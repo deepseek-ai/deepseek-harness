@@ -199,7 +199,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     const { mode } = retryPolicyDefaults(schema, node, schema.getPath(namespace.base, path))
     return { ...loaded, retryPolicy: { ...policy, mode } }
   })
-  // An empty string preserves authentication; a reference stages its removal.
+  // Undefined is untouched; strings hold new input and a reference stages removal.
   const [keyDraft, setKeyDraft] = useState<string | { readonly ref: string; readonly removed?: true }>()
   const keyText = typeof keyDraft === 'string' ? keyDraft : ''
   const keyRemoval = typeof keyDraft === 'object' ? keyDraft : undefined
@@ -441,7 +441,6 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     const detectedVisibleRef = detectedRef === undefined || !visibleRefs.includes(detectedRef) ? undefined : detectedRef
     const missingRefs = checkedRefs.length > 0 && checkedRefs.every(([, info]) => info?.configured === false)
     const savedCredential = detected?.[1]?.source === 'file' && detectedVisibleRef !== undefined
-    const removalRef = keyRemoval?.ref ?? detectedRef
     const credentialHint = keyText.length > 0 || props.credentialRequired === true
       ? undefined
       : keyRemoval !== undefined ? t(keyRemoval.removed === true ? 'keyRemoveApplied' : 'keyRemovePending')
@@ -463,7 +462,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     const keylessNativeAuth = nativeAuth?.env.length === 0 && nativeAuth.oauth
     const keyPlaceholder = keyHint === undefined || props.credentialRequired === true
       ? t('keyPlaceholder')
-      : t(keyRemoval === undefined && savedCredential ? 'keyPlaceholderSaved' : 'keyPlaceholderFallback').replace('{hint}', () => keyHint)
+      : t('keyPlaceholderFallback').replace('{hint}', () => keyHint)
     /** What both family editors take: the rows, whose layer owns them, and the two writes. */
     const catalogProps = {
       models,
@@ -483,26 +482,14 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
             <span className={styles['fieldLabel']}>
               {t('keyInput')}
               {authHelp}
-              {keyRemoval?.removed !== true && keyText.length === 0 && props.credentialRequired !== true && removalRef !== undefined
-                && (keyRemoval !== undefined || (savedCredential && detected[1].writable))
-                ? <button
-                  type="button"
-                  className={styles['linkButton']}
-                  disabled={disabled}
-                  onClick={() => {
-                    setKeyDraft(keyRemoval !== undefined ? undefined : { ref: removalRef })
-                    setFailure(undefined)
-                  }}
-                >{t(keyRemoval !== undefined ? 'keyRemoveUndo' : 'keyRemove')}</button>
-                : null}
             </span>
             <ApiKeyInput
               t={t}
               value={keyText}
               {...keyDraft === undefined && savedCredential ? {
                 saved: {
-                  ...detected[1].writable && removalRef !== undefined
-                    ? { clear: () => { setKeyDraft({ ref: removalRef }); setFailure(undefined) } } : {},
+                  ...detected[1].writable
+                    ? { clear: () => { setKeyDraft({ ref: detected[0] }); setFailure(undefined) } } : {},
                 },
               } : {}}
               placeholder={keyPlaceholder}
@@ -512,7 +499,12 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
               required={props.credentialRequired === true || protocolNeedsKeyHere}
               autoFocus={props.autoFocusCredential === true}
               disabled={disabled || keyRemoval?.removed === true}
-              onChange={(event) => { setKeyDraft(event.target.value); setFailure(undefined) }}
+              onChange={(event) => {
+                setKeyDraft(event.target.value === '' && savedCredential
+                  ? detected[1].writable ? { ref: detected[0] } : undefined
+                  : event.target.value)
+                setFailure(undefined)
+              }}
             />
             {credentialHint === undefined ? null : <p id={`${props.provider}-credential-hint`} className={styles[keyRemoval !== undefined || missingRefs ? 'notice' : detectedRef === undefined ? 'advancedHint' : 'savedNotice']}>{credentialHint}</p>}
             {/* A key the protocol requires is a requirement still to meet, not a fault. */}

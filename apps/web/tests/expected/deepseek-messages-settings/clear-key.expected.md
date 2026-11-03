@@ -16,7 +16,6 @@
       - button "编辑 DeepSeek (deepseek-official)": 编辑
       - text: DeepSeek deepseek-official API 密钥
       - button "认证说明": "?"
-      - button "撤销清除"
       - textbox "API 密钥":
         - /placeholder: 留空使用环境认证（DEEPSEEK_API_KEY）
       - paragraph: 保存后清除已保存密钥，并使用环境认证
