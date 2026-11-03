@@ -671,10 +671,8 @@ describe('mode-aware wire contribution', () => {
 })
 
 describe('the per-program tool-call limit', () => {
-  it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])('rejects maxSubCallsPerMinute=%s at construction', async (maxSubCallsPerMinute) => {
-    const ctx = new Context()
-    onTestFinished(() => ctx.fiber.dispose())
-    expect(() => new PtcExecutor(ctx, { maxSubCallsPerMinute })).toThrow('maxSubCallsPerMinute')
+  it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])('rejects maxSubCallsPerMinute=%s in configuration', (maxSubCallsPerMinute) => {
+    expect(() => PtcToolExecutor.Config({ maxSubCallsPerMinute })).toThrow('maxSubCallsPerMinute')
   })
 
   it('allows 2048 calls with the default two-minute timeout, rejects later attempts, and resets for the next program', async () => {
@@ -687,9 +685,7 @@ describe('the per-program tool-call limit', () => {
       for (let n = 1; n <= 2048; n++) await echo({ value: String(n) })
       const message = 'run_code exceeded its limit of 2048 tool calls; call 2049 was not dispatched. '
         + 'The run_code program may contain an infinite loop. Check loop termination or split the work into smaller run_code calls.'
-      await expect(echo({ value: 'rejected' })).rejects.toMatchObject({
-        code: 'PTC_TOOL_CALL_LIMIT_EXCEEDED', limit: 2048, callNumber: 2049, message,
-      })
+      await expect(echo({ value: 'rejected' })).rejects.toThrow(message)
       expect(request.signal?.aborted).toBe(true)
       await expect(echo({ value: 'caught the error' })).rejects.toThrow('run_code run is over')
       return { logs: [], error: { kind: 'abort', message } }
@@ -723,9 +719,7 @@ describe('the per-program tool-call limit', () => {
       expect(request.timeoutMs).toBe(resolvedMs)
       const echo = request.bindings[0]!.functions.echo!
       for (let n = 0; n < limit; n++) await echo({ value: String(n) })
-      await expect(echo({ value: 'rejected' })).rejects.toMatchObject({
-        code: 'PTC_TOOL_CALL_LIMIT_EXCEEDED', limit, callNumber: limit + 1,
-      })
+      await expect(echo({ value: 'rejected' })).rejects.toThrow(`limit of ${limit} tool calls; call ${limit + 1} was not dispatched`)
       expect(request.signal?.aborted).toBe(true)
       return { logs: [], error: { kind: 'abort', message: String(request.signal?.reason) } }
     }
@@ -773,9 +767,7 @@ describe('the per-program tool-call limit', () => {
       void functions.active!({}).catch(() => { outcomes.push('active canceled') })
       await entered.promise
       void functions.queued!({ value: 'queued' }).catch(() => { outcomes.push('queued abandoned') })
-      await expect(functions.queued!({ value: 'excess' })).rejects.toMatchObject({
-        code: 'PTC_TOOL_CALL_LIMIT_EXCEEDED', limit: 2, callNumber: 3,
-      })
+      await expect(functions.queued!({ value: 'excess' })).rejects.toThrow('limit of 2 tool calls; call 3 was not dispatched')
       expect(request.signal?.aborted).toBe(true)
       return { logs: [], error: { kind: 'abort', message: 'execution canceled' } }
     }
@@ -833,9 +825,7 @@ describe('the per-program tool-call limit', () => {
       await expect(functions.echo!(undefined)).rejects.toThrow('lossless JSON')
       await expect(functions.echo!({})).rejects.toThrow()
       await expect(functions.fail!({})).rejects.toThrow('tool failed')
-      await expect(functions.echo!({ value: 'rejected' })).rejects.toMatchObject({
-        code: 'PTC_TOOL_CALL_LIMIT_EXCEEDED', limit: 3, callNumber: 4,
-      })
+      await expect(functions.echo!({ value: 'rejected' })).rejects.toThrow('limit of 3 tool calls; call 4 was not dispatched')
       expect(request.signal?.aborted).toBe(true)
       return { logs: [], error: { kind: 'abort', message: String(request.signal?.reason) } }
     }

@@ -109,13 +109,19 @@ Inside the program:
 Program-only SDK bindings:
 ```
 
+##### 工具调用额度耗尽
+
+```markdown
+Error: code run failed (abort): run_code exceeded its limit of N tool calls; call M was not dispatched. The run_code program may contain an infinite loop. Check loop termination or split the work into smaller run_code calls.
+```
+
 #### Token 影响
 
-每次请求的固定成本与可见定义成正比。PTC mode 使用生成的 SDK 文本加一个传输 schema 取代最终工具 schema，但不承诺普遍减少成本。
+每次请求的固定成本与可见定义成正比。PTC mode 使用生成的 SDK 文本加一个传输 schema 取代最终工具 schema，但不承诺普遍减少成本。调用额度不增加 SDK 或 schema 文本；超限诊断通过该次运行的失败结果消耗 token。
 
 #### KV Cache 影响
 
-只要 PTC mode 选择、生成的 SDK、传输 schema 与可见工具集合不变，前缀就保持稳定。模式或筛选器变更可能从第一个改变的提示词或 schema token 起使复用失效。
+只要 PTC mode 选择、生成的 SDK、传输 schema 与可见工具集合不变，前缀就保持稳定。模式或筛选器变更可能从第一个改变的提示词或 schema token 起使复用失效。修改 `maxSubCallsPerMinute` 不会改变提示词或 schema token。
 
 ## 已知限制与延期工作
 

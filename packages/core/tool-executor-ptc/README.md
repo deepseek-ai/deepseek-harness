@@ -109,13 +109,19 @@ Inside the program:
 Program-only SDK bindings:
 ```
 
+##### Tool-call allowance exhausted
+
+```markdown
+Error: code run failed (abort): run_code exceeded its limit of N tool calls; call M was not dispatched. The run_code program may contain an infinite loop. Check loop termination or split the work into smaller run_code calls.
+```
+
 #### Token effect
 
-Fixed per-request cost proportional to the visible definitions. PTC mode trades end-tool schemas for generated SDK text plus one transport schema rather than promising a universal reduction.
+Fixed per-request cost proportional to the visible definitions. PTC mode trades end-tool schemas for generated SDK text plus one transport schema rather than promising a universal reduction. The allowance adds no SDK or schema text; its diagnostic contributes tokens through the failed run's result.
 
 #### KV Cache effect
 
-Prefix-stable while the PTC mode selection, generated SDK, transport schema, and visible tool set are unchanged. Mode or filter changes may invalidate reuse from the first changed prompt or schema token.
+Prefix-stable while the PTC mode selection, generated SDK, transport schema, and visible tool set are unchanged. Mode or filter changes may invalidate reuse from the first changed prompt or schema token. Changing `maxSubCallsPerMinute` does not change prompt or schema tokens.
 
 ## Known Limitations and Deferred Work
 

@@ -1,17 +1,19 @@
 /** Program execution failures reported by PTC. @module */
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 
-/** Abort reason when a program exhausts its tool-call allowance; the excess call is never dispatched. */
-export class ToolCallLimitExceededError extends HarnessError {
+/**
+ * Host-only abort reason for an exhausted tool-call allowance; the excess call is never dispatched.
+ * The executor recognizes this class at settlement and reports CODE_RUN_FAILED to the model.
+ */
+export class ToolCallLimitExceededError extends Error {
   /**
    * Describe the rejected call and how to correct the program.
    * @param limit - Timeout-derived maximum tool-call attempts for one run_code invocation.
    * @param callNumber - One-based attempt rejected without invoking the tool.
    */
-  constructor(readonly limit: number, readonly callNumber: number) {
+  constructor(limit: number, callNumber: number) {
     super(`run_code exceeded its limit of ${limit} tool calls; call ${callNumber} was not dispatched. `
-      + 'The run_code program may contain an infinite loop. Check loop termination or split the work into smaller run_code calls.',
-    'PTC_TOOL_CALL_LIMIT_EXCEEDED')
+      + 'The run_code program may contain an infinite loop. Check loop termination or split the work into smaller run_code calls.')
     this.name = 'ToolCallLimitExceededError'
   }
 }

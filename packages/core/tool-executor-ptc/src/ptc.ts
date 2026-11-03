@@ -507,6 +507,7 @@ export function createRunCodeTool(
           if (runOver()) {
             throw new Error(`run_code run is over (${String(runController.signal.reason)}); ${name} not dispatched`)
           }
+          // Count before validation and queuing so repeated failed calls also exhaust the allowance.
           const n = ++toolCallAttempts
           if (n > maxSubCalls) {
             const error = new ToolCallLimitExceededError(maxSubCalls, n)
