@@ -105,6 +105,7 @@ kind: "package-reference"
 - **转换后的文件需要 shell 复制** — 文件系统服务不创建二进制文件，因此模型用 shell 复制每个临时文件。没有 shell 工具的部署无法交付转换后的文件；临时文件在 Office 套件的保留期满或调用方 subagent 树的根 Session 卸载后删除；subagent 产出的文件在该 subagent 结束后仍然保留。
 - **远程工作区不支持转换** — Office 套件运行在 Host 上，远程 shell 读不到其输出存储。
 - **渲染不保存图片文件** — `office_render` 只返回供模型查看的图片，不写出 PNG 或其他图片文件。需要以文件形式获得页面的用户，通过 `office_convert` 并设置 `format: "pdf"` 获得 PDF。
+- **Web GUI 不显示渲染图片** — [ui-tool](../../client/ui-tool/README.zh.md) 的 Office 行显示 `office_render` 结果的文本块并略去其中的图片，因此用户看不到模型检查过的页面。模型仍会收到每张图片。
 - **原生引擎在 Host 进程内运行** — 由模型发起的渲染、转换和重算通过 `ctx.officeKit` 在 Host 进程内运行原生 LibreOffice Kit 引擎，因此不受 shell 沙箱和 PTC 权限约束。输入仍受文件系统后端读取权限的约束。原生解析器以 Host 用户的权限处理不可信的文档。
 - **PTC 激活状态不跨恢复和分叉保留** — PTC 请求头只记录 `run_code`，因此恢复或分叉后的 PTC Agent 在模型重新加载 Office 技能前不提供 Office 绑定；移除和重新加入各重写一次系统提示，缓存影响见 KV Cache 影响一节。
 - **插件重载会清除激活状态** — 热重载、或停用后再启用插件，会清空内存中的标记。如果期间运行过一步，该步的请求头不再包含这三个工具，模型须重新加载 Office 技能才能恢复。
