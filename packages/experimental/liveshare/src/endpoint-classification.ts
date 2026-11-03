@@ -105,6 +105,7 @@ export const VIEWER_ENDPOINT_CLASSES = {
   'session/updateQueue': 'owner-only', // owner edits queued input
   'session/workspacePathApplications': 'owner-only', // owner applies a Workspace path
   'credentials/describe': 'owner-only', // owner credentials; secrets never reach a reader
+  'credentials/readStored': 'owner-only', // owner credentials; secrets never reach a reader
   'credentials/set': 'owner-only', // owner credentials; secrets never reach a reader
   'credentials/unset': 'owner-only', // owner credentials; secrets never reach a reader
   'settings/describe': 'owner-only', // owner settings
@@ -206,9 +207,9 @@ export const VIEWER_ENDPOINT_CLASSES = {
   'goals/pause': 'owner-only', // owner pauses a goal
   'goals/resume': 'owner-only', // owner resumes a goal
   'pluginInventory/list': 'owner-only', // owner plugin inventory
-  'mcpServers/probe': 'owner-only', // owner MCP server management
-  'mcpServers/restart': 'owner-only', // owner MCP server management
-  'mcpServers/watch': 'owner-only', // owner MCP server management
+  'mcpManager/probe': 'owner-only', // owner MCP server management
+  'mcpManager/restart': 'owner-only', // owner MCP server management
+  'mcpManager/watch': 'owner-only', // owner MCP server management
   'mcpServers/startAuthorization': 'owner-only', // owner MCP server management
   'mcpServers/cancelAuthorization': 'owner-only', // owner MCP server management
   'mcpServers/signOut': 'owner-only', // owner MCP server management

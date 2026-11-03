@@ -642,6 +642,10 @@ export class LocalCredentialProvider extends CredentialProvider {
     return Promise.resolve({ configured: false, writable: true })
   }
 
+  override readStored(ref: CredentialRef): Promise<string | undefined> {
+    return Promise.resolve(this.values.get(ref))
+  }
+
   override async set(ref: CredentialRef, value: string): Promise<void> {
     if (value.length === 0) {
       throw new Error(`credentials-local: an empty value cannot be stored for "${ref}"; use unset`)

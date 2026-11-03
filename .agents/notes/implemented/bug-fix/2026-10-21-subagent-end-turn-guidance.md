@@ -29,7 +29,7 @@ The sentence stays one literal line. Rewording `the next result starts a new tur
 
 **Move the guidance into the tool description.** The paragraph is assembled from the set of visible delegation tools and lists their names; the tool description describes one tool. Moving the sentence changes ownership without changing the behavior it prevents.
 
-**Restore every prompt phrase reverted together with this sentence.** The read guidance and the `run_code` argument order are separate decisions with their own evidence; this note records only the delegation paragraph.
+**Restore every prompt phrase reverted together with this sentence.** The read guidance ([2026-10-26 note](2026-10-26-read-guidance-line-ranges.md)) and the `run_code` argument order are separate decisions with their own evidence; this note records only the delegation paragraph.
 
 ## Verification
 
