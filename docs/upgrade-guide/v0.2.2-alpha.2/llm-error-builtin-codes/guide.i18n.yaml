@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-alpha.2/llm-error-builtin-codes/guide.md
+/:
+  en: a3bc51b72528488c
+  zh: 1feb265c92492487
+/new-llmerror-accepts-only-built-in-failure-codes:
+  en: 390a9a983fc10296
+  zh: 2ce8cbc8c8661acf
+/new-llmerror-accepts-only-built-in-failure-codes/change:
+  en: db9bc6fe227f0d41
+  zh: 9ef71a6e7a2214be
+/new-llmerror-accepts-only-built-in-failure-codes/migration:
+  en: 605b8836fd1872e9
+  zh: 7cd1e58bb9cdb49e

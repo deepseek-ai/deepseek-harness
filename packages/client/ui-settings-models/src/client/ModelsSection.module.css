@@ -681,6 +681,13 @@
   gap: 6px 16px;
 }
 
+/* Custom error-code input beside its Add action. */
+.retryCodeAdd {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 /* One backoff column wide, so the count lines up with the delay fields below. */
 .retryCount {
   width: max(112px, calc((100% - 16px) / 3));

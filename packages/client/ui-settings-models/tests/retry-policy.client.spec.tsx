@@ -22,7 +22,11 @@ const RetryPolicy = Schema.union([
   Schema.object({
     mode: Schema.const('normal').required(),
     maxRetries: Schema.number().step(1).min(0).max(Number.MAX_SAFE_INTEGER).default(5),
-    retryableCodes: Schema.array(Schema.string().min(1)).min(1).default(['EMPTY_RESPONSE', 'RATE_LIMIT', 'SERVER', 'TIMEOUT', 'TRANSPORT']),
+    retryableCodes: Schema.array(Schema.union([
+      ...['EMPTY_RESPONSE', 'RATE_LIMIT', 'SERVER', 'TIMEOUT', 'TRANSPORT', 'STREAM_CLOSED', 'MALFORMED_RESPONSE', 'QUOTA']
+        .map(code => Schema.const(code)),
+      Schema.string().min(1),
+    ])).min(1).default(['EMPTY_RESPONSE', 'RATE_LIMIT', 'SERVER', 'TIMEOUT', 'TRANSPORT']),
     backoff,
   }),
   Schema.object({ mode: Schema.const('always').required(), backoff }),
@@ -79,6 +83,8 @@ const CODE_LABELS: Record<string, string> = {
   TRANSPORT: en.retryCodeTransport,
   STREAM_CLOSED: en.retryCodeStreamClosed,
 }
+const customCode = () => screen.getByRole<HTMLInputElement>('textbox', { name: en.retryCodeCustom })
+const addCode = () => screen.getByRole<HTMLButtonElement>('button', { name: en.retryCodeAdd })
 const code_ = (code: string) => screen.getByRole<HTMLInputElement>('checkbox', { name: CODE_LABELS[code] ?? code })
 const apply = () => screen.getByText<HTMLButtonElement>(en.apply)
 
@@ -298,7 +304,8 @@ describe('retry policy fields', () => {
     expect(input('attempts').inputMode).toBe('numeric')
     expect(input(en.retryMaxDelay).inputMode).toBe('decimal')
     expect(input(en.retryMaxDelay).placeholder).toBe('')
-    expect(code_('SERVER').checked).toBe(false)
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0)
+    expect(customCode()).toBeTruthy()
     expect(screen.queryByText('note')).toBeNull()
     expect(screen.queryByLabelText(en.retryInitialDelay)).toBeNull()
     fireEvent.change(input('attempts'), { target: { value: '0' } })
@@ -311,6 +318,49 @@ describe('retry policy fields', () => {
       { op: 'set', path: ['retryPolicy', 'mode'], value: 'patient' },
       { op: 'set', path: ['retryPolicy', 'attempts'], value: 2 },
     ])
+  })
+
+  it('adds a custom code, ignores blanks and duplicates, keeps it after unchecking, and saves it', async () => {
+    const { writeSettings, onClose } = setup(deepSeekNamespace())
+    fireEvent.change(mode(), { target: { value: 'normal' } })
+    expect(code_('STREAM_CLOSED').checked).toBe(false)
+    expect(addCode().disabled).toBe(true)
+    fireEvent.change(customCode(), { target: { value: '   ' } })
+    expect(addCode().disabled).toBe(true)
+    fireEvent.keyDown(customCode(), { key: 'Enter' })
+    expect(screen.getAllByRole('checkbox')).toHaveLength(8)
+    fireEvent.change(customCode(), { target: { value: '  Overloaded_529 ' } })
+    fireEvent.click(addCode())
+    expect(customCode().value).toBe('')
+    expect(code_('Overloaded_529').checked).toBe(true)
+    expect(code_('SERVER').checked).toBe(true)
+    fireEvent.change(customCode(), { target: { value: 'Overloaded_529' } })
+    const enter = fireEvent.keyDown(customCode(), { key: 'Enter' })
+    expect(enter).toBe(false)
+    fireEvent.keyDown(customCode(), { key: 'a' })
+    expect(screen.getAllByRole('checkbox', { name: 'Overloaded_529' })).toHaveLength(1)
+    expect(onClose).not.toHaveBeenCalled()
+    fireEvent.click(code_('Overloaded_529'))
+    expect(code_('Overloaded_529').checked).toBe(false)
+    fireEvent.click(code_('Overloaded_529'))
+    fireEvent.change(customCode(), { target: { value: 'COMPOSING' } })
+    fireEvent.keyDown(customCode(), { key: 'Enter', isComposing: true })
+    expect(screen.queryByRole('checkbox', { name: 'COMPOSING' })).toBeNull()
+    fireEvent.change(customCode(), { target: { value: 'SERVER' } })
+    fireEvent.keyDown(customCode(), { key: 'Enter' })
+    expect(screen.getAllByRole('checkbox', { name: en.retryCodeServer })).toHaveLength(1)
+    fireEvent.click(apply())
+    await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
+    expect(writeSettings.mock.calls[0]?.[1]).toEqual([
+      { op: 'set', path: ['retryPolicy', 'mode'], value: 'normal' },
+      { op: 'set', path: ['retryPolicy', 'retryableCodes'], value: ['EMPTY_RESPONSE', 'RATE_LIMIT', 'SERVER', 'TIMEOUT', 'TRANSPORT', 'Overloaded_529'] },
+    ])
+  })
+
+  it('lists a saved custom code when the editor reopens', () => {
+    setup(deepSeekNamespace({ user: { retryPolicy: { mode: 'normal', retryableCodes: ['SERVER', 'Overloaded_529'] } } }))
+    expect(code_('Overloaded_529').checked).toBe(true)
+    expect(code_('RATE_LIMIT').checked).toBe(false)
   })
 
   it('offers only Default when the retry schema declares no mode branches', () => {

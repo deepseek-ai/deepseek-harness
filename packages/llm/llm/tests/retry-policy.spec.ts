@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import Schema from '@deepseek-ai/schemastery'
 import {
+  LLM_FAILURE_CODES,
   resolveRetryPolicy,
+  RETRY_CODE_CHOICES,
   RetryPolicySchema,
 } from '@deepseek-ai/dsh-llm'
 import type { RetryPolicyConfig } from '@deepseek-ai/dsh-llm'
@@ -111,5 +114,26 @@ describe('provider retry policy', () => {
     expect(RetryPolicySchema({ mode: 'normal' })).toMatchObject({
       retryableCodes: ['EMPTY_RESPONSE', 'RATE_LIMIT', 'SERVER', 'TIMEOUT', 'TRANSPORT'],
     })
+  })
+
+  it('publishes the retry choices through the serialized schema and still admits other codes', () => {
+    const restored = new Schema(JSON.parse(JSON.stringify(RetryPolicySchema.toJSON())) as Schema<RetryPolicyConfig>)
+    const normal = restored.list?.find(branch => branch.dict?.['mode']?.value === 'normal')
+    const item = normal?.dict?.['retryableCodes']?.inner
+    const choices = item?.list?.flatMap((branch): unknown[] => {
+      const value: unknown = branch.value
+      return branch.type === 'const' ? [value] : []
+    })
+    expect(choices).toEqual([...RETRY_CODE_CHOICES])
+    expect(RETRY_CODE_CHOICES).toEqual(
+      Object.keys(LLM_FAILURE_CODES).filter(code => 'retryChoice' in LLM_FAILURE_CODES[code as keyof typeof LLM_FAILURE_CODES]),
+    )
+    expect(restored({ mode: 'normal', retryableCodes: ['SERVER', 'Overloaded_529'] }))
+      .toMatchObject({ retryableCodes: ['SERVER', 'Overloaded_529'] })
+    expect(() => restored({ mode: 'normal', retryableCodes: [''] })).toThrow()
+    // Being a choice does not make a code retried by default.
+    expect(RETRY_CODE_CHOICES).toContain('STREAM_CLOSED')
+    const defaults = resolveRetryPolicy(undefined, 'provider.retryPolicy')
+    expect(defaults.mode === 'normal' ? defaults.retryableCodes : []).not.toContain('STREAM_CLOSED')
   })
 })

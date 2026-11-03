@@ -33,12 +33,8 @@ const LABELS: ReadonlyMap<string, ModelsKey> = new Map([
 /** Hints shown under the mode select, by mode. */
 const MODE_HINTS: ReadonlyMap<string, ModelsKey> = new Map([['always', 'retryAlwaysHint']])
 
-/**
- * Stable `LlmFailure` codes offered in a code picker, with their labels: the
- * transient defaults of `dsh-llm`, then the other request failures a retry can
- * plausibly recover. Inherited and stored codes outside this list stay listed after them.
- */
-const CODE_CHOICES: ReadonlyMap<string, ModelsKey> = new Map([
+/** Labels of known failure codes; a code without one shows verbatim. */
+const CODE_LABELS: ReadonlyMap<string, ModelsKey> = new Map([
   ['EMPTY_RESPONSE', 'retryCodeEmptyResponse'],
   ['RATE_LIMIT', 'retryCodeRateLimit'],
   ['SERVER', 'retryCodeServer'],
@@ -68,6 +64,15 @@ function fieldAt(value: Record<string, unknown>, path: readonly string[]): unkno
 function modeOf(branch: SchemaNode): string | undefined {
   const mode: unknown = branch.dict?.['mode']?.value
   return typeof mode === 'string' ? mode : undefined
+}
+
+/** The constant choices a list field's item schema publishes, in schema order. */
+function choicesOf(node: SchemaNode): string[] {
+  // A union item always carries `list`; any other item publishes no choices.
+  return (node.inner?.list ?? []).flatMap((branch) => {
+    const value: unknown = branch.type === 'const' ? branch.value : undefined
+    return typeof value === 'string' ? [value] : []
+  })
 }
 
 /** The editable fields of one object node, in schema order, without the `mode` discriminant. */
@@ -246,6 +251,7 @@ export function RetryPolicyEditor(props: RetryPolicyEditorProps): ReactNode {
   const mode = branch === undefined ? undefined : String(current['mode'])
   // Raw text keeps partial input such as `0.` visible while it is typed.
   const [texts, setTexts] = useState<Record<string, string>>({})
+  const [added, setAdded] = useState<Record<string, readonly string[]>>({})
   // A nested fold starts open only when the draft already customizes it.
   const [openFolds] = useState(() => new Set(Object.keys(current).filter(key => isRecord(current[key]))))
   const label = (key: string): string => {
@@ -279,13 +285,27 @@ export function RetryPolicyEditor(props: RetryPolicyEditorProps): ReactNode {
       </label>
     )
   }
-  const codesField = (root: SchemaNode, path: readonly string[]): ReactNode => {
+  const codesField = (root: SchemaNode, path: readonly string[], node: SchemaNode): ReactNode => {
+    const id = path.join('.')
     const strings = (value: unknown): string[] => Array.isArray(value) ? value.filter(code => typeof code === 'string') : []
     const inherited = strings(defaults.value(root, path))
     const storedCodes = fieldAt(current, path)
     const selected = Array.isArray(storedCodes) ? strings(storedCodes) : inherited
-    const choices = [...new Set([...CODE_CHOICES.keys(), ...inherited, ...selected])]
+    // Codes added during this edit stay listed after they are unchecked.
+    const choices = [...new Set([...choicesOf(node), ...inherited, ...selected, ...added[id] ?? []])]
     const invalid = invalidAt(path)
+    const select = (next: readonly string[]): void => {
+      // Selecting exactly the inherited codes keeps the field inherited.
+      const inherits = next.length === inherited.length && next.every(value => inherited.includes(value))
+      props.onChange(withField(current, path, inherits ? undefined : [...next]))
+    }
+    const draftCode = (texts[id] ?? '').trim()
+    const add = (): void => {
+      if (draftCode.length === 0) return
+      setAdded(previous => ({ ...previous, [id]: [...new Set([...previous[id] ?? [], draftCode])] }))
+      setTexts(previous => ({ ...previous, [id]: '' }))
+      if (!selected.includes(draftCode)) select([...selected, draftCode])
+    }
     return (
       <fieldset
         key={path.join('.')}
@@ -296,7 +316,7 @@ export function RetryPolicyEditor(props: RetryPolicyEditorProps): ReactNode {
         <legend className={styles['modelFieldLabel']}>{label(path[path.length - 1] as string)}</legend>
         <div className={styles['retryCodeChoices']}>
           {choices.map((code) => {
-            const labelKey = CODE_CHOICES.get(code)
+            const labelKey = CODE_LABELS.get(code)
             return (
               <Checkbox
                 key={code}
@@ -305,14 +325,40 @@ export function RetryPolicyEditor(props: RetryPolicyEditorProps): ReactNode {
                 checked={selected.includes(code)}
                 disabled={disabled || (selected.length === 1 && selected.includes(code))}
                 onChange={(checked) => {
-                  const next = choices.filter(value => value === code ? checked : selected.includes(value))
-                  // Selecting exactly the inherited codes keeps the field inherited.
-                  const inherits = next.length === inherited.length && next.every(value => inherited.includes(value))
-                  props.onChange(withField(current, path, inherits ? undefined : next))
+                  select(choices.filter(value => value === code ? checked : selected.includes(value)))
                 }}
               />
             )
           })}
+        </div>
+        <div className={styles['retryCodeAdd']}>
+          <input
+            className={styles['input']}
+            type="text"
+            value={texts[id] ?? ''}
+            placeholder={t('retryCodeCustom')}
+            aria-label={t('retryCodeCustom')}
+            disabled={disabled}
+            onChange={(event) => {
+              const value = event.target.value
+              setTexts(previous => ({ ...previous, [id]: value }))
+            }}
+            onKeyDown={(event) => {
+              // Enter that confirms an IME composition belongs to the composition.
+              if (event.key !== 'Enter' || event.nativeEvent.isComposing) return
+              // Enter adds the code; it never submits the settings form.
+              event.preventDefault()
+              add()
+            }}
+          />
+          <button
+            type="button"
+            className={styles['secondaryButton']}
+            disabled={disabled || draftCode.length === 0}
+            onClick={add}
+          >
+            {t('retryCodeAdd')}
+          </button>
         </div>
       </fieldset>
     )
@@ -323,7 +369,7 @@ export function RetryPolicyEditor(props: RetryPolicyEditorProps): ReactNode {
     if (node.type === 'number') {
       return numberField(root, path, node, base.length === 0 ? `${styles['modelField']} ${styles['retryCount']}` : styles['modelField'])
     }
-    if (node.type === 'array') return codesField(root, path)
+    if (node.type === 'array') return codesField(root, path, node)
     if (node.type === 'object') {
       return (
         <details key={key} className={styles['retryFold']} open={openFolds.has(key)}>
