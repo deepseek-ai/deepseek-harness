@@ -102,6 +102,7 @@ it('selects a match across workflows and pages after a newer failed producer', (
   const api = vi.fn((path: string, paginate?: boolean): unknown => {
     if (path.includes('/workflows/cua-helper-package.yml/runs?')) return [{ workflow_runs: [] }]
     if (path.includes('/workflows/release-publish.yml/runs?')) return [{ workflow_runs: [{ id: 124 }] }, { workflow_runs: [{ id: 123 }] }]
+    if (path.endsWith('/runs/124/artifacts?per_page=100')) return [{ artifacts: [{ ...f.artifact, name: `cua-helper-124-1-${key}` }] }]
     if (path.endsWith('/runs/124')) return { run_attempt: 1 }
     if (path.endsWith('/runs/124/attempts/1')) return { ...f.run, id: 124, run_attempt: 1, conclusion: 'failure' }
     return f.api(path, paginate)
@@ -124,4 +125,13 @@ it.each(['', '123'])('propagates unavailable GitHub evidence with selection %j',
   const api = vi.fn(() => { throw new Error('HTTP 403') })
   expect(() => selectCuaHelperArtifact(repository, runId, key, api)).toThrow('HTTP 403')
   expect(api).toHaveBeenCalledTimes(1)
+})
+
+it('does not query job or attempt details when artifact names exclude the requested build key', () => {
+  const f = fixture()
+  f.artifact.name = 'cua-helper-123-2-legacy'
+  f.artifacts.shift()
+  expect(selectCuaHelperArtifact(repository, '', key, f.api)).toBeUndefined()
+  expect(f.api.mock.calls.map(([path]) => path).filter(path => !path.includes('/workflows/')))
+    .toEqual([`${base}/artifacts?per_page=100`])
 })

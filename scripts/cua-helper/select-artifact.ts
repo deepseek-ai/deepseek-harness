@@ -50,7 +50,7 @@ export function selectCuaHelperArtifact(repository: string, runId: string, build
   assert(runId === '' || /^[1-9]\d*$/u.test(runId), 'CUA reuse: enter the numeric run ID after /actions/runs/ in the run URL')
   assert(/^[a-f0-9]{64}$/u.test(buildKey), 'CUA reuse: invalid build key')
   const base = `repos/${repository}/actions`
-  const selectRun = (candidate: string): CuaHelperSelection | string => {
+  const selectRun = (candidate: string, retained?: Record<string, unknown>[]): CuaHelperSelection | string => {
     const attempt = id(record(api(`${base}/runs/${candidate}`)).run_attempt)
     const run = record(api(`${base}/runs/${candidate}/attempts/${attempt}`))
     assert(id(run.id) === candidate && id(run.run_attempt) === attempt
@@ -65,7 +65,7 @@ export function selectCuaHelperArtifact(repository: string, runId: string, build
       .filter(job => job.name === jobName)
     if (jobs.length !== 1 || jobs[0]?.conclusion !== 'success') return `the latest attempt has no successful ${jobName} job`
     const name = `cua-helper-${candidate}-${attempt}-${buildKey}`
-    const artifacts = rows(api(`${base}/runs/${candidate}/artifacts?per_page=100`, true), 'artifacts')
+    const artifacts = (retained ?? rows(api(`${base}/runs/${candidate}/artifacts?per_page=100`, true), 'artifacts'))
       .filter(artifact => artifact.name === name)
     if (artifacts.length === 0) return 'no artifact matches the current source bytes and build configuration; use the producer run linked in its summary or rebuild'
     const [artifact] = artifacts
@@ -85,7 +85,11 @@ export function selectCuaHelperArtifact(repository: string, runId: string, build
     true), 'workflow_runs'))
     .sort((left, right) => Number(id(right.id)) - Number(id(left.id)))
   for (const candidate of candidates) {
-    const selected = selectRun(id(candidate.id))
+    const candidateId = id(candidate.id)
+    const artifacts = rows(api(`${base}/runs/${candidateId}/artifacts?per_page=100`, true), 'artifacts')
+    if (!artifacts.some(artifact => typeof artifact.name === 'string'
+      && artifact.name.startsWith(`cua-helper-${candidateId}-`) && artifact.name.endsWith(`-${buildKey}`))) continue
+    const selected = selectRun(candidateId, artifacts)
     if (typeof selected !== 'string') return selected
   }
   return undefined
