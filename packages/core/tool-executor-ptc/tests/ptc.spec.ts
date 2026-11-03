@@ -685,16 +685,18 @@ describe('the per-program tool-call limit', () => {
     runtime.behavior = async (request) => {
       const echo = request.bindings[0]!.functions.echo!
       for (let n = 1; n <= 2048; n++) await echo({ value: String(n) })
-      for (const callNumber of [2049, 2050]) {
-        await expect(echo({ value: 'rejected' })).rejects.toMatchObject({
-          code: 'PTC_TOOL_CALL_LIMIT_EXCEEDED', limit: 2048, callNumber,
-          message: `run_code exceeded its limit of 2048 tool calls; call ${callNumber} was not dispatched. `
-            + 'The run_code program may contain an infinite loop. Check loop termination or split the work into smaller run_code calls.',
-        })
-      }
-      return { logs: [] }
+      const message = 'run_code exceeded its limit of 2048 tool calls; call 2049 was not dispatched. '
+        + 'The run_code program may contain an infinite loop. Check loop termination or split the work into smaller run_code calls.'
+      await expect(echo({ value: 'rejected' })).rejects.toMatchObject({
+        code: 'PTC_TOOL_CALL_LIMIT_EXCEEDED', limit: 2048, callNumber: 2049, message,
+      })
+      expect(request.signal?.aborted).toBe(true)
+      await expect(echo({ value: 'caught the error' })).rejects.toThrow('run_code run is over')
+      return { logs: [], error: { kind: 'abort', message } }
     }
-    expect((await runCode(ctx, 'program', { agent })).isError).toBe(false)
+    const result = await runCode(ctx, 'program', { agent })
+    expect(result.error).toMatchObject({ info: { code: 'CODE_RUN_FAILED' } })
+    expect(result.error?.message).toContain('call 2049 was not dispatched')
     expect(calls).toHaveLength(2048)
     expect(events.filter(event => event.type === 'tool/ptc-dispatch-start')).toHaveLength(2048)
     expect(events.filter(event => event.type === 'tool/ptc-dispatch')).toHaveLength(2048)
@@ -724,9 +726,10 @@ describe('the per-program tool-call limit', () => {
       await expect(echo({ value: 'rejected' })).rejects.toMatchObject({
         code: 'PTC_TOOL_CALL_LIMIT_EXCEEDED', limit, callNumber: limit + 1,
       })
-      return { logs: [] }
+      expect(request.signal?.aborted).toBe(true)
+      return { logs: [], error: { kind: 'abort', message: String(request.signal?.reason) } }
     }
-    expect((await runCode(ctx, 'program', { timeoutMs: requestedMs })).isError).toBe(false)
+    expect((await runCode(ctx, 'program', { timeoutMs: requestedMs })).isError).toBe(true)
     expect(calls).toHaveLength(limit)
     expect(resolver).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ timeoutMs: requestedMs }))
   })
@@ -746,28 +749,70 @@ describe('the per-program tool-call limit', () => {
     expect(calls).toHaveLength(3)
   })
 
-  it('counts queued calls across tool names before any asynchronous dispatch stage', async () => {
+  it('aborts active calls across tool names, abandons queued calls, and drains their logs before returning', async () => {
     const { ctx, runtime } = await setup({ maxSubCallsPerMinute: 1, maxParallelSubCalls: 1 })
     onTestFinished(() => ctx.fiber.dispose())
-    const first = registerEcho(ctx, 'first')
-    const second = registerEcho(ctx, 'second')
+    const { agent, events } = fakeAgent()
+    const entered = Promise.withResolvers<undefined>()
+    const aborted = Promise.withResolvers<undefined>()
+    const queued = registerEcho(ctx, 'queued')
+    let cleaned = false
+    ctx.tools.register(defineContentToolFixture({
+      name: 'active', description: 'Wait for cancellation.', parameters: {},
+      async execute(_args, exec) {
+        exec.signal.addEventListener('abort', () => { aborted.resolve(undefined) }, { once: true })
+        entered.resolve(undefined)
+        await aborted.promise
+        cleaned = true
+        return []
+      },
+    }))
+    const outcomes: string[] = []
     runtime.behavior = async (request) => {
       const functions = request.bindings[0]!.functions
-      const outcomes = await Promise.allSettled([
-        functions.first!({ value: 'one' }), functions.second!({ value: 'two' }),
-        functions.first!({ value: 'three' }), functions.second!({ value: 'four' }),
-      ])
-      expect(outcomes).toMatchObject([
-        { status: 'fulfilled', value: 'first:one' },
-        { status: 'fulfilled', value: 'second:two' },
-        { status: 'rejected', reason: { code: 'PTC_TOOL_CALL_LIMIT_EXCEEDED', limit: 2, callNumber: 3 } },
-        { status: 'rejected', reason: { code: 'PTC_TOOL_CALL_LIMIT_EXCEEDED', limit: 2, callNumber: 4 } },
-      ])
-      return { logs: [] }
+      void functions.active!({}).catch(() => { outcomes.push('active canceled') })
+      await entered.promise
+      void functions.queued!({ value: 'queued' }).catch(() => { outcomes.push('queued abandoned') })
+      await expect(functions.queued!({ value: 'excess' })).rejects.toMatchObject({
+        code: 'PTC_TOOL_CALL_LIMIT_EXCEEDED', limit: 2, callNumber: 3,
+      })
+      expect(request.signal?.aborted).toBe(true)
+      return { logs: [], error: { kind: 'abort', message: 'execution canceled' } }
     }
-    expect((await runCode(ctx, 'program')).isError).toBe(false)
-    expect(first).toEqual([{ value: 'one' }])
-    expect(second).toEqual([{ value: 'two' }])
+    const result = await runCode(ctx, 'program', { agent })
+    expect(result.error).toMatchObject({ info: { code: 'CODE_RUN_FAILED' } })
+    expect(cleaned).toBe(true)
+    expect(outcomes.sort()).toEqual(['active canceled', 'queued abandoned'])
+    expect(queued).toEqual([])
+    expect(events.filter(event => event.type === 'tool/ptc-dispatch-start').map(event => event.data))
+      .toMatchObject([{ name: 'active', subCallId: 'call-1:ptc:1' }])
+    expect(events.filter(event => event.type === 'tool/ptc-dispatch').map(event => event.data))
+      .toMatchObject([{ name: 'active', subCallId: 'call-1:ptc:1', isError: true }])
+  })
+
+  it.each([
+    { failure: { kind: 'abort', message: 'execution canceled; retained variables were cleared' }, cancelCaller: false },
+    { failure: { kind: 'worker-exit', message: 'managed process cleanup failed: fixture failure' }, cancelCaller: false },
+    { failure: { kind: 'abort', message: 'execution canceled' }, cancelCaller: true },
+  ] as const)('preserves the call limit and runtime $failure.kind diagnostics with caller cancellation $cancelCaller', async ({ failure, cancelCaller }) => {
+    const { ctx, runtime } = await setup({ maxSubCallsPerMinute: 1 })
+    onTestFinished(() => ctx.fiber.dispose())
+    const controller = new AbortController()
+    registerEcho(ctx)
+    runtime.behavior = async (request) => {
+      const echo = request.bindings[0]!.functions.echo!
+      await echo({ value: 'one' })
+      await echo({ value: 'two' })
+      await expect(echo({ value: 'excess' })).rejects.toThrow('limit of 2 tool calls')
+      expect(request.signal?.aborted).toBe(true)
+      if (cancelCaller) controller.abort('later caller cancellation')
+      return { logs: ['before termination'], error: failure }
+    }
+    const result = await runCode(ctx, 'program', { signal: controller.signal })
+    expect(result.error).toMatchObject({ info: { code: 'CODE_RUN_FAILED' } })
+    expect(result.error?.message).toContain(`code run failed (${failure.kind}): run_code exceeded its limit of 2 tool calls`)
+    expect(result.error?.message).toContain(failure.message)
+    expect(result.error?.message).toContain('before termination')
   })
 
   it('counts failed argument validation and failed tool executions', async () => {
@@ -791,9 +836,10 @@ describe('the per-program tool-call limit', () => {
       await expect(functions.echo!({ value: 'rejected' })).rejects.toMatchObject({
         code: 'PTC_TOOL_CALL_LIMIT_EXCEEDED', limit: 3, callNumber: 4,
       })
-      return { logs: [] }
+      expect(request.signal?.aborted).toBe(true)
+      return { logs: [], error: { kind: 'abort', message: String(request.signal?.reason) } }
     }
-    expect((await runCode(ctx, 'program')).isError).toBe(false)
+    expect((await runCode(ctx, 'program')).isError).toBe(true)
     expect(calls).toEqual([])
     expect(failure).toHaveBeenCalledTimes(1)
   })

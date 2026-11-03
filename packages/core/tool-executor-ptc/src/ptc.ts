@@ -508,7 +508,11 @@ export function createRunCodeTool(
             throw new Error(`run_code run is over (${String(runController.signal.reason)}); ${name} not dispatched`)
           }
           const n = ++toolCallAttempts
-          if (n > maxSubCalls) throw new ToolCallLimitExceededError(maxSubCalls, n)
+          if (n > maxSubCalls) {
+            const error = new ToolCallLimitExceededError(maxSubCalls, n)
+            runController.abort(error)
+            throw error
+          }
           const normalized = jsonNormalizeArgs(rawArgs)
           const subCallId = brandString<ToolCallId>(`${String(exec.callId)}:ptc:${n}`)
           const input = {
@@ -701,7 +705,9 @@ export function createRunCodeTool(
           }
 
           if (result.error) {
-            if (result.error.kind === 'abort' && exec.signal.aborted) {
+            const limitError = runController.signal.reason instanceof ToolCallLimitExceededError
+              ? runController.signal.reason : undefined
+            if (result.error.kind === 'abort' && exec.signal.aborted && limitError === undefined) {
               const error = new HarnessError('tool call aborted', TOOL_ABORTED)
               error.name = 'AbortError'
               throw error
@@ -709,7 +715,9 @@ export function createRunCodeTool(
             const logsText = result.logs.length > 0 ? `\nCaptured output:\n${result.logs.join('\n')}` : ''
             const sandboxText = result.sandbox === undefined ? ''
               : `\nFile sandbox: ${result.sandbox.mode}${result.sandbox.enforcement === undefined ? '' : `; enforcement: ${result.sandbox.enforcement}`}${result.sandbox.denied ? '; operation denied' : ''}.`
-            throw new CodeRunFailedError(`code run failed (${result.error.kind}): ${result.error.message}${logsText}${sandboxText}${result.sandbox?.denied ? escalationGuidance(runtime.sandboxMode) : ''}`)
+            const failureText = limitError === undefined || limitError.message === result.error.message
+              ? result.error.message : `${limitError.message}\n${result.error.message}`
+            throw new CodeRunFailedError(`code run failed (${result.error.kind}): ${failureText}${logsText}${sandboxText}${result.sandbox?.denied ? escalationGuidance(runtime.sandboxMode) : ''}`)
           }
           return {
             logs: result.logs,

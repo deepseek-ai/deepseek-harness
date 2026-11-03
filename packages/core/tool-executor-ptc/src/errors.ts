@@ -1,7 +1,7 @@
 /** Program execution failures reported by PTC. @module */
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 
-/** A nested call rejected before dispatch because its program exhausted the call limit. */
+/** Abort reason when a program exhausts its tool-call allowance; the excess call is never dispatched. */
 export class ToolCallLimitExceededError extends HarnessError {
   /**
    * Describe the rejected call and how to correct the program.
