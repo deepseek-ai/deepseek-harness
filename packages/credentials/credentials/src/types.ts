@@ -61,14 +61,16 @@ export type CredentialRecord = ApiKeyRecord | GrantRecord
 
 /**
  * Source and writability facts for one reference, safe for configuration UIs —
- * never the value. The view has no slot a value could ride in, which is what
- * lets the whole read half cross the Remote wire.
+ * never the full value. Providers may include a masked preview of a managed
+ * credential; ambient credentials do not expose a preview.
  */
 export interface CredentialInfo {
   /** Whether resolving the reference would currently return a value. */
   configured: boolean
   /** Source layer currently supplying the value; absent while unconfigured. */
   source?: string
+  /** Masked managed value for display only; short values must be fully masked. */
+  preview?: string
   /** Whether the active provider can write this reference. */
   writable: boolean
 }

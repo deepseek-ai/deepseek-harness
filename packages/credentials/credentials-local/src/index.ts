@@ -633,7 +633,10 @@ export class LocalCredentialProvider extends CredentialProvider {
 
   override describe(ref: CredentialRef): Promise<CredentialInfo> {
     const stored = this.values.get(ref)
-    if (stored !== undefined) return Promise.resolve({ configured: true, source: 'file', writable: true })
+    if (stored !== undefined) return Promise.resolve({
+      configured: true, source: 'file', writable: true,
+      preview: stored.length > 12 ? `${stored.slice(0, 4)}…${stored.slice(-4)}` : '••••••••',
+    })
     // Every reference is writable: a set writes the managed file, which
     // outranks every fallback, and an unset exposes the fallback again.
     if (this.inherited(ref) !== undefined) return Promise.resolve({ configured: true, source: 'env', writable: true })

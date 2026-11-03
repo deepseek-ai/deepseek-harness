@@ -16,8 +16,10 @@
       - button "编辑 DeepSeek (deepseek-official)": 编辑
       - text: DeepSeek deepseek-official API 密钥
       - button "认证说明": "?"
+      - button "清除已保存密钥"
       - textbox "API 密钥":
-        - /placeholder: 留空使用已保存凭据
+        - /placeholder: 留空保留现有认证（已保存 API key）
+      - paragraph: 已保存 API key：dsh_…test
       - group:
         - text: 自定义设置 API 地址
         - textbox "API 地址":

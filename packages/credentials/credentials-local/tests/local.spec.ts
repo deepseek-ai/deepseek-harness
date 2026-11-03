@@ -59,6 +59,23 @@ describe('resolveSpec', () => {
 })
 
 describe('layering and reads', () => {
+  it.each([
+    ['a', '••••••••'],
+    ['123456789012', '••••••••'],
+    ['1234567890123', '1234…0123'],
+    ['sk-managed-secret-abcd', 'sk-m…abcd'],
+  ])('describes a stored credential with a masked preview (%s)', async (value, preview) => {
+    const dir = await tempDir()
+    const ctx = await boot({ path: join(dir, '.credentials.yaml'), watch: false })
+    await ctx.credentials.set(KEY, value)
+    const info = await ctx.credentials.describe(KEY)
+    expect(info).toEqual({ configured: true, source: 'file', writable: true, preview })
+    expect(info.preview).not.toBe(value)
+    expect(await ctx.credentials.resolve(KEY)).toEqual({ value, source: 'file' })
+    await ctx.credentials.unset(KEY)
+    expect(await ctx.credentials.describe(KEY)).toEqual({ configured: false, writable: true })
+  })
+
   it('treats an absent file as an empty writable store', async () => {
     const dir = await tempDir()
     const ctx = await boot({ path: join(dir, '.credentials.yaml'), watch: false })
@@ -73,7 +90,7 @@ describe('layering and reads', () => {
     const ctx = await boot({ path, watch: false })
     expect(await ctx.credentials.resolve(KEY)).toEqual({ value: 'plain', source: 'file' })
     expect(await ctx.credentials.resolve(OTHER)).toEqual({ value: 'with space', source: 'file' })
-    expect(await ctx.credentials.describe(KEY)).toEqual({ configured: true, source: 'file', writable: true })
+    expect(await ctx.credentials.describe(KEY)).toEqual({ configured: true, source: 'file', writable: true, preview: '••••••••' })
   })
 
   it('lets the managed file win over a non-empty process environment', async () => {
@@ -83,7 +100,7 @@ describe('layering and reads', () => {
     const ctx = await boot({ path, watch: false })
     vi.stubEnv('DSH_CRED_TEST', 'from-env')
     expect(await ctx.credentials.resolve(KEY)).toEqual({ value: 'from-file', source: 'file' })
-    expect(await ctx.credentials.describe(KEY)).toEqual({ configured: true, source: 'file', writable: true })
+    expect(await ctx.credentials.describe(KEY)).toEqual({ configured: true, source: 'file', writable: true, preview: '••••••••' })
   })
 
   it('treats an empty environment value as absent, falling through to the file', async () => {
@@ -93,7 +110,7 @@ describe('layering and reads', () => {
     const ctx = await boot({ path, watch: false })
     vi.stubEnv('DSH_CRED_TEST', '')
     expect(await ctx.credentials.resolve(KEY)).toEqual({ value: 'stored', source: 'file' })
-    expect(await ctx.credentials.describe(KEY)).toEqual({ configured: true, source: 'file', writable: true })
+    expect(await ctx.credentials.describe(KEY)).toEqual({ configured: true, source: 'file', writable: true, preview: '••••••••' })
   })
 
   it('fails boot loud when the document exists but cannot be read', async () => {
@@ -131,7 +148,7 @@ describe('layer ladder', () => {
     expect(await ctx.credentials.resolve(KEY)).toEqual({ value: 'stored', source: 'file' })
     // A key sitting in the user's .env does not make the stored one
     // unwritable.
-    expect(await ctx.credentials.describe(KEY)).toEqual({ configured: true, source: 'file', writable: true })
+    expect(await ctx.credentials.describe(KEY)).toEqual({ configured: true, source: 'file', writable: true, preview: '••••••••' })
     await expect(ctx.credentials.set(KEY, 'rotated')).resolves.toBeUndefined()
     expect(await ctx.credentials.resolve(KEY)).toEqual({ value: 'rotated', source: 'file' })
   })
@@ -230,7 +247,7 @@ describe('layer ladder', () => {
       { source: 'user-env', path: '/home/.dsh/.env', values: { DSH_CRED_TEST: 'from-user-env' } },
     ])
     expect(await ctx.credentials.resolve(KEY)).toEqual({ value: 'stored', source: 'file' })
-    expect(await ctx.credentials.describe(KEY)).toEqual({ configured: true, source: 'file', writable: true })
+    expect(await ctx.credentials.describe(KEY)).toEqual({ configured: true, source: 'file', writable: true, preview: '••••••••' })
     await expect(ctx.credentials.set(KEY, 'next')).resolves.toBeUndefined()
     expect(await ctx.credentials.resolve(KEY)).toEqual({ value: 'next', source: 'file' })
   })
@@ -382,7 +399,7 @@ describe('document writes', () => {
     const reread = await boot({ path, watch: false })
     expect(await reread.credentials.resolve(KEY)).toEqual({ value: multiLine, source: 'file' })
     expect(await reread.credentials.resolve(OTHER)).toEqual({ value: mixedQuotes, source: 'file' })
-    expect(await reread.credentials.describe(KEY)).toEqual({ configured: true, source: 'file', writable: true })
+    expect(await reread.credentials.describe(KEY)).toEqual({ configured: true, source: 'file', writable: true, preview: 'line… two' })
   })
 
   it('unsets only the owning entry, with its own annotation, and keeps an absent unset silent', async () => {

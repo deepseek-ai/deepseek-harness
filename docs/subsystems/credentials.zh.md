@@ -32,19 +32,21 @@ interface ResolvedCredential {
 
 ## 描述
 
-`describe(ref)` 在绝不暴露值的前提下回应配置界面：引用当前是否可解析、来自哪一层、`set` 当前能否成功。本地提供方将其管理的文件排在启动环境之前，因此保存值总会成为生效且可写的那一层；移除后会重新使用启动环境或 `.env` 后备值。
+`describe(ref)` 报告引用是否可解析、来源、可写性，以及可选的托管凭据脱敏摘要。它不返回完整值，也不提供环境凭据摘要。本地提供方将其管理的文件排在启动环境之前，因此保存值总会成为生效且可写的那一层；移除后会重新使用启动环境或 `.env` 后备值。
 
 ```ts type-equiv
 /**
  * Source and writability facts for one reference, safe for configuration UIs —
- * never the value. The view has no slot a value could ride in, which is what
- * lets the whole read half cross the Remote wire.
+ * never the full value. Providers may include a masked preview of a managed
+ * credential; ambient credentials do not expose a preview.
  */
 interface CredentialInfo {
   /** Whether resolving the reference would currently return a value. */
   configured: boolean
   /** Source layer currently supplying the value; absent while unconfigured. */
   source?: string
+  /** Masked managed value for display only; short values must be fully masked. */
+  preview?: string
   /** Whether the active provider can write this reference. */
   writable: boolean
 }

@@ -199,7 +199,10 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     const { mode } = retryPolicyDefaults(schema, node, schema.getPath(namespace.base, path))
     return { ...loaded, retryPolicy: { ...policy, mode } }
   })
-  const [keyDraft, setKeyDraft] = useState('')
+  // An empty string preserves authentication; a reference stages its removal.
+  const [keyDraft, setKeyDraft] = useState<string | { readonly ref: string }>('')
+  const keyText = typeof keyDraft === 'string' ? keyDraft : ''
+  const keyRemoval = typeof keyDraft === 'string' ? undefined : keyDraft
   const [busy, setBusy] = useState(false)
   const [listBusy, setListBusy] = useState(false)
   const { onBusyChange } = props
@@ -242,6 +245,8 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       ? schema.deletePath(current, [key])
       : schema.setPath(current, [key], value))
   }
+  const clearsDerivedRef = keyRemoval !== undefined && layout === 'pi-ai'
+    && props.nativeAuth !== undefined && stringAt(draft, 'apiKeyEnv') === deriveKeyRef(props.provider)
 
   // The model list is validated by the same per-row checker for both families,
   // so a bad row is named by its position rather than by a blanket message.
@@ -274,18 +279,18 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   const retryFailure = retryNode === undefined || retryDefaults === undefined || props.credentialOnly === true
     ? undefined
     : retryPolicyFailure(schema, retryNode, schema.getPath(draft, ['retryPolicy']), retryDefaults, t)
-  const keyFailure = apiKeyFailure(keyDraft)
+  const keyFailure = apiKeyFailure(keyText)
   // What a probe or a write must carry: the typed key with paste whitespace
   // removed. A blank field yields an empty string, which both call sites read
   // as "no key supplied" rather than as a key — that is how a card whose
   // provider already has a stored key is edited without re-entering it.
-  const keyValue = keyDraft.trim()
+  const keyValue = keyText.trim()
   // A route whose protocol cannot authenticate without a key needs a key reference or a typed key.
   const protocolNeedsKeyHere = layout === 'pi-ai' && protocolNeedsKey(probeApi)
     && stringAt(draft, 'apiKeyEnv') === undefined && stringAt(fallback, 'apiKeyEnv') === undefined
   const protocolKeyMissing = protocolNeedsKeyHere && keyValue.length === 0
   const credentialRequiredFailure = (props.credentialRequired === true
-    && keyDraft.length > 0 && keyValue.length === 0) || protocolKeyMissing
+    && keyText.length > 0 && keyValue.length === 0) || protocolKeyMissing
     ? 'keyRequired' as const
     : undefined
   const shownKeyFailure = credentialRequiredFailure ?? keyFailure
@@ -308,12 +313,16 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
    */
   const applyOnce = async (): Promise<string | undefined> => {
     const ns = namespace.ns
+    // A catalog provider returns to native authentication when this page's
+    // derived reference is removed. Explicit aliases and custom routes keep
+    // their reference so its environment fallback remains addressable.
+    const profileDraft = clearsDerivedRef ? schema.deletePath(draft, ['apiKeyEnv']) : draft
     // A pi-ai profile names the conventional reference only when this page is
     // about to store a key. Otherwise the provider keeps its native auth path.
-    const next = layout === 'pi-ai' && stringAt(draft, 'apiKeyEnv') === undefined
-      && stringAt(fallback, 'apiKeyEnv') === undefined && keyValue.length > 0
-      ? schema.setPath(draft, ['apiKeyEnv'], keyRef)
-      : draft
+    const next = layout === 'pi-ai' && stringAt(profileDraft, 'apiKeyEnv') === undefined
+      && stringAt(schema.getPath(namespace.base, settingsPath), 'apiKeyEnv') === undefined && keyValue.length > 0
+      ? schema.setPath(profileDraft, ['apiKeyEnv'], keyRef)
+      : profileDraft
     if (props.credentialOnly !== true) {
       // The same checker gates the submit button, so a card cannot reach this
       // with a bad row; it stays because the schema check below would refuse
@@ -346,7 +355,10 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       setExpectedRevision(written.view.revision)
       setDraft(next)
     }
-    if (keyValue.length > 0) {
+    if (keyRemoval !== undefined) {
+      const removed = await operations.removeCredential(keyRemoval.ref)
+      if (removed !== undefined) return removed
+    } else if (keyValue.length > 0) {
       const stored = await operations.storeCredential(keyRef, keyValue)
       if (stored !== undefined) return stored
     }
@@ -410,7 +422,9 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     // A named reference is the only credential the adapter reads for this
     // route. Without one, a catalog route authenticates the way the directory
     // reports, and a declared route sends no key at all.
-    const namedRef = stringAt(fallback, 'apiKeyEnv')
+    const namedRef = clearsDerivedRef
+      ? stringAt(schema.getPath(namespace.base, settingsPath), 'apiKeyEnv')
+      : stringAt(fallback, 'apiKeyEnv')
     const nativeAuth = namedRef === undefined ? props.nativeAuth : undefined
     // Display method-neutral references without changing the adapter's lookup.
     const authRefs = namedRef === undefined
@@ -424,12 +438,18 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     const detectedRef = detected?.[0]
     const detectedVisibleRef = detectedRef === undefined || !visibleRefs.includes(detectedRef) ? undefined : detectedRef
     const missingRefs = checkedRefs.length > 0 && checkedRefs.every(([, info]) => info?.configured === false)
-    const savedCredential = detected?.[1]?.source === 'file'
-    const credentialHint = keyDraft.length > 0 || savedCredential || keyHint === undefined || props.credentialRequired === true
+    const savedPreview = detected?.[1]?.preview
+    const savedCredential = detected?.[1]?.source === 'file' || savedPreview !== undefined
+    const removalRef = keyRemoval?.ref ?? detectedRef
+    const credentialHint = keyText.length > 0 || props.credentialRequired === true
       ? undefined
-      : t(detectedRef === undefined ? missingRefs ? 'keyFallbackMissing' : 'keyFallbackUnchecked'
-        : detectedVisibleRef === undefined ? 'keyFallbackDetectedHidden' : 'keyFallbackDetected')
-        .replace('{hint}', () => detectedVisibleRef ?? keyHint)
+      : keyRemoval !== undefined ? t('keyRemovePending')
+        : keyHint === undefined ? undefined
+          : savedCredential
+            ? savedPreview === undefined ? t('keySaved') : t('keySavedPreview').replace('{preview}', () => savedPreview)
+            : t(detectedRef === undefined ? missingRefs ? 'keyFallbackMissing' : 'keyFallbackUnchecked'
+              : detectedVisibleRef === undefined ? 'keyFallbackDetectedHidden' : 'keyFallbackDetected')
+              .replace('{hint}', () => detectedVisibleRef ?? keyHint)
     const keyHelp = visibleRefs.length === 0
       ? undefined
       : t('keyHelp').replace('{env}', () => visibleRefs.join(' / '))
@@ -442,7 +462,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     const keylessNativeAuth = nativeAuth?.env.length === 0 && nativeAuth.oauth
     const keyPlaceholder = keyHint === undefined || props.credentialRequired === true
       ? t('keyPlaceholder')
-      : t(savedCredential ? 'keyPlaceholderSaved' : 'keyPlaceholderFallback').replace('{hint}', () => keyHint)
+      : t(keyRemoval === undefined && savedCredential ? 'keyPlaceholderSaved' : 'keyPlaceholderFallback').replace('{hint}', () => keyHint)
     /** What both family editors take: the rows, whose layer owns them, and the two writes. */
     const catalogProps = {
       models,
@@ -462,10 +482,19 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
             <span className={styles['fieldLabel']}>
               {t('keyInput')}
               {authHelp}
+              {keyText.length === 0 && props.credentialRequired !== true && removalRef !== undefined
+                && (keyRemoval !== undefined || (savedCredential && detected?.[1]?.writable === true))
+                ? <button
+                  type="button"
+                  className={styles['linkButton']}
+                  disabled={disabled}
+                  onClick={() => { setKeyDraft(keyRemoval !== undefined ? '' : { ref: removalRef }) }}
+                >{t(keyRemoval !== undefined ? 'keyRemoveUndo' : 'keyRemove')}</button>
+                : null}
             </span>
             <ApiKeyInput
               t={t}
-              value={keyDraft}
+              value={keyText}
               placeholder={keyPlaceholder}
               aria-label={t('keyInput')}
               aria-invalid={shownKeyFailure !== undefined && !protocolKeyMissing}
@@ -475,7 +504,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
               disabled={disabled}
               onChange={(event) => { setKeyDraft(event.target.value) }}
             />
-            {credentialHint === undefined ? null : <p id={`${props.provider}-credential-hint`} className={styles[missingRefs ? 'notice' : detectedRef === undefined ? 'advancedHint' : 'savedNotice']}>{credentialHint}</p>}
+            {credentialHint === undefined ? null : <p id={`${props.provider}-credential-hint`} className={styles[keyRemoval !== undefined || missingRefs ? 'notice' : detectedRef === undefined ? 'advancedHint' : 'savedNotice']}>{credentialHint}</p>}
             {/* A key the protocol requires is a requirement still to meet, not a fault. */}
             {shownKeyFailure === undefined
               ? null
@@ -597,7 +626,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
                   reasoningLevelsOnly={reasoning.levelsOnly}
                   defaultInput={Array.isArray(defaultInput) ? defaultInput : undefined}
                   probe={probe}
-                  probeBlocked={shownKeyFailure}
+                  probeBlocked={keyRemoval !== undefined ? 'keyRemovePending' : shownKeyFailure}
                   operations={operations}
                   onBusyChange={setListBusy}
                 />

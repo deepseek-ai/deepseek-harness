@@ -60,11 +60,11 @@ declare const ctx: Context
 
 const ref = credentialRef('DEEPSEEK_API_KEY')
 await ctx.credentials.set(ref, 'sk-…')          // save
-await ctx.credentials.describe(ref)             // { configured, source?, writable } — never the value
+await ctx.credentials.describe(ref)             // { configured, source?, preview?, writable } — never the value
 await ctx.credentials.unset(ref)                // remove
 ```
 
-A key you save is usable by the next request that names it, and `describe` reports whether it is set, where it comes from, and whether you can write to it — never the value itself. Records persist in the same file, addressed by `<owner>/<id>` and managed with the seam's record operations (`readRecord`, `describeRecord`, `listRecords`, `modifyRecord`, `deleteRecord`).
+A key you save is usable by the next request that names it, and `describe` reports whether it is set, where it comes from, and whether you can write to it — never the full value. Stored keys longer than 12 characters expose only their first and last four characters in `preview`; shorter keys are fully masked. Environment credentials have no preview. Records persist in the same file, addressed by `<owner>/<id>` and managed with the seam's record operations (`readRecord`, `describeRecord`, `listRecords`, `modifyRecord`, `deleteRecord`).
 
 ### Where keys come from
 
