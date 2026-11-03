@@ -686,7 +686,8 @@ it.skipIf(MODE === 'record')('marks a draft change request ready for review and 
 
 it.skipIf(MODE === 'record')('shows the local changes of the Session by scope and the changes of its change requests, expanding unchanged lines', async () => {
   const { scaffold, page, root, project, tripwire } = await launchPanel('web-e2e-forge-panel-changes', 'follow-up', { branch: 'feat' })
-  // origin/main stops at the twelve-line README; the branch adds a commit, a staged file, an edit, and an untracked file.
+  // origin/main stops at the twelve-line README; the branch adds a commit, which `topic` also has, a staged file, an edit,
+  // and an untracked file.
   await writeFile(join(project, 'README.md'), Array.from({ length: 12 }, (_, index) => `line ${index + 1}\n`).join(''))
   await git(project, 'commit', '--quiet', '-am', 'readme')
   await git(project, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
@@ -695,6 +696,7 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   await writeFile(join(project, 'src', 'app.ts'), 'export const app = 1\n')
   await git(project, 'add', 'src/app.ts')
   await git(project, 'commit', '--quiet', '-m', 'app')
+  await git(project, 'branch', 'topic')
   await writeFile(join(project, 'src', 'extra.ts'), 'export const extra = 1\n')
   await git(project, 'add', 'src/extra.ts')
   await writeFile(join(project, 'README.md'), Array.from({ length: 12 }, (_, index) => index === 9 ? 'line ten\n' : `line ${index + 1}\n`).join(''))
@@ -719,7 +721,8 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   await card.getByRole('button', { name: '查看本会话的变更：4 个文件，新增 4 行，删除 1 行', exact: true }).click()
 
   const local = page.locator('[data-forge-changes="local"]')
-  await local.getByText('与 origin/main 比较，包含未提交的修改', { exact: true }).waitFor({ timeout: 20_000 })
+  await local.getByRole('button', { name: '基准分支：origin/main', exact: true }).waitFor({ timeout: 20_000 })
+  await local.getByText('包含未提交的修改', { exact: true }).waitFor()
   const files = local.locator('[data-forge-diff-file]')
   await expect.poll(() => files.evaluateAll(sections => sections.map(section => section.getAttribute('data-forge-diff-file'))), { timeout: 20_000 })
     .toEqual(['src/app.ts', 'src/extra.ts', 'README.md', 'notes.md'])
@@ -765,6 +768,18 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
     ? event.data.content.flatMap(block => block.type === 'text' && block.text.includes('## User Comment') ? [block.text] : []) : [])
   expect(comments).toHaveLength(1)
   await compareOrRefreshGolden(join(EXPECTED, 'review-message.expected.md'), comments.join('').trimEnd(), MODE)
+
+  // Compared with `topic`, which already has the committed `src/app.ts`, the branch scope keeps only the later changes.
+  await local.getByRole('button', { name: '基准分支：origin/main', exact: true }).click()
+  const bases = page.locator('[data-forge-base-menu]')
+  await bases.getByRole('menuitem', { name: 'topic', exact: true }).waitFor({ timeout: 20_000 })
+  await compareOrRefreshGolden(join(EXPECTED, 'base-menu.expected.md'), await captureStableAria(page, '[data-forge-base-menu]', scaffold.workspaceCwd), MODE)
+  await bases.getByRole('textbox', { name: '搜索分支' }).fill('TOP')
+  await expect.poll(() => bases.getByRole('menuitem').allTextContents()).toEqual(['topic'])
+  await bases.getByRole('textbox', { name: '搜索分支' }).press('Enter')
+  await local.getByRole('button', { name: '基准分支：topic', exact: true }).waitFor()
+  await expect.poll(() => files.evaluateAll(sections => sections.map(section => section.getAttribute('data-forge-diff-file'))), { timeout: 20_000 })
+    .toEqual(['src/extra.ts', 'README.md', 'notes.md'])
 
   await local.getByRole('button', { name: '分支', exact: true }).click()
   await page.getByRole('menuitem', { name: '已暂存', exact: true }).click()

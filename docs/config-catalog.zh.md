@@ -1046,7 +1046,7 @@ export interface CotTranslationPreferences {
 ## `@deepseek-ai/dsh-experimental-client-ui-forge`
 
 - `inject`: `forge` · `forgeSession` · `sessionProjections` · `workingDirectory` · `fs` · `subprocess` · `sandbox` · `sandboxPolicy` · `agents`
-- `source`: [`packages/experimental/client-ui-forge/src/types.ts:318`](../packages/experimental/client-ui-forge/src/types.ts)
+- `source`: [`packages/experimental/client-ui-forge/src/types.ts:345`](../packages/experimental/client-ui-forge/src/types.ts)
 
 ```ts config-catalog
 /** Host settings of the forge panel Remote. */
@@ -1061,7 +1061,7 @@ export interface Config {
   maxOutputBytes?: number
   /** Deadline in milliseconds for one provider sign-in probe. */
   readinessTimeoutMs?: number
-  /** Most local branches listed as worktree bases. */
+  /** Most local branches listed as worktree bases, and most branches in each group of base branches listed for the `branch` scope. */
   maxBranches?: number
   /**
    * Prefix of the branch and checkout directory created for a Session worktree; the first eight
