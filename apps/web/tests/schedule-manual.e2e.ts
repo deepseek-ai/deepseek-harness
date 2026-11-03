@@ -1,6 +1,7 @@
 /** Schedule creation, prompt prefill, and editing through the shipped Web composition. */
 import { chromium } from 'playwright'
 import { expect, it } from 'vitest'
+import type { ScheduleTiming } from '@deepseek-ai/dsh-schedule/client'
 import { launchWebScaffold, watchConsole } from './scaffold.ts'
 import { writeComposerDraft } from './support.ts'
 
@@ -46,6 +47,105 @@ it.each([
     try { await browser?.close() } finally { await scaffold.close() }
   }
 })
+
+it('opens stored timing fields immediately without selecting another repeat option', async () => {
+  const scaffold = await launchWebScaffold({ firstUse: true })
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
+  try {
+    const clock = new Date(Date.now() + 4 * 60 * 60_000).toISOString().slice(11, 16)
+    const choices = [
+      { timing: { kind: 'after', after_seconds: 3600 }, repeat: '仅一次', field: '日期' },
+      { timing: { kind: 'at', at: '2099-01-05T09:00:00.000Z' }, repeat: '仅一次', field: '日期' },
+      { timing: { kind: 'every', every_seconds: 300 }, repeat: '每 N 分钟', field: '重复间隔' },
+      { timing: { kind: 'daily', daily: { time: `${clock}:00`, time_zone: 'UTC' } }, repeat: '每天', field: '时间' },
+      { timing: { kind: 'weekly', weekly: { time: `${clock}:45`, time_zone: 'UTC', weekdays: [1, 5] } },
+        repeat: '每周', field: '星期' },
+    ] satisfies { timing: ScheduleTiming; repeat: string; field: string }[]
+    const tasks = []
+    for (const [index, choice] of choices.entries()) {
+      const task = await scaffold.ctx.schedule.create({ title: `Stored task ${index}`, prompt: 'Review the project', timing: choice.timing })
+      await scaffold.ctx.schedule.edit({ id: task.id, action: 'update', patch: { active: false } })
+      tasks.push({ ...choice, task })
+    }
+    browser = await chromium.launch()
+    const page = await browser.newPage({ viewport: { width: 1440, height: 960 }, locale: 'zh-CN', timezoneId: 'Asia/Shanghai' })
+    await page.addInitScript(() => { localStorage.setItem('dsh.locale', 'zh') })
+    const tripwire = watchConsole(page)
+    await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+    await page.getByRole('button', { name: '自动化任务', exact: true }).click()
+    const manager = page.getByTestId('task-manager-page')
+    await manager.getByRole('button', { name: '全部', exact: true }).click()
+    for (const { task, repeat, field } of tasks) {
+      await manager.getByRole('button', { name: task.title, exact: true }).click()
+      const detail = manager.getByRole('complementary', { name: '任务详情', exact: true })
+      expect(await detail.getByRole('button', { name: `重复 ${repeat}`, exact: true }).isVisible()).toBe(true)
+      const role = field === '星期' ? 'group' : field === '重复间隔' ? 'spinbutton' : 'button'
+      expect(await detail.getByRole(role, { name: field, exact: true }).isVisible()).toBe(true)
+      expect(await detail.getByRole('button', { name: '保存修改', exact: true }).isDisabled()).toBe(true)
+      expect(await scaffold.ctx.schedule.view({ id: task.id })).toMatchObject({ kind: task.kind, scheduledAt: task.scheduledAt })
+      if (field === '日期') {
+        await detail.getByRole('button', { name: '日期', exact: true }).click()
+        await page.getByRole('dialog', { name: '日期', exact: true }).waitFor()
+        await page.keyboard.press('Escape')
+      }
+    }
+    expect(tripwire.pageErrors).toEqual([])
+  } finally {
+    try { await browser?.close() } finally { await scaffold.close() }
+  }
+})
+
+it.each(['2026-03-07T16:00:00.000Z', '2026-03-08T16:00:00.000Z'])(
+  'saves a stored weekly task on %s without a false timing error', async (now) => {
+    const scaffold = await launchWebScaffold({ firstUse: true })
+    let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
+    try {
+      const task = await scaffold.ctx.schedule.create({ title: 'Weekly review', prompt: 'Review the project',
+        timing: { kind: 'weekly', weekly: { time: '02:30:00', time_zone: 'America/New_York', weekdays: [5] } } })
+      await scaffold.ctx.schedule.edit({ id: task.id, action: 'update', patch: { active: false } })
+      browser = await chromium.launch()
+      const page = await browser.newPage({ viewport: { width: 1440, height: 960 }, locale: 'zh-CN', timezoneId: 'America/New_York' })
+      await page.addInitScript((now) => {
+        localStorage.setItem('dsh.locale', 'zh')
+        Date.now = () => Date.parse(now)
+      }, now)
+      const tripwire = watchConsole(page)
+      await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+      await page.getByRole('button', { name: '自动化任务', exact: true }).click()
+      const manager = page.getByTestId('task-manager-page')
+      await manager.getByRole('button', { name: '全部', exact: true }).click()
+      await manager.getByRole('button', { name: task.title, exact: true }).click()
+      const detail = manager.getByRole('complementary', { name: '任务详情', exact: true })
+      await detail.getByRole('group', { name: '星期', exact: true }).getByRole('button').nth(0).click()
+      expect(await detail.getByRole('status').count()).toBe(0)
+      const save = detail.getByRole('button', { name: '保存修改', exact: true })
+      expect(await save.isEnabled()).toBe(true)
+      await save.click()
+      await expect.poll(async () => {
+        const record = await scaffold.ctx.schedule.view({ id: task.id })
+        return 'code' in record ? undefined : record.kind
+      }).toBe('rrule')
+      const updated = await scaffold.ctx.schedule.view({ id: task.id })
+      expect(updated).toMatchObject({ kind: 'rrule', status: 'paused', target: task.target })
+      if ('code' in updated || updated.kind !== 'rrule') throw new Error('expected an edited weekly rule')
+      expect(updated.rrule).toContain('BYDAY=MO,FR')
+
+      await page.reload({ waitUntil: 'load' })
+      await page.getByRole('button', { name: '自动化任务', exact: true }).click()
+      await manager.getByRole('button', { name: '全部', exact: true }).click()
+      await manager.getByRole('button', { name: task.title, exact: true }).click()
+      await detail.getByRole('button', { name: '重复 每周', exact: true }).waitFor()
+      expect(await detail.getByRole('group', { name: '星期', exact: true }).getByRole('button')
+        .evaluateAll(buttons => buttons.map(button => button.getAttribute('aria-pressed'))))
+        .toEqual(['true', 'false', 'false', 'false', 'true', 'false', 'false'])
+      expect(await detail.getByRole('status').count()).toBe(0)
+      expect(await save.isDisabled()).toBe(true)
+      expect(tripwire.pageErrors).toEqual([])
+    } finally {
+      try { await browser?.close() } finally { await scaffold.close() }
+    }
+  },
+)
 
 it('creates from a paused empty state, selects the task, and saves an inline edit without starting an Agent', async () => {
   // First use registers the default Workspace, which a new task's directory starts with.
@@ -222,7 +322,7 @@ it('creates and edits Custom Cron through the built UI while retaining its expli
 
     await detail.getByRole('textbox', { name: '自定义', exact: true }).fill(' ')
     expect(await detail.getByRole('button', { name: '保存修改', exact: true }).isDisabled()).toBe(true)
-    await detail.getByRole('status').getByText('请检查必填项和运行规则', { exact: true }).waitFor()
+    await detail.getByRole('status').getByText('请修改自定义规则、选择其他重复方式，或让智能体协助修改', { exact: true }).waitFor()
     expect(await scaffold.ctx.schedule.view({ id: created.id })).toEqual(created)
     await detail.getByRole('textbox', { name: '自定义', exact: true }).fill('0 10 * * 1-5')
     await detail.getByRole('button', { name: /^时区 / }).waitFor()
