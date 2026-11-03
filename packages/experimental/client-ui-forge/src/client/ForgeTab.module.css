@@ -529,6 +529,31 @@
   line-height: 20px;
 }
 
+/* The merge action takes the product accent; the doubled class outranks the shared primary fill in any stylesheet order. */
+.primaryAction.mergeAction {
+  gap: 6px;
+  padding: 0 10px 0 14px;
+  background: var(--dsw-alias-state-business-primary);
+  color: var(--dsw-alias-label-primary-foreground);
+}
+
+@media (hover: hover) {
+  .primaryAction.mergeAction:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 85%, var(--dsw-alias-label-primary));
+  }
+}
+
+/* A solid caret that points down, and up while the menu is open. */
+.mergeCaret {
+  flex: none;
+  transform: rotate(90deg);
+  transition: transform 120ms ease;
+}
+
+.mergeCaretOpen {
+  transform: rotate(-90deg);
+}
+
 /* A merge method row: its name with the note on what it does below. */
 .method {
   display: flex;
