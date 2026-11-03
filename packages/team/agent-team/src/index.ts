@@ -48,10 +48,12 @@ export class TeamService extends TypertRemoteService {
 
   static Config: z<Config> = z.object({
     maxTasks: z.number().step(1).min(1).default(DEFAULT_MAX_TASKS),
+    defaultEnabled: z.boolean().default(false),
   })
 
   private projection!: ProjectionHandle<TeamProjectionState>
   private readonly maxTasks: number
+  private readonly defaultEnabled: boolean
   private journal!: TeamJournal
   private tasks!: TeamTaskBoard
 
@@ -66,6 +68,7 @@ export class TeamService extends TypertRemoteService {
       }
     }
     this.maxTasks = positiveLimit('maxTasks', config.maxTasks ?? DEFAULT_MAX_TASKS)
+    this.defaultEnabled = config.defaultEnabled ?? false
   }
 
   protected async [Service.init](): Promise<void> {
@@ -73,6 +76,13 @@ export class TeamService extends TypertRemoteService {
     this.projection = await ctx.sessionProjections.register(teamProjectionDefinition)
     this.journal = new TeamJournal(ctx, this.projection)
     this.tasks = new TeamTaskBoard(ctx, this.journal, this.maxTasks)
+    if (this.defaultEnabled) {
+      ctx.on('agent/created', async ({ agent, source, signal }) => {
+        if (source !== 'startup' || ctx.subagents.rootOf(agent) !== agent) return
+        if (this.projection.stateOf(agent.session).enabled !== undefined) return
+        await this.setEnabled(agent, true, signal)
+      })
+    }
   }
 
   /**

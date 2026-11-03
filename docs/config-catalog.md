@@ -180,8 +180,10 @@ export interface Config {
 - `source`: [`packages/team/agent-team/src/types.ts:132`](../packages/team/agent-team/src/types.ts)
 
 ```ts config-catalog
-/** Team-service deployment limits. */
+/** Team-service defaults and deployment limits. */
 export interface Config {
+  /** Enable new roots without a saved selection before their first step; defaults to false. Resumes retain saved mode. */
+  readonly defaultEnabled?: boolean
   /** Maximum non-deleted tasks retained by one Team. */
   readonly maxTasks?: number
 }
