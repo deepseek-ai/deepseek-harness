@@ -103,6 +103,75 @@ async function waitRunning(ctx: Context, id: SessionId): Promise<Agent> {
 }
 
 describe('Tree-owned task boards', () => {
+  it.each(['spawn', 'fork'])('shares the configured root mode with real %s children', async (provider) => {
+    const { ctx, lead } = await setup(['hang', 'hang'], { defaultEnabled: true }, false)
+    expect(durable(lead).enabled).toBe(true)
+    const task = await ctx.agentTeams.createTask(lead, { subject: 'configured', description: 'shared board' })
+    const started = await spawn(ctx, lead, 'configured child', provider)
+    const child = await waitRunning(ctx, started.childId)
+    expect(ctx.agentTeams.isEnabled(child)).toBe(true)
+    expect(ctx.agentTeams.listTasks(child)).toEqual([task])
+    expect(child.session.ownEvents().filter(event => event.type === 'team/mode')).toEqual([])
+    await ctx.agentTeams.setEnabled(lead, false)
+    expect(ctx.agentTeams.isEnabled(child)).toBe(false)
+    const later = await spawn(ctx, lead, 'disabled child', provider)
+    const laterChild = await waitRunning(ctx, later.childId)
+    expect(ctx.agentTeams.isEnabled(laterChild)).toBe(false)
+    await later.dispose()
+    await started.dispose()
+  })
+
+  it.each([undefined, false])('leaves new roots off with defaultEnabled=%s', async (defaultEnabled) => {
+    const { lead } = await setup([], defaultEnabled === undefined ? {} : { defaultEnabled }, false)
+    expect(durable(lead).enabled).toBeUndefined()
+    expect(lead.session.ownEvents().filter(event => event.type === 'team/mode')).toEqual([])
+  })
+
+  it.each([false, true])('preserves a selection saved during setup: %s', async (enabled) => {
+    const { ctx } = await setup([], { defaultEnabled: true }, false)
+    const handle = await ctx.agents.create({
+      sessionId: SessionId('selected-root'),
+      setup: (_ctx, agent) => { agent.session.append('team/mode', { enabled }) },
+    })
+    expect(durable(handle.agent).enabled).toBe(enabled)
+    expect(handle.agent.session.ownEvents().filter(event => event.type === 'team/mode')).toHaveLength(1)
+    await handle.dispose()
+  })
+
+  it('initializes an ordinary fork independently of its inherited mode and tasks', async () => {
+    const { ctx, lead } = await setup([], { defaultEnabled: true }, false)
+    await ctx.agentTeams.createTask(lead, { subject: 'source', description: 'belongs to source' })
+    await ctx.agentTeams.setEnabled(lead, false)
+    const handle = await ctx.agents.create({
+      sessionId: SessionId('configured-fork'),
+      seed: lead.session.snapshotEvents(),
+      meta: { parentSession: lead.id, isSeeded: true },
+      inheritedEventCount: SessionLogOffset(lead.session.seq),
+    })
+    expect(ctx.agentTeams.isEnabled(handle.agent)).toBe(true)
+    expect(ctx.agentTeams.listTasks(handle.agent)).toEqual([])
+    expect(handle.agent.session.ownEvents().filter(event => event.type === 'team/mode')).toHaveLength(1)
+    await handle.dispose()
+  })
+
+  it('unregisters default initialization when the Team service unloads', async () => {
+    const { ctx, teamFiber } = await setup([], { defaultEnabled: true }, false)
+    await teamFiber.dispose()
+    const handle = await ctx.agents.create({ sessionId: SessionId('without-team') })
+    expect(handle.agent.session.ownEvents().filter(event => event.type === 'team/mode')).toEqual([])
+    await handle.dispose()
+  })
+
+  it('rejects Agent creation if saving the configured mode fails', async () => {
+    const { ctx } = await setup([], { defaultEnabled: true }, false)
+    const failure = new Error('mode save failed')
+    const id = SessionId('failed-mode-save')
+    vi.spyOn(ctx.sessions, 'flush').mockRejectedValueOnce(failure)
+    await expect(ctx.agents.create({ sessionId: id })).rejects.toBe(failure)
+    expect(ctx.agents.get(id)).toBeUndefined()
+    expect(ctx.sessions.get(id)).toBeUndefined()
+  })
+
   it('does not register a Team slash command', async () => {
     const { ctx, lead } = await setup([], {}, false)
     await ctx.plugin(Commands)

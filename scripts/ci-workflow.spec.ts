@@ -481,6 +481,12 @@ describe('CI workflow', () => {
 
     expect(windowsWorkflow.jobs['windows-observational']).toBeUndefined()
     expect(windowsBuild['continue-on-error']).not.toBe(true)
+    const channelCheck = buildCommands.find(step => step.name === 'Verify Desktop updater dependency versions')
+    expect(channelCheck).toMatchObject({ shell: 'pwsh' })
+    expect(channelCheck?.['continue-on-error']).not.toBe(true)
+    expect(channelCheck?.run).toContain('node apps/desktop/tests/updates/electron-updater/check-versions.mjs')
+    expect(buildCommands.indexOf(channelCheck!))
+      .toBeGreaterThan(buildCommands.findIndex(step => step.run === 'pnpm run check:ci:windows-blocking'))
     const observational = buildCommands.find(step => step.id === 'observational')
     expect(observational).toMatchObject({
       run: 'pnpm run check:ci:windows-observational-ready',

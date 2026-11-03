@@ -24,7 +24,7 @@ export function desktopCiVersion(environment, productVersion, now = new Date()) 
     }
     candidate = `${desktopBuildVersionPrefix(productVersion)}${date}.${environment.GITHUB_RUN_NUMBER}.${environment.GITHUB_RUN_ATTEMPT}`
   }
-  if (environment.DSH_DESKTOP_UPDATE_CHANNEL === 'latest' && candidate.includes('-')) throw new Error('Latest channel requires a stable version; select product or manual stable version')
+  if (environment.DSH_DESKTOP_UPDATE_CHANNEL === 'stable' && candidate.includes('-')) throw new Error('Stable channel requires a stable version; select product or manual stable version')
   try {
     const resolved = validateDesktopBuildVersion(candidate, productVersion)
     return resolved

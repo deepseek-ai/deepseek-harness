@@ -59,6 +59,7 @@ import {
   type NormalizeContext,
 } from '@deepseek-ai/dsh-session-snapshot'
 import type { Profile, ProfileContext } from '@deepseek-ai/dsh-app-boot'
+import type { PresetDefinition } from '@deepseek-ai/dsh-agent-preset-registry'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import { LlmAdapter } from '@deepseek-ai/dsh-llm'
 import type {
@@ -395,29 +396,25 @@ export interface LaunchOptions {
   welcomeNoticePending?: boolean
   /** Leave first-use Workspace initialization eligible; ordinary scenarios start after the default was removed. */
   firstUse?: boolean
-  /**
-   * Patch the shipped DeepSeek search row to a deterministic endpoint and
-   * credential reference. Browser search scenarios keep the real provider and
-   * credentials seam while avoiding external search traffic and ambient keys.
-   */
+  /** Pin the legacy Messages search endpoint and credential reference. */
   deepSeekSearch?: {
-    /** Anthropic-compatible base URL; the provider appends `/messages`. */
+    /** Anthropic-compatible base URL; `/messages` is appended. */
     baseURL?: string
-    /** Credential reference resolved by the shipped search provider. */
+    /** Credential reference read for each search. */
     apiKeyEnv: string
   }
   /**
-   * Patch the shipped DeepSeek Search and Fetch API row to a deterministic
-   * endpoint and credential reference, optionally selecting both providers as
-   * the settings switch does.
+   * Give both sections of the shipped DeepSeek Search and Fetch API row their
+   * own credential reference and, when given, endpoint, so neither follows the
+   * conversation's DeepSeek credential. Browser search scenarios keep the real
+   * providers and credentials seam while avoiding external search traffic and
+   * ambient keys.
    */
   deepSeekWebApi?: {
-    /** Search and Fetch API base URL; omitted uses the provider default. The providers append `/search` or `/fetch`. */
+    /** Base URL of both sections; omitted uses the official base. The providers append `/search` or `/fetch`. */
     baseURL?: string
-    /** Credential reference resolved by both providers. */
+    /** Credential reference of both sections. */
     apiKeyEnv: string
-    /** Select `deepseek-search-api` and `deepseek-fetch-api` in place of the shipped selection. */
-    select?: boolean
   }
   /** Preset selection default and additional declarative definitions for this scenario. */
   agentPresets?: {
@@ -689,29 +686,41 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
       { id: 'agent-preset-registry', config: { default: options.agentPresets.default } },
       { insert: (options.agentPresets.definitions ?? []).map(config => ({ id: `preset-${config.id}`, name: '@deepseek-ai/dsh-agent-preset', config })) },
     ],
-    ...options.deepSeekSearch === undefined
-      ? []
-      : [{
-        id: 'web-search-deepseek',
-        config: {
-          apiKeyEnv: options.deepSeekSearch.apiKeyEnv,
-          ...options.deepSeekSearch.baseURL === undefined ? {} : { baseURL: options.deepSeekSearch.baseURL },
-        },
-      }],
     ...options.deepSeekWebApi === undefined ? [] : [
       {
         id: 'web-deepseek-api',
         config: {
-          apiKeyEnv: options.deepSeekWebApi.apiKeyEnv,
-          ...options.deepSeekWebApi.baseURL === undefined ? {} : { baseURL: options.deepSeekWebApi.baseURL },
+          searchApiKeyEnv: options.deepSeekWebApi.apiKeyEnv,
+          fetchApiKeyEnv: options.deepSeekWebApi.apiKeyEnv,
+          ...options.deepSeekWebApi.baseURL === undefined ? {} : {
+            searchBaseURL: options.deepSeekWebApi.baseURL, fetchBaseURL: options.deepSeekWebApi.baseURL,
+          },
         },
       },
-      ...options.deepSeekWebApi.select === true
-        ? [{ id: 'web', config: { searchProvider: 'deepseek-search-api', fetchProvider: 'deepseek-fetch-api' } }]
-        : [],
     ],
+    ...options.deepSeekSearch === undefined ? [] : [{
+      id: 'web-search-deepseek',
+      config: {
+        apiKeyEnv: options.deepSeekSearch.apiKeyEnv,
+        ...options.deepSeekSearch.baseURL === undefined ? {} : { baseURL: options.deepSeekSearch.baseURL },
+      },
+    }],
     { id: 'llm-deepseek', disabled: mode !== 'record' && !maskDeepSeekCredential },
   ]
+
+  // Recorded standard sessions pin the optional patch tool in their request headers.
+  if (options.replayFixture !== undefined || options.compareReplaySession === true) {
+    const config = composedRows.find(row => row.id === 'preset-standard')!.config as PresetDefinition
+    overlayPatches.push({
+      id: 'preset-standard',
+      config: {
+        ...config,
+        plugins: config.plugins.map(plugin => plugin.id === 'tool-fs'
+          ? { ...plugin, config: { ...plugin.config, applyPatch: true } }
+          : plugin),
+      },
+    })
+  }
 
   // Live fields use a shared deployment layer; process-specific ports and roots stay in CLI overlays.
   const formEntries = new Set(['agent-default-model', 'agent-preset-registry', 'llm-deepseek', 'llm-pi-ai',

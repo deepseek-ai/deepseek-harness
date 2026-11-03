@@ -1671,11 +1671,13 @@ describe('forgePanel lifecycle', () => {
     const opened = await open(repo, {}, { worktrees: true })
     await opened.ctx.forgePanel.requestWorktree(opened.session, null, signal)
     const proposed = prompt('go')
+    const row = opened.ctx.sessionProjections.checkpoint(opened.session).forgeWorktree
 
     await opened.panel.dispose()
 
     expect(opened.ctx.get('forgePanel')).toBeUndefined()
-    expect(opened.ctx.sessionProjections.checkpoint(opened.session)).not.toHaveProperty('forgeWorktree')
+    expect(opened.ctx.sessionProjections.checkpoint(opened.session)).toHaveProperty('forgeWorktree', row)
+    expect(opened.ctx.sessionProjections.checkpoint(opened.ctx.sessions.create())).not.toHaveProperty('forgeWorktree')
     sendPrompt(opened.agent, 'go')
     await expect(proposeStep(opened.ctx, opened.agent, { turn: 1, step: 1, messages: [proposed] })).resolves.toEqual({ kind: 'enter', messages: [proposed] })
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(repo)

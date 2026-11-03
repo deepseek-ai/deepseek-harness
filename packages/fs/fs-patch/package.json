@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-fs-patch",
   "description": "Pure Codex-style patch parser and LF text updater with structured match failures",
-  "version": "0.2.2-alpha.2",
+  "version": "0.2.2-alpha.3",
   "publishConfig": {
     "access": "public"
   },

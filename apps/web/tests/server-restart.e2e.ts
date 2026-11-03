@@ -84,6 +84,24 @@ class RestartableServer {
   logs(): string { return this.output.replace(/([?&]token=)[A-Za-z0-9_-]+/gu, '$1<redacted>') }
 }
 
+type HostRpc = <T>(endpoint: string, args: object) => Promise<T>
+
+/** Authenticate against one server process and return its Host RPC caller. */
+async function hostRpc(url: string): Promise<HostRpc> {
+  const authenticated = await fetch(url, { redirect: 'manual' })
+  const cookie = authenticated.headers.get('set-cookie')?.split(';', 1)[0]
+  if (cookie === undefined) throw new Error('Server did not issue an authentication cookie')
+  return async <T>(endpoint: string, args: object): Promise<T> => {
+    const response = await fetch(new URL('/api/' + endpoint, url), {
+      method: 'POST', headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ type: 'client-request', rpcId: randomUUID(), method: endpoint, payload: { args } }),
+    })
+    const result = await response.json() as { result: { ok: boolean; value: T; error?: { message: string } } }
+    if (!result.result.ok) throw new Error(`${endpoint}: ${String(result.result.error?.message)}`)
+    return result.result.value
+  }
+}
+
 it.each([false, true])('keeps the same revision, Session and page across a server restart (delayed startup: %s)', async (holdStartup) => {
   const world = await mkdtemp(join(tmpdir(), 'dsh-server-restart-'))
   onTestFinished(() => rm(world, { recursive: true, force: true }))
@@ -118,18 +136,7 @@ it.each([false, true])('keeps the same revision, Session and page across a serve
 
   const url = await server.start(0)
   const port = Number(new URL(url).port)
-  const authenticated = await fetch(url, { redirect: 'manual' })
-  const cookie = authenticated.headers.get('set-cookie')?.split(';', 1)[0]
-  if (cookie === undefined) throw new Error('Server did not issue an authentication cookie')
-  const rpc = async <T>(endpoint: string, args: object): Promise<T> => {
-    const response = await fetch(new URL('/api/' + endpoint, url), {
-      method: 'POST', headers: { 'content-type': 'application/json', cookie },
-      body: JSON.stringify({ type: 'client-request', rpcId: randomUUID(), method: endpoint, payload: { args } }),
-    })
-    const result = await response.json() as { result: { ok: boolean; value: T; error?: { message: string } } }
-    if (!result.result.ok) throw new Error(`${endpoint}: ${String(result.result.error?.message)}`)
-    return result.result.value
-  }
+  const rpc = await hostRpc(url)
   await rpc('workspace/create', { request: { path: workspacePath } })
   const scenarioId = randomUUID()
 
@@ -233,4 +240,31 @@ it.each([false, true])('keeps the same revision, Session and page across a serve
   expect(errors).toEqual([])
   expect(streamErrors).toEqual([])
   expect(navigations).toBe(0)
+})
+
+it('keeps a live blank Session blank across a graceful server restart', async () => {
+  const world = await mkdtemp(join(tmpdir(), 'dsh-server-restart-'))
+  onTestFinished(() => rm(world, { recursive: true, force: true }))
+  // The scenario runs no model turn, so the model endpoint is never contacted.
+  const server = new RestartableServer(world, 'http://127.0.0.1:9')
+  onTestFinished(() => server.stop())
+  const workspacePath = join(world, 'workspace')
+  await mkdir(workspacePath)
+  onTestFailed(async () => {
+    await writeFile(join(REPO_ROOT, '.artifacts', 'server-restart-blank-' + randomUUID() + '.json'), JSON.stringify({ server: server.logs() }, null, 2))
+  })
+
+  const before = await hostRpc(await server.start(0))
+  const { workspace } = await before<{ workspace: { id: string } }>('workspace/create', { request: { path: workspacePath } })
+  const { sessionId } = await before<{ sessionId: string }>('session/create', { request: { workspaceId: workspace.id } })
+  const listed = async (rpc: HostRpc) => (await rpc<{
+    items: { sessionId: string; blank: boolean; agentAvailable: boolean }[]
+  }>('session/list', { _request: {} })).items.find(item => item.sessionId === sessionId)
+  expect(await listed(before)).toMatchObject({ blank: true, agentAvailable: true })
+
+  // SIGTERM unloads the Web layer, including the list projection, before its live Session detaches;
+  // stopping right after creation also precedes the throttled checkpoint of the Session's setup events.
+  await server.stop()
+  const after = await hostRpc(await server.start(0))
+  expect(await listed(after)).toMatchObject({ blank: true, agentAvailable: false })
 })

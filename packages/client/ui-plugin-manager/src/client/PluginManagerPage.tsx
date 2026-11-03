@@ -17,7 +17,7 @@ import {
   IconDownloadOutlineRegular, IconInfoOutlineRegular, IconPlusOutlineRegular, IconRefreshOutlineRegular, IconTrashOutlineRegular,
   IconWarningOutlineRegular, Input, Menu, MenuItemButton, Modal, pointerModality,
   PluginArtworkDefault, PluginArtworkLoop, PluginArtworkSearch, PluginArtworkSubagent, PluginArtworkTerminal,
-  SegmentedTabs, StateDot, Switch, Tag, TerminalBlock, Toast, Tooltip, useAnchoredPosition, useDismissOnOutsidePointer,
+  SegmentedTabs, StateDot, Switch, Tag, TerminalBlock, Toast, Tooltip, useDismissOnOutsidePointer,
   type IconProps, type StateDotState, type TerminalBlockLabels,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
@@ -1043,13 +1043,10 @@ function InstallDialog({
   const registryShown = install.registryOpen && phase === 'idle'
   const specComposition = useInstallComposition(install.open && phase === 'idle')
   const registryComposition = useInstallComposition(install.open && registryShown)
-  const registryPosition = useAnchoredPosition({
-    open: registryShown, anchorRef: registryToggleRef, panelRef: registryPanelRef, align: 'end', gap: 6, margin: 12,
-  })
-  const registryReady = registryShown && registryPosition !== null
+  const registryAnchorName = `--dsh-registry-${registryId.replaceAll(':', '')}`
   useEffect(() => {
-    if (registryReady && install.registryError) registryCustomRef.current?.focus()
-  }, [registryReady, install.registryError])
+    if (registryShown && install.registryError) registryCustomRef.current?.focus()
+  }, [registryShown, install.registryError])
   // The hook only ever asks to close.
   useDismissOnOutsidePointer(registryToggleRef, registryShown, onToggleRegistry, registryPanelRef)
   useEffect(() => {
@@ -1199,6 +1196,7 @@ function InstallDialog({
             </button>
             <button
               ref={registryToggleRef}
+              style={{ anchorName: registryAnchorName }}
               type="button"
               className={css.registryToggle}
               aria-expanded={install.registryOpen}
@@ -1248,7 +1246,7 @@ function InstallDialog({
                 ref={registryPanelRef}
                 id={registryId}
                 className={css.registry}
-                style={registryPosition ?? { visibility: 'hidden', left: 0, top: 0 }}
+                style={{ positionAnchor: registryAnchorName }}
                 data-install-registry
                 aria-label={t('registryLegend')}
                 onKeyDown={(event) => {

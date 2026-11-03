@@ -28,6 +28,7 @@ import { SessionScheduleHover } from '../src/client/SessionScheduleHover.tsx'
 import { SessionScheduleMark } from '../src/client/SessionScheduleMark.tsx'
 import { ScheduleTurnCard, type ScheduleTurnCardInjected } from '../src/client/ScheduleTurnCard.tsx'
 import { en, NS, zh } from '../src/client/locales.ts'
+import * as managerLocales from '../src/client/task-manager-locales.ts'
 
 const Empty = () => null
 
@@ -425,8 +426,16 @@ describe('ui-schedule browser half', () => {
       expect(chip.taskBindings).toBe(body.taskBindings)
       expect(chip.hooks.catalog).toBe(body.hooks.catalog)
       const panel = injectedFace(ctx.slots.entries('main')[0]!, undefined as never) as TaskManagerInjected
-      panel.onNewTask()
-      expect(startSession).toHaveBeenCalledOnce()
+      expect(Object.keys(managerLocales).sort()).toEqual(['de', 'en', 'es', 'fr', 'ja', 'pt', 'ru', 'zh'])
+      for (const [language, dictionary] of Object.entries(managerLocales)) {
+        expect(dictionary['host.createPrompt']).not.toContain('\n')
+        ctx.locale.setLocale(language)
+        panel.onNewTask()
+        expect(startSession).toHaveBeenLastCalledWith(undefined, {
+          prompt: dictionary['host.createPrompt'], whenDraftExists: 'append',
+        })
+      }
+      expect(startSession).toHaveBeenCalledTimes(8)
     } finally {
       await fiber.dispose()
       owner()

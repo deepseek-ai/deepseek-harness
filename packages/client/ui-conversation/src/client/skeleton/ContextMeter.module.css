@@ -65,12 +65,19 @@
   line-height: 20px;
   color: var(--dsw-alias-label-secondary);
   cursor: default;
-  max-width: var(--dsh-anchored-max-width, none);
-  max-height: var(--dsh-anchored-max-height, none);
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 12px - max(12px, var(--dsh-frame-overlay-top, 12px)));
   overflow-x: hidden;
   overflow-y: auto;
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+  position-area: top span-right;
+  position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline, --dsh-context-window, --dsh-context-viewport;
+  align-self: end;
+  justify-self: start;
+  height: fit-content;
+  min-height: 0;
+  margin: 8px 0;
 }
 
 .header {
@@ -163,4 +170,23 @@
   margin: 0;
   font-variant-numeric: tabular-nums;
   color: var(--dsw-alias-label-primary);
+}
+
+@position-try --dsh-context-window {
+  position-area: none;
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: max(12px, calc(anchor(top) + 8px));
+  left: 12px;
+  right: 12px;
+  margin: 0;
+  align-self: safe end;
+  justify-self: safe start;
+}
+
+@position-try --dsh-context-viewport {
+  position-area: none;
+  inset: max(12px, var(--dsh-frame-overlay-top, 12px)) 12px 12px;
+  margin: 0;
+  align-self: safe start;
+  justify-self: safe start;
 }

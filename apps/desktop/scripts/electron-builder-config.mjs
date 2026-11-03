@@ -105,7 +105,7 @@ export function createElectronBuilderConfig(
   // the artifact names, the update feed, and the installed app.getVersion() the updater compares against.
   const productVersion = JSON.parse(readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8')).version
   const buildVersion = resolveDesktopBuildVersion(env, productVersion)
-  if (update?.channel === 'latest' && buildVersion.includes('-')) throw new Error('desktop package: latest requires a stable version')
+  if (update?.channel === 'stable' && buildVersion.includes('-')) throw new Error('desktop package: stable requires a stable version')
   const packaged = resolveDesktopBuildCommit(env)
   return {
     appId,

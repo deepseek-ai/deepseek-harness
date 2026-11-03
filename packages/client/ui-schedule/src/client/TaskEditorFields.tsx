@@ -18,6 +18,7 @@ import { formatScheduleFrequency, zoneLabel } from './schedule-format.ts'
 import type { FrequencyZone } from './schedule-format.ts'
 import { RuleStepper, RuleWeekdayRow } from './TaskRuleControls.tsx'
 import { IconCalendarOutlineRegular } from './CalendarIcon.tsx'
+import type { TaskManagerKey } from './task-manager-locales.ts'
 import css from './TaskManagerPage.module.css'
 
 /** Local form values; only Save writes a task. */
@@ -58,24 +59,29 @@ export function taskDraft(task: ScheduleCatalogEntry): TaskEditorDraft {
   }
 }
 
-/** Required fields and guided selections that the form can validate locally. */
-export function taskDraftValid(draft: TaskEditorDraft, changes?: SchedulePatch): boolean {
-  const fieldsValid = draft.title.trim() !== '' && draft.prompt.trim() !== ''
-    && draft.title.trim().length <= 120
-    && (draft.target !== 'session' || draft.sessionId !== '')
-    && (draft.frequency === 'once' || draft.frequency === 'advanced'
-      || (/^[1-9]\d*$/.test(draft.interval) && Number.isSafeInteger(Number(draft.interval))))
-    && (draft.frequency !== 'weekly' || draft.weekdays.length > 0)
-    && (draft.frequency !== 'monthly' || Number.isInteger(draft.monthDay) && draft.monthDay >= 1 && draft.monthDay <= 31)
-    && (draft.frequency !== 'daily' || /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(draft.dailyTime))
-  if (!fieldsValid) return false
+/**
+ * Validate the form while retaining untouched stored timing.
+ * @param draft - Current form values.
+ * @param changes - Existing task patch; omitted validates a new timing as well.
+ * @returns First correction key, `incomplete` for missing required fields, or undefined when valid.
+ */
+export function taskDraftIssue(draft: TaskEditorDraft, changes?: SchedulePatch): TaskManagerKey | 'incomplete' | undefined {
+  if (draft.title.trim() === '' || draft.prompt.trim() === '' || draft.target === 'session' && draft.sessionId === '') return 'incomplete'
+  if (draft.title.trim().length > 120) return 'rule.invalidTitle'
+  if (draft.frequency !== 'once' && draft.frequency !== 'advanced'
+    && (!/^[1-9]\d*$/.test(draft.interval) || !Number.isSafeInteger(Number(draft.interval)))) return 'rule.invalidInterval'
+  if (draft.frequency === 'weekly' && draft.weekdays.length === 0) return 'rule.requiredWeekday'
+  if (draft.frequency === 'monthly' && (!Number.isInteger(draft.monthDay) || draft.monthDay < 1 || draft.monthDay > 31)) return 'rule.invalidMonthDay'
+  if (draft.frequency === 'daily' && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(draft.dailyTime)) return 'rule.invalidTime'
   // An untouched stored rule remains authoritative for a content-only edit.
-  if (changes !== undefined && changes.timing === undefined) return true
+  if (changes !== undefined && changes.timing === undefined) return undefined
   const timing = timingFromDraft(draft, true)
-  if (timing.kind === 'cron') return Cron.parse(timing.cron.expression, timing.cron.time_zone).kind === 'accepted'
-  if (timing.kind !== 'rrule') return true
-  const parsed = RRule.parse(timing.rrule, { rejectIneffectiveSetPositions: true })
-  return parsed.kind === 'accepted'
+  const parsed = timing.kind === 'cron' ? Cron.parse(timing.cron.expression, timing.cron.time_zone)
+    : timing.kind === 'rrule' ? RRule.parse(timing.rrule, { rejectIneffectiveSetPositions: true }) : undefined
+  if (parsed?.kind !== 'rejected') return undefined
+  if (parsed.reason === 'time_zone') return 'rule.invalidZone'
+  if (parsed.reason === 'density') return 'rule.tooComplex'
+  return draft.frequency === 'advanced' ? 'rule.invalid' : 'rule.invalidTime'
 }
 
 /** Only meaningful field changes enter the CAS edit; untouched timing is never rewritten. */
@@ -129,6 +135,8 @@ export function TaskEditorFields({ draft, onChange, projects, disabled, original
   const dateAnchor = useRef<HTMLButtonElement>(null)
   const clockAnchor = useRef<HTMLButtonElement>(null)
   const id = useId()
+  const dateAnchorName = `--dsh-schedule-date-${id.replaceAll(':', '')}`
+  const clockAnchorName = `--dsh-schedule-clock-${id.replaceAll(':', '')}`
   const rowId = (name: string): string => `${id}-${name}`
   const change = (patch: Partial<TaskEditorDraft>): void => { onChange({ ...draft, ...patch }) }
   const clock = draft.frequency === 'daily' ? `${draft.dailyTime}:00` : draft.start.slice(11)
@@ -200,23 +208,23 @@ export function TaskEditorFields({ draft, onChange, projects, disabled, original
       </div>}
       {draft.frequency === 'once' && <div className={css.ruleRow}>
         <label className={css.ruleLabel} htmlFor={rowId('date')}>{t('timing.date')}</label>
-        <button ref={dateAnchor} id={rowId('date')} type="button" disabled={disabled}
+        <button ref={dateAnchor} style={{ anchorName: dateAnchorName }} id={rowId('date')} type="button" disabled={disabled}
           className={clsx(css.ruleInput, css.ruleControl, css.pickerTrigger)} aria-label={t('timing.date')}
           aria-haspopup="dialog" aria-expanded={dateOpen} onClick={() => { setDateOpen(true) }}>
           <span>{draft.start.slice(0, 10).replaceAll('-', '/')}</span><IconCalendarOutlineRegular className={css.pickerIcon} />
         </button>
-        <DatePicker open={dateOpen && !disabled} anchorRef={dateAnchor} value={draft.start.slice(0, 10)}
+        <DatePicker open={dateOpen && !disabled} anchorRef={dateAnchor} anchorName={dateAnchorName} value={draft.start.slice(0, 10)}
           onPick={(date) => { change({ start: `${date}T${clock}` }); setDateOpen(false) }}
           onClose={() => { setDateOpen(false) }} t={t} />
       </div>}
       {draft.frequency !== 'advanced' && draft.frequency !== 'minutely' && draft.frequency !== 'hourly' && <div className={css.ruleRow}>
         <label className={css.ruleLabel} htmlFor={rowId('time')}>{t('timing.time')}</label>
-        <button ref={clockAnchor} id={rowId('time')} type="button" disabled={disabled}
+        <button ref={clockAnchor} style={{ anchorName: clockAnchorName }} id={rowId('time')} type="button" disabled={disabled}
           className={clsx(css.ruleInput, css.ruleControl, css.pickerTrigger)} aria-label={t('timing.time')}
           aria-haspopup="dialog" aria-expanded={clockOpen} onClick={() => { setClockOpen(true) }}>
           <span>{clock}</span><IconClockOutlineRegular className={css.pickerIcon} />
         </button>
-        <ClockPicker open={clockOpen && !disabled} anchorRef={clockAnchor} value={clock} seconds={draft.frequency !== 'daily'}
+        <ClockPicker open={clockOpen && !disabled} anchorRef={clockAnchor} anchorName={clockAnchorName} value={clock} seconds={draft.frequency !== 'daily'}
           onPick={(time) => { change(draft.frequency === 'daily' ? { dailyTime: time.slice(0, 5) }
             : { start: `${draft.start.slice(0, 10)}T${time}` }) }} onClose={() => { setClockOpen(false) }} t={t} />
       </div>}

@@ -330,26 +330,45 @@ describe.each(['MacIntel', 'Win32', 'Linux x86_64'])('web context menus on %s', 
     expect(await page.locator('[data-document-preview]').getByText('SECOND FILE', { exact: true }).count()).toBe(1)
     expect(tripwire.pageErrors).toEqual([])
   })
-  it('keeps context-menu rows reachable after browser zoom', async () => {
+  it('keeps context-menu layout size during browser zoom and scrolls overflowing rows', async () => {
     const cdp = await page.context().newCDPSession(page)
     try {
       await page.setViewportSize({ width: 1291, height: 480 })
       await page.locator('[data-row-key="session:context-menu-first"]').click({ button: 'right' })
       const menu = page.getByRole('menu')
       await menu.waitFor()
-      // Desktop Chromium caps page scale at three; the short window makes the rows overflow at that scale.
+      const unzoomed = await menu.evaluate((node) => {
+        const rect = node.getBoundingClientRect()
+        return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+      })
       await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 3 })
       await expect.poll(() => page.evaluate(() => window.visualViewport!.scale)).toBe(3)
-      await expect.poll(() => menu.evaluate((node) => {
+      await expect.poll(() => menu.evaluate((node, before) => {
+        const rect = node.getBoundingClientRect()
+        return Math.max(Math.abs(rect.x - before.x), Math.abs(rect.y - before.y),
+          Math.abs(rect.width - before.width), Math.abs(rect.height - before.height))
+      }, unzoomed)).toBeLessThan(1)
+      expect(await menu.evaluate((node) => {
         const view = window.visualViewport!
-        const box = node.getBoundingClientRect()
-        return Math.min(box.left - view.offsetLeft, box.top - view.offsetTop,
-          view.offsetLeft + view.width - box.right, view.offsetTop + view.height - box.bottom)
-      })).toBeGreaterThanOrEqual(11.5)
+        const rect = node.getBoundingClientRect()
+        return rect.width > view.width || rect.height > view.height
+      })).toBe(true)
+
+      // A smaller layout viewport, rather than page zoom alone, makes this list overflow.
+      await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1 })
+      await page.setViewportSize({ width: 1291, height: 180 })
       const rows = menu.locator('[role="presentation"]').first()
+      await expect.poll(() => rows.evaluate(node => node.scrollHeight > node.clientHeight)).toBe(true)
+      await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 3 })
       expect(await rows.evaluate((node) => {
         node.scrollTop = node.scrollHeight
         return node.scrollTop > 0
+      })).toBe(true)
+      await expect.poll(() => rows.evaluate((node) => {
+        const last = [...node.querySelectorAll('[role="menuitem"]')].at(-1)!
+        const row = last.getBoundingClientRect()
+        const viewport = node.getBoundingClientRect()
+        return row.top >= viewport.top - 1 && row.bottom <= viewport.bottom + 1
       })).toBe(true)
     } finally {
       await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1 })

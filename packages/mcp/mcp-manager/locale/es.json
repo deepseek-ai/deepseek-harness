@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Administrador de servidores MCP",
+    "description": "Administra los servidores MCP configurados en Configuración o registrados por complementos e informa su estado de conexión."
+  }
+}

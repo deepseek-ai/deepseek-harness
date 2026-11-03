@@ -80,6 +80,20 @@ describe('Messages request conversion', () => {
     ])
   })
 
+  it('preserves an all-deferred list without synthesizing tools', () => {
+    const tools = [{ name: 'search', description: 'Search', parameters: {}, deferLoading: true as const }]
+    const saved = JSON.stringify(tools)
+    expect(body([user()], { tools }).tools).toEqual([
+      { name: 'search', description: 'Search', input_schema: {}, defer_loading: true },
+    ])
+    expect(JSON.stringify(tools)).toBe(saved)
+  })
+
+  it('preserves absent and empty tool lists', () => {
+    expect(body().tools).toBeUndefined()
+    expect(body([user()], { tools: [] }).tools).toEqual([])
+  })
+
   it('preserves the exact request with request-only text after durable tool results', () => {
     const prefix = [user(), assistant([call()]), result()]
     const input: RequestUserInput = { role: 'user', content: [{ type: 'text', text: 'review or summarize this input' }] }
