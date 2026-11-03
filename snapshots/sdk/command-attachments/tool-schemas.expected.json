@@ -776,7 +776,7 @@
     },
     {
       "name": "wait_agent",
-      "description": "Wait for input at your next step, including agent messages, completion notifications, and user steering. Returns immediately when that input is already pending.",
+      "description": "Wait for input at your next step, including agent messages, completion notifications, and user steering. Returns immediately if input is pending. When called from code, wait once, then finish execution so messages can be delivered. Do not loop.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -811,7 +811,7 @@
         "properties": {
           "queries": {
             "type": "array",
-            "description": "1–4 search queries; their results are merged.",
+            "description": "1–10 search queries; their results are merged.",
             "items": {
               "type": "string"
             }
