@@ -87,7 +87,8 @@ export function ownerSharesDouble(overrides: OwnerSharesOverrides = {}): OwnerSh
     }),
     setCapabilities: async request => accepted({
       shareId: request.shareId,
-      viewerCapabilities: request.capabilities ?? [],
+      viewerPluginAccess: request.viewerPluginAccess ?? 'none',
+      viewerPlugins: request.viewerPlugins ?? [],
     }),
     capabilities: async () => accepted({ capabilities: [] }),
     relay: async () => accepted({ override: DOUBLE_RELAY, effective: DOUBLE_RELAY }),

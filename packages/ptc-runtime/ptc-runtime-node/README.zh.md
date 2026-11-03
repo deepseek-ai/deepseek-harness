@@ -123,7 +123,7 @@ Host 负责策略、截止时间、绑定查找和进程清理。子进程负责
 
 ### 启动与控制
 
-Host 擦除可擦除类型；需要启动进程时，在配置的执行世界中解析可执行文件与 bootstrap，通过 `ctx.sandbox` 等待 argv 限制准备完成，再通过 `ctx.subprocess` 启动。限制准备完成后会再次检查取消状态，因此提供方在取消后返回也无法启动程序。接管继承的控制通道后，子进程在 OS 环境中只保留可执行文件搜索路径、Windows 系统路径和临时路径，并将程序可见的 `process.env` 替换为空字典。Windows ACL 初始化接收父进程各自的 `TEMP` 和 `TMP` 值以使用共享授权锁，然后在启动程序前将二者替换为私有目录。这些原生路径使嵌套进程创建和原生临时文件 API 仍可正常工作。Host 仅在子进程启动时保留 `ELECTRON_RUN_AS_NODE`，使桌面端可执行文件运行 Node bootstrap；bootstrap 在求值模型代码前删除该选择变量。堆上限通过 Node argv 或为打包可执行文件由提供方构造的 `NODE_OPTIONS` 值传递；环境中的加载器和调试器标志会被丢弃。
+Host 擦除可擦除类型；需要启动进程时，在配置的执行世界中解析可执行文件与 bootstrap，通过 `ctx.sandbox` 等待 argv 限制准备完成，再通过 `ctx.subprocess` 启动。限制准备完成后会再次检查取消状态，因此提供方在取消后返回也无法启动程序。接管继承的控制通道后，子进程在 OS 环境中只保留可执行文件搜索路径、Windows 系统路径和临时路径，并将程序可见的 `process.env` 替换为空字典。`node:process` 的具名导出同步更新，因此导入也会获得空环境。Windows ACL 初始化接收父进程各自的 `TEMP` 和 `TMP` 值以使用共享授权锁，然后在启动程序前将二者替换为私有目录。这些原生路径使嵌套进程创建和原生临时文件 API 仍可正常工作。Host 仅在子进程启动时保留 `ELECTRON_RUN_AS_NODE`，使桌面端可执行文件运行 Node bootstrap；bootstrap 在求值模型代码前删除该选择变量。堆上限通过 Node argv 或为打包可执行文件由提供方构造的 `NODE_OPTIONS` 值传递；环境中的加载器和调试器标志会被丢弃。
 
 Host 通过 birpc 调用子进程的 `run()` 方法；注入的绑定调用 Host 的 `invoke()` 方法，捕获的输出通过通知传递。birpc 负责请求关联、远程结果和异常传递。逐行 JSON 通过继承的控制管道传输，与 stdout/stderr 分离。RPC 适配层限制每行消息和原生写入队列的大小，并在管道关闭时拒绝待完成调用；对端点自身没有的方法，birpc 以错误回复，管道关闭后不再执行任何方法。Host 在分派前校验绑定名与无损 JSON；同一管道保证每次求值的消息先于其结果到达，因此消息不携带求值身份。执行截止时间仍由 Host 管理，包含等待审批的调用。
 
@@ -131,9 +131,26 @@ Host 通过 birpc 调用子进程的 `run()` 方法；注入的绑定调用 Host
 
 ### 源代码与构建后 bootstrap
 
-源代码执行加载仅含可擦除语法的 bootstrap 依赖，不依赖同级包的构建后导出；执行世界中必须提供求值器模块和已安装的 Acorn、birpc 依赖。构建后脚本在所有模式下都使用 `process.js`；`persistent-process.js` 委托同一个循环，供未指定程序语法的宿主默认使用 REPL。保留模式要求 `node-script` 启动方式。远端脚本部署提供对应的 `launch.bootstrapPath`。内嵌载体通过 `launch.executable` 启动私有 worker。`resolveLaunch()` 在构造时选择本地默认值；显式的远端调用不依赖客户端自身是否打包。不会假设 Host 路径对应同一个远程文件。
+源代码执行加载仅含可擦除语法的 bootstrap 依赖，不依赖同级包的构建后导出；执行世界中必须提供求值器模块和已安装的 Acorn 与 birpc 依赖。构建后脚本在所有模式下都使用 `process.js`；`persistent-process.js` 委托同一个循环，供未指定程序语法的宿主默认使用 REPL。保留模式要求 `node-script` 启动方式。远端脚本部署提供对应的 `launch.bootstrapPath`。内嵌载体通过 `launch.executable` 启动私有 worker。`resolveLaunch()` 在构造时选择本地默认值；显式的远端调用不依赖客户端自身是否打包。不会假设 Host 路径对应同一个远程文件。
 
 包含 `await` 的源码会在原生编译前检查顶层 await，否则原生编译可能将 `await` 当作标识符。Acorn 解析包住源码的异步函数，acorn-walk 沿用 Node REPL 的 visitor、声明提升和按字符位置修改源码的方式进行遍历。类方法的计算属性名参与遍历，方法体仍独立求值。转换包装末尾表达式，求值器解包并等待其值。无需转换的源码使用原生编译；不含 `await` 的提交保留原生语法诊断。语法错误保留解析器消息、可用的源码位置与光标，不包含编译器或转换器的调用帧。动态 `import()` 表达式保持原生形式，使用编译该 Script 时的 `importModuleDynamically` 选项。两个私有进程 bundle 都包含 Acorn、acorn-walk 和 birpc；源码执行导入已安装的包。
+
+<a id="runner-import-handling"></a>
+### Runner 导入处理
+
+Runner 代码可以向 `runNodeMain()` 或 `runPersistentMain()` 传入 `ProgramImportHandler`。handler 属于子进程，与执行语法无关；它不是序列化的 Host 绑定或插件配置字段。VM Script 接受同步或异步决策；AsyncFunction 和 Node REPL 要求同步决策，返回 Promise 时会被拒绝。`node-script` 和 embedded 启动方式启用 `--experimental-vm-modules`；独立启动的 runner 在拦截 VM Script 导入时需要该标志。AsyncFunction 和 REPL 导入拦截不需要 VM 启动标志。
+
+handler 接收程序的动态导入；在 VM Script 中，还接收 VM 加载的 ESM 依赖中的静态与动态导入。每个请求携带模块标识符、导入属性和实际导入文件的绝对文件名。即使 cwd 改变，保存的函数仍保留该文件名。可返回的决策包括：
+
+- `{ type: 'default' }` 解析并加载请求的模块。
+- `{ type: 'redirect', specifier }` 使用原始属性解析并加载替换后的模块标识符。
+- `{ type: 'module', exports }` 将自有、可枚举的字符串属性暴露为模块导出，包括名为 `default` 的属性。
+
+默认导入和重定向导入相对于实际导入文件解析；替换后的模块标识符不会再次进入 handler。VM Script 使用 Node ESM 解析器，沿用 runner 当前启用的条件和标志，通过 `SourceTextModule` 在 Script context 内加载 `.mjs` 文件以及 Node 解析结果标记为 `module` 的 `.js` 文件。其静态依赖、再导出和稍后的动态导入都调用同一个支持异步决策的 handler。每个求值器按解析后的 URL 缓存文件模块，包括模块与 handler 失败；静态导入只绑定一次。若模块的链接或求值因先前求值结束而失败，后续求值会重新加载该模块，成功求值的模块仍保留身份。模块保留 `import.meta.url`、`filename`、`dirname`、`resolve()` 和 `main: false`。其他格式使用 Node 加载器；未提供 handler 时，所有导入也使用 Node 加载器。handler 抛出值或拒绝会使导入该依赖的模块图失败，不会回退；无关模块图仍可使用。VM Script 在调用 handler 前拒绝 source 阶段导入，并拒绝 VM 加载的 ESM 上的导入属性。AsyncFunction 和 Node REPL 保留 Node 原生依赖加载与 source 阶段规则。
+
+导出值可以是 runner 内的任意对象：原型、私有字段、闭包、循环引用和同步方法都保持正常行为。一个 exports 对象在每个求值器中标识一个模块；名称和值只捕获一次，引用的对象仍可修改。返回不同的 exports 对象会创建另一个模块。每次动态导入以及链接时的每个静态请求都会调用 handler。模块求值失败也会针对该 exports 对象缓存。可调用的 `then` 导出在 AsyncFunction 和 VM Script 中遵循 JavaScript 动态导入的 Promise 同化规则；Node REPL 会拒绝由此产生的非模块值，因此在 REPL 中需使用其他导出名。
+
+AsyncFunction 和 Node REPL 共用同步 `registerHooks` 和以 symbol 为键的全局导出桥接对象。经 VM 编译的工厂使用 Node 默认加载器调用原生 AsyncFunction 构造器，保留严格模式函数体语法和参数绑定。每个求值器与编译文件名组合使用独立的 source URL，确保 V8 构造器缓存保留正确的 import handler 和 referrer。REPL 使用 `AsyncLocalStorage` 区分共享 Node 基于 cwd 生成的导入 URL 的求值器。VM Script 通过逐模块回调管理 ESM 加载与链接；Node 保留求值状态。清理时释放求值器缓存，并移除 hook 和桥接对象；Node 会将原生加载的 ESM 命名空间和 symbol 注册表键保留到进程退出。保留模式求值结束后才发起或返回结果的导入会被拒绝；临时求值让这些导入保持挂起，直到进程退出。保存的函数在后续活动求值中调用时可以正常导入。
 
 ### 源码索引
 
@@ -146,6 +163,8 @@ Host 通过 birpc 调用子进程的 `run()` 方法；注入的绑定调用 Host
 | [`src/worker.ts`](src/worker.ts) | 共用的进程启动、执行截止、绑定分派与清理 |
 | [`src/persistent-process.ts`](src/persistent-process.ts) | 默认使用 REPL 的已安装入口，委托共用子进程循环 |
 | [`src/evaluators/index.ts`](src/evaluators/index.ts) | 三种求值器的统一选择入口 |
+| [`src/imports/vm-modules.ts`](src/imports/vm-modules.ts) | Script 导入决策、递归 ESM 链接与原生加载委托 |
+| [`src/imports/module-hooks.ts`](src/imports/module-hooks.ts) | AsyncFunction 和 REPL hook、求值器归属与导出桥接对象 |
 | [`src/evaluators/async-function.ts`](src/evaluators/async-function.ts) | AsyncFunction：严格模式异步函数体 |
 | [`src/evaluators/repl.ts`](src/evaluators/repl.ts) | Node REPL：交互式声明与保留的 context |
 | [`src/evaluators/vm-script.ts`](src/evaluators/vm-script.ts) | VM Script：Node 全局变量、声明与 Promise 完成值 |
@@ -189,6 +208,7 @@ Host 通过 birpc 调用子进程的 `run()` 方法；注入的绑定调用 Host
 
 这些限制界定执行保证与保留的输出。
 
+- **递归导入处理覆盖显式声明的文件 ESM**——CommonJS、推断为 ESM 的文件、TypeScript、data URL 和其他原生加载格式保留各自的依赖加载器。静态导入原生模块时，在求值时捕获合成导出；动态原生导入保留原始命名空间。VM 加载的 ESM 实例与 Node 原生模块缓存独立，共享 Script 全局变量。
 - **约束继承所选后端的限制**——完整与部分强制能力分开报告；沙箱策略与受管进程约束是不同保证。
 - **堆上限不是进程树内存限制**——原生分配与后代进程内存不属于 V8 老生代上限。不提供进程树 CPU 计量器。
 - **清理继承子进程的可观测范围**——使用 fallback 的平台上，逃逸的后代可能仍在受管范围之外；参见子进程提供方声明的限制。

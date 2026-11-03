@@ -8,7 +8,7 @@
   "types": "lib/types/index.d.ts",
   "license": "MIT",
   "name": "@deepseek-ai/dsh-client-ui-creation-recommendations",
-  "description": "Body of the personalized page card: location choice, creation progress, Keep, Undo and Restore",
+  "description": "Body of the personalized page card: location choice, creation progress, Undo and Restore",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",

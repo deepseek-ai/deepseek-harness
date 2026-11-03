@@ -81,7 +81,7 @@ kind: "package-group"
 | [`ui-settings-agent-loop/`](ui-settings-agent-loop/README.zh.md) | 在插件页提供 Agent 循环设置页 | — |
 | [`ui-settings-session-log/`](ui-settings-session-log/README.zh.md) | 在通用设置中控制随 API 上传会话日志 | — |
 | [`ui-settings-subagent/`](ui-settings-subagent/README.zh.md) | 在插件页提供子智能体设置页 | — |
-| [`ui-settings-web-search/`](ui-settings-web-search/README.zh.md) | 在插件页提供网页搜索设置页 | — |
+| [`ui-settings-web-search/`](ui-settings-web-search/README.zh.md) | 在插件页提供网页搜索与获取设置页 | — |
 | [`ui-plugin-manager/`](ui-plugin-manager/README.zh.md) | 贡献侧栏的“插件”面板：安装、启用、停用、重试与组合已安装的包 | — |
 | [`ui-entry-customization/`](ui-entry-customization/README.zh.md) | 添加分区域的“更多”菜单，固定或收起插件入口，并开始创建插件的草稿 | — |
 | [`ui-plugin-market/`](ui-plugin-market/README.zh.md) | 为“插件”页面贡献“发现”标签页：浏览市场索引并安装其中的组合包 | — |

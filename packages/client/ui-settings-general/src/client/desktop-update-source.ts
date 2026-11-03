@@ -28,7 +28,7 @@ export class DesktopUpdateSource {
   open(): void {
     if (!this.live || this.bridge === undefined) return
     const state = this.store.getSnapshot()
-    if (state.opening || (state.presentation !== undefined
+    if (state.opening || (state.presentation !== undefined && state.presentation.configurationError === undefined
       && ['checking', 'downloading', 'verifying', 'installing'].includes(state.presentation.phase))) return
     this.store.set({ ...state, opening: true })
     void this.bridge.open().catch(() => {

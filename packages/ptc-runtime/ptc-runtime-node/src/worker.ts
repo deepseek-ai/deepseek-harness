@@ -253,7 +253,7 @@ export class ProgramWorker {
       .map(key => [key, undefined]))
     if (packaged) {
       env.DSH_PTC_RUNTIME_NODE = '1'
-      env.NODE_OPTIONS = heapFlag
+      env.NODE_OPTIONS = `${heapFlag} --experimental-vm-modules`
     }
     const handle = this.ctx.subprocess.spawn({ argv: this.confined?.argv ?? argv, cwd, env, stdio: { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', control: 'pipe' }, graceMs: this.config.graceMs })
     this.handle = handle

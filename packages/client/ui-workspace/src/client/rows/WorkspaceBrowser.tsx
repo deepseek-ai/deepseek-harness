@@ -14,7 +14,7 @@
  * are slot entries with their own behavior, so this component threads no
  * action callbacks and hosts no action surface.
  */
-import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import { WorkspaceDialogs } from './WorkspaceDialogs.tsx'
 import {
@@ -673,7 +673,6 @@ function SessionTree({
         )}
         {groupRows}
       </AnimatedRows>
-      <span className={css.fade} />
     </HoverCardGroup>
   )
 }
@@ -784,7 +783,6 @@ function FlatList({
           )
         })}
       </AnimatedRows>
-      <span className={css.fade} />
     </HoverCardGroup>
   )
 }
@@ -886,7 +884,6 @@ function SearchResults({
           </div>
         )}
       </div>
-      <span className={css.fade} />
     </div>
   )
 }
@@ -900,6 +897,7 @@ export function WorkspaceBrowser({
   wide,
   usePanelInfo,
   expandSidebar,
+  useSectionScroller,
   useSessions,
   useSessionStatus,
   useRemoteAccess,
@@ -1106,6 +1104,12 @@ export function WorkspaceBrowser({
   })
   const searchRoot = useRef<HTMLDivElement | null>(null)
   const searchInput = useRef<HTMLInputElement | null>(null)
+  // The list area is this section's own vertical scroller; the sidebar hands wheel
+  // scrolling over its viewport to it once the navigation has moved away.
+  const { bindScrollerRef } = useSectionScroller()
+  const focusSearch = useCallback(() => {
+    searchInput.current?.focus({ preventScroll: true })
+  }, [])
   // Section-header ＋ opens the picker menu (same popover in wide and rail
   // states; the menu anchors on this button).
   const wsPickerOpen = shortcutState.addRequested
@@ -1134,25 +1138,25 @@ export function WorkspaceBrowser({
   useEffect(() => {
     if (wide && searchOnExpand) {
       const timer = window.setTimeout(() => {
-        searchInput.current?.focus({ preventScroll: true })
+        focusSearch()
         setSearchOnExpand(false)
       }, EXPAND_SLIDE_MS)
       return () => { window.clearTimeout(timer) }
     }
-  }, [wide, searchOnExpand])
+  }, [wide, searchOnExpand, focusSearch])
   useEffect(() => {
     if (shortcutState.searchRequest === 0) return
     closeAddWorkspace()
     if (!wide || searchInput.current?.closest('[inert]')) {
       setSearchOnExpand(true)
       expandSidebar()
-    } else searchInput.current?.focus({ preventScroll: true })
-  }, [shortcutState.searchRequest])
+    } else focusSearch()
+  }, [shortcutState.searchRequest, focusSearch])
 
   useEffect(() => {
     if (!wide || !searchExpanded || searchOnExpand) return
-    searchInput.current?.focus({ preventScroll: true })
-  }, [wide, searchExpanded, searchOnExpand])
+    focusSearch()
+  }, [wide, searchExpanded, searchOnExpand, focusSearch])
 
   // Outside-click dismissal stays off while the rail gesture is in flight
   // (searchOnExpand): the rail click flips the shell wide and mounts this
@@ -1217,7 +1221,7 @@ export function WorkspaceBrowser({
   }
   return (
     <div className={clsx(css.root, !wide && css.rail)}>
-      <div className={clsx(css.sectionHeader, wide && searchSpacingMotionEnabled && css.searchSpacingMotion)}>
+      <div className={clsx(css.sectionHeader, wide && searchSpacingMotionEnabled && css.searchSpacingMotion)} data-sidebar-workspace-header="">
         {wide && (
           <span className={clsx(css.sectionLabel, css.wide, searchExpanded && css.sectionLabelHidden)}>
             {groupBy === 'flat' ? t('section.sessions') : t('section.workspaces')}
@@ -1231,7 +1235,7 @@ export function WorkspaceBrowser({
               onClick={() => {
                 closeAddWorkspace()
                 changeSearchExpanded(true)
-                searchInput.current?.focus()
+                focusSearch()
               }}
             >
               <Tooltip label={t('search')} shortcutKeys={searchShortcut?.keys} side="bottom" delayMs={500} disabled={searchExpanded} portal>
@@ -1351,7 +1355,7 @@ export function WorkspaceBrowser({
 
       {/* Always-mounted seat keeps the region's flex slot while the list
           itself is wide-only. */}
-      <div className={css.listArea}>
+      <div ref={wide ? bindScrollerRef : undefined} className={css.listArea} data-sidebar-list-area="">
         {wide && (normalizedQuery !== ''
           ? (
             <SearchResults

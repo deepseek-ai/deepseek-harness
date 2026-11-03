@@ -10,13 +10,15 @@
  * global panel rows and the foot is the `sidebar.workspaces` registrant's,
  * and the foot holds `sidebar.settings` plus `sidebar.footer.action`; the shell
  * hands them the wide flag (plus an expand request callback for the browser).
+ * Through the browser's hookContext, the shell also hands it the scroller hook
+ * that continues wheel scrolling over the sidebar viewport into its list.
  *
  * The column also owns whether the scroll regions nested in it draw a
  * scrollbar at all: the shell tracks the pointer and rebinds ui-theme's
  * scrollbar indirection away while it is elsewhere, so a list the user is not
  * pointing at carries no bar.
  */
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
   FishLogo, IconAppsAddOutlineRegular, IconNewChatOutlineMedium, IconNewChatOutlineRegular,
@@ -25,9 +27,11 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsRenderFactories, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
-  SidebarPanelActionsOwnerProps, SidebarPanelMetadata, SidebarRootComponentProps, SidebarRootInjected, SidebarSectionOwnerProps,
+  SidebarPanelActionsOwnerProps, SidebarPanelMetadata, SidebarRootComponentProps, SidebarRootInjected, SidebarSectionHookContext,
+  SidebarSectionOwnerProps,
 } from './contract/slots.ts'
 import { FIXED_PANEL_ID } from './panel-pins.ts'
+import { createScrollHandoff } from './scroll-handoff.ts'
 import css from './SidebarRoot.module.css'
 
 /** Wide-content unmount delay; matches the 150ms wide-content fade-out. */
@@ -183,6 +187,10 @@ export function SidebarRoot({
   }, [collapsed, drawer])
   const windowsTitlebar = document.documentElement.hasAttribute('data-windows-titlebar')
   const wide = drawer || (windowsTitlebar ? !collapsed : !collapsed || !settled)
+  const [scrollHandoff] = useState(createScrollHandoff)
+  const sectionHookContext = useMemo<SidebarSectionHookContext>(
+    () => ({ useSectionScroller: scrollHandoff.useSectionScroller }), [scrollHandoff],
+  )
   // The Windows titlebar hosts the New Session controls while the sidebar is collapsed.
   const openNewSession = (): void => {
     trackEntryClick({ menu_name: 'new_session', position: windowsTitlebar && collapsed ? 'titlebar' : 'sidebar' })
@@ -393,51 +401,57 @@ export function SidebarRoot({
         </Tooltip>
       )}
 
-      {panels.length > 0 && (
-        <nav className={css.panelList} aria-label={t('panels.label')}>
-          {panels.filter(({ id }) => id === FIXED_PANEL_ID || !hasEntryActions || !unpinned.includes(id)).map(({ id, label }) => (
-            <PanelRow
-              key={id}
-              id={id}
-              label={label}
-              wide={wide}
-              unpinLabel={t('panels.unpin', { name: label })}
-              unpinTooltip={t('panels.unpinTooltip')}
-              canUnpin={hasEntryActions && id !== FIXED_PANEL_ID}
-              setPinned={setPinned}
-              usePanelInfo={usePanelInfo}
-              selectPanel={selectPanel}
-              trackEntryClick={trackEntryClick}
-              renderFactorySlot={renderFactorySlot}
-            />
-          ))}
-          {hasEntryActions && (
-            <PanelMoreMenu
-              wide={wide}
-              label={t('panels.more')}
-              entries={panels.filter(({ id }) => id !== FIXED_PANEL_ID)
-                .map(({ id, label }) => ({ id, label, pinned: !unpinned.includes(id), active: id === activePanelId }))}
-              onOpen={(id) => {
-                const entry = officialEntry(id)
-                if (entry !== undefined) trackEntryClick({ menu_name: entry, position: 'sidebar_more' })
-                const panel = panels.find(candidate => candidate.id === id)
-                if (panel !== undefined) selectPanel(panel.id)
-              }}
-              onPinnedChange={setPinned}
-              trackEntryClick={trackEntryClick}
-              renderSlot={renderSlot}
-            />
+      <div className={css.scrollRegion}>
+        <div
+          ref={scrollHandoff.bindViewportRef}
+          className={css.scrollArea}
+          data-sidebar-scrollport={wide ? '' : undefined}
+        >
+          {panels.length > 0 && (
+            <nav className={css.panelList} aria-label={t('panels.label')}>
+              {panels.filter(({ id }) => id === FIXED_PANEL_ID || !hasEntryActions || !unpinned.includes(id)).map(({ id, label }) => (
+                <PanelRow
+                  key={id}
+                  id={id}
+                  label={label}
+                  wide={wide}
+                  unpinLabel={t('panels.unpin', { name: label })}
+                  unpinTooltip={t('panels.unpinTooltip')}
+                  canUnpin={hasEntryActions && id !== FIXED_PANEL_ID}
+                  setPinned={setPinned}
+                  usePanelInfo={usePanelInfo}
+                  selectPanel={selectPanel}
+                  trackEntryClick={trackEntryClick}
+                  renderFactorySlot={renderFactorySlot}
+                />
+              ))}
+              {hasEntryActions && (
+                <PanelMoreMenu
+                  wide={wide}
+                  label={t('panels.more')}
+                  entries={panels.filter(({ id }) => id !== FIXED_PANEL_ID)
+                    .map(({ id, label }) => ({ id, label, pinned: !unpinned.includes(id), active: id === activePanelId }))}
+                  onOpen={(id) => {
+                    const entry = officialEntry(id)
+                    if (entry !== undefined) trackEntryClick({ menu_name: entry, position: 'sidebar_more' })
+                    const panel = panels.find(candidate => candidate.id === id)
+                    if (panel !== undefined) selectPanel(panel.id)
+                  }}
+                  onPinnedChange={setPinned}
+                  trackEntryClick={trackEntryClick}
+                  renderSlot={renderSlot}
+                />
+              )}
+            </nav>
           )}
-        </nav>
-      )}
-
-      {/* The browsing region fills the column between the controls and the
-          foot in both states; its rail icon column rides the same slot. */}
-      <div className={css.regionArea}>
-        {renderSlot('sidebar.workspaces', {
-          wide,
-          expandSidebar: () => { if (collapsed) toggleSidebar() },
-        })}
+          <div className={css.regionArea}>
+            {renderSlot('sidebar.workspaces', {
+              wide,
+              expandSidebar: () => { if (collapsed) toggleSidebar() },
+            }, { hookContext: sectionHookContext })}
+          </div>
+        </div>
+        <span className={css.scrollFade} aria-hidden="true" />
       </div>
 
       {copiedToast !== null && (

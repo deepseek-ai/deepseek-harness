@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "网页搜索设置",
-    "description": "配置 DeepSeek 网页搜索的密钥、服务地址和请求预算。"
+    "title": "网页搜索与获取设置",
+    "description": "选择网页搜索与网页获取的提供方，并配置 DeepSeek 提供方的密钥、服务地址和上限。"
   }
 }
