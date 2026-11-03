@@ -84,11 +84,14 @@ The official root is `https://api.deepseek.com/anthropic`. An explicit `baseURL`
 
 Messages sends text, thinking, tool calls, and tool results as content blocks, reasoning effort as `output_config.effort`, and images as Files references or inline base64. Models declaring `systemPromptUpdate: in-history` retain the initial top-level system and send new system snapshots after their corresponding user/tool-result turn; undeclared models use the latest snapshot as the top-level system. Replay metadata preserves the model and thinking signatures. Invalid replay metadata emits a warning and omits signatures while retaining text and tool history. Model entries may declare `toolUpdate: addition-only` or `in-history`; the default `deepseek-flash` entry declares `addition-only`. Projected developer tool updates become system-role `tool_addition` and `tool_removal` blocks referencing declared names, and deferred declarations carry `defer_loading`. Requests containing those blocks send the `mid-conversation-tool-changes-2026-07-01` beta header. Messages omits empty assistant text blocks and skips assistant messages left without content, including saved history from other protocols. The stored Session content remains intact.
 
+<a id="account-credentials"></a>
 ### Account credentials
 
 `deepseek-official` resolves only its configured API-key reference. `deepseek-account` resolves only the stored grant from the [account provider](../../credentials/deepseek-account-platform/README.md), whose allowed `inferenceOrigin` defaults to `https://api.deepseek.com`. Neither route falls back to the other. Signing out removes the account grant and preserves API keys.
 
 Messages and Files requests send account tokens as `x-dsh-auth-token` without a Bearer prefix; API keys use `x-api-key`. Neither credential mode follows redirects. The account provider owns HTTP 401 classification and credential invalidation; the transport passes failures to its callback.
+
+The [shared credential helpers](src/credential.ts) serve model routes and web providers without choosing request headers. `resolveDeepSeekApiKey(ctx, ref)` returns a normalized, validated key or `undefined`; an installed credentials service is authoritative, and only its absence enables launch-environment lookup. Store and key-format failures propagate. `deepSeekApiKeyConfigured(ctx, ref)` checks presence without reading stored key values. Account helpers delegate allowed-destination resolution and exact-token invalidation to the account service; invalidation contains storage failures so the original request error remains visible.
 
 ### Streaming with thinking and images
 
