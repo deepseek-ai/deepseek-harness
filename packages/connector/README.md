@@ -24,7 +24,7 @@ Each package in this group is one application plugin that a user installs into a
 
 | Package | Role | ctx key |
 |---|---|---|
-| [`linear/`](linear/README.md) | Registers Linear's hosted MCP server with OAuth through the shared MCP manager, adds the Linear plugin naming guidance, and shows its account on the plugin page | registers on `ctx.mcpServers`, `ctx.systemPrompt`, and `ctx.mcpAccounts` |
+| [`linear/`](linear/README.md) | Registers Linear's hosted MCP server with OAuth through the shared MCP manager, adds the Linear plugin naming guidance, and shows its account on the plugin page | registers on `ctx.mcpManager`, `ctx.systemPrompt`, and `ctx.mcpAccounts` |
 
 -----
 

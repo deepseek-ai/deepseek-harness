@@ -24,7 +24,7 @@ kind: "package-group"
 
 | 包 | 职责 | ctx 键 |
 |---|---|---|
-| [`linear/`](linear/README.zh.md) | 通过共用的 MCP 管理器以 OAuth 注册 Linear 托管的 MCP 服务器，添加 Linear 插件称呼指引，并在插件页面显示账号 | 注册到 `ctx.mcpServers`、`ctx.systemPrompt` 与 `ctx.mcpAccounts` |
+| [`linear/`](linear/README.zh.md) | 通过共用的 MCP 管理器以 OAuth 注册 Linear 托管的 MCP 服务器，添加 Linear 插件称呼指引，并在插件页面显示账号 | 注册到 `ctx.mcpManager`、`ctx.systemPrompt` 与 `ctx.mcpAccounts` |
 
 -----
 

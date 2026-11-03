@@ -16,7 +16,7 @@ import type {} from '@deepseek-ai/dsh-system-prompt'
 import { COPY } from './copy.ts'
 
 export const name = 'linear'
-export const inject = ['mcpServers', 'systemPrompt']
+export const inject = ['mcpManager', 'systemPrompt']
 
 // One shared account per Host: a fixed server name keeps tool names stable and
 // a fixed credential key lets a reinstalled plugin reuse its saved grant.
@@ -48,7 +48,7 @@ export const Config: z<Partial<Config>, Config> = z.object({
  * @throws when another configured or registered server already uses the `linear` name or credential key.
  */
 export function apply(ctx: Context, config: Config): void {
-  ctx.mcpServers.register(SERVER_NAME, {
+  ctx.mcpManager.register(SERVER_NAME, {
     transport: 'streamable-http',
     url: config.url,
     oauth: { credentialKey: CREDENTIAL_KEY },

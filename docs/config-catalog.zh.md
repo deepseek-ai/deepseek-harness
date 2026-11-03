@@ -1914,7 +1914,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-linear`
 
-- `inject`: `mcpServers` · `systemPrompt`
+- `inject`: `mcpManager` · `systemPrompt`
 - `source`: [`packages/connector/linear/src/index.ts:29`](../packages/connector/linear/src/index.ts)
 
 ```ts config-catalog
