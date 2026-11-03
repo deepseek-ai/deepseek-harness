@@ -30,8 +30,19 @@ export type ModelDiscoveryOutcome =
   /** The interrogation was refused, with the Host's own diagnostic. */
   | { readonly kind: 'refused'; readonly message: string }
 
+/** Stored credential loaded for one editor, or a read failure. */
+export type CredentialReadOutcome =
+  | { readonly kind: 'read'; readonly value: string | undefined }
+  | { readonly kind: 'refused'; readonly message: string }
+
 /** The Host operations the Models page and its cards invoke. */
 export interface ModelsOperations {
+  /**
+   * Load a stored credential without reading environment values.
+   * @param ref - credential reference name.
+   * @returns the stored value or the refusal to display.
+   */
+  readCredential(ref: string): Promise<CredentialReadOutcome>
   /**
    * Store one credential literal under its reference.
    * @param ref - credential reference name.
@@ -75,6 +86,10 @@ export interface ModelsOperations {
  */
 export function createModelsOperations(ctx: ClientContext): ModelsOperations {
   return {
+    readCredential: async (ref) => {
+      const response = await ctx.remote.credentials.readStored(ref)
+      return response.ok ? { kind: 'read', value: response.value } : { kind: 'refused', message: response.error.message }
+    },
     storeCredential: async (ref, value) => {
       const response = await ctx.remote.credentials.set(ref, value)
       return response.ok ? undefined : response.error.message

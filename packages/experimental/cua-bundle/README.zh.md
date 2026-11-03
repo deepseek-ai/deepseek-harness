@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-从插件页为已有和新建 PTC 会话开启 macOS Computer Use。Windows 支持正在开发中。本组合包暂放在 `experimental`，待 Windows 支持完成后迁回 `computer-use` 组。默认关闭，启用或单独安装前不在默认插件列表中显示；关闭时不准备本机组件、不注册 CUA 工具或添加其模型指引。
+从插件页为已有和新建 PTC 会话开启 macOS Computer Use。Windows 支持正在开发中。本组合包暂放在 `experimental`，待 Windows 支持完成后迁回 `computer-use` 组。随 DSH 提供且默认关闭，在 macOS Host 的实验性插件列表中显示；关闭时不准备本机组件、不注册 CUA 工具或添加其模型指引。
 
 ## 目录
 
@@ -24,7 +24,7 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在 macOS Desktop 的“插件 → 添加插件”中输入 `@deepseek-ai/dsh-cua-bundle`，点击“安装”，再点击“立即启用”。DSH 将与当前运行时版本匹配的官方插件安装到 profile。发布包包含已签名和公证的 helper，用户无需编译工具。源码 Web 和开发 Desktop 链接工作区组合包，启用时准备临时签名的 helper。打开 Computer Use 详情，按需设置 PTC，并为 `DSH Computer Use.app` 授予辅助功能和屏幕录制权限。已安装的组合包关闭后仍可管理。源码 Web 在仓库根目录运行以下命令：
+在 macOS 上打开“插件 → 更多”，在实验性插件列表中开启 Computer Use。组合包随 DSH 提供并随之升级，开启时无需下载。发布包包含已签名和公证的 helper，用户无需编译工具。源码 Web 和开发 Desktop 在开启时准备临时签名的 helper。打开它的详情，按需设置 PTC，并为 `DSH Computer Use.app` 授予辅助功能和屏幕录制权限。开启后组合包也会出现在插件主列表中，关闭后只留在实验性插件列表。源码 Web 在仓库根目录运行以下命令：
 
 ```sh
 pnpm run build
@@ -33,11 +33,11 @@ pnpm dsh web
 
 源码 Desktop 的启动方式和独立开发配置档见[桌面开发说明](../../../apps/desktop/README.zh.md)。需要使用 Computer Use 的配置档分别开启该功能。
 
-开关将组合包选择保存到 profile 的 `package.json`。Computer Use 仅安装在 PTC 会话中。通过「添加插件」、可见卡片或详情页启用时，系统权限未就绪会显示设置引导。详情页提供“设为 PTC”按钮来修改新会话默认模式，已有会话保留原 preset。开关保持 PTC 执行方式和其他设置不变。详情页的“设为持久化”按钮单独开启 PTC 跨调用的内存状态保留，作用范围和重载行为见[权限页面](../cua/README.zh.md)。提供方加载时准备本机组件，已有与源码摘要匹配的可执行文件时直接复用。
+开关将组合包选择保存到 profile 的 `package.json`。Computer Use 仅安装在 PTC 会话中。通过卡片或详情页启用时，系统权限未就绪会显示设置引导。详情页提供“设为 PTC”按钮来修改新会话默认模式，已有会话保留原 preset。开关保持 PTC 执行方式和其他设置不变。详情页的“设为持久化”按钮单独开启 PTC 跨调用的内存状态保留，作用范围和重载行为见[权限页面](../cua/README.zh.md)。提供方加载时准备本机组件，已有与源码摘要匹配的可执行文件时直接复用。
 
 关闭会卸载提供方，并从其 Agent 作用域中撤回 CUA 工具。执行器配置、新会话默认值和已保存的授权保留。
 
-Computer Use 仅支持 macOS DSH Host。原生提供方是仅在 macOS 安装的可选依赖，组合包和共享库均按需安装。其他 Host 默认不在插件列表和模型推荐中展示此组合包，并在保存设置前拒绝启用。profile 显式安装的依赖和已保存的选择仍保留管理入口。已选中的组合包会在启动时跳过并报告原因，仍可取消选择；已保存的用户设置保留。其他操作系统上的浏览器可以连接受支持的 Mac Host。
+Computer Use 仅支持 macOS DSH Host。原生提供方是仅在 macOS 安装的可选依赖，共享 CUA 和 Client 包仍随安装提供。其他 Host 默认不在插件列表和模型推荐中展示此组合包，并在保存设置前拒绝启用。profile 显式安装的依赖和已保存的选择仍保留管理入口。已选中的组合包会在启动时跳过并报告原因，仍可取消选择；已保存的用户设置保留。其他操作系统上的浏览器可以连接受支持的 Mac Host。
 
 准备失败时，已保存的选择保留，CUA 操作不可用。刷新或重新打开插件页查看组件诊断，修复后重启 DSH。
 
@@ -85,7 +85,7 @@ CUA 生效和卸载会改变 PTC SDK 与系统指引，后续请求使用更新�
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 首次安装需要能访问提供匹配 DSH 版本的注册表。系统权限需用户在 macOS 中确认，安装插件不会自动授予权限。
+- 系统权限需用户在 macOS 中确认，开启组合包不会自动授予权限。
 - PTC 执行方式由 profile 共享，需单独配置。未启用 HMR 的 Host 在重启时应用已保存的变更。
 
 <a id="dev-note"></a>

@@ -109,7 +109,7 @@ export class McpAccountsConnection {
   /**
    * @param ctx - the browser context carrying the Remote client.
    * @param registry - the `mcpAccounts` Remote.
-   * @param servers - the manager's `mcpServers` Remote.
+   * @param servers - the manager's `mcpManager` Remote.
    */
   constructor(ctx: Context, registry: McpAccountsRemote, private readonly servers: McpServersRemote) {
     this.stream = ctx.remote.$stream<McpAccountsView>({

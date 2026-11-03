@@ -50,7 +50,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### Storing and removing keys
 
-Save a key with `set`, remove it with `unset`, and check whether a key is configured with `describe` — the same operations the credential API provides:
+Save a key with `set`, remove it with `unset`, and check whether a key is configured with `describe`. `readStored` reads only the managed value for an editor, excluding environment fallbacks:
 
 ```ts
 import type { Context } from '@deepseek-ai/cordis'

@@ -59,6 +59,18 @@ describe('resolveSpec', () => {
 })
 
 describe('layering and reads', () => {
+  it('reads only stored values for an editor while resolution retains environment fallback', async () => {
+    const dir = await tempDir()
+    vi.stubEnv('DSH_CRED_TEST', 'fixture-environment-key')
+    const ctx = await boot({ path: join(dir, '.credentials.yaml'), watch: false })
+    expect(await ctx.credentials.readStored(KEY)).toBeUndefined()
+    await ctx.credentials.set(KEY, 'fixture-stored-key')
+    expect(await ctx.credentials.readStored(KEY)).toBe('fixture-stored-key')
+    expect(await ctx.credentials.resolve(KEY)).toEqual({ value: 'fixture-stored-key', source: 'file' })
+    await ctx.credentials.unset(KEY)
+    expect(await ctx.credentials.readStored(KEY)).toBeUndefined()
+    expect(await ctx.credentials.resolve(KEY)).toEqual({ value: 'fixture-environment-key', source: 'env' })
+  })
   it('treats an absent file as an empty writable store', async () => {
     const dir = await tempDir()
     const ctx = await boot({ path: join(dir, '.credentials.yaml'), watch: false })

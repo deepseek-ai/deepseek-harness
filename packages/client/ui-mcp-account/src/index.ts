@@ -22,7 +22,7 @@ declare module '@deepseek-ai/cordis' {
 
 /** Holds the registered accounts and serves them, with their servers' manager views, to the Plugins page. */
 export default class McpAccounts extends TypertRemoteService {
-  static inject = ['mcpServers']
+  static inject = ['mcpManager']
 
   private readonly accounts = new Map<string, McpAccountRegistration>()
   private readonly listeners = new Set<() => void>()
@@ -77,7 +77,7 @@ export default class McpAccounts extends TypertRemoteService {
     ended.addEventListener('abort', notify, { once: true })
     const following = (async () => {
       try {
-        for await (const next of this.ctx.mcpServers.watch(ended)) {
+        for await (const next of this.ctx.mcpManager.watch(ended)) {
           servers = next
           notify()
         }

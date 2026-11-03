@@ -80,7 +80,7 @@ async function bench() {
   }
   new Remote()
   ctx.provide('remote.mcpAccounts', { watch: vi.fn() })
-  ctx.provide('remote.mcpServers', { startAuthorization, cancelAuthorization: vi.fn(), signOut: vi.fn(), restart: vi.fn() })
+  ctx.provide('remote.mcpManager', { startAuthorization, cancelAuthorization: vi.fn(), signOut: vi.fn(), restart: vi.fn() })
   const locale = new LocaleRuntime(ctx)
   ctx.provide('locale', locale)
   await ctx.plugin(SlotRegistry)
