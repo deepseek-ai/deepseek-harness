@@ -14,6 +14,7 @@ import {
   ModelsSection, needsSetup, providerCopy, providerTargetLabel, removeProviderProfile,
 } from '../src/client/ModelsSection.tsx'
 import type { ModelsSectionInjected, ModelsSectionProps } from '../src/client/ModelsSection.tsx'
+import { ApiKeyInput } from '../src/client/ApiKeyInput.tsx'
 import { ProviderEditor, pathOps } from '../src/client/ProviderEditor.tsx'
 import type { ProviderEditorProps } from '../src/client/ProviderEditor.tsx'
 import {
@@ -2241,7 +2242,7 @@ it.each([
   expect(input.type).toBe('password')
   expect(input.placeholder).toBe('•'.repeat(length))
   expect(screen.queryByRole('button', { name: 'Clear saved key' })).toBeNull()
-  expect(screen.getByRole<HTMLButtonElement>('button', { name: en.keyReveal }).disabled).toBe(true)
+  expect(screen.queryByRole('button', { name: en.keyReveal })).toBeNull()
   expect(fireEvent.copy(input)).toBe(false)
   expect(fireEvent.cut(input)).toBe(false)
   fireEvent.change(input, { target: { value: 'replacement-key' } })
@@ -2258,6 +2259,15 @@ it.each([
   expect(screen.queryByLabelText(en.keyReveal)).toBeNull()
 })
 
+it('hides the reveal control and masks a disabled key draft', () => {
+  const view = render(<ApiKeyInput value="new-key" t={t} />)
+  fireEvent.click(screen.getByRole('button', { name: en.keyReveal }))
+  expect(screen.getByRole<HTMLInputElement>('textbox').type).toBe('text')
+  view.rerender(<ApiKeyInput value="new-key" t={t} disabled />)
+  expect(screen.queryByRole('button')).toBeNull()
+  expect(document.querySelector('input')?.type).toBe('password')
+})
+
 it('does not invent a mask length when the credential provider omits it', () => {
   renderPiAiEditor('openai', piAiNamespaceWith('openai', { apiKeyEnv: 'OPENAI_API_KEY' }), {
     credential: { configured: true, source: 'file', writable: true },
@@ -2266,7 +2276,7 @@ it('does not invent a mask length when the credential provider omits it', () => 
   expect(input.value).toBe('')
   expect(input.placeholder).toBe('')
   expect(screen.getByText(en.keySaved)).toBeTruthy()
-  expect(screen.getByRole<HTMLButtonElement>('button', { name: en.keyReveal }).disabled).toBe(true)
+  expect(screen.queryByRole('button', { name: en.keyReveal })).toBeNull()
 })
 
 it.each(['Backspace', 'Delete'])('stages whole saved-key deletion with %s and can cancel it', async (key) => {

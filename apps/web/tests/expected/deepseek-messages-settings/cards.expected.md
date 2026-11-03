@@ -18,7 +18,6 @@
       - button "认证说明": "?"
       - textbox "API 密钥":
         - /placeholder: ••••••••••••••••••••••
-      - button "显示密钥" [disabled]
       - paragraph: 使用已保存的 API key。
       - group:
         - text: 自定义设置 API 地址

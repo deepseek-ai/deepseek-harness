@@ -28,12 +28,13 @@ interface ApiKeyInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, '
  */
 export function ApiKeyInput({ value, saved, t, ...props }: ApiKeyInputProps): ReactNode {
   const [revealedValue, setRevealedValue] = useState<string | undefined>()
-  const revealed = saved === undefined && value.length > 0 && revealedValue === value
+  const canReveal = saved === undefined && value.length > 0 && props.disabled !== true
+  const revealed = canReveal && revealedValue === value
   return (
     <div className={`${styles['keyInput']} ${saved === undefined ? '' : styles['savedKeyInput']}`}>
       <input
         {...props}
-        className={`${styles['input']} ${saved !== undefined || value.length > 0 ? styles['keyInputFilled'] : ''}`}
+        className={`${styles['input']} ${canReveal ? styles['keyInputFilled'] : ''}`}
         type={revealed ? 'text' : 'password'}
         autoComplete="new-password"
         value={value}
@@ -51,12 +52,11 @@ export function ApiKeyInput({ value, saved, t, ...props }: ApiKeyInputProps): Re
           props.onChange?.(event)
         }}
       />
-      {value.length === 0 && saved === undefined ? null : <button
+      {!canReveal ? null : <button
         type="button"
         className={styles['keyToggle']}
         aria-label={t(revealed ? 'keyHide' : 'keyReveal')}
         aria-pressed={revealed}
-        disabled={props.disabled || saved !== undefined}
         onClick={() => { setRevealedValue(revealed ? undefined : value) }}
       >
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" aria-hidden="true">

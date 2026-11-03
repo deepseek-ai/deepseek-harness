@@ -137,7 +137,7 @@ it.each([{ name: 'Chromium', engine: chromium }, { name: 'WebKit', engine: webki
       const key = dialog.getByLabel('API 密钥', { exact: true })
       expect(await key.getAttribute('placeholder')).toBe('•'.repeat('fixture-protected-old-key'.length))
       expect(await key.inputValue()).toBe('')
-      expect(await dialog.getByRole('button', { name: '显示密钥' }).isDisabled()).toBe(true)
+      expect(await dialog.getByRole('button', { name: '显示密钥' }).count()).toBe(0)
       expect(await page.locator('body').innerHTML()).not.toContain('fixture-protected-old-key')
       await key.press('Backspace')
       await dialog.getByText('保存以清除已保存的 API key。之后使用环境认证（DEEPSEEK_API_KEY）。', { exact: true }).waitFor()
@@ -160,7 +160,7 @@ it.each([{ name: 'Chromium', engine: chromium }, { name: 'WebKit', engine: webki
       expect(await key.getAttribute('placeholder')).toBe('•'.repeat('fixture-new-key'.length))
       expect(await key.inputValue()).toBe('')
       expect(await key.getAttribute('type')).toBe('password')
-      expect(await dialog.getByRole('button', { name: '显示密钥' }).isDisabled()).toBe(true)
+      expect(await dialog.getByRole('button', { name: '显示密钥' }).count()).toBe(0)
       expect(await page.locator('body').innerHTML()).not.toContain('fixture-new-key')
     } finally {
       try { await browser?.close() } finally { await scaffold.close() }
