@@ -27,7 +27,7 @@ import {
   compareOrRefreshGolden, fixtureUserPrompts,
   launchWebScaffold, recordFixture, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
+import { connectFreshWorkspace, newEnglishPage, saveFailureShot, writeComposerDraft } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/live-interactions', import.meta.url))
 const FIXTURE = join(SNAPSHOT_DIR, 'session.v3.jsonl')
@@ -448,7 +448,7 @@ describe('web e2e: live-turn interactions (cancel / error / retry)', () => {
     const resume = page.getByRole('button', { name: 'Continue generating', exact: true })
     await resume.waitFor()
     const input = page.locator('[data-composer-input]').first()
-    await input.fill('/plan ')
+    await writeComposerDraft(page, input, '/plan ')
     await input.press('Enter')
     const plan = page.getByRole('button', { name: 'Plan mode on, press to turn off', exact: true })
     await plan.waitFor()
@@ -458,10 +458,10 @@ describe('web e2e: live-turn interactions (cancel / error / retry)', () => {
     await resume.waitFor()
     expect(await resume.isEnabled()).toBe(true)
     expect(turnEndReasons(sessionEvents)).toEqual(['error'])
-    await input.fill('A different instruction')
+    await writeComposerDraft(page, input, 'A different instruction')
     expect(await resume.count()).toBe(0)
     expect(await page.getByRole('button', { name: 'Send message', exact: true }).isEnabled()).toBe(true)
-    await input.fill('')
+    await writeComposerDraft(page, input, '')
     await resume.waitFor()
     await page.setViewportSize({ width: 390, height: 844 })
     // ResizeObserver collapses the model label after the viewport changes.
