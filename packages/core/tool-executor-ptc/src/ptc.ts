@@ -23,7 +23,7 @@ import { defineTool, parameterSchemaSpecToJsonSchema, RUN_CODE_NAME, TOOL_ABORTE
 import type { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
 import { toolErrorMessage } from '@deepseek-ai/dsh-tools/pipeline'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
-import { PtcCalls } from './ptc-calls.ts'
+import type { PtcCalls } from './ptc-calls.ts'
 import { CodeRunFailedError, ToolCallLimitExceededError } from './errors.ts'
 import type { Config } from './config.ts'
 import type { ToolDefinition, ToolExecutionResult, ToolRunContext } from '@deepseek-ai/dsh-tools'
@@ -269,12 +269,14 @@ function resolveSandboxPolicy(ctx: Context, exec: ToolRunContext): SandboxExecut
  * @param ctx - executor context owning policy listeners and active program cleanup.
  * @param executor - shared invocation pipeline for nested calls.
  * @param config - validated timeout-based tool-call allowance and concurrency limits.
+ * @param calls - Executor-owned cancellation and reset coordination.
  * @returns the transport definition with runtime-dependent schema text.
  */
 export function createRunCodeTool(
   ctx: Context,
   executor: ToolExecutionPipeline,
   config: Config,
+  calls: PtcCalls,
 ): ToolDefinition {
   const { maxSubCallsPerMinute, maxParallelSubCalls: maxParallel } = config
   // Retain services for log settlement after the executor context becomes inactive.
@@ -295,7 +297,6 @@ export function createRunCodeTool(
   }
 
   const stateOwners = new WeakMap<object, WeakSet<PtcRuntime>>()
-  const calls = new PtcCalls(ctx)
   const definition = defineTool({
     name: RUN_CODE_NAME,
     // The description and `code` parameter description are placeholders here:
@@ -709,7 +710,8 @@ export function createRunCodeTool(
             const limitError = runController.signal.reason instanceof ToolCallLimitExceededError
               ? runController.signal.reason : undefined
             if (result.error.kind === 'abort' && exec.signal.aborted && limitError === undefined) {
-              const error = new HarnessError('tool call aborted', TOOL_ABORTED)
+              const message = runtime.retainsState ? `tool call aborted: ${result.error.message}` : 'tool call aborted'
+              const error = new HarnessError(message, TOOL_ABORTED)
               error.name = 'AbortError'
               throw error
             }
@@ -729,8 +731,9 @@ export function createRunCodeTool(
           callSignal.removeEventListener('abort', onOuterAbort)
         }
       }
-      return runtime.sandboxMode === undefined || exec.agent === undefined ? run(exec.signal)
-        : calls.run(exec.agent.session.id, exec.signal, () => resolveSandboxPolicy(ctx, exec).mode, run)
+      return exec.agent === undefined || (runtime.sandboxMode === undefined && !runtime.retainsState) ? run(exec.signal)
+        : calls.run(exec.agent.session.id, exec.signal,
+          () => runtime.sandboxMode === undefined ? undefined : resolveSandboxPolicy(ctx, exec).mode, run)
     },
     // The model-authored description is the call's always-visible UI label
     // (the bash `description` precedent); the program itself rides rawInput.

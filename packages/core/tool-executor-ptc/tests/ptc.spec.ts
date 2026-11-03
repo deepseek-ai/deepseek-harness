@@ -1,7 +1,7 @@
 import type { ScopeKey } from '@deepseek-ai/dsh-scope'
 import type { ToolExecutionInput } from '@deepseek-ai/dsh-tools'
 import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
-import { PtcExecutor, CodeRunFailedError } from '../src/index.ts'
+import { PtcExecutor, CodeRunFailedError, CodeResetFailedError } from '../src/index.ts'
 import { NativeToolExecutor } from '@deepseek-ai/dsh-tool-executor-native'
 import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -86,7 +86,7 @@ async function setup(options: SetupOptions = {}) {
     await ctx.plugin(FakeRuntime, options.runtime ?? {})
     runtime = ctx.ptcRuntime as FakeRuntime
   }
-  return { ctx, tools: {
+  return { ctx, executor, tools: {
     get: (name: string, scope?: ScopeKey) => executor instanceof PtcExecutor && name === RUN_CODE_NAME ? executor['requirePtcTransport']() : ctx.tools.get(name, scope),
     execute: (input: ToolExecutionInput) => executeCall(ctx, input),
   }, systemPrompt: ctx.systemPrompt, runtime: runtime! }
@@ -1751,19 +1751,20 @@ describe('the run_code dispatch bridge', () => {
     }])
   })
 
-  it('converts a failed run into a structured isError result carrying kind, message, and captured logs', async () => {
+  it.each([
+    ['before code started', []],
+    ['during execution', ['got this far']],
+  ] as const)('reports a timeout %s with its captured output', async (phase, logs) => {
     const { ctx, runtime } = await setup({ mode: 'ptc' })
     runtime.behavior = () => Promise.resolve({
-      logs: ['got this far'],
-      error: { kind: 'timeout', message: 'compute budget exhausted (300ms busy)' },
+      logs: [...logs],
+      error: { kind: 'timeout', message: `execution timed out ${phase} (300ms); retained variables were cleared` },
     })
     const result = await runCode(ctx, 'program')
     expect(result.isError).toBe(true)
     expect(result.error).toMatchObject({ info: { name: 'CodeRunFailedError', code: 'CODE_RUN_FAILED' } })
     const text = (result.content[0] as { text: string }).text
-    expect(text).toContain('code run failed (timeout)')
-    expect(text).toContain('compute budget exhausted')
-    expect(text).toContain('got this far')
+    expect(text).toBe(`Error: code run failed (timeout): execution timed out ${phase} (300ms); retained variables were cleared${logs.length > 0 ? '\nCaptured output:\ngot this far' : ''}`)
   })
 
   it('CodeRunFailedError is a HarnessError with the CODE_RUN_FAILED code', () => {
@@ -2220,6 +2221,22 @@ describe('the run_code dispatch bridge', () => {
     expect(calls).toEqual([])
   })
 
+  it.each(['preserved', 'cleared'])('reports retained variables were %s after caller cancellation', async (state) => {
+    const { ctx, runtime } = await setup({ mode: 'ptc' })
+    vi.spyOn(runtime, 'retainsState', 'get').mockReturnValue(true)
+    const controller = new AbortController()
+    const message = `execution canceled; retained variables were ${state}`
+    runtime.behavior = async () => {
+      controller.abort({ kind: 'user' })
+      return { logs: [], error: { kind: 'abort', message } }
+    }
+    const result = await runCode(ctx, 'program', { signal: controller.signal })
+    expect(result.error).toEqual({
+      message: `tool call aborted: ${message}`,
+      info: { name: 'AbortError', code: TOOL_ABORTED },
+    })
+  })
+
   describe.each(['typescript', 'python'])('%s caller cancellation', (language) => {
     it.each<AgentCancelCause | undefined>([
       { kind: 'user' },
@@ -2528,6 +2545,92 @@ describe('per-agent presentation', () => {
   })
 })
 
+
+describe('host environment reset', () => {
+  async function retainedSetup() {
+    const result = await setup()
+    onTestFinished(async () => { await result.ctx.fiber.dispose() })
+    vi.spyOn(result.runtime, 'retainsState', 'get').mockReturnValue(true)
+    const { agent, scope } = await mintAgentScope(result.ctx)
+    const inject = vi.fn<Agent['inject']>()
+    agent.inject = inject
+    const executor = result.executor as PtcExecutor
+    return { ...result, agent, scope, inject, reset: () => executor.reset(agent) }
+  }
+
+  it('keeps reset outside the model schema, prompt, and SDK', async () => {
+    const { ctx, systemPrompt, agent, scope } = await retainedSetup()
+    registerEcho(ctx)
+    const direct = await executeCall(ctx, { name: 'reset_code', callId: ToolCallId('direct-reset'), signal: testToolSignal, agent, arguments: {} })
+    expect(direct.error?.info?.code).toBe('UNKNOWN_TOOL')
+    scope.ctx.tools.restrict({ allow: [] })
+    const assembly = await systemPrompt.assemble({ scope: agent })
+    expect(assembly.tools.map(tool => tool.name)).toEqual([RUN_CODE_NAME])
+    expect(assembly.sections.map(section => section.text).join('\n')).not.toContain('reset_code')
+  })
+
+  it('clears the exact Agent owner and queues a model-visible state-loss notice', async () => {
+    const { runtime, agent, reset, inject } = await retainedSetup()
+    const release = vi.spyOn(runtime, 'release').mockResolvedValue(undefined)
+    await reset()
+    expect(release).toHaveBeenCalledExactlyOnceWith(agent)
+    expect(inject).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      content: [{ type: 'text', text: 'Program environment reset; retained variables cleared. Completed tool effects remain.' }],
+      source: { kind: 'ptc-mode' },
+    }))
+    vi.spyOn(runtime, 'retainsState', 'get').mockReturnValue(false)
+    await expect(reset()).rejects.toThrow('does not retain an environment')
+    expect(release).toHaveBeenCalledOnce()
+    expect(inject).toHaveBeenCalledOnce()
+  })
+
+  it('releases a nonresponsive program independently and waits for started nested-tool cleanup', async () => {
+    const { ctx, runtime, agent, reset } = await retainedSetup()
+    const toolStarted = Promise.withResolvers<undefined>()
+    const cleanup = Promise.withResolvers<undefined>()
+    const program = Promise.withResolvers<PtcRunResult>()
+    let nestedSignal: AbortSignal | undefined
+    ctx.tools.register(defineTool({
+      name: 'blocked', description: 'Wait for controlled cleanup.', parameters: {},
+      output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
+      execute: async (_args, exec) => { nestedSignal = exec.signal; toolStarted.resolve(undefined); await cleanup.promise; return 'cleaned' },
+    }))
+    runtime.behavior = (request) => {
+      void request.bindings[0]!.functions.blocked!({}).catch(() => {})
+      return program.promise
+    }
+    const release = vi.spyOn(runtime, 'release').mockImplementation(async () => { program.resolve({ logs: [], error: { kind: 'abort', message: 'environment disposed' } }) })
+    const running = runCode(ctx, 'await tools.blocked({}); while (true) {}', { agent })
+    await toolStarted.promise
+    let settled = false
+    const resetting = reset().then((result) => { settled = true; return result })
+    try {
+      await vi.waitFor(() => { expect(release).toHaveBeenCalledWith(agent) })
+      expect(nestedSignal?.aborted).toBe(true)
+      expect(settled).toBe(false)
+      cleanup.resolve(undefined)
+      await resetting
+      expect((await running).isError).toBe(true)
+    } finally { cleanup.resolve(undefined); program.resolve({ logs: [] }); await Promise.all([running, resetting]) }
+  })
+
+  it('reports failed cleanup, refuses further code, and allows explicit reset retry', async () => {
+    const { ctx, runtime, agent, reset, inject } = await retainedSetup()
+    const release = vi.spyOn(runtime, 'release').mockResolvedValue(undefined).mockRejectedValueOnce(new Error('process cleanup failed'))
+    const run = vi.spyOn(runtime, 'run')
+    await expect(reset()).rejects.toThrow(CodeResetFailedError)
+    expect(inject).not.toHaveBeenCalled()
+    const blocked = await runCode(ctx, '1', { agent })
+    expect(blocked.isError).toBe(true)
+    expect(blocked.error?.info?.code).toBe('CODE_RUN_FAILED')
+    expect(blocked.content.find(block => block.type === 'text')?.text).toContain('Ask the host to reset it before running more code')
+    expect(run).not.toHaveBeenCalled()
+    await reset()
+    expect(inject).toHaveBeenCalledOnce()
+    expect(release).toHaveBeenCalledTimes(2)
+    expect((await runCode(ctx, '1', { agent })).isError).toBe(false)
+  })
+})
 
 class ConfinedFakeRuntime extends FakeRuntime {
   override get sandboxMode() { return 'read-only' as const }

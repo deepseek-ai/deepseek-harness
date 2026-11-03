@@ -28,7 +28,7 @@ The [experimental Python provider](../../../../packages/experimental/ptc-runtime
 
 The subprocess owner supplies a dedicated inherited binary control channel, separate from program stdout/stderr and launcher lifecycle IPC. The host bounds frames, queued writes, pending calls and outstanding argument bytes, then validates call identity and the binding allowlist before dispatch. Model code can write to that channel, so its bytes remain untrusted.
 
-Program completion, timeout, cancellation and protocol failure all close execution through the managed process owner. Result selection stops the execution timer; cleanup then waits for the direct outcome and managed-range quiescence. The PTC bridge separately aborts and drains nested tool dispatches before its outer tool result settles. A denial or transport failure never automatically replays a program whose effects may already have occurred.
+For temporary executions, program completion, timeout, cancellation and protocol failure all close execution through the managed process owner. Result selection stops the execution timer; cleanup then waits for the direct outcome and managed-range quiescence. The PTC bridge separately aborts and drains nested tool dispatches before its outer tool result settles. A denial or transport failure never automatically replays a program whose effects may already have occurred.
 
 ### Resource limits
 

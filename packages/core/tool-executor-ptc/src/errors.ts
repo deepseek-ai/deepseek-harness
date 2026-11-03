@@ -34,3 +34,11 @@ export class CodeRunFailedError extends HarnessError {
     this.name = 'CodeRunFailedError'
   }
 }
+
+/** A host reset is unsupported or failed; cleanup failures require an explicit retry. */
+export class CodeResetFailedError extends HarnessError {
+  constructor(message: string) {
+    super(message, 'CODE_RESET_FAILED')
+    this.name = 'CodeResetFailedError'
+  }
+}
