@@ -22,7 +22,7 @@ if (import.meta.main) {
   const entry = process.platform === 'win32' ? pathToFileURL(realpathSync.native(import.meta.filename)).href : import.meta.url
   if (entry === import.meta.url) await runCli()
   else {
-    const canonical: typeof import('./installed-bin.ts') = await import(entry)
+    const canonical = await import(entry) as typeof import('./installed-bin.ts')
     await canonical.runCli()
   }
 }
