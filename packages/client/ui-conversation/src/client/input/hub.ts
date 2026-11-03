@@ -130,7 +130,7 @@ export class InputHub implements SessionInputResolver {
       quoteInsertionAllowed: () => {
         const state = session.getSnapshot()
         return !state.removed && (state.subagent === null
-          || (state.subagent.address.mode === 'continuable' && state.subagent.parentAvailable === true))
+          || state.subagent.address.mode === 'continuable')
           && this.conversation().blocks.storeFor(session.sessionId).getSnapshot() === undefined
       },
       steerQueue: () => { void this.steerQueue(session, shell) },

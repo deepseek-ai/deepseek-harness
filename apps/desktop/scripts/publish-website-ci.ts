@@ -15,7 +15,7 @@ import { desktopPublicationFailure } from './desktop-publication-failure.ts'
 
 const routeSchema = z.object({ runId: z.string().regex(/^[1-9]\d*$/u), attempt: z.string().regex(/^[1-9]\d*$/u),
   commit: z.string().regex(/^[a-f0-9]{40}$/u), runnerName: z.string(), runnerLabel: z.string(), sourceRef: z.string(),
-  channel: z.enum(['nightly', 'latest']), target: z.enum(['mac-arm64', 'mac-x64', 'win-x64']), preset: z.literal('production') })
+  channel: z.enum(['nightly', 'stable']), target: z.enum(['mac-arm64', 'mac-x64', 'win-x64']), preset: z.literal('production') })
 const purgeSchema = z.object({ zoneId: z.string(), publicUrl: z.url(), submittedAt: z.iso.datetime(),
   jobId: z.string().regex(/^[\w.-]{1,128}$/u).optional(),
   status: z.enum(['pending', 'processing', 'success', 'failed', 'timeout', 'canceled', 'unknown']),

@@ -41,3 +41,13 @@ Example `cordis.yml`:
 | `enableLogs` | Enables loader apply, reload, and unload logs. |
 
 Patches can insert entries or override fields on entries with a matching `id`.
+
+## Patch composition and persistence
+
+`applyEntryPatches(data, patches, warn)` uses the same upstream algorithm as mounting. It clones file entries even without patches and clones inserted entry lists before indexing them, so later patches can address inserted rows without mutating those input lists. `entryListSchema` exposes Include’s YAML dialect to configuration tools. Nested entry expressions remain literal until their owning Loader entry evaluates them.
+
+Tree mutations arrive through `commit(change)` and enter a journal. Include merges them with the latest file before writing; file edits win conflicts on the same fields and produce a diagnostic. Patch-owned fields and inserted entries update the parent Include’s patches instead of the included file. Invalid, missing or read-only files leave unsaved changes in memory.
+
+`flush()` waits for this Include’s pending file operations and tree reconciliation, retries outstanding writes, and rejects if changes remain unsaved. Successful persistence clears previous errors. `refresh()` rereads the file and exposes the same completion result. To persist patch-owned changes, flush the child and then its parent. `stop()` makes a final attempt and always stops child entries, even when it rejects; ordinary Fiber disposal still contains cleanup errors. File writes use an atomic rename with bounded retries for transient destination locks.
+
+Ids that Include generates for anonymous inserted rows are written into the patch objects of its own configuration. When the parent tree re-creates that configuration from a file, for example after the parent Include writes, those ids are generated again and the inserted rows restart; give inserted rows explicit ids where their instance state matters.

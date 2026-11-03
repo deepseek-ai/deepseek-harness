@@ -1,5 +1,5 @@
 /** Shared production-deploy preparation for the SDK and SSH executable carriers. */
-import { existsSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 import { cp, mkdir, readFile } from 'node:fs/promises'
 import { dirname, extname, join, resolve, sep } from 'node:path'
 
@@ -61,10 +61,22 @@ export async function restoreLegacyHoists(staging: string, sourceNodeModules: st
     })
     restored.push(dependency)
   }
-  const stillMissing = Object.keys(manifest.dependencies ?? {})
-    .filter(dependency => !existsSync(join(staging, 'node_modules', dependency)))
-  if (stillMissing.length > 0) {
-    throw new Error(`executable-packaging: staged dependencies remain missing: ${stillMissing.join(', ')}.`)
-  }
+  await verifyStagedDependencies(staging)
   return restored
+}
+
+/**
+ * Reject a deployed payload whose manifest names missing direct dependency directories.
+ * @param staging - Deployed payload root containing package.json and node_modules.
+ * @returns Resolves when every declared direct dependency has a directory.
+ */
+export async function verifyStagedDependencies(staging: string): Promise<void> {
+  const manifest = JSON.parse(await readFile(join(staging, 'package.json'), 'utf8')) as {
+    dependencies?: Record<string, string>
+  }
+  const missing = Object.keys(manifest.dependencies ?? {}).sort()
+    .filter(dependency => !statSync(join(staging, 'node_modules', dependency), { throwIfNoEntry: false })?.isDirectory())
+  if (missing.length > 0) {
+    throw new Error(`executable-packaging: staged dependencies remain missing: ${missing.join(', ')}.`)
+  }
 }

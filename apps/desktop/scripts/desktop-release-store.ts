@@ -14,7 +14,7 @@ const sourceSchema = z.strictObject({
   commit: z.string().regex(/^[a-f0-9]{40}$/u),
   workflowCommit: z.string().regex(/^[a-f0-9]{40}$/u),
   sourceRef: z.string().min(1),
-  channel: z.enum(['nightly', 'latest']),
+  channel: z.enum(['nightly', 'stable']),
   runnerName: z.string().min(1),
   // Storage accepts every Desktop target; CI routing separately limits currently provisioned platforms.
   target: z.enum(['mac-arm64', 'mac-x64', 'win-x64']),

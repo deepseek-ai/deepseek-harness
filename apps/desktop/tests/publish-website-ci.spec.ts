@@ -11,7 +11,7 @@ import { publishWebsiteCi, websiteApproval } from '../scripts/publish-website-ci
 vi.mock('node:timers/promises', () => ({ setTimeout: async () => {} }))
 afterEach(() => vi.restoreAllMocks())
 
-it.each(['accepted', 'unconfirmed', 'upload', 'put', 'uploaded', 'approval'] as const)('preserves publication recovery for %s', async (scenario) => {
+it.each(['accepted', 'unconfirmed', 'upload', 'put', 'uploaded', 'stable', 'approval'] as const)('preserves publication recovery for %s', async (scenario) => {
   const root = await mkdtemp(join(tmpdir(), 'website-ci-'))
   try {
     const config = join(root, 'packaging')
@@ -25,10 +25,10 @@ it.each(['accepted', 'unconfirmed', 'upload', 'put', 'uploaded', 'approval'] as 
       bucket: 'production-123', origin: 'https://download.deepseek.com', credentialsFile,
       githubApp: { clientId: 'app', privateKeyFile: join(root, 'app.pem') },
     }))
-    const route = { runId: '12', attempt: '1', commit: 'a'.repeat(40), sourceRef: 'master', channel: 'nightly',
+    const route = { runId: '12', attempt: '1', commit: 'a'.repeat(40), sourceRef: 'master', channel: scenario === 'stable' ? 'stable' : 'nightly',
       runnerName: 'mini', runnerLabel: 'dsh-mini', target: 'mac-arm64', preset: 'production' }
     const manifest = { schemaVersion: 1, source: { repository: 'owner/repo', runId: '12', attempt: '1', commit: route.commit,
-      workflowCommit: route.commit, sourceRef: 'master', channel: 'nightly', runnerName: 'mini', target: 'mac-arm64',
+      workflowCommit: route.commit, sourceRef: 'master', channel: route.channel, runnerName: 'mini', target: 'mac-arm64',
       preset: 'production', productVersion: '1.0.0', version: '1.0.0', testReleaseId: null, qualification: 'notarized' },
     files: [{ name: 'deepseek-harness-1.0.0-mac-arm64.dmg', size: 1, sha512: createHash('sha512').update('x').digest('base64') }] }
     await writeFile(join(root, 'releases', '12', '1', 'manifest.json'), JSON.stringify(manifest))
@@ -37,7 +37,7 @@ it.each(['accepted', 'unconfirmed', 'upload', 'put', 'uploaded', 'approval'] as 
     const env = { RUNNER_NAME: 'mini', GITHUB_REPOSITORY: 'owner/repo', GITHUB_RUN_ID: '99',
       GITHUB_RUN_ATTEMPT: '1', DSH_PACKAGING_CONFIG_DIR: config, DESKTOP_PUBLISH_ROUTE: JSON.stringify(route),
       DESKTOP_WEBSITE_APPROVAL: approval, DOWNLOAD_PROD_EO_ZONE_ID: 'zone-fixture', GITHUB_OUTPUT: join(root, 'output') }
-    if (scenario === 'upload' || scenario === 'put' || scenario === 'uploaded' || scenario === 'approval') {
+    if (scenario === 'upload' || scenario === 'put' || scenario === 'uploaded' || scenario === 'stable' || scenario === 'approval') {
       await writeFile(join(root, 'releases', '12', '1', manifest.files[0]!.name), 'x')
       if (scenario === 'upload' || scenario === 'put') await rm(join(records, 'state.json'))
       let stored = scenario !== 'put'

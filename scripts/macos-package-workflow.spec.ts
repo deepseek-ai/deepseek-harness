@@ -1,3 +1,4 @@
+import { expectDesktopArchive } from './desktop-archive-workflow-test.ts'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import yaml from 'js-yaml'
@@ -80,18 +81,21 @@ describe.each(['arm64', 'x64'])('macOS %s packaging', (arch) => {
     expect(workflow.jobs.package!.env.PACKAGE_MACOS_ZIP_COMPRESSION_LEVEL).toBe('${{ inputs.compression_level }}')
   })
 
+  it('stages the notarized Computer Use helpers after the configuration check and before packing the runtime', () => {
+    const steps = workflow.jobs.package!.steps
+    const staging = steps.findIndex(step => step.name === 'Build and stage notarized Computer Use helpers')
+    expect(staging).toBeGreaterThan(steps.findIndex(step => step.name === 'Check packaging configuration and toolchain'))
+    expect(staging).toBeLessThan(steps.findIndex(step => step.name === 'Build signed installers'))
+    const run = steps[staging]?.run ?? ''
+    // Sources whose dsh does not ship the bundle, or that predate helper packaging, skip staging.
+    expect(run.indexOf("dependencies?.['@deepseek-ai/dsh-cua-bundle']")).toBeLessThan(run.indexOf('scripts/cua-helper/package.ts --out'))
+    expect(run.indexOf('[[ ! -f scripts/cua-helper/package.ts ]]')).toBeLessThan(run.indexOf('scripts/cua-helper/package.ts --out'))
+    expect(run).toContain('pnpm exec tsx scripts/cua-helper/package.ts --out dist/cua-helper')
+    expect(run).toContain('pnpm exec tsx scripts/cua-helper/stage.ts --from dist/cua-helper/extracted')
+  })
+
   it('passes the same target to preparation, packaging and retention', () => {
-    const archive = workflow.jobs['upload-artifact']!
-    expect(archive.env).toMatchObject({
-      DESKTOP_RETAINED_DIRECTORY: '${{ needs.package.outputs.directory }}',
-      DESKTOP_PACKAGE_ATTEMPT: '${{ needs.package.outputs.attempt }}',
-      DESKTOP_PACKAGE_RUNNER: '${{ needs.package.outputs.runner-name }}',
-    })
-    for (const step of archive.steps.filter(step => step.uses?.startsWith('actions/upload-artifact@'))) {
-      expect(step.with?.name).toContain('${{ needs.package.outputs.version }}')
-      expect(step.with?.name).toContain('${{ needs.package.outputs.attempt }}')
-      expect(step.with?.name).not.toContain('github.run_attempt')
-    }
+    expectDesktopArchive(workflow.jobs['upload-artifact']!, 1)
     const job = workflow.jobs.package!
     expect(job.env.DSH_DESKTOP_TARGET_PLATFORM).toBe('darwin')
     expect(job.env.DSH_DESKTOP_TARGET_ARCH).toBe(arch)

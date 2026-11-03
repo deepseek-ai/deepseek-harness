@@ -4,7 +4,9 @@
  * it is restored. The work a Session still runs is reported and stopped by
  * its owners — the Agent registry (`turn`), the job registry seam (`job`),
  * the Subagent runtime (`subagent`), and the Schedule plugin (`schedule`) —
- * through the Workspace registry's archive-admission events.
+ * through the Workspace registry's archive-admission events. The Subagent
+ * runtime also checks its retained ancestry before each step, so a released
+ * intermediate Session cannot hide an archived ancestor.
  */
 
 import type { Context, Plugin } from '@deepseek-ai/cordis'
@@ -33,9 +35,10 @@ export const ArchivedSessionGate: Plugin.Object<void> = {
 
 /**
  * Whether the Agent's Session, or a Session above it in its subagent lineage,
- * is archived. Lineage follows the durable header fields through
+ * is archived. This header-only check follows the durable fields through
  * subagent-origin Sessions only: a fork of an archived Session is an
- * independent conversation.
+ * independent conversation. The Subagent runtime separately checks managed
+ * ancestry when an intermediate Session is unavailable here.
  * @param ctx - Host context.
  * @param agent - the Agent proposing a step.
  * @returns whether an archived Session owns the step.
