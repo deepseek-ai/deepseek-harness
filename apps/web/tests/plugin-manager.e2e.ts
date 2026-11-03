@@ -855,9 +855,12 @@ describe('web e2e: plugin manager', () => {
       .toBe(bundles.filter(bundle => bundle.name !== '@deepseek-ai/dsh-experimental-terminal-bundle'
         && bundle.name !== '@deepseek-ai/dsh-experimental-liveshare'
         && bundle.official && (bundle.listedByDefault !== false || bundle.enabled || bundle.installed)).length)
+    // Computer Use ships with the installation and is listed only on the macOS Hosts it supports.
+    const cuaSupported = process.platform === 'darwin'
     expect(bundles.find(bundle => bundle.name === '@deepseek-ai/dsh-cua-bundle'))
-      .toMatchObject({ enabled: false, optional: false, availability: 'missing', listedByDefault: false })
-    expect(await panel.locator('[data-plugin-package="@deepseek-ai/dsh-cua-bundle"]').count()).toBe(0)
+      .toMatchObject({ enabled: false, optional: true, availability: 'installation', ...cuaSupported ? {} : { listedByDefault: false } })
+    expect(await panel.locator('[data-plugin-group="more"] [data-plugin-package="@deepseek-ai/dsh-cua-bundle"]').count())
+      .toBe(cuaSupported ? 1 : 0)
     for (const name of ['@deepseek-ai/dsh-experimental-session-search', '@deepseek-ai/dsh-experimental-ralph-bundle']) {
       expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === name))
         .toMatchObject({ enabled: false, optional: true, availability: 'installation', listedByDefault: false })
@@ -874,6 +877,7 @@ describe('web e2e: plugin manager', () => {
       ['@deepseek-ai/dsh-experimental-forge-bundle', 1],
       ['@deepseek-ai/dsh-personalized-recommendations', 1],
       ['@deepseek-ai/dsh-experimental-inspector-profile', 1],
+      ...cuaSupported ? [['@deepseek-ai/dsh-cua-bundle', 1]] : [],
       ['@deepseek-ai/dsh-experimental-tool-worktree', 1],
       ['@deepseek-ai/dsh-experimental-cot-translation-bundle', 1],
       ['@deepseek-ai/dsh-experimental-session-titles-bundle', 1],
@@ -1433,8 +1437,8 @@ describe('web e2e: plugin manager', () => {
       // on, so writing the patch file recomposes the running loader; each step first waits for that
       // recomposition and then re-reads the Host bundle list through the page's own Refresh.
       const patchFile = join(visibilityScaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml')
-      const declarationsRow = (): boolean => [...visibilityScaffold.ctx.loader.entries()]
-        .some(entry => entry.options.id === 'liveshare-viewer-declarations')
+      const shareHostRow = (): boolean => [...visibilityScaffold.ctx.loader.entries()]
+        .some(entry => entry.options.id === 'liveshare-share-host')
       const refresh = panel.getByRole('button', { name: '刷新', exact: true })
 
       // Default install: the package ships, but no row it declares runs, so neither list offers it.
@@ -1452,12 +1456,12 @@ describe('web e2e: plugin manager', () => {
       // selects no such bundle: the card joins the experimental list.
       await writeFile(patchFile, [
         '- insert:',
-        '    - id: liveshare-viewer-declarations',
-        "      name: '@deepseek-ai/dsh-experimental-liveshare/viewer-declarations'",
+        '    - id: liveshare-share-host',
+        "      name: '@deepseek-ai/dsh-experimental-liveshare'",
         '',
       ].join('\n'))
-      await expect.poll(declarationsRow, {
-        timeout: 30_000, message: 'the profile patch did not compose the LiveShare declarations row',
+      await expect.poll(shareHostRow, {
+        timeout: 30_000, message: 'the profile patch did not compose the LiveShare share-host row',
       }).toBe(true)
       await refresh.click()
       await expect.poll(() => card.count(), {
@@ -1466,8 +1470,8 @@ describe('web e2e: plugin manager', () => {
 
       // Removing the row stops it: the card leaves both lists again.
       await writeFile(patchFile, '[]\n')
-      await expect.poll(declarationsRow, {
-        timeout: 30_000, message: 'the profile patch did not remove the LiveShare declarations row',
+      await expect.poll(shareHostRow, {
+        timeout: 30_000, message: 'the profile patch did not remove the LiveShare share-host row',
       }).toBe(false)
       await refresh.click()
       await expect.poll(() => card.count(), {
