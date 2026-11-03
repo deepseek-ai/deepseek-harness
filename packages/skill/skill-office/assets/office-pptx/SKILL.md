@@ -61,9 +61,9 @@ Check that text and images fit the slide dimensions, titles form a useful sequen
 
 ## Check and deliver
 
-Reopen the saved presentation with python-pptx to verify the requested slide count, content, formatting, chart data, and notes, including unchanged content that must be preserved. These checks do not establish text fit, readable contrast, or rendering fidelity.
+Reopen the saved presentation with python-pptx to verify the requested slide count, content, formatting, chart data, and notes, including unchanged content that must be preserved. They fully verify text, data, and notes edits, but not text fit, contrast, or rendering fidelity.
 
-Deliver after the requested edits are verified. Creating a file or changing content with incidental basic formatting does not require additional operations. Call `office_render` for requested images or visual inspection and for appearance-focused styling, spacing, sizing, or alignment changes unless the user explicitly skips rendering. For PDF output, call `office_convert` with `format: "pdf"`, then copy the returned temporary file to the destination.
+Deliver after the requested edits are verified. Creating a file or changing text, data, or notes with incidental basic formatting does not require rendering. Call `office_render` for requested images or visual inspection and for appearance-focused styling, spacing, sizing, or alignment changes unless the user explicitly skips rendering. For PDF output, call `office_convert` with `format: "pdf"`, then copy the returned temporary file to the destination.
 
 A fully transparent or uniformly blank image of populated content is a renderer failure: stop visual checks for the task at once, without rendering again with other slides, DPI, or settings and without editing the source for it. If content and structure checks pass, state the visual status only as "Content and structure checks passed; visual inspection was not completed." or "内容与结构检查通过；视觉检查未完成。"; never claim visual verification.
 
