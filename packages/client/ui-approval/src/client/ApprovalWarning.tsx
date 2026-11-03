@@ -86,7 +86,7 @@ export function ApprovalWarning({ warning }: {
       onPointerEnter={enter} onPointerLeave={leave}
       onFocus={(event) => { if (event.currentTarget.matches(':focus-visible')) show() }} onBlur={blur}>
       <Tag tone="warning" className={css.warningTag}>
-        <IconWarningOutlineRegular size={14} />{warning.label}
+        <IconWarningOutlineRegular size={12} />{warning.label}
       </Tag>
     </Button>
     {open && createPortal(

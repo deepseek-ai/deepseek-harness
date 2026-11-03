@@ -64,6 +64,13 @@
 
 @media (hover: hover) {
   .heading .warningTrigger:hover:not(:disabled) { background: transparent; }
+  .warningTrigger:hover:not(:disabled) .warningTag {
+    background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 18%, transparent);
+  }
+}
+
+.warningTrigger:active:not(:disabled) .warningTag {
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 22%, transparent);
 }
 
 .warningPopover {
