@@ -53,7 +53,7 @@ function render(view) {
         ? preparationMessages[update.preparationFailure] ?? messages.mandatoryInstallFailed
         : messages.mandatoryUnavailable
     : update.phase === 'idle' && !policy.checking ? messages.mandatoryNoRelease : undefined)
-  const technicalDetails = failed ? update.technicalDetails ?? update.message ?? '' : ''
+  const technicalDetails = failed && !configurationError ? update.technicalDetails ?? update.message ?? '' : ''
   document.documentElement.lang = id
   document.title = messages.mandatoryTitle
   element('title').textContent = title

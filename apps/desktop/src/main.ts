@@ -956,7 +956,9 @@ async function main(): Promise<void> {
           message: configurationMessage(channelState.error, locale.messages),
           ...{ detail: channelSettings.path,
             buttons: [locale.messages.updateReloadSettings, locale.messages.updateShowSettingsFile, locale.messages.updateClose],
-            defaultId: 0, cancelId: 2, action: { index: 0, run: async () => {
+            defaultId: 0, cancelId: 2,
+            keepOpenAction: { index: 1, run: () => { shell.showItemInFolder(channelSettings.path) } },
+            action: { index: 0, run: async () => {
               if (channelRequests > 0 || channelState === undefined) return false
               channelRequests++
               publishChannel({ ...channelState, changing: true })
@@ -979,8 +981,7 @@ async function main(): Promise<void> {
               }
             } } },
         }, mandatoryUI?.confirmationWindow ?? currentDialogWindow())
-        if (result.response === 2) return
-        if (result.response === 1) { shell.showItemInFolder(channelSettings.path); return }
+        if (result.response !== 0) return
       }
     }).finally(() => { configurationPrompt = undefined })
     return configurationPrompt

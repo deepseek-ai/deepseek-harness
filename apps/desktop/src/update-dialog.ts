@@ -26,6 +26,8 @@ export interface UpdateDialogView {
 /** Electron message options with separately expandable, main-owned diagnostics. */
 export interface UpdateDialogOptions extends MessageBoxOptions {
   readonly technicalDetails?: string
+  /** Synchronous auxiliary action that leaves the current prompt and choices open. */
+  readonly keepOpenAction?: { index: number; run: () => void }
   /** Main-owned action kept in this dialog; false keeps the prompt open for correction. */
   readonly action?: { index: number; run: () => Promise<boolean> }
 }
@@ -120,13 +122,18 @@ export class DesktopUpdateDialog {
         resolve({ response, checkboxChecked: false })
       }
       const respond = async (index: number): Promise<void> => {
-        if (options.action?.index !== index) { finish(index); return }
         const publish = (busy: boolean): void => {
           const { busyButton: _busy, ...rest } = view
           view = { ...rest, revision: ++this.revision, ...(busy ? { busyButton: index } : {}) }
           if (this.active !== undefined) this.active.view = view
           surface.webContents.send(UPDATE_DIALOG_IPC.changed, view)
         }
+        if (options.keepOpenAction?.index === index) {
+          options.keepOpenAction.run()
+          publish(false)
+          return
+        }
+        if (options.action?.index !== index) { finish(index); return }
         publish(true)
         // Keep a fast local read perceptible without delaying the operation itself.
         const held = new Promise<void>((resolveHold) => { setTimeout(resolveHold, 500) })

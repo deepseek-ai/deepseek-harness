@@ -628,7 +628,10 @@ describe('desktop main startup', () => {
     await harness.policyBlocked.promise
     const modal = harness.windows[0]!
     const owned = { sender: modal.webContents, senderFrame: modal.webContents.mainFrame }
-    harness.dialog.showMessageBox.mockResolvedValueOnce({ response: 1 })
+    harness.dialog.showMessageBox.mockImplementationOnce(async (options: import('../src/update-dialog.ts').UpdateDialogOptions) => {
+      options.keepOpenAction!.run()
+      return { response: 2 }
+    })
     await harness.handlers.get(MANDATORY_IPC.action)!(owned, 'refresh')
     expect(harness.showItemInFolder).toHaveBeenCalledWith(path)
     expect(harness.updateDownload).not.toHaveBeenCalled()
@@ -666,7 +669,10 @@ describe('desktop main startup', () => {
     const path = join(harness.app.getPath('userData'), 'desktop', 'settings.json')
     writeFileSync(path, '{broken')
     await readyForUpdate()
-    harness.dialog.showMessageBox.mockResolvedValueOnce({ response: 1 })
+    harness.dialog.showMessageBox.mockImplementationOnce(async (options: import('../src/update-dialog.ts').UpdateDialogOptions) => {
+      options.keepOpenAction!.run()
+      return { response: 2 }
+    })
     await invoke(DESKTOP_IPC.updatesOpen, 'app')
     expect(harness.dialog.showMessageBox.mock.lastCall![0]).toMatchObject({
       message: en.updateConfigurationFormat, detail: path,

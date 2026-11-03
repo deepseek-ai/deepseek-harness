@@ -250,3 +250,20 @@ it('does not revive a busy prompt after cancellation', async () => {
   expect(await pending).toMatchObject({ response: 1 })
   expect(dialogs!.isOpen).toBe(false)
 })
+
+it('keeps the same dialog open after revealing a settings file', async () => {
+  const f = setup()
+  const reveal = vi.fn()
+  const pending = f.show(undefined, { buttons: ['Reload', 'Show file', 'Close'], cancelId: 2,
+    keepOpenAction: { index: 1, run: reveal } })
+  const before = f.invoke(UPDATE_DIALOG_IPC.status) as { revision: number }
+  await f.invoke(UPDATE_DIALOG_IPC.respond, 1)
+  expect(reveal).toHaveBeenCalledOnce()
+  expect((f.invoke(UPDATE_DIALOG_IPC.status) as { revision: number }).revision).toBe(before.revision + 1)
+  expect(f.invoke(UPDATE_DIALOG_IPC.status)).not.toEqual(before)
+  await f.invoke(UPDATE_DIALOG_IPC.respond, 1)
+  expect(reveal).toHaveBeenCalledTimes(2)
+  expect(dialogs!.isOpen).toBe(true)
+  await f.invoke(UPDATE_DIALOG_IPC.respond, 2)
+  expect(await pending).toMatchObject({ response: 2 })
+})
