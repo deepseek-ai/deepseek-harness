@@ -193,7 +193,7 @@ interface ToolArgsMap {
     /** Required only with action blocked: the concrete condition that persisted across rounds and blocks progress. */
     blocked_reason?: string;
   } & Record<string, JsonValue>;
-  /** Wait for input at your next step, including agent messages, completion notifications, and user steering. Returns immediately if input is pending, unless an earlier wait in the same code execution already reported it. `timedOut: false` means new input is pending. Pending input is delivered to the model after code execution finishes. */
+  /** Wait for input at your next step, including agent messages, completion notifications, and user steering. Returns immediately if new input is pending. `timedOut: false` means new input is pending. Pending input is delivered to the model after code execution finishes. */
   wait_agent: {
     /** Wait duration in milliseconds, from 10000 through 3600000. Defaults to 30000. */
     timeout_ms?: number;
