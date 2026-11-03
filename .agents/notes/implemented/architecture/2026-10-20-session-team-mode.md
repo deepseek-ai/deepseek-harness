@@ -14,7 +14,7 @@ The base bundle loads the Team service and task tools, and the Web bundle loads 
 
 The model and reasoning menu owns the user’s selection. The root conversation’s Subagent panel displays members above shared tasks. Disabling Team keeps the journal and children; re-enabling restores the board. Historical task boards without a saved selection stay enabled. Profile loading removes the retired optional bundle selection, retaining row overrides.
 
-Headless deployments may set `agent-team.defaultEnabled` to save an initial selection for a new root before its first own step. Saved selections take precedence, and resumed Sessions retain their mode even when no selection exists. Ordinary forks initialize independently; subagents share their live root’s selection. Creation identifies subagents by their Session origin because activation ownership is registered only after creation listeners settle. Task access still requires the live runtime owner.
+Headless deployments may set `agent-team.defaultEnabled` to save an initial selection for a new root during startup creation. Saved selections take precedence, and resumed Sessions retain their mode even when no selection exists. Ordinary forks initialize independently; subagents share their live root’s selection. Creation identifies subagents by their Session origin because activation ownership is registered only after creation listeners settle. Task access still requires the live runtime owner.
 
 This supersedes the explicit-composition choice in [Agent Teams](../feature/2026-08-05-agent-teams.md). Its durability, ownership, and lifecycle decisions remain active. [Optional bundles](../process/2026-09-15-shipped-optional-bundles.md) still governs other experimental features.
 

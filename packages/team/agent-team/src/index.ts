@@ -80,8 +80,6 @@ export class TeamService extends TypertRemoteService {
       ctx.on('agent/created', async ({ agent, source, signal }) => {
         // Child activation ownership is registered after agent/created settles.
         if (source !== 'startup' || agent.session.header.origin === 'subagent') return
-        const lastStep = ctx.agents.turnBoundaryOf(agent.session).lastStepStartSeq
-        if (lastStep !== null && agent.session.isOwnSeq(lastStep)) return
         if (this.projection.stateOf(agent.session).enabled !== undefined) return
         await this.setEnabled(agent, true, signal)
       })

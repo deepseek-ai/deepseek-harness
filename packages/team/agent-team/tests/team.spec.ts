@@ -140,7 +140,6 @@ describe('Tree-owned task boards', () => {
 
   it('initializes an ordinary fork independently of its inherited mode and tasks', async () => {
     const { ctx, lead } = await setup([], { defaultEnabled: true }, false)
-    lead.session.append('step/start', { turn: 1, step: 1 })
     await ctx.agentTeams.createTask(lead, { subject: 'source', description: 'belongs to source' })
     await ctx.agentTeams.setEnabled(lead, false)
     const handle = await ctx.agents.create({
@@ -159,17 +158,6 @@ describe('Tree-owned task boards', () => {
     const { ctx, teamFiber } = await setup([], { defaultEnabled: true }, false)
     await teamFiber.dispose()
     const handle = await ctx.agents.create({ sessionId: SessionId('without-team') })
-    expect(handle.agent.session.ownEvents().filter(event => event.type === 'team/mode')).toEqual([])
-    await handle.dispose()
-  })
-
-  it('does not apply the default when startup announces a root with its own steps', async () => {
-    const { ctx } = await setup([], { defaultEnabled: true }, false)
-    const handle = await ctx.agents.create({
-      sessionId: SessionId('started-root'),
-      setup: (_ctx, agent) => { agent.session.append('step/start', { turn: 1, step: 1 }) },
-    })
-    expect(ctx.agentTeams.isEnabled(handle.agent)).toBe(false)
     expect(handle.agent.session.ownEvents().filter(event => event.type === 'team/mode')).toEqual([])
     await handle.dispose()
   })
