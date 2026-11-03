@@ -504,7 +504,7 @@ class WebFetchOutput(TypedDict):
     truncated: bool
 
 class WebSearchArgs(TypedDict):
-    # 1–4 search queries; their results are merged.
+    # 1–10 search queries; their results are merged.
     queries: list[str]
     # Additional keys beyond those declared are allowed.
 

@@ -34,7 +34,7 @@ async function observe(run: () => Promise<unknown>): Promise<string[]> {
 import { DeepSeekSearchApiProvider } from '../src/search.ts'
 describe('deepseek search api egress', () => {
   it('goes through the proxy', async () => {
-    const p = new DeepSeekSearchApiProvider(() => ({ apiKey: 'probe', baseURL: 'http://dsk-probe.invalid/api/v1/tools', count: 10 }))
+    const p = new DeepSeekSearchApiProvider(() => ({ apiKey: 'probe', baseURL: 'http://dsk-probe.invalid/api/v1/tools', count: 10, requestsPerSecond: 5 }))
     expect(await observe(() => p.search({ query: 'probe' }))).toEqual(['REQ http://dsk-probe.invalid/api/v1/tools/search'])
   })
 })

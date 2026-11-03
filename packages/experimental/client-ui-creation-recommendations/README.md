@@ -1,5 +1,5 @@
 ---
-description: "Show completed-answer creation cards with location choice, Keep and Undo."
+description: "Show completed-answer creation cards with location choice, Undo and Restore."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Users see one creation proposal below the completed answer. Short plans appear in full; longer ones fold after about two lines and expand on request. A dropdown offers Right sidebar, Session tab, Global page, or Write your own. The cost notice opens until dismissed; this browser remembers the choice across sessions. The information button reopens it. Only Create starts background work; chatting can continue. Progress appears in the header. Keep confirms retention; Undo removes the plugin, and Restore reinstalls it.
+Users see one creation proposal below the completed answer. Short plans appear in full; longer ones fold after about two lines and expand on request. A dropdown offers Right sidebar, Session tab, Global page, or Write your own. The cost notice opens until dismissed; this browser remembers the choice across sessions. The information button reopens it. Only Create starts background work; chatting can continue. Progress appears in the header. An installed page offers only Undo, which removes the plugin; the removed card offers Restore, which reinstalls it.
 
 ## Table of Contents
 
@@ -31,7 +31,7 @@ Enable the [Personalized recommendations bundle](../personalized-recommendations
 
 An unstarted card stays available until a newer proposal in the same conversation replaces it. The replaced card keeps its history with a Replaced label and no creation or location controls. Supplied initial content appears below the plan as folded data, so the user sees what the Creator will receive. Started tasks retain their progress and retry actions. The shared card projection owns this state, so reload does not reactivate a card.
 
-Creation, installation, retention and removal receipts come from the Session projection. The card restores them after reconnecting. A lost action reply shows an actionable error; retry uses the Host’s recorded state. Pending requests disable repeated actions. During generation, Cancel stops the child and waits for cleanup before retry. Accepted installations finish without cancellation. The information disclosure contains the source directory and explains that Undo keeps those files. The removed card offers Restore; when the retained files are gone, it asks for a new proposal.
+Creation, installation and removal receipts come from the Session projection. The card restores them after reconnecting. A lost action reply shows an actionable error; retry uses the Host’s recorded state. Pending requests disable repeated actions. During generation, Cancel stops the child and waits for cleanup before retry. Accepted installations finish without cancellation. The information disclosure contains the source directory and explains that Undo keeps those files. The removed card offers Restore; when the retained files are gone, it asks for a new proposal.
 
 Write your own reveals a placement field, limited to 1,000 characters; blank input cannot start creation. Choosing a preset ignores that custom text. Accepted requests persist it with the receipt for reconnect and retry, and Creator receives it with the full brief. Editing the draft, opening the menu and reading the cost notice make no model request. Dismissing the notice or choosing Create/Not now acknowledges it in browser-local storage; a new browser or cleared/unavailable storage can show it again. Historical settled cards keep the notice collapsed.
 
@@ -45,7 +45,7 @@ Plan disclosure depends on omitted text, not rendered height. Long previews coll
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The plugin registers its body with the shared card frame, which places the card after its Turn and supplies the title, the folded brief, the fold component and card-bound actions. The body validates the card's details and recorded data, then renders the header with the cost notice toggle, the location picker, written placement, folded initial content, progress, Keep, Undo and Restore. The cost notice preference is a browser-local store owned by the plugin. The shared Menu handles portal positioning, keyboard selection and dismissal. The body registration and its dictionaries share one plugin lifetime.
+The plugin registers its body with the shared card frame, which places the card after its Turn and supplies the title, the folded brief, the fold component and card-bound actions. The body validates the card's details and recorded data, then renders the header with the cost notice toggle, the location picker, written placement, folded initial content, progress, Undo and Restore. The cost notice preference is a browser-local store owned by the plugin. The shared Menu handles portal positioning, keyboard selection and dismissal. The body registration and its dictionaries share one plugin lifetime.
 
 - [Source](src/client/Card.tsx)
 - [Tests](tests/)

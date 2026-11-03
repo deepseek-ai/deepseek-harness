@@ -23,6 +23,7 @@ const options = {
   apiKey: 'ds-key',
   baseURL: 'https://api.deepseek.test/api/v1/tools',
   count: 10,
+  requestsPerSecond: 5,
 }
 
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
@@ -89,6 +90,10 @@ describe('DeepSeekSearchApiProvider availability', () => {
   it.each([0, 1.5])('is unavailable with invalid count %j', (count) => {
     expect(searchProvider({ ...options, count }).available()).toBe(false)
   })
+
+  it.each([0, 1.5])('is unavailable with invalid requestsPerSecond %j', (requestsPerSecond) => {
+    expect(searchProvider({ ...options, requestsPerSecond }).available()).toBe(false)
+  })
 })
 
 describe('DeepSeekSearchApiProvider request mapping', () => {
@@ -138,6 +143,48 @@ describe('DeepSeekSearchApiProvider request mapping', () => {
     await searchProvider(options).search({ query: 'q' }, controller.signal)
     const [, init] = fetchMock.mock.calls[0]!
     expect(init?.signal).toBe(controller.signal)
+  })
+})
+
+describe('Search API request pacing', () => {
+  afterEach(() => { vi.useRealTimers() })
+
+  it('starts at most requestsPerSecond searches in any one-second window', async () => {
+    vi.useFakeTimers({ now: 0 })
+    const startedAt: number[] = []
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      startedAt.push(performance.now())
+      return jsonResponse(searchResponse())
+    }))
+    const provider = searchProvider({ ...options, requestsPerSecond: 2 })
+    const { signal } = new AbortController()
+    const searches = Promise.all(['a', 'b', 'c', 'd', 'e'].map(query => provider.search({ query }, signal)))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(startedAt).toEqual([0, 0])
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(startedAt).toEqual([0, 0])
+    await vi.advanceTimersByTimeAsync(1)
+    expect(startedAt).toEqual([0, 0, 1001, 1001])
+    await vi.advanceTimersByTimeAsync(1001)
+    expect(startedAt).toEqual([0, 0, 1001, 1001, 2002])
+    await expect(searches).resolves.toHaveLength(5)
+  })
+
+  it('fails a waiting search with WEB_ABORTED when its signal aborts', async () => {
+    vi.useFakeTimers({ now: 0 })
+    const fetchMock = vi.fn(async () => jsonResponse(searchResponse()))
+    vi.stubGlobal('fetch', fetchMock)
+    const provider = searchProvider({ ...options, requestsPerSecond: 1 })
+    await provider.search({ query: 'first' })
+    const controller = new AbortController()
+    const waiting = provider.search({ query: 'second' }, controller.signal)
+    const outcome = expect(waiting).rejects.toMatchObject({ code: 'WEB_ABORTED' })
+    await vi.advanceTimersByTimeAsync(10)
+    expect(vi.getTimerCount()).toBe(1)
+    controller.abort(new Error('stop'))
+    await outcome
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(0)
   })
 })
 

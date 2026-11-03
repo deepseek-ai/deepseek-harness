@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/client-ui-creation-recommendations/README.md
 /:
-  en: e332dc3625021ad9
-  zh: a6637d7d8696ba5a
+  en: 2f8f55fa844646b4
+  zh: 0ce8ade588ff4cac
 /deepseek-ai-dsh-client-ui-creation-recommendations:
   en: b4af39c5d085f16e
   zh: 19fd311580db7e2b
 /deepseek-ai-dsh-client-ui-creation-recommendations/summary:
-  en: c2b93e3c50f80ecd
-  zh: da8aa68e686abddd
+  en: a8fcbe071c951c04
+  zh: 6ecef794e208c48c
 /deepseek-ai-dsh-client-ui-creation-recommendations/table-of-contents:
   en: d152484eb41ac6b4
   zh: b00dddf4c88f0a45
@@ -18,11 +18,11 @@
   en: 328d7d1d81bb2830
   zh: 425df912753bae83
 /deepseek-ai-dsh-client-ui-creation-recommendations/use-this-package/outcomes-and-recovery:
-  en: 5a3df9cd58832f91
-  zh: 2068dca0a62394fe
+  en: e6ce5b7dca9ededf
+  zh: 8f41b6d59c913283
 /deepseek-ai-dsh-client-ui-creation-recommendations/understand-the-implementation:
-  en: 26b049c5e3f38846
-  zh: 15768ae54aec3511
+  en: d493c9dccc11c3a0
+  zh: d2a8d39089dcb4d1
 /deepseek-ai-dsh-client-ui-creation-recommendations/further-exploration:
   en: 6543c44016da2cdf
   zh: fb0d365a5e411b04
