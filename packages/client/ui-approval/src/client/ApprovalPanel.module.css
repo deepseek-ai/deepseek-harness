@@ -59,6 +59,13 @@
 
 .warningTag { gap: 4px; }
 
+/* The tag supplies the fill; keep its larger button hit target transparent. */
+.heading .warningTrigger:active:not(:disabled) { background: transparent; }
+
+@media (hover: hover) {
+  .heading .warningTrigger:hover:not(:disabled) { background: transparent; }
+}
+
 .warningPopover {
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
