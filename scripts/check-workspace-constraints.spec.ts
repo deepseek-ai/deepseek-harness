@@ -8,6 +8,7 @@ import {
   isPublicExperimentalPackageDirectory,
   PRIVATE_EXPERIMENTAL_PACKAGE_DIRECTORIES,
   EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS,
+  LEGACY_PREFIXED_EXPERIMENTAL_PACKAGE_DIRECTORIES,
 } from './experimental-package-policy.ts'
 import {
   checkDshFamilyVersion,
@@ -22,8 +23,11 @@ import {
   type WorkspaceManifest,
 } from './check-workspace-constraints.ts'
 
+const legacyManifests = LEGACY_PREFIXED_EXPERIMENTAL_PACKAGE_DIRECTORIES
+  .map(dir => ({ dir, manifest: { name: dir.replace('packages/experimental/', '@deepseek-ai/dsh-experimental-') } }))
+
 const experimental = {
-  dir: 'packages/experimental/prototype',
+  dir: LEGACY_PREFIXED_EXPERIMENTAL_PACKAGE_DIRECTORIES[0]!,
   manifest: {
     name: '@deepseek-ai/dsh-experimental-prototype',
     publishConfig: { access: 'public' },
@@ -133,21 +137,36 @@ describe('experimental workspace constraints', () => {
       .toEqual([expect.stringContaining('declared for this directory')])
   })
 
-  it('rejects a missing manifest name even when the directory has no exception', () => {
-    expect(checkExperimentalManifest({ ...experimental, manifest: { publishConfig: { access: 'public' } } }))
-      .toEqual([expect.stringContaining('experimental package name must be declared')])
+  it('rejects the legacy prefix outside the legacy directory list', () => {
+    expect(checkExperimentalManifest({ ...experimental, dir: 'packages/experimental/prototype' })).toEqual([
+      '@deepseek-ai/dsh-experimental-prototype: new experimental packages must not use the "@deepseek-ai/dsh-experimental-" prefix; name it @deepseek-ai/dsh-<name> and declare it in EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS (scripts/experimental-package-policy.ts)',
+    ])
   })
 
-  it('rejects stale, moved and duplicated retained-name declarations', () => {
+  it('rejects a missing manifest name', () => {
+    expect(checkExperimentalManifest({ dir: 'packages/experimental/prototype', manifest: { publishConfig: { access: 'public' } } }))
+      .toEqual(['packages/experimental/prototype: experimental package must declare a name'])
+  })
+
+  it('rejects stale, moved and duplicated unprefixed-name declarations', () => {
     const manifests = Object.entries(EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS).map(([dir, name]) => ({ dir, manifest: { name } }))
-    expect(checkExperimentalNameExceptions(manifests)).toEqual([])
+    expect(checkExperimentalNameExceptions([...manifests, ...legacyManifests])).toEqual([])
     const [first, ...rest] = manifests
     for (const invalid of [
       rest,
       [{ ...first!, manifest: { name: '@deepseek-ai/dsh-experimental-replacement' } }, ...rest],
       [{ ...first!, dir: 'packages/core/replacement' }, ...rest],
       [...manifests, { ...first!, dir: 'packages/experimental/duplicate' }],
-    ]) expect(checkExperimentalNameExceptions(invalid)).toEqual([expect.stringContaining(first!.manifest.name)])
+    ]) expect(checkExperimentalNameExceptions([...invalid, ...legacyManifests])).toEqual([expect.stringContaining(first!.manifest.name)])
+  })
+
+  it('rejects a legacy directory without a prefixed package', () => {
+    const unprefixed = Object.entries(EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS).map(([dir, name]) => ({ dir, manifest: { name } }))
+    const others = legacyManifests.filter(entry => entry.dir !== experimental.dir)
+    for (const invalid of [others, [...others, { dir: experimental.dir, manifest: { name: '@deepseek-ai/dsh-renamed' } }]]) {
+      expect(checkExperimentalNameExceptions([...unprefixed, ...invalid]))
+        .toEqual([`${experimental.dir}: remove this directory from LEGACY_PREFIXED_EXPERIMENTAL_PACKAGE_DIRECTORIES; no package with the legacy prefix lives here`])
+    }
   })
 
   it.each(Object.values(EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS))('rejects retained runtime names and aliases: %s', (name) => {
