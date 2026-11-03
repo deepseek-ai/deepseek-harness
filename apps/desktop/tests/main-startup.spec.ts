@@ -617,6 +617,50 @@ describe('desktop main startup', () => {
     expect(readFileSync(path, 'utf8')).toBe(saved)
   })
 
+  it('recovers invalid settings from the mandatory block without bypassing that block', async () => {
+    configureTestAuthPopup(false)
+    const path = join(harness.app.getPath('userData'), 'desktop', 'settings.json')
+    writeFileSync(path, '{broken')
+    harness.embeddedPolicy = { origin: 'https://policy.example.com', allowedPageOrigins: ['https://downloads.example.com'] }
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockImplementation(async () => Response.json({ code: 40005,
+      data: { show_content: { title: 'Update', detail: 'Required' }, desktop_app_link: 'https://downloads.example.com/' } })))
+    await readyForUpdate()
+    await harness.policyBlocked.promise
+    const modal = harness.windows[0]!
+    const owned = { sender: modal.webContents, senderFrame: modal.webContents.mainFrame }
+    harness.dialog.showMessageBox.mockResolvedValueOnce({ response: 1 })
+    await harness.handlers.get(MANDATORY_IPC.action)!(owned, 'refresh')
+    expect(harness.showItemInFolder).toHaveBeenCalledWith(path)
+    expect(harness.updateDownload).not.toHaveBeenCalled()
+    harness.dialog.showMessageBox.mockImplementationOnce(async (options: import('../src/update-dialog.ts').UpdateDialogOptions) => {
+      expect(options.detail).toBe(path)
+      expect(await options.action!.run()).toBe(false)
+      writeFileSync(path, JSON.stringify({ updates: { channel: 'stable' } }))
+      expect(await options.action!.run()).toBe(true)
+      return { response: 0 }
+    })
+    await harness.handlers.get(MANDATORY_IPC.action)!(owned, 'refresh')
+    expect(await invoke(DESKTOP_IPC.updatesChannelGet, 'app')).toMatchObject({ channel: 'stable' })
+    expect(harness.handlers.get(MANDATORY_IPC.status)!(owned)).toMatchObject({ policy: { blocking: true } })
+    expect(harness.updateDownload).not.toHaveBeenCalled()
+  })
+
+  it('checks mandatory policy immediately after a successful channel switch', async () => {
+    harness.embeddedPolicy = { origin: 'https://policy.example.com', allowedPageOrigins: ['https://downloads.example.com'] }
+    const checked = Promise.withResolvers<undefined>()
+    const request = vi.fn<typeof fetch>().mockImplementation(async (url, options) => {
+      if (url instanceof URL && url.searchParams.get('scenario') === 'channel-change') {
+        expect(new Headers(options?.headers).get('x-client-update-channel')).toBe('stable')
+        checked.resolve(undefined)
+      }
+      return Response.json({ code: 0, data: { biz_code: 0 } })
+    })
+    vi.stubGlobal('fetch', request)
+    await readyForUpdate()
+    expect(await invoke(DESKTOP_IPC.updatesChannelSet, 'app', 'stable')).toMatchObject({ kind: 'applied' })
+    await checked.promise
+  })
+
   it('offers the actual settings file for malformed JSON without suggesting channel reselection', async () => {
     configureTestAuthPopup(false)
     const path = join(harness.app.getPath('userData'), 'desktop', 'settings.json')

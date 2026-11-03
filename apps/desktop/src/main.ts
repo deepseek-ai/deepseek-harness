@@ -450,11 +450,11 @@ async function main(): Promise<void> {
   const updateOverlays = new DesktopUpdateOverlays()
   const updateDialog = new DesktopUpdateDialog(fileURLToPath(new URL('./preload-update-dialog.cjs', import.meta.url)), () => locale, updateOverlays)
   const isMandatory = (): boolean => mandatoryPolicy?.state.blocking === true
-  const ordinaryMessageBox = async (options: UpdateDialogOptions): Promise<Electron.MessageBoxReturnValue> => {
+  const ordinaryMessageBox = async (options: UpdateDialogOptions,
+    parent = currentDialogWindow()): Promise<Electron.MessageBoxReturnValue> => {
     const controller = new AbortController()
     ordinaryDialogs.add(controller)
     try {
-      const parent = currentDialogWindow()
       if (parent === undefined) return { response: options.cancelId ?? 0, checkboxChecked: false }
       return await updateDialog.show(parent, { ...options, signal: controller.signal })
     }
@@ -911,6 +911,7 @@ async function main(): Promise<void> {
           throw error
         }
       })
+      if (kind === 'applied') void mandatoryPolicy?.check('channel-change', true).catch((error: unknown) => { console.error(error) })
       return { kind, state: publishChannel({ channel: updates.selectedChannel, packagedChannel, changing: --channelRequests > 0 }) }
     } catch (error) {
       console.error('desktop update: channel change failed', error)
@@ -977,7 +978,7 @@ async function main(): Promise<void> {
                 publishChannel({ ...channelState, changing: --channelRequests > 0 })
               }
             } } },
-        })
+        }, mandatoryUI?.confirmationWindow ?? currentDialogWindow())
         if (result.response === 2) return
         if (result.response === 1) { shell.showItemInFolder(channelSettings.path); return }
       }
@@ -1523,7 +1524,10 @@ async function main(): Promise<void> {
       preload: fileURLToPath(new URL('./preload-mandatory.cjs', import.meta.url)), locale,
       allowedPageOrigins: policyConfig.allowedPageOrigins, parent: () => mainWindow,
       policy: () => policy.state, update: () => updates.state,
-      refresh: async () => { await Promise.all([checkPolicyManually(), updateSchedule.check(true)]) },
+      refresh: async () => {
+        if (channelState?.error !== undefined) await showConfigurationError()
+        if (channelState?.error === undefined) await Promise.all([checkPolicyManually(), updateSchedule.check(true)])
+      },
       download: downloadUpdate, install: version => updates.install(version),
     })
     void mandatoryPolicy.check('launch').then((state) => {

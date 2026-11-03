@@ -31,9 +31,6 @@ export class DesktopSettingsFileError extends Error {
   constructor(readonly problem: DesktopSettingsProblem, readonly path: string, options?: ErrorOptions) {
     super(`desktop settings: ${problem.kind}: ${path}`, options)
   }
-
-  /** Coarse category consumed by localized configuration guidance. */
-  get kind(): DesktopSettingsProblem['kind'] { return this.problem.kind }
 }
 
 /** Absence permits a caller default; an invalid explicit field does not. */
@@ -73,7 +70,7 @@ export function isDesktopUpdateChannel(value: unknown): value is DesktopUpdatePr
  * @param userData - Electron userData, independent of Host and DSH_HOME.
  * @returns Settings file path without filesystem changes.
  */
-export function desktopSettingsPath(userData: string): string {
+function desktopSettingsPath(userData: string): string {
   return join(userData, 'desktop', 'settings.json')
 }
 

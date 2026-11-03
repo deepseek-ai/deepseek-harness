@@ -27,7 +27,7 @@ export function DesktopChannelRow({ useChannel, select, t }:
     <div className={css.rowText}>
       <div className={css.title}>{t('desktop.channel.title')}</div>
       <div className={css.description}>{t('desktop.channel.description')}</div>
-      {(failed || state?.error !== undefined) && <div role="alert">{t('desktop.channel.error')}</div>}
+      {(failed || state?.error !== undefined) && <div role="alert">{t(failed ? 'desktop.channel.readError' : 'desktop.channel.error')}</div>}
     </div>
     <Menu open={open} onClose={() => { setOpen(false) }} portal align="end"
       selectedId={channel ?? ''}

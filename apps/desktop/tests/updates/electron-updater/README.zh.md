@@ -8,7 +8,7 @@ description: "Electron updater 适配层的平台版本记录与本地验证。"
 
 `src/updates/electron-updater/` 中的适配层负责库的渠道策略、缓存撤销和 Electron HTTP 处理。本验证直接调用该适配层；协调器、配置和 UI 回归由常规测试负责。
 
-每个 PR 在 Windows CI 中运行纯 Node 版本检查。`verified-versions.json` 分别记录 Windows 和 macOS 已验证的实际 Electron、electron-updater 及其 builder-util-runtime 版本。缺少记录或版本不匹配都会失败；`null` 表示待验证。Git 保留历史记录。此检查不启动 Electron，也不访问网络。
+每个 PR 在 Windows CI 中运行纯 Node 版本检查。`verified-versions.json` 分别记录 Windows 和 macOS 已验证的实际 Electron、electron-updater 及其 builder-util-runtime 版本。缺少记录、`null`（待验证）或版本不匹配都会使检查失败。Git 保留历史记录。此检查不启动 Electron，也不访问网络。
 
 修改这些依赖、适配层或验证脚本后，在每个受影响的原生平台上从仓库根目录运行：
 

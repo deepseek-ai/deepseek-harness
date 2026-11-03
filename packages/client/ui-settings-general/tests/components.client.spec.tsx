@@ -333,7 +333,7 @@ it('shows channel load errors and waits for an explicit selection to settle', as
   expect(control.hasAttribute('disabled')).toBe(true)
   state = { failed: true }
   view.rerender(<DesktopChannelRow {...props} useChannel={bindSnapshotSelector(createSnapshotStore(state))} />)
-  expect(screen.getByRole('alert')).toBeTruthy()
+  expect(screen.getByRole('alert').textContent).toBe(en['desktop.channel.readError'])
   state = { failed: false, state: { channel: null, packagedChannel: 'nightly', changing: false, error: 'format' } }
   view.rerender(<DesktopChannelRow {...props} useChannel={bindSnapshotSelector(createSnapshotStore(state))} />)
   expect(control.textContent).toContain('Configuration unavailable')

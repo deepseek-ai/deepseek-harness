@@ -8,7 +8,7 @@ English | [中文](README.zh.md)
 
 The adapter in `src/updates/electron-updater/` owns library channel policy, cache retirement and Electron HTTP handling. This qualification calls that adapter directly; coordinator, configuration and UI regressions belong to ordinary tests.
 
-Every PR runs a Node-only version check in Windows CI. `verified-versions.json` records the installed Electron, electron-updater and its builder-util-runtime versions separately for Windows and macOS. Missing records and mismatches fail; `null` means pending qualification. Git retains prior records. No Electron process or network access is required by this check.
+Every PR runs a Node-only version check in Windows CI. `verified-versions.json` records the installed Electron, electron-updater and its builder-util-runtime versions separately for Windows and macOS. Missing records, `null` (pending qualification), and version mismatches all fail the check. Git retains prior records. No Electron process or network access is required by this check.
 
 After changing those dependencies, the adapter, or its qualification scripts, run on each affected native platform from the repository root:
 

@@ -129,6 +129,7 @@ function parsePolicy(body: unknown, ok: boolean, config: DesktopPolicyConfig): D
 export class DesktopMandatoryUpdatePolicy {
   private current: DesktopPolicyState = { blocking: false, checking: false }
   private pending: Promise<DesktopPolicyState> | undefined
+  private pendingChannel: DesktopPolicyIdentity['channel'] | undefined
   private controller: AbortController | undefined
   private timer: ReturnType<typeof setTimeout> | undefined
   private disposed = false
@@ -156,10 +157,10 @@ export class DesktopMandatoryUpdatePolicy {
   }
 
   /** Platform headers for one check; the calling UI's language and UTC offset are read now. */
-  private requestHeaders(): Record<string, string> {
+  private requestHeaders(channel: DesktopPolicyIdentity['channel']): Record<string, string> {
     return {
       ...platformClientHeaders(this.identity.platform, this.client()),
-      'x-client-arch': this.identity.arch, 'x-client-update-channel': this.identity.channel,
+      'x-client-arch': this.identity.arch, 'x-client-update-channel': channel,
       'x-client-bundled-dsh-version': this.identity.bundledDshVersion,
     }
   }
@@ -175,9 +176,12 @@ export class DesktopMandatoryUpdatePolicy {
    */
   check(scenario: string, manual = false): Promise<DesktopPolicyState> {
     if (this.disposed) return Promise.reject(new Error('desktop policy: disposed'))
-    if (this.pending !== undefined) return this.pending
+    if (this.pending !== undefined) return this.pendingChannel === this.identity.channel
+      ? this.pending : this.pending.then(() => this.check(scenario, true))
     if (!manual && Date.now() < this.nextCheck) return Promise.resolve(this.current)
     clearTimeout(this.timer)
+    const channel = this.identity.channel
+    this.pendingChannel = channel
     this.pending = Promise.resolve().then(async () => {
       if (this.disposed) return this.current
       const controller = new AbortController()
@@ -187,7 +191,7 @@ export class DesktopMandatoryUpdatePolicy {
       try {
         const url = new URL('/api/v0/check_client_update', this.config.origin)
         url.searchParams.set('scenario', scenario)
-        const response = await this.request(url, { headers: this.requestHeaders(), signal: controller.signal,
+        const response = await this.request(url, { headers: this.requestHeaders(channel), signal: controller.signal,
           credentials: this.config.authentication === 'feishu-test' ? 'include' : 'omit', cache: 'no-store', redirect: 'error' })
         const body: unknown = await response.json()
         if (this.config.authentication === 'feishu-test' && response.status === 401

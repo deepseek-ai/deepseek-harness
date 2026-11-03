@@ -259,3 +259,20 @@ it.each(['en', 'zh-CN'])('shows fullscreen recovery guidance directly in the man
   expect((p.element('technical-details') as HTMLDetailsElement).open).toBe(false)
   expect(action).not.toHaveBeenCalled()
 })
+
+it('offers configuration recovery from a mandatory update error', async () => {
+  const p = page('mandatory-update')
+  const locale = resolveDesktopLocale('zh-CN')
+  const state: MandatoryUpdateView = { locale, deferred: false, policy: { blocking: true, checking: false },
+    update: { phase: 'error', failedOperation: 'configuration' } }
+  const action = vi.fn(async () => {})
+  const api: MandatoryUpdateApi = { status: async () => state, action, subscribe: () => () => {} }
+  Object.defineProperty(p.dom.window, 'dshMandatoryUpdate', { value: api })
+  p.run()
+  await expect.poll(() => p.element('refresh').textContent).toBe(locale.messages.updateConfigurationDetails)
+  expect(p.element('refresh').hidden).toBe(false)
+  expect(p.element('error').textContent).toBe(locale.messages.updateConfigurationRead)
+  expect(p.element('update').hidden).toBe(true)
+  p.element('refresh').click()
+  expect(action).toHaveBeenCalledWith('refresh', undefined, undefined)
+})
