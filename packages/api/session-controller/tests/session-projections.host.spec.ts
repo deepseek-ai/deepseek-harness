@@ -532,7 +532,7 @@ describe('session.list projections column', () => {
     expect(excludedApply).not.toHaveBeenCalled()
   })
 
-  it('carries every registered summary key, which is only its own list metadata when no other unit is registered', async () => {
+  it('carries list metadata and unavailable retry eligibility through registered summary keys', async () => {
     const { ctx, session } = await harness(false)
     seedMessages(session, 1)
     const response = await (await remote(ctx)).list(request({}))
@@ -540,7 +540,8 @@ describe('session.list projections column', () => {
     const row = response.value.items.find(item => item.sessionId === session.id)
     expect(row?.projections?.kind).toBe('sequenced')
     expect(Object.keys(row?.projections?.values ?? {})).toEqual([...ctx.sessionProjections.summaryKeys()])
-    expect(Object.keys(row?.projections?.values ?? {})).toEqual(['sessionListMetadata'])
+    expect(Object.keys(row?.projections?.values ?? {})).toEqual(['conversationContinuation', 'sessionListMetadata'])
+    expect(row?.projections?.values.conversationContinuation).toBeNull()
   })
 
   it('serves the summary projection hints from the cache with zero log loads', async () => {
