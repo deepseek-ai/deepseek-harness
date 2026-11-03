@@ -1,0 +1,10 @@
+version: 1
+scenario: web-search-legacy-endpoint-guidance
+profile: headless
+composition: web-search-legacy-endpoint-guidance
+recording: live
+header:
+  class: web-search-legacy-endpoint-guidance
+  pin: true
+  systemPromptSource: text-turn
+  toolSchemasSource: text-turn

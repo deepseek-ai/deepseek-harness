@@ -1166,7 +1166,7 @@ describe('web e2e: plugin manager', () => {
       // Schedule ships in the delivered composition, so no bundle card carries it in either language.
       expect(await panel.getByRole('button', { name: 'View Automation tasks', exact: true }).count()).toBe(0)
       // The official configuration pages follow the language too, from their own dictionary.
-      for (const title of ['Shell', 'Agent loop', 'Subagent', 'Web search']) {
+      for (const title of ['Shell', 'Agent loop', 'Subagent', 'Web search and fetch']) {
         await panel.getByRole('button', { name: `View ${title}`, exact: true }).waitFor()
       }
     } finally {
