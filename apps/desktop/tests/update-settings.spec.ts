@@ -34,7 +34,7 @@ it('preserves other fields during explicit saves and only rereads external edits
 it.each(['{', 'null', '{"updates":[]}', '{"updates":{"channel":"alpha"}}', '{"updates":{"channel":null}}'])('suspends updates for invalid channel settings: %s', async (raw) => {
   const settings = await fixture()
   await writeFile(settings.path, raw)
-  expect(await settings.load()).toMatchObject({ kind: 'error', error: { kind: 'invalid', path: settings.path } })
+  expect(await settings.load()).toMatchObject({ kind: 'error', error: { problem: { kind: 'invalid' }, path: settings.path } })
   expect(await readFile(settings.path, 'utf8')).toBe(raw)
 })
 
@@ -48,7 +48,7 @@ it('refuses to replace malformed user JSON during a UI save', async () => {
 it('reports unreadable configuration instead of silently choosing a default', async () => {
   const settings = await fixture()
   await mkdir(settings.path)
-  expect(await settings.load()).toMatchObject({ kind: 'error', error: { kind: 'read' } })
+  expect(await settings.load()).toMatchObject({ kind: 'error', error: { problem: { kind: 'read' } } })
 })
 
 it('updates the document initialized by shell settings without losing the popup preference', async () => {
