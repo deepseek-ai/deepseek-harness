@@ -612,7 +612,7 @@ it('keeps risk details readable across the pointer gap and after a touch tap', (
   expect(screen.getByRole('dialog', { name: 'Computer use risks' })).toBeTruthy()
 })
 
-it('leaves Escape to composition and a foreground modal without moving focus', () => {
+it('leaves Escape to composition and dismisses risk details when a modal takes focus', () => {
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   const onClose = vi.fn()
   const warning = <ApprovalWarning warning={{ label: 'Risks', title: 'Computer use risks', detail: 'Background control.' }} />
@@ -627,12 +627,11 @@ it('leaves Escape to composition and a foreground modal without moving focus', (
   expect(screen.getByRole('dialog', { name: 'Computer use risks' })).toBeTruthy()
   view.rerender(<>{warning}<Modal open title="Foreground" closeLabel="Close modal" onClose={onClose} /></>)
   const modal = screen.getByRole('dialog', { name: 'Foreground' })
+  expect(screen.queryByRole('dialog', { name: 'Computer use risks' })).toBeNull()
   act(() => { modal.focus() })
   fireEvent.keyDown(modal, { key: 'Escape' })
   expect(onClose).toHaveBeenCalledOnce()
   expect(document.activeElement).toBe(modal)
-  expect(screen.getByRole('dialog', { name: 'Computer use risks' })).toBeTruthy()
-  fireEvent.pointerDown(modal)
   expect(screen.queryByRole('dialog', { name: 'Computer use risks' })).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: 'Risks' }))
   expect(screen.queryByRole('dialog', { name: 'Computer use risks' })).toBeNull()
@@ -698,4 +697,40 @@ it('ignores repeated Escape and restores focus when dismissing focused risk deta
   fireEvent.keyDown(dialog, { key: 'Escape' })
   expect(screen.queryByRole('dialog')).toBeNull()
   expect(document.activeElement).toBe(trigger)
+})
+
+it('dismisses hover-open risks when focus moves elsewhere without taking focus on open', () => {
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+  render(<>
+    <button>Before</button>
+    <ApprovalWarning warning={{ label: 'Risks', title: 'Computer use risks', detail: 'Background control.' }} />
+    <button>After</button>
+  </>)
+  const before = screen.getByRole('button', { name: 'Before' })
+  const after = screen.getByRole('button', { name: 'After' })
+  act(() => { before.focus() })
+  fireEvent.click(screen.getByRole('button', { name: 'Risks' }))
+  expect(document.activeElement).toBe(before)
+  expect(screen.getByRole('dialog', { name: 'Computer use risks' })).toBeTruthy()
+  act(() => { after.focus() })
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(document.activeElement).toBe(after)
+})
+
+it.each(['window blur', 'hidden tab'] as const)('dismisses risk details on %s without restoring focus', (reason) => {
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+  render(<ApprovalWarning warning={{ label: 'Risks', title: 'Computer use risks', detail: 'Background control.' }} />)
+  const trigger = screen.getByRole('button', { name: 'Risks' })
+  fireEvent.click(trigger)
+  fireEvent(document, new Event('visibilitychange'))
+  expect(screen.getByRole('dialog')).toBeTruthy()
+  if (reason === 'window blur') fireEvent(window, new Event('blur'))
+  else {
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+    fireEvent(document, new Event('visibilitychange'))
+  }
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(document.activeElement).toBe(document.body)
+  fireEvent(window, new Event('focus'))
+  expect(trigger.getAttribute('aria-expanded')).toBe('false')
 })

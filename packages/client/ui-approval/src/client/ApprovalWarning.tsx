@@ -53,6 +53,11 @@ export function ApprovalWarning({ warning }: {
   useEffect(() => {
     if (!open) return
     const composition = observeComposition(document)
+    const close = () => { cancelClose(); setOpen(false) }
+    const focusOutside = (event: Event) => {
+      if (event.target instanceof Node && !anchor.current?.contains(event.target) && !panel.current?.contains(event.target)) close()
+    }
+    const visibilityChanged = () => { if (document.visibilityState === 'hidden') close() }
     const dismiss = (event: KeyboardEvent) => {
       if (composition.guards(event) || isBehindModal(anchor.current) || event.defaultPrevented
         || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey || event.key !== 'Escape') return
@@ -64,8 +69,14 @@ export function ApprovalWarning({ warning }: {
       setOpen(false)
     }
     document.addEventListener('keydown', dismiss, true)
+    document.addEventListener('focusin', focusOutside)
+    document.addEventListener('visibilitychange', visibilityChanged)
+    window.addEventListener('blur', close)
     return () => {
       document.removeEventListener('keydown', dismiss, true)
+      document.removeEventListener('focusin', focusOutside)
+      document.removeEventListener('visibilitychange', visibilityChanged)
+      window.removeEventListener('blur', close)
       composition.dispose()
     }
   }, [open, cancelClose])
