@@ -43,7 +43,7 @@
 | `cordis/request-run` | `emit` | [`packages/extensions/cordis-host-runner/src/types.ts:371`](../packages/extensions/cordis-host-runner/src/types.ts) | [`cordis-host-runner`](../packages/extensions/cordis-host-runner) (`emit`) | `remotes` |
 | `cordis/request-run-resolved` | `emit` | [`packages/extensions/cordis-host-runner/src/types.ts:377`](../packages/extensions/cordis-host-runner/src/types.ts) | [`cordis-host-runner`](../packages/extensions/cordis-host-runner) (`emit`) | `remotes` |
 | `credentials/record-updated` | `emit` | [`packages/credentials/credentials/src/types.ts:99`](../packages/credentials/credentials/src/types.ts) | [`credentials`](../packages/credentials/credentials) (`events.dispatch`) | [`authorization`](../packages/credentials/authorization), [`deepseek-account-platform`](../packages/credentials/deepseek-account-platform), `remotes` |
-| `credentials/reference-updated` | `emit` | [`packages/credentials/credentials/src/types.ts:87`](../packages/credentials/credentials/src/types.ts) | [`credentials`](../packages/credentials/credentials) (`events.dispatch`) | `remotes` |
+| `credentials/reference-updated` | `emit` | [`packages/credentials/credentials/src/types.ts:87`](../packages/credentials/credentials/src/types.ts) | [`credentials`](../packages/credentials/credentials) (`events.dispatch`) | [`mcp-client`](../packages/mcp/mcp-client), `remotes` |
 | `deepseek-account/model-sign-in-required` | `emit` | [`packages/credentials/deepseek-account/src/types.ts:97`](../packages/credentials/deepseek-account/src/types.ts) | [`deepseek-account`](../packages/credentials/deepseek-account) (`emit`) | `remotes` |
 | `deepseek-account/session-expired` | `emit` | [`packages/credentials/deepseek-account/src/types.ts:93`](../packages/credentials/deepseek-account/src/types.ts) | [`deepseek-account-platform`](../packages/credentials/deepseek-account-platform) (`emit`) | `account-controller`, `remotes` |
 | `deepseek-account/signed-out` | `emit` | [`packages/credentials/deepseek-account/src/index.ts:12`](../packages/credentials/deepseek-account/src/index.ts) | [`deepseek-account-platform`](../packages/credentials/deepseek-account-platform) (`emit`) | [`deepseek-account`](../packages/credentials/deepseek-account) |
@@ -62,6 +62,7 @@
 | `llm/adapters-updated` | `emit` | [`packages/llm/llm/src/types.ts:24`](../packages/llm/llm/src/types.ts) | [`llm`](../packages/llm/llm) (`events.dispatch`) | [`acp`](../packages/acp/acp), `remotes` |
 | `llm/models-updated` | `emit` | [`packages/llm/llm/src/types.ts:30`](../packages/llm/llm/src/types.ts) | [`llm-deepseek`](../packages/llm/llm-deepseek) (`emit`) | `remotes` |
 | `llm/stream` | `waterfall` | [`packages/llm/llm/src/index.ts:75`](../packages/llm/llm/src/index.ts) | [`llm`](../packages/llm/llm) (`waterfall`) | [`llm-replay`](../packages/test-support/llm-replay), [`session-checkpoint-policy`](../packages/session/session-checkpoint-policy), [`session-title`](../packages/session/session-title) |
+| `mcp-manager/status` | `parallel` | [`packages/mcp/mcp-manager/src/types.ts:46`](../packages/mcp/mcp-manager/src/types.ts) | [`mcp-manager`](../packages/mcp/mcp-manager) (`parallel`) | - |
 | `permission-presets/catalog-changed` | `emit` | [`packages/interaction/permission-presets/src/types.ts:48`](../packages/interaction/permission-presets/src/types.ts) | [`permission-presets`](../packages/interaction/permission-presets) (`events.dispatch`) | `remotes` |
 | `plugin-manager/changed` | `emit` | [`packages/boot/plugin-manager/src/types.ts:432`](../packages/boot/plugin-manager/src/types.ts) | [`plugin-manager`](../packages/boot/plugin-manager) (`emit`) | `remotes` |
 | `plugin-manager/install-log` | `emit` | [`packages/boot/plugin-manager/src/types.ts:438`](../packages/boot/plugin-manager/src/types.ts) | [`plugin-manager`](../packages/boot/plugin-manager) (`emit`) | `remotes` |
@@ -110,12 +111,12 @@
 | --- | --- | --- |
 | `agent/request` | [`agent-loop`](../packages/core/agent-loop) (`waterfall`) | [`compaction-basic`](../packages/compaction/compaction-basic) |
 | `connection/reset` | `gateway` (`emit`) | `terminal-controller`, `ui-settings` |
-| `internal/config` | - | [`llm-pi-ai`](../packages/llm/llm-pi-ai) |
+| `internal/config` | - | [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`mcp-manager`](../packages/mcp/mcp-manager) |
 | `internal/dispatch` | - | [`terminal-bash`](../packages/terminal/terminal-bash) |
-| `internal/plugin` | - | `computer-use-cua-driver-native`, `inspector`, `loader`, [`lsp-stdio`](../packages/lsp/lsp-stdio), [`mcp-client`](../packages/mcp/mcp-client), `modules` |
+| `internal/plugin` | - | `computer-use-cua-driver-native`, `inspector`, `loader`, [`lsp-stdio`](../packages/lsp/lsp-stdio), [`mcp-client`](../packages/mcp/mcp-client), [`mcp-manager`](../packages/mcp/mcp-manager), `modules` |
 | `internal/service` | - | `client-ui-forge`, `gateway` |
 | `internal/status` | - | [`agent`](../packages/core/agent), `claude-code-mods`, `inspector`, `translator`, [`web`](../packages/web/web) |
-| `loader/volatile-update` | - | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-deepseek-api-key`](../packages/llm/llm-deepseek-api-key), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`plugin-market`](../packages/boot/plugin-market), `product-analytics`, `speech-to-text` |
+| `loader/volatile-update` | - | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-deepseek-api-key`](../packages/llm/llm-deepseek-api-key), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`mcp-manager`](../packages/mcp/mcp-manager), [`plugin-market`](../packages/boot/plugin-market), `product-analytics`, `speech-to-text` |
 | `locale/change` | `locale` (`emit`) | `locale` |
 | `slots/changed` | `ui-renderer` (`emit`) | - |
 | `theme/change` | `ui-theme` (`emit`) | `ui-layout`, `ui-theme` |
