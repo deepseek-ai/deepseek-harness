@@ -3,6 +3,8 @@
 - status: Completed
 - button "Completed in {{duration}}" [expanded]
 - button "Ran code and coordinated subagents" [expanded]
+- button "Context injection runtime-context"
+- button "Context injection time-context"
 - button "Code Delegate through the official Claude bundle"
 - button "Tool call subagent_claude_code · Read the fixture response"
 - paragraph: Waiting for the child result.

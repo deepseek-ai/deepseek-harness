@@ -12,6 +12,8 @@
 - status: Completed
 - button "Completed in {{duration}}" [expanded]
 - button "Called tools, ran code, ran commands" [expanded]
+- button "Context injection runtime-context"
+- button "Context injection time-context"
 - button "Think The user wants one run_code program that:"
 - text: Failed
 - 'button "Code Error: code run failed (exception): AFTER_PRESENT"'

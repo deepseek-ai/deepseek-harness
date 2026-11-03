@@ -1,12 +1,12 @@
 /** Tool-category and live-detail interpretation owned by Chat grouping. */
 import { reasoningText } from '../reasoning-text.ts'
 import type { ToolArgs } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { ProcessActivity, ProcessActivitySummary } from '../contract/process-groups.ts'
+import type { ProcessActivity, ProcessActivitySummary, RunningProcessActivity } from '../contract/process-groups.ts'
 import type { ChatNode } from '../contract/chat-nodes.ts'
 import { isRunningTool } from '../contract/chat-nodes.ts'
 import type { ToolCallBlock } from '../contract/snapshot.ts'
 
-function activity(name: string): ProcessActivity {
+function activity(name: string): RunningProcessActivity {
   if (name === 'read') return 'read'
   if (name === 'read_image') return 'readImage'
   if (name === 'grep' || name === 'glob' || name.endsWith('_inspect')) return 'search'
@@ -135,7 +135,7 @@ function liveToolDetail(name: string, args: ToolArgs): string {
 export function processActivity(nodes: readonly ChatNode[]): ProcessActivitySummary {
   const counts = new Map<ProcessActivity, number>()
   const seen = new Set<string>()
-  let running: ProcessActivity | undefined
+  let running: RunningProcessActivity | undefined
   let runningDetail = ''
   let runningTime = -Infinity
   let preparing: boolean | undefined
@@ -159,6 +159,7 @@ export function processActivity(nodes: readonly ChatNode[]): ProcessActivitySumm
     if (node.kind === 'tool-call') visit(node.data.root)
   }
   if (running === undefined) runningDetail = liveReasoningDetail(nodes)
+  if (nodes.length > 0 && nodes.every(node => node.kind === 'context')) counts.set('context', nodes.length)
   return {
     counts: [...counts].map(([kind, count]) => ({ kind, count })).sort((a, b) => b.count - a.count),
     running,
