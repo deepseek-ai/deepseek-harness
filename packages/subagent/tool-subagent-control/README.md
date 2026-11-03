@@ -53,7 +53,7 @@ Sends a message to another agent in the same subagent tree by `agent_id`. The ca
 <a id="wait_agent"></a>
 ### wait_agent
 
-Waits for the exact caller’s next-step inbox. Pending input returns immediately; later input, including messages, completion notifications, and user steering, ends the wait. Queued next-turn messages, unrelated inboxes, and Agent status changes do not end it. Task changes do not end the wait. The tool neither consumes input nor starts an Agent. When calling from code, wait once and finish execution so the next model step can receive the messages; do not loop. `timeout_ms` defaults to 30000 and must be an integer from 10000 through 3600000. Results contain only `timedOut`; cancellation, caller disposal, or plugin unload rejects the wait.
+Waits for the exact caller’s next-step inbox. Pending input returns immediately unless an earlier wait in the same model tool call already reported it, so repeated waits from one `run_code` program block until new input or timeout; later input, including messages, completion notifications, and user steering, ends the wait. Queued next-turn messages, unrelated inboxes, and Agent status changes do not end it. Task changes do not end the wait. The tool neither consumes input nor starts an Agent. When calling from code, wait once and finish execution so the next model step can receive the messages; do not loop. `timeout_ms` defaults to 30000 and must be an integer from 10000 through 3600000. Results contain only `timedOut`; cancellation, caller disposal, or plugin unload rejects the wait.
 
 ### list_agents
 
@@ -71,7 +71,7 @@ This section explains what the tools delegate to the subagent service; the obser
 
 ### Design concept
 
-Messaging, interruption, and discovery delegate to `ctx.subagents`; residency, cold resume, and authorization belong to that service. The wait tool subscribes to the exact caller’s inbox events before starting the timer and checking pending next-step input, and removes its listeners and timer on every settlement.
+Messaging, interruption, and discovery delegate to `ctx.subagents`; residency, cold resume, and authorization belong to that service. The wait tool subscribes to the exact caller’s inbox events before starting the timer and checking pending next-step input, and removes its listeners and timer on every settlement. Each successful wait records, per Agent, the pending ids it reported and its root tool call; a later wait from the same root call ignores those ids.
 
 ### Delivery and signal ownership
 
@@ -187,6 +187,7 @@ These limits define what the control tools cannot observe or steer; they are cur
 - **A delivered message has no independent result** — acceptance returns only its inbox `messageId`; later target work lands in that target's durable Session and is never collected through this tool. A reply is another explicitly addressed `send_message`, not this call's result.
 - **Messaging requires a live subagent tree root** — intermediate creators may be offline. Only the target resumes, consuming one shared capacity slot. Unrelated trees and external or one-shot targets cannot receive messages.
 - **Listing is a snapshot, not a delivery promise** — it may race publication, disposal, or a later message, and another process may activate a child this process reports as `inactive`; cross-process accuracy requires a shared lease. `interrupt_agent` performs the authoritative live-lineage check itself, so discovery staleness cannot grant authority.
+- **Edits to reported input do not end a wait** — replacing a pending message keeps its id, so within the same model tool call a wait that already reported it stays pending; the edited content still reaches the model at the next step.
 - **No pagination or deletion** — the complete stably ordered set is returned, and persisted children remain listed for as long as their sessions remain in persistence; a service-level bound or delete operation is a later product decision.
 
 <a id="dev-note"></a>
