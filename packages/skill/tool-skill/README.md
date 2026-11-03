@@ -25,7 +25,7 @@ Agents can discover and load skills during a session. When the `skill` tool is v
 <a id="use-this-package"></a>
 ## Use this package
 
-Skill discovery, catalog updates, and explicit skill invocation use the Session's current working directory.
+Skill discovery, catalog updates, and explicit skill invocation use the Session's workspace root; a directory change inside that root keeps the same catalog.
 
 Mount the plugin alongside the skill registry to give agents a session skill catalog and the `skill` loader tool. It requires `ctx.agents`, `ctx.tools`, and `ctx.skills`.
 

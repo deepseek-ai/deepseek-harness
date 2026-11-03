@@ -10,7 +10,7 @@ afterEach(cleanup)
 const props = () => {
   const onMenu = vi.fn()
   return {
-    cwd: undefined,
+    workspaceRoot: undefined,
     file: { path: 'out/report.pdf', description: 'Final report', seq: 4, index: 1 },
     host: { name: 'remote-desktop', available: true, fileManager: 'finder' as const },
     phase: undefined,
@@ -34,10 +34,10 @@ it('localizes reveal failures and restores the description when progress clears'
 it('shows the basename while retaining the full location for hover and actions', () => {
   const p = props()
   const path = '/work/reports/result.pdf'
-  const view = render(<PresentedFileCard {...p} cwd="/work" file={{ ...p.file, path }} />)
+  const view = render(<PresentedFileCard {...p} workspaceRoot="/work" file={{ ...p.file, path }} />)
   expect(view.getByTitle(path)).toBeTruthy()
   expect(view.getByText('result.pdf')).toBeTruthy()
-  view.rerender(<PresentedFileCard {...p} cwd="/work" />)
+  view.rerender(<PresentedFileCard {...p} workspaceRoot="/work" />)
   expect(view.getByTitle('/work/out/report.pdf')).toBeTruthy()
   expect(view.getByText('report.pdf')).toBeTruthy()
 })

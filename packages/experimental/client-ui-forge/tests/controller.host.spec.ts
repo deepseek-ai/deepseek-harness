@@ -681,20 +681,11 @@ describe('forgePanel worktree blockers', () => {
     expect(writable.worktree).toEqual(UNAVAILABLE)
   })
 
-  it.each([
-    ['a linked worktree whose shared Git directory lies outside it', async (root: string, repo: string): Promise<string> => {
-      const linked = join(root, 'linked')
-      await git(repo, 'worktree', 'add', '-b', 'feat', linked)
-      return linked
-    }],
-    ['a subdirectory of its checkout', async (_root: string, repo: string): Promise<string> => {
-      const nested = join(repo, 'src')
-      await mkdir(nested)
-      return nested
-    }],
-  ])('blocks a worktree for a Session rooted in %s until the Session gets full access', async (_label, place) => {
-    const { root, repo } = await project()
-    const opened = await open(await place(root, repo))
+  it('blocks a worktree for a Session rooted in a subdirectory of its checkout until the Session gets full access', async () => {
+    const { repo } = await project()
+    const nested = join(repo, 'src')
+    await mkdir(nested)
+    const opened = await open(nested)
     const follower = reader(opened)
 
     const blocked = await follower.until(ready)
@@ -704,6 +695,21 @@ describe('forgePanel worktree blockers', () => {
     expect(blocked.repository).toEqual(demo)
     expect(blocked.worktree.blocker).toBe('outside-writable-root')
     expect(unblocked.worktree.blocker).toBeNull()
+  })
+
+  it('offers a worktree to a Session rooted in a linked worktree because the policy grants its shared Git directory', async () => {
+    const { root, repo } = await project()
+    const linked = join(root, 'linked')
+    await git(repo, 'worktree', 'add', '-b', 'feat', linked)
+    const opened = await open(linked)
+    const follower = reader(opened)
+
+    const inspected = await follower.until(ready)
+
+    expect(inspected.repository).toEqual(demo)
+    expect(inspected.checkout).toMatchObject({ state: 'ready', checkout: { root: linked, linked: true } })
+    expect(inspected.worktree.blocker).toBeNull()
+    expect(opened.ctx.sandboxPolicy.resolve({ session: opened.session }).additionalWritableRoots).toEqual([join(repo, '.git')])
   })
 
   it('shows no blocker after an inspection fails', async () => {

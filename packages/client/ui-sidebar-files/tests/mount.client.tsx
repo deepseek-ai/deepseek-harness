@@ -131,7 +131,7 @@ function harness(placement: Placement, controller: AbortController) {
     close: vi.fn<SidebarRightTabActions['close']>(),
   }
   const sessionsAt = (cwd: string | null): SessionListState =>
-    ({ byId: cwd === null ? {} : { [SESSION]: { cwd } } } as unknown as SessionListState)
+    ({ byId: cwd === null ? {} : { [SESSION]: { cwd } }, projectionsBySession: {} } as unknown as SessionListState)
   const useTabInfo = (): SidebarRightTabInfo => ({
     sidebar: { expanded: true, fullscreen: false },
     panel: { id: PANE, isFloating: placement.isFloating ?? false },

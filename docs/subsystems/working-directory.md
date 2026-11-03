@@ -10,7 +10,7 @@ A Session's active directory is owned by [`dsh-working-directory`](../../package
 
 `rootOf(session)` reads the workspace root: the longest registered anchor that contains the current directory. The anchors are the original project and every checkout `relocate(agent, root, { cwd? })` entered; that operation validates the root and the directory inside it, then records both in one `working-directory/change` whose `anchor` names the root. `anchorsOf(session)` lists them. A `set` inside the root moves only the current directory; a `set` into another anchor selects that anchor as the root; a `set` outside every anchor leaves the root unchanged. Recovery to the original project selects it as the root again. Anchors are compared as recorded.
 
-Changes are local to one Session. Relative filesystem operations, newly started processes, instruction discovery, skills, and file completion use the active directory. Existing terminals and persistent shells retain their own directories. Sandbox writable roots and project membership remain anchored to the original project.
+Changes are local to one Session. The model's relative filesystem operations and the processes its tools start use the current directory. What the user sees follows the workspace root: the sandbox `workspace-write` boundary, the Files tree and directory listings, the change summaries, new sidebar terminals, `@` file completion, the skill catalog, project-instruction discovery, and the LSP workspace. Existing terminals and persistent shells retain their own directories. Project membership remains anchored to the original project.
 
 ## Model context
 

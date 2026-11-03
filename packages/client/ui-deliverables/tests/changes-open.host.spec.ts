@@ -37,7 +37,7 @@ async function fixture() {
   const outside = join(root, 'outside.txt')
   await writeFile(outside, 'outside')
   const data: WorkspaceChangesSummary = {
-    turn: 1, cwd, total: 3, added: 3, deleted: 0, snapshot: { before: 'a'.repeat(40), after: 'b'.repeat(40) },
+    turn: 1, root: cwd, total: 3, added: 3, deleted: 0, snapshot: { before: 'a'.repeat(40), after: 'b'.repeat(40) },
     files: [changed('src/lib/a.ts'), changed('src/b.ts'), changed(outside, '~/outside.txt')],
   }
   const ctx = new Context()

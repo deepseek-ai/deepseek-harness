@@ -11,7 +11,8 @@
  *   [node, runner.js, '--workspace', <dir>, '--temp', <dir>,
  *    '--mode', <read-only|workspace-write>,
  *    ['--write-sid', <S-1-4-…>,
- *     '--temp-write-sid', <S-1-4-…>], '--', <argv...>]
+ *     '--temp-write-sid', <S-1-4-…>],
+ *    ['--writable', <dir>]..., '--', <argv...>]
  *
  * Modes:
  *  - workspace-write: the workspace and temp directories carry distinct
@@ -69,6 +70,8 @@ interface ParsedArgs {
   mode: 'read-only' | 'workspace-write'
   writeSid: string | undefined
   tempWriteSid: string | undefined
+  /** Extra directories granted beside the workspace under workspace-write, in argv order. */
+  writable: string[]
   command: string
   args: string[]
 }
@@ -79,6 +82,7 @@ function parseArgs(raw: string[]): ParsedArgs {
   let mode: string | undefined
   let writeSid: string | undefined
   let parsedTempWriteSid: string | undefined
+  const writable: string[] = []
   let index = 0
   for (; index < raw.length; index++) {
     const token = raw[index]
@@ -95,6 +99,7 @@ function parseArgs(raw: string[]): ParsedArgs {
       case '--mode': mode = value; break
       case '--write-sid': writeSid = value; break
       case '--temp-write-sid': parsedTempWriteSid = value; break
+      case '--writable': writable.push(value); break
       default: fail(`unknown argument: ${token}`)
     }
   }
@@ -104,7 +109,7 @@ function parseArgs(raw: string[]): ParsedArgs {
   const argv = raw.slice(index)
   const command = argv[0]
   if (command === undefined) fail('missing command after --')
-  return { workspace, temp, mode, writeSid, tempWriteSid: parsedTempWriteSid, command, args: argv.slice(1) }
+  return { workspace, temp, mode, writeSid, tempWriteSid: parsedTempWriteSid, writable, command, args: argv.slice(1) }
 }
 
 function requireDirectory(label: string, path: string): void {
@@ -119,10 +124,14 @@ async function main(): Promise<number> {
   // a bogus root must fail loudly at the runner boundary, never mid-child.
   requireDirectory('--workspace', parsed.workspace)
   requireDirectory('--temp', parsed.temp)
+  for (const directory of parsed.writable) requireDirectory('--writable', directory)
 
   const seamManaged = parsed.writeSid !== undefined || parsed.tempWriteSid !== undefined
   if (parsed.mode === 'read-only' && seamManaged) {
     fail('read-only does not accept --write-sid or --temp-write-sid')
+  }
+  if (parsed.mode === 'read-only' && parsed.writable.length > 0) {
+    fail('read-only does not accept --writable')
   }
   if (parsed.mode === 'workspace-write' && (parsed.writeSid === undefined) !== (parsed.tempWriteSid === undefined)) {
     fail('workspace-write requires --write-sid and --temp-write-sid together')
@@ -160,7 +169,7 @@ async function main(): Promise<number> {
       }
     }
     sandbox = new AclSandbox({
-      writableDirs: parsed.mode === 'workspace-write' ? [parsed.workspace] : [],
+      writableDirs: parsed.mode === 'workspace-write' ? [parsed.workspace, ...parsed.writable] : [],
       tempDir: privateTempDir,
       mode: parsed.mode,
       ...writeSid === undefined ? {} : { writeSid },

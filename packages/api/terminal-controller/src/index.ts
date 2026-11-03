@@ -110,16 +110,16 @@ export class TerminalController extends TypertRemoteService {
   }
 
   /**
-   * Read the Session's current directory and terminal limits without filesystem validation or shell lookup.
+   * Read the Session's workspace root and terminal limits without filesystem validation or shell lookup.
    * @param agent - Session owner supplied by the Gateway.
    * @param signal - request cancellation.
-   * @returns the logged current directory and terminal limits; retained terminals keep their own process directories.
+   * @returns the logged workspace root and terminal limits; retained terminals keep their own process directories.
    */
   @Remote
   environment(agent: Agent, signal: AbortSignal): TerminalEnvironment {
     signal.throwIfAborted()
     const { workingDirectory } = this.execution(agent)
-    return { cwd: workingDirectory.get(agent.session),
+    return { cwd: workingDirectory.rootOf(agent.session),
       maxInputBytes: this.config.maxInputBytes, maxBufferedBytes: this.config.maxBufferedBytes, maxCols: this.config.maxCols,
       maxRows: this.config.maxRows, scrollback: this.config.scrollback }
   }
@@ -312,7 +312,9 @@ export class TerminalController extends TypertRemoteService {
 
   private async spawn(agent: Agent, owner: OwnedSession, request: TerminalCreateRequest, signal: AbortSignal): Promise<BrowserTerminal> {
     const { subprocess, workingDirectory } = this.execution(agent)
-    const cwd = await workingDirectory.ensure(agent, signal)
+    // A user terminal starts in the checkout the Session works in, not at the model's cursor.
+    await workingDirectory.ensure(agent, signal)
+    const cwd = workingDirectory.rootOf(agent.session)
     const shell = request.shellPath === undefined
       ? await resolveShell(subprocess, this.config.shell, signal)
       : (await this.shells(agent, signal)).find(candidate => candidate.path === request.shellPath)

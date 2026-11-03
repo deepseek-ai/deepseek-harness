@@ -21,6 +21,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
+import { sessionDirectories } from '@deepseek-ai/dsh-api-session-controller/client/directories'
 import { relativeTime } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { UserTextNodeProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { FileReference, FolderReference, type FileReferenceInjected } from './FileReference.tsx'
@@ -62,10 +63,10 @@ export function apply(ctx: ClientContext): void {
     yield ctx.slots.register({
       name: 'conversation.user.text.node', key: 'file', priority: 100, locale: NS,
       inject: (sessionId: UserTextNodeProps<'file'>['sessionId']): FileReferenceInjected => ({
-        resolveFilePath: path => resolveWorkspacePath(sessions.list.getSnapshot().byId[sessionId]?.cwd, path),
+        // A user reference is relative to the workspace root the user sees, not to the model's current directory.
+        resolveFilePath: path => resolveWorkspacePath(sessionDirectories(sessions, sessionId).root, path),
         openFile: (path) => {
-          const cwd = sessions.list.getSnapshot().byId[sessionId]?.cwd
-          ctx.sidebarRight.openResource(fileAddressFor(sessionId, cwd, path))
+          ctx.sidebarRight.openResource(fileAddressFor(sessionId, sessionDirectories(sessions, sessionId).root, path))
         },
       }),
     }, FileReference)
@@ -165,8 +166,7 @@ export function apply(ctx: ClientContext): void {
     openReference(session, { ref, appearance }) {
       if (appearance !== 'file') return false
       const path = ref.startsWith('@"') ? ref.slice(2, -1) : ref.slice(1)
-      const cwd = sessions.list.getSnapshot().byId[session.sessionId]?.cwd
-      ctx.sidebarRight.openResource(fileAddressFor(session.sessionId, cwd, path))
+      ctx.sidebarRight.openResource(fileAddressFor(session.sessionId, sessionDirectories(sessions, session.sessionId).root, path))
       return true
     },
     codec: {

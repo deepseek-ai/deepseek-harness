@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Open the execution environment's default shell in the Session's current working directory from the Web sidebar. Reconnect to existing processes and close their complete provider-owned process ranges. Terminal output stays outside the Agent transcript. Keeping a terminal open retains its process and a bounded screen buffer.
+Open the execution environment's default shell in the Session's workspace root from the Web sidebar. Reconnect to existing processes and close their complete provider-owned process ranges. Terminal output stays outside the Agent transcript. Keeping a terminal open retains its process and a bounded screen buffer.
 
 ## Table of Contents
 

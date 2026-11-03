@@ -55,7 +55,7 @@ The tree marks the row of the current file with `aria-current`. While the tree i
 <a id="the-tree"></a>
 ## The tree
 
-The root is the session's working directory, read from `useSessions().byId[sessionId].cwd`. Filesystem roots such as `/` and Windows drive roots are valid tree roots. Every level is keyed by absolute path; a child's path is its parent's joined with the entry name by `/`. A level is listed when it is first expanded, through `remote.workspaceFiles.list(sessionId, absolutePath)` on the `@deepseek-ai/dsh-api-workspace-files` namespace. The rows are drawn by the [tree Factory](#tree-factory), which orders them; `workspace-tree.ts` passes every listed entry with its listing's name and type as `meta.kind`, the root key without trailing separators, and localized failure lines. The Factory reads its own copy from the files locale. Dotfiles are shown like any other entry.
+The root is the session's workspace root, selected with `selectSessionRoot` from the list snapshot: the projected `workspaceRoot`, else the header directory. Filesystem roots such as `/` and Windows drive roots are valid tree roots. Every level is keyed by absolute path; a child's path is its parent's joined with the entry name by `/`. A level is listed when it is first expanded, through `remote.workspaceFiles.list(sessionId, absolutePath)` on the `@deepseek-ai/dsh-api-workspace-files` namespace. The rows are drawn by the [tree Factory](#tree-factory), which orders them; `workspace-tree.ts` passes every listed entry with its listing's name and type as `meta.kind`, the root key without trailing separators, and localized failure lines. The Factory reads its own copy from the files locale. Dotfiles are shown like any other entry.
 
 | Entry type | Row |
 |---|---|
@@ -95,7 +95,7 @@ None; directory listings travel over the Remote and assemble no model request.
 
 <a id="known-limitations-and-deferred-work"></a>
 - **Listing only.** No search, artifact filter, drag-and-drop, or rename.
-- **One root.** The tree is rooted at the session's working directory; there is no way to browse above it, and the Host refuses paths outside the workspace root anyway.
+- **One root.** The tree is rooted at the session's workspace root; there is no way to browse above it, and the Host refuses paths outside the workspace root anyway.
 
 <a id="dev-note"></a>
 ### Dev Note

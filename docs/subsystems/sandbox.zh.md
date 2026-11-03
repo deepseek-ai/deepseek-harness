@@ -76,7 +76,7 @@ interface SandboxExecutionPolicy {
 ```ts type-equiv
 /** Inputs that select the sandbox policy for one capability call. */
 interface SandboxPolicyRequest {
-  /** Calling session; its immutable cwd becomes the workspace boundary. */
+  /** Calling session; its workspace root becomes the workspace boundary. */
   session?: Session
   /** Explicit approved mode override, which outranks session policy. */
   mode?: SandboxMode
@@ -200,17 +200,21 @@ Source: [`packages/sandbox/sandbox/src/index.ts`](../../packages/sandbox/sandbox
 
 ### `ctx.sandboxPolicy` — `SandboxPolicyService`
 
-The sandbox-policy service (`ctx.sandboxPolicy`). Owns the deployment default mode, fallback workspace root, and current request-time policy section. Tool layers call resolve for each execution so a session's mode log and immutable cwd travel together to every enforcing capability.
+The sandbox-policy service (`ctx.sandboxPolicy`). Owns the deployment default mode, fallback workspace root, and current request-time policy section. Tool layers call resolve for each execution so a session's mode log and workspace root travel together to every enforcing capability.
+
+A session's workspace root comes from the working-directory service when it is mounted: the checkout the Session works in, which a worktree relocation moves. A linked checkout keeps its Git administration directory and the repository's common directory outside that root; prepare derives them through the execution-world filesystem once per root, and `resolve` adds the derived directories to `additionalWritableRoots`. Tool executions await that derivation in `tools/pre-execute`; Session creation and every directory change start it early.
 
 ```ts cordis-catalog
 /**
  * Resolve the complete policy for one capability call. An approved explicit
  * mode outranks the session's last `sandbox/mode` event, which outranks the
- * deployment default. A session cwd is its workspace-write boundary; the
+ * deployment default. A session's workspace root is its workspace-write
+ * boundary, and the Git administration directories {@link prepare} derived
+ * for that root join the configured extra writable directories; the
  * configured root is the fallback for agentless calls and sessions without a
- * cwd.
+ * recorded directory.
  * @param request - optional session and approved mode override.
- * @returns the fully resolved per-call mode and absolute workspace root.
+ * @returns the fully resolved per-call mode, absolute workspace root, and extra writable directories.
  */
 resolve(request: SandboxPolicyRequest = {}): SandboxExecutionPolicy
 
@@ -220,6 +224,20 @@ resolve(request: SandboxPolicyRequest = {}): SandboxExecutionPolicy
  * @returns the last logged mode, or `undefined` without one.
  */
 overrideOf(session: Session): SandboxMode | undefined
+
+/**
+ * Derive the Git administration directories of the session's workspace root
+ * so the next {@link resolve} grants them: a linked checkout's `.git` file
+ * names its administration directory, whose `commondir` names the
+ * repository's common directory. Directories inside the root, missing
+ * directories, and a root without a `.git` entry add nothing. One derivation
+ * runs per root; its result is kept once the root's `.git` entry was read,
+ * and a failed read is logged and retried on the next call.
+ * @param session - session whose workspace root is inspected.
+ * @param signal - caller cancellation, checked before and after the shared derivation.
+ * @returns the derived directories outside the root, canonical in the execution world.
+ */
+async prepare(session: Session, signal?: AbortSignal): Promise<readonly string[]>
 ```
 
 Types: [Session](session.zh.md)

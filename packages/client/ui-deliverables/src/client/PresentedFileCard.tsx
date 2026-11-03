@@ -20,9 +20,9 @@ function cardDescription(description: string | undefined, fallback: string): str
  * @param props - durable file metadata, Sidebar preview, Host capabilities, gesture status, and localized copy.
  * @returns the file card and its anchored action menu.
  */
-export function PresentedFileCard({ file, cwd, phase, host, onPreview, contextMenuProps, actions, t }: {
+export function PresentedFileCard({ file, workspaceRoot, phase, host, onPreview, contextMenuProps, actions, t }: {
   file: PresentedPath
-  cwd: string | undefined
+  workspaceRoot: string | undefined
   phase: PresentedOpenPhase | undefined
   host: PresentedHost | null
   onPreview: () => void
@@ -37,7 +37,7 @@ export function PresentedFileCard({ file, cwd, phase, host, onPreview, contextMe
     : t(reveal === 'directory' && phase === 'revealing' ? 'presented.directoryOpening'
       : reveal === 'directory' && phase === 'revealError' ? 'presented.directoryError' : `presented.${phase}`)
   return <div className={css.file} data-presented-file>
-    <button type="button" className={css.cardPreview} title={resolveWorkspacePath(cwd, file.path)}
+    <button type="button" className={css.cardPreview} title={resolveWorkspacePath(workspaceRoot, file.path)}
       aria-label={t('presented.previewCard', { name: file.path })} onClick={onPreview}
       {...contextMenuProps} />
     <span className={css.fileIcon}><FileTypeIcon path={file.path} size={20} /></span>

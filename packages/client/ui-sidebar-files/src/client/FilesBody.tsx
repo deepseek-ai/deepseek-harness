@@ -8,6 +8,7 @@
  * it is and opens the file where the right Sidebar places it by default
  * (`FileNavigator`).
  */
+import { selectSessionRoot } from '@deepseek-ai/dsh-api-session-controller/client/directories'
 import { useCallback, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client'
@@ -49,14 +50,14 @@ export function FilesBody(props: FilesBodyProps): ReactNode {
     () => tab.actions.bindCommands({ refresh: () => { refresh(panel.id) } }),
     [tab.actions, panel.id, refresh],
   )
-  const cwd = useSessions(sessions => sessions.byId[sessionId]?.cwd)
+  const workspaceRoot = useSessions(sessions => selectSessionRoot(sessions, sessionId))
   // The setting belongs to a listed tree, so there is nothing to set before one.
   const autoRefresh = useStore((store) => {
     const tree = store.byPane[panel.id]?.tree
-    return tree?.root === cwd ? tree?.autoRefresh : undefined
+    return tree?.root === workspaceRoot ? tree?.autoRefresh : undefined
   })
 
-  if (cwd === undefined) {
+  if (workspaceRoot === undefined) {
     return (
       <div className={css.status} data-files-state="no-workspace">
         <p className={css.statusLine}>{t('noWorkspace')}</p>
@@ -68,8 +69,8 @@ export function FilesBody(props: FilesBodyProps): ReactNode {
   return (
     <div className={css.page} data-files-page>
       <div className={css.header}>
-        <PathLabel path={cwd} className={css.path} data-files-path
-          {...getTriggerProps({ kind: 'directory', value: { sessionId, path: cwd } })} />
+        <PathLabel path={workspaceRoot} className={css.path} data-files-path
+          {...getTriggerProps({ kind: 'directory', value: { sessionId, path: workspaceRoot } })} />
         <span hidden>
           <button type="button" className={css.tool} aria-label={t('autoRefresh')}
             aria-pressed={automatic} disabled={autoRefresh === undefined} data-files-auto-refresh
@@ -90,7 +91,7 @@ export function FilesBody(props: FilesBodyProps): ReactNode {
             <IconRefreshOutlineRegular />
           </button>
         </Tooltip>
-        {renderSlot('sidebar.right.tab.files.actions', { absolutePath: cwd })}
+        {renderSlot('sidebar.right.tab.files.actions', { absolutePath: workspaceRoot })}
       </div>
       <div className={css.content} data-files-content>{navigator}</div>
     </div>

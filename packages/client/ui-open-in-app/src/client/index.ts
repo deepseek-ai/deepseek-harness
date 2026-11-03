@@ -20,6 +20,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-files/client'
 import type {} from '@deepseek-ai/dsh-api-gateway/client'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
+import { selectSessionRoot } from '@deepseek-ai/dsh-api-session-controller/client/directories'
 import type {} from '@deepseek-ai/dsh-api-session-controller/remote'
 import { OPEN_IN_APP_ICON_PREFIX_ROUTE } from '@deepseek-ai/dsh-host-open-in-app/shared'
 import { OpenInAppController } from './controller.ts'
@@ -77,10 +78,11 @@ export function apply(ctx: ClientContext): void {
   }, OpenInAppToast))
   const target = () => {
     if (ctx.layout.panelInfo.getSnapshot().activePanelId !== null) return undefined
-    const session = Object.values(ctx.sessions.list.getSnapshot().byId)
-      .find(row => (row.retainedBy.mainView ?? 0) > 0)
+    const list = ctx.sessions.list.getSnapshot()
+    const session = Object.values(list.byId).find(row => (row.retainedBy.mainView ?? 0) > 0)
+    const root = session === undefined ? undefined : selectSessionRoot(list, session.id)
     const appId = controller.currentApp()
-    return session?.cwd && appId !== undefined ? { appId, path: session.cwd } : undefined
+    return root && appId !== undefined ? { appId, path: root } : undefined
   }
   ctx.effect(() => ctx.shortcuts.register({
     id: 'workspace.openLocal' as ShortcutCommandId, label: () => t('open.tooltip'), aliases: ['open workspace locally', 'open in app'],
@@ -117,8 +119,8 @@ export function apply(ctx: ClientContext): void {
     props: PropsRuntime<'conversation.session.header.utilities'> & Omit<OpenInAppActionProps, 'absolutePath'>,
   ) {
     const { sessionId, useSessions } = props
-    const cwd = useSessions(state => state.byId[sessionId]?.cwd)
-    return cwd ? createElement(OpenInAppAction, { ...props, absolutePath: cwd }) : null
+    const root = useSessions(state => selectSessionRoot(state, sessionId))
+    return root ? createElement(OpenInAppAction, { ...props, absolutePath: root }) : null
   }
   ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register({
     name: 'conversation.session.header.utilities',

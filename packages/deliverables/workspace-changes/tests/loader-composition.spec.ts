@@ -77,7 +77,7 @@ describe('real Loader composition', () => {
     const [recorded, ...rest] = changes(context, session)
     expect(rest).toEqual([])
     expect(recorded).toEqual({
-      turn: 1, cwd, total: 1, added: 1, deleted: 0,
+      turn: 1, root: cwd, total: 1, added: 1, deleted: 0,
       files: [{ path: 'tracked.txt', display: 'tracked.txt', added: 1, deleted: 0 }],
       snapshot: { before: expect.stringMatching(/^[0-9a-f]+$/) as string, after: expect.stringMatching(/^[0-9a-f]+$/) as string },
     })

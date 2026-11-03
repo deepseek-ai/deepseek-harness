@@ -5,6 +5,7 @@ import type { Session } from '@deepseek-ai/dsh-session'
 
 /**
  * Supply fixed directory values without filesystem checks or durable changes.
+ * The workspace root equals the directory, which is the Session's only anchor.
  * @param ctx - context owning this test collaborator.
  * @param defaultDirectory - fallback for fixtures without a Session directory.
  */
@@ -13,6 +14,8 @@ export function provideWorkingDirectoryFixture(ctx: Context, defaultDirectory = 
   ctx.provide('workingDirectory', {
     defaultDirectory,
     get,
+    rootOf: get,
+    anchorsOf: (session: Session): readonly string[] => [get(session)],
     ensure: (agent: Agent): Promise<string> => Promise.resolve(get(agent.session)),
   })
 }

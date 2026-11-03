@@ -1,5 +1,6 @@
 /** Native directory reveal contributed to the captured Session's structured menu. */
 import type { Context } from '@deepseek-ai/cordis'
+import { selectSessionRoot } from '@deepseek-ai/dsh-api-session-controller/client/directories'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { OpenInAppController } from './controller.ts'
 import type { OpenInAppToastSource } from './open-toast.tsx'
@@ -21,7 +22,7 @@ export function registerSessionReveal(
     id: 'open-in-app.reveal', target: 'session', order: 500,
     observe: () => [controller.apps, ctx.sessions.list, ctx.locale],
     resolve: ({ sessionId }) => {
-      const directory = ctx.sessions.list.getSnapshot().byId[sessionId]?.cwd
+      const directory = selectSessionRoot(ctx.sessions.list.getSnapshot(), sessionId)
       const applications = controller.apps.getSnapshot()
       const manager = applications?.find(id => ['finder', 'explorer', 'filemanager'].includes(id))
       return [{

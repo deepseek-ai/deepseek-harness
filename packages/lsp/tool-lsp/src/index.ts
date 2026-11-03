@@ -181,7 +181,7 @@ export function apply(ctx: Context, config: Config): void {
     timeoutMs: resolved.timeoutMs,
     async execute(args, exec) {
       const input = parseLspArgs(args)
-      const workspaceRoot = exec.agent === undefined ? undefined : await ctx.workingDirectory.ensure(exec.agent, exec.signal)
+      const workspaceRoot = exec.agent === undefined ? undefined : ctx.workingDirectory.rootOf(exec.agent.session)
       if (workspaceRoot === undefined) {
         throw new LspError('the lsp tool requires a session workspace cwd', 'LSP_WORKSPACE_REQUIRED')
       }

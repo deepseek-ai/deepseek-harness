@@ -233,8 +233,8 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Session working directory',
     mode: 'seam',
     implementations: ['working-directory'],
-    consumers: ['tool-working-directory', 'tool-fs', 'tool-bash', 'tool-pwsh', 'subagent', 'sdk-jsonrpc-server'],
-    note: 'Two Session projections own the effective execution directory and the workspace root it is in. The filesystem validates changes; user context reports them while original metadata and write grants stay fixed.',
+    consumers: ['tool-working-directory', 'tool-fs', 'tool-bash', 'tool-pwsh', 'subagent', 'sdk-jsonrpc-server', 'sandbox-policy', 'workspace-files', 'terminal-controller', 'workspace-changes', 'file-reference-local', 'tool-skill', 'agent-instructions', 'tool-lsp'],
+    note: 'Two Session projections own the effective execution directory and the workspace root it is in. The filesystem validates changes and user context reports them; model tools follow the directory while the sandbox boundary, file views, and discovery follow the root, and original metadata stays fixed.',
   },
   {
     key: 'mcpResources',

@@ -3,10 +3,10 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 
 /** One file changed during a turn, with line counts from git or from the whole-file captures around its file-tool edits. */
 export interface WorkspaceChangedFile {
-  /** Path relative to the Session working directory, or an absolute Host path outside it. */
+  /** Path relative to the Session workspace root, or an absolute Host path outside it. */
   path: string
   /**
-   * Sort key and label: the relative path inside the working directory, a
+   * Sort key and label: the relative path inside the workspace root, a
    * `../` path for repository files above it, a `~` path under the home
    * directory, otherwise the absolute path. Always slash-separated.
    */
@@ -25,8 +25,8 @@ export interface WorkspaceChangedFile {
 export interface WorkspaceChangesSummary {
   /** The turn whose file changes this summary describes. */
   turn: number
-  /** The Session working directory `path` values are relative to. */
-  cwd: string
+  /** The Session workspace root `path` values are relative to, as it stood when the turn started. */
+  root: string
   /** Changed files in `display` order, capped at the plugin's `maxFiles`. */
   files: WorkspaceChangedFile[]
   /** Complete changed-file count, including files omitted by the cap. */

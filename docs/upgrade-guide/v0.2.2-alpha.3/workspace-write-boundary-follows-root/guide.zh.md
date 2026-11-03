@@ -1,0 +1,24 @@
+---
+kind: upgrade-guide
+description: "workspace-write 边界跟随 Session 的工作区根而不是原始项目，链接 worktree 的 Git 目录变为可写。"
+---
+# `workspace-write` 边界跟随 Session 的工作区根
+
+[English](guide.md) | 中文
+
+## 变更
+
+`ctx.sandboxPolicy.resolve({ session })` 返回的 `workspaceRoot` 是 Session 的工作区根，即它所在的检出目录。此前整个 Session 期间返回的都是 Session header 记录的原始项目。通过 `create_worktree` 或 forge 的"新建工作树"选项进入 worktree 的 Session 现在只能在该 worktree 内写入；原始项目不再整体可写，根内部的 `cd` 不会移动边界。
+
+对于链接 worktree，策略从其 `.git` 指针与 `commondir` 推导出检出目录的 Git 管理目录和仓库公共目录，并加入 `additionalWritableRoots`，因此在 `workspace-write` 下可以在 worktree 内运行 `git commit` 与 `git checkout`。该授权也覆盖共享的 `.git/hooks` 与 `.git/config`，与主检出目录中的 Session 此前拥有的权限相同。Windows ACL 限制接受额外可写根目录，不再以 `SANDBOX_UNSUPPORTED_POLICY` 失败。
+
+文件树、目录列举与监听、交付物与变更摘要、新开的侧栏终端、`@` 文件补全、技能目录、项目指令发现和 LSP 工作区读取同一个根。`WorkspaceChangesSummary.cwd` 由 `root` 取代，`TerminalEnvironment.cwd` 表示该根。
+
+受影响者：依赖 worktree Session 仍可写入原始项目的运维人员、通过 `additionalWritableRoots` 授权 worktree `.git` 的部署，以及读取 `WorkspaceChangesSummary.cwd` 的 Host 插件。
+
+## 迁移
+
+1. 从 `cordis.yml` 中删除只为链接 worktree 的 `.git/worktrees/<name>` 或公共 `.git` 目录而设置的 `additionalWritableRoots` 条目；保留无关目录的条目。
+2. 任务在进入 worktree 后仍需写入原始项目时，用 `working_directory({ cd: "<原始项目>" })` 切换回去，或让 Session 留在原始项目中；边界跟随该变更。
+3. 在消费 `ctx.workspaceChanges.summary` 的 Host 插件中，把对 `WorkspaceChangesSummary.cwd` 的读取改为 `root`。
+4. 确认：在链接 worktree 内打开的 Session 中，`workspace-write` 下 `git commit` 成功，运行时上下文的 `Additional writable directories` 列出仓库的 `.git`；`create_worktree` 之后，对 worktree 之外原始项目的写入被拒绝。

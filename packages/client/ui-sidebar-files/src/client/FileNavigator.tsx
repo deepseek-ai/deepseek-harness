@@ -7,6 +7,7 @@
  * follows `PUSH_FROM`, `FILL_BELOW`, and `FULLSCREEN_QUERY`; the package
  * README describes its behavior.
  */
+import { selectSessionRoot } from '@deepseek-ai/dsh-api-session-controller/client/directories'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import clsx from 'clsx'
@@ -75,14 +76,14 @@ export function FileNavigator({
   const { tab, panel } = useTabInfo()
   const { getTriggerProps } = useContextMenu()
   const paneId = panel.id
-  const cwd = useSessions(sessions => sessions.byId[sessionId]?.cwd)
+  const workspaceRoot = useSessions(sessions => selectSessionRoot(sessions, sessionId))
   const state = useStore(store => store.byPane[paneId])
   const rowWidth = useRowWidth(paneId)
   const canOpen = useCanOpen(check => check)
   const open = page || state?.open === true
   // Measured by the face; the viewport rule is CSS's, read again when a file opens.
   const mode = navigatorMode(rowWidth)
-  const tree = state?.tree?.root === cwd ? state?.tree : undefined
+  const tree = state?.tree?.root === workspaceRoot ? state?.tree : undefined
   const [dragging, setDragging] = useState(false)
   const drag = useRef<{ readonly x: number; readonly width: number } | undefined>(undefined)
   // Stable, so each element registers once per drawing rather than on every render.
@@ -98,8 +99,8 @@ export function FileNavigator({
 
   useEffect(() => attach(paneId, tab.id, tab.signal), [attach, paneId, tab.id, tab.signal])
   // Only a navigator that can draw a tree keeps the workspace command on its tab.
-  useEffect(() => page || cwd === undefined ? undefined : placeBeside(tab.id), [page, cwd, placeBeside, tab.id])
-  useEffect(() => cwd === undefined || !open ? undefined : hold(paneId, cwd), [cwd, open, paneId, hold])
+  useEffect(() => page || workspaceRoot === undefined ? undefined : placeBeside(tab.id), [page, workspaceRoot, placeBeside, tab.id])
+  useEffect(() => workspaceRoot === undefined || !open ? undefined : hold(paneId, workspaceRoot), [workspaceRoot, open, paneId, hold])
 
   const relativePath = tree === undefined ? undefined : relativeFileOf(tab.contentId, sessionId, tree.root)
   const location = useMemo(
@@ -132,7 +133,7 @@ export function FileNavigator({
     }
   }, [tree, paneId, sessionId, toggle, canOpen, onOpen, getTriggerProps])
 
-  if (cwd === undefined || !open) return null
+  if (workspaceRoot === undefined || !open) return null
   const geometry = navigatorGeometry(rowWidth, state?.width ?? DEFAULT_NAVIGATOR_WIDTH)
   // The page's tree always fills the page; a preview's follows its row.
   const shown = page ? undefined : mode
@@ -146,7 +147,7 @@ export function FileNavigator({
       data-files-navigator={paneId}
       data-files-navigator-mode={shown}
       data-files-state="tree"
-      data-files-root={cwd}
+      data-files-root={workspaceRoot}
     >
       {shown !== undefined && shown !== 'fill' && (
         <div

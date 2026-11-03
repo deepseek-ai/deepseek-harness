@@ -2553,7 +2553,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'sandboxPolicy',
     summary: 'The sandbox-policy service (`ctx.sandboxPolicy`).',
-    description: 'The sandbox-policy service (`ctx.sandboxPolicy`). Owns the deployment default mode, fallback workspace root, and current request-time policy section. Tool layers call resolve for each execution so a session\'s mode log and immutable cwd travel together to every enforcing capability.',
+    description: 'The sandbox-policy service (`ctx.sandboxPolicy`). Owns the deployment default mode, fallback workspace root, and current request-time policy section. Tool layers call resolve for each execution so a session\'s mode log and workspace root travel together to every enforcing capability.\n\nA session\'s workspace root comes from the working-directory service when it is mounted: the checkout the Session works in, which a worktree relocation moves. A linked checkout keeps its Git administration directory and the repository\'s common directory outside that root; prepare derives them through the execution-world filesystem once per root, and `resolve` adds the derived directories to `additionalWritableRoots`. Tool executions await that derivation in `tools/pre-execute`; Session creation and every directory change start it early.',
     methods: [
       {
         signature: 'readonly defaultMode: SandboxMode',
@@ -2562,7 +2562,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'readonly workspaceRoot: string',
-        description: 'The absolute `workspace-write` fallback root for calls without a session cwd.',
+        description: 'The absolute `workspace-write` fallback root for calls without a session root.',
         parameters: [],
       },
       {
@@ -2572,15 +2572,21 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'resolve(request: SandboxPolicyRequest = {}): SandboxExecutionPolicy',
-        description: 'Resolve the complete policy for one capability call. An approved explicit mode outranks the session\'s last `sandbox/mode` event, which outranks the deployment default. A session cwd is its workspace-write boundary; the configured root is the fallback for agentless calls and sessions without a cwd.',
+        description: 'Resolve the complete policy for one capability call. An approved explicit mode outranks the session\'s last `sandbox/mode` event, which outranks the deployment default. A session\'s workspace root is its workspace-write boundary, and the Git administration directories prepare derived for that root join the configured extra writable directories; the configured root is the fallback for agentless calls and sessions without a recorded directory.',
         parameters: [{ name: 'request', description: 'optional session and approved mode override.' }],
-        returns: 'the fully resolved per-call mode and absolute workspace root.',
+        returns: 'the fully resolved per-call mode, absolute workspace root, and extra writable directories.',
       },
       {
         signature: 'overrideOf(session: Session): SandboxMode | undefined',
         description: 'Read the session override without applying the deployment default.',
         parameters: [{ name: 'session', description: 'session whose log supplies the override.' }],
         returns: 'the last logged mode, or `undefined` without one.',
+      },
+      {
+        signature: 'async prepare(session: Session, signal?: AbortSignal): Promise<readonly string[]>',
+        description: 'Derive the Git administration directories of the session\'s workspace root so the next resolve grants them: a linked checkout\'s `.git` file names its administration directory, whose `commondir` names the repository\'s common directory. Directories inside the root, missing directories, and a root without a `.git` entry add nothing. One derivation runs per root; its result is kept once the root\'s `.git` entry was read, and a failed read is logged and retried on the next call.',
+        parameters: [{ name: 'session', description: 'session whose workspace root is inspected.' }, { name: 'signal', description: 'caller cancellation, checked before and after the shared derivation.' }],
+        returns: 'the derived directories outside the root, canonical in the execution world.',
       },
     ],
   },
@@ -3849,9 +3855,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: '@Remote environment(agent: Agent, signal: AbortSignal): TerminalEnvironment',
-        description: 'Read the Session\'s current directory and terminal limits without filesystem validation or shell lookup.',
+        description: 'Read the Session\'s workspace root and terminal limits without filesystem validation or shell lookup.',
         parameters: [{ name: 'agent', description: 'Session owner supplied by the Gateway.' }, { name: 'signal', description: 'request cancellation.' }],
-        returns: 'the logged current directory and terminal limits; retained terminals keep their own process directories.',
+        returns: 'the logged workspace root and terminal limits; retained terminals keep their own process directories.',
       },
       {
         signature: '@Remote shells(agent: Agent, signal: AbortSignal): Promise<TerminalShell[]>',
@@ -10183,7 +10189,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WorkspaceChangesSummary',
-    declaration: 'export interface WorkspaceChangesSummary {\n    turn: number;\n    cwd: string;\n    files: WorkspaceChangedFile[];\n    total: number;\n    added: number;\n    deleted: number;\n    snapshot?: {\n        before: string;\n        after: string;\n    };\n}',
+    declaration: 'export interface WorkspaceChangesSummary {\n    turn: number;\n    root: string;\n    files: WorkspaceChangedFile[];\n    total: number;\n    added: number;\n    deleted: number;\n    snapshot?: {\n        before: string;\n        after: string;\n    };\n}',
   },
   {
     name: 'WorkspaceCreateRequest',

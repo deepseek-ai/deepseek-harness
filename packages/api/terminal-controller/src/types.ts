@@ -30,7 +30,7 @@ export interface TerminalShell {
 
 /** Current Session directory and terminal limits; retained terminals keep their own process directories. */
 export interface TerminalEnvironment {
-  /** Logged current directory, read without filesystem validation. */
+  /** Logged workspace root a new terminal starts in, read without filesystem validation. */
   readonly cwd: string
   readonly maxInputBytes: number
   /** Maximum complete encoded Client input bytes retained until acknowledgement. */

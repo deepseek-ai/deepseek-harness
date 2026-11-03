@@ -88,7 +88,7 @@ describe('workspace-changes in a repository', () => {
     expect(events.map(event => event.data)).toEqual([{ turn: 1 }])
     const [recorded, ...rest] = changes(ctx, session)
     expect(rest).toEqual([])
-    expect(recorded).toMatchObject({ turn: 1, cwd, total: 5, added: 7, deleted: 1 })
+    expect(recorded).toMatchObject({ turn: 1, root: cwd, total: 5, added: 7, deleted: 1 })
     expect(recorded!.snapshot!.before).toMatch(/^[0-9a-f]{40,64}$/)
     expect(recorded!.snapshot!.after).toMatch(/^[0-9a-f]{40,64}$/)
     expect(recorded!.files).toEqual([
@@ -357,7 +357,7 @@ describe('workspace-changes without a repository', () => {
     endTurn(session, 1)
     await settle(ctx, session)
     expect(changes(ctx, session)).toEqual([{
-      turn: 1, cwd, total: 3, added: 7, deleted: 1,
+      turn: 1, root: cwd, total: 3, added: 7, deleted: 1,
       files: [
         { path: 'existing.txt', display: 'existing.txt', added: 3, deleted: 1 },
         { path: 'mixed.txt', display: 'mixed.txt', added: 2, deleted: 0 },
@@ -497,7 +497,7 @@ describe('workspace-changes without git', () => {
       endTurn(session, turn)
       await settle(ctx, session)
     }
-    expect(changes(ctx, session)).toEqual([{ turn: 2, cwd, total: 1, added: 1, deleted: 0, files: [{ path: 'w.txt', display: 'w.txt', added: 1, deleted: 0 }] }])
+    expect(changes(ctx, session)).toEqual([{ turn: 2, root: cwd, total: 1, added: 1, deleted: 0, files: [{ path: 'w.txt', display: 'w.txt', added: 1, deleted: 0 }] }])
     expect(await ctx.workspaceChanges.diff(session.id, announcedSeq(session), 0, signal)).toMatchObject({ kind: 'text', before: false, after: true, hunks: [{ lines: ['+w'] }] })
     expect(info).toHaveBeenCalledTimes(1)
     expect(info.mock.calls[0]![0]).toContain('git is unavailable')

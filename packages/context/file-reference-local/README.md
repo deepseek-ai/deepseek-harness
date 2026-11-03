@@ -25,9 +25,9 @@ Agents and host UIs can complete `@file` mentions with ranked paths from each ag
 <a id="use-this-package"></a>
 ## Use this package
 
-Changing the Session's working directory discards the previous directory's search index; the next completion searches the new directory.
+Entering another checkout discards the previous workspace root's search index; the next completion searches the new root. A directory change inside the root keeps the index.
 
-Mount this provider when `@file` completion should discover the Harness host's own filesystem — the namespace the shipped `read` tool operates on. Each agent's workspace is indexed from its Session's current working directory.
+Mount this provider when `@file` completion should discover the Harness host's own filesystem — the namespace the shipped `read` tool operates on. Each agent's workspace is indexed from its Session's workspace root.
 
 ### Enabling the provider
 

@@ -364,7 +364,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-api-workspace-files`
 
 - `inject`: `fs` · `sandboxPolicy` · `sessions` · `typert`
-- `source`: [`packages/api/workspace-files/src/index.ts:70`](../packages/api/workspace-files/src/index.ts)
+- `source`: [`packages/api/workspace-files/src/index.ts:101`](../packages/api/workspace-files/src/index.ts)
 
 ```ts config-catalog
 /** Deployment caps on one page or one listing. */
@@ -2962,7 +2962,7 @@ export interface Config {
 
 - `inject`: `sessionProjections`
 - `refs`: [`SandboxMode`](subsystems/sandbox.zh.md)
-- `source`: [`packages/sandbox/sandbox-policy/src/index.ts:94`](../packages/sandbox/sandbox-policy/src/index.ts)
+- `source`: [`packages/sandbox/sandbox-policy/src/index.ts:119`](../packages/sandbox/sandbox-policy/src/index.ts)
 
 ```ts config-catalog
 /**
@@ -2976,16 +2976,18 @@ export interface Config {
   /** File-sandbox mode a session starts from (default: `read-only`). */
   mode?: SandboxMode
   /**
-   * Absolute fallback root for agentless calls and sessions without a cwd (default:
-   * `process.cwd()`). Normal agent calls use their session cwd instead.
+   * Absolute fallback root for agentless calls and sessions without a recorded
+   * directory (default: `process.cwd()`). Normal agent calls use their
+   * session's workspace root instead.
    */
   workspaceRoot?: string
   /**
    * Extra physical absolute directories that `workspace-write` may also write under
-   * (default: none). The supervisor names them explicitly; there is no
-   * automatic repository or gitfile discovery. Entries are execution-world
-   * paths: this service validates absoluteness and detaches the list, while
-   * the enforcing host rejects missing, non-directory, or symlinked paths. They grant nothing under
+   * (default: none). The supervisor names them explicitly; the Git
+   * administration directories of a linked checkout are derived separately
+   * and need no entry here. Entries are execution-world paths: this service
+   * validates absoluteness and detaches the list, while the enforcing host
+   * rejects missing, non-directory, or symlinked paths. They grant nothing under
    * `read-only`.
    */
   additionalWritableRoots?: string[]
@@ -4861,7 +4863,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-workspace-changes`
 
 - `inject`: `subprocess` · `fs`
-- `source`: [`packages/deliverables/workspace-changes/src/index.ts:34`](../packages/deliverables/workspace-changes/src/index.ts)
+- `source`: [`packages/deliverables/workspace-changes/src/index.ts:35`](../packages/deliverables/workspace-changes/src/index.ts)
 
 ```ts config-catalog
 /** Snapshot, capture, and comparison bounds. Invalid values fail plugin load. */

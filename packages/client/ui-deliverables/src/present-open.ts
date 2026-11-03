@@ -1,7 +1,7 @@
 /** Serve change summaries and comparisons, and open declared or changed workspace files verified by the viewed Session's filesystem. */
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-api-session-controller'
-import type {} from '@deepseek-ai/dsh-api-workspace-files'
+import { resolveWorkspaceFileScope } from '@deepseek-ai/dsh-api-workspace-files'
 import type {} from '@deepseek-ai/dsh-fs'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import { remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
@@ -112,14 +112,13 @@ async function handlePresentOpen(ctx: Context, request: Request): Promise<Respon
   try {
     const read = await readTarget(ctx, request, id, seq)
     if (read instanceof Response) return read
-    const { target, session } = read
+    const { target } = read
     const file = target.type === 'deliverables/presented' && isPresentedData(target.data) ? target.data.files[index] : undefined
     if (!isPresentedFile(file)) return new Response('Presented file not found in this Session result.', { status: 404 })
     request.signal.throwIfAborted()
-    const { absolutePath: path } = await ctx.workspaceFiles.stat({
-      sessionId: id as SessionId,
-      workspaceRoot: session.cwd ?? ctx.sandboxPolicy.workspaceRoot,
-    }, file.path, request.signal)
+    const scope = await resolveWorkspaceFileScope(ctx, id as SessionId, request.signal)
+    if (scope === undefined) return new Response('Presented file Session not found.', { status: 404 })
+    const { absolutePath: path } = await ctx.workspaceFiles.stat(scope, file.path, request.signal)
     return await openVerified(ctx, request, path, action)
   } catch (error: unknown) {
     request.signal.throwIfAborted()
@@ -127,7 +126,7 @@ async function handlePresentOpen(ctx: Context, request: Request): Promise<Respon
   }
 }
 
-/** The summary one `workspace/changes` event announced, without the Host working directory; 404 once the Host no longer serves it. */
+/** The summary one `workspace/changes` event announced, without the Host workspace root; 404 once the Host no longer serves it. */
 function handleChangesSummary(ctx: Context, request: Request): Response {
   const query = new URL(request.url).searchParams
   const id = query.get('sessionId')
@@ -175,7 +174,7 @@ async function handleChangesOpen(ctx: Context, request: Request): Promise<Respon
     if (!ctx.sessionController.workspaceDesktop().available) return new Response('Host desktop unavailable.', { status: 409 })
     const changes = ctx.workspaceChanges.summary(id, seq)
     if (changes === undefined) return new Response('Change summary unavailable.', { status: 404 })
-    const workspaceRoot = changes.cwd
+    const workspaceRoot = changes.root
     const file = changes.files[index]
     if (file === undefined) return new Response('Changed file not found in this summary.', { status: 404 })
     const { absolutePath: path } = await ctx.workspaceFiles.stat({ sessionId: id, workspaceRoot }, file.path, request.signal)

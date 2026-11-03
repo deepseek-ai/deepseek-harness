@@ -9,6 +9,7 @@ import type {} from '@deepseek-ai/dsh-api-workspace-files/remote'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-browser/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { OpenInAppController } from './controller.ts'
+import { selectSessionRoot } from '@deepseek-ai/dsh-api-session-controller/client/directories'
 import { fileAddressFor, resolveWorkspacePath } from '@deepseek-ai/dsh-util-workspace-path'
 import type { OpenInAppPathController } from './open-path.ts'
 import type { OpenInAppKey } from './locales.ts'
@@ -62,7 +63,7 @@ export function registerContextMenus(
     id: 'open-in-app.directory', target: 'directory', order: 100,
     resolve: async ({ sessionId, path }, signal) => {
       await paths.load()
-      const cwd = ctx.sessions.list.getSnapshot().byId[sessionId]?.cwd
+      const cwd = selectSessionRoot(ctx.sessions.list.getSnapshot(), sessionId)
       const absolutePath = resolveWorkspacePath(cwd, path)
       signal.throwIfAborted()
       return [
@@ -88,7 +89,7 @@ export function registerContextMenus(
       const application = apps?.find(app => app.default)
       // The menu names a host, not the pane it was raised in: a floating pane is never a docked landing place.
       const openIn = (destination: 'sidebar' | 'float') => () => {
-        const cwd = ctx.sessions.list.getSnapshot().byId[sessionId]?.cwd
+        const cwd = selectSessionRoot(ctx.sessions.list.getSnapshot(), sessionId)
         ctx.sidebarRight.openResourceIn(sessionId, fileAddressFor(sessionId, cwd, path), {
           destination, ...(line === undefined ? {} : { params: { line } }),
         })
@@ -104,7 +105,7 @@ export function registerContextMenus(
           ...absolutePath === undefined || application === undefined ? {} : { run: () => open(absolutePath, 'open', application.id) } },
         { id: 'copyPath', icon: { key: 'open-in-app.copy' }, failureLabel: t('menu.copyFailed'), label: t('menu.copyPath'),
           run: async () => {
-            const cwd = ctx.sessions.list.getSnapshot().byId[sessionId]?.cwd
+            const cwd = selectSessionRoot(ctx.sessions.list.getSnapshot(), sessionId)
             await navigator.clipboard.writeText(absolutePath ?? resolveWorkspacePath(cwd, path))
             ctx.contextMenus.notify(t('menu.copied'), true)
           } },

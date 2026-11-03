@@ -15,9 +15,10 @@ import type {} from '@deepseek-ai/dsh-agent'
 import type { Session, SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-subprocess'
 import type {} from '@deepseek-ai/dsh-tools'
+import type {} from '@deepseek-ai/dsh-working-directory'
 import type { FsTarget } from '@deepseek-ai/dsh-fs'
 import { GitRunner } from './git.ts'
-import { TurnRecorder } from './recorder.ts'
+import { TurnRecorder, type TurnDirectories } from './recorder.ts'
 import type { WorkspaceChanges } from './types.ts'
 
 export type {
@@ -56,9 +57,23 @@ export const Config: z<Config> = z.object({
   diffTimeoutMs: z.number().default(100),
 })
 
+/** The original directory of a summarized Session: a top-level Session with a recorded directory. */
 function eligible(session: Session): string | undefined {
   const { cwd, origin, delegationDepth } = session.header
   return origin === 'subagent' || (delegationDepth ?? 0) > 0 ? undefined : cwd
+}
+
+/**
+ * The directories a turn starts from: the Session's current directory, which
+ * locates the repository, and its workspace root, which listed paths are
+ * relative to. Without the working-directory service both are the original
+ * project.
+ */
+function directoriesOf(ctx: Context, session: Session, original: string): TurnDirectories {
+  const directories = ctx.get('workingDirectory')
+  return directories === undefined
+    ? { cwd: original, root: original }
+    : { cwd: directories.get(session), root: directories.rootOf(session) }
 }
 
 /**
@@ -129,10 +144,10 @@ export function apply(ctx: Context, config: Config): void {
     })
     return runner
   }
-  const recorderFor = (session: Session, cwd: string): TurnRecorder => {
+  const recorderFor = (session: Session, original: string): TurnRecorder => {
     let recorder = recorders.get(session)
     if (recorder === undefined) {
-      recorder = new TurnRecorder(session, cwd, {
+      recorder = new TurnRecorder(session, () => directoriesOf(ctx, session, original), {
         git: gitRunner(), tempRoot: tmpdir(), maxFiles: config.maxFiles,
         maxFileBytes: config.maxFileBytes, diffTimeoutMs: config.diffTimeoutMs,
         warn: (message) => { ctx.logger.warn(message) },
@@ -144,8 +159,8 @@ export function apply(ctx: Context, config: Config): void {
   }
   ctx.on('session/event', (session, event) => {
     if (event.type === 'turn/start') {
-      const cwd = eligible(session)
-      if (cwd !== undefined) recorderFor(session, cwd).start(event.data.turn)
+      const original = eligible(session)
+      if (original !== undefined) recorderFor(session, original).start(event.data.turn)
       return
     }
     if (event.type === 'tool/result') recorders.get(session)?.observe(event)

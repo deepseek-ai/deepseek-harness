@@ -55,7 +55,7 @@ kind: "package-reference"
 <a id="the-tree"></a>
 ## 树
 
-根是会话的工作目录，读自 `useSessions().byId[sessionId].cwd`。`/` 和 Windows 盘根等文件系统根路径均可作为树的根。每一层以绝对路径为键；子路径是父路径以 `/` 拼上条目名。一层在首次展开时经 `@deepseek-ai/dsh-api-workspace-files` 命名空间的 `remote.workspaceFiles.list(sessionId, absolutePath)` 列出。各行由[目录树 Factory](#tree-factory) 绘制并排序；`workspace-tree.ts` 传入每个已列出的条目，名字取目录列表中的拼写，类型作为 `meta.kind`，根的键去掉末尾分隔符，并传入已本地化的失败行。Factory 自行从 files locale 读取文案。dotfiles 与其他条目一样显示。
+根是会话的工作区根，用 `selectSessionRoot` 从列表快照选出：投影的 `workspaceRoot`，否则为 header 目录。`/` 和 Windows 盘根等文件系统根路径均可作为树的根。每一层以绝对路径为键；子路径是父路径以 `/` 拼上条目名。一层在首次展开时经 `@deepseek-ai/dsh-api-workspace-files` 命名空间的 `remote.workspaceFiles.list(sessionId, absolutePath)` 列出。各行由[目录树 Factory](#tree-factory) 绘制并排序；`workspace-tree.ts` 传入每个已列出的条目，名字取目录列表中的拼写，类型作为 `meta.kind`，根的键去掉末尾分隔符，并传入已本地化的失败行。Factory 自行从 files locale 读取文案。dotfiles 与其他条目一样显示。
 
 | 条目类型 | 行 |
 |---|---|
@@ -95,7 +95,7 @@ kind: "package-reference"
 
 <a id="known-limitations-and-deferred-work"></a>
 - **只有列目录。**没有搜索、产物过滤、拖拽或重命名。
-- **只有一个根。**树以会话工作目录为根；没有办法浏览到它之上，而 Host 本来也拒绝工作区根之外的路径。
+- **只有一个根。**树以会话工作区根为根；没有办法浏览到它之上，而 Host 本来也拒绝工作区根之外的路径。
 
 <a id="dev-note"></a>
 ### 开发备注

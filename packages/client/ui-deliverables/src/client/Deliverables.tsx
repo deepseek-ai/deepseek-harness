@@ -1,4 +1,5 @@
 /** The changed-files card, shown only while the Host serves the turn's summary, and explicitly declared files for a closing turn. */
+import { selectSessionRoot } from '@deepseek-ai/dsh-api-session-controller/client/directories'
 import { useEffect, useState } from 'react'
 import type { TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { Button, IconChevronDownOutlineRegular, IconChevronUpOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -74,7 +75,7 @@ export function Deliverables({
   const { getTriggerProps } = useContextMenu()
   const [expanded, setExpanded] = useState(false)
   const showCodeDiff = useShowCodeDiff(value => value)
-  const cwd = useSessions(state => state.byId[sessionId]?.cwd)
+  const workspaceRoot = useSessions(state => selectSessionRoot(state, sessionId))
   const states = usePresentedOpen(value => value)
   const host = usePresentedHost(value => value)
   const announced = showCodeDiff ? matched.changes : null
@@ -93,7 +94,7 @@ export function Deliverables({
     if (host === null) void reloadPresentedHost()
   }, [host, reloadPresentedHost])
   return <>
-    {changes !== null && <ChangedFiles changes={changes} cwd={cwd} t={t}
+    {changes !== null && <ChangedFiles changes={changes} workspaceRoot={workspaceRoot} t={t}
       sessionId={sessionId} useChangesDiff={useChangesDiff} loadChangesDiff={loadChangesDiff}
       openReview={(index) => { openChangesReview({ sessionId, seq: changes.seq, turn: changes.turn }, index) }} />}
     {matched.presented.length > 0 && <div
@@ -106,7 +107,7 @@ export function Deliverables({
       </div>}
       {host !== null && host !== 'error' && !host.available && <span className={css.hostStatus}>{t('presented.unavailable')}</span>}
       <div className={css.presented} data-presented-files-row data-single={matched.presented.length === 1 ? true : undefined}>
-        {presented.map(file => <PresentedFileCard key={`${file.seq}:${file.index}`} file={file} cwd={cwd}
+        {presented.map(file => <PresentedFileCard key={`${file.seq}:${file.index}`} file={file} workspaceRoot={workspaceRoot}
           phase={states[presentedFileUrl(sessionId, file.seq, file.index)]}
           host={host === 'error' ? null : host} t={t}
           onPreview={() => { openFile(file.path) }}

@@ -190,11 +190,15 @@ export class WorktreeService extends Service {
     const path = this.ctx.fs.processPath(destination)
     if (await this.ctx.fs.lstat(path, undefined, signal) !== undefined) throw new Error(`worktree path already exists: ${path}`)
     try {
-      await this.prepareDirectory(policy, repositoryRoot, poolPath, path, signal)
-      await run(repositoryRoot, ['--work-tree', repositoryRoot, 'worktree', 'add', '--no-checkout', '-b', branch, '--', path, baseCommit])
-      const overrides = await filterOverrides(run, path)
+      // A linked source checkout writes its shared Git directory outside the root; the policy grants it before the first write.
+      await this.ctx.sandboxPolicy.prepare(agent.session, signal)
+      const writing = this.ctx.sandboxPolicy.resolve({ session: agent.session })
+      const write = this.gitRunner(writing, signal)
+      await this.prepareDirectory(writing, repositoryRoot, poolPath, path, signal)
+      await write(repositoryRoot, ['--work-tree', repositoryRoot, 'worktree', 'add', '--no-checkout', '-b', branch, '--', path, baseCommit])
+      const overrides = await filterOverrides(write, path)
       onPhase?.('checkout')
-      await run(path, ['--work-tree', path, 'reset', '--hard', '--no-recurse-submodules', baseCommit], undefined, overrides)
+      await write(path, ['--work-tree', path, 'reset', '--hard', '--no-recurse-submodules', baseCommit], undefined, overrides)
       const { cwd: canonicalPath } = await this.ctx.workingDirectory.relocate(agent, path, { signal })
       return { path: canonicalPath, branch, baseCommit, repositoryRoot }
     } catch (error) {
@@ -209,9 +213,11 @@ export class WorktreeService extends Service {
     onPhase: ((phase: CreateWorktreePhase) => void) | undefined,
   ): Promise<RestoredWorktree> {
     onPhase?.('prepare')
+    if (await this.ctx.fs.lstat(path, undefined, signal) !== undefined) throw new Error(`worktree path already exists: ${path}`)
+    // The shared Git directory of a linked source checkout joins the policy before the registration is rewritten.
+    await this.ctx.sandboxPolicy.prepare(agent.session, signal)
     const policy = this.ctx.sandboxPolicy.resolve({ session: agent.session })
     const run = this.gitRunner(policy, signal)
-    if (await this.ctx.fs.lstat(path, undefined, signal) !== undefined) throw new Error(`worktree path already exists: ${path}`)
     const root = await this.ctx.fs.resolve(repositoryRoot, { signal })
     const pool = await this.ctx.fs.resolve(this.config.directory, { cwd: repositoryRoot, signal })
     const target = await this.ctx.fs.resolve(path, { cwd: repositoryRoot, signal })

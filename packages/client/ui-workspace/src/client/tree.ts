@@ -6,6 +6,7 @@
 import {
   type SessionListState, type SessionSearchResultItem, type SessionSummary,
 } from '@deepseek-ai/dsh-api-session-controller/client'
+import { selectSessionRoot } from '@deepseek-ai/dsh-api-session-controller/client/directories'
 import type { WorkspaceId, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type {
   SessionStatusSnapshot,
@@ -59,7 +60,7 @@ export interface SessionNode {
   /** In the registry-global archive set: shown grayed in place and not openable. */
   archived: boolean
   updatedAt: number
-  /** Session working directory; absent when the Host reports none or an empty path. */
+  /** Workspace root the Session works in; absent when the Host reports none or an empty path. */
   cwd?: string
 }
 
@@ -394,6 +395,8 @@ function sessionNode(
 ): SessionNode {
   const status = statuses.get(s.id)
   const pendingInteraction = visiblePendingKind(status?.pendingInteraction?.kind)
+  // Rows show the checkout the Session works in; grouping stays with the header's original project.
+  const root = selectSessionRoot(list, s.id)
   return {
     id: s.id,
     title: sessionTitle(s),
@@ -404,7 +407,7 @@ function sessionNode(
     pinned: !archived.has(s.id) && pinned.has(s.id),
     archived: archived.has(s.id),
     updatedAt: s.updatedAt,
-    ...(s.cwd === undefined || s.cwd === '' ? {} : { cwd: s.cwd }),
+    ...(root === undefined || root === '' ? {} : { cwd: root }),
     ...(pendingInteraction === undefined ? {} : { pendingInteraction }),
   }
 }

@@ -11,7 +11,7 @@ import { SessionSkillCatalog } from '../src/skill-catalog.ts'
 
 function observation(
   sessionId: SessionId,
-  options: { readonly cwd?: string; readonly workingDirectory?: string | null; readonly agentPreset?: string } = {},
+  options: { readonly cwd?: string; readonly workspaceRoot?: string | null; readonly agentPreset?: string } = {},
 ): SessionObservation {
   const events = Object.freeze([])
   const lease = (): SessionObservation => ({
@@ -30,7 +30,7 @@ function observation(
       asOfSeq: -1,
       values: {
         ...options.agentPreset === undefined ? {} : { agentPreset: options.agentPreset },
-        ...options.workingDirectory === undefined ? {} : { workingDirectory: options.workingDirectory },
+        ...options.workspaceRoot === undefined ? {} : { workspaceRoot: options.workspaceRoot },
       },
     },
     retain: lease,
@@ -49,10 +49,10 @@ async function context(): Promise<Context> {
 }
 
 describe('SessionSkillCatalog', () => {
-  it('reads a moved cold Session catalog from its recorded current directory without resuming an Agent', async () => {
+  it('reads a moved cold Session catalog from its recorded workspace root without resuming an Agent', async () => {
     const ctx = await context()
     const sessionId = SessionId('cold-skills')
-    const observed = observation(sessionId, { cwd: '/cold/original', workingDirectory: '/cold/project' })
+    const observed = observation(sessionId, { cwd: '/cold/original', workspaceRoot: '/cold/project' })
     const dispose = vi.spyOn(observed, Symbol.dispose)
     const observeSession = vi.fn(() => Promise.resolve(observed))
     ctx.provide('sessionQuery', { observeSession } as never)
@@ -93,18 +93,18 @@ describe('SessionSkillCatalog', () => {
   })
 
   it.each([
-    { cwd: undefined, workingDirectory: '/cold/current', expected: '/cold/current' },
-    { cwd: '/cold/original', workingDirectory: null, expected: '/cold/original' },
-    { cwd: undefined, workingDirectory: null, expected: '/catalog/default' },
-    { cwd: undefined, workingDirectory: undefined, expected: '/catalog/default' },
-  ])('resolves cold directory metadata $cwd / $workingDirectory to $expected without filesystem checks', async ({ cwd, workingDirectory, expected }) => {
+    { cwd: undefined, workspaceRoot: '/cold/current', expected: '/cold/current' },
+    { cwd: '/cold/original', workspaceRoot: null, expected: '/cold/original' },
+    { cwd: undefined, workspaceRoot: null, expected: '/catalog/default' },
+    { cwd: undefined, workspaceRoot: undefined, expected: '/catalog/default' },
+  ])('resolves cold directory metadata $cwd / $workspaceRoot to $expected without filesystem checks', async ({ cwd, workspaceRoot, expected }) => {
     const ctx = await context()
     try {
       const sessionId = SessionId('cold-directory-fallback')
       ctx.provide('sessionQuery', {
         observeSession: () => Promise.resolve(observation(sessionId, {
           ...cwd === undefined ? {} : { cwd },
-          ...workingDirectory === undefined ? {} : { workingDirectory },
+          ...workspaceRoot === undefined ? {} : { workspaceRoot },
         })),
       } as never)
       const list = vi.fn(() => Promise.resolve([]))
@@ -150,7 +150,8 @@ describe('SessionSkillCatalog', () => {
         modelInvocable: false,
       }],
     })
-    expect(scopedList).toHaveBeenCalledWith({ cwd: '/live/current', scope: agent })
+    // The live catalog reads the Session's workspace root after the directory was validated, not the validated cursor.
+    expect(scopedList).toHaveBeenCalledWith({ cwd: '/live/project', scope: agent })
     expect(ensureDirectory).toHaveBeenCalledWith(agent, expect.any(AbortSignal))
     expect(session.header.cwd).toBe('/live/project')
     expect(acquireScope).not.toHaveBeenCalled()
