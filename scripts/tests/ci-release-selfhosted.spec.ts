@@ -233,6 +233,9 @@ it('skips installation and signing on a helper match and exports the original pr
   expect(expensive).toHaveLength(4)
   expect(job.steps.find(step => step.name === 'Install locked dependencies')?.run)
     .toBe('pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile')
+  const build = job.steps.find(step => step.name === 'Build and verify notarized applications')!
+  expect(build.run).toContain('node --import tsx/esm scripts/cua-helper/package.ts --out dist/cua-helper')
+  expect(build.run).not.toContain('pnpm exec')
   for (const step of expensive) {
     expect(job.steps.indexOf(select)).toBeLessThan(job.steps.indexOf(step))
     expect(evaluate(step.if!, { 'steps.retained.outputs.artifact-id': '456' })).toBe(false)

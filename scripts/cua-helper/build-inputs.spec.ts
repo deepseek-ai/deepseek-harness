@@ -114,7 +114,7 @@ it('resolves the configured signing file without installing desktop dependencies
 it('loads fingerprinting and selection under plain Node with no node_modules directory', () => {
   const f = fixture()
   for (const file of ['scripts/cua-helper/build-inputs.ts', 'scripts/cua-helper/select-artifact.ts',
-    'apps/desktop/scripts/desktop-file-settings.mjs', 'apps/desktop/scripts/desktop-release-environment.mjs']) {
+    'apps/desktop/scripts/desktop-file-settings.mjs', 'apps/desktop/scripts/desktop-release-environment.mjs', 'scripts/release/process.ts']) {
     mkdirSync(dirname(join(f.root, file)), { recursive: true })
     copyFileSync(resolve(file), join(f.root, file))
   }
@@ -219,7 +219,7 @@ it.skipIf(process.platform === 'win32').each(['match', 'miss', 'api failure', 'm
   'runs the plain-Node selector entry with %s and no node_modules directory', (scenario) => {
     const f = fixture()
     for (const file of ['scripts/cua-helper/build-inputs.ts', 'scripts/cua-helper/select-artifact.ts',
-      'apps/desktop/scripts/desktop-file-settings.mjs', 'apps/desktop/scripts/desktop-release-environment.mjs']) {
+      'apps/desktop/scripts/desktop-file-settings.mjs', 'apps/desktop/scripts/desktop-release-environment.mjs', 'scripts/release/process.ts']) {
       mkdirSync(dirname(join(f.root, file)), { recursive: true })
       copyFileSync(resolve(file), join(f.root, file))
     }
@@ -269,3 +269,15 @@ else if(path in data) console.log(JSON.stringify(data[path])); else {console.err
     }
   },
 )
+
+it('matches Git blobs when tracked attributes require CRLF checkout bytes', () => {
+  const f = fixture()
+  const path = join(f.root, 'apps/desktop/scripts/fixture.cmd')
+  writeFileSync(join(f.root, '.gitattributes'), '*.cmd text eol=crlf\n')
+  writeFileSync(path, '@echo off\necho fixture\n')
+  const previous = producerSnapshot(f.root)
+  writeFileSync(path, '@echo off\r\necho fixture\r\n')
+  expect(cuaHelperSourceMatches(f.root, repository, previous.commit, previous.api)).toBe(true)
+  writeFileSync(join(f.root, '.gitattributes'), '*.cmd text eol=lf\n')
+  expect(cuaHelperSourceMatches(f.root, repository, previous.commit, previous.api)).toBe(false)
+})

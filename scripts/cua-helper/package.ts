@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
+import { isEntry } from '../release/process.ts'
 import { parseArgs } from 'node:util'
 import { execa } from 'execa'
 import { create, extract } from 'tar'
@@ -104,4 +105,4 @@ async function main(): Promise<void> {
   journal.finish(true)
 }
 
-if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.filename) await main()
+if (isEntry(import.meta.url)) await main()

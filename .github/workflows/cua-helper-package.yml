@@ -91,7 +91,7 @@ jobs:
           CUA_EXPECTED_BUILD_KEY: ${{ steps.build-inputs.outputs.build-key }}
         run: |
           mkdir -p dist
-          pnpm exec tsx scripts/cua-helper/package.ts --out dist/cua-helper
+          node --import tsx/esm scripts/cua-helper/package.ts --out dist/cua-helper
       - uses: actions/upload-artifact@v7.0.1
         if: steps.retained.outputs.artifact-id == ''
         id: upload

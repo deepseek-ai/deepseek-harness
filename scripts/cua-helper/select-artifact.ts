@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { isEntry } from '../release/process.ts'
 import { cuaHelperSourceMatches } from './build-inputs.ts'
 
 const workflows = ['cua-helper-package.yml', 'release-publish.yml'] as const
@@ -117,7 +118,7 @@ function githubJson(path: string, paginate = false): unknown {
   return JSON.parse(output)
 }
 
-if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.filename) {
+if (isEntry(import.meta.url)) {
   const env = process.env
   if (!env.GITHUB_REPOSITORY || !env.GITHUB_OUTPUT || !env.GITHUB_STEP_SUMMARY || !env.CUA_BUILD_KEY) {
     throw new Error('CUA reuse: Actions context and CUA_BUILD_KEY are required')

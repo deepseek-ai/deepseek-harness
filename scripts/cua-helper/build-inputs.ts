@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { appendFileSync, lstatSync, readFileSync } from 'node:fs'
 import { isAbsolute, join, resolve } from 'node:path'
+import { isEntry } from '../release/process.ts'
 import { readDesktopPackageSettings } from '../../apps/desktop/scripts/desktop-file-settings.mjs'
 import { resolveMacOSSigningEnvironment } from '../../apps/desktop/scripts/desktop-release-environment.mjs'
 
@@ -12,18 +13,18 @@ const sourceDirectories = [
 ]
 const sourceFiles = new Set([
   '.github/workflows/cua-helper-package.yml', '.github/workflows/release-publish.yml',
-  'package.json', 'scripts/package.json', 'apps/package.json', 'apps/desktop/package.json',
+  'package.json', 'scripts/package.json', 'apps/package.json', 'apps/desktop/package.json', 'scripts/release/process.ts',
   'pnpm-lock.yaml', 'pnpm-workspace.yaml', '.npmrc', '.pnpmfile.cjs', '.pnpmfile.mjs',
 ])
 
 function isSourceFile(path: string): boolean {
-  return sourceFiles.has(path) || /^(?:(?:apps|apps\/desktop|scripts)\/)?tsconfig[^/]*\.json$/u.test(path)
+  return sourceFiles.has(path) || path === '.gitattributes' || path.endsWith('/.gitattributes') || /^(?:(?:apps|apps\/desktop|scripts)\/)?tsconfig[^/]*\.json$/u.test(path)
     || path.split('/').includes('node_modules')
     || sourceDirectories.some(directory => path.startsWith(`${directory}/`))
 }
 
 function trackedSources(root: string): string[] {
-  const files = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' })
+  const files = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })
     .split('\0').filter(isSourceFile).sort()
   for (const required of ['packages/experimental/cua-macos/native/Package.swift', 'scripts/cua-helper/package.ts',
     'package.json', 'pnpm-lock.yaml']) {
@@ -101,6 +102,9 @@ export function cuaHelperSourceMatches(root: string, repository: string, commit:
     const local = sourceFile(root, file)
     if (remote.mode !== (local.executable ? '100755' : '100644')) return false
     if (gitBlobHash(local.bytes) === remote.sha) continue
+    const canonical = execFileSync('git', ['hash-object', `--path=${file}`, '--stdin'],
+      { cwd: root, input: local.bytes, encoding: 'utf8' }).trim()
+    if (canonical === remote.sha) continue
     if (file !== 'package.json' && !file.endsWith('/package.json')) return false
     const blob = api(`repos/${repository}/git/blobs/${remote.sha}`)
     assert(blob && typeof blob === 'object' && 'sha' in blob && blob.sha === remote.sha
@@ -153,7 +157,7 @@ export function cuaHelperBuildKey(source: string, environment: NodeJS.ProcessEnv
   return createHash('sha256').update(JSON.stringify(configuration)).digest('hex')
 }
 
-if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.filename) {
+if (isEntry(import.meta.url)) {
   const env = process.env
   if (!env.GITHUB_OUTPUT || !env.GITHUB_STEP_SUMMARY) throw new Error('CUA build inputs: Actions context required')
   const root = resolve(import.meta.dirname, '../..')
