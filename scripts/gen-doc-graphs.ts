@@ -487,7 +487,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     mode: 'seam',
     implementations: ['credentials-local'],
     consumers: ['api-settings-controller', 'llm-deepseek', 'llm-pi-ai'],
-    note: 'Configuration carries references to secrets; providers own the values. Consumers resolve per operation, so a rotated credential reaches the very next request; the settings controller exposes value-free metadata, writes, and owner-only reads of stored keys.',
+    note: 'Configuration carries references to secrets; providers own the values. Consumers resolve per operation, so a rotated credential reaches the very next request; the settings controller exposes value-free views and write-only storage.',
   },
   {
     key: 'deepseekAccount',

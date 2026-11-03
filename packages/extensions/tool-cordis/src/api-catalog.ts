@@ -843,12 +843,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the value and its source, or `undefined` while unconfigured.',
       },
       {
-        signature: 'abstract readStored(ref: CredentialRef): Promise<string | undefined>',
-        description: 'Read the provider-managed value without consulting environment fallbacks.',
-        parameters: [{ name: 'ref', description: 'the reference to read.' }],
-        returns: 'the stored secret, or undefined when no non-empty value is stored.',
-      },
-      {
         signature: 'abstract describe(ref: CredentialRef): Promise<CredentialInfo>',
         description: 'Describe one reference for configuration surfaces without exposing the value.',
         parameters: [{ name: 'ref', description: 'the reference to describe.' }],
@@ -898,7 +892,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'credentialsController',
     summary: 'Host service backing the generated `ctx.remote.credentials` namespace.',
-    description: 'Host service backing the generated `ctx.remote.credentials` namespace. It carries every wire obligation the credential seam itself does not: the batch fan-out bound, the field-by-field view projection, the reference-grammar guard, and the refusal mapping. Metadata reads exclude secrets; readStored returns only a provider-managed value for an explicitly opened editor.',
+    description: 'Host service backing the generated `ctx.remote.credentials` namespace. It carries every wire obligation the credential seam itself does not: the batch fan-out bound, the field-by-field view projection, the reference-grammar guard, and the refusal mapping. Secret values cross in one direction only — no method here returns one.',
     methods: [
       {
         signature: '@Remote async describe(refs: string[]): Promise<Record<string, CredentialInfo>>',
@@ -908,15 +902,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['RemoteError when the request is invalid or no credential provider is mounted.'],
       },
       {
-        signature: '@Remote async readStored(ref: string): Promise<string | undefined>',
-        description: 'Read one stored value for a credential editor, excluding environment fallbacks.',
-        parameters: [{ name: 'ref', description: 'reference name to read.' }],
-        returns: 'the stored secret, or undefined when the provider stores none.',
-        throws: ['RemoteError for a non-owner Remote caller, an invalid reference, or an absent provider.'],
-      },
-      {
         signature: '@Remote async set(ref: string, value: string): Promise<void>',
-        description: 'Store one value from a configuration surface.',
+        description: 'Store one value from a configuration surface. The value crosses the wire in this direction only: no read path returns it.',
         parameters: [{ name: 'ref', description: 'reference name to store under.' }, { name: 'value', description: 'the non-empty secret value.' }],
         throws: ['RemoteError when the request is invalid, no provider is mounted, or the provider refuses the write.'],
       },
