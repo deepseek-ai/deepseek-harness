@@ -245,7 +245,7 @@ describe('dsh-tool-team', () => {
     expect(teamTools(leadAssembly)).toEqual(TEAM_TOOLS)
     const leadPrompt = renderPrompt(leadAssembly)
     expect(leadPrompt).toContain('A shared task board is available in this session')
-    expect(leadPrompt).toContain('Task readiness does not start an agent')
+    expect(leadPrompt).toContain('Task readiness never starts an owner')
     expect(leadPrompt).toContain('Task changes do not end wait_agent calls')
     expect(renderContextSnapshot(leadAssembly)).toContain(leadIdentity(lead))
     expect((await ctx.systemPrompt.assemble()).contexts.some(context => context.name === 'team:identity')).toBe(false)
@@ -819,6 +819,7 @@ describe('dsh-tool-team', () => {
       const system = request.messages.find(message => message.role === 'system')
       const prompt = system?.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
       expect(prompt?.includes('A shared task board is available')).toBe(enabled)
+      expect(prompt?.includes('record expected write scopes on shared tasks')).toBe(enabled)
       expect(runtimeContextText(request)).toContain(leadIdentity(lead))
       const contexts = request.messages.findLast(message => message.source?.kind === 'runtime-context')?.source
       const initial = adapter.requests[0]!.messages.findLast(message => message.source?.kind === 'runtime-context')?.source

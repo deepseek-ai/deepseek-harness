@@ -152,9 +152,11 @@ describe('session projection summary keys', () => {
       session.append('turn/start', { turn: 1 })
 
       // The derived set is passed as a set: no key-list copy inside the read.
+      // oxlint-disable-next-line typescript/no-deprecated -- This case pins the deprecated cached face itself.
       expect(registry.cachedSnapshot(session, registry.summaryKeys())?.values).toEqual({
         'test/summary-kept': { text: 'turn-1' },
       })
+      // oxlint-disable-next-line typescript/no-deprecated -- This case pins the deprecated cached face itself.
       expect(registry.cachedSnapshot(session)?.values).toEqual({
         'test/summary-kept': { text: 'turn-1' },
         'test/summary-excluded': 1,
@@ -173,7 +175,9 @@ describe('session projection summary keys', () => {
       session.append('turn/start', { turn: 1 })
 
       expect([...registry.summaryKeys()]).toEqual([])
+      // oxlint-disable-next-line typescript/no-deprecated -- This case pins the deprecated cached face itself.
       expect(registry.cachedSnapshot(session, [])).toBeUndefined()
+      // oxlint-disable-next-line typescript/no-deprecated -- This case pins the deprecated cached face itself.
       expect(registry.cachedSnapshot(session)?.values).toEqual({
         'test/summary-excluded': 1,
         'test/summary-excluded-nullable': ['turn-1'],
@@ -199,6 +203,7 @@ describe('session projection summary keys', () => {
     try {
       await registry.register(keptUnit())
       const session = ctx.sessions.create(SessionId('summary-unmaterialized'), { meta: { cwd: '/workspace' } })
+      // oxlint-disable-next-line typescript/no-deprecated -- This case pins the deprecated cached face itself.
       expect(registry.cachedSnapshot(session, registry.summaryKeys())?.values).toEqual({
         'test/summary-kept': null,
       })

@@ -347,6 +347,22 @@ it('retains a rejected Loader entry for retry instead of creating an orphan sibl
   expect(entry.fiber?.state).toBe(2)
 })
 
+it('logs a row whose Loader creation rejects at startup and leaves it inactive for the boot audit', async () => {
+  let broken = true
+  const b = await bench(graph(row('a'), row('b')), { a: () => broken ? { default: 'invalid' } : { apply() {} }, b: () => ({ apply() {} }) }, false)
+  const error = vi.spyOn(b.ctx.logger, 'error').mockImplementation(() => {})
+  await b.modules.entries.start(b.ctx.loader, b.modules.manifest)
+  const entries = new Map([...b.ctx.loader.entries()].map(entry => [entry.options.name, entry]))
+  expect(error).toHaveBeenCalledOnce()
+  expect(error.mock.calls[0]?.[0]).toHaveProperty('message', expect.stringContaining('invalid plugin'))
+  expect(entries.get('a')?.fiber).toBeUndefined()
+  expect(entries.get('b')?.fiber?.state).toBe(2)
+  broken = false
+  await b.modules.entries.retry()
+  expect([...b.ctx.loader.entries()]).toHaveLength(2)
+  expect(entries.get('a')?.fiber?.state).toBe(2)
+})
+
 it('reports Loader import failures and recovers the same entry after the importer recovers', async () => {
   const b = await bench(graph(), { a: () => ({ apply() {} }) })
   let broken = true

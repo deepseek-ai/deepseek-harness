@@ -3,8 +3,10 @@ import { Context } from '@deepseek-ai/cordis'
 import WebRuntime from '@deepseek-ai/dsh-web'
 import { DeepSeekFetchApiProvider, type DeepSeekFetchApiOptions } from '@deepseek-ai/dsh-web-deepseek-api'
 import * as webApiPlugin from '@deepseek-ai/dsh-web-deepseek-api'
+import { DSH_LAUNCH_ENVIRONMENT_KEY, createLaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
+import { customGuidance } from './guidance.ts'
 const fetchProvider = (options: DeepSeekFetchApiOptions) => new DeepSeekFetchApiProvider(() => options)
-const options = { apiKey: 'ds-key', baseURL: 'https://api.deepseek.test/api/v1/tools' }
+const options = { auth: { apiKey: 'ds-key' }, baseURL: 'https://api.deepseek.test/api/v1/tools', guidance: customGuidance('fetch') }
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' }, ...init })
 }
@@ -39,21 +41,21 @@ describe('DeepSeek Fetch API', () => {
     await expect(fetchProvider(options).fetch({ url: 'https://example.com' }, AbortSignal.abort())).rejects.toMatchObject({ code: 'WEB_ABORTED' })
     expect(fetchMock).not.toHaveBeenCalled()
   })
-  it('names the shared API base in endpoint guidance', async () => {
+  it('names the Fetch settings in endpoint guidance', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ error: { message: 'not found' } }, { status: 404 })))
     await expect(fetchProvider(options).fetch({ url: 'https://example.com' })).rejects.toMatchObject({
       code: 'WEB_PROVIDER_ERROR',
       message: 'DeepSeek API error (HTTP 404): not found\n\n'
         + 'The web request used endpoint "https://api.deepseek.test/api/v1/tools/fetch". '
-        + 'Fetch endpoint configuration is separate from chat. If that endpoint is not intended, '
-        + 'guide the user to Plugins > Built-in plugin settings > Web search, where they can '
-        + 'change and save Search / Fetch API base URL. If that settings page is unavailable, the user can set '
-        + 'web-deepseek-api.baseURL to a trusted DeepSeek endpoint. Only the user should choose or change the endpoint.',
+        + 'Fetch sends the API key under web-deepseek-api.fetchApiKeyEnv to web-deepseek-api.fetchBaseURL. If that '
+        + 'endpoint is not intended, guide the user to correct web-deepseek-api.fetchBaseURL and '
+        + 'web-deepseek-api.fetchApiKeyEnv, or to remove both so Fetch uses the DeepSeek credential of the conversation. '
+        + 'Only the user should choose or change the endpoint.',
     })
   })
   it('is available only with a credential source and a parseable base', () => {
     expect(fetchProvider(options).available()).toBe(true)
-    expect(fetchProvider({ ...options, apiKey: '' }).available()).toBe(false)
+    expect(fetchProvider({ ...options, auth: { apiKey: '' } }).available()).toBe(false)
     expect(fetchProvider({ ...options, baseURL: 'not a url' }).available()).toBe(false)
   })
   it('unregisters both providers with its plugin fiber', async () => {
@@ -61,7 +63,8 @@ describe('DeepSeek Fetch API', () => {
     const ctx = new Context()
     try {
       await ctx.plugin(WebRuntime, { searchProvider: 'deepseek-search-api', fetchProvider: 'deepseek-fetch-api' })
-      const fiber = await ctx.plugin(webApiPlugin, { apiKey: 'ds-key', baseURL: options.baseURL })
+      ctx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, createLaunchEnvironmentSnapshot([{ source: 'process', values: { DEEPSEEK_API_KEY: 'ds-key' } }]))
+      const fiber = await ctx.plugin(webApiPlugin, { fetchBaseURL: options.baseURL })
       await expect(ctx.web.fetch({ url: 'https://example.com' })).resolves.toMatchObject({ body: { content: 'body' } })
       await fiber.dispose()
       await expect(ctx.web.fetch({ url: 'https://example.com' })).rejects.toMatchObject({ code: 'WEB_PROVIDER_CONFIGURED_MISSING' })

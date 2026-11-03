@@ -2,7 +2,7 @@
 
 English | [中文](worktrees.zh.md)
 
-The experimental [`dsh-experimental-worktree`](../../packages/experimental/worktree/README.md) service provides `ctx.worktrees`. Its [`create_worktree`](../../packages/experimental/tool-worktree/README.md) consumer creates a new Git branch and checkout, then selects it through the [working-directory service](working-directory.md). The [Git Worktrees optional bundle](../../packages/experimental/tool-worktree/README.md#use-this-package) loads both packages through the GUI plugin manager. It ships switched off; explicit compositions can also mount the two packages.
+The experimental [`dsh-experimental-worktree`](../../packages/experimental/worktree/README.md) service provides `ctx.worktrees`. Its [`create_worktree`](../../packages/experimental/tool-worktree/README.md) consumer creates a new Git branch and checkout, then selects it through the [working-directory service](working-directory.md). The [Change requests & worktrees bundle](../../packages/experimental/forge-bundle/README.md#use-this-package) loads both packages through the GUI plugin manager and ships switched off. Other profiles can select the [standalone worktree bundle](../../packages/experimental/tool-worktree/README.md#use-this-package) or mount the two packages explicitly.
 
 ## Creation and retention
 

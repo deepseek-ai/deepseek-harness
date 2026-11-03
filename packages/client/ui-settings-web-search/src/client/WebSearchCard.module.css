@@ -1,16 +1,89 @@
-.feature {
-  display: grid;
-  gap: 6px;
+/*
+ * Web search and fetch page: two provider sections, each a title and a menu
+ * with its hints. Under Search, the DeepSeek Search API shows its result count,
+ * and the legacy DeepSeek search its API key, base URL, and searches per
+ * request, in a gray panel. The sections are told apart by spacing and the
+ * panel; the only hairlines are the settings fields' dividers inside the panel.
+ */
+
+.section {
+  display: flex;
+  flex-direction: column;
 }
 
-.toggleRow {
+.section + .section {
+  margin-top: 32px;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.field {
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0 12px;
+}
+
+.selector {
+  display: inline-flex;
+  align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
+  width: 100%;
+  height: 34px;
+  padding: 0 12px;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-3);
+  font: inherit;
   font-size: 13px;
   line-height: 1.5;
   color: var(--dsw-alias-label-primary);
+  text-align: start;
+  cursor: pointer;
+}
+
+.selector:focus-visible {
+  outline: none;
+  border-color: var(--dsw-alias-state-business-primary);
+}
+
+.selector:disabled {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+}
+
+@media (hover: hover) {
+  .selector:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.selectorLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chevron {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* The gray panel holding a section's settings below its provider menu. */
+.panel {
+  display: flex;
+  flex-direction: column;
+  padding: 0 16px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-module-platform);
 }
 
 .hint {
@@ -18,6 +91,16 @@
   font-size: 12px;
   line-height: 1.5;
   color: var(--dsw-alias-label-tertiary);
+}
+
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-state-error-primary);
 }
 
 .link {

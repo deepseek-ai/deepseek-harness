@@ -3,6 +3,7 @@
 import type { ContentBlock, ImageBlock, LlmImageRequestBudget, ToolSchema, ToolUpdate, ToolHistory } from './types.ts'
 import type { RequestMessage } from './types.ts'
 import type { Message } from './message.ts'
+import type { MessageId } from './brand.ts'
 import type {
   AttachmentStore, FileAttachmentRef, ImageAttachmentRef, ImageMediaType, RequestImageAttachment,
 } from '@deepseek-ai/dsh-attachment'
@@ -378,11 +379,7 @@ function withoutDeveloperMessages(messages: readonly RequestMessage[]): readonly
   return retained.length === messages.length ? messages : retained
 }
 
-function toolDeclarations(
-  tools: readonly ToolSchema[] | undefined,
-  mode: ToolUpdate,
-  history: ToolHistory,
-): Map<string, ToolSchema> {
+function toolDeclarations(history: ToolHistory): Map<string, ToolSchema> {
   const declarations = new Map(history.tools.map(tool => [tool.name, tool]))
   for (const update of history.updates) {
     for (const tool of update.additions) {
@@ -393,28 +390,46 @@ function toolDeclarations(
     }
   }
 
-  switch (mode) {
-    case 'in-history':
-      // Removal blocks disable tools without discarding their historical definitions.
-      return declarations
-    case 'addition-only': {
-      // Without removal support, the declaration list must omit inactive tools.
-      const activeNames = new Set(tools?.map(tool => tool.name))
-      for (const name of declarations.keys()) {
-        if (!activeNames.has(name)) declarations.delete(name)
+  return declarations
+}
+
+/** Rebuild declarations on removals or additions to an empty set, where the request prefix changes. */
+function rebaseAdditionOnlyHistory(
+  history: ToolHistory,
+  messages: ReadonlyMap<MessageId, readonly ContentBlock[]>,
+): ToolHistory {
+  const available = new Map(history.tools.map(tool => [tool.name, tool]))
+  let baseline = history.tools
+  let retainedFrom = 0
+  for (const [index, update] of history.updates.entries()) {
+    const additions = new Map(update.additions.map(tool => [tool.name, tool]))
+    let reset = available.size === 0 && additions.size > 0
+    // Completeness was checked before projection; Session resolves every addition's definition.
+    for (const block of messages.get(update.messageId) as readonly ContentBlock[]) {
+      if (block.type === 'tool-addition') {
+        const { deferLoading: _loading, ...tool } = additions.get(block.toolName) as ToolSchema
+        available.set(tool.name, tool)
+      } else if (block.type === 'tool-removal') {
+        reset = true
+        available.delete(block.toolName)
       }
-      return declarations
     }
-    /* v8 ignore next 2 -- closed-union exhaustiveness guard */
-    default:
-      return assertNever(mode)
+    if (reset) {
+      baseline = [...available.values()]
+      retainedFrom = index + 1
+    }
   }
+  return retainedFrom === 0 ? history : { tools: baseline, updates: history.updates.slice(retainedFrom) }
 }
 
 /**
  * Construct provider declarations from session-folded history without changing logged active tools.
  * Unsupported routes and incomplete history use current declarations without developer updates.
- * Explicitly deferred baseline tools become available only after their first retained addition.
+ * Explicitly deferred declarations require an addition to activate them.
+ * A rebuild makes previously activated declarations immediate; unactivated declarations stay deferred.
+ * Addition-only routes rebuild when a tool is removed or tools are added to an empty set;
+ * deferred declarations count as existing tools.
+ * Later additions remain deferred and superseded tool blocks are omitted without dropping other content.
  * @param messages - complete request inputs, or the prefix selected for an auxiliary call.
  * @param tools - currently active tool schemas.
  * @param toolUpdate - the resolved route's update mode.
@@ -440,16 +455,18 @@ export function projectToolUpdates(
     // Current schemas alone cannot resolve definitions referenced by past updates.
     return { messages: withoutDeveloperMessages(messages), tools }
   }
-  const messageIds = new Set(messages.flatMap(message => message.role === 'developer' ? [message.id] : []))
-  if (history.updates.some(update => !messageIds.has(update.messageId))) {
+  const updates = new Map(messages.flatMap(message => message.role === 'developer' ? [[message.id, message.content] as const] : []))
+  if (history.updates.some(update => !updates.has(update.messageId))) {
     // An auxiliary prefix may omit updates needed to activate historical declarations.
     return { messages: withoutDeveloperMessages(messages), tools }
   }
 
-  const declarations = toolDeclarations(tools, toolUpdate, history)
+  const projectedHistory = toolUpdate === 'addition-only' ? rebaseAdditionOnlyHistory(history, updates) : history
+  const declarations = toolDeclarations(projectedHistory)
   const updateIds = new Set(history.updates.map(update => update.messageId))
+  const retainedUpdateIds = new Set(projectedHistory.updates.map(update => update.messageId))
   // Deferred baseline tools still need their first addition to become available.
-  const offered = new Set(history.tools.filter(tool => !tool.deferLoading).map(tool => tool.name))
+  const offered = new Set(projectedHistory.tools.filter(tool => !tool.deferLoading).map(tool => tool.name))
   const projectedMessages: RequestMessage[] = []
   for (const message of messages) {
     if (message.role !== 'developer') {
@@ -462,6 +479,7 @@ export function projectToolUpdates(
     const content = message.content.filter((block) => {
       switch (block.type) {
         case 'tool-addition':
+          if (!retainedUpdateIds.has(message.id)) return false
           // Only declared tools that are not already available need activation.
           if (!declarations.has(block.toolName) || offered.has(block.toolName)) return false
           offered.add(block.toolName)

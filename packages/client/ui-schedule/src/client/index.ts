@@ -222,7 +222,7 @@ export function apply(ctx: ClientContext): void {
       store: createEditorStore(),
       inject: (): TaskManagerInjected => ({
         ...detail,
-        onNewTask: () => { ctx.uiWorkspace.startSession() },
+        onNewTask: () => { ctx.uiWorkspace.startSession(undefined, { prompt: t('host.createPrompt'), whenDraftExists: 'append' }) },
         onClearEnded: async () => {
           const outcome = await clearEnded()
           deleteToast.reportClear(outcome)

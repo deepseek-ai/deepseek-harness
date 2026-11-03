@@ -1,0 +1,61 @@
+{
+  "initial": [],
+  "changes": [
+    [
+      {
+        "name": "snapshot_initial",
+        "description": "Make snapshot_ping available.",
+        "parameters": {
+          "type": "object",
+          "properties": {}
+        }
+      }
+    ],
+    [
+      {
+        "name": "snapshot_ping",
+        "description": "Return pong once.",
+        "parameters": {
+          "type": "object",
+          "properties": {}
+        }
+      }
+    ],
+    [
+      {
+        "name": "snapshot_later",
+        "description": "Return later.",
+        "parameters": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "snapshot_ping",
+        "description": "Return pong once.",
+        "parameters": {
+          "type": "object",
+          "properties": {}
+        }
+      }
+    ],
+    [
+      {
+        "name": "snapshot_final",
+        "description": "Return final.",
+        "parameters": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "snapshot_ping",
+        "description": "Return pong once.",
+        "parameters": {
+          "type": "object",
+          "properties": {}
+        }
+      }
+    ]
+  ]
+}

@@ -2,7 +2,7 @@
 
 [English](forge.md) | 中文
 
-实验性的 forge 能力 seam 从代码托管平台读取变更请求（change request，即 pull request 与 merge request）。[`dsh-experimental-forge`](../../packages/experimental/forge/README.zh.md) 是 Service Definition，提供 `ctx.forge`；[`dsh-experimental-forge-github`](../../packages/experimental/forge-github/README.zh.md) 是服务 GitHub 主机的 Service Provider；[`dsh-experimental-forge-session`](../../packages/experimental/forge-session/README.zh.md) 是把变更请求绑定到 Session 的 Consumer，提供 `ctx.forgeSession`；[`dsh-experimental-client-ui-forge`](../../packages/experimental/client-ui-forge/README.zh.md) 是提供 `ctx.forgePanel` 的 GUI Consumer。默认禁用的 [forge Bundle](../../packages/experimental/forge-bundle/README.zh.md) 可从插件页面组合这四个包，并为面板附带一个隔离的 [worktree 服务](../../packages/experimental/worktree/README.zh.md)；除此之外，它们只能通过显式组合加载。
+实验性的 forge 能力 seam 从代码托管平台读取变更请求（change request，即 pull request 与 merge request）。[`dsh-experimental-forge`](../../packages/experimental/forge/README.zh.md) 是 Service Definition，提供 `ctx.forge`；[`dsh-experimental-forge-github`](../../packages/experimental/forge-github/README.zh.md) 是服务 GitHub 主机的 Service Provider；[`dsh-experimental-forge-session`](../../packages/experimental/forge-session/README.zh.md) 是把变更请求绑定到 Session 的 Consumer，提供 `ctx.forgeSession`；[`dsh-experimental-client-ui-forge`](../../packages/experimental/client-ui-forge/README.zh.md) 是提供 `ctx.forgePanel` 的 GUI Consumer。默认禁用的 [forge Bundle](../../packages/experimental/forge-bundle/README.zh.md) 可从插件页面组合这四个包，同时加载[工作树模型工具](../../packages/experimental/tool-worktree/README.zh.md)，并为面板附带一个隔离的 [worktree 服务](../../packages/experimental/worktree/README.zh.md)；除此之外，它们只能通过显式组合加载。
 
 ## 提供方与变更请求
 

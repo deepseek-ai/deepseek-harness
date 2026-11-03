@@ -29,10 +29,11 @@ import type { OwnerShare } from './owner-types.ts'
 import type { SourceAccessApplier } from './source-access.ts'
 import type { OwnerShareOperations } from './share-operations.ts'
 import type { TunnelSupervision } from './tunnel-supervision.ts'
-import { readViewerCapabilitySelection } from './viewer-capability-selection.ts'
-import type { ViewerDeclarationsSurface } from './viewer-declarations.ts'
+import { readViewerPluginPolicies } from './viewer-capability-selection.ts'
+import type { ShareablePluginCatalog } from './viewer-capability-types.ts'
 import type { ViewerReadService } from './viewer-read.ts'
 import { isRecord } from './wire-json.ts'
+import { relayFetch, type RelayFetch } from './relay-fetch.ts'
 
 /** Longest share lifetime an owner may set from the dialog; longer links need a fresh decision. */
 const MAX_SHARE_TTL_MINUTES = 7 * 24 * 60
@@ -54,11 +55,11 @@ interface RelayRead {
  * @param relayPath - Relay path to read, relative to the share's Relay.
  * @returns The Relay's answer, or the unavailable answer when it cannot be reached.
  */
-async function relayReadThroughShare(share: OwnerShare, relayPath: string): Promise<RelayRead> {
+async function relayReadThroughShare(share: OwnerShare, relayPath: string, fetchRelay: RelayFetch): Promise<RelayRead> {
   const relayUrl = new URL(`${share.relay}/${relayPath}`)
   relayUrl.searchParams.set('shareId', share.shareId)
   try {
-    const response = await fetch(relayUrl, {
+    const response = await fetchRelay(relayUrl, {
       headers: { authorization: `Bearer ${share.gatewayToken}` },
     })
     return {
@@ -123,7 +124,8 @@ function ownerShareView(share: OwnerShare): OwnerShareView {
     ...(share.expiresAt === undefined ? {} : { expiresAt: share.expiresAt }),
     allowsFork: share.allowsFork,
     sessionMode: share.sessionMode,
-    viewerCapabilities: share.viewerCapabilities ?? [],
+    viewerPlugins: share.viewerPlugins ?? [],
+    ...(share.viewerPluginAccess === undefined ? {} : { viewerPluginAccess: share.viewerPluginAccess }),
     online: share.online,
     ...(share.access === undefined ? {} : { access: { ...share.access, mode: storedAccessMode(share.access.mode) } }),
   }
@@ -147,6 +149,8 @@ function isRelayAddress(value: string): boolean {
 export interface OwnerShareOperationDeps {
   /** Shares this host publishes. */
   readonly ownerShares: Map<string, OwnerShare>
+  /** Relay transport owned by this share host; absent callers use the module transport. */
+  readonly relayFetch?: RelayFetch
   /** Relay rows this host stopped but has not deleted. */
   readonly pendingRemovals: Map<string, PendingRelayRemoval>
   /** Subjects this deployment admits to every share. */
@@ -155,8 +159,8 @@ export interface OwnerShareOperationDeps {
   readonly forks: ForkRegistry
   /** The viewer reader, closed and re-checked by lifecycle changes. */
   readonly viewerRead: ViewerReadService
-  /** The declaration surface whose live offers a capability selection is accepted against. */
-  readonly viewerDeclarations: ViewerDeclarationsSurface
+  /** The platform catalog a plugin policy is accepted against. */
+  readonly offeredCapabilities: () => readonly ShareablePluginCatalog[]
   /** Reads and adopted states of the Relay's authority over this host's shares. */
   readonly relay: RelayAuthority
   /** Worker registration, expiry timers, and persistence channels. */
@@ -193,12 +197,13 @@ export interface OwnerShareOperationDeps {
  * @returns The operations the Remote service calls.
  */
 export function createOwnerShareOperations(deps: OwnerShareOperationDeps): OwnerShareOperations {
+  const fetchRelay = deps.relayFetch ?? relayFetch
   const ownerShares = deps.ownerShares
   const pendingRemovals = deps.pendingRemovals
   const allowedSubjectIds = deps.allowedSubjectIds
   const forks = deps.forks
   const viewerRead = deps.viewerRead
-  const viewerDeclarations = deps.viewerDeclarations
+  const offeredCapabilities = deps.offeredCapabilities
   const relay = deps.relay
   const tunnel = deps.tunnel
   const currentCredential = deps.storedCredential
@@ -542,26 +547,45 @@ export function createOwnerShareOperations(deps: OwnerShareOperationDeps): Owner
           shareId: request.shareId,
         })
       }
-      // The live offers are the authority: a name no plugin currently offers is refused by name here
-      // rather than stored as a selection no decision could ever expose.
-      const accepted = readViewerCapabilitySelection(viewerDeclarations.declaredCapabilities(), request.capabilities)
-      if (!accepted.ok) {
-        const refusal = accepted.refusal
-        if (refusal.code === 'invalid-capabilities') {
-          throw new RemoteError('liveshareShares/invalid-capabilities', 'capabilities is not a plugin selection', {})
+      // The live Typert catalog is the authority: a method it does not offer is refused here rather
+      // than stored as a selection no decision could ever expose.
+      let selection = current.viewerPlugins
+      if (request.viewerPlugins !== undefined) {
+        const accepted = readViewerPluginPolicies(offeredCapabilities(), request.viewerPlugins)
+        if (!accepted.ok) {
+          const refusal = accepted.refusal
+          if (refusal.code === 'invalid-capabilities') {
+            throw new RemoteError('liveshareShares/invalid-capabilities', 'viewerPlugins is not a plugin policy list', {})
+          }
+          if (refusal.code === 'unknown-plugin') {
+            throw new RemoteError('liveshareShares/unknown-plugin',
+              `no installed plugin offers viewer methods under ${refusal.plugin}`, { plugin: refusal.plugin })
+          }
+          throw new RemoteError('liveshareShares/endpoint-not-offered',
+            `${refusal.plugin} does not offer ${refusal.endpoint}`,
+            { plugin: refusal.plugin, endpoint: refusal.endpoint })
         }
-        if (refusal.code === 'unknown-plugin') {
-          throw new RemoteError('liveshareShares/unknown-plugin',
-            `no plugin offers viewer endpoints under ${refusal.plugin}`, { plugin: refusal.plugin })
-        }
-        throw new RemoteError('liveshareShares/endpoint-not-offered',
-          `${refusal.plugin} does not offer ${refusal.endpoint} as ${refusal.kind}`,
-          { plugin: refusal.plugin, kind: refusal.kind, endpoint: refusal.endpoint })
+        selection = accepted.selection
       }
-      const { viewerCapabilities: _replaced, ...retained } = current
+      const requestedAccess: unknown = request.viewerPluginAccess
+      if (requestedAccess !== undefined && requestedAccess !== 'all' && requestedAccess !== 'none'
+        && requestedAccess !== 'custom') {
+        throw new RemoteError('liveshareShares/invalid-capabilities',
+          'viewerPluginAccess must be all, none, or custom', {})
+      }
+      const access = requestedAccess !== undefined
+        ? requestedAccess
+        : request.viewerPlugins !== undefined
+          ? ((selection?.length ?? 0) > 0 ? 'custom' : 'none')
+          : current.viewerPluginAccess
+            ?? ((current.viewerPlugins?.length ?? 0) > 0 ? 'custom' : 'none')
+      // Only the custom switch follows per-plugin policies; all/none override and clear them.
+      const effectiveSelection = access === 'custom' ? selection ?? [] : []
+      const { viewerPlugins: _replacedPlugins, viewerPluginAccess: _replacedAccess, ...retained } = current
       const next: OwnerShare = {
         ...retained,
-        ...(accepted.selection === undefined ? {} : { viewerCapabilities: accepted.selection }),
+        ...(effectiveSelection.length === 0 ? {} : { viewerPlugins: effectiveSelection }),
+        viewerPluginAccess: access,
         revision: current.revision + 1,
       }
       ownerShares.set(request.shareId, next)
@@ -575,15 +599,19 @@ export function createOwnerShareOperations(deps: OwnerShareOperationDeps): Owner
       // Every open reader snapshot recomputes the policy's bindings, which read this selection and the
       // plugins' offers per decision, so exposure ends or begins at the next call.
       accessChanged()
-      return { shareId: request.shareId, viewerCapabilities: next.viewerCapabilities ?? [] }
+      return {
+        shareId: request.shareId,
+        viewerPluginAccess: access,
+        viewerPlugins: next.viewerPlugins ?? [],
+      }
     },
 
     /**
-     * Read the live offers. A declaration is an offer, not a grant: nothing here exposes anything.
-     * @returns The endpoints plugins currently offer.
+     * Read the installed-plugin catalog. The catalog is an offer, not a grant: nothing here exposes anything.
+     * @returns The Remote methods the installed plugins currently offer to share viewers.
      */
     capabilities() {
-      return { capabilities: viewerDeclarations.declaredCapabilities() }
+      return { capabilities: offeredCapabilities() }
     },
 
     /**
@@ -665,7 +693,7 @@ export function createOwnerShareOperations(deps: OwnerShareOperationDeps): Owner
           shareId: request.shareId,
         })
       }
-      const response = await relayReadThroughShare(share, '__liveshare/audit')
+      const response = await relayReadThroughShare(share, '__liveshare/audit', fetchRelay)
       const audit = response.ok ? readShareAudit(response.text) : undefined
       if (audit !== undefined) return audit
       throw new RemoteError('liveshareShares/audit-unavailable', `audit is unavailable for ${share.relay}`, {

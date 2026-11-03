@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "Demandes de modification et arbres de travail",
-    "description": "Suivez les demandes de modification de chaque session avec leurs vérifications et revues, et démarrez de nouvelles sessions dans un arbre de travail Git ; utilise la CLI gh pour GitHub."
+    "description": "Suivez les pull requests GitHub liées à votre conversation : consultez les vérifications et les revues, comparez le code et transmettez vos remarques à l’agent. Examinez les modifications locales et isolez chaque tâche dans un arbre de travail séparé. Les fonctions GitHub nécessitent la CLI gh installée et une connexion sur l’hôte.",
+    "detail": "docs/DETAIL.fr.md"
   }
 }
