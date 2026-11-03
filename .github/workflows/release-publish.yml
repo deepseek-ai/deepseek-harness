@@ -9,9 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       cua_run_id:
-        description: >-
-          填写要复用的 CUA helper 构建运行编号（run ID，即运行页面 URL 中 /actions/runs/ 后的数字）。
-          留空自动查找逐字节一致的源码构建出来的产物，找不到时重新构建。
+        description: 'CUA helper run ID，留空复用源码逐字节一致的产物，无匹配则构建'
         type: string
         required: false
         default: ''
