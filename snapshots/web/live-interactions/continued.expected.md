@@ -19,8 +19,7 @@
 - status:
   - text: This turn failedupstream 503
   - code: SERVER
-- text: plan Plan mode on. Use /plan off to leave. plan Plan mode off.
-- text: Requested to continue generation
+- text: plan Plan mode on. Use /plan off to leave. plan Plan mode off. Requested to continue generation
 - status: Completed
 - button "Completed in {{duration}}"
 - paragraph: Event sourcing is a pattern where all changes to an application's state are stored as an immutable, append-only sequence of events, rather than persisting only the current state, enabling full auditability, temporal queries, and event-driven architectures.
