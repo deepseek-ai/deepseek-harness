@@ -158,6 +158,7 @@ interface Mounted {
   ctx: Context
   im: FakeIm
   config: ImConfig
+  fs: ReturnType<typeof fakeFs>
   call: (name: string, args: Record<string, unknown>, options?: CallOptions) => Promise<ToolExecutionResult>
   mode: (name: string, args: Record<string, unknown>) => ToolExecutionMode
   prompt: (agent?: Agent) => Promise<string>
@@ -171,12 +172,23 @@ function fakeAgent(sessionId: SessionId): Agent {
 
 /** A filesystem double: one file kind per path, or the failure a scenario needs. */
 function fakeFs(options: { kind?: 'file' | 'directory' | 'absent'; bytes?: number; failure?: Error } = {}) {
+  const writes: { key: string; data: Uint8Array }[] = []
   return {
-    resolve: async (path: string) => ({ targetKey: `t:${path}`, displayPath: path, kind: 'file' }),
+    writes,
+    resolve: async (path: string, opts?: { cwd?: string }) => ({
+      targetKey: opts?.cwd === undefined ? `t:${path}` : `${opts.cwd}/${path}`,
+      displayPath: path,
+      kind: 'file',
+    }),
+    processPath: (target: { targetKey: string }) => target.targetKey,
     stat: async () => (options.failure === undefined
       ? options.kind === 'absent' ? undefined : { type: options.kind ?? 'file', size: 4, version: 'v1' }
       : (() => { throw options.failure })()),
     readBytes: async () => new Uint8Array(options.bytes ?? 4).fill(0x41),
+    writeBytes: async (target: { targetKey: string }, data: Uint8Array) => {
+      writes.push({ key: target.targetKey, data })
+      return { operation: 'create' as const, version: 'v1', bytes: data.byteLength }
+    },
   }
 }
 
@@ -187,7 +199,8 @@ async function mount(options: { config?: Partial<ImConfig>; fs?: ReturnType<type
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
-  ctx.provide('fs', (options.fs ?? fakeFs()) as never)
+  const fs = options.fs ?? fakeFs()
+  ctx.provide('fs', fs as never)
   ctx.provide('workingDirectory', { ensure: async () => '/work' } as never)
   const im = new FakeIm()
   const config = Config({ sources: [{ id: 'team', bot: 'fake:bot', writable: true, store: 'all' }], ...options.config })
@@ -200,6 +213,7 @@ async function mount(options: { config?: Partial<ImConfig>; fs?: ReturnType<type
     ctx,
     im,
     config,
+    fs,
     call: (name, args, callOptions = {}) => executeToolFixture(ctx, {
       name,
       arguments: args,
@@ -237,7 +251,7 @@ describe('im tool registration', () => {
   })
 
   it('registers only the read tools when the preset is read-only', async () => {
-    const mounted = await mount({ config: { tools: { readOnly: true, maxReadBytes: 65536, maxHistoryItems: 50 } } })
+    const mounted = await mount({ config: { tools: { readOnly: true, maxReadBytes: 65536, maxHistoryItems: 50, fileDir: '.dsh/im' } } })
     expect(mounted.names()).toEqual(['im_read', 'im_history', 'im_read_image', 'im_read_file'])
   })
 
@@ -282,7 +296,7 @@ describe('im tool registration', () => {
   })
 
   it('guides a read-only session and a session without chats', async () => {
-    const mounted = await mount({ config: { tools: { readOnly: true, maxReadBytes: 65536, maxHistoryItems: 50 } } })
+    const mounted = await mount({ config: { tools: { readOnly: true, maxReadBytes: 65536, maxHistoryItems: 50, fileDir: '.dsh/im' } } })
     expect(await mounted.prompt(fakeAgent(SessionId('im-session')))).toContain('this preset publishes nothing')
     const bareMounted = await mount()
     bareMounted.im.sessions.add('bare', [])
@@ -385,7 +399,7 @@ describe('im_read and im_history', () => {
   })
 
   it('bounds the rendered text of a read to maxReadBytes', async () => {
-    const mounted = await mount({ config: { tools: { readOnly: false, maxReadBytes: 80, maxHistoryItems: 50 } } })
+    const mounted = await mount({ config: { tools: { readOnly: false, maxReadBytes: 80, maxHistoryItems: 50, fileDir: '.dsh/im' } } })
     expect(textOf(await mounted.call('im_history', {}))).toContain('truncated')
   })
 
@@ -538,24 +552,26 @@ describe('im_read_image', () => {
 })
 
 describe('im_read_file', () => {
-  const attachment = { attachmentId: 'sha256:aa', name: 'report.pdf', bytes: 9 }
+  const attachment = { attachmentId: 'sha256:aa', name: 'report.pdf', bytes: 3 }
   const ref = { message: ImMessageKey('fake:bot', 'm1'), chat: CHAT, seq: 1, index: 2, kind: 'file' as const, src: 'x' }
+  const data = new Uint8Array([7, 8, 9])
 
-  it('saves the file of one label and reports the path to read it', async () => {
+  it('saves the file of one label into the workspace and reports its path', async () => {
     const mounted = await mount()
     mounted.im.media.items.set('1.2', {
-      ref, file: { type: 'file', attachment: attachment as never }, mime: 'application/pdf', bytes: 9, path: '/work/report.pdf',
+      ref, file: { type: 'file', attachment: attachment as never }, mime: 'application/pdf', bytes: 3, data,
     })
     expect(value(await mounted.call('im_read_file', { id: '1.2' }))).toEqual({
-      id: '1.2', chat: CHAT, file: attachment, path: '/work/report.pdf',
+      id: '1.2', chat: CHAT, file: attachment, path: '/work/.dsh/im/1.2-report.pdf',
     })
+    expect(mounted.fs.writes).toEqual([{ key: '/work/.dsh/im/1.2-report.pdf', data }])
   })
 
-  it('reports a stored file this execution environment cannot reach', async () => {
+  it('reports a stored file whose bytes the store did not hand back', async () => {
     const mounted = await mount()
-    mounted.im.media.items.set('1.2', { ref, file: { type: 'file', attachment: attachment as never }, bytes: 9 })
-    expect(value(await mounted.call('im_read_file', { id: '1.2' })))
-      .toEqual({ id: '1.2', chat: CHAT, file: attachment, skipped: 'unmapped' })
+    mounted.im.media.items.set('1.2', { ref, file: { type: 'file', attachment: attachment as never }, bytes: 3 })
+    expect(value(await mounted.call('im_read_file', { id: '1.2' }))).toEqual({ id: '1.2', chat: CHAT })
+    expect(mounted.fs.writes).toEqual([])
   })
 
   it('reports a media element that was not admitted, with and without a reason', async () => {

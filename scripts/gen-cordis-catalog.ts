@@ -601,6 +601,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   FsTarget: 'filesystem.md',
   FsVersion: 'filesystem.md',
   FsWriteIntent: 'filesystem.md',
+  FsWriteBytesOutcome: 'filesystem.md',
   FsWriteOutcome: 'filesystem.md',
   CreateGoalRequest: 'goal.md',
   EditGoalRequest: 'goal.md',

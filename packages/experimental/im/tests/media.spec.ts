@@ -45,10 +45,9 @@ interface FakeHttp {
 interface FakeStore {
   saveImages(inputs: readonly { data: Uint8Array; mediaType: string; name?: string }[]): Promise<unknown[]>
   saveFile(input: { data: Uint8Array; name?: string }): Promise<unknown>
-  fileHostPath?(ref: unknown): string | undefined
 }
 
-function fakeContext(services: { http?: FakeHttp; attachments?: FakeStore; im?: unknown; fs?: unknown }): Context {
+function fakeContext(services: { http?: FakeHttp; attachments?: FakeStore; im?: unknown }): Context {
   return { get: (name: string) => (services as Record<string, unknown>)[name] } as Context
 }
 
@@ -108,7 +107,7 @@ function config(overrides: Partial<ImConfig['media']> = {}): ImConfig {
     retryIntervalMs: 5000,
     media: { download: true, maxBytes: 1048576, maxItems: 9, ...overrides },
     send: { maxBytes: 30000, maxMediaBytes: 1048576, operationTimeoutMs: 30000 },
-    tools: { readOnly: false, maxReadBytes: 65536, maxHistoryItems: 50 },
+    tools: { readOnly: false, maxReadBytes: 65536, maxHistoryItems: 50, fileDir: '.dsh/im' },
   }
 }
 
@@ -243,6 +242,7 @@ describe('ImMediaStore.admit', () => {
       file: { type: 'file', attachment: { attachmentId: 'sha256:1', name: 'report.pdf', bytes: 10 } },
       mime: 'application/pdf',
       bytes: 10,
+      data: TEXT_BYTES,
     })
     expect(attachments.files).toEqual([{ data: TEXT_BYTES, name: 'report.pdf' }])
     expect(attachments.saved).toEqual([])
@@ -259,6 +259,7 @@ describe('ImMediaStore.admit', () => {
       ref: fileRef(1, 'https://cdn/voice.opus'),
       file: { type: 'file', attachment: { attachmentId: 'sha256:1', name: 'file', bytes: 10 } },
       bytes: 10,
+      data: TEXT_BYTES,
     })
     expect(attachments.files).toEqual([{ data: TEXT_BYTES }])
   })
@@ -377,7 +378,7 @@ const fileMessage = (seq: number): ImMessage =>
 /** A store over one fixed history, with the doubles a read scenario needs. */
 function storeWith(
   messages: readonly ImMessage[],
-  options: { http?: FakeHttp; attachments?: FakeStore; fs?: unknown; media?: Partial<ImConfig['media']> } = {},
+  options: { http?: FakeHttp; attachments?: FakeStore; media?: Partial<ImConfig['media']> } = {},
 ): ImMediaStore {
   const history = {
     after: (chat: string, seq: number, limit: number) =>
@@ -450,61 +451,22 @@ describe('ImMediaStore.read', () => {
 })
 
 describe('ImMediaStore.readFile', () => {
-  /** The attachment double whose stored copy lives at one host path the filesystem double can map. */
-  const located = () => {
-    const attachments = attachmentsSaving()
-    attachments.fileHostPath = () => '/host/attachments/r.pdf'
-    return attachments
-  }
-  const mapping = (hostPath: string) => ({
-    processPathFromHostPath: (path: string) => (path === hostPath ? '/work/r.pdf' : undefined),
-  })
   const http = (): FakeHttp => httpServing(TEXT_BYTES, 'application/pdf')
 
-  it('saves the file of one label and reports the path it maps to', async () => {
-    const item = await storeWith([fileMessage(12)], {
-      http: http(),
-      attachments: located(),
-      fs: mapping('/host/attachments/r.pdf'),
-    }).readFile(CHAT.key, '12.1')
+  it('admits the file of one label and hands back its bytes', async () => {
+    const attachments = attachmentsSaving()
+    const item = await storeWith([fileMessage(12)], { http: http(), attachments }).readFile(CHAT.key, '12.1')
     expect(item.ref).toMatchObject({ seq: 12, index: 1, kind: 'file' })
     expect(item.file?.attachment).toEqual({ attachmentId: 'sha256:1', name: 'r.pdf', bytes: 10 })
-    expect(item.path).toBe('/work/r.pdf')
+    expect(item.data).toEqual(TEXT_BYTES)
+    expect(attachments.files).toEqual([{ data: TEXT_BYTES, name: 'r.pdf' }])
   })
 
-  it('reports no path when the execution world cannot reach the stored copy', async () => {
-    const unmapped = await storeWith([fileMessage(12)], { http: http(), attachments: located() })
-      .readFile(CHAT.key, '12.1')
-    expect(unmapped.file?.attachment).toMatchObject({ name: 'r.pdf' })
-    expect(unmapped.path).toBeUndefined()
-    const elsewhere = await storeWith([fileMessage(12)], {
-      http: http(), attachments: located(), fs: mapping('/host/other.pdf'),
-    }).readFile(CHAT.key, '12.1')
-    expect(elsewhere.path).toBeUndefined()
-  })
-
-  it('reports no path for a reference the attachment backend refuses to locate', async () => {
-    const attachments = attachmentsSaving()
-    attachments.fileHostPath = () => { throw new Error('invalid reference') }
-    const item = await storeWith([fileMessage(12)], {
-      http: http(), attachments, fs: mapping('/host/attachments/r.pdf'),
-    }).readFile(CHAT.key, '12.1')
-    expect(item.file?.attachment).toMatchObject({ name: 'r.pdf' })
-    expect(item.path).toBeUndefined()
-  })
-
-  it('reports no path when the backend keeps no host copy or the element was not admitted', async () => {
-    const unmapped = attachmentsSaving()
-    unmapped.fileHostPath = () => undefined
-    const backendless = await storeWith([fileMessage(12)], {
-      http: http(), attachments: unmapped, fs: mapping('/host/attachments/r.pdf'),
-    }).readFile(CHAT.key, '12.1')
-    expect(backendless.file?.attachment).toMatchObject({ name: 'r.pdf' })
-    expect(backendless.path).toBeUndefined()
+  it('reports a file the store could not keep', async () => {
     const oversized = await storeWith([fileMessage(12)], { http: http(), media: { maxBytes: 4 } })
       .readFile(CHAT.key, '12.1')
     expect(oversized.file).toBeUndefined()
-    expect(oversized.path).toBeUndefined()
+    expect(oversized.data).toBeUndefined()
     expect(oversized.skipped).toBe('too-large')
   })
 
@@ -512,6 +474,7 @@ describe('ImMediaStore.readFile', () => {
     const attachments = attachmentsSaving()
     const item = await storeWith([imageMessage(12)], { attachments }).readFile(CHAT.key, '12.1')
     expect(item.file?.attachment).toMatchObject({ name: 'file', bytes: PNG_BYTES.byteLength })
+    expect(item.data).toEqual(PNG_BYTES)
     expect(attachments.files).toEqual([{ data: PNG_BYTES }])
     expect(attachments.saved).toEqual([])
   })
@@ -522,6 +485,7 @@ describe('ImMediaStore.readFile', () => {
       .readFile(CHAT.key, '12.1')
     expect(item.ref.kind).toBe('file')
     expect(item.file).toBeUndefined()
+    expect(item.data).toBeUndefined()
     expect(item.skipped).toBe('disabled')
     expect(attachments.files).toEqual([])
   })

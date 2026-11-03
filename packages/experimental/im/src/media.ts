@@ -7,12 +7,12 @@
  * `im_read_image { id: '12.1' }` even after the record was paged out of the transcript.
  *
  * Images are admitted as normalized image blocks; every other kind (`file`, `audio`, `video`) is admitted as the exact
- * bytes of a durable verbatim file, which request assembly projects to the saved read-only path `im_read_file` also
- * reports.
+ * bytes of a durable verbatim file, which request assembly projects to a handle naming the stored copy and
+ * `im_read_file` materializes in the caller's own filesystem.
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { createResourceFetcher, type Element, type PrepareContext } from '@deepseek-ai/cordis-plugin-im-core'
-import { AttachmentId, type AttachmentStore, type FileAttachmentRef, type ImageMediaType } from '@deepseek-ai/dsh-attachment'
+import { AttachmentId, type AttachmentStore, type ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import type { FileBlock, ImageBlock } from '@deepseek-ai/dsh-llm'
 import { z } from 'zod'
 import { splitKey, type ImChatKey, type ImConfig, type ImMessage, type ImMessageKey } from './api.ts'
@@ -50,8 +50,8 @@ export interface ImMediaItem {
 
 /** Outcome of resolving one media id as a file read (`im_read_file`). */
 export interface ImMediaFileItem extends ImMediaItem {
-  /** Read path of the stored copy in the calling execution world, when that world can reach it. */
-  path?: string
+  /** Exact bytes of the admitted file, so the caller can materialize them in its own execution world. */
+  data?: Uint8Array
 }
 
 /** Media tag → admission kind. Only these tags carry downloadable bytes. */
@@ -262,16 +262,12 @@ export class ImMediaStore {
    * @param chat - the chat the id was shown in.
    * @param id - `#12.1`, `12.1` or `12` (the first media element of message 12).
    * @param signal - cancellation of the calling turn.
-   * @returns the admission outcome of exactly that media element, plus the read path of the stored copy when the
-   *   calling execution world can reach it.
+   * @returns the admission outcome of exactly that media element, with the exact bytes a caller stages for the model.
    */
   async readFile(chat: ImChatKey, id: string, signal?: AbortSignal): Promise<ImMediaFileItem> {
     const ref = await this.elementAt(chat, id)
     if (!this.config.media.download) return { ref, skipped: 'disabled' }
-    const item = await this.admitAs(ref, signal, 'file')
-    const file = item.file
-    const path = file === undefined ? undefined : this.storedPath(file.attachment)
-    return path === undefined ? item : { ...item, path }
+    return await this.admitAs(ref, signal, 'file')
   }
 
   /**
@@ -314,26 +310,6 @@ export class ImMediaStore {
   }
 
   /**
-   * Read path of one stored file in the calling execution world: the mapping request assembly uses for a file block,
-   * so the path `im_read_file` reports is the one a later request would name.
-   * @param ref - durable verbatim file reference.
-   * @returns an absolute read path, or undefined when this execution world cannot reach the stored copy.
-   */
-  private storedPath(ref: FileAttachmentRef): string | undefined {
-    let hostPath: string | undefined
-    try {
-      hostPath = this.ctx.get('attachments')?.fileHostPath(ref)
-    } catch {
-      // A malformed durable reference degrades this read to "no path" instead of failing the tool call.
-      return undefined
-    }
-    if (hostPath === undefined) return undefined
-    // Structural face: this package owns media admission, not the filesystem service, so only the one mapping call.
-    const fs = this.ctx.get('fs') as { processPathFromHostPath(hostPath: string): string | undefined } | undefined
-    return fs?.processPathFromHostPath(hostPath)
-  }
-
-  /**
    * Fetch one reference, bound it by `media.maxBytes`, and hand the bytes to the store `as` selects. Every failure is
    * reported as `skipped`; only the caller's own cancellation is rethrown.
    * @param ref - the reference to admit.
@@ -341,7 +317,7 @@ export class ImMediaStore {
    * @param as - `image` for a normalized image block, `file` for a durable verbatim file.
    * @returns the admission outcome of that reference.
    */
-  private async admitAs(ref: ImMediaRef, signal: AbortSignal | undefined, as: 'image' | 'file'): Promise<ImMediaItem> {
+  private async admitAs(ref: ImMediaRef, signal: AbortSignal | undefined, as: 'image' | 'file'): Promise<ImMediaFileItem> {
     try {
       const fetched = await this.fetch(ref.src, signal)
       const bytes = fetched.data.byteLength
@@ -378,14 +354,20 @@ export class ImMediaStore {
     ref: ImMediaRef,
     fetched: { data: Uint8Array; mime?: string },
     attachments: AttachmentStore | undefined,
-  ): Promise<ImMediaItem> {
+  ): Promise<ImMediaFileItem> {
     const bytes = fetched.data.byteLength
     if (!attachments) return { ref, ...fetched.mime ? { mime: fetched.mime } : {}, bytes, skipped: 'unavailable' }
     const attachment = await attachments.saveFile({
       data: fetched.data,
       ...ref.name ? { name: ref.name } : {},
     })
-    return { ref, file: { type: 'file', attachment }, ...fetched.mime ? { mime: fetched.mime } : {}, bytes }
+    return {
+      ref,
+      file: { type: 'file', attachment },
+      ...fetched.mime ? { mime: fetched.mime } : {},
+      bytes,
+      data: fetched.data,
+    }
   }
 
   /** Bytes of a src: `satori:` internal resources, http(s), and inline `data:`/`base64:` forms. */

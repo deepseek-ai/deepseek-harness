@@ -270,11 +270,11 @@ export const imReadFileOutput = {
         },
         path: {
           type: 'string',
-          description: 'Read-only path of the stored copy; read it with your file tools.',
+          description: 'Path of the saved copy in your workspace; read it with your file tools.',
         },
         skipped: {
           type: 'string',
-          description: 'Why the media element was not admitted as a file, or why it has no readable path here.',
+          description: 'Why the media element was not admitted as a file.',
         },
       },
     },

@@ -1230,6 +1230,12 @@ export interface ImConfig {
     maxReadBytes: number
     /** Maximum messages of one `im_history` page (default 50). */
     maxHistoryItems: number
+    /**
+     * Session-relative directory `im_read_file` writes a downloaded file into (default
+     * `.dsh/im`); the path a chat file is staged at stays inside the working directory so
+     * the model's own file tools and its subagents can read it.
+     */
+    fileDir: string
   }
   /**
    * Default dispatcher: the innermost `im/message` listener. Absent, a message no listener handled is ignored;
@@ -1698,7 +1704,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-fs-local`
 
-- `source`: [`packages/fs/fs-local/src/index.ts:51`](../packages/fs/fs-local/src/index.ts)
+- `source`: [`packages/fs/fs-local/src/index.ts:52`](../packages/fs/fs-local/src/index.ts)
 
 ```ts config-catalog
 /** Configuration for the local filesystem backend. */

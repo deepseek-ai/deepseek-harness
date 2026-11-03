@@ -164,34 +164,39 @@ export function applyTools(ctx: Context, im: ImToolHost, config: ImConfig): void
     }),
   }))
 
-  ctx.tools.register(defineTool({
-    name: 'im_read_file',
-    description: 'Save the file of one media label such as [文件 #12.2 report.pdf] and get the read-only path to open '
-      + 'it with your file tools.',
-    parameters: imReadFileParameters,
-    output: { schema: imReadFileOutput, render },
-    isConcurrencySafe: () => true,
-    execute: (args, exec) => run(async () => {
-      const { record } = caller(im, exec)
-      const chat = chatOf(im, record, args.chat)
-      const item = await im.media.readFile(chat, args.id, exec.signal)
-      const attachment = item.file?.attachment
-      if (attachment === undefined) {
-        return { id: args.id, chat, ...item.skipped === undefined ? {} : { skipped: item.skipped } }
-      }
-      return {
-        id: args.id,
-        chat,
-        file: {
-          name: attachment.name,
-          bytes: attachment.bytes,
-          attachmentId: String(attachment.attachmentId),
-        },
-        // A stored file this execution world cannot reach still reports what was stored, and why it has no path.
-        ...item.path === undefined ? { skipped: 'unmapped' } : { path: item.path },
-      }
-    }),
-  }))
+  // The file read tool stages the bytes it admits in the calling session's own filesystem, so it needs that seam
+  // (`ctx.inject` does not inherit the caller's injections, so `tools` is named again).
+  ctx.inject(['tools', 'fs', 'workingDirectory'], (scoped) => {
+    scoped.tools.register(defineTool({
+      name: 'im_read_file',
+      description: 'Save the file of one media label such as [文件 #12.2 report.pdf] into your workspace and get the '
+        + 'path to open with your file tools.',
+      parameters: imReadFileParameters,
+      output: { schema: imReadFileOutput, render },
+      isConcurrencySafe: () => true,
+      execute: (args, exec) => run(async () => {
+        const { record, agent } = caller(im, exec)
+        const chat = chatOf(im, record, args.chat)
+        const item = await im.media.readFile(chat, args.id, exec.signal)
+        const attachment = item.file?.attachment
+        const data = item.data
+        if (attachment === undefined || data === undefined) {
+          return { id: args.id, chat, ...item.skipped === undefined ? {} : { skipped: item.skipped } }
+        }
+        const cwd = await scoped.workingDirectory.ensure(agent, exec.signal)
+        // A relative POSIX-shaped path: the execution world may not be this host, so no host separator is baked in.
+        const relative = `${config.tools.fileDir}/${item.ref.seq}.${item.ref.index}-${attachment.name}`
+        const target = await scoped.fs.resolve(relative, { cwd, signal: exec.signal })
+        await scoped.fs.writeBytes(target, data, undefined, exec.signal)
+        return {
+          id: args.id,
+          chat,
+          file: { name: attachment.name, bytes: attachment.bytes, attachmentId: String(attachment.attachmentId) },
+          path: scoped.fs.processPath(target),
+        }
+      }),
+    }))
+  })
 
   if (config.tools.readOnly) return
 
@@ -431,9 +436,9 @@ function guidance(im: ImToolHost, record: ImSessionRecord, config: ImConfig): st
       + 'the platform could not render natively.')
   }
   parts.push('Media arrives as a label such as [图片 #12.1] or [文件 #12.2 report.pdf]; im_read_image with an image id '
-    + 'shows exactly that image of the chat, and im_read_file with any media id saves that element and returns the '
-    + 'read-only path to open with your file tools. An image or file in the message you were handed already arrives '
-    + 'with the text.')
+    + 'shows exactly that image of the chat, and im_read_file with any media id saves that element into your workspace '
+    + 'and returns the path to open with your file tools. An image or file in the message you were handed already '
+    + 'arrives with the text.')
   return parts.join(' ')
 }
 

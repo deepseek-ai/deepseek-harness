@@ -117,7 +117,7 @@ Source: [`packages/experimental/im/src/tools.ts`](../packages/experimental/im/sr
 
 ### `im_read_file`
 
-Save the file of one media label such as [文件 #12.2 report.pdf] and get the read-only path to open it with your file tools.
+Save the file of one media label such as [文件 #12.2 report.pdf] into your workspace and get the path to open with your file tools.
 
 ```json
 {
