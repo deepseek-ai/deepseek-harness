@@ -24,7 +24,7 @@ async function fixture(servers: Record<string, unknown> = {}) {
   const world = await oauthWorld()
   await world.ctx.plugin(McpResources)
   await managerProfile(world.ctx, { base: { servers } })
-  const view = () => world.ctx.mcpServers.list().find(entry => entry.name === 'notion')
+  const view = () => world.ctx.mcpManager.list().find(entry => entry.name === 'notion')
   const state = async (expected: McpManagedServerStatus['state']) => {
     await vi.waitFor(() => { expect(view()?.status.state).toBe(expected) }, { timeout: 5000 })
   }
@@ -42,7 +42,7 @@ async function fixture(servers: Record<string, unknown> = {}) {
     return created
   }
   const authorize = async () => {
-    await world.ctx.mcpServers.startAuthorization('notion')
+    await world.ctx.mcpManager.startAuthorization('notion')
     expect(await callback(await phase(() => view()?.authorization, 'waiting-browser'))).toBe(200)
     await state('connected')
   }

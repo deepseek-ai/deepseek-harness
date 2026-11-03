@@ -33,7 +33,7 @@ Notion 插件在加载期间把 Notion 托管的 MCP 服务器 `https://mcp.noti
 dsh plugin --profile web add @deepseek-ai/dsh-notion
 ```
 
-bundle patch 在 profile 其他层之后插入 `notion` 行。插件需要 `mcpServers` 与 `systemPrompt` 服务，Web 与 Desktop 组合通过 [`dsh-web-app`](../../bundle/web-app/README.zh.md) 提供它们。在没有 MCP 管理器的 profile（例如 `headless`）中，插件不会激活，启动时会打印一条警告，指出缺少 `mcpServers` 服务。
+bundle patch 在 profile 其他层之后插入 `notion` 行。插件需要 `mcpManager` 与 `systemPrompt` 服务，Web 与 Desktop 组合通过 [`dsh-web-app`](../../bundle/web-app/README.zh.md) 提供它们。在没有 MCP 管理器的 profile（例如 `headless`）中，插件不会激活，启动时会打印一条警告，指出缺少 `mcpManager` 服务。
 
 ### 授权与退出登录
 
@@ -73,7 +73,7 @@ bundle patch 在 profile 其他层之后插入 `notion` 行。插件需要 `mcpS
 <details>
 <summary>实现内部机制——点击展开</summary>
 
-[`cordis.patch.yml`](cordis.patch.yml) 插入一行 id 为 `notion` 的条目，指向本包，因此本包既是 bundle，也是其唯一的一行；`config` 覆盖以该 id 为目标。Host 侧的 [`src/index.ts`](src/index.ts) 进行两项注册，二者都是插件 fiber 的 effect：`ctx.mcpServers.register('notion', …)` 以配置的 `url` 和 OAuth 凭据 key 添加一个 Streamable HTTP 条目，`ctx.systemPrompt.section()` 在 `MCP_SERVERS` 排序位置添加称呼指引。服务器名固定了 `mcp__notion__` 工具命名空间，凭据 key 固定了 grant 地址，因此重新加载或重新安装的插件会得到同样的工具和 grant。管理器在注册时校验条目；如果已配置或已注册的服务器占用了该名称或 key，插件会在添加指引之前加载失败。
+[`cordis.patch.yml`](cordis.patch.yml) 插入一行 id 为 `notion` 的条目，指向本包，因此本包既是 bundle，也是其唯一的一行；`config` 覆盖以该 id 为目标。Host 侧的 [`src/index.ts`](src/index.ts) 进行两项注册，二者都是插件 fiber 的 effect：`ctx.mcpManager.register('notion', …)` 以配置的 `url` 和 OAuth 凭据 key 添加一个 Streamable HTTP 条目，`ctx.systemPrompt.section()` 在 `MCP_SERVERS` 排序位置添加称呼指引。服务器名固定了 `mcp__notion__` 工具命名空间，凭据 key 固定了 grant 地址，因此重新加载或重新安装的插件会得到同样的工具和 grant。管理器在注册时校验条目；如果已配置或已注册的服务器占用了该名称或 key，插件会在添加指引之前加载失败。
 
 账号注册表运行时，插件还调用 `ctx.mcpAccounts.register({ server: 'notion', packageName: '@deepseek-ai/dsh-notion', copy })`，其中 [`src/copy.ts`](src/copy.ts) 以每种已发布语言保存指明 Notion 的文案；随后由 [`ui-mcp-account`](../../client/ui-mcp-account/README.zh.md) 提供 `notion` 条目，并渲染上文所述的区块、引导、标签与 toast。没有注册表的组合（如 headless profile）加载插件时不带账号区块。
 

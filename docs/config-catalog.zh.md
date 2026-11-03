@@ -2563,7 +2563,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-notion`
 
-- `inject`: `mcpServers` · `systemPrompt`
+- `inject`: `mcpManager` · `systemPrompt`
 - `source`: [`packages/connector/notion/src/index.ts:29`](../packages/connector/notion/src/index.ts)
 
 ```ts config-catalog

@@ -33,7 +33,7 @@ Install the package as a bundle, for example from the Web sidebar's **Plugins** 
 dsh plugin --profile web add @deepseek-ai/dsh-notion
 ```
 
-The bundle patch inserts the `notion` row after the profile's other layers. The plugin requires the `mcpServers` and `systemPrompt` services, which the Web and Desktop compositions provide through [`dsh-web-app`](../../bundle/web-app/README.md). In a profile without the MCP manager, such as `headless`, the plugin does not activate, and startup prints a warning that names the missing `mcpServers` service.
+The bundle patch inserts the `notion` row after the profile's other layers. The plugin requires the `mcpManager` and `systemPrompt` services, which the Web and Desktop compositions provide through [`dsh-web-app`](../../bundle/web-app/README.md). In a profile without the MCP manager, such as `headless`, the plugin does not activate, and startup prints a warning that names the missing `mcpManager` service.
 
 ### Authorize and sign out
 
@@ -73,7 +73,7 @@ The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-no
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-[`cordis.patch.yml`](cordis.patch.yml) inserts one row with id `notion` naming this package, so the package is both the bundle and its only row; `config` overrides target that id. The Host half, [`src/index.ts`](src/index.ts), makes two registrations, both effects of the plugin's fiber: `ctx.mcpServers.register('notion', …)` adds a Streamable HTTP entry with the configured `url` and OAuth credential key, and `ctx.systemPrompt.section()` adds the naming guidance at the `MCP_SERVERS` order. The server name fixes the `mcp__notion__` tool namespace, and the credential key fixes the grant address, so a reloaded or reinstalled plugin reaches the same tools and grant. The manager validates the entry when it is registered; a configured or registered server that already uses the name or key makes the plugin fail to load before the guidance is added.
+[`cordis.patch.yml`](cordis.patch.yml) inserts one row with id `notion` naming this package, so the package is both the bundle and its only row; `config` overrides target that id. The Host half, [`src/index.ts`](src/index.ts), makes two registrations, both effects of the plugin's fiber: `ctx.mcpManager.register('notion', …)` adds a Streamable HTTP entry with the configured `url` and OAuth credential key, and `ctx.systemPrompt.section()` adds the naming guidance at the `MCP_SERVERS` order. The server name fixes the `mcp__notion__` tool namespace, and the credential key fixes the grant address, so a reloaded or reinstalled plugin reaches the same tools and grant. The manager validates the entry when it is registered; a configured or registered server that already uses the name or key makes the plugin fail to load before the guidance is added.
 
 While the account registry runs, the plugin also calls `ctx.mcpAccounts.register({ server: 'notion', packageName: '@deepseek-ai/dsh-notion', copy })`, where [`src/copy.ts`](src/copy.ts) holds the text that names Notion in every shipped language; [`ui-mcp-account`](../../client/ui-mcp-account/README.md) then serves the `notion` entry and renders the section, guidance, tag, and toast described above. A composition without the registry, such as a headless profile, loads the plugin without the account section.
 
