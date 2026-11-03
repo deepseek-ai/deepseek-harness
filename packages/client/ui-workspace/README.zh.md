@@ -77,7 +77,7 @@ Session 行渲染运行时的实时 `pendingInteraction` 分类：审批显示**
 
 当成组的与平铺的 Session 行所对应的 Session 存在活动定时任务时，该行显示时钟标记。它是行首 `sidebar.session.row.leading` seat 的占用方，因此仅在该行主状态为 idle 时渲染，绝不与行自身的状态点同时出现；归档行该格同样留空，搜索结果没有该 seat，也不显示标记。它不是按钮，没有 Tab stop，点击其所在区域不会打开整行。标记自身的读取及其「活动」条件的确切含义由 [ui-schedule](../ui-schedule/README.zh.md) 负责。
 
-工作区标题的右键和省略号共用 `workspace` 右键操作对象。重命名和删除沿用现有确认对话框，打开前再次检查工作区是否存在及操作权限；本机目录显示由 [ui-open-in-app](../ui-open-in-app/README.zh.md) 提供。没有修改权限时仍可使用本机和插件菜单操作。打开菜单不改变展开状态或选中的会话。
+工作区标题的右键和省略号共用本包声明的 `workspace` 右键操作对象。重命名和删除沿用现有确认对话框，打开前再次检查工作区是否存在及操作权限；本机目录显示由 [ui-open-in-app](../ui-open-in-app/README.zh.md) 提供。没有修改权限时仍可使用本机和插件菜单操作。打开菜单不改变展开状态或选中的会话。
 
 会话行通过 [ui-context-menu](../ui-context-menu/README.zh.md) 在右键与省略号按钮间共享现有操作贡献。操作对象固定为被点击的会话，不改变选中状态；`sidebar.workspaces.session.menu.item` 仍是组件扩展位置。内置分组依次为置顶、重命名、分叉；复制 Session ID 和可选的本机目录显示；归档，复制 Session ID 与归档之前各有一条分割线。
 

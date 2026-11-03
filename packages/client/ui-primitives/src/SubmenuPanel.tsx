@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import { menuHoverAllowed, type useMenuSubmenu } from './useMenuSubmenu.ts'
-import { MenuDecoration, menuIconColumns, MenuRow } from './MenuRow.tsx'
+import { menuIconColumns, MenuRow, renderMenuDecoration } from './MenuRow.tsx'
 import { IconChevronLeftOutlineRegular } from './icons/index.tsx'
 import { MenuSurface } from './MenuSurface.tsx'
 import css from './Menu.module.css'
@@ -38,7 +38,7 @@ export function SubmenuPanel({ entry, submenu, compact, dense, contextual, backL
       <div className={css.separator} role="separator" />
     </>}
     <div className={css.viewport} role="presentation">
-      {entry.submenu.map(sub => 'type' in sub ? <MenuDecoration key={sub.id} entry={sub} />
+      {entry.submenu.map(sub => 'type' in sub ? renderMenuDecoration(sub)
         : <MenuRow key={sub.id} icon={sub.icon} reserveIcon={columns.has(sub)} disabled={sub.disabled}
           danger={sub.danger} shortcut={sub.shortcut} onClick={() => { onSelect?.(sub.id) }}>{sub.label}</MenuRow>)}
     </div>

@@ -1,21 +1,30 @@
-/** Shared row presentation for component, data, and child menu entries. */
+/** Package-internal row presentation shared by component, data, and child menu entries. */
 import { useId } from 'react'
 import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from 'react'
 import clsx from 'clsx'
-import type { MenuEntry, MenuItemButtonProps } from './Menu.tsx'
+import type { MenuEntry, MenuItemButtonProps, MenuLabel, MenuSeparator } from './Menu.tsx'
 import { IconCheckOutlineRegular, IconChevronRightOutlineRegular } from './icons/index.tsx'
 import { ShortcutKeys } from './ShortcutKeys.tsx'
 import { Tooltip } from './Tooltip.tsx'
 import css from './Menu.module.css'
 
+/** Optional props that also accept `undefined`, so data rows can forward absent `MenuItem` fields. */
+type OptionalProps<T, K extends keyof T> = { [P in K]?: T[P] | undefined }
+
+/** Package-internal row props: the `MenuItemButton` row fields plus data- and child-row presentation. */
 type MenuRowProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'>
   & Pick<MenuItemButtonProps, 'children'>
-  & { [K in 'icon' | 'shortcut' | 'current' | 'disabledReason' | 'danger' | 'separatorBefore']?: MenuItemButtonProps[K] | undefined }
+  & OptionalProps<MenuItemButtonProps, 'icon' | 'shortcut' | 'current' | 'disabledReason' | 'danger' | 'separatorBefore'>
   & {
+    /** Whether this data row is the menu's current selection. */
     selected?: boolean
+    /** Selection marker: a trailing check, or the row fill. */
     selection?: 'check' | 'fill'
+    /** Keep an empty icon column so grouped rows stay aligned. */
     reserveIcon?: boolean
+    /** Hide the icon from assistive technology; component rows keep it exposed. */
     decorativeIcon?: boolean
+    /** Pointer handlers on the row wrapper, used by submenu parents. */
     wrapperProps?: HTMLAttributes<HTMLDivElement> | undefined
   }
 
@@ -70,11 +79,11 @@ export function menuIconColumns(entries: readonly MenuEntry[], contextual: boole
   return aligned
 }
 
-/** Render a non-interactive entry without joining the keyboard walk.
- * @param props - heading or separator data.
- * @returns the corresponding menu decoration.
+/** Render a separator or group heading outside the keyboard walk.
+ * @param entry - non-interactive menu entry.
+ * @returns the corresponding element.
  */
-export function MenuDecoration({ entry }: { entry: Extract<MenuEntry, { type: string }> }): ReactNode {
-  return entry.type === 'separator' ? <div className={css.separator} role="separator" />
-    : <div className={css.label} role="presentation">{entry.text}</div>
+export function renderMenuDecoration(entry: MenuSeparator | MenuLabel): ReactNode {
+  return entry.type === 'separator' ? <div key={entry.id} className={css.separator} role="separator" />
+    : <div key={entry.id} className={css.label} role="presentation">{entry.text}</div>
 }

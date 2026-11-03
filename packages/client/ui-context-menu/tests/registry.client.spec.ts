@@ -4,7 +4,7 @@ import { MenuRegistry } from '../src/client/registry.ts'
 import type { MenuAction } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 
 declare module '@deepseek-ai/dsh-client-ui-context-menu/client' {
-  interface ContextMenuTargetMap { extension: { readonly id: string } }
+  interface ContextMenuTargetMap { extension: { readonly id: string }; registryHeader: { readonly id: string } }
 }
 const target = { kind: 'extension' as const, value: { id: 'clicked' } }
 
@@ -22,22 +22,22 @@ describe('menu contribution lifecycle', () => {
     const changed = vi.fn()
     const detach = source.subscribe(changed)
     expect(source.getSnapshot()).toEqual([])
-    const first = registry.register({ id: 'first', target: 'sessionHeader', order: 0, resolve })
-    expect(source.getSnapshot()).toEqual(['sessionHeader'])
+    const first = registry.register({ id: 'first', target: 'registryHeader', order: 0, resolve })
+    expect(source.getSnapshot()).toEqual(['registryHeader'])
     const snapshot = source.getSnapshot()
-    const second = registry.register({ id: 'second', target: 'sessionHeader', order: 0, resolve })
+    const second = registry.register({ id: 'second', target: 'registryHeader', order: 0, resolve })
     expect(source.getSnapshot()).toBe(snapshot)
     first(); first()
     expect(source.getSnapshot()).toBe(snapshot)
     const other = registry.register({ id: 'other', target: 'session', order: 0, resolve })
-    expect(source.getSnapshot()).toEqual(['session', 'sessionHeader'])
+    expect(source.getSnapshot()).toEqual(['registryHeader', 'session'])
     second()
     expect(source.getSnapshot()).toEqual(['session'])
     other()
     expect(source.getSnapshot()).toEqual([])
-    registry.register({ id: 'replacement', target: 'sessionHeader', order: 0, resolve })
+    registry.register({ id: 'replacement', target: 'registryHeader', order: 0, resolve })
     expect(registry.registeredKinds).toBe(source)
-    expect(source.getSnapshot()).toEqual(['sessionHeader'])
+    expect(source.getSnapshot()).toEqual(['registryHeader'])
     registry.dispose()
     expect(source.getSnapshot()).toEqual([])
     expect(changed).toHaveBeenCalledTimes(6)

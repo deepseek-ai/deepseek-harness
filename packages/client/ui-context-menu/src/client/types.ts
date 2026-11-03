@@ -2,7 +2,6 @@
 import type { ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import type { PaneId, TabRecord } from '@deepseek-ai/dsh-client-ui-dockkit'
 import type { HTMLAttributes } from 'react'
 
@@ -28,9 +27,6 @@ export type UseContextMenu = () => ContextMenuBindings
 /** External plugins extend this map with their own target families. */
 export interface ContextMenuTargetMap {
   session: { readonly sessionId: SessionId; readonly displayTitle: string }
-  workspace: { readonly workspaceId: WorkspaceId; readonly path: string; readonly displayTitle: string }
-  /** Header utilities, independent of Session-row and title context actions. */
-  sessionHeader: { readonly sessionId: SessionId }
   file: { readonly sessionId: SessionId; readonly path: string; readonly line?: number; readonly paneId?: PaneId }
   directory: { readonly sessionId: SessionId; readonly path: string }
   url: { readonly sessionId: SessionId; readonly url: string }
@@ -131,11 +127,12 @@ export interface ContextMenus {
    */
   register<K extends keyof ContextMenuTargetMap>(contribution: MenuContribution<K>): () => void
   /**
-   * Open the single shared popup.
+   * Open the single shared popup; a repeated gesture on the same target within 4 CSS pixels closes it instead.
    * @param target - captured object.
    * @param point - viewport position.
+   * @param options - set by the shared `contextMenu.button`: its instance id replaces the repeated-gesture check.
    */
-  open(target: ContextMenuTarget, point: MenuPoint): void
+  open(target: ContextMenuTarget, point: MenuPoint, options?: { readonly button: string }): void
   /**
    * Resolve an embedded menu without opening the shared popup.
    * @param target - captured object.

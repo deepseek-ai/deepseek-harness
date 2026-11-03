@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import { useAnchoredPosition } from './useAnchoredPosition.ts'
 import { useMenuSubmenu, menuHoverAllowed } from './useMenuSubmenu.ts'
-import { MenuRow, MenuDecoration, menuIconColumns } from './MenuRow.tsx'
+import { MenuRow, menuIconColumns, renderMenuDecoration } from './MenuRow.tsx'
 import { SubmenuPanel } from './SubmenuPanel.tsx'
 import { usePointerGrace } from './pointer-grace.ts'
 import { isBehindModal } from './useModalLayer.ts'
@@ -443,7 +443,7 @@ export function Menu({ open, anchor, items = [], children, submenuBackLabel, sel
   const itemColumns = menuIconColumns(items, contextual)
   const footerColumns = menuIconColumns(footer ?? [], contextual)
   const renderEntry = (entry: MenuEntry, columns: ReadonlySet<MenuEntry>) => {
-    if ('type' in entry) return <MenuDecoration key={entry.id} entry={entry} />
+    if ('type' in entry) return renderMenuDecoration(entry)
     const hasSub = entry.submenu !== undefined && entry.submenu.length > 0
     return <MenuRow key={entry.id} icon={entry.icon} reserveIcon={columns.has(entry)}
       disabled={entry.disabled} danger={entry.danger} shortcut={entry.shortcut}

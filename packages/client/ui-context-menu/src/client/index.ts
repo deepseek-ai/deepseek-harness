@@ -6,7 +6,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import z from '@deepseek-ai/schemastery'
 import { MENU_TRANSITION_MS } from '@deepseek-ai/dsh-client-ui-primitives'
-import { buttonTargetKey, menuTargetKey } from './target-key.ts'
+import { menuTargetKey } from './target-key.ts'
 import { MenuRegistry } from './registry.ts'
 import { createMenuStore } from './store.ts'
 import { dictionaries } from './locales.ts'
@@ -59,6 +59,8 @@ export function apply(ctx: Context, config: Config = Config({})): void {
   const instance = handle.create()
   const store: typeof handle = { ...handle, create: () => instance }
   const targetSource = createSnapshotStore<ContextMenuTarget | null>(null)
+  // Instance id of the shared button whose activation opened the current popup.
+  const opener = createSnapshotStore<string | null>(null)
   let sequence = 0
   let active: { resolution: MenuResolution; unsubscribe: () => void; target: ContextMenuTarget; point: MenuPoint } | undefined
   let closeTimer: ReturnType<typeof setTimeout> | undefined
@@ -83,7 +85,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
   const cancelOpening = (): void => {
     clearTimeout(openingTimer); finishOpening?.(); finishOpening = undefined
     active?.unsubscribe(); active?.resolution.dispose(); active = undefined
-    targetSource.set(null)
+    targetSource.set(null); opener.set(null)
   }
   const dismiss = (replacing: boolean): void => {
     cancelOpening()
@@ -96,44 +98,48 @@ export function apply(ctx: Context, config: Config = Config({})): void {
   const contextMenus: ContextMenus = {
     active: targetSource, registeredKinds: registry.registeredKinds,
     register: input => registry.register(input), resolve: target => registry.resolve(target), notify, close,
-    open: (target, point) => {
+    open: (target, point, options) => {
       const previous = active
-      if (previous !== undefined
+      // A repeated gesture closes; shared buttons toggle by their own instance instead.
+      if (options === undefined && previous !== undefined
         && Math.hypot(previous.point.x - point.x, previous.point.y - point.y) <= 4
         && menuTargetKey(previous.target) === menuTargetKey(target)) { close(); return }
-      const focused = document.activeElement
-      if (!(focused instanceof Element) || focused.closest('[data-context-menu]') === null) {
-        returnFocus = focused instanceof HTMLElement ? focused : null
-      }
-      dismiss(true)
-      const resolution = registry.resolve(target)
-      targetSource.set(target)
-      let displayed = false
-      const publish = (): void => { if (displayed) instance.actions.items(resolution.source.getSnapshot()) }
-      const occurrence = { resolution, unsubscribe: resolution.source.subscribe(publish), target, point }
-      active = occurrence
-      const delay = new Promise<void>((resolve) => {
-        finishOpening = resolve; openingTimer = setTimeout(resolve, MENU_TRANSITION_MS.prepare)
-      })
-      void Promise.all([resolution.ready, delay]).then(() => {
-        if (active !== occurrence) return
-        clearTimeout(closeTimer)
-        instance.actions.open(target, point)
-        displayed = true
-        publish()
-      })
+      show(target, point)
+      if (options !== undefined) opener.set(options.button)
     },
+  }
+  function show(target: ContextMenuTarget, point: MenuPoint): void {
+    const focused = document.activeElement
+    if (!(focused instanceof Element) || focused.closest('[data-context-menu]') === null) {
+      returnFocus = focused instanceof HTMLElement ? focused : null
+    }
+    dismiss(true)
+    const resolution = registry.resolve(target)
+    targetSource.set(target)
+    let displayed = false
+    const publish = (): void => { if (displayed) instance.actions.items(resolution.source.getSnapshot()) }
+    const occurrence = { resolution, unsubscribe: resolution.source.subscribe(publish), target, point }
+    active = occurrence
+    const delay = new Promise<void>((resolve) => {
+      finishOpening = resolve; openingTimer = setTimeout(resolve, MENU_TRANSITION_MS.prepare)
+    })
+    void Promise.all([resolution.ready, delay]).then(() => {
+      if (active !== occurrence) return
+      clearTimeout(closeTimer)
+      instance.actions.open(target, point)
+      displayed = true
+      publish()
+    })
   }
   ctx.provide('contextMenus', contextMenus)
   ctx.slots.registerFactory({
     name: 'contextMenu.button', scope: 'root',
     inject: () => ({
-      hooks: { active: targetSource, registeredKinds: registry.registeredKinds },
-      toggle: (target: ContextMenuTarget, point: MenuPoint) => {
+      hooks: { opener, registeredKinds: registry.registeredKinds },
+      toggle: (button: string, target: ContextMenuTarget, point: MenuPoint) => {
         if (disposed) return
-        const current = targetSource.getSnapshot()
-        if (current !== null && buttonTargetKey(current) === buttonTargetKey(target)) close()
-        else contextMenus.open(target, point)
+        if (opener.getSnapshot() === button) { close(); return }
+        contextMenus.open(target, point, { button })
       },
     }),
   }, ContextMenuButton)
@@ -170,7 +176,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     inject: () => ({ hooks: { catalog: ctx.shortcuts.catalog }, close, returnFocus: () => returnFocus, select: (id: string) => {
       const selected = active?.resolution
       active?.unsubscribe(); active = undefined
-      targetSource.set(null); dismiss(false)
+      targetSource.set(null); opener.set(null); dismiss(false)
       selected?.select(id); selected?.dispose() } }),
   }, MenuOverlay))
 }

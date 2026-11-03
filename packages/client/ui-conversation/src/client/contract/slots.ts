@@ -25,6 +25,13 @@ import type { ConversationSnapshot } from './snapshot.ts'
 import type { ViewTab } from './views.ts'
 import type { UserTextDocumentInput, UserTextEvaluator, UserTextId, UserTextNode } from './user-text.ts'
 
+declare module '@deepseek-ai/dsh-client-ui-context-menu/client' {
+  interface ContextMenuTargetMap {
+    /** Session Header More menu, independent of Session-row and title context actions. */
+    sessionHeader: { readonly sessionId: SessionId }
+  }
+}
+
 /** Browser-owned draft attachment that has not crossed the durable Host boundary. */
 export type ComposerAttachment = ComposerImageAttachment | ComposerFileAttachment
 

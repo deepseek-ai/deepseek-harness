@@ -6,13 +6,19 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { Context } from '@deepseek-ai/cordis'
-import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import { useState } from 'react'
 import { apply, inject } from '../src/client/index.ts'
 import type { ContextMenuTarget, MenuAction } from '../src/client/types.ts'
 import { isContextMenuTrigger } from '../src/client/external-trigger.ts'
 
-const target = (id: string): ContextMenuTarget => ({ kind: 'sessionHeader', value: { sessionId: SessionId(id) } })
+declare module '@deepseek-ai/dsh-client-ui-context-menu/client' {
+  interface ContextMenuTargetMap {
+    header: { readonly sessionId: SessionId }
+    entity: { readonly id: string; readonly title: string }
+  }
+}
+
+const target = (id: string): ContextMenuTarget => ({ kind: 'header', value: { sessionId: SessionId(id) } })
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks() })
 
 it('shows late registered kinds without preparing actions and withdraws them with the contributing fiber', async () => {
@@ -37,7 +43,7 @@ it('shows late registered kinds without preparing actions and withdraws them wit
   expect(view.getByRole('button', { name: 'Row menu' })).toBeTruthy()
   expect(view.queryByRole('button', { name: 'Header menu' })).toBeNull()
   const contribution = await runtime.mount({ inject: ['contextMenus'], apply: (ctx: Context) => { ctx.effect(() => ctx.contextMenus.register({
-    id: 'header', target: 'sessionHeader', order: 0, resolve,
+    id: 'header', target: 'header', order: 0, resolve,
   })) } })
   expect(view.getByRole('button', { name: 'Header menu' }).getAttribute('aria-haspopup')).toBe('menu')
   expect(resolve).not.toHaveBeenCalled()
@@ -72,7 +78,7 @@ it('toggles moved buttons by target identity, replaces other targets, and preser
   })
   await runtime.mount({ inject, apply })
   await runtime.mount({ inject: ['contextMenus'], apply: (ctx: Context) => { ctx.effect(() => ctx.contextMenus.register({
-    id: 'header', target: 'sessionHeader', order: 0, resolve: () => [{ id: 'open', label: 'Open' }],
+    id: 'header', target: 'header', order: 0, resolve: () => [{ id: 'open', label: 'Open' }],
   })) } })
   const view = runtime.renderRoot()
   const first = view.getByRole('button', { name: 'First menu' })
@@ -88,9 +94,10 @@ it('toggles moved buttons by target identity, replaces other targets, and preser
   expect(clicked).not.toHaveBeenCalled()
   expect(pressed).not.toHaveBeenCalled()
   expect(focus).toHaveBeenCalledWith({ preventScroll: true })
-  expect(open).toHaveBeenLastCalledWith(target('one'), { x: 20, y: 58 })
+  expect(open.mock.lastCall?.slice(0, 2)).toEqual([target('one'), { x: 20, y: 58 }])
+  expect(typeof open.mock.lastCall?.[2]?.button).toBe('string')
   expect(first.getAttribute('aria-expanded')).toBe('true')
-  expect(same.getAttribute('aria-expanded')).toBe('true')
+  expect(same.getAttribute('aria-expanded')).toBe('false')
   expect(second.getAttribute('aria-expanded')).toBe('false')
   await act(() => vi.advanceTimersByTimeAsync(40))
   expect(view.getByRole('menuitem', { name: 'Open' })).toBeTruthy()
@@ -103,8 +110,11 @@ it('toggles moved buttons by target identity, replaces other targets, and preser
   expect(open).toHaveBeenCalledTimes(1)
   fireEvent.click(first)
   fireEvent.click(same)
+  expect(runtime.ctx.contextMenus.active.getSnapshot()).toEqual(target('one'))
+  expect(first.getAttribute('aria-expanded')).toBe('false')
+  expect(same.getAttribute('aria-expanded')).toBe('true')
+  fireEvent.click(same)
   expect(runtime.ctx.contextMenus.active.getSnapshot()).toBeNull()
-  expect(open).toHaveBeenCalledTimes(2)
   fireEvent.click(first)
   fireEvent.pointerDown(second)
   fireEvent.click(second)
@@ -125,14 +135,12 @@ it('toggles moved buttons by target identity, replaces other targets, and preser
   expect(runtime.ctx.contextMenus.active.getSnapshot()).toBeNull()
 })
 
-it.each(['session', 'workspace'] as const)('keeps an open %s button expanded after its owner updates display metadata', async (kind) => {
+it('keeps an open button expanded after its owner updates display metadata in the target', async () => {
   const runtime = await SlotTestRuntime.create()
   onTestFinished(() => runtime.dispose())
   runtime.ctx.provide('shortcuts', { catalog: createSnapshotStore([]) } as never)
   runtime.ctx.provide('locale', { register: () => () => {}, bind: () => (key: string) => key } as never)
-  const entity = (title: string): ContextMenuTarget => kind === 'session'
-    ? { kind, value: { sessionId: SessionId('same'), displayTitle: title } }
-    : { kind, value: { workspaceId: 'same' as WorkspaceId, displayTitle: title, path: `/${title}` } }
+  const entity = (title: string): ContextMenuTarget => ({ kind: 'entity', value: { id: 'same', title } })
   let update!: (target: ContextMenuTarget) => void
   await runtime.root.declare({}, ({ renderFactorySlot }) => {
     const [current, setCurrent] = useState(entity('before'))
@@ -141,7 +149,7 @@ it.each(['session', 'workspace'] as const)('keeps an open %s button expanded aft
   })
   await runtime.mount({ inject, apply })
   await runtime.mount({ inject: ['contextMenus'], apply: (ctx: Context) => { ctx.effect(() => ctx.contextMenus.register({
-    id: 'entity', target: kind, order: 0, resolve: () => [],
+    id: 'entity', target: 'entity', order: 0, resolve: () => [],
   })) } })
   const view = runtime.renderRoot(), button = view.getByRole('button', { name: 'Entity menu' })
   fireEvent.click(button)

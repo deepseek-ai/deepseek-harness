@@ -201,6 +201,6 @@ it('leaves unbound keyboard gestures native', async () => {
     document.dispatchEvent(event)
     expect(event.defaultPrevented).toBe(false)
   } finally { await fiber.dispose() }
-  button.toggle({ kind: 'pluginDocument', value: { id: 'retired' } }, { x: 1, y: 2 })
-  expect(button.hooks.active.getSnapshot()).toBeNull()
+  button.toggle('retired-button', { kind: 'pluginDocument', value: { id: 'retired' } }, { x: 1, y: 2 })
+  expect(button.hooks.opener.getSnapshot()).toBeNull()
 })
