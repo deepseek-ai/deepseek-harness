@@ -47,13 +47,13 @@ function placement(page: Page) {
       [0.25, 0.5, 0.75].every(y => menu.contains(document.elementFromPoint(
         left + (right - left) * x, top + (bottom - top) * y,
       ))))
-    const expectedLeft = Math.min(Math.max(trigger.left, 12), innerWidth - box.width - 12)
-    const expectedTop = Math.min(Math.max(trigger.bottom + 5, 12), innerHeight - box.height - 12)
+    const verticalGap = Math.min(Math.abs(box.top - trigger.bottom - 5), Math.abs(trigger.top - box.bottom - 5))
+    const horizontalAlignment = Math.min(Math.abs(box.left - trigger.left), Math.abs(box.right - trigger.right))
     return {
       dockMode: dock.dataset.sidebarRightPanel,
       bodyMounted: menu.parentElement === document.body,
       fixed: getComputedStyle(menu).position === 'fixed',
-      anchored: Math.abs(box.left - expectedLeft) <= 1 && Math.abs(box.top - expectedTop) <= 1,
+      anchored: verticalGap <= 1 && horizontalAlignment <= 1,
       viewportBounded: box.left >= 11 && box.top >= 11
         && box.right <= innerWidth - 11 && box.bottom <= innerHeight - 11,
       overlapsBrowser,

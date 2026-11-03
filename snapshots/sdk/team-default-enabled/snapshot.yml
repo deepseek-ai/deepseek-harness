@@ -1,0 +1,10 @@
+version: 1
+scenario: team-default-enabled
+profile: sdk
+composition: sdk-team-default-enabled
+recording: authored
+header:
+  class: sdk-team-default-enabled
+  pin: true
+  childSystemPrompts: [1]
+  childToolSchemas: [1]

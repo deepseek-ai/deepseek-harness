@@ -27,6 +27,8 @@ English | [中文](README.zh.md)
 
 New Sessions, including ordinary forks, default to Team mode off. See the [Session-mode upgrade guide](../../../docs/upgrade-guide/v0.2.1-rc.2/session-team-mode/guide.md). Select **Use Agent Teams** in the root Session’s model and reasoning menu. Turning it off hides Team tools and guidance from subsequent steps throughout the tree while retaining tasks and subagents. The saved selection survives restart; a historical task board without a saved selection remains enabled.
 
+Set `defaultEnabled: true` to enable new root Sessions, including ordinary forks, before their first model step. Initialization saves the selection as `team/mode`; a save failure rejects Agent creation. Existing selections take precedence, and resuming a Session never applies the default, including when no selection was saved. Descendants use their live root's mode. The [SDK configuration guide](../../../docs/user/guide/python-sdk.md#enable-team-mode) includes a ready-to-use patch; the standard bundle keeps this option off.
+
 Mode changes take effect without waiting for queued task mutations. Each mutation checks the current mode when it starts: an admitted operation finishes, while queued work is rejected if Team is still off when it starts. Enabling again permits subsequent operations. A failed save leaves an appended selection active; retrying the same selection saves without another mode record.
 
 Add this package when subagents need durable shared task ownership and dependencies. Mount it with `@deepseek-ai/dsh-tool-agent-team` for model tools.
@@ -47,11 +49,12 @@ Mount both Team packages in a composition that already provides continuable suba
 - name: '@deepseek-ai/dsh-tool-agent-team'
 ```
 
-For example, ask the model to start a subagent to review the diff and track its work on the task board. The one limit is optional and validated at startup:
+For example, ask the model to start a subagent to review the diff and track its work on the task board. Configuration fields are optional and validated at startup:
 
 | Field | Default | Meaning |
 |---|---|---|
 | `maxTasks` | `256` | Maximum non-deleted tasks on the board |
+| `defaultEnabled` | `false` | Save Team mode on for new roots without an existing selection |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-agent-team) is the exhaustive source for every accepted field and its JSDoc. A row that sets `maxMembers`, `maxMessageBytes`, or `disposalTimeoutMs` does not activate, and dsh names the key in its startup warning; the [upgrade guide](../../../docs/upgrade-guide/v0.2.1-rc.2/agent-team-subagents/guide.md) lists the replacements.
 

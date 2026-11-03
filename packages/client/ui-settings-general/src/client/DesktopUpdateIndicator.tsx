@@ -12,6 +12,7 @@ const BUSY_PHASES: ReadonlySet<DesktopUpdatePresentation['phase']> = new Set([
 ])
 
 function updateCopy(state: DesktopUpdatePresentation, t: SettingsTranslate): { label: string; detail: string } {
+  if (state.configurationError !== undefined) return { label: t('desktop.channel.unavailable'), detail: t(`desktop.update.configuration.${state.configurationError}`) }
   const labels: Readonly<Record<DesktopUpdatePresentation['phase'], string>> = {
     idle: '',
     checking: t('desktop.update.checking'),
@@ -28,9 +29,13 @@ function updateCopy(state: DesktopUpdatePresentation, t: SettingsTranslate): { l
   }
   if (state.phase === 'error') {
     const failures: Readonly<Record<DesktopUpdateFailureKind, string>> = {
+      configuration: t('desktop.update.configurationFailed'),
       check: t('desktop.update.checkFailed'),
       'check-network': t('desktop.update.checkNetworkFailed'),
       download: t('desktop.update.downloadFailed'),
+      'download-space': t('desktop.update.downloadSpaceFailed'),
+      'download-permission': t('desktop.update.downloadPermissionFailed'),
+      'download-busy': t('desktop.update.downloadBusyFailed'),
       'download-network': t('desktop.update.downloadNetworkFailed'),
       install: t('desktop.update.installFailed'),
       'install-network': t('desktop.update.installNetworkFailed'),
@@ -62,12 +67,12 @@ export function DesktopUpdateIndicator({ wide, hidden, t, view, onOpen }: {
   onOpen: () => void
 }) {
   const { presentation: state, failed, opening } = view
-  if (!wide || hidden || (!failed && (state === undefined || state.phase === 'idle'))) return null
+  if (!wide || hidden || (!failed && (state === undefined || (state.phase === 'idle' && state.configurationError === undefined)))) return null
   const retryLabel = t('desktop.update.retry')
   const copy = state === undefined ? { label: retryLabel, detail: retryLabel } : updateCopy(state, t)
   const label = failed ? retryLabel : copy.label
-  const error = failed || state?.phase === 'error'
-  const busy = opening || (state !== undefined && BUSY_PHASES.has(state.phase))
+  const error = failed || state?.phase === 'error' || state?.configurationError !== undefined
+  const busy = opening || (state !== undefined && state.configurationError === undefined && BUSY_PHASES.has(state.phase))
   return <Tooltip label={failed ? retryLabel : copy.detail} side="top">
     <button type="button" className={css.indicator}
       aria-label={label} aria-disabled={busy} onClick={() => { if (!busy) onOpen() }}>
@@ -91,7 +96,7 @@ export function DesktopUpdateBadge({ useDesktopUpdate, useConnectionState, t }: 
   const { presentation: state, failed } = useDesktopUpdate(value => value)
   const connection = useConnectionState(value => value)
   if (((connection === 'disconnected' || connection === 'connecting') && state?.phase !== 'installing')
-    || (!failed && (state === undefined || state.phase === 'idle'))) return null
+    || (!failed && (state === undefined || (state.phase === 'idle' && state.configurationError === undefined)))) return null
   const retryLabel = t('desktop.update.retry')
   const copy = state === undefined ? { label: retryLabel, detail: retryLabel } : updateCopy(state, t)
   const label = failed ? retryLabel : copy.label
