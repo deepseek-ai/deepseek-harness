@@ -145,7 +145,7 @@ it('keeps the Office tools and returns the unavailable Kit error to the model wh
   expect(result.isError).toBe(true)
   expect(result.content).toEqual([{ type: 'text', text: `Error: cannot convert "${join(workspace, 'report.docx')}": LibreOffice Kit is not installed. `
     + 'This deployment does not provide LibreOffice Kit; install or enable it as this deployment requires, then retry.'
-    + ' Tell the user this operation is unavailable; do not substitute system soffice, npx, or another converter.' }])
+    + ' Tell the user this operation is unavailable, or retry later if the cause may be temporary; do not substitute system soffice, npx, or another converter.' }])
   expect(resolveKitModule).toHaveBeenCalled()
   expect(warnings.filter(warning => warning.startsWith('OfficeKitError: LibreOffice Kit is not installed.'))).toHaveLength(1)
 })
@@ -158,7 +158,7 @@ it('mounts the preset Office tools without the Office kit row and reaches the se
   expect(ctx.tools.schemas().map(tool => tool.name).sort()).toEqual(OFFICE_TOOLS)
   const convert = () => convertReport(ctx, workspace, 'office-without-service')
   expect((await convert()).content).toEqual([{ type: 'text', text: `Error: cannot convert "${join(workspace, 'report.docx')}": The document converter is unavailable.`
-    + ' Tell the user this operation is unavailable; do not substitute system soffice, npx, or another converter.' }])
+    + ' Tell the user this operation is unavailable, or retry later if the cause may be temporary; do not substitute system soffice, npx, or another converter.' }])
   expect(resolveKitModule).not.toHaveBeenCalled()
   await ctx.loader.root.update(entries)
   await ctx.loader.await()

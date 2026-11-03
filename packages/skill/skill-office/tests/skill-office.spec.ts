@@ -315,7 +315,7 @@ it('directs Office operations to dedicated tools without executable paths', asyn
     await ctx.plugin(SkillOffice)
     for (const name of names) {
       const content = (await ctx.skills.get(name))!.content
-      expect(content).toContain('If `office_render`, `office_convert`, or `office_recalculate` is unavailable, call `skill` to load `office`; the tools appear next step.')
+      expect(content).toContain('If `office_render`, `office_convert`, or `office_recalculate` is not in your tools, load `office` with `skill`; they appear next step.')
       expect(content).not.toMatch(
         /operation:|`office` tool|office-render|office-recalculate|office-export-pdf|LibreOffice Kit CLI|--output-dir|"<node>"/u,
       )

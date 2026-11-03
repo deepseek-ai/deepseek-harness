@@ -97,5 +97,5 @@ export function renderFileContent(value: OfficeFileValue): ContentBlock[] {
   const verb = value.operation === 'convert' ? 'Converted' : 'Recalculated'
   const pages = value.pageCount === undefined ? '' : `, ${value.pageCount} page${value.pageCount === 1 ? '' : 's'}`
   return [{ type: 'text', text: `${verb} ${value.path} to ${value.format} (${value.bytes} bytes${pages}): ${value.file}\n`
-    + `Copy this temporary file to its destination with the shell now; it is deleted when this conversation ends.${fontsLine(value.missingFonts)}` }]
+    + `Copy this temporary file to its destination with the shell now; it may be deleted after a retention period or to free space, and is deleted when this conversation ends.${fontsLine(value.missingFonts)}` }]
 }

@@ -15,7 +15,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { ImageAttachmentRef, ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import type { FsInfo, FsTarget } from '@deepseek-ai/dsh-fs'
 import type {} from '@deepseek-ai/dsh-llm'
-import type {} from '@deepseek-ai/dsh-subagent'
+import { SubagentError } from '@deepseek-ai/dsh-subagent'
 import type {} from '@deepseek-ai/dsh-skill'
 import { OfficeKitError, OfficeSourceKey, type OfficeDocumentExtension, type OfficeImageInputExtension, type OfficeKit,
   type OfficeKitSource, type OfficeWorkbookExtension } from '@deepseek-ai/dsh-office-kit'
@@ -293,10 +293,11 @@ function codeOf(error: unknown): unknown {
 
 /** Model-facing failure for a classified Office service error; other failures pass through unchanged. */
 function officeFailure(verb: string, path: string, error: unknown): unknown {
-  if (!(error instanceof Error) || error.name !== 'OfficeKitError') return error
-  const hint = codeOf(error) === 'unavailable' ? ' Tell the user this operation is unavailable; do not substitute system soffice, npx, or another converter.'
-    : codeOf(error) === 'busy' ? ' Retry after other document operations finish.'
-      : codeOf(error) === 'output-too-large' && verb === 'render' ? ' Select fewer pages, a smaller range, or a lower dpi.' : ''
+  if (!(error instanceof OfficeKitError)) return error
+  const hint = error.code === 'unavailable'
+    ? ' Tell the user this operation is unavailable, or retry later if the cause may be temporary; do not substitute system soffice, npx, or another converter.'
+    : error.code === 'busy' ? ' Retry after other document operations finish.'
+      : error.code === 'output-too-large' && verb === 'render' ? ' Select fewer pages, a smaller range, or a lower dpi.' : ''
   return new Error(`cannot ${verb} "${path}": ${error.message}${hint}`, { cause: error })
 }
 
@@ -376,10 +377,19 @@ async function render(
 
 /**
  * Output-store owner for a conversion: the root Session of the caller's subagent tree, so a subagent's output stays
- * until the conversation that delegated it ends. Without the `subagents` service every Agent is its own root.
+ * until the conversation that delegated it ends. Without the `subagents` service every Agent is its own root, and a
+ * caller whose tree root is already disposed owns its output itself.
  */
 function outputOwner(ctx: Context, agent: Agent): string {
-  return (ctx.get('subagents')?.rootOf(agent) ?? agent).session.id
+  const subagents = ctx.get('subagents')
+  if (subagents === undefined) return agent.session.id
+  try {
+    return subagents.rootOf(agent).session.id
+  } catch (error) {
+    // A disposed tree root can no longer release outputs; the calling Session releases them instead.
+    if (error instanceof SubagentError && error.code === 'UNAUTHORIZED') return agent.session.id
+    throw error
+  }
 }
 
 async function convertFile<Operation extends 'convert' | 'recalculate'>(

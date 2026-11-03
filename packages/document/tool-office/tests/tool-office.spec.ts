@@ -24,6 +24,7 @@ import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import OfficeKit, { OfficeKitError, type OfficeKitErrorCode, type OfficeImagesRequest, type OfficeImagesResult, type OfficeKitSource } from '@deepseek-ai/dsh-office-kit'
 import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
+import { SubagentError } from '@deepseek-ai/dsh-subagent'
 import * as ToolOffice from '../src/index.ts'
 import { renderImagesContent } from '../src/content.ts'
 
@@ -348,9 +349,9 @@ describe('render', () => {
     const output = ctx.tools.get('office_recalculate')!.output
     const value = { operation: 'recalculate', path: '/w/book.xlsx', file: '/h/out/book.xlsx', format: 'xlsx', bytes: 9, missingFonts: ['Aptos'] }
     expect(output.render({}, value)).toEqual([{ type: 'text', text: 'Recalculated /w/book.xlsx to xlsx (9 bytes): /h/out/book.xlsx\n'
-      + 'Copy this temporary file to its destination with the shell now; it is deleted when this conversation ends.\nFonts not installed and substituted: Aptos.' }])
+      + 'Copy this temporary file to its destination with the shell now; it may be deleted after a retention period or to free space, and is deleted when this conversation ends.\nFonts not installed and substituted: Aptos.' }])
     expect(output.render({}, { ...value, operation: 'convert', format: 'pdf', pageCount: 1, missingFonts: [] })).toEqual([{ type: 'text',
-      text: 'Converted /w/book.xlsx to pdf (9 bytes, 1 page): /h/out/book.xlsx\nCopy this temporary file to its destination with the shell now; it is deleted when this conversation ends.' }])
+      text: 'Converted /w/book.xlsx to pdf (9 bytes, 1 page): /h/out/book.xlsx\nCopy this temporary file to its destination with the shell now; it may be deleted after a retention period or to free space, and is deleted when this conversation ends.' }])
     expect(output.render({}, { ...value, pageCount: 2 })[0]).toMatchObject({ text: expect.stringContaining('(9 bytes, 2 pages)') as string })
     expect(output.presentationMeta?.({}, value)).toEqual({ path: '/w/book.xlsx', file: '/h/out/book.xlsx' })
   })
@@ -410,7 +411,7 @@ describe('render', () => {
 })
 
 describe('Office service failures', () => {
-  const unavailableHint = ' Tell the user this operation is unavailable; do not substitute system soffice, npx, or another converter.'
+  const unavailableHint = ' Tell the user this operation is unavailable, or retry later if the cause may be temporary; do not substitute system soffice, npx, or another converter.'
 
   it('stays registered without the Office service, fails each call as unavailable, and uses the service once it is provided', async () => {
     const { ctx, kit } = await setup({ kit: false })
@@ -561,7 +562,7 @@ describe('arguments and paths', () => {
     expect(kit.convertTo).toHaveBeenCalledWith(expect.objectContaining({ extension: 'xlsx', format: 'csv', sheet: 'Data',
       output: { owner: expect.stringMatching(/^office-session-/u) as string, name: 'book.csv' } }), expect.any(AbortSignal))
     expect(text(converted)).toBe(`Converted ${join(dir, 'book.xlsx')} to csv (10 bytes): ${join(home, 'outputs', 'book.csv')}\n`
-      + 'Copy this temporary file to its destination with the shell now; it is deleted when this conversation ends.')
+      + 'Copy this temporary file to its destination with the shell now; it may be deleted after a retention period or to free space, and is deleted when this conversation ends.')
     if (converted.isError) throw new Error('convert failed')
     expect(converted.value).toEqual({ operation: 'convert', path: join(dir, 'book.xlsx'), file: join(home, 'outputs', 'book.csv'),
       format: 'csv', bytes: 10, missingFonts: [] })
@@ -674,7 +675,7 @@ describe('output lifetime', () => {
     const converted = await office(ctx, { operation: 'convert', input: 'deck.pptx', format: 'pdf' }, child)
     if (converted.isError) throw new Error(text(converted))
     const { file } = converted.value as { file: string }
-    expect(text(converted)).toContain('it is deleted when this conversation ends')
+    expect(text(converted)).toContain('it may be deleted after a retention period or to free space, and is deleted when this conversation ends')
     expect((await readFile(file, 'utf8')).startsWith('%PDF-')).toBe(true)
     const sessionOf = (agent: object) => (agent as { session: Session }).session
     ctx.emit('session/disposed', sessionOf(child))
@@ -682,5 +683,26 @@ describe('output lifetime', () => {
     await access(file)
     ctx.emit('session/disposed', sessionOf(root))
     await vi.waitFor(async () => { await expect(access(file)).rejects.toMatchObject({ code: 'ENOENT' }) })
+  })
+
+  it('gives a conversion to the calling Session when its tree root is no longer live', async () => {
+    const { ctx } = await setup({ kit: false })
+    await ctx.plugin(OfficeKit, { outputDirectory: join(home, 'office-outputs') })
+    const child = agentOn('vision')
+    ctx.provide('subagents', { rootOf: () => { throw new SubagentError('agent has no active runtime owner', 'UNAUTHORIZED') } } as never)
+    const converted = await office(ctx, { operation: 'convert', input: 'deck.pptx', format: 'pdf' }, child)
+    if (converted.isError) throw new Error(text(converted))
+    const { file } = converted.value as { file: string }
+    await access(file)
+    ctx.emit('session/disposed', (child as { session: Session }).session)
+    await vi.waitFor(async () => { await expect(access(file)).rejects.toMatchObject({ code: 'ENOENT' }) })
+  })
+
+  it('reports other subagent tree failures unchanged', async () => {
+    const { ctx } = await setup()
+    ctx.provide('subagents', { rootOf: () => { throw new SubagentError('subagent tree is unavailable', 'UNSUPPORTED_CAPABILITY') } } as never)
+    const converted = await office(ctx, { operation: 'convert', input: 'deck.pptx', format: 'pdf' })
+    expect(converted.isError).toBe(true)
+    expect(text(converted)).toContain('subagent tree is unavailable')
   })
 })

@@ -29,7 +29,7 @@ kind: "package-reference"
 
 激活只匹配 `activationSkills` 中列出的技能名，因此须同时挂载 [`@deepseek-ai/dsh-skill-office`](../../skill/skill-office/README.zh.md)，或其他注册了同名技能的 provider；否则三个工具永远不会出现。
 
-工具在每次调用时读取 Office 套件服务。Kit 缺失时，调用以该服务的 `unavailable` 消息失败；服务不存在时，调用以 `The document converter is unavailable.` 失败。两种失败都提示模型告知用户，不改用系统 soffice、npx 或其他转换工具。
+工具在每次调用时读取 Office 套件服务。Kit 缺失时，调用以该服务的 `unavailable` 消息失败；服务不存在时，调用以 `The document converter is unavailable.` 失败。每个 `unavailable` 失败都提示模型告知用户；原因可能是暂时的（例如输出存储已满或服务正在卸载）时稍后重试，并且不改用系统 soffice、npx 或其他转换工具。
 
 ```yaml
 - name: '@deepseek-ai/dsh-office-kit'
@@ -88,7 +88,7 @@ kind: "package-reference"
 
 #### 模型看到的内容
 
-三个工具的声明见[工具目录](../../../docs/tool-catalog.zh.md)。渲染结果以 `Rendered <count> image(s) of <absolute input path> (<pageCount> in the document) at <dpi> DPI.` 开头，缺少字体时追加 `Fonts not installed and substituted: <families>.`，随后每张图片先给出 `Page <n>: <width>x<height> px` 或 `Sheet "<name>" <range>: <width>x<height> px` 标签，再给出图片。转换时报告 `Converted <input> to <format> (<bytes> bytes[, <n> pages]): <temporary file>`（或 `Recalculated …`），随后是 `Copy this temporary file to its destination with the shell now; it is deleted when this conversation ends.` 和相同的字体行。失败为 `cannot <operation> "<path>": <reason>`。
+三个工具的声明见[工具目录](../../../docs/tool-catalog.zh.md)。渲染结果以 `Rendered <count> image(s) of <absolute input path> (<pageCount> in the document) at <dpi> DPI.` 开头，缺少字体时追加 `Fonts not installed and substituted: <families>.`，随后每张图片先给出 `Page <n>: <width>x<height> px` 或 `Sheet "<name>" <range>: <width>x<height> px` 标签，再给出图片。转换时报告 `Converted <input> to <format> (<bytes> bytes[, <n> pages]): <temporary file>`（或 `Recalculated …`），随后是 `Copy this temporary file to its destination with the shell now; it may be deleted after a retention period or to free space, and is deleted when this conversation ends.` 和相同的字体行。失败为 `cannot <operation> "<path>": <reason>`。
 
 #### Token 影响
 

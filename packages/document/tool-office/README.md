@@ -29,7 +29,7 @@ The [Web bundle](../../bundle/web-app/README.md) and the [SDK bundle](../../bund
 
 Activation matches only the skill names listed in `activationSkills`, so mount [`@deepseek-ai/dsh-skill-office`](../../skill/skill-office/README.md) or another provider that registers skills with those names; without one, the three tools never appear.
 
-The tools read the Office kit service at each call. When Kit is missing, calls fail with the service's `unavailable` message; while the service is absent, calls fail with `The document converter is unavailable.` Both failures tell the model to inform the user without substituting system soffice, npx, or another converter.
+The tools read the Office kit service at each call. When Kit is missing, calls fail with the service's `unavailable` message; while the service is absent, calls fail with `The document converter is unavailable.` Every `unavailable` failure tells the model to inform the user, or to retry later when the cause may be temporary, such as a full output store or a service being unloaded, without substituting system soffice, npx, or another converter.
 
 ```yaml
 - name: '@deepseek-ai/dsh-office-kit'
@@ -88,7 +88,7 @@ Native request headers retain Office declarations across resume and fork, includ
 
 #### What the model sees
 
-The three declarations are documented in the [tool catalog](../../../docs/tool-catalog.md). A render result opens with `Rendered <count> image(s) of <absolute input path> (<pageCount> in the document) at <dpi> DPI.`, adds `Fonts not installed and substituted: <families>.` when fonts are missing, then gives each image as a `Page <n>: <width>x<height> px` or `Sheet "<name>" <range>: <width>x<height> px` label followed by the image. A conversion reports `Converted <input> to <format> (<bytes> bytes[, <n> pages]): <temporary file>` (or `Recalculated …`), then `Copy this temporary file to its destination with the shell now; it is deleted when this conversation ends.` and the same font line. Failures read `cannot <operation> "<path>": <reason>`.
+The three declarations are documented in the [tool catalog](../../../docs/tool-catalog.md). A render result opens with `Rendered <count> image(s) of <absolute input path> (<pageCount> in the document) at <dpi> DPI.`, adds `Fonts not installed and substituted: <families>.` when fonts are missing, then gives each image as a `Page <n>: <width>x<height> px` or `Sheet "<name>" <range>: <width>x<height> px` label followed by the image. A conversion reports `Converted <input> to <format> (<bytes> bytes[, <n> pages]): <temporary file>` (or `Recalculated …`), then `Copy this temporary file to its destination with the shell now; it may be deleted after a retention period or to free space, and is deleted when this conversation ends.` and the same font line. Failures read `cannot <operation> "<path>": <reason>`.
 
 #### Token effect
 

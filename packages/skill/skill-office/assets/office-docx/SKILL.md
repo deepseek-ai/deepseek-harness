@@ -13,7 +13,7 @@ Name Python scripts for their task, such as `edit_docx.py`; avoid module names s
 
 ## Create and edit
 
-If `office_render`, `office_convert`, or `office_recalculate` is unavailable, call `skill` to load `office`; the tools appear next step.
+If `office_render`, `office_convert`, or `office_recalculate` is not in your tools, load `office` with `skill`; they appear next step.
 
 python-docx cannot read legacy `.doc` files. Use `office_convert` with `format: "docx"`, copy the result into the workspace, then edit the copy.
 
