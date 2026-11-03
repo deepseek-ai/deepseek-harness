@@ -18,7 +18,7 @@ Session id 仍是路由、授权、持久化、任务归属和导航使用的唯
 
 根的名称始终为 `lead`。后代的完整名称是从根开始、以斜杠分隔的名称路径，不带 `lead/` 前缀，例如 `reviewer/checker`。同级唯一的各段使完整名称在整棵树中唯一。目录条目早于名称机制的子级及其下所有后代继续以 Session id 作为名称。
 
-`ctx.subagents.resolveName()` 只读取路径上的目录，为 `lead` 或完整名称返回 Session id；其他文本原样作为 Session id 返回。工具先解析名称，再调用消息、中断或 Team 分配，由这些操作对解析出的 Session id 授权。解析本身不授予权限。运行时撰写的文本以完整名称指称 agent，而 `senderSessionId` 和 Team `ownerId` 等持久归属仍保留 Session id。[subagent 运行时](../../../../packages/subagent/subagent/README.zh.md#agent-names)定义 API 约定，[升级指南](../../../../docs/upgrade-guide/v0.2.2-alpha.2/subagent-names/guide.zh.md)负责调用方迁移。
+`ctx.subagents.resolveName()` 只读取路径上的目录，为 `lead` 或完整名称返回 Session id；其他文本原样作为 Session id 返回。工具先解析名称，再调用消息、中断或 Team 分配，由这些操作对解析出的 Session id 授权。解析本身不授予权限。运行时撰写的文本以完整名称指称 agent，而 `senderSessionId` 和 Team `ownerId` 等持久归属仍保留 Session id。[subagent 运行时](../../../../packages/subagent/subagent/README.zh.md#agent-names)定义 API 约定，[升级指南](../../../../docs/upgrade-guide/v0.2.2-alpha.3/subagent-names/guide.zh.md)负责调用方迁移。
 
 本决策取代 [Agent Teams 队友是子代理](2026-10-15-agent-teams-as-subagents.zh.md)中对“以唯一名称选择性启用同级路由”的否决以及“创建不接收成员名称”的表述，并取代[必需运行时身份](2026-10-13-team-identity-runtime-context.zh.md)中以 Session id 表述身份的文本。它们的单一身份、Team 和运行时上下文保留决策仍然有效。
 

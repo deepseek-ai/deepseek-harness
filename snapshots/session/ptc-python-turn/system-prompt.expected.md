@@ -381,7 +381,7 @@ class SubagentArgs(TypedDict):
     cwd: NotRequired[str]
     # A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request.
     description: str
-    # Optional short name for the subagent, unique among the subagents you create: lower-case letters, digits, and hyphens, starting with a letter, at most 32 characters. Omitted names default to agent-1, agent-2, and so on.
+    # Optional short name for the subagent, unique among the subagents you create: lower-case letters, digits, and hyphens, starting with a letter, at most 32 characters; lead is reserved for the root agent. Omitted names default to agent-1, agent-2, and so on.
     name: NotRequired[str]
     # The complete, self-contained task for the subagent. It does not share this conversation's context, so include everything it needs.
     prompt: str
@@ -396,7 +396,7 @@ class SubagentForkArgs(TypedDict):
     cwd: NotRequired[str]
     # A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request.
     description: str
-    # Optional short name for the subagent, unique among the subagents you create: lower-case letters, digits, and hyphens, starting with a letter, at most 32 characters. Omitted names default to agent-1, agent-2, and so on.
+    # Optional short name for the subagent, unique among the subagents you create: lower-case letters, digits, and hyphens, starting with a letter, at most 32 characters; lead is reserved for the root agent. Omitted names default to agent-1, agent-2, and so on.
     name: NotRequired[str]
     # The task for the subagent. It already sees this conversation's completed turns, so build on them freely and state only what is new.
     prompt: str

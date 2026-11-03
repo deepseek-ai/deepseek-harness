@@ -258,14 +258,14 @@
         - listitem:
           - term: key
           - definition: todo_write
-          - term: Owner
+          - term: owner
           - definition: client-ui-tool
           - term: component
           - definition: TodoRow
         - listitem:
           - term: key
           - definition: create_goal
-          - term: Owner
+          - term: owner
           - definition: client-ui-tool
           - term: component
           - definition: DetailsRow
