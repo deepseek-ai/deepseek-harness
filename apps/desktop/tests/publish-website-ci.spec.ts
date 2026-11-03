@@ -48,10 +48,10 @@ it.each(['accepted', 'unconfirmed', 'upload', 'put', 'uploaded', 'metadata', 'me
         if (request.method === 'PUT') {
           expect(request.body.toString()).toBe('x')
           if (scenario === 'metadata') {
-            const state = JSON.parse(await readFile(join(records, 'state.json'), 'utf8'))
+            const state: unknown = JSON.parse(await readFile(join(records, 'state.json'), 'utf8'))
             expect(state).toMatchObject({ upload: 'upload-intent', uploadConfirmed: true })
-            expect(state.purge).toBeUndefined()
-            expect(state.purgeAttempt).toBeUndefined()
+            expect(state).not.toHaveProperty('purge')
+            expect(state).not.toHaveProperty('purgeAttempt')
           }
           expect(request.headers['content-disposition']).toBe(`attachment; filename="${manifest.files[0]!.name}"`)
           stored = true
@@ -89,7 +89,7 @@ it.each(['accepted', 'unconfirmed', 'upload', 'put', 'uploaded', 'metadata', 'me
             vi.spyOn(teo.v20220901.Client.prototype, 'DescribePurgeTasks').mockRejectedValue(new Error('unavailable'))
             await publishWebsiteCi('purge', env)
             expect(submit).toHaveBeenCalledOnce()
-            expect(JSON.parse(await readFile(join(records, 'state.json'), 'utf8')).purge.jobId).toBe('new-job')
+            expect(JSON.parse(await readFile(join(records, 'state.json'), 'utf8'))).toMatchObject({ purge: { jobId: 'new-job' } })
           }
         }
       } finally { await server.close() }
