@@ -65,7 +65,7 @@ describe('mcp-manager real composition', () => {
     await ctx.plugin(Hmr, { root: [], ignored: [], debounce: 0 })
     await ctx.hmr.runExclusive(async () => {})
     await vi.waitFor(() => { expect(ctx.tools.get('mcp__base__remote')).toBeDefined() })
-    const manager = ctx.mcpServers
+    const manager = ctx.mcpManager
     const fiber = entry.fiber
     expect(manager.list()).toHaveLength(1)
 
@@ -86,11 +86,11 @@ describe('mcp-manager real composition', () => {
     const restored = await registry()
     await start(restored)
     await vi.waitFor(() => { expect(restored.tools.get('mcp__added__remote')).toBeDefined() })
-    expect(restored.mcpServers.list().find(view => view.name === 'base')).toMatchObject({ configured: true, status: { state: 'disabled' } })
+    expect(restored.mcpManager.list().find(view => view.name === 'base')).toMatchObject({ configured: true, status: { state: 'disabled' } })
     await restored.settings.mutate(id, [{ op: 'unset', path: ['servers', 'base'] }])
     await vi.waitFor(() => { expect(restored.tools.get('mcp__base__remote')).toBeDefined() })
     await restored.settings.mutate(id, [{ op: 'unset', path: ['servers', 'added'] }])
-    await vi.waitFor(() => { expect(restored.mcpServers.list().map(view => view.name)).toEqual(['base']) })
+    await vi.waitFor(() => { expect(restored.mcpManager.list().map(view => view.name)).toEqual(['base']) })
   })
 
   it('rejects invalid server edits before persistence', async () => {
@@ -124,7 +124,7 @@ describe('mcp-manager real composition', () => {
     ]) {
       await expect(ctx.settings.update('mcp', { servers })).rejects.toThrow()
       expect(await readFile(profile.patchPath, 'utf8')).toBe(saved)
-      expect(ctx.mcpServers.list()).toEqual([])
+      expect(ctx.mcpManager.list()).toEqual([])
     }
   })
 
@@ -136,6 +136,6 @@ describe('mcp-manager real composition', () => {
       transport: 'streamable-http', url: 'https://example.invalid/mcp', oauth: { credentialKey: 'mcp-client/Foo' }, enabled: false,
     } } })).rejects.toThrow('servers.one.oauth.credentialKey: credential key segment "Foo" must match')
     expect(await readFile(profile.patchPath, 'utf8')).toBe(saved)
-    expect(ctx.mcpServers.list()).toEqual([])
+    expect(ctx.mcpManager.list()).toEqual([])
   })
 })

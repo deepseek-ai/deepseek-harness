@@ -91,7 +91,6 @@ describe('SDK subagent routing and diagnostics through the production profile', 
         processTimeoutMs: 120_000,
         env: {
           ...child.env,
-          DSH_TEST_CHILD_DEFAULT_ROUTE: '1',
           DSH_TEST_PARENT_MODEL_RECORD: '.parent-model-routes',
         },
         inspect: async (cwd) => {
@@ -135,6 +134,38 @@ describe('SDK subagent routing and diagnostics through the production profile', 
     }
     // 15s of vitest headroom past the subprocess deadline, mirroring
     // LOADER_SMOKE_TEST_TIMEOUT_MS's margin over the default window.
+  }, 135_000)
+
+  it('rejects effort-only delegation before launching an SDK child', async () => {
+    const child = await childLaunch()
+    try {
+      await runLoaderSmoke({
+        label: 'dsh-sdk-subagent effort-only rejection',
+        tempDirPrefix: 'dsh-sdk-subagent-effort-only-',
+        binScript: driver,
+        libBinScript: driver,
+        configPath,
+        tsconfigPath: repoTsconfig,
+        processTimeoutMs: 120_000,
+        env: { ...child.env, DSH_TEST_CHILD_EFFORT_ONLY: '1' },
+        inspect: async (cwd) => {
+          const logs = await jsonlFiles(join(cwd, '.sessions'))
+          expect(logs).toHaveLength(1)
+          const events = await sessionEvents(logs[0]!)
+          const results = events.filter(event => event.type === 'tool/result')
+          expect(results).toHaveLength(1)
+          expect(results[0]!.data.message.isError).toBe(true)
+          expect(results[0]!.data.message.content).toEqual([{
+            type: 'text',
+            text: 'Error: child LLM `reasoning_effort` requires both `provider` and `model`; supply both or omit all three fields',
+          }])
+          expect(events.some(event => event.type === 'subagent/catalog')).toBe(false)
+          expect(existsSync(join(child.childHome, 'sessions'))).toBe(false)
+        },
+      })
+    } finally {
+      await rm(child.childHome, { recursive: true, force: true })
+    }
   }, 135_000)
 
   it('presents the child error diagnostic separately from partial output', async () => {

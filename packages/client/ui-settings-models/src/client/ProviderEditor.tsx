@@ -1,6 +1,6 @@
 /**
  * One provider's editor card, hand-written per adapter family: the primary
- * field is a single write-only **API key** input (the page never asks for an
+ * field is a masked **API key** input (the page never asks for an
  * environment-variable name — a typed key stores through `credentials/set`
  * under the profile's reference, deriving `<ROUTE>_API_KEY` when the profile
  * has none. The pi-ai profile records that derivation as `apiKeyEnv` only when
@@ -72,13 +72,15 @@ export interface ProviderEditorProps {
   settingsPath: readonly string[]
   /** The Host operations this card writes and interrogates through. */
   operations: ModelsOperations
+  /** Stored key loaded when opening this editor; omission starts with environment authentication. */
+  initialCredential?: string
   /** Endpoint the route uses when its profile sets no `baseURL`; absent when the adapter reports none. */
   defaultBaseURL?: string
   /** Environment variables used by the provider to construct its endpoint. */
   baseURLEnv?: readonly string[]
   /** Authentication the route performs when its profile names no credential reference; absent when the adapter reports none. */
   nativeAuth?: LlmNativeAuth
-  /** Redacted state of the profile's named credential reference, from the page snapshot. */
+  /** Redacted state of the editor's named or derived credential reference, from the page snapshot. */
   credential?: CredentialInfo
   /** Redacted checks for the profile's named reference or the provider's native variables. */
   credentialChecks?: Readonly<Record<string, CredentialInfo>>
@@ -179,7 +181,7 @@ function refFor(
 export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   const { namespace, schema, settingsPath, operations, t } = props
   const [draft, setDraft] = useState<Record<string, unknown>>(() => draftAt(schema, namespace, settingsPath))
-  const [keyDraft, setKeyDraft] = useState('')
+  const [keyDraft, setKeyDraft] = useState(props.initialCredential ?? '')
   const [busy, setBusy] = useState(false)
   const [listBusy, setListBusy] = useState(false)
   const { onBusyChange } = props
@@ -235,19 +237,17 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   const validateModels = (value: unknown): DeepSeekModelsValidationFailure | ReasoningEffortsFailure | undefined =>
     validateDeepSeekModels(value) ?? (editsReasoning ? validateReasoningEfforts(value) : undefined)
   const modelFailure = validateModels(schema.getPath(draft, ['models']))
-  const keyFailure = apiKeyFailure(keyDraft)
-  // What a probe or a write must carry: the typed key with paste whitespace
-  // removed. A blank field yields an empty string, which both call sites read
-  // as "no key supplied" rather than as a key — that is how a card whose
-  // provider already has a stored key is edited without re-entering it.
-  const keyValue = keyDraft.trim()
+  const keyChanged = keyDraft !== (props.initialCredential ?? '')
+  const keyFailure = keyChanged ? apiKeyFailure(keyDraft) : undefined
+  // Normalize edited keys; preserve unchanged stored values exactly.
+  const keyValue = keyChanged ? keyDraft.trim() : keyDraft
   const credentialRequiredFailure = props.credentialRequired === true
     && keyDraft.length > 0 && keyValue.length === 0
     ? 'keyRequired' as const
     : undefined
   const shownKeyFailure = credentialRequiredFailure ?? keyFailure
   // What the form currently shows, which is what an interrogation must ask:
-  // an edited-but-unsaved endpoint, and a key typed but not yet stored.
+  // an edited-but-unsaved endpoint, and the loaded or newly entered key.
   const probeApi = stringAt(draft, 'api') ?? stringAt(fallback, 'api')
   const probeBaseURL = stringAt(draft, 'baseURL') ?? stringAt(fallback, 'baseURL')
   const probe = {
@@ -270,7 +270,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     // A pi-ai profile names the conventional reference only when this page is
     // about to store a key. Otherwise the provider keeps its native auth path.
     const next = layout === 'pi-ai' && stringAt(draft, 'apiKeyEnv') === undefined
-      && stringAt(fallback, 'apiKeyEnv') === undefined && keyValue.length > 0
+      && stringAt(fallback, 'apiKeyEnv') === undefined && keyChanged && keyValue.length > 0
       ? schema.setPath(draft, ['apiKeyEnv'], keyRef)
       : draft
     if (props.credentialOnly !== true) {
@@ -305,9 +305,14 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       setExpectedRevision(written.view.revision)
       setDraft(next)
     }
-    if (keyValue.length > 0) {
+    const storedKeyRemoved = props.initialCredential !== undefined
+      && (props.credential?.configured === false || props.credential?.source === 'env')
+    if (keyValue.length > 0 && (keyChanged || storedKeyRemoved)) {
       const stored = await operations.storeCredential(keyRef, keyValue)
       if (stored !== undefined) return stored
+    } else if (keyValue.length === 0 && props.initialCredential !== undefined) {
+      const removed = await operations.removeCredential(keyRef)
+      if (removed !== undefined) return removed
     }
     setKeyDraft('')
     return undefined
@@ -379,12 +384,11 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     const checkedRefs = authRefs.map(ref => [
       ref, props.credentialChecks?.[ref] ?? (ref === namedRef ? props.credential : undefined),
     ] as const)
-    const detected = checkedRefs.find(([, info]) => info?.configured === true)
+    const detected = checkedRefs.find(([, info]) => info?.configured === true && info.source !== 'file')
     const detectedRef = detected?.[0]
     const detectedVisibleRef = detectedRef === undefined || !visibleRefs.includes(detectedRef) ? undefined : detectedRef
     const missingRefs = checkedRefs.length > 0 && checkedRefs.every(([, info]) => info?.configured === false)
-    const savedCredential = detected?.[1]?.source === 'file'
-    const credentialHint = keyDraft.length > 0 || savedCredential || keyHint === undefined || props.credentialRequired === true
+    const credentialHint = keyDraft.length > 0 || keyHint === undefined || props.credentialRequired === true
       ? undefined
       : t(detectedRef === undefined ? missingRefs ? 'keyFallbackMissing' : 'keyFallbackUnchecked'
         : detectedVisibleRef === undefined ? 'keyFallbackDetectedHidden' : 'keyFallbackDetected')
@@ -401,7 +405,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     const keylessNativeAuth = nativeAuth?.env.length === 0 && nativeAuth.oauth
     const keyPlaceholder = keyHint === undefined || props.credentialRequired === true
       ? t('keyPlaceholder')
-      : t(savedCredential ? 'keyPlaceholderSaved' : 'keyPlaceholderFallback').replace('{hint}', () => keyHint)
+      : t('keyPlaceholderFallback').replace('{hint}', () => keyHint)
     /** What both family editors take: the rows, whose layer owns them, and the two writes. */
     const catalogProps = {
       models,

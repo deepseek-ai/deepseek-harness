@@ -29,7 +29,7 @@ This package is the part of the product that stores and looks up secret values: 
 
 ### When to use it
 
-Use a credential store whenever configuration must stay free of secret values: settings files that are synced, shared, or rendered in a configuration UI, or teams that rotate keys without editing configuration. Use records when a plugin must keep credentials with no single environment variable — an authorization grant from a sign-in flow, or provider environment values — and when a configuration UI should list what a user is authorized for. A configuration UI can show whether a key or record is set, where it comes from, and whether you can change it — never the value itself. If you only need one fixed environment variable, read that variable directly and skip the store.
+Use a credential store whenever configuration must stay free of secret values: settings files that are synced, shared, or rendered in a configuration UI, or teams that rotate keys without editing configuration. Use records when a plugin must keep credentials with no single environment variable — an authorization grant from a sign-in flow, or provider environment values — and when a configuration UI should list what a user is authorized for. A configuration UI describes presence and writability without reading values. An owner-opened key editor can use `readStored` to load the managed value without consulting environment fallbacks. If you only need one fixed environment variable, read that variable directly and skip the store.
 
 ### Adding it to your composition
 
@@ -58,7 +58,7 @@ await ctx.credentials.set(ref, 'sk-…')                 // the stored value out
 await ctx.credentials.unset(ref)                       // no-op when absent; an environment fallback then applies again
 ```
 
-Store a key with `set`, remove it with `unset`, check its status with `describe`, and read the current value with `resolve` when an operation needs it. `describe` reports whether the key is set, where it comes from, and whether you can write to it — it never returns the value.
+Store a key with `set`, remove it with `unset`, check its status with `describe`, and read the current value with `resolve` when an operation needs it. `readStored` returns only the managed value for editing; it returns `undefined` when none is stored, even when the environment supplies a value. `describe` reports whether the key is set, where it comes from, and whether you can write to it — it never returns the value.
 
 ### Storing, updating, and removing records
 
@@ -94,7 +94,7 @@ Requests that need the key use its current stored value, so rotating the key tak
 
 - **A stored key outranks the launching environment** — while a value is stored, `DEEPSEEK_API_KEY=… dsh` (or a CI secret, a container `-e`) does not apply; `unset` the stored key to use the exported one.
 - **An empty value cannot be stored** — storing an empty string is refused; remove the key instead.
-- **Key values never appear in configuration UIs or diagnostics** — the UI shows whether a key is set, where it comes from, and whether you can change it; the value itself stays in the store.
+- **Metadata and diagnostics exclude key values** — an owner-opened credential editor loads a managed key separately and masks it until revealed.
 
 -----
 

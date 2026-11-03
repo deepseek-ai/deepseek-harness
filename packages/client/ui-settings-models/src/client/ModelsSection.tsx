@@ -86,6 +86,8 @@ export interface ProviderIdentity {
 
 /** One existing row or dormant directory entry addressed by an editor action. */
 interface EditorTarget extends ProviderIdentity {
+  /** Stored secret retained only while this editor is open. */
+  initialCredential?: string
   settingsNs: string
   settingsPath: readonly string[]
   /** Writable credential identified under this page's conventional reference. */
@@ -123,16 +125,18 @@ interface ProviderEditorRenderProps extends Pick<
 
 /** Render an editor for either the setup posture or an expanded provider row. */
 function renderProviderEditor({ target, row, ...props }: ProviderEditorRenderProps): ReactNode {
+  const credential = row.apiKeyEnv === undefined ? row.derivedCredential : row.credential
   return (
     <ProviderEditor
       provider={target.provider}
       displayName={target.displayName}
       settingsPath={target.settingsPath}
+      {...target.initialCredential === undefined ? {} : { initialCredential: target.initialCredential }}
       {...target.declared === true ? { declared: true } : {}}
       {...target.defaultBaseURL === undefined ? {} : { defaultBaseURL: target.defaultBaseURL }}
       {...target.baseURLEnv === undefined ? {} : { baseURLEnv: target.baseURLEnv }}
       {...target.nativeAuth === undefined ? {} : { nativeAuth: target.nativeAuth }}
-      {...row.credential === undefined ? {} : { credential: row.credential }}
+      {...credential === undefined ? {} : { credential }}
       {...row.credentialChecks === undefined ? {} : { credentialChecks: row.credentialChecks }}
       {...props}
     />
@@ -254,6 +258,10 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
   if (state.status === 'ready' && !hasReadySnapshot) setHasReadySnapshot(true)
   if (state.status === 'error' && hasReadySnapshot) setHasReadySnapshot(false)
   const [editing, setEditing] = useState<EditorTarget | undefined>(undefined)
+  const [credentialRead, setCredentialRead] = useState<
+    { provider: string; status: 'loading' } | { provider: string; status: 'failed'; message: string }
+  >()
+  const editorLoading = credentialRead?.status === 'loading'
   const [addOpen, setAddOpen] = useState(false)
   const [addMode, setAddMode] = useState<AddMode>('catalog')
   /** The modes shown since the add card opened; each keeps its panel mounted. */
@@ -268,6 +276,26 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
   const [deleteFailure, setDeleteFailure] = useState<string | undefined>(undefined)
   const [savedTarget, setSavedTarget] = useState<ProviderIdentity | undefined>(undefined)
   const [dismissedSetup, setDismissedSetup] = useState<ReadonlySet<string>>(() => new Set())
+
+  const openEditor = async (row: ProviderRow, target: EditorTarget): Promise<void> => {
+    setSavedTarget(undefined)
+    setAddOpen(false)
+    setEditing(undefined)
+    setCredentialRead(undefined)
+    const info = row.apiKeyEnv === undefined ? row.derivedCredential : row.credential
+    if (info?.configured === false) {
+      setEditing(target)
+      return
+    }
+    setCredentialRead({ provider: target.provider, status: 'loading' })
+    const loaded = await operations.readCredential(row.apiKeyEnv ?? deriveKeyRef(target.provider))
+    if (loaded.kind === 'refused') {
+      setCredentialRead({ provider: target.provider, status: 'failed', message: loaded.message })
+      return
+    }
+    setCredentialRead(undefined)
+    setEditing({ ...target, ...loaded.value === undefined ? {} : { initialCredential: loaded.value } })
+  }
 
   const announceSaved = (target: ProviderIdentity): void => {
     // Announced only once the refreshed directory is in the snapshot the
@@ -509,15 +537,12 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                         type="button"
                         className={styles['secondaryButton']}
                         aria-label={providerCopy(t('editProvider'), target)}
-                        disabled={!open && state.status !== 'ready'}
+                        disabled={editorLoading || (!open && state.status !== 'ready')}
+                        aria-busy={credentialRead?.provider === target.provider && editorLoading}
                         onClick={() => {
                           if (!open && controller.store.getSnapshot().status !== 'ready') return
-                          setSavedTarget(undefined)
-                          // One card at a time: the add card closes with whatever
-                          // it held, since closing either card would otherwise
-                          // discard the other's draft.
-                          setAddOpen(false)
-                          setEditing(open ? undefined : target)
+                          if (open) setEditing(undefined)
+                          else void openEditor(row, target)
                         }}
                       >
                         {t('edit')}
@@ -529,7 +554,7 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                         type="button"
                         className={styles['dangerButton']}
                         aria-label={providerCopy(t('removeProvider'), target)}
-                        disabled={!state.writable || state.status !== 'ready'}
+                        disabled={editorLoading || !state.writable || state.status !== 'ready'}
                         onClick={() => {
                           if (controller.store.getSnapshot().status !== 'ready') return
                           setSavedTarget(undefined)
@@ -544,6 +569,8 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                 </span>
               </div>
               {error}
+              {credentialRead?.provider === target.provider && credentialRead.status === 'failed'
+                ? <p className={styles['error']} role="alert">{credentialRead.message}</p> : null}
               {renderSlot(
                 'settings.models.provider-card',
                 { provider: row.entry, configured: row.configured, keyConfigured: keyConfiguredOf(row) },
@@ -551,7 +578,7 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
               )}
               {open
                 ? renderProviderEditor({
-                  target,
+                  target: { ...target, ...editing.initialCredential === undefined ? {} : { initialCredential: editing.initialCredential } },
                   row,
                   namespace,
                   schema,
@@ -698,7 +725,7 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                 <button
                   type="button"
                   className={styles['addButton']}
-                  disabled={!state.writable || state.status !== 'ready' || (!catalogEnabled && !customEnabled)}
+                  disabled={editorLoading || !state.writable || state.status !== 'ready' || (!catalogEnabled && !customEnabled)}
                   onClick={() => {
                     if (controller.store.getSnapshot().status !== 'ready') return
                     const first = addable[0]

@@ -42,7 +42,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   })
   resources.scaffold = scaffold
   expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === '@deepseek-ai/dsh-cua-bundle'))
-    .toMatchObject({ listedByDefault: false, enabled: true, installed: true })
+    .toMatchObject({ availability: 'installation', enabled: true, installed: true })
   const browser = await chromium.launch()
   resources.browser = browser
   const page = await newEnglishPage(browser), tripwire = watchConsole(page)

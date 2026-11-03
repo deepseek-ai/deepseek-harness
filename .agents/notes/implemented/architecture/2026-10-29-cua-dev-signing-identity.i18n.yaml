@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-29-cua-dev-signing-identity.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-29-cua-dev-signing-identity.md
+/agent-note-development-signing-identity-for-source-built-cua-helpers:
+  en: 472c4efd47184a32
+  zh: 49f64628531970e9
+/agent-note-development-signing-identity-for-source-built-cua-helpers/problem:
+  en: a24857a312482724
+  zh: dbac75d363670e86
+/agent-note-development-signing-identity-for-source-built-cua-helpers/decision:
+  en: d2265f9ec5fb7a79
+  zh: 05da2479b024a4bb
+/agent-note-development-signing-identity-for-source-built-cua-helpers/alternatives-considered:
+  en: e30db5bc9c7aab43
+  zh: fa84883b5527334e
+/agent-note-development-signing-identity-for-source-built-cua-helpers/consequences:
+  en: fb0e8fe44890bdf9
+  zh: d9e9ace1a4c10060

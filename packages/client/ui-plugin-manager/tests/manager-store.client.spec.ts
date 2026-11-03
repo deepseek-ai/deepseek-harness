@@ -1979,10 +1979,10 @@ const CATALOG: BundleInfo = {
   installTarget: { spec: '@deepseek-ai/dsh-subagent-codex@2.0.0', version: '2.0.0' },
 }
 
-it.each(['registry', 'source'] as const)('installs a typed default-hidden Official name using its %s target', async (mode) => {
-  const name = '@deepseek-ai/dsh-cua-bundle'
-  const spec = mode === 'source' ? 'link:/workspace/cua-bundle' : `${name}@2.0.0`
-  const entry = { ...CATALOG, name, listedByDefault: false, installTarget: { spec, version: '2.0.0' } }
+it.each(['registry', 'source'] as const)('installs a typed Official catalog name using its %s target', async (mode) => {
+  const name = CATALOG.name
+  const spec = mode === 'source' ? 'link:/workspace/subagent-codex' : `${name}@2.0.0`
+  const entry = { ...CATALOG, installTarget: { spec, version: '2.0.0' } }
   const { controller, plugins, face, state } = bench({ listBundles: vi.fn().mockResolvedValue(ok([entry])) })
   await controller.load()
   face.openInstall()

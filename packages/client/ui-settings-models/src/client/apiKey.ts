@@ -39,12 +39,11 @@ function isQuoted(value: string): boolean {
 }
 
 /**
- * Judge the key input's current value.
+ * Judge a newly entered or edited key.
  *
- * An empty field is not a failure: every card opens with it empty even when a
- * key is already stored, where it means keep that one. A field holding only
- * whitespace is a failure rather than an empty field, so typed input is never
- * silently discarded.
+ * An empty field is valid; the caller decides whether it means no key or
+ * removal. Whitespace-only input is invalid, so typed input is never silently
+ * discarded. Unchanged stored values do not require this check.
  * @param draft - the key input's current value, untrimmed.
  * @returns the copy key for a field-level failure, or `undefined` to allow submit.
  */
