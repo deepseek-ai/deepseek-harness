@@ -32,7 +32,7 @@ interface ResolvedCredential {
 
 ## 描述
 
-`describe(ref)` 在绝不暴露值的前提下回应配置界面：引用当前是否可解析、来自哪一层、`set` 当前能否成功。本地提供方将其管理的文件排在启动环境之前，因此保存值总会成为生效且可写的那一层；移除后会重新使用启动环境或 `.env` 后备值。
+`describe(ref)` 在绝不暴露值的前提下回应配置界面：引用当前是否可解析、来自哪一层、`set` 当前能否成功。可选的 `length` 只描述已保存值的 UTF-16 长度，不包含密钥字符。本地提供方将其管理的文件排在启动环境之前，因此保存值总会成为生效且可写的那一层；移除后会重新使用启动环境或 `.env` 后备值。
 
 ```ts type-equiv
 /**
@@ -47,6 +47,8 @@ interface CredentialInfo {
   source?: string
   /** Whether the active provider can write this reference. */
   writable: boolean
+  /** Stored value length in UTF-16 code units, when disclosed; never the value. */
+  length?: number
 }
 ```
 
@@ -156,7 +158,7 @@ abstract resolve(ref: CredentialRef): Promise<ResolvedCredential | undefined>
  * Describe one reference for configuration surfaces without exposing the
  * value.
  * @param ref - the reference to describe.
- * @returns configured state, supplying source, and writability.
+ * @returns configured state, supplying source, writability, and optional stored-value length.
  */
 abstract describe(ref: CredentialRef): Promise<CredentialInfo>
 

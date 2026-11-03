@@ -17,7 +17,7 @@
       - text: DeepSeek deepseek-official API 密钥
       - button "认证说明": "?"
       - textbox "API 密钥":
-        - /placeholder: ••••••••
+        - /placeholder: ••••••••••••••••••••••••••••••••••••••••••••
       - button "显示密钥" [disabled]
       - paragraph: 使用已保存的 API key。
       - group:

@@ -187,7 +187,7 @@ export abstract class CredentialProvider extends Service {
    * Describe one reference for configuration surfaces without exposing the
    * value.
    * @param ref - the reference to describe.
-   * @returns configured state, supplying source, and writability.
+   * @returns configured state, supplying source, writability, and optional stored-value length.
    */
   abstract describe(ref: CredentialRef): Promise<CredentialInfo>
 

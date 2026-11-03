@@ -71,6 +71,8 @@ export interface CredentialInfo {
   source?: string
   /** Whether the active provider can write this reference. */
   writable: boolean
+  /** Stored value length in UTF-16 code units, when disclosed; never the value. */
+  length?: number
 }
 
 declare module '@deepseek-ai/cordis' {

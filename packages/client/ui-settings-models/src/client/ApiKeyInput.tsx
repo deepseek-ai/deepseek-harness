@@ -12,8 +12,9 @@ const EYE_OFF_PATH = `${EYE_CONTOUR}M2.5 2.5L13.5 13.5`
 interface ApiKeyInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'type' | 'className' | 'autoComplete'> {
   /** Unsaved input; stored credentials are never read into this field. */
   readonly value: string
-  /** Saved-key actions; the mask never contains the stored credential. */
+  /** Saved-key length and actions; the mask never contains the stored credential. */
   readonly saved?: {
+    readonly length: number
     readonly clear?: () => void
   }
   /** Section copy, including the same reveal labels as SecretText. */
@@ -36,7 +37,7 @@ export function ApiKeyInput({ value, saved, t, ...props }: ApiKeyInputProps): Re
         type={revealed ? 'text' : 'password'}
         autoComplete="new-password"
         value={value}
-        placeholder={saved === undefined ? props.placeholder : '••••••••'}
+        placeholder={saved === undefined ? props.placeholder : '•'.repeat(saved.length)}
         onCopy={(event) => { if (saved !== undefined) event.preventDefault() }}
         onCut={(event) => { if (saved !== undefined) event.preventDefault() }}
         onKeyDown={(event) => {

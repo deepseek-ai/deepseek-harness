@@ -60,11 +60,11 @@ declare const ctx: Context
 
 const ref = credentialRef('DEEPSEEK_API_KEY')
 await ctx.credentials.set(ref, 'sk-…')          // save
-await ctx.credentials.describe(ref)             // { configured, source?, writable } — never the value
+await ctx.credentials.describe(ref)             // { configured, source?, writable, length? } — never the value
 await ctx.credentials.unset(ref)                // remove
 ```
 
-A key you save is usable by the next request that names it, and `describe` reports whether it is set, where it comes from, and whether you can write to it — never the value itself. Records persist in the same file, addressed by `<owner>/<id>` and managed with the seam's record operations (`readRecord`, `describeRecord`, `listRecords`, `modifyRecord`, `deleteRecord`).
+A key you save is usable by the next request that names it, and `describe` reports whether it is set, where it comes from, and whether you can write to it — never the value itself. A stored file value also reports its UTF-16 `length`; environment fallbacks omit this field. Records persist in the same file, addressed by `<owner>/<id>` and managed with the seam's record operations (`readRecord`, `describeRecord`, `listRecords`, `modifyRecord`, `deleteRecord`).
 
 ### Where keys come from
 

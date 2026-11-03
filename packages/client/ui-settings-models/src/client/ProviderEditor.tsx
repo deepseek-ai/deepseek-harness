@@ -491,6 +491,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
               value={keyText}
               {...keyDraft === undefined && savedCredential ? {
                 saved: {
+                  length: detected[1].length ?? 0,
                   ...detected[1].writable
                     ? { clear: () => { setKeyDraft({ ref: detected[0] }); setFailure(undefined) } } : {},
                 },

@@ -32,7 +32,7 @@ interface ResolvedCredential {
 
 ## Description
 
-`describe(ref)` answers configuration surfaces without ever exposing a value: whether the reference resolves, from which layer, and whether `set` would currently succeed. The local provider ranks its managed file above the launch environment, so saving a value always creates the effective writable layer; removing it reveals the launch environment or `.env` fallback again.
+`describe(ref)` answers configuration surfaces without ever exposing a value: whether the reference resolves, from which layer, and whether `set` would currently succeed. The optional `length` discloses the stored value’s UTF-16 length without key characters. The local provider ranks its managed file above the launch environment, so saving a value always creates the effective writable layer; removing it reveals the launch environment or `.env` fallback again.
 
 ```ts type-equiv
 /**
@@ -47,6 +47,8 @@ interface CredentialInfo {
   source?: string
   /** Whether the active provider can write this reference. */
   writable: boolean
+  /** Stored value length in UTF-16 code units, when disclosed; never the value. */
+  length?: number
 }
 ```
 
@@ -156,7 +158,7 @@ abstract resolve(ref: CredentialRef): Promise<ResolvedCredential | undefined>
  * Describe one reference for configuration surfaces without exposing the
  * value.
  * @param ref - the reference to describe.
- * @returns configured state, supplying source, and writability.
+ * @returns configured state, supplying source, writability, and optional stored-value length.
  */
 abstract describe(ref: CredentialRef): Promise<CredentialInfo>
 

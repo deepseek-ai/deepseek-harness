@@ -47,6 +47,7 @@ function projectCredentialInfo(info: CredentialInfo): CredentialInfo {
     configured: info.configured,
     ...info.source === undefined ? {} : { source: info.source },
     writable: info.writable,
+    ...info.length === undefined ? {} : { length: info.length },
   }
 }
 
