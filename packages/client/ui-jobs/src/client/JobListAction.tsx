@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { createPortal } from 'react-dom'
 import type { JobsSnapshot, JobView, ObservedJob } from '@deepseek-ai/dsh-api-job-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
   IconChevronDownOutlineRegular, IconLayersOutlineRegular, IconStopFillRegular, MenuSurface, StateDot, TerminalBlock, Tooltip,
-  useAnchoredPosition, useDismissOnOutsidePointer,
+  useDismissOnOutsidePointer,
   type StateDotState, type TerminalBlockLabels,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
@@ -47,15 +47,6 @@ export type JobListActionProps =
 
 /** Stable empty list so a session with no jobs keeps one array identity. */
 const NO_JOBS: readonly JobView[] = []
-
-/** Minimum gap kept between the popover and the viewport edges (the Menu primitive's portal margin). */
-const VIEWPORT_MARGIN = 12
-
-/** Distance between the trigger's bottom edge and the popover. */
-const MENU_GAP = 5
-
-/** Unplaced list: hidden but laid out so the first placement measures real dimensions. */
-const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
 
 /** Keyboard-reachable controls inside the list, in document order. */
 const FOCUSABLE = 'button:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])'
@@ -416,12 +407,7 @@ export function JobListAction({ sessionId, useJobs, watchRows, observe, killJob,
   // Timers belong to this mounted session and cannot survive a disappearing trigger.
   useEffect(() => cancelHover, [cancelHover, sessionId, hasJobs])
 
-  // The popover portals to the document body: the session header sits in a
-  // clipping column that the right sidebar borders or overlaps, so an in-place
-  // popover is cut off or covered there.
-  const menuPosition = useAnchoredPosition({
-    open, anchorRef: rootRef, panelRef: menuRef, gap: MENU_GAP, margin: VIEWPORT_MARGIN,
-  })
+  const anchorName = `--dsh-jobs-${useId().replaceAll(':', '')}`
   useDismissOnOutsidePointer(rootRef, open, changeOpen, menuRef)
   // Hover does not move focus; Escape must also work from the rest of the page.
   useEffect(() => {
@@ -579,7 +565,7 @@ export function JobListAction({ sessionId, useJobs, watchRows, observe, killJob,
   )
 
   return (
-    <div ref={rootRef} onKeyDown={onKeyDown}>
+    <div ref={rootRef} style={{ anchorName }} onKeyDown={onKeyDown}>
       <Tooltip label={countLabel} disabled={open} delayMs={500} portal side="bottom">
         <button
           ref={triggerRef}
@@ -611,7 +597,7 @@ export function JobListAction({ sessionId, useJobs, watchRows, observe, killJob,
           <MenuSurface
             ref={menuRef}
             className={css.menu}
-            style={menuPosition ?? MEASURE_STYLE}
+            style={{ positionAnchor: anchorName }}
             onPointerEnter={hoverEnter}
             onPointerLeave={hoverLeave}
             onPointerDownCapture={() => { changeOpen(true) }}
