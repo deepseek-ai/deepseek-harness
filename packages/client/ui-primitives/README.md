@@ -67,6 +67,7 @@ Check this table before writing a control in a feature package. A plugin cannot 
 | `HoverCard`, `HoverCardGroup` | Readable, optionally copyable hover preview; a physical list can opt cards into shared first-display dwell and exclusive display. |
 | `DraggableImage` | Original-image gestures with explicit transfer and feedback callbacks. |
 | `ImageLightbox` | Shared image modal with focus restoration and Escape dismissal. |
+| `usePointerGrace` | Cancelable dismissal delay that lets the pointer cross the gap between a trigger and its card; pending timers are cleared on unmount. |
 | `Toast` | Transient top-center banner held for the owner's `holdMs`. |
 | `SettingsForm`, `SettingsValueField`, `SettingsSecretField` | The frame and the controls of a plugin's settings page: the frame takes its copy as `labels`, saves only on its button, and discards on unmount; a value field shows staged text with the overridden badge and reset; a secret field starts blank, requests no saved-password autofill, and reports only whether a value is configured. |
 | `SettingsFormModel`, `settingsNumberField`, `settingsTextField` | The staged-edit model behind such a page over a settings scope: drafts are staged and written on save, a field is overridden by its presence in the user layer, and a save that did not land keeps its drafts. |
