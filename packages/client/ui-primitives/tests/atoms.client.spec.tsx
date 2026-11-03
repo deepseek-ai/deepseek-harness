@@ -898,6 +898,22 @@ describe('Modal', () => {
     expect(onClose).toHaveBeenCalledTimes(2)
   })
 
+  it('places a decorative warning icon in the title only for warning dialogs', () => {
+    const view = render(<Modal open tone="warning" title="Confirm change" closeLabel="Close" onClose={() => {}}>
+      <p>Review the consequences.</p>
+    </Modal>)
+    const heading = screen.getByRole('heading', { name: 'Confirm change' })
+    const icon = heading.querySelector('svg')
+    expect(icon).not.toBeNull()
+    expect(icon?.getAttribute('aria-hidden')).toBe('true')
+    expect(screen.getByText('Review the consequences.').querySelector('svg')).toBeNull()
+    view.rerender(<Modal open title="Confirm change" closeLabel="Close" onClose={() => {}}>Body</Modal>)
+    expect(screen.getByRole('heading', { name: 'Confirm change' }).querySelector('svg')).toBeNull()
+    view.rerender(<Modal open headless tone="warning" title="Confirm change" onClose={() => {}}>Body</Modal>)
+    expect(screen.queryByRole('heading')).toBeNull()
+    expect(screen.getByRole('dialog').querySelector('svg')).toBeNull()
+  })
+
   it('renders headless content without the default close chrome', () => {
     render(
       <Modal open onClose={() => {}} title="Custom surface" headless backdropBlur={false}>

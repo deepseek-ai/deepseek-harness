@@ -84,7 +84,7 @@ it('removes ended tasks across Sessions with their saved deliveries and keeps ac
     .toEqual({ id: endedSecond.record.id, code: 'schedule_not_found' })
   expect(changed).toHaveBeenCalledTimes(1)
   expect(resolve).not.toHaveBeenCalled()
-  expect(ctx.agents.roots()).toEqual(agents)
+  expect(ctx.agents.list()).toEqual(agents)
   await test.fiber.dispose()
   for (const agent of agents) expect(agent.inject).not.toHaveBeenCalled()
 })

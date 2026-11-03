@@ -46,7 +46,7 @@ export function bootstrapArgs(fs: Pick<FileSystem, 'processPathFromHostPath'>, c
     case 'embedded':
       if (persistent) throw new Error('Persistent PTC requires a node-script launch')
       return [String(maxMessageBytes)]
-    case 'node-script': return scriptBootstrapArgs(fs, config.bootstrapPath, maxMessageBytes)
+    case 'node-script': return ['--experimental-vm-modules', ...scriptBootstrapArgs(fs, config.bootstrapPath, maxMessageBytes)]
     /* v8 ignore next -- Callers supply the resolved, closed LaunchConfig union. */
     default: return assertNever(config)
   }

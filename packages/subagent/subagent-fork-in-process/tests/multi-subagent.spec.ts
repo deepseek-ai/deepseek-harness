@@ -40,7 +40,8 @@ function text(blocks: readonly { type: string; text?: string }[]): string {
 describe('multi-subagent coexistence (spawn + fork on one context)', () => {
   it('both providers register and coexist', async () => {
     const { ctx } = await setup([])
-    expect(ctx.subagents.list().sort()).toEqual(['fork', 'spawn'])
+    expect(ctx.subagents.getProvider('fork')).toBeDefined()
+    expect(ctx.subagents.getProvider('spawn')).toBeDefined()
   })
 
   it('the same parent drives a spawn child AND a fork child, then keeps working', async () => {

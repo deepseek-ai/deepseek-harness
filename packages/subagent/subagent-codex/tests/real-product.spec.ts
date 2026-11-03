@@ -336,7 +336,7 @@ describe('real @openai/codex 0.153.4 product', () => {
     ])
     await safeInstance.fixture.requestStarted
     await safeFiber.dispose()
-    expect(ctx.subagents.list()).toEqual(['codex-bypass'])
+    expect(ctx.subagents.getProvider('codex-bypass')).toBeDefined()
     await expect(startExternalActivation(ctx, 'codex-safe', {
       prompt: [{ type: 'text', text: 'This start must fail.' }],
       parent: safeParent,
@@ -365,7 +365,7 @@ describe('real @openai/codex 0.153.4 product', () => {
     ].sort())
     await expectQuiescent(handles)
     await bypassFiber.dispose()
-    expect(ctx.subagents.list()).toEqual([])
+    expect(ctx.subagents.getProvider('codex-bypass')).toBeUndefined()
   }, 60_000)
 
   it('overrides on-request with never and reports a denied command safely', async () => {

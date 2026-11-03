@@ -7,6 +7,8 @@ import { TestClient, remoteDefaultResponses, webApp } from '../src/assembly/inde
 /** The Gateway client and what it injects: the Typert registry and the Connection. */
 const API_ROSTER = webApp.closure(['@deepseek-ai/dsh-api-gateway'])
 const TYPERT_ONLY = webApp.pick(['@deepseek-ai/dsh-typert-registry'])
+/** A row on the Web client's required list, so its failure rejects the boot. */
+const RENDERER_ONLY = webApp.pick(['@deepseek-ai/dsh-client-ui-renderer'])
 const globals = globalThis as { __DSH_TRANSPORT__?: ClientTransportHooks }
 
 describe('TestClient (node environment)', () => {
@@ -38,14 +40,44 @@ describe('TestClient (node environment)', () => {
     await client.dispose() // idempotent after a failed teardown
   })
 
-  it('rethrows a row that fails to apply and lets the next client boot', async () => {
+  it('rethrows a required row that fails to apply and lets the next client boot', async () => {
     const failing = { apply(): void { throw new Error('apply boom') } }
-    await expect(TestClient.start({ roster: TYPERT_ONLY, provide: { '@deepseek-ai/dsh-typert-registry': failing } }, RemoteMock.create()))
-      .rejects.toThrow(/apply boom|typert-registry/)
+    await expect(TestClient.start({ roster: RENDERER_ONLY, provide: { '@deepseek-ai/dsh-client-ui-renderer': failing } }, RemoteMock.create()))
+      .rejects.toThrow('@deepseek-ai/dsh-client-ui-renderer (required): failed')
     const mock = RemoteMock.create().load(remoteDefaultResponses)
     const client = await TestClient.start({ roster: API_ROSTER }, mock)
     onTestFinished(() => client.dispose())
     expect(client.connection.state.getSnapshot()).toBe('connected')
+  })
+
+  it('rejects an optional row that fails to apply by default and names the opt-out', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    onTestFinished(() => { warn.mockRestore() })
+    const failing = { apply(): void { throw new Error('apply boom') } }
+    await expect(TestClient.start(
+      { roster: TYPERT_ONLY, provide: { '@deepseek-ai/dsh-typert-registry': failing } },
+      RemoteMock.create(),
+      { awaitConnected: false },
+    )).rejects.toThrow([
+      'client-test-runtime: every roster entry must activate; pass allowInactiveEntries to tolerate it',
+      'web boot: warning: 1 entry did not activate',
+      '@deepseek-ai/dsh-typert-registry: failed: Error: apply boom',
+    ].join('\n'))
+  })
+
+  it('tolerates an inactive optional row when allowInactiveEntries is set', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    onTestFinished(() => { warn.mockRestore() })
+    const failing = { apply(): void { throw new Error('apply boom') } }
+    const client = await TestClient.start(
+      { roster: TYPERT_ONLY, provide: { '@deepseek-ai/dsh-typert-registry': failing } },
+      RemoteMock.create(),
+      { awaitConnected: false, allowInactiveEntries: true },
+    )
+    onTestFinished(() => client.dispose())
+    expect(warn).toHaveBeenCalledExactlyOnceWith(
+      'web boot: warning: 1 entry did not activate\n@deepseek-ai/dsh-typert-registry: failed: Error: apply boom',
+    )
   })
 
   it.each(['@deepseek-ai/dsh-api-remotes', '@deepseek-ai/dsh-api-remote-access'])(

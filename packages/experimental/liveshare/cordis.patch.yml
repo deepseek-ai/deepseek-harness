@@ -1,10 +1,6 @@
 # Opt-in Liveshare owner bundle: mount the same-origin share APIs and their
 # browser Session-header action. Shipped profiles do not include this layer.
 - insert:
-    # The declaration surface loads first and needs nothing: the share host below waits for a Relay
-    # connection, so a surface it provided would appear after the plugins that offer endpoints did.
-    - id: liveshare-viewer-declarations
-      name: '@deepseek-ai/dsh-experimental-liveshare/viewer-declarations'
     - id: liveshare-share-host
       name: '@deepseek-ai/dsh-experimental-liveshare'
       config:

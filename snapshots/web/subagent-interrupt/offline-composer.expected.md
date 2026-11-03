@@ -10,7 +10,7 @@
     - tab "Chat" [selected]
     - tab "Trajectory"
   - button "More conversation views"
-- text: "Explain event sourcing in one sentence.Your parent agent id is \"session-{{uuid}}\". Before you finish, send your result to that agent with send_message({ agent_id: \"session-{{uuid}}\", message: \"<self-contained result>\" }). The parent shares your workspace but does not automatically receive your transcript, tool output, or reasoning. Send earlier messages as well when a finding changes what the parent should do next; sending a message does not end your turn. {{clock}}"
+- text: Explain event sourcing in one sentence.Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. If your last action is a message to your parent, the completion notice omits your final answer; include the result and relevant evidence in that message. {{clock}}
 - button "Copy"
 - paragraph: partial
 - status: Deep diving
@@ -21,8 +21,8 @@
     - button "Edit queued message"
     - button "Remove queued message"
     - button "Steer queued message"
-- textbox "Parent session offline; sending is unavailable but you can still stop the run" [disabled]
-- button "Add files or run commands" [disabled]
-- 'button "Access mode, current: Custom" [disabled]': Custom
+- textbox "Cmd/Ctrl+Enter steers all queued messages"
+- button "Add files or run commands"
+- 'button "Access mode, current: Custom"': Custom
 - button "Stop generating"
 - button "Send message" [disabled]

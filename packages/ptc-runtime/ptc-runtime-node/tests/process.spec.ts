@@ -15,7 +15,9 @@ it('boots an unbuilt source closure outside the workspace and exchanges tool rep
   for (const file of ['process.ts', 'bootstrap.ts', 'rpc.ts', 'json-wire.ts', 'output-json.ts', 'protocol.ts', 'environment.ts']) {
     await copyFile(new URL(`../src/${file}`, import.meta.url), join(directory, file))
   }
-  await cp(new URL('../src/evaluators/', import.meta.url), join(directory, 'evaluators'), { recursive: true })
+  for (const name of ['evaluators', 'imports']) {
+    await cp(new URL(`../src/${name}/`, import.meta.url), join(directory, name), { recursive: true })
+  }
   await mkdir(join(directory, 'node_modules'))
   for (const name of ['acorn', 'acorn-walk']) {
     await cp(dirname(fileURLToPath(import.meta.resolve(`${name}/package.json`))), join(directory, 'node_modules', name), { recursive: true })
