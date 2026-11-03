@@ -9,7 +9,7 @@ import { MemoryCredentials } from '../../../credentials/credentials/tests/memory
 class LeakyCredentials extends MemoryCredentials {
   override describe(): Promise<CredentialInfo> {
     return Promise.resolve(
-      { configured: true, source: 'memory', writable: true, length: 9, value: 'sk-leaked', preview: 'sk…ed' } as CredentialInfo,
+      { configured: true, source: 'memory', writable: true, masked: '•'.repeat(9), value: 'sk-leaked', preview: 'sk…ed' } as CredentialInfo,
     )
   }
 }
@@ -101,7 +101,7 @@ describe('the credentials Remote namespace a configuration surface calls', () =>
   it('answers only the fields the view declares, whatever a provider returns', async () => {
     const controller = await boot({}, LeakyCredentials)
     const described = await controller.describe(['DEEPSEEK_API_KEY'])
-    expect(described.DEEPSEEK_API_KEY).toEqual({ configured: true, source: 'memory', writable: true, length: 9 })
+    expect(described.DEEPSEEK_API_KEY).toEqual({ configured: true, source: 'memory', writable: true, masked: '•'.repeat(9) })
     expect(JSON.stringify(described)).not.toContain('sk-leaked')
     expect(JSON.stringify(described)).not.toContain('sk…ed')
   })
