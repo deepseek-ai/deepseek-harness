@@ -605,8 +605,6 @@
       "@deepseek-ai/dsh-web-deepseek-api": ["./packages/web/web-deepseek-api/src"],
       "@deepseek-ai/dsh-web-fetch-http": ["./packages/web/web-fetch-http/src"],
       "@deepseek-ai/dsh-web-search-deepseek": ["./packages/web/web-search-deepseek/src"],
-      "@deepseek-ai/dsh-web-search-exa": ["./packages/web/web-search-exa/src"],
-      "@deepseek-ai/dsh-web-search-perplexity": ["./packages/web/web-search-perplexity/src"],
       "@deepseek-ai/dsh-webhook": ["./packages/experimental/webhook/src"],
       "@deepseek-ai/dsh-webhook-github": ["./packages/experimental/webhook-github/src"],
       "@deepseek-ai/dsh-win32-process": ["./packages/subprocess/win32-process/src"],

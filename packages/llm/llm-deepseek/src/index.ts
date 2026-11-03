@@ -1,4 +1,5 @@
 /** DeepSeek Messages transport, request configuration, and model capabilities. */
+export { deepSeekApiKeyConfigured, rejectDeepSeekAccountToken, resolveDeepSeekAccountToken, resolveDeepSeekApiKey } from './credential.ts'
 export { catalogModelFields, deepSeekConfigFields, Config, isBuiltInCatalog, plainOptions, resolveAdapterOptions, PUBLIC_BASE_URL } from './config.ts'
 export type { Options, ResolvedDeepSeekOptions } from './config.ts'
 export {

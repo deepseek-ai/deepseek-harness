@@ -6,12 +6,12 @@ import type {} from '@deepseek-ai/dsh-deepseek-account'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
 import {
   catalogModelInfo, createModelListingCache, refuseListedModel, registerDeepSeekProvider, requestModelListing, resolveAdapterOptions,
-  resolveListedCatalog,
+  resolveListedCatalog, rejectDeepSeekAccountToken, resolveDeepSeekAccountToken,
 } from '@deepseek-ai/dsh-llm-deepseek'
 import type { DeepSeekRequestAuth, ListedCatalog, ListingView, ModelListing, ResolvedDeepSeekOptions } from '@deepseek-ai/dsh-llm-deepseek'
 import { Config, plainAccountOptions, resolveAccountOptions } from './config.ts'
 
-export { Config } from './config.ts'
+export { Config, plainAccountOptions, resolveAccountOptions } from './config.ts'
 export const name = 'llm-deepseek-account'
 export const inject = ['llm']
 
@@ -31,9 +31,8 @@ export function apply(ctx: Context, config: Config): void {
   const settings = () => resolveAccountOptions(plainAccountOptions(config), environment)
   settings()
   const supported = resolveAdapterOptions({}).models
-  const account = () => ctx.get('deepseekAccount')
   const resolveAuth = async (connection: ResolvedDeepSeekOptions): Promise<DeepSeekRequestAuth> => {
-    const token = await account()?.resolveToken(connection.baseURL)
+    const token = await resolveDeepSeekAccountToken(ctx, connection.baseURL)
     if (token === undefined) throw new LlmError('Sign in to DeepSeek to use the account provider. The request destination must allow account authentication.', 'ACCOUNT_SIGN_IN_REQUIRED')
     return {
       headers: { [TOKEN_HEADER]: token },
@@ -44,15 +43,14 @@ export function apply(ctx: Context, config: Config): void {
         }
         if (error.failure.status !== 401) return error
         const rejected = new LlmError(error.message, 'ACCOUNT_TOKEN_INVALID', { ...error.failure, cause: error })
-        try { await account()?.rejectToken(token) }
-        catch (_credentialRemovalFailed) { /* Storage failure cannot replace the inference failure. */ }
+        await rejectDeepSeekAccountToken(ctx, token)
         return rejected
       },
     }
   }
   const catalog = createModelListingCache(ctx, name, PROVIDER, {
     settings: () => settings().catalog,
-    credential: async url => account()?.resolveToken(url),
+    credential: url => resolveDeepSeekAccountToken(ctx, url),
     load: (url, token, signal) => requestModelListing(url, { [TOKEN_HEADER]: token }, signal),
   })
   let loggedListing: ModelListing | undefined

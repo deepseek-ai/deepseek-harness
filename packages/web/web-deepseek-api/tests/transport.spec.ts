@@ -1,13 +1,25 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WebError } from '@deepseek-ai/dsh-web'
+import { customGuidance } from './guidance.ts'
 import { dispatchDeepSeekWeb, type DeepSeekWebAuth } from '../src/transport.ts'
-const options = { apiKey: 'ds-key', baseURL: 'https://api.deepseek.test/anthropic/v1' }
-function searchProvider(auth: DeepSeekWebAuth & { baseURL: string; recordRequest?: (endpoint: string) => void }) {
-  return { search: (body: { query: string }, signal?: AbortSignal) => dispatchDeepSeekWeb(auth, {
-    endpoint: `${auth.baseURL}/messages`, body, decode: value => value,
-    ...auth.recordRequest === undefined ? {} : { recordRequest: auth.recordRequest },
+const options = { apiKey: 'ds-key', baseURL: 'https://api.deepseek.test/v1/tools' }
+const ACCOUNT_BASE = 'https://account.deepseek.test/v1/tools'
+/** Sources of one search; the account fields, when given, form the account credential on {@link ACCOUNT_BASE}. */
+type SearchSources = Omit<DeepSeekWebAuth, 'account'> & {
+  baseURL: string
+  recordRequest?: (endpoint: string) => void
+  resolveAccountToken?: (endpoint: string) => Promise<string | undefined>
+  rejectAccountToken?: (token: string) => Promise<void>
+}
+function searchProvider({ baseURL, recordRequest, resolveAccountToken, rejectAccountToken, ...auth }: SearchSources) {
+  const account = resolveAccountToken === undefined ? {} : {
+    account: { baseURL: ACCOUNT_BASE, resolveToken: resolveAccountToken, rejectToken: rejectAccountToken ?? (async () => {}) },
+  }
+  return { search: (body: { query: string }, signal?: AbortSignal) => dispatchDeepSeekWeb({ ...auth, ...account }, {
+    baseURL, path: '/search', body, decode: value => value,
+    ...recordRequest === undefined ? {} : { recordRequest },
     apiKeyHeaders: key => ({ 'x-api-key': key }),
-    guidance: { subject: 'Search', plugin: 'web-search-deepseek', field: 'baseURL', label: 'Messages API base URL', page: 'Web search' },
+    guidance: customGuidance('search'),
   }, signal) }
 }
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
@@ -34,23 +46,25 @@ describe('DeepSeek web account authentication', () => {
     }
   }
 
-  it('sends only the account token for the dispatched endpoint, ahead of a configured key', async () => {
+  it('sends only the account token to the account endpoint it was released for, ahead of a configured key', async () => {
     const { first } = captureFetch()
     const resolveAccountToken = vi.fn(async (_endpoint: string) => 'account-token')
     const resolveApiKey = vi.fn(async () => 'resolved-key')
     await searchProvider({ ...options, resolveAccountToken, resolveApiKey }).search({ query: 'q' })
     const { url, headers } = first()
-    expect(resolveAccountToken).toHaveBeenCalledWith(url)
+    expect(url).toBe(`${ACCOUNT_BASE}/search`)
+    expect(resolveAccountToken).toHaveBeenCalledExactlyOnceWith(url)
     expect(resolveApiKey).not.toHaveBeenCalled()
     expect(headers['x-dsh-auth-token']).toBe('account-token')
     expect(headers).not.toHaveProperty('x-api-key')
     expect(headers).not.toHaveProperty('authorization')
   })
 
-  it.each([undefined, ''])('falls back to the API key when the account resolves %j', async (token) => {
+  it.each([undefined, ''])('falls back to the API key on the API-key endpoint when the account resolves %j', async (token) => {
     const { first } = captureFetch()
     await searchProvider({ ...options, resolveAccountToken: async () => token }).search({ query: 'q' })
-    const { headers } = first()
+    const { url, headers } = first()
+    expect(url).toBe(`${options.baseURL}/search`)
     expect(headers['x-api-key']).toBe('ds-key')
     expect(headers).not.toHaveProperty('x-dsh-auth-token')
   })
@@ -82,13 +96,84 @@ describe('DeepSeek web account authentication', () => {
     })
   })
 
+  it.each([false, true])('invalidates the sent account token on 401 and preserves the HTTP error when removal fails: %s', async (fails) => {
+    const rejectAccountToken = vi.fn(async (_token: string) => { if (fails) throw new Error('storage failed') })
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ error: 'invalid token' }, { status: 401 })))
+    const error = await rejectedWebError(searchProvider({
+      ...options, resolveAccountToken: async () => 'sent-token', rejectAccountToken,
+    }).search({ query: 'q' }))
+    expect(error.code).toBe('WEB_PROVIDER_ERROR')
+    expect(error.message).toContain('HTTP 401')
+    expect(rejectAccountToken).toHaveBeenCalledExactlyOnceWith('sent-token')
+  })
+
+  it.each([[401, undefined], [403, 'account-token']] as const)('does not invalidate a token for status %s and token %s', async (status, token) => {
+    const rejectAccountToken = vi.fn(async () => {})
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({}, { status })))
+    await expect(searchProvider({
+      ...options, resolveAccountToken: async () => token, rejectAccountToken,
+    }).search({ query: 'q' })).rejects.toMatchObject({ code: 'WEB_PROVIDER_ERROR' })
+    expect(rejectAccountToken).not.toHaveBeenCalled()
+  })
+
+  it('retains the HTTP failure when account invalidation cancels the requesting Session', async () => {
+    const controller = new AbortController()
+    const response = jsonResponse({ error: 'invalid token' }, { status: 401 })
+    const json = response.json.bind(response)
+    vi.spyOn(response, 'json').mockImplementation(async (): Promise<unknown> => {
+      controller.signal.throwIfAborted()
+      const body: unknown = await json()
+      return body
+    })
+    vi.stubGlobal('fetch', vi.fn(async () => response))
+    const error = await rejectedWebError(searchProvider({
+      ...options, resolveAccountToken: async () => 'sent-token',
+      rejectAccountToken: async () => { controller.abort(new Error('signed out')) },
+    }).search({ query: 'q' }, controller.signal))
+    expect(error.code).toBe('WEB_PROVIDER_ERROR')
+    expect(error.message).toContain('HTTP 401')
+    expect(controller.signal.aborted).toBe(true)
+  })
+
+  it('invalidates the sent account token once when cancellation interrupts reading the 401 body', async () => {
+    const controller = new AbortController()
+    const response = jsonResponse({ error: 'invalid token' }, { status: 401 })
+    vi.spyOn(response, 'json').mockImplementation(async (): Promise<unknown> => {
+      controller.abort(new Error('caller stopped'))
+      throw new DOMException('The operation was aborted.', 'AbortError')
+    })
+    vi.stubGlobal('fetch', vi.fn(async () => response))
+    const rejectAccountToken = vi.fn(async (_token: string) => {})
+    const error = await rejectedWebError(searchProvider({
+      ...options, resolveAccountToken: async () => 'sent-token', rejectAccountToken,
+    }).search({ query: 'q' }, controller.signal))
+    expect(error.code).toBe('WEB_ABORTED')
+    expect(rejectAccountToken).toHaveBeenCalledExactlyOnceWith('sent-token')
+  })
+
+  it('reports cancellation during an API-key 401 body read without invalidating a token', async () => {
+    const controller = new AbortController()
+    const response = jsonResponse({}, { status: 401 })
+    vi.spyOn(response, 'json').mockImplementation(async (): Promise<unknown> => {
+      controller.abort(new Error('caller stopped'))
+      throw new DOMException('The operation was aborted.', 'AbortError')
+    })
+    vi.stubGlobal('fetch', vi.fn(async () => response))
+    const rejectAccountToken = vi.fn(async (_token: string) => {})
+    const error = await rejectedWebError(searchProvider({
+      ...options, resolveAccountToken: async () => undefined, rejectAccountToken,
+    }).search({ query: 'q' }, controller.signal))
+    expect(error.code).toBe('WEB_ABORTED')
+    expect(rejectAccountToken).not.toHaveBeenCalled()
+  })
+
   it('keeps endpoint guidance for other account-authenticated HTTP failures', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({}, { status: 503 })))
     const error = await rejectedWebError(searchProvider({
       ...options,
       resolveAccountToken: async () => 'account-token',
     }).search({ query: 'q' }))
-    expect(error.message).toContain('Search endpoint configuration is separate from chat.')
+    expect(error.message).toContain('If that endpoint is not intended')
   })
 
   it('maps a synchronous resolver throw to WEB_PROVIDER_ERROR', async () => {
@@ -238,11 +323,11 @@ describe('DeepSeek web cancellation and failures', () => {
       .rejects.toThrow(expect.objectContaining({
         code: 'WEB_PROVIDER_ERROR',
         message: 'DeepSeek API error (HTTP 429): rate limited\n\n'
-          + 'The web request used endpoint "https://api.deepseek.test/anthropic/v1/messages". '
-          + 'Search endpoint configuration is separate from chat. If that endpoint is not intended, '
-          + 'guide the user to Plugins > Built-in plugin settings > Web search, where they can '
-          + 'change and save Messages API base URL. If that settings page is unavailable, the user can set '
-          + 'web-search-deepseek.baseURL to a trusted DeepSeek endpoint. Only the user should choose or change the endpoint.',
+          + 'The web request used endpoint "https://api.deepseek.test/v1/tools/search". '
+          + 'Search sends the API key under web-deepseek-api.searchApiKeyEnv to web-deepseek-api.searchBaseURL. If that '
+          + 'endpoint is not intended, guide the user to correct web-deepseek-api.searchBaseURL and '
+          + 'web-deepseek-api.searchApiKeyEnv, or to remove both so Search uses the DeepSeek credential of the conversation. '
+          + 'Only the user should choose or change the endpoint.',
       }))
   })
 
@@ -307,7 +392,7 @@ describe('DeepSeek web cancellation and failures', () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('connection refused'))))
     const error = await rejectedWebError(searchProvider(options).search({ query: 'q' }))
     expect(error.code).toBe('WEB_PROVIDER_ERROR')
-    expect(error.message).toContain('The web request used endpoint "https://api.deepseek.test/anthropic/v1/messages".')
+    expect(error.message).toContain('The web request used endpoint "https://api.deepseek.test/v1/tools/search".')
   })
 
 })
