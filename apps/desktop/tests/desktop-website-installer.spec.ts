@@ -29,6 +29,8 @@ async function fixture(target: DesktopPublishRoute['target'] = 'mac-arm64') {
 
 it.each(['mac-arm64', 'mac-x64', 'win-x64'] as const)('accepts only the final %s installer without any update files or current checkout version', async (target) => {
   const f = await fixture(target)
+  f.manifest = { ...f.manifest, files: [...f.manifest.files,
+    { name: 'missing-update.zip', size: 1, sha512: 'unused' }, { name: 'nightly.yml', size: 1, sha512: 'unused' }] }
   const installer = await prepareWebsiteInstaller(f.directory, f.manifest, f.route, 'owner/repo', 'production-123')
   try {
     expect(installer.plan.version).toBe('0.2.1-rc.5')
@@ -43,7 +45,7 @@ it('rejects changed installer bytes', async () => {
   await expect(prepareWebsiteInstaller(f.directory, f.manifest, f.route, 'owner/repo', 'production-123')).rejects.toThrow('differs from build manifest')
 })
 
-it.each(['preset', 'qualification', 'attempt', 'commit', 'target', 'repository'] as const)('rejects mismatched %s even when file bytes match', async (field) => {
+it.each(['preset', 'qualification', 'attempt', 'commit', 'target', 'repository', 'runId', 'runnerName', 'sourceRef', 'channel'] as const)('rejects mismatched %s even when file bytes match', async (field) => {
   const f = await fixture()
   const source = { ...f.manifest.source }
   if (field === 'preset') source.preset = 'test'
@@ -52,6 +54,10 @@ it.each(['preset', 'qualification', 'attempt', 'commit', 'target', 'repository']
   if (field === 'commit') source.commit = 'b'.repeat(40)
   if (field === 'target') source.target = 'mac-x64'
   if (field === 'repository') source.repository = 'other/repo'
+  if (field === 'runId') source.runId = '13'
+  if (field === 'runnerName') source.runnerName = 'other'
+  if (field === 'sourceRef') source.sourceRef = 'dsh-v0.2.1'
+  if (field === 'channel') source.channel = 'stable'
   await expect(prepareWebsiteInstaller(f.directory, { ...f.manifest, source }, f.route, 'owner/repo', 'production-123')).rejects.toThrow('identity or production qualification mismatch')
 })
 
@@ -99,4 +105,11 @@ it('does not replace changed bytes when recovering an already completed publicat
       { read: async () => ({ size: 1, sha512: 'different' }) }, async () => { throw new Error('unexpected write intent') },
       () => { throw new Error('unexpected PUT') }, true)).rejects.toThrow('recorded upload no longer matches')
   } finally { await installer.handle.close() }
+})
+
+it('rejects an unsupported source ref even when route and manifest agree', async () => {
+  const f = await fixture()
+  const route = { ...f.route, sourceRef: 'feature/unapproved' }
+  const manifest = { ...f.manifest, source: { ...f.manifest.source, sourceRef: route.sourceRef } }
+  await expect(prepareWebsiteInstaller(f.directory, manifest, route, 'owner/repo', 'production-123')).rejects.toThrow('identity or production qualification mismatch')
 })
