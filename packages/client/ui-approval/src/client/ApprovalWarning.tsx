@@ -1,14 +1,12 @@
 /** Formatted hover notice that keeps the pending approval unanswered. */
-import { useEffect, useId, useRef, useState, type CSSProperties, type FocusEvent, type PointerEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FocusEvent, type PointerEvent } from 'react'
 import { createPortal } from 'react-dom'
 import {
   Button, IconWarningOutlineRegular, MenuSurface, Tag,
-  isBehindModal, observeComposition, useAnchoredPosition, useDismissOnOutsidePointer, usePointerGrace,
+  isBehindModal, observeComposition, useDismissOnOutsidePointer, usePointerGrace,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ApprovalCardInput } from './contract/slots.ts'
 import css from './ApprovalPanel.module.css'
-
-const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
 
 /**
  * Present caller-owned risks on hover, keyboard focus, or touch activation.
@@ -23,9 +21,7 @@ export function ApprovalWarning({ warning }: {
   const panel = useRef<HTMLDivElement>(null)
   const id = useId()
   const titleId = useId()
-  const position = useAnchoredPosition({
-    open, anchorRef: anchor, panelRef: panel, side: 'top', align: 'end', gap: 8, margin: 12,
-  })
+  const anchorName = `--dsh-approval-warning-${id.replaceAll(':', '')}`
   useDismissOnOutsidePointer(anchor, open, setOpen, panel)
   const { arm: armClose, cancel: cancelClose } = usePointerGrace(() => {
     if (anchor.current?.matches(':focus-visible')
@@ -81,7 +77,7 @@ export function ApprovalWarning({ warning }: {
     }
   }, [open, cancelClose])
   return <>
-    <Button ref={anchor} size="sm" className={css.warningTrigger} aria-haspopup="dialog"
+    <Button ref={anchor} size="sm" className={css.warningTrigger} style={{ anchorName }} aria-haspopup="dialog"
       aria-expanded={open} aria-controls={open ? id : undefined} onClick={show}
       onPointerEnter={enter} onPointerLeave={leave}
       onFocus={(event) => { if (event.currentTarget.matches(':focus-visible')) show() }} onBlur={blur}>
@@ -91,7 +87,7 @@ export function ApprovalWarning({ warning }: {
     </Button>
     {open && createPortal(
       <MenuSurface ref={panel} id={id} role="dialog" aria-labelledby={titleId} tabIndex={-1}
-        className={css.warningPopover} style={position ?? MEASURE_STYLE}
+        className={css.warningPopover} style={{ positionAnchor: anchorName }}
         onPointerEnter={enter} onPointerLeave={leave} onFocus={cancelClose} onBlur={blur}>
         <h3 id={titleId} className={css.warningTitle}>{warning.title}</h3>
         {warning.detail.split('\n\n').map(paragraph => <p key={paragraph}>{paragraph}</p>)}

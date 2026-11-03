@@ -118,8 +118,8 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   await page.keyboard.press('Escape')
   await warning.waitFor({ state: 'hidden' })
   expect(await approval.count()).toBe(1)
-  for (const width of [1000, 390]) {
-    await page.setViewportSize({ width, height: 800 })
+  for (const { width, height } of [{ width: 1000, height: 800 }, { width: 390, height: 800 }, { width: 390, height: 480 }]) {
+    await page.setViewportSize({ width, height })
     for (const colorScheme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme })
       await expect.poll(() => page.evaluate(() => document.body.hasAttribute('data-ds-dark-theme'))).toBe(colorScheme === 'dark')
@@ -128,15 +128,16 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
       await warning.waitFor()
       await expect.poll(async () => warning.evaluate((element) => {
         const bounds = element.getBoundingClientRect()
-        return bounds.left >= 0 && bounds.top >= 0 && bounds.right <= innerWidth && bounds.bottom <= innerHeight
+        return bounds.left >= 12 && bounds.top >= 12 && bounds.right <= innerWidth - 12 && bounds.bottom <= innerHeight - 12
       })).toBe(true)
+      expect(await warning.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
       expect(await approval.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
       if (webSnapshotMode() === 'refresh') {
         const directory = fileURLToPath(new URL('../../../.artifacts', import.meta.url))
         await mkdir(directory, { recursive: true })
-        await page.screenshot({ path: join(directory, `cua-popover-${width}-${colorScheme}.png`), animations: 'disabled' })
+        await page.screenshot({ path: join(directory, `cua-popover-${width}-${height}-${colorScheme}.png`), animations: 'disabled' })
       }
-      await approval.locator('p').click()
+      await page.mouse.click(4, height / 2)
       await warning.waitFor({ state: 'hidden' })
     }
   }

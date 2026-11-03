@@ -547,10 +547,6 @@ it.each(['allow', 'reject', 'always', 'keyboard'] as const)('settles a fixed app
 })
 
 it('opens and dismisses risk details without answering the approval', () => {
-  vi.stubGlobal('ResizeObserver', class {
-    observe() {}
-    disconnect() {}
-  })
   const onAllow = vi.fn(async () => {}), onReject = vi.fn(async () => {})
   const props = {
     requestKey: 'risk-approval', title: 'Control this app?',
@@ -584,7 +580,6 @@ it('opens and dismisses risk details without answering the approval', () => {
 
 it('keeps risk details readable across the pointer gap and after a touch tap', () => {
   vi.useFakeTimers()
-  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true, addEventListener() {}, removeEventListener() {} })))
   render(<ApprovalWarning warning={{ label: 'Risks', title: 'Computer use risks', detail: 'Background control.' }} />)
   const trigger = screen.getByRole('button', { name: 'Risks' })
@@ -613,7 +608,6 @@ it('keeps risk details readable across the pointer gap and after a touch tap', (
 })
 
 it('leaves Escape to composition and dismisses risk details when a modal takes focus', () => {
-  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   const onClose = vi.fn()
   const warning = <ApprovalWarning warning={{ label: 'Risks', title: 'Computer use risks', detail: 'Background control.' }} />
   const view = render(warning)
@@ -640,7 +634,6 @@ it('leaves Escape to composition and dismisses risk details when a modal takes f
 
 it('keeps risk details open for keyboard focus and closes when focus leaves', () => {
   vi.useFakeTimers()
-  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   render(<>
     <ApprovalWarning warning={{ label: 'Risks', title: 'Computer use risks', detail: 'Background control.' }} />
     <button>Outside</button>
@@ -673,7 +666,6 @@ it('keeps risk details open for keyboard focus and closes when focus leaves', ()
 
 it('dismisses pointer-focused risk details when the pointer leaves', () => {
   vi.useFakeTimers()
-  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   render(<ApprovalWarning warning={{ label: 'Risks', title: 'Computer use risks', detail: 'Background control.' }} />)
   fireEvent.click(screen.getByRole('button', { name: 'Risks' }))
   const dialog = screen.getByRole('dialog', { name: 'Computer use risks' })
@@ -685,7 +677,6 @@ it('dismisses pointer-focused risk details when the pointer leaves', () => {
 })
 
 it('ignores repeated Escape and restores focus when dismissing focused risk details', () => {
-  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   render(<ApprovalWarning warning={{ label: 'Risks', title: 'Computer use risks', detail: 'Background control.' }} />)
   const trigger = screen.getByRole('button', { name: 'Risks' })
   fireEvent.click(trigger)
@@ -700,7 +691,6 @@ it('ignores repeated Escape and restores focus when dismissing focused risk deta
 })
 
 it('dismisses hover-open risks when focus moves elsewhere without taking focus on open', () => {
-  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   render(<>
     <button>Before</button>
     <ApprovalWarning warning={{ label: 'Risks', title: 'Computer use risks', detail: 'Background control.' }} />
@@ -718,7 +708,6 @@ it('dismisses hover-open risks when focus moves elsewhere without taking focus o
 })
 
 it.each(['window blur', 'hidden tab'] as const)('dismisses risk details on %s without restoring focus', (reason) => {
-  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   render(<ApprovalWarning warning={{ label: 'Risks', title: 'Computer use risks', detail: 'Background control.' }} />)
   const trigger = screen.getByRole('button', { name: 'Risks' })
   fireEvent.click(trigger)
