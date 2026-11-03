@@ -1,14 +1,6 @@
 /** Program execution failures reported by PTC. @module */
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 
-/** Tool-call allowance for one `run_code` program, with the per-minute budget its limit derives from. */
-export interface ToolCallAllowance {
-  /** Maximum dispatched tool-call attempts for the program; `Number.POSITIVE_INFINITY` without a resolved deadline. */
-  limit: number
-  /** Configured attempts granted per minute of resolved runtime timeout. */
-  maxSubCallsPerMinute: number
-}
-
 /**
  * Host-only abort reason for an exhausted tool-call allowance; the excess call is never dispatched.
  * The executor recognizes this class at settlement and reports CODE_RUN_FAILED to the model.
@@ -16,13 +8,14 @@ export interface ToolCallAllowance {
 export class ToolCallLimitExceededError extends Error {
   /**
    * Describe the rejected call and how to correct the program.
-   * @param allowance - Exhausted allowance, including the per-minute budget behind its limit.
+   * @param limit - Timeout-derived maximum tool-call attempts for one run_code invocation.
    * @param callNumber - One-based attempt rejected without invoking the tool.
+   * @param callsPerMinute - Attempts granted per minute of run_code timeout.
    */
-  constructor(allowance: ToolCallAllowance, callNumber: number) {
-    super(`run_code exceeded its limit of ${allowance.limit} tool calls `
-      + `(maxSubCallsPerMinute ${allowance.maxSubCallsPerMinute}); call ${callNumber} was not dispatched. `
-      + 'The run_code program may contain an infinite loop. Check loop termination or split the work into smaller run_code calls.')
+  constructor(limit: number, callNumber: number, callsPerMinute: number) {
+    super(`run_code exceeded its limit of ${limit} tool calls (${callsPerMinute} per minute of its timeout); `
+      + `call ${callNumber} was not dispatched. The run_code program may contain an infinite loop. `
+      + 'Check loop termination or split the work into smaller run_code calls.')
     this.name = 'ToolCallLimitExceededError'
   }
 }
