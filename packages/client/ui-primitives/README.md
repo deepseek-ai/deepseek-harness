@@ -144,7 +144,7 @@ The atoms cannot read the application locale, so every piece of user-facing copy
 
 Portalled menus close when their anchor becomes inert or hidden; contextual menus use the original control supplied by `returnFocus`. While open, a contextual menu adds its ID to that control's `aria-controls` and restores the previous value on close. Their owner’s retained content stays mounted.
 
-`Menu.listClassName` styles the menu card independently of the anchor wrapper, including in portal mode. Leading icons use the `--dsw-alias-menu-icon` color; destructive icons retain their error color.
+`Menu.listClassName` styles the menu card independently of the anchor wrapper, including in portal mode. Tall portal menus retain the trigger’s horizontal alignment while using the window’s vertical scrolling space; horizontal clamping applies only when the card cannot fit beside that edge. Leading icons use the `--dsw-alias-menu-icon` color; destructive icons retain their error color.
 
 `Menu` delegates its card material to `MenuSurface`; custom menus use the same component. `MenuSurface` forwards div props and refs, uses translucent fill and blur, and accepts `compact` for the smaller radius. Its default relative positioning contains the material layer; caller classes can supply fixed or absolute placement. On macOS, its non-interactive backing follows the card through CSS anchors and unmounts with it; the backing requires the Web shell’s isolated body. Feature classes control layout and elevation, while the component owns material and outer radius ([menu rules](../../../docs/web-styling.md#component-rules)). Modal masks retain their dark translucent fill without background blur.
 

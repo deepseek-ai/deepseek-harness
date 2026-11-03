@@ -984,13 +984,17 @@
   overflow-y: auto;
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
-  position-area: bottom span-left;
-  position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline, --dsh-registry-window, --dsh-registry-viewport;
+  position-area: none;
+  top: max(12px, calc(anchor(bottom) + 6px));
+  bottom: 12px;
+  left: 12px;
+  right: max(12px, anchor(right));
+  position-try-fallbacks: --dsh-registry-window, --dsh-registry-opposite, --dsh-registry-wide-opposite, --dsh-registry-tall, --dsh-registry-viewport;
   align-self: start;
   justify-self: end;
   height: fit-content;
   min-height: 0;
-  margin: 6px 0;
+  margin: 0;
 }
 
 .registryOption {
@@ -2261,7 +2265,33 @@ button.versionSummary:focus-visible {
   right: 12px;
   margin: 0;
   align-self: safe start;
-  justify-self: safe end;
+  justify-self: safe start;
+}
+
+@position-try --dsh-registry-opposite {
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: max(12px, calc(anchor(top) + 6px));
+  align-self: end;
+}
+
+@position-try --dsh-registry-wide-opposite {
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: max(12px, calc(anchor(top) + 6px));
+  left: 12px;
+  right: 12px;
+  align-self: end;
+  justify-self: safe start;
+}
+
+@position-try --dsh-registry-tall {
+  position-area: none;
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: 12px;
+  left: 12px;
+  right: max(12px, anchor(right));
+  margin: 0;
+  align-self: safe start;
+  justify-self: end;
 }
 
 @position-try --dsh-registry-viewport {
