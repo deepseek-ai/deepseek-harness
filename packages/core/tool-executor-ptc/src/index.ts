@@ -77,7 +77,7 @@ export const inject = ['tools', 'systemPrompt', 'ptcRuntime']
 /**
  * Select PTC execution in the mounting scope.
  * @param ctx - context owning this executor's selection and lifetime.
- * @param config - program subcall count and concurrency limits.
+ * @param config - timeout-based subcall allowance and concurrency limits.
  */
 export function apply(ctx: Context, config: Config): void {
   ctx.tools.setExecutor(new PtcExecutor(ctx, config))

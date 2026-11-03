@@ -30,13 +30,13 @@ Add this row to a composition with `dsh-tools` mounted. The nearest scoped execu
 ```yaml
 - name: '@deepseek-ai/dsh-tool-executor-ptc'
   config:
-    maxSubCalls: 128
+    maxSubCallsPerMinute: 1024
     maxParallelSubCalls: 10
 ```
 
 Root `run_code` calls are exclusive and execute serially. `maxParallelSubCalls` limits parallel-safe nested calls within each program and defaults to `10`; it must be a positive integer, with `1` selecting serial execution. Exclusive calls form barriers.
 
-`maxSubCalls` limits nested tool-call attempts per `run_code` invocation and defaults to `128`; it must be a positive integer. All tool bindings share the count, including queued calls, invalid arguments, and failed tools. The next attempt throws before dispatch, identifies the limit and rejected call number, and warns that the program may contain an infinite loop. Catching the error does not restore the allowance; a new `run_code` starts a fresh count. Completed tool effects remain. An uncaught limit error becomes the ordinary `CODE_RUN_FAILED` result.
+`maxSubCallsPerMinute` defaults to `1024` and must be a positive integer. Each `run_code` gets `floor(resolved timeoutMs / 60000 × maxSubCallsPerMinute)` tool-call attempts: the default Node timeout of two minutes allows 2048. Runtime defaults and timeout caps apply before this calculation; no deadline means no finite call allowance. This is a total allowance, not a rolling window, so calls may happen in a burst. All tool bindings share the count, including queued calls, invalid arguments, and failed tools. The next attempt throws before dispatch, names the limit and rejected call number, and warns of a possible infinite loop. Catching the error does not restore the allowance; a new program starts a fresh count. Completed effects remain. An uncaught limit error becomes `CODE_RUN_FAILED`.
 
 This package declares `ctx.ptcRuntime` and `ctx.systemPrompt` as required injections; Agent-owned programs need `ctx.workingDirectory`. The executor activates only after its runtime is available and withdraws when that runtime unloads. An enabled PTC executor without a runtime stops application startup. A withdrawn PTC selection never falls back to native execution.
 

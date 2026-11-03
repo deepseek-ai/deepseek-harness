@@ -268,7 +268,7 @@ function resolveSandboxPolicy(ctx: Context, exec: ToolRunContext): SandboxExecut
  * Build the reserved `run_code` transport outside registered capabilities.
  * @param ctx - executor context owning policy listeners and active program cleanup.
  * @param executor - shared invocation pipeline for nested calls.
- * @param config - validated per-program tool-call count and concurrency limits.
+ * @param config - validated timeout-based tool-call allowance and concurrency limits.
  * @returns the transport definition with runtime-dependent schema text.
  */
 export function createRunCodeTool(
@@ -276,7 +276,7 @@ export function createRunCodeTool(
   executor: ToolExecutionPipeline,
   config: Config,
 ): ToolDefinition {
-  const { maxSubCalls, maxParallelSubCalls: maxParallel } = config
+  const { maxSubCallsPerMinute, maxParallelSubCalls: maxParallel } = config
   // Retain services for log settlement after the executor context becomes inactive.
   const tools = ctx.tools
   const logger = ctx.logger
@@ -380,6 +380,7 @@ export function createRunCodeTool(
         callSignal.addEventListener('abort', onOuterAbort, { once: true })
 
         let toolCallAttempts = 0
+        let maxSubCalls: number
         // The per-run scheduler uses the registry's staged interface and follows
         // the same concurrency rules as the native loop. It also follows the
         // native loop's SEQUENCING: every ordered stage (the dispatch-start
@@ -675,7 +676,7 @@ export function createRunCodeTool(
                 runtimes.add(provider)
               }
             }
-            result = await runtime.run(runtime.resolve({
+            const spec = runtime.resolve({
               program: args.code,
               ...exec.agent === undefined || policy?.mode !== standingPolicy?.mode ? {} : { stateOwner: exec.agent },
               bindings: [{
@@ -687,7 +688,10 @@ export function createRunCodeTool(
               ...cwd !== undefined ? { cwd } : {},
               ...policy !== undefined ? { sandboxPolicy: policy } : {},
               ...args.timeoutMs !== undefined ? { timeoutMs: args.timeoutMs } : {},
-            }))
+            })
+            maxSubCalls = spec.timeoutMs === null ? Infinity
+              : Math.floor(spec.timeoutMs / 60_000 * maxSubCallsPerMinute)
+            result = await runtime.run(spec)
           } finally {
             // Abort sub-dispatches and drain every in-flight dispatch before
             // closing the turn (queued-unstarted ones are abandoned unlogged).

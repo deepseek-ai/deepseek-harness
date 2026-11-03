@@ -65,7 +65,7 @@ class FakeRuntime extends PtcRuntime {
 
 interface SetupOptions {
   mode?: 'native' | 'ptc'
-  maxSubCalls?: number
+  maxSubCallsPerMinute?: number
   maxParallelSubCalls?: number
   runtime?: false | { language?: string }
   toolOrder?: string[]
@@ -77,7 +77,7 @@ async function setup(options: SetupOptions = {}) {
   await ctx.plugin(SystemPrompt, { ...options.toolOrder ? { toolOrder: options.toolOrder } : {} })
   await ctx.plugin(ToolRuntime)
   const executor = options.mode === 'native' ? new NativeToolExecutor(ctx) : new PtcExecutor(ctx, {
-    ...options.maxSubCalls !== undefined ? { maxSubCalls: options.maxSubCalls } : {},
+    ...options.maxSubCallsPerMinute !== undefined ? { maxSubCallsPerMinute: options.maxSubCallsPerMinute } : {},
     ...options.maxParallelSubCalls !== undefined ? { maxParallelSubCalls: options.maxParallelSubCalls } : {},
   })
   ctx.tools.setExecutor(executor)
@@ -154,13 +154,16 @@ async function executeCall(ctx: Context, input: ToolExecutionInput): Promise<Too
 async function runCode(
   ctx: Context,
   code: string,
-  extras: { agent?: Agent; signal?: AbortSignal; description?: string } = {},
+  extras: { agent?: Agent; signal?: AbortSignal; description?: string; timeoutMs?: number } = {},
 ): Promise<ToolExecutionResult> {
   return executeCall(ctx, {
     signal: testToolSignal,
     callId: ToolCallId('call-1'),
     name: RUN_CODE_NAME,
-    arguments: { code, description: extras.description ?? 'Run the test program' },
+    arguments: {
+      code, description: extras.description ?? 'Run the test program',
+      ...extras.timeoutMs !== undefined ? { timeoutMs: extras.timeoutMs } : {},
+    },
     ...extras.agent ? { agent: extras.agent } : {},
     ...extras.signal ? { signal: extras.signal } : {},
   })
@@ -668,41 +671,83 @@ describe('mode-aware wire contribution', () => {
 })
 
 describe('the per-program tool-call limit', () => {
-  it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])('rejects maxSubCalls=%s at construction', async (maxSubCalls) => {
+  it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])('rejects maxSubCallsPerMinute=%s at construction', async (maxSubCallsPerMinute) => {
     const ctx = new Context()
     onTestFinished(() => ctx.fiber.dispose())
-    expect(() => new PtcExecutor(ctx, { maxSubCalls })).toThrow('maxSubCalls')
+    expect(() => new PtcExecutor(ctx, { maxSubCallsPerMinute })).toThrow('maxSubCallsPerMinute')
   })
 
-  it('allows 128 calls by default, rejects later attempts before dispatch, and resets for the next program', async () => {
+  it('allows 2048 calls with the default two-minute timeout, rejects later attempts, and resets for the next program', async () => {
     const { ctx, runtime } = await setup()
     onTestFinished(() => ctx.fiber.dispose())
     const calls = registerEcho(ctx)
     const { agent, events } = fakeAgent()
     runtime.behavior = async (request) => {
       const echo = request.bindings[0]!.functions.echo!
-      for (let n = 1; n <= 128; n++) await echo({ value: String(n) })
-      for (const callNumber of [129, 130]) {
+      for (let n = 1; n <= 2048; n++) await echo({ value: String(n) })
+      for (const callNumber of [2049, 2050]) {
         await expect(echo({ value: 'rejected' })).rejects.toMatchObject({
-          code: 'PTC_TOOL_CALL_LIMIT_EXCEEDED', limit: 128, callNumber,
-          message: `run_code exceeded its limit of 128 tool calls; call ${callNumber} was not dispatched. `
+          code: 'PTC_TOOL_CALL_LIMIT_EXCEEDED', limit: 2048, callNumber,
+          message: `run_code exceeded its limit of 2048 tool calls; call ${callNumber} was not dispatched. `
             + 'The run_code program may contain an infinite loop. Check loop termination or split the work into smaller run_code calls.',
         })
       }
       return { logs: [] }
     }
     expect((await runCode(ctx, 'program', { agent })).isError).toBe(false)
-    expect(calls).toHaveLength(128)
-    expect(events.filter(event => event.type === 'tool/ptc-dispatch-start')).toHaveLength(128)
-    expect(events.filter(event => event.type === 'tool/ptc-dispatch')).toHaveLength(128)
+    expect(calls).toHaveLength(2048)
+    expect(events.filter(event => event.type === 'tool/ptc-dispatch-start')).toHaveLength(2048)
+    expect(events.filter(event => event.type === 'tool/ptc-dispatch')).toHaveLength(2048)
 
     runtime.behavior = async request => ({ logs: [], value: await request.bindings[0]!.functions.echo!({ value: 'next run' }) })
     expect((await runCode(ctx, 'next program', { agent })).isError).toBe(false)
-    expect(calls).toHaveLength(129)
+    expect(calls).toHaveLength(2049)
+  })
+
+  it.each([
+    { requestedMs: 30_000, resolvedMs: 30_000, limit: 2 },
+    { requestedMs: 90_000, resolvedMs: 90_000, limit: 6 },
+    { requestedMs: 10_000, resolvedMs: 10_000, limit: 0 },
+    { requestedMs: 600_000, resolvedMs: 90_000, limit: 6 },
+  ])('uses the resolved timeout $resolvedMs ms for an override of $requestedMs ms', async ({ requestedMs, resolvedMs, limit }) => {
+    const { ctx, runtime } = await setup({ maxSubCallsPerMinute: 4 })
+    onTestFinished(() => ctx.fiber.dispose())
+    vi.spyOn(runtime, 'timeout', 'get').mockReturnValue({ defaultMs: 120_000, maxMs: 600_000 })
+    const resolver = vi.spyOn(runtime, 'resolve').mockImplementation(request => ({
+      ...request, cwd: process.cwd(), timeoutMs: resolvedMs,
+    }))
+    const calls = registerEcho(ctx)
+    runtime.behavior = async (request) => {
+      expect(request.timeoutMs).toBe(resolvedMs)
+      const echo = request.bindings[0]!.functions.echo!
+      for (let n = 0; n < limit; n++) await echo({ value: String(n) })
+      await expect(echo({ value: 'rejected' })).rejects.toMatchObject({
+        code: 'PTC_TOOL_CALL_LIMIT_EXCEEDED', limit, callNumber: limit + 1,
+      })
+      return { logs: [] }
+    }
+    expect((await runCode(ctx, 'program', { timeoutMs: requestedMs })).isError).toBe(false)
+    expect(calls).toHaveLength(limit)
+    expect(resolver).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ timeoutMs: requestedMs }))
+  })
+
+  it('does not impose a finite call allowance when the runtime resolves no deadline', async () => {
+    const { ctx, runtime } = await setup({ maxSubCallsPerMinute: 1 })
+    onTestFinished(() => ctx.fiber.dispose())
+    vi.spyOn(runtime, 'resolve').mockImplementation(request => ({
+      ...request, cwd: process.cwd(), timeoutMs: null,
+    }))
+    const calls = registerEcho(ctx)
+    runtime.behavior = async (request) => {
+      for (let n = 0; n < 3; n++) await request.bindings[0]!.functions.echo!({ value: String(n) })
+      return { logs: [] }
+    }
+    expect((await runCode(ctx, 'program')).isError).toBe(false)
+    expect(calls).toHaveLength(3)
   })
 
   it('counts queued calls across tool names before any asynchronous dispatch stage', async () => {
-    const { ctx, runtime } = await setup({ maxSubCalls: 2, maxParallelSubCalls: 1 })
+    const { ctx, runtime } = await setup({ maxSubCallsPerMinute: 1, maxParallelSubCalls: 1 })
     onTestFinished(() => ctx.fiber.dispose())
     const first = registerEcho(ctx, 'first')
     const second = registerEcho(ctx, 'second')
@@ -726,8 +771,11 @@ describe('the per-program tool-call limit', () => {
   })
 
   it('counts failed argument validation and failed tool executions', async () => {
-    const { ctx, runtime } = await setup({ maxSubCalls: 3 })
+    const { ctx, runtime } = await setup({ maxSubCallsPerMinute: 3 })
     onTestFinished(() => ctx.fiber.dispose())
+    vi.spyOn(runtime, 'resolve').mockImplementation(request => ({
+      ...request, cwd: process.cwd(), timeoutMs: 60_000,
+    }))
     const calls = registerEcho(ctx)
     const failure = vi.fn(async () => { throw new Error('tool failed') })
     ctx.tools.register(defineTool({

@@ -30,13 +30,13 @@ kind: "package-reference"
 ```yaml
 - name: '@deepseek-ai/dsh-tool-executor-ptc'
   config:
-    maxSubCalls: 128
+    maxSubCallsPerMinute: 1024
     maxParallelSubCalls: 10
 ```
 
 根 `run_code` 调用是独占调用，按串行执行。`maxParallelSubCalls` 限制每个程序中并行安全的嵌套调用数，默认值为 `10`；值必须是正整数，`1` 表示串行执行。独占调用构成屏障。
 
-`maxSubCalls` 限制每次 `run_code` 的嵌套工具调用尝试次数，默认值为 `128`，必须是正整数。所有工具绑定共用计数，排队中的调用、无效参数和失败的工具调用也计入。达到上限后，下一次尝试会在执行前抛错，指出上限和被拒绝的调用序号，并提示程序可能存在死循环。捕获错误不会恢复额度；新的 `run_code` 会重新计数。已完成的工具操作仍然生效。未捕获的超限错误会成为普通的 `CODE_RUN_FAILED` 结果。
+`maxSubCallsPerMinute` 默认值为 `1024`，必须是正整数。每次 `run_code` 的工具调用额度为 `floor(最终 timeoutMs / 60000 × maxSubCallsPerMinute)`：Node 默认超时为两分钟，因此允许 2048 次。计算前先应用运行时默认值和超时上限；没有截止时间时，调用额度也没有有限上限。这是总额度，不是滑动窗口，因此可以集中调用。所有工具绑定共用计数，排队调用、无效参数和失败调用也计入。达到上限后，下一次尝试会在执行前抛错，指出上限和被拒绝的调用序号，并提示可能存在死循环。捕获错误不会恢复额度；新的程序重新计数。已完成的操作仍然生效。未捕获的超限错误会成为 `CODE_RUN_FAILED` 结果。
 
 本包将 `ctx.ptcRuntime` 和 `ctx.systemPrompt` 声明为必需注入；带 Agent 的程序要求 `ctx.workingDirectory`。执行器在运行时可用后才激活，并在运行时卸载时撤回。启用 PTC 执行器但未提供运行时会阻止应用启动。已撤回的 PTC 选择不会回退到原生执行。
 

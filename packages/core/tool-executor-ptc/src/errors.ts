@@ -5,7 +5,7 @@ import { HarnessError } from '@deepseek-ai/dsh-llm'
 export class ToolCallLimitExceededError extends HarnessError {
   /**
    * Describe the rejected call and how to correct the program.
-   * @param limit - Configured maximum tool-call attempts for one run_code invocation.
+   * @param limit - Timeout-derived maximum tool-call attempts for one run_code invocation.
    * @param callNumber - One-based attempt rejected without invoking the tool.
    */
   constructor(readonly limit: number, readonly callNumber: number) {

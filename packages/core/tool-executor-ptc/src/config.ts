@@ -3,14 +3,14 @@ import z from '@deepseek-ai/schemastery'
 
 /** Program execution limits. */
 export interface Config {
-  /** Maximum nested tool-call attempts per run_code invocation, including failed calls. */
-  maxSubCalls: number
+  /** Nested tool-call attempts per minute of resolved runtime timeout, including failed calls. */
+  maxSubCallsPerMinute: number
   /** Maximum overlapping concurrency-safe program subcalls. */
   maxParallelSubCalls: number
 }
 
-/** Validated per-program call count and concurrency; parallelism of one makes subcalls serial. */
+/** Validated timeout-based call allowance and concurrency; parallelism of one makes subcalls serial. */
 export const Config: z<Partial<Config>, Config> = z.object({
-  maxSubCalls: z.natural().min(1).default(128),
+  maxSubCallsPerMinute: z.natural().min(1).default(1024),
   maxParallelSubCalls: z.natural().min(1).default(10),
 })
