@@ -138,7 +138,6 @@ function scriptedFace(options: {
       mutate,
     },
     credentials: {
-      readStored: vi.fn(() => Promise.resolve(remoteOk(undefined))),
       describe: vi.fn((refs: string[]) => Promise.resolve(remoteOk(
         Object.fromEntries(refs.map(ref => [ref, { configured: false, writable: true }])),
       ))),
