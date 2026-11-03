@@ -8,11 +8,6 @@ on:
         type: string
         default: master
         required: true
-      cua_run_id:
-        description: 'CUA helper run ID，留空复用源码逐字节一致的产物，无匹配则构建'
-        type: string
-        required: false
-        default: ''
       preset:
         description: '机器上的签名配置'
         type: choice

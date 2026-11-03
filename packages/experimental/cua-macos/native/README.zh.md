@@ -41,7 +41,7 @@ kind: "package-reference"
 
 工作流保留 `cua-helper.tgz` 和 `cua-helper.json`。清单记录原始构建的产品版本、commit、Team ID、两份应用摘要、源码摘要和构建摘要。[Release publish](../../../../.github/workflows/release-publish.yml)始终调用该工作流，再按返回的 run ID 和 artifact ID 下载所选产物，生成 provider 的 npm 包。准备步骤校验当前 helper 的源码摘要、选定的构建摘要、两种架构、应用目录、文件字节和执行权限。npm 发布在写入注册表前重新检查实际 provider tarball。无关 commit 或产品版本变化时，复用保留原始清单和已签名字节。普通 PR 发布检查不使用签名凭据。
 
-**Release publish (dsh)** 和 **Package CUA helper · macOS** 都接受可选的 `cua_run_id`：填写构建运行页面 URL 中 `/actions/runs/` 后的数字，不填 job ID。留空时查询这两个工作流最近 14 天内已结束的运行，查找未过期的匹配产物。选择在 Mac 上执行，早于 pnpm 准备和依赖安装。命中时跳过安装、编译、签名和公证，自动查找未命中时重新构建。手动指定 run ID 时选定最新 attempt；helper 打包未成功、产物缺失或过期、输入不匹配时直接失败，不选择更早的 attempt 或其他运行。后续 npm 失败不影响成功的 helper job。GitHub API 读取失败会停止选择。运行摘要链接实际构建者；只复用产物的运行不重新上传副本，手动选择时填写摘要所链接的构建 run ID。产物保留 14 天。
+**Release publish (dsh)** 接受可选的 `cua_run_id`：填写构建运行页面 URL 中 `/actions/runs/` 后的数字，不填 job ID。发布工作流通过 helper 的 `workflow_call` 参数传入这个选择。手动启动 **Package CUA helper · macOS** 只填写 `source_ref` 和 `preset`，始终自动查找产物。自动查找会查询这两个工作流最近 14 天内已结束的运行，选择未过期的匹配产物。选择在 Mac 上执行，早于 pnpm 准备和依赖安装。命中时跳过安装、编译、签名和公证，自动查找未命中时重新构建。手动指定 run ID 时选定最新 attempt；helper 打包未成功、产物缺失或过期、输入不匹配时直接失败，不选择更早的 attempt 或其他运行。后续 npm 失败不影响成功的 helper job。GitHub API 读取失败会停止选择。运行摘要链接实际构建者；只复用产物的运行不重新上传副本，手动选择时填写摘要所链接的构建 run ID。产物保留 14 天。
 
 [源码摘要](../../../../scripts/cua-helper/build-inputs.ts)覆盖 `native/`、`scripts/cua-helper/`、`apps/desktop/scripts/` 下受 Git 跟踪文件的路径、原始字节和执行权限，以及 helper 工作流、锁文件、workspace 配置、根目录 TypeScript 配置和包管理器版本。产品版本及无关包的源码不参与比较。构建摘要还包含 preset、Node/Swift/Clang/Python 版本、macOS SDK build、签名身份、Team ID 和证书容器摘要，不包含密码。输入缺失或配置无法读取时失败。没有这些记录的旧产物需要重新构建。源码比较仍需等待 Mac runner 并检出代码；输入匹配确定可复用性，消费产物的 pack job 再校验下载的应用字节。
 
