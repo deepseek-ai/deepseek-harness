@@ -103,11 +103,7 @@ Windows 签名打包按 PE 文件内容扫描第一方运行时和应用生产�
 
 Desktop 携带独立的 Python、Node.js 和 pnpm 分发包。Python 包含 numpy、pandas、python-docx、python-pptx、openpyxl、Pillow、lxml、XlsxWriter 及其完整依赖。`load_workspace_dependencies` 工具首次使用时，将该产物离线安装到 `$DSH_HOME/dsh-runtimes/dsh-primary-runtime`（通常为 `~/.dsh/dsh-runtimes/dsh-primary-runtime`），并返回解释器、pnpm 脚本和库目录的绝对路径，以及记录内置分发包名称与版本的 `pythonDistributions`。版本报告不包含用户自行安装的包。Office 任务默认使用这些库，用户或工作区指令指定其他环境时遵循其要求。pnpm 脚本通过返回的 Node 可执行文件运行。返回的 Node 库目录为随包交付的库预留，不是 pnpm 的全局安装目录。
 
-Desktop 展示精简的 `office` 路由及可具名调用的创作子技能。创作使用内置 Python 库；渲染、转换和重算调用 [Office 工具](../../packages/document/tool-office/README.zh.md)，它们通过 Office 套件服务在 Host 内运行 LibreOffice Kit。技能包本身可以留在 ASAR 中。技能位于 ASAR 之外的 `runtime/office-skills`。缺失或无效的技能文件只会把该技能移出目录；无法加载的 Office profile 行会使 Office 技能或 `load_workspace_dependencies` 不可用；这两种失败都不会阻止 Host 启动。渐进加载与限制见 [Office 技能包](../../packages/skill/skill-office/README.zh.md)。
-
-无法加载 Kit 时，Office 技能和 Office 工具仍会注册；每次调用工具都会报告 LibreOffice Kit 未安装，Office 套件通过 `ctx.logger.warn` 对每种不同的失败只记录一次。独立的依赖查询行不受影响。没有单独的诊断文件或 GUI 通知。必需的 Host 组件仍须成功启动，打包冒烟检查会拒绝不可用的 Kit。
-
-从 Desktop 内置终端启动的进程会继承 `DSH_PRIMARY_RUNTIME`，因此在其中启动的 `dsh --profile sdk` 使用 Desktop 的内置 Python 环境。要改用用户的 Python，请取消设置该变量。Desktop 不向 Host 或其子进程发布 Kit 位置；每个应用加载自己的 Kit。
+Desktop 从 ASAR 之外的 `runtime/office-skills` 读取 [Office 技能](../../packages/skill/skill-office/README.zh.md)，其 Python 创作使用上述内置库；技能包本身可以留在 ASAR 中。Office 资源缺失或无效、Office profile 行无法加载时，都不会阻止 Host 启动。从 Desktop 内置终端启动的进程会继承 `DSH_PRIMARY_RUNTIME`，因此在其中启动的 `dsh --profile sdk` 使用 Desktop 的内置 Python 环境，并优先于已下载的 SDK 运行时；要改用用户的 Python，请取消设置该变量。
 
 该产物随 Desktop 版本发布。`runtime.json` 记录 Desktop 版本、目标平台、顶层解释器和包管理器版本及 Python 分发包版本表，以及所选目标的锁定产物输入与组装格式的摘要。分发包名称按 PEP 503 归一化；名称归一化后重复时，清单会被拒绝。旧 `components` 清单通过归一化继续可读，并保留其原有库版本一致性校验。匹配的安装会被复用；依赖或压缩包变化后，即使 Desktop 版本不变，也会在完整暂存副本完成后替换目录。不含摘要的旧清单会在下次安装时被替换。用户自行添加的 Python 包仅在产物身份一致时保留。目录替换失败时保留之前的安装；解释器仍在运行时，Windows 可能拒绝替换。
 
