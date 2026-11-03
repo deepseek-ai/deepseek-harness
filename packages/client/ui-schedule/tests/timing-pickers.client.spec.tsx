@@ -17,6 +17,7 @@ beforeEach(() => {
   // jsdom has no `scrollIntoView`, which the open clock panel calls.
   Element.prototype.scrollIntoView = vi.fn()
   anchor = document.createElement('button')
+  anchor.style.anchorName = '--test-timing-anchor'
   document.body.append(anchor)
 })
 afterEach(() => { cleanup(); vi.useRealTimers(); anchor.remove() })
@@ -27,10 +28,25 @@ afterEach(() => { cleanup(); vi.useRealTimers(); anchor.remove() })
  * @returns the props both pickers take, with spied pick and close callbacks.
  */
 function panel(value: string) {
-  return { open: true, anchorRef: { current: anchor }, value, onPick: vi.fn(), onClose: vi.fn(), t }
+  return { open: true, anchorRef: { current: anchor }, anchorName: '--test-timing-anchor', value, onPick: vi.fn(), onClose: vi.fn(), t }
 }
 
 describe('ClockPicker', () => {
+  it('uses the row CSS anchor and dismisses only outside the trigger and panel', () => {
+    const props = panel('09:30:00')
+    render(<ClockPicker {...props} />)
+    const clock = screen.getByRole('dialog', { name: en['timing.time'] })
+    expect(clock.parentElement).toBe(document.body)
+    expect(clock.style.positionAnchor).toBe(anchor.style.anchorName)
+    expect(clock.style.left).toBe('')
+    expect(clock.style.top).toBe('')
+    fireEvent.pointerDown(anchor)
+    fireEvent.pointerDown(clock)
+    expect(props.onClose).not.toHaveBeenCalled()
+    fireEvent.pointerDown(document.body)
+    expect(props.onClose).toHaveBeenCalledOnce()
+  })
+
   it('starts a value without a clock at midnight', () => {
     const props = panel('')
     render(<ClockPicker {...props} />)

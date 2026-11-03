@@ -617,75 +617,60 @@ describe('JobListAction observation', () => {
     expect(writeText).toHaveBeenCalledWith('pnpm run build')
   })
 
-  it('anchors the portaled list in viewport coordinates and follows resize and ancestor scroll', () => {
-    vi.stubGlobal('innerWidth', 700)
-    vi.stubGlobal('innerHeight', 600)
-    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(440)
-    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(120)
+  it('anchors the portaled list with CSS without reading geometry on resize or ancestor scroll', () => {
     const { container } = render(<JobListAction {...props([outputJob()])} />)
     const trigger = screen.getByRole('button', { name: '1 个后台任务' })
-    const anchor = vi.spyOn(trigger.parentElement!, 'getBoundingClientRect')
-      .mockReturnValue(new DOMRect(344, 40, 180, 28))
+    const anchor = trigger.closest('div')!
+    const measure = vi.spyOn(anchor, 'getBoundingClientRect')
     fireEvent.click(trigger)
     const list = screen.getByRole('list', { name: zh['list.aria'] })
-    const menu = list.closest<HTMLElement>('[data-menu-material]')
-    expect(menu?.parentElement).toBe(document.body)
+    const menu = list.closest<HTMLElement>('[data-menu-material]')!
+    expect(menu.parentElement).toBe(document.body)
     expect(container.contains(list)).toBe(false)
-    expect(menu?.style.left).toBe('248px')
-    expect(menu?.style.top).toBe('73px')
-
-    vi.stubGlobal('innerWidth', 900)
+    expect(anchor.style.anchorName).not.toBe('')
+    expect(menu.style.positionAnchor).toBe(anchor.style.anchorName)
+    expect(menu.style.left).toBe('')
+    expect(menu.style.top).toBe('')
     fireEvent(window, new Event('resize'))
-    expect(menu?.style.left).toBe('344px')
-    anchor.mockReturnValue(new DOMRect(80, 110, 180, 28))
     fireEvent.scroll(container)
-    expect(menu?.style.left).toBe('80px')
-    expect(menu?.style.top).toBe('143px')
+    expect(menu.style.positionAnchor).toBe(anchor.style.anchorName)
+    expect(measure).not.toHaveBeenCalled()
   })
 
-  it('keeps a near-edge anchored list inside both viewport margins', () => {
-    vi.stubGlobal('innerWidth', 700)
-    vi.stubGlobal('innerHeight', 600)
-    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(600)
-    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(120)
-    render(<JobListAction {...props([outputJob()])} />)
-    const trigger = screen.getByRole('button', { name: '1 个后台任务' })
-    vi.spyOn(trigger.parentElement!, 'getBoundingClientRect').mockReturnValue(new DOMRect(4, 540, 180, 28))
-    fireEvent.click(trigger)
-    const menu = screen.getByRole('list', { name: zh['list.aria'] })
-      .closest<HTMLElement>('[data-menu-material]')
-    expect(menu?.style.left).toBe('12px')
-    expect(menu?.style.top).toBe('468px')
+  it('gives independent job controls separate CSS anchors', () => {
+    render(<><JobListAction {...props([outputJob()])} /><JobListAction {...props([outputJob()])} /></>)
+    const triggers = screen.getAllByRole('button', { name: '1 个后台任务' })
+    const first = triggers[0]!.closest('div')!
+    const second = triggers[1]!.closest('div')!
+    expect(first.style.anchorName).not.toBe('')
+    expect(second.style.anchorName).not.toBe('')
+    expect(first.style.anchorName).not.toBe(second.style.anchorName)
   })
 
-  it('follows Visual Viewport panning and resizing and releases its listeners when closed', () => {
+  it('keeps visual viewport changes out of inline placement and closes normally', () => {
     const viewport = Object.assign(new EventTarget(), { width: 600, height: 500, offsetLeft: 40, offsetTop: 60 })
     vi.stubGlobal('visualViewport', viewport)
-    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(120)
-    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(80)
-    const remove = vi.spyOn(viewport, 'removeEventListener')
+    const listen = vi.spyOn(viewport, 'addEventListener')
     render(<JobListAction {...props([outputJob()])} />)
     const trigger = screen.getByRole('button', { name: '1 个后台任务' })
-    vi.spyOn(trigger.parentElement!, 'getBoundingClientRect').mockReturnValue(new DOMRect(100, 300, 200, 20))
     fireEvent.click(trigger)
     const menu = screen.getByRole('list', { name: zh['list.aria'] }).closest<HTMLElement>('[data-menu-material]')!
-    expect(menu.style.left).toBe('140px')
-    expect(menu.style.top).toBe('385px')
+    const placement = menu.style.positionAnchor
     act(() => {
       viewport.offsetLeft = 100
       viewport.offsetTop = 120
       viewport.dispatchEvent(new Event('scroll'))
-    })
-    expect(menu.style.left).toBe('200px')
-    expect(menu.style.top).toBe('445px')
-    act(() => {
       viewport.height = 200
       viewport.dispatchEvent(new Event('resize'))
     })
-    expect(menu.style.top).toBe('228px')
+    expect(menu.style.positionAnchor).toBe(placement)
+    expect(menu.style.left).toBe('')
+    expect(menu.style.top).toBe('')
+    expect(menu.style.getPropertyValue('--dsh-anchored-max-width')).toBe('')
+    expect(menu.style.getPropertyValue('--dsh-anchored-max-height')).toBe('')
+    expect(listen).not.toHaveBeenCalled()
     fireEvent.click(trigger)
     expect(screen.queryByRole('list', { name: zh['list.aria'] })).toBeNull()
-    expect(remove.mock.calls.map(([type]) => type)).toEqual(expect.arrayContaining(['scroll', 'resize']))
   })
 
   it('keeps portaled controls interactive and releases observation on dismissal and unmount', () => {
