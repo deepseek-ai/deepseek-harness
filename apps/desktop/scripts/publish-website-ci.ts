@@ -69,16 +69,13 @@ export async function publishWebsiteCi(mode: 'upload' | 'purge', env: NodeJS.Pro
       env.GITHUB_REPOSITORY || '', config.bucket)
     try {
       const outcome = await withDesktopChannelLock(join(dirname(root), 'publish-locks'), `${config.bucket}/${installer.plan.artifacts[0]!.key}`, async () => {
-        if (state.upload === 'uploaded') {
-          return 'recorded' as const
-        }
+        const previouslyUploaded = state.upload === 'uploaded'
         return uploadWebsiteInstaller(installer, credentials, desktopPublishCos(installer.plan, credentials), async (event) => {
           state = { ...state, upload: event }
           await save()
-        })
+        }, undefined, previouslyUploaded)
       })
-      const disposition = outcome === 'recorded' ? 'previous upload confirmed by journal; skipped'
-        : outcome === 'present' ? 'identical remote bytes confirmed; skipped' : 'uploaded'
+      const disposition = outcome === 'present' ? 'identical remote bytes and download filename confirmed; skipped' : 'uploaded'
       const text = `Website installer ${disposition}: ${installer.plan.publicUrl}; version ${installer.plan.version}\n`
       process.stdout.write(text)
       if (env.GITHUB_STEP_SUMMARY) await appendFile(env.GITHUB_STEP_SUMMARY, text)

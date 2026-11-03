@@ -55,17 +55,21 @@ it.each(['preset', 'qualification', 'attempt', 'commit', 'target', 'repository']
   await expect(prepareWebsiteInstaller(f.directory, { ...f.manifest, source }, f.route, 'owner/repo', 'production-123')).rejects.toThrow('identity or production qualification mismatch')
 })
 
-it('reconciles stored bytes after audit failure without repeating the fixed-object PUT', async () => {
+it.each(['absent', 'missing-header', 'wrong-header'] as const)('reconciles %s after audit failure without repeating the fixed-object PUT', async (initial) => {
   const f = await fixture()
   const installer = await prepareWebsiteInstaller(f.directory, f.manifest, f.route, 'owner/repo', 'production-123')
-  let stored: Buffer | undefined
+  let stored: Buffer | undefined = initial === 'absent' ? undefined : f.bytes
+  const disposition = `attachment; filename="${f.manifest.files[0]!.name}"`
+  let storedDisposition = initial === 'wrong-header' ? 'attachment; filename="old.dmg"' : undefined
   const server = await startCosLoopback((request, response) => {
     if (request.method === 'PUT') {
       expect(request.headers['x-cos-forbid-overwrite']).toBeUndefined()
       expect(request.headers['content-md5']).toBe(createHash('md5').update(f.bytes).digest('base64'))
+      expect(request.headers['content-disposition']).toBe(disposition)
+      storedDisposition = disposition
       stored = request.body
       answer(response)
-    } else if (stored) answer(response, 200, stored)
+    } else if (stored) answer(response, 200, stored, storedDisposition ? { 'content-disposition': storedDisposition } : {})
     else answer(response, 404, cosError('NoSuchKey'))
   })
   try {
@@ -85,4 +89,14 @@ it('reconciles stored bytes after audit failure without repeating the fixed-obje
     expect(stored).toEqual(f.bytes)
     expect(server.requests.filter(request => request.method === 'PUT')).toHaveLength(1)
   } finally { await installer.handle.close(); await server.close() }
+})
+
+it('does not replace changed bytes when recovering an already completed publication', async () => {
+  const f = await fixture()
+  const installer = await prepareWebsiteInstaller(f.directory, f.manifest, f.route, 'owner/repo', 'production-123')
+  try {
+    await expect(uploadWebsiteInstaller(installer, { secretId: 'fixture-id', secretKey: 'fixture-key' },
+      { read: async () => ({ size: 1, sha512: 'different' }) }, async () => { throw new Error('unexpected write intent') },
+      () => { throw new Error('unexpected PUT') }, true)).rejects.toThrow('recorded upload no longer matches')
+  } finally { await installer.handle.close() }
 })

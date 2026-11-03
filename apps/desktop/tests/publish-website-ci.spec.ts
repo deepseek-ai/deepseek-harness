@@ -11,7 +11,7 @@ import { publishWebsiteCi, websiteApproval } from '../scripts/publish-website-ci
 vi.mock('node:timers/promises', () => ({ setTimeout: async () => {} }))
 afterEach(() => vi.restoreAllMocks())
 
-it.each(['accepted', 'unconfirmed', 'upload', 'put', 'uploaded', 'stable', 'approval'] as const)('preserves publication recovery for %s', async (scenario) => {
+it.each(['accepted', 'unconfirmed', 'upload', 'put', 'uploaded', 'metadata', 'stable', 'approval'] as const)('preserves publication recovery for %s', async (scenario) => {
   const root = await mkdtemp(join(tmpdir(), 'website-ci-'))
   try {
     const config = join(root, 'packaging')
@@ -37,19 +37,22 @@ it.each(['accepted', 'unconfirmed', 'upload', 'put', 'uploaded', 'stable', 'appr
     const env = { RUNNER_NAME: 'mini', GITHUB_REPOSITORY: 'owner/repo', GITHUB_RUN_ID: '99',
       GITHUB_RUN_ATTEMPT: '1', DSH_PACKAGING_CONFIG_DIR: config, DESKTOP_PUBLISH_ROUTE: JSON.stringify(route),
       DESKTOP_WEBSITE_APPROVAL: approval, DOWNLOAD_PROD_EO_ZONE_ID: 'zone-fixture', GITHUB_OUTPUT: join(root, 'output') }
-    if (scenario === 'upload' || scenario === 'put' || scenario === 'uploaded' || scenario === 'stable' || scenario === 'approval') {
+    if (scenario === 'upload' || scenario === 'put' || scenario === 'uploaded' || scenario === 'metadata' || scenario === 'stable' || scenario === 'approval') {
       await writeFile(join(root, 'releases', '12', '1', manifest.files[0]!.name), 'x')
       if (scenario === 'upload' || scenario === 'put') await rm(join(records, 'state.json'))
       let stored = scenario !== 'put'
+      let headerStored = scenario !== 'metadata'
       const server = await startCosLoopback((request, response) => {
         if (request.method === 'PUT') {
           expect(request.body.toString()).toBe('x')
+          expect(request.headers['content-disposition']).toBe(`attachment; filename="${manifest.files[0]!.name}"`)
           stored = true
+          headerStored = true
           answer(response)
           return
         }
         if (!stored) answer(response, 404, cosError('NoSuchKey'))
-        else answer(response, 200, 'x')
+        else answer(response, 200, 'x', headerStored ? { 'content-disposition': `attachment; filename="${manifest.files[0]!.name}"` } : {})
       })
       const original = desktopCos.createDesktopCos
       vi.spyOn(desktopCos, 'createDesktopCos').mockImplementation((credentials) => {
@@ -64,10 +67,10 @@ it.each(['accepted', 'unconfirmed', 'upload', 'put', 'uploaded', 'stable', 'appr
         } else {
           const output = vi.spyOn(process.stdout, 'write').mockReturnValue(true)
           await publishWebsiteCi('upload', env)
-          expect(output.mock.calls.map(call => String(call[0])).join('')).toContain(scenario === 'upload'
-            ? 'identical remote bytes confirmed; skipped' : scenario === 'put' ? 'Website installer uploaded:' : 'previous upload confirmed by journal; skipped')
+          expect(output.mock.calls.map(call => String(call[0])).join('')).toContain((scenario === 'put' || scenario === 'metadata')
+            ? 'Website installer uploaded:' : 'identical remote bytes and download filename confirmed; skipped')
           if (scenario === 'upload') expect(server.requests[0]!.path).toBe('/desktop/dsh-latest-macos-arm64.dmg')
-          expect(server.requests.map(request => request.method)).toEqual(scenario === 'upload' ? ['GET'] : scenario === 'put' ? ['GET', 'PUT', 'GET'] : [])
+          expect(server.requests.map(request => request.method)).toEqual((scenario === 'put' || scenario === 'metadata') ? ['GET', 'PUT', 'GET'] : ['GET'])
           expect(JSON.parse(await readFile(join(records, 'state.json'), 'utf8'))).toMatchObject({ approval, upload: 'uploaded' })
           expect(await readFile(env.GITHUB_OUTPUT, 'utf8')).toContain(`record=${records}`)
         }

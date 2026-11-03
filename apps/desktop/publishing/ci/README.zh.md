@@ -86,7 +86,7 @@ Environment 审批限制此工作流，不限制同一机器账户运行的任�
 
 将仓库变量 `DOWNLOAD_PROD_EO_ZONE_ID` 配置为生产 EdgeOne 站点。生产 COS 凭据还需要 `teo:CreatePurgeTask` 和 `teo:DescribePurgeTasks` 权限。官网上传在 Actions 中按 bucket/平台互斥，在原机器上按 bucket/对象互斥；缓存观察单独运行。版本发布、官网上传和缓存刷新分别使用生产审批 Environment，后续 job 和重跑可能需要再次审批。GitHub 每个并发组最多保留一个排队 job，新排队 job 可能取消旧排队 job；重跑前应检查取消记录。
 
-官网状态保存在 releases 根目录同级的 `upload-records/website-<发布 run ID>-<target>/state.json`。macOS 和 Windows 在各自本地磁盘使用相同记录格式。job 重跑不重复已确认完成的上传；结果未知的上传先核对远端字节。仅重跑刷新 job 即可查询已保存任务；人工重跑确认旧任务失败后可提交一次。提交响应丢失时查询匹配的历史记录，不重新提交。unknown 带任务 ID 表示提交已确认；没有 ID 则可能从未提交。人工恢复前应检查 EdgeOne 历史，重新发起发布运行是恢复方式之一。操作者也可使用已有的[固定下载刷新命令](../README.zh.md#fixed-downloads)；Windows 操作者使用该处说明的 DPAPI 凭据启动器。该命令只提交固定 URL 刷新，不观察完成状态，也不更新本次 Actions 运行的 journal。确认恢复完成前应在 EdgeOne 检查返回的任务。
+官网状态保存在 releases 根目录同级的 `upload-records/website-<发布 run ID>-<target>/state.json`。macOS 和 Windows 在各自本地磁盘使用相同记录格式。官网固定 URL 保持 `desktop/dsh-latest-*`，与 nightly/stable 升级通道独立。`Content-Disposition` 沿用经校验安装包的 basename，保留完整版本及平台名称。上传重跑同时核对字节和该响应头；字节相同但响应头缺失或错误时，上传一次并读回验证。记录已完成但远端字节改变时停止恢复，需要重新审批发布。未知写入先读取再决定重试；CDN 响应头透传仍需实测。仅重跑刷新 job 即可查询已保存任务；人工重跑确认旧任务失败后可提交一次。提交响应丢失时查询匹配的历史记录，不重新提交。unknown 带任务 ID 表示提交已确认；没有 ID 则可能从未提交。人工恢复前应检查 EdgeOne 历史，重新发起发布运行是恢复方式之一。操作者也可使用已有的[固定下载刷新命令](../README.zh.md#fixed-downloads)；Windows 操作者使用该处说明的 DPAPI 凭据启动器。该命令只提交固定 URL 刷新，不观察完成状态，也不更新本次 Actions 运行的 journal。确认恢复完成前应在 EdgeOne 检查返回的任务。
 
 刷新观察每十秒查询一次，最长五分钟；结果未知或观察超时后额外查询一次。明确的 failed、timeout、canceled 结果使 job 失败。仍无法确认时成功退出，并输出 Actions warning 和醒目摘要；持久化状态保持 unknown，不标为完成。诊断 artifact 尽力归档，本地记录仍是恢复依据。模拟服务测试覆盖这些路径；发布操作者必须在生产依赖恢复能力前验证 COS/EdgeOne 权限、job-id 筛选、时间范围查询、任务类型和时间戳格式、Actions 跨 attempt 恢复及实际 CDN 行为。
 

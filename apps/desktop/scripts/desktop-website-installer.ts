@@ -64,6 +64,7 @@ export async function prepareWebsiteInstaller(directory: string, manifest: Deskt
       bucket, publicUrl: desktopWebsiteInstallerUrl(route.target),
       secretIdEnvName: 'DOWNLOAD_PROD_COS_SECRET_ID', secretKeyEnvName: 'DOWNLOAD_PROD_COS_SECRET_KEY',
       artifacts: [{ path, filename: file.name, key, channelMetadata: false,
+        contentDisposition: `attachment; filename="${file.name}"`,
         contentType: windows ? 'application/vnd.microsoft.portable-executable' : 'application/x-apple-diskimage' }],
     } }
   } catch (error) {
@@ -79,17 +80,21 @@ export async function prepareWebsiteInstaller(directory: string, manifest: Deskt
  * @param transport Read-only reconciliation adapter using the same destination.
  * @param record Durable event writer; intent must persist before the remote write.
  * @param createClient Optional caller-owned COS factory; absent uses the production client.
+ * @param previouslyUploaded A completed journal forbids replacing different remote bytes during metadata recovery.
  * @returns Whether bytes were uploaded or an existing identical object was reused.
  */
 export async function uploadWebsiteInstaller(installer: DesktopWebsiteInstaller, credentials: DesktopCosCredentials,
   transport: Pick<DesktopPublishTransport, 'read'>,
   record: (event: 'upload-intent' | 'uploaded') => Promise<void>,
   createClient: typeof createDesktopCos = createDesktopCos,
+  previouslyUploaded = false,
 ): Promise<'uploaded' | 'present'> {
   const artifact = installer.plan.artifacts[0]!
   const matches = (remote: DesktopObjectDigest | null) =>
     remote?.size === installer.digest.size && remote.sha512 === installer.digest.sha512
-  if (matches(await transport.read(artifact.key, false))) {
+  const remote = await transport.read(artifact.key, false)
+  if (previouslyUploaded && !matches(remote)) throw new Error('website installer: recorded upload no longer matches remote bytes; select and approve a new publication')
+  if (matches(remote) && remote?.contentDisposition === artifact.contentDisposition) {
     await record('uploaded')
     return 'present'
   }
@@ -99,11 +104,12 @@ export async function uploadWebsiteInstaller(installer: DesktopWebsiteInstaller,
   try {
     await cosOperation(cos, 900_000, () => cos.putObject({ Bucket: installer.plan.bucket, Region: DESKTOP_COS_REGION,
       Key: artifact.key, Body: body, ContentLength: installer.digest.size, ContentType: artifact.contentType,
-      Headers: { 'Content-MD5': installer.md5 },
+      Headers: { 'Content-MD5': installer.md5, 'Content-Disposition': artifact.contentDisposition! },
     }))
   } catch (error) { throw new DesktopCosOperationError('PutObject', error) }
   finally { body.destroy() }
-  if (!matches(await transport.read(artifact.key, false))) throw new Error('website installer: remote upload result unconfirmed; reconcile before retrying')
+  const confirmed = await transport.read(artifact.key, false)
+  if (!matches(confirmed) || confirmed?.contentDisposition !== artifact.contentDisposition) throw new Error('website installer: remote upload result unconfirmed; reconcile before retrying')
   await record('uploaded')
   return 'uploaded'
 }

@@ -49,8 +49,9 @@ export function desktopPublishCos(
       })
       try {
         const cos = client()
-        await cosOperation(cos, 900_000, () => cos.getObject({ ...address, Output: output }))
-        return { size, sha512: sha512.digest('base64'), ...(channel ? { contents: Buffer.concat(chunks).toString('utf8') } : {}) }
+        const response = await cosOperation(cos, 900_000, () => cos.getObject({ ...address, Output: output }))
+        return { size, sha512: sha512.digest('base64'),
+          ...(typeof response.headers?.['content-disposition'] === 'string' ? { contentDisposition: response.headers['content-disposition'] } : {}), ...(channel ? { contents: Buffer.concat(chunks).toString('utf8') } : {}) }
       } catch (error) {
         if (missing(error)) return null
         throw new DesktopCosOperationError('GetObject', error)
