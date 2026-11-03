@@ -146,6 +146,8 @@ function nativeCatalogFact(value: SessionFormatJsonValue): SessionFormatJsonObje
   if (typeof value['childId'] !== 'string'
     || (value['mode'] !== 'continuable' && value['mode'] !== 'external')
     || typeof value['name'] !== 'string'
+    || !/^[a-z][a-z0-9-]{0,31}$/u.test(value['name'])
+    || value['name'] === 'lead'
     || (value['mode'] === 'continuable' && typeof value['label'] !== 'string')
     || (value['label'] !== undefined && typeof value['label'] !== 'string')) {
     throw new SessionFormatError('subagent/catalog requires a supported versioned catalog fact')

@@ -19,6 +19,15 @@ function receipt(title: string, badge: NonNullable<DetailItem['badge']>, t: Deta
   }
 }
 
+/** Localize task ownership without interpreting inspection providers' own `owner` fields. */
+function teamTaskItems(value: unknown, t: DetailTranslate): DetailItem[] {
+  return inspectionItems(value, t).map(item => ({
+    ...item,
+    fields: item.fields.map(field => field.label === 'owner'
+      ? { ...field, label: t('detail.field.owner') } : field),
+  }))
+}
+
 function agentList(text: string, json: unknown, t: DetailTranslate): ToolDetailsModel | null {
   if (Array.isArray(json)) return detailList(inspectionItems(json, t), t('detail.agents.count', { count: json.length }), t)
   if (text === '(no subagents)') return detailList([], t('detail.agents.count', { count: 0 }), t)
@@ -159,12 +168,12 @@ export function controlDetails(
     case 'team_task_get':
     case 'team_task_update':
       if (!detailRecord(json) || typeof json.subject !== 'string') return null
-      return detailList(inspectionItems(json, t), json.subject, t)
+      return detailList(teamTaskItems(json, t), json.subject, t)
     case 'team_task_list':
       if (!detailRecord(json) || !Array.isArray(json.tasks)) return null
       if (json.nextCursor !== undefined && typeof json.nextCursor !== 'number') return null
       return {
-        ...detailList(inspectionItems(json.tasks, t), t('detail.tasks.count', { count: json.tasks.length }), t),
+        ...detailList(teamTaskItems(json.tasks, t), t('detail.tasks.count', { count: json.tasks.length }), t),
         ...(json.nextCursor === undefined ? {} : { caption: t('detail.tasks.nextPage', { cursor: String(json.nextCursor) }) }),
       }
     case 'send_message': {

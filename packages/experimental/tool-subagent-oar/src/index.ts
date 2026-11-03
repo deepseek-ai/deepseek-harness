@@ -54,7 +54,7 @@ export function apply(ctx: Context, config: Config): void {
       name: {
         type: 'string',
         description: 'Optional short name for the subagent, unique among the subagents you create: lower-case letters, '
-          + 'digits, and hyphens, starting with a letter, at most 32 characters. Omitted names default to agent-1, agent-2, and so on.',
+          + 'digits, and hyphens, starting with a letter, at most 32 characters; lead is reserved for the root agent. Omitted names default to agent-1, agent-2, and so on.',
       },
       prompt: {
         type: 'string',

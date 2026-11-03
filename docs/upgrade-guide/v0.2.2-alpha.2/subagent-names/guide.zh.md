@@ -21,9 +21,9 @@ description: "Subagent 控制工具和 Team 任务工具按名称寻址 agent，
 ## 迁移
 
 1. 在脚本、PTC 程序和 SDK 调用中，将 `send_message` 和 `interrupt_agent` 的 `agent_id` 参数改名为 `agent`。传入 `list_agents` 或启动回执报告的名称；已保存的 Session id 仍可使用。
-2. 更新 `list_agents` 输出的解析器，读取 `name`、`status` 和 `description`。从名称推导成员的创建者：最后一个 `/` 之前的文本；名称不含 `/` 时为 `lead`。升级前创建的子级以 Session id 列出。
+2. 更新 `list_agents` 输出的解析器，读取 `name`、`status` 和 `description`。对于具有完整命名路径的后代，其创建者是最后一个 `/` 之前的文本；路径不含 `/` 时为 `lead`。子级或祖先创建时没有名称，会使该后代以 Session id 列出；该 id 不编码创建者，且这些行不再提供 parent 或 depth。
 3. 更新 Team 任务消费方，读取 `owner` 而非 `ownerId`。调用 `ctx.agentTeams` 的 host 代码仍读取 `ownerId`；展示时读取 `ownerName ?? ownerId`。新分配会持久化可选的 `ownerName`，历史记录保持不变。旧投影会拒绝带名称的任务；参见[确认记录](../../../persistence-changes/2026-11-02-team-task-owner-names.zh.md)。
-4. 从委派工具结果读取 `name` 而非 `subagentId`。更新包含 `agent_id` 参数、`started subagent <Session id>` 回执、身份运行时上下文文本或旧 `list_agents` 行的录制 transcript 或 fixture。
+4. 从委派工具结果读取 `name` 而非 `subagentId`。更新包含 `agent_id` 参数、`started subagent <Session id>` 回执、身份运行时上下文文本、`Agent <Session id> sent a message` 署名、`Background subagent <Session id>` 通知或旧 `list_agents` 行的录制 transcript 或 fixture。消息署名和后台通知现在用 agent 名称替代 Session id。
 5. 在构造 `SubagentActivation` 值的代码（例如测试替身）中添加 `name`。读取目录行的代码可读取可选的 `name` 字段。
 6. 在创建 subagent 之前，升级所有打开同一 Session 存储的进程。旧版本无法打开包含第 3 版目录载荷的 Session。
 7. 验证迁移：以 `name: "reviewer"` 启动一个 subagent，确认回执为 `started subagent reviewer`，`list_agents` 列出 `reviewer`，且 `send_message({ agent: "reviewer", message })` 成功。

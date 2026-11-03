@@ -2014,7 +2014,7 @@ Delegate a self-contained task to a configured external agent. Choose its runtim
     },
     "name": {
       "type": "string",
-      "description": "Optional short name for the subagent, unique among the subagents you create: lower-case letters, digits, and hyphens, starting with a letter, at most 32 characters. Omitted names default to agent-1, agent-2, and so on."
+      "description": "Optional short name for the subagent, unique among the subagents you create: lower-case letters, digits, and hyphens, starting with a letter, at most 32 characters; lead is reserved for the root agent. Omitted names default to agent-1, agent-2, and so on."
     },
     "prompt": {
       "type": "string",
@@ -2081,7 +2081,7 @@ Delegate a self-contained task to a subagent (a separate agent that works in its
     },
     "name": {
       "type": "string",
-      "description": "Optional short name for the subagent, unique among the subagents you create: lower-case letters, digits, and hyphens, starting with a letter, at most 32 characters. Omitted names default to agent-1, agent-2, and so on."
+      "description": "Optional short name for the subagent, unique among the subagents you create: lower-case letters, digits, and hyphens, starting with a letter, at most 32 characters; lead is reserved for the root agent. Omitted names default to agent-1, agent-2, and so on."
     },
     "prompt": {
       "type": "string",

@@ -54,6 +54,31 @@ describe('shared detail values', () => {
 })
 
 describe('control detail adapters', () => {
+  it('localizes unreadable catalog statuses in English and Chinese', () => {
+    const states = ['corrupt', 'unsupported', 'unavailable']
+    for (const [dictionary, common, locale, labels] of [
+      [en, commonEn, 'en', ['Corrupt', 'Unsupported', 'Unavailable']],
+      [zh, commonZh, 'zh-CN', ['已损坏', '不支持', '不可用']],
+    ] as const) {
+      const translate = makeTranslate(dictionary, common)
+      const result = states.map(status => ({ name: status, status }))
+      expect(detailsCardModel(output('list_agents', JSON.stringify(result)), translate, locale)
+        ?.items.map(item => item.badge?.label)).toEqual(labels)
+    }
+  })
+
+  it('localizes Team owners while preserving inspection owner fields', () => {
+    const translate = makeTranslate(zh, commonZh)
+    for (const tool of ['team_task_get', 'team_task_create', 'team_task_update', 'team_task_list']) {
+      const task = { subject: 'Review', owner: 'reviewer/checker' }
+      const value = tool === 'team_task_list' ? { tasks: [task] } : task
+      expect(detailsCardModel(output(tool, JSON.stringify(value)), translate, 'zh-CN')?.items[0]?.fields)
+        .toContainEqual({ label: '负责人', value: 'reviewer/checker' })
+    }
+    expect(inspectionItems({ owner: 'client-ui-tool' }, translate)[0]?.fields)
+      .toEqual([{ label: 'owner', value: 'client-ui-tool' }])
+  })
+
   it.each([
     [{ timedOut: false }, '等待已结束'],
     [{ timedOut: true }, '等待已超时'],
@@ -70,7 +95,7 @@ describe('control detail adapters', () => {
     expect(agents?.items).toEqual([
       { title: 'lead', subtitle: 'root agent', badge: { label: 'Running', tone: 'info' }, fields: [] },
       { title: 'reviewer/checker', subtitle: 'Check tests', badge: { label: 'Inactive', tone: 'warning' }, fields: [] },
-      { title: 'old-id', badge: { label: 'unavailable', tone: 'neutral' }, fields: [] },
+      { title: 'old-id', badge: { label: 'Unavailable', tone: 'neutral' }, fields: [] },
     ])
     const historical = details('list_agents', 'a1 [running] — Build\na2 [ready] parent=a1 depth=1 — Review\na3 [diagnostic: corrupt] parent=a1 depth=1', { scope: 'descendants' })
     expect(historical?.summary).toBe('3 agents')

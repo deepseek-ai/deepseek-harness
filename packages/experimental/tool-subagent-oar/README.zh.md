@@ -48,7 +48,7 @@ kind: "package-reference"
 | `providers` | 必填 | 从模型可见运行时别名映射到已注册提供方名称的非空映射 |
 | `toolName` | `subagent_oar` | 工具名称；每个挂载实例需要不同名称 |
 
-[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-tool-subagent-oar)定义接受的字段和校验规则。调用要求提供 `runtime`、`description` 和 `prompt`。可选的 `name` 为子任务命名，在调用方的子级之间唯一；省略时按[子智能体运行时的名称规则](../../subagent/subagent/README.zh.md#agent-names)依次选择 `agent-1`、`agent-2` 等。可选的 `cwd` 选择子任务目录，相对路径从父智能体的当前目录解析。提示必须包含子任务需要的上下文。原生安装、认证、模型设置和权限由所选提供方负责。
+[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-tool-subagent-oar)定义接受的字段和校验规则。调用要求提供 `runtime`、`description` 和 `prompt`。可选的 `name` 为子任务命名，在调用方的子级之间唯一，且不能为 `lead`；省略时按[子智能体运行时的名称规则](../../subagent/subagent/README.zh.md#agent-names)依次选择 `agent-1`、`agent-2` 等。可选的 `cwd` 选择子任务目录，相对路径从父智能体的当前目录解析。提示必须包含子任务需要的上下文。原生安装、认证、模型设置和权限由所选提供方负责。
 
 -----
 

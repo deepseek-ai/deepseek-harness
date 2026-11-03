@@ -169,6 +169,15 @@ it('restores external membership and rejects duplicate catalog children', () => 
   expect(() => restore([entry, { ...entry, seq: 1 }])).toThrow('duplicate catalog child')
 })
 
+it.each(['', 'Reviewer', 'a/b', '1reviewer', 'a'.repeat(33), 'lead'])(
+  'rejects invalid names in native catalog v3: %j', (name) => {
+    for (const mode of ['continuable', 'external']) {
+      const data = { version: 3, childId: 'child', childCreatedAt: 2, mode, label: 'Named', name }
+      expect(() => restore([{ ...catalog, data }])).toThrow('supported versioned catalog fact')
+    }
+  },
+)
+
 it('rejects a repeated sibling name in own catalog facts', () => {
   const named = (seq: number, childId: string, name: string): SessionFormatEvent => ({
     ...catalog, seq,
