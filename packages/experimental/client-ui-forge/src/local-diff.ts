@@ -133,7 +133,7 @@ export async function chosenForkPoint(git: Git, ref: string): Promise<ForkPoint 
  * @param query - text the branch names must contain, ignoring case; empty for every branch.
  * @param limit - most branches in each group.
  * @returns the automatic fork point, then remote-tracking and local branches, most recently committed first.
- * @throws an Error when Git fails or prints more than `maxOutputBytes`.
+ * @throws an Error when Git fails or prints more than the runner's output limit.
  */
 export async function baseBranches(
   git: Git,

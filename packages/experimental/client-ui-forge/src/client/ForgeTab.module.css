@@ -529,17 +529,20 @@
   line-height: 20px;
 }
 
-/* The merge action takes the product accent; the doubled class outranks the shared primary fill in any stylesheet order. */
+/*
+ * The merge action takes the blue button fill, moved toward the label color so its 13px label keeps 4.5:1 contrast
+ * in both themes. The doubled class outranks the shared primary fill in any stylesheet order.
+ */
 .primaryAction.mergeAction {
   gap: 6px;
   padding: 0 10px 0 14px;
-  background: var(--dsw-alias-state-business-primary);
+  background: color-mix(in srgb, var(--dsw-alias-button-info-fill) 92%, var(--dsw-alias-label-primary));
   color: var(--dsw-alias-label-primary-foreground);
 }
 
 @media (hover: hover) {
   .primaryAction.mergeAction:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 85%, var(--dsw-alias-label-primary));
+    background: color-mix(in srgb, var(--dsw-alias-button-info-fill) 85%, var(--dsw-alias-label-primary));
   }
 }
 

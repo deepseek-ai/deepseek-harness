@@ -186,9 +186,16 @@ async function readChanges(
   return { ok: true, value: { kind: 'change', files, url: source.url, headSha, localAhead, fileUrls } }
 }
 
-/** The source review comments on loaded changes record: the change request head, or the local scope and its base. */
+/** The ref that identifies a comparison: the chosen base branch, or null for the automatic fork point and other scopes. */
+function baseRefOf(scope: ForgeLocalScope): string | null {
+  return scope.kind === 'branch' ? scope.base : null
+}
+
+/** The source review comments on loaded changes record: the change request head, or the local scope with its base. */
 function reviewSourceOf(data: ChangesData): ReviewSource {
-  return data.kind === 'local' ? { kind: 'local', scope: data.scope.kind, base: data.base } : { kind: 'change', url: data.url, headSha: data.headSha }
+  return data.kind === 'local'
+    ? { kind: 'local', scope: data.scope.kind, base: data.base, baseRef: baseRefOf(data.scope) }
+    : { kind: 'change', url: data.url, headSha: data.headSha }
 }
 
 /** The files that start expanded: every file until those above it change more than {@link OPEN_LINES} lines. */
@@ -556,9 +563,9 @@ export function ChangesTab({
     }} t={t} />
 
   const recordActions: ReviewActions = {
-    source: source.kind === 'local'
-      ? { kind: 'local', scope, base: data?.kind === 'local' ? data.base : null }
-      : { kind: 'change', url: source.url, headSha: data?.kind === 'change' ? data.headSha : '' },
+    source: data !== null ? reviewSourceOf(data) : source.kind === 'local'
+      ? { kind: 'local', scope, base: null, baseRef: baseRefOf(localScope) }
+      : { kind: 'change', url: source.url, headSha: '' },
     records: queue, addToInput: addReviewToInput, openLink,
   }
   const absentPaths = [...new Set([...reviewState.comments, ...reviewState.records.map(item => item.selection)]

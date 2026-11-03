@@ -927,7 +927,7 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * @param signal - request cancellation.
  * @returns the automatic fork point and at most `maxBranches` remote-tracking and local branches each,
  * most recently committed first, without the checked-out branch.
- * @throws `forgePanel/not-a-checkout` outside a checkout; the Git error when Git fails.
+ * @throws `forgePanel/not-a-checkout` outside a checkout; the Git error when Git fails or the listed refs exceed `maxDiffBytes`.
  */
 @Remote async diffBases(session: Session, query: string, signal: AbortSignal): Promise<ForgeBaseBranches>
 

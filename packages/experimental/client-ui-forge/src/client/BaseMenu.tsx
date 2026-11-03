@@ -84,12 +84,12 @@ export function BaseMenu({ chosen, label, missing, visible, list, choose, t }: B
   const needle = query.trim().toLowerCase()
   const matches = (name: string): boolean => name.toLowerCase().includes(needle)
   const automatic = value?.automatic ?? null
-  // The automatic row's tag names it, so its group has no heading.
-  const groups: { readonly id: string; readonly label?: string; readonly options: readonly BaseOption[] }[] = [
+  const groups: { readonly id: string; readonly label: string; readonly options: readonly BaseOption[] }[] = [
     {
       id: 'automatic',
+      label: t('diff.base.automatic'),
       options: automatic === null || !matches(automatic.name) ? [] : [{
-        key: '', name: automatic.name, base: null, tag: t(automatic.worktree ? 'diff.base.worktree' : 'diff.base.automatic'),
+        key: 'automatic', name: automatic.name, base: null, tag: t(automatic.worktree ? 'diff.base.worktree' : 'diff.base.automatic'),
       }],
     },
     {
@@ -124,13 +124,14 @@ export function BaseMenu({ chosen, label, missing, visible, list, choose, t }: B
   } else {
     body = groups.map(group => (
       <div key={group.id} role="group" aria-label={group.label}>
-        {group.label !== undefined && <div className={css.label} role="presentation">{group.label}</div>}
+        {/* The automatic row's tag names it, so its group shows no heading. */}
+        {group.id !== 'automatic' && <div className={css.label} role="presentation">{group.label}</div>}
         {group.options.map((option) => {
           const selected = (option.base?.ref ?? null) === (chosen?.ref ?? null)
           return (
             <MenuItemButton key={option.key} icon={<IconBranchOutlineRegular size={14} />} current={selected}
               onSelect={() => { pick(option.base) }}>
-              <span className={css.option} data-forge-base-option={option.key}>
+              <span className={css.option}>
                 <span className={css.name}>{option.name}</span>
                 {option.tag !== undefined && <span className={css.tag}>{option.tag}</span>}
                 {selected && <IconCheckOutlineRegular size={14} className={css.check} />}

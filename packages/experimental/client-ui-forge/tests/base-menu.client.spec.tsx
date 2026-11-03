@@ -51,7 +51,8 @@ describe('BaseMenu listing', () => {
     await settle()
     expect(m.list).toHaveBeenCalledWith('', expect.any(AbortSignal))
     expect(m.rows()).toEqual(['origin/mainDefault', 'origin/release/2.4', 'topic'])
-    expect(m.view.getAllByRole('group').map(group => group.getAttribute('aria-label'))).toEqual([null, en['diff.base.remote'], en['diff.base.local']])
+    expect(m.view.getAllByRole('group').map(group => group.getAttribute('aria-label')))
+      .toEqual([en['diff.base.automatic'], en['diff.base.remote'], en['diff.base.local']])
     expect(m.view.getByRole('menuitem', { name: /^origin\/main/ }).getAttribute('aria-current')).toBe('page')
 
     fireEvent.click(m.view.getByRole('menuitem', { name: 'topic' }))

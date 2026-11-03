@@ -713,7 +713,7 @@ describe('mountForgePanel changes view', () => {
   it('inserts numbered frozen quotes in the originating Session without sending a message', async () => {
     const f = await fixture()
     try {
-      const selection: ReviewSelection = { source: { kind: 'local', scope: 'branch', base: 'origin/main' }, comment: { path: 'a.ts', side: 'R', startLine: 1, endLine: 1, body: 'Check this', hunk: '@@ -1 +1 @@\n-old\n+new' } }
+      const selection: ReviewSelection = { source: { kind: 'local', scope: 'branch', base: 'origin/main', baseRef: null }, comment: { path: 'a.ts', side: 'R', startLine: 1, endLine: 1, body: 'Check this', hunk: '@@ -1 +1 @@\n-old\n+new' } }
       const scope = f.sessions.scope(S1)!
       let draft = ''
       const focus = vi.fn(), send = vi.fn()
@@ -742,7 +742,7 @@ describe('mountForgePanel changes view', () => {
     try {
       const view = f.changes(S1)
       if (missing === 'no scope') f.sessions.scope.mockReturnValue(undefined)
-      expect(view.addReviewToInput({ source: { kind: 'local', scope: 'branch', base: 'origin/main' }, comment: { path: 'a', side: 'L', startLine: 1, endLine: 1, body: 'Comment', hunk: '' } })).toBe(false)
+      expect(view.addReviewToInput({ source: { kind: 'local', scope: 'branch', base: 'origin/main', baseRef: null }, comment: { path: 'a', side: 'L', startLine: 1, endLine: 1, body: 'Comment', hunk: '' } })).toBe(false)
     } finally { await f.dispose() }
   })
   it('immediately closes an already-aborted occurrence and reports failed removal', async () => {
@@ -759,7 +759,7 @@ describe('mountForgePanel changes view', () => {
     const f = await fixture()
     const lifetime = new AbortController()
     const tab = { id: 'review-tab' as TabId, signal: lifetime.signal }
-    const selection: ReviewSelection = { source: kind === 'local' ? { kind, scope: 'branch', base: 'origin/main' }
+    const selection: ReviewSelection = { source: kind === 'local' ? { kind, scope: 'branch', base: 'origin/main', baseRef: null }
       : { kind, url: 'https://github.com/octo/demo/pull/7', headSha: 'a'.repeat(40) },
     comment: { path: 'a.ts', side: 'R', startLine: 1, endLine: 1, body: 'Check this', hunk: '@@ -1 +1 @@\n-old\n+new' } }
     const queue = f.changes(S1).reviewQueue(tab)

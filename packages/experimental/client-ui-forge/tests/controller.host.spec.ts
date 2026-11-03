@@ -8,6 +8,7 @@ import type { Session } from '@deepseek-ai/dsh-session'
 import WorktreeService from '@deepseek-ai/dsh-experimental-worktree'
 import ForgePanelController from '../src/index.ts'
 import type { Config, ForgeLocalDiff, ForgePanelState, ForgeSessionWorktree, ForgeWorktreeState } from '../src/index.ts'
+import { GitOutputTooLarge } from '../src/git.ts'
 import { WORKTREE_RECORD } from '../src/worktree.ts'
 import { missingWorktree } from '../src/panel.ts'
 import {
@@ -532,6 +533,23 @@ describe('forgePanel local changes', () => {
 
     const outside = await open(await plain())
     await expect(outside.ctx.forgePanel.diffBases(outside.session, '', signal)).rejects.toMatchObject({ code: 'forgePanel/not-a-checkout' })
+  })
+
+  it('lists more refs than other Git output may print, up to maxDiffBytes', async () => {
+    const { repo } = await project()
+    await withDefaultBranch(repo)
+    for (let index = 0; index < 40; index += 1) await git(repo, 'update-ref', `refs/remotes/origin/a-long-branch-name-${index}`, 'HEAD')
+    const listing = await git(repo, 'for-each-ref', 'refs/remotes/')
+    expect(listing.length).toBeGreaterThan(1024)
+
+    const limited = await open(repo, { maxOutputBytes: 1024, maxBranches: 3 })
+    await expect(limited.ctx.forgePanel.diffBases(limited.session, '', signal)).resolves.toMatchObject({ remote: { length: 3 } })
+    await expect(limited.ctx.forgePanel.diffBases(limited.session, 'name-39', signal)).resolves.toMatchObject({
+      remote: [{ name: 'origin/a-long-branch-name-39' }],
+    })
+
+    const refused = await open(repo, { maxOutputBytes: 1024, maxDiffBytes: 1024 })
+    await expect(refused.ctx.forgePanel.diffBases(refused.session, '', signal)).rejects.toBeInstanceOf(GitOutputTooLarge)
   })
 
   it('reports a directory outside a checkout, a branch without a fork point, and a diff over the limit', async () => {

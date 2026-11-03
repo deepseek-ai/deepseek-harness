@@ -684,6 +684,30 @@ describe('ChangesTab base branch', () => {
     expect(m.faces.localDiff).toHaveBeenLastCalledWith({ kind: 'branch', base: null }, expect.any(AbortSignal))
   })
 
+  it('records review comments under the compared ref and names the base the Host reports', async () => {
+    const renderDiff = DiffFileModule.DiffFile
+    let source: ReviewActions['source'] | undefined
+    vi.spyOn(DiffFileModule, 'DiffFile').mockImplementation((props) => {
+      source = props.review?.source
+      return renderDiff(props)
+    })
+    const m = mount({
+      setup: (faces) => {
+        faces.localDiff.mockImplementation(async scope => ok({ ...CLEAN, base: scope.kind !== 'branch' ? null : scope.base === null ? BASE : 'topic' }))
+      },
+    })
+    await settle()
+    expect(source).toEqual({ kind: 'local', scope: 'branch', base: BASE, baseRef: null })
+
+    act(() => { m.store.actions.based(TAB, TOPIC) })
+    await settle()
+    expect(source).toEqual({ kind: 'local', scope: 'branch', base: 'topic', baseRef: TOPIC.ref })
+
+    act(() => { m.store.actions.scoped(TAB, 'staged') })
+    await settle()
+    expect(source).toEqual({ kind: 'local', scope: 'staged', base: null, baseRef: null })
+  })
+
   it('keeps the chosen branch while another scope shows, and reads that scope without it', async () => {
     const m = mount()
     await settle()
@@ -1222,7 +1246,7 @@ describe('line review actions', () => {
     const m = mount({ source: { kind: 'change', url: URL7 } })
     await settle()
     expect(publish).toBeDefined()
-    expect(await publish!({ source: { kind: 'local', scope: 'branch', base: 'origin/main' }, comment: {
+    expect(await publish!({ source: { kind: 'local', scope: 'branch', base: 'origin/main', baseRef: null }, comment: {
       path: 'src/app.ts', side: 'R', startLine: 4, endLine: 4, hunk: '', body: 'Local reference',
     } })).toBe(en['review.stale'])
     expect(m.faces.submitReview).not.toHaveBeenCalled()
@@ -1238,7 +1262,7 @@ describe('line review actions', () => {
     fireEvent.change(section.getByRole('textbox'), { target: { value: 'Explain these lines' } })
     expect(section.getByRole('textbox')).toHaveProperty('value', 'Explain these lines')
     fireEvent.click(within(m.section('src/app.ts').querySelector('[data-forge-comment]')!).getByRole('button', { name: 'Add to input' }))
-    expect(m.faces.addReviewToInput.mock.lastCall?.[0]).toMatchObject({ source: { kind: 'local', scope: 'branch', base: 'origin/main' },
+    expect(m.faces.addReviewToInput.mock.lastCall?.[0]).toMatchObject({ source: { kind: 'local', scope: 'branch', base: 'origin/main', baseRef: null },
       comment: { path: 'src/app.ts', side: 'R', startLine: 4, endLine: 5, body: 'Explain these lines' } })
     fireEvent.click(section.getByRole('button', { name: 'Select line L4' }))
     fireEvent.click(section.getByRole('button', { name: 'Add comment' }))

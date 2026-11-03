@@ -1,5 +1,5 @@
 - textbox "搜索分支"
-- group:
+- group "默认":
   - menuitem "origin/main 默认"
 - group "本地分支":
   - text: 本地分支

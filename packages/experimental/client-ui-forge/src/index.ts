@@ -198,13 +198,14 @@ export class ForgePanelController extends TypertRemoteService {
    * @param signal - request cancellation.
    * @returns the automatic fork point and at most `maxBranches` remote-tracking and local branches each,
    * most recently committed first, without the checked-out branch.
-   * @throws `forgePanel/not-a-checkout` outside a checkout; the Git error when Git fails.
+   * @throws `forgePanel/not-a-checkout` outside a checkout; the Git error when Git fails or the listed refs exceed `maxDiffBytes`.
    */
   @Remote
   async diffBases(session: Session, query: string, signal: AbortSignal): Promise<ForgeBaseBranches> {
     signal.throwIfAborted()
     const inspection = await this.checkoutOf(session, signal)
-    const git = gitIn(this.home, this.config, session, inspection.checkout.root, signal)
+    // A search can match any branch, so every ref is listed; a repository's refs can far exceed other short Git output.
+    const git = gitIn(this.home, { ...this.config, maxOutputBytes: this.config.maxDiffBytes }, session, inspection.checkout.root, signal)
     return await baseBranches(git, inspection, this.worktreeState(session).created, query, this.config.maxBranches)
   }
 

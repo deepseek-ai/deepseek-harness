@@ -1321,7 +1321,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'List the branches the `branch` scope of the Session\'s current checkout can compare with.',
         parameters: [{ name: 'session', description: 'Session whose checkout is read.' }, { name: 'query', description: 'text the branch names must contain, ignoring case; empty for every branch.' }, { name: 'signal', description: 'request cancellation.' }],
         returns: 'the automatic fork point and at most `maxBranches` remote-tracking and local branches each, most recently committed first, without the checked-out branch.',
-        throws: ['`forgePanel/not-a-checkout` outside a checkout; the Git error when Git fails.'],
+        throws: ['`forgePanel/not-a-checkout` outside a checkout; the Git error when Git fails or the listed refs exceed `maxDiffBytes`.'],
       },
       {
         signature: '@Remote async track(session: Session, url: string, signal: AbortSignal): Promise<void>',

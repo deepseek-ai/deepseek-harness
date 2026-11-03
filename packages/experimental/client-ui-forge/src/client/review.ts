@@ -20,8 +20,11 @@ export interface ReviewComment {
 
 /** The immutable source from which a comment was selected. */
 export type ReviewSource =
-  /** Local changes in a scope; `base` names what the `branch` scope compared with, and is null for other scopes. */
-  | { readonly kind: 'local'; readonly scope: string; readonly base: string | null }
+  /**
+   * Local changes in a scope. `base` names what the `branch` scope compared with for the reader, and is null for
+   * other scopes; `baseRef` identifies the comparison: the chosen ref, or null for the automatic fork point and other scopes.
+   */
+  | { readonly kind: 'local'; readonly scope: string; readonly base: string | null; readonly baseRef: string | null }
   | { readonly kind: 'change'; readonly url: string; readonly headSha: string }
 
 /** One selected range and the source the user saw. */
