@@ -89,7 +89,7 @@ test('registers into the sidebar', async ({ remote, start }) => {
 })
 ```
 
-`createClientTest` 使用原生 Vitest fixture：每个测试获得已加载 `remoteDefaultResponses` 的新 `mock`、等同于 `mock.remote` 的 `remote` Proxy，以及配置应答后才起机的 `start()`。重复启动共用一个 Promise，调用方必须 await 它来观察启动错误。fixture 收尾等待启动，即使断言失败也销毁客户端、检查漏配，并拒绝测试结束后保存的 `start` 调用。需要分别拥有多个客户端时直接用 `TestClient.start`。这些 fixture 隔离自己的状态，不隔离 `location` 等页面全局。
+`createClientTest` 使用原生 Vitest fixture：每个测试获得已加载 `remoteDefaultResponses` 的新 `mock`、等同于 `mock.remote` 的 `remote` Proxy，以及配置应答后才起机的 `start()`。重复启动共用一个 Promise，调用方必须 await 它来观察启动错误。产品启动只对必需名单外的未激活 entry 告警，测试默认则要求每个 roster entry 都激活；只有预期可选插件失败的用例，才向 `createClientTest` 或 `TestClient.start` 传 `allowInactiveEntries: true`。fixture 收尾等待启动，即使断言失败也销毁客户端、检查漏配，并拒绝测试结束后保存的 `start` 调用。需要分别拥有多个客户端时直接用 `TestClient.start`。这些 fixture 隔离自己的状态，不隔离 `location` 等页面全局。
 
 两档测试的所有命名空间都使用[通用 Remote Proxy](../remote-mock/README.zh.md#remote-proxy)。装配测试使用 `remote` fixture；局部 `TestRemote` 可以接收 `{ settings: mock.remote.settings }`。直接配置返回数据，并读取原生 `.mock.calls`。mutation 应答不会自动更新后续 describe 应答：场景发布新数据时，显式修改 `remote.settings.describe.mockResolvedValue(...)`。Proxy 文档拥有无构建类型说明和必需的构建后本地类型检查规则。
 

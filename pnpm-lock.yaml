@@ -10357,6 +10357,12 @@ importers:
       '@deepseek-ai/dsh-experimental-liveshare-protocol':
         specifier: workspace:*
         version: link:../liveshare-protocol
+      '@deepseek-ai/dsh-http-proxy':
+        specifier: workspace:*
+        version: link:../../util/http-proxy
+      '@deepseek-ai/dsh-official-bundles':
+        specifier: workspace:*
+        version: link:../../util/official-bundles
       '@deepseek-ai/dsh-session':
         specifier: workspace:*
         version: link:../../core/session
@@ -10366,6 +10372,9 @@ importers:
       '@deepseek-ai/dsh-util-values':
         specifier: workspace:*
         version: link:../../util/values
+      undici:
+        specifier: 8.11.2
+        version: 8.11.2
       ws:
         specifier: ^8.18.3
         version: 8.21.3
