@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-当模型应通过 `run_code` 程序调用工具时，使用此执行器。先挂载兼容的 PTC 运行时和工具注册表。作用域限制决定生成的 SDK；只有 `run_code` 能被直接调用。可配置并行安全的程序子调用并发上限。
+当模型应通过 `run_code` 程序调用工具时，使用此执行器。先挂载兼容的 PTC 运行时和工具注册表。作用域限制决定生成的 SDK；只有 `run_code` 能被直接调用。可配置每个程序的工具调用总数上限，以及并行安全的子调用并发上限。
 
 ## 目录
 
@@ -30,10 +30,13 @@ kind: "package-reference"
 ```yaml
 - name: '@deepseek-ai/dsh-tool-executor-ptc'
   config:
+    maxSubCallsPerMinute: 1024
     maxParallelSubCalls: 10
 ```
 
 根 `run_code` 调用是独占调用，按串行执行。`maxParallelSubCalls` 限制每个程序中并行安全的嵌套调用数，默认值为 `10`；值必须是正整数，`1` 表示串行执行。独占调用构成屏障。
+
+`maxSubCallsPerMinute` 默认值为 `1024`，必须是正整数。每次 `run_code` 的工具调用额度为 `floor(最终 timeoutMs / 60000 × maxSubCallsPerMinute)`：Node 默认超时为两分钟，因此允许 2048 次。计算前先应用运行时默认值和超时上限；没有截止时间时，调用额度也没有有限上限。这是总额度，不是滑动窗口，因此可以集中调用。所有工具绑定共用计数，排队调用、无效参数和失败调用也计入。达到上限后，下一次尝试会通过运行时取消路径终止整个程序，取消进行中的子调用，并放弃排队调用，然后返回 `CODE_RUN_FAILED`。与超时一样，捕获绑定错误也不能让程序继续运行；运行时保留的状态会被丢弃。已完成的工具操作仍然生效，新的程序重新计数。
 
 本包将 `ctx.ptcRuntime` 和 `ctx.systemPrompt` 声明为必需注入；带 Agent 的程序要求 `ctx.workingDirectory`。执行器在运行时可用后才激活，并在运行时卸载时撤回。启用 PTC 执行器但未提供运行时会阻止应用启动。已撤回的 PTC 选择不会回退到原生执行。
 
@@ -85,7 +88,7 @@ PTC 执行器公开保留的 `run_code` 传输以及按所加载运行时语言�
 
 #### 模型看到什么
 
-PTC mode 会公开生成的 [`run_code` schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-executor-ptc)、下方 SDK 说明，以及按所加载运行时语言生成的精确 SDK 块。两种运行时语言都将 `code` 列在 `description` 前；这是呈现顺序，不强制 JSON 成员顺序。REPL 与 Script 运行时共用通用工具描述和 SDK 说明；语法与状态规则由各自的 `executionInstructions` 提供。TypeScript bash 示例对函数体运行时返回值，对 REPL 和 Script 运行时打印输出。说明将生成声明明确标为只能在程序内使用的绑定。当当前 `bash` 参数 schema 接受示例参数时，说明还会给出以 `run_code` 包住 `tools.bash(...)` 的完整调用。`tools:sdk` 段使用 first-party 顺序 5000，并关闭提示词变量插值，使两种运行时语言都原样保留工具描述和 schema 中的 `{{…}}` 文本。在 `ptc` 下，提示词还会带上处于更早 first-party 顺序的 `tools:ptc-only` 规则，让模型先读到「可以调用哪些工具」再读「每个工具做什么」。
+PTC mode 会公开生成的 [`run_code` schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-executor-ptc)、下方 SDK 说明，以及按所加载运行时语言生成的精确 SDK 块。两种运行时语言都将 `code` 列在 `description` 前；这是呈现顺序，不强制 JSON 成员顺序。REPL 与 Script 运行时共用通用工具描述和 SDK 说明；语法与状态规则由各自的 `executionInstructions` 提供。TypeScript bash 示例对函数体运行时返回值，对 REPL 和 Script 运行时打印输出。说明将生成声明明确标为只能在程序内使用的绑定。当当前 `bash` 参数 schema 接受示例参数时，说明还会给出以 `run_code` 包住 `tools.bash(...)` 的完整调用。`tools:sdk` 段使用 first-party 顺序 5000，并关闭提示词变量插值，使两种运行时语言都原样保留工具描述和 schema 中的 `{{…}}` 文本。在 `ptc` 下，提示词还会带上处于更早 first-party 顺序的 `tools:ptc-only` 规则，让模型先读到「可以调用哪些工具」再读「每个工具做什么」。 工具调用额度耗尽时，`run_code` 返回失败结果，说明额度、被拒绝的调用序号、程序已终止，以及可能存在死循环。运行时清理诊断和已捕获的输出仍然可见。
 
 ##### 带 bash 的 TypeScript PTC mode SDK 说明
 
@@ -106,13 +109,19 @@ Inside the program:
 Program-only SDK bindings:
 ```
 
+##### 工具调用额度耗尽
+
+```markdown
+Error: code run failed (abort): run_code exceeded its limit of 2048 tool calls (1024 per minute of its timeout); call 2049 was not dispatched. The run_code program may contain an infinite loop. Check loop termination or split the work into smaller run_code calls.
+```
+
 #### Token 影响
 
-每次请求的固定成本与可见定义成正比。PTC mode 使用生成的 SDK 文本加一个传输 schema 取代最终工具 schema，但不承诺普遍减少成本。
+每次请求的固定成本与可见定义成正比。PTC mode 使用生成的 SDK 文本加一个传输 schema 取代最终工具 schema，但不承诺普遍减少成本。调用额度不增加 SDK 或 schema 文本；超限诊断通过该次运行的失败结果消耗 token。
 
 #### KV Cache 影响
 
-只要 PTC mode 选择、生成的 SDK、传输 schema 与可见工具集合不变，前缀就保持稳定。模式或筛选器变更可能从第一个改变的提示词或 schema token 起使复用失效。
+只要 PTC mode 选择、生成的 SDK、传输 schema 与可见工具集合不变，前缀就保持稳定。模式或筛选器变更可能从第一个改变的提示词或 schema token 起使复用失效。修改 `maxSubCallsPerMinute` 不会改变提示词或 schema token。
 
 ## 已知限制与延期工作
 

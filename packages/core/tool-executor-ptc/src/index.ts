@@ -20,11 +20,11 @@ const SDK_RENDERERS = {
 export class PtcExecutor implements ToolExecutor {
   readonly sections: readonly ToolPromptSection[]
   private readonly pipeline: ToolExecutionPipeline
-  private readonly maxParallelSubCalls: number
+  private readonly config: Config
   private ptcTransport: ToolDefinition | undefined
 
   constructor(private readonly ctx: Context, config: Partial<Config> = {}, private readonly maxParallel: () => number = () => 10) {
-    this.maxParallelSubCalls = Config(config).maxParallelSubCalls
+    this.config = Config(config)
     const tools = ctx.tools
     this.sections = [
       { name: 'tools:ptc-only', order: ctx.systemPrompt.getSectionOrder('PTC_ONLY'), text: PTC_ONLY_INSTRUCTION, interpolate: false },
@@ -57,7 +57,7 @@ export class PtcExecutor implements ToolExecutor {
 
   /** Keep the reserved transport outside registered capabilities and their restrictions. */
   private requirePtcTransport(): ToolDefinition {
-    this.ptcTransport ??= createRunCodeTool(this.ctx, this.pipeline, this.maxParallelSubCalls)
+    this.ptcTransport ??= createRunCodeTool(this.ctx, this.pipeline, this.config)
     return this.ptcTransport
   }
 }
@@ -77,7 +77,7 @@ export const inject = ['tools', 'systemPrompt', 'ptcRuntime']
 /**
  * Select PTC execution in the mounting scope.
  * @param ctx - context owning this executor's selection and lifetime.
- * @param config - program subcall concurrency limits.
+ * @param config - timeout-based subcall allowance and concurrency limits.
  */
 export function apply(ctx: Context, config: Config): void {
   ctx.tools.setExecutor(new PtcExecutor(ctx, config))
