@@ -27,7 +27,7 @@ The Automation tasks page and right Sidebar task tab use the same editor for tas
 
 Below 768px, the task list uses 20px horizontal insets, matching the Plugins page.
 
-The shipped Web composition mounts `ui-schedule` with Host Schedule. The Automation tasks sidebar entry opens the task list without selecting or activating a Session. New retains its existing behavior: open a new conversation and let the user enter an instruction. Its adjacent menu offers Create in conversation and Create manually. Manual creation opens the same editor as an existing task, validates required fields, and saves a task without starting an Agent or sending the instruction. A failed request leaves the form and its values visible. The empty state shows a decorative document-and-clock illustration whose colors follow the theme.
+The shipped Web composition mounts `ui-schedule` with Host Schedule. The Automation tasks sidebar entry opens the task list without selecting or activating a Session. New and the adjacent menu's Create in a session action both open a new conversation with a short task-creation prompt in the current UI language, ready for the user to complete and send. When a blank conversation is reused, the prompt is appended on a new line, preserving its text, inline references, and attachments. The same menu offers Create manually. Manual creation opens the same editor as an existing task, validates required fields, and saves a task without starting an Agent or sending the instruction. A failed request leaves the form and its values visible. The empty state shows a decorative document-and-clock illustration whose colors follow the theme.
 
 Enabled, Paused, Ended, and All filters combine with text search over the title, prompt, and linked Session id; the page starts on Enabled. The search-row menu clears all ended tasks after confirmation, preserving active and paused tasks. Selecting a task opens its editable Rules / Records page. Save is enabled only for valid, meaningful changes and sends only changed fields with `expectedUpdatedAt`, or `null` when no stored revision exists. The fields stay editable after saving. Unsaved drafts survive navigation between tasks and away from the page. A conflict retains the whole draft and disables Save. Review with my edits reapplies the changed field groups to the latest values for review before saving; Discard replaces the draft with the latest stored values. For a new task, Discard closes the editor. Late responses cannot change another task's detail. Coarse-pointer search, instruction, and timing fields use 16px text to prevent focus zoom on iOS Safari.
 
@@ -72,7 +72,7 @@ Sidebar layout records omit opener parameters. `TaskTabBindings` therefore persi
 <a id="model-experience"></a>
 ## Model Experience
 
-None, as this browser package registers no model tools or messages.
+None, as this browser package registers no model tools or automatic messages; the creation prompt stays an unsent draft.
 
 #### KV Cache effect
 
