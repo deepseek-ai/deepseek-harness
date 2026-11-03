@@ -1109,6 +1109,14 @@ describe('desktop main startup', () => {
     expect(template.map(describeItem)).toEqual(platform === 'darwin'
       ? ['Desktop test', en.fileMenu, 'editMenu', 'windowMenu']
       : ['Application', 'editMenu'])
+    const edit = template.find(item => item.role === 'editMenu')!.submenu as MenuItemConstructorOptions[] | undefined
+    expect(edit?.map(item => [describeItem(item), item.accelerator, item.visible])).toEqual(platform === 'darwin'
+      ? [['undo', undefined, undefined], ['redo', undefined, undefined], ['separator', undefined, undefined],
+        ['cut', undefined, undefined], ['copy', undefined, undefined], ['paste', undefined, undefined],
+        ['pasteAndMatchStyle', 'Shift+Command+V', undefined], ['pasteAndMatchStyle', 'Option+Shift+Command+V', false],
+        ['delete', undefined, undefined], ['selectAll', undefined, undefined], ['separator', undefined, undefined],
+        ['Substitutions', undefined, undefined], ['Speech', undefined, undefined]]
+      : undefined)
     const application = template[0]!.submenu as MenuItemConstructorOptions[]
     expect(application.filter(item => item.visible !== false).map(describeItem)).toEqual(platform === 'darwin'
       ? ['about', 'separator', en.checkUpdatesMenu, en.cliCommandMenu, 'separator', 'toggleDevTools', 'separator', 'hide', 'hideOthers', 'unhide', 'separator', 'quit']
