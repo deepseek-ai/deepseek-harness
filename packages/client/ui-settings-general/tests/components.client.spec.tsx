@@ -428,3 +428,8 @@ it('uses the concise Chinese configuration error for the settings notification',
 it('labels uncertain settings saves without claiming they were not written', () => {
   expect(zh['desktop.channel.result.uncertain']).toBe('设置保存异常')
 })
+
+it('does not describe a saved selection that failed to apply as unsaved', () => {
+  expect(zh['desktop.channel.result.apply']).toBe('设置保存异常')
+  expect(en['desktop.channel.result.apply']).toBe('Settings save error')
+})

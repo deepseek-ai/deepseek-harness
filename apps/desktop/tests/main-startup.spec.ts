@@ -592,8 +592,7 @@ describe('desktop main startup', () => {
     expect(await invoke(DESKTOP_IPC.updatesChannelSet, 'app', 'stable')).toEqual({ kind: 'applied', state: { channel: 'stable', packagedChannel: 'nightly', changing: false } })
   })
 
-
-  it('keeps cleanup suspension visible with restart guidance after a failed switch', async () => {
+  it('keeps committed settings after apply failure and recovers through explicit reload', async () => {
     await readyForUpdate()
     const { DesktopUpdateCoordinator } = await import('../src/update-coordinator.ts')
     vi.spyOn(DesktopUpdateCoordinator.prototype, 'switchChannel').mockImplementationOnce(async function (this: InstanceType<typeof DesktopUpdateCoordinator>, _channel, persist) {
@@ -606,9 +605,16 @@ describe('desktop main startup', () => {
     })
     expect(await invoke(DESKTOP_IPC.updatesStatus, 'app')).toMatchObject({ configurationError: 'cleanup' })
     await invoke(DESKTOP_IPC.updatesOpen, 'app')
-    const options = harness.dialog.showMessageBox.mock.lastCall![0] as MessageBoxOptions
+    const options = harness.dialog.showMessageBox.mock.lastCall![0] as import('../src/update-dialog.ts').UpdateDialogOptions
     expect(options.message).toBe(en.updateConfigurationCleanup)
-    expect(options.detail).toBeUndefined()
+    const path = join(harness.app.getPath('userData'), 'desktop', 'settings.json')
+    expect(options.detail).toBe(path)
+    const saved = readFileSync(path, 'utf8')
+    expect(JSON.parse(saved)).toMatchObject({ updates: { channel: 'stable' } })
+    expect(await options.action!.run()).toBe(true)
+    expect(await invoke(DESKTOP_IPC.updatesChannelGet, 'app')).toMatchObject({ channel: 'stable', changing: false })
+    expect(await invoke(DESKTOP_IPC.updatesChannelGet, 'app')).not.toHaveProperty('error')
+    expect(readFileSync(path, 'utf8')).toBe(saved)
   })
 
   it('offers the actual settings file for malformed JSON without suggesting channel reselection', async () => {

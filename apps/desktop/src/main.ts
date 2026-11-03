@@ -951,10 +951,9 @@ async function main(): Promise<void> {
   const showConfigurationError = (): Promise<void> => {
     configurationPrompt ??= Promise.resolve().then(async () => {
       while (channelState?.error !== undefined) {
-        const settingsError = channelState.error !== 'cleanup'
         const result = await ordinaryMessageBox({ type: 'error', title: locale.messages.updateFailedTitle,
           message: configurationMessage(channelState.error, locale.messages),
-          ...(settingsError ? { detail: channelSettings.path,
+          ...{ detail: channelSettings.path,
             buttons: [locale.messages.updateReloadSettings, locale.messages.updateShowSettingsFile, locale.messages.updateClose],
             defaultId: 0, cancelId: 2, action: { index: 0, run: async () => {
               if (channelRequests > 0 || channelState === undefined) return false
@@ -977,9 +976,9 @@ async function main(): Promise<void> {
               } finally {
                 publishChannel({ ...channelState, changing: --channelRequests > 0 })
               }
-            } } } : {}),
+            } } },
         })
-        if (!settingsError || result.response === 2) return
+        if (result.response === 2) return
         if (result.response === 1) { shell.showItemInFolder(channelSettings.path); return }
       }
     }).finally(() => { configurationPrompt = undefined })
