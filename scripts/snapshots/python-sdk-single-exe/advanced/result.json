@@ -919,6 +919,10 @@
           ],
           "isError": false,
           "id": "{{messageId}}"
+        },
+        "meta": {
+          "kind": "activation",
+          "subagentId": "{{child-1}}"
         }
       },
       "sourceEventSeqs": [
@@ -981,6 +985,7 @@
               "kind": "subagent-settled",
               "form": "notice",
               "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
+              "stopReason": "completed",
               "senderSessionId": "{{child-1}}"
             },
             "role": "user",
@@ -1258,6 +1263,7 @@
           "kind": "subagent-settled",
           "form": "notice",
           "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
+          "stopReason": "completed",
           "senderSessionId": "{{child-1}}"
         },
         "role": "user",
@@ -2691,6 +2697,10 @@
                   {
                     "type": "text",
                     "text": "Reply with exactly DIRECT_CHILD_OK and nothing else."
+                  },
+                  {
+                    "type": "text",
+                    "text": "Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. If your last action is a message to your parent, the completion notice omits your final answer; include the result and relevant evidence in that message."
                   }
                 ],
                 "source": {
@@ -2803,6 +2813,10 @@
               ],
               "isError": false,
               "id": "{{messageId}}"
+            },
+            "meta": {
+              "kind": "activation",
+              "subagentId": "{{child-1}}"
             }
           },
           "sourceEventSeqs": [
@@ -2940,6 +2954,10 @@
               {
                 "type": "text",
                 "text": "Reply with exactly DIRECT_CHILD_OK and nothing else."
+              },
+              {
+                "type": "text",
+                "text": "Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. If your last action is a message to your parent, the completion notice omits your final answer; include the result and relevant evidence in that message."
               }
             ],
             "source": {
@@ -3272,6 +3290,7 @@
                   "kind": "subagent-settled",
                   "form": "notice",
                   "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
+                  "stopReason": "completed",
                   "senderSessionId": "{{child-1}}"
                 },
                 "role": "user",
@@ -4224,6 +4243,7 @@
               "kind": "subagent-settled",
               "form": "notice",
               "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
+              "stopReason": "completed",
               "senderSessionId": "{{child-1}}"
             },
             "role": "user",

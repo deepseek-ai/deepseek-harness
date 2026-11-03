@@ -12,7 +12,7 @@ export interface PageDetails {
   readonly initialContent?: string | undefined
 }
 
-/** Phases a page card records besides the shared `dismissed`. */
+/** Phases a page card records besides the shared `dismissed`; only earlier builds recorded `kept`, which reads as `installed`. */
 export type PagePhase = 'creating' | 'installing' | 'cancelled' | 'installed' | 'kept' | 'removed' | 'failed' | 'interrupted' | 'unconfirmed'
 
 /** Data each page decision records; profile files own the installed bundle. */
@@ -28,7 +28,7 @@ export interface PageData {
 }
 
 /** User actions a page card offers besides the shared `dismiss`. */
-export type PageVerb = 'create' | 'keep' | 'undo' | 'cancel' | 'restore'
+export type PageVerb = 'create' | 'undo' | 'cancel' | 'restore'
 
 /** Fields the card sends with Create and Not now; Create requires a valid location. */
 export interface PageLocation {

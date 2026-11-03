@@ -862,7 +862,6 @@ describe('subagent catalogs', () => {
       address: {
         parentSessionId: S1, childSessionId: S2, mode: 'continuable',
       },
-      parentAvailable: true,
     })
     // Clicking the same child through an ordinary list-selection path must not
     // erase the catalog-derived address and fall back to session.* transport.
@@ -874,7 +873,6 @@ describe('subagent catalogs', () => {
       address: {
         parentSessionId: S1, childSessionId: S2, mode: 'continuable',
       },
-      parentAvailable: true,
     })
     await manager.get(S2).open()
     await manager.get(S2).prompt([{ type: 'text', text: 'continue' }], 'queue')
@@ -895,8 +893,7 @@ describe('subagent catalogs', () => {
     expect(remote.subagents.prompt.mock.calls.map(([request]) => request)).toEqual([
       {
         requestId: expect.any(String) as unknown as string,
-        parentSessionId: S1, childSessionId: S2,
-        mode: 'continuable',
+        childSessionId: S2,
         delivery: 'queue',
         content: [{ type: 'text', text: 'continue' }],
         clientTimeZone: new Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -1059,36 +1056,6 @@ describe('subagent catalogs', () => {
       state: 'ready', values: { subagentCatalog: [] },
     })
     expect(remote.session.projections).toHaveBeenCalledTimes(2)
-  })
-
-  it.for([false, true])('keeps live parent availability when an earlier initial read settles (failure: %s)', async (failure, { mock, remote }) => {
-    const response = Promise.withResolvers<Awaited<ReturnType<typeof remote.session.projections>>>()
-    remote.session.projections.mockImplementation(() => response.promise)
-    const manager = makeManager(mock, remote)
-    manager.resolveTarget({ parentSessionId: S1, childSessionId: S2, mode: 'continuable' })
-    const child = manager.get(S2)
-    const read = manager.refreshProjections(S1)
-    manager.handleSessionAdded(summary(S1))
-    manager.handleSessionStatus(S1, false)
-    response.resolve(failure
-      ? err(new RemoteError('gateway/internal', 'offline', {}))
-      : ok({ kind: 'sequenced', asOfSeq: 0, values: { subagentCatalog: [] } }))
-    await read
-    expect(child.getSnapshot().subagent?.parentAvailable).toBe(true)
-    expect(remote.session.projections.mock.calls.map(([request]) => request)).toHaveLength(1)
-  })
-
-  it('keeps parent availability unknown after list failure and accepts a later Host summary', async ({ mock, remote }) => {
-    const manager = makeManager(mock, remote)
-    manager.resolveTarget({ parentSessionId: S1, childSessionId: S2, mode: 'continuable' })
-    const child = manager.get(S2)
-    remote.session.list.mockResolvedValue(err(new RemoteError('gateway/internal', 'offline', {})))
-    await manager.refreshList()
-    expect(manager.getListSnapshot().state).toBe('error')
-    expect(child.getSnapshot().subagent?.parentAvailable).toBeUndefined()
-    manager.handleSessionAdded(summary(S1))
-    expect(child.getSnapshot().subagent?.parentAvailable).toBe(true)
-    await manager.dispose()
   })
 
   it('keeps a pushed catalog when an earlier initial read reports the parent missing', async ({ mock, remote }) => {
@@ -1257,23 +1224,6 @@ describe('remaining branches', () => {
     manager.handleSessionAdded(summary(S2, { running: false, agentAvailable: false }))
     expect(manager.getListSnapshot().items.find(item => item.sessionId === S2))
       .toMatchObject({ running: false })
-    await manager.dispose()
-  })
-
-  it('preserves Host availability when a local create echo follows Agent disposal', async ({ mock, remote }) => {
-    const response = Promise.withResolvers<Awaited<ReturnType<typeof remote.session.create>>>()
-    remote.session.create.mockImplementation(() => response.promise)
-    const manager = makeManager(mock, remote)
-    manager.resolveTarget({
-      parentSessionId: S1, childSessionId: S2, mode: 'continuable',
-    })
-    const child = manager.get(S2)
-    const request = manager.create()
-    manager.handleSessionAdded(summary(S1, { agentAvailable: false }))
-    response.resolve(ok({ sessionId: S1 }))
-    await request
-    manager.resolveTarget(S2)
-    expect(child.getSnapshot().subagent?.parentAvailable).toBe(false)
     await manager.dispose()
   })
 
@@ -1631,7 +1581,6 @@ describe('connected generation', () => {
     })
     expect(manager.get(S2).getSnapshot().subagent).toEqual({
       address,
-      parentAvailable: true,
     })
     expect(manager.subagentAddress(S2)).toEqual(address)
   })

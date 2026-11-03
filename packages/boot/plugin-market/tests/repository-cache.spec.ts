@@ -193,6 +193,52 @@ it('reports a repository Git cannot fetch as denied', async () => {
   await expect(repositories.read(source.url, source.commit, 'README.md', 100, signal)).resolves.toBeDefined()
 })
 
+it('fetches over SSH when Git refuses the https URL, and reports the https refusal when SSH also fails', async () => {
+  const source = repository('ssh', { 'README.md': 'over ssh', 'a.png': 'png' })
+  // The cache allows no https transport, so Git refuses every https URL; the SSH form, without the https port, reaches the source.
+  writeFileSync(join(root, 'home', '.gitconfig'), [
+    `[url "${source.url}"]`, ' insteadOf = ssh://git@git.example/team/plugin.git',
+    `[url "${pathToFileURL(join(root, 'missing')).href}"]`, ' insteadOf = ssh://git@git.example/team/other.git', '',
+  ].join('\n'))
+  const repositories = cache()
+  expect(text(await repositories.read('https://git.example:8443/team/plugin.git', undefined, 'README.md', 100, signal))).toBe('over ssh')
+  // The clone keeps the SSH remote for file contents it downloads later.
+  expect(text(await repositories.read('https://git.example:8443/team/plugin.git', source.commit, 'a.png', 100, signal))).toBe('png')
+  // A refused SSH fetch reports both refusals.
+  const refused = repositories.read('https://git.example/team/other.git', undefined, 'README.md', 100, signal)
+  await expectRejection(refused, { reason: 'denied' }, 'https://git.example/team/other.git: git fetch')
+  await expect(refused).rejects.toThrow('ssh://git@git.example/team/other.git: git fetch')
+  // A missing commit on a clone that already fetches over SSH is not retried.
+  const missing = await repositories.read('https://git.example:8443/team/plugin.git', 'f'.repeat(40), 'README.md', 100, signal).catch((error: unknown) => error)
+  expect(missing).toMatchObject({ reason: 'denied' })
+  expect((missing as Error).message.match(/git fetch/gu)).toEqual(['git fetch'])
+  expect((missing as Error).message).toContain('ssh://git@git.example/team/plugin.git: git fetch')
+  // The SSH fetch keeps the repository limit.
+  const small = cache({ dir: join(root, 'small'), maxRepositoryBytes: 1, sizePollMs: 3_600_000 })
+  await expect(small.read('https://git.example/team/plugin.git', undefined, 'README.md', 100, signal)).rejects.toMatchObject({ reason: 'too-large' })
+  // A URL with credentials or a query has no SSH form.
+  for (const url of ['https://user@git.example/team/plugin.git', 'https://git.example/team/plugin.git?x=1']) {
+    await expectRejection(repositories.read(url, undefined, 'README.md', 100, signal), { reason: 'denied' }, `${url}: git fetch`)
+  }
+})
+
+it('reports an SSH retry that cannot connect as a network failure, and does not retry an https URL that cannot connect', async () => {
+  vi.stubEnv('GIT_SSH_COMMAND', 'ssh -F /dev/null -o BatchMode=yes -o ConnectTimeout=5')
+  for (const name of ['http_proxy', 'https_proxy', 'HTTP_PROXY', 'HTTPS_PROXY', 'all_proxy', 'ALL_PROXY']) vi.stubEnv(name, '')
+  writeFileSync(join(root, 'home', '.gitconfig'), [
+    '[url "ssh://127.0.0.1:1/down.git"]', ' insteadOf = ssh://git@git.example/team/down.git',
+    '[url "http://127.0.0.1:1/offline.git"]', ' insteadOf = https://git.example/team/offline.git',
+    '[http]', ' proxy =', '',
+  ].join('\n'))
+  const refused = cache().read('https://git.example/team/down.git', undefined, 'README.md', 100, signal)
+  await expectRejection(refused, { reason: 'network' }, 'https://git.example/team/down.git: git fetch')
+  await expect(refused).rejects.toThrow('ssh://git@git.example/team/down.git: git fetch')
+  const offline = await cache({ transports: ['http', 'ssh'] }).read('https://git.example/team/offline.git', undefined, 'README.md', 100, signal)
+    .catch((error: unknown) => error)
+  expect(offline).toMatchObject({ reason: 'network' })
+  expect((offline as Error).message).not.toContain('ssh://')
+})
+
 it('stops a fetch once the repository grows past its limit, and deletes the repository', async () => {
   const source = repository('e', { 'README.md': 'x' })
   // The empty repository already exceeds one byte, so the first size check stops Git.

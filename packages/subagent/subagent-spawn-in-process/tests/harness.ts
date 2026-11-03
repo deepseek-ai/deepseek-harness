@@ -49,5 +49,5 @@ export async function spawnHarness(workdir: string): Promise<Context> {
 export async function waitForIdle(ctx: Context, agent: Agent): Promise<void> {
   do {
     await agent.whenIdle()
-  } while (await ctx.subagents.waitForChildren(agent))
+  } while (await ctx.subagents.waitForTreeWork(agent))
 }

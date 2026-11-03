@@ -187,6 +187,10 @@ export class ActionCards extends TypertRemoteService {
     this.owner = ctx.fiber
   }
 
+  private isLiveRoot(agent: Agent): boolean {
+    return this.ctx.agents.get(agent.id) === agent && agent.session.header.origin !== 'subagent'
+  }
+
   protected async [Service.init](): Promise<void> {
     this.projection = await this.ctx.sessionProjections.register(actionCardProjection)
     this.ctx.tools.register(defineTool({
@@ -217,7 +221,7 @@ export class ActionCards extends TypertRemoteService {
         return
       }
       // Loads by subagents or from code activate nothing: `propose_action` refuses both callers.
-      if (exec.parent !== undefined || !this.ctx.agents.roots().includes(agent)) return
+      if (exec.parent !== undefined || !this.isLiveRoot(agent)) return
       const skill = exec.name === SKILL_TOOL && !result.isError ? skillArguments.safeParse(exec.arguments) : undefined
       if (skill?.success !== true || ![...this.kinds.values()].some(kind => kind.skill === skill.data.name)) return
       const turn = this.ctx.agents.turnBoundaryOf(agent.session).lastTurn
@@ -337,7 +341,7 @@ export class ActionCards extends TypertRemoteService {
   @Remote
   act(agent: Agent, callId: ToolCallId, verb: string, payload?: Record<string, JsonValue>): Promise<ActionCardResult> {
     if (this.isStopping()) return Promise.resolve(refused('closing'))
-    if (!this.ctx.agents.roots().includes(agent)) return Promise.resolve(refused('not-live-root'))
+    if (!this.isLiveRoot(agent)) return Promise.resolve(refused('not-live-root'))
     const proposal = ownEntry(this.projection.stateOf(agent.session).view.proposals, callId)
     if (proposal === undefined) return Promise.resolve(refused('unknown'))
     const kind = this.kinds.get(proposal.action)
@@ -371,7 +375,7 @@ export class ActionCards extends TypertRemoteService {
       this.ctx.logger.warn('Cannot reconcile action card %s before %s: %s', proposal.callId, verb, String(error))
       return refused('unavailable')
     }
-    return this.ctx.agents.roots().includes(agent) ? undefined : refused('not-live-root')
+    return this.isLiveRoot(agent) ? undefined : refused('not-live-root')
   }
 
   private async dismiss(
@@ -421,7 +425,7 @@ export class ActionCards extends TypertRemoteService {
     // so no card could follow them.
     if (agent === undefined || exec.parent !== undefined) throw new ActionCardError('Call propose_action directly, not from code.', 'ACTION_CARD_NESTED')
     // Only a live root can act on a card, so a subagent's card could never be used.
-    if (!this.ctx.agents.roots().includes(agent)) throw new ActionCardError('Cards are offered in the main conversation only.', 'ACTION_CARD_ROOT')
+    if (!this.isLiveRoot(agent)) throw new ActionCardError('Cards are offered in the main conversation only.', 'ACTION_CARD_ROOT')
     if (this.projection.stateOf(agent.session).queued >= this.config.queuedMessageLimit) {
       throw new ActionCardError('The user has queued more messages; show no card and answer briefly.', 'ACTION_CARD_QUEUED')
     }

@@ -832,7 +832,7 @@ describe('tool-call scheduler: failure quiescence', () => {
     const { agent: second } = await first.ctx.agents.create({
       sessionId: SessionId('second-agent'),
       agentOptions: { provider: 'mock', model: 'mock' },
-      parentAgent: first,
+
     })
     const firstDone = waitForIdle(ctx, first)
     first.followup(createUserMessage({ content: [{ type: 'text', text: 'first' }], source: { kind: 'user' } }))

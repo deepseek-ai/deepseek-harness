@@ -1,4 +1,4 @@
-/** Body of a `create_personalized_page` card: location choice, creation progress, retention, undo and restore. */
+/** Body of a `create_personalized_page` card: location choice, creation progress, undo and restore. */
 import { useCallback, useId, useState, useSyncExternalStore } from 'react'
 import { z } from 'zod'
 import { Button, IconChevronDownOutlineRegular, IconWarningTriangleOutlineRegular, Menu, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -148,22 +148,12 @@ export function PageCardBody({ proposal, decision, summary, Folded, act, infoDis
             </Button>
           </div>
         </footer>
-      </div> : <p className={css.description}>{t('location')} · {data?.customLocation ?? t(data?.slot ?? details.data.slot)}</p>}
-      {phase === 'creating' && <footer className={css.footer}>
-        <Button variant="ghost" size="sm" disabled={busy} onClick={() => { void run('cancel') }}>{t(pending === 'cancel' ? 'cancelling' : 'cancel')}</Button>
-      </footer>}
-      {installed && <footer className={css.footer}>
-        <span className={css.scope}>{t('scope')}</span>
-        <div className={css.actions}>
-          <Button variant="ghost" size="sm" disabled={busy} onClick={() => { void run('undo') }}>{t('undo')}</Button>
-          {phase !== 'kept' && <Button variant="primary" size="sm" disabled={busy} onClick={() => { void run('keep') }}>{t('keep')}</Button>}
-        </div>
-      </footer>}
-      {phase === 'removed' && <footer className={css.footer}>
-        <div className={css.actions}>
-          <Button variant="primary" size="sm" disabled={busy} onClick={() => { void run('restore') }}>{t(pending === 'restore' ? 'restoring' : 'restore')}</Button>
-        </div>
-      </footer>}
+      </div> : <div className={css.placement}>
+        <p className={css.description}>{t('location')} · {data?.customLocation ?? t(data?.slot ?? details.data.slot)}</p>
+        {phase === 'creating' && <Button variant="ghost" size="sm" disabled={busy} onClick={() => { void run('cancel') }}>{t(pending === 'cancel' ? 'cancelling' : 'cancel')}</Button>}
+        {installed && <Button variant="ghost" size="sm" disabled={busy} onClick={() => { void run('undo') }}>{t('undo')}</Button>}
+        {phase === 'removed' && <Button variant="primary" size="sm" disabled={busy} onClick={() => { void run('restore') }}>{t(pending === 'restore' ? 'restoring' : 'restore')}</Button>}
+      </div>}
     </div>
   </>
 }

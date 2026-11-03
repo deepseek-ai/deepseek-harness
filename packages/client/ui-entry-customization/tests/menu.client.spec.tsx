@@ -2,11 +2,12 @@
 /** The plugin fills each region's More menu with the discovery and Creator actions. */
 import type { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react'
 import type { ComponentProps } from 'react'
 import { useState } from 'react'
 import { makeTranslate, SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
+import { Menu } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import type { TrackProductEvent } from '@deepseek-ai/dsh-client-product-analytics/client'
 import { EntryMenuContent } from '../src/client/EntryMenuContent.tsx'
@@ -35,16 +36,16 @@ function content(overrides: Partial<ContentProps> = {}) {
     region: 'sidebar', t: makeTranslate(en),
     usePluginNavigation: <T,>(select: (present: boolean) => T): T => select(true),
     usePanelInfo: unused, useSessions: unused, useSessionStatus: unused, useSessionRetainInfo: unused,
-    useResource: unused, useWorkspaces: unused,
+    useResource: unused, useWorkspaces: unused, renderFactorySlot: () => null,
     ...callbacks,
     ...overrides,
   } as ContentProps
   const view = render(<div role="menu"><EntryMenuContent {...props} /></div>)
-  return { view, ...callbacks }
+  return { view, props, ...callbacks }
 }
 
 describe('More menu rows', () => {
-  it.each(['sidebar', 'rightbar'] as const)('shows only discovery and creation in %s regardless of entries', (region) => {
+  it.each(['rightbar'] as const)('shows only discovery and creation in %s regardless of entries', (region) => {
     const b = content({ region, entries: [
       { id: 'notes', label: 'Notes', pinned: true, active: true },
       { id: 'tasks', label: 'Tasks', pinned: false },
@@ -59,6 +60,37 @@ describe('More menu rows', () => {
     expect(b.onDismiss.mock.invocationCallOrder[1]).toBeLessThan(b.createPlugin.mock.invocationCallOrder[0]!)
     expect(b.onOpen).not.toHaveBeenCalled()
     expect(b.onPinnedChange).not.toHaveBeenCalled()
+  })
+
+  it('lists only unpinned sidebar entries and pins without navigating', () => {
+    const b = content()
+    expect(b.view.queryByRole('menuitem', { name: 'Notes' })).toBeNull()
+    fireEvent.click(b.view.getByRole('menuitem', { name: 'Tasks' }))
+    expect(b.onOpen).toHaveBeenCalledExactlyOnceWith('tasks')
+    expect(b.onPinnedChange).not.toHaveBeenCalled()
+    b.onOpen.mockClear()
+    fireEvent.click(b.view.getByRole('menuitem', { name: 'Pin Tasks to sidebar' }))
+    expect(b.onPinnedChange).toHaveBeenCalledExactlyOnceWith('tasks', true)
+    expect(b.onOpen).not.toHaveBeenCalled()
+  })
+
+  it('returns focus to More after keyboard pinning without opening the entry', async () => {
+    const b = content()
+    b.view.unmount()
+    function PinMenu() {
+      const [open, setOpen] = useState(true)
+      return <Menu open={open} onClose={() => { setOpen(false) }} autoFocus
+        anchor={<button type="button">More</button>}>
+        <EntryMenuContent {...b.props} onDismiss={() => { setOpen(false) }} />
+      </Menu>
+    }
+    const view = render(<PinMenu />)
+    const pin = view.getByRole('menuitem', { name: 'Pin Tasks to sidebar' })
+    act(() => { pin.focus() })
+    fireEvent.keyDown(pin, { key: 'Tab' })
+    await waitFor(() => { expect(document.activeElement).toBe(view.getByRole('button', { name: 'More' })) })
+    expect(b.onPinnedChange).toHaveBeenCalledExactlyOnceWith('tasks', true)
+    expect(b.onOpen).not.toHaveBeenCalled()
   })
 
   it.each([true, false])('opens folded Views and marks the active View with plugin navigation present=%s', (browsable) => {
@@ -90,7 +122,7 @@ describe('More menu rows', () => {
   })
 
   it.each(['sidebar', 'rightbar'] as const)('keeps only creation in %s without plugin navigation', (region) => {
-    const b = content({ region, usePluginNavigation: select => select(false) })
+    const b = content({ region, entries: [], usePluginNavigation: select => select(false) })
     expect(b.view.getAllByRole('menuitem').map(row => row.textContent)).toEqual(['Create your plugin'])
     expect(b.view.queryByRole('separator')).toBeNull()
     fireEvent.click(b.view.getByRole('menuitem', { name: 'Create your plugin' }))

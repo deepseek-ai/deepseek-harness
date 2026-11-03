@@ -1,1 +1,1 @@
-- button "立即启用" [disabled]
+- status: 正在应用 Computer Use 的更改
