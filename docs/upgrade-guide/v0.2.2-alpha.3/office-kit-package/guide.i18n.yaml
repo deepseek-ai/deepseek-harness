@@ -1,13 +1,13 @@
 # Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
 # section, a hash of its English and Chinese blocks outside code blocks and generated regions.
 # After editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-alpha.2/office-kit-package/guide.md
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-alpha.3/office-kit-package/guide.md
 /:
   en: 0e3fae218b0fe86f
   zh: 31fa1f4ac5cfffe6
 /deepseek-ai-dsh-office-kit-replaces-deepseek-ai-dsh-office-to-pdf:
-  en: 905ef2a0e635d288
-  zh: 7a661f303ee0f2bb
+  en: e9c8bf48217b3e1c
+  zh: 710a0cd0489a65b7
 /deepseek-ai-dsh-office-kit-replaces-deepseek-ai-dsh-office-to-pdf/change:
   en: 885088211bc994ac
   zh: ee8192f950f2597b
