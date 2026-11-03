@@ -109,7 +109,7 @@ it('resolves the configured signing file without installing desktop dependencies
   expect(() => readCuaSigningSettings({ ...environment, DSH_PACKAGING_CONFIG_DIR: 'relative' })).toThrow('CONFIG_DIR')
 })
 
-it('loads the selector under plain Node with no node_modules directory', () => {
+it('loads fingerprinting and selection under plain Node with no node_modules directory', () => {
   const f = fixture()
   for (const file of ['scripts/cua-helper/build-inputs.ts', 'scripts/cua-helper/select-artifact.ts',
     'apps/desktop/scripts/desktop-file-settings.mjs', 'apps/desktop/scripts/desktop-release-environment.mjs']) {
@@ -117,7 +117,7 @@ it('loads the selector under plain Node with no node_modules directory', () => {
     copyFileSync(resolve(file), join(f.root, file))
   }
   const output = execFileSync(process.execPath, ['--input-type=module', '-e',
-    "const { selectCuaHelperArtifact } = await import('./scripts/cua-helper/select-artifact.ts'); console.log(typeof selectCuaHelperArtifact)"],
+    "const a = await import('./scripts/cua-helper/select-artifact.ts'); const b = await import('./scripts/cua-helper/build-inputs.ts'); console.log(typeof a.selectCuaHelperArtifact, typeof b.cuaHelperSourceDigest)"],
   { cwd: f.root, encoding: 'utf8', timeout: 30_000, stdio: 'pipe' })
-  expect(output.trim()).toBe('function')
+  expect(output.trim()).toBe('function function')
 })

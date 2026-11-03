@@ -1,8 +1,8 @@
 /** Content and machine identity for reusing a signed helper before installing dependencies. */
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { lstatSync, readFileSync } from 'node:fs'
-import { isAbsolute, join } from 'node:path'
+import { appendFileSync, lstatSync, readFileSync } from 'node:fs'
+import { isAbsolute, join, resolve } from 'node:path'
 import { readDesktopPackageSettings } from '../../apps/desktop/scripts/desktop-file-settings.mjs'
 import { resolveMacOSSigningEnvironment } from '../../apps/desktop/scripts/desktop-release-environment.mjs'
 
@@ -77,4 +77,15 @@ export function cuaHelperBuildKey(source: string, environment: NodeJS.ProcessEnv
     python: run('/usr/bin/xcrun', ['python3', '--version']),
   }
   return createHash('sha256').update(JSON.stringify(configuration)).digest('hex')
+}
+
+if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.filename) {
+  const env = process.env
+  if (!env.GITHUB_OUTPUT || !env.GITHUB_STEP_SUMMARY) throw new Error('CUA build inputs: Actions context required')
+  const root = resolve(import.meta.dirname, '../..')
+  const sourceDigest = cuaHelperSourceDigest(root)
+  const buildKey = cuaHelperBuildKey(sourceDigest, readCuaSigningSettings(env))
+  appendFileSync(env.GITHUB_OUTPUT, `source-digest=${sourceDigest}\nbuild-key=${buildKey}\n`)
+  appendFileSync(env.GITHUB_STEP_SUMMARY, `CUA helper 源码摘要：\`${sourceDigest}\`。\n\n`)
+  console.log(`CUA helper source digest: ${sourceDigest}`)
 }

@@ -3,7 +3,6 @@ import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { cuaHelperBuildKey, cuaHelperSourceDigest, readCuaSigningSettings } from './build-inputs.ts'
 
 const workflows = ['cua-helper-package.yml', 'release-publish.yml'] as const
 
@@ -97,17 +96,17 @@ export function selectCuaHelperArtifact(repository: string, runId: string, build
 
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.filename) {
   const env = process.env
-  if (!env.GITHUB_REPOSITORY || !env.GITHUB_OUTPUT || !env.GITHUB_STEP_SUMMARY) throw new Error('CUA reuse: Actions context required')
-  const root = resolve(import.meta.dirname, '../..')
-  const sourceDigest = cuaHelperSourceDigest(root)
-  const buildKey = cuaHelperBuildKey(sourceDigest, readCuaSigningSettings(env))
+  if (!env.GITHUB_REPOSITORY || !env.GITHUB_OUTPUT || !env.GITHUB_STEP_SUMMARY || !env.CUA_BUILD_KEY) {
+    throw new Error('CUA reuse: Actions context and CUA_BUILD_KEY are required')
+  }
+  const buildKey = env.CUA_BUILD_KEY
   const selection = selectCuaHelperArtifact(env.GITHUB_REPOSITORY, env.CUA_RUN_ID ?? '', buildKey, (path, paginate) =>
     JSON.parse(execFileSync('gh', ['api', ...(paginate ? ['--paginate', '--slurp'] : []), path],
       { encoding: 'utf8', timeout: 60_000, maxBuffer: 8 * 1024 * 1024 })))
-  appendFileSync(env.GITHUB_OUTPUT, `source-digest=${sourceDigest}\nbuild-key=${buildKey}\nartifact-id=${selection?.artifactId ?? ''}\nrun-id=${selection?.runId ?? ''}\nattempt=${selection?.attempt ?? ''}\n`)
+  appendFileSync(env.GITHUB_OUTPUT, `artifact-id=${selection?.artifactId ?? ''}\nrun-id=${selection?.runId ?? ''}\nattempt=${selection?.attempt ?? ''}\n`)
   const summary = selection
     ? `复用 [CUA helper 构建](https://github.com/${env.GITHUB_REPOSITORY}/actions/runs/${selection.runId}/attempts/${selection.attempt})，run ID \`${selection.runId}\`，artifact ID \`${selection.artifactId}\`。跳过依赖安装、编译、签名和公证。`
     : '未找到源码逐字节一致且构建配置匹配的可用 CUA helper 产物，执行依赖安装和重新构建。'
-  appendFileSync(env.GITHUB_STEP_SUMMARY, `${summary}\n\n源码摘要：\`${sourceDigest}\`。\n`)
+  appendFileSync(env.GITHUB_STEP_SUMMARY, `${summary}\n`)
   console.log(summary)
 }

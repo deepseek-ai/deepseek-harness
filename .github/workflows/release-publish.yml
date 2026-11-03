@@ -32,7 +32,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/dsh-v') || inputs.skip-tag-check
     uses: ./.github/workflows/cua-helper-package.yml
     with:
-      source_ref: ${{ github.ref }}
+      reuse: true
       preset: production
       cua_run_id: ${{ inputs.cua_run_id }}
 

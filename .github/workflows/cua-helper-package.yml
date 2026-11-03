@@ -3,11 +3,6 @@ name: Package CUA helper · macOS
 on:
   workflow_dispatch:
     inputs:
-      source_ref:
-        description: '同仓库可信源码分支或 dsh-v* tag'
-        type: string
-        default: master
-        required: true
       preset:
         description: '机器上的签名配置'
         type: choice
@@ -16,9 +11,9 @@ on:
         required: true
   workflow_call:
     inputs:
-      source_ref:
-        type: string
-        required: true
+      reuse:
+        type: boolean
+        default: false
       cua_run_id:
         type: string
         default: ''
@@ -52,21 +47,19 @@ jobs:
     outputs:
       artifact-id: ${{ steps.retained.outputs.artifact-id || steps.upload.outputs.artifact-id }}
       run-id: ${{ steps.retained.outputs.run-id || github.run_id }}
-      build-key: ${{ steps.retained.outputs.build-key }}
+      build-key: ${{ steps.build-inputs.outputs.build-key }}
     env:
       DSH_PACKAGING_PRESET: ${{ inputs.preset }}
       DSH_TELEMETRY_DISABLED: '1'
-      PACKAGE_SOURCE_REF: ${{ inputs.source_ref }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:
-          ref: ${{ inputs.source_ref }}
           persist-credentials: false
           clean: true
-      - name: Validate source selection
+      - name: Validate run ref and preset
         run: |
-          node -e 'const fs=require("node:fs"); const ref=process.env.PACKAGE_SOURCE_REF;
-          if(ref.startsWith("refs/pull/") || /^[a-f0-9]{40}$/i.test(ref)) throw Error("Select a trusted repository branch or release tag");
+          node -e 'const fs=require("node:fs"); const ref=process.env.GITHUB_REF;
+          if(!ref || (!ref.startsWith("refs/heads/") && !ref.startsWith("refs/tags/"))) throw Error("Select a trusted repository branch or release tag");
           const tag=ref.replace(/^refs\/tags\//, "");
           if(tag.startsWith("dsh-v") && tag!=="dsh-v"+JSON.parse(fs.readFileSync("package.json","utf8")).version) throw Error("Release tag must match product version");
           if(!["test","production"].includes(process.env.DSH_PACKAGING_PRESET)) throw Error("Invalid preset");'
@@ -74,11 +67,16 @@ jobs:
         with:
           node-version: '24'
           package-manager-cache: false
+      - name: Record CUA helper build inputs
+        id: build-inputs
+        run: node scripts/cua-helper/build-inputs.ts
       - name: Find reusable CUA helper
+        if: inputs.reuse
         id: retained
         env:
           GH_TOKEN: ${{ github.token }}
           CUA_RUN_ID: ${{ inputs.cua_run_id }}
+          CUA_BUILD_KEY: ${{ steps.build-inputs.outputs.build-key }}
         run: node scripts/cua-helper/select-artifact.ts
       - uses: pnpm/action-setup@v5.0.0
         if: steps.retained.outputs.artifact-id == ''
@@ -90,7 +88,7 @@ jobs:
       - name: Build and verify notarized applications
         if: steps.retained.outputs.artifact-id == ''
         env:
-          CUA_EXPECTED_BUILD_KEY: ${{ steps.retained.outputs.build-key }}
+          CUA_EXPECTED_BUILD_KEY: ${{ steps.build-inputs.outputs.build-key }}
         run: |
           mkdir -p dist
           pnpm exec tsx scripts/cua-helper/package.ts --out dist/cua-helper
@@ -98,7 +96,7 @@ jobs:
         if: steps.retained.outputs.artifact-id == ''
         id: upload
         with:
-          name: cua-helper-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.retained.outputs.build-key }}
+          name: cua-helper-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.build-inputs.outputs.build-key }}
           path: dist/cua-helper/*
           if-no-files-found: error
           compression-level: 0
