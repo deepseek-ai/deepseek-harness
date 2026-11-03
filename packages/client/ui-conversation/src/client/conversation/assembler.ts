@@ -63,6 +63,30 @@ interface GroupState {
   readonly store: ConversationGroupStore<unknown>
 }
 
+/**
+ * Failure of an incremental Conversation update.
+ * When `rebuilt` is true, every active view already shows a complete rebuild of
+ * the loaded window, and `cause` is the original failure. When it is false, the
+ * rebuild or its view replacement also failed, and `cause` is an
+ * `AggregateError` of both failures; the next flush retries that rebuild or replacement.
+ */
+export class ConversationUpdateError extends Error {
+  /** Whether every active view shows the complete rebuild. */
+  readonly rebuilt: boolean
+
+  /**
+   * @param rebuilt - whether every active view shows the complete rebuild.
+   * @param options - the original failure, or an `AggregateError` of both failures, as `cause`.
+   */
+  constructor(rebuilt: boolean, options: ErrorOptions) {
+    super(rebuilt
+      ? 'conversation update failed; the loaded window was rebuilt'
+      : 'conversation update failed, and rebuilding the loaded window also failed', options)
+    this.name = 'ConversationUpdateError'
+    this.rebuilt = rebuilt
+  }
+}
+
 const PUBLICATION_RANK: Record<ConversationPublication, number> = {
   none: 0,
   'animation-frame': 1,
@@ -190,6 +214,7 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
   private readonly matchedDefinitions: ConversationNodeDefinition[] = []
   private readonly matchedResults: ConversationMatchResult[] = []
   private hasMore = false
+  private rebuildPending = false
   private replacePending = true
   private timelineDirty = true
 
@@ -362,27 +387,65 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
 
   /**
    * Materialize dirty Contexts and advance every active view builder.
+   * When an incremental update throws, the assembler replays the complete loaded
+   * window into new Contexts and replaces every active view before it throws a
+   * {@link ConversationUpdateError}. A Definition that throws on every incremental
+   * update therefore makes each flush replay the whole window. A failure on the
+   * complete-replacement path propagates unchanged, publishes no view, and keeps
+   * the replacement pending for the next flush.
    * @returns whether any view snapshot was rebuilt or incrementally applied.
+   * @throws {@link ConversationUpdateError} when an incremental update fails.
    */
   flush(): boolean {
+    if (this.rebuildPending) this.rebuildWindow()
     if (!this.replacePending && this.dirty.size === 0 && !this.timelineDirty) return false
-    if (this.replacePending) {
-      this.replaceLocationData()
-      const updated: ViewState[] = []
-      const changedTurns = this.locationIndex.takeChangedTurns()
-      for (const target of this.activeTargets) {
-        const view = this.views.get(target)
-        if (view === undefined) continue
-        this.updateView(view, true, this.buildTargetNodes(target, this.contextsByTarget.get(target)), changedTurns)
-        updated.push(view)
-      }
-      this.replacePending = false
-      this.dirty.clear()
-      this.dirtyByTarget.clear()
-      this.timelineDirty = false
-      return this.publishViews(updated)
-    }
+    if (this.replacePending) return this.flushReplacement()
 
+    try {
+      return this.flushIncremental()
+    } catch (error: unknown) {
+      return this.recoverIncremental(error)
+    }
+  }
+
+  private flushReplacement(): boolean {
+    this.replaceLocationData()
+    const updated: ViewState[] = []
+    const changedTurns = this.locationIndex.takeChangedTurns()
+    for (const target of this.activeTargets) {
+      const view = this.views.get(target)
+      if (view === undefined) continue
+      this.updateView(view, true, this.buildTargetNodes(target, this.contextsByTarget.get(target)), changedTurns)
+      updated.push(view)
+    }
+    this.replacePending = false
+    this.dirty.clear()
+    this.dirtyByTarget.clear()
+    this.timelineDirty = false
+    return this.publishViews(updated)
+  }
+
+  /** Replace partial incremental state with a complete rebuild, then report the original failure. */
+  private recoverIncremental(error: unknown): never {
+    try {
+      this.rebuildWindow()
+      this.flushReplacement()
+    } catch (recoveryError: unknown) {
+      throw new ConversationUpdateError(false, {
+        cause: new AggregateError([error, recoveryError], 'conversation update and its rebuild failed'),
+      })
+    }
+    throw new ConversationUpdateError(true, { cause: error })
+  }
+
+  /** Rebuild every Context from the loaded inputs; a failed rebuild stays pending for the next flush. */
+  private rebuildWindow(): void {
+    this.rebuildPending = true
+    this.replaceWindow(this.sortedInputs(), this.hasMore)
+    this.rebuildPending = false
+  }
+
+  private flushIncremental(): boolean {
     const updated: ViewState[] = []
     if (this.applyDirtyLocationData()) this.timelineDirty = true
     const changedTurns = this.locationIndex.takeChangedTurns()
@@ -405,7 +468,8 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
 
   /**
    * Add one target to the monotonic active set and materialize its current snapshot.
-   * Pending Context work is flushed before the first complete replacement.
+   * Pending Context work is flushed before the first complete replacement. When that
+   * flush throws, the target stays inactive and a later activation retries it.
    * @param target - registered or subsequently registered view target.
    * @returns whether any active target snapshot changed.
    */

@@ -202,6 +202,7 @@ None; Conversation assembly and browser input state do not alter provider-side p
 - **Only registered targets can render** — the shell deliberately has no implicit fallback target beyond the registered `chat` preference.
 - **Factory occurrences inherit their render-position Session** — `conversation.content` does not accept an independently addressed Session; that requires a separate Session-provider capability.
 - **Composer backdrop blur is verified only in Chromium** — with `will-change: transform` on the docked composer, descendant `backdrop-filter` still samples the transcript in Chromium; WebKit behavior has not been verified.
+- **A failing Definition costs a full replay per publication** — after an incremental flush fails, the assembler replays the complete loaded window to keep the views correct. A Definition that fails on every update therefore replays the whole window on each publication until its owner fixes it ([window update paths](../../../docs/subsystems/conversation.md#window-update-paths)).
 
 
 <a id="dev-note"></a>

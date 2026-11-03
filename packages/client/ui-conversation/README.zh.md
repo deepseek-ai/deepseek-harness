@@ -202,6 +202,7 @@ selector 必须是 owner currency 的纯函数。非 null 返回值作为 `match
 - **只有已注册 target 可以渲染**——除已注册的 `chat` 偏好外，shell 刻意不提供隐式 fallback target。
 - **Factory occurrence 继承渲染位置的 Session**——`conversation.content` 不接受独立寻址的 Session；该能力需要单独的 Session provider。
 - **composer 内的毛玻璃只在 Chromium 中验证过**——docked composer 设置 `will-change: transform` 后，Chromium 中后代的 `backdrop-filter` 仍会采样背后的 transcript；WebKit 中的表现尚未验证。
+- **出错的 Definition 让每次发布都完整回放**——增量 flush 失败后，assembler 回放已加载的完整窗口，以保持视图正确。若某个 Definition 在每次更新中都失败，在其 owner 修复前，每次发布都会回放整个窗口（[Window 更新路径](../../../docs/subsystems/conversation.zh.md#window-update-paths)）。
 
 
 <a id="dev-note"></a>
