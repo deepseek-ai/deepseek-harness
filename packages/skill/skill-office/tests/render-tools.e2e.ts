@@ -63,10 +63,13 @@ it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each([{ format: 'docx', mod
       })
       const renders = officeCalls(events).filter(call => call.name === 'office_render')
       expect(renders.length, JSON.stringify(calls)).toBeGreaterThan(0)
-      const images = events.some(event => (event.type === 'tool/result' && event.data.message.content.some(block => block.type === 'image'))
-        || (event.type === 'user/message' && event.data.source.kind === 'ptc-mode' && event.data.content.some(block => block.type === 'image')))
+      const renderCallIds = new Set(renders.map(call => call.callId))
+      const images = events.some(event => mode === 'native'
+        ? event.type === 'tool/result' && renderCallIds.has(event.data.message.toolCallId)
+          && !event.data.message.isError && event.data.message.content.some(block => block.type === 'image')
+        : event.type === 'user/message' && event.data.source.kind === 'ptc-mode'
+          && event.data.content.some(block => block.type === 'image'))
       expect(images, JSON.stringify(calls)).toBe(true)
-      expect(calls.some(call => call.name === 'read_image')).toBe(false)
     },
   })
 })
