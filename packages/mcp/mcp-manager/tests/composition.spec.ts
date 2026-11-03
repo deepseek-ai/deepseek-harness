@@ -124,7 +124,7 @@ describe('mcp-manager real composition', () => {
     ]) {
       await expect(ctx.settings.update('mcp', { servers })).rejects.toThrow()
       expect(await readFile(profile.patchPath, 'utf8')).toBe(saved)
-      expect(ctx.mcpServers.list()).toEqual([])
+      expect(ctx.mcpManager.list()).toEqual([])
     }
   })
 
@@ -136,6 +136,6 @@ describe('mcp-manager real composition', () => {
       transport: 'streamable-http', url: 'https://example.invalid/mcp', oauth: { credentialKey: 'mcp-client/Foo' }, enabled: false,
     } } })).rejects.toThrow('servers.one.oauth.credentialKey: credential key segment "Foo" must match')
     expect(await readFile(profile.patchPath, 'utf8')).toBe(saved)
-    expect(ctx.mcpServers.list()).toEqual([])
+    expect(ctx.mcpManager.list()).toEqual([])
   })
 })
