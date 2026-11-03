@@ -20,7 +20,7 @@ Compatibility protection covers Web and Desktop profiles, including existing nat
 
 | Retained identity | Unconstrained cleanup | Why it is deferred |
 |---|---|---|
-| Published names in the naming-exception map | Give every experimental package the `@deepseek-ai/dsh-experimental-` prefix | Existing dependencies, imports, module declarations, and profile files use the established names |
+| Published names with the legacy `@deepseek-ai/dsh-experimental-` prefix | Drop the prefix so that every experimental package keeps its name on promotion | Existing dependencies, imports, module declarations, and profile files use the established names |
 | Existing badge, Ralph, and native-tool row IDs | Give optional contributions consistently distinct `optional-*` selectors | Existing user overrides use those IDs; the ownership move does not require a new selector |
 
 These naming changes are deferred, not prerequisites for experimental classification. A later cleanup requires an explicit release and migration decision, an inventory of affected Web/Desktop configurations, and installed-profile upgrade evidence. Directory moves or pre-stable API status alone do not retire these exceptions. The package list stays in the typed policy rather than being copied into this note or package READMEs.

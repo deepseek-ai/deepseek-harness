@@ -118,24 +118,24 @@ describe('workspace manifest discovery', () => {
 })
 
 describe('experimental workspace constraints', () => {
-  it('requires the experimental package-name prefix', () => {
+  it('requires an unprefixed name to have a directory entry', () => {
     expect(checkExperimentalManifest({
       ...experimental,
       manifest: { ...experimental.manifest, name: '@deepseek-ai/dsh-prototype' },
     })).toEqual([
-      '@deepseek-ai/dsh-prototype: experimental package name must start with "@deepseek-ai/dsh-experimental-" or match its declared directory exception',
+      '@deepseek-ai/dsh-prototype: experimental package name must be declared for this directory in EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS (scripts/experimental-package-policy.ts)',
     ])
   })
 
   it.each(Object.entries(EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS))('retains %s only at its declared directory', (dir, name) => {
     expect(checkExperimentalManifest({ dir, manifest: { name, publishConfig: { access: 'public' } } })).toEqual([])
     expect(checkExperimentalManifest({ ...experimental, manifest: { ...experimental.manifest, name } }))
-      .toEqual([expect.stringContaining('declared directory exception')])
+      .toEqual([expect.stringContaining('declared for this directory')])
   })
 
   it('rejects a missing manifest name even when the directory has no exception', () => {
     expect(checkExperimentalManifest({ ...experimental, manifest: { publishConfig: { access: 'public' } } }))
-      .toEqual([expect.stringContaining('experimental package name must start')])
+      .toEqual([expect.stringContaining('experimental package name must be declared')])
   })
 
   it('rejects stale, moved and duplicated retained-name declarations', () => {

@@ -27,7 +27,7 @@ export const EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS: Readonly<Record<string, strin
   'packages/experimental/personalized-recommendations': '@deepseek-ai/dsh-personalized-recommendations',
 } satisfies Record<`packages/experimental/${string}`, `@deepseek-ai/dsh-${string}`>
 
-/** npm namespace for experimental packages without retained-name exceptions. */
+/** Legacy npm namespace kept by existing experimental packages; new packages must not use it. */
 export const EXPERIMENTAL_PACKAGE_NAME_PREFIX = '@deepseek-ai/dsh-experimental-'
 const retainedNames = new Set(Object.values(EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS))
 
