@@ -88,7 +88,7 @@
   align-self: end;
   justify-self: end;
   margin: 0;
-  position-try-fallbacks: --dsh-warning-wide-above, --dsh-warning-below, --dsh-warning-wide-below, --dsh-warning-window;
+  position-try-fallbacks: --dsh-warning-wide-above, --dsh-warning-below, --dsh-warning-wide-below, --dsh-warning-window, --dsh-warning-wide-window;
   z-index: 1100;
   box-sizing: border-box;
   width: 420px;
@@ -122,6 +122,12 @@
 }
 
 @position-try --dsh-warning-window {
+  top: var(--dsh-warning-window-top);
+  bottom: 12px;
+  align-self: safe start;
+}
+
+@position-try --dsh-warning-wide-window {
   top: var(--dsh-warning-window-top);
   bottom: 12px;
   right: 12px;
