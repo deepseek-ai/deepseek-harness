@@ -14,7 +14,7 @@ The [Web bundle](../../../../packages/bundle/web-app/cordis.patch.yml) and the [
 
 The bundled Python environment ([`tool-workspace-dependencies`](../../../../packages/skill/tool-workspace-dependencies/README.md)) mounts only in Desktop and in the SDK when a primary runtime is available. `skill-office` declares `pythonEnvironment: 'workspace-dependencies' | 'user'` explicitly; each bundle row selects the value for its deployment. The default is `'workspace-dependencies'` because older SDK patches replace the complete `config` of the `skill-office` row; such a patch omits the new key and keeps the bundled-environment instructions it was written for.
 
-[`@deepseek-ai/dsh-office-kit`](../../../../packages/document/office-kit/README.md) owns Kit location and the shared conversion service. Its `/locate` entry accepts only explicit arguments: the consumer's own `import.meta.resolve` lookup. Native engine paths use ASAR-unpacked mapping. It reads no environment variables, and the entry imports only Node built-in modules as values, so a consumer can depend on it without loading Cordis services, Schemastery, or Kit. The [on-demand Office tools](2026-10-31-native-office-tool.md) run Kit operations inside the Host, so no deployment publishes Kit CLI paths or Office executable variables.
+[`@deepseek-ai/dsh-office-kit`](../../../../packages/document/office-kit/README.md) owns Kit location and the shared conversion service. Kit location is an internal implementation of the provider and is not exported: the provider passes its own `import.meta.resolve` lookup, and native engine paths use ASAR-unpacked mapping. Location reads no environment variables. The [on-demand Office tools](2026-10-31-native-office-tool.md) run Kit operations inside the Host, so no deployment publishes Kit CLI paths or Office executable variables.
 
 An absent Kit degrades instead of failing a load. The conversion service registers and rejects conversions with code `unavailable`, retaining only a successful Kit import and reporting each distinct failure once; the `office_render`, `office_convert`, and `office_recalculate` tools stay registered and return that message when called.
 
@@ -30,7 +30,7 @@ An absent Kit degrades instead of failing a load. The conversion service registe
 
 **Fail the conversion row when Kit is absent.** This reports the absence at load, which the misconfiguration rule prefers, but the absence belongs to the deployment rather than the configuration, and it disables preview rendering paths and dependent skills that do not need Kit.
 
-**Keep a separate locator package.** A package without Cordis dependencies isolates `skill-office` from the service, but duplicates release, dependency-policy, and documentation configuration for one closely coupled component. The `/locate` subpath provides the same import isolation.
+**Keep a separate locator package.** A package without Cordis dependencies isolates `skill-office` from the service, but duplicates release, dependency-policy, and documentation configuration for one closely coupled component. No consumer outside the provider needs to locate Kit, so the location logic stays inside the provider.
 
 ## Consequences
 
@@ -38,4 +38,4 @@ Ordinary Web and SDK sessions without a bundled environment list the four Office
 
 Processes launched from the Desktop built-in terminal inherit `DSH_PRIMARY_RUNTIME`, so the SDK uses its bundled environment. The shell publishes no Kit location; child applications resolve their own Kit.
 
-Verification covers the `/locate` import restriction, Kit lookup and engine resolution, conversion retry after a missing or unloadable Kit, deduplicated warnings, the `office_*` tools' `unavailable` results with an absent Kit, recorded Web and SDK sessions that list the Office skills, and Office profile end-to-end tests.
+Verification covers Kit lookup from the provider's Kit entry ([kit-lookup.spec.ts](../../../../packages/document/office-kit/tests/kit-lookup.spec.ts)), engine resolution and ASAR-unpacked path mapping ([engine-package.spec.ts](../../../../packages/document/office-kit/tests/engine-package.spec.ts)), independent engine resolution per Kit installation ([anchors.spec.ts](../../../../packages/document/office-kit/tests/anchors.spec.ts)), conversion retry after a missing or unloadable Kit, deduplicated warnings, the `office_*` tools' `unavailable` results with an absent Kit, recorded Web and SDK sessions that list the Office skills, and Office profile end-to-end tests.

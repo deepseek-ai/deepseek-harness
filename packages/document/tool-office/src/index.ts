@@ -25,7 +25,8 @@ import { checkParameterNames, checkRenderArguments, checkConversionArguments, ex
   RECALCULATION_FORMATS,
   type OfficeRenderArgs, type OfficeConvertArgs, type OfficeRecalculateArgs, type OfficeFamily, type OfficeOperationName,
   type OfficeToolName } from './formats.ts'
-import { renderFileContent, renderImagesContent, type OfficeFileValue, type OfficeRenderValue } from './content.ts'
+import { renderFileContent, renderImagesContent, type OfficeFileFormats, type OfficeFileValue,
+  type OfficeRenderValue } from './content.ts'
 
 /** Cordis plugin name used by Loader diagnostics. */
 export const name = 'tool-office'
@@ -57,8 +58,8 @@ export const Config: z<Partial<Config>, Config> = z.object({
   maxImageBytes: z.natural().min(1).max(Number.MAX_SAFE_INTEGER).default(32 * 1024 * 1024),
 })
 
-/** Stored encodings of a rendered image; attachment normalization can re-encode a PNG as JPEG or WebP. */
-const IMAGE_MEDIA_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const satisfies readonly ImageMediaType[]
+/** Stored encodings of a rendered PNG: attachment normalization keeps it or re-encodes it as JPEG or WebP. */
+const IMAGE_MEDIA_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const satisfies readonly ImageMediaType[]
 
 const IMAGE_SCHEMA = {
   type: 'object',
@@ -116,14 +117,17 @@ const PARAMETER_NAMES: Readonly<Record<OfficeToolName, readonly string[]>> = {
   office_recalculate: Object.keys(RECALCULATE_PARAMETERS),
 }
 
-const FILE_PROPERTIES = {
-  path: { type: 'string', required: true, description: 'Canonical absolute input path.' },
-  file: { type: 'string', required: true, description: 'Absolute path of the temporary output file.' },
-  format: { type: 'string', required: true, enum: OUTPUT_FORMATS },
-  bytes: { type: 'integer', required: true },
-  pageCount: { type: 'integer', description: 'Pages of a PDF output.' },
-  missingFonts: MISSING_FONTS_SCHEMA,
-} as const
+/** Output schema properties of a file-producing operation whose `format` is one of `formats`. */
+function fileProperties<const Formats extends readonly string[]>(formats: Formats) {
+  return {
+    path: { type: 'string', required: true, description: 'Canonical absolute input path.' },
+    file: { type: 'string', required: true, description: 'Absolute path of the temporary output file.' },
+    format: { type: 'string', required: true, enum: formats },
+    bytes: { type: 'integer', required: true },
+    pageCount: { type: 'integer', description: 'Pages of a PDF output.' },
+    missingFonts: MISSING_FONTS_SCHEMA,
+  } as const
+}
 
 /**
  * Register Office tools admitted after a successful skill load or an earlier Office declaration.
@@ -184,7 +188,7 @@ export function apply(ctx: Context, config: Config): void {
     parameters: CONVERT_PARAMETERS,
     output: {
       schema: { type: 'object', additionalProperties: false, properties: {
-        operation: { type: 'string', const: 'convert', required: true }, ...FILE_PROPERTIES,
+        operation: { type: 'string', const: 'convert', required: true }, ...fileProperties(OUTPUT_FORMATS),
       } },
       render: (_args, value) => renderFileContent(value),
       presentationMeta: (_args, value) => ({ path: value.path, file: value.file }),
@@ -206,7 +210,7 @@ export function apply(ctx: Context, config: Config): void {
     parameters: RECALCULATE_PARAMETERS,
     output: {
       schema: { type: 'object', additionalProperties: false, properties: {
-        operation: { type: 'string', const: 'recalculate', required: true }, ...FILE_PROPERTIES,
+        operation: { type: 'string', const: 'recalculate', required: true }, ...fileProperties(RECALCULATION_FORMATS),
       } },
       render: (_args, value) => renderFileContent(value),
       presentationMeta: (_args, value) => ({ path: value.path, file: value.file }),
@@ -356,11 +360,14 @@ async function render(
     images: result.images.map((image, index) => {
       // saveImages returns one reference per input, in input order.
       const ref = refs[index] as ImageAttachmentRef
+      const { mediaType } = ref
+      // Normalization of a PNG yields PNG, JPEG, or WebP.
+      if (mediaType === 'image/gif') throw new Error(`cannot render "${target.displayPath}": the attachment service stored a rendered PNG as GIF`)
       return {
         ...image.page === undefined ? {} : { page: image.page },
         ...image.sheet === undefined ? {} : { sheet: image.sheet },
         ...image.range === undefined ? {} : { range: image.range },
-        attachmentId: ref.attachmentId, mediaType: ref.mediaType, bytes: ref.bytes, width: ref.width, height: ref.height,
+        attachmentId: ref.attachmentId, mediaType, bytes: ref.bytes, width: ref.width, height: ref.height,
         ...ref.originalDimensions === undefined ? {} : { originalDimensions: { ...ref.originalDimensions } },
       }
     }),
@@ -376,7 +383,8 @@ function outputOwner(ctx: Context, agent: Agent): string {
 }
 
 async function convertFile<Operation extends 'convert' | 'recalculate'>(
-  ctx: Context, kit: OfficeKit, agent: Agent, signal: AbortSignal, operation: Operation, args: OfficeConvertArgs | OfficeRecalculateArgs,
+  ctx: Context, kit: OfficeKit, agent: Agent, signal: AbortSignal, operation: Operation,
+  args: (OfficeConvertArgs | OfficeRecalculateArgs) & { format: OfficeFileFormats[Operation] },
   target: FsTarget, source: OfficeKitSource,
 ): Promise<OfficeFileValue<Operation>> {
   const { format } = args

@@ -108,6 +108,7 @@ In native mode, activation during a conversation appends one `developer/message`
 - **Native engine in the Host process** — rendering, conversion, and recalculation that the model starts run the native LibreOffice Kit engine inside the Host process through `ctx.officeKit`, so the shell sandbox and PTC permissions do not confine them. Inputs remain subject to the filesystem backend's read authority. The native parser processes an untrusted document with the Host user's permissions.
 - **PTC activation does not survive resume or fork** — the PTC request header records only `run_code`, so a resumed or forked PTC Agent offers no Office bindings until the model loads an Office skill again; the removal and the re-addition each rewrite the system prompt, with the cache effect described under KV Cache effect.
 - **Plugin reload clears activation** — hot reload, or disabling and re-enabling the plugin, clears the in-memory marks. If a step runs in the meantime, its request header omits the three tools, and the model must load an Office skill again to restore them.
+- **Direct invocation activates from the next step** — the tool set of a step is fixed before the content of a user-invoked skill such as `/office` is injected, so the first model request after the invocation declares no Office tools. The tools appear from the next model step.
 - Rendering fidelity, fonts, and pagination follow LibreOffice Kit and can differ from Microsoft Office.
 
 <a id="dev-note"></a>

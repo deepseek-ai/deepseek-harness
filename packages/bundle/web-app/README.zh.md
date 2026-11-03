@@ -168,11 +168,11 @@ URL 行与浏览器交接都是就绪信号：监督方一观察到该行就发�
 
 #### 模型看到什么
 
-所有 profile 的技能目录都列出 Office 路由和六个 Office 技能。加载的 Python 技能末尾带一节 Python 环境说明：Desktop 上指引模型调用 `load_workspace_dependencies`；其他 profile 指引模型使用项目或用户已有的 Python。
+所有 profile 的技能目录都列出 Office 路由和三个 Office 创作技能。加载的 Python 技能末尾带一节 Python 环境说明：Desktop 上指引模型调用 `load_workspace_dependencies`；其他 profile 指引模型使用项目或用户已有的 Python。
 
 #### Token 影响
 
-每个初始目录包含七条目录摘要；仅在模型请求时加载技能正文。
+每个初始目录包含四条目录摘要；仅在模型请求时加载技能正文。
 
 #### KV Cache 影响
 

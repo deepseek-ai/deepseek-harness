@@ -975,7 +975,7 @@ interface ToolOutputMap {
     path: string;
     /** Absolute path of the temporary output file. */
     file: string;
-    format: "pdf" | "docx" | "odt" | "txt" | "xlsx" | "ods" | "csv" | "pptx" | "odp";
+    format: "xlsx" | "ods";
     bytes: number;
     /** Pages of a PDF output. */
     pageCount?: number;
@@ -993,7 +993,7 @@ interface ToolOutputMap {
       sheet?: string;
       range?: string;
       attachmentId: string;
-      mediaType: "image/png" | "image/jpeg" | "image/webp" | "image/gif";
+      mediaType: "image/png" | "image/jpeg" | "image/webp";
       bytes: number;
       width: number;
       height: number;

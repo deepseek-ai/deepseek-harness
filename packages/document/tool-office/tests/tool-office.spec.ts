@@ -209,6 +209,10 @@ describe('office schema', () => {
     expect(schemas[0]?.description).toBe('Render document pages, slides, or worksheet areas as images you can view.')
     expect(schemas[1]?.parameters).toMatchObject({ properties: { format: { enum: ['pdf', 'docx', 'odt', 'txt', 'xlsx', 'ods', 'csv', 'pptx', 'odp'] } } })
     expect(schemas[2]?.parameters).toMatchObject({ properties: { format: { enum: ['xlsx', 'ods'] } } })
+    const outputs = ctx.tools.definitions().map(definition => definition.output.schema)
+    expect(outputs[0]).toMatchObject({ properties: { images: { items: { properties: { mediaType: { enum: ['image/png', 'image/jpeg', 'image/webp'] } } } } } })
+    expect(outputs[1]).toMatchObject({ properties: { format: { enum: ['pdf', 'docx', 'odt', 'txt', 'xlsx', 'ods', 'csv', 'pptx', 'odp'] } } })
+    expect(outputs[2]).toMatchObject({ properties: { format: { enum: ['xlsx', 'ods'] } } })
     for (const definition of ctx.tools.definitions()) {
       expect(definition.output.schema).toMatchObject({ type: 'object', properties: { operation: { const: definition.name.replace('office_', '') } } })
       expect(definition.output.schema).not.toHaveProperty('oneOf')
@@ -393,6 +397,15 @@ describe('render', () => {
     const result = await office(ctx, { operation: 'render', input: 'deck.pptx' })
     if (result.isError) throw new Error('render failed')
     expect(result.value).toMatchObject({ images: [{ originalDimensions: { width: 4, height: 4 } }] })
+  })
+
+  it('refuses a rendered image that attachment storage reports as GIF', async () => {
+    const { ctx } = await setup()
+    vi.spyOn(ctx.get('attachments')!, 'saveImages').mockResolvedValueOnce([{
+      attachmentId: 'stored' as never, mediaType: 'image/gif', bytes: 1, width: 1, height: 1,
+    }])
+    expect(text(await office(ctx, { operation: 'render', input: 'deck.pptx' })))
+      .toContain(`cannot render "${join(dir, 'deck.pptx')}": the attachment service stored a rendered PNG as GIF`)
   })
 })
 

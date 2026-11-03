@@ -89,7 +89,8 @@ if (resource !== undefined) {
   Reflect.deleteProperty(process.env, 'DSH_PTC_RUNTIME_NODE')
   await import('@deepseek-ai/dsh-ptc-runtime-node/process')
 } else if (selection === undefined) {
-  // A user-set DSH_PRIMARY_RUNTIME, including the empty opt-out, takes precedence over the downloaded cache.
+  // A DSH_PRIMARY_RUNTIME set or inherited from the environment, including the empty opt-out, takes precedence over the
+  // downloaded cache.
   if (cache !== undefined && existsSync(join(cache, 'primary', 'complete'))) {
     process.env.DSH_PRIMARY_RUNTIME ??= join(cache, 'primary', 'primary-runtime')
   }

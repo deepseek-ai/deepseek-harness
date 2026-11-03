@@ -4,14 +4,15 @@
  */
 
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import { AttachmentId, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import type { OfficeConversionFormat } from '@deepseek-ai/dsh-office-kit'
+import { AttachmentId, type ImageAttachmentRef, type ImageMediaType } from '@deepseek-ai/dsh-attachment'
+import type { OfficeConversionFormat, OfficeRecalculationFormat } from '@deepseek-ai/dsh-office-kit'
 
 /**
  * One rendered image and the document location it shows. The attachment fields are those of the stored reference;
- * storage normalization can re-encode a rendered PNG, so `mediaType` names the stored encoding.
+ * storage normalization keeps a rendered PNG or re-encodes it as JPEG or WebP, so `mediaType` names the stored encoding.
  */
-export interface OfficeRenderedImage extends Pick<ImageAttachmentRef, 'mediaType' | 'bytes' | 'width' | 'height' | 'originalDimensions'> {
+export interface OfficeRenderedImage extends Pick<ImageAttachmentRef, 'bytes' | 'width' | 'height' | 'originalDimensions'> {
+  mediaType: Exclude<ImageMediaType, 'image/gif'>
   /** One-based page or slide; absent for worksheet areas. */
   page?: number
   /** Worksheet of a worksheet area. */
@@ -34,6 +35,12 @@ export interface OfficeRenderValue {
   missingFonts: string[]
 }
 
+/** Output format of each file-producing operation. */
+export interface OfficeFileFormats {
+  convert: OfficeConversionFormat
+  recalculate: OfficeRecalculationFormat
+}
+
 /** Canonical result of `convert` and `recalculate`. */
 export interface OfficeFileValue<Operation extends 'convert' | 'recalculate' = 'convert' | 'recalculate'> {
   operation: Operation
@@ -41,7 +48,7 @@ export interface OfficeFileValue<Operation extends 'convert' | 'recalculate' = '
   path: string
   /** Absolute path of the temporary output file in the filesystem execution world. */
   file: string
-  format: OfficeConversionFormat
+  format: OfficeFileFormats[Operation]
   bytes: number
   /** Pages of a PDF output. */
   pageCount?: number

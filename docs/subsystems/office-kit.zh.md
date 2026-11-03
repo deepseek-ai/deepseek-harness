@@ -8,7 +8,7 @@
 
 | 所有者 | 职责 |
 |---|---|
-| [office-kit](../../packages/document/office-kit/README.zh.md) | `ctx.officeKit`：共享 LibreOffice 渲染、转换与重算，有界准入、输出缓存和按 Session 划分的输出存储；`/locate`（契约由包 README 拥有）：调用方的 Kit 入口、从该安装定位的引擎清单，以及映射到 ASAR 解包目录的原生路径 |
+| [office-kit](../../packages/document/office-kit/README.zh.md) | `ctx.officeKit`：共享 LibreOffice 渲染、转换与重算，有界准入、输出缓存和按 Session 划分的输出存储；解析提供方自身的 Kit 入口、从该安装定位的引擎清单，以及映射到 ASAR 解包目录的原生路径 |
 | [tool-office](../../packages/document/tool-office/README.zh.md) | 按需激活的 `office_render`、`office_convert` 和 `office_recalculate` 工具：工具结果中的渲染图片，以及供 shell 复制的转换或重算文件 |
 | [Web bundle](../../packages/bundle/web-app/README.zh.md)与 [SDK bundle](../../packages/bundle/sdk-app/README.zh.md) | 由宿主消费者共享的单个可配置提供方及 `tool-office` |
 | [Office 预览 Client](../../packages/client/ui-sidebar-documentpreview/README.zh.md#office-preview) | Office 扩展名选择、PDF 复用和缺失字体提示 |

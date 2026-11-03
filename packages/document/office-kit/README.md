@@ -115,7 +115,7 @@ None; this service does not construct or modify model requests.
 - Conversion fidelity and installed native/WASM assets belong to `@deepseek-ai/libreoffice-kit`; this provider neither searches for system LibreOffice nor downloads an engine at runtime.
 - Queue waiting time is not bounded by `timeoutMs`, which starts only when kit conversion begins.
 - The provider locates only the Kit installation it resolves itself; it does not search other locations or install Kit or engines.
-- Rendered images and converted files are returned as bytes; this service has no workspace output path, so each consumer owns publication.
+- Rendered images are returned as bytes. Converted and recalculated files are stored in the provider's output directory, not in the workspace; the caller copies each file to its destination.
 - Mapping a native path does not verify that the unpacked copy exists. Kit rejects missing manifests or assets instead of treating them as an absent native package.
 
 <a id="dev-note"></a>
