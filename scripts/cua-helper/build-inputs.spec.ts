@@ -32,6 +32,14 @@ function fixture() {
   return { root, git, source: join(root, 'packages/experimental/cua-macos/native/Sources/Main.swift') }
 }
 
+function copyHelperScripts(root: string): void {
+  for (const file of ['scripts/cua-helper/build-inputs.ts', 'scripts/cua-helper/select-artifact.ts',
+    'apps/desktop/scripts/desktop-file-settings.mjs', 'apps/desktop/scripts/desktop-release-environment.mjs', 'scripts/release/process.ts']) {
+    mkdirSync(dirname(join(root, file)), { recursive: true })
+    copyFileSync(resolve(file), join(root, file))
+  }
+}
+
 it('keeps identical source bytes across product versions and unrelated package edits', () => {
   const f = fixture()
   const before = cuaHelperSourceDigest(f.root)
@@ -113,11 +121,7 @@ it('resolves the configured signing file without installing desktop dependencies
 
 it('loads fingerprinting and selection under plain Node with no node_modules directory', () => {
   const f = fixture()
-  for (const file of ['scripts/cua-helper/build-inputs.ts', 'scripts/cua-helper/select-artifact.ts',
-    'apps/desktop/scripts/desktop-file-settings.mjs', 'apps/desktop/scripts/desktop-release-environment.mjs', 'scripts/release/process.ts']) {
-    mkdirSync(dirname(join(f.root, file)), { recursive: true })
-    copyFileSync(resolve(file), join(f.root, file))
-  }
+  copyHelperScripts(f.root)
   const output = execFileSync(process.execPath, ['--input-type=module', '-e',
     "const a = await import('./scripts/cua-helper/select-artifact.ts'); const b = await import('./scripts/cua-helper/build-inputs.ts'); console.log(typeof a.selectCuaHelperArtifact, typeof b.cuaHelperSourceDigest)"],
   { cwd: f.root, encoding: 'utf8', timeout: 30_000, stdio: 'pipe' })
@@ -218,11 +222,7 @@ it.each(['test', 'production'])('computes the same %s build key through selectio
 it.skipIf(process.platform === 'win32').each(['match', 'miss', 'api failure', 'missing gh'])(
   'runs the plain-Node selector entry with %s and no node_modules directory', (scenario) => {
     const f = fixture()
-    for (const file of ['scripts/cua-helper/build-inputs.ts', 'scripts/cua-helper/select-artifact.ts',
-      'apps/desktop/scripts/desktop-file-settings.mjs', 'apps/desktop/scripts/desktop-release-environment.mjs', 'scripts/release/process.ts']) {
-      mkdirSync(dirname(join(f.root, file)), { recursive: true })
-      copyFileSync(resolve(file), join(f.root, file))
-    }
+    copyHelperScripts(f.root)
     const snapshot = producerSnapshot(f.root)
     const key = 'a'.repeat(64)
     const base = `repos/${repository}/actions/runs/123`
