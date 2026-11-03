@@ -9,7 +9,7 @@ const FILE_SETTINGS = ['DSH_DESKTOP_WINDOWS_CER_FILE', 'DSH_DESKTOP_WINDOWS_SIGN
  * Read an explicitly selected dotenv without exposing credential-bearing parser errors.
  * @param {string} path Selected file; relative file settings resolve beside it.
  * @param {(name: string) => boolean} accepts Whether this file may declare a setting.
- * @returns {NodeJS.ProcessEnv} Validated file settings.
+ * @returns {Record<string, string>} Validated file settings.
  */
 export function readDesktopPackageSettings(path, accepts) {
   let contents

@@ -84,7 +84,7 @@ jobs:
           dest: ${{ runner.temp }}/setup-pnpm-cua-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Install locked dependencies
         if: steps.retained.outputs.artifact-id == ''
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
       - name: Build and verify notarized applications
         if: steps.retained.outputs.artifact-id == ''
         env:

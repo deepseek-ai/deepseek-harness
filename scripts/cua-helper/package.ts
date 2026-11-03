@@ -104,4 +104,4 @@ async function main(): Promise<void> {
   journal.finish(true)
 }
 
-await main()
+if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.filename) await main()

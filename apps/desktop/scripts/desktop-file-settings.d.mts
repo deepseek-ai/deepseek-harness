@@ -2,7 +2,7 @@
 
 /**
  * Read an explicitly selected dotenv without exposing credential-bearing parser errors.
- * @param path - Selected file; relative credential paths resolve beside it.
+ * @param path - Selected file; relative file settings resolve beside it.
  * @param accepts - Whether this file may declare a setting.
  * @returns Validated file settings.
  */

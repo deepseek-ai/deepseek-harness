@@ -1,10 +1,11 @@
 /** Byte-level source reuse survives unrelated releases and invalidates changed build inputs. */
-import { execFileSync } from 'node:child_process'
-import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { delimiter, dirname, join, resolve } from 'node:path'
 import { expect, it, onTestFinished } from 'vitest'
-import { cuaHelperBuildKey, cuaHelperSourceDigest, readCuaSigningSettings } from './build-inputs.ts'
+import { loadDesktopPackageEnvironment } from '../../apps/desktop/scripts/desktop-package-environment.mjs'
+import { cuaHelperBuildKey, cuaHelperSourceDigest, cuaHelperSourceMatches, readCuaSigningSettings } from './build-inputs.ts'
 
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'cua-inputs-'))
@@ -19,6 +20,7 @@ function fixture() {
     'scripts/cua-helper/package.ts': 'build helper',
     'apps/desktop/scripts/notarize-macos.mjs': 'notarize helper',
     '.github/workflows/cua-helper-package.yml': 'build configuration',
+    '.github/workflows/release-publish.yml': 'publish configuration',
     'packages/client/unrelated/src/index.ts': 'unrelated feature',
   }
   for (const [path, bytes] of Object.entries(files)) {
@@ -121,3 +123,149 @@ it('loads fingerprinting and selection under plain Node with no node_modules dir
   { cwd: f.root, encoding: 'utf8', timeout: 30_000, stdio: 'pipe' })
   expect(output.trim()).toBe('function function')
 })
+
+const repository = 'deepseek-harness/deepseek-harness'
+
+function producerSnapshot(root: string) {
+  const git = (...args: string[]): string => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: 'pipe' })
+  git('add', '-A')
+  git('-c', `core.hooksPath=${join(root, 'no-hooks')}`, '-c', 'commit.gpgsign=false', '-c', 'user.name=Fixture',
+    '-c', 'user.email=fixture@example.test', 'commit', '--quiet', '-m', 'fixture')
+  const commit = git('rev-parse', 'HEAD').trim()
+  const tree = git('ls-tree', '-r', '-z', 'HEAD').split('\0').filter(Boolean).map((entry) => {
+    const [metadata, path] = entry.split('\t')
+    const [mode, type, sha] = (metadata ?? '').split(' ')
+    if (!path || !mode || !type || !sha) throw new Error('Invalid Git fixture tree entry')
+    return { path, mode, type, sha }
+  })
+  const response = { truncated: false, tree }
+  const responses: Record<string, unknown> = { [`repos/${repository}/git/trees/${commit}?recursive=1`]: response }
+  for (const entry of tree.filter(entry => entry.path === 'package.json')) {
+    const bytes = execFileSync('git', ['cat-file', 'blob', entry.sha], { cwd: root, stdio: 'pipe' })
+    responses[`repos/${repository}/git/blobs/${entry.sha}`] = { sha: entry.sha, encoding: 'base64', content: bytes.toString('base64') }
+  }
+  return { commit, response, responses, api: (path: string): unknown => {
+    if (!(path in responses)) throw new Error(`Unexpected GitHub fixture request ${path}`)
+    return responses[path]
+  } }
+}
+
+it('compares GitHub commit objects independently of artifact claims while allowing a root version bump', () => {
+  const f = fixture()
+  const previous = producerSnapshot(f.root)
+  expect(cuaHelperSourceMatches(f.root, repository, previous.commit, previous.api)).toBe(true)
+  writeFileSync(join(f.root, 'package.json'), JSON.stringify({ version: '2.0.0', packageManager: 'pnpm@11.28.5' }))
+  writeFileSync(join(f.root, 'packages/client/unrelated/src/index.ts'), 'another unrelated feature')
+  expect(cuaHelperSourceMatches(f.root, repository, previous.commit, previous.api)).toBe(true)
+  writeFileSync(f.source, 'changed native code')
+  expect(cuaHelperSourceMatches(f.root, repository, previous.commit, previous.api)).toBe(false)
+})
+
+it.each(['helper workflow', 'publish workflow', 'packaging script', 'manifest lifecycle', 'npm config', 'patch', 'tracked dependency', 'deleted file'])(
+  'rejects independent producer source proof after a changed %s', (change) => {
+    const f = fixture()
+    const previous = producerSnapshot(f.root)
+    const digest = cuaHelperSourceDigest(f.root)
+    if (change === 'helper workflow') writeFileSync(join(f.root, '.github/workflows/cua-helper-package.yml'), 'forged uploader')
+    if (change === 'publish workflow') writeFileSync(join(f.root, '.github/workflows/release-publish.yml'), 'forged caller')
+    if (change === 'packaging script') writeFileSync(join(f.root, 'scripts/cua-helper/package.ts'), 'forged metadata')
+    if (change === 'manifest lifecycle') writeFileSync(join(f.root, 'package.json'), JSON.stringify({
+      version: '1.0.0', packageManager: 'pnpm@11.28.5', scripts: { postinstall: 'unexpected code' },
+    }))
+    if (change === 'npm config') writeFileSync(join(f.root, '.npmrc'), 'node-options=--require=./unexpected.cjs')
+    if (change === 'patch') {
+      mkdirSync(join(f.root, 'patches'))
+      writeFileSync(join(f.root, 'patches/dependency.patch'), 'changed package code')
+    }
+    if (change === 'tracked dependency') {
+      mkdirSync(join(f.root, 'apps/desktop/node_modules/unexpected'), { recursive: true })
+      writeFileSync(join(f.root, 'apps/desktop/node_modules/unexpected/index.js'), 'unexpected dependency code')
+      f.git('add', '--force', 'apps/desktop/node_modules')
+    }
+    if (change === 'deleted file') rmSync(f.source)
+    f.git('add', '-A')
+    expect(cuaHelperSourceDigest(f.root)).not.toBe(digest)
+    expect(cuaHelperSourceMatches(f.root, repository, previous.commit, previous.api)).toBe(false)
+  },
+)
+
+it('stops source comparison when GitHub returns an incomplete tree', () => {
+  const f = fixture()
+  const previous = producerSnapshot(f.root)
+  previous.response.truncated = true
+  expect(() => cuaHelperSourceMatches(f.root, repository, previous.commit, previous.api)).toThrow('incomplete commit tree')
+})
+
+it.each(['test', 'production'])('computes the same %s build key through selection and packaging configuration readers', (preset) => {
+  const f = fixture()
+  const config = join(f.root, 'config')
+  mkdirSync(join(config, 'presets'), { recursive: true })
+  mkdirSync(join(config, 'secrets'))
+  writeFileSync(join(config, 'presets', `${preset}.env`), `DSH_DESKTOP_AUTO_UPDATE_ENV=${preset}\n`)
+  writeFileSync(join(config, 'secrets/signing.p12'), 'fixture certificate')
+  writeFileSync(join(config, 'secrets/macos-signing.env'), [
+    'CSC_LINK=./signing.p12', 'CSC_KEY_PASSWORD=fixture-password', 'DSH_DESKTOP_MACOS_TEAM_ID=ABCDEFGHIJ',
+    'DSH_DESKTOP_MACOS_SIGNING_IDENTITY=Fixture (ABCDEFGHIJ)',
+  ].join('\n'))
+  const environment = { DSH_PACKAGING_CONFIG_DIR: config, DSH_PACKAGING_PRESET: preset }
+  const source = cuaHelperSourceDigest(f.root)
+  const run = (_command: string, args: string[]): string => args.join(' ')
+  expect(cuaHelperBuildKey(source, readCuaSigningSettings(environment), run))
+    .toBe(cuaHelperBuildKey(source, loadDesktopPackageEnvironment('darwin', environment), run))
+})
+
+// The fake gh uses a POSIX executable shim; the production workflow runs on macOS.
+it.skipIf(process.platform === 'win32').each(['match', 'miss', 'api failure', 'missing gh'])(
+  'runs the plain-Node selector entry with %s and no node_modules directory', (scenario) => {
+    const f = fixture()
+    for (const file of ['scripts/cua-helper/build-inputs.ts', 'scripts/cua-helper/select-artifact.ts',
+      'apps/desktop/scripts/desktop-file-settings.mjs', 'apps/desktop/scripts/desktop-release-environment.mjs']) {
+      mkdirSync(dirname(join(f.root, file)), { recursive: true })
+      copyFileSync(resolve(file), join(f.root, file))
+    }
+    const snapshot = producerSnapshot(f.root)
+    const key = 'a'.repeat(64)
+    const base = `repos/${repository}/actions/runs/123`
+    Object.assign(snapshot.responses, {
+      [base]: { run_attempt: 2 },
+      [`${base}/attempts/2`]: { id: 123, run_attempt: 2, status: 'completed', conclusion: 'success',
+        event: 'workflow_dispatch', path: '.github/workflows/cua-helper-package.yml', head_sha: snapshot.commit,
+        repository: { full_name: repository }, head_repository: { full_name: repository } },
+      [`${base}/jobs?filter=all&per_page=100`]: [{ jobs: [{ name: 'package', conclusion: 'success', run_attempt: 2 }] }],
+      [`${base}/artifacts?per_page=100`]: [{ artifacts: scenario === 'match'
+        ? [{ id: 456, name: `cua-helper-123-2-${key}`, expired: false, size_in_bytes: 4096 }] : [] }],
+    })
+    const data = join(f.root, 'responses.json')
+    writeFileSync(data, JSON.stringify(snapshot.responses))
+    const bin = join(f.root, 'fake-bin')
+    mkdirSync(bin)
+    if (scenario !== 'missing gh') {
+      writeFileSync(join(bin, 'gh'), `#!/usr/bin/env node\nconst fs=require('node:fs');
+if(process.env.FIXTURE_API_FAILURE==='1') { console.error('fixture API failure'); process.exit(1); }
+const path=process.argv.at(-1); const data=JSON.parse(fs.readFileSync(process.env.FIXTURE_API_DATA,'utf8'));
+if(path.includes('/workflows/')) console.log(JSON.stringify([{workflow_runs:path.includes('cua-helper-package.yml')?[{id:123}]:[]}]));
+else if(path in data) console.log(JSON.stringify(data[path])); else {console.error('unexpected path '+path);process.exit(1);}
+`, { mode: 0o755 })
+    }
+    const output = join(f.root, 'outputs')
+    const summary = join(f.root, 'summary')
+    const result = spawnSync(process.execPath, [join(f.root, 'scripts/cua-helper/select-artifact.ts')], {
+      cwd: f.root, encoding: 'utf8', timeout: 60_000,
+      env: { ...process.env, NODE_OPTIONS: '', PATH: scenario === 'missing gh' ? bin : `${bin}${delimiter}${process.env.PATH ?? ''}`,
+        GITHUB_REPOSITORY: repository, GITHUB_OUTPUT: output, GITHUB_STEP_SUMMARY: summary, CUA_RUN_ID: '', CUA_BUILD_KEY: key,
+        FIXTURE_API_DATA: data, FIXTURE_API_FAILURE: scenario === 'api failure' ? '1' : '0' },
+    })
+    expect(result.error).toBeUndefined()
+    expect(result.signal).toBeNull()
+    if (scenario === 'api failure' || scenario === 'missing gh') {
+      expect(result.status).toBe(1)
+      expect(result.stderr).toContain(scenario === 'missing gh' ? 'install GitHub CLI (gh)' : 'check token permissions')
+      expect(existsSync(output)).toBe(false)
+      expect(existsSync(summary)).toBe(false)
+    } else {
+      expect(result.status, result.stderr).toBe(0)
+      expect(readFileSync(output, 'utf8')).toBe(scenario === 'match' ? 'artifact-id=456\nrun-id=123\n' : 'artifact-id=\nrun-id=\n')
+      expect(readFileSync(summary, 'utf8')).toContain(scenario === 'match' ? '跳过依赖安装' : '未找到')
+    }
+  },
+)

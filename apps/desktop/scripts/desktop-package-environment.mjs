@@ -100,7 +100,6 @@ export function loadDesktopPackageEnvironment(platform, environment = process.en
   }
 }
 
-
 function requireReadableFile(environment, name) {
   try {
     if (!statSync(environment[name]).isFile()) throw new Error('not a file')

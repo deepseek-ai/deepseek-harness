@@ -231,6 +231,8 @@ it('skips installation and signing on a helper match and exports the original pr
     || step.name === 'Install locked dependencies' || step.name === 'Build and verify notarized applications'
     || step.uses === 'actions/upload-artifact@v7.0.1')
   expect(expensive).toHaveLength(4)
+  expect(job.steps.find(step => step.name === 'Install locked dependencies')?.run)
+    .toBe('pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile')
   for (const step of expensive) {
     expect(job.steps.indexOf(select)).toBeLessThan(job.steps.indexOf(step))
     expect(evaluate(step.if!, { 'steps.retained.outputs.artifact-id': '456' })).toBe(false)
