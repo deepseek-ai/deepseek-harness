@@ -5,7 +5,7 @@
  */
 import type { WebSearchProvider, WebSearchRequest, WebSearchResult } from '@deepseek-ai/dsh-web'
 import {
-  dispatchDeepSeekWeb, hasDeepSeekWebCredential, invalidResponse, isRecord,
+  dispatchDeepSeekWeb, hasDeepSeekWebCredential, invalidResponse, isRecord, searchAborted,
   type DeepSeekWebAuth, type DeepSeekWebGuidance,
 } from './transport.ts'
 
@@ -17,6 +17,9 @@ export const DEEPSEEK_WEB_API_BASE_URL = 'https://api.deepseek.com/v1/tools'
 
 /** Default Search API result count, the service's own default. */
 export const DEEPSEEK_DEFAULT_COUNT = 10
+
+/** Default Search requests started per second, the service's account-wide 5 QPS limit. */
+export const DEEPSEEK_SEARCH_REQUESTS_PER_SECOND = 5
 
 /** Longest `ori_question` the Search API accepts, in characters. */
 const ORIGINAL_QUESTION_MAX_CHARS = 128
@@ -32,6 +35,8 @@ export interface DeepSeekSearchApiOptions extends DeepSeekWebAuth {
   baseURL: string
   /** Results requested per search, from 1 through 50; a smaller request bound wins. */
   count: number
+  /** Most Search requests this provider starts in any one-second window. */
+  requestsPerSecond: number
   /** Read the user question that triggered the search; undefined or blank sends none. */
   originalQuestion?: () => string | undefined
 }
@@ -67,6 +72,8 @@ export function mapSearchResponse(response: unknown): WebSearchResult {
  */
 export class DeepSeekSearchApiProvider implements WebSearchProvider {
   readonly id = DEEPSEEK_SEARCH_API_PROVIDER_ID
+  /** Monotonic start times (ms) of requests inside the current window, oldest first. */
+  private readonly starts: number[] = []
 
   /**
    * @param resolveOptions - the options for the NEXT search, read once at each
@@ -76,10 +83,11 @@ export class DeepSeekSearchApiProvider implements WebSearchProvider {
 
   available(): boolean {
     const options = this.resolveOptions()
-    return hasDeepSeekWebCredential(options) && URL.canParse(options.baseURL) && isPositiveInteger(options.count)
+    return hasDeepSeekWebCredential(options) && URL.canParse(options.baseURL)
+      && isPositiveInteger(options.count) && isPositiveInteger(options.requestsPerSecond)
   }
 
-  search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult> {
+  async search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult> {
     const options = this.resolveOptions()
     const question = boundedQuestion(options.originalQuestion?.())
     return dispatchDeepSeekWeb(options, {
@@ -91,9 +99,47 @@ export class DeepSeekSearchApiProvider implements WebSearchProvider {
         ...question === undefined ? {} : { ori_question: question },
       },
       decode: mapSearchResponse,
+      waitToSend: waitSignal => this.waitForRequestSlot(options.requestsPerSecond, waitSignal),
       guidance: { subject: 'Search', ...DEEPSEEK_WEB_API_GUIDANCE },
     }, signal)
   }
+
+  /**
+   * Wait until fewer than `limit` requests started within the last second,
+   * inclusive of its first millisecond, then record this start.
+   * @throws {@link WebError} `WEB_ABORTED` when `signal` aborts while waiting.
+   */
+  private async waitForRequestSlot(limit: number, signal?: AbortSignal): Promise<void> {
+    for (;;) {
+      if (signal?.aborted === true) throw searchAborted(signal)
+      const now = performance.now()
+      let oldest = this.starts[0]
+      while (oldest !== undefined && oldest < now - 1000) {
+        this.starts.shift()
+        oldest = this.starts[0]
+      }
+      if (oldest === undefined || this.starts.length < limit) {
+        this.starts.push(now)
+        return
+      }
+      await abortableDelay(oldest + 1001 - now, signal)
+    }
+  }
+}
+
+/** Resolve after `ms`, or early when `signal` aborts; the caller rechecks the signal. */
+function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const onAbort = () => {
+      clearTimeout(timer)
+      resolve()
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
 }
 
 /**
