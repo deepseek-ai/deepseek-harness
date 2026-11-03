@@ -73,7 +73,8 @@ it('does not replace the declaring Loader entry subtree or persist runtime tree 
     expect(mountedCompositionRows(mount.tree)[0]!.entryId).toBe('child')
     expect(entry.subtree).toBe(previousTree)
     expect(entry.subgroup).toBe(previousGroup)
-    mount.tree.write()
+    const row = mount.tree.root.data[0]!
+    mount.tree.commit({ id: 'child', group: mount.tree.root, legacy: { ...row }, options: row })
     entry.subtree = mount.tree
     entry.subgroup = mount.tree.root
     const other = createScope(owner, {})

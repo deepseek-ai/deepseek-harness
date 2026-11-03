@@ -5,14 +5,14 @@
 - id: web
   name: '@deepseek-ai/dsh-web'
   config:
-    searchProvider: deepseek-official
+    searchProvider: deepseek-search-api
     fetchProvider: deepseek-fetch-api
 
 - id: web-deepseek-api
   name: '@deepseek-ai/dsh-web-deepseek-api'
   config:
-    apiKey: snapshot-key
-    baseURL: http://127.0.0.1:43118/api/v1/tools
+    fetchApiKeyEnv: DSH_SNAPSHOT_FETCH_KEY
+    fetchBaseURL: http://127.0.0.1:43118/api/v1/tools
 
 - id: tool-web
   name: '@deepseek-ai/dsh-tool-web'
