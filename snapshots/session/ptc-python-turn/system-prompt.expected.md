@@ -589,7 +589,7 @@ class Tools(Protocol):
     async def update_goal(self, args: UpdateGoalArgs) -> UpdateGoalOutput1 | UpdateGoalOutput2:
         """Update the current goal."""
     async def wait_agent(self, args: WaitAgentArgs) -> WaitAgentOutput:
-        """Wait for input at your next model step; returns immediately if input is pending. Does not consume messages. When called from code, wait once, then finish execution so messages can be delivered. Do not loop."""
+        """Wait for input at your next step, including agent messages, completion notifications, and user steering. Returns immediately if input is pending. When called from code, wait once, then finish execution so messages can be delivered. Do not loop."""
     async def web_fetch(self, args: WebFetchArgs) -> WebFetchOutput:
         """Fetch the content of a specific HTTP(S) URL and return it decoded to text."""
     async def web_search(self, args: WebSearchArgs) -> WebSearchOutput:

@@ -272,7 +272,7 @@ interface ToolArgsMap {
     /** Required only with action blocked: the concrete condition that persisted across rounds and blocks progress. */
     blocked_reason?: string;
   } & Record<string, JsonValue>;
-  /** Wait for input at your next model step; returns immediately if input is pending. Does not consume messages. When called from code, wait once, then finish execution so messages can be delivered. Do not loop. */
+  /** Wait for input at your next step, including agent messages, completion notifications, and user steering. Returns immediately if input is pending. When called from code, wait once, then finish execution so messages can be delivered. Do not loop. */
   wait_agent: {
     /** Wait duration in milliseconds, from 10000 through 3600000. Defaults to 30000. */
     timeout_ms?: number;
