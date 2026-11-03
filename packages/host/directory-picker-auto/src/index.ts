@@ -76,7 +76,7 @@ export async function apply(ctx: Context): Promise<void> {
     linuxChooser: hasLinuxChooserBinary(process.env.PATH, canExecute),
   })
   await ctx.effect(async () => {
-    // Root-tree create: the Loader root is in-memory (write() is a no-op), so
+    // Root-tree create: the Loader root is in-memory (commit() is a no-op), so
     // the mounted rows can never be persisted back into a config file. The
     // backend lands first: the surface's browser half drives the capability
     // the backend registers.

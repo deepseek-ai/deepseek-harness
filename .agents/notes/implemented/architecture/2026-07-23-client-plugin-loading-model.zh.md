@@ -67,8 +67,8 @@ Host 会快照每个已构建插件入口 bundle，并把每个调度阶段的�
 1. 内核挂载 vendored Loader，在任何 entry 存在之前就把模块系统注入为 `internal`。顺序有讲究：`tree.import` 的裸 import 兜底分支在浏览器里绝不能跑到。
 2. 它统一创建每个 graph row。Import modules row 会返回记忆化的 bootstrap exports，其 `apply()` 读取该树的 `Loader.internal`，把同一个实例提供为 `ctx.modules`；需要该 service 的 row 会保持 PENDING 直至此时，因此 modules row 无需特殊创建位置。渲染组装是由 `dsh-client-ui-renderer` 提供的普通 host graph row；内核不追加组装伪 entry。
 3. Graph 顺序治理同步 factory 可用性；Cordis 激活与之独立，仍经服务等待推进。
-4. `settled` = 每个 entry 已创建 + `loader.await()` 完全停稳 + 一次全 ACTIVE 扫描。扫描列出每个 import 失败、FAILED 或 PENDING 的 fiber 及其缺失的服务。它存在的理由：cordis 的 inject 等待没有超时——这次扫描就是大声失败的兜底线。
-5. 不依赖框架的 loading 页经 `internal/status` 投影真实 fiber 状态。检查完成后，内核调用 `ctx.uiRenderer.mount(container)`，一次切换到真实 UI。
+4. `settled` = 每个 entry 已创建 + `loader.await()` 完全停稳 + 启动审计。审计列出每个 import 失败、FAILED 或 PENDING 的 fiber 及其激活错误或缺失的服务。它存在的理由：cordis 的 inject 等待没有超时。浏览器必需名单中的 entry 未激活会拒绝启动；其他未激活 entry 输出一条控制台警告（[启动策略](2026-09-09-consumer-owned-startup-strictness.zh.md)）。
+5. 不依赖框架的 loading 页经 `internal/status` 投影真实 fiber 状态。审计接受插件树后，内核调用 `ctx.uiRenderer.mount(container)`，一次切换到真实 UI。
 
 ### 动态图对账
 
@@ -104,7 +104,7 @@ Bootstrap 替换会在失效或卸载前被拒绝：模块系统保留其初始�
 
 Wire 两侧运行同一份治理实现；浏览器特有层只包含一套模块系统和一个重载插件。动态包只有一种产物形态，因此纯度检查覆盖全部动态包。Cordis 依赖、模块请求与启动档位都与其所有者——manifest——同住，负责组合的 app 只握名册。Host graph 校验与递归请求到达使同步 factory 依赖保持显式。浏览器原生 script 装载保留插件网络资源、生成 bundle 与 TypeScript/TSX 源码之间的标准映射，模块系统只保留两个可替换的载体钩子：负责 bundle 字节的 `loadBundle` 和负责包资源引用的 `resolveAsset`。
 
-接受的代价：vendored Loader 在浏览器里背着闲置机件（EntryTree 持久化是 no-op，分组／隔离未用）；开发期每次修改插件都要付一次 bundle 重建加 fiber 重挂；graph `inject` row 指导 factory 到达，但服务可用性仍是激活权威，因此不匹配会在 settled 扫描时浮出；静态 UI 库保留直接实体导出；每个 bundle 多出一份 sourcemap 产物，外部 script 失败也只能给出粗粒度 URL 诊断，不能像显式 fetch 那样报告 HTTP 状态。Host 为当前图及上一代启动图保留 bundle 快照与惰性响应计划。脚本和 map body 在首次 `GET` 后缓存，因此内存随 bundle 快照和已请求的响应 body 增长。每份已物化响应在其 URL 下保持固定；若上一代 map 在重建后才首次被请求，则会读取当前 map 文件。
+接受的代价：vendored Loader 在浏览器里背着闲置机件（EntryTree 持久化是 no-op，分组／隔离未用）；开发期每次修改插件都要付一次 bundle 重建加 fiber 重挂；graph `inject` row 指导 factory 到达，但服务可用性仍是激活权威，因此不匹配会在启动审计时浮出；静态 UI 库保留直接实体导出；每个 bundle 多出一份 sourcemap 产物，外部 script 失败也只能给出粗粒度 URL 诊断，不能像显式 fetch 那样报告 HTTP 状态。Host 为当前图及上一代启动图保留 bundle 快照与惰性响应计划。脚本和 map body 在首次 `GET` 后缓存，因此内存随 bundle 快照和已请求的响应 body 增长。每份已物化响应在其 URL 下保持固定；若上一代 map 在重建后才首次被请求，则会读取当前 map 文件。
 
 名册位于 web 组合包的配置树（`packages/bundle/web-app/cordis.patch.yml`）；`mountWebPlugins` 与 `CLIENT_PACKAGES` 常量已消失，重组一次部署等于替换 yml/overlay。Graph 组合器位于 `dsh-client-modules` node 半，由 parser 预载的 Client face 则自举浏览器模块表。Webserver 继续作为朴素路由注册插件；`/api/*` 绑定、浏览器认证、RPC envelope 与精确 Fetch 路由属于 Connection node 半，Remote 分发属于 API Gateway，开发期 bundle 监视与 SSE 通道属于 HMR node 半。
 

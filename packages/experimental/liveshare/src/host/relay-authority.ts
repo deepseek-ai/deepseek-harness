@@ -21,6 +21,7 @@ import type { ShareAccessSummary } from './owner-types.ts'
 import type { OwnerShare } from './owner-types.ts'
 import type { ViewerReadService } from './viewer-read.ts'
 import { isRecord, json } from './wire-json.ts'
+import { relayFetch, type RelayFetch } from './relay-fetch.ts'
 
 /** What one authoritative Relay read of a share produced. */
 export interface RelayAuthorityRead {
@@ -53,6 +54,8 @@ export function requesterStillAdmitted(
 export interface RelayAuthorityDeps {
   /** Shares this host publishes, which a frame and a read both update or verify. */
   readonly ownerShares: Map<string, OwnerShare>
+  /** Relay transport owned by this share host; absent callers use the module transport. */
+  readonly relayFetch?: RelayFetch
   /** Whether the host has been disposed. */
   readonly disposed: () => boolean
   /** Children this host created, whose grants a narrowed frame ends. */
@@ -144,11 +147,16 @@ export function admissionNarrowed(previous: ShareAccessStateFrame, next: ShareAc
   return previous.allowedSubjectIds.some(subject => !next.allowedSubjectIds.includes(subject))
 }
 
-async function relayRequests(defaultRelay: string, share: OwnerShare, signal?: AbortSignal): Promise<Response> {
+async function relayRequests(
+  defaultRelay: string,
+  share: OwnerShare,
+  signal: AbortSignal | undefined,
+  fetchRelay: RelayFetch,
+): Promise<Response> {
   const relayUrl = new URL(`${defaultRelay}/__liveshare/requests`)
   relayUrl.searchParams.set('shareId', share.shareId)
   try {
-    const response = await fetch(relayUrl, {
+    const response = await fetchRelay(relayUrl, {
       headers: { authorization: `Bearer ${share.gatewayToken}` },
       signal: signal === undefined ? AbortSignal.timeout(5_000) : AbortSignal.any([signal, AbortSignal.timeout(5_000)]),
     })
@@ -161,9 +169,14 @@ async function relayRequests(defaultRelay: string, share: OwnerShare, signal?: A
   }
 }
 
-async function relayAuthorityRead(defaultRelay: string, share: OwnerShare, signal?: AbortSignal): Promise<RelayAuthorityRead> {
+async function relayAuthorityRead(
+  defaultRelay: string,
+  share: OwnerShare,
+  signal: AbortSignal | undefined,
+  fetchRelay: RelayFetch,
+): Promise<RelayAuthorityRead> {
   try {
-    const response = await relayRequests(defaultRelay, share, signal)
+    const response = await relayRequests(defaultRelay, share, signal, fetchRelay)
     if (!response.ok) return { ok: false }
     const data: unknown = await response.json()
     if (!isRecord(data)) return { ok: false }
@@ -326,7 +339,7 @@ export function createRelayAuthority(deps: RelayAuthorityDeps): RelayAuthority {
   async function readRelayAuthority(share: OwnerShare, signal?: AbortSignal): Promise<RelayAuthorityRead> {
     signal?.throwIfAborted()
     const generation = generationOf(share.shareId)
-    const snapshot = await relayAuthorityRead(share.relay, share, signal)
+    const snapshot = await relayAuthorityRead(share.relay, share, signal, deps.relayFetch ?? relayFetch)
     signal?.throwIfAborted()
     const current = deps.ownerShares.get(share.shareId)
     if (deps.disposed() || generation !== generationOf(share.shareId) || current?.gatewayToken !== share.gatewayToken

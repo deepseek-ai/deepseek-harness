@@ -304,6 +304,7 @@ it('updates volatile children through Group and Include custom updates and saves
   expect(initial.title.get()).toBe('group-update')
   expect(group.options.config).toEqual([child('group-update')])
   await includeEntry.fiber!.update({ path: includePath, patches: [{ id: 'consumer', config: { title: 'include-update' } }] })
+  await include.flush()
   await ctx.loader.await()
   expect(initial.title.get()).toBe('include-update')
   expect(includeEntry.fiber).toBe(originalInclude)

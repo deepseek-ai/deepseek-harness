@@ -71,7 +71,9 @@ it.each([0, 1, 2])('retains Agent resources until all work exits with %i failed 
   expect(scopeDisposedBeforeWorkExit).toBe(false)
   expect(scopeDisposed).toBe(true)
   expect(abortHandled).toBe(1)
-  expect(projections.checkpoint(agent.session).inbox).toBeUndefined()
+  // The released inbox unit keeps this Session's last row; a Session created after the unload gets none.
+  expect(projections.checkpoint(agent.session)).toHaveProperty('inbox')
+  expect(projections.checkpoint(ctx.sessions.create())).not.toHaveProperty('inbox')
   expect(projections.checkpoint(agent.session).turnBoundary).toBeDefined()
   expect(ctx.agents.get(agent.id)).toBeUndefined()
   expect(ctx.sessions.get(agent.session.id)).toBeUndefined()

@@ -92,7 +92,7 @@ async function harness(mode: ViewerSessionMode = 'write') {
     sourceConfined: () => true,
     forks,
     workspaces: () => [],
-    declaredCapabilities: () => [],
+    offeredPlugins: () => [],
   }
   ctx.remoteAccess.registerPolicy('share-viewer', createViewerAccessPolicy(accessFacts))
   const shared = ctx.connection.createSharedFetchHandler('/api')

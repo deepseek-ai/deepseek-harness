@@ -110,7 +110,7 @@
 
 /* Compact one-line Workspace row after removing the session-count subtitle. */
 .projectRow {
-  height: 34px;
+  height: 32px;
   align-items: center;
   box-sizing: border-box;
 }

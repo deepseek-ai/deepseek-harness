@@ -178,6 +178,7 @@ const processBoundTests = [
   'packages/llm/llm-pi-ai/tests/adapter.spec.ts',
   'packages/boot/app-boot/tests/app-boot.spec.ts',
   'packages/workflow/workflow-ptc/tests/workflow-ptc.spec.ts',
+  'packages/ptc-runtime/ptc-runtime-node/tests/imports.spec.ts',
 ]
 
 // Claude Code's test-kit module names, served by the mods bridge's test support so the example mods' tests import them unchanged.
@@ -236,7 +237,8 @@ export default defineConfig({
         resolve: { alias: testingAliases },
         test: {
           name: 'process-bound',
-          execArgv: vitestExecArgv,
+          // Runner import tests require VM modules; the missing-flag test stays in thread-safe.
+          execArgv: [...vitestExecArgv, '--experimental-vm-modules'],
           pool: 'forks',
           ...laneTestBudget,
           setupFiles: [
@@ -406,11 +408,9 @@ export default defineConfig({
         // by decision: its correctness signal is its uninstrumented suite and
         // the packer's end-to-end image spec.
         'packages/experimental/webworker-runtime/src/**/*.ts',
-        // Projection/command round: executor lifecycle branches and the
-        // registry's drive tails need the same maturing lanes. TODO(gui):
-        // cover and remove with the client test lane above.
+        // Command executor lifecycle branches need the same maturing lanes.
+        // TODO(gui): cover and remove with the client test lane above.
         'packages/interaction/commands/src/index.ts',
-        'packages/session/session-projection/src/index.ts',
         ...windowsUnsupportedCoveragePackages.map(path => `${path}/src/**/*.ts`),
         ...windowsOnlyCoverageExclusions,
         ...windowsRunnerCoverageExclusions,

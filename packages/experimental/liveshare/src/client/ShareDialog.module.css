@@ -92,6 +92,7 @@
 
 .rowLabel { color: var(--dsw-alias-label-primary); flex-shrink: 0; white-space: nowrap; }
 .hint { margin: 0; color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.warning { margin: 0; color: var(--dsw-alias-label-primary); font-size: 12px; }
 
 
 .identityName { color: var(--dsw-alias-label-primary); }
@@ -135,6 +136,51 @@
 }
 
 .capabilities legend { padding: 0 4px; }
+
+.permissions { display: flex; flex-direction: column; gap: 14px; }
+.permissionSections { display: flex; flex-direction: column; gap: 16px; }
+.permissionBlock { display: flex; flex-direction: column; gap: 6px; }
+.methodItem { display: flex; flex-direction: column; gap: 2px; }
+.methodDescription {
+  display: -webkit-box;
+  margin: 0 0 4px 24px;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.permissionBlock + .permissionBlock {
+  padding-top: 14px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+/* Bounds the installed-plugin list so a large profile cannot push the dialog past the viewport. */
+.capabilityList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.capabilityPlugin {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* A partial selection can itself be long; keep its checkboxes inside the plugin row's scroll area. */
+.methodList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding-left: 8px;
+}
 
 .linkRow {
   display: flex;
@@ -348,4 +394,8 @@
 .requestItem time {
   grid-column: 1 / -1;
   color: var(--dsw-alias-label-tertiary);
+}
+
+.methodDescription:empty {
+  display: none;
 }

@@ -8,7 +8,6 @@
     "rewriteRelativeImportExtensions": false
   },
   "include": [
-    "apps/web/tests/credential-editor.e2e.ts",
     "apps/web/tests/sidebar-drawer.e2e.ts",
     "apps/web/tests/creation-recommendations.e2e.ts",
     "apps/web/tests/plugin-recommendations.e2e.ts",

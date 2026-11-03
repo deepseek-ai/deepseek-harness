@@ -15,13 +15,15 @@ import type {} from '@deepseek-ai/dsh-agent'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-web'
 import { DeepSeekFetchApiProvider } from './fetch.ts'
-import { DEEPSEEK_DEFAULT_COUNT, DEEPSEEK_WEB_API_BASE_URL, DeepSeekSearchApiProvider } from './search.ts'
+import {
+  DEEPSEEK_DEFAULT_COUNT, DEEPSEEK_SEARCH_REQUESTS_PER_SECOND, DEEPSEEK_WEB_API_BASE_URL, DeepSeekSearchApiProvider,
+} from './search.ts'
 import { deepSeekWebAuth, deepSeekWebCredentialReady } from './transport.ts'
 
 export { DEEPSEEK_FETCH_API_PROVIDER_ID, DeepSeekFetchApiProvider } from './fetch.ts'
 export type { DeepSeekFetchApiOptions } from './fetch.ts'
 export {
-  DEEPSEEK_DEFAULT_COUNT, DEEPSEEK_SEARCH_API_PROVIDER_ID, DEEPSEEK_WEB_API_BASE_URL,
+  DEEPSEEK_DEFAULT_COUNT, DEEPSEEK_SEARCH_API_PROVIDER_ID, DEEPSEEK_SEARCH_REQUESTS_PER_SECOND, DEEPSEEK_WEB_API_BASE_URL,
   DeepSeekSearchApiProvider, mapSearchResponse,
 } from './search.ts'
 export type { DeepSeekSearchApiOptions } from './search.ts'
@@ -42,6 +44,12 @@ export interface Config {
   baseURL: Volatile<string>
   /** Search API results per search, from 1 through 50; a smaller request bound wins. Defaults to 10. */
   count: Volatile<number>
+  /**
+   * Most Search requests this plugin instance sends in any one-second window; later searches wait,
+   * and the wait counts against the caller's timeout. Other processes and clients on the same account
+   * share the account limit without coordination. Defaults to 5.
+   */
+  searchRequestsPerSecond: Volatile<number>
   /** Send the triggering user question, bounded to 128 characters, as `ori_question`. Defaults to true. */
   sendOriginalQuestion: Volatile<boolean>
 }
@@ -51,6 +59,7 @@ export const Config = z.object({
   apiKeyEnv: z.string().role('credential-ref').default('DEEPSEEK_API_KEY').volatile(),
   baseURL: z.string().default(DEEPSEEK_WEB_API_BASE_URL).volatile(),
   count: z.number().step(1).min(1).max(50).default(DEEPSEEK_DEFAULT_COUNT).volatile(),
+  searchRequestsPerSecond: z.number().step(1).min(1).default(DEEPSEEK_SEARCH_REQUESTS_PER_SECOND).volatile(),
   sendOriginalQuestion: z.boolean().default(true).volatile(),
 })
 
@@ -82,6 +91,7 @@ export function apply(ctx: Context, config: Config): void {
     ...auth(),
     baseURL: config.baseURL.get(),
     count: config.count.get(),
+    requestsPerSecond: config.searchRequestsPerSecond.get(),
     ...config.sendOriginalQuestion.get() ? {
       originalQuestion: () => latestUserQuestion(ctx.get('agents')?.currentInitiator()?.session),
     } : {},

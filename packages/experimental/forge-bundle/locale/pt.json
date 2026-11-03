@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "Solicitações de alteração e árvores de trabalho",
-    "description": "Acompanhe as solicitações de alteração de cada sessão com suas verificações e revisões e inicie novas sessões em uma árvore de trabalho Git; usa a CLI gh para o GitHub."
+    "description": "Acompanhe os pull requests do GitHub vinculados à conversa: consulte verificações e revisões, compare código e envie comentários ao agente. Revise alterações locais e isole cada tarefa em uma árvore de trabalho separada. Os recursos do GitHub exigem a CLI gh instalada e uma sessão iniciada no host.",
+    "detail": "docs/DETAIL.pt.md"
   }
 }

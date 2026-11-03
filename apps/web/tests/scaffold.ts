@@ -59,6 +59,7 @@ import {
   type NormalizeContext,
 } from '@deepseek-ai/dsh-session-snapshot'
 import type { Profile, ProfileContext } from '@deepseek-ai/dsh-app-boot'
+import type { PresetDefinition } from '@deepseek-ai/dsh-agent-preset-registry'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import { LlmAdapter } from '@deepseek-ai/dsh-llm'
 import type {
@@ -712,6 +713,20 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     ],
     { id: 'llm-deepseek', disabled: mode !== 'record' && !maskDeepSeekCredential },
   ]
+
+  // Recorded standard sessions pin the optional patch tool in their request headers.
+  if (options.replayFixture !== undefined || options.compareReplaySession === true) {
+    const config = composedRows.find(row => row.id === 'preset-standard')!.config as PresetDefinition
+    overlayPatches.push({
+      id: 'preset-standard',
+      config: {
+        ...config,
+        plugins: config.plugins.map(plugin => plugin.id === 'tool-fs'
+          ? { ...plugin, config: { ...plugin.config, applyPatch: true } }
+          : plugin),
+      },
+    })
+  }
 
   // Live fields use a shared deployment layer; process-specific ports and roots stay in CLI overlays.
   const formEntries = new Set(['agent-default-model', 'agent-preset-registry', 'llm-deepseek', 'llm-pi-ai',
@@ -1761,10 +1776,12 @@ export async function assertFixtureInventory(dir: string, expected: string[]): P
 
 /**
  * Console tripwires: reconnect/gap-repair self-healing or a pageerror must
- * fail the scenario, not mask a dead wire behind eventual consistency.
+ * fail the scenario, not mask a dead wire behind eventual consistency. A boot
+ * audit warning fails it too: the product boot tolerates inactive optional
+ * entries, but every e2e composition must activate completely.
  */
 export interface WebConsoleTripwire {
-  /** Console warnings matching reconnect/gap-repair/discontinuity copy. */
+  /** Console warnings matching reconnect/gap-repair/discontinuity copy or the boot audit's inactive-entry warning. */
   warnings: string[]
   /** Uncaught page errors. */
   pageErrors: string[]
@@ -1780,7 +1797,7 @@ export function watchConsole(page: Page): WebConsoleTripwire {
   const pageErrors: string[] = []
   page.on('console', (message) => {
     const text = message.text()
-    if (/connection lost|gap repair|discontinuous/i.test(text)) warnings.push(text)
+    if (/connection lost|gap repair|discontinuous|web boot: warning/i.test(text)) warnings.push(text)
   })
   page.on('pageerror', (error) => { pageErrors.push(String(error)) })
   return { warnings, pageErrors }

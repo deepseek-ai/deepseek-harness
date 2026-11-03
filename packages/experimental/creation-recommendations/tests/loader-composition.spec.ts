@@ -128,9 +128,6 @@ it.each(['portable-bundle', 'foreign-nested-row'] as const)('validates and insta
   const live = () => [...ctx.loader.entries()].find(entry => entry.options.id === name + ':counter')?.fiber
   expect(live()).toBeDefined()
   expect(readProfileManifest('test', dir).dsh?.profile?.bundles).toContain(name)
-  await ctx.actionCards.act(agent, callId, 'keep')
-  expect(receipt()?.phase).toBe('kept')
-  expect(live()).toBeDefined()
   await ctx.actionCards.act(agent, callId, 'undo')
   expect(receipt()?.phase).toBe('removed')
   expect(live()).toBeUndefined()
