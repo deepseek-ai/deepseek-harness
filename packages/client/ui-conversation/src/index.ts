@@ -24,9 +24,6 @@ export const Config = z.object({
   [BUSY_ENTER_FIELD]: ConversationSettingsFields[BUSY_ENTER_FIELD].volatile(),
 })
 
-/** Settings integration is optional and does not block activation. */
-export const inject = []
-
 /** Register browser conversation preferences.
  * @param ctx Plugin context used for optional settings presentation.
  */

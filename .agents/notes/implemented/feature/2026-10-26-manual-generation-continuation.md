@@ -10,7 +10,7 @@ Users need another request after a model failure without inserting an artificial
 
 ## Decision
 
-The play action submits `content: []` through the existing Session prompt API. The API assigns `source.kind: 'retry'`; unchanged AgentLoop admission records an empty `user/message` and opens a normally balanced new turn. Chat omits the empty retry node while the log retains the input. The original failed turn remains closed.
+The play action submits `content: []` through the existing Session prompt API. The API assigns `source.kind: 'retry'`; unchanged AgentLoop admission records an empty `user/message` and opens a normally balanced new turn. Chat presents a compact continuation-request receipt while the log retains the empty input. The original failed turn remains closed.
 
 The Session API owns the fixed-size `conversationContinuation` projection and shares its value with the browser. Admission requires an eligible failure, true idle ownership, and no pending human input. An appended empty retry message admits the new turn, preserving eligibility if its request also fails.
 

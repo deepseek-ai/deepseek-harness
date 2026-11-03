@@ -626,7 +626,7 @@ describe('built-in conversation node Definitions', () => {
     },
   )
 
-  it.each(['replay', 'live', 'prepend'] as const)('hides empty retry bubbles through %s while retaining other input', (mode) => {
+  it.each(['replay', 'live', 'prepend'] as const)('presents empty retry receipts through %s while retaining other input', (mode) => {
     const retry = { id: 'empty-retry', role: 'user', content: [], source: { kind: 'retry' } }
     const before = [
       at(1, 'agent/inbox/spliced', { target: 'next-turn', start: 0, inserted: [retry] }),
@@ -640,7 +640,9 @@ describe('built-in conversation node Definitions', () => {
     if (mode === 'prepend') value.prepend(before, false)
     value.flush()
     const current = snapshot(value)
-    expect(current.nodes.values().filter(candidate => candidate.anchorSeq === 5)).toEqual([])
+    const receipt = node(current, 'turn-trigger')
+    expect(receipt).toMatchObject({ anchorSeq: 5, groupTree: 'input', data: { content: [], source: { kind: 'retry' } } })
+    expect(current.order).toContain(receipt?.key)
     expect(node(current, 'unknown')).toBeUndefined()
 
     value.append(at(6, 'user/message', { ...retry, id: 'retry-with-content',

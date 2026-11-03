@@ -98,7 +98,7 @@ Chat 在 `MarkdownDelegateProvider.getTriggerProps` 接入处适配 Markdown 目
 <a id="turn-process-folding"></a>
 ## 轮次过程折叠
 
-带 `source.kind: 'retry'` 的空 `user/message` 记录保留在 Session 历史中，Chat 不生成对应展示节点。普通空用户消息与包含内容的重试消息保持正常展示。
+带 `source.kind: 'retry'` 的空 `user/message` 记录保留在 Session 历史中，Chat 显示轻量的继续请求记录，不生成用户气泡。普通空用户消息与包含内容的重试消息保持正常展示。
 
 正常在线时，本地 transcript 与 steering 回显在 Inbox 接受与领取期间保持挂载，直到持久消息到达，不会重复触发跟随底部。跨客户端的待处理 steering 遵循 Inbox 顺序，在匹配位置使用本地回显。已入档的本地 steering 还会排除匹配的旧 Inbox 行，直到领取投影到达；没有本地提交身份的 steering 仍按 Inbox 投影显示。重连后，Host 消息替代已有接收回执的本地回显；已领取但尚未入档时，气泡可能短暂消失。
 

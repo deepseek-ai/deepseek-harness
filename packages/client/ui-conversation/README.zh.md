@@ -197,7 +197,7 @@ selector 必须是 owner currency 的纯函数。非 null 返回值作为 `match
 
 #### 模型看到什么
 
-播放按钮通过现有 Session prompt API 提交 `content: []`。普通 Loop 准入记录带 `source.kind: 'retry'` 的空 `user/message`。Chat 隐藏空重试气泡。适配器按普通消息序列化处理；该操作不添加本地化或隐藏的继续文本。待注入上下文遵循普通准入流程。
+播放按钮通过现有 Session prompt API 提交 `content: []`。普通 Loop 准入记录带 `source.kind: 'retry'` 的空 `user/message`。Chat 将空重试消息显示为轻量的继续请求记录。适配器按普通消息序列化处理；该操作不添加本地化或隐藏的继续文本。待注入上下文遵循普通准入流程。
 
 #### Token 影响
 

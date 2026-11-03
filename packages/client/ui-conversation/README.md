@@ -197,7 +197,7 @@ Session title context gestures use the shared [context menu](../ui-context-menu/
 
 #### What the model sees
 
-The play action submits `content: []` through the existing Session prompt API. Ordinary Loop admission records an empty `user/message` with `source.kind: 'retry'`. Chat hides the empty retry bubble. The adapter applies its ordinary message serialization; the action adds no localized or hidden continuation text. Pending injected context follows ordinary admission.
+The play action submits `content: []` through the existing Session prompt API. Ordinary Loop admission records an empty `user/message` with `source.kind: 'retry'`. Chat presents the empty retry as a compact continuation-request receipt. The adapter applies its ordinary message serialization; the action adds no localized or hidden continuation text. Pending injected context follows ordinary admission.
 
 #### Token effect
 
