@@ -12,7 +12,8 @@ export const CUA_APPLICATION = 'DSH Computer Use.app'
 export const CUA_MANIFEST = 'cua-helper.json'
 const Digest = z.string().regex(/^[a-f0-9]{64}$/u)
 const Manifest = z.object({
-  schemaVersion: z.literal(1), version: z.string().min(1), commit: z.string().regex(/^[a-f0-9]{40}$/u),
+  schemaVersion: z.literal(2), sourceDigest: Digest, buildKey: Digest,
+  version: z.string().min(1), commit: z.string().regex(/^[a-f0-9]{40}$/u),
   teamId: z.string().regex(/^[A-Z0-9]{10}$/u),
   applications: z.array(z.object({ architecture: z.enum(CUA_ARCHITECTURES), bundle: Digest }).strict()).length(2),
 }).strict()
@@ -90,12 +91,13 @@ export function sealCuaApplication(directory: string, application: string): stri
 /**
  * Verify the producer record and every final application before copying or packing.
  * @param root - Extracted helper artifact containing native/bin and cua-helper.json.
- * @param expected - Source commit and product version of the consuming checkout.
+ * @param expected - Source digest and, on the Mac-to-pack transfer, the selected build key.
  * @returns Validated producer metadata.
  */
-export function verifyCuaHelperPayload(root: string, expected: { version: string; commit: string }): CuaHelperManifest {
+export function verifyCuaHelperPayload(root: string, expected: { sourceDigest: string; buildKey?: string }): CuaHelperManifest {
   const manifest = Manifest.parse(JSON.parse(readFileSync(join(root, CUA_MANIFEST), 'utf8')))
-  if (manifest.version !== expected.version || manifest.commit !== expected.commit) throw new Error('CUA artifact does not match the release source and version')
+  if (manifest.sourceDigest !== expected.sourceDigest) throw new Error('CUA artifact does not match the current helper source bytes')
+  if (expected.buildKey !== undefined && manifest.buildKey !== expected.buildKey) throw new Error('CUA artifact does not match the selected build configuration')
   if (new Set(manifest.applications.map(entry => entry.architecture)).size !== 2) throw new Error('CUA artifact must contain arm64 and x64')
   const bin = join(root, 'native/bin')
   if (readdirSync(bin).sort().join(',') !== 'darwin-arm64,darwin-x64') throw new Error('CUA artifact has unexpected architecture directories')
@@ -112,7 +114,7 @@ export function verifyCuaHelperPayload(root: string, expected: { version: string
  * @param packageRoot - Provider package to receive native/bin.
  * @param expected - Source identity required by the release.
  */
-export function stageCuaHelperPayload(root: string, packageRoot: string, expected: { version: string; commit: string }): void {
+export function stageCuaHelperPayload(root: string, packageRoot: string, expected: { sourceDigest: string; buildKey?: string }): void {
   verifyCuaHelperPayload(root, expected)
   const destination = join(packageRoot, 'native/bin')
   if (existsSync(destination)) throw new Error('CUA staging requires an empty native/bin; use a clean release checkout')

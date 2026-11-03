@@ -11,6 +11,7 @@ const selfhosted = ['self-hosted', 'linux', 'x64', 'vm-backup']
 const hosted = 'ubuntu-24.04'
 
 interface Step {
+  env?: Record<string, string>
   name?: string
   uses?: string
   run?: string
@@ -30,6 +31,7 @@ interface Workflow {
     with?: Record<string, unknown>
     needs?: string
     permissions?: Record<string, string>
+    outputs?: Record<string, string>
   }>
 }
 
@@ -42,7 +44,7 @@ function workflow(file: string): Workflow {
 // Missing context properties use the Actions empty-string value.
 function evaluate(expression: string, context: Record<string, string | boolean>): unknown {
   const source = expression.trim().replace(/^\$\{\{|\}\}$/g, '')
-    .replace(/\b(?:github|vars|runner|inputs|needs)(?:\.[a-zA-Z_][a-zA-Z_0-9-]*)+/g,
+    .replace(/\b(?:github|vars|runner|inputs|needs|steps)(?:\.[a-zA-Z_][a-zA-Z_0-9-]*)+/g,
       key => JSON.stringify(context[key] ?? ''))
   return runInNewContext(source, {
     fromJSON: JSON.parse, startsWith: (value: string, prefix: string) => value.startsWith(prefix),
@@ -180,75 +182,70 @@ it('keeps vendor publication manual and entirely hosted', () => {
   expect(Object.keys(publish.on)).toEqual(['workflow_dispatch'])
   for (const job of Object.values(publish.jobs)) expect(job['runs-on']).toBe(hosted)
 })
-it('keeps DSH publication manual with hosted npm jobs and an explicit signed-helper producer', () => {
+it('keeps DSH publication manual and delegates all helper selections to the Mac workflow', () => {
   const publish = workflow('release-publish.yml')
   expect(Object.keys(publish.on)).toEqual(['workflow_dispatch'])
+  const helper = publish.jobs['cua-helper']!
+  expect(helper).toEqual({
+    if: "startsWith(github.ref, 'refs/tags/dsh-v') || inputs.skip-tag-check",
+    uses: './.github/workflows/cua-helper-package.yml',
+    with: { source_ref: '${{ github.ref }}', preset: 'production', cua_run_id: '${{ inputs.cua_run_id }}' },
+  })
   for (const [name, job] of Object.entries(publish.jobs)) {
-    if (name === 'cua-helper') {
-      expect(job).toEqual({
-        if: "(startsWith(github.ref, 'refs/tags/dsh-v') || inputs.skip-tag-check) && inputs.cua_run_id == '' && inputs.cua_run_attempt == ''",
-        uses: './.github/workflows/cua-helper-package.yml',
-        with: { source_ref: '${{ github.ref }}', preset: 'production' },
-      })
-    } else expect(job['runs-on']).toBe(hosted)
+    if (name !== 'cua-helper') expect(job['runs-on']).toBe(hosted)
   }
+  expect(JSON.stringify(publish)).not.toContain('cua_run_attempt')
+  expect(publish.jobs['pack']!.needs).toBe('cua-helper')
+  expect(publish.jobs['pack']!.if).toBeUndefined()
 })
+
 it.each([
-  ['refs/tags/dsh-v0.2.1-rc.4', false, '', '', true],
-  ['refs/heads/master', false, '', '', false],
-  ['refs/heads/master', true, '', '', true],
-  ['refs/tags/dsh-v0.2.1-rc.4', false, '123', '', false],
-  ['refs/heads/master', true, '123', '2', false],
-  ['refs/tags/dsh-v0.2.1-rc.4', false, '', '2', false],
-] as const)('selects the helper producer for ref %s, skip=%s, run=%s, attempt=%s', (ref, skip, runId, attempt, expected) => {
+  ['refs/tags/dsh-v0.2.1-rc.4', false, true],
+  ['refs/heads/master', false, false],
+  ['refs/heads/master', true, true],
+] as const)('gates helper selection for ref %s, skip=%s', (ref, skip, expected) => {
   const expression = workflow('release-publish.yml').jobs['cua-helper']!.if!
-  expect(evaluate(expression, { 'github.ref': ref, 'inputs.skip-tag-check': skip,
-    'inputs.cua_run_id': runId, 'inputs.cua_run_attempt': attempt })).toBe(expected)
+  expect(evaluate(expression, { 'github.ref': ref, 'inputs.skip-tag-check': skip })).toBe(expected)
 })
 
-it.each([
-  ['success', '', '', false, true],
-  ['failure', '', '', false, false],
-  ['failure', '123', '', false, false],
-  ['cancelled', '', '', false, false],
-  ['skipped', '', '', false, false],
-  ['skipped', '123', '', false, true],
-  ['skipped', '123', '2', false, true],
-  ['skipped', '', '2', false, true],
-  ['skipped', '123', '2', true, false],
-] as const)('gates npm packing with helper=%s, run=%s, attempt=%s, cancelled=%s', (result, runId, attempt, cancelled, expected) => {
-  const pack = workflow('release-publish.yml').jobs['pack']!
-  expect(pack.needs).toBe('cua-helper')
-  expect(evaluate(pack.if!, { 'needs.cua-helper.result': result,
-    'inputs.cua_run_id': runId, 'inputs.cua_run_attempt': attempt, cancelled })).toBe(expected)
+it('skips installation and signing on a helper match and exports the original producer identifiers', () => {
+  const helper = workflow('cua-helper-package.yml')
+  expect(helper.permissions).toEqual({ contents: 'read', actions: 'read' })
+  const job = helper.jobs['package']!
+  const select = job.steps.find(step => step.name === 'Find reusable CUA helper')!
+  expect(select.run).toBe('node scripts/cua-helper/select-artifact.ts')
+  const expensive = job.steps.filter(step => step.uses === 'pnpm/action-setup@v5.0.0'
+    || step.name === 'Install locked dependencies' || step.name === 'Build and verify notarized applications'
+    || step.uses === 'actions/upload-artifact@v7.0.1')
+  expect(expensive).toHaveLength(4)
+  for (const step of expensive) {
+    expect(job.steps.indexOf(select)).toBeLessThan(job.steps.indexOf(step))
+    expect(evaluate(step.if!, { 'steps.retained.outputs.artifact-id': '456' })).toBe(false)
+    expect(evaluate(step.if!, { 'steps.retained.outputs.artifact-id': '' })).toBe(true)
+  }
+  expect(job.outputs).toMatchObject({
+    'artifact-id': '${{ steps.retained.outputs.artifact-id || steps.upload.outputs.artifact-id }}',
+    'run-id': '${{ steps.retained.outputs.run-id || github.run_id }}',
+    'build-key': '${{ steps.retained.outputs.build-key }}',
+  })
 })
 
-it('validates retained attempts before downloading exactly one artifact with read-only Actions access', () => {
+it('downloads the selected producer artifact and verifies its build key before packing', () => {
   const publish = workflow('release-publish.yml')
-  expect(publish.permissions).toEqual({ contents: 'read' })
+  expect(publish.permissions).toEqual({ contents: 'read', actions: 'read' })
   const pack = publish.jobs['pack']!
   expect(pack.permissions).toEqual({ contents: 'read', actions: 'read' })
-  const select = pack.steps.find(step => step.name === 'Select retained CUA helper')!
-  const retained = pack.steps.find(step => step.name === 'Download retained CUA helper')!
-  const fresh = pack.steps.find(step => step.name === 'Download freshly built CUA helper')!
-  expect(select.run).toBe('pnpm exec tsx scripts/cua-helper/select-artifact.ts')
-  expect(pack.steps.indexOf(select)).toBeLessThan(pack.steps.indexOf(retained))
-  expect(retained).toMatchObject({ uses: 'actions/download-artifact@v8.0.1', with: {
-    'artifact-ids': '${{ steps.retained-cua.outputs.artifact-id }}', 'run-id': '${{ inputs.cua_run_id }}',
+  const download = pack.steps.find(step => step.name === 'Download selected CUA helper')!
+  expect(download).toMatchObject({ uses: 'actions/download-artifact@v8.0.1', with: {
+    'artifact-ids': '${{ needs.cua-helper.outputs.artifact-id }}', 'run-id': '${{ needs.cua-helper.outputs.run-id }}',
     'github-token': '${{ github.token }}', path: 'dist/cua-helper',
   } })
-  expect(retained.with?.name).toBeUndefined()
-  expect(fresh.with).toEqual({ name: '${{ needs.cua-helper.outputs.artifact }}', path: 'dist/cua-helper' })
-  for (const [runId, attempt, reuse] of [['', '', false], ['123', '', true], ['123', '2', true], ['', '2', true]] as const) {
-    const context = { 'inputs.cua_run_id': runId, 'inputs.cua_run_attempt': attempt }
-    expect(evaluate(select.if!, context)).toBe(reuse)
-    expect(evaluate(retained.if!, context)).toBe(reuse)
-    expect(evaluate(fresh.if!, context)).toBe(!reuse)
-  }
+  expect(download.if).toBeUndefined()
+  expect(download.with?.name).toBeUndefined()
   const stage = pack.steps.find(step => step.name === 'Stage verified native helper applications')!
   expect(stage.if).toBeUndefined()
+  expect(stage.env).toEqual({ CUA_EXPECTED_BUILD_KEY: '${{ needs.cua-helper.outputs.build-key }}' })
   expect(stage.run).toContain('scripts/cua-helper/stage.ts --from dist/cua-helper/extracted')
-  expect(pack.steps.indexOf(stage)).toBeGreaterThan(pack.steps.indexOf(retained))
-  expect(pack.steps.indexOf(stage)).toBeGreaterThan(pack.steps.indexOf(fresh))
+  expect(pack.steps.indexOf(stage)).toBeGreaterThan(pack.steps.indexOf(download))
   expect(pack.steps.indexOf(stage)).toBeLessThan(pack.steps.findIndex(step => step.name === 'Pack release tarballs'))
 })

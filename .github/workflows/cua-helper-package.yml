@@ -8,6 +8,13 @@ on:
         type: string
         default: master
         required: true
+      cua_run_id:
+        description: >-
+          填写要复用的 CUA helper 构建运行编号（run ID，即运行页面 URL 中 /actions/runs/ 后的数字）。
+          留空自动查找逐字节一致的源码构建出来的产物，找不到时重新构建。
+        type: string
+        required: false
+        default: ''
       preset:
         description: '机器上的签名配置'
         type: choice
@@ -19,16 +26,26 @@ on:
       source_ref:
         type: string
         required: true
+      cua_run_id:
+        type: string
+        default: ''
       preset:
         type: string
         default: production
     outputs:
-      artifact:
-        description: '包含两个架构的已签名、公证 helper 归档'
-        value: ${{ jobs.package.outputs.artifact }}
+      artifact-id:
+        description: '包含两个架构的已签名、公证 helper 的产物编号'
+        value: ${{ jobs.package.outputs.artifact-id }}
+      run-id:
+        description: '产物所属的构建运行编号'
+        value: ${{ jobs.package.outputs.run-id }}
+      build-key:
+        description: '源码和构建配置的摘要'
+        value: ${{ jobs.package.outputs.build-key }}
 
 permissions:
   contents: read
+  actions: read
 
 # Desktop uses the same keychain search list and optional system proxy transaction.
 concurrency:
@@ -40,7 +57,9 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64, dsh-mac-package-trial]
     timeout-minutes: 60
     outputs:
-      artifact: ${{ steps.artifact.outputs.name }}
+      artifact-id: ${{ steps.retained.outputs.artifact-id || steps.upload.outputs.artifact-id }}
+      run-id: ${{ steps.retained.outputs.run-id || github.run_id }}
+      build-key: ${{ steps.retained.outputs.build-key }}
     env:
       DSH_PACKAGING_PRESET: ${{ inputs.preset }}
       DSH_TELEMETRY_DISABLED: '1'
@@ -53,31 +72,47 @@ jobs:
           clean: true
       - name: Validate source selection
         run: |
-          node -e 'const cp=require("node:child_process"); const fs=require("node:fs"); const ref=process.env.PACKAGE_SOURCE_REF;
+          node -e 'const fs=require("node:fs"); const ref=process.env.PACKAGE_SOURCE_REF;
           if(ref.startsWith("refs/pull/") || /^[a-f0-9]{40}$/i.test(ref)) throw Error("Select a trusted repository branch or release tag");
           const tag=ref.replace(/^refs\/tags\//, "");
           if(tag.startsWith("dsh-v") && tag!=="dsh-v"+JSON.parse(fs.readFileSync("package.json","utf8")).version) throw Error("Release tag must match product version");
           if(!["test","production"].includes(process.env.DSH_PACKAGING_PRESET)) throw Error("Invalid preset");'
-      - uses: pnpm/action-setup@v5.0.0
-        with:
-          dest: ${{ runner.temp }}/setup-pnpm-cua-${{ github.run_id }}-${{ github.run_attempt }}
       - uses: actions/setup-node@v7.0.0
         with:
           node-version: '24'
           package-manager-cache: false
+      - name: Find reusable CUA helper
+        id: retained
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CUA_RUN_ID: ${{ inputs.cua_run_id }}
+        run: node scripts/cua-helper/select-artifact.ts
+      - uses: pnpm/action-setup@v5.0.0
+        if: steps.retained.outputs.artifact-id == ''
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm-cua-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Install locked dependencies
+        if: steps.retained.outputs.artifact-id == ''
         run: pnpm install --frozen-lockfile
       - name: Build and verify notarized applications
+        if: steps.retained.outputs.artifact-id == ''
+        env:
+          CUA_EXPECTED_BUILD_KEY: ${{ steps.retained.outputs.build-key }}
         run: |
           mkdir -p dist
           pnpm exec tsx scripts/cua-helper/package.ts --out dist/cua-helper
-      - name: Name retained artifact
-        id: artifact
-        run: echo "name=cua-helper-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v7.0.1
+        if: steps.retained.outputs.artifact-id == ''
+        id: upload
         with:
-          name: ${{ steps.artifact.outputs.name }}
+          name: cua-helper-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.retained.outputs.build-key }}
           path: dist/cua-helper/*
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
+      - name: Record newly built artifact
+        if: steps.retained.outputs.artifact-id == ''
+        env:
+          CUA_ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+        run: |
+          printf '已构建 CUA helper，run ID `%s`，artifact ID `%s`。\n' "$GITHUB_RUN_ID" "$CUA_ARTIFACT_ID" >> "$GITHUB_STEP_SUMMARY"
