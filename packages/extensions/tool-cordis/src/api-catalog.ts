@@ -843,6 +843,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the value and its source, or `undefined` while unconfigured.',
       },
       {
+        signature: 'abstract readStored(ref: CredentialRef): Promise<string | undefined>',
+        description: 'Read the provider-managed value without consulting environment fallbacks.',
+        parameters: [{ name: 'ref', description: 'the reference to read.' }],
+        returns: 'the stored secret, or undefined when no non-empty value is stored.',
+      },
+      {
         signature: 'abstract describe(ref: CredentialRef): Promise<CredentialInfo>',
         description: 'Describe one reference for configuration surfaces without exposing the value.',
         parameters: [{ name: 'ref', description: 'the reference to describe.' }],
@@ -892,7 +898,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'credentialsController',
     summary: 'Host service backing the generated `ctx.remote.credentials` namespace.',
-    description: 'Host service backing the generated `ctx.remote.credentials` namespace. It carries every wire obligation the credential seam itself does not: the batch fan-out bound, the field-by-field view projection, the reference-grammar guard, and the refusal mapping. Secret values cross in one direction only — no method here returns one.',
+    description: 'Host service backing the generated `ctx.remote.credentials` namespace. It carries every wire obligation the credential seam itself does not: the batch fan-out bound, the field-by-field view projection, the reference-grammar guard, and the refusal mapping. Metadata reads exclude secrets; readStored returns only a provider-managed value for an explicitly opened editor.',
     methods: [
       {
         signature: '@Remote async describe(refs: string[]): Promise<Record<string, CredentialInfo>>',
@@ -902,8 +908,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['RemoteError when the request is invalid or no credential provider is mounted.'],
       },
       {
+        signature: '@Remote async readStored(ref: string): Promise<string | undefined>',
+        description: 'Read one stored value for a credential editor, excluding environment fallbacks.',
+        parameters: [{ name: 'ref', description: 'reference name to read.' }],
+        returns: 'the stored secret, or undefined when the provider stores none.',
+        throws: ['RemoteError for a non-owner Remote caller, an invalid reference, or an absent provider.'],
+      },
+      {
         signature: '@Remote async set(ref: string, value: string): Promise<void>',
-        description: 'Store one value from a configuration surface. The value crosses the wire in this direction only: no read path returns it.',
+        description: 'Store one value from a configuration surface.',
         parameters: [{ name: 'ref', description: 'reference name to store under.' }, { name: 'value', description: 'the non-empty secret value.' }],
         throws: ['RemoteError when the request is invalid, no provider is mounted, or the provider refuses the write.'],
       },
@@ -2054,20 +2067,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
-    key: 'mcpResources',
-    summary: 'Scoped resource access plus three tools shared by configured MCP servers.',
-    description: 'Scoped resource access plus three tools shared by configured MCP servers.',
-    methods: [
-      {
-        signature: 'register(server: string, provider: McpResourceProvider): () => void',
-        description: 'Register one server and expose resource tools while that scope has providers.',
-        parameters: [{ name: 'server', description: 'configured server name, unique in this scope.' }, { name: 'provider', description: 'connection-owned resource operations.' }],
-        returns: 'the effect disposer for this exact registration.',
-      },
-    ],
-  },
-  {
-    key: 'mcpServers',
+    key: 'mcpManager',
     summary: 'The manager service.',
     description: 'The manager service. Reconciliation and `restart` serialize instance replacement. Probes run independently and are cancelled before replacement or disposal waits for their cleanup.',
     methods: [
@@ -2124,6 +2124,19 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: '@Remote async signOut(name: string): Promise<void>',
         description: 'Drain authorization, probes, and connections before deleting the local grant; retain client registration. A configuration change before deletion preserves the grant and rejects.',
         parameters: [{ name: 'name', description: 'configured or registered OAuth entry; cleanup failure preserves the grant and blocks replacement.' }],
+      },
+    ],
+  },
+  {
+    key: 'mcpResources',
+    summary: 'Scoped resource access plus three tools shared by configured MCP servers.',
+    description: 'Scoped resource access plus three tools shared by configured MCP servers.',
+    methods: [
+      {
+        signature: 'register(server: string, provider: McpResourceProvider): () => void',
+        description: 'Register one server and expose resource tools while that scope has providers.',
+        parameters: [{ name: 'server', description: 'configured server name, unique in this scope.' }, { name: 'provider', description: 'connection-owned resource operations.' }],
+        returns: 'the effect disposer for this exact registration.',
       },
     ],
   },

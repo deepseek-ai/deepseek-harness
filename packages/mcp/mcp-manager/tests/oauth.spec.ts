@@ -12,7 +12,7 @@ async function managed(layer: 'base' | 'user' = 'base') {
   const world = await oauthWorld()
   const servers = { oauth: { ...world.config, enabled: true } }
   await managerProfile(world.ctx, layer === 'base' ? { base: { servers } } : { base: { servers: {} }, user: { servers } })
-  const manager = world.ctx.mcpServers
+  const manager = world.ctx.mcpManager
   const view = () => manager.list().find(entry => entry.name === 'oauth')!
   const state = async (expected: string) => {
     await vi.waitFor(() => { expect(view().status.state).toBe(expected) }, { timeout: 5000 })
@@ -31,7 +31,7 @@ async function managed(layer: 'base' | 'user' = 'base') {
 it.each(['signOut', 'restart'] as const)('notifies authorization removal from a disabled entry after %s', async (operation) => {
   const world = await oauthWorld()
   await managerProfile(world.ctx, { base: { servers: { oauth: { ...world.config, enabled: false } } } })
-  const manager = world.ctx.mcpServers
+  const manager = world.ctx.mcpManager
   const view = () => manager.list()[0]!
   await manager.startAuthorization('oauth')
   expect(await callback(await phase(() => view().authorization, 'waiting-browser'))).toBe(200)
@@ -50,7 +50,7 @@ it.each(['signOut', 'restart'] as const)('notifies authorization removal from a 
 it('cancels only the selected attempt and retires authorization when a disabled entry changes', async () => {
   const world = await oauthWorld()
   await managerProfile(world.ctx, { base: { servers: { oauth: { ...world.config, enabled: false } } } })
-  const manager = world.ctx.mcpServers
+  const manager = world.ctx.mcpManager
   const view = () => manager.list()[0]!.authorization
   const first = await manager.startAuthorization('oauth')
   await manager.cancelAuthorization('missing', first.id)
@@ -334,7 +334,7 @@ it.each(['unauthorized', 'invalid-grant', 'scope', 'forbidden'] as const)('handl
 it('registers an OAuth server, streams its authorization, and redacts its access token from tool errors', async () => {
   const world = await oauthWorld()
   await managerProfile(world.ctx, { base: { servers: {} } })
-  const manager = world.ctx.mcpServers
+  const manager = world.ctx.mcpManager
   manager.register('oauth', {
     transport: 'streamable-http', url: world.origin + '/mcp', oauth: { credentialKey: 'mcp-client/oauth' }, reconnect: { enabled: false },
   })
@@ -363,8 +363,8 @@ it('registers an OAuth server, streams its authorization, and redacts its access
 it('refuses a registration whose OAuth credential key a configured entry already owns', async () => {
   const world = await oauthWorld()
   await managerProfile(world.ctx, { base: { servers: { configured: { ...world.config, enabled: false } } } })
-  expect(() => world.ctx.mcpServers.register('registered', {
+  expect(() => world.ctx.mcpManager.register('registered', {
     transport: 'streamable-http', url: world.origin + '/mcp', oauth: { credentialKey: 'mcp-client/oauth' },
   })).toThrow('OAuth credentialKey is already assigned to another server')
-  expect(world.ctx.mcpServers.list().map(view => view.name)).toEqual(['configured'])
+  expect(world.ctx.mcpManager.list().map(view => view.name)).toEqual(['configured'])
 })

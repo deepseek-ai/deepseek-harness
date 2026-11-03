@@ -15,6 +15,7 @@ const CLASSIFIED = Object.keys(VIEWER_ENDPOINT_CLASSES)
 describe('viewer endpoint classification', () => {
   it('exports the compiled classification without changing its keys', () => {
     expect(Object.keys(COMPLETE_VIEWER_ENDPOINT_CLASSES)).toEqual(CLASSIFIED)
+    expect(COMPLETE_VIEWER_ENDPOINT_CLASSES['credentials/readStored']).toBe('owner-only')
   })
 
   it('reports the endpoint a classification is missing', () => {
