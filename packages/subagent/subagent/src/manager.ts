@@ -8,7 +8,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { isAbsolute, resolve } from 'node:path'
-import type {} from '@deepseek-ai/dsh-working-directory'
+import { within } from '@deepseek-ai/dsh-working-directory'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent, AgentOptions, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
 import { brandString } from '@deepseek-ai/dsh-brand'
@@ -747,7 +747,14 @@ export class SubagentManager {
           appendDelegatedPolicyOverrides(child.session, create.delegatedPolicies)
           const workingDirectory = childCtx.get('workingDirectory')
           if (workingDirectory === undefined) throw new Error('local subagents require the working-directory service')
-          await workingDirectory.set(child, create.cwd, inputs.signal)
+          // The child header records the parent's original project; a parent working in another
+          // checkout passes that checkout on as the child's root when the child starts inside it.
+          const parentRoot = workingDirectory.rootOf(create.parent.session)
+          if (parentRoot !== child.session.header.cwd && within(parentRoot, create.cwd)) {
+            await workingDirectory.relocate(child, parentRoot, { cwd: create.cwd, signal: inputs.signal })
+          } else {
+            await workingDirectory.set(child, create.cwd, inputs.signal)
+          }
         }
         if (inputs.composition.agentPreset === undefined) await applyChildComposition(childCtx, create?.parent, inputs.composition)
         if (inputs.outputSchema !== undefined) {

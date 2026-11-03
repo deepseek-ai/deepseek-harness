@@ -236,10 +236,10 @@ describe('HarnessSdkJsonRpcServer', () => {
         .rejects.toThrow('SDK server is not initialized')
       expect(ctx.agents.list()).toEqual([])
       await server.initialize({ cwd: root, provider: 'mock', model: 'mock' })
-      await expect(server.handleRequest('session/working-directory/get', { sessionId: 'a' })).resolves.toEqual({ cwd: root })
+      await expect(server.handleRequest('session/working-directory/get', { sessionId: 'a' })).resolves.toEqual({ cwd: root, root })
       const selected = await realpath(child)
-      await expect(server.handleRequest('session/working-directory/set', { sessionId: 'a', path: 'child' })).resolves.toEqual({ cwd: selected })
-      await expect(server.handleRequest('session/working-directory/get', { sessionId: 'b' })).resolves.toEqual({ cwd: root })
+      await expect(server.handleRequest('session/working-directory/set', { sessionId: 'a', path: 'child' })).resolves.toEqual({ cwd: selected, root })
+      await expect(server.handleRequest('session/working-directory/get', { sessionId: 'b' })).resolves.toEqual({ cwd: root, root })
       const agent = ctx.agents.get(SessionId('a'))!
       expect(agent.session.header.cwd).toBe(root)
       await server.prompt({ sessionId: 'a', contentBlocks: [{ type: 'text', text: 'where' }] })

@@ -31,13 +31,13 @@ for line in sys.stdin:
         print(json.dumps({'jsonrpc': '2.0', 'id': frame['id'], 'result': {}}), flush=True)
         break
     elif method == 'session/working-directory/get':
-        result = {'cwd': directories.get(params['sessionId'], origin)}
+        result = {'cwd': directories.get(params['sessionId'], origin), 'root': origin}
     elif method == 'session/working-directory/set':
         assert not os.path.isabs(params['path']), 'client must preserve relative paths'
         previous = directories.get(params['sessionId'], origin)
         current = os.path.normpath(os.path.join(previous, params['path']))
         directories[params['sessionId']] = current
-        result = {'cwd': 7 if params['path'] == 'malformed' else current}
+        result = {'cwd': 7 if params['path'] == 'malformed' else current, 'root': origin}
     else:
         raise AssertionError(method)
     print(json.dumps({'jsonrpc': '2.0', 'id': frame['id'], 'result': result}), flush=True)
@@ -49,6 +49,7 @@ for line in sys.stdin:
         assert first.get_working_directory() == str(tmp_path)
         assert first.set_working_directory("child") == str(tmp_path / "child")
         assert first.get_working_directory() == str(tmp_path / "child")
+        assert first.get_workspace_root() == str(tmp_path)
         assert second.get_working_directory() == str(tmp_path)
         with pytest.raises(ValidationError):
             second.set_working_directory("malformed")

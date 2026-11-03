@@ -10,7 +10,7 @@ A fixed Session creation directory cannot represent a task that changes checkout
 
 ## Decision
 
-`dsh-working-directory` owns one logged effective directory per Session. Its projection initializes from the immutable original project and folds `working-directory/change`; consumers read that owner instead of deriving execution paths from the header or sandbox root. Directory changes validate through the filesystem provider, serialize within the Session, and publish only after the new directory is available.
+`dsh-working-directory` owns one logged effective directory per Session. Its projection initializes from the immutable original project and folds `working-directory/change`; consumers read that owner instead of deriving execution paths from the header or sandbox root. Directory changes validate through the filesystem provider, serialize within the Session, and publish only after the new directory is available. The [workspace-root note](2026-11-03-session-workspace-root.md) adds the workspace root and its anchors on top of this owner.
 
 The `dsh-base` composition mounts `working_directory({ cd? })` globally. The tool reads or changes the Session directory, so every Agent preset can select or recover it, including presets without file-editing tools. The Web composition keeps action tools in preset scopes.
 

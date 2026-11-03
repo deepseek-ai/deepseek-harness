@@ -2413,6 +2413,16 @@
       "source": "packages/experimental/worktree/src/types.ts"
     },
     {
+      "doc": "docs/subsystems/working-directory.md",
+      "symbol": "RelocateOptions",
+      "source": "packages/session/working-directory/src/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/working-directory.md",
+      "symbol": "RelocatedDirectories",
+      "source": "packages/session/working-directory/src/index.ts"
+    },
+    {
       "doc": "docs/subsystems/forge.md",
       "symbol": "ForgeRepository",
       "source": "packages/experimental/forge/src/types.ts"

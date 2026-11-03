@@ -874,8 +874,11 @@ function verifyWorkingDirectory(log: string, cwd: string): void {
     return (source.sections as JsonObject[]).filter(section => section.name === 'working-directory:current')
       .map(section => section.text)
   })
+  // Inside the original project the snapshot names the root only while the cursor is below it.
   expect(contexts).toEqual([cwd, join(cwd, 'selected'), join(cwd, 'second'), cwd]
-    .map(directory => `Current working directory: ${JSON.stringify(directory)}.`))
+    .map(directory => directory === cwd
+      ? `Current working directory: ${JSON.stringify(directory)}.`
+      : `Current working directory: ${JSON.stringify(directory)}.\nWorkspace root: ${JSON.stringify(cwd)}.`))
   const notices = users.filter(message => (message.source as JsonObject).kind === 'working-directory')
     .map(message => (message.content as JsonObject[]).map(block => block.text).join(''))
   expect(notices).toEqual([

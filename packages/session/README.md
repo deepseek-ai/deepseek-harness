@@ -45,7 +45,7 @@ The group splits into four families: durable storage (persistence seam, backends
 | Package | Role | ctx key |
 |---|---|---|
 | [`session-projection/`](session-projection/README.md) | Defines and drives projection units that fold committed events into whole current values | `ctx.sessionProjections` |
-| [`working-directory/`](working-directory/README.md) | Owns each Session's effective execution directory and user-context changes | `ctx.workingDirectory` |
+| [`working-directory/`](working-directory/README.md) | Owns each Session's effective execution directory, the workspace root it is in, and user-context changes | `ctx.workingDirectory` |
 | [`tool-working-directory/`](tool-working-directory/README.md) | Reads or changes the active directory through one tool | `working_directory` |
 | [`session-projection-cache/`](session-projection-cache/README.md) | Persists projection checkpoints so cold reads skip full log loads | `ctx.sessionProjectionCache` |
 | [`session-stats/`](session-stats/README.md) | Serves whole-log conversation counts and wall times through the `sessionStats` unit | registers on `ctx.sessionProjections` |

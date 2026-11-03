@@ -105,12 +105,14 @@ describe('DeepSeekHarness', () => {
     const origin = await first.getWorkingDirectory()
     expect(await first.setWorkingDirectory('child')).toBe(join(origin, 'child'))
     expect(await first.getWorkingDirectory()).toBe(join(origin, 'child'))
+    expect(await first.getWorkspaceRoot()).toBe(origin)
     expect(await second.getWorkingDirectory()).toBe(origin)
   })
 
   it('rejects a malformed working-directory response', async () => {
     const harness = harnessWith({ FAKE_MALFORMED_DIRECTORY: '1' })
     await expect(harness.session().getWorkingDirectory()).rejects.toThrow('returned no working directory')
+    await expect(harness.session().getWorkspaceRoot()).rejects.toThrow('returned no working directory')
     await expect(harness.session().setWorkingDirectory('.')).rejects.toThrow('returned no working directory')
   })
   it('ignores notifications that precede the submitted message receipt', async () => {

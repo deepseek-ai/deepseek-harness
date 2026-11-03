@@ -314,7 +314,7 @@ reader.on('line', (line) => {
         ? resolve(previous, String(frame.params?.path))
         : previous
       workingDirectories.set(sessionId, cwd)
-      respond({ cwd })
+      respond({ cwd, root: originCwd })
       return
     }
     case 'session/query':

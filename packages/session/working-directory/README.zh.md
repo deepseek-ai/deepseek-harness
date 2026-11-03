@@ -39,7 +39,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-Session 投影拥有当前目录，并通过 Session observation 暴露它，因此冷态读取方无需激活 Agent 即可使用；header 继续标识原始项目。每个 Session 的变更串行执行，通过文件系统 provider 验证，并检查取消状态与 Agent 生命周期，提交事件后排入用户上下文通知。若提交后通知入队失败，操作仍返回已提交的目录并记录警告；下一次请求或恢复仍会收到必需的目录上下文。提示词组装在发布必需的上下文条目前验证当前目录。已有进程与沙箱授权继续由各自的服务拥有。[服务实现](src/index.ts) 定义 API。
+Session 投影拥有当前目录，并通过 Session observation 暴露它，因此冷态读取方无需激活 Agent 即可使用；header 继续标识原始项目。第二个投影从同一事件折叠工作区锚及其选出的根，`relocate` 在提交一条携带 `anchor` 的事件前验证根及其内部的目录。每个 Session 的变更串行执行，通过文件系统 provider 验证，并检查取消状态与 Agent 生命周期，提交事件后排入用户上下文通知。若提交后通知入队失败，操作仍返回已提交的目录并记录警告；下一次请求或恢复仍会收到必需的目录上下文。提示词组装在发布必需的上下文条目前验证当前目录。已有进程与沙箱授权继续由各自的服务拥有。[服务实现](src/index.ts) 定义 API。
 
 不发布 `./invariant` 伴生模块，因为服务从 Session 投影读取唯一的目录状态，并在使用时检查文件系统有效性。
 
@@ -63,7 +63,7 @@ Session 投影拥有当前目录，并通过 Session observation 暴露它，因
 
 #### 模型可见内容
 
-当前值为 `Current working directory: <JSON-quoted absolute path>.` 每次已提交变更（包括自动恢复）都会尝试通过普通 Agent 收件箱排入用户上下文通知。取消或销毁可能丢弃尚未进入请求的通知；持久化目录仍可供下一次请求使用。目录上下文不进入系统提示词，即使可选运行时上下文被禁用，也仍然保留。
+当前值为 `Current working directory: <JSON-quoted absolute path>.`，当前目录与工作区根不同时，第二行为 `Workspace root: <JSON-quoted absolute path>.`。每次已提交变更（包括自动恢复）都会尝试通过普通 Agent 收件箱排入用户上下文通知；选中另一个根的变更在通知末尾给出 `<JSON-quoted root> is now the workspace root.`。取消或销毁可能丢弃尚未进入请求的通知；持久化目录仍可供下一次请求使用。目录上下文不进入系统提示词，即使可选运行时上下文被禁用，也仍然保留。
 
 #### Token 影响
 
@@ -78,6 +78,7 @@ Session 投影拥有当前目录，并通过 Session observation 暴露它，因
 <a id="known-limitations-and-deferred-work"></a>
 
 - **原始项目缺失** — 当前目录与原始项目均不可用时，提示词组装会拒绝每个模型轮次，包括纯聊天轮次。服务不会另选或重建仓库。请先恢复原始目录，或通过 SDK 的 `setWorkingDirectory`（Python 中为 `set_working_directory`）或 `ctx.workingDirectory.set` 选择现有的绝对目录，再重试。已有 shell 保留各自进程的目录。
+- **锚按记录原样比较** — 原始项目是 header 记录的路径，而 `set` 与 `relocate` 记录文件系统 provider 给出的规范路径。通过符号链接或以不同大小写记录的 header 永远不包含这些路径，因此根停留在原始项目上，与目录位于所有锚之外时相同。
 
 <a id="dev-note"></a>
 ### 开发备注

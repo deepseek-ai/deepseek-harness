@@ -239,6 +239,15 @@ export class HarnessSession {
   }
 
   /**
+   * Read the workspace root the effective directory is in, recovering a missing directory to the Session origin.
+   * @returns the absolute checkout directory that file views and the write boundary follow.
+   */
+  async getWorkspaceRoot(): Promise<string> {
+    await this.harness.start()
+    return this.harness.client.getWorkspaceRoot(this.id)
+  }
+
+  /**
    * Change the effective directory without moving existing processes or changing permissions.
    * @param path - absolute or Session-current-directory-relative directory.
    * @returns the validated absolute directory.

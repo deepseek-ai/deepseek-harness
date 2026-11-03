@@ -9,7 +9,6 @@ import { pluginRecordOf } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import { deadline } from '@deepseek-ai/dsh-timeout'
-import type {} from '@deepseek-ai/dsh-working-directory'
 import { gitIn, hasBranch, inspectCheckout } from './git.ts'
 import type { GitConfig, Inspection } from './git.ts'
 import { localChanges } from './local-diff.ts'
@@ -19,7 +18,8 @@ import type {
   ForgeCheckoutState, ForgeLocalChanges, ForgeMissingWorktree, ForgePanelChangeRequest, ForgePanelState, ForgePanelWorktree,
   ForgeWorktreeBlocker, ForgeWorktreeState,
 } from './types.ts'
-import { within, WORKTREE_RECORD } from './worktree.ts'
+import { within } from '@deepseek-ai/dsh-working-directory'
+import { WORKTREE_RECORD } from './worktree.ts'
 import type { WorktreeCreations } from './worktree.ts'
 
 /** Git and diff limits plus the sign-in probe deadline. */

@@ -27,7 +27,8 @@ import type {
   Config, ForgeBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame, ForgeLocalDiff, ForgeLocalScope, ForgeMissingWorktree,
   ForgePanelState, ForgeSessionWorktree, ForgeWorktreeState,
 } from './types.ts'
-import { forgeWorktreeProjection, messageOf, within, WORKTREE_RECORD, WorktreeCreations } from './worktree.ts'
+import { within } from '@deepseek-ai/dsh-working-directory'
+import { forgeWorktreeProjection, messageOf, WORKTREE_RECORD, WorktreeCreations } from './worktree.ts'
 import type { HeldWork } from './worktree.ts'
 
 export type * from './types.ts'

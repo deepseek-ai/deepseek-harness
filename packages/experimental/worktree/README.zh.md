@@ -32,7 +32,7 @@ kind: "package-reference"
 - name: '@deepseek-ai/dsh-experimental-tool-worktree'
 ```
 
-`ctx.worktrees.create(agent, { name?, from? }, signal?, onPhase?)` 创建新分支与检出目录，再通过 `ctx.workingDirectory.set` 进入规范化的检出目录。`from` 在创建前解析为本地提交，默认是 `HEAD`；暂存、未暂存、未跟踪以及被忽略的源文件均不复制。`baseCommit` 报告解析出的提交对象名称；仓库本地的替换引用仍作用于检出的内容。检出操作禁用已配置的 Git clean、smudge 和 process 过滤器，不修改仓库配置。分支或检出路径已存在时会报错。返回记录包含 `path`、`branch`、`baseCommit` 和 `repositoryRoot`。可选的第四个参数 `onPhase` 在校验、分配目录与创建分支之前收到 `prepare`，在写入文件并进入检出之前收到 `checkout`；它不得抛出异常。
+`ctx.worktrees.create(agent, { name?, from? }, signal?, onPhase?)` 创建新分支与检出目录，再通过 `ctx.workingDirectory.relocate` 进入规范化的检出目录，使该检出目录成为 Session 的工作区根。`from` 在创建前解析为本地提交，默认是 `HEAD`；暂存、未暂存、未跟踪以及被忽略的源文件均不复制。`baseCommit` 报告解析出的提交对象名称；仓库本地的替换引用仍作用于检出的内容。检出操作禁用已配置的 Git clean、smudge 和 process 过滤器，不修改仓库配置。分支或检出路径已存在时会报错。返回记录包含 `path`、`branch`、`baseCommit` 和 `repositoryRoot`。可选的第四个参数 `onPhase` 在校验、分配目录与创建分支之前收到 `prepare`，在写入文件并进入检出之前收到 `checkout`；它不得抛出异常。
 
 `ctx.worktrees.restore(agent, { path, branch, baseCommit, repositoryRoot }, signal?, onPhase?)` 在记录的目录重新检出被删除的 worktree。它在修改前校验记录中的仓库根目录、完整提交对象名、分支和配置池内的规范目标路径。它只通过 `git worktree remove` 移除缺失目标的未锁定登记；其他 worktree 与锁定登记保持不变。随后在分支仍存在时检出该分支，否则在 `baseCommit` 重新创建同名分支，并通过 `branchRecreated` 报告是哪种情况。目录已存在时会报错。调用方 Session 的工作目录不变，从未提交的修改无法恢复。检出与创建时一样禁用过滤器。`onPhase` 在检查目录、清理登记与创建分支之前收到 `prepare`，在写入文件之前收到 `checkout`；它不能抛出异常。
 

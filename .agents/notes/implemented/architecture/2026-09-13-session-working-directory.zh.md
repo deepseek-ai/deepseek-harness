@@ -10,7 +10,7 @@ Status: implemented
 
 ## Decision
 
-`dsh-working-directory` 拥有每个 Session 的一个日志化有效目录。投影从不可变的原始项目初始化，并折叠 `working-directory/change`；消费者读取该服务，而不是从 header 或沙箱根目录派生执行路径。目录变更通过文件系统 provider 验证，在 Session 内串行执行，并只在新目录可用后发布。
+`dsh-working-directory` 拥有每个 Session 的一个日志化有效目录。投影从不可变的原始项目初始化，并折叠 `working-directory/change`；消费者读取该服务，而不是从 header 或沙箱根目录派生执行路径。目录变更通过文件系统 provider 验证，在 Session 内串行执行，并只在新目录可用后发布。[工作区根记录](2026-11-03-session-workspace-root.zh.md)在该服务之上增加工作区根及其锚。
 
 `dsh-base` 组合在全局挂载 `working_directory({ cd? })`。该工具读取或改变 Session 目录，使每个 Agent preset 都能选择或恢复它，包括没有文件编辑工具的 preset。Web 组合把操作工具放在 preset 作用域中。
 

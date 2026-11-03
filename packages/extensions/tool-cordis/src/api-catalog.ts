@@ -4401,8 +4401,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'workingDirectory',
-    summary: 'One owner for each Session\'s effective directory and its model-visible changes.',
-    description: 'One owner for each Session\'s effective directory and its model-visible changes.',
+    summary: 'One owner for each Session\'s effective directory, its workspace root, and their model-visible changes.',
+    description: 'One owner for each Session\'s effective directory, its workspace root, and their model-visible changes.\n\nThe current directory is the cursor every relative path resolves from. The workspace root is the checkout that cursor is in: the longest registered anchor containing it. Anchors are the original project plus every checkout a relocate entered, so an ordinary set inside the root moves only the cursor, a `set` into another anchor switches the root to that anchor, and a `set` outside every anchor moves the cursor and leaves the root.',
     methods: [
       {
         signature: 'readonly defaultDirectory: string',
@@ -4416,6 +4416,18 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'its effective absolute directory.',
       },
       {
+        signature: 'rootOf(session: Session): string',
+        description: 'Read the committed workspace root without filesystem I/O.',
+        parameters: [{ name: 'session', description: 'Session whose root is requested.' }],
+        returns: 'the registered anchor containing the current directory, or the deployment default when none is recorded.',
+      },
+      {
+        signature: 'anchorsOf(session: Session): readonly string[]',
+        description: 'Read the registered workspace anchors without filesystem I/O.',
+        parameters: [{ name: 'session', description: 'Session whose anchors are requested.' }],
+        returns: 'anchors in registration order, the original project first when the header records one.',
+      },
+      {
         signature: 'ensure(agent: Agent, signal?: AbortSignal): Promise<string>',
         description: 'Validate the current directory and restore the original project when it disappeared.',
         parameters: [{ name: 'agent', description: 'live or unpublished Agent owning the Session.' }, { name: 'signal', description: 'cancellation for filesystem inspection.' }],
@@ -4424,10 +4436,17 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'set(agent: Agent, path: string, signal?: AbortSignal): Promise<string>',
-        description: 'Change one Session\'s directory without changing existing processes or permissions.',
+        description: 'Change one Session\'s directory without changing existing processes or permissions. The workspace root follows the registered anchors: a path inside the current root keeps it, a path inside another anchor selects that anchor, and a path outside every anchor leaves the root unchanged.',
         parameters: [{ name: 'agent', description: 'live or unpublished Agent owning the Session.' }, { name: 'path', description: 'absolute path or a path relative to its current directory.' }, { name: 'signal', description: 'cancellation before the durable change.' }],
         returns: 'the canonical absolute directory, committed before fulfillment. A notice failure is warned; the next request still receives the committed directory.',
         throws: ['when the requested path is not an existing directory.'],
+      },
+      {
+        signature: 'relocate(agent: Agent, root: string, options: RelocateOptions = {}): Promise<RelocatedDirectories>',
+        description: 'Enter another checkout: register `root` as a workspace anchor of the Session and move its current directory to `options.cwd`, or to the root itself. One committed event carries both; existing processes and permissions are unchanged.',
+        parameters: [{ name: 'agent', description: 'live or unpublished Agent owning the Session.' }, { name: 'root', description: 'absolute checkout directory, or a path relative to the current directory.' }, { name: 'options', description: 'directory to enter inside the root and cancellation before the durable change.' }],
+        returns: 'the canonical root and current directory, committed before fulfillment. A notice failure is warned; the next request still receives the committed directories.',
+        throws: ['when either path is not an existing directory or the directory lies outside the root.'],
       },
     ],
   },
@@ -7773,6 +7792,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'Reload',
     declaration: 'export interface Reload {\n    filename: string;\n    modules: ReloadModules;\n    runtime?: Plugin.Runtime | undefined;\n}',
+  },
+  {
+    name: 'RelocatedDirectories',
+    declaration: 'export interface RelocatedDirectories {\n    root: string;\n    cwd: string;\n}',
+  },
+  {
+    name: 'RelocateOptions',
+    declaration: 'export interface RelocateOptions {\n    cwd?: string;\n    signal?: AbortSignal;\n}',
   },
   {
     name: 'RemoteAccessAction',

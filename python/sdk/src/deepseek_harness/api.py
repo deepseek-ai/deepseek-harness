@@ -206,6 +206,11 @@ class Session:
         self.harness.start()
         return self.harness.client.get_working_directory(self.id)
 
+    def get_workspace_root(self) -> str:
+        """Read the workspace root the effective directory is in, recovering a missing directory first."""
+        self.harness.start()
+        return self.harness.client.get_workspace_root(self.id)
+
     def set_working_directory(self, path: str) -> str:
         """Change the effective directory while existing processes retain their own directories."""
         self.harness.start()

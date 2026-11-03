@@ -195,7 +195,7 @@ export class WorktreeService extends Service {
       const overrides = await filterOverrides(run, path)
       onPhase?.('checkout')
       await run(path, ['--work-tree', path, 'reset', '--hard', '--no-recurse-submodules', baseCommit], undefined, overrides)
-      const canonicalPath = await this.ctx.workingDirectory.set(agent, path, signal)
+      const { cwd: canonicalPath } = await this.ctx.workingDirectory.relocate(agent, path, { signal })
       return { path: canonicalPath, branch, baseCommit, repositoryRoot }
     } catch (error) {
       throw new Error(`Could not finish worktree ${branch} at ${path}. Any created checkout and branch are retained. ${error instanceof Error ? error.message : String(error)}`, { cause: error })

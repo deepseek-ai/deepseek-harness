@@ -60,8 +60,26 @@ describe('subagent working directories', () => {
     const child = run.localAgent
     expect(child.session.header.cwd).toBe(origin)
     expect(ctx.workingDirectory.get(child.session)).toBe(selected)
+    expect(ctx.workingDirectory.rootOf(child.session)).toBe(origin)
     await ctx.workingDirectory.set(parent, first)
     expect(ctx.workingDirectory.get(child.session)).toBe(selected)
+    await run.dispose()
+  })
+
+  it.each(['spawn', 'fork'])('%s inherits the parent workspace root when the parent works in another checkout', async (provider) => {
+    const { ctx, parent, origin, second } = await fixture()
+    const inside = join(second, 'inside')
+    await mkdir(inside)
+    await ctx.workingDirectory.relocate(parent, second, { cwd: inside })
+    const run = await startTestActivation(ctx, provider, {
+      parent, prompt: [{ type: 'text', text: 'child' }], signal: new AbortController().signal,
+    })
+    await run.result
+    const child = run.localAgent
+    expect(child.session.header.cwd).toBe(origin)
+    expect(ctx.workingDirectory.get(child.session)).toBe(await realpath(inside))
+    expect(ctx.workingDirectory.rootOf(child.session)).toBe(await realpath(second))
+    expect(ctx.workingDirectory.anchorsOf(child.session)).toEqual([origin, await realpath(second)])
     await run.dispose()
   })
 

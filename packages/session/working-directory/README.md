@@ -39,7 +39,7 @@ Mount alongside `fs`, `sessionProjections`, and `systemPrompt`. `defaultDirector
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The Session projection owns the effective directory and exposes it in Session observations, so cold readers can use it without activating an Agent; the header continues to identify the original project. Changes serialize per Session, validate through the filesystem provider, check cancellation and Agent lifetime, commit an event, and queue a user-context notice. If notice queuing fails after commit, the operation returns the committed directory and logs a warning; the next request or resume still receives the required directory context. Prompt assembly validates the current directory before publishing its required context contribution. Existing processes and sandbox grants keep their independent ownership. The [service implementation](src/index.ts) defines the API.
+The Session projection owns the effective directory and exposes it in Session observations, so cold readers can use it without activating an Agent; the header continues to identify the original project. A second projection folds the workspace anchors and the root they select from the same event, and `relocate` validates the root and the directory inside it before committing one event that carries `anchor`. Changes serialize per Session, validate through the filesystem provider, check cancellation and Agent lifetime, commit an event, and queue a user-context notice. If notice queuing fails after commit, the operation returns the committed directory and logs a warning; the next request or resume still receives the required directory context. Prompt assembly validates the current directory before publishing its required context contribution. Existing processes and sandbox grants keep their independent ownership. The [service implementation](src/index.ts) defines the API.
 
 No runtime invariant companion is published because the service reads its only directory state from the Session projection and checks filesystem validity at use.
 
@@ -63,7 +63,7 @@ No runtime invariant companion is published because the service reads its only d
 
 #### What the model sees
 
-The current value is `Current working directory: <JSON-quoted absolute path>.` Each committed change, including automatic recovery, attempts to queue a user-context notice through the ordinary Agent inbox. Cancellation or disposal may discard unadmitted notices; the durable directory remains available to the next request. Directory context stays outside the system prompt and remains enabled when optional runtime context is disabled.
+The current value is `Current working directory: <JSON-quoted absolute path>.`, followed by `Workspace root: <JSON-quoted absolute path>.` on a second line while the two differ. Each committed change, including automatic recovery, attempts to queue a user-context notice through the ordinary Agent inbox; a change that selects another root ends its notice with `<JSON-quoted root> is now the workspace root.` Cancellation or disposal may discard unadmitted notices; the durable directory remains available to the next request. Directory context stays outside the system prompt and remains enabled when optional runtime context is disabled.
 
 #### Token effect
 
@@ -78,6 +78,7 @@ Directory transitions append context without replacing the stable system-prompt 
 <a id="known-limitations-and-deferred-work"></a>
 
 - **Missing original project** — when the current directory and the original project are both unavailable, prompt assembly rejects every model turn, including chat-only turns. The service does not choose or recreate a repository. Restore the original directory, or use SDK `setWorkingDirectory` (`set_working_directory` in Python) or `ctx.workingDirectory.set` to select an existing absolute directory before retrying. Existing shells retain their process-local directories.
+- **Anchors compare as recorded** — the original project is the header's recorded path, while `set` and `relocate` record canonical paths from the filesystem provider. A header recorded through a symlink or with different casing never contains those paths, so the root stays on the original project as it does for a directory outside every anchor.
 
 <a id="dev-note"></a>
 ### Dev Note
