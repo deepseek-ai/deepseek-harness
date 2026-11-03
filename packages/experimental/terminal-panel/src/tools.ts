@@ -113,6 +113,7 @@ export function registerUserTerminalTools(ctx: Context, terminals: UserTerminals
       lines: { type: 'number', description: `Newest lines to read (default ${DEFAULT_READ_LINES}).` },
     },
     output: {
+      /* jscpd:ignore-start -- TerminalController screen pages share these fields with tool-terminal's ctx.terminals pages. */
       schema: {
         type: 'object',
         additionalProperties: false,
@@ -124,6 +125,7 @@ export function registerUserTerminalTools(ctx: Context, terminals: UserTerminals
           truncated: { type: 'boolean', required: true },
         },
       },
+      /* jscpd:ignore-end */
       render: (_args, value) => [{ type: 'text', text: renderUserScreen(value, maxReadBytes) }],
     },
     async execute(args: ReadArgs, exec) {
