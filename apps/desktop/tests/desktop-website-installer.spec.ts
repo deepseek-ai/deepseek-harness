@@ -21,7 +21,8 @@ async function fixture(target: DesktopPublishRoute['target'] = 'mac-arm64') {
   const filename = `deepseek-harness-0.2.1-rc.5-${target}.${target === 'win-x64' ? 'exe' : 'dmg'}`
   await writeFile(join(directory, filename), bytes)
   const manifest: DesktopRetainedManifest = { schemaVersion: 1, source: {
-    ...route, repository: 'owner/repo', workflowCommit: route.commit, productVersion: '0.2.1', version: '0.2.1-rc.5',
+    runId: route.runId, attempt: route.attempt, commit: route.commit, sourceRef: route.sourceRef,
+    channel: route.channel, runnerName: route.runnerName, target: route.target, preset: route.preset, repository: 'owner/repo', workflowCommit: route.commit, productVersion: '0.2.1', version: '0.2.1-rc.5',
     testReleaseId: null, qualification: target === 'win-x64' ? 'signed' : 'notarized',
   }, files: [{ name: filename, size: bytes.length, sha512: createHash('sha512').update(bytes).digest('base64') }] }
   return { directory, bytes, route, manifest }

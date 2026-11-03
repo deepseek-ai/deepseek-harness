@@ -11,7 +11,7 @@ import { publishWebsiteCi, websiteApproval } from '../scripts/publish-website-ci
 vi.mock('node:timers/promises', () => ({ setTimeout: async () => {} }))
 afterEach(() => vi.restoreAllMocks())
 
-it.each(['accepted', 'unconfirmed', 'upload', 'put', 'uploaded', 'metadata', 'metadata-retry', 'stable', 'approval'] as const)('preserves publication recovery for %s', async (scenario) => {
+it.each(['accepted', 'unconfirmed', 'incomplete', 'wrong-journal', 'upload', 'put', 'uploaded', 'metadata', 'metadata-retry', 'stable', 'approval'] as const)('preserves publication recovery for %s', async (scenario) => {
   const root = await mkdtemp(join(tmpdir(), 'website-ci-'))
   try {
     const config = join(root, 'packaging')
@@ -96,6 +96,14 @@ it.each(['accepted', 'unconfirmed', 'upload', 'put', 'uploaded', 'metadata', 'me
       return
     }
     const submit = vi.spyOn(teo.v20220901.Client.prototype, 'CreatePurgeTask').mockResolvedValue({ JobId: 'job-1' })
+    if (scenario === 'incomplete' || scenario === 'wrong-journal') {
+      await writeFile(join(records, 'state.json'), JSON.stringify({ approval: scenario === 'wrong-journal' ? 'other' : approval, upload: 'upload-intent' }))
+      const query = vi.spyOn(teo.v20220901.Client.prototype, 'DescribePurgeTasks')
+      await expect(publishWebsiteCi('purge', env)).rejects.toThrow(scenario === 'incomplete' ? 'upload completion is not confirmed' : 'journal belongs to another approved build')
+      expect(submit).not.toHaveBeenCalled()
+      expect(query).not.toHaveBeenCalled()
+      return
+    }
     const query = vi.spyOn(teo.v20220901.Client.prototype, 'DescribePurgeTasks').mockRejectedValue(new Error('fixture-key'))
     if (scenario === 'unconfirmed') submit.mockRejectedValue(new Error('lost response'))
     const output = vi.spyOn(process.stdout, 'write').mockReturnValue(true)
