@@ -819,6 +819,7 @@ describe('dsh-tool-team', () => {
       const system = request.messages.find(message => message.role === 'system')
       const prompt = system?.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
       expect(prompt?.includes('A shared task board is available')).toBe(enabled)
+      expect(prompt?.includes('Before delegating, use team_task_list to reuse existing tasks and team_task_create for missing work.')).toBe(enabled)
       expect(runtimeContextText(request)).toContain(leadIdentity(lead))
       const contexts = request.messages.findLast(message => message.source?.kind === 'runtime-context')?.source
       const initial = adapter.requests[0]!.messages.findLast(message => message.source?.kind === 'runtime-context')?.source
