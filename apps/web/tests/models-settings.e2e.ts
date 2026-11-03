@@ -221,7 +221,7 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-models-customized'))
     const dialog = page.getByRole('dialog', { name: '设置' })
     await dialog.getByRole('button', { name: '编辑 minimax-cn' }).click()
-    await dialog.getByPlaceholder('留空保留现有认证（已保存 API key）', { exact: true }).waitFor({ timeout: 10_000 })
+    await dialog.getByPlaceholder('••••••••', { exact: true }).waitFor({ timeout: 10_000 })
     expect(await dialog.textContent()).not.toContain('API 密钥来源：')
     expect(await dialog.textContent()).not.toMatch(/oauth/i)
     await dialog.getByText('自定义设置').click()

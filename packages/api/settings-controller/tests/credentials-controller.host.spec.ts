@@ -14,16 +14,6 @@ class LeakyCredentials extends MemoryCredentials {
   }
 }
 
-/** A managed provider returning a display preview alongside an undeclared secret. */
-class PreviewCredentials extends MemoryCredentials {
-  override describe(): Promise<CredentialInfo> {
-    return Promise.resolve({
-      configured: true, source: 'file', writable: true,
-      preview: 'sk-m…abcd', value: 'sk-managed-secret-abcd',
-    } as CredentialInfo)
-  }
-}
-
 /** A store whose write rejects with a bare string, the way some client libraries do. */
 class LiteralRejectingCredentials extends MemoryCredentials {
   override async set(): Promise<void> {
@@ -113,15 +103,6 @@ describe('the credentials Remote namespace a configuration surface calls', () =>
     const described = await controller.describe(['DEEPSEEK_API_KEY'])
     expect(described.DEEPSEEK_API_KEY).toEqual({ configured: true, source: 'memory', writable: true })
     expect(JSON.stringify(described)).not.toContain('sk-leaked')
-  })
-
-  it('returns the masked preview without the original stored credential', async () => {
-    const controller = await boot({}, PreviewCredentials)
-    const described = await controller.describe(['DEEPSEEK_API_KEY'])
-    expect(described.DEEPSEEK_API_KEY).toEqual({
-      configured: true, source: 'file', writable: true, preview: 'sk-m…abcd',
-    })
-    expect(JSON.stringify(described)).not.toContain('sk-managed-secret-abcd')
   })
 
   it('stores and removes through the same references the batch describes', async () => {

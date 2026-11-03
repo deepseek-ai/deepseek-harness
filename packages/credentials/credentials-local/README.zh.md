@@ -60,11 +60,11 @@ declare const ctx: Context
 
 const ref = credentialRef('DEEPSEEK_API_KEY')
 await ctx.credentials.set(ref, 'sk-…')          // save
-await ctx.credentials.describe(ref)             // { configured, source?, preview?, writable } — never the value
+await ctx.credentials.describe(ref)             // { configured, source?, writable } — never the value
 await ctx.credentials.unset(ref)                // remove
 ```
 
-你保存的密钥会被下一个按名引用它的请求使用；`describe` 报告它是否已设置、来自哪里、能否写入——绝不返回完整值。超过 12 个字符的已保存密钥只在 `preview` 中显示首尾各四个字符；较短密钥全部遮住。环境凭据不提供摘要。记录也持久化在同一文件中：插件按 `<owner>/<id>` 寻址一条记录，并用 seam 的记录操作（`readRecord`、`describeRecord`、`listRecords`、`modifyRecord`、`deleteRecord`）管理它。
+你保存的密钥会被下一个按名引用它的请求使用；`describe` 报告它是否已设置、来自哪里、能否写入——绝不返回值本身。记录也持久化在同一文件中：插件按 `<owner>/<id>` 寻址一条记录，并用 seam 的记录操作（`readRecord`、`describeRecord`、`listRecords`、`modifyRecord`、`deleteRecord`）管理它。
 
 ### 密钥从哪里来
 

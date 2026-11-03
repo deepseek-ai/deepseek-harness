@@ -18,8 +18,8 @@
       - button "认证说明": "?"
       - button "清除已保存密钥"
       - textbox "API 密钥":
-        - /placeholder: 留空保留现有认证（已保存 API key）
-      - paragraph: 已保存 API key：dsh_…test
+        - /placeholder: ••••••••
+      - paragraph: 已保存 API key
       - group:
         - text: 自定义设置 API 地址
         - textbox "API 地址":

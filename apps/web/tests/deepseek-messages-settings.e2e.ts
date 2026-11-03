@@ -17,7 +17,7 @@ import { openSettings, connectFreshWorkspaceZh, saveFailureShot, ZH_BROWSER_LOCA
 
 const EXPECTED = fileURLToPath(new URL('./expected/deepseek-messages-settings/', import.meta.url))
 
-it.skipIf(webSnapshotMode() === 'record').each(['deepseek-official', 'google', 'openai', 'clear-fixture'])(
+it.skipIf(webSnapshotMode() === 'record').each(['deepseek-official', 'google', 'openai', 'acme-gateway'])(
   'clears the saved %s key and sends the next request with environment authentication', async (provider) => {
     const messages = provider === 'deepseek-official'
     const google = provider === 'google'
@@ -121,6 +121,52 @@ it.skipIf(webSnapshotMode() === 'record').each(['deepseek-official', 'google', '
 )
 
 it.each([{ name: 'Chromium', engine: chromium }, { name: 'WebKit', engine: webkit }])(
+  'protects saved keys and reveals only unsaved replacements in $name', async ({ engine }) => {
+    const scaffold = await launchWebScaffold({ deepSeekMissingCredential: true })
+    let browser: Browser | undefined
+    try {
+      await scaffold.ctx.credentials.set(credentialRef('DEEPSEEK_API_KEY'), 'fixture-protected-old-key')
+      browser = await engine.launch()
+      const page = await browser.newPage({ locale: ZH_BROWSER_LOCALE })
+      await page.goto(scaffold.authenticatedUrl)
+      await openSettings(page, 'zh')
+      const dialog = page.getByRole('dialog', { name: '设置' })
+      await dialog.getByRole('button', { name: '模型', exact: true }).click()
+      const edit = dialog.getByRole('button', { name: '编辑 DeepSeek (deepseek-official)', exact: true })
+      await edit.click()
+      const key = dialog.getByLabel('API 密钥', { exact: true })
+      expect(await key.getAttribute('placeholder')).toBe('••••••••')
+      expect(await key.inputValue()).toBe('')
+      expect(await dialog.getByRole('button', { name: '显示密钥' }).count()).toBe(0)
+      expect(await page.locator('body').innerHTML()).not.toContain('fixture-protected-old-key')
+      await key.press('Backspace')
+      await dialog.getByText('保存后清除已保存密钥，并使用环境认证', { exact: true }).waitFor()
+      expect(await key.getAttribute('placeholder')).toBe('留空使用环境认证（DEEPSEEK_API_KEY）')
+      await dialog.getByRole('button', { name: '撤销清除', exact: true }).click()
+      expect(await key.getAttribute('placeholder')).toBe('••••••••')
+      await key.fill('fixture-new-key')
+      await dialog.getByRole('button', { name: '显示密钥', exact: true }).click()
+      expect(await key.getAttribute('type')).toBe('text')
+      expect(await key.inputValue()).toBe('fixture-new-key')
+      await key.press('ControlOrMeta+A')
+      await key.press('ControlOrMeta+X')
+      await expect.poll(() => key.inputValue()).toBe('')
+      await key.fill('fixture-new-key')
+      await dialog.getByRole('button', { name: '保存', exact: true }).click()
+      await expect.poll(() => key.count()).toBe(0)
+      await edit.click()
+      expect(await key.getAttribute('placeholder')).toBe('••••••••')
+      expect(await key.inputValue()).toBe('')
+      expect(await key.getAttribute('type')).toBe('password')
+      expect(await dialog.getByRole('button', { name: '显示密钥' }).count()).toBe(0)
+      expect(await page.locator('body').innerHTML()).not.toContain('fixture-new-key')
+    } finally {
+      try { await browser?.close() } finally { await scaffold.close() }
+    }
+  },
+)
+
+it.each([{ name: 'Chromium', engine: chromium }, { name: 'WebKit', engine: webkit }])(
   'keeps a foreign model drag from editing another provider input in $name', async ({ engine }) => {
     const scaffold = await launchWebScaffold({ deepSeekMissingCredential: true })
     let browser: Browser | undefined
@@ -200,8 +246,8 @@ describe.skipIf(webSnapshotMode() === 'record')('web e2e: DeepSeek Messages sett
     const messages = dialog
     const key = messages.getByLabel('API 密钥', { exact: true })
     expect(await key.inputValue()).toBe('')
-    expect(await key.getAttribute('placeholder')).toBe('留空保留现有认证（已保存 API key）')
-    await messages.getByText('已保存 API key：sk-m…ding', { exact: true }).waitFor()
+    expect(await key.getAttribute('placeholder')).toBe('••••••••')
+    await messages.getByText('已保存 API key', { exact: true }).waitFor()
     await messages.getByText('自定义设置', { exact: true }).click()
     expect(await messages.getByLabel('API 地址', { exact: true }).getAttribute('placeholder'))
       .toBe('https://api.deepseek.com/anthropic（默认使用环境 DEEPSEEK_BASE_URL）')
@@ -228,12 +274,12 @@ describe.skipIf(webSnapshotMode() === 'record')('web e2e: DeepSeek Messages sett
     expect(await page.locator('body').innerText()).not.toContain('sk-e2e-')
     await dialog.getByRole('button', { name: '编辑 DeepSeek (deepseek-official)', exact: true }).click()
     expect(await key.inputValue()).toBe('')
-    await messages.getByText('已保存 API key：sk-e…ages', { exact: true }).waitFor()
+    await messages.getByText('已保存 API key', { exact: true }).waitFor()
     expect(await key.getAttribute('type')).toBe('password')
     await key.fill('sk-cancelled-replacement')
-    expect(await messages.getByText('已保存 API key：sk-e…ages', { exact: true }).count()).toBe(0)
+    expect(await messages.getByText('已保存 API key', { exact: true }).count()).toBe(0)
     await key.fill('')
-    await messages.getByText('已保存 API key：sk-e…ages', { exact: true }).waitFor()
+    await messages.getByText('已保存 API key', { exact: true }).waitFor()
     await messages.getByRole('button', { name: '保存', exact: true }).click()
     await dialog.getByText('已保存 DeepSeek (deepseek-official)。', { exact: true }).waitFor()
     expect(await readFile(join(scaffold.harnessHome, '.credentials.yaml'), 'utf8')).toBe(credentials)

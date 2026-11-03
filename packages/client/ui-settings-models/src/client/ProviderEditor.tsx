@@ -200,9 +200,9 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     return { ...loaded, retryPolicy: { ...policy, mode } }
   })
   // An empty string preserves authentication; a reference stages its removal.
-  const [keyDraft, setKeyDraft] = useState<string | { readonly ref: string }>('')
+  const [keyDraft, setKeyDraft] = useState<string | { readonly ref: string; readonly removed?: true }>()
   const keyText = typeof keyDraft === 'string' ? keyDraft : ''
-  const keyRemoval = typeof keyDraft === 'string' ? undefined : keyDraft
+  const keyRemoval = typeof keyDraft === 'object' ? keyDraft : undefined
   const [busy, setBusy] = useState(false)
   const [listBusy, setListBusy] = useState(false)
   const { onBusyChange } = props
@@ -313,9 +313,8 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
    */
   const applyOnce = async (): Promise<string | undefined> => {
     const ns = namespace.ns
-    // A catalog provider returns to native authentication when this page's
-    // derived reference is removed. Explicit aliases and custom routes keep
-    // their reference so its environment fallback remains addressable.
+    // Removing a catalog route's conventional reference restores native auth.
+    // Other aliases and custom routes keep their named environment fallback.
     const profileDraft = clearsDerivedRef ? schema.deletePath(draft, ['apiKeyEnv']) : draft
     // A pi-ai profile names the conventional reference only when this page is
     // about to store a key. Otherwise the provider keeps its native auth path.
@@ -348,6 +347,12 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       : materializesNativeProfile
         ? [{ op: 'set', path: [...settingsPath], value: {} }]
         : pathOps(settingsPath, committedOriginal, next)
+    if (keyRemoval !== undefined && keyRemoval.removed !== true) {
+      const removed = await operations.removeCredential(keyRemoval.ref)
+      if (removed !== undefined) return removed
+      // A later settings failure cannot restore a secret that was deleted.
+      setKeyDraft({ ...keyRemoval, removed: true })
+    }
     if (ops.length > 0) {
       const written = await operations.writeSettings(ns, ops, expectedRevision)
       if (written.kind !== 'written') return written.kind === 'conflict' ? t('conflict') : written.message
@@ -355,10 +360,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       setExpectedRevision(written.view.revision)
       setDraft(next)
     }
-    if (keyRemoval !== undefined) {
-      const removed = await operations.removeCredential(keyRemoval.ref)
-      if (removed !== undefined) return removed
-    } else if (keyValue.length > 0) {
+    if (keyValue.length > 0) {
       const stored = await operations.storeCredential(keyRef, keyValue)
       if (stored !== undefined) return stored
     }
@@ -438,15 +440,14 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     const detectedRef = detected?.[0]
     const detectedVisibleRef = detectedRef === undefined || !visibleRefs.includes(detectedRef) ? undefined : detectedRef
     const missingRefs = checkedRefs.length > 0 && checkedRefs.every(([, info]) => info?.configured === false)
-    const savedPreview = detected?.[1]?.preview
-    const savedCredential = detected?.[1]?.source === 'file' || savedPreview !== undefined
+    const savedCredential = detected?.[1]?.source === 'file' && detectedVisibleRef !== undefined
     const removalRef = keyRemoval?.ref ?? detectedRef
     const credentialHint = keyText.length > 0 || props.credentialRequired === true
       ? undefined
-      : keyRemoval !== undefined ? t('keyRemovePending')
+      : keyRemoval !== undefined ? t(keyRemoval.removed === true ? 'keyRemoveApplied' : 'keyRemovePending')
         : keyHint === undefined ? undefined
           : savedCredential
-            ? savedPreview === undefined ? t('keySaved') : t('keySavedPreview').replace('{preview}', () => savedPreview)
+            ? t('keySaved')
             : t(detectedRef === undefined ? missingRefs ? 'keyFallbackMissing' : 'keyFallbackUnchecked'
               : detectedVisibleRef === undefined ? 'keyFallbackDetectedHidden' : 'keyFallbackDetected')
               .replace('{hint}', () => detectedVisibleRef ?? keyHint)
@@ -482,27 +483,36 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
             <span className={styles['fieldLabel']}>
               {t('keyInput')}
               {authHelp}
-              {keyText.length === 0 && props.credentialRequired !== true && removalRef !== undefined
-                && (keyRemoval !== undefined || (savedCredential && detected?.[1]?.writable === true))
+              {keyRemoval?.removed !== true && keyText.length === 0 && props.credentialRequired !== true && removalRef !== undefined
+                && (keyRemoval !== undefined || (savedCredential && detected[1].writable))
                 ? <button
                   type="button"
                   className={styles['linkButton']}
                   disabled={disabled}
-                  onClick={() => { setKeyDraft(keyRemoval !== undefined ? '' : { ref: removalRef }) }}
+                  onClick={() => {
+                    setKeyDraft(keyRemoval !== undefined ? undefined : { ref: removalRef })
+                    setFailure(undefined)
+                  }}
                 >{t(keyRemoval !== undefined ? 'keyRemoveUndo' : 'keyRemove')}</button>
                 : null}
             </span>
             <ApiKeyInput
               t={t}
               value={keyText}
+              {...keyDraft === undefined && savedCredential ? {
+                saved: {
+                  ...detected[1].writable && removalRef !== undefined
+                    ? { clear: () => { setKeyDraft({ ref: removalRef }); setFailure(undefined) } } : {},
+                },
+              } : {}}
               placeholder={keyPlaceholder}
               aria-label={t('keyInput')}
               aria-invalid={shownKeyFailure !== undefined && !protocolKeyMissing}
               aria-describedby={credentialHint === undefined ? undefined : `${props.provider}-credential-hint`}
               required={props.credentialRequired === true || protocolNeedsKeyHere}
               autoFocus={props.autoFocusCredential === true}
-              disabled={disabled}
-              onChange={(event) => { setKeyDraft(event.target.value) }}
+              disabled={disabled || keyRemoval?.removed === true}
+              onChange={(event) => { setKeyDraft(event.target.value); setFailure(undefined) }}
             />
             {credentialHint === undefined ? null : <p id={`${props.provider}-credential-hint`} className={styles[keyRemoval !== undefined || missingRefs ? 'notice' : detectedRef === undefined ? 'advancedHint' : 'savedNotice']}>{credentialHint}</p>}
             {/* A key the protocol requires is a requirement still to meet, not a fault. */}
@@ -674,7 +684,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
           || (props.credentialRequired === true && keyValue.length === 0)}
         submitLabelKey={props.submitLabelKey ?? 'apply'}
         submitBusyLabelKey={props.submitBusyLabelKey ?? 'applying'}
-        {...props.cancelLabelKey === undefined ? {} : { cancelLabelKey: props.cancelLabelKey }}
+        cancelLabelKey={keyRemoval?.removed === true ? 'close' : props.cancelLabelKey ?? 'cancel'}
         onCancel={() => { props.onClose(false) }}
         onSubmit={() => { props.onSubmitCredential?.(); void apply() }}
       />

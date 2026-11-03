@@ -32,21 +32,19 @@ interface ResolvedCredential {
 
 ## Description
 
-`describe(ref)` reports whether a reference resolves, its source, writability, and an optional masked preview of a managed credential. It never returns the full value or an ambient credential preview. The local provider ranks its managed file above the launch environment, so saving a value always creates the effective writable layer; removing it reveals the launch environment or `.env` fallback again.
+`describe(ref)` answers configuration surfaces without ever exposing a value: whether the reference resolves, from which layer, and whether `set` would currently succeed. The local provider ranks its managed file above the launch environment, so saving a value always creates the effective writable layer; removing it reveals the launch environment or `.env` fallback again.
 
 ```ts type-equiv
 /**
  * Source and writability facts for one reference, safe for configuration UIs —
- * never the full value. Providers may include a masked preview of a managed
- * credential; ambient credentials do not expose a preview.
+ * never the value. The view has no slot a value could ride in, which is what
+ * lets the whole read half cross the Remote wire.
  */
 interface CredentialInfo {
   /** Whether resolving the reference would currently return a value. */
   configured: boolean
   /** Source layer currently supplying the value; absent while unconfigured. */
   source?: string
-  /** Masked managed value for display only; short values must be fully masked. */
-  preview?: string
   /** Whether the active provider can write this reference. */
   writable: boolean
 }
