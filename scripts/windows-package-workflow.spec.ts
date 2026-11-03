@@ -113,22 +113,16 @@ it('retains failure diagnostics and uploads only the selected successful install
     DESKTOP_PACKAGE_ATTEMPT: '${{ needs.package.outputs.attempt }}',
     DESKTOP_PACKAGE_RUNNER: '${{ needs.package.outputs.runner-name }}',
   })
-  for (const step of archive.steps.filter(step => step.uses?.startsWith('actions/upload-artifact@'))) {
-    expect(step.with?.name).toContain('${{ needs.package.outputs.version }}')
-    expect(step.with?.name).toContain('${{ needs.package.outputs.attempt }}')
-    expect(step.with?.name).not.toContain('github.run_attempt')
-  }
+
   const archival = workflow.jobs['upload-artifact']!.steps.filter(step => step.uses?.startsWith('actions/upload-artifact@'))
-  expect(archival).toHaveLength(2)
+  expect(archival).toHaveLength(1)
   expect(uploads[0]!.if).toBe("always() && steps.checkout.outcome == 'success'")
   expect(uploads[0]!.with).toMatchObject({
     path: '${{ github.workspace }}/apps/desktop/.desktop-build/packaging-runs/',
     'include-hidden-files': true,
   })
-  for (const mode of ['unsigned', 'signed']) {
-    const upload = archival.find(step => step.if === `success() && inputs.signing == '${mode}'`)!
-    expect(upload.with).toMatchObject({ path: '${{ needs.package.outputs.directory }}/*', 'if-no-files-found': 'error', 'compression-level': 0 })
-  }
+  expect(archive.env.DESKTOP_ARCHIVE_NAME).toBe('windows-x64-${{ inputs.signing }}-${{ needs.package.outputs.version }}-${{ github.run_id }}-${{ needs.package.outputs.attempt }}.zip')
+  expect(archival[0]!.with).toMatchObject({ path: '${{ steps.archive.outputs.path }}', 'if-no-files-found': 'error', archive: false, overwrite: true, name: '${{ env.DESKTOP_ARCHIVE_NAME }}' })
 })
 
 it('normalizes priority in the dependency and packaging shells before launching their children', () => {

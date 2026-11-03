@@ -167,6 +167,7 @@ jobs:
     timeout-minutes: 30
     env:
       DESKTOP_RETAINED_DIRECTORY: ${{ needs.package.outputs.directory }}
+      DESKTOP_ARCHIVE_NAME: macos-arm64-${{ needs.package.outputs.mode }}-${{ needs.package.outputs.version }}-${{ github.run_id }}-${{ needs.package.outputs.attempt }}.zip
       DESKTOP_PACKAGE_ATTEMPT: ${{ needs.package.outputs.attempt }}
       DESKTOP_PACKAGE_RUNNER: ${{ needs.package.outputs.runner-name }}
     steps:
@@ -189,17 +190,17 @@ jobs:
           echo "PNPM_CONFIG_STORE_DIR=$DSH_DESKTOP_PACKAGE_CACHE_DIR/workspace-pnpm-store" >> "$GITHUB_ENV"
       - run: pnpm install --frozen-lockfile
         working-directory: artifact-archiver
-      - name: Verify original retained build before GitHub archival
+      - name: Archive verified retained build
+        id: archive
         working-directory: artifact-archiver
         run: node --import tsx apps/desktop/scripts/archive-desktop-ci.ts
       - name: Retain installers for the selected mode
         if: success()
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: macos-arm64-${{ needs.package.outputs.mode }}-${{ needs.package.outputs.version }}-${{ github.run_id }}-${{ needs.package.outputs.attempt }}
-          include-hidden-files: true
-          path: ${{ needs.package.outputs.directory }}/*
-          compression-level: 0
+          name: ${{ env.DESKTOP_ARCHIVE_NAME }}
+          path: ${{ steps.archive.outputs.path }}
+          archive: false
           if-no-files-found: error
           retention-days: 14
           overwrite: true

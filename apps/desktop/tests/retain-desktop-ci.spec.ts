@@ -1,4 +1,5 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { execFileSync } from 'node:child_process'
+import { mkdtemp, mkdir, readFile, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
@@ -39,6 +40,34 @@ it.each([
   const directory = await retainDesktopCi(env, appRoot)
   const archiveEnv = { ...env, GITHUB_RUN_ATTEMPT: '3', DESKTOP_RETAINED_DIRECTORY: directory,
     DESKTOP_PACKAGE_ATTEMPT: '2', DESKTOP_PACKAGE_RUNNER: env.RUNNER_NAME }
+  if (target === 'win-x64' && qualification === 'signed' && ['darwin', 'win32'].includes(process.platform)) {
+    const timestamp = Date.UTC(2026, 9, 23, 8, 2, 43) / 1000
+    await utimes(join(directory, 'manifest.json'), timestamp, timestamp)
+    const output = join(root, 'archive-output')
+    execFileSync(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../scripts/archive-desktop-ci.ts')], {
+      env: { ...process.env, ...archiveEnv, DESKTOP_ARCHIVE_NAME: 'fixture.zip', GITHUB_OUTPUT: output, RUNNER_TEMP: root },
+    })
+    const path = (await readFile(output, 'utf8')).trim().slice('path='.length)
+    const listing = execFileSync(process.platform === 'win32' ? 'python' : 'python3', ['-c', `
+import datetime, json, struct, sys, zipfile
+with zipfile.ZipFile(sys.argv[1]) as archive:
+    entry = archive.getinfo('manifest.json')
+    seconds = int(sys.argv[2])
+    assert entry.date_time == datetime.datetime.fromtimestamp(seconds - 1).timetuple()[:6]
+    extra = entry.extra
+    while extra:
+        tag, size = struct.unpack_from('<HH', extra)
+        if tag == 0x5455:
+            assert extra[4] & 1 and struct.unpack_from('<I', extra, 5)[0] == seconds
+            break
+        extra = extra[4 + size:]
+    else:
+        raise AssertionError('missing Unix modification time')
+    assert archive.testzip() is None
+    print(json.dumps(archive.namelist()))
+`, path, String(timestamp)], { encoding: 'utf8' })
+    expect(JSON.parse(listing)).toEqual(['manifest.json', ...names])
+  }
   await verifyDesktopArchive(archiveEnv)
   await expect(verifyDesktopArchive({ ...archiveEnv, RUNNER_NAME: 'other' })).rejects.toThrow('wrong original machine')
   await expect(verifyDesktopArchive({ ...archiveEnv, DESKTOP_PACKAGE_ATTEMPT: '3' })).rejects.toThrow('original build')
