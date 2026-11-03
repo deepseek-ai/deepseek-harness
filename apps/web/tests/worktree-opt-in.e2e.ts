@@ -1,4 +1,4 @@
-/** Git Worktrees opt-in through the shipped plugin manager, profile, and Loader. */
+/** Unified review and worktree opt-in through the shipped plugin manager, profile, and Loader. */
 
 import { execFile } from 'node:child_process'
 import { readFile, writeFile } from 'node:fs/promises'
@@ -6,16 +6,19 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { FiberState } from '@deepseek-ai/cordis'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-experimental-worktree'
+import type {} from '@deepseek-ai/dsh-experimental-client-ui-forge'
 import { chromium } from 'playwright'
 import { expect, it, onTestFailed, onTestFinished } from 'vitest'
 import { launchWebScaffold, watchConsole } from './scaffold.ts'
 import { connectFreshWorkspace, newEnglishPage, PLUGIN_TOGGLE_SETTLE_MS, saveFailureShot } from './support.ts'
 
-const BUNDLE = '@deepseek-ai/dsh-experimental-tool-worktree'
+const BUNDLE = '@deepseek-ai/dsh-experimental-forge-bundle'
+const STANDALONE = '@deepseek-ai/dsh-experimental-tool-worktree'
 const exec = promisify(execFile)
 
-it('persists the Git Worktrees switch and removes its capability while retaining checkouts', async () => {
+it('persists the unified review and worktree switch and retains checkouts after disabling', async () => {
   const scaffold = await launchWebScaffold({
     extraOverlayPath: fileURLToPath(new URL('./pin-browse-picker.overlay.yml', import.meta.url)),
   })
@@ -70,13 +73,15 @@ it('persists the Git Worktrees switch and removes its capability while retaining
   }
   let panel = await openPlugins()
   let card = panel.locator(`[data-plugin-group="more"] [data-plugin-package="${BUNDLE}"]`)
-  await card.getByRole('button', { name: 'View Git worktrees', exact: true }).waitFor()
+  await card.getByRole('button', { name: 'View Change requests & worktrees', exact: true }).waitFor()
+  expect(await panel.locator(`[data-plugin-package="${STANDALONE}"]`).count()).toBe(0)
   expect(await card.getByText('Experimental', { exact: true }).count()).toBe(1)
-  let toggle = card.getByRole('switch', { name: 'Enable Git worktrees', exact: true })
+  let toggle = card.getByRole('switch', { name: 'Enable Change requests & worktrees', exact: true })
   expect(await toggle.getAttribute('aria-checked')).toBe('false')
   expect(await selectedBundles()).not.toContain(BUNDLE)
   expect(rows()).toEqual([])
   expect(scaffold.ctx.get('worktrees')).toBeUndefined()
+  expect(scaffold.ctx.get('forgePanel')).toBeUndefined()
   expect(tools()).toContain('working_directory')
   expect(tools()).not.toContain('create_worktree')
 
@@ -85,14 +90,21 @@ it('persists the Git Worktrees switch and removes its capability while retaining
   await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('true')
   expect(await selectedBundles()).toContain(BUNDLE)
   expect(tools()).toContain('create_worktree')
-  const created = await scaffold.ctx.worktrees.create(agent, { name: 'gui-opt-in' })
+  expect(scaffold.ctx.get('forgePanel')).toBeDefined()
+  const created = { path: join(repository, '.agents/worktrees/gui-opt-in'), baseCommit: (await git('rev-parse', 'HEAD')).stdout.trim() }
+  const result = await scaffold.ctx.tools.execute({
+    agent, signal: new AbortController().signal,
+    calls: [{ type: 'tool-call', id: ToolCallId('gui-opt-in'), name: 'create_worktree', arguments: JSON.stringify({ name: 'gui-opt-in' }) }],
+  })
+  expect(result.results[0]?.result.isError).not.toBe(true)
+  expect(result.results[0]?.result.value).toEqual({ ...created, branch: 'gui-opt-in', repositoryRoot: repository })
   expect(await readFile(join(created.path, 'retained.txt'), 'utf8')).toBe('retained checkout\n')
   expect(scaffold.ctx.workingDirectory.get(agent.session)).toBe(created.path)
 
   await page.reload({ waitUntil: 'load' })
   panel = await openPlugins()
   card = panel.locator(`[data-plugin-group="more"] [data-plugin-package="${BUNDLE}"]`)
-  toggle = card.getByRole('switch', { name: 'Enable Git worktrees', exact: true })
+  toggle = card.getByRole('switch', { name: 'Enable Change requests & worktrees', exact: true })
   await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
   expect(tools()).toContain('create_worktree')
   await toggle.click()
@@ -100,6 +112,7 @@ it('persists the Git Worktrees switch and removes its capability while retaining
   await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('false')
   expect(await selectedBundles()).not.toContain(BUNDLE)
   expect(scaffold.ctx.get('worktrees')).toBeUndefined()
+  expect(scaffold.ctx.get('forgePanel')).toBeUndefined()
   expect(tools()).not.toContain('create_worktree')
   expect(tools()).toContain('working_directory')
   expect(await readFile(join(created.path, 'retained.txt'), 'utf8')).toBe('retained checkout\n')
@@ -108,7 +121,7 @@ it('persists the Git Worktrees switch and removes its capability while retaining
 
   await page.reload({ waitUntil: 'load' })
   panel = await openPlugins()
-  await expect.poll(() => panel.getByRole('switch', { name: 'Enable Git worktrees', exact: true })
+  await expect.poll(() => panel.getByRole('switch', { name: 'Enable Change requests & worktrees', exact: true })
     .getAttribute('aria-checked')).toBe('false')
   expect(tools()).not.toContain('create_worktree')
   expect(await selectedBundles()).not.toContain(BUNDLE)

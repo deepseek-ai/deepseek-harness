@@ -74,9 +74,8 @@ describe('interface creation', () => {
     await f.ctx.plugin(CreationRecommendations)
     expect(f.current()?.phase).toBe('installed')
     expect((await f.act('create')).status).toBe('settled')
-    await f.act('keep')
-    expect(f.current()?.phase).toBe('kept')
-    expect(f.manager.removeBundle).not.toHaveBeenCalled()
+    expect(await f.act('keep')).toEqual({ status: 'refused', reason: 'unavailable' })
+    expect(f.current()?.phase).toBe('installed')
     await f.act('undo')
     expect(f.manager.removeBundle).toHaveBeenCalledExactlyOnceWith(f.current()?.bundleName)
     expect(f.current()?.phase).toBe('removed')
@@ -306,6 +305,16 @@ describe('interface creation', () => {
     await f.act('undo')
     expect(f.current()?.phase).toBe('removed')
     expect(f.manager.removeBundle).not.toHaveBeenCalled()
+  })
+
+  it('offers Undo on a page that an earlier build recorded as kept', async () => {
+    const f = await fixture()
+    await f.propose()
+    recordCard(f.agent.session, { callId, phase: 'kept', slot: 'page', bundleName: '@dsh-local/view-kept' })
+    f.bundles.push(installedBundle('@dsh-local/view-kept'))
+    expect(await f.act('create')).toEqual(settled('kept', { slot: 'page', bundleName: '@dsh-local/view-kept' }))
+    expect(await f.act('undo')).toEqual(settled('removed', { slot: 'page', bundleName: '@dsh-local/view-kept', application: 'applied' }))
+    expect(f.manager.removeBundle).toHaveBeenCalledExactlyOnceWith('@dsh-local/view-kept')
   })
 
   it('ignores page receipts whose data no longer validates and decisions of other kinds', async () => {

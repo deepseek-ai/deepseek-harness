@@ -14,6 +14,7 @@
 import { memo, useMemo, useRef } from 'react'
 import type { ReactNode } from 'react'
 import clsx from 'clsx'
+import { copyKatexAsTex } from './copy-tex.ts'
 import { IncrementalMarkdownParser } from './incremental.ts'
 import { parseGfm, parseGfmWithMath } from './parse.ts'
 import {
@@ -179,6 +180,8 @@ class StreamingRenderer {
  * including `#L24` / `#L24-L30` fragments and `:24` / `:24-30` / `:24:5` suffixes
  * (ranges open at their first line, columns are ignored, and invalid locations
  * open only the file; see the README for URL/path classification).
+ * Copying a selection inside the document writes selected formulas as
+ * `$…$` / `$$…$$` TeX source.
  * @returns A GFM document with TeX math rendered through KaTeX; raw HTML never
  * renders as markup, and unsafe protocols are disabled. Local links without an opener remain text;
  * absolute HTTP(S) images render directly.
@@ -210,5 +213,6 @@ export const MarkdownText = memo(function MarkdownText({
   }, [text, streaming, labels, fileMentions, pathImages, omitHtml])
   return <div className={clsx(css.markdown, variant === 'compact' && css.compact)}
     data-text-interaction-source={textInteractionSource ? '' : undefined}
-    data-markdown-variant={variant === 'compact' ? variant : undefined}>{children}</div>
+    data-markdown-variant={variant === 'compact' ? variant : undefined}
+    onCopy={(event) => { copyKatexAsTex(event.nativeEvent, event.currentTarget) }}>{children}</div>
 })

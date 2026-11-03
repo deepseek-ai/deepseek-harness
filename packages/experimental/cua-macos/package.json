@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-cua-macos",
   "description": "macOS native provider for shared Computer Use application and window objects",
-  "version": "0.2.2-alpha.2",
+  "version": "0.2.2-alpha.3",
   "publishConfig": {
     "access": "public"
   },
@@ -53,10 +53,10 @@
     "@deepseek-ai/dsh-user-questions": "workspace:*"
   },
   "dependencies": {
+    "@deepseek-ai/schemastery": "workspace:~",
     "zod": "^4.4.3",
     "@deepseek-ai/dsh-atomic-write": "workspace:*",
-    "@deepseek-ai/dsh-cua": "workspace:*",
-    "@deepseek-ai/schemastery": "workspace:~"
+    "@deepseek-ai/dsh-cua": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-working-directory": "workspace:*",
