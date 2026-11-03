@@ -2157,7 +2157,7 @@ Source: [`packages/subagent/tool-subagent-control/src/index.ts`](../packages/sub
 
 ### `wait_agent`
 
-Wait for input at your next step, including agent messages, completion notifications, and user steering. Returns immediately when that input is already pending.
+Wait for input at your next model step; returns immediately if input is pending. Does not consume messages. When called from code, wait once, then finish execution so messages can be delivered. Do not loop.
 
 ```json
 {
