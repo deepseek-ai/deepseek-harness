@@ -285,6 +285,7 @@
     { "path": "./vendor/plugin-im-core" },
     { "path": "./vendor/plugin-im-adapter-lark" },
     { "path": "./vendor/plugin-im-adapter-qq" },
+    { "path": "./vendor/plugin-im-markdown" },
     { "path": "./vendor/satori-element" },
     { "path": "./vendor/element" },
     { "path": "./vendor/http" },

@@ -18,20 +18,25 @@ import type { Bot } from './bot.ts'
 import { createRenderReport } from './fallback.ts'
 import type { Envelope, Mode, ModeTypes, TransformResult } from './mode.ts'
 import type { Target } from './protocol.ts'
-import { RenderEngine } from './registry.ts'
+import { markdownOf, RenderEngine } from './registry.ts'
+import type { StreamPhase } from './stream.ts'
 
 export interface TransformOptions<T extends ModeTypes> {
   bot: Bot
   target: Target
   mode: Mode<T>
+  /** The stream state being rendered (`RenderContext.stream`); omitted outside a stream. */
+  stream?: StreamPhase | undefined
 }
 
 /** Transform a normalized `<message>` into the mode's drafts. */
 export function transform<T extends ModeTypes>(content: Element<'message'>, options: TransformOptions<T>): TransformResult<T['draft']> {
   if (content?.type !== 'message') throw new TypeError('transform() expects a normalized <message> root (use normalize())')
-  const { bot, target, mode } = options
+  const { bot, target, mode, stream } = options
   const report = createRenderReport()
-  const engine = new RenderEngine<T>(mode.elements, { bot, target, mode: mode.id, limits: mode.limits, report })
+  const engine = new RenderEngine<T>(mode.elements, {
+    bot, target, mode: mode.id, limits: mode.limits, report, stream, markdown: markdownOf(bot),
+  })
   engine.register(content, undefined, 'message', 0)
 
   const roots: Element[] = []
@@ -56,6 +61,9 @@ export function transform<T extends ModeTypes>(content: Element<'message'>, opti
   }
 
   const nodes = engine.renderChildren(body, content)
+  // An intermediate stream state whose body renders nothing yet (markdown still writing its first block) has nothing
+  // to publish; the pipeline skips it instead of opening the stream with an empty message.
+  if (!nodes.length && stream?.final === false) return { msgs: [], actions: [], report }
   const msgs = mode.assemble(nodes, envelope, engine.context(content))
   if (msgs && typeof (msgs as unknown as { then?: unknown }).then === 'function') {
     throw new TypeError(`assemble of mode "${mode.id}" returned a promise; transform is synchronous`)

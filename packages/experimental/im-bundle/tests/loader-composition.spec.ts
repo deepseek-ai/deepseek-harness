@@ -19,6 +19,7 @@ import { Context, type Plugin } from '@deepseek-ai/cordis'
 import Include, { entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { Satori } from '@deepseek-ai/cordis-plugin-im-core'
+import Markdown from '@deepseek-ai/cordis-plugin-im-markdown'
 import { FakeAdapter, createTextMode } from '@deepseek-ai/cordis-plugin-im-core/src/testing.ts'
 import LarkBot from '@deepseek-ai/cordis-plugin-im-adapter-lark'
 import { Config as QQConfig } from '@deepseek-ai/cordis-plugin-im-adapter-qq'
@@ -101,10 +102,11 @@ const SCHEMAS: Record<string, Schema> = {
 }
 
 describe('IM bundle rows', () => {
-  it('declares the IM plane: core, both adapters, host, commands', () => {
+  it('declares the IM plane: core, markdown, both adapters, host, commands', () => {
     expect(rows().map(row => [row.id, row.name])).toEqual([
       ['im-http', '@deepseek-ai/cordis-plugin-http'],
       ['im-core', '@deepseek-ai/cordis-plugin-im-core'],
+      ['im-markdown', '@deepseek-ai/cordis-plugin-im-markdown'],
       ['im-feishu', '@deepseek-ai/cordis-plugin-im-adapter-lark'],
       ['im-qq', '@deepseek-ai/cordis-plugin-im-adapter-qq'],
       ['im', '@deepseek-ai/dsh-experimental-im'],
@@ -198,6 +200,7 @@ async function boot(): Promise<Booted> {
   const modules = new Map<string, unknown>([
     ['@deepseek-ai/cordis-plugin-http', fake('im-http')],
     ['@deepseek-ai/cordis-plugin-im-core', Satori],
+    ['@deepseek-ai/cordis-plugin-im-markdown', Markdown],
     // The adapter override: the Feishu application module is replaced by the in-memory fake platform.
     ['fixture:fake-adapter', fake('im-feishu', [], (child) => {
       child.plugin(FakeAdapter, { modes: { text: createTextMode() }, selfId: 'cli_fake' })

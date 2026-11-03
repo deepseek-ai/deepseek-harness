@@ -21,6 +21,9 @@
       "path": "../plugin-im-core"
     },
     {
+      "path": "../plugin-im-markdown"
+    },
+    {
       "path": "../satori-element"
     },
     {

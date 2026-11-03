@@ -11,7 +11,6 @@ export { type Attrs, type BareTag, type Component, type ElementFactory, Fragment
 export * from './normalize.ts'
 export * from './variants.ts'
 export * from './text.ts'
-export { fromMarkdown } from './markdown.ts'
 export { escape, unescape } from '@deepseek-ai/cordis-element'
 
 export { h as default } from './factory.ts'

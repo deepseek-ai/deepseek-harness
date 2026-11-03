@@ -3,12 +3,11 @@
  *
  * Total: works on unnormalized trees and never throws for unknown tags (their children are projected).
  * Blocks are separated by one newline; envelope `quote` is omitted, `title` is the first line; a `<fallback>` projects
- * its last candidate.
+ * its last candidate; `<markdown>` projects its source as it is (the converter lives with the IM render engine).
  */
 
 import { elementInfo, isTag } from './elements.ts'
 import { Fragment, toChildren } from './factory.ts'
-import { fromMarkdown } from './markdown.ts'
 import type { Child, Element } from './vocabulary.ts'
 
 type Node = Element & { attrs: Record<string, any> }
@@ -104,7 +103,7 @@ function blockText(node: Node): string | undefined {
     case 'td': return flow(kids)
     case 'details': return flow(kids)
     case 'button-group': return kids.map(child => child.type === 'button' ? buttonText(child) : inlineText(child)).join(' ')
-    case 'markdown': return flow(fromMarkdown(String(attrs.content ?? children(node))) as Node[])
+    case 'markdown': return String(attrs.content ?? children(node))
     default: {
       if (!isTag(node.type)) return children(node)
       const info = elementInfo[node.type]
@@ -137,7 +136,7 @@ function inlineText(node: Node): string {
     case 'forward': return children(node) || '[forward]'
     case 'quote': return ''
     case 'fallback': return inline(lastCandidate(node))
-    case 'markdown': return toText(fromMarkdown(String(attrs.content ?? children(node))))
+    case 'markdown': return String(attrs.content ?? children(node))
     default: return isTag(node.type) && elementInfo[node.type].position === 'block' ? blockText(node) ?? '' : children(node)
   }
 }

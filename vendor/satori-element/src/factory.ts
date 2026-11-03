@@ -28,7 +28,7 @@ export interface ElementFactory {
   <K extends Tag>(tag: K, attrs: Attrs<K>, ...children: Child[]): Element<K>
   <K extends BareTag>(tag: K, ...children: Child[]): Element<K>
   text(content: string): Element<'text'>
-  /** `<markdown content>`: expanded into elements by `normalize`. */
+  /** `<markdown content>`: GFM source, expanded into elements by the IM render engine's `markdown` service. */
   markdown(source: string): Element<'markdown'>
 }
 

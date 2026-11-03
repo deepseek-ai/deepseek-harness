@@ -11,6 +11,7 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest'
+import Markdown from '@deepseek-ai/cordis-plugin-im-markdown'
 import { h, type Fragment } from '@deepseek-ai/satori-element'
 import type { Prepared, SerializeContext } from '@deepseek-ai/cordis-plugin-im-core'
 import { expectGolden, mountFakeAdapter, renderCorpus, runConformance } from '@deepseek-ai/cordis-plugin-im-core/src/testing.ts'
@@ -41,6 +42,7 @@ async function mount(options: { allowAtAll?: boolean; stream?: boolean } = {}) {
     modes: { post: mode },
     ...options.stream ? { stream: { post: 'edit' as const } } : {},
   })
+  await result.ctx.plugin(Markdown)
   mounted.push({ dispose: () => result.ctx.fiber.dispose() })
   return { ...result, mode }
 }

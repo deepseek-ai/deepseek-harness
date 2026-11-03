@@ -14,6 +14,9 @@
  *   mode has no diff, or the previous tick failed and the platform state is uncertain).
  * - `close` always receives the full final state; it must also end platform streaming (CardKit `streaming_mode`
  *   off, QQ `input_state` 10) even when the content did not change.
+ * - Every state renders with `RenderContext.stream` set (`{ strategy, final }`), so an element whose rendering
+ *   changes as it grows can keep an `append` stream's published prefix intact; an intermediate state that renders no
+ *   message at all is skipped.
  * - A driver signals "this platform message cannot take this state" by throwing {@link StreamLimitError}
  *   (`shape`: append-only got a non-prefix change; `budget`: edits/window exhausted; `size`: too large). The
  *   scheduler then stops intermediate publication and resolves the stream at close by recalling and resending. A
@@ -33,6 +36,18 @@ import type { Target } from './protocol.ts'
 import type { Prepared } from './resource.ts'
 
 export type StreamStrategy = 'patch' | 'edit' | 'append' | 'final'
+
+/**
+ * What the render of one stream state knows about the stream (`RenderContext.stream`).
+ *
+ * `final: false` marks an intermediate state. Under `append` the platform message keeps every character it was
+ * sent, so an element whose rendering may still change as its content grows (`<markdown>`: an unclosed `**`, fence or
+ * table re-parses once it closes) renders only the part a later state keeps.
+ */
+export interface StreamPhase {
+  readonly strategy: StreamStrategy
+  readonly final: boolean
+}
 
 export interface StreamOptions extends SendOptions {
   /** Minimum interval between platform updates; default max(limit.stream.interval, 300 ms). */
@@ -106,8 +121,15 @@ export interface StreamHost<T extends ModeTypes = ModeTypes> {
   readonly mode: Mode<T>
   /** `undefined` ⇒ built-in `final` strategy. */
   readonly driver: StreamDriver<T> | undefined
-  /** normalize → transform → prepare (cached) → serialize of the full state. May reject. */
-  render(content: Fragment, signal: AbortSignal): Promise<StreamFrame<T>>
+  /**
+   * normalize → transform → prepare (cached) → serialize of the full state. May reject.
+   *
+   * @param content - the state.
+   * @param signal - aborts the render.
+   * @param final - the state is the one `close` publishes; the render sees it as `RenderContext.stream.final`.
+   * @returns the frame; `undefined` for an intermediate state that renders nothing yet.
+   */
+  render(content: Fragment, signal: AbortSignal, final: boolean): Promise<StreamFrame<T> | undefined>
   /** Plain `bot.send` (final strategy, recall + resend). */
   send(content: Fragment, options: SendOptions): Promise<SendResult>
   /** Recall a published message; resolves `false` when `message.delete` is not supported for it now. */
@@ -453,9 +475,9 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
     this.rendered = this.version
     if (content === undefined || this._state !== 'open') return
 
-    let frame: StreamFrame<T>
+    let frame: StreamFrame<T> | undefined
     try {
-      frame = await this.retry(() => this.host.render(content, this.controller.signal), true)
+      frame = await this.retry(() => this.host.render(content, this.controller.signal, false), true)
     } catch (error: unknown) {
       // An intermediate state that cannot render is dropped (close renders again and reports), but dropping it in
       // silence hides a content or deployment fault for the whole turn.
@@ -467,7 +489,8 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
       }
       return
     }
-    if (this._state !== 'open') return
+    // Nothing of this state renders yet (e.g. markdown whose first block is still being written).
+    if (frame === undefined || this._state !== 'open') return
     const violation = this.frameViolation(frame)
     if (violation) {
       this.warn('IM stream debug %s: frame violation %s (%s)',
@@ -632,8 +655,9 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
     const handle = this._handle
     if (!driver || !handle) return this.send(content) // `final` strategy, or nothing published yet
 
-    const frame = await this.retry(() => this.host.render(content, this.controller.signal), false)
+    const frame = await this.retry(() => this.host.render(content, this.controller.signal, true), false)
     if (this.aborted) return
+    if (frame === undefined) throw new Error('stream host rendered no frame for the final state')
     const sized = this.frameViolation(frame)
     if (sized && !sized.resendable) return this.limitFail(sized.violation, true, frame.result.report)
     if (sized) return this.resend(frame, sized.violation)

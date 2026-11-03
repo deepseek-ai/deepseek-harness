@@ -13,6 +13,7 @@ import {
   normalize, PlatformError, Satori, type MessageHandle, type SendContext, type SentPart, type Target,
 } from '@deepseek-ai/cordis-plugin-im-core'
 import LarkBot, { Config, LarkApiError, type LarkConfig } from '@deepseek-ai/cordis-plugin-im-adapter-lark'
+import Markdown from '@deepseek-ai/cordis-plugin-im-markdown'
 import {
   deleteSentPart, editMessagePayload, partKindOf, receiveIdTypeOf, replyPlan, sendMessagePayload, type LarkPayload,
 } from '../src/send.ts'
@@ -53,6 +54,7 @@ async function mount(overrides: Record<string, Route> = {}) {
   contexts.push(ctx)
   await ctx.plugin(Http)
   await ctx.plugin(Satori)
+  await ctx.plugin(Markdown)
   const calls: Call[] = []
   const table = routes(overrides)
   ctx.on('http/fetch', async (url: URL, init: any) => {

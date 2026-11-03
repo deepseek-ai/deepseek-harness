@@ -42,6 +42,7 @@ const vendoredPackages = new Set([
   '@deepseek-ai/cordis-plugin-im-core',
   '@deepseek-ai/cordis-plugin-im-adapter-lark',
   '@deepseek-ai/cordis-plugin-im-adapter-qq',
+  '@deepseek-ai/cordis-plugin-im-markdown',
   '@deepseek-ai/satori-element',
   '@deepseek-ai/cordis-element',
   '@deepseek-ai/cordis-plugin-http',

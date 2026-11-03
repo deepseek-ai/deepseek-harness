@@ -45,7 +45,8 @@
  */
 
 import { toText, type ChatRef, type InboundMessage, type Session, type UserRef } from '@deepseek-ai/cordis-plugin-im-core'
-import { fromMarkdown, h, isBlock, isInline, normalize, type Element } from '@deepseek-ai/satori-element'
+import { fromMarkdown } from '@deepseek-ai/cordis-plugin-im-markdown'
+import { h, isBlock, isInline, normalize, type Element } from '@deepseek-ai/satori-element'
 import {
   type LarkChatKind, type LarkMessageReceivedEvent, type LarkRawEvent, type LarkReferrer, arrayOf, isDict, nonEmpty,
 } from './api/events.ts'

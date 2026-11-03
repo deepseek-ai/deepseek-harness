@@ -70,7 +70,7 @@ import {
 import { CallbackRegistry, Session, type SessionEvent } from './session.ts'
 import {
   createMessageStream, type MessageStream, type StreamDriver, type StreamFrame, type StreamHost, type StreamOptions,
-  streamBackoff,
+  type StreamPhase, streamBackoff,
 } from './stream.ts'
 import { transform } from './transform.ts'
 
@@ -165,6 +165,8 @@ interface PipelineOptions {
   mode?: Mode<any>
   /** The publication is a stream state, so the mode must be able to stream. */
   stream?: boolean
+  /** The stream state this render publishes (`RenderContext.stream`). */
+  phase?: StreamPhase
 }
 
 export abstract class Bot<C = unknown> {
@@ -346,13 +348,15 @@ export abstract class Bot<C = unknown> {
   stream(target: Target, options: StreamOptions = {}): MessageStream {
     const mode = this.streamMode(target)
     const driver = this.driverOf(mode.id, target)
+    const strategy = driver?.strategy ?? 'final'
     const host: StreamHost<any> = {
       bot: this,
       target,
       mode,
       driver,
-      render: async (content, signal): Promise<StreamFrame<any>> => {
-        const frame = await this.pipeline(target, content, options, { signal, mode })
+      render: async (content, signal, final): Promise<StreamFrame<any> | undefined> => {
+        const frame = await this.pipeline(target, content, options, { signal, mode, phase: { strategy, final } })
+        if (!frame) return undefined
         return {
           content: frame.content,
           result: frame.result,
@@ -396,16 +400,30 @@ export abstract class Bot<C = unknown> {
    * @param target - the chat.
    * @param content - the content, directives included.
    * @param options - send options.
-   * @param extra - stage options of the caller (`handle`, `skipUpload`, `signal`, a frozen `mode` or `stream` intent).
-   * @returns the staged frame; its `content` is the tree without the directives.
+   * @param extra - stage options of the caller (`handle`, `skipUpload`, `signal`, a frozen `mode`, the `stream` intent
+   * or the stream `phase`).
+   * @returns the staged frame; its `content` is the tree without the directives. `undefined` only for an intermediate
+   * stream state (`phase.final === false`) that renders no platform message yet.
    * @throws PlatformError `invalid` when the chosen mode renders no platform message.
    */
   private async pipeline(
     target: Target,
     content: Fragment,
     options: SendOptions,
+    extra?: PipelineOptions & { phase?: undefined },
+  ): Promise<PipelineFrame>
+  private async pipeline(
+    target: Target,
+    content: Fragment,
+    options: SendOptions,
+    extra: PipelineOptions,
+  ): Promise<PipelineFrame | undefined>
+  private async pipeline(
+    target: Target,
+    content: Fragment,
+    options: SendOptions,
     extra: PipelineOptions = {},
-  ): Promise<PipelineFrame> {
+  ): Promise<PipelineFrame | undefined> {
     const { content: stripped, directives } = splitDirectives(content)
     const root = normalize(stripped)
     const mode = extra.mode
@@ -415,8 +433,9 @@ export abstract class Bot<C = unknown> {
         extra.stream === true ? { ...directives, preferStreamableMode: true } : directives,
         extra.handle,
       )
-    const result = transform(root, { bot: this, target, mode })
+    const result = transform(root, { bot: this, target, mode, stream: extra.phase })
     if (!result.msgs.length) {
+      if (extra.phase?.final === false) return undefined
       throw new PlatformError('invalid', `${this.id}: mode "${mode.id}" rendered no platform message (empty content?)`)
     }
     this.checkStrict(result.report, options)

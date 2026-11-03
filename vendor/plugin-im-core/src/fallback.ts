@@ -18,7 +18,7 @@
  *   equivalent); the engine records the `degraded` entry itself.
  */
 
-import { type Element, type ElementKey, fromMarkdown, type Fragment, h, type Tag, toText } from '@deepseek-ai/satori-element'
+import { type Element, type ElementKey, type Fragment, h, type Tag, toText } from '@deepseek-ai/satori-element'
 
 /** What a fallback sees besides the element. */
 export interface FallbackContext {
@@ -494,7 +494,8 @@ export const coreFallbacks: { readonly [K in Tag]?: Fallback<K> } = {
     })
     return h('p', ...out)
   },
-  markdown: el => fromMarkdown(el.attrs.content),
+  // Reached only without the `markdown` service: the source is all there is to show.
+  markdown: el => el.attrs.content,
   forward: () => '[合并转发]',
   raw: children,
 }

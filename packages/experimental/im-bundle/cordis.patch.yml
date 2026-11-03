@@ -9,6 +9,12 @@
     - id: im-core
       name: '@deepseek-ai/cordis-plugin-im-core'
 
+    # The `markdown` service: expands `<markdown>` (every answer the model
+    # writes) while a message renders, so each mode receives ordinary elements.
+    # Without it an answer reaches the chat as its literal markdown source.
+    - id: im-markdown
+      name: '@deepseek-ai/cordis-plugin-im-markdown'
+
     # The Feishu / Lark long connection. There is no mode to configure: core
     # publishes each message in the mode that renders it with the fewest
     # degradations (card before post on a tie). `cardStreaming` keeps the CardKit

@@ -29,7 +29,7 @@ describe('JSX', () => {
     const out = normalize(tree)
     expect(out.toString()).toBe(
       '<message><title theme="info">Report</title><p>intro <b>bold</b></p>'
-      + '<ul><li checked><p>a</p></li><li><p>b</p></li></ul><p>md text</p>'
+      + '<ul><li checked><p>a</p></li><li><p>b</p></li></ul><markdown content="md text"/>'
       + '<button-group><button type="action" id="ok">OK</button></button-group></message>',
     )
     expect(toText(out)).toBe('Report\nintro bold\n• ☑ a\n• b\nmd text\n[OK]')

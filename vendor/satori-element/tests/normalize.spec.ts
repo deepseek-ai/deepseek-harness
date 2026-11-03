@@ -179,18 +179,18 @@ describe('normalize: rejections', () => {
 })
 
 describe('normalize: markdown', () => {
-  it('expands <markdown> through fromMarkdown in flow position', () => {
-    expect(xml(['x', h.markdown('a\nb\n\nc'), h('hr')]))
-      .toBe('<message><p>x</p><p>a<br/>b</p><p>c</p><hr/></message>')
-    expect(normalize(h.markdown('a')).children.some(c => (c.type as string) === 'markdown')).toBe(false)
+  it('keeps <markdown> as one element between the blocks of flow content, its source unparsed', () => {
+    expect(xml(['x', h.markdown('a\n**b**'), h('hr')]))
+      .toBe('<message><p>x</p><markdown content="a\n**b**"/><hr/></message>')
   })
 
-  it('inlines a single-paragraph expansion inside phrasing content', () => {
-    expect(xml(h('p', 'say: ', h.markdown('hi')))).toBe('<message><p>say: hi</p></message>')
+  it('keeps <markdown> inside phrasing content', () => {
+    expect(xml(h('p', 'say: ', h.markdown('hi')))).toBe('<message><p>say: <markdown content="hi"/></p></message>')
   })
 
   it('accepts text children as the source', () => {
-    expect(xml(parse('<markdown>text child</markdown>'))).toBe('<message><p>text child</p></message>')
+    const [markdown] = normalize(parse('<markdown>text child</markdown>')).children
+    expect(markdown).toMatchObject({ type: 'markdown', attrs: { content: 'text child' }, children: [] })
   })
 })
 

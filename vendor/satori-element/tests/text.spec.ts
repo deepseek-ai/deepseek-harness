@@ -65,8 +65,8 @@ describe('toText', () => {
     expect(toText(h('raw', { platform: 'lark', type: 'sticker' }, '[sticker]'))).toBe('[sticker]')
   })
 
-  it('expands markdown and tolerates unknown or reserved tags', () => {
-    expect(toText(h.markdown('a\n\nb'))).toBe('a\nb')
+  it('projects markdown as its source and tolerates unknown or reserved tags', () => {
+    expect(toText(h.markdown('a\n\n**b**'))).toBe('a\n\n**b**')
     expect(toText(parse('x<sup>2</sup> <lark:card>c</lark:card>'))).toBe('x2 c')
   })
 

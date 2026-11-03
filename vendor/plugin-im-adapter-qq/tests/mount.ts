@@ -4,6 +4,7 @@ import { Context } from '@deepseek-ai/cordis'
 import Http from '@deepseek-ai/cordis-plugin-http'
 import { Satori, type Target } from '@deepseek-ai/cordis-plugin-im-core'
 import QQBot, { Config, type QQConfig } from '@deepseek-ai/cordis-plugin-im-adapter-qq'
+import Markdown from '@deepseek-ai/cordis-plugin-im-markdown'
 
 const contexts: Context[] = []
 
@@ -16,6 +17,7 @@ export async function mountQQ(input: Partial<QQConfig> = {}) {
   contexts.push(ctx)
   await ctx.plugin(Http)
   await ctx.plugin(Satori)
+  await ctx.plugin(Markdown)
   ctx.on('http/fetch', () => {
     throw new Error('unexpected network request')
   })

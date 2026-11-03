@@ -18,6 +18,7 @@ import Http from '@deepseek-ai/cordis-plugin-http'
 import { Satori, type Target } from '@deepseek-ai/cordis-plugin-im-core'
 import { streamingScripts } from '@deepseek-ai/cordis-plugin-im-core/src/testing.ts'
 import LarkBot, { Config, type LarkConfig } from '@deepseek-ai/cordis-plugin-im-adapter-lark'
+import Markdown from '@deepseek-ai/cordis-plugin-im-markdown'
 
 const CHAT = 'oc_chat'
 const target: Target = { chat: { id: CHAT, type: 'group' } }
@@ -57,6 +58,7 @@ async function mount(answer?: (call: Call, index: number) => Answer | undefined,
   contexts.push(ctx)
   await ctx.plugin(Http)
   await ctx.plugin(Satori)
+  await ctx.plugin(Markdown)
   const calls: Call[] = []
   ctx.on('http/fetch', async (url: URL, init: any) => {
     if (url.pathname === '/open-apis/auth/v3/tenant_access_token/internal') {

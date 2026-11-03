@@ -10347,6 +10347,9 @@ importers:
       '@deepseek-ai/cordis-plugin-im-core':
         specifier: workspace:~
         version: link:../../../vendor/plugin-im-core
+      '@deepseek-ai/cordis-plugin-im-markdown':
+        specifier: workspace:~
+        version: link:../../../vendor/plugin-im-markdown
       '@deepseek-ai/dsh-experimental-im':
         specifier: workspace:*
         version: link:../im
@@ -18771,6 +18774,9 @@ importers:
 
   vendor/plugin-im-adapter-lark:
     dependencies:
+      '@deepseek-ai/cordis-plugin-im-markdown':
+        specifier: workspace:~
+        version: link:../plugin-im-markdown
       '@deepseek-ai/schemastery':
         specifier: link:../schemastery
         version: link:../schemastery
@@ -18818,6 +18824,9 @@ importers:
       '@deepseek-ai/cordis-plugin-im-core':
         specifier: workspace:~
         version: link:../plugin-im-core
+      '@deepseek-ai/cordis-plugin-im-markdown':
+        specifier: workspace:~
+        version: link:../plugin-im-markdown
       '@deepseek-ai/satori-element':
         specifier: workspace:~
         version: link:../satori-element
@@ -18847,14 +18856,8 @@ importers:
         specifier: workspace:~
         version: link:../http
 
-  vendor/satori-element:
+  vendor/plugin-im-markdown:
     dependencies:
-      '@deepseek-ai/cordis-element':
-        specifier: workspace:~
-        version: link:../element
-      '@deepseek-ai/cosmokit':
-        specifier: link:../cosmokit
-        version: link:../cosmokit
       mdast-util-from-markdown:
         specifier: ^2.0.3
         version: 2.0.3(supports-color@9.4.0)
@@ -18865,9 +18868,27 @@ importers:
         specifier: ^3.0.0
         version: 3.0.0
     devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../cordis
+      '@deepseek-ai/cordis-plugin-im-core':
+        specifier: workspace:~
+        version: link:../plugin-im-core
+      '@deepseek-ai/satori-element':
+        specifier: workspace:~
+        version: link:../satori-element
       '@types/mdast':
         specifier: ^4.0.4
         version: 4.0.4
+
+  vendor/satori-element:
+    dependencies:
+      '@deepseek-ai/cordis-element':
+        specifier: workspace:~
+        version: link:../element
+      '@deepseek-ai/cosmokit':
+        specifier: link:../cosmokit
+        version: link:../cosmokit
 
   vendor/schemastery:
     dependencies:

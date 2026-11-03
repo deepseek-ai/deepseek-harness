@@ -188,9 +188,9 @@ describe('core fallback table', () => {
     expect(p!.children.map(node => node.type)).toEqual(['button', 'text', 'button'])
   })
 
-  it('markdown, forward and raw', () => {
+  it('markdown (its literal source without the markdown service), forward and raw', () => {
     const md = defaultFallback('markdown')!(h.markdown('**x**'), { renders: rendersWith(), ancestors: [], report: createRenderReport() })
-    expect(xml(normalizeChildren(md as never, 'message'))).toBe('<p><b>x</b></p>')
+    expect(xml(normalizeChildren(md as never, 'message'))).toBe('<p>**x**</p>')
     expect(text(lower(h('forward', { id: 'f' })))).toBe('[合并转发]')
     expect(text(lower(h('raw', { platform: 'p', type: 't' }, 'fallback text')))).toBe('fallback text')
   })

@@ -1,8 +1,8 @@
 /**
- * Markdown input: GFM markdown → elements, expanded by `normalize` for `<markdown>` / `h.markdown`.
+ * GFM markdown → satori elements: the one place in the IM stack that knows the CommonMark/GFM syntax.
  *
  * Adapters never see markdown source; each mode serializes its own dialect from the elements produced here (with its
- * own escaping), so this converter is the single place that knows the CommonMark/GFM syntax.
+ * own escaping).
  *
  * Mapping: heading → `h1`…`h6`, emphasis/strong/delete → `i`/`b`/`s`, inlineCode → `code`, code → `pre[lang]`,
  * list/listItem → `ul`/`ol`/`li[checked]`, blockquote → `blockquote`, thematicBreak → `hr`,
@@ -15,31 +15,65 @@
  *   keeps meaning "image inside phrasing content";
  * - reference links/images resolve against the document's link reference definitions;
  * - unsupported constructs degrade to their children (or to their literal text) instead of throwing: the input is user
- *   content, and `normalize` validates the result anyway.
+ *   content, and the render engine normalizes the result anyway.
  */
 
 import { fromMarkdown as parseMarkdown } from 'mdast-util-from-markdown'
 import { gfmFromMarkdown } from 'mdast-util-gfm'
 import { gfm } from 'micromark-extension-gfm'
 import type { Code, List, ListItem, Nodes, PhrasingContent, RootContent, Table } from 'mdast'
-import { make } from './factory.ts'
-import type { Element } from './vocabulary.ts'
+import { type Element, h } from '@deepseek-ai/satori-element'
 
 /** Link reference definitions of one document: normalized identifier → target URL. */
 type References = ReadonlyMap<string, string>
 
+/** `h` over a tag computed at run time; the converter only builds tags of the vocabulary. */
+const build = h as unknown as (type: string, attrs: Record<string, unknown>, ...children: Element[]) => Element
+
+function make(type: string, attrs: Record<string, unknown>, children: Element[]): Element {
+  return build(type, attrs, ...children)
+}
+
+/** Line endings as the parser's offsets count them. */
+function normalizeNewlines(source: string): string {
+  return source.replace(/\r\n?/g, '\n')
+}
+
 /** Parse GFM markdown into an mdast tree (GFM = autolink, strikethrough, table, task list, footnote). */
 function parse(source: string) {
-  return parseMarkdown(source.replace(/\r\n?/g, '\n'), {
+  return parseMarkdown(source, {
     extensions: [gfm()],
     mdastExtensions: [gfmFromMarkdown()],
   })
 }
 
-/** Convert markdown source into v4 block-level elements (never a `<message>`; `normalize` adds the envelope). */
+/**
+ * Convert markdown source into block-level elements (never a `<message>`).
+ *
+ * @param source - GFM markdown.
+ * @returns the blocks of the document.
+ */
 export function fromMarkdown(source: string): Element[] {
-  const root = parse(String(source ?? ''))
+  const root = parse(normalizeNewlines(String(source ?? '')))
   return blocks(root.children, references(root.children))
+}
+
+/**
+ * The part of a document still being written that later text cannot change: everything before its last top-level
+ * block.
+ *
+ * CommonMark parses blocks line by line, so text appended to a document can only reshape its last block (a paragraph
+ * turning into a setext heading or a table, a list continuing, an emphasis, a code span or a fence closing); every
+ * block before it is final. A link reference definition is the exception: one that arrives after the cut resolves a
+ * reference above it only in the complete document.
+ *
+ * @param source - a prefix of a markdown document.
+ * @returns the source of its settled blocks without trailing whitespace; `''` while the first block is still open.
+ */
+export function settledMarkdown(source: string): string {
+  const normalized = normalizeNewlines(source)
+  const end = parse(normalized).children.at(-1)?.position?.start.offset
+  return end === undefined ? '' : normalized.slice(0, end).trimEnd()
 }
 
 function text(content: string): Element {

@@ -46,13 +46,7 @@
   ],
   "dependencies": {
     "@deepseek-ai/cordis-element": "workspace:~",
-    "@deepseek-ai/cosmokit": "workspace:~",
-    "mdast-util-from-markdown": "^2.0.3",
-    "mdast-util-gfm": "^3.1.0",
-    "micromark-extension-gfm": "^3.0.0"
-  },
-  "devDependencies": {
-    "@types/mdast": "^4.0.4"
+    "@deepseek-ai/cosmokit": "workspace:~"
   },
   "publishConfig": {
     "access": "public"

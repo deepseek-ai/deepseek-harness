@@ -10,6 +10,7 @@ import { Context } from '@deepseek-ai/cordis'
 import Http from '@deepseek-ai/cordis-plugin-http'
 import { Satori } from '@deepseek-ai/cordis-plugin-im-core'
 import LarkBot, { Config, type LarkConfig } from '@deepseek-ai/cordis-plugin-im-adapter-lark'
+import Markdown from '@deepseek-ai/cordis-plugin-im-markdown'
 
 /** The bot's own open id; the handshake route answers with it. */
 export const SELF_ID = 'ou_bot'
@@ -107,6 +108,7 @@ export async function mount(input: Record<string, unknown> = {}, overrides: Reco
   contexts.push(ctx)
   await ctx.plugin(Http)
   await ctx.plugin(Satori)
+  await ctx.plugin(Markdown)
   const routes = platform(overrides)
   // The plugin's hook types speak undici's `WebSocket`; this fake only has to stay open.
   ctx.on('http/websocket', (() => new Socket()) as never)

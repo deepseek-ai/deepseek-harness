@@ -25,6 +25,7 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/cordis-plugin-im-markdown": "workspace:~",
     "@deepseek-ai/cordis-plugin-http": "workspace:~",
     "@deepseek-ai/cordis-plugin-im-core": "workspace:~",
     "@deepseek-ai/satori-element": "workspace:~"

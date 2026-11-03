@@ -8,6 +8,7 @@ import { Context } from '@deepseek-ai/cordis'
 import Http from '@deepseek-ai/cordis-plugin-http'
 import { PlatformError, Satori, type MessageHandle, type SendContext, type SentPart, type Target } from '@deepseek-ai/cordis-plugin-im-core'
 import { normalize } from '@deepseek-ai/satori-element'
+import Markdown from '@deepseek-ai/cordis-plugin-im-markdown'
 import QQBot, {
   Config,
   DELETE_WINDOW_MS,
@@ -55,6 +56,7 @@ async function mount(
   contexts.push(ctx)
   await ctx.plugin(Http)
   await ctx.plugin(Satori)
+  await ctx.plugin(Markdown)
   const calls: Call[] = []
     // Contextual typing gives the hook the http package's own request init (undici), so the stub stays exact.
   ctx.on('http/fetch', async (url, init) => {

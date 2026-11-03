@@ -53,6 +53,8 @@
       "@deepseek-ai/cordis-plugin-im-adapter-lark/src/*": ["./vendor/plugin-im-adapter-lark/src/*"],
       "@deepseek-ai/cordis-plugin-im-adapter-qq": ["./vendor/plugin-im-adapter-qq/src/index.ts"],
       "@deepseek-ai/cordis-plugin-im-adapter-qq/src/*": ["./vendor/plugin-im-adapter-qq/src/*"],
+      "@deepseek-ai/cordis-plugin-im-markdown": ["./vendor/plugin-im-markdown/src/index.ts"],
+      "@deepseek-ai/cordis-plugin-im-markdown/src/*": ["./vendor/plugin-im-markdown/src/*"],
       "@deepseek-ai/satori-element": ["./vendor/satori-element/src/index.ts"],
       "@deepseek-ai/satori-element/src/*": ["./vendor/satori-element/src/*"],
       "@deepseek-ai/satori-element/jsx-runtime": ["./vendor/satori-element/src/index.ts"],

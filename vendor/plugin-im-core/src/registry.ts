@@ -20,6 +20,9 @@
  *    A candidate other than the first is recorded in `RenderReport.fallbacks`. Candidates stand in the place of the
  *    `<fallback>`: their parent and ancestors are those of the `<fallback>`.
  * 6. Handlers and fallbacks are synchronous; returning a promise throws (`transform` is pure, I/O is `prepare`).
+ * 7. A `<markdown>` goes to the `markdown` service (`markdown.ts`), which renders its converted source through
+ *    `RenderContext.transform`; without that service it is lowered through the core fallback (rule 3). For a
+ *    `<fallback>` candidate it counts as native: its expansion is lowered like any other content.
  *
  * Positions and ids: every element of the input (and of every fallback output) gets a *frame* with its parent, its
  * structural path (`message/ul[2]/li[0]`, the `normalize` error-path format) and its fallback depth. A keyed element
@@ -31,14 +34,16 @@
  */
 
 import {
-  type ButtonCallback, type Element, type ElementKey, normalizeChildren, type Tag, toText, variantKey, variantsOf,
-  type VariantOf,
+  type ButtonCallback, type Element, type ElementKey, type Fragment, normalizeChildren, type Tag, toText, variantKey,
+  variantsOf, type VariantOf,
 } from '@deepseek-ai/satori-element'
 import type { Bot } from './bot.ts'
 import { defaultFallback, type Fallback, preservingVariants, type RenderReport } from './fallback.ts'
+import type { MarkdownRenderer } from './markdown.ts'
 import type { ElementHandler, HandlerOptions, LimitKey, Mode, ModeTypes } from './mode.ts'
 import type { Target } from './protocol.ts'
 import { type ResourceKind, type ResourceMeta, ResourceRef } from './resource.ts'
+import type { StreamPhase } from './stream.ts'
 
 export interface RenderContext<T extends ModeTypes> {
   readonly bot: Bot
@@ -59,6 +64,18 @@ export interface RenderContext<T extends ModeTypes> {
   /** Outermost first, parent last (the `ancestors` argument of `variantsOf`). */
   readonly ancestors: readonly Element[]
   readonly report: RenderReport
+  /**
+   * The stream state this render publishes, `undefined` outside a stream. `final: false` is an intermediate state:
+   * under the `append` strategy the platform keeps every character it was sent, so content that a later state would
+   * render differently must stay back until it is final.
+   */
+  readonly stream: StreamPhase | undefined
+  /**
+   * Render `content` in place of the current element: normalized as content of the element's parent, rendered with
+   * the parent's ancestors, and positioned under the element's path. Not a degradation — this is how an element that
+   * expands into other elements (`<markdown>`) renders.
+   */
+  transform(content: Fragment): T['node'][]
 }
 
 /** A registered handler with its options (engine lookup). */
@@ -154,6 +171,7 @@ export class ElementRegistry<T extends ModeTypes, R extends Tag = never> {
     const limits: Mode['limits'] = {}
     const fresh = new RenderEngine<T>(this, {
       bot: ctx.bot, target: ctx.target, mode: ctx.mode, limits: engine?.base.limits ?? limits, report: ctx.report,
+      stream: ctx.stream, markdown: engine?.base.markdown ?? markdownOf(ctx.bot),
     }, ctx.ancestors)
     return fresh.renderRoots(nodes)
   }
@@ -198,6 +216,20 @@ export interface RenderBase {
   /** `Mode.limits` of the rendering mode. */
   limits: Mode['limits']
   report: RenderReport
+  /** The stream state being rendered (`RenderContext.stream`). */
+  stream?: StreamPhase | undefined
+  /** Expands `<markdown>`; without one, `<markdown>` takes the core fallback (its source as literal text). */
+  markdown?: MarkdownRenderer | undefined
+}
+
+/**
+ * The `markdown` service visible to a bot, if a plugin provides one.
+ *
+ * @param bot - the bot rendering the message.
+ * @returns the active provider, or `undefined`.
+ */
+export function markdownOf(bot: Bot): MarkdownRenderer | undefined {
+  return bot.ctx?.get('markdown')
 }
 
 function isThenable(value: unknown): boolean {
@@ -219,6 +251,12 @@ class Context<T extends ModeTypes> implements RenderContext<T> {
   get target() { return this[ENGINE].base.target }
   get mode() { return this[ENGINE].base.mode }
   get report() { return this[ENGINE].base.report }
+  get stream() { return this[ENGINE].base.stream }
+
+  transform(content: Fragment): T['node'][] {
+    if (!this.current) throw new Error('RenderContext.transform() renders in place of an element; this context has none')
+    return this[ENGINE].renderInPlace(this.current, content)
+  }
 
   renders(key: ElementKey): boolean {
     return this[ENGINE].registry.has(key)
@@ -360,6 +398,11 @@ export class RenderEngine<T extends ModeTypes> {
       return chosen ? chosen.children.flatMap(child => this.render(child)) : []
     }
     const ancestors = this.ancestorsOf(el)
+    if (el.type === 'markdown') {
+      const markdown = this.base.markdown
+      if (!markdown) return this.lower(el, frame, ancestors, undefined)
+      return [...markdown.render(el as Element<'markdown'>, new Context(this, el, ancestors))]
+    }
     const entry = this.registry.entry(el.type)
     if (BASE_TAGS.has(el.type)) {
       if (!entry) throw new Error(`mode "${this.base.mode}" has no handler for the base tag <${el.type}>`)
@@ -393,6 +436,29 @@ export class RenderEngine<T extends ModeTypes> {
     }
     if (out === undefined) return []
     return Array.isArray(out) ? [...out] : [out as T['node']]
+  }
+
+  /**
+   * Render `content` standing in the place of `el` ({@link RenderContext.transform}): normalized against `el`'s
+   * parent, registered under that parent with paths below `el`'s own, at `el`'s fallback depth.
+   *
+   * @param el - the element being replaced, registered with this engine.
+   * @param content - what renders in its place.
+   * @returns the platform nodes of `content`.
+   * @throws Error when `content` is not allowed where `el` stands.
+   */
+  renderInPlace(el: Element, content: Fragment): T['node'][] {
+    const frame = this.frameOf(el)
+    const parent = frame.parent
+    const parentTag: Tag = parent?.type ?? this.outer[this.outer.length - 1]?.type ?? 'message'
+    let nodes: Element[]
+    try {
+      nodes = normalizeChildren(content, parentTag, frame.path)
+    } catch (error) {
+      throw new Error(`<${el.type}> at ${frame.path} rendered content not allowed in <${parentTag}>: ${(error as Error).message}`, { cause: error })
+    }
+    nodes.forEach((node, index) => this.register(node, parent, childPath(`${frame.path}>`, node, index), frame.depth))
+    return nodes.flatMap(node => this.render(node))
   }
 
   /** Rule 3: apply the override or core fallback and render its output. */
@@ -460,6 +526,8 @@ function stands(registry: ElementRegistry<any, any>, child: Element, fixed: read
 
 function nativeTree(registry: ElementRegistry<any, any>, el: Element, ancestors: readonly Element[]): boolean {
   if (el.type === 'fallback') return el.children.some(candidate => nativeAll(registry, candidate.children, ancestors))
+  // Markdown expands while it renders; what it expands to is lowered like any other content.
+  if (el.type === 'markdown') return true
   // A root child the mode takes into its envelope is rendered by `assemble`, not lowered.
   if (ancestors.length === 1 && ancestors[0]!.type === 'message' && registry.inEnvelope(el.type)) return true
   const inner = [...ancestors, el]

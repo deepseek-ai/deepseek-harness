@@ -19,7 +19,7 @@ import {
   type StreamTickContext,
   type Target,
 } from '@deepseek-ai/cordis-plugin-im-core'
-import { normalize } from '@deepseek-ai/satori-element'
+import { h, normalize } from '@deepseek-ai/satori-element'
 import QQBot, {
   Config,
   type QqMessageRequest,
@@ -28,6 +28,7 @@ import QQBot, {
 import type { QQReferrer } from '../src/decode.ts'
 import type { QqDraft } from '../src/modes/shared.ts'
 import { createStreamDriver, INPUT_STATE_CLOSE, INPUT_STATE_OPEN, type QqStreamState } from '../src/stream.ts'
+import Markdown from '@deepseek-ai/cordis-plugin-im-markdown'
 
 const GROUP = 'group:FBB1D91204242AAB8B61A0179A6245B0'
 const DIRECT = 'user:DD8246C68EC19CAF8D2AA76941180EA4'
@@ -74,6 +75,7 @@ async function mount(
   contexts.push(ctx)
   await ctx.plugin(Http)
   await ctx.plugin(Satori)
+  await ctx.plugin(Markdown)
   const calls: Call[] = []
   ctx.on('http/fetch', async (url, init) => {
     const href = String(url)
@@ -357,6 +359,30 @@ describe('through the scheduler', () => {
     expect(calls.every(call => call.url.endsWith(`/v2/users/DD8246C68EC19CAF8D2AA76941180EA4/stream_messages`))).toBe(true)
     expect(result.handle.parts[0]!.id).toBe('stream-1')
     expect(stream.state).toBe('closed')
+  })
+
+  it('streams only the settled markdown blocks, so an unclosed emphasis never breaks the appended prefix', async () => {
+    const { bot, calls } = await mount(undefined, { markdown: true })
+    const stream = bot.stream(direct())
+
+    // Nothing is settled while the only block is still being written: no request at all.
+    stream.update(h.markdown('**未闭'))
+    await flush()
+    expect(calls).toHaveLength(0)
+    stream.update(h.markdown('**加粗** 一段\n\n第二段 **未闭'))
+    await advance(300)
+    // The second paragraph's emphasis closes later, which re-parses it; it stays back until the stream closes.
+    stream.update(h.markdown('**加粗** 一段\n\n第二段 **未闭合** 继续'))
+    await advance(300)
+    const done = stream.close(h.markdown('**加粗** 一段\n\n第二段 **未闭合** 继续'))
+    done.catch(() => {})
+    await advance(3000)
+    await done
+
+    expect(calls.map(call => ({ method: call.method, data: call.data }))).toMatchObject([
+      { method: 'POST', data: { content_type: 'markdown', content_raw: '**加粗** 一段', input_state: INPUT_STATE_OPEN } },
+      { method: 'POST', data: { content_raw: '**加粗** 一段\n\n第二段 **未闭合** 继续', input_state: INPUT_STATE_CLOSE } },
+    ])
   })
 
   it('falls back to one plain message when the stream cannot open (no passive reply context)', async () => {

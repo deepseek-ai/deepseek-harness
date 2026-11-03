@@ -6,7 +6,8 @@
  *   wrapped into `<p>`, whitespace-only runs between blocks are dropped;
  * - envelope elements (`quote`, `title`) only appear as direct root children, at most one each, hoisted to the
  *   front in the order `quote`, `title`; `summary` is hoisted to the front of its `details`;
- * - `<markdown>` is expanded through `fromMarkdown`;
+ * - `<markdown>` stays one element with its source in `content` (text children are joined into it); the IM render
+ *   engine expands it, so the source is never parsed here;
  * - a `<fallback>` may stand wherever its candidates may: each candidate becomes one `<case>` normalized as content
  *   of the element the `<fallback>` stands in (a fallback of phrasing content joins the surrounding inline run);
  * - T3 (reserved), alias and unknown tags are rejected, as are blocks inside phrasing content and children of
@@ -16,7 +17,6 @@
 
 import { elementInfo, isReservedTag, isTag, tagAliases } from './elements.ts'
 import { make, toChildren } from './factory.ts'
-import { fromMarkdown } from './markdown.ts'
 import type { Child, Element, Tag } from './vocabulary.ts'
 
 /** Thrown for content that violates the v4 structure. `path` locates the offending node (`message/ul[2]/li[0]`). */
@@ -150,18 +150,9 @@ function markdownSource(node: Node, path: string): string {
   throw new NormalizeError('<markdown> requires a "content" string (or text children)', path)
 }
 
-/** Expand `<markdown>` nodes in a child list (flow/list contexts: spliced as blocks). */
-function expandMarkdown(nodes: Node[], path: string): Item[] {
-  const out: Item[] = []
-  nodes.forEach((node, index) => {
-    const p = childPath(path, node, index)
-    if (node.type === 'markdown') {
-      for (const block of fromMarkdown(markdownSource(node, p)) as Node[]) out.push({ node: block, path: `${p}>` })
-    } else {
-      out.push({ node, path: p })
-    }
-  })
-  return out
+/** `<markdown>` with its source in `content`; the render engine expands it (the source is never parsed here). */
+function normalizeMarkdown(node: Node, path: string): Node {
+  return make('markdown', { content: markdownSource(node, path) }, [], node.key) as Node
 }
 
 function normalizeText(nodes: Node[], parent: Tag, path: string): Element[] {
@@ -199,12 +190,7 @@ function phrasing(list: Item[], parent: Tag): Element[] {
   const out: Node[] = []
   list.forEach(({ node, path: p }) => {
     if (node.type === 'markdown') {
-      const blocks = fromMarkdown(markdownSource(node, p)) as Node[]
-      const inline = blocks.length === 1 && blocks[0]!.type === 'p' ? blocks[0]!.children : blocks
-      for (const child of phrasing(items(inline as Node[], `${p}>`), parent) as Node[]) {
-        if (child.type === 'text') pushText(out, child)
-        else out.push(child)
-      }
+      out.push(normalizeMarkdown(node, p))
       return
     }
     if (node.type === 'fallback') {
@@ -237,7 +223,12 @@ function normalizeFlow(nodes: Node[], parent: Tag, path: string): Element[] {
     }
     run = []
   }
-  for (const { node, path: p } of expandMarkdown(nodes, path)) {
+  for (const { node, path: p } of items(nodes, path)) {
+    if (node.type === 'markdown') {
+      flush()
+      out.push(normalizeMarkdown(node, p))
+      continue
+    }
     if (node.type === 'fallback') {
       if (isInlineFallback(node)) {
         run.push({ node, path: p })
@@ -280,7 +271,7 @@ function normalizeList(nodes: Node[], parent: Tag, path: string): Element[] {
     }
     run = []
   }
-  for (const { node, path: p } of expandMarkdown(nodes, path)) {
+  for (const { node, path: p } of items(nodes, path)) {
     if (node.type === 'li') {
       flush()
       out.push(normalizeElement(node, 'li', p))

@@ -39,6 +39,7 @@
   "dependencies": {
     "@deepseek-ai/cordis-plugin-http": "workspace:~",
     "@deepseek-ai/cordis-plugin-im-core": "workspace:~",
+    "@deepseek-ai/cordis-plugin-im-markdown": "workspace:~",
     "@deepseek-ai/cordis-plugin-im-adapter-lark": "workspace:~",
     "@deepseek-ai/cordis-plugin-im-adapter-qq": "workspace:~",
     "@deepseek-ai/dsh-experimental-im": "workspace:*",

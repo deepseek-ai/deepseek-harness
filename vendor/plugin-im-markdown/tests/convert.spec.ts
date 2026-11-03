@@ -3,7 +3,8 @@ import type { RootContent } from 'mdast'
 import { fromMarkdown } from 'mdast-util-from-markdown'
 import { gfmFromMarkdown } from 'mdast-util-gfm'
 import { gfm } from 'micromark-extension-gfm'
-import { fromMarkdown as convert, h, normalize, tags } from '@deepseek-ai/satori-element'
+import { normalize, tags } from '@deepseek-ai/satori-element'
+import { fromMarkdown as convert, settledMarkdown } from '@deepseek-ai/cordis-plugin-im-markdown'
 
 /** `<message>` of one markdown document, as the XML-ish form (`toString()` is the tree's canonical shape). */
 const xml = (source: string) => normalize(convert(source)).toString()
@@ -352,9 +353,9 @@ describe('fromMarkdown: text conservation', () => {
     }
   })
 
-  it('conserves text through <markdown> in flow position', () => {
+  it('conserves text through a normalized message', () => {
     const content = '## 标题\n\n正文 **加粗** `代码`\n\n- 一\n- 二'
-    const message = normalize(h.markdown(content))
+    const message = normalize(convert(content))
     expect(strip(treeText(message.children))).toBe(strip(sourceText(mdastLeaves(content))))
     expect(message.children.map(child => child.type)).toEqual(['h2', 'p', 'ul'])
   })
@@ -362,6 +363,27 @@ describe('fromMarkdown: text conservation', () => {
   it('survives arbitrary punctuation without throwing', () => {
     for (const source of ['#', '*', '`', '```', '|', '>', '~~', '[', '![]', '\\', '|||\n|-|\n|x|', '\u0000\u0001']) {
       expect(() => convert(source)).not.toThrow()
+    }
+  })
+})
+
+
+describe('settledMarkdown', () => {
+  it('keeps everything before the last top-level block', () => {
+    expect(settledMarkdown('**a')).toBe('')
+    expect(settledMarkdown('done\n\n**b')).toBe('done')
+    expect(settledMarkdown('## t\n\n- x\n- y\n\n```js\nopen')).toBe('## t\n\n- x\n- y')
+    expect(settledMarkdown('a\r\n\r\nb')).toBe('a')
+    expect(settledMarkdown('')).toBe('')
+  })
+
+  it('keeps every settled state a prefix of the complete document', () => {
+    const source = '好的 **加粗** 与 `代码`\n\n1. 一\n2. 二\n\n| a | b |\n| - | - |\n| 1 | 2 |\n\n标题\n---\n\n```ts\nx\n```\n\n尾'
+    let previous: string[] = []
+    for (let n = 1; n <= source.length; n++) {
+      const blocks = convert(settledMarkdown(source.slice(0, n))).map(block => block.toString())
+      expect(blocks.slice(0, previous.length)).toEqual(previous)
+      previous = blocks
     }
   })
 })
