@@ -162,6 +162,21 @@ The bundled runtime includes `str_replace_editor`, but `sdk-minimal` omits it fr
 
 Pass `patches=("/absolute/path/to/editor.patch.yml",)` when constructing `DeepSeekHarness(profile="sdk-minimal", ...)`, or put the patch in `$DSH_HOME/profiles/sdk-minimal/cordis.patch.yml` for persistent configuration. On the next runtime launch, model requests include `str_replace_editor` beside the default tools. The local filesystem provider uses the runtime working directory for relative paths; like the minimal shell, it does not confine access to that directory. The same patch works with the standard `sdk` profile.
 
+<a id="enable-team-mode"></a>
+### Enable Team mode
+
+Use the standard `sdk` profile for Agent Teams; `sdk-minimal` does not include subagents or Team services. Save the [Team patch](../../../apps/cli/config/examples/team-mode.yml) as `team-mode.yml`:
+
+```yaml
+- id: agent-team
+  config:
+    defaultEnabled: true
+```
+
+Pass its absolute path in the SDK's `patches` option with `profile="sdk"`. Python uses `patches=("/absolute/path/to/team-mode.yml",)`; TypeScript uses `patches: ["/absolute/path/to/team-mode.yml"]`. The patch replaces the `agent-team` row's whole configuration, so include any custom `maxTasks` limit in the same mapping.
+
+Create a new root Session and ask it to create and list a shared task. Its first model request includes the Team tools and collaboration guidance. The root saves its mode, and subagents share it. Resuming an existing Session preserves its mode, even if it was explicitly turned off or never enabled; changing or removing this patch does not override saved selections. See the [Team service reference](../../../packages/team/agent-team/README.md#use-this-package) for mode and task semantics.
+
 ## Understand the minimal profile
 
 | Property | Value |

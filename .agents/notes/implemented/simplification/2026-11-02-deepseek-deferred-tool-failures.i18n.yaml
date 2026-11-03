@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-02-deepseek-deferred-tool-failures.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-11-02-deepseek-deferred-tool-failures.md
+/agent-note-expose-deepseek-deferred-only-request-failures:
+  en: 1c4af8b4e2ec0e46
+  zh: fcb806d33973025e
+/agent-note-expose-deepseek-deferred-only-request-failures/problem:
+  en: c974406f21854541
+  zh: 701cd64cabdfee79
+/agent-note-expose-deepseek-deferred-only-request-failures/decision:
+  en: 6878caaaebd91a41
+  zh: 2ebd5da04dfb1ac6
+/agent-note-expose-deepseek-deferred-only-request-failures/alternatives-considered:
+  en: d10efff97379cfbb
+  zh: 572b124ddbb2d86d
+/agent-note-expose-deepseek-deferred-only-request-failures/consequences:
+  en: d60323c595b076f4
+  zh: 1bf1068424777b7e

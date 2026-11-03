@@ -1,0 +1,5 @@
+- insert:
+    - id: team-request-capture
+      name: '../manual-compact/capture-requests.mjs'
+      config:
+        path: !!js dshHomePath('team-requests.jsonl')

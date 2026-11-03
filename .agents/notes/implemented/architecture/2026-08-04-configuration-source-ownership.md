@@ -58,7 +58,6 @@ The line is that these take effect with no user action, before any turn, outside
 - A `.env` holding `DSH_*`, `PATH`, `BROWSER`, or — in the invoking directory — a proxy variable fails the launch instead of being applied. Developers keeping switches in a repository `.env` move them to their shell — a deliberate, loud break.
 - Composition is no longer overridable by a stale shell endpoint. It is still overridable by a user's stored `settings.yaml`, which is the settings seam's layering and not something this note changes; the product CLI offers no flag above it, so a deployment that must win against stored settings owns its own bin or loader tree.
 - Not solved: the layers are still materialized into `process.env`, so ordinary project variables continue to reach child processes under the subprocess scrub. Bootstrap variables cannot come from a file at all; the environment package records the remaining subprocess reach as a limitation.
-- Exa and Perplexity still capture their key at load time rather than through the credential seam. They no longer read raw `process.env` — they resolve through the trusted layers — but converting them to per-request credential resolution is separate work.
 
 ## Alternatives considered
 

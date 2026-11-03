@@ -1,7 +1,7 @@
 /** The client reader for share access and endpoint offers: only a complete record becomes presentable. */
 
 import { describe, expect, it } from 'vitest'
-import { readAccess, readCapabilityGroups } from '../src/client/share-types.ts'
+import { readAccess, readOfferedPlugins, readPluginAccess, readViewerPolicies } from '../src/client/share-types.ts'
 
 describe('confirmed share access', () => {
   it('summarizes the mode and both subject counts', () => {
@@ -23,27 +23,81 @@ describe('confirmed share access', () => {
   })
 })
 
-describe('viewer endpoint offers', () => {
-  it('reads one plugin entry with both endpoint lists', () => {
-    expect(readCapabilityGroups([{ plugin: 'ui-chat', readable: ['session/list'], writable: [] }]))
-      .toEqual([{ plugin: 'ui-chat', readable: ['session/list'], writable: [] }])
+describe('viewer endpoint catalog', () => {
+  it('reads one plugin entry with its package and endpoint list', () => {
+    expect(readOfferedPlugins([{
+      plugin: 'ui-chat', package: '@deepseek-ai/dsh-client-ui-chat', endpoints: ['session/list'],
+    }])).toEqual([{
+      plugin: 'ui-chat', package: '@deepseek-ai/dsh-client-ui-chat', endpoints: ['session/list'],
+    }])
   })
 
-  it('leaves out every entry this build cannot present, keeping the readable ones in order', () => {
-    expect(readCapabilityGroups([
-      // A value that names no plugin, and one whose plugin name is empty.
-      { readable: ['session/list'], writable: [] },
-      { plugin: '', readable: [], writable: [] },
-      // One missing list, and one list holding a non-string entry.
-      { plugin: 'no-writable', readable: ['session/list'] },
-      { plugin: 'bad-entry', readable: ['session/list', 3], writable: [] },
-      { plugin: 'ui-chat', readable: [], writable: ['session/prompt'] },
-    ])).toEqual([{ plugin: 'ui-chat', readable: [], writable: ['session/prompt'] }])
+  it('drops a package field the host left empty', () => {
+    expect(readOfferedPlugins([{ plugin: 'ui-chat', package: '', endpoints: ['session/list'] }]))
+      .toEqual([{ plugin: 'ui-chat', endpoints: ['session/list'] }])
+  })
+
+  it('leaves out every entry this build cannot present', () => {
+    expect(readOfferedPlugins([
+      { endpoints: ['session/list'] },
+      { plugin: '', endpoints: [] },
+      { plugin: 'no-endpoints' },
+      { plugin: 'bad-entry', endpoints: ['session/list', 3] },
+      { plugin: 'ui-chat', endpoints: [] },
+    ])).toEqual([{ plugin: 'ui-chat', endpoints: [] }])
   })
 
   it('reads no offer at all from a host that reports none', () => {
-    for (const empty of [undefined, null, 'ui-chat', 3]) expect(readCapabilityGroups(empty)).toEqual([])
-    // Null entries in an otherwise readable array name no group either.
-    expect(readCapabilityGroups([null, 'ui-chat'])).toEqual([])
+    for (const empty of [undefined, null, 'ui-chat', 3]) expect(readOfferedPlugins(empty)).toEqual([])
+    expect(readOfferedPlugins([null, 'ui-chat'])).toEqual([])
+  })
+
+  it('keeps readable titles and descriptions and drops malformed ones', () => {
+    expect(readOfferedPlugins([{
+      plugin: 'ui-chat',
+      endpoints: ['ui-chat/send'],
+      titles: { zh: '聊天', en: '' },
+      descriptions: { 'ui-chat/send': '发送消息', 'ui-chat/empty': '' },
+    }])).toEqual([{
+      plugin: 'ui-chat',
+      endpoints: ['ui-chat/send'],
+      titles: { zh: '聊天' },
+      descriptions: { 'ui-chat/send': '发送消息' },
+    }])
+    expect(readOfferedPlugins([{
+      plugin: 'plain', endpoints: ['plain/send'], titles: ['bad'], descriptions: { only: '' },
+    }])).toEqual([{ plugin: 'plain', endpoints: ['plain/send'] }])
+  })
+})
+
+describe('viewer plugin policies', () => {
+  it('reads all, none, and a selected subset', () => {
+    expect(readViewerPolicies([
+      { plugin: 'ui-chat', mode: 'all' },
+      { plugin: 'job', mode: 'none' },
+      { plugin: 'files', mode: 'selected', endpoints: ['files/read'] },
+    ])).toEqual([
+      { plugin: 'ui-chat', mode: 'all' },
+      { plugin: 'job', mode: 'none' },
+      { plugin: 'files', mode: 'selected', endpoints: ['files/read'] },
+    ])
+  })
+
+  it('drops legacy groups and malformed modes', () => {
+    expect(readViewerPolicies([
+      { plugin: 'ui-chat', readable: ['session/list'], writable: [] },
+      { plugin: 'job', mode: 'sometimes' },
+      { plugin: 'files', mode: 'selected', endpoints: [3] },
+      { plugin: '', mode: 'all' },
+    ])).toEqual([])
+    expect(readViewerPolicies(undefined)).toEqual([])
+    expect(readViewerPolicies([null, 'bad'])).toEqual([])
+  })
+})
+
+describe('global plugin access', () => {
+  it('reads only an explicit all as open', () => {
+    expect(readPluginAccess('all')).toBe('all')
+    for (const closed of [undefined, null, 'none', 'sometimes', 1]) expect(readPluginAccess(closed)).toBe('none')
   })
 })

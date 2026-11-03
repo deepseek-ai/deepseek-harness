@@ -18,6 +18,7 @@ import { formatScheduleFrequency, zoneLabel } from './schedule-format.ts'
 import type { FrequencyZone } from './schedule-format.ts'
 import { RuleStepper, RuleWeekdayRow } from './TaskRuleControls.tsx'
 import { IconCalendarOutlineRegular } from './CalendarIcon.tsx'
+import type { TaskManagerKey } from './task-manager-locales.ts'
 import css from './TaskManagerPage.module.css'
 
 /** Local form values; only Save writes a task. */
@@ -58,24 +59,29 @@ export function taskDraft(task: ScheduleCatalogEntry): TaskEditorDraft {
   }
 }
 
-/** Required fields and guided selections that the form can validate locally. */
-export function taskDraftValid(draft: TaskEditorDraft, changes?: SchedulePatch): boolean {
-  const fieldsValid = draft.title.trim() !== '' && draft.prompt.trim() !== ''
-    && draft.title.trim().length <= 120
-    && (draft.target !== 'session' || draft.sessionId !== '')
-    && (draft.frequency === 'once' || draft.frequency === 'advanced'
-      || (/^[1-9]\d*$/.test(draft.interval) && Number.isSafeInteger(Number(draft.interval))))
-    && (draft.frequency !== 'weekly' || draft.weekdays.length > 0)
-    && (draft.frequency !== 'monthly' || Number.isInteger(draft.monthDay) && draft.monthDay >= 1 && draft.monthDay <= 31)
-    && (draft.frequency !== 'daily' || /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(draft.dailyTime))
-  if (!fieldsValid) return false
+/**
+ * Validate the form while retaining untouched stored timing.
+ * @param draft - Current form values.
+ * @param changes - Existing task patch; omitted validates a new timing as well.
+ * @returns First correction key, `incomplete` for missing required fields, or undefined when valid.
+ */
+export function taskDraftIssue(draft: TaskEditorDraft, changes?: SchedulePatch): TaskManagerKey | 'incomplete' | undefined {
+  if (draft.title.trim() === '' || draft.prompt.trim() === '' || draft.target === 'session' && draft.sessionId === '') return 'incomplete'
+  if (draft.title.trim().length > 120) return 'rule.invalidTitle'
+  if (draft.frequency !== 'once' && draft.frequency !== 'advanced'
+    && (!/^[1-9]\d*$/.test(draft.interval) || !Number.isSafeInteger(Number(draft.interval)))) return 'rule.invalidInterval'
+  if (draft.frequency === 'weekly' && draft.weekdays.length === 0) return 'rule.requiredWeekday'
+  if (draft.frequency === 'monthly' && (!Number.isInteger(draft.monthDay) || draft.monthDay < 1 || draft.monthDay > 31)) return 'rule.invalidMonthDay'
+  if (draft.frequency === 'daily' && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(draft.dailyTime)) return 'rule.invalidTime'
   // An untouched stored rule remains authoritative for a content-only edit.
-  if (changes !== undefined && changes.timing === undefined) return true
+  if (changes !== undefined && changes.timing === undefined) return undefined
   const timing = timingFromDraft(draft, true)
-  if (timing.kind === 'cron') return Cron.parse(timing.cron.expression, timing.cron.time_zone).kind === 'accepted'
-  if (timing.kind !== 'rrule') return true
-  const parsed = RRule.parse(timing.rrule, { rejectIneffectiveSetPositions: true })
-  return parsed.kind === 'accepted'
+  const parsed = timing.kind === 'cron' ? Cron.parse(timing.cron.expression, timing.cron.time_zone)
+    : timing.kind === 'rrule' ? RRule.parse(timing.rrule, { rejectIneffectiveSetPositions: true }) : undefined
+  if (parsed?.kind !== 'rejected') return undefined
+  if (parsed.reason === 'time_zone') return 'rule.invalidZone'
+  if (parsed.reason === 'density') return 'rule.tooComplex'
+  return draft.frequency === 'advanced' ? 'rule.invalid' : 'rule.invalidTime'
 }
 
 /** Only meaningful field changes enter the CAS edit; untouched timing is never rewritten. */

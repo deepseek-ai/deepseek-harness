@@ -47,7 +47,7 @@ describe('viewer forwarded interactions', () => {
         allowsPrompt: () => ({ ok: false, code: 'fork-ceiling-uninstalled', message: 'no ceiling' }),
       },
       workspaces: () => [],
-      declaredCapabilities: () => [],
+      offeredPlugins: () => [],
     }))
     const emits = [
       { event: 'api-session/status', args: ['private', true], resources: sessionArg },

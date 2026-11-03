@@ -239,11 +239,10 @@ describe('real Loader composition', () => {
     expect(entryNames(ctx)).not.toContain(NATIVE_SURFACE)
     expect(ctx.get('directoryPicker')).toBeUndefined()
     // Self-disposing an include-tree entry persists `disabled: true` (loader
-    // behavior, not the chooser's); await that debounced write so it cannot
-    // race the temp-dir removal, and pin that the persisted row is the
-    // chooser itself — the resolved backend still never reaches the file.
-    // stop() drains the Include write queue, so this assertion does not depend
-    // on the debounce timer racing Windows coverage load.
+    // behavior, not the chooser's); await that write so it cannot race the
+    // temp-dir removal, and pin that the persisted row is the chooser itself —
+    // the resolved backend still never reaches the file. stop() drains the
+    // Include journal, so this assertion does not depend on write timing.
     await includeTree(ctx).stop()
     expect(await readFile(configPath, 'utf8')).toContain('disabled: true')
     expect(await readFile(configPath, 'utf8')).not.toContain(NATIVE)
@@ -299,7 +298,7 @@ describe('real Loader composition', () => {
     await expect(autoEntry.fiber!.dispose()).resolves.not.toThrow()
     expect(entryNames(ctx)).not.toContain(NATIVE)
     expect(entryNames(ctx)).not.toContain(NATIVE_SURFACE)
-    // Same self-dispose persistence as above: drain the Include write queue
+    // Same self-dispose persistence as above: drain the Include journal
     // deterministically before asserting the persisted row.
     await includeTree(ctx).stop()
     expect(await readFile(configPath, 'utf8')).toContain('disabled: true')
@@ -308,17 +307,20 @@ describe('real Loader composition', () => {
     expect(renameControl.attempts).toBeGreaterThanOrEqual(2)
   })
 
-  it('reports a terminal debounced-write failure again to the teardown owner', { timeout: 60_000 }, async () => {
+  it('reports unsaved changes at shutdown and clears the error after a successful retry', { timeout: 60_000 }, async () => {
     stubAttendedHost()
     const { ctx } = await loadComposition('127.0.0.1')
     const autoEntry = [...ctx.loader.entries()].find(entry => entry.options.name === AUTO)!
     const include = includeTree(ctx)
     renameControl.failureCode = 'EIO'
-    renameControl.remainingFailures = 1
+    renameControl.remainingFailures = Infinity
 
     await autoEntry.fiber!.dispose()
     await expect.poll(() => renameControl.injectedFailures).toBe(1)
     await expect(include.stop()).rejects.toMatchObject({ code: 'EIO' })
+    renameControl.remainingFailures = 0
+    await expect(include.flush()).resolves.toBeUndefined()
+    await expect(include.flush()).resolves.toBeUndefined()
     await expect(ctx.fiber.dispose()).resolves.not.toThrow()
     context = undefined
   })

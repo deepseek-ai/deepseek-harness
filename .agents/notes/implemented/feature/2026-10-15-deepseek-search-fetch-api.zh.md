@@ -10,15 +10,15 @@ Status: implemented
 
 ## 决策
 
-2026-10-16 核对的 [DeepSeek Search 与 Fetch 指南](https://api-docs.deepseek.com/zh-cn/guides/search)定义上游 API。[web-deepseek-api 插件](../../../../packages/web/web-deepseek-api/README.zh.md)通过现有 `web_search` 和 `web_fetch` 工具接入它，[web-search-deepseek](../../../../packages/web/web-search-deepseek/README.zh.md) 保留 Messages 搜索。[Web 能力决策](../architecture/2026-06-24-web-capability-seam.zh.md)继续负责提供方选择、工具职责和抓取结果字段。
+2026-10-16 核对的 [DeepSeek Search 与 Fetch 指南](https://api-docs.deepseek.com/zh-cn/guides/search)定义上游 API。[web-deepseek-api 插件](../../../../packages/web/web-deepseek-api/README.zh.md)通过现有 `web_search` 和 `web_fetch` 工具接入它。[Web 能力决策](../architecture/2026-06-24-web-capability-seam.zh.md)继续负责提供方选择、工具职责和抓取结果字段；[Web 提供方选择决策](../architecture/2026-10-29-web-provider-selection.zh.md)负责用户如何选择各个提供方，以及内置组合选择哪些提供方。
 
 ### 协议选择与部署
 
-两个 API 注册为 `deepseek-search-api` 和 `deepseek-fetch-api`；Messages 搜索保留 `deepseek-official`。网页搜索页上的设置 **Use the new Web Search API**（**启用新版 Web 搜索 API**）同时写入 `web.searchProvider` 和 `web.fetchProvider`：开启时选择两个 API，关闭时恢复内置选择，即 Messages 搜索与本地 HTTP 抓取。开关默认关闭，保存后生效，因为 Web 服务在每次操作时读取两项选择。在 Search API 正式发布公告之前，Messages 仍是默认值，已有用户无需配置即可继续使用搜索。每次操作解析一份设置快照，包含端点和凭据。两个 API 读取同一份凭据和同一个 API 基础地址，因为指南从同一基础地址提供它们，开关也同时选择它们。
+两个 API 注册为 `deepseek-search-api` 和 `deepseek-fetch-api`；Messages 搜索仍独立注册为 `deepseek-official`。Web 服务通过 `web.searchProvider` 和 `web.fetchProvider` 选择各个提供方，「网页搜索与获取」页上的 Search 和 Fetch 下拉框分别设置这两项；内置组合选择 Search API 与本地 HTTP 抓取，见[选择决策](../architecture/2026-10-29-web-provider-selection.zh.md)。已保存的选择从下一次操作起生效，因为 Web 服务在每次操作时读取两项选择。每次操作解析一份包含端点和凭据的设置快照。两个 API 读取 `web-deepseek-api` namespace，每个能力各自解析端点与凭据。
 
-两种协议分别保存 API 基础地址。Messages 保留 `https://api.deepseek.com/anthropic/v1`，追加 `/messages`。直接检索使用 `web-deepseek-api.baseURL`，默认值为指南中的公网地址 `https://api.deepseek.com/v1/tools`，追加 `/search` 或 `/fetch`；已验证的开发地址为 `http://api-dev.deepseek.com:8031/api/v1/tools`。两者前缀不同，程序不会根据主机名推断，其他部署需填写完整基础地址。开关本身已是显式启用，因此以文档中的公网部署作为默认值。基础地址为空白或无法解析时，两个提供方都不可用。
+直接检索在 API 基础地址后追加 `/search` 或 `/fetch`。没有在 YAML 中单独设置端点字段的能力，使用会话的 DeepSeek 模型路由基础地址的 origin 加 `/v1/tools`，公网部署即指南中的 `https://api.deepseek.com/v1/tools`；该推导及每次操作发送的凭据由[选择决策](../architecture/2026-10-29-web-provider-selection.zh.md)负责。已验证的开发地址为 `http://api-dev.deepseek.com:8031/api/v1/tools`；其前缀不同，程序不会根据主机名推断，此类部署需在 `searchBaseURL` 或 `fetchBaseURL` 中填写完整基础地址。基础地址无法解析时，该能力的提供方不可用。
 
-指南规定使用 API 密钥进行 Bearer 鉴权，请求只发送文档规定的鉴权与 JSON 内容类型请求头。DeepSeek 账号路由上的会话改为发送其账号 token，与 Messages 搜索一致；2026-10-16 公网 Search 与 Fetch 路由已接受该 token，因此只登录账号的用户也可以启用直接检索。同日检查的一个 Anthropic 兼容网关提供 Messages 网页搜索，但没有 `/v1/tools` 路由；此类部署继续使用 Messages 搜索。
+指南规定使用 API 密钥进行 Bearer 鉴权，请求只发送文档规定的鉴权与 JSON 内容类型请求头。`deepseek-account` 路由上的会话改为发送账号 token；2026-10-16 公网 Search 与 Fetch 路由已接受该 token，因此只登录账号的用户也能使用直接检索。同日检查的一个 Anthropic 兼容网关提供 Messages 网页搜索，但没有 `/v1/tools` 路由；此类部署可以选择 Messages 搜索，或把该能力的单独基础地址设为提供 `/v1/tools` 的地址。
 
 ### 搜索结果与模型输入
 
@@ -36,45 +36,41 @@ HTTP 提供方继续负责自身的 URL 校验和资源限制。选择 DeepSeek 
 
 ### 默认值迁移
 
-将默认值改为 Search API 是发布公告之后的另一项变更。API 密钥和账号 token 都能访问公网路由；位于没有 `/v1/tools` 路由的网关之后的部署，需要在默认值变更前显式设置 `web.searchProvider: deepseek-official`，已保存的 Messages 选择仍使用 Messages。
+内置组合选择 `deepseek-search-api`；[选择决策](../architecture/2026-10-29-web-provider-selection.zh.md)负责这项默认值及其不回退规则。API 密钥和账号 token 都能访问公网路由。位于没有 `/v1/tools` 路由的网关之后的部署，需把 `searchBaseURL` 设为提供这些路由的基础地址。已保存的 `web.searchProvider: deepseek-official` 会选中 Messages 搜索，其他已保存的选择保持其提供方。
 
-### 附带的 Messages 修复
+### 旧版 Messages 搜索
 
-保留的 Messages 路径显式发送 `thinking: { type: 'disabled' }`，并在发送前记录同一请求体。这避免了辅助请求在生成回答被丢弃的情况下执行思考；它不实现或控制新的检索 API。`tool_choice` 仍不传递。[持久化确认记录](../../../../docs/persistence-changes/2026-10-13-deepseek-search-thinking.zh.md)负责日志中可选字段的兼容性。
+选中 `deepseek-official` 时，独立的 `dsh-web-search-deepseek` 提供方发送 Messages 搜索请求，见[选择决策](../architecture/2026-10-29-web-provider-selection.zh.md)。它的 `web/deepseek-search-llm-request` 会话事件类型（包括[持久化确认记录](../../../../docs/persistence-changes/2026-10-13-deepseek-search-thinking.zh.md)覆盖的可选请求体字段 `thinking: { type: 'disabled' }`）仍由 `dsh-web-search-deepseek` 声明并写入，因此包含该事件的已发布会话仍能打开。Messages 搜索发送该字段，是因为 Harness 丢弃生成的回答，辅助请求无需推理。
 
 ## 考虑过的替代方案
 
-**仅保留 Messages 搜索实现。** 即使调用方只需要来源，这也保留了辅助生成和响应提取。直接 Search 去掉这次 Harness 模型请求，同时保留 Messages 供显式选择。
-
-**立即将 Search API 设为默认值。** 尚未发布公告，部分网关也只提供 Messages；这些用户会失去可用的搜索。
+**仅保留 Messages 搜索实现。** 即使调用方只需要来源，这也保留了辅助生成和响应提取。直接 Search 去掉这次 Harness 模型请求。
 
 **复用 Messages 地址或推断路由前缀。** 协议与部署前缀不同。分别保存基础地址可保留现有配置，避免把有效请求发往错误路由。
 
-**要求显式填写 Search API 基础地址。** 开启开关已是显式选择，空默认值会迫使每位用户复制文档中的公网地址。其他部署仍可覆盖它。
+**要求显式填写 Search API 基础地址。** Search API 是内置的搜索默认值，空默认值会让它在每位用户填写一个 DeepSeek 模型路由已经确定的地址之前都不可用。其他部署仍可设置自己的基础地址。
 
-**把两个 API 放在 Messages 提供方内部，由提供方自己的开关切换。** `web-search-deepseek` 内的开关无法改变抓取路由，因此开启后除非用户另外修改 `web.fetchProvider`，`web_fetch` 仍走 HTTP；它还把两个 API 的生命周期绑在 Messages 搜索上，而默认值迁移后 Messages 搜索可能被移除。独立注册让 Web 服务现有的选择来表达这个开关，每个包都可以单独修改或移除。
+**把两个 API 放在 Messages 提供方内部，由提供方自己的开关切换。** Messages 提供方内的开关无法改变抓取路由，因此除非用户另外修改 `web.fetchProvider`，`web_fetch` 仍会走 HTTP；它还会把两个 API 的生命周期绑在 Messages 搜索上。独立注册让 Web 服务通过现有的提供方选择机制选择各个提供方，不会把任一 API 与 Messages 提供方绑定。
 
-**让 Messages 搜索与新 API 共用一套传输层。** 两者都通过同样的 seam，即 `ctx.credentials` 和 `ctx.deepseekAccount` 解析凭据，共享模块只能省下请求派发与失败映射代码。它会让 Messages 包依赖新 API 包、两者必须一起发版，而默认值迁移后 Messages 搜索可能被移除。在此之前，两个包各自保留传输层。
+**让 Messages 搜索与新 API 共用一套传输层。** 共享 Web 传输层会耦合不同的请求格式和失败映射。凭据值改为通过共享的 [`llm-deepseek` 凭据函数](../../../../packages/llm/llm-deepseek/src/credential.ts)获取；Messages 搜索与 Search/Fetch API 传输层保持独立。
 
-**把 Search 和 Fetch 拆成两个包。** 指南从同一基础地址、以同一份凭据提供两个 API，开关也同时选择它们；拆成两个包会让用户只需编辑一次的设置重复出现。每种操作位于独立模块，任一 API 都可以单独修改。
+**把 Search 和 Fetch 拆成两个包。** 指南从同一基础地址、以同一份凭据提供两个 API；拆成两个包会让指向同一部署的设置重复出现。分别选择不需要拆包，因为每个 API 注册自己的提供方 id。每种操作位于独立模块，任一 API 都可以单独修改。
 
-**在设置页用下拉框列出所有已注册的提供方。** 通用提供方表单从 Config schema 推导编辑控件，还需要在提供方接口上增加宿主侧展示元数据。该页面只需要 DeepSeek 的选择，其他提供方保留各自的设置页。
+**在设置页用下拉框列出所有已注册的提供方。** 通用提供方表单从 Config schema 推导编辑控件，还需要在提供方接口上增加宿主侧展示元数据。这一否决对通用表单仍然成立：该页面只编辑 DeepSeek 提供方的设置，其他提供方保留各自的设置页。对于提供方下拉框，[选择决策](../architecture/2026-10-29-web-provider-selection.zh.md)取代了这一否决，下拉框按 `title` 列出所有已注册的提供方。
 
 **让模型以工具参数提供 `ori_question`。** API 将该字段定义为用户的原始问题，而最近一条用户提示已记录了这段文本。工具参数会改变所有搜索提供方共用的面向模型的 schema，并引入改写。
-
-**开启开关时保留 HTTP 抓取。** 该开关用于启用 DeepSeek 新的检索 API，保留 HTTP 抓取会让使用 Fetch API 依赖手动修改 `web.fetchProvider`。开关关闭时，抓取仍选择带有自身访问策略的 HTTP 提供方，配置中也仍可单独选择任一抓取提供方。
 
 **新增提取工具或扩展抓取结果。** API 以 Markdown 获取一个具体网页，符合现有抓取操作。其成功本身即表示已获取页面，Markdown 正文也带有页面标题，因此扩展结果会改动每个抓取消费方，而模型可见的收益很小。
 
 ## 影响
 
-直接模式中的检索不再需要辅助模型 token，但结果仍消耗主模型上下文。2026-10-16 通过网关进行的一次 Messages 网页搜索，为一次服务端搜索消耗了 8,154 个输入 token 和 828 个输出 token。指南对 Search 和 Fetch 分别按每 1,000 次成功且有结果的请求收取 5 元；结果条数不影响单次价格。多个查询仍对应多次请求。文档中的 Claude Code 与 Codex 优惠不能作为 Harness 免收费用的依据。除非关闭 `sendOriginalQuestion`，Search API 模式还会随每个查询把用户提示的至多 128 个字符发送给搜索服务。
+直接检索不需要辅助模型 token，但结果仍消耗主模型上下文。2026-10-16 通过网关进行的一次 Messages 网页搜索，为一次服务端搜索消耗了 8,154 个输入 token 和 828 个输出 token。指南对 Search 和 Fetch 分别按每 1,000 次成功且有结果的请求收取 5 元；结果条数不影响单次价格。多个查询仍对应多次请求。文档中的 Claude Code 与 Codex 优惠不能作为 Harness 免收费用的依据。除非关闭 `sendOriginalQuestion`，Search API 模式还会随每个查询把用户提示的至多 128 个字符发送给搜索服务。
 
-Search 和 Fetch 各有账号级 5 QPS 限制，独立于模型并发，同一账号的 API 密钥共享额度。Fetch 还有目标域名限制。当前工具可并发发送四个查询，任一查询失败会使整批失败。提供方没有共享限速调度器、自动重试或回退；其他会话或进程也会消耗同一账号的额度。
+Search 和 Fetch 各有账号级 5 QPS 限制，独立于模型并发，同一账号的 API 密钥共享额度。Fetch 还有目标域名限制。工具每次调用最多接受 `searchMaxQueries` 个查询，默认 10 个；任一查询失败会使整批失败。Search 提供方在单个插件实例的任意一秒窗口内最多发送 `searchRequestsPerSecond` 个请求，默认 5 个，因此满批次的后五个查询比前五个晚一秒开始。该限速不跨进程共享，提供方也没有自动重试或回退；其他进程或客户端也会消耗同一账号的额度。
 
 ## 验证与尚未接入的 API 能力
 
-提供方测试覆盖请求映射、空结果、格式错误的响应、独立地址与默认地址、账号 token 鉴权、取消与空白配置。设置测试及[插件配置浏览器场景](../../../../apps/web/tests/plugin-config.e2e.ts)覆盖暂存后保存、默认地址和同时切换两项选择。[网页搜索回放](../../../../apps/web/tests/web-search-round.e2e.ts)与 [Fetch Session 回放](../../../../snapshots/session/deepseek-fetch/snapshot.yml)固定模型可见结果。2026-10-16，[真实提供方测试](../../../../packages/web/web-deepseek-api/tests/web-deepseek-api.e2e.ts)在公网地址通过了 Search 与 Fetch 验证；在内置配置上运行的一轮 headless 对话返回了八个来源并抓取到 Markdown，且没有辅助请求事件。上文的账号 token、网关和状态码观察来自同日的手动探测。
+提供方测试覆盖请求映射、空结果、格式错误的响应、独立地址与推导地址、账号 token 鉴权及其在 HTTP 401 后被作废、取消与空白配置。设置测试及[插件配置浏览器场景](../../../../apps/web/tests/plugin-config.e2e.ts)覆盖暂存后保存、结果数，以及分别选择 Search 与 Fetch。[网页搜索回放](../../../../apps/web/tests/web-search-round.e2e.ts)与 [Fetch Session 回放](../../../../snapshots/session/deepseek-fetch/snapshot.yml)固定模型可见结果。2026-10-16，[真实提供方测试](../../../../packages/web/web-deepseek-api/tests/web-deepseek-api.e2e.ts)在公网地址通过了 Search 与 Fetch 验证；在内置配置上运行的一轮 headless 对话返回了八个来源并抓取到 Markdown，且没有辅助请求事件。上文的账号 token、网关和状态码观察来自同日的手动探测。
 
 以下能力尚未包含在已实现的接入中：
 

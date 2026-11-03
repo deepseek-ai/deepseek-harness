@@ -1,7 +1,8 @@
-// Web e2e scenario for the shipped default search composition. A real browser
-// drives `web_search`; the model stream is replayed while the real DeepSeek
-// provider calls a deterministic local Search API endpoint through
-// the real credentials service.
+// Web e2e scenario for the shipped default search provider, the DeepSeek
+// Search API, with no provider selection patched. A real browser drives
+// `web_search`; the model stream is replayed while the real DeepSeek provider
+// calls a deterministic local Search API endpoint through the real
+// credentials service.
 import { readFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
@@ -140,7 +141,7 @@ async function startSearchServer(captured: CapturedSearchRequest[]): Promise<{ s
   return { server, baseURL: `http://127.0.0.1:${address.port}` }
 }
 
-describe('web e2e: opt-in Search API web search', () => {
+describe('web e2e: default Search API web search', () => {
   let scaffold: WebScaffold
   let browser: Browser
   let page: Page
@@ -155,10 +156,10 @@ describe('web e2e: opt-in Search API web search', () => {
     scaffold = await launchWebScaffold({
       extraOverlayPath: fileURLToPath(new URL('./pin-browse-picker.overlay.yml', import.meta.url)),
       compareReplaySession: true,
+      // Own YAML endpoint settings pin Search to the local endpoint and a dedicated key.
       deepSeekWebApi: {
         baseURL: `${search.baseURL}/api/v1/tools`,
         apiKeyEnv: SEARCH_CREDENTIAL_REF,
-        select: true,
       },
       ...(MODE === 'record' ? {} : { replayFixture: FIXTURE, paceMs: 15 }),
     })

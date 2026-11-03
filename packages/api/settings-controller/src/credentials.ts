@@ -9,7 +9,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import type { CredentialProvider } from '@deepseek-ai/dsh-credentials'
 import type { CredentialInfo } from '@deepseek-ai/dsh-credentials/types'
-import { principalOf, Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { z } from 'zod'
 
 /**
@@ -61,8 +61,8 @@ declare module '@deepseek-ai/cordis' {
  * Host service backing the generated `ctx.remote.credentials` namespace. It
  * carries every wire obligation the credential seam itself does not: the batch
  * fan-out bound, the field-by-field view projection, the reference-grammar
- * guard, and the refusal mapping. Metadata reads exclude secrets; readStored
- * returns only a provider-managed value for an explicitly opened editor.
+ * guard, and the refusal mapping. Secret values cross in one direction only —
+ * no method here returns one.
  */
 export class CredentialsController extends TypertRemoteService {
   /** @param ctx - Host context where a credential provider may be mounted. */
@@ -90,22 +90,8 @@ export class CredentialsController extends TypertRemoteService {
   }
 
   /**
-   * Read one stored value for a credential editor, excluding environment fallbacks.
-   * @param ref - reference name to read.
-   * @returns the stored secret, or undefined when the provider stores none.
-   * @throws RemoteError for a non-owner Remote caller, an invalid reference, or an absent provider.
-   */
-  @Remote
-  async readStored(ref: string): Promise<string | undefined> {
-    const request = parseRequest('credentials.readStored', unsetRequestSchema, { ref })
-    if (principalOf(this.ctx.invocation) !== undefined) {
-      throw new RemoteError('credential/rejected', 'Only the owner can read stored credentials.', { ref: request.ref })
-    }
-    return this.provider().readStored(credentialRef(request.ref))
-  }
-
-  /**
-   * Store one value from a configuration surface.
+   * Store one value from a configuration surface. The value crosses the wire in
+   * this direction only: no read path returns it.
    * @param ref - reference name to store under.
    * @param value - the non-empty secret value.
    * @throws RemoteError when the request is invalid, no provider is mounted, or the provider refuses the write.

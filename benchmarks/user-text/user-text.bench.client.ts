@@ -92,6 +92,25 @@ async function worker<Report>(args: readonly string[], semiSpaceMb?: number): Pr
   return run.report
 }
 
+/** Compare adjacent scaling samples before aggregating, so unrelated fastest rounds cannot set the ratio. */
+function doublingRatio(half: readonly number[], full: readonly number[]): number {
+  const ratios = half.map((duration, index) => full[index]! / duration).sort((a, b) => a - b)
+  return ratios[Math.floor(ratios.length / 2)]!
+}
+
+describe('credential-matcher scaling measurement', () => {
+  it('compares adjacent rounds when the runner changes speed', () => {
+    const half = [1, 2, 2, 2, 2]
+    const full = [4, 4, 4, 4, 4]
+    expect(Math.min(...full) / Math.min(...half)).toBeGreaterThan(MAX_DOUBLING_SCALING)
+    expect(doublingRatio(half, full)).toBe(2)
+  })
+
+  it('rejects superlinear growth even when one round is faster', () => {
+    expect(doublingRatio([1, 2, 2, 2, 2], [2, 6, 6, 6, 6])).toBeGreaterThan(MAX_DOUBLING_SCALING)
+  })
+})
+
 describe('sent user text with the credential matcher', () => {
   let timings: ReadonlyMap<string, UserTextWorkloadTiming>
   let allocations: ReadonlyMap<string, UserTextWorkloadAllocation>
@@ -114,6 +133,11 @@ describe('sent user text with the credential matcher', () => {
       ...benchmark,
       measures: `${benchmark.measures} Minimum of ${ATTEMPTS} per-sample means of ${measured.evaluationsPerSample} fresh evaluations after warm-up.`,
     }, { withSecretMs: { ms: measured.withSecretMs, cpuMs: measured.withSecretCpuMs } }, { withSecretMs: budgetMs })
+  }
+  const expectLinear = (half: UserTextWorkloadTiming, full: UserTextWorkloadTiming): void => {
+    const ratio = doublingRatio(half.samples.map(sample => sample.withSecretMs), full.samples.map(sample => sample.withSecretMs))
+    console.log(JSON.stringify({ benchmark: `user-text/${full.id}/scaling`, ratio, budget: MAX_DOUBLING_SCALING }))
+    expect(ratio).toBeLessThanOrEqual(MAX_DOUBLING_SCALING)
   }
 
   it.each(Object.entries(UNMATCHED_EXPECTED))('evaluates %s without credentials within its budget and ratio', (id, expected) => {
@@ -139,7 +163,7 @@ describe('sent user text with the credential matcher', () => {
     const half = timing('env-keys-1000')
     const full = timing('env-keys-2000')
     expect([half.secrets, full.secrets]).toEqual([1_000, 2_000])
-    expect(full.withSecretMs / half.withSecretMs).toBeLessThanOrEqual(MAX_DOUBLING_SCALING)
+    expectLinear(half, full)
   })
 
   it.each(ADVERSARIAL)('scans adversarial %s input linearly without backtracking', (name) => {
@@ -148,7 +172,7 @@ describe('sent user text with the credential matcher', () => {
     const budgetMs = ciTimeBudget(ADVERSARIAL_EXPECTED_MS)
     record(benchmarkCase(`adversarial-${name}`, `One 128 KiB document repeating a ${name} unit.`), full, budgetMs)
     expect(full.withSecretMs).toBeLessThanOrEqual(budgetMs)
-    expect(full.withSecretMs / half.withSecretMs).toBeLessThanOrEqual(MAX_DOUBLING_SCALING)
+    expectLinear(half, full)
   })
 
   it.each(workloadIds())('allocates only result nodes and masks for %s', (id) => {

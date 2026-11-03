@@ -28,6 +28,7 @@ import { readViewerContext, resetViewerContext } from './viewer-context.ts'
 import { NS, viewerReasonText, type ViewerTranslate } from './locales.ts'
 import { noteViewerStatusFacts, resetViewerStatus, viewerStatus } from './viewer-status.ts'
 import { mountViewerStatusBanner, type ViewerStatusAction } from './viewer-status-banner.ts'
+import { installViewerPluginWarnings, installViewerRpcWarnings } from './viewer-plugin-warning.ts'
 
 export const name = 'liveshare-viewer-session'
 
@@ -181,6 +182,14 @@ export function apply(ctx: ClientContext): void {
       banner.dispose()
     }
   }, 'liveshare: state why the page shows no Session')
+  ctx.effect(
+    () => installViewerPluginWarnings(document, t),
+    'liveshare: name an owner-only plugin route once',
+  )
+  ctx.effect(
+    () => installViewerRpcWarnings(ctx.get('connection') as ConnectionHandle, document, t),
+    'liveshare: name an owner-only RPC route once',
+  )
   // A Connection that lost its carrier cannot read the Session right now; the Connection layer
   // reconnects by itself, so the page states `offline` until a generation is connected again.
   ctx.effect(() => {

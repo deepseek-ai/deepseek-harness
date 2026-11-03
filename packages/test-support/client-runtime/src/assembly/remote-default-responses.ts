@@ -30,8 +30,10 @@ export const remoteDefaultResponses: RemoteTable = {
     'dynamicCordisRunner/syncInspectManifest': ok(null),
     // ui-cordis inventory at apply and on `connection/reset`.
     'dynamicCordisRunner/inventory': ok([]),
-    // ui-settings-plugins web-search card `readCredential()` when the settings mirror first publishes.
+    // ui-settings-web-search page `readCredential()` when the settings mirror first publishes.
     'credentials/describe': ok({}),
+    // ui-settings-web-search page provider options at apply and on `connection/reset`.
+    'web/listProviders': ok({ search: [], fetch: [] }),
     // ui-permission-presets `PermissionCatalogDirectory` on its first read for a connection generation.
     'permissionPresets/catalog': ok({ options: [] }),
     // ui-settings-account refreshes details after a stored-grant snapshot.
