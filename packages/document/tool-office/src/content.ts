@@ -50,7 +50,7 @@ export interface OfficeFileValue<Operation extends 'convert' | 'recalculate' = '
   file: string
   format: OfficeFileFormats[Operation]
   bytes: number
-  /** Pages of a PDF output. */
+  /** Page count the converter reports for the output. */
   pageCount?: number
   /** Requested font families that were substituted. */
   missingFonts: string[]

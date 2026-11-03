@@ -130,7 +130,7 @@ export interface OfficeFileResult {
   readonly path: string
   /** Complete file bytes, bounded by `maxOutputBytes`. */
   readonly bytes: number
-  /** Pages of a PDF output. */
+  /** Page count the converter reports for the output. */
   readonly pageCount?: number
   /** Requested OOXML font families unavailable to this operation. */
   readonly missingFonts: string[]

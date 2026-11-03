@@ -965,7 +965,7 @@ interface ToolOutputMap {
     file: string;
     format: "pdf" | "docx" | "odt" | "txt" | "xlsx" | "ods" | "csv" | "pptx" | "odp";
     bytes: number;
-    /** Pages of a PDF output. */
+    /** Page count the converter reports for the output. */
     pageCount?: number;
     missingFonts: string[];
   };
@@ -977,7 +977,7 @@ interface ToolOutputMap {
     file: string;
     format: "xlsx" | "ods";
     bytes: number;
-    /** Pages of a PDF output. */
+    /** Page count the converter reports for the output. */
     pageCount?: number;
     missingFonts: string[];
   };

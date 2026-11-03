@@ -124,7 +124,7 @@ function fileProperties<const Formats extends readonly string[]>(formats: Format
     file: { type: 'string', required: true, description: 'Absolute path of the temporary output file.' },
     format: { type: 'string', required: true, enum: formats },
     bytes: { type: 'integer', required: true },
-    pageCount: { type: 'integer', description: 'Pages of a PDF output.' },
+    pageCount: { type: 'integer', description: 'Page count the converter reports for the output.' },
     missingFonts: MISSING_FONTS_SCHEMA,
   } as const
 }
