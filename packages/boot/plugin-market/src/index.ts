@@ -142,7 +142,7 @@ export default class PluginMarket extends TypertRemoteService {
     const lifetime = this.lifetime.signal
     this.repositories = new RepositoryCache({
       dir: cacheDir, maxRepositoryBytes: config.detailRepositoryMaxBytes, maxCacheBytes: config.detailCacheMaxBytes,
-      // The URL forms repositories are read from, and ssh, which `url.<base>.insteadOf` may route them to.
+      // The URL forms repositories are read from, and ssh, which `url.<base>.insteadOf` or the retry after a refused http(s) fetch uses.
       timeoutMs: config.detailGitTimeoutMs, ttlMs: config.cacheTtlMs, transports: ['https', 'http', 'ssh'], lifetime,
       // Bounds how far a fetch overshoots `detailRepositoryMaxBytes`; directory walks cost little at this rate.
       sizePollMs: 200,

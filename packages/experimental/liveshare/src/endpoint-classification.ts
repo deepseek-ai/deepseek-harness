@@ -79,9 +79,9 @@ export const VIEWER_ENDPOINT_CLASSES = {
   'remoteAccess/follow': 'always-allowed', // every Peer reads its own access snapshot before any policy
 
   // ── owner-only ───────────────────────────────────────────────────────────────
-  // No reader role names these and no plugin offers them today, so the conservative class is
-  // owner-only. A plugin that intends to expose one reclassifies it as 'plugin-offered', which still
-  // only makes it eligible for the declaration path; the owner's per-share selection is the grant.
+  // No reader role names these, so the conservative class is owner-only. A share's method policy
+  // decides whether one installed plugin's method reaches its viewers; this table only decides what
+  // the core share roles grant.
   'account/ackBonusNotified': 'owner-only', // owner account and sign-in; the served page never reads it
   'account/cancelSignIn': 'owner-only', // owner account and sign-in; the served page never reads it
   'account/getBalance': 'owner-only', // owner account and sign-in; the served page never reads it
@@ -93,10 +93,10 @@ export const VIEWER_ENDPOINT_CLASSES = {
   'account/startSignIn': 'owner-only', // owner account and sign-in; the served page never reads it
   'account/watch': 'owner-only', // owner account and sign-in; the served page never reads it
   'account/watchExpiry': 'owner-only', // owner account and sign-in; the served page never reads it
-  'job/follow': 'owner-only', // owner background jobs
+  'job/follow': 'owner-only', // owner background jobs'
   'job/kill': 'owner-only', // owner background jobs
-  'job/list': 'owner-only', // owner background jobs
-  'fileReferences/list': 'owner-only', // owner composer reference search
+  'job/list': 'owner-only', // owner background jobs'
+  'fileReferences/list': 'owner-only', // owner file references'
   'session/create': 'owner-only', // owner creates a Session
   'session/initializeDefaultModel': 'owner-only', // owner initializes a Session default model
   'session/openWorkspacePath': 'owner-only', // owner opens a Workspace path
@@ -105,6 +105,7 @@ export const VIEWER_ENDPOINT_CLASSES = {
   'session/updateQueue': 'owner-only', // owner edits queued input
   'session/workspacePathApplications': 'owner-only', // owner applies a Workspace path
   'credentials/describe': 'owner-only', // owner credentials; secrets never reach a reader
+  'credentials/readStored': 'owner-only', // owner credentials; secrets never reach a reader
   'credentials/set': 'owner-only', // owner credentials; secrets never reach a reader
   'credentials/unset': 'owner-only', // owner credentials; secrets never reach a reader
   'settings/describe': 'owner-only', // owner settings
@@ -134,10 +135,10 @@ export const VIEWER_ENDPOINT_CLASSES = {
   'workspace/unarchiveSession': 'owner-only', // owner unarchives a Session
   'workspace/unpinSession': 'owner-only', // owner unpins a Session
   'workspaceFiles/changes': 'owner-only', // owner Workspace file access
-  'workspaceFiles/list': 'owner-only', // owner Workspace file access
-  'workspaceFiles/read': 'owner-only', // owner Workspace file access
-  'workspaceFiles/readBytes': 'owner-only', // owner Workspace file access
-  'workspaceFiles/stat': 'owner-only', // owner Workspace file access
+  'workspaceFiles/list': 'owner-only', // owner Workspace file access'
+  'workspaceFiles/read': 'owner-only', // absolute paths reach files outside the Workspace, so no share offers it
+  'workspaceFiles/readBytes': 'owner-only', // absolute paths reach files outside the Workspace, so no share offers it
+  'workspaceFiles/stat': 'owner-only', // absolute paths reach files outside the Workspace, so no share offers it
   'pluginManager/cancelInstall': 'owner-only', // owner plugin management
   'pluginManager/inspect': 'owner-only', // owner plugin management
   'pluginManager/installBundle': 'owner-only', // owner plugin management

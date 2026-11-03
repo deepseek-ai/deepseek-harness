@@ -111,7 +111,7 @@ function service(mode: OwnerShare['sessionMode'], options: {
     sourceConfined,
     forks,
     workspaces: () => [],
-    declaredCapabilities: () => [],
+    offeredPlugins: () => [],
   }
   const read = createViewerReadService({
     connection: owner.connection,

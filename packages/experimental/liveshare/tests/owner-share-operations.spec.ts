@@ -55,7 +55,7 @@ interface Harness {
   readonly relay: { readRelayAuthority: ReturnType<typeof vi.fn> }
   readonly viewerRead: { closeShare: ReturnType<typeof vi.fn>; cancelPendingCalls: ReturnType<typeof vi.fn> }
   readonly forks: { revokeShare: ReturnType<typeof vi.fn> }
-  readonly viewerDeclarations: { declaredCapabilities: ReturnType<typeof vi.fn> }
+  readonly offeredCapabilities: ReturnType<typeof vi.fn>
   readonly persistOwnerState: ReturnType<typeof vi.fn>
   readonly applySourceAccess: ReturnType<typeof vi.fn>
   readonly accessChanged: ReturnType<typeof vi.fn>
@@ -93,7 +93,7 @@ function harness(): Harness {
   const relay = { readRelayAuthority: vi.fn(async () => ({ ok: true })) }
   const viewerRead = { closeShare: vi.fn(), cancelPendingCalls: vi.fn() }
   const forks = { revokeShare: vi.fn(async () => {}) }
-  const viewerDeclarations = { declaredCapabilities: vi.fn(() => []) }
+  const offeredCapabilities = vi.fn(() => [])
   const persistOwnerState = vi.fn(async () => {})
   const applySourceAccess = vi.fn(async () => {})
   const accessChanged = vi.fn()
@@ -111,7 +111,7 @@ function harness(): Harness {
     allowedSubjectIds: [],
     forks,
     viewerRead,
-    viewerDeclarations,
+    offeredCapabilities,
     relay,
     tunnel,
     effectiveRelay,
@@ -128,7 +128,7 @@ function harness(): Harness {
     reconcileSourceAccess,
   } as never)
   return {
-    operations, ownerShares, pendingRemovals, tunnel, relay, viewerRead, forks, viewerDeclarations,
+    operations, ownerShares, pendingRemovals, tunnel, relay, viewerRead, forks, offeredCapabilities,
     persistOwnerState, applySourceAccess, accessChanged, cancelShareTurn, cancelChildTurns, reconcileSourceAccess,
     selectRelayAddress, bumpRelayRevision, sourceConfined, storedCredential, effectiveRelay,
   }
@@ -245,7 +245,8 @@ describe('listing shares', () => {
         broadenedByDeploymentSubjects: true, identityKeyAcl: true,
       },
       expiresAt: '2030-01-01T00:00:00Z',
-      viewerCapabilities: [{ plugin: 'files', readable: ['files/read'], writable: [] }],
+      viewerPluginAccess: 'none',
+      viewerPlugins: [{ plugin: 'files', mode: 'selected', endpoints: ['files/read'] }],
     })
     h.ownerShares.set(share.shareId, share)
     const listed = await h.operations.list()
@@ -254,7 +255,8 @@ describe('listing shares', () => {
     expect(h.relay.readRelayAuthority).toHaveBeenCalledWith(share)
     expect(listed.shares).toEqual([expect.objectContaining({
       shareId: 'share-1', expiresAt: '2030-01-01T00:00:00Z',
-      viewerCapabilities: [{ plugin: 'files', readable: ['files/read'], writable: [] }],
+      viewerPluginAccess: 'none',
+      viewerPlugins: [{ plugin: 'files', mode: 'selected', endpoints: ['files/read'] }],
       // oxlint-disable-next-line typescript/no-unsafe-assignment -- typed test doubles and mock calls.
       access: expect.objectContaining({ mode: 'selected' }),
     })])
@@ -267,7 +269,7 @@ describe('listing shares', () => {
     const listed = await h.operations.list()
     expect(listed.shares[0]).not.toHaveProperty('expiresAt')
     expect(listed.shares[0]).not.toHaveProperty('access')
-    expect(listed.shares[0]?.viewerCapabilities).toEqual([])
+    expect(listed.shares[0]?.viewerPlugins).toEqual([])
   })
 
   it('drops a share whose record disappeared while its authority was read', async () => {
@@ -446,59 +448,94 @@ describe('updating share permissions', () => {
   })
 })
 
-describe('setting share capabilities', () => {
-  const offers = [{ plugin: 'files', readable: ['files/read', 'files/list'], writable: ['files/write'] }]
+describe('setting viewer plugin policies', () => {
+  const offers = [{ plugin: 'files', endpoints: ['files/list', 'files/read'] }]
 
-  it('stores the selection plugins offer and reports it', async () => {
+  it('stores the policies the catalog offers and reports them', async () => {
     const h = harness()
     h.ownerShares.set('share-1', storedShare())
-    h.viewerDeclarations.declaredCapabilities.mockReturnValue(offers)
+    h.offeredCapabilities.mockReturnValue(offers)
     await expect(h.operations.setCapabilities({
-      shareId: 'share-1', capabilities: [{ plugin: 'files', readable: ['files/read'], writable: [] }],
-    })).resolves.toEqual({ shareId: 'share-1', viewerCapabilities: [{ plugin: 'files', readable: ['files/read'], writable: [] }] })
+      shareId: 'share-1', viewerPlugins: [{ plugin: 'files', mode: 'selected', endpoints: ['files/read'] }],
+    })).resolves.toEqual({
+      shareId: 'share-1',
+      viewerPluginAccess: 'custom',
+      viewerPlugins: [{ plugin: 'files', mode: 'selected', endpoints: ['files/read'] }],
+    })
     expect(h.ownerShares.get('share-1')).toMatchObject({
-      revision: 2, viewerCapabilities: [{ plugin: 'files', readable: ['files/read'], writable: [] }],
+      revision: 2,
+      viewerPlugins: [{ plugin: 'files', mode: 'selected', endpoints: ['files/read'] }],
     })
     expect(h.accessChanged).toHaveBeenCalled()
   })
 
   it('clears an omitted selection from the record', async () => {
     const h = harness()
-    h.ownerShares.set('share-1', storedShare({ viewerCapabilities: offers as never }))
-    h.viewerDeclarations.declaredCapabilities.mockReturnValue(offers)
-    await expect(h.operations.setCapabilities({ shareId: 'share-1', capabilities: [] }))
-      .resolves.toEqual({ shareId: 'share-1', viewerCapabilities: [] })
-    expect(h.ownerShares.get('share-1')).not.toHaveProperty('viewerCapabilities')
+    h.ownerShares.set('share-1', storedShare({ viewerPlugins: [{ plugin: 'files', mode: 'all' }] }))
+    h.offeredCapabilities.mockReturnValue(offers)
+    await expect(h.operations.setCapabilities({ shareId: 'share-1', viewerPlugins: [] }))
+      .resolves.toEqual({ shareId: 'share-1', viewerPluginAccess: 'none', viewerPlugins: [] })
+    expect(h.ownerShares.get('share-1')).not.toHaveProperty('viewerPlugins')
   })
 
-  it('refuses malformed, unknown, and unoffered selections', async () => {
+  it('accepts the three modes and refuses malformed, unknown, and unoffered entries', async () => {
     const h = harness()
     h.ownerShares.set('share-1', storedShare())
-    h.viewerDeclarations.declaredCapabilities.mockReturnValue(offers)
-    await expect(h.operations.setCapabilities({ shareId: '', capabilities: [] }))
+    h.offeredCapabilities.mockReturnValue(offers)
+    await expect(h.operations.setCapabilities({
+      shareId: 'share-1',
+      viewerPlugins: [{ plugin: 'files', mode: 'all' }, { plugin: 'files', mode: 'none' }],
+    })).resolves.toMatchObject({ viewerPlugins: [{ plugin: 'files', mode: 'all' }] })
+    await expect(h.operations.setCapabilities({ shareId: '', viewerPlugins: [] }))
       .rejects.toMatchObject({ code: 'liveshareShares/missing-share-id' })
-    await expect(h.operations.setCapabilities({ shareId: 'absent', capabilities: [] }))
+    await expect(h.operations.setCapabilities({ shareId: 'absent', viewerPlugins: [] }))
       .rejects.toMatchObject({ code: 'liveshareShares/share-not-found' })
-    await expect(h.operations.setCapabilities({ shareId: 'share-1', capabilities: 'files' as never }))
+    await expect(h.operations.setCapabilities({ shareId: 'share-1', viewerPlugins: 'files' as never }))
       .rejects.toMatchObject({ code: 'liveshareShares/invalid-capabilities' })
     await expect(h.operations.setCapabilities({
-      shareId: 'share-1', capabilities: [{ plugin: 'ghost', readable: [], writable: [] }],
+      shareId: 'share-1', viewerPluginAccess: 'sometimes' as never,
+    })).rejects.toMatchObject({ code: 'liveshareShares/invalid-capabilities' })
+    await expect(h.operations.setCapabilities({
+      shareId: 'share-1', viewerPlugins: [{ plugin: 'ghost', mode: 'all' }],
     })).rejects.toMatchObject({ code: 'liveshareShares/unknown-plugin', details: { plugin: 'ghost' } })
     await expect(h.operations.setCapabilities({
-      shareId: 'share-1', capabilities: [{ plugin: 'files', readable: ['files/absent'], writable: [] }],
+      shareId: 'share-1', viewerPlugins: [{ plugin: 'files', mode: 'selected', endpoints: ['files/absent'] }],
     })).rejects.toMatchObject({
-      code: 'liveshareShares/endpoint-not-offered', details: { plugin: 'files', kind: 'readable', endpoint: 'files/absent' },
+      code: 'liveshareShares/endpoint-not-offered', details: { plugin: 'files', endpoint: 'files/absent' },
     })
+  })
+
+  it('sets global access without a per-plugin selection', async () => {
+    const h = harness()
+    h.ownerShares.set('share-1', storedShare({ viewerPlugins: [{ plugin: 'files', mode: 'all' }] }))
+    h.offeredCapabilities.mockReturnValue(offers)
+    await expect(h.operations.setCapabilities({ shareId: 'share-1', viewerPluginAccess: 'all' }))
+      .resolves.toEqual({ shareId: 'share-1', viewerPluginAccess: 'all', viewerPlugins: [] })
+    expect(h.ownerShares.get('share-1')).not.toHaveProperty('viewerPlugins')
+    await expect(h.operations.setCapabilities({ shareId: 'share-1', viewerPluginAccess: 'custom' }))
+      .resolves.toEqual({ shareId: 'share-1', viewerPluginAccess: 'custom', viewerPlugins: [] })
+  })
+
+  it('derives custom or none from an older record without a global switch', async () => {
+    const withPlugins = harness()
+    withPlugins.ownerShares.set('share-1', storedShare({ viewerPlugins: [{ plugin: 'files', mode: 'all' }] }))
+    withPlugins.offeredCapabilities.mockReturnValue(offers)
+    await expect(withPlugins.operations.setCapabilities({ shareId: 'share-1' }))
+      .resolves.toMatchObject({ viewerPluginAccess: 'custom' })
+    const withoutPlugins = harness()
+    withoutPlugins.ownerShares.set('share-1', storedShare())
+    await expect(withoutPlugins.operations.setCapabilities({ shareId: 'share-1' }))
+      .resolves.toMatchObject({ viewerPluginAccess: 'none' })
   })
 
   it('restores the previous selection when the write fails', async () => {
     const h = harness()
     const share = storedShare()
     h.ownerShares.set(share.shareId, share)
-    h.viewerDeclarations.declaredCapabilities.mockReturnValue(offers)
+    h.offeredCapabilities.mockReturnValue(offers)
     h.persistOwnerState.mockRejectedValue(new Error('disk full'))
     await expect(h.operations.setCapabilities({
-      shareId: share.shareId, capabilities: [{ plugin: 'files', readable: ['files/read'], writable: [] }],
+      shareId: share.shareId, viewerPlugins: [{ plugin: 'files', mode: 'all' }],
     })).rejects.toMatchObject({ code: 'liveshareShares/owner-state-unavailable' })
     expect(h.ownerShares.get(share.shareId)).toBe(share)
     expect(h.accessChanged).not.toHaveBeenCalled()
@@ -584,7 +621,7 @@ describe('Relay selection and identity', () => {
 
   it('reports the live offer list and Relay state', () => {
     const h = harness()
-    h.viewerDeclarations.declaredCapabilities.mockReturnValue([{ plugin: 'files', readable: ['files/read'], writable: [] }])
+    h.offeredCapabilities.mockReturnValue([{ plugin: 'files', readable: ['files/read'], writable: [] }])
     expect(h.operations.capabilities()).toEqual({ capabilities: [{ plugin: 'files', readable: ['files/read'], writable: [] }] })
     expect(h.operations.relay()).toEqual({ override: RELAY, effective: RELAY })
   })
