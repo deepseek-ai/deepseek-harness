@@ -61,10 +61,10 @@ Check that text and images fit the slide dimensions, titles form a useful sequen
 
 ## Check and deliver
 
-Reopen the saved presentation with python-pptx to verify the requested slide count, content, formatting, chart data, and notes, including unchanged content that must be preserved. They fully verify text, data, and notes edits, but not text fit, contrast, or rendering fidelity.
+Reopen the saved presentation with python-pptx to verify the requested slide count, content, formatting, chart data, and notes, including unchanged content that must be preserved. python-pptx reads text and properties but cannot measure layout: slide text sits in fixed-size boxes, so wrapping, overflow, overlap, and contrast appear only in a rendering.
 
-Deliver after the requested edits are verified. Creating a file or changing text, data, or notes with incidental basic formatting does not require rendering. Call `office_render` for requested images or visual inspection and for appearance-focused styling, spacing, sizing, or alignment changes unless the user explicitly skips rendering. For PDF output, call `office_convert` with `format: "pdf"`, then copy the returned temporary file to the destination.
+Call `office_render` once on the new or changed slides after any edit to what a slide shows, including its text, images, charts, sizes, positions, and styling; a request to skip rendering takes precedence. python-pptx checks alone cover speaker notes and document properties. Deliver after these checks. For PDF output, call `office_convert` with `format: "pdf"`, then copy the returned temporary file to the destination.
 
-A fully transparent or uniformly blank image of populated content is a renderer failure: stop visual checks for the task at once, without rendering again with other slides, DPI, or settings and without editing the source for it. If content and structure checks pass, state the visual status only as "Content and structure checks passed; visual inspection was not completed." or "内容与结构检查通过；视觉检查未完成。"; never claim visual verification.
+A fully transparent or uniformly blank image of populated content means the renderer failed, which ends visual checks for the task and leaves the source as it is. When content and structure checks pass, state the visual status only as "Content and structure checks passed; visual inspection was not completed." or "内容与结构检查通过；视觉检查未完成。".
 
 Call `present({"files":[{"path":"report-edited.pptx"}]})` with the actual final PPTX path. It exposes the current source file without copying or preserving its bytes, so keep that file in place and leave intermediate images and reports out of delivery unless requested. If `present` is unavailable, use the session's supported file delivery method.

@@ -45,7 +45,7 @@ kind: "package-reference"
 <a id="progressive-loading"></a>
 ### 渐进加载
 
-模型依据任务选择技能；宿主不会根据文件扩展名注入完整说明。资源完整时，四个技能均列入目录，可通过 `skill` 按名称加载或由用户显式调用。加载 Office 技能后，三个 Office 工具从下一步开始可用；工具不可用时（例如 PTC 模式 resume 或 fork 之后），技能会指示模型重新加载 `office`。python-docx、openpyxl 和 python-pptx 无法读取的旧格式 `.doc`、`.xls`、`.ppt` 文件，先用 `office_convert` 转换再编辑。用户要求的外观修改，包括电子表格单元格填充和文本对齐，即使没有明确要求视觉检查，也需要渲染；用户明确要求跳过渲染时以该要求为准。单独的操作任务在路由后直接调用专用工具，不加载创作技能。单独的 PDF 导出在检查复制出的文件非空且以 `%PDF-` 开头后即结束。
+模型依据任务选择技能；宿主不会根据文件扩展名注入完整说明。资源完整时，四个技能均列入目录，可通过 `skill` 按名称加载或由用户显式调用。加载 Office 技能后，三个 Office 工具从下一步开始可用；工具不可用时（例如 PTC 模式 resume 或 fork 之后），技能会指示模型重新加载 `office`。python-docx、openpyxl 和 python-pptx 无法读取的旧格式 `.doc`、`.xls`、`.ppt` 文件，先用 `office_convert` 转换再编辑。用户要求的外观修改，包括电子表格单元格填充和文本对齐，即使没有明确要求视觉检查，也需要渲染，演示文稿中新增或修改的幻灯片内容同样需要渲染；用户明确要求跳过渲染时以该要求为准。单独的操作任务在路由后直接调用专用工具，不加载创作技能。单独的 PDF 导出在检查复制出的文件非空且以 `%PDF-` 开头后即结束。
 
 ```mermaid
 flowchart TD
@@ -57,8 +57,8 @@ flowchart TD
     C --> D["Author and validate content, structure and data"]
     D -->|No additional operation needed| F["Deliver"]
 
-    B -->|Images, visual inspection, or appearance changes| R["office_render: images in the tool result"]
-    D -->|Images, visual inspection, or appearance changes| R
+    B -->|Images, visual inspection, appearance or slide changes| R["office_render: images in the tool result"]
+    D -->|Images, visual inspection, appearance or slide changes| R
     R --> V["Inspect requested images"]
     V --> F
 
@@ -71,7 +71,7 @@ flowchart TD
     P --> F
 ```
 
-新建文件以及内容、数据或公式修改，不会仅因附带基础格式调整而需要渲染。预览图片直接出现在 `office_render` 结果中，检查不会在工作区创建文件；回复以文字说明检查结果。转换和重算的文件以临时路径返回，由模型用 `cp` 或 `Copy-Item` 复制进工作区。操作结束后，已加载的说明仍属于会话历史。图中描述各端常规预设，不改变 minimal 或 sdk-minimal 的纯 shell 定义。
+文档和工作簿只在要求图片、视觉检查或外观修改时渲染，因为相应的库能验证内容，而 Word 会重新排版文字。演示文稿还会渲染新增或修改的幻灯片内容，因为 python-pptx 无法测量固定大小文本框中的文字是否放得下；只修改演讲者备注时不渲染。预览图片直接出现在 `office_render` 结果中，检查不会在工作区创建文件；回复以文字说明检查结果。转换和重算的文件以临时路径返回，由模型用 `cp` 或 `Copy-Item` 复制进工作区。操作结束后，已加载的说明仍属于会话历史。图中描述各端常规预设，不改变 minimal 或 sdk-minimal 的纯 shell 定义。
 
 普通 Word 文本编辑只检查目标文本片段及其格式，保存后重新打开文档验证修改。检查通过即结束验证；只有遇到具体问题或明确要求时才探查内部包结构和元数据。
 

@@ -20,6 +20,9 @@ const formats = [
   {
     contentTask: 'change the title text on slide 1 to Quarterly results without changing its formatting',
     verifyContent: "from pptx import Presentation\np=Presentation('result.pptx'); assert len(p.slides) == 1; assert p.slides[0].shapes[0].text == 'Quarterly results'",
+    contentRenders: true,
+    notesTask: 'set the speaker notes of slide 1 to Revenue grew 50%. without changing the slide',
+    verifyNotes: "from pptx import Presentation\np=Presentation('result.pptx'); s=p.slides[0]; assert s.has_notes_slide and s.notes_slide.notes_text_frame.text.strip() == 'Revenue grew 50%.'; assert s.shapes[0].text == 'Quarterly revenue'",
     format: 'pptx', task: 'center the title on slide 1 and set its font color to #1F4E79',
     seed: "from pptx import Presentation\nfrom pptx.util import Inches\np=Presentation(); s=p.slides.add_slide(p.slide_layouts[6]); s.shapes.add_textbox(Inches(1),Inches(1),Inches(6),Inches(1)).text='Quarterly revenue'; p.save('input.pptx')",
     verify: "from pptx import Presentation\nfrom pptx.enum.text import PP_ALIGN\np=Presentation('result.pptx'); title=p.slides[0].shapes[0]; r=title.text_frame.paragraphs[0]; assert r.alignment == PP_ALIGN.CENTER; assert abs(2*title.left+title.width-p.slide_width) <= 1; assert str(r.runs[0].font.color.rgb).upper() == '1F4E79'",
@@ -27,6 +30,7 @@ const formats = [
   {
     contentTask: 'change the title paragraph text to Quarterly results without changing its formatting',
     verifyContent: "from docx import Document\nd=Document('result.docx'); assert [p.text for p in d.paragraphs] == ['Quarterly results', 'Q1: 12; Q2: 18']",
+    contentRenders: false,
     format: 'docx', task: 'center the title paragraph and set its font color to #1F4E79',
     seed: "from docx import Document\nd=Document(); d.add_paragraph('Quarterly revenue'); d.add_paragraph('Q1: 12; Q2: 18'); d.save('input.docx')",
     verify: "from docx import Document\nfrom docx.enum.text import WD_ALIGN_PARAGRAPH\nd=Document('result.docx'); p=d.paragraphs[0]; assert p.alignment == WD_ALIGN_PARAGRAPH.CENTER; assert p.runs[0].font.color.rgb == (31,78,121)",
@@ -34,6 +38,7 @@ const formats = [
   {
     contentTask: 'change Revenue!B2 to 20 without changing the cell formatting or other data',
     verifyContent: "from openpyxl import load_workbook\nw=load_workbook('result.xlsx'); s=w['Revenue']; assert list(s.values) == [('Quarter','Revenue'),('Q1',20),('Q2',18)]",
+    contentRenders: false,
     format: 'xlsx', task: 'center the text in Revenue!A1:B1 and set the cells\' fill color to #1F4E79',
     seed: "from openpyxl import Workbook\nw=Workbook(); s=w.active; s.title='Revenue'; s.append(['Quarter','Revenue']); s.append(['Q1',12]); s.append(['Q2',18]); w.save('input.xlsx')",
     verify: "from openpyxl import load_workbook\nw=load_workbook('result.xlsx'); s=w['Revenue']; assert all(s[c].alignment.horizontal == 'center' and s[c].fill.fgColor.rgb.endswith('1F4E79') for c in ('A1','B1')); assert s['B2'].value == 12 and s['B3'].value == 18",
@@ -47,18 +52,23 @@ const intents = [
 ] as const
 
 /**
- * Register the visual-intent e2e cases for the selected document formats.
+ * Register the visual-intent e2e cases for the selected document formats. Without an explicit request, appearance
+ * edits render once, content edits render once only where the format's library cannot check their layout (PPTX
+ * fixed-size text boxes), and PPTX speaker-notes edits never render.
  * @param selected - Document formats whose cases this spec file registers.
  */
 export function registerVisualIntentCases(selected: readonly DocumentFormat[]): void {
-  const cases = [
-    ...formats.filter(format => selected.includes(format.format)).flatMap(format => intents.flatMap(intent => [
-      { ...format, ...intent, kind: 'format' },
-      { ...format, ...intent, kind: 'content', task: format.contentTask, verify: format.verifyContent },
-    ])),
-  ]
+  const cases = formats.filter(format => selected.includes(format.format)).flatMap(format => [
+    ...intents.flatMap(intent => [
+      { ...format, ...intent, kind: 'format', rendersUnrequested: true },
+      { ...format, ...intent, kind: 'content', task: format.contentTask, verify: format.verifyContent, rendersUnrequested: format.contentRenders },
+    ]),
+    ...'notesTask' in format
+      ? [{ ...format, ...intents[2], kind: 'notes', task: format.notesTask, verify: format.verifyNotes, rendersUnrequested: false }]
+      : [],
+  ])
 
-  it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each(cases)('$format $kind $intent visual intent', async ({ format, kind, task, seed, verify, intent, suffix }) => {
+  it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each(cases)('$format $kind $intent visual intent', async ({ format, kind, task, seed, verify, intent, suffix, rendersUnrequested }) => {
     const controlRoot = await mkdtemp(join(tmpdir(), 'dsh-office-control-test-'))
     try {
       const previewRoot = join(controlRoot, 'tmp')
@@ -118,7 +128,7 @@ export function registerVisualIntentCases(selected: readonly DocumentFormat[]): 
           const checked = await execa(python!, ['-c', verify], { cwd, reject: false })
           expect(checked.exitCode, `${checked.stderr}\n${diagnostic}`).toBe(0)
           expect(loaded, diagnostic).toContain(`office-${format}`)
-          if (intent === 'excluded' || kind === 'content' && intent !== 'explicit') {
+          if (intent === 'excluded' || intent === 'implicit' && !rendersUnrequested) {
             expect(renderCalls, diagnostic).toEqual([])
           } else {
             expect(renderCalls, diagnostic).toHaveLength(1)

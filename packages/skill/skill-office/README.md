@@ -45,7 +45,7 @@ A relative `assetRoot` rejects registration. Catalog discovery reads each `SKILL
 <a id="progressive-loading"></a>
 ### Progressive loading
 
-The model chooses skills from the task; the host does not inject complete instructions based on file extensions. With complete resources, all four skills are listed and loadable by name through `skill` or explicit user invocation. Loading an Office skill makes the three Office tools available from the next step; when they are unavailable, such as after a PTC resume or fork, the skills direct the model to load `office` again. Legacy `.doc`, `.xls`, and `.ppt` files, which python-docx, openpyxl, and python-pptx cannot read, are converted with `office_convert` before editing. Requested appearance changes, including spreadsheet cell fills and text alignment, require rendering even without an explicit visual-check request; an explicit request to skip rendering takes precedence. Standalone operations use the dedicated tools after routing without loading an authoring skill. PDF export alone stops after checking that the copied output is nonempty and starts with `%PDF-`.
+The model chooses skills from the task; the host does not inject complete instructions based on file extensions. With complete resources, all four skills are listed and loadable by name through `skill` or explicit user invocation. Loading an Office skill makes the three Office tools available from the next step; when they are unavailable, such as after a PTC resume or fork, the skills direct the model to load `office` again. Legacy `.doc`, `.xls`, and `.ppt` files, which python-docx, openpyxl, and python-pptx cannot read, are converted with `office_convert` before editing. Requested appearance changes, including spreadsheet cell fills and text alignment, require rendering even without an explicit visual-check request, and so do new or changed slide content in presentations; an explicit request to skip rendering takes precedence. Standalone operations use the dedicated tools after routing without loading an authoring skill. PDF export alone stops after checking that the copied output is nonempty and starts with `%PDF-`.
 
 ```mermaid
 flowchart TD
@@ -57,8 +57,8 @@ flowchart TD
     C --> D["Author and validate content, structure and data"]
     D -->|No additional operation needed| F["Deliver"]
 
-    B -->|Images, visual inspection, or appearance changes| R["office_render: images in the tool result"]
-    D -->|Images, visual inspection, or appearance changes| R
+    B -->|Images, visual inspection, appearance or slide changes| R["office_render: images in the tool result"]
+    D -->|Images, visual inspection, appearance or slide changes| R
     R --> V["Inspect requested images"]
     V --> F
 
@@ -71,7 +71,7 @@ flowchart TD
     P --> F
 ```
 
-New files and content, data, or formula edits do not require rendering solely because they include incidental basic formatting. Preview images arrive in the `office_render` result, so no workspace files are created for inspection; replies report the inspection in text. Converted and recalculated files arrive as temporary paths that the model copies into the workspace with `cp` or `Copy-Item`. Loaded instructions remain in session history after an operation finishes. The diagram describes ordinary presets across supported clients; it does not change the shell-only definition of minimal or sdk-minimal.
+Documents and workbooks render only for requested images, visual inspection, or appearance changes, because their libraries verify content and Word reflows text. Presentations also render new or changed slide content, because python-pptx cannot measure text fit in fixed-size boxes; speaker-notes edits do not render. Preview images arrive in the `office_render` result, so no workspace files are created for inspection; replies report the inspection in text. Converted and recalculated files arrive as temporary paths that the model copies into the workspace with `cp` or `Copy-Item`. Loaded instructions remain in session history after an operation finishes. The diagram describes ordinary presets across supported clients; it does not change the shell-only definition of minimal or sdk-minimal.
 
 Ordinary Word text edits inspect the target runs and formatting, then reopen the saved document to verify the edit. Successful checks end validation; package and metadata investigation requires a concrete problem or an explicit request.
 
