@@ -9,11 +9,11 @@
   en: d1aad580a4db9872
   zh: 1eb3bac59353291d
 /agent-note-direct-deepseek-search-and-fetch-apis/decision:
-  en: e70efbb3aa9d53b6
-  zh: 1d25eae2461346df
+  en: 43298ccae4f7a6d4
+  zh: eb7ef46b6f290c15
 /agent-note-direct-deepseek-search-and-fetch-apis/decision/protocol-selection-and-deployment:
-  en: ec653b59d62ed95f
-  zh: 0d675616059930ba
+  en: 90e5031d0d2fa9e4
+  zh: a9c0229b20555d9e
 /agent-note-direct-deepseek-search-and-fetch-apis/decision/search-results-and-model-input:
   en: ad7b3e4fbe528cf2
   zh: 8ab8779bfdaaa4fa
@@ -21,17 +21,17 @@
   en: 7566e400f9ab3a51
   zh: 118b2e84d0030480
 /agent-note-direct-deepseek-search-and-fetch-apis/decision/default-migration:
-  en: d5a8e36b545f1c04
-  zh: d741fd0789401c62
-/agent-note-direct-deepseek-search-and-fetch-apis/decision/supplementary-messages-fix:
-  en: 738e32b488bbc1a1
-  zh: f33afe570f62599a
+  en: cb2f0910955b6730
+  zh: 7df057048acd7858
+/agent-note-direct-deepseek-search-and-fetch-apis/decision/legacy-messages-search:
+  en: 0dcc97d8105fab60
+  zh: d80d40ae3a0c601d
 /agent-note-direct-deepseek-search-and-fetch-apis/alternatives-considered:
-  en: 641cbfefc76f2f95
-  zh: e3e718473eace85f
+  en: 907e0b8424943d43
+  zh: f45e583e7cb4eb63
 /agent-note-direct-deepseek-search-and-fetch-apis/consequences:
-  en: a55da02f4d3c06c0
-  zh: 3c1a624f03f34f28
+  en: 7ec21c5b1124e5f8
+  zh: af769dbdb4face9f
 /agent-note-direct-deepseek-search-and-fetch-apis/verification-and-remaining-api-adoption:
-  en: 4c84e7bd035b52a7
-  zh: 4e5687bda0a47706
+  en: 595a35ce727a7c82
+  zh: 10b2197663198015

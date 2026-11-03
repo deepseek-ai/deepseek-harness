@@ -4,7 +4,7 @@ import { ModuleLoader } from './internal.ts'
 import { Entry, type EntryOptions } from './config/entry.ts'
 import { EntryGroup } from './config/group.ts'
 import isolate from './config/isolate.ts'
-import { EntryTree } from './config/tree.ts'
+import { EntryTree, type EntryChange } from './config/tree.ts'
 import { interpolate } from './config/utils.ts'
 
 /** Re-export entry node APIs. */
@@ -72,7 +72,7 @@ export namespace Loader {
 /**
  * Service that owns a loader entry tree and imports configured plugins.
  *
- * Subclasses provide persistence by implementing `write()` on `EntryTree`.
+ * Subclasses provide persistence by implementing `commit(change)` on `EntryTree`.
  */
 export class Loader extends EntryTree {
   declare [Service.config]: Loader.Intercept
@@ -113,8 +113,10 @@ export class Loader extends EntryTree {
       if (!fiber.entry || fiber.parent.fiber?.entry === fiber.entry) return
       const schema = fiber.runtime?.Config
       const unparse = schema?.['simplify']
-      fiber.entry.options.config = unparse ? unparse.call(schema, config) : config
-      fiber.entry.parent.tree.write()
+      const { entry } = fiber
+      const legacy = { ...entry.options }
+      entry.options.config = unparse ? unparse.call(schema, config) : config
+      entry.parent.tree.commit({ id: entry.options.id, group: entry.parent, options: entry.options, legacy })
     })
 
     ctx.on('internal/update', function (config, next) {
@@ -149,24 +151,33 @@ export class Loader extends EntryTree {
       if (!ctx.registry.has(fiber.runtime!.callback)) return
 
       // case 5: the entry's tree is being disposed
-      const treeOwner = fiber.entry.parent.tree.ctx.fiber
-      if (!treeOwner.uid || treeOwner.state === FiberState.UNLOADING) return
+      if (!fiber.entry.parent.tree.ctx.fiber.uid) return
 
-      this.showLog(fiber.entry, 'unload')
+      const { entry } = fiber
+      this.showLog(entry, 'unload')
 
-      // case 6: fiber is disposed by loader behavior
+      // case 6: the entry's parent is being unloaded, which takes the entry with it
+      // (the parent may still be registered, e.g. when it has lost a dependency)
+      if (fiber.parent.fiber.state === FiberState.UNLOADING) return
+
+      // case 7: the entry is being removed by the loader (`EntryGroup.remove`
+      // unregisters it before disposing the fiber)
+      if (entry.parent.tree.store[entry.options.id] !== entry) return
+
+      // case 8: fiber is disposed by loader behavior
       // such as inject checker, config file update, ancestor group disable
-      if (fiber.entry.disabled) return
+      if (entry.disabled) return
 
-      fiber.entry.options.disabled = true
-      fiber.entry.parent.tree.write()
+      const legacy = { ...entry.options }
+      entry.options.disabled = true
+      entry.parent.tree.commit({ id: entry.options.id, group: entry.parent, options: entry.options, legacy })
     })
 
     ctx.plugin(isolate)
   }
 
-  write() {
-    // Loader's root tree is in-memory; writes are no-ops.
+  commit(_change: EntryChange) {
+    // Loader's root tree is in-memory; commits are no-ops.
   }
 
   [Service.check]() {

@@ -63,7 +63,7 @@ export interface ProbeTarget {
   baseURL?: string
   /** Wire protocol the form names, when it names one. */
   api?: string
-  /** Loaded or newly entered key currently shown in the form, when there is one. */
+  /** Key typed into the form and not yet stored, when there is one. */
   apiKey?: string
 }
 

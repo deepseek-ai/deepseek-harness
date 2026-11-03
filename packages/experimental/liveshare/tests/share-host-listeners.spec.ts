@@ -1,4 +1,4 @@
-/** Share-host assembly: configuration guards, agent listeners, and owner state projection. */
+/** Share-host assembly: configuration guards, catalog titles, agent listeners, and owner state projection. */
 
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -8,6 +8,7 @@ import { createScope } from '@deepseek-ai/dsh-scope'
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { apply, publishedShareState, type Config, type OwnerShare } from '../src/host/share-host.ts'
+import type {} from '../src/index.ts'
 import type { ForkToolExecution } from '../src/host/fork-tool-guard.ts'
 import { FakeTunnelWorker } from './tunnel-supervision-fake-worker.ts'
 import { shareViewerPrincipal } from '../src/host/viewer-principal.ts'
@@ -78,6 +79,8 @@ async function mount(
     readonly state?: ReturnType<typeof stateFile>
     /** Mount with no owner state file configured, so the DSH_HOME default is read. */
     readonly useDshHome?: boolean
+    /** Services provided on the root context before the plugin body runs. */
+    readonly services?: Readonly<Record<string, unknown>>
   } = {},
 ): Promise<Mounted> {
   const handlers = new Map<string, (...args: unknown[]) => Promise<unknown>>()
@@ -99,8 +102,9 @@ async function mount(
     if (!handlers.has(name)) handlers.set(name, listener as (...args: unknown[]) => Promise<unknown>)
     return originalOn(name as never, listener as never)
   }) as never
-  const { state, useDshHome, ...rest } = config
+  const { state, useDshHome, services, ...rest } = config
   const files = state ?? stateFile()
+  for (const [name, service] of Object.entries(services ?? {})) ctx.provide(name, service)
   await apply(ctx, {
     ...(useDshHome === true ? {} : { ownerStateFile: files.file }),
     ...rest,
@@ -150,9 +154,9 @@ describe('configuration guards', () => {
       gatewayToken: 'token', allowedSubjectIds: [], createdAt: '2026-01-01T00:00:00Z',
       allowsFork: true, online: true, link: '', relay: RELAY, revision: 0,
       sessionMode: 'write', expiresAt: '2026-01-02T00:00:00Z',
-      viewerCapabilities: [{ plugin: 'mekGit', readable: ['mekGit/getGraph'], writable: [] }],
+      viewerPlugins: [{ plugin: 'mekGit', mode: 'all' }],
     })).toMatchObject({
-      viewerCapabilities: [{ plugin: 'mekGit', readable: ['mekGit/getGraph'], writable: [] }],
+      viewerPlugins: [{ plugin: 'mekGit', mode: 'all' }],
       expiresAt: '2026-01-02T00:00:00Z',
     })
   })
@@ -228,6 +232,54 @@ describe('configuration guards', () => {
       .rejects.toMatchObject({ code: 'liveshareShares/relay-url-required' })
     await expect(mounted.ctx.liveshareShares.identity({}))
       .rejects.toMatchObject({ code: 'liveshareShares/relay-url-required' })
+    await mounted.ctx.fiber.dispose()
+  })
+})
+
+describe('capability catalog titles', () => {
+  /** The catalog groups the owner's share panel lists. */
+  const catalog = (ctx: Context) => ctx.liveshareShares.capabilities().capabilities
+
+  it('names a catalog group after the bundle that mounts its component package', async () => {
+    const mounted = await mount({
+      services: {
+        pluginManager: {
+          listBundles: async () => [
+            {
+              name: '@fixture/forge-bundle',
+              meta: { title: { en: 'Change requests' } },
+              rows: [{ moduleName: '@fixture/forge' }],
+            },
+            { name: '@deepseek-ai/dsh-base', rows: [{ moduleName: '@deepseek-ai/dsh-agent' }] },
+          ],
+        },
+        typert: {
+          local: {
+            list: () => [
+              { id: '@fixture/forge#forgePanel', namespace: 'forgePanel', method: 'changeRequestStates' },
+              { id: '@deepseek-ai/dsh-agent#agentAudit', namespace: 'agentAudit', method: 'list' },
+              { id: '@fixture/unbundled#status', namespace: 'unbundledStatus', method: 'read' },
+            ],
+          },
+        },
+      },
+    })
+    // The bundle catalog is read after the plugin body returns, so the groups appear once it answers.
+    await vi.waitFor(() => { expect(catalog(mounted.ctx)).toHaveLength(2) })
+    const groups = catalog(mounted.ctx)
+    // A component of a core profile bundle is not offered to viewers.
+    expect(groups.flatMap(group => group.endpoints)).not.toContain('agentAudit/list')
+    expect(groups.find(group => group.plugin === '@fixture/forge-bundle')).toEqual({
+      plugin: '@fixture/forge-bundle',
+      package: '@fixture/forge',
+      titles: { en: 'Change requests' },
+      endpoints: ['forgePanel/changeRequestStates'],
+    })
+    expect(groups.find(group => group.plugin === 'unbundledStatus')).toEqual({
+      plugin: 'unbundledStatus',
+      package: '@fixture/unbundled',
+      endpoints: ['unbundledStatus/read'],
+    })
     await mounted.ctx.fiber.dispose()
   })
 })

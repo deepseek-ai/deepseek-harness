@@ -9,6 +9,14 @@
 
 import { isRecord } from './wire-json.ts'
 
+/**
+ * Name of the PTC transport the selected executor reserves.
+ *
+ * Liveshare names it locally so its tool surface takes no runtime dependency on the tools package; the
+ * suite pins this value against the registry's own reservation of the name.
+ */
+export const RUN_CODE_NAME = 'run_code'
+
 /** Tier that admits one shared tool. */
 export type SharedToolTier = 'view' | 'write'
 
@@ -161,6 +169,9 @@ export const SHARED_TOOL_PROFILES: readonly SharedToolProfile[] = [
   { name: 'skill', tier: 'view', noFileEffect: true, defaultsToWorkspace: false, call: noFileCall },
   { name: 'web_search', tier: 'view', noFileEffect: true, defaultsToWorkspace: false, call: noFileCall },
   { name: 'web_fetch', tier: 'view', noFileEffect: true, defaultsToWorkspace: false, call: noFileCall },
+  // The PTC transport declares no path of its own: the program runs under the owner's standing file
+  // policy, and every nested call is a separate execution this same guard and replacement set judge.
+  { name: RUN_CODE_NAME, tier: 'view', noFileEffect: true, defaultsToWorkspace: false, call: noFileCall },
   { name: 'edit', tier: 'write', noFileEffect: false, defaultsToWorkspace: false, call: filePathCall },
   { name: 'write', tier: 'write', noFileEffect: false, defaultsToWorkspace: false, call: filePathCall },
 ]

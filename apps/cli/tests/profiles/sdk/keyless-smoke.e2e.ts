@@ -57,6 +57,7 @@ describe('Python SDK dsh profile keyless smoke', () => {
     { label: 'reports max-token turns with mapping enabled through env', envValue: 'true', editorEnabled: false },
     { label: 'reports max-token turns with mapping disabled through env', envValue: 'false', editorEnabled: false },
     { label: 'allows an explicit patch to enable str_replace_editor', envValue: undefined, editorEnabled: true },
+    { label: 'allows an explicit patch to enable apply_patch', envValue: undefined, editorEnabled: false, patchEnabled: true },
     { label: 'uses the PTC executor overlay despite the retired environment selector', envValue: undefined, editorEnabled: false, ptc: true },
     // The shipped sdk profile mounts no observation policy: an edit of a file the model never read lands on disk.
     { label: 'edits a file the model never read through the shipped profile', envValue: undefined, editorEnabled: false, unreadEdit: true },
@@ -64,11 +65,14 @@ describe('Python SDK dsh profile keyless smoke', () => {
     const { envValue, editorEnabled } = scenario
     const ptc = 'ptc' in scenario && scenario.ptc
     const unreadEdit = 'unreadEdit' in scenario && scenario.unreadEdit
+    const patchEnabled = 'patchEnabled' in scenario && scenario.patchEnabled
 
     const root = await mkdtemp(join(tmpdir(), 'dsh-python-sdk-runtime-smoke-'))
     const unreadFile = join(root, 'notes.txt')
     if (unreadEdit) await writeFile(unreadFile, 'alpha\n')
     const editorPatch = join(root, 'editor.patch.yml')
+    const fsPatch = join(root, 'fs.patch.yml')
+    if (patchEnabled) await writeFile(fsPatch, '- {id: tool-fs, config: {applyPatch: true}}\n')
     if (editorEnabled) await writeFile(editorPatch, [
       '- insert:',
       '    - id: tool-str-replace-editor',
@@ -103,6 +107,7 @@ describe('Python SDK dsh profile keyless smoke', () => {
       '--profile',
       'sdk',
       ...(editorEnabled ? ['--patch', editorPatch] : []),
+      ...(patchEnabled ? ['--patch', fsPatch] : []),
       ...(ptc ? ['--patch', join(repoRoot, 'apps/cli/config/examples/ptc.yml')] : []),
     ], {
       cwd: repoRoot,
@@ -189,16 +194,16 @@ describe('Python SDK dsh profile keyless smoke', () => {
       const toolNames = tools.map(tool => tool.name)
       expect(modelRequests[0]?.output_config).toEqual({ effort: 'max' })
       expect(modelRequests[0]?.max_tokens).toBe(1234)
-      const expectedTools = ['read', 'write', 'edit', 'apply_patch', 'web_fetch', 'web_search', 'subagent', 'subagent_fork',
+      const expectedTools = ['read', 'write', 'edit', 'web_fetch', 'web_search', 'subagent', 'subagent_fork',
         'present', 'ask_user_question', 'schedule_create', 'schedule_edit', 'schedule_list', 'schedule_view', 'plugin_manager']
       const requestText = JSON.stringify(modelRequests[0])
       if (ptc) {
         expect(toolNames).toEqual(['run_code'])
-        // The PTC overlay keeps the pre-apply_patch tool set, as the Web ptc preset does.
-        for (const tool of expectedTools.filter(tool => tool !== 'apply_patch')) expect(requestText.includes(`${tool}:`), tool).toBe(true)
+        for (const tool of expectedTools) expect(requestText.includes(`${tool}:`), tool).toBe(true)
         expect(requestText.includes('apply_patch:')).toBe(false)
       } else {
         expect(toolNames).toEqual(expect.arrayContaining(expectedTools))
+        expect(toolNames.includes('apply_patch')).toBe(patchEnabled)
         expect(toolNames.includes('str_replace_editor')).toBe(editorEnabled)
         expect(toolNames).not.toContain('list_subagent_models')
       }

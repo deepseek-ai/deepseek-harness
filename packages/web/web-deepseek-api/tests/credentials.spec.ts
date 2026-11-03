@@ -10,8 +10,6 @@ import { DSH_LAUNCH_ENVIRONMENT_KEY, createLaunchEnvironmentSnapshot } from '@de
 import WebRuntime from '@deepseek-ai/dsh-web'
 import * as webApiPlugin from '@deepseek-ai/dsh-web-deepseek-api'
 
-const BASE = 'https://api.deepseek.test/v1/tools'
-
 /** Stub the Search API and read back the bearer credential of every dispatched request. */
 function captureAuthorization(): () => (string | null)[] {
   const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(
@@ -30,7 +28,7 @@ function captureAuthorization(): () => (string | null)[] {
 async function mount(ctx: Context, config: Record<string, unknown>, environment: Record<string, string>): Promise<void> {
   ctx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, createLaunchEnvironmentSnapshot([{ source: 'process', values: environment }]))
   await ctx.plugin(WebRuntime, { searchProvider: 'deepseek-search-api' })
-  await ctx.plugin(webApiPlugin, { baseURL: BASE, ...config })
+  await ctx.plugin(webApiPlugin, config)
 }
 
 afterEach(() => { vi.unstubAllGlobals() })
@@ -45,7 +43,7 @@ describe('web-deepseek-api API-key resolution', () => {
       await mount(ctx, {}, {})
       const missing = ctx.web.search({ query: 'missing' })
       await expect(missing).rejects.toMatchObject({ code: 'WEB_PROVIDER_CREDENTIAL_MISSING' })
-      await expect(missing).rejects.toThrow(/"apiKey" in the web-deepseek-api config/)
+      await expect(missing).rejects.toThrow(/export "DEEPSEEK_API_KEY" in the launching environment/)
       const ref = credentialRef('DEEPSEEK_API_KEY')
       await ctx.credentials.set(ref, 'stored-key')
       await ctx.web.search({ query: 'stored' })
@@ -60,8 +58,7 @@ describe('web-deepseek-api API-key resolution', () => {
 
   it.each([
     ['the default reference', {}, { DEEPSEEK_API_KEY: 'env-key' }, 'Bearer env-key'],
-    ['a configured reference', { apiKeyEnv: 'SEARCH_API_KEY' }, { SEARCH_API_KEY: 'custom-key' }, 'Bearer custom-key'],
-    ['an empty literal key', { apiKey: '' }, { DEEPSEEK_API_KEY: 'env-key' }, 'Bearer env-key'],
+    ['a configured reference', { searchApiKeyEnv: 'SEARCH_API_KEY' }, { SEARCH_API_KEY: 'custom-key' }, 'Bearer custom-key'],
   ])('falls back to the launch environment for %s without a credentials service', async (_case, config, environment, expected) => {
     const authorization = captureAuthorization()
     const ctx = new Context()
@@ -82,13 +79,13 @@ describe('web-deepseek-api API-key resolution', () => {
     } finally { await ctx.fiber.dispose() }
   })
 
-  it('treats an empty credential value as missing', async () => {
+  it.each(['', 'bad key', '非法密钥'])('rejects malformed stored key %j before dispatch', async (value) => {
     const authorization = captureAuthorization()
     const ctx = new Context()
     try {
-      ctx.provide('credentials', { resolve: async () => ({ value: '' }) } as never)
+      ctx.provide('credentials', { resolve: async () => ({ value }), describe: async () => ({ configured: true }) } as never)
       await mount(ctx, {}, {})
-      await expect(ctx.web.search({ query: 'q' })).rejects.toMatchObject({ code: 'WEB_PROVIDER_CREDENTIAL_MISSING' })
+      await expect(ctx.web.search({ query: 'q' })).rejects.toMatchObject({ code: 'WEB_PROVIDER_ERROR' })
       expect(authorization()).toEqual([])
     } finally { await ctx.fiber.dispose() }
   })
