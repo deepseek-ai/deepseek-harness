@@ -566,13 +566,13 @@ export interface ComposerBarInjected {
   toggleCommandMenu: ((selection: EditSelection) => void) | undefined
   stop: (() => void) | undefined
   /**
-   * Submit empty continuation input for the displayed failure.
-   * @param ending - sequence of the displayed failed turn/end.
+   * Submit empty input to retry the displayed failed generation.
+   * @param failureSeq - sequence of the displayed failed turn/end.
    */
-  continueGeneration: ((ending: SessionSeq) => void) | undefined
+  retry: ((failureSeq: SessionSeq) => void) | undefined
   hooks: {
-    /** Host-projected latest eligible failure, excluding pending human steering. */
-    continuation: ObservableSnapshot<SessionSeq | undefined>
+    /** Latest retryable failed turn/end sequence; undefined while unavailable or human steering is pending. */
+    retryableFailure: ObservableSnapshot<SessionSeq | undefined>
     /** Readable sequence while the fixed Stop command is registered. */
     stopShortcut: ObservableSnapshot<readonly string[]>
     /**

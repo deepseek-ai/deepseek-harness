@@ -46,9 +46,9 @@ export type InputBarProps = ComposerBarProps
 export const InputBar = memo(function InputBar({
   useSession, useInput, inputActions, keyboard, addFiles, removeAttachment, resolveDraftAttachments,
   retryFileUpload,
-  toggleCommandMenu, stop, continueGeneration, t,
+  toggleCommandMenu, stop, retry, t,
   renderSlot, useBusyEnter, useFileUploads, useNotices, useLexicon, useMenuLauncher, useStopShortcut,
-  useAccess, useContinuation,
+  useAccess, useRetryableFailure,
   useProjection, sessionId, variant, disabled: inert = false, blocked,
   workspacePickerOpen = false, onRequestWorkspace,
   placeholder, accessory,
@@ -70,7 +70,7 @@ export const InputBar = memo(function InputBar({
   useEffect(() => { setActivity(false) }, [sessionId])
   const promptError = useSession(s => s.promptError) ?? null
   const running = useSession(s => s.running) ?? false
-  const continuation = useContinuation(value => value)
+  const retryableFailure = useRetryableFailure(value => value)
   const historyOpen = useSession(s => s.openState === 'open') ?? false
   const submissionPending = useSession(s => s.pendingSubmissions.length > 0) ?? false
   const subagent = useSession(s => s.subagent) ?? null
@@ -358,12 +358,12 @@ export const InputBar = memo(function InputBar({
   // exposes Stop independently, and so does a running session while a
   // message waits for the Host.
   const primaryStops = running && subagent === null && !sending && (empty || blocked !== undefined)
-  const primaryContinues = !running && subagent === null && empty && continuation !== undefined
+  const primaryRetries = !running && subagent === null && empty && retryableFailure !== undefined
     && historyOpen && !submissionPending && !disabled && input.queue.length === 0
-    && input.phase === 'plain' && continueGeneration !== undefined
+    && input.phase === 'plain' && retry !== undefined
   // Disabled native buttons may omit mouseleave; their tooltip must close from state.
   const primaryDisabled = primaryStops ? stopAction === undefined
-    : (!primaryContinues && empty) || disabled || machineBusy || uploadsPending
+    : (!primaryRetries && empty) || disabled || machineBusy || uploadsPending
   const interruptible = running && (continuable || (sending && subagent === null))
   const primarySubmitMode = resolveSubmitMode(busyEnter, running, 'enter', steeringAvailable)
   const plainMessageDraft = !empty && input?.phase === 'plain' && !draft.trimStart().startsWith('/')
@@ -371,7 +371,7 @@ export const InputBar = memo(function InputBar({
     ? t('input.stop')
     : sending
       ? t('input.sending')
-      : primaryContinues
+      : primaryRetries
         ? t('input.continue')
         : running && steeringAvailable && !disabled && !uploadsPending && plainMessageDraft
           ? t(primarySubmitMode === 'steer' ? 'input.send.steer' : 'input.send.queue')
@@ -381,8 +381,8 @@ export const InputBar = memo(function InputBar({
       stopAction?.()
       return
     }
-    if (primaryContinues) {
-      continueGeneration(continuation)
+    if (primaryRetries) {
+      retry(retryableFailure)
       return
     }
     if (keyboard === undefined) return // absent machine: the button is disabled
@@ -564,7 +564,7 @@ export const InputBar = memo(function InputBar({
                       <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeOpacity="0.35" strokeWidth="2" />
                       <path d="M8 2a6 6 0 0 1 6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                     </svg>
-                  ) : primaryContinues ? (
+                  ) : primaryRetries ? (
                     <IconTriangleRightFillRegular size={16} className={css.continueIcon} />
                   ) : (
                     <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>

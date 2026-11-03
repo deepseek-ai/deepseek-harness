@@ -79,7 +79,7 @@ const ABSENT_NOTICES = {
   getSnapshot: (): InputNotice | null => null,
   subscribe: () => () => {},
 }
-const ABSENT_CONTINUATION = {
+const ABSENT_RETRYABLE_FAILURE = {
   getSnapshot: () => undefined,
   subscribe: () => () => {},
 }
@@ -487,9 +487,9 @@ export function apply(ctx: Context, config: Config = Config({})): void {
           retryFileUpload: undefined,
           toggleCommandMenu: undefined,
           stop: undefined,
-          continueGeneration: undefined,
+          retry: undefined,
           hooks: {
-            continuation: ABSENT_CONTINUATION,
+            retryableFailure: ABSENT_RETRYABLE_FAILURE,
             stopShortcut,
             busyEnter: submissionPolicy.busyEnter,
             fileUploads: ABSENT_FILE_UPLOADS,
@@ -568,9 +568,9 @@ export function apply(ctx: Context, config: Config = Config({})): void {
             })
           },
         stop: () => { stop(sessionId) },
-        continueGeneration: (ending) => { inputHub.continueGeneration(sessionId, ending) },
+        retry: (failureSeq) => { inputHub.retry(sessionId, failureSeq) },
         hooks: {
-          continuation: inputHub.continuation(sessionId),
+          retryableFailure: inputHub.retryableFailure(sessionId),
           stopShortcut,
           busyEnter: submissionPolicy.busyEnter,
           fileUploads: conversation.fileUploads,

@@ -174,14 +174,14 @@ describe('Conversation inject API', () => {
     await b.runtime.sessions.replaceEvents(ROOT, continuationTurn({ kind: 'error', error: { code: 'SERVER', message: 'busy' } }))
     await b.runtime.sessions.setProjection(ROOT, 'conversationContinuation', SessionSeq(5))
     const composer = b.composerApi(ROOT)
-    expect(b.composerApi(ROOT).hooks.continuation).toBe(composer.hooks.continuation)
-    expect(composer.hooks.continuation.getSnapshot()).toBe(5)
+    expect(b.composerApi(ROOT).hooks.retryableFailure).toBe(composer.hooks.retryableFailure)
+    expect(composer.hooks.retryableFailure.getSnapshot()).toBe(5)
     b.runtime.ctx.locale.setLocale(locale)
     const pending = Promise.withResolvers<Awaited<ReturnType<ISession['prompt']>>>()
     onTestFinished(() => { pending.resolve({ ok: true, value: { accepted: true } }) })
     b.sessionFake.prompt.mockImplementationOnce(() => pending.promise)
-    composer.continueGeneration!(SessionSeq(5))
-    composer.continueGeneration!(SessionSeq(5))
+    composer.retry!(SessionSeq(5))
+    composer.retry!(SessionSeq(5))
     expect(composer.keyboard!.snapshot.phase).toBe('sending')
     await vi.waitFor(() => { expect(b.sessionFake.prompt).toHaveBeenCalledOnce() })
     expect(b.sessionFake.prompt.mock.calls[0]?.[0]).toEqual([])
@@ -198,19 +198,19 @@ describe('Conversation inject API', () => {
     await b.runtime.sessions.setProjection(ROOT, 'conversationContinuation', SessionSeq(5))
     const composer = b.composerApi(ROOT)
     const input = b.inputApi(ROOT)
-    composer.continueGeneration!(SessionSeq(1))
+    composer.retry!(SessionSeq(1))
     input.actions.setDraft('Keep my new instruction')
-    composer.continueGeneration!(SessionSeq(5))
+    composer.retry!(SessionSeq(5))
     expect(input.state.getSnapshot().draft).toBe('Keep my new instruction')
     input.actions.setDraft('')
     await b.runtime.sessions.updateSessionSnapshot(ROOT, (state) => { state.running = true })
-    composer.continueGeneration!(SessionSeq(5))
+    composer.retry!(SessionSeq(5))
     await b.runtime.sessions.updateSessionSnapshot(ROOT, (state) => { state.running = false })
     await b.runtime.sessions.appendEvent(ROOT, {
       type: 'event', event: { type: 'turn/start', seq: SessionSeq(6), time: 1, data: { turn: 2 } },
     })
     await b.runtime.sessions.setProjection(ROOT, 'conversationContinuation', null)
-    composer.continueGeneration!(SessionSeq(5))
+    composer.retry!(SessionSeq(5))
     expect(input.state.getSnapshot().draft).toBe('')
     expect(b.sessionFake.prompt).not.toHaveBeenCalled()
   })
@@ -220,7 +220,7 @@ describe('Conversation inject API', () => {
     onTestFinished(() => b.runtime.dispose())
     await b.runtime.sessions.setProjection(ROOT, 'conversationContinuation', SessionSeq(5))
     const composer = b.composerApi(ROOT)
-    const source = composer.hooks.continuation
+    const source = composer.hooks.retryableFailure
     const notified = vi.fn()
     const unsubscribe = source.subscribe(notified)
     onTestFinished(unsubscribe)
@@ -231,11 +231,11 @@ describe('Conversation inject API', () => {
     const user = createUserMessage({ content: [{ type: 'text', text: 'new instruction' }], source: { kind: 'user' } })
     await b.runtime.sessions.setProjection(ROOT, 'inbox', { ...inbox, 'next-step': [context, user] })
     expect(source.getSnapshot()).toBeUndefined()
-    composer.continueGeneration!(SessionSeq(5))
+    composer.retry!(SessionSeq(5))
     expect(b.sessionFake.prompt).not.toHaveBeenCalled()
     await b.runtime.sessions.setProjection(ROOT, 'inbox', inbox)
     expect(source.getSnapshot()).toBe(5)
-    composer.continueGeneration!(SessionSeq(5))
+    composer.retry!(SessionSeq(5))
     await vi.waitFor(() => { expect(b.sessionFake.prompt).toHaveBeenCalledOnce() })
     expect(b.sessionFake.prompt.mock.calls[0]?.[0]).toEqual([])
     expect(notified).toHaveBeenCalledTimes(3)
@@ -246,7 +246,7 @@ describe('Conversation inject API', () => {
     onTestFinished(() => b.runtime.dispose())
     await b.runtime.sessions.replaceEvents(ROOT, continuationTurn({ kind: 'error', error: { code: 'SERVER', message: 'busy' } }).slice(1), true)
     await b.runtime.sessions.setProjection(ROOT, 'conversationContinuation', SessionSeq(5))
-    const source = b.composerApi(ROOT).hooks.continuation
+    const source = b.composerApi(ROOT).hooks.retryableFailure
     expect(source.getSnapshot()).toBe(5)
     const history = Array.from({ length: 1666 }, (_, index) => continuationTurn({ kind: 'completed' }, index + 1)).flat()
     history.push(...continuationTurn({ kind: 'completed' }, 1667).slice(0, 4))
@@ -319,7 +319,7 @@ describe('Conversation inject API', () => {
           break
       }
       const before = b.inputApi(ROOT).state.getSnapshot().draft
-      composer.continueGeneration!(SessionSeq(5))
+      composer.retry!(SessionSeq(5))
       expect(b.inputApi(ROOT).state.getSnapshot().draft).toBe(before)
       expect(b.sessionFake.prompt).not.toHaveBeenCalled()
     },
@@ -336,12 +336,12 @@ describe('Conversation inject API', () => {
       return { ok: false, error }
     })
     else b.sessionFake.prompt.mockRejectedValueOnce(new Error('connection lost'))
-    composer.continueGeneration!(SessionSeq(5))
+    composer.retry!(SessionSeq(5))
     await vi.waitFor(() => { expect(b.sessionFake.prompt).toHaveBeenCalledOnce(); expect(composer.keyboard!.snapshot.phase).toBe('plain') })
     expect(composer.keyboard!.snapshot.draft).toBe('')
     if (outcome === 'refused') expect(b.runtime.sessions.binding(ROOT)!.session.getSnapshot().promptError?.error.message).toBe('request refused')
     else expect(composer.hooks.notices.getSnapshot()).toMatchObject({ level: 'error', text: 'connection lost' })
-    composer.continueGeneration!(SessionSeq(5))
+    composer.retry!(SessionSeq(5))
     await vi.waitFor(() => { expect(b.sessionFake.prompt).toHaveBeenCalledTimes(2) })
   })
 

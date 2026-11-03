@@ -57,7 +57,7 @@ interface ConversationAttachmentFace {
 /** Session-addressed input facade registry (SessionInputResolver face + composer-layer extras). */
 export class InputHub implements SessionInputResolver {
   private readonly shells = new WeakMap<SessionBinding, SessionInputShell>()
-  private readonly continuations = new WeakMap<SessionBinding, ObservableSnapshot<SessionSeq | undefined>>()
+  private readonly retryableFailures = new WeakMap<SessionBinding, ObservableSnapshot<SessionSeq | undefined>>()
 
   /**
    * @param ctx - client root context (services resolved lazily per call — boot order stays free).
@@ -209,14 +209,14 @@ export class InputHub implements SessionInputResolver {
   }
 
   /**
-   * Read Host-projected eligibility while excluding pending human steering.
+   * Read the Host-projected retryable failure while excluding pending human steering.
    * @param id - retained ordinary Session identity.
-   * @returns the identity-stable eligibility source.
+   * @returns an identity-stable source whose value is the failed turn/end sequence or undefined.
    */
-  continuation(id: SessionId): ObservableSnapshot<SessionSeq | undefined> {
+  retryableFailure(id: SessionId): ObservableSnapshot<SessionSeq | undefined> {
     const binding = this.sessions().binding(id)
     if (binding === undefined) throw new Error(`conversation.input: session "${id}" resolved no binding`)
-    let source = this.continuations.get(binding)
+    let source = this.retryableFailures.get(binding)
     if (source === undefined) {
       const ending = binding.session.projections.faceOf('conversationContinuation')
       const inbox = binding.session.projections.faceOf('inbox')
@@ -232,20 +232,20 @@ export class InputHub implements SessionInputResolver {
           return () => { unsubscribeInbox(); unsubscribeEnding() }
         },
       }
-      this.continuations.set(binding, source)
+      this.retryableFailures.set(binding, source)
     }
     return source
   }
 
   /**
-   * Submit empty continuation input through the ordinary composer. Stale
+   * Submit empty input to retry a failed generation through the ordinary composer. Stale
    * failures, active work, and drafts keep their current input unchanged.
    * @param id - retained ordinary Session identity.
-   * @param ending - failure the displayed button addresses.
+   * @param failureSeq - failed turn/end sequence the displayed button addresses.
    */
-  continueGeneration(id: SessionId, ending: SessionSeq): void {
+  retry(id: SessionId, failureSeq: SessionSeq): void {
     const binding = this.sessions().binding(id)
-    if (binding === undefined || this.continuation(id).getSnapshot() !== ending) return
+    if (binding === undefined || this.retryableFailure(id).getSnapshot() !== failureSeq) return
     const session = binding.session.getSnapshot()
     const shell = this.shellFor(binding)
     const input = shell.snapshot

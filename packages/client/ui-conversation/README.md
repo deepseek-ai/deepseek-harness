@@ -78,9 +78,11 @@ The composer measures its expanded control groups after size, content, visibilit
 
 The context meter follows the [statistics-control radius](../../../docs/ui-radius.md#radius-scale).
 
-An empty, idle ordinary Session composer offers a play action after `RATE_LIMIT`, `SERVER`, `TIMEOUT`, `TRANSPORT`, `EMPTY_RESPONSE`, or `STREAM_CLOSED` ends its latest turn. The failed turn must include admitted ordinary user input and a settled failed model attempt. Clicking submits `content: []` through the existing Session prompt API; drafts and attachments keep the Send action. A new balanced turn uses committed history without adding a user message. Refusal or transport failure leaves the draft empty and reports the error through the ordinary submission lifecycle.
+An empty, idle ordinary Session composer offers a play action after `RATE_LIMIT`, `SERVER`, `TIMEOUT`, `TRANSPORT`, `EMPTY_RESPONSE`, or `STREAM_CLOSED` ends its latest turn. The failed turn must include admitted ordinary user input and a settled failed model attempt. Clicking submits `content: []` through the existing Session prompt API; drafts and attachments keep the Send action. A new balanced turn uses committed history and records an empty `user/message` with `source.kind: 'retry'`. Refusal or transport failure leaves the draft empty and reports the error through the ordinary submission lifecycle.
 
 The Session API owns `conversationContinuation`, shared by Host admission and browser presentation. It restores eligibility from complete Session history and preserves it across repeated failed empty continuations, independently of loaded browser pages.
+
+The composer exposes `retry(failureSeq)` for failed-generation recovery and `useRetryableFailure` for the latest eligible failed `turn/end` sequence or `undefined`. User-facing text calls the action Continue generating.
 
 The composer uses the shared [text-input focus policy](../ui-primitives/README.md#use-this-package) on mount, Session switching, and unlock. Identified phones and tablets require tapping the input; desktop devices retain automatic focus. On these mobile devices, a submission that empties the focused draft moves focus to the non-text composer card, dismissing the keyboard while retaining its navigation position. Rejected submissions, retained newer draft text, and another control already holding focus preserve focus. The [Lexical patch](../../../patches/lexical@0.49.0.patch) keeps caret scrolling in the same coordinate system as DOM geometry when a mobile keyboard pans the page.
 

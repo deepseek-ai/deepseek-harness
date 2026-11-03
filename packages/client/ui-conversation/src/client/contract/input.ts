@@ -352,7 +352,7 @@ export type InputEvent =
   /** Enter submission with the current clipboard projection, its reference chips, its quotes, and its attachments. */
   | {
     readonly type: 'enter'
-    /** Explicit continuation may submit an empty draft through the default sink. */
+    /** Explicit retry may submit an empty draft through the default sink. */
     readonly allowEmpty?: boolean
     readonly mode: InputSubmitMode
     readonly draft: string
