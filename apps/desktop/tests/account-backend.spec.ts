@@ -1,4 +1,5 @@
 import { once } from 'node:events'
+import type { IncomingMessage } from 'node:http'
 import { WebSocketServer } from 'ws'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { accountView, desktopAccountBackend } from '../src/account-backend.ts'
@@ -28,7 +29,7 @@ it('uses account Remote commands without returning additional wire fields', asyn
   const backend = desktopAccountBackend('http://127.0.0.1:1234', (request) => {
     requests.push(request)
     return Promise.resolve({ links: { usageUrl: 'http://localhost/usage', topUpUrl: 'http://localhost/top_up' }, status: 'signed-out', attempt: null, token: 'private' })
-  }, () => Promise.resolve(''))
+  }, '')
   const client = { version: '1.2.3', locale: 'en', timezoneOffsetSeconds: 28_800 }
   expect(await backend.start(client)).toEqual({ links: { usageUrl: 'http://localhost/usage', topUpUrl: 'http://localhost/top_up' }, status: 'signed-out', attempt: null })
   expect(await backend.signOut(client)).toMatchObject({ status: 'signed-out' })
@@ -59,12 +60,13 @@ it('receives live expiry separately from account snapshots', async () => {
   const snapshot = { status: 'signed-out', attempt: null,
     links: { usageUrl: 'https://platform.deepseek.com/usage', topUpUrl: 'https://platform.deepseek.com/top_up' } }
   const received = Promise.withResolvers<undefined>()
-  const backend = desktopAccountBackend(`http://127.0.0.1:${address.port}`, () => Promise.resolve(snapshot), () => Promise.resolve(''))
+  const backend = desktopAccountBackend(`http://127.0.0.1:${address.port}`, () => Promise.resolve(snapshot), 'dsh-auth-fixture=signed')
   const stop = backend.watch(
     (value) => { expect(value).toEqual(snapshot); received.resolve(undefined) }, vi.fn(), expired, onAnalyticsEnabledChanged,
   )
   onTestFinished(stop)
-  await connected
+  const [, upgrade] = await connected as [unknown, IncomingMessage]
+  expect(upgrade.headers.cookie).toBe('dsh-auth-fixture=signed')
   // Logical streams share the socket; observe their opening frames before sending data.
   const streams = new Map<string, string>()
   const opened = Promise.withResolvers<undefined>()

@@ -487,7 +487,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     mode: 'seam',
     implementations: ['credentials-local'],
     consumers: ['api-settings-controller', 'llm-deepseek', 'llm-pi-ai'],
-    note: 'Configuration carries references to secrets; providers own the values. Consumers resolve per operation, so a rotated credential reaches the very next request; the settings controller exposes value-free views and write-only storage.',
+    note: 'Configuration carries references to secrets; providers own the values. Consumers resolve per operation, so a rotated credential reaches the very next request; the settings controller exposes value-free metadata, writes, and owner-only reads of stored keys.',
   },
   {
     key: 'deepseekAccount',
@@ -706,7 +706,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'The one concrete loop plugin; extension packages depend on dsh-agent events and services, not on this package.',
   },
   {
-    key: 'mcpServers',
+    key: 'mcpManager',
     pkg: 'mcp-manager',
     title: 'Settings-driven MCP server fleet',
     mode: 'core',

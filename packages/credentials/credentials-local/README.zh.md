@@ -50,7 +50,7 @@ kind: "package-reference"
 
 ### 存储与移除密钥
 
-用 `set` 保存密钥、用 `unset` 移除、用 `describe` 检查密钥是否已配置——与凭据 API 提供的操作相同：
+用 `set` 保存密钥、用 `unset` 移除、用 `describe` 检查密钥是否已配置。`readStored` 仅为编辑器读取托管值，不使用环境后备：
 
 ```ts
 import type { Context } from '@deepseek-ai/cordis'

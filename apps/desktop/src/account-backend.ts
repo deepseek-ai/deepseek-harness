@@ -80,10 +80,10 @@ export interface DesktopAccountBackend {
  * Connect native account operations to the standard authenticated Web backend.
  * @param origin - Host Web origin.
  * @param invoke - validated unary RPC caller.
- * @param cookies - Electron session cookie reader.
+ * @param cookie - Host authentication Cookie header for the account WebSocket.
  * @returns account operations; watch callers own their subscriptions.
  */
-export function desktopAccountBackend(origin: string, invoke: AccountInvoke, cookies: () => Promise<string>): DesktopAccountBackend {
+export function desktopAccountBackend(origin: string, invoke: AccountInvoke, cookie: string): DesktopAccountBackend {
   const call = async (method: string, args: Record<string, unknown> = {}): Promise<AccountView> =>
     accountView(await invoke({ namespace: 'account', method, args }))
   return {
@@ -98,34 +98,31 @@ export function desktopAccountBackend(origin: string, invoke: AccountInvoke, coo
         const streamId = randomUUID()
         const expiryStreamId = randomUUID()
         const analyticsPolicyStreamId = randomUUID()
-        void cookies().then((cookie) => {
-          if (closed) return
-          const url = new URL(REMOTE_STREAM_MUX_PATH, origin)
-          url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
-          socket = new WebSocket(url, { headers: { cookie, origin }, maxPayload: 65_536 })
-          socket.on('open', () => {
-            if (onAnalyticsEnabledChanged !== undefined) socket?.send(JSON.stringify({ type: 'open', streamId: analyticsPolicyStreamId, endpoint: 'productAnalytics/watchPolicy', payload: { args: {} } }))
-            socket?.send(JSON.stringify({ type: 'open', streamId: expiryStreamId, endpoint: 'account/watchExpiry', payload: { args: {} } }))
-            socket?.send(JSON.stringify({ type: 'open', streamId, endpoint: 'account/watch', payload: { args: {} } }))
-          })
-          socket.on('message', (data) => {
-            try {
-              const bytes = Array.isArray(data) ? Buffer.concat(data) : Buffer.isBuffer(data) ? data : Buffer.from(data)
-              const frame = parseRemoteStreamServerMessage(bytes.toString('utf8'))
-              if (frame.streamId === analyticsPolicyStreamId) {
-                if (frame.type === 'item' && typeof frame.value === 'boolean') onAnalyticsEnabledChanged?.(frame.value)
-                else onAnalyticsEnabledChanged?.(false)
-                return
-              }
-              if (frame.streamId === expiryStreamId && frame.type === 'item' && frame.value === 'session-expired') { expired(); return }
-              if (frame.streamId !== streamId) throw new Error('desktop account: unexpected stream')
-              if (frame.type === 'item') listener(accountView(frame.value))
-              else socket?.close()
-            } catch { socket?.close() }
-          })
-          socket.on('error', () => { socket?.close() })
-          socket.on('close', () => { if (!closed) { onAnalyticsEnabledChanged?.(false); failed(); retry = setTimeout(connect, 1000) } })
-        }).catch(() => { if (!closed) { onAnalyticsEnabledChanged?.(false); failed(); retry = setTimeout(connect, 1000) } })
+        const url = new URL(REMOTE_STREAM_MUX_PATH, origin)
+        url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+        socket = new WebSocket(url, { headers: { cookie, origin }, maxPayload: 65_536 })
+        socket.on('open', () => {
+          if (onAnalyticsEnabledChanged !== undefined) socket?.send(JSON.stringify({ type: 'open', streamId: analyticsPolicyStreamId, endpoint: 'productAnalytics/watchPolicy', payload: { args: {} } }))
+          socket?.send(JSON.stringify({ type: 'open', streamId: expiryStreamId, endpoint: 'account/watchExpiry', payload: { args: {} } }))
+          socket?.send(JSON.stringify({ type: 'open', streamId, endpoint: 'account/watch', payload: { args: {} } }))
+        })
+        socket.on('message', (data) => {
+          try {
+            const bytes = Array.isArray(data) ? Buffer.concat(data) : Buffer.isBuffer(data) ? data : Buffer.from(data)
+            const frame = parseRemoteStreamServerMessage(bytes.toString('utf8'))
+            if (frame.streamId === analyticsPolicyStreamId) {
+              if (frame.type === 'item' && typeof frame.value === 'boolean') onAnalyticsEnabledChanged?.(frame.value)
+              else onAnalyticsEnabledChanged?.(false)
+              return
+            }
+            if (frame.streamId === expiryStreamId && frame.type === 'item' && frame.value === 'session-expired') { expired(); return }
+            if (frame.streamId !== streamId) throw new Error('desktop account: unexpected stream')
+            if (frame.type === 'item') listener(accountView(frame.value))
+            else socket?.close()
+          } catch { socket?.close() }
+        })
+        socket.on('error', () => { socket?.close() })
+        socket.on('close', () => { if (!closed) { onAnalyticsEnabledChanged?.(false); failed(); retry = setTimeout(connect, 1000) } })
       }
       connect()
       return () => { closed = true; onAnalyticsEnabledChanged?.(false); clearTimeout(retry); socket?.close() }

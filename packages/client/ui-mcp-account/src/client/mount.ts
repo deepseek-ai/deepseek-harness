@@ -42,7 +42,7 @@ function registerAccount(
 
 function showAccounts(ctx: Context): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'mcp-account: dictionaries')
-  const connection = new McpAccountsConnection(ctx, ctx.remote.mcpAccounts, ctx.remote.mcpServers)
+  const connection = new McpAccountsConnection(ctx, ctx.remote.mcpAccounts, ctx.remote.mcpManager)
   ctx.effect(() => async () => { await connection.dispose() }, 'mcp-account: connection')
   ctx.effect(() => {
     const shown = new Map<string, () => void>()
@@ -72,7 +72,7 @@ function showAccounts(ctx: Context): void {
  */
 export async function mountMcpAccounts(ctx: Context, contribution: TypertRemoteContribution): Promise<() => Promise<void>> {
   const unmount = await ctx.remote.$mount(contribution)
-  const ui = ctx.inject(['remote.mcpAccounts', 'remote.mcpServers', 'slots', 'locale'], showAccounts)
+  const ui = ctx.inject(['remote.mcpAccounts', 'remote.mcpManager', 'slots', 'locale'], showAccounts)
   try { await ui } catch (error) { await ui.dispose(); await unmount(); throw error }
   return async () => { await ui.dispose(); await unmount() }
 }

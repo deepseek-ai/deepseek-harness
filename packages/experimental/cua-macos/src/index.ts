@@ -1,11 +1,11 @@
 /** macOS native CUA provider using the shared application and window API. */
 import { isAbsolute, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import Schema from '@deepseek-ai/schemastery'
-import { createPermissionParameters } from './permission-guide.ts'
 import type { Context } from '@deepseek-ai/cordis'
+import Schema from '@deepseek-ai/schemastery'
 import { CuaConfig, installCua } from '@deepseek-ai/dsh-cua'
-import { nativeHostArchitecture, prepareNativeExecutable } from './native-build.ts'
+import { createPermissionParameters } from './permission-guide.ts'
+import { nativeHostArchitecture, prepareNativeExecutable, type SourceSigning } from './native-build.ts'
 import { createSharedNativeChannel } from './shared-native.ts'
 import { GUIDANCE } from './guidance.ts'
 export { GUIDANCE } from './guidance.ts'
@@ -14,15 +14,30 @@ export { GUIDANCE } from './guidance.ts'
 export const name = 'experimental-cua-macos'
 /** Services required by the shared CUA executor and the native launcher. */
 export const inject = ['computerUse', 'tools', 'systemPrompt', 'subprocess', 'agents']
-/** Native preparation, operation bounds, and profile-local application grants. */
+/** Native preparation, source-build signing, operation bounds, and profile-local application grants. */
 export interface Config extends CuaConfig {
   /** Interval in milliseconds between permission and position checks while the native guide is open. */
   permissionPollIntervalMs: number
+  /**
+   * Source-build signing: `ad-hoc` (default) binds grants to the code hash;
+   * an object selects an existing certificate in an explicitly configured keychain.
+   * Installed packages and `helperPath` keep their own signature.
+   */
+  sourceSigning: SourceSigning
 }
-/** Validate shared resource bounds and macOS guide configuration before preparing the helper. */
-export const Config = Schema.intersect([CuaConfig, Schema.object({
+/** Validate shared operation bounds and macOS source signing before preparing the helper. */
+export const Config = Schema.object({
+  // Schemastery erases object field types on dict; the shared Config declares their output types.
+  ...CuaConfig.dict as { [Key in keyof CuaConfig]: Schema<unknown, CuaConfig[Key]> },
   permissionPollIntervalMs: Schema.number().step(1).min(100).max(2 ** 31 - 1).default(1000),
-})]) satisfies Schema<Record<string, unknown>, Config>
+  sourceSigning: Schema.union([
+    Schema.const('ad-hoc'),
+    Schema.object({
+      identity: Schema.string().pattern(/^[^-\s]/).required(),
+      keychain: Schema.string().pattern(/^\/.+/).required(),
+    }),
+  ]).default('ad-hoc'),
+}) satisfies Schema<Record<string, unknown>, Config>
 
 const description = 'Inspect macOS permissions, select an application and window, read AX state, capture screenshots or dispatch input. Use appHandle from getApp; verify actions by reading fresh state.'
 
@@ -44,7 +59,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   const controller = new AbortController()
   const prepared = prepareNativeExecutable({
     packageRoot: resolve(fileURLToPath(new URL('..', import.meta.url))),
-    architecture, subprocess: ctx.subprocess,
+    architecture, sourceSigning: config.sourceSigning, subprocess: ctx.subprocess,
     timeoutMs: config.buildTimeoutMs, graceMs: config.graceMs, signal: controller.signal,
   })
   ctx.effect(() => async () => {

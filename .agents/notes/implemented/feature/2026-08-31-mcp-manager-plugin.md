@@ -12,7 +12,7 @@ Installed application plugins also bring their own servers. Each must add its se
 
 ## Decision
 
-`packages/mcp/mcp-manager` is a service plugin (`ctx.mcpServers`) that owns the volatile `servers` configuration and reconciles a fleet of ordinary `dsh-mcp-client` child instances; `packages/mcp/mcp-client` owns connection supervision, status, probing, and per-attempt startup budgets.
+`packages/mcp/mcp-manager` is a service plugin (`ctx.mcpManager`) that owns the volatile `servers` configuration and reconciles a fleet of ordinary `dsh-mcp-client` child instances; `packages/mcp/mcp-client` owns connection supervision, status, probing, and per-attempt startup budgets.
 
 **Configuration is volatile Config, and CRUD needs no new API.** Settings projects the manager entry’s Config under its Loader id; ConfigEditor owns profile persistence, inheritance, and revision checks. Settings edits retain inherited servers, and resetting an inherited entry restores its base value. Direct profile patches replace the complete `servers` map. Loader commits the reference before notifying the manager’s existing reconcile queue.
 

@@ -265,7 +265,7 @@
     },
     {
       "name": "list_subagent_models",
-      "description": "Inspect subagent models without changing the current Agent. No arguments: providers; `provider`: allowed models; `provider` + `model`: that model and its reasoning efforts. Inspect options here before selecting a child provider and model; use returned ids for delegation.",
+      "description": "Inspect the routes available for explicit subagent model selection. No arguments: authorized providers. `provider`: that provider's authorized models. `provider` + `model`: that model and its reasoning efforts. Query when choosing an explicit child route or reasoning effort. Omit optional fields rather than sending empty strings.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -359,7 +359,7 @@
     },
     {
       "name": "subagent",
-      "description": "Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing. This backend does not accept follow-up messages. Supply `provider` and `model` together. Omitted values use child defaults, falling back to this backend's route defaults. When the effective route changes, an omitted `reasoning_effort` uses the model's default.",
+      "description": "Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing. This backend does not accept follow-up messages. Omit `provider`, `model`, and `reasoning_effort` to use child defaults, falling back to this backend's route defaults.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -377,15 +377,15 @@
           },
           "provider": {
             "type": "string",
-            "description": "Child LLM provider id."
+            "description": "Child LLM provider id; requires `model`."
           },
           "model": {
             "type": "string",
-            "description": "Model id within that provider."
+            "description": "Model id within that provider; requires `provider`."
           },
           "reasoning_effort": {
             "type": "string",
-            "description": "Model-specific reasoning effort id."
+            "description": "Reasoning effort id; requires `provider` and `model`. Omit to use the selected model's default, even when it matches the parent or configured route."
           }
         },
         "required": [

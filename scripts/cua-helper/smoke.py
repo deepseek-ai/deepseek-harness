@@ -80,7 +80,7 @@ def main():
                     if method == "getCapabilities":
                         assert result["platform"] == "macos", result
                     else:
-                        assert result["launchApplication"]["name"] == "DSH Computer Use.app", result.get("launchApplication", {}).get("name")
+                        assert result["launchApplication"]["name"] == executable.parents[2].name, result.get("launchApplication", {}).get("name")
                         assert isinstance(result["accessibility"], bool) and isinstance(result["screenRecording"], bool)
                 connection.shutdown(socket.SHUT_WR)
                 assert stream.read() == b"", "helper did not acknowledge connection cleanup"

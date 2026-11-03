@@ -56,7 +56,7 @@ function manager() {
 async function registry(servers = manager()) {
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose() })
-  ctx.provide('mcpServers', servers.service)
+  ctx.provide('mcpManager', servers.service)
   const fiber = ctx.plugin(McpAccounts)
   await fiber
   return { ctx, fiber, servers }
