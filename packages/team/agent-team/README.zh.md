@@ -27,6 +27,8 @@ kind: "package-reference"
 
 新 Session（包括普通分叉）默认关闭 Team 模式。参见[会话模式升级指南](../../../docs/upgrade-guide/v0.2.1-rc.2/session-team-mode/guide.zh.md)。在根 Session 的模型与推理等级菜单中打开**使用智能体团队**。关闭开关后，整棵树的后续步骤不再显示 Team 工具和提示词，同时保留任务与子代理。选择重启后仍有效；没有保存选择的历史任务板保持开启。
 
+设置 `defaultEnabled: true` 可在首次模型步骤之前启用新根 Session，包括普通分叉。初始化将选择保存为 `team/mode`；保存失败会拒绝 Agent 创建。已有选择优先，恢复 Session 时始终不应用默认值，包括从未保存选择的会话。后代使用其存活根节点的模式。[SDK 配置指南](../../../docs/user/guide/python-sdk.zh.md#enable-team-mode)提供可直接使用的 patch；标准 bundle 保持此选项关闭。
+
 模式切换无需等待排队中的任务修改即可生效。每项修改在开始时检查当前模式：已经进入执行的操作继续完成，仍在排队的操作若开始时 Team 仍关闭则被拒绝。重新开启允许后续操作继续。保存失败时，已经追加的选择仍然有效；重试同一选择会再次保存，不重复记录模式。
 
 当 subagent 需要持久化共享任务归属和依赖关系时，添加此包。与 `@deepseek-ai/dsh-tool-agent-team` 一起挂载可提供模型工具。
@@ -47,11 +49,12 @@ kind: "package-reference"
 - name: '@deepseek-ai/dsh-tool-agent-team'
 ```
 
-例如，让模型启动子代理审查差异，并在任务板上跟踪工作。唯一的限制是可选项，在启动时校验：
+例如，让模型启动子代理审查差异，并在任务板上跟踪工作。配置字段均为可选项，在启动时校验：
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
 | `maxTasks` | `256` | 任务板上最多的未删除任务数 |
+| `defaultEnabled` | `false` | 为没有已有选择的新根会话保存 Team 模式开启状态 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-agent-team)是每个受支持字段及其 JSDoc 的穷尽式真源。设置 `maxMembers`、`maxMessageBytes` 或 `disposalTimeoutMs` 的配置行不会激活，dsh 会在启动警告中指出该键；[升级指南](../../../docs/upgrade-guide/v0.2.1-rc.2/agent-team-subagents/guide.zh.md)列出替代方式。
 

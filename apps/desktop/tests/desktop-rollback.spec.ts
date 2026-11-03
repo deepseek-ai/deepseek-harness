@@ -55,17 +55,17 @@ it.each(['missing-file', 'changed-file', 'changed-channel'] as const)('rejects %
   expect(f.writes).toEqual([])
 })
 
-it('restores nightly when latest already matches and resumes a partially restored pair', async () => {
-  for (const latestAlreadyMatches of [true, false]) {
+it('restores nightly when stable already matches and resumes a partially restored pair', async () => {
+  for (const stableAlreadyMatches of [true, false]) {
     const f = fixture()
     const nightly = f.plan.artifacts[1]!
-    const plan = { ...f.plan, artifacts: [...f.plan.artifacts, { ...nightly, key: 'feed/latest.yml', filename: 'latest.yml' }] }
-    f.objects.set('feed/latest.yml', latestAlreadyMatches ? nightly.contents! : 'version: 2.0.0\n')
-    if (!latestAlreadyMatches) {
+    const plan = { ...f.plan, artifacts: [...f.plan.artifacts, { ...nightly, key: 'feed/stable.yml', filename: 'stable.yml' }] }
+    f.objects.set('feed/stable.yml', stableAlreadyMatches ? nightly.contents! : 'version: 2.0.0\n')
+    if (!stableAlreadyMatches) {
       const put = f.operations.transport.put.bind(f.operations.transport)
       const interrupted = { ...f.operations, transport: { ...f.operations.transport,
         async put(...args: Parameters<typeof put>) {
-          if (args[0].key === 'feed/latest.yml') throw new Error('fixture interruption')
+          if (args[0].key === 'feed/stable.yml') throw new Error('fixture interruption')
           return put(...args)
         },
       } }
@@ -73,7 +73,7 @@ it('restores nightly when latest already matches and resumes a partially restore
     }
     await expect(rollbackDesktopChannel(plan, '2.0.0', true, f.operations)).resolves.toMatchObject({ status: 'complete' })
     expect(f.objects.get('feed/nightly.yml')).toBe(nightly.contents)
-    expect(f.objects.get('feed/latest.yml')).toBe(nightly.contents)
+    expect(f.objects.get('feed/stable.yml')).toBe(nightly.contents)
     expect(f.writes.filter(key => key === 'feed/nightly.yml')).toHaveLength(1)
   }
 })

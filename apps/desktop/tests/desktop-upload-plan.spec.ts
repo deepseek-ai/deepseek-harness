@@ -38,7 +38,7 @@ async function fixture(
   target: DesktopPackageTargetName,
   version = '1.2.3',
   environment: 'test' | 'production' = 'test',
-  channel: 'nightly' | 'latest' = 'nightly',
+  channel: 'nightly' | 'stable' = 'nightly',
 ): Promise<Fixture> {
   const root = await mkdtemp(join(tmpdir(), 'dsh-desktop-upload-'))
   temporaryDirectories.push(root)
@@ -175,14 +175,14 @@ describe('desktop upload plan', () => {
       .rejects.toThrow(failure === 'checksum' ? /SHA-512/u : /completion record/u)
   })
 
-  it.each(['test', 'production'] as const)('isolates stable latest packages from nightly in %s', async (environment) => {
+  it.each(['test', 'production'] as const)('isolates stable-channel packages from nightly in %s', async (environment) => {
     const nightly = await createDesktopUploadPlan('win-x64', await fixture('win-x64', '1.2.3', environment, 'nightly'))
-    const latest = await createDesktopUploadPlan('win-x64', await fixture('win-x64', '1.2.3', environment, 'latest'))
-    expect(latest.artifacts.filter(file => file.channelMetadata).map(file => file.filename)).toEqual(['latest.yml'])
+    const stable = await createDesktopUploadPlan('win-x64', await fixture('win-x64', '1.2.3', environment, 'stable'))
+    expect(stable.artifacts.filter(file => file.channelMetadata).map(file => file.filename)).toEqual(['stable.yml'])
     expect(nightly.artifacts.filter(file => file.channelMetadata).map(file => file.filename)).toEqual(['nightly.yml'])
-    expect(latest.artifacts.every(file => !nightly.artifacts.some(other => other.key === file.key))).toBe(true)
-    const prerelease = await fixture('win-x64', '1.2.3-alpha.1', environment, 'latest')
-    await expect(createDesktopUploadPlan('win-x64', prerelease)).rejects.toThrow(/latest requires a stable version/u)
+    expect(stable.artifacts.every(file => !nightly.artifacts.some(other => other.key === file.key))).toBe(true)
+    const prerelease = await fixture('win-x64', '1.2.3-alpha.1', environment, 'stable')
+    await expect(createDesktopUploadPlan('win-x64', prerelease)).rejects.toThrow(/stable requires a stable version/u)
   })
 
   it('publishes fixed feeds referencing versioned binaries without overriding CDN cache policy', async () => {

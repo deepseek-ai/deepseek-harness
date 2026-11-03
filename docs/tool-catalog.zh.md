@@ -2020,7 +2020,7 @@ lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，�
     },
     "name": {
       "type": "string",
-      "description": "Optional short name for the subagent, unique among the subagents you create: lower-case letters, digits, and hyphens, starting with a letter, at most 32 characters. Omitted names default to agent-1, agent-2, and so on."
+      "description": "Optional short name for the subagent, unique among the subagents you create: lower-case letters, digits, and hyphens, starting with a letter, at most 32 characters; lead is reserved for the root agent. Omitted names default to agent-1, agent-2, and so on."
     },
     "prompt": {
       "type": "string",
@@ -2087,7 +2087,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
     },
     "name": {
       "type": "string",
-      "description": "Optional short name for the subagent, unique among the subagents you create: lower-case letters, digits, and hyphens, starting with a letter, at most 32 characters. Omitted names default to agent-1, agent-2, and so on."
+      "description": "Optional short name for the subagent, unique among the subagents you create: lower-case letters, digits, and hyphens, starting with a letter, at most 32 characters; lead is reserved for the root agent. Omitted names default to agent-1, agent-2, and so on."
     },
     "prompt": {
       "type": "string",
