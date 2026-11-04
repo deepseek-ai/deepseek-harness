@@ -417,11 +417,16 @@ describe('session.history projections block', () => {
       .toBe(false)
 
     seedMessages(session, 1)
-    const changed = await iterator.next()
-    expect(changed).toMatchObject({
-      done: false,
-      value: { type: 'projection', changes: [{ key: 'sessionListMetadata' }] },
-    })
+    let changed = await iterator.next()
+    while (!changed.done && changed.value.type === 'projection'
+      && !changed.value.changes.some(change => change.key === 'sessionListMetadata')) {
+      expect(changed.value.changes.map(change => change.key)).not.toContain('test/internal-count')
+      changed = await iterator.next()
+    }
+    if (changed.done || changed.value.type !== 'projection') throw new Error('control stream ended before its projection')
+    const keys = changed.value.changes.map(change => change.key)
+    expect(keys).toContain('sessionListMetadata')
+    expect(keys).not.toContain('test/internal-count')
     abort.abort()
     await iterator.return?.()
 
@@ -527,7 +532,7 @@ describe('session.list projections column', () => {
     expect(excludedApply).not.toHaveBeenCalled()
   })
 
-  it('carries every registered summary key, which is only its own list metadata when no other unit is registered', async () => {
+  it('carries list metadata and unavailable retry eligibility through registered summary keys', async () => {
     const { ctx, session } = await harness(false)
     seedMessages(session, 1)
     const response = await (await remote(ctx)).list(request({}))
@@ -535,7 +540,8 @@ describe('session.list projections column', () => {
     const row = response.value.items.find(item => item.sessionId === session.id)
     expect(row?.projections?.kind).toBe('sequenced')
     expect(Object.keys(row?.projections?.values ?? {})).toEqual([...ctx.sessionProjections.summaryKeys()])
-    expect(Object.keys(row?.projections?.values ?? {})).toEqual(['sessionListMetadata'])
+    expect(Object.keys(row?.projections?.values ?? {})).toEqual(['conversationContinuation', 'sessionListMetadata'])
+    expect(row?.projections?.values.conversationContinuation).toBeNull()
   })
 
   it('serves the summary projection hints from the cache with zero log loads', async () => {
@@ -754,11 +760,12 @@ describe('Session control projection frames', () => {
     iterable: AsyncIterable<SessionControlFrame>,
     count: number,
     abort: AbortController,
+    keys: readonly string[],
   ): Promise<SessionControlFrame[]> {
     const frames: SessionControlFrame[] = []
     for await (const frame of iterable) {
       frames.push(frame)
-      if (frames.filter(candidate => candidate.type === 'projection').length >= count) abort.abort()
+      if (frames.filter(candidate => candidate.type === 'projection' && candidate.changes.some(change => keys.includes(change.key))).length >= count) abort.abort()
     }
     return frames
   }
@@ -772,7 +779,7 @@ describe('Session control projection frames', () => {
     await new Promise(resolve => setTimeout(resolve, 0))
     const abort = new AbortController()
     const stream = proxy.control(abort.signal)
-    const collected = collect(stream, 3, abort)
+    const collected = collect(stream, 3, abort, ['test/last-user', 'sessionListMetadata'])
 
     const now = vi.spyOn(Date, 'now').mockReturnValue(100)
     seedMessages(session, 1)
@@ -789,6 +796,7 @@ describe('Session control projection frames', () => {
       {
         type: 'projection', sessionId: session.id, seq: 0, changes: [
           { key: 'test/last-user', val: { text: 'm0' } },
+          { key: 'conversationContinuation', val: null },
           { key: 'sessionListMetadata', val: { blank: true, lastPromptAt: 100 } },
         ],
       },
@@ -829,6 +837,7 @@ describe('Session control projection frames', () => {
       value: {
         type: 'projection', seq: 0, changes: [
           { key: 'test/last-user', val: { text: 'm0' } },
+          { key: 'conversationContinuation', val: null },
           { key: 'sessionListMetadata', val: { blank: true, lastPromptAt: 100 } },
         ],
       },

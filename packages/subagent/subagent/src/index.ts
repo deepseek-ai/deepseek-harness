@@ -33,6 +33,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import type {} from '@deepseek-ai/dsh-attachment'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import type { Scoped } from '@deepseek-ai/dsh-scope'
 import { assertObjectJsonSchema } from '@deepseek-ai/dsh-tools'
@@ -55,6 +56,7 @@ import type {
   SubagentActivation,
   SubagentActivationSpec,
   SubagentInterruptAuthority,
+  SubagentMemberNames,
   SubagentProvider,
   SubagentRunEndInfo,
   SubagentRunInfo,
@@ -66,16 +68,18 @@ import { assertSubagentMaxDepth } from './depth.ts'
 import { createLifecycleEmitter } from './lifecycle.ts'
 import type { LifecycleEmitter } from './lifecycle.ts'
 import SubagentManager from './manager.ts'
-import { listDescendants as listSubagentDescendants } from './list-children.ts'
+import { listDescendants as listSubagentDescendants, resolveAgentPath } from './list-children.ts'
 import type { SubagentDescendantListEntry } from './list-children.ts'
 import { subagentIdentityProjectionDefinition, subagentTimingProjectionDefinition } from './projection.ts'
 import { subagentCatalogProjectionDefinition } from './catalog.ts'
+import { ROOT_AGENT_NAME } from './names.ts'
 
 export type {} from './catalog.ts'
 export type {} from './projection.ts'
 export * from './out-of-process.ts'
 export { AssistantOutputFold, finalAssistantOutput } from './assistant-output.ts'
 export { SubagentRunId } from './types.ts'
+export { ROOT_AGENT_NAME } from './names.ts'
 export type {
   ContinuableCreateRequest,
   ContinuableCreateSpec,
@@ -83,6 +87,7 @@ export type {
   SubagentActivation,
   SubagentActivationSpec,
   SubagentInterruptAuthority,
+  SubagentMemberNames,
   SubagentProvider,
   SubagentResult,
   SubagentRun,
@@ -208,13 +213,14 @@ export class SubagentRuntime extends TypertRemoteService {
 
   protected async [Service.init](): Promise<void> {
     const ctx = this.ctx
-    await ctx.sessionProjections.register(subagentCatalogProjectionDefinition)
+    const catalogProjection = await ctx.sessionProjections.register(subagentCatalogProjectionDefinition)
     await ctx.sessionProjections.register(subagentTimingProjectionDefinition)
     const identityProjection = await ctx.sessionProjections.register(subagentIdentityProjectionDefinition)
     if (ctx.fiber.uid === null) return
     ctx.inject(['agents'], (childCtx: Context) => {
       const manager = new SubagentManager(childCtx, {
         identityOf: session => identityProjection.stateOf(session).identity,
+        catalogOf: session => subagentCatalogProjectionDefinition.wire.view(catalogProjection.stateOf(session)),
         emitLifecycle: this.emitLifecycle,
       }, () => this.config.maxActiveSubagents.get())
       this.manager = manager
@@ -293,6 +299,47 @@ export class SubagentRuntime extends TypertRemoteService {
    */
   rootOf(caller: Agent): Agent {
     return this.requireManager().rootOf(caller)
+  }
+
+  /**
+   * Report the model-facing names of a live tree member and its direct creator.
+   * The root is `lead`; a descendant is the slash-separated path of names from
+   * the root, or its Session id when it or a creator below the root has no name.
+   * @param agent - exact live root or resident tree member.
+   * @returns the member's name and, for a descendant, its creator's name.
+   * @throws when the caller or its runtime owner is unavailable.
+   */
+  namesOf(agent: Agent): SubagentMemberNames {
+    return this.requireManager().namesOf(agent)
+  }
+
+  /**
+   * Resolve a model-supplied agent reference within the caller's tree. `lead`
+   * selects the root and a slash-separated path is looked up through the
+   * catalogs along it. Any other text that is not a name in the tree is
+   * returned as a Session id, because a single token can be one; a
+   * slash-separated address never is, so an unmatched path fails instead of
+   * reaching a member lookup as an unknown id. Resolution grants no authority:
+   * messaging, interruption, and assignment authorize the result.
+   * @param caller - exact live Agent whose tree root anchors the lookup.
+   * @param name - `lead`, a full name from the root, or a Session id.
+   * @param signal - cancellation forwarded to each catalog read.
+   * @returns the referenced Session id.
+   * @throws {@link SubagentError} `AGENT_NAME_NOT_FOUND` when a path names no member;
+   *   when the caller's root is unavailable; or when a catalog along the path cannot be read.
+   */
+  async resolveName(caller: Agent, name: string, signal: AbortSignal): Promise<SessionId> {
+    const root = this.rootOf(caller)
+    if (name === ROOT_AGENT_NAME) return root.id
+    const resolved = await resolveAgentPath(this.ctx, root.id, name, signal)
+    if (resolved !== undefined) return resolved
+    if (name.includes('/')) {
+      throw new SubagentError(
+        `agent name ${JSON.stringify(name)} was not found in this subagent tree; use list_agents to see the names`,
+        'AGENT_NAME_NOT_FOUND',
+      )
+    }
+    return brandString<SessionId>(name)
   }
 
   /**

@@ -3,7 +3,7 @@ import type { ContextMessageNode } from '../contract/snapshot.ts'
 import type { ChatKey } from '../locale.ts'
 
 /** Existing primitive glyph selected for a Turn trigger's source family. */
-export type TurnTriggerIcon = 'agent' | 'github' | 'goal' | 'job' | 'plugin' | 'request' | 'schedule' | 'subagent' | 'team' | 'webhook'
+export type TurnTriggerIcon = 'agent' | 'continue' | 'github' | 'goal' | 'job' | 'plugin' | 'request' | 'schedule' | 'subagent' | 'team' | 'webhook'
 
 function record(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {}
@@ -30,17 +30,21 @@ function subagentTitle(reason: unknown): ChatKey {
 /**
  * Describe a waking message using its recorded source.
  * @param node - durable context, including the original notification body.
- * @returns localized title key and source-family icon.
+ * @returns localized title, source-family icon, and compact presentation for continuation receipts.
  */
 export function turnTriggerDetails(node: ContextMessageNode): {
   title: ChatKey
   icon: TurnTriggerIcon
+  compact?: true
 } {
   const source = record(node.source)
   const kind = field(source, 'kind')
   let title: ChatKey = 'message.trigger.request'
   let icon: TurnTriggerIcon = 'request'
   switch (kind) {
+    case 'retry':
+      if (node.content.length === 0) return { title: 'message.continuation.requested', icon: 'continue', compact: true }
+      break
     case 'goal': {
       title = 'message.trigger.goal'
       icon = 'goal'

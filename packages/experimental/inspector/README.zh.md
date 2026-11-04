@@ -78,7 +78,7 @@ Host 插件注入 `webServer` 和 `connection`，接受以下字段：
 | `maxBodyChunkBytes` | 48 KiB | base64 编码前一条 body 记录携带的原始字节数 |
 | `maxJournalBytes` | 256 MiB | Worker 保留的请求与响应 body 总字节数 |
 | `maxRetainedRequests` | `2000` | Worker 保留的进行中与已完成请求总数 |
-| `maxSourceFrameBytes` | 128 KiB | 编码后的 source frame 上限 |
+| `maxSourceFrameBytes` | 128 KiB | 编码后的 source frame 上限；小于 5121 字节时加载失败，因为容纳不下 Cordis 树快照 |
 | `maxSourceRecordsPerFrame` | `128` | 每个 source batch 的记录数 |
 | `maxQueuedRecords` | `2048` | 每个 producer 等待发送的记录数 |
 | `maxQueuedBytes` | 16 MiB | 每个 producer 等待发送的编码字节数 |

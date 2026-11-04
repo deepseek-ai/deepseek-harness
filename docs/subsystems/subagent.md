@@ -33,6 +33,12 @@ interface SubagentActivationSpec extends Omit<SubagentStartRequest, 'label' | 's
   readonly provider: string
   /** Short task label retained in cataloged child membership. */
   readonly label: string
+  /**
+   * Requested name, unique among the parent's children: 1–32 lower-case
+   * letters, digits, or hyphens starting with a letter, other than `lead`.
+   * Omission selects the first free `agent-N`.
+   */
+  readonly name?: string
   /** Optional reserved identity for a local child; external backends allocate their own ids. */
   readonly childId?: SessionId
   /** Cancellation before publication; callers own later cancellation through dispose. */
@@ -47,6 +53,11 @@ interface SubagentActivationSpec extends Omit<SubagentStartRequest, 'label' | 's
 interface SubagentActivation {
   /** Stable identity of the child. */
   readonly childId: SessionId
+  /**
+   * Model-facing name: slash-separated names from the root when every creator
+   * below the root is named, otherwise the child Session id.
+   */
+  readonly name: string
   /** Accepted inbox message, when the backend has a local inbox. */
   readonly messageId?: MessageId
   /**
@@ -165,6 +176,20 @@ interface ContinuableCreateSpec {
    * `CreateAgentOptions.seed`: contiguous from seq 0, lossless JSON, balanced.
    */
   readonly seed?: readonly SessionEvent[]
+}
+```
+
+## Agent names
+
+Session ids remain the only execution identity for routing, authorization, persistence, and task ownership; names are model-facing references. `SubagentActivation.name` is the child's full name, and `listDescendants()` rows carry it as `path` when every link from the root is named. `namesOf(agent)` reports the names of a live member and its direct creator; the root is `lead`. `resolveName(caller, name, signal)` returns the Session id for `lead` or a full name; any other text that names no member is returned unchanged as a Session id, while a slash-separated address that names no member fails with `AGENT_NAME_NOT_FOUND`. Callers authorize the result; resolution grants no authority. The [package README](../../packages/subagent/subagent/README.md#agent-names) defines the name rule, defaults, failures, and catalog persistence.
+
+```ts type-equiv
+/** Model-facing names of one live tree member and its direct creator. */
+interface SubagentMemberNames {
+  /** `lead` for the root, the slash-separated path for a named descendant, otherwise the Session id. */
+  readonly self: string
+  /** The direct creator's name by the same rule; absent for the root. */
+  readonly parent?: string
 }
 ```
 
@@ -377,7 +402,7 @@ The model-facing `list_agents` adapter reports current activity as `running` or 
 
 Direct-child entries are available as `observation.projections?.values.subagentCatalog` through `ctx.sessionQuery.observeSession(parentSessionId, { signal })`; callers release the observation with `using`. Entries follow parent event order without reading child logs or enumerating the Session corpus. Query failures propagate; a missing catalog projection means discovery is unavailable. Browser rows derive membership from the shared projection store and add activity from Session status; the control stream pushes complete catalog updates. `listDescendants()` recursively reads those catalogs and derives `hasChildren` from each child catalog. [The parent-catalog Agent Note](../../.agents/notes/implemented/architecture/2026-09-01-parent-owned-subagent-catalog.md) owns creation, fork isolation, ordering, and persistence costs.
 
-`SubagentRuntime.listDescendants(rootSessionId)` recursively calls the same catalog reader in stable pre-order, preserving each parent's event order. External entries are leaves without local Sessions. One-shot and unknown-mode entries remain traversal nodes; unknown modes produce `unsupported` diagnostics. An unreadable child catalog produces `corrupt` or `unavailable` and stops only that branch. Root read failures, missing services or projections, and cancellation reject the listing. Each reachable catalog is observed once and released before the next read; repeated ids and cycles are skipped. Sessions absent from reachable catalogs are not discovered, including ordinary Session forks and any subagents below those forks. Each row carries its catalog parent and root-relative depth:
+`SubagentRuntime.listDescendants(rootSessionId)` recursively calls the same catalog reader in stable pre-order, preserving each parent's event order. External entries are leaves without local Sessions. One-shot and unknown-mode entries remain traversal nodes; unknown modes produce `unsupported` diagnostics. An unreadable child catalog produces `corrupt` or `unavailable` and stops only that branch. Root read failures, missing services or projections, and cancellation reject the listing. Each reachable catalog is observed once and released before the next read; repeated ids and cycles are skipped. Sessions absent from reachable catalogs are not discovered, including ordinary Session forks and any subagents below those forks. Each row carries its catalog parent, root-relative depth, and, when every link from the root is named, its full name as `path`:
 
 ```ts type-equiv
 /** One catalog descendant with its direct parent and edge distance from the requested root. */
@@ -386,6 +411,8 @@ type SubagentDescendantListEntry = SubagentListEntry & {
   readonly parentId: SessionId
   /** Edge distance from the requested root; direct children are `1`. */
   readonly depth: number
+  /** Slash-separated names from the requested root; absent when this child or an ancestor below the root has no name. */
+  readonly path?: string
 }
 ```
 
@@ -442,6 +469,33 @@ startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>
  * @throws when the caller or its runtime owner is unavailable.
  */
 rootOf(caller: Agent): Agent
+
+/**
+ * Report the model-facing names of a live tree member and its direct creator.
+ * The root is `lead`; a descendant is the slash-separated path of names from
+ * the root, or its Session id when it or a creator below the root has no name.
+ * @param agent - exact live root or resident tree member.
+ * @returns the member's name and, for a descendant, its creator's name.
+ * @throws when the caller or its runtime owner is unavailable.
+ */
+namesOf(agent: Agent): SubagentMemberNames
+
+/**
+ * Resolve a model-supplied agent reference within the caller's tree. `lead`
+ * selects the root and a slash-separated path is looked up through the
+ * catalogs along it. Any other text that is not a name in the tree is
+ * returned as a Session id, because a single token can be one; a
+ * slash-separated address never is, so an unmatched path fails instead of
+ * reaching a member lookup as an unknown id. Resolution grants no authority:
+ * messaging, interruption, and assignment authorize the result.
+ * @param caller - exact live Agent whose tree root anchors the lookup.
+ * @param name - `lead`, a full name from the root, or a Session id.
+ * @param signal - cancellation forwarded to each catalog read.
+ * @returns the referenced Session id.
+ * @throws {@link SubagentError} `AGENT_NAME_NOT_FOUND` when a path names no member;
+ *   when the caller's root is unavailable; or when a catalog along the path cannot be read.
+ */
+async resolveName(caller: Agent, name: string, signal: AbortSignal): Promise<SessionId>
 
 /**
  * Join progressing subagent tree work for its root. Idle members with parked input
