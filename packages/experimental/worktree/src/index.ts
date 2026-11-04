@@ -1,4 +1,7 @@
-/** Creates a new Git branch and checkout, then changes the calling Session's working directory; restores a removed checkout. */
+/**
+ * Creates a new Git branch and checkout, then relocates the calling Session into it as a registered
+ * workspace anchor; restores a removed checkout.
+ */
 
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'

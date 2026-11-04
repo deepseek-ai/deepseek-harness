@@ -14,7 +14,7 @@ Status: implemented
 
 `relocate` 验证根及其内部的目录，然后提交一条可选 `anchor` 指向该根的 `working-directory/change`。根内部的 `set` 只移动光标；进入另一个锚的 `set` 把该锚选为根；所有锚之外的 `set` 移动光标并保留根。恢复到原始项目时再次把它选为根。事件的可选属性是一次同版本持久化变更，记录在[确认记录](../../../../docs/persistence-changes/2026-11-03-working-directory-anchor.zh.md)中；没有 `anchor` 的日志折叠后以原始项目为唯一的锚。
 
-工作树创建通过 `relocate` 进入检出目录；离开它就是既有的 `set` 回到原始项目，锚规则将其变为根的变化。子代理在 header 中保留父级的原始项目；当父级的根是另一个检出目录且子级在其中启动时，子级迁入该根，因此子级的根与父级一致。光标与根不同时，用户上下文快照增加一行 `Workspace root`，选中另一个根的变更在通知末尾给出新根。SDK 的工作目录方法返回 `{ cwd, root }`，`getWorkspaceRoot`（Python 中为 `get_workspace_root`）读取根。
+工作树创建通过 `relocate` 进入检出目录；离开它就是既有的 `set` 回到原始项目，锚规则将其变为根的变化。子代理在 header 中保留父级的原始项目；当父级的根是另一个已登记的检出目录且子级在其中启动时，子级迁入该根。子级的根随即是该检出目录，除非其 header 登记的原始项目本身已包含子级目录，因为根始终是包含目录的最长锚；子级不登记父级的其他锚，因此之后 `cd` 进父级进入过的另一个检出目录时子级的根不变。光标与根不同时，用户上下文快照增加一行 `Workspace root`，选中另一个根的变更在通知末尾给出新根。SDK 的工作目录方法返回 `{ cwd, root }`，`getWorkspaceRoot`（Python 中为 `get_workspace_root`）读取根。
 
 ## Alternatives considered
 

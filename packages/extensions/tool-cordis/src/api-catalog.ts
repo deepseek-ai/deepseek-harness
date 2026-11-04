@@ -4483,7 +4483,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: 'relocate(agent: Agent, root: string, options: RelocateOptions = {}): Promise<RelocatedDirectories>',
         description: 'Enter another checkout: register `root` as a workspace anchor of the Session and move its current directory to `options.cwd`, or to the root itself. One committed event carries both; existing processes and permissions are unchanged.',
         parameters: [{ name: 'agent', description: 'live or unpublished Agent owning the Session.' }, { name: 'root', description: 'absolute checkout directory, or a path relative to the current directory.' }, { name: 'options', description: 'directory to enter inside the root and cancellation before the durable change.' }],
-        returns: 'the canonical root and current directory, committed before fulfillment. A notice failure is warned; the next request still receives the committed directories.',
+        returns: 'the committed current directory and the workspace root selected after the commit; the registered root is that root unless a more specific anchor already contains the directory. A notice failure is warned; the next request still receives the committed directories.',
         throws: ['when either path is not an existing directory or the directory lies outside the root.'],
       },
     ],

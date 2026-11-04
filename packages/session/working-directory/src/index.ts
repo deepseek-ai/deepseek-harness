@@ -70,7 +70,11 @@ export interface RelocateOptions {
 
 /** The committed outcome of {@link WorkingDirectoryService.relocate}. */
 export interface RelocatedDirectories {
-  /** Canonical absolute workspace root, now a registered anchor of the Session. */
+  /**
+   * Canonical absolute workspace root the commit selected: the longest registered anchor containing
+   * `cwd`. This is the registered root unless a more specific anchor, such as an original project
+   * inside it, already contains `cwd`.
+   */
   root: string
   /** Canonical absolute current directory inside `root`. */
   cwd: string
@@ -274,7 +278,8 @@ export class WorkingDirectoryService extends Service {
    * @param agent - live or unpublished Agent owning the Session.
    * @param root - absolute checkout directory, or a path relative to the current directory.
    * @param options - directory to enter inside the root and cancellation before the durable change.
-   * @returns the canonical root and current directory, committed before fulfillment.
+   * @returns the committed current directory and the workspace root selected after the commit;
+   * the registered root is that root unless a more specific anchor already contains the directory.
    * A notice failure is warned; the next request still receives the committed directories.
    * @throws when either path is not an existing directory or the directory lies outside the root.
    */
@@ -288,7 +293,7 @@ export class WorkingDirectoryService extends Service {
         throw new Error(`working-directory: ${JSON.stringify(cwd)} lies outside the workspace root ${JSON.stringify(anchor)}`)
       }
       this.commit(agent, cwd, false, control, anchor)
-      return { root: anchor, cwd }
+      return { root: this.rootOf(agent.session), cwd }
     })
   }
 

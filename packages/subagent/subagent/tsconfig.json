@@ -72,6 +72,9 @@
       "path": "../../util/chunked-list"
     },
     {
+      "path": "../../fs/fs"
+    },
+    {
       "path": "../../session/working-directory"
     }
   ]

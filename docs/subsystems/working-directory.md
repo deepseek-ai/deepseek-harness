@@ -33,7 +33,11 @@ interface RelocateOptions {
 ```ts type-equiv
 /** The committed outcome of {@link WorkingDirectoryService.relocate}. */
 interface RelocatedDirectories {
-  /** Canonical absolute workspace root, now a registered anchor of the Session. */
+  /**
+   * Canonical absolute workspace root the commit selected: the longest registered anchor containing
+   * `cwd`. This is the registered root unless a more specific anchor, such as an original project
+   * inside it, already contains `cwd`.
+   */
   root: string
   /** Canonical absolute current directory inside `root`. */
   cwd: string
@@ -109,7 +113,8 @@ set(agent: Agent, path: string, signal?: AbortSignal): Promise<string>
  * @param agent - live or unpublished Agent owning the Session.
  * @param root - absolute checkout directory, or a path relative to the current directory.
  * @param options - directory to enter inside the root and cancellation before the durable change.
- * @returns the canonical root and current directory, committed before fulfillment.
+ * @returns the committed current directory and the workspace root selected after the commit;
+ * the registered root is that root unless a more specific anchor already contains the directory.
  * A notice failure is warned; the next request still receives the committed directories.
  * @throws when either path is not an existing directory or the directory lies outside the root.
  */
