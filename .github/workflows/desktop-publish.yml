@@ -10,10 +10,10 @@ on:
         type: string
         required: true
       staging_percentage:
-        description: '更新灰度比例：0–100 整数；留空全量，作用于原包所属渠道'
+        description: '更新灰度比例：0–100 整数，默认 100；留空沿用包内值，作用于原包所属渠道'
         type: string
         required: false
-        default: ''
+        default: '100'
       upload_website:
         description: '同时上传官网安装包并刷新缓存（仅 production）；取消后仅执行版本与自动更新发布'
         type: boolean
