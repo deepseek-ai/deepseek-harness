@@ -1,5 +1,6 @@
 /** The worktree a Session requests before it starts: its record, its projection, and its creation. */
 
+import { isAbsolute, relative, sep } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { generatedWorktreeName } from '@deepseek-ai/dsh-experimental-worktree'
@@ -8,7 +9,7 @@ import { appendPluginRecord, pluginRecordOf } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition, ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
-import { within } from '@deepseek-ai/dsh-working-directory'
+import type {} from '@deepseek-ai/dsh-working-directory'
 import { z } from 'zod'
 import type {
   ForgeMissingWorktree, ForgeSessionWorktree, ForgeWorktreeCreation, ForgeWorktreeFailure, ForgeWorktreeRestoration, ForgeWorktreeState,
@@ -65,6 +66,18 @@ export const forgeWorktreeProjection = {
     view: state => state.created !== null && state.cwd !== null && within(state.created.path, state.cwd) ? state.created : null,
   },
 } satisfies ProjectionDefinition<'forgeWorktree', ForgeWorktreeState>
+
+/**
+ * Whether `path` is `root` or lies below it. Both are canonical absolute paths of one execution
+ * world; the test is lexical and never touches the filesystem.
+ * @param root - canonical absolute directory.
+ * @param path - canonical absolute path to test.
+ * @returns whether `root` contains `path`.
+ */
+export function within(root: string, path: string): boolean {
+  const rest = relative(root, path)
+  return rest === '' || (rest !== '..' && !rest.startsWith(`..${sep}`) && !isAbsolute(rest))
+}
 
 /**
  * The text of a failure: an Error's message, or else the thrown value as a string.

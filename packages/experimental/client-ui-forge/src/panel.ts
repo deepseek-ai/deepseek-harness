@@ -18,8 +18,8 @@ import type {
   ForgeCheckoutState, ForgeLocalChanges, ForgeMissingWorktree, ForgePanelChangeRequest, ForgePanelState, ForgePanelWorktree,
   ForgeWorktreeBlocker, ForgeWorktreeState,
 } from './types.ts'
-import { within } from '@deepseek-ai/dsh-working-directory'
-import { WORKTREE_RECORD } from './worktree.ts'
+import type {} from '@deepseek-ai/dsh-working-directory'
+import { within, WORKTREE_RECORD } from './worktree.ts'
 import type { WorktreeCreations } from './worktree.ts'
 
 /** Git and diff limits plus the sign-in probe deadline. */
