@@ -10,7 +10,7 @@ export function apply(ctx, config = {}) {
   const checkedCancellation = new WeakSet()
   ctx.on('agent/pre-step', async ({ agent, messages, signal }, next) => {
     if (checkedCancellation.has(agent)
-      || (config.checkRootCancellation === false && agent.session.header.origin !== 'subagent')) return next()
+      || (config.checkRootCancellation !== true && agent.session.header.origin !== 'subagent')) return next()
     checkedCancellation.add(agent)
     const pending = {
       id: randomUUID(), role: 'user',
