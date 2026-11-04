@@ -57,7 +57,7 @@ it.runIf(process.platform === 'darwin' || process.platform === 'win32')('stores 
   const entries = unzipSync(bytes)
   expect(Object.keys(entries)).toEqual(['manifest.json', ...names])
   for (const [name, content] of Object.entries(entries)) expect(Buffer.from(content)).toEqual(await readFile(join(directory, name)))
-  // The first central directory entry describes manifest.json. UTC+3 is 11:02:43 on every test host.
+  // UTC+3 is 11:02:43 on every test host.
   const directoryOffset = bytes.readUInt32LE(bytes.length - 22 + 16)
   expect(bytes.readUInt32LE(directoryOffset)).toBe(0x02014b50)
   const nameLength = bytes.readUInt16LE(directoryOffset + 28)
@@ -65,7 +65,7 @@ it.runIf(process.platform === 'darwin' || process.platform === 'win32')('stores 
   expect(bytes.readUInt16LE(directoryOffset + 10)).toBe(0)
   const dosTime = bytes.readUInt16LE(directoryOffset + 12)
   expect([dosTime >>> 11, (dosTime >>> 5) & 63, (dosTime & 31) * 2]).toEqual([11, 2, 42])
-  const start = directoryOffset + 46 + bytes.readUInt16LE(directoryOffset + 28)
+  const start = directoryOffset + 46 + nameLength
   const end = start + bytes.readUInt16LE(directoryOffset + 30)
   let unixTime: number | undefined
   for (let offset = start; offset < end; offset += 4 + bytes.readUInt16LE(offset + 2)) {
@@ -89,7 +89,7 @@ it.each(['../escape.zip', '-option.zip', 'missing-extension', 'missing-output'])
   const output = join(root, 'archive-output')
   const result = spawnSync(process.execPath, ['--import', 'tsx', archiveScript], { encoding: 'utf8',
     env: { ...process.env, ...archiveEnv, RUNNER_TEMP: root, GITHUB_OUTPUT: name === 'missing-output' ? '' : output,
-      DESKTOP_ARCHIVE_NAME: name === 'missing-output' ? 'fixture.zip' : name } })
+      DESKTOP_ARCHIVE_NAME: name === 'missing-output' ? 'fixture.zip' : name, RUNNER_NAME: 'wrong-machine' } })
   expect(result.status).toBe(1)
   expect(result.stderr).toContain('desktop archival: invalid ZIP output settings')
   await expect(readFile(output)).rejects.toMatchObject({ code: 'ENOENT' })
