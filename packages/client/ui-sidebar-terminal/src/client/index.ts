@@ -110,6 +110,20 @@ export function apply(ctx: Context): void {
       if (opened !== undefined) ctx.webTerminals.bind(sessionId, opened.contentId, info.id)
     }
   }
+  // Terminals each Session's latest roster listed under Agent control. One that leaves the roster while the Agent
+  // controls it was ended by the Agent or its Session, so this window closes the tabs bound to it.
+  const agentControlled = new Map<SessionId, ReadonlySet<WebTerminalId>>()
+  const closeEndedAgentTerminals = (sessionId: SessionId, terminals: readonly WebTerminalInfo[]): void => {
+    const listed = new Set(terminals.map(info => info.id))
+    const ended = new Set([...agentControlled.get(sessionId) ?? []].filter(terminal => !listed.has(terminal)))
+    const controlled = terminals.filter(info => info.origin === 'agent' && info.control === 'agent')
+    agentControlled.set(sessionId, new Set(controlled.map(info => info.id)))
+    if (ended.size === 0) return
+    for (const tab of ctx.sidebarRight.tabsIn(sessionId)) {
+      const bound = tab.kind === 'terminal' ? ctx.webTerminals.boundTerminal(sessionId, tab.contentId) : undefined
+      if (bound !== undefined && ended.has(bound)) ctx.sidebarRight.closeIn(sessionId, tab.id)
+    }
+  }
   const watches = new Map<SessionId, AgentTerminalOpenerInjected>()
   ctx.effect(() => ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
     name: 'conversation.session.header.actions', id: 'agent-terminals', locale: namespace,
@@ -117,7 +131,10 @@ export function apply(ctx: Context): void {
       let watch = watches.get(sessionId)
       if (watch === undefined) {
         watch = {
-          watchAgentTerminals: () => ctx.webTerminals.watch(sessionId, (terminals) => { openAgentTerminals(sessionId, terminals) }),
+          watchAgentTerminals: () => ctx.webTerminals.watch(sessionId, (terminals) => {
+            closeEndedAgentTerminals(sessionId, terminals)
+            openAgentTerminals(sessionId, terminals)
+          }),
         }
         watches.set(sessionId, watch)
       }
