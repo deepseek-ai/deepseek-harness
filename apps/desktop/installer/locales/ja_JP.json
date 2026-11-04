@@ -1,6 +1,8 @@
 {
   "nsisLanguage": "JAPANESE",
   "strings": {
+    "INSTALLER_UPDATE_WAIT": "アップデートを適用中…",
+    "INSTALLER_UPDATE_REOPEN": "完了後、自動的に起動します。",
     "INSTALLER_INSTALL": "今すぐインストール",
     "INSTALLER_FINISH": "完了",
     "INSTALLER_NATIVE_PROGRESS": "インストールを準備しています… %d%%",

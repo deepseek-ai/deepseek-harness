@@ -1,6 +1,8 @@
 {
   "nsisLanguage": "RUSSIAN",
   "strings": {
+    "INSTALLER_UPDATE_WAIT": "Установка обновления…",
+    "INSTALLER_UPDATE_REOPEN": "Приложение откроется само.",
     "INSTALLER_INSTALL": "Установить сейчас",
     "INSTALLER_FINISH": "Готово",
     "INSTALLER_NATIVE_PROGRESS": "Подготовка установки… %d%%",
