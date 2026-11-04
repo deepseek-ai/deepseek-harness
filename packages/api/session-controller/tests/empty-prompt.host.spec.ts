@@ -94,3 +94,30 @@ it('consumes injected context with the empty prompt', async () => {
   expect(agent.inbox.nextStep).toHaveLength(0)
   expect(ctx.sessionProjections.snapshot(agent.session).values.conversationContinuation).not.toBeNull()
 })
+
+it('deduplicates empty continuation after claim and before user-message admission', async () => {
+  const { ctx, remote, agent, adapter, request } = await setup()
+  agent.followup(createUserMessage({ content: [{ type: 'text', text: 'original task' }], source: { kind: 'user' } }))
+  await agent.whenIdle()
+  const claimed = Promise.withResolvers<undefined>()
+  const release = Promise.withResolvers<undefined>()
+  onTestFinished(() => { release.resolve(undefined) })
+  ctx.on('agent/pre-step', async ({ messages }, next) => {
+    if (messages.some(message => message.source.kind === 'retry')) {
+      claimed.resolve(undefined)
+      await release.promise
+    }
+    return next()
+  })
+  const continuation = request('continue-once')
+  expect((await remote.prompt(continuation)).ok).toBe(true)
+  await claimed.promise
+  expect(agent.inbox.nextTurn).toEqual([])
+  expect(agent.session.snapshotEvents().some(event => event.type === 'user/message' && event.data.source.kind === 'retry')).toBe(false)
+  expect((await remote.prompt(continuation)).ok).toBe(true)
+  release.resolve(undefined)
+  await agent.whenIdle()
+  expect(adapter.requests).toHaveLength(2)
+  expect(agent.session.snapshotEvents().flatMap(event => event.type === 'agent/inbox/spliced' ? event.data.inserted : [])
+    .filter(message => message.source.kind === 'retry')).toHaveLength(1)
+})
