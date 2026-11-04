@@ -300,8 +300,8 @@
   en: e8dd0cebbb930eb7
   zh: e8dd0cebbb930eb7
 /session-persistence-event-catalog/events/working-directory/working-directory-change-log-only:
-  en: 075369b880bd304b
-  zh: 0eca94dbaf5d9090
+  en: bdfcb912ecdcf00d
+  zh: 525303d732b7a59b
 /session-persistence-event-catalog/events/workspace:
   en: 63ee1a85e4b59ae3
   zh: 63ee1a85e4b59ae3
@@ -1428,8 +1428,8 @@
   en: 874fb1c541bbca1d
   zh: 1aa7e89654cd041a
 /session-persistence-event-catalog/resolved-persistence-types/anchor-cwd:
-  en: 4c7cc91c89725a3f
-  zh: 5c91de8c4713cc89
+  en: 0575d5a02ed571b4
+  zh: 35408927e76e368a
 /session-persistence-event-catalog/resolved-persistence-types/args-commandid-name-source:
   en: a117573a5d58cb3c
   zh: d5ad59e17a3a815d
@@ -1914,8 +1914,8 @@
   en: 0b74295f7c5c8f11
   zh: 5f1213cec87f6be0
 /session-persistence-event-catalog/resolved-persistence-types/kind-working-directory:
-  en: 1a6c0842d549a5f9
-  zh: cde31cc53cbcab66
+  en: 71df7e1042865e6e
+  zh: a6ff4987ada523be
 /session-persistence-event-catalog/resolved-persistence-types/max-tokens-messages-model-thinking:
   en: 3216b23c131d0070
   zh: 73ca171c6014f16e

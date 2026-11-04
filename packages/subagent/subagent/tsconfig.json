@@ -75,6 +75,9 @@
       "path": "../../fs/fs"
     },
     {
+      "path": "../../util/workspace-path"
+    },
+    {
       "path": "../../session/working-directory"
     }
   ]

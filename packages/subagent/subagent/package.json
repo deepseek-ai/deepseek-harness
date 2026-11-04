@@ -49,6 +49,7 @@
     "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-chunked-list": "workspace:*",
     "@deepseek-ai/dsh-util-values": "workspace:*",
+    "@deepseek-ai/dsh-util-workspace-path": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
     "zod": "4.4.3"
   },

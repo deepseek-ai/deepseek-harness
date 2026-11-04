@@ -54,6 +54,7 @@
     "@deepseek-ai/dsh-tools": "workspace:*"
   },
   "dependencies": {
+    "@deepseek-ai/dsh-util-workspace-path": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
     "zod": "^4.4.3"
   }

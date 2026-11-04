@@ -30,6 +30,9 @@
       "path": "../../core/system-prompt"
     },
     {
+      "path": "../../util/workspace-path"
+    },
+    {
       "path": "../../../vendor/schemastery"
     }
   ]
