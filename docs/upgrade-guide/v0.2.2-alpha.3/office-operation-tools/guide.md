@@ -9,7 +9,7 @@ English | [中文](guide.zh.md)
 
 ## Change
 
-`@deepseek-ai/dsh-skill-office` no longer registers the `office-render`, `office-recalculate`, and `office-export-pdf` skills; it registers the `office` router and the `office-docx`, `office-pptx`, and `office-xlsx` authoring skills. After an Office skill loads, the model calls [`office_render`, `office_convert`, and `office_recalculate`](../../../../packages/document/tool-office/README.md) from the following step.
+`@deepseek-ai/dsh-skill-office` no longer registers the `office-render`, `office-recalculate`, and `office-export-pdf` skills; it registers the `office` router and the `office-docx`, `office-pdf`, `office-pptx`, and `office-xlsx` skills. After an Office skill loads, the model calls [`office_render`, `office_convert`, and `office_recalculate`](../../../../packages/document/tool-office/README.md) from the following step.
 
 Configuration changes:
 
@@ -36,7 +36,7 @@ This affects users and prompts of the removed skills, compositions and launchers
 2. Remove `node` and `cli` from every `skill-office` row in `cordis.yml`, patches, and overlays. Set `pythonEnvironment: user` unless the composition mounts `@deepseek-ai/dsh-tool-workspace-dependencies`.
 3. Compositions that mount `@deepseek-ai/dsh-skill-office` without the shipped bundles also mount `@deepseek-ai/dsh-office-kit` and `@deepseek-ai/dsh-tool-office`.
 4. In launchers, stop setting `DSH_BUNDLED_OFFICE_CLI` and `DSH_BUNDLED_OFFICE_NODE`, and rename `DSH_BUNDLED_PRIMARY_RUNTIME` to `DSH_PRIMARY_RUNTIME`. The Python SDK prefers a set or inherited `DSH_PRIMARY_RUNTIME`, even empty, over its download cache; unset it to use the cache.
-5. In a copy referenced by `assetRoot`, replace the four remaining folders with the installed package's `assets/` and delete the three removed skill folders.
+5. In a copy referenced by `assetRoot`, replace the remaining folders with the installed package's `assets/` and delete the three removed skill folders.
 6. A `standard` or `ptc` preset saved from the Agent Preset editor replaces the shipped plugin list, so its Sessions lack the Office tools. Add this row to the saved list, or to `config.plugins` of the `preset-standard` or `preset-ptc` row in `$DSH_HOME/profiles/<profile>/cordis.patch.yml` (`<profile>`: `web` or `desktop`):
 
    ```yaml

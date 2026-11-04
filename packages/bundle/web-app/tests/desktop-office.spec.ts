@@ -34,7 +34,7 @@ vi.mock('@deepseek-ai/dsh-office-kit/src/locate.ts', async (original) => {
 })
 
 const assets = fileURLToPath(new URL('../../../skill/skill-office/assets/', import.meta.url))
-const names = ['office', 'office-docx', 'office-pptx', 'office-xlsx']
+const names = ['office', 'office-docx', 'office-pdf', 'office-pptx', 'office-xlsx']
 const ROWS = ['office-kit', 'tool-office', 'workspace-dependencies', 'skill-office']
 const OFFICE_TOOLS = ['office_convert', 'office_recalculate', 'office_render']
 

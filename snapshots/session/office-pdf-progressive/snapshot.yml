@@ -1,0 +1,9 @@
+version: 1
+scenario: office-pdf-progressive
+profile: headless
+composition: office-render-tools
+recording: authored
+header:
+  class: office-render-tools
+workspace:
+  setup: office-skills

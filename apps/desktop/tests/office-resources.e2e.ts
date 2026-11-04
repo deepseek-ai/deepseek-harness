@@ -11,7 +11,7 @@ import { builtHost, prepareDesktopHome } from './harness.ts'
 afterEach(() => { vi.unstubAllEnvs() })
 
 const SKILL_PROBE = 'desktop-office-skill-probe'
-const OFFICE_SKILLS = ['office', 'office-docx', 'office-pptx', 'office-xlsx']
+const OFFICE_SKILLS = ['office', 'office-docx', 'office-pdf', 'office-pptx', 'office-xlsx']
 
 /** Add a test-only profile bundle whose route reports the Host registry's Office skills through the real Loader. */
 function installSkillProbe(profile: string): void {

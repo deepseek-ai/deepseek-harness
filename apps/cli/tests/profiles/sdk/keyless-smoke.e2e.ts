@@ -612,7 +612,7 @@ it.each(['unset', 'empty', 'full', 'python-only', 'python-only-patched', 'wrong-
   // Loading an Office skill declares the Office tools from the following request.
   expect(lastNames.filter(name => name.startsWith('office')).sort()).toEqual(officeTools)
   expect(names).not.toContain('render_document')
-  for (const name of ['office-docx', 'office-pptx', 'office-xlsx']) {
+  for (const name of ['office-docx', 'office-pdf', 'office-pptx', 'office-xlsx']) {
     expect(JSON.stringify(requests[0]!.messages)).toContain(name)
   }
   expect(requests).toHaveLength(toolUses.length + 1)

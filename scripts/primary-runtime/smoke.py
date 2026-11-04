@@ -23,6 +23,9 @@ from pptx import Presentation
 from pptx.chart.data import CategoryChartData
 from pptx.enum.chart import XL_CHART_TYPE
 from pptx.util import Inches
+from pypdf import PdfReader, PdfWriter
+from pypdf.errors import DependencyError
+from pypdf.generic import ArrayObject, DictionaryObject, FloatObject, NameObject, NumberObject, TextStringObject
 
 
 def check_interpreters():
@@ -120,6 +123,49 @@ def main():
         finally:
             reopened_workbook.close()
         assert pandas.read_excel(root / "workbook.xlsx")["Value"].iloc[0] == 42
+
+        pdf = PdfWriter()
+        pdf.add_blank_page(width=200, height=100)
+        pdf.add_blank_page(width=100, height=200).rotate(90)
+        pdf.add_metadata({"/Title": "Office PDF"})
+        pdf.write(root / "document.pdf")
+        reopened_pdf = PdfReader(root / "document.pdf")
+        assert len(reopened_pdf.pages) == 2
+        assert reopened_pdf.pages[1].rotation == 90
+        assert reopened_pdf.metadata.title == "Office PDF"
+
+        form = PdfWriter()
+        form.add_blank_page(width=300, height=200)
+        field = form.add_annotation(0, DictionaryObject({
+            NameObject("/Subtype"): NameObject("/Widget"), NameObject("/FT"): NameObject("/Tx"),
+            NameObject("/T"): TextStringObject("name"), NameObject("/F"): NumberObject(4),
+            NameObject("/Rect"): ArrayObject([FloatObject(10), FloatObject(10), FloatObject(200), FloatObject(40)]),
+            NameObject("/DA"): TextStringObject("/Helv 12 Tf 0 g"),
+        }))
+        form.root_object[NameObject("/AcroForm")] = DictionaryObject({NameObject("/Fields"): ArrayObject([field.indirect_reference])})
+        form.write(root / "form.pdf")
+        filled = PdfWriter(clone_from=root / "form.pdf")
+        for page in filled.pages:
+            filled.update_page_form_field_values(page, {"name": "Ada Lovelace"}, auto_regenerate=False)
+        filled.write(root / "filled.pdf")
+        reopened_form = PdfReader(root / "filled.pdf")
+        assert reopened_form.get_fields()["name"].value == "Ada Lovelace"
+        assert reopened_form.trailer["/Root"]["/AcroForm"].get("/NeedAppearances") is not True
+        assert "/AP" in reopened_form.pages[0]["/Annots"][0].get_object()
+
+        # The payload omits cryptography, so only the RC4 algorithm named by the PDF skill is available.
+        try:
+            PdfWriter(clone_from=root / "document.pdf").encrypt("password", algorithm="AES-256")
+        except DependencyError:
+            pass
+        else:
+            raise AssertionError("AES encryption unexpectedly available")
+        protected = PdfWriter(clone_from=root / "document.pdf")
+        protected.encrypt("password", algorithm="RC4-128")
+        protected.write(root / "protected.pdf")
+        reopened_protected = PdfReader(root / "protected.pdf")
+        assert reopened_protected.is_encrypted and reopened_protected.decrypt("password")
+        assert len(reopened_protected.pages) == 2
     print("Office runtime versions and document round trips passed.")
 
 

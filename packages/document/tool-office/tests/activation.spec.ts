@@ -18,7 +18,7 @@ import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as ToolOffice from '../src/index.ts'
 
 const NAMES = ['office_convert', 'office_recalculate', 'office_render']
-const SKILLS = ['office', 'office-docx', 'office-xlsx', 'office-pptx']
+const SKILLS = ['office', 'office-docx', 'office-xlsx', 'office-pptx', 'office-pdf']
 const signal = new AbortController().signal
 
 function response(name?: string, args: object = {}): StreamChunk[] {
