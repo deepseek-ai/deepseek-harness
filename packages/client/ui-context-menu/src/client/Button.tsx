@@ -46,9 +46,8 @@ export function ContextMenuButton({ target, label, className, size, useOpener, u
       toggle(id, target, { x: rect.left, y: rect.bottom })
     },
   }
+  if (size !== 'sm') return <button {...attributes} type="button"><IconEllipsisOutlineRegular /></button>
   return <Tooltip label={label} side="bottom" align="end" portal>
-    {size === 'sm'
-      ? <Button {...attributes} size="sm" icon={<IconEllipsisOutlineRegular />} />
-      : <button {...attributes} type="button"><IconEllipsisOutlineRegular /></button>}
+    <Button {...attributes} size="sm" icon={<IconEllipsisOutlineRegular />} />
   </Tooltip>
 }

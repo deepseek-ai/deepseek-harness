@@ -49,7 +49,7 @@ export interface ContextMenuButtonProps {
   readonly target: ContextMenuTarget
   readonly label: string
   readonly className?: string | undefined
-  /** Use the compact toolbar control; omission preserves caller-styled row button geometry. */
+  /** Use the compact toolbar control with a label tooltip; omission preserves caller-styled row button geometry without a tooltip. */
   readonly size?: 'sm'
 }
 
