@@ -49,7 +49,7 @@ Do not rename `.xls`, `.xlsb`, encrypted files, or macro-enabled files to `.xlsx
 
 Reopen the saved workbook with openpyxl and verify the requested sheet names, values, types, formulas, styles, and totals against the source data, including unchanged content that must be preserved. These checks do not calculate formulas or judge workbook appearance.
 
-Call `office_render` when the user asks for images or visual inspection, or when the task targets appearance, such as cell fill colors, text alignment, spacing, or sizing; a request to skip rendering takes precedence. New workbooks and data or formula edits, with the bold headers and number formats that accompany them, are checked with openpyxl alone.
+Call `office_render` when the user asks for images or visual inspection, or when the task targets appearance, such as cell fill colors, text alignment, spacing, or sizing; a request to skip rendering takes precedence. Do not render new workbooks or data or formula edits merely to verify accompanying bold headers or number formats; check these with openpyxl alone.
 
 Render worksheets by `sheet` and the affected `range`; worksheet numbers are not PDF page numbers. Earlier images of an unchanged source remain current. A fully transparent or uniformly blank image of populated content means the renderer failed, which ends visual checks for the task and leaves the source as it is. When content and structure checks pass, state the visual status only as "Content and structure checks passed; visual inspection was not completed." or "内容与结构检查通过；视觉检查未完成。".
 
