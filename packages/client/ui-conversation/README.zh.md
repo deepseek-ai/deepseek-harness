@@ -80,6 +80,12 @@ root 作用域的 hoc Slot `conversation.hero.frame` 在所有阶段都包裹滚
 
 上下文占用率入口遵循[统计控件圆角规则](../../../docs/ui-radius.zh.md#radius-scale)。
 
+空闲且草稿为空的普通 Session，在最新轮次以 `RATE_LIMIT`、`SERVER`、`TIMEOUT`、`TRANSPORT`、`EMPTY_RESPONSE` 或 `STREAM_CLOSED` 结束后显示播放按钮。失败工作必须有已准入的普通用户输入和失败请求尝试。点击通过现有 Session prompt API 提交 `content: []`；已有草稿或附件仍使用发送按钮。新轮次正常闭合，使用已提交历史，并记录 `source.kind: 'retry'` 的空 `user/message`。请求被拒绝或传输失败时，草稿保持为空，错误沿用普通提交流程展示。
+
+Session API 拥有 `conversationContinuation`，Host 准入和浏览器展示共用该投影。它从完整 Session 历史恢复资格，并在空输入继续再次失败时保留资格，不依赖浏览器已加载的历史分页。
+
+composer 提供 `retry(failureSeq)` 处理生成失败后的恢复。输入栏通过标准 `useProjection` prop 读取 `conversationContinuation` 和 `inbox`。面向用户的操作文案为“继续生成”。
+
 composer 在挂载、切换 Session 和解除锁定时使用共享的[文字输入框聚焦策略](../ui-primitives/README.zh.md#use-this-package)。识别出的手机和平板需要点击输入框；桌面设备保留自动聚焦。在这些移动设备上，提交清空正在聚焦的草稿后，焦点移到不接受文字输入的 composer 卡片，收起键盘并保留键盘导航位置。被拒绝的提交、保留的新草稿文字，以及已经聚焦的其他控件均保留原有焦点。移动端键盘平移页面时，[Lexical 补丁](../../../patches/lexical@0.49.0.patch)让光标滚动计算与 DOM 几何使用同一坐标系。
 
 上下文占用按钮在输入卡片下方、会话统计右侧显示圆环和百分比。点击按钮可在受布局视口约束的 CSS 锚定面板中查看 token 构成，没有统计项时也可打开；上下文用量和容量尚不可用时，按钮保持隐藏。浏览器缩放和平移时面板随页面移动，因此可以超出视觉视口。Hero 之外，这一行为空时仍保留一项读数的高度，因此会话统计和上下文用量稍后到达不会改变 composer 的高度；Hero 不显示空行。
@@ -191,11 +197,19 @@ selector 必须是 owner currency 的纯函数。非 null 返回值作为 `match
 <a id="model-experience"></a>
 ## 模型体验
 
-无，因为本包渲染浏览器状态，并通过 Session Controller API 发送用户确认提交的输入，而不构造模型请求。
+### 手动继续请求
+
+#### 模型看到什么
+
+播放按钮通过现有 Session prompt API 提交 `content: []`。普通 Loop 准入记录带 `source.kind: 'retry'` 的空 `user/message`。Chat 将空重试消息显示为轻量的继续请求记录。适配器按普通消息序列化处理；该操作不添加本地化或隐藏的继续文本。待注入上下文遵循普通准入流程。
+
+#### Token 影响
+
+该操作不增加继续文本。空消息的序列化及封装开销取决于适配器。请求仍承担保留历史、当前提示词、工具声明以及新准入上下文的正常输入成本。
 
 #### KV Cache 影响
 
-无；Conversation 组装和浏览器输入状态不会改变提供方侧的 prompt cache。
+空重试消息的序列化取决于适配器。前缀复用取决于当前模型、提示词、工具、注入上下文及提供方缓存策略。
 
 ## 已知限制与暂缓事项
 
@@ -203,6 +217,7 @@ selector 必须是 owner currency 的纯函数。非 null 返回值作为 `match
 
 - **只有已注册 target 可以渲染**——除已注册的 `chat` 偏好外，shell 刻意不提供隐式 fallback target。
 - **Factory occurrence 继承渲染位置的 Session**——`conversation.content` 不接受独立寻址的 Session；该能力需要单独的 Session provider。
+- **手动继续使用固定产品白名单**——支持的失败码独立于提供方可配置的 `retryableCodes`；修改自动重试策略不会扩展或缩小此操作的范围。即使默认策略不重试 `STREAM_CLOSED`，用户仍可明确发起新轮次。该错误码也可能表示协议违规，因此再次请求不保证能够恢复。
 - **composer 内的毛玻璃只在 Chromium 中验证过**——docked composer 设置 `will-change: transform` 后，Chromium 中后代的 `backdrop-filter` 仍会采样背后的 transcript；WebKit 中的表现尚未验证。
 - **出错的 Definition 让每次发布都完整回放**——增量 flush 失败后，assembler 回放已加载的完整窗口，以保持视图正确。若某个 Definition 在每次更新中都失败，在其 owner 修复前，每次发布都会回放整个窗口（[Window 更新路径](../../../docs/subsystems/conversation.zh.md#window-update-paths)）。
 

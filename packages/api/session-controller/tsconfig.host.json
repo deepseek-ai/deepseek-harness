@@ -25,7 +25,8 @@
     "src/list.ts",
     "src/media-references.ts",
     "src/archived-session-gate.ts",
-    "src/skill-catalog.ts"
+    "src/skill-catalog.ts",
+    "src/continuation.ts"
   ],
   "references": [
     {
@@ -126,6 +127,9 @@
     },
     {
       "path": "../../session/working-directory"
+    },
+    {
+      "path": "../../util/brand"
     }
   ]
 }
