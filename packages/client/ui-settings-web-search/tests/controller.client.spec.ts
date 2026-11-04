@@ -591,6 +591,65 @@ describe('WebSearchCardController sections', () => {
   })
 })
 
+describe('WebSearchCardController billing', () => {
+  it('shows each billing only while its DeepSeek API is selected, reading an unset billing as automatic', async () => {
+    const b = bench()
+    try {
+      serve(b)
+      await vi.waitFor(() => { expect(b.state().search.kind).toBe('deepseek') })
+      expect(b.state()).toMatchObject({ searchBilling: { value: 'auto', overridden: false }, fetchBilling: undefined })
+      b.face.selectProvider('fetchProvider', 'deepseek-fetch-api')
+      b.face.selectProvider('searchProvider', 'deepseek-official')
+      expect(b.state()).toMatchObject({ searchBilling: undefined, fetchBilling: { value: 'auto', overridden: false } })
+    } finally { b.controller.dispose() }
+  })
+
+  it('reads a stored billing and its override, and an unknown stored value as automatic', async () => {
+    const b = bench()
+    try {
+      serve(b, { value: API_SELECTION, base: API_SELECTION })
+      b.api.publish({ value: { count: 10, searchBilling: 'account', fetchBilling: 'session' as never }, user: { searchBilling: 'account' } })
+      await vi.waitFor(() => { expect(b.state().fetch.kind).toBe('deepseek') })
+      expect(b.state()).toMatchObject({
+        searchBilling: { value: 'account', overridden: true }, fetchBilling: { value: 'auto' },
+      })
+    } finally { b.controller.dispose() }
+  })
+
+  it('saves a selected billing and clears it when the composed billing is selected again', async () => {
+    const b = bench({ accept: true })
+    try {
+      serve(b, { value: API_SELECTION, base: API_SELECTION })
+      await vi.waitFor(() => { expect(b.state().fetch.kind).toBe('deepseek') })
+      b.face.selectBilling('search', 'api-key')
+      expect(b.state()).toMatchObject({ dirty: true, searchBilling: { value: 'api-key', overridden: true } })
+      b.face.save()
+      await vi.waitFor(() => { expect(b.api.mutate).toHaveBeenCalledTimes(1) })
+      expect(b.api.mutate).toHaveBeenCalledWith([{ op: 'set', path: ['searchBilling'], value: 'api-key' }], undefined)
+      await vi.waitFor(() => { expect(b.state().saving).toBe(false) })
+      b.face.selectBilling('search', 'auto')
+      expect(b.state().searchBilling).toEqual({ value: 'auto', overridden: false })
+      b.face.save()
+      await vi.waitFor(() => { expect(b.api.mutate).toHaveBeenCalledTimes(2) })
+      expect(b.api.mutate).toHaveBeenLastCalledWith([{ op: 'unset', path: ['searchBilling'] }], undefined)
+    } finally { b.controller.dispose() }
+  })
+
+  it('stores automatic billing as an override where the deployment composes another billing', async () => {
+    const b = bench({ accept: true })
+    try {
+      serve(b, { value: API_SELECTION, base: API_SELECTION }, { count: 10, fetchBilling: 'account' })
+      await vi.waitFor(() => { expect(b.state().fetchBilling).toMatchObject({ value: 'account' }) })
+      b.face.selectBilling('fetch', 'account')
+      expect(b.state().dirty).toBe(false)
+      b.face.selectBilling('fetch', 'auto')
+      b.face.save()
+      await vi.waitFor(() => { expect(b.api.mutate).toHaveBeenCalledTimes(1) })
+      expect(b.api.mutate).toHaveBeenCalledWith([{ op: 'set', path: ['fetchBilling'], value: 'auto' }], undefined)
+    } finally { b.controller.dispose() }
+  })
+})
+
 describe('WebSearchCardController providers', () => {
   it('lists the official providers first in a fixed order and plugin providers after them in Host order', async () => {
     const b = bench()

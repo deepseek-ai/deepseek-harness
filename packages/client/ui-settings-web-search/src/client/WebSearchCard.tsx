@@ -1,9 +1,10 @@
 /**
  * The web search and fetch settings page: one section per capability, each
  * with a provider menu and its explanation. The selected provider's settings
- * below the menu sit in one gray panel: the result count for the DeepSeek
- * Search API, and the key, endpoint, and search limit for legacy Messages
- * search. A provider with no settings here shows no panel.
+ * below the menu sit in one gray panel: the result count and billing for the
+ * DeepSeek Search API, billing for the DeepSeek Fetch API, and the key,
+ * endpoint, and search limit for legacy Messages search. A provider with no
+ * settings here shows no panel.
  */
 
 import { useRef, useState, type ReactNode } from 'react'
@@ -15,7 +16,8 @@ import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-cli
 import { formLabels, type WebSearchSettingsLocaleKey } from './locales.ts'
 import styles from './WebSearchCard.module.css'
 import {
-  PROVIDER_IDS, type WebProviderOption, type WebProviderSelection, type WebSearchCardFace, type WebSearchCardState,
+  PROVIDER_IDS, type WebBilling, type WebBillingState, type WebProviderOption, type WebProviderSelection,
+  type WebSearchCardFace, type WebSearchCardState,
 } from './web-search-card-controller.ts'
 
 /** Props the renderer binds for the web search and fetch page. */
@@ -80,6 +82,9 @@ export function WebSearchCard(props: WebSearchCardProps) {
               overriddenLabel={t('overridden')} resetLabel={t('reset')} invalidLabel={t('invalidCount')} disabled={disabled}
               {...state.count}
               onEdit={(text) => { props.edit('count', text) }} onReset={() => { props.resetField('count') }} />
+            {state.searchBilling !== undefined && (
+              <BillingField capability="search" t={t} billing={state.searchBilling} disabled={disabled} onSelect={props.selectBilling} />
+            )}
           </div>
         )}
         {search.kind === 'legacy' && state.legacyKey !== undefined && (
@@ -113,6 +118,11 @@ export function WebSearchCard(props: WebSearchCardProps) {
           section={fetch} disabled={menuDisabled} field="fetchProvider" onSelect={props.selectProvider}
           providersFailed={state.providersFailed} onRetry={props.retryProviders}
           description={describe(fetch)} hint={fetch.kind === 'plugin' ? t('pluginProviderHint') : undefined} />
+        {state.fetchBilling !== undefined && (
+          <div className={styles.panel}>
+            <BillingField capability="fetch" t={t} billing={state.fetchBilling} disabled={disabled} onSelect={props.selectBilling} />
+          </div>
+        )}
       </section>
     </SettingsForm>
   )
@@ -170,6 +180,48 @@ function Dropdown(props: {
       minWidthFromAnchor
       anchor={anchor}
     />
+  )
+}
+
+/** Dictionary names of each billing and its explanation, in menu order. */
+const BILLING_COPY = {
+  'auto': { nameKey: 'billingAuto', hintKey: 'billingAutoHint' },
+  'account': { nameKey: 'billingAccount', hintKey: 'billingAccountHint' },
+  'api-key': { nameKey: 'billingApiKey', hintKey: 'billingApiKeyHint' },
+} as const satisfies Record<WebBilling, { nameKey: WebSearchSettingsLocaleKey; hintKey: WebSearchSettingsLocaleKey }>
+
+/** Billing entries in menu order. */
+const BILLINGS: readonly WebBilling[] = ['auto', 'account', 'api-key']
+
+/**
+ * One capability's billing menu with the selected billing's explanation, which names the YAML fields that take
+ * precedence over billing.
+ * @param props - the capability, locale copy, the billing state, the settings lock, and the selection callback.
+ * @returns the labelled billing menu.
+ */
+function BillingField(props: {
+  capability: 'search' | 'fetch'
+  t: T
+  billing: WebBillingState
+  /** Locks the menu: read-only settings or a save in flight. */
+  disabled: boolean
+  onSelect: WebSearchCardFace['selectBilling']
+}) {
+  const { t, billing, capability } = props
+  const id = `plugin-config-web-${capability}-billing`
+  const labelId = `${id}-label`
+  return (
+    <div className={styles.panelField}>
+      <span id={labelId} className={styles.panelLabel}>{t('billing')}</span>
+      <Dropdown id={id} labelledBy={labelId} items={BILLINGS.map(mode => ({ id: mode, label: t(BILLING_COPY[mode].nameKey) }))}
+        selectedId={billing.value} valueLabel={t(BILLING_COPY[billing.value].nameKey)} disabled={props.disabled}
+        // The menu offers only BILLINGS entries, so the fallback never applies.
+        /* v8 ignore next */
+        onSelect={(mode) => { props.onSelect(capability, BILLINGS.find(entry => entry === mode) ?? billing.value) }} />
+      <p className={styles.hint}>
+        {t(BILLING_COPY[billing.value].hintKey, { baseURL: `${capability}BaseURL`, apiKeyEnv: `${capability}ApiKeyEnv` })}
+      </p>
+    </div>
   )
 }
 

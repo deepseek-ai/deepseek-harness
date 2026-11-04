@@ -14,6 +14,7 @@ export type WebSearchSettingsLocaleKey =
   | 'count' | 'countHint'
   | 'overridden' | 'reset' | 'readOnly' | 'unavailable'
   | 'save' | 'saving' | 'saveFailed' | 'invalidNumber' | 'invalidCount'
+  | 'billing' | 'billingAuto' | 'billingAutoHint' | 'billingAccount' | 'billingAccountHint' | 'billingApiKey' | 'billingApiKeyHint'
 
 /** English copy. */
 export const en: Record<WebSearchSettingsLocaleKey, string> = {
@@ -52,6 +53,13 @@ export const en: Record<WebSearchSettingsLocaleKey, string> = {
   saveFailed: 'The deployment did not accept these values; they were left for you to correct.',
   invalidNumber: 'Enter a number, or leave blank to use the default.',
   invalidCount: 'Enter an integer from 1 to 50, or leave blank to use the default.',
+  billing: 'Billing',
+  billingAuto: 'Automatic',
+  billingAutoHint: "Uses the conversation's DeepSeek account or API key when it chats on DeepSeek; otherwise the DeepSeek API key, then the signed-in DeepSeek account. Charges may apply. A {baseURL} or {apiKeyEnv} set in YAML takes precedence.",
+  billingAccount: 'Signed-in DeepSeek account',
+  billingAccountHint: 'Bills the signed-in DeepSeek account; unavailable when signed out. A {baseURL} or {apiKeyEnv} set in YAML takes precedence.',
+  billingApiKey: 'DeepSeek API key',
+  billingApiKeyHint: 'Uses the key and address of the DeepSeek (API key) provider on the Models page; unavailable without a key. A {baseURL} or {apiKeyEnv} set in YAML takes precedence.',
 }
 
 /** Simplified Chinese copy. */
@@ -91,6 +99,13 @@ export const zh: Record<WebSearchSettingsLocaleKey, string> = {
   saveFailed: '本部署没有接受这些值，已保留供你修改。',
   invalidNumber: '请填数字；留空表示使用默认值。',
   invalidCount: '请填 1–50 的整数；留空表示使用默认值。',
+  billing: '计费方式',
+  billingAuto: '自动',
+  billingAutoHint: '会话使用 DeepSeek 模型时沿用其账号或 API Key；否则依次使用 DeepSeek API Key、已登录的 DeepSeek 账号。可能产生费用。YAML 中设置了 {baseURL} 或 {apiKeyEnv} 时以 YAML 为准。',
+  billingAccount: '已登录的 DeepSeek 账号',
+  billingAccountHint: '由已登录的 DeepSeek 账号计费，未登录时不可用。YAML 中设置了 {baseURL} 或 {apiKeyEnv} 时以 YAML 为准。',
+  billingApiKey: 'DeepSeek API Key',
+  billingApiKeyHint: '使用模型页中 DeepSeek（API Key）提供方的 Key 和地址，未配置 Key 时不可用。YAML 中设置了 {baseURL} 或 {apiKeyEnv} 时以 YAML 为准。',
 }
 
 /**
@@ -139,6 +154,13 @@ export const ja = {
   'saveFailed': 'デプロイがこれらの値を受け入れませんでした。修正用に残されています。',
   'invalidNumber': '数値を入力するか、デフォルトを使用するには空欄にしてください。',
   'invalidCount': '1〜50 の整数を入力するか、デフォルトを使用するには空欄にしてください。',
+  'billing': '課金方法',
+  'billingAuto': '自動',
+  'billingAutoHint': '会話が DeepSeek モデルを使う場合は、そのアカウントまたは API キーを使います。それ以外は DeepSeek API キー、次にログイン中の DeepSeek アカウントを使います。料金が発生する場合があります。YAML で {baseURL} または {apiKeyEnv} を設定している場合は YAML が優先されます。',
+  'billingAccount': 'ログイン中の DeepSeek アカウント',
+  'billingAccountHint': 'ログイン中の DeepSeek アカウントに課金します。ログアウト中は使用できません。YAML で {baseURL} または {apiKeyEnv} を設定している場合は YAML が優先されます。',
+  'billingApiKey': 'DeepSeek API キー',
+  'billingApiKeyHint': 'モデルページの DeepSeek（API キー）プロバイダーのキーとアドレスを使います。キーがない場合は使用できません。YAML で {baseURL} または {apiKeyEnv} を設定している場合は YAML が優先されます。',
 } satisfies Record<keyof typeof en, string>
 
 /** Spanish dictionary, checked against the English keys. */
@@ -178,6 +200,13 @@ export const es = {
   saveFailed: 'El despliegue no aceptó estos valores; quedaron para que usted los corrigiera.',
   invalidNumber: 'Ingrese un número o déjelo en blanco para usar el valor predeterminado.',
   invalidCount: 'Ingrese un número entero del 1 al 50 o déjelo en blanco para usar el valor predeterminado.',
+  billing: 'Facturación',
+  billingAuto: 'Automática',
+  billingAutoHint: 'Usa la cuenta o la clave de API de DeepSeek de la conversación cuando chatea en DeepSeek; si no, la clave de API de DeepSeek y después la cuenta de DeepSeek conectada. Puede generar cargos. Si YAML define {baseURL} o {apiKeyEnv}, prevalece YAML.',
+  billingAccount: 'Cuenta de DeepSeek conectada',
+  billingAccountHint: 'Factura a la cuenta de DeepSeek conectada; no está disponible sin una sesión iniciada. Si YAML define {baseURL} o {apiKeyEnv}, prevalece YAML.',
+  billingApiKey: 'Clave de API de DeepSeek',
+  billingApiKeyHint: 'Usa la clave y la dirección del proveedor DeepSeek (clave de API) de la página Modelos; no está disponible sin una clave. Si YAML define {baseURL} o {apiKeyEnv}, prevalece YAML.',
 } satisfies Record<keyof typeof en, string>
 
 /** French dictionary, checked against the English keys. */
@@ -217,6 +246,13 @@ export const fr = {
   saveFailed: "Le déploiement n'a pas accepté ces valeurs ; ils vous ont été laissés à corriger.",
   invalidNumber: 'Entrez un numéro ou laissez ce champ vide pour utiliser la valeur par défaut.',
   invalidCount: 'Entrez un nombre entier compris entre 1 et 50 ou laissez vide pour utiliser la valeur par défaut.',
+  billing: 'Facturation',
+  billingAuto: 'Automatique',
+  billingAutoHint: "Utilise le compte ou la clé API DeepSeek de la conversation lorsqu'elle discute sur DeepSeek ; sinon la clé API DeepSeek, puis le compte DeepSeek connecté. Des frais peuvent s'appliquer. Si YAML définit {baseURL} ou {apiKeyEnv}, YAML prévaut.",
+  billingAccount: 'Compte DeepSeek connecté',
+  billingAccountHint: 'Facture le compte DeepSeek connecté ; indisponible une fois déconnecté. Si YAML définit {baseURL} ou {apiKeyEnv}, YAML prévaut.',
+  billingApiKey: 'Clé API DeepSeek',
+  billingApiKeyHint: "Utilise la clé et l'adresse du fournisseur DeepSeek (clé API) de la page Modèles ; indisponible sans clé. Si YAML définit {baseURL} ou {apiKeyEnv}, YAML prévaut.",
 } satisfies Record<keyof typeof en, string>
 
 /** German dictionary, checked against the English keys. */
@@ -256,6 +292,13 @@ export const de = {
   saveFailed: 'Die Bereitstellung hat diese Werte nicht akzeptiert. Sie mussten sie korrigieren.',
   invalidNumber: 'Geben Sie eine Zahl ein oder lassen Sie das Feld leer, um den Standardwert zu verwenden.',
   invalidCount: 'Geben Sie eine Ganzzahl zwischen 1 und 50 ein oder lassen Sie das Feld leer, um den Standardwert zu verwenden.',
+  billing: 'Abrechnung',
+  billingAuto: 'Automatisch',
+  billingAutoHint: 'Verwendet das DeepSeek-Konto oder den DeepSeek-API-Schlüssel der Unterhaltung, wenn sie DeepSeek nutzt; sonst den DeepSeek-API-Schlüssel, dann das angemeldete DeepSeek-Konto. Es können Kosten anfallen. Ist in YAML {baseURL} oder {apiKeyEnv} gesetzt, gilt YAML.',
+  billingAccount: 'Angemeldetes DeepSeek-Konto',
+  billingAccountHint: 'Rechnet über das angemeldete DeepSeek-Konto ab; nicht verfügbar, wenn abgemeldet. Ist in YAML {baseURL} oder {apiKeyEnv} gesetzt, gilt YAML.',
+  billingApiKey: 'DeepSeek-API-Schlüssel',
+  billingApiKeyHint: 'Verwendet Schlüssel und Adresse des Anbieters DeepSeek (API-Schlüssel) auf der Seite Modelle; ohne Schlüssel nicht verfügbar. Ist in YAML {baseURL} oder {apiKeyEnv} gesetzt, gilt YAML.',
 } satisfies Record<keyof typeof en, string>
 
 /** Russian dictionary, checked against the English keys. */
@@ -295,6 +338,13 @@ export const ru = {
   saveFailed: 'Развертывание не приняло эти значения; их оставили вам на исправление.',
   invalidNumber: 'Введите число или оставьте поле пустым, чтобы использовать значение по умолчанию.',
   invalidCount: 'Введите целое число от 1 до 50 или оставьте поле пустым, чтобы использовать значение по умолчанию.',
+  billing: 'Оплата',
+  billingAuto: 'Автоматически',
+  billingAutoHint: 'Использует аккаунт или ключ API DeepSeek из разговора, если он идёт в DeepSeek; иначе ключ API DeepSeek, затем активный аккаунт DeepSeek. Возможна оплата. Если в YAML задан {baseURL} или {apiKeyEnv}, действует YAML.',
+  billingAccount: 'Активный аккаунт DeepSeek',
+  billingAccountHint: 'Оплачивается активным аккаунтом DeepSeek; недоступно без входа. Если в YAML задан {baseURL} или {apiKeyEnv}, действует YAML.',
+  billingApiKey: 'Ключ API DeepSeek',
+  billingApiKeyHint: 'Использует ключ и адрес поставщика DeepSeek (ключ API) на странице моделей; недоступно без ключа. Если в YAML задан {baseURL} или {apiKeyEnv}, действует YAML.',
 } satisfies Record<keyof typeof en, string>
 
 /** Portuguese dictionary, checked against the English keys. */
@@ -334,4 +384,11 @@ export const pt = {
   saveFailed: 'A implantação não aceitou esses valores; eles foram deixados para você corrigir.',
   invalidNumber: 'Insira um número ou deixe em branco para usar o padrão.',
   invalidCount: 'Insira um número inteiro de 1 a 50 ou deixe em branco para usar o padrão.',
+  billing: 'Cobrança',
+  billingAuto: 'Automática',
+  billingAutoHint: 'Usa a conta ou a chave de API da DeepSeek da conversa quando ela usa a DeepSeek; caso contrário, a chave de API da DeepSeek e depois a conta DeepSeek conectada. Pode gerar cobranças. Se o YAML definir {baseURL} ou {apiKeyEnv}, o YAML prevalece.',
+  billingAccount: 'Conta DeepSeek conectada',
+  billingAccountHint: 'Cobra da conta DeepSeek conectada; indisponível sem sessão iniciada. Se o YAML definir {baseURL} ou {apiKeyEnv}, o YAML prevalece.',
+  billingApiKey: 'Chave de API da DeepSeek',
+  billingApiKeyHint: 'Usa a chave e o endereço do provedor DeepSeek (chave de API) da página Modelos; indisponível sem uma chave. Se o YAML definir {baseURL} ou {apiKeyEnv}, o YAML prevalece.',
 } satisfies Record<keyof typeof en, string>

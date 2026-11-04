@@ -75,14 +75,14 @@ export class DeepSeekSearchApiProvider implements WebSearchProvider {
   private readonly starts: number[] = []
   /** Picker description: what this provider suits and what it costs or cannot do. */
   readonly description: NonNullable<WebSearchProvider['description']> = {
-    en: 'Queries the search endpoint directly for titles, URLs, and snippets without an extra model call. Uses the DeepSeek account of the current conversation, or a DeepSeek API key, and may incur API charges.',
-    zh: '直接请求搜索接口返回标题、URL 与摘要，无需额外调用模型。使用当前会话的 DeepSeek 账号或 DeepSeek API Key，可能产生计费',
-    ja: '追加のモデル呼び出しなしで検索エンドポイントに直接問い合わせ、タイトル、URL、スニペットを返します。現在の会話の DeepSeek アカウント、または DeepSeek API キーを使用し、API 料金が発生する場合があります。',
-    es: 'Consulta directamente el punto de conexión de búsqueda y devuelve títulos, URL y fragmentos sin una llamada adicional al modelo. Usa la cuenta de DeepSeek de la conversación actual o una clave de API de DeepSeek, y puede generar cargos de API.',
-    fr: "Interroge directement le point de terminaison de recherche pour obtenir titres, URL et extraits, sans appel de modèle supplémentaire. Utilise le compte DeepSeek de la conversation en cours ou une clé API DeepSeek, et peut entraîner des frais d'API.",
-    de: 'Fragt den Suchendpunkt direkt nach Titeln, URLs und Ausschnitten ab, ohne zusätzlichen Modellaufruf. Verwendet das DeepSeek-Konto der aktuellen Unterhaltung oder einen DeepSeek-API-Schlüssel und kann API-Kosten verursachen.',
-    ru: 'Напрямую запрашивает поисковый сервис и возвращает заголовки, URL и фрагменты без дополнительного вызова модели. Использует учётную запись DeepSeek текущего разговора или ключ API DeepSeek; возможна оплата API.',
-    pt: 'Consulta diretamente o endpoint de pesquisa e retorna títulos, URLs e trechos sem uma chamada extra ao modelo. Usa a conta DeepSeek da conversa atual ou uma chave de API da DeepSeek e pode gerar cobranças de API.',
+    en: 'Queries the search endpoint directly for titles, URLs, and snippets without an extra model call. Bills the DeepSeek account or a DeepSeek API key, as its billing setting chooses, and may incur API charges.',
+    zh: '直接请求搜索接口返回标题、URL 与摘要，无需额外调用模型。按计费方式设置使用 DeepSeek 账号或 DeepSeek API Key 计费，可能产生费用',
+    ja: '追加のモデル呼び出しなしで検索エンドポイントに直接問い合わせ、タイトル、URL、スニペットを返します。課金方法の設定に応じて DeepSeek アカウントまたは DeepSeek API キーに課金され、API 料金が発生する場合があります。',
+    es: 'Consulta directamente el punto de conexión de búsqueda y devuelve títulos, URL y fragmentos sin una llamada adicional al modelo. Factura a la cuenta de DeepSeek o a una clave de API de DeepSeek, según el ajuste de facturación, y puede generar cargos de API.',
+    fr: "Interroge directement le point de terminaison de recherche pour obtenir titres, URL et extraits, sans appel de modèle supplémentaire. Facture le compte DeepSeek ou une clé API DeepSeek selon le paramètre de facturation, et peut entraîner des frais d'API.",
+    de: 'Fragt den Suchendpunkt direkt nach Titeln, URLs und Ausschnitten ab, ohne zusätzlichen Modellaufruf. Rechnet je nach Abrechnungseinstellung über das DeepSeek-Konto oder einen DeepSeek-API-Schlüssel ab und kann API-Kosten verursachen.',
+    ru: 'Напрямую запрашивает поисковый сервис и возвращает заголовки, URL и фрагменты без дополнительного вызова модели. Оплачивается учётной записью DeepSeek или ключом API DeepSeek в зависимости от настройки оплаты; возможна оплата API.',
+    pt: 'Consulta diretamente o endpoint de pesquisa e retorna títulos, URLs e trechos sem uma chamada extra ao modelo. Cobra da conta DeepSeek ou de uma chave de API da DeepSeek, conforme a configuração de cobrança, e pode gerar cobranças de API.',
   }
 
   /**

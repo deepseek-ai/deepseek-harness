@@ -24,13 +24,13 @@ function field(text: string, rest: Partial<SettingsFieldState> = {}): SettingsFi
 /** Each official provider's registered description; the page shows the active language's entry. */
 const DESCRIPTIONS: Record<string, { en: string; zh: string }> = {
   'deepseek-search-api': {
-    en: 'Search API description. Uses the DeepSeek account of the current conversation, or a DeepSeek API key, and may incur API charges.',
-    zh: 'Search API 说明。使用当前会话的 DeepSeek 账号或 DeepSeek API Key，可能产生计费',
+    en: 'Search API description. Bills the DeepSeek account or a DeepSeek API key, as its billing setting chooses, and may incur API charges.',
+    zh: 'Search API 说明。按计费方式设置使用 DeepSeek 账号或 DeepSeek API Key 计费，可能产生费用',
   },
   'http': { en: 'Direct fetch description.', zh: '本机获取说明' },
   'deepseek-fetch-api': {
-    en: 'Fetch API description. Uses the DeepSeek account of the current conversation, or a DeepSeek API key, may incur API charges.',
-    zh: 'Fetch API 说明。使用当前会话的 DeepSeek 账号或 DeepSeek API Key，可能产生计费',
+    en: 'Fetch API description. Bills the DeepSeek account or a DeepSeek API key, as its billing setting chooses, and may incur API charges.',
+    zh: 'Fetch API 说明。按计费方式设置使用 DeepSeek 账号或 DeepSeek API Key 计费，可能产生费用',
   },
 }
 
@@ -54,6 +54,8 @@ function shipped(): WebSearchCardState {
     search: { selected: 'deepseek-search-api', options: SEARCH_OPTIONS, kind: 'deepseek', auto: false },
     fetch: { selected: 'http', options: FETCH_OPTIONS, kind: 'local', auto: false },
     count: field('10'),
+    searchBilling: { value: 'auto', overridden: false },
+    fetchBilling: undefined,
     messagesBaseURL: field(''),
     maxUses: field('5'),
     legacyKey: undefined,
@@ -63,7 +65,9 @@ function shipped(): WebSearchCardState {
 /** Both DeepSeek API providers selected. */
 function apis(): WebSearchCardState {
   const base = shipped()
-  return { ...base, fetch: { ...base.fetch, selected: 'deepseek-fetch-api', kind: 'deepseek' } }
+  return {
+    ...base, fetch: { ...base.fetch, selected: 'deepseek-fetch-api', kind: 'deepseek' }, fetchBilling: { value: 'account', overridden: true },
+  }
 }
 
 /** Legacy Messages search selected, with its key control. */
@@ -72,6 +76,7 @@ function legacy(key: Partial<NonNullable<WebSearchCardState['legacyKey']>> = {})
   return {
     ...base,
     search: { ...base.search, selected: 'deepseek-official', kind: 'legacy' },
+    searchBilling: undefined,
     legacyKey: { ...field(''), ref: 'DEEPSEEK_API_KEY', configured: false, writable: true, ...key },
   }
 }
@@ -83,12 +88,14 @@ function plugins(): WebSearchCardState {
     ...base,
     search: { selected: 'exa', kind: 'plugin', auto: false, options: [{ id: 'exa', title: 'Exa', missing: false }] },
     fetch: { selected: '', kind: 'none', auto: false, options: [] },
+    searchBilling: undefined,
   }
 }
 
 function cardActions() {
   return {
-    edit: vi.fn(), resetField: vi.fn(), selectProvider: vi.fn(), retryProviders: vi.fn(), save: vi.fn(), discard: vi.fn(),
+    edit: vi.fn(), resetField: vi.fn(), selectProvider: vi.fn(), selectBilling: vi.fn(), retryProviders: vi.fn(), save: vi.fn(),
+    discard: vi.fn(),
   }
 }
 
@@ -106,6 +113,80 @@ const fetchMenu = () => screen.getByRole('button', { name: new RegExp(`^${en.fet
 const region = (name: string) => within(screen.getByRole('region', { name }))
 /** The text of every paragraph in a section, in order. */
 const paragraphs = (name: string) => [...screen.getByRole('region', { name }).querySelectorAll('p')].map(node => node.textContent)
+
+/** The billing menu of a section, named by its label followed by the selected billing. */
+const billingMenu = (name: string) => region(name).getByRole('button', { name: new RegExp(`^${en.billing} `) })
+
+describe('WebSearchCard billing', () => {
+  it('shows each DeepSeek API billing menu with the selected billing and its explanation', () => {
+    renderPage(apis())
+    expect(billingMenu(en.searchSection).textContent).toBe('Automatic')
+    expect(billingMenu(en.fetchSection).textContent).toBe('Signed-in DeepSeek account')
+    expect(region(en.searchSection).getByText(
+      "Uses the conversation's DeepSeek account or API key when it chats on DeepSeek; otherwise the DeepSeek API key, then the"
+      + ' signed-in DeepSeek account. Charges may apply. A searchBaseURL or searchApiKeyEnv set in YAML takes precedence.',
+      { exact: true },
+    )).toBeTruthy()
+    expect(region(en.fetchSection).getByText(
+      'Bills the signed-in DeepSeek account; unavailable when signed out. A fetchBaseURL or fetchApiKeyEnv set in YAML takes precedence.',
+      { exact: true },
+    )).toBeTruthy()
+  })
+
+  it('lists the three billings and selects a new one for its capability only', () => {
+    const { actions } = renderPage(apis())
+    fireEvent.click(billingMenu(en.fetchSection))
+    expect(screen.getAllByRole('menuitem').map(item => item.textContent))
+      .toEqual(['Automatic', 'Signed-in DeepSeek account', 'DeepSeek API key'])
+    fireEvent.click(screen.getByRole('menuitem', { name: 'DeepSeek API key' }))
+    fireEvent.click(billingMenu(en.searchSection))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Automatic' }))
+    expect(actions.selectBilling.mock.calls).toEqual([['fetch', 'api-key']])
+  })
+
+  it('explains API-key billing', () => {
+    renderPage({ ...shipped(), searchBilling: { value: 'api-key', overridden: true } })
+    expect(billingMenu(en.searchSection).textContent).toBe('DeepSeek API key')
+    expect(region(en.searchSection).getByText(t('billingApiKeyHint', { baseURL: 'searchBaseURL', apiKeyEnv: 'searchApiKeyEnv' }), { exact: true }))
+      .toBeTruthy()
+  })
+
+  it('shows no billing menu for local fetch, legacy search, or plugin providers', () => {
+    renderPage(legacy())
+    expect(screen.queryByRole('button', { name: new RegExp(`^${en.billing} `) })).toBeNull()
+    cleanup()
+    renderPage(plugins())
+    expect(screen.queryByRole('button', { name: new RegExp(`^${en.billing} `) })).toBeNull()
+  })
+
+  it('locks the billing menus while settings are read-only or saving', () => {
+    renderPage({ ...apis(), writable: false })
+    expect((billingMenu(en.searchSection) as HTMLButtonElement).disabled).toBe(true)
+    expect((billingMenu(en.fetchSection) as HTMLButtonElement).disabled).toBe(true)
+    cleanup()
+    renderPage({ ...apis(), saving: true })
+    expect((billingMenu(en.fetchSection) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('carries the approved billing copy in both locales', () => {
+    expect([en.billing, en.billingAuto, en.billingAccount, en.billingApiKey])
+      .toEqual(['Billing', 'Automatic', 'Signed-in DeepSeek account', 'DeepSeek API key'])
+    expect([zh.billing, zh.billingAuto, zh.billingAccount, zh.billingApiKey])
+      .toEqual(['计费方式', '自动', '已登录的 DeepSeek 账号', 'DeepSeek API Key'])
+    expect(zh.billingAutoHint).toBe('会话使用 DeepSeek 模型时沿用其账号或 API Key；否则依次使用 DeepSeek API Key、已登录的 DeepSeek 账号。可能产生费用。'
+      + 'YAML 中设置了 {baseURL} 或 {apiKeyEnv} 时以 YAML 为准。')
+    expect(zh.billingAccountHint).toBe('由已登录的 DeepSeek 账号计费，未登录时不可用。YAML 中设置了 {baseURL} 或 {apiKeyEnv} 时以 YAML 为准。')
+    expect(zh.billingApiKeyHint)
+      .toBe('使用模型页中 DeepSeek（API Key）提供方的 Key 和地址，未配置 Key 时不可用。YAML 中设置了 {baseURL} 或 {apiKeyEnv} 时以 YAML 为准。')
+    // No hint states its billing unconditionally, because YAML endpoint fields take precedence.
+    for (const dictionary of [en, zh]) {
+      for (const key of ['billingAutoHint', 'billingAccountHint', 'billingApiKeyHint'] as const) {
+        expect(dictionary[key]).toContain('{baseURL}')
+        expect(dictionary[key]).toContain('{apiKeyEnv}')
+      }
+    }
+  })
+})
 
 describe('WebSearchCard', () => {
   it('offers legacy search in both locales and renders its own settings', () => {
@@ -167,14 +248,16 @@ describe('WebSearchCard', () => {
     expect(region(en.fetchSection).queryByRole('textbox')).toBeNull()
   })
 
-  it('shows the DeepSeek Fetch API description under its provider menu', () => {
+  it('shows the DeepSeek Fetch API description under its provider menu, and its billing panel after it', () => {
     renderPage(apis())
     expect(fetchMenu().textContent).toBe(en.providerDeepSeekFetch)
     expect(region(en.fetchSection).getByText(DESCRIPTIONS['deepseek-fetch-api']!.zh)).toBeTruthy()
-    expect(screen.getAllByRole('button').filter(button => button.hasAttribute('aria-expanded')).map(button => button.id))
-      .toEqual(['plugin-config-web-search-provider', 'plugin-config-web-fetch-provider'])
-    // The Fetch section holds only its title and provider menu block.
-    expect(screen.getByRole('region', { name: en.fetchSection }).children).toHaveLength(2)
+    expect(screen.getAllByRole('button').filter(button => button.hasAttribute('aria-expanded')).map(button => button.id)).toEqual([
+      'plugin-config-web-search-provider', 'plugin-config-web-search-billing',
+      'plugin-config-web-fetch-provider', 'plugin-config-web-fetch-billing',
+    ])
+    // The Fetch section holds its title, its provider menu block, and the billing panel.
+    expect(screen.getByRole('region', { name: en.fetchSection }).children).toHaveLength(3)
     expect(region(en.fetchSection).queryByRole('textbox')).toBeNull()
   })
 
