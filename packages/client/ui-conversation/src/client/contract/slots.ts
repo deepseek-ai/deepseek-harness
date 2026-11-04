@@ -283,6 +283,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'conversation.composer': { kind: 'chain'; scope: 'session'; owner: ComposerChainProps }
     /** Workspace picker shown by the blank-session Hero. */
     'conversation.hero.workspace': { kind: 'single'; scope: 'root'; owner: EmptyWorkspaceOwnerProps }
+    /** Layers wrapping the Conversation scroll body; `hero` reports a blank, standalone home. */
+    'conversation.hero.frame': { kind: 'hoc'; scope: 'root'; owner: HeroFrameOwnerProps }
     /** Brand mark shown before the blank-session headline. */
     'conversation.hero.brand.mark': { kind: 'single'; scope: 'root'; owner: HeroBrandMarkOwnerProps }
     /** Agent-preset control staged for a New Session. */
@@ -363,6 +365,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
         'conversation.composer': { kind: 'chain'; scope: 'session' }
         'conversation.composer.bar': { kind: 'single'; scope: 'session-maybe' }
         'conversation.input.dock': { kind: 'list'; scope: 'session' }
+        'conversation.hero.frame': { kind: 'hoc'; scope: 'root' }
         'conversation.hero.brand.mark': { kind: 'single'; scope: 'root' }
         'conversation.hero.workspace': { kind: 'single'; scope: 'root' }
         'conversation.hero.agentPreset': { kind: 'single'; scope: 'session-maybe' }
@@ -623,7 +626,13 @@ export interface ComposerChainProps {
   pendingInteraction: SessionPendingInteraction | undefined
 }
 
-/** Presentation props supplied to the blank-session brand mark. */
+/** Conversation state exposed to scroll-body frame layers. */
+export interface HeroFrameOwnerProps {
+  /** Whether the body shows the blank home of a standalone, non-embedded Conversation. */
+  hero: boolean
+}
+
+/** Brand-mark presentation selected by the blank home. */
 export interface HeroBrandMarkOwnerProps {
   /** Requested square edge in pixels. */
   size: number

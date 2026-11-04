@@ -1,4 +1,6 @@
-- text: 与 origin/main 比较，包含未提交的修改
+- text: main
+- button "基准分支：origin/main": origin/main
+- text: 包含未提交的修改
 - button "创建变更请求"
 - button "分支"
 - button "全部 0 个文件" [disabled]

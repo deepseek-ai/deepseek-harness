@@ -2699,6 +2699,21 @@
     },
     {
       "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeBaseBranch",
+      "source": "packages/experimental/client-ui-forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeAutomaticBase",
+      "source": "packages/experimental/client-ui-forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeBaseBranches",
+      "source": "packages/experimental/client-ui-forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
       "symbol": "ForgeChangeRequestListState",
       "source": "packages/experimental/client-ui-forge/src/types.ts"
     },
