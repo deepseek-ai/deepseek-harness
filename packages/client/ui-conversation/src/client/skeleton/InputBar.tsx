@@ -16,7 +16,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, KeyboardEvent, MouseEvent } from 'react'
 import clsx from 'clsx'
-import { isRecord } from '@deepseek-ai/dsh-util-values'
 import {
   focusWithoutRing, IconPlusOutlineMedium, IconTriangleRightFillRegular, IconWarningOutlineRegular, isMobileDevice, Toast, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -74,7 +73,9 @@ export const InputBar = memo(function InputBar({
   const retryableFailure = useProjection('conversationContinuation') ?? undefined
   const pendingHumanInput = useProjection('inbox', inbox =>
     inbox?.['next-step'].some(message =>
-      isRecord(message) && isRecord(message.source) && message.source.kind === 'user') ?? false)
+      typeof message === 'object' && message !== null && 'source' in message
+      && typeof message.source === 'object' && message.source !== null && 'kind' in message.source
+      && message.source.kind === 'user') ?? false)
   const historyOpen = useSession(s => s.openState === 'open') ?? false
   const submissionPending = useSession(s => s.pendingSubmissions.length > 0) ?? false
   const subagent = useSession(s => s.subagent) ?? null
