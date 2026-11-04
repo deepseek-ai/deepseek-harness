@@ -94,9 +94,10 @@ export const NativeOnlyOperations = [
   operation('openPermissionSettings', { permission: z.enum(['accessibility', 'screenRecording']) }),
 ] as const
 
-/** Process identity returned only after a successful app selection. */
+/** Application selection returned only after a successful app selection. */
 export const AppResult = z.object({
-  appHandle: z.string().min(1).transform(value => value as CuaAppHandle), pid, name: z.string(), bundleId: z.string().optional(),
+  appHandle: z.string().min(1).transform(value => value as CuaAppHandle),
+  name: z.string(), bundleId: z.string().optional(), running: z.boolean(),
 })
 /** Running application records from the helper. */
 export const AppsResult = z.array(z.object({ pid, name: z.string(), bundleId: z.string().optional() }))
@@ -105,13 +106,13 @@ export const FoundAppsResult = z.array(z.intersection(z.object({ id: z.string().
   z.discriminatedUnion('isRunning', [z.object({ isRunning: z.literal(true), pid }), z.object({ isRunning: z.literal(false) })])))
 /** Current windows and their global native bounds. */
 export const WindowsResult = z.array(z.object({
-  windowId: id, pid, appName: z.string(), title: z.string(), bounds,
+  windowId: id, appName: z.string(), title: z.string(), bounds,
   isOnScreen: z.boolean(), onCurrentSpace: z.boolean().nullable(),
 }))
-/** Observed state with window and process identity for stale-target rejection. */
+/** Observed state for the selected application or window. */
 export const StateResult = z.object({
   appHandle: z.string().min(1).transform(value => value as CuaAppHandle),
-  pid, windowId: id.nullable(),
+  windowId: id.nullable(),
   focusedWindowId: id.nullable().optional(),
   snapshotId: z.string().min(1).transform(value => value as CuaSnapshotId),
   tree: z.string(), windows: WindowsResult, truncated: z.boolean(),

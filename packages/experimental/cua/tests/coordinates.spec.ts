@@ -6,7 +6,7 @@ import type { CuaAppHandle, CuaWindowInfo } from '../src/types.ts'
 
 const handle = 'app' as CuaAppHandle
 const window = (width = 640, height = 480, x = 100): CuaWindowInfo => ({
-  windowId: 7, pid: 17, appName: 'Fixture', title: 'Window', bounds: { x, y: 200, width, height }, isOnScreen: true, onCurrentSpace: true,
+  windowId: 7, appName: 'Fixture', title: 'Window', bounds: { x, y: 200, width, height }, isOnScreen: true, onCurrentSpace: true,
 })
 const call = (method: string, params: object) => Request.parse({ method, params: { appHandle: handle, windowId: 7, ...params } })
 

@@ -220,6 +220,7 @@ actor AXWorker {
             let authorization = try ApplicationAuthorization.describe(identity, name: app.name ?? selector, expectedExecutablePath: app.executablePath)
             let handle = try acquire(identity)
             var response = app.json.object ?? [:]
+            response["running"] = .bool(true)
             response["appHandle"] = .string(handle)
             response["authorization"] = authorization
             return .result(.object(response))
@@ -293,7 +294,7 @@ actor AXWorker {
             for observed in observedWindows where window == nil || observed.windowID == window {
                 observedWindowBounds[handle, default: [:]][observed.windowID] = observed.bounds
             }
-            return .result(.object(["appHandle": .string(handle), "pid": .number(Double(identity.pid)),
+            return .result(.object(["appHandle": .string(handle),
                 "windowId": window.map { .number(Double($0)) } ?? .null,
                 "focusedWindowId": projection.focusedWindowID.map { .number(Double($0)) } ?? .null,
                 "snapshotId": .string(id), "tree": .string(projection.tree), "elements": .array(projection.elements),
@@ -409,7 +410,7 @@ actor AXWorker {
     }
 
     private func pendingApplication(_ app: InstalledApplication, handle: String, authorization: JSONValue) -> JSONValue {
-        var value: [String: JSONValue] = ["appHandle": .string(handle), "pid": .null, "name": .string(app.name), "authorization": authorization]
+        var value: [String: JSONValue] = ["appHandle": .string(handle), "running": .bool(false), "name": .string(app.name), "authorization": authorization]
         if let bundleID = app.bundleID { value["bundleId"] = .string(bundleID) }
         return .object(value)
     }
@@ -427,7 +428,7 @@ actor AXWorker {
             throw NativeFailure(code: "STALE_APP", message: "Launched application does not match the approved signing identity")
         }
         targets[plan.handle] = .running(identity)
-        var value: [String: JSONValue] = ["appHandle": .string(plan.handle), "pid": .number(Double(pid)), "name": .string(app.name)]
+        var value: [String: JSONValue] = ["appHandle": .string(plan.handle), "running": .bool(true), "name": .string(app.name)]
         if let bundleID = app.bundleID { value["bundleId"] = .string(bundleID) }
         return .object(value)
     }

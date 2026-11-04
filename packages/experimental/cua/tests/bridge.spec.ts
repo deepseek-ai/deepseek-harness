@@ -11,11 +11,11 @@ import type { CuaElementId, CuaOperation } from '../src/types.ts'
 const element = (id: string): CuaElementId => brandString<CuaElementId>(id)
 
 const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC'
-const selected = { appHandle: 'app-17', pid: 17, name: 'Editor' }
+const selected = { appHandle: 'app-17', pid: 17, name: 'Editor', running: true }
 const bounds = { x: 0, y: 0, width: 640, height: 480 }
 const snapshot = {
-  appHandle: 'app-17', pid: 17, windowId: null, snapshotId: 'snapshot-1', tree: '0 button', truncated: false,
-  windows: [{ windowId: 23, pid: 17, appName: 'Editor', title: 'Document', bounds, isOnScreen: true, onCurrentSpace: null }],
+  appHandle: 'app-17', windowId: null, snapshotId: 'snapshot-1', tree: '0 button', truncated: false,
+  windows: [{ windowId: 23, appName: 'Editor', title: 'Document', bounds, isOnScreen: true, onCurrentSpace: null }],
 }
 
 it('uses the current tool binding when a retained app is called by another execution', async () => {

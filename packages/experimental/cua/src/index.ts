@@ -268,16 +268,16 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         ? await withFileLock(join(tmpdir(), 'dsh-cua-system-clipboard'), requestNative, { waitMs: config.timeoutMs, signal })
         : await requestNative()
       if (method === 'getApp') {
-        const prepared = AppResult.extend({ pid: AppResult.shape.pid.nullable() }).parse(result)
+        const prepared = AppResult.parse(result)
         const { authorization, applicationIcon } = z.object({ authorization: ApplicationAuthorizationResult,
           applicationIcon: ApplicationIcon.optional(),
         }).parse(result)
         await access.select(agent, client, prepared.appHandle, authorization, signal, applicationIcon)
         signal.throwIfAborted()
-        const selected = prepared.pid === null
-          ? AppResult.parse(await access.run(client, prepared.appHandle, signal,
+        const selected = prepared.running
+          ? prepared
+          : AppResult.parse(await access.run(client, prepared.appHandle, signal,
             signal => client.request('launchApp', { appHandle: prepared.appHandle }, signal, execution.callId)))
-          : AppResult.parse(prepared)
         if (selected.appHandle !== prepared.appHandle) throw new NativeError('NATIVE_PROTOCOL', 'Launched application has another handle')
         return selected
       }

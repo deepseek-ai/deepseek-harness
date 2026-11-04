@@ -105,7 +105,7 @@ async function setup(model?: { provider: string; model: string }) {
 async function selectApplication(f: Awaited<ReturnType<typeof setup>>) {
   await f.ctx.plugin(UserQuestions)
   f.ctx.on('user-questions/request', async () => ({ answers: [{ id: 'cua-app-access', selected: ['Allow for this session'] }] }))
-  native.request.mockResolvedValueOnce({ appHandle: 'app-one', pid: 17, name: 'Fixture',
+  native.request.mockResolvedValueOnce({ appHandle: 'app-one', name: 'Fixture', running: true,
     authorization: { id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app', persistable: false } })
   expect((await f.execute('getApp', { selector: 'Fixture' })).isError).toBe(false)
 }
@@ -124,10 +124,10 @@ it.each(['Allow for this session', 'Deny'])('obtains %s before a stopped applica
   onTestFinished(() => { answer.resolve({ answers: [{ id: 'cua-app-access', selected: ['Deny'] }] }) })
   f.ctx.on('user-questions/request', async () => { asked.resolve(); return answer.promise })
   native.request.mockImplementation(async (method: string) => method === 'getApp'
-    ? { appHandle: 'pending-app', pid: null, name: 'Fixture', authorization: {
+    ? { appHandle: 'pending-app', name: 'Fixture', running: false, authorization: {
       id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app', persistable: false,
     } }
-    : { appHandle: 'pending-app', pid: 17, name: 'Fixture' })
+    : { appHandle: 'pending-app', name: 'Fixture', running: true })
   const pending = f.execute('getApp', { selector: 'Fixture' })
   await asked.promise
   expect(native.request.mock.calls.map(call => call[0])).toEqual(['getApp'])
@@ -135,16 +135,16 @@ it.each(['Allow for this session', 'Deny'])('obtains %s before a stopped applica
   const result = await pending
   expect(result.isError).toBe(choice === 'Deny')
   expect(native.request.mock.calls.map(call => call[0])).toEqual(choice === 'Deny' ? ['getApp'] : ['getApp', 'launchApp'])
-  if (choice !== 'Deny') expect(result.value).toMatchObject({ appHandle: 'pending-app', pid: 17 })
+  if (choice !== 'Deny') expect(result.value).toMatchObject({ appHandle: 'pending-app', running: true })
 })
 
 it('rejects a launch result that changes the approved handle', async () => {
   const f = await setup()
   await f.ctx.plugin(UserQuestions)
   f.ctx.on('user-questions/request', async () => ({ answers: [{ id: 'cua-app-access', selected: ['Allow for this session'] }] }))
-  native.request.mockResolvedValueOnce({ appHandle: 'pending-app', pid: null, name: 'Fixture', authorization: {
+  native.request.mockResolvedValueOnce({ appHandle: 'pending-app', name: 'Fixture', running: false, authorization: {
     id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app', persistable: false,
-  } }).mockResolvedValueOnce({ appHandle: 'another-app', pid: 17, name: 'Fixture' })
+  } }).mockResolvedValueOnce({ appHandle: 'another-app', name: 'Fixture', running: true })
   const result = await f.execute('getApp', { selector: 'Fixture' })
   expect(result.isError).toBe(true)
   expect(JSON.stringify(result.content)).toContain('another handle')
@@ -369,8 +369,8 @@ it.each([false, true])('rejects an ended Agent with prior helper acquisition %s'
 it('supplies configured resource bounds and clears registrations on unload', async () => {
   const f = await setup()
   await selectApplication(f)
-  native.request.mockResolvedValueOnce({ appHandle: 'app-one', pid: 17, windowId: null, snapshotId: 's', tree: 'Window', truncated: false,
-    windows: [{ windowId: 7, pid: 17, appName: 'Fixture', title: 'Window', bounds: imageMetadata.bounds, isOnScreen: true, onCurrentSpace: true }] })
+  native.request.mockResolvedValueOnce({ appHandle: 'app-one', windowId: null, snapshotId: 's', tree: 'Window', truncated: false,
+    windows: [{ windowId: 7, appName: 'Fixture', title: 'Window', bounds: imageMetadata.bounds, isOnScreen: true, onCurrentSpace: true }] })
   await f.execute('getState', { appHandle: 'app-one' })
   expect(native.request).toHaveBeenLastCalledWith('getState', { appHandle: 'app-one', maxElements: 64, maxDepth: 8 }, expect.any(AbortSignal), ToolCallId('lifecycle-2'))
   await f.execute('drag', { appHandle: 'app-one', windowId: 7, fromX: 1, fromY: 2, toX: 3, toY: 4, relative: true })
@@ -387,7 +387,7 @@ it('supplies configured resource bounds and clears registrations on unload', asy
 it('keeps native element diagnostics out of model-visible state and structured tool values', async () => {
   const f = await setup()
   await selectApplication(f)
-  const visible = { appHandle: 'app-one', pid: 17, windowId: null, focusedWindowId: null,
+  const visible = { appHandle: 'app-one', windowId: null, focusedWindowId: null,
     snapshotId: 'state-one', tree: '- [0] AXButton "Save"', windows: [], truncated: false }
   native.request.mockResolvedValue({ ...visible, elements: [{ elementId: '0', role: 'AXButton', bounds: [10, 20, 30, 40] }] })
   const result = await f.execute('getState', { appHandle: 'app-one' })
@@ -419,7 +419,7 @@ it('preserves screenshot attachments and invalidates pixel coordinates when wind
   const stored = await f.ctx.attachments.readImage(image.attachment)
   expect(Buffer.from(stored.data).toString('base64')).toBe(data)
   expect(result.value).toMatchObject({ ...metadata, coordinateSpace: 'screenshot-pixels', mimeType: 'image/png', data })
-  const windows = [{ windowId: 7, pid: 17, appName: 'Fixture', title: 'Window',
+  const windows = [{ windowId: 7, appName: 'Fixture', title: 'Window',
     bounds: { ...metadata.bounds, width: 2 }, isOnScreen: true, onCurrentSpace: true }]
   native.request.mockResolvedValueOnce(windows)
   const listed = await f.execute('listWindows', { appHandle: 'app-one' })
@@ -716,7 +716,7 @@ it('stores signed application consent separately from configuration', async () =
   await f.ctx.plugin(UserQuestions)
   f.ctx.on('user-questions/request', async () => ({ answers: [{ id: 'cua-app-access', selected: ['Always allow'] }] }))
   const authorization = { id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app', persistable: true }
-  native.request.mockResolvedValue({ appHandle: 'signed-app', pid: 17, name: 'Fixture', authorization })
+  native.request.mockResolvedValue({ appHandle: 'signed-app', name: 'Fixture', running: true, authorization })
   expect((await f.execute('getApp', { selector: 'Fixture' })).isError).toBe(false)
   expect(await readFile(profile.patchPath, 'utf8')).not.toContain(authorization.id)
   const files = await readdir(join(profile.home, 'storages'))
@@ -746,7 +746,7 @@ it('uses configured signed application grants without requesting a human answer'
   await f.provider.dispose()
   const grant = { id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app' }
   await f.ctx.plugin(NativeProvider, { ...config, allowedApps: [grant] })
-  native.request.mockResolvedValueOnce({ appHandle: 'saved-app', pid: 17, name: 'Fixture', authorization: { ...grant, persistable: true } })
+  native.request.mockResolvedValueOnce({ appHandle: 'saved-app', name: 'Fixture', running: true, authorization: { ...grant, persistable: true } })
   expect((await f.execute('getApp', { selector: 'Fixture' })).isError).toBe(false)
   native.request.mockResolvedValue({ dispatched: true })
   expect((await f.execute('activate', { appHandle: 'saved-app' })).isError).toBe(false)

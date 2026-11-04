@@ -109,9 +109,9 @@ function serve() {
 function createApplicationState(socket, record, application, captureBroker, connectionId) {
   const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC'
   const scope = connectionId === 1 ? 'fixture' : `fixture-${connectionId}`
-  const app = { appHandle: `${scope}-app`, pid: 9, name: 'Fixture', bundleId: 'test.fixture' }
+  const app = { appHandle: `${scope}-app`, pid: 9, name: 'Fixture', bundleId: 'test.fixture', running: true }
   const bounds = { x: 40, y: 60, width: 320, height: 200 }
-  const window = { windowId: 7, pid: 9, appName: 'Fixture', title: 'CUA fixture', bounds, isOnScreen: true, onCurrentSpace: true }
+  const window = { windowId: 7, appName: 'Fixture', title: 'CUA fixture', bounds, isOnScreen: true, onCurrentSpace: true }
   const axlessWindow = { ...window, windowId: 8, title: 'AXless canvas' }
   const transformedWindow = { ...window, windowId: 9, title: 'Transformed window', bounds: { x: 16, y: 512, width: 131, height: 145 } }
   const screenshotConfig = new URL('./fixture-screenshot.json', import.meta.url)
@@ -136,7 +136,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
     if (method === 'getApp') {
       if (params.selector === 'Denied Fixture' || params.selector === 'Revocable Fixture') {
         const denied = params.selector === 'Denied Fixture'
-        return { appHandle: denied ? 'denied-app' : 'revoked-app', pid: 17, name: params.selector,
+        return { appHandle: denied ? 'denied-app' : 'revoked-app', name: params.selector, running: true,
           authorization: { id: (denied ? 'b' : 'c').repeat(64), name: params.selector,
             executablePath: denied ? '/fixture/denied' : '/fixture/revocable', persistable: false } }
       }
@@ -170,9 +170,9 @@ function createApplicationState(socket, record, application, captureBroker, conn
       const axless = params.windowId === 8
       const snapshotId = `${scope}-snapshot-${generation}`
       snapshots.set(params.windowId ?? null, { snapshotId, windowId: params.windowId ?? null, axless })
-      if (axless) return { appHandle: app.appHandle, pid: 9, windowId: 8, snapshotId,
+      if (axless) return { appHandle: app.appHandle, windowId: 8, snapshotId,
         tree: '', elements: [], windows: [axlessWindow], truncated: false }
-      return { appHandle: app.appHandle, pid: 9, windowId: params.windowId ?? null,
+      return { appHandle: app.appHandle, windowId: params.windowId ?? null,
         snapshotId: `${scope}-snapshot-${generation}`, tree: `AX scope=${params.windowId === undefined ? 'application' : 'window'} offsets=UTF-16${params.details ? ' bounds=global-points' : ''}\n- [0] AXButton "Increment"${params.details ? ' id="increment" actions=["AXPress"] bounds=[60,80,100,20]' : ''}\n- [1] AXTextField valueWritable=true selectionWritable=true value=${JSON.stringify(application.value)} placeholder="Fixture text"\n- AXStaticText "Count: ${application.count}"${application.hovering ? '\n- AXStaticText "Hover information"' : ''}\n- [2] AXMenuBarItem "File"${params.includeMenus ? '\n  - [3] AXMenuItem "Fixture command"' : '\nMenu contents omitted; request includeMenus=true to expand.'}`,
         elements: [{ elementId: '0', role: 'AXButton', title: 'Increment', value: null, description: null,
           identifier: null, bounds: [60, 80, 100, 20], actions: ['AXPress'], enabled: true }],

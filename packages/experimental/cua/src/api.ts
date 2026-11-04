@@ -60,6 +60,10 @@ async function unsupportedKeyboardInput(): Promise<never> {
   throw new Error('Keyboard input is not supported at this scope.')
 }
 
+async function emit(sink: CuaObservationSink | undefined, value: object, options?: CuaObservationOptions): Promise<void> {
+  if (options?.emit !== false) await sink?.text(JSON.stringify(value))
+}
+
 /**
  * Create app/window objects using the caller's authorized dispatcher.
  * @param dispatch - Current tool authority; rejects propagate without retries.
@@ -68,57 +72,34 @@ async function unsupportedKeyboardInput(): Promise<never> {
  */
 export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): CuaApi {
   const call = validatedCall(dispatch)
-  const action = async (method: CuaOperation['method'], params: Record<string, JsonValue>) => ActionResult.parse(await call(method, params))
-  async function emit(value: object, options?: CuaObservationOptions): Promise<void> {
-    if (options?.emit !== false) await sink?.text(JSON.stringify(value))
-  }
   const objects = createCuaObjects(dispatch, sink)
 
   const api: CuaApi = {
     async getCapabilities(options) {
       const result = CapabilitiesResult.parse(await call('getCapabilities', {}))
-      await emit(result, options)
+      await emit(sink, result, options)
       return result
     },
     async listApps(options) {
       const result = AppsResult.parse(await call('listApps', {})).map(app => ({
         id: app.bundleId || String(app.pid), displayName: app.name, isRunning: true as const, pid: app.pid,
       }))
-      await emit(result, options)
+      await emit(sink, result, options)
       return result
     },
     async findApps(query, options) {
       const result = FoundAppsResult.parse(await call('findApps', { query }))
-      await emit(result, options)
+      await emit(sink, result, options)
       return result
     },
     async getState(options) {
       const result = { apps: await api.listApps({ emit: false }), browsers: [] as [] }
-      await emit(result, options)
+      await emit(sink, result, options)
       return result
     },
     async getApp(selector) {
-      const { appHandle, pid } = AppResult.parse(await call('getApp', { selector }))
-      const app: CuaApp = {
-        ...objects.createSurface(appHandle, pid), pid, appHandle,
-        async activate() { return action('activate', { appHandle }) },
-        async getWindows(options) {
-          const windows = WindowsResult.parse(await call('listWindows', { appHandle }))
-          if (windows.some(window => window.pid !== pid)) throw new Error('Native windows belong to another application')
-          await emit(windows, options)
-          return windows
-        },
-        async getWindow(windowId): Promise<CuaWindow> {
-          const window = objects.createWindow(appHandle, pid, windowId)
-          await window.getAccessibilityTree({ emit: false })
-          return window
-        },
-        async typeText(text) { return action('typeText', { appHandle, text }) },
-        async paste(text, options) { return action('paste', { appHandle, text,
-          ...options?.format === undefined ? {} : { format: options.format },
-        }) },
-        async pressKey(key) { return action('pressKey', { appHandle, ...keyChord(key) }) },
-      }
+      const { appHandle } = AppResult.parse(await call('getApp', { selector }))
+      const app = objects.createApp(appHandle)
       await app.getAccessibilityTree({ emit: false })
       return app
     },
@@ -126,19 +107,13 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
   return api
 }
 
-/**
- * Create application and window objects sharing their latest observations.
- * @param dispatch Logged operation dispatcher.
- * @param sink Optional observation output.
- * @returns Surface and window constructors with observation state owned by this factory.
- */
-export function createCuaObjects(dispatch: CuaDispatch, sink: CuaObservationSink | undefined): {
-  createSurface(appHandle: CuaAppHandle, pid: number, selectedWindow?: number): CuaSurface
-  createWindow(appHandle: CuaAppHandle, pid: number, windowId: number): CuaWindow
+function createCuaObjects(dispatch: CuaDispatch, sink: CuaObservationSink | undefined): {
+  createApp(appHandle: CuaAppHandle): CuaApp
+  createWindow(appHandle: CuaAppHandle, windowId: number): CuaWindow
 } {
   const call = validatedCall(dispatch)
   const action = async (method: CuaOperation['method'], params: Record<string, JsonValue>) => ActionResult.parse(await call(method, params))
-  const observed = new Map<CuaAppHandle, ReturnType<typeof StateResult.parse>>()
+  const observed = new Map<CuaAppHandle, { snapshotId: string; windowId: number | undefined }>()
   function elementParams(appHandle: CuaAppHandle): Record<string, JsonValue> {
     const current = observed.get(appHandle)
     if (current === undefined) throw new Error('Read getAccessibilityTree before using this surface')
@@ -148,11 +123,11 @@ export function createCuaObjects(dispatch: CuaDispatch, sink: CuaObservationSink
     const current = observed.get(appHandle)
     return {
       appHandle, windowId,
-      ...current !== undefined && (current.windowId === null || current.windowId === windowId)
+      ...current !== undefined && (current.windowId === undefined || current.windowId === windowId)
         ? { snapshotId: current.snapshotId } : {},
     }
   }
-  function createSurface(appHandle: CuaAppHandle, pid: number, selectedWindow?: number): CuaSurface {
+  function createSurface(appHandle: CuaAppHandle, selectedWindow?: number): CuaSurface {
     return {
       async show() {
         return ShowResult.parse(await call('show', { appHandle,
@@ -166,11 +141,7 @@ export function createCuaObjects(dispatch: CuaDispatch, sink: CuaObservationSink
           ...options?.includeMenus === undefined ? {} : { includeMenus: options.includeMenus },
           ...options?.details === undefined ? {} : { details: options.details },
         }))
-        if (state.appHandle !== appHandle || state.pid !== pid || state.windowId !== (selectedWindow ?? null)) {
-          throw new Error('Native observation belongs to another application or window')
-        }
-        if (state.windows.some(window => window.pid !== pid)) throw new Error('Native windows belong to another application')
-        observed.set(appHandle, state)
+        observed.set(appHandle, { snapshotId: state.snapshotId, windowId: selectedWindow })
         if (options?.emit !== false) await sink?.text(state.tree)
         return state.tree
       },
@@ -198,12 +169,11 @@ export function createCuaObjects(dispatch: CuaDispatch, sink: CuaObservationSink
       pressKey: unsupportedKeyboardInput,
     }
   }
-  function createWindow(appHandle: CuaAppHandle, pid: number, windowId: number): CuaWindow {
+  function createWindow(appHandle: CuaAppHandle, windowId: number): CuaWindow {
     return {
-      ...createSurface(appHandle, pid, windowId), windowId,
+      ...createSurface(appHandle, windowId), windowId,
       async getScreenshot(options) {
         const image = ScreenshotResult.parse(await call('screenshot', { appHandle, windowId }))
-        if (image.windowId !== windowId) throw new Error('Native screenshot belongs to another window')
         const screenshot: CuaScreenshot = {
           bytes: Uint8Array.from(Buffer.from(image.data, 'base64')),
           mimeType: image.mimeType,
@@ -253,5 +223,26 @@ export function createCuaObjects(dispatch: CuaDispatch, sink: CuaObservationSink
       },
     }
   }
-  return { createSurface, createWindow }
+  function createApp(appHandle: CuaAppHandle): CuaApp {
+    return {
+      ...createSurface(appHandle), appHandle,
+      async activate() { return action('activate', { appHandle }) },
+      async getWindows(options) {
+        const windows = WindowsResult.parse(await call('listWindows', { appHandle }))
+        await emit(sink, windows, options)
+        return windows
+      },
+      async getWindow(windowId): Promise<CuaWindow> {
+        const window = createWindow(appHandle, windowId)
+        await window.getAccessibilityTree({ emit: false })
+        return window
+      },
+      async typeText(text) { return action('typeText', { appHandle, text }) },
+      async paste(text, options) { return action('paste', { appHandle, text,
+        ...options?.format === undefined ? {} : { format: options.format },
+      }) },
+      async pressKey(key) { return action('pressKey', { appHandle, ...keyChord(key) }) },
+    }
+  }
+  return { createApp, createWindow }
 }

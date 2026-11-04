@@ -1,6 +1,6 @@
 /** App and window behavior over a fixture operation dispatcher, without desktop access. */
 import { Buffer } from 'node:buffer'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { createCuaApi } from '../src/api.ts'
@@ -11,12 +11,12 @@ const element = (id: string): CuaElementId => brandString<CuaElementId>(id)
 
 const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC'
 const bounds = { x: -640, y: 100, width: 640, height: 480 }
-const selected = { appHandle: 'app-17', pid: 17, name: 'Editor', bundleId: 'test.editor' }
+const selected = { appHandle: 'app-17', pid: 17, name: 'Editor', bundleId: 'test.editor', running: true }
 const delivered = { dispatched: true }
 const capabilities = { platform: 'macos', sessionLocked: false, permissions: { accessibility: true, screenRecording: false }, appLevelAccessibility: true, keyboard: ['app'], methods: ['getState', 'click'], coordinateSpace: 'screenshot-pixels', browser: false }
 
 function windowInfo(windowId: number) {
-  return { windowId, pid: 17, appName: 'Editor', title: `Document ${windowId}`, bounds, isOnScreen: true, onCurrentSpace: null }
+  return { windowId, appName: 'Editor', title: `Document ${windowId}`, bounds, isOnScreen: true, onCurrentSpace: null }
 }
 
 function fixture(withSink = true) {
@@ -32,7 +32,7 @@ function fixture(withSink = true) {
       case 'hover': return { ...delivered, hoverRoute: 'accessibility', systemPointerMoved: false }
       case 'show': return { ...delivered, windowId: params.windowId ?? 23, foregroundChanged: false }
       case 'getState': return {
-        appHandle: selected.appHandle, pid: 17, windowId: params.windowId ?? null,
+        appHandle: selected.appHandle, windowId: params.windowId ?? null,
         snapshotId: `snapshot-${++generation}`, tree: `Tree ${generation}`, truncated: false,
         windows: params.windowId === undefined ? windows : windows.filter(window => window.windowId === params.windowId),
       }
@@ -49,7 +49,7 @@ function fixture(withSink = true) {
 }
 
 function state(overrides: Record<string, JsonValue> = {}): JsonValue {
-  return { appHandle: selected.appHandle, pid: 17, windowId: null, snapshotId: 'changed', tree: 'Changed tree', windows: [windowInfo(23)], truncated: false, ...overrides }
+  return { appHandle: selected.appHandle, windowId: null, snapshotId: 'changed', tree: 'Changed tree', windows: [windowInfo(23)], truncated: false, ...overrides }
 }
 
 function screenshot(overrides: Record<string, JsonValue> = {}): JsonValue {
@@ -75,7 +75,8 @@ describe('application discovery', () => {
     expect(await f.api.getCapabilities({ emit: false })).toEqual(capabilities)
     expect(await f.api.listApps()).toHaveLength(2)
     const app = await f.api.getApp('Editor')
-    expect(app.pid).toBe(17)
+    expect(app).not.toHaveProperty('pid')
+    expectTypeOf<CuaApp>().not.toHaveProperty('pid')
     expect(app.appHandle).toBe('app-17')
     const window = await app.getWindow(23)
     expect(await window.getScreenshot()).toEqual({ bytes: Uint8Array.from(Buffer.from(PNG, 'base64')), mimeType: 'image/png', pixelWidth: 1, pixelHeight: 1, windowId: 23 })
@@ -339,8 +340,8 @@ describe('application and window observations', () => {
   it('keeps separate snapshots for different application handles', async () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
-    f.dispatch.mockResolvedValueOnce({ appHandle: 'app-18', pid: 18, name: 'Utility' })
-    f.dispatch.mockResolvedValueOnce(state({ appHandle: 'app-18', pid: 18, snapshotId: 'other', windows: [] }))
+    f.dispatch.mockResolvedValueOnce({ appHandle: 'app-18', name: 'Utility', running: true })
+    f.dispatch.mockResolvedValueOnce(state({ appHandle: 'app-18', snapshotId: 'other', windows: [] }))
     const other = await f.api.getApp('Utility')
     await app.setValue(element('0'), 'Editor')
     await other.setValue(element('0'), 'Utility')
@@ -451,28 +452,28 @@ describe('application and window observations', () => {
     expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'screenshot', params: { appHandle: 'app-17', windowId: 23 } })
   })
 
-  const identityMismatches: Record<string, JsonValue>[] = [
-    { appHandle: 'another-app' }, { pid: 18 }, { windowId: 24 },
+  const providerIdentities: Record<string, JsonValue>[] = [
+    { appHandle: 'another-app' }, { windowId: 24 },
   ]
-  it.each(identityMismatches)('rejects a snapshot belonging to another identity: %j', async (identity) => {
+  it.each(providerIdentities)('accepts provider state without revalidating identity: %j', async (identity) => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
     f.dispatch.mockResolvedValueOnce(state(identity))
-    await expect(app.getAccessibilityTree()).rejects.toThrow('another application or window')
-    const calls = f.dispatch.mock.calls.length
-    await expect(app.setValue(element('0'), 'stale')).rejects.toThrow('Read getAccessibilityTree')
-    expect(f.dispatch).toHaveBeenCalledTimes(calls)
+    await expect(app.getAccessibilityTree()).resolves.toBe('Changed tree')
+    await app.setValue(element('0'), 'stale')
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'setValue', params: {
+      appHandle: 'app-17', snapshotId: 'changed', elementId: '0', value: 'stale',
+    } })
   })
 
-  it('rejects wrong-process windows in both snapshot and standalone window discovery', async () => {
+  it('returns provider window records without process filtering', async () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
-    const otherWindow = { ...windowInfo(23), pid: 18 }
-    f.dispatch.mockResolvedValueOnce(state({ windows: [otherWindow] }))
-    await expect(app.getAccessibilityTree()).rejects.toThrow('windows belong to another application')
-    f.dispatch.mockResolvedValueOnce([otherWindow])
-    await expect(app.getWindows()).rejects.toThrow('windows belong to another application')
-    expect(f.sink.text).not.toHaveBeenCalled()
+    const observed = windowInfo(24)
+    f.dispatch.mockResolvedValueOnce(state({ windows: [observed] }))
+    await expect(app.getAccessibilityTree()).resolves.toBe('Changed tree')
+    f.dispatch.mockResolvedValueOnce([observed])
+    await expect(app.getWindows()).resolves.toEqual([observed])
   })
 
   it('accepts coordinate input without a current snapshot', async () => {
@@ -528,13 +529,13 @@ describe('screenshots', () => {
     expect(f.sink.image).toHaveBeenCalledTimes(1)
   })
 
-  it('rejects a screenshot captured from another window before emitting it', async () => {
+  it('returns a screenshot captured from another window without rejecting it', async () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
     const window = await app.getWindow(23)
     f.dispatch.mockResolvedValueOnce(screenshot({ windowId: 24 }))
-    await expect(window.getScreenshot()).rejects.toThrow('another window')
-    expect(f.sink.image).not.toHaveBeenCalled()
+    await expect(window.getScreenshot()).resolves.toMatchObject({ windowId: 24 })
+    expect(f.sink.image).toHaveBeenCalledWith(expect.objectContaining({ windowId: 24 }))
   })
 
   it.each(['image/jpeg', 'image/webp', 'image/gif'])('preserves Host-admitted %s bytes and metadata in the return value and image sink', async (mimeType) => {

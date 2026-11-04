@@ -4,7 +4,7 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { z } from 'zod'
 import type { ActionResult, CapabilitiesResult, FoundAppsResult, HoverResult, Request, ScreenshotResult, ShowResult, WindowsResult } from './protocol.ts'
 
-/** Helper-issued application selection; public app objects bind it to one process lifetime. */
+/** Helper-issued application selection; public app objects hold only this opaque handle. */
 export type CuaAppHandle = Branded<'CuaAppHandle'>
 /** Helper-issued accessibility observation identity. */
 export type CuaSnapshotId = Branded<'CuaSnapshotId'>
@@ -86,7 +86,7 @@ export type CuaSelectTextOptions = Pick<CuaParameters<'selectText'>, 'prefix' | 
 /** Positive deltas reveal content above/left; each axis is an integer from -10 to 10. */
 export type CuaScrollOptions = Pick<CuaParameters<'scroll'>, 'x' | 'y' | 'deltaLinesX' | 'deltaLinesY'> & CuaCoordinateOptions
 /**
- * Accessibility observations, element operations and scope-dependent keyboard input.
+ * Common operations inherited by application and window objects; not a standalone object.
  * Advertised AX actions remain available; failed actions are not retried through pointer input.
  */
 export interface CuaSurface {
@@ -208,9 +208,8 @@ export interface CuaWindow extends CuaSurface {
    */
   drag(from: readonly [number, number], to: readonly [number, number], options?: CuaDragOptions): Promise<CuaActionResult>
 }
-/** Application-level accessibility, window discovery and activation operations. */
+/** Application-level accessibility, window discovery and scope-dependent input operations. */
 export interface CuaApp extends CuaSurface {
-  readonly pid: number
   readonly appHandle: CuaAppHandle
   /**
    * Activate this application explicitly, potentially changing the user's focused app and Space.
