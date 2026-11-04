@@ -12,6 +12,8 @@
   - button "More conversation views"
 - text: Explain event sourcing in one sentence.Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. If your last action is a message to your parent, the completion notice omits your final answer; include the result and relevant evidence in that message. {{clock}}
 - button "Copy"
+- button "Context injection runtime-context"
+- button "Context injection time-context"
 - paragraph: partial
 - status: Deep diving
 - text: Deep diving for {{duration}} ···

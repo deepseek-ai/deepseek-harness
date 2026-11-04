@@ -71,13 +71,17 @@
   overflow-y: auto;
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
-  position-area: top span-right;
-  position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline, --dsh-context-window, --dsh-context-viewport;
+  position-area: none;
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: max(12px, calc(anchor(top) + 8px));
+  left: max(12px, anchor(left));
+  right: 12px;
+  position-try-fallbacks: --dsh-context-window, --dsh-context-opposite, --dsh-context-wide-opposite, --dsh-context-tall, --dsh-context-viewport;
   align-self: end;
   justify-self: start;
   height: fit-content;
   min-height: 0;
-  margin: 8px 0;
+  margin: 0;
 }
 
 .header {
@@ -180,7 +184,33 @@
   right: 12px;
   margin: 0;
   align-self: safe end;
-  justify-self: safe start;
+  justify-self: safe end;
+}
+
+@position-try --dsh-context-opposite {
+  top: max(12px, calc(anchor(bottom) + 8px));
+  bottom: 12px;
+  align-self: start;
+}
+
+@position-try --dsh-context-wide-opposite {
+  top: max(12px, calc(anchor(bottom) + 8px));
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  align-self: start;
+  justify-self: safe end;
+}
+
+@position-try --dsh-context-tall {
+  position-area: none;
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: 12px;
+  left: max(12px, anchor(left));
+  right: 12px;
+  margin: 0;
+  align-self: safe start;
+  justify-self: start;
 }
 
 @position-try --dsh-context-viewport {
@@ -188,5 +218,5 @@
   inset: max(12px, var(--dsh-frame-overlay-top, 12px)) 12px 12px;
   margin: 0;
   align-self: safe start;
-  justify-self: safe start;
+  justify-self: safe end;
 }

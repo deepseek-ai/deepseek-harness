@@ -296,7 +296,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
       await ctx.plugin(NodePtcRuntime)
     },
     note:
-      'The PTC executor exposes only run_code to the model and declares other visible capabilities in a generated SDK in the runtime’s language. Program bindings enter the shared guarded tool pipeline in submission order; concurrency-safe bodies overlap up to maxParallelSubCalls, and nested results remain linked to the outer program.',
+      'The PTC executor exposes only run_code to the model and declares other visible capabilities in a generated SDK in the runtime’s language. Program bindings enter the shared guarded tool pipeline in submission order; concurrency-safe bodies overlap up to maxParallelSubCalls, and nested results remain linked to the outer program. The resolved timeout and maxSubCallsPerMinute set the total call allowance; exceeding it terminates the program.',
   },
   {
     pkg: '@deepseek-ai/dsh-plan-mode',

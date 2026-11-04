@@ -51,7 +51,7 @@
   justify-self: start;
   align-self: start;
   margin: 0;
-  position-try-fallbacks: --dsh-menu-wide-below, --dsh-menu-above, --dsh-menu-wide-above, --dsh-menu-window;
+  position-try-fallbacks: --dsh-menu-wide-below, --dsh-menu-above, --dsh-menu-wide-above, --dsh-menu-window, --dsh-menu-wide-window;
   width: max-content;
   height: fit-content;
   z-index: 1100;
@@ -60,14 +60,14 @@
   top: var(--dsh-menu-window-top);
   bottom: max(12px, calc(anchor(top) + 4px));
   align-self: end;
-  position-try-fallbacks: --dsh-menu-wide-above, --dsh-menu-below, --dsh-menu-wide-below, --dsh-menu-window;
+  position-try-fallbacks: --dsh-menu-wide-above, --dsh-menu-below, --dsh-menu-wide-below, --dsh-menu-window, --dsh-menu-wide-window;
 }
 .portal[data-anchor-side='right'] {
   top: max(var(--dsh-menu-window-top), anchor(top));
   bottom: 12px;
   left: max(12px, calc(anchor(right) + 4px));
   right: 12px;
-  position-try-fallbacks: --dsh-menu-left, --dsh-menu-wide-below, --dsh-menu-window;
+  position-try-fallbacks: --dsh-menu-left, --dsh-menu-wide-below, --dsh-menu-window, --dsh-menu-wide-window;
 }
 .portal[data-anchor-align='end']:not([data-anchor-side='right']) {
   left: 12px;
@@ -109,13 +109,20 @@
   right: max(12px, calc(anchor(left) + 4px));
   justify-self: end;
 }
+/* A tall card keeps its trigger alignment before horizontal clamping is needed. */
 @position-try --dsh-menu-window {
+  top: var(--dsh-menu-window-top);
+  bottom: 12px;
+  align-self: safe start;
+}
+
+@position-try --dsh-menu-wide-window {
   top: var(--dsh-menu-window-top);
   left: 12px;
   right: 12px;
   bottom: 12px;
   align-self: safe start;
-  justify-self: safe start;
+  justify-self: safe var(--dsh-menu-wide-align, end);
 }
 
 /* Open above the anchor (empty-state workspace chip: figma 122:9481). */

@@ -1048,7 +1048,7 @@ export interface CotTranslationPreferences {
 ## `@deepseek-ai/dsh-experimental-client-ui-forge`
 
 - `inject`: `forge` · `forgeSession` · `sessionProjections` · `workingDirectory` · `fs` · `subprocess` · `sandbox` · `sandboxPolicy` · `agents`
-- `source`: [`packages/experimental/client-ui-forge/src/types.ts:318`](../packages/experimental/client-ui-forge/src/types.ts)
+- `source`: [`packages/experimental/client-ui-forge/src/types.ts:345`](../packages/experimental/client-ui-forge/src/types.ts)
 
 ```ts config-catalog
 /** Host settings of the forge panel Remote. */
@@ -1063,14 +1063,14 @@ export interface Config {
   maxOutputBytes?: number
   /** Deadline in milliseconds for one provider sign-in probe. */
   readinessTimeoutMs?: number
-  /** Most local branches listed as worktree bases. */
+  /** Most local branches listed as worktree bases, and most branches in each group of base branches listed for the `branch` scope. */
   maxBranches?: number
   /**
    * Prefix of the branch and checkout directory created for a Session worktree; the first eight
    * hexadecimal digits of the Session id's UUID, a hyphen, and four random hexadecimal digits follow it.
    */
   worktreePrefix?: string
-  /** Largest diff, or file read to show unchanged lines, in bytes. */
+  /** Largest diff, file read to show unchanged lines, or list of base branch refs, in bytes. */
   maxDiffBytes?: number
   /** Most untracked files a local diff or the local changes card includes. */
   maxUntrackedFiles?: number
@@ -2807,6 +2807,8 @@ export interface Config {
   maxMessageBytes?: number
   /** Maximum simultaneous host binding calls accepted from a program. */
   maxPendingCalls?: number
+  /** Time to wait for cooperative stop acknowledgment before terminating the process. */
+  stopGraceMs?: number
   /** Managed process termination and output-drain grace in milliseconds. */
   graceMs?: number
 }
@@ -4078,6 +4080,8 @@ export interface Config {
 ```ts config-catalog
 /** Program execution limits. */
 export interface Config {
+  /** Nested tool-call attempts per minute of resolved runtime timeout, including failed calls. */
+  maxSubCallsPerMinute: number
   /** Maximum overlapping concurrency-safe program subcalls. */
   maxParallelSubCalls: number
 }

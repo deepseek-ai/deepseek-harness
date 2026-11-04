@@ -406,6 +406,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   ForgeLineComment: 'forge.md',
   ForgeReviewRequest: 'forge.md',
   ForgeReviewResult: 'forge.md',
+  ForgeBaseBranches: 'forge.md',
   ForgeBranches: 'forge.md',
   ForgeChangeRequestDiff: 'forge.md',
   ForgeChangeRequestStatesFrame: 'forge.md',
