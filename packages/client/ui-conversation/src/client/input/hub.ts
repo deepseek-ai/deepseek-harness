@@ -208,30 +208,6 @@ export class InputHub implements SessionInputResolver {
   }
 
   /**
-   * Read the Host-projected retryable failure while excluding pending human steering.
-   * @param id - retained ordinary Session identity.
-   * @returns a source whose value is the failed turn/end sequence or undefined.
-   */
-  retryableFailure(id: SessionId): ObservableSnapshot<SessionSeq | undefined> {
-    const binding = this.sessions().binding(id)
-    if (binding === undefined) throw new Error(`conversation.input: session "${id}" resolved no binding`)
-    const ending = binding.session.projections.faceOf('conversationContinuation')
-    const inbox = binding.session.projections.faceOf('inbox')
-    return {
-      getSnapshot: () => {
-        const pending = inbox.getSnapshot() as InboxState | undefined
-        return pending?.['next-step'].some(message => message.source.kind === 'user')
-          ? undefined : (ending.getSnapshot() as SessionSeq | null | undefined) ?? undefined
-      },
-      subscribe: (listener) => {
-        const unsubscribeEnding = ending.subscribe(listener)
-        const unsubscribeInbox = inbox.subscribe(listener)
-        return () => { unsubscribeInbox(); unsubscribeEnding() }
-      },
-    }
-  }
-
-  /**
    * Submit empty input to retry a failed generation through the ordinary composer. Stale
    * failures, active work, and drafts keep their current input unchanged.
    * @param id - retained ordinary Session identity.
@@ -239,7 +215,8 @@ export class InputHub implements SessionInputResolver {
    */
   retry(id: SessionId, failureSeq: SessionSeq): void {
     const binding = this.sessions().binding(id)
-    if (binding === undefined || this.retryableFailure(id).getSnapshot() !== failureSeq) return
+    if (binding === undefined
+      || binding.session.projections.faceOf('conversationContinuation').getSnapshot() !== failureSeq) return
     const session = binding.session.getSnapshot()
     const shell = this.shellFor(binding)
     const input = shell.snapshot
@@ -248,6 +225,7 @@ export class InputHub implements SessionInputResolver {
       || session.pendingSubmissions.length > 0 || input.phase !== 'plain'
       || input.draft.trim() !== '' || input.attachmentIds.length > 0
       || (inbox?.['next-turn'].length ?? 0) > 0
+      || inbox?.['next-step'].some(message => message.source.kind === 'user')
       || this.conversation().blocks.storeFor(id).getSnapshot() !== undefined) return
     shell.submit('queue', 'click', true)
   }

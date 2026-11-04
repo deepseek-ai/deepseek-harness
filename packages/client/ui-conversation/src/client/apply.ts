@@ -79,10 +79,6 @@ const ABSENT_NOTICES = {
   getSnapshot: (): InputNotice | null => null,
   subscribe: () => () => {},
 }
-const ABSENT_RETRYABLE_FAILURE = {
-  getSnapshot: () => undefined,
-  subscribe: () => () => {},
-}
 const ABSENT_BLOCK = {
   getSnapshot: (): ComposerBlock | undefined => undefined,
   subscribe: () => () => {},
@@ -490,7 +486,6 @@ export function apply(ctx: Context, config: Config = Config({})): void {
           stop: undefined,
           retry: undefined,
           hooks: {
-            retryableFailure: ABSENT_RETRYABLE_FAILURE,
             stopShortcut,
             busyEnter: submissionPolicy.busyEnter,
             fileUploads: ABSENT_FILE_UPLOADS,
@@ -571,7 +566,6 @@ export function apply(ctx: Context, config: Config = Config({})): void {
         stop: () => { stop(sessionId) },
         retry: (failureSeq) => { inputHub.retry(sessionId, failureSeq) },
         hooks: {
-          retryableFailure: inputHub.retryableFailure(sessionId),
           stopShortcut,
           busyEnter: submissionPolicy.busyEnter,
           fileUploads: conversation.fileUploads,

@@ -574,8 +574,6 @@ export interface ComposerBarInjected {
    */
   retry: ((failureSeq: SessionSeq) => void) | undefined
   hooks: {
-    /** Latest retryable failed turn/end sequence; undefined while unavailable or human steering is pending. */
-    retryableFailure: ObservableSnapshot<SessionSeq | undefined>
     /** Readable sequence while the fixed Stop command is registered. */
     stopShortcut: ObservableSnapshot<readonly string[]>
     /**

@@ -16,6 +16,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, KeyboardEvent, MouseEvent } from 'react'
 import clsx from 'clsx'
+import { isRecord } from '@deepseek-ai/dsh-util-values'
 import {
   focusWithoutRing, IconPlusOutlineMedium, IconTriangleRightFillRegular, IconWarningOutlineRegular, isMobileDevice, Toast, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -48,7 +49,7 @@ export const InputBar = memo(function InputBar({
   retryFileUpload,
   toggleCommandMenu, stop, retry, t,
   renderSlot, useBusyEnter, useFileUploads, useNotices, useLexicon, useMenuLauncher, useStopShortcut,
-  useAccess, useRetryableFailure,
+  useAccess,
   useProjection, sessionId, variant, disabled: inert = false, blocked,
   workspacePickerOpen = false, onRequestWorkspace,
   placeholder, accessory,
@@ -70,7 +71,10 @@ export const InputBar = memo(function InputBar({
   useEffect(() => { setActivity(false) }, [sessionId])
   const promptError = useSession(s => s.promptError) ?? null
   const running = useSession(s => s.running) ?? false
-  const retryableFailure = useRetryableFailure(value => value)
+  const retryableFailure = useProjection('conversationContinuation') ?? undefined
+  const pendingHumanInput = useProjection('inbox', inbox =>
+    inbox?.['next-step'].some(message =>
+      isRecord(message) && isRecord(message.source) && message.source.kind === 'user') ?? false)
   const historyOpen = useSession(s => s.openState === 'open') ?? false
   const submissionPending = useSession(s => s.pendingSubmissions.length > 0) ?? false
   const subagent = useSession(s => s.subagent) ?? null
@@ -359,7 +363,7 @@ export const InputBar = memo(function InputBar({
   // message waits for the Host.
   const primaryStops = running && subagent === null && !sending && (empty || blocked !== undefined)
   const primaryRetries = !running && subagent === null && empty && retryableFailure !== undefined
-    && historyOpen && !submissionPending && !disabled && input.queue.length === 0
+    && !pendingHumanInput && historyOpen && !submissionPending && !disabled && input.queue.length === 0
     && input.phase === 'plain' && retry !== undefined
   // Disabled native buttons may omit mouseleave; their tooltip must close from state.
   const primaryDisabled = primaryStops ? stopAction === undefined

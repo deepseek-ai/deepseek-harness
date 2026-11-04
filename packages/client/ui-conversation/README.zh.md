@@ -84,7 +84,7 @@ root 作用域的 hoc Slot `conversation.hero.frame` 在所有阶段都包裹滚
 
 Session API 拥有 `conversationContinuation`，Host 准入和浏览器展示共用该投影。它从完整 Session 历史恢复资格，并在空输入继续再次失败时保留资格，不依赖浏览器已加载的历史分页。
 
-composer 提供 `retry(failureSeq)` 处理生成失败后的恢复，通过 `useRetryableFailure` 读取最新符合条件的失败 `turn/end` 序号或 `undefined`。面向用户的操作文案为“继续生成”。
+composer 提供 `retry(failureSeq)` 处理生成失败后的恢复。输入栏通过标准 `useProjection` prop 读取 `conversationContinuation` 和 `inbox`。面向用户的操作文案为“继续生成”。
 
 composer 在挂载、切换 Session 和解除锁定时使用共享的[文字输入框聚焦策略](../ui-primitives/README.zh.md#use-this-package)。识别出的手机和平板需要点击输入框；桌面设备保留自动聚焦。在这些移动设备上，提交清空正在聚焦的草稿后，焦点移到不接受文字输入的 composer 卡片，收起键盘并保留键盘导航位置。被拒绝的提交、保留的新草稿文字，以及已经聚焦的其他控件均保留原有焦点。移动端键盘平移页面时，[Lexical 补丁](../../../patches/lexical@0.49.0.patch)让光标滚动计算与 DOM 几何使用同一坐标系。
 

@@ -84,7 +84,7 @@ An empty, idle ordinary Session composer offers a play action after `RATE_LIMIT`
 
 The Session API owns `conversationContinuation`, shared by Host admission and browser presentation. It restores eligibility from complete Session history and preserves it across repeated failed empty continuations, independently of loaded browser pages.
 
-The composer exposes `retry(failureSeq)` for failed-generation recovery and `useRetryableFailure` for the latest eligible failed `turn/end` sequence or `undefined`. User-facing text calls the action Continue generating.
+The composer exposes `retry(failureSeq)` for failed-generation recovery. The input bar reads `conversationContinuation` and `inbox` through the standard `useProjection` prop. User-facing text calls the action Continue generating.
 
 The composer uses the shared [text-input focus policy](../ui-primitives/README.md#use-this-package) on mount, Session switching, and unlock. Identified phones and tablets require tapping the input; desktop devices retain automatic focus. On these mobile devices, a submission that empties the focused draft moves focus to the non-text composer card, dismissing the keyboard while retaining its navigation position. Rejected submissions, retained newer draft text, and another control already holding focus preserve focus. The [Lexical patch](../../../patches/lexical@0.49.0.patch) keeps caret scrolling in the same coordinate system as DOM geometry when a mobile keyboard pans the page.
 

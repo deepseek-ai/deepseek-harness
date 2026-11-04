@@ -174,7 +174,6 @@ describe('Conversation inject API', () => {
     await b.runtime.sessions.replaceEvents(ROOT, continuationTurn({ kind: 'error', error: { code: 'SERVER', message: 'busy' } }))
     await b.runtime.sessions.setProjection(ROOT, 'conversationContinuation', SessionSeq(5))
     const composer = b.composerApi(ROOT)
-    expect(composer.hooks.retryableFailure.getSnapshot()).toBe(5)
     b.runtime.ctx.locale.setLocale(locale)
     const pending = Promise.withResolvers<Awaited<ReturnType<ISession['prompt']>>>()
     onTestFinished(() => { pending.resolve({ ok: true, value: { accepted: true } }) })
@@ -219,25 +218,17 @@ describe('Conversation inject API', () => {
     onTestFinished(() => b.runtime.dispose())
     await b.runtime.sessions.setProjection(ROOT, 'conversationContinuation', SessionSeq(5))
     const composer = b.composerApi(ROOT)
-    const source = composer.hooks.retryableFailure
-    const notified = vi.fn()
-    const unsubscribe = source.subscribe(notified)
-    onTestFinished(unsubscribe)
     const context = { id: 'context', role: 'user', content: [{ type: 'text', text: 'approval policy context' }], source: { kind: 'user-approval' } }
     const inbox: InboxWireState = { 'next-turn': [], 'next-step': [context] }
     await b.runtime.sessions.setProjection(ROOT, 'inbox', inbox)
-    expect(source.getSnapshot()).toBe(5)
     const user = createUserMessage({ content: [{ type: 'text', text: 'new instruction' }], source: { kind: 'user' } })
     await b.runtime.sessions.setProjection(ROOT, 'inbox', { ...inbox, 'next-step': [context, user] })
-    expect(source.getSnapshot()).toBeUndefined()
     composer.retry!(SessionSeq(5))
     expect(b.sessionFake.prompt).not.toHaveBeenCalled()
     await b.runtime.sessions.setProjection(ROOT, 'inbox', inbox)
-    expect(source.getSnapshot()).toBe(5)
     composer.retry!(SessionSeq(5))
     await vi.waitFor(() => { expect(b.sessionFake.prompt).toHaveBeenCalledOnce() })
     expect(b.sessionFake.prompt.mock.calls[0]?.[0]).toEqual([])
-    expect(notified).toHaveBeenCalledTimes(3)
   })
 
   it('uses the Host projection on partial pages and does no history materialization for streaming chunks', async () => {
@@ -245,7 +236,7 @@ describe('Conversation inject API', () => {
     onTestFinished(() => b.runtime.dispose())
     await b.runtime.sessions.replaceEvents(ROOT, continuationTurn({ kind: 'error', error: { code: 'SERVER', message: 'busy' } }).slice(1), true)
     await b.runtime.sessions.setProjection(ROOT, 'conversationContinuation', SessionSeq(5))
-    const source = b.composerApi(ROOT).hooks.retryableFailure
+    const source = b.runtime.sessions.binding(ROOT)!.session.projections.faceOf('conversationContinuation')
     expect(source.getSnapshot()).toBe(5)
     const history = Array.from({ length: 1666 }, (_, index) => continuationTurn({ kind: 'completed' }, index + 1)).flat()
     history.push(...continuationTurn({ kind: 'completed' }, 1667).slice(0, 4))
@@ -276,7 +267,7 @@ describe('Conversation inject API', () => {
       feed.append({ type: 'transient', event: { type: 'assistant/live-chunk', seq: 9999.5, time: index,
         data: { attemptId: LlmAttemptId('streaming'), turn: 1667, step: 1, chunk: { type: 'text-delta', index: 0, text: 'x' } },
       } })
-      expect(source.getSnapshot()).toBeUndefined()
+      expect(source.getSnapshot()).toBeNull()
     }
     expect(materializations).toBe(0)
     expect(notified).not.toHaveBeenCalled()
