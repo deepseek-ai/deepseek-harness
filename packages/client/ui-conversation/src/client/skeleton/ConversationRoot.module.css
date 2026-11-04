@@ -193,6 +193,18 @@
   display: none;
 }
 
+.headerMenuButton {
+  flex: none;
+  width: 28px;
+  padding: 0;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.headerMenuButton svg {
+  width: 15px;
+  height: 15px;
+}
+
 /* The far-right corner seat reaches 16px into the header's 28px right padding,
    so its control sits past the utilities' edge; it is laid out only while its
    occupant renders something. Its left margin equals the utilities' 8px gap so

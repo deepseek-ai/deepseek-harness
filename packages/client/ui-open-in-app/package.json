@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-open-in-app",
-  "description": "Web \"Open In...\" controls: the Session-header split button opening the workspace directory in an installed application, and the document preview's default-application controls for one file",
+  "description": "Session application submenus and native opening controls for directories and previewed files",
   "version": "0.2.2-alpha.3",
   "publishConfig": {
     "access": "public"

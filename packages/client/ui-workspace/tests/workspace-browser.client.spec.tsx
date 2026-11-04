@@ -21,6 +21,8 @@ import { createWorkspaceShortcutControls } from '../src/client/shortcuts.ts'
 import { createWorkspaceViewStore, FLAT_SESSION_ORDER_KEY } from '../src/client/stores.ts'
 import { UNGROUPED_KEY } from '../src/client/tree.ts'
 import { WorkspaceBrowser } from '../src/client/rows/WorkspaceBrowser.tsx'
+import { renderMenuButton } from './menu-button.tsx'
+import rowCss from '../src/client/rows/Rows.module.css'
 import { zh } from '../src/client/locales.ts'
 
 // Every fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
@@ -115,10 +117,8 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
   const request = createSnapshotStore<WorkspaceActionRequest | null>(null)
   const store = createWorkspaceViewStore().create()
   const props: WorkspaceBrowserProps = {
-    openWorkspaceMenu: vi.fn(),
     useWorkspaceActionRequest: bindSnapshotSelector(request),
     settleWorkspaceAction: () => { request.set(null) },
-    openSessionMenu: vi.fn(),
     useContextMenuTarget: selector => selector(null),
     useShortcuts: select => select([]),
     useWorkspaceShortcuts: bindSnapshotSelector(controls.state),
@@ -153,6 +153,7 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
     useDirectoryFlow: bindSnapshotSelector({ getSnapshot: () => true, subscribe: () => () => {} }),
     useHostInfo: selector => selector({ home: undefined, isLoopback: true }),
     renderSlot: renderDirectoryFlowOnly,
+    renderFactorySlot: renderMenuButton,
     t,
     ...overrides,
   }
@@ -170,6 +171,28 @@ function rerender(b: ReturnType<typeof mount>, overrides: Partial<WorkspaceBrows
 }
 
 describe('WorkspaceBrowser', () => {
+  it.each(['workspace', 'flat', 'ungrouped'] as const)('passes the standard menu factory through the %s list', (mode) => {
+    const preferences = createWorkspaceViewStore().create()
+    preferences.actions.setGroupBy(mode === 'flat' ? 'flat' : 'workspace')
+    preferences.actions.setGroupExpanded(mode === 'ungrouped' ? UNGROUPED_KEY : 'alpha', true)
+    const renderFactorySlot = vi.fn(renderMenuButton)
+    mount({
+      useSessions: hook(sessionState([summary('session-one', 10)])),
+      useWorkspaces: hook(workspaceState(mode === 'ungrouped' ? [] : [workspace('alpha', ['session-one'])])),
+      renderFactorySlot,
+    })
+    expect(renderFactorySlot).toHaveBeenCalledWith('contextMenu.button', {
+      target: { kind: 'session', value: { sessionId: sid('session-one'), displayTitle: 'session-one' } },
+      label: '会话“session-one”的操作', className: rowCss.iconButton,
+    })
+    if (mode === 'workspace') {
+      expect(renderFactorySlot).toHaveBeenCalledWith('contextMenu.button', {
+        target: { kind: 'workspace', value: { workspaceId: wid('alpha'), path: '/projects/alpha', displayTitle: 'alpha' } },
+        label: '工作区“alpha”的操作', className: rowCss.iconButton,
+      })
+    }
+  })
+
   it('binds the list area as the section scroller only while the sidebar is wide', () => {
     const bindScrollerRef = vi.fn()
     const browser = mount({ useSectionScroller: () => ({ bindScrollerRef }) })
