@@ -69,6 +69,7 @@ export class ClientTerminals extends Service {
     const connection = ctx.get('connection') as ConnectionHandle
     let connected = connection.generation.getSnapshot() !== undefined
     ctx.on('connection/reset', () => {
+      this.rosters.resume()
       if (!connected) { connected = true; return }
       for (const [sessionId, inventory] of this.inventories) {
         void inventory.reset()?.catch((error: unknown) => {

@@ -916,3 +916,23 @@ it('logs a failed roster stream', async () => {
   await expect.poll(() => warn.mock.calls.length).toBe(1)
   expect(warn).toHaveBeenCalledWith('Terminal roster failed', expect.objectContaining({ message: 'roster unavailable' }))
 })
+
+it('reopens a failed roster stream when the connection resets', async () => {
+  storage()
+  const h = fixture()
+  vi.mocked(h.remote.watch).mockImplementationOnce(streamMethod<TerminalRemote['watch']>(async function* () {
+    yield* []
+    throw new Error('roster unavailable')
+  }))
+  const agentTerminal: WebTerminalInfo = { ...info, id: 'agent-terminal' as WebTerminalId, origin: 'agent', control: 'agent' }
+  h.rosterFrames.push([agentTerminal])
+  const { service, ctx } = await h.service()
+  const warn = vi.spyOn(ctx.logger, 'warn')
+  const seen = vi.fn()
+  service.watch(sessionId, seen)
+  await expect.poll(() => warn.mock.calls.length).toBe(1)
+  ctx.emit('connection/reset')
+  await expect.poll(() => seen.mock.calls.length).toBe(1)
+  expect(seen).toHaveBeenCalledWith([agentTerminal])
+  expect(h.remote.watch).toHaveBeenCalledTimes(2)
+})
