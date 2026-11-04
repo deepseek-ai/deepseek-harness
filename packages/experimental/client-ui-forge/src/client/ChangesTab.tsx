@@ -10,8 +10,9 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
-  Button, IconChevronDownOutlineRegular, IconChevronsUpDownOutlineRegular, IconCompareSplitOutlineRegular, IconInfoOutlineRegular,
-  IconListPenOutlineRegular, IconNowrapFillRegular, IconRightUpOutlineRegular, IconWorkspaceTreeOutlineRegular, IconWrapFillRegular,
+  Button, IconBranchOutlineRegular, IconChevronDownOutlineRegular, IconChevronsUpDownOutlineRegular, IconCompareSplitOutlineRegular,
+  IconInfoOutlineRegular, IconListPenOutlineRegular, IconNowrapFillRegular, IconRightUpOutlineRegular, IconWorkspaceTreeOutlineRegular,
+  IconWrapFillRegular,
   Menu, StateDot, Tooltip,
   type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -20,14 +21,16 @@ import type { SidebarRightTabInfo } from '@deepseek-ai/dsh-client-ui-sidebar-rig
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { fileAddressFor, pathPartsOf } from '@deepseek-ai/dsh-util-workspace-path'
 import type {
-  ForgeChangeRequestDiff, ForgeDiffFile, ForgeLocalDiff, ForgeLocalScope, ForgePanelChangeRequest, ForgePanelState,
+  ForgeBaseBranch, ForgeBaseBranches, ForgeChangeRequestDiff, ForgeDiffFile, ForgeLocalDiff, ForgeLocalScope, ForgePanelChangeRequest,
+  ForgePanelState,
 } from '../types.ts'
 import type { ForgeReviewRequest, ForgeReviewResult } from '@deepseek-ai/dsh-experimental-forge/types'
 import { sameReviewSource, type ReviewQueue } from './review-queue.ts'
 import { ReviewThread, useFileReview } from './ReviewThread.tsx'
 import type { ReviewActions } from './ReviewComposer.tsx'
 import { SubmitReview } from './SubmitReview.tsx'
-import type { ReviewSelection } from './review.ts'
+import type { ReviewSelection, ReviewSource } from './review.ts'
+import { BaseMenu } from './BaseMenu.tsx'
 import { parseChangesAddress, type ChangesSource } from './changes-address.ts'
 import type { createChangesStore } from './changes-store.ts'
 import { Counts, DiffFile, type DiffFileAction } from './DiffFile.tsx'
@@ -61,6 +64,8 @@ export interface ChangesTabInjected {
   readonly reconnect: () => void
   /** Read the local changes of one scope; `signal` aborts the read. */
   readonly localDiff: (scope: ForgeLocalScope, signal: AbortSignal) => Promise<RemoteResult<ForgeLocalDiff>>
+  /** Read the branches the `branch` scope can compare with, whose names contain `query`; `signal` aborts the read. */
+  readonly diffBases: (query: string, signal: AbortSignal) => Promise<RemoteResult<ForgeBaseBranches>>
   /** Read the new side of one file in a local scope. */
   readonly localText: (scope: ForgeLocalScope, path: string) => Promise<RemoteResult<string>>
   /** Read the changes of a change request by its binding URL; `signal` aborts the read. */
@@ -90,7 +95,9 @@ type ChangesData =
     readonly kind: 'local'
     readonly files: readonly ForgeDiffFile[]
     /** Scope the files were read in. */
-    readonly scope: ScopeKind
+    readonly scope: ForgeLocalScope
+    /** Name of what the `branch` scope compared with; null for other scopes. */
+    readonly base: string | null
     /** Untracked files left out. */
     readonly omitted: number
   }
@@ -143,21 +150,52 @@ const FAILURE: Partial<Record<string, ForgePanelKey>> = {
   'forgePanel/filter-config-failed': 'diff.filterConfigFailed',
 }
 
+/** Failures of a chosen base branch, which offer the automatic fork point instead of a retry. */
+const BASE_FAILURE: Partial<Record<string, ForgePanelKey>> = {
+  'forgePanel/base-missing': 'diff.baseMissing',
+  'forgePanel/no-fork-point': 'diff.baseUnrelated',
+}
+
+/**
+ * Explain a failure of the `branch` scope that its chosen base branch caused.
+ * @param failed - code of the failed read, or null.
+ * @param base - branch the read compared with, or null for the automatic fork point and other scopes.
+ * @param t - forge panel copy.
+ * @returns the message naming the branch, or undefined for another failure or without a chosen branch.
+ */
+function baseFailureOf(failed: string | null, base: ForgeBaseBranch | null, t: Translate): string | undefined {
+  const key = failed === null ? undefined : BASE_FAILURE[failed]
+  return key === undefined || base === null ? undefined : t(key, { base: base.name })
+}
+
 async function readChanges(
   source: ChangesSource,
-  scope: ScopeKind,
+  scope: ForgeLocalScope,
   reads: Pick<ChangesTabInjected, 'localDiff' | 'changeRequestDiff'>,
   signal: AbortSignal,
 ): Promise<RemoteResult<ChangesData>> {
   if (source.kind === 'local') {
-    const result = await reads.localDiff({ kind: scope }, signal)
+    const result = await reads.localDiff(scope, signal)
     if (!result.ok) return result
-    return { ok: true, value: { kind: 'local', files: result.value.files, scope, omitted: result.value.omitted } }
+    const { files, base, omitted } = result.value
+    return { ok: true, value: { kind: 'local', files, scope, base, omitted } }
   }
   const result = await reads.changeRequestDiff(source.url, signal)
   if (!result.ok) return result
   const { files, headSha, localAhead, fileUrls } = result.value
   return { ok: true, value: { kind: 'change', files, url: source.url, headSha, localAhead, fileUrls } }
+}
+
+/** The ref that identifies a comparison: the chosen base branch, or null for the automatic fork point and other scopes. */
+function baseRefOf(scope: ForgeLocalScope): string | null {
+  return scope.kind === 'branch' ? scope.base : null
+}
+
+/** The source review comments on loaded changes record: the change request head, or the local scope with its base. */
+function reviewSourceOf(data: ChangesData): ReviewSource {
+  return data.kind === 'local'
+    ? { kind: 'local', scope: data.scope.kind, base: data.base, baseRef: baseRefOf(data.scope) }
+    : { kind: 'change', url: data.url, headSha: data.headSha }
 }
 
 /** The files that start expanded: every file until those above it change more than {@link OPEN_LINES} lines. */
@@ -189,7 +227,7 @@ function badgeOf(file: ForgeDiffFile, data: ChangesData, t: Translate): string {
   if (file.status === 'added') parts.push(t('diff.newFile'))
   else if (file.status === 'deleted') parts.push(t('diff.deletedFile'))
   else if (file.status === 'renamed' && file.previousPath !== null) parts.push(t('diff.renamed', { from: renamedFrom(file.previousPath, file.path) }))
-  if (file.untracked && data.kind === 'local' && data.scope === 'branch') parts.push(t('diff.badgeUncommitted'))
+  if (file.untracked && data.kind === 'local' && data.scope.kind === 'branch') parts.push(t('diff.badgeUncommitted'))
   return parts.join(' · ')
 }
 
@@ -223,19 +261,40 @@ function ChangeHeader({ url, entry, openLink, reviewCount, reviewDisabled, onRev
   )
 }
 
-function LocalHeader({ state, scope, createChangeRequest, t }: {
+/**
+ * The local view's header: for the `branch` scope, the checked-out branch, the base branch picker, and a note
+ * that uncommitted changes count; for another scope, what it compares.
+ */
+function LocalHeader({ state, scope, base, missing, visible, diffBases, choose, createChangeRequest, t }: {
   readonly state: ForgePanelState | null
   readonly scope: ScopeKind
+  readonly base: ForgeBaseBranch | null
+  /** Whether the chosen base branch no longer exists. */
+  readonly missing: boolean
+  readonly visible: boolean
+  readonly diffBases: ChangesTabInjected['diffBases']
+  readonly choose: (base: ForgeBaseBranch | null) => void
   readonly createChangeRequest: () => void
   readonly t: Translate
 }): ReactNode {
-  const base = state?.local?.base ?? null
-  const note = scope !== 'branch' ? t(SCOPE_NOTE[scope]) : base === null ? '' : t('diff.scopeNote.branch', { base })
   const creatable = state !== null && state.repository !== null && openChangeRequestOf(state) === undefined
+  const checkout = state?.checkout.state === 'ready' ? state.checkout.checkout : null
+  const head = checkout?.branch ?? checkout?.commit ?? 'HEAD'
   return (
     <div className={css.header}>
-      <span className={css.headerIcon}><IconListPenOutlineRegular size={15} /></span>
-      <span className={css.headerNote}>{note}</span>
+      {scope === 'branch' ? <>
+        <span className={css.headerIcon}><IconBranchOutlineRegular size={15} /></span>
+        <Tooltip label={head} side="bottom">
+          <span className={css.headerHead} tabIndex={0} data-forge-head="">{head}</span>
+        </Tooltip>
+        <span className={css.headerArrow} aria-hidden="true">→</span>
+        <BaseMenu chosen={base} label={base?.name ?? state?.local?.base ?? t('diff.base.automatic')} missing={missing}
+          visible={visible} list={diffBases} choose={choose} t={t} />
+        <span className={clsx(css.headerNote, css.headerSuffix)}>{t('diff.base.uncommitted')}</span>
+      </> : <>
+        <span className={css.headerIcon}><IconListPenOutlineRegular size={15} /></span>
+        <span className={css.headerNote}>{t(SCOPE_NOTE[scope])}</span>
+      </>}
       {creatable && (
         <Button size="sm" variant="outline" className={css.headerEnd} onClick={createChangeRequest}>{t('changes.local.create')}</Button>
       )}
@@ -310,7 +369,8 @@ function OrphanReviews({ path, actions, t }: PropsLocale<typeof NS> & {
  * @returns the view body.
  */
 export function ChangesTab({
-  useTabInfo, sessionId, useStore, actions, usePanel, reconnect, localDiff, localText, changeRequestDiff, changeRequestText,
+  useTabInfo, sessionId, useStore, actions, usePanel, reconnect, localDiff, diffBases, localText, changeRequestDiff,
+  changeRequestText,
   openLink, copyPath, createChangeRequest, addReviewToInput, reviewQueue, submitReview, report, t,
 }: ChangesTabProps): ReactNode {
   const { tab } = useTabInfo()
@@ -386,6 +446,8 @@ export function ChangesTab({
   const snapshot = usePanel(tab.visible ? 'visible' : 'inactive')
   const state = snapshot?.state ?? null
   const scope = choices?.scope ?? 'branch'
+  const base = choices?.base ?? null
+  const localScope = useMemo((): ForgeLocalScope => scope === 'branch' ? { kind: 'branch', base: base?.ref ?? null } : { kind: scope }, [scope, base])
   const split = choices?.split ?? true
   const wrap = choices?.wrap ?? true
   const entry = source.kind === 'change' ? state?.changeRequests.find(item => item.url === source.url) : undefined
@@ -394,7 +456,7 @@ export function ChangesTab({
   const pending = entry !== undefined && entry.ref !== null && entry.update === null
   const head = entry?.snapshot?.headSha ?? (pending ? null : '')
   const version = state === null ? null : source.kind === 'local' ? `${scope}\n${JSON.stringify(state.local)}` : head
-  const dataKey = source.kind === 'local' ? scope : 'change'
+  const dataKey = source.kind === 'local' ? JSON.stringify(localScope) : 'change'
   const [loaded, setLoaded] = useState<{ readonly key: string; readonly data: ChangesData } | null>(null)
   const [failure, setFailure] = useState<{ readonly key: string; readonly code: string } | null>(null)
   // Names the read the inputs ask for; it is in flight until `finished` matches it.
@@ -403,7 +465,7 @@ export function ChangesTab({
   useEffect(() => {
     if (!tab.visible || read === null || read === finished) return
     const controller = new AbortController()
-    void readChanges(source, scope, { localDiff, changeRequestDiff }, controller.signal).then((result) => {
+    void readChanges(source, localScope, { localDiff, changeRequestDiff }, controller.signal).then((result) => {
       if (controller.signal.aborted) return
       setFinished(read)
       if (result.ok) {
@@ -414,7 +476,7 @@ export function ChangesTab({
       }
     })
     return () => { controller.abort() }
-  }, [tab.visible, read, source, scope, dataKey, localDiff, changeRequestDiff])
+  }, [tab.visible, read, source, localScope, dataKey, localDiff, changeRequestDiff])
   const data = loaded !== null && loaded.key === dataKey ? loaded.data : null
   const files = useMemo(() => filesInTreeOrder(changedFileTree(data?.files ?? [])), [data])
   // The centered loader marks a first read; the toolbar's glyph turns only while shown changes are read again.
@@ -438,10 +500,16 @@ export function ChangesTab({
   }, [tab.visible, wanted, data])
   const refresh = (): void => { setAttempt(value => value + 1) }
   const root = state !== null && state.checkout.state === 'ready' ? state.checkout.checkout.root : null
+  // A chosen base branch that is gone or shares no history with HEAD offers the automatic fork point instead.
+  const baseFailure = baseFailureOf(failed, source.kind === 'local' && scope === 'branch' ? base : null, t)
   // Configuration reads may recover after the user fixes Git settings or raises the output limit.
   const message = failed === null ? undefined : FAILURE[failed]
+  const failureText = baseFailure ?? t(message ?? 'diff.error')
   const changeUrl = source.kind === 'change' ? entry?.snapshot?.url ?? source.url : null
-  const retry = message === undefined || failed === 'forgePanel/filter-config-failed'
+  const retry = baseFailure === undefined && (message === undefined || failed === 'forgePanel/filter-config-failed')
+  const automaticBase = baseFailure !== undefined && (
+    <Button size="sm" variant="outline" onClick={() => { actions.based(tab.id, null) }}>{t('diff.useAutomaticBase')}</Button>
+  )
 
   /** Apply a change to the unchanged lines of `owner`, unless newer changes replaced it. */
   const update = (owner: ChangesData, change: (value: Expansion) => Expansion): void => {
@@ -455,7 +523,7 @@ export function ChangesTab({
     update(owner, value => ({ ...value, open: { ...value.open, [path]: new Set([...value.open[path] ?? [], index]) } }))
     if (current.texts[path] !== undefined) return
     update(owner, value => ({ ...value, texts: { ...value.texts, [path]: 'loading' } }))
-    const reading = owner.kind === 'local' ? localText({ kind: owner.scope }, path) : changeRequestText(owner.url, owner.headSha, path)
+    const reading = owner.kind === 'local' ? localText(owner.scope, path) : changeRequestText(owner.url, owner.headSha, path)
     void reading.then((result) => {
       const lines = result.ok ? textLines(result.value) : undefined
       if (lines !== undefined && matchesHunks(lines, file.hunks)) {
@@ -495,7 +563,9 @@ export function ChangesTab({
     }} t={t} />
 
   const recordActions: ReviewActions = {
-    source: source.kind === 'local' ? { kind: 'local', scope } : { kind: 'change', url: source.url, headSha: data?.kind === 'change' ? data.headSha : '' },
+    source: data !== null ? reviewSourceOf(data) : source.kind === 'local'
+      ? { kind: 'local', scope, base: null, baseRef: baseRefOf(localScope) }
+      : { kind: 'change', url: source.url, headSha: '' },
     records: queue, addToInput: addReviewToInput, openLink,
   }
   const absentPaths = [...new Set([...reviewState.comments, ...reviewState.records.map(item => item.selection)]
@@ -550,10 +620,11 @@ export function ChangesTab({
     } else {
       body = (
         <div className={css.centered} role="status">
-          <span>{t(message ?? 'diff.error')}</span>
-          {(retry || changeUrl !== null) && (
+          <span>{failureText}</span>
+          {(retry || changeUrl !== null || automaticBase !== false) && (
             <div className={css.actions}>
               {retry && <Button size="sm" variant="outline" onClick={refresh}>{t('retry')}</Button>}
+              {automaticBase}
               {changeUrl !== null && (
                 <Button size="sm" variant="outline" onClick={() => { openLink(changeUrl) }}>{t('diff.viewInBrowser')}</Button>
               )}
@@ -578,7 +649,7 @@ export function ChangesTab({
               key={path}
               visible={tab.visible}
               file={file}
-              review={{ source: data.kind === 'local' ? { kind: 'local', scope: data.scope } : { kind: 'change', url: data.url, headSha: data.headSha },
+              review={{ source: reviewSourceOf(data),
                 addToInput: addReviewToInput,
                 records: queue, openLink, reviewStarted: reviewState.comments.length > 0,
                 onQuoted: (selection) => { if (!queue.recordAgent(selection)) report('review.saveFailed') },
@@ -635,7 +706,8 @@ export function ChangesTab({
   return (
     <div className={css.root} data-forge-changes={source.kind}>
       {source.kind === 'local'
-        ? <LocalHeader state={state} scope={scope} createChangeRequest={createChangeRequest} t={t} />
+        ? <LocalHeader state={state} scope={scope} base={base} missing={failed === 'forgePanel/base-missing'} visible={tab.visible}
+          diffBases={diffBases} choose={(next) => { actions.based(tab.id, next) }} createChangeRequest={createChangeRequest} t={t} />
         : <ChangeHeader url={source.url} entry={entry} openLink={openLink} reviewCount={reviewState.comments.length}
           reviewDisabled={data === null} onReview={() => { setReviewOpen(true) }} t={t} />}
       {!reviewOpen && reviewState.error !== null && <Notice>{t(reviewState.error === 'load' ? 'review.loadFailed' : 'review.saveFailed')}</Notice>}
@@ -687,8 +759,10 @@ export function ChangesTab({
         </span>
       </div>
       {data !== null && failed !== null && (
-        <Notice action={retry && <Button size="sm" variant="outline" className={css.noticeAction} onClick={refresh}>{t('retry')}</Button>}>
-          {t(message ?? 'diff.error')}
+        <Notice action={retry
+          ? <Button size="sm" variant="outline" className={css.noticeAction} onClick={refresh}>{t('retry')}</Button>
+          : automaticBase !== false && <span className={css.noticeAction}>{automaticBase}</span>}>
+          {failureText}
         </Notice>
       )}
       {data?.kind === 'change' && data.localAhead !== null && data.localAhead > 0 && (

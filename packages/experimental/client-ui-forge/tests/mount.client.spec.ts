@@ -30,7 +30,7 @@ import type { ReviewSelection } from '../src/client/review.ts'
 import { WorktreeProgress, type WorktreeProgressInjected } from '../src/client/WorktreeProgress.tsx'
 import { WorktreeToggle, type WorktreeToggleInjected } from '../src/client/WorktreeToggle.tsx'
 import type {
-  ForgeBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame, ForgeLocalDiff, ForgeLocalScope, ForgePanelState,
+  ForgeBaseBranches, ForgeBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame, ForgeLocalDiff, ForgeLocalScope, ForgePanelState,
 } from '../src/types.ts'
 import { entry, listState, ready, snapshot, unserved } from './client-fixtures.client.ts'
 
@@ -159,6 +159,8 @@ async function base() {
     localDiff: vi.fn(async (_sessionId: SessionId, _scope: ForgeLocalScope, _signal?: AbortSignal): Read<ForgeLocalDiff> =>
       ({ ok: true, value: LOCAL })),
     localText: vi.fn(async (_sessionId: SessionId, _scope: ForgeLocalScope, _path: string): Read<string> => ({ ok: true, value: 'a\n' })),
+    diffBases: vi.fn(async (_sessionId: SessionId, _query: string, _signal?: AbortSignal): Read<ForgeBaseBranches> =>
+      ({ ok: true, value: { automatic: null, remote: [], local: [] } })),
     changeRequestChecks: vi.fn(async (
       _sessionId: SessionId, _url: string, _headSha: string, _signal: AbortSignal,
     ): Read<ChangeRequestSnapshot> => ({ ok: true, value: snapshot(7) })),
@@ -711,7 +713,7 @@ describe('mountForgePanel changes view', () => {
   it('inserts numbered frozen quotes in the originating Session without sending a message', async () => {
     const f = await fixture()
     try {
-      const selection: ReviewSelection = { source: { kind: 'local', scope: 'branch' }, comment: { path: 'a.ts', side: 'R', startLine: 1, endLine: 1, body: 'Check this', hunk: '@@ -1 +1 @@\n-old\n+new' } }
+      const selection: ReviewSelection = { source: { kind: 'local', scope: 'branch', base: 'origin/main', baseRef: null }, comment: { path: 'a.ts', side: 'R', startLine: 1, endLine: 1, body: 'Check this', hunk: '@@ -1 +1 @@\n-old\n+new' } }
       const scope = f.sessions.scope(S1)!
       let draft = ''
       const focus = vi.fn(), send = vi.fn()
@@ -740,7 +742,7 @@ describe('mountForgePanel changes view', () => {
     try {
       const view = f.changes(S1)
       if (missing === 'no scope') f.sessions.scope.mockReturnValue(undefined)
-      expect(view.addReviewToInput({ source: { kind: 'local', scope: 'branch' }, comment: { path: 'a', side: 'L', startLine: 1, endLine: 1, body: 'Comment', hunk: '' } })).toBe(false)
+      expect(view.addReviewToInput({ source: { kind: 'local', scope: 'branch', base: 'origin/main', baseRef: null }, comment: { path: 'a', side: 'L', startLine: 1, endLine: 1, body: 'Comment', hunk: '' } })).toBe(false)
     } finally { await f.dispose() }
   })
   it('immediately closes an already-aborted occurrence and reports failed removal', async () => {
@@ -757,7 +759,7 @@ describe('mountForgePanel changes view', () => {
     const f = await fixture()
     const lifetime = new AbortController()
     const tab = { id: 'review-tab' as TabId, signal: lifetime.signal }
-    const selection: ReviewSelection = { source: kind === 'local' ? { kind, scope: 'branch' }
+    const selection: ReviewSelection = { source: kind === 'local' ? { kind, scope: 'branch', base: 'origin/main', baseRef: null }
       : { kind, url: 'https://github.com/octo/demo/pull/7', headSha: 'a'.repeat(40) },
     comment: { path: 'a.ts', side: 'R', startLine: 1, endLine: 1, body: 'Check this', hunk: '@@ -1 +1 @@\n-old\n+new' } }
     const queue = f.changes(S1).reviewQueue(tab)
@@ -787,6 +789,8 @@ describe('mountForgePanel changes view', () => {
     const signal = new AbortController().signal
     expect(await view.localDiff({ kind: 'staged' }, signal)).toEqual({ ok: true, value: LOCAL })
     expect(await view.localText({ kind: 'staged' }, 'src/a.ts')).toEqual({ ok: true, value: 'a\n' })
+    expect(await view.diffBases('rel', signal)).toEqual({ ok: true, value: { automatic: null, remote: [], local: [] } })
+    expect(f.forgePanel.diffBases).toHaveBeenCalledWith(S1, 'rel', signal)
     expect(await view.changeRequestDiff('https://github.com/octo/demo/pull/7', signal)).toEqual({ ok: true, value: CHANGE })
     expect(await view.changeRequestText('https://github.com/octo/demo/pull/7', 'a'.repeat(40), 'src/a.ts')).toEqual({ ok: true, value: 'b\n' })
     expect(f.forgePanel.localDiff).toHaveBeenCalledWith(S1, { kind: 'staged' }, signal)

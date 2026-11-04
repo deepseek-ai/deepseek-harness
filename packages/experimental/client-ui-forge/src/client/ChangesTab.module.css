@@ -60,6 +60,39 @@
   white-space: nowrap;
 }
 
+/* The checked-out branch gives way first, so the base branch stays readable. */
+.headerHead {
+  flex: 0 100 auto;
+  min-width: 2.5em;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font-family: var(--ds-font-family-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.headerArrow {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.headerSuffix {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+@container forge-changes (max-width: 520px) {
+  .headerSuffix {
+    display: none;
+  }
+}
+
+@container forge-changes (max-width: 380px) {
+  .headerHead,
+  .headerArrow {
+    display: none;
+  }
+}
+
 .headerEnd {
   flex: none;
   margin-left: auto;

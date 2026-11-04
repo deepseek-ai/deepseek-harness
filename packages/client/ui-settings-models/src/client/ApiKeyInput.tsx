@@ -1,4 +1,4 @@
-/** Credential input with the same reveal behavior as masked conversation text. */
+/** Write-only credential input with the same reveal behavior as masked conversation text. */
 import { useState } from 'react'
 import type { InputHTMLAttributes, ReactNode } from 'react'
 import type { en } from './locales.ts'
@@ -10,7 +10,7 @@ const EYE_OFF_PATH = `${EYE_CONTOUR}M2.5 2.5L13.5 13.5`
 
 /** Input attributes and section copy for the current credential draft. */
 interface ApiKeyInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'type' | 'className' | 'autoComplete'> {
-  /** Stored credential or the user's current edit; initially masked. */
+  /** Unsaved input; stored credentials are never read into this field. */
   readonly value: string
   /** Section copy, including the same reveal labels as SecretText. */
   readonly t: (key: keyof typeof en) => string

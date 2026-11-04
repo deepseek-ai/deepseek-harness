@@ -107,9 +107,11 @@ describe('ReactLoopInbox', () => {
       'next-turn': [pending],
       'next-step': [],
     })
+    const row = ctx.sessionProjections.checkpoint(session).inbox
 
     await projection.dispose()
-    expect(ctx.sessionProjections.checkpoint(session).inbox?.val).toBeUndefined()
+    expect(ctx.sessionProjections.checkpoint(session)).toHaveProperty('inbox', row)
+    expect(ctx.sessionProjections.checkpoint(ctx.sessions.create())).not.toHaveProperty('inbox')
     expect(first.nextTurn).toEqual([pending])
     first.clear()
     expect(second.nextTurn).toEqual([])

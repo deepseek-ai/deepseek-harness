@@ -64,4 +64,15 @@ describe('web-search-deepseek settings section', () => {
     await bench.ctx.fiber.dispose()
   })
 
+  it('lists the provider with its description for the Search menu', async () => {
+    const bench = await boot()
+    const [listed] = bench.ctx.web.listProviders().search
+    expect(listed).toMatchObject({ id: 'deepseek-official' })
+    expect(listed).not.toHaveProperty('title')
+    expect(listed?.description).toMatchObject({
+      en: 'Runs server-side web search inside a full Messages model call, adding model latency and token usage on every search. Requires a DeepSeek account or API key.',
+      zh: '通过完整模型调用在服务端执行网页搜索，每次搜索都会产生模型延迟与 token 消耗。需 DeepSeek 账号或 API Key',
+    })
+    await bench.ctx.fiber.dispose()
+  })
 })

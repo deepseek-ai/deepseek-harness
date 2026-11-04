@@ -9,7 +9,7 @@ import { basename, delimiter, dirname, isAbsolute, join, relative, sep } from 'n
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import ts from 'typescript'
-import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
+import { deriveEventMessage, foldSurface, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import { releasedV0SessionFormatCodec } from '@deepseek-ai/dsh-session-format-v0-to-v1'
 import type { SessionFormatEvent, SessionFormatMigrationContext } from '@deepseek-ai/dsh-session-format'
 import { assertWorkspaceOutsideTemp, outsideTempWorkspaceParent } from '../../scripts/snapshot-workspace-parent.ts'
@@ -769,7 +769,9 @@ function verifyAdvancedToolchain(logs: readonly SessionLog[]): void {
   const textOf = (index: number) => results[index]!.content
     .flatMap(block => block.type === 'text' ? [block.text] : []).join('')
   expect(JSON.parse(textOf(1))).toEqual(['Service', 'Event', 'Config', 'Tool'])
-  expect(textOf(2)).toBe(`started subagent ${logs[1]!.header.id}`)
+  expect(textOf(2)).toBe('started subagent agent-1')
+  expect(events.filter(event => event.type === 'subagent/catalog').map(event => event.data))
+    .toContainEqual(expect.objectContaining({ childId: logs[1]!.header.id, name: 'agent-1' }))
   const completions = events.flatMap(event => event.type === 'user/message'
     && event.data.source.kind === 'subagent-settled' ? [{
       sender: event.data.source.senderSessionId,
@@ -819,6 +821,26 @@ function verifyMcpResources(log: string, ptc: boolean): void {
     .toContain('MCP_RESOURCE_INSTRUCTION: keep {{braces}} literal.')
   expect(normalizedSystemPrompts(log, contextOf([log])).join('\n'))
     .toContain('server argument: ["catalog"]')
+}
+
+function verifyMcpTemplateError(log: string, secret: string): void {
+  const events = parseSessionLog(log)
+  const calls = events.flatMap(event => event.type === 'tool/call' ? [event.data.name] : [])
+  expect(calls).toEqual(['mcp__protected__ping'])
+  const results = events.flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
+  expect(results).toHaveLength(1)
+  expect(results[0]).toMatchObject({ isError: true })
+  const diagnostic = results[0]!.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
+  expect(diagnostic).toBe('Error: MCP fixture rejected Bearer [redacted]')
+  expect(log).not.toContain(secret)
+  const resultIndex = events.findIndex(event => event.type === 'tool/result')
+  const nextRequest = events.findIndex((event, index) => index > resultIndex && event.type === 'assistant/message')
+  expect(nextRequest).toBeGreaterThan(resultIndex)
+  const prefix = events.slice(0, nextRequest)
+  const surface = foldSurface(prefix)
+  const messages = surface.nodes.map(seq => deriveEventMessage(prefix[seq]!, surface.projectedMessages))
+  expect(messages).toContainEqual(results[0])
+  expect(JSON.stringify(messages)).not.toContain(secret)
 }
 
 function verifyNoMcpServers(log: string, ptc: boolean): void {
@@ -1380,7 +1402,8 @@ describe('headless recorded-session snapshots', () => {
       const spillRoot = await mkdtemp(join(tmpdir(), 'acp-snap-spill-'))
       const fixturePath = join(scenario.dir, fixtureFiles[0] ?? sessionFixtureName(0, SESSION_FORMAT_VERSION))
       const locatorRoot = snapshotSpillRoot(fixturePath)
-      const mcpDemo = scenario.name === 'plugin-manager-mcp' ? await startHttpMcpFixture() : undefined
+      const mcpDemo = scenario.name === 'plugin-manager-mcp' || scenario.name === 'mcp-template-error'
+        ? await startHttpMcpFixture({ rejectToolCalls: scenario.name === 'mcp-template-error' }) : undefined
       let result: Awaited<ReturnType<typeof runLoaderSmoke>>
       try {
         result = await runLoaderSmoke({
@@ -1435,7 +1458,7 @@ describe('headless recorded-session snapshots', () => {
             patchSources.forEach((source, index) => {
               materializeProfilePatch(source, cwd, 'headless', join(cwd, patchRoot), index)
             })
-            if (mcpDemo !== undefined) {
+            if (scenario.name === 'plugin-manager-mcp') {
               const profileDir = join(cwd, '.dsh/profiles/headless')
               await mkdir(profileDir, { recursive: true })
               await copyFile(join(scenario.dir, 'profile.patch.yml'), join(profileDir, 'cordis.patch.yml'))
@@ -1458,7 +1481,7 @@ describe('headless recorded-session snapshots', () => {
             if (retainedToolInput !== undefined && primaryFixture !== undefined) {
               verifyToolResultWriterParity(primaryFixture, actualLogs[0]!.content)
             }
-            if (mcpDemo !== undefined) {
+            if (scenario.name === 'plugin-manager-mcp' && mcpDemo !== undefined) {
               const log = actualLogs[0]!.content
               expect(log).toContain('mcp__demo__ping')
               expect(log).toContain('pong')
@@ -1466,6 +1489,14 @@ describe('headless recorded-session snapshots', () => {
               const saved = await readFile(join(cwd, '.dsh/profiles/headless/cordis.patch.yml'), 'utf8')
               expect(saved).toContain('id: demo')
               expect(saved).toContain('disabled: false')
+            }
+            if (scenario.name === 'mcp-template-error' && mcpDemo !== undefined) {
+              const secret = scenario.manifest.environment?.DSH_MCP_TEMPLATE_TOKEN
+              expect(secret).toBeDefined()
+              verifyMcpTemplateError(actualLogs[0]!.content, secret!)
+              expect(mcpDemo.calls).toEqual(['ping'])
+              expect(mcpDemo.authorization.length).toBeGreaterThan(1)
+              expect(mcpDemo.authorization.every(value => value === `Bearer ${secret!}`)).toBe(true)
             }
             if (scenario.name === 'toolcall-unused-args') {
               const events = parseSessionLog(actualLogs[0]!.content)

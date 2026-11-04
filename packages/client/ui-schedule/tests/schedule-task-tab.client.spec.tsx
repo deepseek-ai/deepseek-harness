@@ -170,6 +170,20 @@ function boundTo(id: ScheduleId): TaskTabBindings {
 }
 
 describe.each([['English', en], ['Chinese', zh]] as const)('task tab body in %s', (_name, dictionary) => {
+  it('opens stored weekly controls immediately and restores them after viewing records', () => {
+    const { rrule: _rrule, kind: _kind, ...common } = at
+    mount({ records: [{ ...common, kind: 'weekly', time: '09:30:00.000', timeZone: 'UTC', weekdays: [1, 5] }] },
+      { sessionId: SESSION, id: at.id }, dictionary)
+    const detail = screen.getByRole('complementary', { name: dictionary['detail.label'] })
+    const days = (): (string | null)[] => within(within(detail).getByRole('group', { name: dictionary['rule.weekday'] }))
+      .getAllByRole('button').map(button => button.getAttribute('aria-pressed'))
+    expect(days()).toEqual(['true', 'false', 'false', 'false', 'true', 'false', 'false'])
+    fireEvent.click(within(detail).getByRole('tab', { name: dictionary['detail.records'] }))
+    fireEvent.click(within(detail).getByRole('tab', { name: dictionary['detail.rule'] }))
+    expect(days()).toEqual(['true', 'false', 'false', 'false', 'true', 'false', 'false'])
+    expect(within(detail).getByRole('button', { name: dictionary['rule.save'] }).hasAttribute('disabled')).toBe(true)
+  })
+
   it('renders the named task rule, its actions, and its target Session entry without a close control', () => {
     const h = mount({}, { sessionId: SESSION, id: at.id }, dictionary)
     const detail = screen.getByRole('complementary', { name: dictionary['detail.label'] })

@@ -1,0 +1,3 @@
+- group "Update channel":
+  - text: Update channel Stable is suitable for everyday use. Development offers early access to new features but may be unstable.
+  - button "Update channel": Stable

@@ -68,6 +68,7 @@ async function stack(
   backend: PersistenceMount,
   root: string,
   script: ConstructorParameters<typeof MockAdapter>[0],
+  config: ConstructorParameters<typeof TeamService>[1] = {},
 ) {
   const ctx = new Context()
   contexts.add(ctx)
@@ -78,7 +79,7 @@ async function stack(
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(SubagentService)
   await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
-  await ctx.plugin(TeamService)
+  await ctx.plugin(TeamService, config)
   const adapter = new MockAdapter(script)
   ctx.llm.registerAdapter(['mock'], adapter)
   return {
@@ -90,6 +91,27 @@ async function stack(
 
 for (const backend of backends) {
   describe(`${backend.name} Agent Teams recovery`, () => {
+    it.each([undefined, false, true])('preserves saved mode %s when resumed with the opposite default', async (enabled) => {
+      const storageRoot = mkdtempSync(join(tmpdir(), 'dsh-team-default-'))
+      roots.push(storageRoot)
+      const id = SessionId('configured-resume')
+      const first = await stack(backend, storageRoot, [], { defaultEnabled: enabled === true })
+      const lead = await first.ctx.agentLoop.create(id, { provider: 'mock', model: 'mock' })
+      lead.session.append('session/title', { title: 'Saved session', messageSeqs: [], source: { kind: 'user' } })
+      await first.ctx.sessions.flush(lead.session)
+      if (enabled === false) {
+        await first.ctx.agentTeams.setEnabled(lead, true)
+        await first.ctx.agentTeams.setEnabled(lead, enabled)
+      }
+      const before = lead.session.ownEvents().filter(event => event.type === 'team/mode').map(event => event.data)
+      await first.dispose()
+      const second = await stack(backend, storageRoot, [], { defaultEnabled: enabled !== true })
+      const resumed = await second.ctx.agents.resume({ resumeSessionId: id })
+      expect(second.ctx.agentTeams.isEnabled(resumed.agent)).toBe(enabled === true)
+      expect(resumed.agent.session.ownEvents().filter(event => event.type === 'team/mode').map(event => event.data)).toEqual(before)
+      await resumed.dispose()
+    })
+
     it('restores the saved mode and retains tasks while disabled', async () => {
       const storageRoot = mkdtempSync(join(tmpdir(), 'dsh-team-mode-'))
       roots.push(storageRoot)
@@ -99,15 +121,17 @@ for (const backend of backends) {
       expect(first.ctx.agentTeams.isEnabled(lead)).toBe(false)
       await first.ctx.agentTeams.setEnabled(lead, true)
       const task = await first.ctx.agentTeams.createTask(lead, { subject: 'saved', description: 'retained while off' })
+      const claimed = await first.ctx.agentTeams.updateTask(lead, { taskId: task.id, expectedRevision: task.revision, action: 'claim' })
+      expect(claimed.ownerName).toBe('lead')
       await first.ctx.agentTeams.setEnabled(lead, false)
       await first.dispose()
       const second = await stack(backend, storageRoot, [])
       const resumed = await second.ctx.agents.resume({ resumeSessionId: id, agentOptions: { provider: 'mock', model: 'mock' } })
       expect(second.ctx.agentTeams.isEnabled(resumed.agent)).toBe(false)
       expect(second.ctx.sessionProjections.snapshot(resumed.agent.session).values.agentTeam)
-        .toMatchObject({ enabled: false, tasks: [task] })
+        .toMatchObject({ enabled: false, tasks: [claimed] })
       await second.ctx.agentTeams.setEnabled(resumed.agent, true)
-      expect(second.ctx.agentTeams.listTasks(resumed.agent)).toEqual([task])
+      expect(second.ctx.agentTeams.listTasks(resumed.agent)).toEqual([claimed])
     })
 
     it('restores continuable teammates and tasks from the Lead log after restart', {
@@ -146,7 +170,7 @@ for (const backend of backends) {
       ])
       await expect(second.ctx.agentTeams.updateTask(rootHandle.agent, {
         taskId: created.id, expectedRevision: 1, action: 'reassign', owner: started.childId,
-      })).resolves.toMatchObject({ ownerId: started.childId })
+      })).resolves.toMatchObject({ ownerId: started.childId, ownerName: 'agent-1' })
       expect(second.adapter.requests).toEqual([])
       await rootHandle.dispose()
       await second.dispose()

@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
+import { isEntry } from '../release/process.ts'
 import { parseArgs } from 'node:util'
 import { execa } from 'execa'
 import { create, extract } from 'tar'
@@ -15,6 +16,7 @@ import { notarizeMacOS } from '../../apps/desktop/scripts/notarize-macos.mjs'
 import { createPackagingRun } from '../../apps/desktop/scripts/packaging-run.mjs'
 import { packagingErrorDetails, packagingStep } from '../../apps/desktop/scripts/packaging-step.mjs'
 import { verifyMacOSRuntimeCode } from '../../apps/desktop/scripts/verify-macos-signature.mjs'
+import { cuaHelperBuildKey, cuaHelperSourceDigest } from './build-inputs.ts'
 import { CUA_APPLICATION, CUA_ARCHITECTURES, CUA_MANIFEST, readCuaApplication, sealCuaApplication, verifyCuaHelperPayload, type CuaHelperManifest } from './payload.ts'
 
 async function main(): Promise<void> {
@@ -23,6 +25,11 @@ async function main(): Promise<void> {
   const root = resolve(import.meta.dirname, '../..')
   const output = resolve(values.out)
   const environment = loadDesktopPackageEnvironment('darwin')
+  const sourceDigest = cuaHelperSourceDigest(root)
+  const buildKey = cuaHelperBuildKey(sourceDigest, environment)
+  if (process.env.CUA_EXPECTED_BUILD_KEY !== undefined && process.env.CUA_EXPECTED_BUILD_KEY !== buildKey) {
+    throw new Error('CUA build inputs changed after artifact selection; restart the helper workflow')
+  }
   const signing = resolveMacOSSigningEnvironment(environment)
   const notary = resolveMacOSNotarizationEnvironment(environment)
   const settings = resolveMacOSPackageSettings(environment)
@@ -68,15 +75,15 @@ async function main(): Promise<void> {
         applications.push({ architecture, bundle: sealCuaApplication(directory, application) })
       }
     })
-    const manifest: CuaHelperManifest = { schemaVersion: 1, version, commit, teamId: signing.teamId, applications }
+    const manifest: CuaHelperManifest = { schemaVersion: 2, sourceDigest, buildKey, version, commit, teamId: signing.teamId, applications }
     writeFileSync(join(payload, CUA_MANIFEST), `${JSON.stringify(manifest, null, 2)}\n`)
-    verifyCuaHelperPayload(payload, { version, commit })
+    verifyCuaHelperPayload(payload, { sourceDigest, buildKey })
     const archive = join(output, 'cua-helper.tgz')
     await create({ cwd: payload, file: archive, gzip: true, portable: true }, [CUA_MANIFEST, 'native'])
     const extracted = join(scratch, 'extracted')
     mkdirSync(extracted)
     await extract({ cwd: extracted, file: archive, strict: true })
-    verifyCuaHelperPayload(extracted, { version, commit })
+    verifyCuaHelperPayload(extracted, { sourceDigest, buildKey })
     for (const { architecture, bundle } of applications) {
       const application = join(extracted, 'native/bin', `darwin-${architecture}`, bundle, CUA_APPLICATION)
       await verify(application, architecture)
@@ -98,4 +105,4 @@ async function main(): Promise<void> {
   journal.finish(true)
 }
 
-await main()
+if (isEntry(import.meta.url)) await main()

@@ -24,8 +24,8 @@
   en: 0553b6c926c44cf4
   zh: 5cd3221d3e8eebd9
 /deepseek-ai-dsh-web-search-deepseek/use-this-package/authentication:
-  en: e9104c20ee90b3be
-  zh: 5fcc71d403976eaa
+  en: 7a765ba931329067
+  zh: 6fc14edcc378684a
 /deepseek-ai-dsh-web-search-deepseek/use-this-package/what-a-search-returns:
   en: e30442c90365357b
   zh: 9c9e2f1182963a8a
@@ -33,8 +33,8 @@
   en: 467b8238cf7e140c
   zh: 85a519c8811557aa
 /deepseek-ai-dsh-web-search-deepseek/use-this-package/failures-and-recovery:
-  en: e8b3d05fa39ccf47
-  zh: 2faa8b06ce0c4ad4
+  en: 8e69cf009b707c49
+  zh: f7d50bfc06b01b6d
 /deepseek-ai-dsh-web-search-deepseek/understand-the-implementation:
   en: 9842c69ad3636bb3
   zh: 3cdc3f816cbdd0cb
@@ -48,8 +48,8 @@
   en: d6c3f30b70a5f4b5
   zh: ab7c5b7d6fc3cae6
 /deepseek-ai-dsh-web-search-deepseek/further-exploration:
-  en: 4c0730d979693c5a
-  zh: 74681ad82b7b45ed
+  en: 3a650478cf33d792
+  zh: ab4247c4c31f4a90
 /deepseek-ai-dsh-web-search-deepseek/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
@@ -96,5 +96,5 @@
   en: 7f775cc79dbce94b
   zh: 12b8f68f9e7c48ca
 /deepseek-ai-dsh-web-search-deepseek/known-limitations-and-deferred-work/dev-note/dedicated-retrieval-endpoint:
-  en: 2a0437bd17a5a8a4
-  zh: 4032f3feb2388f6e
+  en: 188ca3400a73352e
+  zh: f948e2c565ec6ac1

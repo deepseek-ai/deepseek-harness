@@ -18,7 +18,7 @@ One npm package and one plugin entry keep existing installation and loading path
 
 The Session records submitted programs, nested tool calls and returned output. It does not serialize the REPL heap or rerun earlier programs after restart, resume or fork: replaying automation could repeat external side effects. A missing variable is a normal program error, and the model-visible instructions require recreating variables and reacquiring resources. No environment identifier or new durable Session event is required because the provider exposes no unlogged model input.
 
-Cancellation, deadline expiry, protocol or output-limit failure, owner disposal and process exit discard the environment. Ordinary exceptions retain earlier mutations. A retained function uses the active evaluation's host bindings; asynchronous work from an earlier evaluation cannot acquire a later evaluation's tool authority or output sink.
+Protocol or output-limit failure, owner disposal and process exit discard the environment. The [interruption decision](2026-10-29-retained-ptc-interruption.md) owns timeout and cancellation recovery with retained state. Ordinary exceptions retain earlier mutations. A retained function uses the active evaluation's host bindings; asynchronous work from an earlier evaluation cannot acquire a later evaluation's tool authority or output sink.
 
 ## Alternatives considered
 

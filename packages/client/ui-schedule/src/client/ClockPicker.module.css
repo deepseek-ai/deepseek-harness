@@ -10,10 +10,10 @@
   flex-direction: column;
   min-width: 0;
   width: 52px;
-  max-height: min(216px, calc(var(--dsh-anchored-max-height, 222px) - 6px));
+  max-height: min(216px, calc(100dvh - 30px));
   overflow-x: hidden;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior-y: contain;
 }
 
 /* One clock value. The right column's rows are 13px copy, so the columns set

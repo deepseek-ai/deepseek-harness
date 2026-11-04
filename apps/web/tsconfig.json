@@ -23,7 +23,7 @@
   // this client-registered project must not also hold them (one program
   // cannot see both sides of the cordis Context merges).
   "exclude": [
-    "tests/credential-editor.e2e.ts",
+    "tests/home-whale.e2e.ts",
     "tests/sidebar-drawer.e2e.ts",
     "tests/creation-recommendations.e2e.ts",
     "tests/plugin-recommendations.e2e.ts",
@@ -134,6 +134,7 @@
     "tests/desktop-locale.e2e.ts",
     "tests/settings-import.e2e.ts",
     "tests/desktop-updates.e2e.ts",
+    "tests/desktop-channel.e2e.ts",
     "tests/developer-tools-settings.e2e.ts",
     "tests/models-settings.e2e.ts",
     "tests/deepseek-messages-settings.e2e.ts",
@@ -186,6 +187,7 @@
     "tests/file-upload-round.e2e.ts",
     "tests/message-actions.e2e.ts",
     "tests/open-in-app-ssh.e2e.ts",
+    "tests/open-in-app-menus.e2e.ts",
     "tests/fork-mid-turn.e2e.ts",
     "tests/message-feedback.e2e.ts",
     "tests/markdown-images.e2e.ts",

@@ -44,3 +44,15 @@ it('omits malformed provider receipt fields and never copies raw errors into COS
   expect(failure).not.toHaveProperty('httpStatus')
   expect(JSON.stringify(failure)).not.toContain('fixture-secret')
 })
+
+it('prints structured archival failure through the real CLI', () => {
+  const result = spawnSync(process.execPath, ['--import', 'tsx/esm',
+    fileURLToPath(new URL('../scripts/archive-desktop-ci.ts', import.meta.url))], {
+    encoding: 'utf8', timeout: 30_000, env: { ...process.env, DESKTOP_ARCHIVE_NAME: '', GITHUB_OUTPUT: '' },
+  })
+  expect(result.error).toBeUndefined()
+  expect(result.signal).toBeNull()
+  expect(result.status).toBe(1)
+  expect(JSON.parse(result.stderr)).toEqual({ phase: 'artifact archival', code: 'validation',
+    message: 'desktop archival: invalid ZIP output settings' })
+})
