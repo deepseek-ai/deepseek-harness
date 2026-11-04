@@ -169,6 +169,15 @@ describe('card markdown escaping', () => {
 // Structure
 
 describe('card structure', () => {
+  it('never shows an action id as the label of a blank button', async () => {
+    const { payloads } = await render(h('button-group',
+      h('button', { type: 'action', id: 'dsh:card:x:blank' }, '\u3000'),
+      h('button', { type: 'action', id: 'dsh:card:x:empty' })))
+    const json = JSON.stringify(payloads[0])
+    expect(json).not.toMatch(/"content":"dsh:card/)
+    expect(json).toContain('"content":"\u3000"')
+  })
+
   it('merges consecutive text blocks into one markdown component and keeps hr/img as components', async () => {
     const { payloads } = await render([
       h('p', 'one'), h('h2', 'two'), h('ul', h('li', 'three')), h('hr'), h('p', 'four'),

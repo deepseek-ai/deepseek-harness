@@ -424,14 +424,17 @@ function buttonComponent(el: Element<'button'>, ctx: RenderContext<CardTypes>): 
   const attrs = el.attrs
   // `input` is not a variant of this mode, so the engine renders the core fallback before any handler runs.
   if (attrs.type === 'input') throw new TypeError('the card mode does not render input buttons')
-  const label = ctx.text(el.children).replace(/\s+/g, ' ').trim()
+  const raw = ctx.text(el.children)
+  const label = raw.replace(/\s+/g, ' ').trim()
   const behavior: CardButtonBehavior = attrs.type === 'link'
     ? { type: 'open_url', url: attrs.href }
     : { type: 'callback', value: { v4: { id: attrs.id, ...attrs.data === undefined ? {} : { data: attrs.data } } } }
   return {
     tag: 'button',
     id: cardElementId(ctx.stableId(el)),
-    text: label || (attrs.type === 'link' ? attrs.href : attrs.id),
+    // A whitespace-only label (a blank grid cell) stays blank: the action id is an internal routing key and must never
+    // become visible text. A button without any label still shows its link or, for an action, an ideographic space.
+    text: label || (raw.length > 0 ? '\u3000' : attrs.type === 'link' ? attrs.href : '\u3000'),
     type: attrs.variant ?? BUTTON_TYPES[attrs.theme ?? 'default'] ?? 'default',
     behavior,
     disabled: !!attrs.disabled,
