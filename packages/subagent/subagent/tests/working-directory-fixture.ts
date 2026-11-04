@@ -2,7 +2,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import { resolve } from 'node:path'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { Session } from '@deepseek-ai/dsh-session'
-import { within } from '@deepseek-ai/dsh-working-directory'
+import { within } from '@deepseek-ai/dsh-util-workspace-path'
 import type { RelocateOptions, RelocatedDirectories } from '@deepseek-ai/dsh-working-directory'
 
 /** Directory selection for orchestration fixtures whose paths are symbolic and whose logs exclude context providers. */

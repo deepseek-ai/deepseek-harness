@@ -42,6 +42,7 @@ const DUPLICATE_SAFE_PACKAGES: readonly string[] = [
   '@deepseek-ai/dsh-util-code-language',
   '@deepseek-ai/dsh-util-crypto',
   '@deepseek-ai/dsh-util-values',
+  '@deepseek-ai/dsh-util-workspace-path',
 ]
 
 /**

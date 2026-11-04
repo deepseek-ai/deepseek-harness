@@ -76,6 +76,9 @@
       "path": "../forge-session"
     },
     {
+      "path": "../../util/workspace-path"
+    },
+    {
       "path": "../worktree"
     }
   ]
