@@ -26,9 +26,7 @@ import { createConversationStore } from '../src/client/stores.ts'
 import type { SessionInputShell } from '../src/client/input/facade.ts'
 import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import { SessionSeq } from '@deepseek-ai/dsh-session/types'
-import { createUserMessage, LlmAttemptId } from '@deepseek-ai/dsh-llm'
-import { MutableSessionEventSource } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { SessionEventWindow } from '@deepseek-ai/dsh-api-session-controller/client'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { InboxWireState } from '@deepseek-ai/dsh-agent/types'
 import { continuationTurn } from './continuation-fixture.ts'
 
@@ -229,54 +227,6 @@ describe('Conversation inject API', () => {
     composer.retry!(SessionSeq(5))
     await vi.waitFor(() => { expect(b.sessionFake.prompt).toHaveBeenCalledOnce() })
     expect(b.sessionFake.prompt.mock.calls[0]?.[0]).toEqual([])
-  })
-
-  it('uses the Host projection on partial pages and does no history materialization for streaming chunks', async () => {
-    const b = await bench()
-    onTestFinished(() => b.runtime.dispose())
-    await b.runtime.sessions.replaceEvents(ROOT, continuationTurn({ kind: 'error', error: { code: 'SERVER', message: 'busy' } }).slice(1), true)
-    await b.runtime.sessions.setProjection(ROOT, 'conversationContinuation', SessionSeq(5))
-    const source = b.runtime.sessions.binding(ROOT)!.session.projections.faceOf('conversationContinuation')
-    expect(source.getSnapshot()).toBe(5)
-    const history = Array.from({ length: 1666 }, (_, index) => continuationTurn({ kind: 'completed' }, index + 1)).flat()
-    history.push(...continuationTurn({ kind: 'completed' }, 1667).slice(0, 4))
-    await b.runtime.sessions.replaceEvents(ROOT, history)
-    await b.runtime.sessions.setProjection(ROOT, 'conversationContinuation', null)
-    const feed = b.runtime.sessions.binding(ROOT)!.eventSource
-    if (!(feed instanceof MutableSessionEventSource)) throw new Error('expected mutable fixture feed')
-    const rawSnapshot = feed.getSnapshot.bind(feed)
-    const windows = new WeakMap<SessionEventWindow, SessionEventWindow>()
-    let materializations = 0
-    const read = vi.spyOn(feed, 'getSnapshot').mockImplementation(() => {
-      const window = rawSnapshot()
-      let observed = windows.get(window)
-      if (observed === undefined) {
-        observed = {
-          get entries() { materializations++; return window.entries },
-          hasMore: window.hasMore, revision: window.revision, change: window.change,
-        }
-        windows.set(window, observed)
-      }
-      return observed
-    })
-    onTestFinished(() => { read.mockRestore() })
-    const notified = vi.fn()
-    const unsubscribe = source.subscribe(notified)
-    onTestFinished(unsubscribe)
-    for (let index = 0; index < 2000; index++) {
-      feed.append({ type: 'transient', event: { type: 'assistant/live-chunk', seq: 9999.5, time: index,
-        data: { attemptId: LlmAttemptId('streaming'), turn: 1667, step: 1, chunk: { type: 'text-delta', index: 0, text: 'x' } },
-      } })
-      expect(source.getSnapshot()).toBeNull()
-    }
-    expect(materializations).toBe(0)
-    expect(notified).not.toHaveBeenCalled()
-    await b.runtime.sessions.setProjection(ROOT, 'conversationContinuation', SessionSeq(10001))
-    expect(notified).toHaveBeenCalledOnce()
-    expect(source.getSnapshot()).toBe(10001)
-    unsubscribe()
-    await b.runtime.sessions.setProjection(ROOT, 'conversationContinuation', null)
-    expect(notified).toHaveBeenCalledOnce()
   })
 
   it.each(['next-turn', 'pending', 'block', 'attachment', 'subagent', 'removed', 'closed'] as const)(

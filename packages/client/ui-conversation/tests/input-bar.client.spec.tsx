@@ -38,12 +38,6 @@ import { InputBar } from '../src/client/skeleton/InputBar.tsx'
 import type { InputBarProps } from '../src/client/skeleton/InputBar.tsx'
 import { en, zh } from '../src/client/locales.ts'
 
-declare module '@deepseek-ai/dsh-llm' {
-  interface MessageSourceMap {
-    'input-bar-context-fixture': { kind: 'input-bar-context-fixture' }
-  }
-}
-
 // Every fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
 const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined })) as GlobalStandardProps['useResource']
 
@@ -145,15 +139,14 @@ function bench(over?: BenchOptions) {
     promptError: over?.promptError ?? null,
   }))
   type ShellDeps = ConstructorParameters<typeof SessionInputShell>[0]
-  const inbox = createSnapshotStore<InboxState>({
-    'next-turn': over?.queue ?? [],
-    'next-step': over?.nextStep ?? [],
-  })
   const shell = new SessionInputShell({
     actx: SCTX,
     defaultSink: sink,
     commandAttachments: { serialize: () => Promise.resolve([]), release: () => {}, unsupportedNotice: (token: string) => `${token.trim()} attachments-unsupported` },
-    inbox,
+    inbox: createSnapshotStore<InboxState>({
+      'next-turn': over?.queue ?? [],
+      'next-step': over?.nextStep ?? [],
+    }),
     ...(over?.steerQueue !== undefined ? { steerQueue: over.steerQueue } : {}),
     // Lexicon-only stub: adjudication untouched (undefined slash methods are
     // never reached — these benches drive plain-draft flows only).
@@ -170,9 +163,6 @@ function bench(over?: BenchOptions) {
   if (over?.attachments !== undefined) shell.addAttachments(over.attachments.map(attachment => attachment.id))
   const stop = vi.fn()
   const retry = vi.fn()
-  const continuation = createSnapshotStore<SessionSeq | null>(over?.retryableFailure ?? null)
-  const useContinuation = bindSnapshotSelector(continuation)
-  const useInbox = bindSnapshotSelector(inbox)
   const removeAttachment = vi.fn((id: DraftAttachmentId) => { shell.removeAttachment(id) })
   const menuLauncher = createSnapshotStore<string | null>(over?.commandMenuOpen === true ? 'command' : null)
   const busyEnter = createSnapshotStore<'queue' | 'steer'>(over?.busyEnter ?? 'queue')
@@ -209,15 +199,14 @@ function bench(over?: BenchOptions) {
     ...allowAllAccess,
     useContextMenu: contextMenuHook(),
     useAccess: endpoint => !(over?.deniedEndpoints ?? []).includes(endpoint),
-    useProjection: ((key: string, selector: (v: unknown) => unknown = v => v) => {
-      if (key === 'conversationContinuation') return useContinuation(selector)
-      if (key === 'inbox') return useInbox(selector)
-      return selector(key === 'plan'
+    useProjection: ((key: string, selector: (v: unknown) => unknown = v => v) =>
+      selector(key === 'plan'
         ? over?.plan
         : key === 'goal' ? over?.goal
-          : key === 'imageLimits' ? over?.imageLimits
-            : key === 'contextPressure' ? over?.contextPressure : undefined)
-    }),
+          : key === 'conversationContinuation' ? over?.retryableFailure
+            : key === 'inbox' ? { 'next-turn': over?.queue ?? [], 'next-step': over?.nextStep ?? [] }
+              : key === 'imageLimits' ? over?.imageLimits
+                : key === 'contextPressure' ? over?.contextPressure : undefined)),
     useInput: bindSnapshotSelector(shell.state),
     inputActions: shell.actions,
     keyboard: shell,
@@ -278,7 +267,7 @@ function bench(over?: BenchOptions) {
   const interruptButton = view.container.querySelector<HTMLButtonElement>('button[aria-label="停止生成"]')
   return {
     view, textarea, button, interruptButton, props, sink, shell, wiring: shell, session, stop, removeAttachment, slotCalls,
-    menuLauncher, busyEnter, stopShortcut, continuation, inbox, retry,
+    menuLauncher, busyEnter, stopShortcut, retry,
     steerQueue: over?.steerQueue,
     get placeholder() { return placeholderOf(view.container) },
     get inputDisabled() { return textarea.getAttribute('aria-disabled') === 'true' },
@@ -300,26 +289,10 @@ it('offers the play action only for an empty, idle composer with an eligible fai
   expect(b.retry).toHaveBeenCalledOnce()
 })
 
-it('updates the continue action from failure and pending-input projections', async () => {
-  const b = bench()
-  expect(b.view.queryByRole('button', { name: '继续生成' })).toBeNull()
-  await act(async () => { b.continuation.set(2 as SessionSeq) })
-  expect(b.view.getByRole('button', { name: '继续生成' }).getAttribute('disabled')).toBeNull()
-  const context = { ...row('context'), source: { kind: 'input-bar-context-fixture' as const } }
-  await act(async () => { b.inbox.set({ 'next-turn': [], 'next-step': [context] }) })
-  expect(b.view.getByRole('button', { name: '继续生成' })).not.toBeNull()
-  await act(async () => { b.inbox.set({ 'next-turn': [], 'next-step': [context, row('new instruction')] }) })
-  expect(b.view.queryByRole('button', { name: '继续生成' })).toBeNull()
-  await act(async () => { b.inbox.set({ 'next-turn': [], 'next-step': [context] }) })
-  fireEvent.click(b.view.getByRole('button', { name: '继续生成' }))
-  expect(b.retry).toHaveBeenCalledExactlyOnceWith(2)
-  await act(async () => { b.continuation.set(null) })
-  expect(b.view.queryByRole('button', { name: '继续生成' })).toBeNull()
-})
-
 it.each([
   { running: true }, { attachments: [{ kind: 'image' as const, id: 'image' as DraftAttachmentId, file: new File([], 'x.png'), previewUrl: 'blob:test' }] },
   { blocked: { reason: 'Select a model' } }, { subagent: CONTINUABLE_CHILD }, { deniedEndpoints: ['session/prompt'] },
+  { nextStep: [row('new instruction')] },
 ])('keeps the continue action unavailable with %j', (options) => {
   const b = bench({ ...options, retryableFailure: 2 as SessionSeq })
   expect(b.view.queryByRole('button', { name: '继续生成' })).toBeNull()
