@@ -69,7 +69,7 @@
     "@deepseek-ai/dsh-http-proxy": "workspace:*",
     "@modelcontextprotocol/server": "2.2.0",
     "@modelcontextprotocol/node": "2.0.0",
-    "zod": "4.4.3",
+    "zod": "4.6.6",
     "@deepseek-ai/dsh-mcp-resources": "workspace:*",
     "@deepseek-ai/dsh-system-prompt": "workspace:*",
     "@deepseek-ai/dsh-credentials": "workspace:*"

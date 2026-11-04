@@ -78,7 +78,7 @@
     "@deepseek-ai/dsh-deque": "workspace:*",
     "@deepseek-ai/dsh-native-command": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
-    "zod": "4.4.3"
+    "zod": "4.6.6"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",

@@ -39,7 +39,7 @@
   "dependencies": {
     "@deepseek-ai/dsh-credentials": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
-    "zod": "4.4.3"
+    "zod": "4.6.6"
   },
   "files": [
     "locale/*.json",

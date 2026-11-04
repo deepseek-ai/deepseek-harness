@@ -80,7 +80,7 @@
     "@deepseek-ai/dsh-timeout": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
     "mime-types": "^3.0.2",
-    "zod": "4.4.3"
+    "zod": "4.6.6"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
