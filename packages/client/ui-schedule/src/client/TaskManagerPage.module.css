@@ -111,7 +111,7 @@
   height: 32px;
   width: 32px;
   padding: 0;
-  border-radius: 0 var(--dsw-radius-lg) var(--dsw-radius-lg) 0;
+  border-radius: 0 var(--dsw-radius-md) var(--dsw-radius-md) 0;
   border-left: 0.5px solid color-mix(in srgb, var(--dsw-alias-label-primary-foreground) 30%, transparent);
 }
 .createMenu [role='menuitem'] { gap: 10px; padding: 6px 12px; }
