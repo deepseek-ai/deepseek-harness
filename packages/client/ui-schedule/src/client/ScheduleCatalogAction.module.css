@@ -41,7 +41,7 @@
 .menu {
   position: fixed;
   position-area: none;
-  position-try-fallbacks: --dsh-schedule-catalog-wide-below, --dsh-schedule-catalog-above, --dsh-schedule-catalog-wide-above, --dsh-schedule-catalog-window;
+  position-try-fallbacks: --dsh-schedule-catalog-wide-below, --dsh-schedule-catalog-above, --dsh-schedule-catalog-wide-above, --dsh-schedule-catalog-window, --dsh-schedule-catalog-viewport;
   top: max(16px, calc(anchor(bottom) + 5px));
   bottom: 16px;
   left: max(16px, anchor(left));
@@ -236,6 +236,13 @@
 }
 
 @position-try --dsh-schedule-catalog-window {
+  top: max(16px, var(--dsh-frame-overlay-top, 16px));
+  bottom: 16px;
+  margin: 0;
+  align-self: safe end;
+}
+
+@position-try --dsh-schedule-catalog-viewport {
   position-area: none;
   inset: max(16px, var(--dsh-frame-overlay-top, 16px)) 16px 16px;
   margin: 0;

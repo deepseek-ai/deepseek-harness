@@ -7,6 +7,8 @@ description: Draw and review official DeepSeek Harness plugin icons and optional
 
 Draw recognizable artwork that belongs beside the existing official icons. Official and official experimental plugins share this visual language; the UI label communicates experimental status. This guidance does not replace designer approval.
 
+When reviewing the containing page, use the [UI review baseline](../../../docs/ui-design-review-cases.md#review-baseline) to combine artwork balance with its tile, label, neighboring cards and theme material. Keep package artwork distinct from action icons: coherent optical weight does not require equal drawing bounds, monochrome fills or identical geometry across those roles.
+
 ## Optional feature previews
 
 Before drawing a larger image for the top of an official bundle's detail document, read and follow [adding a plugin feature preview](../../../docs/cookbook/adding-a-plugin-preview.md). It owns optionality, image count, design canvas, position, language variants, file location, and acceptance. The guide also owns the embedded-raster exception for SVG previews; small icons remain geometry-only. The icon dimensions below do not apply to previews. Inspect the real feature and preserve its produced assets.
@@ -14,7 +16,7 @@ Before drawing a larger image for the top of an official bundle's detail documen
 ## Establish the subject
 
 - Inspect the actual feature, its output, and its owning manifest before drawing. A badge-producing skill may need a tag, not a medal. Reuse designer-supplied assets; do not invent a brand mark or change product names, identifiers, or unrelated icons without approval.
-- Read the [existing artwork](../../../packages/client/ui-primitives/src/plugin-artwork.tsx) and the nearest relevant package SVGs. Borrow one coherent treatment, not every reference's effects. Action icons remain with [dsh-client-ui-ux](../dsh-client-ui-ux/SKILL.md#reuse-before-adding).
+- Read the [existing artwork](../../../packages/client/ui-primitives/src/plugin-artwork.tsx) and the nearest relevant package SVGs. Borrow one coherent treatment, not every reference's effects. Action icons remain with [the UI design entry](../dsh-client-ui-ux/SKILL.md#select-the-rule-owners).
 - Check every affected entry, list, detail, and component row. Bundle artwork and a component's name and icon can have separate metadata owners; changing one does not update the other.
 
 ## Draw and refine

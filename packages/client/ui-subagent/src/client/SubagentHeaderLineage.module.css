@@ -530,7 +530,8 @@
 }
 
 @position-try --dsh-subagents-window {
-  inset: max(16px, var(--dsh-frame-overlay-top, 16px)) 16px 16px;
+  top: max(16px, var(--dsh-frame-overlay-top, 16px));
+  bottom: 16px;
   align-self: safe start;
   justify-self: safe start;
 }

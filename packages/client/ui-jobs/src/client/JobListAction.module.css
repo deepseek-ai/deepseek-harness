@@ -95,13 +95,17 @@
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   box-shadow: var(--dsw-elevation-prominent);
-  position-area: bottom span-right;
-  position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline, --dsh-jobs-window, --dsh-jobs-viewport;
+  position-area: none;
+  top: max(12px, calc(anchor(bottom) + 5px));
+  bottom: 12px;
+  left: max(12px, anchor(left));
+  right: 12px;
+  position-try-fallbacks: --dsh-jobs-window, --dsh-jobs-opposite, --dsh-jobs-wide-opposite, --dsh-jobs-tall, --dsh-jobs-viewport;
   align-self: start;
   justify-self: start;
   height: fit-content;
   min-height: 0;
-  margin: 5px 0;
+  margin: 0;
 }
 
 .menuBody {
@@ -460,7 +464,33 @@
   right: 12px;
   margin: 0;
   align-self: safe start;
-  justify-self: safe start;
+  justify-self: safe end;
+}
+
+@position-try --dsh-jobs-opposite {
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: max(12px, calc(anchor(top) + 5px));
+  align-self: end;
+}
+
+@position-try --dsh-jobs-wide-opposite {
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: max(12px, calc(anchor(top) + 5px));
+  left: 12px;
+  right: 12px;
+  align-self: end;
+  justify-self: safe end;
+}
+
+@position-try --dsh-jobs-tall {
+  position-area: none;
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: 12px;
+  left: max(12px, anchor(left));
+  right: 12px;
+  margin: 0;
+  align-self: safe start;
+  justify-self: start;
 }
 
 @position-try --dsh-jobs-viewport {
@@ -468,5 +498,5 @@
   inset: max(12px, var(--dsh-frame-overlay-top, 12px)) 12px 12px;
   margin: 0;
   align-self: safe start;
-  justify-self: safe start;
+  justify-self: safe end;
 }
