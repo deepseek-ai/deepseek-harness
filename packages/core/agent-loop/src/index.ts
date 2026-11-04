@@ -514,7 +514,12 @@ export class AgentLoop extends Service implements AgentFactory {
         if (machine === undefined) await machineReady.promise
         /* v8 ignore next -- setup failure untracks this disposer before resolving without a machine. */
         if (machine !== undefined) {
-          machine.cancel({ kind: 'disposed' }, { keepInbox: !ready })
+          try {
+            machine.cancel({ kind: 'disposed' }, { keepInbox: !ready })
+          } catch (error: unknown) {
+            failures.push(error)
+          }
+          // A failed queue write must not release resources underneath work.
           await machine.whenIdle()
         }
       } catch (error: unknown) {
@@ -573,6 +578,7 @@ export class AgentLoop extends Service implements AgentFactory {
           loopCtx, id, agentOptions, session,
           projections,
           lastTurn,
+          abort.signal,
         )
         machineReady.resolve()
         // Adopt the scope on its original fiber so it cannot unload before teardown.
@@ -636,6 +642,7 @@ export class AgentLoop extends Service implements AgentFactory {
           await loopCtx.agents.announce(agent, source, abort.signal)
           assertLive()
           ready = true
+          callerSignal?.removeEventListener('abort', onCallerAbort)
           return { agent, dispose }
         } catch (error: unknown) {
           // Failed initialization must not release queued input into a new turn.

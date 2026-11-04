@@ -16,7 +16,7 @@ import SessionStore, { Session, SessionId, SessionLogOffset, TurnEndReason } fro
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { TOOL_ABORTED_BEFORE_DISPATCH } from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import AgentRegistry, { type Agent, type AgentCancelCause } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { AgentClosedError, type Agent, type AgentCancelCause } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { MockAdapter, textResponse, toolCallResponse } from './mock-adapter.ts'
@@ -319,14 +319,12 @@ describe('Agent.cancel()', () => {
     })
     const agent = handle.agent
 
+    const streaming = Promise.withResolvers<undefined>()
+    ctx.on('agent/assistant-stream', ({ frame }) => { if (frame.type === 'chunk') streaming.resolve(undefined) })
     send(agent, 'active')
-    await new Promise(resolve => setTimeout(resolve, 30))
-
-    // Dispose cancels with `{ kind: 'disposed' }`; a wake landing in the
-    // abort-to-idle window must not latch, so `whenIdle()` does not wait on
-    // a model turn over the session being torn down.
+    await streaming.promise
     const disposal = handle.dispose()
-    setTimeout(() => { send(agent, 'late wake') }, 10)
+    expect(() =>{  send(agent, 'late wake') }).toThrow(AgentClosedError)
     await disposal
 
     expect(adapter.requests).toHaveLength(1)

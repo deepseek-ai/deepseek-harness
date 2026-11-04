@@ -11,6 +11,7 @@ import { isAbsolute, resolve } from 'node:path'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent, AgentOptions, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
+import { AgentClosedError } from '@deepseek-ai/dsh-agent'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { ReasoningEffortId, contentHasImage, createUserMessage, errorChain } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, MessageId, MessageSource } from '@deepseek-ai/dsh-llm'
@@ -991,7 +992,8 @@ export class SubagentManager {
               done = this.close(activation, () => this.finishDisposal(activation, false))
               return Promise.resolve()
             })
-          } catch (_error: unknown) {
+          } catch (error: unknown) {
+            if (error instanceof AgentClosedError) return Promise.resolve('closed')
             // Another activity already owns the Agent's idle phase.
             return Promise.resolve('retry')
           }

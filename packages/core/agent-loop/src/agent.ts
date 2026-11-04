@@ -18,7 +18,7 @@ import type {
   PreStepDecision,
   RequestErrorAction,
 } from '@deepseek-ai/dsh-agent'
-import { AgentModel, agentEvents, assembleContextFor } from '@deepseek-ai/dsh-agent'
+import { AgentClosedError, AgentModel, agentEvents, assembleContextFor } from '@deepseek-ai/dsh-agent'
 import type { GenerateOptions, LlmCallConfig, Message, PreparedLlmCall } from '@deepseek-ai/dsh-llm'
 import {
   LlmError,
@@ -141,6 +141,7 @@ export class ReactLoopAgent implements Agent {
     public readonly session: Session,
     projections: LoopProjections,
     lastTurn: number,
+    private readonly lifetimeSignal: AbortSignal,
   ) {
     this.requestSurfaceGeneration = session.surface.contentGeneration
     this.dispatch = agentEvents(loopCtx, this)
@@ -168,6 +169,7 @@ export class ReactLoopAgent implements Agent {
   }
 
   send(message: UserMessage, target: InboxTarget, wakeup: boolean): void {
+    this.assertOpen()
     // Waking input cannot join an aborted activity, so it starts the next turn.
     // Captured before the insertion so a reentrant cancel from a splice observer cannot reclassify it.
     const wakingAfterAbort = wakeup && this.phase.kind !== 'idle' && this.phase.abort.signal.aborted
@@ -189,14 +191,19 @@ export class ReactLoopAgent implements Agent {
   }
 
   cancel(cause: AgentCancelCause, options: CancelOptions = {}): void {
-    if (!options.keepInbox) {
-      this.inbox.clear()
-      if (this.phase.kind !== 'idle') this.phase.wakeRequested = false
+    try {
+      if (!options.keepInbox) this.inbox.clear()
+    } finally {
+      // Queue persistence must not prevent cancellation of admitted work.
+      if (this.phase.kind !== 'idle') {
+        if (!options.keepInbox) this.phase.wakeRequested = false
+        this.phase.abort.abort(cause)
+      }
     }
-    if (this.phase.kind !== 'idle') this.phase.abort.abort(cause)
   }
 
   runMaintenance<T>(job: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    this.assertOpen()
     if (this.phase.kind !== 'idle') throw new Error(`agent "${this.id}" already has active work`)
     const done = Promise.withResolvers<void>()
     const maintenance: Phase = {
@@ -228,6 +235,7 @@ export class ReactLoopAgent implements Agent {
    *   the inbox insertion so a reentrant cancel cannot reclassify it.
    */
   private wakeDriver(wakeAfterAbort = false): void {
+    if (this.lifetimeSignal.aborted) return
     if (this.phase.kind !== 'idle') {
       // Maintenance and aborted drivers cannot deliver the wake: latch it for
       // replay at convergence. Live drivers claim queued work themselves;
@@ -255,6 +263,12 @@ export class ReactLoopAgent implements Agent {
     do {
       await (activity = this.activityDone)
     } while (activity !== this.activityDone)
+  }
+
+  private assertOpen(): void {
+    if (this.lifetimeSignal.aborted) {
+      throw new AgentClosedError(this.id, { cause: this.lifetimeSignal.reason })
+    }
   }
 
   /** Report one failure at its live boundary, then preserve it for driver containment. */

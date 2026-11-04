@@ -206,6 +206,7 @@ declare module './types.ts' {
    * Clear queued and steering work — unless `keepInbox` — and abort the active
    * turn or between-turn task. The first cause wins for that activity. With no
    * active activity, cancellation is a no-op and does not arm later work.
+   * Queue-write failures still abort the activity and propagate to the caller.
    * @param cause - the stable caller intent carried by the active operation signal.
    * @param options - cancellation options; `keepInbox` preserves pending work.
    */
@@ -225,7 +226,7 @@ declare module './types.ts' {
    * inbox until the task settles, while public status stays `idle`.
    * `whenIdle()` follows both the task and any waking work released behind it.
    * @param task - operation whose fulfillment or rejection is preserved, with a signal aborted by {@link cancel}.
-   * @throws synchronously when turn-driving or another maintenance task already owns the agent.
+   * @throws AgentClosedError after disposal begins, or an Error when another activity owns the agent.
    * @returns the task promise.
    */
     runMaintenance<T>(task: (signal: AbortSignal) => Promise<T>): Promise<T>
@@ -240,6 +241,7 @@ declare module './types.ts' {
    * @param message - identified content and the source that supplied it.
    * @param target - the preferred next-turn or next-step inbox boundary.
    * @param wakeup - whether delivery may wake the driver.
+   * @throws AgentClosedError after disposal begins; no input is inserted.
    */
     send(message: UserMessage, target: InboxTarget, wakeup: boolean): void
 
@@ -247,6 +249,7 @@ declare module './types.ts' {
    * Queue an ordinary follow-up turn and wake the driver. The item becomes the
    * sole ordinary message of its own turn.
    * @param message - identified prompt content and the source that supplied it.
+   * @throws AgentClosedError after disposal begins; no input is inserted.
    */
     followup(message: UserMessage): void
 
@@ -256,6 +259,7 @@ declare module './types.ts' {
    * A rejected step leaves steering parked in the inbox until the next
    * wake; cancellation or disposal may discard pending steering.
    * @param message - identified steering content and the source that supplied it.
+   * @throws AgentClosedError after disposal begins; no input is inserted.
    */
     steer(message: UserMessage): void
 
@@ -266,6 +270,7 @@ declare module './types.ts' {
    * wakes them. It may miss a request whose pre-step already claimed its
    * batch. Cancellation or disposal may discard pending context.
    * @param message - identified injected context and the source that supplied it.
+   * @throws AgentClosedError after disposal begins; no input is inserted.
    */
     inject(message: UserMessage): void
   }

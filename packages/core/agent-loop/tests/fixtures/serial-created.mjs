@@ -6,7 +6,42 @@ export const name = 'serial-created-fixture'
 export const inject = ['agents', 'sessions']
 
 /** Install ordered creation listeners whose context must precede the first turn. */
-export function apply(ctx) {
+export function apply(ctx, config = {}) {
+  const checkedCancellation = new WeakSet()
+  ctx.on('agent/pre-step', async ({ agent, messages, signal }, next) => {
+    if (checkedCancellation.has(agent)
+      || (config.checkRootCancellation === false && agent.session.header.origin !== 'subagent')) return next()
+    checkedCancellation.add(agent)
+    const pending = {
+      id: randomUUID(), role: 'user',
+      content: [{ type: 'text', text: 'Cancellation checkpoint probe.' }],
+      source: { kind: `plugin:${name}` },
+    }
+    agent.inject(pending)
+    const failure = new Error('fixture queue-clear refusal')
+    const stopRejecting = ctx.on('internal/dispatch', (_mode, eventName, args) => {
+      if (eventName !== 'session/event') return
+      const [session, event] = args
+      if (session === agent.session && event.type === 'agent/inbox/spliced'
+        && event.data.outcome === 'canceled' && (event.data.removedCount ?? 0) > 0) throw failure
+    })
+    try {
+      try { agent.cancel({ kind: 'user' }) }
+      catch (error) { if (error !== failure) throw error }
+    } finally {
+      stopRejecting()
+    }
+    if (!signal.aborted) throw new Error('queue-clear failure prevented cancellation')
+    agent.inbox.remove(pending.id)
+    for (const message of messages) {
+      const ordinary = message.source.kind === 'user'
+      const restored = message.source.kind === `plugin:${name}`
+        ? { ...message, content: [{ type: 'text', text: message.content[0].text + ' Queue-clear failures still cancel active work.' }] }
+        : message
+      agent.send(restored, ordinary ? 'next-turn' : 'next-step', ordinary)
+    }
+    return next()
+  })
   const ready = new WeakSet()
   ctx.on('agent/created', async ({ agent }) => {
     await setImmediate()
