@@ -1,9 +1,9 @@
-/** Experimental package identities, publication policy, and retained npm names. */
+/** Experimental package identities, publication policy, and npm names. */
 
 /**
- * Experimental packages whose npm names omit the experimental prefix, by directory: identities retained across
- * experimental classification and package-role moves, and packages named without the prefix so that leaving
- * experimental status keeps their names.
+ * Experimental packages whose npm names omit the experimental prefix, by directory. Every new experimental package
+ * belongs here so that promotion keeps its name; isolation checks and plugin-record ownership recognize an unprefixed
+ * experimental name only through this map.
  */
 export const EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS: Readonly<Record<string, string>> = {
   'packages/experimental/cua': '@deepseek-ai/dsh-cua',
@@ -27,17 +27,63 @@ export const EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS: Readonly<Record<string, strin
   'packages/experimental/personalized-recommendations': '@deepseek-ai/dsh-personalized-recommendations',
 } satisfies Record<`packages/experimental/${string}`, `@deepseek-ai/dsh-${string}`>
 
-/** npm namespace for experimental packages without retained-name exceptions. */
+/** Legacy npm namespace, allowed only in `LEGACY_PREFIXED_EXPERIMENTAL_PACKAGE_DIRECTORIES`. */
 export const EXPERIMENTAL_PACKAGE_NAME_PREFIX = '@deepseek-ai/dsh-experimental-'
-const retainedNames = new Set(Object.values(EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS))
+
+/** Existing experimental packages that keep the legacy prefix until a rename; this list must not grow. */
+export const LEGACY_PREFIXED_EXPERIMENTAL_PACKAGE_DIRECTORIES: readonly string[] = [
+  'packages/experimental/api-speech-to-text',
+  'packages/experimental/auto-review',
+  'packages/experimental/badge-skill-bundle',
+  'packages/experimental/browser-use-chrome-devtools-mcp',
+  'packages/experimental/browser-use-playwright-mcp',
+  'packages/experimental/browser-use-runtime',
+  'packages/experimental/browser-use-stagehand-native',
+  'packages/experimental/claude-code-mods',
+  'packages/experimental/client-ui-claude-code-mods',
+  'packages/experimental/client-ui-cot-translation',
+  'packages/experimental/client-ui-forge',
+  'packages/experimental/client-ui-stats',
+  'packages/experimental/client-ui-voice-input',
+  'packages/experimental/computer-use-cua-driver-mcp',
+  'packages/experimental/computer-use-cua-driver-native',
+  'packages/experimental/cot-translation-bundle',
+  'packages/experimental/cua-macos',
+  'packages/experimental/forge',
+  'packages/experimental/forge-bundle',
+  'packages/experimental/forge-github',
+  'packages/experimental/forge-session',
+  'packages/experimental/inspector',
+  'packages/experimental/inspector-profile',
+  'packages/experimental/liveshare',
+  'packages/experimental/liveshare-protocol',
+  'packages/experimental/plugin-market-bundle',
+  'packages/experimental/ptc-runtime-python',
+  'packages/experimental/ralph-bundle',
+  'packages/experimental/session-inspector',
+  'packages/experimental/session-search',
+  'packages/experimental/session-titles-bundle',
+  'packages/experimental/speech-to-text',
+  'packages/experimental/speech-to-text-sensevoice',
+  'packages/experimental/subagent-oar',
+  'packages/experimental/terminal-bundle',
+  'packages/experimental/tool-subagent-oar',
+  'packages/experimental/tool-worktree',
+  'packages/experimental/translator',
+  'packages/experimental/voice-input-bundle',
+  'packages/experimental/webworker-packer',
+  'packages/experimental/webworker-runtime',
+  'packages/experimental/worktree',
+]
+const unprefixedNames = new Set(Object.values(EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS))
 
 /**
  * Identify an experimental npm package independently of its installed directory.
  * @param name - complete npm package name, without a version or subpath.
- * @returns Whether the name uses the experimental prefix or a retained name.
+ * @returns Whether the name uses the legacy prefix or appears in `EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS`.
  */
 export function isExperimentalPackageName(name: string): boolean {
-  return name.startsWith(EXPERIMENTAL_PACKAGE_NAME_PREFIX) || retainedNames.has(name)
+  return name.startsWith(EXPERIMENTAL_PACKAGE_NAME_PREFIX) || unprefixedNames.has(name)
 }
 
 /**
