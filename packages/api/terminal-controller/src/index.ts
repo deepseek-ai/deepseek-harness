@@ -8,7 +8,7 @@ import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import { Remote, RemoteError, TypertRemoteService, type RemoteStream } from '@deepseek-ai/dsh-typert-protocol'
-import { AgentTerminal, type AgentTerminalRequest } from './agent.ts'
+import { AgentTerminalHandle, type AgentTerminal, type AgentTerminalRequest } from './agent.ts'
 import { discoverShells, findShell, resolveShell } from './shells.ts'
 import { BrowserTerminal } from './terminal.ts'
 import { TerminalRetention } from './retention.ts'
@@ -18,8 +18,8 @@ import type {
 } from './types.ts'
 
 export type * from './types.ts'
-export { AgentTerminal, AgentTerminalError } from './agent.ts'
-export type { AgentTerminalErrorCode, AgentTerminalRequest } from './agent.ts'
+export { AgentTerminalError } from './agent.ts'
+export type { AgentTerminal, AgentTerminalErrorCode, AgentTerminalRequest } from './agent.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -43,7 +43,10 @@ export interface Config {
   readonly shellCandidates: string[]
   /** Maximum retained terminals and pending allocations per Session. */
   readonly maxTerminals: number
-  /** Maximum Agent-controlled terminals and pending Agent allocations per Session; `maxTerminals` still bounds every terminal. */
+  /**
+   * Maximum running Agent-controlled terminals and pending Agent allocations per Session; `maxTerminals` still bounds
+   * every terminal, including exited ones and failed allocations awaiting cleanup.
+   */
   readonly maxAgentTerminals: number
   /** Maximum terminal width in columns. */
   readonly maxCols: number
@@ -77,7 +80,7 @@ interface OwnedSession {
   readonly terminals: Map<WebTerminalId, BrowserTerminal>
   readonly pending: Map<WebTerminalId, Promise<BrowserTerminal>>
   readonly allocations: Map<WebTerminalId, TerminalAllocation>
-  /** Agent allocations not yet committed; they count toward `maxAgentTerminals`. */
+  /** Agent allocations not yet committed; with running Agent-controlled terminals, they count toward `maxAgentTerminals`. */
   readonly agentPending: Set<WebTerminalId>
 }
 
@@ -86,6 +89,19 @@ interface TerminalLaunch {
   readonly argv: readonly string[]
   readonly env: Record<string, string>
   readonly info: WebTerminalInfo
+  /** Removes files the launch created once the process has ended; it must not throw. */
+  readonly release?: () => Promise<void>
+}
+
+/**
+ * Validate a terminal display title.
+ * @param title - requested title.
+ * @returns the title without surrounding whitespace.
+ * @throws Error when the title is blank or longer than 120 characters.
+ */
+function terminalTitle(title: string): string {
+  if (title.trim().length === 0 || title.length > 120) throw new Error('Terminal title must contain 1–120 characters')
+  return title.trim()
 }
 
 /** Typed Remote control of transient Session-owned terminal processes. */
@@ -201,21 +217,26 @@ export class TerminalController extends TypertRemoteService {
    * @param signal - allocation cancellation; a committed terminal outlives it.
    * @returns the Agent's handle for the committed terminal.
    * @throws RemoteError `terminal/limit-reached` when the Session or Agent terminal limit is reached.
+   * @throws Error when the title is blank or longer than 120 characters.
    */
   async openForAgent(agent: Agent, request: AgentTerminalRequest, signal: AbortSignal): Promise<AgentTerminal> {
     this.lifetime.signal.throwIfAborted()
+    const title = terminalTitle(request.title)
     this.dimensions(request.cols, request.rows)
     const owner = this.owner(agent)
     owner.lifetime.signal.throwIfAborted()
     this.requireCapacity(owner)
-    const controlled = [...owner.terminals.values(), ...owner.allocations.values()]
-      .filter(terminal => terminal.info.origin === 'agent' && terminal.info.control === 'agent').length
-    if (controlled + owner.agentPending.size >= this.config.maxAgentTerminals) throw new RemoteError('terminal/limit-reached', 'Session Agent terminal limit reached', { limit: this.config.maxAgentTerminals })
+    const controlled = new Set(owner.agentPending)
+    for (const { info } of [...owner.terminals.values(), ...owner.allocations.values()]) {
+      if (info.origin === 'agent' && info.control === 'agent' && info.state === 'running') controlled.add(info.id)
+    }
+    if (controlled.size >= this.config.maxAgentTerminals) throw new RemoteError('terminal/limit-reached', 'Session Agent terminal limit reached', { limit: this.config.maxAgentTerminals })
     const id = randomUUID() as WebTerminalId
     owner.agentPending.add(id)
     try {
-      const terminal = await this.allocate(agent, owner, id, launchSignal => this.agentLaunch(agent, id, request, launchSignal), signal)
-      return new AgentTerminal(terminal, () => this.close(agent, id))
+      const launch = { ...request, title }
+      const terminal = await this.allocate(agent, owner, id, launchSignal => this.agentLaunch(agent, id, launch, launchSignal), signal)
+      return new AgentTerminalHandle(terminal, () => this.close(agent, id))
     } finally {
       owner.agentPending.delete(id)
     }
@@ -227,10 +248,14 @@ export class TerminalController extends TypertRemoteService {
    * @param id - terminal identity.
    * @param request - page position and byte bound.
    * @returns rendered screen text, including output received before the call.
+   * @throws RemoteError `terminal/unavailable` when the terminal is missing or closes before the screen is read.
    */
   readScreen(agent: Agent, id: WebTerminalId, request: TerminalScreenRequest): Promise<TerminalScreenPage> {
     const terminal = this.terminal(agent, id)
-    return terminal.drain().then(() => terminal.readScreen(request))
+    return terminal.drain().then(() => {
+      if (terminal.screenReleased) throw new RemoteError('terminal/unavailable', 'Terminal was closed in this Session', {})
+      return terminal.readScreen(request)
+    })
   }
 
   /**
@@ -315,8 +340,8 @@ export class TerminalController extends TypertRemoteService {
    */
   @Remote
   rename(agent: Agent, id: WebTerminalId, title: string): void {
-    if (title.trim().length === 0 || title.length > 120) throw new Error('Terminal title must contain 1–120 characters')
-    this.terminal(agent, id).rename(title.trim())
+    const trimmed = terminalTitle(title)
+    this.terminal(agent, id).rename(trimmed)
   }
 
   /**
@@ -398,7 +423,7 @@ export class TerminalController extends TypertRemoteService {
         owner.terminals.delete(id)
         this.changed(agent.id)
       }, (error) => { this.ctx.logger.error('Browser terminal cleanup failed', error) })
-      terminal.onStateChange(() => { this.changed(agent.id) })
+      terminal.setStateListener(() => { this.changed(agent.id) })
       this.changed(agent.id)
       this.requireOpen(owner, id)
       return terminal
@@ -426,14 +451,38 @@ export class TerminalController extends TypertRemoteService {
     const shell = await this.agentShell(agent, request.preferredShells, signal)
     const argv = await this.confine(agent, [shell.path, ...shell.args], request.policy, signal)
     const { platform } = await subprocess.terminalEnvironment(signal)
-    // Confined shells cannot write the person's history file; workspace-write grants /tmp.
-    const history = request.policy.mode !== 'danger-full-access' && platform === 'posix' ? { HISTFILE: `/tmp/dsh-agent-history-${id}` } : {}
+    // Confined shells cannot write the person's history file and must not load it. Only workspace-write grants /tmp,
+    // so a read-only shell gets an empty HISTFILE and keeps no history file.
+    const historyFile = `/tmp/dsh-agent-history-${id}`
+    const keepsHistory = platform === 'posix' && request.policy.mode === 'workspace-write'
+    const confined = platform === 'posix' && request.policy.mode !== 'danger-full-access'
+    const history = confined ? { HISTFILE: keepsHistory ? historyFile : '' } : {}
     return {
       argv, env: { ...request.env, DSH_SESSION_ID: agent.id, ...history },
       info: {
         id, shell, title: request.title, cwd, cols: request.cols, rows: request.rows, state: 'running', exitCode: null,
         origin: 'agent', control: 'agent', sandboxMode: request.policy.mode,
       },
+      ...keepsHistory ? { release: () => this.removeHistory(subprocess, historyFile) } : {},
+    }
+  }
+
+  /**
+   * Delete a confined Agent shell's history file in its execution environment after the shell ends.
+   * @param subprocess - the execution environment that ran the shell.
+   * @param path - history file the shell was given.
+   * @returns after deletion; a failure is logged because the file only holds the ended shell's own history.
+   */
+  private async removeHistory(subprocess: Context['subprocess'], path: string): Promise<void> {
+    try {
+      const { exitCode, signal } = await subprocess.spawn({
+        argv: ['rm', '-f', '--', path], cwd: '/',
+        stdio: { stdin: 'ignore', stdout: { maxBytes: 4096 }, stderr: { maxBytes: 4096 } },
+        graceMs: this.config.disposeGraceMs,
+      }).done
+      if (exitCode !== 0) throw new Error(`rm ended with ${exitCode ?? signal}`)
+    } catch (error) {
+      this.ctx.logger.warn('Agent terminal history cleanup failed', { path, error })
     }
   }
 
@@ -487,7 +536,7 @@ export class TerminalController extends TypertRemoteService {
   private async spawn(
     agent: Agent, owner: OwnedSession, id: WebTerminalId, prepare: (signal: AbortSignal) => Promise<TerminalLaunch>, signal: AbortSignal,
   ): Promise<BrowserTerminal> {
-    const { info, argv, env } = await prepare(signal)
+    const { info, argv, env, release } = await prepare(signal)
     const handle = await this.execution(agent).subprocess.spawnTerminal({
       argv, cwd: info.cwd, cols: info.cols, rows: info.rows,
       terminalType: 'xterm-256color', env,
@@ -496,11 +545,12 @@ export class TerminalController extends TypertRemoteService {
     })
     try {
       signal.throwIfAborted()
-      return new BrowserTerminal(handle, info, this.config.scrollback, this.config.maxBufferedBytes)
+      return new BrowserTerminal(handle, info, this.config.scrollback, this.config.maxBufferedBytes, release)
     } catch (error) {
       const cleanup = new TerminalRetention(this.config, handle.inspectActivity.bind(handle), async () => {
         owner.closedIds.add(id)
         await handle.terminate()
+        await release?.()
         owner.allocations.delete(id)
         this.changed(agent.id)
       }, (cleanupError) => { this.ctx.logger.error('Browser terminal allocation cleanup failed', cleanupError) })

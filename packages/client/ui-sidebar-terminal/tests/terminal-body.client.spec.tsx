@@ -163,7 +163,7 @@ it('keeps one emulator across rename and locale updates, applies snapshots and o
   expect(disconnect).toHaveBeenCalledOnce()
 })
 
-it('marks emulator input as typed only shortly after a person gesture', () => {
+it('marks emulator input as typed only shortly after a person gesture, never for focus reports or scrolling', () => {
   const now = vi.spyOn(performance, 'now').mockReturnValue(1000)
   const snapshot: TerminalViewState = { ...idle, info, phase: 'connected', writable: true }
   const h = mount(snapshot)
@@ -180,6 +180,18 @@ it('marks emulator input as typed only shortly after a person gesture', () => {
   fireEvent.paste(terminal.textarea!)
   terminal.input?.('pasted')
   expect(h.model.write).toHaveBeenLastCalledWith('pasted', true)
+  now.mockReturnValue(2000)
+  fireEvent.mouseDown(terminal.textarea!)
+  terminal.input?.('\x1b[I')
+  expect(h.model.write).toHaveBeenLastCalledWith('\x1b[I', false)
+  terminal.input?.('\x1b[O')
+  expect(h.model.write).toHaveBeenLastCalledWith('\x1b[O', false)
+  terminal.input?.('\x1b[<0;3;4M')
+  expect(h.model.write).toHaveBeenLastCalledWith('\x1b[<0;3;4M', true)
+  now.mockReturnValue(3000)
+  fireEvent.wheel(terminal.textarea!)
+  terminal.input?.('\x1b[B')
+  expect(h.model.write).toHaveBeenLastCalledWith('\x1b[B', false)
   h.view.unmount()
   now.mockReturnValue(1450)
   fireEvent.keyDown(terminal.textarea!, { key: 'x' })

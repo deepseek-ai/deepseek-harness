@@ -275,6 +275,7 @@ Typed Remote control of transient Session-owned terminal processes.
  * @param signal - allocation cancellation; a committed terminal outlives it.
  * @returns the Agent's handle for the committed terminal.
  * @throws RemoteError `terminal/limit-reached` when the Session or Agent terminal limit is reached.
+ * @throws Error when the title is blank or longer than 120 characters.
  */
 async openForAgent(agent: Agent, request: AgentTerminalRequest, signal: AbortSignal): Promise<AgentTerminal>
 
@@ -284,6 +285,7 @@ async openForAgent(agent: Agent, request: AgentTerminalRequest, signal: AbortSig
  * @param id - terminal identity.
  * @param request - page position and byte bound.
  * @returns rendered screen text, including output received before the call.
+ * @throws RemoteError `terminal/unavailable` when the terminal is missing or closes before the screen is read.
  */
 readScreen(agent: Agent, id: WebTerminalId, request: TerminalScreenRequest): Promise<TerminalScreenPage>
 

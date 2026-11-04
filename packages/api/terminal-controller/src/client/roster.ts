@@ -11,10 +11,14 @@ interface RosterEntry {
   readonly listeners: Set<TerminalRosterListener>
   latest: readonly WebTerminalInfo[] | undefined
   stopped: boolean
-  readonly dispose: () => Promise<void>
+  /** Disposes the live stream; undefined after the stream failed and before it reopens. */
+  dispose: (() => Promise<void>) | undefined
 }
 
-/** Shares one Host roster stream among a Session's watchers and stops it with the last watcher. */
+/**
+ * Shares one Host roster stream among a Session's watchers and stops it with the last watcher. A stream that fails
+ * while watched reopens for its remaining watchers on the next watch of that Session or on {@link TerminalRosters.resume}.
+ */
 export class TerminalRosters {
   private readonly entries = new Map<SessionId, RosterEntry>()
   private readonly stopping = new Set<Promise<void>>()
@@ -41,9 +45,10 @@ export class TerminalRosters {
   watch(sessionId: SessionId, listener: TerminalRosterListener): () => void {
     let entry = this.entries.get(sessionId)
     if (entry === undefined || entry.stopped) {
-      entry = this.start(sessionId)
+      entry = { listeners: new Set(), latest: undefined, stopped: false, dispose: undefined }
       this.entries.set(sessionId, entry)
     }
+    if (entry.dispose === undefined) this.open(sessionId, entry)
     entry.listeners.add(listener)
     if (entry.latest !== undefined) this.notify(listener, entry.latest)
     const owned = entry
@@ -59,6 +64,15 @@ export class TerminalRosters {
   }
 
   /**
+   * Reopen the streams that failed while watched, for example after the connection is replaced.
+   */
+  resume(): void {
+    for (const [sessionId, entry] of this.entries) {
+      if (entry.dispose === undefined) this.open(sessionId, entry)
+    }
+  }
+
+  /**
    * Stop every stream.
    * @returns after every stream has closed.
    */
@@ -68,7 +82,7 @@ export class TerminalRosters {
     await Promise.all(this.stopping)
   }
 
-  private start(sessionId: SessionId): RosterEntry {
+  private open(sessionId: SessionId, entry: RosterEntry): void {
     const name = `terminal roster ${String(sessionId)}`
     const stream = this.gateway.$stream<WebTerminalInfo[]>({
       name,
@@ -78,7 +92,8 @@ export class TerminalRosters {
         ? new RemoteStreamCarrierError(`${name} ended before release`)
         : new Error(`${name} ended before its first frame`),
     })
-    const entry: RosterEntry = { listeners: new Set(), latest: undefined, stopped: false, dispose: () => stream.dispose() }
+    const dispose = (): Promise<void> => stream.dispose()
+    entry.dispose = dispose
     void (async () => {
       try {
         for await (const item of stream) {
@@ -91,11 +106,12 @@ export class TerminalRosters {
         // Disposal ends the stream without an error, so every caught failure is a live stream failure.
         this.failed(error)
       } finally {
-        if (this.entries.get(sessionId) === entry) this.entries.delete(sessionId)
-        this.stop(entry)
+        if (entry.dispose === dispose) {
+          entry.dispose = undefined
+          this.track(dispose())
+        }
       }
     })()
-    return entry
   }
 
   private notify(listener: TerminalRosterListener, terminals: readonly WebTerminalInfo[]): void {
@@ -105,7 +121,13 @@ export class TerminalRosters {
   private stop(entry: RosterEntry): void {
     if (entry.stopped) return
     entry.stopped = true
-    const stopping = entry.dispose().finally(() => { this.stopping.delete(stopping) })
+    const dispose = entry.dispose
+    entry.dispose = undefined
+    if (dispose !== undefined) this.track(dispose())
+  }
+
+  private track(disposal: Promise<void>): void {
+    const stopping = disposal.finally(() => { this.stopping.delete(stopping) })
     this.stopping.add(stopping)
   }
 }

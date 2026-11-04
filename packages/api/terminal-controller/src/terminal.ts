@@ -40,12 +40,14 @@ export class BrowserTerminal {
    * @param info - initial metadata.
    * @param scrollback - maximum retained scrollback rows.
    * @param maxBufferedBytes - per-follower queue cap.
+   * @param release - removes files the launch created once the process has ended; it must not throw.
    */
   constructor(
     private readonly handle: SubprocessTerminalHandle,
     public info: WebTerminalInfo,
     scrollback: number,
     private readonly maxBufferedBytes: number,
+    private readonly release: () => Promise<void> = () => Promise.resolve(),
   ) {
     const { Terminal } = requireHeadless()
     const { SerializeAddon } = requireSerialize()
@@ -176,10 +178,10 @@ export class BrowserTerminal {
   }
 
   /**
-   * Report published state changes to the owner's roster; the listener must not throw.
-   * @param listener - called after each state publication.
+   * Set the one listener that reports published state changes to the owner's roster; a later call replaces it.
+   * @param listener - called after each state publication; it must not throw.
    */
-  onStateChange(listener: () => void): void { this.stateListener = listener }
+  setStateListener(listener: () => void): void { this.stateListener = listener }
 
   /**
    * Observe shell lifecycle without interpreting output.
@@ -305,6 +307,9 @@ export class BrowserTerminal {
     if (this.info.control !== 'agent') throw new AgentTerminalError('user-control', 'The user has taken over this terminal')
   }
 
+  /** Whether closing released the screen; reads and marks then fail. */
+  get screenReleased(): boolean { return this.screenDisposed }
+
   private requireScreen(): void {
     if (this.screenDisposed) throw new AgentTerminalError('unavailable', 'The terminal was closed')
   }
@@ -337,6 +342,7 @@ export class BrowserTerminal {
     this.closing = (async () => {
       await this.handle.terminate()
       await this.drained
+      await this.release()
       for (const follower of this.followers) follower.finish()
       this.followers.clear()
       this.screenDisposed = true

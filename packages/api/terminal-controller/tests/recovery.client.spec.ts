@@ -870,7 +870,7 @@ it('keeps new terminals with colliding layout-local tab ids independent across s
   expect(h.remote.create).toHaveBeenCalledTimes(2)
 })
 
-it('updates a loaded Session list from the roster before watchers open a tab for a new agent terminal', async () => {
+it('applies each whole roster to a loaded Session list before watchers run, adding and dropping terminals', async () => {
   storage()
   const h = fixture()
   const { service } = await h.service()
@@ -885,6 +885,11 @@ it('updates a loaded Session list from the roster before watchers open a tab for
   expect(await service.recover(sessionId)).toEqual([info, agentTerminal])
   expect(h.remote.list).toHaveBeenCalledOnce()
   release()
+  h.rosterFrames.splice(0, 1, [info])
+  const released = service.watch(sessionId, seen)
+  await expect.poll(() => seen.mock.calls.length).toBe(2)
+  expect(await service.recover(sessionId)).toEqual([info])
+  released()
 })
 
 it('treats bound, viewed and closing terminals as represented in this window', async () => {
@@ -893,8 +898,10 @@ it('treats bound, viewed and closing terminals as represented in this window', a
   const { service } = await h.service()
   const agentId = 'agent-terminal' as WebTerminalId
   expect(service.isRepresented(sessionId, agentId)).toBe(false)
+  expect(service.boundTerminal(sessionId, 'sidebar://terminal/new')).toBeUndefined()
   service.bind(sessionId, 'sidebar://terminal/new', agentId)
   expect(service.isRepresented(sessionId, agentId)).toBe(true)
+  expect(service.boundTerminal(sessionId, 'sidebar://terminal/new')).toBe(agentId)
   service.view(sessionId, 'viewed', 'sidebar://terminal/viewed', 'viewed-terminal' as WebTerminalId)
   expect(service.isRepresented(sessionId, 'viewed-terminal' as WebTerminalId)).toBe(true)
   service.retainTabs([{ sessionId, tabId: 'restored', contentId: 'sidebar://terminal/restored' }])
@@ -915,4 +922,24 @@ it('logs a failed roster stream', async () => {
   service.watch(sessionId, vi.fn())
   await expect.poll(() => warn.mock.calls.length).toBe(1)
   expect(warn).toHaveBeenCalledWith('Terminal roster failed', expect.objectContaining({ message: 'roster unavailable' }))
+})
+
+it('reopens a failed roster stream when the connection resets', async () => {
+  storage()
+  const h = fixture()
+  vi.mocked(h.remote.watch).mockImplementationOnce(streamMethod<TerminalRemote['watch']>(async function* () {
+    yield* []
+    throw new Error('roster unavailable')
+  }))
+  const agentTerminal: WebTerminalInfo = { ...info, id: 'agent-terminal' as WebTerminalId, origin: 'agent', control: 'agent' }
+  h.rosterFrames.push([agentTerminal])
+  const { service, ctx } = await h.service()
+  const warn = vi.spyOn(ctx.logger, 'warn')
+  const seen = vi.fn()
+  service.watch(sessionId, seen)
+  await expect.poll(() => warn.mock.calls.length).toBe(1)
+  ctx.emit('connection/reset')
+  await expect.poll(() => seen.mock.calls.length).toBe(1)
+  expect(seen).toHaveBeenCalledWith([agentTerminal])
+  expect(h.remote.watch).toHaveBeenCalledTimes(2)
 })

@@ -3850,13 +3850,14 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Open a terminal for the Session\'s Agent under a caller-resolved sandbox policy; it appears in every window that watches the Session and passes to the person on the person\'s first typed input.',
         parameters: [{ name: 'agent', description: 'Session owner whose Agent requests the terminal.' }, { name: 'request', description: 'title, directory, dimensions, sandbox policy and shell preference.' }, { name: 'signal', description: 'allocation cancellation; a committed terminal outlives it.' }],
         returns: 'the Agent\'s handle for the committed terminal.',
-        throws: ['RemoteError `terminal/limit-reached` when the Session or Agent terminal limit is reached.'],
+        throws: ['RemoteError `terminal/limit-reached` when the Session or Agent terminal limit is reached.', 'Error when the title is blank or longer than 120 characters.'],
       },
       {
         signature: 'readScreen(agent: Agent, id: WebTerminalId, request: TerminalScreenRequest): Promise<TerminalScreenPage>',
         description: 'Render a page of any terminal in the Agent\'s Session, including terminals the person opened.',
         parameters: [{ name: 'agent', description: 'Session owner.' }, { name: 'id', description: 'terminal identity.' }, { name: 'request', description: 'page position and byte bound.' }],
         returns: 'rendered screen text, including output received before the call.',
+        throws: ['RemoteError `terminal/unavailable` when the terminal is missing or closes before the screen is read.'],
       },
       {
         signature: 'inspectActivity(agent: Agent, id: WebTerminalId): Promise<\'idle\' | \'busy\' | \'unknown\'>',
@@ -5537,7 +5538,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'AgentTerminal',
-    declaration: 'export class AgentTerminal {\n    constructor(private readonly terminal: BrowserTerminal, private readonly closeTerminal: () => Promise<void>);\n    get id(): WebTerminalId;\n    get pid(): number;\n    get info(): WebTerminalInfo;\n    get revision(): number;\n    changed(after: number, signal: AbortSignal): Promise<number>;\n    write(data: string): Promise<void>;\n    drain(): Promise<void>;\n    read(request: TerminalScreenRequest): TerminalScreenPage;\n    mark(): TerminalScreenMark;\n    inspectForeground(): Promise<SubprocessTerminalForeground | undefined>;\n    signal(signal: SubprocessTerminalSignal): Promise<number>;\n    async close(): Promise<void>;\n}',
+    declaration: 'export interface AgentTerminal {\n    readonly id: WebTerminalId;\n    readonly pid: number;\n    readonly info: WebTerminalInfo;\n    readonly revision: number;\n    changed(after: number, signal: AbortSignal): Promise<number>;\n    write(data: string): Promise<void>;\n    drain(): Promise<void>;\n    read(request: TerminalScreenRequest): TerminalScreenPage;\n    mark(): TerminalScreenMark;\n    inspectForeground(): Promise<SubprocessTerminalForeground | undefined>;\n    signal(signal: SubprocessTerminalSignal): Promise<number>;\n    close(): Promise<void>;\n}',
   },
   {
     name: 'AgentTerminalRequest',
@@ -5754,10 +5755,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'BrandedNumber',
     declaration: 'export type BrandedNumber<B extends string> = number & {\n    readonly [BRAND]: B;\n};',
-  },
-  {
-    name: 'BrowserTerminal',
-    declaration: 'export class BrowserTerminal {\n    constructor(private readonly handle: SubprocessTerminalHandle, public info: WebTerminalInfo, scrollback: number, private readonly maxBufferedBytes: number);\n    monitor(policy: TerminalRetentionPolicy, closing: () => void, closed: () => void, failed: (error: unknown) => void): void;\n    retain(signal: AbortSignal): AsyncIterable<TerminalRetentionFrame>;\n    async *attach(input: AsyncIterable<TerminalInput>, limits: Pick<TerminalEnvironment, \'maxInputBytes\' | \'maxCols\' | \'maxRows\'>, signal: AbortSignal, inputWindow?: RemoteUplinkWindow): AsyncIterable<TerminalFrame>;\n    onStateChange(listener: () => void): void;\n    async inspectActivity(): Promise<SubprocessTerminalActivity[\'state\']>;\n    get pid(): number;\n    get revision(): number;\n    async changed(after: number, signal: AbortSignal): Promise<number>;\n    agentWrite(data: string): Promise<void>;\n    agentSignal(signal: SubprocessTerminalSignal): Promise<number>;\n    inspectForeground(): Promise<SubprocessTerminalForeground | undefined>;\n    async drain(): Promise<void>;\n    readScreen(request: TerminalScreenRequest): TerminalScreenPage;\n    markScreen(): TerminalScreenMark;\n    rename(title: string): void;\n    close(): Promise<void>;\n    dispose(): Promise<void>;\n}',
   },
   {
     name: 'BrowserUseProviderName',
@@ -9402,10 +9399,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TerminalRetentionFrame',
     declaration: 'export interface TerminalRetentionFrame {\n    readonly type: \'retained\';\n}',
-  },
-  {
-    name: 'TerminalRetentionPolicy',
-    declaration: 'export interface TerminalRetentionPolicy {\n    readonly unattendedTimeoutMs: number;\n    readonly activityPollIntervalMs: number;\n    readonly cleanupRetryMs: number;\n}',
   },
   {
     name: 'TerminalSandboxMode',

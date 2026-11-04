@@ -63,12 +63,12 @@ export class ClientTerminals extends Service {
   constructor(ctx: Context, private readonly remote: TerminalRemote) {
     super(ctx, 'webTerminals')
     this.rosters = new TerminalRosters(ctx.remote, remote, (sessionId, terminals) => {
-      const inventory = this.inventories.get(sessionId)
-      for (const info of terminals) inventory?.update(info)
+      this.inventories.get(sessionId)?.reconcile(terminals)
     }, (error) => { this.ctx.logger.warn('Terminal roster failed', error) })
     const connection = ctx.get('connection') as ConnectionHandle
     let connected = connection.generation.getSnapshot() !== undefined
     ctx.on('connection/reset', () => {
+      this.rosters.resume()
       if (!connected) { connected = true; return }
       for (const [sessionId, inventory] of this.inventories) {
         void inventory.reset()?.catch((error: unknown) => {
@@ -121,11 +121,21 @@ export class ClientTerminals extends Service {
   /**
    * Watch one Session's retained terminals; every watcher in this window shares one Host stream.
    * @param sessionId - watched Session.
-   * @param listener - receives each whole roster after the shared terminal list is updated.
+   * @param listener - receives each whole roster after the shared terminal list adopts it, dropping unlisted terminals.
    * @returns the release.
    */
   watch(sessionId: SessionId, listener: TerminalRosterListener): () => void {
     return this.rosters.watch(sessionId, listener)
+  }
+
+  /**
+   * Read the Host terminal a tab's content is bound to in this window.
+   * @param sessionId - owning Session.
+   * @param contentId - the tab's globally unique content identity.
+   * @returns the bound terminal, or undefined for an unbound tab.
+   */
+  boundTerminal(sessionId: SessionId, contentId: string): WebTerminalId | undefined {
+    return this.bindings.get(sessionId, contentId)
   }
 
   /**
