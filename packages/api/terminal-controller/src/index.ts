@@ -43,7 +43,10 @@ export interface Config {
   readonly shellCandidates: string[]
   /** Maximum retained terminals and pending allocations per Session. */
   readonly maxTerminals: number
-  /** Maximum Agent-controlled terminals and pending Agent allocations per Session; `maxTerminals` still bounds every terminal. */
+  /**
+   * Maximum running Agent-controlled terminals and pending Agent allocations per Session; `maxTerminals` still bounds
+   * every terminal, including exited ones and failed allocations awaiting cleanup.
+   */
   readonly maxAgentTerminals: number
   /** Maximum terminal width in columns. */
   readonly maxCols: number
@@ -77,7 +80,7 @@ interface OwnedSession {
   readonly terminals: Map<WebTerminalId, BrowserTerminal>
   readonly pending: Map<WebTerminalId, Promise<BrowserTerminal>>
   readonly allocations: Map<WebTerminalId, TerminalAllocation>
-  /** Agent allocations not yet committed; they count toward `maxAgentTerminals`. */
+  /** Agent allocations not yet committed; with running Agent-controlled terminals, they count toward `maxAgentTerminals`. */
   readonly agentPending: Set<WebTerminalId>
 }
 
@@ -86,6 +89,17 @@ interface TerminalLaunch {
   readonly argv: readonly string[]
   readonly env: Record<string, string>
   readonly info: WebTerminalInfo
+}
+
+/**
+ * Validate a terminal display title.
+ * @param title - requested title.
+ * @returns the title without surrounding whitespace.
+ * @throws Error when the title is blank or longer than 120 characters.
+ */
+function terminalTitle(title: string): string {
+  if (title.trim().length === 0 || title.length > 120) throw new Error('Terminal title must contain 1–120 characters')
+  return title.trim()
 }
 
 /** Typed Remote control of transient Session-owned terminal processes. */
@@ -201,20 +215,25 @@ export class TerminalController extends TypertRemoteService {
    * @param signal - allocation cancellation; a committed terminal outlives it.
    * @returns the Agent's handle for the committed terminal.
    * @throws RemoteError `terminal/limit-reached` when the Session or Agent terminal limit is reached.
+   * @throws Error when the title is blank or longer than 120 characters.
    */
   async openForAgent(agent: Agent, request: AgentTerminalRequest, signal: AbortSignal): Promise<AgentTerminal> {
     this.lifetime.signal.throwIfAborted()
+    const title = terminalTitle(request.title)
     this.dimensions(request.cols, request.rows)
     const owner = this.owner(agent)
     owner.lifetime.signal.throwIfAborted()
     this.requireCapacity(owner)
-    const controlled = [...owner.terminals.values(), ...owner.allocations.values()]
-      .filter(terminal => terminal.info.origin === 'agent' && terminal.info.control === 'agent').length
-    if (controlled + owner.agentPending.size >= this.config.maxAgentTerminals) throw new RemoteError('terminal/limit-reached', 'Session Agent terminal limit reached', { limit: this.config.maxAgentTerminals })
+    const controlled = new Set(owner.agentPending)
+    for (const { info } of [...owner.terminals.values(), ...owner.allocations.values()]) {
+      if (info.origin === 'agent' && info.control === 'agent' && info.state === 'running') controlled.add(info.id)
+    }
+    if (controlled.size >= this.config.maxAgentTerminals) throw new RemoteError('terminal/limit-reached', 'Session Agent terminal limit reached', { limit: this.config.maxAgentTerminals })
     const id = randomUUID() as WebTerminalId
     owner.agentPending.add(id)
     try {
-      const terminal = await this.allocate(agent, owner, id, launchSignal => this.agentLaunch(agent, id, request, launchSignal), signal)
+      const launch = { ...request, title }
+      const terminal = await this.allocate(agent, owner, id, launchSignal => this.agentLaunch(agent, id, launch, launchSignal), signal)
       return new AgentTerminal(terminal, () => this.close(agent, id))
     } finally {
       owner.agentPending.delete(id)
@@ -227,10 +246,14 @@ export class TerminalController extends TypertRemoteService {
    * @param id - terminal identity.
    * @param request - page position and byte bound.
    * @returns rendered screen text, including output received before the call.
+   * @throws RemoteError `terminal/unavailable` when the terminal is missing or closes before the screen is read.
    */
   readScreen(agent: Agent, id: WebTerminalId, request: TerminalScreenRequest): Promise<TerminalScreenPage> {
     const terminal = this.terminal(agent, id)
-    return terminal.drain().then(() => terminal.readScreen(request))
+    return terminal.drain().then(() => {
+      if (terminal.screenReleased) throw new RemoteError('terminal/unavailable', 'Terminal was closed in this Session', {})
+      return terminal.readScreen(request)
+    })
   }
 
   /**
@@ -315,8 +338,8 @@ export class TerminalController extends TypertRemoteService {
    */
   @Remote
   rename(agent: Agent, id: WebTerminalId, title: string): void {
-    if (title.trim().length === 0 || title.length > 120) throw new Error('Terminal title must contain 1–120 characters')
-    this.terminal(agent, id).rename(title.trim())
+    const trimmed = terminalTitle(title)
+    this.terminal(agent, id).rename(trimmed)
   }
 
   /**

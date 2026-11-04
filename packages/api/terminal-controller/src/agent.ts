@@ -21,7 +21,7 @@ export class AgentTerminalError extends Error {
 
 /** Launch parameters for an agent terminal; the caller resolves policy and directory. */
 export interface AgentTerminalRequest {
-  /** Tab title. */
+  /** Tab title of 1–120 characters; surrounding whitespace is removed. */
   readonly title: string
   /** Absolute initial directory; absent uses the Session working directory. */
   readonly cwd?: string

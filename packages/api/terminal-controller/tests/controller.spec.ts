@@ -843,6 +843,57 @@ describe('Agent terminals', () => {
     await expect(controller.openForAgent(agent, agentRequest, signal())).rejects.toMatchObject({ code: 'terminal/limit-reached', details: { limit: 1 } })
   })
 
+  it('frees the Agent slot when its terminal exits', async () => {
+    const { ctx, controller, agent, subprocess } = fixture({ maxTerminals: 3 })
+    withSandbox(ctx)
+    const exiting = fakeHandle()
+    subprocess.spawnTerminal.mockImplementationOnce(async () => exiting.checked)
+    subprocess.spawnTerminal.mockImplementation(async () => fakeHandle().checked)
+    const first = await controller.openForAgent(agent, agentRequest, signal())
+    await expect(controller.openForAgent(agent, agentRequest, signal())).rejects.toMatchObject({ details: { limit: 1 } })
+    await exiting.handle.terminate()
+    await vi.waitFor(() => { expect(first.info.state).toBe('exited') })
+    const second = await controller.openForAgent(agent, agentRequest, signal())
+    expect(controller.list(agent.id).map(info => info.id)).toEqual([first.id, second.id])
+  })
+
+  it('counts a failed Agent allocation awaiting cleanup toward the Session limit only', async () => {
+    const { ctx, controller, agent, subprocess, handle } = fixture({ maxTerminals: 2 })
+    withSandbox(ctx)
+    const abort = new AbortController()
+    subprocess.spawnTerminal.mockImplementationOnce(async () => { abort.abort(new Error('request disconnected')); return handle })
+    vi.mocked(handle.terminate).mockRejectedValueOnce(new Error('cleanup failed'))
+    await expect(controller.openForAgent(agent, agentRequest, abort.signal)).rejects.toThrow('cleanup failed')
+    expect(controller.list(agent.id)).toMatchObject([{ origin: 'agent', control: 'agent', state: 'failed' }])
+    subprocess.spawnTerminal.mockImplementation(async () => fakeHandle().checked)
+    await controller.openForAgent(agent, agentRequest, signal())
+    await expect(controller.openForAgent(agent, agentRequest, signal())).rejects.toMatchObject({ details: { limit: 2 } })
+  })
+
+  it('trims Agent terminal titles and rejects blank or over-long ones before allocating', async () => {
+    const { ctx, controller, agent, subprocess } = fixture()
+    withSandbox(ctx)
+    await expect(controller.openForAgent(agent, { ...agentRequest, title: '   ' }, signal())).rejects.toThrow('1–120 characters')
+    await expect(controller.openForAgent(agent, { ...agentRequest, title: 'x'.repeat(121) }, signal())).rejects.toThrow('1–120 characters')
+    expect(subprocess.spawnTerminal).not.toHaveBeenCalled()
+    const terminal = await controller.openForAgent(agent, { ...agentRequest, title: '  dev server  ' }, signal())
+    expect(terminal.info.title).toBe('dev server')
+  })
+
+  it('reports a terminal closed while its screen read drains as unavailable', async () => {
+    const { ctx, controller, agent, handle } = fixture()
+    withSandbox(ctx)
+    const terminal = await controller.openForAgent(agent, agentRequest, signal())
+    const accepted = Promise.withResolvers<undefined>()
+    handle.write.mockImplementationOnce(() => accepted.promise)
+    const writing = terminal.write('sleep 1\r')
+    const reading = controller.readScreen(agent, terminal.id, { offset: 0, count: 5, maxBytes: 100 })
+    await terminal.close()
+    accepted.resolve(undefined)
+    await writing
+    await expect(reading).rejects.toMatchObject({ code: 'terminal/unavailable' })
+  })
+
   it('drives its terminal through the handle and closes it while the agent controls it', async () => {
     const { ctx, controller, agent, handle } = fixture()
     withSandbox(ctx)

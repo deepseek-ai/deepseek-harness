@@ -313,7 +313,10 @@ export interface Config {
   readonly shellCandidates: string[]
   /** Maximum retained terminals and pending allocations per Session. */
   readonly maxTerminals: number
-  /** Maximum Agent-controlled terminals and pending Agent allocations per Session; `maxTerminals` still bounds every terminal. */
+  /**
+   * Maximum running Agent-controlled terminals and pending Agent allocations per Session; `maxTerminals` still bounds
+   * every terminal, including exited ones and failed allocations awaiting cleanup.
+   */
   readonly maxAgentTerminals: number
   /** Maximum terminal width in columns. */
   readonly maxCols: number

@@ -305,6 +305,9 @@ export class BrowserTerminal {
     if (this.info.control !== 'agent') throw new AgentTerminalError('user-control', 'The user has taken over this terminal')
   }
 
+  /** Whether closing released the screen; reads and marks then fail. */
+  get screenReleased(): boolean { return this.screenDisposed }
+
   private requireScreen(): void {
     if (this.screenDisposed) throw new AgentTerminalError('unavailable', 'The terminal was closed')
   }
