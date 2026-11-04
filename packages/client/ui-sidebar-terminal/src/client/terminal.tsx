@@ -71,10 +71,13 @@ export function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }: Ter
 
 /**
  * xterm.js reports the person's input and terminal-protocol replies through the same data event, so input that
- * follows a person's gesture within this window counts as typed; IME commits arrive in a later task.
+ * follows a person's gesture within this window counts as typed; IME commits arrive in a later task. Scrolling is
+ * not a gesture: xterm turns the wheel into arrow keys on the alternate screen, and reading must not take over.
  */
 const TYPED_INPUT_WINDOW_MS = 250
-const INPUT_GESTURES = ['keydown', 'beforeinput', 'paste', 'compositionend', 'drop', 'wheel', 'mousedown', 'touchstart'] as const
+const INPUT_GESTURES = ['keydown', 'beforeinput', 'paste', 'compositionend', 'drop', 'mousedown', 'touchstart'] as const
+/** Focus-in and focus-out reports (DECSET 1004) that xterm.js sends when a click focuses the screen. */
+const FOCUS_REPORTS = new Set(['\x1b[I', '\x1b[O'])
 
 /* oxlint-disable typescript/no-non-null-assertion -- React sets the DOM ref, then these effects initialize and use the emulator. */
 function TerminalScreen({ state, model, visible, label, theme }: {
@@ -113,7 +116,9 @@ function TerminalScreen({ state, model, visible, label, theme }: {
     let gestureAt = Number.NEGATIVE_INFINITY
     const gesture = (): void => { gestureAt = performance.now() }
     for (const type of INPUT_GESTURES) node.addEventListener(type, gesture, { capture: true, passive: true })
-    const input = xterm.onData((data) => { model.write(data, performance.now() - gestureAt < TYPED_INPUT_WINDOW_MS) })
+    const input = xterm.onData((data) => {
+      model.write(data, performance.now() - gestureAt < TYPED_INPUT_WINDOW_MS && !FOCUS_REPORTS.has(data))
+    })
     const measure = (): void => {
       if (!current.current.visible || !current.current.state.writable || node.clientWidth === 0 || node.clientHeight === 0) return
       fitScreen(xterm, addon, current.current.state, model)
