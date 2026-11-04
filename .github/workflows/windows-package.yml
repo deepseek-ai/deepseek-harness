@@ -220,6 +220,7 @@ jobs:
     env:
       PACKAGE_CACHE_NAMESPACE: ${{ inputs.cache_namespace }}
       DESKTOP_RETAINED_DIRECTORY: ${{ needs.package.outputs.directory }}
+      DESKTOP_ARCHIVE_NAME: windows-x64-${{ inputs.signing }}-${{ needs.package.outputs.version }}-${{ github.run_id }}-${{ needs.package.outputs.attempt }}.zip
       DESKTOP_PACKAGE_ATTEMPT: ${{ needs.package.outputs.attempt }}
       DESKTOP_PACKAGE_RUNNER: ${{ needs.package.outputs.runner-name }}
     steps:
@@ -251,28 +252,17 @@ jobs:
           "PNPM_CONFIG_STORE_DIR=$storeRoot" >> $env:GITHUB_ENV
       - run: pnpm install --frozen-lockfile
         working-directory: artifact-archiver
-      - name: Verify original retained build before GitHub archival
+      - name: Archive verified retained build
+        id: archive
         working-directory: artifact-archiver
         run: node --import tsx apps/desktop/scripts/archive-desktop-ci.ts
-      - name: Retain verified unsigned installer
-        if: success() && inputs.signing == 'unsigned'
+      - name: Retain installers for the selected mode
+        if: success()
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: windows-x64-unsigned-${{ needs.package.outputs.version }}-${{ github.run_id }}-${{ needs.package.outputs.attempt }}
-          compression-level: 0
-          include-hidden-files: true
-          path: ${{ needs.package.outputs.directory }}/*
-          if-no-files-found: error
-          retention-days: 14
-          overwrite: true
-      - name: Retain verified signed installer
-        if: success() && inputs.signing == 'signed'
-        uses: actions/upload-artifact@v7.0.1
-        with:
-          name: windows-x64-signed-${{ needs.package.outputs.version }}-${{ github.run_id }}-${{ needs.package.outputs.attempt }}
-          compression-level: 0
-          include-hidden-files: true
-          path: ${{ needs.package.outputs.directory }}/*
+          name: ${{ env.DESKTOP_ARCHIVE_NAME }}
+          path: ${{ steps.archive.outputs.path }}
+          archive: false
           if-no-files-found: error
           retention-days: 14
           overwrite: true
