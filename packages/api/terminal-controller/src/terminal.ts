@@ -40,12 +40,14 @@ export class BrowserTerminal {
    * @param info - initial metadata.
    * @param scrollback - maximum retained scrollback rows.
    * @param maxBufferedBytes - per-follower queue cap.
+   * @param release - removes files the launch created once the process has ended; it must not throw.
    */
   constructor(
     private readonly handle: SubprocessTerminalHandle,
     public info: WebTerminalInfo,
     scrollback: number,
     private readonly maxBufferedBytes: number,
+    private readonly release: () => Promise<void> = () => Promise.resolve(),
   ) {
     const { Terminal } = requireHeadless()
     const { SerializeAddon } = requireSerialize()
@@ -340,6 +342,7 @@ export class BrowserTerminal {
     this.closing = (async () => {
       await this.handle.terminate()
       await this.drained
+      await this.release()
       for (const follower of this.followers) follower.finish()
       this.followers.clear()
       this.screenDisposed = true

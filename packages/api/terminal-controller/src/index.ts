@@ -89,6 +89,8 @@ interface TerminalLaunch {
   readonly argv: readonly string[]
   readonly env: Record<string, string>
   readonly info: WebTerminalInfo
+  /** Removes files the launch created once the process has ended; it must not throw. */
+  readonly release?: () => Promise<void>
 }
 
 /**
@@ -449,14 +451,38 @@ export class TerminalController extends TypertRemoteService {
     const shell = await this.agentShell(agent, request.preferredShells, signal)
     const argv = await this.confine(agent, [shell.path, ...shell.args], request.policy, signal)
     const { platform } = await subprocess.terminalEnvironment(signal)
-    // Confined shells cannot write the person's history file; workspace-write grants /tmp.
-    const history = request.policy.mode !== 'danger-full-access' && platform === 'posix' ? { HISTFILE: `/tmp/dsh-agent-history-${id}` } : {}
+    // Confined shells cannot write the person's history file and must not load it. Only workspace-write grants /tmp,
+    // so a read-only shell gets an empty HISTFILE and keeps no history file.
+    const historyFile = `/tmp/dsh-agent-history-${id}`
+    const keepsHistory = platform === 'posix' && request.policy.mode === 'workspace-write'
+    const confined = platform === 'posix' && request.policy.mode !== 'danger-full-access'
+    const history = confined ? { HISTFILE: keepsHistory ? historyFile : '' } : {}
     return {
       argv, env: { ...request.env, DSH_SESSION_ID: agent.id, ...history },
       info: {
         id, shell, title: request.title, cwd, cols: request.cols, rows: request.rows, state: 'running', exitCode: null,
         origin: 'agent', control: 'agent', sandboxMode: request.policy.mode,
       },
+      ...keepsHistory ? { release: () => this.removeHistory(subprocess, historyFile) } : {},
+    }
+  }
+
+  /**
+   * Delete a confined Agent shell's history file in its execution environment after the shell ends.
+   * @param subprocess - the execution environment that ran the shell.
+   * @param path - history file the shell was given.
+   * @returns after deletion; a failure is logged because the file only holds the ended shell's own history.
+   */
+  private async removeHistory(subprocess: Context['subprocess'], path: string): Promise<void> {
+    try {
+      const { exitCode, signal } = await subprocess.spawn({
+        argv: ['rm', '-f', '--', path], cwd: '/',
+        stdio: { stdin: 'ignore', stdout: { maxBytes: 4096 }, stderr: { maxBytes: 4096 } },
+        graceMs: this.config.disposeGraceMs,
+      }).done
+      if (exitCode !== 0) throw new Error(`rm ended with ${exitCode ?? signal}`)
+    } catch (error) {
+      this.ctx.logger.warn('Agent terminal history cleanup failed', { path, error })
     }
   }
 
@@ -510,7 +536,7 @@ export class TerminalController extends TypertRemoteService {
   private async spawn(
     agent: Agent, owner: OwnedSession, id: WebTerminalId, prepare: (signal: AbortSignal) => Promise<TerminalLaunch>, signal: AbortSignal,
   ): Promise<BrowserTerminal> {
-    const { info, argv, env } = await prepare(signal)
+    const { info, argv, env, release } = await prepare(signal)
     const handle = await this.execution(agent).subprocess.spawnTerminal({
       argv, cwd: info.cwd, cols: info.cols, rows: info.rows,
       terminalType: 'xterm-256color', env,
@@ -519,11 +545,12 @@ export class TerminalController extends TypertRemoteService {
     })
     try {
       signal.throwIfAborted()
-      return new BrowserTerminal(handle, info, this.config.scrollback, this.config.maxBufferedBytes)
+      return new BrowserTerminal(handle, info, this.config.scrollback, this.config.maxBufferedBytes, release)
     } catch (error) {
       const cleanup = new TerminalRetention(this.config, handle.inspectActivity.bind(handle), async () => {
         owner.closedIds.add(id)
         await handle.terminate()
+        await release?.()
         owner.allocations.delete(id)
         this.changed(agent.id)
       }, (cleanupError) => { this.ctx.logger.error('Browser terminal allocation cleanup failed', cleanupError) })

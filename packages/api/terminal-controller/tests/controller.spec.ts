@@ -7,7 +7,7 @@ import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import type { SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandbox'
-import { SubprocessExecutableNotFoundError, type SubprocessRuntime, type SubprocessTerminalEnvironment, type SubprocessTerminalHandle } from '@deepseek-ai/dsh-subprocess'
+import { SubprocessExecutableNotFoundError, type SubprocessRuntime, type SubprocessSpawnSpec, type SubprocessTerminalEnvironment, type SubprocessTerminalHandle } from '@deepseek-ai/dsh-subprocess'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TerminalController, type Config } from '../src/index.ts'
@@ -51,7 +51,13 @@ function fixture(overrides: Partial<Config> = {}) {
   ctx.provide('sandboxPolicy', sandboxPolicy as never)
   ctx.provide('workingDirectory', workingDirectory as never)
   const { handle, checked } = fakeHandle()
-  const subprocess = { terminalEnvironment: vi.fn(async (): Promise<SubprocessTerminalEnvironment> => ({ platform: 'posix', defaultShell: '/bin/bash' })), resolveExecutable: vi.fn(async (path: string) => path), spawnTerminal: vi.fn(async () => checked) }
+  const subprocess = {
+    terminalEnvironment: vi.fn(async (): Promise<SubprocessTerminalEnvironment> => ({ platform: 'posix', defaultShell: '/bin/bash' })),
+    resolveExecutable: vi.fn(async (path: string) => path), spawnTerminal: vi.fn(async () => checked),
+    spawn: vi.fn((_spec: SubprocessSpawnSpec) => ({
+      done: Promise.resolve<{ exitCode: number | null; signal: NodeJS.Signals | null }>({ exitCode: 0, signal: null }),
+    })),
+  }
   ctx.provide('subprocess', subprocess as never)
   const controller = new TerminalController(ctx, { ...config, ...overrides })
   const disposeEffect = (label: string): Promise<void> => {
@@ -771,6 +777,51 @@ describe('Agent terminals', () => {
     expect(terminal.id).toMatch(/^[\w-]{1,128}$/u)
     expect(terminal.info).toMatchObject({ title: 'dev server', origin: 'agent', control: 'agent', sandboxMode: 'workspace-write', state: 'running' })
     expect(controller.list(agent.id)).toEqual([terminal.info])
+    expect(subprocess.spawn).not.toHaveBeenCalled()
+    await terminal.close()
+    expect(subprocess.spawn).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      argv: ['rm', '-f', '--', `/tmp/dsh-agent-history-${terminal.id}`], cwd: '/',
+    }))
+  })
+
+  it.each([
+    ['a read-only POSIX shell an empty HISTFILE', 'posix', { mode: 'read-only', workspaceRoot: '/workspace' }, { HISTFILE: '' }],
+    ['a confined Windows shell no HISTFILE', 'windows', confined, {}],
+  ] as const)('gives %s and removes no history file', async (_name, platform, policy, history) => {
+    const { ctx, controller, agent, subprocess } = fixture()
+    withSandbox(ctx)
+    subprocess.terminalEnvironment.mockResolvedValue({ platform, defaultShell: '/bin/bash' })
+    const terminal = await controller.openForAgent(agent, { ...agentRequest, policy }, signal())
+    expect(subprocess.spawnTerminal).toHaveBeenCalledWith(expect.objectContaining({ env: { DSH_SESSION_ID: 'session', ...history } }))
+    await terminal.close()
+    expect(subprocess.spawn).not.toHaveBeenCalled()
+  })
+
+  it('logs a failed history cleanup and still closes the terminal', async () => {
+    const { ctx, controller, agent, subprocess } = fixture()
+    withSandbox(ctx)
+    subprocess.spawnTerminal.mockImplementation(async () => fakeHandle().checked)
+    const warn = vi.spyOn(ctx.logger, 'warn')
+    subprocess.spawn.mockReturnValueOnce({ done: Promise.resolve({ exitCode: 1, signal: null }) })
+    subprocess.spawn.mockReturnValueOnce({ done: Promise.resolve({ exitCode: null, signal: 'SIGKILL' }) })
+    subprocess.spawn.mockImplementationOnce(() => { throw new Error('spawn unavailable') })
+    for (let index = 0; index < 3; index++) await (await controller.openForAgent(agent, agentRequest, signal())).close()
+    expect(controller.list(agent.id)).toEqual([])
+    expect(warn.mock.calls.map(call => String((call[1] as { error: unknown }).error)))
+      .toEqual(['Error: rm ended with 1', 'Error: rm ended with SIGKILL', 'Error: spawn unavailable'])
+  })
+
+  it('removes the history file of a failed Agent allocation after its cleanup', async () => {
+    const { ctx, controller, agent, subprocess } = fixture()
+    withSandbox(ctx)
+    const abort = new AbortController()
+    subprocess.spawnTerminal.mockImplementationOnce(async () => { abort.abort(new Error('request disconnected')); return fakeHandle().checked })
+    await expect(controller.openForAgent(agent, agentRequest, abort.signal)).rejects.toThrow('request disconnected')
+    expect(subprocess.spawn).toHaveBeenCalledOnce()
+    const [cleanup] = subprocess.spawn.mock.calls[0]!
+    expect(cleanup.argv.slice(0, 3)).toEqual(['rm', '-f', '--'])
+    expect(cleanup.argv[3]).toMatch(/^\/tmp\/dsh-agent-history-/u)
+    expect(controller.list(agent.id)).toEqual([])
   })
 
   it('starts a full-access agent terminal in the requested directory and environment, keeping its own variables', async () => {
