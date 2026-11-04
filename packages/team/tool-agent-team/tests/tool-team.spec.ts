@@ -878,7 +878,7 @@ describe('dsh-tool-team', () => {
       const system = request.messages.find(message => message.role === 'system')
       const prompt = system?.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
       expect(prompt?.includes('Agent Teams is available')).toBe(enabled)
-      expect(prompt?.includes('Record expected write scopes on shared tasks')).toBe(enabled)
+      expect(prompt?.includes('record expected write scopes on shared tasks')).toBe(enabled)
       expect(runtimeContextText(request)).toContain(leadIdentity(lead))
       const contexts = request.messages.findLast(message => message.source?.kind === 'runtime-context')?.source
       const initial = adapter.requests[0]!.messages.findLast(message => message.source?.kind === 'runtime-context')?.source
