@@ -14,6 +14,7 @@
 - button "Copy"
 - status: Failed
 - button "Failed" [disabled] [expanded]
+- button "Injected context"
 - group:
   - status: Retried model request (2/2) · {{duration}}
 - status:
