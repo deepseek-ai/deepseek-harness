@@ -75,7 +75,7 @@ export interface WorkspaceFileScope {
  * @param signal - cancellation for the persistence read of a stored Session.
  * @returns the scope, or undefined when no live or stored Session has that identity.
  */
-export async function resolveWorkspaceFileScope(
+async function workspaceFileScopeOf(
   ctx: Context, sessionId: SessionId, signal?: AbortSignal,
 ): Promise<WorkspaceFileScope | undefined> {
   const live = ctx.get('sessions')?.get(sessionId)
@@ -237,9 +237,20 @@ export class WorkspaceFiles extends TypertRemoteService {
         resource: 'session',
         hostTypeSymbol: '@deepseek-ai/dsh-api-workspace-files#WorkspaceFileScope',
         wireTypeSymbol: '@deepseek-ai/dsh-session/types#SessionId',
-        resolve: sessionId => resolveWorkspaceFileScope(scope, sessionId),
+        resolve: sessionId => workspaceFileScopeOf(scope, sessionId),
       })
     })
+  }
+
+  /**
+   * Resolve the scope other Host services use to open the same `session/<id>/<path>` addresses:
+   * a live Session's workspace root, else a stored Session's recorded root, else its header directory.
+   * @param sessionId - Session identity received on the wire.
+   * @param signal - cancellation for the persistence read of a stored Session.
+   * @returns the scope, or undefined when no live or stored Session has that identity.
+   */
+  scopeOf(sessionId: SessionId, signal?: AbortSignal): Promise<WorkspaceFileScope | undefined> {
+    return workspaceFileScopeOf(this.ctx, sessionId, signal)
   }
 
   /**

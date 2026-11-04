@@ -1,7 +1,7 @@
 /** Serve change summaries and comparisons, and open declared or changed workspace files verified by the viewed Session's filesystem. */
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-api-session-controller'
-import { resolveWorkspaceFileScope } from '@deepseek-ai/dsh-api-workspace-files'
+import type {} from '@deepseek-ai/dsh-api-workspace-files'
 import type {} from '@deepseek-ai/dsh-fs'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import { remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
@@ -116,7 +116,7 @@ async function handlePresentOpen(ctx: Context, request: Request): Promise<Respon
     const file = target.type === 'deliverables/presented' && isPresentedData(target.data) ? target.data.files[index] : undefined
     if (!isPresentedFile(file)) return new Response('Presented file not found in this Session result.', { status: 404 })
     request.signal.throwIfAborted()
-    const scope = await resolveWorkspaceFileScope(ctx, id as SessionId, request.signal)
+    const scope = await ctx.workspaceFiles.scopeOf(id as SessionId, request.signal)
     if (scope === undefined) return new Response('Presented file Session not found.', { status: 404 })
     const { absolutePath: path } = await ctx.workspaceFiles.stat(scope, file.path, request.signal)
     return await openVerified(ctx, request, path, action)

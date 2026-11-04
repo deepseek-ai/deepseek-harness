@@ -1,10 +1,8 @@
 /** Resolve desktop-only file references through the active Host filesystem and Session. */
 import { createHash } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
-import { resolveWorkspaceFileScope } from '@deepseek-ai/dsh-api-workspace-files'
+import type {} from '@deepseek-ai/dsh-api-workspace-files'
 import type {} from '@deepseek-ai/dsh-fs'
-import type {} from '@deepseek-ai/dsh-session'
-import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { parseFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
 
@@ -27,10 +25,11 @@ export async function localDragResource(ctx: Context, address: string, cancellat
   const resource = parseFileAddress(address)
   if (resource?.scope !== 'session') throw new Error('File drag requires a Session resource')
   const fs = ctx.get('fs')
-  if (fs === undefined || ctx.get('sessions') === undefined || ctx.get('sandboxPolicy') === undefined) throw new Error('File access unavailable')
+  const workspaceFiles = ctx.get('workspaceFiles')
+  if (fs === undefined || workspaceFiles === undefined) throw new Error('File access unavailable')
   const signal = cancellation === undefined ? AbortSignal.timeout(10_000) : AbortSignal.any([cancellation, AbortSignal.timeout(10_000)])
   signal.throwIfAborted()
-  const scope = await resolveWorkspaceFileScope(ctx, resource.sessionId as SessionId, signal)
+  const scope = await workspaceFiles.scopeOf(resource.sessionId as SessionId, signal)
   if (scope === undefined) throw new Error('File drag Session unavailable')
   const cwd = scope.workspaceRoot
   const entry = await fs.lstat(resource.path, { cwd }, signal)

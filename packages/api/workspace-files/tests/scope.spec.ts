@@ -3,7 +3,7 @@ import { Context } from '@deepseek-ai/cordis'
 import SessionStore, { SESSION_FORMAT_VERSION, SessionId, type SessionHeader } from '@deepseek-ai/dsh-session'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import { describe, expect, it, vi } from 'vitest'
-import WorkspaceFiles, { resolveWorkspaceFileScope } from '../src/index.ts'
+import WorkspaceFiles from '../src/index.ts'
 
 const CAPS = {
   maxBytes: 1024,
@@ -53,9 +53,9 @@ describe('Workspace Files Session scope lookup', () => {
     const workspaceFiles = await ctx.plugin(WorkspaceFiles, CAPS)
     try {
       ctx.sessions.create(liveId, { meta: { cwd: liveRoot, origin: 'subagent' } })
-      await expect(resolveWorkspaceFileScope(ctx, liveId)).resolves.toEqual({ sessionId: liveId, workspaceRoot: liveWorktree })
-      await expect(resolveWorkspaceFileScope(ctx, coldId)).resolves.toEqual({ sessionId: coldId, workspaceRoot: coldWorktree })
-      await expect(resolveWorkspaceFileScope(ctx, plainId)).resolves.toEqual({ sessionId: plainId, workspaceRoot: coldRoot })
+      await expect(ctx.workspaceFiles.scopeOf(liveId)).resolves.toEqual({ sessionId: liveId, workspaceRoot: liveWorktree })
+      await expect(ctx.workspaceFiles.scopeOf(coldId)).resolves.toEqual({ sessionId: coldId, workspaceRoot: coldWorktree })
+      await expect(ctx.workspaceFiles.scopeOf(plainId)).resolves.toEqual({ sessionId: plainId, workspaceRoot: coldRoot })
       expect(cachedSnapshot).toHaveBeenCalledWith(expect.objectContaining({ id: coldId }), ['workspaceRoot'])
       const lookup = ctx.typert.lookups.get('workspaceFileScope')
       if (lookup === undefined) throw new Error('workspaceFileScope lookup did not register')
@@ -108,7 +108,7 @@ describe('Workspace Files Session scope lookup', () => {
       await expect(lookup.resolve(liveFallbackId)).resolves.toEqual({ sessionId: liveFallbackId, workspaceRoot: fallbackRoot })
       expect(stat).not.toHaveBeenCalled()
       const signal = new AbortController().signal
-      await expect(resolveWorkspaceFileScope(ctx, coldId, signal)).resolves.toEqual({ sessionId: coldId, workspaceRoot: coldRoot })
+      await expect(ctx.workspaceFiles.scopeOf(coldId, signal)).resolves.toEqual({ sessionId: coldId, workspaceRoot: coldRoot })
       expect(stat).toHaveBeenLastCalledWith(coldId, { signal })
       await expect(lookup.resolve(coldId)).resolves.toEqual({ sessionId: coldId, workspaceRoot: coldRoot })
       await expect(lookup.resolve(fallbackId)).resolves.toEqual({ sessionId: fallbackId, workspaceRoot: fallbackRoot })
