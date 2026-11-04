@@ -98,9 +98,9 @@
 }
 
 /* Beside a preview in a row from FileNavigator `FILL_BELOW` on, the navigator
-   is a raised card inset by the tree body's own 8px so its corners show, with
-   the floating dock panel's surface (ui-dockkit `.float`) at a radius sized
-   for a panel this narrow. */
+   is a raised card inset by the tree body's own 8px so its corners show, at a
+   radius sized for a panel this narrow. In light mode it takes the floating
+   dock panel's surface and shadow (ui-dockkit `.float`). */
 @media (width >= 768px) {
   .push,
   .overlay {
@@ -133,7 +133,9 @@
     height: auto;
   }
 
-  /* Dark theme separates the card by background layer alone, without a shadow. */
+  /* Dark mode draws no shadow: the layer-1 background against the body's base
+     background separates the card, and its scrollbar takes the matching l1
+     thumb pair. */
   :global(body[data-ds-dark-theme]) .push,
   :global(body[data-ds-dark-theme]) .overlay {
     background: var(--dsw-alias-bg-layer-1);
