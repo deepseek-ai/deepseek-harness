@@ -176,10 +176,10 @@ export class BrowserTerminal {
   }
 
   /**
-   * Report published state changes to the owner's roster; the listener must not throw.
-   * @param listener - called after each state publication.
+   * Set the one listener that reports published state changes to the owner's roster; a later call replaces it.
+   * @param listener - called after each state publication; it must not throw.
    */
-  onStateChange(listener: () => void): void { this.stateListener = listener }
+  setStateListener(listener: () => void): void { this.stateListener = listener }
 
   /**
    * Observe shell lifecycle without interpreting output.

@@ -8,7 +8,7 @@ import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import { Remote, RemoteError, TypertRemoteService, type RemoteStream } from '@deepseek-ai/dsh-typert-protocol'
-import { AgentTerminal, type AgentTerminalRequest } from './agent.ts'
+import { AgentTerminalHandle, type AgentTerminal, type AgentTerminalRequest } from './agent.ts'
 import { discoverShells, findShell, resolveShell } from './shells.ts'
 import { BrowserTerminal } from './terminal.ts'
 import { TerminalRetention } from './retention.ts'
@@ -18,8 +18,8 @@ import type {
 } from './types.ts'
 
 export type * from './types.ts'
-export { AgentTerminal, AgentTerminalError } from './agent.ts'
-export type { AgentTerminalErrorCode, AgentTerminalRequest } from './agent.ts'
+export { AgentTerminalError } from './agent.ts'
+export type { AgentTerminal, AgentTerminalErrorCode, AgentTerminalRequest } from './agent.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -234,7 +234,7 @@ export class TerminalController extends TypertRemoteService {
     try {
       const launch = { ...request, title }
       const terminal = await this.allocate(agent, owner, id, launchSignal => this.agentLaunch(agent, id, launch, launchSignal), signal)
-      return new AgentTerminal(terminal, () => this.close(agent, id))
+      return new AgentTerminalHandle(terminal, () => this.close(agent, id))
     } finally {
       owner.agentPending.delete(id)
     }
@@ -421,7 +421,7 @@ export class TerminalController extends TypertRemoteService {
         owner.terminals.delete(id)
         this.changed(agent.id)
       }, (error) => { this.ctx.logger.error('Browser terminal cleanup failed', error) })
-      terminal.onStateChange(() => { this.changed(agent.id) })
+      terminal.setStateListener(() => { this.changed(agent.id) })
       this.changed(agent.id)
       this.requireOpen(owner, id)
       return terminal

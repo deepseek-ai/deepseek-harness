@@ -5538,7 +5538,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'AgentTerminal',
-    declaration: 'export class AgentTerminal {\n    constructor(private readonly terminal: BrowserTerminal, private readonly closeTerminal: () => Promise<void>);\n    get id(): WebTerminalId;\n    get pid(): number;\n    get info(): WebTerminalInfo;\n    get revision(): number;\n    changed(after: number, signal: AbortSignal): Promise<number>;\n    write(data: string): Promise<void>;\n    drain(): Promise<void>;\n    read(request: TerminalScreenRequest): TerminalScreenPage;\n    mark(): TerminalScreenMark;\n    inspectForeground(): Promise<SubprocessTerminalForeground | undefined>;\n    signal(signal: SubprocessTerminalSignal): Promise<number>;\n    async close(): Promise<void>;\n}',
+    declaration: 'export interface AgentTerminal {\n    readonly id: WebTerminalId;\n    readonly pid: number;\n    readonly info: WebTerminalInfo;\n    readonly revision: number;\n    changed(after: number, signal: AbortSignal): Promise<number>;\n    write(data: string): Promise<void>;\n    drain(): Promise<void>;\n    read(request: TerminalScreenRequest): TerminalScreenPage;\n    mark(): TerminalScreenMark;\n    inspectForeground(): Promise<SubprocessTerminalForeground | undefined>;\n    signal(signal: SubprocessTerminalSignal): Promise<number>;\n    close(): Promise<void>;\n}',
   },
   {
     name: 'AgentTerminalRequest',
@@ -5755,10 +5755,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'BrandedNumber',
     declaration: 'export type BrandedNumber<B extends string> = number & {\n    readonly [BRAND]: B;\n};',
-  },
-  {
-    name: 'BrowserTerminal',
-    declaration: 'export class BrowserTerminal {\n    constructor(private readonly handle: SubprocessTerminalHandle, public info: WebTerminalInfo, scrollback: number, private readonly maxBufferedBytes: number);\n    monitor(policy: TerminalRetentionPolicy, closing: () => void, closed: () => void, failed: (error: unknown) => void): void;\n    retain(signal: AbortSignal): AsyncIterable<TerminalRetentionFrame>;\n    async *attach(input: AsyncIterable<TerminalInput>, limits: Pick<TerminalEnvironment, \'maxInputBytes\' | \'maxCols\' | \'maxRows\'>, signal: AbortSignal, inputWindow?: RemoteUplinkWindow): AsyncIterable<TerminalFrame>;\n    onStateChange(listener: () => void): void;\n    async inspectActivity(): Promise<SubprocessTerminalActivity[\'state\']>;\n    get pid(): number;\n    get revision(): number;\n    async changed(after: number, signal: AbortSignal): Promise<number>;\n    agentWrite(data: string): Promise<void>;\n    agentSignal(signal: SubprocessTerminalSignal): Promise<number>;\n    inspectForeground(): Promise<SubprocessTerminalForeground | undefined>;\n    async drain(): Promise<void>;\n    readScreen(request: TerminalScreenRequest): TerminalScreenPage;\n    markScreen(): TerminalScreenMark;\n    get screenReleased(): boolean;\n    rename(title: string): void;\n    close(): Promise<void>;\n    dispose(): Promise<void>;\n}',
   },
   {
     name: 'BrowserUseProviderName',
@@ -9403,10 +9399,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TerminalRetentionFrame',
     declaration: 'export interface TerminalRetentionFrame {\n    readonly type: \'retained\';\n}',
-  },
-  {
-    name: 'TerminalRetentionPolicy',
-    declaration: 'export interface TerminalRetentionPolicy {\n    readonly unattendedTimeoutMs: number;\n    readonly activityPollIntervalMs: number;\n    readonly cleanupRetryMs: number;\n}',
   },
   {
     name: 'TerminalSandboxMode',
