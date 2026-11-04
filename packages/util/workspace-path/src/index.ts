@@ -19,25 +19,6 @@ export function isAbsoluteWorkspacePath(path: string): boolean {
 }
 
 /**
- * Whether `path` is `root` or lies below it. Both are canonical absolute paths of one execution
- * world in the same spelling, so the test is lexical and never touches the filesystem: the path
- * equals the directory or continues it past a separator. Windows spellings compare
- * case-insensitively, as their filesystems do.
- * @param root - canonical absolute directory.
- * @param path - canonical absolute path to test.
- * @returns true for `root` itself and every path below it.
- */
-export function within(root: string, path: string): boolean {
-  const windows = isWindowsStylePath(root)
-  const separator = windows && root.includes('\\') ? '\\' : '/'
-  const base = windows ? root.toLowerCase() : root
-  const candidate = windows ? path.toLowerCase() : path
-  const directory = base.length > 1 && base.endsWith(separator) ? base.slice(0, -1) : base
-  const prefix = directory.endsWith(separator) ? directory : directory + separator
-  return candidate === directory || candidate.startsWith(prefix)
-}
-
-/**
  * Resolve a Workspace-relative path into the Host-facing spelling used by path operations.
  * @param cwd - Session Workspace root, when known.
  * @param path - Absolute or Workspace-relative path; leading `./` segments are dropped when joining.

@@ -3,7 +3,7 @@
  * @module @deepseek-ai/dsh-working-directory
  */
 
-import { isAbsolute } from 'node:path'
+import { isAbsolute, relative, sep } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { z as zod } from 'zod'
@@ -13,7 +13,6 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-system-prompt'
-import { within } from '@deepseek-ai/dsh-util-workspace-path'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -87,6 +86,18 @@ interface WorkspaceRootState {
   root: string | null
   /** Registered anchors in registration order; the original project comes first when the header records one. */
   anchors: string[]
+}
+
+/**
+ * Whether `path` is `root` or lies below it. Both paths are canonical absolute
+ * paths of one execution world; the test is lexical and never touches the filesystem.
+ * @param root - canonical absolute directory.
+ * @param path - canonical absolute path to test.
+ * @returns true for `root` itself and every path below it.
+ */
+export function within(root: string, path: string): boolean {
+  const rest = relative(root, path)
+  return rest === '' || (rest !== '..' && !rest.startsWith(`..${sep}`) && !isAbsolute(rest))
 }
 
 /** The longest anchor containing `path`, or undefined when none does. */

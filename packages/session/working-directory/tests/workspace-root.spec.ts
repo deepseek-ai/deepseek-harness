@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
-import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
+import WorkingDirectory, { within } from '@deepseek-ai/dsh-working-directory'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { renderContextSnapshot } from '@deepseek-ai/dsh-system-prompt'
@@ -189,5 +189,13 @@ describe('Session workspace roots', () => {
     await f.ctx.workingDirectory.relocate(agent, f.worktree)
     expect(f.ctx.workingDirectory.rootOf(agent.session)).toBe(f.worktree)
     expect(f.ctx.workingDirectory.anchorsOf(agent.session)).toEqual([f.worktree])
+  })
+
+  it('tests containment lexically on canonical absolute paths', () => {
+    expect(within('/repo', '/repo')).toBe(true)
+    expect(within('/repo', '/repo/src')).toBe(true)
+    expect(within('/repo', '/repo-sibling')).toBe(false)
+    expect(within('/repo', '/')).toBe(false)
+    expect(within('/repo/src', '/repo')).toBe(false)
   })
 })

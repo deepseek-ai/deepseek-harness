@@ -236,7 +236,6 @@ describe('package dependency scope', () => {
       '@deepseek-ai/dsh-util-code-language',
       '@deepseek-ai/dsh-util-crypto',
       '@deepseek-ai/dsh-util-values',
-      '@deepseek-ai/dsh-util-workspace-path',
     ])
     expect(PACKAGE_DEPENDENCY_POLICY.safeHostDependencyExports['@deepseek-ai/dsh-deque']).toEqual(['Deque'])
     expect(PACKAGE_DEPENDENCY_POLICY.safeHostDependencyExports['@deepseek-ai/schemastery']).toEqual(['default'])
