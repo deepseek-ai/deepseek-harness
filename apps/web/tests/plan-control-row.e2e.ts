@@ -62,7 +62,17 @@ async function controlLayout(page: Page) {
 
 /** Wait for the responsive column and control row to finish changing width. */
 async function resizeControls(page: Page, width: number): Promise<void> {
+  const previousWidth = page.viewportSize()!.width
   await page.setViewportSize({ width, height: VIEWPORT.height })
+  if (width >= 768 && width < 1024) {
+    const frame = page.locator('[data-sidebar-collapsed][data-rightbar-collapsed]')
+    if (previousWidth >= 1024) await frame.waitFor()
+    const open = page.getByRole('button', { name: 'Open sidebar', exact: true })
+    if (await open.isVisible()) {
+      await open.click()
+      await expect.poll(() => frame.count()).toBe(0)
+    }
+  }
   await page.locator('[data-composer-card]').evaluate(async (card) => {
     let previous = card.getBoundingClientRect().width
     let stable = 0
@@ -201,7 +211,7 @@ describe('web e2e: plan chip click area at the narrow viewport', () => {
     // Find the content-dependent transition on this platform's fonts, never a
     // committed pixel threshold. The old 360px rule cannot satisfy this case.
     let narrowViewport: number | undefined
-    for (let width = 1100; width >= 650; width -= 10) {
+    for (let width = 1100; width >= 770; width -= 10) {
       await resizeControls(page, width)
       const layout = await controlLayout(page)
       if (layout.width > 360 && layout.icon && !layout.text) {
@@ -267,7 +277,7 @@ describe('web e2e: plan chip click area at the narrow viewport', () => {
     await selectModel(page, LONG_MODEL)
     await expectControlLayout(page, false)
 
-    await resizeControls(page, 440)
+    await resizeControls(page, 384)
     await expectControlLayout(page, true)
     const trigger = page.getByRole('button', { name: /Select model/ })
     expect(await trigger.getAttribute('title')).toContain(LONG_MODEL)

@@ -1,0 +1,8 @@
+version: 1
+scenario: deepseek-all-deferred-tools
+profile: headless
+composition: deepseek-all-deferred-tools
+recording: authored
+header:
+  class: deepseek-all-deferred-tools
+  pin: true

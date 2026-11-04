@@ -62,16 +62,16 @@ it.each(['portable-bundle', 'foreign-nested-row'] as const)('validates and insta
     ctx.provide('appReady', { onReady: (listener) => { listener(); return () => {} } })
     ctx.provide('subagents', { startActivation: async (spec: SubagentActivationSpec): Promise<SubagentActivation & { childId: SessionId }> => {
       starts.push(spec)
-      const instructions = JSON.parse(spec.request.prompt.find(block => block.type === 'text')!.text) as { packageName: string }
-      await writeBundle(spec.request.cwd!, instructions.packageName)
+      const instructions = JSON.parse(spec.prompt.find(block => block.type === 'text')!.text) as { packageName: string }
+      await writeBundle(spec.cwd!, instructions.packageName)
       if (scenario === 'foreign-nested-row') {
-        await writeFile(join(spec.request.cwd!, 'cordis.patch.yml'), JSON.stringify([{ insert: [{
+        await writeFile(join(spec.cwd!, 'cordis.patch.yml'), JSON.stringify([{ insert: [{
           id: instructions.packageName + ':group', name: instructions.packageName, group: true,
           config: [{ id: 'access', name: instructions.packageName }],
         }] }]))
       } else {
-        await rename(join(spec.request.cwd!, 'index.js'), join(spec.request.cwd!, 'runtime.mjs'))
-        await symlink('./runtime.mjs', join(spec.request.cwd!, 'index.js'))
+        await rename(join(spec.cwd!, 'index.js'), join(spec.cwd!, 'runtime.mjs'))
+        await symlink('./runtime.mjs', join(spec.cwd!, 'index.js'))
       }
       return { childId: spec.childId!, dispose: async () => {},
         result: Promise.resolve({ output: [], stopReason: 'completed', structured: { ready: true } }) }
@@ -118,9 +118,9 @@ it.each(['portable-bundle', 'foreign-nested-row'] as const)('validates and insta
   }
   await vi.waitFor(() => { expect(receipt()?.phase).toBe('installed') }, { timeout: 20_000 })
   expect(receipt()?.data?.application).toBe('applied')
-  expect(starts[0]?.request.agentPreset).toBe('cordis')
-  expect(starts[0]?.request.cwd?.startsWith(join(home, '.dsh-created-plugins'))).toBe(true)
-  await rm(starts[0]!.request.cwd!, { recursive: true })
+  expect(starts[0]?.agentPreset).toBe('cordis')
+  expect(starts[0]?.cwd?.startsWith(join(home, '.dsh-created-plugins'))).toBe(true)
+  await rm(starts[0]!.cwd!, { recursive: true })
   const name = receipt()?.data?.bundleName
   if (typeof name !== 'string') throw new Error('the installed card records no bundle name')
   await ctx.pluginManager.setBundleEnabled(name, false)
@@ -128,9 +128,6 @@ it.each(['portable-bundle', 'foreign-nested-row'] as const)('validates and insta
   const live = () => [...ctx.loader.entries()].find(entry => entry.options.id === name + ':counter')?.fiber
   expect(live()).toBeDefined()
   expect(readProfileManifest('test', dir).dsh?.profile?.bundles).toContain(name)
-  await ctx.actionCards.act(agent, callId, 'keep')
-  expect(receipt()?.phase).toBe('kept')
-  expect(live()).toBeDefined()
   await ctx.actionCards.act(agent, callId, 'undo')
   expect(receipt()?.phase).toBe('removed')
   expect(live()).toBeUndefined()

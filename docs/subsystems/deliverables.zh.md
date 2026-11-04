@@ -6,6 +6,8 @@
 
 源码：[`packages/deliverables/tool-present/src/types.ts`](../../packages/deliverables/tool-present/src/types.ts)、[`packages/deliverables/workspace-changes/src/types.ts`](../../packages/deliverables/workspace-changes/src/types.ts)
 
+补丁调用使用相同的摘要与对比 API。对于 Git 覆盖之外的路径，移动形成源删除与目标新增；停止的提交只贡献实际文件净变化。[采集规则](../../packages/deliverables/workspace-changes/README.zh.md#use-this-package)定义路径选择与观察行为。
+
 ## `PresentedFile`：一条声明的交付
 
 ```ts type-equiv

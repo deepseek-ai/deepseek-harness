@@ -861,7 +861,7 @@ class ReplayAdapter extends LlmAdapter {
 
   constructor(
     providers: readonly ReplayProviderConfig[],
-    private readonly replay: (options: GenerateOptions) => AsyncIterable<StreamChunk>,
+    private readonly replay: (options: GenerateOptions<string>) => AsyncIterable<StreamChunk>,
   ) {
     super()
     this.providers = new Map(providers.map(provider => [provider.id, provider]))
@@ -946,7 +946,7 @@ class ReplayAdapter extends LlmAdapter {
     })
   }
 
-  override stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+  override stream(options: GenerateOptions<string>): AsyncIterable<StreamChunk> {
     return this.replay(options)
   }
 }
@@ -1047,7 +1047,7 @@ export function installLlmReplay(ctx: Context, config: ReplayConfig): ReplayHand
   const liveSessionIds: (string | undefined)[] = Array.from({ length: scripts.length })
   let nextScript = 0
   const ANON = '\0anon\0' // the key for a call that carries no sessionId
-  const replay = (options: GenerateOptions): AsyncIterable<StreamChunk> => {
+  const replay = (options: GenerateOptions<string>): AsyncIterable<StreamChunk> => {
     const key = options.sessionId ?? ANON
     let state = bound.get(key)
     let unrecorded = false
@@ -1107,7 +1107,7 @@ export function installLlmReplay(ctx: Context, config: ReplayConfig): ReplayHand
   const providers = config.providers ?? []
   const dispose = providers.length > 0
     ? ctx.llm.registerAdapter(providers.map(provider => provider.id), new ReplayAdapter(providers, replay))
-    : ctx.on('llm/stream', (options: GenerateOptions, _next) => replay(options))
+    : ctx.on('llm/stream', (options: GenerateOptions<string>, _next) => replay(options))
   return {
     dispose,
     assertConsumed(): void {

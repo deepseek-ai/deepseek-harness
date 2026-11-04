@@ -159,7 +159,7 @@ Business behavior is verified through keyed-update regressions and recorded Web 
 | Evidence | Required observation |
 |---|---|
 | Keyed notifications and React updates | Content growth affects the owning Node and affected Group; unchanged historical rows and unrelated Turns receive no extra notifications. Mode changes preserve keys and member parents. |
-| Recorded Web replay | Current accessible titles, group disclosure, hidden ordinary Context, trigger notices, and footer placement match the committed expected output. |
+| Recorded Web replay | Current accessible titles, group disclosure, Context rows, trigger notices, and footer placement match the committed expected output. |
 
 [Recorded Web scenarios](../../../../apps/web/tests/steering.e2e.ts) cover online steering, reconnect handoff, and grouped presentation through the shipped Web profile. These behavior checks do not establish a quantified latency or memory improvement.
 
@@ -171,4 +171,4 @@ Business behavior is verified through keyed-update regressions and recorded Web 
 - Stable mounting does not eliminate layout, paint, or retained-memory costs. No measured latency or optimal-performance claim is made.
 - Real group splits, merges, first-member changes, and pagination repairs can change identity. The mode-switch guarantee does not prohibit those legitimate changes.
 - Revealing hidden parts, selection/copy, interruption notices, group disclosure, and outer Turn interaction belong to Chat's business adaptation; generic reference tests alone do not establish those behaviors.
-- Turn status/duration replaces the old tool/message-count title, so status, accessible names, and empty-process Turns require explicit presentation coverage. Hiding ordinary Context retains non-human waking notices and original Session/Trajectory inspection; footer placement depends on the real Turn end rather than group membership.
+- Turn status/duration replaces the old tool/message-count title, so status, accessible names, and empty-process Turns require explicit presentation coverage. Non-human waking notices remain independent of Context rows, and Session/Trajectory inspection is unchanged; footer placement depends on the real Turn end rather than group membership.

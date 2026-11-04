@@ -33,7 +33,7 @@ const OUT = 'packages/extensions/cordis-client-runner/src/client/slot-catalog.ts
 const SOURCE_GLOBS = ['packages/*/*/src/**/*.ts', 'packages/*/*/src/**/*.tsx']
 
 /** Slot cardinalities the contract allows. */
-const KINDS = ['single', 'list', 'keyed', 'chain'] as const
+const KINDS = ['single', 'list', 'keyed', 'chain', 'hoc'] as const
 /** Slot data scopes the contract allows. */
 const SCOPES = ['root', 'session', 'session-maybe'] as const
 
@@ -48,9 +48,9 @@ const MAX_DECL_CHARS = 1200
  * share that hands down a subsystem instead of a share, and prose that grew
  * into a manual. Every report also lists one line per standard prop seat of its
  * scope, so the widest Session-scope slot (`tool.call.toolview`, with the
- * global and Session access seats) sets the current 123.
+ * global and Session access seats) sets the current 125.
  */
-const MAX_ENTRY_LINES = 123
+const MAX_ENTRY_LINES = 125
 
 /** One register-call option as the catalog teaches it. */
 interface OptionDoc {
@@ -81,6 +81,10 @@ const REGISTER_OPTIONS: Readonly<Record<(typeof KINDS)[number], readonly OptionD
   ],
   chain: [
     { name: 'select', requirement: 'required', type: '(owner) => unknown | null', doc: 'Pure routing selector. Entries are tried in ascending order; the first non-null result wins and arrives as the component\'s `matched` prop. All-null falls through to the owner\'s fallback.' },
+  ],
+  hoc: [
+    { name: 'id', requirement: 'required', type: 'string', doc: 'Your layer key. A fresh id adds a layer; reusing a shipped id replaces that layer. Your component must render its `children` prop: a layer that omits it hides the owner content, such as the whole conversation and its composer.' },
+    { name: 'order', requirement: 'optional', type: 'number', doc: 'Nesting position, ascending (default 0); the lowest order is the outermost layer. Render the `children` prop exactly once.' },
   ],
 }
 
@@ -301,9 +305,11 @@ function entryOf(
       ...occupant.id === undefined ? [] : [`id '${occupant.id}'`],
       ...occupant.entryKey === undefined ? [] : [`key '${occupant.entryKey}'`],
     ].join(' ')),
-    replaceRisk: cellOccupied && (declaration.kind === 'single' || declaration.kind === 'keyed')
-      ? 'shadows-shipped-ui'
-      : 'none',
+    replaceRisk: declaration.kind === 'hoc'
+      ? 'wraps-owner-content'
+      : cellOccupied && (declaration.kind === 'single' || declaration.kind === 'keyed')
+        ? 'shadows-shipped-ui'
+        : 'none',
     example: exampleOf(declaration),
     source: declaration.source,
   }
@@ -365,7 +371,9 @@ function exampleOf(declaration: SlotDeclaration): string {
     '  apply(ctx) {',
     `    ctx.slots.inject('${declaration.key}', () => ctx.slots.register(`,
     `      { ${options} },`,
-    "      () => React.createElement('div', null, 'hello'),",
+    declaration.kind === 'hoc'
+      ? "      ({ children }) => React.createElement('div', null, children),"
+      : "      () => React.createElement('div', null, 'hello'),",
     '    ))',
     '  },',
     '}',
@@ -393,6 +401,7 @@ const KIND_EXAMPLE: Readonly<Record<string, readonly string[]>> = {
   list: ["id: 'my-entry'", 'order: 100', "label: 'My entry'"],
   keyed: ["key: '<one key the owner dispatches>'"],
   chain: ['select: owner => null'],
+  hoc: ["id: 'my-layer'", 'order: 100'],
 }
 
 /** Drop the `@deepseek-ai/dsh-` prefix so rows stay readable. */
@@ -476,7 +485,7 @@ export function renderClientCatalog(entries: readonly SlotEntry[]): string {
     'export interface ClientSlotEntry {',
     '  /** SlotMap key passed as the register call\'s `name`. */',
     '  key: string',
-    '  /** Cardinality: `single`, `list`, `keyed`, or `chain`. */',
+    '  /** Cardinality: `single`, `list`, `keyed`, `chain`, or `hoc`. */',
     '  kind: string',
     '  /** Data scope: `root`, `session`, or `session-maybe`. */',
     '  scope: string',
@@ -502,7 +511,10 @@ export function renderClientCatalog(entries: readonly SlotEntry[]): string {
     '  declaredBy: string',
     '  /** Entries the shipped composition already registered here. */',
     '  occupants: readonly string[]',
-    '  /** `shadows-shipped-ui` when registering here replaces shipped UI; `none` when additive. */',
+    '  /**',
+    '   * `shadows-shipped-ui` when registering here replaces shipped UI; `wraps-owner-content` when your',
+    '   * component wraps the owner content and must render `children`; `none` when additive.',
+    '   */',
     '  replaceRisk: string',
     '  /** A minimal browser half that registers into this slot. */',
     '  example: string',

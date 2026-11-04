@@ -1,9 +1,9 @@
 /** Select local test defaults or platform release settings without changing the caller's environment. */
 
-import { accessSync, constants, readFileSync, statSync } from 'node:fs'
-import { dirname, isAbsolute, join, resolve } from 'node:path'
+import { accessSync, constants, statSync } from 'node:fs'
+import { dirname, isAbsolute, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parseEnv } from 'node:util'
+import { readDesktopPackageSettings as readSettings } from './desktop-file-settings.mjs'
 import { resolveDesktopAppId, resolveMacOSNotarizationEnvironment, resolveMacOSSigningEnvironment, resolveNpmRegistry } from './desktop-release-environment.mjs'
 import { resolveDesktopAutoUpdateConfig } from './desktop-auto-update-environment.mjs'
 import { createWindowsTokenSigner } from './windows-sign.mjs'
@@ -19,7 +19,6 @@ const SHARED_SETTING = /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|NPM_REGISTRY|M
 const WINDOWS_SETTING = /^DSH_DESKTOP_WINDOWS_(?:CER_FILE|SIGNTOOL|KEY_CONTAINER|TOKEN_PIN|SIGNATURE_CACHE_DIR|SIGNATURE_CACHE_CONCURRENCY|PACK_CONCURRENCY|COMPRESSION_LEVEL)$/u
 const MACOS_SETTING = /^(?:DSH_DESKTOP_MACOS_(?:SIGNING_IDENTITY|TEAM_ID|SIGNATURE_CACHE_DIR|PACK_CONCURRENCY|ZIP_COMPRESSION_LEVEL|DOWNLOAD_PROXY|NOTARIZATION_PROXY)|APPLE_(?:API_KEY|API_KEY_ID|API_ISSUER|ID|APP_SPECIFIC_PASSWORD|TEAM_ID|KEYCHAIN|KEYCHAIN_PROFILE)|CSC_(?:LINK|KEY_PASSWORD))$/u
 const AMBIENT_RELEASE_SETTING = /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|MANDATORY_UPDATE_.*|WINDOWS_.*|MACOS_.*)|APPLE_.*|(?:WIN_)?CSC_.*|DOWNLOAD_(?:TEST|PROD)_.*)$/iu
-const FILE_SETTINGS = ['DSH_DESKTOP_WINDOWS_CER_FILE', 'DSH_DESKTOP_WINDOWS_SIGNTOOL', 'APPLE_API_KEY', 'APPLE_KEYCHAIN', 'CSC_LINK']
 
 /**
  * Select local macOS test defaults without reading dotenv files or inheriting release settings.
@@ -99,40 +98,6 @@ export function loadDesktopPackageEnvironment(platform, environment = process.en
     ...(environment.DSH_DESKTOP_UPDATE_CHANNEL === undefined ? {} : { DSH_DESKTOP_UPDATE_CHANNEL: environment.DSH_DESKTOP_UPDATE_CHANNEL }),
     ...(preset === undefined ? {} : { DSH_PACKAGING_PRESET: preset }),
   }
-}
-
-/**
- * Read an explicitly selected dotenv without exposing credential-bearing parser errors.
- * @param {string} path Selected file; relative file settings resolve beside it.
- * @param {(name: string) => boolean} accepts Whether this file may declare a setting.
- * @returns {NodeJS.ProcessEnv} Validated file settings.
- */
-function readSettings(path, accepts) {
-  let contents
-  try {
-    contents = readFileSync(path, 'utf8')
-  }
-  catch {
-    throw new Error(`desktop package: cannot read ${path}; copy ${path}.example and fill in the local settings`)
-  }
-  let settings
-  try {
-    settings = parseEnv(contents.replace(/^\uFEFF/u, ''))
-  }
-  catch {
-    // Parser diagnostics can contain credential-bearing input.
-    throw new Error(`desktop package: invalid dotenv syntax in ${path}`)
-  }
-  for (const name of Object.keys(settings)) {
-    if (!accepts(name)) {
-      throw new Error(`desktop package: unsupported setting ${name} in ${path}; use the platform template`)
-    }
-    if (settings[name].includes('\0')) throw new Error(`desktop package: ${name} cannot contain a NUL character`)
-  }
-  for (const name of FILE_SETTINGS) {
-    if (settings[name]?.trim()) settings[name] = resolve(dirname(path), settings[name].trim())
-  }
-  return settings
 }
 
 function requireReadableFile(environment, name) {

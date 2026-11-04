@@ -86,6 +86,8 @@ Read these pages when the deliverables surface is not enough. They move from the
 
 -----
 
+Delivery cards and known inline file mentions expose a [context menu](../ui-context-menu/README.md) for their declared Session file, preserving the original path and optional line.
+
 <a id="model-experience"></a>
 ## Model Experience
 

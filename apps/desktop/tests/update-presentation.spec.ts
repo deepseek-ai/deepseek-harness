@@ -44,3 +44,18 @@ it('keeps raw diagnostics out of error tooltips in both locales', () => {
       technicalDetails: 'private diagnostic' }, messages)).toBe(messages.updateInstallFailed)
   }
 })
+
+it('offers actionable filesystem recovery without exposing paths in the indicator', () => {
+  for (const messages of [en, zh]) {
+    for (const [downloadFailure, expected] of [
+      ['space', messages.updateDownloadSpaceFailed],
+      ['permission', messages.updateDownloadPermissionFailed],
+      ['busy', messages.updateDownloadBusyFailed],
+    ] as const) {
+      const state: DesktopUpdateState = { phase: 'error', failedOperation: 'download', downloadFailure,
+        technicalDetails: '/private/cache/new.zip', message: 'write failed' }
+      expect(desktopUpdateErrorSummary(state, messages)).toBe(expected)
+      expect(presentDesktopUpdate(state)).toEqual({ phase: 'error', failure: `download-${downloadFailure}` })
+    }
+  }
+})

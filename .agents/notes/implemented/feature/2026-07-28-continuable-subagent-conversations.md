@@ -18,6 +18,8 @@ Parent Agents need to send later work to the same live child without changing it
 
 ## Decision
 
+Human control addressing and permissions are superseded by [target Session user controls](../architecture/2026-10-22-subagent-target-user-controls.md); model-message adjacency and parent-owned runtime restrictions are superseded by [tree-wide communication](../architecture/2026-10-16-tree-wide-agent-communication.md). The direct-parent authorization statements below do not govern those current operations.
+
 The shared activation entry point, external execution ownership, and caller-versus-parent result delivery are governed by [Unified subagent activations](../simplification/2026-09-17-unified-subagent-activations.md). This record retains the independent rationale described below.
 
 A continuable subagent has one durable Session and at most one process-local Activation:

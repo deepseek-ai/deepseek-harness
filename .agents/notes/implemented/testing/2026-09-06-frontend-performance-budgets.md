@@ -102,6 +102,23 @@ These local runs both failed the independent open budget: their open medians wer
 
 Post-GC browser heap was 80.70/80.71 MiB. GNU time reported maximum RSS of 535.78/561.80 MiB for each benchmark command and its children; this is not input-phase memory or an aggregate browser-memory measurement. Moving the composer's selection reveal into an animation frame was rejected: profiling showed the style flush moved to another geometry read, without improving typing. The product fix removes the invalidation source instead.
 
+### Streaming Assistant visibility
+
+Chat retains visibility per Assistant block. Same-kind text and reasoning appends inspect only the incoming delta until the block becomes visible, then reuse that result. This avoids repeated `trim()` calls on accumulated strings without changing whitespace, first-token timing, or visible anchors. Replacements recalculate visibility, retry resets it, and final messages rebuild it. Copying the block array remains proportional to its length; this does not make every Assembler operation constant-time.
+
+The [conversation-fold worker](../../../../benchmarks/conversation-fold/conversation-fold.worker.client.ts) measures a single 256 KiB block split into 4,096 or 16,384 deltas, using ordinary text or reasoning whose first half is whitespace. Five fresh compiled Node children per case reuse the existing benchmark registrations, production Assembler and Chat builder. Timing includes every append, one final flush, and reading every output character. Fixture preparation and GC are excluded; retained heap is the post-GC increment with the Assembler, live entries and published state still reachable.
+
+Local macOS arm64 measurements on Node 26.8.2 give these elapsed medians. The time limits use reference allowances of 12/32 ms and the existing shared scale and headroom; they are not new hosted-runner calibration.
+
+| Workload | Deltas | Repeated accumulated trim | Cached visibility | Time limit |
+|---|---:|---:|---:|---:|
+| Ordinary text | 4,096 | 42.25 ms | 7.32 ms | 30 ms |
+| Half-leading-whitespace reasoning | 4,096 | 252.75 ms | 7.96 ms | 30 ms |
+| Ordinary text | 16,384 | 206.71 ms | 23.06 ms | 80 ms |
+| Half-leading-whitespace reasoning | 16,384 | 1114.18 ms | 23.08 ms | 80 ms |
+
+All four cases reject accumulated trimming and pass with cached visibility. Retained heap remains approximately 2.8/9.9 MiB for the two fragment counts, below the 20 MiB limit derived from a 16 MiB allowance. Maximum worker RSS across these samples falls from 185.70 to 89.36 MiB; it is a whole-process diagnostic, not aggregate application memory. This endpoint measures local assembly with one final publication, excluding network, browser rendering and Trajectory. Separate browser regressions cover settlement, cancellation, retry, reload, reopening and blank reasoning without asserting a browser speedup.
+
 ## Alternatives considered
 
 **Use the Node fold as paint evidence.** Rejected because it never performs DOM mutation, layout, or browser scheduling. The focused reconnect case likewise makes no GUI speed claim.

@@ -21,14 +21,14 @@
   en: 3221d1076554001f
   zh: 29f166be6a5c04d9
 /development-guide/contributor-reference/typescript-project-layout:
-  en: eb79b6f8ea745a9f
-  zh: de676c78231c823a
+  en: 16d67911ecaa50d3
+  zh: f5259b0fbf022db3
 /development-guide/contributor-reference/environment-variables:
   en: dba2c72ee6ffa930
   zh: b65c27fbb9129ec8
 /development-guide/contributor-reference/git-integrations:
-  en: 2efb7c4e482413fc
-  zh: 75386476a283111a
+  en: 075658ecfc10da20
+  zh: 69e664417bbde87e
 /development-guide/contributor-reference/ci-gates:
   en: dfa3a24d9070478f
   zh: fa889b3536ab58e2
@@ -45,5 +45,5 @@
   en: 85b38f78d87fc88f
   zh: 00d5eb625e7dfb61
 /development-guide/contributor-reference/documenting-types-verbatim-ts-type-equiv:
-  en: 9d578b6797be921b
-  zh: 823cbfcfd9a75c17
+  en: 6b9b948e0b80cf76
+  zh: 2642f4127ed9b719

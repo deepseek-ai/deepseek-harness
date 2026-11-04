@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ConfigPageForm } from '../src/client/slot-contract.ts'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -70,7 +71,7 @@ const MIRROR_OPTION = `${en.registryNpmmirror} registry.npmmirror.com`
 
 const IDLE_INSTALL: InstallState = {
   open: false, spec: '', registries: null, registry: { kind: 'offered', registry: null }, registryOpen: false, registryError: false, attempts: null,
-  phase: 'idle', inputError: null, subject: null, runs: [], detailsOpen: false,
+  phase: 'idle', inputError: null, subject: null, runs: [], detailsOpen: false, logPath: null,
   installed: null, installedVersion: null, restartRequired: false, failure: null, approvedBuilds: [], enabling: false,
 }
 
@@ -159,6 +160,7 @@ function renderTab(
     useSessionRetainInfo: unusedStandardHook,
     useResource: unusedStandardHook,
     ...allowAllAccess,
+    useContextMenu: contextMenuHook(),
   }
   const navigation = createNavigationStore().create()
   const props: PluginManagerPageProps = {
@@ -298,30 +300,30 @@ describe('PluginManagerPage', () => {
   })
 
   it('keeps the Installed tab panel through loading and the More list out of the tabs, and returns a More plugin opened from Discover to Discover', () => {
-    const worktree = '@deepseek-ai/dsh-experimental-tool-worktree'
+    const inspector = '@deepseek-ai/dsh-experimental-inspector-profile'
     const { navigation, set } = renderTab({ status: 'loading', packages: [] }, {}, {
       'plugins.tab:discover': (_view, owner) => (
-        <button type="button" onClick={() => { (owner as PluginTabProps).openPackage(worktree) }}>Discover open</button>
+        <button type="button" onClick={() => { (owner as PluginTabProps).openPackage(inspector) }}>Discover open</button>
       ),
     }, {}, [{ id: 'discover', label: 'Discover' }])
     const installed = screen.getByRole('tab', { name: en.installedTab })
     expect(document.getElementById(installed.getAttribute('aria-controls') as string)?.getAttribute('role')).toBe('tabpanel')
     set({ status: 'ready', packages: [] })
     expect(screen.getByRole('tabpanel', { name: en.installedTab }).textContent).toBe(en.empty)
-    set({ packages: [pkg({ name: worktree, official: true, optional: true, installed: false, enabled: false })] })
+    set({ packages: [pkg({ name: inspector, official: true, optional: true, installed: false, enabled: false })] })
     act(() => { navigation.actions.setView({ kind: 'more' }) })
     expect(screen.queryByRole('tablist')).toBeNull()
     expect(screen.queryByRole('tabpanel')).toBeNull()
     act(() => { navigation.actions.setView({ kind: 'list' }) })
     fireEvent.click(screen.getByRole('tab', { name: 'Discover' }))
     fireEvent.click(screen.getByRole('button', { name: 'Discover open' }))
-    expect(document.querySelector(`[data-plugin-detail="${worktree}"]`)).not.toBeNull()
+    expect(document.querySelector(`[data-plugin-detail="${inspector}"]`)).not.toBeNull()
     // An official plugin of the More list opened from Discover returns to Discover, not to the More list.
     fireEvent.click(screen.getByRole('button', { name: en.backToList }))
     expect(navigation.getSnapshot()).toEqual({ tab: 'discover', view: { kind: 'list' } })
     fireEvent.click(screen.getByRole('tab', { name: en.installedTab }))
     act(() => { navigation.actions.setView({ kind: 'more' }) })
-    fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', worktree) }))
+    fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', inspector) }))
     fireEvent.click(screen.getByRole('button', { name: en.backToPackage.replace('{name}', en.moreTitle) }))
     expect(screen.getByRole('heading', { name: en.moreTitle, level: 1 })).toBeTruthy()
   })
@@ -733,14 +735,14 @@ describe('PluginManagerPage', () => {
         pkg({ name: '@acme/dsh-tool', enabled: false }),
         // Selected by the profile but not a bundle: a problem the person can switch off, in the profile's own group.
         pkg({ name: 'dsh-selected', installed: false, error: { code: 'not-bundle' } }),
-        pkg({ name: '@deepseek-ai/dsh-experimental-agent-team-profile', installed: false, optional: true, removable: false, enabled: false }),
+        pkg({ name: '@deepseek-ai/dsh-experimental-voice-input-bundle', installed: false, optional: true, removable: false, enabled: false }),
       ],
       busy: ['dsh-protected'],
     })
     const cards = screen.getAllByRole('listitem')
     // Offered extensions precede installed bundles.
     expect(cards.map(card => card.getAttribute('data-plugin-package'))).toEqual([
-      '@deepseek-ai/dsh-experimental-agent-team-profile', 'dsh-better-sidebar', 'dsh-broken', 'dsh-protected', '@acme/dsh-tool', 'dsh-selected',
+      '@deepseek-ai/dsh-experimental-voice-input-bundle', 'dsh-better-sidebar', 'dsh-broken', 'dsh-protected', '@acme/dsh-tool', 'dsh-selected',
     ])
     expect(cards.map(card => card.getAttribute('data-plugin-status'))).toEqual(['disabled', 'running', 'problem', 'running', 'disabled', 'problem'])
     // Group titles have no counts; the official bundle retains its experimental marker.
@@ -774,11 +776,11 @@ describe('PluginManagerPage', () => {
         ].map(name => pkg({ name })),
         pkg({ name: '@acme/dsh-base', readOnlyReason: 'management-required' }),
         pkg({ name: 'dsh-better-sidebar' }),
-        pkg({ name: '@deepseek-ai/dsh-experimental-agent-team-profile', installed: false, optional: true, removable: false }),
+        pkg({ name: '@deepseek-ai/dsh-experimental-voice-input-bundle', installed: false, optional: true, removable: false }),
       ],
     })
     expect(screen.getAllByRole('listitem').map(card => card.getAttribute('data-plugin-package'))).toEqual([
-      '@deepseek-ai/dsh-experimental-agent-team-profile', '@acme/dsh-base', 'dsh-better-sidebar',
+      '@deepseek-ai/dsh-experimental-voice-input-bundle', '@acme/dsh-base', 'dsh-better-sidebar',
     ])
     expect(document.querySelector('[data-plugin-count]')).toBeNull()
   })
@@ -787,7 +789,7 @@ describe('PluginManagerPage', () => {
     const name = '@deepseek-ai/dsh-experimental-terminal-bundle'
     const b = renderTab({ packages: [
       pkg({ name, official: true, enabled, rows: [row()] }),
-      pkg({ name: '@deepseek-ai/dsh-experimental-agent-team-profile', official: true }),
+      pkg({ name: '@deepseek-ai/dsh-experimental-voice-input-bundle', official: true }),
     ] })
     expect(document.querySelector(`[data-plugin-package="${name}"]`)).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
@@ -805,7 +807,7 @@ describe('PluginManagerPage', () => {
 
   it('keeps a shipped bundle out of both lists until one of its declared rows runs', () => {
     const hidden = '@deepseek-ai/dsh-experimental-liveshare'
-    const shown = '@deepseek-ai/dsh-experimental-agent-team-profile'
+    const shown = '@deepseek-ai/dsh-experimental-voice-input-bundle'
     const offer = (rows: readonly PackageRow[]): PackageView => pkg({
       name: hidden, official: true, installed: false, optional: true, removable: false, enabled: false, listedByDefault: false, rows,
     })
@@ -879,16 +881,16 @@ describe('PluginManagerPage', () => {
   })
 
   it('opens an official bundle\'s page with its beta tag and no uninstall, and switches it on', () => {
-    const title = 'Agent Teams'
+    const title = 'Voice input'
     const { actions } = renderTab({
-      packages: [pkg({ name: '@deepseek-ai/dsh-experimental-agent-team-profile', meta: { title }, installed: false, optional: true, removable: false, enabled: false })],
+      packages: [pkg({ name: '@deepseek-ai/dsh-experimental-voice-input-bundle', meta: { title }, installed: false, optional: true, removable: false, enabled: false })],
     })
     fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', title) }))
     const detail = document.querySelector('[data-plugin-detail]') as HTMLElement
     expect(within(detail).getByText(en.statusBeta)).toBeTruthy()
     expect(within(detail).queryByRole('button', { name: en.uninstallLabel.replace('{name}', title) })).toBeNull()
     fireEvent.click(within(detail).getByRole('switch', { name: en.enableToggle.replace('{name}', title) }))
-    expect(actions.setEnabled).toHaveBeenCalledExactlyOnceWith('@deepseek-ai/dsh-experimental-agent-team-profile', true)
+    expect(actions.setEnabled).toHaveBeenCalledExactlyOnceWith('@deepseek-ai/dsh-experimental-voice-input-bundle', true)
   })
 
   it('keeps the persisted selection while marking a failed component as a problem', () => {
@@ -913,7 +915,7 @@ describe('PluginManagerPage', () => {
   })
 
   it.each([
-    ['@deepseek-ai/dsh-experimental-agent-team-profile', true],
+    ['@deepseek-ai/dsh-experimental-voice-input-bundle', true],
     ['@deepseek-ai/dsh-experimental-auto-review', true],
     ['@deepseek-ai/dsh-experimental-fixture-input', false],
     ['@deepseek-ai/dsh-cua-bundle', true],
@@ -1196,11 +1198,11 @@ describe('PluginManagerPage', () => {
     }
 
     it('keeps configuration and installed plugins on the main list and shows eligible official plugins on the secondary page', () => {
-      const team = '@deepseek-ai/dsh-experimental-agent-team-profile'
+      const team = '@deepseek-ai/dsh-experimental-voice-input-bundle'
       renderTab(
         { packages: [
           pkg({ name: '@deepseek-ai/dsh-experimental-badge-skill-bundle', official: true, enabled: false }),
-          pkg({ name: '@deepseek-ai/dsh-experimental-agent-team-profile', installed: false, optional: true, removable: false, enabled: false }),
+          pkg({ name: '@deepseek-ai/dsh-experimental-voice-input-bundle', installed: false, optional: true, removable: false, enabled: false }),
           pkg({ name: '@deepseek-ai/dsh-subagent-claude-code', official: true, availability: 'missing', installed: false, enabled: false }),
           pkg({ name: '@deepseek-ai/dsh-subagent-codex', official: true, enabled: false }),
           pkg({ name: '@deepseek-ai/dsh-experimental-tool-worktree', official: true, enabled: false }),
@@ -1221,7 +1223,7 @@ describe('PluginManagerPage', () => {
       expect(within(extensions).getByRole('heading', { name: en.extensionsTitle })).toBeTruthy()
       expect(within(extensions).getByRole('button', { name: en.moreAction }).textContent).toBe(en.moreAction)
       expect(within(extensions).getAllByRole('listitem').map(card => card.getAttribute('data-plugin-package')))
-        .toEqual(['@deepseek-ai/dsh-experimental-agent-team-profile', '@acme/new-official'])
+        .toEqual(['@deepseek-ai/dsh-experimental-voice-input-bundle', '@acme/new-official'])
       expect(document.querySelector('[data-plugin-count]')).toBeNull()
       expect(within(basic).getByText('Limits every command.')).toBeTruthy()
       expect(within(basic).queryByRole('switch', { name: en.enableToggle.replace('{name}', 'Shell') })).toBeNull()
@@ -1235,7 +1237,7 @@ describe('PluginManagerPage', () => {
         .toEqual(['more'])
       const more = document.querySelector('[data-plugin-group="more"]') as HTMLElement
       expect(within(more).getAllByRole('listitem').map(card => card.getAttribute('data-plugin-package')))
-        .toEqual([team, '@acme/new-official', '@deepseek-ai/dsh-experimental-tool-worktree', '@deepseek-ai/dsh-experimental-badge-skill-bundle', '@deepseek-ai/dsh-subagent-codex', '@deepseek-ai/dsh-subagent-claude-code'])
+        .toEqual([team, '@acme/new-official', '@deepseek-ai/dsh-experimental-badge-skill-bundle', '@deepseek-ai/dsh-subagent-codex', '@deepseek-ai/dsh-subagent-claude-code'])
       expect(document.querySelector('[data-plugin-package="dsh-better-sidebar"]')).toBeNull()
       fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', team) }))
       fireEvent.click(screen.getByRole('button', { name: en.backToPackage.replace('{name}', en.moreTitle) }))
@@ -1253,8 +1255,21 @@ describe('PluginManagerPage', () => {
       expect(screen.getByRole('heading', { name: en.basicTitle })).toBeTruthy()
     })
 
+    it.each([false, true])('shows one forge card and hides the standalone worktree card when enabled is %s', (enabled) => {
+      const forge = '@deepseek-ai/dsh-experimental-forge-bundle'
+      const worktree = '@deepseek-ai/dsh-experimental-tool-worktree'
+      renderTab({ packages: [
+        pkg({ name: forge, official: true, enabled }),
+        pkg({ name: worktree, official: true, enabled }),
+      ] })
+      expect(document.querySelectorAll(`[data-plugin-package="${forge}"]`)).toHaveLength(1)
+      expect(document.querySelector(`[data-plugin-package="${worktree}"]`)).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
+      expect(document.querySelectorAll(`[data-plugin-package="${forge}"]`)).toHaveLength(1)
+      expect(document.querySelector(`[data-plugin-package="${worktree}"]`)).toBeNull()
+    })
+
     it.each([
-      '@deepseek-ai/dsh-cua-bundle',
       '@deepseek-ai/dsh-experimental-session-search',
       '@deepseek-ai/dsh-experimental-ralph-bundle',
       '@acme/shipped-exploration',
@@ -1359,10 +1374,10 @@ describe('PluginManagerPage', () => {
     })
 
     it.each([
-      '@deepseek-ai/dsh-experimental-tool-worktree',
+      '@deepseek-ai/dsh-experimental-inspector-profile',
       '@deepseek-ai/dsh-personalized-recommendations',
     ])('pins enabled %s onto the main list and removes it when disabled', (first) => {
-      const team = '@deepseek-ai/dsh-experimental-agent-team-profile'
+      const team = '@deepseek-ai/dsh-experimental-voice-input-bundle'
       const second = '@deepseek-ai/dsh-experimental-cot-translation-bundle'
       const entry = (name: string, enabled: boolean): PackageView => pkg({ name, official: true, enabled })
       const b = renderTab({ packages: [entry(second, true), entry(team, true), entry(first, false)] })
@@ -1856,9 +1871,9 @@ describe('PluginManagerPage', () => {
     expect(screen.queryByText('line 8')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: en.terminalExpandAria.replace('{n}', '3') }))
     expect(screen.getByText('line 8')).toBeTruthy()
-    // Before the first chunk there is no location to name.
+    // Before the first chunk there is no location to name, and a running install claims no output yet.
     set({ install: { ...IDLE_INSTALL, open: true, spec: 'dsh-x', phase: 'running', subject, detailsOpen: true } })
-    expect(screen.getByText(en.terminalNoOutput)).toBeTruthy()
+    expect(screen.queryByText(en.installDetailsNoOutput)).toBeNull()
     // Cancel and the back control each ask the Host to stop the run; the close control asks too, and closes once the Host confirms.
     fireEvent.click(screen.getByRole('button', { name: en.installCancel }))
     fireEvent.click(screen.getByRole('button', { name: en.installCancelAndEdit }))
@@ -2058,6 +2073,35 @@ describe('PluginManagerPage', () => {
     // A tarball spec reads by its kind too.
     set({ install: { ...IDLE_INSTALL, open: true, spec: '/p/x.tgz', phase: 'failed', subject: { spec: '/p/x.tgz', status: 'accepted', kind: 'tarball', bundle: null, registry: null }, failure: null } })
     expect(screen.getByText(en.installSubjectTarball)).toBeTruthy()
+  })
+
+  it('names an enable-stage failure and points the details at the complete Host log', () => {
+    const subject = { spec: 'dsh-x', status: 'accepted', kind: 'registry', name: 'dsh-x', bundle: true, registry: null } as const
+    const logPath = '/home/u/.dsh/profiles/web/plugin-manager/runs/install.log'
+    const enabling: InstallState = {
+      ...IDLE_INSTALL, open: true, spec: 'dsh-x', phase: 'failed', subject, detailsOpen: true, logPath,
+      failure: { reason: 'activation refused', stage: 'enable', enabled: true },
+    }
+    const { set } = renderTab({ install: enabling })
+    // The enabled bundle could not be applied, so the screen separates the finished install from the failure.
+    expect(screen.getByText(en.installFailedEnabling)).toBeTruthy()
+    // No terminal chunk reached the dialog; the details say what the dialog received, not what the run printed.
+    expect(screen.getByText(en.installDetailsNoOutput)).toBeTruthy()
+    // They still point at the Host's complete log for the run that settled the dialog.
+    expect(screen.getByText(en.installLogPath.replace('{path}', logPath))).toBeTruthy()
+    // A failure of the install itself names no finished install.
+    set({ install: { ...enabling, failure: { reason: 'activation refused', stage: 'install', enabled: true } } })
+    expect(screen.queryByText(en.installFailedEnabling)).toBeNull()
+    // An install that never asked to enable the bundle cannot have failed enabling it.
+    set({ install: { ...enabling, failure: { reason: 'activation refused', stage: 'enable', enabled: false } } })
+    expect(screen.queryByText(en.installFailedEnabling)).toBeNull()
+    // Without a reason the sentence is the only line: it names the step instead of the install command it finished.
+    set({ install: { ...enabling, failure: { reason: '', stage: 'enable', enabled: true } } })
+    expect(screen.getAllByText(en.installFailedEnabling)).toHaveLength(1)
+    expect(screen.queryByText(en.installFailureGeneric)).toBeNull()
+    // Without a settled run's log the details offer no path.
+    set({ install: { ...enabling, logPath: null } })
+    expect(screen.queryByText(en.installLogPath.replace('{path}', logPath))).toBeNull()
   })
 
   it.each(['network', 'timeout'] as const)('shows GitHub recovery only after a %s failure and returns to package input', (kind) => {

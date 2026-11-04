@@ -99,7 +99,9 @@ export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
         () => scope.slots.register({
           name: 'conversation.session.header.utilities',
           id: 'liveshare-share',
-          order: 30,
+          // Left of the overflow menu (0) and the schedule entry (-5), so Share sits beside the
+          // review action instead of beyond the overflow.
+          order: -7,
           locale: NS,
           inject: () => ({ shares }),
         }, LiveshareShareAction),

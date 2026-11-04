@@ -12,19 +12,19 @@ Status: implemented
 
 撤销 #932 中的五个提交，解决包移动冲突并保留后续独立行为。记录的合并提交属于更大的 #936 依赖链；撤销其第一父提交差异还会删除无关的仓库插件支持。[Vendor 修改记录](../../../../vendor/README.md#local-modifications) 按不变的固定来源记录每项保留的源码更改。
 
-Loader 立即更改条目选项。EntryGroup 并发启动同级条目并记录应用失败；EntryTree 等待未完成的工作，但不因失败的 fiber 而拒绝。两者均不恢复旧插件或配置。Include 保留解析校验和 patch 重应用，但插件失败可能留下部分应用的配置树。
+Loader 立即更改条目选项。EntryGroup 并发启动同级条目并记录应用失败；EntryTree 等待未完成的工作，但不因失败的 fiber 而拒绝。两者均不恢复旧插件或配置。Include 在文件无效时保留正在运行的配置树，但插件失败可能留下部分应用的配置树。
 
 应用消费者负责完成检查。CLI 在安装实时 patch 监视器前等待其回退 HMR 服务。目录选择器检查其挂载的条目。选择器和浏览器包运行器在移除条目前取得首次 fiber 释放的结果，并等待该结果后才报告拆卸完成。预设挂载等待其子树，并报告导入、激活和缺少服务的失败。[应用启动](../../../../packages/boot/app-boot/README.zh.md) 负责精确 patch 文件监视、激活检查和部分上下文清理。Web 启动在打印 URL 或打开浏览器前检查激活状态。这些适配维持应用反向补丁后已有的消费者行为。
 
-Fiber、Entry 和 isolate 保持上游的更新返回行为。App boot 通过现有的 `internal/update` waterfall 观察被丢弃的重启 promise，并在检查 patch 重载前等待 fiber。游离的导入完成观察器处理 fiber 的两种结果；fiber 仍保留失败信息供显式检查。Include 的持久写入在删除子条目前后均排空，防止后续拆卸写入掩盖更早的终止性写入失败。
+Fiber、Entry 和 isolate 保持上游的更新返回行为。App boot 通过现有的 `internal/update` waterfall 观察被丢弃的重启 promise，并在检查 patch 重载前等待 fiber。游离的导入完成观察器处理 fiber 的两种结果；fiber 仍保留失败信息供显式检查。Include 的持久化遵循 vendor 修改记录中的 journal 适配：仍有未保存变更时，`flush()` 和 `stop()` 会拒绝。
 
-保留两项 #932 专属 vendor 改动：Include 中等待初始文件创建并强制重新读取，以及 Schemastery 条件导出。恢复 #932 前的防抖写入和读取顺序，会在缺失文件初始化测试中复现 `ENOENT`。保留这两行可以维持已有 `initial` 选项，而无需在应用侧增加文件写入器或另一份 YAML 序列化逻辑。移除 Schemastery exports 后，Web preset 测试在启动时复现 `ERR_REQUIRE_ESM_RACE_CONDITION`：并发 ESM 导入使 Node 回退到 CJS 入口。HMR 注入装饰器、条件 patch 克隆及更新返回值采用 #932 前的行为。显式 `workspace:` 依赖使 #932 的 workspace 链接开关与专用锁文件检查不再必要。
+保留一项 #932 专属 vendor 改动：Schemastery 条件导出。Include 1.1.1 会先写入 `initial` 文件再读取，因此缺失文件的初始化不再需要本地改动。移除 Schemastery exports 后，Web preset 测试在启动时复现 `ERR_REQUIRE_ESM_RACE_CONDITION`：并发 ESM 导入使 Node 回退到 CJS 入口。HMR 注入装饰器及更新返回值采用 #932 前的行为；patch 克隆遵循上游 Include。显式 `workspace:` 依赖使 #932 的 workspace 链接开关与专用锁文件检查不再必要。
 
 ## 考虑过的替代方案
 
 **保留事务化 Loader 更新。** 它们能从被拒绝的插件候选自动恢复，但会保留本次删除的 vendor 生命周期机制。解析失败可以独立于插件回滚进行处理。
 
-**逐字恢复所有 vendor 文件。** 这还会删除延迟注入配置求值、条件禁用条目、生命周期释放修复、持久写入和模块加载器兼容性。这些更改具有独立消费者，并继续记录在 vendor 修改记录中。
+**逐字恢复所有 vendor 文件。** 这还会删除延迟注入配置求值、条件禁用条目、生命周期释放修复和模块加载器兼容性。这些更改具有独立消费者，并继续记录在 vendor 修改记录中。
 
 **将通用回滚移入应用启动。** 这会在另一归属下保留相同的候选代次与恢复义务。应用改为报告失败，并允许后续有效编辑恢复。
 

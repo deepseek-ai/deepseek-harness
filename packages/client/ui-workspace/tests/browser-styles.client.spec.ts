@@ -34,39 +34,60 @@ const declarations = (selector: string): Map<string, string> | undefined => decl
 const rowDeclarations = (selector: string): Map<string, string> | undefined => declarationsFrom(rowsCss, selector)
 
 describe('WorkspaceBrowser.module.css list', () => {
+  it('hides touch timestamps without hiding pending-interaction labels', () => {
+    const touch = /@media \(hover: none\) \{([\s\S]*?)\n\}/.exec(rowsCss)?.[1]
+    expect(touch).toContain('.sessionRow .timestamp')
+    expect(touch).not.toMatch(/\.sessionRow(?:\.selected)? \.time[\s,{]/)
+    expect(rowDeclarations('.sessionRow .pinnedAction')?.get('order')).toBe('-1')
+  })
+
   const root = declarations('.root')
   const listArea = declarations('.listArea')
   const list = declarations('.list')
 
-  it('is the scrolling region', () => {
-    expect(list).toBeDefined()
-    expect(list!.get('overflow-y')).toBe('auto')
-  })
+  // The scroll-state rule repeats the expanded list-area selector, so ordinary rules are read before it.
+  const [ordinaryCss = '', scrollStateCss = ''] = css.split('@container scroll-state(scrollable: bottom)')
+  const expandedListArea = declarationsFrom(ordinaryCss, '.root:not(.rail) .listArea')
 
-  it('counts the themed scrollbar inside the shell trailing inset', () => {
-    expect(root?.get('--dsh-session-list-edge-inset')).toBe('var(--dsh-sidebar-inline-padding)')
-    expect(root?.get('--dsh-session-list-scrollbar-width')).toBe('5px')
-    expect(root?.get('--dsh-session-list-scrollbar-offset')).toBe('2px')
-    expect(root?.get('padding-right')).toBe('var(--dsh-session-list-edge-inset)')
-    expect(listArea?.get('margin-left')).toBe('-4px')
-    expect(listArea?.get('padding-left')).toBe('4px')
-    expect(listArea?.get('margin-right')).toBe('calc(-1 * var(--dsh-session-list-edge-inset))')
-    expect(declarations('.fade')?.get('right')).toBe('var(--dsh-session-list-edge-inset)')
-    expect(list?.get('margin-right')).toBe('var(--dsh-session-list-scrollbar-offset)')
-    expect(list?.get('margin-left')).toBe('-4px')
-    expect(list?.get('padding-left')).toBe('4px')
-    expect(list?.get('padding-right')).toBe([
-      'calc(',
-      'var(--dsh-session-list-edge-inset)',
-      '- var(--dsh-session-list-scrollbar-width)',
-      '- var(--dsh-session-list-scrollbar-offset)',
-      ')',
-    ].join(' '))
+  it('scrolls the expanded list area as the section\'s own scroller while rows keep natural height', () => {
+    expect(list?.get('overflow')).toBe('visible')
+    expect(list?.get('overflow-y')).toBeUndefined()
+    expect(list?.get('scrollbar-gutter')).toBeUndefined()
+    expect(list?.get('padding-bottom')).toBe('16px')
+    expect(listArea?.get('overflow')).toBe('visible')
+    expect(expandedListArea?.get('display')).toBe('block')
+    expect(expandedListArea?.get('overflow-x')).toBe('hidden')
+    expect(expandedListArea?.get('overflow-y')).toBe('auto')
+    expect(expandedListArea?.get('scrollbar-gutter')).toBe('stable')
+    expect(expandedListArea?.get('margin-left')).toBe('-4px')
+    expect(expandedListArea?.get('padding-left')).toBe('4px')
+    expect(expandedListArea?.get('margin-right')).toBe('calc(2px - var(--dsh-sidebar-inline-padding))')
+    expect(expandedListArea?.get('padding-right'))
+      .toBe('calc(var(--dsh-sidebar-inline-padding) - var(--dsh-scrollbar-width) - 2px)')
+    expect(root?.get('padding-right')).toBeUndefined()
+    expect(declarations('.rail .listArea')).toBeUndefined()
     expect(declarations('.list::-webkit-scrollbar')).toBeUndefined()
   })
 
-  it('reserves the scrollbar whether or not the list overflows', () => {
-    expect(list!.get('scrollbar-gutter')).toBe('stable')
+  it('leaves user scrolling to the sidebar viewport until it reaches its end', () => {
+    const block = /^ \{([\s\S]*?)\n\}/.exec(scrollStateCss)?.[1] ?? ''
+    expect(declarationsFrom(block, '.root:not(.rail) .listArea')?.get('overflow-y')).toBe('hidden')
+  })
+
+  it('keeps the expanded section at most one viewport tall, and exactly that tall while searching', () => {
+    const expanded = declarations('.root:not(.rail)')
+    expect(root?.get('position')).toBe('relative')
+    expect(expanded?.get('flex')).toBe('none')
+    expect(expanded?.get('max-height')).toBe('100cqh')
+    expect(expanded?.get('height')).toBeUndefined()
+    expect(declarations('.root:not(.rail):has(.searchExpanded)')?.get('height')).toBe('100cqh')
+    expect(declarations('.sectionHeader')?.get('background')).toBeUndefined()
+    expect(root?.get('--workspace-toolbar-height')).toBe('36px')
+    expect(root?.get('--workspace-toolbar-gap')).toBe('0px')
+    expect(declarations('.sectionHeader')?.get('height')).toBe('var(--workspace-toolbar-height)')
+    expect(declarations('.sectionHeader')?.get('margin-bottom')).toBe('var(--workspace-toolbar-gap)')
+    expect(declarations('.searchExpanded')?.get('width')).toBe('100%')
+    expect(declarations('.searchExpanded')?.get('margin-inline')).toBe('0')
   })
 
   it('keeps 2px between rows and 4px between workspace groups', () => {
@@ -82,6 +103,7 @@ describe('WorkspaceBrowser.module.css list', () => {
     const sessionMarker = rowDeclarations('.sessionRow.dropBefore::before')
     expect(listTopMarker?.get('top')).toBe('-8px')
     expect(listTopMarker?.get('left')).toBe('0')
+    expect(listTopMarker?.get('right')).toBe('0')
     expect(workspaceMarker?.get('left')).toBe('0')
     expect(sessionMarker?.get('left')).toBe('calc(-1 * var(--dsh-sidebar-paint-inset))')
     expect(sessionMarker?.get('right')).toBe('calc(4px - var(--dsh-sidebar-paint-inset))')
@@ -97,11 +119,10 @@ describe('WorkspaceBrowser.module.css list', () => {
     }
   })
 
-  it('keeps the compact fade, overflow control, search field, and row heights', () => {
-    expect(declarations('.fade')?.get('height')).toBe('24px')
+  it('keeps the overflow control, search field, and row heights', () => {
     expect(declarations('.sessionOverflowButton')?.get('height')).toBe('28px')
     expect(declarations('.searchExpanded')?.get('height')).toBe('32px')
-    expect(rowDeclarations('.projectRow')?.get('height')).toBe('34px')
+    expect(rowDeclarations('.projectRow')?.get('height')).toBe('32px')
     expect(rowDeclarations('.sessionRow')?.get('height')).toBe('32px')
     // One leading status cell for every session row, grouped or flat: the cell
     // hosts either the row's status dot or the leading seat, and it reserves its
@@ -125,6 +146,7 @@ describe('WorkspaceBrowser.module.css list', () => {
     expect(rowDeclarations('.iconButton')?.get('width')).toBe('24px')
     expect(rowDeclarations('.time')?.get('margin-inline-end')).toBe('-1px')
     expect(declarations('.sectionLabel')?.get('left')).toBe('-1px')
+    expect(declarations('.sectionHeader')?.get('padding-left')).toBe('var(--dsh-sidebar-row-padding)')
   })
 
   it('extends native row action targets while retaining the compact layout footprint', () => {
@@ -152,11 +174,13 @@ describe('WorkspaceBrowser.module.css list', () => {
     expect(header?.get('padding-inline')).toBe('calc(var(--dsh-sidebar-paint-inset) + 1px)')
     expect(header?.get('gap')).toBe('0')
     expect(declarations('.root:not(.rail) .sectionHeader:not(:has(.searchExpanded))')?.get('padding-right')).toBe('1px')
+    expect(declarations('.root:not(.rail) .sectionHeader:not(:has(.searchExpanded))')?.get('margin-right')).toBe('-4px')
     expect(declarations('.searchExpanded')?.get('width')).toBe('100%')
     expect(declarations('.searchExpanded')?.get('margin-inline')).toBe('0')
     expect(declarations('.searchExpanded .searchButton')?.get('height')).toBe('32px')
     expect(declarations('.sectionHeader:has(.searchExpanded) .sectionLabelHidden')?.get('margin-right')).toBe('0')
-    expect(declarations('.list')?.get('overflow-y')).toBe('auto')
+    expect(declarations('.list')?.get('overflow')).toBe('visible')
+    expect(declarations('.listArea')?.get('min-height')).toBe('0')
   })
 
   it('marquees a clipped session title on row hover', () => {

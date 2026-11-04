@@ -121,17 +121,27 @@ describe('Assembled liveshare viewer page on a writable share', () => {
     // Session, no Workspace verbs, and no reordering.
     expect(screen.queryByRole('button', { name: '新会话' })).toBeNull()
     expect(screen.queryByRole('button', { name: /^在“/u })).toBeNull()
-    expect(screen.queryByRole('button', { name: /^工作区“/u })).toBeNull()
+    const workspace = inputFixture.context().get('workspaces')?.list.getSnapshot().items[0]
+    if (workspace === undefined) throw new Error('shared Workspace is not listed')
+    const menus = inputFixture.context().get('contextMenus')
+    if (menus === undefined) throw new Error('context menus are not mounted')
+    const workspaceMenu = menus.resolve({ kind: 'workspace', value: {
+      workspaceId: workspace.workspaceId, path: workspace.path, displayTitle: workspace.title,
+    } })
+    await workspaceMenu.ready
+    expect(workspaceMenu.source.getSnapshot()).toEqual([])
+    workspaceMenu.dispose()
     expect(document.querySelector('[role="treeitem"][draggable="true"]')).toBeNull()
     // The Session's own verbs stay the owner's — the one this page may use there is the branch the
     // mode grants — so the row's menu is not a second way into the owner's Session management: it
     // opens on the branch verb and carries neither rename nor archive.
     const sourceVerbs = screen.getByRole('button', { name: /^会话“/u })
     await act(async () => { fireEvent.click(sourceVerbs) })
-    expect(await screen.findByRole('menuitem', { name: '分叉会话' })).toBeDefined()
+    expect(await screen.findByRole('menuitem', { name: /^分叉会话/u })).toBeDefined()
     expect(screen.queryByRole('menuitem', { name: '重命名' })).toBeNull()
     expect(screen.queryByRole('menuitem', { name: '归档会话' })).toBeNull()
     await act(async () => { fireEvent.keyDown(document, { key: 'Escape' }) })
+    await waitFor(() => { expect(screen.queryByRole('menu')).toBeNull() })
 
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '停止生成' })) })
     await waitFor(() => { expect(screen.queryByRole('button', { name: '停止生成' })).toBeNull() })

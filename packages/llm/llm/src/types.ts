@@ -551,8 +551,17 @@ export interface ToolHistory {
   }[]
 }
 
-/** A single model request, fully assembled. */
-export interface GenerateOptions {
+/** Auxiliary request purposes declared by their producer packages. */
+export interface LlmRequestPurposeMap {}
+
+/** Declared auxiliary request purpose; ordinary conversation requests leave it absent. */
+export type LlmRequestPurpose = Extract<keyof LlmRequestPurposeMap, string>
+
+/**
+ * A single model request, fully assembled.
+ * @typeParam Purpose - declared purpose keys for callers; forwarding adapters may accept `string`.
+ */
+export interface GenerateOptions<Purpose extends string = LlmRequestPurpose> {
   /** Registered provider route selecting the adapter instance. */
   provider: string
   model: string
@@ -593,5 +602,5 @@ export interface GenerateOptions {
    * map the purpose to model-hidden transport metadata. Ordinary conversation
    * requests leave it unset.
    */
-  purpose?: 'compaction' | 'session-title'
+  purpose?: Purpose
 }

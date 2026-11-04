@@ -107,10 +107,10 @@ async function collectedRegions(page: Page, selector: string): Promise<Collected
       const hits = interactive
         ? samples.filter(([x, y]) => {
           const top = document.elementFromPoint(x, y)
-          // A pane's programmatic focus target also contains its window-drag strip.
-          // The strip owns those pixels; controls inside it still need their own subtraction.
-          const strip = top?.closest('[data-dockkit-strip][data-window-drag]')
-          if (element.matches('[data-dockkit-pane][tabindex="-1"]')
+          // Panes and the navigation dialog contain their own window-drag rows.
+          // Those rows own their pixels; controls inside still subtract themselves.
+          const strip = top?.closest('[data-window-drag]')
+          if (element.matches('[data-dockkit-pane][tabindex="-1"], [data-shortcut-modal="sidebar"][role="dialog"]')
             && strip != null && element.contains(strip)) return false
           return top !== null && (top === element || element.contains(top))
         })
@@ -502,6 +502,32 @@ describe('web e2e: macOS window drag coverage', () => {
       await page.close()
     }
   }, 120_000)
+
+  it('keeps the drawer titlebar draggable without swallowing its close button', async () => {
+    const { page, tripwire } = await desktopPage()
+    try {
+      await page.setViewportSize({ width: 571, height: 696 })
+      await page.locator('[data-sidebar-drawer][data-sidebar-collapsed]').waitFor()
+      await page.locator('[data-shell-leading]').getByRole('button', { name: 'Open sidebar', exact: true }).click()
+      const drawer = page.getByRole('dialog', { name: 'Navigation', exact: true })
+      await drawer.waitFor()
+      await settled(page)
+      const toggle = drawer.getByRole('button', { name: 'Collapse sidebar', exact: true })
+      const button = (await toggle.boundingBox())!
+      const seat = await rectOf(page, '[data-shell-leading]')
+      const regions = await collectedRegions(page, INTERACTIVE_SELECTOR)
+      const y = button.y + button.height / 2
+      expect(isDraggableAt(regions, seat.x + seat.width / 2, y), 'the inactive header controls behind the drawer').toBe(true)
+      expect(isDraggableAt(regions, (seat.x + seat.width + button.x) / 2, y), 'the gap before the close button').toBe(true)
+      expect(isDraggableAt(regions, button.x + button.width / 2, y), 'the close button').toBe(false)
+      expect(swallowedBoxes(regions)).toEqual([])
+      await toggle.click()
+      await drawer.waitFor({ state: 'hidden' })
+      expect(tripwire.pageErrors).toEqual([])
+    } finally {
+      await page.close()
+    }
+  })
 
   it('keeps an entry page’s chrome row draggable', async () => {
     const { page, tripwire } = await desktopPage()

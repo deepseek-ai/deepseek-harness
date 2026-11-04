@@ -53,22 +53,12 @@ it.skipIf(process.platform !== 'darwin').each([
     await plugins.getByRole('button', { name: '更多', exact: true }).waitFor()
     expect(await page.locator('[data-plugin-package="@deepseek-ai/dsh-cua-bundle"]').count()).toBe(0)
     await plugins.getByRole('button', { name: '更多', exact: true }).click()
+    // The installation ships the bundle off; the Experimental plugins list offers it without an installation step.
     const card = page.locator('[data-plugin-package="@deepseek-ai/dsh-cua-bundle"]')
-    expect(await card.count()).toBe(0)
-    expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === '@deepseek-ai/dsh-cua-bundle'))
-      .toMatchObject({ listedByDefault: false, enabled: false, installed: false })
-    await plugins.getByRole('button', { name: '返回插件', exact: true }).click()
-    const offerCua = async () => {
-      await plugins.getByRole('button', { name: '添加插件', exact: true }).click()
-      const dialog = page.getByRole('dialog', { name: '添加插件', exact: true })
-      await dialog.getByRole('textbox', { name: '包名或地址', exact: true }).fill('@deepseek-ai/dsh-cua-bundle')
-      await dialog.getByRole('button', { name: '安装', exact: true }).click()
-      const ready = page.getByRole('dialog', { name: '插件已随 DSH 提供', exact: true })
-      await ready.waitFor()
-      expect(await ready.getByText('无需下载，启用即可使用', { exact: true }).count()).toBe(1)
-      return ready.getByRole('button', { name: '立即启用', exact: true })
-    }
-    const enableNow = await offerCua()
+    await plugins.locator('[data-plugin-group="more"] [data-plugin-package="@deepseek-ai/dsh-cua-bundle"]').waitFor()
+    const listed = (await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === '@deepseek-ai/dsh-cua-bundle')
+    expect(listed).toMatchObject({ availability: 'installation', optional: true, enabled: false, installed: false })
+    expect(listed).not.toHaveProperty('listedByDefault')
     let toggle = card.getByRole('switch', { name: '启用 Computer Use', exact: true })
     const originalAgent = scaffold.ctx.agents.list()[0]!
     const ptcAgent = (await scaffold.ctx.agents.create({
@@ -97,12 +87,10 @@ it.skipIf(process.platform !== 'darwin').each([
       return applying
     })
     try {
-      await enableNow.click()
-      await expect.poll(() => enableNow.isEnabled()).toBe(false)
-      expect(await enableNow.getAttribute('aria-busy')).toBe('true')
-      expect(await card.count()).toBe(0)
+      await toggle.click()
+      await card.getByRole('status').getByText('正在应用 Computer Use 的更改', { exact: true }).waitFor()
       await compareOrRefreshGolden(fileURLToPath(new URL('./expected/cua-permissions/enabling.expected.md', import.meta.url)),
-        await captureStableAria(page, '[data-install-phase="done"] button[aria-busy]', scaffold.workspaceCwd), webSnapshotMode())
+        await captureStableAria(page, '[data-plugin-package="@deepseek-ai/dsh-cua-bundle"] [role="status"]', scaffold.workspaceCwd), webSnapshotMode())
     } finally {
       enabling.resolve(undefined)
       enableCall.mockRestore()
@@ -145,7 +133,7 @@ it.skipIf(process.platform !== 'darwin').each([
       expect(scaffold.ctx.tools.schemas(originalAgent).some(tool => tool.name === 'cua')).toBe(preset === 'ptc')
     }
     const child = await scaffold.ctx.agents.create({
-      sessionId: SessionId('cua-child'), parentAgent: ptcAgent,
+      sessionId: SessionId('cua-child'),
       setup: (ctx) => { scaffold.ctx.agentPresets.composeFrom(ctx, ptcAgent.ctx) },
     })
     expect(scaffold.ctx.tools.schemas(child.agent).some(tool => tool.name === 'cua')).toBe(true)
@@ -199,8 +187,7 @@ it.skipIf(process.platform !== 'darwin').each([
     const program = 'globalThis.counter = (globalThis.counter ?? 0) + 1'
     expect((await runtime.run(runtime.resolve({ program, bindings: [], stateOwner: owner }))).value).toBe(1)
     await toggle.click()
-    await toggle.waitFor({ state: 'hidden' })
-    await card.waitFor({ state: 'hidden' })
+    await toggle.and(page.locator('[aria-checked="false"]')).waitFor({ state: 'visible' })
     expect(scaffold.ctx.get('computerUse')).toBeUndefined()
     expect(runtimeFiber() === persistentRuntimeFiber).toBe(true)
     expect(scaffold.ctx.agentPresets.defaultId).toBe(initialDefault)
@@ -211,7 +198,7 @@ it.skipIf(process.platform !== 'darwin').each([
     }
     expect((await runtime.run(runtime.resolve({ program, bindings: [], stateOwner: owner }))).value).toBe(2)
     expect(await readFile(settingsPath, 'utf8')).toBe(saved)
-    await (await offerCua()).click()
+    await toggle.click()
     await toggle.and(page.locator('[aria-checked="true"]')).waitFor({ state: 'visible' })
     await setup.waitFor()
     expect(await setup.getByText('Computer Use 插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。', { exact: true }).count()).toBe(1)
@@ -249,9 +236,8 @@ it.skipIf(process.platform !== 'darwin').each([
       expect.objectContaining({ id: 'agent-preset-registry', config: { default: 'standard', selectedDefault: 'ptc' } }),
     ]))
     await toggle.click()
-    await toggle.waitFor({ state: 'hidden' })
-    await card.waitFor({ state: 'hidden' })
-    await (await offerCua()).click()
+    await toggle.and(page.locator('[aria-checked="false"]')).waitFor({ state: 'visible' })
+    await toggle.click()
     await toggle.and(page.locator('[aria-checked="true"]')).waitFor({ state: 'visible' })
     await setup.waitFor()
     expect(await setup.getByText('Computer Use 插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。', { exact: true }).count()).toBe(1)

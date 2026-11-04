@@ -1,0 +1,8 @@
+- id: ptc-runtime
+  config:
+    executionMode: vm-script
+    scriptPersistence: true
+    launch:
+      kind: node-script
+      executable: !!js process.execPath
+      bootstrapPath: !!js "decodeURIComponent(new URL('./runner.mjs', 'file://' + process.env.DSH_SNAPSHOT_FILE).pathname)"

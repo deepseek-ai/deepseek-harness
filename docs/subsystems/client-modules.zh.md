@@ -93,7 +93,9 @@ interface WebBootGraph {
 
 包加入这张表的方式，是在自己的 package.json 中声明 `dsh.client`（`platform: 'web'`、可选的 `inject` 边、可选的 `immediately`），并在 `exports["./client"]` 导出构建好的 bundle。每个 live row 都从自己的 Loader specifier 与所属 tree `baseUrl` 解析；若 `loader.internal.resolveSync` 可用，则使用 Host face import 所用的同一个实现。最近归属的 package manifest 提供浏览器模块 id，因此相对 source 与 built overlay 仍保留包身份。若不同的 active Loader source 解析到同一包名，组合会失败；一个来源卸载后，仍存活的来源无需重启 fiber 即可提供该 row。
 
-扫描是单包增量的；不存在全量重扫代码路径。fiber 构造或 dispose（资源释放）时的每次 cordis `internal/plugin` 发射都把该 fiber 的 entry 名标脏，一次微任务 flush 把每个脏名与实时 loader entry 对账。激活趟以全部当前 entry 灌入同一个脏集合并同步 flush，因此初扫与稳态共享一条实现——但失败姿态相反。激活时，已加载 entry 中的畸形声明或缺失 bundle 会聚合为一个大声的 `AggregateError`，列出每个损坏的包：该 fiber 进入 FAILED，由启动的大声失败 sweep 上报。稳态下，损坏的包只记录一条警告，且不得殃及其他包。
+包按 Loader entry 名增量对账。fiber 构造或 dispose（资源释放）时的每次 Cordis `internal/plugin` 事件都会把该 fiber 的 entry 名标脏。每次非空 flush 在开始时枚举全部 Loader entries 一次并按名称建索引；待处理名称使用索引中的全部同名来源，缺失名称使用空列表移除已卸载的来源。包解析过程不得在对账期间同步添加或移除 Loader entries。激活阶段初始化全部当前名称并同步 flush；后续通知通过微任务执行 flush。
+
+激活时，畸形声明、缺失 bundle 和 flush 枚举失败会聚合为组合错误：fiber 失败，由启动流程报告。稳态下，包失败只记录警告，不妨碍其他名称继续对账。枚举失败会消费失败批次、记录一条警告，并保持包状态和已发布的图不变；受影响的每个名称都要等另一次通知才会重试。
 
 每次对账都会重新读取包 manifest 与 bundle 元数据。同一来源的 fiber 重启若读到相同的声明与 bundle 元数据，就保留其 row 与 rev，且不读取 bundle 字节；声明、client 导出或 bundle 发生变化时，由这次对账发布。没有伴随条目重启的 bundle 重建经 `rebuilt()` 到达图。
 

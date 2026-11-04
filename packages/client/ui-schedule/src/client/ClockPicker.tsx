@@ -8,7 +8,6 @@ import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent, ReactNode, RefObject } from 'react'
 import clsx from 'clsx'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
-import { secondPrecision } from './task-timing.ts'
 import { PickerPopover } from './PickerPopover.tsx'
 import type { TaskManagerKey } from './task-manager-locales.ts'
 import css from './ClockPicker.module.css'
@@ -28,20 +27,21 @@ const COLUMNS = [
   { label: 'timing.second', options: padded(60) },
 ] as const satisfies readonly { readonly label: TaskManagerKey; readonly options: readonly string[] }[]
 
-/** A whole-second clock, the only text a pick composes onto. */
-const CLOCK_SECONDS = /^\d{2}:\d{2}:\d{2}$/
+/** Leading hour and minute of a clock, with its optional whole seconds. */
+const CLOCK = /^(\d{2}):(\d{2})(?::(\d{2}))?/
 
 /**
  * The `HH:MM:SS` clock a pick composes onto.
  *
- * A value that states no clock at all starts from midnight, so the first pick
- * still submits one complete clock rather than leaving a row empty.
+ * A clock without seconds gains `:00`, and fractional seconds drop. A value
+ * that states no clock at all starts from midnight, so the first pick still
+ * submits one complete clock rather than leaving a row empty.
  * @param value - staged clock text.
  * @returns its whole-second clock, or midnight when it states none.
  */
 function clockBase(value: string): string {
-  const seconds = secondPrecision(value)
-  return CLOCK_SECONDS.test(seconds) ? seconds : '00:00:00'
+  const match = CLOCK.exec(value)
+  return match === null ? '00:00:00' : `${match[1]}:${match[2]}:${match[3] ?? '00'}`
 }
 
 /** One column's position in display order. */
@@ -76,6 +76,8 @@ export interface ClockPickerProps {
   readonly open: boolean
   /** The row's trigger button, which anchors the panel. */
   readonly anchorRef: RefObject<HTMLButtonElement | null>
+  /** CSS anchor name assigned to the row trigger. */
+  readonly anchorName: string
   /** The staged clock text. */
   readonly value: string
   /** Stage one picked `HH:MM:SS` clock. */
@@ -83,9 +85,9 @@ export interface ClockPickerProps {
   /** Dismiss the panel. */
   readonly onClose: () => void
   /**
-   * Whether the panel offers the seconds column (default true). A cron rule has
-   * no seconds field, so its form hides the column; a pick then keeps the staged
-   * clock's own seconds.
+   * Whether the panel offers the seconds column (default true). A daily rule
+   * names only its hour and minute, so its form hides the column; a pick then
+   * keeps the staged clock's own seconds.
    */
   readonly seconds?: boolean
   /** Row copy. */
@@ -97,7 +99,7 @@ export interface ClockPickerProps {
  * @param props - open state, the trigger, the staged clock, the pick and close callbacks, the seconds-column switch, and row copy.
  * @returns the anchored panel while open, and nothing while closed.
  */
-export function ClockPicker({ open, anchorRef, value, onPick, onClose, seconds = true, t }: ClockPickerProps): ReactNode {
+export function ClockPicker({ open, anchorRef, anchorName, value, onPick, onClose, seconds = true, t }: ClockPickerProps): ReactNode {
   const columns = seconds ? COLUMNS : COLUMNS.slice(0, 2)
   const refs = useRef(new Map<string, HTMLDivElement>())
   const valueRef = useRef(value)
@@ -185,6 +187,7 @@ export function ClockPicker({ open, anchorRef, value, onPick, onClose, seconds =
   return <PickerPopover
     open={open}
     anchorRef={anchorRef}
+    anchorName={anchorName}
     label={t('timing.time')}
     className={css.clock}
     onClose={onClose}
@@ -207,7 +210,7 @@ export function ClockPicker({ open, anchorRef, value, onPick, onClose, seconds =
             className={clsx(css.option, option === picked[at] && css.selected)}
             onClick={() => { pick(at, option, index) }}
             onKeyDown={(event) => { onOptionKeyDown(event, at, index, option, column.options.length) }}
-          >{option}</div>
+          ><span className={css.optionLabel}>{option}</span></div>
         ))}
       </div>
     ))}

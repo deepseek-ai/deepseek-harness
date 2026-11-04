@@ -14,7 +14,7 @@ export interface GhOutput {
 }
 
 /** Runs `gh` with literal arguments; rejects when the process cannot run to an exit code. */
-export type GhRunner = (args: readonly string[], signal: AbortSignal) => Promise<GhOutput>
+export type GhRunner = (args: readonly string[], signal: AbortSignal, input?: string) => Promise<GhOutput>
 
 /** Resolved executable and limits for `gh`. */
 export interface GhConfig {
@@ -50,11 +50,11 @@ export class GhOutputLimitError extends Error {
  * @returns the runner.
  */
 export function ghRunner(config: GhConfig): GhRunner {
-  return async (args, signal) => {
+  return async (args, signal, input) => {
     const result = await execa(config.ghCommand, args, {
       env: { ...scrubbedParentEnv(), GH_PROMPT_DISABLED: '1', GH_NO_UPDATE_NOTIFIER: '1', GH_PAGER: '', NO_COLOR: '1', CLICOLOR: '0' },
       extendEnv: false,
-      stdin: 'ignore',
+      ...input === undefined ? { stdin: 'ignore' as const } : { input },
       reject: false,
       timeout: config.timeoutMs,
       cancelSignal: signal,

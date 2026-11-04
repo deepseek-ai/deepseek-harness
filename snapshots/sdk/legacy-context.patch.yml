@@ -18,3 +18,11 @@
 
 - id: time-context
   disabled: true
+
+- id: tool-plugin-manager
+  disabled: true
+
+# The recorded tool catalog includes the optional patch tool.
+- id: tool-fs
+  config:
+    applyPatch: true

@@ -1,0 +1,11 @@
+version: 1
+scenario: apply-patch-update
+profile: headless
+composition: apply-patch
+recording: live
+header:
+  class: apply-patch
+  pin: true
+platform: posix
+workspace:
+  final: true

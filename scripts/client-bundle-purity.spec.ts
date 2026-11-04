@@ -1,6 +1,6 @@
 /**
- * Pins shared client-bundle preset rules: module-edge purity, source-map
- * chaining, and physical watch dependencies hidden behind virtual CSS Modules.
+ * Pins shared client-bundle preset rules: build modes, module-edge purity,
+ * source-map chaining, and physical watch dependencies hidden behind virtual CSS Modules.
  */
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -109,6 +109,63 @@ describe('client bundle build faces', () => {
   })
 })
 
+async function clientChunkOutput(root: string, config: UserConfig, fileName: string): Promise<string> {
+  let builds: TsdownBundle[] = []
+  try {
+    builds = await build({
+      ...config, cwd: root, config: false, tsconfig: false,
+      write: false, clean: false, exports: false, report: false, logLevel: 'silent',
+    })
+    const chunks = builds.flatMap(bundle => bundle.chunks).filter(chunk => chunk.type === 'chunk')
+    const output = chunks.find(chunk => chunk.fileName === fileName)?.code
+    if (output === undefined) throw new Error(`client output missing: ${fileName}`)
+    return output
+  } finally {
+    for (const bundle of builds) await bundle[Symbol.asyncDispose]()
+  }
+}
+
+describe('statically linked client build modes', () => {
+  it.each([
+    { label: 'defaults to production', mode: undefined, expectedMode: 'production', frozen: false },
+    { label: 'retains explicit development', mode: 'development', expectedMode: 'development', frozen: true },
+  ])('$label when compiling conditional branches', async ({ mode, expectedMode, frozen }) => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-static-client-mode-'))
+    onTestFinished(() => { rmSync(root, { recursive: true, force: true }) })
+    const entry = join(root, 'lib/types/client/index.js')
+    mkdirSync(dirname(entry), { recursive: true })
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ name: REQUESTING_PACKAGE, type: 'module' }))
+    writeFileSync(entry, [
+      'export const snapshot = { value: 1 }',
+      "if (process.env.NODE_ENV !== 'production') Object.freeze(snapshot)",
+      'export const mode = process.env.NODE_ENV',
+      '',
+    ].join('\n'))
+
+    const previousMode = process.env.NODE_ENV
+    let config: UserConfig | undefined
+    try {
+      if (mode === undefined) Reflect.deleteProperty(process.env, 'NODE_ENV')
+      else process.env.NODE_ENV = mode
+      config = staticLinked(root, ['lib/types/client/index.js'])({ env: { DSH_BUILD_FACE: 'client' } })
+        .find(candidate => candidate.platform === 'browser')
+    } finally {
+      if (previousMode === undefined) Reflect.deleteProperty(process.env, 'NODE_ENV')
+      else process.env.NODE_ENV = previousMode
+    }
+    if (config === undefined) throw new Error('static client config missing')
+
+    const output = await clientChunkOutput(root, config, 'index.js')
+    const emitted = await import(`data:text/javascript,${encodeURIComponent(output)}`) as {
+      mode: string
+      snapshot: { value: number }
+    }
+    expect(emitted.mode).toBe(expectedMode)
+    expect(emitted.snapshot).toEqual({ value: 1 })
+    expect(Object.isFrozen(emitted.snapshot)).toBe(frozen)
+  })
+})
+
 function dynamicImportFixture(prefix: string): string {
   const root = mkdtempSync(join(tmpdir(), prefix))
   onTestFinished(() => { rmSync(root, { recursive: true, force: true }) })
@@ -148,19 +205,9 @@ describe('client bundle dynamic imports', () => {
     const config = clientConfigs()[0]
     if (config === undefined) throw new Error('client config missing')
 
-    let builds: TsdownBundle[] = []
-    try {
-      builds = await build({
-        ...config, cwd: root, config: false, tsconfig: false,
-        write: false, clean: false, exports: false, report: false, logLevel: 'silent',
-      })
-      const chunks = builds.flatMap(bundle => bundle.chunks).filter(chunk => chunk.type === 'chunk')
-      const output = chunks.find(chunk => chunk.fileName === 'client.js')?.code
-      expect(output).toContain('require.async("./client.terminal.js")')
-      expect(output).not.toContain('Promise.resolve().then(() => require("./client.terminal.js"))')
-    } finally {
-      for (const bundle of builds) await bundle[Symbol.asyncDispose]()
-    }
+    const output = await clientChunkOutput(root, config, 'client.js')
+    expect(output).toContain('require.async("./client.terminal.js")')
+    expect(output).not.toContain('Promise.resolve().then(() => require("./client.terminal.js"))')
   })
 })
 
@@ -214,6 +261,7 @@ describe('client bundle purity gate', () => {
     expect(resolveId('@deepseek-ai/dsh-session/surface')).toBeNull()
     expect(resolveId('@deepseek-ai/dsh-brand')).toBeNull()
     expect(resolveId('@deepseek-ai/dsh-deque')).toBeNull()
+    expect(resolveId('@deepseek-ai/dsh-util-time')).toBeNull()
     expect(resolveId('@deepseek-ai/dsh-util-values')).toBeNull()
     expect(resolveId('@deepseek-ai/dsh-token-meter/client')).toBeNull()
     expect(() => resolveId('@deepseek-ai/dsh-token-meter')).toThrow(/purity/)
@@ -227,6 +275,27 @@ describe('client bundle purity gate', () => {
     expect(() => resolveId('@deepseek-ai/dsh-plugin-manager/registry/internal')).toThrow(/purity/)
   })
 
+  it('omits unused RRULE code from a Cron-only browser import', async () => {
+    const builds = await build({
+      config: false, platform: 'browser', format: ['esm'], entry: ['cron-only'],
+      write: false, clean: false, exports: false, report: false, logLevel: 'silent',
+      plugins: [{
+        name: 'cron-only',
+        resolveId: id => id === 'cron-only' ? id : null,
+        load: id => id === 'cron-only'
+          ? `export { Cron } from ${JSON.stringify(join(packageDir('util/time'), 'src/index.ts'))}` : null,
+      }],
+    })
+    try {
+      const modules = builds.flatMap(bundle => bundle.chunks).flatMap(chunk => chunk.type === 'chunk' ? chunk.moduleIds : [])
+        .map(id => id.replaceAll('\\', '/'))
+      expect(modules.some(id => id.endsWith('/time/src/cron.ts'))).toBe(true)
+      expect(modules.some(id => id.includes('/rrule'))).toBe(false)
+    } finally {
+      for (const bundle of builds) await bundle[Symbol.asyncDispose]()
+    }
+  })
+
   it('admits only the pure spill notice entry, not its Host policy', () => {
     expect(resolveId('@deepseek-ai/dsh-spill-policy/notice')).toBeNull()
     expect(resolveId('@deepseek-ai/dsh-output-retention')).toBeNull()
@@ -234,12 +303,12 @@ describe('client bundle purity gate', () => {
     expect(() => resolveId('@deepseek-ai/dsh-spill-policy/notice/internal')).toThrow(/purity/)
   })
 
-  it('inlines the stateless file-drag entry without admitting its subpaths or UI plugin', () => {
-    expect(resolveId('@deepseek-ai/dsh-util-file-drag')).toBeNull()
-    expect(() => resolveId('@deepseek-ai/dsh-util-file-drag/internal')).toThrow(/purity/)
-    expect(() => resolveId('@deepseek-ai/dsh-client-ui-file-drag')).toThrow(/purity/)
+  it.each(['file-drag'])('inlines the stateless %s entry without admitting its subpaths or UI plugin', (name) => {
+    expect(resolveId(`@deepseek-ai/dsh-util-${name}`)).toBeNull()
+    expect(() => resolveId(`@deepseek-ai/dsh-util-${name}/internal`)).toThrow(/purity/)
+    expect(() => resolveId(`@deepseek-ai/dsh-client-ui-${name}`)).toThrow(/purity/)
     const deps = clientConfigs()[0]?.deps as { neverBundle: (specifier: string) => boolean }
-    expect(deps.neverBundle('@deepseek-ai/dsh-util-file-drag')).toBe(false)
+    expect(deps.neverBundle(`@deepseek-ai/dsh-util-${name}`)).toBe(false)
   })
 
   it('inlines the browser-safe Timer entry while sharing Cordis through the module table', () => {
@@ -293,8 +362,8 @@ describe('client bundle purity gate', () => {
 })
 
 describe('client bundle experimental input isolation', () => {
-  const experimental = '@deepseek-ai/dsh-experimental-client-ui-agent-team'
-  const experimentalDir = packageDir('experimental/client-ui-agent-team')
+  const experimental = '@deepseek-ai/dsh-experimental-client-ui-voice-input'
+  const experimentalDir = packageDir('experimental/client-ui-voice-input')
 
   function fixture() {
     const root = mkdtempSync(join(tmpdir(), 'dsh-client-inputs-'))

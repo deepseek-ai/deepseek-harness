@@ -1,0 +1,3 @@
+Rename
+Show in folder
+Delete workspace

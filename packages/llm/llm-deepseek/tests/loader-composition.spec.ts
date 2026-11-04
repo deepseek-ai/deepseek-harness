@@ -24,6 +24,20 @@ import { assemble } from './assemble.ts'
 import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
 import { sourceModuleLoader } from './helpers.ts'
 
+declare module '@deepseek-ai/dsh-llm/types' {
+  interface LlmRequestPurposeMap {
+    'test-upload-exclusion': true
+  }
+}
+
+const uploadExclusion = {
+  name: 'test-upload-exclusion',
+  inject: ['sessionLogDeepSeek'],
+  apply(ctx: Context) {
+    ctx.sessionLogDeepSeek.registerExclusion(request => request.purpose === 'test-upload-exclusion')
+  },
+}
+
 const NS = 'llm-deepseek'
 const KEY_REF = credentialRef('DEEPSEEK_API_KEY')
 
@@ -41,7 +55,7 @@ afterEach(async () => {
 })
 
 async function loadComposition(
-  options: { withDynamic: boolean; baseURL: string; reuseRoot?: string; enableSessionLog?: boolean },
+  options: { withDynamic: boolean; baseURL: string; reuseRoot?: string; enableSessionLog?: boolean; exclusionFirst?: boolean },
 ): Promise<{ ctx: Context; settingsPath: string; credentialsPath: string }> {
   // A reused root is the restart case: the same harness home, its documents
   // exactly as the previous process left them.
@@ -67,11 +81,13 @@ async function loadComposition(
     "- name: '@deepseek-ai/dsh-session-projection'",
     '- id: deepseek-llm-api-extensions',
     "  name: '@deepseek-ai/dsh-deepseek-llm-api-extensions'",
+    ...options.exclusionFirst === true ? ["- name: '@test/upload-exclusion'"] : [],
     '- id: session-log-deepseek',
     "  name: '@deepseek-ai/dsh-session-log-deepseek'",
     ...options.enableSessionLog !== undefined
       ? ['  config:', `    enabled: ${String(options.enableSessionLog)}`]
       : [],
+    ...options.exclusionFirst === false ? ["- name: '@test/upload-exclusion'"] : [],
     '- id: plugin-package-inventory-deepseek',
     "  name: '@deepseek-ai/dsh-plugin-package-inventory-deepseek'",
     ...options.withDynamic
@@ -96,6 +112,7 @@ async function loadComposition(
   await ctx.plugin(Loader)
   ctx.loader.builtins.include = Include
   const modules = new Map<string, unknown>([
+    ['@test/upload-exclusion', uploadExclusion],
     ['@deepseek-ai/dsh-llm', LlmRuntime],
     ['@deepseek-ai/dsh-session', SessionStore],
     ['@deepseek-ai/dsh-session-projection', SessionProjectionRegistry],
@@ -248,6 +265,25 @@ describe('llm-deepseek real dynamic composition', () => {
       throughSeq: 0,
       events: [{ type: 'turn/start', seq: 0 }],
     })
+    expect(SessionLogDeepSeek.acceptedThrough(session)).toBe(0)
+  })
+
+  it.each([false, true])('applies a registered upload exclusion through HTTP with consumer first=%s', async (exclusionFirst) => {
+    vi.stubEnv('DEEPSEEK_API_KEY', 'entry-key')
+    const server = await mockServer([{ kind: 'sse', events: textEvents }, { kind: 'sse', events: textEvents }])
+    const { ctx } = await loadComposition({ withDynamic: false, baseURL: server.url, exclusionFirst })
+    const session = ctx.sessions.create(SessionId('excluded-composition'))
+    session.append('turn/start', { turn: 1 })
+
+    await assemble(ctx, { model: 'deepseek-v4-flash', messages: [], sessionId: session.id, purpose: 'test-upload-exclusion' })
+    expect(server.headers[0]?.['x-deepseek-harness-session-id']).toBe(session.id)
+    expect(server.requests[0]).not.toHaveProperty('dsh_session_log')
+    expect(server.requests[0]).toHaveProperty('dsh_plugin_packages')
+    expect(SessionLogDeepSeek.acceptedThrough(session)).toBe(-1)
+    expect(session.snapshotEvents()).toHaveLength(1)
+
+    await assemble(ctx, { model: 'deepseek-v4-flash', messages: [], sessionId: session.id })
+    expect(server.requests[1]).toHaveProperty('dsh_session_log')
     expect(SessionLogDeepSeek.acceptedThrough(session)).toBe(0)
   })
 

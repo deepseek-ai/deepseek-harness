@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 /** FontFamilyRow behavior: the field shows the persisted list, blur and Enter
  * commit the normalized input, and the field follows store changes. Also
  * covers the font-list normalization it relies on. */
@@ -53,6 +54,7 @@ function mount(kind: FontRole = 'code', code = '') {
     usePanelInfo, useSessionRetainInfo: () => undefined, useResource,
     useWorkspaces: emptyWorkspaces(),
     ...allowAllAccess,
+    useContextMenu: contextMenuHook(),
     useStore: bindSnapshotSelector(store),
     actions: store.actions,
     t: (key: string) => COPY[key] ?? key,

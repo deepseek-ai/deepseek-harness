@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 // InputBar behavior over the editor + submit-machine wiring: Enter-send
 // semantics (IME guard, Shift newline, busy Enter policy, Ctrl/Meta steering,
 // repeat suppression), running semantics (input stays free; continuable
@@ -53,7 +54,6 @@ const SCTX = {} as Context
 const SID = 's1' as SessionId
 const CONTINUABLE_CHILD = {
   address: { parentSessionId: 'parent' as SessionId, childSessionId: SID, mode: 'continuable' as const },
-  parentAvailable: true,
 }
 
 function snapshotOf(overrides: Partial<SessionSnapshot> = {}): SessionSnapshot {
@@ -195,6 +195,7 @@ function bench(over?: BenchOptions) {
       items: [], archivedSessionIds: [], pinnedSessionIds: [], state: 'idle', phase: 'ready', error: null,
     })),
     ...allowAllAccess,
+    useContextMenu: contextMenuHook(),
     useAccess: endpoint => !(over?.deniedEndpoints ?? []).includes(endpoint),
     useProjection: ((key: string, selector?: (v: unknown) => unknown) =>
       (selector ?? (v => v))(key === 'plan'
@@ -245,7 +246,6 @@ function bench(over?: BenchOptions) {
   // that claim a command or freeze the machine query the DOM directly.
   const steeringAvailable = over?.subagent === undefined || over.subagent.address.mode === 'continuable'
   const composerLocked = over?.disabled === true || over?.inert === true || over?.blocked !== undefined
-    || (over?.subagent?.address.mode === 'continuable' && over.subagent.parentAvailable !== true)
   const uploadsPending = (over?.attachments ?? []).some(attachment => attachment.kind === 'file'
     ? over?.fileUploads?.[attachment.id]?.status !== 'ready'
     : over?.fileUploads?.[attachment.id] !== undefined && over.fileUploads[attachment.id]?.status !== 'ready')
@@ -508,7 +508,6 @@ describe('image draft rail', () => {
   })
 
   it.each([
-    ['an offline parent', { ...CONTINUABLE_CHILD, parentAvailable: false }],
     ['a one-shot child', { ...CONTINUABLE_CHILD, address: { ...CONTINUABLE_CHILD.address, mode: 'one-shot' as const } }],
   ])('keeps attachment intake closed for %s', (_name, subagent) => {
     const addFiles = vi.fn(() => null)
@@ -796,7 +795,6 @@ describe('Enter semantics', () => {
       queue: [row('q-1')],
       subagent: {
         address: { parentSessionId: 'parent' as SessionId, childSessionId: SID, mode: 'continuable' },
-        parentAvailable: true,
       },
     }).placeholder).toBe('Cmd/Ctrl+Enter 插话发送全部排队消息')
   })
@@ -915,7 +913,6 @@ describe('Enter semantics', () => {
         childSessionId: SID,
         mode: 'continuable' as const,
       },
-      parentAvailable: true,
     }
     const childSteerQueue = vi.fn()
     const child = bench({ running: true, subagent, queue: [row('q-1')], steerQueue: childSteerQueue })
@@ -1055,7 +1052,7 @@ describe('running and lock semantics', () => {
     try {
       const { view, stopShortcut } = bench({
         running: true,
-        subagent: { address: { parentSessionId: 'parent' as SessionId, childSessionId: SID, mode: 'continuable' }, parentAvailable: true },
+        subagent: { address: { parentSessionId: 'parent' as SessionId, childSessionId: SID, mode: 'continuable' } },
         t: makeTranslate(messages, {}),
       })
       const stop = view.getByRole('button', { name: label })
@@ -1065,6 +1062,31 @@ describe('running and lock semantics', () => {
       expect(view.getByRole('tooltip').getAttribute('aria-label')).toBe(`${label} Esc Esc`)
       act(() => { stopShortcut.set([]) })
       expect(view.getByRole('tooltip').textContent).toBe(label)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // The docked seat is the containing block for fixed descendants, so control
+  // tooltips render under the document body rather than inside the composer.
+  it('renders every control tooltip outside the composer subtree', () => {
+    vi.useFakeTimers()
+    try {
+      const { view } = bench({ running: true })
+      const shown: string[] = []
+      for (const control of view.container.querySelectorAll('button')) {
+        fireEvent.pointerEnter(control)
+        act(() => { vi.advanceTimersByTime(500) })
+        const tooltip = view.queryByRole('tooltip')
+        if (tooltip !== null) {
+          shown.push(control.getAttribute('aria-label') ?? '')
+          expect(view.container.contains(tooltip)).toBe(false)
+          expect(document.body.contains(tooltip)).toBe(true)
+        }
+        fireEvent.pointerLeave(control)
+        act(() => { vi.advanceTimersByTime(500) })
+      }
+      expect(shown).toEqual(expect.arrayContaining(['添加文件或调用指令', '停止生成']))
     } finally {
       vi.useRealTimers()
     }
@@ -1335,7 +1357,6 @@ describe('running and lock semantics', () => {
           childSessionId: SID,
           mode: 'continuable',
         },
-        parentAvailable: true,
       },
     })
     expect(button.getAttribute('aria-label')).toBe('排队发送')
@@ -1362,7 +1383,6 @@ describe('running and lock semantics', () => {
         childSessionId: SID,
         mode: 'continuable' as const,
       },
-      parentAvailable: true,
     }
     const { button, sink } = bench({ running: true, busyEnter: 'steer', draft: '子代理插话', subagent })
     expect(button.getAttribute('aria-label')).toBe('插话发送')
@@ -1418,24 +1438,14 @@ describe('running and lock semantics', () => {
     expect(shell.pickFiles()).toBe(false)
   })
 
-  it('parent-offline running continuable locks Send but keeps independent Stop usable', () => {
-    const { button, interruptButton, textarea, stop, view } = bench({
+  it('keeps input and Stop available for a continuable child without parent availability', () => {
+    const { button, interruptButton, textarea, stop } = bench({
       running: true,
-      draft: '',
-      subagent: {
-        address: {
-          parentSessionId: 'parent' as SessionId,
-          childSessionId: SID,
-          mode: 'continuable',
-        },
-        parentAvailable: false,
-      },
+      draft: 'continue',
+      subagent: CONTINUABLE_CHILD,
     })
-    expect(textarea.getAttribute('aria-disabled')).toBe('true')
-    expect(placeholderOf(view.container)).toBe('父会话已离线，无法继续发送；仍可停止当前运行')
-    expect((view.getByLabelText('添加文件或调用指令') as HTMLButtonElement).disabled).toBe(true)
-    expect(button.getAttribute('aria-label')).toBe('发送消息')
-    expect(button.disabled).toBe(true)
+    expect(textarea.getAttribute('aria-disabled')).not.toBe('true')
+    expect(button.disabled).toBe(false)
     expect(interruptButton?.disabled).toBe(false)
     fireEvent.click(interruptButton!)
     expect(stop).toHaveBeenCalledTimes(1)
@@ -1451,7 +1461,6 @@ describe('running and lock semantics', () => {
           childSessionId: SID,
           mode: 'one-shot',
         },
-        parentAvailable: true,
       },
     })
     expect(button.getAttribute('aria-label')).toBe('发送消息')
@@ -1466,7 +1475,6 @@ describe('running and lock semantics', () => {
         childSessionId: SID,
         mode: 'continuable' as const,
       },
-      parentAvailable: true,
     }
     const plain = bench({ running: true, busyEnter: 'steer', draft: 'plain', subagent })
     fireEvent.keyDown(plain.textarea, { key: 'Enter' })

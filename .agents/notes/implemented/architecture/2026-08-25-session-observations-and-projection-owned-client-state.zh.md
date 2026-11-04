@@ -106,7 +106,7 @@ Projection 的三种交付状态含义不同：
 |---|---|---|---|
 | Session list hints | 部分 | 上次持久 checkpoint 或有界 fallback cut | 未知 |
 | Follow opening baseline | 对当前 Host composition 完整 | 精确 opening cursor | Capability 不存在 |
-| Projection frame | 单个完整 key | Frame 携带的 event sequence | 不适用 |
+| Projection frame | 帧列出的每个 key，各为完整值 | Frame 携带的 event sequence | 未变化 |
 
 Client 为每个 key 保存一行。由建连 Host 算出的行带 sequence number：更新的 baseline 或 frame 会替换它，相同或更旧的输入被忽略，因此 reconnect 可以替换 event window，而不会回退已经在更晚 sequence 接受的 projection frame。从持久化缓存看出来的 list hint 不带可比的 sequence number，让位于所有 Host 排序过的写入（[Projection cache 只读面按 lifecycle 身份匹配，客户端 store 区分 cached 与 sequenced 行](2026-09-19-projection-cache-listing-identity-and-cached-rows.zh.md)）。
 

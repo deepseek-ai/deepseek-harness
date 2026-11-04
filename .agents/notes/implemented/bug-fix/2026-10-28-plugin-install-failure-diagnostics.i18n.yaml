@@ -1,0 +1,25 @@
+# Bilingual-pair consistency record for 2026-10-28-plugin-install-failure-diagnostics.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-10-28-plugin-install-failure-diagnostics.md
+/agent-note-install-failures-keep-their-diagnostics-in-the-dialog:
+  en: dc13db49685fee98
+  zh: 65896465ceaba16a
+/agent-note-install-failures-keep-their-diagnostics-in-the-dialog/problem:
+  en: 34c85dbc0fdaeeaf
+  zh: b11042edb1eb8e3b
+/agent-note-install-failures-keep-their-diagnostics-in-the-dialog/decision:
+  en: fa3f10f9d7502077
+  zh: c6b83153a0f5e324
+/agent-note-install-failures-keep-their-diagnostics-in-the-dialog/alternatives-considered:
+  en: 2616d060183a7a74
+  zh: 15179fd42ea2b6dc
+/agent-note-install-failures-keep-their-diagnostics-in-the-dialog/consequences:
+  en: 246d2a60f856c631
+  zh: d7a552af3ad32b6f
+/agent-note-install-failures-keep-their-diagnostics-in-the-dialog/related:
+  en: e0709383c16148e9
+  zh: 00765408d0ad25f1
+/agent-note-install-failures-keep-their-diagnostics-in-the-dialog/testing:
+  en: 336df2ffde183519
+  zh: 86e62a8a052c1f91

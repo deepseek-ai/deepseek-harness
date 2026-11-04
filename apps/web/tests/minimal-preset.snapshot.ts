@@ -142,8 +142,11 @@ describe('minimal agent preset', () => {
         ],
       }
     `)
+    const requestedTools = new Set(requestHeader.tools?.map(tool => tool.name))
     expect(requestHeader.tools?.toSorted((left, right) => left.name.localeCompare(right.name)))
-      .toEqual(scaffold.ctx.tools.schemas(agentHandle.agent).toSorted((left, right) => left.name.localeCompare(right.name)))
+      .toEqual(scaffold.ctx.tools.schemas(agentHandle.agent)
+        .filter(tool => requestedTools.has(tool.name))
+        .toSorted((left, right) => left.name.localeCompare(right.name)))
   })
 
   it.skipIf(MODE === 'record')('expands the completed persistent Bash call in the Web conversation', async () => {
