@@ -10,7 +10,7 @@
 import { useRef, useState, type ReactNode } from 'react'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import {
-  Button, IconChevronDownOutlineRegular, Menu, SettingsForm, SettingsSecretField, SettingsValueField,
+  Button, IconChevronDownOutlineRegular, Menu, SettingsForm, SettingsSecretField, SettingsValueField, Tag,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { formLabels, type WebSearchSettingsLocaleKey } from './locales.ts'
@@ -83,7 +83,8 @@ export function WebSearchCard(props: WebSearchCardProps) {
               {...state.count}
               onEdit={(text) => { props.edit('count', text) }} onReset={() => { props.resetField('count') }} />
             {state.searchBilling !== undefined && (
-              <BillingField capability="search" t={t} billing={state.searchBilling} disabled={disabled} onSelect={props.selectBilling} />
+              <BillingField capability="search" t={t} billing={state.searchBilling} disabled={disabled}
+                onSelect={props.selectBilling} resolveText={props.resolveText} />
             )}
           </div>
         )}
@@ -120,7 +121,8 @@ export function WebSearchCard(props: WebSearchCardProps) {
           description={describe(fetch)} hint={fetch.kind === 'plugin' ? t('pluginProviderHint') : undefined} />
         {state.fetchBilling !== undefined && (
           <div className={styles.panel}>
-            <BillingField capability="fetch" t={t} billing={state.fetchBilling} disabled={disabled} onSelect={props.selectBilling} />
+            <BillingField capability="fetch" t={t} billing={state.fetchBilling} disabled={disabled}
+              onSelect={props.selectBilling} resolveText={props.resolveText} />
           </div>
         )}
       </section>
@@ -193,10 +195,14 @@ const BILLING_COPY = {
 /** Billing entries in menu order. */
 const BILLINGS: readonly WebBilling[] = ['auto', 'account', 'api-key']
 
+/** Separator between the field names of the advanced-override tag, by language. */
+const FIELD_SEPARATOR = { en: ', ', zh: '、', ja: '、', es: ', ', fr: ', ', de: ', ', ru: ', ', pt: ', ' }
+
 /**
- * One capability's billing menu with the selected billing's explanation, which names the YAML fields that take
- * precedence over billing.
- * @param props - the capability, locale copy, the billing state, the settings lock, and the selection callback.
+ * One capability's billing menu with the selected billing's explanation. While the capability's own endpoint fields
+ * override billing, a tag beside the label names them and the menu is locked.
+ * @param props - the capability, locale copy, the billing state, the settings lock, the selection callback, and the
+ * locale resolver for the field-name separator.
  * @returns the labelled billing menu.
  */
 function BillingField(props: {
@@ -206,21 +212,28 @@ function BillingField(props: {
   /** Locks the menu: read-only settings or a save in flight. */
   disabled: boolean
   onSelect: WebSearchCardFace['selectBilling']
+  resolveText: WebSearchCardFace['resolveText']
 }) {
   const { t, billing, capability } = props
   const id = `plugin-config-web-${capability}-billing`
   const labelId = `${id}-label`
   return (
     <div className={styles.panelField}>
-      <span id={labelId} className={styles.panelLabel}>{t('billing')}</span>
+      <div className={styles.panelHead}>
+        <span id={labelId} className={styles.panelLabel}>{t('billing')}</span>
+        {billing.advancedOverride.length > 0 && (
+          <Tag tone="neutral">
+            {t('billingAdvancedOverride', { fields: billing.advancedOverride.join(props.resolveText(FIELD_SEPARATOR)) })}
+          </Tag>
+        )}
+      </div>
       <Dropdown id={id} labelledBy={labelId} items={BILLINGS.map(mode => ({ id: mode, label: t(BILLING_COPY[mode].nameKey) }))}
-        selectedId={billing.value} valueLabel={t(BILLING_COPY[billing.value].nameKey)} disabled={props.disabled}
+        selectedId={billing.value} valueLabel={t(BILLING_COPY[billing.value].nameKey)}
+        disabled={props.disabled || billing.advancedOverride.length > 0}
         // The menu offers only BILLINGS entries, so the fallback never applies.
         /* v8 ignore next */
         onSelect={(mode) => { props.onSelect(capability, BILLINGS.find(entry => entry === mode) ?? billing.value) }} />
-      <p className={styles.hint}>
-        {t(BILLING_COPY[billing.value].hintKey, { baseURL: `${capability}BaseURL`, apiKeyEnv: `${capability}ApiKeyEnv` })}
-      </p>
+      <p className={styles.hint}>{t(BILLING_COPY[billing.value].hintKey)}</p>
     </div>
   )
 }

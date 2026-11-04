@@ -14,8 +14,9 @@
  *
  * The DeepSeek Search and Fetch APIs take no credential values here: each
  * has a billing menu, written to `searchBilling` or `fetchBilling`, that
- * chooses which DeepSeek credential it sends, and their own endpoint fields
- * are YAML-only. Legacy Messages search keeps its key control.
+ * chooses which DeepSeek credential it sends. Their own endpoint fields are
+ * YAML-only: the page reads them to report that they override billing and
+ * never writes them. Legacy Messages search keeps its key control.
  *
  * The legacy key's literal never rides a response, so the page learns only
  * whether one is configured and writes it through the credentials domain,
@@ -107,6 +108,14 @@ export interface WebApiSettings {
   searchBilling?: WebBilling
   /** Credential the Fetch API sends. */
   fetchBilling?: WebBilling
+  /** Search API base set in YAML; read only, and it overrides {@link searchBilling}. */
+  readonly searchBaseURL?: string
+  /** Search API credential reference set in YAML; read only, and it overrides {@link searchBilling}. */
+  readonly searchApiKeyEnv?: string
+  /** Fetch API base set in YAML; read only, and it overrides {@link fetchBilling}. */
+  readonly fetchBaseURL?: string
+  /** Fetch API credential reference set in YAML; read only, and it overrides {@link fetchBilling}. */
+  readonly fetchApiKeyEnv?: string
 }
 
 /** One capability's billing menu. */
@@ -115,6 +124,11 @@ export interface WebBillingState {
   value: WebBilling
   /** Whether saving would leave a user-layer entry for this field. */
   overridden: boolean
+  /**
+   * Names of the capability's non-empty own endpoint fields, base URL first. While any is set, the provider ignores
+   * billing and the menu is locked.
+   */
+  advancedOverride: readonly string[]
 }
 
 /** One entry of a provider menu. */
@@ -458,7 +472,10 @@ export class WebSearchCardController {
   /** One capability's billing as its menu renders it. */
   private billing(capability: WebBillingCapability): WebBillingState {
     const field = this.api.field(`${capability}Billing`)
-    return { value: isBilling(field.text) ? field.text : 'auto', overridden: field.overridden }
+    const section = this.scopes.api.getSnapshot().value
+    const advancedOverride = ([`${capability}BaseURL`, `${capability}ApiKeyEnv`] as const)
+      .filter(name => (section?.[name] ?? '') !== '')
+    return { value: isBilling(field.text) ? field.text : 'auto', overridden: field.overridden, advancedOverride }
   }
 
   /**

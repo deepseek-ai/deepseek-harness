@@ -15,6 +15,7 @@ export type WebSearchSettingsLocaleKey =
   | 'overridden' | 'reset' | 'readOnly' | 'unavailable'
   | 'save' | 'saving' | 'saveFailed' | 'invalidNumber' | 'invalidCount'
   | 'billing' | 'billingAuto' | 'billingAutoHint' | 'billingAccount' | 'billingAccountHint' | 'billingApiKey' | 'billingApiKeyHint'
+  | 'billingAdvancedOverride'
 
 /** English copy. */
 export const en: Record<WebSearchSettingsLocaleKey, string> = {
@@ -55,11 +56,12 @@ export const en: Record<WebSearchSettingsLocaleKey, string> = {
   invalidCount: 'Enter an integer from 1 to 50, or leave blank to use the default.',
   billing: 'Billing',
   billingAuto: 'Automatic',
-  billingAutoHint: "Uses the conversation's DeepSeek account or API key when it chats on DeepSeek; otherwise the DeepSeek API key, then the signed-in DeepSeek account. Charges may apply. A {baseURL} or {apiKeyEnv} set in YAML takes precedence.",
+  billingAutoHint: "Uses the conversation's DeepSeek account or API key when it chats on DeepSeek; on other models, the DeepSeek API key, or the signed-in DeepSeek account without one.",
   billingAccount: 'Signed-in DeepSeek account',
-  billingAccountHint: 'Bills the signed-in DeepSeek account; unavailable when signed out. A {baseURL} or {apiKeyEnv} set in YAML takes precedence.',
+  billingAccountHint: 'Bills the signed-in DeepSeek account. Unavailable when signed out.',
   billingApiKey: 'DeepSeek API key',
-  billingApiKeyHint: 'Uses the key and address of the DeepSeek (API key) provider on the Models page; unavailable without a key. A {baseURL} or {apiKeyEnv} set in YAML takes precedence.',
+  billingApiKeyHint: 'Bills the DeepSeek API key set on the Models page. Unavailable without a key.',
+  billingAdvancedOverride: 'Overridden by {fields}',
 }
 
 /** Simplified Chinese copy. */
@@ -101,11 +103,12 @@ export const zh: Record<WebSearchSettingsLocaleKey, string> = {
   invalidCount: '请填 1–50 的整数；留空表示使用默认值。',
   billing: '计费方式',
   billingAuto: '自动',
-  billingAutoHint: '会话使用 DeepSeek 模型时沿用其账号或 API Key；否则依次使用 DeepSeek API Key、已登录的 DeepSeek 账号。可能产生费用。YAML 中设置了 {baseURL} 或 {apiKeyEnv} 时以 YAML 为准。',
+  billingAutoHint: '会话使用 DeepSeek 模型时，沿用该会话的账号或 API Key；使用其他模型时，先用 DeepSeek API Key，没有则用已登录的 DeepSeek 账号。',
   billingAccount: '已登录的 DeepSeek 账号',
-  billingAccountHint: '由已登录的 DeepSeek 账号计费，未登录时不可用。YAML 中设置了 {baseURL} 或 {apiKeyEnv} 时以 YAML 为准。',
+  billingAccountHint: '由已登录的 DeepSeek 账号计费，未登录时不可用。',
   billingApiKey: 'DeepSeek API Key',
-  billingApiKeyHint: '使用模型页中 DeepSeek（API Key）提供方的 Key 和地址，未配置 Key 时不可用。YAML 中设置了 {baseURL} 或 {apiKeyEnv} 时以 YAML 为准。',
+  billingApiKeyHint: '由模型页中配置的 DeepSeek API Key 计费，未配置时不可用。',
+  billingAdvancedOverride: '已被 {fields} 覆盖',
 }
 
 /**
@@ -156,11 +159,12 @@ export const ja = {
   'invalidCount': '1〜50 の整数を入力するか、デフォルトを使用するには空欄にしてください。',
   'billing': '課金方法',
   'billingAuto': '自動',
-  'billingAutoHint': '会話が DeepSeek モデルを使う場合は、そのアカウントまたは API キーを使います。それ以外は DeepSeek API キー、次にログイン中の DeepSeek アカウントを使います。料金が発生する場合があります。YAML で {baseURL} または {apiKeyEnv} を設定している場合は YAML が優先されます。',
+  'billingAutoHint': '会話が DeepSeek モデルを使う場合は、その会話のアカウントまたは API キーを使います。他のモデルでは DeepSeek API キーを使い、ない場合はログイン中の DeepSeek アカウントを使います。',
   'billingAccount': 'ログイン中の DeepSeek アカウント',
-  'billingAccountHint': 'ログイン中の DeepSeek アカウントに課金します。ログアウト中は使用できません。YAML で {baseURL} または {apiKeyEnv} を設定している場合は YAML が優先されます。',
+  'billingAccountHint': 'ログイン中の DeepSeek アカウントに課金します。ログアウト中は使用できません。',
   'billingApiKey': 'DeepSeek API キー',
-  'billingApiKeyHint': 'モデルページの DeepSeek（API キー）プロバイダーのキーとアドレスを使います。キーがない場合は使用できません。YAML で {baseURL} または {apiKeyEnv} を設定している場合は YAML が優先されます。',
+  'billingApiKeyHint': 'モデルページで設定した DeepSeek API キーに課金します。未設定の場合は使用できません。',
+  'billingAdvancedOverride': '{fields} により上書き済み',
 } satisfies Record<keyof typeof en, string>
 
 /** Spanish dictionary, checked against the English keys. */
@@ -202,11 +206,12 @@ export const es = {
   invalidCount: 'Ingrese un número entero del 1 al 50 o déjelo en blanco para usar el valor predeterminado.',
   billing: 'Facturación',
   billingAuto: 'Automática',
-  billingAutoHint: 'Usa la cuenta o la clave de API de DeepSeek de la conversación cuando chatea en DeepSeek; si no, la clave de API de DeepSeek y después la cuenta de DeepSeek conectada. Puede generar cargos. Si YAML define {baseURL} o {apiKeyEnv}, prevalece YAML.',
+  billingAutoHint: 'Usa la cuenta o la clave de API de DeepSeek de la conversación cuando chatea en DeepSeek; con otros modelos, la clave de API de DeepSeek o, sin ella, la cuenta de DeepSeek conectada.',
   billingAccount: 'Cuenta de DeepSeek conectada',
-  billingAccountHint: 'Factura a la cuenta de DeepSeek conectada; no está disponible sin una sesión iniciada. Si YAML define {baseURL} o {apiKeyEnv}, prevalece YAML.',
+  billingAccountHint: 'Factura a la cuenta de DeepSeek conectada. No está disponible sin una sesión iniciada.',
   billingApiKey: 'Clave de API de DeepSeek',
-  billingApiKeyHint: 'Usa la clave y la dirección del proveedor DeepSeek (clave de API) de la página Modelos; no está disponible sin una clave. Si YAML define {baseURL} o {apiKeyEnv}, prevalece YAML.',
+  billingApiKeyHint: 'Factura a la clave de API de DeepSeek configurada en la página Modelos. No está disponible sin una clave.',
+  billingAdvancedOverride: 'Anulado por {fields}',
 } satisfies Record<keyof typeof en, string>
 
 /** French dictionary, checked against the English keys. */
@@ -248,11 +253,12 @@ export const fr = {
   invalidCount: 'Entrez un nombre entier compris entre 1 et 50 ou laissez vide pour utiliser la valeur par défaut.',
   billing: 'Facturation',
   billingAuto: 'Automatique',
-  billingAutoHint: "Utilise le compte ou la clé API DeepSeek de la conversation lorsqu'elle discute sur DeepSeek ; sinon la clé API DeepSeek, puis le compte DeepSeek connecté. Des frais peuvent s'appliquer. Si YAML définit {baseURL} ou {apiKeyEnv}, YAML prévaut.",
+  billingAutoHint: "Utilise le compte ou la clé API DeepSeek de la conversation lorsqu'elle discute sur DeepSeek ; avec d'autres modèles, la clé API DeepSeek ou, à défaut, le compte DeepSeek connecté.",
   billingAccount: 'Compte DeepSeek connecté',
-  billingAccountHint: 'Facture le compte DeepSeek connecté ; indisponible une fois déconnecté. Si YAML définit {baseURL} ou {apiKeyEnv}, YAML prévaut.',
+  billingAccountHint: 'Facture le compte DeepSeek connecté. Indisponible une fois déconnecté.',
   billingApiKey: 'Clé API DeepSeek',
-  billingApiKeyHint: "Utilise la clé et l'adresse du fournisseur DeepSeek (clé API) de la page Modèles ; indisponible sans clé. Si YAML définit {baseURL} ou {apiKeyEnv}, YAML prévaut.",
+  billingApiKeyHint: 'Facture la clé API DeepSeek définie sur la page Modèles. Indisponible sans clé.',
+  billingAdvancedOverride: 'Remplacé par {fields}',
 } satisfies Record<keyof typeof en, string>
 
 /** German dictionary, checked against the English keys. */
@@ -294,11 +300,12 @@ export const de = {
   invalidCount: 'Geben Sie eine Ganzzahl zwischen 1 und 50 ein oder lassen Sie das Feld leer, um den Standardwert zu verwenden.',
   billing: 'Abrechnung',
   billingAuto: 'Automatisch',
-  billingAutoHint: 'Verwendet das DeepSeek-Konto oder den DeepSeek-API-Schlüssel der Unterhaltung, wenn sie DeepSeek nutzt; sonst den DeepSeek-API-Schlüssel, dann das angemeldete DeepSeek-Konto. Es können Kosten anfallen. Ist in YAML {baseURL} oder {apiKeyEnv} gesetzt, gilt YAML.',
+  billingAutoHint: 'Verwendet das DeepSeek-Konto oder den DeepSeek-API-Schlüssel der Unterhaltung, wenn sie DeepSeek nutzt; bei anderen Modellen den DeepSeek-API-Schlüssel oder ohne ihn das angemeldete DeepSeek-Konto.',
   billingAccount: 'Angemeldetes DeepSeek-Konto',
-  billingAccountHint: 'Rechnet über das angemeldete DeepSeek-Konto ab; nicht verfügbar, wenn abgemeldet. Ist in YAML {baseURL} oder {apiKeyEnv} gesetzt, gilt YAML.',
+  billingAccountHint: 'Rechnet über das angemeldete DeepSeek-Konto ab. Nicht verfügbar, wenn abgemeldet.',
   billingApiKey: 'DeepSeek-API-Schlüssel',
-  billingApiKeyHint: 'Verwendet Schlüssel und Adresse des Anbieters DeepSeek (API-Schlüssel) auf der Seite Modelle; ohne Schlüssel nicht verfügbar. Ist in YAML {baseURL} oder {apiKeyEnv} gesetzt, gilt YAML.',
+  billingApiKeyHint: 'Rechnet über den auf der Seite Modelle festgelegten DeepSeek-API-Schlüssel ab. Ohne Schlüssel nicht verfügbar.',
+  billingAdvancedOverride: 'Überschrieben durch {fields}',
 } satisfies Record<keyof typeof en, string>
 
 /** Russian dictionary, checked against the English keys. */
@@ -340,11 +347,12 @@ export const ru = {
   invalidCount: 'Введите целое число от 1 до 50 или оставьте поле пустым, чтобы использовать значение по умолчанию.',
   billing: 'Оплата',
   billingAuto: 'Автоматически',
-  billingAutoHint: 'Использует аккаунт или ключ API DeepSeek из разговора, если он идёт в DeepSeek; иначе ключ API DeepSeek, затем активный аккаунт DeepSeek. Возможна оплата. Если в YAML задан {baseURL} или {apiKeyEnv}, действует YAML.',
+  billingAutoHint: 'Использует аккаунт или ключ API DeepSeek из разговора, если он идёт в DeepSeek; с другими моделями — ключ API DeepSeek, а без него — активный аккаунт DeepSeek.',
   billingAccount: 'Активный аккаунт DeepSeek',
-  billingAccountHint: 'Оплачивается активным аккаунтом DeepSeek; недоступно без входа. Если в YAML задан {baseURL} или {apiKeyEnv}, действует YAML.',
+  billingAccountHint: 'Оплачивается активным аккаунтом DeepSeek. Недоступно без входа.',
   billingApiKey: 'Ключ API DeepSeek',
-  billingApiKeyHint: 'Использует ключ и адрес поставщика DeepSeek (ключ API) на странице моделей; недоступно без ключа. Если в YAML задан {baseURL} или {apiKeyEnv}, действует YAML.',
+  billingApiKeyHint: 'Оплачивается ключом API DeepSeek, заданным на странице моделей. Недоступно без ключа.',
+  billingAdvancedOverride: 'Переопределено: {fields}',
 } satisfies Record<keyof typeof en, string>
 
 /** Portuguese dictionary, checked against the English keys. */
@@ -386,9 +394,10 @@ export const pt = {
   invalidCount: 'Insira um número inteiro de 1 a 50 ou deixe em branco para usar o padrão.',
   billing: 'Cobrança',
   billingAuto: 'Automática',
-  billingAutoHint: 'Usa a conta ou a chave de API da DeepSeek da conversa quando ela usa a DeepSeek; caso contrário, a chave de API da DeepSeek e depois a conta DeepSeek conectada. Pode gerar cobranças. Se o YAML definir {baseURL} ou {apiKeyEnv}, o YAML prevalece.',
+  billingAutoHint: 'Usa a conta ou a chave de API da DeepSeek da conversa quando ela usa a DeepSeek; com outros modelos, a chave de API da DeepSeek ou, sem ela, a conta DeepSeek conectada.',
   billingAccount: 'Conta DeepSeek conectada',
-  billingAccountHint: 'Cobra da conta DeepSeek conectada; indisponível sem sessão iniciada. Se o YAML definir {baseURL} ou {apiKeyEnv}, o YAML prevalece.',
+  billingAccountHint: 'Cobra da conta DeepSeek conectada. Indisponível sem sessão iniciada.',
   billingApiKey: 'Chave de API da DeepSeek',
-  billingApiKeyHint: 'Usa a chave e o endereço do provedor DeepSeek (chave de API) da página Modelos; indisponível sem uma chave. Se o YAML definir {baseURL} ou {apiKeyEnv}, o YAML prevalece.',
+  billingApiKeyHint: 'Cobra da chave de API da DeepSeek definida na página Modelos. Indisponível sem uma chave.',
+  billingAdvancedOverride: 'Substituído por {fields}',
 } satisfies Record<keyof typeof en, string>

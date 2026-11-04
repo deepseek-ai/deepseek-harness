@@ -721,12 +721,12 @@ describe('provider registration', () => {
     expect(search.map(({ id }) => id)).toEqual(['deepseek-search-api'])
     expect(fetch.map(({ id }) => id)).toEqual(['deepseek-fetch-api'])
     expect(search[0]?.description).toMatchObject({
-      en: 'Queries the search endpoint directly for titles, URLs, and snippets without an extra model call. Bills the DeepSeek account or a DeepSeek API key, as its billing setting chooses, and may incur API charges.',
-      zh: '直接请求搜索接口返回标题、URL 与摘要，无需额外调用模型。按计费方式设置使用 DeepSeek 账号或 DeepSeek API Key 计费，可能产生费用',
+      en: 'Queries the search endpoint directly for titles, URLs, and snippets without an extra model call. Incurs charges, billed to the DeepSeek account or DeepSeek API key that the Billing setting selects; see the Search & Fetch guide for pricing.',
+      zh: '直接请求搜索接口返回标题、URL 与摘要，无需额外调用模型。会产生费用，按「计费方式」向 DeepSeek 账号或 DeepSeek API Key 计费，计费规则详见「网页搜索与获取指南」。',
     })
     expect(fetch[0]?.description).toMatchObject({
-      en: 'Fetches public URLs on DeepSeek servers and returns Markdown. Bills the DeepSeek account or a DeepSeek API key, as its billing setting chooses, may incur API charges, and cannot reach intranet or loopback addresses.',
-      zh: '由 DeepSeek 服务端抓取公网页面并返回 Markdown。按计费方式设置使用 DeepSeek 账号或 DeepSeek API Key 计费，可能产生费用，且无法访问内网和本机',
+      en: 'Fetches public URLs on DeepSeek servers and returns Markdown; cannot reach intranet or loopback addresses. Incurs charges, billed to the DeepSeek account or DeepSeek API key that the Billing setting selects; see the Search & Fetch guide for pricing.',
+      zh: '由 DeepSeek 服务端抓取公网页面并返回 Markdown，无法访问内网和本机。会产生费用，按「计费方式」向 DeepSeek 账号或 DeepSeek API Key 计费，计费规则详见「网页搜索与获取指南」。',
     })
   })
 })

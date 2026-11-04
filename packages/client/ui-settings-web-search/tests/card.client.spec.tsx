@@ -24,13 +24,13 @@ function field(text: string, rest: Partial<SettingsFieldState> = {}): SettingsFi
 /** Each official provider's registered description; the page shows the active language's entry. */
 const DESCRIPTIONS: Record<string, { en: string; zh: string }> = {
   'deepseek-search-api': {
-    en: 'Search API description. Bills the DeepSeek account or a DeepSeek API key, as its billing setting chooses, and may incur API charges.',
-    zh: 'Search API 说明。按计费方式设置使用 DeepSeek 账号或 DeepSeek API Key 计费，可能产生费用',
+    en: 'Search API description. Incurs charges, billed to the DeepSeek account or DeepSeek API key that the Billing setting selects.',
+    zh: 'Search API 说明。会产生费用，按「计费方式」向 DeepSeek 账号或 DeepSeek API Key 计费。',
   },
   'http': { en: 'Direct fetch description.', zh: '本机获取说明' },
   'deepseek-fetch-api': {
-    en: 'Fetch API description. Bills the DeepSeek account or a DeepSeek API key, as its billing setting chooses, and may incur API charges.',
-    zh: 'Fetch API 说明。按计费方式设置使用 DeepSeek 账号或 DeepSeek API Key 计费，可能产生费用',
+    en: 'Fetch API description. Incurs charges, billed to the DeepSeek account or DeepSeek API key that the Billing setting selects.',
+    zh: 'Fetch API 说明。会产生费用，按「计费方式」向 DeepSeek 账号或 DeepSeek API Key 计费。',
   },
 }
 
@@ -54,7 +54,7 @@ function shipped(): WebSearchCardState {
     search: { selected: 'deepseek-search-api', options: SEARCH_OPTIONS, kind: 'deepseek', auto: false },
     fetch: { selected: 'http', options: FETCH_OPTIONS, kind: 'local', auto: false },
     count: field('10'),
-    searchBilling: { value: 'auto', overridden: false },
+    searchBilling: { value: 'auto', overridden: false, advancedOverride: [] },
     fetchBilling: undefined,
     messagesBaseURL: field(''),
     maxUses: field('5'),
@@ -66,7 +66,7 @@ function shipped(): WebSearchCardState {
 function apis(): WebSearchCardState {
   const base = shipped()
   return {
-    ...base, fetch: { ...base.fetch, selected: 'deepseek-fetch-api', kind: 'deepseek' }, fetchBilling: { value: 'account', overridden: true },
+    ...base, fetch: { ...base.fetch, selected: 'deepseek-fetch-api', kind: 'deepseek' }, fetchBilling: { value: 'account', overridden: true, advancedOverride: [] },
   }
 }
 
@@ -123,14 +123,31 @@ describe('WebSearchCard billing', () => {
     expect(billingMenu(en.searchSection).textContent).toBe('Automatic')
     expect(billingMenu(en.fetchSection).textContent).toBe('Signed-in DeepSeek account')
     expect(region(en.searchSection).getByText(
-      "Uses the conversation's DeepSeek account or API key when it chats on DeepSeek; otherwise the DeepSeek API key, then the"
-      + ' signed-in DeepSeek account. Charges may apply. A searchBaseURL or searchApiKeyEnv set in YAML takes precedence.',
+      "Uses the conversation's DeepSeek account or API key when it chats on DeepSeek; on other models, the DeepSeek API key,"
+      + ' or the signed-in DeepSeek account without one.',
       { exact: true },
     )).toBeTruthy()
-    expect(region(en.fetchSection).getByText(
-      'Bills the signed-in DeepSeek account; unavailable when signed out. A fetchBaseURL or fetchApiKeyEnv set in YAML takes precedence.',
-      { exact: true },
-    )).toBeTruthy()
+    expect(region(en.fetchSection).getByText('Bills the signed-in DeepSeek account. Unavailable when signed out.', { exact: true }))
+      .toBeTruthy()
+    expect(screen.queryByText(/^Overridden by /)).toBeNull()
+  })
+
+  it.each<[string, readonly string[], string]>([
+    ['one own field', ['searchBaseURL'], 'Overridden by searchBaseURL'],
+    // The page's resolver picks Chinese, so two names join with the Chinese enumeration comma.
+    ['both own fields', ['searchBaseURL', 'searchApiKeyEnv'], 'Overridden by searchBaseURL、searchApiKeyEnv'],
+  ])('tags the billing with %s and locks its menu', (_label, advancedOverride, tag) => {
+    renderPage({ ...apis(), searchBilling: { value: 'auto', overridden: false, advancedOverride } })
+    expect(region(en.searchSection).getByText(tag, { exact: true })).toBeTruthy()
+    expect((billingMenu(en.searchSection) as HTMLButtonElement).disabled).toBe(true)
+    expect(region(en.fetchSection).queryByText(/^Overridden by /)).toBeNull()
+    expect((billingMenu(en.fetchSection) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('joins the overriding field names with the separator of the active language', () => {
+    renderPage({ ...apis(), fetchBilling: { value: 'auto', overridden: false, advancedOverride: ['fetchBaseURL', 'fetchApiKeyEnv'] } })
+    expect(resolveText).toHaveBeenCalledWith(expect.objectContaining({ en: ', ', zh: '、' }))
+    expect(region(en.fetchSection).getByText('Overridden by fetchBaseURL、fetchApiKeyEnv', { exact: true })).toBeTruthy()
   })
 
   it('lists the three billings and selects a new one for its capability only', () => {
@@ -145,9 +162,9 @@ describe('WebSearchCard billing', () => {
   })
 
   it('explains API-key billing', () => {
-    renderPage({ ...shipped(), searchBilling: { value: 'api-key', overridden: true } })
+    renderPage({ ...shipped(), searchBilling: { value: 'api-key', overridden: true, advancedOverride: [] } })
     expect(billingMenu(en.searchSection).textContent).toBe('DeepSeek API key')
-    expect(region(en.searchSection).getByText(t('billingApiKeyHint', { baseURL: 'searchBaseURL', apiKeyEnv: 'searchApiKeyEnv' }), { exact: true }))
+    expect(region(en.searchSection).getByText('Bills the DeepSeek API key set on the Models page. Unavailable without a key.', { exact: true }))
       .toBeTruthy()
   })
 
@@ -173,18 +190,19 @@ describe('WebSearchCard billing', () => {
       .toEqual(['Billing', 'Automatic', 'Signed-in DeepSeek account', 'DeepSeek API key'])
     expect([zh.billing, zh.billingAuto, zh.billingAccount, zh.billingApiKey])
       .toEqual(['计费方式', '自动', '已登录的 DeepSeek 账号', 'DeepSeek API Key'])
-    expect(zh.billingAutoHint).toBe('会话使用 DeepSeek 模型时沿用其账号或 API Key；否则依次使用 DeepSeek API Key、已登录的 DeepSeek 账号。可能产生费用。'
-      + 'YAML 中设置了 {baseURL} 或 {apiKeyEnv} 时以 YAML 为准。')
-    expect(zh.billingAccountHint).toBe('由已登录的 DeepSeek 账号计费，未登录时不可用。YAML 中设置了 {baseURL} 或 {apiKeyEnv} 时以 YAML 为准。')
-    expect(zh.billingApiKeyHint)
-      .toBe('使用模型页中 DeepSeek（API Key）提供方的 Key 和地址，未配置 Key 时不可用。YAML 中设置了 {baseURL} 或 {apiKeyEnv} 时以 YAML 为准。')
-    // No hint states its billing unconditionally, because YAML endpoint fields take precedence.
-    for (const dictionary of [en, zh]) {
-      for (const key of ['billingAutoHint', 'billingAccountHint', 'billingApiKeyHint'] as const) {
-        expect(dictionary[key]).toContain('{baseURL}')
-        expect(dictionary[key]).toContain('{apiKeyEnv}')
-      }
-    }
+    expect([zh.billingAutoHint, zh.billingAccountHint, zh.billingApiKeyHint, zh.billingAdvancedOverride]).toEqual([
+      '会话使用 DeepSeek 模型时，沿用该会话的账号或 API Key；使用其他模型时，先用 DeepSeek API Key，没有则用已登录的 DeepSeek 账号。',
+      '由已登录的 DeepSeek 账号计费，未登录时不可用。',
+      '由模型页中配置的 DeepSeek API Key 计费，未配置时不可用。',
+      '已被 {fields} 覆盖',
+    ])
+    expect([en.billingAutoHint, en.billingAccountHint, en.billingApiKeyHint, en.billingAdvancedOverride]).toEqual([
+      "Uses the conversation's DeepSeek account or API key when it chats on DeepSeek; on other models, the DeepSeek API key, or the"
+      + ' signed-in DeepSeek account without one.',
+      'Bills the signed-in DeepSeek account. Unavailable when signed out.',
+      'Bills the DeepSeek API key set on the Models page. Unavailable without a key.',
+      'Overridden by {fields}',
+    ])
   })
 })
 

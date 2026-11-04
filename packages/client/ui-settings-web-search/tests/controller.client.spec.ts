@@ -628,7 +628,7 @@ describe('WebSearchCardController billing', () => {
       expect(b.api.mutate).toHaveBeenCalledWith([{ op: 'set', path: ['searchBilling'], value: 'api-key' }], undefined)
       await vi.waitFor(() => { expect(b.state().saving).toBe(false) })
       b.face.selectBilling('search', 'auto')
-      expect(b.state().searchBilling).toEqual({ value: 'auto', overridden: false })
+      expect(b.state().searchBilling).toEqual({ value: 'auto', overridden: false, advancedOverride: [] })
       b.face.save()
       await vi.waitFor(() => { expect(b.api.mutate).toHaveBeenCalledTimes(2) })
       expect(b.api.mutate).toHaveBeenLastCalledWith([{ op: 'unset', path: ['searchBilling'] }], undefined)
@@ -646,6 +646,42 @@ describe('WebSearchCardController billing', () => {
       b.face.save()
       await vi.waitFor(() => { expect(b.api.mutate).toHaveBeenCalledTimes(1) })
       expect(b.api.mutate).toHaveBeenCalledWith([{ op: 'set', path: ['fetchBilling'], value: 'auto' }], undefined)
+    } finally { b.controller.dispose() }
+  })
+})
+
+describe('WebSearchCardController advanced override', () => {
+  it('names each capability’s non-empty own endpoint fields, base URL first, and none while they are unset or empty', async () => {
+    const b = bench()
+    try {
+      serve(b, { value: API_SELECTION, base: API_SELECTION })
+      await vi.waitFor(() => { expect(b.state().fetch.kind).toBe('deepseek') })
+      expect(b.state()).toMatchObject({ searchBilling: { advancedOverride: [] }, fetchBilling: { advancedOverride: [] } })
+      b.api.publish({ value: { count: 10, searchApiKeyEnv: 'OWN_KEY', searchBaseURL: 'https://own.test/v1/tools', fetchBaseURL: '' } })
+      expect(b.state().searchBilling?.advancedOverride).toEqual(['searchBaseURL', 'searchApiKeyEnv'])
+      expect(b.state().fetchBilling?.advancedOverride).toEqual([])
+      b.api.publish({ value: { count: 10, fetchApiKeyEnv: 'OWN_KEY' } })
+      expect(b.state().searchBilling?.advancedOverride).toEqual([])
+      expect(b.state().fetchBilling?.advancedOverride).toEqual(['fetchApiKeyEnv'])
+    } finally { b.controller.dispose() }
+  })
+
+  it('saves a billing without writing or clearing the own endpoint fields', async () => {
+    const b = bench({ accept: true })
+    try {
+      const composed = { count: 10, searchBaseURL: 'https://own.test/v1/tools', fetchApiKeyEnv: 'OWN_KEY' }
+      serve(b, { value: API_SELECTION, base: API_SELECTION }, composed)
+      await vi.waitFor(() => { expect(b.state().fetch.kind).toBe('deepseek') })
+      b.face.selectBilling('fetch', 'api-key')
+      b.face.edit('count', '20')
+      b.face.save()
+      await vi.waitFor(() => { expect(b.api.mutate).toHaveBeenCalledTimes(1) })
+      const ops = b.api.mutate.mock.calls[0]![0]
+      expect(ops.map(op => op.path[0]).sort()).toEqual(['count', 'fetchBilling'])
+      await vi.waitFor(() => { expect(b.state().saving).toBe(false) })
+      expect(b.state()).toMatchObject({
+        searchBilling: { advancedOverride: ['searchBaseURL'] }, fetchBilling: { value: 'api-key', advancedOverride: ['fetchApiKeyEnv'] },
+      })
     } finally { b.controller.dispose() }
   })
 })

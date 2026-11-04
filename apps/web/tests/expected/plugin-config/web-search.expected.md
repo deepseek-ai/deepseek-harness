@@ -4,7 +4,7 @@
 - region "网页搜索提供方":
   - heading "网页搜索提供方" [level=4]
   - button "网页搜索提供方 DeepSeek Search API": DeepSeek Search API
-  - paragraph: 直接请求搜索接口返回标题、URL 与摘要，无需额外调用模型。按计费方式设置使用 DeepSeek 账号或 DeepSeek API Key 计费，可能产生费用
+  - paragraph: 直接请求搜索接口返回标题、URL 与摘要，无需额外调用模型。会产生费用，按「计费方式」向 DeepSeek 账号或 DeepSeek API Key 计费，计费规则详见「网页搜索与获取指南」。
   - paragraph:
     - link "网页搜索与获取指南":
       - /url: https://api-docs.deepseek.com/zh-cn/guides/search
@@ -15,12 +15,12 @@
   - paragraph: 每个查询返回的结果条数，须为 1–50 的整数，默认 10；不控制搜索调用次数。web_search 保留的来源数不超过其自身的结果上限。
   - text: 计费方式
   - button "计费方式 自动": 自动
-  - paragraph: 会话使用 DeepSeek 模型时沿用其账号或 API Key；否则依次使用 DeepSeek API Key、已登录的 DeepSeek 账号。可能产生费用。YAML 中设置了 searchBaseURL 或 searchApiKeyEnv 时以 YAML 为准。
+  - paragraph: 会话使用 DeepSeek 模型时，沿用该会话的账号或 API Key；使用其他模型时，先用 DeepSeek API Key，没有则用已登录的 DeepSeek 账号。
 - region "网页获取提供方":
   - heading "网页获取提供方" [level=4]
   - button "网页获取提供方 DeepSeek Fetch API": DeepSeek Fetch API
-  - paragraph: 由 DeepSeek 服务端抓取公网页面并返回 Markdown。按计费方式设置使用 DeepSeek 账号或 DeepSeek API Key 计费，可能产生费用，且无法访问内网和本机
+  - paragraph: 由 DeepSeek 服务端抓取公网页面并返回 Markdown，无法访问内网和本机。会产生费用，按「计费方式」向 DeepSeek 账号或 DeepSeek API Key 计费，计费规则详见「网页搜索与获取指南」。
   - text: 计费方式
   - button "计费方式 自动": 自动
-  - paragraph: 会话使用 DeepSeek 模型时沿用其账号或 API Key；否则依次使用 DeepSeek API Key、已登录的 DeepSeek 账号。可能产生费用。YAML 中设置了 fetchBaseURL 或 fetchApiKeyEnv 时以 YAML 为准。
+  - paragraph: 会话使用 DeepSeek 模型时，沿用该会话的账号或 API Key；使用其他模型时，先用 DeepSeek API Key，没有则用已登录的 DeepSeek 账号。
 - button "保存" [disabled]

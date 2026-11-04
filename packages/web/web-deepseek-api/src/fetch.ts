@@ -31,14 +31,14 @@ export class DeepSeekFetchApiProvider implements WebFetchProvider {
   readonly id = DEEPSEEK_FETCH_API_PROVIDER_ID
   /** Picker description: what this provider suits and what it costs or cannot do. */
   readonly description: NonNullable<WebFetchProvider['description']> = {
-    en: 'Fetches public URLs on DeepSeek servers and returns Markdown. Bills the DeepSeek account or a DeepSeek API key, as its billing setting chooses, may incur API charges, and cannot reach intranet or loopback addresses.',
-    zh: '由 DeepSeek 服务端抓取公网页面并返回 Markdown。按计费方式设置使用 DeepSeek 账号或 DeepSeek API Key 计费，可能产生费用，且无法访问内网和本机',
-    ja: 'DeepSeek のサーバーで公開 URL を取得し、Markdown を返します。課金方法の設定に応じて DeepSeek アカウントまたは DeepSeek API キーに課金され、API 料金が発生する場合があり、イントラネットやループバックのアドレスにはアクセスできません。',
-    es: 'Obtiene URL públicas en los servidores de DeepSeek y devuelve Markdown. Factura a la cuenta de DeepSeek o a una clave de API de DeepSeek, según el ajuste de facturación, puede generar cargos de API y no puede acceder a direcciones de la intranet ni de bucle invertido.',
-    fr: "Récupère les URL publiques sur les serveurs DeepSeek et renvoie du Markdown. Facture le compte DeepSeek ou une clé API DeepSeek selon le paramètre de facturation, peut entraîner des frais d'API et ne peut pas atteindre les adresses intranet ou de bouclage.",
-    de: 'Ruft öffentliche URLs auf DeepSeek-Servern ab und gibt Markdown zurück. Rechnet je nach Abrechnungseinstellung über das DeepSeek-Konto oder einen DeepSeek-API-Schlüssel ab, kann API-Kosten verursachen und erreicht keine Intranet- oder Loopback-Adressen.',
-    ru: 'Загружает публичные URL на серверах DeepSeek и возвращает Markdown. Оплачивается учётной записью DeepSeek или ключом API DeepSeek в зависимости от настройки оплаты, возможна оплата API; адреса интрасети и loopback недоступны.',
-    pt: 'Obtém URLs públicas nos servidores da DeepSeek e retorna Markdown. Cobra da conta DeepSeek ou de uma chave de API da DeepSeek, conforme a configuração de cobrança, pode gerar cobranças de API e não alcança endereços da intranet nem de loopback.',
+    en: 'Fetches public URLs on DeepSeek servers and returns Markdown; cannot reach intranet or loopback addresses. Incurs charges, billed to the DeepSeek account or DeepSeek API key that the Billing setting selects; see the Search & Fetch guide for pricing.',
+    zh: '由 DeepSeek 服务端抓取公网页面并返回 Markdown，无法访问内网和本机。会产生费用，按「计费方式」向 DeepSeek 账号或 DeepSeek API Key 计费，计费规则详见「网页搜索与获取指南」。',
+    ja: 'DeepSeek のサーバーで公開 URL を取得し、Markdown を返します。イントラネットやループバックのアドレスにはアクセスできません。料金が発生し、「課金方法」の設定に応じて DeepSeek アカウントまたは DeepSeek API キーに課金されます。料金の詳細は「検索と取得のガイド」を参照してください。',
+    es: 'Obtiene URL públicas en los servidores de DeepSeek y devuelve Markdown; no puede acceder a direcciones de la intranet ni de bucle invertido. Genera cargos, facturados a la cuenta de DeepSeek o a la clave de API de DeepSeek que elija el ajuste Facturación; consulte la Guía de búsqueda y recuperación para ver los precios.',
+    fr: 'Récupère les URL publiques sur les serveurs DeepSeek et renvoie du Markdown ; ne peut pas atteindre les adresses intranet ou de bouclage. Entraîne des frais, facturés au compte DeepSeek ou à la clé API DeepSeek que choisit le paramètre Facturation ; consultez le Guide de recherche et de récupération pour les tarifs.',
+    de: 'Ruft öffentliche URLs auf DeepSeek-Servern ab und gibt Markdown zurück; erreicht keine Intranet- oder Loopback-Adressen. Verursacht Kosten, die dem DeepSeek-Konto oder DeepSeek-API-Schlüssel berechnet werden, den die Einstellung Abrechnung auswählt; Preise siehe Leitfaden zum Suchen und Abrufen.',
+    ru: 'Загружает публичные URL на серверах DeepSeek и возвращает Markdown; адреса интрасети и loopback недоступны. Услуга платная: оплата списывается с учётной записи DeepSeek или ключа API DeepSeek, выбранных в настройке «Оплата»; тарифы см. в документе «Руководство по поиску и получению».',
+    pt: 'Obtém URLs públicas nos servidores da DeepSeek e retorna Markdown; não alcança endereços da intranet nem de loopback. Gera cobranças, feitas na conta DeepSeek ou na chave de API da DeepSeek selecionada pela configuração Cobrança; consulte o Guia de pesquisa e busca para ver os preços.',
   }
 
   /** @param resolveOptions - the options for the NEXT fetch, read once at each fetch's entry. */
