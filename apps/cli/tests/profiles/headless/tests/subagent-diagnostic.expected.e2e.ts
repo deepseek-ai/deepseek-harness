@@ -132,8 +132,8 @@ describe('parent-owned cold child catalog snapshot', () => {
         if (parent === undefined) throw new Error('missing persisted parent log')
 
         // Discovery reads child catalogs without requiring activation descriptors.
-        expect(parent).toContain(`${childId} [inactive] parent=${parentId} depth=1 — descriptorless child`)
-        expect(parent).not.toContain('[diagnostic: corrupt]')
+        expect(parent).toContain(`${childId} [inactive] — descriptorless child`)
+        expect(parent).not.toContain(`${childId} [corrupt]`)
 
         const context: NormalizeContext = { sessionIds: [parentId, childId], cwd }
         const normalizedParent = normalizeSessionSnapshot(parent, context)

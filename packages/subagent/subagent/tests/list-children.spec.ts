@@ -135,8 +135,8 @@ describe('direct-child catalog reader', () => {
 
     const children = await listChildren(ctx, parent.id)
     expect(children.map(({ createdAt: _createdAt, ...child }) => child)).toEqual([
-      { id: callerOwned.childId, label: 'spawn', mode: 'continuable' },
-      { id: continuableId, label: 'continuable child', mode: 'continuable' },
+      { id: callerOwned.childId, label: 'spawn', mode: 'continuable', name: 'agent-1' },
+      { id: continuableId, label: 'continuable child', mode: 'continuable', name: 'agent-2' },
     ])
     expect(children.every(child => Number.isFinite(child.createdAt))).toBe(true)
     expect(listSessions).not.toHaveBeenCalled()

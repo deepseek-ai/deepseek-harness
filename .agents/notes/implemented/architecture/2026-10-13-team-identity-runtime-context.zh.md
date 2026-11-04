@@ -4,6 +4,8 @@ Status: implemented
 
 [English](2026-10-13-team-identity-runtime-context.md) | 中文
 
+[目录名称](2026-11-02-subagent-catalog-names.zh.md)取代下文以 Session id 表述身份的文本：agent 看到自身、直接父级和根的名称。runtime context 保留决策仍然有效。
+
 ## Problem
 
 嵌入初始任务的 teammate 身份依赖普通历史保留。压缩可能移除它；从 teammate 创建的普通 fork 即使已成为独立 Lead，也可能保留旧角色。身份必须反映当前 subagent 树，同时保持共享系统指令一致。

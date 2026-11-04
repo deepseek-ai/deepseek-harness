@@ -9,8 +9,8 @@
   en: 686fb5136bef0a3b
   zh: d25d6569174a01b5
 /deepseek-ai-dsh-tool-subagent/summary:
-  en: c09d40329253a9d8
-  zh: 91c1bbe5557bdda9
+  en: 5167763e0cf03963
+  zh: b73dc896a972c1f8
 /deepseek-ai-dsh-tool-subagent/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
@@ -21,8 +21,8 @@
   en: 1a23808ca32b8f2d
   zh: e637a35220da0564
 /deepseek-ai-dsh-tool-subagent/use-this-package/managed-delegation:
-  en: d9cba86982b22de7
-  zh: f5c764d45bd8fffd
+  en: 31e50585cfd7e747
+  zh: 643d9a9e3643cf55
 /deepseek-ai-dsh-tool-subagent/use-this-package/selecting-a-child-preset:
   en: e28a206c65151ec0
   zh: 1372242076549ca4
@@ -39,8 +39,8 @@
   en: ef692c4d17290920
   zh: b1d0d3dab011e2cd
 /deepseek-ai-dsh-tool-subagent/understand-the-implementation/result-acknowledgement:
-  en: 3cdb913209febc42
-  zh: ea6ebfbe9d21fb3e
+  en: 3c2d70d479be8e38
+  zh: 9aebdb72223a086e
 /deepseek-ai-dsh-tool-subagent/understand-the-implementation/context-sensitive-wording:
   en: 1733728ac5aa6bb0
   zh: 341ffc6e21a289af
@@ -60,8 +60,8 @@
   en: 2e7844a04f0456ea
   zh: 7aaaa033b700aa3d
 /deepseek-ai-dsh-tool-subagent/model-experience/tool-schema/token-effect:
-  en: c04242443b8fbdb0
-  zh: 8779ef72c4eaee35
+  en: b36081ab5c06241f
+  zh: 1e784317ee1fb381
 /deepseek-ai-dsh-tool-subagent/model-experience/tool-schema/kv-cache-effect:
   en: 5697c49cb84fb2a4
   zh: b2b8464d3cbabfa5
@@ -111,8 +111,8 @@
   en: 45854c8f4da73af7
   zh: 7a9803ca8c03c40f
 /deepseek-ai-dsh-tool-subagent/model-experience/start-result/what-the-model-sees:
-  en: 219e365808e8d448
-  zh: a0da72d3a542d39e
+  en: 1a7740d71a8ce2ad
+  zh: 259baa9e51b40d24
 /deepseek-ai-dsh-tool-subagent/model-experience/start-result/token-effect:
   en: 807d71626c81c858
   zh: ba4b85709fa46c84
@@ -123,8 +123,8 @@
   en: b6ed0eef154aa546
   zh: 34160884aa30ffec
 /deepseek-ai-dsh-tool-subagent/model-experience/completion-delivery/what-the-model-sees:
-  en: 8f5e3a083eb7f807
-  zh: 6bfc2b38f49a6f79
+  en: 9350bc15498f2f28
+  zh: 8e8902031d39a4e9
 /deepseek-ai-dsh-tool-subagent/model-experience/completion-delivery/token-effect:
   en: 615348e27c0c9bc0
   zh: 1655fdbc42932909

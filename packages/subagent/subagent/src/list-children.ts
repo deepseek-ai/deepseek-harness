@@ -8,6 +8,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { SubagentListEntry } from './control-types.ts'
 import { SubagentError } from './error.ts'
+import { isAgentName, joinAgentPath } from './names.ts'
 import type { SubagentCatalogEntry } from './projection-types.ts'
 
 export type { SubagentListEntry } from './control-types.ts'
@@ -18,6 +19,8 @@ export type SubagentDescendantListEntry = SubagentListEntry & {
   readonly parentId: SessionId
   /** Edge distance from the requested root; direct children are `1`. */
   readonly depth: number
+  /** Slash-separated names from the requested root; absent when this child or an ancestor below the root has no name. */
+  readonly path?: string
 }
 
 /**
@@ -85,15 +88,18 @@ export async function listDescendants(
     assertListingNotCancelled(signal)
     return children
   }
-  const stack = (await readChildren(rootSessionId))
-    .map(entry => ({ entry, parentId: rootSessionId, depth: 1 }))
+  type Position = { entry: SubagentCatalogEntry; parentId: SessionId; depth: number; parentPath: string | undefined }
+  const stack: Position[] = (await readChildren(rootSessionId))
+    .map(entry => ({ entry, parentId: rootSessionId, depth: 1, parentPath: '' }))
     .reverse()
   const visited = new Set<SessionId>([rootSessionId])
   const result: SubagentDescendantListEntry[] = []
   for (let position = stack.pop(); position !== undefined; position = stack.pop()) {
-    const { entry, parentId, depth } = position
+    const { entry, parentId, depth, parentPath } = position
     if (visited.has(entry.id)) continue
     visited.add(entry.id)
+    const path = joinAgentPath(parentPath, 'name' in entry ? entry.name : undefined)
+    const at = { parentId, depth, ...path === undefined ? {} : { path } }
     let children: SubagentCatalogEntry[]
     try {
       children = entry.mode === 'external' ? [] : await readChildren(entry.id)
@@ -101,28 +107,57 @@ export async function listDescendants(
       if (error instanceof SubagentError) throw error
       const code = error instanceof Error && 'code' in error ? error.code : undefined
       result.push({
-        kind: 'diagnostic', id: entry.id, parentId, depth,
+        kind: 'diagnostic', id: entry.id, ...at,
         reason: code === 'SESSION_QUERY_CORRUPT_SESSION' || code === 'SESSION_QUERY_SOURCE_CONFLICT'
           ? 'corrupt' : 'unavailable',
       })
       continue
     }
     if (entry.mode === 'unknown') {
-      result.push({ kind: 'diagnostic', id: entry.id, parentId, depth, reason: 'unsupported' })
+      result.push({ kind: 'diagnostic', id: entry.id, ...at, reason: 'unsupported' })
     } else {
       const { createdAt: _createdAt, ...identity } = entry
       result.push({
-        ...identity, kind: 'child', parentId, depth,
+        ...identity, kind: 'child', ...at,
         activity: sessions.get(entry.id) === undefined ? 'inactive' : 'running',
         hasChildren: children.length > 0,
       })
     }
     // Catalog event order defines siblings; the stack visits the first one next.
     for (const child of [...children].reverse()) {
-      stack.push({ entry: child, parentId: entry.id, depth: depth + 1 })
+      stack.push({ entry: child, parentId: entry.id, depth: depth + 1, parentPath: path })
     }
   }
   return result
+}
+
+/**
+ * Resolve a slash-separated name by reading only the catalogs along its path.
+ * @param ctx - context carrying the Session query service.
+ * @param rootSessionId - tree root whose catalog holds the first name.
+ * @param name - candidate full name relative to the root.
+ * @param signal - cancellation forwarded to each catalog read.
+ * @returns the named member's Session id, or undefined when the text is not a name in this tree.
+ * @throws {@link SubagentError} when a catalog dependency is unavailable; Session read failures propagate.
+ */
+export async function resolveAgentPath(
+  ctx: Context,
+  rootSessionId: SessionId,
+  name: string,
+  signal: AbortSignal,
+): Promise<SessionId | undefined> {
+  const segments = name.split('/')
+  if (!segments.every(isAgentName)) return undefined
+  let current = rootSessionId
+  for (const [index, segment] of segments.entries()) {
+    const children = await listChildren(ctx, current, signal)
+    const child = children.find(entry => 'name' in entry && entry.name === segment)
+    if (child === undefined) return undefined
+    // External and unknown children own no local Session, so they are the last segment too.
+    if (index < segments.length - 1 && child.mode !== 'continuable' && child.mode !== 'one-shot') return undefined
+    current = child.id
+  }
+  return current
 }
 
 /** Stop the complete traversal when its caller cancels. */
