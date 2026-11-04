@@ -155,15 +155,25 @@
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  width: 360px;
-  max-width: min(calc(100vw - 32px), var(--dsh-anchored-max-width, 100vw));
-  max-height: min(560px, calc(100vh - 140px), var(--dsh-anchored-max-height, 100vh));
+
+  max-width: calc(100vw - 32px);
+  max-height: min(560px, calc(100dvh - 140px));
   padding: 6px;
   overflow: hidden;
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   box-shadow: var(--dsw-elevation-prominent);
+  /* The fixed card width lets CSS retain both the trigger edge and the window inset. */
+  --dsh-subagent-menu-width: min(360px, calc(100vw - 32px));
+  position-area: none;
+  top: calc(anchor(bottom) + 5px);
+  left: clamp(16px, anchor(left), calc(100vw - var(--dsh-subagent-menu-width) - 16px));
+  width: var(--dsh-subagent-menu-width);
+  position-try-fallbacks: --dsh-subagents-above, --dsh-subagents-window;
+  height: fit-content;
+  min-height: 0;
+  margin: 0;
 }
 
 .menuBody {
@@ -512,4 +522,16 @@
   .refresh:hover {
     background: var(--dsw-alias-interactive-bg-hover);
   }
+}
+
+@position-try --dsh-subagents-above {
+  top: auto;
+  bottom: calc(anchor(top) + 5px);
+}
+
+@position-try --dsh-subagents-window {
+  top: max(16px, var(--dsh-frame-overlay-top, 16px));
+  bottom: 16px;
+  align-self: safe start;
+  justify-self: safe start;
 }

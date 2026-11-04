@@ -7,6 +7,7 @@
    12px caption chevron; 28px chip height matches the sibling Plan /
    Read-only selects in the same tool row. */
 .trigger {
+  anchor-name: var(--dsh-model-anchor);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -88,20 +89,29 @@
   transform: rotate(180deg);
 }
 
-/* Portaled to body and placed from the trigger rect by the component (the
-   Menu primitive's portal rules), so the sidebar and the columns' overflow
-   clips cannot crop it; z matches the primitive's .portal layer. */
+/* The body portal escapes overflow ancestors. CSS anchors keep the card above
+   its trigger; layout viewport bounds do not shrink during pinch zoom. */
 .menu {
   box-sizing: border-box;
   position: fixed;
+  position-anchor: var(--dsh-model-anchor);
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  left: 12px;
+  /* Anchor insets stay linear because scroll compensation runs after layout. */
+  right: anchor(right);
+  bottom: calc(anchor(top) + 8px);
+  align-self: safe end;
+  justify-self: safe end;
+  margin: 0;
   z-index: 1100;
   display: flex;
   flex-direction: column;
   /* Rows size the card up to its visible bounds; longer names ellipsize. */
-  width: max-content;
-  min-width: min(240px, calc(100vw - 32px), var(--dsh-anchored-max-width, 100vw));
-  max-width: min(420px, calc(100vw - 32px), var(--dsh-anchored-max-width, 100vw));
-  max-height: min(360px, calc(100vh - 96px), var(--dsh-anchored-max-height, 100vh));
+  width: fit-content;
+  height: fit-content;
+  min-width: min(240px, calc(100vw - 24px));
+  max-width: min(420px, calc(100vw - 24px));
+  max-height: min(360px, calc(100dvh - 96px));
   overflow: hidden;
   padding: 4px;
   /* Surface tokens match the Menu primitive card (ui-primitives

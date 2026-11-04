@@ -1,4 +1,4 @@
-/** Retained package names keep experimental isolation and persisted record namespaces. */
+/** Unprefixed and legacy prefixed package names keep experimental isolation and persisted record namespaces. */
 
 import { describe, expect, it } from 'vitest'
 import {
@@ -19,7 +19,7 @@ describe('experimental package identities', () => {
     }
   })
 
-  it.each(names)('does not extend the retained-name exception %s to another package', (name) => {
+  it.each(names)('does not extend the unprefixed name %s to another package', (name) => {
     for (const reference of [`${name}-unrelated`, `other-${name}`, name.replace('@deepseek-ai/', '@other/')]) {
       expect(isExperimentalPackageName(reference)).toBe(false)
       expect(hasExperimentalPackageReference(reference)).toBe(false)
@@ -27,12 +27,12 @@ describe('experimental package identities', () => {
     }
   })
 
-  it('keeps new experimental packages under their prefixed namespaces', () => {
+  it('derives the record namespace from a legacy prefixed name', () => {
     expect(experimentalPackageRecordNamespace('@deepseek-ai/dsh-experimental-bridge')).toBe('bridge')
     expect(hasExperimentalPackageReference('@deepseek-ai/dsh-core')).toBe(false)
   })
 
-  it.each(Object.entries(EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS))('keeps %s record names independent of the retained npm name', (directory, name) => {
+  it.each(Object.entries(EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS))('keeps %s record names independent of the unprefixed npm name', (directory, name) => {
     expect(experimentalPackageRecordNamespace(name)).toBe(directory.split('/').at(-1))
   })
 })

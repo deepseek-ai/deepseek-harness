@@ -10,6 +10,7 @@ import {
   ConversationLocationIndex,
   ConversationNodeAssembler as RuntimeConversationNodeAssembler,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import { ConversationUpdateError } from '../src/client/conversation/assembler.ts'
 import type {
   ConversationMatch, ConversationNodeContext,
   ConversationNodeDefinition, ConversationViewDefinition, ConversationViewNode,
@@ -1915,7 +1916,7 @@ describe('ConversationNodeAssembler', () => {
     })
   })
 
-  it('rejects withdrawing a previously materialized Node during an incremental update', () => {
+  it('rejects withdrawing a previously materialized Node and replaces the view with a complete rebuild', () => {
     const definition: ConversationNodeDefinition<boolean> = {
       kind: 'toggle',
       match: (event) => {
@@ -1937,9 +1938,65 @@ describe('ConversationNodeAssembler', () => {
     expect(testSnapshot(assembler)?.order).toHaveLength(1)
 
     assembler.append(input(at(SessionSeq(2), 'toggle/hide', {})))
-    expect(() => assembler.flush()).toThrow(/withdrew materialized target "test"/)
+    let failure: unknown
+    try {
+      assembler.flush()
+    } catch (error: unknown) {
+      failure = error
+    }
+    expect(failure).toBeInstanceOf(ConversationUpdateError)
+    expect((failure as ConversationUpdateError).rebuilt).toBe(true)
+    expect(((failure as ConversationUpdateError).cause as Error).message).toMatch(/withdrew materialized target "test"/)
+    // The rebuild replayed the window, so the view already reflects the hidden toggle.
+    expect(testSnapshot(assembler)?.order).toHaveLength(0)
+    assembler.append(input(at(SessionSeq(3), 'command/run', { commandId: 'two', name: 'x' })))
+    expect(() => assembler.flush()).not.toThrow()
+  })
 
+  it('reports both failures when the rebuild fails and retries the rebuild on the next flush', () => {
+    let starts = 0
+    const definition: ConversationNodeDefinition<boolean> = {
+      kind: 'toggle',
+      match: (event) => {
+        if ((event.type as string) === 'command/run') return { id: 'one', role: 'start' }
+        if ((event.type as string) === 'toggle/hide') return { id: 'one', role: 'update' }
+        return null
+      },
+      start: () => {
+        starts++
+        if (starts === 2) throw new Error('replay start failed')
+        return true
+      },
+      update: () => false,
+      target: 'test',
+      buildViewNode: context => context.state === true ? node(context, true) : null,
+    }
+    const assembler = new ConversationNodeAssembler(
+      new TestEventDefinitions([definition]),
+      new TestViewDefinitions([testView()]),
+    )
+    assembler.replaceWindow([input(at(SessionSeq(1), 'command/run', { commandId: 'one', name: 'x' }))], false)
+    assembler.flush()
+    assembler.append(input(at(SessionSeq(2), 'toggle/hide', {})))
+
+    let failure: unknown
+    try {
+      assembler.flush()
+    } catch (error: unknown) {
+      failure = error
+    }
+    expect(failure).toBeInstanceOf(ConversationUpdateError)
+    expect((failure as ConversationUpdateError).rebuilt).toBe(false)
+    const cause = (failure as ConversationUpdateError).cause
+    expect(cause).toBeInstanceOf(AggregateError)
+    expect((cause as AggregateError).errors.map(error => (error as Error).message)).toEqual([
+      expect.stringMatching(/withdrew materialized target "test"/),
+      'replay start failed',
+    ])
+    // The failed rebuild published no view; the next flush rebuilds before any other work.
     expect(testSnapshot(assembler)?.order).toHaveLength(1)
+    expect(assembler.flush()).toBe(true)
+    expect(testSnapshot(assembler)?.order).toHaveLength(0)
   })
 
   it('fails loud when a Definition returns undefined State', () => {

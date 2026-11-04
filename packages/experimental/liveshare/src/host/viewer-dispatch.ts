@@ -158,8 +158,25 @@ export function createViewerDispatch(input: ViewerDispatchDeps): ViewerDispatch 
       body: JSON.stringify(body),
       ...(signal === undefined ? {} : { signal }),
     }), peer)
-    const payload: unknown = await response.json().catch(() => undefined)
-    return { status: response.status, body: payload ?? { error: 'invalid-owner-response' } }
+    /* v8 ignore next -- a response body read failure is equivalent to an empty body. */
+    const text = await response.text().catch(() => '')
+    let payload: unknown
+    try {
+      payload = text === '' ? undefined : JSON.parse(text)
+    } catch {
+      payload = undefined
+    }
+    if (payload !== undefined) return { status: response.status, body: payload }
+    if (response.status === 403 || response.status === 404) {
+      return {
+        status: response.status,
+        body: {
+          error: 'owner-route-not-shared',
+          hint: 'The owner route is available to the owner only. Register the method as a Typert Remote so LiveShare can authorize the viewer call.',
+        },
+      }
+    }
+    return { status: response.status, body: { error: 'invalid-owner-response' } }
   }
 
   /**

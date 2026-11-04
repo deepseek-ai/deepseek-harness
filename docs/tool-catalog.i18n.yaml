@@ -9,8 +9,8 @@
   en: 6cc2cd9ced70bb09
   zh: 1c0e6cb4ba2ed637
 /tool-schema-catalog/tool-package-map:
-  en: 6e8419f195bc96a1
-  zh: 564c4f04420d329a
+  en: 7e4516e824b1500e
+  zh: b0ea6f61792d98a0
 /tool-schema-catalog/deepseek-ai-dsh-plugin-manager:
   en: e0143916bb634762
   zh: e0143916bb634762
@@ -72,8 +72,8 @@
   en: 8c8643ef46fd075f
   zh: 8c8643ef46fd075f
 /tool-schema-catalog/deepseek-ai-dsh-tool-executor-ptc/run-code:
-  en: a5d49232a604a2fb
-  zh: 720040d11a3e31c2
+  en: 7917e16cbc2c366f
+  zh: c39eb0420544f04a
 /tool-schema-catalog/deepseek-ai-dsh-plan-mode:
   en: b500b530845e26a9
   zh: b500b530845e26a9
@@ -246,8 +246,8 @@
   en: 841abe0dd5913ea7
   zh: 841abe0dd5913ea7
 /tool-schema-catalog/deepseek-ai-dsh-tool-subagent/list-subagent-models:
-  en: 207228068bc61885
-  zh: 36e9344ee1af8869
+  en: 0e21650bbe8c71c7
+  zh: fe4033efb38d51a3
 /tool-schema-catalog/deepseek-ai-dsh-tool-subagent/subagent:
   en: 430672da3c1a6ca6
   zh: bd3a9ab4089f9dbb
@@ -264,8 +264,8 @@
   en: b53326fedeab850d
   zh: ecb75b6ce31da009
 /tool-schema-catalog/deepseek-ai-dsh-tool-subagent-control/wait-agent:
-  en: f3cf5a0c56ddc07a
-  zh: 7f6754d71e1b4ae4
+  en: 4b95d11b610d34ca
+  zh: 9b0d9b6012be30d8
 /tool-schema-catalog/deepseek-ai-dsh-tool-jobs:
   en: 9be673b1604d0114
   zh: 9be673b1604d0114
@@ -309,8 +309,8 @@
   en: d5f5679abe86e316
   zh: d5f5679abe86e316
 /tool-schema-catalog/deepseek-ai-dsh-experimental-tool-worktree/create-worktree:
-  en: d8fe3c566ba2147c
-  zh: baf372cb9242670c
+  en: 41950f76db71e7f7
+  zh: 654d2e5505ff3d3c
 /tool-schema-catalog/deepseek-ai-dsh-tool-workflow:
   en: bb38a9d29f46563c
   zh: bb38a9d29f46563c

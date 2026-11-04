@@ -9,7 +9,7 @@ Verify your work by running the code or tests. Keep answers brief and factual.
 
 Check the [exit code: N] marker on every bash result; investigate failures before moving on.
 
-Use the read tool — not shell commands like cat — to inspect text files. Use offset and limit to continue reading large files.
+Use the read tool — not shell commands like cat, sed, head, or tail — to inspect text files. Use offset and limit to read a line range or continue a large file.
 
 Read an existing file before overwriting it with write and prefer edit for targeted changes.
 
@@ -504,7 +504,7 @@ class WebFetchOutput(TypedDict):
     truncated: bool
 
 class WebSearchArgs(TypedDict):
-    # 1–4 search queries; their results are merged.
+    # 1–10 search queries; their results are merged.
     queries: list[str]
     # Additional keys beyond those declared are allowed.
 
@@ -589,7 +589,7 @@ class Tools(Protocol):
     async def update_goal(self, args: UpdateGoalArgs) -> UpdateGoalOutput1 | UpdateGoalOutput2:
         """Update the current goal."""
     async def wait_agent(self, args: WaitAgentArgs) -> WaitAgentOutput:
-        """Wait for input at your next step, including agent messages, completion notifications, and user steering. Returns immediately when that input is already pending."""
+        """Wait for input at your next step, including agent messages, completion notifications, and user steering. Returns immediately if new input is pending. `timedOut: false` means new input is pending. Pending input is delivered to the model after code execution finishes."""
     async def web_fetch(self, args: WebFetchArgs) -> WebFetchOutput:
         """Fetch the content of a specific HTTP(S) URL and return it decoded to text."""
     async def web_search(self, args: WebSearchArgs) -> WebSearchOutput:

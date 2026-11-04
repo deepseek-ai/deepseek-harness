@@ -38,7 +38,7 @@ import type { ImageAttachmentLimits, ImageAttachmentRef, SaveImageAttachment, St
 import UserQuestionService from '@deepseek-ai/dsh-user-questions'
 import PlanModeController from '@deepseek-ai/dsh-plan-mode'
 import WebRuntime from '@deepseek-ai/dsh-web'
-import * as WebSearchExa from '@deepseek-ai/dsh-web-search-exa'
+import * as WebDeepSeekApi from '@deepseek-ai/dsh-web-deepseek-api'
 import * as WebFetchLocal from '@deepseek-ai/dsh-web-fetch-http'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import type { SubagentProvider } from '@deepseek-ai/dsh-subagent'
@@ -296,7 +296,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
       await ctx.plugin(NodePtcRuntime)
     },
     note:
-      'The PTC executor exposes only run_code to the model and declares other visible capabilities in a generated SDK in the runtime’s language. Program bindings enter the shared guarded tool pipeline in submission order; concurrency-safe bodies overlap up to maxParallelSubCalls, and nested results remain linked to the outer program.',
+      'The PTC executor exposes only run_code to the model and declares other visible capabilities in a generated SDK in the runtime’s language. Program bindings enter the shared guarded tool pipeline in submission order; concurrency-safe bodies overlap up to maxParallelSubCalls, and nested results remain linked to the outer program. The resolved timeout and maxSubCallsPerMinute set the total call allowance; exceeding it terminates the program.',
   },
   {
     pkg: '@deepseek-ai/dsh-plan-mode',
@@ -686,7 +686,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
       })
       await ctx.plugin(ToolWorktree)
     },
-    note: 'Explicit experimental composition only. Creates a new branch and checkout from a pinned local commit under existing write permissions, then changes the Session directory. Leaving retains the branch and checkout.',
+    note: 'Enabled through the Change requests & worktrees bundle on Web and Desktop; other profiles can select the standalone bundle. Creates a new branch and checkout from a pinned local commit under existing write permissions, then changes the Session directory. Leaving retains the branch and checkout.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-workflow',
@@ -722,7 +722,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
       // Mount search and fetch providers so both tools register. Their schemas
       // do not depend on provider identity or availability.
       await ctx.plugin(WebRuntime)
-      await ctx.plugin(WebSearchExa)
+      await ctx.plugin(WebDeepSeekApi)
       await ctx.plugin(WebFetchLocal)
       await ctx.plugin(ToolWeb)
     },

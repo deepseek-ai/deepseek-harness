@@ -107,6 +107,9 @@ const renderDirectoryFlowOnly: WorkspaceBrowserProps['renderSlot'] = (name: stri
     ? <div data-testid="directory-flow" />
     : null
 
+// Mounted outside a sidebar, the browser binds its list area to nothing.
+const SECTION_SCROLLER = { bindScrollerRef: () => {} }
+
 function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
   const controls = createWorkspaceShortcutControls()
   const request = createSnapshotStore<WorkspaceActionRequest | null>(null)
@@ -140,6 +143,7 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
     open: vi.fn(),
     searchSessions: vi.fn(async () => ({ items: [], hasMore: false })),
     searchResultLimit: 20,
+    useSectionScroller: () => SECTION_SCROLLER,
     notifyArchivedNotOpenable: vi.fn(),
     renameWorkspace: vi.fn(async () => {}),
     deleteWorkspace: vi.fn(async () => {}),
@@ -166,6 +170,20 @@ function rerender(b: ReturnType<typeof mount>, overrides: Partial<WorkspaceBrows
 }
 
 describe('WorkspaceBrowser', () => {
+  it('binds the list area as the section scroller only while the sidebar is wide', () => {
+    const bindScrollerRef = vi.fn()
+    const browser = mount({ useSectionScroller: () => ({ bindScrollerRef }) })
+    const list = browser.view.container.querySelector<HTMLElement>('[data-sidebar-list-area]')!
+    expect(bindScrollerRef).toHaveBeenLastCalledWith(list)
+    rerender(browser, { wide: false })
+    expect(bindScrollerRef).toHaveBeenLastCalledWith(null)
+    expect(browser.view.container.querySelector('[data-sidebar-list-area]')).toBe(list)
+    rerender(browser, { wide: true })
+    expect(bindScrollerRef).toHaveBeenLastCalledWith(list)
+    browser.view.unmount()
+    expect(bindScrollerRef).toHaveBeenLastCalledWith(null)
+  })
+
   it.each(['workspace', 'flat', 'ungrouped'] as const)('keeps %s recency independent of arrival order and saved manual positions', (mode) => {
     localStorage.clear()
     const preferences = createWorkspaceViewStore().create()
