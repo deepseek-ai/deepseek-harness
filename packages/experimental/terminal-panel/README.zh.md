@@ -57,7 +57,7 @@ kind: "package-reference"
 | `backendType` | `shell` | 由侧栏终端提供的终端注册表类型 |
 | `cols`、`rows` | `160`、`40` | 初始尺寸；打开的侧栏视图会把终端调整为面板大小 |
 | `preferredShells` | `[]` | 在默认 shell 之前、从已探测 shell 中优先尝试的可执行文件名 |
-| `environment` | `PAGER`、`GIT_PAGER` = `cat` | 添加到 Agent 终端环境的变量 |
+| `environment` | `PAGER`、`GIT_PAGER` = `cat` | 添加到 Agent 终端环境的变量；配置的值会替换默认值，因此请在其中保留 `PAGER` 和 `GIT_PAGER`，否则 `git log` 等程序会停在分页器中 |
 | `startupSilenceMs`、`startupTimeoutMs` | `300`、`15000` | 启动静默时长与启动时限 |
 | `promptSilenceMs` | `300` | 发送后检查前台之前的静默时长 |
 | `probeIntervalMs` | `1000` | 两次前台检查之间的最短间隔 |
@@ -167,6 +167,7 @@ Terminals you open with terminal_open appear in the user's side panel. The user 
 - **就绪是推断的**——静默的 shell 内建命令（如 `wait`）会被当作 `stdin_read`；在 macOS 上，等待输入的程序要到 `idleSilenceMs` 后才返回；停在提示符的嵌套 shell 返回 `inferred_idle`。
 - **用户终端只读当前屏幕**——`user_terminal_read` 返回当前屏幕，不等待新输出。
 - **沙箱中的启动文件**——受限 shell 无法写入可写目录之外的文件，因此会写这类文件的启动文件可能在终端中打印错误。
+- **完全访问下共用历史**——`danger-full-access` 终端沿用继承的 `HISTFILE`，通常就是人自己的历史文件，因此 Agent 的命令会追加到这份历史中，Agent 的 shell 也会载入它。
 
 <a id="dev-note"></a>
 ### 开发备注

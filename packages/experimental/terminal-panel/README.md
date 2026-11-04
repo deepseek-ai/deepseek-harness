@@ -57,7 +57,7 @@ Once the person types or pastes into an Agent terminal, `terminal_send` and `ter
 | `backendType` | `shell` | Terminal registry type served by sidebar terminals |
 | `cols`, `rows` | `160`, `40` | Initial size; an open sidebar view resizes the terminal to its panel |
 | `preferredShells` | `[]` | Executable names tried among the discovered shells before the default shell |
-| `environment` | `PAGER`, `GIT_PAGER` = `cat` | Variables added to Agent terminal environments |
+| `environment` | `PAGER`, `GIT_PAGER` = `cat` | Variables added to Agent terminal environments; a configured value replaces the default, so keep `PAGER` and `GIT_PAGER` in it, or programs such as `git log` stop in a pager |
 | `startupSilenceMs`, `startupTimeoutMs` | `300`, `15000` | Startup silence and bound |
 | `promptSilenceMs` | `300` | Silence before a send checks the foreground |
 | `probeIntervalMs` | `1000` | Minimum interval between foreground inspections |
@@ -167,6 +167,7 @@ Append-only; new results follow the reusable request prefix.
 - **Inferred readiness** — a silent shell builtin, such as `wait`, reads as `stdin_read`; on macOS a program waiting for input returns only after `idleSilenceMs`; a nested shell at its prompt returns `inferred_idle`.
 - **Point-in-time user reads** — `user_terminal_read` returns the current screen and does not wait for new output.
 - **Sandboxed startup files** — confined shells cannot write files outside the writable roots, so startup files that do may print errors into the terminal.
+- **Shared history under full access** — a `danger-full-access` terminal keeps the inherited `HISTFILE`, usually the person's own history file, so the Agent's commands join that history and the Agent's shell loads it.
 
 <a id="dev-note"></a>
 ### Dev Note
