@@ -21,6 +21,8 @@ async function main(): Promise<void> {
   if (process.connected) process.send?.({ type: 'starting', runId }, (error) => { if (error !== null) console.error(error) })
   const runtimeDir = process.argv[2] as string
   const projectDir = process.argv[3] as string
+  // Set before the launch-environment snapshot and profile evaluation.
+  process.env.DSH_PRIMARY_RUNTIME = process.argv[4] ?? join(runtimeDir, '..', 'runtime', 'primary-runtime')
   const installAnchor = join(runtimeDir, 'node_modules', '@deepseek-ai', 'dsh', 'package.json')
   const profile = loadProfileDirectory('dsh', projectDir, installAnchor)
   reportSkippedBundles('dsh', profile)
@@ -30,14 +32,14 @@ async function main(): Promise<void> {
     resolvedProfile: { profile, installAnchor },
     patchFiles: [],
     args: ['--no-open', '--host', '127.0.0.1', '--port', '0'],
-    ...(process.argv[4] === undefined ? {} : {
+    ...(process.argv[5] === undefined ? {} : {
       packageManager: {
         command: process.execPath,
-        args: ['--expose-internals', process.argv[4]],
+        args: ['--expose-internals', process.argv[5]],
         env: {
           ELECTRON_RUN_AS_NODE: '1',
           DSH_DESKTOP_NODE_EXECUTABLE: process.execPath,
-          PATH: `${process.argv[5] ?? ''}${delimiter}${process.env.PATH ?? ''}`,
+          PATH: `${process.argv[6] ?? ''}${delimiter}${process.env.PATH ?? ''}`,
         },
       },
     }),

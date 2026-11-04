@@ -45,7 +45,7 @@ it.each([false, true])('settles startup after parent IPC disconnect (boot failur
   copyFileSync(join(hostDirectory, 'lib', 'index.js'), entry)
   const pnpm = join(root, 'bundled-pnpm.mjs')
   const nodeBin = join(root, 'bin')
-  const child = fork(entry, [root, root, pnpm, nodeBin], { execArgv: [], stdio: ['ignore', 'ignore', 'pipe', 'ipc'] })
+  const child = fork(entry, [root, root, root, pnpm, nodeBin], { execArgv: [], stdio: ['ignore', 'ignore', 'pipe', 'ipc'] })
   let stderr = ''
   child.stderr!.setEncoding('utf8').on('data', (chunk: string) => { stderr += chunk })
   const exited = new Promise<number | null>(resolve => child.once('exit', resolve))

@@ -35,7 +35,7 @@ This affects users and prompts of the removed skills, compositions and launchers
    - `office-export-pdf`: `office_convert` with `format: "pdf"`.
 2. Remove `node` and `cli` from every `skill-office` row in `cordis.yml`, patches, and overlays. Set `pythonEnvironment: user` unless the composition mounts `@deepseek-ai/dsh-tool-workspace-dependencies`.
 3. Compositions that mount `@deepseek-ai/dsh-skill-office` without the shipped bundles also mount `@deepseek-ai/dsh-office-kit` and `@deepseek-ai/dsh-tool-office`.
-4. In launchers, stop setting `DSH_BUNDLED_OFFICE_CLI` and `DSH_BUNDLED_OFFICE_NODE`, and rename `DSH_BUNDLED_PRIMARY_RUNTIME` to `DSH_PRIMARY_RUNTIME`. The Python SDK prefers a set or inherited `DSH_PRIMARY_RUNTIME`, even empty, over its download cache; Desktop's built-in terminal and model shells inherit it, so `unset DSH_PRIMARY_RUNTIME` there to use the cache.
+4. In launchers, stop setting `DSH_BUNDLED_OFFICE_CLI` and `DSH_BUNDLED_OFFICE_NODE`, and rename `DSH_BUNDLED_PRIMARY_RUNTIME` to `DSH_PRIMARY_RUNTIME`. The Python SDK prefers a set or inherited `DSH_PRIMARY_RUNTIME`, even empty, over its download cache; unset it to use the cache.
 5. In a copy referenced by `assetRoot`, replace the four remaining folders with the installed package's `assets/` and delete the three removed skill folders.
 6. A `standard` or `ptc` preset saved from the Agent Preset editor replaces the shipped plugin list, so its Sessions lack the Office tools. Add this row to the saved list, or to `config.plugins` of the `preset-standard` or `preset-ptc` row in `$DSH_HOME/profiles/<profile>/cordis.patch.yml` (`<profile>`: `web` or `desktop`):
 

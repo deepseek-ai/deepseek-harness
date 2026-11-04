@@ -169,9 +169,10 @@ const harness = await vi.hoisted(async () => {
     constructor(
       readonly node: string, readonly runtime: string, readonly profile: string,
       readonly inspectPort?: number, readonly environment?: NodeJS.ProcessEnv, readonly onFailure?: (error: Error) => void,
+      readonly primaryRuntime?: string,
       readonly packageManager?: { pnpm: string; nodeBin: string },
-      readonly onPlatformSession?: ConstructorParameters<typeof DesktopHostProcess>[7],
-      readonly onPluginOperation?: ConstructorParameters<typeof DesktopHostProcess>[8],
+      readonly onPlatformSession?: ConstructorParameters<typeof DesktopHostProcess>[8],
+      readonly onPluginOperation?: ConstructorParameters<typeof DesktopHostProcess>[9],
     ) { hosts.push(this) }
   }
   const app = Object.assign(new EventEmitter(), {
@@ -501,9 +502,8 @@ describe('desktop main startup', () => {
     await readyForUpdate()
     const host = harness.hosts[0]!
     expect(host.node).toBe(process.execPath)
-    expect(host.environment).toMatchObject({
-      DSH_PRIMARY_RUNTIME: packaged ? join('desktop-test-resources', 'runtime', 'primary-runtime') : 'test-primary-runtime',
-    })
+    expect(host.primaryRuntime).toBe(packaged
+      ? join('desktop-test-resources', 'runtime', 'primary-runtime') : 'test-primary-runtime')
     expect(host.packageManager).toMatchObject({
       pnpm: packaged
         ? join('desktop-test-resources', 'runtime', 'primary-runtime', 'dependencies', 'pnpm', 'bin', 'pnpm.mjs')
@@ -733,7 +733,7 @@ describe('desktop main startup', () => {
     vi.stubEnv('DSH_DESKTOP_DSH_DIR', join(root, 'app.asar', 'dsh'))
     const host = await readyForUpdate()
     await vi.waitFor(() => { expect(harness.analytics.mock.calls.some(([event]) => (event as { eventName: string }).eventName === 'desktop_app_launch')).toBe(true) })
-    expect(host.environment).toHaveProperty('DSH_PRIMARY_RUNTIME', 'test-primary-runtime')
+    expect(host.primaryRuntime).toBe('test-primary-runtime')
     expect(existsSync(harness.app.getPath('logs'))).toBe(false)
     expect(writeCrashReport).not.toHaveBeenCalled()
     expect(harness.dialog.showMessageBox).not.toHaveBeenCalledWith(expect.objectContaining({ title: en.startupFailed }))
@@ -2858,7 +2858,7 @@ describe('desktop main startup', () => {
     expect(harness.hosts[0]).toMatchObject({
       node: process.execPath,
       runtime: join(harness.app.getAppPath(), 'dsh'),
-      environment: { DSH_PRIMARY_RUNTIME: join('desktop-test-resources', 'runtime', 'primary-runtime') },
+      primaryRuntime: join('desktop-test-resources', 'runtime', 'primary-runtime'),
       profile: 'desktop-test-profile',
     })
     expect(harness.hosts[0]!.environment).not.toBe(process.env)
@@ -2880,7 +2880,7 @@ describe('desktop main startup', () => {
     await harness.hostStarted.promise
     const project = join(harness.app.getAppPath(), '.desktop-build', 'development', 'project')
     expect(harness.hosts[0]).toMatchObject({ node: process.execPath, runtime: project,
-      environment: { DSH_PRIMARY_RUNTIME: 'test-primary-runtime' }, profile: 'desktop-test-profile' })
+      primaryRuntime: 'test-primary-runtime', profile: 'desktop-test-profile' })
     expect(harness.applyRelease).toHaveBeenCalledOnce()
     harness.hosts[0]!.ready.resolve()
     await harness.navigated.promise

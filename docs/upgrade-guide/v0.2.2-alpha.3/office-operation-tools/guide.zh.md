@@ -35,7 +35,7 @@ Web profile，以及没有 primary runtime 的 SDK profile，会在首次请求�
    - `office-export-pdf`：`office_convert`，`format` 为 `"pdf"`。
 2. 从 `cordis.yml`、patch 和 overlay 的所有 `skill-office` 行中删除 `node` 和 `cli`。除非组合挂载了 `@deepseek-ai/dsh-tool-workspace-dependencies`，否则设置 `pythonEnvironment: user`。
 3. 不使用随发行版 bundle、自行挂载 `@deepseek-ai/dsh-skill-office` 的组合，同时挂载 `@deepseek-ai/dsh-office-kit` 和 `@deepseek-ai/dsh-tool-office`。
-4. 在启动器中不再设置 `DSH_BUNDLED_OFFICE_CLI` 和 `DSH_BUNDLED_OFFICE_NODE`，并把 `DSH_BUNDLED_PRIMARY_RUNTIME` 改名为 `DSH_PRIMARY_RUNTIME`。Python SDK 优先使用环境中设置或继承的 `DSH_PRIMARY_RUNTIME`（空值也一样），其次才是下载缓存；Desktop 内置终端和模型 shell 会继承该变量，因此要在其中使用缓存，先执行 `unset DSH_PRIMARY_RUNTIME`。
+4. 在启动器中不再设置 `DSH_BUNDLED_OFFICE_CLI` 和 `DSH_BUNDLED_OFFICE_NODE`，并把 `DSH_BUNDLED_PRIMARY_RUNTIME` 改名为 `DSH_PRIMARY_RUNTIME`。Python SDK 优先使用环境中设置或继承的 `DSH_PRIMARY_RUNTIME`（空值也一样），其次才是下载缓存；要使用缓存，请取消设置该变量。
 5. 在 `assetRoot` 引用的副本中，用已安装包 `assets/` 下的对应目录替换其余四个目录，并删除三个已删除技能的目录。
 6. 在 Agent 预设编辑器中保存过的 `standard` 或 `ptc` 预设会替换随发行版提供的插件列表，因此其 Session 没有 Office 工具。把下面这一行加入已保存的列表，或加入 `$DSH_HOME/profiles/<profile>/cordis.patch.yml` 中 `preset-standard` 或 `preset-ptc` 行的 `config.plugins`（`<profile>`：`web` 或 `desktop`）：
 

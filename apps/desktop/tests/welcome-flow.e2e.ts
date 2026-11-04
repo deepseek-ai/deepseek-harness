@@ -90,7 +90,7 @@ describe.skipIf(!existsSync(builtHost))('built Desktop welcome flow', () => {
       const restart = async (): Promise<void> => {
         await host?.stop()
         host = new DesktopHostProcess(process.execPath, project, paths.profile, undefined,
-          { ...process.env, DSH_PRIMARY_RUNTIME: join(root, 'runtime', 'primary-runtime') })
+          process.env, undefined, join(root, 'runtime', 'primary-runtime'))
         const { url } = await host.start()
         hostOrigin = new URL(url).origin
         backend = connectDesktopWelcome(url, await authenticateWebHost(url))

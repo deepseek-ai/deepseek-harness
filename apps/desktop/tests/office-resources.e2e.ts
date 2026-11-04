@@ -67,7 +67,7 @@ describe.skipIf(!existsSync(builtHost))('built Desktop Host Office resources', (
       installSkillProbe(paths.profile)
       const primaryRuntime = mode === 'relative-source' ? 'runtime/primary-runtime' : join(runtime, 'primary-runtime')
       host = new DesktopHostProcess(process.execPath, project, paths.profile, undefined,
-        { ...process.env, DSH_PRIMARY_RUNTIME: primaryRuntime }, (error) => { failures.push(error) })
+        process.env, (error) => { failures.push(error) }, primaryRuntime)
       const { url } = await host.start()
       // The authenticated URL exchanges its token for a session cookie by redirecting.
       const response = await fetch(url, { redirect: 'manual' })
