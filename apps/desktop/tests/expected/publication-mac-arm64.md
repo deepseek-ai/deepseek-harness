@@ -8,6 +8,7 @@
 | 发布环境 | <code>test</code> |
 | 版本号 | <code>1.0.0</code> |
 | 升级通道 | <code>nightly</code> |
+| 更新灰度比例 | 全量（未设置） |
 | 平台 | <code>mac-arm64</code> |
 | 测试 release ID | <code>aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa</code><br>测试下载路径的随机前缀，用于降低地址被猜到的可能性；连续升级测试需使用相同值。 |
 | 下载地址预览 | <a href="https&#58;//example.com/dsh-desk/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/bin/mac-arm64/deepseek-harness-1.0.0-mac-arm64.dmg">https&#58;//example.com/dsh-desk/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/bin/mac-arm64/deepseek-harness-1.0.0-mac-arm64.dmg</a><br>发布后的目标地址，审批前不保证可下载。 |
