@@ -109,8 +109,8 @@
     border-radius: var(--dsw-radius-lg);
     --dsw-elevation-stroke-color: var(--dsw-alias-border-l2);
     box-shadow: var(--dsw-elevation-prominent);
-    /* Elevated surface: the tree's scrollbar takes the l2 thumb pair (ui-theme
-       styles/scrollbar.css). */
+    /* Elevated light surface: the tree's scrollbar takes the l2 thumb pair
+       (ui-theme styles/scrollbar.css). */
     --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
     --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
   }
@@ -138,6 +138,8 @@
   :global(body[data-ds-dark-theme]) .overlay {
     background: var(--dsw-alias-bg-layer-1);
     box-shadow: none;
+    --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l1);
+    --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l1);
   }
 
   /* The bar stops where the card's corners curve, so they do not clip it. */
