@@ -96,3 +96,13 @@ it('accepts a successful package when the attempt failed during archival', () =>
   expect(resolveDesktopPublishRoute('owner/repo', f.run, { source: f.source }, f.jobs, f.routes))
     .toMatchObject({ runId: '42', attempt: '2' })
 })
+
+it.each([null, undefined])('routes from successful package evidence without a run conclusion (%s)', (conclusion) => {
+  const f = fixture()
+  const run = { ...f.run, conclusion }
+  expect(resolveDesktopPublishRoute('owner/repo', run, { source: f.source }, f.jobs, f.routes))
+    .toMatchObject({ runId: '42', attempt: '2', runnerLabel: 'dsh-mini' })
+  f.jobs[0]!.conclusion = 'failure'
+  expect(() => resolveDesktopPublishRoute('owner/repo', run, { source: f.source }, f.jobs, f.routes))
+    .toThrow('single successful packaging runner')
+})
