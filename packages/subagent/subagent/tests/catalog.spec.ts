@@ -242,6 +242,48 @@ describe('external catalog membership', () => {
 })
 
 describe('named catalog membership', () => {
+  it('reuses version-6 unnamed checkpoints and folds only the named suffix', async () => {
+    const ctx = new Context()
+    try {
+      await ctx.plugin(SessionProjectionRegistry)
+      const apply = vi.fn(subagentCatalogProjectionDefinition.apply)
+      await ctx.sessionProjections.register({ ...subagentCatalogProjectionDefinition, apply })
+      const historical: SessionEvent<'subagent/catalog'>[] = [
+        fact(0, 'legacy-local', 1, { mode: 'continuable', label: 'Legacy' }),
+        { type: 'subagent/catalog', seq: SessionSeq(1), time: 0,
+          data: { version: 1, childId: SessionId('legacy-unknown'), childCreatedAt: 2, mode: 'unknown' } },
+        { type: 'subagent/catalog', seq: SessionSeq(2), time: 0,
+          data: { version: 2, childId: SessionId('legacy-external'), childCreatedAt: 3, mode: 'external' } },
+      ]
+      const suffix: SessionEvent<'subagent/catalog'>[] = [
+        { type: 'subagent/catalog', seq: SessionSeq(3), time: 0,
+          data: { version: 3, childId: SessionId('reviewer'), childCreatedAt: 4,
+            mode: 'continuable', label: 'Review', name: 'reviewer' } },
+        { type: 'subagent/catalog', seq: SessionSeq(4), time: 0,
+          data: { version: 3, childId: SessionId('auditor'), childCreatedAt: 5, mode: 'external', name: 'auditor' } },
+      ]
+      const checkpoint = { subagentCatalog: { ver: 6, seq: SessionSeq(2), val: {
+        inheritedEventCount: 0, head: { values: historical.map(event => event.data) },
+      } } }
+      expect(ctx.sessionProjections.restoreFloor(checkpoint)).toBe(2)
+      expect(ctx.sessionProjections.viewCheckpoint(checkpoint).subagentCatalog).toEqual([
+        { id: 'legacy-local', createdAt: 1, mode: 'continuable', label: 'Legacy' },
+        { id: 'legacy-unknown', createdAt: 2, mode: 'unknown' },
+        { id: 'legacy-external', createdAt: 3, mode: 'external' },
+      ])
+      expect(apply).not.toHaveBeenCalled()
+      const restored = ctx.sessionProjections.restore(checkpoint, suffix, SessionLogOffset(3), header, SessionLogOffset(0))
+      expect(apply.mock.calls.map(([, event]) => event)).toEqual(suffix)
+      const full = ctx.sessionProjections.restore({}, [...historical, ...suffix], SessionLogOffset(0), header, SessionLogOffset(0))
+      expect(restored).toEqual(full)
+      expect(restored.checkpoint['subagentCatalog']!.ver).toBe(6)
+      expect(restored.snapshot.values.subagentCatalog?.map(entry => 'name' in entry ? entry.name : undefined))
+        .toEqual([undefined, undefined, undefined, 'reviewer', 'auditor'])
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('restores version-3 names beside unnamed historical children', () => {
     const named: SessionEvent<'subagent/catalog'>[] = [
       { type: 'subagent/catalog', seq: SessionSeq(1), time: 0,

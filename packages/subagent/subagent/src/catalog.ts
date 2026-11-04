@@ -126,7 +126,7 @@ function subagentCatalogEntries(state: SubagentCatalogState): SubagentCatalogEnt
   return entries
 }
 
-/** Parent-owned direct-child catalog projection; invalid own facts reject restoration. */
+/** Parent-owned catalog; version-6 checkpoints retain unnamed facts, and invalid own facts reject restoration. */
 export const subagentCatalogProjectionDefinition = {
   key: 'subagentCatalog',
   stateSchema,
@@ -135,7 +135,7 @@ export const subagentCatalogProjectionDefinition = {
     if (event.type !== 'subagent/catalog' || event.seq < state.inheritedEventCount) return state
     return { ...state, head: appendChunkedList(state.head, eventDataSchema.parse(event.data)) }
   },
-  stateVersion: 7,
+  stateVersion: 6,
   wire: { viewSchema, view: subagentCatalogEntries },
 } satisfies ProjectionDefinition<'subagentCatalog', SubagentCatalogState>
 

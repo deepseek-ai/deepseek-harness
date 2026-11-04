@@ -35,7 +35,7 @@ changes:
 <a id="compatibility"></a>
 ## 兼容性
 
-version 0、1、2 载荷的 schema 和含义保持不变；当前读取方将其恢复为按 Session id 寻址的无名子代理。新的本地创建和父级交付的 external 创建写入 version 3。较早版本在原生 V4 准入和目录投影恢复时拒绝未知载荷版本，而不会误读条目，因此记录了具名子代理的父 Session 会明确失败，而不是丢失子代理。
+version 0、1、2 载荷的 schema 和含义保持不变；当前读取方将其恢复为按 Session id 寻址的无名子代理。新的本地创建和父级交付的 external 创建写入 version 3。投影 stateVersion 保持为 6：无名检查点仍可复用，后缀回放与包含具名事件的全量回放一致。较早版本在原生 V4 准入和目录投影恢复时拒绝未知载荷版本，而不会误读条目，因此记录了具名子代理的父 Session 会明确失败，而不是丢失子代理。
 
 <a id="verification"></a>
 ## 验证

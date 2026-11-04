@@ -35,7 +35,7 @@ changes:
 <a id="compatibility"></a>
 ## Compatibility
 
-Version 0, 1, and 2 payloads keep their schemas and meaning; current readers restore them as unnamed children addressed by Session id. New local and parent-delivered external creation writes version 3. Earlier releases reject the unknown payload version during native V4 admission and catalog projection restoration instead of misreading the entry, so a parent Session that recorded a named child fails loudly rather than losing a child.
+Version 0, 1, and 2 payloads keep their schemas and meaning; current readers restore them as unnamed children addressed by Session id. New local and parent-delivered external creation writes version 3. Projection stateVersion remains 6: unnamed checkpoints stay usable, and their suffix replay matches full replay with named events. Earlier releases reject the unknown payload version during native V4 admission and catalog projection restoration instead of misreading the entry, so a parent Session that recorded a named child fails loudly rather than losing a child.
 
 <a id="verification"></a>
 ## Verification
