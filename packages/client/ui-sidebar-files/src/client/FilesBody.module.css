@@ -99,18 +99,21 @@
 
 /* Beside a preview in a row from FileNavigator `FILL_BELOW` on, the navigator
    is a raised card inset by the tree body's own 8px so its corners show, at a
-   radius sized for a panel this narrow. In light mode it takes the floating
-   dock panel's surface and shadow (ui-dockkit `.float`). */
+   radius sized for a panel this narrow. The layer-1 background separates the
+   card in dark mode; its hairline and shadow use static black, so they stay
+   black in both themes. */
 @media (width >= 768px) {
   .push,
   .overlay {
-    background: var(--dsw-alias-bg-layer-2);
+    background: var(--dsw-alias-bg-layer-1);
     border: 0;
     border-radius: var(--dsw-radius-lg);
-    --dsw-elevation-stroke-color: var(--dsw-alias-border-l2);
-    box-shadow: var(--dsw-elevation-prominent);
-    /* Elevated light surface: the tree's scrollbar takes the l2 thumb pair
-       (ui-theme styles/scrollbar.css). */
+    box-shadow:
+      0 0 0 0.5px color-mix(in srgb, var(--dsw-static-neutral-1000) 10%, transparent),
+      0 3px 8px 0 color-mix(in srgb, var(--dsw-static-neutral-1000) 4%, transparent),
+      0 0 20px 0 color-mix(in srgb, var(--dsw-static-neutral-1000) 5%, transparent);
+    /* Elevated surface: the tree's scrollbar takes the l2 thumb pair (ui-theme
+       styles/scrollbar.css). */
     --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
     --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
   }
@@ -131,17 +134,6 @@
     bottom: 8px;
     z-index: 2;
     height: auto;
-  }
-
-  /* Dark mode draws no shadow: the layer-1 background against the body's base
-     background separates the card, and its scrollbar takes the matching l1
-     thumb pair. */
-  :global(body[data-ds-dark-theme]) .push,
-  :global(body[data-ds-dark-theme]) .overlay {
-    background: var(--dsw-alias-bg-layer-1);
-    box-shadow: none;
-    --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l1);
-    --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l1);
   }
 
   /* The bar stops where the card's corners curve, so they do not clip it. */
