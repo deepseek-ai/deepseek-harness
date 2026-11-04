@@ -1,12 +1,11 @@
 /** Built Desktop Host startup with incomplete or unusable Office resources; run after the repository build. */
 
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { DesktopHostProcess } from '../src/host-process.ts'
-import { builtHost, prepareDesktopHome, repository } from './harness.ts'
+import { builtHost, prepareDesktopHome } from './harness.ts'
 
 afterEach(() => { vi.unstubAllEnvs() })
 
@@ -47,11 +46,9 @@ export function apply(ctx) {
 
 describe.skipIf(!existsSync(builtHost))('built Desktop Host Office resources', () => {
   it.each([
-    ['one missing Office skill file', 'missing-skill'],
     ['an empty runtime directory', 'empty-runtime'],
     ['an unusable primary runtime path', 'relative-source'],
-    ['complete Office resources', 'complete'],
-  ] as const)('starts the Host with %s', async (_label, mode) => {
+  ] as const)('starts the Host with %s and the packaged Office skills', async (_label, mode) => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-desktop-office-'))
     let host: DesktopHostProcess | undefined
     const failures: Error[] = []
@@ -59,10 +56,6 @@ describe.skipIf(!existsSync(builtHost))('built Desktop Host Office resources', (
       const { project, paths } = await prepareDesktopHome(root)
       const runtime = join(root, 'runtime')
       mkdirSync(runtime)
-      if (mode !== 'empty-runtime') {
-        cpSync(join(repository, 'packages/skill/skill-office/assets'), join(runtime, 'office-skills'), { recursive: true })
-        if (mode === 'missing-skill') rmSync(join(runtime, 'office-skills', 'office-docx', 'SKILL.md'))
-      }
       writeFileSync(join(paths.profile, 'cordis.patch.yml'), '- id: webserver\n  config:\n    host: 127.0.0.1\n    port: 0\n')
       installSkillProbe(paths.profile)
       const primaryRuntime = mode === 'relative-source' ? 'runtime/primary-runtime' : join(runtime, 'primary-runtime')
@@ -81,24 +74,10 @@ describe.skipIf(!existsSync(builtHost))('built Desktop Host Office resources', (
       expect(skills.officeKit).toBe(true)
       // Agent presets, not the Host root, mount the Office tools.
       expect(skills.tools).toEqual([])
-      switch (mode) {
-        case 'complete':
-          expect(skills.names.toSorted()).toEqual(OFFICE_SKILLS)
-          expect(skills.content['office-docx']).toEqual(expect.any(String))
-          expect(skills.content.office).toContain('`office_render`')
-          break
-        case 'missing-skill':
-          expect(skills.names.toSorted()).toEqual(OFFICE_SKILLS.filter(name => name !== 'office-docx'))
-          expect(skills.content['office-docx']).toBeNull()
-          expect(skills.content.office).toContain('`office_render`')
-          break
-        case 'empty-runtime':
-        case 'relative-source':
-          expect(skills).toMatchObject({ names: [], content: { office: null, 'office-docx': null } })
-          break
-        default:
-          assertNever(mode)
-      }
+      // skill-office reads the skills from its packaged assets, independent of the primary runtime directory.
+      expect(skills.names.toSorted()).toEqual(OFFICE_SKILLS)
+      expect(skills.content['office-docx']).toEqual(expect.any(String))
+      expect(skills.content.office).toContain('`office_render`')
       expect(failures).toEqual([])
     } finally {
       await host?.stop()

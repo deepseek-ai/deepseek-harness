@@ -10,7 +10,7 @@ wheel 包会安装 `dsh` 控制台命令和 `deepseek_harness_runtime` Python �
 
 生产可执行程序位于模块的 `runtime/` 目录，命名为 `deepseek-harness-sdk-runtime-<platform>-<arch>`；Windows 使用 `.exe` 后缀。Linux 与 macOS wheel 包含目标平台原生的 `-rg` 伴随程序，Windows 包含 `-rg.exe`，macOS 还包含 `node-pty` 使用的 `-spawn-helper`。已发布目标是 Linux x64、Linux arm64、macOS arm64、macOS x64 与 Windows x64。wheel 包标签必须与载荷严格匹配；不发布 Windows arm64 wheel 包。
 
-wheel 仅携带可执行程序、原生执行辅助程序，以及包含 `downloads.json` 和轻量 `office-skills/` 目录的 `<platform>-<arch>/`。CPython、创作库、独立 Node、pnpm 和完整 Office sidecar 均为可选下载资源。导入 Python 模块、启动 SDK profile 和处理 Office 文件都不会下载资源。
+wheel 仅携带可执行程序、原生执行辅助程序，以及包含 `downloads.json` 的 `<platform>-<arch>/`。Office skills 内置于可执行程序中。CPython、创作库、独立 Node、pnpm 和完整 Office sidecar 均为可选下载资源。导入 Python 模块、启动 SDK profile 和处理 Office 文件都不会下载资源。
 
 使用前显式下载所需的任一种资源：
 
@@ -21,11 +21,11 @@ office = download_office()
 primary_runtime = download_primary_runtime()
 ```
 
-`download_office()` 下载锁定版本的 npm Kit、目标引擎及完整依赖树，并准备供 Python `deepseek_harness.office` 模块使用的独立 Node。`download_primary_runtime()` 独立下载 CPython、锁定的 Python 库、Node、pnpm 和 Office skills。两者返回绝对资源目录，并复用完整缓存。创作下载会在返回前校验目标平台、解释器、库目录与 skills。现有本地 `installPrimaryRuntime()` 操作仍只复制已有载荷，不执行下载。 共享构建器采用 [NumPy/pandas 测试文件裁剪规则](../../apps/desktop/README.zh.md#bundled-workspace-dependencies)。
+`download_office()` 下载锁定版本的 npm Kit、目标引擎及完整依赖树，并准备供 Python `deepseek_harness.office` 模块使用的独立 Node。`download_primary_runtime()` 独立下载 CPython、锁定的 Python 库、Node 和 pnpm。两者返回绝对资源目录，并复用完整缓存。创作下载会在返回前校验目标平台、解释器与库目录。现有本地 `installPrimaryRuntime()` 操作仍只复制已有载荷，不执行下载。 共享构建器采用 [NumPy/pandas 测试文件裁剪规则](../../apps/desktop/README.zh.md#bundled-workspace-dependencies)。
 
 `DSH_RESOURCE_CACHE` 指定绝对缓存根目录，默认为 `~/.cache/deepseek-harness/resources`。资源身份包含发布版本锁定的输入。下载会校验归档哈希和包身份、保留执行权限，并原子发布完整目录。下载失败后可重试。`DSH_RESOURCE_DOWNLOAD_TIMEOUT_MS` 限制每个归档的下载耗时，包含响应内容；默认值为 `300000`，接受 `1` 到 `2147483647` 的整数。下载遵循 Harness 代理环境策略。已安装的 wheel 文件不会被修改。不同发布版本使用独立缓存目录；不再使用的版本需手动删除。下载使用锁定的上游 URL，不提供 registry 或镜像覆盖。
 
-后续启动时，打包 bootstrap 将已下载资源提供给 SDK profile。`DSH_PRIMARY_RUNTIME` 覆盖缓存中的创作环境；空值禁用其查询和包管理器选择。`DSH_OFFICE_SIDECAR` 可选择包含独立 Node 的绝对 sidecar 目录。用户可自行提供 Python 环境和文档库，无需下载创作环境。Office skills 只在有创作环境时可用，并指引模型使用其内置 Python 与库。未选择 Office sidecar 时，Office 工具报告 LibreOffice Kit 不可用。外部创作载荷保留 `primary-runtime/` 及同级 `office-skills/` 布局。SDK 原位读取资源，不复制到 `DSH_HOME`。`sdk-minimal` profile 不挂载这些提供方。
+后续启动时，打包 bootstrap 将已下载资源提供给 SDK profile。`DSH_PRIMARY_RUNTIME` 覆盖缓存中的创作环境；空值禁用其查询和包管理器选择。`DSH_OFFICE_SIDECAR` 可选择包含独立 Node 的绝对 sidecar 目录。用户可自行提供 Python 环境和文档库，无需下载创作环境。Office skills 总是可用，来自可执行程序内置的包内 assets：有创作环境时指引模型使用其内置 Python 与库，没有时指引模型使用用户已有的 Python。未选择 Office sidecar 时，Office 工具报告 LibreOffice Kit 不可用。SDK 原位读取资源，不复制到 `DSH_HOME`。`sdk-minimal` profile 不挂载这些提供方。
 
 选择 skills 与交付资源相互独立：项目、自定义目录和用户文件系统 skills 优先于同名随包 skills。SDK patch 可以仅禁用 Office 提供方，同时保留 Python 查询：
 

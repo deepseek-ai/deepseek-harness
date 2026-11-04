@@ -1,7 +1,7 @@
 import { createServer } from 'node:http'
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { zstdDecompressSync } from 'node:zlib'
 import { resolveExampleLaunch } from '@deepseek-ai/dsh-loader-smoke'
@@ -537,17 +537,14 @@ async function officeFixture(root: string, pythonOnly: boolean) {
   await mkdir(paths.pythonPackages, { recursive: true })
   if (paths.nodePackages !== undefined) await mkdir(paths.nodePackages, { recursive: true })
   await writeFile(join(source, 'runtime.json'), JSON.stringify(manifest))
-  await cp(join(repoRoot, 'packages/skill/skill-office/assets'), join(root, 'resources', 'office-skills'), { recursive: true })
   return { source, paths }
 }
 
-it.each(['unset', 'empty', 'full', 'python-only', 'python-only-patched', 'missing-assets', 'wrong-type'] as const)('composes Office resources through the SDK profile (%s)', async (mode) => {
+it.each(['unset', 'empty', 'full', 'python-only', 'python-only-patched', 'wrong-type'] as const)('composes Office resources through the SDK profile (%s)', async (mode) => {
   const root = await mkdtemp(join(tmpdir(), 'sdk-office-'))
   onTestFinished(() => rm(root, { recursive: true, force: true }))
   const enabled = mode !== 'unset' && mode !== 'empty'
-  const skills = enabled && mode !== 'missing-assets'
   const { source, paths } = await officeFixture(root, mode.startsWith('python-only'))
-  if (mode === 'missing-assets') await rm(join(root, 'resources', 'office-skills'), { recursive: true })
   if (mode === 'wrong-type') {
     await rm(paths.python)
     await mkdir(paths.python)
@@ -555,7 +552,7 @@ it.each(['unset', 'empty', 'full', 'python-only', 'python-only-patched', 'missin
   const requests: Record<string, unknown>[] = []
   const toolUses = [
     ...enabled ? [{ type: 'tool_use', id: 'workspace-dependencies', name: 'load_workspace_dependencies', input: {} } as const] : [],
-    ...skills ? [{ type: 'tool_use', id: 'office-docx', name: 'skill', input: { name: 'office-docx' } } as const] : [],
+    { type: 'tool_use', id: 'office-docx', name: 'skill', input: { name: 'office-docx' } } as const,
   ]
   const server = createServer((request, response) => {
     let body = ''
@@ -573,9 +570,12 @@ it.each(['unset', 'empty', 'full', 'python-only', 'python-only-patched', 'missin
   if (address === null || typeof address === 'string') throw new Error('model fixture did not bind')
   const home = join(root, 'home')
   const cliPatch = join(root, 'cli.patch.yml')
-  // This patch replaces the row's config without pythonEnvironment, as patches written before that option did;
-  // the skill-office default keeps directing the model to the bundled environment.
-  await writeFile(cliPatch, JSON.stringify(mode === 'python-only-patched' ? [{ id: 'skill-office', config: { assetRoot: join(root, 'resources', 'office-skills') } }] : []))
+  const packagedSkills = join(repoRoot, 'packages/skill/skill-office/assets')
+  const patchedSkills = join(root, 'patched-skills')
+  if (mode === 'python-only-patched') await cp(packagedSkills, patchedSkills, { recursive: true })
+  // This patch replaces the row's config with only assetRoot; the skill-office default keeps directing the model to
+  // the bundled environment.
+  await writeFile(cliPatch, JSON.stringify(mode === 'python-only-patched' ? [{ id: 'skill-office', config: { assetRoot: patchedSkills } }] : []))
   const officeLaunch = resolveExampleLaunch({
     srcBin: fileURLToPath(new URL('../../../src/bin.ts', import.meta.url)), mode: 'lib',
     configArgs: ['--profile', 'sdk', '--patch', cliPatch],
@@ -606,24 +606,24 @@ it.each(['unset', 'empty', 'full', 'python-only', 'python-only-patched', 'missin
   }, () => stderr)
   const names = (requests[0]!.tools as { name: string }[]).map(value => value.name)
   expect(names.includes('load_workspace_dependencies')).toBe(enabled)
-  expect(JSON.stringify(requests[0]!.messages).includes('`office`')).toBe(skills)
+  expect(JSON.stringify(requests[0]!.messages)).toContain('`office`')
   const officeTools = ['office_convert', 'office_recalculate', 'office_render']
   expect(names.filter(name => name.startsWith('office'))).toEqual([])
   const lastNames = (requests.at(-1)!.tools as { name: string }[]).map(value => value.name)
   // Loading an Office skill declares the Office tools from the following request.
-  expect(lastNames.filter(name => name.startsWith('office')).sort()).toEqual(skills ? officeTools : [])
+  expect(lastNames.filter(name => name.startsWith('office')).sort()).toEqual(officeTools)
   expect(names).not.toContain('render_document')
   for (const name of ['office-docx', 'office-pptx', 'office-xlsx']) {
-    expect(JSON.stringify(requests[0]!.messages).includes(name)).toBe(skills)
+    expect(JSON.stringify(requests[0]!.messages)).toContain(name)
   }
   expect(requests).toHaveLength(toolUses.length + 1)
-  if (skills) {
-    const messages = requests.at(-1)!.messages as { content: { type: string; tool_use_id?: string; content?: unknown }[] }[]
-    const skill = JSON.stringify(messages.flatMap(message => message.content).find(block => block.tool_use_id === 'office-docx'))
-    expect(skill).toContain('## Python environment')
-    expect(skill).toContain('Otherwise call `load_workspace_dependencies`')
-    expect(skill).not.toContain('`python3` or `python` on PATH')
-  }
+  const messages = requests.at(-1)!.messages as { content: { type: string; tool_use_id?: string; content?: unknown }[] }[]
+  const skill = JSON.stringify(messages.flatMap(message => message.content).find(block => block.tool_use_id === 'office-docx'))
+  const skillDirectory = join(mode === 'python-only-patched' ? patchedSkills : packagedSkills, 'office-docx').split(sep).join('/')
+  expect(skill).toContain(JSON.stringify(`Base directory for this skill: ${skillDirectory}`).slice(1, -1))
+  expect(skill).toContain('## Python environment')
+  expect(skill.includes('Otherwise call `load_workspace_dependencies`')).toBe(enabled)
+  expect(skill.includes('`python3` or `python` on PATH')).toBe(!enabled)
   if (mode === 'wrong-type') {
     const messages = requests[1]!.messages as { content: { type: string; tool_use_id?: string; content?: unknown }[] }[]
     const result = messages.flatMap(message => message.content).find(block => block.tool_use_id === 'workspace-dependencies')

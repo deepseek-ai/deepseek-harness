@@ -19,11 +19,13 @@ description: "删除 `office-render`、`office-recalculate` 和 `office-export-p
 | `DSH_BUNDLED_OFFICE_CLI` 和 `DSH_BUNDLED_OFFICE_NODE` | 无；不再有组件读取它们 |
 | `DSH_BUNDLED_PRIMARY_RUNTIME` | `DSH_PRIMARY_RUNTIME` |
 
-`skill-office` 新增 `pythonEnvironment`。默认值 `'workspace-dependencies'` 让 Python 技能调用 `load_workspace_dependencies`；没有挂载 `@deepseek-ai/dsh-tool-workspace-dependencies` 的组合必须设为 `'user'`。`DSH_BUNDLED_OFFICE_SKILLS` 含义不变。
+`skill-office` 新增 `pythonEnvironment`。默认值 `'workspace-dependencies'` 让 Python 技能调用 `load_workspace_dependencies`；没有挂载 `@deepseek-ai/dsh-tool-workspace-dependencies` 的组合必须设为 `'user'`。`DSH_BUNDLED_OFFICE_SKILLS` 的删除见 [Office 技能资源](../office-skill-resources/guide.zh.md)。
 
 Office 工具在 Host 进程内用原生 LibreOffice Kit 引擎解析不可信的文档，不受 shell 沙箱和 PTC 权限约束，并具有 Host 用户的权限；输入仍由文件系统后端授权。`office-kit` 条目新增 `outputDirectory`（默认 `$DSH_HOME/office-kit/outputs`）、`outputRetentionMs` 和 `maxOutputStoreBytes`。
 
-受影响的有：使用已删除技能的用户和提示词，设置了已删除配置键或环境变量的组合和启动器，`assetRoot` 技能副本，已保存的 `standard` 或 `ptc` 预设，以及依赖 shell 沙箱解析文档的部署。
+Web profile，以及没有 primary runtime 的 SDK profile，会在首次请求上下文和 `/` 菜单中列出 Office 技能。
+
+受影响的有：使用已删除技能的用户和提示词，设置了已删除配置键或环境变量的组合和启动器，`assetRoot` 技能副本，已保存的 `standard` 或 `ptc` 预设，依赖 shell 沙箱解析文档的部署，以及固定了首次请求上下文或 `/` 菜单的测试。
 
 ## 迁移
 
@@ -43,4 +45,5 @@ Office 工具在 Host 进程内用原生 LibreOffice Kit 引擎解析不可信�
    ```
 
 7. 需要在沙箱中解析文档的部署不挂载 `@deepseek-ai/dsh-tool-office`。
-8. 确认：在 Desktop 的 `standard` 或 `ptc` 新 Session 中发送 `/office`，再另发一条导出 PDF 的请求；该请求会产生一次 `office_convert` 调用，返回临时 PDF 路径或 `unavailable` 消息。
+8. 更新首次请求上下文和 `/` 菜单的预期结果，使其包含 Office 技能。
+9. 确认：在 `standard` 或 `ptc` 的新 Session 中发送 `/office`，再另发一条导出 PDF 的请求；该请求会产生一次 `office_convert` 调用，返回临时 PDF 路径或 `unavailable` 消息。

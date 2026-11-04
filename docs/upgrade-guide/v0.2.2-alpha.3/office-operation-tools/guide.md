@@ -19,11 +19,13 @@ Configuration changes:
 | `DSH_BUNDLED_OFFICE_CLI` and `DSH_BUNDLED_OFFICE_NODE` | None; no component reads them |
 | `DSH_BUNDLED_PRIMARY_RUNTIME` | `DSH_PRIMARY_RUNTIME` |
 
-`skill-office` gains `pythonEnvironment`. Its default, `'workspace-dependencies'`, directs the Python skills to `load_workspace_dependencies`; a composition without `@deepseek-ai/dsh-tool-workspace-dependencies` must set `'user'`. `DSH_BUNDLED_OFFICE_SKILLS` keeps its meaning.
+`skill-office` gains `pythonEnvironment`. Its default, `'workspace-dependencies'`, directs the Python skills to `load_workspace_dependencies`; a composition without `@deepseek-ai/dsh-tool-workspace-dependencies` must set `'user'`. [Office skill resources](../office-skill-resources/guide.md) covers the removal of `DSH_BUNDLED_OFFICE_SKILLS`.
 
 The Office tools parse untrusted documents with the native LibreOffice Kit engine in the Host process, outside the shell sandbox and PTC permissions, with the Host user's permissions; the filesystem backend still authorizes inputs. The `office-kit` row gains `outputDirectory` (default `$DSH_HOME/office-kit/outputs`), `outputRetentionMs`, and `maxOutputStoreBytes`.
 
-This affects users and prompts of the removed skills, compositions and launchers setting the removed keys or variables, `assetRoot` skill copies, saved `standard` or `ptc` presets, and deployments relying on the shell sandbox for document parsing.
+The Web profile, and the SDK profile without a primary runtime, list the Office skills in the first request context and `/` menu.
+
+This affects users and prompts of the removed skills, compositions and launchers setting the removed keys or variables, `assetRoot` skill copies, saved `standard` or `ptc` presets, deployments relying on the shell sandbox for document parsing, and tests pinning the first request context or `/` menu.
 
 ## Migration
 
@@ -43,4 +45,5 @@ This affects users and prompts of the removed skills, compositions and launchers
    ```
 
 7. Deployments that require sandboxed document parsing omit `@deepseek-ai/dsh-tool-office`.
-8. Confirm: in a new Desktop `standard` or `ptc` Session, send `/office`, then a separate PDF export request; it produces an `office_convert` call that returns a temporary PDF path or the `unavailable` message.
+8. Update expected first request contexts and `/` menus with the Office skills.
+9. Confirm: in a new `standard` or `ptc` Session, send `/office`, then a separate PDF export request; it produces an `office_convert` call that returns a temporary PDF path or the `unavailable` message.

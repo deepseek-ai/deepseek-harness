@@ -2,18 +2,18 @@
 # section, a hash of its English and Chinese blocks outside code blocks and generated regions.
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-26-cross-deployment-office-kit.md
-/agent-note-one-office-kit-package-across-deployments:
-  en: a4558b56d2a49f7f
-  zh: cb62eb5b6c762eba
-/agent-note-one-office-kit-package-across-deployments/problem:
-  en: f27bccc8c9d6e5e5
-  zh: 4fc2454bbea7f17d
-/agent-note-one-office-kit-package-across-deployments/decision:
-  en: 6b097c3ce6288717
-  zh: c305c5bf03de4e02
-/agent-note-one-office-kit-package-across-deployments/alternatives-considered:
-  en: 57fbc447be854953
-  zh: da5867587c93a2a1
-/agent-note-one-office-kit-package-across-deployments/consequences:
-  en: c4220369acceab74
-  zh: c8a78727ef28abdd
+/agent-note-office-skills-in-every-deployment-with-one-office-kit-package:
+  en: aef0b589f3562990
+  zh: c2227dd19e282c6f
+/agent-note-office-skills-in-every-deployment-with-one-office-kit-package/problem:
+  en: 129d30508926bbc5
+  zh: 15feff44556fc9b7
+/agent-note-office-skills-in-every-deployment-with-one-office-kit-package/decision:
+  en: 7d70a22025ab858e
+  zh: cc37cb9932e78787
+/agent-note-office-skills-in-every-deployment-with-one-office-kit-package/alternatives-considered:
+  en: 167c52da0171028f
+  zh: 9c87c2370d0719df
+/agent-note-office-skills-in-every-deployment-with-one-office-kit-package/consequences:
+  en: ffd13aad24ca750c
+  zh: a22f513e123f31b4

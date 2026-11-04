@@ -42,7 +42,7 @@ async function downloadResource(kind) {
         await downloadOfficeSidecar(downloads.office, staging, archives)
       } else {
         await preparePrimaryRuntime({ target: downloads.target, output: staging, cache: archives,
-          version: downloads.version, pnpmArchive: downloads.pnpm, skillSource: join(resourceDirectory, 'office-skills') })
+          version: downloads.version, pnpmArchive: downloads.pnpm })
       }
       await writeFile(join(staging, 'complete'), downloads.identity)
       try { await rename(staging, destination) } catch (error) {
@@ -68,7 +68,6 @@ if (office !== undefined) {
     },
   })
 }
-if (downloads !== undefined) process.env.DSH_BUNDLED_OFFICE_SKILLS = join(resourceDirectory, 'office-skills')
 
 const selectorName = 'DSH_SUBPROCESS_RUNNER'
 const selection = process.env[selectorName]

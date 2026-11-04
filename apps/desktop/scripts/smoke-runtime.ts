@@ -13,7 +13,8 @@ import { createPluginProfile } from '../src/project-manager.ts'
 import type { DesktopRuntimeDescriptor } from '../src/runtime-tree.ts'
 
 /**
- * Check CLI package operations, Host startup, its frontend, external plugins, and real Office rendering, conversion, and recalculation.
+ * Check CLI package operations, Host startup, its frontend, external plugins, packaged Office skill loading,
+ * and real Office rendering, conversion, and recalculation.
  * @param root - Materialized dsh resources.
  * @param node - Prepared target Electron executable.
  * @param runtime - Verified resource descriptor.
@@ -100,6 +101,21 @@ export function apply(ctx) {
         response.end(inspect(error, { depth: 5 }))
       }
     } }))
+  ctx.effect(() => ctx.webServer.register({ kind: 'exact', path: '/desktop-smoke-skills',
+    async handler(_request, response) {
+      try {
+        const names = ['office', 'office-docx', 'office-pptx', 'office-xlsx']
+        const listed = new Set((await ctx.skills.list()).map(skill => skill.name))
+        const loaded = await Promise.all(names.map(async name => {
+          const skill = listed.has(name) ? await ctx.skills.get(name) : undefined
+          return { name, path: skill?.path ?? null, bytes: skill?.content.length ?? 0 }
+        }))
+        response.end(JSON.stringify(loaded))
+      } catch (error) {
+        response.statusCode = 500
+        response.end(inspect(error, { depth: 5 }))
+      }
+    } }))
   for (const input of ${JSON.stringify(inputs)}) {
     ctx.effect(() => ctx.webServer.register({ kind: 'exact', path: '/desktop-smoke-office/' + input.extension,
       async handler(_request, response) {
@@ -142,7 +158,7 @@ export function apply(ctx) {
   }
 }
 `)
-    writeFileSync(join(plugin, 'bundle.yml'), '- insert:\n    - id: desktop-runtime-smoke-plugin\n      name: desktop-runtime-smoke-plugin\n      inject: [webServer, officeKit, pluginManager]\n')
+    writeFileSync(join(plugin, 'bundle.yml'), '- insert:\n    - id: desktop-runtime-smoke-plugin\n      name: desktop-runtime-smoke-plugin\n      inject: [webServer, officeKit, pluginManager, skills]\n')
     cpSync(plugin, join(profile, 'node_modules', pluginName), { recursive: true })
     const manifest = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8')) as {
       dependencies?: Record<string, string>
@@ -172,6 +188,13 @@ export function apply(ctx) {
     if (!installation.ok || !installed.ok || await installed.text() !== 'installed plugin ready') {
       throw new Error(`desktop runtime: bundled pnpm plugin installation failed: ${installationResult}`)
     }
+    const skills = await fetch(new URL('/desktop-smoke-skills', ready.url), { headers: { cookie }, signal: AbortSignal.timeout(120_000) })
+    if (!skills.ok) throw new Error(`desktop runtime: Office skill loading failed: ${await skills.text()}`)
+    const loadedSkills = await skills.json() as Array<{ name: string; path: string | null; bytes: number }>
+    if (loadedSkills.some(skill => skill.path === null || skill.bytes === 0)) {
+      throw new Error(`desktop runtime: packaged Office skills are not loadable: ${JSON.stringify(loadedSkills)}`)
+    }
+    console.log('desktop runtime: packaged Office skills listed and loaded')
     for (const { extension } of inputs) {
       const converted = await fetch(new URL(`/desktop-smoke-office/${extension}`, ready.url), {
         headers: { cookie }, signal: AbortSignal.timeout(120_000),

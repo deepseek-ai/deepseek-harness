@@ -1,6 +1,6 @@
 /** Web application Office rows over a real Loader tree: skills, profile gating, Python, preset Office tools, and failure containment. */
 
-import { cp, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -56,16 +56,11 @@ it('mounts the Office tools in the standard and PTC presets and omits it from th
   expect(host).not.toContain('tool-office')
 })
 
-async function boot(
-  profile: string, primaryRuntime: (root: string) => string | undefined, skills: (root: string) => string | undefined = () => undefined,
-  mounted: readonly string[] = ROWS,
-) {
+async function boot(profile: string, primaryRuntime: (root: string) => string | undefined, mounted: readonly string[] = ROWS) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'dsh-desktop-office-rows-')))
   onTestFinished(() => rm(root, { recursive: true, force: true }))
   vi.stubEnv('DSH_HOME', join(root, 'home'))
   vi.stubEnv('DSH_PRIMARY_RUNTIME', primaryRuntime(root))
-  vi.stubEnv('DSH_BUNDLED_OFFICE_SKILLS', skills(root))
-  await cp(assets, join(root, 'office-skills'), { recursive: true })
   const nodePath = join(root, 'primary-runtime', 'dependencies', 'node', 'bin', process.platform === 'win32' ? 'node.exe' : 'node')
   await mkdir(dirname(nodePath), { recursive: true })
   await writeFile(nodePath, '')
@@ -120,16 +115,14 @@ async function convertReport(ctx: Context, workspace: string, callId: string) {
   } finally { toolSet.dispose() }
 }
 
-it('mounts Desktop skills from the primary runtime beside the Office tools', async () => {
+it('mounts packaged Desktop skills with the primary runtime Python beside the Office tools', async () => {
   const { ctx, root } = await boot('desktop', root => join(root, 'primary-runtime'))
-  // Desktop omits pythonEnvironment; the skill-office default selects the bundled environment.
-  expect(ctx.loader.resolve('skill-office').fiber?.effectiveConfig).toEqual({
-    assetRoot: join(root, 'office-skills'), pythonEnvironment: 'workspace-dependencies',
-  })
+  expect(ctx.loader.resolve('skill-office').fiber?.effectiveConfig).toStrictEqual({ pythonEnvironment: 'workspace-dependencies' })
   expect(ctx.loader.resolve('workspace-dependencies').fiber?.effectiveConfig).toEqual({
     source: join(root, 'primary-runtime'), root: join(root, 'home', 'dsh-runtimes', 'dsh-primary-runtime'),
   })
   expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(names)
+  expect((await ctx.skills.get('office-docx'))?.resourceBase).toEqual({ kind: 'directory', path: join(assets, 'office-docx').split(sep).join('/') })
   expect(ctx.tools.schemas().map(tool => tool.name).sort()).toEqual(['load_workspace_dependencies', ...OFFICE_TOOLS])
   expect(ctx.officeKit.outputDirectory).toBe(join(root, 'home', 'office-kit', 'outputs'))
   expect((await ctx.skills.get('office-docx'))?.content).toMatch(/## Python environment\n\n.*`load_workspace_dependencies`/u)
@@ -151,7 +144,7 @@ it('keeps the Office tools and returns the unavailable Kit error to the model wh
 })
 
 it('mounts the preset Office tools without the Office kit row and reaches the service after the row loads', async () => {
-  const { ctx, workspace, entries } = await boot('web', () => undefined, () => undefined, ROWS.filter(id => id !== 'office-kit'))
+  const { ctx, workspace, entries } = await boot('web', () => undefined, ROWS.filter(id => id !== 'office-kit'))
   vi.mocked(resolveKitModule).mockClear()
   await writeFile(join(workspace, 'report.docx'), 'docx bytes')
   await ctx.loader.resolve('tool-office').fiber!.await()
@@ -166,12 +159,16 @@ it('mounts the preset Office tools without the Office kit row and reaches the se
   expect(resolveKitModule).toHaveBeenCalled()
 })
 
-it('mounts neither Office skills nor the bundled Python outside the Desktop profile, even with launcher variables', async () => {
-  const { ctx } = await boot('web', root => join(root, 'primary-runtime'), root => join(root, 'office-skills'))
-  expect(ctx.loader.resolve('skill-office').disabled).toBe(true)
-  expect(ctx.loader.resolve('skill-office').fiber).toBeUndefined()
+it('mounts Office skills with packaged defaults and the user Python outside the Desktop profile without launcher variables', async () => {
+  const { ctx } = await boot('web', () => undefined)
+  expect(ctx.loader.resolve('skill-office').disabled).toBe(false)
+  expect(ctx.loader.resolve('skill-office').fiber?.effectiveConfig).toStrictEqual({ pythonEnvironment: 'user' })
   expect(ctx.loader.resolve('workspace-dependencies').disabled).toBe(true)
-  expect(await ctx.skills.list()).toEqual([])
+  expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(names)
+  expect((await ctx.skills.get('office-docx'))?.resourceBase).toEqual({ kind: 'directory', path: join(assets, 'office-docx').split(sep).join('/') })
+  const docx = (await ctx.skills.get('office-docx'))?.content
+  expect(docx).toMatch(/## Python environment\n\n.*`python3` or `python` on PATH/u)
+  expect(docx).not.toContain('load_workspace_dependencies')
   expect(ctx.tools.schemas().map(tool => tool.name).sort()).toEqual(OFFICE_TOOLS)
 })
 
@@ -181,7 +178,7 @@ it('mounts packaged Office skills with the user Python in a Desktop profile laun
   await ctx.loader.resolve('skill-office').fiber!.await()
   expect(ctx.loader.resolve('workspace-dependencies').disabled).toBe(true)
   expect(ctx.loader.resolve('workspace-dependencies').fiber).toBeUndefined()
-  expect(ctx.loader.resolve('skill-office').fiber?.effectiveConfig).toStrictEqual({ assetRoot: undefined, pythonEnvironment: 'user' })
+  expect(ctx.loader.resolve('skill-office').fiber?.effectiveConfig).toStrictEqual({ pythonEnvironment: 'user' })
   expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(names)
   expect((await ctx.skills.get('office-docx'))?.resourceBase).toEqual({ kind: 'directory', path: join(assets, 'office-docx').split(sep).join('/') })
   const docx = (await ctx.skills.get('office-docx'))?.content
@@ -190,20 +187,19 @@ it('mounts packaged Office skills with the user Python in a Desktop profile laun
   expect(ctx.tools.schemas().map(tool => tool.name).sort()).toEqual(OFFICE_TOOLS)
 })
 
-it('treats an empty primary runtime as unset in the Desktop profile', async () => {
+it('treats an empty primary runtime variable as unset in the Desktop profile', async () => {
   const { ctx } = await boot('desktop', () => '')
   await ctx.loader.resolve('skill-office').fiber!.await()
   expect(ctx.loader.resolve('workspace-dependencies').disabled).toBe(true)
-  expect(ctx.loader.resolve('skill-office').fiber?.effectiveConfig).toStrictEqual({ assetRoot: undefined, pythonEnvironment: 'user' })
+  expect(ctx.loader.resolve('skill-office').fiber?.effectiveConfig).toStrictEqual({ pythonEnvironment: 'user' })
   expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(names)
 })
 
-it('fails only the Office skill rows when the carrier supplies an unusable primary runtime path', async () => {
+it('fails only the dependency-query row when the carrier supplies an unusable primary runtime path', async () => {
   const { ctx } = await boot('desktop', () => 'primary-runtime')
-  for (const id of ['skill-office', 'workspace-dependencies']) {
-    await expect(ctx.loader.resolve(id).fiber!.await()).rejects.toThrow('absolute')
-  }
-  expect(await ctx.skills.list()).toEqual([])
+  await expect(ctx.loader.resolve('workspace-dependencies').fiber!.await()).rejects.toThrow('absolute')
+  await ctx.loader.resolve('skill-office').fiber!.await()
+  expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(names)
   expect(ctx.tools.schemas().map(tool => tool.name).sort()).toEqual(OFFICE_TOOLS)
 })
 

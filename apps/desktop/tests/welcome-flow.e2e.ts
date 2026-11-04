@@ -10,7 +10,7 @@ import { DesktopHostProcess } from '../src/host-process.ts'
 import { desktopClientMetadata } from '../src/client-metadata.ts'
 import { connectDesktopWelcome, type DesktopWelcomeBackend } from '../src/welcome-backend.ts'
 import { authenticateWebHost } from '../src/web-document.ts'
-import { builtHost, prepareDesktopHome, repository } from './harness.ts'
+import { builtHost, prepareDesktopHome } from './harness.ts'
 
 afterEach(() => { vi.unstubAllEnvs() })
 
@@ -80,7 +80,6 @@ describe.skipIf(!existsSync(builtHost))('built Desktop welcome flow', () => {
     const platform = await mockPlatform()
     try {
       const { home, project, paths } = await prepareDesktopHome(root)
-      cpSync(join(repository, 'packages/skill/skill-office/assets'), join(root, 'runtime/office-skills'), { recursive: true })
       const nodeBin = join(root, 'runtime/primary-runtime/dependencies/node/bin')
       mkdirSync(nodeBin, { recursive: true })
       cpSync(process.execPath, join(nodeBin, process.platform === 'win32' ? 'node.exe' : 'node'))

@@ -69,7 +69,7 @@ function persistentReadFailure(error: unknown): boolean {
 }
 
 /**
- * Register Office skills with resources readable by the script interpreter.
+ * Register Office skills whose `SKILL.md` files the Host reads from `assetRoot`.
  * Skill files are read during catalog discovery and loading, and each distinct failure is reported once. A missing
  * or invalid skill is omitted from a complete catalog, and its failed load returns `undefined` and invalidates the
  * catalog. Any other read error leaves discovery incomplete, so the registry retries it, and rejects a load.

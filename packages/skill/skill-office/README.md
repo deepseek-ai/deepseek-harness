@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The catalog lists the Office router and three authoring skills. Full instructions load on demand. The authoring skills append the configured Python environment; the skills direct operations to [`office_render`, `office_convert`, and `office_recalculate`](../../document/tool-office/README.md), with shell copies of output files. Desktop and an SDK with a primary runtime mount the provider; the bundled dependency query mounts beside it whenever a primary runtime is available.
+The catalog lists the Office router and three authoring skills. Full instructions load on demand. The authoring skills append the configured Python environment; the skills direct operations to [`office_render`, `office_convert`, and `office_recalculate`](../../document/tool-office/README.md), with shell copies of output files. The Web application and SDK profiles mount the provider; only Desktop, or an SDK with a primary runtime, also mounts the bundled dependency query.
 
 ## Table of Contents
 
@@ -35,7 +35,7 @@ Mount the skill provider beside the skill registry and `dsh-tool-skill`. The pro
 
 | Field | Default | Meaning |
 |---|---|---|
-| `assetRoot` | Carrier resources or packaged `assets/` | Absolute directory containing the four skill folders. |
+| `assetRoot` | Packaged `assets/` | Absolute directory containing the four skill folders. |
 | `pythonEnvironment` | `'workspace-dependencies'` | Python that `office-docx`, `office-pptx`, and `office-xlsx` direct the model to; see below. |
 
 `pythonEnvironment` selects one fixed section appended to those three skills. Both values first defer to an explicit user or applicable AGENTS.md environment requirement. `'workspace-dependencies'` directs the model to call `load_workspace_dependencies` and use the bundled Python and libraries it returns; mount it only with `dsh-tool-workspace-dependencies`. A custom composition that mounts this package without `dsh-tool-workspace-dependencies` must configure `pythonEnvironment: user`. `'user'` directs the model to the project's or user's existing Python on PATH, to check that the required libraries import, and to name missing packages instead of installing them globally without the user's agreement.
