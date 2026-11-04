@@ -79,6 +79,7 @@ Session 投影拥有当前目录，并通过 Session observation 暴露它，因
 
 - **原始项目缺失** — 当前目录与原始项目均不可用时，提示词组装会拒绝每个模型轮次，包括纯聊天轮次。服务不会另选或重建仓库。请先恢复原始目录，或通过 SDK 的 `setWorkingDirectory`（Python 中为 `set_working_directory`）或 `ctx.workingDirectory.set` 选择现有的绝对目录，再重试。已有 shell 保留各自进程的目录。
 - **锚按记录原样比较** — 原始项目是 header 记录的路径，而 `set` 与 `relocate` 记录文件系统 provider 给出的规范路径。通过符号链接或以不同大小写记录的 header 永远不包含这些路径，因此根停留在原始项目上，与目录位于所有锚之外时相同。
+- **根尚无消费方** — `workspaceRoot` 目前没有消费方：沙箱写边界、工作区文件服务、变更记录器、侧栏终端、`@` 文件候选、技能目录、项目指令与 LSP 工作区仍读取 header 或当前目录。接入它们是[工作区根记录](../../../.agents/notes/implemented/architecture/2026-11-03-session-workspace-root.zh.md#deferred)列出的后续工作；仅有 `rootOf` 不改变它们的任何行为。
 
 <a id="dev-note"></a>
 ### 开发备注

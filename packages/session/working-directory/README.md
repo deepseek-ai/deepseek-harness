@@ -79,6 +79,7 @@ Directory transitions append context without replacing the stable system-prompt 
 
 - **Missing original project** — when the current directory and the original project are both unavailable, prompt assembly rejects every model turn, including chat-only turns. The service does not choose or recreate a repository. Restore the original directory, or use SDK `setWorkingDirectory` (`set_working_directory` in Python) or `ctx.workingDirectory.set` to select an existing absolute directory before retrying. Existing shells retain their process-local directories.
 - **Anchors compare as recorded** — the original project is the header's recorded path, while `set` and `relocate` record canonical paths from the filesystem provider. A header recorded through a symlink or with different casing never contains those paths, so the root stays on the original project as it does for a directory outside every anchor.
+- **Root without consumers** — `workspaceRoot` has no consumer yet: the sandbox write boundary, the workspace file service, the change recorder, sidebar terminals, `@` file candidates, the skill catalog, project instructions, and the LSP workspace still read the header or the current directory. Connecting them is the deferred work the [workspace-root note](../../../.agents/notes/implemented/architecture/2026-11-03-session-workspace-root.md#deferred) lists; `rootOf` alone changes none of their behavior.
 
 <a id="dev-note"></a>
 ### Dev Note
