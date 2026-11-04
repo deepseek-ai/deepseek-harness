@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/schemastery",
   "description": "Type driven schema validator",
-  "version": "3.18.6-alpha.2",
+  "version": "3.19.0",
   "publishConfig": {
     "access": "public"
   },
