@@ -62,6 +62,7 @@ it.skipIf(process.platform !== 'win32')('resets only the allocated checkout with
 
 it('routes manual packaging to the dedicated runner with explicit preset and signing selection', () => {
   expect(Object.keys(workflow.on)).toEqual(['workflow_dispatch'])
+  expect(workflow.on.workflow_dispatch).toMatchObject({ inputs: { version_mode: { default: 'default', options: ['default', 'follow-dsh', 'build-number', 'manual'] } } })
   expect(workflow.jobs.package).not.toHaveProperty('name')
   expect(job['runs-on']).toBe('dsh-win-package-trial')
   expect(JSON.stringify(job.env)).not.toContain('runner.')

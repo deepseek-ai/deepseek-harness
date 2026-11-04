@@ -9,8 +9,13 @@ it.each(['nightly', 'stable'] as const)('resolves every CI version mode independ
   for (const version of ['1.2.3', '1.2.3-alpha.1', '1.2.3-rc.1']) {
     const env = { DSH_DESKTOP_UPDATE_CHANNEL: channel, GITHUB_RUN_NUMBER: '7', GITHUB_RUN_ATTEMPT: '2' }
     const generated = `${desktopBuildVersionPrefix(version)}20261103.7.2`
-    expect(desktopCiVersion({ ...env, PACKAGE_VERSION_MODE: 'product' }, version, now)).toBe(version)
-    expect(desktopCiVersion({ ...env, PACKAGE_VERSION_MODE: 'auto' }, version, now)).toBe(generated)
+    expect(desktopCiVersion({ ...env, PACKAGE_VERSION_MODE: 'follow-dsh' }, version, now)).toBe(version)
+    for (const preset of ['test', 'production']) {
+      expect(desktopCiVersion({ ...env, DSH_PACKAGING_PRESET: preset, PACKAGE_VERSION_MODE: 'build-number' }, version, now)).toBe(generated)
+    }
+    for (const oldMode of ['auto', 'product']) {
+      expect(() => desktopCiVersion({ ...env, PACKAGE_VERSION_MODE: oldMode }, version, now)).toThrow('Invalid version mode')
+    }
     expect(desktopCiVersion({ ...env, PACKAGE_VERSION_MODE: 'manual', PACKAGE_BUILD_VERSION: generated }, version, now)).toBe(generated)
     expect(desktopCiVersion({ ...env, PACKAGE_VERSION_MODE: 'default', DSH_PACKAGING_PRESET: 'production' }, version, now)).toBe(version)
     expect(desktopCiVersion({ ...env, PACKAGE_VERSION_MODE: 'default', DSH_PACKAGING_PRESET: 'test' }, version, now)).toBe(generated)

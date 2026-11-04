@@ -33,6 +33,7 @@ describe.each(['arm64', 'x64'])('macOS %s packaging', (arch) => {
 
   it('confines signed Mac packaging to manual dispatch and a dedicated Apple Silicon runner', () => {
     expect(Object.keys(workflow.on)).toEqual(['workflow_dispatch'])
+    expect(workflow.on.workflow_dispatch).toMatchObject({ inputs: { version_mode: { default: 'default', options: ['default', 'follow-dsh', 'build-number', 'manual'] } } })
     expect(workflow.jobs.package).not.toHaveProperty('name')
     expect(workflow.on.workflow_dispatch).toMatchObject({ inputs: { test_release_id: { type: 'string', default: '', required: false } } })
     expect(workflow.on.workflow_dispatch).not.toHaveProperty('inputs.publish')

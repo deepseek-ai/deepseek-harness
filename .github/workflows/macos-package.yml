@@ -21,9 +21,9 @@ on:
         default: nightly
         required: true
       version_mode:
-        description: '版本模式：default 为 test 自动编号、production 跟随产品；product 保留原版本，auto 自动编号，manual 手填'
+        description: '版本模式：default 按环境自动选择（test 取 build-number，production 取 follow-dsh）；follow-dsh 跟随 dsh 包版本号；build-number 自动追加构建编号；manual 手填'
         type: choice
-        options: [default, product, auto, manual]
+        options: [default, follow-dsh, build-number, manual]
         default: default
         required: true
       build_version:
