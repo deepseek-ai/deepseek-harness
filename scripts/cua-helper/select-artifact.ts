@@ -1,6 +1,5 @@
 /** Find a matching retained helper on the Mac runner before installing dependencies. */
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { isEntry } from '../release/process.ts'
@@ -43,19 +42,19 @@ export interface CuaHelperSelection {
  * @param api - Read-only GitHub JSON reader; paginated responses are arrays of pages.
  * @param matchesSource - Independent comparison of the producer head SHA with the consuming build inputs.
  * @param now - Discovery time; automatic search covers the artifact's 14-day retention window.
- * @returns Matching producer artifact, or undefined when automatic discovery has no match.
+ * @returns Resolves to the matching producer artifact, or undefined when automatic discovery has no match.
  */
-export function selectCuaHelperArtifact(repository: string, runId: string, buildKey: string,
-  api: (path: string, paginate?: boolean) => unknown, matchesSource: (commit: string) => boolean,
-  now = new Date()): CuaHelperSelection | undefined {
+export async function selectCuaHelperArtifact(repository: string, runId: string, buildKey: string,
+  api: (path: string, paginate?: boolean) => Promise<unknown>, matchesSource: (commit: string) => Promise<boolean>,
+  now = new Date()): Promise<CuaHelperSelection | undefined> {
   assert(/^[\w.-]+\/[\w.-]+$/u.test(repository) && !repository.split('/').some(part => part === '.' || part === '..'),
     'CUA reuse: invalid repository')
   assert(runId === '' || /^[1-9]\d*$/u.test(runId), 'CUA reuse: enter the numeric run ID after /actions/runs/ in the run URL')
   assert(/^[a-f0-9]{64}$/u.test(buildKey), 'CUA reuse: invalid build key')
   const base = `repos/${repository}/actions`
-  const selectRun = (candidate: string, retained?: Record<string, unknown>[]): CuaHelperSelection | string => {
-    const attempt = id(record(api(`${base}/runs/${candidate}`)).run_attempt)
-    const run = record(api(`${base}/runs/${candidate}/attempts/${attempt}`))
+  const selectRun = async (candidate: string, retained?: Record<string, unknown>[]): Promise<CuaHelperSelection | string> => {
+    const attempt = id(record(await api(`${base}/runs/${candidate}`)).run_attempt)
+    const run = record(await api(`${base}/runs/${candidate}/attempts/${attempt}`))
     assert(id(run.id) === candidate && id(run.run_attempt) === attempt
       && record(run.repository).full_name === repository && record(run.head_repository).full_name === repository,
     'CUA reuse: selected run, attempt or repository does not match GitHub evidence')
@@ -64,7 +63,7 @@ export function selectCuaHelperArtifact(repository: string, runId: string, build
     if (run.status !== 'completed') return 'the latest attempt has not completed'
     if (workflow === 'cua-helper-package.yml' && run.conclusion !== 'success') return 'the latest packaging attempt did not succeed'
     const jobName = workflow === 'cua-helper-package.yml' ? 'package' : 'cua-helper / package'
-    const jobs = rows(api(`${base}/runs/${candidate}/jobs?filter=all&per_page=100`, true), 'jobs')
+    const jobs = rows(await api(`${base}/runs/${candidate}/jobs?filter=all&per_page=100`, true), 'jobs')
       .filter(job => job.name === jobName)
     const attempts = jobs.map(job => Number(id(job.run_attempt)))
     assert(attempts.every(value => value <= Number(attempt)), 'CUA reuse: run advanced during selection; retry with the same run ID')
@@ -72,7 +71,7 @@ export function selectCuaHelperArtifact(repository: string, runId: string, build
     const producers = jobs.filter(job => job.run_attempt === producerAttempt)
     if (producers.length !== 1 || producers[0]?.conclusion !== 'success') return `the last executed ${jobName} job did not succeed`
     const name = `cua-helper-${candidate}-${producerAttempt}-${buildKey}`
-    const artifacts = (retained ?? rows(api(`${base}/runs/${candidate}/artifacts?per_page=100`, true), 'artifacts'))
+    const artifacts = (retained ?? rows(await api(`${base}/runs/${candidate}/artifacts?per_page=100`, true), 'artifacts'))
       .filter(artifact => artifact.name === name)
     if (artifacts.length === 0) return 'no artifact matches the current source bytes and build configuration; use the producer run linked in its summary or rebuild'
     const [artifact] = artifacts
@@ -80,42 +79,109 @@ export function selectCuaHelperArtifact(repository: string, runId: string, build
     assert(typeof artifact.expired === 'boolean' && typeof artifact.size_in_bytes === 'number', 'CUA reuse: invalid artifact metadata')
     if (artifact.expired || artifact.size_in_bytes <= 0) return 'the matching artifact is expired or empty'
     assert(typeof run.head_sha === 'string' && /^[a-f0-9]{40}$/u.test(run.head_sha), 'CUA reuse: invalid producer head SHA')
-    if (!matchesSource(run.head_sha)) return 'the producer commit has different helper build inputs'
+    if (!await matchesSource(run.head_sha)) return 'the producer commit has different helper build inputs'
     return { runId: candidate, attempt: String(producerAttempt), artifactId: id(artifact.id) }
   }
   if (runId !== '') {
-    const selected = selectRun(runId)
+    const selected = await selectRun(runId)
     if (typeof selected === 'string') throw new Error(`CUA reuse: run ${runId}: ${selected}`)
     return selected
   }
   const since = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString()
-  const candidates = workflows.flatMap(workflow => rows(api(
-    `${base}/workflows/${workflow}/runs?event=workflow_dispatch&status=completed&created=${encodeURIComponent(`>=${since}`)}&per_page=100`,
-    true), 'workflow_runs'))
-    .sort((left, right) => Number(id(right.id)) - Number(id(left.id)))
+  const candidates: Record<string, unknown>[] = []
+  for (const workflow of workflows) {
+    candidates.push(...rows(await api(
+      `${base}/workflows/${workflow}/runs?event=workflow_dispatch&status=completed&created=${encodeURIComponent(`>=${since}`)}&per_page=100`,
+      true), 'workflow_runs'))
+  }
+  candidates.sort((left, right) => Number(id(right.id)) - Number(id(left.id)))
   for (const candidate of candidates) {
     const candidateId = id(candidate.id)
-    const artifacts = rows(api(`${base}/runs/${candidateId}/artifacts?per_page=100`, true), 'artifacts')
+    const artifacts = rows(await api(`${base}/runs/${candidateId}/artifacts?per_page=100`, true), 'artifacts')
     if (!artifacts.some(artifact => typeof artifact.name === 'string'
       && artifact.name.startsWith(`cua-helper-${candidateId}-`) && artifact.name.endsWith(`-${buildKey}`))) continue
-    const selected = selectRun(candidateId, artifacts)
+    const selected = await selectRun(candidateId, artifacts)
     if (typeof selected !== 'string') return selected
   }
   return undefined
 }
 
-function githubJson(path: string, paginate = false): unknown {
-  let output: string
-  try {
-    output = execFileSync('gh', ['api', ...(paginate ? ['--paginate', '--slurp'] : []), path],
-      { encoding: 'utf8', timeout: 60_000, maxBuffer: 32 * 1024 * 1024 })
-  } catch (error) {
-    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
-      throw new Error('CUA reuse: install GitHub CLI (gh) on the Mac runner PATH, then retry this workflow')
-    }
-    throw new Error('CUA reuse: GitHub lookup failed; check token permissions, rate limits and connectivity, then retry this workflow', { cause: error })
+/**
+ * Create authenticated, read-only GitHub requests using Node's built-in fetch.
+ * Each call, including pagination, has a 60-second deadline and a 32 MiB response limit.
+ * Pagination stays on the configured API origin. Request or parsing failures never return partial pages.
+ * @param environment - GH_TOKEN and optional GITHUB_API_URL supplied by Actions.
+ * @param request - HTTP transport receiving the authenticated URL and request options.
+ * @returns JSON reader; paginated calls resolve to an array of page objects.
+ */
+export function createGitHubJsonReader(environment: NodeJS.ProcessEnv, request: typeof fetch = fetch):
+(path: string, paginate?: boolean) => Promise<unknown> {
+  const token = environment.GH_TOKEN?.trim()
+  if (!token) throw new Error('CUA reuse: GH_TOKEN is required for GitHub API access')
+  const configured = environment.GITHUB_API_URL ?? 'https://api.github.com'
+  let base: URL
+  try { base = new URL(configured.endsWith('/') ? configured : `${configured}/`) } catch (_error) {
+    // URL parser errors may include credential-bearing configuration.
+    throw new Error('CUA reuse: GITHUB_API_URL must be a valid HTTPS API URL')
   }
-  return JSON.parse(output)
+  assert(base.protocol === 'https:' && !base.username && !base.password && !base.search && !base.hash,
+    'CUA reuse: GITHUB_API_URL must be HTTPS without credentials, query or fragment')
+  return async (path, paginate = false) => {
+    let target = new URL(path, base)
+    const visited = new Set<string>()
+    const pages: unknown[] = []
+    let bytes = 0
+    const signal = AbortSignal.timeout(60_000)
+    while (true) {
+      assert(target.origin === base.origin && target.pathname.startsWith(base.pathname)
+        && !target.username && !target.password && !target.hash, 'CUA reuse: GitHub pagination left the configured API')
+      assert(!visited.has(target.href), 'CUA reuse: GitHub returned a pagination cycle')
+      visited.add(target.href)
+      let response: Response
+      try {
+        response = await request(target, {
+          headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2026-03-10', 'User-Agent': 'deepseek-harness-cua-helper' },
+          redirect: 'error', signal,
+        })
+      } catch (error) {
+        throw new Error('CUA reuse: GitHub request failed or timed out; check connectivity and retry this workflow', { cause: error })
+      }
+      if (!response.ok) {
+        try { await response.body?.cancel() } catch (_error) {
+          // A failed body stream must not hide the HTTP failure already received.
+        }
+        throw new Error(`CUA reuse: GitHub request failed (HTTP ${response.status}); check token permissions, rate limits or service availability, then retry`)
+      }
+      const reader = response.body?.getReader()
+      if (!reader) throw new Error('CUA reuse: GitHub returned an empty response')
+      const chunks: Uint8Array[] = []
+      try {
+        while (true) {
+          const chunk = await reader.read()
+          if (chunk.done) break
+          bytes += chunk.value.byteLength
+          if (bytes > 32 * 1024 * 1024) {
+            await reader.cancel()
+            throw new Error('CUA reuse: GitHub response exceeds 32 MiB')
+          }
+          chunks.push(chunk.value)
+        }
+      } finally { reader.releaseLock() }
+      let value: unknown
+      try { value = JSON.parse(Buffer.concat(chunks).toString('utf8')) } catch (_error) {
+        // JSON parser errors may include response bytes.
+        throw new Error('CUA reuse: GitHub returned invalid JSON; retry this workflow')
+      }
+      if (!paginate) return value
+      pages.push(value)
+      const link = response.headers.get('link') ?? ''
+      const next = /<([^>]+)>\s*;\s*rel="next"/u.exec(link)?.[1]
+      assert(next || !link.includes('rel="next"'), 'CUA reuse: GitHub returned an invalid pagination link')
+      if (!next) return pages
+      target = new URL(next, target)
+    }
+  }
 }
 
 if (isEntry(import.meta.url)) {
@@ -123,13 +189,14 @@ if (isEntry(import.meta.url)) {
   if (!env.GITHUB_REPOSITORY || !env.GITHUB_OUTPUT || !env.GITHUB_STEP_SUMMARY || !env.CUA_BUILD_KEY) {
     throw new Error('CUA reuse: Actions context and CUA_BUILD_KEY are required')
   }
+  const githubJson = createGitHubJsonReader(env)
   const repository = env.GITHUB_REPOSITORY
   const root = resolve(import.meta.dirname, '../..')
   const sourceMatches = new Map<string, boolean>()
-  const selection = selectCuaHelperArtifact(repository, env.CUA_RUN_ID ?? '', env.CUA_BUILD_KEY, githubJson, (commit) => {
+  const selection = await selectCuaHelperArtifact(repository, env.CUA_RUN_ID ?? '', env.CUA_BUILD_KEY, githubJson, async (commit) => {
     let matches = sourceMatches.get(commit)
     if (matches === undefined) {
-      matches = cuaHelperSourceMatches(root, repository, commit, githubJson)
+      matches = await cuaHelperSourceMatches(root, repository, commit, githubJson)
       sourceMatches.set(commit, matches)
     }
     return matches

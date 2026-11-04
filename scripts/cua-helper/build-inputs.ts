@@ -75,12 +75,12 @@ export function cuaHelperSourceDigest(root: string): string {
  * @param repository - GitHub repository containing the authenticated producer run.
  * @param commit - Producer head SHA returned by GitHub, never an artifact-supplied revision.
  * @param api - Read-only GitHub JSON reader.
- * @returns Whether all selected file paths, bytes and executable modes match, excluding product version fields in package manifests.
+ * @returns Resolves to whether selected paths, bytes and executable modes match, excluding package manifest version fields.
  */
-export function cuaHelperSourceMatches(root: string, repository: string, commit: string,
-  api: (path: string) => unknown): boolean {
+export async function cuaHelperSourceMatches(root: string, repository: string, commit: string,
+  api: (path: string) => Promise<unknown>): Promise<boolean> {
   assert(/^[a-f0-9]{40}$/u.test(commit), 'CUA source: invalid producer commit')
-  const response = api(`repos/${repository}/git/trees/${commit}?recursive=1`)
+  const response = await api(`repos/${repository}/git/trees/${commit}?recursive=1`)
   assert(response && typeof response === 'object' && 'truncated' in response && response.truncated === false
     && 'tree' in response && Array.isArray(response.tree), 'CUA source: GitHub returned an incomplete commit tree')
   const tree = new Map<string, { sha: string; mode: string }>()
@@ -106,7 +106,7 @@ export function cuaHelperSourceMatches(root: string, repository: string, commit:
       { cwd: root, input: local.bytes, encoding: 'utf8' }).trim()
     if (canonical === remote.sha) continue
     if (file !== 'package.json' && !file.endsWith('/package.json')) return false
-    const blob = api(`repos/${repository}/git/blobs/${remote.sha}`)
+    const blob = await api(`repos/${repository}/git/blobs/${remote.sha}`)
     assert(blob && typeof blob === 'object' && 'sha' in blob && blob.sha === remote.sha
       && 'encoding' in blob && blob.encoding === 'base64' && 'content' in blob && typeof blob.content === 'string',
     'CUA source: invalid package manifest blob')
