@@ -341,14 +341,14 @@ export class PanelTerminalSession implements TerminalBackendSession {
 
   async close(_reason: string): Promise<void> {
     this.closing = true
-    if (this.terminal.info.control === 'agent') {
-      try {
-        await this.terminal.close()
-      } catch (error: unknown) {
-        // The person may type between the control check and the close; the terminal then stays theirs.
-        if (!(error instanceof AgentTerminalError && error.code === 'user-control')) throw error
-      }
+    try {
+      if (this.terminal.info.control === 'agent') await this.terminal.close()
+    } catch (error: unknown) {
+      // The person may type between the control check and the close; the terminal then stays theirs.
+      if (!(error instanceof AgentTerminalError && error.code === 'user-control')) throw error
+    } finally {
+      // A failed close still ends the wait of the send in flight; the registry reports the failure.
+      this.active?.release()
     }
-    this.active?.release()
   }
 }

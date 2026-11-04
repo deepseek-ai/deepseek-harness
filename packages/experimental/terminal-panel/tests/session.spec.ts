@@ -290,8 +290,12 @@ describe('closing', () => {
     raced.terminal.close.mockRejectedValueOnce(new AgentTerminalError('user-control', 'The user has taken over this terminal'))
     await expect(raced.session.close('model request')).resolves.toBeUndefined()
     const failed = session()
+    failed.terminal.foreground = { processGroupId: 200, inputWaiting: false }
+    const send = failed.session.startSend({ text: 'npm run dev', submit: true })
+    await vi.advanceTimersByTimeAsync(10)
     failed.terminal.close.mockRejectedValueOnce(new Error('cleanup failed'))
     await expect(failed.session.close('model request')).rejects.toThrow('cleanup failed')
+    expect(await settled(send.done)).toMatchObject({ waitReason: 'session_exit', sessionStatus: { kind: 'running' } })
   })
 })
 
