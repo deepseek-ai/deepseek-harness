@@ -57,7 +57,6 @@ interface ConversationAttachmentFace {
 /** Session-addressed input facade registry (SessionInputResolver face + composer-layer extras). */
 export class InputHub implements SessionInputResolver {
   private readonly shells = new WeakMap<SessionBinding, SessionInputShell>()
-  private readonly retryableFailures = new WeakMap<SessionBinding, ObservableSnapshot<SessionSeq | undefined>>()
 
   /**
    * @param ctx - client root context (services resolved lazily per call — boot order stays free).
@@ -211,30 +210,25 @@ export class InputHub implements SessionInputResolver {
   /**
    * Read the Host-projected retryable failure while excluding pending human steering.
    * @param id - retained ordinary Session identity.
-   * @returns an identity-stable source whose value is the failed turn/end sequence or undefined.
+   * @returns a source whose value is the failed turn/end sequence or undefined.
    */
   retryableFailure(id: SessionId): ObservableSnapshot<SessionSeq | undefined> {
     const binding = this.sessions().binding(id)
     if (binding === undefined) throw new Error(`conversation.input: session "${id}" resolved no binding`)
-    let source = this.retryableFailures.get(binding)
-    if (source === undefined) {
-      const ending = binding.session.projections.faceOf('conversationContinuation')
-      const inbox = binding.session.projections.faceOf('inbox')
-      source = {
-        getSnapshot: () => {
-          const pending = inbox.getSnapshot() as InboxState | undefined
-          return pending?.['next-step'].some(message => message.source.kind === 'user')
-            ? undefined : (ending.getSnapshot() as SessionSeq | null | undefined) ?? undefined
-        },
-        subscribe: (listener) => {
-          const unsubscribeEnding = ending.subscribe(listener)
-          const unsubscribeInbox = inbox.subscribe(listener)
-          return () => { unsubscribeInbox(); unsubscribeEnding() }
-        },
-      }
-      this.retryableFailures.set(binding, source)
+    const ending = binding.session.projections.faceOf('conversationContinuation')
+    const inbox = binding.session.projections.faceOf('inbox')
+    return {
+      getSnapshot: () => {
+        const pending = inbox.getSnapshot() as InboxState | undefined
+        return pending?.['next-step'].some(message => message.source.kind === 'user')
+          ? undefined : (ending.getSnapshot() as SessionSeq | null | undefined) ?? undefined
+      },
+      subscribe: (listener) => {
+        const unsubscribeEnding = ending.subscribe(listener)
+        const unsubscribeInbox = inbox.subscribe(listener)
+        return () => { unsubscribeInbox(); unsubscribeEnding() }
+      },
     }
-    return source
   }
 
   /**

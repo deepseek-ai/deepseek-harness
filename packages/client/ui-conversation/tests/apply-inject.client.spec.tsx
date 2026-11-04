@@ -174,7 +174,6 @@ describe('Conversation inject API', () => {
     await b.runtime.sessions.replaceEvents(ROOT, continuationTurn({ kind: 'error', error: { code: 'SERVER', message: 'busy' } }))
     await b.runtime.sessions.setProjection(ROOT, 'conversationContinuation', SessionSeq(5))
     const composer = b.composerApi(ROOT)
-    expect(b.composerApi(ROOT).hooks.retryableFailure).toBe(composer.hooks.retryableFailure)
     expect(composer.hooks.retryableFailure.getSnapshot()).toBe(5)
     b.runtime.ctx.locale.setLocale(locale)
     const pending = Promise.withResolvers<Awaited<ReturnType<ISession['prompt']>>>()
