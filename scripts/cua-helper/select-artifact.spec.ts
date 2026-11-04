@@ -183,7 +183,7 @@ it('authenticates native HTTP requests and follows canonical GitHub pagination l
   ])
   expect(request).toHaveBeenCalledTimes(2)
   expect(request.mock.calls[1]![1]?.signal).toBe(request.mock.calls[0]![1]?.signal)
-  expect(String(request.mock.calls[1]![0])).toBe('https://api.github.com/repositories/42/actions/jobs?page=2')
+  expect(request.mock.calls[1]![0]).toHaveProperty('href', 'https://api.github.com/repositories/42/actions/jobs?page=2')
   for (const [, options] of request.mock.calls) {
     const headers = new Headers(options?.headers)
     expect(headers.get('authorization')).toBe('Bearer fixture-token')
@@ -197,7 +197,7 @@ it('uses the configured GitHub API base path and leaves non-paginated JSON unwra
   const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ run_attempt: 2 }))
   const api = createGitHubJsonReader({ GH_TOKEN: 'fixture-token', GITHUB_API_URL: 'https://github.example.test/api/v3' }, request)
   await expect(api('repos/owner/repo/actions/runs/123')).resolves.toEqual({ run_attempt: 2 })
-  expect(String(request.mock.calls[0]![0])).toBe('https://github.example.test/api/v3/repos/owner/repo/actions/runs/123')
+  expect(request.mock.calls[0]![0]).toHaveProperty('href', 'https://github.example.test/api/v3/repos/owner/repo/actions/runs/123')
 })
 
 it.each([401, 403, 429, 500, 503])('rejects HTTP %s without returning a partial page list or response credentials', async (status) => {
@@ -278,7 +278,7 @@ it('propagates an asynchronous source verification failure', async () => {
 it('passes the 60-second abort signal to the HTTP transport', async () => {
   const controller = new AbortController()
   const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(controller.signal)
-  onTestFinished(() => timeout.mockRestore())
+  onTestFinished(() => { timeout.mockRestore() })
   const request: typeof fetch = async (_url, options) => {
     expect(options?.signal).toBe(controller.signal)
     controller.abort(new DOMException('fixture timeout', 'TimeoutError'))
