@@ -72,7 +72,7 @@ kind: "package-library"
 | `SettingsForm`、`SettingsValueField`、`SettingsSecretField` | 插件设置页的框架与控件：框架以 `labels` 接收文案，只在按钮点击时保存，卸载即丢弃；值字段显示暂存文本以及已覆盖标签和重置；密文字段每次为空，请求浏览器不要自动填入已保存的密码，只报告是否已配置。 |
 | `SettingsFormModel`、`settingsNumberField`、`settingsTextField` | 这类页面背后基于设置 scope 的暂存编辑模型：草稿先暂存、保存时写入，字段是否被覆盖看用户层是否含有它，未落地的保存保留草稿。 |
 | `JsonTree`、`JsonBlock` | 只读 JSON 查看。 |
-| `MarkdownText`、`MarkdownDelegateProvider`、`CodeBlock` | 不可信 GFM 与 TeX 数学、owner 委托的 HTTP(S) 导航，以及高亮代码。`CodeBlock` 可通过 `lineNumbers` 开启行号；复制的源码不含行号栏，`contentRef` 则向需要把稳定源码包装节点用作滚动区的 owner 提供该节点。调用方提供自己的语言与复制工具栏时，设置 `showHeader={false}`。 |
+| `MarkdownText`、`MarkdownDelegateProvider`、`CodeBlock` | 不可信 GFM 与 TeX 数学、owner 委托的 HTTP(S) 导航，以及高亮代码。`CodeBlock` 可通过 `lineNumbers` 开启行号；复制的源码不含行号栏，`contentRef` 则向需要把稳定源码包装节点用作滚动区的 owner 提供该节点。调用方提供自己的语言与复制工具栏时，设置 `showHeader={false}`。`diff` 与 `patch` 围栏按标记列划分行，按侧边栏文件 diff 的样式给新增、删除行上色，并按文件头写明的语言分别对该文件的删除侧与新增侧做语法高亮，因此源码 diff 保留语法颜色；标记列仍保留在复制的源码里。 |
 | `DetailDocument`、`detailDocumentState`、`useDetailDocumentLabels` | 用于较长 Markdown 描述（例如插件的详细介绍文档）的区块，本身不带标题：加载期间显示三行骨架屏，随后显示文档、owner 提供的失败消息和重试，或在没有文档时不显示任何内容。文档高度超过 `min(560px, 60vh)` 时，在可通过键盘聚焦、由 owner 的标题命名的区域内滚动。文档中的原始 HTML 会被省略。相对链接保持为文本，只加载 owner 的 `images` 解析器接受的图片或绝对 HTTP(S) 地址的图片。`detailDocumentState` 把 owner 的读取结果映射为显示状态，`useDetailDocumentLabels` 根据翻译后的字符串构建引用稳定的标签。 |
 | `useClipboardCopy` | 复制当前文本并显示一秒成功反馈，阻止写入期间及成功反馈期间的重复操作，卸载时清除重置计时器；迟到的写入结果不会更新已卸载控件。 |
 | `UserMessageBubble` | 用户消息的背景、圆角、内容内边距、字体与纯文本换行规则。接收原生 div props；行对齐、宽度、内容和操作由调用方拥有。 |
@@ -235,6 +235,7 @@ kind: "package-library"
 - **流式期间跨边界引用解析被推迟**：定义落在增量冻结边界另一侧的引用式链接或脚注，在回复流式输出期间渲染为字面文本；定稿时的全量解析会将其解析。
 - **长高亮 fence 会保留完整 token DOM**：流式路径避免重新解析、重新 tokenize 和 reconcile 已完成前缀，但不会丢弃旧颜色或虚拟化 token span。因此最终 DOM 数量仍随 fence 的 token 数增长；嵌套／容器内 fence 与病态的单个超长行仍走通用尾部路径。
 - **公式仅在单个 Markdown 文档内复制为 TeX**：超出其 `MarkdownText` 根节点的选区（例如从用户消息延伸到回复）沿用浏览器原生复制，会将 KaTeX 隐藏的 MathML 文本与可见字形拼接在一起。在单个文档内，非公式内容的纯文本取自 `innerText`，因此与原生复制一样，会包含代码块语言标签和复制按钮文本。
+- **Diff 围栏按文件、按侧推断颜色**：`diff` 与 `patch` 围栏解析 hunk 行数预算，使后续文件头仍按文件头处理；每个文件的删除行与新增行分别用其 `---`/`+++` 头写明的语言 tokenize，路径不可识别时正文保持纯文本。流式 diff 每来一个 chunk 都会重新 tokenize；标记列仍保留在复制的源码中。
 - **超长行不着色**：所有高亮界面中，长度达到 1,000 个 UTF-16 单元的源码行渲染为一段纯文本，因为 TextMate 扫描成本随行长超线性增长，单个生成行否则会阻塞页面数秒。语法状态会跳过该行，因此在该行开始或结束的注释、模板字符串会使后续行着色错误。高亮仍在渲染期间同步执行，因此数千个普通行的文件仍按比例增加开销。
 - **裸 URL 在非 ASCII 标点前结束**：[tokenizer 补丁](../../../patches/micromark-extension-gfm-autolink-literal@2.1.0.patch)和[转换补丁](../../../patches/mdast-util-gfm-autolink-literal@2.0.1.patch)让 GFM 自动链接在非 ASCII 标点、符号或空白处结束，因此路径中含未编码 `（`、`・` 等字符的 URL 只链接到该字符之前；这类 URL 请写成 `<…>` 或 `[…](…)`。URL 后直接跟中日韩文字时仍会并入链接，因为 `/wiki/中文` 这类路径是合法的。两个补丁都绑定精确版本：升级任一依赖时必须重新应用或撤销对应补丁，否则该边界规则会悄然失效。
 - **Go 结构体字段规则在本地打了补丁**：Go 语法加载时，重复匹配单行结构体字段的规则会替换为 [worlpaker/go-syntax#25](https://github.com/worlpaker/go-syntax/pull/25) 合入的规则，因为内置规则在 `struct {` 之后含花括号注释等行上会指数级回溯。若依赖升级后该规则消失，加载语法会抛错，Go 代码以纯文本显示；`@shikijs/langs` 发布上游规则后删除此补丁。
