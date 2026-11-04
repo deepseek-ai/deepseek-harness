@@ -46,7 +46,6 @@ it('fails closed when a publishing route or its unique label is missing', () => 
   expect(() => resolveDesktopPublishRoute('owner/repo', f.run, { source: f.source }, f.jobs, duplicates)).toThrow(/unique runner label/u)
 })
 
-
 it('keeps the packaged source separate from the workflow commit', () => {
   const f = fixture()
   f.source.commit = 'b'.repeat(40)
