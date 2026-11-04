@@ -64,7 +64,7 @@ const skills = registerUpstreamSkills(ctx, {
 
 ### Kept files and verification
 
-The library downloads `<prefix>/<owner>/<repository>/tar.gz/<commit>` from each `skillsUrls` prefix in order. A prefix that answers with an error status or no body, does not deliver the whole archive within `skillsTimeoutMs`, sends a malformed archive, or sends files that differ from the pin is logged with its origin, and the next prefix is tried; disposing the plugin stops at once. The library keeps every regular file under `directory` except the paths in `exclude`, plus `license`, at their repository paths. It refuses an archive with an empty, `.`, or `..` path segment or a backslash in any entry, entries outside its one top-level directory, a kept path that is a link or appears twice, kept files above `bytes`, or no license file. On Windows, node-tar turns backslashes into slashes before the library reads a path, so the segments they separate are checked instead. The digest hashes each kept file's path, byte length, and content in path order, because GitHub keeps the files of a commit archive stable but not its compressed bytes. Verified files are written to a sibling staging directory, which is then renamed to `skills.directory`; a directory that another process, such as Desktop beside Web, published first is kept.
+The library downloads `<prefix>/<owner>/<repository>/tar.gz/<commit>` from each `skillsUrls` prefix in order. A prefix that answers with an error status or no body, does not deliver the whole archive within `skillsTimeoutMs`, sends a malformed archive, or sends files that differ from the pin is logged with the prefix, and the next prefix is tried; disposing the plugin stops at once. The library keeps every regular file under `directory` except the paths in `exclude`, plus `license`, at their repository paths. It refuses an archive with an empty, `.`, or `..` path segment or a backslash in any entry, entries outside its one top-level directory, a kept path that is a link or appears twice, kept files above `bytes`, or no license file. On Windows, node-tar turns backslashes into slashes before the library reads a path, so the segments they separate are checked instead. The digest hashes each kept file's path, byte length, and content in path order, because GitHub keeps the files of a commit archive stable but not its compressed bytes. Verified files are written to a sibling staging directory, which is then renamed to `skills.directory`; a directory that another process, such as Desktop beside Web, published first is kept.
 
 ### Pinning a commit
 
@@ -75,8 +75,8 @@ The library downloads `<prefix>/<owner>/<repository>/tar.gz/<commit>` from each 
 | Field | Default | Meaning |
 |---|---|---|
 | `skillsDir` | none | Directory holding the kept files at their repository paths; when set, nothing is downloaded, and a path that is not a directory fails the load |
-| `skillsUrls` | `['https://codeload.github.com']` | HTTPS archive download prefixes, without a query, fragment, or credentials, tried in order |
-| `skillsTimeoutMs` | `120000` | How long one prefix may take to deliver the whole archive before the next is tried |
+| `skillsUrls` | `['https://codeload.github.com']` | HTTPS archive download prefixes, without a query, fragment, or credentials, tried in order; a value that does not parse as a URL fails the configuration |
+| `skillsTimeoutMs` | `120000` | Whole milliseconds one prefix may take to deliver the whole archive before the next is tried |
 
 -----
 
@@ -86,7 +86,7 @@ The library downloads `<prefix>/<owner>/<repository>/tar.gz/<commit>` from each 
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The provider lists the entry only while `skills.directory` exists, with source `bundled` at the bundled rank, so a project or user skill of the same name wins. It returns a complete, empty list before publishing, because an incomplete observation would make the whole skill catalog incomplete; publishing invalidates the catalog instead. One download runs at a time, and the provider registration's signal aborts it when the plugin is disposed. Kept files are held in memory, bounded by `bytes`, until they match the digest, so no unverified file reaches the disk; files outside the selection are read and dropped, so `skillsTimeoutMs` bounds the time spent on them.
+The provider lists the entry only while `skills.directory` exists, with source `bundled` at the bundled rank, so a project or user skill of the same name wins. It returns a complete, empty list before publishing, because an incomplete observation would make the whole skill catalog incomplete; publishing invalidates the catalog instead, as does a failed download that finds a directory another process published. One download runs at a time, and the provider registration's signal aborts it when the plugin is disposed. Kept files are held in memory, bounded by `bytes`, until they match the digest, so no unverified file reaches the disk; files outside the selection are read and dropped, so `skillsTimeoutMs` bounds the time spent on them.
 
 | File | Role |
 |---|---|

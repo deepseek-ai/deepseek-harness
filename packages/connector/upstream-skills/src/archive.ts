@@ -166,7 +166,7 @@ export async function downloadSkillSet(
     } catch (error) {
       signal.throwIfAborted()
       failure = error
-      warn(`downloading the upstream skills from ${new URL(url).origin} failed`, error)
+      warn(`downloading the upstream skills from ${base} failed`, error)
     }
   }
   const at = `${set.repository} at ${set.commit}`
