@@ -15,8 +15,6 @@ import { type Config, validateConfig } from './config.ts'
 import { registerUserTerminalTools } from './tools.ts'
 
 export { Config } from './config.ts'
-export { SUBAGENT_REFUSAL } from './backend.ts'
-export { TAKEN_OVER } from './session.ts'
 
 /** Cordis plugin name. */
 export const name = 'terminal-panel'
