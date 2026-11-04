@@ -262,7 +262,7 @@ it.each(['nightly', 'stable'] as const)('rejects older, equal and malformed vers
     f.checkForUpdates.mockResolvedValueOnce({ isUpdateAvailable: true, updateInfo: { version } })
     expect((await f.coordinator.check()).phase).toBe(version === 'invalid' ? 'error' : 'idle')
     await expect(f.coordinator.download(version)).rejects.toThrow(/no checked update/u)
-    await expect(f.coordinator.install(version)).rejects.toThrow(/not ready/u)
+    await expect(f.coordinator.install(version)).rejects.toThrow(/confirmed target is not ready/u)
     expect(f.downloadUpdate).not.toHaveBeenCalled()
     expect(f.quitAndInstall).not.toHaveBeenCalled()
   }

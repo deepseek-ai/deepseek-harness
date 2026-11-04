@@ -67,10 +67,12 @@ async function main() {
       assert.equal((await target.checkForUpdates()).isUpdateAvailable, true)
       assert.equal(target.updateInfoAndProvider.info.version, candidate)
     }
-    version = '0.9.0-rc.1'
-    await discardDesktopUpdate(target)
-    await target.checkForUpdates()
-    assert.equal(target.updateInfoAndProvider, null)
+    for (const candidate of ['0.9.0-rc.1', '1.0.0-rc.1']) {
+      version = candidate
+      await discardDesktopUpdate(target)
+      assert.equal((await target.checkForUpdates()).isUpdateAvailable, false)
+      assert.equal(target.updateInfoAndProvider, null)
+    }
     version = '2.0.0'
     percentage = 0
     await discardDesktopUpdate(target)
