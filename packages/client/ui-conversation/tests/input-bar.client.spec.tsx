@@ -38,6 +38,12 @@ import { InputBar } from '../src/client/skeleton/InputBar.tsx'
 import type { InputBarProps } from '../src/client/skeleton/InputBar.tsx'
 import { en, zh } from '../src/client/locales.ts'
 
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'input-bar-context-fixture': { kind: 'input-bar-context-fixture' }
+  }
+}
+
 // Every fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
 const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined })) as GlobalStandardProps['useResource']
 
@@ -299,7 +305,7 @@ it('updates the continue action from failure and pending-input projections', asy
   expect(b.view.queryByRole('button', { name: '继续生成' })).toBeNull()
   await act(async () => { b.continuation.set(2 as SessionSeq) })
   expect(b.view.getByRole('button', { name: '继续生成' }).getAttribute('disabled')).toBeNull()
-  const context = { ...row('context'), source: { kind: 'user-approval' as const } }
+  const context = { ...row('context'), source: { kind: 'input-bar-context-fixture' as const } }
   await act(async () => { b.inbox.set({ 'next-turn': [], 'next-step': [context] }) })
   expect(b.view.getByRole('button', { name: '继续生成' })).not.toBeNull()
   await act(async () => { b.inbox.set({ 'next-turn': [], 'next-step': [context, row('new instruction')] }) })
