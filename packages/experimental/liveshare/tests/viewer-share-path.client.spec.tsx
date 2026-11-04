@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, waitFor } from '@testing-library/react'
 import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
+import { apply as menusApply, inject as menusInject } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { apply as resourcesApply, inject as resourcesInject } from '@deepseek-ai/dsh-client-resources/src/client/index.ts'
 import { apply as sidebarApply, inject as sidebarInject } from '@deepseek-ai/dsh-client-ui-sidebar-right/src/client/index.ts'
@@ -51,6 +52,7 @@ async function boot() {
   await rt.sessions.add({ id: SESSION })
   await rt.sessions.retainFor(rt.ctx, SESSION, { source: 'mainView' }).ready
   await rt.mount({ inject: [...resourcesInject], apply: resourcesApply })
+  await rt.mount({ inject: [...menusInject], apply: menusApply })
   await rt.mount({ inject: [...sidebarInject], apply: sidebarApply })
   await rt.mount({ inject: [...inject], apply })
   const view = rt.renderSlot('rightbar', { width: 600, viewportWidth: 1440, canShow: true })

@@ -679,12 +679,17 @@ describe('pick and codec', () => {
 
 describe('reference preview', () => {
   it('binds each inline file action to its originating Session', async () => {
-    const { ctx } = await bench()
+    const { ctx, sessions } = await bench()
     const entry = ctx.slots.entries('conversation.user.text.node').find(candidate => candidate.options.key === 'file')!
     const factory = entry.inject as NonNullable<typeof entry.inject> & ((id: SessionId) => FileReferenceInjected)
     const openResource = vi.spyOn(ctx.sidebarRight, 'openResource')
     factory(session.sessionId).openFile('docs/a b.md')
     factory(sid('other')).openFile('notes.md')
+    const file = factory(session.sessionId)
+    await sessions.updateSummary(session.sessionId, { cwd: '/workspace' })
+    await sessions.setProjection(session.sessionId, 'workingDirectory', '/workspace/elsewhere')
+    expect(file.resolveFilePath('docs/a b.md')).toBe('/workspace/docs/a b.md')
+    expect(factory(sid('other')).resolveFilePath('/absolute.md')).toBe('/absolute.md')
     expect(openResource.mock.calls).toEqual([
       ['dsh-resource://file/session/target/docs/a%20b.md'],
       ['dsh-resource://file/session/other/notes.md'],

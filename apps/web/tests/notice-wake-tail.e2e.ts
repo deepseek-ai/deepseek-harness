@@ -170,6 +170,7 @@ describe('web e2e: notice Turn after a long Detailed Turn', () => {
         kind: 'subagent-settled',
         form: 'notice',
         summary: 'Background subagent finished.',
+        stopReason: 'completed',
         senderSessionId: SessionId('notice-wake-child'),
       }
       const notice = createUserMessage({

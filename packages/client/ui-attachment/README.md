@@ -25,7 +25,7 @@ This package renders everything the conversation UI shows about attachments: one
 <a id="use-this-package"></a>
 ## Use this package
 
-Image drag actions and the composer’s original-file reader arrive through slot injection from [ui-file-drag](../ui-file-drag/README.md). The image gallery Factory also receives these actions through its declared inject face; custom Factory replacements must supply that face.
+Image drag actions and the composer’s original-file reader arrive through slot injection from [ui-file-drag](../ui-file-drag/README.md). The image gallery Factory also receives these actions through its declared inject face; custom Factory replacements must supply that face. `MessageImage` and `ImageGallery` require the ordinary `getTriggerProps` factory; they bind each original image once and pass the same `contextMenuProps` to its thumbnail and lightbox.
 
 Mount this plugin alongside [`ui-conversation`](../ui-conversation/README.md) and [`ui-tool`](../ui-tool/README.md) when tool results need an image gallery. It waits for their slot declarations and registers its components into them. Users then see the mixed draft-attachment rail, DeepSeek Web file cards with upload controls, the drop overlay with its limits line, message images sized by count, the tool card's gallery, and the Escape/mask/close lightbox.
 
@@ -81,6 +81,8 @@ Read these pages when the attachment surface is not enough. They move from the s
 - [Client package map](../README.md) — adjacent browser UI packages.
 
 -----
+
+Message images and original previews forward context gestures through the shared gallery to [ui-context-menu](../ui-context-menu/README.md). Original authorized URLs and MIME metadata remain independent from thumbnail presentation.
 
 <a id="model-experience"></a>
 ## Model Experience

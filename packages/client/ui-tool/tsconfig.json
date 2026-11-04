@@ -12,6 +12,9 @@
       "path": "../../spill/spill-policy"
     },
     {
+      "path": "../../fs/fs-patch"
+    },
+    {
       "path": "../../attachment/attachment"
     },
     {

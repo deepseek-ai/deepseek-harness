@@ -7,8 +7,9 @@ import { captureStreamWrites, LogBuffer, makeConsoleShim, makeBindingErrorClass,
 import type { BindingErrorConstructor, PatchableStream } from './bootstrap.ts'
 import { clearProgramEnvironment } from './environment.ts'
 import { createProgramEvaluator } from './evaluators/index.ts'
-import type { ProgramEvaluator } from './evaluators/types.ts'
-import type { ProgramResult, HostMethods, ProgramMethods } from './protocol.ts'
+import { ImportEvaluationEndedError } from './imports/evaluation-ended.ts'
+import type { ProgramEvaluator, ProgramImportHandler, ProgramImportResult } from './evaluators/types.ts'
+import { PROGRAM_PROTOCOL_VERSION, type ProgramResult, type HostMethods, type ProgramMethods } from './protocol.ts'
 
 /** Process-owned environment, output and directory control consumed by the child. */
 export interface ProgramProcess {
@@ -24,6 +25,7 @@ interface Evaluation {
   maxOutputBytes: number
   active: boolean
   reusable: boolean
+  revoked: boolean
   finish(result: ProgramResult): void
 }
 
@@ -31,12 +33,14 @@ interface Evaluation {
  * Serve sequential evaluations until the host closes the control channel.
  * @param stream - Inherited, already-adopted control endpoint.
  * @param maxMessageBytes - Maximum control message and queued output bytes.
- * @param processState - Child environment, output, directory control and exit status.
+ * @param processState - Native child process; structural test doubles do not replace Node's globals or built-in exports.
  * @param defaultFormat - Syntax used by installed bootstraps when the host omits it.
+ * @param importHandler - Runner-local import decisions; omission retains native loading.
  * @returns After control closure and evaluator cleanup.
  */
 export async function runNodeMain(
   stream: Duplex, maxMessageBytes: number, processState: ProgramProcess, defaultFormat: PtcProgramFormat = 'function-body',
+  importHandler?: ProgramImportHandler,
 ): Promise<void> {
   if (!Number.isSafeInteger(maxMessageBytes) || maxMessageBytes <= 0) throw new Error('invalid control message limit')
   clearProgramEnvironment(processState)
@@ -47,37 +51,42 @@ export async function runNodeMain(
   const unsettled = new Promise<never>(() => {})
   let evaluator: ProgramEvaluator | undefined
   let current: Evaluation | undefined
+  const acceptsCalls = (evaluation: Evaluation): boolean => evaluation.active && !evaluation.revoked
   const host: Pick<HostMethods, 'invoke'> = {
-    invoke: (global, name, args) => {
+    invoke: async (global, name, args) => {
       const evaluation = context.getStore()
-      if (!evaluation?.active) {
-        if (evaluation && !evaluation.reusable) return unsettled
-        throw new Error('PTC evaluation has ended; call this function from a new run_code evaluation')
-      }
-      return connection.invoke(global, name, args).then((value) => {
-        return !evaluation.active && !evaluation.reusable ? unsettled : value
-      }, (error: unknown) => {
-        // Closing a temporary process must not resume an unawaited binding with a late rejection.
+      if (evaluation && !evaluation.active && !evaluation.reusable) return unsettled
+      if (!evaluation || !acceptsCalls(evaluation)) throw new Error('PTC evaluation ended')
+      let value
+      try { value = await connection.invoke(global, name, args) } catch (error) {
+        // Closing a temporary process must not resume an unawaited call with a rejection.
         if (!evaluation.active && !evaluation.reusable) return unsettled
         throw error
-      })
+      }
+      if (!evaluation.active && !evaluation.reusable) return unsettled
+      if (!acceptsCalls(evaluation)) throw new Error('PTC evaluation canceled')
+      return value
     },
   }
-  const logSink = { push(text: string): void { const evaluation = context.getStore(); if (evaluation?.active) evaluation.logs.push(text) } }
+  const logSink = { push(text: string): void {
+    const evaluation = context.getStore()
+    if (evaluation && acceptsCalls(evaluation)) evaluation.logs.push(text)
+  } }
   captureStreamWrites(logSink, processState.stdout)
   captureStreamWrites(logSink, processState.stderr)
   const connection = createProcessRpc<HostMethods, ProgramMethods>(stream, maxMessageBytes, {
     async run(cwd, data) {
+      if (current?.active) throw new Error('overlapping PTC evaluation')
       const completion = Promise.withResolvers<ProgramResult>()
-      const logs = new LogBuffer(data.maxOutputBytes, (text) => { void connection.log(text) }, () => { void connection.outputLimit() })
+      const logs = new LogBuffer(data.maxOutputBytes,
+        (text) => { void connection.log(text) }, () => { void connection.outputLimit() })
       const format = data.programFormat ?? defaultFormat
       const evaluation: Evaluation = {
-        logs, maxOutputBytes: data.maxOutputBytes, active: true, reusable: data.retainsState,
+        logs, maxOutputBytes: data.maxOutputBytes, active: true, reusable: data.retainsState, revoked: false,
         finish(result) {
-          if (!evaluation.active) return
           evaluation.active = false
           if (evaluation.reusable) {
-            void connection.$rejectPendingCalls(({ reject }) => { reject(new Error('PTC evaluation ended before the binding completed')) })
+            void connection.$rejectPendingCalls(({ reject }) => { reject(new Error('PTC evaluation ended')) })
           }
           completion.resolve(result)
         },
@@ -90,6 +99,18 @@ export async function runNodeMain(
             evaluator = createProgramEvaluator(format, (error) => {
               const active = context.getStore()
               if (active?.active && error) active.finish(prepareException(error, active.logs.remainingOutputBytes(), active.maxOutputBytes))
+            }, importHandler === undefined ? undefined : (request) => {
+              const active = context.getStore()
+              if (!active?.active) throw new ImportEvaluationEndedError(active?.reusable ?? true)
+              const result = importHandler(request)
+              const checkActive = (decision: ProgramImportResult): ProgramImportResult => {
+                if (!active.active) throw new ImportEvaluationEndedError(active.reusable, true)
+                return decision
+              }
+              return 'then' in result ? result.then(checkActive, (error: unknown) => {
+                if (!active.active) throw new ImportEvaluationEndedError(active.reusable, true)
+                throw error
+              }) : checkActive(result)
             })
             evaluator.globals.console = makeConsoleShim(logSink)
             // Context access must not reserve a function-body parameter named process.
@@ -113,6 +134,8 @@ export async function runNodeMain(
             }
           }
           evaluator.evaluate(data.code, (result) => {
+            if (!evaluation.active) return
+            if (evaluation.revoked) { evaluation.finish({}); return }
             evaluation.finish(result.ok ? prepareCompletion(result.value, logs.remainingOutputBytes(), data.maxOutputBytes)
               : prepareException(result.error, logs.remainingOutputBytes(), data.maxOutputBytes))
           })
@@ -122,13 +145,19 @@ export async function runNodeMain(
       })
       return await completion.promise
     },
+    revoke() {
+      const evaluation = current
+      if (!evaluation?.active) return
+      evaluation.revoked = true
+      void connection.$rejectPendingCalls(({ reject }) => { reject(new Error('PTC evaluation canceled')) })
+    },
   }, ['ready', 'log', 'outputLimit'], (_error, kind) => {
     if (current?.active || kind === 'protocol') processState.exitCode = 1
     if (current) current.active = false
     closed.resolve()
   })
   try {
-    await connection.ready()
+    await connection.ready(PROGRAM_PROTOCOL_VERSION)
     await closed.promise
   } finally {
     evaluator?.close()

@@ -25,6 +25,10 @@
 - id: time-context
   disabled: true
 
+# Keep the recorded job-wait composition; default SDK tools have separate snapshots.
+- id: tool-plugin-manager
+  disabled: true
+
 - id: tool-jobs
   name: '@deepseek-ai/dsh-tool-jobs'
   config:
@@ -33,3 +37,8 @@
 - insert:
     - id: background-wait-steer-fixture
       name: './wait-fixture.mjs'
+
+# The recorded tool catalog includes the optional patch tool.
+- id: tool-fs
+  config:
+    applyPatch: true

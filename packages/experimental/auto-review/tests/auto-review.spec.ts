@@ -1497,17 +1497,23 @@ describe('cancellation and integration teardown', () => {
       const probe = registerProbe(ctx)
       const session = sessions.prepare(SessionId(`shutdown-${outcome}`), { meta: { cwd: '/workspace' } })
       const events: SessionEvent[] = []
-      ctx.effect(function* () {
-        const detach = sessions.enter(session)
-        yield () => {
-          detach()
-          detached.resolve(undefined)
-        }
-        yield ctx.on('session/event', (subject, event) => {
-          if (subject === session) events.push(event)
-        })
-        sessions.announce(session)
-        yield () => releaseSession.promise
+      // A dependent of a root-provided service unloads with Auto, before the root's own effects.
+      await ctx.plugin({
+        inject: ['workingDirectory'],
+        apply: (scope: Context) => {
+          scope.effect(function* () {
+            const detach = sessions.enter(session)
+            yield () => {
+              detach()
+              detached.resolve(undefined)
+            }
+            yield scope.on('session/event', (subject, event) => {
+              if (subject === session) events.push(event)
+            })
+            sessions.announce(session)
+            yield () => releaseSession.promise
+          })
+        },
       })
       ctx.permissionPresets.set(session, AUTO_PRESET)
       const agent = agentFor(session)

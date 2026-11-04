@@ -37,7 +37,7 @@ describe('changes addresses', () => {
 
   it('name the local view and a change request view by its number when the URL ends in one', () => {
     const t = makeTranslate(zh)
-    expect(changesTitle({ kind: 'local' }, t)).toBe('变更')
+    expect(changesTitle({ kind: 'local' }, t)).toBe('本地变更')
     expect(changesTitle({ kind: 'change', url: URL }, t)).toBe('#7 的变更')
     expect(changesTitle({ kind: 'change', url: 'https://example.com/review' }, t)).toBe('变更')
   })
@@ -59,12 +59,15 @@ describe('createChangesStore', () => {
   it('seeds a tab on its first navigation, keeps its choices, and forgets it', () => {
     const store = createChangesStore().create()
     store.actions.navigated('tab-1', 1)
-    expect(store.getSnapshot().byTab['tab-1']).toEqual({ scope: 'branch', split: true, wrap: true, navigated: 1 })
+    expect(store.getSnapshot().byTab['tab-1']).toEqual({ scope: 'branch', base: null, split: true, wrap: true, navigated: 1 })
     store.actions.scoped('tab-1', 'staged')
+    store.actions.based('tab-1', { ref: 'refs/heads/topic', name: 'topic' })
     store.actions.toggledSplit('tab-1')
     store.actions.toggledWrap('tab-1')
     store.actions.navigated('tab-1', 2)
-    expect(store.getSnapshot().byTab['tab-1']).toEqual({ scope: 'staged', split: false, wrap: false, navigated: 2 })
+    expect(store.getSnapshot().byTab['tab-1']).toEqual({
+      scope: 'staged', base: { ref: 'refs/heads/topic', name: 'topic' }, split: false, wrap: false, navigated: 2,
+    })
     store.actions.navigated('tab-2', 1)
     store.actions.forget('tab-1')
     expect(Object.keys(store.getSnapshot().byTab)).toEqual(['tab-2'])

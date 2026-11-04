@@ -1,3 +1,16 @@
+import { lt, valid } from 'semver'
+
+/**
+ * Identify frozen upgrade guides whose examples target an earlier release.
+ * @param file - Repository-relative path normalized to forward slashes.
+ * @param currentVersion - Current root package version.
+ * @returns Whether the guide predates the current upgrade-guide directory.
+ */
+export function isFrozenUpgradeGuidePath(file: string, currentVersion: string): boolean {
+  const version = /^docs\/upgrade-guide\/v([^/]+)\/[^/]+\/guide(?:\.zh)?\.md$/.exec(file)?.[1]
+  return version !== undefined && valid(version) !== null && lt(version, currentVersion)
+}
+
 /** Map one workspace source alias target to its declaration-build target. */
 export function builtDeclarationPath(candidate: string): string {
   // Two workspace path forms exist: whole-package entries end in /src, subpath

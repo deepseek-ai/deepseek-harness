@@ -9,7 +9,7 @@
 import { createHash } from 'node:crypto'
 import { build as bundle } from 'tsdown'
 import { spawn } from 'node:child_process'
-import { pnpmInvocation, restoreLegacyHoists } from './executable-packaging.ts'
+import { pnpmInvocation, verifyStagedDependencies } from './executable-packaging.ts'
 import { existsSync, statSync } from 'node:fs'
 import { chmod, copyFile, cp, glob, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve, sep } from 'node:path'
@@ -37,8 +37,6 @@ const OUT_DIR = 'dist-exe'
 const PYTHON_RUNTIME_DIR = 'python/sdk-runtime/src/deepseek_harness_runtime/runtime'
 /** The deployed closure doubles as the node-mode carrier. */
 const PYTHON_NODE_SUBDIR = 'node'
-/** Legacy deploy may hoist peer-specialized workspace packages back here. */
-const DEPLOY_SOURCE_NODE_MODULES = 'python/sdk-runtime/node_modules'
 /** Documentation excluded from the generated runtime directory. */
 const DEPLOY_ONLY_DOCS = ['README.md', 'README.zh.md', 'README.i18n.yaml']
 
@@ -304,24 +302,19 @@ class SingleExeBuild {
     }
     if (this.cli.dryRun) console.log(`build-exe-for-python-sdk: [dry-run] rm -rf ${this.staging}`)
     else await rm(this.staging, { recursive: true, force: true })
-    try { await this.runPnpm('deploy', [
+    await this.runPnpm('deploy', [
       '--filter',
       DEPLOY_ROOT_PACKAGE,
       'deploy',
-      '--legacy',
       '--prod',
       // Production deployment omits workspace tooling such as Electron's patched signer.
       '--config.allow-unused-patches=true',
       '--config.node-linker=hoisted',
-      '--config.auto-install-peers=false',
+      `--config.pnpmfile=${join(root, 'scripts/python-runtime-deploy.pnpmfile.mjs')}`,
       '--config.link-workspace-packages=true',
       '--config.hoist-workspace-packages=false',
       this.staging,
-    ]) } finally {
-      // Legacy deploy records production-only workspace state; restore the development installation before exec.
-      await this.runPnpm('restore development dependencies', ['install', '--offline', '--frozen-lockfile', '--prod=false', '--ignore-scripts'])
-    }
-    await this.restoreLegacyHoists()
+    ])
     await this.materializeStagedLinks()
     if (this.cli.dryRun) {
       for (const name of DEPLOY_ONLY_DOCS) console.log(`build-exe-for-python-sdk: [dry-run] rm -f ${join(this.staging, name)}`)
@@ -333,21 +326,6 @@ class SingleExeBuild {
     }
   }
 
-  /**
-   * Restore direct packages that pnpm's legacy hoister places beside the deploy
-   * source instead of in the target. The runtime manifest supplies every peer,
-   * so package-local node_modules trees are omitted to preserve one flat Cordis
-   * instance and a symlink-free packaged payload.
-   */
-  private async restoreLegacyHoists(): Promise<void> {
-    if (this.cli.dryRun) {
-      console.log('build-exe-for-python-sdk: [dry-run] restore direct dependencies omitted by legacy deploy')
-      return
-    }
-    const restored = await restoreLegacyHoists(this.staging, resolve(root, DEPLOY_SOURCE_NODE_MODULES))
-    if (restored.length > 0) console.log(`build-exe-for-python-sdk: restored legacy deploy hoists: ${restored.join(', ')}`)
-  }
-
   /** Replace deploy-time package links with files and reject any remaining link. */
   private async materializeStagedLinks(): Promise<void> {
     if (this.cli.dryRun) {
@@ -355,7 +333,8 @@ class SingleExeBuild {
       return
     }
     await materializeStagedLinks(this.staging)
-    await deduplicateStagedWorkspacePackages(this.staging, root)
+    await deduplicateStagedWorkspacePackages(this.staging, this.staging)
+    await verifyStagedDependencies(this.staging)
   }
 
   /** Add the executable entry and pkg assets to the staged manifest. */

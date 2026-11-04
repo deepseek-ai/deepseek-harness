@@ -2,8 +2,9 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import { desktopReleasesRoot, retainDesktopCi } from '../scripts/retain-desktop-ci.ts'
+import { desktopReleasesRoot, retainDesktopCi, resolveDesktopRetentionRunner } from '../scripts/retain-desktop-ci.ts'
 import { verifyRetainedDesktopRelease } from '../scripts/desktop-release-store.ts'
+import { verifyDesktopArchive } from '../scripts/archive-desktop-ci.ts'
 import { prepareDesktopPublication } from '../scripts/publish-desktop-ci.ts'
 
 const roots: string[] = []
@@ -32,9 +33,15 @@ it.each([
     DSH_DESKTOP_TARGET_ARCH: target === 'mac-arm64' ? 'arm64' : 'x64', PACKAGE_SOURCE_REF: 'master', PACKAGE_SOURCE_SHA: 'b'.repeat(40), PACKAGE_VERSION: '1.0.0',
     PACKAGE_SIGNING: qualification === 'unsigned' ? 'unsigned' : 'signed', PACKAGE_SKIP_NOTARIZATION: qualification === 'unnotarized' ? 'true' : 'false', GITHUB_RUN_ID: '123', GITHUB_RUN_ATTEMPT: '2',
     GITHUB_STEP_SUMMARY: join(root, 'summary.md'),
+    DESKTOP_PUBLISH_RUNNERS: JSON.stringify({ dedicated: { label: 'dsh-dedicated', target: [target] } }),
     GITHUB_REPOSITORY: 'owner/repository', GITHUB_SHA: 'b'.repeat(40), RUNNER_NAME: 'dedicated',
   }
-  await retainDesktopCi(env, appRoot)
+  const directory = await retainDesktopCi(env, appRoot)
+  const archiveEnv = { ...env, GITHUB_RUN_ATTEMPT: '3', DESKTOP_RETAINED_DIRECTORY: directory,
+    DESKTOP_PACKAGE_ATTEMPT: '2', DESKTOP_PACKAGE_RUNNER: env.RUNNER_NAME }
+  await verifyDesktopArchive(archiveEnv)
+  await expect(verifyDesktopArchive({ ...archiveEnv, RUNNER_NAME: 'other' })).rejects.toThrow('wrong original machine')
+  await expect(verifyDesktopArchive({ ...archiveEnv, DESKTOP_PACKAGE_ATTEMPT: '3' })).rejects.toThrow('original build')
   const manifest = await verifyRetainedDesktopRelease(desktopReleasesRoot(env), '123', '2')
   expect(manifest.files.map(file => file.name)).toEqual(names)
   expect(manifest.source).toMatchObject({ target, qualification })
@@ -48,4 +55,12 @@ it.each([
     }) })).rejects.toThrow('重跑当前发布任务无效')
     await expect(summary).toMatchFileSnapshot(`./expected/retained-${qualification}.md`)
   } else expect(summary).toContain('Publish separately with package_run_id=123 and package_run_attempt=2')
+})
+
+it('rejects missing or ambiguous archival routing before packaging starts', () => {
+  const env = { RUNNER_NAME: 'dedicated', DSH_DESKTOP_TARGET_PLATFORM: 'darwin', DSH_DESKTOP_TARGET_ARCH: 'arm64' }
+  expect(() => resolveDesktopRetentionRunner(env)).toThrow('DESKTOP_PUBLISH_RUNNERS is required')
+  expect(() => resolveDesktopRetentionRunner({ ...env, DESKTOP_PUBLISH_RUNNERS: JSON.stringify({
+    dedicated: { label: 'dsh-shared', target: 'mac-arm64' }, other: { label: 'dsh-shared', target: 'mac-arm64' },
+  }) })).toThrow('unique artifact routing label')
 })

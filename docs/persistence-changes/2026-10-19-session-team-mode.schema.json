@@ -1,0 +1,15 @@
+{
+  "formatVersion": 2,
+  "roots": [
+    {"key":"event:team/mode","kind":"event","event":"team/mode","surface":false,"digest":"920d87e22b7409bcc7224f8b1dc7f5101c33574c75627c65baab12b85cc96e75"}
+  ],
+  "types": [],
+  "nodes": {
+    "0657d3ca5ac4e7bf": {"kind":"primitive","type":"number"},
+    "920d87e22b7409bc": {"kind":"object","properties":[{"name":"data","type":"c2a13242efc3bea4","optional":false},{"name":"ignorable","type":"dacf3d5f3e4ff619","optional":true},{"name":"seq","type":"0657d3ca5ac4e7bf","optional":false},{"name":"time","type":"0657d3ca5ac4e7bf","optional":false},{"name":"type","type":"d8a476d2c6fd30df","optional":false}],"indices":[]},
+    "aa93010d0e521ad7": {"kind":"primitive","type":"boolean"},
+    "c2a13242efc3bea4": {"kind":"object","properties":[{"name":"enabled","type":"aa93010d0e521ad7","optional":false}],"indices":[]},
+    "d8a476d2c6fd30df": {"kind":"literal","value":"team/mode"},
+    "dacf3d5f3e4ff619": {"kind":"literal","value":true}
+  }
+}

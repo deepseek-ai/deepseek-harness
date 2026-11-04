@@ -151,7 +151,7 @@ it.each([true, false])('explains cost and background creation without starting w
   expect(value.act).not.toHaveBeenCalled()
 })
 
-it('offers cancellation during generation, then waits for cleanup before retrying', async () => {
+it('offers cancellation beside the location during generation, then waits for cleanup before retrying', async () => {
   const value = props({ phase: 'creating', data: { slot: 'page', bundleName: '@dsh-local/view-fixture' } })
   const pending = Promise.withResolvers<ActionCardResult | undefined>()
   value.act.mockImplementation(() => pending.promise)
@@ -159,7 +159,9 @@ it('offers cancellation during generation, then waits for cleanup before retryin
   expect(screen.queryByText(zh.sourceRetained)).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: zh.creationInfo }))
   expect(screen.getByText(zh.sourceRetained)).toBeTruthy()
-  fireEvent.click(screen.getByRole('button', { name: '取消创建' }))
+  const cancel = screen.getByRole('button', { name: '取消创建' })
+  expect(cancel.parentElement).toBe(screen.getByText(`${zh.location} · ${zh.page}`).parentElement)
+  fireEvent.click(cancel)
   expect(value.act).toHaveBeenCalledWith('cancel', undefined)
   expect(screen.getByRole('button', { name: '正在取消…' }).hasAttribute('disabled')).toBe(true)
   expect(screen.queryByRole('button', { name: '重新创建' })).toBeNull()
@@ -178,18 +180,20 @@ it.each(['failed', 'interrupted', 'cancelled', 'unconfirmed'] as const)('offers 
   await waitFor(() => { expect(value.act).toHaveBeenCalledWith('create', { slot: 'page' }) })
 })
 
-it('retains installed and kept plugins with an Undo action and the actual application outcome', async () => {
+it('offers only Undo, beside the location, on installed and earlier kept plugins, with the actual application outcome', async () => {
   const value = props({ phase: 'installed', data: { slot: 'page', application: 'applied' } })
   const { rerender } = render(<PageCardBody {...value} />)
   expect(screen.getAllByRole('status')).toHaveLength(1)
-  expect(screen.getByText(zh.scope)).toBeTruthy()
-  fireEvent.click(screen.getByRole('button', { name: '保留' }))
-  await waitFor(() => { expect(value.act).toHaveBeenCalledWith('keep', undefined) })
+  const undo = screen.getByRole('button', { name: zh.undo })
+  expect(screen.getAllByRole('button')).toEqual([screen.getByRole('button', { name: zh.creationInfo }), undo])
+  expect(undo.parentElement).toBe(screen.getByText(`${zh.location} · ${zh.page}`).parentElement)
+  fireEvent.click(undo)
+  await waitFor(() => { expect(value.act).toHaveBeenCalledWith('undo', undefined) })
   const kept = props({ phase: 'kept', data: { slot: 'page', application: 'restart-required' } })
   rerender(<PageCardBody {...kept} />)
-  expect(screen.queryByRole('button', { name: '保留' })).toBeNull()
   expect(screen.getByText(zh['restart-required'])).toBeTruthy()
-  fireEvent.click(screen.getByRole('button', { name: '撤销' }))
+  expect(screen.getAllByRole('button')).toEqual([screen.getByRole('button', { name: zh.creationInfo }), screen.getByRole('button', { name: zh.undo })])
+  fireEvent.click(screen.getByRole('button', { name: zh.undo }))
   await waitFor(() => { expect(kept.act).toHaveBeenCalledWith('undo', undefined) })
 })
 
@@ -201,7 +205,7 @@ it('offers only Restore on a removed card, labels it while pending and explains 
   expect(screen.getByRole('status').textContent).toBe(zh.removed)
   const restore = screen.getByRole('button', { name: zh.restore })
   expect(screen.getAllByRole('button')).toEqual([screen.getByRole('button', { name: zh.creationInfo }), restore])
-  expect(restore.closest('footer')).not.toBeNull()
+  expect(restore.parentElement).toBe(screen.getByText(`${zh.location} · ${zh.page}`).parentElement)
   fireEvent.click(restore)
   expect(value.act).toHaveBeenCalledExactlyOnceWith('restore', undefined)
   expect(screen.getByRole('button', { name: zh.restoring }).hasAttribute('disabled')).toBe(true)

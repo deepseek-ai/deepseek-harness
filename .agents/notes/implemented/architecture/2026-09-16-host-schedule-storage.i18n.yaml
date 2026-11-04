@@ -3,17 +3,17 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-16-host-schedule-storage.md
 /agent-note-host-owned-scheduled-messages:
-  en: 11854b220af809ea
-  zh: 0f0575de37107ed8
+  en: b3b0dde47f58ca48
+  zh: d4ba3a6cf1228578
 /agent-note-host-owned-scheduled-messages/problem:
   en: 2c774d05ae75784f
   zh: 619ba7f281b13233
 /agent-note-host-owned-scheduled-messages/decision:
-  en: 1210b3975fd26bb3
-  zh: 3322e6d0aa63fdb0
+  en: 20dcfc8e9c44cde7
+  zh: d9609e41eb4e9bd9
 /agent-note-host-owned-scheduled-messages/alternatives-considered:
   en: 21d7ec9a9ff3cbf2
   zh: 93d03b8b3012aa7e
 /agent-note-host-owned-scheduled-messages/consequences:
-  en: 3ae0cd93ed95431e
-  zh: 25a0a2bc25863651
+  en: ce4ef02663cd485c
+  zh: ad8ae567c3bab8e0

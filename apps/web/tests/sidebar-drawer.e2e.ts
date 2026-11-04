@@ -236,6 +236,9 @@ it('overlays the conversation and closes after navigation without losing its sid
       const opener = page.getByRole('button', { name: 'Open sidebar', exact: true })
       await opener.waitFor()
       const frame = page.locator('[data-sidebar-drawer]')
+      expect(await page.locator('[data-shell-leading]').getByRole('button').count()).toBe(1)
+      expect(await frame.evaluate(el => getComputedStyle(el).getPropertyValue('--dsh-frame-leading-clearance').trim()))
+        .toBe('48px')
       await expect.poll(() => frame.getAttribute('data-sidebar-collapsed')).toBe('true')
       const sidebar = page.locator('[data-slot="sidebar"]')
       const original = await sidebar.elementHandle()
@@ -271,6 +274,33 @@ it('overlays the conversation and closes after navigation without losing its sid
       await assertMaskFade(frame, 1, 0)
       await drawer.waitFor({ state: 'hidden' })
       await page.getByRole('navigation', { name: 'Session hierarchy' }).getByText('Drawer navigation', { exact: true }).waitFor()
+      const chatTab = page.getByRole('tab', { name: 'Chat', exact: true })
+      const tabInset = () => chatTab.evaluate((tab) => {
+        const label = document.createRange()
+        label.selectNodeContents(tab)
+        return label.getBoundingClientRect().left - tab.closest('header')!.getBoundingClientRect().left
+      })
+      expect(await tabInset()).toBeCloseTo(20, 1)
+      // Restore CSS-probe markers in the same synchronous task, before rendering.
+      const desktopInsets = await chatTab.evaluate((tab) => {
+        const root = document.documentElement
+        try {
+          return ['darwin', 'win32'].map((platform) => {
+            root.dataset.platform = platform
+            const label = document.createRange()
+            label.selectNodeContents(tab)
+            return label.getBoundingClientRect().left - tab.closest('header')!.getBoundingClientRect().left
+          })
+        } finally {
+          delete root.dataset.platform
+        }
+      })
+      for (const inset of desktopInsets) expect(inset).toBeCloseTo(28, 1)
+      await page.setViewportSize({ width: 768, height: 844 })
+      await frame.waitFor({ state: 'detached' })
+      expect(await tabInset()).toBeCloseTo(28, 1)
+      await page.setViewportSize({ width: 390, height: 844 })
+      await frame.waitFor()
       await opener.click()
       const selectedRow = drawer.getByRole('treeitem', { selected: true })
       const more = selectedRow.getByRole('button', { name: 'Session actions for Drawer navigation', exact: true })
@@ -283,14 +313,52 @@ it('overlays the conversation and closes after navigation without losing its sid
       await menu.getByRole('menuitem', { name: 'Archive session', exact: true }).waitFor()
       await menu.getByRole('menuitem', { name: 'Pin session', exact: true }).tap()
       await menu.waitFor({ state: 'hidden' })
-      await selectedRow.getByLabel('Pinned', { exact: true }).waitFor()
+      const unpin = selectedRow.getByRole('button', { name: 'Unpin session', exact: true })
+      await expect.poll(() => selectedRow.getByLabel('Pinned', { exact: true }).count()).toBe(1)
+      expect(await unpin.isVisible()).toBe(true)
+      const timestamp = selectedRow.getByText(/^(?:now|\d+min)$/, { exact: true })
+      expect(await timestamp.count()).toBe(1)
+      expect(await timestamp.textContent()).toMatch(/^(?:now|\d+min)$/)
+      expect(await timestamp.isVisible()).toBe(false)
+      const unpinBox = (await unpin.boundingBox())!
+      const moreBox = (await more.boundingBox())!
+      const folderMoreBox = (await workspaceButtons.nth(0).boundingBox())!
+      const folderNewBox = (await workspaceButtons.nth(1).boundingBox())!
+      expect(moreBox.x - unpinBox.x).toBeCloseTo(folderNewBox.x - folderMoreBox.x, 1)
+      await unpin.tap()
+      await expect.poll(() => selectedRow.getByLabel('Pinned', { exact: true }).count()).toBe(0)
+      expect(await drawer.isVisible()).toBe(true)
+      await more.tap()
+      await menu.getByRole('menuitem', { name: 'Pin session', exact: true }).tap()
+      await menu.waitFor({ state: 'hidden' })
+      await unpin.waitFor()
       await more.tap()
       await menu.getByRole('menuitem', { name: 'Unpin session', exact: true }).tap()
       await menu.waitFor({ state: 'hidden' })
       await expect.poll(() => selectedRow.getByLabel('Pinned', { exact: true }).count()).toBe(0)
       await drawer.getByRole('button', { name: 'Plugins', exact: true }).tap()
       await drawer.waitFor({ state: 'hidden' })
-      await page.locator('[data-plugin-panel]').waitFor()
+      const pluginPanel = page.locator('[data-plugin-panel]')
+      await pluginPanel.waitFor()
+      for (const width of [390, 767, 768]) {
+        await page.setViewportSize({ width, height: 844 })
+        expect(await pluginPanel.evaluate(el => Number.parseFloat(getComputedStyle(el).paddingLeft)))
+          .toBeCloseTo(width < 768 ? 20 : width * 0.04, 1)
+      }
+      await page.setViewportSize({ width: 390, height: 844 })
+      await frame.waitFor()
+      await opener.click()
+      await drawer.getByRole('button', { name: 'Automation tasks', exact: true }).tap()
+      await drawer.waitFor({ state: 'hidden' })
+      const tasksContent = page.getByTestId('task-manager-page').locator('[class*="pageContent"]')
+      await tasksContent.waitFor()
+      for (const width of [390, 767, 768]) {
+        await page.setViewportSize({ width, height: 844 })
+        expect(await tasksContent.evaluate(el => Number.parseFloat(getComputedStyle(el).paddingLeft)))
+          .toBeCloseTo(width < 768 ? 20 : width * 0.04, 1)
+      }
+      await page.setViewportSize({ width: 390, height: 844 })
+      await frame.waitFor()
       await opener.click()
       await drawer.waitFor()
       await page.touchscreen.tap(370, 420)
@@ -526,7 +594,9 @@ it('overlays the conversation and closes after navigation without losing its sid
         'fold transitions: sidebar controls follow the divider in both directions; reduced motion changes width without animation',
         'drawer mask: opacity transitions from 0 to 1 on open and 1 to 0 on close',
         'reduced motion: drawer and mask settle without transitions',
-        'touch selected Session: More remains visible; archive and pin stay in its menu; pin marker retained',
+        'Web header: only the sidebar opener remains, with 48px leading clearance',
+        'below 768px: plugin and automation pages use 20px insets; Web view tabs align at 20px, while Desktop and wider Web tabs retain 28px',
+        'touch selected Session: More remains visible; update time is hidden; pinned rows offer Unpin before More with Workspace action spacing',
         'touch Workspace: actions appear only while expanded, including after folding the focused row',
         'fine pointer: folded Workspace actions remain available on hover',
         'fine pointer: selected Session actions stay hidden until hover, including at 390px',

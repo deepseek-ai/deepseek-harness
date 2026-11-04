@@ -20,6 +20,8 @@ The audit runs only during initial application boot. Later config HMR remains be
 
 This policy governs [Web host boot](../../../../packages/boot/app-boot/README.md), including its [client plugin roster](2026-07-23-client-plugin-loading-model.md). [Per-session presets](2026-09-18-declarative-agent-presets.md) own a separate strict subtree audit.
 
+The browser boot audit applies the same policy to the client plugin tree with its own global list in [`boot-client.ts`](../../../../packages/client/web/src/boot-client.ts): the module system, Session control, the renderer, the application frame, the Session view, and its sidebar. Browser entries are named by package, so the list holds package names; a name absent from the boot graph has no effect, and neither list is derived from the other. The list is the minimum fatal set: an entry that a listed entry waits on blocks startup too. Feature plugins, including credential masking, stay optional. A failed entry reports its activation error. Optional failures appear in one console warning, and in Settings → Plugins → Plugin list only after a later graph synchronization reconciles them. Renaming a listed package requires updating the list and its tests.
+
 ## Alternatives considered
 
 - **Add transactional and best-effort modes to vendored Loader.** Rejected because strictness belongs to the application or resource owner, while a Loader group contains unrelated plugins. A mode would also expand the vendor patch and leave callers to select a policy at every group.
@@ -35,6 +37,8 @@ The compact terminal report keeps the failing plugins visible; a separate file r
 ## Testing
 
 App-boot unit tests cover absent and disabled required ids, optional import failure, config evaluation failure, synchronous and asynchronous `apply()` failure, pending dependencies, and required failure teardown. Unit expectations pin diagnostic grouping, preservation of original error objects and import logs, exporter cleanup, complete diagnostic values, private file creation, concurrent report names, and failed-write fallback. The built Web-profile acceptance asserts a single port-conflict stack without Node wrapper output, verifies the saved diagnostic file and its stderr fallback, serves the full UI with optional failures and exits nonzero without readiness when the required HTTP port is occupied or `modules` or `connection` cannot activate.
+
+Browser audit unit tests (`boot-client.client.spec.ts`, `boot.client.spec.ts`) cover required and optional import, creation, activation, and pending failures, carrier presentation, and required names absent from the boot graph. Test carriers are stricter than the product: `TestClient` requires every roster entry to activate unless a case passes `allowInactiveEntries`, and the browser e2e lanes treat a `web boot: warning` as a failure with no opt-out.
 
 The [Web process matrix](../../../../apps/cli/tests/profiles/web/tests/web-failure-matrix.expected.e2e.ts) independently exercises optional and required failures at startup and after native patch-file edits. Authenticated HTTP requests and plugin lifecycle files distinguish a usable application from a surviving process. These keyless process checks complement the [controlled-delivery unit tests](../../../../packages/boot/app-boot/tests/user-patches.spec.ts): unit tests isolate reconciliation failures, while the process tests also require the shipped launcher, native watcher, and bounded shutdown to work together.
 

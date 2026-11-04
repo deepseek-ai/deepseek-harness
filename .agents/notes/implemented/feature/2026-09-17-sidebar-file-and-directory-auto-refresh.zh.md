@@ -60,10 +60,11 @@ Sidebar 的 Document Preview 和 Files 面板都需要反映磁盘上的最新�
 | 包内 `ResourceGroup` | [resource-group.ts](../../../../packages/client/ui-sidebar-documentpreview/src/client/document/resource-group.ts) | 通过现有 `resources.source(address)` 观察成员；`add` 加入资源，`set` 更新完整成员列表，`close` 释放全部成员，不改变通用 Resource 服务 |
 | `DocumentBodyOwner`、`HtmlBody`、`createReadHtmlRelative` | [渲染器输入](../../../../packages/client/ui-sidebar-documentpreview/src/client/document/contract.ts)、[HTML body](../../../../packages/client/ui-sidebar-documentpreview/src/client/html/HtmlBody.tsx)、[关联文件读取](../../../../packages/client/ui-sidebar-documentpreview/src/client/html/read-relative.ts) | 渲染器通过 `addResource` 声明读取到的成员，通过 `setResources` 提交本次依赖列表；HTML 在每次读取返回后按 Host 报告的路径加入 CSS／JS 资源，解析结束后释放不再引用的成员 |
 | 各文档渲染器 | [DocumentContent](../../../../packages/client/ui-sidebar-documentpreview/src/client/document/contract.ts) 及同包各渲染器目录 | 不接 watch；继续消费文本、字节或 renderer revision；`failed()` 结束渲染器加载但不记录成功版本。检查刷新时取消旧任务、释放旧对象及保留现有视图偏好 |
-| `filesFace`、`FilesInjected` | [Files face](../../../../packages/client/ui-sidebar-files/src/client/face.ts) | 继续作为已有业务入口，直接持有各 Tab 根节点；绑定目录读取和变化流，转发展开、折叠、刷新及自动刷新开关，不新增 `FilesController` |
+| `filesFace`、`FilesInjected` | [Files face](../../../../packages/client/ui-sidebar-files/src/client/face.ts) | 继续作为已有业务入口，在导航栏绘制分栏目录树期间直接持有各分栏的根节点（[按分栏保存状态](../architecture/2026-10-20-workspace-tree-state-per-pane.zh.md)）；绑定目录读取和变化流，转发展开、折叠、刷新及自动刷新开关，不新增 `FilesController` |
 | 包内 `DirectoryNode` | [directory-node.ts](../../../../packages/client/ui-sidebar-files/src/client/directory-node.ts) | 表示一个已打开的目录，拥有本目录变化流、读取状态和已打开子节点；负责局部刷新、展开、递归关闭，以及向子节点传递自动刷新状态；`setExpanded` 按最新展开偏好更新待恢复节点 |
-| `createFilesStore`、`FilesTabState`、`LevelState` | [Files store](../../../../packages/client/ui-sidebar-files/src/client/store.ts) | 保留展开、滚动和目录显示数据；区分首次加载与已有内容上的刷新，避免每次后台重读都把子树卸载；不保存 watcher 或 AbortController |
-| `FilesBody`、`Level`、`Entry` | [FilesBody.tsx](../../../../packages/client/ui-sidebar-files/src/client/FilesBody.tsx) | 将展开、折叠、刷新和面板卸载交给注入回调；按节点展示结果渲染，不扫描整棵树生成监听集合，展示仍只读已有框架钩子与存储 |
+| `createFilesStore`、`FilesPaneState`、`FilesTreeState`、`LevelState` | [Files store](../../../../packages/client/ui-sidebar-files/src/client/store.ts) | 保留展开和目录显示数据；区分首次加载与已有内容上的刷新，避免每次后台重读都把子树卸载；不保存 watcher 或 AbortController |
+| `FileNavigator` | [FileNavigator.tsx](../../../../packages/client/ui-sidebar-files/src/client/FileNavigator.tsx)、[workspace-tree.ts](../../../../packages/client/ui-sidebar-files/src/client/workspace-tree.ts) | 通过框架钩子读取各分栏状态；将已列出的层级转换为条目与目录状态；将展开、折叠和绘制生命周期交给注入的 Files face，由它负责列出目录、刷新与监听 |
+| `FileTree` | [FileTree.tsx](../../../../packages/client/ui-sidebar-files/src/client/FileTree.tsx) | 根据属性绘制条目、目录状态与展开状态，通过 `onToggle` 和 `onOpen` 报告行操作。root 作用域的 `sidebar.files.tree` Factory 通过框架席位读取本地化文案与局部 `accessory` 组件，不持有目录列表或监听 |
 | Files 注册入口 | [Files client/index.ts](../../../../packages/client/ui-sidebar-files/src/client/index.ts) | 给现有 `filesFace` 增加目录变化流回调；异步副作用留在注入实现，不引入另一个功能插件的运行时导出 |
 
 ## 监听接口与事件内容
@@ -176,13 +177,14 @@ Document Preview 和 Files 各自保留原 reload 按钮。独立自动刷新开
 
 ```text
 Files.open
-  → FilesBody → Session.cwd + Tab
-  → filesFace.start → DirectoryNode.open
+  → FileNavigator → Session.cwd + pane
+  → filesFace.hold → DirectoryNode.open
   → changes(sessionId, path)
   → Host.watch(depth: 0) → ready
   → DirectoryNode → list(sessionId, path)
-  → createFilesStore.levels[path]
-  → Level / Entry
+  → createFilesStore.byPane[paneId].tree.levels[path]
+  → FileNavigator → workspace-tree.ts: workspaceEntries / workspaceDirectories
+  → renderFactorySlot('sidebar.files.tree', input) → Level / Entry
 
 Entry.expand
   → filesFace.toggle
@@ -204,7 +206,7 @@ Process → create / remove / rename
 
 ## 目录节点树与生命周期
 
-Files 的运行时对象本身就是一棵按需打开的目录树，不先建立整棵 Workspace 树，也不另算一个扁平的 watcher 集合。现有 `filesFace` 持有各 Tab 根节点，读取、监听和释放逐层交给 `DirectoryNode`，不另抽控制器类。
+Files 的运行时对象本身就是一棵按需打开的目录树，不先建立整棵 Workspace 树，也不另算一个扁平的 watcher 集合。现有 `filesFace` 持有各分栏的根节点，读取、监听和释放逐层交给 `DirectoryNode`，不另抽控制器类。
 
 | 节点职责 | 具体行为 |
 |---|---|
@@ -239,14 +241,14 @@ workspace/                  watch
 | 首次打开 | 打开文件 Resource 监听并读取正文 | 打开根节点，由根节点建立监听并读取列表 |
 | 展开子目录 | 无影响 | 父节点打开对应子节点；子节点监听并读取直接子项，按偏好逐层恢复仍存在的后代 |
 | 折叠子目录 | 已打开的文件预览继续监听 | 释放该目录及其当前不可见后代的监听；可保留展开偏好和显示缓存 |
-| 切走 Tab 或面板卸载 | Tab pin 继续持有文件元数据流；正文组件不在时不主动重读，切回来按待处理 Resource 变化与开关状态补刷新 | 此版沿用 Tab 生命周期，保留已展开目录节点和监听；不另外引入面板显隐生命周期 |
+| 切走 Tab 或隐藏目录树 | Tab pin 继续持有文件元数据流；正文组件不在时不主动重读，切回来按待处理 Resource 变化与开关状态补刷新 | 在分栏的文件 tab 之间切换时保留已展开目录节点和监听，因为下一个 tab 在同一次提交中绘制目录树；隐藏目录树或显示不带目录树的 tab 时关闭它们，存储保留展开状态与已显示的层级，下一次绘制时就地重新列出 |
 | 手动刷新 | 重用当前预览 reload，不重建整套 Resource | 从根节点递归刷新已打开子节点，不进入折叠目录，也不重建全部 watcher |
-| 关闭最后一个持有者 | Resource abort，文件流结束，Host 等待 watcher 关闭 | Tab 关闭时终止全部目录流、取消读取并删除 Tab 状态 |
+| 关闭最后一个持有者 | Resource abort，文件流结束，Host 等待 watcher 关闭 | 分栏中没有挂载的导航栏、也没有最近一次在那里绘制导航栏的打开 tab 时，终止全部目录流、取消读取并删除该分栏的状态 |
 | 连接恢复 | 新流 ready 后重新 stat，即使断线期间没有可回放事件也能发现变化 | 新流 ready 后重新 list 所有仍需观察的目录 |
 
-Files 监听跟随 Tab 生命周期；折叠关闭对应子树，关闭 Tab 则释放根节点与整棵活动树。暂时隐藏面板不额外拆除和重建节点，这使改动集中在现有入口和目录对象。存储保留展开偏好，节点只在重新展开时用这份偏好逐层恢复，不维护第二份全局展开集合。
+Files 监听跟随各分栏已绘制的目录树；折叠关闭对应子树，分栏最后一次绘制结束时释放根节点与整棵活动树，没有打开的 tab 最近一次在该分栏绘制目录树时，还会删除其状态。存储保留展开偏好与已显示的层级，节点只在重新展开时用这份偏好逐层恢复，不维护第二份全局展开集合。
 
-同一个完整文件 Resource 地址的共享继续由 `ResourceRegistry` 完成。目录节点的父子所有权保证一个 Tab 内同一分支不会重复打开；第一版不增加跨 Session、跨窗口或路径别名的全局 watcher 去重系统。目录下的普通文件项不各自订阅文件 watch，只有真正打开为预览 Resource 的文件才取得独立文件监听。
+同一个完整文件 Resource 地址的共享继续由 `ResourceRegistry` 完成。目录节点的父子所有权保证一个分栏内同一分支不会重复打开；第一版不增加跨 Session、跨窗口或路径别名的全局 watcher 去重系统。目录下的普通文件项不各自订阅文件 watch，只有真正打开为预览 Resource 的文件才取得独立文件监听。
 
 ## 用户可见动线
 
@@ -281,8 +283,8 @@ Files 监听跟随 Tab 生命周期；折叠关闭对应子树，关闭 Tab 则�
 - 事件表示“目标可能变化”，不是一次用户操作的精确回放。Chokidar 的重复通知和连续写入可以合并；文件按版本去重，目录按待刷新状态合并。
 - 同一目录最多有一次有效 list 在途；在途或读取收尾期间再次失效，只记录需要补读，随后读取最新状态，不累计任意长度的刷新任务队列。
 - 文件自动刷新复用读取代次和 renderer revision。连续通知不能让旧请求覆盖新内容，也不能因同一已处理版本而无限 reload。
-- 目录后台刷新保留当前列表，不另存没有显示用途的 `refreshing` 标记；只有没有可显示列表时才进入 `loading`，避免子树闪烁和监听反复重建。
-- 目录折叠、删除或 Tab 关闭后，已取消读取的晚到结果不得重新创建状态或恢复监听。即使生成器停在已产出的帧上，取消也会关闭 Host watcher；流与插件拆除等待关闭完成。
+- 目录后台刷新保留当前列表并标记 `refreshing`；显示不受该标记影响，定位文件据此等待目录重新列出；只有没有可显示列表时才进入 `loading`，避免子树闪烁和监听反复重建。
+- 目录折叠、删除、绘制结束或分栏状态被删除后，已取消读取的晚到结果不得重新创建状态或恢复监听。即使生成器停在已产出的帧上，取消也会关闭 Host watcher；流与插件拆除等待关闭完成。
 - 父目录保持存在时，文件短暂消失不结束监听；正常文件变化与监听自身失败分别处理。同路径文件监听覆盖原子保存与删除重建。
 - 原有文件读取并非事务快照，stat 与正文读取之间仍可能发生写入；后续通知触发刷新，自动刷新不保证每次读取都获得原子快照。
 

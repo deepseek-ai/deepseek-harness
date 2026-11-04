@@ -388,16 +388,18 @@
 /* Expanded facts, one row each: an icon under the glyph, the label, the value,
    and a chevron on a row that opens something. */
 .rows {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  display: grid;
+  /* Edge tracks include each row's padding; labels retain their Chinese width and grow for longer translations. */
+  grid-template-columns: 24px minmax(32px, max-content) minmax(0, 1fr) 22px;
+  gap: 2px 10px;
   padding: 4px 6px 6px;
   border-top: 0.5px solid var(--dsw-alias-border-l2);
 }
 
 .row {
   display: grid;
-  grid-template-columns: 16px 32px minmax(0, 1fr) 12px;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: center;
   column-gap: 10px;
   box-sizing: border-box;
@@ -449,6 +451,7 @@
   align-items: center;
   gap: 6px;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .rowValue[data-tone='error'] {
@@ -469,7 +472,9 @@
 
 /* The checks menu anchors to the whole row. */
 .checksAnchor {
-  display: block;
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
 }
 
 .checksList {
@@ -522,6 +527,34 @@
   padding: 0 14px;
   font-size: 13px;
   line-height: 20px;
+}
+
+/*
+ * The merge action takes the blue button fill, moved toward the label color so its 13px label keeps 4.5:1 contrast
+ * in both themes. The doubled class outranks the shared primary fill in any stylesheet order.
+ */
+.primaryAction.mergeAction {
+  gap: 6px;
+  padding: 0 10px 0 14px;
+  background: color-mix(in srgb, var(--dsw-alias-button-info-fill) 92%, var(--dsw-alias-label-primary));
+  color: var(--dsw-alias-label-primary-foreground);
+}
+
+@media (hover: hover) {
+  .primaryAction.mergeAction:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--dsw-alias-button-info-fill) 85%, var(--dsw-alias-label-primary));
+  }
+}
+
+/* A solid caret that points down, and up while the menu is open. */
+.mergeCaret {
+  flex: none;
+  transform: rotate(90deg);
+  transition: transform 120ms ease;
+}
+
+.mergeCaretOpen {
+  transform: rotate(-90deg);
 }
 
 /* A merge method row: its name with the note on what it does below. */

@@ -606,6 +606,7 @@ describe('dsh web keyless CLI smoke', () => {
   it.each(['native', 'ptc'] as const)('selects the %s executor through profile overlays and ignores the retired environment selector', async (mode) => {
     requireDist()
     const workspace = mkdtempSync(join(tmpdir(), 'dsh-web-ptc-'))
+    const promptMarker = `WEB_EXECUTOR_${mode}_${randomUUID()}`
 
     interface PtcModeProviderRequest {
       system?: string
@@ -621,7 +622,11 @@ describe('dsh web keyless CLI smoke', () => {
       request.setEncoding('utf8')
       request.on('data', (chunk: string) => { body += chunk })
       request.on('end', () => {
-        resolveProviderRequest(JSON.parse(body) as PtcModeProviderRequest)
+        const parsed = JSON.parse(body) as PtcModeProviderRequest
+        const messages = JSON.stringify(parsed.messages ?? [])
+        if (messages.includes(promptMarker) && !messages.includes(TITLE_PROMPT_MARKER)) {
+          resolveProviderRequest(parsed)
+        }
         response.writeHead(200, { 'content-type': 'text/event-stream' })
         response.end(messagesResponse('done'))
       })
@@ -653,11 +658,19 @@ describe('dsh web keyless CLI smoke', () => {
     try {
       const baseUrl = await waitForReadyLine(child)
       const created = await remoteRpc<{ sessionId: string }>(baseUrl, 'session/create', { request: {} })
+      // Title requests share the provider; exercise auxiliary-first arrival explicitly.
+      await fetch(`http://127.0.0.1:${address.port}`, {
+        method: 'POST',
+        body: JSON.stringify({ messages: [{
+          role: 'user',
+          content: [{ type: 'text', text: `${TITLE_PROMPT_MARKER}\n${JSON.stringify([promptMarker])}` }],
+        }] }),
+      }).then(response => response.text())
       await remoteRpc<{ accepted: true }>(baseUrl, 'session/prompt', { request: {
         requestId: randomUUID(),
         sessionId: created.sessionId,
         mode: 'queue',
-        content: [{ type: 'text', text: 'go' }],
+        content: [{ type: 'text', text: promptMarker }],
       } })
       const captured = await Promise.race([
         providerRequest,
@@ -693,6 +706,8 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY || notReady.length > 0)('web smoke
   let browser: Browser
   let page: Page
   const pageErrors: string[] = []
+  // The product boot only warns about inactive optional entries; this lane requires the whole composition.
+  const bootWarnings: string[] = []
 
   beforeAll(async () => {
     requireDist()
@@ -729,6 +744,9 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY || notReady.length > 0)('web smoke
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
     page.on('pageerror', e => pageErrors.push(String(e)))
+    page.on('console', (message) => {
+      if (message.text().startsWith('web boot: warning')) bootWarnings.push(message.text())
+    })
     await page.goto(baseUrl, { waitUntil: 'load' })
   }, 120_000)
 
@@ -747,6 +765,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY || notReady.length > 0)('web smoke
     onTestFailed(() => saveFailureShot(page, 'w5-cold-start'))
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
     expect(await page.locator('text=Failed to load plugins').count()).toBe(0)
+    expect(bootWarnings).toEqual([])
     const template = await page.locator('[class*="frame"]').evaluate(el => getComputedStyle(el).gridTemplateColumns)
     expect(template.split(' ').length).toBe(3)
     await screen(page, '01-cold-start')

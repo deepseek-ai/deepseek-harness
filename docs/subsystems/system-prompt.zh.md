@@ -23,6 +23,8 @@ interface AssembleContext {
 }
 ```
 
+`TOOL_APPLY_PATCH` 的顺序为 1350，位于 `TOOL_EDIT`（1300）与 `TOOL_GLOB`（1400）之间。
+
 ## 工具提供方结果
 
 `ToolProviderResult.schemas` 是当前组装中对模型可见的工具 schema 集合。`knownNames` 是提供方在限制前的名称全集，用于区分「配置名拼写错误」与「已知工具在此作用域中被有意隐藏」。

@@ -1,7 +1,7 @@
 .trigger {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   min-height: 28px;
   padding: 3px 2px;
   border: 0;
@@ -23,25 +23,64 @@
   }
 }
 
-.trigger svg {
-  transition: transform 120ms ease;
-}
-
-.triggerOpen {
-  transform: rotate(180deg);
-}
-
-.triggerDot {
+.activitySlot {
+  display: inline-flex;
   flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
 }
 
-.count {
-  margin: 0 5px;
+.trigger .compactIcon {
+  display: none;
 }
 
-/* Portaled and fixed in the viewport with coordinates supplied inline from the
-   trigger rect; the z-index layers above the right sidebar (at most 40) and
-   below modal overlays (1000). */
+@container (max-width: 460px) {
+  .trigger .compactIcon {
+    display: block;
+  }
+
+  .trigger .textModeActivity {
+    display: none;
+  }
+
+  .trigger .count {
+    display: none;
+  }
+
+  .trigger {
+    box-sizing: border-box;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    justify-content: center;
+    color: var(--dsw-alias-label-secondary);
+  }
+
+  .trigger .activitySlot,
+  .trigger .activitySlot > svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .trigger:focus-visible {
+    color: var(--dsw-alias-label-secondary);
+  }
+
+  .trigger:active {
+    background: var(--dsw-alias-interactive-bg-active);
+  }
+
+  @media (hover: hover) {
+    .trigger:hover {
+      color: var(--dsw-alias-label-secondary);
+      background: var(--dsw-alias-interactive-bg-hover);
+    }
+  }
+}
+
+/* Portaled above the right sidebar (at most 40) and below modal overlays (1000). */
 .menu {
   position: fixed;
   z-index: 100;
@@ -50,12 +89,23 @@
   flex-direction: column;
   width: 500px;
   max-width: min(560px, calc(100vw - 32px));
-  max-height: min(480px, calc(100vh - 140px));
+  max-height: min(480px, calc(100dvh - 140px));
   overflow: hidden;
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   box-shadow: var(--dsw-elevation-prominent);
+  position-area: none;
+  top: max(12px, calc(anchor(bottom) + 5px));
+  bottom: 12px;
+  left: max(12px, anchor(left));
+  right: 12px;
+  position-try-fallbacks: --dsh-jobs-window, --dsh-jobs-opposite, --dsh-jobs-wide-opposite, --dsh-jobs-tall, --dsh-jobs-viewport;
+  align-self: start;
+  justify-self: start;
+  height: fit-content;
+  min-height: 0;
+  margin: 0;
 }
 
 .menuBody {
@@ -404,4 +454,49 @@
 
 .noticeError {
   color: var(--dsw-alias-state-error-primary);
+}
+
+@position-try --dsh-jobs-window {
+  position-area: none;
+  top: max(12px, calc(anchor(bottom) + 5px));
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  margin: 0;
+  align-self: safe start;
+  justify-self: safe end;
+}
+
+@position-try --dsh-jobs-opposite {
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: max(12px, calc(anchor(top) + 5px));
+  align-self: end;
+}
+
+@position-try --dsh-jobs-wide-opposite {
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: max(12px, calc(anchor(top) + 5px));
+  left: 12px;
+  right: 12px;
+  align-self: end;
+  justify-self: safe end;
+}
+
+@position-try --dsh-jobs-tall {
+  position-area: none;
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: 12px;
+  left: max(12px, anchor(left));
+  right: 12px;
+  margin: 0;
+  align-self: safe start;
+  justify-self: start;
+}
+
+@position-try --dsh-jobs-viewport {
+  position-area: none;
+  inset: max(12px, var(--dsh-frame-overlay-top, 12px)) 12px 12px;
+  margin: 0;
+  align-self: safe start;
+  justify-self: safe end;
 }

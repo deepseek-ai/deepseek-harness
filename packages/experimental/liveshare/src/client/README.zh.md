@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-viewer 页面只提供调用方 Peer 访问快照（`remoteAccess/follow`）包含的写操作；该快照由 owner 的 Gateway 经 Liveshare share-viewer policy 回答。各界面读取各自的访问钩子。Session 的快照不含 `session/prompt` 与 `session/cancel` 时，composer 隐藏发送与停止。轮次末尾的分支操作与 viewer 自己的分支行只在快照含 `session/fork` 时出现。会话与工作区管理条目对快照不含的端点自行隐藏。附件接收跟随 `fileUploads/upload`；分享向读者提供的每条会话都会授予它，档位与分叉开关都不决定它。Host 仍对每次调用强制鉴权。
+viewer 页面只提供调用方 Peer 访问快照（`remoteAccess/follow`）包含的写操作；该快照由 owner 的 Gateway 经 Liveshare share-viewer policy 回答。各界面读取各自的访问钩子。Session 的快照不含 `session/prompt` 与 `session/cancel` 时，composer 隐藏发送与停止。轮次末尾的分支操作与 共享 Session 菜单的分支操作只在快照含 `session/fork` 时出现。会话与工作区管理条目对快照不含的端点自行隐藏。附件接收跟随 `fileUploads/upload`；分享向读者提供的每条会话都会授予它，档位与分叉开关都不决定它。Host 仍对每次调用强制鉴权。
 
 分享自身的回答（`/__liveshare/context`）给出页面的 mode 与原因。快照不允许向本页展示、创建或切换到的 Session 发送提示时，该 Session 的 composer 带一个 block，说明页面级原因：无法确认的分享，已停止、过期或被撤销的分享，分支上的只读 mode，或通用只读说明。快照不带每个 Session 的拒绝码，因此不说明某个 Session 自己的拒绝原因。`forkLineage` 描述该行，不授权发送提示或停止。
 

@@ -50,8 +50,6 @@ describe('release families', () => {
       .filter(member => member.directory.startsWith('packages/experimental/'))
       .map(member => member.name)).toEqual([
       '@deepseek-ai/dsh-action-cards',
-      '@deepseek-ai/dsh-experimental-agent-team-profile',
-      '@deepseek-ai/dsh-experimental-agent-team',
       '@deepseek-ai/dsh-experimental-api-speech-to-text',
       '@deepseek-ai/dsh-experimental-auto-review',
       '@deepseek-ai/dsh-experimental-badge-skill-bundle',
@@ -61,7 +59,6 @@ describe('release families', () => {
       '@deepseek-ai/dsh-experimental-browser-use-stagehand-native',
       '@deepseek-ai/dsh-experimental-claude-code-mods',
       '@deepseek-ai/dsh-client-ui-action-cards',
-      '@deepseek-ai/dsh-experimental-client-ui-agent-team',
       '@deepseek-ai/dsh-experimental-client-ui-claude-code-mods',
       '@deepseek-ai/dsh-experimental-client-ui-cot-translation',
       '@deepseek-ai/dsh-client-ui-creation-recommendations',
@@ -101,7 +98,6 @@ describe('release families', () => {
       '@deepseek-ai/dsh-experimental-speech-to-text',
       '@deepseek-ai/dsh-experimental-subagent-oar',
       '@deepseek-ai/dsh-experimental-terminal-bundle',
-      '@deepseek-ai/dsh-experimental-tool-agent-team',
       '@deepseek-ai/dsh-tool-ralph',
       '@deepseek-ai/dsh-tool-session-query',
       '@deepseek-ai/dsh-experimental-tool-subagent-oar',
@@ -264,7 +260,7 @@ describe('release families', () => {
     const dsh = member('apps/cli', '@deepseek-ai/dsh')
     const providers = ON_DEMAND_BUNDLES.map(name => member(`packages/subagent/${name}`, name))
     const plan = releaseFamily('dsh').publishOrder([dsh, ...providers])
-    expect(plan.order.map(entry => entry.name)).toEqual([...ON_DEMAND_BUNDLES, dsh.name])
+    expect(plan.order.map(entry => entry.name)).toEqual([...ON_DEMAND_BUNDLES.toSorted(), dsh.name])
     expect(dsh.manifest).toEqual({})
     expect(plan.droppedPeerEdges).toEqual([])
   })
@@ -280,8 +276,8 @@ describe('release families', () => {
       peerDependencies: { '@deepseek-ai/dsh': 'workspace:*' },
     }))
     const plan = releaseFamily('dsh').publishOrder([dsh, ...providers])
-    expect(plan.order.map(entry => entry.name)).toEqual([...ON_DEMAND_BUNDLES, dsh.name])
-    expect(plan.droppedPeerEdges).toEqual(ON_DEMAND_BUNDLES.map(name => ({ consumer: name, peer: dsh.name })))
+    expect(plan.order.map(entry => entry.name)).toEqual([...ON_DEMAND_BUNDLES.toSorted(), dsh.name])
+    expect(plan.droppedPeerEdges).toEqual(ON_DEMAND_BUNDLES.toSorted().map(name => ({ consumer: name, peer: dsh.name })))
   })
 
   it.each(['dependencies', 'optionalDependencies', 'peerDependencies'])(

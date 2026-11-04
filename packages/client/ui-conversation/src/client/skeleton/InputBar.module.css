@@ -19,6 +19,15 @@
   padding-top: 4px;
 }
 
+/* The docked composer reserves one statistics row before its readings
+   arrive, so the projections landing never change the composer height. The
+   row height matches the readings: a 20px secondary line plus 1px block
+   padding (ui-chat StatsPills `.pill`, ContextMeter `.trigger`). A minimum,
+   not a fixed height, so taller readings still size the row. */
+.root:not(.hero) > .dock {
+  min-height: calc(22px + var(--dsh-content-font-delta-secondary, 0px));
+}
+
 .hero .dock:empty {
   display: none;
 }
@@ -405,6 +414,11 @@
      keeps its original seat while the smaller chips sit lower. Transform, not
      margin, so flex centering math is untouched. */
   transform: translateY(-2px);
+}
+
+/* Solid artwork uses a smaller footprint than the thin send arrow. */
+.continueIcon {
+  transform: scale(1.5);
 }
 
 @media (hover: hover) {

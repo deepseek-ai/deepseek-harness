@@ -8,14 +8,48 @@ vi.mock('pdfjs-dist', () => ({}))
 vi.mock('pdfjs-dist/web/pdf_viewer.mjs', () => ({
   TextLayerBuilder: class {
     div = document.createElement('div')
-    constructor(options: unknown) { api.create(options) }
-    render = api.render
+    #onAppend: (div: HTMLDivElement) => void
+    constructor(options: { onAppend: (div: HTMLDivElement) => void }) {
+      api.create(options)
+      this.#onAppend = options.onAppend
+    }
+    // Like PDF.js, the builder hands its layer to onAppend only after the text is laid out.
+    render = async (params: unknown) => {
+      await api.render(params)
+      this.#onAppend(this.div)
+    }
     cancel = api.cancel
   },
 }))
 import { pdfTextRenderer } from '../src/client/pdf/text.ts'
 
-afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
+afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.clearAllMocks() })
+
+it('attaches the text layer only after rendering finishes', async () => {
+  vi.stubGlobal('ResizeObserver', class { observe = vi.fn(); disconnect = vi.fn() })
+  const rendered = Promise.withResolvers<undefined>()
+  api.render.mockReturnValueOnce(rendered.promise)
+  const host = document.createElement('div')
+  const task = pdfTextRenderer(host)({} as PDFPageProxy, { width: 400, scale: 1, userUnit: 1 } as PageViewport)
+  expect(host.childElementCount).toBe(0)
+  rendered.resolve(undefined)
+  await task.promise
+  expect(host.childElementCount).toBe(1)
+  task.cancel()
+})
+
+it('keeps a layer cancelled after its text finished out of the host', async () => {
+  vi.stubGlobal('ResizeObserver', class { observe = vi.fn(); disconnect = vi.fn() })
+  const rendered = Promise.withResolvers<undefined>()
+  api.render.mockReturnValueOnce(rendered.promise)
+  const host = document.createElement('div')
+  const task = pdfTextRenderer(host)({} as PDFPageProxy, { width: 400, scale: 1, userUnit: 1 } as PageViewport)
+  rendered.resolve(undefined)
+  task.cancel()
+  await task.promise
+  expect(host.childElementCount).toBe(0)
+  expect(api.cancel).toHaveBeenCalledTimes(2)
+})
 
 it('aligns selectable text to the displayed width and removes its observer and DOM on cancellation', async () => {
   let resize: ResizeObserverCallback | undefined
@@ -35,7 +69,7 @@ it('aligns selectable text to the displayed width and removes its observer and D
   const page = { streamTextContent: () => text } as PDFPageProxy
   const task = pdfTextRenderer(host)(page, viewport)
   await task.promise
-  expect(api.create).toHaveBeenCalledWith({ pdfPage: page })
+  expect(api.create).toHaveBeenCalledWith(expect.objectContaining({ pdfPage: page }))
   expect(api.render).toHaveBeenCalledWith({ viewport })
   expect(observe).toHaveBeenCalledWith(host)
   expect((host.firstElementChild as HTMLElement).style.scale).toBe('0.5')

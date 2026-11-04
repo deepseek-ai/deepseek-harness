@@ -21,6 +21,7 @@ import SessionStore, { SESSION_FORMAT_VERSION, SessionId, SessionLogOffset, Sess
 import type { Session, SessionEvent, SessionHeader, UserMessage } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
+import type { SessionProjectionSummaryExcluded } from '@deepseek-ai/dsh-session-projection/types'
 import SessionProjectionCache, { projectionCacheDomainSpec } from '@deepseek-ai/dsh-session-projection-cache'
 import { titleProjectionDefinition } from '@deepseek-ai/dsh-session-title'
 import Storage from '@deepseek-ai/dsh-storage'
@@ -43,6 +44,7 @@ let nextHarnessSession = 1
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {
     'test/last-user': { text: string } | null
+    'test/summary-excluded': SessionProjectionSummaryExcluded<number>
   }
 }
 
@@ -360,7 +362,7 @@ describe('session.history projections block', () => {
     await new Promise(resolve => setTimeout(resolve, 0))
     await expect(next).resolves.toMatchObject({
       done: false,
-      value: { type: 'projection', key: 'sessionListMetadata' },
+      value: { type: 'projection', changes: [{ key: 'sessionListMetadata' }] },
     })
     const extra = iterator.next()
     const quiet = Symbol('quiet')
@@ -415,11 +417,16 @@ describe('session.history projections block', () => {
       .toBe(false)
 
     seedMessages(session, 1)
-    const changed = await iterator.next()
-    expect(changed).toMatchObject({
-      done: false,
-      value: { type: 'projection', key: 'sessionListMetadata' },
-    })
+    let changed = await iterator.next()
+    while (!changed.done && changed.value.type === 'projection'
+      && !changed.value.changes.some(change => change.key === 'sessionListMetadata')) {
+      expect(changed.value.changes.map(change => change.key)).not.toContain('test/internal-count')
+      changed = await iterator.next()
+    }
+    if (changed.done || changed.value.type !== 'projection') throw new Error('control stream ended before its projection')
+    const keys = changed.value.changes.map(change => change.key)
+    expect(keys).toContain('sessionListMetadata')
+    expect(keys).not.toContain('test/internal-count')
     abort.abort()
     await iterator.return?.()
 
@@ -468,7 +475,7 @@ describe('session.history projections block', () => {
 })
 
 describe('session.list projections column', () => {
-  it('serves every already-materialized wire value from the live registry without folding', async () => {
+  it('serves every summary wire value from the live registry', async () => {
     const { ctx, session } = await harness(true)
     await ctx.sessionProjections.register(lastUserUnit())
     const gateway = await remote(ctx)
@@ -502,29 +509,39 @@ describe('session.list projections column', () => {
     expect(row?.projections?.values.agentPreset).toBe('minimal')
   })
 
-  it('omits an unmaterialized live projection instead of folding history for listing', async () => {
+  it('computes every summary key for a live row without computing summary-excluded units', async () => {
     const { ctx, session } = await harness(true)
     seedMessages(session, 1)
-    const unit = lastUserUnit()
-    const apply = vi.fn(unit.apply)
-    await ctx.sessionProjections.register({ ...unit, apply })
+    await ctx.sessionProjections.register(lastUserUnit())
+    const excludedApply = vi.fn((state: number) => state + 1)
+    await ctx.sessionProjections.register({
+      key: 'test/summary-excluded',
+      stateSchema: z.number().int().nonnegative(),
+      init: () => 0,
+      apply: excludedApply,
+      wire: { viewSchema: z.number().int().nonnegative(), view: state => state, summary: false },
+      stateVersion: 1,
+    })
 
     const response = await (await remote(ctx)).list(request({}))
     if (!response.ok) throw new Error('unreachable')
     const row = response.value.items.find(item => item.sessionId === session.id)
-    expect(row).toBeDefined()
-    expect('test/last-user' in (row?.projections?.values ?? {})).toBe(false)
-    expect(apply).not.toHaveBeenCalled()
+    expect(row?.projections?.values['test/last-user']).toEqual({ text: 'm0' })
+    expect(row?.projections?.asOfSeq).toBe(session.seq - 1)
+    expect('test/summary-excluded' in (row?.projections?.values ?? {})).toBe(false)
+    expect(excludedApply).not.toHaveBeenCalled()
   })
 
-  it('omits the column entirely when no registry is mounted', async () => {
+  it('carries list metadata and unavailable retry eligibility through registered summary keys', async () => {
     const { ctx, session } = await harness(false)
     seedMessages(session, 1)
     const response = await (await remote(ctx)).list(request({}))
     if (!response.ok) throw new Error('unreachable')
     const row = response.value.items.find(item => item.sessionId === session.id)
-    expect(row).toBeDefined()
-    expect(row !== undefined && 'projections' in row).toBe(false)
+    expect(row?.projections?.kind).toBe('sequenced')
+    expect(Object.keys(row?.projections?.values ?? {})).toEqual([...ctx.sessionProjections.summaryKeys()])
+    expect(Object.keys(row?.projections?.values ?? {})).toEqual(['conversationContinuation', 'sessionListMetadata'])
+    expect(row?.projections?.values.conversationContinuation).toBeNull()
   })
 
   it('serves the summary projection hints from the cache with zero log loads', async () => {
@@ -743,25 +760,26 @@ describe('Session control projection frames', () => {
     iterable: AsyncIterable<SessionControlFrame>,
     count: number,
     abort: AbortController,
+    keys: readonly string[],
   ): Promise<SessionControlFrame[]> {
     const frames: SessionControlFrame[] = []
     for await (const frame of iterable) {
       frames.push(frame)
-      if (frames.filter(candidate => candidate.type === 'projection').length >= count) abort.abort()
+      if (frames.filter(candidate => candidate.type === 'projection' && candidate.changes.some(change => keys.includes(change.key))).length >= count) abort.abort()
     }
     return frames
   }
 
-  it('broadcasts changed view references with the causing seq and skips same-reference applies', async () => {
+  it('broadcasts one frame per event listing changed views in registration order and skips same-reference applies', async () => {
     const { ctx, session } = await harness(true)
     await ctx.sessionProjections.register(lastUserUnit())
     const proxy = await remote(ctx)
-    // The controller's onChanged subscription lives in an inject child whose
+    // The controller's onEventChanged subscription lives in an inject child whose
     // fiber activates asynchronously; yield until it lands before appending.
     await new Promise(resolve => setTimeout(resolve, 0))
     const abort = new AbortController()
     const stream = proxy.control(abort.signal)
-    const collected = collect(stream, 5, abort)
+    const collected = collect(stream, 3, abort, ['test/last-user', 'sessionListMetadata'])
 
     const now = vi.spyOn(Date, 'now').mockReturnValue(100)
     seedMessages(session, 1)
@@ -773,24 +791,58 @@ describe('Session control projection frames', () => {
     now.mockRestore()
 
     const frames = await collected
-    const pushes = frames.filter(
-      (f): f is Extract<SessionControlFrame, { type: 'projection' }> =>
-        f.type === 'projection' && f.key === 'test/last-user',
-    )
+    const pushes = frames.filter((f): f is Extract<SessionControlFrame, { type: 'projection' }> => f.type === 'projection')
     expect(pushes).toEqual([
-      { type: 'projection', sessionId: session.id, key: 'test/last-user', value: { text: 'm0' }, seq: 0 },
-      { type: 'projection', sessionId: session.id, key: 'test/last-user', value: { text: 'm0' }, seq: 2 },
-    ])
-    expect(frames.filter(
-      (f): f is Extract<SessionControlFrame, { type: 'projection' }> =>
-        f.type === 'projection' && f.key === 'sessionListMetadata',
-    )).toEqual([
-      { type: 'projection', sessionId: session.id, key: 'sessionListMetadata', value: { blank: true, lastPromptAt: 100 }, seq: 0 },
-      { type: 'projection', sessionId: session.id, key: 'sessionListMetadata', value: { blank: false, lastPromptAt: 100 }, seq: 1 },
-      { type: 'projection', sessionId: session.id, key: 'sessionListMetadata', value: { blank: false, lastPromptAt: 300 }, seq: 2 },
+      {
+        type: 'projection', sessionId: session.id, seq: 0, changes: [
+          { key: 'test/last-user', val: { text: 'm0' } },
+          { key: 'conversationContinuation', val: null },
+          { key: 'sessionListMetadata', val: { blank: true, lastPromptAt: 100 } },
+        ],
+      },
+      {
+        type: 'projection', sessionId: session.id, seq: 1, changes: [
+          { key: 'sessionListMetadata', val: { blank: false, lastPromptAt: 100 } },
+        ],
+      },
+      {
+        type: 'projection', sessionId: session.id, seq: 2, changes: [
+          { key: 'test/last-user', val: { text: 'm0' } },
+          { key: 'sessionListMetadata', val: { blank: false, lastPromptAt: 300 } },
+        ],
+      },
     ])
     // Frame seq aligns with the tail block's asOfSeq vocabulary (higher-seq-wins compatible).
     const tail = await opening(proxy, session.id)
     expect(tail.projections.asOfSeq).toBe(pushes.at(-1)?.seq)
+  })
+
+  it('streams one observeProjections change per event for the observed Session only', async () => {
+    const { ctx, session } = await harness(true)
+    await ctx.sessionProjections.register(lastUserUnit())
+    const proxy = await remote(ctx)
+    await new Promise(resolve => setTimeout(resolve, 0))
+    const other = ctx.sessions.create(undefined, { meta: { cwd: '/workspace' } })
+    const abort = new AbortController()
+    const changes = proxy.observeProjections({ sessionId: session.id }, abort.signal)[Symbol.asyncIterator]()
+    expect(await changes.next()).toEqual({ done: false, value: { type: 'ready' } })
+
+    const now = vi.spyOn(Date, 'now').mockReturnValue(100)
+    seedMessages(other, 1)
+    seedMessages(session, 1)
+    now.mockRestore()
+
+    expect(await changes.next()).toEqual({
+      done: false,
+      value: {
+        type: 'projection', seq: 0, changes: [
+          { key: 'test/last-user', val: { text: 'm0' } },
+          { key: 'conversationContinuation', val: null },
+          { key: 'sessionListMetadata', val: { blank: true, lastPromptAt: 100 } },
+        ],
+      },
+    })
+    abort.abort()
+    expect(await changes.next()).toEqual({ done: true, value: undefined })
   })
 })

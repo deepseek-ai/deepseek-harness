@@ -11,20 +11,20 @@ export function pull(number: number, repository: ForgeRepository = demo): Change
 /** One CheckRun context node as GitHub returns it. */
 export function checkRun(name: string, status: string, conclusion: string | null, workflow: string | null = 'ci'): Record<string, unknown> {
   return {
-    __typename: 'CheckRun',
+    __typename: 'CheckRun', id: 'check-1', databaseId: 1,
     name,
     status,
     conclusion,
     detailsUrl: `https://github.com/octo/demo/actions/runs/1/job/${name}`,
     startedAt: status === 'QUEUED' ? null : '2026-10-09T01:00:00Z',
     completedAt: status === 'COMPLETED' ? '2026-10-09T01:02:07Z' : null,
-    checkSuite: workflow === null ? { workflowRun: null } : { workflowRun: { workflow: { name: workflow } } },
+    checkSuite: { app: { id: 'github-actions' }, workflowRun: workflow === null ? null : { event: 'pull_request', workflow: { id: workflow, name: workflow } } },
   }
 }
 
 /** One StatusContext node as GitHub returns it. */
 export function statusContext(context: string, state: string): Record<string, unknown> {
-  return { __typename: 'StatusContext', context, state, targetUrl: null }
+  return { __typename: 'StatusContext', context, state, targetUrl: null, createdAt: '2026-10-09T01:00:00Z' }
 }
 
 /** Merge settings of a repository that allows squash and merge commits and whose viewer may merge, usually with a merge commit. */
@@ -63,8 +63,8 @@ export function pullRequestNode(number: number, overrides: Record<string, unknow
       nodes: [{
         commit: {
           statusCheckRollup: rollupState === null ? null : {
-            state: rollupState,
-            contexts: { pageInfo: { hasNextPage: false }, nodes: contexts },
+            id: `rollup-${number}`, state: rollupState,
+            contexts: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: contexts },
           },
         },
       }],

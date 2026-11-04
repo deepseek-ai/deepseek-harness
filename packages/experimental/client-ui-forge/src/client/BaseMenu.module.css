@@ -1,0 +1,153 @@
+/* Base branch trigger in the local changes header and its searchable menu. */
+.anchor {
+  flex: none;
+  min-width: 0;
+  max-width: min(60%, 320px);
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  max-width: 100%;
+  height: 26px;
+  padding: 0 6px 0 8px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-family: var(--ds-font-family-code);
+  cursor: pointer;
+}
+
+.trigger[aria-expanded='true'] {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .trigger:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.trigger:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
+.trigger svg {
+  flex: none;
+}
+
+.triggerName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.missing .triggerName {
+  color: var(--dsw-alias-label-secondary);
+  text-decoration: line-through;
+}
+
+.warning {
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+.menu {
+  width: min(380px, calc(100vw - 24px));
+}
+
+.root {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+}
+
+.search {
+  padding: 8px;
+}
+
+.searchInput {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+}
+
+.searchInput input::placeholder {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.rows {
+  max-height: 320px;
+  overflow: auto;
+  padding: 0 4px 4px;
+}
+
+.label {
+  padding: 6px 8px 4px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.name {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--ds-font-family-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tag {
+  flex: none;
+  padding: 0 5px;
+  border-radius: var(--dsw-radius-xs);
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.check {
+  flex: none;
+  margin-left: auto;
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 8px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.note {
+  padding: 8px 12px;
+  border-top: 0.5px solid var(--dsw-alias-border-l3);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+@media (pointer: coarse) {
+  .search input {
+    font-size: 16px;
+  }
+}

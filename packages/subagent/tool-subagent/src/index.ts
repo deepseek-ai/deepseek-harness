@@ -21,7 +21,6 @@ import {
 } from '@deepseek-ai/dsh-subagent'
 import type { SubagentProvider } from '@deepseek-ai/dsh-subagent'
 import {
-  assertAllowedModelSelection,
   hasConfiguredLlmSelection,
   hasDelegationModelRequest,
   preflightChildLlmRoute,
@@ -203,15 +202,15 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     const wording = providerWording(subagentProvider.inheritsParentContext)
     const providerRouteDefaults = subagentProvider.agentRouteDefaults
     const selectionDescription = providerRouteDefaults !== undefined
-      ? ' Supply `provider` and `model` together. Omitted values use child defaults, falling back to this backend\'s route defaults. When the effective route changes, an omitted `reasoning_effort` uses the model\'s default.'
-      : ' Supply `provider` and `model` together. Omitted values use child defaults, falling back to compatible parent values. When the effective route changes, an omitted `reasoning_effort` uses the model\'s default.'
+      ? ' Omit `provider`, `model`, and `reasoning_effort` to use child defaults, falling back to this backend\'s route defaults.'
+      : ' Omit `provider`, `model`, and `reasoning_effort` to use child defaults, falling back to compatible parent values.'
     const definition = defineTool({
       name: toolName,
       description: wording.description
-        + ' This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes.'
+        + ' This tool starts an independently managed subagent and immediately returns its id. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing.'
         + (subagentProvider.prepareContinuable !== undefined
-          ? ' The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes.'
-          : ' The completion notice includes its final answer. This backend does not accept follow-up messages.')
+          ? ' Use `send_message` to steer it while running or continue its conversation after it finishes.'
+          : ' This backend does not accept follow-up messages.')
         + (modelSelectionEnabled ? selectionDescription : '')
         + (modelSelectionEnabled && subagentProvider.inheritsParentContext
           ? ' Changing the route can prevent provider-side reuse of the inherited conversation prefix.'
@@ -224,7 +223,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         description: {
           type: 'string',
           required: true,
-          description: 'A short (3-5 word) description of the delegated task, for display.',
+          description: 'A short (3-5 word) description of the delegated task, for display. '
+            + "Use the language of the user's current request.",
         },
         prompt: {
           type: 'string',
@@ -241,15 +241,15 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         ...modelSelectionEnabled ? {
           provider: {
             type: 'string' as const,
-            description: 'Child LLM provider id.',
+            description: 'Child LLM provider id; requires `model`.',
           },
           model: {
             type: 'string' as const,
-            description: 'Model id within that provider.',
+            description: 'Model id within that provider; requires `provider`.',
           },
           reasoning_effort: {
             type: 'string' as const,
-            description: 'Model-specific reasoning effort id.',
+            description: 'Reasoning effort id; requires `provider` and `model`. Omit to use the selected model\'s default, even when it matches the parent or configured route.',
           },
         } : {},
       },
@@ -263,6 +263,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
           },
         },
         render: (_args, value) => [{ type: 'text', text: `started subagent ${value.subagentId}` }],
+        presentationMeta: (_args, value) => ({ kind: value.kind, subagentId: value.subagentId }),
       },
       isConcurrencySafe: () => true,
       async execute(args, exec) {
@@ -283,28 +284,24 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
           ? { ...providerRouteDefaults, ...config.agentOptions }
           : config.agentOptions
         const requestedChildAgentOptions = requestedAgentOptions(
-          parentOptions,
           configuredChildAgentOptions,
           modelRequest,
           modelSelectionEnabled,
-        )
-        assertAllowedModelSelection(
           modelSelectionPolicy,
           parentOptions,
-          requestedChildAgentOptions,
-          modelRequest,
         )
         if (requiresRoutePreflight) {
           const llm = ctx.get('llm')
           if (llm === undefined) {
             throw new Error('cannot resolve the selected child LLM route because the `llm` service is unavailable')
           }
+          const inheritParentReasoningEffort = providerRouteDefaults === undefined && !hasDelegationModelRequest(modelRequest)
           await preflightChildLlmRoute(
             llm,
             parentOptions,
             requestedChildAgentOptions,
             exec.signal,
-            providerRouteDefaults === undefined,
+            inheritParentReasoningEffort,
           )
           if (ctx.subagents.getProvider(config.provider) !== subagentProvider) {
             throw new Error(`subagent provider "${config.provider}" changed while resolving the child LLM route; retry the delegation`)
@@ -324,7 +321,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         const started = await ctx.subagents.startActivation({
           provider: config.provider,
           label: args.description,
-          request,
+          ...request,
           signal: exec.signal,
           delivery: 'parent',
         })
@@ -370,7 +367,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         .sort()
       if (visible[0] !== toolName) return ''
       const names = visible.map(name => `\`${name}\``).join(' or ')
-      return `Start independent delegations with ${names} together in one assistant message and continue useful work while they run. When only waiting for their results remains, end your turn instead of sleeping or polling; the next result starts a new turn.`
+      return `Start independent delegations with ${names} together in one assistant message and continue useful work while they run. When only waiting for their results remains, end your turn instead of sleeping or polling; the next result starts a new turn. Collect the subagent results required to complete the task before giving the user a final answer.\n\nAgents may use different working directories; changes to shared files affect other agents. Split parallel write work into disjoint file or directory scopes. Bash, formatters, code generators, and scripts can overwrite concurrent edits without conflict detection; coordinate their changes explicitly. The agent integrating the work must review the final diff and run relevant tests.`
     },
   })
   ctx.systemPrompt.context({

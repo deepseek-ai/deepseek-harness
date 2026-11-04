@@ -144,22 +144,26 @@ describe('Assembled liveshare viewer page branching a share', () => {
     // Session ID, while the shared Session's row still offers the one verb this page may use there.
     expect(screen.queryByRole('button', { name: /^Access mode/u })).toBeNull()
     /**
-     * Labels one row's action menu offers, read by opening and closing it.
+     * Check one row's menu after asynchronous preparation, including shortcut-bearing labels.
      * @param row - Session row to read.
-     * @returns The menu row labels.
+     * @param labels - Expected accessible label prefixes in menu order.
      */
-    const menuLabels = async (row: HTMLElement): Promise<string[]> => {
+    const expectMenu = async (row: HTMLElement, labels: readonly string[]): Promise<void> => {
       const trigger = within(row).getByRole('button', { name: /Session actions for/u })
       await act(async () => { fireEvent.click(trigger) })
-      const labels = screen.queryAllByRole('menuitem').map(item => item.textContent ?? '')
+      const items = await screen.findAllByRole('menuitem')
+      expect(items).toHaveLength(labels.length)
+      labels.forEach((label, index) => {
+        expect(screen.getByRole('menuitem', { name: new RegExp(`^${label}`, 'u') })).toBe(items[index])
+      })
       await act(async () => { fireEvent.keyDown(document, { key: 'Escape' }) })
-      return labels
+      await waitFor(() => { expect(screen.queryByRole('menu')).toBeNull() })
     }
-    expect(await menuLabels(childRow)).toEqual(['Copy Session ID'])
+    await expectMenu(childRow, ['Copy Session ID'])
     const sourceRow = document.querySelector<HTMLElement>('[role="treeitem"][data-row-key="session:fx-alpha"]')
     if (sourceRow === null) throw new Error('shared Session row is not listed')
     expect(sourceRow).not.toBe(childRow)
-    expect(await menuLabels(sourceRow)).toEqual(['Fork session', 'Copy Session ID'])
+    await expectMenu(sourceRow, ['Fork session', 'Copy Session ID'])
 
     const childId = childRow.dataset.rowKey?.replace(/^session:/u, '')
     if (childId === undefined) throw new Error('scripted Owner child is not listed')
@@ -199,7 +203,7 @@ describe('Assembled liveshare viewer page branching a share', () => {
     // share's own answer names.
     expect(document.body.textContent).toContain('The owner set this share to read only')
     // No Session on the page offers a verb any more: the grant that carried them is gone.
-    await waitFor(async () => { expect(await menuLabels(sourceRow)).toEqual(['Copy Session ID']) }, { timeout: 15_000 })
+    await expectMenu(sourceRow, ['Copy Session ID'])
     expect(document.contains(sourceRow)).toBe(true)
 
     // Opening the shared Session again shows no branch action at all: the grant this page held is
@@ -220,9 +224,7 @@ describe('Assembled liveshare viewer page branching a share', () => {
         .toBeGreaterThan(0)
     }, { timeout: 15_000 })
     // The sidebar row follows the same answer, and shows it again on the Session it belongs to.
-    await waitFor(async () => {
-      expect(await menuLabels(sourceRow)).toEqual(['Fork session', 'Copy Session ID'])
-    }, { timeout: 15_000 })
+    await expectMenu(sourceRow, ['Fork session', 'Copy Session ID'])
     // Negative control: restoring source branching never revives a revoked child, and the child states
     // the fork verdict rather than the view tier's note, which would claim a reach it lost.
     await act(async () => { fireEvent.click(childRow) })

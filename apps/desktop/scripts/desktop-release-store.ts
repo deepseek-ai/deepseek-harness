@@ -14,7 +14,7 @@ const sourceSchema = z.strictObject({
   commit: z.string().regex(/^[a-f0-9]{40}$/u),
   workflowCommit: z.string().regex(/^[a-f0-9]{40}$/u),
   sourceRef: z.string().min(1),
-  channel: z.enum(['nightly', 'latest']),
+  channel: z.enum(['nightly', 'stable']),
   runnerName: z.string().min(1),
   // Storage accepts every Desktop target; CI routing separately limits currently provisioned platforms.
   target: z.enum(['mac-arm64', 'mac-x64', 'win-x64']),
@@ -121,13 +121,13 @@ export async function retainDesktopRelease(root: string, source: DesktopRetained
 }
 
 /**
- * Read an attempt and rehash every retained file before a consumer uses it.
+ * Read and validate manifest identity without requiring unrelated retained files.
  * @param root Persistent releases root.
  * @param runId Expected source run ID.
  * @param attempt Expected source attempt.
- * @returns Parsed inventory; missing, linked, changed or mismatched files reject.
+ * @returns Parsed inventory; consumers must verify the files they use against their recorded digests.
  */
-export async function verifyRetainedDesktopRelease(root: string, runId: string, attempt: string): Promise<DesktopRetainedManifest> {
+export async function readRetainedDesktopManifest(root: string, runId: string, attempt: string): Promise<DesktopRetainedManifest> {
   const path = retainedDesktopPath(root, runId, attempt)
   await directory(root)
   await directory(join(root, runId))
@@ -137,6 +137,19 @@ export async function verifyRetainedDesktopRelease(root: string, runId: string, 
   const manifest = manifestSchema.parse(JSON.parse(await readFile(manifestPath, 'utf8')))
   if (manifest.source.runId !== runId || manifest.source.attempt !== attempt) throw new Error('desktop release store: attempt identity mismatch')
   if (new Set(manifest.files.map(file => file.name)).size !== manifest.files.length) throw new Error('desktop release store: duplicate file inventory')
+  return manifest
+}
+
+/**
+ * Verify every retained file against its immutable build manifest.
+ * @param root Persistent releases directory.
+ * @param runId Original packaging run.
+ * @param attempt Original packaging attempt, unchanged by archival reruns.
+ * @returns Manifest after all retained files pass size and hash verification.
+ */
+export async function verifyRetainedDesktopRelease(root: string, runId: string, attempt: string): Promise<DesktopRetainedManifest> {
+  const manifest = await readRetainedDesktopManifest(root, runId, attempt)
+  const path = retainedDesktopPath(root, runId, attempt)
   for (const file of manifest.files) {
     const current = await fingerprint(join(path, file.name))
     if (current.size !== file.size || current.sha512 !== file.sha512) throw new Error(`desktop release store: changed file ${file.name}`)

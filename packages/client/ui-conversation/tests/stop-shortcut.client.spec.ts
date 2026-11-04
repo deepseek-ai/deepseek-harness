@@ -190,7 +190,7 @@ describe('fixed stop routing', () => {
     })
     expect(b.press()).not.toHaveBeenCalled()
     await b.runtime.sessions.updateSessionSnapshot('s1', (draft) => {
-      draft.subagent = { parentAvailable: false, address: { parentSessionId: 'parent' as SessionId,
+      draft.subagent = { address: { parentSessionId: 'parent' as SessionId,
         childSessionId: 's1' as SessionId, mode: 'continuable' } }
     })
     b.press()

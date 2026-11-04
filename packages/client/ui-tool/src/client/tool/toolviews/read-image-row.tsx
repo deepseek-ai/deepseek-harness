@@ -17,6 +17,7 @@
 // content until `execute` returns, so a running read_image shows the summary row
 // alone.
 
+import { toolFileInject } from '../file-menu.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import { imageCardModel } from '../models/image-card-model.ts'
 import { readFamilyRow, type ReadImageRowProps } from './read-family-row.tsx'
@@ -29,11 +30,12 @@ import { CONVERSATION_NS as NS } from '../../locale.ts'
  */
 export function ReadImageRow(props: ReadImageRowProps) {
   const { block, renderSlot, loadImage } = props
+  const { getTriggerProps } = props.useContextMenu()
   return readFamilyRow(props, {
     image: imageCardModel(block),
     renderSlot,
     loadImage,
-  })
+  }, getTriggerProps)
 }
 
 /**
@@ -44,7 +46,7 @@ export function ReadImageRow(props: ReadImageRowProps) {
  */
 export const readImageToolview = {
   name: 'read-image-toolview',
-  inject: ['slots'],
+  inject: ['slots', 'sessions'],
   /**
    * Register the read_image row into the Tool-owned keyed view slot.
    * @param ctx - registrant context (disposal rides ctx.effect inside slots.register).
@@ -55,6 +57,7 @@ export const readImageToolview = {
         name: 'tool.call.toolview',
         key: 'read_image',
         locale: NS,
+        inject: toolFileInject(ctx),
         children: { 'tool.call.images': { kind: 'single', scope: 'session' } },
       }, ReadImageRow))
   },

@@ -72,8 +72,6 @@ export interface DiffFileProps {
   readonly tooltip: string
   /** Rows of the file's menu. */
   readonly actions: readonly DiffFileAction[]
-  /** Copy the repository-relative path from the file header. */
-  readonly onCopyPath: () => void
   /** Receives the section element, which scrolling to the file targets. */
   readonly sectionRef: (element: HTMLElement | null) => void
   /** Forge panel copy. */
@@ -405,7 +403,7 @@ function FileMenu({ name, actions, t }: {
  * @returns the file section.
  */
 export function DiffFile(props: DiffFileProps): ReactNode {
-  const { file, expanded, onToggle, badge, tooltip, actions, onCopyPath, sectionRef, t } = props
+  const { file, expanded, onToggle, badge, tooltip, actions, sectionRef, t } = props
   const name = file.path.slice(file.path.lastIndexOf('/') + 1)
   return (
     <section ref={sectionRef} className={css.file} data-forge-diff-file={file.path} data-expanded={expanded ? '' : undefined}>
@@ -420,9 +418,9 @@ export function DiffFile(props: DiffFileProps): ReactNode {
           <IconChevronDownOutlineRegular size={14} className={css.chevron} />
         </button>
         <FileTypeIcon path={file.path} size={16} className={css.fileIcon} />
-        <button type="button" className={css.filePath} aria-label={`${t('diff.copyPath')}: ${file.path}`} onClick={onCopyPath}>
+        <span className={css.filePath}>
           <FileLabel path={file.path} tooltip={tooltip} />
-        </button>
+        </span>
         <span className={css.fileSpacer} data-forge-path-spacer="" />
         {badge !== '' && <span className={css.badge}>{badge}</span>}
         {!file.binary && <Counts file={file} t={t} />}

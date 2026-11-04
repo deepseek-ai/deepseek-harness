@@ -6,7 +6,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ForgeDiffFile } from '../src/types.ts'
 import { ChangedFiles, type ChangedFilesState } from '../src/client/ChangedFiles.tsx'
-import { changedFileTree, filterFileTree } from '../src/client/file-tree.ts'
+import { changedFileTree, filesInTreeOrder, filterFileTree } from '../src/client/file-tree.ts'
 import { en } from '../src/client/locales.ts'
 import { FileTreePane } from '../src/client/FileTreePane.tsx'
 
@@ -19,10 +19,12 @@ function file(path: string, previousPath: string | null = null): ForgeDiffFile {
 it('compacts directory chains, sorts directories before files, and keeps identical basenames distinct', () => {
   const tree = changedFileTree([file('z.ts'), file('src/client/b.ts'), file('docs/a.ts'), file('src/client/a.ts')])
   expect(tree.map(node => [node.kind, node.name])).toEqual([['directory', 'docs'], ['directory', 'src/client'], ['file', 'z.ts']])
+  expect(filesInTreeOrder(tree).map(file => file.path)).toEqual(['docs/a.ts', 'src/client/a.ts', 'src/client/b.ts', 'z.ts'])
   expect(filterFileTree(tree, 'A.TS').map(node => node.path)).toEqual(['docs', 'src/client'])
   expect(filterFileTree(tree, ' ')).toBe(tree)
   expect(filterFileTree(tree, 'missing')).toEqual([])
   expect(changedFileTree([])).toEqual([])
+  expect(filesInTreeOrder([])).toEqual([])
 })
 
 it('matches renamed paths and keeps file names containing backslashes literal', () => {
@@ -33,7 +35,7 @@ it('matches renamed paths and keeps file names containing backslashes literal', 
 
 it('preserves input order for repeated paths with distinct file metadata', () => {
   const first = file('same.ts', 'original.ts'), second = file('same.ts')
-  expect(changedFileTree([file('z.ts'), first, file('a.ts'), second]).map(node => node.kind === 'file' && node.file))
+  expect(filesInTreeOrder(changedFileTree([file('z.ts'), first, file('a.ts'), second])))
     .toEqual([file('a.ts'), first, second, file('z.ts')])
 })
 
@@ -90,7 +92,7 @@ it('bounds pointer and keyboard resizing, retains hidden width, and stops cancel
   })
   try {
     const props = { files: [file('a.ts')], state: { query: '', collapsed: {}, selected: null }, t: makeTranslate(en), filter: vi.fn(), toggle: vi.fn(), jump: vi.fn(), id: 'tree' }
-    const view = render(<FileTreePane {...props} open />)
+    const view = render(<FileTreePane {...props} position="right" />)
     const handle = view.getByRole('separator')
     const capture = vi.fn(), release = vi.fn()
     Object.defineProperties(handle, { setPointerCapture: { value: capture }, releasePointerCapture: { value: release } })
@@ -120,9 +122,26 @@ it('bounds pointer and keyboard resizing, retains hidden width, and stops cancel
       fireEvent.pointerMove(handle, { pointerId: 1, clientX: 300 })
       expect(width()).toBe(350)
     }
-    view.rerender(<FileTreePane {...props} open={false} />)
-    view.rerender(<FileTreePane {...props} open />)
+    view.rerender(<FileTreePane {...props} position="hidden" />)
+    containerWidth = 0
+    act(() => { measure([], new NativeObserver(() => {})) })
     expect(width()).toBe(350)
+    containerWidth = 1000
+    view.rerender(<FileTreePane {...props} position="right" />)
+    act(() => { measure([], new NativeObserver(() => {})) })
+    expect(width()).toBe(350)
+    view.rerender(<FileTreePane {...props} position="left" />)
+    expect(view.getByRole('separator')).toBe(handle)
+    expect(width()).toBe(350)
+    fireEvent.keyDown(handle, { key: 'ArrowRight' })
+    expect(width()).toBe(370)
+    fireEvent.keyDown(handle, { key: 'ArrowLeft' })
+    expect(width()).toBe(350)
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 1, clientX: 350 })
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: 400 })
+    expect(width()).toBe(400)
+    fireEvent.pointerUp(handle, { pointerId: 1, clientX: 450 })
+    expect(width()).toBe(450)
     containerWidth = 600
     act(() => { measure([], new NativeObserver(() => {})) })
     expect(width()).toBe(280)
@@ -134,7 +153,7 @@ it('bounds pointer and keyboard resizing, retains hidden width, and stops cancel
 it('can mount into a detached fragment without measuring a nonexistent parent element', () => {
   const observe = vi.spyOn(ResizeObserver.prototype, 'observe')
   const view = render(<FileTreePane files={[]} state={{ query: '', collapsed: {}, selected: null }} t={makeTranslate(en)}
-    filter={vi.fn()} toggle={vi.fn()} jump={vi.fn()} id="detached-tree" open />, { container: document.createDocumentFragment() })
+    filter={vi.fn()} toggle={vi.fn()} jump={vi.fn()} id="detached-tree" position="right" />, { container: document.createDocumentFragment() })
   expect(observe).not.toHaveBeenCalled()
   view.unmount()
 })

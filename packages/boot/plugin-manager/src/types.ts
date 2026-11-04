@@ -139,13 +139,18 @@ export type PluginInstallFailureKind =
 
 /** Package operation completion, including Git checks and a retrieval path for unabridged diagnostics. */
 export interface PackageResult {
+  /** The status the run is read as having ended with; a run the manager terminated records the coerced status 1. */
   exitCode: number
   output: string
   truncated: boolean
   logPath: string
   /** Present when the run failed: what kind of failure its exit and output describe. */
   kind?: PluginInstallFailureKind
-  /** The manager terminated the run after it printed nothing for its silence bound; `exitCode` still reports how it ended. */
+  /**
+   * The run outlived its bound: the manager terminated it after it printed nothing for its silence bound, or the GitHub
+   * connection check hit its deadline. Such a run reports no exit status of its own, so `exitCode` records the status
+   * its failure is read as rather than a status the process returned.
+   */
   timedOut?: boolean
   /** Present when a compatibility check refused the run: the packages the running DSH version rejects. */
   incompatible?: IncompatiblePlugin[]
@@ -344,19 +349,19 @@ export interface PluginInstallCancellation {
   readonly status: 'cancelled' | 'too-late' | 'not-running'
 }
 
-/** One chunk of a pnpm run's output, as the run produces it. */
+/** One chunk of an installation run's output: a pnpm run, or the GitHub connection check that stopped it. */
 export interface PluginInstallLogChunk {
   /** The installation the run belongs to, when its caller supplied a request id. */
   readonly requestId?: PluginInstallRequestId
   /** The run the chunk belongs to. */
   readonly jobId: string
-  /** The command line the run executes: pnpm's command name, then its arguments. */
+  /** The command line the run executes: its command name, then its arguments. */
   readonly argv: readonly string[]
   /** The directory the run executes in: the profile directory. */
   readonly cwd: string
   readonly stream: 'stdout' | 'stderr'
   readonly text: string
-  /** Present on the run's last chunk: pnpm's exit code, null when it ended without one. */
+  /** Present on the chunk that ends a run: its exit code, null when the run ended without one. */
   readonly exitCode?: number | null
 }
 
@@ -426,7 +431,7 @@ declare module '@deepseek-ai/cordis' {
      */
     'plugin-manager/changed'(change: PluginChange): void
     /**
-     * One chunk of a pnpm run's output, streamed as the run produces it.
+     * One chunk of an installation run's output, streamed as the run produces it.
      * @mode emit
      * @param chunk - the chunk and the run it belongs to.
      */

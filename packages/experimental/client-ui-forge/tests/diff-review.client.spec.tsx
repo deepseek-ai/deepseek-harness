@@ -12,7 +12,7 @@ import type { ForgeDiffFile } from '../src/types.ts'
 
 const file: ForgeDiffFile = { path: 'a.txt', previousPath: null, status: 'modified', binary: false, oversized: false, untracked: false, additions: 3, deletions: 2,
   hunks: [{ oldStart: 2, oldLines: 3, newStart: 2, newLines: 4, lines: [' same', '-old first', '-old last', '+new first', '+new last', '+'] }] }
-const source = { kind: 'local' as const, scope: 'branch' }
+const source = { kind: 'local' as const, scope: 'branch', base: 'origin/main', baseRef: null }
 const t = makeTranslate(en)
 afterEach(() => { cleanup(); document.getSelection()?.removeAllRanges(); localStorage.clear(); vi.restoreAllMocks() })
 
@@ -22,7 +22,7 @@ function mount(overrides: Partial<DiffFileProps> = {}) {
   const review: ReviewActions = { source, addToInput, records, onQuoted: (item) => { records.recordAgent(item) } }
   const props: DiffFileProps = { file, visible: true, expanded: true, onToggle: vi.fn(), large: false, revealed: false, onReveal: vi.fn(),
     text: undefined, open: new Set(), onExpand: vi.fn(), split: true, wrap: true, badge: '', tooltip: 'a.txt', actions: [],
-    onCopyPath: vi.fn(), sectionRef: vi.fn(), review, t, ...overrides }
+    sectionRef: vi.fn(), review, t, ...overrides }
   const view = render(<DiffFile {...props} />)
   const line = (name: string) => view.getByRole('button', { name: `Select line ${name}` })
   const code = (side: 'L' | 'R', no: number): HTMLElement => {

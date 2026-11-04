@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-26-manual-generation-continuation.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-10-26-manual-generation-continuation.md
+/agent-note-manual-generation-continuation:
+  en: 327aaa1cdc63b1f5
+  zh: 1147b4a23e51772c
+/agent-note-manual-generation-continuation/problem:
+  en: f118844946afdbdc
+  zh: f1fe37d042f88b24
+/agent-note-manual-generation-continuation/decision:
+  en: 463db7deb7710e07
+  zh: cfacb69cb58349a9
+/agent-note-manual-generation-continuation/alternatives-considered:
+  en: 58bb948d210d42ea
+  zh: 5dc920d222d71218
+/agent-note-manual-generation-continuation/consequences:
+  en: e86aee3a7da7649f
+  zh: d58e8cc94e5008bf
+/agent-note-manual-generation-continuation/verification:
+  en: e31a5bd5826c689f
+  zh: 02ac700146246664
