@@ -696,6 +696,34 @@ export abstract class Bot<C = unknown> {
     }
   }
 
+  /**
+   * A handle for a message this bot published in an earlier process, rebuilt from its platform id, so it can be
+   * edited or deleted after a restart. The handle claims no content (`edits` restarts at 0) and the mode the caller
+   * names, which must be the mode the message was published in: an edit renders in it and the platform refuses a
+   * payload of another kind.
+   *
+   * @param message - the published message (platform id and chat).
+   * @param mode - id of the mode the message was published in; defaults to the bot's preferred mode for the chat.
+   * @param kind - `SentPart.kind` the adapter recorded for the part (adapter-defined; `message` when unknown).
+   * @returns a one-part handle.
+   * @throws PlatformError `invalid` for a mode this bot does not implement.
+   */
+  handleOf(message: MessageRef, mode?: string, kind = 'message'): MessageHandle {
+    const target: Target = { chat: message.chat }
+    const id = mode ?? this.preferredModeId(target)
+    this.modeOf(id)
+    const now = this.now()
+    return {
+      bot: this.id,
+      target,
+      mode: id,
+      parts: [{ id: message.id, kind, time: now }],
+      createdAt: now,
+      edits: 0,
+      content: normalize([]),
+    }
+  }
+
   /** A `MessageRef` (a message we did not send) seen as a handle with one part and a fresh timestamp. */
   private asHandle(handle: MessageHandle | MessageRef): MessageHandle {
     if (Array.isArray((handle as MessageHandle).parts)) return handle as MessageHandle
