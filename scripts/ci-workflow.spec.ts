@@ -481,6 +481,12 @@ describe('CI workflow', () => {
 
     expect(windowsWorkflow.jobs['windows-observational']).toBeUndefined()
     expect(windowsBuild['continue-on-error']).not.toBe(true)
+    const channelCheck = buildCommands.find(step => step.name === 'Verify Desktop updater dependency versions')
+    expect(channelCheck).toMatchObject({ shell: 'pwsh' })
+    expect(channelCheck?.['continue-on-error']).not.toBe(true)
+    expect(channelCheck?.run).toContain('node apps/desktop/tests/updates/electron-updater/check-versions.mjs')
+    expect(buildCommands.indexOf(channelCheck!))
+      .toBeGreaterThan(buildCommands.findIndex(step => step.run === 'pnpm run check:ci:windows-blocking'))
     const observational = buildCommands.find(step => step.id === 'observational')
     expect(observational).toMatchObject({
       run: 'pnpm run check:ci:windows-observational-ready',
@@ -1792,6 +1798,20 @@ describe('Policy workflows', () => {
       if (check === undefined || !isRecord(check.env)) throw new TypeError(`${file} ${job} must run the check action with env`)
       expect(String(check.env.CHECK_MODE)).toContain('vars.MERGE_POLICY_')
     }
+  })
+
+  it('runs on the release branches as well as master, on both pull requests and base-branch pushes', () => {
+    const branches = ['master', 'release/dsh-[0-9]+.[0-9]+.[0-9]+']
+    for (const file of ['pr-check-on-head-branch.yml', 'pr-check-after-approve.yml']) {
+      const workflow = loadWorkflow('.github/workflows/' + file)
+      const events = workflow.on
+      if (!isRecord(events) || !isRecord(events.pull_request_target)) throw new TypeError(`${file} must trigger on pull_request_target`)
+      expect(events.pull_request_target.branches).toEqual(branches)
+    }
+    const workflow = loadWorkflow('.github/workflows/pr-check-on-base-branch.yml')
+    const events = workflow.on
+    if (!isRecord(events) || !isRecord(events.push)) throw new TypeError('the base-branch workflow must trigger on push')
+    expect(events.push.branches).toEqual(branches)
   })
 
   it('decides the review verdict in one Approve Check job that can publish the check run', () => {

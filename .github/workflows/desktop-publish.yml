@@ -171,7 +171,7 @@ jobs:
 
   upload-website-installer:
     needs: [route, prepare, publish]
-    if: inputs.upload_website && needs.prepare.outputs.preset == 'production'
+    if: inputs.upload_website && needs.prepare.outputs.preset != 'test'
     runs-on: [self-hosted, '${{ needs.route.outputs.runner }}']
     environment: desktop-production
     timeout-minutes: 60
@@ -216,7 +216,7 @@ jobs:
 
   purge-website-installer:
     needs: [route, prepare, upload-website-installer]
-    if: inputs.upload_website && needs.prepare.outputs.preset == 'production'
+    if: inputs.upload_website && needs.prepare.outputs.preset != 'test'
     runs-on: [self-hosted, '${{ needs.route.outputs.runner }}']
     environment: desktop-production
     timeout-minutes: 60

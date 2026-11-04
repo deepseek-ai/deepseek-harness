@@ -10,11 +10,11 @@ import { randomBytes } from 'node:crypto'
 import { base64Url } from './base64-url.ts'
 import { existsSync, readFileSync } from 'node:fs'
 import { writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
-import type { ShareAccessSelection } from '../share-api-types.ts'
+import type { ShareAccessSelection, ViewerPluginAccess } from '../share-api-types.ts'
 import type { ViewerSessionMode } from './fork-policy.ts'
 import { normalizeRelayUrl } from './relay-url.ts'
 import type { OwnerShare, ShareAccessSummary } from './owner-types.ts'
-import type { ViewerCapabilityGroup } from './viewer-declarations.ts'
+import type { ViewerPluginPolicy } from './viewer-capability-types.ts'
 import { isRecord } from './wire-json.ts'
 
 
@@ -51,7 +51,9 @@ export interface PersistedOwnerShare {
    * Absent on every share written before the capability existed, and absent means none: an upgrade never
    * exposes a plugin endpoint the owner had no chance to select.
    */
-  readonly viewerCapabilities?: readonly ViewerCapabilityGroup[]
+  readonly viewerPlugins?: readonly ViewerPluginPolicy[]
+  /** Global switch over every installed plugin's methods; absent reads as none. */
+  readonly viewerPluginAccess?: ViewerPluginAccess
 }
 
 /** Owner state read from disk: the persisted Relay override, every restorable share, and every Relay row still owed. */
@@ -121,7 +123,8 @@ export function loadOwnerState(file: string): LoadedOwnerState {
       // A record with no tier reads back as `view`; the record's own switch decides forking.
       sessionMode: value.sessionMode === 'write' ? 'write' : 'view',
       allowsFork: value.allowsFork === true,
-      ...(value.viewerCapabilities === undefined ? {} : { viewerCapabilities: value.viewerCapabilities }),
+      ...(viewerPluginsOf(value).length === 0 ? {} : { viewerPlugins: viewerPluginsOf(value) }),
+      viewerPluginAccess: accessOf(value),
       online: false,
     }]
   }))
@@ -169,7 +172,8 @@ export function writeOwnerState(
     ...(share.expiresAt === undefined ? {} : { expiresAt: share.expiresAt }),
     ...(share.allowsFork ? { allowsFork: true } : {}),
     sessionMode: share.sessionMode,
-    ...(share.viewerCapabilities === undefined ? {} : { viewerCapabilities: share.viewerCapabilities }),
+    ...(share.viewerPlugins === undefined ? {} : { viewerPlugins: share.viewerPlugins }),
+    ...(share.viewerPluginAccess === undefined ? {} : { viewerPluginAccess: share.viewerPluginAccess }),
   }))
   const removals = [...pendingRemovals.values()].map(entry => ({
     relay: entry.relay,
@@ -226,11 +230,12 @@ function persistedRelayUrl(value: unknown, file: string): string | undefined {
  * @param value - Parsed state file entry.
  * @returns True when the entry names a plugin and its endpoint lists.
  */
-function isViewerCapabilityGroup(value: unknown): value is ViewerCapabilityGroup {
+function isViewerPluginPolicy(value: unknown): value is ViewerPluginPolicy {
   return isRecord(value)
     && typeof value.plugin === 'string' && value.plugin !== ''
-    && Array.isArray(value.readable) && value.readable.every(action => typeof action === 'string')
-    && Array.isArray(value.writable) && value.writable.every(action => typeof action === 'string')
+    && (value.mode === 'all' || value.mode === 'none' || value.mode === 'selected')
+    && (value.endpoints === undefined
+      || (Array.isArray(value.endpoints) && value.endpoints.every(action => typeof action === 'string')))
 }
 
 /**
@@ -256,9 +261,33 @@ function isPersistedOwnerShare(value: unknown): value is PersistedOwnerShare {
     && typeof value.createdAt === 'string'
     && (value.expiresAt === undefined || typeof value.expiresAt === 'string')
     && (value.allowsFork === undefined || typeof value.allowsFork === 'boolean')
-    && (value.viewerCapabilities === undefined
-      || (Array.isArray(value.viewerCapabilities) && value.viewerCapabilities.every(isViewerCapabilityGroup)))
+    && (value.viewerPlugins === undefined
+      || (Array.isArray(value.viewerPlugins) && value.viewerPlugins.every(isViewerPluginPolicy)))
+    && (value.viewerPluginAccess === undefined || value.viewerPluginAccess === 'all'
+      || value.viewerPluginAccess === 'none' || value.viewerPluginAccess === 'custom')
     && (value.sessionMode === undefined || value.sessionMode === 'view' || value.sessionMode === 'write')
+}
+
+/**
+ * Read one stored share's per-plugin policies.
+ * @param value - Stored share record.
+ * @returns The stored policies, or an empty list.
+ */
+function viewerPluginsOf(value: { readonly viewerPlugins?: readonly ViewerPluginPolicy[] }): readonly ViewerPluginPolicy[] {
+  return value.viewerPlugins ?? []
+}
+
+/**
+ * Read one stored share's global plugin switch, migrating records written before `custom` existed.
+ * @param value - Stored share record.
+ * @returns `all`/`custom` as stated; any other value follows nonempty per-plugin policies.
+ */
+function accessOf(value: {
+  readonly viewerPluginAccess?: ViewerPluginAccess
+  readonly viewerPlugins?: readonly ViewerPluginPolicy[]
+}): ViewerPluginAccess {
+  if (value.viewerPluginAccess === 'all' || value.viewerPluginAccess === 'custom') return value.viewerPluginAccess
+  return (value.viewerPlugins?.length ?? 0) > 0 ? 'custom' : 'none'
 }
 
 function isShareAccessSummary(value: unknown): value is ShareAccessSummary {

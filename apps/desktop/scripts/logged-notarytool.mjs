@@ -5,7 +5,7 @@ import { basename, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { recordPackagingEvent, packagingOutputRedactor } from './packaging-run.mjs'
-import { packagingStep } from './packaging-step.mjs'
+import { packagingErrorDetails, packagingStep } from './packaging-step.mjs'
 
 const exec = promisify(execFile)
 const AUTH_FLAGS = new Set(['--apple-id', '--password', '--team-id', '--key', '--key-id', '--issuer', '--keychain', '--keychain-profile'])
@@ -17,7 +17,8 @@ async function execute(args) {
   } catch (error) {
     // Apple can report rejection with a nonzero exit; electron-notarize needs its JSON ID to retrieve diagnostics.
     if (args[0] === 'wait' && typeof error.code === 'number' && typeof error.stdout === 'string' && error.stdout.trim()) return error.stdout
-    throw error
+    throw new Error(`notarytool ${args[0]} failed (code: ${String(error.code ?? 'unknown')}, signal: ${String(error.signal ?? 'none')})\n`
+      + `stdout: ${error.stdout ?? ''}\nstderr: ${error.stderr ?? ''}`, { cause: error })
   }
 }
 
@@ -74,10 +75,13 @@ export async function runLoggedNotarytool(args, directory, invoke = execute) {
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
-  try { process.stdout.write(await runLoggedNotarytool(process.argv.slice(2), process.env.DSH_DESKTOP_PACKAGING_RUN_DIR)) }
-  catch {
-    // execFile errors include credential-bearing argv; detailed failures are redacted in the journal.
-    process.stderr.write('desktop notarization: Apple command failed; see packaging events.jsonl\n')
+  const args = process.argv.slice(2)
+  const directory = process.env.DSH_DESKTOP_PACKAGING_RUN_DIR
+  try { process.stdout.write(await runLoggedNotarytool(args, directory)) }
+  catch (error) {
+    const credentials = args.filter((_, index) => AUTH_FLAGS.has(args[index - 1]))
+    process.stderr.write(`desktop notarization: Apple command failed${directory ? `; see ${directory}/events.jsonl` : ''}\n`
+      + `${packagingErrorDetails(error, credentials)}\n`)
     process.exitCode = 1
   }
 }

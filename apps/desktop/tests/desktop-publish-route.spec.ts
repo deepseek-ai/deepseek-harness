@@ -88,3 +88,11 @@ it('matches Intel artifacts to the Intel workflow on a machine serving both arch
   f.source.target = 'mac-arm64'
   expect(() => resolveDesktopPublishRoute('owner/repo', f.run, { source: f.source }, f.jobs, routes)).toThrow(/does not match/u)
 })
+
+it('accepts a successful package when the attempt failed during archival', () => {
+  const f = fixture()
+  f.run.conclusion = 'failure'
+  f.jobs.push({ ...f.jobs[0]!, name: 'upload-artifact', conclusion: 'failure' })
+  expect(resolveDesktopPublishRoute('owner/repo', f.run, { source: f.source }, f.jobs, f.routes))
+    .toMatchObject({ runId: '42', attempt: '2' })
+})

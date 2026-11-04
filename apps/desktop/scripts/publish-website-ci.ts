@@ -15,13 +15,13 @@ import { desktopPublicationFailure } from './desktop-publication-failure.ts'
 
 const routeSchema = z.object({ runId: z.string().regex(/^[1-9]\d*$/u), attempt: z.string().regex(/^[1-9]\d*$/u),
   commit: z.string().regex(/^[a-f0-9]{40}$/u), runnerName: z.string(), runnerLabel: z.string(), sourceRef: z.string(),
-  channel: z.enum(['nightly', 'latest']), target: z.enum(['mac-arm64', 'mac-x64', 'win-x64']), preset: z.literal('production') })
+  channel: z.enum(['nightly', 'stable']), target: z.enum(['mac-arm64', 'mac-x64', 'win-x64']), preset: z.literal('production') })
 const purgeSchema = z.object({ zoneId: z.string(), publicUrl: z.url(), submittedAt: z.iso.datetime(),
   jobId: z.string().regex(/^[\w.-]{1,128}$/u).optional(),
   status: z.enum(['pending', 'processing', 'success', 'failed', 'timeout', 'canceled', 'unknown']),
   observedAt: z.iso.datetime().optional(), diagnostic: z.string().optional() })
 const stateSchema = z.object({ approval: z.string(), upload: z.enum(['pending', 'upload-intent', 'uploaded']),
-  purge: purgeSchema.optional(), purgeAttempt: z.string().optional() })
+  uploadConfirmed: z.boolean().optional(), purge: purgeSchema.optional(), purgeAttempt: z.string().optional() })
 
 /**
  * Bind website approval to the retained manifest and exact production bucket.
@@ -69,16 +69,15 @@ export async function publishWebsiteCi(mode: 'upload' | 'purge', env: NodeJS.Pro
       env.GITHUB_REPOSITORY || '', config.bucket)
     try {
       const outcome = await withDesktopChannelLock(join(dirname(root), 'publish-locks'), `${config.bucket}/${installer.plan.artifacts[0]!.key}`, async () => {
-        if (state.upload === 'uploaded') {
-          return 'recorded' as const
-        }
+        const previouslyUploaded = state.uploadConfirmed === true || state.upload === 'uploaded'
         return uploadWebsiteInstaller(installer, credentials, desktopPublishCos(installer.plan, credentials), async (event) => {
-          state = { ...state, upload: event }
+          state = event === 'upload-intent'
+            ? { approval: state.approval, upload: event, uploadConfirmed: previouslyUploaded }
+            : { ...state, upload: event, uploadConfirmed: true }
           await save()
-        })
+        }, { previouslyUploaded })
       })
-      const disposition = outcome === 'recorded' ? 'previous upload confirmed by journal; skipped'
-        : outcome === 'present' ? 'identical remote bytes confirmed; skipped' : 'uploaded'
+      const disposition = outcome === 'present' ? 'identical remote bytes and download filename confirmed; skipped' : 'uploaded'
       const text = `Website installer ${disposition}: ${installer.plan.publicUrl}; version ${installer.plan.version}\n`
       process.stdout.write(text)
       if (env.GITHUB_STEP_SUMMARY) await appendFile(env.GITHUB_STEP_SUMMARY, text)

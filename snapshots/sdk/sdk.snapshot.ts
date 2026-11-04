@@ -140,6 +140,14 @@ interface SdkAssertions {
 }
 
 const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
+  'team-default-enabled': {
+    expectedFinalResponse: 'TEAM_CONFIG_OK',
+    patches: [
+      fileURLToPath(new URL('../../apps/cli/config/examples/team-mode.yml', import.meta.url)),
+      fileURLToPath(new URL('./team-default-enabled/capture.cordis.yml', import.meta.url)),
+    ],
+    modelRequestsFile: 'team-requests.jsonl',
+  },
   'approval': {
     approvalOutcomes: ['allowed-once', 'rejected'],
     environment: { DSH_PERMISSION_MODE: 'workspace-write' },
@@ -705,6 +713,7 @@ const legacySdkCompositions = new Set([
   'sdk-dsh-sdk-dynamic-route',
   'sdk-minimal',
   'sdk-serial-created',
+  'sdk-team-session-mode',
   'sdk-upload',
   'session-title',
   'session-title-stability',
@@ -1204,6 +1213,32 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
       )
       reconcileCatalogCreationTimes(ordered.map(log => log.content), 'validate')
       const actualContext = contextOf(ordered, cwd)
+      if (scenario.name === 'team-default-enabled') {
+        const parent = ordered[0]!
+        const events = parseSessionLog(parent.content)
+        expect(events.filter(event => event.type === 'team/mode').map(event => event.data.enabled)).toEqual([true])
+        expect(events.findIndex(event => event.type === 'team/mode'))
+          .toBeLessThan(events.findIndex(event => event.type === 'step/start'))
+        expect(modelRequests).toHaveLength(6)
+        const first = modelRequests[0]!
+        expect((first.tools as JsonObject[]).map(tool => tool.name)).toEqual(expect.arrayContaining([
+          'team_task_create', 'team_task_get', 'team_task_list', 'team_task_update',
+        ]))
+        expect(JSON.stringify(first.messages)).toContain('shared task board')
+        expect(events.filter(event => event.type === 'team/task').map(event => event.data.task))
+          .toEqual([expect.objectContaining({ subject: 'Configured Team', status: 'pending' })])
+        expect(events.filter(event => event.type === 'tool/result').map(event => event.data.message.isError))
+          .toEqual([false, false, false])
+        const child = parseSessionLog(ordered[1]!.content)
+        expect(child.filter(event => event.type === 'team/mode')).toEqual([])
+        const childResults = child.filter(event => event.type === 'tool/result')
+        expect(childResults.map(event => event.data.message.isError)).toEqual([false])
+        expect(JSON.stringify(childResults)).toContain('Configured Team')
+        for (const request of modelRequests) {
+          expect((request.tools as JsonObject[]).map(tool => tool.name)).toContain('team_task_list')
+          expect(JSON.stringify(request.messages)).toContain('shared task board')
+        }
+      }
       if (scenario.name === 'command-attachments') {
         const parent = ordered[0]
         if (parent === undefined) throw new Error('command attachments have no persisted Session')
@@ -1723,6 +1758,10 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
       if (ordered.length > 1 && assertions.dshSdkChild === undefined) {
         expect(observedMethods.has('subagent.started')).toBe(true)
         expect(observedMethods.has('subagent.finished')).toBe(true)
+        for (const notification of notifications.filter(item => item.method === 'subagent.finished')) {
+          const child = ordered.find(log => log.header.id === notification.params.childSessionId)
+          expect(notification.params.parentSessionId).toBe(child?.header.parentSession)
+        }
       }
     })
   }

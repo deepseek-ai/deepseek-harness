@@ -1,10 +1,9 @@
 /** One task's rule, saved deliveries, edits, runs, and linked Session. */
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { flushSync } from 'react-dom'
 import clsx from 'clsx'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ScheduleCatalogEntry, ScheduleEditRequest, ScheduleId } from '@deepseek-ai/dsh-schedule/client'
+import type { ScheduleCatalogEntry, ScheduleCreateRequest, ScheduleEditRequest, ScheduleId } from '@deepseek-ai/dsh-schedule/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
 import {
@@ -14,9 +13,11 @@ import {
 import { CatalogFeedback } from './CatalogFeedback.tsx'
 import { DeliveryHistory, type DeliveryHistoryInjected } from './DeliveryHistory.tsx'
 import type { CatalogDeleteOutcome, CatalogSnapshot } from './catalog-source.ts'
-import { TaskEditorFields, draftTarget, projectChoices, targetLabelKey, taskDraft, taskDraftValid } from './TaskEditorFields.tsx'
+import { TaskEditorFields, draftTarget, newTaskDraft, projectChoices, reapplyTaskDraft, taskDraft, taskDraftIssue, taskDraftPatch } from './TaskEditorFields.tsx'
+import type { TaskEditorDraft } from './TaskEditorFields.tsx'
+import type { TaskEditorStoreProps } from './editor-store.ts'
 import { timingFromDraft } from './editor-timing.ts'
-import { formatAvailableAt, formatScheduleFrequency, nextRunParts, recordTimeZone, zoneLabel } from './schedule-format.ts'
+import { formatAvailableAt, nextRunParts, recordTimeZone } from './schedule-format.ts'
 import { sessionLinkState } from './session-link.ts'
 import { taskNextRunAt, taskSessionId } from './task-record.ts'
 import { NewSessionLimit } from './NewSessionLimit.tsx'
@@ -28,6 +29,10 @@ export type HostEditFailure = 'host.saveError' | 'host.conflict' | 'host.notFutu
 
 /** Localized reason the Host refused a run, or reason the wiring could not confirm it. */
 export type HostRunFailure = 'host.runError' | 'host.executionPending' | 'detail.missing'
+
+/** Creation keeps a failed draft and never creates or activates its destination Session. */
+export type TaskCreateOutcome = { readonly created: ScheduleCatalogEntry }
+  | { readonly failed: 'host.createError' | 'host.notFuture' | 'host.invalidRule' }
 
 /** Target-based mutations supplied by the owning plugin's Remote wiring. */
 export interface HostTaskActions {
@@ -76,28 +81,21 @@ export interface TaskDetailInjected extends DeliveryHistoryInjected {
 }
 
 /** One task's detail, as the Tasks page and the task tab both compose it. */
-export type TaskDetailProps = TaskDetailInjected
+type TaskDetailCommonProps = TaskDetailInjected
+  & TaskEditorStoreProps
   & PropsLocale<'schedule.manager'>
   & Pick<PropsRuntime<'main'>, 'useSessions' | 'useWorkspaces'>
   & {
-    /** Task shown; an authoritative catalog row refreshes on its own outside an open edit. */
-    readonly task: ScheduleCatalogEntry
-    /**
-     * Whether an authoritative catalog row backs the shown task; a retained task alone disables its edit, pause,
-     * run, and delete entries.
-     */
-    readonly authoritative: boolean
     /** Element id shared by the detail panels and any control that points at them. */
     readonly id: string
-    /** Catalog query state; loading keeps every action visible and disabled. */
+    /** Catalog query state; loading disables saved-task actions. */
     readonly status: 'loading' | 'ready' | 'error'
     /** Tasks with a deletion in flight. */
     readonly deleting: readonly ScheduleId[]
     /**
-     * Report the task that an open edit started from or that a confirmed deletion is removing, so its owner
-     * retains it outside the catalog, or null when that edit closes or the Host does not apply that deletion.
+     * Retain a task while a confirmed deletion and its catalog refresh settle.
      */
-    readonly onEditState: (task: ScheduleCatalogEntry | null) => void
+    readonly onRetainTask: (task: ScheduleCatalogEntry | null) => void
     /** Active detail view; the owner resets it to Rules when it selects another task. */
     readonly tab: TaskDetailTab
     /** Select the active detail view. */
@@ -115,44 +113,60 @@ export type TaskDetailProps = TaskDetailInjected
     readonly onClose?: () => void
   }
 
-/** One task detail's editing state, as its Tasks page or task tab owns it. */
+/** New and existing tasks use the same editable page; only submission and saved-task actions differ. */
+export type TaskDetailProps = TaskDetailCommonProps & ({
+  readonly task: ScheduleCatalogEntry
+  readonly authoritative: boolean
+  readonly onCreateTask?: never
+  readonly onCreated?: never
+} | {
+  readonly task?: undefined
+  readonly authoritative?: never
+  readonly onCreateTask: (request: ScheduleCreateRequest) => Promise<TaskCreateOutcome>
+  readonly onCreated: (task: ScheduleCatalogEntry) => void
+})
+
+/** One task detail's selected tab, confirmation, and retained catalog row. */
 export interface TaskDetailController {
   /** Catalog row the shown id resolves to, or undefined when the read has no such row. */
   readonly record: ScheduleCatalogEntry | undefined
-  /** Task to show: the catalog row, or the task that an open edit or a confirmed deletion retained. */
+  /** Task to show: the catalog row, an unsaved draft's baseline, or a confirmed deletion's retained row. */
   readonly task: ScheduleCatalogEntry | undefined
   /** Props the shared detail element takes, without the task it shows. */
-  readonly props: Omit<TaskDetailProps, 'task' | 'authoritative' | 'onClose' | 'onDeleted'>
+  readonly props: Omit<TaskDetailCommonProps, 'onClose' | 'onDeleted'>
 }
 
 /**
- * Own the editing state one task detail shares across both of its owners.
+ * Own selected-task state shared by the Tasks page and task tabs.
  *
- * The shown task is the catalog row for `taskId`, or the task that an open edit
- * or a confirmed deletion of that row retained after the row left the catalog.
- * The view, the confirmation, and the retained task all reset when `taskId`
- * changes, so one task's edit never carries into another.
+ * The shown task comes from the catalog, an unsaved form's CAS baseline, or a
+ * confirmed deletion. The view and confirmation reset when selection changes;
+ * the entry's store retains unsaved fields by task identity.
  * @param injected - detail actions, localized copy, and framework readers.
  * @param catalog - the owner's authoritative task catalog snapshot.
  * @param taskId - task the owner selected, or undefined when it selected none.
  * @returns the shown task and catalog row, its element id, its confirmation, and the detail props.
  */
 export function useTaskDetail(
-  injected: TaskDetailInjected & PropsLocale<'schedule.manager'> & Pick<PropsRuntime<'main'>, 'useSessions' | 'useWorkspaces'>,
+  injected: TaskDetailInjected & TaskEditorStoreProps & PropsLocale<'schedule.manager'> & Pick<PropsRuntime<'main'>, 'useSessions' | 'useWorkspaces'>,
   catalog: CatalogSnapshot<ScheduleCatalogEntry>,
   taskId: ScheduleId | undefined,
 ): TaskDetailController {
-  const [draft, setDraft] = useState<ScheduleCatalogEntry | null>(null)
+  const [retained, setRetained] = useState<ScheduleCatalogEntry | null>(null)
   const [tab, setTab] = useState<TaskDetailTab>('rule')
   const [confirmId, setConfirmId] = useState<ScheduleId | null>(null)
   const id = useId()
+  const savedDraft = injected.useStore(state => taskId === undefined ? undefined : state.drafts[`task:${taskId}`])
   useEffect(() => {
-    setDraft(null)
+    setRetained(null)
     setTab('rule')
     setConfirmId(null)
   }, [taskId])
   const record = taskId === undefined ? undefined : catalog.records.find(item => item.id === taskId)
-  const task = record ?? (draft !== null && draft.id === taskId ? draft : undefined)
+  const edited = record === undefined && savedDraft?.base !== undefined
+    && Object.keys(taskDraftPatch(savedDraft.draft, savedDraft.base)).length > 0
+    ? savedDraft.base : undefined
+  const task = record ?? edited ?? (retained !== null && retained.id === taskId ? retained : undefined)
   return {
     record, task,
     props: {
@@ -160,7 +174,7 @@ export function useTaskDetail(
       status: catalog.status,
       deleting: catalog.deleting,
       id,
-      onEditState: setDraft,
+      onRetainTask: setRetained,
       tab,
       onTabChange: setTab,
       confirmId,
@@ -170,12 +184,12 @@ export function useTaskDetail(
 }
 
 /**
- * Render one task's rule or saved deliveries; changing its id resets the edit.
+ * Render one new or existing task's editable rule or saved deliveries.
  * @param props - Task, catalog state, detail view, confirmation, locale, and actions.
  * @returns The detail region and its deletion confirmation dialog.
  */
 export function TaskDetail(props: TaskDetailProps): ReactNode {
-  return <TaskDetailView key={props.task.id} {...props} />
+  return <TaskDetailView key={props.task === undefined ? 'new' : `task:${props.task.id}`} {...props} />
 }
 
 function TaskDetailView(props: TaskDetailProps): ReactNode {
@@ -183,111 +197,132 @@ function TaskDetailView(props: TaskDetailProps): ReactNode {
     onRetry, onOpenSession, loadHistory, status, deleting, useSessions, useWorkspaces, t, hostActions } = props
   const sessions = useSessions(snapshot => snapshot)
   const workspaces = useWorkspaces(snapshot => snapshot)
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(() => taskDraft(task))
-  const [base, setBase] = useState(task)
-  const [pending, setPending] = useState(false)
-  const [failure, setFailure] = useState<HostEditFailure | HostRunFailure | null>(null)
+  const key = task === undefined ? 'new' : `task:${task.id}`
+  const stored = props.useStore(state => state.drafts[key])
+  const [seed] = useState(newTaskDraft)
+  const initial = stored?.initial ?? seed
+  const changes = useMemo(() => stored?.base === undefined ? undefined : taskDraftPatch(stored.draft, stored.base),
+    [stored?.draft, stored?.base])
+  const storedDirty = changes !== undefined && Object.keys(changes).length > 0
+  const cached = stored?.base !== undefined && !storedDirty && !stored.pending && stored.failure === undefined
+    && stored.base.updatedAt !== task?.updatedAt ? undefined : stored
+  const base = cached?.base ?? task
+  const input = cached?.draft ?? (task === undefined ? initial : taskDraft(task))
+  const projects = projectChoices(workspaces.items, t('host.defaultProject'))
+  // Until a directory is chosen, a new form follows the Workspace list as it arrives.
+  const draft = task === undefined && input.cwd === '' ? { ...input, cwd: projects.defaultCwd } : input
+  const dirty = base === undefined
+    ? JSON.stringify(draft) !== JSON.stringify({ ...initial, cwd: initial.cwd || projects.defaultCwd }) : storedDirty
+  const issue = dirty ? taskDraftIssue(draft, changes) : undefined
+  const valid = issue === undefined
+  const [actionPending, setPending] = useState(false)
+  const [actionFailure, setFailure] = useState<HostEditFailure | HostRunFailure | null>(null)
+  const saving = cached?.pending === true
+  const pending = actionPending || saving
+  const failure = !pending && dirty && base !== undefined && task !== undefined && base.updatedAt !== task.updatedAt
+    ? 'host.conflict' : actionFailure ?? cached?.failure ?? null
   const [menuOpen, setMenuOpen] = useState(false)
-  const editRef = useRef<HTMLButtonElement>(null)
   const moreRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
   const mounted = useRef(true)
+  useLayoutEffect(() => {
+    const scroll = scrollRef.current as HTMLDivElement
+    const measure = (): void => {
+      scroll.style.setProperty('--detail-scrollbar-space', `${scroll.offsetWidth - scroll.clientWidth}px`)
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(scroll)
+    return () => { observer.disconnect() }
+  }, [tab])
   useEffect(() => {
     mounted.current = true
     panelRef.current?.focus({ preventScroll: true })
     return () => { mounted.current = false }
   }, [])
-  const floorEndsAt = task.deliveryFloorEndsAt === undefined ? undefined : Date.parse(task.deliveryFloorEndsAt)
+  const floorEndsAt = task?.deliveryFloorEndsAt === undefined ? undefined : Date.parse(task.deliveryFloorEndsAt)
   // A sample at the floor's end enables Run now when the interval passes, not up to one period later.
   const now = useRelativeClock(RELATIVE_CLOCK_PERIOD_MS, floorEndsAt)
-  const busy = pending || status === 'loading' || deleting.includes(task.id)
-  const executionActive = task.executionActive === true
+  const deletingTask = task !== undefined && deleting.includes(task.id)
+  const busy = pending || deletingTask || task !== undefined && status === 'loading'
+  const executionActive = task?.executionActive === true
   const deliveryFloor = floorEndsAt !== undefined && floorEndsAt > now
-  const linkedId = taskSessionId(task)
+  const linkedId = task === undefined ? undefined : taskSessionId(task)
   const linkedText = linkedId === undefined ? '' : sessions.byId[linkedId]?.displayTitle ?? linkedId
   const linkedState = linkedId === undefined ? 'unavailable' : sessionLinkState(linkedId, sessions, workspaces)
   // The Host refuses to deliver to an archived target Session.
-  const targetArchived = task.target.kind !== 'new' && linkedState === 'archived'
+  const targetArchived = task?.target.kind !== 'new' && linkedState === 'archived'
   // Only the interval needs the row to explain itself: each other cause shows in the detail or is transient.
-  const runHeld = busy || editing || executionActive || targetArchived || !props.authoritative
-  const nextRunAt = taskNextRunAt(task)
-  const next = nextRunParts(nextRunAt, t('time.locale'), now, t)
+  const runHeld = busy || dirty || executionActive || targetArchived || !props.authoritative
+  const nextRunAt = task === undefined ? '' : taskNextRunAt(task)
+  const next = task === undefined ? undefined : nextRunParts(nextRunAt, t('time.locale'), now, t)
   // SessionListState gives every listed id a byId row.
   const choices = sessions.ids.map(value => ({ value, label: (sessions.byId[value] as SessionSummary).displayTitle }))
-  const projects = projectChoices(workspaces.items, t('host.defaultProject'))
-
-  const beginEdit = (): void => {
-    setBase(task)
-    setDraft(taskDraft(task))
+  const setDraft = (value: TaskEditorDraft): void => {
+    props.actions.setDraft(key, { base, draft: value, ...(task === undefined ? { initial } : {}),
+      ...(cached?.failure === 'host.conflict' ? { failure: cached.failure } : {}) })
     setFailure(null)
-    props.onEditState(task)
-    setEditing(true)
-    onTabChange('rule')
   }
+  const reset = (): void => { props.actions.clearDraft(key); setFailure(null) }
   const save = async (): Promise<void> => {
-    setPending(true)
+    props.actions.setDraft(key, { base, draft, pending: true, ...(task === undefined ? { initial } : {}) })
     setFailure(null)
-    const target = draftTarget(draft, base)
-    const seeded = taskDraft(base)
-    const timingChanged = JSON.stringify(timingFromDraft(draft)) !== JSON.stringify(timingFromDraft(seeded))
-    const targetChanged = draft.target !== seeded.target || draft.sessionId !== seeded.sessionId || draft.cwd !== seeded.cwd
-    const patch = {
-      ...(draft.title === base.title ? {} : { title: draft.title }),
-      ...(draft.prompt === base.prompt ? {} : { prompt: draft.prompt }),
-      ...(timingChanged ? { timing: timingFromDraft(draft, true) } : {}),
-      ...(targetChanged ? { target } : {}),
-    }
-    if (Object.keys(patch).length === 0) Object.assign(patch, { title: draft.title })
-    const outcome = await hostActions.edit({ id: task.id, action: 'update', patch, expectedUpdatedAt: base.updatedAt ?? null })
-    if (!mounted.current) return
-    // The read-only view returns at once, so its Edit button can take back the focus of the removed Save button.
-    flushSync(() => {
-      setPending(false)
-      if (outcome === 'saved') { setEditing(false); props.onEditState(null) }
-      else setFailure(outcome.failed)
-    })
-    if (outcome === 'saved') editRef.current?.focus()
+    const existingBase = base as ScheduleCatalogEntry
+    const outcome = task === undefined
+      ? await props.onCreateTask({ title: draft.title.trim(), prompt: draft.prompt.trim(),
+        timing: timingFromDraft(draft, true), target: draftTarget(draft) })
+      : await hostActions.edit({ id: task.id, action: 'update', patch: taskDraftPatch(draft, existingBase, true),
+        expectedUpdatedAt: existingBase.updatedAt ?? null })
+    if (outcome === 'saved' || 'created' in outcome) {
+      props.actions.clearDraft(key)
+      if (mounted.current && outcome !== 'saved') props.onCreated?.(outcome.created)
+      if (mounted.current && outcome === 'saved') panelRef.current?.focus({ preventScroll: true })
+    } else props.actions.setDraft(key, { base, draft, failure: outcome.failed, ...(task === undefined ? { initial } : {}) })
   }
-  const setActive = async (): Promise<void> => {
+  const setActive = async (task: ScheduleCatalogEntry): Promise<void> => {
     setPending(true)
     const outcome = await hostActions.edit({ id: task.id, action: 'update', patch: { active: task.status !== 'active' }, expectedUpdatedAt: task.updatedAt ?? null })
     if (!mounted.current) return
     setPending(false)
     setFailure(outcome === 'saved' ? null : outcome.failed)
   }
-  const run = async (): Promise<void> => {
+  const run = async (id: ScheduleId): Promise<void> => {
     setMenuOpen(false)
     setPending(true)
-    const outcome = await hostActions.run(task.id)
+    const outcome = await hostActions.run(id)
     if (!mounted.current) return
     setPending(false)
     setFailure(outcome === 'queued' ? null : outcome.failed)
   }
 
   return <>
-    <aside ref={panelRef} tabIndex={-1} className={css.detail} id={id} aria-label={t('detail.label')}>
+    <aside ref={panelRef} tabIndex={-1} className={css.detail} id={id} aria-busy={pending || deletingTask}
+      aria-label={t(task === undefined ? 'host.manualCreate' : 'detail.label')}
+      onKeyDown={(event) => {
+        if (pending && event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); event.stopPropagation() }
+      }}>
       <div className={css.detailTabsBar}>
-        <div className={css.detailTabs} role="tablist" aria-label={t('detail.tabs')}>
-          {(['rule', 'records'] as const).map(value => <button key={value} type="button" role="tab"
-            id={`${id}-${value}-tab`} aria-controls={`${id}-${value}-panel`} tabIndex={tab === value ? 0 : -1}
-            aria-selected={tab === value} className={css.detailTab}
-            onKeyDown={(event) => {
-              if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
-              if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
-              event.preventDefault()
-              const next = event.key === 'Home' ? 0 : event.key === 'End' ? 1 : value === 'rule' ? 1 : 0
-              onTabChange(next === 0 ? 'rule' : 'records')
-              const button = event.currentTarget.parentElement?.children[next]
-              if (button instanceof HTMLButtonElement) button.focus()
-            }}
-            onClick={() => { onTabChange(value) }}>{t(value === 'rule' ? 'detail.rule' : 'detail.records')}</button>)}
-        </div>
+        {task === undefined ? <h2 className={css.createTitle}>{t('host.manualCreate')}</h2>
+          : <div className={css.detailTabs} role="tablist" aria-label={t('detail.tabs')}>
+            {(['rule', 'records'] as const).map(value => <button key={value} type="button" role="tab"
+              id={`${id}-${value}-tab`} aria-controls={`${id}-${value}-panel`} tabIndex={tab === value ? 0 : -1}
+              aria-selected={tab === value} className={css.detailTab}
+              onKeyDown={(event) => {
+                if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
+                if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+                event.preventDefault()
+                const next = event.key === 'Home' ? 0 : event.key === 'End' ? 1 : value === 'rule' ? 1 : 0
+                onTabChange(next === 0 ? 'rule' : 'records')
+                const button = event.currentTarget.parentElement?.children[next]
+                if (button instanceof HTMLButtonElement) button.focus()
+              }}
+              onClick={() => { onTabChange(value) }}>{t(value === 'rule' ? 'detail.rule' : 'detail.records')}</button>)}
+          </div>}
         <div className={css.detailActions}>
-          {!editing && <Button ref={editRef} size="sm" disabled={busy || executionActive || !props.authoritative} onClick={beginEdit}>{t('host.edit')}</Button>}
-          <Tooltip label={t(task.status === 'active' ? 'host.pause' : 'host.resume')} side="bottom" delayMs={500} portal>
-            <span><Button size="sm" className={css.detailIconButton} disabled={busy || editing || executionActive || task.status === 'ended' || !props.authoritative}
-              aria-label={t(task.status === 'active' ? 'host.pause' : 'host.resume')} onClick={() => { void setActive() }}>
+          {task !== undefined && <><Tooltip label={t(task.status === 'active' ? 'host.pause' : 'host.resume')} side="bottom" delayMs={500} portal>
+            <span><Button size="sm" className={css.detailIconButton} disabled={busy || dirty || executionActive || task.status === 'ended' || !props.authoritative}
+              aria-label={t(task.status === 'active' ? 'host.pause' : 'host.resume')} onClick={() => { void setActive(task) }}>
               {task.status === 'active' ? <IconPauseOutlineRegular /> : <IconPlayOutlineRegular />}
             </Button></span>
           </Tooltip>
@@ -299,8 +334,8 @@ function TaskDetailView(props: TaskDetailProps): ReactNode {
             <MenuItemButton disabled={runHeld || deliveryFloor}
               disabledReason={deliveryFloor && !runHeld
                 ? t('host.runAfterInterval', { time: formatAvailableAt(floorEndsAt, t('time.locale'), now) }) : undefined}
-              onSelect={() => { void run() }}>{t('host.run')}</MenuItemButton>
-            <MenuItemButton disabled={busy || editing || executionActive || !props.authoritative}
+              onSelect={() => { void run(task.id) }}>{t('host.run')}</MenuItemButton>
+            <MenuItemButton disabled={busy || dirty || executionActive || !props.authoritative}
               onSelect={() => {
                 // The dialog returns focus to the control that held it on open, not to the removed menu row.
                 moreRef.current?.focus()
@@ -309,55 +344,55 @@ function TaskDetailView(props: TaskDetailProps): ReactNode {
               }}>
               {t('delete.action')}
             </MenuItemButton>
-          </Menu>
-          {onClose !== undefined && <Button size="sm" className={css.detailIconButton} aria-label={t('detail.close')}
+          </Menu></>}
+          {onClose !== undefined && <Button size="sm" className={css.detailIconButton} aria-label={t(task === undefined ? 'host.closeCreate' : 'detail.close')}
             disabled={pending} onClick={onClose}><IconCloseOutlineRegular /></Button>}
         </div>
       </div>
-      <div className={clsx(css.detailScroll, tab === 'records' && css.detailRecords)} role="tabpanel"
-        id={`${id}-${tab}-panel`} aria-labelledby={`${id}-${tab}-tab`} tabIndex={0}>
+      <div ref={scrollRef} className={clsx(css.detailScroll, tab === 'records' && css.detailRecords)} role={task === undefined ? undefined : 'tabpanel'}
+        id={`${id}-${tab}-panel`} aria-labelledby={task === undefined ? undefined : `${id}-${tab}-tab`} tabIndex={0}>
         <CatalogFeedback status={status} populated onRetry={onRetry} t={t} />
         {tab === 'rule' && <>
-          {!editing && <>
+          {task !== undefined && <>
             <header className={css.detailHeader}><h2 className={css.readonlyName}>{task.title}</h2></header>
             <div className={css.nextRun}><p>{task.status === 'active'
-              ? <>{t('detail.nextRun')} <time dateTime={nextRunAt}>{next.absolute}</time>{' '}
-                <span className={css.nextRunRelative}>{next.relative}</span></>
+              ? <>{t('detail.nextRun')} <time dateTime={nextRunAt}>{next?.absolute}</time>{' '}
+                <span className={css.nextRunRelative}>{next?.relative}</span></>
               : t(`status.${task.status}`)}</p></div>
-            <p className={css.readonlyPrompt}>{task.prompt}</p>
-            <div className={css.ruleCard}>
-              <div className={css.hostRuleRow}><span>{t('rule.repeat')}</span><span>{formatScheduleFrequency(task, t, {
-                system: Intl.DateTimeFormat().resolvedOptions().timeZone, label: zone => zoneLabel(zone, t),
-              })}</span></div>
-              <div className={css.hostRuleRow}><span>{t('host.target')}</span><span>{t(targetLabelKey(task.target.kind))}</span></div>
-            </div>
             {linkedId !== undefined && linkedState !== 'available' && task.target.kind === 'session'
               && <p className={css.detailNotice} role="status">{t(linkedState === 'archived' ? 'detail.sessionArchived'
                 : linkedState === 'loading' ? 'detail.sessionLoading' : 'detail.sessionUnavailable')}</p>}
             {/* A refused run states the same cause, so it alone reports a queued or running execution. */}
             {executionActive && failure !== 'host.executionPending'
               && <p className={css.detailNotice} role="status">{t('host.executionActive')}</p>}
+            {dirty && !props.authoritative && status === 'ready' && !deletingTask && failure !== 'detail.missing'
+              && <p className={css.detailNotice} role="status">{t('detail.missing')}</p>}
           </>}
-          {editing && <TaskEditorFields draft={draft} onChange={setDraft} disabled={pending}
-            projects={projects} original={base} t={t} />}
-          {editing && draft.target === 'new'
-            && <NewSessionLimit load={hostActions.loadNewSessionInterval} t={t} />}
           {/* A refused run is an expected wait, not a failure of the Host or of the user's input. */}
-          {failure === 'host.executionPending' ? <p className={css.detailNotice} role="status">{t(failure)}</p>
+          {failure === 'host.conflict' ? <div className={clsx(css.notice, css.conflictNotice)}>
+            <p role="alert">{t(failure)}</p>
+            {changes !== undefined && dirty && task !== undefined && props.authoritative && status === 'ready'
+              && <Button variant="outline" size="sm" disabled={busy} onClick={() => {
+                props.actions.setDraft(key, { base: task, draft: reapplyTaskDraft(draft, task, changes) })
+                setFailure(null)
+                panelRef.current?.focus({ preventScroll: true })
+              }}>{t('host.reapply')}</Button>}
+          </div> : failure === 'host.executionPending' ? <p className={css.detailNotice} role="status">{t(failure)}</p>
             : failure !== null && <p className={css.saveFailure} role="alert">{t(failure)}</p>}
-          {failure === 'host.conflict' && <Button onClick={beginEdit}>{t('host.reload')}</Button>}
+          <TaskEditorFields draft={draft} onChange={setDraft}
+            disabled={pending || executionActive || deletingTask}
+            projects={projects} original={base} t={t} />
+          {draft.target === 'new'
+            && <NewSessionLimit load={hostActions.loadNewSessionInterval} t={t} />}
+          {failure === null && issue !== undefined && issue !== 'incomplete'
+            && <p className={css.saveFailure} role="status">{t(issue)}</p>}
         </>}
-        {tab === 'records' && <DeliveryHistory id={task.id} latestMessageId={task.lastDelivery?.messageId}
+        {tab === 'records' && task !== undefined && <DeliveryHistory id={task.id} latestMessageId={task.lastDelivery?.messageId}
           timeZone={recordTimeZone(task)} loadHistory={loadHistory} onOpenSession={onOpenSession}
           sessionTitles={Object.fromEntries(choices.map(choice => [choice.value, choice.label]))}
           availableSessionIds={sessions.ids.filter(value => sessionLinkState(value, sessions, workspaces) === 'available')} t={t} />}
       </div>
-      {editing ? <footer className={css.saveFooter}>
-        <span className={css.saveNotice}>{t('rule.unsaved')}</span>
-        <Button disabled={pending} onClick={() => { setEditing(false); props.onEditState(null); setFailure(null) }}>{t('rule.cancel')}</Button>
-        <Button variant="primary" disabled={pending || !taskDraftValid(draft) || failure === 'host.conflict'}
-          onClick={() => { void save() }}>{t(pending ? 'rule.saving' : 'rule.save')}</Button>
-      </footer> : (task.target.kind !== 'new' || linkedId !== undefined) && <footer className={css.hostSessionFooter}>
+      {task !== undefined && (task.target.kind !== 'new' || linkedId !== undefined) && <footer className={css.hostSessionFooter}>
         <span>{t(task.target.kind === 'new' ? 'host.latestConversation' : 'detail.session')}</span>
         {linkedId === undefined || (task.target.kind === 'new_once' && linkedState === 'unavailable')
           ? <span className={css.hostSessionEmpty}>{t('host.sessionAfterFirstRun')}</span>
@@ -367,21 +402,32 @@ function TaskDetailView(props: TaskDetailProps): ReactNode {
             {linkedText}<IconChevronRightOutlineRegular />
           </Button>}
       </footer>}
+      {(tab === 'rule' || dirty) && <footer className={css.saveFooter}>
+        <span className={css.saveNotice}>{dirty ? t('rule.unsaved') : ''}</span>
+        <Button disabled={pending || task !== undefined && !dirty && failure === null}
+          onClick={() => { reset(); if (task === undefined) onClose?.() }}>{t('rule.cancel')}</Button>
+        <Button variant="primary" disabled={busy || !dirty || !valid || failure === 'host.conflict'
+          || task !== undefined && (!props.authoritative || executionActive)}
+        onClick={() => { void save() }}>{t(saving ? task === undefined ? 'host.creating' : 'rule.saving' : task === undefined ? 'host.create' : 'rule.save')}</Button>
+      </footer>}
     </aside>
-    <Modal open={confirmId === task.id} className={css.confirmDialog as string} contentClassName={css.confirmContent as string}
+    {task !== undefined && <Modal open={confirmId === task.id}
+      className={css.confirmDialog as string} contentClassName={css.confirmContent as string}
       title={t('delete.title')} description={t('delete.description')} closeLabel={t('delete.close')} onClose={() => { onConfirm(null) }}
       footer={<div className={css.confirmActions}>
         <Button data-modal-autofocus onClick={() => { onConfirm(null) }}>{t('delete.cancel')}</Button>
         <Button disabled={busy} onClick={() => {
           onConfirm(null)
+          setPending(true)
           // The refresh that drops the row lands before the outcome, so the owner retains the task until then.
-          props.onEditState(task)
+          props.onRetainTask(task)
           void onDelete(task.id).then((outcome) => {
             if (!mounted.current) return
-            if (outcome === 'deleted') onDeleted()
-            else props.onEditState(null)
+            setPending(false)
+            if (outcome === 'deleted') { props.actions.clearDraft(key); onDeleted() }
+            else props.onRetainTask(null)
           })
         }}>{t('delete.confirm')}</Button>
-      </div>}><p className={css.confirmPrompt}>{task.prompt}</p></Modal>
+      </div>}><p className={css.confirmPrompt}>{task.prompt}</p></Modal>}
   </>
 }

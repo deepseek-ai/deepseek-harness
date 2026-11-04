@@ -31,6 +31,7 @@ import { WorkspacePicker } from '../src/client/WorkspacePicker.tsx'
 import { FLAT_SESSION_ORDER_KEY } from '../src/client/stores.ts'
 import { UNGROUPED_KEY } from '../src/client/tree.ts'
 import { apply as hostApply } from '../src/index.ts'
+import { SECTION_HOOK_CONTEXT, SECTION_INJECT } from './section-scroller.client.ts'
 
 const sid = (id: string) => id as SessionId
 const summary = (id: string, updatedAt: number): SessionSummary => ({
@@ -186,14 +187,15 @@ type RowListName = typeof MENU_ITEM | typeof ROW_ACTION | 'shell.overlay'
 function declare(slots: SlotRegistry, ...names: HoleName[]): () => void {
   const children = Object.fromEntries([...names, 'contextMenu.content', 'contextMenu.icon'].map(name => [
     name, { kind: name === 'shell.overlay' ? 'list' : name.startsWith('contextMenu.') ? 'keyed' : 'single', scope: 'root',
-      ...name === 'contextMenu.icon' ? { inline: true } : {} },
+      ...name === 'contextMenu.icon' ? { inline: true } : {},
+      ...name === 'sidebar.workspaces' ? { inject: SECTION_INJECT } : {} },
   ]))
   return slots.register({ name: 'root', children } as never, () => null)
 }
 
 /** Own the sidebar declaration independently of the frame-wide overlay in lifecycle tests. */
 function SidebarDeclarationOwner({ renderSlot }: PropsRenderSlots<'sidebar.workspaces'>) {
-  return renderSlot('sidebar.workspaces', { wide: true, expandSidebar: () => {} })
+  return renderSlot('sidebar.workspaces', { wide: true, expandSidebar: () => {} }, { hookContext: SECTION_HOOK_CONTEXT })
 }
 
 /** The one entry registered under `id` in a list. */
@@ -385,7 +387,7 @@ describe('ui-workspace apply', () => {
     declare(b.slots, 'shell.overlay')
     const removeBrowser = b.slots.register({
       name: 'shell.overlay', id: 'test-sidebar-owner',
-      children: { 'sidebar.workspaces': { kind: 'single', scope: 'root' } },
+      children: { 'sidebar.workspaces': { kind: 'single', scope: 'root', inject: SECTION_INJECT } },
     }, SidebarDeclarationOwner)
     await b.ctx.plugin({ inject: [...inject], apply }).await()
     b.setSessions(sessionState([{ ...summary('source', 1), retainedBy: { mainView: 1 } }]))

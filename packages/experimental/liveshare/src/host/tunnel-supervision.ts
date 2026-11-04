@@ -36,6 +36,7 @@ import type { ShareRpcActor } from '@deepseek-ai/dsh-experimental-liveshare-prot
 import type { ViewerReadService } from './viewer-read.ts'
 import { TunnelWorker, type TunnelWorkerInput } from './tunnel-worker.ts'
 import { isRecord } from './wire-json.ts'
+import { relayFetch, type RelayFetch } from './relay-fetch.ts'
 
 /** Longest wait one timer may take; a deadline beyond it is waited for in steps. */
 const MAX_EXPIRY_TIMER_MS = 2 ** 31 - 1
@@ -96,6 +97,8 @@ function tunnelCommand(): TunnelProcessCommand {
 export interface TunnelSupervisionDeps {
   /** Host context, read for the optional title services the reconcile step uses. */
   readonly ctx: Context
+  /** Relay transport owned by this share host; absent callers use the module transport. */
+  readonly relayFetch?: RelayFetch
   /** Shares this host publishes; registration replay walks them. */
   readonly ownerShares: Map<string, OwnerShare>
   /** Relay rows this host stopped but has not deleted. */
@@ -317,6 +320,7 @@ function describeTransportFailure(error: unknown): string {
  * @returns Worker lifecycle, registration replay, credential state, and timers.
  */
 export function createTunnelSupervision(deps: TunnelSupervisionDeps): TunnelSupervision {
+  const fetchRelay = deps.relayFetch ?? relayFetch
   const pending = new Map<string, PendingShare>()
   const forwardedRequests = new Map<string, AbortController>()
   const forwardedTasks = new Set<Promise<void>>()
@@ -479,7 +483,7 @@ export function createTunnelSupervision(deps: TunnelSupervisionDeps): TunnelSupe
     try {
       const relayUrl = new URL(`${relay}/__liveshare/share`)
       relayUrl.searchParams.set('shareId', shareId)
-      const response = await fetch(relayUrl, {
+      const response = await fetchRelay(relayUrl, {
         method: 'DELETE',
         headers: { authorization: `Bearer ${gatewayToken}` },
         signal: AbortSignal.timeout(5_000),
@@ -743,7 +747,7 @@ export function createTunnelSupervision(deps: TunnelSupervisionDeps): TunnelSupe
     const facts = factsFor(normalized)
     const presented = claimableCredentialForRelay(normalized)
     try {
-      const response = await fetch(new URL(`${normalized}/__liveshare/owner-credential`), {
+      const response = await fetchRelay(new URL(`${normalized}/__liveshare/owner-credential`), {
         signal: AbortSignal.timeout(5_000),
         ...(presented === undefined ? {} : { headers: { 'x-liveshare-owner-credential': presented } }),
       })
@@ -781,7 +785,7 @@ export function createTunnelSupervision(deps: TunnelSupervisionDeps): TunnelSupe
       if (deps.disposed()) break
       if (normalizeRelayUrl(share.relay) !== relay) continue
       try {
-        const response = await fetch(
+        const response = await fetchRelay(
           new URL(`${share.relay}/__liveshare/share/claim?shareId=${encodeURIComponent(share.shareId)}`),
           {
             method: 'POST',
@@ -835,7 +839,7 @@ export function createTunnelSupervision(deps: TunnelSupervisionDeps): TunnelSupe
     const controller = new AbortController()
     const timer = setTimeout(() => { controller.abort() }, 5_000)
     try {
-      const response = await fetch(relay, { method: 'GET', redirect: 'manual', signal: controller.signal })
+      const response = await fetchRelay(relay, { method: 'GET', redirect: 'manual', signal: controller.signal })
       await response.body?.cancel()
       return { reachable: true }
     } catch (error) {

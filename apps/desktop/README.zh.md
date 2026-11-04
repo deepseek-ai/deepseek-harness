@@ -35,7 +35,7 @@ Electron 在 `userData/desktop/locale-cache` 缓存最近确认的界面语言�
 
 桌面埋点遵循[产品采集策略](../../packages/client/product-analytics/README.zh.md)及其动态应用配置，不包含 Web 使用情况。安装更新会等待该操作的本地埋点接收请求结束，再锁定 API 准入并停止 Host。接收请求的时限为一秒，失败不会阻止安装，也不等待收集端完成发送。
 
-桌面应用是完整 dsh Web 应用外的一层 Electron 壳。Electron RunAsNode 子进程启动共享 profile runner，Electron 立即从 `dsh-app://app/` 加载打包内的 Web 入口。共享加载页等待 Host 启动注入，然后在同一文档中启动客户端。Electron 将应用 HTTP 请求转发给已认证的 Web Host，转发时丢弃描述 Node fetch 连接而非资源本身的响应头（`transfer-encoding`、`connection`、`keep-alive`），并把插件 bundle 响应标记为 `no-store`，因为其每次启动都变化的 revision 只会在 Chromium 磁盘缓存中累积；WebSocket 流连接到该 Host，仅为归属的应用窗口附加凭据。Node IPC 承载启动注入、就绪与关闭。Desktop 默认监听系统分配的端口，因此不会与 Web 的 `3080` 或系统保留端口冲突；可通过 `webserver.config.port` patch 覆盖。
+桌面应用是完整 dsh Web 应用外的一层 Electron 壳。Electron RunAsNode 子进程启动共享 profile runner，Electron 立即从 `dsh-app://app/` 加载打包内的 Web 入口。共享加载页等待 Host 启动注入，然后在同一文档中启动客户端。Electron 将应用 HTTP 请求转发给已认证的 Web Host，转发时丢弃描述 Node fetch 连接而非资源本身的响应头（`transfer-encoding`、`connection`、`keep-alive`），并把插件 bundle 响应标记为 `no-store`，因为其每次启动都变化的 revision 只会在 Chromium 磁盘缓存中累积；WebSocket 流连接到该 Host，仅为归属的应用窗口附加凭据。Node IPC 承载启动注入、就绪与关闭。Desktop 默认监听系统分配的端口，因此不会与 Web 的 `3080` 或系统保留端口冲突；可通过 `webserver.config.port` patch 覆盖。原生 Host 请求会显式发送当前 Host 的认证 Cookie，任何 Electron session 都不保存该 Cookie；每次启动 Host 时都会移除早期版本遗留在默认 session 中的 `dsh-auth-*` Cookie，因为 Cookie 不区分端口，否则这些 Cookie 会随每个发往 `127.0.0.1` 的请求一并发送。
 
 Desktop 绑定 `127.0.0.1`，即 Electron 为就绪 URL 与 WebSocket 凭据过滤器拨号的地址。WebSocket 流按 Host 监听器使用 `ws:` 或 `wss:`；附加凭据要求 authority 与 scheme 均匹配。
 
@@ -302,7 +302,17 @@ Electron 主进程在启动时读取一次 `app.getPath('userData')/desktop/sett
 }
 ```
 
-已有文件不会被覆盖；缺少 `updates` 对象或该字段时均按 `false` 处理。将字段设为 `true` 后完全退出并重启应用，即可允许测试鉴权弹窗。改回 `false` 并重启即可再次禁止。创建、读取或校验失败时使用默认值 `false`，不阻止启动。Desktop 尝试在 Electron 控制台记录包含文件路径的警告；日志不可用也不阻止启动。修正文件并重启后才会应用显式设置。未知字段会保留。安装更新保留此用户数据文件；Windows 卸载按[卸载规则](#windows-uninstall-rules)删除它。
+启动读取不会覆盖已有文件；缺少 `updates` 对象或该字段时均按 `false` 处理。将字段设为 `true` 后完全退出并重启应用，即可允许测试鉴权弹窗。改回 `false` 并重启即可再次禁止。创建、读取或校验失败时使用默认值 `false`，不阻止启动。Desktop 尝试在 Electron 控制台记录包含文件路径的警告；日志不可用也不阻止启动。修正文件并重启后才会应用显式设置。未知字段会保留。安装更新保留此用户数据文件；Windows 卸载按[卸载规则](#windows-uninstall-rules)删除它。
+
+在桌面版**设置 → 通用设置 → 更新渠道**中，**正式版**选择 `stable`，**开发版**选择 `nightly`。主进程在同一文件中保存 `updates.channel`，并通过 IPC 立即应用选择，不依赖 Host 设置服务。省略 channel 时使用打包注入的包内默认值。外部编辑和删除仅在下次启动读取，不运行文件监听器。鉴权弹窗设置仍须重启生效。UI 写入保留最新有效文件中的其他字段；外部编辑器不能与 UI 保存同时写入。
+
+UI 切换期间，选择器显示待应用选项和加载指示；失败时恢复实际运行渠道，并显示简短 toast。普通保存失败不会阻止使用当前渠道及旧更新目标。启动配置无效或无法撤销旧更新安装资格会暂停更新操作；没有强更策略阻塞时，主应用仍可使用。启动配置错误会显示持续十秒、可查看详情的非阻塞提示。更新入口独立于下载进度保留暂停原因；打开后可查看恢复指引、配置路径并在系统文件管理器中定位文件。修正文件后，可在错误详情中选择**重新读取配置**或重启；显式重读只应用更新配置，不改写文件。重读按钮至少显示半秒加载指示，期间不接受重复点击；文件仍无效时继续暂停更新。在设置中选择有效渠道也可恢复无效渠道；JSON 损坏须先修复文件。已知强更阻塞继续生效；强更页面的配置异常入口可打开同一文件定位和重读对话框。渠道切换成功后立即重新检查强更策略；如旧渠道的检查仍在进行，则等待其完成后检查新渠道。切换成功时先收尾检查、下载并撤销安装资格，再检查新渠道；两个渠道版本号相同也遵循该规则。切换不降级，也不自动安装。安装准备期间拒绝 UI 切换；调用 `quitAndInstall()` 交接后，编辑文件不能取消本次安装。
+
+共享设置存储区分文件缺失、读取失败、JSON 损坏、文档结构无效和单项字段无效。鉴权开关与渠道字段分别通过 Zod 校验；鉴权开关无效不会使有效渠道失效，反之亦然。读取不创建文件；启动初始化是显式操作，并与保存共用写锁。保存保留未知字段和无关的无效字段。写入诊断区分未写入、完成情况不确定，以及写入已提交但释放锁失败；最后一种情况不表示文件已回滚。
+
+撤销安装资格后，旧文件删除失败不阻止渠道切换。失败时间、操作、路径及文件系统错误会刷新写入 Electron 日志目录的 `update-cleanup.jsonl`；日志本身无法写入时回退到标准错误输出。后续下载失败独立报告，不归因于之前的清理警告。有结构化文件系统错误时，区分空间不足、无法写入和文件占用；错误弹窗详情保留当次错误码及已提供的文件路径。没有结构化依据时保留通用下载失败提示。
+
+更新适配层兼容性和平台版本记录见 [Electron updater 兼容性](tests/updates/electron-updater/README.zh.md)。
 
 <a id="mandatory-update-policy"></a>
 

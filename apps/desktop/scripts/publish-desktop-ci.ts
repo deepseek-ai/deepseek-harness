@@ -18,7 +18,7 @@ import { websiteApproval } from './publish-website-ci.ts'
 import { desktopPublishQualificationError } from './desktop-publish-qualification.mjs'
 
 const routeSchema = z.object({ runId: z.string(), attempt: z.string(), commit: z.string(), runnerName: z.string(),
-  sourceRef: z.string(), channel: z.enum(['nightly', 'latest']),
+  sourceRef: z.string(), channel: z.enum(['nightly', 'stable']),
   target: z.enum(['mac-arm64', 'mac-x64', 'win-x64']), preset: z.enum(['test', 'production']) })
 
 /**

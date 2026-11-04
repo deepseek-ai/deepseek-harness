@@ -14,6 +14,7 @@ function render(view) {
   const { locale: { id, messages }, policy, update, confirmation, navigation } = view
   const confirming = confirmation !== undefined
   const failed = update.phase === 'error'
+  const configurationError = failed && update.failedOperation === 'configuration'
   const ready = update.phase === 'ready' || (failed && update.failedOperation === 'install')
   const downloadable = update.phase === 'available' || (failed && update.failedOperation === 'download')
   const authenticationRequired = policy.error === 'authentication-required'
@@ -45,13 +46,14 @@ function render(view) {
     detail = view.restart === 'stopping-tasks' ? messages.mandatoryStopping : messages.mandatoryRestarting
     status = ''; primary = ''; action = ''
   }
-  const error = localError ?? view.error ?? (authenticationRequired ? messages.policyLoginRequired : failed
+  const error = localError ?? view.error ?? (configurationError ? messages.updateConfigurationRead
+    : authenticationRequired ? messages.policyLoginRequired : failed
     ? update.failedOperation === 'download' ? messages.mandatoryDownloadFailed
       : update.failedOperation === 'install'
         ? preparationMessages[update.preparationFailure] ?? messages.mandatoryInstallFailed
         : messages.mandatoryUnavailable
     : update.phase === 'idle' && !policy.checking ? messages.mandatoryNoRelease : undefined)
-  const technicalDetails = failed ? update.technicalDetails ?? update.message ?? '' : ''
+  const technicalDetails = failed && !configurationError ? update.technicalDetails ?? update.message ?? '' : ''
   document.documentElement.lang = id
   document.title = messages.mandatoryTitle
   element('title').textContent = title
@@ -73,7 +75,8 @@ function render(view) {
   element('update').disabled = busy && !confirming
   element('later').textContent = messages.updateLater
   element('later').hidden = !confirmation?.active
-  element('refresh').textContent = authenticationRequired ? messages.policyLogin : messages.mandatoryRefresh
+  element('refresh').textContent = configurationError ? messages.updateConfigurationDetails
+    : authenticationRequired ? messages.policyLogin : messages.mandatoryRefresh
   element('refresh').hidden = confirming || view.restart !== undefined || (!authenticationRequired && (!!primary || !fallback))
   element('refresh').disabled = busy || policy.checking
   element('page').textContent = navigation ? messages.mandatoryReopen : messages.mandatoryPage

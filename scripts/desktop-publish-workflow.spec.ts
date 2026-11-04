@@ -86,11 +86,11 @@ it('defaults to production website upload and separates cache-only recovery', ()
   expect(workflow.jobs.prepare!.env?.DOWNLOAD_PROD_EO_ZONE_ID).toBe('${{ vars.DOWNLOAD_PROD_EO_ZONE_ID }}')
   const upload = workflow.jobs['upload-website-installer']!
   const purge = workflow.jobs['purge-website-installer']!
-  expect(upload.if).toContain("inputs.upload_website && needs.prepare.outputs.preset == 'production'")
   expect(purge.needs).toEqual(['route', 'prepare', 'upload-website-installer'])
   expect(upload.concurrency).toEqual({ group: 'desktop-website-upload-${{ needs.prepare.outputs.website-destination }}', 'cancel-in-progress': false })
   expect(purge.concurrency).toEqual({ group: 'desktop-website-purge-${{ needs.prepare.outputs.website-destination }}', 'cancel-in-progress': false })
   for (const job of [upload, purge]) {
+    expect(job.if).toBe("inputs.upload_website && needs.prepare.outputs.preset != 'test'")
     expect(job.environment).toBe('desktop-production')
     const preflight = job.steps.findIndex(step => step.run === 'node apps/desktop/scripts/preflight-desktop-publish-local.mjs')
     expect(preflight).toBeGreaterThan(-1)

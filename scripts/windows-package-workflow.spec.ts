@@ -1,3 +1,4 @@
+import { expectDesktopArchive } from './desktop-archive-workflow-test.ts'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -12,7 +13,7 @@ const workflow = yaml.load(readFileSync(resolve(root, '.github/workflows/windows
   concurrency: { group: string; 'cancel-in-progress': boolean }
   jobs: Record<string, {
     defaults?: { run: { shell: string } }
-    'runs-on': string
+    'runs-on': string | string[]
     env: Record<string, string>
     steps: Array<{
       id?: string
@@ -108,14 +109,7 @@ it('retains failure diagnostics and uploads only the selected successful install
   const uploads = job.steps.filter(step => step.uses?.startsWith('actions/upload-artifact@'))
   expect(uploads).toHaveLength(1)
   const archive = workflow.jobs['upload-artifact']!
-  expect(archive.env).toMatchObject({
-    DESKTOP_RETAINED_DIRECTORY: '${{ needs.package.outputs.directory }}',
-    DESKTOP_PACKAGE_ATTEMPT: '${{ needs.package.outputs.attempt }}',
-    DESKTOP_PACKAGE_RUNNER: '${{ needs.package.outputs.runner-name }}',
-  })
-
-  const archival = workflow.jobs['upload-artifact']!.steps.filter(step => step.uses?.startsWith('actions/upload-artifact@'))
-  expect(archival).toHaveLength(1)
+  const archival = expectDesktopArchive(archive, 1)
   expect(uploads[0]!.if).toBe("always() && steps.checkout.outcome == 'success'")
   expect(uploads[0]!.with).toMatchObject({
     path: '${{ github.workspace }}/apps/desktop/.desktop-build/packaging-runs/',

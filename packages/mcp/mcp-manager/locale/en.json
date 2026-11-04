@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "MCP server manager",
+    "description": "Manage the MCP servers configured in Settings or registered by plugins, and report their connection status."
+  }
+}
