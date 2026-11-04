@@ -34,8 +34,7 @@ import type { Session } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-tools'
-import { within } from '@deepseek-ai/dsh-util-workspace-path'
-import type {} from '@deepseek-ai/dsh-working-directory'
+import { within } from '@deepseek-ai/dsh-working-directory'
 
 export { SANDBOX_MODES, setSandboxMode } from './session-mode.ts'
 

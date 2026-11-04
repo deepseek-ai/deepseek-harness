@@ -39,9 +39,6 @@
       "path": "../../core/tools"
     },
     {
-      "path": "../../util/workspace-path"
-    },
-    {
       "path": "../../session/working-directory"
     }
   ]
