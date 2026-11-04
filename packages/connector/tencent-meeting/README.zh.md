@@ -71,11 +71,11 @@ dsh plugin --profile web remove @deepseek-ai/dsh-tencent-meeting
 <a id="model-experience"></a>
 ## 模型体验
 
-间接通过 `tencent-meeting` 行体现：该行的包负责其[模型体验](../tencent-meeting-cli/README.zh.md#model-experience)中描述的技能目录条目和加载后的技能正文。
+间接通过 `tencent-meeting` 行体现：该行的包负责其[模型体验](../tencent-meeting-cli/README.zh.md#model-experience)中描述的技能目录条目、加载后的技能正文和 CLI 路径的运行时上下文条目。
 
 #### KV Cache 影响
 
-除 `tencent-meeting` 行的技能目录外没有影响；本 bundle 自身不发送 provider 请求。
+除 `tencent-meeting` 行的技能目录和运行时上下文条目外没有影响；本 bundle 自身不发送 provider 请求。
 
 ## 已知限制与延期工作
 

@@ -71,11 +71,11 @@ Switching the bundle off withdraws the skill, the path in runtime context, and t
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through the `tencent-meeting` row, whose package owns the skill catalog entry and loaded skill body described in its [Model Experience](../tencent-meeting-cli/README.md#model-experience).
+Indirectly, through the `tencent-meeting` row, whose package owns the skill catalog entry, the loaded skill body, and the CLI path's runtime-context entry described in its [Model Experience](../tencent-meeting-cli/README.md#model-experience).
 
 #### KV Cache effect
 
-None beyond the `tencent-meeting` row's skill catalog; the bundle itself sends no provider request.
+None beyond the `tencent-meeting` row's skill catalog and runtime-context entry; the bundle itself sends no provider request.
 
 ## Known Limitations and Deferred Work
 
