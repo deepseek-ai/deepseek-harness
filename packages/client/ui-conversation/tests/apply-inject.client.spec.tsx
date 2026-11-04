@@ -30,7 +30,7 @@ import { createUserMessage, LlmAttemptId } from '@deepseek-ai/dsh-llm'
 import { MutableSessionEventSource } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionEventWindow } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { InboxWireState } from '@deepseek-ai/dsh-agent/types'
-import { continuationTurn } from '../../../api/session-controller/tests/continuation-fixture.client.ts'
+import { continuationTurn } from './continuation-fixture.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
