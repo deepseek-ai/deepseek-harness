@@ -8,7 +8,7 @@ A Session's active directory is owned by [`dsh-working-directory`](../../package
 
 `ctx.workingDirectory.get(session)` reads the logged value. `ensure(agent)` validates it and restores the original project when the directory disappeared. `set(agent, path)` validates and records a requested change. Sessions without a header directory use the configured runtime fallback; an unavailable fallback produces an error.
 
-`rootOf(session)` reads the workspace root: the longest registered anchor that contains the current directory. The anchors are the original project and every checkout `relocate(agent, root, { cwd? })` entered; that operation validates the root and the directory inside it, then records both in one `working-directory/change` whose `anchor` names the root. `anchorsOf(session)` lists them. A `set` inside the root moves only the current directory; a `set` into another anchor selects that anchor as the root; a `set` outside every anchor leaves the root unchanged. Recovery to the original project selects it as the root again. Anchors are compared as recorded.
+`rootOf(session)` reads the workspace root: the longest registered anchor that contains the current directory. The anchors are the original project and every checkout `relocate(agent, root, { cwd? })` entered; that operation validates the root and the directory inside it, then records both in one `working-directory/change` whose `anchor` names the root. `anchorsOf(session)` lists them. A `set` inside the root moves only the current directory; a `set` into another anchor selects that anchor as the root; a `set` outside every anchor leaves the root unchanged. Recovery to the original project selects it as the root again. Anchors compare lexically on canonical paths: producers record the original project by its canonical spelling, a Session without a recorded project registers the deployment fallback as its first anchor, and a recovery destination outside every anchor joins the anchors.
 
 Changes are local to one Session. Relative filesystem operations, newly started processes, instruction discovery, skills, and file completion use the active directory. Existing terminals and persistent shells retain their own directories. Sandbox writable roots and project membership remain anchored to the original project.
 
@@ -87,6 +87,8 @@ anchorsOf(session: Session): readonly string[]
  * @param agent - live or unpublished Agent owning the Session.
  * @param signal - cancellation for filesystem inspection.
  * @returns the existing directory; recovery is committed before fulfillment.
+ * A Session without a recorded project records the deployment fallback as its first anchor on its
+ * first validation, and a recovery destination outside every anchor joins the anchors.
  * A notice failure is warned without reverting the committed state.
  * @throws when the original project is also unavailable.
  */

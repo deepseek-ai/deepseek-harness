@@ -101,7 +101,7 @@ describe('subagent working directories', () => {
     await run.dispose()
   })
 
-  it('leaves a child of a parent without a recorded project on the deployment fallback without registering it', async () => {
+  it('does not relocate a child of a parent without a recorded project; the child registers the fallback itself', async () => {
     const { ctx } = await fixture()
     const fallback = ctx.workingDirectory.defaultDirectory
     const { agent: parent } = await ctx.agents.create({
@@ -116,11 +116,14 @@ describe('subagent working directories', () => {
     await run.result
     const child = run.localAgent
     expect(child.session.header.cwd).toBeUndefined()
-    expect(ctx.workingDirectory.get(child.session)).toBe(await realpath(fallback))
-    expect(ctx.workingDirectory.rootOf(child.session)).toBe(fallback)
-    expect(ctx.workingDirectory.anchorsOf(child.session)).toEqual([])
+    // The parent's fallback root is no registered anchor, so the child is not relocated into it; the
+    // child's own first validation records the canonical fallback as its first anchor.
+    const canonical = await realpath(fallback)
+    expect(ctx.workingDirectory.get(child.session)).toBe(canonical)
+    expect(ctx.workingDirectory.rootOf(child.session)).toBe(canonical)
+    expect(ctx.workingDirectory.anchorsOf(child.session)).toEqual([canonical])
     expect(child.session.snapshotEvents().filter(event => event.type === 'working-directory/change'))
-      .toEqual([expect.objectContaining({ data: { cwd: await realpath(fallback) } })])
+      .toEqual([expect.objectContaining({ data: { cwd: canonical, anchor: canonical } })])
     await run.dispose()
   })
 

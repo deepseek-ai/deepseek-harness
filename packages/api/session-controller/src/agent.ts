@@ -1,5 +1,6 @@
 /** Agent activation, composition, and initial model route owned by API Session. */
 
+import type {} from '@deepseek-ai/dsh-fs'
 import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import type { Context } from '@deepseek-ai/cordis'
@@ -439,11 +440,14 @@ export class ApiSessionAgentController {
     } catch (error: unknown) {
       throw new Error(`failed to ensure project directory "${cwd}": ${String(error)}`, { cause: error })
     }
+    // The header records the canonical spelling of the project directory; see SessionHeader.cwd.
+    const fs = this.ctx.get('fs')
+    const canonical = fs === undefined ? cwd : fs.processPath(await fs.resolve(cwd))
     return (await this.ctx.agents.create({
       sessionId,
       agentOptions: this.agentOptions(),
       meta: {
-        cwd,
+        cwd: canonical,
         ...(composition.agentPreset === undefined ? {} : { agentPreset: composition.agentPreset }),
       },
       setup: composition.setup,

@@ -227,6 +227,8 @@ export class WorkingDirectoryService extends Service {
    * @param agent - live or unpublished Agent owning the Session.
    * @param signal - cancellation for filesystem inspection.
    * @returns the existing directory; recovery is committed before fulfillment.
+   * A Session without a recorded project records the deployment fallback as its first anchor on its
+   * first validation, and a recovery destination outside every anchor joins the anchors.
    * A notice failure is warned without reverting the committed state.
    * @throws when the original project is also unavailable.
    */
@@ -239,13 +241,18 @@ export class WorkingDirectoryService extends Service {
       agent.ctx.fiber.assertActive()
       if (info?.type === 'directory') {
         if (this.workingDirectoryProjectionHandle.stateOf(agent.session) === null) {
-          agent.session.append('working-directory/change', { cwd: current })
+          // A Session without a recorded project records the deployment fallback as its first anchor.
+          const fallback = this.ctx.fs.processPath(target)
+          agent.session.append('working-directory/change', { cwd: fallback, anchor: fallback })
+          return fallback
         }
         return current
       }
       const original = agent.session.header.cwd ?? this.defaultDirectory
       const restored = await this.directory(original, original, control)
-      this.commit(agent, restored, true, control)
+      // A destination no anchor contains, such as a header recorded by another spelling, becomes one.
+      const anchor = anchorContaining(this.anchorsOf(agent.session), restored) === undefined ? restored : undefined
+      this.commit(agent, restored, true, control, anchor)
       return restored
     })
   }
@@ -291,6 +298,11 @@ export class WorkingDirectoryService extends Service {
       const cwd = options.cwd === undefined ? anchor : await this.directory(options.cwd, anchor, control)
       if (!within(anchor, cwd)) {
         throw new Error(`working-directory: ${JSON.stringify(cwd)} lies outside the workspace root ${JSON.stringify(anchor)}`)
+      }
+      if (agent.session.header.cwd === undefined && this.anchorsOf(agent.session).length === 0) {
+        // The deployment fallback is the recovery destination; registering it first lets leaving the checkout select it.
+        const fallback = await this.directory(this.defaultDirectory, this.defaultDirectory, control)
+        agent.session.append('working-directory/change', { cwd: this.get(agent.session), anchor: fallback })
       }
       this.commit(agent, cwd, false, control, anchor)
       return { root: this.rootOf(agent.session), cwd }

@@ -1,10 +1,11 @@
 /** Session creation, blank-Session reuse, and Agent preset identity through `session.create`. */
 
-import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
+import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Agent, AgentFactory } from '@deepseek-ai/dsh-agent'
 import { agentPresetProjectionDefinition } from '@deepseek-ai/dsh-agent-preset-registry'
@@ -205,6 +206,17 @@ function completedTurn(seq: number): SessionEvent[] {
 }
 
 describe('session.create Agent preset identity', () => {
+  it('records the canonical spelling of the requested project directory', async () => {
+    const { ctx, remote, cwd } = await harness({ presets: ['standard'] })
+    await ctx.plugin(LocalFileSystem, { cwd })
+    const real = join(cwd, 'real')
+    const link = join(cwd, 'link')
+    mkdirSync(real)
+    symlinkSync(real, link)
+    await remote.create({ sessionId: SessionId('canonical'), cwd: link })
+    expect(ctx.agents.get(SessionId('canonical'))?.session.header.cwd).toBe(real)
+  })
+
   it('records the requested preset on the Session header', async () => {
     const { ctx, remote } = await harness({ presets: ['standard', 'minimal'] })
 
