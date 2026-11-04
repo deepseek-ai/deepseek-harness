@@ -1,4 +1,4 @@
-/** Host registration for browser conversation preferences. */
+/** Browser conversation preferences. */
 import type {} from '@deepseek-ai/dsh-settings'
 
 import type { Volatile, Context } from '@deepseek-ai/cordis'
@@ -24,7 +24,7 @@ export const Config = z.object({
   [BUSY_ENTER_FIELD]: ConversationSettingsFields[BUSY_ENTER_FIELD].volatile(),
 })
 
-/** Host preferences are consumed through the configuration form projection.
+/** Register browser conversation preferences.
  * @param ctx Plugin context used for optional settings presentation.
  */
 export function apply(ctx: Context): void {
