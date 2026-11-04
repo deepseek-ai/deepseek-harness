@@ -29,7 +29,7 @@ async function retainedFixture(target: 'win-x64' | 'mac-x64' | 'mac-arm64', qual
     : [`deepseek-harness-1.0.0-${target}.dmg`, `deepseek-harness-1.0.0-${target}.zip`, `deepseek-harness-1.0.0-${target}.zip.blockmap`, `${target}-release.json`, 'nightly-mac.yml']
   await Promise.all(names.map(name => writeFile(join(artifacts, name), 'fixture')))
   const env = {
-    DSH_PACKAGING_CONFIG_DIR: config, DSH_PACKAGING_PRESET: 'test', DSH_DESKTOP_TARGET_PLATFORM: target === 'win-x64' ? 'win32' : 'darwin',
+    DSH_DESKTOP_RELEASES_DIR: '', DSH_PACKAGING_CONFIG_DIR: config, DSH_PACKAGING_PRESET: 'test', DSH_DESKTOP_TARGET_PLATFORM: target === 'win-x64' ? 'win32' : 'darwin',
     DSH_DESKTOP_TARGET_ARCH: target === 'mac-arm64' ? 'arm64' : 'x64', PACKAGE_SOURCE_REF: 'master', PACKAGE_SOURCE_SHA: 'b'.repeat(40), PACKAGE_VERSION: '1.0.0',
     PACKAGE_SIGNING: qualification === 'unsigned' ? 'unsigned' : 'signed', PACKAGE_SKIP_NOTARIZATION: qualification === 'unnotarized' ? 'true' : 'false', GITHUB_RUN_ID: '123', GITHUB_RUN_ATTEMPT: '2',
     GITHUB_STEP_SUMMARY: join(root, 'summary.md'),
@@ -60,6 +60,9 @@ it.runIf(process.platform === 'darwin' || process.platform === 'win32')('stores 
   // The first central directory entry describes manifest.json. UTC+3 is 11:02:43 on every test host.
   const directoryOffset = bytes.readUInt32LE(bytes.length - 22 + 16)
   expect(bytes.readUInt32LE(directoryOffset)).toBe(0x02014b50)
+  const nameLength = bytes.readUInt16LE(directoryOffset + 28)
+  expect(bytes.subarray(directoryOffset + 46, directoryOffset + 46 + nameLength).toString('utf8')).toBe('manifest.json')
+  expect(bytes.readUInt16LE(directoryOffset + 10)).toBe(0)
   const dosTime = bytes.readUInt16LE(directoryOffset + 12)
   expect([dosTime >>> 11, (dosTime >>> 5) & 63, (dosTime & 31) * 2]).toEqual([11, 2, 42])
   const start = directoryOffset + 46 + bytes.readUInt16LE(directoryOffset + 28)

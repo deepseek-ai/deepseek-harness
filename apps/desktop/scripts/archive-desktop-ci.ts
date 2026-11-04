@@ -34,7 +34,7 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
     const windows = process.platform === 'win32'
     if (windows && !process.env.SystemRoot) throw new Error('desktop archival: SystemRoot is required to locate Windows bsdtar')
     const tar = windows ? join(process.env.SystemRoot!, 'System32', 'tar.exe') : '/usr/bin/tar'
-    const metadata = windows ? [] : ['--no-mac-metadata', '--no-xattrs']
+    const metadata = process.platform === 'darwin' ? ['--no-mac-metadata', '--no-xattrs'] : []
     try {
       execFileSync(tar, ['--format', 'zip', '--options', 'zip:compression=store', ...metadata, '-cf', path, '--', ...files], { cwd: directory, stdio: 'inherit' })
     } catch (cause) {
