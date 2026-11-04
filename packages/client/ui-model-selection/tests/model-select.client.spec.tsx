@@ -450,41 +450,36 @@ describe('ModelSelect reasoning effort', () => {
       .map(row => row.textContent)).toEqual(['Max'])
   })
 
-  it('portals the placed menu card to body and closes only on truly-outside mousedown', () => {
-    const offsetWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth')!
-    const offsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight')!
-    Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, get: () => 200 })
-    Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, get: () => 300 })
-    try {
-      const { container } = render(<ModelSelect renderSlot={renderLabel}
-        locked={false}
-        available
-        directory={createSnapshotStore(state())}
-        load={vi.fn()} resolveText={resolveText}
-        select={vi.fn().mockResolvedValue({ ok: true, value: undefined })}
-        t={t}
-      />)
-      const trigger = screen.getByRole('button', { name: /选择模型/ })
-      fireEvent.click(trigger)
-      const menu = screen.getByRole('menu')
-      // Outside the composer subtree — column overflow clips cannot crop it.
-      expect(container.contains(menu)).toBe(false)
-      expect(menu.parentElement).toBe(document.body)
-      // jsdom anchor rects are all zero, so the measured 200x300 card clamps
-      // to the 12px viewport margin on both axes.
-      expect(menu.style.left).toBe('12px')
-      expect(menu.style.top).toBe('12px')
-      // Interactions inside the trigger subtree or the portaled card stay open.
-      expect(fireEvent.mouseDown(menu)).toBe(true)
-      expect(fireEvent.mouseDown(trigger)).toBe(false)
-      fireEvent.blur(trigger, { relatedTarget: menu })
-      expect(screen.getByRole('menu')).toBeTruthy()
-      fireEvent.mouseDown(document.body)
-      expect(screen.queryByRole('menu')).toBeNull()
-    } finally {
-      Object.defineProperty(HTMLElement.prototype, 'offsetWidth', offsetWidth)
-      Object.defineProperty(HTMLElement.prototype, 'offsetHeight', offsetHeight)
-    }
+  it('anchors the body portal with CSS and closes only on truly-outside mousedown', () => {
+    const measure = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+    onTestFinished(() => { measure.mockRestore() })
+    const { container } = render(<ModelSelect renderSlot={renderLabel}
+      locked={false}
+      available
+      directory={createSnapshotStore(state())}
+      load={vi.fn()} resolveText={resolveText}
+      select={vi.fn().mockResolvedValue({ ok: true, value: undefined })}
+      t={t}
+    />)
+    const trigger = screen.getByRole('button', { name: /选择模型/ })
+    fireEvent.click(trigger)
+    const menu = screen.getByRole('menu')
+    // Outside the composer subtree — column overflow clips cannot crop it.
+    expect(container.contains(menu)).toBe(false)
+    expect(menu.parentElement).toBe(document.body)
+    const anchor = trigger.style.getPropertyValue('--dsh-model-anchor')
+    expect(anchor).toMatch(/^--dsh-model-/)
+    expect(menu.style.getPropertyValue('--dsh-model-anchor')).toBe(anchor)
+    expect(menu.style.left).toBe('')
+    expect(menu.style.top).toBe('')
+    expect(measure).not.toHaveBeenCalled()
+    // Interactions inside the trigger subtree or the portaled card stay open.
+    expect(fireEvent.mouseDown(menu)).toBe(true)
+    expect(fireEvent.mouseDown(trigger)).toBe(false)
+    fireEvent.blur(trigger, { relatedTarget: menu })
+    expect(screen.getByRole('menu')).toBeTruthy()
+    fireEvent.mouseDown(document.body)
+    expect(screen.queryByRole('menu')).toBeNull()
   })
 
   it('renders no Agent-bound control for an addressed subagent session', () => {

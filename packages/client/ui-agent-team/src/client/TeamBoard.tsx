@@ -43,7 +43,7 @@ function TaskRow({ task, rootId, expanded, onToggle, t }: Pick<TeamBoardProps, '
   expanded: boolean
   onToggle: () => void
 }) {
-  const owner = task.ownerId ?? t('unowned')
+  const owner = task.ownerName ?? task.ownerId ?? t('unowned')
   const blocked = task.status === 'pending' && !task.ready
   const detailsId = `team-task-${rootId}-${task.id}`
   return (

@@ -24,10 +24,6 @@ export class MemoryCredentials extends CredentialProvider {
     return Promise.resolve(undefined)
   }
 
-  override readStored(_ref: CredentialRef): Promise<string | undefined> {
-    return Promise.resolve(undefined)
-  }
-
   override describe(_ref: CredentialRef): Promise<CredentialInfo> {
     return Promise.resolve({ configured: false, writable: true })
   }

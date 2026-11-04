@@ -2,7 +2,7 @@
 
 English | [中文](forge.zh.md)
 
-The experimental forge capability seam reads change requests, meaning pull requests and merge requests, from code hosts. [`dsh-experimental-forge`](../../packages/experimental/forge/README.md) is the Service Definition and provides `ctx.forge`; [`dsh-experimental-forge-github`](../../packages/experimental/forge-github/README.md) is the Service Provider for GitHub hosts; [`dsh-experimental-forge-session`](../../packages/experimental/forge-session/README.md) is the Consumer that binds change requests to Sessions and provides `ctx.forgeSession`; [`dsh-experimental-client-ui-forge`](../../packages/experimental/client-ui-forge/README.md) is the GUI Consumer that provides `ctx.forgePanel`. The default-disabled [forge bundle](../../packages/experimental/forge-bundle/README.md) composes all four, with an isolated [worktree service](../../packages/experimental/worktree/README.md) for the panel, from the Plugins page; otherwise they load only through explicit composition.
+The experimental forge capability seam reads change requests, meaning pull requests and merge requests, from code hosts. [`dsh-experimental-forge`](../../packages/experimental/forge/README.md) is the Service Definition and provides `ctx.forge`; [`dsh-experimental-forge-github`](../../packages/experimental/forge-github/README.md) is the Service Provider for GitHub hosts; [`dsh-experimental-forge-session`](../../packages/experimental/forge-session/README.md) is the Consumer that binds change requests to Sessions and provides `ctx.forgeSession`; [`dsh-experimental-client-ui-forge`](../../packages/experimental/client-ui-forge/README.md) is the GUI Consumer that provides `ctx.forgePanel`. The default-disabled [forge bundle](../../packages/experimental/forge-bundle/README.md) composes all four, with the [worktree model tool](../../packages/experimental/tool-worktree/README.md) and an isolated [worktree service](../../packages/experimental/worktree/README.md) for the panel, from the Plugins page; otherwise they load only through explicit composition.
 
 ## Providers and change requests
 
@@ -567,22 +567,55 @@ type ForgeChangeRequestStatesFrame =
   | { readonly type: 'changed'; readonly states: readonly ForgeChangeRequestListState[] }
 ```
 
-The changes view reads through the same Remote. `localDiff` reads one `ForgeLocalScope` of the Session's checkout, and `changeRequestDiff` reads a bound change request at the head of its latest status through the provider's `diff`; both return files that the Host parsed into `ForgeDiffFile` hunks. `localText` and `changeRequestText` read the new side of one file, which supplies the unchanged lines between hunks. Each inspection also sizes the `branch` scope as `ForgePanelState.local` for the panel's local changes card.
+The changes view reads through the same Remote. `localDiff` reads one `ForgeLocalScope` of the Session's checkout, and `changeRequestDiff` reads a bound change request at the head of its latest status through the provider's `diff`; both return files that the Host parsed into `ForgeDiffFile` hunks. `localText` and `changeRequestText` read the new side of one file, which supplies the unchanged lines between hunks. Each inspection also sizes the `branch` scope as `ForgePanelState.local` for the panel's local changes card, always against the automatic fork point. A `branch` scope whose `base` names a ref compares with the merge base of HEAD and that branch instead; `diffBases` lists the branches the view offers, with the automatic fork point.
 
 ```ts type-equiv
 /** Which local changes a diff covers; each reads the Session's checkout through Git. */
 type ForgeLocalScope =
   /**
-   * The working tree and untracked files against the fork point: the base commit of the worktree the
-   * Session created, else the merge base of HEAD with the default branch of the code host remote.
+   * The working tree and untracked files against a fork point: the merge base of HEAD with the
+   * `base` ref, or while `base` is null, the base commit of the worktree the Session created,
+   * else the merge base of HEAD with the default branch of the code host remote.
    */
-  | { readonly kind: 'branch' }
+  | { readonly kind: 'branch'; readonly base: string | null }
   /** The working tree and untracked files against HEAD. */
   | { readonly kind: 'uncommitted' }
   /** The working tree and untracked files against the index. */
   | { readonly kind: 'unstaged' }
   /** The index against HEAD. */
   | { readonly kind: 'staged' }
+```
+
+```ts type-equiv
+/** A branch the `branch` scope can compare with. */
+interface ForgeBaseBranch {
+  /** Full ref name: `refs/heads/<branch>` or `refs/remotes/<remote>/<branch>`. */
+  readonly ref: string
+  /** The ref without `refs/heads/` or `refs/remotes/`, such as `master` or `origin/master`. */
+  readonly name: string
+}
+```
+
+```ts type-equiv
+/** What the `branch` scope compares with while no base branch is chosen. */
+interface ForgeAutomaticBase {
+  /** The created worktree's base branch or abbreviated base commit, or the default branch of the code host remote. */
+  readonly name: string
+  /** Whether the fork point is the base commit of the worktree the Session created rather than a merge base. */
+  readonly worktree: boolean
+}
+```
+
+```ts type-equiv
+/** Branches the `branch` scope can compare with, whose names contain a query. */
+interface ForgeBaseBranches {
+  /** The fork point used while no base branch is chosen, whatever the query; null without one. */
+  readonly automatic: ForgeAutomaticBase | null
+  /** Remote-tracking branches without symbolic refs such as `origin/HEAD`, most recently committed first, at most `maxBranches`. */
+  readonly remote: readonly ForgeBaseBranch[]
+  /** Local branches other than the checked-out one, most recently committed first, at most `maxBranches`. */
+  readonly local: readonly ForgeBaseBranch[]
+}
 ```
 
 ```ts type-equiv
@@ -888,6 +921,17 @@ Serves the forge panel. Following a Session inspects the checkout of its current
 @Remote async branches(session: Session, signal: AbortSignal): Promise<ForgeBranches>
 
 /**
+ * List the branches the `branch` scope of the Session's current checkout can compare with.
+ * @param session - Session whose checkout is read.
+ * @param query - text the branch names must contain, ignoring case; empty for every branch.
+ * @param signal - request cancellation.
+ * @returns the automatic fork point and at most `maxBranches` remote-tracking and local branches each,
+ * most recently committed first, without the checked-out branch.
+ * @throws `forgePanel/not-a-checkout` outside a checkout; the Git error when Git fails or the listed refs exceed `maxDiffBytes`.
+ */
+@Remote async diffBases(session: Session, query: string, signal: AbortSignal): Promise<ForgeBaseBranches>
+
+/**
  * Bind a change request to a Session by URL, or restore a dismissed binding.
  * @param session - Session that receives the binding.
  * @param url - web URL of the change request.
@@ -920,9 +964,10 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * @param scope - which changes to read.
  * @param signal - request cancellation.
  * @returns the files, the base of the `branch` scope, and the untracked files left out.
- * @throws `forgePanel/not-a-checkout` outside a checkout; `forgePanel/no-fork-point` for the `branch`
- * scope of a checkout without one; `forgePanel/filter-config-failed` when filter configuration cannot be read
- * completely, before any comparison; `forgePanel/diff-too-large` over `maxDiffBytes`; the Git error when Git fails.
+ * @throws `forgePanel/not-a-checkout` outside a checkout; `forgePanel/base-missing` when the base branch
+ * chosen for the `branch` scope does not exist; `forgePanel/no-fork-point` for the `branch` scope without
+ * a fork point; `forgePanel/filter-config-failed` when filter configuration cannot be read completely, before
+ * any comparison; `forgePanel/diff-too-large` over `maxDiffBytes`; the Git error when Git fails.
  */
 @Remote async localDiff(session: Session, scope: ForgeLocalScope, signal: AbortSignal): Promise<ForgeLocalDiff>
 

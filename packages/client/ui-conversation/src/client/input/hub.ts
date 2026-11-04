@@ -11,7 +11,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {
   ISessions, SessionBinding, SessionFace,
 } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId, SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-locale/client'
 import type { InboxState } from '@deepseek-ai/dsh-agent/types'
 import type { ModelSelectionProjection } from '@deepseek-ai/dsh-agent/types'
@@ -208,6 +208,29 @@ export class InputHub implements SessionInputResolver {
   }
 
   /**
+   * Submit empty input to retry a failed generation through the ordinary composer. Stale
+   * failures, active work, and drafts keep their current input unchanged.
+   * @param id - retained ordinary Session identity.
+   * @param failureSeq - failed turn/end sequence the displayed button addresses.
+   */
+  retry(id: SessionId, failureSeq: SessionSeq): void {
+    const binding = this.sessions().binding(id)
+    if (binding === undefined
+      || binding.session.projections.faceOf('conversationContinuation').getSnapshot() !== failureSeq) return
+    const session = binding.session.getSnapshot()
+    const shell = this.shellFor(binding)
+    const input = shell.snapshot
+    const inbox = binding.session.projections.faceOf('inbox').getSnapshot() as InboxState | undefined
+    if (session.running || session.removed || session.openState !== 'open' || session.subagent !== null
+      || session.pendingSubmissions.length > 0 || input.phase !== 'plain'
+      || input.draft.trim() !== '' || input.attachmentIds.length > 0
+      || (inbox?.['next-turn'].length ?? 0) > 0
+      || inbox?.['next-step'].some(message => message.source.kind === 'user')
+      || this.conversation().blocks.storeFor(id).getSnapshot() !== undefined) return
+    shell.submit('queue', 'click', true)
+  }
+
+  /**
    * Query file intake without creating a Session input.
    * @param id - target Session.
    * @returns whether its mounted composer currently accepts files.
@@ -251,7 +274,9 @@ export class InputHub implements SessionInputResolver {
     signal: AbortSignal,
     accept: () => void,
   ): Promise<SubmitOutcome> {
-    if (text === '' && attachmentIds.length === 0) return Promise.resolve({ kind: 'success' })
+    if (text === '' && attachmentIds.length === 0) {
+      return session.prompt([], mode, signal).then(result => result.ok ? { kind: 'success' } : { kind: 'error' })
+    }
     return this.conversation().sendSession(session, text, attachmentIds, mode, signal, accept)
   }
 

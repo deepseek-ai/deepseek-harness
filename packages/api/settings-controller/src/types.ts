@@ -20,9 +20,9 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
      */
     'settings/conflict': { readonly ns: string; readonly expected: number; readonly actual: number }
     /**
-     * A non-owner requested a stored secret, or the provider refused a valid
-     * credential write, for example because the stored document no longer
-     * parses. The details name only the reference, never the value.
+     * The provider refused a valid credential write, for example because the
+     * stored document no longer parses. The details name only the reference,
+     * never the value.
      */
     'credential/rejected': { readonly ref: string }
   }

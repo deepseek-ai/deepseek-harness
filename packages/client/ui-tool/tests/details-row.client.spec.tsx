@@ -153,17 +153,17 @@ describe('todosDetail', () => {
 })
 
 describe('DetailsRow', () => {
-  it('puts agent IDs first and lets a compact description expand and collapse', () => {
+  it('puts agent names first and lets a compact description expand and collapse', () => {
     const description = 'Verify every construction bound. '.repeat(20)
-    const block = { ...result('list_agents', null), content: [{ type: 'text' as const, text: `tree-checker-id [running] parent=root-id depth=1 — ${description}` }] }
+    const block = { ...result('list_agents', null), content: [{ type: 'text' as const, text: `reviewer/checker [running] — ${description}` }] }
     const model = detailsCardModel(block, t, 'en')!
     render(<ToolDetails model={model} t={t} />)
-    const id = screen.getByText('tree-checker-id')
-    const toggle = screen.getByRole('button', { name: 'Expand description for tree-checker-id' })
-    expect(id.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const name = screen.getByText('reviewer/checker')
+    const toggle = screen.getByRole('button', { name: 'Expand description for reviewer/checker' })
+    expect(name.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(toggle.textContent).toBe(description)
     fireEvent.click(toggle)
-    expect(screen.getByRole('button', { name: 'Collapse description for tree-checker-id' }).getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Collapse description for reviewer/checker' }).getAttribute('aria-expanded')).toBe('true')
     fireEvent.click(toggle)
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
   })

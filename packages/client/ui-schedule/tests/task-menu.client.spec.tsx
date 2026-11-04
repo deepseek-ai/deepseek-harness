@@ -50,6 +50,22 @@ function OpenMenu({ onSelect, portal = false }: {
 }
 
 describe('TaskMenu', () => {
+  it('assigns independent CSS anchors to portaled menus without measuring their bounds', () => {
+    const measure = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+    onTestFinished(() => { measure.mockRestore() })
+    const view = render(<>
+      <TaskMenu open portal anchor={<button type="button">first trigger</button>} items={ITEMS} onSelect={() => {}} onClose={() => {}} />
+      <TaskMenu open portal anchor={<button type="button">second trigger</button>} items={ITEMS} onSelect={() => {}} onClose={() => {}} />
+    </>)
+    const anchors = ['first trigger', 'second trigger'].map(label => screen.getByRole('button', { name: label }).parentElement!.style.anchorName)
+    expect(anchors.every(name => name !== '')).toBe(true)
+    expect(new Set(anchors).size).toBe(2)
+    const menus = screen.getAllByRole('menu')
+    expect(menus.map(menu => menu.style.positionAnchor)).toEqual(anchors)
+    expect(menus.every(menu => !view.container.contains(menu) && menu.style.left === '' && menu.style.top === '')).toBe(true)
+    expect(measure).not.toHaveBeenCalled()
+  })
+
   it('shows items only while open, and reports the clicked row id', () => {
     const onSelect = vi.fn()
     const { rerender } = render(
@@ -201,8 +217,7 @@ describe('TaskMenu', () => {
     const alpha = screen.getByRole('menuitem', { name: 'Alpha' })
     expect(document.activeElement).toBe(alpha)
 
-    // Placement runs again on scroll and resize, and on the panel's own size
-    // change; the handover is once per open, so a reader on a row keeps it.
+    // A viewport resize must not repeat the initial header focus handover.
     fireEvent(window, new Event('resize'))
     expect(document.activeElement).toBe(alpha)
   })

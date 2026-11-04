@@ -7,10 +7,11 @@ import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import type { Browser, Page, WebSocketRoute } from 'playwright'
 import { chromium } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, onTestFailed, type MockInstance } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished, type MockInstance } from 'vitest'
+import type { Agent } from '@deepseek-ai/dsh-agent'
 import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
-import { expandAssistantStream } from '@deepseek-ai/dsh-llm'
+import { expandAssistantStream, type UserMessage } from '@deepseek-ai/dsh-llm'
 import { parseRemoteStreamServerMessage } from '@deepseek-ai/dsh-api-gateway/stream-protocol'
 import {
   acknowledgeReloadConnectionLoss, assertFixtureInventory, captureExpandedTurnProcessAria, captureStableAria,
@@ -109,7 +110,7 @@ describe('web e2e: mid-turn steering lands durably and visibly', () => {
     }
   })
 
-  it('strictly steers one queued row; the interjection is logged, rendered, and obeyed', async () => {
+  it('strictly steers one queued row and deduplicates its retry after claiming', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-steering'))
     if (MODE !== 'record') {
       // The steer lands as a durable user/message, so the inventory holds
@@ -155,12 +156,34 @@ describe('web e2e: mid-turn steering lands durably and visibly', () => {
       await compareOrRefreshGolden(MID_EXPECTED, snapshot, MODE)
     }
 
-    // Answer the composer; the tool result closes the step, the loop drains
-    // the steer as user/message, and the steered continuation runs the
-    // final model call.
-    await composer.getByRole('radio', { name: 'Yes' }).click()
-    await composer.getByRole('radio', { name: 'Yes' }).press('Enter')
-    await settled
+    const claimed = Promise.withResolvers<{ agent: Agent; message: UserMessage }>()
+    const release = Promise.withResolvers<undefined>()
+    const stopHolding = scaffold.ctx.on('agent/pre-step', async ({ agent, messages }, next) => {
+      const message = messages.find(item => item.content.some(block => block.type === 'text' && block.text === STEER))
+      if (message !== undefined) {
+        claimed.resolve({ agent, message })
+        await release.promise
+      }
+      return next()
+    })
+    onTestFinished(() => { release.resolve(undefined); stopHolding() })
+    try {
+      await composer.getByRole('radio', { name: 'Yes' }).click()
+      await composer.getByRole('radio', { name: 'Yes' }).press('Enter')
+      const { agent, message } = await claimed.promise
+      expect(claimedMessages(sessionEvents, STEER)).toHaveLength(0)
+      const source = message.source
+      if (source.kind !== 'user' || !('rpcId' in source)) throw new Error('steering input has no request identity')
+      await expect(scaffold.ctx.sessionController.prompt({
+        sessionId: agent.id, requestId: source.rpcId, mode: 'queue',
+        content: [{ type: 'text', text: STEER }],
+      }, new AbortController().signal)).resolves.toEqual({ accepted: true })
+      expect([...agent.inbox.nextTurn, ...agent.inbox.nextStep]).toEqual([])
+    } finally {
+      release.resolve(undefined)
+      stopHolding()
+      await settled
+    }
 
     if (MODE === 'record') {
       const sessionId = await settled

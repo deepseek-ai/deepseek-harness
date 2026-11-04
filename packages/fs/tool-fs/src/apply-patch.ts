@@ -1,4 +1,4 @@
-/** Codex-style multi-file patch tool over the guarded patch executor. */
+/** Multi-file patch tool over the guarded patch executor. */
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { executePatch } from './patch/index.ts'
@@ -25,12 +25,11 @@ export function applyApplyPatchTool(ctx: Context, sandbox: FsSandboxController):
   })
   ctx.tools.register(defineTool({
     name: 'apply_patch',
-    description: 'Create, update, delete, or move UTF-8 text files with one Codex-style patch; '
+    description: 'Create, update, delete, or move UTF-8 text files with one patch; '
       + 'prefer it over multiple edit calls when a change spans several files or separated regions.',
     parameters: {
-      // Named `input` as in the Codex apply_patch tool; models trained on it send that key.
       input: { type: 'string', required: true,
-        description: 'Codex patch text: start with *** Begin Patch and end with *** End Patch. '
+        description: 'Patch text: start with *** Begin Patch and end with *** End Patch. '
           + 'Use *** Add File: path with + lines; *** Update File: path, optionally followed by *** Move to: path, '
           + 'with @@ or @@ context and space-prefixed context, + added, or - removed lines; '
           + '*** End of File anchors the last hunk to the file end. Use *** Delete File: path to delete. '

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-terminal-panel",
   "description": "Persistent Agent terminals shown in the Web sidebar, plus read-only access to the user's terminals",
-  "version": "0.2.2-alpha.2",
+  "version": "0.2.2-alpha.3",
   "publishConfig": {
     "access": "public"
   },

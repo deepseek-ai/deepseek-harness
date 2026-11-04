@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-For an explicit interface request, a clear implied viewing or editing need, or a result with concrete continuing use, the Agent answers first and may offer one optional creation card at the completed Turn’s end. Explicit requests can serve a single task. The user can change the suggested location, then choose Create. A background Creator builds a new plugin and installs it into the profile. Keep confirms retention; Undo removes that plugin, and Restore reinstalls it.
+For an explicit interface request, a clear implied viewing or editing need, or a result with concrete continuing use, the Agent answers first and may offer one optional creation card at the completed Turn’s end. Explicit requests can serve a single task. The user can change the suggested location, then choose Create. A background Creator builds a new plugin and installs it into the profile. Undo removes that plugin, and Restore reinstalls it.
 
 ## Table of Contents
 
@@ -63,7 +63,7 @@ The next naturally occurring model request receives the latest unreported status
 
 The Host entry is a function plugin that injects `actionCards`; it provides no service or Remote of its own and adds nothing to `dsh-base`. Disabling the feature removes its skill and card kind and drains its owned Creator work.
 
-The plugin registers the `create_personalized_page` kind with the shared [action card service](../action-cards/README.md): the `personalized-pages` skill, `details` with `slot` and optional `initialContent`, and the verbs Create, Keep, Undo, Cancel and Restore. The service owns the `propose_action` tool, the card projection, Not now, the Remote action and the status notice. This plugin handles the other verbs and records decisions whose data carries the location, any written placement, the reserved package name and the latest installation outcome; the status notice reports all but the package name. The plugin's `reconcile` checks interrupted or uncertain runs against the installed profile before every action; Not now is then recorded for an unstarted card and for cancelled, failed, interrupted or unconfirmed runs.
+The plugin registers the `create_personalized_page` kind with the shared [action card service](../action-cards/README.md): the `personalized-pages` skill, `details` with `slot` and optional `initialContent`, and the verbs Create, Undo, Cancel and Restore. The service owns the `propose_action` tool, the card projection, Not now, the Remote action and the status notice. This plugin handles the other verbs and records decisions whose data carries the location, any written placement, the reserved package name and the latest installation outcome; the status notice reports all but the package name. The plugin's `reconcile` checks interrupted or uncertain runs against the installed profile before every action; Not now is then recorded for an unstarted card and for cancelled, failed, interrupted or unconfirmed runs.
 
 The card tool carries typed proposals and defines click-to-start semantics; each kind supplies its fields and Skill entry. `personalized-pages` owns eligibility, duplicate checks, minimal scope, placement and content preparation. It allows implementation details needed for the agreed behavior, such as input validation and empty states; independent operations, sources, automation or broader access require a basis in the request or agreed context.
 

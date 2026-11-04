@@ -681,7 +681,6 @@
   outline-offset: 1px;
 }
 
-
 .reason {
   margin: 0;
   font-size: 12px;
@@ -970,7 +969,7 @@
   gap: 4px;
   box-sizing: border-box;
   width: min(440px, calc(100vw - 24px));
-  margin: 0;
+
   padding: 8px;
   border: 0;
   /* An opaque layer keeps the registry form controls readable over the dialog. */
@@ -979,12 +978,23 @@
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   box-shadow: var(--dsw-elevation-prominent);
   min-width: 0;
-  max-width: var(--dsh-anchored-max-width, none);
-  max-height: var(--dsh-anchored-max-height, none);
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 12px - max(12px, var(--dsh-frame-overlay-top, 12px)));
   overflow-x: hidden;
   overflow-y: auto;
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+  position-area: none;
+  top: max(12px, calc(anchor(bottom) + 6px));
+  bottom: 12px;
+  left: 12px;
+  right: max(12px, anchor(right));
+  position-try-fallbacks: --dsh-registry-window, --dsh-registry-opposite, --dsh-registry-wide-opposite, --dsh-registry-tall, --dsh-registry-viewport;
+  align-self: start;
+  justify-self: end;
+  height: fit-content;
+  min-height: 0;
+  margin: 0;
 }
 
 .registryOption {
@@ -1688,8 +1698,6 @@ label.registryOption {
   color: var(--dsw-alias-state-error-primary);
 }
 
-
-
 .rowFailure {
   margin: 4px 0 0 56px;
   font-size: 12px;
@@ -2247,4 +2255,49 @@ button.versionSummary:focus-visible {
   .partsFilter input {
     font-size: 16px;
   }
+}
+
+@position-try --dsh-registry-window {
+  position-area: none;
+  top: max(12px, calc(anchor(bottom) + 6px));
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  margin: 0;
+  align-self: safe start;
+  justify-self: safe start;
+}
+
+@position-try --dsh-registry-opposite {
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: max(12px, calc(anchor(top) + 6px));
+  align-self: end;
+}
+
+@position-try --dsh-registry-wide-opposite {
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: max(12px, calc(anchor(top) + 6px));
+  left: 12px;
+  right: 12px;
+  align-self: end;
+  justify-self: safe start;
+}
+
+@position-try --dsh-registry-tall {
+  position-area: none;
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: 12px;
+  left: 12px;
+  right: max(12px, anchor(right));
+  margin: 0;
+  align-self: safe start;
+  justify-self: end;
+}
+
+@position-try --dsh-registry-viewport {
+  position-area: none;
+  inset: max(12px, var(--dsh-frame-overlay-top, 12px)) 12px 12px;
+  margin: 0;
+  align-self: safe start;
+  justify-self: safe start;
 }

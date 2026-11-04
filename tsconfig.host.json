@@ -8,7 +8,7 @@
     "rewriteRelativeImportExtensions": false
   },
   "include": [
-    "apps/web/tests/credential-editor.e2e.ts",
+    "apps/web/tests/home-whale.e2e.ts",
     "apps/web/tests/sidebar-drawer.e2e.ts",
     "apps/web/tests/creation-recommendations.e2e.ts",
     "apps/web/tests/plugin-recommendations.e2e.ts",
@@ -175,6 +175,7 @@
     "apps/web/tests/file-upload-round.e2e.ts",
     "apps/web/tests/message-actions.e2e.ts",
     "apps/web/tests/open-in-app-ssh.e2e.ts",
+    "apps/web/tests/open-in-app-menus.e2e.ts",
     "apps/web/tests/fork-mid-turn.e2e.ts",
     "apps/web/tests/message-feedback.e2e.ts",
     "apps/web/tests/markdown-images.e2e.ts",
@@ -508,8 +509,6 @@
     { "path": "./packages/compaction/compaction-tool-result-pruner" },
     { "path": "./packages/compaction/compaction-image-offload" },
     { "path": "./packages/web/web" },
-    { "path": "./packages/web/web-search-exa" },
-    { "path": "./packages/web/web-search-perplexity" },
     { "path": "./packages/web/web-search-deepseek" },
     { "path": "./packages/web/web-deepseek-api" },
     { "path": "./packages/web/web-fetch-http" },
@@ -575,6 +574,7 @@
     { "path": "./packages/experimental/hooks-claude-code" },
     { "path": "./packages/experimental/hooks-codex" },
     { "path": "./packages/mcp/mcp-client" },
+    { "path": "./packages/mcp/mcp-manager" },
     { "path": "./packages/mcp/mcp-resources" },
     { "path": "./packages/host/directory-picker" },
     { "path": "./packages/host/directory-picker-auto" },

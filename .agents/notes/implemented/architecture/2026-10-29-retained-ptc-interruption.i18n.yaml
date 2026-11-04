@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-29-retained-ptc-interruption.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-29-retained-ptc-interruption.md
+/agent-note-retained-ptc-interruption:
+  en: 482adc6f938bc494
+  zh: 2bcc4856df4fb39e
+/agent-note-retained-ptc-interruption/problem:
+  en: 1d2ac1280f14aa80
+  zh: c5875c914cf23d73
+/agent-note-retained-ptc-interruption/decision:
+  en: 77f44a7ce832934c
+  zh: 4744934c60ca6f3d
+/agent-note-retained-ptc-interruption/alternatives-considered:
+  en: 8c57872ffaf660b2
+  zh: 4765cbf561ea5dc9
+/agent-note-retained-ptc-interruption/consequences:
+  en: f679322d48a740e9
+  zh: 4a255df6e019a32c

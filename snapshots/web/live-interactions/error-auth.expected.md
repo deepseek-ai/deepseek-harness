@@ -10,7 +10,8 @@
 - text: Reply with a one-sentence description of event sourcing, then stop. {{clock}}
 - button "Copy"
 - status: Failed
-- button "Failed" [disabled]
+- button "Failed" [disabled] [expanded]
+- button "Injected context"
 - status:
   - text: This turn failedAPI key is invalid
   - code: AUTH

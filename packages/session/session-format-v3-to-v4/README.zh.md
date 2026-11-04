@@ -245,7 +245,7 @@ System image 接纳要求非空 attachment id、PNG／JPEG／WebP／GIF MIME 类
 | `compaction/start`、`compaction/summary`、`compaction/end` | 匹配 compaction id、源 command 和活动 turn 上下文。Summary 区间引用精确的当前表面节点且排除 protected head；成功完成需要一个 summary。继承的未完成 compaction 在 end-seed marker 处过期。 |
 | `compaction/prune` | 其区间引用精确的当前表面节点且排除 protected head；它不要求存在 compaction 事务或其所有者字段。 |
 | Compact checkpoint 替换 | 其 `compact-checkpoint` 来源标识活动 compaction。 |
-| 原生 `subagent/catalog` | 校验继承截点之后的自身 version-0/version-1/version-2 载荷。每个子 id 必须唯一。原生读取不收集子日志，也不比较其物理事实；继承条目不建立自身成员关系。 |
+| 原生 `subagent/catalog` | 校验继承截点之后的自身 version-0 至 version-3 载荷；version 3 仅由原生写入，为 continuable 或 external 条目增加子代理名称。每个子 id 和 version-3 同级名称必须唯一。名称由 1–32 个小写字母、数字或连字符组成，以字母开头，且不能为 `lead`。原生读取不收集子日志，也不比较其物理事实；继承条目不建立自身成员关系。 |
 | 继承截点与投递 | 应用上文的原生 V4 标记、坐标及代际归属规则。 |
 
 这些检查由 [relationships.ts](src/relationships.ts) 按代际拥有。完整的通用消息／信封接纳与插件拥有的消息投影还使用已安装 Session；单独的导出 V4 恢复器不能替代完整 catalog 恢复。
