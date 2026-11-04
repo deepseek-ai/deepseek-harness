@@ -865,7 +865,7 @@ describe('agent loop', () => {
   })
 
   it('restores runtime context during a retry without admitting the user batch twice', async () => {
-    const adapter = new MockAdapter([textResponse('one'), () => { throw new LlmError('overflow', 'CONTEXT_LENGTH') }, textResponse('two')])
+    const adapter = new MockAdapter([textResponse('one'), () => { throw LlmError.fromFailure({ message: 'overflow', code: 'CONTEXT_LENGTH' }) }, textResponse('two')])
     const ctx = await harness(adapter)
     try {
       ctx.systemPrompt.context({ name: 'directory', order: 0, required: true, text: 'Current working directory: /workspace.' })

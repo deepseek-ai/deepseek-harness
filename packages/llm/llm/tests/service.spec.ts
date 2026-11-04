@@ -432,7 +432,7 @@ describe('LlmRuntime', () => {
   })
 
   it.each(['done', 'value'] as const)('normalizes a throwing IteratorResult.%s getter', async (field) => {
-    const original = new LlmError(`${field} getter failed`, 'RESULT_GETTER_FAILED')
+    const original = LlmError.fromFailure({ message: `${field} getter failed`, code: 'RESULT_GETTER_FAILED' })
     const result = field === 'done' ? {} : { done: false }
     Object.defineProperty(result, field, { get: () => { throw original } })
     let cleanupLookups = 0
@@ -471,7 +471,7 @@ describe('LlmRuntime', () => {
   })
 
   it.each(['dispatch', 'iterator'] as const)('normalizes synchronous adapter %s failures', async (boundary) => {
-    const original = new LlmError(`${boundary} failed`, 'BOUNDARY_FAILED')
+    const original = LlmError.fromFailure({ message: `${boundary} failed`, code: 'BOUNDARY_FAILED' })
     const adapter = new class extends LlmAdapter {
       stream(_options: GenerateOptions): AsyncIterable<StreamChunk> {
         if (boundary === 'dispatch') throw original
@@ -1590,7 +1590,7 @@ describe('LlmRuntime', () => {
   })
 
   it('creates LlmError with a code for programmatic handling', () => {
-    const err = new LlmError('something went wrong', 'CUSTOM_CODE')
+    const err = LlmError.fromFailure({ message: 'something went wrong', code: 'CUSTOM_CODE' })
     expect(err).toBeInstanceOf(Error)
     expect(err.name).toBe('LlmError')
     expect(err.message).toBe('something went wrong')
