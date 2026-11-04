@@ -9,6 +9,11 @@ on:
         description: '打包运行 ID：填写成功的 Package Desktop run ID；发布环境和 release ID 沿用原包'
         type: string
         required: true
+      staging_percentage:
+        description: '更新灰度比例：0–100 整数；留空全量，作用于原包所属渠道'
+        type: string
+        required: false
+        default: ''
       upload_website:
         description: '同时上传官网安装包并刷新缓存（仅 production）；取消后仅执行版本与自动更新发布'
         type: boolean
@@ -66,6 +71,7 @@ jobs:
       website-destination: ${{ steps.check.outputs.website-destination }}
       label: ${{ steps.check.outputs.label }}
     env:
+      DESKTOP_STAGING_PERCENTAGE: ${{ inputs.staging_percentage }}
       DESKTOP_PACKAGE_SELECTION: ${{ needs.route.outputs.selection }}
       DESKTOP_UPLOAD_WEBSITE: ${{ inputs.upload_website }}
       DOWNLOAD_PROD_EO_ZONE_ID: ${{ vars.DOWNLOAD_PROD_EO_ZONE_ID }}
@@ -111,6 +117,7 @@ jobs:
       cancel-in-progress: false
     timeout-minutes: 90
     env:
+      DESKTOP_STAGING_PERCENTAGE: ${{ inputs.staging_percentage }}
       DESKTOP_APPROVED_PACKAGE: ${{ needs.prepare.outputs.approval }}
       DESKTOP_PUBLISH_ROUTE: ${{ needs.prepare.outputs.route }}
       DSH_TELEMETRY_DISABLED: '1'
