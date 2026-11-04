@@ -665,7 +665,7 @@ describe('the shipped Web composition', () => {
       // The host (global) view carries the deployment-level providers alone:
       // local discovery moved behind the presets with `skill-filesystem`.
       expect((await ctx.skills.list({ cwd: proj })).map(skill => skill.name)).toEqual([
-        'dsh-badge',
+        'dsh-badge', 'office', 'office-docx', 'office-pptx', 'office-xlsx',
       ])
 
       // The standard agent's view merges the global layer with its preset's
