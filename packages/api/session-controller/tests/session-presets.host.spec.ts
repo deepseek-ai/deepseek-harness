@@ -214,7 +214,8 @@ describe('session.create Agent preset identity', () => {
     mkdirSync(real)
     symlinkSync(real, link)
     await remote.create({ sessionId: SessionId('canonical'), cwd: link })
-    expect(ctx.agents.get(SessionId('canonical'))?.session.header.cwd).toBe(real)
+    // The filesystem canonicalizes with native semantics, which also expands Windows short names.
+    expect(ctx.agents.get(SessionId('canonical'))?.session.header.cwd).toBe(realpathSync.native(real))
   })
 
   it('records the requested preset on the Session header', async () => {
