@@ -1164,6 +1164,14 @@ describe('desktop main startup', () => {
     expect(harness.hosts).toHaveLength(0)
   })
 
+  it.each([[false, '#f9fafb'], [true, '#1b1b1c']] as const)('paints the Windows workspace in its startup palette (dark=%s)', async (dark, color) => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    harness.nativeTheme.shouldUseDarkColors = dark
+    await import('../src/main.ts')
+    await harness.preparing.promise
+    expect(harness.windows[0]!.options).toMatchObject({ backgroundColor: color })
+  })
+
   it('serves packaged shell documents instead of rejecting the shell origin', async () => {
     const { serveWebDocument } = await import('../src/web-document.ts')
     vi.mocked(serveWebDocument).mockResolvedValue(new Response('shell document'))
