@@ -71,11 +71,11 @@ dsh plugin --profile web remove @deepseek-ai/dsh-wecom
 <a id="model-experience"></a>
 ## 模型体验
 
-间接地通过 `wecom` 行产生，该行所属的包负责技能目录条目和加载后的技能正文，见其[模型体验](../wecom-cli/README.zh.md#model-experience)。
+间接地通过 `wecom` 行产生，该行所属的包负责技能目录条目、加载后的技能正文和 CLI 路径的运行时上下文条目，见其[模型体验](../wecom-cli/README.zh.md#model-experience)。
 
 #### KV Cache 影响
 
-除 `wecom` 行的技能目录外没有影响；bundle 本身不发送 provider 请求。
+除 `wecom` 行的技能目录和运行时上下文条目外没有影响；bundle 本身不发送 provider 请求。
 
 ## 已知限制与延期工作
 

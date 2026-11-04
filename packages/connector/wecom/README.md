@@ -71,11 +71,11 @@ Switching the bundle off withdraws the skills, the path in runtime context, and 
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through the `wecom` row, whose package owns the skill catalog entries and loaded skill bodies described in its [Model Experience](../wecom-cli/README.md#model-experience).
+Indirectly, through the `wecom` row, whose package owns the skill catalog entries, the loaded skill bodies, and the CLI path's runtime-context entry described in its [Model Experience](../wecom-cli/README.md#model-experience).
 
 #### KV Cache effect
 
-None beyond the `wecom` row's skill catalog; the bundle itself sends no provider request.
+None beyond the `wecom` row's skill catalog and runtime-context entry; the bundle itself sends no provider request.
 
 ## Known Limitations and Deferred Work
 
