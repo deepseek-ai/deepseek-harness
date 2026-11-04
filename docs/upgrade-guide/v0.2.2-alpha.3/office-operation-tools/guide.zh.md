@@ -19,7 +19,7 @@ description: "删除 `office-render`、`office-recalculate` 和 `office-export-p
 | `DSH_BUNDLED_OFFICE_CLI` 和 `DSH_BUNDLED_OFFICE_NODE` | 无；不再有组件读取它们 |
 | `DSH_BUNDLED_PRIMARY_RUNTIME` | `DSH_PRIMARY_RUNTIME` |
 
-`skill-office` 新增 `pythonEnvironment`。默认值 `'workspace-dependencies'` 让 Python 技能调用 `load_workspace_dependencies`；没有挂载 `@deepseek-ai/dsh-tool-workspace-dependencies` 的组合必须设为 `'user'`。`DSH_BUNDLED_OFFICE_SKILLS` 含义不变。
+`skill-office` 新增 `pythonEnvironment`。默认值 `'workspace-dependencies'` 让 Python 技能调用 `load_workspace_dependencies`；没有挂载 `@deepseek-ai/dsh-tool-workspace-dependencies` 的组合必须设为 `'user'`。`DSH_BUNDLED_OFFICE_SKILLS` 的删除见 [Office 技能资源](../office-skill-resources/guide.zh.md)。
 
 Office 工具在 Host 进程内用原生 LibreOffice Kit 引擎解析不可信的文档，不受 shell 沙箱和 PTC 权限约束，并具有 Host 用户的权限；输入仍由文件系统后端授权。`office-kit` 条目新增 `outputDirectory`（默认 `$DSH_HOME/office-kit/outputs`）、`outputRetentionMs` 和 `maxOutputStoreBytes`。
 

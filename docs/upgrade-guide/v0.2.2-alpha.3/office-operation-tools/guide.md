@@ -19,7 +19,7 @@ Configuration changes:
 | `DSH_BUNDLED_OFFICE_CLI` and `DSH_BUNDLED_OFFICE_NODE` | None; no component reads them |
 | `DSH_BUNDLED_PRIMARY_RUNTIME` | `DSH_PRIMARY_RUNTIME` |
 
-`skill-office` gains `pythonEnvironment`. Its default, `'workspace-dependencies'`, directs the Python skills to `load_workspace_dependencies`; a composition without `@deepseek-ai/dsh-tool-workspace-dependencies` must set `'user'`. `DSH_BUNDLED_OFFICE_SKILLS` keeps its meaning.
+`skill-office` gains `pythonEnvironment`. Its default, `'workspace-dependencies'`, directs the Python skills to `load_workspace_dependencies`; a composition without `@deepseek-ai/dsh-tool-workspace-dependencies` must set `'user'`. [Office skill resources](../office-skill-resources/guide.md) covers the removal of `DSH_BUNDLED_OFFICE_SKILLS`.
 
 The Office tools parse untrusted documents with the native LibreOffice Kit engine in the Host process, outside the shell sandbox and PTC permissions, with the Host user's permissions; the filesystem backend still authorizes inputs. The `office-kit` row gains `outputDirectory` (default `$DSH_HOME/office-kit/outputs`), `outputRetentionMs`, and `maxOutputStoreBytes`.
 
