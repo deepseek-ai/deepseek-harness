@@ -7,9 +7,7 @@
   {
     "stage": "more-hover",
     "details": true,
-    "tooltips": [
-      "Session actions for Use the read tool twice"
-    ]
+    "tooltips": []
   },
   {
     "stage": "archive-before-dwell",
