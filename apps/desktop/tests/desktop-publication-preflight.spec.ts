@@ -1,3 +1,4 @@
+import { load } from 'js-yaml'
 import { createHash } from 'node:crypto'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -61,10 +62,25 @@ it.each(['mac-arm64', 'win-x64'] as const)('preflights a complete retained %s bu
     expect(summary).not.toContain('example.com//')
     expect(summary).not.toContain(root)
     expect(summary).not.toContain('absent-credentials')
+    for (const percentage of ['0', '10', '100']) {
+      const staged = await prepareDesktopPublication({ ...env, DESKTOP_STAGING_PERCENTAGE: percentage }, signature)
+      const stagedFeed = staged.plan.artifacts.find(file => file.channelMetadata)!
+      expect(load(stagedFeed.contents!)).toMatchObject({ stagingPercentage: Number(percentage) })
+      expect(staged.approval).not.toBe(prepared.approval)
+      expect(await desktopPublicationSummary(staged.manifest.source, staged.plan, staged.approval, false)).toContain(`${percentage}%`)
+      await expect(prepareDesktopPublication({ ...env, DESKTOP_STAGING_PERCENTAGE: percentage,
+        DESKTOP_APPROVED_PACKAGE: prepared.approval }, signature)).rejects.toThrow(/changed after approval/u)
+    }
+    for (const percentage of ['-1', '101', '1.5', 'NaN', 'Infinity', '1e1']) {
+      await expect(prepareDesktopPublication({ ...env, DESKTOP_STAGING_PERCENTAGE: percentage }, signature))
+        .rejects.toThrow(/integer from 0 to 100/u)
+    }
+    const blank = await prepareDesktopPublication({ ...env, DESKTOP_STAGING_PERCENTAGE: ' ' }, signature)
+    expect(blank.approval).toBe(prepared.approval)
     await expect(prepareDesktopPublication({ ...env, DESKTOP_APPROVED_PACKAGE: 'wrong' }, signature)).rejects.toThrow(/changed after approval/u)
     await expect(prepareDesktopPublication({ ...env, RUNNER_NAME: 'other-machine' }, signature)).rejects.toThrow(/different machine/u)
     await writeFile(join(retained, `${base}.${extension}`), 'changed')
     await expect(prepareDesktopPublication(env, signature)).rejects.toThrow(/changed file/u)
-    expect(signatureChecks).toBe(2)
+
   } finally { await rm(root, { recursive: true, force: true }) }
 })

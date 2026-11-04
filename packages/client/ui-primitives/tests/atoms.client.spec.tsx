@@ -174,6 +174,7 @@ describe('MenuItemButton', () => {
 
 describe('Menu', () => {
   beforeEach(() => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
     vi.stubGlobal('CSS', { supports: (property: string) => property === '-webkit-backdrop-filter' })
   })
   afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
@@ -600,9 +601,9 @@ describe('Menu', () => {
     expect(screen.getByRole('menuitem', { name: 'Sub' })).toBeDefined()
     fireEvent.focus(screen.getByRole('menuitem', { name: 'Row' }))
     expect(screen.queryByRole('menuitem', { name: 'Sub' })).toBeNull()
-    fireEvent.mouseEnter(parent.parentElement as HTMLElement)
+    fireEvent.pointerEnter(parent.parentElement as HTMLElement)
     expect(screen.getByRole('menuitem', { name: 'Sub' })).toBeDefined()
-    fireEvent.mouseOver(screen.getByRole('menuitem', { name: 'Row' }))
+    fireEvent.pointerOver(screen.getByRole('menuitem', { name: 'Row' }))
     expect(screen.queryByRole('menuitem', { name: 'Sub' })).toBeNull()
   })
 
@@ -634,13 +635,13 @@ describe('Menu', () => {
     fireEvent.click(parent)
     expect(onSelect).not.toHaveBeenCalled()
     fireEvent.focus(parent)
-    fireEvent.mouseEnter(wrap)
+    fireEvent.pointerEnter(wrap)
     expect(screen.getByTestId('sub-ic')).toBeDefined()
     expect(screen.getByRole('menuitem', { name: 'Create ok' }).getAttribute('aria-keyshortcuts')).toBe('Meta+N')
     expect(screen.getByRole('menuitem', { name: 'Create ok' }).querySelectorAll('kbd')).toHaveLength(2)
     fireEvent.click(screen.getByRole('menuitem', { name: 'Create ok' }))
     expect(onSelect).toHaveBeenCalledWith('ok')
-    fireEvent.mouseLeave(wrap)
+    fireEvent.focus(plain)
     expect(screen.queryByRole('menuitem', { name: 'Create ok' })).toBeNull()
   })
 
@@ -805,7 +806,7 @@ describe('Menu', () => {
     expect(onSelect).toHaveBeenCalledWith('new')
   })
 
-  it('caps the list height for internal scrolling unless a submenu row is present', () => {
+  it('caps the list height for internal scrolling including menus with submenus', () => {
     const { rerender } = render(
       <Menu open anchor={<span>trigger</span>} items={items} onSelect={() => {}} onClose={() => {}} />)
     expect(screen.getByRole('menu').className).toMatch(/scrollable/)
@@ -817,7 +818,7 @@ describe('Menu', () => {
         onSelect={() => {}}
         onClose={() => {}}
       />)
-    expect(screen.getByRole('menu').className).not.toMatch(/scrollable/)
+    expect(screen.getByRole('menu').className).toMatch(/scrollable/)
   })
 
 

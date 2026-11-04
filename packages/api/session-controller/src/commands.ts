@@ -502,7 +502,7 @@ export class SessionCommandController {
       case 'remove': {
         agent.inbox.remove(request.itemId)
         const source = message.source
-        if ((source.kind === 'user' || source.kind === 'retry') && 'rpcId' in source) {
+        if (source.kind === 'user' && 'rpcId' in source) {
           this.ctx.fileUploads.retirePrompt(agent, source.rpcId)
         }
         break
