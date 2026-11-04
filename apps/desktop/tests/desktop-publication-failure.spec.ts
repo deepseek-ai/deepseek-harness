@@ -48,11 +48,11 @@ it('omits malformed provider receipt fields and never copies raw errors into COS
 it('prints structured archival failure through the real CLI', () => {
   const result = spawnSync(process.execPath, ['--import', 'tsx/esm',
     fileURLToPath(new URL('../scripts/archive-desktop-ci.ts', import.meta.url))], {
-    encoding: 'utf8', timeout: 30_000, env: { ...process.env, RUNNER_NAME: '', DESKTOP_PACKAGE_RUNNER: '' },
+    encoding: 'utf8', timeout: 30_000, env: { ...process.env, DESKTOP_ARCHIVE_NAME: '', GITHUB_OUTPUT: '', RUNNER_NAME: '', DESKTOP_PACKAGE_RUNNER: '' },
   })
   expect(result.error).toBeUndefined()
   expect(result.signal).toBeNull()
   expect(result.status).toBe(1)
   expect(JSON.parse(result.stderr)).toEqual({ phase: 'artifact archival', code: 'validation',
-    message: 'desktop archival: wrong original machine' })
+    message: 'desktop archival: invalid ZIP output settings' })
 })
