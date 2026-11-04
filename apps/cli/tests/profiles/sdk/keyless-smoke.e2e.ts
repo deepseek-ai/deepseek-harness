@@ -545,7 +545,6 @@ it.each(['unset', 'empty', 'full', 'python-only', 'python-only-patched', 'missin
   const root = await mkdtemp(join(tmpdir(), 'sdk-office-'))
   onTestFinished(() => rm(root, { recursive: true, force: true }))
   const enabled = mode !== 'unset' && mode !== 'empty'
-  const skills = enabled && mode !== 'missing-assets'
   const { source, paths } = await officeFixture(root, mode.startsWith('python-only'))
   if (mode === 'missing-assets') await rm(join(root, 'resources', 'office-skills'), { recursive: true })
   if (mode === 'wrong-type') {
@@ -555,7 +554,7 @@ it.each(['unset', 'empty', 'full', 'python-only', 'python-only-patched', 'missin
   const requests: Record<string, unknown>[] = []
   const toolUses = [
     ...enabled ? [{ type: 'tool_use', id: 'workspace-dependencies', name: 'load_workspace_dependencies', input: {} } as const] : [],
-    ...skills ? [{ type: 'tool_use', id: 'office-docx', name: 'skill', input: { name: 'office-docx' } } as const] : [],
+    ...mode === 'missing-assets' ? [] : [{ type: 'tool_use', id: 'office-docx', name: 'skill', input: { name: 'office-docx' } } as const],
   ]
   const server = createServer((request, response) => {
     let body = ''
@@ -606,23 +605,23 @@ it.each(['unset', 'empty', 'full', 'python-only', 'python-only-patched', 'missin
   }, () => stderr)
   const names = (requests[0]!.tools as { name: string }[]).map(value => value.name)
   expect(names.includes('load_workspace_dependencies')).toBe(enabled)
-  expect(JSON.stringify(requests[0]!.messages).includes('`office`')).toBe(skills)
+  expect(JSON.stringify(requests[0]!.messages).includes('`office`')).toBe(mode !== 'missing-assets')
   const officeTools = ['office_convert', 'office_recalculate', 'office_render']
   expect(names.filter(name => name.startsWith('office'))).toEqual([])
   const lastNames = (requests.at(-1)!.tools as { name: string }[]).map(value => value.name)
   // Loading an Office skill declares the Office tools from the following request.
-  expect(lastNames.filter(name => name.startsWith('office')).sort()).toEqual(skills ? officeTools : [])
+  expect(lastNames.filter(name => name.startsWith('office')).sort()).toEqual(mode === 'missing-assets' ? [] : officeTools)
   expect(names).not.toContain('render_document')
   for (const name of ['office-docx', 'office-pptx', 'office-xlsx']) {
-    expect(JSON.stringify(requests[0]!.messages).includes(name)).toBe(skills)
+    expect(JSON.stringify(requests[0]!.messages).includes(name)).toBe(mode !== 'missing-assets')
   }
   expect(requests).toHaveLength(toolUses.length + 1)
-  if (skills) {
+  if (mode !== 'missing-assets') {
     const messages = requests.at(-1)!.messages as { content: { type: string; tool_use_id?: string; content?: unknown }[] }[]
     const skill = JSON.stringify(messages.flatMap(message => message.content).find(block => block.tool_use_id === 'office-docx'))
     expect(skill).toContain('## Python environment')
-    expect(skill).toContain('Otherwise call `load_workspace_dependencies`')
-    expect(skill).not.toContain('`python3` or `python` on PATH')
+    expect(skill.includes('Otherwise call `load_workspace_dependencies`')).toBe(enabled)
+    expect(skill.includes('`python3` or `python` on PATH')).toBe(!enabled)
   }
   if (mode === 'wrong-type') {
     const messages = requests[1]!.messages as { content: { type: string; tool_use_id?: string; content?: unknown }[] }[]

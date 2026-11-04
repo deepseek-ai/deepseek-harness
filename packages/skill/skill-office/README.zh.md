@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-目录列出 Office 路由及三个创作技能，完整说明按需加载。创作技能追加配置的 Python 环境说明；技能把操作交给 [`office_render`、`office_convert` 和 `office_recalculate`](../../document/tool-office/README.zh.md)，并用 shell 复制输出文件。Desktop 和带主运行时的 SDK 挂载该提供者；有主运行时时，内置依赖查询也挂载在它旁边。
+目录列出 Office 路由及三个创作技能，完整说明按需加载。创作技能追加配置的 Python 环境说明；技能把操作交给 [`office_render`、`office_convert` 和 `office_recalculate`](../../document/tool-office/README.zh.md)，并用 shell 复制输出文件。Web 应用和 SDK profile 挂载该提供者；只有 Desktop 或带主运行时的 SDK 还挂载内置依赖查询。
 
 ## 目录
 

@@ -11,7 +11,7 @@ Status: implemented
 ## 决策
 
 
-[Office 提供者](../../../../packages/skill/skill-office/README.zh.md) 列出精简路由和三个各格式创作技能；本决策引入的操作技能已由[按需激活的 Office 工具](2026-10-31-native-office-tool.zh.md)取代。模型按名称加载完整说明；以外观为目标的修改会选择渲染，除非用户明确要求跳过。渲染使用任务工作区内随机命名的私有临时目录，并在检查后删除。技能通过普通 Bash 或 PowerShell 调用共享 Python 检查器和配置的 LibreOffice Kit CLI。SDK 和 Desktop 分别拥有 Office 组合；普通 Web 和共享 base 不挂载这些插件。[按需激活的 Office 工具](2026-10-31-native-office-tool.zh.md)取代其 shell 执行方式和对渲染工具的否决。
+[Office 提供者](../../../../packages/skill/skill-office/README.zh.md) 列出精简路由和三个各格式创作技能；本决策引入的操作技能已由[按需激活的 Office 工具](2026-10-31-native-office-tool.zh.md)取代。模型按名称加载完整说明；以外观为目标的修改会选择渲染，除非用户明确要求跳过。渲染使用任务工作区内随机命名的私有临时目录，并在检查后删除。技能通过普通 Bash 或 PowerShell 调用共享 Python 检查器和配置的 LibreOffice Kit CLI。SDK 和 Desktop 分别拥有 Office 组合；普通 Web 和共享 base 不挂载这些插件。[Office 技能在所有部署中可用](2026-10-26-cross-deployment-office-kit.zh.md)取代此挂载决策，[按需激活的 Office 工具](2026-10-31-native-office-tool.zh.md)取代其 shell 执行方式和对渲染工具的否决。
 
 载体负责解释器和资源位置。操作技能仅在加载正文时附加配置的 Node 与 CLI 路径；创作技能使用选定的 Python 和共享检查器资源。加载说明不准备引擎或创作 payload。普通 shell 执行保留现有权限和进程管理。
 

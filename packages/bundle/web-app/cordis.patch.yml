@@ -293,11 +293,12 @@
       config:
         outputDirectory: !!js dshHomePath('office-kit', 'outputs')
 
-    # Office skills and their Python environment load only in the Desktop
-    # profile. Desktop supplies its Office skills and Python environment through
-    # the primary runtime named by DSH_PRIMARY_RUNTIME. A Desktop profile launched
-    # without a nonempty value disables workspace-dependencies, uses the packaged
-    # skills, and directs the model to the user's Python.
+    # Desktop supplies its Office skills and Python environment through the primary
+    # runtime named by DSH_PRIMARY_RUNTIME. A Desktop profile launched without a
+    # nonempty value disables workspace-dependencies and, like the other profiles,
+    # uses the packaged skills and directs the model to the user's Python. Outside
+    # Desktop, a nonempty DSH_BUNDLED_OFFICE_SKILLS selects the skill directory;
+    # otherwise the packaged skills apply.
     - id: workspace-dependencies
       name: '@deepseek-ai/dsh-tool-workspace-dependencies'
       disabled: !!js "ctx.get('profileContext')?.name !== 'desktop' || !process.env.DSH_PRIMARY_RUNTIME"
@@ -307,10 +308,9 @@
 
     - id: skill-office
       name: '@deepseek-ai/dsh-skill-office'
-      disabled: !!js "ctx.get('profileContext')?.name !== 'desktop'"
       config:
-        assetRoot: !!js "process.env.DSH_PRIMARY_RUNTIME ? process.getBuiltinModule('node:path').join(process.env.DSH_PRIMARY_RUNTIME, '..', 'office-skills') : undefined"
-        pythonEnvironment: !!js "process.env.DSH_PRIMARY_RUNTIME ? undefined : 'user'"
+        assetRoot: !!js "(ctx.get('profileContext')?.name === 'desktop' ? process.env.DSH_PRIMARY_RUNTIME && process.getBuiltinModule('node:path').join(process.env.DSH_PRIMARY_RUNTIME, '..', 'office-skills') : process.env.DSH_BUNDLED_OFFICE_SKILLS) || undefined"
+        pythonEnvironment: !!js "ctx.get('profileContext')?.name === 'desktop' && process.env.DSH_PRIMARY_RUNTIME ? undefined : 'user'"
 
     # The right Sidebar's document tab: bounded file reads with selectable
     # Markdown, code, HTML, PDF, Office, and plain-text renderers.
