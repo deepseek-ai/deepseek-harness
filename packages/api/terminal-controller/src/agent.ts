@@ -31,7 +31,10 @@ export interface AgentTerminalRequest {
   readonly policy: SandboxExecutionPolicy
   /** Executable names tried in order among discovered shells before the environment default. */
   readonly preferredShells: readonly string[]
-  /** Variables added to the shell environment; the controller's `DSH_SESSION_ID` and `HISTFILE` take precedence. */
+  /**
+   * Variables added to the shell environment; the controller's `DSH_SESSION_ID`, and `HISTFILE` in confined
+   * POSIX shells, take precedence.
+   */
   readonly env?: Readonly<Record<string, string>>
 }
 
@@ -109,6 +112,7 @@ export class AgentTerminal {
 
   /**
    * Terminate the terminal and remove its tab while the agent controls it.
+   * Control is checked once when the call starts; a takeover during cleanup does not stop the close.
    * @returns after process cleanup.
    * @throws AgentTerminalError after the person takes over; the terminal then stays open for the person.
    */
