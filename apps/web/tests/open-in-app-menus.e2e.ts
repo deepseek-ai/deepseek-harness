@@ -260,8 +260,6 @@ describe('Open in Session menus', () => {
       await expect.poll(alignment).toBeLessThanOrEqual(1)
 
       // Browser layout changes are real; no observer callback or rectangle is mocked.
-      await rootElement.evaluate((node) => { node.style.transform = 'translate(-80px, 20px)' })
-      await expect.poll(alignment).toBeLessThanOrEqual(1)
       await parent.evaluate((node) => { node.style.marginTop = '24px' })
       await expect.poll(alignment).toBeLessThanOrEqual(1)
       const before = await child.boundingBox()

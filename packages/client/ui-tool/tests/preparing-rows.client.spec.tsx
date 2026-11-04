@@ -46,7 +46,7 @@ describe('tool preparation', () => {
   })
 
   it.each([
-    ['read', ReadRow], ['read_image', ReadImageRow], ['write', FileMutationRow], ['edit', FileMutationRow],
+    ['read', ReadRow], ['read_image', ReadImageRow], ['write', FileMutationRow], ['edit', FileMutationRow], ['apply_patch', FileMutationRow],
     ['grep', SearchRow], ['glob', SearchRow], ['web_search', WebRow], ['web_fetch', WebRow],
     ['todo_write', TodoRow], ['ask_user_question', AskQuestionRow], ['subagent', DetailsRow], ['subagent_fork', DetailsRow],
     ['run_code', GenericToolCard], ['custom_tool', GenericToolCard],
@@ -105,6 +105,20 @@ describe('tool preparation', () => {
     expect(view.getAllByText('Research CLI products')).toHaveLength(2)
     expect(view.getByText('Research products in detail.')).toBeTruthy()
     expect(view.getByText('child-1')).toBeTruthy()
+  })
+
+  it('names patch files once the streamed patch text completes', () => {
+    const args = new PartialArguments()
+    const props = preparation('apply_patch', args)
+    const view = render(<FileMutationRow {...props} />)
+    args.append(String.raw`{"input":"*** Begin Patch\n*** Update File: src/a.ts\n@@\n-old\n+new`)
+    view.rerender(<FileMutationRow {...props} block={{ ...props.block }} />)
+    expect(toolRowModel('apply_patch', props.block, '/workspace').summary).toBe('')
+    expect(view.queryByText('src/a.ts')).toBeNull()
+    args.append(String.raw`\n*** End Patch"}`)
+    view.rerender(<FileMutationRow {...props} block={{ ...props.block }} />)
+    expect(view.getByText('Edit')).toBeTruthy()
+    expect(view.getByText('src/a.ts')).toBeTruthy()
   })
 
   it('retains the file row through streamed arguments, dispatch, and result', () => {

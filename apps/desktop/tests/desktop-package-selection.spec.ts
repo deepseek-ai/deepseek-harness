@@ -9,7 +9,7 @@ import { retainDesktopRelease, verifyRetainedDesktopRelease } from '../scripts/d
 function fixture() {
   const run = { id: 42, run_attempt: 2, head_sha: 'a'.repeat(40), status: 'completed', conclusion: 'success',
     event: 'workflow_dispatch', path: '.github/workflows/macos-package.yml', repository: { full_name: 'owner/repo' } }
-  const jobs = [{ name: 'package', runner_name: 'mini', conclusion: 'success' }]
+  const jobs = [{ name: 'package', run_attempt: 2, runner_name: 'mini', conclusion: 'success' }]
   const routes = { mini: { label: 'dsh-mini', target: 'mac-arm64' } }
   const calls: string[] = []
   const api = (path: string, paginate?: boolean) => {
@@ -39,6 +39,7 @@ it('routes a Windows package through its own configured machine target', () => {
 it('selects an explicit old attempt without consulting the latest attempt', () => {
   const f = fixture()
   f.run.run_attempt = 1
+  f.jobs[0]!.run_attempt = 1
   selectDesktopPackage('owner/repo', { package_run_id: '42', package_run_attempt: '1' }, f.routes, f.api)
   expect(f.calls).not.toContain('repos/owner/repo/actions/runs/42')
   expect(f.calls).toContain('repos/owner/repo/actions/runs/42/attempts/1')
@@ -47,8 +48,8 @@ it('selects an explicit old attempt without consulting the latest attempt', () =
 it.each(['failed', 'cancelled', 'running', 'workflow', 'repository', 'attempt', 'run', 'job', 'ambiguous', 'route', 'label'])(
   'rejects %s evidence without falling back to a different attempt', (kind) => {
     const f = fixture()
-    if (kind === 'failed') f.run.conclusion = 'failure'
-    if (kind === 'cancelled') f.run.conclusion = 'cancelled'
+    if (kind === 'failed') { f.run.conclusion = 'failure'; f.jobs[0]!.conclusion = 'failure' }
+    if (kind === 'cancelled') { f.run.conclusion = 'cancelled'; f.jobs[0]!.conclusion = 'cancelled' }
     if (kind === 'running') f.run.status = 'in_progress'
     if (kind === 'workflow') f.run.path = '.github/workflows/ci.yml'
     if (kind === 'repository') f.run.repository.full_name = 'other/repo'
@@ -134,4 +135,25 @@ it('routes both Mac architectures to one machine without authorizing an unlisted
   for (const target of [[], ['mac-x64', 'linux-x64']]) {
     expect(() => selectDesktopPackage('owner/repo', { package_run_id: '42' }, { mini: { label: 'dsh-mini', target } }, f.api)).toThrow()
   }
+})
+
+it.each([false, true])('keeps original build after archival retry with reused job listed: %s', (includesReused) => {
+  const f = fixture()
+  const selected = selectDesktopPackage('owner/repo', { package_run_id: '42' }, f.routes, (path) => {
+    if (path.endsWith('/42')) return { run_attempt: 3 }
+    if (path.endsWith('/attempts/3')) return { ...f.run, run_attempt: 3 }
+    if (path.endsWith('/attempts/3/jobs?per_page=100')) return [{ jobs: [{ name: 'upload-artifact', run_attempt: 3, runner_name: 'mini', conclusion: 'success' }, ...(includesReused ? f.jobs : [])] }]
+    if (path.includes('filter=all')) return [{ jobs: [{ ...f.jobs[0], run_attempt: 2 }] }]
+    if (path.endsWith('/attempts/2')) return { ...f.run, conclusion: 'failure' }
+    return [{ jobs: f.jobs }]
+  })
+  expect(selected.run.run_attempt).toBe(2)
+  expect(selected.runnerName).toBe('mini')
+})
+
+it('accepts a successful package when only archival failed', () => {
+  const f = fixture()
+  f.run.conclusion = 'failure'
+  f.jobs.push({ name: 'upload-artifact', run_attempt: 3, runner_name: 'mini', conclusion: 'failure' })
+  expect(selectDesktopPackage('owner/repo', { package_run_id: '42' }, f.routes, f.api).run.run_attempt).toBe(2)
 })

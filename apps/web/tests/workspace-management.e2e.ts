@@ -587,6 +587,8 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
       await observe('details')
       await row.getByRole('button', { name: /^Session actions for / }).hover()
       await hoverPage.clock.runFor(1000)
+      // The shared menu button's tooltip appears once its bubble has been measured.
+      await tooltip.filter({ hasText: /^Session actions for / }).waitFor()
       expect(await card.count()).toBe(1)
       await observe('more-hover')
 

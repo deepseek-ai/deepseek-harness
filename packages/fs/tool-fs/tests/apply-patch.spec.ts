@@ -27,7 +27,7 @@ it('omits patch registration and guidance when disabled', async () => {
 
 it('registers patch guidance when enabled and removes tool and section on disposal', async () => {
   const t = await setup()
-  expect(t.ctx.tools.get('apply_patch')?.description).toBe('Create, update, delete, or move UTF-8 text files with one Codex-style patch; '
+  expect(t.ctx.tools.get('apply_patch')?.description).toBe('Create, update, delete, or move UTF-8 text files with one patch; '
     + 'prefer it over multiple edit calls when a change spans several files or separated regions.')
   const key = {}
   let scope!: Scope

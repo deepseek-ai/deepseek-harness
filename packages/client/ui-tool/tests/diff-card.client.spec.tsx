@@ -257,12 +257,76 @@ describe('FileMutationRow diff card', () => {
     expect(model.state).toBe('error')
     expect(model.errorSummary).toBe('Patch stopped after 1 of 3 operations.')
     const view = render(<FileMutationRow {...rowProps(block, 'apply_patch')} />)
-    expect(view.getByText('应用补丁')).toBeTruthy()
+    expect(view.getByText('编辑')).toBeTruthy()
     toggleRow(view)
     expect(view.container.querySelectorAll('[data-diff]').length).toBeGreaterThan(0)
     expect(view.getByText('created')).toBeTruthy()
     expect(view.getByText('after')).toBeTruthy()
     expect(view.container.textContent).toContain(output)
+  })
+
+  it('summarizes a complete patch by the files the executor parser reads', () => {
+    const patchRow = (input: string) => toolRowModel('apply_patch', settled({ call: { name: 'apply_patch', argsRaw: JSON.stringify({ input }) } }), '/w/app')
+    expect(patchRow('*** Begin Patch\n*** Update File: src/a.ts\n@@\n-old\n+new\n*** End Patch')).toMatchObject({
+      summary: 'src/a.ts', filePath: 'src/a.ts', fileTargets: undefined,
+    })
+    expect(patchRow([
+      '*** Begin Patch', '*** Add File: /w/app/docs/new.md', '+hello', '*** Update File: src/a.ts', '*** Move to: src/b.ts',
+      '@@', ' *** Delete File: context.txt', '-old', '+new', '*** Delete File: old.txt  ', '*** End Patch',
+    ].join('\n'))).toMatchObject({ summary: 'docs/new.md, src/a.ts → src/b.ts, old.txt', filePath: undefined, fileTargets: [
+      { id: 2, label: 'docs/new.md', filePath: '/w/app/docs/new.md' },
+      { id: 4, from: 'src/a.ts', label: 'src/b.ts', filePath: 'src/b.ts' },
+      { id: 10, label: 'old.txt', filePath: undefined },
+    ] })
+    expect(patchRow('*** Begin Patch\n*** Delete File: old.txt\n*** End Patch')).toMatchObject({ summary: 'old.txt', filePath: undefined, fileTargets: undefined })
+    expect(patchRow('*** Begin Patch\n*** Update File: a.ts\n*** Move to: b.ts\n@@\n-x\n+y\n*** End Patch')).toMatchObject({
+      summary: 'a.ts → b.ts', filePath: undefined, fileTargets: [{ id: 2, from: 'a.ts', label: 'b.ts', filePath: 'b.ts' }],
+    })
+    // Outside an update section the parser trims header lines, so these headers name files.
+    expect(patchRow('*** Begin Patch\n *** Update File: a.ts\n@@\n-old\n+new\n*** End Patch')).toMatchObject({ summary: 'a.ts', filePath: 'a.ts' })
+    expect(patchRow('*** Begin Patch\n*** Add File: a.md\n+x\n  *** Update File: b.ts\n@@\n-old\n+new\n*** End Patch'))
+      .toMatchObject({ summary: 'a.md, b.ts' })
+    // A Move to after a hunk is hunk content the parser rejects, and so changes no file.
+    expect(patchRow('*** Begin Patch\n*** Update File: a.ts\n@@\n-old\n+new\n*** Move to: b.ts\n*** End Patch'))
+      .toMatchObject({ summary: '', filePath: undefined, fileTargets: undefined })
+  })
+
+  it('keeps only absolute patch paths openable before a successful result', () => {
+    const argsRaw = JSON.stringify({ input: '*** Begin Patch\n*** Add File: /w/app/a.md\n+a\n*** Update File: b.ts\n@@\n-x\n+y\n*** End Patch' })
+    const expected = [{ id: 2, label: 'a.md', filePath: '/w/app/a.md' }, { id: 4, label: 'b.ts', filePath: undefined }]
+    expect(toolRowModel('apply_patch', running({ name: 'apply_patch', argsRaw }), '/w/app').fileTargets).toEqual(expected)
+    expect(toolRowModel('apply_patch', settled({ call: { name: 'apply_patch', argsRaw }, isError: true }), '/w/app').fileTargets).toEqual(expected)
+  })
+
+  it('opens each file a multi-file patch names without toggling the row', () => {
+    const open = vi.fn()
+    const openFile = vi.fn()
+    const input = '*** Begin Patch\n*** Add File: docs/new.md\n+hi\n*** Update File: a.ts\n*** Move to: b.ts\n@@\n-x\n+y\n*** Delete File: old.txt\n*** End Patch'
+    const block = settled({ call: { name: 'apply_patch', argsRaw: JSON.stringify({ input }) } })
+    const view = render(<FileMutationRow {...{ ...rowProps(block, 'apply_patch'), openFile, useContextMenu: contextMenuHook(open) }} />)
+    expect([...view.container.querySelectorAll('button')].map(button => button.textContent)).toEqual(['docs/new.md', 'b.ts'])
+    expect(view.container.textContent).toContain('docs/new.md, a.ts → b.ts, old.txt')
+    // Enter on a link stays with the link: the row does not expand. Activation is the native button's.
+    fireEvent.keyDown(view.getByRole('button', { name: 'docs/new.md' }), { key: 'Enter' })
+    expect(view.container.querySelector('[data-diff]')).toBeNull()
+    fireEvent.click(view.getByRole('button', { name: 'b.ts' }))
+    fireEvent.click(view.getByRole('button', { name: 'docs/new.md' }))
+    expect(openFile.mock.calls).toEqual([['b.ts'], ['docs/new.md']])
+    expect(view.container.querySelector('[data-diff]')).toBeNull()
+    fireEvent.contextMenu(view.getByRole('button', { name: 'docs/new.md' }))
+    expect(open).toHaveBeenCalledWith({ kind: 'file', value: { sessionId: SID, path: 'docs/new.md' } }, expect.anything())
+  })
+
+  it('keeps running and failed multi-file patches as plain summary text', () => {
+    const input = '*** Begin Patch\n*** Add File: /w/app/a.md\n+a\n*** Update File: /w/app/b.ts\n@@\n-x\n+y\n*** End Patch'
+    const argsRaw = JSON.stringify({ input })
+    const live = render(<FileMutationRow {...rowProps(running({ name: 'apply_patch', argsRaw }), 'apply_patch')} />)
+    expect(live.container.querySelectorAll('button')).toHaveLength(0)
+    expect(live.container.textContent).toContain('a.md, b.ts')
+    cleanup()
+    const stopped = settled({ call: { name: 'apply_patch', argsRaw }, meta: { stopped: true, diffs: DIFFS } })
+    const view = render(<FileMutationRow {...rowProps(stopped, 'apply_patch')} />)
+    expect(view.container.querySelectorAll('button')).toHaveLength(0)
   })
 
   it('collapses to the summary row; expanding reveals the applied diff card', () => {
