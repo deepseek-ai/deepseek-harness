@@ -993,7 +993,10 @@ export class SubagentManager {
               return Promise.resolve()
             })
           } catch (error: unknown) {
-            if (error instanceof AgentClosedError) return Promise.resolve('closed')
+            if (error instanceof AgentClosedError) {
+              done = this.close(activation, () => this.finishDisposal(activation, false))
+              return Promise.resolve({ done })
+            }
             // Another activity already owns the Agent's idle phase.
             return Promise.resolve('retry')
           }
