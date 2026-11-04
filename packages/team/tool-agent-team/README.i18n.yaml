@@ -21,11 +21,11 @@
   en: c27d5457e1183675
   zh: 3c36d513e6400446
 /deepseek-ai-dsh-tool-agent-team/use-this-package/smallest-working-example:
-  en: 4df140a03006896c
-  zh: 705f10a798e58898
+  en: ef59c1e6be24bb1f
+  zh: bcfeb501de8fa2c7
 /deepseek-ai-dsh-tool-agent-team/use-this-package/what-the-model-can-do:
-  en: 4aee48f5debcc7d1
-  zh: 4eb148aa5e42398b
+  en: a4d49b09d00dfc3e
+  zh: 971dcc633e694936
 /deepseek-ai-dsh-tool-agent-team/use-this-package/what-success-and-failure-look-like:
   en: bf1eb0e693610f5b
   zh: 2b29e5cf63623909
@@ -39,8 +39,8 @@
   en: 3b906bae9ec19393
   zh: 42c8dd145c704cb3
 /deepseek-ai-dsh-tool-agent-team/understand-the-implementation/policy-and-tools:
-  en: 443f2be851ec9b56
-  zh: 7dda4bd2eb072309
+  en: 79c000a90c6c05a4
+  zh: 610e2cebc2431674
 /deepseek-ai-dsh-tool-agent-team/understand-the-implementation/scoped-registration-and-teardown:
   en: ee8db166c0bc8a9b
   zh: 6bfe192220e931a6
@@ -72,8 +72,8 @@
   en: 60ebf4743dac10a4
   zh: 2543f538b52a2980
 /deepseek-ai-dsh-tool-agent-team/model-experience/task-tool-schemas/token-effect:
-  en: 5ae789db90ce9606
-  zh: 3b26fe33c811815c
+  en: 36eef5d7c07ed17c
+  zh: 1e85f1118a5a8277
 /deepseek-ai-dsh-tool-agent-team/model-experience/task-tool-schemas/kv-cache-effect:
   en: 41bfcd6adb8058f5
   zh: 73363ee21021a96a

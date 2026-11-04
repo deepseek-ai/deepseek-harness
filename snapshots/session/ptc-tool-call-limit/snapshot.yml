@@ -1,0 +1,9 @@
+version: 1
+scenario: ptc-tool-call-limit
+profile: headless
+composition: ptc
+recording: authored
+header:
+  class: ptc
+workspace:
+  final: true

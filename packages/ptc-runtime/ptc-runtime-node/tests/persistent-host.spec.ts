@@ -1,3 +1,4 @@
+import { PROGRAM_PROTOCOL_VERSION } from '../src/protocol.ts'
 import { setImmediate } from 'node:timers/promises'
 import { Context } from '@deepseek-ai/cordis'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -225,7 +226,7 @@ describe('persistent PTC host protocol', () => {
     expect(waiting.spawn).not.toHaveBeenCalled()
   })
 
-  it('captures active raw output and ignores bytes arriving while the environment is idle', async () => {
+  it('captures active native output and ignores output while idle', async () => {
     const h = await setup()
     h.onBoot(() => {
       h.stdout.write('stdout')
@@ -249,11 +250,11 @@ describe('persistent PTC host protocol', () => {
     expect(h.terminate).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps the first outcome when raw output overflows beside a terminal frame', async () => {
+  it('keeps the first outcome when tagged output overflows beside a terminal frame', async () => {
     const h = await setup({ maxOutputBytes: 100 })
     h.onBoot(() => {
       h.complete({ value: encodePtcJsonWire(42) })
-      queueMicrotask(() => { h.stdout.write('x'.repeat(1000)) })
+      queueMicrotask(() => { h.emit({ t: 'q', m: 'log', a: ['x'.repeat(1000)] }) })
     })
     expect((await h.start()).error?.kind).toBe('output-limit')
     await setImmediate()
@@ -274,7 +275,7 @@ describe('persistent PTC host protocol', () => {
     expect(result.error?.message).toContain('fatal output')
   })
 
-  it('does not send a late binding result into the next evaluation', async () => {
+  it.each(['resolve', 'reject'] as const)('suppresses a late binding %s during the next evaluation', async (outcome) => {
     const h = await setup({ maxMessageBytes: 1024 })
     const release = Promise.withResolvers<string>()
     onTestFinished(() => { release.resolve('') })
@@ -285,7 +286,8 @@ describe('persistent PTC host protocol', () => {
     h.onBoot(() => { booted.resolve(undefined) })
     const next = h.start(slow, NO_INITIAL_FRAME)
     await booted.promise
-    release.resolve('x'.repeat(2000))
+    if (outcome === 'resolve') release.resolve('x'.repeat(2000))
+    else release.reject(new Error('x'.repeat(2000)))
     await setImmediate()
     h.complete({ value: encodePtcJsonWire(2) })
     expect(await next).toMatchObject({ value: 2 })
@@ -465,7 +467,7 @@ it('logs unexpected idle readiness and its failed cleanup', async () => {
     h.onBoot(() => { h.complete({}) })
     await h.start()
     h.waitForExit.mockRejectedValueOnce(new Error('idle cleanup failed'))
-    h.emit({ t: 'q', m: 'ready', a: [] })
+    h.emit({ t: 'q', m: 'ready', a: [PROGRAM_PROTOCOL_VERSION] })
     await vi.waitFor(() => { expect(reported).toHaveBeenCalledTimes(2) })
     expect(reported.mock.calls).toEqual([['duplicate program readiness'], ['idle cleanup failed']])
   } finally { reported.mockRestore() }
@@ -486,6 +488,19 @@ it('does not log a launch failure after cancellation closed the environment', as
     expect((await result).error?.kind).toBe('abort')
     expect(reported).not.toHaveBeenCalled()
   } finally { reported.mockRestore() }
+})
+
+it('ignores late output-stream errors after owner release', async () => {
+  const h = await setup()
+  const warn = vi.spyOn(h.ctx.logger, 'warn').mockImplementation(() => {})
+  try {
+    h.onBoot(() => { h.complete({}) })
+    await h.start()
+    await h.runtime.release(request.stateOwner!)
+    h.stderr.emit('error', new Error('pipe closed after release'))
+    expect(warn).not.toHaveBeenCalled()
+    expect(h.terminate).toHaveBeenCalledOnce()
+  } finally { warn.mockRestore() }
 })
 
 it('logs an idle process failure with its bounded stderr tail', async () => {

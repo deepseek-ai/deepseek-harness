@@ -9,8 +9,8 @@
   en: 6cc2cd9ced70bb09
   zh: 1c0e6cb4ba2ed637
 /tool-schema-catalog/tool-package-map:
-  en: 17d0b1d1a3c15c7f
-  zh: 1a9d90fc99e0e848
+  en: 7b5b99bcc5cd46f4
+  zh: c1697f88326440ff
 /tool-schema-catalog/deepseek-ai-dsh-plugin-manager:
   en: e0143916bb634762
   zh: e0143916bb634762
@@ -72,8 +72,8 @@
   en: 8c8643ef46fd075f
   zh: 8c8643ef46fd075f
 /tool-schema-catalog/deepseek-ai-dsh-tool-executor-ptc/run-code:
-  en: a5d49232a604a2fb
-  zh: 720040d11a3e31c2
+  en: 7917e16cbc2c366f
+  zh: c39eb0420544f04a
 /tool-schema-catalog/deepseek-ai-dsh-plan-mode:
   en: b500b530845e26a9
   zh: b500b530845e26a9
@@ -129,8 +129,8 @@
   en: 07d595ce1f1a5184
   zh: 07d595ce1f1a5184
 /tool-schema-catalog/deepseek-ai-dsh-tool-fs/apply-patch:
-  en: 882f2fa9fac236d6
-  zh: e8320796a5cb038f
+  en: 50b4939c9a1d96ac
+  zh: e733cc1156e2853c
 /tool-schema-catalog/deepseek-ai-dsh-tool-fs/edit:
   en: 5b6a252adde51af6
   zh: 7aa172a5d8b9cbd2
@@ -240,8 +240,8 @@
   en: 8daafae6faf7898e
   zh: 8daafae6faf7898e
 /tool-schema-catalog/deepseek-ai-dsh-experimental-tool-subagent-oar/subagent-oar:
-  en: 6283c3023d6ea436
-  zh: 9c018b8c12a3f1e7
+  en: 4936c61a65f8cdb2
+  zh: 5a1bfbb9738a62a9
 /tool-schema-catalog/deepseek-ai-dsh-tool-subagent:
   en: 841abe0dd5913ea7
   zh: 841abe0dd5913ea7
@@ -249,23 +249,23 @@
   en: 0e21650bbe8c71c7
   zh: fe4033efb38d51a3
 /tool-schema-catalog/deepseek-ai-dsh-tool-subagent/subagent:
-  en: 430672da3c1a6ca6
-  zh: bd3a9ab4089f9dbb
+  en: 9912eeda5bc40b43
+  zh: 0cb70f9a0d923bee
 /tool-schema-catalog/deepseek-ai-dsh-tool-subagent-control:
   en: ab82e130c3413f04
   zh: ab82e130c3413f04
 /tool-schema-catalog/deepseek-ai-dsh-tool-subagent-control/interrupt-agent:
   en: a622b15cc2598d51
-  zh: 48e1b05956d63e26
+  zh: ece4b2af6a11c49c
 /tool-schema-catalog/deepseek-ai-dsh-tool-subagent-control/list-agents:
-  en: a56168133c21c6a0
-  zh: f9df1c0fe49fa225
+  en: 8d50c6e19c9517ab
+  zh: 6ae97d046c5915db
 /tool-schema-catalog/deepseek-ai-dsh-tool-subagent-control/send-message:
   en: b53326fedeab850d
   zh: ecb75b6ce31da009
 /tool-schema-catalog/deepseek-ai-dsh-tool-subagent-control/wait-agent:
-  en: f3cf5a0c56ddc07a
-  zh: 7f6754d71e1b4ae4
+  en: 4b95d11b610d34ca
+  zh: 9b0d9b6012be30d8
 /tool-schema-catalog/deepseek-ai-dsh-tool-jobs:
   en: 9be673b1604d0114
   zh: 9be673b1604d0114

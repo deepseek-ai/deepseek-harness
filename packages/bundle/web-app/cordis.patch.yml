@@ -67,9 +67,9 @@
     - id: session-log-download
       name: '@deepseek-ai/dsh-session-log-export'
 
-    # Session-header "Open In..." split button over the host application
-    # resolution (macOS/Windows/Linux; a host with no resolved application
-    # renders no button). Two halves: the host routes and the browser surface.
+    # Session-menu application choices over Host resolution on macOS, Windows,
+    # and Linux. An empty catalog hides the action. The Host routes and browser
+    # controls also serve the file-tree directory opener.
     - id: open-in-app
       name: '@deepseek-ai/dsh-host-open-in-app'
       config:
@@ -339,7 +339,7 @@
     - id: ui-chat
       name: '@deepseek-ai/dsh-client-ui-chat'
 
-    # Official occupants for the generic sidebar and conversation brand slots.
+    # Official occupants for the sidebar brand slots and the home whale frame layer.
     - id: ui-brand-official
       name: '@deepseek-ai/dsh-client-ui-brand-official'
 

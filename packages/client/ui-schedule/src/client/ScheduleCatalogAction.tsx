@@ -1,11 +1,10 @@
 import {
-  useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent,
+  useEffect, useId, useMemo, useRef, useState, type KeyboardEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
 import {
   IconClockOutlineRegular,
   IconTrashOutlineRegular,
-  useAnchoredPosition,
   useDismissOnOutsidePointer,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -31,7 +30,6 @@ export type ScheduleCatalogActionProps =
   }>
 
 const SECOND_MS = 1_000
-const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
 
 /**
  * Current-Session reminder catalog with durable deletion, rendered only while
@@ -56,14 +54,7 @@ function SessionScheduleCatalog({
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const catalogRef = useRef<HTMLUListElement>(null)
-  const catalogPosition = useAnchoredPosition({
-    open,
-    anchorRef: triggerRef,
-    panelRef: catalogRef,
-    side: 'bottom',
-    gap: 5,
-    margin: 16,
-  })
+  const anchorName = `--dsh-schedule-catalog-${useId().replaceAll(':', '')}`
 
   useDismissOnOutsidePointer(rootRef, open, setOpen, catalogRef)
 
@@ -119,6 +110,7 @@ function SessionScheduleCatalog({
   const trigger = (
     <button
       ref={triggerRef}
+      style={{ anchorName }}
       type="button"
       className={css.trigger}
       data-schedule-reminder-entry=""
@@ -141,7 +133,7 @@ function SessionScheduleCatalog({
       <ul
         ref={catalogRef}
         className={css.menu}
-        style={catalogPosition ?? MEASURE_STYLE}
+        style={{ positionAnchor: anchorName }}
         aria-label={t('list.aria')}
         onKeyDown={onKeyDown}
       >

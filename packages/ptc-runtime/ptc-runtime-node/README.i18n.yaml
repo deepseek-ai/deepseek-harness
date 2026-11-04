@@ -9,8 +9,8 @@
   en: 7e1a8657a212c70b
   zh: afb7a8c6a3afd718
 /deepseek-ai-dsh-ptc-runtime-node/summary:
-  en: 79d30a488dfb61a9
-  zh: 6b375f440656da9c
+  en: fd81f3e969a3d8cc
+  zh: a8211ce7c308dfd2
 /deepseek-ai-dsh-ptc-runtime-node/table-of-contents:
   en: d152484eb41ac6b4
   zh: 725b47765ee8f30b
@@ -18,17 +18,17 @@
   en: 9c742ab3175c4f80
   zh: 5fa7d1ce9c3920d2
 /deepseek-ai-dsh-ptc-runtime-node/use-this-package/configuration:
-  en: 34b5a336733ea39f
-  zh: 7604b03999b61517
+  en: 8d42f921a1fa8e5c
+  zh: 27b79ec4ec52b3fd
 /deepseek-ai-dsh-ptc-runtime-node/use-this-package/execution-and-results:
   en: 2a9fa3292bf07355
   zh: db0b5684820915eb
 /deepseek-ai-dsh-ptc-runtime-node/use-this-package/in-memory-modes:
-  en: 647286ffa607df3b
-  zh: ddf6d548e914cf4c
+  en: 0204fbdcb55c9c0d
+  zh: 8e6b6f3974993ca0
 /deepseek-ai-dsh-ptc-runtime-node/use-this-package/deadlines-and-cancellation:
-  en: 3e7ab293fac35688
-  zh: 617ed4930bbef6c7
+  en: d383ec7aeab8afec
+  zh: 7c9c49e205fbbcd8
 /deepseek-ai-dsh-ptc-runtime-node/use-this-package/failures:
   en: 34a221d0f26b8e47
   zh: 2fd20ac9c9953c7f
@@ -36,8 +36,8 @@
   en: 50e6cd38e298da31
   zh: c8b252b3acf59147
 /deepseek-ai-dsh-ptc-runtime-node/understand-the-implementation/launch-and-control:
-  en: 5b3c72f09ab82585
-  zh: 82bf54f0cf160250
+  en: f27d477e3ccb10de
+  zh: 0f14a4899bae6c39
 /deepseek-ai-dsh-ptc-runtime-node/understand-the-implementation/source-and-built-bootstraps:
   en: 93c117a1e404ddca
   zh: 6902de0d96efb03b
@@ -45,8 +45,8 @@
   en: e2458b4653a620bb
   zh: 4ae26bd1e6a69430
 /deepseek-ai-dsh-ptc-runtime-node/understand-the-implementation/source-map:
-  en: af96c044b4fbda62
-  zh: 481180e36cc7e951
+  en: 2821d695aec82044
+  zh: 59e365efb152b047
 /deepseek-ai-dsh-ptc-runtime-node/further-exploration:
   en: ac2e2ae13d3f1394
   zh: 5d08b9c658fcf83a
@@ -57,8 +57,8 @@
   en: 40294c1c31b74824
   zh: d91e7b78c0619c7e
 /deepseek-ai-dsh-ptc-runtime-node/known-limitations-and-deferred-work:
-  en: c3fba2e38749fd24
-  zh: 18a77758669688b3
+  en: 7f688098214c7c72
+  zh: de06cbba4da172c5
 /deepseek-ai-dsh-ptc-runtime-node/known-limitations-and-deferred-work/dev-note:
   en: 6373aba4e08f7205
   zh: 2a8c33d1f2839df4

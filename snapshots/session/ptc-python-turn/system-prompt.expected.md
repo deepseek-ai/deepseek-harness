@@ -51,7 +51,7 @@ class ToolCallError(Exception):
     toolName: str
 
 class ApplyPatchArgs(TypedDict):
-    # Codex patch text: start with *** Begin Patch and end with *** End Patch. Use *** Add File: path with + lines; *** Update File: path, optionally followed by *** Move to: path, with @@ or @@ context and space-prefixed context, + added, or - removed lines; *** End of File anchors the last hunk to the file end. Use *** Delete File: path to delete. Paths are relative to the Session working directory.
+    # Patch text: start with *** Begin Patch and end with *** End Patch. Use *** Add File: path with + lines; *** Update File: path, optionally followed by *** Move to: path, with @@ or @@ context and space-prefixed context, + added, or - removed lines; *** End of File anchors the last hunk to the file end. Use *** Delete File: path to delete. Paths are relative to the Session working directory.
     input: str
     # The narrowest wider sandbox mode for a one-shot retry of the exact operation the sandbox just denied; the retry asks the user for approval.
     sandbox_permissions: NotRequired[Literal["workspace-write", "danger-full-access"]]
@@ -237,8 +237,8 @@ class GrepOutput(TypedDict):
     matches: list[GrepOutputMatches]
 
 class InterruptAgentArgs(TypedDict):
-    # The id of an agent created under you: your direct child or a deeper descendant.
-    agent_id: str
+    # The name of an agent created under you: your direct child or a deeper descendant.
+    agent: str
     # Additional keys beyond those declared are allowed.
 
 class InterruptAgentOutput(TypedDict):
@@ -295,25 +295,10 @@ class JobOutputOutput(TypedDict):
     text: str
     job: JobOutputOutputJob
 
-class ListAgentsOutput1(TypedDict):
-    kind: Literal["root"]
-    id: str
-    status: Literal["running", "inactive"]
-
-class ListAgentsOutput2(TypedDict):
-    kind: Literal["child"]
-    id: str
-    label: str
-    status: Literal["running", "inactive"]
-    parent: NotRequired[str]
-    depth: NotRequired[float]
-
-class ListAgentsOutput3(TypedDict):
-    kind: Literal["diagnostic"]
-    id: str
-    reason: Literal["corrupt", "unsupported", "unavailable"]
-    parent: NotRequired[str]
-    depth: NotRequired[float]
+class ListAgentsOutput(TypedDict):
+    name: str
+    status: Literal["running", "inactive", "corrupt", "unsupported", "unavailable"]
+    description: NotRequired[str]
 
 class ReadArgs(TypedDict):
     # Path to read, resolved by the filesystem backend.
@@ -359,8 +344,8 @@ class ReadImageOutput(TypedDict):
     image: ReadImageOutputImage
 
 class SendMessageArgs(TypedDict):
-    # The agent id of another member of your subagent tree, as shown by list_agents.
-    agent_id: str
+    # The name of another agent in your subagent tree, as shown by list_agents.
+    agent: str
     # The message to deliver to the agent.
     message: str
     # Additional keys beyond those declared are allowed.
@@ -396,26 +381,30 @@ class SubagentArgs(TypedDict):
     cwd: NotRequired[str]
     # A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request.
     description: str
+    # Optional short name for the subagent, unique among the subagents you create: lower-case letters, digits, and hyphens, starting with a letter, at most 32 characters; lead is reserved for the root agent. Omitted names default to agent-1, agent-2, and so on.
+    name: NotRequired[str]
     # The complete, self-contained task for the subagent. It does not share this conversation's context, so include everything it needs.
     prompt: str
     # Additional keys beyond those declared are allowed.
 
 class SubagentOutput(TypedDict):
     kind: Literal["activation"]
-    subagentId: str
+    name: str
 
 class SubagentForkArgs(TypedDict):
     # Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent.
     cwd: NotRequired[str]
     # A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request.
     description: str
+    # Optional short name for the subagent, unique among the subagents you create: lower-case letters, digits, and hyphens, starting with a letter, at most 32 characters; lead is reserved for the root agent. Omitted names default to agent-1, agent-2, and so on.
+    name: NotRequired[str]
     # The task for the subagent. It already sees this conversation's completed turns, so build on them freely and state only what is new.
     prompt: str
     # Additional keys beyond those declared are allowed.
 
 class SubagentForkOutput(TypedDict):
     kind: Literal["activation"]
-    subagentId: str
+    name: str
 
 class TodoWriteArgsTodos(TypedDict):
     # What the task is — a short imperative line.
@@ -549,7 +538,7 @@ class WriteOutput(TypedDict):
 
 class Tools(Protocol):
     async def apply_patch(self, args: ApplyPatchArgs) -> ApplyPatchOutput:
-        """Create, update, delete, or move UTF-8 text files with one Codex-style patch; prefer it over multiple edit calls when a change spans several files or separated regions."""
+        """Create, update, delete, or move UTF-8 text files with one patch; prefer it over multiple edit calls when a change spans several files or separated regions."""
     async def bash(self, args: BashArgs) -> BashOutput1 | BashOutput2 | BashOutput3:
         """Execute a bash command (`bash -c`) and return its stdout/stderr. Each call runs in a fresh shell; pass `workdir` instead of using `cd`. Managed `$DSH_*` variables expose current harness environment facts. Long output is truncated to its tail; the full output is saved to a file whose path is reported when available. Provide `description` before `command` in the arguments. Before any delete or move, verify that the resolved absolute target path is the intended one; never run it against a computed path you have not checked. An unset variable expands to an empty string, so guard variables in such paths with `${VAR:?}`. Commands may run under a file sandbox; a blocked file operation is reported as `[sandbox: file access denied under <mode> mode]`, a policy denial: do not retry another way."""
     async def create_goal(self, args: CreateGoalArgs) -> CreateGoalOutput1 | CreateGoalOutput2:
@@ -570,8 +559,8 @@ class Tools(Protocol):
         """List your background jobs (running and finished) with their ids, kinds, and statuses."""
     async def job_output(self, args: JobOutputArgs) -> JobOutputOutput:
         """Read a background job: output since the previous read for stream jobs, or the result of a finished final-output job."""
-    async def list_agents(self, args: dict[str, Any]) -> list[ListAgentsOutput1 | ListAgentsOutput2 | ListAgentsOutput3]:
-        """List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. You can message any other agent in the subagent tree listed as running or inactive. running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation."""
+    async def list_agents(self, args: dict[str, Any]) -> list[ListAgentsOutput]:
+        """List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry names, descriptions, and status. A descendant's name is its path from the root, such as reviewer/checker. You can message any other agent in the subagent tree. running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. corrupt, unsupported, or unavailable means this row's own descendants could not be read; the row itself is still a member you can message. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation."""
     async def read(self, args: ReadArgs) -> ReadOutput:
         """Read a UTF-8 text file and return line-numbered content."""
     async def read_image(self, args: ReadImageArgs) -> ReadImageOutput:
@@ -581,15 +570,15 @@ class Tools(Protocol):
     async def skill(self, args: SkillArgs) -> SkillOutput:
         """Load the full instructions for a skill. Call it before acting on a task that names or clearly matches a skill in the session skill catalog."""
     async def subagent(self, args: SubagentArgs) -> SubagentOutput:
-        """Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing. Use `send_message` to steer it while running or continue its conversation after it finishes."""
+        """Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its name. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing. Use `send_message` to steer it while running or continue its conversation after it finishes."""
     async def subagent_fork(self, args: SubagentForkArgs) -> SubagentForkOutput:
-        """Delegate a task to a subagent that inherits this conversation: a child agent seeded with all completed turns so far (it does not see the current in-flight turn). Use this when the subtask builds on this conversation's context — a follow-up analysis, a review, a continuation — without consuming this conversation's context for the work itself. You receive its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing. Use `send_message` to steer it while running or continue its conversation after it finishes."""
+        """Delegate a task to a subagent that inherits this conversation: a child agent seeded with all completed turns so far (it does not see the current in-flight turn). Use this when the subtask builds on this conversation's context — a follow-up analysis, a review, a continuation — without consuming this conversation's context for the work itself. You receive its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its name. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing. Use `send_message` to steer it while running or continue its conversation after it finishes."""
     async def todo_write(self, args: TodoWriteArgs) -> TodoWriteOutput:
         """Record and update a task list to plan multi-step work and show progress; skip it for trivial single-step tasks. Add one todo per concrete step before you start. While work remains, keep the todos being worked on `in_progress`, several only when work runs in parallel. Mark each todo `completed` as soon as it is done."""
     async def update_goal(self, args: UpdateGoalArgs) -> UpdateGoalOutput1 | UpdateGoalOutput2:
         """Update the current goal."""
     async def wait_agent(self, args: WaitAgentArgs) -> WaitAgentOutput:
-        """Wait for input at your next step, including agent messages, completion notifications, and user steering. Returns immediately when that input is already pending."""
+        """Wait for input at your next step, including agent messages, completion notifications, and user steering. Returns immediately if new input is pending. `timedOut: false` means new input is pending. Pending input is delivered to the model after code execution finishes."""
     async def web_fetch(self, args: WebFetchArgs) -> WebFetchOutput:
         """Fetch the content of a specific HTTP(S) URL and return it decoded to text."""
     async def web_search(self, args: WebSearchArgs) -> WebSearchOutput:

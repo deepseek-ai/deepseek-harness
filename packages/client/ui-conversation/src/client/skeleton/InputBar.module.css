@@ -416,6 +416,11 @@
   transform: translateY(-2px);
 }
 
+/* Solid artwork uses a smaller footprint than the thin send arrow. */
+.continueIcon {
+  transform: scale(1.5);
+}
+
 @media (hover: hover) {
   .primary:hover:not(:disabled) {
     background: var(--dsw-alias-button-info-hover);

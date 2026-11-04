@@ -43,7 +43,29 @@
 @media (hover: hover) {
   .typeFilterButton:hover { color: var(--dsw-alias-state-business-primary); background: var(--dsw-alias-interactive-bg-hover); }
 }
-.typeFilterPanel { position: fixed; z-index: 1250; width: 290px; max-width: min(calc(100vw - 24px), var(--dsh-anchored-max-width, 100vw)); max-height: min(calc(100vh - 24px), var(--dsh-anchored-max-height, 100vh)); overflow: auto; box-sizing: border-box; padding: 10px; color: var(--dsw-alias-label-primary); font-size: 11px; }
+.typeFilterPanel {
+  position: fixed;
+  z-index: 1250;
+  width: 290px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 10px;
+  color: var(--dsw-alias-label-primary);
+  font-size: 11px;
+  position-area: none;
+  top: max(12px, calc(anchor(bottom) + 4px));
+  bottom: 12px;
+  left: max(12px, anchor(left));
+  right: 12px;
+  position-try-fallbacks: --dsh-types-window, --dsh-types-opposite, --dsh-types-wide-opposite, --dsh-types-tall, --dsh-types-viewport;
+  align-self: start;
+  justify-self: start;
+  height: fit-content;
+  min-height: 0;
+  margin: 0;
+}
 .typeFilterInput { width: 100%; box-sizing: border-box; padding: 5px 6px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 4px; background: transparent; color: inherit; font: inherit; }
 .typeFilterHelp { margin: 6px 0; color: var(--dsw-alias-label-secondary); }
 .typeFilterOptions { max-height: 180px; overflow: auto; }
@@ -111,4 +133,49 @@
 
 @media (prefers-reduced-motion: reduce) {
   .table tr { animation: none; }
+}
+
+@position-try --dsh-types-window {
+  position-area: none;
+  top: max(12px, calc(anchor(bottom) + 4px));
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  margin: 0;
+  align-self: safe start;
+  justify-self: safe end;
+}
+
+@position-try --dsh-types-opposite {
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: max(12px, calc(anchor(top) + 4px));
+  align-self: end;
+}
+
+@position-try --dsh-types-wide-opposite {
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: max(12px, calc(anchor(top) + 4px));
+  left: 12px;
+  right: 12px;
+  align-self: end;
+  justify-self: safe end;
+}
+
+@position-try --dsh-types-tall {
+  position-area: none;
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: 12px;
+  left: max(12px, anchor(left));
+  right: 12px;
+  margin: 0;
+  align-self: safe start;
+  justify-self: start;
+}
+
+@position-try --dsh-types-viewport {
+  position-area: none;
+  inset: max(12px, var(--dsh-frame-overlay-top, 12px)) 12px 12px;
+  margin: 0;
+  align-self: safe start;
+  justify-self: safe end;
 }

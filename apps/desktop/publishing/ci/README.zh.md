@@ -68,6 +68,8 @@ Environment 审批限制此工作流，不限制同一机器账户运行的任�
 
 ## 打包与发布
 
+发布表单支持可选的 `staging_percentage`，取值为 0 到 100 的整数。该值作用于保留包所属的 nightly 或 stable 渠道，显示在审批摘要中，并写入发布的 YAML 和审计记录，不修改保留产物。留空沿用包内默认值（通常为全量）。已完成的发布不能通过重试修改比例；同版本清单内容冲突仍会报错。
+
 发布到 test 或 production 都必须在 Windows 选择 `signing=signed`，或在 macOS 不勾选**跳过公证**。无签名、无公证的包仅限内部调试，不能发布或用于自动更新。托管路由 job 会在安装依赖前，依据所选 run 和 attempt 对应的 artifact 名称拒绝已标明的调试包。仅重跑归档时，artifact 名称保留原构建 attempt，早期检查可能未识别该包；本地清单资格校验仍会在发布前拒绝调试包。缺少 artifact 元数据不代表允许发布：原机器仍会验证留存清单和签名。遇到调试包拒绝提示时，需重新完成签名或公证，再使用新包的 run ID / attempt 发布；重跑发布不能使现有产物获得发布资格。
 
 选择对应平台的 `Package Desktop` 工作流、preset、源码、通道和版本模式。test 的 `source_ref` 接受仓库内分支名（如 `feature/desktop-update`）或 `dsh-v*` tag；production 仅接受 `master` 或 `dsh-v*` tag。符合 `dsh-v` 后接数字、其余为字母、数字、点或连字符的名称按 tag 处理，即使存在同名分支。tag 必须与所选产品版本一致。建议从 `master` 启动打包工作流，再单独填写打包源码；不支持直接填写 commit SHA、PR ref 或 fork 仓库。源码必须包含 CI 适配脚本，旧源码会在安装依赖前失败。仅选择可信分支：其构建代码将在签名机器上执行。这是操作约定，不提供工作流来源强制限制或凭据隔离。发布使用记录的 commit，并要求该提交仍在所选分支历史中；正常追加提交不影响发布，删除分支或导致历史分叉的强推会拒绝。tag 发布要求 tag 仍指向记录的提交。从 `master` 发起发布；托管路由 job 会在派发到原机器前拒绝其他 ref。实际打包源码提交单独记录。`version_mode=default` 对 production 选择 follow-dsh，对 test 选择 build-number；follow-dsh 跟随所选源码的 dsh 包版本号，build-number 在任一环境均追加日期/run/attempt，manual 要求填写 `build_version`。已有派发命令中的 `-f version_mode=auto` 须改为 `-f version_mode=build-number`，`-f version_mode=product` 改为 `-f version_mode=follow-dsh`；本地 CLI 的 `--build-version auto` 不变。工作流暂时传递旧模式名，以兼容已含 CI 适配脚本但早于模式改名的源码；当前解析器同时接受新旧名称。计划于 2027-01-04 同时删除 workflow 映射和解析器别名，并要求所选源码支持新模式名；该日期不会触发自动失效。操作人员选择的渠道接受任意受支持的构建版本，包括 alpha 和 RC 版本；渠道不改变版本优先级，也不允许客户端降级。可选 `test_release_id` 是测试 URL 前缀：留空沿用机器默认值，同一平台连续升级测试需保持相同值，并应定期轮换默认值。它不是 GitHub run ID。格式校验和轮换限制见[打包配置](../../packaging/README.zh.md#configuration-and-local-builds)。

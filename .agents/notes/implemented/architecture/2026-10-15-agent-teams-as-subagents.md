@@ -4,7 +4,7 @@ Status: implemented
 
 English | [中文](2026-10-15-agent-teams-as-subagents.zh.md)
 
-The adjacency and parent-lifetime restrictions are superseded by [tree-wide communication](2026-10-16-tree-wide-agent-communication.md). [Task-board inbox coordination](2026-10-19-team-task-board-inbox.md) supersedes the separate roster and Team-owned wait; the single subagent identity decision remains active.
+The adjacency and parent-lifetime restrictions are superseded by [tree-wide communication](2026-10-16-tree-wide-agent-communication.md). [Task-board inbox coordination](2026-10-19-team-task-board-inbox.md) supersedes the separate roster and Team-owned wait; the single subagent identity decision remains active. [Catalog names](2026-11-02-subagent-catalog-names.md) supersede the statement that creation accepts no member name and the rejection of unique names below.
 
 ## Problem
 

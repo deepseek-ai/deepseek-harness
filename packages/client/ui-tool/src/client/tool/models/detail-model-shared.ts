@@ -39,6 +39,7 @@ export function detailJson(text: string): unknown {
 }
 
 const STATUS_KEYS = {
+  corrupt: 'detail.status.corrupt', unsupported: 'detail.status.unsupported', unavailable: 'detail.status.unavailable',
   running: 'detail.status.running', idle: 'detail.status.idle', ready: 'detail.status.ready',
   inactive: 'detail.status.inactive', provisioning: 'detail.status.provisioning',
   failed: 'detail.status.failed', error: 'detail.status.failed',

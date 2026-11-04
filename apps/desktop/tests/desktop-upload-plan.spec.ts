@@ -178,11 +178,14 @@ describe('desktop upload plan', () => {
   })
 
   it.each(['test', 'production'] as const)('isolates stable-channel packages from nightly in %s', async (environment) => {
-    const nightly = await createDesktopUploadPlan('win-x64', await fixture('win-x64', '1.2.3', environment, 'nightly'))
-    const stable = await createDesktopUploadPlan('win-x64', await fixture('win-x64', '1.2.3', environment, 'stable'))
+    const nightly = await createDesktopUploadPlan('win-x64', { ...await fixture('win-x64', '1.2.3', environment, 'nightly'), stagingPercentage: 10 })
+    const stable = await createDesktopUploadPlan('win-x64', { ...await fixture('win-x64', '1.2.3', environment, 'stable'), stagingPercentage: 10 })
     expect(stable.artifacts.filter(file => file.channelMetadata).map(file => file.filename)).toEqual(['stable.yml'])
     expect(nightly.artifacts.filter(file => file.channelMetadata).map(file => file.filename)).toEqual(['nightly.yml'])
     expect(stable.artifacts.every(file => !nightly.artifacts.some(other => other.key === file.key))).toBe(true)
+    for (const plan of [nightly, stable]) {
+      expect(plan.artifacts.find(file => file.channelMetadata)!.contents).toContain('stagingPercentage: 10')
+    }
   })
 
   it.each(['mac-arm64', 'mac-x64', 'win-x64'] as const)('publishes manually selected prereleases on stable for %s', async (target) => {
