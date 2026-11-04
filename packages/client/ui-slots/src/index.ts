@@ -97,8 +97,8 @@ export type PropsLocale<N> = N extends keyof LocaleNamespaceMap & string
   }
   : object
 
-/** Slot cardinality: single occupant, ordered list, key-dispatched, or selector-routed chain. */
-export type SlotKind = 'single' | 'list' | 'keyed' | 'chain'
+/** Slot cardinality: single occupant, ordered list, key-dispatched, selector-routed chain, or nested wrapper layers. */
+export type SlotKind = 'single' | 'list' | 'keyed' | 'chain' | 'hoc'
 
 /** Slot data context: global, current-session-optional, or strict session-bound. */
 export type SlotScope = 'root' | 'session-maybe' | 'session'
@@ -287,6 +287,16 @@ export interface ChainRenderOpts {
 }
 
 /**
+ * renderSlot options for a hoc slot. `children` is the owner's content; every
+ * live entry wraps it, and the slot renders it unchanged when no entry is live.
+ * Omitted content renders the layers around nothing.
+ */
+export interface HocRenderOpts {
+  /** Innermost content wrapped by the slot's entries. */
+  children?: ReactNode
+}
+
+/**
  * Chain-entry selector: the routing decision of one chain contribution.
  * Runs at render time in chain order (ascending `priority`, default 0, lower
  * tries first; ties keep registration = assembly order); the first non-null
@@ -303,12 +313,16 @@ export type ChainSelect<O extends object, M> = (owner: O) => M | null
 export type ChainKeysOf<S extends keyof SlotMap & string> =
   S extends unknown ? (SlotMap[S]['kind'] extends 'chain' ? S : never) : never
 
+/** Keys of a slot-key union whose SlotMap entry is hoc-kind (renderSlot requires `children`). */
+export type HocKeysOf<S extends keyof SlotMap & string> =
+  S extends unknown ? (SlotMap[S]['kind'] extends 'hoc' ? S : never) : never
+
 /** Keys in a render share whose dispatch occurrence requires hookContext. */
 type ContextualKeysOf<S extends keyof SlotMap & string> =
   S extends unknown ? (SlotMap[S] extends { hookContext: unknown } ? S : never) : never
 
 /** Keys in a render share with the ordinary optional options bag. */
-type OrdinaryKeysOf<S extends keyof SlotMap & string> = Exclude<S, ContextualKeysOf<S>>
+type OrdinaryKeysOf<S extends keyof SlotMap & string> = Exclude<S, ContextualKeysOf<S> | HocKeysOf<S>>
 
 /**
  * Plain and contextual child dispatch signatures. Keeping them as separate
@@ -316,9 +330,12 @@ type OrdinaryKeysOf<S extends keyof SlotMap & string> = Exclude<S, ContextualKey
  * declared hookContext mandatory only for the Slot keys that need it.
  */
 type RenderSlotFn<S extends keyof SlotMap & string> =
-  ([ContextualKeysOf<S>] extends [never] ? object : {
+  ([HocKeysOf<S>] extends [never] ? object : {
+    <K extends HocKeysOf<S>>(key: K, owner: OwnerOf<K>, opts?: HocRenderOpts): ReactNode
+  }) &
+  ([Exclude<ContextualKeysOf<S>, HocKeysOf<S>>] extends [never] ? object : {
     <
-      K extends ContextualKeysOf<S>,
+      K extends Exclude<ContextualKeysOf<S>, HocKeysOf<S>>,
       EntryKey extends EntryKeyOf<K> = EntryKeyOf<K>,
     >(
       key: K,
@@ -344,6 +361,14 @@ type RenderSlotFn<S extends keyof SlotMap & string> =
  */
 export type MatchedShare<E extends SlotEntryDef, M> =
   E['kind'] extends 'chain' ? { matched: M } : object
+
+/**
+ * Hoc children share: a hoc-slot component receives the next inner layer, or
+ * the owner's content at the innermost layer, as the framework-injected
+ * `children` prop and renders it exactly once.
+ */
+export type HocShare<E extends SlotEntryDef> =
+  E['kind'] extends 'hoc' ? { children: ReactNode } : object
 
 /** Props of the standard-kit SessionProvider seat. */
 export interface SessionAreaProps {
@@ -377,10 +402,11 @@ export type SessionProviderComponent = (props: SessionAreaProps) => ReactNode
 export type PropsRenderSlots<S extends keyof SlotMap & string> = {
   /**
    * Render a declared non-chain child slot (chain keys dispatch through
-   * `renderSlotChain` — their routing lives in entry selectors).
+   * `renderSlotChain` — their routing lives in entry selectors). A hoc key
+   * takes the content its entries wrap as `opts.children`.
    * @param key - declared child key.
    * @param owner - owner props share for that key (decided at the render site).
-   * @param opts - kind dispatch options.
+   * @param opts - kind dispatch options; `{ children }` for hoc keys.
    * @returns rendered node(s).
    */
   renderSlot: RenderSlotFn<Exclude<S, ChainKeysOf<S>>>
@@ -611,7 +637,7 @@ export type ComposedProps<
   M = never,
   N = undefined,
 > = PropsRuntime<K, EntryKey> & PropsRenderSlots<S> & PropsRenderFactories
-  & PropsStore<H> & InjectFace<I> & MatchedShare<SlotMap[K], M> & PropsLocale<N>
+  & PropsStore<H> & InjectFace<I> & MatchedShare<SlotMap[K], M> & HocShare<SlotMap[K]> & PropsLocale<N>
 
 /**
  * Inject factory parameter list, derived from the registration's declaration:
@@ -763,7 +789,8 @@ export type SlotLabel = string | (() => string)
 
 /**
  * Kind shape fields carried in register options (keyed dispatch key; list
- * id/order/label; chain select/priority; non-chain priority = cell shadowing rank).
+ * id/order/label; hoc id/order; chain select/priority; for every other kind
+ * priority is the cell shadowing rank, and hoc nesting follows order).
  */
 export type KindOptions<
   K extends keyof SlotMap & string,
@@ -788,13 +815,20 @@ export type KindOptions<
         /** Explicit chain position (ascending, default 0, lower tries first); ties keep registration = assembly order. */
         priority?: number
       }
-        : {
-          /**
-           * Cell shadowing rank (ascending, default 0, lowest renders; a
-           * same-priority second registration throws — see {@link SlotCore.register}).
-           */
+        : SlotMap[K]['kind'] extends 'hoc' ? {
+          id: string
+          /** Nesting position: ascending, default 0; the lowest order is the outermost layer. */
+          order?: number
+          /** Cell shadowing rank (ascending, default 0, lowest renders; same id + same priority throws — see {@link SlotCore.register}). */
           priority?: number
         }
+          : {
+            /**
+             * Cell shadowing rank (ascending, default 0, lowest renders; a
+             * same-priority second registration throws — see {@link SlotCore.register}).
+             */
+            priority?: number
+          }
 
 /**
  * Compile-time presence check: an entry declaring children MUST consume
@@ -1132,11 +1166,11 @@ export class SlotCore {
    * an already-declared child key throws (one declarer per slot — the message
    * names the first declarer); mounting one shared store handle under slots
    * of different scopes throws. Kind constraints: keyed — missing `key`
-   * throws; list — missing `id` throws; chain — missing `select` throws (the
-   * selector is the entry's routing seat, see {@link ChainSelect}).
+   * throws; list and hoc — missing `id` throws; chain — missing `select`
+   * throws (the selector is the entry's routing seat, see {@link ChainSelect}).
    *
-   * Shadowing (single/keyed/list): entries sharing one cell (single — the
-   * slot itself; keyed — same `key`; list — same `id`) coexist at distinct
+   * Shadowing (single/keyed/list/hoc): entries sharing one cell (single — the
+   * slot itself; keyed — same `key`; list and hoc — same `id`) coexist at distinct
    * priorities, sorted ascending with ties keeping registration order; the
    * cell's lowest live entry renders ({@link SlotCore.entriesOfSlot}). A
    * second registration at an occupied cell's exact priority (default 0)
@@ -1230,11 +1264,12 @@ export class SlotCore {
         }
         break
       }
-      case 'list': {
-        if (options.id === undefined) throw new Error(`list slot "${options.name}" requires options.id`)
+      case 'list':
+      case 'hoc': {
+        if (options.id === undefined) throw new Error(`${spec.kind} slot "${options.name}" requires options.id`)
         const occupant = rec.entries.find(e => e.options.id === options.id && (e.options.priority ?? 0) === priority)
         if (occupant) {
-          throw new Error(`list slot "${options.name}" already has an entry with id "${options.id}" ${occupantHint(occupant)}`)
+          throw new Error(`${spec.kind} slot "${options.name}" already has an entry with id "${options.id}" ${occupantHint(occupant)}`)
         }
         break
       }
@@ -1281,9 +1316,10 @@ export class SlotCore {
     const next = [...rec.entries, entry]
     // Stable sorts: priority ascending for every kind, ties keep registration
     // sequence — a cell's winner is its first occurrence, chain tries lower
-    // priority first. List refines equal priorities by explicit `order` so the
-    // raw ledger keeps its display sequence for priority-less compositions.
-    next.sort(spec.kind === 'list'
+    // priority first. List and hoc refine equal priorities by explicit `order`
+    // so the raw ledger keeps its display or nesting sequence for priority-less
+    // compositions.
+    next.sort(spec.kind === 'list' || spec.kind === 'hoc'
       ? (a, b) => ((a.options.priority ?? 0) - (b.options.priority ?? 0)) || ((a.options.order ?? 0) - (b.options.order ?? 0))
       : (a, b) => (a.options.priority ?? 0) - (b.options.priority ?? 0))
     rec.entries = next
@@ -1344,8 +1380,9 @@ export class SlotCore {
   /**
    * Project a key's entries to its shadowing winners: the first live
    * (non-abdicated) entry of each cell in priority order — single: the slot
-   * is one cell; keyed: one cell per `key`; list: one cell per `id` (winners
-   * keep ledger sequence; list renderers still refine display by `order`).
+   * is one cell; keyed: one cell per `key`; list and hoc: one cell per `id`
+   * (winners keep ledger sequence; renderers still refine list display and hoc
+   * nesting by `order`).
    * Chain keys return the raw entries unchanged: election consumes every
    * entry, shadowing does not apply. The raw {@link SlotCore.entries} view
    * stays the inspection surface. Builds a fresh array per call — a render
@@ -1363,7 +1400,7 @@ export class SlotCore {
     for (const entry of rec.entries) {
       if (this.abdicated.has(entry)) continue
       // Single-kind entries all share the one undefined cell.
-      const cell = kind === 'keyed' ? entry.options.key : kind === 'list' ? entry.options.id : undefined
+      const cell = kind === 'keyed' ? entry.options.key : kind === 'list' || kind === 'hoc' ? entry.options.id : undefined
       if (seenCells.has(cell)) continue
       seenCells.add(cell)
       heads.push(entry)
@@ -1529,7 +1566,7 @@ export class SlotCore {
   /**
    * Renderer crash report from an entry boundary. Always notifies
    * {@link SlotCore.onEntryError} listeners; with `info.abdicate` set (the
-   * shadowing kinds — single/keyed/list) it first retires the entry from its
+   * shadowing kinds — single/keyed/list/hoc) it first retires the entry from its
    * cell, one-shot: the record's version bumps through the ordinary mutation
    * channel so outlets re-project onto the cell's next survivor, and a
    * repeat abdicating report no-ops entirely. Chain crashes report with

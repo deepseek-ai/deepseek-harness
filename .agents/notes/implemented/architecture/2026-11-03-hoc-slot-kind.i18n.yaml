@@ -1,0 +1,25 @@
+# Bilingual-pair consistency record for 2026-11-03-hoc-slot-kind.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-03-hoc-slot-kind.md
+/agent-note-add-the-hoc-slot-kind-so-plugins-can-wrap-owner-content-in-layers:
+  en: 8292b8f9884b8802
+  zh: 3a4f34ca79313c9d
+/agent-note-add-the-hoc-slot-kind-so-plugins-can-wrap-owner-content-in-layers/problem:
+  en: d16c3bfef49e16be
+  zh: 6714da1c9c984fe9
+/agent-note-add-the-hoc-slot-kind-so-plugins-can-wrap-owner-content-in-layers/decision:
+  en: 3a4380324cfc1679
+  zh: 44db368e091cbd46
+/agent-note-add-the-hoc-slot-kind-so-plugins-can-wrap-owner-content-in-layers/decision/implementation:
+  en: 01189e457c91deeb
+  zh: 94f7e8865b332a07
+/agent-note-add-the-hoc-slot-kind-so-plugins-can-wrap-owner-content-in-layers/decision/first-consumer:
+  en: 1afdf4ceeef7a3b3
+  zh: be01cf39850db0ca
+/agent-note-add-the-hoc-slot-kind-so-plugins-can-wrap-owner-content-in-layers/alternatives-considered:
+  en: b4824619c502b422
+  zh: 610364f2dc8cb2b7
+/agent-note-add-the-hoc-slot-kind-so-plugins-can-wrap-owner-content-in-layers/consequences:
+  en: 7542ee2bc2c70258
+  zh: bc0dd1dc6e50de66
