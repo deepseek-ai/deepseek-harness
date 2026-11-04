@@ -43,6 +43,9 @@
     },
     {
       "path": "../../sandbox/sandbox"
+    },
+    {
+      "path": "../../util/output-retention"
     }
   ]
 }

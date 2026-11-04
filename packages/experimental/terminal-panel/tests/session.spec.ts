@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentTerminalError } from '@deepseek-ai/dsh-api-terminal-controller'
 import { TerminalError } from '@deepseek-ai/dsh-terminal'
 import type { TerminalSendResult } from '@deepseek-ai/dsh-terminal'
-import { PanelTerminalSession, TAKEN_OVER, changedWithin, modelError, newestBytes, statusOf } from '../src/session.ts'
+import { PanelTerminalSession, TAKEN_OVER, changedWithin, modelError, statusOf } from '../src/session.ts'
 import { FakeTerminal, SHELL_PID } from './fake.ts'
 
 const options = { promptSilenceMs: 300, probeIntervalMs: 1000, idleSilenceMs: 3000, timeoutMs: 30_000, maxReadBytes: 1000 }
@@ -300,13 +300,6 @@ describe('closing', () => {
 })
 
 describe('helpers', () => {
-  it('keeps the newest whole code points within a byte bound', () => {
-    expect(newestBytes('abc', 3)).toEqual({ text: 'abc', truncated: false })
-    expect(newestBytes('a终端', 6)).toEqual({ text: '终端', truncated: true })
-    expect(newestBytes('a终端', 5)).toEqual({ text: '端', truncated: true })
-    expect(newestBytes('😀', 3)).toEqual({ text: '', truncated: true })
-  })
-
   it('passes errors other than a takeover through unchanged', () => {
     const failure = new Error('provider failed')
     expect(modelError(failure)).toBe(failure)

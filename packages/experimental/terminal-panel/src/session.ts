@@ -1,8 +1,8 @@
 /** One sidebar terminal behind the terminal registry: sends, screen reads, signals and release to the person. */
 
-import { Buffer } from 'node:buffer'
 import { AgentTerminalError } from '@deepseek-ai/dsh-api-terminal-controller'
 import type { AgentTerminal, TerminalScreenMark, WebTerminalInfo } from '@deepseek-ai/dsh-api-terminal-controller'
+import { TextRetainer } from '@deepseek-ai/dsh-output-retention'
 import type { SubprocessTerminalForeground } from '@deepseek-ai/dsh-subprocess'
 import { TerminalError } from '@deepseek-ai/dsh-terminal'
 import type {
@@ -119,17 +119,10 @@ export async function changedWithin(terminal: PanelTerminal, revision: number, d
  * @returns the kept suffix and whether anything was dropped.
  */
 export function newestBytes(text: string, maxBytes: number): { text: string; truncated: boolean } {
-  if (Buffer.byteLength(text) <= maxBytes) return { text, truncated: false }
-  const points = Array.from(text)
-  let bytes = 0
-  let start = points.length
-  while (start > 0) {
-    const size = Buffer.byteLength(points[start - 1] as string)
-    if (bytes + size > maxBytes) break
-    bytes += size
-    start--
-  }
-  return { text: points.slice(start).join(''), truncated: true }
+  const retainer = new TextRetainer({ kind: 'tail', maxBytes })
+  retainer.push(text)
+  const retained = retainer.finish()
+  return { text: retained.text, truncated: retained.truncated }
 }
 
 /** A send's output, rendered from a screen mark that moves past the lines already read. */

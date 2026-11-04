@@ -114,6 +114,15 @@ describe('user terminal tools', () => {
     const bounded = renderUserScreen({ text: 'x'.repeat(100), totalLines: 1, lineBegin: 0, lineEnd: 1, truncated: false }, 60)
     expect(Buffer.byteLength(bounded)).toBeLessThanOrEqual(60)
     expect(bounded).toMatch(/^x+\n\[lines: 0-1 of 1\]\n\[output truncated\]$/u)
+    const page = { text: '终端'.repeat(40), totalLines: 123_456_789_012_345, lineBegin: 123_456_789_012_000, lineEnd: 123_456_789_012_345, truncated: true }
+    const fixed = '\n[lines: 123456789012000-123456789012345 of 123456789012345]\n[output truncated]'
+    for (const limit of [Buffer.byteLength(fixed) - 1, 64]) {
+      const tiny = renderUserScreen(page, limit)
+      expect(Buffer.byteLength(tiny)).toBeLessThanOrEqual(limit)
+      expect(fixed.endsWith(tiny)).toBe(true)
+    }
+    expect(renderUserScreen(page, Buffer.byteLength(fixed))).toBe(fixed)
+    expect(renderUserScreen(page, Buffer.byteLength(fixed) + 3)).toBe(`端${fixed}`)
   })
 })
 

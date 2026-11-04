@@ -53,8 +53,11 @@ export function renderUserScreen(page: TerminalScreenPage, maxBytes: number): st
   const text = page.text || '(empty screen)'
   const marker = page.truncated ? TRUNCATED : ''
   if (Buffer.byteLength(text + suffix + marker) <= maxBytes) return text + suffix + marker
-  const room = Math.max(0, maxBytes - Buffer.byteLength(suffix + TRUNCATED))
-  return newestBytes(text, room).text + suffix + TRUNCATED
+  const fixed = suffix + TRUNCATED
+  const fixedBytes = Buffer.byteLength(fixed)
+  // A bound below the position and truncation lines keeps only the newest bytes of those lines.
+  if (fixedBytes >= maxBytes) return newestBytes(fixed, maxBytes).text
+  return newestBytes(text, maxBytes - fixedBytes).text + fixed
 }
 
 /**
