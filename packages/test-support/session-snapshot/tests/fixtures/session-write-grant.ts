@@ -16,11 +16,10 @@ export const inject = ['sandboxPolicy']
 export function apply(ctx: Context): void {
   ctx.on('agent/created', ({ agent }) => {
     const extra = join(process.cwd(), 'extra')
-    const disposers = [extra, join(extra, 'missing'), join(extra, 'keep.txt')]
-      .map(directory => ctx.sandboxPolicy.registerWritableRoot(agent.session, directory))
+    const dispose = ctx.sandboxPolicy.registerWritableRoot(agent.session, extra)
     ctx.on('session/event', (session, event) => {
       if (session === agent.session && event.type === 'tool/result') {
-        for (const dispose of disposers) dispose()
+        dispose()
       }
     })
   })

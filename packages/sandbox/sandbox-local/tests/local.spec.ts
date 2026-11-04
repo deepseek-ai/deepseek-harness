@@ -441,7 +441,7 @@ describe('the windows-acl probe (runner invocation contract)', () => {
     const file = join(extra, 'file.txt')
     writeFileSync(file, 'file')
     try {
-      await expect(sandbox.confine(['true'], { ...WW, additionalWritableRoots: [join(extra, 'missing'), file] })).resolves.toBeDefined()
+      await expect(sandbox.confine(['true'], { ...WW, additionalWritableRoots: [join(extra, 'missing'), file] })).rejects.toThrow('Invalid additional writable directory')
       await expect(sandbox.confine(['true'], { ...WW, additionalWritableRoots: [extra] }))
         .rejects.toThrow('Windows ACL confinement does not support additional writable directories')
       await expect(sandbox.confine(['true'], { ...RO, additionalWritableRoots: ['/extra'] })).resolves.toBeDefined()

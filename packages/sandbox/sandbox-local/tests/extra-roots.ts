@@ -1,6 +1,6 @@
 /** Native backend checks for explicit directory grants and their denial cases. */
 import { spawnSync } from 'node:child_process'
-import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { expect } from 'vitest'
@@ -29,10 +29,8 @@ export async function checkExtraWrites(provider: LocalSandboxProvider, directory
   const workspaceRoot = realpathSync.native(await directory(homedir()))
   const extra = realpathSync.native(await directory(homedir()))
   const outside = realpathSync.native(await directory(homedir()))
-  const file = join(workspaceRoot, 'file.txt')
-  writeFileSync(file, 'file')
   const policy: SandboxPolicy = { mode: 'workspace-write', workspaceRoot,
-    additionalWritableRoots: [extra, join(workspaceRoot, 'missing'), file, join(file, 'child')] }
+    additionalWritableRoots: [extra] }
   const allowed = join(extra, 'allowed.txt')
   const result = await run(provider, `printf allowed > ${quote(allowed)}`, policy)
   expect(result.status, result.stderr).toBe(0)

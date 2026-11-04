@@ -2586,7 +2586,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       {
         signature: 'registerWritableRoot(session: Session, directory: string): () => void',
         description: 'Permit writes under one directory in this Session\'s future workspace-write operations. The calling context owns the effect; disposal removes only this registration. Other grants to the directory remain effective. Existing operations and persistent processes retain their resolved permissions. Grants are runtime-only and must be registered again after resume or fork.',
-        parameters: [{ name: 'session', description: 'exact live Session receiving the grant; other Sessions and agentless calls are unaffected.' }, { name: 'directory', description: 'absolute execution-world path; execution skips it unless it is a directory and rejects symlinked directories.' }],
+        parameters: [{ name: 'session', description: 'exact live Session receiving the grant; other Sessions and agentless calls are unaffected.' }, { name: 'directory', description: 'absolute execution-world path; execution rejects missing, non-directory, or symlinked paths.' }],
         returns: 'the exact Cordis effect disposer for this registration.',
         throws: ['when the directory is relative or contains a NUL byte.'],
       },

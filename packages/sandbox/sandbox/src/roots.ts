@@ -15,7 +15,7 @@
 
 import { realpathSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { resolve } from 'node:path'
+import { relative } from 'node:path'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import type { SandboxExecutionPolicy } from './index.ts'
 
@@ -27,20 +27,18 @@ export class SandboxInvalidRootError extends HarnessError {
   }
 }
 
-/** Resolve existing directories without allowing mutable aliases to redirect grants. */
-function additionalRoot(path: string): string | undefined {
+/** Resolve existing directories, rejecting aliases that differ under the host's path comparison. */
+function additionalRoot(path: string): string {
   let physical: string
   let directory: boolean
   try {
     physical = realpathSync.native(path)
     directory = statSync(physical).isDirectory()
   } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code
-    if (code === 'ENOENT' || code === 'ENOTDIR') return undefined
     throw new SandboxInvalidRootError(path, `cannot read the directory: ${String(error)}`)
   }
-  if (!directory) return undefined
-  if (physical !== resolve(path)) {
+  if (!directory) throw new SandboxInvalidRootError(path, 'expected an existing directory')
+  if (relative(path, physical) !== '') {
     throw new SandboxInvalidRootError(path, `use the physical directory path ${JSON.stringify(physical)}; symlinked grants are not supported`)
   }
   return physical
@@ -71,7 +69,7 @@ export function canonicalPath(path: string): string {
 
 /**
  * The workspace-owned writable roots — the policy's workspace root plus its
- * existing extra directories, as a canonical, deduplicated allow-list. Both
+ * explicit extra directories, as a canonical, deduplicated allow-list. Both
  * the workspace and every extra root must be granted together by every
  * backend; this is the one derivation of that set, kept separate from the
  * platform temp policy each backend documents for itself (Seatbelt and the fs
@@ -79,11 +77,11 @@ export function canonicalPath(path: string): string {
  * grants).
  * @param policy - the file-effect policy to derive the allow-list from.
  * @returns the canonical workspace-owned roots; empty under `read-only`.
- * @throws {SandboxInvalidRootError} An extra root cannot be inspected or uses a symlink; missing and non-directory entries are skipped.
+ * @throws {SandboxInvalidRootError} An extra root cannot be inspected, is not a directory, or uses a symlink.
  */
 export function workspaceWritableRoots(policy: SandboxExecutionPolicy): string[] {
   if (policy.mode !== 'workspace-write') return []
-  const additional = (policy.additionalWritableRoots ?? []).map(additionalRoot).filter(root => root !== undefined)
+  const additional = (policy.additionalWritableRoots ?? []).map(additionalRoot)
   return [...new Set([canonicalPath(policy.workspaceRoot), ...additional])]
 }
 

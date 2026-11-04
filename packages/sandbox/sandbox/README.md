@@ -100,7 +100,7 @@ The ladder is a closed table — `read-only` may escalate to `workspace-write` o
 
 ### Writable roots
 
-`workspaceWritableRoots` derives the workspace and explicit extra directories for bwrap and Landlock. `writableRoots` adds the host temporary areas for Seatbelt and the in-process filesystem fence. Both deduplicate roots, skip extra paths that are missing or are not directories, and reject directories that resolve through symlinks. Each execution checks the paths again. See the [mode definitions](../../../docs/subsystems/sandbox.md).
+`workspaceWritableRoots` derives the workspace and explicit extra directories for bwrap and Landlock. `writableRoots` adds the host temporary areas for Seatbelt and the in-process filesystem fence. Both deduplicate roots and reject extra paths that are missing, are not directories, or resolve through symlinks. Path comparison accepts Windows casing and separator differences. Each execution checks the paths again. See the [mode definitions](../../../docs/subsystems/sandbox.md).
 
 </details>
 

@@ -56,7 +56,7 @@ kind: "package-reference"
 
 不受支持的平台或不可用的 runner 会拒绝执行：`confine()` 以 `SANDBOX_UNAVAILABLE` 拒绝 并列出该平台的 runner 选项，消费方会呈现该错误，而不是让命令不受限制地运行。启动后拒绝自身 profile 的 runner 由其致命 stderr 签名与退出码识别，因此损坏的沙箱不会被误认为被拒绝的命令。`runnerCommand` 覆盖是操作方断言：它跳过功能探测，并假定配置的 runner 诚实实现与 bwrap 兼容的 profile。
 
-Seatbelt、bwrap 和 Landlock 在 `workspace-write` 下包含策略显式指定的 `additionalWritableRoots`。只读模式忽略这些授权。执行时跳过不存在或不是目录的路径。符号链接目录和其他检查失败会在命令启动前触发 `SANDBOX_INVALID_ROOT`。
+Seatbelt、bwrap 和 Landlock 在 `workspace-write` 下包含策略显式指定的 `additionalWritableRoots`。只读模式忽略这些授权。不存在的路径、非目录、符号链接目录和其他检查失败会在命令启动前触发 `SANDBOX_INVALID_ROOT`。
 
 -----
 
