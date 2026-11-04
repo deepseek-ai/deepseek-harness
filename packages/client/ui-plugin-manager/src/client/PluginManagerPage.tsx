@@ -35,7 +35,7 @@ import {
   type PluginManagerFace, type PluginManagerState, type RegistryChoice, type VersionCheck,
 } from './manager-store.ts'
 import { managementText, noticeText, packageText, registryText, restartText, rowText, type Translate } from './presentation.ts'
-import type { PluginPackageRef, PluginRowRef, PluginsSubject } from './slot-contract.ts'
+import type { PluginPackageRef, PluginRowRef, PluginsSubject, PluginTabInstall } from './slot-contract.ts'
 import type { ConfigPageForm } from './slot-contract.ts'
 import { UpdateDialog, VersionSection } from './versions.tsx'
 import { BundleDetailSection } from './BundleDetailSection.tsx'
@@ -407,11 +407,11 @@ function SourceSection({ pkg, t }: { readonly pkg: PackageView; readonly t: Tran
 }
 
 /**
- * A bundle's enable switch on its card and its page: locked, saying why, for
- * one the Host protects; off and locked for one it cannot read.
+ * A bundle's enable switch on its card, its page, and a contributed tab: locked, saying why, for one the Host
+ * protects; off and locked for one it cannot read; off for one the page does not list yet.
  */
 function EnableSwitch({ pkg, title, t, busy, onSetEnabled }: {
-  readonly pkg: PackageView
+  readonly pkg: PackageView | undefined
   readonly title: string
   readonly t: Translate
   readonly busy: boolean
@@ -424,11 +424,11 @@ function EnableSwitch({ pkg, title, t, busy, onSetEnabled }: {
         {busy ? <StateDot state="ongoing" /> : null}
       </span>
       <Switch
-        checked={pkg.enabled}
+        checked={pkg?.enabled ?? false}
         label={t('enableToggle', { name: title })}
-        disabled={busy || pkg.readOnlyReason !== undefined || (!pkg.enabled && pkg.error !== undefined
-          && (pkg.error.code === 'unsupported-platform' || !(pkg.availability === 'missing' && pkg.installTarget !== undefined)))}
-        {...pkg.readOnlyReason === undefined ? {} : { title: managementText({ code: pkg.readOnlyReason }, t) }}
+        disabled={busy || (pkg !== undefined && (pkg.readOnlyReason !== undefined || (!pkg.enabled && pkg.error !== undefined
+          && (pkg.error.code === 'unsupported-platform' || !(pkg.availability === 'missing' && pkg.installTarget !== undefined)))))}
+        {...pkg?.readOnlyReason === undefined ? {} : { title: managementText({ code: pkg.readOnlyReason }, t) }}
         onChange={onSetEnabled}
       />
     </span>
@@ -1612,7 +1612,8 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   const tab = tabs.some(item => item.id === selectedTab) ? selectedTab : INSTALLED_TAB
   useEffect(() => { if (tab !== selectedTab) setTab(tab) }, [tab, selectedTab, setTab])
   const tabsId = useId()
-  const [activation, setActivation] = useState<string | null>(null)
+  // The bundle a switch turned on, with the tab whose switch did; its guidance shows on that tab.
+  const [activation, setActivation] = useState<{ readonly name: string; readonly tab: string } | null>(null)
   const [headerRef] = useState(props.createHeaderRef)
   useEffect(() => { ensure() }, [ensure])
   // Installation highlights visible cards without changing the user's current page.
@@ -1670,9 +1671,11 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   const installedPanel = tabs.length === 0 || showsMoreList
     ? {}
     : { role: 'tabpanel', id: `${tabsId}-${INSTALLED_TAB}-panel`, 'aria-labelledby': `${tabsId}-${INSTALLED_TAB}` }
-  const activated = listed.find(pkg => pkg.name === activation && pkg.enabled && !state.busy.includes(pkg.name))
+  const activated = activation?.tab === tab
+    ? listed.find(pkg => pkg.name === activation.name && pkg.enabled && !state.busy.includes(pkg.name))
+    : undefined
   const setBundleEnabled = (name: string, enabled: boolean): void => {
-    setActivation(enabled ? name : null)
+    setActivation(enabled ? { name, tab } : null)
     props.setEnabled(name, enabled)
   }
   const setRowEnabled = (row: PackageRow, enabled: boolean): void => {
@@ -1686,6 +1689,17 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   const updates = updatesNote(mine, state.versions, t)
   const updatePkg = state.update === null ? undefined : state.packages.find(pkg => pkg.name === state.update?.packageName)
   const packageBusy = (pkg: PackageView): boolean => bundleBusy(state, pkg.name)
+  // The Installed list's switch for a contributed tab; a bundle the page does not list installs and turns on.
+  const renderEnableSwitch = (name: string, install?: PluginTabInstall): ReactNode => {
+    const pkg = listed.find(item => item.name === name)
+    if (pkg !== undefined) {
+      return <EnableSwitch pkg={pkg} title={packageText(pkg, resolveText).title} t={t} busy={packageBusy(pkg)}
+        onSetEnabled={(enabled) => { setBundleEnabled(pkg.name, enabled) }} />
+    }
+    if (install === undefined || !loaded) return null
+    return <EnableSwitch pkg={undefined} title={install.title} t={t} busy={bundleBusy(state, name)}
+      onSetEnabled={() => { setActivation({ name, tab }); props.installFrom(install, true) }} />
+  }
   const packageCard = (pkg: PackageView): ReactNode => (
     <PackageCard
       key={pkg.name}
@@ -1796,9 +1810,10 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
           ? (
             <div role="tabpanel" id={`${tabsId}-${tab}-panel`} aria-labelledby={`${tabsId}-${tab}`} className={css.tabPanel}>
               {renderSlot('plugins.tab', {
-                install: props.installFrom,
+                install: (target) => { props.installFrom(target, false) },
                 update: props.openGitUpdate,
                 openPackage: (name) => { setTab(INSTALLED_TAB); setView({ kind: 'package', name, returnTab: tab }) },
+                renderEnableSwitch,
               }, { only: tab })}
             </div>
           )
@@ -1917,13 +1932,18 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
               </div>
             )
           : null}
-        {onInstalled && activated !== undefined && !state.install.open
+        {activated !== undefined && !state.install.open
           ? renderSlot('plugins.bundle.activation', {
             packageName: activated.name,
             onDismiss: () => { setActivation(null) },
             onOpenDetails: () => {
               setActivation(null)
-              setView({ kind: 'package', name: activated.name, ...showsMoreList ? { from: 'more' } : {} })
+              if (onInstalled) {
+                setView({ kind: 'package', name: activated.name, ...showsMoreList ? { from: 'more' } : {} })
+                return
+              }
+              setTab(INSTALLED_TAB)
+              setView({ kind: 'package', name: activated.name, returnTab: tab })
             },
           }, { entryKey: activated.name }) : null}
       </div>
@@ -1946,7 +1966,12 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
         onCancel={props.cancelInstall}
         onReconcile={props.reconcileInstall}
         onToggleDetails={props.toggleInstallDetails}
-        onEnableNow={() => { setActivation(state.install.installed); props.enableInstalled() }}
+        onEnableNow={() => {
+          // Guidance for a bundle the dialog switched on stays beside the Installed list that holds its card.
+          /* v8 ignore next -- the dialog offers Enable now only once it names the installed bundle */
+          setActivation(state.install.installed === null ? null : { name: state.install.installed, tab: INSTALLED_TAB })
+          props.enableInstalled()
+        }}
         onApproveBuilds={props.approveBuildsAndRetry}
         onToggleRegistry={props.toggleRegistryOptions}
         onChooseRegistry={props.chooseRegistry}

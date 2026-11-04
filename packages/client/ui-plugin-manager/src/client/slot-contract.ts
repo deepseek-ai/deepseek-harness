@@ -9,7 +9,7 @@
  * `import type` and registers through `ctx.slots`; it never imports this
  * package at runtime.
  *
- * A contributed tab, such as Discover, installs and updates through the page's own dialogs.
+ * A contributed tab, such as Discover, installs and updates through the page's own dialogs and can show the page's own switch.
  *
  * Entries accept `page` for the form with its own save control and `summary`
  * for an official card's one-liner or a row's missing-description fallback.
@@ -18,6 +18,7 @@
  * all. The page draws the title, icon, and crumb itself.
  */
 
+import type { ReactNode } from 'react'
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
 import type { BundleInfo } from '@deepseek-ai/dsh-api-remotes/client'
 import type { ConfigForm, ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
@@ -121,6 +122,15 @@ export interface PluginTabProps {
    * @param packageName - npm package name of the bundle.
    */
   readonly openPackage: (packageName: string) => void
+  /**
+   * Render the switch the Installed list shows for a bundle, with its progress, locks, and the activation guidance it
+   * opens on this tab. For a bundle the page does not list, turning the switch on installs `install` and switches the
+   * bundle on once installed.
+   * @param packageName - npm package name of the bundle.
+   * @param install - the exact version to install while the page does not list the bundle.
+   * @returns the switch; null while the page has not read its bundles, or for an unlisted bundle without `install`.
+   */
+  readonly renderEnableSwitch: (packageName: string, install?: PluginTabInstall) => ReactNode
 }
 
 /** Add-plugin menu actions, independent of any selected bundle or Session. */

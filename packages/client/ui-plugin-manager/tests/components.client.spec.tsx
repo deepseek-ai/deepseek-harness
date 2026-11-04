@@ -282,7 +282,7 @@ describe('PluginManagerPage', () => {
     expect(document.querySelector('[data-plugin-group="bundles"]')).toBeNull()
     expect(screen.queryByRole('button', { name: en.refresh })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Discover install' }))
-    expect(actions.installFrom).toHaveBeenCalledWith({ spec: 'dsh-a@1.0.0', registry: 'https://r.example/', title: 'Alpha', version: '1.0.0' })
+    expect(actions.installFrom).toHaveBeenCalledWith({ spec: 'dsh-a@1.0.0', registry: 'https://r.example/', title: 'Alpha', version: '1.0.0' }, false)
     fireEvent.click(screen.getByRole('button', { name: 'Discover update' }))
     expect(actions.openGitUpdate).toHaveBeenCalledWith({ packageName: 'dsh-a', version: '1.1.0', spec: 'git+https://git.example/o/a.git#bbbbbbb' })
     fireEvent.click(screen.getByRole('button', { name: 'Discover open' }))
@@ -2848,6 +2848,60 @@ it('keeps activation guidance with the Installed list when a contributed tab ena
   expect(screen.queryByText('Enable guidance')).toBeNull()
   fireEvent.click(screen.getByRole('tab', { name: en.installedTab }))
   expect(screen.getByText('Enable guidance')).toBeTruthy()
+})
+
+it('gives a contributed tab the Installed list switch, whose guidance opens on that tab and returns to it', () => {
+  const name = 'dsh-better-sidebar'
+  const { set, actions, navigation } = renderTab({ packages: [pkg({ enabled: false })] }, { bundles: new Set([name]) }, {
+    'plugins.tab:connectors': (_view, owner) => <div data-tab-switch>{(owner as PluginTabProps).renderEnableSwitch(name)}</div>,
+    [`plugins.bundle.activation:${name}`]: (_view, owner) => <button onClick={(owner as PluginActivationOwnerProps).onOpenDetails}>Go to setup</button>,
+    [`plugins.bundle.config:${name}`]: () => <div>Bundle setup</div>,
+  }, {}, [{ id: 'connectors', label: 'Connectors' }])
+  fireEvent.click(screen.getByRole('tab', { name: 'Connectors' }))
+  const toggle = within(document.querySelector('[data-tab-switch]') as HTMLElement).getByRole('switch', { name: en.enableToggle.replace('{name}', name) })
+  expect(toggle.getAttribute('aria-checked')).toBe('false')
+  fireEvent.click(toggle)
+  expect(actions.setEnabled).toHaveBeenCalledWith(name, true)
+  set({ packages: [pkg()], busy: [name] })
+  expect(screen.queryByText('Go to setup')).toBeNull()
+  set({ busy: [] })
+  // The guidance belongs to the tab whose switch turned the bundle on.
+  fireEvent.click(screen.getByRole('tab', { name: en.installedTab }))
+  expect(screen.queryByText('Go to setup')).toBeNull()
+  fireEvent.click(screen.getByRole('tab', { name: 'Connectors' }))
+  fireEvent.click(screen.getByText('Go to setup'))
+  expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'package', name, returnTab: 'connectors' } })
+  expect(screen.getByText('Bundle setup')).toBeTruthy()
+})
+
+it('installs and switches on a bundle the page does not list from a contributed tab switch', () => {
+  const install = { spec: 'dsh-new@1.0.0', title: 'New', version: '1.0.0' }
+  const { set, actions } = renderTab({ status: 'loading', packages: [] }, {}, {
+    'plugins.tab:connectors': (_view, owner) => {
+      const tab = owner as PluginTabProps
+      return <>
+        <div data-new>{tab.renderEnableSwitch('dsh-new', install) ?? 'no switch'}</div>
+        <div data-absent>{tab.renderEnableSwitch('dsh-absent') ?? 'no switch'}</div>
+      </>
+    },
+    'plugins.bundle.activation:dsh-new': () => <div>New guidance</div>,
+  }, {}, [{ id: 'connectors', label: 'Connectors' }])
+  fireEvent.click(screen.getByRole('tab', { name: 'Connectors' }))
+  // Until the page has read its bundles it cannot tell a missing bundle from one it lists.
+  expect(document.querySelector('[data-new]')?.textContent).toBe('no switch')
+  set({ status: 'ready' })
+  expect(document.querySelector('[data-absent]')?.textContent).toBe('no switch')
+  const toggle = within(document.querySelector('[data-new]') as HTMLElement).getByRole('switch', { name: en.enableToggle.replace('{name}', 'New') })
+  expect(toggle.getAttribute('aria-checked')).toBe('false')
+  fireEvent.click(toggle)
+  expect(actions.installFrom).toHaveBeenCalledWith(install, true)
+  expect(actions.setEnabled).not.toHaveBeenCalled()
+  const subject = { spec: install.spec, status: 'accepted', kind: 'registry', name: 'dsh-new', bundle: true, registry: null, selection: true } as const
+  set({ install: { ...IDLE_INSTALL, open: false, phase: 'running', subject } })
+  expect(within(document.querySelector('[data-new]') as HTMLElement).getByRole('switch')).toHaveProperty('disabled', true)
+  set({ install: IDLE_INSTALL, packages: [pkg({ name: 'dsh-new' })] })
+  expect(within(document.querySelector('[data-new]') as HTMLElement).getByRole('switch').getAttribute('aria-checked')).toBe('true')
+  expect(screen.getByText('New guidance')).toBeTruthy()
 })
 
 it('supplies the accepted entry values and atomic mutation action to a custom plugin page', () => {

@@ -229,9 +229,9 @@ export interface InstallState {
   readonly mirrorRecovery?: boolean
   /**
    * The spec came from a confirmed entry of another tab, with that entry's name and version: the dialog shows no spec
-   * form, only its check and outcome.
+   * form, only its check and outcome. With `enable`, the installed bundle is switched on as a catalog switch does.
    */
-  readonly confirmed?: { readonly title: string; readonly version: string }
+  readonly confirmed?: { readonly title: string; readonly version: string; readonly enable?: true }
   /** The registries the Host configured, read when the dialog opens; null until the Host answered. */
   readonly registries: PluginRegistries | null
   /** The registry this install asks first: the one last used, else the Host's first. */
@@ -446,8 +446,9 @@ export interface PluginManagerFace {
    * checking it; the dialog shows no spec form. A hidden installation reopens instead. The registry is asked first for
    * this dialog only and never remembered.
    * @param target - the exact spec, optional registry, and the name and version the dialog shows.
+   * @param enable - switch the bundle on once installed, instead of offering it afterward.
    */
-  installFrom: (target: PluginTabInstall) => void
+  installFrom: (target: PluginTabInstall, enable: boolean) => void
   /** Hide immediately, abort a check, or request cancellation while retaining the Host-owned installation. */
   closeInstall: () => void
   editInstallSpec: (text: string) => void
@@ -767,11 +768,14 @@ export class PluginManagerController {
         this.ctx.get('productAnalytics')?.track('plugin_add_button_click', {})
         this.openDialog()
       },
-      installFrom: ({ spec, registry, title, version }) => {
+      installFrom: ({ spec, registry, title, version }, enable) => {
         // A hidden installation reopens as it is; only one installation runs at a time.
         if (!this.openDialog()) return
         this.transientRegistry = registry !== undefined
-        this.patchInstall({ spec, confirmed: { title, version }, ...registry === undefined ? {} : { registry: { kind: 'custom', url: registry } } })
+        this.patchInstall({
+          spec, confirmed: { title, version, ...enable ? { enable } : {} },
+          ...registry === undefined ? {} : { registry: { kind: 'custom', url: registry } },
+        })
         void this.runInstall()
       },
       closeInstall: () => {
@@ -1278,7 +1282,7 @@ export class PluginManagerController {
       this.patchInstall({ phase: 'idle', inputError: { problem, reason, ...registries === undefined ? {} : { registries } } })
       return
     }
-    await this.startInstall({ spec, ...inspected.value })
+    await this.startInstall({ spec, ...inspected.value, ...install.confirmed?.enable === true ? { selection: true } : {} })
   }
 
   /**
