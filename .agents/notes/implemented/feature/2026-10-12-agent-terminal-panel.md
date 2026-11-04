@@ -14,7 +14,7 @@ The experimental [`terminal-panel`](../../../../packages/experimental/terminal-p
 
 ### Ownership by creator
 
-Terminals are partitioned by who opened them. An Agent terminal records `origin: 'agent'` and starts with `control: 'agent'`; the person's first typed browser input passes control to the person. The browser marks input as typed only shortly after a keyboard, paste, input-method, drop, wheel, pointer or touch gesture, because xterm.js reports terminal-protocol replies through the same data event. After takeover the controller refuses Agent writes, signals and closing, reads continue, and `terminal_close` releases the registry session without ending the shell. Terminals the person opened are never writable by the Agent; `user_terminal_list` and `user_terminal_read` read them, and `readUserTerminals: false` removes both tools.
+Terminals are partitioned by who opened them. An Agent terminal records `origin: 'agent'` and starts with `control: 'agent'`; the person's first typed browser input passes control to the person. The browser marks input as typed only shortly after a keyboard, paste, input-method, drop, pointer or touch gesture, because xterm.js reports terminal-protocol replies through the same data event; focus reports and wheel-produced arrow keys never count, so focusing or scrolling an Agent terminal does not take it over. After takeover the controller refuses Agent writes, signals and closing, reads continue, and `terminal_close` releases the registry session without ending the shell. Terminals the person opened are never writable by the Agent; `user_terminal_list` and `user_terminal_read` read them, and `readUserTerminals: false` removes both tools.
 
 ### Permissions
 
@@ -26,7 +26,7 @@ The backend adds nothing to shell startup, because remote execution environments
 
 ### Presentation
 
-The controller streams each Session's terminal list. A displayed Session opens a sidebar tab for each running Agent terminal it does not show yet, expanding a collapsed sidebar, and badges terminals the Agent controls, or after takeover a confined sandbox, naming the sandbox mode on hover.
+The controller streams each Session's terminal list. A displayed Session opens a sidebar tab for each running Agent terminal it does not show yet, expanding a collapsed sidebar, and badges terminals the Agent controls, or after takeover a confined sandbox, naming the sandbox mode on hover. A terminal that leaves the list while the Agent controls it closes its tabs.
 
 ## Alternatives considered
 
