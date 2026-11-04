@@ -244,6 +244,11 @@ ManifestDPIAware true
   ${EndIf}
   !insertmacro InstallerPublishStage 4
   !insertmacro dshFinishDirectories
+  ${If} $RestartStatusJob != ""
+  ${AndIf} $RestartStatusJob != 0
+    System::Call 'kernel32::CloseHandle(p $RestartStatusJob)'
+    StrCpy $RestartStatusJob 0
+  ${EndIf}
   ; Standard uninstall-entry metadata read by inventory tools; the upstream template records it only under its private key.
   WriteRegStr SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" InstallLocation "$INSTDIR"
   ${If} $0 == 1

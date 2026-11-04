@@ -1,22 +1,23 @@
+!ifndef BUILD_UNINSTALLER
+Var RestartStatusJob
+!endif
+
 !macro ShowRestartBanner
-  Banner::show /NOUNLOAD /set 76 "$(INSTALLER_UPDATE_WAIT)" /set 1030 "$(INSTALLER_UPDATE_REOPEN)" "${PRODUCT_NAME}"
   Push $0
-  Push $1
-  Push $2
-  Push $3
-  Banner::getWindow /NOUNLOAD
-  Pop $0
-  ; The shell and the dialog image use different icon sizes from the same installer.
-  System::Call 'shell32::ExtractIconExW(w "$EXEPATH", i 0, *p .r1, *p .r2, i 1) i.r3'
-  ${If} $1 != 0
-  ${AndIf} $2 != 0
-    SendMessage $0 ${WM_SETICON} 1 $1
-    SendMessage $0 ${WM_SETICON} 0 $2
-    GetDlgItem $3 $0 -1
-    SendMessage $3 0x170 $1 0
+  ${If} ${Errors}
+    StrCpy $0 1
+  ${Else}
+    StrCpy $0 0
   ${EndIf}
-  Pop $3
-  Pop $2
+  Push $1
+  StrCpy $1 0
+  System::Call '$PLUGINSDIR\window-frame.dll::InstallerStartRestartStatus(w "$EXEPATH", w "$InstallerTheme", i $LANGUAGE, w "$(INSTALLER_UPDATE_WAIT)") p.r1 ?c'
+  StrCpy $RestartStatusJob $1
   Pop $1
+  ${If} $0 == 1
+    SetErrors
+  ${Else}
+    ClearErrors
+  ${EndIf}
   Pop $0
 !macroend
