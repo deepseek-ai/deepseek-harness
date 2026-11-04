@@ -13,6 +13,8 @@ const PERL_SOURCE = [
   'my $m = /x/ || !/z/;',
   'my $q = $a / $b + $o->return / 2;',
   'my @chars = split //, $w;',
+  'my %re = (key => /k/);',
+  '$a or /o/; not /n/; 1 while /w/; 1 until /u/;',
   'exit 0;',
 ].join('\n')
 
@@ -26,9 +28,11 @@ function colored(lines: HighlightSpan[][], index: number): string[] {
 it('ends bare Perl match patterns in list and expression contexts', async () => {
   const ready = Promise.withResolvers<undefined>()
   const dispose = subscribeGrammarLoaded(() => { ready.resolve(undefined) })
+  const timer = setTimeout(() => { ready.reject(new Error('Perl grammar did not load within 10 seconds')) }, 10_000)
   try {
     if (highlightLines('1;', 'perl') === undefined) await ready.promise
   } finally {
+    clearTimeout(timer)
     dispose()
   }
   const lines = highlightLines(PERL_SOURCE, 'perl') ?? []
@@ -46,18 +50,27 @@ it('ends bare Perl match patterns in list and expression contexts', async () => 
   expect(colored(lines, 7)).toEqual(['my:keyword', '/x/:string-expression', '/z/:string-expression'])
   expect(colored(lines, 8)).toEqual(['my:keyword', '->:keyword'])
   expect(colored(lines, 9)).toEqual(['my:keyword', 'split:function', '//:string-expression'])
-  expect(colored(lines, 10)).toEqual(['exit:keyword'])
+  expect(colored(lines, 10)).toEqual(['my:keyword', '=>:keyword', '/k/:string-expression'])
+  expect(colored(lines, 11)).toEqual([
+    'or:keyword', '/o/:string-expression', 'not:keyword', '/n/:string-expression',
+    'while:keyword', '/w/:string-expression', 'until:keyword', '/u/:string-expression',
+  ])
+  expect(colored(lines, 12)).toEqual(['exit:keyword'])
 })
 
 it('patches exactly the vendored match rule and rejects a grammar without it', async () => {
   const { default: grammars } = await import('@shikijs/langs/perl')
-  const perl = grammars.find(grammar => grammar.name === 'perl')
-  const patched = patchPerlGrammar(grammars)
-  const after = patched.find(grammar => grammar.name === 'perl')?.patterns
-  const changed = after?.flatMap((rule, index) => rule === perl?.patterns[index] ? [] : [[perl?.patterns[index]?.begin, rule.begin]])
-  expect(changed).toEqual([['(?<=[\\&({|~]|if|unless|^)\\s*((/))', expect.stringContaining('[^\\w$@%&>:-]split|^split|')]])
-  expect(patched.filter(grammar => grammar.name !== 'perl')).toEqual(grammars.filter(grammar => grammar.name !== 'perl'))
+  const other = { name: 'perl-embedded', scopeName: 'source.perl.embedded', patterns: [], repository: {} }
+  const index = grammars.findIndex(grammar => grammar.name === 'perl')
+  const before = grammars[index]?.patterns
+  const inputs = [...grammars, other]
+  const patched = patchPerlGrammar(inputs)
+  const changed = patched[index]?.patterns.flatMap((rule, at) => rule === before?.[at] ? [] : [[before?.[at]?.begin, rule.begin]])
+  const words = ['if', 'unless', 'split', 'grep', 'and', 'or', 'not', 'return', 'while', 'until']
+    .map(word => `[^\\w$@%&>:-]${word}|^${word}`).join('|')
+  expect(changed).toEqual([['(?<=[\\&({|~]|if|unless|^)\\s*((/))', `(?<=[\\&({|~,!=]|=>|^|${words})\\s*((/))`]])
+  expect(patched.map((grammar, at) => at === index || grammar === inputs[at])).toEqual(inputs.map(() => true))
   expect(() => patchPerlGrammar([{ name: 'perl', scopeName: 'source.perl', patterns: [], repository: {} }]))
     .toThrow('expected exactly one Perl match rule to patch, found 0')
-  expect(() => patchPerlGrammar([])).toThrow('found 0')
+  expect(() => patchPerlGrammar([other])).toThrow('found 0')
 })
