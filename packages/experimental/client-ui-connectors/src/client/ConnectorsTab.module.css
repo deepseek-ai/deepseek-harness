@@ -73,6 +73,29 @@
   overflow-wrap: anywhere;
 }
 
+.open {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .open:hover {
+    text-decoration: underline;
+  }
+}
+
+.open:focus-visible {
+  border-radius: var(--dsw-radius-xs);
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 2px;
+}
+
 .description {
   display: -webkit-box;
   overflow: hidden;

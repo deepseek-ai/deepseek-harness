@@ -1,23 +1,37 @@
-/** The Connectors tab: the official connectors with an install or open action each. */
+/** The Connectors tab: the official connectors with their brand icons and the Installed list's switch each. */
 import { useEffect, type ReactNode } from 'react'
-import { Button, PluginArtworkDefault } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime, Translate } from '@deepseek-ai/dsh-client-ui-slots'
-import type { PluginTabInstall } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
-import { CONNECTORS, type Connector } from './connectors.ts'
+import type { PluginTabProps } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
+import dingtalk from './assets/dingtalk.svg'
+import feishu from './assets/feishu.svg'
+import linear from './assets/linear.svg'
+import notion from './assets/notion.svg'
+import tencentDocs from './assets/tencent-docs.svg'
+import tencentMeeting from './assets/tencent-meeting.svg'
+import wecom from './assets/wecom.svg'
+import { CONNECTORS, type Connector, type ConnectorId } from './connectors.ts'
 import type { ConnectorsFace, ConnectorStatus } from './connectors-store.ts'
 import type { ConnectorsLocaleKey } from './locales.ts'
 import css from './ConnectorsTab.module.css'
 
-/** Tab props: the Plugins page's install and open callbacks, the dictionary, and the injected face. */
+/** Each connector's brand icon, the same file its bundle declares. */
+const ICONS: Readonly<Record<ConnectorId, string>> = {
+  'feishu': feishu, 'wecom': wecom, 'dingtalk': dingtalk, 'tencent-meeting': tencentMeeting,
+  'notion': notion, 'tencent-docs': tencentDocs, 'linear': linear,
+}
+
+/** Tab props: the Plugins page's callbacks and switch, the dictionary, and the injected face. */
 export type ConnectorsTabProps = PropsRuntime<'plugins.tab'> & PropsLocale<'connectors'> & InjectFace<ConnectorsFace>
 
 /**
- * List every official connector; a missing one installs at the running release, an installed one opens its page.
- * @param props - the owner's callbacks, the dictionary, and the connectors' states.
+ * List every official connector with the Installed list's switch; a missing one's switch installs it at the running
+ * release and switches it on, and an installed one's name opens its page.
+ * @param props - the owner's callbacks and switch, the dictionary, and the connectors' states.
  * @returns the tab's content.
  */
 export function ConnectorsTab(props: ConnectorsTabProps): ReactNode {
-  const { t, install, openPackage, ensure, retry, version } = props
+  const { t, openPackage, renderEnableSwitch, ensure, retry, version } = props
   const state = props.useConnectors(snapshot => snapshot)
   useEffect(() => { ensure() }, [ensure])
   return (
@@ -34,47 +48,38 @@ export function ConnectorsTab(props: ConnectorsTabProps): ReactNode {
       <ul className={css.list} aria-busy={state.status === 'loading'}>
         {CONNECTORS.map(connector => (
           <ConnectorRow key={connector.id} connector={connector} status={state.connectors[connector.packageName]}
-            version={version} t={t} install={install} openPackage={openPackage} />
+            version={version} t={t} openPackage={openPackage} renderEnableSwitch={renderEnableSwitch} />
         ))}
       </ul>
     </section>
   )
 }
 
-function ConnectorRow({ connector, status, version, t, install, openPackage }: {
+function ConnectorRow({ connector, status, version, t, openPackage, renderEnableSwitch }: {
   readonly connector: Connector
   readonly status: ConnectorStatus | undefined
   readonly version: string | undefined
   readonly t: Translate<ConnectorsLocaleKey>
-  readonly install: (target: PluginTabInstall) => void
-  readonly openPackage: (packageName: string) => void
+  readonly openPackage: PluginTabProps['openPackage']
+  readonly renderEnableSwitch: PluginTabProps['renderEnableSwitch']
 }): ReactNode {
-  const title = t(`${connector.id}.title`)
-  const action = (): ReactNode => {
-    if (status === undefined) return null
-    if (status !== 'missing') {
-      return (
-        <Button variant="ghost" size="sm" aria-label={t('openTitle', { name: title })} onClick={() => { openPackage(connector.packageName) }}>
-          {t(status)}
-        </Button>
-      )
-    }
-    if (version === undefined) return <Button variant="outline" size="sm" disabled aria-label={t('installTitle', { name: title })}>{t('install')}</Button>
-    return (
-      <Button variant="outline" size="sm" aria-label={t('installTitle', { name: title })}
-        onClick={() => { install({ spec: `${connector.packageName}@${version}`, title, version }) }}>
-        {t('install')}
-      </Button>
-    )
-  }
+  const { id, packageName } = connector
+  const title = t(`${id}.title`)
+  const installed = status === 'installed' || status === 'enabled'
+  const install = status === 'missing' && version !== undefined ? { spec: `${packageName}@${version}`, title, version } : undefined
   return (
-    <li className={css.row} data-connector={connector.id}>
-      <span className={css.icon} aria-hidden="true"><PluginArtworkDefault size={36} /></span>
+    <li className={css.row} data-connector={id}>
+      <span className={css.icon} aria-hidden="true"><img src={ICONS[id]} width={36} height={36} alt="" /></span>
       <div className={css.main}>
-        <span className={css.title}>{title}</span>
-        <span className={css.description}>{t(`${connector.id}.description`)}</span>
+        {installed
+          ? (
+            <button type="button" className={`${css.title} ${css.open}`} aria-label={t('openTitle', { name: title })}
+              onClick={() => { openPackage(packageName) }}>{title}</button>
+          )
+          : <span className={css.title}>{title}</span>}
+        <span className={css.description}>{t(`${id}.description`)}</span>
       </div>
-      <div className={css.end}>{action()}</div>
+      <div className={css.end}>{status === undefined ? null : renderEnableSwitch(packageName, install)}</div>
     </li>
   )
 }

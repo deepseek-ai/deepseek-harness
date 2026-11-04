@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-插件页的“连接器”标签以界面语言列出官方连接器的名称和简介。未安装的连接器点“安装”会打开插件页的安装对话框，安装与当前 DSH 版本相同的包；已安装的连接器点按钮会打开它的详情页。“已安装”标签的卡片列表把连接器留给本标签，关闭“连接器”bundle 会停止所有连接器。
+插件页的“连接器”标签列出官方连接器，每行带品牌图标和“已安装”列表上的开关。打开未安装连接器的开关，会安装与当前 DSH 版本相同的包并开启它；点已安装连接器的名称会打开它的详情页。“已安装”标签的卡片列表把连接器留给本标签，关闭“连接器”bundle 会停止所有连接器。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-启用 [“连接器”bundle](../connectors-bundle/README.zh.md)。本包没有配置项。profile 未持有的连接器显示“安装”，已安装但关闭的显示“已安装”，已开启的显示“已开启”。构建中没有 DSH 版本时，“安装”不可用。连接器只在 bundle 开启时运行：关闭 bundle 会停止所有连接器，但保留每个连接器自己的开关；重新开启后，它们恢复运行。
+启用 [“连接器”bundle](../connectors-bundle/README.zh.md)。本包没有配置项。每一行以界面语言显示连接器的品牌图标、名称和简介，以及它在“已安装”列表的卡片上会显示的开关。打开 profile 未持有的连接器的开关，会以当前 DSH 版本打开安装对话框，装好后开启该连接器，并在本标签上显示它的账号引导；构建中没有 DSH 版本时，这类连接器不显示开关。连接器只在 bundle 开启时运行：关闭 bundle 会停止所有连接器，但保留每个连接器自己的开关；重新开启后，它们恢复运行。
 
 -----
 
@@ -35,7 +35,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-Host 入口在 bundle 开启期间提供 `connectors` 服务。声明了 `inject: [connectors]` 的连接器条目在没有这个服务时保持等待，所以无论开关在哪里切换，Loader 都会随之停止或恢复连接器。浏览器入口把标签注册到 `plugins.tab`。`ConnectorsController` 在标签首次渲染时读取 `pluginManager.listBundles`，收到 `plugin-manager/changed` 和 `connection/reset` 时再次读取，只采用最新一次读取的结果。“安装”以 `<包名>@<DSH_CLIENT_VERSION>` 调用插件页的 `install`，已安装连接器的按钮调用 `openPackage`。连接器名单是 [`dsh-official-bundles`](../../util/official-bundles/README.zh.md) 的 `CONNECTOR_BUNDLES`，插件页也据此把它们排除在卡片列表之外；每个连接器的名称和简介放在本包中，所以标签能显示 profile 尚未持有的连接器。
+Host 入口在 bundle 开启期间提供 `connectors` 服务。声明了 `inject: [connectors]` 的连接器条目在没有这个服务时保持等待，所以无论开关在哪里切换，Loader 都会随之停止或恢复连接器。浏览器入口把标签注册到 `plugins.tab`。`ConnectorsController` 在标签首次渲染时读取 `pluginManager.listBundles`，收到 `plugin-manager/changed` 和 `connection/reset` 时再次读取，只采用最新一次读取的结果。每一行渲染插件页的 `renderEnableSwitch`，未安装的连接器附带安装目标 `<包名>@<DSH_CLIENT_VERSION>`；点已安装连接器的名称会调用 `openPackage`。每个连接器的品牌图标是其 bundle 所声明 `icon.svg` 的副本，放在 `src/client/assets/` 下。连接器名单是 [`dsh-official-bundles`](../../util/official-bundles/README.zh.md) 的 `CONNECTOR_BUNDLES`，插件页也据此把它们排除在卡片列表之外；每个连接器的名称、简介和图标放在本包中，所以标签能显示 profile 尚未持有的连接器。
 
 - [Host 源码](src/index.ts)
 - [浏览器源码](src/client/index.ts)
@@ -64,7 +64,7 @@ Host 入口在 bundle 开启期间提供 `connectors` 服务。声明了 `inject
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 名单只包含 DSH 发布的连接器；新增连接器时，要把包名加入 `CONNECTOR_BUNDLES`，在这里加上它的文案，并在它的条目上声明 `inject: [connectors]`。
+- 名单只包含 DSH 发布的连接器；新增连接器时，要把包名加入 `CONNECTOR_BUNDLES`，在这里加上它的文案和图标，并在它的条目上声明 `inject: [connectors]`。
 - 每一行不显示账号连接状态，连接状态在连接器的详情页查看。
 - 安装要求连接器包已按当前 DSH 版本发布。
 

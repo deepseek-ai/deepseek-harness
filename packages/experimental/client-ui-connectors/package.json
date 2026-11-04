@@ -24,12 +24,14 @@
       "types": "./lib/types/client/index.d.ts",
       "default": "./lib/client.js"
     },
+    "./assets/*": "./lib/assets/*",
     "./locale/*.json": "./locale/*.json"
   },
   "files": [
     "locale/*.json",
     "lib/index.js",
     "lib/client.js",
+    "lib/assets",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",

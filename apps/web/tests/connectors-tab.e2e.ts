@@ -1,4 +1,4 @@
-/** An installed connector stays off Installed, opens from the Connectors tab, and stays off after that tab leaves. */
+/** An installed connector stays off Installed, switches and opens from the Connectors tab, and stays off after that tab leaves. */
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -12,7 +12,7 @@ const BUNDLE = '@deepseek-ai/dsh-experimental-connectors-bundle'
 const FEISHU = '@deepseek-ai/dsh-feishu'
 const EXPECTED = fileURLToPath(new URL('./expected/connectors-tab/connectors-tab.expected.md', import.meta.url))
 
-it('lists the official connectors, keeps an installed one only in the tab, and keeps it off Installed when switched off', async () => {
+it('lists the official connectors, switches an installed one from the tab, and keeps it off Installed when switched off', async () => {
   const root = await mkdtemp(join(tmpdir(), 'connectors-tab-web-'))
   const owned: { scaffold?: WebScaffold; browser?: Browser } = {}
   onTestFinished(async () => {
@@ -37,7 +37,14 @@ it('lists the official connectors, keeps an installed one only in the tab, and k
   await tab.click()
   const feishu = panel.locator('[data-connector="feishu"]')
   await feishu.getByRole('button', { name: '打开 飞书插件', exact: true }).waitFor()
+  const toggle = feishu.getByRole('switch')
+  await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
   await compareOrRefreshGolden(EXPECTED, await captureStableAria(page, '[data-connectors]', scaffold.workspaceCwd), webSnapshotMode())
+  // The tab's switch is the Installed list's own: it applies through the Host and reads back the new state.
+  await toggle.click()
+  await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('false')
+  await toggle.click()
+  await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
   await feishu.getByRole('button', { name: '打开 飞书插件', exact: true }).click()
   await panel.locator(`[data-plugin-detail="${FEISHU}"]`).waitFor()
   await panel.getByRole('button', { name: '返回插件', exact: true }).click()
