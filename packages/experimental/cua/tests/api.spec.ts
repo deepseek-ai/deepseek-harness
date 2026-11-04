@@ -13,7 +13,7 @@ const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG
 const bounds = { x: -640, y: 100, width: 640, height: 480 }
 const selected = { appHandle: 'app-17', pid: 17, name: 'Editor', bundleId: 'test.editor' }
 const delivered = { dispatched: true }
-const capabilities = { platform: 'macos', sessionLocked: false, permissions: { accessibility: true, screenRecording: false }, appLevelAccessibility: true, methods: ['getState', 'click'], coordinateSpace: 'screenshot-pixels', browser: false }
+const capabilities = { platform: 'macos', sessionLocked: false, permissions: { accessibility: true, screenRecording: false }, appLevelAccessibility: true, keyboard: ['app'], methods: ['getState', 'click'], coordinateSpace: 'screenshot-pixels', browser: false }
 
 function windowInfo(windowId: number) {
   return { windowId, pid: 17, appName: 'Editor', title: `Document ${windowId}`, bounds, isOnScreen: true, onCurrentSpace: null }
@@ -674,6 +674,21 @@ describe('input actions', () => {
       { method: 'pressKey', params: { appHandle: 'app-17', key: 'a', modifiers: ['control', 'shift'] } },
       { method: 'pressKey', params: { appHandle: 'app-17', key: 'Return', modifiers: [] } },
     ])
+  })
+
+  it('rejects keyboard input on a window surface without dispatching an app-level fallback', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    const window = await app.getWindow(23)
+    f.dispatch.mockClear()
+    for (const run of [
+      () => window.typeText('hello'),
+      () => window.paste('hello'),
+      () => window.pressKey('Return'),
+    ]) {
+      await expect(run()).rejects.toThrow('Keyboard input is not supported at this scope.')
+    }
+    expect(f.dispatch).not.toHaveBeenCalled()
   })
 
   it('retains the snapshot identity for element right and double clicks', async () => {

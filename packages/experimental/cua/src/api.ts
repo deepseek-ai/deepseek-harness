@@ -56,6 +56,10 @@ function validatedCall(dispatch: CuaDispatch) {
   }
 }
 
+async function unsupportedKeyboardInput(): Promise<never> {
+  throw new Error('Keyboard input is not supported at this scope.')
+}
+
 /**
  * Create app/window objects using the caller's authorized dispatcher.
  * @param dispatch - Current tool authority; rejects propagate without retries.
@@ -189,6 +193,9 @@ export function createCuaObjects(dispatch: CuaDispatch, sink: CuaObservationSink
           ...options?.selectionType === undefined ? {} : { selectionType: options.selectionType },
         })
       },
+      typeText: unsupportedKeyboardInput,
+      paste: unsupportedKeyboardInput,
+      pressKey: unsupportedKeyboardInput,
     }
   }
   function createWindow(appHandle: CuaAppHandle, pid: number, windowId: number): CuaWindow {

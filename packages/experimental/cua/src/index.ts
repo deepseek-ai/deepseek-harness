@@ -18,8 +18,6 @@ import { ApplicationAuthorizationResult, installCuaAccess } from './access.ts'
 import type { CuaApplicationGrant, CuaApplicationId } from './access-types.ts'
 import type { CuaAppHandle, CuaOperation } from './types.ts'
 import { ApplicationIcon, AppResult, NativeScreenshotResult, Request, ScreenshotResult, StateResult, WindowsResult } from './protocol.ts'
-import { CuaWindowExecution } from './window-execution.ts'
-import { WindowRequest } from './window-protocol.ts'
 import { CuaCoordinates } from './coordinates.ts'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
@@ -149,8 +147,6 @@ async function screenshotStore(ctx: Context, execution: Readonly<CuaExecution>) 
 
 /** Prepared platform executable, transport, and platform-specific operating instructions. */
 export interface CuaBackend {
-  /** Expose window discovery and launch instead of application objects. */
-  windowApi?: boolean
   helperPath: string
   createChannel: NativeChannelFactory
   guidance: string
@@ -183,7 +179,6 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
     release: () => Promise<void>
     signal: AbortSignal
     coordinates: CuaCoordinates
-    windows: CuaWindowExecution
   }>()
   const closedOwners = new WeakSet<Agent>()
   function ownerFor(agent: Agent) {
@@ -207,7 +202,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       })
     }
     const release = agent.ctx.effect(() => close, 'dsh-cua.agent')
-    const owner = { close, release, signal: controller.signal, coordinates: new CuaCoordinates(), windows: new CuaWindowExecution() }
+    const owner = { close, release, signal: controller.signal, coordinates: new CuaCoordinates() }
     ownerCleanups.set(agent, owner)
     return owner
   }
@@ -297,13 +292,12 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       return result
     }
     const tool: ToolDefinition = {
-      name: 'cua', description: backend.windowApi
-        ? 'Discover windows or launch entries, obtain window access, read AX state, capture screenshots and dispatch input to selected windows. Verify actions with fresh state.'
-        : 'Inspect desktop access, select an application and window, read AX state, capture screenshots or dispatch input. Use appHandle from getApp; verify actions by reading fresh state.',
-      parameters: { ...z.record(z.string(), z.json()).parse(z.toJSONSchema(backend.windowApi ? WindowRequest : Request)), type: 'object' },
+      name: 'cua',
+      description: 'Inspect desktop access, select an application and window, read AX state, capture screenshots or dispatch input. Use appHandle from getApp; verify actions by reading fresh state.',
+      parameters: { ...z.record(z.string(), z.json()).parse(z.toJSONSchema(Request)), type: 'object' },
       output: { schema: {}, render: renderResult },
       async execute(args, execution) {
-        const request = backend.windowApi ? WindowRequest.parse(args) : Request.parse(args)
+        const request = Request.parse(args)
         const agent = executionAgent(execution)
         execution.signal.throwIfAborted()
         lifetime.signal.throwIfAborted()
@@ -321,7 +315,6 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
                 clients.delete(agent)
                 access.forget(agent)
                 owner.coordinates = new CuaCoordinates()
-                owner.windows = new CuaWindowExecution()
               }
               throw error
             }
@@ -335,7 +328,6 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
             client = new NativeClient(ctx, native, backend.createChannel, (message) => { ctx.logger.debug(message) })
             clients.set(agent, client)
             owner.coordinates = new CuaCoordinates()
-            owner.windows = new CuaWindowExecution()
           }
           const nativeClient = client
           const dispatch = async (signal: AbortSignal) => {
@@ -343,11 +335,6 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
             const result = await callNative(Request.parse(request), scoped)
             signal.throwIfAborted()
             return result
-          }
-          if (backend.windowApi) {
-            return owner.windows.run(WindowRequest.parse(request), agent, nativeClient, access, signal, execution.callId,
-              config.maxAppMatches,
-              (operation, signal) => callNative(operation, { ...execution, agent, signal, nativeClient, coordinates: owner.coordinates }))
           }
           return 'appHandle' in request.params
             ? access.run(nativeClient, request.params.appHandle as CuaAppHandle, signal, dispatch)
@@ -366,7 +353,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       text: () => ctx.get('ptcRuntime')?.programFormat !== 'repl' ? guidance : `${guidance}
 
 Persistent PTC initialization:
-var { ${backend.windowApi ? 'connectCuaWindows: connectCua' : 'connectCua'} } = await import(${JSON.stringify(new URL('../lib/bridge.js', import.meta.url).href)});
+var { connectCua } = await import(${JSON.stringify(new URL('../lib/bridge.js', import.meta.url).href)});
 var cua = connectCua(() => tools.cua, text => console.log(text));`,
     }
     const register = (scope: Context): void => {

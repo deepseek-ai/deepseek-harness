@@ -194,6 +194,7 @@ actor AXWorker {
             return .result(.object(["platform": .string("macos"), "permissions": .object([
                 "accessibility": .bool(AXIsProcessTrusted()), "screenRecording": .bool(CGPreflightScreenCaptureAccess())]),
                 "appLevelAccessibility": .bool(true),
+                "keyboard": .array([.string("app")]),
                 "sessionLocked": locked.map(JSONValue.bool) ?? .null,
                 "methods": .array(NativeProtocol.modelMethods.map(JSONValue.string)), "coordinateSpace": .string("window-points"), "browser": .bool(false)]))
         }

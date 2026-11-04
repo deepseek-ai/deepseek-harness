@@ -1,7 +1,6 @@
 /** Build-time native admission metadata derived from the shared operation definitions. */
 import { z } from 'zod'
 import type { JSONSchema } from 'zod/v4/core'
-import { WindowNativeOperations } from './window-protocol.ts'
 import { NativeOnlyOperations, NativeResourceParameters, Request } from './protocol.ts'
 
 type Schema = JSONSchema.JSONSchema
@@ -13,11 +12,10 @@ function object(schema: Schema | boolean | undefined): Schema {
 function variants(schema: Schema): Schema[] { return schema.anyOf ?? schema.oneOf ?? [schema] }
 
 /**
- * Derive native request schemas and admission fields without platform implementation details.
- * @param windows Include Windows window discovery and launch preparation.
+ * Derive native request schemas and admission fields from the shared operation definitions.
  * @returns Model operation names, native field and enum tables, and the complete wire schema.
  */
-export function nativeProtocol(windows = false): {
+export function nativeProtocol(): {
   fields: Map<string, Set<string>>
   enums: Map<string, Map<string, Set<string>>>
   modelMethods: string[]
@@ -25,7 +23,7 @@ export function nativeProtocol(windows = false): {
 } {
   const resources = new Map(Object.entries(NativeResourceParameters))
   const modelMethods = Request.options.map(schema => schema.shape.method.value).sort()
-  const schemas = [...Request.options, ...NativeOnlyOperations, ...(windows ? WindowNativeOperations : [])]
+  const schemas = [...Request.options, ...NativeOnlyOperations]
     .map(schema => z.toJSONSchema(schema))
   const fields = new Map<string, Set<string>>()
   const enums = new Map<string, Map<string, Set<string>>>()

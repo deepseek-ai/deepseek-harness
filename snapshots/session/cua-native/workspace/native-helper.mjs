@@ -131,7 +131,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
       const state = JSON.parse(readFileSync(new URL('./permissions.json', import.meta.url), 'utf8'))
       return { platform: 'darwin', ...state, helper: { pid: process.pid }, parent: { pid: process.ppid } }
     }
-    if (method === 'getCapabilities') return { platform: 'macos', sessionLocked: false, permissions: { accessibility: true, screenRecording: true }, appLevelAccessibility: true, methods, coordinateSpace: 'window-points', browser: false }
+    if (method === 'getCapabilities') return { platform: 'macos', sessionLocked: false, permissions: { accessibility: true, screenRecording: true }, appLevelAccessibility: true, keyboard: ['app'], methods, coordinateSpace: 'window-points', browser: false }
     if (method === 'listApps') return [{ pid: app.pid, name: app.name, bundleId: app.bundleId }]
     if (method === 'getApp') {
       if (params.selector === 'Denied Fixture' || params.selector === 'Revocable Fixture') {
