@@ -81,9 +81,6 @@ importers:
       '@deepseek-ai/dsh-experimental-subagent-oar':
         specifier: workspace:*
         version: link:packages/experimental/subagent-oar
-      '@deepseek-ai/dsh-experimental-terminal-panel':
-        specifier: workspace:*
-        version: link:packages/experimental/terminal-panel
       '@deepseek-ai/dsh-experimental-tool-subagent-oar':
         specifier: workspace:*
         version: link:packages/experimental/tool-subagent-oar
@@ -114,6 +111,9 @@ importers:
       '@deepseek-ai/dsh-subagent-dsh-sdk':
         specifier: workspace:*
         version: link:packages/subagent/subagent-dsh-sdk
+      '@deepseek-ai/dsh-terminal-panel':
+        specifier: workspace:*
+        version: link:packages/experimental/terminal-panel
       '@deepseek-ai/dsh-tool-executor-native':
         specifier: workspace:*
         version: link:packages/core/tool-executor-native
@@ -11072,12 +11072,12 @@ importers:
 
   packages/experimental/terminal-bundle:
     dependencies:
-      '@deepseek-ai/dsh-experimental-terminal-panel':
-        specifier: workspace:*
-        version: link:../terminal-panel
       '@deepseek-ai/dsh-terminal':
         specifier: workspace:*
         version: link:../../terminal/terminal
+      '@deepseek-ai/dsh-terminal-panel':
+        specifier: workspace:*
+        version: link:../terminal-panel
       '@deepseek-ai/dsh-tool-terminal':
         specifier: workspace:*
         version: link:../tool-terminal

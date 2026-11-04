@@ -8,7 +8,7 @@
         - id: optional-terminal-registry
           name: '@deepseek-ai/dsh-terminal'
         - id: optional-terminal-panel
-          name: '@deepseek-ai/dsh-experimental-terminal-panel'
+          name: '@deepseek-ai/dsh-terminal-panel'
           config:
             preferredShells: !!js "process.platform === 'win32' ? ['pwsh', 'powershell'] : []"
         - id: optional-tool-terminal

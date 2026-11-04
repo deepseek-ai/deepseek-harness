@@ -41,7 +41,7 @@
   "dependencies": {
     "@deepseek-ai/dsh-tool-terminal": "workspace:*",
     "@deepseek-ai/dsh-terminal": "workspace:*",
-    "@deepseek-ai/dsh-experimental-terminal-panel": "workspace:*"
+    "@deepseek-ai/dsh-terminal-panel": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~"

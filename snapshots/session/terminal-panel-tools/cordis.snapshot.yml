@@ -15,7 +15,7 @@
         - id: pty
           name: '@deepseek-ai/dsh-terminal'
         - id: terminal-panel
-          name: '@deepseek-ai/dsh-experimental-terminal-panel'
+          name: '@deepseek-ai/dsh-terminal-panel'
         - id: tool-terminal
           name: '@deepseek-ai/dsh-tool-terminal'
     - id: llm-replay

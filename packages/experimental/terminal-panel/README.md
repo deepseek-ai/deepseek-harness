@@ -3,7 +3,7 @@ description: "Persistent Agent terminals shown in the Web sidebar, which the per
 kind: "package-reference"
 ---
 
-# @deepseek-ai/dsh-experimental-terminal-panel
+# @deepseek-ai/dsh-terminal-panel
 
 English | [中文](README.zh.md)
 
@@ -34,7 +34,7 @@ Mount the plugin in a group that isolates `terminals`, beside the registry and t
     terminals: true
   config:
     - name: '@deepseek-ai/dsh-terminal'
-    - name: '@deepseek-ai/dsh-experimental-terminal-panel'
+    - name: '@deepseek-ai/dsh-terminal-panel'
     - name: '@deepseek-ai/dsh-tool-terminal'
 ```
 
@@ -134,7 +134,7 @@ Prefix-stable while the plugin stays loaded; loading or unloading it changes the
 
 #### What the model sees
 
-The two schemas are listed in the [`dsh-experimental-terminal-panel` catalog section](../../../docs/tool-catalog.md#deepseek-aidsh-experimental-terminal-panel). The six terminal tools keep the schemas of [`dsh-tool-terminal`](../../../docs/tool-catalog.md#deepseek-aidsh-tool-terminal).
+The two schemas are listed in the [`dsh-terminal-panel` catalog section](../../../docs/tool-catalog.md#deepseek-aidsh-terminal-panel). The six terminal tools keep the schemas of [`dsh-tool-terminal`](../../../docs/tool-catalog.md#deepseek-aidsh-tool-terminal).
 
 #### Token effect
 

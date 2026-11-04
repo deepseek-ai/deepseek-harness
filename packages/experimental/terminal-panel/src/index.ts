@@ -1,7 +1,7 @@
 /**
  * Visible persistent terminals: a terminal registry backend whose sessions are Agent terminals in the
  * Session's sidebar, read-only tools for terminals the user opened, and guidance for both.
- * @module @deepseek-ai/dsh-experimental-terminal-panel
+ * @module @deepseek-ai/dsh-terminal-panel
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -19,7 +19,7 @@ export { SUBAGENT_REFUSAL } from './backend.ts'
 export { TAKEN_OVER } from './session.ts'
 
 /** Cordis plugin name. */
-export const name = 'experimental-terminal-panel'
+export const name = 'terminal-panel'
 /** Terminal registry, sidebar terminals, sandbox policy, tool registry and prompt sections. */
 export const inject = ['terminals', 'terminalController', 'sandboxPolicy', 'tools', 'systemPrompt']
 

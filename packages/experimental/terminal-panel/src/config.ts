@@ -58,12 +58,12 @@ export const Config: z<Partial<Config>, Config> = z.object({
  */
 export function validateConfig(config: Config): void {
   if (config.promptSilenceMs > config.idleSilenceMs) {
-    throw new Error('experimental-terminal-panel: promptSilenceMs must not exceed idleSilenceMs')
+    throw new Error('terminal-panel: promptSilenceMs must not exceed idleSilenceMs')
   }
   if (config.idleSilenceMs > config.timeoutMs) {
-    throw new Error('experimental-terminal-panel: idleSilenceMs must not exceed timeoutMs')
+    throw new Error('terminal-panel: idleSilenceMs must not exceed timeoutMs')
   }
   if (config.startupSilenceMs > config.startupTimeoutMs) {
-    throw new Error('experimental-terminal-panel: startupSilenceMs must not exceed startupTimeoutMs')
+    throw new Error('terminal-panel: startupSilenceMs must not exceed startupTimeoutMs')
   }
 }
