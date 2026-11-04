@@ -2,6 +2,7 @@
   "name": "@deepseek-ai/dsh-tencent-meeting-cli",
   "description": "Tencent Meeting through the official tmeet: the CLI by its absolute path, its skill, and account operations over Remote",
   "version": "0.2.2-alpha.2",
+  "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"
   },
@@ -23,6 +24,7 @@
     "./package.json": "./package.json"
   },
   "files": [
+    "icon.svg",
     "locale/*.json",
     "lib/index.js",
     "skills",

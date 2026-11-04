@@ -2,6 +2,7 @@
   "name": "@deepseek-ai/dsh-tencent-meeting",
   "description": "Tencent Meeting plugin: the official tmeet with its skill, and account connection from the Plugins page",
   "version": "0.2.2-alpha.2",
+  "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"
   },
@@ -24,6 +25,7 @@
     "./locale/*.json": "./locale/*.json"
   },
   "files": [
+    "icon.svg",
     "locale/*.json",
     "lib/index.js",
     "cordis.patch.yml",
