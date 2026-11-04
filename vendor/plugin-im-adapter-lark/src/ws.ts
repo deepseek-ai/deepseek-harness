@@ -396,13 +396,16 @@ export class WsClient extends WsClientBase<LarkBot> {
       if (!signal.aborted) this.acknowledge(socket, frame, body)
     }
     const timer = setTimeout(() => answer({}), this.bot.config.callbackAnswerMs)
+    let deferred = false
     try {
       const session = await cardActionSession(this.bot, raw, signal)
       if (!session?.button) return
       session.button.respond = async (reply: ButtonAnswer) => { answer(cardAnswerBody(reply)) }
+      // A listener that answers asynchronously claims the answer; the deadline still bounds it.
+      session.button.defer = () => { deferred = true }
       await this.bot.receive(session)
     } finally {
-      answer({})
+      if (!deferred) answer({})
     }
   }
 

@@ -31,6 +31,12 @@ export interface ButtonEvent {
    * passes, so a caller that updates the clicked message after answering awaits this first.
    */
   respond?(answer: ButtonAnswer): Promise<void>
+  /**
+   * Claim the answer for a listener that calls {@link respond} only after asynchronous work: the platform then does
+   * not answer `{}` as soon as intake settles, and answers on its own only once its deadline passes. Absent where
+   * {@link respond} is absent.
+   */
+  defer?(): void
 }
 
 /** Platform-neutral answer to a button click ({@link ButtonEvent.respond}). */
