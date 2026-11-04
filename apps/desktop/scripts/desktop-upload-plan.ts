@@ -62,7 +62,7 @@ export interface DesktopUploadPlanOptions {
   /** Publish only the installer at its fixed download URL, replacing the previous object. */
   readonly latest?: boolean
   /** Percentage of installations eligible for this publication; absent preserves packaged metadata. */
-  readonly stagingPercentage?: number
+  readonly stagingPercentage?: number | undefined
   readonly environment?: NodeJS.ProcessEnv
   readonly repositoryRoot?: string
   readonly appRoot?: string

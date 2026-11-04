@@ -40,7 +40,7 @@ export interface DesktopPublicationRecord {
  */
 export async function createDesktopPublicationRecord(
   root: string,
-  identity: { repository: string; runId: string; attempt: string; actor: string; destination: string; operation: 'publish' | 'rollback'; reason: string; stagingPercentage?: number },
+  identity: { repository: string; runId: string; attempt: string; actor: string; destination: string; operation: 'publish' | 'rollback'; reason: string; stagingPercentage?: number | undefined },
 ): Promise<DesktopPublicationRecord> {
   await mkdir(root, { recursive: true, mode: 0o700 })
   const staging = await mkdtemp(join(root, '.initializing-'))
@@ -78,7 +78,7 @@ export async function wasDesktopAttemptPublished(root: string, expected: {
   runId: string
   attempt: string
   destination: string
-  stagingPercentage?: number
+  stagingPercentage?: number | undefined
 }): Promise<boolean> {
   let entries
   try { entries = await readdir(root, { withFileTypes: true }) } catch (error) {
