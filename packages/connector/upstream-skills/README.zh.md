@@ -68,7 +68,7 @@ const skills = registerUpstreamSkills(ctx, {
 
 ### 固定提交
 
-`pnpm exec tsx scripts/upstream-skills-digest.ts --repository <owner>/<repository> --commit <完整提交号> --directory <路径> [--exclude <路径>]... [--license LICENSE]` 从 GitHub 下载归档，按同样规则保留文件，以 JSON 输出固定信息，并在 stderr 列出保留的 `SKILL.md` 路径。
+`pnpm exec tsx scripts/upstream-skills-digest.ts --repository <owner>/<repository> --commit <完整提交号> --directory <路径> [--exclude <路径>]... [--license LICENSE] [--url <前缀>]` 从 `--url` 前缀下载归档（默认是 `https://codeload.github.com`），按同样规则保留文件，以 JSON 输出固定信息，并在 stderr 列出保留的 `SKILL.md` 路径。
 
 ### 共用配置
 
@@ -122,7 +122,8 @@ const skills = registerUpstreamSkills(ctx, {
 <a id="known-limitations-and-deferred-work"></a>
 
 - 换用新的固定提交后，首次加载需要能访问 GitHub 或配置的镜像；下载成功之前，入口技能不会列出，插件显示 `failed` 状态。
-- 插件改为固定其他提交后，以及插件卸载后，已发布的目录仍留在 `$DSH_HOME/cache/<name>` 中，没有任何清理。
+- 插件改为固定其他提交后，以及插件卸载后，已发布的目录仍留在 `$DSH_HOME/cache/<name>` 中，没有任何清理。进程在写入下载内容时退出，也会在那里留下它的暂存目录 `.skills-<摘要>-<uuid>`。
+- 只检查已发布的目录是否存在。目录里的文件被删除或改动后，入口技能仍会基于这些文件列出；删除该目录后，下一次检查或加载会重新下载固定的提交。
 - 不保留文件权限，上游脚本不可直接执行；目前的上游子指南都通过 `python3` 运行脚本。
 
 <a id="dev-note"></a>

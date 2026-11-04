@@ -68,7 +68,7 @@ The library downloads `<prefix>/<owner>/<repository>/tar.gz/<commit>` from each 
 
 ### Pinning a commit
 
-`pnpm exec tsx scripts/upstream-skills-digest.ts --repository <owner>/<repository> --commit <full id> --directory <path> [--exclude <path>]... [--license LICENSE]` downloads the archive from GitHub, keeps the same files, prints the pin as JSON, and lists the kept `SKILL.md` paths on stderr.
+`pnpm exec tsx scripts/upstream-skills-digest.ts --repository <owner>/<repository> --commit <full id> --directory <path> [--exclude <path>]... [--license LICENSE] [--url <prefix>]` downloads the archive from the `--url` prefix, `https://codeload.github.com` by default, keeps the same files, prints the pin as JSON, and lists the kept `SKILL.md` paths on stderr.
 
 ### Shared config
 
@@ -122,7 +122,8 @@ A load that finds the files in place lists the entry in the session's first cata
 <a id="known-limitations-and-deferred-work"></a>
 
 - The first load after a new pin needs GitHub or a configured mirror; until a download succeeds, the entry skill is not listed and the plugin shows the `failed` state.
-- Published directories stay in `$DSH_HOME/cache/<name>` after a plugin pins another commit and after the plugin is removed; nothing prunes them.
+- Published directories stay in `$DSH_HOME/cache/<name>` after a plugin pins another commit and after the plugin is removed; nothing prunes them. A process that exits while it writes a download leaves its `.skills-<digest>-<uuid>` staging directory there too.
+- Only the published directory's existence is checked. When files inside it are deleted or changed, the entry skill stays listed over them; deleting the directory makes the next check or load download the pin again.
 - File modes are not kept, so an upstream script is not executable; the current upstream guides run their scripts through `python3`.
 
 <a id="dev-note"></a>
