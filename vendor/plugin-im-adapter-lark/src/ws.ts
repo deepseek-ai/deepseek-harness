@@ -8,16 +8,18 @@
  * Accepted families:
  * - `im.message.receive_v1` and `im.message.recalled_v1`: decoded to sessions by {@link LarkBot.decodeEvent},
  *   each awaited through `bot.receive` (the intake gate) **before** the frame is acknowledged;
- * - `card.action.trigger`: answered `{}` **immediately** — the platform gives a card callback 3 seconds, while the
- *   intake store may be slower — and then published as an `interaction/button` session;
+ * - `card.action.trigger`: published as an `interaction/button` session and answered **once**, before intake is
+ *   awaited to the end — with the toast a listener passes to `button.respond()`, else `{}` when intake settles or
+ *   `config.callbackAnswerMs` elapses — because the platform gives a card callback 3 seconds while the intake store
+ *   may be slower;
  * - `im.message.reaction.created_v1` / `deleted_v1`: admitted like messages when they arrive.
  *
  * Any other family, and `card.action.trigger` when `config.callbacks` is off, is acknowledged **without** admission:
  * the platform must not redeliver an event this adapter does not serve.
  *
  * ACK semantics: an event gets its acknowledgement only after every session was accepted (a failed intake leaves no
- * success ACK, so the platform redelivers), while a card callback is answered first and its intake failure is logged —
- * the user's click must never wait for storage.
+ * success ACK, so the platform redelivers), while a card callback is answered by its deadline at the latest and its
+ * intake failure is logged — the user's click must never wait for storage.
  *
  * Everything else — backoff, `bot-connect`/`bot-disconnect` status, disposal — is the core {@link WsClientBase};
  * `prepare()` runs again on every reconnect, and {@link LarkBot.initialize} re-learns the token and identity there.
@@ -26,7 +28,9 @@
  */
 
 import { type Context } from '@deepseek-ai/cordis'
-import { type ButtonEvent, type ChatRef, type Session, Status, type UserRef, WsClientBase, type WebSocket } from '@deepseek-ai/cordis-plugin-im-core'
+import {
+  type ButtonAnswer, type ButtonEvent, type ChatRef, type Session, Status, type UserRef, WsClientBase, type WebSocket,
+} from '@deepseek-ai/cordis-plugin-im-core'
 import {} from '@deepseek-ai/cordis-plugin-http'
 import pb from 'protobufjs/light.js'
 import {
@@ -154,6 +158,16 @@ export async function cardActionSession(
 
 /** Heartbeat period of the gateway; the platform announces its own in `ClientConfig.PingInterval`. */
 const DEFAULT_PING_INTERVAL = 90_000
+
+/**
+ * The callback answer body of one {@link ButtonAnswer}: `{ toast: { type, content } }`, or `{}` without a toast.
+ *
+ * @param answer - the listener's answer.
+ * @returns the JSON body the frame is answered with.
+ */
+export function cardAnswerBody(answer: ButtonAnswer): Record<string, unknown> {
+  return answer.toast ? { toast: { type: answer.toast.type, content: answer.toast.content } } : {}
+}
 
 /**
  * The long connection of one application (`bot.adapter`).
@@ -350,10 +364,7 @@ export class WsClient extends WsClientBase<LarkBot> {
     if (raw.header.app_id !== this.bot.config.appId) throw new Error('Lark event belongs to another application')
     const type = raw.header.event_type
     if (type === 'card.action.trigger' && this.bot.config.callbacks) {
-      // The answer is due in 3 s, so it goes out before intake; a failed intake is logged, not retried here.
-      this.acknowledge(socket, frame, {})
-      const session = await cardActionSession(this.bot, raw, signal)
-      if (session) await this.bot.receive(session)
+      await this.answerCardAction(socket, frame, raw, signal)
       return
     }
     if (!isAdmittedEvent(type, this.bot.config.callbacks)) {
@@ -363,6 +374,36 @@ export class WsClient extends WsClientBase<LarkBot> {
     const sessions = await this.bot.decodeEvent(raw)
     for (const session of sessions) await this.bot.receive(session)
     if (!signal.aborted) this.acknowledge(socket, frame, EVENT_ACK)
+  }
+
+  /**
+   * One `card.action.trigger`: decode the click, hand it to intake with {@link ButtonEvent.respond} attached, and
+   * answer the frame once — with the listener's answer when it calls `respond`, else `{}` when intake settles or
+   * `config.callbackAnswerMs` after arrival elapses, whichever comes first. The platform wants the answer within 3 s,
+   * so intake is never awaited past that deadline; a failed intake still rejects and is logged by the caller.
+   *
+   * @param socket - socket the frame arrived on.
+   * @param frame - the callback frame (answered in place).
+   * @param raw - validated event envelope.
+   * @param signal - connection signal; an aborted connection sends no answer.
+   */
+  private async answerCardAction(socket: WebSocket, frame: pb.Message & Frame, raw: LarkRawEvent, signal: AbortSignal) {
+    let answered = false
+    const answer = (body: unknown) => {
+      if (answered) return
+      answered = true
+      clearTimeout(timer)
+      if (!signal.aborted) this.acknowledge(socket, frame, body)
+    }
+    const timer = setTimeout(() => answer({}), this.bot.config.callbackAnswerMs)
+    try {
+      const session = await cardActionSession(this.bot, raw, signal)
+      if (!session?.button) return
+      session.button.respond = async (reply: ButtonAnswer) => { answer(cardAnswerBody(reply)) }
+      await this.bot.receive(session)
+    } finally {
+      answer({})
+    }
   }
 
   /** Answer one frame: same frame back, plus the `biz_rt` header the platform expects and the response body. */

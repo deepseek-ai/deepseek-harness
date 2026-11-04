@@ -24,6 +24,19 @@ export interface ButtonEvent {
   /** Passive-reply / reply context the adapter may use (QQ event_id, Lark open_message_id). */
   referrer: unknown
   time: number
+  /**
+   * Answer the interaction on the platform, when the platform lets a click carry an answer (a Lark card callback
+   * answers with a toast). Resolves once the answer was sent; only the first call counts, and a later call resolves
+   * without effect. Absent on platforms without such an answer, and the platform answers on its own once its deadline
+   * passes, so a caller that updates the clicked message after answering awaits this first.
+   */
+  respond?(answer: ButtonAnswer): Promise<void>
+}
+
+/** Platform-neutral answer to a button click ({@link ButtonEvent.respond}). */
+export interface ButtonAnswer {
+  /** A short notice shown to the clicker. */
+  toast?: { type: 'info' | 'success' | 'warning' | 'error'; content: string }
 }
 
 export type ButtonCallback = (event: ButtonEvent) => void | Promise<void>

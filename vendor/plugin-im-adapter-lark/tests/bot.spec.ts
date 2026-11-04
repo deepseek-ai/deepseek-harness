@@ -194,6 +194,7 @@ describe('LarkBot shell', () => {
       platform: 'feishu',
       cardStreaming: true,
       callbacks: true,
+      callbackAnswerMs: 1_500,
     })
     expect(bot.config.allowAtAll).toBeUndefined()
     expect(bot.config.ws).toMatchObject({

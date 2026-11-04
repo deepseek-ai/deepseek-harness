@@ -1,6 +1,6 @@
 /**
  * The Lark long connection: the gateway handshake, protobuf frames and fragment reassembly, the ACK rules for events,
- * and `card.action.trigger` → `interaction/button` with its immediate `{}` answer.
+ * and `card.action.trigger` → `interaction/button` with its single answer (a `respond()` toast, else `{}`).
  *
  * Every socket is a local stand-in delivered through the `http/websocket` hook and every request goes through the
  * `http/fetch` hook, so nothing leaves the process.
@@ -388,9 +388,9 @@ describe('Lark card callbacks', () => {
     context: { open_message_id: 'om_card', open_chat_id: 'oc_chat' },
   })
 
-  it('answers {} immediately, before the click is admitted', async () => {
+  it('answers {} by the deadline when the click has not been admitted yet', async () => {
     const gate = Promise.withResolvers<Response>()
-    const mounted = await mount({}, { '/open-apis/im/v1/chats/oc_chat': () => gate.promise })
+    const mounted = await mount({ callbackAnswerMs: 20 }, { '/open-apis/im/v1/chats/oc_chat': () => gate.promise })
     const socket = await dial(mounted)
     const received = vi.fn()
     mounted.ctx.on('satori/receive', received)
@@ -419,6 +419,57 @@ describe('Lark card callbacks', () => {
       messageId: 'om_card',
     })
     expect(session.button.bot.id).toBe('lark:cli_lark')
+    // The deadline already answered: a late respond() sends nothing more.
+    await session.button.respond({ toast: { type: 'info', content: 'late' } })
+    expect(acks(mounted, socket)).toHaveLength(1)
+    await mounted.bot.disconnect()
+  })
+
+  it('answers with the toast a listener passes to respond(), before the listener continues', async () => {
+    const mounted = await mount({ callbackAnswerMs: 2_000 })
+    const socket = await dial(mounted)
+    const gate = Promise.withResolvers<void>()
+    const seen: number[] = []
+    mounted.ctx.on('satori/receive', async (session) => {
+      await session.button!.respond!({ toast: { type: 'success', content: '已确认' } })
+      // respond() resolves only after the answer frame was written, so an edit of the card may follow.
+      seen.push(acks(mounted, socket).length)
+      await session.button!.respond!({ toast: { type: 'error', content: 'second' } })
+      await gate.promise
+    })
+    socket.receive(eventFrame(mounted, cardAction))
+    await vi.waitFor(() => { expect(seen).toEqual([1]) })
+    expect(ackBody(acks(mounted, socket)[0]!)).toEqual({ toast: { type: 'success', content: '已确认' } })
+    gate.resolve()
+    await new Promise(resolve => setTimeout(resolve, 10))
+    expect(acks(mounted, socket)).toHaveLength(1)
+    await mounted.bot.disconnect()
+  })
+
+  it('answers {} as soon as intake settles without a respond() call', async () => {
+    const mounted = await mount({ callbackAnswerMs: 2_000 })
+    const socket = await dial(mounted)
+    const received = vi.fn()
+    mounted.ctx.on('satori/receive', received)
+    const start = Date.now()
+    socket.receive(eventFrame(mounted, cardAction))
+    await vi.waitFor(() => { expect(acks(mounted, socket)).toHaveLength(1) })
+    expect(Date.now() - start).toBeLessThan(1_000)
+    expect(received).toHaveBeenCalledTimes(1)
+    expect(ackBody(acks(mounted, socket)[0]!)).toEqual({})
+    await mounted.bot.disconnect()
+  })
+
+  it('answers {} once and logs when intake fails', async () => {
+    const mounted = await mount({ callbackAnswerMs: 2_000 })
+    const socket = await dial(mounted)
+    const error = vi.spyOn(mounted.ctx.logger, 'error')
+    mounted.ctx.on('satori/receive', async () => { throw new Error('store down') })
+    socket.receive(eventFrame(mounted, cardAction))
+    await vi.waitFor(() => { expect(acks(mounted, socket)).toHaveLength(1) })
+    expect(ackBody(acks(mounted, socket)[0]!)).toEqual({})
+    await vi.waitFor(() => { expect(error).toHaveBeenCalled() })
+    expect(acks(mounted, socket)).toHaveLength(1)
     await mounted.bot.disconnect()
   })
 

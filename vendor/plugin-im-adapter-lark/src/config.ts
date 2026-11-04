@@ -72,6 +72,11 @@ export interface LarkConfig {
   cardStreaming: boolean
   /** Accept `card.action.trigger` over the long connection, i.e. interactive card buttons work. */
   callbacks: boolean
+  /**
+   * Longest wait (ms, from arrival) for a listener's `button.respond()` before a card callback is answered `{}`; the
+   * platform discards an answer later than 3 s. Intake settling earlier answers at once.
+   */
+  callbackAnswerMs: number
   /** Fact override for `@all`: `undefined` (default) means "probe/unknown". */
   allowAtAll?: boolean
   /** Long-connection limits and retry policy. */
@@ -85,6 +90,8 @@ export const Config: z<LarkConfig> = z.object({
   baseUrl: z.string().role('url').description('OpenAPI 根地址；默认按平台选择。'),
   cardStreaming: z.boolean().default(true).description('卡片模式下使用 CardKit 实体流式更新。'),
   callbacks: z.boolean().default(true).description('接收 card.action.trigger 卡片回调。'),
+  callbackAnswerMs: z.natural().max(2_500).role('ms').default(1_500)
+    .description('卡片回调等待监听器应答（如 toast）的最长时间；超时后回复空应答。平台要求 3 秒内应答。'),
   allowAtAll: z.boolean().description('是否允许 @所有人（覆盖探测结果）。'),
   ws: WsConfig,
 }).description('飞书 / Lark 适配器设置')
