@@ -18,7 +18,7 @@ Use this guide when adding or reviewing an error class, an error code, or a fail
 
 1. Reuse the owning domain's existing class when the failure belongs to that domain: `FsError` for filesystem targets, `SearchError` for `glob`/`grep`, `LspError`, `WebError`, `SubagentError`, `TeamError`, `GoalError`, `WorkflowError`, `UserQuestionError`, `SessionQueryError`, the `Sandbox*Error` classes, and `CodeRunFailedError`.
 2. Use `ToolArgsError` (`INVALID_ARGS`) for argument constraints the parameter schema cannot express, such as an empty string, a range, or a cross-field rule.
-3. Declare a new class only for a new owning domain. Prefer one class with a code union over one class per failure; a separate subclass is justified when consumers must catch it by type, and it then extends the domain class so the domain still matches with `instanceof`.
+3. Declare a new class only for a new owning domain. Prefer one class with a code union over one class per failure; a separate subclass is justified when consumers must catch it by type or it carries its own structured fields, such as `ToolArgsError.violations`, and it then extends the domain class when one exists so the domain still matches with `instanceof`.
 4. Never declare a coded class that extends bare `Error`. An existing one is migrated by changing its base class and keeping every `name` and `code`.
 
 ## Name the class
@@ -26,6 +26,7 @@ Use this guide when adding or reviewing an error class, an error code, or a fail
 - `name` is the PascalCase class name ending in `Error`, such as `JobError` or `SandboxEscalationError`.
 - Assign `this.name` a string literal in the constructor. `HarnessError` defaults `name` to `new.target.name`, but a bundler may rename a colliding class binding, and a renamed class would change persisted data.
 - Do not reuse another domain's class name, and do not encode a code in the name.
+- Cancellation is the one exception: a tool throws a `HarnessError` whose `name` is `AbortError` and whose code is the `dsh-tools` `TOOL_ABORTED` constant (`ABORTED`), so tool-thrown and registry-generated cancellations share one `name` and `code`.
 
 ## Format the code
 
