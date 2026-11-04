@@ -205,10 +205,11 @@ export function teamProjectionView(state: TeamProjectionState): TeamProjection {
  * Team projection selected by the projected Session identity; the wire view
  * carries the selection and task board. Current subagents are
  * supplied separately by the existing `subagentCatalog` projection.
+ * Version-7 checkpoints without owner names remain usable without backfilling.
  */
 export const teamProjectionDefinition = {
   key: 'agentTeam',
-  stateVersion: 8,
+  stateVersion: 7,
   stateSchema: teamProjectionEntrySchema,
   init: (header, inheritedEventCount: SessionLogOffset) => emptyTeamState(header.id, inheritedEventCount),
   apply: applyProjectionEvent,

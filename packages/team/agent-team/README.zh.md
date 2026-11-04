@@ -139,7 +139,7 @@ Team 在激活前要求 `sessionPersistence` 可用。`Service.init` 等待 `age
 
 任务修改在向当前在线根 Session 追加 `team/task` 前响应取消，随后等待刷盘完成。取消不能撤回已追加的记录。刷盘失败或没有监听器参与时，以 `TEAM_TASK_PERSISTENCE_UNCONFIRMED` 报告任务 id 和修订号：任务已可见，但持久性未知。重试前先读取该任务。任务记录仅保留在日志中。不重写已提交任务或历史载荷代次。
 
-投影忽略历史名册与邮箱记录，不校验或保留其载荷。投影仅保存任务板、模式选择和恢复元数据。不兼容的投影检查点从未改写的 Session 日志重建；参见[升级指南](../../../docs/upgrade-guide/v0.2.1-rc.3/team-projection/guide.zh.md)。
+投影忽略历史名册与邮箱记录，不校验或保留其载荷。投影仅保存任务板、模式选择和恢复元数据。缺少 `ownerName` 的第 7 版检查点仍可复用；后缀回放从后续任务事件记录名称，不回填历史任务。不兼容的投影检查点从未改写的 Session 日志重建；参见[升级指南](../../../docs/upgrade-guide/v0.2.1-rc.3/team-projection/guide.zh.md)。
 
 ### Dispose
 

@@ -35,7 +35,7 @@ changes:
 <a id="compatibility"></a>
 ## 兼容性
 
-当前读取方接受没有 ownerName 的已有任务载荷，直接显示 ownerId，不改写或回填历史日志。新任务记录保留相同的 ownerId 授权和第 2 版任务语义。旧 Team 投影使用严格任务 schema，会拒绝包含 ownerName 的记录，保留最后的有效任务并报告投影失败，不会静默误读归属。Session 格式版本保持不变。agentTeam 投影状态版本升为 8，使第 6、7 版检查点从事件重建。
+当前读取方接受没有 ownerName 的已有任务载荷，直接显示 ownerId，不改写或回填历史日志。新任务记录保留相同的 ownerId 授权和第 2 版任务语义。旧 Team 投影使用严格任务 schema，会拒绝包含 ownerName 的记录，保留最后的有效任务并报告投影失败，不会静默误读归属。Session 格式版本保持不变。agentTeam 投影状态版本保持为 7：缺少 ownerName 的第 7 版检查点仍可复用，后缀回放保留后续任务事件中的名称。第 6 版检查点仍从事件重建。
 
 <a id="verification"></a>
 ## 验证

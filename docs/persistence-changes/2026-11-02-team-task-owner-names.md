@@ -35,7 +35,7 @@ changes:
 <a id="compatibility"></a>
 ## Compatibility
 
-Current readers accept existing task payloads without ownerName and display ownerId without rewriting or backfilling historical logs. New task records retain the same ownerId authorization and version 2 task semantics. Earlier Team projections use a strict task schema and reject records containing ownerName, retaining their last valid tasks and reporting a projection failure rather than silently misinterpreting ownership. Session format version remains unchanged. The agentTeam projection state version advances to 8 so version 6 and 7 checkpoints rebuild from events.
+Current readers accept existing task payloads without ownerName and display ownerId without rewriting or backfilling historical logs. New task records retain the same ownerId authorization and version 2 task semantics. Earlier Team projections use a strict task schema and reject records containing ownerName, retaining their last valid tasks and reporting a projection failure rather than silently misinterpreting ownership. Session format version remains unchanged. The agentTeam projection state version remains 7: version-7 checkpoints without ownerName remain usable, and suffix replay preserves names from later task events. Version-6 checkpoints still rebuild from events.
 
 <a id="verification"></a>
 ## Verification
