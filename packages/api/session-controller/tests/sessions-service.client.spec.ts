@@ -107,7 +107,7 @@ describe('list store projection', () => {
   it('projects durable titles separately from cwd/id display fallbacks and parent links', async ({ bench }) => {
     const b = bench()
     b.svc.handleControlFrame({
-      type: 'projection', sessionId: sid('s1'), key: 'title', value: 'Durable title', seq: 2,
+      type: 'projection', sessionId: sid('s1'), changes: [{ key: 'title', val: 'Durable title' }], seq: 2,
     })
     await feedList(b, [
       { id: 's1', cwd: '/home/u/proj-a/' },
@@ -128,7 +128,7 @@ describe('list store projection', () => {
     expect(b.svc.list.getSnapshot().byId[sid('s1')]?.projectionValues?.agentPreset).toBe('standard')
 
     b.svc.handleControlFrame({
-      type: 'projection', sessionId: sid('s1'), key: 'agentPreset', value: 'minimal', seq: 1,
+      type: 'projection', sessionId: sid('s1'), changes: [{ key: 'agentPreset', val: 'minimal' }], seq: 1,
     })
     await Promise.resolve()
 
@@ -784,7 +784,7 @@ describe('catalog-addressed navigation', () => {
     it(`loads an unretained one-shot child with projected title ${String(title)}`, async ({ bench }) => {
       const b = bench()
       if (title !== undefined) b.svc.handleControlFrame({
-        type: 'projection', sessionId: sid('one-shot'), key: 'title', value: title, seq: 2,
+        type: 'projection', sessionId: sid('one-shot'), changes: [{ key: 'title', val: title }], seq: 2,
       })
       b.mock.remote.session.projections.mockResolvedValue(ok({
         kind: 'sequenced', asOfSeq: 0, values: { subagentCatalog: [{ id: sid('one-shot'), createdAt: 1, mode: 'one-shot' }] },
@@ -984,7 +984,7 @@ describe('fork', () => {
   ] as const)('increments the durable title %j after the child is published', async ([sourceTitle, childTitle], { bench }) => {
     const b = bench()
     b.svc.handleControlFrame({
-      type: 'projection', sessionId: sid('source'), key: 'title', value: sourceTitle, seq: 2,
+      type: 'projection', sessionId: sid('source'), changes: [{ key: 'title', val: sourceTitle }], seq: 2,
     })
     await feedList(b, [{ id: 'source', cwd: '/work' }])
     b.mock.remote.session.fork.mockResolvedValue(ok({ sessionId: sid('child') }))
@@ -1035,7 +1035,7 @@ describe('fork', () => {
   it('rejects child rename failure while preserving its catalog row without retaining the child', async ({ bench }) => {
     const b = bench()
     b.svc.handleControlFrame({
-      type: 'projection', sessionId: sid('source'), key: 'title', value: 'Roadmap', seq: 2,
+      type: 'projection', sessionId: sid('source'), changes: [{ key: 'title', val: 'Roadmap' }], seq: 2,
     })
     await feedList(b, [{ id: 'source' }])
     b.mock.remote.session.fork.mockResolvedValue(ok({ sessionId: sid('child') }))

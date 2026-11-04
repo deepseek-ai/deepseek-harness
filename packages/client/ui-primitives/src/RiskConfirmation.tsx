@@ -3,7 +3,7 @@
  * must gate a sensitive action behind an explicit checkbox.
  */
 import { Button } from './Button.tsx'
-import { IconWarningOutlineRegular } from './icons/index.tsx'
+import { Checkbox } from './Checkbox.tsx'
 import { Modal } from './Modal.tsx'
 import css from './RiskConfirmation.module.css'
 
@@ -45,6 +45,7 @@ export function RiskConfirmation({
       open={open}
       onClose={onCancel}
       title={title}
+      tone="warning"
       closeLabel={closeLabel}
       className={css.confirmation ?? ''}
       contentClassName={css.confirmationContent ?? ''}
@@ -64,20 +65,15 @@ export function RiskConfirmation({
         </>
       )}
     >
-      <div className={css.warning}>
-        <IconWarningOutlineRegular size={18} className={css.warningIcon} />
-        <p>{description}</p>
-      </div>
-      <label className={css.acknowledgement}>
-        <input
-          type="checkbox"
-          checked={acknowledged}
-          disabled={disabled}
-          data-modal-autofocus
-          onChange={(event) => { onAcknowledgedChange(event.currentTarget.checked) }}
-        />
-        <span>{acknowledgeLabel}</span>
-      </label>
+      <p className={css.description}>{description}</p>
+      <Checkbox
+        className={css.acknowledgement}
+        checked={acknowledged}
+        disabled={disabled}
+        modalAutofocus
+        label={acknowledgeLabel}
+        onChange={onAcknowledgedChange}
+      />
     </Modal>
   )
 }

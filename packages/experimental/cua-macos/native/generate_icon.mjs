@@ -13,10 +13,13 @@ async function main() {
     const iconset = join(scratch, 'DSHComputerUse.iconset')
     await mkdir(iconset)
     const source = await readFile(join(root, '../../cua-bundle/icon.svg'))
+    const background = Buffer.from('<svg width="36" height="36" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="32" height="32" rx="7" fill="#FFFFFF"/></svg>')
     for (const points of [16, 32, 128, 256, 512]) {
       for (const scale of [1, 2]) {
         const pixels = points * scale
-        await sharp(source, { density: pixels * 2 }).resize(pixels, pixels).png()
+        const foreground = await sharp(source, { density: pixels * 2 }).resize(pixels, pixels).png().toBuffer()
+        await sharp(background, { density: pixels * 2 }).resize(pixels, pixels)
+          .composite([{ input: foreground }]).png()
           .toFile(join(iconset, `icon_${points}x${points}${scale === 2 ? '@2x' : ''}.png`))
       }
     }

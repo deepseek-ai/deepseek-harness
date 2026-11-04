@@ -340,9 +340,7 @@ async function recompose(
       diagnostic: failure.entry.fiber?.uid ? reloadDiagnostic(failure) : undefined,
     }))
     // Removed entries leave the Loader store before their async disposers finish.
-    const previousFibers = [...ctx.loader.entries()].flatMap(row => row.fiber === undefined ? [] : [{
-      fiber: row.fiber, failed: row.fiber.state === FIBER_FAILED || row.fiber.state === FIBER_DISPOSED,
-    }])
+    const previousFibers = [...ctx.loader.entries()].flatMap(row => row.fiber === undefined ? [] : [row.fiber])
     const { patches: previous = [], ...includeConfig } = entry.options.config as Include.Config
     const current = withResolution ? ctx.get('pluginPackages')?.resolution : undefined
     // A plain-data resolution has no inputs to recompute from.
@@ -386,12 +384,15 @@ async function recompose(
     const prepared = prepareProfilePatches(ctx, patches, parentURL, binName)
     applying = true
     const retried = [...new Set([...running, ...withResolution ? [...ctx.loader.entries()].filter(importFailed) : []])]
+    // Group.update replaces its data array and attempts every row it still lists, including failed imports.
+    const priorData = new Map(retried.map(row => [row, row.parent.data]))
     try {
       await entry.update({ config: { ...includeConfig, patches: prepared } })
     } finally {
-      await resume(ctx, retried)
+      // Only rows whose Group did not update still need an explicit retry after the awaited update.
+      await resume(ctx, retried.filter(row => row.parent.data === priorData.get(row)))
     }
-    const results = await Promise.allSettled(previousFibers.map(({ fiber }) => fiber.await()))
+    await Promise.allSettled(previousFibers.map(fiber => fiber.await()))
     await ctx.loader.await()
     const failures = await inactiveEntries(ctx)
     const introduced = failures.filter((failure) => {
@@ -403,9 +404,6 @@ async function recompose(
       return !previousFailures.some(previous => sameFailure(previous, failure))
     })
     if (introduced.length > 0) throw new Error(activationDiagnostic(binName, introduced, false).trimEnd())
-    for (const [index, result] of results.entries()) {
-      if (result.status === 'rejected' && !previousFibers[index]?.failed) throw result.reason
-    }
     ctx.emit('app-boot/config-reload')
     return { warnings: failures.map(reloadDiagnostic) }
   } finally {
@@ -415,7 +413,7 @@ async function recompose(
         // Ascending original positions put each row back where it was.
         for (const { group, options, index } of stopped.toSorted((left, right) => left.index - right.index)) {
           // `create` starts the entry but leaves the group's option list as it is; that list is what the next update
-          // compares against to remove the row and what the Include writes back.
+          // compares against to remove the row.
           group.data.splice(index, 0, options)
           await group.create(options)
         }
@@ -658,10 +656,9 @@ export function renderConfigDump(
   const base = parsed as Parameters<typeof applyEntryPatches>[0]
   // snapshot_k = ONE application of layers 1..k flattened, using the exact
   // arguments boot passes for that prefix. snapshot_N is the mounted composition.
-  // The patches are cloned per call: applyEntryPatches detaches the entry
-  // list but pushes `insert` rows by reference from the patch list, so
-  // sharing patch objects across snapshot calls would leak a later
-  // snapshot's mutations into an earlier one's result.
+  // The patches are cloned per call: applyEntryPatches clones entries and
+  // inserted rows but assigns override values such as `config` by reference,
+  // so each snapshot keeps its own copies of those values.
   const snapshot = (count: number, warnings: string[]): ReturnType<typeof applyEntryPatches> => {
     const flattened = structuredClone(layers.slice(0, count).flatMap(layer => layer.patches))
     return applyEntryPatches(base, flattened, (message: string, ...args: unknown[]) => {
@@ -806,8 +803,8 @@ export interface FailLoudProcess {
   exit(code: number): void
 }
 
-// Loader rc.5 derives and drops a rejected promise after a fiber fails. Keep
-// exact reasons already folded into the boot diagnostic visible through the
+// An activation rejection already folded into the boot diagnostic can also
+// reach the process rejection handler. Keep exact reasons visible through the
 // next process rejection checkpoint so the process guard can coalesce them.
 const assembledActivationRejections = new Map<unknown, number>()
 
@@ -1224,11 +1221,6 @@ export async function boot(
   try {
     ctx.baseUrl = pathToFileURL(dirname(absoluteConfigPath)).href + '/'
     ctx.provide('dshHomePath', dshHomePath)
-    // Fiber.update() discards the restart promise. Observe it before the
-    // waterfall returns; activation audits still report the failed fiber.
-    ctx.on('internal/update', (_config, _noSave, next: () => unknown) => {
-      void Promise.resolve(next()).catch((error: unknown) => { ctx.logger.error(error) })
-    }, { global: true, prepend: true })
     await ctx.plugin(Loader)
     await prepare?.(ctx)
     stage = 'plugin tree failed to load'

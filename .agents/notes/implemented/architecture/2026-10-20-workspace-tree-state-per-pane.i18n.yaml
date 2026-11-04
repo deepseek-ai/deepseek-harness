@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for 2026-10-20-workspace-tree-state-per-pane.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-20-workspace-tree-state-per-pane.md
+/agent-note-the-workspace-tree-is-per-pane-state-drawn-inside-each-file-tab-and-the-plugin-mounting-it-decides-where-files-open:
+  en: 3768a6ac42af3a0b
+  zh: ba3c0826b2a4d287
+/agent-note-the-workspace-tree-is-per-pane-state-drawn-inside-each-file-tab-and-the-plugin-mounting-it-decides-where-files-open/problem:
+  en: 3a7f14dd68a3ff14
+  zh: b21be07e8a7e6024
+/agent-note-the-workspace-tree-is-per-pane-state-drawn-inside-each-file-tab-and-the-plugin-mounting-it-decides-where-files-open/decision:
+  en: a15c7c13f167e5ac
+  zh: ff261e3705c47ff0
+/agent-note-the-workspace-tree-is-per-pane-state-drawn-inside-each-file-tab-and-the-plugin-mounting-it-decides-where-files-open/decision/the-tree-is-drawn-inside-each-file-tab-and-its-state-is-kept-per-pane:
+  en: 432aff475f1dfd21
+  zh: bbc058c1f967c067
+/agent-note-the-workspace-tree-is-per-pane-state-drawn-inside-each-file-tab-and-the-plugin-mounting-it-decides-where-files-open/decision/the-rows-are-a-controlled-component-factory-over-flat-entries:
+  en: a06955933f9f7f0e
+  zh: ccda2bd27175d36b
+/agent-note-the-workspace-tree-is-per-pane-state-drawn-inside-each-file-tab-and-the-plugin-mounting-it-decides-where-files-open/decision/the-plugin-that-mounts-the-tree-decides-where-a-file-lands:
+  en: 7cf8e3671900fe71
+  zh: 952f69cba9c44c10
+/agent-note-the-workspace-tree-is-per-pane-state-drawn-inside-each-file-tab-and-the-plugin-mounting-it-decides-where-files-open/decision/navigation-is-consumed-by-the-destination-tab:
+  en: e7b254df55d9768d
+  zh: d3303f20bb9ebdd6
+/agent-note-the-workspace-tree-is-per-pane-state-drawn-inside-each-file-tab-and-the-plugin-mounting-it-decides-where-files-open/decision/each-package-works-without-the-others:
+  en: dd160808a3ac77bc
+  zh: f63741f159717072
+/agent-note-the-workspace-tree-is-per-pane-state-drawn-inside-each-file-tab-and-the-plugin-mounting-it-decides-where-files-open/alternatives-considered:
+  en: 1c5501c71afc7748
+  zh: 3a2b0ec2d7923a12
+/agent-note-the-workspace-tree-is-per-pane-state-drawn-inside-each-file-tab-and-the-plugin-mounting-it-decides-where-files-open/consequences:
+  en: 586ec09cfcf60b82
+  zh: ef683318fbf68d71
+/agent-note-the-workspace-tree-is-per-pane-state-drawn-inside-each-file-tab-and-the-plugin-mounting-it-decides-where-files-open/verification:
+  en: eae354783022bed8
+  zh: fe2563a3bb259d55

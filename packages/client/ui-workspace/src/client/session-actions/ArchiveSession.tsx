@@ -1,11 +1,4 @@
-/**
- * The archive action: a `sidebar.workspaces.session.menu.item` row and a
- * `sidebar.workspaces.session.row.action` button over one injected behavior,
- * plus the `shell.overlay` dialog that confirms stopping a Session's running
- * work before archiving it. The same entries restore an archived row; the
- * notice a successful archive raises and the diagnostics for Host rejections
- * live in the injected callbacks, not here.
- */
+/** Archive hover button and confirmation for stopping the Session’s running work. */
 import { useState } from 'react'
 import type { SessionActivity } from '@deepseek-ai/dsh-api-workspace-controller/client'
 // Type-only: the family keys each provider merges; a key this program did not compile takes the generic line.
@@ -14,42 +7,14 @@ import type {} from '@deepseek-ai/dsh-jobs/view'
 import type {} from '@deepseek-ai/dsh-schedule/client'
 import type {} from '@deepseek-ai/dsh-subagent/client'
 import {
-  Button, IconArchiveOutlineRegular, IconUnarchiveOutlineRegular, MenuItemButton, Modal, Tooltip,
+  Button, IconArchiveOutlineRegular, IconUnarchiveOutlineRegular, Modal, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
   ArchiveSessionInjected, SessionArchiveConfirmInjected, SessionArchiveConfirmProps, SessionArchiveConfirmRequest,
-  SessionMenuItemProps, SessionRowActionProps,
+  SessionRowActionProps,
 } from '../contract/slots.ts'
 import css from '../rows/Rows.module.css'
 import browserCss from '../rows/WorkspaceBrowser.module.css'
-
-/**
- * Menu row (order 400): archive, or restore an archived row. Absent while the Session's access
- * snapshot excludes that toggle.
- * @param props - owner share, the archive share, the access Hook, and the menu open state.
- * @returns the row, or nothing when the caller may not toggle this Session's archival.
- */
-export function ArchiveSessionMenuItem({
-  sessionId, useArchived, useMenuOpenState, useShortcuts, useSessionAccess, archiveSession, unarchiveSession, t,
-}: SessionMenuItemProps<ArchiveSessionInjected>) {
-  const [, setMenuOpen] = useMenuOpenState()
-  const shortcut = useShortcuts(rows => rows.find(row => row.id === 'session.archive'))
-  const archived = useArchived(set => set.has(sessionId))
-  const allowed = useSessionAccess(sessionId, archived ? 'workspace/unarchiveSession' : 'workspace/archiveSession')
-  if (!allowed) return null
-  return (
-    <MenuItemButton
-      shortcut={archived ? undefined : shortcut}
-      icon={archived ? <IconUnarchiveOutlineRegular size={14} /> : <IconArchiveOutlineRegular size={14} />}
-      onSelect={() => {
-        setMenuOpen(false)
-        ;(archived ? unarchiveSession : archiveSession)(sessionId)
-      }}
-    >
-      {t(archived ? 'menu.unarchiveSession' : 'menu.archiveSession')}
-    </MenuItemButton>
-  )
-}
 
 /**
  * Hover button (order 100): archive, or restore an archived row. Absent while the Session's access

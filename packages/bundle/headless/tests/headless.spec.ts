@@ -381,7 +381,7 @@ describe('headless runner', () => {
         if (turns === 1) {
           await test.ctx.subagents.startActivation({
             provider: 'external', label: 'work', delivery: 'parent', signal: new AbortController().signal,
-            request: { parent, prompt: [] },
+            parent, prompt: [],
           })
           await cleaning.promise
           appendTurn(session, 1, message, 'waiting for child', true)
@@ -429,7 +429,7 @@ describe('headless runner', () => {
       },
     })
     test.ctx.provide('subagents', {
-      async waitForChildren(parent: Agent) {
+      async waitForTreeWork(parent: Agent) {
         expect(test.ctx.agents.get(parent.id)).toBe(parent)
         const batch = checks++
         if (batch === 2) return false
@@ -467,7 +467,7 @@ describe('headless runner', () => {
       },
     })
     test.ctx.provide('subagents', {
-      async waitForChildren(parent: Agent) {
+      async waitForTreeWork(parent: Agent) {
         const check = checks++
         if (check === 2) return false
         parent.followup(createUserMessage({ content: [{ type: 'text', text: 'batch complete' }], source: { kind: 'user' } }))

@@ -102,6 +102,15 @@ def test_missing_callback_does_not_advertise_question_support(runtime: Path, tmp
         assert client.request("stats", {}, response_model=Response).capabilities is None
 
 
+def test_callback_can_dismiss_a_question_without_a_provider_error(runtime: Path, tmp_path: Path) -> None:
+    with HarnessClient(config(lambda _request, _cancelled: {"cancelled": True}),
+                       _launch_args=(sys.executable, str(runtime))) as client:
+        initialize(client, tmp_path)
+        result = client.request("ask", {}, response_model=Response)
+        assert result.answer == {"cancelled": True}
+        assert result.error is None
+
+
 @pytest.mark.parametrize("action", ["cancel", "disconnect", "close"])
 def test_cancellation_stops_cooperative_host_work_and_suppresses_late_answer(runtime: Path, tmp_path: Path, action: str) -> None:
     entered = threading.Event()

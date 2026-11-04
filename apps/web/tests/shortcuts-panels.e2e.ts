@@ -127,10 +127,16 @@ describe.skipIf(process.platform === 'win32')('Web sidebar shortcuts', () => {
 
       const terminalEntry = panel.locator('[data-sidebar-right-guide-entry="terminal"]')
       const shellMenu = terminalEntry.getByRole('button', { name: 'Choose shell', exact: true })
-      const titleBounds = await terminalEntry.getByText('New terminal', { exact: true }).boundingBox()
-      const arrowBounds = await shellMenu.boundingBox()
-      expect(arrowBounds!.x).toBeGreaterThanOrEqual(titleBounds!.x + titleBounds!.width)
-      expect(arrowBounds!.x - titleBounds!.x - titleBounds!.width).toBeLessThan(8)
+      // Sample both rectangles in one layout instead of crossing the panel's transition frames.
+      await expect.poll(() => terminalEntry.evaluate((entry) => {
+        const title = [...entry.querySelectorAll('span[aria-hidden="true"]')].find(element => element.textContent === 'New terminal')
+        const arrow = entry.querySelector('button[aria-label="Choose shell"]')
+        if (title === undefined || arrow === null) return null
+        const titleBounds = title.getBoundingClientRect()
+        const arrowBounds = arrow.getBoundingClientRect()
+        const gap = arrowBounds.left - titleBounds.right
+        return { ordered: gap >= 0, adjacent: gap < 8 }
+      })).toEqual({ ordered: true, adjacent: true })
       await shellMenu.click()
       await page.getByRole('menu').waitFor()
       expect(await panel.locator('[data-sidebar-terminal]').count()).toBe(0)
@@ -178,6 +184,9 @@ describe.skipIf(process.platform === 'win32')('Web sidebar shortcuts', () => {
       await page.keyboard.press(`${primary}+Shift+,`)
       expect(await panel.locator('[data-dockkit-tab]').filter({ hasText: 'Files' }).count()).toBe(1)
       expect(await panel.locator('[data-dockkit-pane]').evaluate(pane => document.activeElement === pane)).toBe(true)
+      // Once the reveal's glow has ended, the focused pane draws nothing of its own. file-browser.e2e.ts and the
+      // seat spec own the glow itself, so this waits for no marker rather than requiring the transient one.
+      await expect.poll(() => panel.locator('[data-dockkit-pane][data-sidebar-right-flash]').count()).toBe(0)
       expect(await paneAppearance()).toEqual([plainPane])
 
       await bind(page, primary, 'Toggle panel fullscreen', 'Workspace files')
@@ -254,12 +263,12 @@ describe.skipIf(process.platform === 'win32')('Web sidebar shortcuts', () => {
         await menuTab.click({ button: 'right' })
         await page.getByRole('menu').waitFor()
         expect(await page.getByRole('tooltip').count()).toBe(0)
-        expect(await page.getByRole('menuitem').getAttribute('aria-keyshortcuts')).toBeNull()
+        expect(await page.getByRole('menuitem', { name: 'Close', exact: true }).getAttribute('aria-keyshortcuts')).toBe(aria)
         if (attempt === 0) {
           await compareOrRefreshGolden(join(expected, 'tab-menu.expected.md'),
-            await captureStableAria(page, '[data-dockkit-tab-menu]', scaffold.workspaceCwd), mode)
+            await captureStableAria(page, '[data-context-menu][role="menu"]', scaffold.workspaceCwd), mode)
         } else {
-          await page.getByRole('menuitem').focus()
+          await page.getByRole('menuitem', { name: 'Close', exact: true }).focus()
         }
         await page.keyboard.press('Escape')
         await page.getByRole('menu').waitFor({ state: 'detached' })

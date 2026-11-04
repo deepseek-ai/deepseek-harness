@@ -12,20 +12,23 @@ import css from './Checkbox.module.css'
  * @param props.disabled - whether the control refuses changes.
  * @param props.title - optional localized hover text.
  * @param props.className - extra class for the label's placement.
+ * @param props.modalAutofocus - designate the input for the owning Modal's initial focus without React autoFocus.
  * @returns the label containing its checkbox.
  */
-export function Checkbox({ checked, onChange, label, disabled = false, title, className }: {
+export function Checkbox({ checked, onChange, label, disabled = false, title, className, modalAutofocus = false }: {
   checked: boolean
   onChange: (next: boolean) => void
   label: string
   disabled?: boolean
   title?: string | undefined
   className?: string | undefined
+  modalAutofocus?: boolean
 }) {
   return (
     <label className={clsx(css.checkbox, className)} title={title}>
       <span className={css.control}>
         <input type="checkbox" checked={checked} disabled={disabled}
+          data-modal-autofocus={modalAutofocus || undefined}
           onChange={(event) => { onChange(event.target.checked) }} />
         <span className={css.mark} aria-hidden="true"><IconCheckOutlineRegular size={12} /></span>
       </span>

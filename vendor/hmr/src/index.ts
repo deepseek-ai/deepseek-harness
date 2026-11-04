@@ -146,7 +146,8 @@ class Hmr extends Service {
       for (const entry of loader.entries()) {
         const include = entry.subtree as Include | undefined
         if (include?.filename !== filename && include?.filename !== configuredFilename) continue
-        await include.refresh()
+        // A rejected refresh reports unsaved runtime changes; Include keeps its running tree.
+        try { await include.refresh() } catch (error) { this.ctx.logger.warn(error) }
         return
       }
 

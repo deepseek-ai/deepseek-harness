@@ -736,6 +736,8 @@ describe('DockSurface', () => {
     // A press on the nested control must not reach the chip's gesture handler;
     // if it did, the pointer would be captured and this click would never land.
     fireEvent.pointerDown(close)
+    expect(fireEvent.keyDown(close, { key: 'Enter' })).toBe(true)
+    expect(fireEvent.keyDown(close, { key: ' ' })).toBe(true)
     fireEvent.click(close)
     expect(intents.closeTab).toHaveBeenCalledTimes(1)
     expect(intents.focusTab).not.toHaveBeenCalled()

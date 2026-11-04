@@ -291,9 +291,13 @@
 
     - id: fs-observation-policy
       name: '@deepseek-ai/dsh-fs-observation-policy'
+      disabled: true
 
     - id: tool-fs
       name: '@deepseek-ai/dsh-tool-fs'
+      config:
+        # Set false to drop the apply_patch tool beside edit.
+        applyPatch: false
 
     - id: tool-fs-search
       name: '@deepseek-ai/dsh-tool-fs-search'
@@ -358,6 +362,14 @@
 
     - id: subagent
       name: '@deepseek-ai/dsh-subagent'
+
+    - id: agent-team
+      name: '@deepseek-ai/dsh-agent-team'
+      config:
+        maxTasks: 256
+
+    - id: tool-agent-team
+      name: '@deepseek-ai/dsh-tool-agent-team'
 
     - id: subagent-spawn-in-process
       name: '@deepseek-ai/dsh-subagent-spawn-in-process'
@@ -449,21 +461,28 @@
 
     # The shared base enables the stable model-facing web_search and web_fetch
     # tools. The Web app disables this host row and composes both tools per agent
-    # preset; products with a stricter network policy override tool-web. DeepSeek
-    # search resolves the same DEEPSEEK_API_KEY
-    # credential the Models page manages for chat, at each search; its Messages
-    # endpoint is configured independently from the model route, so it takes its own
-    # base-URL override. Anonymous fetch accepts only public HTTP(S) destinations,
-    # resolves and validates every destination, and pins every actual connection.
-    # Search is a full auxiliary model request with server-side retrieval, so this
-    # shipped DeepSeek route gets 60s while the provider-neutral tool default
-    # remains 30s. The DeepSeek Search and Fetch APIs register as
-    # deepseek-search-api and deepseek-fetch-api with the same credential; the Web
-    # search settings switch selects both in place of these defaults.
+    # preset; products with a stricter network policy override tool-web. Search
+    # defaults to the DeepSeek Search API (deepseek-search-api) and fetch to the
+    # anonymous local fetcher (http). The DeepSeek Search and Fetch APIs
+    # (deepseek-search-api, deepseek-fetch-api) follow the conversation: on the
+    # deepseek-account route they send the account token to that route's
+    # origin, and otherwise the API key of the DeepSeek API-key route to its
+    # origin, so a DEEPSEEK_API_KEY alone serves both without a sign-in.
+    # searchBaseURL / searchApiKeyEnv (fetch* for Fetch) pin one capability to
+    # its own endpoint and key instead.
+    # Legacy Messages search (deepseek-official) is selectable separately and
+    # uses its own endpoint, with the account token or DEEPSEEK_API_KEY.
+    # Anonymous fetch accepts only public
+    # HTTP(S) destinations, resolves and validates every destination, and pins
+    # every actual connection. This composition gives web_search 60s whichever
+    # provider serves it; the provider-neutral tool default remains 30s. The Web
+    # search provider and Web fetch provider
+    # menus on the Web search and fetch settings page select a provider for each
+    # capability in place of these defaults.
     - id: web
       name: '@deepseek-ai/dsh-web'
       config:
-        searchProvider: deepseek-official
+        searchProvider: deepseek-search-api
         fetchProvider: http
 
     - id: web-search-deepseek
@@ -473,8 +492,6 @@
 
     - id: web-deepseek-api
       name: '@deepseek-ai/dsh-web-deepseek-api'
-      config:
-        apiKeyEnv: DEEPSEEK_API_KEY
 
     - id: web-fetch-http
       name: '@deepseek-ai/dsh-web-fetch-http'

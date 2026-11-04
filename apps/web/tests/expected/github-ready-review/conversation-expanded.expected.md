@@ -21,7 +21,10 @@
   - text: GitHub event received
   - time: {{clock}}
 - status: Completed
-- button "Completed in {{duration}}" [disabled]
+- button "Completed in {{duration}}" [expanded]
+- button "Injected context" [expanded]
+- button "Context injection runtime-context"
+- button "Context injection time-context"
 - paragraph: "Review complete: no actionable findings."
 - button "Copy"
 - button "Good response"

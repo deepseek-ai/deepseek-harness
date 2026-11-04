@@ -15,9 +15,9 @@ on:
         default: test
         required: true
       update_channel:
-        description: '升级通道：nightly 或 latest（须为稳定版本）；自动更新不会切换通道'
+        description: '升级通道：nightly 或 stable（须为稳定版本）；默认通道由此打包输入确定'
         type: choice
-        options: [nightly, latest]
+        options: [nightly, stable]
         default: nightly
         required: true
       version_mode:
@@ -127,6 +127,23 @@ jobs:
           args=()
           if [[ "$PACKAGE_SKIP_NOTARIZATION" = true ]]; then args+=(--skip-notarization); fi
           pnpm run package:desktop:mac:x64 --check --build-version "$PACKAGE_VERSION" "${args[@]}"
+      - name: Build and stage notarized Computer Use helpers
+        # A source whose dsh ships the Computer Use bundle packs the workspace provider into the Desktop runtime,
+        # which therefore needs the same notarized helper npm publication stages.
+        run: |
+          if ! node -e "process.exit(require('./apps/cli/package.json').dependencies?.['@deepseek-ai/dsh-cua-bundle'] ? 0 : 1)"; then
+            echo 'This source does not ship Computer Use in Desktop; no helper is staged.'
+            exit 0
+          fi
+          if [[ ! -f scripts/cua-helper/package.ts ]]; then
+            echo '::warning::This source ships Computer Use but predates helper packaging; Computer Use cannot prepare its helper in this package.'
+            exit 0
+          fi
+          mkdir -p dist
+          pnpm exec tsx scripts/cua-helper/package.ts --out dist/cua-helper
+          mkdir dist/cua-helper/extracted
+          tar -xzf dist/cua-helper/cua-helper.tgz -C dist/cua-helper/extracted
+          pnpm exec tsx scripts/cua-helper/stage.ts --from dist/cua-helper/extracted
       - name: Build signed installers
         env:
           PACKAGE_VERSION: ${{ steps.settings.outputs.version }}

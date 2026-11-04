@@ -73,7 +73,7 @@ Remote 方法如下：
 
 三者都没有时，结果为 `{ status: 'none' }`。找到的文档携带其 `origin`（`locale`、`readme` 或 `repository`）、去掉开头 YAML front matter 块后的 Markdown 内容和 `document` id。结果，以及再次读取也会重复出现的 `too-large`、`denied` 和 `invalid` 失败，缓存 `cacheTtlMs`；传入 `refresh` 时改为重新读取；并发读取共享一次读取。只要每个 `cacheTtlMs` 内至少有一次读取返回某个 `document` id 或有一次图片请求引用它，该 id 就保持有效；未使用的 id 会被遗忘，在再次读取该文档之前，其图片请求返回 404。
 
-`github.com` 上的仓库文件通过 GitHub 的原始文件主机读取，`detailGitlabHosts` 中主机上的仓库文件通过 GitLab 仓库文件 API 读取。API 请求跟随同一 origin 内的重定向。API 返回 401、403 或 404 时，由一次不带任何凭据、发往该仓库 smart HTTP 端点的请求判断仓库是否公开；公开仓库中未找到文件即表示该文件不存在。需要凭据的仓库，以及所在主机没有此类 API 的仓库，通过 https、http 或 ssh 从部分克隆中读取。Git 使用用户的配置、凭据助手和 `url.<base>.insteadOf` 规则，且不提示输入，因此 https URL 可能被改为通过 ssh 访问；除非设置了 `GIT_SSH` 或 `GIT_SSH_COMMAND`，ssh 以批处理模式运行。
+`github.com` 上的仓库文件通过 GitHub 的原始文件主机读取，`detailGitlabHosts` 中主机上的仓库文件通过 GitLab 仓库文件 API 读取。API 请求跟随同一 origin 内的重定向。API 返回 401、403 或 404 时，由一次不带任何凭据、发往该仓库 smart HTTP 端点的请求判断仓库是否公开；公开仓库中未找到文件即表示该文件不存在。需要凭据的仓库，以及所在主机没有此类 API 的仓库，通过 https、http 或 ssh 从部分克隆中读取。Git 使用用户的配置、凭据助手和 `url.<base>.insteadOf` 规则，且不提示输入，因此 https URL 可能被改为通过 ssh 访问。Git 拒绝 http(s) URL 时，部分克隆改从 `ssh://git@<host>/<path>`（插件安装也使用的 SSH 形式）再次获取，并保留该远程地址；重试失败时报告两次的诊断，原因是网络或大小限制时分别报告 `network` 或 `too-large`，否则报告 `denied`。因此打开详情页可能通过 ssh 连接索引条目指定的主机；在批处理模式和默认的主机密钥检查下，ssh 只向用户 known hosts 中的主机认证。除非设置了 `GIT_SSH` 或 `GIT_SSH_COMMAND`，ssh 以批处理模式运行。
 
 `GET /api/plugin-market/detail-file?document=<id>&path=<destination>` 向已通过认证的 owner 连接提供已读取文档旁的图片。目标路径相对于该文档；以 `/` 开头时相对于包或仓库的根目录；路径中的查询和片段被忽略。只提供该根目录内的 PNG、JPEG、GIF、WebP、AVIF 和 SVG 文件，响应带有 `Content-Security-Policy: sandbox`、`X-Content-Type-Options: nosniff` 和时长为 `cacheTtlMs` 的私有缓存。文件不存在、文档未知或其他路径返回 404；下文所列的失败依次返回 413、502、403、503 和 400；失败响应不被缓存。
 

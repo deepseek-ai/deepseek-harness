@@ -2,20 +2,12 @@
 
 import type { ViewerSessionMode } from './viewer-capabilities.ts'
 
-/**
- * One plugin's endpoints the owner may expose to a share's viewers.
- *
- * The same shape carries the plugins' live offers and one share's own selection: the panel presents
- * the offers as tick boxes and saves back the selected subset, so both sides read the same fields.
- */
-export interface ViewerCapabilityGroup {
-  /** Declaring plugin's name, which is what the owner ticks under. */
-  readonly plugin: string
-  /** Readable endpoints of that plugin, sorted by the host. */
-  readonly readable: readonly string[]
-  /** Writable endpoints of that plugin, sorted by the host. */
-  readonly writable: readonly string[]
-}
+import type { ShareCapabilityGroup, ViewerPluginPolicy } from '../share-api-types.ts'
+
+/** One installed plugin's Remote methods the Host offers a share. */
+export type OfferedPlugin = ShareCapabilityGroup
+
+export type { ViewerPluginPolicy }
 
 /** One owner-created share listed by the global management UI. */
 export interface OutgoingShare {
@@ -36,13 +28,13 @@ export interface OutgoingShare {
    */
   readonly allowsFork?: boolean
   /**
-   * Plugin endpoints this share exposes to its viewers, as the owner's Harness reports them.
+   * Per-plugin endpoint policies this share carries, as the owner's Harness reports them.
    *
-   * Absent when that Harness reports none, which is also what an empty list means: no plugin endpoint
-   * reaches this share's viewers. A host that cannot report the field is read the same way, because
-   * nothing was selected for the share.
+   * Absent means no plugin endpoint reaches this share's viewers.
    */
-  readonly viewerCapabilities?: readonly ViewerCapabilityGroup[]
+  readonly viewerPlugins?: readonly ViewerPluginPolicy[]
+  /** Global switch over every installed plugin's methods; absent reads as none. */
+  readonly viewerPluginAccess?: 'all' | 'none' | 'custom'
   /** ISO time after which the Relay denies viewers; absent means it never expires. */
   readonly expiresAt?: string
   readonly online: boolean
@@ -83,7 +75,7 @@ export function readAccess(value: unknown): ConfirmedShareAccess | undefined {
 
 /**
  * Read one endpoint list out of a decoded entry.
- * @param value Raw `readable` or `writable` field.
+ * @param value Raw endpoint list field.
  * @returns The endpoint names, or undefined when the value is not an array of strings.
  */
 function readEndpointList(value: unknown): readonly string[] | undefined {
@@ -97,33 +89,87 @@ function readEndpointList(value: unknown): readonly string[] | undefined {
 }
 
 /**
- * Read one plugin's endpoint lists out of a decoded offer or selection entry.
- * @param value Raw entry from the host's `capabilities` or `viewerCapabilities` array.
- * @returns The group, or undefined when the entry is not a plugin name with two endpoint lists.
+ * Read one share's global plugin switch.
+ * @param value Raw `viewerPluginAccess` field.
+ * @returns The reported switch; an unknown or absent value reads as `none`.
  */
-function readCapabilityGroup(value: unknown): ViewerCapabilityGroup | undefined {
-  if (typeof value !== 'object' || value === null) return undefined
-  const group = value as Record<string, unknown>
-  if (typeof group.plugin !== 'string' || group.plugin === '') return undefined
-  const readable = readEndpointList(group.readable)
-  const writable = readEndpointList(group.writable)
-  return readable === undefined || writable === undefined
-    ? undefined
-    : { plugin: group.plugin, readable, writable }
+export function readPluginAccess(value: unknown): 'all' | 'none' | 'custom' {
+  return value === 'all' || value === 'custom' ? value : 'none'
 }
 
 /**
- * Normalize one host-reported endpoint list into the entries this page can present.
+ * Normalize the host-reported catalog into the plugins this page can present.
  *
- * A Host that reports nothing, reports a value this build cannot read, or reports one malformed entry
- * leaves this page with no offer to present for it: an unreadable offer is not one the owner may tick.
- * @param value Raw `capabilities` or `viewerCapabilities` field.
- * @returns The readable groups, in the order the host reported them.
+ * A Host that reports nothing, or one malformed entry, leaves no offer for that entry: an unreadable
+ * offer is not one the owner may tick.
+ * @param value Raw `capabilities` field.
+ * @returns The offered plugins, in the order the host reported them.
  */
-export function readCapabilityGroups(value: unknown): readonly ViewerCapabilityGroup[] {
+export function readOfferedPlugins(value: unknown): readonly OfferedPlugin[] {
   if (!Array.isArray(value)) return []
-  return value.flatMap((entry): readonly ViewerCapabilityGroup[] => {
-    const group = readCapabilityGroup(entry)
-    return group === undefined ? [] : [group]
+  return value.flatMap((entry): readonly OfferedPlugin[] => {
+    if (typeof entry !== 'object' || entry === null) return []
+    const group = entry as Record<string, unknown>
+    if (typeof group.plugin !== 'string' || group.plugin === '') return []
+    const endpoints = readEndpointList(group.endpoints)
+    if (endpoints === undefined) return []
+    const packageName = typeof group.package === 'string' && group.package !== '' ? group.package : undefined
+    const titles = readTitles(group.titles)
+    const descriptions = readDescriptions(group.descriptions)
+    return [{
+      plugin: group.plugin,
+      ...(packageName === undefined ? {} : { package: packageName }),
+      ...(titles === undefined ? {} : { titles }),
+      endpoints,
+      ...(descriptions === undefined ? {} : { descriptions }),
+    }]
+  })
+}
+
+/**
+ * Read a plugin's localized title map out of one catalog entry.
+ * @param value Raw `titles` field.
+ * @returns The string-valued titles, or undefined when the field is not a map.
+ */
+function readTitles(value: unknown): Readonly<Record<string, string>> | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
+  const titles: Record<string, string> = {}
+  for (const [language, title] of Object.entries(value)) {
+    if (typeof title === 'string' && title !== '') titles[language] = title
+  }
+  return titles
+}
+
+/**
+ * Read a plugin's endpoint descriptions.
+ * @param value Raw `descriptions` field.
+ * @returns One description per known endpoint, or undefined when none is readable.
+ */
+function readDescriptions(value: unknown): Readonly<Record<string, string>> | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
+  const descriptions: Record<string, string> = {}
+  for (const [endpoint, description] of Object.entries(value)) {
+    if (typeof description === 'string' && description !== '') descriptions[endpoint] = description
+  }
+  return Object.keys(descriptions).length === 0 ? undefined : descriptions
+}
+
+/**
+ * Normalize one share's stored policies into the entries this page can edit.
+ *
+ * A Host that reports nothing, or one malformed entry, leaves that plugin closed.
+ * @param value Raw `viewerPlugins` field.
+ * @returns The policies this page can present, in host order.
+ */
+export function readViewerPolicies(value: unknown): readonly ViewerPluginPolicy[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((entry): readonly ViewerPluginPolicy[] => {
+    if (typeof entry !== 'object' || entry === null) return []
+    const policy = entry as Record<string, unknown>
+    if (typeof policy.plugin !== 'string' || policy.plugin === '') return []
+    if (policy.mode !== 'all' && policy.mode !== 'none' && policy.mode !== 'selected') return []
+    const endpoints = policy.endpoints === undefined ? undefined : readEndpointList(policy.endpoints)
+    if (policy.endpoints !== undefined && endpoints === undefined) return []
+    return [{ plugin: policy.plugin, mode: policy.mode, ...(endpoints === undefined ? {} : { endpoints }) }]
   })
 }

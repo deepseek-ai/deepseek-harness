@@ -15,7 +15,7 @@ import type { ReviewActions } from '../src/client/ReviewComposer.tsx'
 import { ReviewQueue } from '../src/client/review-queue.ts'
 import { createChangesStore } from '../src/client/changes-store.ts'
 import { ChangesTab, type ChangesTabInjected, type ChangesTabProps } from '../src/client/ChangesTab.tsx'
-import { en } from '../src/client/locales.ts'
+import { en, zh } from '../src/client/locales.ts'
 import type { PanelSnapshot } from '../src/client/source.ts'
 import css from '../src/client/ChangesTab.module.css'
 import type { ForgeChangeRequestDiff, ForgeDiffFile, ForgeLocalDiff, ForgePanelState } from '../src/types.ts'
@@ -110,6 +110,7 @@ const REFUSED = {
   noForkPoint: { ok: false, error: new RemoteError('forgePanel/no-fork-point', 'no fork point', {}) },
   notCheckout: { ok: false, error: new RemoteError('forgePanel/not-a-checkout', 'not a checkout', {}) },
   tooLarge: { ok: false, error: new RemoteError('forgePanel/diff-too-large', 'too large', {}) },
+  filterConfig: { ok: false, error: new RemoteError('forgePanel/filter-config-failed', 'filter configuration unavailable', {}) },
   gone: { ok: false, error: new RemoteError('forgePanel/diff-failed', 'gone', {}) },
   hostRefused: { ok: false, error: new RemoteError('forgePanel/diff-failed', 'diff too large', {}) },
   failed: { ok: false, error: new RemoteError('gateway/bad-request', 'failed', {}) },
@@ -146,6 +147,7 @@ async function settle(): Promise<void> {
 type Faces = { -readonly [K in Exclude<keyof ChangesTabInjected, 'keyedHooks'>]: ReturnType<typeof vi.fn<ChangesTabInjected[K]>> }
 
 interface MountOptions {
+  readonly translate?: typeof t
   readonly source?: ChangesSource
   readonly state?: ForgePanelState | null
   readonly disconnected?: boolean
@@ -215,7 +217,7 @@ function mount(options: MountOptions = {}) {
   const props: ChangesTabProps = {
     useTabInfo: () => ({
       sidebar: { expanded: true, fullscreen: false },
-      panel: { id: 'pane-1' as PaneId },
+      panel: { id: 'pane-1' as PaneId, isFloating: false },
       tab: {
         id: TAB, kind: CHANGES_KIND, contentId, title: 'Changes', visible: useVisible(value => value),
         navigation: useNavigation(value => value), signal: aborter.signal, actions: tabActions,
@@ -226,7 +228,7 @@ function mount(options: MountOptions = {}) {
     actions: store.actions,
     usePanel,
     ...faces,
-    t,
+    t: options.translate ?? t,
   }
   const view = render(<ChangesTab {...props} />)
   /** The section of one file. */
@@ -259,7 +261,39 @@ function fileViewport(m: ReturnType<typeof mount>) {
 }
 
 describe('ChangesTab keyboard file navigation', () => {
-  it.each([{ kind: 'local' }, { kind: 'change', url: URL7 }] as const)('moves between $kind files, expands the destination and keeps focus in the diff', async (source) => {
+  it.each([{ kind: 'local' }, { kind: 'change', url: URL7 }] as const)('uses file-tree order for $kind diff sections and keyboard navigation', async (source) => {
+    const files = [
+      file('README.md'), file('packages/plugin/README.md'), file('packages/plugin/tests/index.spec.ts'),
+      file('packages/plugin/src/index.ts'), file('packages/plugin/src/adapter.ts'), file('docs/guide.md'),
+    ]
+    const expected = [
+      'docs/guide.md', 'packages/plugin/src/adapter.ts', 'packages/plugin/src/index.ts',
+      'packages/plugin/tests/index.spec.ts', 'packages/plugin/README.md', 'README.md',
+    ]
+    const m = mount({ source, setup: (faces) => {
+      faces.localDiff.mockResolvedValue(ok({ ...LOCAL, files }))
+      faces.changeRequestDiff.mockResolvedValue(ok({ ...CHANGE, files }))
+    } })
+    await settle()
+    const tree = within(m.view.getByRole('navigation'))
+    const paths = tree.getAllByRole('button').filter(button => !button.hasAttribute('aria-expanded'))
+      .map(button => button.getAttribute('aria-label'))
+    expect(paths).toEqual(expected)
+    expect(m.paths()).toEqual(paths)
+    const { viewport } = fileViewport(m)
+    for (const path of expected.slice(1)) {
+      fireEvent.keyDown(viewport, { key: 'ArrowRight' })
+      expect(scrolled.mock.contexts.at(-1)).toBe(m.section(path))
+      expect(tree.getByRole('button', { name: path }).getAttribute('aria-current')).toBe('true')
+    }
+    fireEvent.change(tree.getByRole('textbox'), { target: { value: 'README' } })
+    expect(m.paths()).toEqual(expected)
+  })
+
+  it.each([
+    { source: { kind: 'local' }, label: 'lib/a.txt → lib/b.txt' },
+    { source: { kind: 'change', url: URL7 }, label: 'src/app.ts' },
+  ] as const)('moves between $source.kind files, expands the destination and keeps focus in the diff', async ({ source, label }) => {
     const m = mount({ source })
     await settle()
     const { viewport, nodes } = fileViewport(m)
@@ -272,7 +306,7 @@ describe('ChangesTab keyboard file navigation', () => {
     expect(destination.hasAttribute('data-expanded')).toBe(true)
     expect(document.activeElement).toBe(viewport)
     const tree = within(m.view.getByRole('navigation'))
-    expect(tree.getByRole('button', { name: destination.dataset.forgeDiffFile! }).getAttribute('aria-current')).toBe('true')
+    expect(tree.getByRole('button', { current: true }).getAttribute('aria-label')).toBe(label)
     fireEvent.scroll(viewport)
     fireEvent.keyDown(viewport, { key: 'ArrowLeft' })
     expect(scrolled.mock.contexts.at(-1)).toBe(nodes[1])
@@ -365,7 +399,7 @@ describe('ChangesTab local reads', () => {
     expect(m.faces.localDiff).toHaveBeenCalledWith({ kind: 'branch' }, expect.any(AbortSignal))
     await settle()
 
-    expect(m.paths()).toEqual(['src/app.ts', 'src/new.ts', 'assets/logo.png', 'docs/gone.txt', 'lib/b.txt', 'logs/big.log'])
+    expect(m.paths()).toEqual(['assets/logo.png', 'docs/gone.txt', 'lib/b.txt', 'logs/big.log', 'src/app.ts', 'src/new.ts'])
     expect(m.view.getByText('Compared with origin/main, including uncommitted changes')).toBeTruthy()
     expect(m.view.getByRole('status').textContent).toBe('2 more untracked files are not listed')
     expect(m.view.getByRole('button', { name: 'All 6 files' })).toBeTruthy()
@@ -435,6 +469,20 @@ describe('ChangesTab local reads', () => {
     expect(m.view.getByRole('status').textContent).toBe(message)
     expect(m.view.queryByRole('button', { name: en.retry })).toBeNull()
     expect(m.view.getByRole('button', { name: 'All 0 files' }).hasAttribute('disabled')).toBe(true)
+  })
+
+  it.each([['en', en], ['zh', zh]] as const)('explains a filter configuration failure in %s and retries the comparison', async (_locale, dictionary) => {
+    const m = mount({
+      translate: makeTranslate(dictionary),
+      setup: (faces) => { faces.localDiff.mockResolvedValueOnce(REFUSED.filterConfig) },
+    })
+    await settle()
+    expect(m.view.getByRole('status').textContent).toBe(`${dictionary['diff.filterConfigFailed']}${dictionary.retry}`)
+    expect(m.view.queryByText(dictionary['diff.tooLarge'])).toBeNull()
+    fireEvent.click(m.view.getByRole('button', { name: dictionary.retry }))
+    await settle()
+    expect(m.paths()).toHaveLength(6)
+    expect(m.view.queryByText(dictionary['diff.filterConfigFailed'])).toBeNull()
   })
 
   it('offers a retry after any other failure', async () => {
@@ -639,8 +687,9 @@ describe('ChangesTab layout', () => {
     const files = [APP, ...[1, 2, 3, 4, 5, 6].map(huge)]
     const m = mount({ setup: (faces) => { faces.localDiff.mockResolvedValue(ok({ base: BASE, files, omitted: 0 })) } })
     await settle()
-    expect(m.paths().map(path => path === null ? null : m.section(path).hasAttribute('data-expanded'))).toEqual([true, true, true, true, true, true, false])
+    expect(m.paths().map(path => path === null ? null : m.section(path).hasAttribute('data-expanded'))).toEqual([true, true, true, true, true, false, false])
 
+    fireEvent.click(within(m.section('src/app.ts')).getByRole('button', { name: 'Expand app.ts' }))
     const toggle = within(m.section('src/app.ts')).getByRole('button', { name: 'Collapse app.ts' })
     fireEvent.click(toggle)
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
@@ -873,7 +922,7 @@ describe('ChangesTab change requests', () => {
     expect(m.faces.openLink).toHaveBeenLastCalledWith(URL7)
     await settle()
 
-    expect(m.paths()).toEqual(['src/app.ts', 'docs/notes.txt', 'docs/gone.txt'])
+    expect(m.paths()).toEqual(['docs/gone.txt', 'docs/notes.txt', 'src/app.ts'])
     expect(m.view.getByRole('status').textContent).toBe('The local branch has 1 unpushed commits; these are the changes on the change request')
     expect(m.section('src/app.ts').querySelector(`.${css.badge}`)).toBeNull()
     fireEvent.click(within(m.section('src/app.ts')).getByRole('button', { name: '2 unchanged lines' }))
@@ -908,7 +957,7 @@ describe('ChangesTab change requests', () => {
     expect(m.faces.openLink).toHaveBeenLastCalledWith(URL7)
     fireEvent.click(m.view.getByRole('button', { name: en.retry }))
     await settle()
-    expect(m.paths()).toEqual(['src/app.ts', 'docs/notes.txt', 'docs/gone.txt'])
+    expect(m.paths()).toEqual(['docs/gone.txt', 'docs/notes.txt', 'src/app.ts'])
   })
 
   it('says a diff over a size limit is too large to show and offers only its web page', async () => {
@@ -1051,9 +1100,20 @@ describe('line review actions', () => {
     fireEvent.change(tree.getByRole('textbox'), { target: { value: 'app.ts' } })
     fireEvent.click(tree.getByRole('button', { name: 'src/app.ts' }))
     expect(tree.getByRole('button', { name: 'src/app.ts' }).getAttribute('aria-current')).toBe('true')
-    fireEvent.click(m.view.getByRole('button', { name: en['diff.fileTree'] }))
-    expect(m.view.getByRole('button', { name: en['diff.fileTree'] }).getAttribute('aria-expanded')).toBe('false')
-    fireEvent.click(m.view.getByRole('button', { name: en['diff.fileTree'] }))
+    const toggle = m.view.getByRole('button', { name: en['diff.moveFileTreeRight'] })
+    toggle.focus()
+    fireEvent.click(toggle)
+    expect(m.view.getByRole('button', { name: en['diff.hideFileTree'] })).toBe(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(document.activeElement).toBe(toggle)
+    expect(tree.getByRole('button', { name: 'src/app.ts' }).getAttribute('aria-current')).toBe('true')
+    fireEvent.click(toggle)
+    expect(m.view.getByRole('button', { name: en['diff.showFileTreeLeft'] })).toBe(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(document.activeElement).toBe(toggle)
+    fireEvent.click(toggle)
+    expect(m.view.getByRole('button', { name: en['diff.moveFileTreeRight'] })).toBe(toggle)
+    expect(document.activeElement).toBe(toggle)
     expect(tree.getByRole('textbox')).toHaveProperty('value', 'app.ts')
     fireEvent.change(tree.getByRole('textbox'), { target: { value: '' } })
     fireEvent.click(tree.getByRole('button', { name: 'src' }))

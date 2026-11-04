@@ -2,7 +2,7 @@
 import { applyLoopbackServerEffect } from '../loopback-fixture-server.mjs'
 
 /** Model-visible endpoint retained by the recorded session. */
-const RECORDED_ENDPOINT = 'http://127.0.0.1:43118/anthropic/v1/messages'
+const RECORDED_ENDPOINT = 'http://127.0.0.1:43118/api/v1/tools/search'
 const RECORDED_URL = new URL(RECORDED_ENDPOINT)
 
 /** Cordis plugin name. */
@@ -33,13 +33,13 @@ function transportInput(input, transportEndpoint) {
   return input
 }
 
-/** Start the local Messages endpoint and stop it with the plugin fiber. */
+/** Start the local Search API endpoint and stop it with the plugin fiber. */
 export async function apply(ctx) {
   let restoreFetch = () => {}
   await applyLoopbackServerEffect(ctx, {
     label: 'web-search-error-fixture',
     requestListener: (request, response) => {
-      if (request.method === 'POST' && request.url === '/anthropic/v1/messages') {
+      if (request.method === 'POST' && request.url === '/api/v1/tools/search') {
         response.writeHead(401, { 'content-type': 'application/json' })
         response.end(JSON.stringify({ error: { message: 'invalid snapshot API key' } }))
         return
@@ -48,7 +48,7 @@ export async function apply(ctx) {
       response.end('not found')
     },
     onListening: (address) => {
-      const transportEndpoint = `http://127.0.0.1:${String(address.port)}/anthropic/v1/messages`
+      const transportEndpoint = `http://127.0.0.1:${String(address.port)}/api/v1/tools/search`
       const originalFetch = globalThis.fetch
       const fixtureFetch = async (input, init) => originalFetch(transportInput(input, transportEndpoint), init)
       globalThis.fetch = fixtureFetch

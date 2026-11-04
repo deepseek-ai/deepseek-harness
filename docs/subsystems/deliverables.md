@@ -6,6 +6,8 @@ What a turn hands to the user, owned by the [deliverables package group](../../p
 
 Sources: [`packages/deliverables/tool-present/src/types.ts`](../../packages/deliverables/tool-present/src/types.ts), [`packages/deliverables/workspace-changes/src/types.ts`](../../packages/deliverables/workspace-changes/src/types.ts)
 
+Patch calls use the same summary and comparison APIs. For paths outside Git coverage, a move contributes a deleted source and an added destination; a stopped commit contributes only actual net file changes. The [capture rules](../../packages/deliverables/workspace-changes/README.md#use-this-package) define path selection and observation behavior.
+
 ## `PresentedFile` — one declared delivery
 
 ```ts type-equiv

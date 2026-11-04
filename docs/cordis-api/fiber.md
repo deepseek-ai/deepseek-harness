@@ -34,7 +34,7 @@ Register a cleanup-aware effect on this fiber.
 
 **Returns** a disposer that tears the effect down and settles once done.
 
-[Source](../../vendor/cordis/src/fiber.ts#L415)
+[Source](../../vendor/cordis/src/fiber.ts#L421)
 
 ### ctx.fiber
 
@@ -51,7 +51,7 @@ The fiber (plugin runtime instance) that owns this context.
 
 Runtime instance of one plugin application.
 
-A fiber tracks dependency state, validated config, lifecycle effects, and cleanup for the plugin context returned by `ctx.plugin()`.
+A fiber tracks dependency state, raw and effective config, lifecycle effects, and cleanup for the plugin context returned by `ctx.plugin()`.
 
 [Source](../../vendor/cordis/src/fiber.ts#L184)
 
@@ -80,11 +80,11 @@ The context this fiber's plugin runs in (extends the parent context).
 ### fiber.config
 
 ```ts cordis-catalog
-/** The validated plugin config (updated by `update()`); read through {@link effectiveConfig}. */
+/** Raw plugin input retained for the next activation. */
 public config: any
 ```
 
-The validated plugin config (updated by `update()`); read through effectiveConfig.
+Raw plugin input retained for the next activation.
 
 [Source](../../vendor/cordis/src/fiber.ts#L190)
 
@@ -97,7 +97,7 @@ public state
 
 Current lifecycle state; transitions emit `internal/status`.
 
-[Source](../../vendor/cordis/src/fiber.ts#L194)
+[Source](../../vendor/cordis/src/fiber.ts#L192)
 
 ### fiber.dispose
 
@@ -108,16 +108,27 @@ public readonly dispose: () => Promise<void>
 
 Dispose this fiber: unload the plugin, then settle once cleanup finished.
 
-[Source](../../vendor/cordis/src/fiber.ts#L196)
+[Source](../../vendor/cordis/src/fiber.ts#L194)
 
-### fiber.store
+### fiber.committed
 
 ```ts cordis-catalog
-/** Snapshot of required service implementations while loaded; `undefined` otherwise. */
-public store: Dict<Impl> | undefined
+/** Required implementations retained through dependent teardown. */
+public committed: Readonly<Dict<Impl>> | undefined
 ```
 
-Snapshot of required service implementations while loaded; `undefined` otherwise.
+Required implementations retained through dependent teardown.
+
+[Source](../../vendor/cordis/src/fiber.ts#L196)
+
+### fiber.provisions
+
+```ts cordis-catalog
+/** Service implementations owned by this fiber, including isolated provisions. */
+public readonly provisions: Set<Impl>
+```
+
+Service implementations owned by this fiber, including isolated provisions.
 
 [Source](../../vendor/cordis/src/fiber.ts#L198)
 
@@ -141,7 +152,7 @@ get name()
 
 The plugin's display name, inherited from the nearest named ancestor, else `'root'`.
 
-[Source](../../vendor/cordis/src/fiber.ts#L336)
+[Source](../../vendor/cordis/src/fiber.ts#L342)
 
 ### fiber.assertActive()
 
@@ -159,7 +170,7 @@ Throw if the fiber has already been disposed.
 
 **Returns** nothing when the fiber is still active.
 
-[Source](../../vendor/cordis/src/fiber.ts#L351)
+[Source](../../vendor/cordis/src/fiber.ts#L357)
 
 ### fiber.effect(execute, label?)
 
@@ -190,7 +201,7 @@ Register a cleanup-aware effect on this fiber.
 
 **Returns** a disposer that tears the effect down and settles once done.
 
-[Source](../../vendor/cordis/src/fiber.ts#L415)
+[Source](../../vendor/cordis/src/fiber.ts#L421)
 
 ### fiber.getEffects()
 
@@ -207,7 +218,7 @@ Return metadata for currently registered effects.
 
 **Returns** one `EffectMeta` tree per labeled live effect.
 
-[Source](../../vendor/cordis/src/fiber.ts#L568)
+[Source](../../vendor/cordis/src/fiber.ts#L574)
 
 ### fiber.rawConfig
 
@@ -218,21 +229,22 @@ get rawConfig(): unknown
 
 Raw input retained for the next activation, without evaluating expressions or validating it.
 
-[Source](../../vendor/cordis/src/fiber.ts#L642)
+[Source](../../vendor/cordis/src/fiber.ts#L649)
 
 ### fiber.effectiveConfig
 
 ```ts cordis-catalog
 /**
- * The config object published by the existing activation/update lifecycle, without cloning or re-parsing.
- * It is undefined before the first resolution and remains readable after unload; callers requiring a live instance check `state`.
+ * The object passed to plugin activation or the latest successful update that retained the instance.
+ * Candidate resolution does not publish it; volatile updates retain its references.
+ * Undefined before activation and readable after unload; callers requiring a live instance check `state`.
  */
 get effectiveConfig(): unknown
 ```
 
-The config object published by the existing activation/update lifecycle, without cloning or re-parsing. It is undefined before the first resolution and remains readable after unload; callers requiring a live instance check `state`.
+The object passed to plugin activation or the latest successful update that retained the instance. Candidate resolution does not publish it; volatile updates retain its references. Undefined before activation and readable after unload; callers requiring a live instance check `state`.
 
-[Source](../../vendor/cordis/src/fiber.ts#L655)
+[Source](../../vendor/cordis/src/fiber.ts#L664)
 
 ### fiber.resolveConfig(config)
 
@@ -254,7 +266,7 @@ Evaluate and validate a candidate using this fiber's `internal/config` hooks and
 
 **Returns** The candidate's resolved config, retaining the schema's result identity.
 
-[Source](../../vendor/cordis/src/fiber.ts#L667)
+[Source](../../vendor/cordis/src/fiber.ts#L676)
 
 ### fiber.await()
 
@@ -272,7 +284,7 @@ Wait for current lifecycle work and rethrow startup errors.
 
 **Returns** this fiber, once it has settled into a stable state.
 
-[Source](../../vendor/cordis/src/fiber.ts#L731)
+[Source](../../vendor/cordis/src/fiber.ts#L754)
 
 ### fiber.restart()
 
@@ -290,35 +302,29 @@ Dispose and immediately reload this plugin with its current config.
 
 **Returns** a promise resolving once the reload settled.
 
-[Source](../../vendor/cordis/src/fiber.ts#L745)
+[Source](../../vendor/cordis/src/fiber.ts#L768)
 
 ### fiber.update(config, noSave?)
 
 ```ts cordis-catalog
 /**
- * Validate and apply new config, then restart the plugin.
- *
- * Runs the `internal/update` waterfall first, so update hooks (and HMR)
- * can veto or replace the restart.
- *
- * @param config — the new raw config; validated before anything restarts.
- * @param noSave — hint for persistence hooks not to write the change back.
- * @returns nothing; the restart runs behind the `internal/update` waterfall.
- * @throws {ValidationError} when the new config fails validation.
+ * Resolve a candidate, retain its raw config and apply it through the update waterfall.
+ * @param config Raw config; pending fibers defer resolution until activation.
+ * @param noSave Suppress the persistence notification when true.
+ * @returns The awaited update/restart result, or undefined when a synchronous listener handles it.
+ * @throws {ValidationError} when an active fiber's candidate is invalid.
  */
-update(config: any, noSave = false)
+update(config: any, noSave = false): Awaitable<void>
 ```
 
-Validate and apply new config, then restart the plugin.
+Resolve a candidate, retain its raw config and apply it through the update waterfall.
 
-Runs the `internal/update` waterfall first, so update hooks (and HMR) can veto or replace the restart.
+- `config` — Raw config; pending fibers defer resolution until activation.
+- `noSave` — Suppress the persistence notification when true.
 
-- `config` — the new raw config; validated before anything restarts.
-- `noSave` — hint for persistence hooks not to write the change back.
+**Returns** The awaited update/restart result, or undefined when a synchronous listener handles it.
 
-**Returns** nothing; the restart runs behind the `internal/update` waterfall.
-
-[Source](../../vendor/cordis/src/fiber.ts#L764)
+[Source](../../vendor/cordis/src/fiber.ts#L783)
 
 ## Effect
 

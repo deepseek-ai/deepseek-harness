@@ -7,6 +7,8 @@ kind: "package-library"
 
 English | [中文](README.zh.md)
 
+Direct component fixtures use `contextMenuHook(open)` to supply the global menu hook with production gesture handling. An unstubbed activation throws; Slot composition tests mount the menu plugin itself.
+
 ## Summary
 
 `SlotTestRuntime.create()` lets Vitest suites drive production slots, stores, typed Session and Workspace fixtures, and local DOM assertions in jsdom. For plugin activation, reload, reconnect, and cleanup tests, `createClientTest` starts the web profile's bundle roster with endpoint-named Remote mocks, without a business Host. Missing services and unstubbed calls fail explicitly. The whole-client fixture owns startup and disposal; the local runtime provides idempotent disposal. Use this package through `devDependencies` for client tests; it is not a product plugin.
@@ -87,7 +89,7 @@ test('registers into the sidebar', async ({ remote, start }) => {
 })
 ```
 
-`createClientTest` uses native Vitest fixtures: each test gets a fresh `mock` loaded with `remoteDefaultResponses`, a `remote` proxy equal to `mock.remote`, and a `start()` that boots only after the test configures its responses. Repeated starts share one promise; await it to observe startup errors. Fixture teardown waits for startup, disposes the client even after a failed assertion, checks missing responses, and refuses a saved `start` after the test. Use `TestClient.start` directly for independently owned clients. These fixtures isolate their own state, not page globals such as `location`.
+`createClientTest` uses native Vitest fixtures: each test gets a fresh `mock` loaded with `remoteDefaultResponses`, a `remote` proxy equal to `mock.remote`, and a `start()` that boots only after the test configures its responses. Repeated starts share one promise; await it to observe startup errors. Unlike the product boot, which only warns about inactive entries outside its required list, every roster entry must activate by default; pass `allowInactiveEntries: true` to `createClientTest` or `TestClient.start` only for a case that expects an optional plugin to fail. Fixture teardown waits for startup, disposes the client even after a failed assertion, checks missing responses, and refuses a saved `start` after the test. Use `TestClient.start` directly for independently owned clients. These fixtures isolate their own state, not page globals such as `location`.
 
 The [generic Remote proxy](../remote-mock/README.md#remote-proxy) supports every namespace in both tiers. An assembled test uses the `remote` fixture; a local `TestRemote` can receive `{ settings: mock.remote.settings }`. Configure returned data and read native `.mock.calls` directly. A mutation response does not update later describe answers automatically: change `remote.settings.describe.mockResolvedValue(...)` explicitly when the scenario publishes new data. The proxy documentation owns unbuilt typing and the required build-backed local typecheck.
 

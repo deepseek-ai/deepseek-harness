@@ -1,15 +1,15 @@
 ---
-description: "The schedule package group: Host-owned scheduled reminders and task management."
+description: "The schedule package group: Host-owned scheduled tasks, reminders, and task management."
 kind: "package-group"
 ---
 
-# schedule/ — Host-owned reminders
+# schedule/ — Host-owned scheduled tasks
 
 English | [中文](README.zh.md)
 
 ## Summary
 
-Create one-shot, fixed-rate, daily, weekly, or cron reminders for a conversation and keep them across Host restarts. Inspect active and inactive tasks without opening their original Sessions. Use Schedule for reminder creation and delivery, and the Automation tasks page for cross-Session inspection and confirmed deletion. Due reminders arrive as ordinary follow-up messages in the original conversation, not email, SMS, or push notifications.
+Create RFC 5545 recurring tasks that deliver to an existing Session or to a new one, and keep them across Host restarts. Inspect active, paused, and ended tasks without opening their target Sessions. An Agent uses the Schedule tools, and a user uses the sidebar Automation tasks page, to create, edit, pause, resume, and delete tasks; the Automation tasks page can also run a task now. Due tasks arrive as ordinary follow-up messages in their target Session, not email, SMS, or push notifications.
 
 ## Table of Contents
 
@@ -22,22 +22,22 @@ Create one-shot, fixed-rate, daily, weekly, or cron reminders for a conversation
 <a id="packages"></a>
 ## Packages
 
-Choose this package for persistent reminder management.
+Choose this package for persistent scheduled task management.
 
 | Package | Role |
 |---|---|
-| [`schedule/`](schedule/README.md) | Host-owned reminder persistence, scheduling, inspection, and explicit deletion |
-| [`tool-schedule/`](tool-schedule/README.md) | Preset-scoped `schedule_create`, `schedule_list`, `schedule_update`, and `schedule_delete` tools over the Host `ctx.schedule` service |
+| [`schedule/`](schedule/README.md) | Host-owned task persistence, scheduling, delivery targets, inspection, and explicit deletion |
+| [`tool-schedule/`](tool-schedule/README.md) | Preset-scoped `schedule_create`, `schedule_list`, `schedule_view`, and `schedule_edit` tools over the Host `ctx.schedule` service |
 
 -----
 
 <a id="related-documentation"></a>
 ## Related documentation
 
-- [Schedule subsystem](../../docs/subsystems/schedule.md) — task records, latest receipts, timing, and delivery contracts.
-- [Generated tool catalog](../../docs/tool-catalog.md#deepseek-aidsh-tool-schedule) — the `schedule_create`/`schedule_list`/`schedule_update`/`schedule_delete` schemas a mounting preset contributes.
-- [Schedule user guide](../../docs/user/guide/schedule.md) — create reminders and inspect active or inactive tasks.
-- [Web task page and reminder catalog](../client/ui-schedule/README.md) — browser inspection of tasks and confirmed deletion.
+- [Schedule subsystem](../../docs/subsystems/schedule.md) — task records, recurrence rules, delivery targets, latest receipts, and delivery contracts.
+- [Generated tool catalog](../../docs/tool-catalog.md#deepseek-aidsh-tool-schedule) — the `schedule_create`/`schedule_list`/`schedule_view`/`schedule_edit` schemas a mounting preset contributes.
+- [Schedule user guide](../../docs/user/guide/schedule.md) — create, inspect, run, edit, and delete scheduled tasks.
+- [Automation tasks page](../client/ui-schedule/README.md) — the sidebar page that manages every Host task in the browser.
 
 -----
 

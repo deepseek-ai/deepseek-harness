@@ -135,6 +135,31 @@ it('refreshes an Include through the queue and skips registered exact paths', as
   expect(refresh).toHaveBeenCalledOnce()
 })
 
+it('continues the batch when an Include refresh reports unsaved changes', async () => {
+  const { ctx, dir } = await fixture()
+  const moduleWatcher = watchers.at(-1)!
+  const imported = vi.spyOn(ctx.loader, 'import').mockResolvedValue(Include)
+  onTestFinished(() => { imported.mockRestore() })
+  const includes = []
+  for (const name of ['first.yml', 'second.yml']) {
+    const file = join(dir, name)
+    writeFileSync(file, '[]\n')
+    const id = await ctx.loader.create({ name: 'include', config: { path: pathToFileURL(file).href } })
+    includes.push({ file, id })
+  }
+  await ctx.loader.await()
+  const [first, second] = includes.map(({ id }) => ctx.loader.resolve(id).subtree as Include)
+  const failure = new Error('config file has 1 unsaved change(s)')
+  const rejected = vi.spyOn(first!, 'refresh').mockRejectedValue(failure)
+  const refreshed = vi.spyOn(second!, 'refresh')
+  const warn = vi.spyOn(ctx.logger, 'warn')
+  moduleWatcher.emit('change', includes[0]!.file)
+  moduleWatcher.emit('change', includes[1]!.file)
+  await vi.waitFor(() => { expect(refreshed).toHaveBeenCalledOnce() })
+  expect(rejected).toHaveBeenCalledOnce()
+  expect(warn).toHaveBeenCalledWith(failure)
+})
+
 it('queues cached module replacements behind configuration mutations and recovers after failure', async () => {
   const { ctx, dir, hmr } = await fixture()
   const file = join(dir, 'source.mjs')
@@ -218,7 +243,7 @@ it('rebinds configuration handlers when its provider is reconfigured within a re
   })
   await binding.await()
   await hmr.runExclusive(async () => {
-    provider.update({ root: [], ignored: [], debounce: 1 })
+    await provider.update({ root: [], ignored: [], debounce: 1 })
     await provider.await()
     await binding.await()
   })

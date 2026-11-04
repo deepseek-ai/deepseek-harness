@@ -137,7 +137,7 @@ async function readerHarness(creator: ShareRpcActor, target: 'fork' | 'source' =
     sourceConfined: () => true,
     forks,
     workspaces: () => [],
-    declaredCapabilities: () => [],
+    offeredPlugins: () => [],
   }
   ctx.remoteAccess.registerPolicy('share-viewer', createViewerAccessPolicy(accessFacts))
 

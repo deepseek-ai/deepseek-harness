@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 /**
  * The guide tab's body: the chain seam, and the shipped guide behind it.
  *
@@ -34,6 +35,7 @@ const standard: GlobalStandardProps & SessionStandardProps = {
   usePanelInfo: unused, useSessions: unused, useSessionStatus: unused,
   useSessionRetainInfo: unused, useResource: unused, useWorkspaces: unused,
   ...allowAllAccess,
+  useContextMenu: contextMenuHook(),
   inputActions: { insertQuote: () => false, captureInsertion: unused, insertText: unused, setDraft: unused, persistDraft: unused,
     addAttachments: unused, removeAttachment: unused, pruneAttachments: unused, submit: unused },
 }
@@ -68,14 +70,15 @@ function mountGuide(entries: readonly SidebarRightGuideBox[], custom?: (key: str
   const setPinned = vi.fn<GuideBodyProps['setPinned']>()
   let actionsOwner: SidebarRightGuideActionsOwnerProps | undefined
   const openTab = vi.fn()
+  const close = vi.fn()
   const renderSlot = vi.fn<GuideBodyProps['renderSlotChain']>((_seat, _owner, options) => options?.fallback)
   const props: GuideBodyProps = {
     ...standard, SessionProvider: ({ children }) => children,
     useShortcuts: <T,>(selector: (entries: readonly ShortcutCatalogEntry[]) => T): T => selector(shortcuts),
-    useTabInfo: () => ({ sidebar: { expanded: true, fullscreen: false }, panel: { id: 'pane-guide' as PaneId },
+    useTabInfo: () => ({ sidebar: { expanded: true, fullscreen: false }, panel: { id: 'pane-guide' as PaneId, isFloating: false },
       tab: { ...TAB, visible: true, signal: new AbortController().signal,
         navigation: { address: TAB.contentId, params: undefined, revision: 0 },
-        actions: { bindCommands: vi.fn(() => vi.fn()), openResource: vi.fn(), openTab, close: vi.fn() } } }),
+        actions: { bindCommands: vi.fn(() => vi.fn()), openResource: vi.fn(), openTab, close } } }),
     useGuideEntries: bindSnapshotSelector(guideEntries),
     useEntryPins: bindSnapshotSelector(entryPins),
     useEntryActions: bindSnapshotSelector(entryActions),
@@ -94,7 +97,7 @@ function mountGuide(entries: readonly SidebarRightGuideBox[], custom?: (key: str
   const boxes = (): string[] =>
     [...view.container.querySelectorAll('[data-sidebar-right-guide-entry]')].map(node => node.getAttribute('data-sidebar-right-guide-entry') ?? '')
   return {
-    view, guideEntries, entryPins, openTab, setPinned, renderSlot, entrySlot: props.renderSlot, boxes, useTabInfo: props.useTabInfo,
+    view, guideEntries, entryPins, openTab, close, setPinned, renderSlot, entrySlot: props.renderSlot, boxes, useTabInfo: props.useTabInfo,
     actionsOwner: () => {
       if (actionsOwner === undefined) throw new Error('guide actions not rendered')
       return actionsOwner
@@ -135,8 +138,11 @@ describe('GuideBody', () => {
     expect(b.setPinned).toHaveBeenCalledExactlyOnceWith('terminal:terminal-20', true)
     b.actionsOwner().onOpen('removed:entry')
     expect(b.openTab).not.toHaveBeenCalled()
+    expect(b.close).not.toHaveBeenCalled()
     b.actionsOwner().onOpen('terminal:terminal-20')
     expect(b.openTab).toHaveBeenCalledExactlyOnceWith('terminal', { replaceTab: true })
+    expect(b.close).toHaveBeenCalledOnce()
+    expect(b.close.mock.invocationCallOrder[0]).toBeGreaterThan(b.openTab.mock.invocationCallOrder[0]!)
     fireEvent.click(b.view.getByRole('menuitem', { name: 'Guide action' }))
     expect(b.view.queryByRole('menu')).toBeNull()
     expect(more.getAttribute('aria-expanded')).toBe('false')
@@ -182,12 +188,14 @@ describe('GuideBody', () => {
     cleanup()
   })
 
-  it('picking a box without a reveal preference preserves the default opening behavior', () => {
-    const { view, openTab } = mountGuide([box('files', 10)])
+  it('picking a box opens its page in the guide\'s place, then closes the guide', () => {
+    const { view, openTab, close } = mountGuide([box('files', 10)])
     const entry = view.container.querySelector('[data-sidebar-right-guide-entry="files"]')
     if (entry === null) throw new Error('expected the files box')
     fireEvent.click(entry)
     expect(openTab).toHaveBeenCalledWith('files', { replaceTab: true })
+    expect(close).toHaveBeenCalledOnce()
+    expect(close.mock.invocationCallOrder[0]).toBeGreaterThan(openTab.mock.invocationCallOrder[0]!)
     cleanup()
   })
 

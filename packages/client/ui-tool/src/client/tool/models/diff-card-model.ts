@@ -94,13 +94,19 @@ function appliedDiffs(meta: unknown): DiffHunk[] | 'empty' | null {
  * A successful write with valid empty metadata uses its argument-derived
  * whole-file diff, matching create and identical-overwrite presentation;
  * `str_replace_editor` settles through Generic because it has no result view.
+ * A settled call whose arguments carry no single intended diff, such as a
+ * multi-file patch, shows only the applied diffs its result metadata records.
  * @param block - running or settled Tool block.
  * @returns the diff-card props, or null for the generic path.
  */
 export function diffCardModel(block: ToolCallBlock): DiffCardModel | null {
   if (block.parentCallId !== undefined) return null
   const intended = intendedDiff(block)
-  if (intended === null) return null
+  if (intended === null) {
+    if (!('kind' in block) || block.isError) return null
+    const applied = appliedDiffs(block.meta)
+    return applied === null || applied === 'empty' ? null : { card: { diffs: applied } }
+  }
   if (!('kind' in block)) return { card: { diffs: [intended.diff] } }
   if (intended.tool === 'str_replace_editor') return null
   if (block.isError) return null

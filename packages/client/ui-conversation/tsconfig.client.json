@@ -104,6 +104,9 @@
     },
     {
       "path": "../product-analytics/tsconfig.client.json"
+    },
+    {
+      "path": "../ui-context-menu"
     }
   ],
   "exclude": [

@@ -11,6 +11,9 @@
 - button "Copy"
 - status: Completed
 - button "Completed in {{duration}}" [expanded]
+- button "Injected context" [expanded]
+- button "Context injection runtime-context"
+- button "Context injection time-context"
 - group:
   - status: Retried model request (1/5) · {{duration}}
 - button "Analysis completed" [expanded]

@@ -10,12 +10,18 @@ const MIN_WIDTH = 200
 const MAX_WIDTH = 600
 const DIFF_MIN_WIDTH = 320
 
+/** Placement of a tab's file navigator; hiding it retains its viewing choices. */
+export type FileTreePosition = 'right' | 'left' | 'hidden'
+
 /**
  * Render a keyboard- and pointer-resizable tree beside the diff.
- * @param props - tree rows, pane visibility, and the toggle's controlled element id.
+ * @param props - tree rows, pane position, and the toggle's controlled element id.
  * @returns the bounded pane and its resize separator.
  */
-export function FileTreePane({ open, id, ...props }: ChangedFilesProps & { readonly open: boolean; readonly id: string }): ReactNode {
+export function FileTreePane({ position, id, ...props }: ChangedFilesProps & {
+  readonly position: FileTreePosition
+  readonly id: string
+}): ReactNode {
   const pane = useRef<HTMLDivElement>(null)
   const drag = useRef<{ pointer: number; x: number; width: number } | null>(null)
   const [width, setWidth] = useState(240)
@@ -35,8 +41,9 @@ export function FileTreePane({ open, id, ...props }: ChangedFilesProps & { reado
     return () => { observer.disconnect() }
   }, [])
   const shown = Math.min(width, maximum)
+  const direction = position === 'left' ? 1 : -1
   const resize = (next: number): void => { setWidth(Math.round(Math.max(MIN_WIDTH, Math.min(maximum, next)))) }
-  return <div ref={pane} className={clsx(css.pane, changesCss.treePane)} hidden={!open} style={{ width: shown }}>
+  return <div ref={pane} className={clsx(css.pane, changesCss.treePane)} data-position={position} hidden={position === 'hidden'} style={{ width: shown }}>
     <div className={css.resize} role="separator" tabIndex={0} aria-label={props.t('diff.resizeFileTree')}
       aria-orientation="vertical" aria-controls={id} aria-valuemin={MIN_WIDTH} aria-valuemax={maximum} aria-valuenow={shown}
       onPointerDown={(event) => {
@@ -47,12 +54,12 @@ export function FileTreePane({ open, id, ...props }: ChangedFilesProps & { reado
       }}
       onPointerMove={(event) => {
         const active = drag.current
-        if (active?.pointer === event.pointerId) resize(active.width + active.x - event.clientX)
+        if (active?.pointer === event.pointerId) resize(active.width + direction * (event.clientX - active.x))
       }}
       onPointerUp={(event) => {
         const active = drag.current
         if (active?.pointer !== event.pointerId) return
-        resize(active.width + active.x - event.clientX)
+        resize(active.width + direction * (event.clientX - active.x))
         drag.current = null
         event.currentTarget.releasePointerCapture(event.pointerId)
       }}
@@ -60,7 +67,7 @@ export function FileTreePane({ open, id, ...props }: ChangedFilesProps & { reado
       onKeyDown={(event) => {
         if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
         event.preventDefault()
-        resize(event.key === 'Home' ? MIN_WIDTH : event.key === 'End' ? maximum : shown + (event.key === 'ArrowLeft' ? 20 : -20))
+        resize(event.key === 'Home' ? MIN_WIDTH : event.key === 'End' ? maximum : shown + direction * (event.key === 'ArrowRight' ? 20 : -20))
       }} />
     <nav id={id} className={css.navigation} aria-label={props.t('diff.allFiles', { count: props.files.length })}>
       <ChangedFiles {...props} />

@@ -27,10 +27,12 @@ export function SubmitReview({ queue, url, headSha, busy, error, submit, close, 
 }): ReactNode {
   const state = useSyncExternalStore(queue.subscribe, queue.getSnapshot)
   const name = useId()
+  const summaryHint = `${name}-summary-hint`
+  const requiresSummary = state.event === 'request-changes'
   const locked = busy || state.uncertain !== null
   const stale = state.comments.some(item => item.source.kind !== 'change' || item.source.url !== url || item.source.headSha !== headSha)
   const empty = state.comments.some(item => item.comment.body.trim() === '')
-    || (state.event === 'request-changes' && state.body.trim() === '')
+    || (requiresSummary && state.body.trim() === '')
     || (state.event === 'comment' && state.body.trim() === '' && state.comments.length === 0)
   const notice = state.error !== null ? t(state.error === 'load' ? 'review.loadFailed' : 'review.saveFailed')
     : stale ? t('review.stale') : error
@@ -44,9 +46,13 @@ export function SubmitReview({ queue, url, headSha, busy, error, submit, close, 
     </>}>
     <div className={css.form}>
       <div className={css.count}>{t('review.drafts', { count: state.comments.length })}</div>
-      <textarea data-modal-autofocus className={clsx(reviewCss.input, css.input)} rows={4} disabled={locked} value={state.body}
-        aria-label={t('review.summary')} placeholder={t('review.summary')}
-        onChange={(event) => { queue.summarize(event.target.value, state.event) }} />
+      <div className={css.summary}>
+        <textarea data-modal-autofocus className={clsx(reviewCss.input, css.input)} rows={4} disabled={locked} value={state.body}
+          aria-label={t('review.summary')} placeholder={t('review.summary')} required={requiresSummary}
+          aria-describedby={requiresSummary ? summaryHint : undefined}
+          onChange={(event) => { queue.summarize(event.target.value, state.event) }} />
+        <div id={summaryHint} className={css.hint} role="status">{requiresSummary ? t('review.summaryRequired') : ''}</div>
+      </div>
       <div className={css.decisions}>
         {(['comment', 'approve', 'request-changes'] as const).map(value => <label key={value}>
           <input type="radio" name={name} value={value} checked={state.event === value} disabled={locked}

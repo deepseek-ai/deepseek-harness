@@ -34,8 +34,8 @@
 
 .mark {
   position: absolute;
-  inset-inline-start: 2px;
-  top: 2px;
+  inset: 0;
+  margin: auto;
   display: flex;
   width: 12px;
   height: 12px;

@@ -1,42 +1,10 @@
-/**
- * The rename action: a `sidebar.workspaces.session.menu.item` row that raises
- * the rename request, and the `shell.overlay` dialog entry that answers it.
- * The dialog lives outside the row menu because the row unmounts with the
- * menu; the browser raises the same request from a title double-click.
- */
+/** Rename dialog shared by Session menus, shortcuts, and title double-clicks. */
 import { useRef, useState } from 'react'
-import { Button, IconEditOutlineRegular, MenuItemButton, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
-  RenameSessionInjected, SessionMenuItemProps, SessionRenameDialogInjected, SessionRenameDialogProps, SessionRenameTarget,
+  SessionRenameDialogInjected, SessionRenameDialogProps, SessionRenameTarget,
 } from '../contract/slots.ts'
 import css from '../rows/WorkspaceBrowser.module.css'
-
-/**
- * Menu row (order 200): ask for the rename dialog, seeded with the row's current title. Absent while
- * the Session's access snapshot excludes `session/rename`.
- * @param props - owner share, menu open state, access Hook, and the rename share.
- * @returns the row, or nothing when the caller may not rename this Session.
- */
-export function RenameSessionMenuItem({
-  sessionId, displayTitle, useMenuOpenState, useShortcuts, useSessionAccess, requestSessionRename, t,
-}: SessionMenuItemProps<RenameSessionInjected>) {
-  const [, setMenuOpen] = useMenuOpenState()
-  const shortcut = useShortcuts(rows => rows.find(row => row.id === 'session.rename'))
-  const renameAllowed = useSessionAccess(sessionId, 'session/rename')
-  if (!renameAllowed) return null
-  return (
-    <MenuItemButton
-      shortcut={shortcut}
-      icon={<IconEditOutlineRegular />}
-      onSelect={() => {
-        setMenuOpen(false)
-        requestSessionRename(sessionId, displayTitle)
-      }}
-    >
-      {t('rename')}
-    </MenuItemButton>
-  )
-}
 
 /**
  * The `shell.overlay` entry: nothing while no rename is requested, otherwise

@@ -31,7 +31,7 @@ const existing = {
   link: 'https://relay.example.test/?shareId=existing', createdAt: '2026-09-05T00:00:00Z', online: true,
   sessionMode: 'view',
   allowsFork: false,
-  viewerCapabilities: [],
+  viewerPlugins: [],
   access: {
     mode: 'selected',
     selected: [{ providerId: 'feishu', tenantId: 'tenant', subjectId: 'viewer' }],
@@ -706,6 +706,7 @@ describe('Liveshare dialog product acceptance', () => {
     expect(document.activeElement).toBe(last)
   })
 
+
   it('ignores a repeated create click while the first share is being prepared', async () => {
     const host = await showDialog(200, false)
     const create = screen.getByRole('button', { name: 'Create share' })
@@ -716,7 +717,8 @@ describe('Liveshare dialog product acceptance', () => {
 })
 
 /** One offer a plugin makes to this host's viewers. */
-const OFFERED = [{ plugin: 'mekGit', readable: ['mekGit/getGraph'], writable: ['mekGit/commit'] }]
+const OFFERED = [{ plugin: 'mekGit', endpoints: ['mekGit/commit', 'mekGit/getGraph'] }]
+const STORED = [{ plugin: 'mekGit', mode: 'all' }]
 
 /** An access record every endpoint of the open link uses. */
 const OPEN_ACCESS = {
@@ -771,25 +773,99 @@ function identityFor(relay: string) {
 }
 
 describe('Liveshare dialog stored-record branches', () => {
-  it('saves the narrowest endpoint tier as no endpoint at all', async () => {
-    const setCapabilities = vi.fn(async () => accepted({ shareId: 'existing', viewerCapabilities: [] }))
+  it('clears the per-plugin selection when the global switch closes every method', async () => {
+    const setCapabilities = vi.fn(async () => accepted({ shareId: 'existing', viewerPluginAccess: 'none' as const, viewerPlugins: [] }))
     await showControlled({
-      rows: [{ ...existing, viewerCapabilities: OFFERED }],
+      rows: [{ ...existing, viewerPluginAccess: 'all' as const, viewerPlugins: STORED }],
       overrides: {
         capabilities: async () => accepted({ capabilities: OFFERED }),
         setCapabilities,
       },
     })
 
-    await act(async () => { fireEvent.click(screen.getByRole('tab', { name: 'Unavailable' })) })
+    await act(async () => { fireEvent.click(screen.getByRole('tab', { name: 'Deny all' })) })
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save changes' })) })
-    expect(setCapabilities).toHaveBeenCalledWith({ shareId: 'existing', capabilities: [] })
+    expect(setCapabilities).toHaveBeenCalledWith({ shareId: 'existing', viewerPluginAccess: 'none' as const, viewerPlugins: [] })
+  })
+
+  it('opens every installed plugin method through the global switch', async () => {
+    const setCapabilities = vi.fn(async () => accepted({
+      shareId: 'existing', viewerPluginAccess: 'all' as const, viewerPlugins: [],
+    }))
+    await showControlled({
+      rows: [{ ...existing, viewerPlugins: [] }],
+      overrides: {
+        capabilities: async () => accepted({ capabilities: OFFERED }),
+        setCapabilities,
+      },
+    })
+
+    await act(async () => { fireEvent.click(screen.getByRole('tab', { name: 'Allow all' })) })
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save changes' })) })
+    expect(setCapabilities).toHaveBeenCalledWith({
+      shareId: 'existing', viewerPluginAccess: 'all' as const, viewerPlugins: [],
+    })
+  })
+
+  it('opens the per-plugin list and stores a custom policy', async () => {
+    const setCapabilities = vi.fn(async () => accepted({
+      shareId: 'existing', viewerPluginAccess: 'custom' as const,
+      viewerPlugins: [{ plugin: 'mekGit', mode: 'all' as const }],
+    }))
+    await showControlled({
+      rows: [{ ...existing, viewerPluginAccess: 'none' as const, viewerPlugins: [] }],
+      overrides: {
+        capabilities: async () => accepted({ capabilities: OFFERED }),
+        setCapabilities,
+      },
+    })
+
+    await act(async () => { fireEvent.click(screen.getByRole('tab', { name: 'Custom' })) })
+    await act(async () => { fireEvent.click(screen.getByRole('tab', { name: 'All methods' })) })
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save changes' })) })
+    expect(setCapabilities).toHaveBeenCalledWith({
+      shareId: 'existing', viewerPluginAccess: 'custom' as const,
+      viewerPlugins: [{ plugin: 'mekGit', mode: 'all' as const }],
+    })
+  })
+
+  it('states unsaved changes when the owner adds a method the share does not expose', async () => {
+    await showControlled({
+      rows: [{
+        ...existing,
+        viewerPluginAccess: 'custom' as const,
+        viewerPlugins: [{ plugin: 'mekGit', mode: 'selected' as const, endpoints: ['mekGit/commit'] }],
+      }],
+      overrides: { capabilities: async () => accepted({ capabilities: OFFERED }) },
+    })
+
+    expect(screen.getByRole('button', { name: 'Save changes' })).toHaveProperty('disabled', true)
+    await act(async () => { fireEvent.click(screen.getByRole('checkbox', { name: 'getGraph' })) })
+    expect(screen.getByText(en['dialog.permissions.unsaved'])).toBeDefined()
+    expect(screen.getByRole('button', { name: 'Save changes' })).toHaveProperty('disabled', false)
+  })
+
+  it('warns before a second Done discards the picks', async () => {
+    const onClose = vi.fn()
+    await showControlled({
+      rows: [existing],
+      onClose,
+      overrides: { capabilities: async () => accepted({ capabilities: OFFERED }) },
+    })
+
+    await act(async () => { fireEvent.click(screen.getByRole('tab', { name: 'Allow all' })) })
+    expect(screen.getByText(en['dialog.permissions.unsaved'])).toBeDefined()
+    await act(async () => { fireEvent.click(screen.getByText('Done')) })
+    expect(screen.getByText(en['dialog.permissions.discard'])).toBeDefined()
+    expect(onClose).not.toHaveBeenCalled()
+    await act(async () => { fireEvent.click(screen.getByText('Done')) })
+    expect(onClose).toHaveBeenCalledOnce()
   })
 
   it('saves a fork change for a record that names no session permission', async () => {
     const updatePermissions = vi.fn(async (): Promise<RemoteResult<SharePermissions>> =>
       accepted({ shareId: 'existing', sessionMode: 'view', allowsFork: true }))
-    const setCapabilities = vi.fn(async () => accepted({ shareId: 'existing', viewerCapabilities: [] }))
+    const setCapabilities = vi.fn(async () => accepted({ shareId: 'existing', viewerPluginAccess: 'none' as const, viewerPlugins: [] }))
     let calls = 0
     await showControlled({
       rows: [{ ...existing, sessionMode: undefined }],
@@ -863,14 +939,14 @@ describe('Liveshare dialog stored-record branches', () => {
       accepted({ shareId: 'existing', sessionMode: 'view', allowsFork: true }))
     const setCapabilities = vi.fn(async () => refused('gateway/internal', {}))
     await showControlled({
-      rows: [{ ...existing, viewerCapabilities: OFFERED }],
+      rows: [{ ...existing, viewerPlugins: STORED }],
       overrides: {
         capabilities: async () => accepted({ capabilities: OFFERED }),
         list: async () => {
           calls += 1
           return accepted({ shares: [calls === 1
-            ? { ...existing, viewerCapabilities: OFFERED }
-            : { ...existing, viewerCapabilities: OFFERED, allowsFork: true }] as never })
+            ? { ...existing, viewerPlugins: STORED }
+            : { ...existing, viewerPlugins: STORED, allowsFork: true }] as never })
         },
         updatePermissions,
         setCapabilities,
@@ -1217,7 +1293,7 @@ describe('Liveshare dialog stored-record branches', () => {
   it('states a half-saved permission save even when the re-read names another share', async () => {
     let calls = 0
     await showControlled({
-      rows: [{ ...existing, viewerCapabilities: OFFERED }],
+      rows: [{ ...existing, viewerPlugins: STORED }],
       overrides: {
         capabilities: async () => accepted({ capabilities: OFFERED }),
         updatePermissions: async (): Promise<RemoteResult<SharePermissions>> =>
@@ -1226,8 +1302,8 @@ describe('Liveshare dialog stored-record branches', () => {
         list: async () => {
           calls += 1
           return accepted({ shares: [calls === 1
-            ? { ...existing, viewerCapabilities: OFFERED }
-            : { ...existing, shareId: 'another', viewerCapabilities: OFFERED }] as never })
+            ? { ...existing, viewerPlugins: STORED }
+            : { ...existing, shareId: 'another', viewerPlugins: STORED }] as never })
         },
       },
     })

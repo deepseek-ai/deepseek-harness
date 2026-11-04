@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 /**
  * QueueDock rendering and operations: authoritative rows, inline editing,
  * collapse state, removal, QueueDock Steer, failure notices, and live retirement.
@@ -118,6 +119,7 @@ function kitFor(snapshot: SessionSnapshot, injected: Partial<QueueDockInjected> 
     ),
     useWorkspaces: (() => { throw new Error('unused') }) as never,
     ...allowAllAccess,
+    useContextMenu: contextMenuHook(),
     useProjection: (() => undefined) as never,
     useConversation: bindSnapshotSelector(createSnapshotStore(conversationSnapshot())),
     useChat: (() => { throw new Error('unused') }) as QueueDockProps['useChat'],
@@ -702,7 +704,6 @@ describe('QueueDock', () => {
           childSessionId: SID,
           mode: 'continuable' as const,
         },
-        parentAvailable: false,
       },
     }
     const source = liveSession(snap)
@@ -725,7 +726,6 @@ describe('QueueDock', () => {
           childSessionId: SID,
           mode: 'one-shot' as const,
         },
-        parentAvailable: true,
       },
     }
     const source = liveSession(snap)

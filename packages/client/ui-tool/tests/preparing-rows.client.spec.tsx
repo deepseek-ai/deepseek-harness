@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { useDisclosure } from '@deepseek-ai/dsh-client-ui-chat/src/client/chat/use-disclosure.ts'
 import type { StartedToolCall, ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
-import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { contextMenuHook, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { en } from '@deepseek-ai/dsh-client-ui-conversation/src/client/locales.ts'
 import { en as common } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import { PartialArguments } from '@deepseek-ai/dsh-util-values'
@@ -22,10 +22,13 @@ import { toolRowModel } from '../src/client/tool/models/tool-call-model.ts'
 
 afterEach(cleanup)
 
-type Props = Parameters<typeof TodoRow>[0] & Parameters<typeof ReadImageRow>[0] & Parameters<typeof AskQuestionRow>[0]
+type Props = Parameters<typeof GenericToolCard>[0] & Parameters<typeof TodoRow>[0]
+  & Parameters<typeof ReadImageRow>[0] & Parameters<typeof AskQuestionRow>[0]
 
 function preparation(name: string, args = new PartialArguments()): Extract<Props, { phase: 'preparing' }> {
   return {
+    getFileTriggerProps: () => ({}),
+    useContextMenu: contextMenuHook(), resolveFilePath: path => path,
     phase: 'preparing', callId: 'call', toolName: name,
     block: { phase: 'preparing', args, callId: 'call', name, turn: 1, step: 1, time: 1, subCalls: [] },
     cwd: '/workspace', t: makeTranslate(en, common), useDisclosure, openFile: vi.fn(), loadImage: vi.fn(),
@@ -45,7 +48,7 @@ describe('tool preparation', () => {
   it.each([
     ['read', ReadRow], ['read_image', ReadImageRow], ['write', FileMutationRow], ['edit', FileMutationRow],
     ['grep', SearchRow], ['glob', SearchRow], ['web_search', WebRow], ['web_fetch', WebRow],
-    ['todo_write', TodoRow], ['ask_user_question', AskQuestionRow], ['subagent', DetailsRow],
+    ['todo_write', TodoRow], ['ask_user_question', AskQuestionRow], ['subagent', DetailsRow], ['subagent_fork', DetailsRow],
     ['run_code', GenericToolCard], ['custom_tool', GenericToolCard],
   ] as const)('%s has a tool-owned prefix without arguments or disclosure', (name, Component) => {
     const props = preparation(name)
@@ -68,6 +71,40 @@ describe('tool preparation', () => {
     const view = render(<FileMutationRow {...preparation(name, args)} />)
     expect(view.queryByText('1KB')).toBeNull()
     expect(view.queryByRole('button')).toBeNull()
+  })
+
+  it.each([
+    ['subagent', 'Create subagent'],
+    ['subagent_fork', 'Fork subagent'],
+  ])('%s keeps its streamed description through dispatch and creation', (name, title) => {
+    const args = new PartialArguments()
+    const props = preparation(name, args)
+    const view = render(<DetailsRow {...props} />)
+    expect(view.getByText(title)).toBeTruthy()
+    args.append('{"prompt":"Research products in detail.","description":"Research')
+    view.rerender(<DetailsRow {...props} block={{ ...props.block }} />)
+    expect(view.getByText('Research')).toBeTruthy()
+    args.append(' CLI products"}')
+    view.rerender(<DetailsRow {...props} block={{ ...props.block }} />)
+    expect(view.getByText('Research CLI products')).toBeTruthy()
+    const argsRaw = JSON.stringify({ description: 'Research CLI products', prompt: 'Research products in detail.' })
+    const started: StartedToolCall = {
+      ...props.block, phase: 'start', args: PartialArguments.fromText(argsRaw), argsRaw,
+    }
+    view.rerender(<DetailsRow {...props} phase="start" block={started} />)
+    expect(view.getByText('Research CLI products')).toBeTruthy()
+    const settled: ToolResultNode = {
+      kind: 'tool-result', seq: 3, time: 3, callId: 'call', callTime: 2, name,
+      args: started.args, call: { name, argsRaw }, isError: false, subCalls: [],
+      content: [{ type: 'text', text: 'started subagent child-1' }],
+    }
+    view.rerender(<DetailsRow {...props} phase="result" block={settled} />)
+    expect(view.getByText('Research CLI products')).toBeTruthy()
+    expect(view.queryByText('Agent response')).toBeNull()
+    fireEvent.click(view.getByRole('button', { expanded: false }))
+    expect(view.getAllByText('Research CLI products')).toHaveLength(2)
+    expect(view.getByText('Research products in detail.')).toBeTruthy()
+    expect(view.getByText('child-1')).toBeTruthy()
   })
 
   it('retains the file row through streamed arguments, dispatch, and result', () => {
@@ -142,6 +179,7 @@ describe('tool preparation', () => {
   it.each([
     ['custom_tool', GenericToolCard, 'Tool call', 'custom_tool · Inspect this file'],
     ['subagent', DetailsRow, 'Create subagent', 'Inspect this file'],
+    ['subagent_fork', DetailsRow, 'Fork subagent', 'Inspect this file'],
   ] as const)('%s retains its title and tool-name rule when arguments arrive', (name, Component, title, summary) => {
     const props = preparation(name)
     const view = render(<Component {...props} />)

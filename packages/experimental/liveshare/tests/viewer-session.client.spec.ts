@@ -47,11 +47,14 @@ describe('opening the shared Session', () => {
 
     openSharedSession(ctx)
     expect(openSession).not.toHaveBeenCalled()
+    const onListed = notify
+    onListed?.()
+    expect(openSession).not.toHaveBeenCalled()
 
     snapshot = { byId: { [SHARED]: { id: SHARED } } }
-    notify?.()
+    onListed?.()
     // A notifier that delivers once more while removing this listener cannot navigate twice.
-    notify?.()
+    onListed?.()
     expect(openSession).toHaveBeenCalledOnce()
     expect(openSession).toHaveBeenCalledWith(SHARED)
     void ctx.fiber.dispose()

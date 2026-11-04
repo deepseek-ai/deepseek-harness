@@ -1,204 +1,60 @@
 import { describe, expect, it } from 'vitest'
-import { SessionLogOffset } from '@deepseek-ai/dsh-session'
-import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import {
   ScheduleId,
   ScheduleInputError,
   ScheduleLogError,
-  allocateScheduleId,
-  applyScheduleChanges,
-  canonicalizeCronExpression,
   canonicalizeTimeZone,
   createAfterScheduleRecord,
   createAtScheduleRecord,
   createEveryScheduleRecord,
-  decodeScheduleChange,
   decodeScheduleRecord,
-  foldScheduleEvents,
   MAX_TITLE_LENGTH,
   MIN_EVERY_INTERVAL_SECONDS,
   renderRecurringReminderBatchFraming,
   renderReminderFraming,
   resolveEveryOccurrence,
-  scheduleView,
 } from '../src/domain.ts'
 import type { LocalAtInput } from '../src/types.ts'
 
-function scheduleEvent(data: unknown, seq = 0): SessionEvent {
-  return { type: 'schedule/change', seq, time: 1, data } as SessionEvent
-}
+describe('Host task record decoding', () => {
+  const id = ScheduleId('stored')
+  const now = Date.parse('2026-08-05T12:00:00.000Z')
+  const records = [
+    createAfterScheduleRecord(id, 'Prompt', 60, now, 'Task'),
+    createAtScheduleRecord(id, 'Prompt', '2026-08-06T01:00:00.000Z', now, 'Task'),
+    createEveryScheduleRecord(id, 'Prompt', 300, now, 'Task'),
+  ]
 
-function createData(id = 'schedule-1', prompt = 'check logs', scheduledAt = '2026-08-05T12:00:00.000Z') {
-  return {
-    version: 1,
-    operation: 'create',
-    schedule: { id, kind: 'after', title: 'check logs', prompt, afterSeconds: 30, scheduledAt },
-  }
-}
-
-function atCreateData(id = 'schedule-at', prompt = 'join meeting', scheduledAt = '2026-08-06T01:00:00.000Z') {
-  return {
-    version: 1,
-    operation: 'create',
-    schedule: { id, kind: 'at', title: 'join meeting', prompt, scheduledAt },
-  }
-}
-
-function everyCreateData(
-  id = 'schedule-every',
-  prompt = 'check metrics',
-  scheduledAt = '2026-08-05T12:05:00.000Z',
-) {
-  return {
-    version: 1,
-    operation: 'create',
-    schedule: { id, kind: 'every', title: 'check metrics', prompt, everySeconds: 300, scheduledAt },
-  }
-}
-
-describe('version-1 Schedule decoding and folding', () => {
-  it('decodes and freezes each exact v1 operation', () => {
-    const create = decodeScheduleChange(createData())
-    const at = decodeScheduleChange(atCreateData())
-    const every = decodeScheduleChange(everyCreateData())
-    const remove = decodeScheduleChange({ version: 1, operation: 'delete', id: 'schedule-1' })
-    const dispatch = decodeScheduleChange({ version: 1, operation: 'dispatch', id: 'schedule-1' })
-    const everyDispatch = decodeScheduleChange({
-      version: 1,
-      operation: 'dispatch',
-      id: 'schedule-every',
-      acceptedAt: '2026-08-05T12:05:00.000Z',
-    })
-
-    expect(create).toEqual(createData())
-    expect(at).toEqual(atCreateData())
-    expect(every).toEqual(everyCreateData())
-    expect(remove).toEqual({ version: 1, operation: 'delete', id: 'schedule-1' })
-    expect(dispatch).toEqual({ version: 1, operation: 'dispatch', id: 'schedule-1' })
-    expect(everyDispatch).toEqual({
-      version: 1,
-      operation: 'dispatch',
-      id: 'schedule-every',
-      acceptedAt: '2026-08-05T12:05:00.000Z',
-    })
-    expect(Object.isFrozen(create)).toBe(true)
-    expect(Object.isFrozen(at)).toBe(true)
-    expect(Object.isFrozen(every)).toBe(true)
-    if (create.operation !== 'create') throw new Error('expected create')
-    expect(Object.isFrozen(create.schedule)).toBe(true)
+  it.each(records)('round-trips a detached frozen $kind record', (record) => {
+    const stored = { ...record }
+    const decoded = decodeScheduleRecord(stored)
+    expect(decoded).toEqual(record)
+    expect(decoded).not.toBe(stored)
+    expect(Object.isFrozen(decoded)).toBe(true)
   })
 
-  it('decodes and folds a v1 create record written before titles existed', () => {
-    const untitled = [
-      { version: 1, operation: 'create', schedule: {
-        id: 'after', kind: 'after', prompt: 'check logs', afterSeconds: 30, scheduledAt: '2026-08-05T12:00:00.000Z' } },
-      { version: 1, operation: 'create', schedule: {
-        id: 'at', kind: 'at', prompt: 'join meeting', scheduledAt: '2026-08-06T01:00:00.000Z' } },
-      { version: 1, operation: 'create', schedule: {
-        id: 'every', kind: 'every', prompt: 'check metrics', everySeconds: 300, scheduledAt: '2026-08-05T12:05:00.000Z' } },
-    ]
-    for (const data of untitled) {
-      const decoded = decodeScheduleChange(data)
-      if (decoded.operation !== 'create') throw new Error('expected create')
-      expect(Object.hasOwn(decoded.schedule, 'title')).toBe(false)
-    }
-    expect(foldScheduleEvents(untitled.map((data, seq) => scheduleEvent(data, seq)))).toEqual({
-      active: [
-        expect.objectContaining({ id: 'after' }),
-        expect.objectContaining({ id: 'at' }),
-        expect.objectContaining({ id: 'every' }),
-      ],
-      seenIds: ['after', 'at', 'every'],
-    })
-  })
-
-  it('still refuses a historical create record whose present title is malformed', () => {
-    const cases = [
-      { ...createData().schedule, title: '' },
-      { ...atCreateData().schedule, title: ' padded' },
-      { ...everyCreateData().schedule, title: 'x'.repeat(MAX_TITLE_LENGTH + 1) },
-      { ...createData().schedule, title: undefined, extra: true },
-    ]
-    for (const schedule of cases) {
-      expect(() => decodeScheduleChange({ version: 1, operation: 'create', schedule })).toThrow(ScheduleLogError)
-    }
+  it.each(records.flatMap(record => [
+    { ...record, prompt: '' }, { ...record, prompt: 1 }, { ...record, prompt: ' padded' },
+    { ...record, extra: true },
+  ]))('rejects malformed stored prompt or keys for $kind', (value) => {
+    expect(() => decodeScheduleRecord(value)).toThrow(ScheduleLogError)
   })
 
   it.each([
-    null,
-    { version: 2, operation: 'delete', id: 'schedule-1' },
-    { version: 1, operation: 'pause', id: 'schedule-1' },
-    { version: 1, operation: 'delete', id: 'schedule-1', extra: true },
-    { version: 1, operation: 'dispatch', id: '' },
-    { version: 1, operation: 'dispatch', id: ' schedule-1' },
-    { version: 1, operation: 'dispatch', id: 'schedule-1', acceptedAt: 'not-an-instant' },
-    { version: 1, operation: 'dispatch', id: 'schedule-1', acceptedAt: '2026-08-05T12:05:00.000Z', extra: true },
-    { ...createData(), extra: true },
-    { ...createData(), schedule: { ...createData().schedule, extra: true } },
-    { ...createData(), schedule: { ...createData().schedule, kind: 'at' } },
-    { ...atCreateData(), schedule: { ...atCreateData().schedule, extra: true } },
-    { ...atCreateData(), schedule: { ...atCreateData().schedule, prompt: ' ' } },
-    { ...everyCreateData(), schedule: { ...everyCreateData().schedule, extra: true } },
-    { ...everyCreateData(), schedule: { ...everyCreateData().schedule, prompt: ' ' } },
-    { ...everyCreateData(), schedule: { ...everyCreateData().schedule, everySeconds: 59 } },
-    { ...everyCreateData(), schedule: { ...everyCreateData().schedule, everySeconds: 300.5 } },
-    { ...everyCreateData(), schedule: { ...everyCreateData().schedule, everySeconds: '300' } },
-    { ...everyCreateData(), schedule: { ...everyCreateData().schedule, everySeconds: Number.MAX_SAFE_INTEGER } },
-    { ...createData(), schedule: { ...createData().schedule, prompt: ' ' } },
-    { ...createData(), schedule: { ...createData().schedule, afterSeconds: 0 } },
-    { ...createData(), schedule: { ...createData().schedule, afterSeconds: 1.5 } },
-    { ...createData(), schedule: { ...createData().schedule, scheduledAt: '2026-02-30T00:00:00.000Z' } },
-    { ...createData(), schedule: { ...createData().schedule, scheduledAt: '10000-01-01T00:00:00.000Z' } },
-    { ...createData(), schedule: null },
-    { ...atCreateData(), schedule: { ...atCreateData().schedule, kind: 'every' } },
-    { ...atCreateData(), schedule: { ...atCreateData().schedule, kind: 'later' } },
-  ])('rejects malformed durable data %#', (data) => {
-    expect(() => decodeScheduleChange(data)).toThrow(ScheduleLogError)
-  })
-
-  it('folds active records in create order and rejects invalid transitions', () => {
-    const first = scheduleEvent(createData('first'), 0)
-    const second = scheduleEvent(atCreateData('second'), 1)
-    const removed = scheduleEvent({ version: 1, operation: 'delete', id: 'first' }, 2)
-    expect(foldScheduleEvents([first, second, removed])).toEqual({
-      active: [expect.objectContaining({ id: 'second' })],
-      seenIds: ['first', 'second'],
-    })
-    expect(() => foldScheduleEvents([
-      first,
-      scheduleEvent(createData('first'), 1),
-    ])).toThrow(/was reused/)
-    expect(() => foldScheduleEvents([
-      scheduleEvent({ version: 1, operation: 'delete', id: 'missing' }),
-    ])).toThrow(/inactive id/)
-    expect(() => foldScheduleEvents([
-      scheduleEvent({ version: 1, operation: 'dispatch', id: 'missing' }),
-    ])).toThrow(/inactive id/)
-  })
-
-  it('folds only the fork-owned suffix and validates its boundary', () => {
-    const parentCreate = scheduleEvent(createData('parent'), 0)
-    const childCreate = scheduleEvent(createData('child'), 1)
-    expect(foldScheduleEvents([parentCreate, childCreate], SessionLogOffset(1))).toEqual({
-      active: [expect.objectContaining({ id: 'child' })],
-      seenIds: ['child'],
-    })
-    expect(() => foldScheduleEvents([], -1 as never)).toThrow(/inheritedEventCount/)
-    expect(() => foldScheduleEvents([], SessionLogOffset(1))).toThrow(/inheritedEventCount/)
-    expect(() => foldScheduleEvents([], 0.5 as never)).toThrow(/inheritedEventCount/)
-  })
-
-  it('allocates a readable id without reusing ended or colliding ids', () => {
-    expect(allocateScheduleId({ active: [], seenIds: [] })).toBe('schedule-1')
-    expect(allocateScheduleId({ active: [], seenIds: [ScheduleId('custom'), ScheduleId('schedule-3')] }))
-      .toBe('schedule-4')
-    expect(allocateScheduleId({ active: [], seenIds: [ScheduleId('one'), ScheduleId('schedule-2')] }))
-      .toBe('schedule-3')
+    null, [], { kind: 'unknown' },
+    { ...records[0], id: ' padded' },
+    { ...records[0], scheduledAt: 1 },
+    { ...records[0], scheduledAt: '2026-02-30T00:00:00.000Z' },
+    { ...records[0], afterSeconds: 0 }, { ...records[0], afterSeconds: 1.5 },
+    { ...records[2], everySeconds: '60' }, { ...records[2], everySeconds: 59 },
+    { ...records[2], everySeconds: Number.MAX_SAFE_INTEGER },
+  ])('rejects invalid stored timing or identity %#', (value) => {
+    expect(() => decodeScheduleRecord(value)).toThrow(ScheduleLogError)
   })
 })
 
 describe('after record and model framing', () => {
-  it('builds canonical records and derives scheduled or overdue views', () => {
+  it('builds canonical records', () => {
     const record = createAfterScheduleRecord(ScheduleId('schedule-1'), '  check logs  ', 30, 1_000, 'check logs')
     expect(record).toEqual({
       id: 'schedule-1',
@@ -208,8 +64,6 @@ describe('after record and model framing', () => {
       afterSeconds: 30,
       scheduledAt: '1970-01-01T00:00:31.000Z',
     })
-    expect(scheduleView(record, 30_999)).toMatchObject({ state: 'scheduled', deliveryMode: 'host' })
-    expect(scheduleView(record, 31_000)).toMatchObject({ state: 'overdue', deliveryMode: 'host' })
   })
 
   it('stores a supplied title verbatim, trimmed, for a multi-line instruction', () => {
@@ -372,40 +226,6 @@ describe('fixed-rate records and durable progression', () => {
       .toThrow(/interval milliseconds/)
   })
 
-  it('advances one Every record without a backlog or a cross-record gate', () => {
-    const create = scheduleEvent(everyCreateData(), 0)
-    const first = scheduleEvent({
-      version: 1,
-      operation: 'dispatch',
-      id: 'schedule-every',
-      acceptedAt: '2026-08-05T12:17:34.000Z',
-    }, 1)
-    expect(foldScheduleEvents([create, first])).toEqual({
-      active: [{
-        id: 'schedule-every',
-        kind: 'every',
-        title: 'check metrics',
-        prompt: 'check metrics',
-        everySeconds: 300,
-        scheduledAt: '2026-08-05T12:20:00.000Z',
-      }],
-      seenIds: ['schedule-every'],
-    })
-    expect(() => foldScheduleEvents([
-      create,
-      scheduleEvent({ version: 1, operation: 'dispatch', id: 'schedule-every' }, 1),
-    ])).toThrow(/must contain acceptedAt/)
-    expect(() => foldScheduleEvents([
-      scheduleEvent(createData('one-shot'), 0),
-      scheduleEvent({
-        version: 1,
-        operation: 'dispatch',
-        id: 'one-shot',
-        acceptedAt: '2026-08-05T12:17:34.000Z',
-      }, 1),
-    ])).toThrow(/must not contain acceptedAt/)
-  })
-
   it('terminates at the representable boundary and renders one escaped multi-record batch', () => {
     const final = {
       ...createEveryScheduleRecord(ScheduleId('schedule-final'), 'final', 300, start, 'final'),
@@ -414,16 +234,6 @@ describe('fixed-rate records and durable progression', () => {
     expect(resolveEveryOccurrence(final, Date.parse(final.scheduledAt))).toEqual({
       occurrenceAt: final.scheduledAt,
     })
-    expect(foldScheduleEvents([
-      scheduleEvent({ version: 1, operation: 'create', schedule: final }, 0),
-      scheduleEvent({
-        version: 1,
-        operation: 'dispatch',
-        id: final.id,
-        acceptedAt: final.scheduledAt,
-      }, 1),
-    ])).toEqual({ active: [], seenIds: [final.id] })
-
     const first = createEveryScheduleRecord(ScheduleId('schedule-one'), 'line\n"quoted"', 300, start, 'line')
     const second = createEveryScheduleRecord(ScheduleId('schedule-two'), 'check metrics', 600, start, 'check metrics')
     expect(renderRecurringReminderBatchFraming([
@@ -591,7 +401,7 @@ describe('absolute record and time-zone resolution', () => {
     }
   })
 
-  it('derives an at view and model framing without persisting input interpretation', () => {
+  it('stores an at record and model framing without persisting input interpretation', () => {
     const record = createAtScheduleRecord(
       ScheduleId('schedule-at'),
       'join meeting',
@@ -599,10 +409,8 @@ describe('absolute record and time-zone resolution', () => {
       now,
       'join meeting',
     )
-    expect(scheduleView(record, now)).toEqual({
-      ...record,
-      state: 'scheduled',
-      deliveryMode: 'host',
+    expect(record).toEqual({
+      id: 'schedule-at', kind: 'at', title: 'join meeting', prompt: 'join meeting', scheduledAt: '2026-08-06T01:00:00.000Z',
     })
     expect(renderReminderFraming(record)).toContain('occurrence_at: 2026-08-06T01:00:00.000Z')
   })
@@ -631,14 +439,5 @@ describe('durable decoding and folding edges', () => {
     expect(() => decodeScheduleRecord({ ...weeklyRecord, ...fields })).toThrow(ScheduleLogError)
   })
 
-  it('applies one decoded delete change to a retained active record', () => {
-    const record = createAfterScheduleRecord(ScheduleId('retained'), 'check logs', 30, 1_000, 'check logs')
-    const change = decodeScheduleChange({ version: 1, operation: 'delete', id: record.id })
-    expect(applyScheduleChanges({ active: [record], seenIds: [record.id] }, [change]))
-      .toEqual({ active: [], seenIds: [record.id] })
-  })
 
-  it('encodes a non-uniform cron field as comma-separated runs', () => {
-    expect(canonicalizeCronExpression('1,2,5 0 * * *')).toBe('1-2,5 0 * * *')
-  })
 })

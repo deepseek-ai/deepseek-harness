@@ -1,18 +1,19 @@
 // @vitest-environment jsdom
-/** The web-search page as the Plugins page renders it: its API switch, key control, two fields, and their resets. */
+/** The web search and fetch page as the Plugins page renders it: two provider menus and the selected providers' own settings. */
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { SettingsFieldState, SettingsFormShell } from '@deepseek-ai/dsh-client-ui-primitives'
 import { WebSearchCard, type WebSearchCardProps } from '../src/client/WebSearchCard.tsx'
-import type { WebSearchCardState } from '../src/client/web-search-card-controller.ts'
+import type { WebProviderOption, WebSearchCardState } from '../src/client/web-search-card-controller.ts'
 import { en, zh } from '../src/client/locales.ts'
 
 afterEach(cleanup)
 
-const t = (key: keyof typeof en) => en[key]
+const t = ((key: keyof typeof en, params?: Record<string, unknown>) =>
+  en[key].replace(/\{(\w+)\}/g, (match, name: string) => params !== undefined && name in params ? String(params[name]) : match)) as WebSearchCardProps['t']
 
 const settled: SettingsFormShell = { available: true, writable: true, dirty: false, invalid: false, saving: false, failed: false }
 
@@ -20,164 +21,346 @@ function field(text: string, rest: Partial<SettingsFieldState> = {}): SettingsFi
   return { text, overridden: false, invalid: false, ...rest }
 }
 
-const endpoints = {
-  messages: field(''),
-  api: field('https://api.deepseek.com/v1/tools'),
+/** Each official provider's registered description; the page shows the active language's entry. */
+const DESCRIPTIONS: Record<string, { en: string; zh: string }> = {
+  'deepseek-search-api': {
+    en: 'Search API description. Uses the DeepSeek account of the current conversation, or a DeepSeek API key, and may incur API charges.',
+    zh: 'Search API 说明。使用当前会话的 DeepSeek 账号或 DeepSeek API Key，可能产生计费',
+  },
+  'http': { en: 'Direct fetch description.', zh: '本机获取说明' },
+  'deepseek-fetch-api': {
+    en: 'Fetch API description. Uses the DeepSeek account of the current conversation, or a DeepSeek API key, may incur API charges.',
+    zh: 'Fetch API 说明。使用当前会话的 DeepSeek 账号或 DeepSeek API Key，可能产生计费',
+  },
+}
+
+function options(...ids: string[]): WebProviderOption[] {
+  return ids.map(id => ({ id, ...DESCRIPTIONS[id] === undefined ? {} : { description: DESCRIPTIONS[id] }, missing: false }))
+}
+
+/** Menu entries as the controller orders them. */
+const SEARCH_OPTIONS = options('deepseek-search-api', 'deepseek-official')
+const FETCH_OPTIONS = options('http', 'deepseek-fetch-api')
+
+/** The locale service's resolution, with Chinese active. */
+const resolveText = vi.fn((text: string | { en: string; [locale: string]: string }) => typeof text === 'string' ? text : text.zh ?? text.en)
+
+/** The shipped selection: the DeepSeek Search API with local fetch. */
+function shipped(): WebSearchCardState {
+  return {
+    ...settled,
+    selectionBlocked: false,
+    providersFailed: false,
+    search: { selected: 'deepseek-search-api', options: SEARCH_OPTIONS, kind: 'deepseek', auto: false },
+    fetch: { selected: 'http', options: FETCH_OPTIONS, kind: 'local', auto: false },
+    count: field('10'),
+    messagesBaseURL: field(''),
+    maxUses: field('5'),
+    legacyKey: undefined,
+  }
+}
+
+/** Both DeepSeek API providers selected. */
+function apis(): WebSearchCardState {
+  const base = shipped()
+  return { ...base, fetch: { ...base.fetch, selected: 'deepseek-fetch-api', kind: 'deepseek' } }
+}
+
+/** Legacy Messages search selected, with its key control. */
+function legacy(key: Partial<NonNullable<WebSearchCardState['legacyKey']>> = {}): WebSearchCardState {
+  const base = shipped()
+  return {
+    ...base,
+    search: { ...base.search, selected: 'deepseek-official', kind: 'legacy' },
+    legacyKey: { ...field(''), ref: 'DEEPSEEK_API_KEY', configured: false, writable: true, ...key },
+  }
+}
+
+/** Search and Fetch providers that take no settings on this page. */
+function plugins(): WebSearchCardState {
+  const base = shipped()
+  return {
+    ...base,
+    search: { selected: 'exa', kind: 'plugin', auto: false, options: [{ id: 'exa', title: 'Exa', missing: false }] },
+    fetch: { selected: '', kind: 'none', auto: false, options: [] },
+  }
 }
 
 function cardActions() {
-  return { edit: vi.fn(), resetField: vi.fn(), setSearchApi: vi.fn(), save: vi.fn(), discard: vi.fn() }
+  return {
+    edit: vi.fn(), resetField: vi.fn(), selectProvider: vi.fn(), retryProviders: vi.fn(), save: vi.fn(), discard: vi.fn(),
+  }
 }
 
+function renderPage(state: WebSearchCardState = shipped(), view: 'page' | 'summary' = 'page') {
+  const store = createSnapshotStore<WebSearchCardState>(state)
+  const actions = cardActions()
+  const props = { ...actions, view, t, resolveText, useWebSearchCard: bindSnapshotSelector(store) } as WebSearchCardProps
+  render(<WebSearchCard {...props} />)
+  return { actions, store }
+}
+
+/** The provider menus, named by their section title followed by the selected provider. */
+const searchMenu = () => screen.getByRole('button', { name: new RegExp(`^${en.searchSection} `) })
+const fetchMenu = () => screen.getByRole('button', { name: new RegExp(`^${en.fetchSection} `) })
+const region = (name: string) => within(screen.getByRole('region', { name }))
+/** The text of every paragraph in a section, in order. */
+const paragraphs = (name: string) => [...screen.getByRole('region', { name }).querySelectorAll('p')].map(node => node.textContent)
+
 describe('WebSearchCard', () => {
-  function renderWebSearch(state: Partial<WebSearchCardState> = {}) {
-    const store = createSnapshotStore<WebSearchCardState>({
-      ...settled,
-      apiSwitchAvailable: true,
-      apiSwitchBlocked: state.invalid === true || state.failed === true,
-      baseURL: state.useSearchApi === true ? endpoints.api : endpoints.messages, useSearchApi: false, maxUses: field('5'),
-      count: field('10'),
-      apiKey: field(''),
-      apiKeyConfigured: false,
-      apiKeyWritable: true,
-      ...state,
+  it('offers legacy search in both locales and renders its own settings', () => {
+    const { actions } = renderPage(legacy())
+    expect(searchMenu().textContent).toBe('DeepSeek (legacy)')
+    expect(zh.providerLegacy).toBe('DeepSeek（旧版）')
+    expect(screen.queryByLabelText(en.count)).toBeNull()
+    fireEvent.change(screen.getByLabelText(en.credential), { target: { value: 'new-key' } })
+    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://messages.test/v1' } })
+    fireEvent.change(screen.getByLabelText(en.maxUses), { target: { value: '8' } })
+    expect(actions.edit.mock.calls).toEqual([
+      ['legacyApiKey', 'new-key'], ['messagesBaseURL', 'https://messages.test/v1'], ['maxUses', '8'],
+    ])
+  })
+
+  it('resets the legacy endpoint and search limit under their own names', () => {
+    const { actions } = renderPage({
+      ...legacy(), messagesBaseURL: field('https://messages.test/v1', { overridden: true }), maxUses: field('8', { overridden: true }),
     })
-    const actions = cardActions()
-    const props = { ...actions, view: 'page', t, useWebSearchCard: bindSnapshotSelector(store) } as WebSearchCardProps
-    render(<WebSearchCard {...props} />)
-    return actions
-  }
+    for (const button of screen.getAllByRole('button', { name: en.reset })) fireEvent.click(button)
+    expect(actions.resetField.mock.calls).toEqual([['messagesBaseURL'], ['maxUses']])
+  })
 
   it('renders its one-liner alone in the summary view', () => {
-    const store = createSnapshotStore<WebSearchCardState>({
-      ...settled, baseURL: endpoints.messages, apiSwitchAvailable: true, apiSwitchBlocked: false, useSearchApi: false,
-      maxUses: field('5'), count: field('10'), apiKey: field(''), apiKeyConfigured: false, apiKeyWritable: true,
-    })
-    const props = { ...cardActions(), view: 'summary', t, useWebSearchCard: bindSnapshotSelector(store) } as WebSearchCardProps
-    render(<WebSearchCard {...props} />)
-
+    renderPage(shipped(), 'summary')
     expect(document.body.textContent).toBe(en.description)
-    expect(screen.queryByLabelText(en.apiKey)).toBeNull()
+    expect(screen.queryByLabelText(en.count)).toBeNull()
   })
 
-  it('reports whether a key is configured without ever showing one', () => {
-    renderWebSearch({ apiKeyConfigured: true })
-
-    expect(screen.getByText(en.apiKeySet)).toBeTruthy()
-    expect(screen.getByLabelText(en.apiKey)).toHaveProperty('type', 'password')
+  it('titles the page and its two sections by the provider each one picks', () => {
+    renderPage()
+    expect(en.title).toBe('Web search and fetch')
+    expect(zh.title).toBe('网页搜索与获取')
+    expect([en.searchSection, en.fetchSection]).toEqual(['Web search provider', 'Web fetch provider'])
+    expect([zh.searchSection, zh.fetchSection]).toEqual(['网页搜索提供方', '网页获取提供方'])
+    expect(screen.getByRole('heading', { name: en.searchSection })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: en.fetchSection })).toBeTruthy()
+    expect(screen.getByRole('region', { name: en.searchSection })).toBeTruthy()
+    expect(screen.getByRole('region', { name: en.fetchSection })).toBeTruthy()
   })
 
-  it('keeps the key control usable while the settings document is read-only', () => {
-    const actions = renderWebSearch({ writable: false })
-
-    const key = screen.getByLabelText(en.apiKey)
-    expect(key).toHaveProperty('disabled', false)
-    expect(screen.getByLabelText(en.baseUrl)).toHaveProperty('disabled', true)
-    expect(screen.getByRole('switch', { name: en.useSearchApi })).toHaveProperty('disabled', true)
-
-    fireEvent.change(key, { target: { value: 'ds-secret' } })
-
-    expect(actions.edit).toHaveBeenCalledWith('apiKey', 'ds-secret')
+  it('names each provider menu by its section title and the selected provider, with no label of its own', () => {
+    renderPage()
+    expect(searchMenu().getAttribute('aria-labelledby')).toBe('plugin-config-web-search-section plugin-config-web-search-provider-value')
+    expect(screen.getByRole('button', { name: `${en.searchSection} ${en.providerDeepSeek}` })).toBe(searchMenu())
+    expect(screen.getByRole('button', { name: `${en.fetchSection} ${en.providerLocal}` })).toBe(fetchMenu())
+    for (const title of [en.searchSection, en.fetchSection]) expect(screen.getAllByText(title)).toHaveLength(1)
+    expect(document.querySelectorAll('label[for="plugin-config-web-search-provider"], label[for="plugin-config-web-fetch-provider"]')).toHaveLength(0)
   })
 
-  it('disables the key control when the reference itself is not writable', () => {
-    // A key coming from the process environment: the settings document is
-    // writable, the credential is not.
-    renderWebSearch({ apiKeyConfigured: true, apiKeyWritable: false })
-
-    expect(screen.getByLabelText(en.apiKey)).toHaveProperty('disabled', true)
-    expect(screen.getByLabelText(en.baseUrl)).toHaveProperty('disabled', false)
+  it('shows the Search API result count in a panel, and gives local fetch no panel', () => {
+    renderPage()
+    expect(searchMenu().textContent).toBe(en.providerDeepSeek)
+    expect(fetchMenu().textContent).toBe(en.providerLocal)
+    expect(region(en.searchSection).getByText(DESCRIPTIONS['deepseek-search-api']!.zh)).toBeTruthy()
+    expect(region(en.fetchSection).getByText('本机获取说明')).toBeTruthy()
+    expect(region(en.searchSection).getByLabelText(en.count)).toHaveProperty('value', '10')
+    for (const label of [en.credential, en.baseUrl]) expect(screen.queryByLabelText(label)).toBeNull()
+    expect(region(en.fetchSection).queryByRole('textbox')).toBeNull()
   })
 
-  it('stages the endpoint, the search budget, and their resets', () => {
-    const actions = renderWebSearch({
-      baseURL: { ...endpoints.messages, ...field('https://search.test/v1', { overridden: true }) },
-      maxUses: field('3', { overridden: true }),
-    })
-
-    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://other.test' } })
-    fireEvent.change(screen.getByLabelText(en.maxUses), { target: { value: '4' } })
-    const resets = screen.getAllByRole('button', { name: en.reset })
-    expect(resets).toHaveLength(2)
-    for (const reset of resets) fireEvent.click(reset)
-
-    expect(actions.edit.mock.calls).toEqual([
-      ['baseURL', 'https://other.test'],
-      ['maxUses', '4'],
-    ])
-    expect(actions.resetField.mock.calls).toEqual([['baseURL'], ['maxUses']])
-  })
-  it.each([
-    [false, en.baseUrl, ''],
-    [true, en.searchApiBaseUrl, 'https://api.deepseek.com/v1/tools'],
-  ])('shows the selected API endpoint with the Search API %s and offers no reset before an override', (searchApi, label, value) => {
-    const actions = renderWebSearch({ useSearchApi: searchApi })
-    const input = screen.getByLabelText(label)
-    expect(input).toHaveProperty('value', value)
-    expect(screen.queryByText(en.overridden)).toBeNull()
-    expect(screen.queryByRole('button', { name: en.reset })).toBeNull()
-    fireEvent.change(input, { target: { value: 'https://custom.test' } })
-    expect(actions.edit).toHaveBeenCalledWith('baseURL', 'https://custom.test')
+  it('shows the DeepSeek Fetch API description under its provider menu', () => {
+    renderPage(apis())
+    expect(fetchMenu().textContent).toBe(en.providerDeepSeekFetch)
+    expect(region(en.fetchSection).getByText(DESCRIPTIONS['deepseek-fetch-api']!.zh)).toBeTruthy()
+    expect(screen.getAllByRole('button').filter(button => button.hasAttribute('aria-expanded')).map(button => button.id))
+      .toEqual(['plugin-config-web-search-provider', 'plugin-config-web-fetch-provider'])
+    // The Fetch section holds only its title and provider menu block.
+    expect(screen.getByRole('region', { name: en.fetchSection }).children).toHaveLength(2)
+    expect(region(en.fetchSection).queryByRole('textbox')).toBeNull()
   })
 
-  it('defaults the feature off and stages enabling it', () => {
-    const actions = renderWebSearch()
-    const toggle = screen.getByRole('switch', { name: en.useSearchApi })
-    expect(toggle.getAttribute('aria-checked')).toBe('false')
-    expect(screen.getByLabelText(en.maxUses)).toBeTruthy()
-    expect(screen.getByText(en.baseUrlHint)).toBeTruthy()
-    expect(screen.queryByText(en.searchApiBaseUrlHint)).toBeNull()
-    expect(zh.useSearchApi).toBe('启用新版 Web 搜索 API')
-    fireEvent.click(toggle)
-    expect(actions.setSearchApi).toHaveBeenCalledWith(true)
-    expect(actions.save).not.toHaveBeenCalled()
+  it('edits and resets the Search API result count', () => {
+    const { actions } = renderPage({ ...apis(), count: field('20', { overridden: true }) })
+    const search = region(en.searchSection)
+    expect(search.getByLabelText(en.count)).toHaveProperty('value', '20')
+    fireEvent.change(search.getByLabelText(en.count), { target: { value: '30' } })
+    fireEvent.click(search.getByRole('button', { name: en.reset }))
+    expect(actions.edit.mock.calls).toEqual([['count', '30']])
+    expect(actions.resetField.mock.calls).toEqual([['count']])
   })
 
-  it('links the switch hint to the localized search and fetch guide', () => {
-    renderWebSearch()
+  it('shows the DeepSeek search guide after the Search API description, and the Fetch API description', () => {
+    renderPage(apis())
+    expect(fetchMenu().textContent).toBe(en.providerDeepSeekFetch)
     const guide = screen.getByRole('link', { name: en.searchGuide })
     expect(guide).toHaveProperty('href', en.searchGuideUrl)
     expect(guide.getAttribute('target')).toBe('_blank')
     expect(guide.getAttribute('rel')).toBe('noopener noreferrer')
-    expect(guide.parentElement?.textContent).toBe(`${en.useSearchApiHint}${en.searchGuide}`)
-    expect(`${zh.useSearchApiHint}${zh.searchGuide}`).toBe('默认关闭，搜索通过 DeepSeek Messages 完成。新版 Web 搜索 API 功能与计费详见网页搜索与抓取指南')
-    expect(zh.searchGuideUrl).toBe('https://api-docs.deepseek.com/zh-cn/guides/search')
+    // The description comes first; the guide link is the page's own line after it.
+    expect(paragraphs(en.searchSection).slice(0, 2)).toEqual([DESCRIPTIONS['deepseek-search-api']!.zh, en.searchGuide])
   })
 
-  it('omits the switch while the Host serves no Search and Fetch API section', () => {
-    renderWebSearch({ apiSwitchAvailable: false })
-    expect(screen.queryByRole('switch', { name: en.useSearchApi })).toBeNull()
-    expect(screen.queryByRole('link', { name: en.searchGuide })).toBeNull()
-    expect(screen.getByLabelText(en.maxUses)).toBeTruthy()
+  it('shows no settings while neither provider takes them', () => {
+    renderPage(plugins())
+    expect(screen.queryByText(en.credential)).toBeNull()
+    expect(screen.queryByRole('textbox')).toBeNull()
   })
 
-  it.each([{ invalid: true }, { failed: true }, { saving: true }])('keeps invalid or unsaved failures visible while the switch is locked: %j', (state) => {
-    renderWebSearch(state)
-    expect(screen.getByRole('switch', { name: en.useSearchApi })).toHaveProperty('disabled', true)
-    expect(screen.getByLabelText(en.maxUses)).toBeTruthy()
+  it('selects a provider from the menu and leaves the current one alone', () => {
+    const { actions } = renderPage()
+    fireEvent.click(searchMenu())
+    expect(searchMenu().getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual([en.providerDeepSeek, en.providerLegacy])
+    fireEvent.click(screen.getByRole('menuitem', { name: en.providerDeepSeek }))
+    expect(screen.queryByRole('menuitem')).toBeNull()
+    fireEvent.click(fetchMenu())
+    expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual([en.providerLocal, en.providerDeepSeekFetch])
+    fireEvent.click(screen.getByRole('menuitem', { name: en.providerLocal }))
+    expect(actions.selectProvider).not.toHaveBeenCalled()
+    fireEvent.click(fetchMenu())
+    fireEvent.click(screen.getByRole('menuitem', { name: en.providerDeepSeekFetch }))
+    expect(actions.selectProvider).toHaveBeenLastCalledWith('fetchProvider', 'deepseek-fetch-api')
+    expect(actions.save).not.toHaveBeenCalled()
+  })
+
+  it('shows each selected provider’s registered description as plain text, with no action of its own', () => {
+    renderPage()
+    expect(region(en.fetchSection).getByText('本机获取说明').tagName).toBe('P')
+    expect(region(en.fetchSection).queryAllByRole('button').map(button => button.id)).toEqual(['plugin-config-web-fetch-provider'])
+    expect(resolveText).toHaveBeenCalledWith(DESCRIPTIONS.http)
+  })
+
+  it('shows a plugin provider’s description before the pointer to its own settings, and nothing for a provider without one', () => {
+    const base = plugins()
+    renderPage({
+      ...base,
+      search: { ...base.search, options: [{ id: 'exa', title: 'Exa', description: { en: 'Exa search.', zh: 'Exa 搜索' }, missing: false }] },
+      fetch: { ...base.fetch, selected: 'jina', kind: 'plugin', options: [{ id: 'jina', description: { en: 'Jina.', zh: '' }, missing: false }] },
+    })
+    expect(paragraphs(en.searchSection)).toEqual(['Exa 搜索', en.pluginProviderHint])
+    // An empty translation shows no paragraph.
+    expect(paragraphs(en.fetchSection)).toEqual([en.pluginProviderHint])
+  })
+
+  it('closes an open menu without selecting on Escape', () => {
+    const { actions } = renderPage()
+    fireEvent.click(searchMenu())
+    fireEvent.keyDown(screen.getAllByRole('menuitem')[0]!, { key: 'Escape' })
+    expect(screen.queryByRole('menuitem')).toBeNull()
+    expect(actions.selectProvider).not.toHaveBeenCalled()
+  })
+
+  it('names plugin providers by title or id, and marks a selection the Host does not register', () => {
+    const base = shipped()
+    renderPage({
+      ...base,
+      search: {
+        selected: 'perplexity', kind: 'none', auto: false,
+        options: [...SEARCH_OPTIONS, { id: 'exa', title: 'Exa', missing: false }, { id: 'perplexity', missing: true }],
+      },
+      fetch: {
+        selected: 'jina', kind: 'plugin', auto: false,
+        options: [...FETCH_OPTIONS, { id: 'jina', missing: false }],
+      },
+    })
+    expect(searchMenu().textContent).toBe('perplexity (not loaded)')
+    expect(zh.providerMissing).toBe('{id}（未加载）')
+    expect(fetchMenu().textContent).toBe('jina')
+    expect(screen.getAllByText(en.pluginProviderHint)).toHaveLength(1)
+    expect(screen.queryByText(en.credential)).toBeNull()
+    fireEvent.click(searchMenu())
+    expect(screen.getAllByRole('menuitem').map(item => item.textContent))
+      .toEqual([en.providerDeepSeek, en.providerLegacy, 'Exa', 'perplexity (not loaded)'])
+  })
+
+  it('explains a plugin Search provider and an unselected Fetch provider', () => {
+    renderPage(plugins())
+    expect(searchMenu().textContent).toBe('Exa')
+    expect(fetchMenu().textContent).toBe(en.providerAuto)
+    expect(screen.getByText(en.pluginProviderHint)).toBeTruthy()
+  })
+
+  it('offers automatic selection where the deployment composes no provider', () => {
+    const base = shipped()
+    const { actions } = renderPage({
+      ...base,
+      search: { ...base.search, auto: true },
+      fetch: { ...base.fetch, selected: '', kind: 'none', auto: true },
+    })
+    expect(fetchMenu().textContent).toBe(en.providerAuto)
+    fireEvent.click(searchMenu())
+    expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual([en.providerAuto, en.providerDeepSeek, en.providerLegacy])
+    fireEvent.click(screen.getByRole('menuitem', { name: en.providerAuto }))
+    expect(actions.selectProvider).toHaveBeenCalledWith('searchProvider', '')
+    fireEvent.click(fetchMenu())
+    fireEvent.click(screen.getByRole('menuitem', { name: en.providerAuto }))
+    expect(actions.selectProvider).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports a failed provider list read in each section and retries it', () => {
+    const { actions } = renderPage({ ...shipped(), providersFailed: true })
+    for (const name of [en.searchSection, en.fetchSection]) {
+      expect(region(name).getByRole('status').textContent).toBe(`${en.providersFailed}${en.retry}`)
+      fireEvent.click(region(name).getByRole('button', { name: en.retry }))
+    }
+    expect(zh.providersFailed).toBe('无法读取提供方列表，此菜单可能不完整')
+    expect(actions.retryProviders).toHaveBeenCalledTimes(2)
+    expect(searchMenu().textContent).toBe(en.providerDeepSeek)
+  })
+
+  it('shows no provider list notice while the list read succeeds', () => {
+    renderPage()
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(screen.queryByRole('button', { name: en.retry })).toBeNull()
+  })
+
+  it('keeps the legacy key control usable while the settings document is read-only', () => {
+    const { actions } = renderPage({ ...legacy(), writable: false })
+    const key = screen.getByLabelText(en.credential)
+    expect(key).toHaveProperty('disabled', false)
+    expect(screen.getByLabelText(en.baseUrl)).toHaveProperty('disabled', true)
+    expect(searchMenu()).toHaveProperty('disabled', true)
+    fireEvent.change(key, { target: { value: 'ds-secret' } })
+    expect(actions.edit).toHaveBeenCalledWith('legacyApiKey', 'ds-secret')
+  })
+
+  it('disables the legacy key control when the reference itself is not writable', () => {
+    renderPage(legacy({ configured: true, writable: false }))
+    expect(screen.getByLabelText(en.credential)).toHaveProperty('disabled', true)
+    expect(screen.getByText(en.apiKeySet)).toBeTruthy()
+    expect(searchMenu()).toHaveProperty('disabled', false)
+  })
+
+  it('disables the legacy key control while a save is in flight', () => {
+    const { store } = renderPage(legacy())
+    expect(screen.getByLabelText(en.credential)).toHaveProperty('disabled', false)
+    act(() => { store.set({ ...legacy(), saving: true }) })
+    expect(screen.getByLabelText(en.credential)).toHaveProperty('disabled', true)
+  })
+
+  it.each([{ invalid: true }, { failed: true }])('locks every menu while an error must stay visible: %j', (state) => {
+    renderPage({ ...apis(), ...state, selectionBlocked: true })
+    expect(searchMenu()).toHaveProperty('disabled', true)
+    expect(fetchMenu()).toHaveProperty('disabled', true)
+    fireEvent.click(searchMenu())
+    expect(screen.queryByRole('menuitem')).toBeNull()
+    expect(searchMenu().getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('closes an open menu and reports it collapsed when the menus lock', () => {
+    const { store } = renderPage()
+    fireEvent.click(searchMenu())
+    expect(screen.getAllByRole('menuitem')).toHaveLength(2)
+    act(() => { store.set({ ...shipped(), invalid: true, selectionBlocked: true }) })
+    expect(screen.queryByRole('menuitem')).toBeNull()
+    expect(searchMenu().getAttribute('aria-expanded')).toBe('false')
   })
 
   it('explains the supported result count and blocks saving an invalid draft', () => {
-    renderWebSearch({ useSearchApi: true, count: field('51', { invalid: true }), invalid: true, dirty: true })
+    renderPage({
+      ...apis(), count: field('51', { invalid: true }), invalid: true, dirty: true, selectionBlocked: true,
+    })
     expect(screen.getByText(en.invalidCount)).toBeTruthy()
     expect(screen.getByLabelText(en.count).getAttribute('aria-invalid')).toBe('true')
     expect(screen.getByRole('button', { name: en.save })).toHaveProperty('disabled', true)
-  })
-
-  it('edits the Search API endpoint and result count in Search API mode', () => {
-    const actions = renderWebSearch({ useSearchApi: true, count: field('20', { overridden: true }) })
-    expect(screen.queryByLabelText(en.maxUses)).toBeNull()
-    expect(screen.getByLabelText(en.count)).toHaveProperty('value', '20')
-    expect(screen.getByText(en.countHint)).toBeTruthy()
-    expect(screen.getByText(en.searchApiBaseUrlHint)).toBeTruthy()
-    expect(screen.queryByText(en.baseUrlHint)).toBeNull()
-    expect(screen.getByLabelText(en.searchApiBaseUrl)).toHaveProperty('value', 'https://api.deepseek.com/v1/tools')
-    fireEvent.change(screen.getByLabelText(en.searchApiBaseUrl), { target: { value: 'https://other.test' } })
-    fireEvent.change(screen.getByLabelText(en.count), { target: { value: '30' } })
-    fireEvent.click(screen.getByRole('button', { name: en.reset }))
-    fireEvent.click(screen.getByRole('switch', { name: en.useSearchApi }))
-    expect(actions.edit.mock.calls).toEqual([['baseURL', 'https://other.test'], ['count', '30']])
-    expect(actions.resetField.mock.calls).toEqual([['count']])
-    expect(actions.setSearchApi).toHaveBeenCalledWith(false)
   })
 })

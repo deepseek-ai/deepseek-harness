@@ -1,4 +1,4 @@
-/** Partial clones of real local repositories: reads, README lookup, limits, eviction, and Git failures. */
+/** Partial clones of real local repositories: reads, README lookup, limits, eviction, and Git failures, including a stalled Git fixture. */
 import { execFileSync } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
@@ -17,6 +17,7 @@ async function expectRejection(promise: Promise<unknown>, fields: object, messag
 
 
 let root: string
+const caches: RepositoryCache[] = []
 const lifetime = new AbortController()
 const signal = new AbortController().signal
 const text = (bytes: Uint8Array | undefined): string => new TextDecoder().decode(bytes)
@@ -28,16 +29,20 @@ beforeEach(() => {
   vi.stubEnv('HOME', join(root, 'home'))
   vi.stubEnv('XDG_CONFIG_HOME', join(root, 'home'))
 })
-afterEach(() => {
+afterEach(async () => {
+  await Promise.all(caches.splice(0).map(repositories => repositories.settled()))
   vi.unstubAllEnvs()
   vi.unstubAllGlobals()
   rmSync(root, { recursive: true, force: true })
 })
 
 function git(cwd: string, ...args: string[]): string {
-  // Fixture repositories ignore inherited Git overrides, such as a hook's `GIT_DIR`, and every user or system configuration.
+  // Fixture Git ignores inherited overrides and user configuration. Background maintenance stays disabled.
   const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')))
-  return execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', '-c', 'commit.gpgsign=false', ...args], {
+  return execFileSync('git', [
+    '-c', 'user.name=t', '-c', 'user.email=t@example.com', '-c', 'commit.gpgsign=false',
+    '-c', 'gc.auto=0', '-c', 'maintenance.auto=false', ...args,
+  ], {
     cwd, encoding: 'utf8',
     env: { ...env, HOME: join(root, 'home'), XDG_CONFIG_HOME: join(root, 'home'), GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' },
   }).trim()
@@ -73,10 +78,12 @@ function repository(name: string, files: Record<string, string | Uint8Array>): {
 }
 
 function cache(options: Partial<RepositoryCacheOptions> = {}): RepositoryCache {
-  return new RepositoryCache({
+  const repositories = new RepositoryCache({
     dir: join(root, 'cache'), maxRepositoryBytes: 10 * 1024 * 1024, maxCacheBytes: 100 * 1024 * 1024,
     timeoutMs: 30_000, ttlMs: 60_000, transports: ['file', 'ssh'], lifetime: lifetime.signal, sizePollMs: 1, ...options,
   })
+  caches.push(repositories)
+  return repositories
 }
 
 it('reads files at a pinned commit and the default branch, fetching contents only when read', async () => {
@@ -132,7 +139,7 @@ it('asks the smart HTTP endpoint without credentials whether a repository is pub
   expect(fetch).toHaveBeenCalledTimes(5)
 })
 
-it('reports an unreachable host as a network failure, a failed local command as a plain error, and a Git that cannot run', async () => {
+it('reports an unreachable host as a network failure, a failed local command as a plain error, and a missing Git', async () => {
   vi.stubEnv('GIT_SSH_COMMAND', 'ssh -F /dev/null -o BatchMode=yes -o ConnectTimeout=5')
   await expectRejection(cache().read('ssh://127.0.0.1:1/owner/repo.git', undefined, 'README.md', 100, signal), { reason: 'network' }, 'git fetch')
   const source = repository('t', { 'README.md': 'x' })
@@ -149,12 +156,28 @@ it('reports an unreachable host as a network failure, a failed local command as 
   await expect(broken).rejects.toThrow('git update-ref')
   await expect(broken).rejects.not.toBeInstanceOf(DetailFailure)
   expect(readdirSync(join(root, 'cache'))).toEqual([])
-  // Git that cannot answer `git --version` within the deadline cannot run.
   const other = repository('t2', { 'README.md': 'x' })
-  await expectRejection(cache({ timeoutMs: 1 }).read(other.url, other.commit, 'README.md', 100, signal), { reason: 'git-unavailable' }, 'timed out')
   vi.stubEnv('PATH', join(root, 'no-git'))
   const missing = cache().read(other.url, other.commit, 'README.md', 100, signal)
   await expectRejection(missing, { reason: 'git-unavailable' }, 'git --version')
+  expect(readdirSync(join(root, 'cache'))).toEqual([])
+})
+
+it('reports a stalled Git version check as unavailable before initializing a clone', async () => {
+  const bin = join(root, 'stalled-git')
+  const script = join(bin, 'stall.cjs')
+  mkdirSync(bin)
+  writeFileSync(script, 'setInterval(() => {}, 1000)\n')
+  vi.stubEnv('PLUGIN_MARKET_TEST_NODE', process.execPath)
+  vi.stubEnv('PLUGIN_MARKET_TEST_GIT_SCRIPT', script)
+  writeFileSync(join(bin, process.platform === 'win32' ? 'git.cmd' : 'git'), process.platform === 'win32'
+    ? '@"%PLUGIN_MARKET_TEST_NODE%" "%PLUGIN_MARKET_TEST_GIT_SCRIPT%"\r\n'
+    : '#!/bin/sh\nexec "$PLUGIN_MARKET_TEST_NODE" "$PLUGIN_MARKET_TEST_GIT_SCRIPT"\n', { mode: 0o755 })
+  vi.stubEnv('PATH', bin)
+  const repositories = cache({ timeoutMs: 100 })
+  const stalled = repositories.read('https://git.example/stalled.git', undefined, 'README.md', 100, signal)
+  await expectRejection(stalled, { reason: 'git-unavailable' }, 'timed out')
+  await expect(stalled).rejects.toThrow('git --version')
   expect(readdirSync(join(root, 'cache'))).toEqual([])
 })
 
@@ -168,6 +191,52 @@ it('reports a repository Git cannot fetch as denied', async () => {
   const source = repository('d', { 'README.md': 'x' })
   await expect(repositories.read(source.url, 'f'.repeat(40), 'README.md', 100, signal)).rejects.toMatchObject({ reason: 'denied' })
   await expect(repositories.read(source.url, source.commit, 'README.md', 100, signal)).resolves.toBeDefined()
+})
+
+it('fetches over SSH when Git refuses the https URL, and reports the https refusal when SSH also fails', async () => {
+  const source = repository('ssh', { 'README.md': 'over ssh', 'a.png': 'png' })
+  // The cache allows no https transport, so Git refuses every https URL; the SSH form, without the https port, reaches the source.
+  writeFileSync(join(root, 'home', '.gitconfig'), [
+    `[url "${source.url}"]`, ' insteadOf = ssh://git@git.example/team/plugin.git',
+    `[url "${pathToFileURL(join(root, 'missing')).href}"]`, ' insteadOf = ssh://git@git.example/team/other.git', '',
+  ].join('\n'))
+  const repositories = cache()
+  expect(text(await repositories.read('https://git.example:8443/team/plugin.git', undefined, 'README.md', 100, signal))).toBe('over ssh')
+  // The clone keeps the SSH remote for file contents it downloads later.
+  expect(text(await repositories.read('https://git.example:8443/team/plugin.git', source.commit, 'a.png', 100, signal))).toBe('png')
+  // A refused SSH fetch reports both refusals.
+  const refused = repositories.read('https://git.example/team/other.git', undefined, 'README.md', 100, signal)
+  await expectRejection(refused, { reason: 'denied' }, 'https://git.example/team/other.git: git fetch')
+  await expect(refused).rejects.toThrow('ssh://git@git.example/team/other.git: git fetch')
+  // A missing commit on a clone that already fetches over SSH is not retried.
+  const missing = await repositories.read('https://git.example:8443/team/plugin.git', 'f'.repeat(40), 'README.md', 100, signal).catch((error: unknown) => error)
+  expect(missing).toMatchObject({ reason: 'denied' })
+  expect((missing as Error).message.match(/git fetch/gu)).toEqual(['git fetch'])
+  expect((missing as Error).message).toContain('ssh://git@git.example/team/plugin.git: git fetch')
+  // The SSH fetch keeps the repository limit.
+  const small = cache({ dir: join(root, 'small'), maxRepositoryBytes: 1, sizePollMs: 3_600_000 })
+  await expect(small.read('https://git.example/team/plugin.git', undefined, 'README.md', 100, signal)).rejects.toMatchObject({ reason: 'too-large' })
+  // A URL with credentials or a query has no SSH form.
+  for (const url of ['https://user@git.example/team/plugin.git', 'https://git.example/team/plugin.git?x=1']) {
+    await expectRejection(repositories.read(url, undefined, 'README.md', 100, signal), { reason: 'denied' }, `${url}: git fetch`)
+  }
+})
+
+it('reports an SSH retry that cannot connect as a network failure, and does not retry an https URL that cannot connect', async () => {
+  vi.stubEnv('GIT_SSH_COMMAND', 'ssh -F /dev/null -o BatchMode=yes -o ConnectTimeout=5')
+  for (const name of ['http_proxy', 'https_proxy', 'HTTP_PROXY', 'HTTPS_PROXY', 'all_proxy', 'ALL_PROXY']) vi.stubEnv(name, '')
+  writeFileSync(join(root, 'home', '.gitconfig'), [
+    '[url "ssh://127.0.0.1:1/down.git"]', ' insteadOf = ssh://git@git.example/team/down.git',
+    '[url "http://127.0.0.1:1/offline.git"]', ' insteadOf = https://git.example/team/offline.git',
+    '[http]', ' proxy =', '',
+  ].join('\n'))
+  const refused = cache().read('https://git.example/team/down.git', undefined, 'README.md', 100, signal)
+  await expectRejection(refused, { reason: 'network' }, 'https://git.example/team/down.git: git fetch')
+  await expect(refused).rejects.toThrow('ssh://git@git.example/team/down.git: git fetch')
+  const offline = await cache({ transports: ['http', 'ssh'] }).read('https://git.example/team/offline.git', undefined, 'README.md', 100, signal)
+    .catch((error: unknown) => error)
+  expect(offline).toMatchObject({ reason: 'network' })
+  expect((offline as Error).message).not.toContain('ssh://')
 })
 
 it('stops a fetch once the repository grows past its limit, and deletes the repository', async () => {

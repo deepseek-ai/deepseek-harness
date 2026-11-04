@@ -86,10 +86,10 @@ const node = (number) => ({
   reviewDecision: null,
   reviewThreads: { nodes: [] },
   commits: { nodes: [{ commit: { statusCheckRollup: {
-    state: number === 7 ? 'PENDING' : 'SUCCESS',
-    contexts: { pageInfo: { hasNextPage: false }, nodes: [{
-      __typename: 'CheckRun', name: 'test', status: number === 7 ? 'IN_PROGRESS' : 'COMPLETED', conclusion: number === 7 ? null : 'SUCCESS',
-      detailsUrl: null, startedAt: null, completedAt: null, checkSuite: { workflowRun: { workflow: { name: 'ci' } } },
+    id: 'rollup-' + number, state: number === 7 ? 'PENDING' : 'SUCCESS',
+    contexts: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [{
+      __typename: 'CheckRun', id: 'check-1', databaseId: 1, name: 'test', status: number === 7 ? 'IN_PROGRESS' : 'COMPLETED', conclusion: number === 7 ? null : 'SUCCESS',
+      detailsUrl: null, startedAt: null, completedAt: null, checkSuite: { app: { id: 'actions' }, workflowRun: { event: 'pull_request', workflow: { id: 'ci', name: 'ci' } } },
     }] },
   } } }] },
 })
@@ -370,7 +370,9 @@ suite('forge-session through a real cordis.yml Loader composition', () => {
       : null)).toEqual([['Change 7', 'pending'], ['Change 8', 'success'], ['Change 9', 'success']]) })
 
     const entry = [...ctx.loader.entries()].find(candidate => candidate.options.name === 'cordis:@deepseek-ai/dsh-experimental-forge-session')
+    const row = ctx.sessionProjections.checkpoint(agent.session).forgeChangeRequests
     await entry?.fiber?.dispose()
-    expect(ctx.sessionProjections.checkpoint(agent.session)).not.toHaveProperty('forgeChangeRequests')
+    expect(ctx.sessionProjections.checkpoint(agent.session)).toHaveProperty('forgeChangeRequests', row)
+    expect(ctx.sessionProjections.checkpoint(ctx.sessions.create())).not.toHaveProperty('forgeChangeRequests')
   }, 60_000)
 })

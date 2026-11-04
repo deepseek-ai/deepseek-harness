@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 /**
  * View registration acceptance on the real framework stack: the plugin fiber
  * registers Trajectory into a real SlotRegistry view ring, tabs
@@ -236,6 +237,7 @@ function standaloneProps(
     useSessionRetainInfo: () => undefined,
     useWorkspaces: emptyWorkspaces(),
     ...allowAllAccess,
+    useContextMenu: contextMenuHook(),
     useConversation: bindSnapshotSelector(createSnapshotStore(conversationSnapshot(trajectory))),
     useInput: bindSnapshotSelector(input),
     inputActions,
@@ -375,6 +377,7 @@ function mount(fixture: Awaited<ReturnType<typeof bench>>) {
     useSessionRetainInfo: () => undefined,
     useWorkspaces,
     ...allowAllAccess,
+    useContextMenu: contextMenuHook(),
     useProjection,
     useInput,
     inputActions,
@@ -1339,6 +1342,116 @@ describe('timeline projection', () => {
 })
 
 describe('TrajectoryView state', () => {
+  const nestedCallNodes: LegacyConversationSlice['nodes'] = [
+    { kind: 'user', seq: 1, time: 1_000, content: [], source: null },
+    {
+      kind: 'assistant', seq: 2, time: 2_000, turn: 1, step: 1,
+      blocks: [
+        { kind: 'text', text: 'parent assistant' },
+        { kind: 'tool-call', callId: 'root', name: 'run_code', argsRaw: '{}' },
+        { kind: 'tool-call', callId: 'sibling', name: 'write', argsRaw: '{}' },
+      ],
+    },
+    {
+      kind: 'tool-result', seq: 3, time: 4_000, callId: 'root',
+      name: 'run_code', args: PartialArguments.fromText('{}'),
+      call: { name: 'run_code', argsRaw: '{}' }, callTime: 2_100,
+      content: [], isError: false,
+      subCalls: [{
+        phase: 'start', args: PartialArguments.fromText('{}'),
+        callId: 'first-child', parentCallId: 'root', name: 'bash', argsRaw: '{}',
+        turn: 1, step: 1, time: 2_200, subCalls: [],
+      }, {
+        phase: 'start', args: PartialArguments.fromText('{}'),
+        callId: 'child', parentCallId: 'root', name: 'read', argsRaw: '{}',
+        turn: 1, step: 1, time: 2_300,
+        subCalls: [{
+          phase: 'start', args: PartialArguments.fromText('{}'),
+          callId: 'grandchild', parentCallId: 'child', name: 'grep', argsRaw: '{}',
+          turn: 1, step: 1, time: 2_400, subCalls: [],
+        }],
+      }],
+    },
+    {
+      kind: 'tool-result', seq: 4, time: 5_000, callId: 'sibling',
+      name: 'write', args: PartialArguments.fromText('{}'),
+      call: { name: 'write', argsRaw: '{}' }, callTime: 2_100,
+      content: [], isError: false, subCalls: [],
+    },
+  ]
+
+  it('folds only descendants, searches them, and reveals a requested grandchild through every fold', () => {
+    const nodes = nestedCallNodes
+    const props = {
+      ...standaloneProps(nodes),
+      ...standaloneHistory(historySnapshot(nodes)),
+      ...standaloneDuration(),
+    }
+    const view = render(<TrajectoryView {...props} />)
+    const collapse = screen.getByRole('button', { name: '收起所有子调用' })
+    expect(screen.getByRole('button', { name: '收起所有调用' }).nextElementSibling).toBe(collapse)
+    expect(screen.getByRole('row', { name: /子工具.*bash/ })).toBeTruthy()
+    fireEvent.click(collapse)
+    expect(screen.queryByRole('row', { name: /子工具.*bash/ })).toBeNull()
+    expect(screen.getByRole('row', { name: /工具.*run_code/ })).toBeTruthy()
+    expect(screen.getByRole('row', { name: /工具.*write/ })).toBeTruthy()
+    expect(screen.getByRole('row', { name: /收起的子调用/ }).textContent).toBe('…3 个工具调用 · bash, read, grep')
+    fireEvent.click(screen.getByRole('button', { name: '展开所有子调用' }))
+    expect(screen.getByRole('row', { name: /子工具.*bash/ })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '收起所有子调用' }))
+    fireEvent.keyDown(screen.getByRole('row', { name: /收起的子调用/ }), { key: 'Enter' })
+    expect(screen.getByRole('row', { name: /子工具.*bash/ })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '收起所有子调用' }))
+    fireEvent.change(screen.getByRole('searchbox', { name: '搜索轨迹' }), { target: { value: 'bash' } })
+    expect(screen.getByRole('row', { name: /子工具.*bash/ })).toBeTruthy()
+    fireEvent.change(screen.getByRole('searchbox', { name: '搜索轨迹' }), { target: { value: '' } })
+    expect(screen.queryByRole('row', { name: /子工具.*bash/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '收起所有调用' }))
+    fireEvent.click(screen.getByRole('button', { name: '收起所有轮次' }))
+    view.rerender(<TrajectoryView {...props} viewRequest={{ view: 'trajectory', focus: 'grandchild' }} />)
+    expect(screen.getByRole('row', { name: /子工具.*grep/ }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.queryByRole('row', { name: /收起的/ })).toBeNull()
+  })
+
+  it.each(['click', 'Enter', ' '])('expands a subcall summary with %j', (activation) => {
+    render(<TrajectoryView
+      {...standaloneProps(nestedCallNodes)}
+      {...standaloneHistory(historySnapshot(nestedCallNodes))}
+      {...standaloneDuration()}
+    />)
+    fireEvent.click(screen.getByRole('button', { name: '收起所有子调用' }))
+    const summary = screen.getByRole('row', { name: /收起的子调用.*3 个工具调用/ })
+    expect(summary.tabIndex).toBe(0)
+    if (activation === 'click') fireEvent.click(summary)
+    else fireEvent.keyDown(summary, { key: activation })
+    expect(screen.getAllByRole('row', { name: /子工具/ })).toHaveLength(3)
+    expect(screen.queryByRole('row', { name: /收起的子调用/ })).toBeNull()
+  })
+
+  it.each([
+    { outer: ['轮次'] },
+    { outer: ['调用'] },
+    { outer: ['调用', '轮次'] },
+  ])('preserves subcall folding through outer folds $outer', ({ outer }) => {
+    render(<TrajectoryView
+      {...standaloneProps(nestedCallNodes)}
+      {...standaloneHistory(historySnapshot(nestedCallNodes))}
+      {...standaloneDuration()}
+    />)
+    fireEvent.click(screen.getByRole('button', { name: '收起所有子调用' }))
+    for (const kind of outer) {
+      fireEvent.click(screen.getByRole('button', { name: `收起所有${kind}` }))
+    }
+    expect(screen.getAllByRole('row', { name: /收起的/ })).toHaveLength(1)
+    expect(screen.queryByRole('row', { name: /收起的子调用/ })).toBeNull()
+    for (const kind of outer.toReversed()) {
+      fireEvent.click(screen.getByRole('button', { name: `展开所有${kind}` }))
+    }
+    expect(screen.getByRole('row', { name: /收起的子调用/ })).toBeTruthy()
+    expect(screen.getByRole('row', { name: /工具.*write/ })).toBeTruthy()
+    expect(screen.queryByRole('row', { name: /子工具/ })).toBeNull()
+  })
+
   it.each([
     { interrupted: true, status: '失败' },
     { interrupted: false, status: '已完成' },

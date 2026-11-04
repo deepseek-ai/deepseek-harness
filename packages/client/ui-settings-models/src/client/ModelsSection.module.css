@@ -511,27 +511,8 @@
   gap: 12px;
 }
 
-@container (max-width: 400px) {
-  .modelRow > input {
-    grid-column: 2 / 4;
-  }
-
-  .modelRow > button:nth-last-child(2) {
-    grid-column: 4;
-    grid-row: 1;
-  }
-
-  .modelRow > button:last-child {
-    grid-column: 5;
-    grid-row: 1;
-  }
-
-  .modelAdvanced > .modelField {
-    grid-column: 1 / -1;
-  }
-}
-
 .modelEntry {
+  container: model-row / inline-size;
   display: grid;
   grid-template-columns: 28px minmax(0, 1.4fr) minmax(0, 1fr) 28px 28px;
   column-gap: 6px;
@@ -549,12 +530,51 @@
   gap: 6px;
 }
 
+.modelName {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.modelNameLabel {
+  display: none;
+}
+
+@container model-row (max-width: 440px) {
+  .modelRow > .modelAdvanced {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .modelRow {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+  }
+
+  .modelRow .modelName {
+    display: none;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    padding: 2px 4px 0;
+  }
+
+  .modelRow[data-expanded] .modelName {
+    display: flex;
+  }
+
+  .modelNameLabel {
+    display: block;
+  }
+}
+
 .modelDragHandle:not(:disabled) {
   cursor: grab;
 }
 
 .modelEntry[data-dragging] {
   opacity: 0.5;
+}
+
+.modelEntry[data-drop-target] {
+  z-index: 1;
 }
 
 .modelDragPreview {

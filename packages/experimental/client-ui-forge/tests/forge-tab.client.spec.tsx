@@ -30,7 +30,7 @@ const unused = (): never => { throw new Error('the forge tab does not call this 
 function tabInfo(visible: boolean, openResource: SidebarRightTabActions['openResource']): SidebarRightTabInfo {
   return {
     sidebar: { expanded: true, fullscreen: false },
-    panel: { id: 'pane-1' as PaneId },
+    panel: { id: 'pane-1' as PaneId, isFloating: false },
     tab: {
       id: 'tab-forge' as TabId,
       kind: 'forge-panel',
@@ -54,6 +54,7 @@ function tab(state: ForgePanelState | null, options: { disconnected?: boolean; v
   const remove = vi.fn<(entry: ForgePanelChangeRequest) => void>()
   const markReady = vi.fn<(entry: ForgePanelChangeRequest) => Promise<void>>(async () => {})
   const merge = vi.fn<(entry: ForgePanelChangeRequest, request: MergeRequest) => Promise<void>>(async () => {})
+  const readChecks = vi.fn<ForgeTabProps['readChecks']>(async () => snapshot(1))
   const restore = vi.fn<() => void>()
   const openLink = vi.fn<(url: string) => void>()
   const copyText = vi.fn<(text: string) => void>()
@@ -67,12 +68,12 @@ function tab(state: ForgePanelState | null, options: { disconnected?: boolean; v
     usePanel: bindSnapshotSelector(panel),
     useHost: bindSnapshotSelector(host),
     useLocale: bindSnapshotSelector(createSnapshotStore<string>('en')),
-    reconnect, refresh, remove, markReady, merge, restore, openLink, copyText, copyPath, reportVisible, createChangeRequest,
+    reconnect, refresh, remove, markReady, merge, readChecks, restore, openLink, copyText, copyPath, reportVisible, createChangeRequest,
     t,
   }
   const view = render(<ForgeTab {...props} />)
   return {
-    view, panel, visibility, reconnect, refresh, remove, markReady, merge, restore, openLink, copyText, copyPath, reportVisible,
+    view, panel, visibility, reconnect, refresh, remove, markReady, merge, readChecks, restore, openLink, copyText, copyPath, reportVisible,
     createChangeRequest, openResource,
   }
 }
@@ -257,9 +258,26 @@ describe('ForgeTab local changes', () => {
   })
 
   it.each([
+    { label: 'a project with an open PR', linked: false, draft: false },
+    { label: 'a project with a draft PR', linked: false, draft: true },
+    { label: 'a linked worktree with an open PR', linked: true, draft: false },
+    { label: 'a linked worktree with a draft PR', linked: true, draft: true },
+  ])('keeps local and PR changes independent in $label', ({ linked, draft }) => {
+    const request = entry(7, snapshot(7, { headBranch: 'main', draft }))
+    const b = tab(ready({ local, changeRequests: [request] }, { linked }))
+    expect(b.view.container.querySelector('[data-forge-local]')).not.toBeNull()
+    expect(b.view.container.querySelector('[data-forge-change]')).not.toBeNull()
+    expect(b.view.queryByRole('button', { name: en['changes.local.create'] })).toBeNull()
+
+    fireEvent.click(b.view.getByRole('button', { name: 'View the changes of this Session: 1 files, 3 lines added, 1 lines deleted' }))
+    expect(b.openResource).toHaveBeenLastCalledWith(LOCAL_ADDRESS, undefined)
+    fireEvent.click(b.view.getByRole('button', { name: 'View the changes of #7: 12 lines added, 3 lines deleted' }))
+    expect(b.openResource).toHaveBeenLastCalledWith(changesAddress({ sessionId: SESSION, source: { kind: 'change', url: request.url } }), undefined)
+  })
+
+  it.each([
     ['before the branch scope is read', ready()],
     ['while the branch scope changes nothing', ready({ local: { base: 'origin/main', files: [] } })],
-    ['once an open change request carries the checked-out branch', ready({ local, changeRequests: [entry(7, snapshot(7, { headBranch: 'main' }))] })],
   ])('hides the card %s', (_label, state) => {
     const b = tab(state)
     expect(b.view.container.querySelector('[data-forge-local]')).toBeNull()

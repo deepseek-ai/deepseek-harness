@@ -113,10 +113,10 @@ if (args[0] === 'auth' && args[1] === 'status') {
 }
 if (args[0] === 'api' && args[1] === 'graphql') {
   const query = args.find(arg => arg.startsWith('query=')).slice('query='.length)
-  const check = (name, conclusion, completedAt) => ({
-    __typename: 'CheckRun', name, status: 'COMPLETED', conclusion,
+  const check = (name, conclusion, completedAt, databaseId = 101) => ({
+    __typename: 'CheckRun', id: 'check-' + databaseId, name, status: 'COMPLETED', conclusion, databaseId,
     detailsUrl: 'https://github.com/octo/demo/actions/runs/1', startedAt: '2026-10-09T00:00:00Z', completedAt,
-    checkSuite: { workflowRun: { workflow: { name: 'CI' } } },
+    checkSuite: { app: { id: 'github-actions' }, workflowRun: { event: 'pull_request', workflow: { id: 'ci', name: 'CI' } } },
   })
   const pulls = {
     7: {
@@ -124,9 +124,9 @@ if (args[0] === 'api' && args[1] === 'graphql') {
       updatedAt: '2026-10-09T00:00:00Z', closedAt: null, author: { login: 'octo' }, headRefName: 'feat', headRefOid: 'a'.repeat(40),
       baseRefName: 'main', additions: 128, deletions: 14, mergeable: 'MERGEABLE', mergeStateStatus: 'BLOCKED', reviewDecision: 'REVIEW_REQUIRED',
       reviewThreads: { nodes: [{ isResolved: false }] },
-      commits: { nodes: [{ commit: { statusCheckRollup: { state: 'FAILURE', contexts: {
-        pageInfo: { hasNextPage: false },
-        nodes: [check('lint', 'SUCCESS', '2026-10-09T00:00:42Z'), check('test', 'FAILURE', '2026-10-09T00:02:07Z')],
+      commits: { nodes: [{ commit: { statusCheckRollup: { id: 'rollup-7', state: 'FAILURE', contexts: {
+        pageInfo: { hasNextPage: true, endCursor: 'checks-100' },
+        nodes: Array.from({ length: 100 }, (_, i) => check('lint', 'FAILURE', '2026-10-08T00:00:42Z', i + 1)),
       } } } }] },
     },
     9: {
@@ -134,10 +134,17 @@ if (args[0] === 'api' && args[1] === 'graphql') {
       isDraft: !state.ready, updatedAt: '2026-10-09T00:00:00Z', closedAt: state.mergedAt, author: { login: 'octo' },
       headRefName: 'feat/merge', headRefOid: state.head ?? 'b'.repeat(40), baseRefName: 'main', additions: 30, deletions: 2, mergeable: 'MERGEABLE',
       mergeStateStatus: state.ready ? 'CLEAN' : 'BLOCKED', reviewDecision: 'APPROVED', reviewThreads: { nodes: [] },
-      commits: { nodes: [{ commit: { statusCheckRollup: { state: 'SUCCESS', contexts: {
-        pageInfo: { hasNextPage: false }, nodes: [check('lint', 'SUCCESS', '2026-10-09T00:00:42Z')],
+      commits: { nodes: [{ commit: { statusCheckRollup: { id: 'rollup-9', state: 'SUCCESS', contexts: {
+        pageInfo: { hasNextPage: false, endCursor: null }, nodes: [check('lint', 'SUCCESS', '2026-10-09T00:00:42Z')],
       } } } }] },
     },
+  }
+  if (query.includes('node(id: $id)')) {
+    process.stdout.write(JSON.stringify({ data: { node: { contexts: {
+      pageInfo: { hasNextPage: false, endCursor: null },
+      nodes: [check('lint', 'SUCCESS', '2026-10-09T00:00:42Z'), check('test', 'FAILURE', '2026-10-09T00:02:07Z')],
+    } } } }))
+    process.exit(0)
   }
   const settings = {
     squashMergeAllowed: true, mergeCommitAllowed: true, rebaseMergeAllowed: true, viewerPermission: 'WRITE', viewerDefaultMergeMethod: 'SQUASH',
@@ -217,11 +224,11 @@ interface PanelLaunch {
  * Launch the bundle against a GitHub checkout of `main` and `release` and open the New Session screen of that workspace.
  * @param failureShot - name of the screenshot saved when the test fails.
  * @param scenario - normal conversation, a restoration follow-up, or a numbered PR lookup.
- * @param options - desktop transport, initial checkout branch, and touch input for the browser.
+ * @param options - desktop transport, checkout branch, browser input, sandbox runner availability, and diff output limit.
  * @returns the scaffold, page, and checkout.
  */
 async function launchPanel(failureShot: string, scenario: 'normal' | 'follow-up' | 'reference' = 'normal',
-  options: { desktop?: 'darwin' | 'win32'; branch?: string; hasTouch?: boolean } = {}): Promise<PanelLaunch> {
+  options: { desktop?: 'darwin' | 'win32'; branch?: string; hasTouch?: boolean; missingSandbox?: boolean; maxDiffBytes?: number } = {}): Promise<PanelLaunch> {
   const { desktop } = options
   const resources: { scaffold?: WebScaffold; browser?: Browser } = {}
   const root = await mkdtemp(join(tmpdir(), 'dsh-forge-panel-'))
@@ -240,7 +247,9 @@ async function launchPanel(failureShot: string, scenario: 'normal' | 'follow-up'
   const panelText = `${Array.from({ length: 20 }, (_, index) => panelLine(index + 1, 'new')).join('\n')}\n`
   await writeFile(join(root, 'contents.json'), JSON.stringify({ [`src/panel.ts@${HEAD7}`]: panelText }))
   const overlay = join(root, 'forge.patch.yml')
-  await writeFile(overlay, `- id: forge-github\n  config: ${JSON.stringify({ ghCommand: gh })}\n`)
+  await writeFile(overlay, `- id: forge-github\n  config: ${JSON.stringify({ ghCommand: gh })}\n`
+    + (options.maxDiffBytes === undefined ? '' : `- id: forge-panel\n  config: ${JSON.stringify({ maxDiffBytes: options.maxDiffBytes })}\n`)
+    + (options.missingSandbox ? `- id: sandbox\n  config: ${JSON.stringify({ runnerCommand: [join(root, 'missing-sandbox')], runnerFailureSignatures: ['sandbox startup failed'] })}\n` : ''))
   const override = join(root, 'replay.override.json')
   // The borrowed scenario records one model call, so index 1 appends the reply to the follow-up.
   if (scenario === 'follow-up') await writeFile(override, JSON.stringify({ patches: [{ at: 1, entry: { kind: 'chunks', chunks: textReply(FOLLOW_UP_REPLY) } }] }))
@@ -371,11 +380,75 @@ function worktreeRecords(events: readonly SessionEvent[]): unknown[] {
   })
 }
 
+it.skipIf(MODE === 'record')('reads local Git with full access when the sandbox runner cannot start', async () => {
+  const { scaffold, page, project, tripwire } = await launchPanel('web-e2e-forge-permissions', 'normal', { missingSandbox: true })
+  await git(project, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
+  await git(project, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
+  await writeFile(join(project, 'README.md'), 'demo\nchanged\n')
+  const { settled } = await sendPrompt(page, scaffold)
+  const sessionId = await settled
+  await page.getByText('LIGHTHOUSE', { exact: true }).waitFor()
+  await page.locator('[data-forge-header]').click()
+  const panel = page.locator('[data-forge-panel]')
+  await panel.getByText('无法读取 Git 信息', { exact: true }).waitFor({ timeout: 20_000 })
+
+  const permission = page.locator('button[aria-label^="访问模式"]').first()
+  await permission.click()
+  await page.getByRole('menuitem', { name: '完全权限', exact: true }).click()
+  const confirmation = page.getByRole('dialog', { name: '确认启用完全权限？' })
+  await confirmation.getByRole('checkbox', { name: '我已了解风险，并愿意继续' }).check()
+  await confirmation.getByRole('button', { name: '启用完全权限' }).click()
+  const local = page.locator('[data-forge-local]')
+  await local.getByRole('button', { name: '查看本会话的变更：1 个文件，新增 1 行，删除 0 行', exact: true }).waitFor({ timeout: 20_000 })
+  await compareOrRefreshGolden(join(EXPECTED, 'full-access.expected.md'), await captureStableAria(page, '[data-forge-local]', scaffold.workspaceCwd), MODE)
+  await local.getByRole('button', { name: '查看本会话的变更：1 个文件，新增 1 行，删除 0 行', exact: true }).click()
+  await page.locator('[data-forge-diff-file="README.md"]').getByText('changed', { exact: true }).waitFor()
+
+  await permission.click()
+  await page.getByRole('menuitem', { name: '工作区内修改', exact: true }).click()
+  if (!await panel.isVisible()) await page.locator('[data-forge-header]').click()
+  await panel.getByText('无法读取 Git 信息', { exact: true }).waitFor({ timeout: 20_000 })
+  await expect.poll(async () => (await readPersistedEvents(scaffold, sessionId))
+    .filter(event => event.type === 'sandbox/mode').map(event => event.data.mode).slice(-2))
+    .toEqual(['danger-full-access', 'workspace-write'])
+  expect(tripwire.pageErrors).toEqual([])
+  expect(tripwire.warnings).toEqual([])
+})
+
+it.skipIf(MODE === 'record')('reports incomplete filter configuration and retries after it is corrected', async () => {
+  const { scaffold, page, project, tripwire } = await launchPanel('web-e2e-forge-filter-config', 'normal', { maxDiffBytes: 512 })
+  await git(project, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
+  await git(project, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
+  await writeFile(join(project, 'README.md'), 'demo\nchanged\n')
+  const { settled } = await sendPrompt(page, scaffold)
+  await settled
+  await page.getByText('LIGHTHOUSE', { exact: true }).waitFor()
+  await page.locator('[data-forge-header]').click()
+  const openChanges = page.locator('[data-forge-local]').getByRole('button', { name: '查看本会话的变更：1 个文件，新增 1 行，删除 0 行', exact: true })
+  await openChanges.waitFor({ timeout: 20_000 })
+  const key = `filter.${'long'.repeat(200)}.clean`
+  await git(project, 'config', key, 'cat')
+  await openChanges.click()
+  const changes = page.locator('[data-forge-changes="local"]')
+  await changes.getByText('无法完整读取 Git 过滤器配置，尚未执行比较。请检查 Git 配置和读取上限后重试', { exact: true }).waitFor()
+  await compareOrRefreshGolden(join(EXPECTED, 'filter-config-failed.expected.md'),
+    await captureStableAria(page, '[data-forge-changes="local"]', scaffold.workspaceCwd), MODE)
+
+  await git(project, 'config', '--unset', key)
+  await changes.getByRole('button', { name: '重试', exact: true }).click()
+  await changes.locator('[data-forge-diff-file="README.md"]').getByText('changed', { exact: true }).waitFor()
+  expect(await changes.getByRole('status').count()).toBe(0)
+  expect(tripwire.pageErrors).toEqual([])
+  expect(tripwire.warnings).toEqual([])
+})
+
 it.skipIf(MODE === 'record')('automatically shows a numbered PR when gh JSON omits its URL', async () => {
   const { scaffold, page, project, tripwire } = await launchPanel('web-e2e-forge-numbered-reference', 'reference')
   const { settled } = await sendPrompt(page, scaffold)
   const sessionId = await settled
   const events = await readPersistedEvents(scaffold, sessionId)
+  const request = events.find(event => event.type === 'request/header')
+  expect(request?.data.header.tools?.filter(tool => tool.name === 'create_worktree')).toHaveLength(1)
   const toolOutput = events.flatMap(event => event.type === 'tool/result'
     ? event.data.message.content.flatMap(block => block.type === 'text' ? [block.text] : []) : []).join('\n')
   expect(toolOutput).toContain('Add the pull request panel')
@@ -442,6 +515,11 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
   const row = page.locator(`[data-row-key="session:${sessionId}"]`)
   await row.getByRole('img', { name: '在自己的工作树中', exact: true }).waitFor({ timeout: 20_000 })
   await row.getByRole('img', { name: '变更请求状态：需要处理 · 检查失败', exact: true }).waitFor({ timeout: 20_000 })
+  // A fresh page cannot retain the previous browser source's status values.
+  await page.goto('about:blank')
+  await expect.poll(() => scaffold.ctx.storageDomain.get('forge_panel_change_requests')).toBeUndefined()
+  await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+  await row.getByRole('img', { name: '变更请求状态：需要处理 · 检查失败', exact: true }).waitFor({ timeout: 20_000 })
   await row.hover()
   const rowHover = page.locator('[data-forge-session-hover]')
   await rowHover.getByText('#7 Add the pull request panel', { exact: true }).waitFor({ timeout: 20_000 })
@@ -467,10 +545,14 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
   // The random branch suffix can read as a duration, so the branch is replaced before the capture normalizes durations.
   await compareOrRefreshGolden(join(EXPECTED, 'panel.expected.md'),
     await captureStableAria(page, '[data-forge-panel]', scaffold.workspaceCwd, { replacements: [[branch, 'dsh-{{worktree}}']] }), MODE)
+  const beforeChecks = (await readFile(join(root, 'calls.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string[])
+  expect(beforeChecks.some(args => args.includes('id=rollup-7'))).toBe(false)
   const checksRow = change.getByRole('button', { name: /^检查/ })
   await checksRow.click()
   const checks = page.getByRole('menu')
   await expect.poll(() => checks.getByRole('menuitem').allTextContents()).toEqual([expect.stringMatching(/^test/), expect.stringMatching(/^lint/)])
+  const afterChecks = (await readFile(join(root, 'calls.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string[])
+  expect(afterChecks.filter(args => args.includes('id=rollup-7'))).toHaveLength(1)
   await page.keyboard.press('Escape')
   await checks.waitFor({ state: 'detached' })
   expect(await checksRow.getAttribute('aria-expanded')).toBe('false')
@@ -605,7 +687,7 @@ it.skipIf(MODE === 'record')('marks a draft change request ready for review and 
 })
 
 it.skipIf(MODE === 'record')('shows the local changes of the Session by scope and the changes of its change requests, expanding unchanged lines', async () => {
-  const { scaffold, page, root, project, tripwire } = await launchPanel('web-e2e-forge-panel-changes', 'follow-up')
+  const { scaffold, page, root, project, tripwire } = await launchPanel('web-e2e-forge-panel-changes', 'follow-up', { branch: 'feat' })
   // origin/main stops at the twelve-line README; the branch adds a commit, a staged file, an edit, and an untracked file.
   await writeFile(join(project, 'README.md'), Array.from({ length: 12 }, (_, index) => `line ${index + 1}\n`).join(''))
   await git(project, 'commit', '--quiet', '-am', 'readme')
@@ -626,7 +708,12 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   const session = scaffold.ctx.sessions.get(sessionId)
   if (session === undefined) throw new Error('The Session must stay loaded')
   const header = page.locator('[data-forge-header]')
-  await header.click()
+  await page.getByRole('button', { name: '打开右侧边栏', exact: true }).click()
+  const guide = page.locator('[data-sidebar-right-guide]')
+  await guide.getByRole('button', { name: /^代码审查和变更/ }).waitFor()
+  await compareOrRefreshGolden(join(EXPECTED, 'review-guide.expected.md'),
+    await captureStableAria(page, '[data-sidebar-right-guide-entry="forge-panel"]', scaffold.workspaceCwd), MODE)
+  await guide.getByRole('button', { name: /^代码审查和变更/ }).click()
   // The New Session screen inspected the checkout before these changes, which came from outside the Session.
   await page.locator('[data-forge-panel]').getByRole('button', { name: '刷新状态', exact: true }).click()
   const card = page.locator('[data-forge-local]')
@@ -637,7 +724,7 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   await local.getByText('与 origin/main 比较，包含未提交的修改', { exact: true }).waitFor({ timeout: 20_000 })
   const files = local.locator('[data-forge-diff-file]')
   await expect.poll(() => files.evaluateAll(sections => sections.map(section => section.getAttribute('data-forge-diff-file'))), { timeout: 20_000 })
-    .toEqual(['README.md', 'src/app.ts', 'src/extra.ts', 'notes.md'])
+    .toEqual(['src/app.ts', 'src/extra.ts', 'README.md', 'notes.md'])
   await local.locator('[data-forge-diff-file="notes.md"]').getByText('新文件 · 未提交', { exact: true }).waitFor()
   const readme = local.locator('[data-forge-diff-file="README.md"]')
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
@@ -693,6 +780,14 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   await header.click()
   const change = page.locator(`[data-forge-change="${PULL}"]`)
   await change.getByRole('link', { name: 'Add the pull request panel', exact: true }).waitFor({ timeout: 20_000 })
+  await card.getByRole('button', { name: '查看本会话的变更：4 个文件，新增 4 行，删除 1 行', exact: true }).waitFor()
+  expect(await card.getByRole('button', { name: '创建变更请求', exact: true }).count()).toBe(0)
+  await compareOrRefreshGolden(join(EXPECTED, 'local-and-pr.expected.md'),
+    await captureStableAria(page, '[data-forge-panel]', scaffold.workspaceCwd), MODE)
+  await card.getByRole('button', { name: '查看本会话的变更：4 个文件，新增 4 行，删除 1 行', exact: true }).click()
+  await local.getByText('暂存区与 HEAD 比较', { exact: true }).waitFor()
+  await expect.poll(() => header.getAttribute('aria-pressed')).toBe('false')
+  await header.click()
   await change.getByRole('button', { name: '查看 #7 的变更：新增 128 行，删除 14 行', exact: true }).click()
   const view = page.locator('[data-forge-changes="change"]')
   const panelFile = view.locator('[data-forge-diff-file="src/panel.ts"]')
@@ -707,6 +802,13 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   await page.getByRole('button', { name: '全屏', exact: true }).click()
   await view.getByRole('navigation').getByRole('button', { name: 'src/panel.ts', exact: true }).waitFor()
   const fileTree = view.getByRole('navigation')
+  const treeIsLeft = async () => {
+    const tree = await fileTree.boundingBox()
+    const diff = await view.locator('[data-forge-changes-scroll]').boundingBox()
+    if (tree === null || diff === null) throw new Error('Tree and diff must be visible')
+    return tree.x < diff.x
+  }
+  expect(await treeIsLeft()).toBe(true)
   const directoryName = await fileTree.getByText('src', { exact: true }).boundingBox()
   const fileName = await fileTree.getByText('panel.ts', { exact: true }).boundingBox()
   if (directoryName === null || fileName === null) throw new Error('Tree entries must be visible')
@@ -714,13 +816,26 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   await fileTree.getByRole('textbox', { name: '筛选文件…' }).fill('src')
   await fileTree.getByRole('textbox', { name: '筛选文件…' }).fill('')
   await fileTree.getByRole('button', { name: 'src', exact: true }).click()
-  await view.getByRole('button', { name: '文件树', exact: true }).click()
+  await view.getByRole('button', { name: /^(将文件树移到右侧|隐藏文件树|在左侧显示文件树)$/ }).click()
+  expect(await treeIsLeft()).toBe(false)
+  expect(await fileTree.getByRole('button', { name: 'src', exact: true }).getAttribute('aria-expanded')).toBe('false')
+  await page.setViewportSize({ width: 390, height: 844 })
   expect(await fileTree.isVisible()).toBe(false)
-  await view.getByRole('button', { name: '文件树', exact: true }).click()
+  expect(await view.getByRole('button', { name: /^(将文件树移到右侧|隐藏文件树|在左侧显示文件树)$/ }).isVisible()).toBe(false)
+  await view.getByRole('button', { name: '全部 2 个文件', exact: true }).click()
+  await page.getByRole('menu').getByRole('textbox', { name: '筛选文件…' }).waitFor()
+  await page.keyboard.press('Escape')
+  await page.setViewportSize({ width: 1680, height: 1000 })
+  expect(await treeIsLeft()).toBe(false)
+  await view.getByRole('button', { name: /^(将文件树移到右侧|隐藏文件树|在左侧显示文件树)$/ }).click()
+  expect(await fileTree.isVisible()).toBe(false)
+  await view.getByRole('button', { name: /^(将文件树移到右侧|隐藏文件树|在左侧显示文件树)$/ }).click()
+  expect(await treeIsLeft()).toBe(true)
   expect(await fileTree.getByRole('button', { name: 'src', exact: true }).getAttribute('aria-expanded')).toBe('false')
   await fileTree.getByRole('textbox', { name: '筛选文件…' }).fill('src')
-  await view.getByRole('button', { name: '文件树', exact: true }).click()
-  await view.getByRole('button', { name: '文件树', exact: true }).click()
+  await view.getByRole('button', { name: /^(将文件树移到右侧|隐藏文件树|在左侧显示文件树)$/ }).click()
+  await view.getByRole('button', { name: /^(将文件树移到右侧|隐藏文件树|在左侧显示文件树)$/ }).click()
+  await view.getByRole('button', { name: /^(将文件树移到右侧|隐藏文件树|在左侧显示文件树)$/ }).click()
   expect(await fileTree.getByRole('textbox', { name: '筛选文件…' }).inputValue()).toBe('src')
   await compareOrRefreshGolden(join(EXPECTED, 'file-tree-toggle.expected.md'),
     await captureStableAria(page, '[data-forge-changes="change"]', scaffold.workspaceCwd), MODE)
@@ -732,7 +847,7 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   if (handle === null) throw new Error('Tree resize handle must be visible')
   await page.mouse.move(handle.x + handle.width / 2, handle.y + 100)
   await page.mouse.down()
-  await page.mouse.move(handle.x - 80, handle.y + 100, { steps: 5 })
+  await page.mouse.move(handle.x + 80, handle.y + 100, { steps: 5 })
   await page.mouse.up()
   expect(Number(await resizeTree.getAttribute('aria-valuenow'))).toBeGreaterThan(originalWidth)
   await resizeTree.press('Home')
@@ -741,11 +856,25 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   const treeBounds = await fileTree.boundingBox()
   if (searchBounds === null || treeBounds === null) throw new Error('Tree search must be visible')
   expect(searchBounds.x + searchBounds.width).toBeLessThanOrEqual(treeBounds.x + treeBounds.width)
-  await resizeTree.press('ArrowLeft')
+  await resizeTree.press('ArrowRight')
   const resizedWidth = await resizeTree.getAttribute('aria-valuenow')
-  await view.getByRole('button', { name: '文件树', exact: true }).click()
-  await view.getByRole('button', { name: '文件树', exact: true }).click()
+  await view.getByRole('button', { name: /^(将文件树移到右侧|隐藏文件树|在左侧显示文件树)$/ }).click()
+  expect(await treeIsLeft()).toBe(false)
   expect(await resizeTree.getAttribute('aria-valuenow')).toBe(resizedWidth)
+  await resizeTree.press('ArrowLeft')
+  expect(Number(await resizeTree.getAttribute('aria-valuenow'))).toBe(Number(resizedWidth) + 20)
+  await resizeTree.press('ArrowRight')
+  const rightHandle = await resizeTree.boundingBox()
+  if (rightHandle === null) throw new Error('Right tree resize handle must be visible')
+  await page.mouse.move(rightHandle.x + rightHandle.width / 2, rightHandle.y + 100)
+  await page.mouse.down()
+  await page.mouse.move(rightHandle.x - 80, rightHandle.y + 100, { steps: 5 })
+  await page.mouse.up()
+  expect(Number(await resizeTree.getAttribute('aria-valuenow'))).toBeGreaterThan(Number(resizedWidth))
+  const rightWidth = await resizeTree.getAttribute('aria-valuenow')
+  await view.getByRole('button', { name: /^(将文件树移到右侧|隐藏文件树|在左侧显示文件树)$/ }).click()
+  await view.getByRole('button', { name: /^(将文件树移到右侧|隐藏文件树|在左侧显示文件树)$/ }).click()
+  expect(await resizeTree.getAttribute('aria-valuenow')).toBe(rightWidth)
   for (const side of ['old', 'new'] as const) {
     const firstLine = await panelFile.locator(`[data-review-code][data-${side}-line="2"]`).boundingBox()
     const lastLine = await panelFile.locator(`[data-review-code][data-${side}-line="4"]`).boundingBox()
@@ -805,8 +934,12 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   await page.keyboard.press('Escape')
   expect(await reviewDialog.count()).toBe(0)
   await view.getByRole('button', { name: '提交评审 (1)', exact: true }).click()
-  await reviewDialog.getByRole('textbox', { name: '评审总结…', exact: true }).fill('需要补充边界检查')
   await reviewDialog.getByRole('radio', { name: '请求更改', exact: true }).check()
+  await reviewDialog.getByText('请求更改时，请填写评审总结', { exact: true }).waitFor()
+  expect(await reviewDialog.getByRole('button', { name: '提交评审', exact: true }).isDisabled()).toBe(true)
+  await compareOrRefreshGolden(join(EXPECTED, 'review-summary-required.expected.md'),
+    await captureStableAria(page, '[role="dialog"][aria-label="提交评审"]', scaffold.workspaceCwd), MODE)
+  await reviewDialog.getByRole('textbox', { name: '评审总结…', exact: true }).fill('需要补充边界检查')
   await compareOrRefreshGolden(join(EXPECTED, 'submit-review.expected.md'),
     await captureStableAria(page, '[role="dialog"][aria-label="提交评审"]', scaffold.workspaceCwd), MODE)
   await reviewDialog.getByRole('button', { name: '提交评审', exact: true }).click()
@@ -915,7 +1048,7 @@ it.skipIf(MODE === 'record')('retains a wrapped code line and tree width across 
   await code.waitFor()
   for (const width of [240, 320]) {
     if (width === 320) {
-      for (let step = 0; step < 4; step += 1) await separator.press('ArrowLeft')
+      for (let step = 0; step < 4; step += 1) await separator.press('ArrowRight')
       await beforeFile.getByRole('button', { name: '收起 before-0.ts', exact: true }).click()
     }
     await layout()
@@ -952,8 +1085,9 @@ it.skipIf(MODE === 'record')('uses horizontal arrows to navigate files while pre
   const { scaffold, page, project, tripwire } = await launchPanel('web-e2e-forge-file-keys')
   await git(project, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
   await git(project, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
-  for (const path of ['a.txt', 'b.txt', 'c.txt']) {
-    await writeFile(join(project, path), Array.from({ length: path === 'c.txt' ? 1 : 80 }, (_, line) => `line ${line + 1}\n`).join(''))
+  await mkdir(join(project, 'src'))
+  for (const path of ['src/a.txt', 'src/b.txt', 'README.md']) {
+    await writeFile(join(project, path), Array.from({ length: path === 'README.md' ? 1 : 80 }, (_, line) => `line ${line + 1}\n`).join(''))
   }
   const { settled } = await sendPrompt(page, scaffold)
   await settled
@@ -966,9 +1100,13 @@ it.skipIf(MODE === 'record')('uses horizontal arrows to navigate files while pre
   await page.getByRole('button', { name: '全屏', exact: true }).click()
   await page.setViewportSize({ width: 1280, height: 500 })
   const tree = view.getByRole('navigation')
-  const a = view.locator('[data-forge-diff-file="a.txt"]')
-  const b = view.locator('[data-forge-diff-file="b.txt"]')
-  const c = view.locator('[data-forge-diff-file="c.txt"]')
+  const files = view.locator('[data-forge-diff-file]')
+  const paths = await files.evaluateAll(elements => elements.map(element => element.getAttribute('data-forge-diff-file')))
+  expect(paths).toEqual(['src/a.txt', 'src/b.txt', 'README.md'])
+  expect(await tree.locator('button:not([aria-expanded])').evaluateAll(elements => elements.map(element => element.getAttribute('aria-label')))).toEqual(paths)
+  const a = view.locator('[data-forge-diff-file="src/a.txt"]')
+  const b = view.locator('[data-forge-diff-file="src/b.txt"]')
+  const c = view.locator('[data-forge-diff-file="README.md"]')
   await b.getByRole('button', { name: '收起 b.txt', exact: true }).click()
   await scroll.evaluate((element) => { element.scrollTop = 0 })
   await scroll.focus()
@@ -979,11 +1117,11 @@ it.skipIf(MODE === 'record')('uses horizontal arrows to navigate files while pre
   await expect.poll(() => scroll.evaluate(element => element.scrollTop)).toBeGreaterThan(0)
   await scroll.evaluate((element) => { element.scrollTop = 0 })
   await page.keyboard.press('ArrowRight')
-  await expect.poll(() => tree.getByRole('button', { name: 'b.txt', exact: true }).getAttribute('aria-current')).toBe('true')
+  await expect.poll(() => tree.getByRole('button', { name: 'src/b.txt', exact: true }).getAttribute('aria-current')).toBe('true')
   expect(await b.getAttribute('data-expanded')).toBe('')
   expect(await scroll.evaluate(element => document.activeElement === element)).toBe(true)
   await page.keyboard.press('ArrowRight')
-  await expect.poll(() => tree.getByRole('button', { name: 'c.txt', exact: true }).getAttribute('aria-current')).toBe('true')
+  await expect.poll(() => tree.getByRole('button', { name: 'README.md', exact: true }).getAttribute('aria-current')).toBe('true')
   const lastPosition = await scroll.evaluate(element => element.scrollTop)
   const lastBox = await c.boundingBox(), viewport = await scroll.boundingBox()
   if (lastBox === null || viewport === null) throw new Error('The last file and scroll viewport must be rendered')
@@ -992,16 +1130,16 @@ it.skipIf(MODE === 'record')('uses horizontal arrows to navigate files while pre
   await page.keyboard.press('ArrowRight')
   expect(await scroll.evaluate(element => element.scrollTop)).toBe(lastPosition)
   await page.keyboard.press('ArrowLeft')
-  await expect.poll(() => tree.getByRole('button', { name: 'b.txt', exact: true }).getAttribute('aria-current')).toBe('true')
+  await expect.poll(() => tree.getByRole('button', { name: 'src/b.txt', exact: true }).getAttribute('aria-current')).toBe('true')
   await page.keyboard.press('ArrowLeft')
-  await expect.poll(() => tree.getByRole('button', { name: 'a.txt', exact: true }).getAttribute('aria-current')).toBe('true')
+  await expect.poll(() => tree.getByRole('button', { name: 'src/a.txt', exact: true }).getAttribute('aria-current')).toBe('true')
   await b.evaluate((element) => {
     const viewport = element.closest('[data-forge-changes-scroll]')!
     viewport.scrollTop += element.getBoundingClientRect().top - viewport.getBoundingClientRect().top + 100
   })
   await page.keyboard.press('ArrowRight')
-  await expect.poll(() => tree.getByRole('button', { name: 'c.txt', exact: true }).getAttribute('aria-current')).toBe('true')
-  await tree.getByRole('button', { name: 'a.txt', exact: true }).click()
+  await expect.poll(() => tree.getByRole('button', { name: 'README.md', exact: true }).getAttribute('aria-current')).toBe('true')
+  await tree.getByRole('button', { name: 'src/a.txt', exact: true }).click()
   await a.getByRole('button', { name: '选择第 R1 行', exact: true }).click()
   await a.getByRole('button', { name: '添加评论', exact: true }).click()
   const input = a.getByRole('textbox', { name: '留下评论…', exact: true })
@@ -1010,8 +1148,65 @@ it.skipIf(MODE === 'record')('uses horizontal arrows to navigate files while pre
   expect(await input.evaluate(element => (element as HTMLTextAreaElement).selectionStart)).toBe(11)
   await input.press('ArrowRight')
   expect(await input.inputValue()).toBe('keep editing')
-  expect(await tree.getByRole('button', { name: 'a.txt', exact: true }).getAttribute('aria-current')).toBe('true')
+  expect(await tree.getByRole('button', { name: 'src/a.txt', exact: true }).getAttribute('aria-current')).toBe('true')
   expect(await input.evaluate(element => document.activeElement === element)).toBe(true)
+  expect(tripwire.pageErrors).toEqual([])
+  expect(tripwire.warnings).toEqual([])
+})
+
+it.skipIf(MODE === 'record')('keeps tall branch and changed-file menus aligned with their triggers', async () => {
+  const { scaffold, page, project, tripwire } = await launchPanel('web-e2e-forge-tall-menus')
+  await Promise.all(Array.from({ length: 45 }, (_, index) =>
+    git(project, 'update-ref', `refs/heads/worktree/long-menu-regression-${index}`, 'HEAD')))
+  const option = page.locator('[data-forge-worktree]')
+  await option.getByRole('checkbox', { name: '新建工作树', exact: true }).check()
+  const base = option.getByRole('button', { name: '基于 main', exact: true })
+  await base.click()
+  const menu = page.getByRole('menu')
+  await menu.getByRole('menuitem', { name: 'worktree/long-menu-regression-44', exact: true }).waitFor()
+  await expect.poll(async () => {
+    const trigger = await base.boundingBox()
+    const card = await menu.boundingBox()
+    return trigger === null || card === null ? Infinity : Math.abs(trigger.x + trigger.width - card.x - card.width)
+  }).toBeLessThan(1)
+  await page.keyboard.press('Escape')
+  expect(await base.getAttribute('aria-expanded')).toBe('false')
+  await option.getByRole('checkbox', { name: '新建工作树', exact: true }).uncheck()
+
+  await git(project, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
+  await git(project, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
+  await mkdir(join(project, 'src'))
+  await Promise.all(Array.from({ length: 60 }, (_, index) =>
+    writeFile(join(project, 'src', `long-file-list-${index}.ts`), `export const value = ${index}\n`)))
+  await git(project, 'add', 'src')
+  await git(project, 'commit', '--quiet', '-m', 'long file list')
+  const { settled } = await sendPrompt(page, scaffold)
+  await settled
+  await page.locator('[data-forge-header]').click()
+  const panel = page.locator('[data-forge-panel]')
+  await panel.getByRole('button', { name: '刷新状态', exact: true }).click()
+  await panel.getByRole('button', { name: /^查看本会话的变更：60 个文件/ }).click()
+  const changes = page.locator('[data-forge-changes="local"]')
+  const files = changes.getByRole('button', { name: '全部 60 个文件', exact: true })
+  await files.click()
+  await menu.getByRole('textbox', { name: '筛选文件…', exact: true }).waitFor()
+  await expect.poll(async () => {
+    const trigger = await files.boundingBox()
+    const card = await menu.boundingBox()
+    return trigger === null || card === null ? Infinity : Math.abs(trigger.x - card.x)
+  }).toBeLessThan(1)
+  await menu.getByRole('textbox', { name: '筛选文件…', exact: true }).fill('long-file-list-59')
+  expect(await menu.getByRole('menuitem', { name: 'src/long-file-list-59.ts', exact: true }).isVisible()).toBe(true)
+  await page.keyboard.press('Escape')
+  expect(await menu.count()).toBe(0)
+  await page.setViewportSize({ width: 390, height: 700 })
+  await files.click()
+  await menu.getByRole('textbox', { name: '筛选文件…', exact: true }).waitFor()
+  await expect.poll(() => menu.evaluate((node) => {
+    const rect = node.getBoundingClientRect()
+    return rect.left >= 12 && rect.right <= 378 && rect.top >= 12 && rect.bottom <= 688
+  })).toBe(true)
+  await page.keyboard.press('Escape')
   expect(tripwire.pageErrors).toEqual([])
   expect(tripwire.warnings).toEqual([])
 })

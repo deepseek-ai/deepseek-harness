@@ -8,6 +8,7 @@
     "src"
   ],
   "references": [
+    { "path": "../../llm/llm-deepseek" },
     {
       "path": "../../util/launch-environment"
     },
@@ -37,6 +38,18 @@
     },
     {
       "path": "../../util/http-proxy"
+    },
+    {
+      "path": "../../../vendor/loader"
+    },
+    {
+      "path": "../../llm/llm"
+    },
+    {
+      "path": "../../llm/llm-deepseek-api-key"
+    },
+    {
+      "path": "../../llm/llm-deepseek-account"
     }
   ]
 }

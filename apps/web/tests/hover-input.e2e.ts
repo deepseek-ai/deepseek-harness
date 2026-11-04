@@ -103,7 +103,7 @@ it.each([false, true])('keeps workspace and archived search actions reachable wi
     await activate(actions)
     await archive.waitFor()
   }
-  for (const key of ['ArrowDown', 'Tab']) {
+  for (const key of ['ArrowDown', 'Home']) {
     await page.keyboard.press(key)
     expect(await page.locator('html').getAttribute('data-input-modality')).toBe('keyboard')
     expect(await page.getByRole('menu').evaluate(menu => menu.contains(document.activeElement))).toBe(true)

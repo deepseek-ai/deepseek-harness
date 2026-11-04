@@ -170,7 +170,8 @@ describe('web e2e: the composer model switch is the default for later sessions',
       expect(popupBounds!.width).toBeCloseTo(commandMenuBounds!.width)
       expect(popupBounds!.x).toBeCloseTo(commandMenuBounds!.x)
       expect(await search.getAttribute('placeholder')).toBe('搜索模型…')
-      await page.getByRole('option').first().waitFor()
+      // Command menu height changes where the pointer lands in the model popup.
+      await page.getByRole('option', { name: 'Acme Large', exact: true }).hover()
       await compareOrRefreshGolden(
         fileURLToPath(new URL('./expected/default-model/command-picker.expected.md', import.meta.url)),
         await captureStableAria(page, '[aria-label="/model 选项"]', scaffold.workspaceCwd),
@@ -272,6 +273,7 @@ describe('web e2e: the composer model switch is the default for later sessions',
       await observeFocus('Enter model pane')
       await devicePage.keyboard.press('ArrowDown')
       const search = devicePage.getByRole('searchbox', { name: '搜索模型…' })
+      expect(await search.evaluate(input => getComputedStyle(input).fontSize)).toBe('16px')
       await expect.poll(() => search.evaluate(element => document.activeElement === element)).toBe(true)
       await observeFocus('Navigate models')
       await devicePage.keyboard.press('Escape')
@@ -563,7 +565,7 @@ describe('web e2e: the composer model switch is the default for later sessions',
     for (const palette of headingPalettes) {
       expect(palette.headingFills, `${palette.platform}, dark=${String(palette.dark)}`)
         .toEqual(['rgba(0, 0, 0, 0)'])
-      expect(palette.menuFill).toBe(palette.dark ? 'rgba(67, 69, 74, 0.45)' : 'rgba(248, 249, 250, 0.58)')
+      expect(palette.menuFill).toBe(palette.dark ? 'rgba(48, 49, 54, 0.64)' : 'rgba(252, 253, 254, 0.7)')
       expect(palette.searchBorder).toBe('rgba(0, 0, 0, 0)')
       expect(palette.positions).toEqual(['sticky'])
       expect(palette.headingRadii).toEqual([palette.platform === 'darwin' ? '0px' : palette.optionRadius])

@@ -24,6 +24,12 @@ function productIcon(glyph: IconGlyph, weight: IconWeight): (props: IconProps) =
   )
 }
 
+/** Regular one-pixel IconLayersOutline artwork. */
+export const IconLayersOutlineRegular = productIcon('layers-outline', 'regular')
+
+/** Medium IconLayersOutline artwork with a 1.3px stroke. */
+export const IconLayersOutlineMedium = productIcon('layers-outline', 'medium')
+
 /** Regular one-pixel IconNewChatOutline artwork. */
 export const IconNewChatOutlineRegular = productIcon('new-chat-outline', 'regular')
 
@@ -608,3 +614,9 @@ export const IconAppsAddOutlineRegular = appsAddIcon('regular')
 
 /** Three entry tiles and an add mark with 1.3px strokes. */
 export const IconAppsAddOutlineMedium = appsAddIcon('medium')
+
+/** Regular floppy-disk save action. */
+export const IconSaveOutlineRegular = productIcon('save-outline', 'regular')
+
+/** Medium floppy-disk save action. */
+export const IconSaveOutlineMedium = productIcon('save-outline', 'medium')

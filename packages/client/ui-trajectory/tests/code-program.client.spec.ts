@@ -31,6 +31,63 @@ describe('recorded code programs', () => {
     expect(codeProgram({ ...CELL, ...(schemaDetail === undefined ? {} : { schemaDetail }) })?.language).toBeUndefined()
   })
 
+  // Historical run_code schemas from tool-executor-ptc use this literal prefix.
+  it.each([
+    ['Execute a program in `typescript` against the available tools.', 'typescript'],
+    ['Execute a program in `python` against the available tools.', 'python'],
+    ['Execute a program in `Python` against the available tools.', 'python'],
+    ['Execute a program in `ruby` against the available tools.', undefined],
+    ['Execute a program in `typescript` against the available tools. Example: call a Python tool.', 'typescript'],
+    ['Execute a program in `python` against the available tools. Example: call a TypeScript tool.', 'python'],
+    ['Execute a program. Examples use TypeScript and Python.', undefined],
+    ['Execute a program against the available tools.', undefined],
+    ['An example: Execute a program in `typescript`.', undefined],
+    ['execute a program in `typescript` against the available tools.', undefined],
+  ])('reads only the leading tool-level declaration: %s', (description, language) => {
+    const schemaDetail = JSON.stringify({
+      description,
+      parameters: { properties: { code: { description: "The program to execute, following this tool's execution instructions." } } },
+    })
+    expect(codeProgram({ ...CELL, schemaDetail })?.language).toBe(language)
+  })
+
+  it.each([
+    ['typescript', 'A TypeScript program.', 'typescript'],
+    ['python', 'A Python program.', 'python'],
+    ['typescript', 'A Python program.', undefined],
+    ['python', 'A TypeScript program.', undefined],
+    ['typescript', 'A TypeScript or Python program.', undefined],
+    ['python', 'A TypeScript or Python program.', undefined],
+    ['ruby', 'A TypeScript program.', undefined],
+    ['ruby', 'A Python program.', undefined],
+  ])('combines the declaration %s with the legacy hint %s', (declared, description, language) => {
+    const schemaDetail = JSON.stringify({
+      description: `Execute a program in \`${declared}\` against the available tools.`,
+      parameters: { properties: { code: { description } } },
+    })
+    expect(codeProgram({ ...CELL, schemaDetail })?.language).toBe(language)
+  })
+
+  it.each(['typescript', 'python'])('uses the %s declaration without a parameter description', (language) => {
+    for (const description of [undefined, 42]) {
+      const schemaDetail = JSON.stringify({
+        description: `Execute a program in \`${language}\` against the available tools.`,
+        parameters: { properties: { code: { description } } },
+      })
+      expect(codeProgram({ ...CELL, schemaDetail })?.language).toBe(language)
+    }
+  })
+
+  it.each([undefined, 42, 'Execute a TypeScript program against the available tools.'])(
+    'retains legacy hints without an explicit declaration: %s', (description) => {
+      const schemaDetail = JSON.stringify({
+        description,
+        parameters: { properties: { code: { description: 'A Python program.' } } },
+      })
+      expect(codeProgram({ ...CELL, schemaDetail })?.language).toBe('python')
+    },
+  )
+
   it('uses the first nonempty source line when a description is unavailable', () => {
     const source = '\n  const x = 1\nreturn x\n'
     for (const description of [undefined, '', '   ']) {

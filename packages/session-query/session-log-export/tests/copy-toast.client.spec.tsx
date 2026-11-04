@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useSyncExternalStore } from 'react'
@@ -13,7 +14,7 @@ const unused = (): never => { throw new Error('This isolated component does not 
 const standard: GlobalStandardProps = {
   useSessions: unused, useSessionStatus: unused, useSessionRetainInfo: unused,
   useSessionAccess: () => true, useRemoteAccess: () => true, useWorkspaceAccess: () => true,
-  usePanelInfo: unused, useResource: unused, useWorkspaces: unused,
+  usePanelInfo: unused, useContextMenu: contextMenuHook(), useResource: unused, useWorkspaces: unused,
 }
 
 function bindSnapshot(store: ObservableSnapshot<SessionMarkdownCopyState>) {

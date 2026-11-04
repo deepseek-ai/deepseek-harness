@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Enable macOS Computer Use from Plugins for existing and new PTC sessions. Windows support is in development. This bundle remains in `experimental` until that support is complete, then moves to the `computer-use` group. It is off by default and hidden from the default plugin lists until enabled or separately installed; disabled profiles prepare no native components and register neither CUA tools nor their model guidance.
+Enable macOS Computer Use from Plugins for existing and new PTC sessions. Windows support is in development. This bundle remains in `experimental` until that support is complete, then moves to the `computer-use` group. It ships with DSH switched off and appears in the Experimental plugins list on macOS Hosts; disabled profiles prepare no native components and register neither CUA tools nor their model guidance.
 
 ## Table of Contents
 
@@ -24,7 +24,7 @@ Enable macOS Computer Use from Plugins for existing and new PTC sessions. Window
 <a id="use-this-package"></a>
 ## Use this package
 
-This workflow targets developers running macOS Web or unpackaged Desktop from source. In **Plugins → Add plugin**, enter `@deepseek-ai/dsh-cua-bundle`, choose **Install**, then **Enable now**. DSH enables its shipped copy without downloading another one. Enabled bundles remain in Plugins, where you can open Computer Use to manage permissions or switch it off. Switching off hides its card again unless the profile separately installed it. The permission page identifies the responsible application reported by macOS when the optional system query is available. Request access and enable that application in System Settings; follow the application named by macOS if it differs from the detected source. For Web, run these commands from the repository root:
+On macOS, open **Plugins → More** and switch on **Computer use** in the Experimental plugins list. The bundle ships with DSH and updates with it, so enabling it downloads nothing. Published packages contain the signed and notarized helper; users need no compiler. Source Web and development Desktop prepare an ad-hoc helper when enabled. Open its details, choose PTC if needed, and grant Accessibility and Screen Recording to `DSH Computer Use.app`. An enabled bundle also appears in the main plugin list; switching it off returns it to the Experimental plugins list only. For source Web, run these commands from the repository root:
 
 ```sh
 pnpm run build
@@ -33,7 +33,7 @@ pnpm dsh web
 
 For the source Desktop launcher and its separate development profile, follow [Desktop development](../../../apps/desktop/README.md). Enable Computer Use in each profile that needs it.
 
-The switch saves bundle selection in the profile’s `package.json`. Computer Use is installed only in PTC sessions. Enabling through Add plugin, a visible card, or its detail page offers setup guidance when system permissions need attention. The detail page offers **Set to PTC** for the new-session default; existing sessions keep their preset. The switch leaves PTC execution mode and other settings unchanged. The detail page’s **Use persistent mode** action separately enables in-memory state across PTC calls; its effects and reload behavior are described in the [permission page](../cua/README.md). Native preparation runs when the provider loads and reuses the source-hashed executable when available.
+The switch saves bundle selection in the profile’s `package.json`. Computer Use is installed only in PTC sessions. Enabling through its card or detail page offers setup guidance when system permissions need attention. The detail page offers **Set to PTC** for the new-session default; existing sessions keep their preset. The switch leaves PTC execution mode and other settings unchanged. The detail page’s **Use persistent mode** action separately enables in-memory state across PTC calls; its effects and reload behavior are described in the [permission page](../cua/README.md). Native preparation runs when the provider loads and reuses the source-hashed executable when available.
 
 Disabling unloads the provider and withdraws CUA tools from its Agent scopes. Runtime configuration, the new-session default and saved grants remain.
 
@@ -85,7 +85,7 @@ CUA activation and removal change the PTC SDK and system guidance; subsequent re
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Source Web and Desktop share permission controls on macOS. Packaged Desktop helper distribution, signing, and permission attribution are deferred.
+- System permissions require the user’s approval in macOS; enabling the bundle does not grant them.
 - PTC execution is shared by the profile and is configured independently. A Host without HMR applies saved changes at restart.
 
 <a id="dev-note"></a>

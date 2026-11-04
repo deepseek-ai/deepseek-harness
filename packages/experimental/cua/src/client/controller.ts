@@ -50,8 +50,12 @@ export class PermissionController {
   private closed = false
   private epoch = 0
   private sequence = 0
-  /** @param remote Generated CUA Remote namespace; failed results are handled with query and action failures. */
-  constructor(private readonly remote: Context['remote']['cuaAccess']) {}
+  /**
+   * @param remote Generated CUA Remote namespace; failed results follow the query and action paths.
+   * @param locale Current Client language, read when a permission action starts.
+   */
+  constructor(private readonly remote: Context['remote']['cuaAccess'],
+    private readonly locale: () => string) {}
   /**
    * Bind the permission projection to its user actions.
    * @returns Reactive state and controls shared by the page, prompt, and toast host.
@@ -60,8 +64,12 @@ export class PermissionController {
     return {
       hooks: { cuaPermissions: this.state },
       refresh: () => { this.enqueue() },
-      request: (permission) => { this.enqueue(() => this.remote.requestPermission(permission), 'requested') },
-      openSettings: (permission) => { this.enqueue(() => this.remote.openSettings(permission), 'opened') },
+      request: (permission) => {
+        this.enqueue(() => this.remote.requestPermission(permission, this.locale()), 'requested')
+      },
+      openSettings: (permission) => {
+        this.enqueue(() => this.remote.openSettings(permission, this.locale()), 'opened')
+      },
       revoke: (id) => { this.enqueue(() => this.remote.revoke(id), 'revoked') },
       retryApproval: (id) => { this.enqueue(() => this.remote.retryApproval(id), 'retryAllowed') },
       dismissToast: () => { if (!this.closed) this.state.update((state) => { state.toast = null }) },

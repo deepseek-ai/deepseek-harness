@@ -1,0 +1,5 @@
+- dialog "Computer use risks":
+  - heading "Computer use risks" [level=3]
+  - paragraph: The agent can access only apps you approve, and can read and control them in the background.
+  - paragraph: Online games, messaging apps, and other apps may restrict automation. Violating their rules could result in your account with that app being suspended or banned.
+  - paragraph: Proceed at your own risk. To stop automated control at any time, press Stop in DeepSeek Harness.

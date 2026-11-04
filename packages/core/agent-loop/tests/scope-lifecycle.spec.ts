@@ -254,25 +254,6 @@ describe('agent scope lifecycle', () => {
     await agent.whenIdle()
   })
 
-  it('records an explicitly owned Agent as a non-root runtime child', async () => {
-    const ctx = await harness()
-    const root = await ctx.agents.create({
-      sessionId: SessionId('runtime-root'),
-      agentOptions: { model: 'mock' },
-    })
-    const child = await root.agent.ctx.agents.create({
-      sessionId: SessionId('runtime-child'),
-      agentOptions: { model: 'mock' },
-      parentAgent: root.agent,
-    })
-
-    expect(ctx.agents.list()).toEqual([root.agent, child.agent])
-    expect(ctx.agents.roots()).toEqual([root.agent])
-
-    await child.dispose()
-    await root.dispose()
-  })
-
   it('scoped registrations live in the agent world and die with the agent', async () => {
     const ctx = await harness()
     const handle = await ctx.agents.create({ sessionId: SessionId('s1'), agentOptions: { provider: 'mock', model: 'mock' } })
@@ -325,8 +306,14 @@ describe('agent scope lifecycle', () => {
     expect(ctx.sessionProjections.checkpoint(second.agent.session).inbox?.val).toBeDefined()
 
     await Promise.all([first.dispose(), second.dispose()])
+    const row = ctx.sessionProjections.checkpoint(second.agent.session).inbox
+    const coldRow = ctx.sessionProjections.checkpoint(cold).inbox
     await loopFiber.dispose()
-    expect(ctx.sessionProjections.checkpoint(second.agent.session).inbox?.val).toBeUndefined()
+    cold.append('turn/start', { turn: 1 })
+    // The released unit keeps each Session's last row and folds no event after the unload.
+    expect(ctx.sessionProjections.checkpoint(second.agent.session)).toHaveProperty('inbox', row)
+    expect(ctx.sessionProjections.checkpoint(cold)).toHaveProperty('inbox', coldRow)
+    expect(ctx.sessionProjections.checkpoint(ctx.sessions.create(SessionId('projection-after-unload')))).not.toHaveProperty('inbox')
   })
 
   it('agent.ctx listeners hear only their own agent (scoped dispatch end to end)', async () => {
