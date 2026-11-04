@@ -166,7 +166,7 @@ it('browses workspace files in tabs that share one pane tree', async () => {
   expect(await toggle.getAttribute('aria-expanded')).toBe('true')
 
   await toggle.focus()
-  // In dark mode the card is raised by a lighter background layer than the filled tree, and its shadow is the Menu card's black shadow.
+  // In dark mode the card is raised by a lighter background layer than the filled tree, and its soft shadow stays black.
   const theme = await page.locator('body').getAttribute('data-ds-dark-theme')
   try {
     await page.evaluate(() => { document.body.setAttribute('data-ds-dark-theme', '') })
