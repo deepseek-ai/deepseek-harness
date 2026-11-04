@@ -27,9 +27,9 @@ export async function verifyDesktopArchive(env: NodeJS.ProcessEnv): Promise<stri
 
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.filename) {
   try {
-    const files = await verifyDesktopArchive(process.env)
     const { DESKTOP_ARCHIVE_NAME: name, DESKTOP_RETAINED_DIRECTORY: directory, RUNNER_TEMP: temp, GITHUB_OUTPUT: output } = process.env
     if (!name || !/^[a-zA-Z0-9][a-zA-Z0-9.+_-]*\.zip$/u.test(name) || !directory || !temp || !output) throw new Error('desktop archival: invalid ZIP output settings')
+    const files = await verifyDesktopArchive(process.env)
     const path = join(await mkdtemp(join(temp, 'desktop-archive-')), name)
     const windows = process.platform === 'win32'
     if (windows && !process.env.SystemRoot) throw new Error('desktop archival: SystemRoot is required to locate Windows bsdtar')

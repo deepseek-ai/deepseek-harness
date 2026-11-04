@@ -115,7 +115,7 @@ runner 的受监督启动和恢复见 [Windows runner 机器准备](../windows-s
 
 所有 Windows 打包模式（含 test 和 unsigned）都要求仓库变量 `DESKTOP_PUBLISH_RUNNERS`；触发前配置[原机器路由](../publishing/ci/README.zh.md#machine-setup)。
 
-在 Actions 打开完成的运行，下载独立 `upload-artifact` job 生成的 Artifacts。安装包名称使用原构建的 `package_run_attempt`，诊断名称使用当前 `run_attempt`。打包成功但归档失败时，仅重跑 `upload-artifact` 以复用保留的安装包。`windows-x64-signed-<version>-<run_id>-<package_run_attempt>.zip` 与 `windows-x64-unsigned-<version>-<run_id>-<package_run_attempt>.zip` 包含对应 EXE；`windows-package-logs-<run_id>-<run_attempt>` 包含打包诊断。安装包 ZIP 用本地 DOS 和绝对 Unix 字段记录各留存副本的修改时间，不保证是原始构建时间。上传步骤名为 `Retain installers for the selected mode` 和 `Retain packaging diagnostics`；步骤耗时与带时间戳的日志显示上传用时。这些产物不等于发布 Release 或下载站内容。
+在 Actions 打开完成的运行，下载独立 `upload-artifact` job 生成的 Artifacts。安装包名称使用原构建的 `package_run_attempt`，诊断名称使用当前 `run_attempt`。打包成功但归档失败时，仅重跑 `upload-artifact` 以复用保留的安装包。`windows-x64-signed-<version>-<run_id>-<package_run_attempt>.zip` 与 `windows-x64-unsigned-<version>-<run_id>-<package_run_attempt>.zip` 包含对应 EXE；`windows-package-logs-<run_id>-<run_attempt>` 包含打包诊断。安装包 ZIP 用 DOS 字段的本地时间和 Unix 字段的绝对时间记录各留存副本的修改时间，不保证是原始构建时间。上传步骤名为 `Retain installers for the selected mode` 和 `Retain packaging diagnostics`；步骤耗时与带时间戳的日志显示上传用时。这些产物不等于发布 Release 或下载站内容。
 
 测量缓存时，`cache_namespace` 为两个依赖 store 和上游下载选择保留的子目录；留空使用正常共享缓存。新名称用于冷缓存采样，再次使用同名用于热缓存采样。名称由 1–64 个小写字母、数字或连字符组成，以字母或数字开头，且不能为 Windows 设备名。这不会重置独立的签名缓存或操作系统文件缓存；应将其状态、Job 开始至完成的总耗时与阶段耗时和产物体积一并报告。workflow 在依赖安装前记录 Node 版本、可用 CPU 并行数、逻辑 CPU 数及总内存和空闲内存。
 
@@ -127,7 +127,7 @@ runner 的受监督启动和恢复见 [Windows runner 机器准备](../windows-s
 
 ## macOS 自托管打包
 
-[Apple Silicon 工作流](../../../.github/workflows/macos-package.yml)与 [Intel 工作流](../../../.github/workflows/macos-intel-package.yml)在带有 `dsh-mac-package-trial` 标签的 Apple Silicon runner 上分别生成 arm64 和 x64 安装包，两者共用一个并发组。Intel 工作流在安装依赖前检查 Rosetta 能否执行；所选源码必须包含按目标架构校验的 macOS CI 适配脚本。两者均选择 `test` 或 `production`，并复用现有签名、公证和打包运行时检查。所选源码的 dsh 随附 Computer Use 组合包时，两者都在配置检查之后用 `scripts/cua-helper/package.ts` 和 `stage.ts` 构建、公证并放入两种架构的 helper，与 npm 发布的步骤相同；`skip_notarization` 不会跳过 helper 的公证。源码早于 helper 打包支持时只输出警告，该安装包中的 Computer Use 无法准备 helper。成功的 DMG／ZIP 与诊断日志保留 14 天，不发布 release；安装包上传关闭重复 ZIP 压缩。产物名为 `macos-<arch>-<mode>-<version>-<run_id>-<package_run_attempt>.zip`，其中 `arch` 为 `arm64` 或 `x64`；条目时间以本地 DOS 和绝对 Unix 字段记录留存副本的修改时间，不一定是原始构建时间。操作人员须验收完整 Actions 运行及目标架构上的安装，才能确认可交付。`compression_level` 下拉选项默认为 `3`，也可选择 `7`；本次运行以该选项覆盖机器预设，只影响 ZIP 和自动升级下载，不影响 DMG。
+[Apple Silicon 工作流](../../../.github/workflows/macos-package.yml)与 [Intel 工作流](../../../.github/workflows/macos-intel-package.yml)在带有 `dsh-mac-package-trial` 标签的 Apple Silicon runner 上分别生成 arm64 和 x64 安装包，两者共用一个并发组。Intel 工作流在安装依赖前检查 Rosetta 能否执行；所选源码必须包含按目标架构校验的 macOS CI 适配脚本。两者均选择 `test` 或 `production`，并复用现有签名、公证和打包运行时检查。所选源码的 dsh 随附 Computer Use 组合包时，两者都在配置检查之后用 `scripts/cua-helper/package.ts` 和 `stage.ts` 构建、公证并放入两种架构的 helper，与 npm 发布的步骤相同；`skip_notarization` 不会跳过 helper 的公证。源码早于 helper 打包支持时只输出警告，该安装包中的 Computer Use 无法准备 helper。成功的 DMG／ZIP 与诊断日志保留 14 天，不发布 release；安装包上传关闭重复 ZIP 压缩。产物名为 `macos-<arch>-<mode>-<version>-<run_id>-<package_run_attempt>.zip`，其中 `arch` 为 `arm64` 或 `x64`；条目时间以 DOS 字段的本地时间和 Unix 字段的绝对时间记录留存副本的修改时间，不保证是原始构建时间。操作人员须验收完整 Actions 运行及目标架构上的安装，才能确认可交付。`compression_level` 下拉选项默认为 `3`，也可选择 `7`；本次运行以该选项覆盖机器预设，只影响 ZIP 和自动升级下载，不影响 DMG。
 
 两个 macOS 工作流都要求仓库变量 `DESKTOP_PUBLISH_RUNNERS`，包括 test 和未公证模式。独立 `upload-artifact` job 的安装包名称保留原构建 attempt；打包成功但归档失败时，仅重跑该 job。参见[原机器路由与恢复](../publishing/ci/README.zh.md#recovery-and-records)。
 
