@@ -2,7 +2,7 @@
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { z } from 'zod'
-import type { CuaActionResult, CuaCapabilities, CuaObservationOptions, CuaPasteOptions, CuaWindow, CuaWindowInfo } from './types.ts'
+import type { CuaActionResult, CuaCapabilities, CuaObservationOptions, CuaWindow, CuaWindowInfo } from './types.ts'
 import type { LaunchEntriesResult, WindowRequest } from './window-protocol.ts'
 
 /** Connection-owned grant for exactly one observed window lifetime. */
@@ -19,12 +19,6 @@ export interface CuaDesktopWindow extends CuaWindow {
   windowHandle: CuaWindowHandle
   /** Bring this window forward. @returns Dispatch evidence, not application success. */
   activate(): Promise<CuaActionResult>
-  /** Type into the focused control in this window. @param text Text to insert. @returns Dispatch evidence. */
-  typeText(text: string): Promise<CuaActionResult>
-  /** Paste into this window. @param text Clipboard payload. @param options Clipboard format. @returns Dispatch evidence. */
-  paste(text: string, options?: CuaPasteOptions): Promise<CuaActionResult>
-  /** Send a chord to this window. @param key Key or chord. @returns Dispatch evidence. */
-  pressKey(key: string): Promise<CuaActionResult>
 }
 /** Provider-specific subset of CUA; discovery, launch and control are separate operations. */
 export interface CuaWindowApi {

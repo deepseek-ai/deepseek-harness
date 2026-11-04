@@ -86,7 +86,7 @@ export type CuaSelectTextOptions = Pick<CuaParameters<'selectText'>, 'prefix' | 
 /** Positive deltas reveal content above/left; each axis is an integer from -10 to 10. */
 export type CuaScrollOptions = Pick<CuaParameters<'scroll'>, 'x' | 'y' | 'deltaLinesX' | 'deltaLinesY'> & CuaCoordinateOptions
 /**
- * Accessibility observations and element operations shared by an application and its windows.
+ * Accessibility observations, element operations and scope-dependent keyboard input.
  * Advertised AX actions remain available; failed actions are not retried through pointer input.
  */
 export interface CuaSurface {
@@ -138,6 +138,29 @@ export interface CuaSurface {
    * @returns Dispatch evidence; rejects unsupported, ambiguous or changed text without keyboard fallback.
    */
   selectText(elementId: CuaElementId, text: string, options?: CuaSelectTextOptions): Promise<CuaActionResult>
+  /**
+   * Type text at the current input focus.
+   * Rejects when the provider does not support keyboard input at this scope.
+   * @param text - Literal text; cancellation may leave a prefix entered.
+   * @returns Whether the provider successfully executed the requested operation.
+   */
+  typeText(text: string): Promise<CuaActionResult>
+  /**
+   * Paste text or HTML at the target's current input focus.
+   * Rejects when the provider does not support keyboard input at this scope.
+   * PASTE_NOT_CONSUMED means no clipboard read within the configured deadline after dispatch; inspect before retrying.
+   * @param text - Clipboard contents in the selected format; defaults to plain text.
+   * @param options - Clipboard format. Original contents are restored unless another writer changes them.
+   * @returns Dispatch evidence; unsupported Paste commands fail without typing fallback.
+   */
+  paste(text: string, options?: CuaPasteOptions): Promise<CuaActionResult>
+  /**
+   * Send a key or chord at the current input focus.
+   * Rejects when the provider does not support keyboard input at this scope.
+   * @param key - xdotool-style chord such as super+c, shift+Tab, + or cmd++; plus is also a key name.
+   * @returns Whether the provider successfully executed the requested operation.
+   */
+  pressKey(key: string): Promise<CuaActionResult>
 }
 /**
  * An explicit window with screenshot and pointer input operations.
@@ -185,7 +208,7 @@ export interface CuaWindow extends CuaSurface {
    */
   drag(from: readonly [number, number], to: readonly [number, number], options?: CuaDragOptions): Promise<CuaActionResult>
 }
-/** Application-level accessibility, window discovery, keyboard input and clipboard operations. */
+/** Application-level accessibility, window discovery and activation operations. */
 export interface CuaApp extends CuaSurface {
   readonly pid: number
   readonly appHandle: CuaAppHandle
@@ -206,26 +229,6 @@ export interface CuaApp extends CuaSurface {
    * @returns A window object with its initial accessibility tree read silently; this updates the application's current snapshot.
    */
   getWindow(windowId: number): Promise<CuaWindow>
-  /**
-   * Input at the application's current focus.
-   * @param text - literal text; cancellation may leave a prefix entered.
-   * @returns dispatch evidence.
-   */
-  typeText(text: string): Promise<CuaActionResult>
-  /**
-   * Paste text or HTML through the application's standard Paste menu command.
-   * PASTE_NOT_CONSUMED means no clipboard read within the configured deadline after dispatch; inspect before retrying.
-   * @param text - Clipboard contents in the selected format; defaults to plain text.
-   * @param options - Clipboard format. Original contents are restored unless another writer changes them.
-   * @returns Dispatch evidence; unsupported Paste commands fail without typing fallback.
-   */
-  paste(text: string, options?: CuaPasteOptions): Promise<CuaActionResult>
-  /**
-   * Send a key/chord at current focus.
-   * @param key - xdotool-style chord such as super+c, shift+Tab, + or cmd++; plus is also a key name.
-   * @returns dispatch evidence.
-   */
-  pressKey(key: string): Promise<CuaActionResult>
 }
 /** Native app API; its caller owns global bindings and variable persistence. */
 export interface CuaApi {

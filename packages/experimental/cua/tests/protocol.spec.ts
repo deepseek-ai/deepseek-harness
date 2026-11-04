@@ -159,9 +159,43 @@ it.each(['click', 'hover', 'scroll', 'drag'])('validates 0–999 integer coordin
 it.each([true, false])('requires the reported application-level accessibility capability: %s', (appLevelAccessibility) => {
   const capabilities = {
     platform: 'macos', permissions: { accessibility: true, screenRecording: false }, appLevelAccessibility,
-    sessionLocked: false, methods: [], coordinateSpace: 'screenshot-pixels', browser: false,
+    keyboard: ['app'], sessionLocked: false, methods: [], coordinateSpace: 'screenshot-pixels', browser: false,
   }
   expect(CapabilitiesResult.parse(capabilities)).toEqual(capabilities)
   const { appLevelAccessibility: _omitted, ...missing } = capabilities
   expect(CapabilitiesResult.safeParse(missing).success).toBe(false)
+})
+
+it.each([
+  { keyboard: [] },
+  { keyboard: ['app'] },
+  { keyboard: ['window'] },
+  { keyboard: ['app', 'window'] },
+  { keyboard: ['app', 'app'] },
+] as const)('accepts keyboard scopes $keyboard without adding nonempty or unique constraints', ({ keyboard }) => {
+  const capabilities = {
+    platform: 'windows', permissions: { accessibility: true, screenRecording: true }, appLevelAccessibility: false,
+    keyboard, sessionLocked: false, methods: [], coordinateSpace: 'screenshot-pixels', browser: false,
+  }
+  expect(CapabilitiesResult.parse(capabilities)).toEqual(capabilities)
+})
+
+it.each([
+  { keyboard: ['screen'] },
+  { keyboard: ['app', 'screen'] },
+  { keyboard: ['App'] },
+])('rejects an unsupported keyboard scope in $keyboard', ({ keyboard }) => {
+  const capabilities = {
+    platform: 'macos', permissions: { accessibility: true, screenRecording: false }, appLevelAccessibility: true,
+    keyboard, sessionLocked: false, methods: [], coordinateSpace: 'screenshot-pixels', browser: false,
+  }
+  expect(CapabilitiesResult.safeParse(capabilities).success).toBe(false)
+})
+
+it('requires keyboard scopes', () => {
+  const capabilities = {
+    platform: 'macos', permissions: { accessibility: true, screenRecording: false }, appLevelAccessibility: true,
+    sessionLocked: false, methods: [], coordinateSpace: 'screenshot-pixels', browser: false,
+  }
+  expect(CapabilitiesResult.safeParse(capabilities).success).toBe(false)
 })
