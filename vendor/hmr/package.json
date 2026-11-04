@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/cordis-plugin-hmr",
   "description": "Hot Module Replacement Plugin for Cordis",
-  "version": "1.0.21-alpha.2",
+  "version": "1.1.0",
   "publishConfig": {
     "access": "public"
   },
