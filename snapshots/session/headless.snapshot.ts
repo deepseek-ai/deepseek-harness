@@ -100,7 +100,14 @@ interface SessionLog {
   readonly header: JsonObject
 }
 
-/** Keep the cwd text priced by compaction independent of the platform's temporary-root length. */
+/**
+ * Scenarios whose compaction prices the runtime-context directory text: the current directory of
+ * `compaction-recovery`, and the `Workspace root` line the other three print after `cd /tmp` leaves the
+ * root. Their temporary root gets a fixed text length so `shadowedTokenCount` is platform independent.
+ */
+const COMPACTION_PRICED_SCENARIOS = new Set(['compaction-recovery', 'compaction-output-reserve', 'compaction-summary-headroom', 'model-switch-compaction'])
+
+/** Keep the directory text priced by compaction independent of the platform's temporary-root length. */
 async function compactionWorkspaceOptions(): Promise<{ tempDirParent: string; tempDirPrefix: string }> {
   const tempDirParent = await realpath(tmpdir())
   const prefix = 'dsh-log-snap-'
@@ -1410,7 +1417,7 @@ describe('headless recorded-session snapshots', () => {
         result = await runLoaderSmoke({
           label: `${scenario.name} headless snapshot`,
           tempDirPrefix: 'dsh-log-snap-',
-          ...(scenario.name === 'compaction-recovery' ? await compactionWorkspaceOptions() : {}),
+          ...(COMPACTION_PRICED_SCENARIOS.has(scenario.name) ? await compactionWorkspaceOptions() : {}),
           ...(scenario.manifest.workspace?.parent === 'outside-temp' ? { tempDirParent: outsideTempWorkspaceParent() } : {}),
           binScript: dshBin,
           sourceImport: 'tsx/esm',
