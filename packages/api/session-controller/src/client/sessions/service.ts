@@ -130,12 +130,24 @@ function displayTitleOf(title: string | undefined, cwd: string | undefined, id: 
 }
 
 /**
- * Increment a trailing fork number while preserving its half-width or
- * full-width parentheses; an unnumbered title starts with ` (1)`.
+ * Increment the fork number until the candidate is not taken.
  * @param title - source session's durable title.
+ * @param taken - durable titles of Host-listed sessions.
  * @returns the title assigned to the fork child.
  */
-function increasedForkTitle(title: string): string {
+function increasedForkTitle(title: string, taken: ReadonlySet<string>): string {
+  let next = incrementedTitle(title)
+  while (taken.has(next)) next = incrementedTitle(next)
+  return next
+}
+
+/**
+ * Increment a trailing fork number while preserving its half-width or
+ * full-width parentheses; an unnumbered title starts with ` (1)`.
+ * @param title - title to increment.
+ * @returns the title with the next fork number.
+ */
+function incrementedTitle(title: string): string {
   const ascii = /^(.*?)\((\d+)\)$/u.exec(title)
   if (ascii?.[1] !== undefined && ascii[2] !== undefined) {
     return `${ascii[1]}(${BigInt(ascii[2]) + 1n})`
@@ -455,7 +467,8 @@ export class ClientSessions implements ISessions {
    *   seq (a real event seq the caller already knows; a cut inside an open
    *   turn is balanced Host-side with synthetic closers, and omission selects
    *   the latest completed-turn prefix), and whether to increment an
-   *   inherited durable title before resolving, plus permission to start source migration.
+   *   inherited durable title, skipping numbers Host-listed titles already use,
+   *   before resolving, plus permission to start source migration.
    * @returns the child session id.
    * @throws {SessionForkError} with the source id.
    * @throws {Error} when a requested child-title rename fails after creation.
@@ -480,7 +493,9 @@ export class ClientSessions implements ISessions {
     const childId = result.value.sessionId
     opts.onCreated?.(childId)
     if (sourceTitle !== undefined) {
-      const renamed = await this.manager.rename(childId, increasedForkTitle(sourceTitle))
+      const list = this.list.getSnapshot()
+      const taken = new Set(list.ids.flatMap(id => list.byId[id]?.title ?? []))
+      const renamed = await this.manager.rename(childId, increasedForkTitle(sourceTitle, taken))
       if (!renamed.ok) throw new Error(`fork child rename failed: ${renamed.error.code}: ${renamed.error.message}`)
     }
     return childId
