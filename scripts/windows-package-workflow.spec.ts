@@ -1,3 +1,4 @@
+import { expectDesktopArchive } from './desktop-archive-workflow-test.ts'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -11,7 +12,8 @@ const workflow = yaml.load(readFileSync(resolve(root, '.github/workflows/windows
   permissions: Record<string, string>
   concurrency: { group: string; 'cancel-in-progress': boolean }
   jobs: Record<string, {
-    'runs-on': string
+    defaults?: { run: { shell: string } }
+    'runs-on': string | string[]
     env: Record<string, string>
     steps: Array<{
       id?: string
@@ -105,15 +107,16 @@ it('validates before building and passes the same mode and version to checks and
 
 it('retains failure diagnostics and uploads only the selected successful installer', () => {
   const uploads = job.steps.filter(step => step.uses?.startsWith('actions/upload-artifact@'))
-  expect(uploads).toHaveLength(3)
+  expect(uploads).toHaveLength(1)
+  const archival = expectDesktopArchive(workflow.jobs['upload-artifact']!, 2)
   expect(uploads[0]!.if).toBe("always() && steps.checkout.outcome == 'success'")
   expect(uploads[0]!.with).toMatchObject({
     path: '${{ github.workspace }}/apps/desktop/.desktop-build/packaging-runs/',
     'include-hidden-files': true,
   })
   for (const mode of ['unsigned', 'signed']) {
-    const upload = uploads.find(step => step.if === `success() && inputs.signing == '${mode}'`)!
-    expect(upload.with).toMatchObject({ path: '${{ steps.retained.outputs.directory }}/*', 'if-no-files-found': 'error', 'compression-level': 0 })
+    const upload = archival.find(step => step.if === `success() && inputs.signing == '${mode}'`)!
+    expect(upload.with).toMatchObject({ path: '${{ needs.package.outputs.directory }}/*', 'if-no-files-found': 'error', 'compression-level': 0 })
   }
 })
 
@@ -210,4 +213,11 @@ it.skipIf(process.platform !== 'win32')('stages helpers that remain usable when 
   } finally {
     rmSync(directory, { recursive: true, force: true, maxRetries: 3 })
   }
+})
+
+it('archives with native PowerShell and the persistent packaging store', () => {
+  const archival = workflow.jobs['upload-artifact']!
+  expect(archival.defaults?.run.shell).toBe('pwsh')
+  expect(archival.steps.find(step => step.name === 'Configure persistent pnpm store')?.run)
+    .toBe(job.steps.find(step => step.name === 'Configure persistent pnpm store')?.run)
 })
