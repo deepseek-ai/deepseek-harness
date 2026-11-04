@@ -2,7 +2,7 @@
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { z } from 'zod'
-import type { CuaActionResult, CuaCapabilities, CuaObservationOptions, CuaPasteOptions, CuaSurface, CuaWindowInfo } from './types.ts'
+import type { CuaActionResult, CuaCapabilities, CuaObservationOptions, CuaPasteOptions, CuaWindow, CuaWindowInfo } from './types.ts'
 import type { LaunchEntriesResult, WindowRequest } from './window-protocol.ts'
 
 /** Connection-owned grant for exactly one observed window lifetime. */
@@ -14,7 +14,7 @@ export type CuaWindowDispatch = (operation: CuaWindowOperation) => Promise<JsonV
 /** Discovered launch entry; its identifier is accepted by launch, not by window selection. */
 export type CuaLaunchEntry = z.output<typeof LaunchEntriesResult>[number]
 /** Selected window; keyboard and clipboard operations require this window in front. */
-export interface CuaDesktopWindow extends CuaSurface {
+export interface CuaDesktopWindow extends CuaWindow {
   windowId: number
   windowHandle: CuaWindowHandle
   /** Bring this window forward. @returns Dispatch evidence, not application success. */
@@ -32,7 +32,7 @@ export interface CuaWindowApi {
   getCapabilities(options?: CuaObservationOptions): Promise<CuaCapabilities>
   /** Discover top-level windows without reading AX. @param options Output options. @returns Window metadata. */
   listWindows(options?: CuaObservationOptions): Promise<CuaWindowInfo[]>
-  /** Authorize selected windows and read their initial AX silently. A failure may leave earlier grants in place.
+  /** Authorize selected windows and read their initial accessibility trees silently. A failure may leave earlier grants in place.
    * @param ids IDs from listWindows; duplicates reject. @returns Windows in requested order.
    */
   getWindows(ids: readonly number[]): Promise<CuaDesktopWindow[]>

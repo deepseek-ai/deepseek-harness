@@ -1,7 +1,7 @@
 /** Model-authored operation JSON cannot supply host configuration or bypass retained identities. */
 import { expect, it } from 'vitest'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import { Request, ScreenshotResult } from '../src/protocol.ts'
+import { CapabilitiesResult, Request, ScreenshotResult } from '../src/protocol.ts'
 
 const rejectedRequests: Array<{ reason: string; request: JsonValue }> = [
   { reason: 'raw process ID instead of a selected app handle', request: { method: 'typeText', params: { pid: 17, text: 'hello' } } },
@@ -154,4 +154,14 @@ it.each(['click', 'hover', 'scroll', 'drag'])('validates 0–999 integer coordin
     }
     expect(Request.safeParse({ method, params: { ...params, relative: false, [field]: 1000 } }).success).toBe(true)
   }
+})
+
+it.each([true, false])('requires the reported application-level accessibility capability: %s', (appLevelAccessibility) => {
+  const capabilities = {
+    platform: 'macos', permissions: { accessibility: true, screenRecording: false }, appLevelAccessibility,
+    sessionLocked: false, methods: [], coordinateSpace: 'screenshot-pixels', browser: false,
+  }
+  expect(CapabilitiesResult.parse(capabilities)).toEqual(capabilities)
+  const { appLevelAccessibility: _omitted, ...missing } = capabilities
+  expect(CapabilitiesResult.safeParse(missing).success).toBe(false)
 })

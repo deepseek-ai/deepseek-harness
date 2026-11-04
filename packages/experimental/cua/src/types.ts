@@ -34,7 +34,7 @@ export interface CuaObservationSink {
 }
 /** Observations emit by default. Returned values are unaffected by this option. */
 export interface CuaObservationOptions { emit?: boolean }
-/** Full observations of the requested content; each read replaces this surface's current snapshot. */
+/** Full observations of the requested content; each read replaces the application's current snapshot. */
 export interface CuaAxOptions extends CuaObservationOptions {
   /** Reserved compatibility option; observations are never diffs. */
   disableDiffing?: boolean
@@ -85,12 +85,8 @@ export type CuaPasteOptions = Pick<CuaParameters<'paste'>, 'format'>
 export type CuaSelectTextOptions = Pick<CuaParameters<'selectText'>, 'prefix' | 'suffix' | 'selectionType'>
 /** Positive deltas reveal content above/left; each axis is an integer from -10 to 10. */
 export type CuaScrollOptions = Pick<CuaParameters<'scroll'>, 'x' | 'y' | 'deltaLinesX' | 'deltaLinesY'> & CuaCoordinateOptions
-/** An observed AX tree and independently captured image; capture is not atomic. */
-export interface CuaObservation { state: string; screenshot: CuaScreenshot }
 /**
- * App-wide or explicitly scoped window observations and actions.
- * Capture and pointer delivery reject known AX/display frame conflicts with WINDOW_CHANGED.
- * Coordinate input also rejects resizing since the latest successful AX read or screenshot.
+ * Accessibility observations and element operations shared by an application and its windows.
  * Advertised AX actions remain available; failed actions are not retried through pointer input.
  */
 export interface CuaSurface {
@@ -100,32 +96,21 @@ export interface CuaSurface {
    */
   show(): Promise<CuaShowResult>
   /**
-   * Read fresh AX text, with menu contents collapsed by default.
+   * Read the full accessibility tree, with menu contents collapsed by default.
+   * The returned tree becomes the application's current snapshot; use element ids from its latest successful read.
    * @param options - emission, menu expansion and field detail options.
-   * @returns AX text with element ids.
+   * @returns Full accessibility tree text with element ids, subject to the provider's traversal limits.
    */
-  getAXState(options?: CuaAxOptions): Promise<string>
-  /**
-   * Capture the selected window.
-   * @param options - emission options.
-   * @returns encoded model-request image with its format, pixel dimensions and window; use mimeType when saving or declaring the image.
-   */
-  getScreenshot(options?: CuaObservationOptions): Promise<CuaScreenshot>
-  /**
-   * Read AX then capture.
-   * @param options - observation options.
-   * @returns both non-atomic observations.
-   */
-  getAXStateAndScreenshot(options?: CuaAxOptions): Promise<CuaObservation>
+  getAccessibilityTree(options?: CuaAxOptions): Promise<string>
   /**
    * List the actions currently advertised by an element, including attribute-setting operations.
-   * @param elementId - Element id from this surface's latest observation.
+   * @param elementId - Element id from the application's current snapshot.
    * @returns Provider-defined action names; empty when the element advertises none.
    */
   listActions(elementId: CuaElementId): Promise<string[]>
   /**
    * Perform an element action, including attribute-setting operations.
-   * @param elementId - Element id from this surface's latest observation.
+   * @param elementId - Element id from the application's current snapshot.
    * @param action - Exact action name from listActions.
    * @param argument - Direct action argument; omit or pass null for a no-argument action, or pass the value itself for attribute setting.
    * @returns Whether the provider successfully executed the requested operation.
@@ -134,10 +119,39 @@ export interface CuaSurface {
   /**
    * Invoke the element's default action.
    * If the element's type does not support a default action, the result's dispatched field is false.
-   * @param elementId - Element id from this surface's latest observation.
+   * @param elementId - Element id from the application's current snapshot.
    * @returns Whether the provider successfully executed the requested operation.
    */
   invoke(elementId: CuaElementId): Promise<CuaActionResult>
+  /**
+   * Set an observed control value.
+   * @param elementId - Element id from the application's current snapshot.
+   * @param value - Replacement value as JSON; supported values are defined by the platform provider.
+   * @returns dispatch evidence.
+   */
+  setValue(elementId: CuaElementId, value: JsonValue): Promise<CuaActionResult>
+  /**
+   * Select one literal text occurrence through writable AXSelectedTextRange and verify its range.
+   * @param elementId - Element id from the application's current snapshot.
+   * @param text - Nonempty literal text; multiple matches require adjacent context.
+   * @param options - Adjacent prefix/suffix and selection or cursor placement.
+   * @returns Dispatch evidence; rejects unsupported, ambiguous or changed text without keyboard fallback.
+   */
+  selectText(elementId: CuaElementId, text: string, options?: CuaSelectTextOptions): Promise<CuaActionResult>
+}
+/**
+ * An explicit window with screenshot and pointer input operations.
+ * Capture and pointer delivery reject known AX/display frame conflicts with WINDOW_CHANGED.
+ * Coordinate input also rejects resizing since the latest successful AX read or screenshot.
+ */
+export interface CuaWindow extends CuaSurface {
+  readonly windowId: number
+  /**
+   * Capture the selected window.
+   * @param options - emission options.
+   * @returns encoded model-request image with its format, pixel dimensions and window; use mimeType when saving or declaring the image.
+   */
+  getScreenshot(options?: CuaObservationOptions): Promise<CuaScreenshot>
   /**
    * Reveal advertised AX alternate UI, otherwise move the system cursor without pressing a button.
    * The system-pointer route requires the app to be foreground and the point unobscured; never activates or raises it.
@@ -157,21 +171,6 @@ export interface CuaSurface {
    */
   click(target: CuaElementId | readonly [number, number], options?: CuaClickOptions): Promise<CuaActionResult>
   /**
-   * Set an observed control value.
-   * @param elementId - element id from this surface's latest observation.
-   * @param value - Replacement value as JSON; supported values are defined by the platform provider.
-   * @returns dispatch evidence.
-   */
-  setValue(elementId: CuaElementId, value: JsonValue): Promise<CuaActionResult>
-  /**
-   * Select one literal text occurrence through writable AXSelectedTextRange and verify its range.
-   * @param elementId - Text control element id from this surface's latest observation.
-   * @param text - Nonempty literal text; multiple matches require adjacent context.
-   * @param options - Adjacent prefix/suffix and selection or cursor placement.
-   * @returns Dispatch evidence; rejects unsupported, ambiguous or changed text without keyboard fallback.
-   */
-  selectText(elementId: CuaElementId, text: string, options?: CuaSelectTextOptions): Promise<CuaActionResult>
-  /**
    * Scroll at a screenshot-local point or integer ratio.
    * @param options - point, coordinate mode and line deltas; at least one delta must be nonzero.
    * @returns dispatch evidence.
@@ -186,14 +185,7 @@ export interface CuaSurface {
    */
   drag(from: readonly [number, number], to: readonly [number, number], options?: CuaDragOptions): Promise<CuaActionResult>
 }
-/** One explicit window; keyboard operations remain app-scoped because they follow focus. */
-export interface CuaWindow extends CuaSurface { readonly windowId: number }
-/**
- * Native app handle supporting direct observations and actions without window enumeration.
- * Screenshots and coordinates reuse the latest AX observation's focused on-screen,
- * nonzero-size window, or require exactly one such window. Read fresh AX to follow
- * focus changes; explicit window objects retain their selected target.
- */
+/** Application-level accessibility, window discovery, keyboard input and clipboard operations. */
 export interface CuaApp extends CuaSurface {
   readonly pid: number
   readonly appHandle: CuaAppHandle
@@ -211,7 +203,7 @@ export interface CuaApp extends CuaSurface {
   /**
    * Observe a specific window.
    * @param windowId - ID obtained from getWindows.
-   * @returns a reusable window object with its initial AX state retained silently; getAXState emits it.
+   * @returns A window object with its initial accessibility tree read silently; this updates the application's current snapshot.
    */
   getWindow(windowId: number): Promise<CuaWindow>
   /**
@@ -265,7 +257,7 @@ export interface CuaApi {
   /**
    * Select an app, obtain consent, launch it in the background if necessary, and silently retain initial AX state.
    * @param selector - Exact name, bundle ID, absolute application path or running PID string; ambiguous names reject.
-   * @returns a handle tied to this process lifetime.
+   * @returns An application handle tied to this process lifetime; its initial tree read becomes the current snapshot.
    */
   getApp(selector: string): Promise<CuaApp>
 }

@@ -164,7 +164,7 @@ it('correlates a native request with its logged tool invocation', async () => {
 
 it('reports screenshot pixel coordinates while preserving native capabilities', async () => {
   const f = await setup()
-  const capabilities = { platform: 'macos', coordinateSpace: 'window-points', permissions: { accessibility: true, screenCapture: false } }
+  const capabilities = { platform: 'macos', coordinateSpace: 'window-points', permissions: { accessibility: true, screenCapture: false }, appLevelAccessibility: true }
   native.request.mockResolvedValueOnce(capabilities)
   const result = await f.execute('getCapabilities')
   expect(result.isError).toBe(false)

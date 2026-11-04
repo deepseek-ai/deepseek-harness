@@ -11,6 +11,7 @@ import type { CuaWindowOperation } from '../src/window-types.ts'
 const element = (id: string): CuaElementId => brandString<CuaElementId>(id)
 
 const metadata = { windowId: 7, pid: 10, appName: 'Editor', title: 'Document', bounds: { x: -100, y: 0, width: 800, height: 600 }, isOnScreen: true, onCurrentSpace: null }
+const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC'
 function fixture() {
   const text = vi.fn()
   const dispatch = vi.fn(async (request: CuaWindowOperation): Promise<JsonValue> => {
@@ -20,6 +21,8 @@ function fixture() {
       case 'getState': return { windowHandle: 'window-7', windowId: 7, pid: 10, snapshotId: 'state-1', tree: 'AX window', windows: [metadata], truncated: false }
       case 'findApps': return [{ id: 'shell-entry', displayName: 'Settings', kind: 'shell' }]
       case 'listActions': return ['AXPress']
+      case 'hover': return { dispatched: true, hoverRoute: 'accessibility', systemPointerMoved: false }
+      case 'screenshot': return { mimeType: 'image/png', data: PNG, pixelWidth: 1, pixelHeight: 1, windowId: 7, bounds: metadata.bounds, coordinateSpace: 'screenshot-pixels' }
       default: return { dispatched: true }
     }
   })
@@ -39,9 +42,15 @@ it('binds all observation and keyboard operations to a selected window and suppr
   expect(window).toBeDefined()
   if (!window) throw new Error('Missing selected window')
   expect(f.text).not.toHaveBeenCalled()
-  await window.getAXState()
+  expect(f.dispatch.mock.calls[1]?.[0]).toEqual({ method: 'getState', params: { windowHandle: 'window-7' } })
+  await window.getAccessibilityTree()
   expect(f.text).toHaveBeenCalledWith('AX window')
   await window.click(element('0'))
+  await window.click([1, 2])
+  await window.hover(element('42.12345'))
+  await window.scroll({ x: 1, y: 2, deltaLinesX: 0, deltaLinesY: 1 })
+  await window.drag([1, 2], [3, 4])
+  expect(await window.getScreenshot()).toMatchObject({ mimeType: 'image/png', pixelWidth: 1, pixelHeight: 1, windowId: 7 })
   await window.activate()
   await window.typeText('hello')
   await window.paste('world')
@@ -116,7 +125,7 @@ it('supports discovery without a sink and suppresses requested emissions', async
   await f.api.listWindows({ emit: false })
   expect(f.text).not.toHaveBeenCalled()
   await createCuaWindowApi(f.dispatch).listWindows()
-  const capabilities = { platform: 'windows', permissions: { accessibility: true, screenRecording: true }, sessionLocked: false, methods: [], coordinateSpace: 'screenshot-pixels', browser: false }
+  const capabilities = { platform: 'windows', permissions: { accessibility: true, screenRecording: true }, appLevelAccessibility: false, sessionLocked: false, methods: [], coordinateSpace: 'screenshot-pixels', browser: false }
   f.dispatch.mockResolvedValueOnce(capabilities)
   expect(await f.api.getCapabilities()).toEqual(capabilities)
 })

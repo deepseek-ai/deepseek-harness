@@ -68,7 +68,7 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
   async function emit(value: object, options?: CuaObservationOptions): Promise<void> {
     if (options?.emit !== false) await sink?.text(JSON.stringify(value))
   }
-
+  const objects = createCuaObjects(dispatch, sink)
 
   const api: CuaApi = {
     async getCapabilities(options) {
@@ -96,7 +96,7 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
     async getApp(selector) {
       const { appHandle, pid } = AppResult.parse(await call('getApp', { selector }))
       const app: CuaApp = {
-        ...createCuaSurface(dispatch, sink, appHandle, pid), pid, appHandle,
+        ...objects.createSurface(appHandle, pid), pid, appHandle,
         async activate() { return action('activate', { appHandle }) },
         async getWindows(options) {
           const windows = WindowsResult.parse(await call('listWindows', { appHandle }))
@@ -105,8 +105,8 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
           return windows
         },
         async getWindow(windowId): Promise<CuaWindow> {
-          const window = { ...createCuaSurface(dispatch, sink, appHandle, pid, windowId), windowId }
-          await window.getAXState({ emit: false })
+          const window = objects.createWindow(appHandle, pid, windowId)
+          await window.getAccessibilityTree({ emit: false })
           return window
         },
         async typeText(text) { return action('typeText', { appHandle, text }) },
@@ -115,7 +115,7 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
         }) },
         async pressKey(key) { return action('pressKey', { appHandle, ...keyChord(key) }) },
       }
-      await app.getAXState({ emit: false })
+      await app.getAccessibilityTree({ emit: false })
       return app
     },
   }
@@ -123,127 +123,128 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
 }
 
 /**
- * Bind one observed surface to its authorized dispatcher.
+ * Create application and window objects sharing their latest observations.
  * @param dispatch Logged operation dispatcher.
  * @param sink Optional observation output.
- * @param appHandle Native authorization handle.
- * @param pid Observed process lifetime owner.
- * @param selectedWindow Explicit window selection, or the macOS application scope.
- * @returns Observation and input methods retaining only the latest AX state.
+ * @returns Surface and window constructors with observation state owned by this factory.
  */
-export function createCuaSurface(dispatch: CuaDispatch, sink: CuaObservationSink | undefined,
-  appHandle: CuaAppHandle, pid: number, selectedWindow?: number): CuaSurface {
+export function createCuaObjects(dispatch: CuaDispatch, sink: CuaObservationSink | undefined): {
+  createSurface(appHandle: CuaAppHandle, pid: number, selectedWindow?: number): CuaSurface
+  createWindow(appHandle: CuaAppHandle, pid: number, windowId: number): CuaWindow
+} {
   const call = validatedCall(dispatch)
   const action = async (method: CuaOperation['method'], params: Record<string, JsonValue>) => ActionResult.parse(await call(method, params))
-  let observed: ReturnType<typeof StateResult.parse> | undefined
-  function snapshotParams(): Record<string, JsonValue> {
-    if (!observed) throw new Error('Read getAXState before using this surface')
-    return { appHandle, snapshotId: observed.snapshotId }
+  const observed = new Map<CuaAppHandle, ReturnType<typeof StateResult.parse>>()
+  function elementParams(appHandle: CuaAppHandle): Record<string, JsonValue> {
+    const current = observed.get(appHandle)
+    if (current === undefined) throw new Error('Read getAccessibilityTree before using this surface')
+    return { appHandle, snapshotId: current.snapshotId }
   }
-  function windowId(): number {
-    if (selectedWindow !== undefined) return selectedWindow
-    const windows = observed?.windows.filter(window => window.isOnScreen && window.bounds.width > 0 && window.bounds.height > 0)
-    const focused = windows?.find(window => window.windowId === observed?.focusedWindowId)
-    if (focused) return focused.windowId
-    const first = windows?.[0]
-    if (!first || windows.length !== 1) throw new Error('Select a window with app.getWindows() and app.getWindow(windowId) before this operation')
-    return first.windowId
+  function coordinateParams(appHandle: CuaAppHandle, windowId: number): Record<string, JsonValue> {
+    const current = observed.get(appHandle)
+    return {
+      appHandle, windowId,
+      ...current !== undefined && (current.windowId === null || current.windowId === windowId)
+        ? { snapshotId: current.snapshotId } : {},
+    }
   }
-  const result: CuaSurface = {
-    async show() {
-      return ShowResult.parse(await call('show', { appHandle,
-        ...selectedWindow === undefined ? {} : { windowId: selectedWindow },
-      }))
-    },
-    async getAXState(options) {
-      observed = undefined
-      const state = StateResult.parse(await call('getState', { appHandle,
-        ...selectedWindow === undefined ? {} : { windowId: selectedWindow },
-        ...options?.includeMenus === undefined ? {} : { includeMenus: options.includeMenus },
-        ...options?.details === undefined ? {} : { details: options.details },
-      }))
-      if (state.appHandle !== appHandle || state.pid !== pid || state.windowId !== (selectedWindow ?? null)) {
-        throw new Error('Native observation belongs to another application or window')
-      }
-      if (state.windows.some(window => window.pid !== pid)) throw new Error('Native windows belong to another application')
-      observed = state
-      if (options?.emit !== false) await sink?.text(state.tree)
-      return state.tree
-    },
-    async getScreenshot(options) {
-      if (!observed) await result.getAXState({ emit: false })
-      const target = windowId()
-      const image = ScreenshotResult.parse(await call('screenshot', { appHandle, windowId: target }))
-      if (image.windowId !== target) throw new Error('Native screenshot belongs to another window')
-      const screenshot: CuaScreenshot = {
-        bytes: Uint8Array.from(Buffer.from(image.data, 'base64')),
-        mimeType: image.mimeType,
-        pixelWidth: image.pixelWidth,
-        pixelHeight: image.pixelHeight,
-        windowId: image.windowId,
-      }
-      if (options?.emit !== false) await sink?.image(screenshot)
-      return screenshot
-    },
-    async getAXStateAndScreenshot(options) {
-      const state = await result.getAXState(options)
-      return { state, screenshot: await result.getScreenshot(options) }
-    },
-    async listActions(elementId) {
-      return ActionNamesResult.parse(await call('listActions', { ...snapshotParams(), elementId }))
-    },
-    async performAction(elementId, name, argument) {
-      return action('performAction', { ...snapshotParams(), elementId, action: name,
-        ...argument === undefined ? {} : { argument },
-      })
-    },
-    async invoke(elementId) {
-      return ActionResult.parse(await call('invoke', { ...snapshotParams(), elementId }))
-    },
-    async hover(target, options) {
-      const relative = options?.relative === undefined ? {} : { relative: options.relative }
-      if (typeof target === 'string') return HoverResult.parse(await call('hover', { ...snapshotParams(), elementId: target, ...relative }))
-      const [x, y] = target
-      return HoverResult.parse(await call('hover', { ...snapshotParams(), windowId: windowId(), x, y, ...relative }))
-    },
-    async click(target, options) {
-      const mouseButton = options?.mouseButton ?? 'left'
-      const clickCount = options?.clickCount ?? 1
-      if (mouseButton !== 'left' && clickCount !== 1) throw new Error('Only left double-click is supported')
-      const modifiers = options?.modifiers === undefined ? {} : { modifiers: [...options.modifiers] }
-      const hold = options?.holdMs === undefined ? {} : { holdMs: options.holdMs }
-      const relative = options?.relative === undefined ? {} : { relative: options.relative }
-      if (typeof target === 'string') {
-        return action('click', { ...snapshotParams(), ...modifiers, ...hold, ...relative, elementId: target,
-          ...mouseButton === 'left' ? {} : { mouseButton }, ...clickCount === 1 ? {} : { clickCount },
+  function createSurface(appHandle: CuaAppHandle, pid: number, selectedWindow?: number): CuaSurface {
+    return {
+      async show() {
+        return ShowResult.parse(await call('show', { appHandle,
+          ...selectedWindow === undefined ? {} : { windowId: selectedWindow },
+        }))
+      },
+      async getAccessibilityTree(options) {
+        observed.delete(appHandle)
+        const state = StateResult.parse(await call('getState', { appHandle,
+          ...selectedWindow === undefined ? {} : { windowId: selectedWindow },
+          ...options?.includeMenus === undefined ? {} : { includeMenus: options.includeMenus },
+          ...options?.details === undefined ? {} : { details: options.details },
+        }))
+        if (state.appHandle !== appHandle || state.pid !== pid || state.windowId !== (selectedWindow ?? null)) {
+          throw new Error('Native observation belongs to another application or window')
+        }
+        if (state.windows.some(window => window.pid !== pid)) throw new Error('Native windows belong to another application')
+        observed.set(appHandle, state)
+        if (options?.emit !== false) await sink?.text(state.tree)
+        return state.tree
+      },
+      async listActions(elementId) {
+        return ActionNamesResult.parse(await call('listActions', { ...elementParams(appHandle), elementId }))
+      },
+      async performAction(elementId, name, argument) {
+        return action('performAction', { ...elementParams(appHandle), elementId, action: name,
+          ...argument === undefined ? {} : { argument },
         })
-      }
-      const [x, y] = target
-      return action('click', { ...snapshotParams(), windowId: windowId(), x, y, mouseButton, clickCount, ...modifiers, ...hold, ...relative })
-    },
-    async setValue(elementId, value) { return action('setValue', { ...snapshotParams(), elementId, value }) },
-    async selectText(elementId, text, options) {
-      return action('selectText', { ...snapshotParams(), elementId, text,
-        ...options?.prefix === undefined ? {} : { prefix: options.prefix },
-        ...options?.suffix === undefined ? {} : { suffix: options.suffix },
-        ...options?.selectionType === undefined ? {} : { selectionType: options.selectionType },
-      })
-    },
-    async scroll(options) {
-      if (options.deltaLinesX === 0 && options.deltaLinesY === 0) throw new Error('At least one scroll delta must be nonzero')
-      return action('scroll', {
-        ...snapshotParams(), windowId: windowId(),
-        x: options.x, y: options.y, deltaLinesX: options.deltaLinesX, deltaLinesY: options.deltaLinesY,
-        ...options.relative === undefined ? {} : { relative: options.relative },
-      })
-    },
-    async drag(from, to, options) {
-      return action('drag', { ...snapshotParams(), windowId: windowId(), fromX: from[0], fromY: from[1], toX: to[0], toY: to[1],
-        ...options?.relative === undefined ? {} : { relative: options.relative },
-        ...options?.mouseButton === undefined ? {} : { mouseButton: options.mouseButton },
-        ...options?.modifiers === undefined ? {} : { modifiers: [...options.modifiers] },
-      })
-    },
+      },
+      async invoke(elementId) {
+        return ActionResult.parse(await call('invoke', { ...elementParams(appHandle), elementId }))
+      },
+      async setValue(elementId, value) { return action('setValue', { ...elementParams(appHandle), elementId, value }) },
+      async selectText(elementId, text, options) {
+        return action('selectText', { ...elementParams(appHandle), elementId, text,
+          ...options?.prefix === undefined ? {} : { prefix: options.prefix },
+          ...options?.suffix === undefined ? {} : { suffix: options.suffix },
+          ...options?.selectionType === undefined ? {} : { selectionType: options.selectionType },
+        })
+      },
+    }
   }
-  return result
+  function createWindow(appHandle: CuaAppHandle, pid: number, windowId: number): CuaWindow {
+    return {
+      ...createSurface(appHandle, pid, windowId), windowId,
+      async getScreenshot(options) {
+        const image = ScreenshotResult.parse(await call('screenshot', { appHandle, windowId }))
+        if (image.windowId !== windowId) throw new Error('Native screenshot belongs to another window')
+        const screenshot: CuaScreenshot = {
+          bytes: Uint8Array.from(Buffer.from(image.data, 'base64')),
+          mimeType: image.mimeType,
+          pixelWidth: image.pixelWidth,
+          pixelHeight: image.pixelHeight,
+          windowId: image.windowId,
+        }
+        if (options?.emit !== false) await sink?.image(screenshot)
+        return screenshot
+      },
+      async hover(target, options) {
+        const relative = options?.relative === undefined ? {} : { relative: options.relative }
+        if (typeof target === 'string') return HoverResult.parse(await call('hover', { ...elementParams(appHandle), elementId: target, ...relative }))
+        const [x, y] = target
+        return HoverResult.parse(await call('hover', { ...coordinateParams(appHandle, windowId), x, y, ...relative }))
+      },
+      async click(target, options) {
+        const mouseButton = options?.mouseButton ?? 'left'
+        const clickCount = options?.clickCount ?? 1
+        if (mouseButton !== 'left' && clickCount !== 1) throw new Error('Only left double-click is supported')
+        const modifiers = options?.modifiers === undefined ? {} : { modifiers: [...options.modifiers] }
+        const hold = options?.holdMs === undefined ? {} : { holdMs: options.holdMs }
+        const relative = options?.relative === undefined ? {} : { relative: options.relative }
+        if (typeof target === 'string') {
+          return action('click', { ...elementParams(appHandle), ...modifiers, ...hold, ...relative, elementId: target,
+            ...mouseButton === 'left' ? {} : { mouseButton }, ...clickCount === 1 ? {} : { clickCount },
+          })
+        }
+        const [x, y] = target
+        return action('click', { ...coordinateParams(appHandle, windowId), x, y, mouseButton, clickCount, ...modifiers, ...hold, ...relative })
+      },
+      async scroll(options) {
+        if (options.deltaLinesX === 0 && options.deltaLinesY === 0) throw new Error('At least one scroll delta must be nonzero')
+        return action('scroll', {
+          ...coordinateParams(appHandle, windowId),
+          x: options.x, y: options.y, deltaLinesX: options.deltaLinesX, deltaLinesY: options.deltaLinesY,
+          ...options.relative === undefined ? {} : { relative: options.relative },
+        })
+      },
+      async drag(from, to, options) {
+        return action('drag', { ...coordinateParams(appHandle, windowId),
+          fromX: from[0], fromY: from[1], toX: to[0], toY: to[1],
+          ...options?.relative === undefined ? {} : { relative: options.relative },
+          ...options?.mouseButton === undefined ? {} : { mouseButton: options.mouseButton },
+          ...options?.modifiers === undefined ? {} : { modifiers: [...options.modifiers] },
+        })
+      },
+    }
+  }
+  return { createSurface, createWindow }
 }

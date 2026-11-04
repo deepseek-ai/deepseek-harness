@@ -1,6 +1,6 @@
 /** Window facade using the same observed surface operations as the application facade. */
 import { z } from 'zod'
-import { createCuaSurface, keyChord } from './api.ts'
+import { createCuaObjects, keyChord } from './api.ts'
 import { ActionResult, CapabilitiesResult } from './protocol.ts'
 import { LaunchEntriesResult, LaunchResult, SelectedWindowsResult, WindowDiscoveryResult, WindowRequest } from './window-protocol.ts'
 import type { CuaAppHandle, CuaObservationOptions, CuaObservationSink } from './types.ts'
@@ -43,23 +43,23 @@ export function createCuaWindowApi(dispatch: CuaWindowDispatch, sink?: CuaObserv
         const { windowId, pid } = selectedWindow
         const windowHandle = selectedWindow.windowHandle as CuaWindowHandle
         const appHandle = selectedWindow.windowHandle as CuaAppHandle
-        const surface = createCuaSurface(async (operation) => {
-          const params = z.record(z.string(), z.json()).parse(operation.params)
-          delete params.appHandle
-          delete params.windowId
-          const result = await call(operation.method, { ...params, windowHandle })
-          if (operation.method !== 'getState') return result
-          const state = z.record(z.string(), z.json()).parse(result)
-          return { ...state, appHandle }
-        }, sink, appHandle, pid, windowId)
         const window: CuaDesktopWindow = {
-          ...surface, windowId, windowHandle,
+          ...createCuaObjects(async (operation) => {
+            const params = z.record(z.string(), z.json()).parse(operation.params)
+            delete params.appHandle
+            delete params.windowId
+            const result = await call(operation.method, { ...params, windowHandle })
+            if (operation.method !== 'getState') return result
+            const state = z.record(z.string(), z.json()).parse(result)
+            return { ...state, appHandle }
+          }, sink).createWindow(appHandle, pid, windowId),
+          windowHandle,
           async activate() { return ActionResult.parse(await call('activate', { windowHandle })) },
           async typeText(text) { return ActionResult.parse(await call('typeText', { windowHandle, text })) },
           async paste(text, options) { return ActionResult.parse(await call('paste', { windowHandle, text, ...options })) },
           async pressKey(key) { return ActionResult.parse(await call('pressKey', { windowHandle, ...keyChord(key) })) },
         }
-        await window.getAXState({ emit: false })
+        await window.getAccessibilityTree({ emit: false })
         windows.push(window)
       }
       return windows

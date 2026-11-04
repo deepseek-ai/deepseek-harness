@@ -84,7 +84,7 @@ it.skipIf(process.platform === 'win32' || !existsSync(bridge) || !existsSync(boo
       expect(invalid.error?.message).not.toContain('ZodError')
       expect(invalid.error?.message).not.toContain('"origin"')
       expect(calls.filter(call => call.phase === 'invalid')).toEqual([])
-      const second = await run('await win.getAXState({emit:false}); await win.click("0"); await win.getAXState({emit:false});', 'second')
+      const second = await run('await win.getAccessibilityTree({emit:false}); await win.click("0"); await win.getAccessibilityTree({emit:false});', 'second')
       expect(second.error).toBeUndefined()
       expect(second.value).toContain('Count: 2')
       expect(calls.filter(call => call.phase === 'second').map(call => call.method)).toEqual(['getState', 'click', 'getState'])

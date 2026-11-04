@@ -193,6 +193,7 @@ actor AXWorker {
         if method == "getCapabilities" {
             return .result(.object(["platform": .string("macos"), "permissions": .object([
                 "accessibility": .bool(AXIsProcessTrusted()), "screenRecording": .bool(CGPreflightScreenCaptureAccess())]),
+                "appLevelAccessibility": .bool(true),
                 "sessionLocked": locked.map(JSONValue.bool) ?? .null,
                 "methods": .array(NativeProtocol.modelMethods.map(JSONValue.string)), "coordinateSpace": .string("window-points"), "browser": .bool(false)]))
         }

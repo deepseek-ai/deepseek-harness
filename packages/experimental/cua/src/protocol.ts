@@ -131,6 +131,8 @@ export const ScreenshotResult = NativeScreenshotResult.extend({
 /** Permissions are reported without opening system permission dialogs. */
 export const CapabilitiesResult = z.object({
   platform: z.string(), permissions: z.object({ accessibility: z.boolean(), screenRecording: z.boolean() }),
+  /** Whether the provider supports application-level accessibility observations. */
+  appLevelAccessibility: z.boolean(),
   sessionLocked: z.boolean().nullable(),
   methods: z.array(z.string()), coordinateSpace: z.literal('screenshot-pixels'), browser: z.literal(false),
 })
