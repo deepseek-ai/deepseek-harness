@@ -75,7 +75,7 @@ export namespace Loader {
  * Subclasses provide persistence by implementing `commit(change)` on `EntryTree`.
  */
 export class Loader extends EntryTree {
-  declare [Service.config]: Loader.Intercept
+  declare [Service.metadata]: Loader.Intercept
 
   public envData = process.env.CORDIS_SHARED
     ? JSON.parse(process.env.CORDIS_SHARED)
@@ -181,14 +181,14 @@ export class Loader extends EntryTree {
   }
 
   [Service.check]() {
-    const config: Loader.Intercept = Service.prototype[Service.resolveConfig].call(this)
+    const config: Loader.Intercept = Service.prototype[Service.resolveIntercept].call(this)
     if (config.await && this.getTasks().length) return false
     return true
   }
 
   showLog(entry: Entry, type: string) {
     if (entry.options.group || !entry.parent.tree.enableLogs) return
-    this.ctx.root.logger?.('loader').info('%s plugin %C', type, entry.options.name)
+    this.ctx[Context.root].logger?.('loader').info('%s plugin %C', type, entry.options.name)
   }
 
   /** Return the loader entry id that owns `fiber`, if any. */

@@ -1054,7 +1054,7 @@ describe('boot', () => {
     writeFileSync(join(dir, 'exiting.mjs'), [
       'export const name = "exiting"',
       'export function apply(ctx) {',
-      '  void ctx.root.fiber.dispose()',
+      '  void ctx[Symbol.for("cordis.root")].fiber.dispose()',
       '}',
       '',
     ].join('\n'))

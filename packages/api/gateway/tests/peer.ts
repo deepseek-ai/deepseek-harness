@@ -1,5 +1,5 @@
 /** Owner Peers for Gateway specs: every in-process call names its Peer explicitly. */
-import type { Context } from '@deepseek-ai/cordis'
+import { Context } from '@deepseek-ai/cordis'
 import { Peer } from '@deepseek-ai/dsh-client-connection'
 import type { PeerScope, Principal } from '@deepseek-ai/dsh-typert-protocol'
 
@@ -11,10 +11,10 @@ const owners = new WeakMap<Context, PeerScope>()
  * @returns the tree's shared owner Peer.
  */
 export function ownerPeer(ctx: Context): PeerScope {
-  let peer = owners.get(ctx.root)
+  let peer = owners.get(ctx[Context.root])
   if (peer === undefined) {
-    peer = new Peer(ctx.root, { principal: { kind: 'owner' } })
-    owners.set(ctx.root, peer)
+    peer = new Peer(ctx[Context.root], { principal: { kind: 'owner' } })
+    owners.set(ctx[Context.root], peer)
   }
   return peer
 }
@@ -26,5 +26,5 @@ export function ownerPeer(ctx: Context): PeerScope {
  * @returns an independent Peer.
  */
 export function peerFor(ctx: Context, principal: Principal): PeerScope {
-  return new Peer(ctx.root, { principal })
+  return new Peer(ctx[Context.root], { principal })
 }

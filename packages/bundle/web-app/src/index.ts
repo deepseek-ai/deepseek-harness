@@ -15,7 +15,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
-import type { Context } from '@deepseek-ai/cordis'
+import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { auditStartupEntries } from '@deepseek-ai/dsh-app-boot'
 import type {} from '@deepseek-ai/dsh-client-connection'
@@ -223,10 +223,10 @@ export function apply(ctx: Context, config: Config): void {
       // route owner are still mounting. Await Loader settlement first; a
       // hand-built tree without a Loader is already the complete tree.
       const announceReady = (): void => {
-        if (ANNOUNCED_ROOTS.has(connectionCtx.root)) return
+        if (ANNOUNCED_ROOTS.has(connectionCtx[Context.root])) return
         const webUrl = appRootUrl()
         const authenticatedUrl = connectionCtx.connection.authenticatedUrl(webUrl)
-        ANNOUNCED_ROOTS.add(connectionCtx.root)
+        ANNOUNCED_ROOTS.add(connectionCtx[Context.root])
         if (config.printUrl) {
           console.log(`dsh web: ${authenticatedUrl}`)
         }
@@ -245,7 +245,7 @@ export function apply(ctx: Context, config: Config): void {
       if (settled === undefined) announceReady()
       else {
         void settled.then(async () => {
-          await auditStartupEntries(connectionCtx.root, 'dsh web', () => {})
+          await auditStartupEntries(connectionCtx[Context.root], 'dsh web', () => {})
           // The tree can be disposed while the boot was in flight (early
           // SIGTERM); a URL line or browser tab for a dead server would only
           // mislead, and reading torn-down services would turn a clean shutdown

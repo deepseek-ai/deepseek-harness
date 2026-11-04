@@ -36,7 +36,7 @@ extend(meta = {}): this
 
 **返回**继承自当前上下文的子上下文。
 
-[源码](../../vendor/cordis/src/context.ts#L99)
+[源码](../../vendor/cordis/src/context.ts#L101)
 
 ### ctx.isolate(name, label?)
 
@@ -65,48 +65,38 @@ isolate(name: string, label?: symbol)
 
 **返回**一个子上下文，其 `name` 服务在新作用域中解析。
 
-[源码](../../vendor/cordis/src/context.ts#L121)
+[源码](../../vendor/cordis/src/context.ts#L123)
 
 ### ctx.intercept(name, config)
 
 ```ts cordis-catalog
 /**
- * Add service-specific intercept config for plugins started below this
+ * Add service-specific intercept metadata for plugins started below this
  * context.
  *
  * Plugins loaded under the returned context see `config` merged into the
- * service's resolved config (ancestor entries first; see
- * `Service[symbols.resolveConfig]`). The parent context is not affected.
+ * service's resolved intercept metadata (injected metadata first, then
+ * ancestor intercepts; see `Service[symbols.resolveIntercept]`). The parent
+ * context is not affected.
  *
- * @param name — the service name whose config to intercept.
- * @param config — the intercept config to merge for that service.
+ * @param name — the service name whose metadata to intercept.
+ * @param config — the intercept metadata to merge for that service.
  * @returns a child context carrying the additional intercept entry.
  */
-intercept<K extends InjectKey>(name: K, config: Context[K] extends { [symbols.config]: infer T } ? T : never): this
+intercept<K extends InjectKey>(name: K, config: Context[K] extends { [symbols.metadata]: infer T } ? T : never): this
 intercept(name: string, config: any): this
 ```
 
-为在此上下文之下启动的插件添加服务专属的拦截配置。
+为在此上下文之下启动的插件添加服务专属的拦截元数据。
 
-在返回的上下文下加载的插件会看到 `config` 已合并到服务解析后的配置中（祖先条目在前；见 `Service[symbols.resolveConfig]`）。父上下文不受影响。
+在返回的上下文下加载的插件会看到 `config` 已合并到服务解析后的拦截元数据中（注入的元数据在前，其后是祖先上下文的拦截；见 `Service[symbols.resolveIntercept]`）。父上下文不受影响。
 
-- `name`：要拦截其配置的服务名称。
-- `config`：要为该服务合并的拦截配置。
+- `name`：要拦截其元数据的服务名称。
+- `config`：要为该服务合并的拦截元数据。
 
 **返回**一个携带额外拦截条目的子上下文。
 
-[源码](../../vendor/cordis/src/context.ts#L139)
-
-### ctx.root
-
-```ts cordis-catalog
-/** The root context of the application (every child context shares it). @experimental */
-root: this
-```
-
-应用的根上下文，所有子上下文均共享它。@experimental
-
-[源码](../../vendor/cordis/src/context.ts#L22)
+[源码](../../vendor/cordis/src/context.ts#L142)
 
 ### ctx.baseUrl
 
@@ -165,6 +155,17 @@ registry: RegistryService
 
 ## 静态成员
 
+### Context.root
+
+```ts cordis-catalog
+/** Symbol key of the root context (see the `Context[symbols.root]` property). */
+static readonly root: unique symbol
+```
+
+根上下文的 symbol 键（见 `Context[symbols.root]` 属性）。
+
+[源码](../../vendor/cordis/src/context.ts#L44)
+
 ### Context.effect
 
 ```ts cordis-catalog
@@ -174,7 +175,7 @@ static readonly effect: unique symbol
 
 资源释放函数用于公开其 EffectMeta 诊断树的 symbol 键。
 
-[源码](../../vendor/cordis/src/context.ts#L44)
+[源码](../../vendor/cordis/src/context.ts#L46)
 
 ### Context.filter
 
@@ -185,7 +186,7 @@ static readonly filter: unique symbol
 
 上下文监听器过滤器的 symbol 键，每次分派事件时都会查询该过滤器。
 
-[源码](../../vendor/cordis/src/context.ts#L46)
+[源码](../../vendor/cordis/src/context.ts#L48)
 
 ### Context.isolate
 
@@ -196,7 +197,7 @@ static readonly isolate: unique symbol
 
 隔离映射的 symbol 键（见 `Context[symbols.isolate]` 属性）。
 
-[源码](../../vendor/cordis/src/context.ts#L48)
+[源码](../../vendor/cordis/src/context.ts#L50)
 
 ### Context.intercept
 
@@ -207,7 +208,7 @@ static readonly intercept: unique symbol
 
 拦截映射的 symbol 键（见 `Context[symbols.intercept]` 属性）。
 
-[源码](../../vendor/cordis/src/context.ts#L50)
+[源码](../../vendor/cordis/src/context.ts#L52)
 
 ### Context.is(value)
 
@@ -232,7 +233,7 @@ static is(value: any): value is Context
 
 **返回** `true` 时，`value` 是 Cordis 上下文，并会收窄其类型。
 
-[源码](../../vendor/cordis/src/context.ts#L61)
+[源码](../../vendor/cordis/src/context.ts#L63)
 
 ## 服务存储与混入
 

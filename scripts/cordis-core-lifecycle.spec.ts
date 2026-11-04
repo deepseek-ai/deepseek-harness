@@ -110,7 +110,8 @@ describe('Cordis rc.11 lifecycle', () => {
       await isolated.plugin((child) => { expect(child.rc11View).toBe('inner') })
       await withdraw()
       expect(owner.rc11View).toBe('outer')
-      expect(isolated.rc11View).toBe('outer')
+      // The isolated context does not fall back to the injected view once its own provision is withdrawn.
+      expect(() => isolated.rc11View).toThrow('without inject')
     })
     await ctx.plugin((owner) => {
       owner.isolate('rc11Private').provide('rc11Private', true)

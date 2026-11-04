@@ -34,7 +34,7 @@ The child prototypally inherits every property of this context; own properties o
 
 **Returns** a child context inheriting from this one.
 
-[Source](../../vendor/cordis/src/context.ts#L99)
+[Source](../../vendor/cordis/src/context.ts#L101)
 
 ### ctx.isolate(name, label?)
 
@@ -63,48 +63,38 @@ Below the returned context, reads and writes of the service `name` resolve again
 
 **Returns** a child context whose `name` service resolves in the new scope.
 
-[Source](../../vendor/cordis/src/context.ts#L121)
+[Source](../../vendor/cordis/src/context.ts#L123)
 
 ### ctx.intercept(name, config)
 
 ```ts cordis-catalog
 /**
- * Add service-specific intercept config for plugins started below this
+ * Add service-specific intercept metadata for plugins started below this
  * context.
  *
  * Plugins loaded under the returned context see `config` merged into the
- * service's resolved config (ancestor entries first; see
- * `Service[symbols.resolveConfig]`). The parent context is not affected.
+ * service's resolved intercept metadata (injected metadata first, then
+ * ancestor intercepts; see `Service[symbols.resolveIntercept]`). The parent
+ * context is not affected.
  *
- * @param name — the service name whose config to intercept.
- * @param config — the intercept config to merge for that service.
+ * @param name — the service name whose metadata to intercept.
+ * @param config — the intercept metadata to merge for that service.
  * @returns a child context carrying the additional intercept entry.
  */
-intercept<K extends InjectKey>(name: K, config: Context[K] extends { [symbols.config]: infer T } ? T : never): this
+intercept<K extends InjectKey>(name: K, config: Context[K] extends { [symbols.metadata]: infer T } ? T : never): this
 intercept(name: string, config: any): this
 ```
 
-Add service-specific intercept config for plugins started below this context.
+Add service-specific intercept metadata for plugins started below this context.
 
-Plugins loaded under the returned context see `config` merged into the service's resolved config (ancestor entries first; see `Service[symbols.resolveConfig]`). The parent context is not affected.
+Plugins loaded under the returned context see `config` merged into the service's resolved intercept metadata (injected metadata first, then ancestor intercepts; see `Service[symbols.resolveIntercept]`). The parent context is not affected.
 
-- `name` — the service name whose config to intercept.
-- `config` — the intercept config to merge for that service.
+- `name` — the service name whose metadata to intercept.
+- `config` — the intercept metadata to merge for that service.
 
 **Returns** a child context carrying the additional intercept entry.
 
-[Source](../../vendor/cordis/src/context.ts#L139)
-
-### ctx.root
-
-```ts cordis-catalog
-/** The root context of the application (every child context shares it). @experimental */
-root: this
-```
-
-The root context of the application (every child context shares it). @experimental
-
-[Source](../../vendor/cordis/src/context.ts#L22)
+[Source](../../vendor/cordis/src/context.ts#L142)
 
 ### ctx.baseUrl
 
@@ -163,6 +153,17 @@ The plugin registry. Its methods are mixed onto `ctx` (`ctx.plugin`, `ctx.inject
 
 ## Static members
 
+### Context.root
+
+```ts cordis-catalog
+/** Symbol key of the root context (see the `Context[symbols.root]` property). */
+static readonly root: unique symbol
+```
+
+Symbol key of the root context (see the `Context[symbols.root]` property).
+
+[Source](../../vendor/cordis/src/context.ts#L44)
+
 ### Context.effect
 
 ```ts cordis-catalog
@@ -172,7 +173,7 @@ static readonly effect: unique symbol
 
 Symbol key under which a disposer exposes its EffectMeta diagnostics tree.
 
-[Source](../../vendor/cordis/src/context.ts#L44)
+[Source](../../vendor/cordis/src/context.ts#L46)
 
 ### Context.filter
 
@@ -183,7 +184,7 @@ static readonly filter: unique symbol
 
 Symbol key for a context's listener filter, consulted on every event dispatch.
 
-[Source](../../vendor/cordis/src/context.ts#L46)
+[Source](../../vendor/cordis/src/context.ts#L48)
 
 ### Context.isolate
 
@@ -194,7 +195,7 @@ static readonly isolate: unique symbol
 
 Symbol key of the isolation map (see the `Context[symbols.isolate]` property).
 
-[Source](../../vendor/cordis/src/context.ts#L48)
+[Source](../../vendor/cordis/src/context.ts#L50)
 
 ### Context.intercept
 
@@ -205,7 +206,7 @@ static readonly intercept: unique symbol
 
 Symbol key of the intercept map (see the `Context[symbols.intercept]` property).
 
-[Source](../../vendor/cordis/src/context.ts#L50)
+[Source](../../vendor/cordis/src/context.ts#L52)
 
 ### Context.is(value)
 
@@ -230,7 +231,7 @@ Works across realms and across multiple copies of cordis, because the brand is k
 
 **Returns** `true` if `value` is a Cordis context, narrowing its type.
 
-[Source](../../vendor/cordis/src/context.ts#L61)
+[Source](../../vendor/cordis/src/context.ts#L63)
 
 ## Service store and mixins
 
