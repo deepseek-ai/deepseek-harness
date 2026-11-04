@@ -20,7 +20,7 @@ on:
         default: false
         required: true
       package_run_attempt:
-        description: '已发布的原打包 attempt，必须明确填写'
+        description: '已发布的原打包 attempt；默认 1，请核对原 run'
         type: string
         required: true
         default: '1'
@@ -197,6 +197,15 @@ jobs:
         id: website
         working-directory: website-publisher
         run: node --import tsx apps/desktop/scripts/publish-desktop-rollout-ci.ts website-upload
+      - name: Archive website feed verification
+        if: always() && steps.website.outputs.rollout-record != ''
+        continue-on-error: true
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: website-feed-verification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.website.outputs.rollout-record }}/
+          if-no-files-found: warn
+          retention-days: 30
       - name: Archive website publication diagnostics
         if: always() && steps.website.outputs.record != ''
         continue-on-error: true

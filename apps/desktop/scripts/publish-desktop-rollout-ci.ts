@@ -6,8 +6,7 @@ import { z } from 'zod'
 import { readDesktopPublishConfig, readDesktopUploadCredentials } from './desktop-publish-config.ts'
 import { desktopReleasesRoot } from './retain-desktop-ci.ts'
 import { readRetainedDesktopManifest, retainedDesktopPath } from './desktop-release-store.ts'
-import { resolveRetainedDesktopPublication } from './resolve-retained-desktop-publish-ci.ts'
-import { desktopPublishApi } from './resolve-desktop-publish-ci.ts'
+import { resolveRetainedDesktopPublication, retainedDesktopPublishApi } from './resolve-retained-desktop-publish-ci.ts'
 import { createDesktopPublicationRecord, findDesktopPublication, withDesktopChannelLock } from './desktop-publish-record.ts'
 import { prepareDesktopRollout, rolloutDesktopRelease } from './desktop-rollout.ts'
 import { desktopPublishCos } from './desktop-publish-cos.ts'
@@ -75,27 +74,31 @@ export async function prepareDesktopRolloutCi(env: NodeJS.ProcessEnv) {
  */
 export async function publishDesktopRolloutCi(mode: 'check' | 'apply' | 'website-upload' | 'website-purge',
   env: NodeJS.ProcessEnv): Promise<void> {
+  if (mode === 'website-purge') {
+    if (env.DESKTOP_UPLOAD_WEBSITE !== 'true') throw new Error('desktop rollout: website publication was not selected')
+    // The existing website approval and uploaded journal authorize cache recovery without retained feed files.
+    await publishWebsiteCi('purge', env)
+    return
+  }
   const context = await prepareDesktopRolloutCi(env)
   const { route, root, recordsRoot, config, manifest, plan, target, website, destination, approval } = context
   if (mode === 'check') {
     if (env.GITHUB_OUTPUT) await appendFile(env.GITHUB_OUTPUT,
       `approval=${approval}\nwebsite-approval=${websiteApproval(manifest, config.bucket)}\nwebsite-destination=${createHash('sha256').update(`${config.bucket}/${route.target}`).digest('hex')}\nlabel=${manifest.source.version} / ${route.channel} / ${route.target} → ${target === undefined ? 'website only' : `${target}%`}\n`)
-    if (env.GITHUB_STEP_SUMMARY) await appendFile(env.GITHUB_STEP_SUMMARY,
-      `## Desktop rollout approval\n\nPackage: ${route.runId} / ${route.attempt}; version ${manifest.source.version}; ${route.target}; ${route.preset} / ${route.channel}.\n\nTarget: ${target === undefined ? 'keep current percentage' : `${target}%`}. Current percentage is verified from COS during execution; decreases are rejected.\n\nWebsite: ${website ? desktopWebsiteInstallerUrl(route.target) + ' (upload and cache refresh)' : 'unchanged'}.\n\nInitial publication confirmed. Package binaries are not rehashed or re-signed.\n`)
+    if (env.GITHUB_STEP_SUMMARY && !env.DESKTOP_ROLLOUT_APPROVAL) await appendFile(env.GITHUB_STEP_SUMMARY,
+      `## Desktop rollout approval\n\nPackage: ${route.runId} / ${route.attempt}; version ${manifest.source.version}; ${route.target}; ${route.preset} / ${route.channel}.\n\nTarget: ${target === undefined ? 'keep current percentage' : `${target}%`}. Current percentage is verified from COS during execution; decreases are rejected.\n\nWebsite: ${website ? desktopWebsiteInstallerUrl(route.target) + ' (upload and cache refresh)' : 'unchanged'}.\n\nInitial publication confirmed. Package binaries are not rehashed and signatures are not reverified.\n`)
     return
   }
   if (env.DESKTOP_ROLLOUT_APPROVAL !== approval) throw new Error('desktop rollout: approved inputs or retained metadata changed')
   if (mode.startsWith('website-') && !website) throw new Error('desktop rollout: website publication was not selected')
-  // Cache recovery uses its own persisted upload evidence and never writes the update feed.
-  if (mode === 'website-purge') { await publishWebsiteCi('purge', env); return }
   const credentials = await readDesktopUploadCredentials(config)
   await withDesktopChannelLock(join(dirname(root), 'publish-locks'), destination, async () => {
     const journal = await createDesktopPublicationRecord(recordsRoot, {
       repository: manifest.source.repository, runId: route.runId, attempt: route.attempt,
       actor: env.GITHUB_TRIGGERING_ACTOR || env.GITHUB_ACTOR || 'unknown', destination,
-      operation: 'rollout', reason: mode, stagingPercentage: target,
+      operation: 'rollout', reason: mode, stagingPercentage: mode === 'apply' ? target : undefined,
     })
-    if (env.GITHUB_OUTPUT) await appendFile(env.GITHUB_OUTPUT, `record=${journal.directory}\n`)
+    if (env.GITHUB_OUTPUT) await appendFile(env.GITHUB_OUTPUT, `${mode === 'website-upload' ? 'rollout-record' : 'record'}=${journal.directory}\n`)
     try {
       const result = await rolloutDesktopRelease(plan, mode === 'apply' ? target : undefined,
         { transport: desktopPublishCos(plan.upload, credentials), record: event => journal.record(event) })
@@ -117,8 +120,9 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
   try {
     const mode = process.argv[2]
     if (mode === 'route' && process.argv.length === 3) {
-      const route = await resolveRetainedDesktopPublication(process.env, desktopPublishApi, readRetainedDesktopManifest)
       if (!process.env.GITHUB_OUTPUT) throw new Error('desktop rollout: Actions output required')
+      const route = await resolveRetainedDesktopPublication(
+        process.env, retainedDesktopPublishApi(process.env), readRetainedDesktopManifest)
       await appendFile(process.env.GITHUB_OUTPUT, `route=${JSON.stringify(route)}\npreset=${route.preset}\n`)
     } else {
       const parsed = z.enum(['check', 'apply', 'website-upload', 'website-purge']).parse(mode)

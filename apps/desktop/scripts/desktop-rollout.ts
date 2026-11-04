@@ -20,6 +20,7 @@ const metadataSchema = z.object({
 function metadata(contents: string) {
   if (Buffer.byteLength(contents) > 1024 * 1024) throw new Error('desktop rollout: metadata exceeds 1 MiB')
   try { return metadataSchema.parse(load(contents)) }
+  // YAML parser details may include raw remote contents; keep them out of publication diagnostics.
   catch { throw new Error('desktop rollout: invalid update metadata') }
 }
 
@@ -46,8 +47,9 @@ export async function prepareDesktopRollout(directory: string, manifest: Desktop
   if (update.environment !== source.preset) throw new Error('desktop rollout: environment differs from original package')
   const filename = desktopUpdateMetadataFilename(source.version, platform, source.channel)
   const item = manifest.files.find(file => file.name === filename)
+  if (!item) throw new Error(`desktop rollout: manifest has no update metadata ${filename}`)
   const contents = await readFile(join(directory, filename), 'utf8')
-  if (!item || item.size !== Buffer.byteLength(contents)
+  if (item.size !== Buffer.byteLength(contents)
     || item.sha512 !== createHash('sha512').update(contents).digest('base64')) {
     throw new Error('desktop rollout: retained update metadata differs from manifest')
   }

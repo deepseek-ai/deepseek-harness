@@ -43,7 +43,7 @@ GitHub matches every label in a job's `runs-on` list. The [default-label rules](
 | --- | --- |
 | Windows packaging | `dsh-win-package-trial` |
 | macOS packaging | `self-hosted`, `macOS`, `ARM64`, `dsh-mac-package-trial` |
-| Publication `prepare` and `publish` | `self-hosted` and the selected `DESKTOP_PUBLISH_RUNNERS` entry's `label` |
+| All original-machine publication and rollout jobs | `self-hosted` and the selected `DESKTOP_PUBLISH_RUNNERS` entry's `label` |
 
 A runner with only `dsh-win-package-trial` can package Windows but cannot accept publication. Its routing entry does not add labels to its GitHub registration. Have a runner administrator correct the registered labels; changing the route's `target` or restarting a healthy listener does not supply a missing label.
 
@@ -83,11 +83,11 @@ Before installing dependencies on the original runner, preparation and the appro
 
 ## Rollout and website publication
 
-For a 10% → 30% → 100% rollout, first publish through COS with `staging_percentage=10` and `upload_website=false`. Then dispatch **Publish Desktop · Rollout & Website** from `master` with the original package run ID and explicit attempt. Set `rollout_percentage` to 30, then 100 for progressive delivery; leave it empty for website-only publication. `upload_website` defaults to false. Enable it on the final invocation to upload the production website installer and refresh its cache. Each platform uses its own package run.
+For a 10% → 30% → 100% rollout, first publish through COS with `staging_percentage=10` and `upload_website=false`. Then dispatch **Publish Desktop · Rollout & Website** from `master` with the original package run ID and selected attempt (defaults to 1; verify it against the package run). Set `rollout_percentage` to 30, then 100 for progressive delivery; leave it empty for website-only publication. `upload_website` defaults to false; select a percentage or enable website publication. Enable it on the final invocation to upload the production website installer and refresh its cache. Each platform uses its own package run.
 
 Preparation checks GitHub identity, the retained manifest, the small update YAML and a completed initial publication record; it does not rehash package binaries or repeat signature/notarization checks. After Environment approval, execution reads the current COS feed, verifies that its version, payload URL, size, hash and other metadata still match the published package, and changes only `stagingPercentage`. Missing or replaced feeds reject the operation. Repeating the same percentage is a no-op; lowering the percentage is rejected. The approval shows the requested percentage; the current percentage is read from COS during execution.
 
-Website upload reuses the original retained installer, hashes that installer alone and uses the existing upload/purge recovery records. A metadata-only rollout therefore does not require installer files, but website publication requires its installer. Percentage changes retain before/after YAML in separate rollout audit records. Initial COS publication remains required; this workflow never builds packages, uploads versioned binaries or creates release tags.
+Website upload reuses the original retained installer, hashes that installer alone and uses the existing upload/purge recovery records. Cache-only retries use the existing website approval and upload journal without requiring the retained update YAML or initial feed journal. The website upload holds the feed channel lock through installer verification and upload so a newer feed cannot replace the selected version midway; competing publications on that channel fail while the lock is held. A metadata-only rollout therefore does not require installer files, but website publication requires its installer. Percentage changes retain before/after YAML in separate rollout audit records. Initial COS publication remains required; this workflow never builds packages, uploads versioned binaries or creates release tags.
 
 <a id="recovery-and-records"></a>
 

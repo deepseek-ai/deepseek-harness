@@ -39,16 +39,26 @@ export async function resolveRetainedDesktopPublication(env: NodeJS.ProcessEnv, 
   return route
 }
 
-if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.filename) {
-  const env = process.env
-  if (!env.GITHUB_OUTPUT || !env.GH_TOKEN) throw new Error('desktop publish: Actions output and API token required')
-  const route = await resolveRetainedDesktopPublication(env, async (path) => {
+/**
+ * Create the read-only GitHub verifier used on self-hosted publication machines.
+ * @param env Actions API origin and token; no gh installation is required.
+ * @returns A bounded JSON reader whose responses are validated by the route resolver.
+ */
+export function retainedDesktopPublishApi(env: NodeJS.ProcessEnv): (path: string) => Promise<unknown> {
+  if (!env.GH_TOKEN) throw new Error('desktop publish: API token required')
+  return async (path) => {
     const response = await fetch(`${env.GITHUB_API_URL || 'https://api.github.com'}/${path}`, {
       headers: { Authorization: `Bearer ${env.GH_TOKEN}`, Accept: 'application/vnd.github+json' },
       signal: AbortSignal.timeout(60_000),
     })
     if (!response.ok) throw new Error(`desktop publish: GitHub verification request failed (HTTP ${response.status})`)
     return response.json()
-  })
+  }
+}
+
+if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.filename) {
+  const env = process.env
+  if (!env.GITHUB_OUTPUT || !env.GH_TOKEN) throw new Error('desktop publish: Actions output and API token required')
+  const route = await resolveRetainedDesktopPublication(env, retainedDesktopPublishApi(env))
   await appendFile(env.GITHUB_OUTPUT, `route=${JSON.stringify(route)}\npreset=${route.preset}\n`)
 }

@@ -56,3 +56,21 @@ it('prints structured archival failure through the real CLI', () => {
   expect(JSON.parse(result.stderr)).toEqual({ phase: 'artifact archival', code: 'validation',
     message: 'desktop archival: invalid ZIP output settings' })
 })
+
+
+it.each(['percentage cannot decrease; inspect the current rollout', 'feed changed before write; inspect and retry',
+  'written feed is unconfirmed; inspect before retrying'])('retains rollout recovery instructions: %s', (message) => {
+  expect(desktopPublicationFailure(new Error(`desktop rollout: ${message}`), 'desktop rollout'))
+    .toEqual({ phase: 'desktop rollout', code: 'validation', message: `desktop rollout: ${message}` })
+})
+
+it.each([['check', 'extra'], ['route']])('prints actionable rollout CLI failures for %s', (...args) => {
+  const result = spawnSync(process.execPath, ['--import', 'tsx/esm',
+    fileURLToPath(new URL('../scripts/publish-desktop-rollout-ci.ts', import.meta.url)), ...args], {
+    encoding: 'utf8', timeout: 30_000, env: { ...process.env, GITHUB_OUTPUT: '', GH_TOKEN: '' },
+  })
+  expect(result.error).toBeUndefined()
+  expect(result.status).toBe(1)
+  expect(JSON.parse(result.stderr)).toMatchObject({ phase: 'desktop rollout', code: 'validation',
+    message: args[0] === 'route' ? 'desktop rollout: Actions output required' : 'desktop rollout: expected one operation' })
+})

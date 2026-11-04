@@ -1,7 +1,13 @@
+import { execFile, spawnSync } from 'node:child_process'
+import { createServer } from 'node:http'
+import { promisify } from 'node:util'
 import { createHash } from 'node:crypto'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { teo } from 'tencentcloud-sdk-nodejs-teo'
+import { createDesktopUploadPlan } from '../scripts/desktop-upload-plan.ts'
+import { desktopBuildRecordFilename, desktopWebsiteInstallerUrl } from '../scripts/desktop-auto-update-environment.mjs'
 import { dump, load } from 'js-yaml'
 import { expect, it, vi } from 'vitest'
 import { prepareDesktopRollout, rolloutDesktopRelease } from '../scripts/desktop-rollout.ts'
@@ -172,6 +178,7 @@ it('keeps rollout approval and website recovery separate without tag creation or
   expect(text).not.toMatch(/create-github-app-token|publish-desktop-ci.ts|resolve-retained-desktop-publish-ci.ts/u)
   expect(text).toContain('publish-desktop-rollout-ci.ts route')
   expect(workflow.jobs.publish!.env!.DESKTOP_UPLOAD_WEBSITE).toBe('${{ inputs.upload_website }}')
+  expect(text).toContain('steps.website.outputs.rollout-record')
 })
 
 
@@ -219,7 +226,8 @@ it.each(['apply', 'changed-approval', 'replaced-feed', 'website'] as const)('che
       expect(mock.writes).toHaveLength(scenario === 'apply' ? 1 : 0)
       expect(website).toHaveBeenCalledTimes(scenario === 'website' ? 1 : 0)
       const output = await readFile(env.GITHUB_OUTPUT, 'utf8')
-      const directory = output.split('\n').find(line => line.startsWith('record='))!.slice(7)
+      const key = scenario === 'website' ? 'rollout-record=' : 'record='
+      const directory = output.split('\n').find(line => line.startsWith(key))!.slice(key.length)
       expect(JSON.parse(await readFile(join(directory, 'result.json'), 'utf8'))).toMatchObject({ status: 'complete' })
       expect(await readFile(join(directory, 'events.jsonl'), 'utf8')).toContain(scenario === 'apply' ? 'put-verified' : 'object-present')
       expect(await readFile(env.GITHUB_STEP_SUMMARY, 'utf8')).toContain(scenario === 'apply' ? '10% → 30%' : '10% → 10%')
@@ -247,4 +255,150 @@ it('routes without package binaries only for the explicit metadata-only reader a
     await expect(resolveRetainedDesktopPublication(env, async path => path.includes('/environments/')
       ? { protection_rules: [] } : api(path), readRetainedDesktopManifest)).rejects.toThrow('requires configured reviewers')
   } finally { await rm(f.root, { recursive: true, force: true }) }
+})
+
+
+it('runs the real route CLI without gh and emits the selected route and preset', async () => {
+  const f = await fixture()
+  const requests: Array<{ url: string | undefined; token: string | undefined }> = []
+  const server = createServer((request, response) => {
+    requests.push({ url: request.url, token: request.headers.authorization })
+    response.writeHead(200, { 'content-type': 'application/json', connection: 'close' })
+    response.end(JSON.stringify(request.url?.includes('/environments/')
+      ? { protection_rules: [{ type: 'required_reviewers', reviewers: [{}] }] } : { sha: f.manifest.source.commit }))
+  })
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(0, '127.0.0.1', () => { server.off('error', reject); resolve() })
+    })
+    const address = server.address()
+    if (address === null || typeof address === 'string') throw new Error('expected TCP listener')
+    const output = join(f.root, 'route-output')
+    const selection = { runnerName: 'runner',
+      run: { id: 42, run_attempt: 1, head_sha: f.manifest.source.workflowCommit, path: '.github/workflows/macos-package.yml',
+        conclusion: 'success', event: 'workflow_dispatch', repository: { full_name: 'owner/repo' } },
+      jobs: [{ name: 'package', runner_name: 'runner', conclusion: 'success', labels: ['self-hosted', 'dsh-runner'] }],
+      routes: { runner: { label: 'dsh-runner', target: 'mac-arm64' } },
+    }
+    const result = await promisify(execFile)(process.execPath,
+      ['--import', 'tsx/esm', 'apps/desktop/scripts/publish-desktop-rollout-ci.ts', 'route'], {
+        timeout: 30_000, env: {
+          ...Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toLowerCase() !== 'path')), PATH: '',
+          GH_TOKEN: 'fixture-token', GITHUB_API_URL: `http://127.0.0.1:${address.port}`, GITHUB_OUTPUT: output,
+          RUNNER_NAME: 'runner', GITHUB_REPOSITORY: 'owner/repo', DSH_PACKAGING_CONFIG_DIR: join(f.root, 'config'),
+          DESKTOP_PACKAGE_SELECTION: JSON.stringify(selection),
+        },
+      })
+    expect(result.stderr).toBe('')
+    const lines = (await readFile(output, 'utf8')).trim().split('\n')
+    expect(lines[1]).toBe('preset=production')
+    expect(JSON.parse(lines[0]!.slice('route='.length))).toMatchObject({ runId: '42', attempt: '1', target: 'mac-arm64' })
+    expect(requests).toHaveLength(3)
+    expect(requests.every(request => request.token === 'Bearer fixture-token')).toBe(true)
+    expect(requests[2]!.url).toContain('/environments/desktop-production')
+  } finally {
+    server.closeAllConnections()
+    if (server.listening) {
+      await new Promise<void>((resolve, reject) => server.close((error) => { if (error) reject(error); else resolve() }))
+    }
+    await rm(f.root, { recursive: true, force: true })
+  }
+})
+
+it.each(['mac-arm64', 'win-x64'] as const)('accepts %s metadata produced by the original full upload planner', async (target) => {
+  const f = await fixture(target)
+  try {
+    const base = `deepseek-harness-${f.manifest.source.version}-${target}`
+    const extension = target === 'win-x64' ? 'exe' : 'zip'
+    await writeFile(join(f.directory, `${base}.${extension}`), 'installer')
+    await writeFile(join(f.directory, `${base}.${extension}.blockmap`), 'blockmap')
+    if (target !== 'win-x64') await writeFile(join(f.directory, `${base}.dmg`), 'installer')
+    await writeFile(join(f.directory, desktopBuildRecordFilename(target)), JSON.stringify({
+      schemaVersion: 1, target, version: f.manifest.source.version, channel: 'nightly',
+      environment: 'production', publicUrl: f.plan.upload.publicUrl, commit: f.manifest.source.commit, dirty: false,
+    }))
+    const original = await createDesktopUploadPlan(target, { artifactsRoot: f.directory, environment: f.environment,
+      packagedProductVersion: f.manifest.source.version, stagingPercentage: 10 })
+    const feed = original.artifacts.find(artifact => artifact.channelMetadata)!
+    const mock = transport(feed.contents!)
+    expect(await rolloutDesktopRelease(f.plan, 30, { transport: mock.api, record: mock.record }))
+      .toEqual({ before: 10, after: 30 })
+    expect(load(mock.writes[0]!)).toEqual({ ...(load(feed.contents!) as object), stagingPercentage: 30 })
+  } finally { await rm(f.root, { recursive: true, force: true }) }
+})
+
+it.each(['missing-yaml', 'wrong-approval', 'not-uploaded', 'wrong-zone', 'not-selected'] as const)(
+  'preserves independent website purge recovery for %s', async (scenario) => {
+    const f = await fixture()
+    try {
+      const config = join(f.root, 'config')
+      const credentialsFile = join(f.root, 'credentials.json')
+      await mkdir(join(config, 'publishing'), { recursive: true })
+      await writeFile(credentialsFile, JSON.stringify({ secretId: 'fixture-id', secretKey: 'fixture-key' }))
+      await writeFile(join(config, 'publishing/production.json'), JSON.stringify({
+        bucket: 'bucket-123', origin: 'https://download.deepseek.com', credentialsFile,
+        githubApp: { clientId: 'app', privateKeyFile: join(f.root, 'absent-key') },
+      }))
+      await rm(join(f.directory, f.filename))
+      const directory = join(f.root, 'upload-records', 'website-99-mac-arm64')
+      await mkdir(directory, { recursive: true })
+      const approval = websitePublisher.websiteApproval(await readRetainedDesktopManifest(join(f.root, 'releases'), '42', '1'), 'bucket-123')
+      const publicUrl = desktopWebsiteInstallerUrl('mac-arm64')
+      await writeFile(join(directory, 'state.json'), JSON.stringify({ approval,
+        upload: scenario === 'not-uploaded' ? 'pending' : 'uploaded', purgeAttempt: '1',
+        purge: { zoneId: 'zone-fixture', publicUrl, submittedAt: '2026-11-04T00:00:00.000Z',
+          jobId: 'existing-job', status: 'processing' },
+      }))
+      const submit = vi.spyOn(teo.v20220901.Client.prototype, 'CreatePurgeTask').mockRejectedValue(new Error('unexpected purge submission'))
+      const query = vi.spyOn(teo.v20220901.Client.prototype, 'DescribePurgeTasks').mockResolvedValue({
+        TotalCount: 1, Tasks: [{ JobId: 'existing-job', Target: publicUrl, Type: 'purge_url', Status: 'success' }],
+      })
+      vi.spyOn(process.stdout, 'write').mockReturnValue(true)
+      const execution = publishDesktopRolloutCi('website-purge', {
+        RUNNER_NAME: 'runner', GITHUB_REPOSITORY: 'owner/repo', GITHUB_RUN_ID: '99', GITHUB_RUN_ATTEMPT: '2',
+        DSH_PACKAGING_CONFIG_DIR: config, DESKTOP_PUBLISH_ROUTE: JSON.stringify({ ...f.manifest.source, runnerLabel: 'dsh-runner' }),
+        DESKTOP_UPLOAD_WEBSITE: scenario === 'not-selected' ? 'false' : 'true',
+        DESKTOP_WEBSITE_APPROVAL: scenario === 'wrong-approval' ? 'changed' : approval,
+        DOWNLOAD_PROD_EO_ZONE_ID: scenario === 'wrong-zone' ? 'zone-changed' : 'zone-fixture',
+      })
+      if (scenario === 'missing-yaml') {
+        await execution
+        expect(query).toHaveBeenCalledOnce()
+        expect(JSON.parse(await readFile(join(directory, 'state.json'), 'utf8'))).toMatchObject({ purge: { status: 'success' } })
+      } else {
+        await expect(execution).rejects.toThrow({
+          'wrong-approval': 'approved build or destination changed', 'not-uploaded': 'upload completion is not confirmed',
+          'wrong-zone': 'saved destination differs', 'not-selected': 'website publication was not selected',
+        }[scenario])
+        expect(query).not.toHaveBeenCalled()
+      }
+      expect(submit).not.toHaveBeenCalled()
+    } finally { vi.restoreAllMocks(); await rm(f.root, { recursive: true, force: true }) }
+  })
+
+
+it('executes the master guard and keeps all rollout preflights ahead of dependency installation', async () => {
+  const workflow = load(await readFile('.github/workflows/desktop-rollout.yml', 'utf8')) as {
+    jobs: Record<string, { steps: Array<{ id?: string; run?: string; uses?: string; env?: Record<string, string> }> }>
+  }
+  const route = workflow.jobs.route!.steps
+  const command = route[0]!.run!
+  for (const ref of ['refs/heads/master', 'refs/heads/stale-feature']) {
+    const result = spawnSync(process.execPath, ['-e', command.slice('node -e "'.length, -1)], {
+      env: { ...process.env, GITHUB_REF: ref }, encoding: 'utf8', timeout: 30_000,
+    })
+    expect(result.error).toBeUndefined()
+    expect(result.status).toBe(ref === 'refs/heads/master' ? 0 : 1)
+  }
+  const preflight = route.findIndex(step => step.id === 'preflight')
+  expect(preflight).toBeGreaterThan(0)
+  expect(preflight).toBeLessThan(route.findIndex(step => step.uses?.startsWith('pnpm/')))
+  expect(route.find(step => step.id === 'route')?.env?.DESKTOP_PACKAGE_ATTEMPT).toBe('${{ steps.preflight.outputs.attempt }}')
+  for (const [name, job] of Object.entries(workflow.jobs)) {
+    if (name === 'route') continue
+    const local = job.steps.findIndex(step => step.run?.includes('preflight-desktop-publish-local.mjs'))
+    expect(local).toBeGreaterThanOrEqual(0)
+    expect(local).toBeLessThan(job.steps.findIndex(step => step.run === 'pnpm install --frozen-lockfile'))
+  }
 })
