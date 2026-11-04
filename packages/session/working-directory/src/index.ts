@@ -214,6 +214,16 @@ export class WorkingDirectoryService extends Service {
   }
 
   /**
+   * Read the recorded workspace root without the deployment fallback and without filesystem I/O.
+   * @param session - Session whose root is requested.
+   * @returns the longest registered anchor containing the current directory, or undefined while the
+   * log registers no anchor; consumers apply their own fallback.
+   */
+  recordedRootOf(session: Session): string | undefined {
+    return this.workspaceRootProjectionHandle.stateOf(session).root ?? undefined
+  }
+
+  /**
    * Read the registered workspace anchors without filesystem I/O.
    * @param session - Session whose anchors are requested.
    * @returns anchors in registration order, the original project first when the header records one.

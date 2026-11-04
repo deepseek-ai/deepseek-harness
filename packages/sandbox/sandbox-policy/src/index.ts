@@ -22,7 +22,7 @@
  * @module @deepseek-ai/dsh-sandbox-policy
  */
 
-import { isAbsolute } from 'node:path'
+import { isAbsolute, relative, sep } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { z as zod } from 'zod'
 import z from '@deepseek-ai/schemastery'
@@ -34,7 +34,7 @@ import type { Session } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-tools'
-import { within } from '@deepseek-ai/dsh-working-directory'
+import type {} from '@deepseek-ai/dsh-working-directory'
 
 export { SANDBOX_MODES, setSandboxMode } from './session-mode.ts'
 
@@ -81,6 +81,15 @@ function renderPolicyContext(policy: SandboxExecutionPolicy): string {
       throw new Error(`unreachable sandbox mode: ${String(mode)}`)
     }
   }
+}
+
+/**
+ * Whether `path` is `root` or lies below it. Both are canonical absolute paths of one execution
+ * world; the test is lexical and never touches the filesystem.
+ */
+function within(root: string, path: string): boolean {
+  const rest = relative(root, path)
+  return rest === '' || (rest !== '..' && !rest.startsWith(`..${sep}`) && !isAbsolute(rest))
 }
 
 /** The `gitdir:` pointer line of a linked checkout's `.git` file. */
@@ -324,9 +333,10 @@ export class SandboxPolicyService extends Service {
         }
       }
       signal.throwIfAborted()
-      const derived = Object.freeze(outside.filter((directory, index) => !within(root, directory)
-        && !outside.some((other, otherIndex) => otherIndex !== index && other !== directory && within(other, directory))
-        && outside.indexOf(directory) === index))
+      // Distinct directories outside the root, keeping only those no other candidate already contains.
+      const candidates = [...new Set(outside)].filter(directory => !within(root, directory))
+      const derived = Object.freeze(candidates.filter(directory =>
+        !candidates.some(other => other !== directory && within(other, directory))))
       this.gitAdministration.set(root, derived)
       return derived
     } catch (error) {
@@ -337,14 +347,12 @@ export class SandboxPolicyService extends Service {
   }
 
   /**
-   * The session's workspace root: the working-directory root when one is recorded, else the header directory,
+   * The session's workspace root: the root the working-directory service recorded, else the header directory,
    * else the deployment fallback.
    */
   private rootOf(session: Session | undefined): string {
     if (session === undefined) return this.workspaceRoot
-    const directories = this.ctx.get('workingDirectory')
-    if (directories !== undefined && directories.anchorsOf(session).length > 0) return directories.rootOf(session)
-    return session.header.cwd ?? this.workspaceRoot
+    return this.ctx.get('workingDirectory')?.recordedRootOf(session) ?? session.header.cwd ?? this.workspaceRoot
   }
 
   private additionalRootsWith(derived: readonly string[] | undefined): readonly string[] | undefined {

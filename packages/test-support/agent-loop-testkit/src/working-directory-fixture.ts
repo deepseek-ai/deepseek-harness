@@ -16,6 +16,7 @@ export function provideWorkingDirectoryFixture(ctx: Context, defaultDirectory = 
     defaultDirectory,
     get,
     rootOf: get,
+    recordedRootOf: (session: Session): string | undefined => session.header.cwd,
     anchorsOf: (session: Session): readonly string[] => session.header.cwd === undefined ? [] : [get(session)],
     ensure: (agent: Agent): Promise<string> => Promise.resolve(get(agent.session)),
   })

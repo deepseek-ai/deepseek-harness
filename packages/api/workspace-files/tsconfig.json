@@ -6,12 +6,6 @@
     },
     {
       "path": "./tsconfig.client.json"
-    },
-    {
-      "path": "../../session/session-projection-cache"
-    },
-    {
-      "path": "../../session/working-directory"
     }
   ]
 }

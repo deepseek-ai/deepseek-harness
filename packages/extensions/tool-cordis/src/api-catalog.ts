@@ -4460,6 +4460,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the registered anchor containing the current directory, or the deployment default when none is recorded.',
       },
       {
+        signature: 'recordedRootOf(session: Session): string | undefined',
+        description: 'Read the recorded workspace root without the deployment fallback and without filesystem I/O.',
+        parameters: [{ name: 'session', description: 'Session whose root is requested.' }],
+        returns: 'the longest registered anchor containing the current directory, or undefined while the log registers no anchor; consumers apply their own fallback.',
+      },
+      {
         signature: 'anchorsOf(session: Session): readonly string[]',
         description: 'Read the registered workspace anchors without filesystem I/O.',
         parameters: [{ name: 'session', description: 'Session whose anchors are requested.' }],

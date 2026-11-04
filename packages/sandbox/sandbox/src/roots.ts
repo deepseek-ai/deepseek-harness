@@ -85,6 +85,19 @@ export function workspaceWritableRoots(policy: SandboxExecutionPolicy): string[]
 }
 
 /**
+ * The explicit extra writable roots of a policy as canonical, validated, deduplicated paths with the
+ * workspace root itself removed: the directories an enforcement layer grants beside the root.
+ * @param policy - the file-effect policy to derive the extras from.
+ * @returns the canonical extra roots; empty under `read-only` or without extras.
+ * @throws {SandboxInvalidRootError} An extra root is missing, is not a directory, or uses a symlink.
+ */
+export function additionalWritableRoots(policy: SandboxExecutionPolicy): string[] {
+  if (policy.mode !== 'workspace-write') return []
+  const root = canonicalPath(policy.workspaceRoot)
+  return [...new Set((policy.additionalWritableRoots ?? []).map(additionalRoot))].filter(directory => directory !== root)
+}
+
+/**
  * The roots one confined execution may WRITE under — the mode's meaning as a
  * canonical, deduplicated allow-list. `read-only` allows nothing;
  * `workspace-write` allows the policy's workspace root, its explicit extra

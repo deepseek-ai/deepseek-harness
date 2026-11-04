@@ -34,7 +34,7 @@ import {
 } from '@deepseek-ai/node-addon-system/landlock-run'
 import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { SandboxProvider, SandboxUnavailableError, canonicalPath, workspaceWritableRoots } from '@deepseek-ai/dsh-sandbox'
+import { SandboxProvider, SandboxUnavailableError, additionalWritableRoots, canonicalPath } from '@deepseek-ai/dsh-sandbox'
 import type { ConfinedArgv, ConfinedSandboxMode, RunnerFailureRule, SandboxEnforcement, SandboxPolicy } from '@deepseek-ai/dsh-sandbox'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { AclWriteGrant, assertTempRootOutsideWorkspace, registerAclDiagnosisSkill, tempWriteSid, workspaceWriteSid } from '@deepseek-ai/dsh-sandbox-windows-acl'
@@ -371,8 +371,8 @@ export class LocalSandboxProvider extends SandboxProvider {
    * @returns the runner invocation.
    */
   private windowsAclRunnerArgv(policy: SandboxPolicy): string[] {
-    // Canonical, validated extra roots; the workspace root itself leads that list.
-    const extras = policy.mode === 'workspace-write' ? workspaceWritableRoots(policy).slice(1) : []
+    // Canonical, validated extra roots beside the workspace root.
+    const extras = additionalWritableRoots(policy)
     const writable = extras.flatMap(directory => ['--writable', directory])
     const sessionId = policy.sessionId
     if (sessionId === undefined || policy.mode === 'read-only') {

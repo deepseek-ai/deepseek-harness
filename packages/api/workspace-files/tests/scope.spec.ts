@@ -44,10 +44,7 @@ describe('Workspace Files Session scope lookup', () => {
     ctx.provide('sandboxPolicy', { workspaceRoot: resolve('fallback-workspace') } as never)
     ctx.provide('sessionPersistence', { stat } as never)
     ctx.provide('sessionProjectionCache', { cachedSnapshot } as never)
-    ctx.provide('workingDirectory', {
-      anchorsOf: () => [liveRoot, liveWorktree],
-      rootOf: () => liveWorktree,
-    } as never)
+    ctx.provide('workingDirectory', { recordedRootOf: () => liveWorktree } as never)
     const sessions = await ctx.plugin(SessionStore)
     const typert = await ctx.plugin(TypertRegistry)
     const workspaceFiles = await ctx.plugin(WorkspaceFiles, CAPS)

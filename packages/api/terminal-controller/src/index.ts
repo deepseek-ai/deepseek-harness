@@ -312,7 +312,9 @@ export class TerminalController extends TypertRemoteService {
 
   private async spawn(agent: Agent, owner: OwnedSession, request: TerminalCreateRequest, signal: AbortSignal): Promise<BrowserTerminal> {
     const { subprocess, workingDirectory } = this.execution(agent)
-    // A user terminal starts in the checkout the Session works in, not at the model's cursor.
+    // A user terminal starts in the checkout the Session works in, not at the model's cursor. The root is
+    // read after validation, not from ensure's return value: a directory change landing in between is the
+    // Session's later state, and the process keeps whichever root it was spawned in.
     await workingDirectory.ensure(agent, signal)
     const cwd = workingDirectory.rootOf(agent.session)
     const shell = request.shellPath === undefined

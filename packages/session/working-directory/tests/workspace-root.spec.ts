@@ -46,6 +46,7 @@ describe('Session workspace roots', () => {
   it('starts with the original project as the only anchor and root', async () => {
     await using f = await fixture()
     expect(f.ctx.workingDirectory.rootOf(f.agent.session)).toBe(f.root)
+    expect(f.ctx.workingDirectory.recordedRootOf(f.agent.session)).toBe(f.root)
     expect(f.ctx.workingDirectory.anchorsOf(f.agent.session)).toEqual([f.root])
     expect(f.ctx.sessionProjections.snapshot(f.agent.session).values.workspaceRoot).toBe(f.root)
     expect(await f.context()).toContain(`Current working directory: ${JSON.stringify(f.root)}.`)
@@ -184,12 +185,14 @@ describe('Session workspace roots', () => {
     await using f = await fixture()
     const agent = await f.harness.create(SessionId('without-origin'))
     expect(f.ctx.workingDirectory.rootOf(agent.session)).toBe(f.ctx.workingDirectory.defaultDirectory)
+    expect(f.ctx.workingDirectory.recordedRootOf(agent.session)).toBeUndefined()
     expect(f.ctx.workingDirectory.anchorsOf(agent.session)).toEqual([])
     expect(f.ctx.sessionProjections.snapshot(agent.session).values.workspaceRoot).toBeNull()
     // Relocation registers the deployment fallback first, so leaving the checkout later selects it.
     const fallback = await realpath(f.ctx.workingDirectory.defaultDirectory)
     await f.ctx.workingDirectory.relocate(agent, f.worktree)
     expect(f.ctx.workingDirectory.rootOf(agent.session)).toBe(f.worktree)
+    expect(f.ctx.workingDirectory.recordedRootOf(agent.session)).toBe(f.worktree)
     expect(f.ctx.workingDirectory.anchorsOf(agent.session)).toEqual([fallback, f.worktree])
   })
 

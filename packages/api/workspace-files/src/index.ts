@@ -80,8 +80,7 @@ async function workspaceFileScopeOf(
 ): Promise<WorkspaceFileScope | undefined> {
   const live = ctx.get('sessions')?.get(sessionId)
   if (live !== undefined) {
-    const directories = ctx.get('workingDirectory')
-    const root = directories !== undefined && directories.anchorsOf(live).length > 0 ? directories.rootOf(live) : live.header.cwd
+    const root = ctx.get('workingDirectory')?.recordedRootOf(live) ?? live.header.cwd
     return { sessionId, workspaceRoot: root ?? ctx.sandboxPolicy.workspaceRoot }
   }
   const stored = await ctx.get('sessionPersistence')?.stat(sessionId, signal === undefined ? undefined : { signal })

@@ -22,6 +22,16 @@ import {
   type SkillSummary,
 } from '@deepseek-ai/dsh-skill'
 
+
+/**
+ * The workspace root after the directory service validated the Session's current directory, so a
+ * vanished checkout is recovered before skills are looked up, as the other root consumers do.
+ */
+async function validatedRoot(ctx: Context, agent: Agent, signal?: AbortSignal): Promise<string> {
+  await ctx.workingDirectory.ensure(agent, signal)
+  return ctx.workingDirectory.rootOf(agent.session)
+}
+
 export const name = 'tool-skill'
 export const inject = ['agents', 'tools', 'skills', 'workingDirectory']
 
@@ -133,7 +143,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       }
       // The agent is its own scope key, so the lookup resolves the layered
       // registry exactly as this agent's composition sees it.
-      const cwd = exec.agent === undefined ? undefined : ctx.workingDirectory.rootOf(exec.agent.session)
+      const cwd = exec.agent === undefined ? undefined : await validatedRoot(ctx, exec.agent, exec.signal)
       const lookup = { cwd, signal: exec.signal, scope: exec.agent }
       const summary = (await ctx.skills.list(lookup)).find(skill => skill.name === args.name)
       if (!summary) {
@@ -187,7 +197,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     const names = invokedSkillNames(messages)
     if (names.length === 0) return decision
     signal.throwIfAborted()
-    const lookup = { cwd: ctx.workingDirectory.rootOf(agent.session), signal, scope: agent }
+    const lookup = { cwd: await validatedRoot(ctx, agent, signal), signal, scope: agent }
     const injections: UserMessage[] = []
     for (const name of names) {
       const skill = await ctx.skills.get(name, lookup)
@@ -223,7 +233,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     signal.throwIfAborted()
     const toolVisible = ctx.tools.get(skillTool.name, agent) === skillTool
     const snapshot = toolVisible
-      ? await ctx.skills.snapshot({ cwd: ctx.workingDirectory.rootOf(agent.session), signal, scope: agent })
+      ? await ctx.skills.snapshot({ cwd: await validatedRoot(ctx, agent, signal), signal, scope: agent })
       : { skills: [], complete: true }
     signal.throwIfAborted()
     const skills = snapshot.skills.filter(isModelInvocable)

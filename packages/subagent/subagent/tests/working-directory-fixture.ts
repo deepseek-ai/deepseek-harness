@@ -24,6 +24,10 @@ class FixtureWorkingDirectory extends Service {
       ?? session?.header.cwd ?? process.cwd()
   }
 
+  recordedRootOf(session: Session): string | undefined {
+    return this.anchors.get(session) === undefined ? session?.header.cwd : this.rootOf(session)
+  }
+
   anchorsOf(session: Session): readonly string[] {
     return this.anchors.get(session) ?? [session?.header.cwd ?? process.cwd()]
   }
