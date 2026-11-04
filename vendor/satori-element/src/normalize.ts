@@ -133,6 +133,41 @@ function checkAttrs(tag: Tag, attrs: Record<string, unknown>, path: string) {
     const field = ({ action: 'id', link: 'href', input: 'text' } as Record<string, string>)[attrs.type as string]
     if (!field) throw new NormalizeError(`<button> type must be action | link | input, got ${String(attrs.type)}`, path)
     if (!nonEmptyString(attrs[field])) throw new NormalizeError(`<button type="${attrs.type}"> requires "${field}"`, path)
+    checkButtonStyle(attrs, path)
+  }
+  if (tag === 'button-group') {
+    checkOneOf('button-group', 'width', attrs.width, ['auto', 'fill'], path)
+    checkOneOf('button-group', 'align', attrs.align, ['left', 'center', 'right'], path)
+  }
+}
+
+/** Reject a present attribute outside its allowed values. */
+function checkOneOf(tag: Tag, name: string, value: unknown, allowed: readonly string[], path: string) {
+  if (value !== undefined && !allowed.includes(value as string)) {
+    throw new NormalizeError(`<${tag}> ${name} must be ${allowed.join(' | ')}, got ${String(value)}`, path)
+  }
+}
+
+/** The optional `ButtonStyle` attributes: closed values, a positive pixel width and a complete confirmation. */
+function checkButtonStyle(attrs: Record<string, unknown>, path: string) {
+  checkOneOf('button', 'size', attrs.size, ['tiny', 'small', 'medium', 'large'], path)
+  checkOneOf('button', 'variant', attrs.variant, [
+    'default', 'primary', 'danger', 'text', 'primary_text', 'danger_text', 'primary_filled', 'danger_filled', 'laser',
+  ], path)
+  const width = attrs.width
+  if (width !== undefined && width !== 'default' && width !== 'fill'
+    && !(typeof width === 'number' && Number.isFinite(width) && width > 0)) {
+    throw new NormalizeError(`<button> width must be default | fill | a positive number of pixels, got ${String(width)}`, path)
+  }
+  for (const name of ['icon', 'tip', 'disabledTip']) {
+    if (attrs[name] !== undefined && !nonEmptyString(attrs[name])) {
+      throw new NormalizeError(`<button> ${name} must be a non-empty string`, path)
+    }
+  }
+  const confirm = attrs.confirm as { title?: unknown; text?: unknown } | undefined
+  if (confirm !== undefined && (typeof confirm !== 'object' || confirm === null
+    || !nonEmptyString(confirm.title) || !nonEmptyString(confirm.text))) {
+    throw new NormalizeError('<button> confirm requires a non-empty "title" and "text"', path)
   }
 }
 

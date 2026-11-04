@@ -41,6 +41,38 @@ export interface ButtonAnswer {
 
 export type ButtonCallback = (event: ButtonEvent) => void | Promise<void>
 
+/** Size of a button (`ButtonStyle.size`). */
+export type ButtonSize = 'tiny' | 'small' | 'medium' | 'large'
+
+/**
+ * Exact visual type of a button on platforms that name one (the Lark card `type`); it takes precedence over `theme`
+ * there, and platforms without these types ignore it.
+ */
+export type ButtonVariant =
+  | 'default' | 'primary' | 'danger' | 'text' | 'primary_text' | 'danger_text' | 'primary_filled' | 'danger_filled'
+  | 'laser'
+
+/**
+ * Optional presentation of a button, shared by every `button` type; a platform ignores what it cannot show. A type
+ * alias rather than an interface, so attribute records stay assignable to `Record<string, unknown>`.
+ */
+export type ButtonStyle = {
+  theme?: Theme
+  disabled?: boolean
+  size?: ButtonSize
+  /** `default` (fits the label), `fill` (the available width) or a width in pixels. */
+  width?: 'default' | 'fill' | number
+  /** Platform icon token (a Feishu standard icon such as `done_outlined`). */
+  icon?: string
+  /** Confirmation dialog shown before the click takes effect. */
+  confirm?: { title: string; text: string }
+  /** Hover text. */
+  tip?: string
+  /** Hover text while `disabled`. */
+  disabledTip?: string
+  variant?: ButtonVariant
+}
+
 /** Merge-extensible: adapters augment it only for namespaced pure-content tags (none in v1). */
 export interface ElementMap {
   message: {}
@@ -84,10 +116,11 @@ export interface ElementMap {
   video: { src: string; name?: string; duration?: number; poster?: string }
   file: { src: string; name?: string; size?: number }
   button:
-    | { type: 'action'; id: string; data?: string; theme?: Theme; disabled?: boolean; onClick?: ButtonCallback }
-    | { type: 'link'; href: string; theme?: Theme; disabled?: boolean }
-    | { type: 'input'; text: string; send?: boolean; theme?: Theme; disabled?: boolean }
-  'button-group': {}
+    | ({ type: 'action'; id: string; data?: string; onClick?: ButtonCallback } & ButtonStyle)
+    | ({ type: 'link'; href: string } & ButtonStyle)
+    | ({ type: 'input'; text: string; send?: boolean } & ButtonStyle)
+  /** `width: 'fill'` shares the row among the buttons (each defaults to `width: 'fill'`); `align` places the row. */
+  'button-group': { width?: 'auto' | 'fill'; align?: Align }
   /**
    * Ordered alternatives: each direct child (a fragment counts as one) is a candidate, and a renderer uses the first
    * candidate it renders without degrading anything, else the last candidate.

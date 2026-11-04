@@ -9,7 +9,8 @@
  *   (≤ 4 tables per component, the platform limit; `small` blocks merge only with each other, as `text_size:
  *   'notation'` components). Inside lists, quotes and table cells everything is markdown (`<hr>`, `![alt](key)`).
  * - `hr`, `img` (block image; `alt` is the hover text), `collapsible_panel` (`details`, children assembled
- *   recursively — panels nest), `button` and `column_set` (`button-group`, one auto-width column per button).
+ *   recursively — panels nest), `button` and `column_set` (`button-group`, one auto-width column per button, or one
+ *   equally weighted column per button with `width="fill"`).
  * - `title` → card `header` (`template` from `theme`; the mode declares `title` as an envelope tag, so core puts it in
  *   the envelope).
  * - `audio` / `video` / `file` split the logical message into their own messages in tree order (`message.split`),
@@ -19,7 +20,9 @@
  * the clicker's behalf, so the mode does not declare that variant and the core fallback renders the label plus the
  * text. A button inside a paragraph cannot live in markdown, so it is hoisted right after its block and reported
  * `moved` (`hoisted`). Action buttons need card callbacks: with `callbacks: false` the `action` variant is not declared
- * and the core fallback renders the buttons as text.
+ * and the core fallback renders the buttons as text. The `ButtonStyle` attributes map onto the Lark button fields
+ * (`size`, `width`, `icon` as a `standard_icon`, `confirm`, `tip` → `hover_tips`, `disabledTip` → `disabled_tips`),
+ * and `variant` is the exact Lark `type`, taking precedence over the `theme` mapping.
  *
  * Element ids. Every component gets `element_id = cardElementId(ctx.stableId(el))` (`e` + base32(sha1(path))[0..15]),
  * so ids are stable across re-renders of the same structure and — for keyed elements, whose path restarts at
@@ -36,7 +39,9 @@
  * replaces the message content (`PATCH /im/v1/messages/{id}`) rather than patching one element.
  */
 
-import { type Align, type Element, isPhrasingContainer, type Theme } from '@deepseek-ai/satori-element'
+import {
+  type Align, type ButtonSize, type ButtonVariant, type Element, isPhrasingContainer, type Theme,
+} from '@deepseek-ai/satori-element'
 import {
   defineMode, ElementRegistry, type Envelope, type LimitKey, type LimitViolation, type Mode, type ModeTypes,
   type Prepared, type RenderContext, type RenderReport, ResourceRef, type ResolvedResource,
@@ -81,7 +86,7 @@ export type CardButtonBehavior =
   | { type: 'open_url'; url: string }
 
 /** Lark button `type` (style). */
-export type LarkButtonType = 'default' | 'primary' | 'danger' | 'primary_filled' | 'danger_filled'
+export type LarkButtonType = ButtonVariant
 
 export interface CardButtonComponent {
   tag: 'button'
@@ -90,10 +95,27 @@ export interface CardButtonComponent {
   type: LarkButtonType
   behavior: CardButtonBehavior
   disabled: boolean
+  size?: ButtonSize
+  /** Lark `width`: `default`, `fill` or `<n>px`. */
+  width?: string
+  /** Standard icon token. */
+  icon?: string
+  confirm?: { title: string; text: string }
+  tip?: string
+  disabledTip?: string
 }
 
-/** `button-group` (or buttons hoisted out of one paragraph): a `column_set` with one auto-width column per button. */
-export interface CardButtonRowComponent { tag: 'column_set'; id: string; buttons: CardButtonComponent[] }
+/**
+ * `button-group` (or buttons hoisted out of one paragraph): a `column_set` with one column per button — auto-width,
+ * or equally weighted with `width: 'fill'`; `align` is the row's `horizontal_align`.
+ */
+export interface CardButtonRowComponent {
+  tag: 'column_set'
+  id: string
+  buttons: CardButtonComponent[]
+  width?: 'fill'
+  align?: Align
+}
 
 export type CardComponent =
   | CardMarkdownComponent | CardHrComponent | CardImageComponent | CardPanelComponent | CardButtonComponent
@@ -410,9 +432,15 @@ function buttonComponent(el: Element<'button'>, ctx: RenderContext<CardTypes>): 
     tag: 'button',
     id: cardElementId(ctx.stableId(el)),
     text: label || (attrs.type === 'link' ? attrs.href : attrs.id),
-    type: BUTTON_TYPES[attrs.theme ?? 'default'] ?? 'default',
+    type: attrs.variant ?? BUTTON_TYPES[attrs.theme ?? 'default'] ?? 'default',
     behavior,
     disabled: !!attrs.disabled,
+    ...attrs.size ? { size: attrs.size } : {},
+    ...attrs.width === undefined ? {} : { width: typeof attrs.width === 'number' ? `${attrs.width}px` : attrs.width },
+    ...attrs.icon ? { icon: attrs.icon } : {},
+    ...attrs.confirm ? { confirm: { title: attrs.confirm.title, text: attrs.confirm.text } } : {},
+    ...attrs.tip ? { tip: attrs.tip } : {},
+    ...attrs.disabledTip ? { disabledTip: attrs.disabledTip } : {},
   }
 }
 
@@ -652,7 +680,20 @@ function serializeButton(button: CardButtonComponent): Record<string, unknown> {
   const behaviors = button.behavior.type === 'open_url'
     ? [{ type: 'open_url', default_url: button.behavior.url }]
     : [{ type: 'callback', value: button.behavior.value }]
-  return { tag: 'button', element_id: button.id, text: plainText(button.text), type: button.type, disabled: button.disabled, behaviors }
+  return {
+    tag: 'button',
+    element_id: button.id,
+    text: plainText(button.text),
+    type: button.type,
+    ...button.size ? { size: button.size } : {},
+    ...button.width ? { width: button.width } : {},
+    ...button.icon ? { icon: { tag: 'standard_icon', token: button.icon } } : {},
+    ...button.tip ? { hover_tips: plainText(button.tip) } : {},
+    disabled: button.disabled,
+    ...button.disabledTip ? { disabled_tips: plainText(button.disabledTip) } : {},
+    ...button.confirm ? { confirm: { title: plainText(button.confirm.title), text: plainText(button.confirm.text) } } : {},
+    behaviors,
+  }
 }
 
 /** One draft component as card JSON 2.0 (`key` resolves resource refs). */
@@ -692,7 +733,12 @@ export function serializeComponent(component: CardComponent, key: KeyOf): Record
         element_id: component.id,
         flex_mode: 'flow',
         horizontal_spacing: '8px',
-        columns: component.buttons.map(button => ({ tag: 'column', width: 'auto', elements: [serializeButton(button)] })),
+        ...component.align ? { horizontal_align: component.align } : {},
+        columns: component.buttons.map(button => ({
+          tag: 'column',
+          ...component.width === 'fill' ? { width: 'weighted', weight: 1 } : { width: 'auto' },
+          elements: [serializeButton(button)],
+        })),
       }
   }
 }
@@ -833,7 +879,14 @@ export function createCardMode(config: CardModeConfig = {}): Mode<CardTypes> {
         else if (node.kind === 'inline') buttons.push(...node.buttons)
       }
       if (!buttons.length) return []
-      const component: CardButtonRowComponent = { tag: 'column_set', id: cardElementId(ctx.stableId(el)), buttons }
+      const fill = el.attrs.width === 'fill'
+      const component: CardButtonRowComponent = {
+        tag: 'column_set',
+        id: cardElementId(ctx.stableId(el)),
+        buttons: fill ? buttons.map(button => button.width ? button : { ...button, width: 'fill' }) : buttons,
+        ...fill ? { width: 'fill' } : {},
+        ...el.attrs.align ? { align: el.attrs.align } : {},
+      }
       return { kind: 'component', component }
     })
 

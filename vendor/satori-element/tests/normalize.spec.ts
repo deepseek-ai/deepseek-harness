@@ -172,6 +172,29 @@ describe('normalize: rejections', () => {
     expect(errorOf(() => normalize(parse('<button>x</button>'))).message).toMatch(/type must be action/)
   })
 
+  it('checks the optional button presentation attributes', () => {
+    const ok = h('button', {
+      type: 'action', id: 'b', size: 'small', width: 96, icon: 'done_outlined', tip: 't', disabledTip: 'd',
+      confirm: { title: 'T', text: 'X' }, variant: 'primary_filled',
+    }, 'go')
+    expect(normalize(ok).children[0]!.attrs).toMatchObject({ width: 96, variant: 'primary_filled' })
+    expect(normalize(h('button', { type: 'link', href: 'https://e.x', width: 'fill' }, 'go'))).toBeDefined()
+    const bad = (attrs: Record<string, unknown>) =>
+      errorOf(() => normalize(h('button', { type: 'action', id: 'b', ...attrs } as never, 'go'))).message
+    expect(bad({ size: 'huge' })).toMatch(/size must be tiny/)
+    expect(bad({ width: 0 })).toMatch(/width must be default/)
+    expect(bad({ width: 'wide' })).toMatch(/width must be default/)
+    expect(bad({ variant: 'ghost' })).toMatch(/variant must be/)
+    expect(bad({ icon: '' })).toMatch(/icon must be a non-empty string/)
+    expect(bad({ confirm: { title: 'T' } })).toMatch(/confirm requires/)
+    expect(errorOf(() => normalize(h('button-group', { width: 'half' } as never))).message).toMatch(/width must be auto/)
+    expect(errorOf(() => normalize(h('button-group', { align: 'top' } as never))).message).toMatch(/align must be left/)
+  })
+
+  it('validates nothing extra for a plain button', () => {
+    expect(xml(h('button', { type: 'action', id: 'b' }, 'go'))).toBe('<message><button type="action" id="b">go</button></message>')
+  })
+
   it('rejects unbuilt function components', () => {
     const component = { type: 'component', attrs: {}, children: [] }
     expect(errorOf(() => normalize(component as never)).message).toMatch(/function components/)

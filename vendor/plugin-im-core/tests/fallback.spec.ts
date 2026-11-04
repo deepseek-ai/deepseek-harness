@@ -178,6 +178,10 @@ describe('core fallback table', () => {
     const [themed] = lower(h('button', { type: 'action', id: 'x', theme: 'danger', onClick }, 'X'), { variant: 'theme' })
     expect(themed!.type).toBe('button')
     expect(themed!.attrs).toEqual({ type: 'action', id: 'x', onClick })
+    // Lowering the theme keeps the presentation attributes a mode without themes may still read.
+    const styled = { size: 'small', width: 'fill', icon: 'done_outlined', confirm: { title: 'T', text: 'X' }, variant: 'laser' } as const
+    const [kept] = lower(h('button', { type: 'action', id: 'x', theme: 'info', onClick, ...styled }, 'X'), { variant: 'theme' })
+    expect(kept!.attrs).toEqual({ type: 'action', id: 'x', onClick, ...styled })
   })
 
   it('button groups splice their buttons, inline when buttons are not native', () => {

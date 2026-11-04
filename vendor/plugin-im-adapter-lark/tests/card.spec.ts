@@ -248,6 +248,60 @@ describe('card structure', () => {
     expect(result.actions.map(action => action.id)).toEqual(['stop', 'go'])
   })
 
+  it('buttons carry size, width, icon, tips, confirm and an exact variant', async () => {
+    const { payloads } = await render([
+      h('button', {
+        type: 'action', id: 'ok', theme: 'warning', variant: 'primary_text', size: 'small', width: 120,
+        icon: 'done_outlined', tip: 'hover', disabled: true, disabledTip: 'not now',
+        confirm: { title: '确认？', text: '不可撤销' },
+      }, 'OK'),
+      h('button', { type: 'link', href: 'https://example.com', width: 'fill', size: 'large', variant: 'laser' }, 'Open'),
+      h('button', { type: 'action', id: 'plain', theme: 'warning' }, 'Plain'),
+    ])
+    const [ok, open, plain] = elements(payloads[0])
+    expect(ok).toEqual({
+      tag: 'button',
+      element_id: expect.any(String),
+      text: { tag: 'plain_text', content: 'OK' },
+      type: 'primary_text',
+      size: 'small',
+      width: '120px',
+      icon: { tag: 'standard_icon', token: 'done_outlined' },
+      hover_tips: { tag: 'plain_text', content: 'hover' },
+      disabled: true,
+      disabled_tips: { tag: 'plain_text', content: 'not now' },
+      confirm: { title: { tag: 'plain_text', content: '确认？' }, text: { tag: 'plain_text', content: '不可撤销' } },
+      behaviors: [{ type: 'callback', value: { v4: { id: 'ok' } } }],
+    })
+    expect(open).toMatchObject({ type: 'laser', size: 'large', width: 'fill' })
+    // Without the new attributes a button serializes exactly as before (theme map unchanged: warning → danger).
+    expect(Object.keys(plain!)).toEqual(['tag', 'element_id', 'text', 'type', 'disabled', 'behaviors'])
+    expect(plain!.type).toBe('danger')
+  })
+
+  it('button-group width and align map onto the column_set; no attributes keep the auto-width row', async () => {
+    const onClick = () => {}
+    const { payloads } = await render([
+      h('button-group', { width: 'fill', align: 'center' },
+        h('button', { type: 'action', id: 'a', onClick }, 'A'),
+        h('button', { type: 'action', id: 'b', onClick, width: 80 }, 'B')),
+      h('button-group', { align: 'right' },
+        h('button', { type: 'action', id: 'c', onClick }, 'C'),
+        h('button', { type: 'action', id: 'd', onClick }, 'D')),
+      h('button-group',
+        h('button', { type: 'action', id: 'e', onClick }, 'E'),
+        h('button', { type: 'action', id: 'f', onClick }, 'F')),
+    ])
+    const [fill, right, plain] = elements(payloads[0])
+    expect(fill).toMatchObject({ tag: 'column_set', flex_mode: 'flow', horizontal_spacing: '8px', horizontal_align: 'center' })
+    expect(fill!.columns.map((column: Record<string, unknown>) => [column.width, column.weight])).toEqual([['weighted', 1], ['weighted', 1]])
+    expect(fill!.columns.map((column: { elements: Record<string, unknown>[] }) => column.elements[0]!.width)).toEqual(['fill', '80px'])
+    expect(right!.horizontal_align).toBe('right')
+    expect(right!.columns[0]).toEqual({ tag: 'column', width: 'auto', elements: [expect.not.objectContaining({ width: expect.anything() })] })
+    expect(Object.keys(plain!)).toEqual(['tag', 'element_id', 'flex_mode', 'horizontal_spacing', 'columns'])
+    expect(plain!.columns[0]).toEqual({ tag: 'column', width: 'auto', elements: [expect.objectContaining({ tag: 'button' })] })
+  })
+
   it('input buttons fall back to their label and text: a card cannot send a message', async () => {
     const { payloads, report } = await render(
       h('p', 'run ', h('button', { type: 'input', text: '/status' }, 'Status'), ' now'))
