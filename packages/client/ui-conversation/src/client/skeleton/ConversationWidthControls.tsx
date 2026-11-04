@@ -106,8 +106,8 @@ function WidthHandle(props: {
     const body = event.currentTarget.parentElement
     /* v8 ignore next -- a width handle renders only inside the Conversation body. */
     if (body === null) return
-    const scrollport = body.querySelector<HTMLElement>(':scope > [data-conversation-scroll]')
-    /* v8 ignore next -- the Conversation body always contains its direct scroll element. */
+    const scrollport = body.querySelector<HTMLElement>('[data-conversation-scroll]')
+    /* v8 ignore next -- the Conversation body always contains its scroll element. */
     if (scrollport === null) return
     if (event.ctrlKey || event.deltaY === 0) return
     scrollport.scrollBy({ top: wheelDeltaY(event, scrollport) })
