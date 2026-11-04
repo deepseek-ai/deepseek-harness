@@ -112,7 +112,7 @@ export function apply(ctx: Context): void {
   }
   const watches = new Map<SessionId, AgentTerminalOpenerInjected>()
   ctx.effect(() => ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
-    name: 'conversation.session.header.actions', id: `${id}.agent-terminals`, locale: namespace,
+    name: 'conversation.session.header.actions', id: 'agent-terminals', locale: namespace,
     inject: (sessionId): AgentTerminalOpenerInjected => {
       let watch = watches.get(sessionId)
       if (watch === undefined) {

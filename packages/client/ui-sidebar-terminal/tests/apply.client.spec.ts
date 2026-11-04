@@ -204,6 +204,7 @@ it('opens each running agent terminal once, binds its new tab and skips other te
   try {
     const sessionId = 'session' as SessionId
     const entry = h.entries.find(item => item.name === 'conversation.session.header.actions')!
+    expect(entry.id).toBe('agent-terminals')
     const opener = entry.inject(sessionId) as AgentTerminalOpenerInjected
     expect(entry.inject(sessionId)).toBe(opener)
     const release = opener.watchAgentTerminals()
