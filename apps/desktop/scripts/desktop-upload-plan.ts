@@ -33,6 +33,8 @@ export interface DesktopUploadArtifact {
   readonly filename: string
   readonly key: string
   readonly contentType: string
+  /** Browser save name for fixed website downloads, preserving the validated installer basename. */
+  readonly contentDisposition?: string
   readonly channelMetadata: boolean
   /** Published YAML with normalized artifact URLs; binary bytes remain file-backed. */
   readonly contents?: string
@@ -288,7 +290,8 @@ export async function createDesktopUploadPlan(
     bucket: update.bucket,
     secretIdEnvName: update.secretIdEnvName,
     secretKeyEnvName: update.secretKeyEnvName,
-    artifacts: options.latest ? [{ ...installerArtifact, filename: latestFilename, key: latestKey }] : artifacts,
+    artifacts: options.latest ? [{ ...installerArtifact, filename: latestFilename, key: latestKey,
+      contentDisposition: `attachment; filename="${installerArtifact.filename}"` }] : artifacts,
     ...typeof buildRecord.commit === 'string' ? { commit: buildRecord.commit } : {},
     ...typeof buildRecord.dirty === 'boolean' ? { dirty: buildRecord.dirty } : {},
   }

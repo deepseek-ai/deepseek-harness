@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
+import { Fragment, memo, useCallback, useMemo, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
   CodeBlock, DiffBlock, DisclosureRow, IconInspectOutlineRegular, ReadBlock, SearchBlock,
@@ -21,7 +21,7 @@ import {
 } from '../models/primitive-labels.ts'
 import type { AskQuestionCardModel } from '../models/ask-question-card-model.ts'
 import {
-  formatToolBody, type ToolRowState, type ToolRowVariant,
+  FILE_TARGET_MOVE, FILE_TARGET_SEPARATOR, formatToolBody, type ToolRowFileTarget, type ToolRowState, type ToolRowVariant,
 } from '../models/tool-call-model.ts'
 import type { WebCardModelProps } from '../models/web-card-model.ts'
 import { AskQuestionCard } from './AskQuestionCard.tsx'
@@ -93,6 +93,14 @@ export interface ToolRowProps {
   onOpenFile?: ((path: string, options?: OpenFileOptions) => void) | undefined
   /** File gesture bindings supplied by the owning tool view. */
   fileContextMenuProps?: ContextMenuTriggerProps | undefined
+  /**
+   * Files a patch row names. When onOpenFile is set, the row state is `ok`, and
+   * at least one target has a `filePath`, each such target renders as its own
+   * link in place of the summary text; otherwise the row shows `summary`.
+   */
+  fileTargets?: readonly ToolRowFileTarget[] | undefined
+  /** File gesture bindings for one `fileTargets` path, supplied by the owning tool view. */
+  fileTargetContextMenuProps?: ((path: string) => ContextMenuTriggerProps) | undefined
   /** URL gesture bindings supplied by the owning tool view. */
   urlContextMenuProps?: ContextMenuTriggerProps | undefined
   /** Safe http(s) URL from tool args; when set, the summary renders as a link that opens it in a new tab. */
@@ -107,6 +115,35 @@ export interface ToolRowProps {
 /** Keep a summary link click from toggling the row; the browser still follows the link. */
 function stopLinkClick(event: MouseEvent<HTMLAnchorElement>): void {
   event.stopPropagation()
+}
+
+interface FileTargetLinkProps {
+  label: string
+  path: string
+  onOpenFile: (path: string, options?: OpenFileOptions) => void
+  contextMenuProps: ContextMenuTriggerProps | undefined
+  onLinkKeyDown: (event: KeyboardEvent<HTMLElement>) => void
+}
+
+/** One openable file inside a multi-file summary; activating it never toggles the row. */
+function FileTargetLink({ label, path, onOpenFile, contextMenuProps, onLinkKeyDown }: FileTargetLinkProps) {
+  return (
+    <button
+      type="button"
+      className={css.fileTargetLink}
+      {...contextMenuProps}
+      onClick={(event) => {
+        event.stopPropagation()
+        onOpenFile(path)
+      }}
+      onKeyDown={(event) => {
+        onLinkKeyDown(event)
+        contextMenuProps?.onKeyDown?.(event)
+      }}
+    >
+      {label}
+    </button>
+  )
 }
 
 /** Visually hidden run-state label for color-only running and settlement cues. */
@@ -151,7 +188,7 @@ export const ToolRow = memo(function ToolRow({
   filePath,
   filePathLine,
   onOpenFile,
-  fileContextMenuProps, urlContextMenuProps,
+  fileContextMenuProps, urlContextMenuProps, fileTargets, fileTargetContextMenuProps,
   href,
   inspect,
   useDisclosure,
@@ -203,6 +240,10 @@ export const ToolRow = memo(function ToolRow({
     }
     : undefined, [filePath, filePathLine, onOpenFile, settledWithCue])
   const linkHref = settledWithCue ? undefined : href
+  // Per-file links appear only on a successful result: TextShimmer accepts no
+  // buttons, so running and failed rows keep the plain summary text.
+  const openTarget = state === 'ok' && fileTargets?.some(target => target.filePath !== undefined) === true
+    ? onOpenFile : undefined
   // Keep Enter/Space on the focused path or URL link from bubbling to the row's
   // keydown handler, which would preventDefault() the key and toggle expand
   // instead of activating the link — the keyboard analogue of the click
@@ -219,7 +260,25 @@ export const ToolRow = memo(function ToolRow({
        its title shows no trailing dot). */
     <>
       <span className={css.sep} data-shimmer-decoration aria-hidden />
-      {exitLabel === null && openFile !== undefined ? (
+      {exitLabel === null && fileTargets !== undefined && openTarget !== undefined ? (
+        <span className={css.fileLinks}>
+          {fileTargets.map((target, index) => (
+            <Fragment key={target.id}>
+              {index > 0 && FILE_TARGET_SEPARATOR}
+              {target.from !== undefined && `${target.from}${FILE_TARGET_MOVE}`}
+              {target.filePath === undefined ? target.label : (
+                <FileTargetLink
+                  label={target.label}
+                  path={target.filePath}
+                  onOpenFile={openTarget}
+                  contextMenuProps={fileTargetContextMenuProps?.(target.filePath)}
+                  onLinkKeyDown={summaryLinkKeyDown}
+                />
+              )}
+            </Fragment>
+          ))}
+        </span>
+      ) : exitLabel === null && openFile !== undefined ? (
         <button
           type="button"
           className={css.fileLink}
@@ -268,7 +327,8 @@ export const ToolRow = memo(function ToolRow({
         </TextShimmer>
       )}
     </>
-  ), [summaryLinkKeyDown, fileContextMenuProps, urlContextMenuProps, linkHref, openFile, state, suffix, totals, summaryText, exitLabel])
+  ), [summaryLinkKeyDown, fileContextMenuProps, urlContextMenuProps, linkHref, openFile, fileTargets, openTarget,
+    fileTargetContextMenuProps, state, suffix, totals, summaryText, exitLabel])
   const expandedContent = useMemo(() => open ? (
     <div className={clsx(css.bodyWrap, detailsBody !== null && css.detailsBodyWrap)}>
       {askQuestionBody !== null
