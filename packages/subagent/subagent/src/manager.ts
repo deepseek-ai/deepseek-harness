@@ -8,6 +8,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { isAbsolute, resolve } from 'node:path'
+import type {} from '@deepseek-ai/dsh-fs'
 import { within } from '@deepseek-ai/dsh-working-directory'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent, AgentOptions, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
@@ -435,11 +436,17 @@ export class SubagentManager {
     })
   }
 
-  /** Capture the explicit or inherited directory while the parent still owns startup. */
+  /**
+   * Capture the explicit or inherited directory while the parent still owns startup. The result carries
+   * the canonical spelling the directory service records, so containment against the parent's root sees
+   * the same path a symlinked request denotes; an orchestration fixture without a filesystem keeps it lexical.
+   */
   private async resolveDirectory(request: Pick<SubagentStartRequest, 'parent' | 'cwd'>, signal: AbortSignal): Promise<string> {
-    const cwd = request.cwd !== undefined && isAbsolute(request.cwd)
+    const lexical = request.cwd !== undefined && isAbsolute(request.cwd)
       ? request.cwd
       : resolve(await this.ctx.workingDirectory.ensure(request.parent, signal), request.cwd ?? '.')
+    const fs = this.ctx.get('fs')
+    const cwd = fs === undefined ? lexical : fs.processPath(await fs.resolve(lexical, { signal }))
     signal.throwIfAborted()
     return cwd
   }
@@ -748,9 +755,11 @@ export class SubagentManager {
           const workingDirectory = childCtx.get('workingDirectory')
           if (workingDirectory === undefined) throw new Error('local subagents require the working-directory service')
           // The child header records the parent's original project; a parent working in another
-          // checkout passes that checkout on as the child's root when the child starts inside it.
+          // registered checkout passes that checkout on as the child's root when the child starts inside
+          // it. A parent without a recorded project reports the deployment fallback, which is no anchor.
           const parentRoot = workingDirectory.rootOf(create.parent.session)
-          if (parentRoot !== child.session.header.cwd && within(parentRoot, create.cwd)) {
+          if (workingDirectory.anchorsOf(create.parent.session).includes(parentRoot)
+            && parentRoot !== child.session.header.cwd && within(parentRoot, create.cwd)) {
             await workingDirectory.relocate(child, parentRoot, { cwd: create.cwd, signal: inputs.signal })
           } else {
             await workingDirectory.set(child, create.cwd, inputs.signal)

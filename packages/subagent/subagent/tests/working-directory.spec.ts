@@ -1,6 +1,6 @@
 import { startTestActivation } from './local-activation.ts'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
-import { mkdtemp, mkdir, realpath, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, realpath, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
@@ -43,7 +43,7 @@ async function fixture() {
     meta: { cwd: origin },
     agentOptions: { provider: 'mock', model: 'mock' },
   })
-  return { ctx, parent, origin, first, second, adapter }
+  return { ctx, root, parent, origin, first, second, adapter }
 }
 
 describe('subagent working directories', () => {
@@ -80,6 +80,47 @@ describe('subagent working directories', () => {
     expect(ctx.workingDirectory.get(child.session)).toBe(await realpath(inside))
     expect(ctx.workingDirectory.rootOf(child.session)).toBe(await realpath(second))
     expect(ctx.workingDirectory.anchorsOf(child.session)).toEqual([origin, await realpath(second)])
+    await run.dispose()
+  })
+
+  it('relocates a child whose explicit directory is a symlinked spelling inside the parent checkout', async () => {
+    const { ctx, root, parent, origin, second } = await fixture()
+    const inside = join(second, 'inside')
+    await mkdir(inside)
+    const link = join(root, 'link')
+    await symlink(second, link)
+    await ctx.workingDirectory.relocate(parent, second)
+    const run = await startTestActivation(ctx, 'spawn', {
+      parent, cwd: join(link, 'inside'), prompt: [{ type: 'text', text: 'child' }], signal: new AbortController().signal,
+    })
+    await run.result
+    const child = run.localAgent
+    expect(ctx.workingDirectory.get(child.session)).toBe(await realpath(inside))
+    expect(ctx.workingDirectory.rootOf(child.session)).toBe(await realpath(second))
+    expect(ctx.workingDirectory.anchorsOf(child.session)).toEqual([origin, await realpath(second)])
+    await run.dispose()
+  })
+
+  it('leaves a child of a parent without a recorded project on the deployment fallback without registering it', async () => {
+    const { ctx } = await fixture()
+    const fallback = ctx.workingDirectory.defaultDirectory
+    const { agent: parent } = await ctx.agents.create({
+      sessionId: SessionId('fallback-parent'),
+      meta: {},
+      agentOptions: { provider: 'mock', model: 'mock' },
+    })
+    expect(ctx.workingDirectory.rootOf(parent.session)).toBe(fallback)
+    const run = await startTestActivation(ctx, 'spawn', {
+      parent, cwd: fallback, prompt: [{ type: 'text', text: 'child' }], signal: new AbortController().signal,
+    })
+    await run.result
+    const child = run.localAgent
+    expect(child.session.header.cwd).toBeUndefined()
+    expect(ctx.workingDirectory.get(child.session)).toBe(await realpath(fallback))
+    expect(ctx.workingDirectory.rootOf(child.session)).toBe(fallback)
+    expect(ctx.workingDirectory.anchorsOf(child.session)).toEqual([])
+    expect(child.session.snapshotEvents().filter(event => event.type === 'working-directory/change'))
+      .toEqual([expect.objectContaining({ data: { cwd: await realpath(fallback) } })])
     await run.dispose()
   })
 
