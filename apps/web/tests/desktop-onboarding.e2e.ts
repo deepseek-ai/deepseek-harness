@@ -15,7 +15,7 @@ import {
   acknowledgeReloadConnectionLoss, captureStableAria, compareOrRefreshGolden,
   launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { REPO_ROOT, saveFailureShot, ZH_BROWSER_LOCALE } from './support.ts'
+import { collectWindowSurface, REPO_ROOT, saveFailureShot, ZH_BROWSER_LOCALE } from './support.ts'
 
 const MODE = webSnapshotMode()
 const EXPECTED = fileURLToPath(new URL('./expected/desktop-onboarding', import.meta.url))
@@ -255,14 +255,7 @@ describe.skipIf(MODE === 'record')('web e2e: App-only desktop onboarding', () =>
       expect(await page.getByRole('button', { name: '开始设置', exact: true }).evaluate(element => getComputedStyle(element).getPropertyValue('-webkit-app-region'))).toBe(platform === 'darwin' ? 'no-drag' : 'none')
       if (platform === 'darwin') {
         expect(await page.locator('[data-window-drag-controls] [data-desktop-onboarding]').count()).toBe(1)
-        const regions = await page.evaluate(() => Array.from(document.querySelectorAll('*')).flatMap((element) => {
-          const style = getComputedStyle(element)
-          const region = style.getPropertyValue('app-region')
-          const rect = element.getBoundingClientRect()
-          if ((region !== 'drag' && region !== 'no-drag') || style.visibility === 'hidden'
-            || rect.width === 0 || rect.height === 0) return []
-          return [{ x: rect.x, y: rect.y, width: rect.width, height: rect.height, draggable: region === 'drag' }]
-        }))
+        const { regions } = await collectWindowSurface(page)
         const band = await page.locator('[data-window-drag-controls]').locator('..').locator('[data-window-drag]').boundingBox()
         const button = await page.getByRole('button', { name: '开始设置', exact: true }).boundingBox()
         if (band === null || button === null) throw new Error('The onboarding drag fixture has no layout box')

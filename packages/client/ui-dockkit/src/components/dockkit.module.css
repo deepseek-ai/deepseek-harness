@@ -307,14 +307,13 @@
 
 /* macOS desktop: an embedder may pin this surface at the window's top edge.
    Panes always subtract their whole boxes; a marked strip adds its row back
-   unless floating panes disable that mark. Strip-end chrome, pane bodies,
-   floats, and dividers also exclude their boxes. The divider is a plain div
+   unless floating panes disable that mark. Strip-end chrome, floats, and
+   dividers also exclude their boxes. The divider is a plain div
    outside a drag row, so ui-web's scoped controls rule cannot exclude it.
    Keep these selectors at (0,1,0): ui-web's inert reset at (0,2,1) must win
    when an overlay makes the retained panes inactive. */
 :global(:where(html[data-platform='darwin'])) .pane,
 :global(:where(html[data-platform='darwin'])) .stripChrome,
-:global(:where(html[data-platform='darwin'])) .paneBody,
 :global(:where(html[data-platform='darwin'])) .float,
 :global(:where(html[data-platform='darwin'])) .divider {
   -webkit-app-region: no-drag;

@@ -45,7 +45,7 @@ macOS 桌面窗口的可拖区域被写了两遍。布局决定 chrome 行在哪
 - `packages/client/web/tests/window-drag-regions.client.spec.ts` —— 合成规则，含顺序敏感与盒子边界。
 - `packages/client/web/tests/base-styles.client.spec.ts` —— base.css 声明模型的交互选择器和控件作用范围、逐元素重置、视口排除、唯一那条 darwin drag 规则，以及 recall 标记的减除。
 - `packages/client/ui-theme/tests/app-region-styles.client.spec.ts` —— 拖拽所有权、行清单与每行的标记；清单之外的标记或行高变化即失败。
-- `packages/client/ui-dockkit/tests/app-region-styles.client.spec.ts` —— 面板、strip 末端 chrome、面板正文、浮动面板和分隔条排除自身矩形；strip 行的 drag 属于 markup 标记，因此样式表不声明 drag。
+- `packages/client/ui-dockkit/tests/app-region-styles.client.spec.ts` —— 面板、strip 末端 chrome、浮动面板和分隔条排除自身矩形；面板的排除矩形覆盖其正文。strip 行的 drag 属于 markup 标记，因此样式表不声明 drag。
 - `packages/client/web/tests/window-drag-recall.client.spec.ts` —— 通过两个 seam 驱动 watcher：什么会重新启动它、什么被它忽略、收敛循环、外壳默认值，以及销毁。
 - `apps/web/tests/window-drag-coverage.e2e.ts` —— 真 Chromium：控件与区域所有者分开探测，被裁剪的转录区与标签内容不能减除页头，含浮动面板的全屏右栏保留预期排除，inert 的保留面板不影响前景行。插件管理页头的紧凑态场景检查标记页头的矩形不会延伸到列表控件上方。逐行探测、详情页正文排除、浮层和右栏 recall 脉冲仍有覆盖。
 - `apps/web/tests/window-drag-inheritance.e2e.ts` —— 已安装的 Chrome 报告版本，并验证继承的排除、生产重置、显式 `none` 与 `initial` 的区别，以及移除重置的负对照。未安装 Chrome 或运行时不支持属性继承时，显式跳过本场景；断言和其他启动错误正常失败。常规 Chromium 149 车道不实现继承，因此单靠该车道不能验证重置行为。

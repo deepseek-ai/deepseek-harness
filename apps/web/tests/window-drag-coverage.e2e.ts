@@ -26,19 +26,10 @@ import {
   INTERACTIVE_SELECTOR, RECALL_MARK, isDraggableAt, type RegionRect,
 } from '@deepseek-ai/dsh-client-web/src/window-drag/regions.ts'
 import { launchWebScaffold, watchConsole, type WebScaffold } from './scaffold.ts'
-import { connectFreshWorkspace, expandOwningTurnProcess, newEnglishPage, saveFailureShot } from './support.ts'
-
-/** An interactive box, including controls that declare no native region. */
-interface InteractiveBox extends Rect {
-  /** Sample points at which the browser's hit test reaches this element or its content. */
-  readonly hits: readonly (readonly [number, number])[]
-}
-
-/** Native region owners and hittable controls describe separate parts of the same frame. */
-interface CollectedSurface {
-  readonly regions: readonly RegionRect[]
-  readonly controls: readonly InteractiveBox[]
-}
+import {
+  collectWindowSurface, connectFreshWorkspace, expandOwningTurnProcess, newEnglishPage, saveFailureShot,
+  type CollectedWindowSurface,
+} from './support.ts'
 
 /** A point the coverage table claims something about. */
 interface CoverageProbe {
@@ -85,41 +76,11 @@ async function rectOf(page: Page, selector: string): Promise<Rect> {
  * @param selector - the interactive element selector.
  * @returns native region boxes and independently sampled controls.
  */
-async function collectedSurface(page: Page, selector: string): Promise<CollectedSurface> {
-  return page.evaluate((interactiveSelector) => {
-    const regions: RegionRect[] = []
-    const controls: InteractiveBox[] = []
-    for (const element of Array.from(document.querySelectorAll('*'))) {
-      const style = getComputedStyle(element)
-      const region = style.getPropertyValue('-webkit-app-region')
-      if (style.visibility === 'hidden' || style.display === 'none') continue
-      const rect = element.getBoundingClientRect()
-      if (rect.width === 0 || rect.height === 0) continue
-      const box = { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
-      if (region === 'drag' || region === 'no-drag') regions.push({ ...box, draggable: region === 'drag' })
-      if (!element.matches(interactiveSelector)) continue
-      const insetX = Math.min(2, rect.width / 4)
-      const insetY = Math.min(2, rect.height / 4)
-      const samples: [number, number][] = [
-        [rect.x + rect.width / 2, rect.y + rect.height / 2],
-        [rect.x + insetX, rect.y + insetY],
-        [rect.x + rect.width - insetX, rect.y + insetY],
-        [rect.x + insetX, rect.y + rect.height - insetY],
-        [rect.x + rect.width - insetX, rect.y + rect.height - insetY],
-      ]
-      const hits = samples.filter(([x, y]) => {
-        const top = document.elementFromPoint(x, y)
-        // Panes and the navigation dialog contain their own window-drag rows.
-        // Those rows own their pixels; controls inside still subtract themselves.
-        const strip = top?.closest('[data-window-drag]')
-        if (element.matches('[data-dockkit-pane][tabindex="-1"], [data-shortcut-modal="sidebar"][role="dialog"]')
-          && strip != null && element.contains(strip)) return false
-        return top !== null && (top === element || element.contains(top))
-      })
-      controls.push({ ...box, hits })
-    }
-    return { regions, controls }
-  }, selector)
+async function collectedSurface(page: Page, selector: string): Promise<CollectedWindowSurface> {
+  return collectWindowSurface(page, {
+    selector,
+    containersWithDragRows: '[data-dockkit-pane][tabindex="-1"], [data-shortcut-modal="sidebar"][role="dialog"]',
+  })
 }
 
 /** @param page - the page under test. @param selector - the control selector. @returns native region owners in DOM order. */
@@ -136,7 +97,7 @@ async function collectedRegions(page: Page, selector: string): Promise<readonly 
  * @param surface - native regions and independent interactive boxes from one frame.
  * @returns one description per interactive box with a hittable sample inside the drag surface.
  */
-function swallowedBoxes(surface: CollectedSurface): string[] {
+function swallowedBoxes(surface: CollectedWindowSurface): string[] {
   return surface.controls
     .filter(region => region.hits.some(([x, y]) => isDraggableAt(surface.regions, x, y)))
     .map(region => `${Math.round(region.x)},${Math.round(region.y)} ${Math.round(region.width)}x${Math.round(region.height)}`)
@@ -178,7 +139,7 @@ async function settled(page: Page): Promise<void> {
 
 /**
  * Scroll a content box above its scrollport while its untrimmed bounds overlap window chrome.
- * @param target - Rendered content whose geometry Electron collects without overflow clipping.
+ * @param target - Content whose full bounds can overlap chrome while clipped by its scrollport.
  * @param scrollport - The content's actual scrolling owner.
  * @param chrome - The chrome row that must retain its drag pixels.
  * @returns A point inside the clipped content box and the chrome row.
@@ -364,7 +325,7 @@ describe('web e2e: macOS window drag coverage', () => {
     } finally { await page.close() }
   })
 
-  it('keeps no-drag subtraction within pane bodies and horizontally scrolling tab viewports', async () => {
+  it('keeps no-drag subtraction within panes and horizontally scrolling tab viewports', async () => {
     const { page, tripwire } = await desktopPage()
     try {
       await connectTranscriptWorkspace(page, 'scrolled-drag-pane')
@@ -387,9 +348,12 @@ describe('web e2e: macOS window drag coverage', () => {
       const child = body.locator('[data-drag-scroll-fixture]')
       const strip = await rectOf(page, '[data-dockkit-strip]')
       const [x, y] = await scrollBehindChrome(child, body, strip)
-      expect(await body.evaluate(element => getComputedStyle(element).getPropertyValue('app-region'))).toBe('no-drag')
       expect(await child.evaluate(element => getComputedStyle(element).getPropertyValue('app-region'))).toBe('none')
       const regions = await collectedRegions(page, INTERACTIVE_SELECTOR)
+      const bodyBox = await body.boundingBox()
+      if (bodyBox === null) throw new Error('The pane body has no layout box')
+      expect(isDraggableAt(regions, bodyBox.x + bodyBox.width / 2, bodyBox.y + bodyBox.height / 2),
+        'pane content remains outside the drag surface').toBe(false)
       expect(isDraggableAt(regions, x, y), 'scrolled descendants do not subtract the pane tab strip').toBe(true)
 
       const tabs = panel.locator('[data-dockkit-strip-tabs]').first()
