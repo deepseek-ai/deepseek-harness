@@ -117,7 +117,6 @@ async function convertReport(ctx: Context, workspace: string, callId: string) {
 
 it('mounts packaged Desktop skills with the primary runtime Python beside the Office tools', async () => {
   const { ctx, root } = await boot('desktop', root => join(root, 'primary-runtime'))
-  // Desktop omits pythonEnvironment; the skill-office default selects the bundled environment.
   expect(ctx.loader.resolve('skill-office').fiber?.effectiveConfig).toStrictEqual({ pythonEnvironment: 'workspace-dependencies' })
   expect(ctx.loader.resolve('workspace-dependencies').fiber?.effectiveConfig).toEqual({
     source: join(root, 'primary-runtime'), root: join(root, 'home', 'dsh-runtimes', 'dsh-primary-runtime'),
