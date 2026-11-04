@@ -30,7 +30,7 @@ it('omits development artifacts while preserving executable modules, assets and 
     '@mixmark-io/domino/.yarn/plugins/@yarnpkg/plugin-version.cjs',
     '@mixmark-io/domino/.yarn/versions/release.yml',
     '@deepseek-ai/libreoffice-kit-wasm/assets/soffice.data',
-    '@deepseek-ai/libreoffice-kit-darwin-arm64/bin/libreoffice-kit',
+    '@deepseek-ai/libreoffice-kit-darwin-arm64/bin/dsoffice',
     '.modules.yaml', '.pnpm-workspace-state-v1.json', '.bin/tool', '.pnpm/cache',
   ]
   const retained = [
@@ -50,7 +50,7 @@ it('omits development artifacts while preserving executable modules, assets and 
     '@mixmark-io/domino/LICENSE', '@mixmark-io/domino/package.json',
     'example/.yarn/runtime.cjs', '@mixmark-io/domino/.yarn-data.json',
     '@img/sharp-win32-x64/lib/libvips-42.dll',
-    '@deepseek-ai/libreoffice-kit-win32-x64/bin/libreoffice-kit.exe',
+    '@deepseek-ai/libreoffice-kit-win32-x64/bin/dsoffice.exe',
     '@deepseek-ai/libreoffice-kit-win32-x64/sources/core-source.json',
     '@deepseek-ai/libreoffice-kit-win32-x64/licenses/MPL-2.0.txt',
   ]
