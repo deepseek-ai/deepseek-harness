@@ -626,6 +626,39 @@ describe('built-in conversation node Definitions', () => {
     },
   )
 
+  it.each(['replay', 'live', 'prepend'] as const)('presents empty retry receipts through %s while retaining other input', (mode) => {
+    const retry = { id: 'empty-retry', role: 'user', content: [], source: { kind: 'retry' } }
+    const before = [
+      at(1, 'agent/inbox/spliced', { target: 'next-turn', start: 0, inserted: [retry] }),
+      at(2, 'turn/start', { turn: 1 }),
+      at(3, 'agent/inbox/spliced', { target: 'next-turn', start: 0, removedCount: 1, inserted: [] }),
+      at(4, 'step/start', { turn: 1, step: 1 }),
+    ]
+    const message = at(5, 'user/message', retry, { surfaceOp: 'append' })
+    const value = assembler(mode === 'replay' ? [...before, message] : mode === 'prepend' ? [message] : [], mode === 'prepend')
+    if (mode === 'live') for (const entry of [...before, message]) value.append(entry)
+    if (mode === 'prepend') value.prepend(before, false)
+    value.flush()
+    const current = snapshot(value)
+    const receipt = node(current, 'turn-trigger')
+    expect(receipt).toMatchObject({ anchorSeq: 5, groupTree: 'input', data: { content: [], source: { kind: 'retry' } } })
+    expect(current.order).toContain(receipt?.key)
+    expect(node(current, 'unknown')).toBeUndefined()
+
+    value.append(at(6, 'user/message', { ...retry, id: 'retry-with-content',
+      content: [{ type: 'text', text: 'retained context' }],
+    }, { surfaceOp: 'append' }))
+    value.append(at(7, 'user/message', { ...retry, id: 'ordinary-empty', source: { kind: 'user' } }, { surfaceOp: 'append' }))
+    value.append(at(8, 'developer/message', { turn: 1, step: 1,
+      message: { ...retry, id: 'developer-empty', role: 'developer' },
+    }, { surfaceOp: 'append' }))
+    value.flush()
+    expect(node(snapshot(value), 'context')?.data).toMatchObject({ content: [{ type: 'text', text: 'retained context' }] })
+    expect(node(snapshot(value), 'user')?.data).toMatchObject({ content: [], source: { kind: 'user' } })
+    expect(snapshot(value).nodes.values().find(candidate => candidate.anchorSeq === 8)?.data)
+      .toMatchObject({ content: [], source: { kind: 'retry' } })
+  })
+
   it.each(['replay', 'live', 'prepend'] as const)('classifies waking Inbox messages through %s', (mode) => {
     const notice = { ...textMessage('notice', 'scheduled work'), source: { kind: 'schedule' } }
     const human = textMessage('human', 'user task')

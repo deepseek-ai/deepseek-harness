@@ -80,6 +80,12 @@ The composer measures its expanded control groups after size, content, visibilit
 
 The context meter follows the [statistics-control radius](../../../docs/ui-radius.md#radius-scale).
 
+An empty, idle ordinary Session composer offers a play action after `RATE_LIMIT`, `SERVER`, `TIMEOUT`, `TRANSPORT`, `EMPTY_RESPONSE`, or `STREAM_CLOSED` ends its latest turn. The failed turn must include admitted ordinary user input and a settled failed model attempt. Clicking submits `content: []` through the existing Session prompt API; drafts and attachments keep the Send action. A new balanced turn uses committed history and records an empty `user/message` with `source.kind: 'retry'`. Refusal or transport failure leaves the draft empty and reports the error through the ordinary submission lifecycle.
+
+The Session API owns `conversationContinuation`, shared by Host admission and browser presentation. It restores eligibility from complete Session history and preserves it across repeated failed empty continuations, independently of loaded browser pages.
+
+The composer exposes `retry(failureSeq)` for failed-generation recovery. The input bar reads `conversationContinuation` and `inbox` through the standard `useProjection` prop. User-facing text calls the action Continue generating.
+
 The composer uses the shared [text-input focus policy](../ui-primitives/README.md#use-this-package) on mount, Session switching, and unlock. Identified phones and tablets require tapping the input; desktop devices retain automatic focus. On these mobile devices, a submission that empties the focused draft moves focus to the non-text composer card, dismissing the keyboard while retaining its navigation position. Rejected submissions, retained newer draft text, and another control already holding focus preserve focus. The [Lexical patch](../../../patches/lexical@0.49.0.patch) keeps caret scrolling in the same coordinate system as DOM geometry when a mobile keyboard pans the page.
 
 The context-occupancy button shows a ring and percentage below the input card, after the Session statistics. Clicking it opens the token breakdown in a CSS-anchored panel bounded by the layout viewport, including when no statistics are shown; the button stays hidden until context usage and capacity are available. Browser zoom and panning move the panel with the page, so it may extend beyond the visual viewport. Outside the Hero, that row keeps one reading's height while it is empty, so statistics and context usage arriving later do not change the composer's height; the Hero shows no empty row.
@@ -193,11 +199,19 @@ Session title context gestures use the shared [context menu](../ui-context-menu/
 <a id="model-experience"></a>
 ## Model Experience
 
-None, as this package renders browser state and sends user-admitted inputs through Session Controller APIs without constructing model requests.
+### Manual continuation request
+
+#### What the model sees
+
+The play action submits `content: []` through the existing Session prompt API. Ordinary Loop admission records an empty `user/message` with `source.kind: 'retry'`. Chat presents the empty retry as a compact continuation-request receipt. The adapter applies its ordinary message serialization; the action adds no localized or hidden continuation text. Pending injected context follows ordinary admission.
+
+#### Token effect
+
+The action adds no continuation text. Empty-message serialization and framing costs depend on the adapter. The request still incurs the ordinary cost of retained history, current prompt sections, tool declarations, and any newly admitted context.
 
 #### KV Cache effect
 
-None; Conversation assembly and browser input state do not alter provider-side prompt caching.
+Serialization of the empty retry message depends on the adapter. Prefix reuse depends on the current model, prompt, tools, injected context, and provider cache policy.
 
 ## Known Limitations and Deferred Work
 
@@ -205,6 +219,7 @@ None; Conversation assembly and browser input state do not alter provider-side p
 
 - **Only registered targets can render** — the shell deliberately has no implicit fallback target beyond the registered `chat` preference.
 - **Factory occurrences inherit their render-position Session** — `conversation.content` does not accept an independently addressed Session; that requires a separate Session-provider capability.
+- **Manual continuation uses a fixed product allowlist** — the supported failure codes are independent of the provider's configurable `retryableCodes`; changing automatic retry policy does not expand or reduce this action. `STREAM_CLOSED` permits an explicit new user turn even when the default policy does not retry it. That code can also identify a protocol violation, so another request is not guaranteed to recover.
 - **Composer backdrop blur is verified only in Chromium** — with `will-change: transform` on the docked composer, descendant `backdrop-filter` still samples the transcript in Chromium; WebKit behavior has not been verified.
 - **A failing Definition costs a full replay per publication** — after an incremental flush fails, the assembler replays the complete loaded window to keep the views correct. A Definition that fails on every update therefore replays the whole window on each publication until its owner fixes it ([window update paths](../../../docs/subsystems/conversation.md#window-update-paths)).
 
