@@ -21,8 +21,8 @@ async function main(): Promise<void> {
   if (process.connected) process.send?.({ type: 'starting', runId }, (error) => { if (error !== null) console.error(error) })
   const runtimeDir = process.argv[2] as string
   const projectDir = process.argv[3] as string
-  // Set before the launch-environment snapshot and profile evaluation.
-  process.env.DSH_PRIMARY_RUNTIME = process.argv[4] ?? join(runtimeDir, '..', 'runtime', 'primary-runtime')
+  // Set before the launch-environment snapshot and profile evaluation; empty means the payload sits beside the runtime directory.
+  process.env.DSH_PRIMARY_RUNTIME = process.argv[4] || join(runtimeDir, '..', 'runtime', 'primary-runtime')
   const installAnchor = join(runtimeDir, 'node_modules', '@deepseek-ai', 'dsh', 'package.json')
   const profile = loadProfileDirectory('dsh', projectDir, installAnchor)
   reportSkippedBundles('dsh', profile)

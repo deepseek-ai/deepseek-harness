@@ -45,11 +45,10 @@ const formats = [
   },
 ] as const
 
-const intents = [
-  { intent: 'explicit', suffix: 'Render the finished file and visually inspect the changed page or sheet.' },
-  { intent: 'excluded', suffix: 'Do not render or visually inspect the finished file.' },
-  { intent: 'implicit', suffix: '' },
-] as const
+const explicitIntent = { intent: 'explicit', suffix: 'Render the finished file and visually inspect the changed page or sheet.' } as const
+const excludedIntent = { intent: 'excluded', suffix: 'Do not render or visually inspect the finished file.' } as const
+const implicitIntent = { intent: 'implicit', suffix: '' } as const
+const intents = [explicitIntent, excludedIntent, implicitIntent]
 
 /**
  * Register the visual-intent e2e cases for the selected document formats. Without an explicit request, appearance
@@ -64,7 +63,7 @@ export function registerVisualIntentCases(selected: readonly DocumentFormat[]): 
       { ...format, ...intent, kind: 'content', task: format.contentTask, verify: format.verifyContent, rendersUnrequested: format.contentRenders },
     ]),
     ...'notesTask' in format
-      ? [{ ...format, ...intents[2], kind: 'notes', task: format.notesTask, verify: format.verifyNotes, rendersUnrequested: false }]
+      ? [{ ...format, ...implicitIntent, kind: 'notes', task: format.notesTask, verify: format.verifyNotes, rendersUnrequested: false }]
       : [],
   ])
 

@@ -39,7 +39,7 @@ python-docx does not paginate or render documents. Do not represent ordinary rep
 
 Reopen the saved document with python-docx and verify the requested content, related formatting, and unchanged content that must be preserved. These checks complete routine validation; deliver the file once they pass. ZIP integrity, package inventories, and metadata matter only for a concrete failure.
 
-Call `office_render` on the changed page when the user asks for images or visual inspection, or when styling, font color, spacing, sizing, or text alignment is the requested edit; a request to skip rendering takes precedence. Rendering is reserved for these cases: new documents and content edits, with incidental basic formatting, are checked with python-docx alone. For PDF output, call `office_convert` with `format: "pdf"`, then copy the returned temporary file to the destination.
+Call `office_render` on the changed page when the user asks for images or visual inspection, or when styling, font color, spacing, sizing, or text alignment is the requested edit; a request to skip rendering takes precedence. New documents and content edits, with incidental basic formatting, are checked with python-docx alone. For PDF output, call `office_convert` with `format: "pdf"`, then copy the returned temporary file to the destination.
 
 A fully transparent or uniformly blank image of populated content means the renderer failed, which ends visual checks for the task and leaves the source as it is. When content and structure checks pass, state the visual status only as "Content and structure checks passed; visual inspection was not completed." or "内容与结构检查通过；视觉检查未完成。".
 

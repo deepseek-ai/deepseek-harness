@@ -509,6 +509,20 @@ describe('Office service failures', () => {
 })
 
 describe('arguments and paths', () => {
+  /** Refuse `args` with `message` after exactly `resolveCalls` filesystem resolutions. */
+  async function expectRefusal(args: Record<string, unknown>, message: string, resolveCalls: number): Promise<void> {
+    await mkdir(join(dir, 'folder.pptx'))
+    const { ctx, kit } = await setup()
+    const resolve = vi.spyOn(ctx.fs, 'resolve')
+    const result = await office(ctx, args)
+    expect(resolve).toHaveBeenCalledTimes(resolveCalls)
+    expect(result.isError).toBe(true)
+    expect(text(result)).toContain(message)
+    expect(kit.renderImages).not.toHaveBeenCalled()
+    expect(kit.convertTo).not.toHaveBeenCalled()
+    expect(kit.recalculate).not.toHaveBeenCalled()
+  }
+
   it.each([
     ...['pdf', 'docx', 'odt', 'txt'].map(format => ['report.docx', format]),
     ...['pdf', 'xlsx', 'ods', 'csv'].map(format => ['book.xlsx', format]),
@@ -543,21 +557,17 @@ describe('arguments and paths', () => {
     [{ operation: 'render', input: 'book.xlsx', sheet: ' ' }, 'sheet must be an exact worksheet name'],
     [{ operation: 'render', input: 'deck.pptx', dpi: 23 }, 'dpi must be an integer from 24 to 600'],
     [{ operation: 'render', input: 'deck.pptx', dpi: 601 }, 'dpi must be an integer from 24 to 600'],
-    [{ operation: 'render', input: 'missing.pptx' }, 'missing.pptx": not found'],
-    [{ operation: 'render', input: 'folder.pptx' }, 'folder.pptx": not a regular file'],
     [{ operation: 'convert', input: 'deck.pptx', format: 'xlsx' }, 'deck.pptx" to xlsx: this file converts to pdf, pptx, odp'],
     [{ operation: 'recalculate', input: 'book.xlsx', format: 'pdf' }, 'format'],
-  ])('refuses %j', async (args, message) => {
-    await mkdir(join(dir, 'folder.pptx'))
-    const { ctx, kit } = await setup()
-    const resolve = vi.spyOn(ctx.fs, 'resolve')
-    const result = await office(ctx, args)
-    if (args.input !== 'missing.pptx' && args.input !== 'folder.pptx') expect(resolve).not.toHaveBeenCalled()
-    expect(result.isError).toBe(true)
-    expect(text(result)).toContain(message)
-    expect(kit.renderImages).not.toHaveBeenCalled()
-    expect(kit.convertTo).not.toHaveBeenCalled()
-    expect(kit.recalculate).not.toHaveBeenCalled()
+  ])('refuses %j before reading the filesystem', async (args, message) => {
+    await expectRefusal(args, message, 0)
+  })
+
+  it.each([
+    [{ operation: 'render', input: 'missing.pptx' }, 'missing.pptx": not found'],
+    [{ operation: 'render', input: 'folder.pptx' }, 'folder.pptx": not a regular file'],
+  ])('refuses %j after resolving the input path', async (args, message) => {
+    await expectRefusal(args, message, 1)
   })
 
   it('returns the temporary file and the copy instruction for conversions and recalculations', async () => {

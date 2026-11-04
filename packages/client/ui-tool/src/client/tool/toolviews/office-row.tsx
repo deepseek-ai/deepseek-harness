@@ -24,8 +24,10 @@ export function OfficeRow({
   const { getTriggerProps } = useContextMenu()
   const office = officeRowModel(toolName, block, cwd, home)
   const row = toolRowModel(toolName, block, cwd, home)
-  // Image blocks would flatten to JSON attachment references; keep only the text.
-  const text = 'kind' in block ? block.content.flatMap(part => part.type === 'text' ? [part.text] : []).join('\n') : ''
+  // Image blocks flatten to JSON attachment references, so a settled result with only images shows no body.
+  const output = 'kind' in block
+    ? block.content.flatMap(part => part.type === 'text' ? [part.text] : []).join('\n') || null
+    : row.output
   const path = office.filePath
   return (
     <ToolRow
@@ -40,7 +42,7 @@ export function OfficeRow({
       title={t(office.titleKey)}
       summary={office.summary}
       bodyRaw={null}
-      output={text === '' ? row.output : text}
+      output={output}
       errorSummary={row.errorSummary}
       state={row.state}
       filePath={path}

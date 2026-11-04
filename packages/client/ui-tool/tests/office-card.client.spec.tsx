@@ -94,10 +94,11 @@ describe('OfficeRow', () => {
     expect(view.container.querySelector('[data-images]')).toBeNull()
   })
 
-  it('falls back to the flattened output when a result has no text', () => {
+  it('shows no output body when a settled result carries only images', () => {
     const view = render(<OfficeRow {...props(settled({ content: [{ type: 'image', attachment: image }] }))} />)
-    fireEvent.click(view.container.querySelector('[data-expandable]')!)
-    expect(view.container.textContent).toContain('attachmentId')
+    expect(view.container.textContent).toContain('渲染文档')
+    expect(view.container.textContent).not.toContain('attachmentId')
+    expect(view.container.querySelector('[data-expandable]')).toBeNull()
   })
 
   it('shows a running call with its input', () => {
@@ -112,7 +113,8 @@ describe('OfficeRow', () => {
     const input = '/w/app/input.xlsx'
     const file = `/tmp/office/output.${format}`
     const output = `${verb} ${input} to ${format} (123 bytes${pages}): ${file}\n`
-      + 'Copy this temporary file to its destination with the shell now; it is deleted when this conversation ends.'
+      + 'Copy this temporary file to its destination with the shell now; it may be deleted after a retention period'
+      + ' or to free space, and is deleted when this conversation ends.'
     const warning = 'Fonts not installed and substituted: Example font.'
     const block = settled({ meta: { path: input, file }, content: [{ type: 'text', text: output }, { type: 'text', text: warning }] },
       JSON.stringify({ input: 'input.xlsx', format }), name)

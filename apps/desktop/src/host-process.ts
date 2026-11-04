@@ -214,7 +214,8 @@ export class DesktopHostProcess {
       entry,
       this.runtimeDir,
       this.projectDir,
-      this.primaryRuntime ?? join(this.runtimeDir, '..', 'runtime', 'primary-runtime'),
+      // Empty asks the Host for the payload beside its runtime directory, so that layout has one owner.
+      this.primaryRuntime ?? '',
       ...this.packageManager === undefined ? [] : [this.packageManager.pnpm, this.packageManager.nodeBin],
     ], {
       cwd: this.projectDir,
