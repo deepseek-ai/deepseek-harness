@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
+import { realpathSync } from 'node:fs'
 import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -11,7 +12,7 @@ import { mountRuntime } from './setup.ts'
 import type { Config } from '../src/index.ts'
 
 async function setup(mode: 'read-only' | 'workspace-write' = 'read-only', executionMode: NonNullable<Config['executionMode']> = 'persistent-in-memory') {
-  const root = await mkdtemp(join(homedir(), '.dsh-persistent-sandbox-'))
+  const root = realpathSync.native(await mkdtemp(join(homedir(), '.dsh-persistent-sandbox-')))
   const cwd = join(root, 'workspace')
   await mkdir(cwd)
   const ctx = new Context()
