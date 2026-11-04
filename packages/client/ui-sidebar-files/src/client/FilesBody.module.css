@@ -133,13 +133,11 @@
     height: auto;
   }
 
+  /* Dark theme separates the card by background layer alone, without a shadow. */
   :global(body[data-ds-dark-theme]) .push,
   :global(body[data-ds-dark-theme]) .overlay {
-    background: var(--dsw-alias-bg-base);
-    box-shadow:
-      var(--dsw-elevation-stroke),
-      0 3px 8px 0 color-mix(in srgb, var(--dsw-static-neutral-00) 8%, transparent),
-      0 0 20px 0 color-mix(in srgb, var(--dsw-static-neutral-00) 6%, transparent);
+    background: var(--dsw-alias-bg-layer-1);
+    box-shadow: none;
   }
 
   /* The bar stops where the card's corners curve, so they do not clip it. */
