@@ -115,9 +115,7 @@ runner 的受监督启动和恢复见 [Windows runner 机器准备](../windows-s
 
 所有 Windows 打包模式（含 test 和 unsigned）都要求仓库变量 `DESKTOP_PUBLISH_RUNNERS`；触发前配置[原机器路由](../publishing/ci/README.zh.md#machine-setup)。
 
-在 Actions 打开完成的运行，下载独立 `upload-artifact` job 生成的 Artifacts。安装包名称使用原构建的 `package_run_attempt`，诊断名称使用当前 `run_attempt`。打包成功但归档失败时，仅重跑 `upload-artifact` 以复用保留的安装包。`windows-x64-signed-<version>-<run_id>-<package_run_attempt>.zip` 与 `windows-x64-unsigned-<version>-<run_id>-<package_run_attempt>.zip` 包含对应 EXE；`windows-package-logs-<run_id>-<run_attempt>` 包含打包诊断。安装包 ZIP 用 DOS 字段的本地时间和 Unix 字段的绝对时间记录各留存副本的修改时间，不保证是原始构建时间。上传步骤名为 `Retain installers for the selected mode` 和 `Retain packaging diagnostics`；步骤耗时与带时间戳的日志显示上传用时。这些产物不等于发布 Release 或下载站内容。
-
-归档 job 使用系统 bsdtar 创建 store 模式 ZIP：Windows 为 `%SystemRoot%\System32\tar.exe`（必须设置 `SystemRoot`），macOS 为 `/usr/bin/tar`。`invalid ZIP output settings` 表示归档名称、保留目录、临时目录或输出文件设置缺失或无效，会在校验文件前拒绝。`ZIP creation failed with <tar>` 指明失败的归档工具；检查其 stderr、工具是否可用，以及 `RUNNER_TEMP` 剩余空间。若打包已成功，修复归档前置条件后仅重跑 `upload-artifact`，复用保留的安装包。
+在 Actions 打开完成的运行，下载独立 `upload-artifact` job 生成的 Artifacts。安装包名称使用原构建的 `package_run_attempt`，诊断名称使用当前 `run_attempt`。打包成功但归档失败时，修复[归档前置条件](../publishing/ci/README.zh.md#recovery-and-records)后仅重跑 `upload-artifact`，复用保留的安装包。`windows-x64-signed-<version>-<run_id>-<package_run_attempt>.zip` 与 `windows-x64-unsigned-<version>-<run_id>-<package_run_attempt>.zip` 包含对应 EXE；`windows-package-logs-<run_id>-<run_attempt>` 包含打包诊断。安装包 ZIP 用 DOS 字段的本地时间和 Unix 字段的绝对时间记录各留存副本的修改时间，不保证是原始构建时间。上传步骤名为 `Retain installers for the selected mode` 和 `Retain packaging diagnostics`；步骤耗时与带时间戳的日志显示上传用时。这些产物不等于发布 Release 或下载站内容。
 
 测量缓存时，`cache_namespace` 为两个依赖 store 和上游下载选择保留的子目录；留空使用正常共享缓存。新名称用于冷缓存采样，再次使用同名用于热缓存采样。名称由 1–64 个小写字母、数字或连字符组成，以字母或数字开头，且不能为 Windows 设备名。这不会重置独立的签名缓存或操作系统文件缓存；应将其状态、Job 开始至完成的总耗时与阶段耗时和产物体积一并报告。workflow 在依赖安装前记录 Node 版本、可用 CPU 并行数、逻辑 CPU 数及总内存和空闲内存。
 

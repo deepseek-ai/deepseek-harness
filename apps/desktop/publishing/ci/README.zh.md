@@ -80,6 +80,8 @@ Environment 审批限制此工作流，不限制同一机器账户运行的任�
 
 ## 恢复与记录
 
+归档 job 使用系统 bsdtar 创建 store 模式 ZIP：Windows 为 `%SystemRoot%\System32\tar.exe`，macOS 为 `/usr/bin/tar`。`invalid ZIP output settings` 表示归档名称缺失或格式非法，或保留目录、临时目录、`GITHUB_OUTPUT` 缺失，会在校验文件前拒绝。`desktop archival: SystemRoot is required to locate Windows bsdtar` 表示缺失 Windows 系统目录设置。`ZIP creation failed with <tar>` 指明失败的归档工具；检查其 stderr、工具是否可用，以及 `RUNNER_TEMP` 剩余空间。
+
 打包 workflow 将 `package` 与 `upload-artifact`（GitHub 产物归档）分开。所有打包模式（包括 test 和 unsigned）都要求在打包前配置 `DESKTOP_PUBLISH_RUNNERS`，用于将归档路由到原机器。归档失败后仅重跑 `upload-artifact`；它校验原始 manifest 和 hash，不重新构建、签名或公证。打包诊断归档尽力执行，不改变构建成功状态。归档重跑若一直排队且未分配 runner，应先检查解析出的 runner 标签和上游 package 输出，不能直接认定机器离线。输出缺失时需由操作者从原留存目录和 manifest 恢复文件；重跑整个 workflow 会重新构建，不属于仅归档恢复。Actions 验收须验证输出复用。
 
 生产 COS 发布默认启用官网安装包上传和缓存刷新（`upload_website=true`）。取消后仅发布版本化资源及自动更新清单；test 发布不修改生产官网。`upload-website-installer` 上传固定安装包，`purge-website-installer` 刷新该 URL。官网安装包校验器只需要最终 DMG/EXE 和保留的 manifest，匹配生产资格、构建身份及平台，只计算一次安装包 hash，并通过同一打开的文件句柄上传。production nightly 和 stable 包都可以替换官网固定安装包。操作者负责选择预期版本；固定对象没有防降级保护，重跑旧发布可能覆盖新安装包。勾选官网上传时，审批前摘要展示固定官网 URL、选定版本和无防降级保护的说明。原有版本与自动更新发布保留自身校验。
