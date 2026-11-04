@@ -6,8 +6,7 @@ import { desktopPublishQualificationError } from './desktop-publish-qualificatio
 const positive = z.number().int().positive()
 const runSchema = z.object({
   id: positive, run_attempt: positive, head_sha: z.string().regex(/^[a-f0-9]{40}$/u),
-  // The package job establishes eligibility; archival failure does not disqualify its build.
-  path: z.string(), conclusion: z.string(), event: z.literal('workflow_dispatch'),
+  path: z.string(), event: z.literal('workflow_dispatch'),
   repository: z.object({ full_name: z.string() }),
 })
 const requestSchema = z.object({ source: z.object({
