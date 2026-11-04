@@ -9,14 +9,16 @@ import { desktopBuildVersionPrefix, validateDesktopBuildVersion } from './deskto
  * @returns {string} Validated build version.
  */
 export function desktopCiVersion(environment, productVersion, now = new Date()) {
-  const mode = environment.PACKAGE_VERSION_MODE
-  const selected = mode === 'default' ? (environment.DSH_PACKAGING_PRESET === 'production' ? 'product' : 'auto') : mode
-  if (selected !== undefined && !['product', 'auto', 'manual'].includes(selected)) throw new Error('Invalid version mode')
-  const requested = selected === 'product' ? productVersion : selected === 'auto' ? 'auto' : environment.PACKAGE_BUILD_VERSION?.trim()
+  const input = environment.PACKAGE_VERSION_MODE
+  // TODO: Remove legacy mode aliases on 2027-01-04 with the workflow source_ref mapping.
+  const mode = input === 'product' ? 'follow-dsh' : input === 'auto' ? 'build-number' : input
+  const selected = mode === 'default' ? (environment.DSH_PACKAGING_PRESET === 'production' ? 'follow-dsh' : 'build-number') : mode
+  if (selected !== undefined && !['follow-dsh', 'build-number', 'manual'].includes(selected)) throw new Error('Invalid version mode')
+  const requested = selected === 'follow-dsh' ? productVersion : selected === 'build-number' ? 'auto' : environment.PACKAGE_BUILD_VERSION?.trim()
   if (selected === 'manual' && (!requested || requested === 'auto')) throw new Error('Manual version mode requires an explicit version')
   const date = now.toISOString().slice(0, 10).replaceAll('-', '')
   const example = `${desktopBuildVersionPrefix(productVersion)}${date}.1`
-  if (!requested) throw new Error(`Build version is required: use auto, ${productVersion}, or e.g. ${example}`)
+  if (!requested) throw new Error(`Build version is required: select version_mode=build-number, or use ${productVersion}, or e.g. ${example}`)
   let candidate = requested
   if (requested === 'auto') {
     for (const name of ['GITHUB_RUN_NUMBER', 'GITHUB_RUN_ATTEMPT']) {
@@ -24,11 +26,10 @@ export function desktopCiVersion(environment, productVersion, now = new Date()) 
     }
     candidate = `${desktopBuildVersionPrefix(productVersion)}${date}.${environment.GITHUB_RUN_NUMBER}.${environment.GITHUB_RUN_ATTEMPT}`
   }
-  if (environment.DSH_DESKTOP_UPDATE_CHANNEL === 'stable' && candidate.includes('-')) throw new Error('Stable channel requires a stable version; select product or manual stable version')
   try {
     const resolved = validateDesktopBuildVersion(candidate, productVersion)
     return resolved
   } catch {
-    throw new Error(`Invalid build version for this checkout: use auto, ${productVersion}, or e.g. ${example}`)
+    throw new Error(`Invalid build version for this checkout: select version_mode=build-number, or use ${productVersion}, or e.g. ${example}`)
   }
 }

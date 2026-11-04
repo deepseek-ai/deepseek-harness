@@ -62,6 +62,7 @@ it.skipIf(process.platform !== 'win32')('resets only the allocated checkout with
 
 it('routes manual packaging to the dedicated runner with explicit preset and signing selection', () => {
   expect(Object.keys(workflow.on)).toEqual(['workflow_dispatch'])
+  expect(workflow.on.workflow_dispatch).toMatchObject({ inputs: { version_mode: { default: 'default', options: ['default', 'follow-dsh', 'build-number', 'manual'] } } })
   expect(workflow.jobs.package).not.toHaveProperty('name')
   expect(job['runs-on']).toBe('dsh-win-package-trial')
   expect(JSON.stringify(job.env)).not.toContain('runner.')
@@ -79,7 +80,7 @@ it('routes manual packaging to the dedicated runner with explicit preset and sig
   expect(workflow.on.workflow_dispatch!.inputs.version_mode!.default).toBe('default')
   expect(workflow.on.workflow_dispatch!.inputs.source_ref!.default).toBe('master')
   expect(workflow.on.workflow_dispatch!.inputs.update_channel!.default).toBe('nightly')
-  expect(job.env.PACKAGE_VERSION_MODE).toBe('${{ inputs.version_mode }}')
+  expect(job.env.PACKAGE_VERSION_MODE).toBe("${{ inputs.version_mode == 'follow-dsh' && 'product' || inputs.version_mode == 'build-number' && 'auto' || inputs.version_mode }}")
   expect(job.env.PACKAGE_SOURCE_REF).toBe('${{ inputs.source_ref }}')
   expect(job.env.DSH_DESKTOP_UPDATE_CHANNEL).toBe('${{ inputs.update_channel }}')
   expect(job.env.DSH_PACKAGING_PRESET).toBe('${{ inputs.preset }}')

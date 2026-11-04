@@ -15,15 +15,15 @@ on:
         default: test
         required: true
       update_channel:
-        description: '升级通道：nightly 或 stable（须为稳定版本）；默认通道由此打包输入确定'
+        description: '升级通道：人工选择 nightly 或 stable，与版本后缀无关；默认通道由此打包输入确定'
         type: choice
         options: [nightly, stable]
         default: nightly
         required: true
       version_mode:
-        description: '版本模式：default 为 test 自动编号、production 跟随产品；product 保留原版本，auto 自动编号，manual 手填'
+        description: '版本模式：default 按环境自动选择（test 取 build-number，production 取 follow-dsh）；follow-dsh 跟随 dsh 包版本号；build-number 自动追加构建编号；manual 手填'
         type: choice
-        options: [default, product, auto, manual]
+        options: [default, follow-dsh, build-number, manual]
         default: default
         required: true
       build_version:
@@ -77,7 +77,8 @@ jobs:
         shell: pwsh
     env:
       PACKAGE_SOURCE_REF: ${{ inputs.source_ref }}
-      PACKAGE_VERSION_MODE: ${{ inputs.version_mode }}
+      # TODO: Remove this legacy source_ref mode mapping on 2027-01-04 with the parser aliases.
+      PACKAGE_VERSION_MODE: ${{ inputs.version_mode == 'follow-dsh' && 'product' || inputs.version_mode == 'build-number' && 'auto' || inputs.version_mode }}
       DSH_DESKTOP_UPDATE_CHANNEL: ${{ inputs.update_channel }}
       DSH_TELEMETRY_DISABLED: '1'
       DSH_PACKAGING_PRESET: ${{ inputs.preset }}
