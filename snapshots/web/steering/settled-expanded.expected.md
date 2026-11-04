@@ -13,7 +13,6 @@
 - button "Completed in {{duration}}" [disabled]
 - button "Asked questions" [expanded]
 - button "Context injection runtime-context"
-- button "Context injection skill-catalog"
 - button "Context injection time-context"
 - button "Ask question 1/1 answered"
 - group "Questions and answers":

@@ -13,7 +13,6 @@
 - button "Stopped" [disabled] [expanded]
 - button "Injected context" [expanded]
 - button "Context injection runtime-context"
-- button "Context injection skill-catalog"
 - button "Context injection time-context"
 - paragraph: partial
 - text: Stopped

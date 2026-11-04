@@ -10,7 +10,6 @@
 - text: Stream one TypeScript fence for the highlighting snapshot. {{clock}}
 - button "Copy"
 - button "Context injection runtime-context"
-- button "Context injection skill-catalog"
 - button "Context injection time-context"
 - text: ts
 - button "Wrap lines" [pressed]

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The catalog lists the Office router and three authoring skills. Full instructions load on demand. The authoring skills append the configured Python environment; the skills direct operations to [`office_render`, `office_convert`, and `office_recalculate`](../../document/tool-office/README.md), with shell copies of output files. The Web application and SDK profiles mount the provider; only Desktop, or an SDK with a primary runtime, also mounts the bundled dependency query.
+The catalog lists the Office router and three authoring skills. Full instructions load on demand. The authoring skills append the configured Python environment; the skills direct operations to [`office_render`, `office_convert`, and `office_recalculate`](../../document/tool-office/README.md), with shell copies of output files. Desktop and an SDK with a primary runtime mount the provider; the bundled dependency query mounts beside it whenever a primary runtime is available.
 
 ## Table of Contents
 

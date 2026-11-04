@@ -166,17 +166,12 @@ it('mounts the preset Office tools without the Office kit row and reaches the se
   expect(resolveKitModule).toHaveBeenCalled()
 })
 
-it('mounts Office skills with packaged defaults and the user Python outside the Desktop profile without launcher variables', async () => {
-  const { ctx } = await boot('web', () => undefined)
-  expect(ctx.loader.resolve('skill-office').disabled).toBe(false)
-  // The path expression evaluates to `undefined`; the schema leaves it unset so skill-office applies its packaged default.
-  expect(ctx.loader.resolve('skill-office').fiber?.effectiveConfig).toStrictEqual({ assetRoot: undefined, pythonEnvironment: 'user' })
+it('mounts neither Office skills nor the bundled Python outside the Desktop profile, even with launcher variables', async () => {
+  const { ctx } = await boot('web', root => join(root, 'primary-runtime'), root => join(root, 'office-skills'))
+  expect(ctx.loader.resolve('skill-office').disabled).toBe(true)
+  expect(ctx.loader.resolve('skill-office').fiber).toBeUndefined()
   expect(ctx.loader.resolve('workspace-dependencies').disabled).toBe(true)
-  expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(names)
-  expect((await ctx.skills.get('office-docx'))?.resourceBase).toEqual({ kind: 'directory', path: join(assets, 'office-docx').split(sep).join('/') })
-  const docx = (await ctx.skills.get('office-docx'))?.content
-  expect(docx).toMatch(/## Python environment\n\n.*`python3` or `python` on PATH/u)
-  expect(docx).not.toContain('load_workspace_dependencies')
+  expect(await ctx.skills.list()).toEqual([])
   expect(ctx.tools.schemas().map(tool => tool.name).sort()).toEqual(OFFICE_TOOLS)
 })
 
@@ -195,19 +190,8 @@ it('mounts packaged Office skills with the user Python in a Desktop profile laun
   expect(ctx.tools.schemas().map(tool => tool.name).sort()).toEqual(OFFICE_TOOLS)
 })
 
-it('reads Office skills from the launcher skill directory outside the Desktop profile', async () => {
-  const { ctx, root } = await boot('web', () => undefined, root => join(root, 'office-skills'))
-  expect(ctx.loader.resolve('skill-office').fiber?.effectiveConfig).toStrictEqual({ assetRoot: join(root, 'office-skills'), pythonEnvironment: 'user' })
-  expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(names)
-  expect((await ctx.skills.get('office-docx'))?.resourceBase)
-    .toEqual({ kind: 'directory', path: join(root, 'office-skills', 'office-docx').split(sep).join('/') })
-})
-
-it.each([
-  ['desktop', (): string => '', (): undefined => undefined],
-  ['web', (): undefined => undefined, (): string => ''],
-] as const)('treats empty launcher variables as unset in the %s profile', async (profile, primaryRuntime, skills) => {
-  const { ctx } = await boot(profile, primaryRuntime, skills)
+it('treats an empty primary runtime as unset in the Desktop profile', async () => {
+  const { ctx } = await boot('desktop', () => '')
   await ctx.loader.resolve('skill-office').fiber!.await()
   expect(ctx.loader.resolve('workspace-dependencies').disabled).toBe(true)
   expect(ctx.loader.resolve('skill-office').fiber?.effectiveConfig).toStrictEqual({ assetRoot: undefined, pythonEnvironment: 'user' })

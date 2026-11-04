@@ -24,7 +24,6 @@
 - button "Completed in {{duration}}" [expanded]
 - button "Injected context" [expanded]
 - button "Context injection runtime-context"
-- button "Context injection skill-catalog"
 - button "Context injection time-context"
 - paragraph: "Review complete: no actionable findings."
 - button "Copy"
