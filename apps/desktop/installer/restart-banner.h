@@ -1,3 +1,4 @@
+#include "restart-text.h"
 namespace restart_banner {
 constexpr wchar_t stateKey[] = L"HarnessInstaller.RestartBanner";
 struct Style {
@@ -50,7 +51,7 @@ inline INT_PTR CALLBACK DialogProc(HWND window, UINT message, WPARAM wp, LPARAM 
 
 // Size the localized paragraph with the font and wrapping used by its static control.
 static void InstallerStyleRestartBanner(HWND window, LPCWSTR text,
-    LPCWSTR, LPCWSTR face, int logicalFontSize, COLORREF background, COLORREF foreground) {
+    LPCWSTR locale, LPCWSTR face, int logicalFontSize, COLORREF background, COLORREF foreground) {
     const HWND label = GetDlgItem(window, 1030);
     const HWND icon = GetDlgItem(window, 0xffff);
     if (!label || !icon) return;
@@ -79,6 +80,8 @@ static void InstallerStyleRestartBanner(HWND window, LPCWSTR text,
     DrawTextW(dc, text, -1, &paragraph, DT_CALCRECT | DT_WORDBREAK | DT_NOPREFIX | DT_EDITCONTROL);
     SelectObject(dc, previous);
     ReleaseDC(window, dc);
+    const int bodyWidth = width - 2 * padding - gap - iconSize;
+    HBITMAP bitmap = RenderRestartParagraph(window, text, face, locale, logicalFontSize, bodyWidth, dpi, background, foreground, paragraph.bottom);
     const int titleHeight = px(22), titleGap = px(4);
     const int textHeight = titleHeight + titleGap + paragraph.bottom;
     const int height = 2 * padding + std::max<int>(iconSize, textHeight);
@@ -108,5 +111,9 @@ static void InstallerStyleRestartBanner(HWND window, LPCWSTR text,
     SetWindowPos(icon, nullptr, padding, (height - iconSize) / 2, iconSize, iconSize, SWP_NOZORDER);
     SetWindowPos(label, nullptr, padding + iconSize + gap, (height - textHeight) / 2 + titleHeight + titleGap,
         width - 2 * padding - gap - iconSize, paragraph.bottom, SWP_NOZORDER);
+    if (bitmap) {
+        SetWindowLongPtrW(label, GWL_STYLE, (GetWindowLongPtrW(label, GWL_STYLE) & ~SS_TYPEMASK) | SS_BITMAP);
+        SendMessageW(label, STM_SETIMAGE, IMAGE_BITMAP, reinterpret_cast<LPARAM>(bitmap));
+    }
     RedrawWindow(window, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
 }
