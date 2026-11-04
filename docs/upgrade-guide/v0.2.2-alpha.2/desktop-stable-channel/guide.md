@@ -13,6 +13,6 @@ Desktop packages, update feeds, and channel configuration use `stable` instead o
 
 ## Migration
 
-1. Select `stable` in packaging workflows or set `DSH_DESKTOP_UPDATE_CHANNEL=stable` when building a stable-channel package. Select the channel independently of the version suffix; stable also accepts alpha and RC versions.
+1. Select `stable` in packaging workflows or set `DSH_DESKTOP_UPDATE_CHANNEL=stable` when building a stable-channel package. Build a stable version, without a prerelease suffix.
 2. If a local Desktop settings file contains `updates.channel: "latest"`, change the value to `"stable"` and restart Desktop. Omitting the field uses the package default.
 3. Publish with the updated tooling: it writes `stable.yml` on Windows and `stable-mac.yml` on macOS within each architecture's feed directory, with stable-channel binaries under `stable/`. Verify the selected channel and requested feed in the test deployment before production publication. Old packages still requesting `latest` feeds do not migrate automatically.
