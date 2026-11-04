@@ -118,16 +118,23 @@ describe('WecomAccount', () => {
     const init = Promise.withResolvers<ScriptedProcess>()
     script[INIT] = (process) => { init.resolve(process) }
 
+    const offered: string[] = []
+    const stop = account.observe(() => {
+      const url = account.snapshot().operation?.authorizationUrl
+      if (url !== undefined && offered.at(-1) !== url) offered.push(url)
+    })
     const id = account.start('connect')
     expect(account.snapshot().operation).toEqual({ id, kind: 'connect', phase: 'authorizing', cancellable: true })
     const authorizing = await init.promise
-    authorizing.write('stderr', `${QR_LINK}\n`)
+    authorizing.write('stderr', 'https://work.weixin.qq.com/ai/qc/gen?source=stderr\n')
     authorizing.write('stdout', 'Scan the QR code with WeCom:\n  http://work.weixin.qq.com/insecure\nhttps://evil.example/qr\n')
     authorizing.write('stdout', `${QR_LINK}\n`)
     await vi.waitFor(() => { expect(account.snapshot().operation).toMatchObject({ phase: 'authorizing', authorizationUrl: QR_LINK }) })
     authorizing.reply({ stdout: 'Authorized\n' })
 
     expect(await settled(id)).toEqual({ account: { state: 'authorized', skills: 'installed' }, result: { id, kind: 'connect', outcome: 'succeeded' } })
+    stop()
+    expect(offered).toEqual([QR_LINK])
     expect(commands()).toEqual([INIT, STATUS])
     expect(errors()).toEqual([])
   })

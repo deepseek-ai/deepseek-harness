@@ -22,7 +22,7 @@ export interface CliReply {
   signal?: NodeJS.Signals | null
 }
 
-/** A piped process whose managed range exits on termination unless held. */
+/** A piped process whose managed range exits on termination. */
 export class ScriptedProcess implements SubprocessHandle {
   readonly stdin = undefined
   readonly stdout = new PassThrough()
@@ -31,7 +31,6 @@ export class ScriptedProcess implements SubprocessHandle {
   readonly collected: SubprocessCollectedOutputs = {}
   readonly done: Promise<SubprocessOutcome>
   terminated = false
-  holdExit = false
   private readonly outcome = Promise.withResolvers<SubprocessOutcome>()
   private readonly exit = Promise.withResolvers<boolean>()
 
@@ -57,17 +56,12 @@ export class ScriptedProcess implements SubprocessHandle {
     this.terminated = true
     this.close()
     this.outcome.resolve({ exitCode: null, signal: 'SIGTERM' })
-    if (!this.holdExit) this.exit.resolve(true)
+    this.exit.resolve(true)
   }
 
   private close(): void {
     if (!this.stdout.writableEnded) this.stdout.end()
     if (!this.stderr.writableEnded) this.stderr.end()
-  }
-
-  /** Empty a held managed range. */
-  release(): void {
-    this.exit.resolve(true)
   }
 
   waitForExit(): Promise<boolean> {
@@ -101,18 +95,6 @@ export class ScriptedSubprocess extends SubprocessRuntime {
 
   override spawnTerminal(): Promise<never> {
     throw new Error('wecom-cli commands never allocate a terminal')
-  }
-}
-
-/**
- * Answer each command by its arguments after the executable.
- * @param replies - reply per space-joined argument list.
- * @returns a `respond` function that fails unknown commands.
- */
-export function byArguments(replies: Record<string, CliReply>): (process: ScriptedProcess) => void {
-  return (process) => {
-    const reply = replies[process.spec.argv.slice(1).join(' ')]
-    process.reply(reply ?? { exitCode: 1, stderr: `unexpected command: ${process.spec.argv.join(' ')}` })
   }
 }
 
