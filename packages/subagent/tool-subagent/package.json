@@ -32,7 +32,10 @@
     "locale/model-selection-settings/*.json",
     "lib/index.js",
     "lib/model-selection-settings.js",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ],
   "license": "MIT",
   "peerDependencies": {

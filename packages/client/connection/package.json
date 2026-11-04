@@ -46,7 +46,10 @@
     "lib/index.js",
     "lib/client.browser.js",
     "lib/client.node.js",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ],
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",

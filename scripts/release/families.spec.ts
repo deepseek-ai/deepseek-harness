@@ -398,16 +398,30 @@ describe('release families', () => {
     ])
   })
 
-  it('applies the harness payload policy to dsh and keeps upstream payloads for vendored packages', () => {
+  it('accepts the harness payload and keeps upstream payloads for vendored packages', () => {
     const dsh = releaseFamily('dsh')
     const vendor = releaseFamily('vendor')
     const harness = member('packages/a/library', '@deepseek-ai/dsh-library')
     const vendored = member('vendor/cordis', '@deepseek-ai/cordis')
 
-    expect(() => { dsh.validatePayload(harness, ['package/lib/index.js', 'package/src/index.ts']) })
-      .toThrow(/publishes source file/)
+    expect(() => { dsh.validatePayload(harness, ['package/lib/index.js', 'package/lib/index.js.map', 'package/src/index.ts']) }).not.toThrow()
     expect(() => { vendor.validatePayload(vendored, ['package/lib/index.js', 'package/src/index.ts']) }).not.toThrow()
     expect(() => { vendor.validatePayload(vendored, []) }).toThrow(/empty tarball/)
+  })
+
+  it('requires the installed package payload the staging hook supplies', () => {
+    const dsh = releaseFamily('dsh')
+    const installed = member('apps/cli', '@deepseek-ai/dsh')
+
+    expect(() => { dsh.validatePayload(installed, ['package/lib/index.js', 'package/src/bin.ts']) })
+      .toThrow(/@deepseek-ai\/dsh packed no documentation/)
+    expect(() => { dsh.validatePayload(installed, ['package/lib/index.js', 'package/docs/guide.md', 'package/src/bin.ts']) })
+      .toThrow(/@deepseek-ai\/dsh packed no upgrade guide index/)
+    const docs = ['package/docs/guide.md', 'package/docs/upgrade-guide/README.md']
+    expect(() => { dsh.validatePayload(installed, ['package/lib/index.js', ...docs]) })
+      .toThrow(/@deepseek-ai\/dsh packed no source/)
+    expect(() => { dsh.validatePayload(installed, ['package/lib/index.js', ...docs, 'package/src/bin.ts']) })
+      .not.toThrow()
   })
 
   it('drives the installed entry only for the family that publishes one', () => {

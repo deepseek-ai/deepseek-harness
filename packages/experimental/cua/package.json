@@ -64,10 +64,14 @@
     "lib/native-client.js",
     "lib/protocol.js",
     "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
     "lib/typert.host.js",
     "lib/typert.host.d.ts",
     "lib/typert.remote-client.js",
-    "lib/typert.remote-client.d.ts"
+    "lib/typert.remote-client.d.ts",
+    "lib/typert.remote-client.d.ts.map",
+    "src"
   ],
   "license": "MIT",
   "peerDependencies": {

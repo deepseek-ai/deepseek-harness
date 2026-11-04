@@ -96,7 +96,10 @@
     "lib/index.js",
     "lib/client.js",
     "lib/client.*.js",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ],
   "dependencies": {
     "@deepseek-ai/schemastery": "workspace:~"

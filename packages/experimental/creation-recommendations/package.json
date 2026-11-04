@@ -66,7 +66,10 @@
     "references/*.md",
     "skills/*.md",
     "lib/types/**/*.js",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ],
   "icon": "./icon.svg"
 }

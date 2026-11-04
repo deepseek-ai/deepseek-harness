@@ -40,7 +40,10 @@
     "presets/minimal.patch.yml",
     "presets/cordis.patch.yml",
     "lib/public-url-*.js",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ],
   "license": "MIT",
   "dsh": {

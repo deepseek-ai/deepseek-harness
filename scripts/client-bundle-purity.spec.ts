@@ -206,8 +206,9 @@ describe('client bundle dynamic imports', () => {
     if (config === undefined) throw new Error('client config missing')
 
     const output = await clientChunkOutput(root, config, 'client.js')
-    expect(output).toContain('require.async("./client.terminal.js")')
-    expect(output).not.toContain('Promise.resolve().then(() => require("./client.terminal.js"))')
+    // The compressor rewrites string literals, so the quotes are not part of the contract.
+    expect(output).toMatch(/require\.async\((["'`])\.\/client\.terminal\.js\1\)/)
+    expect(output).not.toMatch(/Promise\.resolve\(\)\.then\(\(\)\s*=>\s*require\((["'`])\.\/client\.terminal\.js\1\)\)/)
   })
 })
 

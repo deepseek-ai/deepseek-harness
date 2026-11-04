@@ -31,7 +31,10 @@
     "lib/index.js",
     "lib/worker.js",
     "runtime/assets.json",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ],
   "license": "MIT",
   "dependencies": {
