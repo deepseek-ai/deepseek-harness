@@ -129,7 +129,8 @@ describe('Session workspace roots', () => {
     await using f = await fixture()
     const packages = join(f.root, 'packages')
     const agent = await f.harness.create(SessionId('enclosed-origin'), {}, { cwd: packages })
-    await expect(f.ctx.workingDirectory.relocate(agent, f.root, { cwd: packages })).resolves.toEqual({ root: f.root, cwd: packages })
+    // The enclosing anchor is registered, but the original project stays the longest anchor containing the cursor.
+    await expect(f.ctx.workingDirectory.relocate(agent, f.root, { cwd: packages })).resolves.toEqual({ root: packages, cwd: packages })
     expect(f.ctx.workingDirectory.rootOf(agent.session)).toBe(packages)
     expect(f.ctx.workingDirectory.anchorsOf(agent.session)).toEqual([packages, f.root])
     expect(f.harness.claim(agent, 'next-step', 1)).toEqual([])
