@@ -145,6 +145,23 @@
   cursor: pointer;
 }
 
+/* Pointing at one file of a multi-file patch brightens that file alone: the
+   row keeps its idle color and diff totals instead of the whole-row hover. */
+@media (hover: hover) {
+  .row:has(.fileTargetLink:hover) {
+    color: var(--dsw-alias-label-tertiary);
+  }
+
+  .row:not([aria-expanded='true']):has(.fileTargetLink:hover) .diffAdded,
+  .row:not([aria-expanded='true']):has(.fileTargetLink:hover) .diffRemoved {
+    color: inherit;
+  }
+
+  .fileTargetLink:hover {
+    color: var(--dsw-alias-label-secondary);
+  }
+}
+
 /* Error row's collapsed summary: the failure's first line in the error color. */
 .errorSummary {
   color: var(--dsw-alias-state-error-primary);
