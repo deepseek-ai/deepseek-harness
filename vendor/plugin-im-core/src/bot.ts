@@ -439,6 +439,16 @@ export abstract class Bot<C = unknown> {
       throw new PlatformError('invalid', `${this.id}: mode "${mode.id}" rendered no platform message (empty content?)`)
     }
     this.checkStrict(result.report, options)
+    // A draft the platform is known to refuse (too many elements, too many bytes) fails here, before any request: a
+    // final state of a stream is checked by the stream scheduler itself, which can recall and resend.
+    if (extra.phase === undefined) {
+      for (const msg of result.msgs) {
+        const violation = mode.check?.(msg)[0]
+        if (violation !== undefined) {
+          throw new PlatformError('limit', `: ${violation.message}`, { published: 'no' })
+        }
+      }
+    }
     const signal = extra.signal ?? options.signal
     const prepared = await prepare(result.msgs, {
       adapter: this.adapterHooks,

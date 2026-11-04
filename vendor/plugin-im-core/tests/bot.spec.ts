@@ -269,6 +269,19 @@ describe('bot.send', () => {
     expect(toText(result.handle.content)).toBe('a\n---\nb')
   })
 
+  it('refuses a draft its mode reports over a hard limit before any request, as an unpublished limit error', async () => {
+    const strict = makeMode('strict', {
+      check: draft => (draft.text.length > 3 ? [{ kind: 'size', limit: 3, actual: draft.text.length, message: 'too long' }] : []),
+    })
+    const { adapter, bot } = await setup(TestAdapter, { modes: { strict } })
+    await expect(bot.send(target, message(h('p', 'abcdef')))).rejects.toMatchObject({
+      kind: 'limit', published: 'no', message: expect.stringContaining('too long'),
+    })
+    expect(adapter.ops.filter(op => op.op === 'sendPayload')).toHaveLength(0)
+    await bot.send(target, message(h('p', 'abc')))
+    expect(adapter.ops.filter(op => op.op === 'sendPayload')).toHaveLength(1)
+  })
+
   it('emits send once per logical message and registers onClick actions', async () => {
     const { bot, sends } = await setup()
     const clicked: string[] = []

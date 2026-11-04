@@ -26,6 +26,14 @@ describe('Lark error table', () => {
     expect(classify(new LarkApiError('bad', { code: 230001, status: 400 })).kind).toBe('invalid')
   })
 
+  it('keeps the platform text of a code the table does not know', () => {
+    const error = classify(new LarkApiError('Failed to create card content, ext=ErrCode: 11310; ErrMsg: element exceeds the limit',
+      { code: 230099, status: 400 }))
+    expect(error).toMatchObject({ kind: 'invalid', published: 'no' })
+    expect(error.message).toContain('(230099)')
+    expect(error.message).toContain('element exceeds the limit')
+  })
+
   it('maps the mute codes to permission', () => {
     for (const code of [230035, 230018]) {
       expect(classify(new LarkApiError('muted', { code, status: 400 })).kind).toBe('permission')

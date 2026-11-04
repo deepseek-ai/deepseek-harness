@@ -6,6 +6,7 @@ exports[`IM bundle rows > renders every configurable row through its own schema 
     "config": {
       "appId": "process.env.DSH_FEISHU_APP_ID",
       "appSecret": "process.env.DSH_FEISHU_APP_SECRET",
+      "callbackAnswerMs": 1500,
       "callbacks": true,
       "cardStreaming": true,
       "platform": "feishu",

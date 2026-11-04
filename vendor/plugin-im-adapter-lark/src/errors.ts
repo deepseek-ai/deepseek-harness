@@ -217,7 +217,12 @@ export function classify(error: unknown): PlatformError {
     // a 5xx leaves publication unknown unless the caller decided otherwise.
     init.published = error.published
       ?? (error.code !== undefined || (error.status !== undefined && error.status < 500) ? 'no' : 'unknown')
-    return new PlatformError(kind, fallback?.message ?? error.message, init)
+    // A code the taxonomy does not know keeps the platform's own text: it is the only description of what was wrong
+    // (e.g. 230099 "Failed to create card content … element exceeds the limit").
+    const message = rule !== undefined
+      ? rule.message
+      : `${fallback?.message ?? 'the platform rejected the request'}${error.code === undefined ? '' : ` (${error.code})`}: ${error.message}`
+    return new PlatformError(kind, message, init)
   }
 
   const response = responseOf(error)
