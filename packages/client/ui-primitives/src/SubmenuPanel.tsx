@@ -1,5 +1,5 @@
 /** Portaled child menu presentation; interaction state belongs to useMenuSubmenu. */
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import { menuHoverAllowed, type useMenuSubmenu } from './useMenuSubmenu.ts'
@@ -7,6 +7,11 @@ import { menuIconColumns, MenuRow, renderMenuDecoration } from './MenuRow.tsx'
 import { IconChevronLeftOutlineRegular } from './icons/index.tsx'
 import { MenuSurface } from './MenuSurface.tsx'
 import css from './Menu.module.css'
+
+/** Name the parent card anchor, and hide the child card until its layout is known. */
+function anchors(submenu: ReturnType<typeof useMenuSubmenu>, hidden: boolean): CSSProperties & Record<`--dsh-submenu-${string}`, string> {
+  return { '--dsh-submenu-parent': submenu.parentAnchor, ...hidden ? { visibility: 'hidden' } : {} }
+}
 
 /** Render one child list with a non-selecting back row in single-page placement.
  * @param props - active entry, submenu operations, and shared row presentation options.
@@ -26,9 +31,9 @@ export function SubmenuPanel({ entry, submenu, compact, dense, contextual, backL
   const columns = menuIconColumns(entry.submenu, contextual)
   return createPortal(<MenuSurface ref={submenu.panelRef} compact={compact}
     className={clsx(css.submenu, css.scrollable, dense && css.denseList, compact && css.compactList)}
-    style={submenu.position === null ? { visibility: 'hidden', left: 0, top: 0 } : {
-      ...submenu.position.style, visibility: submenu.hidden ? 'hidden' : undefined,
-    }} role="menu" onPointerEnter={submenu.cancelClose}
+    style={anchors(submenu, submenu.hidden)}
+    data-submenu-layout={submenu.measured ? submenu.page ? 'page' : 'side' : undefined}
+    data-contextual={contextual ? '' : undefined} role="menu" onPointerEnter={submenu.cancelClose}
     onPointerLeave={(event) => { if (menuHoverAllowed(event)) submenu.leave() }}
     onContextMenu={contextual ? (event) => { event.preventDefault(); event.stopPropagation(); onClose() } : undefined}
     onClick={(event) => { event.stopPropagation(); afterSelection() }}>

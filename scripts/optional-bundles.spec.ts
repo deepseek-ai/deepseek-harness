@@ -133,7 +133,7 @@ describe('optional bundles', () => {
     }
   })
 
-  it('offers Git Worktrees as one disabled bundle with its runtime and tool', () => {
+  it('retains the standalone worktree bundle for explicit profiles', () => {
     const name = '@deepseek-ai/dsh-experimental-tool-worktree'
     expect(OPTIONAL_BUNDLES).toContain(name)
     for (const template of Object.values(PROFILE_TEMPLATES)) expect(template.bundles).not.toContain(name)
@@ -144,7 +144,7 @@ describe('optional bundles', () => {
     }
   })
 
-  it('offers the forge panel as one disabled bundle with its registry, provider, bindings, panel, and isolated worktree service', () => {
+  it('offers the forge panel and model worktree tool together with their separate worktree services', () => {
     const name = '@deepseek-ai/dsh-experimental-forge-bundle'
     expect(OPTIONAL_BUNDLES).toContain(name)
     for (const template of Object.values(PROFILE_TEMPLATES)) expect(template.bundles).not.toContain(name)
@@ -154,24 +154,28 @@ describe('optional bundles', () => {
       '@deepseek-ai/dsh-experimental-forge-github',
       '@deepseek-ai/dsh-experimental-forge-session',
       '@deepseek-ai/dsh-experimental-client-ui-forge',
-      '@deepseek-ai/dsh-experimental-worktree',
+      '@deepseek-ai/dsh-experimental-tool-worktree',
     ]) {
       expect(flattenRows(composeEntries(shipped)).some(row => row.name === moduleName)).toBe(false)
       expect(rows.filter(row => row.name === moduleName && row.disabled !== true)).toHaveLength(1)
     }
     const group = composeEntries([...shipped, bundle(name).patches]).find(row => row.id === 'optional-forge-panel')
     expect(group?.isolate).toEqual({ worktrees: true })
+    expect(rows.filter(row => row.name === '@deepseek-ai/dsh-experimental-worktree')).toHaveLength(2)
   })
 
-  it('composes the forge panel beside Git Worktrees with one worktree service each', () => {
-    const composed = composeEntries([
-      ...shipped,
-      bundle('@deepseek-ai/dsh-experimental-tool-worktree').patches,
-      bundle('@deepseek-ai/dsh-experimental-forge-bundle').patches,
-    ], (message) => { throw new Error(message) })
-    const topLevelIds = composed.flatMap(entry => typeof entry.id === 'string' ? [entry.id] : [])
-    expect(topLevelIds).toHaveLength(new Set(topLevelIds).size)
-    expect(flattenRows(composed).filter(row => row.name === '@deepseek-ai/dsh-experimental-worktree')).toHaveLength(2)
+  it('keeps the existing tool and panel row overrides addressable in the unified bundle', () => {
+    const config = { directory: '.agents/custom-worktrees' }
+    const warnings: string[] = []
+    const composed = composeEntries([...shipped, bundle('@deepseek-ai/dsh-experimental-forge-bundle').patches, [
+      { id: 'worktree', config },
+      { id: 'tool-worktree', disabled: true },
+      { id: 'optional-forge-panel', disabled: true },
+    ]], message => warnings.push(message))
+    expect(warnings).toEqual([])
+    expect(composed.find(row => row.id === 'worktree')?.config).toEqual(config)
+    expect(composed.find(row => row.id === 'tool-worktree')?.disabled).toBe(true)
+    expect(composed.find(row => row.id === 'optional-forge-panel')?.disabled).toBe(true)
   })
 
   it('ships all five lightweight bundles without selecting them in a default template', () => {

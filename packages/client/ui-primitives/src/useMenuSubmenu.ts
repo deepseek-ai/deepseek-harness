@@ -1,9 +1,8 @@
-/** Owns one menu's child placement, pointer grace, and focus transitions. */
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+/** Owns one menu's child layout mode, pointer grace, and focus transitions. */
+import { useId, useLayoutEffect, useRef, useState } from 'react'
 import type { RefObject, SyntheticEvent } from 'react'
 import type { MenuEntry, MenuItem } from './Menu.tsx'
-import { placeMenuSubmenu } from './menu-submenu-position.ts'
-import { usePositionedOverlay } from './useAnchoredPosition.ts'
+import { submenuNeedsPage } from './menu-submenu-position.ts'
 import { usePointerGrace } from './pointer-grace.ts'
 
 /** Whether a pointer event can request hover interactions.
@@ -17,7 +16,10 @@ export function menuHoverAllowed(event: { pointerType: string }): boolean {
 interface MenuSubmenu {
   entry: (MenuItem & { submenu: readonly MenuEntry[] }) | undefined
   panelRef: RefObject<HTMLDivElement>
-  position: ReturnType<typeof usePositionedOverlay>
+  /** CSS anchor name of the root card's anchor box; the child card is placed against it. */
+  parentAnchor: string
+  /** Whether the layout mode for the current child is known; the card stays hidden until it is. */
+  measured: boolean
   page: boolean
   hidden: boolean
   contains: (node: Node | null) => boolean
@@ -39,11 +41,10 @@ export function useMenuSubmenu(options: {
   open: boolean
   items: readonly MenuEntry[]
   footer: readonly MenuEntry[] | undefined
-  contextual: boolean
   listRef: RefObject<HTMLDivElement>
   refocusAnchor: () => void
 }): MenuSubmenu {
-  const { open, items, footer, contextual, listRef, refocusAnchor } = options
+  const { open, items, footer, listRef, refocusAnchor } = options
   const [expanded, setExpanded] = useState<{ id: string; trigger: HTMLButtonElement; activated: boolean } | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   // A DOM target suppresses its focus-open handler until focus restoration completes.
@@ -52,21 +53,52 @@ export function useMenuSubmenu(options: {
     !('type' in item) && item.id === expanded?.id && item.disabled !== true
     && item.submenu !== undefined && item.submenu.length > 0)
   const trigger = expanded?.trigger ?? null
-  const anchorRef = useMemo(() => ({ current: trigger }), [trigger])
+  const anchorId = useId().replaceAll(':', '')
+  const parentAnchor = `--dsh-submenu-parent-${anchorId}`
+  // Null until the active child has been measured against the layout viewport.
+  const [needsPage, setNeedsPage] = useState<boolean | null>(null)
   const contains = (node: Node | null): boolean => panelRef.current?.contains(node) === true
   const invalidated = expanded !== null && entry === undefined
   // These reads precede React removing an invalidated panel or a page's return row.
   const active = document.activeElement
   const restoreInvalidatedFocus = open && invalidated && (contains(active) || trigger === active)
   const backWasFocused = contains(active) && active?.hasAttribute('data-menu-back') === true
-  const position = usePositionedOverlay({
-    open: open && entry !== undefined,
-    anchorRef, parentRef: listRef, panelRef,
-    placement: placeMenuSubmenu, gap: 4, margin: 12, frameClearance: !contextual,
-    layoutKey: entry,
-  })
-  const page = entry !== undefined && expanded?.activated === true && position?.page === true
-  const hidden = position === null || (position.page && !page)
+  const measured = needsPage !== null
+  const page = entry !== undefined && expanded?.activated === true && needsPage === true
+  const hidden = !measured || (needsPage && !page)
+  // CSS anchors place the card against the parent card. JavaScript selects the layout and
+  // supplies two lengths: the card's natural height and the active row's offset from the
+  // parent card's top. Both are relative sizes, so page zoom and panning leave them valid.
+  const visible = open && entry !== undefined
+  useLayoutEffect(() => {
+    const panel = panelRef.current
+    const parent = listRef.current
+    if (!visible || panel === null || parent === null || trigger === null) { setNeedsPage(null); return }
+    const measureRow = (): void => {
+      panel.style.setProperty('--dsh-submenu-row-offset', `${trigger.getBoundingClientRect().top - parent.getBoundingClientRect().top}px`)
+    }
+    // The layout uses the side card's natural size, not the size a page layout gives it.
+    const measure = (): void => {
+      const layout = panel.getAttribute('data-submenu-layout')
+      panel.removeAttribute('data-submenu-layout')
+      const width = panel.offsetWidth
+      panel.style.setProperty('--dsh-submenu-height', `${panel.offsetHeight}px`)
+      if (layout !== null) panel.setAttribute('data-submenu-layout', layout)
+      measureRow()
+      const viewport = document.documentElement.clientWidth || window.innerWidth
+      setNeedsPage(submenuNeedsPage(parent.getBoundingClientRect(), width, viewport))
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    parent.addEventListener('scroll', measureRow, true)
+    const observer = new ResizeObserver(measure)
+    for (const element of [parent, trigger, panel]) observer.observe(element)
+    return () => {
+      window.removeEventListener('resize', measure)
+      parent.removeEventListener('scroll', measureRow, true)
+      observer.disconnect()
+    }
+  }, [visible, entry, trigger, listRef])
   const focusFirstChild = (): void => {
     const panel = panelRef.current
     const first = panel?.querySelector<HTMLButtonElement>('button[role="menuitem"]:not(:disabled):not([data-menu-back])')
@@ -122,7 +154,7 @@ export function useMenuSubmenu(options: {
       focusFirstChild()
       pendingFocus.current = null
     }
-  }, [open, entry, position, page, hidden, invalidated, restoreInvalidatedFocus, backWasFocused, cancelClose])
+  }, [open, entry, needsPage, page, hidden, invalidated, restoreInvalidatedFocus, backWasFocused, cancelClose])
 
   const collapseFrom = (event: SyntheticEvent<HTMLDivElement>): void => {
     // React DOM normalizes text-node event targets to their parent element.
@@ -131,7 +163,7 @@ export function useMenuSubmenu(options: {
     if (row.closest('[role="menu"]') === event.currentTarget) collapse()
   }
   return {
-    entry, panelRef, position, page, hidden,
+    entry, panelRef, parentAnchor, measured, page, hidden,
     contains,
     activeList: (focused: Node | null) => page || contains(focused) ? panelRef.current : listRef.current,
     returnToParent: (): boolean => {

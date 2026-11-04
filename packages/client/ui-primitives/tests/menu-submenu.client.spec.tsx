@@ -70,7 +70,7 @@ function ExternalTriggerFixture({ onClose }: { onClose: () => void }) {
       onClick={() => { setOpen(value => !value) }}><span>External more</span></button>
     <Menu open={open} anchor={null} portal contextual returnFocus={() => trigger.current}
       isExternalTrigger={node => trigger.current?.contains(node) === true}
-      getAnchorRect={() => trigger.current?.getBoundingClientRect() ?? null}
+      anchorRef={trigger}
       items={entries} onClose={() => { onClose(); setOpen(false) }} />
   </>
 }
@@ -235,19 +235,56 @@ describe('Menu submenus', () => {
     expect(document.activeElement).toBe(trigger)
   })
 
-  it('portals the child outside parent scrolling and flips left with a viewport height cap', () => {
+  it('portals a side child anchored to the parent card at the active row offset, outside parent scrolling', () => {
     panel = new DOMRect(780, 620, 200, 120)
     row = new DOMRect(784, 680, 192, 34)
-    childHeight = 1000
     render(<Fixture />)
     openMenu()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Applications' }))
+    const parent = screen.getByRole('menuitem', { name: 'Applications' })
+    fireEvent.click(parent)
     const menu = childMenu()
+    const root = parent.closest<HTMLElement>('[role="menu"]')!
     expect(menu.parentElement).toBe(document.body)
-    expect(menu.style.left).toBe('576px')
-    expect(menu.style.top).toBe('12px')
-    expect(menu.style.getPropertyValue('--dsh-anchored-max-height')).toBe('744px')
-    expect(screen.getByRole('menuitem', { name: 'Applications' }).closest('[role="menu"]')?.contains(menu)).toBe(false)
+    expect(root.contains(menu)).toBe(false)
+    expect(menu.getAttribute('data-submenu-layout')).toBe('side')
+    expect(menu.style.visibility).toBe('')
+    // CSS anchors own placement and flipping; the card names its anchor and sets no coordinates.
+    const box = root.querySelector<HTMLElement>(':scope > [aria-hidden="true"][style*="anchor-name"]')
+    expect(box?.style.anchorName).toBe(menu.style.getPropertyValue('--dsh-submenu-parent'))
+    expect(menu.style.left).toBe('')
+    expect(menu.style.top).toBe('')
+    expect(menu.style.getPropertyValue('--dsh-submenu-height')).toBe('100px')
+    expect(menu.style.getPropertyValue('--dsh-submenu-row-offset')).toBe('60px')
+    row = new DOMRect(784, 650, 192, 34)
+    fireEvent.scroll(root.querySelector('[role="presentation"]')!)
+    expect(menu.style.getPropertyValue('--dsh-submenu-row-offset')).toBe('30px')
+  })
+
+  it('re-measures the row offset on observed size changes and stops observing on close', () => {
+    const observers: { callback: ResizeObserverCallback; observed: Element[]; disconnect: ReturnType<typeof vi.fn> }[] = []
+    vi.stubGlobal('ResizeObserver', class {
+      private readonly record
+      constructor(callback: ResizeObserverCallback) {
+        this.record = { callback, observed: [] as Element[], disconnect: vi.fn() }
+        observers.push(this.record)
+      }
+      observe(element: Element) { this.record.observed.push(element) }
+      unobserve() {}
+      disconnect() { this.record.disconnect() }
+    })
+    render(<Fixture />)
+    openMenu()
+    const parent = screen.getByRole('menuitem', { name: 'Applications' })
+    fireEvent.click(parent)
+    const menu = childMenu()
+    const observer = observers.at(-1)!
+    expect(observer.observed).toEqual(expect.arrayContaining([parent, menu, parent.closest('[role="menu"]')]))
+    expect(menu.style.getPropertyValue('--dsh-submenu-row-offset')).toBe('40px')
+    row = new DOMRect(104, 200, 192, 34)
+    act(() => { observer.callback([], {} as ResizeObserver) })
+    expect(menu.style.getPropertyValue('--dsh-submenu-row-offset')).toBe('100px')
+    fireEvent.keyDown(menu, { key: 'Escape' })
+    expect(observer.disconnect).toHaveBeenCalled()
   })
 
   it('uses one visible panel at 390px and a localized non-selecting return action', () => {
@@ -260,8 +297,7 @@ describe('Menu submenus', () => {
     fireEvent.click(parent)
     const menu = childMenu()
     expect(screen.getAllByRole('menu')).toHaveLength(1)
-    expect(menu.style.left).toBe('170px')
-    expect(menu.style.getPropertyValue('--dsh-anchored-width')).toBe('200px')
+    expect(menu.getAttribute('data-submenu-layout')).toBe('page')
     expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'First app' }))
     fireEvent.click(screen.getByRole('menuitem', { name: '返回上级' }))
     expect(select).not.toHaveBeenCalled()
@@ -322,7 +358,7 @@ describe('Menu submenus', () => {
     pointer(parent, 'pointerdown', 'touch')
     fireEvent.click(parent)
     expect(screen.getAllByRole('menu')).toHaveLength(2)
-    expect(childMenu().style.left).toBe('304px')
+    expect(childMenu().getAttribute('data-submenu-layout')).toBe('side')
     expect(screen.queryByRole('menuitem', { name: 'Go back' })).toBeNull()
     hover = true
     pointer(screen.getByRole('menuitem', { name: 'Other action' }), 'pointerover', 'touch')

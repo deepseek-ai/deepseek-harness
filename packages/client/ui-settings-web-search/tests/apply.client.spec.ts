@@ -29,12 +29,14 @@ async function bench(served?: string[]) {
   const describeSettings = vi.fn(() => Promise.resolve(served === undefined
     ? { ok: false, error: new RemoteError('gateway/internal', 'no provider', {}) }
     : { ok: true, value: { writable: true, hasDocument: true, namespaces: served.map(ns => view(ns)) } }))
+  const listProviders = vi.fn(() => Promise.resolve({ ok: true, value: { search: [], fetch: [] } }))
   const remote = new TestRemote(ctx, {
     credentials: { describe: describeCredentials, set: vi.fn() },
     settings: { describe: describeSettings },
+    web: { listProviders },
   })
   await ctx.plugin({ inject: [...settingsInject], apply: settingsApply }).await()
-  return { ctx, slots: ctx.get('slots') as SlotRegistry, describeCredentials, describeSettings, remote }
+  return { ctx, slots: ctx.get('slots') as SlotRegistry, describeCredentials, describeSettings, listProviders, remote }
 }
 
 /** The Plugins page's item slot, as its owner declares it. */
@@ -51,11 +53,11 @@ describe('ui-settings-web-search apply', () => {
   })
 
   it('declares the services it uses', () => {
-    expect(inject).toEqual(['slots', 'locale', 'remote', 'remote.credentials', 'configForms'])
+    expect(inject).toEqual(['slots', 'locale', 'remote', 'remote.credentials', 'remote.web', 'configForms'])
   })
 
-  it('registers the page while the Host serves the namespace, titled in the active locale', async () => {
-    const { ctx, slots } = await bench(['web-search-deepseek'])
+  it('registers the page while the Host serves the web namespace, titled in the active locale', async () => {
+    const { ctx, slots } = await bench(['web'])
     declareRoot(slots)
 
     await ctx.plugin({ inject: [...inject], apply }).await()
@@ -63,14 +65,14 @@ describe('ui-settings-web-search apply', () => {
     await vi.waitFor(() => { expect(slots.entries('plugins.item')).toHaveLength(1) })
     const entry = slots.entries('plugins.item')[0]!
     expect(entry.options).toMatchObject({ id: 'web-search', order: 20 })
-    expect(resolveSlotLabel(entry.options.label)).toBe('网页搜索')
+    expect(resolveSlotLabel(entry.options.label)).toBe('网页搜索与获取')
     expect(entry.locale).toBe(NS)
     const face = (entry.inject as () => Pick<WebSearchCardFace, 'hooks'>)()
     expect(Object.keys(face.hooks)).toEqual(['webSearchCard'])
   })
 
-  it('registers nothing while the namespace is not served', async () => {
-    const { ctx, slots, describeSettings } = await bench(['shell'])
+  it('registers nothing while the web namespace is not served', async () => {
+    const { ctx, slots, describeSettings } = await bench(['shell', 'web-deepseek-api'])
     declareRoot(slots)
     await ctx.plugin({ inject: [...inject], apply }).await()
     await vi.waitFor(() => { expect(describeSettings).toHaveBeenCalled() })
@@ -78,14 +80,16 @@ describe('ui-settings-web-search apply', () => {
     expect(slots.entries('plugins.item')).toHaveLength(0)
   })
 
-  it('re-reads the credential when the Host reports the watched reference changed, and ignores another', async () => {
+  it('re-reads the credentials when the Host reports a watched reference changed, and ignores another', async () => {
     const { ctx, slots, describeCredentials, remote } = await bench()
     declareRoot(slots)
     await ctx.plugin({ inject: [...inject], apply }).await()
     await vi.waitFor(() => { expect(describeCredentials).toHaveBeenCalled() })
     describeCredentials.mockClear()
 
-    remote.emit('credentials/reference-updated', ['SOME_OTHER_KEY'])
+    for (const ref of ['UNWATCHED_KEY', 'DEEPSEEK_SEARCH_API_KEY', 'DEEPSEEK_FETCH_API_KEY']) {
+      remote.emit('credentials/reference-updated', [ref])
+    }
     await Promise.resolve()
     expect(describeCredentials).not.toHaveBeenCalled()
 
@@ -95,8 +99,27 @@ describe('ui-settings-web-search apply', () => {
     await vi.waitFor(() => { expect(describeCredentials).toHaveBeenCalledTimes(1) })
   })
 
+  it('re-reads the providers when the Host reports a registration change or the connection resets', async () => {
+    const { ctx, slots, listProviders, remote } = await bench()
+    declareRoot(slots)
+    const fiber = ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    await vi.waitFor(() => { expect(listProviders).toHaveBeenCalledTimes(1) })
+
+    remote.emit('web/providers-changed', [])
+    await vi.waitFor(() => { expect(listProviders).toHaveBeenCalledTimes(2) })
+    ctx.emit('connection/reset')
+    await vi.waitFor(() => { expect(listProviders).toHaveBeenCalledTimes(3) })
+
+    await fiber.dispose()
+    remote.emit('web/providers-changed', [])
+    ctx.emit('connection/reset')
+    await Promise.resolve()
+    expect(listProviders).toHaveBeenCalledTimes(3)
+  })
+
   it('collapses the page on teardown', async () => {
-    const { ctx, slots } = await bench(['web-search-deepseek'])
+    const { ctx, slots } = await bench(['web'])
     declareRoot(slots)
     const fiber = ctx.plugin({ inject: [...inject], apply })
     await fiber.await()

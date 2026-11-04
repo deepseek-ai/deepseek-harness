@@ -123,9 +123,14 @@ describe('approval state', () => {
     expect(ctx.approval.overrideOf(session)).toBe('never')
     expect(read).not.toHaveBeenCalled()
     expect(snapshot).not.toHaveBeenCalled()
+    const row = ctx.sessionProjections.checkpoint(session)['approvalState']
 
     await service.dispose()
-    expect(ctx.sessionProjections.checkpoint(session)).not.toHaveProperty('approvalState')
+    session.append('turn/start', { turn: 1 })
+    session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+    // The released unit keeps its last row and folds no event after the unload.
+    expect(ctx.sessionProjections.checkpoint(session)).toHaveProperty('approvalState', row)
+    expect(ctx.sessionProjections.checkpoint(ctx.sessions.create())).not.toHaveProperty('approvalState')
     await ctx.plugin(ApprovalService)
     expect(ctx.approval.overrideOf(session)).toBe('never')
     expect(ctx.sessionProjections.checkpoint(session)['approvalState']?.val).toEqual({ policy: 'never', turnOpen: false })
@@ -214,10 +219,13 @@ describe('approval state', () => {
     await registration.entered
     const session = ctx.sessions.create()
     setApprovalPolicy(session, 'never')
+    const row = ctx.sessionProjections.checkpoint(session)['approvalState']
     const unloading = fiber.dispose()
     registration.release()
     await unloading
-    expect(ctx.sessionProjections.checkpoint(session)).not.toHaveProperty('approvalState')
+    session.append('turn/start', { turn: 1 })
+    expect(ctx.sessionProjections.checkpoint(session)).toHaveProperty('approvalState', row)
+    expect(ctx.sessionProjections.checkpoint(ctx.sessions.create())).not.toHaveProperty('approvalState')
     expect(ctx.get('approval')).toBeUndefined()
     const prompt = await ctx.systemPrompt.assemble({ agent: agentFor(session) })
     expect(prompt.contexts).not.toContainEqual(expect.objectContaining({ name: 'approval:policy' }))

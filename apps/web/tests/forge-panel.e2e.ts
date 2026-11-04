@@ -447,6 +447,8 @@ it.skipIf(MODE === 'record')('automatically shows a numbered PR when gh JSON omi
   const { settled } = await sendPrompt(page, scaffold)
   const sessionId = await settled
   const events = await readPersistedEvents(scaffold, sessionId)
+  const request = events.find(event => event.type === 'request/header')
+  expect(request?.data.header.tools?.filter(tool => tool.name === 'create_worktree')).toHaveLength(1)
   const toolOutput = events.flatMap(event => event.type === 'tool/result'
     ? event.data.message.content.flatMap(block => block.type === 'text' ? [block.text] : []) : []).join('\n')
   expect(toolOutput).toContain('Add the pull request panel')
@@ -1148,6 +1150,63 @@ it.skipIf(MODE === 'record')('uses horizontal arrows to navigate files while pre
   expect(await input.inputValue()).toBe('keep editing')
   expect(await tree.getByRole('button', { name: 'src/a.txt', exact: true }).getAttribute('aria-current')).toBe('true')
   expect(await input.evaluate(element => document.activeElement === element)).toBe(true)
+  expect(tripwire.pageErrors).toEqual([])
+  expect(tripwire.warnings).toEqual([])
+})
+
+it.skipIf(MODE === 'record')('keeps tall branch and changed-file menus aligned with their triggers', async () => {
+  const { scaffold, page, project, tripwire } = await launchPanel('web-e2e-forge-tall-menus')
+  await Promise.all(Array.from({ length: 45 }, (_, index) =>
+    git(project, 'update-ref', `refs/heads/worktree/long-menu-regression-${index}`, 'HEAD')))
+  const option = page.locator('[data-forge-worktree]')
+  await option.getByRole('checkbox', { name: '新建工作树', exact: true }).check()
+  const base = option.getByRole('button', { name: '基于 main', exact: true })
+  await base.click()
+  const menu = page.getByRole('menu')
+  await menu.getByRole('menuitem', { name: 'worktree/long-menu-regression-44', exact: true }).waitFor()
+  await expect.poll(async () => {
+    const trigger = await base.boundingBox()
+    const card = await menu.boundingBox()
+    return trigger === null || card === null ? Infinity : Math.abs(trigger.x + trigger.width - card.x - card.width)
+  }).toBeLessThan(1)
+  await page.keyboard.press('Escape')
+  expect(await base.getAttribute('aria-expanded')).toBe('false')
+  await option.getByRole('checkbox', { name: '新建工作树', exact: true }).uncheck()
+
+  await git(project, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
+  await git(project, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
+  await mkdir(join(project, 'src'))
+  await Promise.all(Array.from({ length: 60 }, (_, index) =>
+    writeFile(join(project, 'src', `long-file-list-${index}.ts`), `export const value = ${index}\n`)))
+  await git(project, 'add', 'src')
+  await git(project, 'commit', '--quiet', '-m', 'long file list')
+  const { settled } = await sendPrompt(page, scaffold)
+  await settled
+  await page.locator('[data-forge-header]').click()
+  const panel = page.locator('[data-forge-panel]')
+  await panel.getByRole('button', { name: '刷新状态', exact: true }).click()
+  await panel.getByRole('button', { name: /^查看本会话的变更：60 个文件/ }).click()
+  const changes = page.locator('[data-forge-changes="local"]')
+  const files = changes.getByRole('button', { name: '全部 60 个文件', exact: true })
+  await files.click()
+  await menu.getByRole('textbox', { name: '筛选文件…', exact: true }).waitFor()
+  await expect.poll(async () => {
+    const trigger = await files.boundingBox()
+    const card = await menu.boundingBox()
+    return trigger === null || card === null ? Infinity : Math.abs(trigger.x - card.x)
+  }).toBeLessThan(1)
+  await menu.getByRole('textbox', { name: '筛选文件…', exact: true }).fill('long-file-list-59')
+  expect(await menu.getByRole('menuitem', { name: 'src/long-file-list-59.ts', exact: true }).isVisible()).toBe(true)
+  await page.keyboard.press('Escape')
+  expect(await menu.count()).toBe(0)
+  await page.setViewportSize({ width: 390, height: 700 })
+  await files.click()
+  await menu.getByRole('textbox', { name: '筛选文件…', exact: true }).waitFor()
+  await expect.poll(() => menu.evaluate((node) => {
+    const rect = node.getBoundingClientRect()
+    return rect.left >= 12 && rect.right <= 378 && rect.top >= 12 && rect.bottom <= 688
+  })).toBe(true)
+  await page.keyboard.press('Escape')
   expect(tripwire.pageErrors).toEqual([])
   expect(tripwire.warnings).toEqual([])
 })

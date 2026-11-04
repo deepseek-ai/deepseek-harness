@@ -76,6 +76,8 @@ export interface ClockPickerProps {
   readonly open: boolean
   /** The row's trigger button, which anchors the panel. */
   readonly anchorRef: RefObject<HTMLButtonElement | null>
+  /** CSS anchor name assigned to the row trigger. */
+  readonly anchorName: string
   /** The staged clock text. */
   readonly value: string
   /** Stage one picked `HH:MM:SS` clock. */
@@ -97,7 +99,7 @@ export interface ClockPickerProps {
  * @param props - open state, the trigger, the staged clock, the pick and close callbacks, the seconds-column switch, and row copy.
  * @returns the anchored panel while open, and nothing while closed.
  */
-export function ClockPicker({ open, anchorRef, value, onPick, onClose, seconds = true, t }: ClockPickerProps): ReactNode {
+export function ClockPicker({ open, anchorRef, anchorName, value, onPick, onClose, seconds = true, t }: ClockPickerProps): ReactNode {
   const columns = seconds ? COLUMNS : COLUMNS.slice(0, 2)
   const refs = useRef(new Map<string, HTMLDivElement>())
   const valueRef = useRef(value)
@@ -185,6 +187,7 @@ export function ClockPicker({ open, anchorRef, value, onPick, onClose, seconds =
   return <PickerPopover
     open={open}
     anchorRef={anchorRef}
+    anchorName={anchorName}
     label={t('timing.time')}
     className={css.clock}
     onClose={onClose}

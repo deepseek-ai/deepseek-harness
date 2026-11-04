@@ -50,7 +50,7 @@ export function MenuOverlay({ useStore, actions, renderSlot, close, select, retu
     <Menu key={occurrence} open={target !== null} anchor={null} portal autoFocus contextual returnFocus={returnFocus}
       submenuBackLabel={t('back')} isExternalTrigger={isContextMenuTrigger}
       exiting={closing ? replacing ? 'replace' : 'dismiss' : undefined}
-      getAnchorRect={() => new DOMRect(point.x, point.y, 0, 0)}
+      anchorPoint={point}
       items={menuEntries(items.filter(item => !item.afterContent), catalog, renderSlot)}
       footer={menuEntries(items.filter(item => item.afterContent), catalog, renderSlot)} onClose={close} onSelect={select}>
       {target !== null && renderSlot('contextMenu.content', { target, dismiss: close }, { entryKey: target.kind })}

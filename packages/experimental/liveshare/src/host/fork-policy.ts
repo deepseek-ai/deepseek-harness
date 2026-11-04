@@ -7,8 +7,9 @@
  * authorize, and states the ceiling the child runs under.
  */
 
+import type { ViewerPluginAccess } from '../share-api-types.ts'
 import { sharedToolNames } from './shared-tools.ts'
-import type { ViewerCapabilityGroup } from './viewer-declarations.ts'
+import type { ViewerPluginPolicy } from './viewer-capability-types.ts'
 
 
 /**
@@ -82,7 +83,9 @@ export interface ForkShareState {
    * the `share-viewer` policy exposes a plugin endpoint only where this selection and the plugin's live
    * declaration both name it.
    */
-  readonly viewerCapabilities?: readonly ViewerCapabilityGroup[]
+  readonly viewerPlugins?: readonly ViewerPluginPolicy[]
+  /** Global switch over every installed plugin's methods; absent reads as none. */
+  readonly viewerPluginAccess?: ViewerPluginAccess
 }
 
 /** One fork attempt, already carried over the Relay channel with trusted metadata. */

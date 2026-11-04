@@ -80,7 +80,7 @@ async function harness(mode: 'view' | 'write' = 'view') {
       allowsPrompt: () => ({ ok: false, code: 'fork-unknown-child', message: 'this Owner holds no forks' }),
     },
     workspaces: () => [],
-    declaredCapabilities: () => [],
+    offeredPlugins: () => [],
   }))
   // The Owner's shared `/api` handler: one Connection request decoded and handed to the Gateway as its Peer.
   const readers = readerConnection(async (request, peer) => {
