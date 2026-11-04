@@ -2,7 +2,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { RemoteError, TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
-import { TeamModeToggle, type TeamModeToggleInjected } from '../src/client/TeamModeToggle.tsx'
+import { TeamModePage, TeamModeToggle, type TeamModePageInjected } from '../src/client/TeamModeToggle.tsx'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { TeamBoard } from '../src/client/TeamBoard.tsx'
@@ -62,21 +62,30 @@ describe('task-board browser plugin', () => {
     await b.fiber.dispose()
   })
 
-  it('registers the mode switch when Agent Teams arrives and reports each execution outcome', async () => {
+  it('registers the summary and settings page when Agent Teams arrives and reports each execution outcome', async () => {
     const b = await bench()
     b.ctx.slots.register({
       name: 'conversation.input.model',
-      children: { 'conversation.input.model.options': { kind: 'list', scope: 'session' } },
+      children: {
+        'conversation.input.model.options': { kind: 'list', scope: 'session' },
+        'conversation.input.model.page': { kind: 'keyed', scope: 'session' },
+      },
     } as never, () => null)
     const entry = () => b.ctx.slots.entries('conversation.input.model.options')
       .find(candidate => candidate.component === TeamModeToggle)
+    const page = () => b.ctx.slots.entries('conversation.input.model.page')
+      .find(candidate => candidate.component === TeamModePage)
     expect(entry()).toBeUndefined()
+    expect(page()).toBeUndefined()
     const setEnabled = vi.fn<Context['remote']['agentTeams']['setEnabled']>()
     new TestRemote(b.ctx, { agentTeams: { setEnabled } })
-    await vi.waitFor(() => { expect(entry()).toBeDefined() })
-    const injected = entry()!.inject as (sessionId: SessionId) => Record<string, unknown>
+    await vi.waitFor(() => { expect(entry()).toBeDefined(); expect(page()).toBeDefined() })
+    expect(entry()).toMatchObject({ options: { id: 'agent-team' }, locale: 'agent-team' })
+    expect(entry()!.inject).toBeUndefined()
+    expect(page()).toMatchObject({ options: { key: 'agent-team' }, locale: 'agent-team' })
+    const injected = page()!.inject as (sessionId: SessionId) => Record<string, unknown>
     const value: object = injected(SessionId('chosen-session'))
-    const mode = value as TeamModeToggleInjected
+    const mode = value as TeamModePageInjected
     setEnabled.mockResolvedValueOnce({ ok: true, value: undefined })
     await expect(mode.selectTeamMode(true)).resolves.toBeNull()
     expect(setEnabled).toHaveBeenLastCalledWith('chosen-session', true)
@@ -104,6 +113,7 @@ describe('task-board browser plugin', () => {
     mode.requestDisableConfirmation()
     await b.fiber.dispose()
     expect(entry()).toBeUndefined()
+    expect(page()).toBeUndefined()
     expect(overlayEntry()).toBeUndefined()
     expect(request.getSnapshot()).toBeNull()
   })

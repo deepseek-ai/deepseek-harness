@@ -33,6 +33,39 @@ describe('Switch', () => {
     expect(onChange).not.toHaveBeenCalled()
   })
 
+  it.each([false, true])('keeps focus while pending and refuses repeated activation (checked: %s)', (checked) => {
+    const onChange = vi.fn()
+    const { rerender } = render(<Switch checked={checked} label="Toggle" onChange={onChange} />)
+    const control = screen.getByRole('switch') as HTMLButtonElement
+    control.focus()
+    rerender(<Switch checked={checked} pending label="Toggle" onChange={onChange} />)
+    expect(control.disabled).toBe(false)
+    expect(control.getAttribute('aria-disabled')).toBe('true')
+    expect(control.getAttribute('aria-busy')).toBe('true')
+    expect(control.getAttribute('aria-checked')).toBe(String(checked))
+    expect(document.activeElement).toBe(control)
+    fireEvent.click(control)
+    fireEvent.click(control)
+    expect(onChange).not.toHaveBeenCalled()
+    rerender(<Switch checked={checked} label="Toggle" onChange={onChange} />)
+    expect(control.getAttribute('aria-disabled')).toBeNull()
+    expect(control.getAttribute('aria-busy')).toBeNull()
+    expect(document.activeElement).toBe(control)
+    fireEvent.click(control)
+    expect(onChange).toHaveBeenCalledExactlyOnceWith(!checked)
+  })
+
+  it('keeps a locked switch natively disabled while pending', () => {
+    const onChange = vi.fn()
+    render(<Switch checked={false} pending disabled label="Toggle" onChange={onChange} />)
+    const control = screen.getByRole('switch') as HTMLButtonElement
+    expect(control.disabled).toBe(true)
+    expect(control.getAttribute('aria-disabled')).toBe('true')
+    expect(control.getAttribute('aria-busy')).toBe('true')
+    fireEvent.click(control)
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
   it('carries a lock reason as the hover title when the owner names one', () => {
     render(<Switch checked={false} disabled label="Toggle" title="Managed by policy" onChange={() => {}} />)
     expect(screen.getByRole('switch').getAttribute('title')).toBe('Managed by policy')

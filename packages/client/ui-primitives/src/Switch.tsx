@@ -9,17 +9,18 @@ import css from './Switch.module.css'
  * @param props.checked - the current state; the control is fully controlled.
  * @param props.onChange - called with the state the click asks for.
  * @param props.label - localized accessible name, owned by the render site.
- * @param props.disabled - whether the control refuses input; owners also set it
- * while a write is in flight, not only when a deployment locks the toggle.
+ * @param props.disabled - whether the control is unavailable and excluded from keyboard focus.
+ * @param props.pending - a write is in flight; refuse further changes while preserving focus.
  * @param props.title - localized hover text, typically why the toggle is locked.
  * @param props.className - extra class for layout placement.
  * @returns the switch element.
  */
-export function Switch({ checked, onChange, label, disabled = false, title, className }: {
+export function Switch({ checked, onChange, label, disabled = false, pending = false, title, className }: {
   checked: boolean
   onChange: (next: boolean) => void
   label: string
   disabled?: boolean
+  pending?: boolean
   title?: string | undefined
   // `| undefined` so a caller can forward an optional class straight through
   // under exactOptionalPropertyTypes (a CSS-module lookup is string|undefined).
@@ -33,8 +34,10 @@ export function Switch({ checked, onChange, label, disabled = false, title, clas
       aria-label={label}
       title={title}
       disabled={disabled}
+      aria-disabled={disabled || pending || undefined}
+      aria-busy={pending || undefined}
       className={clsx(css.switch, className)}
-      onClick={() => { onChange(!checked) }}
+      onClick={() => { if (!pending) onChange(!checked) }}
     >
       <span className={css.thumb} />
     </button>

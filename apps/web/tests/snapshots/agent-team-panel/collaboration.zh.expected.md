@@ -1,10 +1,9 @@
 ## Menu
 
-- menu "模型与推理等级":
-  - menuitem "模型 DeepSeek-V4-Flash"
+- menu "智能体团队协作":
   - text: 启用智能体团队协作
-  - button "关于智能体团队协作"
   - switch "启用智能体团队协作" [checked]
+  - paragraph: 通过共享任务板协调多个智能体的分工与进度，复杂任务表现更佳，token 开销也相应更高。
 
 ## Confirmation
 

@@ -1,4 +1,4 @@
-- group "模型与推理等级":
+- group "模型":
   - searchbox "搜索模型…": ACMLG
   - button "清除搜索"
   - menu "模型":

@@ -1,7 +1,7 @@
-/** Session-owned Agent Teams selection in the model and reasoning menu. */
+/** Session-owned Agent Teams summary and settings inside the model menu. */
 
 import { useState } from 'react'
-import { Button, IconInfoOutlineRegular, Switch, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconChevronRightOutlineRegular, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-model-selection/client'
 import type {} from '@deepseek-ai/dsh-agent-team/client'
@@ -9,40 +9,75 @@ import type {} from '@deepseek-ai/dsh-agent'
 import type { NS } from './locales.ts'
 import css from './TeamModeToggle.module.css'
 
-/** Session selection callbacks supplied by the Client plugin. */
-export interface TeamModeToggleInjected {
+/** Session selection callbacks supplied to the Team settings page. */
+export interface TeamModePageInjected {
   /** Save the selection; null means success, otherwise the string describes the failure. */
   selectTeamMode: (enabled: boolean) => Promise<string | null>
   /** Open a Session-targeted confirmation outside this menu. */
   requestDisableConfirmation: () => void
 }
 
-/** Full props of the model-menu Team switch. */
-export type TeamModeToggleProps = PropsRuntime<'conversation.input.model.options'>
-  & PropsLocale<typeof NS> & TeamModeToggleInjected
+/** Full props of the model-menu Team summary. */
+export type TeamModeToggleProps = PropsRuntime<'conversation.input.model.options'> & PropsLocale<typeof NS>
+
+/** Full props of the model-menu Team settings page. */
+export type TeamModePageProps = PropsRuntime<'conversation.input.model.page'>
+  & PropsLocale<typeof NS> & TeamModePageInjected
 
 /**
- * Render the saved selection without an optimistic update.
- * @param props - Session projection, menu state, localized copy, and selection callback.
- * @returns the Team switch when the capability projection is available.
+ * Show the saved Team state and open its settings without changing the mode.
+ * @param props - Session projection, page navigation, and locale.
+ * @returns the summary when Team mode is available on a root Session.
  */
 export function TeamModeToggle(props: TeamModeToggleProps) {
   const addressedChild = props.useSession(snapshot => snapshot.subagent !== null)
   const listedChild = props.useSessions(state => state.byId[props.sessionId]?.origin === 'subagent')
   if (addressedChild || listedChild) return null
-  return <RootTeamModeToggle {...props} />
+  return <RootTeamModeSummary {...props} />
+}
+
+function RootTeamModeSummary({ useProjection, locked, openPage, t }: TeamModeToggleProps) {
+  const mode = useProjection('agentTeam')
+  if (mode === undefined) return null
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      className={css.summary}
+      data-model-menu-page="agent-team"
+      disabled={locked}
+      onClick={() => { openPage({ key: 'agent-team', title: t('command.title') }) }}
+    >
+      <span className={css.summaryLabel}>{t('command.title')}</span>
+      <span className={css.state}>{t(mode.enabled ? 'mode.on' : 'mode.off')}</span>
+      <IconChevronRightOutlineRegular size={14} className={css.chevron} aria-hidden="true" />
+    </button>
+  )
+}
+
+/**
+ * Present the explanation and persisted Team switch for a root Session.
+ * @param props - Session projections, mode operations, menu dismissal, and locale.
+ * @returns the Team settings content when its projection is available.
+ */
+export function TeamModePage(props: TeamModePageProps) {
+  const addressedChild = props.useSession(snapshot => snapshot.subagent !== null)
+  const listedChild = props.useSessions(state => state.byId[props.sessionId]?.origin === 'subagent')
+  if (addressedChild || listedChild) return null
+  return <RootTeamModePage {...props} />
 }
 
 /** Read and change the selection only for root Sessions. */
-function RootTeamModeToggle({
+function RootTeamModePage({
   useProjection, locked, dismiss, reportFailure, selectTeamMode, requestDisableConfirmation, t,
-}: TeamModeToggleProps) {
+}: TeamModePageProps) {
   const mode = useProjection('agentTeam')
   const modelSelection = useProjection('modelSelection')
   const [pending, setPending] = useState(false)
   if (mode === undefined) return null
   const select = (enabled: boolean): void => {
-    if (!enabled && modelSelection !== undefined && modelSelection.lastUsed !== null) {
+    if (locked || pending || modelSelection === undefined) return
+    if (!enabled && modelSelection.lastUsed !== null) {
       dismiss()
       requestDisableConfirmation()
       return
@@ -55,16 +90,13 @@ function RootTeamModeToggle({
     }).finally(() => { setPending(false) })
   }
   return (
-    <div className={css.row}>
-      <span className={css.label}>
-        <span>{t('mode.label')}</span>
-        <Tooltip label={t('mode.description')} side="top" delayMs={300} maxWidth={300} portal openOnClick>
-          <Button variant="ghost" size="sm" className={css.infoButton} aria-label={t('mode.infoLabel')}>
-            <IconInfoOutlineRegular size={11} aria-hidden="true" />
-          </Button>
-        </Tooltip>
-      </span>
-      <Switch className={css.toggle} checked={mode.enabled} disabled={locked || pending || modelSelection === undefined} label={t('mode.label')} onChange={select} />
+    <div className={css.page}>
+      <div className={css.row}>
+        <span className={css.label}>{t('mode.label')}</span>
+        <Switch className={css.toggle} checked={mode.enabled} disabled={locked || modelSelection === undefined}
+          pending={pending} label={t('mode.label')} onChange={select} />
+      </div>
+      <p className={css.description}>{t('mode.description')}</p>
     </div>
   )
 }

@@ -17,20 +17,40 @@ export interface ModelLabelOwner {
   selected: boolean
 }
 
+/** A keyed contribution displayed as a second page of the model menu. */
+export interface ModelMenuPage {
+  /** Registration key in conversation.input.model.page; also marks its root button's data-model-menu-page. */
+  key: string
+  /** Localized accessible name of the detail page. */
+  title: string
+}
+
+/** Selection state and feedback shared by menu option entries and detail pages. */
+export interface ModelMenuControls {
+  /** Whether the composer currently refuses selection changes. */
+  locked: boolean
+  /** Close the menu and focus its trigger synchronously before opening another overlay. */
+  dismiss: () => void
+  /** Report a failed selection through the menu owner's persistent toast. */
+  reportFailure: (message: string) => void
+}
+
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
     /** Session options appended after model and reasoning controls in the root menu. */
     'conversation.input.model.options': {
       kind: 'list'
       scope: 'session'
-      owner: {
-        /** Whether the composer currently refuses selection changes. */
-        locked: boolean
-        /** Close the menu and focus its trigger synchronously before opening another overlay. */
-        dismiss: () => void
-        /** Report a failed selection through the menu owner's persistent toast. */
-        reportFailure: (message: string) => void
+      owner: ModelMenuControls & {
+        /** Open a keyed detail page inside this menu; its root button supplies data-model-menu-page for focus return. */
+        openPage: (page: ModelMenuPage) => void
       }
+    }
+    /** Plugin-owned content displayed as a model-menu detail page. */
+    'conversation.input.model.page': {
+      kind: 'keyed'
+      scope: 'session'
+      owner: ModelMenuControls
     }
     /**
      * Non-interactive inline model label; selection controls remain owner-managed.

@@ -1,31 +1,6 @@
 /**
- * ModelSelect: the composer's named model seat (`conversation.input.model`).
- * Two-level selection per figma 496:26454's MenuDropdown: the root menu is
- * the Model / Effort row pair (label + current value + a right chevron),
- * each drilling into its own list — the provider-grouped model list over
- * the shared directory, and the effort levels. The trigger (313:14108's
- * ToggleButton) shows both: model name + effort in the caption tone.
- * Model catalogs above four entries show search, which retains focus while
- * ↑/↓ cycle the highlighted result; Enter and Tab accept it. Smaller model
- * catalogs, root panes, and effort panes move focus between rows. Escape and Shift+Tab leave a drilled pane first and otherwise close
- * back to the trigger. A drilled pane focuses the current effort or model
- * search field. Provider headings paint their background only while pinned
- * by scrolling. Clearing a query restores the full list and search focus.
- * Selecting restores trigger focus without a ring until the trigger loses focus
- * or the menu reopens. Mobile devices restore button focus when opening or
- * drilling; model search takes focus only after explicit user input.
- * Model names match a case-insensitive ordered subsequence
- * within each provider group, ranked by
- * prefix, alignment score, then catalog order. Returning to the root pane
- * hands focus back to the cell that opened it. Data and submission ride the
- * same per-session ModelDirectory as the /model popup; exact-model reasoning
- * metadata and the selected effort come from the Host rather than a
- * client-owned vocabulary. A rejected selection announces through the shared
- * transient Toast anchored to the composer card; the in-menu strip with
- * Retry remains the catalog-load surface. While the directory's pending
- * selection is unsettled, the trigger shows a spinner in place of its
- * chevron, and each row whose value that selection carries shows one in place
- * of its check mark.
+ * Session model menu with inline reasoning stops and keyed settings pages.
+ * Model choices and submissions share the same directory as the /model command.
  */
 import { MenuGroup, MenuSurface, observeStickyMenuGroups } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
@@ -36,23 +11,18 @@ import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import type { ModelReasoningEffort, ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
 import {
-  IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconCloseFillRegular,
+  IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconChevronRightOutlineRegular,
+  IconCloseFillRegular,
   IconDataOutlineRegular, IconWarningOutlineRegular, Input, isMobileDevice, rankByName, StateDot, Tag, Toast,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ModelLabelOwner, ModelSelectInjected } from './slots.ts'
+import type { ModelLabelOwner, ModelMenuPage, ModelSelectInjected } from './slots.ts'
+import { EffortSlider, type EffortChoice } from './EffortSlider.tsx'
 import css from './ModelSelect.module.css'
 import { orderModelProviders } from './provider-order.ts'
 
-/** Which pane the dropdown shows: the two-row root or one drilled-in list. */
-type Pane = 'root' | 'model' | 'effort'
-
-/** One dynamic effort row; undefined means preserve the provider default. */
-interface EffortChoice {
-  key: string
-  effort: string | undefined
-  label: string
-}
+/** The root controls, all models, or a keyed plugin-owned settings page. */
+type Pane = 'root' | 'model' | ModelMenuPage
 
 /**
  * Render the composer model seat.
@@ -63,7 +33,7 @@ interface EffortChoice {
 export function ModelSelect(
   { locked, available, directory, load, select, resolveText, t, renderSlot }:
   ModelSelectInjected & Pick<PropsRuntime<'conversation.input.model'>, 'locked'> & PropsLocale<'model'>
-    & Omit<PropsRenderSlots<'conversation.input.model.label' | 'conversation.input.model.options'>, 'SessionProvider'>,
+    & Omit<PropsRenderSlots<'conversation.input.model.label' | 'conversation.input.model.options' | 'conversation.input.model.page'>, 'SessionProvider'>,
 ) {
   const state = useSyncExternalStore(
     fn => directory.subscribe(fn),
@@ -74,6 +44,7 @@ export function ModelSelect(
   const [query, setQuery] = useState('')
   const [highlightedIndex, setHighlightedIndex] = useState<number | null>(null)
   const [selectionFocus, setSelectionFocus] = useState(false)
+  const [modelReturnFocus, setModelReturnFocus] = useState(false)
   // The in-menu error strip serves catalog loads (its Retry re-runs the
   // load); a rejected SELECTION announces through the transient toast
   // instead, so the strip renders only while the latest failure-capable
@@ -176,15 +147,25 @@ export function ModelSelect(
 
   // Pane switches unmount the focused row; restore focus inside the menu so
   // keyboard navigation remains available.
-  const paneFocus = useRef<'drill' | 'model' | 'effort' | null>(null)
+  const paneFocus = useRef<'drill' | 'model' | 'effort' | ModelMenuPage | null>(null)
   const previousShowSearch = useRef(showSearch)
   useEffect(() => {
     const changedSearchMode = previousShowSearch.current !== showSearch
     previousShowSearch.current = showSearch
     const intent = paneFocus.current ?? (changedSearchMode && pane === 'model' ? 'drill' : null)
+    if (intent === 'effort' && busy) return
     paneFocus.current = null
     if (!open || intent === null) return
+    if (intent === 'effort') {
+      menuRef.current?.querySelector<HTMLInputElement>('input[type="range"]:not([disabled])')?.focus()
+      return
+    }
     if (intent === 'drill') {
+      if (typeof pane === 'object') {
+        const first = menuRef.current?.querySelector<HTMLElement>('[role="switch"]:not([disabled])')
+        ;(first ?? menuRef.current ?? triggerRef.current)?.focus()
+        return
+      }
       if (pane === 'model' && showSearch && !isMobileDevice()) {
         searchRef.current?.focus()
         return
@@ -198,9 +179,11 @@ export function ModelSelect(
       ;(target ?? triggerRef.current)?.focus()
       return
     }
-    const cell = itemRefs.current[intent === 'effort' ? 1 : 0]
+    const cell = intent === 'model' ? itemRefs.current[0]
+      : Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>('[data-model-menu-page]') ?? [])
+        .find(button => button.dataset.modelMenuPage === intent.key)
     ;(cell !== null && cell !== undefined && !cell.disabled ? cell : triggerRef.current)?.focus()
-  }, [open, pane, showSearch])
+  }, [open, pane, showSearch, selectionFocus, busy])
 
   useEffect(() => {
     const viewport = groupsRef.current
@@ -218,6 +201,7 @@ export function ModelSelect(
 
   const show = (): void => {
     setSelectionFocus(false)
+    setModelReturnFocus(false)
     triggerRef.current?.focus()
     setQuery('')
     setHighlightedIndex(null)
@@ -238,11 +222,6 @@ export function ModelSelect(
     if (restoreFocus) queueMicrotask(() => { triggerRef.current?.focus() })
   }
 
-  const closeAfterSelection = (): void => {
-    setSelectionFocus(true)
-    close(true)
-  }
-
   const drill = (next: Pane): void => {
     setQuery('')
     setHighlightedIndex(null)
@@ -252,13 +231,14 @@ export function ModelSelect(
 
   /** Leave a drilled pane for the root one, handing the keyboard back to its cell. */
   const back = (from: Exclude<Pane, 'root'>): void => {
+    setModelReturnFocus(from === 'model')
     paneFocus.current = from
     setPane('root')
   }
 
   const moveFocus = (offset: number): void => {
-    const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>(
-      'button[role="menuitem"]:not([disabled]), button[role="menuitemradio"]:not([disabled]), button[role="switch"]:not([disabled])',
+    const items = Array.from(menuRef.current?.querySelectorAll<HTMLElement>(
+      'button[role="menuitem"]:not([disabled]), button[role="menuitemradio"]:not([disabled]), button[role="switch"]:not([disabled]), input[type="range"]:not([disabled])',
     ) ?? [])
     if (items.length === 0) return
     const active = items.findIndex(item => item === document.activeElement)
@@ -275,61 +255,58 @@ export function ModelSelect(
     if (event.nativeEvent.isComposing) return
     if (event.key === 'Escape' && open) {
       event.preventDefault()
+      event.stopPropagation()
       // Escape backs out of a drilled pane first, then closes.
-      if (pane !== 'root' && currentChoice !== undefined) back(pane)
+      if (typeof pane === 'object' || (pane === 'model' && currentChoice !== undefined)) back(pane)
       else close(true)
       return
     }
     if (!open) return
-    if (pane === 'model' && showSearch && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+    if (event.key === 'Tab') {
+      const menu = menuRef.current
+      const trigger = triggerRef.current
+      if (menu === null || trigger === null) return
+      const stops = Array.from(menu.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href], [tabindex]'))
+        .filter(item => item.tabIndex >= 0 && !item.matches(':disabled') && item.closest('[hidden], [inert]') === null)
+      const focused = document.activeElement
+      if (focused === trigger || focused === menu) {
+        if (event.shiftKey) {
+          close()
+          if (focused === menu) { event.preventDefault(); trigger.focus() }
+        } else {
+          event.preventDefault()
+          ;(stops[0] ?? trigger).focus()
+        }
+        return
+      }
+      const index = stops.findIndex(item => item === focused)
+      if (index < 0) return
+      const next = stops[index + (event.shiftKey ? -1 : 1)]
+      if (next !== undefined) {
+        event.preventDefault()
+        next.focus()
+      } else {
+        // Forward Tab continues from the trigger into the composer, not from the body portal.
+        if (event.shiftKey) event.preventDefault()
+        close()
+        trigger.focus()
+      }
+      return
+    }
+    if (pane === 'model' && showSearch && event.target === searchRef.current
+      && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
       event.preventDefault()
       if (!busy && visibleModels.length > 0) {
         const direction = event.key === 'ArrowDown' ? 1 : -1
         setHighlightedIndex((activeModelIndex + direction + visibleModels.length) % visibleModels.length)
-        searchRef.current?.focus()
+        searchRef.current.focus()
       }
       return
     }
-    if (pane === 'model' && showSearch && event.target instanceof HTMLInputElement
-      && (event.key === 'Enter' || (event.key === 'Tab' && !event.shiftKey))) {
-      if (event.key === 'Tab' && visibleModels.length === 0) return
+    if (pane === 'model' && showSearch && event.target === searchRef.current && event.key === 'Enter') {
       event.preventDefault()
       const highlighted = visibleModels[activeModelIndex]
       if (!busy && highlighted !== undefined) choose(highlighted)
-      return
-    }
-    // Tab settles like Enter and Shift+Tab leaves like Escape, so the menu's
-    // keys mean what they mean in the composer. Both are consumed: the card
-    // keeps the browser's focus traversal out while it is open.
-    if (event.key === 'Tab') {
-      if (event.shiftKey) {
-        event.preventDefault()
-        if (pane !== 'root' && currentChoice !== undefined) back(pane)
-        else close(true)
-        return
-      }
-      // Settling activates the row the keyboard is on; with focus still on the
-      // trigger, Tab enters the menu at the value in use instead. Any other
-      // control inside the card (a retry button) keeps the browser's traversal,
-      // so the keystroke stays unconsumed there.
-      const focused = document.activeElement
-      const rows = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>(
-        'button[role="menuitem"]:not([disabled]), button[role="menuitemradio"]:not([disabled]), button[role="switch"]:not([disabled])',
-      ) ?? [])
-      if (focused instanceof HTMLButtonElement && rows.includes(focused)) {
-        event.preventDefault()
-        focused.click()
-        return
-      }
-      if (focused !== triggerRef.current) return
-      event.preventDefault()
-      if (pane === 'model' && showSearch) {
-        setHighlightedIndex(null)
-        searchRef.current?.focus()
-        return
-      }
-      const checked = menuRef.current?.querySelector<HTMLElement>('[role="menuitemradio"][aria-checked="true"]:not([disabled])')
-      ;(checked ?? rows.find(item => !item.disabled))?.focus()
       return
     }
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -339,6 +316,9 @@ export function ModelSelect(
   }
 
   const onBlur = (event: FocusEvent<HTMLDivElement>): void => {
+    // Non-focusable menu text and native range dragging can temporarily clear DOM focus.
+    // Outside pointer presses are handled separately; close only for a known outside focus target.
+    if (event.relatedTarget === null) return
     if (event.relatedTarget instanceof Node && (
       rootRef.current?.contains(event.relatedTarget) === true
       || menuRef.current?.contains(event.relatedTarget) === true
@@ -346,12 +326,17 @@ export function ModelSelect(
     close()
   }
 
-  const settleSelection = (result: Awaited<ReturnType<ModelSelectInjected['select']>>): void => {
+  const settleSelection = (result: Awaited<ReturnType<ModelSelectInjected['select']>>, origin: 'model' | 'effort'): void => {
     if (result === undefined) return
-    if (result.ok) {
-      if (rootRef.current !== null) closeAfterSelection()
-      return
+    if (menuRef.current !== null) {
+      paneFocus.current = origin
+      if (result.ok) {
+        setModelReturnFocus(origin === 'model')
+        setPane('root')
+      }
+      setSelectionFocus(false)
     }
+    if (result.ok) return
     const { error } = result
     toastSeq.current += 1
     setToast({
@@ -362,34 +347,31 @@ export function ModelSelect(
     })
   }
 
-  const submit = (selection: ModelSelection): void => {
+  const submit = (selection: ModelSelection, origin: 'model' | 'effort'): void => {
     lastActionRef.current = 'select'
-    // Disabled option rows cannot retain focus while a selection is pending.
+    // Model rows may unmount; the inline slider keeps focus while its value is saved.
     setSelectionFocus(true)
-    triggerRef.current?.focus()
-    void select(selection).then(settleSelection)
+    if (origin === 'model') triggerRef.current?.focus()
+    void select(selection).then((result) => { settleSelection(result, origin) })
   }
 
   const choose = (selection: ModelSelection): void => {
     if (state.current?.provider === selection.provider && state.current.model === selection.model) {
-      closeAfterSelection()
+      back('model')
       return
     }
-    submit(selection)
+    submit(selection, 'model')
   }
 
   const chooseEffort = (effort: string | undefined): void => {
-    if (state.current === null) return
-    if (effectiveEffort === effort) {
-      closeAfterSelection()
-      return
-    }
+    if (state.current === null || locked || busy) return
+    if (effectiveEffort === effort || (effort === undefined && state.current.reasoningEffort === undefined)) return
     const selection: ModelSelection = {
       provider: state.current.provider,
       model: state.current.model,
       ...effort === undefined ? {} : { reasoningEffort: effort },
     }
-    submit(selection)
+    submit(selection, 'effort')
   }
 
   const waiting = currentChoice === undefined && state.status === 'loading'
@@ -479,38 +461,53 @@ export function ModelSelect(
       {open && createPortal(
         <MenuSurface
           ref={menuRef}
+          tabIndex={-1}
           id={`${id}-menu`}
           className={css.menu}
           style={anchorStyle}
           role={pane === 'model' ? 'group' : 'menu'}
-          aria-label={t('menu.aria')}
+          aria-label={pane === 'root' ? t('menu.aria') : pane === 'model' ? t('menu.model') : pane.title}
           aria-busy={state.status === 'loading' || busy}
         >
           {pane === 'root' && (
-            <>
-              <button ref={itemRef()} type="button" role="menuitem" className={css.cell} onClick={() => { drill('model') }}>
+            <div className={clsx(css.rootPage, reasoning !== undefined && css.reasoningPage)} data-model-menu-root>
+              <button ref={itemRef()} type="button" role="menuitem" className={clsx(css.cell, reasoning !== undefined && css.modelHeadline)}
+                data-return-focus={modelReturnFocus ? '' : undefined}
+                onBlur={() => { setModelReturnFocus(false) }}
+                onKeyDown={() => { setModelReturnFocus(false) }}
+                onPointerMove={(event) => { if (modelReturnFocus && event.pointerType !== 'touch') setModelReturnFocus(false) }}
+                onClick={() => { drill('model') }}>
                 <span className={css.cellLabel}>{t('menu.model')}</span>
                 <span className={css.cellValue}>
                   {currentChoice === undefined ? modelLabel : renderModelLabel(currentChoice.group.provider, currentChoice.model, 'menu', true)}
                 </span>
                 <IconChevronRightOutlineRegular className={css.cellChevron} />
               </button>
-              {reasoning !== undefined && (
-                <button ref={itemRef()} type="button" role="menuitem" className={css.cell} onClick={() => { drill('effort') }}>
-                  <span className={css.cellLabel}>{t('menu.effort')}</span>
-                  <span className={css.cellValue}>{effortLabel}</span>
-                  <IconChevronRightOutlineRegular className={css.cellChevron} />
-                </button>
+              {currentChoice !== undefined && reasoning !== undefined && (
+                <EffortSlider
+                  key={JSON.stringify([currentChoice.group.id, currentChoice.model.id])}
+                  choices={effortChoices}
+                  value={pending !== null && pending.provider === currentChoice.group.id && pending.model === currentChoice.model.id
+                    ? pending.reasoningEffort ?? reasoning.defaultEffort
+                    : effectiveEffort}
+                  label={t('menu.effort')}
+                  currentLabel={effortLabel ?? t('effort.providerDefault')}
+                  formatTooltip={effort => t('effort.tooltip', { effort })}
+                  disabled={locked}
+                  pending={busy}
+                  onSelect={chooseEffort}
+                />
               )}
               {renderSlot('conversation.input.model.options', {
                 locked: locked || busy,
+                openPage: (page) => { drill(page) },
                 dismiss: () => {
                   close()
                   triggerRef.current?.focus()
                 },
                 reportFailure: (message) => { setToast({ seq: ++toastSeq.current, text: message }) },
               })}
-            </>
+            </div>
           )}
 
           {pane === 'model' && (
@@ -580,7 +577,7 @@ export function ModelSelect(
                             role="menuitemradio"
                             aria-checked={selected}
                             id={`${id}-model-${index}`}
-                            tabIndex={showSearch ? -1 : 0}
+                            tabIndex={showSearch && index !== activeModelIndex ? -1 : 0}
                             onFocus={() => { setHighlightedIndex(index) }}
                             data-highlighted={index === activeModelIndex ? '' : undefined}
                             className={clsx(
@@ -616,41 +613,17 @@ export function ModelSelect(
             </>
           )}
 
-          {pane === 'effort' && (
-            <>
-              {state.error !== null && lastActionRef.current === 'load' && (
-                <div className={css.error}>
-                  <span>{t('error.action', { message: state.error })}</span>
-                  <button type="button" className={css.retry} onClick={reload}>{t('action.reload')}</button>
-                </div>
-              )}
-              <div className={clsx(css.groups, 'scrollable')}>
-                {effortChoices.length === 0
-                  ? <div className={css.empty}>{t('empty.efforts')}</div>
-                  : effortChoices.map(level => (
-                    <button
-                      ref={itemRef()}
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={effectiveEffort === level.effort}
-                      className={clsx(css.option, effectiveEffort === level.effort && css.selected)}
-                      key={level.key}
-                      disabled={busy}
-                      onClick={() => { chooseEffort(level.effort) }}
-                    >
-                      <span className={css.optionCopy}>
-                        <span className={css.modelName}>{level.label}</span>
-                      </span>
-                      <span className={css.check}>
-                        {pending !== null && pending.provider === state.current?.provider
-                          && pending.model === state.current.model && pending.reasoningEffort === level.effort
-                          ? <StateDot state="ongoing" />
-                          : effectiveEffort === level.effort ? <IconCheckOutlineRegular /> : null}
-                      </span>
-                    </button>
-                  ))}
-              </div>
-            </>
+          {typeof pane === 'object' && (
+            <div className={css.pageBody}>
+              {renderSlot('conversation.input.model.page', {
+                locked: locked || busy,
+                dismiss: () => {
+                  close()
+                  triggerRef.current?.focus()
+                },
+                reportFailure: (message) => { setToast({ seq: ++toastSeq.current, text: message }) },
+              }, { entryKey: pane.key })}
+            </div>
           )}
         </MenuSurface>,
         document.body,

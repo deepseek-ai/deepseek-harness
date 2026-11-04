@@ -150,7 +150,7 @@ describe.skipIf(webSnapshotMode() === 'record').each([
     for (const entry of ['button', 'command'] as const) {
       const composer = page.locator('[data-composer-input]').first()
       const surface = entry === 'button'
-        ? page.getByRole('group', { name: '模型与推理等级', exact: true })
+        ? page.getByRole('group', { name: '模型', exact: true })
         : page.locator('[aria-label="/model 选项"]')
       const viewport = entry === 'button'
         ? surface.getByRole('menu', { name: '模型', exact: true })
@@ -296,7 +296,7 @@ describe.skipIf(webSnapshotMode() === 'record').each([
       await page.setViewportSize({ width: 402, height: 874 })
       await page.getByRole('button', { name: /^选择模型/ }).click()
       await page.getByRole('menuitem', { name: /^模型/ }).click()
-      const panel = page.getByRole('group', { name: '模型与推理等级', exact: true })
+      const panel = page.getByRole('group', { name: '模型', exact: true })
       for (const height of [874, 500]) {
         await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1 })
         await page.setViewportSize({ width: 402, height })
@@ -398,66 +398,67 @@ describe.skipIf(webSnapshotMode() === 'record').each([
     }
   })
 
-  it.runIf(engine === chromium)('keeps reasoning efforts selectable after zooming with and without list overflow', async () => {
+  it.runIf(engine === chromium)('keeps reasoning efforts selectable after zooming with and without root overflow', async () => {
     const cdp = await page.context().newCDPSession(page)
     try {
-      for (const { height, scrolls } of [{ height: 500, scrolls: false }, { height: 350, scrolls: true }]) {
+      for (const { height, scrolls } of [{ height: 500, scrolls: false }, { height: 220, scrolls: true }]) {
         await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1 })
         await page.setViewportSize({ width: 402, height })
         await page.getByRole('button', { name: /^选择模型/ }).click()
-        await page.getByRole('menuitem', { name: /^推理等级/ }).click()
         const menu = page.getByRole('menu', { name: '模型与推理等级', exact: true })
-        await menu.getByRole('menuitemradio').first().click()
+        const slider = menu.getByRole('slider', { name: '推理等级', exact: true })
+        await slider.press('Home')
         await expect.poll(() => scaffold.ctx.agentDefaultModel.currentSelection().reasoningEffort).toBeUndefined()
-        await page.getByRole('button', { name: /^选择模型/ }).click()
-        await page.getByRole('menuitem', { name: /^推理等级/ }).click()
-        const last = menu.getByRole('menuitemradio').last()
-        await expect.poll(() => last.getAttribute('aria-checked')).toBe('false')
+        await expect.poll(() => slider.getAttribute('aria-busy')).toBe('false')
         await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 2.5 })
         await expect.poll(() => page.evaluate(() => window.visualViewport!.scale)).toBe(2.5)
-        expect(await menu.getByRole('menuitemradio').count()).toBeGreaterThanOrEqual(7)
-        await expect.poll(() => last.evaluate((row) => {
-          const scroller = row.parentElement!
+        expect(Number(await slider.getAttribute('max'))).toBeGreaterThanOrEqual(7)
+        expect(await menu.getByRole('group', { name: '推理等级', exact: true }).getByRole('button').count()).toBe(0)
+        await expect.poll(() => slider.evaluate((range) => {
+          const scroller = range.closest<HTMLElement>('[data-model-menu-root]')!
           scroller.scrollTop = scroller.scrollHeight
           return { overflow: getComputedStyle(scroller).overflowY,
             overflows: scroller.scrollHeight > scroller.clientHeight, moved: scroller.scrollTop > 0 }
         })).toEqual({ overflow: 'auto', overflows: scrolls, moved: scrolls })
-        await expect.poll(() => last.evaluate((row) => {
-          const rect = row.getBoundingClientRect()
-          const viewport = row.parentElement!.getBoundingClientRect()
+        await expect.poll(() => slider.evaluate((range) => {
+          const rect = range.getBoundingClientRect()
+          const viewport = range.closest('[data-model-menu-root]')!.getBoundingClientRect()
           return rect.top >= viewport.top - 1 && rect.bottom <= viewport.bottom + 1
         })).toBe(true)
-        const target = await last.evaluate((row) => {
-          const rect = row.getBoundingClientRect()
+        const target = await slider.evaluate((range) => {
+          const rect = range.getBoundingClientRect()
           const viewport = window.visualViewport!
           return {
-            left: Math.max(0, Math.min(window.innerWidth - viewport.width, rect.left + rect.width / 2 - viewport.width / 2)),
+            left: Math.max(0, Math.min(window.innerWidth - viewport.width, rect.right - 8 - viewport.width / 2)),
             top: Math.max(0, Math.min(window.innerHeight - viewport.height, rect.top + rect.height / 2 - viewport.height / 2)),
             offsetLeft: viewport.offsetLeft, offsetTop: viewport.offsetTop,
           }
         })
-        // Pan from the page margin so wheel input cannot scroll the list instead.
+        // Pan from the page margin so wheel input cannot scroll the menu instead.
         await cdp.send('Input.synthesizeScrollGesture', {
           x: 1, y: 1, xDistance: target.offsetLeft - target.left, yDistance: target.offsetTop - target.top,
           gestureSourceType: 'mouse', speed: 800,
         })
-        await expect.poll(() => last.evaluate((row) => {
-          const rect = row.getBoundingClientRect()
+        await expect.poll(() => slider.evaluate((range) => {
+          const rect = range.getBoundingClientRect()
           const viewport = window.visualViewport!
-          const x = rect.left + rect.width / 2 - viewport.offsetLeft
+          const x = rect.right - 8 - viewport.offsetLeft
           const y = rect.top + rect.height / 2 - viewport.offsetTop
           return x >= 0 && x < viewport.width && y >= 0 && y < viewport.height
         })).toBe(true)
-        // Dispatch touch without locator auto-scrolling the last row into view.
-        const point = await last.evaluate((row) => {
-          const rect = row.getBoundingClientRect()
+        // Native touch must select the last stop without locator auto-scrolling.
+        const point = await slider.evaluate((range) => {
+          const rect = range.getBoundingClientRect()
           const viewport = window.visualViewport!
-          return { x: rect.left + rect.width / 2 - viewport.offsetLeft,
+          return { x: rect.right - 8 - viewport.offsetLeft,
             y: rect.top + rect.height / 2 - viewport.offsetTop }
         })
         await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] })
         await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
         await expect.poll(() => scaffold.ctx.agentDefaultModel.currentSelection()).toMatchObject({ reasoningEffort: 'max' })
+        expect(await menu.isVisible()).toBe(true)
+        await expect.poll(() => slider.getAttribute('aria-valuetext')).toBe('Max')
+        await page.keyboard.press('Escape')
         await menu.waitFor({ state: 'detached' })
       }
     } finally {
