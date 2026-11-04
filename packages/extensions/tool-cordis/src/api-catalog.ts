@@ -4469,7 +4469,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: 'ensure(agent: Agent, signal?: AbortSignal): Promise<string>',
         description: 'Validate the current directory and restore the original project when it disappeared.',
         parameters: [{ name: 'agent', description: 'live or unpublished Agent owning the Session.' }, { name: 'signal', description: 'cancellation for filesystem inspection.' }],
-        returns: 'the existing directory; recovery is committed before fulfillment. A notice failure is warned without reverting the committed state.',
+        returns: 'the existing directory; recovery is committed before fulfillment. A Session without a recorded project records the deployment fallback as its first anchor on its first validation, and a recovery destination outside every anchor joins the anchors. A notice failure is warned without reverting the committed state.',
         throws: ['when the original project is also unavailable.'],
       },
       {

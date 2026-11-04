@@ -1,7 +1,7 @@
 /** Workspace roots: anchors registered by relocation, the root the cursor selects, and the context both reach the model through. */
-import { mkdtemp, mkdir, realpath, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, realpath, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
@@ -186,9 +186,56 @@ describe('Session workspace roots', () => {
     expect(f.ctx.workingDirectory.rootOf(agent.session)).toBe(f.ctx.workingDirectory.defaultDirectory)
     expect(f.ctx.workingDirectory.anchorsOf(agent.session)).toEqual([])
     expect(f.ctx.sessionProjections.snapshot(agent.session).values.workspaceRoot).toBeNull()
+    // Relocation registers the deployment fallback first, so leaving the checkout later selects it.
+    const fallback = await realpath(f.ctx.workingDirectory.defaultDirectory)
     await f.ctx.workingDirectory.relocate(agent, f.worktree)
     expect(f.ctx.workingDirectory.rootOf(agent.session)).toBe(f.worktree)
-    expect(f.ctx.workingDirectory.anchorsOf(agent.session)).toEqual([f.worktree])
+    expect(f.ctx.workingDirectory.anchorsOf(agent.session)).toEqual([fallback, f.worktree])
+  })
+
+  it('registers the deployment fallback of a Session without origin metadata as its first anchor and returns to it', async () => {
+    await using f = await fixture()
+    const agent = await f.harness.create(SessionId('without-origin-recovery'))
+    const fallback = await realpath(f.ctx.workingDirectory.defaultDirectory)
+    await expect(f.ctx.workingDirectory.ensure(agent)).resolves.toBe(fallback)
+    expect(f.ctx.workingDirectory.anchorsOf(agent.session)).toEqual([fallback])
+    expect(f.ctx.workingDirectory.rootOf(agent.session)).toBe(fallback)
+    await f.ctx.workingDirectory.relocate(agent, f.worktree, { cwd: 'src' })
+    expect(f.ctx.workingDirectory.anchorsOf(agent.session)).toEqual([fallback, f.worktree])
+    f.harness.claim(agent, 'next-step', 1)
+    await rm(f.worktree, { recursive: true })
+    await expect(f.ctx.workingDirectory.ensure(agent)).resolves.toBe(fallback)
+    expect(f.ctx.workingDirectory.rootOf(agent.session)).toBe(fallback)
+    expect(f.ctx.workingDirectory.get(agent.session)).toBe(fallback)
+  })
+
+  it('recovers a Session whose header spells the original project through a symlink onto the canonical project', async () => {
+    await using f = await fixture()
+    const link = join(dirname(f.root), 'link')
+    await symlink(f.root, link)
+    const agent = await f.harness.create(SessionId('linked-origin'), {}, { cwd: link })
+    expect(f.ctx.workingDirectory.anchorsOf(agent.session)).toEqual([link])
+    await f.ctx.workingDirectory.relocate(agent, f.worktree, { cwd: 'src' })
+    f.harness.claim(agent, 'next-step', 1)
+    await rm(f.worktree, { recursive: true })
+    // The recovery destination is canonical and no anchor contains it, so it joins the anchors and becomes the root.
+    await expect(f.ctx.workingDirectory.ensure(agent)).resolves.toBe(f.root)
+    expect(f.ctx.workingDirectory.rootOf(agent.session)).toBe(f.root)
+    expect(f.ctx.workingDirectory.anchorsOf(agent.session)).toEqual([link, f.worktree, f.root])
+    expect(f.harness.claim(agent, 'next-step', 1).map(message => message.content.map(block => block.type === 'text' ? block.text : '').join(''))).toEqual([
+      `The working directory ${JSON.stringify(join(f.worktree, 'src'))} is unavailable. The working directory is now ${JSON.stringify(f.root)}. ${JSON.stringify(f.root)} is now the workspace root.`,
+    ])
+  })
+
+  it('keeps the previous root when a Session with a symlinked header returns to the original project by that spelling', async () => {
+    await using f = await fixture()
+    const link = join(dirname(f.root), 'link-return')
+    await symlink(f.root, link)
+    const agent = await f.harness.create(SessionId('linked-origin-return'), {}, { cwd: link })
+    await f.ctx.workingDirectory.relocate(agent, f.worktree)
+    // Documented limitation: the canonical project is not an anchor until recovery registers it.
+    await expect(f.ctx.workingDirectory.set(agent, link)).resolves.toBe(f.root)
+    expect(f.ctx.workingDirectory.rootOf(agent.session)).toBe(f.worktree)
   })
 
   it('tests containment lexically on canonical absolute paths', () => {

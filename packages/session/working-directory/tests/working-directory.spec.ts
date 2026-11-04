@@ -152,11 +152,13 @@ describe('Session working directories', () => {
   it('uses and records the configured launch fallback for a Session without origin metadata', async () => {
     await using f = await fixture()
     const agent = await f.harness.create(SessionId('without-origin'))
-    const fallback = f.ctx.workingDirectory.defaultDirectory
+    // The first validation records the canonical fallback as the Session's first anchor.
+    const fallback = await realpath(f.ctx.workingDirectory.defaultDirectory)
     await expect(f.ctx.workingDirectory.ensure(agent)).resolves.toBe(fallback)
     expect(agent.session.snapshotEvents()).toContainEqual(expect.objectContaining({
-      type: 'working-directory/change', data: { cwd: fallback },
+      type: 'working-directory/change', data: { cwd: fallback, anchor: fallback },
     }))
+    expect(f.ctx.workingDirectory.anchorsOf(agent.session)).toEqual([fallback])
   })
 
   it('rejects a relative deployment default before accepting Sessions', async () => {

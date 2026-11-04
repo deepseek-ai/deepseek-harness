@@ -78,7 +78,7 @@ Session 投影拥有当前目录，并通过 Session observation 暴露它，因
 <a id="known-limitations-and-deferred-work"></a>
 
 - **原始项目缺失** — 当前目录与原始项目均不可用时，提示词组装会拒绝每个模型轮次，包括纯聊天轮次。服务不会另选或重建仓库。请先恢复原始目录，或通过 SDK 的 `setWorkingDirectory`（Python 中为 `set_working_directory`）或 `ctx.workingDirectory.set` 选择现有的绝对目录，再重试。已有 shell 保留各自进程的目录。
-- **锚按记录原样比较** — 原始项目是 header 记录的路径，而 `set` 与 `relocate` 记录文件系统 provider 给出的规范路径。通过符号链接或以不同大小写记录的 header 永远不包含这些路径，因此根停留在原始项目上，与目录位于所有锚之外时相同。
+- **以其他拼写记录的 header** — 生产方现在以规范路径记录原始项目，但更早创建的 Session，或由客户端传入符号链接或大小写不同路径的 Session，仍以该拼写作为第一个锚，而 `set` 与 `relocate` 记录的是规范路径。这类 Session 进入另一个检出目录后，以 header 的拼写 `cd` 回原始项目时保留先前的根；进入的检出目录消失时，恢复会把规范的原始项目登记为锚。
 
 <a id="dev-note"></a>
 ### 开发备注

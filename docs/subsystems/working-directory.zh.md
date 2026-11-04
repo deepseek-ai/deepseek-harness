@@ -8,7 +8,7 @@ Session 的当前目录由 [`dsh-working-directory`](../../packages/session/work
 
 `ctx.workingDirectory.get(session)` 读取日志中的值。`ensure(agent)` 验证它，并在目录消失时恢复原始项目。`set(agent, path)` 验证并记录请求的变更。header 没有目录的 Session 使用配置的运行时回退目录；回退目录不可用时返回错误。
 
-`rootOf(session)` 读取工作区根：包含当前目录的最长已登记锚。锚是原始项目以及 `relocate(agent, root, { cwd? })` 进入过的每个检出目录；该操作验证根及其内部的目录，然后用一条 `anchor` 指向该根的 `working-directory/change` 同时记录两者。`anchorsOf(session)` 列出这些锚。根内部的 `set` 只移动当前目录；进入另一个锚的 `set` 把该锚选为根；所有锚之外的 `set` 不改变根。恢复到原始项目时再次把它选为根。锚按记录的原样比较。
+`rootOf(session)` 读取工作区根：包含当前目录的最长已登记锚。锚是原始项目以及 `relocate(agent, root, { cwd? })` 进入过的每个检出目录；该操作验证根及其内部的目录，然后用一条 `anchor` 指向该根的 `working-directory/change` 同时记录两者。`anchorsOf(session)` 列出这些锚。根内部的 `set` 只移动当前目录；进入另一个锚的 `set` 把该锚选为根；所有锚之外的 `set` 不改变根。恢复到原始项目时再次把它选为根。锚在规范路径上按词法比较：生产方以规范拼写记录原始项目，没有记录项目的 Session 把部署回退目录登记为第一个锚，恢复目的地不在任何锚内时也加入锚。
 
 变更仅影响一个 Session。模型的相对路径文件系统操作以及其工具启动的进程使用当前目录。用户看到的内容跟随工作区根：沙箱 `workspace-write` 边界、文件树与目录列举、变更摘要、新开的侧栏终端、`@` 文件补全、技能目录、项目指令发现和 LSP 工作区。已有终端和持久 shell 保留自己的目录。项目归属继续绑定原始项目。
 
@@ -87,6 +87,8 @@ anchorsOf(session: Session): readonly string[]
  * @param agent - live or unpublished Agent owning the Session.
  * @param signal - cancellation for filesystem inspection.
  * @returns the existing directory; recovery is committed before fulfillment.
+ * A Session without a recorded project records the deployment fallback as its first anchor on its
+ * first validation, and a recovery destination outside every anchor joins the anchors.
  * A notice failure is warned without reverting the committed state.
  * @throws when the original project is also unavailable.
  */
