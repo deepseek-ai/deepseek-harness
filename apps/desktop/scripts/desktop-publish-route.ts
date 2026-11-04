@@ -1,4 +1,4 @@
-/** Validate a completed packaging attempt and route publication back to its original runner. */
+/** Validate package-job success and route publication; attempt selection enforces run completion. */
 import { z } from 'zod'
 import { desktopPublishRunnersSchema, desktopPackageWorkflows } from './desktop-publish-targets.ts'
 import { desktopPublishQualificationError } from './desktop-publish-qualification.mjs'
