@@ -8,7 +8,7 @@ import { expect, it, onTestFinished, vi } from 'vitest'
 
 import { continuationProjectionDefinition as definition } from '../src/continuation.ts'
 import { paginate } from '../src/history.ts'
-import { continuationTurn as turn } from './continuation-fixture.ts'
+import { continuationTurn as turn } from './continuation-fixture.client.ts'
 
 const failed = (code: string): TurnEndReason => ({ kind: 'error', error: { code, message: code } })
 function fold(events: readonly SessionEvent[]) {
