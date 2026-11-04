@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-26-cross-deployment-office-kit.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-26-cross-deployment-office-kit.md
+/agent-note-one-office-kit-package-across-deployments:
+  en: a4558b56d2a49f7f
+  zh: cb62eb5b6c762eba
+/agent-note-one-office-kit-package-across-deployments/problem:
+  en: f27bccc8c9d6e5e5
+  zh: 4fc2454bbea7f17d
+/agent-note-one-office-kit-package-across-deployments/decision:
+  en: 6b097c3ce6288717
+  zh: c305c5bf03de4e02
+/agent-note-one-office-kit-package-across-deployments/alternatives-considered:
+  en: 57fbc447be854953
+  zh: da5867587c93a2a1
+/agent-note-one-office-kit-package-across-deployments/consequences:
+  en: c4220369acceab74
+  zh: c8a78727ef28abdd

@@ -117,9 +117,10 @@ it.each(['arm64', 'x64'] as const)('selects %s Node entitlements and keeps helpe
   mkdirSync(join(path, 'dependencies/node/bin'), { recursive: true })
   const node = join(path, 'dependencies/node/bin/node')
   const addon = join(path, 'addon.node')
-  const helpers = ['arm64', 'x64'].map(helperArch => join(path, 'node_modules/@deepseek-ai', `libreoffice-kit-darwin-${helperArch}`, 'bin/libreoffice-kit'))
-  for (const helper of helpers) mkdirSync(join(helper, '..'), { recursive: true })
-  for (const file of [node, addon, ...helpers]) writeFileSync(file, Buffer.from('cffaedfe00000000', 'hex'))
+  const helpers = ['arm64', 'x64'].map(helperArch => join(path, 'node_modules/@deepseek-ai', `libreoffice-kit-darwin-${helperArch}`, 'bin/dsoffice'))
+  const library = join(path, 'node_modules/@deepseek-ai/libreoffice-kit-darwin-arm64/lib/libmergedlo.dylib')
+  for (const file of [...helpers, library]) mkdirSync(join(file, '..'), { recursive: true })
+  for (const file of [node, addon, library, ...helpers]) writeFileSync(file, Buffer.from('cffaedfe00000000', 'hex'))
   await signMacOSRuntime(path, 'com.example.app', identity, arch)
   const nodePlist = join(import.meta.dirname, '../scripts', arch === 'x64' ? 'node-x64-entitlements.plist' : 'jit-entitlements.plist')
   expect(signMacOSRuntimeCode).toHaveBeenCalledWith(node, expect.any(String), identity, nodePlist)
@@ -131,4 +132,19 @@ it.each(['arm64', 'x64'] as const)('selects %s Node entitlements and keeps helpe
       join(import.meta.dirname, '../scripts/jit-entitlements.plist'))
   }
   expect(signMacOSRuntimeCode).toHaveBeenCalledWith(addon, expect.any(String), identity, undefined)
+  expect(signMacOSRuntimeCode).toHaveBeenCalledWith(library, expect.any(String), identity, undefined)
+})
+
+it('grants JIT to every Mach-O executable directly under a darwin Kit engine bin directory regardless of its name', async () => {
+  const path = root()
+  const helpers = ['dsoffice', 'renamed-helper'].map(name => join(path, 'node_modules/@deepseek-ai/libreoffice-kit-darwin-arm64/bin', name))
+  const nested = join(path, 'node_modules/@deepseek-ai/libreoffice-kit-darwin-arm64/bin/nested/tool')
+  for (const file of [...helpers, nested]) {
+    mkdirSync(join(file, '..'), { recursive: true })
+    writeFileSync(file, Buffer.from('cffaedfe00000000', 'hex'))
+  }
+  await signMacOSRuntime(path, 'com.example.app', identity, 'arm64')
+  const jit = join(import.meta.dirname, '../scripts/jit-entitlements.plist')
+  for (const file of helpers) expect(signMacOSRuntimeCode).toHaveBeenCalledWith(file, expect.any(String), identity, jit)
+  expect(signMacOSRuntimeCode).toHaveBeenCalledWith(nested, expect.any(String), identity, undefined)
 })

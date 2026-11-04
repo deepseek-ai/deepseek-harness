@@ -171,6 +171,28 @@ describe('keyed toolview hole through the real machinery', () => {
     await b.runtime.dispose()
   })
 
+  it.each([
+    ['office_render', 'Render document'],
+    ['office_convert', 'Convert document'],
+    ['office_recalculate', 'Recalculate workbook'],
+  ])('dispatches %s to its Office row through the real call tree', async (name, title) => {
+    const output = `${name} result`
+    const args = { input: 'input.xlsx', ...name === 'office_render' ? {} : { format: 'xlsx' } }
+    const b = await bench([
+      toolResult(3, 'office-call', name, JSON.stringify(args), {
+        meta: { path: '/w/input.xlsx' }, content: [{ type: 'text', text: output }],
+      }),
+    ])
+    try {
+      const view = b.runtime.renderRoot()
+      expect(view.getByText(title)).toBeTruthy()
+      expect(view.queryByText('Tool call')).toBeNull()
+      expect(view.getByRole('button', { name: name === 'office_render' ? 'input.xlsx' : 'input.xlsx → xlsx' })).toBeTruthy()
+      fireEvent.click(view.container.querySelector('[data-expandable]')!)
+      expect(view.getByText(output)).toBeTruthy()
+    } finally { await b.runtime.dispose() }
+  })
+
   it('renders Auto denial copy through the real machinery', async () => {
     const b = await bench([
       toolResult(

@@ -67,10 +67,6 @@ if (office !== undefined) {
       return nextResolve(specifier, kit ? { ...context, parentURL } : context)
     },
   })
-  process.env.DSH_BUNDLED_OFFICE_NODE = join(office, 'node', 'bin', process.platform === 'win32' ? 'node.exe' : 'node')
-  process.env.DSH_BUNDLED_OFFICE_CLI = join(office, 'node_modules', '@deepseek-ai', 'libreoffice-kit', 'lib', 'cli.js')
-} else if (isSea()) {
-  process.env.DSH_BUNDLED_OFFICE_CLI = ''
 }
 if (downloads !== undefined) process.env.DSH_BUNDLED_OFFICE_SKILLS = join(resourceDirectory, 'office-skills')
 
@@ -93,11 +89,13 @@ if (resource !== undefined) {
   Reflect.deleteProperty(process.env, 'DSH_PTC_RUNTIME_NODE')
   await import('@deepseek-ai/dsh-ptc-runtime-node/process')
 } else if (selection === undefined) {
+  // A DSH_PRIMARY_RUNTIME set or inherited from the environment, including the empty opt-out, takes precedence over the
+  // downloaded cache.
   if (cache !== undefined && existsSync(join(cache, 'primary', 'complete'))) {
-    process.env.DSH_BUNDLED_PRIMARY_RUNTIME = join(cache, 'primary', 'primary-runtime')
+    process.env.DSH_PRIMARY_RUNTIME ??= join(cache, 'primary', 'primary-runtime')
   }
   let packageManager
-  const primary = process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME
+  const primary = process.env.DSH_PRIMARY_RUNTIME
   if (primary !== undefined && primary !== '') {
     const { resolvePrimaryRuntime } = await import('@deepseek-ai/dsh-tool-workspace-dependencies')
     const { node, pnpm } = await resolvePrimaryRuntime(primary)

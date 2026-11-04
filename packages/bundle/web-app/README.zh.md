@@ -100,7 +100,9 @@ dsh --profile web --no-open --host "$(hostname -i | awk '{print $1}')" --public-
 <details>
 <summary>实现细节——点击展开</summary>
 
-此 bundle 由一层五个文件的补丁和一个运行时胶水插件组成：`cordis.patch.yml` 承载宿主行和 preset 注册表，每个 `presets/<id>.patch.yml` 插入一条随发行版交付的 preset 声明，按 `dsh.bundle.patch` 列出的顺序应用。存储栈与投影缓存来自 `dsh-base`；Web 叠加层的工作区和消息反馈条目消费共享的 `storageDomain` 服务。补丁重述 base 有意省略的界面专用值，插入 Web 专用宿主条目和浏览器插件列表，再将 Agent 层移到预设后面。胶水插件负责 dist 服务、公告应用 URL、明文 HTTP 暴露警告、bash 变量和就绪通知。`office-to-pdf` 条目为宿主消费者挂载一个延迟创建引擎的 [Office 转换提供方](../../document/office-to-pdf/README.zh.md)，使用此 bundle 的 Desktop 组合也共享该提供方。 转换服务的 Remote 方法负责预览读取授权，Document Preview 负责 Office 查看器和客户端缓存。
+此 bundle 由一层五个文件的补丁和一个运行时胶水插件组成：`cordis.patch.yml` 承载宿主行和 preset 注册表，每个 `presets/<id>.patch.yml` 插入一条随发行版交付的 preset 声明，按 `dsh.bundle.patch` 列出的顺序应用。存储栈与投影缓存来自 `dsh-base`；Web 叠加层的工作区和消息反馈条目消费共享的 `storageDomain` 服务。补丁重述 base 有意省略的界面专用值，插入 Web 专用宿主条目和浏览器插件列表，再将 Agent 层移到预设后面。胶水插件负责 dist 服务、公告应用 URL、明文 HTTP 暴露警告、bash 变量和就绪通知。`office-kit` 条目为宿主消费者挂载一个延迟创建引擎的 [Office 转换提供方](../../document/office-kit/README.zh.md)，使用此 bundle 的 Desktop 组合也共享该提供方，转换后的文件保存在 `$DSH_HOME/office-kit/outputs`。`standard` 和 `ptc` 预设在所有 profile 中挂载 [Office 工具](../../document/tool-office/README.zh.md)，无论是否安装 Kit，并在加载 Office 技能后声明它们；`minimal` 预设不挂载它们。转换服务的 Remote 方法负责预览读取授权，Document Preview 负责 Office 查看器和客户端缓存。
+
+`skill-office` 行只在 Desktop profile 中挂载 [Office 技能](../../skill/skill-office/README.zh.md)；其他 profile 禁用该行和内置依赖查询行。`DSH_PRIMARY_RUNTIME` 非空时，Desktop 还挂载依赖查询行，从载体的主运行时读取技能，并保留默认的 `pythonEnvironment: 'workspace-dependencies'`；没有主运行时则保留包内 assets，并选择 `pythonEnvironment: 'user'`。资源打包由 [Desktop 应用](../../../apps/desktop/README.zh.md#bundled-workspace-dependencies)负责。
 
 ### patch 语义
 
@@ -161,6 +163,20 @@ URL 行与浏览器交接都是就绪信号：监督方一观察到该行就发�
 #### KV Cache 影响
 
 无；该插件不贡献系统提示词文本。
+
+### Office 技能
+
+#### 模型看到什么
+
+Desktop profile 的技能目录列出 Office 路由和三个 Office 创作技能；其他 profile 不列出。加载的 Python 技能末尾带一节 Python 环境说明：有主运行时时指引模型调用 `load_workspace_dependencies`；没有时指引模型使用项目或用户已有的 Python。
+
+#### Token 影响
+
+Desktop profile 中每个初始目录包含四条目录摘要；仅在模型请求时加载技能正文。其他 profile：无。
+
+#### KV Cache 影响
+
+资源和配置不变时，内置 Office 摘要和各 Python 环境说明保持稳定；目录何时变化见 [Office 技能](../../skill/skill-office/README.zh.md#model-experience)。
 
 ## 已知限制与延期工作
 

@@ -25,7 +25,7 @@ Deployments that ship their own script runtimes (Desktop's primary runtime, or a
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the plugin beside the tool registry with the payload directory. Configuration validation requires a nonempty `source` and rejects empty `root` values before activation; both paths must be absolute. The bundled Office skills (`@deepseek-ai/dsh-skill-office`) reference this tool by name for their default interpreter.
+Mount the plugin beside the tool registry with the payload directory. Configuration validation requires a nonempty `source` and rejects empty `root` values before activation; both paths must be absolute. With `pythonEnvironment: 'workspace-dependencies'`, the bundled Office skills (`@deepseek-ai/dsh-skill-office`) reference this tool by name for their default interpreter.
 
 ### Minimal configuration
 
@@ -46,7 +46,7 @@ Mount the plugin beside the tool registry with the payload directory. Configurat
 
 On macOS and Linux, the builder retains `python` and `python3` as relative links to the sibling versioned interpreter (for example, `python3.12`). Installation preserves these two aliases and materializes other links. Alias validation requires the exact sibling filename and a regular target file; carriers that cannot preserve links, including Python wheels, retain supported regular command files. Windows keeps its ordinary `python.exe` file.
 
-The packaged `sdk` profile uses its bundled Python and Office skills by default; `DSH_PRIMARY_RUNTIME` overrides the resource location, and an empty value opts out. Source launches without a carrier default remain opt-in. See [runtime configuration](../../../python/sdk-runtime/README.md) for independent skill selection. Missing skill resources produce a startup warning; invalid or incomplete external runtime payloads fail the first tool call. Profile configuration changes require restarting the SDK process.
+The packaged `sdk` profile uses its bundled Python and Office skills by default; `DSH_PRIMARY_RUNTIME` overrides the resource location, and an empty value opts out of both. Without a primary runtime, including source launches, the `sdk` profile mounts neither this tool nor the Office skills. See [runtime configuration](../../../python/sdk-runtime/README.md) for independent skill selection. Missing skill resources are reported once through `ctx.logger.warn` during catalog discovery; invalid or incomplete external runtime payloads fail the first tool call. Profile configuration changes require restarting the SDK process.
 
 ### Build a carrier payload
 
