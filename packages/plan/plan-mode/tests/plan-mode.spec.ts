@@ -844,7 +844,11 @@ describe('exit_plan_mode', () => {
       arguments: { plan: '# P' }, token: Symbol('direct-exit') as ToolExecutionToken, signal: testToolSignal,
       deferContext() {}, concludeTurn() {},
     }
-    await expect(exit?.execute({ plan: '# P' }, exec)).rejects.toThrow(`${EXIT_PLAN_MODE} is only available in plan mode`)
+    await expect(exit?.execute({ plan: '# P' }, exec)).rejects.toMatchObject({
+      name: 'ToolContextUnavailableError',
+      code: 'TOOL_CONTEXT_UNAVAILABLE',
+      message: `${EXIT_PLAN_MODE} requires a calling agent`,
+    })
   })
 
   it('keeps the exit tool after leaving plan mode and rejects a call outside it', async () => {
@@ -855,6 +859,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: exit_plan_mode is only available in plan mode' }])
+    expect(result.error?.info).toEqual({ name: 'PlanModeError', code: 'PLAN_NOT_ACTIVE' })
   })
 
   it('admits the exit tool for a selected entry but rejects a call before the entry is logged', async () => {
@@ -866,6 +871,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: exit_plan_mode is only available in plan mode' }])
+    expect(result.error?.info).toEqual({ name: 'PlanModeError', code: 'PLAN_NOT_ACTIVE' })
   })
 
   it('rejects an empty or heading-less plan before asking the reviewer', async () => {
@@ -873,7 +879,8 @@ describe('exit_plan_mode', () => {
     for (const plan of ['', 'do things']) {
       const result = await callExit(ctx, agent, plan)
       expect(result.isError).toBe(true)
-      expect(result.content).toEqual([{ type: 'text', text: 'Error: exit_plan_mode requires a non-empty markdown plan starting with a # heading' }])
+      expect(result.content).toEqual([{ type: 'text', text: 'Error: invalid arguments: exit_plan_mode requires a non-empty markdown plan starting with a # heading' }])
+      expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
     }
     expect(asked).toHaveLength(0)
     expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
@@ -885,6 +892,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: no user-questions channel is available to review the plan; ask the user to switch the session mode instead' }])
+    expect(result.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
     expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
   })
 
@@ -1022,6 +1030,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: The user chose to keep planning; their feedback: consider the resume path' }])
+    expect(result.error?.info).toEqual({ name: 'PlanModeError', code: 'PLAN_REVISION_REQUESTED' })
     expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
   })
 
@@ -1030,6 +1039,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: The user chose to keep planning; revise the plan and present it again.' }])
+    expect(result.error?.info).toEqual({ name: 'PlanModeError', code: 'PLAN_REVISION_REQUESTED' })
   })
 
   it('a custom-text-only answer is feedback, never consent', async () => {
@@ -1037,6 +1047,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: The user chose to keep planning; their feedback: add tests first' }])
+    expect(result.error?.info).toEqual({ name: 'PlanModeError', code: 'PLAN_REVISION_REQUESTED' })
     expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
   })
 
@@ -1045,6 +1056,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: The user chose to keep planning; revise the plan and present it again.' }])
+    expect(result.error?.info).toEqual({ name: 'PlanModeError', code: 'PLAN_REVISION_REQUESTED' })
     expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
   })
 
@@ -1053,6 +1065,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: The user chose to keep planning; their feedback: change the tests' }])
+    expect(result.error?.info).toEqual({ name: 'PlanModeError', code: 'PLAN_REVISION_REQUESTED' })
     expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
   })
 
@@ -1067,6 +1080,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: The user chose to keep planning; revise the plan and present it again.' }])
+    expect(result.error?.info).toEqual({ name: 'PlanModeError', code: 'PLAN_REVISION_REQUESTED' })
     expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
   })
 
@@ -1076,6 +1090,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: The user chose to keep planning; revise the plan and present it again.' }])
+    expect(result.error?.info).toEqual({ name: 'PlanModeError', code: 'PLAN_REVISION_REQUESTED' })
   })
 
   it('declares the plan-review presentation intent naming its approve option', async () => {
@@ -1153,6 +1168,7 @@ describe('exit_plan_mode', () => {
     const result = await pending
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: the plan-mode service was reloaded while the plan was under review; present the plan again' }])
+    expect(result.error?.info).toEqual({ name: 'PlanModeError', code: 'PLAN_REVIEW_INTERRUPTED' })
     expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
   })
 
@@ -1161,7 +1177,8 @@ describe('exit_plan_mode', () => {
     registerQuestionAnswerer(ctx, { ask: () => { throw new Error('review aborted') } })
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
-    expect(result.content).toEqual([{ type: 'text', text: 'Error: review aborted' }])
+    expect(result.content).toEqual([{ type: 'text', text: 'Error: the user-questions answerer failed before the user answered' }])
+    expect(result.error?.info).toEqual({ name: 'UserQuestionError', code: 'PROVIDER_ERROR' })
     expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
   })
 
