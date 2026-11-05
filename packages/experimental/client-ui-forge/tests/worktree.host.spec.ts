@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { AgentCancelCause } from '@deepseek-ai/dsh-agent'
+import { CREATED_RECORD } from '@deepseek-ai/dsh-experimental-worktree'
 import type {} from '@deepseek-ai/dsh-experimental-forge-session'
 import SessionStore, { appendPluginRecord, SessionId } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
@@ -43,6 +44,18 @@ async function folded(): Promise<{ ctx: Context; session: Session; state: () => 
 }
 
 describe('forgeWorktree projection', () => {
+  it('ignores a service creation record without an open request and after the first step', async () => {
+    const { session, state } = await folded()
+    const created = {
+      path: WORKTREE.path, branch: WORKTREE.branch, baseCommit: WORKTREE.baseCommit, repositoryRoot: WORKTREE.repositoryRoot,
+    }
+    appendPluginRecord(session, CREATED_RECORD, created)
+    expect(state().created).toBeNull()
+    appendPluginRecord(session, WORKTREE_RECORD, { action: 'request', from: 'main' })
+    appendPluginRecord(session, CREATED_RECORD, created)
+    expect(state().created).toEqual({ ...created, from: 'main' })
+  })
+
   it('shows clients the created worktree in the Session summary while the Session works in it', async () => {
     const { ctx, session, state } = await folded()
     const published: unknown[] = []

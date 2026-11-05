@@ -824,6 +824,16 @@ describe('forgePanel worktree requests', () => {
     expect(opened.created).toHaveLength(1)
   })
 
+  it('forwards the worktree service\'s cleanup state and answers null without the service', async () => {
+    const { repo } = await project()
+    const without = await open(repo)
+    expect(await without.ctx.forgePanel.worktreeCleanup(without.session, null)).toBeNull()
+    const opened = await open(repo, {}, { worktrees: true })
+    expect(await opened.ctx.forgePanel.worktreeCleanup(opened.session, null)).toBeNull()
+    vi.spyOn(opened.ctx.worktrees, 'cleanupOf').mockResolvedValue({ revision: 3, status: 'removed' })
+    expect(await opened.ctx.forgePanel.worktreeCleanup(opened.session, 3)).toEqual({ revision: 3, status: 'removed' })
+  })
+
   it('refuses worktree requests and restoration without a worktree service, and keeps a waiting message for the withdrawal', async () => {
     const { repo } = await project()
     const opened = await open(repo)

@@ -7,7 +7,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { unsupportedInbox, unsupportedModel } from '@deepseek-ai/dsh-agent-loop-testkit'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
-import SessionStore, { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import SessionStore, { appendPluginRecord, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import * as SessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -22,7 +22,7 @@ import WorkingDirectoryService from '@deepseek-ai/dsh-working-directory'
 import WorkspaceRegistry from '@deepseek-ai/dsh-workspace'
 import { MemoryMediaPool, MemoryStorageBackend } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
 import type {} from '../src/archive.ts'
-import WorktreeService from '../src/index.ts'
+import WorktreeService, { CREATED_RECORD, worktreeProjection } from '../src/index.ts'
 import type { WorktreeCleanup } from '../src/index.ts'
 import * as removal from '../src/removal.ts'
 import { git, repository, UnusedSandbox } from './harness.ts'
@@ -111,7 +111,7 @@ async function persisted(f: Fixture, session: Session): Promise<void> {
 }
 
 /** A live Session whose store entry the test detaches itself, leaving only its persisted log. */
-function detachable(f: Fixture, id: string, meta: { cwd: string }): { session: Session; detach: () => void } {
+function detachable(f: Fixture, id: string, meta: { cwd?: string }): { session: Session; detach: () => void } {
   const session = f.ctx.sessions.prepare(SessionId(id), { meta })
   const detach = f.ctx.sessions.enter(session)
   f.ctx.sessions.announce(session)
@@ -263,6 +263,31 @@ describe('archive-triggered worktree cleanup', () => {
     await expect(access(worktree.path)).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
+  it('retains a checkout while a live fork that moved elsewhere still carries its creation', async () => {
+    const f = await fixture()
+    const seed = f.session.snapshotEvents()
+    const fork = f.ctx.sessions.create(SessionId('fork-elsewhere'), {
+      seed, inheritedEventCount: SessionLogOffset(seed.length), meta: { isSeeded: true, cwd: f.root },
+    })
+    const agent = agentFor(f.ctx, fork)
+    await f.ctx.agents.register(agent)
+    await f.ctx.workingDirectory.set(agent, f.root)
+    expect(f.ctx.workingDirectory.get(fork)).toBe(f.root)
+    await f.ctx.workspaceRegistry.archiveSession(f.session.id)
+    expect(await settled(f)).toMatchObject({ status: 'retained' })
+    expect(removeCheckout).not.toHaveBeenCalled()
+  })
+
+  it('treats a cached cold Session that recorded no directory as working nowhere', async () => {
+    const f = await fixture({ cache: true })
+    const nowhere = detachable(f, 'cold-nowhere', {})
+    await f.ctx.sessionProjectionCache.write(nowhere.session)
+    await persisted(f, nowhere.session)
+    nowhere.detach()
+    await f.ctx.workspaceRegistry.archiveSession(f.session.id)
+    expect(await settled(f)).toMatchObject({ status: 'removed' })
+  })
+
   it('reads a cold Session from its log without the cache', async () => {
     const f = await fixture()
     const borrower = detachable(f, 'cold-borrower', { cwd: f.worktree.path })
@@ -349,6 +374,50 @@ describe('archive-triggered worktree cleanup', () => {
     expect(await settled(f)).toMatchObject({ status: 'removed' })
     // Entry ran after removal, against a directory that no longer exists.
     expect(f.ctx.workingDirectory.get(other)).toBe(f.root)
+  })
+
+  it('registers nothing for a cold Session without creations and ignores an unarchive without an attempt', async () => {
+    const f = await fixture()
+    const cold = detachable(f, 'cold-empty', { cwd: f.root })
+    await persisted(f, cold.session)
+    cold.detach()
+    await f.ctx.workspaceRegistry.archiveSession(cold.session.id)
+    // A cold Session's creations are only known once its log or cache was read, so the placeholder settles to nothing.
+    expect(await settled(f, cold.session)).toBeNull()
+    expect(await f.ctx.worktrees.cleanupOf(cold.session, null)).toBeNull()
+    await f.ctx.workspaceRegistry.unarchiveSession(cold.session.id)
+    expect(f.ctx.workspaceRegistry.archivedSessionIds).not.toContain(cold.session.id)
+  })
+
+  it('retains a checkout for a borrower that appeared between the eligible inspection and the locked recheck', async () => {
+    const f = await fixture()
+    const list = f.ctx.sessionQuery.listSessions.bind(f.ctx.sessionQuery)
+    vi.spyOn(f.ctx.sessionQuery, 'listSessions').mockImplementationOnce(async (...args) => {
+      const records = await list(...args)
+      f.ctx.sessions.create(SessionId('late-borrower'), { meta: { cwd: f.worktree.path } })
+      return records
+    })
+    await f.ctx.workspaceRegistry.archiveSession(f.session.id)
+    expect(await settled(f)).toMatchObject({ status: 'retained' })
+    expect(removeCheckout).not.toHaveBeenCalled()
+    await access(f.worktree.path)
+  })
+
+  it('treats a subagent child whose parent is unknown to the corpus as unarchived', async () => {
+    const f = await fixture()
+    f.ctx.sessions.create(SessionId('orphan-child'), {
+      meta: { cwd: f.worktree.path, origin: 'subagent', parentSession: SessionId('never-existed') },
+    })
+    await f.ctx.workspaceRegistry.archiveSession(f.session.id)
+    expect(await settled(f)).toMatchObject({ status: 'retained' })
+  })
+
+  it('skips a creation record whose payload fails validation', async () => {
+    const f = await fixture()
+    const handle = await f.ctx.sessionProjections.register(worktreeProjection)
+    const before = handle.stateOf(f.session).created
+    appendPluginRecord(f.session, CREATED_RECORD, { path: '', branch: 'x', baseCommit: 'y', repositoryRoot: 'z' })
+    expect(handle.stateOf(f.session).created).toEqual(before)
   })
 
   it('withdraws listeners before draining, so disposal neither fails unrelated access nor serves a stale result', async () => {

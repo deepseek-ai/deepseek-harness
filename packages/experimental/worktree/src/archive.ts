@@ -44,10 +44,11 @@ interface Attempt {
 
 /**
  * Whether `path` is `root` or lies below it. Both are canonical absolute
- * paths of one execution world, so string prefixing is exact.
+ * directories of one execution world without a trailing separator, so string
+ * prefixing is exact.
  */
 function within(root: string, path: string): boolean {
-  return path === root || path.startsWith(root.endsWith('/') ? root : `${root}/`)
+  return path === root || path.startsWith(`${root}/`)
 }
 
 /** Owns pending cleanup, gates directory entry into a checkout being removed, and drains before the service is released. */
@@ -106,13 +107,13 @@ export class WorktreeReclamation {
     const attempt = this.attempts.get(session.id)
     if (attempt === undefined || (revision !== null && revision !== attempt.revision)) return null
     if (revision !== null) await attempt.done
-    if (this.lifetime.signal.aborted) return null
+    // A cold Session without creations withdraws its placeholder while it settles.
+    if (this.lifetime.signal.aborted || this.attempts.get(session.id) !== attempt) return null
     return { revision: attempt.revision, status: attempt.status }
   }
 
   /** Register attempts for the Session's own creations and return; every inspection runs in the background. */
   private schedule(sessionId: SessionId): void {
-    if (this.lifetime.signal.aborted) return
     const live = this.ctx.sessions.get(sessionId)
     // A cold Session's creations come from the persisted cache or its log, below.
     const owned = live === undefined ? undefined : this.projection.stateOf(live).created.filter(creation => creation.owned)
@@ -122,19 +123,16 @@ export class WorktreeReclamation {
       revision: ++this.revision, status: 'scheduled', cancelled: false, done: Promise.resolve(),
     }
     this.attempts.set(sessionId, attempt)
+    // run() settles every outcome into the attempt, so the task never rejects.
     const task = this.run(sessionId, attempt, owned)
     this.pending.add(task)
-    attempt.done = task.then(() => { this.pending.delete(task) }, () => { this.pending.delete(task) })
+    attempt.done = task.then(() => { this.pending.delete(task) })
   }
 
   private async run(sessionId: SessionId, attempt: Attempt, owned: readonly WorktreeCreation[] | undefined): Promise<void> {
     const ctx = this.ctx
     try {
-      let creations = owned
-      if (creations === undefined) {
-        const own = await this.creationsOf(sessionId, undefined)
-        creations = own === undefined ? [] : own.filter(creation => creation.owned)
-      }
+      const creations = owned ?? (await this.creationsOf(sessionId, undefined)).filter(creation => creation.owned)
       const candidate = creations[0]?.worktree
       if (candidate === undefined) {
         this.attempts.delete(sessionId)
@@ -162,19 +160,21 @@ export class WorktreeReclamation {
     })
   }
 
-  /** Remove under the path lock; a second use check runs inside it, after competing operations settled. */
+  /**
+   * Remove under the path lock; a second use check runs inside it, after
+   * competing operations settled. A Session has one attempt and unarchiving
+   * awaits it, so removals of one path never overlap.
+   */
   private async remove(session: Session, worktree: CreatedWorktree, attempt: Attempt): Promise<boolean> {
-    const previous = this.removing.get(worktree.path) ?? Promise.resolve()
-    const operation = previous.then(() => this.host.exclusiveCheckout(worktree.path, async () => {
+    const operation = this.host.exclusiveCheckout(worktree.path, async () => {
       if (attempt.cancelled || !await this.unused(worktree, undefined)) return false
       return await this.host.removeCheckout(session, worktree, this.lifetime.signal, () => !attempt.cancelled)
-    }))
-    const settled = operation.then(() => {}, () => {})
-    this.removing.set(worktree.path, settled)
+    })
+    this.removing.set(worktree.path, operation.then(() => {}, () => {}))
     try {
       return await operation
     } finally {
-      if (this.removing.get(worktree.path) === settled) this.removing.delete(worktree.path)
+      this.removing.delete(worktree.path)
     }
   }
 
@@ -199,9 +199,9 @@ export class WorktreeReclamation {
       if (archived.has(id) || ancestorArchived(record.header, headers, archived)) continue
       const live = ctx.sessions.get(id)
       const cwd = live === undefined ? await this.directoryOf(record.header) : ctx.workingDirectory.get(live)
-      if (cwd !== undefined && cwd !== null && within(worktree.path, cwd)) return false
+      if (cwd !== null && within(worktree.path, cwd)) return false
       const creations = live === undefined ? await this.creationsOf(id, record.header) : this.projection.stateOf(live).created
-      if (creations?.some(creation => creation.worktree.path === worktree.path)) return false
+      if (creations.some(creation => creation.worktree.path === worktree.path)) return false
       signal.throwIfAborted()
     }
     return true
@@ -214,8 +214,8 @@ export class WorktreeReclamation {
     return await this.ctx.sessionQuery.inspectSession(sessionId, session => session, this.lifetime.signal)
   }
 
-  /** The recorded directory of a cold Session: the persisted cache when it has one, else its log. */
-  private async directoryOf(header: SessionHeader): Promise<string | null | undefined> {
+  /** The recorded directory of a cold Session, null when its log recorded none: the persisted cache when it has one, else its log. */
+  private async directoryOf(header: SessionHeader): Promise<string | null> {
     const cached = this.ctx.get('sessionProjectionCache')?.cachedSnapshot(header, ['workingDirectory'])?.values.workingDirectory
     if (cached !== undefined) return cached
     return await this.ctx.sessionQuery.inspectSession(header.id, session => this.ctx.workingDirectory.get(session), this.lifetime.signal)
@@ -224,7 +224,7 @@ export class WorktreeReclamation {
   /** The recorded creations of a cold Session: the persisted cache when it has one, else its log. */
   private async creationsOf(
     sessionId: SessionId, header: SessionHeader | undefined,
-  ): Promise<readonly WorktreeCreation[] | undefined> {
+  ): Promise<readonly WorktreeCreation[]> {
     const cached = header === undefined
       ? undefined
       : this.ctx.get('sessionProjectionCache')?.cachedSnapshot(header, ['worktree'])?.values.worktree

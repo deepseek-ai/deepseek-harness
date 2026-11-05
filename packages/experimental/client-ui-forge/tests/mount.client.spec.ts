@@ -889,6 +889,23 @@ describe('archive notices', () => {
     } finally { await f.ctx.fiber.dispose() }
   })
 
+  it('emits nothing when a scheduled cleanup ends removed', async () => {
+    const f = await fixture()
+    try {
+      const settled = vi.fn()
+      const failed = vi.fn()
+      f.ctx.on('workspace/archive-followup-settled', settled)
+      f.ctx.on('workspace/archive-followup-failed', failed)
+      f.forgePanel.worktreeCleanup.mockImplementation(async (_id, revision) => ({ ok: true, value: { revision: 1, status: revision === null ? 'scheduled' : 'removed' } }))
+      expect(await f.ctx.waterfall('workspace/archive-notice', S1, () => Promise.resolve({ text: 'fallback', tone: 'success' as const })))
+        .toEqual({ text: en['toast.archiveCleanupScheduled'], tone: 'success' })
+      await vi.waitFor(() => { expect(f.forgePanel.worktreeCleanup).toHaveBeenCalledTimes(2) })
+      await new Promise(resolve => setTimeout(resolve, 0))
+      expect(settled).not.toHaveBeenCalled()
+      expect(failed).not.toHaveBeenCalled()
+    } finally { await f.ctx.fiber.dispose() }
+  })
+
   it('restores the ordinary notice when a scheduled cleanup ends retained', async () => {
     const f = await fixture()
     try {
