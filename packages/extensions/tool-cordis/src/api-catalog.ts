@@ -1310,6 +1310,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when the Host lacks the Session query, projection cache, storage, or Session store service.'],
       },
       {
+        signature: '@Remote async worktreeCleanup(session: Session, revision: number | null): Promise<WorktreeCleanup | null>',
+        description: 'Read or await the worktree service\'s archive cleanup of the Session\'s checkout.',
+        parameters: [{ name: 'session', description: 'Session whose cleanup is visible to the caller.' }, { name: 'revision', description: 'null reads now; a matching revision waits for completion.' }],
+        returns: 'the cleanup state, or null without a worktree service, an attempt, or a current revision.',
+      },
+      {
         signature: '@Remote async branches(session: Session, signal: AbortSignal): Promise<ForgeBranches>',
         description: 'List the local branches that can start a worktree of the Session\'s current checkout.',
         parameters: [{ name: 'session', description: 'Session whose current directory is listed.' }, { name: 'signal', description: 'request cancellation.' }],
@@ -3080,6 +3086,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'a caller-owned observation lease.',
       },
       {
+        signature: 'inspectSession<T>(sessionId: SessionId, read: (session: Session) => T, signal?: AbortSignal): Promise<T>',
+        description: 'Inspect domain-owned state without attaching or resuming a cold Session. The getter runs synchronously after preparation and must not mutate or retain the Session.',
+        parameters: [{ name: 'sessionId', description: 'logical Session identity.' }, { name: 'read', description: 'domain getter returning detached data.' }, { name: 'signal', description: 'preparation cancellation.' }],
+        returns: 'the getter\'s value at the current live or prepared cut.',
+      },
+      {
         signature: 'abstract searchSessions( request: SessionSearchRequest, exec?: SessionSearchExecContext, ): Promise<SessionSearchPage<SessionSearchHit>>',
         description: 'Search the live-preferred logical corpus and group by session.',
         parameters: [{ name: 'request', description: 'query text, metadata filters, page size, and cursor.' }, { name: 'exec', description: 'optional cancellation control.' }],
@@ -4532,7 +4544,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Validate the current directory and restore the original project when it disappeared.',
         parameters: [{ name: 'agent', description: 'live or unpublished Agent owning the Session.' }, { name: 'signal', description: 'cancellation for filesystem inspection.' }],
         returns: 'the existing directory; recovery is committed before fulfillment. A notice failure is warned without reverting the committed state.',
-        throws: ['when the original project is also unavailable.'],
+        throws: ['when the original project is also unavailable, or when a `working-directory/access` listener rejects.'],
       },
       {
         signature: 'set(agent: Agent, path: string, signal?: AbortSignal): Promise<string>',
@@ -4719,7 +4731,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: 'archiveSession(sessionId: SessionId, options: ArchiveSessionOptions = {}): Promise<void>',
         description: 'Archive one session durably. The session must exist (live or in session persistence); its workspace accounting — or lack of one — is irrelevant. Without `stopActivity` the session must also be inactive: the `workspace/session-activity` waterfall is asked once, and any reported activity rejects with WorkspaceActiveSessionError before anything is written. With `stopActivity` the archive is written without an activity check, and the `workspace/session-stop` providers are then asked to stop the session\'s work: the durable archive set is what a provider\'s `agent/pre-step` gate reads, so every wake the stops induce is already blocked. Archiving drops the session\'s pin in the same durable write (pinning and archival are mutually exclusive). An already archived id resolves without writing, asking, or stopping.',
         parameters: [{ name: 'sessionId', description: 'The session to archive.' }, { name: 'options', description: 'Whether running work is stopped instead of refusing.' }],
-        returns: 'resolution after durability and, with `stopActivity`, after every stop request was issued.',
+        returns: 'resolution after durability, any stop requests, and follow-up admission.',
       },
       {
         signature: 'unarchiveSession(sessionId: SessionId): Promise<void>',
@@ -4749,8 +4761,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'worktrees',
-    summary: 'Creates retained Git worktrees under the mounted filesystem and sandbox providers.',
-    description: 'Creates retained Git worktrees under the mounted filesystem and sandbox providers.',
+    summary: 'Creates retained Git worktrees under the mounted filesystem and sandbox providers, records each creation in the Session log, and reclaims a clean, unreferenced checkout when the Session that created it is archived.',
+    description: 'Creates retained Git worktrees under the mounted filesystem and sandbox providers, records each creation in the Session log, and reclaims a clean, unreferenced checkout when the Session that created it is archived.',
     methods: [
       {
         signature: 'async create( agent: Agent, request: CreateWorktreeRequest = {}, signal?: AbortSignal, onPhase?: (phase: CreateWorktreePhase) => void, ): Promise<CreatedWorktree>',
@@ -4763,6 +4775,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Check out a removed worktree again at its recorded directory: its branch when the branch still exists, otherwise a new branch of the same name at `baseCommit`. Only the missing target\'s unlocked registration is removed, and an existing directory fails. Changes that were never committed are not recovered. Checkout disables configured clean, smudge, and process filters, as creation does. The calling Session\'s working directory does not change. Failures may retain newly allocated Git/filesystem artifacts.',
         parameters: [{ name: 'agent', description: 'caller whose sandbox policy confines the commands.' }, { name: 'request', description: 'recorded directory, branch, base commit, and source repository root.' }, { name: 'signal', description: 'cancellation of the restoration.' }, { name: 'onPhase', description: 'receives each stage before it begins; it must not throw.' }],
         returns: 'the directory and whether the branch was created again.',
+      },
+      {
+        signature: 'async cleanupOf(session: Session, revision: number | null): Promise<WorktreeCleanup | null>',
+        description: 'Read the archive cleanup of a Session\'s created checkout; waiting never starts one. Absent without the Workspace and query providers.',
+        parameters: [{ name: 'session', description: 'archived Session whose cleanup is read.' }, { name: 'revision', description: 'null reads at once; a matching revision waits for that attempt to settle.' }],
+        returns: 'the attempt state, or null when none exists, the revision was superseded, or the service is stopping.',
       },
     ],
   },
@@ -5475,6 +5493,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'info', description: 'the run\'s identity snapshot (id + meta).' }],
   },
   {
+    name: 'working-directory/access',
+    mode: 'waterfall',
+    signature: '\'working-directory/access\'( request: { agent: Agent; path: string | null; signal: AbortSignal }, next: () => Promise<string>, ): Promise<string>',
+    summary: 'Coordinate directory validation and publication with a resource operation on the directory, such as a checkout being removed.',
+    description: 'Coordinate directory validation and publication with a resource operation on the directory, such as a checkout being removed. A listener that must wait awaits that operation, then calls `next()`; every other listener calls `next()` at once. A rejection fails this access and leaves the recorded directory unchanged; it is not a fallback.',
+    parameters: [{ name: 'request', description: 'owner, requested path (null validates the current directory), and the access\'s cancellation.' }, { name: 'next', description: 'perform validation and commit.' }],
+  },
+  {
     name: 'workspace/session-activity',
     mode: 'waterfall',
     signature: '\'workspace/session-activity\'( request: SessionActivityRequest, next: () => Promise<readonly SessionActivity[]>, ): Promise<readonly SessionActivity[]>',
@@ -5483,12 +5509,36 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'request', description: 'the session about to be archived.' }, { name: 'next', description: 'delegate to the remaining providers.' }],
   },
   {
+    name: 'workspace/session-archived',
+    mode: 'parallel',
+    signature: '\'workspace/session-archived\'(request: SessionActivityRequest): Promise<void> | void',
+    summary: 'Admit optional follow-up work after durable archival and any stop requests.',
+    description: 'Admit optional follow-up work after durable archival and any stop requests. Dispatched inside the registry\'s write queue: a listener registers its work and returns, and runs the work and any unbounded I/O afterwards. Listener failures are logged without undoing archival. Listeners own and drain their background work.',
+    parameters: [{ name: 'request', description: 'newly archived Session; repeated archive requests do not dispatch.' }],
+  },
+  {
     name: 'workspace/session-stop',
     mode: 'parallel',
     signature: '\'workspace/session-stop\'(request: SessionActivityRequest): Promise<void> | void',
     summary: 'Stop a session\'s running work because the caller archived it with `stopActivity`; the archive set is durable when this dispatches.',
     description: 'Stop a session\'s running work because the caller archived it with `stopActivity`; the archive set is durable when this dispatches. Each provider stops its own families — cancelling a turn, its subagent descendants, owned jobs, or active schedules — through the same cancel paths the user\'s own stop actions use, so the session log ends every open turn regularly and a later unarchive can continue the conversation. Listeners issue their stop requests without waiting for running work to settle; a listener may await its own durability barrier. A rejection is logged by the registry and does not undo the archive.',
     parameters: [{ name: 'request', description: 'the session being archived.' }],
+  },
+  {
+    name: 'workspace/session-unarchiving',
+    mode: 'parallel',
+    signature: '\'workspace/session-unarchiving\'(request: SessionActivityRequest): Promise<void> | void',
+    summary: 'Cancel or settle archive follow-up work before making a Session available again.',
+    description: 'Cancel or settle archive follow-up work before making a Session available again. A rejection retains the archived state.',
+    parameters: [{ name: 'request', description: 'Session about to leave the archive set.' }],
+  },
+  {
+    name: 'worktree/cleanup',
+    mode: 'emit',
+    signature: '\'worktree/cleanup\'(info: { sessionId: SessionId; path: string; cleanup: WorktreeCleanup }): void',
+    summary: 'A cleanup attempt changed state.',
+    description: 'A cleanup attempt changed state. Fires once at admission with `scheduled` and once at settlement with the final status.',
+    parameters: [{ name: 'info', description: 'the archived Session, the checkout, and the attempt state.' }],
   },
 ]
 
@@ -10441,6 +10491,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'WorkspaceView',
     declaration: 'export interface WorkspaceView {\n    readonly workspaceId: WorkspaceId;\n    readonly path: string;\n    readonly title: string;\n    readonly sessionIds: readonly SessionId[];\n    readonly createdAt: string;\n    readonly updatedAt: string;\n}',
+  },
+  {
+    name: 'WorktreeCleanup',
+    declaration: 'export interface WorktreeCleanup {\n    readonly revision: number;\n    readonly status: \'scheduled\' | \'retained\' | \'removed\' | \'failed\';\n}',
   },
 ]
 

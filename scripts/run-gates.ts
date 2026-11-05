@@ -421,6 +421,7 @@ function sharedHygieneGates(): Gate[] {
     pnpmScript('plugin-record-callers', 'verify-plugin-record-callers', { label: 'plugin record callers' }),
     pnpmScript('no-unknown-casts', 'verify-no-unknown-casts', { label: 'no new unknown casts' }),
     pnpmScript('no-top-level-await', 'verify-no-top-level-await', { label: 'no module-scope await' }),
+    pnpmScript('plugin-entry-exports', 'verify-plugin-entry-exports', { label: 'plugin entry exports' }),
   ]
 }
 

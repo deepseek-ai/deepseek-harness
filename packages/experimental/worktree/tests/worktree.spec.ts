@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { access, mkdir, readdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { join, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { pluginRecordOf } from '@deepseek-ai/dsh-session'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import WorktreeService from '../src/index.ts'
@@ -38,6 +39,10 @@ describe('creating and entering retained worktrees', () => {
     const result = await ctx.worktrees.create(agent, { name: 'topic' })
     expect(result).toEqual({ path: join(root, '.agents/worktrees/topic'), branch: 'topic', baseCommit, repositoryRoot: root })
     expect(ctx.workingDirectory.get(agent.session)).toBe(result.path)
+    const events = agent.session.snapshotEvents()
+    const created = events.findIndex(event => pluginRecordOf(event)?.type === 'plugin:worktree/created')
+    expect(created).toBeGreaterThan(events.findIndex(event => event.type === 'working-directory/change'))
+    expect(pluginRecordOf(events[created]!)?.data).toEqual(result)
     expect(await git(result.path, 'symbolic-ref', '--short', 'HEAD')).toBe('topic')
     expect(await contents(join(result.path, 'tracked.txt'))).toBe('initial\n')
     expect(await git(root, 'show', ':tracked.txt')).toBe('staged')
