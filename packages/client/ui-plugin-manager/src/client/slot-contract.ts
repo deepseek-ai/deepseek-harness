@@ -9,7 +9,7 @@
  * `import type` and registers through `ctx.slots`; it never imports this
  * package at runtime.
  *
- * A contributed tab, such as Discover, installs through the page's own dialog.
+ * A contributed tab, such as Discover, installs and updates through the page's own dialogs.
  *
  * Entries accept `page` for the form with its own save control and `summary`
  * for an official card's one-liner or a row's missing-description fallback.
@@ -91,6 +91,16 @@ export interface PluginTabInstall {
   readonly version: string
 }
 
+/** A newer Git version of an installed bundle that a tab asks the Plugins page to update to. */
+export interface PluginTabUpdate {
+  /** npm package name of the installed bundle. */
+  readonly packageName: string
+  /** The target version. */
+  readonly version: string
+  /** The Git spec that installs `version`, pinned to a full commit of the repository directory the bundle came from. */
+  readonly spec: string
+}
+
 /** Owner props of a page tab another plugin contributes, such as Discover. */
 export interface PluginTabProps {
   /**
@@ -99,6 +109,13 @@ export interface PluginTabProps {
    * @param target - the spec, optional registry, and display text.
    */
   readonly install: (target: PluginTabInstall) => void
+  /**
+   * Open the page's update dialog at its confirmation for a bundle the Host lists with `update: 'git'`, from the
+   * version the page lists; nothing opens before the page has listed the bundle or while another update runs. The
+   * update removes the installed version, installs the target, and installs the removed version again when that fails.
+   * @param target - the package, the target version, and its Git spec.
+   */
+  readonly update: (target: PluginTabUpdate) => void
   /**
    * Switch to the Installed tab and open a bundle's page, whose back button returns to the calling tab.
    * @param packageName - npm package name of the bundle.
@@ -118,8 +135,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'plugins.add.actions': { kind: 'list'; scope: 'root'; owner: PluginAddActionsProps }
     /**
      * Tabs after the page's own Installed tab, such as Discover: `label` names the tab and `order` places it. The
-     * page renders the selected entry under its header and tabs; the entry draws its own content and installs
-     * through the owner's `install`.
+     * page renders the selected entry under its header and tabs; the entry draws its own content and installs and
+     * updates through the owner's `install` and `update`.
      */
     'plugins.tab': { kind: 'list'; scope: 'root'; owner: PluginTabProps }
     /** Optional guidance after the user enables a bundle from the list, keyed by npm package name. */

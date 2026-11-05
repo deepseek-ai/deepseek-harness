@@ -56,7 +56,7 @@ With the provider mounted, a command runs under the mode you resolve per call. E
 
 An unsupported platform or an unusable runner fails closed: `confine()` rejects with `SANDBOX_UNAVAILABLE` and names the runner options for the platform, and the consumer surfaces that error rather than running the command unconfined. A runner that starts but refuses its profile is identified by its fatal stderr signature and exit code, so a broken sandbox is not mistaken for a denied command. The `runnerCommand` override is an operator assertion: it skips functional probes and assumes the configured runner implements the bwrap-compatible profile honestly.
 
-Seatbelt, bwrap, and Landlock include the policy's explicit `additionalWritableRoots` under `workspace-write`. Read-only ignores those grants. Invalid extra directories raise `SANDBOX_INVALID_ROOT` before the command starts.
+Seatbelt, bwrap, and Landlock include the policy's explicit `additionalWritableRoots` under `workspace-write`. Read-only ignores those grants. Missing paths, non-directories, symlinked directories, and other inspection failures raise `SANDBOX_INVALID_ROOT` before the command starts. The Windows ACL backend does not inspect these extra roots and keeps workspace and private-temp access only.
 
 -----
 
@@ -130,7 +130,7 @@ No direct invalidation; the named consumers own any request-prefix changes.
 
 These limits define when the provider is a poor fit or needs special operational care. They are current package constraints, not a general platform comparison or a task backlog.
 
-- **Windows extra roots** — Windows ACL rejects every workspace-write subprocess carrying extra directories with `SANDBOX_UNSUPPORTED_POLICY`, before grants or child creation. Filesystem tools can enforce these grants independently. Remove the extra grants or use a supported host for process operations.
+- **Windows extra roots** — Additional directory grants apply to the harness `write` and `edit` tools only. PowerShell, terminals, PTC, and other sandboxed processes retain workspace and private-temp access under `workspace-write`. Extra grants do not change their ACLs or block their execution; see the [decision](../../../.agents/notes/implemented/architecture/2026-10-29-windows-file-tool-directory-grants.md).
 - **Windows ACL enforcement is partial** — NTFS hard links alias one file object across workspace and external paths, reads stay unconfined, and a tree another AppContainer tool has ACL'd with a package SID is unreadable to the Low-integrity child. The provider reports `enforcement: 'partial'` rather than overstating that boundary as full.
 - **Landlock may be partial** — older supported kernel ABIs confine only the access classes they expose, reported as `enforcement: 'partial'` rather than overstated as full.
 - **Seatbelt depends on deprecated `sandbox-exec`** — macOS still ships it, but this provider cannot replace or probe that private policy engine if Apple removes it.

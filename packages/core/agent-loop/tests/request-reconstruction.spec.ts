@@ -534,7 +534,7 @@ describe('request stability across the loop', () => {
 
   it('starts a new request series when compaction rewrites a retry in the same step', async () => {
     const adapter = new MockAdapter([
-      () => { throw new LlmError('request is too large', 'CONTEXT_LENGTH') },
+      () => { throw LlmError.fromFailure({ message: 'request is too large', code: 'CONTEXT_LENGTH' }) },
       textResponse('recovered'),
     ])
     const ctx = await harness(adapter)

@@ -30,7 +30,7 @@ it('omits development artifacts while preserving executable modules, assets and 
     '@mixmark-io/domino/.yarn/plugins/@yarnpkg/plugin-version.cjs',
     '@mixmark-io/domino/.yarn/versions/release.yml',
     '@deepseek-ai/libreoffice-kit-wasm/assets/soffice.data',
-    '@deepseek-ai/libreoffice-kit-darwin-arm64/bin/libreoffice-kit',
+    '@deepseek-ai/libreoffice-kit-darwin-arm64/bin/dsoffice',
     '.modules.yaml', '.pnpm-workspace-state-v1.json', '.bin/tool', '.pnpm/cache',
   ]
   const retained = [
@@ -50,9 +50,15 @@ it('omits development artifacts while preserving executable modules, assets and 
     '@mixmark-io/domino/LICENSE', '@mixmark-io/domino/package.json',
     'example/.yarn/runtime.cjs', '@mixmark-io/domino/.yarn-data.json',
     '@img/sharp-win32-x64/lib/libvips-42.dll',
-    '@deepseek-ai/libreoffice-kit-win32-x64/bin/libreoffice-kit.exe',
+    '@deepseek-ai/libreoffice-kit-win32-x64/bin/dsoffice.exe',
     '@deepseek-ai/libreoffice-kit-win32-x64/sources/core-source.json',
     '@deepseek-ai/libreoffice-kit-win32-x64/licenses/MPL-2.0.txt',
+    '@deepseek-ai/dsh/lib/index.js', '@deepseek-ai/dsh/lib/bin.js',
+    '@deepseek-ai/dsh-session/lib/index.js',
+    '@deepseek-ai/dsh/src/bin.ts', '@deepseek-ai/dsh/docs/architecture.md',
+    '@deepseek-ai/dsh/docs/upgrade-guide/v0.2.0/example/guide.md',
+    '@deepseek-ai/dsh-session/src/index.ts',
+    '@deepseek-ai/dsh-client-ui-chat/src/client/Page.tsx',
   ]
   try {
     const runtime = runtimeFixture(source)

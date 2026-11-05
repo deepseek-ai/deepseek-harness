@@ -98,13 +98,15 @@
 }
 
 /* Beside a preview in a row from FileNavigator `FILL_BELOW` on, the navigator
-   is a raised card inset by the tree body's own 8px so its corners show, with
-   the floating dock panel's surface (ui-dockkit `.float`) at a radius sized
-   for a panel this narrow. */
+   is a raised card inset by the tree body's own 8px so its corners show, at a
+   radius sized for a panel this narrow. The layer-1 background separates the
+   card in dark mode; its shadow is `--dsw-elevation-prominent` with the l2
+   hairline, l3 in dark mode as on menu cards (ui-theme
+   styles/gradient-shadow-text.css). */
 @media (width >= 768px) {
   .push,
   .overlay {
-    background: var(--dsw-alias-bg-layer-2);
+    background: var(--dsw-alias-bg-layer-1);
     border: 0;
     border-radius: var(--dsw-radius-lg);
     --dsw-elevation-stroke-color: var(--dsw-alias-border-l2);
@@ -135,11 +137,7 @@
 
   :global(body[data-ds-dark-theme]) .push,
   :global(body[data-ds-dark-theme]) .overlay {
-    background: var(--dsw-alias-bg-base);
-    box-shadow:
-      var(--dsw-elevation-stroke),
-      0 3px 8px 0 color-mix(in srgb, var(--dsw-static-neutral-00) 8%, transparent),
-      0 0 20px 0 color-mix(in srgb, var(--dsw-static-neutral-00) 6%, transparent);
+    --dsw-elevation-stroke-color: var(--dsw-alias-border-l3);
   }
 
   /* The bar stops where the card's corners curve, so they do not clip it. */

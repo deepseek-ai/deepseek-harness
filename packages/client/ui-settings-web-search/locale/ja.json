@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Web 検索と取得の設定",
-    "description": "Web 検索と Web 取得のプロバイダーを選択し、DeepSeek プロバイダーのキー、サービスアドレス、上限を設定します。"
+    "description": "Web 検索と Web 取得のプロバイダーを選択し、DeepSeek プロバイダーの課金方法、キー、サービスアドレス、上限を設定します。"
   }
 }

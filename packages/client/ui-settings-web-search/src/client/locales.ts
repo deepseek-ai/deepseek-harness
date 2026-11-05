@@ -14,6 +14,8 @@ export type WebSearchSettingsLocaleKey =
   | 'count' | 'countHint'
   | 'overridden' | 'reset' | 'readOnly' | 'unavailable'
   | 'save' | 'saving' | 'saveFailed' | 'invalidNumber' | 'invalidCount'
+  | 'billing' | 'billingAuto' | 'billingAutoHint' | 'billingAccount' | 'billingAccountHint' | 'billingApiKey' | 'billingApiKeyHint'
+  | 'billingAdvancedOverride'
 
 /** English copy. */
 export const en: Record<WebSearchSettingsLocaleKey, string> = {
@@ -42,7 +44,7 @@ export const en: Record<WebSearchSettingsLocaleKey, string> = {
   searchGuideUrl: 'https://api-docs.deepseek.com/guides/search',
   apiKeySet: 'A key is configured.',
   count: 'Results per search',
-  countHint: 'Results returned per query: an integer from 1 to 50, default 10. This controls result count, not search calls. web_search keeps no more sources than its own result limit.',
+  countHint: 'Results returned per search: 1 to 50, default 10.',
   overridden: 'Overridden',
   reset: 'Reset to default',
   readOnly: 'This deployment stores settings read-only.',
@@ -52,6 +54,14 @@ export const en: Record<WebSearchSettingsLocaleKey, string> = {
   saveFailed: 'The deployment did not accept these values; they were left for you to correct.',
   invalidNumber: 'Enter a number, or leave blank to use the default.',
   invalidCount: 'Enter an integer from 1 to 50, or leave blank to use the default.',
+  billing: 'Billing',
+  billingAuto: 'Automatic',
+  billingAutoHint: "Follows the conversation's DeepSeek account or API key; with other models, uses the API key first, then the signed-in account.",
+  billingAccount: 'Signed-in DeepSeek account',
+  billingAccountHint: 'Requires signing in to DeepSeek.',
+  billingApiKey: 'DeepSeek API key',
+  billingApiKeyHint: 'Uses the API key from the Models page; set one first.',
+  billingAdvancedOverride: 'Overridden by {fields}',
 }
 
 /** Simplified Chinese copy. */
@@ -81,7 +91,7 @@ export const zh: Record<WebSearchSettingsLocaleKey, string> = {
   searchGuideUrl: 'https://api-docs.deepseek.com/zh-cn/guides/search',
   apiKeySet: '已配置密钥。',
   count: '每次搜索结果数',
-  countHint: '每个查询返回的结果条数，须为 1–50 的整数，默认 10；不控制搜索调用次数。web_search 保留的来源数不超过其自身的结果上限。',
+  countHint: '每次搜索返回的结果条数，1–50，默认 10。',
   overridden: '已覆盖',
   reset: '恢复默认',
   readOnly: '本部署的设置为只读。',
@@ -91,6 +101,14 @@ export const zh: Record<WebSearchSettingsLocaleKey, string> = {
   saveFailed: '本部署没有接受这些值，已保留供你修改。',
   invalidNumber: '请填数字；留空表示使用默认值。',
   invalidCount: '请填 1–50 的整数；留空表示使用默认值。',
+  billing: '计费方式',
+  billingAuto: '自动',
+  billingAutoHint: '跟随当前会话的 DeepSeek 账号或 API Key；会话用其他模型时，优先用 API Key，没有则用已登录账号。',
+  billingAccount: '已登录的 DeepSeek 账号',
+  billingAccountHint: '需要先登录 DeepSeek 账号。',
+  billingApiKey: 'DeepSeek API Key',
+  billingApiKeyHint: '使用「模型」页配置的 API Key，需要先配置。',
+  billingAdvancedOverride: '已被 {fields} 覆盖',
 }
 
 /**
@@ -129,7 +147,7 @@ export const ja = {
   'searchGuideUrl': 'https://api-docs.deepseek.com/guides/search',
   'apiKeySet': 'キーが設定されています。',
   'count': '検索あたりの結果数',
-  'countHint': 'クエリごとに返される結果数: 1〜50 の整数、デフォルトは 10 です。これは結果数であり、検索呼び出し数ではありません。web_search は自身の結果上限を超えるソースを保持しません。',
+  'countHint': '検索ごとに返す結果数です。1〜50、既定値は 10 です。',
   'overridden': '上書き済み',
   'reset': 'デフォルトに戻す',
   'readOnly': 'このデプロイでは設定は読み取り専用で保存されます。',
@@ -139,6 +157,14 @@ export const ja = {
   'saveFailed': 'デプロイがこれらの値を受け入れませんでした。修正用に残されています。',
   'invalidNumber': '数値を入力するか、デフォルトを使用するには空欄にしてください。',
   'invalidCount': '1〜50 の整数を入力するか、デフォルトを使用するには空欄にしてください。',
+  'billing': '課金方法',
+  'billingAuto': '自動',
+  'billingAutoHint': '会話の DeepSeek アカウントまたは API キーに従います。他のモデルでは API キーを優先し、ない場合はログイン中のアカウントを使います。',
+  'billingAccount': 'ログイン中の DeepSeek アカウント',
+  'billingAccountHint': 'DeepSeek へのログインが必要です。',
+  'billingApiKey': 'DeepSeek API キー',
+  'billingApiKeyHint': 'モデルページの API キーを使います。先に設定してください。',
+  'billingAdvancedOverride': '{fields} により上書き済み',
 } satisfies Record<keyof typeof en, string>
 
 /** Spanish dictionary, checked against the English keys. */
@@ -168,7 +194,7 @@ export const es = {
   searchGuideUrl: 'https://api-docs.deepseek.com/guides/search',
   apiKeySet: 'Se configura una clave.',
   count: 'Resultados por búsqueda',
-  countHint: 'Resultados devueltos por consulta: un número entero del 1 al 50, valor predeterminado 10. Esto controla el recuento de resultados, no las llamadas de búsqueda. web_search no guarda más fuentes que su propio límite de resultados.',
+  countHint: 'Resultados devueltos por búsqueda: de 1 a 50, predeterminado 10.',
   overridden: 'Anulado',
   reset: 'Restablecer los valores predeterminados',
   readOnly: 'Esta implementación almacena configuraciones de solo lectura.',
@@ -178,6 +204,14 @@ export const es = {
   saveFailed: 'El despliegue no aceptó estos valores; quedaron para que usted los corrigiera.',
   invalidNumber: 'Ingrese un número o déjelo en blanco para usar el valor predeterminado.',
   invalidCount: 'Ingrese un número entero del 1 al 50 o déjelo en blanco para usar el valor predeterminado.',
+  billing: 'Facturación',
+  billingAuto: 'Automática',
+  billingAutoHint: 'Sigue la cuenta o la clave de API de DeepSeek de la conversación; con otros modelos, usa primero la clave de API y luego la cuenta conectada.',
+  billingAccount: 'Cuenta de DeepSeek conectada',
+  billingAccountHint: 'Requiere iniciar sesión en DeepSeek.',
+  billingApiKey: 'Clave de API de DeepSeek',
+  billingApiKeyHint: 'Usa la clave de API de la página Modelos; configúrela primero.',
+  billingAdvancedOverride: 'Anulado por {fields}',
 } satisfies Record<keyof typeof en, string>
 
 /** French dictionary, checked against the English keys. */
@@ -207,7 +241,7 @@ export const fr = {
   searchGuideUrl: 'https://api-docs.deepseek.com/guides/search',
   apiKeySet: 'Une clé est configurée.',
   count: 'Résultats par recherche',
-  countHint: 'Résultats renvoyés par requête : un nombre entier de 1 à 50, 10 par défaut. Cela contrôle le nombre de résultats, pas les appels de recherche. web_search ne conserve pas plus de sources que sa propre limite de résultats.',
+  countHint: 'Résultats renvoyés par recherche : de 1 à 50, 10 par défaut.',
   overridden: 'Remplacé',
   reset: 'Réinitialiser aux valeurs par défaut',
   readOnly: 'Ce déploiement stocke les paramètres en lecture seule.',
@@ -217,6 +251,14 @@ export const fr = {
   saveFailed: "Le déploiement n'a pas accepté ces valeurs ; ils vous ont été laissés à corriger.",
   invalidNumber: 'Entrez un numéro ou laissez ce champ vide pour utiliser la valeur par défaut.',
   invalidCount: 'Entrez un nombre entier compris entre 1 et 50 ou laissez vide pour utiliser la valeur par défaut.',
+  billing: 'Facturation',
+  billingAuto: 'Automatique',
+  billingAutoHint: "Suit le compte ou la clé API DeepSeek de la conversation ; avec d'autres modèles, utilise d'abord la clé API, puis le compte connecté.",
+  billingAccount: 'Compte DeepSeek connecté',
+  billingAccountHint: 'Nécessite une connexion à DeepSeek.',
+  billingApiKey: 'Clé API DeepSeek',
+  billingApiKeyHint: "Utilise la clé API de la page Modèles ; définissez-en une d'abord.",
+  billingAdvancedOverride: 'Remplacé par {fields}',
 } satisfies Record<keyof typeof en, string>
 
 /** German dictionary, checked against the English keys. */
@@ -246,7 +288,7 @@ export const de = {
   searchGuideUrl: 'https://api-docs.deepseek.com/guides/search',
   apiKeySet: 'Ein Schlüssel ist konfiguriert.',
   count: 'Ergebnisse pro Suche',
-  countHint: 'Pro Abfrage zurückgegebene Ergebnisse: eine Ganzzahl von 1 bis 50, Standard 10. Dies steuert die Ergebnisanzahl, nicht Suchaufrufe. web_search behält nicht mehr Quellen als sein eigenes Ergebnislimit.',
+  countHint: 'Ergebnisse pro Suche: 1 bis 50, Standard 10.',
   overridden: 'Überschrieben',
   reset: 'Auf Standard zurücksetzen',
   readOnly: 'Diese Bereitstellung speichert Einstellungen schreibgeschützt.',
@@ -256,6 +298,14 @@ export const de = {
   saveFailed: 'Die Bereitstellung hat diese Werte nicht akzeptiert. Sie mussten sie korrigieren.',
   invalidNumber: 'Geben Sie eine Zahl ein oder lassen Sie das Feld leer, um den Standardwert zu verwenden.',
   invalidCount: 'Geben Sie eine Ganzzahl zwischen 1 und 50 ein oder lassen Sie das Feld leer, um den Standardwert zu verwenden.',
+  billing: 'Abrechnung',
+  billingAuto: 'Automatisch',
+  billingAutoHint: 'Folgt dem DeepSeek-Konto oder API-Schlüssel der Unterhaltung; bei anderen Modellen zuerst der API-Schlüssel, dann das angemeldete Konto.',
+  billingAccount: 'Angemeldetes DeepSeek-Konto',
+  billingAccountHint: 'Erfordert eine Anmeldung bei DeepSeek.',
+  billingApiKey: 'DeepSeek-API-Schlüssel',
+  billingApiKeyHint: 'Verwendet den API-Schlüssel der Seite Modelle; legen Sie zuerst einen fest.',
+  billingAdvancedOverride: 'Überschrieben durch {fields}',
 } satisfies Record<keyof typeof en, string>
 
 /** Russian dictionary, checked against the English keys. */
@@ -285,7 +335,7 @@ export const ru = {
   searchGuideUrl: 'https://api-docs.deepseek.com/guides/search',
   apiKeySet: 'Ключ настроен.',
   count: 'Результаты по поиску',
-  countHint: 'Результаты, возвращаемые по запросу: целое число от 1 до 50, по умолчанию 10. Это контролирует количество результатов, а не поисковые вызовы. web_search хранит не больше источников, чем его собственный лимит результатов.',
+  countHint: 'Число результатов на поиск: от 1 до 50, по умолчанию 10.',
   overridden: 'Переопределено',
   reset: 'Сбросить настройки по умолчанию',
   readOnly: 'В этом развертывании параметры сохраняются только для чтения.',
@@ -295,6 +345,14 @@ export const ru = {
   saveFailed: 'Развертывание не приняло эти значения; их оставили вам на исправление.',
   invalidNumber: 'Введите число или оставьте поле пустым, чтобы использовать значение по умолчанию.',
   invalidCount: 'Введите целое число от 1 до 50 или оставьте поле пустым, чтобы использовать значение по умолчанию.',
+  billing: 'Оплата',
+  billingAuto: 'Автоматически',
+  billingAutoHint: 'Следует аккаунту или ключу API DeepSeek из разговора; с другими моделями сначала ключ API, затем активный аккаунт.',
+  billingAccount: 'Активный аккаунт DeepSeek',
+  billingAccountHint: 'Требуется вход в DeepSeek.',
+  billingApiKey: 'Ключ API DeepSeek',
+  billingApiKeyHint: 'Использует ключ API со страницы моделей; сначала задайте его.',
+  billingAdvancedOverride: 'Переопределено: {fields}',
 } satisfies Record<keyof typeof en, string>
 
 /** Portuguese dictionary, checked against the English keys. */
@@ -324,7 +382,7 @@ export const pt = {
   searchGuideUrl: 'https://api-docs.deepseek.com/guides/search',
   apiKeySet: 'Uma chave está configurada.',
   count: 'Resultados por pesquisa',
-  countHint: 'Resultados retornados por consulta: um número inteiro de 1 a 50, padrão 10. Isso controla a contagem de resultados, não as chamadas de pesquisa. web_search não mantém mais fontes do que seu próprio limite de resultados.',
+  countHint: 'Resultados retornados por pesquisa: de 1 a 50, padrão 10.',
   overridden: 'Substituído',
   reset: 'Redefinir para o padrão',
   readOnly: 'Esta implantação armazena configurações somente leitura.',
@@ -334,4 +392,12 @@ export const pt = {
   saveFailed: 'A implantação não aceitou esses valores; eles foram deixados para você corrigir.',
   invalidNumber: 'Insira um número ou deixe em branco para usar o padrão.',
   invalidCount: 'Insira um número inteiro de 1 a 50 ou deixe em branco para usar o padrão.',
+  billing: 'Cobrança',
+  billingAuto: 'Automática',
+  billingAutoHint: 'Segue a conta ou a chave de API da DeepSeek da conversa; com outros modelos, usa primeiro a chave de API e depois a conta conectada.',
+  billingAccount: 'Conta DeepSeek conectada',
+  billingAccountHint: 'Requer login na DeepSeek.',
+  billingApiKey: 'Chave de API da DeepSeek',
+  billingApiKeyHint: 'Usa a chave de API da página Modelos; defina uma primeiro.',
+  billingAdvancedOverride: 'Substituído por {fields}',
 } satisfies Record<keyof typeof en, string>

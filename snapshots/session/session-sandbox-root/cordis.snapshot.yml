@@ -45,7 +45,6 @@
   config:
     mode: !!js process.env.DSH_PERMISSION_MODE ?? 'workspace-write'
     workspaceRoot: /tmp
-    additionalWritableRoots: !!js "[process.cwd() + '/extra']"
 
 - id: headless-runner
   inject: [headlessStartup]
@@ -56,6 +55,8 @@
     permissionMode: workspace-write
 
 - insert:
+    - id: session-write-grant
+      name: '../../../packages/test-support/session-snapshot/tests/fixtures/session-write-grant.ts'
     - id: llm-replay
       name: '@deepseek-ai/dsh-llm-replay'
       config:

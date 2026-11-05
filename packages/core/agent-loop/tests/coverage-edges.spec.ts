@@ -434,7 +434,7 @@ describe('recovery without a retry action', () => {
   it('a completed recovery that returns no action leaves the failed turn terminal', async () => {
     const { LlmError } = await import('@deepseek-ai/dsh-llm')
     const adapter = new MockAdapter([
-      () => { throw new LlmError('down', 'SERVICE_UNAVAILABLE') },
+      () => { throw LlmError.fromFailure({ message: 'down', code: 'SERVICE_UNAVAILABLE' }) },
     ])
     const ctx = await harness(adapter)
     const agent = await ctx.agentLoop.create(SessionId('recovery-no-retry'), { provider: 'mock', model: 'mock' })

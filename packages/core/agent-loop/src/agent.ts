@@ -572,7 +572,7 @@ export class ReactLoopAgent implements Agent {
           )
           signal.throwIfAborted()
           if (action?.kind !== 'retry') {
-            throw new LlmError(finish.failure.message, finish.failure.code, finish.failure)
+            throw LlmError.fromFailure(finish.failure)
           }
           continue
         }

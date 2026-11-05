@@ -53,6 +53,12 @@ profile 目录包含一个 `package.json`，其中记录树外插件依赖，以
 
 `config/examples/` 交付 GitHub 评审 webhook、记忆 MCP 服务器与运行时 Cordis 工具的可选覆盖层。它们绝不属于默认 profile；设置与安全说明由[用户指南](../../docs/user/guide/index.zh.md)和[开发实战指南](../../docs/user/develop/practice/index.zh.md)负责。
 
+## 安装包内容
+
+发布 tarball 在 `lib/` 下携带打包后的运行时，在 `src/` 下携带 TypeScript 源码，在各自描述的文件旁携带声明映射与 JavaScript map，并在 `docs/` 下携带文档。只有 `prepack` 会暂存 `docs/`，`postpack` 又会删除这份副本，因此工作树里的读者看到的始终是检出当前的内容。
+
+`docs/` 包含文档网站的页面与全部升级指南，以及这些页面引用的资产。`docs/upgrade-guide/README.md` 在暂存时生成：它按每个 `v<T>` 目录升级前的版本对指南分组，列出每份指南的标题、中英文描述与相对路径。桌面应用在其 `app.asar` 内携带同样的 `docs/` 与 `src/`。生成的 `persistence-changes/` 记录、`i18n/` 规范与 `*.i18n.yaml` 一致性记录不发布。其中的页面保留仓库的相对链接，因此指向 `../packages/**` 或指向被排除的 `persistence-changes/` 记录的链接只在检出中可解析。
+
 ## 开发
 
 生产运行需要已构建的包与前端产物。请在仓库根目录单独运行 `pnpm run build`，然后使用 `pnpm dsh <args...>` 运行 TypeScript 入口并转发所有参数；模块解析约定以[源码执行参考](reference/README.zh.md#source-execution)为准。
