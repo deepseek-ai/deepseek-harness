@@ -65,7 +65,7 @@ const SHAPES: Record<ChangeRequestTone, ReactNode> = {
   ),
 }
 
-/** Center of each shape's head branch end, which a checks mark replaces. */
+/** Center of each shape's head branch end, which a checks mark covers. */
 const HEAD: Record<ChangeRequestTone, readonly [number, number]> = {
   open: [12, 12.5],
   unknown: [12, 12.5],

@@ -208,13 +208,22 @@ function Lines({ file, text, open, onExpand, split, wrap, review, visible, comme
   const prepared = useMemo(() => segmentsOf(file, lines, open).map((segment): Prepared => segment.kind === 'gap'
     ? segment
     : { ...segment, old: sideSpans(segment.rows, 'old', highlighter), new: sideSpans(segment.rows, 'new', highlighter) }), [file, lines, open, highlighter])
-  const choose = (side: 'L' | 'R', line: number, extend: boolean): void => {
-    if (review === undefined || editing) return
+  // Returns whether the range was accepted; a range across hunks or outside them keeps the previous selection.
+  const choose = (side: 'L' | 'R', line: number, extend: boolean): boolean => {
+    if (review === undefined || editing) return false
     const from = extend && origin.current?.side === side ? origin.current.line : line
     const comment = selectReviewLines(file, side, from, line)
-    if (comment === undefined) return
+    if (comment === undefined) return false
     if (!extend || origin.current?.side !== side) origin.current = { side, line }
     setSelection({ source: review.source, comment })
+    return true
+  }
+  // A drag that began on a hover plus extends through every row with a line on its starting side, wherever the pointer crosses that row.
+  const extendAdd = (buttons: number, old: number | null, next: number | null): void => {
+    const from = origin.current
+    if (dragging.current !== 'add' || buttons !== 1 || from === null) return
+    const line = from.side === 'L' ? old : next
+    if (line !== null) choose(from.side, line, true)
   }
   const selected = (side: 'L' | 'R', line: number | null): boolean => line !== null && selection !== null
     && selection.comment.side === side && line >= selection.comment.startLine && line <= selection.comment.endLine
@@ -227,10 +236,8 @@ function Lines({ file, text, open, onExpand, split, wrap, review, visible, comme
       return <span className={css.number}>{line ?? ''}</span>
     }
     const plus = !selecting && !editing && selection?.comment.side === side && selection.comment.endLine === line
-    return <span className={clsx(css.number, reviewCss.gutter)}
-      onPointerEnter={(event) => {
-        if ((dragging.current === 'gutter' || dragging.current === 'add') && origin.current?.side === side && event.buttons === 1) choose(side, line, true)
-      }}>
+    return <span className={clsx(css.number, reviewCss.gutter)} data-review-side={side}
+      onPointerEnter={(event) => { if (dragging.current === 'gutter' && origin.current?.side === side && event.buttons === 1) choose(side, line, true) }}>
       <button type="button" className={reviewCss.line}
         aria-label={t('review.selectLine', { line: `${side}${line}` })} aria-pressed={selected(side, line)}
         onPointerDown={(event) => {
@@ -262,11 +269,12 @@ function Lines({ file, text, open, onExpand, split, wrap, review, visible, comme
           onPointerDown={(event) => {
             if (event.button !== 0) return
             event.preventDefault()
+            // A refused range keeps the previous selection, which the release must not open.
+            if (!choose(side, line, event.shiftKey)) return
             window.getSelection()?.removeAllRanges()
             setNativeSide(null)
             dragging.current = 'add'
             setSelecting(true)
-            choose(side, line, event.shiftKey)
           }}>
           <IconPlusOutlineRegular size={14} />
         </span>
@@ -311,7 +319,8 @@ function Lines({ file, text, open, onExpand, split, wrap, review, visible, comme
       </button>)
     } else if (columns) {
       for (const [index, pair] of splitRows(segment.rows).entries()) {
-        rows.push(<div key={`${at}-${index}`} className={css.pair} data-diff-pair={pairKind(pair)}>
+        rows.push(<div key={`${at}-${index}`} className={css.pair} data-diff-pair={pairKind(pair)}
+          onPointerEnter={(event) => { extendAdd(event.buttons, pair.left?.no ?? null, pair.right?.no ?? null) }}>
           {cell(pair.left, segment.old, 'L')}{cell(pair.right, segment.new, 'R')}
         </div>)
         if (!inserted && endsAt(pair.left?.no ?? null, pair.right?.no ?? null)) {
@@ -322,8 +331,11 @@ function Lines({ file, text, open, onExpand, split, wrap, review, visible, comme
       }
     } else {
       for (const [index, row] of segment.rows.entries()) {
-        rows.push(<div key={`${at}-${index}`} className={clsx(css.line, css[row.kind], (selected('L', row.old) || selected('R', row.new)) && (editing || nativeSide === null) && reviewCss.selected)} data-diff-line={row.kind}>
-          {singleSide !== 'R' && number('L', row.old, row.kind === 'del')}{singleSide !== 'L' && number('R', row.new, row.kind !== 'del')}<span className={css.sign}>{SIGN[row.kind]}</span>
+        // Both numbers place their plus in the sign column, so a row showing the labeled plus offers no hover plus.
+        const labeled = !selecting && !editing && endsAt(row.old, row.new)
+        rows.push(<div key={`${at}-${index}`} className={clsx(css.line, css[row.kind], (selected('L', row.old) || selected('R', row.new)) && (editing || nativeSide === null) && reviewCss.selected)} data-diff-line={row.kind}
+          onPointerEnter={(event) => { extendAdd(event.buttons, row.old, row.new) }}>
+          {singleSide !== 'R' && number('L', row.old, row.kind === 'del' && !labeled)}{singleSide !== 'L' && number('R', row.new, row.kind !== 'del' && !labeled)}<span className={css.sign}>{SIGN[row.kind]}</span>
           <Code text={row.text} old={row.old} next={row.new} spans={row.kind === 'del' ? segment.old?.get(row.old) : segment.new?.get(row.new)} />
         </div>)
         if (!inserted && endsAt(row.old, row.new)) {

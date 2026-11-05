@@ -1174,9 +1174,14 @@ it.skipIf(MODE === 'record')('uses horizontal arrows to navigate files while pre
 
 it.skipIf(MODE === 'record')('opens a comment from the hover plus in one press without covering the line number or the code', async () => {
   const { scaffold, page, project, tripwire } = await launchPanel('web-e2e-forge-hover-plus')
+  // notes.txt changes into context, a deletion followed by context, and an addition, so unified rows show both numbers.
+  await writeFile(join(project, 'notes.txt'), ['keep 1', 'keep 2', 'drop 3', 'keep 4', 'keep 5', 'keep 6'].map(line => `${line}\n`).join(''))
+  await git(project, 'add', 'notes.txt')
+  await git(project, 'commit', '--quiet', '-m', 'notes')
   await git(project, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
   await git(project, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
   await writeFile(join(project, 'README.md'), `changed\n${Array.from({ length: 8 }, (_, line) => `line ${line + 2}\n`).join('')}`)
+  await writeFile(join(project, 'notes.txt'), ['keep 1', 'keep 2', 'keep 4', 'keep 5', 'added', 'keep 6'].map(line => `${line}\n`).join(''))
   const { settled } = await sendPrompt(page, scaffold)
   await settled
   await page.locator('[data-forge-header]').click()
@@ -1240,6 +1245,32 @@ it.skipIf(MODE === 'record')('opens a comment from the hover plus in one press w
   expect(await plus('R4').isVisible()).toBe(true)
   await number('R4').click()
   expect(await number('R4').getAttribute('aria-pressed')).toBe('true')
+
+  // With both numbers shown, a deleted line's plus sits where a context line's does: in the sign column.
+  const notes = view.locator('[data-forge-diff-file="notes.txt"]')
+  const notesPlus = (name: string) => notes.locator(`[data-review-add="${name}"]`)
+  const notesCode = (side: 'old' | 'new', line: number) => notes.locator(`[data-review-code][data-${side}-line="${line}"]`)
+  await notesCode('new', 3).hover()
+  const contextPlus = await notesPlus('R3').boundingBox()
+  await notesCode('old', 3).hover()
+  const deletedPlus = await notesPlus('L3').boundingBox()
+  const nextRow = await notesCode('old', 4).boundingBox()
+  if (contextPlus === null || deletedPlus === null || nextRow === null) throw new Error('The pluses and the next row must be rendered')
+  expect(deletedPlus.x).toBe(contextPlus.x)
+  // A drag from the deleted line's plus extends through the context row below it on the old side.
+  const x = deletedPlus.x + deletedPlus.width / 2
+  await page.mouse.move(x, deletedPlus.y + deletedPlus.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(x, nextRow.y + nextRow.height / 2, { steps: 5 })
+  await page.mouse.up()
+  await notes.getByRole('region', { name: '评论 L3–4', exact: true }).waitFor()
+  await notes.getByRole('button', { name: '取消', exact: true }).click()
+  await notes.getByRole('textbox').waitFor({ state: 'detached' })
+  // The labeled plus of a left context line stays reachable; Playwright refuses a covered target.
+  await notes.getByRole('button', { name: '选择第 L2 行', exact: true }).click()
+  expect((await notes.getByRole('button', { name: '添加评论', exact: true }).boundingBox())?.x).toBe(contextPlus.x)
+  await notes.getByRole('button', { name: '添加评论', exact: true }).click()
+  await notes.getByRole('region', { name: '评论 L2', exact: true }).waitFor()
   expect(tripwire.pageErrors).toEqual([])
   expect(tripwire.warnings).toEqual([])
 })
