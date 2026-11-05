@@ -9,7 +9,7 @@ description: "依赖 macOS 全局 no-drag 排除的自定义 Client 浮层必须
 
 ## 变更
 
-从 0.2.2-alpha.2 升级后，macOS Desktop 仅自动排除 `data-window-drag` 行或 `data-window-drag-controls` 范围内的交互控件。此前，应用中任意位置匹配的控件和 ARIA role 都会获得 `no-drag`。自定义 Client 插件若依赖该规则使覆盖可拖动页头的内容保持可交互，现在必须声明排除。未显式声明区域的普通滚动内容不贡献区域，因此被裁剪到视口上方的内容不会再阻挡页头拖动。
+从 0.2.2-rc.1 升级后，macOS Desktop 仅自动排除 `data-window-drag` 行或 `data-window-drag-controls` 范围内的交互控件。此前，应用中任意位置匹配的控件和 ARIA role 都会获得 `no-drag`。自定义 Client 插件若依赖该规则使覆盖可拖动页头的内容保持可交互，现在必须声明排除。未显式声明区域的普通滚动内容不贡献区域，因此被裁剪到视口上方的内容不会再阻挡页头拖动。
 
 该变更影响这些范围之外、覆盖拖动行的自定义浮层。已位于标记行内的控件、使用自带排除的共享原语的浮层，以及已显式声明 `no-drag` 的组件无需迁移。规则仅适用于 macOS Desktop，普通 Web 和 Windows 行为不变。
 
