@@ -33,7 +33,7 @@ Choose it when a domain keeps state that clients should see without re-deriving 
 
 ### Define a projection unit
 
-A domain contributes one `ProjectionDefinition` per state key: a key, a state schema, an initial state, a synchronous fold `apply(state, event)`, an optional `wire` block that projects state to a client view, and a `stateVersion` that bumps whenever the state fields or fold semantics change:
+A domain contributes one `ProjectionDefinition` per state key: a key, a state schema, an initial state, a synchronous fold `apply(state, event)`, an optional `wire` block that projects state to a client view, and a `stateVersion` for checkpoint invalidation. Bump it when state fields or fold semantics change. An optional addition may retain the version only when absence preserves historical meaning and a regression test verifies that restoring an old checkpoint plus its suffix matches full replay; schema acceptance alone is insufficient:
 
 ```text
 const definition = {

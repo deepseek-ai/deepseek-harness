@@ -123,7 +123,7 @@ Sidebar 声明四个扩展 slot；其文档 tab 另行声明下表中的 keyed �
 
 Preview 记录已载入版本和读取开始时的观察版本。自动刷新默认开启；成员首次元数据只建立基线，后续变化才重新加载 tab。刷新只重读当前 tab，不改变共享元数据或其他 tab 的内容。读取不具备事务性；版本是不透明的相等性令牌，不是可排序的时间戳（[资源观察与 Preview RPC](../../.agents/notes/implemented/architecture/2026-09-08-document-preview-operations.zh.md)）。
 
-自行加载的渲染器接收 `{ kind: 'renderer', revision, loaded, failed, reload }`，而不是文件字节。正文调用自己的注入 face，在 revision 变化和卸载时取消请求，并通过 `loaded(version)` 报告已展示的源版本。加载失败时调用 `failed()`，使后续文件变化能够触发重试。父组件忽略过期报告，保留共享的重新加载与源文件变更控件。Office 使用此模式请求 [Host 渲染的 PDF](office-to-pdf.zh.md)；其 face 将转换字节、字体元数据和失败写入自己的 store，正文渲染嵌套 PDF 视图。`OfficeFontAction` 通过 `sidebar.right.tab.document.action` 在刷新按钮前显示缺失字体警告。[包 README](../../packages/client/ui-sidebar-documentpreview/README.zh.md#what-it-registers)定义加载生命周期。
+自行加载的渲染器接收 `{ kind: 'renderer', revision, loaded, failed, reload }`，而不是文件字节。正文调用自己的注入 face，在 revision 变化和卸载时取消请求，并通过 `loaded(version)` 报告已展示的源版本。加载失败时调用 `failed()`，使后续文件变化能够触发重试。父组件忽略过期报告，保留共享的重新加载与源文件变更控件。Office 使用此模式请求 [Host 渲染的 PDF](office-kit.zh.md)；其 face 将转换字节、字体元数据和失败写入自己的 store，正文渲染嵌套 PDF 视图。`OfficeFontAction` 通过 `sidebar.right.tab.document.action` 在刷新按钮前显示缺失字体警告。[包 README](../../packages/client/ui-sidebar-documentpreview/README.zh.md#what-it-registers)定义加载生命周期。
 
 ## 资源模型
 

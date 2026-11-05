@@ -12,7 +12,7 @@ Status: implemented
 
 Web 侧栏终端直接通过 Session 的 subprocess provider 运行，使用执行环境中系统用户的权限。它不通过 Agent 沙箱限制 shell，也不请求 Agent 审批。操作系统权限、容器隔离和 provider 对环境凭据的清除仍然生效。Session 标识负责访问范围、进程清理和初始目录；sandbox policy 仅在 Session 没有 cwd 时提供配置的默认目录。
 
-改变 Agent 权限时，用户终端继续运行。Agent 使用的 shell 和 terminal 工具保留各自的沙箱限制。用户终端的输入和输出不产生模型输入或 Session 事件。
+改变 Agent 权限时，用户终端继续运行。Agent 使用的 shell 和 terminal 工具保留各自的沙箱限制。用户终端的输入和输出不产生模型输入或 Session 事件；[Agent 终端面板决策](../feature/2026-10-12-agent-terminal-panel.zh.md)中的实验工具 `user_terminal_read` 以工具结果返回的屏幕是例外。
 
 本决策仅取代 [Web 侧栏终端决策](../feature/2026-09-09-web-sidebar-terminal.zh.md)中的共享沙箱策略和模式切换限制。原记录继续负责进程所有权、传输、屏幕恢复和 shell 选择。OpenCode 的 `packages/core/src/pty.ts` 和 `packages/core/src/pty/pty.node.ts` 提供相邻实现依据：其交互式终端使用选定的 shell 和工作目录直接创建 PTY。
 

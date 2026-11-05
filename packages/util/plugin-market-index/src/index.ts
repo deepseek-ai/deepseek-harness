@@ -113,25 +113,28 @@ function declaredId(value: unknown, path: string, declared: Readonly<Record<stri
 }
 
 function pluginMetadata(value: unknown, path: string, index: MarketIndexMetadata): MarketPluginMetadata {
-  const object = value === undefined ? {} : objectAt(value, path)
-  const category = optional(object, 'category', path, (member, at) => declaredId(member, at, index.categories))
-  const keywords = optional(object, 'keywords', path, (member, at) => {
+  const object = value === undefined || value === null ? {} : objectAt(value, path)
+  const field = <T>(key: string, read: (value: unknown, path: string) => T): T | undefined =>
+    object[key] === null ? undefined : optional(object, key, path, read)
+  const category = field('category', (member, at) => declaredId(member, at, index.categories))
+  const keywords = field('keywords', (member, at) => {
     if (!Array.isArray(member)) fail(at, 'must be an array')
     return member.map((keyword, position) => {
       if (typeof keyword !== 'string') fail(`${at}[${String(position)}]`, 'must be a string')
       return keyword
     })
   }) ?? []
-  const labels = optional(object, 'labels', path, (member, at) => {
+  const labels = field('labels', (member, at) => {
     if (!Array.isArray(member)) fail(at, 'must be an array')
     const ids = member.map((label, position) => declaredId(label, `${at}[${String(position)}]`, index.labels))
     if (new Set(ids).size !== ids.length) fail(at, 'must not repeat a label')
     return ids
   }) ?? []
-  const sortKeys = optional(object, 'sortKeys', path, (member, at) => {
+  const sortKeys = field('sortKeys', (member, at) => {
     const values: Record<string, number> = {}
     for (const [id, sortValue] of Object.entries(objectAt(member, at))) {
       declaredId(id, `${at}.${id}`, index.sortKeys)
+      if (sortValue === null) continue
       if (typeof sortValue !== 'number' || !Number.isFinite(sortValue)) fail(`${at}.${id}`, 'must be a finite number')
       own(values, id, sortValue)
     }
@@ -290,6 +293,7 @@ function plugin(value: unknown, path: string, index: MarketIndexMetadata, indexU
 
 /**
  * Validate a parsed format-1 index. Members the format does not define are ignored and dropped.
+ * Null plugin metadata fields normalize like absent fields; null sort values are omitted, while zero is retained.
  * @param value - the parsed JSON document.
  * @param indexUrl - absolute URL the index was read from; relative icon references resolve against it.
  * @returns the validated index with absent metadata groups and lists filled with empty values, and each plugin's

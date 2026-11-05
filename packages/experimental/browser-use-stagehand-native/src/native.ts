@@ -38,8 +38,6 @@ export interface NativeBrowserConfig {
   mode: 'launch' | 'attach'
   /** Existing browser's configured debugging endpoint. */
   cdpEndpoint?: string
-  /** Optional existing Stagehand extension id. */
-  extensionId?: string
   /** Executable selected for an owned Chromium instance. */
   executablePath?: string
   /** Whether to hide an owned browser's window. */
@@ -96,7 +94,6 @@ export async function openNativeBrowser(config: NativeBrowserConfig): Promise<Na
   const { Stagehand, localBrowser } = await import('@browserbasehq/stagehand')
   const browser = await localBrowser.connect({
     cdpUrl: z.string().parse(config.cdpEndpoint),
-    ...config.extensionId === undefined ? {} : { extensionId: config.extensionId },
   })
   const stagehand = await Stagehand.create({ browser, model: config.model, logging: { level: 'off' } })
   return {

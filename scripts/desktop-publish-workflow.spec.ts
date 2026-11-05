@@ -9,6 +9,7 @@ const workflow = yaml.load(readFileSync(resolve(import.meta.dirname, '../.github
   permissions: Record<string, string>
   jobs: Record<string, {
     defaults?: unknown
+    concurrency?: { group: string; 'cancel-in-progress': boolean }
     needs?: string | string[]
     env?: Record<string, string>
     if?: string
@@ -77,4 +78,26 @@ it('rejects non-master dispatch before scheduling a self-hosted job', () => {
     expect(result.status).toBe(ref === 'refs/heads/master' ? 0 : 1)
     if (result.status !== 0) expect(result.stderr).toContain('must be dispatched from master')
   }
+})
+
+it('defaults to production website upload and separates cache-only recovery', () => {
+  expect(workflow.on.workflow_dispatch).toMatchObject({ inputs: { upload_website: { type: 'boolean', default: true } } })
+  expect(workflow.jobs.prepare!.env?.DESKTOP_UPLOAD_WEBSITE).toBe('${{ inputs.upload_website }}')
+  expect(workflow.jobs.prepare!.env?.DOWNLOAD_PROD_EO_ZONE_ID).toBe('${{ vars.DOWNLOAD_PROD_EO_ZONE_ID }}')
+  const upload = workflow.jobs['upload-website-installer']!
+  const purge = workflow.jobs['purge-website-installer']!
+  expect(purge.needs).toEqual(['route', 'prepare', 'upload-website-installer'])
+  expect(upload.concurrency).toEqual({ group: 'desktop-website-upload-${{ needs.prepare.outputs.website-destination }}', 'cancel-in-progress': false })
+  expect(purge.concurrency).toEqual({ group: 'desktop-website-purge-${{ needs.prepare.outputs.website-destination }}', 'cancel-in-progress': false })
+  for (const job of [upload, purge]) {
+    expect(job.if).toBe("inputs.upload_website && needs.prepare.outputs.preset != 'test'")
+    expect(job.environment).toBe('desktop-production')
+    const preflight = job.steps.findIndex(step => step.run === 'node apps/desktop/scripts/preflight-desktop-publish-local.mjs')
+    expect(preflight).toBeGreaterThan(-1)
+    expect(preflight).toBeLessThan(job.steps.findIndex(step => step.run === 'pnpm install --frozen-lockfile'))
+    expect(job.env?.DESKTOP_WEBSITE_APPROVAL).toBe('${{ needs.prepare.outputs.website-approval }}')
+  }
+  expect(upload.steps.find(step => step.id === 'website')?.run).toBe('node --import tsx apps/desktop/scripts/publish-website-ci.ts upload')
+  expect(purge.steps.find(step => step.id === 'website')?.run).toBe('node --import tsx apps/desktop/scripts/publish-website-ci.ts purge')
+  expect(purge.steps.some(step => step.run?.includes('publish-desktop-ci.ts'))).toBe(false)
 })

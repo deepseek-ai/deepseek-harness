@@ -80,9 +80,7 @@
   }
 }
 
-/* Portaled and fixed in the viewport with coordinates supplied inline from the
-   trigger rect; the z-index layers above the right sidebar (at most 40) and
-   below modal overlays (1000). */
+/* Portaled above the right sidebar (at most 40) and below modal overlays (1000). */
 .menu {
   position: fixed;
   z-index: 100;
@@ -90,13 +88,24 @@
   display: flex;
   flex-direction: column;
   width: 500px;
-  max-width: min(560px, calc(100vw - 32px), var(--dsh-anchored-max-width, 100vw));
-  max-height: min(480px, calc(100vh - 140px), var(--dsh-anchored-max-height, 100vh));
+  max-width: min(560px, calc(100vw - 32px));
+  max-height: min(480px, calc(100dvh - 140px));
   overflow: hidden;
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   box-shadow: var(--dsw-elevation-prominent);
+  position-area: none;
+  top: max(12px, calc(anchor(bottom) + 5px));
+  bottom: 12px;
+  left: max(12px, anchor(left));
+  right: 12px;
+  position-try-fallbacks: --dsh-jobs-window, --dsh-jobs-opposite, --dsh-jobs-wide-opposite, --dsh-jobs-tall, --dsh-jobs-viewport;
+  align-self: start;
+  justify-self: start;
+  height: fit-content;
+  min-height: 0;
+  margin: 0;
 }
 
 .menuBody {
@@ -445,4 +454,49 @@
 
 .noticeError {
   color: var(--dsw-alias-state-error-primary);
+}
+
+@position-try --dsh-jobs-window {
+  position-area: none;
+  top: max(12px, calc(anchor(bottom) + 5px));
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  margin: 0;
+  align-self: safe start;
+  justify-self: safe end;
+}
+
+@position-try --dsh-jobs-opposite {
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: max(12px, calc(anchor(top) + 5px));
+  align-self: end;
+}
+
+@position-try --dsh-jobs-wide-opposite {
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: max(12px, calc(anchor(top) + 5px));
+  left: 12px;
+  right: 12px;
+  align-self: end;
+  justify-self: safe end;
+}
+
+@position-try --dsh-jobs-tall {
+  position-area: none;
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: 12px;
+  left: max(12px, anchor(left));
+  right: 12px;
+  margin: 0;
+  align-self: safe start;
+  justify-self: start;
+}
+
+@position-try --dsh-jobs-viewport {
+  position-area: none;
+  inset: max(12px, var(--dsh-frame-overlay-top, 12px)) 12px 12px;
+  margin: 0;
+  align-self: safe start;
+  justify-self: safe end;
 }

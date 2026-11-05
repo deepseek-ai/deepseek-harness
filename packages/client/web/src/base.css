@@ -44,14 +44,20 @@ html[data-platform='darwin'] body {
   isolation: isolate;
 }
 
+/* The shipped Electron runtime inherits app-region and collects full boxes
+   without overflow clips. Only explicit owners contribute geometry, so clipped
+   descendants cannot subtract a chrome row after scrolling outside its view. */
+:where(html[data-platform='darwin'] *) {
+  -webkit-app-region: initial;
+}
+
 /* macOS desktop: the one drag declaration. A chrome row marks itself in markup
    (`data-window-drag`) and its own box becomes its draggable geometry, so no fixed
    band has to match any row's height; the ui-theme app-region gate's CHROME_ROWS
    manifest is the list of rows that must carry the mark. Electron composes
-   app-regions from geometry, not hit testing, so a surface covering a row would
-   otherwise drag the window instead of receiving clicks; every covering overlay
-   portals to document.body beside #root, which also puts it after every drag row
-   in document order, and one rule subtracts them all. */
+   app-regions from geometry, not hit testing, so covering overlays must subtract
+   their boxes after the row in document order. Body portals sit after #root;
+   their root boxes are excluded below. */
 html[data-platform='darwin'] [data-window-drag] {
   -webkit-app-region: drag;
 }
@@ -72,25 +78,31 @@ html[data-platform='darwin'] body > :not(#root) {
   -webkit-app-region: no-drag;
 }
 
-/* Inside #root, interactive controls and raised surfaces (dialogs, menus)
-   subtract themselves from any drag row they overlap, wherever they render.
-   Electron composes app-regions from geometry in document order, so a drag rule
-   must sit on a chrome row that precedes the overlays covering it — never on a
-   content container, which would override every overlay mounted earlier in the
-   DOM. One selector on the native elements, ARIA roles, and tabindexed custom
-   widgets replaces per-component no-drag opt-outs. */
-html[data-platform='darwin'] :is(
+/* An interactive viewport without nested drag rows owns one box; its clipped
+   descendants do not.
+   Containers with nested drag rows must instead declare their own region. */
+html[data-platform='darwin'] [data-window-drag-exclude] {
+  -webkit-app-region: no-drag;
+}
+
+/* Controls subtract themselves only inside a chrome row. Scrollable content
+   outside those rows needs no region, even when it is keyboard-focusable.
+   Covering overlays own their no-drag box through the body rule above or an
+   explicit component declaration. A controls scope also covers the onboarding
+   stage whose window-wide drag band is a preceding sibling. */
+html[data-platform='darwin'] :where([data-window-drag], [data-window-drag-controls]) :is(
   button, a, input, select, textarea, summary, [contenteditable='true'], [tabindex],
   [role='dialog'], [role='alertdialog'], [role='menu'], [role='listbox'], [role='tooltip'],
   [role='button'], [role='link'], [role='tab'], [role='menuitem'], [role='menuitemcheckbox'],
   [role='menuitemradio'], [role='option'], [role='checkbox'], [role='radio'], [role='switch'],
   [role='slider'], [role='combobox'], [role='textbox']
-) {
+):where(:not([data-window-drag-exclude] *)) {
   -webkit-app-region: no-drag;
 }
 
-/* Reset both native region types for inert content. Chromium treats the explicit
-   `none` keyword as `no-drag`, which would erase foreground drag rows. */
+/* Reset both native region types for inert content. In the shipped Electron
+   runtime, authored `none` computes to `no-drag`; `initial` computes to `none`
+   and contributes no box, so it cannot erase foreground drag rows. */
 html[data-platform='darwin'] [inert],
 html[data-platform='darwin'] [inert] * {
   -webkit-app-region: initial;

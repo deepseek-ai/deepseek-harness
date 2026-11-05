@@ -33,7 +33,7 @@ beforeEach(() => {
 
 function share(overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
   return {
-    shareId: 'share-1', sessionId: 'session-1', sessionTitle: 'Session', accessMode: 'open',
+    shareId: 'share-1', sessionId: 'session-1', sessionIds: ['session-1'], sessionTitle: 'Session', accessMode: 'open',
     link: `${RELAY}/?shareId=share-1`, relay: RELAY, gatewayToken: 'gateway-token',
     allowedSubjectIds: [], revision: 1, createdAt: '2026-01-01T00:00:00Z',
     allowsFork: false, sessionMode: 'view', online: false, ...overrides,
@@ -105,9 +105,9 @@ function harness(options: HarnessOptions = {}) {
   }
 }
 
-function spec(overrides: Partial<TunnelShareSpec> = {}): TunnelShareSpec {
+function spec(overrides: Partial<TunnelShareSpec> = {}): TunnelShareSpec & { readonly sessionIds: readonly string[] } {
   return {
-    shareId: 'share-1', sessionId: 'session-1', sessionTitle: 'Session', accessMode: 'open',
+    shareId: 'share-1', sessionId: 'session-1', sessionIds: ['session-1'], sessionTitle: 'Session', accessMode: 'open',
     relay: RELAY, gatewayToken: 'gateway-token', ownerDisplayName: 'Owner', allowedSubjectIds: [],
     ...overrides,
   }

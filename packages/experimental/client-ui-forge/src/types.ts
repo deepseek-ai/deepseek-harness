@@ -216,13 +216,40 @@ export interface ForgeBranches {
   readonly branches: readonly string[]
 }
 
+/** A branch the `branch` scope can compare with. */
+export interface ForgeBaseBranch {
+  /** Full ref name: `refs/heads/<branch>` or `refs/remotes/<remote>/<branch>`. */
+  readonly ref: string
+  /** The ref without `refs/heads/` or `refs/remotes/`, such as `master` or `origin/master`. */
+  readonly name: string
+}
+
+/** What the `branch` scope compares with while no base branch is chosen. */
+export interface ForgeAutomaticBase {
+  /** The created worktree's base branch or abbreviated base commit, or the default branch of the code host remote. */
+  readonly name: string
+  /** Whether the fork point is the base commit of the worktree the Session created rather than a merge base. */
+  readonly worktree: boolean
+}
+
+/** Branches the `branch` scope can compare with, whose names contain a query. */
+export interface ForgeBaseBranches {
+  /** The fork point used while no base branch is chosen, whatever the query; null without one. */
+  readonly automatic: ForgeAutomaticBase | null
+  /** Remote-tracking branches without symbolic refs such as `origin/HEAD`, most recently committed first, at most `maxBranches`. */
+  readonly remote: readonly ForgeBaseBranch[]
+  /** Local branches other than the checked-out one, most recently committed first, at most `maxBranches`. */
+  readonly local: readonly ForgeBaseBranch[]
+}
+
 /** Which local changes a diff covers; each reads the Session's checkout through Git. */
 export type ForgeLocalScope =
   /**
-   * The working tree and untracked files against the fork point: the base commit of the worktree the
-   * Session created, else the merge base of HEAD with the default branch of the code host remote.
+   * The working tree and untracked files against a fork point: the merge base of HEAD with the
+   * `base` ref, or while `base` is null, the base commit of the worktree the Session created,
+   * else the merge base of HEAD with the default branch of the code host remote.
    */
-  | { readonly kind: 'branch' }
+  | { readonly kind: 'branch'; readonly base: string | null }
   /** The working tree and untracked files against HEAD. */
   | { readonly kind: 'uncommitted' }
   /** The working tree and untracked files against the index. */
@@ -326,14 +353,14 @@ export interface Config {
   maxOutputBytes?: number
   /** Deadline in milliseconds for one provider sign-in probe. */
   readinessTimeoutMs?: number
-  /** Most local branches listed as worktree bases. */
+  /** Most local branches listed as worktree bases, and most branches in each group of base branches listed for the `branch` scope. */
   maxBranches?: number
   /**
    * Prefix of the branch and checkout directory created for a Session worktree; the first eight
    * hexadecimal digits of the Session id's UUID, a hyphen, and four random hexadecimal digits follow it.
    */
   worktreePrefix?: string
-  /** Largest diff, or file read to show unchanged lines, in bytes. */
+  /** Largest diff, file read to show unchanged lines, or list of base branch refs, in bytes. */
   maxDiffBytes?: number
   /** Most untracked files a local diff or the local changes card includes. */
   maxUntrackedFiles?: number
@@ -367,8 +394,13 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'forgePanel/action-failed': Record<string, never>
     /** The Session's directory is not inside a Git checkout, so it has no local changes. */
     'forgePanel/not-a-checkout': Record<string, never>
-    /** No remote names a default branch that HEAD shares history with, and the checkout is not a worktree the Session created. */
+    /**
+     * HEAD shares no history with the base branch chosen for the `branch` scope, or with none chosen, no remote names a
+     * default branch that HEAD shares history with and the checkout is not a worktree the Session created.
+     */
     'forgePanel/no-fork-point': Record<string, never>
+    /** The base branch chosen for the `branch` scope does not exist, as after the branch was deleted. */
+    'forgePanel/base-missing': Record<string, never>
     /** Filter configuration could not be read completely; no comparison ran. Correct Git settings or the output limit before retrying. */
     'forgePanel/filter-config-failed': Record<string, never>
     /**

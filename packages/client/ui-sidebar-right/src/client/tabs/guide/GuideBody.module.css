@@ -25,18 +25,14 @@
 }
 
 /* The guide tab's own compass above the capsules, at 56px on watermark ink —
-   not a control. The ink is pinned to the pure-gray static ramp per theme
+   not a control. The ink uses the pure-gray guide-hero token
    because the label aliases all ride the bluish ramp, whose cast shows at
    this size. Its margin over the column's gap holds the first capsule 30px
    below it; the capsules keep the bare gap between them. */
 .hero {
   display: flex;
   margin-bottom: 16px;
-  color: var(--dsw-static-neutral-200);
-}
-
-:global(body[data-ds-dark-theme]) .hero {
-  color: var(--dsw-static-neutral-700);
+  color: var(--dsw-specific-guide-hero);
 }
 
 /* A filled pill, 380px wide by default, its icon and text anchored at the

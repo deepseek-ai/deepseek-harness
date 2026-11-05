@@ -10,7 +10,7 @@
 - text: 只回复 MESSAGES_WEB_READY，不调用工具。 {{clock}}
 - button "复制"
 - status: 已完成
-- button "已完成，用时 {{duration}}" [disabled]
+- button "已完成，用时 {{duration}}"
 - paragraph: MESSAGES_WEB_READY
 - button "复制"
 - button "好的回答"

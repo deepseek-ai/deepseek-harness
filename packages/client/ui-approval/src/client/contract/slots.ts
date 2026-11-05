@@ -211,6 +211,8 @@ export interface ApprovalCardInput {
   title: string
   /** Localized scope or consequence of the decision. */
   description?: string
+  /** Caller-localized warning label and explanation, with paragraphs separated by blank lines (`\n\n`). */
+  warning?: { label: string; title: string; detail: string }
   /** Subject metadata for human recognition; the caller admits icon URLs. Never an authorization identity. */
   subject?: { name: string; icon?: string }
   /** Optional tool-owned detail rendered through the existing child slot. */

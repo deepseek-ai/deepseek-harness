@@ -36,7 +36,7 @@ export function OnboardingSurface({ children, exiting = false }: { children: Rea
   return createPortal((
     <div className={css.onboardingOverlay} data-exiting={exiting || undefined} role="presentation">
       <div className={css.dragBand} data-window-drag aria-hidden="true" />
-      <div className={css.onboardingStage}>{children}</div>
+      <div className={css.onboardingStage} data-window-drag-controls>{children}</div>
     </div>
   ), document.body)
 }

@@ -1055,7 +1055,7 @@ describe('provider profile lifecycle', () => {
     await expect((async () => {
       for await (const _chunk of adapter.stream({ provider: 'anthropic', model: 'claude-sonnet-4', messages: [] })) { /* drain */ }
     })()).rejects.toMatchObject({ code: 'NO_ADAPTER' })
-    expect(new LlmError('x', 'X')).toBeInstanceOf(Error)
+    expect(LlmError.fromFailure({ message: 'x', code: 'X' })).toBeInstanceOf(Error)
   })
 
   it('rejects unsupported or unresolved image input before provider I/O', async () => {

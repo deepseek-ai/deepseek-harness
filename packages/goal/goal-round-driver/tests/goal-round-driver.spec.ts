@@ -150,6 +150,11 @@ async function waitForRequests(adapter: ScriptedAdapter, count: number): Promise
   })
 }
 
+/** Durable goal operations recorded in one Agent's Session log. */
+function goalOperations(agent: Agent): string[] {
+  return agent.session.snapshotEvents().flatMap(event => event.type === 'goal/change' ? [event.data.operation] : [])
+}
+
 describe('goal-round outcome policy', () => {
   it('renders the objective, round budget, authority boundary, and completion protocol', () => {
     const goal: GoalView = {
@@ -1023,6 +1028,70 @@ describe('same-session goal driving', () => {
     })
     expect(test.agent.status).toBe('idle')
     expect(test.adapter.requests).toHaveLength(1)
+  })
+
+  it('keeps a running goal active when its Agent is disposed mid-round', async () => {
+    const test = await harness(['hang'])
+    const handle = await test.ctx.agents.create({
+      sessionId: SessionId('goal-session-agent-disposed'),
+      agentOptions: { provider: 'mock', model: 'mock' },
+    })
+    test.ctx.goals.create(handle.agent, { objective: 'survive agent disposal' })
+    await waitForRequests(test.adapter, 1)
+
+    await handle.dispose()
+
+    // Disposal aborts the round with the `disposed` cause, which is no pause decision.
+    expect(goalOperations(handle.agent)).toEqual(['create'])
+  })
+
+  it('keeps a running goal active and starts no round when only its Agent owner unloads', async () => {
+    const test = await harness(['hang'])
+    let agent: Agent | undefined
+    // Reloading or disabling the owner plugin at runtime disposes the Agents it created.
+    const owner = await test.ctx.plugin({
+      name: 'goal-test-reloaded-owner',
+      inject: ['agents'],
+      async apply(ownerCtx: Context) {
+        agent = (await ownerCtx.agents.create({
+          sessionId: SessionId('goal-session-owner-unload'),
+          agentOptions: { provider: 'mock', model: 'mock' },
+        })).agent
+      },
+    })
+    if (agent === undefined) throw new Error('the owner did not create its Agent')
+    test.ctx.goals.create(agent, { objective: 'survive owner reload' })
+    await waitForRequests(test.adapter, 1)
+
+    await owner.dispose()
+
+    expect(goalOperations(agent)).toEqual(['create'])
+    expect(test.adapter.requests).toHaveLength(1)
+  })
+
+  it.each([true, false])('keeps a running goal active when root disposal unloads its Agent owner first: %s', async (ownerUnloadsFirst) => {
+    const test = await harness(['hang'])
+    // An owner depending on a root-provided service unloads before its root's other
+    // children, as the Web Session controller does under the Cordis teardown order.
+    test.ctx.provide('goalTestRootService', {})
+    let agent: Agent | undefined
+    await test.ctx.plugin({
+      name: 'goal-test-agent-owner',
+      inject: ownerUnloadsFirst ? ['goalTestRootService', 'agents'] : ['agents'],
+      async apply(owner: Context) {
+        agent = (await owner.agents.create({
+          sessionId: SessionId(`goal-session-root-disposal-${String(ownerUnloadsFirst)}`),
+          agentOptions: { provider: 'mock', model: 'mock' },
+        })).agent
+      },
+    })
+    if (agent === undefined) throw new Error('the owner did not create its Agent')
+    test.ctx.goals.create(agent, { objective: 'survive shutdown' })
+    await waitForRequests(test.adapter, 1)
+
+    await test.ctx.fiber.dispose()
+
+    expect(goalOperations(agent)).toEqual(['create'])
   })
 
   it('cancels an accepted queued round and awaits its driver task during teardown', async () => {

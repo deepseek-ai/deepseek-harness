@@ -75,9 +75,11 @@ export function ownerSharesDouble(overrides: OwnerSharesOverrides = {}): OwnerSh
       link: `${DOUBLE_RELAY}/?shareId=created`,
       shareId: 'created',
       sessionId: 'session',
+      sessionIds: ['session'],
       sessionMode: 'view',
       access: OPEN_ACCESS,
     }),
+    addSessions: async request => accepted({ shareId: request.shareId, sessionIds: request.sessionIds }),
     list: async () => accepted({ shares: [] }),
     stop: async () => accepted({ ok: true }),
     updatePermissions: async request => accepted({
@@ -105,6 +107,7 @@ export function ownerSharesDouble(overrides: OwnerSharesOverrides = {}): OwnerSh
   }
   const shares: OwnerShares = {
     create: async request => record('create', request, () => base.create(request)),
+    addSessions: async request => record('addSessions', request, () => base.addSessions(request)),
     list: async () => record('list', undefined, () => base.list()),
     stop: async request => record('stop', request, () => base.stop(request)),
     updatePermissions: async request => record('updatePermissions', request, () => base.updatePermissions(request)),
