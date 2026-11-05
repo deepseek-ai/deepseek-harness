@@ -32,17 +32,9 @@ import { ImSessionHost } from './sessions.ts'
 import { ImStore } from './store.ts'
 import { applyTools } from './tools.ts'
 
-export * from './api.ts'
-export { Config, DEFAULT_DISPATCHER_PROMPT } from './config.ts'
-export { chatHeader, DISPATCHER_KEY, DISPATCHER_OWNER, ImDispatcher } from './dispatcher.ts'
+export type * from './api.ts'
 export { ImError } from './error.ts'
-export { STOP_BUTTON_PREFIX } from './outputs.ts'
-export { sessionIdOf } from './hosting.ts'
-export { operationId } from './send.ts'
-export { mediaLabel, mediaRefs, parseMediaId } from './media.ts'
 export type { ImMediaFileItem, ImMediaItem, ImMediaKind, ImMediaRef } from './media.ts'
-export { formatText } from './format.ts'
-export { IM_TOOLS } from './tools.ts'
 export type { ImToolName } from './tools.ts'
 
 declare module '@deepseek-ai/cordis' {

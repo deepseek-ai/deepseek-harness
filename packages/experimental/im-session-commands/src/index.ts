@@ -14,9 +14,8 @@ import type { ImMessageEvent, ImOutcome } from '@deepseek-ai/dsh-im'
 import { SessionCommands } from './commands.ts'
 import type { SessionCommandsConfig } from './config.ts'
 
-export { BY, BUILTIN_ORDER, SessionCommands } from './commands.ts'
 export { Config, type SessionCommandAllow, type SessionCommandsConfig } from './config.ts'
-export { stringsOf, type SessionCommandStrings, type SessionCommandsLocale } from './locale.ts'
+export type { SessionCommandStrings, SessionCommandsLocale } from './locale.ts'
 
 export const name = 'session-commands'
 /** The IM host, the dsh command registry and the agent registry the commands act on. */
