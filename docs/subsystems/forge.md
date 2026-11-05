@@ -567,7 +567,7 @@ type ForgeChangeRequestStatesFrame =
   | { readonly type: 'changed'; readonly states: readonly ForgeChangeRequestListState[] }
 ```
 
-The changes view reads through the same Remote. `localDiff` reads one `ForgeLocalScope` of the Session's checkout, and `changeRequestDiff` reads a bound change request at the head of its latest status through the provider's `diff`; both return files that the Host parsed into `ForgeDiffFile` hunks. `localText` and `changeRequestText` read the new side of one file, which supplies the unchanged lines between hunks. Each inspection also sizes the `branch` scope as `ForgePanelState.local` for the panel's local changes card, always against the automatic fork point. A `branch` scope whose `base` names a ref compares with the merge base of HEAD and that branch instead; `diffBases` lists the branches the view offers, with the automatic fork point.
+The changes view reads through the same Remote. `localDiff` reads one `ForgeLocalScope` of the Session's checkout, and `changeRequestDiff` reads a bound change request at the head of its latest status through the provider's `diff`; both return files that the Host parsed into `ForgeDiffFile` hunks. `localText` and `changeRequestText` read the new side of one file, which supplies the unchanged lines between hunks. Each inspection also sizes the `branch` scope as `ForgePanelState.local` for the Session panel's local changes row, always against the automatic fork point. A `branch` scope whose `base` names a ref compares with the merge base of HEAD and that branch instead; `diffBases` lists the branches the view offers, with the automatic fork point.
 
 ```ts type-equiv
 /** Which local changes a diff covers; each reads the Session's checkout through Git. */
@@ -707,7 +707,7 @@ interface ForgeChangedFile {
 ```
 
 ```ts type-equiv
-/** Size of the `branch` scope, which the panel's local changes card shows. */
+/** Size of the `branch` scope, which the Session panel's local changes row shows. */
 interface ForgeLocalChanges {
   /** Ref or abbreviated commit the scope compares with. */
   readonly base: string

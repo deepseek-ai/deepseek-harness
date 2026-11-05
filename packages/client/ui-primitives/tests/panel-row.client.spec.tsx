@@ -29,6 +29,13 @@ describe('PanelRow', () => {
     expect(onActivate).toHaveBeenCalledTimes(1)
   })
 
+  it('names the button with the action label', () => {
+    const onActivate = vi.fn()
+    render(<PanelRow icon={<svg />} onActivate={onActivate} actionLabel="View the changes: 2 files">Local changes</PanelRow>)
+    fireEvent.click(screen.getByRole('button', { name: 'View the changes: 2 files' }))
+    expect(onActivate).toHaveBeenCalledTimes(1)
+  })
+
   it('forwards attributes such as context-menu handlers to the outer element', () => {
     const onContextMenu = vi.fn()
     const view = render(<PanelRow icon={<svg />} className="placed" onContextMenu={onContextMenu} tabIndex={0}>Row</PanelRow>)

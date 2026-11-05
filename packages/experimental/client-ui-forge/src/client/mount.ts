@@ -6,8 +6,8 @@ import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
-import { IconBranchOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type {} from '@deepseek-ai/dsh-client-ui-session-panel/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
@@ -18,19 +18,23 @@ import type { ForgeChangeRequestListState, ForgeChangeRequestStatesFrame, ForgeP
 import { ReviewQueue } from './review-queue.ts'
 import { formatReviewComment, type ReviewSelection } from './review.ts'
 import { ActionToast } from './ActionToast.tsx'
-import { CHANGES_ID, changesDefinition } from './changes-address.ts'
+import { AttentionIndicator, type AttentionIndicatorInjected } from './AttentionIndicator.tsx'
+import { CHANGES_ID, changesAddress, changesDefinition, type ChangesSource } from './changes-address.ts'
+import {
+  ChangeRequestsActions, ChangeRequestsSection, type ChangeRequestsActionsInjected, type ChangeRequestsSectionInjected,
+} from './ChangeRequestsSection.tsx'
 import { createChangesStore } from './changes-store.ts'
 import { ChangesTab, type ChangesTabInjected } from './ChangesTab.tsx'
 import { ChangesTabTitle } from './ChangesTabTitle.tsx'
-import { ForgeTab, type ForgeTabInjected } from './ForgeTab.tsx'
-import { ForgeTabTitle } from './ForgeTabTitle.tsx'
-import { HeaderButton, type HeaderButtonInjected } from './HeaderButton.tsx'
+import {
+  CheckoutRow, EnvironmentActions, LocalChangesRow, type CheckoutRowInjected, type LocalChangesRowInjected,
+} from './EnvironmentRows.tsx'
 import { de, en, es, fr, ja, NS, pt, ru, zh, type ForgePanelKey } from './locales.ts'
 import type { SessionListInjected } from './session-list.ts'
 import { SessionHoverForge } from './SessionHoverForge.tsx'
 import { SessionRowForge } from './SessionRowForge.tsx'
 import {
-  createNoticeSource, createPanelSource, createStreamSource, createVisibilitySource, foldStates, type PanelSource, type VisibilitySource,
+  createNoticeSource, createPanelSource, createStreamSource, foldStates, type PanelSource,
 } from './source.ts'
 import { numberOf } from './status.ts'
 import { WorktreeProgress, type WorktreeProgressInjected } from './WorktreeProgress.tsx'
@@ -38,12 +42,6 @@ import { WorktreeToggle, type WorktreeToggleInjected } from './WorktreeToggle.ts
 
 /** Services required before the Remote contribution mounts. */
 export const inject = ['remote', 'slots', 'locale', 'sidebarRightTabs', 'sidebarRight', 'sessions']
-
-/** Registry id of the forge tab type, also its slot key. */
-export const TAB_ID = '@deepseek-ai/dsh-experimental-client-ui-forge'
-
-/** Kind of the forge tab. */
-export const TAB_KIND = 'forge-panel'
 
 /**
  * Open a URL in a new browsing context without giving it access to this page.
@@ -53,10 +51,9 @@ function openLink(url: string): void {
   window.open(url, '_blank', 'noopener,noreferrer')
 }
 
-/** Per-Session stores shared by the tab, the header button, the New Session option, and the worktree card. */
+/** Per-Session stores shared by the Session panel entries, the New Session option, and the worktree card. */
 interface SessionStores {
   readonly panel: PanelSource
-  readonly visibility: VisibilitySource
   readonly reviews: WeakMap<AbortSignal, ReviewQueue>
   readonly release: () => void
 }
@@ -83,7 +80,7 @@ function registerUi(ctx: Context): void {
         panel.close()
         stores.delete(sessionId)
       }, 'forge-panel: release Session state')
-      store = { panel, visibility: createVisibilitySource(), reviews: new WeakMap(), release: () => { void dispose() } }
+      store = { panel, reviews: new WeakMap(), release: () => { void dispose() } }
       stores.set(sessionId, store)
     }
     return store
@@ -158,14 +155,18 @@ function registerUi(ctx: Context): void {
     getSnapshot: () => ctx.locale.getLocale().active,
     subscribe: listener => ctx.locale.subscribe(listener),
   }
-  const tabFace = (sessionId: SessionId): ForgeTabInjected => {
+  const refreshOf = (sessionId: SessionId) => async (): Promise<void> => {
+    settled(await ctx.remote.forgePanel.refresh(sessionId), 'toast.refreshFailed')
+  }
+  const openChanges = (sessionId: SessionId, source: ChangesSource): void => {
+    ctx.sidebarRight.openResourceIn(sessionId, changesAddress({ sessionId, source }))
+  }
+  const sectionFace = (sessionId: SessionId): ChangeRequestsSectionInjected => {
     const store = storesOf(sessionId)
     return {
-      hooks: { panel: store.panel.hooks.panel, host, locale },
+      hooks: { panel: store.panel.hooks.panel, locale },
       reconnect: store.panel.reconnect,
-      refresh: async () => {
-        settled(await ctx.remote.forgePanel.refresh(sessionId), 'toast.refreshFailed')
-      },
+      refresh: refreshOf(sessionId),
       remove: (entry) => { remove(sessionId, entry) },
       readChecks: async (url, headSha, signal) => {
         const result = await ctx.remote.forgePanel.changeRequestChecks(sessionId, url, headSha, signal)
@@ -183,18 +184,31 @@ function registerUi(ctx: Context): void {
         else if (result.error.code === 'forgePanel/stale-head') notices.report('toast.mergeStale', { params: { name: nameOf(entry) } })
         else notices.report('toast.mergeFailed', { params: { message: result.error.message } })
       },
-      restore: () => {
-        void restore(sessionId).then((message) => {
-          if (message !== undefined) notices.report('toast.restoreFailed', { params: { message } })
-        })
-      },
       openLink,
       copyText,
-      copyPath,
-      reportVisible: store.visibility.set,
-      createChangeRequest: () => { createChangeRequest(sessionId) },
+      viewChanges: (entry) => { openChanges(sessionId, { kind: 'change', url: entry.url }) },
     }
   }
+  const sectionActionsFace = (sessionId: SessionId): ChangeRequestsActionsInjected => ({
+    hooks: { panel: storesOf(sessionId).panel.hooks.panel },
+    refresh: refreshOf(sessionId),
+  })
+  const checkoutFace = (sessionId: SessionId): CheckoutRowInjected => ({
+    hooks: { panel: storesOf(sessionId).panel.hooks.panel, host },
+    restore: () => {
+      void restore(sessionId).then((message) => {
+        if (message !== undefined) notices.report('toast.restoreFailed', { params: { message } })
+      })
+    },
+  })
+  const localFace = (sessionId: SessionId): LocalChangesRowInjected => ({
+    hooks: { panel: storesOf(sessionId).panel.hooks.panel },
+    viewLocalChanges: () => { openChanges(sessionId, { kind: 'local' }) },
+    createChangeRequest: () => { createChangeRequest(sessionId) },
+  })
+  const attentionFace = (sessionId: SessionId): AttentionIndicatorInjected => ({
+    hooks: { panel: storesOf(sessionId).panel.hooks.panel },
+  })
   const changesFace = (sessionId: SessionId): ChangesTabInjected => {
     const store = storesOf(sessionId)
     return {
@@ -266,18 +280,36 @@ function registerUi(ctx: Context): void {
       },
     }
   }
-  ctx.effect(() => ctx.sidebarRightTabs.register({
-    id: TAB_ID, kind: TAB_KIND, title: () => t('tab.title'),
-    guide: [{
-      id: 'review', order: 15, title: () => t('guide.title'), description: () => t('guide.description'), icon: IconBranchOutlineRegular,
-    }],
-  }), 'forge-panel: sidebar tab')
-  ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
-    name: 'sidebar.right.pane.tab', key: TAB_ID, locale: NS, inject: tabFace,
-  }, ForgeTab))
-  ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register({
-    name: 'sidebar.right.pane.tab.title', key: TAB_ID, locale: NS,
-  }, ForgeTabTitle))
+  ctx.slots.inject('conversation.session.panel.section', function* () {
+    yield ctx.slots.register({
+      name: 'conversation.session.panel.section',
+      id: 'change-requests',
+      // The first section after the Environment section (0).
+      order: 100,
+      label: () => t('tab.title'),
+      locale: NS,
+      inject: sectionFace,
+    }, ChangeRequestsSection)
+    yield ctx.slots.register({
+      name: 'conversation.session.panel.section.actions', key: 'change-requests', locale: NS, inject: sectionActionsFace,
+    }, ChangeRequestsActions)
+  })
+  ctx.slots.inject('conversation.session.panel.environment.row', function* () {
+    // The checkout this refresh inspects is what the Environment section shows.
+    yield ctx.slots.register({
+      name: 'conversation.session.panel.section.actions', key: 'environment', locale: NS, inject: sectionActionsFace,
+    }, EnvironmentActions)
+    // After the project row (0).
+    yield ctx.slots.register({
+      name: 'conversation.session.panel.environment.row', id: 'forge.checkout', order: 20, locale: NS, inject: checkoutFace,
+    }, CheckoutRow)
+    yield ctx.slots.register({
+      name: 'conversation.session.panel.environment.row', id: 'forge.local', order: 30, locale: NS, inject: localFace,
+    }, LocalChangesRow)
+  })
+  ctx.slots.inject('conversation.session.panel.indicator', () => ctx.slots.register({
+    name: 'conversation.session.panel.indicator', id: 'forge.attention', locale: NS, inject: attentionFace,
+  }, AttentionIndicator))
   ctx.effect(() => ctx.sidebarRightTabs.register(changesDefinition(t)), 'forge-panel: changes tab')
   ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
     name: 'sidebar.right.pane.tab', key: CHANGES_ID, locale: NS, store: createChangesStore(), inject: changesFace,
@@ -285,25 +317,6 @@ function registerUi(ctx: Context): void {
   ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register({
     name: 'sidebar.right.pane.tab.title', key: CHANGES_ID, locale: NS,
   }, ChangesTabTitle))
-  ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register({
-    name: 'conversation.session.header.utilities',
-    id: 'forge-panel',
-    // Left of the schedule entry (-5) and the overflow menu (0), right of open-in-app (-10).
-    order: -8,
-    locale: NS,
-    inject: (sessionId: SessionId): HeaderButtonInjected => {
-      const store = storesOf(sessionId)
-      return {
-        hooks: { panel: store.panel.hooks.panel, visible: store.visibility.hooks.visible },
-        toggle: (visible) => {
-          if (!visible) { ctx.sidebarRight.openTab(TAB_KIND); return }
-          const tab = ctx.sidebarRight.tabsIn(sessionId).find(tab => tab.kind === TAB_KIND)
-          if (tab === undefined) return
-          ctx.sidebarRight.hide(tab.id)
-        },
-      }
-    },
-  }, HeaderButton))
   ctx.slots.inject('conversation.hero.options', () => ctx.slots.register({
     name: 'conversation.hero.options', id: 'forge-panel.worktree', locale: NS, inject: worktreeFace,
   }, WorktreeToggle))

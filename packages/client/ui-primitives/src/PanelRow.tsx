@@ -15,6 +15,8 @@ export interface PanelRowProps extends Omit<HTMLAttributes<HTMLElement>, 'childr
   readonly trailing?: ReactNode
   /** Make the icon and content one button with this action; the trailing area stays outside it. */
   readonly onActivate?: (() => void) | undefined
+  /** Accessible name of the `onActivate` button when its visible content does not describe the action. */
+  readonly actionLabel?: string | undefined
 }
 
 /**
@@ -22,7 +24,7 @@ export interface PanelRowProps extends Omit<HTMLAttributes<HTMLElement>, 'childr
  * @param props - row content, the optional action, and attributes for the outer element.
  * @returns the row element.
  */
-export function PanelRow({ icon, children, trailing, onActivate, className, ...attributes }: PanelRowProps) {
+export function PanelRow({ icon, children, trailing, onActivate, actionLabel, className, ...attributes }: PanelRowProps) {
   const body = (
     <>
       <span className={css.icon} aria-hidden="true">{icon}</span>
@@ -33,7 +35,7 @@ export function PanelRow({ icon, children, trailing, onActivate, className, ...a
     <div {...attributes} className={clsx(css.row, className)} data-panel-row="">
       {onActivate === undefined
         ? <span className={css.body}>{body}</span>
-        : <button type="button" className={clsx(css.body, css.action)} onClick={onActivate}>{body}</button>}
+        : <button type="button" className={clsx(css.body, css.action)} aria-label={actionLabel} onClick={onActivate}>{body}</button>}
       {trailing !== undefined && <span className={css.trailing}>{trailing}</span>}
     </div>
   )

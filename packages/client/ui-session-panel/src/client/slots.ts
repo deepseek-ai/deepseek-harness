@@ -31,8 +31,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * assistive technology, which becomes part of the toggle's name.
      */
     'conversation.session.panel.indicator': { kind: 'list'; scope: 'session'; inline: true }
-    /** Rows of the built-in Environment section in ascending `order`. */
-    'conversation.session.panel.environment.row': { kind: 'list'; scope: 'session' }
+    /** Rows of the built-in Environment section in ascending `order`; they receive the section's owner values. */
+    'conversation.session.panel.environment.row': { kind: 'list'; scope: 'session'; owner: SessionPanelSectionOwnerProps }
   }
 }
 

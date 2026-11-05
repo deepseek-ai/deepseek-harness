@@ -236,39 +236,3 @@ export function createNoticeSource(): NoticeSource {
     dismiss: () => { publish(null) },
   }
 }
-
-/** Whether one Session's forge tab is visible; the header entry reads it for its pressed state. */
-export interface VisibilitySource {
-  /** Current visibility; the renderer binds it as `useVisible`. */
-  readonly hooks: { readonly visible: HostObservable<boolean> }
-  /**
-   * Record the tab's visibility.
-   * @param visible - whether the tab is visible.
-   */
-  readonly set: (visible: boolean) => void
-}
-
-/**
- * Create the visibility store of one Session's forge tab, initially hidden.
- * @returns the store.
- */
-export function createVisibilitySource(): VisibilitySource {
-  let visible = false
-  const listeners = new Set<() => void>()
-  return {
-    hooks: {
-      visible: {
-        getSnapshot: () => visible,
-        subscribe(listener) {
-          listeners.add(listener)
-          return () => { listeners.delete(listener) }
-        },
-      },
-    },
-    set: (next) => {
-      if (next === visible) return
-      visible = next
-      for (const listener of [...listeners]) listener()
-    },
-  }
-}

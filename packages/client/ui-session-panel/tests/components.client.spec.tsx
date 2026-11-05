@@ -206,10 +206,12 @@ describe('SessionPanel', () => {
 })
 
 describe('EnvironmentSection', () => {
-  it('renders its rows straight into the section body', () => {
+  it('renders its rows straight into the section body with the section owner values', () => {
     const renderSlot = vi.fn(() => <span>row</span>)
-    render(<>{EnvironmentSection({ renderSlot } as EnvironmentSectionProps)}</>)
-    expect(renderSlot).toHaveBeenCalledWith('conversation.session.panel.environment.row', {})
+    const dismissOverlay = vi.fn<() => void>()
+    render(<>{EnvironmentSection({ presentation: 'overlay', dismissOverlay, renderSlot } as Pick<EnvironmentSectionProps,
+      'presentation' | 'dismissOverlay' | 'renderSlot'> as EnvironmentSectionProps)}</>)
+    expect(renderSlot).toHaveBeenCalledWith('conversation.session.panel.environment.row', { presentation: 'overlay', dismissOverlay })
     expect(screen.getByText('row')).toBeTruthy()
   })
 })

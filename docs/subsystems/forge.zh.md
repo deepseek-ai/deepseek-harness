@@ -567,7 +567,7 @@ type ForgeChangeRequestStatesFrame =
   | { readonly type: 'changed'; readonly states: readonly ForgeChangeRequestListState[] }
 ```
 
-变更视图经同一个 Remote 读取。`localDiff` 读取 Session 检出的某个 `ForgeLocalScope`；`changeRequestDiff` 经提供方的 `diff` 读取已绑定变更请求在其最新状态 head 处的变更；两者返回的文件都已在宿主上解析为 `ForgeDiffFile` 的 hunk。`localText` 与 `changeRequestText` 读取一个文件的新版本，用来补出 hunk 之间未变更的行。每次检查还会把 `branch` 范围的规模统计为 `ForgePanelState.local`，供面板的变更卡片使用，始终以自动分叉点为准。`base` 指定了引用的 `branch` 范围改为与 HEAD 和该分支的合并基准比较；`diffBases` 列出视图可选的分支以及自动分叉点。
+变更视图经同一个 Remote 读取。`localDiff` 读取 Session 检出的某个 `ForgeLocalScope`；`changeRequestDiff` 经提供方的 `diff` 读取已绑定变更请求在其最新状态 head 处的变更；两者返回的文件都已在宿主上解析为 `ForgeDiffFile` 的 hunk。`localText` 与 `changeRequestText` 读取一个文件的新版本，用来补出 hunk 之间未变更的行。每次检查还会把 `branch` 范围的规模统计为 `ForgePanelState.local`，供会话面板的本地变更行使用，始终以自动分叉点为准。`base` 指定了引用的 `branch` 范围改为与 HEAD 和该分支的合并基准比较；`diffBases` 列出视图可选的分支以及自动分叉点。
 
 ```ts type-equiv
 /** Which local changes a diff covers; each reads the Session's checkout through Git. */
@@ -707,7 +707,7 @@ interface ForgeChangedFile {
 ```
 
 ```ts type-equiv
-/** Size of the `branch` scope, which the panel's local changes card shows. */
+/** Size of the `branch` scope, which the Session panel's local changes row shows. */
 interface ForgeLocalChanges {
   /** Ref or abbreviated commit the scope compares with. */
   readonly base: string

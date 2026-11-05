@@ -6,7 +6,7 @@ import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { changesTitle, parseChangesAddress } from './changes-address.ts'
 import type { NS } from './locales.ts'
-import css from './ForgeTab.module.css'
+import css from './Forge.module.css'
 
 /** Props of the changes tab title. */
 export type ChangesTabTitleProps = Pick<PropsRuntime<'sidebar.right.pane.tab.title'>, 'useTabInfo'> & PropsLocale<typeof NS>

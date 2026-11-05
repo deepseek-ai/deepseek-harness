@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/** Session header entry, forge and changes tab titles, and action toast rendering. */
+/** Attention indicator, changes tab title, and action toast rendering. */
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -10,8 +10,7 @@ import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { ActionToast } from '../src/client/ActionToast.tsx'
 import { changesAddress } from '../src/client/changes-address.ts'
 import { ChangesTabTitle } from '../src/client/ChangesTabTitle.tsx'
-import { ForgeTabTitle } from '../src/client/ForgeTabTitle.tsx'
-import { HeaderButton } from '../src/client/HeaderButton.tsx'
+import { AttentionIndicator, type AttentionIndicatorProps } from '../src/client/AttentionIndicator.tsx'
 import { en } from '../src/client/locales.ts'
 import { createNoticeSource, type PanelSnapshot } from '../src/client/source.ts'
 import type { ForgePanelState } from '../src/types.ts'
@@ -24,74 +23,30 @@ afterEach(() => {
 
 const t = makeTranslate(en)
 
-describe('HeaderButton', () => {
-  function header(state: ForgePanelState | null, visible = false) {
+describe('AttentionIndicator', () => {
+  function indicator(state: ForgePanelState | null) {
     const panel = createSnapshotStore<PanelSnapshot>({ state, disconnected: false })
-    const visibility = createSnapshotStore<boolean>(visible)
-    const toggle = vi.fn<(visible: boolean) => void>()
-    const view = render(
-      <HeaderButton usePanel={bindSnapshotSelector(panel)} useVisible={bindSnapshotSelector(visibility)} toggle={toggle} t={t} />,
-    )
-    return { panel, visibility, toggle, view, button: () => view.container.querySelector('[data-forge-header]') }
+    const props = { usePanel: bindSnapshotSelector(panel), t } as
+      Pick<AttentionIndicatorProps, 'usePanel' | 't'> as AttentionIndicatorProps
+    const view = render(<AttentionIndicator {...props} />)
+    return { panel, view }
   }
 
   it.each([
     ['before the first state', null],
-    ['outside a Git checkout', ready({ checkout: { state: 'none' } })],
-    ['while the first inspection of an unknown repository runs', ready({ checkout: { state: 'pending' }, repository: null })],
-  ])('stays hidden %s', (_label, state) => {
-    expect(header(state).view.container.innerHTML).toBe('')
+    ['without change requests', ready()],
+    ['while every change request is fine', ready({ changeRequests: [entry(1, snapshot(1))] })],
+  ])('renders nothing %s', (_label, state) => {
+    expect(indicator(state).view.container.innerHTML).toBe('')
   })
 
-  it.each([
-    ['a ready checkout', ready()],
-    ['a failed inspection', ready({ checkout: { state: 'failed', message: 'boom' } })],
-    ['a repeated inspection of a known repository', ready({ checkout: { state: 'pending' } })],
-    ['bound change requests outside a Git checkout', ready({ checkout: { state: 'none' }, changeRequests: [entry(1, snapshot(1))] })],
-  ])('opens the hidden tab for %s', (_label, state) => {
-    const b = header(state)
-    const button = b.view.getByRole('button', { name: en['header.label'] })
-    expect(button.getAttribute('aria-pressed')).toBe('false')
-    expect(button.querySelector('[data-state]')).toBeNull()
-    fireEvent.click(button)
-    expect(b.toggle).toHaveBeenCalledWith(false)
-  })
-
-  it('marks change requests that need attention', () => {
-    const b = header(ready({ changeRequests: [entry(1, snapshot(1)), entry(2, snapshot(2, { checksRollup: 'failure' }))] }))
-    const button = b.view.getByRole('button', { name: en['header.attention'] })
-    expect(button.querySelector('[data-state="error"]')).not.toBeNull()
-  })
-
-  it('follows the tab visibility and hides a visible tab', () => {
-    const b = header(ready(), true)
-    const button = b.view.getByRole('button', { name: en['header.label'] })
-    expect(button.getAttribute('aria-pressed')).toBe('true')
-    fireEvent.click(button)
-    expect(b.toggle).toHaveBeenLastCalledWith(true)
-
-    act(() => { b.visibility.set(false) })
-    expect(button.getAttribute('aria-pressed')).toBe('false')
-    fireEvent.click(button)
-    expect(b.toggle).toHaveBeenLastCalledWith(false)
-  })
-
-  it('appears, changes its label, and disappears as the panel state changes', () => {
-    const b = header(null)
-    act(() => { b.panel.set({ state: ready(), disconnected: false }) })
-    expect(b.button()?.getAttribute('aria-label')).toBe(en['header.label'])
-    act(() => { b.panel.set({ state: ready({ changeRequests: [entry(1, snapshot(1, { mergeability: 'conflicting' }))] }), disconnected: false }) })
-    expect(b.button()?.getAttribute('aria-label')).toBe(en['header.attention'])
-    act(() => { b.panel.set({ state: ready({ checkout: { state: 'none' } }), disconnected: true }) })
-    expect(b.button()).toBeNull()
-  })
-})
-
-describe('ForgeTabTitle', () => {
-  it('shows the branch glyph and the tab name', () => {
-    const view = render(<ForgeTabTitle t={t} />)
-    expect(view.getByText(en['tab.title'])).toBeTruthy()
-    expect(view.container.querySelector('svg')).not.toBeNull()
+  it('marks change requests that need attention and names the mark', () => {
+    const b = indicator(ready({ changeRequests: [entry(1, snapshot(1)), entry(2, snapshot(2, { checksRollup: 'failure' }))] }))
+    const mark = b.view.container.querySelector('[data-forge-attention]')
+    expect(mark?.querySelector('[data-state="error"]')).not.toBeNull()
+    expect(mark?.textContent).toBe(en['header.attention'])
+    act(() => { b.panel.set({ state: ready({ changeRequests: [entry(1, snapshot(1))] }), disconnected: false }) })
+    expect(b.view.container.innerHTML).toBe('')
   })
 })
 
