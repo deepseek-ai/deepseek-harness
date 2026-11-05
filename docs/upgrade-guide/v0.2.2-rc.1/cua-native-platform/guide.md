@@ -19,6 +19,6 @@ The object API now reads initial AX state silently in `getApp` and `getWindow`. 
 
 1. If using the bundled native helper, upgrade the CUA packages together. No profile edit is needed.
 2. If setting `helperPath`, rebuild that helper against the current protocol. Add `platform: "darwin"` to macOS permission responses, or implement the Windows response fields in [`CuaSystemPermissionState`](../../../../packages/experimental/cua/src/access-types.ts).
-3. In custom provider integrations, remove `description` from the object passed to `installCua`. Keep platform instructions in `guidance`.
-4. If a script relies on selection to print the AX tree, explicitly call `await app.getAXState()` or `await window.getAXState()` afterward. Selection still initializes element indices.
+3. In custom provider integrations, remove `description` from the object passed to `installCua`. Pass the provider’s `capabilities`, `guidance`, and `permissionParameters` to the shared executor.
+4. If a script relies on selection to print the AX tree, explicitly call `await app.getAccessibilityTree()` or `await window.getAccessibilityTree()` afterward. Selection still initializes element IDs.
 5. Restart the provider and open Computer Use details. Confirm that status queries succeed and show the platform's access controls; rebuild custom TypeScript consumers to check the updated interface.

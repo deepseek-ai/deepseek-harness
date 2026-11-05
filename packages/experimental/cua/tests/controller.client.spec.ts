@@ -39,11 +39,11 @@ it('refreshes after a request and then waits for an explicit refresh', async () 
     f.actions.systemStatus.mockResolvedValue({ ok: true, value: { ...value, screenRecording: true } })
     await vi.advanceTimersByTimeAsync(120000)
     expect(f.actions.systemStatus).toHaveBeenCalledOnce()
-    expect(f.controller.state.getSnapshot().system.value?.screenRecording).toBe(false)
+    expect(f.controller.state.getSnapshot().system.value).toMatchObject({ platform: 'darwin', screenRecording: false })
     f.face.refresh()
     await vi.advanceTimersByTimeAsync(0)
     expect(f.actions.systemStatus).toHaveBeenCalledTimes(2)
-    expect(f.controller.state.getSnapshot().system.value?.screenRecording).toBe(true)
+    expect(f.controller.state.getSnapshot().system.value).toMatchObject({ platform: 'darwin', screenRecording: true })
   } finally { await f.controller.dispose(); vi.useRealTimers() }
 })
 

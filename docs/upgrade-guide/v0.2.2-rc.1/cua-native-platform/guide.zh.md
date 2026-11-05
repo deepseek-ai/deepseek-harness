@@ -19,6 +19,6 @@ description: "自定义原生 CUA helper 的权限响应必须带平台标记，
 
 1. 使用随包原生 helper 时，一起升级 CUA 包，无需编辑 profile。
 2. 设置了 `helperPath` 时，按当前协议重新构建该 helper。在 macOS 权限响应中添加 `platform: "darwin"`，或实现 [`CuaSystemPermissionState`](../../../../packages/experimental/cua/src/access-types.ts) 中的 Windows 响应字段。
-3. 在自定义提供方集成中，从传给 `installCua` 的对象中移除 `description`，把平台指引保留在 `guidance` 中。
-4. 如果脚本依赖选择操作输出 AX 树，请随后显式调用 `await app.getAXState()` 或 `await window.getAXState()`。选择操作仍会初始化元素索引。
+3. 在自定义提供方集成中，从传给 `installCua` 的对象中移除 `description`，传入提供方的 `capabilities`、`guidance` 和 `permissionParameters`。
+4. 如果脚本依赖选择操作输出 AX 树，请随后显式调用 `await app.getAccessibilityTree()` 或 `await window.getAccessibilityTree()`。选择操作仍会初始化元素 ID。
 5. 重启提供方并打开 Computer Use 详情，确认状态查询成功且显示对应平台的访问控件；重新构建自定义 TypeScript 消费者，检查更新后的接口。
