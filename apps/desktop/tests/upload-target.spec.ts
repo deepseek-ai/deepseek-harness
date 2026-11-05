@@ -13,7 +13,7 @@ vi.mock('../scripts/desktop-edgeone.ts', async importOriginal => ({
 
 vi.mock('../scripts/desktop-package-environment.mjs', () => ({ loadDesktopPackageEnvironment: vi.fn() }))
 vi.mock('../scripts/desktop-upload-plan.ts', () => ({ createDesktopUploadPlan: vi.fn() }))
-vi.mock('../scripts/desktop-cos.ts', () => ({ createDesktopCos: vi.fn() }))
+vi.mock('@deepseek-ai/dsh-desktop-publisher/desktop-cos.ts', () => ({ createDesktopCos: vi.fn() }))
 vi.mock('../scripts/desktop-upload-run.ts', () => ({ uploadDesktopRelease: vi.fn() }))
 vi.mock('../scripts/desktop-release-tag.ts', async importOriginal => ({
   ...await importOriginal<typeof import('../scripts/desktop-release-tag.ts')>(),

@@ -11,7 +11,7 @@ import {
   desktopLatestInstallerFilename,
   desktopUpdateMetadataFilename,
   resolveDesktopUploadConfig,
-} from './desktop-auto-update-environment.mjs'
+} from '@deepseek-ai/dsh-desktop-publisher/desktop-auto-update-environment.mjs'
 import { desktopTargetBuildPaths } from './desktop-build-paths.mjs'
 import { validateDesktopBuildVersion } from './desktop-build-version.mjs'
 
@@ -27,35 +27,8 @@ const TARGETS = {
   readonly os: string
 }>
 
-/** One local file and its final object metadata. */
-export interface DesktopUploadArtifact {
-  readonly path: string
-  readonly filename: string
-  readonly key: string
-  readonly contentType: string
-  /** Browser save name for fixed website downloads, preserving the validated installer basename. */
-  readonly contentDisposition?: string
-  readonly channelMetadata: boolean
-  /** Published YAML with normalized artifact URLs; binary bytes remain file-backed. */
-  readonly contents?: string
-}
-
-/** A validated installer or update upload, with any channel metadata ordered last. */
-export interface DesktopUploadPlan {
-  readonly environment: 'test' | 'production'
-  readonly target: DesktopPackageTargetName
-  readonly version: string
-  /** Update feed directory URL, or the single installer URL for a fixed download. */
-  readonly publicUrl: string
-  readonly bucket: string
-  readonly secretIdEnvName: string
-  readonly secretKeyEnvName: string
-  readonly artifacts: readonly DesktopUploadArtifact[]
-  /** Commit the artifacts were packaged from, absent for a package built before builds recorded it. */
-  readonly commit?: string
-  /** Whether that checkout carried uncommitted changes. */
-  readonly dirty?: boolean
-}
+import type { DesktopUploadArtifact, DesktopUploadPlan } from '@deepseek-ai/dsh-desktop-publisher/desktop-upload-types.ts'
+export type { DesktopUploadArtifact, DesktopUploadPlan } from '@deepseek-ai/dsh-desktop-publisher/desktop-upload-types.ts'
 
 /** Filesystem and environment inputs used to validate one upload. */
 export interface DesktopUploadPlanOptions {

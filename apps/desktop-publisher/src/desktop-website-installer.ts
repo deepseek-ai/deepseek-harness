@@ -9,11 +9,11 @@ import { createDesktopCos, DESKTOP_COS_REGION, type DesktopCosCredentials } from
 import { cosOperation } from './cos-operation.ts'
 import type { DesktopObjectDigest, DesktopPublishTransport } from './desktop-publish.ts'
 import { DesktopCosOperationError } from './desktop-publication-failure.ts'
-import type { DesktopUploadPlan } from './desktop-upload-plan.ts'
+import type { DesktopSingleUploadPlan } from './desktop-upload-types.ts'
 
 /** Verified file and destination; the caller closes the handle after publication. */
 export interface DesktopWebsiteInstaller {
-  readonly plan: DesktopUploadPlan
+  readonly plan: DesktopSingleUploadPlan
   readonly digest: DesktopObjectDigest
   readonly md5: string
   readonly contentDisposition: string
@@ -52,7 +52,7 @@ export async function prepareWebsiteInstaller(directory: string, manifest: Deskt
     const sha512 = createHash('sha512')
     const md5 = createHash('md5')
     let size = 0
-    for await (const bytes of handle.createReadStream({ autoClose: false, start: 0 })) {
+    for await (const bytes of handle.createReadStream({ autoClose: false, start: 0 }) as AsyncIterable<Buffer>) {
       size += bytes.length
       sha512.update(bytes)
       md5.update(bytes)
@@ -89,7 +89,7 @@ export async function uploadWebsiteInstaller(installer: DesktopWebsiteInstaller,
   record: (event: 'upload-intent' | 'uploaded') => Promise<void>,
   options: { createClient?: typeof createDesktopCos; previouslyUploaded?: boolean } = {},
 ): Promise<'uploaded' | 'present'> {
-  const artifact = installer.plan.artifacts[0]!
+  const artifact = installer.plan.artifacts[0]
   const matches = (remote: DesktopObjectDigest | null) =>
     remote?.size === installer.digest.size && remote.sha512 === installer.digest.sha512
   const remote = await transport.read(artifact.key, false)

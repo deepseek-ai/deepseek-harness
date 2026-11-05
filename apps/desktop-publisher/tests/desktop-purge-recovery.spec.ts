@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { desktopPublicationFailure } from '../scripts/desktop-publication-failure.ts'
-import { recoverDesktopPurge, type DesktopPurgeRecord, type DesktopPurgeRecoveryOptions } from '../scripts/desktop-purge-recovery.ts'
+import { desktopPublicationFailure } from '@deepseek-ai/dsh-desktop-publisher/desktop-publication-failure.ts'
+import { recoverDesktopPurge, type DesktopPurgeRecord, type DesktopPurgeRecoveryOptions } from '@deepseek-ai/dsh-desktop-publisher/desktop-purge-recovery.ts'
 
 const config = { zoneId: 'zone-test', publicUrl: 'https://download.deepseek.com/desktop/test.dmg', secretId: 'secret-id', secretKey: 'secret-key' }
 const submittedAt = '2026-10-30T00:00:00.000Z'

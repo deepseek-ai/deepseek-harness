@@ -3,10 +3,10 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import * as desktopCos from '../scripts/desktop-cos.ts'
+import * as desktopCos from '@deepseek-ai/dsh-desktop-publisher/desktop-cos.ts'
 import { answer, cosError, startCosLoopback } from './cos-loopback.ts'
 import { teo } from 'tencentcloud-sdk-nodejs-teo'
-import { publishWebsiteCi, websiteApproval } from '../scripts/publish-website-ci.ts'
+import { publishWebsiteCi, websiteApproval } from '@deepseek-ai/dsh-desktop-publisher/publish-website-ci.ts'
 
 vi.mock('node:timers/promises', () => ({ setTimeout: async () => {} }))
 afterEach(() => vi.restoreAllMocks())

@@ -1,8 +1,8 @@
 import { Readable, Writable } from 'node:stream'
 import type { ServerResponse } from 'node:http'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cosOperation } from '../scripts/cos-operation.ts'
-import { createDesktopCos } from '../scripts/desktop-cos.ts'
+import { cosOperation } from '@deepseek-ai/dsh-desktop-publisher/cos-operation.ts'
+import { createDesktopCos } from '@deepseek-ai/dsh-desktop-publisher/desktop-cos.ts'
 import { answer, cosError, startCosLoopback, type CosLoopback } from './cos-loopback.ts'
 
 const loopbacks: CosLoopback[] = []

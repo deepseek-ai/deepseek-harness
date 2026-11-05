@@ -734,6 +734,9 @@ importers:
         specifier: ^8.21.3
         version: 8.21.3
     devDependencies:
+      '@deepseek-ai/dsh-desktop-publisher':
+        specifier: workspace:*
+        version: link:../desktop-publisher
       '@deepseek-ai/dsh-app-boot':
         specifier: workspace:*
         version: link:../../packages/boot/app-boot
@@ -842,6 +845,27 @@ importers:
       zod:
         specifier: 4.6.6
         version: 4.6.6
+
+  apps/desktop-publisher:
+    dependencies:
+      zod:
+        specifier: 4.6.6
+        version: 4.6.6
+      js-yaml:
+        specifier: ^4.3.2
+        version: 4.3.2
+      semver:
+        specifier: ^7.8.5
+        version: 7.8.5
+      cos-nodejs-sdk-v5:
+        specifier: 3.0.0
+        version: 3.0.0
+      tencentcloud-sdk-nodejs-teo:
+        specifier: 4.1.330
+        version: 4.1.330(supports-color@9.4.0)
+      tsx:
+        specifier: ^4.23.13
+        version: 4.23.13
 
   apps/desktop-host:
     dependencies:

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { expect, it } from 'vitest'
-import { createDesktopPublicationRecord, wasDesktopAttemptPublished, withDesktopChannelLock } from '../scripts/desktop-publish-record.ts'
+import { createDesktopPublicationRecord, wasDesktopAttemptPublished, withDesktopChannelLock } from '@deepseek-ai/dsh-desktop-publisher/desktop-publish-record.ts'
 
 it('excludes another process while a channel lock is held and admits it after release', async () => {
   const root = await mkdtemp(join(tmpdir(), 'desktop-process-lock-'))
@@ -18,7 +18,7 @@ it('excludes another process while a channel lock is held and admits it after re
     }
   `
   const contender = () => promisify(execFile)(process.execPath, ['--import', 'tsx/esm', '--input-type=module', '-e', script,
-    new URL('../scripts/desktop-publish-record.ts', import.meta.url).href, root], { encoding: 'utf8' })
+    new URL('../src/desktop-publish-record.ts', import.meta.url).href, root], { encoding: 'utf8' })
   try {
     await withDesktopChannelLock(root, 'bucket/mac', async () => {
       expect((await contender()).stdout).toBe('locked')

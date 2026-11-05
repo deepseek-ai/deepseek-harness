@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { dump, load } from 'js-yaml'
 
 const CONFIG_FILENAME = 'app-update.yml'
-import { resolveDesktopUpdateChannel } from './desktop-auto-update-environment.mjs'
+import { resolveDesktopUpdateChannel } from '@deepseek-ai/dsh-desktop-publisher/desktop-auto-update-environment.mjs'
 
 function object(value, label) {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {

@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import type COS from 'cos-nodejs-sdk-v5'
 import type { DesktopUploadArtifact, DesktopUploadPlan } from './desktop-upload-plan.ts'
-import { DESKTOP_COS_REGION } from './desktop-cos.ts'
+import { DESKTOP_COS_REGION } from '@deepseek-ai/dsh-desktop-publisher/desktop-cos.ts'
 import { recordPackagingEvent } from './packaging-run.mjs'
 
 const FAILURE_CODES = new Set(['AccessDenied', 'InternalError', 'NoSuchBucket', 'BadDigest', 'SignatureDoesNotMatch',
@@ -84,7 +84,9 @@ export async function uploadDesktopRelease(plan: DesktopUploadPlan, cos: COS, re
     }
     const sourceSha256: Record<string, string> = {}
     for (const filename of UPLOADER_SOURCES) {
-      sourceSha256[filename] = createHash('sha256').update(await readFile(join(import.meta.dirname, filename))).digest('hex')
+      sourceSha256[filename] = createHash('sha256').update(await readFile(filename === 'desktop-cos.ts'
+        ? new URL(import.meta.resolve('@deepseek-ai/dsh-desktop-publisher/desktop-cos.ts'))
+        : join(import.meta.dirname, filename))).digest('hex')
     }
     await writeFile(join(directory, 'plan.json'), `${JSON.stringify({ schemaVersion: 1,
       environment: plan.environment, target: plan.target, version: plan.version, bucket: plan.bucket,

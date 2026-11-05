@@ -2,7 +2,7 @@
 import { execFileSync } from 'node:child_process'
 import { appendFile, readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import { desktopPublishQualificationError } from './desktop-publish-qualification.mjs'
+import { desktopPublishQualificationError } from '@deepseek-ai/dsh-desktop-publisher/desktop-publish-qualification.mjs'
 
 /**
  * Pin the requested attempt and reject its explicitly named debugging artifacts.

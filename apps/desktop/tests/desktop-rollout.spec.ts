@@ -7,17 +7,17 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { teo } from 'tencentcloud-sdk-nodejs-teo'
 import { createDesktopUploadPlan } from '../scripts/desktop-upload-plan.ts'
-import { desktopBuildRecordFilename, desktopWebsiteInstallerUrl } from '../scripts/desktop-auto-update-environment.mjs'
+import { desktopBuildRecordFilename, desktopWebsiteInstallerUrl } from '@deepseek-ai/dsh-desktop-publisher/desktop-auto-update-environment.mjs'
 import { dump, load } from 'js-yaml'
 import { expect, it, vi } from 'vitest'
-import { prepareDesktopRollout, rolloutDesktopRelease } from '../scripts/desktop-rollout.ts'
-import * as cosTransport from '../scripts/desktop-publish-cos.ts'
-import * as websitePublisher from '../scripts/publish-website-ci.ts'
-import { prepareDesktopRolloutCi, publishDesktopRolloutCi } from '../scripts/publish-desktop-rollout-ci.ts'
-import { createDesktopPublicationRecord } from '../scripts/desktop-publish-record.ts'
-import { readRetainedDesktopManifest, type DesktopRetainedManifest } from '../scripts/desktop-release-store.ts'
-import { resolveRetainedDesktopPublication } from '../scripts/resolve-retained-desktop-publish-ci.ts'
-import type { DesktopPublishEvent, DesktopRemoteObject, DesktopPublishTransport } from '../scripts/desktop-publish.ts'
+import { prepareDesktopRollout, rolloutDesktopRelease } from '@deepseek-ai/dsh-desktop-publisher/desktop-rollout.ts'
+import * as cosTransport from '@deepseek-ai/dsh-desktop-publisher/desktop-publish-cos.ts'
+import * as websitePublisher from '@deepseek-ai/dsh-desktop-publisher/publish-website-ci.ts'
+import { prepareDesktopRolloutCi, publishDesktopRolloutCi } from '@deepseek-ai/dsh-desktop-publisher/publish-desktop-rollout-ci.ts'
+import { createDesktopPublicationRecord } from '@deepseek-ai/dsh-desktop-publisher/desktop-publish-record.ts'
+import { readRetainedDesktopManifest, type DesktopRetainedManifest } from '@deepseek-ai/dsh-desktop-publisher/desktop-release-store.ts'
+import { resolveRetainedDesktopPublication } from '@deepseek-ai/dsh-desktop-publisher/resolve-retained-desktop-publish-ci.ts'
+import type { DesktopPublishEvent, DesktopRemoteObject, DesktopPublishTransport } from '@deepseek-ai/dsh-desktop-publisher/desktop-publish.ts'
 
 const digest = (contents: string) => ({
   size: Buffer.byteLength(contents), sha512: createHash('sha512').update(contents).digest('base64'),
@@ -284,7 +284,7 @@ it('runs the real route CLI without gh and emits the selected route and preset',
       routes: { runner: { label: 'dsh-runner', target: 'mac-arm64' } },
     }
     const result = await promisify(execFile)(process.execPath,
-      ['--import', 'tsx/esm', 'apps/desktop/scripts/publish-desktop-rollout-ci.ts', 'route'], {
+      ['--import', 'tsx/esm', 'apps/desktop-publisher/src/publish-desktop-rollout-ci.ts', 'route'], {
         timeout: 30_000, env: {
           ...Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toLowerCase() !== 'path')), PATH: '',
           GH_TOKEN: 'fixture-token', GITHUB_API_URL: `http://127.0.0.1:${address.port}`, GITHUB_OUTPUT: output,
@@ -403,6 +403,6 @@ it('executes the master guard and keeps all rollout preflights ahead of dependen
     if (name === 'route') continue
     const local = job.steps.findIndex(step => step.run?.includes('preflight-desktop-publish-local.mjs'))
     expect(local).toBeGreaterThanOrEqual(0)
-    expect(local).toBeLessThan(job.steps.findIndex(step => step.run === 'pnpm install --frozen-lockfile'))
+    expect(local).toBeLessThan(job.steps.findIndex(step => step.run === 'pnpm --filter @deepseek-ai/dsh-desktop-publisher --fail-if-no-match install --prod --frozen-lockfile --ignore-scripts'))
   }
 })

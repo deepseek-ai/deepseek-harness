@@ -2,8 +2,8 @@ import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { expect, it } from 'vitest'
 import { z } from 'zod'
-import { DesktopCosOperationError, desktopPublicationFailure } from '../scripts/desktop-publication-failure.ts'
-import { DesktopPublishError } from '../scripts/desktop-publish.ts'
+import { DesktopCosOperationError, desktopPublicationFailure } from '@deepseek-ai/dsh-desktop-publisher/desktop-publication-failure.ts'
+import { DesktopPublishError } from '@deepseek-ai/dsh-desktop-publisher/desktop-publish.ts'
 
 it('preserves actionable validation and filesystem diagnostics', () => {
   expect(desktopPublicationFailure(new DesktopPublishError('conflict', 'desktop publish: object differs: bin/app.exe'), 'upload'))
@@ -26,7 +26,7 @@ it('does not retain provider bodies, unknown messages, JSON input or invalid fie
 
 it('prints rollback usage through the real CLI before any audit or remote operation', () => {
   const result = spawnSync(process.execPath, ['--import', 'tsx/esm',
-    fileURLToPath(new URL('../scripts/rollback-desktop-channel.ts', import.meta.url))], { encoding: 'utf8', timeout: 30_000 })
+    fileURLToPath(new URL('../../desktop/scripts/rollback-desktop-channel.ts', import.meta.url))], { encoding: 'utf8', timeout: 30_000 })
   expect(result.error).toBeUndefined()
   expect(result.signal).toBeNull()
   expect(result.status).toBe(1)
@@ -47,7 +47,7 @@ it('omits malformed provider receipt fields and never copies raw errors into COS
 
 it('prints structured archival failure through the real CLI', () => {
   const result = spawnSync(process.execPath, ['--import', 'tsx/esm',
-    fileURLToPath(new URL('../scripts/archive-desktop-ci.ts', import.meta.url))], {
+    fileURLToPath(new URL('../../desktop/scripts/archive-desktop-ci.ts', import.meta.url))], {
     encoding: 'utf8', timeout: 30_000, env: { ...process.env, DESKTOP_ARCHIVE_NAME: '', GITHUB_OUTPUT: '' },
   })
   expect(result.error).toBeUndefined()
@@ -66,7 +66,7 @@ it.each(['percentage cannot decrease; inspect the current rollout', 'feed change
 
 it.each([['check', 'extra'], ['route']])('prints actionable rollout CLI failures for %s', (...args) => {
   const result = spawnSync(process.execPath, ['--import', 'tsx/esm',
-    fileURLToPath(new URL('../scripts/publish-desktop-rollout-ci.ts', import.meta.url)), ...args], {
+    fileURLToPath(new URL('../src/publish-desktop-rollout-ci.ts', import.meta.url)), ...args], {
     encoding: 'utf8', timeout: 30_000, env: { ...process.env, GITHUB_OUTPUT: '', GH_TOKEN: '' },
   })
   expect(result.error).toBeUndefined()

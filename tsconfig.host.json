@@ -245,6 +245,8 @@
     "apps/cli/tests/**/*.ts",
     "apps/plugin-market-generator/tests/**/*.ts",
     "apps/desktop/scripts/**/*.ts",
+    "apps/desktop-publisher/src/**/*.ts",
+    "apps/desktop-publisher/tests/**/*.ts",
     "apps/desktop/tests/**/*.ts",
     "apps/desktop-host/tests/**/*.ts",
     "benchmarks/**/*.ts",

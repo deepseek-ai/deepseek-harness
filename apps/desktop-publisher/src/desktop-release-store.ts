@@ -44,7 +44,7 @@ async function fingerprint(path: string) {
   if (!info.isFile() || info.isSymbolicLink()) throw new Error('desktop release store: expected a regular file')
   const hash = createHash('sha512')
   let size = 0
-  for await (const bytes of createReadStream(path)) { size += bytes.length; hash.update(bytes) }
+  for await (const bytes of createReadStream(path) as AsyncIterable<Buffer>) { size += bytes.length; hash.update(bytes) }
   if (size === 0) throw new Error('desktop release store: empty artifact')
   return { size, sha512: hash.digest('base64') }
 }

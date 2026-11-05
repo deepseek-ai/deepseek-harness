@@ -47,7 +47,7 @@ export function createDesktopCos(credentials: DesktopCosCredentials, timeoutMs: 
   })
   cos.on('before-send', (options: CosRequestOptions) => {
     for (const name of Object.keys(options.headers)) {
-      if (name.toLowerCase() === 'cache-control' && options.headers[name] === '') delete options.headers[name]
+      if (name.toLowerCase() === 'cache-control' && options.headers[name] === '') Reflect.deleteProperty(options.headers, name)
     }
   })
   return cos

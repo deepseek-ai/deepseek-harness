@@ -4,7 +4,7 @@ import { appendFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { z } from 'zod'
 import { readDesktopPublishConfig, readDesktopUploadCredentials } from './desktop-publish-config.ts'
-import { desktopReleasesRoot } from './retain-desktop-ci.ts'
+import { desktopReleasesRoot } from './desktop-releases-root.ts'
 import { readRetainedDesktopManifest, retainedDesktopPath } from './desktop-release-store.ts'
 import { resolveRetainedDesktopPublication, retainedDesktopPublishApi } from './resolve-retained-desktop-publish-ci.ts'
 import { createDesktopPublicationRecord, findDesktopPublication, withDesktopChannelLock } from './desktop-publish-record.ts'
@@ -49,7 +49,7 @@ export async function prepareDesktopRolloutCi(env: NodeJS.ProcessEnv) {
     || source.qualification !== (source.target === 'win-x64' ? 'signed' : 'notarized')) {
     throw new Error('desktop rollout: repository or release qualification mismatch')
   }
-  const config = await readDesktopPublishConfig(env.DSH_PACKAGING_CONFIG_DIR!, source.preset)
+  const config = await readDesktopPublishConfig(z.string().parse(env.DSH_PACKAGING_CONFIG_DIR), source.preset)
   const environment = source.preset === 'test'
     ? { DSH_DESKTOP_AUTO_UPDATE_ENV: 'test', DOWNLOAD_TEST_ORIGIN: config.origin,
       DOWNLOAD_TEST_RELEASE_ID: source.testReleaseId ?? '', DOWNLOAD_TEST_COS_BUCKET: config.bucket }

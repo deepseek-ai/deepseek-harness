@@ -28,6 +28,7 @@
     // not declaration path aliases, keep each package/vendor source compiled
     // under its own tsconfig boundary.
     "paths": {
+      "@deepseek-ai/dsh-desktop-publisher/*": ["./apps/desktop-publisher/src/*"],
       "@deepseek-ai/dsh-client-ui-file-actions": ["./packages/client/ui-file-actions/src/index.ts"],
       "@deepseek-ai/dsh-client-ui-file-actions/client": ["./packages/client/ui-file-actions/src/client/index.ts"],
       "@deepseek-ai/dsh-client-ui-file-actions/types": ["./packages/client/ui-file-actions/src/types.ts"],

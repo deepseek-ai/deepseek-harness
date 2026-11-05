@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import { retainDesktopRelease, retainedDesktopPath, verifyRetainedDesktopRelease, type DesktopRetainedSource } from '../scripts/desktop-release-store.ts'
+import { retainDesktopRelease, retainedDesktopPath, verifyRetainedDesktopRelease, type DesktopRetainedSource } from '@deepseek-ai/dsh-desktop-publisher/desktop-release-store.ts'
 
 const roots: string[] = []
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))) })
