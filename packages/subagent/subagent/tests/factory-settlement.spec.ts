@@ -47,7 +47,7 @@ it.each([false, true])('settles an activation after factory unload with queue-cl
       }
     })
     await loop.dispose()
-    expect(child.inbox.hasPending).toBe(rejectQueueClear)
+    expect(child.inbox.nextStep.length + child.inbox.nextTurn.length > 0).toBe(rejectQueueClear)
     rejectClear()
     expect(ctx.agents.get(started.childId)).toBeUndefined()
     release.resolve(undefined)
