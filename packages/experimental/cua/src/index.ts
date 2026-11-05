@@ -9,7 +9,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { ComputerUseProviderName } from '@deepseek-ai/dsh-computer-use/brand'
 import { admitEncodedImages } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import type { ContentBlock } from '@deepseek-ai/dsh-llm'
+import { HarnessError, type ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { z } from 'zod'
 import { NativeClient, NativeError, type NativeClientConfig, type NativeChannelFactory } from './native-client.ts'
@@ -25,7 +25,7 @@ import { CuaCoordinates } from './coordinates.ts'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import type { PromptSection } from '@deepseek-ai/dsh-system-prompt'
-import type { ToolDefinition, ToolExecution } from '@deepseek-ai/dsh-tools'
+import { TOOL_ABORTED, ToolArgsError, ToolContextUnavailableError, type ToolDefinition, type ToolExecution } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-subprocess'
 import type {} from '@deepseek-ai/dsh-computer-use'
 import type {} from '@deepseek-ai/dsh-ptc-runtime'
@@ -88,8 +88,22 @@ export const CuaConfig = Schema.object(CuaConfigFields) satisfies Schema<Record<
 
 
 function executionAgent(execution: Readonly<ToolExecution>): Agent {
-  if (!execution.agent) throw new Error('dsh-cua requires an agent-owned execution')
+  if (!execution.agent) throw new ToolContextUnavailableError('dsh-cua requires an agent-owned execution')
   return execution.agent
+}
+
+/** Parse the tool request; refinements the parameter schema cannot express fail as argument errors. */
+function parseRequest<T>(schema: z.ZodType<T>, args: unknown): T {
+  const parsed = schema.safeParse(args)
+  if (!parsed.success) throw new ToolArgsError(parsed.error.issues.map(issue => `${issue.path.join('.') || '<root>'}: ${issue.message}`))
+  return parsed.data
+}
+
+/** Native cancellation after the caller cancelled keeps its diagnostic under the registry's cancellation identity. */
+function callerCancelled(error: NativeError): HarnessError {
+  const cancelled = new HarnessError(error.message, TOOL_ABORTED, { cause: error })
+  cancelled.name = 'AbortError'
+  return cancelled
 }
 
 interface CuaExecution extends ToolExecution {
@@ -111,16 +125,20 @@ function renderResult(args: unknown, value: JsonValue): ContentBlock[] {
 /** Resolve the exact calling model and attachment store before requesting a screenshot. */
 async function screenshotStore(ctx: Context, execution: Readonly<CuaExecution>) {
   const attachments = ctx.get('attachments')
-  if (!attachments) throw new Error('CUA screenshots require an attachment store')
+  if (!attachments) throw new ToolContextUnavailableError('CUA screenshots require an attachment store')
   const agent = execution.agent
   const routed = agent.session.requestHeader()?.config
   const provider = routed?.provider ?? agent.options.provider
   const model = routed?.model ?? agent.options.model
   const llm = ctx.get('llm')
-  if (provider === undefined || model === undefined || llm === undefined) throw new Error('CUA screenshot model route could not be resolved')
+  if (provider === undefined || model === undefined || llm === undefined) {
+    throw new ToolContextUnavailableError('CUA screenshot model route could not be resolved')
+  }
   const info = await llm.resolveModelInfo(provider, model, execution.signal)
   execution.signal.throwIfAborted()
-  if (!info.inputModalities?.includes('image')) throw new Error(`CUA screenshots require model "${model}" to declare image input`)
+  if (!info.inputModalities?.includes('image')) {
+    throw new NativeError('IMAGE_MODEL_UNSUPPORTED', `CUA screenshots require model "${model}" to declare image input`)
+  }
   return { attachments, target: (image: ImageAttachmentRef) => llm.imageRequestTarget(provider, model, image) }
 }
 
@@ -178,7 +196,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
   }>()
   const closedOwners = new WeakSet<Agent>()
   function ownerFor(agent: Agent) {
-    if (closedOwners.has(agent) || ctx.agents.get(agent.id) !== agent) throw new Error('dsh-cua agent has been disposed')
+    if (closedOwners.has(agent) || ctx.agents.get(agent.id) !== agent) throw new ToolContextUnavailableError('dsh-cua agent has been disposed')
     const existing = ownerCleanups.get(agent)
     if (existing) return existing
     const controller = new AbortController()
@@ -311,7 +329,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       parameters: { ...z.record(z.string(), z.json()).parse(z.toJSONSchema(requestSchema)), type: 'object' },
       output: { schema: {}, render: renderResult },
       async execute(args, execution) {
-        const request = requestSchema.parse(args)
+        const request = parseRequest(requestSchema, args)
         const agent = executionAgent(execution)
         execution.signal.throwIfAborted()
         lifetime.signal.throwIfAborted()
@@ -361,6 +379,9 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         pending.set(operation, agent)
         try {
           return await operation
+        } catch (error) {
+          if (execution.signal.aborted && error instanceof NativeError && error.code === 'NATIVE_CANCELLED') throw callerCancelled(error)
+          throw error
         } finally {
           pending.delete(operation)
         }

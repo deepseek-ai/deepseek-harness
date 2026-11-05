@@ -34,7 +34,7 @@ import { expect, it, onTestFinished, vi } from 'vitest'
 import sharp from 'sharp'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import * as NativeProvider from '../src/index.ts'
-import type { NativeClient } from '@deepseek-ai/dsh-cua/native-client'
+import { NativeError, type NativeClient } from '@deepseek-ai/dsh-cua/native-client'
 import type { NativeBuildSpec } from '../src/native-build.ts'
 
 const native = vi.hoisted(() => ({
@@ -255,6 +255,7 @@ it.each(['Allow for this session', 'Deny'])('obtains %s before a stopped applica
   answer.resolve({ answers: [{ id: 'cua-app-access', selected: [choice] }] })
   const result = await pending
   expect(result.isError).toBe(choice === 'Deny')
+  if (choice === 'Deny') expect(result.error?.info).toEqual({ name: 'NativeError', code: 'APP_ACCESS_DENIED' })
   expect(native.request.mock.calls.map(call => call[0])).toEqual(choice === 'Deny' ? ['getApp'] : ['getApp', 'launchApp'])
   if (choice !== 'Deny') expect(result.value).toMatchObject({ appHandle: 'pending-app', running: true })
 })
@@ -268,7 +269,23 @@ it('rejects a launch result that changes the approved handle', async () => {
   } }).mockResolvedValueOnce({ appHandle: 'another-app', name: 'Fixture', running: true })
   const result = await f.execute('getApp', { selector: 'Fixture' })
   expect(result.isError).toBe(true)
+  expect(result.error?.info).toEqual({ name: 'NativeError', code: 'NATIVE_PROTOCOL' })
   expect(JSON.stringify(result.content)).toContain('another handle')
+})
+
+it.each([true, false])('classifies native cancellation by whether the caller cancelled (%s)', async (callerCancelled) => {
+  const f = await setup()
+  await f.execute()
+  const controller = new AbortController()
+  native.request.mockImplementationOnce(async () => {
+    if (callerCancelled) controller.abort()
+    throw new NativeError('NATIVE_CANCELLED', 'Operation cancelled; inspect fresh state before retrying input')
+  })
+  const result = await f.execute('listApps', {}, controller.signal)
+  expect(result.isError).toBe(true)
+  expect(result.error?.info).toEqual(callerCancelled
+    ? { name: 'AbortError', code: 'ABORTED' }
+    : { name: 'NativeError', code: 'NATIVE_CANCELLED' })
 })
 
 it('rejects a model attempt to call the private launch operation', async () => {
@@ -471,11 +488,14 @@ it('reports failed cleanup after waiting for other owners and releasing their Ag
 
 it('rejects malformed and unowned operations before acquiring a helper', async () => {
   const f = await setup()
-  expect((await f.execute('screenshot', { pid: 9, windowId: 7 })).isError).toBe(true)
+  const malformed = await f.execute('screenshot', { pid: 9, windowId: 7 })
+  expect(malformed.isError).toBe(true)
+  expect(malformed.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
   const unowned = await executeToolFixture(f.ctx, {
     signal: new AbortController().signal, callId: ToolCallId('unowned'), name: 'cua', arguments: { method: 'listApps', params: {} },
   })
   expect(unowned.isError).toBe(true)
+  expect(unowned.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
   expect(native.instances).toEqual([])
   expect(native.request).not.toHaveBeenCalled()
 })
@@ -487,6 +507,7 @@ it.each([false, true])('rejects an ended Agent with prior helper acquisition %s'
   const requests = native.request.mock.calls.length
   const result = await f.execute()
   expect(result.isError).toBe(true)
+  expect(result.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
   expect(JSON.stringify(result.content)).toContain('agent has been disposed')
   expect(native.instances).toHaveLength(acquired ? 1 : 0)
   expect(native.request).toHaveBeenCalledTimes(requests)
@@ -554,6 +575,7 @@ it('preserves screenshot attachments and invalidates pixel coordinates when wind
   native.request.mockClear()
   const click = await f.execute('click', { appHandle: 'app-one', windowId: 7, x: 0, y: 0 })
   expect(click.isError).toBe(true)
+  expect(click.error?.info).toEqual({ name: 'NativeError', code: 'SCREENSHOT_REQUIRED' })
   expect(JSON.stringify(click.content)).toContain('SCREENSHOT_REQUIRED')
   expect(native.request).not.toHaveBeenCalled()
 })
@@ -624,6 +646,7 @@ it.each([{ pixelWidth: 2 }, { pixelHeight: 2 }])('rejects native screenshot dime
   native.request.mockResolvedValue({ ...imageMetadata, ...invalid, mimeType: 'image/png', data: imageData })
   const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: 7 })
   expect(result.isError).toBe(true)
+  expect(result.error?.info).toEqual({ name: 'NativeError', code: 'NATIVE_PROTOCOL' })
   expect(JSON.stringify(result.content)).toContain('dimensions disagree')
   expect(result.content.some(block => block.type === 'image')).toBe(false)
 })
@@ -634,6 +657,7 @@ it('refuses screenshot capture when no attachment store is mounted', async () =>
   native.request.mockClear()
   const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: 7 })
   expect(result.isError).toBe(true)
+  expect(result.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
   expect(JSON.stringify(result.content)).toContain('require an attachment store')
   expect(native.request).not.toHaveBeenCalled()
 })
@@ -656,6 +680,9 @@ it.each(['unresolved', 'unknown', 'text-only', 'provider-error'] as const)(
     expect(result.isError).toBe(true)
     expect(JSON.stringify(result.content)).toContain(route === 'unresolved' ? 'model route could not be resolved'
       : route === 'provider-error' ? 'model lookup failed' : 'declare image input')
+    expect(result.error?.info).toEqual(route === 'unresolved'
+      ? { name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' }
+      : route === 'provider-error' ? undefined : { name: 'NativeError', code: 'IMAGE_MODEL_UNSUPPORTED' })
     expect(native.request).not.toHaveBeenCalled()
     expect(saved).not.toHaveBeenCalled()
   },
@@ -910,6 +937,7 @@ it('rejects an application handle before any helper or consent has been acquired
   const f = await setup()
   const result = await f.execute('getState', { appHandle: 'unselected-app' })
   expect(result.isError).toBe(true)
+  expect(result.error?.info).toEqual({ name: 'NativeError', code: 'APP_ACCESS_REQUIRED' })
   expect(JSON.stringify(result.content)).toContain('APP_ACCESS_REQUIRED')
   expect(native.instances).toHaveLength(0)
   expect(native.request).not.toHaveBeenCalled()

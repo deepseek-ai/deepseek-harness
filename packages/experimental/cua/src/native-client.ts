@@ -2,6 +2,7 @@
 import { randomUUID } from 'node:crypto'
 import assert from 'node:assert/strict'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
+import { HarnessError } from '@deepseek-ai/dsh-llm'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { z } from 'zod'
@@ -18,15 +19,20 @@ const ScreenshotDiagnostic = z.object({
 })
 const WireReply = z.union([Reply, ScreenshotDiagnostic.extend({ type: z.literal('diagnostic') })])
 
-/** Native refusal or transport failure with a stable machine-readable code. */
-export class NativeError extends Error {
+/**
+ * Native refusal, transport failure, or host-side CUA refusal with a stable machine-readable code.
+ * The helper supplies its own codes, such as `APP_ACCESS_DENIED` or `STALE_SNAPSHOT`, so consumers
+ * tolerate unknown codes; the host adds `NATIVE_*` transport codes, application-access codes,
+ * and `IMAGE_MODEL_UNSUPPORTED` for a screenshot requested by a model without image input.
+ */
+export class NativeError extends HarnessError {
   /**
-   * @param code - Native error code or a transport-owned NATIVE_* code.
+   * @param code - Native error code or a host-owned code.
    * @param message - Actionable diagnostic, without its code prefix.
    * @param options - Original failure when available.
    */
-  constructor(readonly code: string, message: string, options?: ErrorOptions) {
-    super(`${code}: ${message}`, options)
+  constructor(code: string, message: string, options?: ErrorOptions) {
+    super(`${code}: ${message}`, code, options)
     this.name = 'NativeError'
   }
 }

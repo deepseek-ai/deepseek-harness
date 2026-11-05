@@ -1,6 +1,6 @@
 /** Controlled connection streams exercise the platform-independent native protocol client. */
 import { PassThrough, Writable } from 'node:stream'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { HarnessError, ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { NativeChannel } from '../src/native-client.ts'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { z } from 'zod'
@@ -227,7 +227,9 @@ describe('native helper transport', () => {
 
   it('rejects a pre-cancelled operation without writing or invalidating acquired handles', async () => {
     const f = fixture()
-    await expect(f.client.request('click', {}, AbortSignal.abort())).rejects.toMatchObject({ code: 'NATIVE_CANCELLED' })
+    const rejected = f.client.request('click', {}, AbortSignal.abort())
+    await expect(rejected).rejects.toBeInstanceOf(HarnessError)
+    await expect(rejected).rejects.toMatchObject({ name: 'NativeError', code: 'NATIVE_CANCELLED' })
     expect(f.requests).toEqual([])
     expect(f.client.disposed).toBe(false)
   })
