@@ -134,6 +134,9 @@ describe('search formatting', () => {
     expect(() => parseSearchArgs({ queries: ['one', 'two'] }, 1)).toThrow('at most 1 query')
     expect(() => parseSearchArgs({ queries: ['one', 'two', 'three'] }, 2)).toThrow('at most 2 queries')
     expect(() => parseSearchArgs({ queries: ['ok', ' '] }, WEB_SEARCH_MAX_QUERIES)).toThrow('each query must be a non-empty string')
+    for (const queries of [[], ['one', 'two'], ['ok', ' ']]) {
+      expect(() => parseSearchArgs({ queries }, 1)).toThrow(expect.objectContaining({ name: 'ToolArgsError', code: 'INVALID_ARGS' }))
+    }
   })
 
   it('falls back to the raw URL as a source label when the URL is unparseable', () => {
@@ -397,6 +400,7 @@ describe('fetch formatting', () => {
 
   it('validates url (non-empty), no timeout parameter', () => {
     expect(() => parseFetchArgs({ url: ' ' })).toThrow('non-empty')
+    expect(() => parseFetchArgs({ url: ' ' })).toThrow(expect.objectContaining({ name: 'WebError', code: 'WEB_INVALID_URL' }))
     expect(parseFetchArgs({ url: 'https://a.test' })).toEqual({ url: 'https://a.test' })
   })
 
@@ -775,6 +779,13 @@ describe('tool-web execution through the real registry', () => {
     await fiber.dispose()
   })
 
+  it('reports hand-checked query and URL constraints with structured identity', async () => {
+    const { fiber, call } = await mountTools({ webConfig: { searchProvider: 'stub-search' }, search: searchProvider({ sources: [], truncated: false }) })
+    expect((await call('web_search', { queries: [] })).error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
+    expect((await call('web_fetch', { url: ' ' })).error?.info).toEqual({ name: 'WebError', code: 'WEB_INVALID_URL' })
+    await fiber.dispose()
+  })
+
   it('has no default export (namespace plugin export shape)', () => {
     expect('default' in ToolWeb).toBe(false)
   })
@@ -976,7 +987,7 @@ describe('searchMaxQueries is plugin config', () => {
     expect(JSON.stringify(schema?.parameters)).toContain('1–2 search queries')
     const out = await call('web_search', { queries: ['one', 'two', 'three'] })
     expect(out.isError).toBe(true)
-    expect(out.content).toEqual([{ type: 'text', text: 'Error: queries must contain at most 2 queries' }])
+    expect(out.content).toEqual([{ type: 'text', text: 'Error: invalid arguments: queries must contain at most 2 queries' }])
     expect(seen).toEqual([])
     await fiber.dispose()
   })
@@ -1003,7 +1014,7 @@ describe('searchMaxQueries is plugin config', () => {
     for (const query of queries) expect(text).toContain(`https://${query}.test/1`)
     expect(text).not.toContain('.test/2')
     const rejected = await call('web_search', { queries: [...queries, 'q10'] })
-    expect(rejected.content).toEqual([{ type: 'text', text: 'Error: queries must contain at most 10 queries' }])
+    expect(rejected.content).toEqual([{ type: 'text', text: 'Error: invalid arguments: queries must contain at most 10 queries' }])
     await fiber.dispose()
   })
 
