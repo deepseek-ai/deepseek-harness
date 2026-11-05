@@ -19,7 +19,9 @@ import type {} from '@deepseek-ai/dsh-user-approval'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import { deepFreeze, snapshotJsonValue, type JsonValue } from '@deepseek-ai/dsh-util-values'
-import { defineTool, parameterSchemaSpecToJsonSchema, RUN_CODE_NAME, TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
+import {
+  defineTool, parameterSchemaSpecToJsonSchema, RUN_CODE_NAME, TOOL_ABORTED, ToolArgsError, ToolContextUnavailableError,
+} from '@deepseek-ai/dsh-tools'
 import type { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
 import { toolErrorMessage } from '@deepseek-ai/dsh-tools/pipeline'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
@@ -81,11 +83,11 @@ const RUN_CODE_FLAVORS = {
 export function requirePtcRuntime(ctx: Context): SupportedPtcRuntime {
   const runtime = ctx.get('ptcRuntime')
   if (runtime === undefined) {
-    throw new Error('dsh-tools: mode "ptc" requires a PTC runtime — load a ctx.ptcRuntime implementation (e.g. @deepseek-ai/dsh-ptc-runtime-node) or load @deepseek-ai/dsh-tool-executor-native')
+    throw new ToolContextUnavailableError('dsh-tools: mode "ptc" requires a PTC runtime — load a ctx.ptcRuntime implementation (e.g. @deepseek-ai/dsh-ptc-runtime-node) or load @deepseek-ai/dsh-tool-executor-native')
   }
   if (!Object.hasOwn(RUN_CODE_FLAVORS, runtime.language)) {
     const known = Object.keys(RUN_CODE_FLAVORS).map(name => JSON.stringify(name)).join(', ')
-    throw new Error(`dsh-tools: no SDK renderer registered for runtime language ${JSON.stringify(runtime.language)} (known: ${known})`)
+    throw new ToolContextUnavailableError(`dsh-tools: no SDK renderer registered for runtime language ${JSON.stringify(runtime.language)} (known: ${known})`)
   }
   return runtime as SupportedPtcRuntime
 }
@@ -253,14 +255,14 @@ type RunCodeOutput = { logs: string[]; result?: JsonValue; sandbox?: PtcRunSandb
 async function resolveWorkingDirectory(ctx: Context, exec: ToolRunContext): Promise<string | undefined> {
   if (exec.agent === undefined) return undefined
   const directories = ctx.get('workingDirectory')
-  if (directories === undefined) throw new Error('dsh-tools: run_code with an Agent requires workingDirectory')
+  if (directories === undefined) throw new ToolContextUnavailableError('dsh-tools: run_code with an Agent requires workingDirectory')
   return directories.ensure(exec.agent, exec.signal)
 }
 
 /** Resolve standing authority for a runtime that enforces file policy. */
 function resolveSandboxPolicy(ctx: Context, exec: ToolRunContext): SandboxExecutionPolicy {
   const policy = ctx.get('sandboxPolicy')
-  if (policy === undefined) throw new Error('dsh-tools: confined PTC runtime requires sandboxPolicy')
+  if (policy === undefined) throw new ToolContextUnavailableError('dsh-tools: confined PTC runtime requires sandboxPolicy')
   return policy.resolve(exec.agent === undefined ? {} : { session: exec.agent.session })
 }
 
@@ -343,21 +345,21 @@ export function createRunCodeTool(
     },
     async execute(args, exec): Promise<RunCodeOutput> {
       if (args.description.trim().length === 0) {
-        throw new Error('invalid description: expected a non-empty string')
+        throw new ToolArgsError(['invalid description: expected a non-empty string'])
       }
       const runtime = requirePtcRuntime(ctx)
       const run = async (callSignal: AbortSignal): Promise<RunCodeOutput> => {
         validateEscalationArgs(args.sandbox_permissions, args.justification)
         if (args.timeoutMs !== undefined && runtime.timeout === undefined) {
-          throw new Error('timeoutMs is not available for this PTC runtime')
+          throw new ToolArgsError(['timeoutMs is not available for this PTC runtime'])
         }
         if (args.timeoutMs !== undefined && (!Number.isFinite(args.timeoutMs) || args.timeoutMs <= 0)) {
-          throw new Error('invalid timeoutMs: expected a positive finite number')
+          throw new ToolArgsError(['invalid timeoutMs: expected a positive finite number'])
         }
         const standingPolicy = runtime.sandboxMode === undefined ? undefined : resolveSandboxPolicy(ctx, exec)
         let policy = standingPolicy
         if (args.sandbox_permissions !== undefined && args.justification !== undefined) {
-          if (standingPolicy === undefined) throw new Error('sandbox_permissions is not available for this PTC runtime')
+          if (standingPolicy === undefined) throw new ToolArgsError(['sandbox_permissions is not available for this PTC runtime'])
           const approvedMode = await approveEscalation({
             requestedMode: args.sandbox_permissions,
             justification: args.justification,
@@ -698,6 +700,11 @@ export function createRunCodeTool(
             maxSubCalls = spec.timeoutMs === null ? Infinity
               : Math.floor(spec.timeoutMs / 60_000 * maxSubCallsPerMinute)
             result = await runtime.run(spec)
+          } catch (error) {
+            // Runtimes reject only contract misuse; a rejection without its own code becomes CODE_RUN_FAILED.
+            exec.signal.throwIfAborted()
+            if (error instanceof HarnessError) throw error
+            throw new CodeRunFailedError(`code run failed: ${toolErrorMessage(error)}`, 'CODE_RUN_FAILED', { cause: error })
           } finally {
             // Abort sub-dispatches and drain every in-flight dispatch before
             // closing the turn (queued-unstarted ones are abandoned unlogged).

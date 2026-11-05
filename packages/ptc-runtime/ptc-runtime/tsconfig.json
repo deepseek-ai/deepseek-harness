@@ -16,6 +16,9 @@
     },
     {
       "path": "../../sandbox/sandbox"
+    },
+    {
+      "path": "../../util/error"
     }
   ]
 }

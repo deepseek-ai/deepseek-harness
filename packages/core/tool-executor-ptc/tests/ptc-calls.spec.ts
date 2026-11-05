@@ -86,6 +86,9 @@ it('unloads the executor only after calls stop and refuses late admission', asyn
     await rejected
     await disposed
     await expect(calls.run(session.id, signal, mode, async () => 'unexpected')).rejects.toThrow('PTC tool executor disposed')
+    await expect(calls.run(session.id, signal, mode, async () => 'unexpected')).rejects.toMatchObject({
+      name: 'CodeRunFailedError', code: 'CODE_RUN_UNAVAILABLE',
+    })
   } finally { cleanup.resolve(undefined); await first; await disposed }
 })
 

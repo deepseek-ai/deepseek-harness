@@ -58,13 +58,18 @@ describe('Node runtime host failures', () => {
     const h = await setup({}, 'read-only')
     expect(h.runtime.sandboxMode).toBe('read-only')
     expect(() => h.runtime.resolve({ ...request, cwd: 'relative' })).toThrow('cwd must be absolute')
+    expect(() => h.runtime.resolve({ ...request, cwd: 'relative' })).toThrow(expect.objectContaining({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_INVALID_ARGUMENT' }))
     await expect(h.runtime.run({ ...request, cwd: process.cwd(), timeoutMs: 1 })).rejects.toThrow('resolved sandbox policy')
+    await expect(h.runtime.run({ ...request, cwd: process.cwd(), timeoutMs: 1 })).rejects.toMatchObject({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_INVALID_ARGUMENT' })
     const spec = h.runtime.resolve(request)
     await expect(h.runtime.run({ ...spec, timeoutMs: Infinity })).rejects.toThrow('resolved cwd and timeout')
+    await expect(h.runtime.run({ ...spec, timeoutMs: Infinity })).rejects.toMatchObject({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_INVALID_ARGUMENT' })
     expect(h.spawn).not.toHaveBeenCalled()
     await h.ctx.fiber.dispose()
     expect(() => h.runtime.resolve(request)).toThrow('resolve after disposal')
+    expect(() => h.runtime.resolve(request)).toThrow(expect.objectContaining({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_UNAVAILABLE' }))
     await expect(h.runtime.run(spec)).rejects.toThrow('run after disposal')
+    await expect(h.runtime.run(spec)).rejects.toMatchObject({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_UNAVAILABLE' })
   })
 
   it('fails a required unavailable sandbox before spawning', async () => {
