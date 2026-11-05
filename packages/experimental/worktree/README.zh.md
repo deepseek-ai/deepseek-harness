@@ -36,7 +36,7 @@ kind: "package-reference"
 
 `ctx.worktrees.restore(agent, { path, branch, baseCommit, repositoryRoot }, signal?, onPhase?)` 在记录的目录重新检出被删除的 worktree。它在修改前校验记录中的仓库根目录、完整提交对象名、分支和配置池内的规范目标路径。它只通过 `git worktree remove` 移除缺失目标的未锁定登记；其他 worktree 与锁定登记保持不变。随后在分支仍存在时检出该分支，否则在 `baseCommit` 重新创建同名分支，并通过 `branchRecreated` 报告是哪种情况。目录已存在时会报错。调用方 Session 的工作目录不变，从未提交的修改无法恢复。检出与创建时一样禁用过滤器。`onPhase` 在检查目录、清理登记与创建分支之前收到 `prepare`，在写入文件之前收到 `checkout`；它不能抛出异常。
 
-默认检出目录是 `<current checkout root>/.agents/worktrees/<name>`。返回的 `repositoryRoot` 是调用方当前检出目录的顶层目录；如果它是链接检出目录，工作树父目录就嵌套在其中。省略名称时，名称由前缀 `dsh-`、Session id 中 UUID 的前 8 位十六进制数、一个连字符和 4 位随机十六进制数组成，例如 `dsh-6b1f02c4-9a3e`；Session id 不含 UUID 时，前缀后接 8 位随机十六进制数。`generatedWorktreeName` 导出同一规则，供在创建前确定名称的调用方使用。仅当服务的分配操作创建了父目录时，服务才会写入内容为 `*` 加换行符的 `.gitignore`；已有文件与忽略规则保持不变。相对路径 `directory`、生成名称使用的 `namePrefix`、可执行程序与进程限制可在[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-worktree)中查阅。
+默认检出目录是 `<current checkout root>/.agents/worktrees/<name>`。返回的 `repositoryRoot` 是调用方当前检出目录的顶层目录；如果它是链接检出目录，工作树父目录就嵌套在其中。省略名称时，名称由前缀 `dsh-`、Session id 中 UUID 的前 8 位十六进制数、一个连字符和 4 位随机十六进制数组成，例如 `dsh-6b1f02c4-9a3e`；Session id 不含 UUID 时，前缀后接 8 位随机十六进制数。`generatedWorktreeName` 导出同一规则，供在创建前确定名称的调用方使用。仅当服务的分配操作创建了父目录时，服务才会写入内容为 `*` 加换行符的 `.gitignore`；已有文件与忽略规则保持不变。每条 Git 和 Node 命令各自受 `timeoutMs` 时限约束，默认 5 分钟，使大仓库在较慢的文件系统上也能完成检出；取消仍会终止正在运行的命令。相对路径 `directory`、生成名称使用的 `namePrefix`、可执行程序与进程限制可在[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-worktree)中查阅。
 
 -----
 
