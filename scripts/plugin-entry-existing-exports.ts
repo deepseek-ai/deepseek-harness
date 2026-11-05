@@ -71,7 +71,9 @@ export const EXISTING_PLUGIN_ENTRY_EXPORTS = {
     'checkDoneValue', 'detachResidual', 'encodeJsonPlain', 'hasNonLosslessNumber', 'hasUnsafeIntegerToken',
     'hostFrameParseCeiling', 'logTruncationMarker', 'readProcessStart', 'resolvePythonBin', 'validateChildFrame',
   ],
-  '@deepseek-ai/dsh-experimental-worktree': ['generatedWorktreeName'],
+  '@deepseek-ai/dsh-experimental-worktree': [
+    'CREATED_RECORD', 'createdWorktreeSchema', 'generatedWorktreeName', 'worktreeProjection',
+  ],
   '@deepseek-ai/dsh-file-reference-local': [
     'DEFAULT_FILE_SEARCH_EXCLUDED_DIRECTORIES', 'DEFAULT_FILE_SEARCH_MAX_ENTRIES', 'DEFAULT_FILE_SEARCH_MAX_RESULTS',
     'FILE_REFERENCE_PROMPT', 'WorkspaceFileSearch', 'activeAtToken', 'formatFileMention',
@@ -207,6 +209,7 @@ export const EXISTING_PLUGIN_ENTRY_EXPORTS = {
   ],
   '@deepseek-ai/dsh-terminal': ['TerminalSessionId'],
   '@deepseek-ai/dsh-terminal-bash': ['BashTerminalBackend', 'PWSH_PROMPT_SETUP'],
+  '@deepseek-ai/dsh-terminal-panel': ['GUIDANCE'],
   '@deepseek-ai/dsh-tool-call-timeout-policy': ['TOOL_TIMEOUT'],
   '@deepseek-ai/dsh-tool-executor-native': ['NativeToolExecutor'],
   '@deepseek-ai/dsh-tool-executor-ptc': [
