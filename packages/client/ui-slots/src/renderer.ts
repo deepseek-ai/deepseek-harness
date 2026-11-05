@@ -163,9 +163,9 @@ export interface SlotRendererHost {
    */
   entriesOfSlot(key: string): readonly StoredEntry[]
   /**
-   * Report an entry boundary crash. With `info.abdicate` (shadowing kinds)
-   * the entry retires from its cell, one-shot, so the next survivor renders;
-   * chain crashes report without abdicating. The registration stays on the
+   * Report an entry boundary crash. With `info.abdicate` (single, keyed, and
+   * list) the entry retires from its cell, one-shot, so the next survivor
+   * renders; chain and hoc crashes report without abdicating. The registration stays on the
    * ledger either way.
    * @param key - slot key the entry rendered under.
    * @param entry - the crashed entry.

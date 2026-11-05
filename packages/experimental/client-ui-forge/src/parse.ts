@@ -1,5 +1,7 @@
 /** Parsers for the porcelain output of the read-only Git commands the panel runs. */
 
+import type { ForgeBaseBranch } from './types.ts'
+
 /** One remote with the URLs `git remote -v` prints for it. */
 export interface GitRemote {
   /** Remote name such as `origin`. */
@@ -28,6 +30,40 @@ export function parseTopLevel(output: string): string {
 export function parseName(output: string): string | null {
   const [name = ''] = output.split(/\r?\n/)
   return name.length === 0 ? null : name
+}
+
+/** Ref prefixes of the branches the `branch` scope can compare with: local branches, then remote-tracking branches. */
+export const BASE_REF_PREFIXES = ['refs/heads/', 'refs/remotes/'] as const
+
+/**
+ * Select the branches the `branch` scope can compare with from `git for-each-ref`
+ * output, keeping its order and leaving out symbolic refs and the checked-out branch.
+ * @param output - stdout of `git for-each-ref --format=%(refname)%00%(symref)` over {@link BASE_REF_PREFIXES}.
+ * @param current - checked-out branch, or null when HEAD is detached.
+ * @param query - text the names must contain, ignoring case; empty or blank for every branch.
+ * @param limit - most branches in each group.
+ * @returns remote-tracking and local branches, at most `limit` of each.
+ */
+export function parseBaseBranches(
+  output: string,
+  current: string | null,
+  query: string,
+  limit: number,
+): { readonly remote: ForgeBaseBranch[]; readonly local: ForgeBaseBranch[] } {
+  const [heads, remotes] = BASE_REF_PREFIXES
+  const needle = query.trim().toLowerCase()
+  const remote: ForgeBaseBranch[] = []
+  const local: ForgeBaseBranch[] = []
+  for (const line of output.split(/\r?\n/)) {
+    const [ref = '', symref = ''] = line.split('\0')
+    if (symref.length > 0) continue
+    const group = ref.startsWith(heads) ? local : ref.startsWith(remotes) ? remote : undefined
+    if (group === undefined || group.length >= limit) continue
+    const name = ref.slice(group === local ? heads.length : remotes.length)
+    if (name.length === 0 || (group === local && name === current) || !name.toLowerCase().includes(needle)) continue
+    group.push({ ref, name })
+  }
+  return { remote, local }
 }
 
 /**

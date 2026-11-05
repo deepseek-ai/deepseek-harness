@@ -17,7 +17,6 @@ import {
 import { projectionCacheDomainSpec } from '@deepseek-ai/dsh-session-projection-cache'
 import { scheduleDomain } from '@deepseek-ai/dsh-schedule'
 import { snapshotSubagentDescriptor, SUBAGENT_DESCRIPTOR_VERSION } from '@deepseek-ai/dsh-subagent'
-import { SUBAGENT_CATALOG_VERSION } from '@deepseek-ai/dsh-subagent/src/catalog.ts'
 
 /** Root copied by the preview image's repository adapter. */
 export const VFS_EXAMPLE_ROOT = fileURLToPath(new URL('./fixtures/vfs-example', import.meta.url))
@@ -386,7 +385,8 @@ function mainLog(): {
     { childId: VFS_EXAMPLE_SESSION_IDS.oneShot, childCreatedAt: CREATED_AT + 100_000, mode: 'one-shot', label: 'Review preview architecture' },
     { childId: VFS_EXAMPLE_SESSION_IDS.continuable, childCreatedAt: CREATED_AT + 200_000, mode: 'continuable', label: 'Continue preview verification' },
   ] as const) {
-    log.add({ type: 'subagent/catalog', data: { version: SUBAGENT_CATALOG_VERSION, ...child } })
+    // Version 0 keeps both preview children unnamed, as releases before agent names recorded them.
+    log.add({ type: 'subagent/catalog', data: { version: 0, ...child } })
   }
   log.add({ type: 'step/end', data: { turn, step: 1 } })
   log.add({ type: 'step/start', data: { turn, step: 2 } })

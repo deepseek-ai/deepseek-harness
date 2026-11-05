@@ -39,6 +39,7 @@ const PRODUCT_NAMES = {
 
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
+  'menu.openIn': '在应用中打开',
   'menu.openInSidebar': '在侧边栏打开',
   'menu.openInFloat': '在浮窗中打开',
   'menu.finder': '在 Finder 中显示',
@@ -73,6 +74,7 @@ export const zh = {
 
 /** English dictionary, key-identical to the Chinese source of truth. */
 export const en: Record<OpenInAppKey, string> = {
+  'menu.openIn': 'Open in',
   'menu.openInSidebar': 'Open in sidebar',
   'menu.openInFloat': 'Open in floating panel',
   'menu.finder': 'Show in Finder',
@@ -110,6 +112,7 @@ export type OpenInAppKey = keyof typeof zh
 
 /** Japanese copy, checked against the English keys. */
 export const ja = {
+  'menu.openIn': 'アプリケーションで開く',
   'menu.openInSidebar': 'サイドバーで開く',
   'menu.openInFloat': 'フローティングパネルで開く',
   'menu.finder': 'Finder に表示',
@@ -144,6 +147,7 @@ export const ja = {
 
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
+  'menu.openIn': 'Abrir con',
   'menu.openInSidebar': 'Abrir en la barra lateral',
   'menu.openInFloat': 'Abrir en un panel flotante',
   'menu.finder': 'Mostrar en Finder',
@@ -177,6 +181,7 @@ export const es = {
 
 /** French dictionary, checked against the English keys. */
 export const fr = {
+  'menu.openIn': 'Ouvrir avec',
   'menu.openInSidebar': 'Ouvrir dans la barre latérale',
   'menu.openInFloat': 'Ouvrir dans un panneau flottant',
   'menu.finder': 'Afficher dans le Finder',
@@ -210,6 +215,7 @@ export const fr = {
 
 /** German dictionary, checked against the English keys. */
 export const de = {
+  'menu.openIn': 'Öffnen mit',
   'menu.openInSidebar': 'In der Seitenleiste öffnen',
   'menu.openInFloat': 'In schwebendem Panel öffnen',
   'menu.finder': 'Im Finder anzeigen',
@@ -243,6 +249,7 @@ export const de = {
 
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
+  'menu.openIn': 'Открыть с помощью',
   'menu.openInSidebar': 'Открыть на боковой панели',
   'menu.openInFloat': 'Открыть на плавающей панели',
   'menu.finder': 'Показать в Finder',
@@ -276,6 +283,7 @@ export const ru = {
 
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
+  'menu.openIn': 'Abrir com',
   'menu.openInSidebar': 'Abrir na barra lateral',
   'menu.openInFloat': 'Abrir em painel flutuante',
   'menu.finder': 'Mostrar no Finder',

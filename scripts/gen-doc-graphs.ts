@@ -269,9 +269,9 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'The native provider owns application consent and cancellation; the optional Client page queries and changes those decisions through its Remote.',
   },
   {
-    key: 'officeToPdf', pkg: 'office-to-pdf', title: 'Office to PDF conversion',
-    mode: 'core', consumers: ['client-ui-sidebar-documentpreview'],
-    note: 'Authorized Office bytes are converted on the Host using the declared native target engine, or Node WASM when no native target is declared.',
+    key: 'officeKit', pkg: 'office-kit', title: 'Office rendering, conversion, and recalculation',
+    mode: 'core', consumers: ['client-ui-sidebar-documentpreview', 'tool-office'],
+    note: 'Authorized Office bytes are rendered as PDFs or images, converted, or recalculated on the Host using the declared native target engine, or Node WASM when no native target is declared.',
   },
   {
     key: 'attachments',
@@ -713,6 +713,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Reconciles mcp-client instances against its volatile servers configuration, aggregates their connection statuses, and serves restart and probe to management surfaces.',
   },
   {
+    key: 'mcpClientHost',
+    pkg: 'mcp-client',
+    title: 'MCP client host for a server manager',
+    mode: 'service',
+    consumers: ['mcp-manager'],
+    note: 'An mcp-client entry loaded with host: true validates, mounts, probes, and authorizes servers for the manager, which reaches no other mcp-client value; its servers run below it, so a reload of the MCP client restarts the manager.',
+  },
+  {
     key: 'mcpAccounts',
     pkg: 'client-ui-mcp-account',
     title: 'MCP connector accounts on the Plugins page',
@@ -772,7 +780,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'terminal',
     title: 'Persistent PTY session registry',
     mode: 'seam',
-    implementations: ['terminal-bash'],
+    implementations: ['terminal-bash', 'terminal-panel'],
     consumers: ['tool-terminal'],
     note: 'The registry owns exact-Agent session identity and cleanup; backends own terminal mechanics, while tool-terminal exposes the owner-scoped model tools.',
   },
@@ -782,7 +790,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Process-sandbox seam',
     mode: 'seam',
     implementations: ['sandbox-local', 'sandbox-ssh'],
-    consumers: ['bash-sandbox', 'terminal-bash'],
+    consumers: ['bash-sandbox', 'terminal-bash', 'api-terminal-controller'],
     note: 'Consumers hand over the exact argv they are about to spawn; same-world backends wrap it under a per-call policy and report enforcement.',
   },
   {
@@ -791,7 +799,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Sandbox policy home',
     mode: 'core',
     implementations: [],
-    consumers: ['bash-sandbox', 'fs-sandbox', 'terminal-bash'],
+    consumers: ['bash-sandbox', 'fs-sandbox', 'terminal-bash', 'terminal-panel'],
     note: 'The one home for the deployment default mode + workspace root; only the sandboxed executor and provider read the service (the tool layers use the pure `sandbox/mode` fold it also exports). Both enforcing families read it so bash and fs cannot confine to different roots.',
   },
   {

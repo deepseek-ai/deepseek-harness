@@ -166,6 +166,7 @@ Config 更新严格验证发生变化的 provider。初始加载将已存储的�
 | [`src/context.ts`](src/context.ts) | Harness 到 pi-ai 的上下文转换、图片处理、回放恢复 |
 | [`src/stream.ts`](src/stream.ts) | 把 pi-ai 事件转换为 harness `StreamChunk` 值 |
 | [`src/replay.ts`](src/replay.ts) | 带版本的 `ReplayEnvelope` 存储与校验 |
+| [`src/prefix-binding.ts`](src/prefix-binding.ts) | 请求前缀变化后省略 Anthropic thinking |
 | [`src/discovery.ts`](src/discovery.ts) | 面向配置界面的端点询问 |
 
 ### 注册与目录
@@ -195,6 +196,8 @@ git add packages/llm/llm-pi-ai/src/provider-data.generated.ts
 
 成功 assistant 响应会存储带版本的、无损 JSON 回放状态，与产生它们的提供方和模型放在一起——响应级事实加每个流式块一条逐块条目。请求时，`LlmRuntime` 仅当同一适配器实例拥有两条路由时才传递回放状态；适配器校验它并恢复原生响应 id、提供方签名与可选的 `providerThinkingLevel` effort 元数据，缺失的 effort 元数据仍保持缺失。回放会对照 assistant 来源校验请求模型身份，并用它保留同模型签名；提供方报告的响应模型仅作为诊断元数据。回放状态缺失或无法使用时会降级为提供方无关内容，并保留 assistant 来源中必需的提供方和模型。pi-ai 工具调用参数是解析后的对象，因此适配器解析输入并重新字符串化输出，以符合 harness 原始 JSON 约定；pi-ai 流内错误事件映射为终止 `finish` 分片。 协议转换仅作用于请求副本。从 A 切换到 B 再切回 A 时，存储的内容保持完整，包括空文本块、工具 id、原始块顺序和原生回放元数据；发给不同提供方、API 或模型的请求会省略不受支持的签名和推理块。缺少原生元数据的降级回放也会省略推理。切回原模型时，有效的原生回放会保留已存储的推理。
 
+Anthropic 可以将每个已签名 thinking 块绑定到生成它时的请求前缀：系统提示词、工具和此前的消息。执行此检查的账户和请求会拒绝回放过期块的请求。因此，Anthropic Messages 响应会将其请求上下文的 SHA-256 摘要记录为 `prefixDigest`。后续 Anthropic Messages 请求会在每个回放响应之前重新计算重建前缀的摘要；摘要不同时，例如在压缩、工具结果裁剪、图片卸载或系统提示词或工具变化之后，省略该响应的已签名 thinking 与 redacted thinking。不含 `prefixDigest` 的回放状态（在此检查出现之前写入）按同样方式处理，从而修复已经失败的对话。文本、工具调用和未签名 thinking 保留；只含已签名 thinking 的响应不再发送。已省略的 thinking 在后续请求中保持省略。手动思考要求工具轮次的最后一个 assistant 轮次以 thinking 块开头，因此当请求启用 thinking 且模型的 compat 未设置 `forceAdaptiveThinking` 时，请求以工具结果延续的工具轮次对应的 assistant 消息会保留其 thinking。
+
 </details>
 
 -----
@@ -220,7 +223,7 @@ git add packages/llm/llm-pi-ai/src/provider-data.generated.ts
 
 #### 模型看到什么
 
-所选目录模型会收到系统消息文本、对话历史、工具以及支持的采样字段。目录模型声明 `supportsMidConvoSystemMessages` 时，适配器按历史顺序保留后续系统消息。否则，适配器在传给 pi-ai 之前，将每条非空的后续系统消息转换为以 `<system-reminder>` 包裹的用户消息。包裹文本不会赋予系统角色优先级。单次调用的 `GenerateOptions.system` 放在初始历史提示词之前。重复的系统消息仍会重复发送；空系统消息会被跳过，不会丢弃之前的文本。工具更新能力选择共享的历史声明投影；pi-ai 接收初始可用工具，以及按开发者消息分组的新增和受支持的移除更新。当包含工具更新的 Anthropic 请求中所有投影后的声明均为延迟加载时，初始可用工具为一个占位工具 `DeferredToolPlaceholder`，其描述要求模型永不调用它；若被调用，会得到普通的未知工具结果。Anthropic 在更新消息中以内联方式接收后续工具定义。回放会保留工具调用命名空间，以支持动态加载的 Responses 工具。每张保留图片前都会有文本，注明其完整附件 id 与实际请求尺寸。当前执行文件系统可以映射附件提供方的宿主对象时，该文本还会携带只读规范化对象路径，并警告规范化或请求投影可能缩放或重新编码上传内容。日志中的图片省略决策选中的每个出现位置都会在替换文本中保留自己的身份与当前已解析访问方式，其规范化附件不会读取或变换。当保留的出现位置数量仍超过路由的 `maxRequestImages`，或其精确 base64 载荷超过 `maxRequestImageBytes` 时，调用以 `IMAGE_OFFLOAD_REQUIRED` 失败，由 `dsh-compaction-image-offload` 用 `image/offload` 事件记录所选位置并重试步骤。提供方原生回放元数据只在适配器针对历史内容校验通过后恢复。 `imageRequestTarget(provider, model, image)` 向截图调用方提供与模型请求一致的图片尺寸和字节目标；不缩放图片的适配器保留归一化后的原图。
+所选目录模型会收到系统消息文本、对话历史、工具以及支持的采样字段。目录模型声明 `supportsMidConvoSystemMessages` 时，适配器按历史顺序保留后续系统消息。否则，适配器在传给 pi-ai 之前，将每条非空的后续系统消息转换为以 `<system-reminder>` 包裹的用户消息。包裹文本不会赋予系统角色优先级。单次调用的 `GenerateOptions.system` 放在初始历史提示词之前。重复的系统消息仍会重复发送；空系统消息会被跳过，不会丢弃之前的文本。工具更新能力选择共享的历史声明投影；pi-ai 接收初始可用工具，以及按开发者消息分组的新增和受支持的移除更新。当包含工具更新的 Anthropic 请求中所有投影后的声明均为延迟加载时，初始可用工具为一个占位工具 `DeferredToolPlaceholder`，其描述要求模型永不调用它；若被调用，会得到普通的未知工具结果。Anthropic 在更新消息中以内联方式接收后续工具定义。回放会保留工具调用命名空间，以支持动态加载的 Responses 工具。每张保留图片前都会有文本，注明其完整附件 id 与实际请求尺寸。当前执行文件系统可以映射附件提供方的宿主对象时，该文本还会携带只读规范化对象路径，并警告规范化或请求投影可能缩放或重新编码上传内容。日志中的图片省略决策选中的每个出现位置都会在替换文本中保留自己的身份与当前已解析访问方式，其规范化附件不会读取或变换。当保留的出现位置数量仍超过路由的 `maxRequestImages`，或其精确 base64 载荷超过 `maxRequestImageBytes` 时，调用以 `IMAGE_OFFLOAD_REQUIRED` 失败，由 `dsh-compaction-image-offload` 用 `image/offload` 事件记录所选位置并重试步骤。提供方原生回放元数据只在适配器针对历史内容校验通过后恢复。在 Anthropic Messages 路由上，如果回放响应的请求前缀自生成后发生变化（例如经过压缩），该响应会丢失 thinking 块；其文本和工具调用保留。 `imageRequestTarget(provider, model, image)` 向截图调用方提供与模型请求一致的图片尺寸和字节目标；不缩放图片的适配器保留归一化后的原图。
 
 #### Token 影响
 
@@ -228,7 +231,7 @@ git add packages/llm/llm-pi-ai/src/provider-data.generated.ts
 
 #### KV Cache 影响
 
-传给适配器的后续系统消息不会进入初始提示词，从而保留此前的请求前缀。这不改变 Agent loop 的提示词纳入行为；它仍在不支持原生系统更新的路由上合并更新。转换保持逻辑请求顺序，图片句柄与卸载占位符则会添加模型可见文本。即使附件身份与请求字节保持稳定，执行世界路径变化也会改写历史句柄，并可能从该图片起阻止复用。更换适配器实例、提供方、模型或其他上游 token 具有相同的后缀影响。一次省略决策会把较早图片换成占位文本，因此复用在该消息处结束；省略永不回退，在下一次决策前前缀保持稳定。数量超限时一次省略 `imageOffloadCountQuantum` 张图片，因此饱和路由每新增这么多张图片才让复用在最老的保留图片处结束一次。
+传给适配器的后续系统消息不会进入初始提示词，从而保留此前的请求前缀。这不改变 Agent loop 的提示词纳入行为；它仍在不支持原生系统更新的路由上合并更新。转换保持逻辑请求顺序，图片句柄与卸载占位符则会添加模型可见文本。即使附件身份与请求字节保持稳定，执行世界路径变化也会改写历史句柄，并可能从该图片起阻止复用。更换适配器实例、提供方、模型或其他上游 token 具有相同的后缀影响。省略过期的 Anthropic thinking 发生在前缀变化之后，而该变化已在变化的消息处结束复用。第一个省略无摘要记录的 thinking 的请求会在第一条此类消息处结束复用，且仅发生一次。一次省略决策会把较早图片换成占位文本，因此复用在该消息处结束；省略永不回退，在下一次决策前前缀保持稳定。数量超限时一次省略 `imageOffloadCountQuantum` 张图片，因此饱和路由每新增这么多张图片才让复用在最老的保留图片处结束一次。
 
 ### 提供方响应
 
@@ -270,6 +273,8 @@ pi-ai 事件变成 harness 的推理、文本、工具调用、用量与 finish 
 - **提供方 HTTP 状态不可用**——pi-ai 错误事件不跨提供方暴露稳定 HTTP 状态。
 - **重试策略由提供方自有，而非 SDK 重试**——pi-ai SDK 重试保持禁用，因此持久 agent（智能体）步骤与 `llm/retry` 事件拥有每个可见尝试，直接 `ctx.llm.stream()` 调用仍是单次尝试。
 - **流式 JSON 工具调用参数避免逐 delta 重复解析**——安装的 pi-ai 带有 [`patches/@earendil-works__pi-ai@1.3.0.patch`](../../../patches/@earendil-works__pi-ai@1.3.0.patch)，它移除了每个流适配器中对整段累计参数 JSON 的逐 delta 重新解析（上游 [earendil-works/pi#9265](https://github.com/earendil-works/pi/issues/9265)）；未打补丁时，数 MB 的参数流会在事件循环上消耗 O(n²) CPU，并使进程内所有会话停滞。完成事件提供解析后的参数；Responses 可能在参数完成和输出项完成时分别解析。本适配器只读取 delta 字符串与最终参数。每次升级 pi-ai 时都要重新应用或撤销该补丁。
+- **即使端点会接受，过期的 Anthropic thinking 也会被省略**——前缀检查取决于模型、账户和请求，而适配器无法观测这些因素，因此每次前缀变化以及每个不含 `prefixDigest` 的回放状态都会让模型失去这部分推理，Anthropic 会以输出 token 重新生成它。摘要覆盖 pi-ai 上下文对象，而不是线上请求体：对话中途切换认证或会改变线上请求的 compat 设置不会被检测到；改变 Anthropic 消息序列化的 pi-ai 升级需要在 [`src/prefix-binding.ts`](src/prefix-binding.ts) 中使用新的 `DIGEST_SEED`；本包构建这些对象的方式发生任何变化，都会使已记录的 thinking 被丢弃一次。
+- **跨越前缀变化的手动思考工具轮次仍可能被拒绝**——其未结束的 assistant 消息必须保留过期的 thinking 以满足手动思考要求，因此执行前缀检查的端点会拒绝每个请求，直到一条用户消息结束该轮次。在已安装的目录中，执行此检查的模型使用自适应思考。
 - **Chat Completions 中的 Gemini 工具调用思考签名由补丁保留**——同一补丁把 OpenAI 兼容流式响应里的 `tool_calls[].extra_content.google.thought_signature` 读入工具调用的重放签名，并在同一模型继续时以 `extra_content` 发回（上游 [earendil-works/pi#10157](https://github.com/earendil-works/pi/issues/10157)）；未打补丁时，Gemini 会以 HTTP 400 拒绝工具调用轮次的下一步。OpenRouter 的加密推理详情仍通过 `reasoning_details` 重放。
 
 <a id="dev-note"></a>

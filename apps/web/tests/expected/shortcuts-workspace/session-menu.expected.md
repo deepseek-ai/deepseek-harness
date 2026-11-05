@@ -4,6 +4,6 @@
   - menuitem "Fork session"
   - separator
   - menuitem "Copy Session ID"
-  - menuitem "Show in Finder"
+  - menuitem "Open in"
   - separator
   - menuitem "Archive session"

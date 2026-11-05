@@ -11,6 +11,7 @@
 - status: Completed
 - button "Completed in {{duration}}" [expanded]
 - button "Asked questions" [expanded]
+- button "Context injection runtime-context"
 - button "Think The user wants me to use the ask_user_question tool with specific parameters. Let me do exactly that."
 - button "Ask question" [expanded]
 - text: Ask question 1/1 answered

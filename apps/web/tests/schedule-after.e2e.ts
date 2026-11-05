@@ -920,6 +920,43 @@ describe.skipIf(MODE === 'record')('web e2e: active Schedule catalog', () => {
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
+  it('keeps a wide schedule catalog below its header trigger in a narrow viewport', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-schedule-catalog-anchor'))
+    try {
+      await page.getByRole('button', { name: 'Automation tasks', exact: true }).click()
+      const manager = page.getByTestId('task-manager-page')
+      await manager.getByRole('button', { name: 'Check exact cadence', exact: true }).click()
+      await manager.getByRole('button', { name: /^Linked session.*: open linked session$/ }).click()
+      await liveAgent(scaffold, CATALOG_SESSION_ID)
+      const collapse = page.getByRole('button', { name: 'Collapse sidebar', exact: true })
+      if (await collapse.isVisible()) await collapse.click()
+      await page.setViewportSize({ width: 360, height: 586 })
+      await page.evaluate(() => document.fonts.ready)
+      const trigger = page.getByRole('button', { name: '3 automation tasks', exact: true })
+      await trigger.click()
+      const catalog = page.getByRole('list', { name: 'Enabled automation tasks', exact: true })
+      await expect.poll(() => catalog.evaluate((node) => {
+        const anchor = document.querySelector('button[aria-label="3 automation tasks"]')!.getBoundingClientRect()
+        const rect = node.getBoundingClientRect()
+        return {
+          gap: Math.round(rect.top - anchor.bottom),
+          inside: rect.left >= 15.5 && rect.right <= innerWidth - 15.5
+            && rect.top >= 15.5 && rect.bottom <= innerHeight - 15.5,
+          widerThanEitherSide: rect.width > innerWidth - 16 - anchor.left && rect.width > anchor.right - 16,
+        }
+      })).toEqual({ gap: 5, inside: true, widerThanEitherSide: true })
+      expect(await catalog.getByRole('listitem').count()).toBe(3)
+      await page.keyboard.press('Escape')
+      await catalog.waitFor({ state: 'detached' })
+      expect(await trigger.evaluate(node => node === document.activeElement)).toBe(true)
+    } finally {
+      await page.keyboard.press('Escape')
+      await page.setViewportSize({ width: 900, height: 900 })
+      const expand = page.getByRole('button', { name: 'Open sidebar', exact: true })
+      if (await expand.isVisible()) await expand.click()
+    }
+  })
+
   it('reads stored tasks without a live Session and deletes them through the catalog', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-schedule-catalog'))
     const layers = [

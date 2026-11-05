@@ -1,3 +1,4 @@
+import { PROGRAM_PROTOCOL_VERSION } from '../src/protocol.ts'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import { setImmediate } from 'node:timers/promises'
@@ -41,6 +42,7 @@ describe('Node runtime host failures', () => {
     [{ timeoutMs: MAX_TIMER_DELAY_MS + 1 }, 'timeoutMs'],
     [{ maxTimeoutMs: MAX_TIMER_DELAY_MS + 1 }, 'maxTimeoutMs'],
     [{ graceMs: MAX_TIMER_DELAY_MS + 1 }, 'graceMs'],
+    [{ stopGraceMs: MAX_TIMER_DELAY_MS + 1 }, 'stopGraceMs'],
     [{ maxOutputBytes: 3 }, 'maxOutputBytes'],
     [{ maxOutputBytes: 4.5 }, 'maxOutputBytes'],
     [{ maxMessageBytes: 1.5 }, 'maxMessageBytes'],
@@ -257,9 +259,30 @@ describe('Node runtime host failures', () => {
     expect((await h.start()).error?.kind).toBe('protocol')
   })
 
+  it.each([[], [0], [PROGRAM_PROTOCOL_VERSION - 1], [PROGRAM_PROTOCOL_VERSION + 1], ['1']])('refuses bootstrap readiness with incompatible version arguments %j before dispatch', async (...args) => {
+    const h = await setup()
+    const result = await h.start(request, { t: 'q', m: 'ready', a: args })
+    expect(result.error).toEqual({ kind: 'protocol', message: 'bootstrap protocol mismatch; upgrade launch.bootstrapPath with the host' })
+    expect(h.messages).not.toContainEqual(expect.objectContaining({ m: 'run' }))
+    expect(h.terminate).toHaveBeenCalledOnce()
+  })
+
+  it.each<[unknown, string]>([
+    [{ t: 'q', m: 'outputLimit', a: [] }, 'idle PTC output limit'],
+    [call(1), 'binding call arrived without an active PTC evaluation'],
+  ])('refuses program traffic before readiness %j', async (frame, message) => {
+    const h = await setup()
+    const binding = vi.fn(async () => null)
+    const result = await h.start(withBinding(binding), frame)
+    expect(result.error).toMatchObject({ kind: 'protocol', message })
+    expect(h.messages).not.toContainEqual(expect.objectContaining({ m: 'run' }))
+    expect(binding).not.toHaveBeenCalled()
+    expect(h.terminate).toHaveBeenCalledOnce()
+  })
+
   it.each<[unknown, string]>([
     [null, 'not a JSON object'],
-    [{ t: 'q', m: 'ready', a: [] }, 'duplicate program readiness'],
+    [{ t: 'q', m: 'ready', a: [PROGRAM_PROTOCOL_VERSION] }, 'duplicate program readiness'],
     [{ t: 'q', m: 'log', a: [1] }, 'invalid program log'],
     [{ t: 'q', m: 'invoke', a: [null, 'test', []], i: 'call' }, 'undeclared binding'],
     [{ t: 'q', m: 'invoke', a: ['tools', 'constructor', []], i: 'call' }, 'undeclared binding'],

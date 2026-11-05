@@ -19,9 +19,11 @@ import { customGuidance } from './guidance.ts'
 const searchProvider = (options: DeepSeekSearchApiOptions): DeepSeekSearchApiProvider =>
   new DeepSeekSearchApiProvider(() => options)
 
+const BASE = 'https://api.deepseek.test/api/v1/tools'
+const auth = (key: string, baseURL = BASE): DeepSeekSearchApiOptions['auth'] => ({ sources: [{ kind: 'api-key', baseURL, key }] })
+
 const options = {
-  auth: { apiKey: 'ds-key' },
-  baseURL: 'https://api.deepseek.test/api/v1/tools',
+  auth: auth('ds-key'),
   count: 10,
   requestsPerSecond: 5,
   guidance: customGuidance('search'),
@@ -73,7 +75,7 @@ describe('mapSearchResponse', () => {
 
 describe('DeepSeekSearchApiProvider availability', () => {
   it('is unavailable without a key', () => {
-    expect(searchProvider({ ...options, auth: { apiKey: '' } }).available()).toBe(false)
+    expect(searchProvider({ ...options, auth: auth('') }).available()).toBe(false)
   })
 
   it('is available with a key', () => {
@@ -81,11 +83,15 @@ describe('DeepSeekSearchApiProvider availability', () => {
   })
 
   it('is available with only an account token resolver', () => {
-    expect(searchProvider({ ...options, auth: { account: { baseURL: options.baseURL, resolveToken: async () => 'account-token', rejectToken: async () => {} } } }).available()).toBe(true)
+    expect(searchProvider({ ...options, auth: { sources: [{ kind: 'account', baseURL: BASE, resolveToken: async () => 'account-token', rejectToken: async () => {} }] } }).available()).toBe(true)
+  })
+
+  it('is available with only a misconfigured source, which the search reports', () => {
+    expect(searchProvider({ ...options, auth: { sources: [{ kind: 'misconfigured', message: 'route settings do not resolve' }] } }).available()).toBe(true)
   })
 
   it('is misconfigured when the base URL is unparseable', () => {
-    expect(searchProvider({ ...options, baseURL: 'not a url' }).available()).toBe(false)
+    expect(searchProvider({ ...options, auth: auth('ds-key', 'not a url') }).available()).toBe(false)
   })
 
   it.each([0, 1.5])('is unavailable with invalid count %j', (count) => {

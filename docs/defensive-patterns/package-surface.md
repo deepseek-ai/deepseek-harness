@@ -151,7 +151,7 @@ Restating a required-devDependency package list or the field rules on this page 
 Internal dependency syntax follows the package family: `@deepseek-ai/dsh` and `@deepseek-ai/dsh-*` use `workspace:*`, every other internal package uses `workspace:~`, and `workspace:^` has retired. The same dependency name is written the same way in every workspace, and a mismatch is a hard scan failure rather than a warning a reviewer can waive. The uniform syntax keeps one resolution path and prevents duplicate instances of a dependency and the resolution differences that follow them.
 
 - Judged by `workspaceRange()` in [verify-package-dependencies.ts](../../scripts/verify-package-dependencies.ts): the `@deepseek-ai/dsh` and `@deepseek-ai/dsh-*` families get `workspace:*`, every other internal package gets `workspace:~`; the scan walks the managed manifests and compares every declaration of the same dependency name.
-- Boundary: a same-namespace package that is not a workspace member declares an ordinary third-party range and is outside the family rule — `@deepseek-ai/libreoffice-kit` is declared `^0.1.5` in `apps/desktop-host/package.json` (dependencies), `packages/bundle/web-app/package.json` (devDependencies), `packages/document/office-to-pdf/package.json` (dependencies), and `packages/skill/skill-office/package.json` (dependencies).
+- Boundary: a same-namespace package that is not a workspace member declares an ordinary third-party range and is outside the family rule — `@deepseek-ai/libreoffice-kit` is declared `0.2.3` in `packages/bundle/web-app/package.json` (devDependencies) and `packages/document/office-kit/package.json` (dependencies).
 - Distribution is not restated here; the recompute command below prints the current counts of `workspace:*`, `workspace:~`, `workspace:^`, and any exact-range declaration outside the family rule.
 - Exception: the scan decides mechanically; a genuine exception means changing the scan and the policy file with the domain owner's confirmation and the reason on the change.
 - Recompute:
@@ -167,7 +167,7 @@ Each family in its form, with the non-member exception left as an ordinary versi
   "dependencies": {
     "@deepseek-ai/dsh-base": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
-    "@deepseek-ai/libreoffice-kit": "^0.1.5"
+    "@deepseek-ai/libreoffice-kit": "0.2.3"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-typert-registry": "workspace:*"

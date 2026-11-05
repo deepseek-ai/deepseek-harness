@@ -18,8 +18,8 @@
   en: 924b8c15f9529028
   zh: 9fb0c399b5a79e3e
 /deepseek-ai-dsh-subagent/use-this-package/enabling-delegation:
-  en: 025605eddae02478
-  zh: 5659cba4340735d8
+  en: c0718955687ff245
+  zh: eb2d3cdbe92e0fe2
 /deepseek-ai-dsh-subagent/use-this-package/delegation-settings:
   en: 86c982223fab1a3a
   zh: 3d220d8ed84eab9a
@@ -27,8 +27,11 @@
   en: 4b40bd380bea81ce
   zh: 896a584190981168
 /deepseek-ai-dsh-subagent/use-this-package/local-and-external-children:
-  en: 191ef1dabe2fce7c
-  zh: f799fdcbb5c5a171
+  en: d6eef66bc1d293fe
+  zh: e4754d38212c0b2e
+/deepseek-ai-dsh-subagent/use-this-package/agent-names:
+  en: e46a141f9126c45f
+  zh: 15f6011c36baa20c
 /deepseek-ai-dsh-subagent/use-this-package/child-presets:
   en: a740e5e9bdd661d9
   zh: 712a5458fc8b3615
@@ -51,8 +54,8 @@
   en: 61cddba23f4e7d1c
   zh: 052c8331a747403f
 /deepseek-ai-dsh-subagent/understand-the-implementation/activation-settlement:
-  en: fc8938de925b1a97
-  zh: b50e1f948d60b93c
+  en: 9543250098033347
+  zh: 3721af3e31409a32
 /deepseek-ai-dsh-subagent/understand-the-implementation/restoring-child-composition:
   en: 843f9f4319ca2ae3
   zh: 218bf355816d4ff6
@@ -69,11 +72,11 @@
   en: f7cec22ba9d3fb4f
   zh: 67b1d40f9b136f71
 /deepseek-ai-dsh-subagent/model-experience/settlement-notice/what-the-model-sees:
-  en: d5e6377fabfee1ca
-  zh: f5c442401264a60d
+  en: 45d8a22bad10fba2
+  zh: 0ebd7f4570150713
 /deepseek-ai-dsh-subagent/model-experience/settlement-notice/token-effect:
-  en: f98ad834e8ce8950
-  zh: cf509805dd934094
+  en: 435e801179ee02c8
+  zh: 72551f95c5ee7bca
 /deepseek-ai-dsh-subagent/model-experience/settlement-notice/kv-cache-effect:
   en: d6b1d618083da79b
   zh: 9a28942b7d53c382
@@ -108,8 +111,8 @@
   en: 59e848fca82a46fb
   zh: fcd6a8a2bb58609f
 /deepseek-ai-dsh-subagent/known-limitations-and-deferred-work:
-  en: 746c75e25114ab8b
-  zh: 168d577f1fcc4281
+  en: fb3ae9c914da17ff
+  zh: 18d2fe7caadc9c70
 /deepseek-ai-dsh-subagent/known-limitations-and-deferred-work/dev-note:
   en: 25cc0909348666bb
   zh: 95517f12de100049

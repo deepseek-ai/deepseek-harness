@@ -331,7 +331,7 @@ export function createRelayAuthority(deps: RelayAuthorityDeps): RelayAuthority {
       if (admissionNarrowed(previous, state)) deps.cancelShareTurn(shareId)
       // The Session's sandbox follows its shares: a narrowed tier re-installs the read-only layer, and a
       // deadline that just passed releases it.
-      deps.reconcileSourceAccess(share.sessionId)
+      for (const sessionId of share.sessionIds) deps.reconcileSourceAccess(sessionId)
     }
     deps.accessChanged()
   }

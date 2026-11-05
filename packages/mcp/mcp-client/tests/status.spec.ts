@@ -65,7 +65,8 @@ vi.mock('@modelcontextprotocol/client/stdio', () => ({
 }))
 
 import * as McpClient from '@deepseek-ai/dsh-mcp-client/src/index.ts'
-import { Config as ConfigSchema, apply, connectionStatusOf } from '@deepseek-ai/dsh-mcp-client/src/index.ts'
+import { Config as ConfigSchema, apply } from '@deepseek-ai/dsh-mcp-client/src/index.ts'
+import { connectionStatusIn as connectionStatusOf } from '@deepseek-ai/dsh-mcp-client/src/status.ts'
 import { McpStatusCell } from '@deepseek-ai/dsh-mcp-client/src/status.ts'
 
 async function mountRegistry(): Promise<Context> {

@@ -70,6 +70,79 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   expect(await approval.getByText('/Applications/Fixture.app', { exact: true }).count()).toBe(0)
   await compareOrRefreshGolden(fileURLToPath(new URL('./expected/cua-permissions/application-approval.expected.md', import.meta.url)),
     await captureStableAria(page, '[data-approval-key]', scaffold.workspaceCwd), webSnapshotMode())
+  const risks = approval.getByRole('button', { name: 'Risks', exact: true })
+  const warning = page.getByRole('dialog', { name: 'Computer use risks' })
+  await risks.hover()
+  await warning.waitFor()
+  expect(await warning.evaluate(element => element === document.activeElement)).toBe(false)
+  await warning.hover()
+  expect(await warning.count()).toBe(1)
+  await approval.locator('p').hover()
+  await warning.waitFor({ state: 'hidden' })
+  await risks.hover()
+  await warning.waitFor()
+  await approval.getByRole('button', { name: 'Reject', exact: true }).focus()
+  await warning.waitFor({ state: 'hidden' })
+  await approval.locator('p').hover()
+  await risks.hover()
+  await warning.waitFor()
+  await page.keyboard.press('ControlOrMeta+Slash')
+  const shortcuts = page.getByRole('dialog', { name: 'Keyboard shortcuts', exact: true })
+  await shortcuts.waitFor()
+  await warning.waitFor({ state: 'hidden' })
+  expect(await shortcuts.evaluate(element => element.contains(document.activeElement))).toBe(true)
+  await page.keyboard.press('Escape')
+  await shortcuts.waitFor({ state: 'hidden' })
+  expect(await approval.count()).toBe(1)
+  await approval.locator('p').hover()
+  for (const selectText of [false, true]) {
+    await risks.hover()
+    await warning.waitFor()
+    const paragraph = warning.locator('p').first()
+    if (selectText) {
+      await paragraph.dblclick({ position: { x: 8, y: 10 } })
+      expect(await page.evaluate(() => window.getSelection()?.toString().trim().length ?? 0)).toBeGreaterThan(0)
+    } else {
+      await paragraph.click()
+    }
+    expect(await warning.evaluate(element => element === document.activeElement)).toBe(true)
+    await approval.locator('p').hover()
+    await warning.waitFor({ state: 'hidden' })
+  }
+  await page.keyboard.press('Tab')
+  await risks.focus()
+  await warning.waitFor()
+  expect(await risks.evaluate(element => element === document.activeElement)).toBe(true)
+  await compareOrRefreshGolden(fileURLToPath(new URL('./expected/cua-permissions/application-risks.expected.md', import.meta.url)),
+    await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd), webSnapshotMode())
+  await page.keyboard.press('Escape')
+  await warning.waitFor({ state: 'hidden' })
+  expect(await approval.count()).toBe(1)
+  for (const { width, height } of [{ width: 1000, height: 800 }, { width: 390, height: 800 }, { width: 390, height: 480 }]) {
+    await page.setViewportSize({ width, height })
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme })
+      await expect.poll(() => page.evaluate(() => document.body.hasAttribute('data-ds-dark-theme'))).toBe(colorScheme === 'dark')
+      await risks.dispatchEvent('pointerdown', { pointerType: 'touch' })
+      await risks.click()
+      await warning.waitFor()
+      await expect.poll(async () => warning.evaluate((element) => {
+        const bounds = element.getBoundingClientRect()
+        return bounds.left >= 12 && bounds.top >= 12 && bounds.right <= innerWidth - 12 && bounds.bottom <= innerHeight - 12
+      })).toBe(true)
+      expect(await warning.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+      expect(await approval.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+      if (webSnapshotMode() === 'refresh') {
+        const directory = fileURLToPath(new URL('../../../.artifacts', import.meta.url))
+        await mkdir(directory, { recursive: true })
+        await page.screenshot({ path: join(directory, `cua-popover-${width}-${height}-${colorScheme}.png`), animations: 'disabled' })
+      }
+      await page.mouse.click(4, height / 2)
+      await warning.waitFor({ state: 'hidden' })
+    }
+  }
+  await page.emulateMedia({ colorScheme: null })
+  await page.setViewportSize({ width: 1680, height: 1000 })
   await approval.getByRole('button', { name: 'Always allow', exact: true }).click()
   expect((await grant).results).toMatchObject([{ result: { isError: false } }])
   await approval.waitFor({ state: 'hidden' })

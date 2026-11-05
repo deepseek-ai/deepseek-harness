@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { AgentCancelCause } from '@deepseek-ai/dsh-agent'
+import { CREATED_RECORD } from '@deepseek-ai/dsh-experimental-worktree'
 import type {} from '@deepseek-ai/dsh-experimental-forge-session'
 import SessionStore, { appendPluginRecord, SessionId } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
@@ -43,6 +44,18 @@ async function folded(): Promise<{ ctx: Context; session: Session; state: () => 
 }
 
 describe('forgeWorktree projection', () => {
+  it('ignores a service creation record without an open request and after the first step', async () => {
+    const { session, state } = await folded()
+    const created = {
+      path: WORKTREE.path, branch: WORKTREE.branch, baseCommit: WORKTREE.baseCommit, repositoryRoot: WORKTREE.repositoryRoot,
+    }
+    appendPluginRecord(session, CREATED_RECORD, created)
+    expect(state().created).toBeNull()
+    appendPluginRecord(session, WORKTREE_RECORD, { action: 'request', from: 'main' })
+    appendPluginRecord(session, CREATED_RECORD, created)
+    expect(state().created).toEqual({ ...created, from: 'main' })
+  })
+
   it('shows clients the created worktree in the Session summary while the Session works in it', async () => {
     const { ctx, session, state } = await folded()
     const published: unknown[] = []
@@ -274,7 +287,8 @@ describe('creating a requested worktree', () => {
     const created = { path, branch, from: null, baseCommit: head, repositoryRoot: repo }
     expect(result).toEqual({ path, branch, baseCommit: head, repositoryRoot: repo })
     expect(worktreeOf(opened)).toEqual(created)
-    expect(opened.records).toEqual([{ action: 'request', from: null }, { action: 'created', worktree: created }])
+    expect(opened.records).toEqual([{ action: 'request', from: null }])
+    expect(opened.created).toEqual([{ path, branch, baseCommit: head, repositoryRoot: repo }])
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(path)
     expect(opened.ctx.sessionProjections.snapshot(opened.session, ['forgeWorktree']).values).toEqual({ forgeWorktree: created })
     expect(await git(path, 'symbolic-ref', '--short', 'HEAD')).toBe(branch)
@@ -403,7 +417,8 @@ describe('worktree creation at the first step proposal', () => {
     expect(branch).toMatch(/^dsh-[0-9a-f]{8}$/)
     const path = join(repo, '.agents', 'worktrees', ...branch.split('/'))
     expect(created).toEqual({ path, branch, from: null, baseCommit: head, repositoryRoot: repo })
-    expect(opened.records).toEqual([{ action: 'request', from: null }, { action: 'created', worktree: created }])
+    expect(opened.records).toEqual([{ action: 'request', from: null }])
+    expect(opened.created).toHaveLength(1)
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(path)
     expect(await git(path, 'symbolic-ref', '--short', 'HEAD')).toBe(branch)
     expect(decision).toEqual({ kind: 'enter', messages: [proposed, notice(path)], startsRequestSeries: true })
@@ -439,7 +454,8 @@ describe('worktree creation at the first step proposal', () => {
     expect(path).toBe(worktreeOf(opened)?.path)
     expect(entered).toEqual({ kind: 'enter', messages: [proposed] })
     expect(opened.agent.inbox.nextStep).toEqual([notice(path)])
-    expect(opened.records).toHaveLength(2)
+    expect(opened.records).toEqual([{ action: 'request', from: null }])
+    expect(opened.created).toHaveLength(1)
     expect(await branches(repo)).toEqual([worktreeOf(opened)?.branch, 'main'])
   })
 
@@ -488,7 +504,8 @@ describe('worktree creation at the first step proposal', () => {
 
     expect(decision).toEqual({ kind: 'enter', messages: [proposed] })
     expect(opened.changes).toHaveLength(reports)
-    expect(opened.records).toHaveLength(2)
+    expect(opened.records).toEqual([{ action: 'request', from: null }])
+    expect(opened.created).toHaveLength(1)
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(created.path)
     expect(await branches(repo)).toEqual([created.branch, 'main'])
   })

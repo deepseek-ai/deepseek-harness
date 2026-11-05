@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Terminais persistentes",
-    "description": "Fornece ao agente terminais cujos processos continuam em execução em segundo plano entre chamadas de ferramentas, para que ele possa iniciar um servidor de desenvolvimento ou um REPL e voltar depois para ler a saída ou digitar entradas.",
+    "description": "Fornece ao agente terminais que abrem como abas da barra lateral, que você pode acompanhar e assumir digitando neles. Os processos continuam em execução entre chamadas de ferramentas, para que ele possa iniciar um servidor de desenvolvimento ou um REPL e voltar depois para ler a saída; ele também pode ler os terminais que você mesmo abrir.",
     "detail": "docs/DETAIL.md"
   }
 }

@@ -11,4 +11,4 @@
           - img "In progress"
           - text: Agent task
         - paragraph: Created by the root agent
-        - paragraph: "Owner: session-{{uuid}}"
+        - paragraph: "Owner: lead"

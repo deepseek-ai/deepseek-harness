@@ -349,6 +349,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
       'conversation.composer': { kind: 'chain', scope: 'session' },
       'conversation.composer.bar': { kind: 'single', scope: 'session-maybe' },
       'conversation.input.dock': { kind: 'list', scope: 'session' },
+      'conversation.hero.frame': { kind: 'hoc', scope: 'root' },
       'conversation.hero.brand.mark': { kind: 'single', scope: 'root' },
       'conversation.hero.workspace': { kind: 'single', scope: 'root' },
       'conversation.hero.agentPreset': { kind: 'single', scope: 'session-maybe' },
@@ -483,6 +484,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
           retryFileUpload: undefined,
           toggleCommandMenu: undefined,
           stop: undefined,
+          retry: undefined,
           hooks: {
             stopShortcut,
             busyEnter: submissionPolicy.busyEnter,
@@ -562,6 +564,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
             })
           },
         stop: () => { stop(sessionId) },
+        retry: (failureSeq) => { inputHub.retry(sessionId, failureSeq) },
         hooks: {
           stopShortcut,
           busyEnter: submissionPolicy.busyEnter,
