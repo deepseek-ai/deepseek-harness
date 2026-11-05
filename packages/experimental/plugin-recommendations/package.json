@@ -54,7 +54,7 @@
     "@deepseek-ai/dsh-skill": "workspace:*"
   },
   "dependencies": {
-    "zod": "4.4.3",
+    "zod": "4.6.6",
     "@deepseek-ai/dsh-client-ui-plugin-recommendations": "workspace:*",
     "@deepseek-ai/dsh-action-cards": "workspace:*",
     "@deepseek-ai/dsh-client-ui-action-cards": "workspace:*"
