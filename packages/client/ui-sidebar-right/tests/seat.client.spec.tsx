@@ -626,11 +626,7 @@ describe('RightbarSeat presentation', () => {
     // The tab the opening seeds mounts under the mark, so it starts at the closed position.
     const host = element(h.view.container, "[data-dockkit-host='dock']")
     expect(panel.hasAttribute('data-sidebar-right-opening')).toBe(true)
-    // Short transitions inside an item, or other properties, do not end the slide.
-    fireEvent.transitionEnd(element(host, '[data-dockkit-pane]'), { propertyName: 'transform' })
-    fireEvent.transitionEnd(host, { propertyName: 'opacity' })
-    expect(panel.hasAttribute('data-sidebar-right-opening')).toBe(true)
-    fireEvent.transitionEnd(host, { propertyName: 'transform' })
+    fireEvent.transitionEnd(host)
     expect(panel.hasAttribute('data-sidebar-right-opening')).toBe(false)
     act(() => { h.actions.splitPane(SESSION) })
     expect(panel.hasAttribute('data-sidebar-right-opening')).toBe(false)
@@ -657,7 +653,8 @@ describe('RightbarSeat presentation', () => {
     expect(panel.style.width).toBe('420px')
     fireEvent.click(element(h.view.container, '[data-sidebar-right-mode]'))
     expect(h.layout().mode).toBe('fullscreen')
-    expect(panel.style.width).toBe('100vw')
+    expect(panel.style.width).toBe('calc(1px + 100vw)')
+    expect(panel.style.getPropertyValue('--dsh-sidebar-width')).toBe('calc(100vw + 1px)')
     expect(panel.dataset['sidebarRightPanel']).toBe('fullscreen')
     expect(element(h.view.container, '[data-tab-body]')).toBe(body)
     expect(h.frame.openRightbar).toHaveBeenLastCalledWith(true, true)

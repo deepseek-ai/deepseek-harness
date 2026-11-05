@@ -30,7 +30,7 @@
  * domain follows each session's store commits, including sessions off screen.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, ReactNode, RefObject, TransitionEvent } from 'react'
+import type { CSSProperties, ReactNode, RefObject } from 'react'
 import type { ContextMenuTarget } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import type { ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/client'
 import { IconPanelLeftOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -305,12 +305,6 @@ function PanelChrome({ sessionId, fullscreen, actions, t, shortcuts, toggleFulls
   )
 }
 
-/** Whether a bubbled transition end is the open slide of a docked Grid item, not a short transition inside one. */
-function slideEnded(event: TransitionEvent<HTMLDivElement>): boolean {
-  return event.propertyName === 'transform'
-    && (event.target as Element).matches("[data-dockkit-host='dock'], [data-dockkit-empty], [data-dockkit-divider]")
-}
-
 /**
  * The panel: the docked surface with the two controls in its top-right strip,
  * anchored to the frame's right edge and slid off it while collapsed.
@@ -330,8 +324,8 @@ function SidebarPanel(panel: PanelProps & { width: number; panelRef: RefObject<H
     played.current = flash.serial
     return panel.active ? flashPane(panelRef.current, flash) : undefined
   }, [flash, panel.active, panelRef])
-  // True from the render that opens the on-screen panel until the slide of a
-  // docked item ends, the panel closes, or it leaves the screen, which cancels the
+  // True from the render that opens the on-screen panel until a transition in
+  // it ends, the panel closes, or it leaves the screen, which cancels the
   // slide; the stylesheet starts items mounted meanwhile at the closed position.
   const [opened, setOpened] = useState(expanded)
   const [opening, setOpening] = useState(false)
@@ -345,13 +339,16 @@ function SidebarPanel(panel: PanelProps & { width: number; panelRef: RefObject<H
     <div
       ref={panelRef}
       className={css.panel}
-      style={{ width: fullscreen ? '100vw' : width,
-        '--dsh-sidebar-width': fullscreen ? '100vw' : `${width}px` } as CSSProperties}
+      // Fullscreen is 1px wider than the viewport: the first column's divider,
+      // which separates the panel from the conversation, sits past the window's
+      // left edge where the frame clips it, and slides into view with the panel.
+      style={{ width: fullscreen ? 'calc(100vw + 1px)' : width,
+        '--dsh-sidebar-width': fullscreen ? 'calc(100vw + 1px)' : `${width}px` } as CSSProperties}
       data-sidebar-right-session={sessionId}
       data-sidebar-right-panel={fullscreen ? 'fullscreen' : 'push'}
       data-sidebar-right-open={expanded || undefined}
       data-sidebar-right-opening={opening || undefined}
-      onTransitionEnd={opening ? (event) => { if (slideEnded(event)) setOpening(false) } : undefined}
+      onTransitionEnd={opening ? () => { setOpening(false) } : undefined}
       // Dockkit hides individual docked hosts; floating descendants remain accessible.
       aria-hidden={(!expanded && surface.layout.floats.length === 0) || undefined}
     >
