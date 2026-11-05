@@ -23,31 +23,6 @@ function requestIssueMessage(issues: readonly z.core.$ZodIssue[], parent: readon
   }))].join('; ')
 }
 
-/** Parse a portable key chord.
- * @param chord Key or chord.
- * @returns Native key and modifier names.
- */
-export function keyChord(chord: string): { key: string; modifiers: string[] } {
-  const parts = chord.split('+')
-  let key = parts.pop()
-  if (key === '' && parts.at(-1) === '') {
-    key = '+'
-    parts.pop()
-  }
-  if (!key) throw new Error('A key chord must end with a key name')
-  const names: Record<string, string> = {
-    cmd: 'command', command: 'command', super: 'command', Super_L: 'command', Super_R: 'command',
-    ctrl: 'control', control: 'control', Control_L: 'control', Control_R: 'control',
-    alt: 'option', option: 'option', Alt_L: 'option', Alt_R: 'option',
-    shift: 'shift', Shift_L: 'shift', Shift_R: 'shift', fn: 'fn',
-  }
-  return { key, modifiers: parts.map((part) => {
-    const modifier = names[part]
-    if (modifier === undefined) throw new Error(`Unsupported key modifier: ${part}`)
-    return modifier
-  }) }
-}
-
 function validatedCall(dispatch: CuaDispatch) {
   return (method: CuaOperation['method'], params: Record<string, JsonValue>) => {
     const request = Request.safeParse({ method, params })
@@ -188,9 +163,13 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>, sink: CuaObser
           ...options?.format === undefined ? {} : { format: options.format },
         })
       },
-      async pressKey(key) {
+      async pressKey(key, modifiers = []) {
         requireKeyboard()
-        return action('pressKey', keyChord(key))
+        return action('pressKey', { key, modifiers: [...modifiers] })
+      },
+      async sendKeyEvent(key, direction) {
+        requireKeyboard()
+        return action('sendKeyEvent', { key, direction })
       },
     }
     return { surface, call: scopedCall, action, elementParams }

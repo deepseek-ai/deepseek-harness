@@ -12,11 +12,25 @@ const rejectedRequests: Array<{ reason: string; request: JsonValue }> = [
   { reason: 'numeric element id', request: { method: 'click', params: { appHandle: 'app', snapshotId: 'snapshot', elementId: 0 } } },
   { reason: 'coordinate click without a window', request: { method: 'click', params: { appHandle: 'app', x: 1, y: 2 } } },
   { reason: 'mixed element and coordinate click', request: { method: 'click', params: { appHandle: 'app', snapshotId: 'snapshot', elementId: '0', windowId: 23, x: 1, y: 2 } } },
-  { reason: 'unsupported modifier', request: { method: 'pressKey', params: { appHandle: 'app', key: 'a', modifiers: ['hyper'] } } },
+  { reason: 'non-string pressKey modifier', request: { method: 'pressKey', params: { appHandle: 'app', key: 'a', modifiers: ['command', 7] } } },
+  { reason: 'sendKeyEvent modifiers', request: { method: 'sendKeyEvent', params: { appHandle: 'app', key: 'a', direction: 'down', modifiers: [] } } },
+  { reason: 'sendKeyEvent without direction', request: { method: 'sendKeyEvent', params: { appHandle: 'app', key: 'a' } } },
+  { reason: 'sendKeyEvent invalid direction', request: { method: 'sendKeyEvent', params: { appHandle: 'app', key: 'a', direction: 'press' } } },
+  { reason: 'sendKeyEvent empty key', request: { method: 'sendKeyEvent', params: { appHandle: 'app', key: '', direction: 'down' } } },
 ]
 
 it.each(rejectedRequests)('rejects $reason at operation admission', ({ request }) => {
   expect(Request.safeParse(request).success).toBe(false)
+})
+
+it('admits arbitrary provider-defined pressKey modifier names', () => {
+  const request = { method: 'pressKey', params: { appHandle: 'app', key: 'PlatformKey', modifiers: ['platform-modifier', 'shift'] } }
+  expect(Request.parse(request)).toEqual(request)
+})
+
+it('admits arbitrary key names with an explicit key-event direction', () => {
+  const request = { method: 'sendKeyEvent', params: { appHandle: 'app', windowId: 23, key: 'Command', direction: 'down' } }
+  expect(Request.parse(request)).toEqual(request)
 })
 
 it.each([

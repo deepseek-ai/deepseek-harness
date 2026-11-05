@@ -24,6 +24,7 @@ enum NativeProtocol {
         "screenshot": ["appHandle", "windowId"],
         "scroll": ["appHandle", "deltaLinesX", "deltaLinesY", "snapshotId", "windowId", "x", "y"],
         "selectText": ["appHandle", "elementId", "prefix", "selectionType", "snapshotId", "suffix", "text", "windowId"],
+        "sendKeyEvent": ["appHandle", "direction", "key", "windowId"],
         "setValue": ["appHandle", "elementId", "snapshotId", "value", "windowId"],
         "show": ["appHandle", "windowId"],
         "typeText": ["appHandle", "text", "windowId"],
@@ -33,8 +34,8 @@ enum NativeProtocol {
         "drag": ["modifiers": ["command", "control", "fn", "option", "shift"], "mouseButton": ["left", "middle", "right"]],
         "openPermissionSettings": ["permission": ["accessibility", "screenRecording"]],
         "paste": ["format": ["html", "text"]],
-        "pressKey": ["modifiers": ["command", "control", "fn", "option", "shift"]],
         "requestPermission": ["permission": ["accessibility", "screenRecording"]],
         "selectText": ["selectionType": ["cursor_after", "cursor_before", "text"]],
+        "sendKeyEvent": ["direction": ["down", "up"]],
     ]
 }

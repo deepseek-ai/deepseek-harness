@@ -991,20 +991,62 @@
             "modifiers": {
               "type": "array",
               "items": {
-                "type": "string",
-                "enum": [
-                  "command",
-                  "control",
-                  "option",
-                  "shift",
-                  "fn"
-                ]
+                "type": "string"
               }
             }
           },
           "required": [
             "appHandle",
             "key"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string",
+          "const": "sendKeyEvent"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "appHandle": {
+              "type": "string",
+              "minLength": 1
+            },
+            "windowId": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 4294967295
+            },
+            "key": {
+              "type": "string",
+              "minLength": 1
+            },
+            "direction": {
+              "type": "string",
+              "enum": [
+                "down",
+                "up"
+              ]
+            }
+          },
+          "required": [
+            "appHandle",
+            "key",
+            "direction"
           ],
           "additionalProperties": false
         }

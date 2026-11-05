@@ -189,6 +189,9 @@ actor AXWorker {
                  trace: ScreenshotTrace? = nil) async throws -> DriverOutcome {
         try cancellation.check()
         guard !closed else { throw NativeFailure(code: "NATIVE_CLOSED", message: "Helper is closing") }
+        if method == "sendKeyEvent" {
+            throw NativeFailure(code: "NOT_IMPLEMENTED", message: "sendKeyEvent is not implemented on current platform.")
+        }
         let locked = observeSession()
         if method == "getCapabilities" {
             return .result(.object(["permissions": .object([

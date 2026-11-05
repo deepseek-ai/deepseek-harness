@@ -61,7 +61,8 @@ export const Request = z.discriminatedUnion('method', [
     selectionType: z.enum(['text', 'cursor_before', 'cursor_after']).optional() }),
   operation('typeText', { ...app, windowId: id.optional(), text: z.string() }),
   operation('paste', { ...app, windowId: id.optional(), text: z.string(), format: z.enum(['text', 'html']).optional() }),
-  operation('pressKey', { ...app, windowId: id.optional(), key: z.string().min(1), modifiers: z.array(z.enum(['command', 'control', 'option', 'shift', 'fn'])).optional() }),
+  operation('pressKey', { ...app, windowId: id.optional(), key: z.string().min(1), modifiers: z.array(z.string()).optional() }),
+  operation('sendKeyEvent', { ...app, windowId: id.optional(), key: z.string().min(1), direction: z.enum(['down', 'up']) }),
   z.object({ method: z.literal('scroll'), params: z.union([
     z.object({ ...absoluteCoordinate,
       deltaLinesX: z.number().int().min(-10).max(10), deltaLinesY: z.number().int().min(-10).max(10) }).strict(),

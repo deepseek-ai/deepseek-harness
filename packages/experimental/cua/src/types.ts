@@ -160,12 +160,22 @@ export interface CuaSurface {
    */
   paste(text: string, options?: CuaPasteOptions): Promise<CuaActionResult>
   /**
-   * Send a key or chord at the current input focus.
+   * Press and release one key at the current input focus.
    * Rejects when the provider does not support keyboard input at this scope.
-   * @param key - xdotool-style chord such as super+c, shift+Tab, + or cmd++; plus is also a key name.
+   * @param key - Provider-defined key name to press and release; not a chord.
+   * @param modifiers - Platform- or provider-defined modifier names held for this keystroke; omitted means none.
    * @returns Whether the provider successfully executed the requested operation.
    */
-  pressKey(key: string): Promise<CuaActionResult>
+  pressKey(key: string, modifiers?: string[]): Promise<CuaActionResult>
+  /**
+   * Send one key-down or key-up event at the current input focus.
+   * Does not send the opposite event.
+   * Rejects when the provider does not support keyboard input at this scope.
+   * @param key - Platform-defined key name; modifier keys may themselves be targets.
+   * @param direction - Explicit event direction; the opposite event is never sent implicitly.
+   * @returns Whether the provider successfully executed the requested operation.
+   */
+  sendKeyEvent(key: string, direction: 'down' | 'up'): Promise<CuaActionResult>
 }
 /**
  * An explicit window with screenshot and pointer input operations.

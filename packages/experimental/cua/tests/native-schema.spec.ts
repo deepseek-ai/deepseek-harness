@@ -36,6 +36,20 @@ it('admits only locator fields for default invocation', () => {
   expect(nativeProtocol().fields.get('invoke')).toEqual(new Set(['appHandle', 'snapshotId', 'elementId', 'windowId']))
 })
 
+it('admits arbitrary pressKey modifier names without a generated string enum', () => {
+  const native = nativeProtocol()
+  expect(native.fields.get('pressKey')).toContain('modifiers')
+  expect(native.enums.get('pressKey')?.has('modifiers') ?? false).toBe(false)
+})
+
+it('admits key events with only an explicit direction enum', () => {
+  const native = nativeProtocol()
+  expect(native.fields.get('sendKeyEvent')).toEqual(new Set(['appHandle', 'windowId', 'key', 'direction']))
+  expect(native.enums.get('sendKeyEvent')?.get('direction')).toEqual(new Set(['down', 'up']))
+  expect(native.enums.get('sendKeyEvent')?.has('modifiers') ?? false).toBe(false)
+  expect(native.enums.get('sendKeyEvent')?.has('key') ?? false).toBe(false)
+})
+
 it('accepts a parameter-free object schema without a properties dictionary', () => {
   replacements.values.set(0, { properties: { method: { const: 'getCapabilities' }, params: { type: 'object' } } })
   expect(nativeProtocol().fields.get('getCapabilities')).toEqual(new Set())

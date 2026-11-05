@@ -514,10 +514,10 @@ describe('application and window observations', () => {
     f.dispatch.mockClear()
     await window.typeText('hello')
     await window.paste('<b>bold</b>', { format: 'html' })
-    await window.pressKey('cmd+a')
+    await window.pressKey('a', ['command'])
     await app.typeText('app text')
     await app.paste('app paste')
-    await app.pressKey('shift+Tab')
+    await app.pressKey('Tab', ['shift'])
     expect(f.dispatch.mock.calls.map(([operation]) => operation)).toEqual([
       { method: 'typeText', params: { appHandle: 'app-17', windowId: 23, text: 'hello' } },
       { method: 'paste', params: { appHandle: 'app-17', windowId: 23, text: '<b>bold</b>', format: 'html' } },
@@ -537,7 +537,7 @@ describe('application and window observations', () => {
     await expect(app.typeText('app text')).rejects.toThrow('App-scoped keyboard input is not supported on current platform.')
     await expect(app.paste('app text')).rejects.toThrow('App-scoped keyboard input is not supported on current platform.')
     await expect(app.pressKey('Return')).rejects.toThrow('App-scoped keyboard input is not supported on current platform.')
-    await expect(app.pressKey('unknown+a')).rejects.toThrow('App-scoped keyboard input is not supported on current platform.')
+    await expect(app.pressKey('', ['command'])).rejects.toThrow('App-scoped keyboard input is not supported on current platform.')
     expect(f.dispatch).not.toHaveBeenCalled()
     await expect(window.typeText('window text')).resolves.toEqual(delivered)
     expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'typeText', params: { appHandle: 'app-17', windowId: 23, text: 'window text' } })
@@ -684,11 +684,7 @@ describe('input actions', () => {
     ['oversized scroll', ({ window }) => window.scroll({ x: 0, y: 0, deltaLinesX: 11, deltaLinesY: 0 })],
     ['fractional scroll', ({ window }) => window.scroll({ x: 0, y: 0, deltaLinesX: 0.5, deltaLinesY: 0 })],
     ['negative drag point', ({ window }) => window.drag([0, 0], [-1, 3])],
-    ['empty chord', ({ app }) => app.pressKey('')],
-    ['missing key', ({ app }) => app.pressKey('super+')],
-    ['empty plus modifier', ({ app }) => app.pressKey('++')],
-    ['extra plus delimiter', ({ app }) => app.pressKey('cmd+++')],
-    ['unknown modifier', ({ app }) => app.pressKey('unknown+a')],
+    ['empty key', ({ app }) => app.pressKey('')],
   ]
   it.each<[string, (surfaces: Surfaces) => Promise<unknown>]>([
     ['getState windowId: Too small: expected number to be >0', ({ app }) => app.getWindow(0)],
@@ -714,17 +710,41 @@ describe('input actions', () => {
     expect(f.dispatch).toHaveBeenCalledTimes(calls)
   })
 
-  it.each<[string, string, string[]]>([
-    ['+', '+', []],
-    ['cmd++', '+', ['command']],
-    ['ctrl+shift++', '+', ['control', 'shift']],
-    ['cmd+plus', 'plus', ['command']],
-    ['plus', 'plus', []],
-  ])('dispatches the plus-key chord %s', async (chord, key, modifiers) => {
+  it.each<[string, string[] | undefined, string[]]>([
+    ['+', undefined, []],
+    ['plus', [], []],
+    ['+', ['command'], ['command']],
+    ['Tab', ['shift'], ['shift']],
+  ])('forwards literal key %s with modifiers %j without splitting', async (key, modifiers, expected) => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
-    await app.pressKey(chord)
-    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'pressKey', params: { appHandle: 'app-17', key, modifiers } })
+    if (modifiers === undefined) await app.pressKey(key)
+    else await app.pressKey(key, modifiers)
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'pressKey', params: { appHandle: 'app-17', key, modifiers: expected } })
+  })
+
+  it('forwards the literal key unsplit in one RPC without mutating modifiers', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    const modifiers: string[] = ['control', 'shift']
+    f.dispatch.mockClear()
+    await app.pressKey('+', modifiers)
+    expect(f.dispatch).toHaveBeenCalledTimes(1)
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'pressKey', params: {
+      appHandle: 'app-17', key: '+', modifiers: ['control', 'shift'],
+    } })
+    expect(modifiers).toEqual(['control', 'shift'])
+  })
+
+  it('forwards arbitrary provider-defined key and modifier names in one RPC', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    f.dispatch.mockClear()
+    await app.pressKey('PlatformKey', ['platform-modifier'])
+    expect(f.dispatch).toHaveBeenCalledTimes(1)
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'pressKey', params: {
+      appHandle: 'app-17', key: 'PlatformKey', modifiers: ['platform-modifier'],
+    } })
   })
 
   it('passes literal text and keys to the selected app identity', async () => {
@@ -733,7 +753,7 @@ describe('input actions', () => {
     await app.typeText('中文\nline two')
     await app.paste('粘贴\nplain text')
     await app.paste('<b>bold</b>', { format: 'html' })
-    await app.pressKey('Control_L+shift+a')
+    await app.pressKey('a', ['control', 'shift'])
     await app.pressKey('Return')
     expect(f.dispatch.mock.calls.slice(-5).map(([operation]) => operation)).toEqual([
       { method: 'typeText', params: { appHandle: 'app-17', text: '中文\nline two' } },
@@ -753,11 +773,59 @@ describe('input actions', () => {
       () => window.typeText('hello'),
       () => window.paste('hello'),
       () => window.pressKey('Return'),
-      () => window.pressKey('unknown+a'),
+      () => window.pressKey('', ['command']),
     ]) {
       await expect(run()).rejects.toThrow('Window-scoped keyboard input is not supported on current platform.')
     }
     expect(f.dispatch).not.toHaveBeenCalled()
+  })
+
+  it.each<[string, 'down' | 'up']>([
+    ['app', 'down'],
+    ['app', 'up'],
+    ['window', 'down'],
+    ['window', 'up'],
+  ])('sends one explicit %s-scoped key event (%s) with exactly one RPC', async (scope, direction) => {
+    const f = fixture()
+    f.setCapabilities({ ...capabilities, keyboard: ['app', 'window'] })
+    const app = await f.api.getApp('Editor')
+    const surface = scope === 'window' ? await app.getWindow(23) : app
+    f.dispatch.mockClear()
+    f.dispatch.mockResolvedValueOnce(delivered)
+    await expect(surface.sendKeyEvent('Shift', direction)).resolves.toEqual(delivered)
+    expect(f.dispatch).toHaveBeenCalledTimes(1)
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'sendKeyEvent', params: {
+      appHandle: 'app-17', ...scope === 'window' ? { windowId: 23 } : {}, key: 'Shift', direction,
+    } })
+  })
+
+  it('returns an un-dispatched key-event result from one RPC without retrying', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    f.dispatch.mockClear()
+    f.dispatch.mockResolvedValueOnce({ dispatched: false })
+    await expect(app.sendKeyEvent('Command', 'down')).resolves.toEqual({ dispatched: false })
+    expect(f.dispatch).toHaveBeenCalledTimes(1)
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'sendKeyEvent', params: {
+      appHandle: 'app-17', key: 'Command', direction: 'down',
+    } })
+  })
+
+  it('rejects key events without keyboard support before validating them', async () => {
+    const appFixture = fixture()
+    appFixture.setCapabilities({ ...capabilities, keyboard: ['window'] })
+    const app = await appFixture.api.getApp('Editor')
+    appFixture.dispatch.mockClear()
+    await expect(app.sendKeyEvent('', 'down')).rejects.toThrow('App-scoped keyboard input is not supported on current platform.')
+    expect(appFixture.dispatch).not.toHaveBeenCalled()
+
+    const windowFixture = fixture()
+    windowFixture.setCapabilities({ ...capabilities, keyboard: ['app'] })
+    const windowApp = await windowFixture.api.getApp('Editor')
+    const window = await windowApp.getWindow(23)
+    windowFixture.dispatch.mockClear()
+    await expect(window.sendKeyEvent('', 'up')).rejects.toThrow('Window-scoped keyboard input is not supported on current platform.')
+    expect(windowFixture.dispatch).not.toHaveBeenCalled()
   })
 
   it('retains the snapshot identity for element right and double clicks', async () => {
