@@ -16,7 +16,7 @@ import { NativeClient, NativeError, type NativeClientConfig, type NativeChannelF
 import { CuaPermissionStore } from './permission-store.ts'
 import { ApplicationAuthorizationResult, installCuaAccess } from './access.ts'
 import type { CuaApplicationGrant, CuaApplicationId } from './access-types.ts'
-import type { CuaAppHandle, CuaOperation } from './types.ts'
+import type { CuaAppHandle, CuaOperation, CuaStartupCapabilities } from './types.ts'
 import { ApplicationIcon, AppResult, NativeScreenshotResult, Request, ScreenshotResult, StateResult, WindowsResult } from './protocol.ts'
 import { CuaCoordinates } from './coordinates.ts'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
@@ -29,6 +29,7 @@ import type {} from '@deepseek-ai/dsh-ptc-runtime'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 
 export { CuaAccess } from './access.ts'
+export type { CuaStartupCapabilities } from './types.ts'
 
 /** Native executable and per-operation resource bounds. */
 export interface CuaConfig {
@@ -145,11 +146,12 @@ async function screenshotStore(ctx: Context, execution: Readonly<CuaExecution>) 
   return { attachments, target: (image: ImageAttachmentRef) => llm.imageRequestTarget(provider, model, image) }
 }
 
-/** Prepared platform executable, transport, and platform-specific operating instructions. */
+/** Prepared platform executable, transport, platform-specific instructions and startup capabilities. */
 export interface CuaBackend {
   helperPath: string
   createChannel: NativeChannelFactory
   guidance: string
+  capabilities: CuaStartupCapabilities
 }
 
 /**
@@ -282,7 +284,19 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         return selected
       }
       signal.throwIfAborted()
-      if (method === 'getCapabilities') return { ...z.record(z.string(), z.json()).parse(result), coordinateSpace: 'screenshot-pixels' }
+      if (method === 'getCapabilities') {
+        const runtime = z.record(z.string(), z.json()).parse(result)
+        const capabilities = backend.capabilities
+        return {
+          ...runtime,
+          platform: capabilities.platform,
+          methods: [...capabilities.methods],
+          appLevelAccessibility: capabilities.appLevelAccessibility,
+          keyboard: [...capabilities.keyboard],
+          browser: capabilities.browser,
+          coordinateSpace: capabilities.coordinateSpace,
+        }
+      }
       if (method === 'getState') {
         const state = StateResult.parse(result)
         execution.coordinates.observe(state.appHandle, state.windows, state.windowId ?? undefined)

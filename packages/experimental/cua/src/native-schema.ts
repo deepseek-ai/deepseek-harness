@@ -13,16 +13,14 @@ function variants(schema: Schema): Schema[] { return schema.anyOf ?? schema.oneO
 
 /**
  * Derive native request schemas and admission fields from the shared operation definitions.
- * @returns Model operation names, native field and enum tables, and the complete wire schema.
+ * @returns Native field and enum tables and the complete wire schema.
  */
 export function nativeProtocol(): {
   fields: Map<string, Set<string>>
   enums: Map<string, Map<string, Set<string>>>
-  modelMethods: string[]
   json: string
 } {
   const resources = new Map(Object.entries(NativeResourceParameters))
-  const modelMethods = Request.options.map(schema => schema.shape.method.value).sort()
   const schemas = [...Request.options, ...NativeOnlyOperations]
     .map(schema => z.toJSONSchema(schema))
   const fields = new Map<string, Set<string>>()
@@ -69,7 +67,7 @@ export function nativeProtocol(): {
     fields.set(method, names)
     if (values.size) enums.set(method, values)
   }
-  return { fields, enums, modelMethods, json: JSON.stringify({
+  return { fields, enums, json: JSON.stringify({
     $schema: 'https://json-schema.org/draft/2020-12/schema',
     $comment: 'Generated from the shared CUA operation schema. Do not edit.',
     title: 'dsh-cua native request',

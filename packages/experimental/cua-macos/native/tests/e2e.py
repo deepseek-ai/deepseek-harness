@@ -126,7 +126,6 @@ def main():
                     time.sleep(0.025)
 
             capabilities = call("getCapabilities", {})
-            assert capabilities["platform"] == "macos", capabilities
             assert capabilities["permissions"] == {"accessibility": True, "screenRecording": True}, capabilities
             apps = call("listApps", {})
             assert any(app["pid"] == fixture.pid for app in apps), apps

@@ -191,12 +191,9 @@ actor AXWorker {
         guard !closed else { throw NativeFailure(code: "NATIVE_CLOSED", message: "Helper is closing") }
         let locked = observeSession()
         if method == "getCapabilities" {
-            return .result(.object(["platform": .string("macos"), "permissions": .object([
+            return .result(.object(["permissions": .object([
                 "accessibility": .bool(AXIsProcessTrusted()), "screenRecording": .bool(CGPreflightScreenCaptureAccess())]),
-                "appLevelAccessibility": .bool(true),
-                "keyboard": .array([.string("app")]),
-                "sessionLocked": locked.map(JSONValue.bool) ?? .null,
-                "methods": .array(NativeProtocol.modelMethods.map(JSONValue.string)), "coordinateSpace": .string("window-points"), "browser": .bool(false)]))
+                "sessionLocked": locked.map(JSONValue.bool) ?? .null]))
         }
         if method == "listApps" { return .result(.array(catalog.applications.filter { $0.regular && $0.name != nil }.map(\.json))) }
         try NativePlatform.requireUnlocked(locked)

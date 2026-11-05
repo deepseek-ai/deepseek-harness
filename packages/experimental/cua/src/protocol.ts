@@ -17,7 +17,7 @@ const window = { ...app, windowId: id }
 const jsonValue = z.json()
 export const elementId = z.string().min(1)
   .describe('Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot.')
-const snapshot = { ...app, snapshotId: z.string().min(1), elementId }
+const snapshot = { ...app, windowId: id.optional(), snapshotId: z.string().min(1), elementId }
 const coordinate = { ...window, snapshotId: z.string().min(1).optional(), x: point, y: point }
 const absoluteCoordinate = { ...coordinate, relative: z.literal(false).optional().describe('Omitted or false uses pixels in the latest screenshot returned by this tool.') }
 const relativeCoordinate = { ...coordinate, relative: z.literal(true).describe('Use integer thousandths of the window width and height, from 0 to 999.'), x: relativePoint, y: relativePoint }
@@ -59,9 +59,9 @@ export const Request = z.discriminatedUnion('method', [
   operation('setValue', { ...snapshot, value: jsonValue }),
   operation('selectText', { ...snapshot, text: z.string().min(1), prefix: z.string().optional(), suffix: z.string().optional(),
     selectionType: z.enum(['text', 'cursor_before', 'cursor_after']).optional() }),
-  operation('typeText', { ...app, text: z.string() }),
-  operation('paste', { ...app, text: z.string(), format: z.enum(['text', 'html']).optional() }),
-  operation('pressKey', { ...app, key: z.string().min(1), modifiers: z.array(z.enum(['command', 'control', 'option', 'shift', 'fn'])).optional() }),
+  operation('typeText', { ...app, windowId: id.optional(), text: z.string() }),
+  operation('paste', { ...app, windowId: id.optional(), text: z.string(), format: z.enum(['text', 'html']).optional() }),
+  operation('pressKey', { ...app, windowId: id.optional(), key: z.string().min(1), modifiers: z.array(z.enum(['command', 'control', 'option', 'shift', 'fn'])).optional() }),
   z.object({ method: z.literal('scroll'), params: z.union([
     z.object({ ...absoluteCoordinate,
       deltaLinesX: z.number().int().min(-10).max(10), deltaLinesY: z.number().int().min(-10).max(10) }).strict(),

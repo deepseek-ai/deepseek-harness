@@ -144,7 +144,6 @@ def main():
             call = helper.call
             capabilities = call("getCapabilities", {})
             assert capabilities["permissions"] == {"accessibility": True, "screenRecording": True}, capabilities
-            assert "launchApp" not in capabilities["methods"], capabilities
             matches = call("findApps", {"query": str(application), "maxAppMatches": 20})
             assert len(matches) == 1 and matches[0]["isRunning"] is False, matches
             pending = call("getApp", {"selector": str(application)})

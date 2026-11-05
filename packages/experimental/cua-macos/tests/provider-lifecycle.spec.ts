@@ -162,13 +162,18 @@ it('correlates a native request with its logged tool invocation', async () => {
   expect(native.request).toHaveBeenCalledExactlyOnceWith('listApps', {}, expect.any(AbortSignal), ToolCallId('lifecycle-1'))
 })
 
-it('reports screenshot pixel coordinates while preserving native capabilities', async () => {
+it('merges startup capabilities into runtime native fields', async () => {
   const f = await setup()
-  const capabilities = { platform: 'macos', coordinateSpace: 'window-points', permissions: { accessibility: true, screenCapture: false }, appLevelAccessibility: true, keyboard: ['app'] }
-  native.request.mockResolvedValueOnce(capabilities)
+  const runtime = { permissions: { accessibility: true, screenRecording: false }, sessionLocked: false }
+  native.request.mockResolvedValueOnce(runtime)
   const result = await f.execute('getCapabilities')
   expect(result.isError).toBe(false)
-  expect(result.value).toEqual({ ...capabilities, coordinateSpace: 'screenshot-pixels' })
+  expect(result.value).toEqual({ ...runtime, platform: 'macos', appLevelAccessibility: true, keyboard: ['app'], browser: false,
+    coordinateSpace: 'screenshot-pixels', methods: [
+      'activate', 'click', 'drag', 'findApps', 'getApp', 'getCapabilities', 'getState', 'hover', 'invoke',
+      'listActions', 'listApps', 'listWindows', 'paste', 'performAction', 'pressKey', 'screenshot', 'scroll',
+      'selectText', 'setValue', 'show', 'typeText',
+    ] })
   expect(native.request).toHaveBeenCalledExactlyOnceWith('getCapabilities', {}, expect.any(AbortSignal), ToolCallId('lifecycle-1'))
 })
 

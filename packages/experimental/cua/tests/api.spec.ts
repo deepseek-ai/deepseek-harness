@@ -4,7 +4,7 @@ import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { createCuaApi } from '../src/api.ts'
-import type { CuaApp, CuaElementId, CuaOperation, CuaScreenshot, CuaWindow } from '../src/types.ts'
+import type { CuaApp, CuaCapabilities, CuaElementId, CuaOperation, CuaScreenshot, CuaWindow } from '../src/types.ts'
 
 /** Element ids are opaque strings; these fixtures use the macOS decimal form. */
 const element = (id: string): CuaElementId => brandString<CuaElementId>(id)
@@ -13,7 +13,7 @@ const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG
 const bounds = { x: -640, y: 100, width: 640, height: 480 }
 const selected = { appHandle: 'app-17', pid: 17, name: 'Editor', bundleId: 'test.editor', running: true }
 const delivered = { dispatched: true }
-const capabilities = { platform: 'macos', sessionLocked: false, permissions: { accessibility: true, screenRecording: false }, appLevelAccessibility: true, keyboard: ['app'], methods: ['getState', 'click'], coordinateSpace: 'screenshot-pixels', browser: false }
+const capabilities: CuaCapabilities = { platform: 'macos', sessionLocked: false, permissions: { accessibility: true, screenRecording: false }, appLevelAccessibility: true, keyboard: ['app'], methods: ['getState', 'click'], coordinateSpace: 'screenshot-pixels', browser: false }
 
 function windowInfo(windowId: number) {
   return { windowId, appName: 'Editor', title: `Document ${windowId}`, bounds, isOnScreen: true, onCurrentSpace: null }
@@ -21,11 +21,12 @@ function windowInfo(windowId: number) {
 
 function fixture(withSink = true) {
   let windows = [windowInfo(23)]
+  let currentCapabilities: CuaCapabilities = capabilities
   let generation = 0
   const sink = { text: vi.fn<(value: string) => void>(), image: vi.fn<(screenshot: CuaScreenshot) => void>() }
   const dispatch = vi.fn(async ({ method, params }: CuaOperation): Promise<JsonValue> => {
     switch (method) {
-      case 'getCapabilities': return capabilities
+      case 'getCapabilities': return currentCapabilities
       case 'listApps': return [selected, { pid: 18, name: 'Utility' }]
       case 'getApp': return selected
       case 'listWindows': return windows
@@ -45,6 +46,7 @@ function fixture(withSink = true) {
     dispatch, sink, api: createCuaApi(dispatch, withSink ? sink : undefined),
     setWindows: (ids: number[]) => { windows = ids.map(windowInfo) },
     setWindowRecords: (records: ReturnType<typeof windowInfo>[]) => { windows = records },
+    setCapabilities: (value: CuaCapabilities) => { currentCapabilities = value },
   }
 }
 
@@ -163,7 +165,7 @@ describe('hover across observations', () => {
     await window.getScreenshot({ emit: false })
     expect(await window.hover([30, 40])).toEqual({ ...delivered, hoverRoute: 'accessibility', systemPointerMoved: false })
     expect(f.dispatch.mock.calls.map(([operation]) => operation)).toEqual([
-      { method: 'hover', params: { appHandle: 'app-17', snapshotId: 'snapshot-2', elementId: '0' } },
+      { method: 'hover', params: { appHandle: 'app-17', snapshotId: 'snapshot-2', elementId: '0', windowId: 23 } },
       { method: 'getState', params: { appHandle: 'app-17', windowId: 23 } },
       { method: 'screenshot', params: { appHandle: 'app-17', windowId: 23 } },
       { method: 'hover', params: { appHandle: 'app-17', snapshotId: 'snapshot-3', windowId: 23, x: 30, y: 40 } },
@@ -199,7 +201,7 @@ describe('pointer buttons and modifiers', () => {
     const window = await app.getWindow(23)
     await window.click(element('0'), { mouseButton: 'middle', modifiers: ['shift'] })
     expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'click', params: {
-      appHandle: 'app-17', snapshotId: 'snapshot-2', elementId: '0', mouseButton: 'middle', modifiers: ['shift'],
+      appHandle: 'app-17', snapshotId: 'snapshot-2', elementId: '0', windowId: 23, mouseButton: 'middle', modifiers: ['shift'],
     } })
     await window.click([10, 20], { modifiers: ['command'] })
     expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'click', params: {
@@ -322,18 +324,18 @@ describe('application and window observations', () => {
     await second.click(element('3'))
     expect(f.dispatch.mock.calls.slice(-3).map(([operation]) => operation)).toEqual([
       { method: 'setValue', params: { appHandle: 'app-17', snapshotId: 'snapshot-3', elementId: '1', value: 'First document' } },
-      { method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-3', elementId: '2' } },
-      { method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-3', elementId: '3' } },
+      { method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-3', elementId: '2', windowId: 23 } },
+      { method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-3', elementId: '3', windowId: 24 } },
     ])
     expect(first.windowId).toBe(23)
     expect(second.windowId).toBe(24)
     expect(f.sink.text.mock.calls.map(([text]) => text)).toEqual([])
     await expect(second.getAccessibilityTree({ emit: false, disableDiffing: true })).resolves.toBe('Tree 4')
     await second.click(element('3'))
-    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-4', elementId: '3' } })
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-4', elementId: '3', windowId: 24 } })
     await app.getAccessibilityTree({ emit: false })
     await first.invoke(element('4'))
-    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'invoke', params: { appHandle: 'app-17', snapshotId: 'snapshot-5', elementId: '4' } })
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'invoke', params: { appHandle: 'app-17', snapshotId: 'snapshot-5', elementId: '4', windowId: 23 } })
     expect(f.sink.text).not.toHaveBeenCalled()
   })
 
@@ -474,6 +476,69 @@ describe('application and window observations', () => {
     await expect(app.getAccessibilityTree()).resolves.toBe('Changed tree')
     f.dispatch.mockResolvedValueOnce([observed])
     await expect(app.getWindows()).resolves.toEqual([observed])
+  })
+
+  it('skips app-level accessibility while keeping window observation available', async () => {
+    const f = fixture()
+    f.setCapabilities({ ...capabilities, appLevelAccessibility: false })
+    const app = await f.api.getApp('Editor')
+    expect(f.dispatch.mock.calls.map(([call]) => call.method)).toEqual(['getCapabilities', 'getApp'])
+    await expect(app.getAccessibilityTree()).rejects.toThrow('Application-level accessibility is not supported on current platform; observe a window instead.')
+    await expect(app.listActions(element('0'))).rejects.toThrow('Application-level accessibility is not supported on current platform; observe a window instead.')
+    await expect(app.performAction(element('0'), 'AXPress')).rejects.toThrow('Application-level accessibility is not supported on current platform; observe a window instead.')
+    await expect(app.invoke(element('0'))).rejects.toThrow('Application-level accessibility is not supported on current platform; observe a window instead.')
+    await expect(app.setValue(element('0'), 'value')).rejects.toThrow('Application-level accessibility is not supported on current platform; observe a window instead.')
+    await expect(app.selectText(element('0'), 'text')).rejects.toThrow('Application-level accessibility is not supported on current platform; observe a window instead.')
+    expect(f.dispatch).toHaveBeenCalledTimes(2)
+    f.dispatch.mockClear()
+    await expect(app.typeText('keyboard without accessibility')).resolves.toEqual(delivered)
+    expect(f.dispatch.mock.calls.map(([operation]) => operation)).toEqual([
+      { method: 'typeText', params: { appHandle: 'app-17', text: 'keyboard without accessibility' } },
+    ])
+    const window = await app.getWindow(23)
+    await expect(window.getAccessibilityTree({ emit: false })).resolves.toBe('Tree 2')
+    await expect(app.getAccessibilityTree()).rejects.toThrow('Application-level accessibility is not supported on current platform; observe a window instead.')
+    await expect(window.invoke(element('0'))).resolves.toEqual(delivered)
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'invoke', params: {
+      appHandle: 'app-17', windowId: 23, snapshotId: 'snapshot-2', elementId: '0',
+    } })
+  })
+
+  it('honors window keyboard support and keeps app keyboard available', async () => {
+    const f = fixture()
+    f.setCapabilities({ ...capabilities, keyboard: ['app', 'window'] })
+    const app = await f.api.getApp('Editor')
+    const window = await app.getWindow(23)
+    f.dispatch.mockClear()
+    await window.typeText('hello')
+    await window.paste('<b>bold</b>', { format: 'html' })
+    await window.pressKey('cmd+a')
+    await app.typeText('app text')
+    await app.paste('app paste')
+    await app.pressKey('shift+Tab')
+    expect(f.dispatch.mock.calls.map(([operation]) => operation)).toEqual([
+      { method: 'typeText', params: { appHandle: 'app-17', windowId: 23, text: 'hello' } },
+      { method: 'paste', params: { appHandle: 'app-17', windowId: 23, text: '<b>bold</b>', format: 'html' } },
+      { method: 'pressKey', params: { appHandle: 'app-17', windowId: 23, key: 'a', modifiers: ['command'] } },
+      { method: 'typeText', params: { appHandle: 'app-17', text: 'app text' } },
+      { method: 'paste', params: { appHandle: 'app-17', text: 'app paste' } },
+      { method: 'pressKey', params: { appHandle: 'app-17', key: 'Tab', modifiers: ['shift'] } },
+    ])
+  })
+
+  it('rejects app keyboard when only window scope is supported', async () => {
+    const f = fixture()
+    f.setCapabilities({ ...capabilities, keyboard: ['window'] })
+    const app = await f.api.getApp('Editor')
+    const window = await app.getWindow(23)
+    f.dispatch.mockClear()
+    await expect(app.typeText('app text')).rejects.toThrow('App-scoped keyboard input is not supported on current platform.')
+    await expect(app.paste('app text')).rejects.toThrow('App-scoped keyboard input is not supported on current platform.')
+    await expect(app.pressKey('Return')).rejects.toThrow('App-scoped keyboard input is not supported on current platform.')
+    await expect(app.pressKey('unknown+a')).rejects.toThrow('App-scoped keyboard input is not supported on current platform.')
+    expect(f.dispatch).not.toHaveBeenCalled()
+    await expect(window.typeText('window text')).resolves.toEqual(delivered)
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'typeText', params: { appHandle: 'app-17', windowId: 23, text: 'window text' } })
   })
 
   it('accepts coordinate input without a current snapshot', async () => {
@@ -686,8 +751,9 @@ describe('input actions', () => {
       () => window.typeText('hello'),
       () => window.paste('hello'),
       () => window.pressKey('Return'),
+      () => window.pressKey('unknown+a'),
     ]) {
-      await expect(run()).rejects.toThrow('Keyboard input is not supported at this scope.')
+      await expect(run()).rejects.toThrow('Window-scoped keyboard input is not supported on current platform.')
     }
     expect(f.dispatch).not.toHaveBeenCalled()
   })
@@ -699,8 +765,8 @@ describe('input actions', () => {
     await window.click(element('12'), { mouseButton: 'right' })
     await window.click(element('13'), { clickCount: 2 })
     expect(f.dispatch.mock.calls.slice(-2).map(([operation]) => operation)).toEqual([
-      { method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-2', elementId: '12', mouseButton: 'right' } },
-      { method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-2', elementId: '13', clickCount: 2 } },
+      { method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-2', elementId: '12', windowId: 23, mouseButton: 'right' } },
+      { method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-2', elementId: '13', windowId: 23, clickCount: 2 } },
     ])
   })
 
@@ -711,15 +777,15 @@ describe('input actions', () => {
     await window.click(element('42.12345'))
     await window.hover(element('42.12345'))
     expect(f.dispatch.mock.calls.slice(-2).map(([operation]) => operation)).toEqual([
-      { method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-2', elementId: '42.12345' } },
-      { method: 'hover', params: { appHandle: 'app-17', snapshotId: 'snapshot-2', elementId: '42.12345' } },
+      { method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-2', elementId: '42.12345', windowId: 23 } },
+      { method: 'hover', params: { appHandle: 'app-17', snapshotId: 'snapshot-2', elementId: '42.12345', windowId: 23 } },
     ])
   })
 
   it('does not activate on selection and dispatches only an explicit activation request', async () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
-    expect(f.dispatch.mock.calls.map(([call]) => call.method)).toEqual(['getApp', 'getState'])
+    expect(f.dispatch.mock.calls.map(([call]) => call.method)).toEqual(['getCapabilities', 'getApp', 'getState'])
     await app.activate()
     expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'activate', params: { appHandle: 'app-17' } })
   })
@@ -731,10 +797,10 @@ describe('input actions', () => {
     const failure = new Error('Application was restarted; select it again')
     f.dispatch.mockRejectedValueOnce(failure)
     await expect(app.typeText('hello')).rejects.toBe(failure)
-    expect(f.dispatch).toHaveBeenCalledTimes(4)
+    expect(f.dispatch).toHaveBeenCalledTimes(5)
     f.dispatch.mockResolvedValueOnce({ dispatched: 'yes' })
     await expect(window.click(element('0'))).rejects.toThrow()
-    expect(f.dispatch).toHaveBeenCalledTimes(5)
+    expect(f.dispatch).toHaveBeenCalledTimes(6)
   })
 
   it('rejects invalid selection inputs before dispatch', async () => {

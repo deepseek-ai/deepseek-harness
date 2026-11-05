@@ -45,6 +45,11 @@ export interface CuaAxOptions extends CuaObservationOptions {
 }
 /** Reported permissions and operations; null sessionLocked means no usable console session was verified. */
 export type CuaCapabilities = z.output<typeof CapabilitiesResult>
+/** Provider capabilities fixed when the provider is installed; runtime fields come from getCapabilities. */
+export type CuaStartupCapabilities = Pick<
+  CuaCapabilities,
+  'platform' | 'methods' | 'appLevelAccessibility' | 'keyboard' | 'browser' | 'coordinateSpace'
+>
 /** App discovery result accepted by getApp. */
 export type CuaAppInfo = Pick<Extract<CuaFoundAppInfo, { isRunning: true }>, 'id' | 'displayName' | 'isRunning' | 'pid'>
 /** An installed application match; running matches include a process identifier. */

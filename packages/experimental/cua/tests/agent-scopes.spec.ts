@@ -19,6 +19,10 @@ const provider = {
       helperPath: resolve('unused-cua-helper'),
       createChannel() { throw new Error('Scope tests must not start a native helper') },
       guidance: 'Fixture CUA guidance',
+      capabilities: {
+        platform: 'macos', methods: ['getCapabilities', 'getApp', 'getState'], appLevelAccessibility: true,
+        keyboard: ['app'], browser: false, coordinateSpace: 'screenshot-pixels',
+      },
     })
   },
 }

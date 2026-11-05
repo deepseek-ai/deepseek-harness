@@ -33,7 +33,7 @@ it('retains optional resource fields and tuple-valued parameters without inventi
 })
 
 it('admits only locator fields for default invocation', () => {
-  expect(nativeProtocol().fields.get('invoke')).toEqual(new Set(['appHandle', 'snapshotId', 'elementId']))
+  expect(nativeProtocol().fields.get('invoke')).toEqual(new Set(['appHandle', 'snapshotId', 'elementId', 'windowId']))
 })
 
 it('accepts a parameter-free object schema without a properties dictionary', () => {
