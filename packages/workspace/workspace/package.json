@@ -46,7 +46,7 @@
   },
   "dependencies": {
     "@deepseek-ai/dsh-brand": "workspace:*",
-    "zod": "4.4.3"
+    "zod": "4.6.6"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",

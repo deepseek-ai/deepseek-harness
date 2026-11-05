@@ -448,24 +448,14 @@
 
 /* macOS: the themed elevated fill reads as a foreign slab on the vibrancy
    sidebar; a white wash sits in the glass like native macOS sidebar
-   controls. Dark keeps the same white ink at lower alpha. */
+   controls; the glass tokens lower its alpha in dark mode. */
 :global([data-platform='darwin']) :where(.root:not([role='dialog'])) .newSession {
-  background: rgb(255 255 255 / 0.55);
+  background: var(--dsw-specific-sidebar-glass-fill);
 }
 
 @media (hover: hover) {
   :global([data-platform='darwin']) :where(.root:not([role='dialog'])) .newSession:hover {
-    background: rgb(255 255 255 / 0.3);
-  }
-}
-
-:global([data-platform='darwin']) :global([data-ds-dark-theme]) :where(.root:not([role='dialog'])) .newSession {
-  background: rgb(255 255 255 / 0.15);
-}
-
-@media (hover: hover) {
-  :global([data-platform='darwin']) :global([data-ds-dark-theme]) :where(.root:not([role='dialog'])) .newSession:hover {
-    background: rgb(255 255 255 / 0.2);
+    background: var(--dsw-specific-sidebar-glass-hover);
   }
 }
 
@@ -483,6 +473,16 @@
 @media (hover: hover) {
   .collapsed .newSession:hover {
     background-color: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+:global([data-platform='darwin']) :where(.root:not([role='dialog'])).collapsed .newSession {
+  background: var(--dsw-specific-sidebar-glass-collapsed-fill);
+}
+
+@media (hover: hover) {
+  :global([data-platform='darwin']) :where(.root:not([role='dialog'])).collapsed .newSession:hover {
+    background: var(--dsw-specific-sidebar-glass-collapsed-hover);
   }
 }
 

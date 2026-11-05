@@ -53,7 +53,7 @@
     "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
     "@modelcontextprotocol/sdk": "^1.31.0",
-    "zod": "4.4.3",
+    "zod": "4.6.6",
     "@deepseek-ai/dsh-tool-subagent": "workspace:*"
   },
   "devDependencies": {

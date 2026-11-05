@@ -46,7 +46,7 @@ export function desktopPublicationFailure(error: unknown, phase: string): {
     message: `Invalid fields: ${error.issues.map(issue => `${issue.path.join('.') || '(root)'} (${issue.code})`).join(', ')}` }
   if (error instanceof SyntaxError) return { phase, code: 'invalid-json', message: 'Invalid JSON; check the configuration or retained record for this stage.' }
   const ownedMessage =
-    /^(desktop (?:publish|archival|release store|retention|rollback|tag|upload|auto-update|macOS signing|build)[^\n]*:|Usage:)/u
+    /^(desktop (?:publish|rollout|archival|release store|retention|rollback|tag|upload|auto-update|macOS signing|build)[^\n]*:|Usage:)/u
   const websiteMessage = /^website (?:publication|installer|cache purge):/u
   if (error instanceof Error && (ownedMessage.test(error.message) || websiteMessage.test(error.message))) {
     return { phase, code: 'validation', message: error.message }
