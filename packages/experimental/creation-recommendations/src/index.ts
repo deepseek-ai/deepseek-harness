@@ -96,7 +96,7 @@ class PersonalizedPages {
       invitation: 'End with at most one short invitation in the user’s language, in the first person: after they click Create below, '
         + 'you will build it in the background as a plugin page that stays available, without blocking the chat; '
         + 'the build takes minutes and many tokens.',
-      verbs: { create: { global: true, writes: true }, keep: {}, undo: { global: true }, cancel: {}, restore: { global: true } },
+      verbs: { create: { global: true, writes: true }, undo: { global: true }, cancel: {}, restore: { global: true } },
       openPhases: ['cancelled', 'failed', 'interrupted', 'unconfirmed'],
       statusGuidance: 'Cancelled means a started background creation was stopped before installation. '
         + 'Cancelled, failed or interrupted runs can be retried from their existing card; no new proposal is needed. '
@@ -226,19 +226,16 @@ class PersonalizedPages {
       return { status: 'accepted' }
     }
     if (previous?.phase === 'installed' || previous?.phase === 'kept') {
-      if (verb !== 'keep' && verb !== 'undo') return settled(previous)
+      if (verb !== 'undo') return settled(previous)
       if (previous.bundleName === undefined) return refused('unavailable')
-      let card: PageCard = { ...previous, phase: 'kept' }
-      if (verb === 'undo') {
-        const bundle = (await this.ctx.pluginManager.listBundles()).find(item => item.name === previous.bundleName && item.installed)
-        if (this.isStopping()) return refused('closing')
-        const result = bundle === undefined ? undefined : await Promise.race([
-          this.ctx.pluginManager.removeBundle(previous.bundleName), this.stopped.promise,
-        ])
-        if (this.isStopping()) return { status: 'unconfirmed', reason: 'closing' }
-        card = result === undefined ? { ...previous, phase: 'removed', application: 'applied' }
-          : { ...previous, phase: result.application === 'applied' ? 'removed' : previous.phase, application: result.application }
-      }
+      const bundle = (await this.ctx.pluginManager.listBundles()).find(item => item.name === previous.bundleName && item.installed)
+      if (this.isStopping()) return refused('closing')
+      const result = bundle === undefined ? undefined : await Promise.race([
+        this.ctx.pluginManager.removeBundle(previous.bundleName), this.stopped.promise,
+      ])
+      if (this.isStopping()) return { status: 'unconfirmed', reason: 'closing' }
+      const card: PageCard = result === undefined ? { ...previous, phase: 'removed', application: 'applied' }
+        : { ...previous, phase: result.application === 'applied' ? 'removed' : previous.phase, application: result.application }
       this.record(agent, card)
       return settled(card)
     }

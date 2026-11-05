@@ -1,0 +1,51 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../../../vendor/cosmokit"
+    },
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../../core/agent"
+    },
+    {
+      "path": "../../api/terminal-controller/tsconfig.host.json"
+    },
+    {
+      "path": "../../core/system-prompt"
+    },
+    {
+      "path": "../../core/tools"
+    },
+    {
+      "path": "../../sandbox/sandbox-policy"
+    },
+    {
+      "path": "../../subprocess/subprocess"
+    },
+    {
+      "path": "../../terminal/terminal"
+    },
+    {
+      "path": "../../core/session"
+    },
+    {
+      "path": "../../sandbox/sandbox"
+    },
+    {
+      "path": "../../util/output-retention"
+    }
+  ]
+}

@@ -47,7 +47,7 @@
     # message that addresses the bot then reaches one session shared by every
     # chat.
     - id: im
-      name: '@deepseek-ai/dsh-experimental-im'
+      name: '@deepseek-ai/dsh-im'
       config:
         sources: []
 
@@ -55,4 +55,4 @@
     # (`/compact`). First in the waterfall, so a command never reaches the
     # shared session as model input.
     - id: im-session-commands
-      name: '@deepseek-ai/dsh-experimental-im-session-commands'
+      name: '@deepseek-ai/dsh-im-session-commands'

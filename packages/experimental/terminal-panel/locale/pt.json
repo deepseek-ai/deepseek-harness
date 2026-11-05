@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Backend de terminais da barra lateral",
+    "description": "Executa os terminais persistentes do agente como abas da barra lateral que o usuário pode acompanhar e assumir, e permite que o agente leia os terminais do próprio usuário."
+  }
+}

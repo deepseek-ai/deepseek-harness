@@ -117,7 +117,7 @@ registry 的两个行为决定了「怎么尝试一次发布」。写入之间�
 | `publish` | 上面那三态 |
 | `process` / `tarball` | 启动命令、读取打包 tarball 的唯一正家，其中的入口守卫让每个脚本都可被 import |
 
-dsh 族套用仓库的发布 payload 策略（拒绝源码与声明映射）。vendored 族保留上游 payload，因为那些 manifest 导出 `./src/*`，去掉 `src` 会发出一个导出映射指向不存在文件的包。
+dsh 族套用仓库的发布 payload 策略（发布 `src`、其声明映射，以及紧挨所描述 bundle 的 JavaScript map，[理由](2026-10-08-published-source-and-docs.zh.md)）。vendored 族保留上游 payload，因为该 payload 由上游 manifest 拥有，且它们导出 `./src/*`。
 
 ### workflow 形状：PR/push 上 pack，从手动 dispatch 工作流发布
 

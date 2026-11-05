@@ -9,8 +9,8 @@
   en: 520d9dc51e2b0142
   zh: 8f332776243107a9
 /deepseek-ai-dsh-experimental-tool-subagent-oar/summary:
-  en: 8adbaf2511d2c47f
-  zh: 1495f6bdb84a30ea
+  en: eeb535e580132e01
+  zh: 918fc55ce2be9581
 /deepseek-ai-dsh-experimental-tool-subagent-oar/table-of-contents:
   en: d152484eb41ac6b4
   zh: 8d1e20b826450ffe
@@ -21,11 +21,11 @@
   en: 368805e5bcffeb0a
   zh: 9340ff5074ada9e1
 /deepseek-ai-dsh-experimental-tool-subagent-oar/use-this-package/minimal-configuration:
-  en: 5b2b33c1d0fae20a
-  zh: 26bff1e013e2bfcd
+  en: 13646f48b42b016a
+  zh: acc0dcdefe54e89a
 /deepseek-ai-dsh-experimental-tool-subagent-oar/understand-the-implementation:
-  en: 3e8a9fffa9c5afd0
-  zh: 932b6d0b682208ba
+  en: 41555a0244acb746
+  zh: 3e7fd7ba1a9c6964
 /deepseek-ai-dsh-experimental-tool-subagent-oar/further-exploration:
   en: a796236202b695f5
   zh: 8e76361f31517714
@@ -36,11 +36,11 @@
   en: 8febbb031aa0452d
   zh: da3f9011631652da
 /deepseek-ai-dsh-experimental-tool-subagent-oar/model-experience/external-delegation-tool/what-the-model-sees:
-  en: 2e0f5274092f794b
-  zh: 83a14e5f7018717f
+  en: 7ec989dffbc0f65e
+  zh: fc734ea0a8801bab
 /deepseek-ai-dsh-experimental-tool-subagent-oar/model-experience/external-delegation-tool/token-effect:
-  en: 60d7ffec7f4dc858
-  zh: 09f286978df6b4ec
+  en: 33d073eb994d2969
+  zh: 320f4a82aa665a46
 /deepseek-ai-dsh-experimental-tool-subagent-oar/model-experience/external-delegation-tool/kv-cache-effect:
   en: 7c1ac0b007b2f0ce
   zh: 2332a07c6f8bcbdc

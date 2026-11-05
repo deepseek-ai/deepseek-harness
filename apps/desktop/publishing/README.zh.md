@@ -59,9 +59,9 @@ pnpm run package:desktop:mac:arm64
 pnpm run upload:mac:arm64
 ```
 
-内测打包在目标 `.env` 中显式设置 `DSH_DESKTOP_AUTO_UPDATE_ENV=test` 和 `DOWNLOAD_TEST_ORIGIN=https://download-test.deepseek.com`；上传使用 `DOWNLOAD_TEST_COS_BUCKET=bj-toc-download-test-1320056602` 及独立测试凭据。test 和 production 都使用固定 Nightly 通道，部署选择不提供通道切换。
+内测打包在目标 `.env` 中显式设置 `DSH_DESKTOP_AUTO_UPDATE_ENV=test` 和 `DOWNLOAD_TEST_ORIGIN=https://download-test.deepseek.com`；上传使用 `DOWNLOAD_TEST_COS_BUCKET=bj-toc-download-test-1320056602` 及独立测试凭据。部署与更新渠道相互独立；参见[安装包渠道选择](../packaging/README.zh.md#release-versions)。
 
-前期内测包使用 `test` 部署。只有正式发布才显式选择 `production`；更换上传凭据不会改变已有安装包的更新目标。打包不需要 COS 凭据，会禁用 electron-builder 发布、移除子进程的 COS 凭据，并且仅在签名与公证成功后记录完成状态。上传在读取凭据前验证该记录、部署、目标、共同版本号、文件名、大小与 SHA-512。安装包和 blockmap 先于 YAML 上传；历史对象继续保留。每个版本发布 `nightly.yml` 或 `nightly-mac.yml`；稳定版本还发布指向相同产物的 `latest.yml` 或 `latest-mac.yml`。发布的 YAML 使用安装包绝对 URL。上传器不设置 Cache-Control，包括 COS SDK 否则会添加的空头部：缓存策略由部署基础设施负责，清单不缓存，安装包缓存单独配置。同一目标应串行发布，并在发布验收前验证公网产物与清单内容。
+前期内测包使用 `test` 部署。只有正式发布才显式选择 `production`；更换上传凭据不会改变已有安装包的更新目标。打包不需要 COS 凭据，会禁用 electron-builder 发布、移除子进程的 COS 凭据，并且仅在签名与公证成功后记录完成状态。上传在读取凭据前验证该记录、部署、目标、共同版本号、文件名、大小与 SHA-512。安装包和 blockmap 先于 YAML 上传；历史对象继续保留。每个包仅发布自身选定渠道的清单：`nightly.yml` / `nightly-mac.yml` 或 `stable.yml` / `stable-mac.yml`。发布的 YAML 使用安装包绝对 URL。上传器不设置 Cache-Control，包括 COS SDK 否则会添加的空头部：缓存策略由部署基础设施负责，清单不缓存，安装包缓存单独配置。同一目标应串行发布，并在发布验收前验证公网产物与清单内容。
 
 Windows NSIS 上传要求安装包旁存在生成的非空 `.exe.blockmap`。blockmap 先于通道 YAML 上传；NSIS 安装包元数据不要求另一种 web-installer 格式使用的内嵌 `blockMapSize`。文件清单测试使用固定版本构建器的 blockmap 生成器，而不是手工编造内嵌映射字段。
 
@@ -69,11 +69,13 @@ Windows NSIS 上传要求安装包旁存在生成的非空 `.exe.blockmap`。blo
 
 ## 固定安装包下载
 
+上传设置 `Content-Disposition: attachment`，`filename` 沿用经校验安装包的 basename，保留完整版本、平台和架构。固定 `dsh-latest-*` URL 与 nightly/stable 升级通道独立，不另加命名后缀。发布后需验证 CDN 响应头透传及浏览器保存文件名。
+
 固定安装包下载在仓库根目录使用 `pnpm run upload:latest:mac:arm64`、`pnpm run upload:latest:mac:x64` 或 `pnpm run upload:latest:win:x64`。它们把已完成目标的 DMG 或 EXE 上传到 `desktop/dsh-latest-macos-arm64.dmg`、`desktop/dsh-latest-macos-x64.dmg` 或 `desktop/dsh-latest-windows-x64.exe`。生产 URL 以 `https://download.deepseek.com/` 开头；测试 URL 使用 `DOWNLOAD_TEST_ORIGIN`。两个部署环境均复用目标 dotenv 中的部署、bucket 和凭据、全部常规发布校验以及下述上传审计。每个命令覆盖一个固定对象，不发布更新清单、blockmap 或发布标签。测试固定下载在测试 bucket 中跨发布 ID 共享；包内更新 URL 仍要求原有发布 ID。发布由操作人员显式执行，也允许预发布版本。生产命令随后提交一次 EdgeOne URL 缓存清除任务并报告任务 ID，不查询或等待缓存清除完成。测试上传仍由部署基础设施管理缓存策略。本地回环测试覆盖上传行为；真实 COS 和 CDN 验收由发布操作人员负责。
 
 生产固定下载要求在目标 dotenv 中配置 `DOWNLOAD_PROD_EO_ZONE_ID`，且既有 `DOWNLOAD_PROD_COS_SECRET_ID` / `DOWNLOAD_PROD_COS_SECRET_KEY` 身份具备对应站点的 `teo:CreatePurgeTask` 权限。发布操作人员须在使用前确认该权限；无需新增 CI Secret。上传前解析必需配置。提交请求超时为 30 秒，不自动重试。
 
-命令报告提交已接受，不代表缓存清除已完成。EO 结果输出到控制台，不另建刷新记录文件；既有上传审计仅记录 COS 写入。提交被拒绝或未确认时，命令以失败状态退出，已上传安装包保持发布。连接中断或未收到响应时，先检查 EO 任务历史再重新提交。使用 `pnpm run purge:latest <target>` 可只提交刷新，无需上传；需要生产配置和凭据，无需本地安装包。DPAPI 用户复用原凭据启动器，在 `-Upload -Latest` 命令上添加 `-PurgeOnly`。按目标串行执行上传和单独刷新。CI 发布器不发布固定下载，也不执行此刷新。
+命令报告提交已接受，不代表缓存清除已完成。EO 结果输出到控制台，不另建刷新记录文件；既有上传审计仅记录 COS 写入。提交被拒绝或未确认时，命令以失败状态退出，已上传安装包保持发布。连接中断或未收到响应时，先检查 EO 任务历史再重新提交。使用 `pnpm run purge:latest <target>` 可只提交刷新，无需上传；需要生产配置和凭据，无需本地安装包。DPAPI 用户复用原凭据启动器，在 `-Upload -Latest` 命令上添加 `-PurgeOnly`。按目标串行执行上传和单独刷新。[CI 发布工作流](ci/README.zh.md#recovery-and-records)使用独立的官网上传和刷新观察 job。
 
 <a id="credentials"></a>
 

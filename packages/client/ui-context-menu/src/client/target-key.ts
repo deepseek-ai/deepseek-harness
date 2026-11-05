@@ -1,4 +1,4 @@
-/** Stable equality for the JSON-compatible target vocabulary, independent of object insertion order. */
+/** Target equality for repeated pointer and keyboard gestures. */
 import type { ContextMenuTarget } from './types.ts'
 
 /**

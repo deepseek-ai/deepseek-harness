@@ -1,4 +1,4 @@
-/** Operator configuration of dsh-experimental-im: admission sources, deployment limits, and the default dispatcher. */
+/** Operator configuration of dsh-im: admission sources, deployment limits, and the default dispatcher. */
 import z from '@deepseek-ai/schemastery'
 import type { ImConfig } from './api.ts'
 

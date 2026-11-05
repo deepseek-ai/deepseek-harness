@@ -351,6 +351,13 @@ export function apply(ctx: Context): void {
             return
           }
           if (event.data.reason.kind !== 'aborted') return
+          const abortReason = event.data.reason.reason
+          // Agent disposal aborts the round without a pause decision, so continuation
+          // is only disarmed and the durable phase stays active, as on driver unload.
+          if (abortReason.kind === 'disposed') {
+            disarm(state)
+            return
+          }
           if (state.attempt?.phase === 'claimed' || state.attempt?.phase === 'admitted') {
             state.attempt.cancelled = true
           }

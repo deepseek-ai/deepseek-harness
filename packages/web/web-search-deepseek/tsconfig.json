@@ -8,6 +8,7 @@
     "src"
   ],
   "references": [
+    { "path": "../../llm/llm-deepseek" },
     {
       "path": "../../util/launch-environment"
     },

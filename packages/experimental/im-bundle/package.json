@@ -1,7 +1,7 @@
 {
-  "name": "@deepseek-ai/dsh-experimental-im-bundle",
+  "name": "@deepseek-ai/dsh-im-bundle",
   "description": "Connect Feishu/Lark chats to one shared agent session.",
-  "version": "0.2.2-alpha.2",
+  "version": "0.2.2-rc.1",
   "publishConfig": {
     "access": "public"
   },
@@ -25,7 +25,10 @@
   "files": [
     "lib/index.js",
     "cordis.patch.yml",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ],
   "license": "MIT",
   "peerDependencies": {
@@ -42,8 +45,8 @@
     "@deepseek-ai/cordis-plugin-im-markdown": "workspace:~",
     "@deepseek-ai/cordis-plugin-im-adapter-lark": "workspace:~",
     "@deepseek-ai/cordis-plugin-im-adapter-qq": "workspace:~",
-    "@deepseek-ai/dsh-experimental-im": "workspace:*",
-    "@deepseek-ai/dsh-experimental-im-session-commands": "workspace:*"
+    "@deepseek-ai/dsh-im": "workspace:*",
+    "@deepseek-ai/dsh-im-session-commands": "workspace:*"
   },
   "dsh": {
     "bundle": {

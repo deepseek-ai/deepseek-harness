@@ -1,5 +1,5 @@
 ---
-description: "Keep shell processes alive across tool calls."
+description: "Let the agent run long-lived commands in terminals you can watch in the sidebar."
 kind: "package-bundle"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Add six experimental global terminal tools to every Agent. The bundle owns an isolated terminal registry with the platform shell backend; terminals remain Agent-owned. It ships switched off in Web and Desktop and is omitted from the Plugins bundle lists and detail pages.
+Add six experimental global terminal tools to every Agent, plus two read-only tools for the person's own terminals. The bundle owns an isolated terminal registry whose backend opens each terminal as a sidebar tab the person can watch and take over. It ships switched off in Web and Desktop and is omitted from the Plugins bundle lists and detail pages.
 
 ## Table of Contents
 
@@ -37,7 +37,7 @@ The selected layer adds its global tools to every Agent in the Host, in every pr
 <details>
 <summary>Implementation details — click to expand</summary>
 
-[`cordis.patch.yml`](cordis.patch.yml) inserts the Host group `optional-persistent-terminals`, which registers the tools in the global tool layer. Later profile patches can override its rows by id. The [profile composer](../../boot/app-boot/README.md) owns patch ordering and errors.
+[`cordis.patch.yml`](cordis.patch.yml) inserts the Host group `optional-persistent-terminals`, which registers the tools in the global tool layer. Its `optional-terminal-panel` row prefers `pwsh`, then `powershell`, on Windows and the execution environment's default shell elsewhere. Later profile patches can override its rows by id. The [profile composer](../../boot/app-boot/README.md) owns patch ordering and errors.
 
 </details>
 
@@ -46,14 +46,15 @@ The selected layer adds its global tools to every Agent in the Host, in every pr
 <a id="further-exploration"></a>
 ## Further Exploration
 
-[Capability implementation](../tool-terminal/README.md)
+- [Sidebar terminal backend](../terminal-panel/README.md)
+- [Terminal tools](../tool-terminal/README.md)
 
 -----
 
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through the [capability implementation](../tool-terminal/README.md), which owns model context and results.
+Indirectly, through the [terminal tools](../tool-terminal/README.md) and the [sidebar terminal backend](../terminal-panel/README.md), which own model context and results.
 
 #### KV Cache effect
 
@@ -63,7 +64,8 @@ The layer adds no request content directly; the capability implementation owns c
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Terminals belong to the Agent that created them. POSIX uses Bash and Windows uses PowerShell; the bundle does not share another terminal registry.
+- Agent terminals require the Web or Desktop composition, which mounts the terminal controller; the bundle does not share another terminal registry.
+- The [sidebar terminal backend limitations](../terminal-panel/README.md#known-limitations-and-deferred-work) apply.
 
 -----
 

@@ -143,3 +143,67 @@
   content: counter(source-line);
   user-select: none;
 }
+
+/* Diff fences paint full-bleed rows with the Sidebar file diff's row colors;
+   the row's own inline padding keeps the marker clear of the inset bar. */
+.diffFence :where(pre) {
+  padding: 8px 0 16px;
+}
+
+.diffLine {
+  display: inline-block;
+  width: 100%;
+}
+
+/* Numbered gutters already make `.line` a full-width block; keep the padding
+   box intact instead of stacking a second 100% width on it. */
+.numbered .diffLine {
+  display: block;
+  width: auto;
+}
+
+.diffFence .diffLine {
+  padding: 0 16px;
+  box-sizing: border-box;
+}
+
+/* A non-wrapping fence scrolls horizontally: rows cover the scrollable width,
+   not just the visible box, so the fill and left bar survive scrolling. */
+.diffFence[data-code-wrap='false'] .diffLine {
+  width: max-content;
+  min-width: 100%;
+}
+
+.diffAdd {
+  background: var(--dsw-alias-file-diff-added-bg);
+  box-shadow: inset 3px 0 0 var(--dsw-alias-file-diff-added-marker);
+}
+
+.diffDel {
+  background: var(--dsw-alias-file-diff-deleted-bg);
+  box-shadow: inset 3px 0 0 var(--dsw-alias-file-diff-deleted-marker);
+}
+
+.diffMarker {
+  margin-inline-end: 1ch;
+}
+
+.diffAdd .diffMarker {
+  color: var(--dsw-alias-file-diff-added-marker);
+}
+
+.diffDel .diffMarker {
+  color: var(--dsw-alias-file-diff-deleted-marker);
+}
+
+.diffContext {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.diffHunk {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.diffMeta {
+  color: var(--dsw-alias-label-tertiary);
+}

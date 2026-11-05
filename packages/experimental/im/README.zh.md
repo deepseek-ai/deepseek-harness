@@ -3,7 +3,7 @@ description: "平台无关的 IM 宿主：按规则接纳聊天、按聊天递�
 kind: "package-reference"
 ---
 
-# @deepseek-ai/dsh-experimental-im
+# @deepseek-ai/dsh-im
 
 [English](README.md) | 中文
 
@@ -25,18 +25,18 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用方式
 
-[IM 组合包](../im-bundle/README.zh.md) 把 `@deepseek-ai/dsh-experimental-im`、飞书/Lark 适配器与 [`session-commands`](../im-session-commands/README.zh.md) 加入已有的 profile，持久化、agent 预设与上下文压缩由该 profile 的 base 层提供；运维 patch 负责配置 `defaultDispatch`。在自定义组合中挂载 `@deepseek-ai/dsh-experimental-im` 时，需配置 `sources` 并挂载至少一个监听 `im/message` 的插件或配置 `defaultDispatch`；若两者都未配置，被接纳的消息只会入库并标记为 `ignored`，不会触发任何 agent。
+[IM 组合包](../im-bundle/README.zh.md) 把 `@deepseek-ai/dsh-im`、飞书/Lark 适配器与 [`session-commands`](../im-session-commands/README.zh.md) 加入已有的 profile，持久化、agent 预设与上下文压缩由该 profile 的 base 层提供；运维 patch 负责配置 `defaultDispatch`。在自定义组合中挂载 `@deepseek-ai/dsh-im` 时，需配置 `sources` 并挂载至少一个监听 `im/message` 的插件或配置 `defaultDispatch`；若两者都未配置，被接纳的消息只会入库并标记为 `ignored`，不会触发任何 agent。
 
 ### 各包职责划分
 
-`@deepseek-ai/dsh-experimental-im` 负责消息存储、会话托管、权限校验与工具注册，斜杠命令、自定义消息路由与轮次输出渲染可由独立插件完成。
+`@deepseek-ai/dsh-im` 负责消息存储、会话托管、权限校验与工具注册，斜杠命令、自定义消息路由与轮次输出渲染可由独立插件完成。
 
 | 职责 | 所属包 |
 |---|---|
-| 消息接纳、`im_messages` 存储、`im/message` 事件链、默认分派会话 | `@deepseek-ai/dsh-experimental-im` |
-| 托管会话（`im_sessions`）、消息发送（`im_receipts`）、格式化、历史查询 | `@deepseek-ai/dsh-experimental-im` |
-| 轮次活动跟踪（`im/activity`）与输出渲染器注册表（`ctx.im.outputs`） | `@deepseek-ai/dsh-experimental-im` |
-| `im_read`、`im_history`、`im_read_image`、`im_read_file`、`im_send`、`im_reply`、`im_send_file` | `@deepseek-ai/dsh-experimental-im`（当 `tools` 与 `systemPrompt` 存在时注册） |
+| 消息接纳、`im_messages` 存储、`im/message` 事件链、默认分派会话 | `@deepseek-ai/dsh-im` |
+| 托管会话（`im_sessions`）、消息发送（`im_receipts`）、格式化、历史查询 | `@deepseek-ai/dsh-im` |
+| 轮次活动跟踪（`im/activity`）与输出渲染器注册表（`ctx.im.outputs`） | `@deepseek-ai/dsh-im` |
+| `im_read`、`im_history`、`im_read_image`、`im_read_file`、`im_send`、`im_reply`、`im_send_file` | `@deepseek-ai/dsh-im`（当 `tools` 与 `systemPrompt` 存在时注册） |
 | 聊天斜杠命令（`/stop`、`/clear`、`/new`、`/status`、`/help` 及透传命令） | [`session-commands`](../im-session-commands/README.zh.md) |
 | 平台协议、元素规范化、模式选择与平台传输适配器 | `@deepseek-ai/cordis-plugin-im-core` 及飞书/QQ 适配器 |
 
@@ -61,7 +61,7 @@ kind: "package-reference"
 | `tools.readOnly` / `tools.maxReadBytes` / `tools.maxHistoryItems` / `tools.fileDir` | `false` / 64 KiB / 50 / `.dsh/im` | 是否仅注册只读工具、单次工具返回最大字节数、`im_history` 单页最大条数，以及 `im_read_file` 暂存下载文件的会话内相对目录 |
 | `defaultDispatch` | 不配置 | 可选[默认分派会话](#the-default-dispatcher)：必填 `agentPreset`、`provider`、`model` 与绝对路径 `cwd`，可选 `output`（`'none'`）、`delivery`（`'steer'`）、`restrict`（不限制工具）与 `prompt`（`im:dispatcher`，order 81） |
 
-不匹配任何规则的聊天消息既不会入库也不会发出事件。完整字段定义见生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-im)。
+不匹配任何规则的聊天消息既不会入库也不会发出事件。完整字段定义见生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-im)。
 
 ### 持久性与消息存储
 
@@ -121,7 +121,7 @@ kind: "package-reference"
 <a id="the-default-dispatcher"></a>
 ### 默认分派会话
 
-在 `@deepseek-ai/dsh-experimental-im` 上配置 `defaultDispatch` 后，任何未被前置 `im/message` 监听器处理、且提及了机器人的消息，都会投递给一个全局共享的托管会话（`key: 'im:dispatcher'`，`owner: 'dispatcher'`）。机器人自身的消息以及未提及机器人的群消息仍会被忽略。随着该会话收到不同聊天的消息，它会把每个聊天依次加入自己的绑定列表（`writable` 取决于接纳该聊天的来源规则，首个聊天标记为 `home`）。每条投递给它的消息前都会加上一行 `<im-chat key="…" source="…" type="…" />` 头部，以便模型识别消息来自哪个聊天，并在调用 `im_reply` 或 `im_send` 时传入对应的 `chat` 键。
+在 `@deepseek-ai/dsh-im` 上配置 `defaultDispatch` 后，任何未被前置 `im/message` 监听器处理、且提及了机器人的消息，都会投递给一个全局共享的托管会话（`key: 'im:dispatcher'`，`owner: 'dispatcher'`）。机器人自身的消息以及未提及机器人的群消息仍会被忽略。随着该会话收到不同聊天的消息，它会把每个聊天依次加入自己的绑定列表（`writable` 取决于接纳该聊天的来源规则，首个聊天标记为 `home`）。每条投递给它的消息前都会加上一行 `<im-chat key="…" source="…" type="…" />` 头部，以便模型识别消息来自哪个聊天，并在调用 `im_reply` 或 `im_send` 时传入对应的 `chat` 键。
 
 分派会话还会获得专属的 `im:dispatcher` 系统提示词段落（默认 order 81），该段落仅对 `im:dispatcher` 会话生效，对其他所有 agent 均渲染为空字符串。
 
@@ -129,7 +129,7 @@ kind: "package-reference"
 
 `im/message` 是一条按顺序执行的 Cordis 事件链。使用 `{ prepend: true }` 注册的插件（如 [`session-commands`](../im-session-commands/README.zh.md)）在其他监听器之前运行，使 `/stop`、`/clear` 等命令直接执行而不会变成模型输入。部署自行挂载的路由插件按常规顺序注册，遇到不属于自己处理范围的消息时调用 `next()` 向后传递；若所有插件都未接手，则在配置了 `defaultDispatch` 时交由默认分派会话处理，否则返回 `{ kind: 'ignored' }`。
 
-在 `@deepseek-ai/dsh-experimental-im` 之下，`@deepseek-ai/cordis-plugin-im-core` 与 `@deepseek-ai/satori-element` 提供元素模型、渲染器用来适配内容的 `<fallback>` 备选、模式选择、降级计分、资源上传准备与流式调度，飞书与 QQ 适配器则负责具体平台模式的实现。
+在 `@deepseek-ai/dsh-im` 之下，`@deepseek-ai/cordis-plugin-im-core` 与 `@deepseek-ai/satori-element` 提供元素模型、渲染器用来适配内容的 `<fallback>` 备选、模式选择、降级计分、资源上传准备与流式调度，飞书与 QQ 适配器则负责具体平台模式的实现。
 
 -----
 
@@ -263,7 +263,7 @@ You are the default IM session: you receive every message that addresses the bot
 
 <a id="known-limitations-and-deferred-work"></a>
 
-`@deepseek-ai/dsh-experimental-im` 当前存在以下限制：
+`@deepseek-ai/dsh-im` 当前存在以下限制：
 
 - **单个存储目录仅限单进程使用** — `im_messages`、`im_sessions` 与 `im_receipts` 在内存和磁盘上均由单个进程独占维护，不支持多进程并发共享同一存储。
 - **未挂载路由插件且未配置 `defaultDispatch` 时不会回复** — 若没有任何 `im/message` 监听器认领消息且未配置 `defaultDispatch`，被接纳的消息只会入库并标记为 `ignored`。
@@ -288,6 +288,6 @@ You are the default IM session: you receive every message that addresses the bot
 <details>
 <summary>维护者工作记录——点击展开</summary>
 
-关于 `@deepseek-ai/dsh-experimental-im` 与其插件之间的职责边界，见 [IM 架构说明](../../../.agents/notes/implemented/architecture/2026-10-25-im-architecture-v4.zh.md)；profile 为何只挂载宿主与命令插件，见[共享会话说明](../../../.agents/notes/implemented/simplification/2026-10-28-im-shared-session-minimal-plane.zh.md)；存储域命名规则见 [IM 存储单元身份说明](../../../.agents/notes/implemented/architecture/2026-10-25-im-storage-unit-identity.zh.md)。
+关于 `@deepseek-ai/dsh-im` 与其插件之间的职责边界，见 [IM 架构说明](../../../.agents/notes/implemented/architecture/2026-10-25-im-architecture-v4.zh.md)；profile 为何只挂载宿主与命令插件，见[共享会话说明](../../../.agents/notes/implemented/simplification/2026-10-28-im-shared-session-minimal-plane.zh.md)；存储域命名规则见 [IM 存储单元身份说明](../../../.agents/notes/implemented/architecture/2026-10-25-im-storage-unit-identity.zh.md)。
 
 </details>

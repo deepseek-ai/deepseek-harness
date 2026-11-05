@@ -405,15 +405,20 @@
   border-radius: 999px;
   corner-shape: round;
   background: var(--dsw-alias-button-info-fill);
-  /* Static white, not the foreground token: the arrow stays white on the blue
+  /* On-color ink, not the foreground token: the arrow stays white on the blue
      fill in both themes (design 34:10465). */
-  color: #fff;
+  color: var(--dsw-alias-label-on-color);
   cursor: pointer;
   transition: background-color 100ms ease;
   /* Opts out of the row's 2px downward shift (.row top pad): the send circle
      keeps its original seat while the smaller chips sit lower. Transform, not
      margin, so flex centering math is untouched. */
   transform: translateY(-2px);
+}
+
+/* Solid artwork uses a smaller footprint than the thin send arrow. */
+.continueIcon {
+  transform: scale(1.5);
 }
 
 @media (hover: hover) {

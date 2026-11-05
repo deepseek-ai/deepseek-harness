@@ -1,0 +1,41 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../../util/timeout" },
+    {
+      "path": "../../../vendor/cosmokit"
+    },
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../../vendor/loader"
+    },
+    {
+      "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../mcp-client"
+    },
+    {
+      "path": "../../settings/settings"
+    },
+    {
+      "path": "../../credentials/credentials"
+    },
+    {
+      "path": "../../core/tools"
+    },
+    {
+      "path": "../../util/values"
+    },
+    {
+      "path": "../../typert/protocol"
+    }
+  ]
+}

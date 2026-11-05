@@ -24,7 +24,7 @@ const REGISTER_HEAD = /\.(?:register|registerFactory)\(/
 export interface SlotDeclaration {
   /** SlotMap key, e.g. `settings.section`. */
   key: string
-  /** Cardinality literal (`single` / `list` / `keyed` / `chain`), or '' when not a literal. */
+  /** Cardinality literal (`single` / `list` / `keyed` / `chain` / `hoc`), or '' when not a literal. */
   kind: string
   /** Data-scope literal (`root` / `session` / `session-maybe`), or '' when not a literal. */
   scope: string

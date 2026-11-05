@@ -7,16 +7,15 @@
  * the text as model input. Every reply goes through `event.reply`; the returned outcome (`handled by
  * session-commands`) is recorded by the core, so a redelivery does not act twice.
  *
- * @module @deepseek-ai/dsh-experimental-im-session-commands
+ * @module @deepseek-ai/dsh-im-session-commands
  */
 import type { Context } from '@deepseek-ai/cordis'
-import type { ImMessageEvent, ImOutcome } from '@deepseek-ai/dsh-experimental-im'
+import type { ImMessageEvent, ImOutcome } from '@deepseek-ai/dsh-im'
 import { SessionCommands } from './commands.ts'
 import type { SessionCommandsConfig } from './config.ts'
 
-export { BY, BUILTIN_ORDER, SessionCommands } from './commands.ts'
 export { Config, type SessionCommandAllow, type SessionCommandsConfig } from './config.ts'
-export { stringsOf, type SessionCommandStrings, type SessionCommandsLocale } from './locale.ts'
+export type { SessionCommandStrings, SessionCommandsLocale } from './locale.ts'
 
 export const name = 'session-commands'
 /** The IM host, the dsh command registry and the agent registry the commands act on. */

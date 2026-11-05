@@ -4,8 +4,8 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import type { ImSessionRecord, ImSessionSpec } from '@deepseek-ai/dsh-experimental-im/src/api.ts'
-import { ImChatKey } from '@deepseek-ai/dsh-experimental-im/src/api.ts'
+import type { ImSessionRecord, ImSessionSpec } from '@deepseek-ai/dsh-im/src/api.ts'
+import { ImChatKey } from '@deepseek-ai/dsh-im/src/api.ts'
 import { BY } from '../src/commands.ts'
 import { COMPOSITION, delivery } from '../../im/tests/support/sessions-harness.ts'
 import {

@@ -49,7 +49,7 @@ Expanding an observable row opens that job's output observation stream from `ctx
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-One slot entry in the header actions band (after the preset label) renders the trigger; its popover uses a body-mounted `MenuSurface` with fixed positioning so dock panels and clipping ancestors cannot cover it. `useAnchoredPosition` tracks scrolling, Visual Viewport panning, browser zoom, and anchor/panel resizing; the popover stays hidden until its first position resolves. All data arrives through `ctx.jobs` — the component holds no transport state. The roster follows the mount: one `useEffect` keeps the session's `job.list` stream open while the control lives. Observation follows visibility: another `useEffect` opens the stream for the expanded row's job and closes it on collapse, unmount, or popover close.
+One slot entry in the header actions band (after the preset label) renders the trigger; its popover uses a body-mounted `MenuSurface` with fixed positioning so dock panels and clipping ancestors cannot cover it. CSS anchors keep the popover attached to its trigger within layout-viewport size limits. Browser zoom and panning move it with the page, so it may extend beyond the visual viewport. Its internal scrolling and dismissal remain available. All data arrives through `ctx.jobs` — the component holds no transport state. The roster follows the mount: one `useEffect` keeps the session's `job.list` stream open while the control lives. Observation follows visibility: another `useEffect` opens the stream for the expanded row's job and closes it on collapse, unmount, or popover close.
 
 | File | Role |
 |---|---|

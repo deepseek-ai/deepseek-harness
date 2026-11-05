@@ -40,7 +40,7 @@ interface AgentMessageSource {
 
 ```ts
 interface SendMessageInput {
-  readonly agent_id: string
+  readonly agent: string
   readonly message: string
 }
 ```
@@ -53,7 +53,7 @@ parent 与 child 以相同注册表顺序继承相同定义。标准定义携带
 
 ### 完整移除与重新引入条件
 
-独立的 `@deepseek-ai/dsh-tool-subagent-report` 包、`report` schema、`tool:report` 提示词 section、`reportDelivery` 配置、report 专属消息来源、目录项、组合行和受支持行为快照均已不存在。统一工具放弃了无需接收方的 child 快捷方式，也放弃了让结构性返回工具绕过显式 child allow-list 的旧能力。只有具体用例需要树成员的 `agent_id` 与固定 Steer 无法表达的语义时，这些能力才会重新出现；重新引入需要独立的模型操作与前缀成本证据，而非 `sendMessage()` 之上的别名。
+独立的 `@deepseek-ai/dsh-tool-subagent-report` 包、`report` schema、`tool:report` 提示词 section、`reportDelivery` 配置、report 专属消息来源、目录项、组合行和受支持行为快照均已不存在。统一工具放弃了无需接收方的 child 快捷方式，也放弃了让结构性返回工具绕过显式 child allow-list 的旧能力。只有具体用例需要树成员的 `agent` 引用与固定 Steer 无法表达的语义时，这些能力才会重新出现；重新引入需要独立的模型操作与前缀成本证据，而非 `sendMessage()` 之上的别名。
 
 ## 考虑过的替代方案
 
@@ -71,7 +71,7 @@ parent 与 child 以相同注册表顺序继承相同定义。标准定义携带
 
 ## 后果
 
-- 模型 Consumer 向 parent 与 child 公开一个 `send_message({ agent_id, message })` 定义，不提供模型选择的 Queue 与 Steer 参数。
+- 模型 Consumer 向 parent 与 child 公开一个 `send_message({ agent, message })` 定义，不提供模型选择的 Queue 与 Steer 参数。
 - 继续执行管理器仍是整树授权、驻留、冷恢复、唤醒准入与拆卸竞态的唯一所有者。
 - 被接受的消息可以延长运行中目标的当前轮次；一起等待的消息共享 next-step FIFO 顺序。
 - 调用方取消只在 inbox 接受前掌管工作，不会撤回已接受消息或 dispose（资源释放）目标。

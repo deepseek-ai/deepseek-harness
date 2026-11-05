@@ -1,12 +1,12 @@
 /** Deployment-owned browser surface: an open face skips the launch-token handshake. */
 
 import { Context } from '@deepseek-ai/cordis'
-import type { CredentialProvider } from '@deepseek-ai/dsh-credentials'
+import type {} from '@deepseek-ai/dsh-credentials'
 import { describe, expect, it } from 'vitest'
 import { BrowserAuth } from '../src/browser-auth.ts'
 import type { ConnectionIndexRequest, ConnectionIndexResponse } from '../src/rpc.ts'
 import { HostConnectionService } from '../src/rpc-host.ts'
-import { RecordCredentials } from './browser-credentials.ts'
+import { provideBrowserCredentials } from './browser-credentials.ts'
 
 /** The proxy's own authority, as a browser behind it spells it. */
 const AUTHORITY = '172.25.20.84:8080'
@@ -36,7 +36,10 @@ async function mounted(open: boolean): Promise<{
   readonly dispose: () => Promise<void>
 }> {
   const ctx = new Context()
-  const auth = await BrowserAuth.create({}, new RecordCredentials() as unknown as CredentialProvider, 30)
+  provideBrowserCredentials(ctx)
+  const credentials = ctx.get('credentials')
+  if (credentials === undefined) throw new Error('the credential double was not provided')
+  const auth = await BrowserAuth.create({}, credentials, 30)
   const fiber = ctx.plugin((pluginCtx) => {
     new HostConnectionService(pluginCtx, ['172.25.20.84'], auth, open)
   })

@@ -5,36 +5,36 @@
 /:
   en: 7e35122fda72e7e2
   zh: 05931e03848d1820
-/deepseek-ai-dsh-experimental-im-bundle:
-  en: 4722d7107bee3552
-  zh: 553a8971891f5684
-/deepseek-ai-dsh-experimental-im-bundle/summary:
-  en: aada2b0f5d9b2fc3
-  zh: d7f9969d9da7b95e
-/deepseek-ai-dsh-experimental-im-bundle/table-of-contents:
+/deepseek-ai-dsh-im-bundle:
+  en: 8b1fa56ee67171ce
+  zh: 78596fff9d53aa62
+/deepseek-ai-dsh-im-bundle/summary:
+  en: 5f150f072c819d83
+  zh: 3029177857c77194
+/deepseek-ai-dsh-im-bundle/table-of-contents:
   en: d152484eb41ac6b4
   zh: 4ebceb2533647b32
-/deepseek-ai-dsh-experimental-im-bundle/use-this-package:
-  en: c35a8a38b2d81b2a
-  zh: 7d6f5f4671cf8c73
-/deepseek-ai-dsh-experimental-im-bundle/use-this-package/configure-a-deployment:
+/deepseek-ai-dsh-im-bundle/use-this-package:
+  en: e4180f04565d97ac
+  zh: c304959b01a0a485
+/deepseek-ai-dsh-im-bundle/use-this-package/configure-a-deployment:
   en: 9a702289a2ae1c61
   zh: 35d5039074c02092
-/deepseek-ai-dsh-experimental-im-bundle/understand-the-implementation:
-  en: 144a3ce3fe09f6c0
-  zh: 421013d59b9ef351
-/deepseek-ai-dsh-experimental-im-bundle/further-exploration:
+/deepseek-ai-dsh-im-bundle/understand-the-implementation:
+  en: fd4867223a0f4787
+  zh: a8cfaa82ff7510ad
+/deepseek-ai-dsh-im-bundle/further-exploration:
   en: b5c07796b6482bf8
   zh: 1450f34445b830b0
-/deepseek-ai-dsh-experimental-im-bundle/model-experience:
+/deepseek-ai-dsh-im-bundle/model-experience:
   en: 7d1509cc520b7f9d
   zh: 913616cf19905fb7
-/deepseek-ai-dsh-experimental-im-bundle/model-experience/kv-cache-effect:
+/deepseek-ai-dsh-im-bundle/model-experience/kv-cache-effect:
   en: 95ebd504850fc5db
   zh: 6d8c92a0f39722cb
-/deepseek-ai-dsh-experimental-im-bundle/known-limitations-and-deferred-work:
+/deepseek-ai-dsh-im-bundle/known-limitations-and-deferred-work:
   en: d62b82bedac2c5f5
   zh: 2060bf549034059e
-/deepseek-ai-dsh-experimental-im-bundle/known-limitations-and-deferred-work/dev-note:
+/deepseek-ai-dsh-im-bundle/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 4f9f026b33f03db6

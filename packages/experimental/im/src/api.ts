@@ -1,5 +1,5 @@
 /**
- * Public contract of `@deepseek-ai/dsh-experimental-im`: the platform-neutral IM host. Platform output is never produced by the
+ * Public contract of `@deepseek-ai/dsh-im`: the platform-neutral IM host. Platform output is never produced by the
  * core — sessions publish through output renderers (`ctx.im.outputs`) or tools; inbound messages are routed by
  * plugins listening to the `im/message` waterfall.
  */

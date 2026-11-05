@@ -3,9 +3,13 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import {
-  Config, IM_TOOLS, ImChatKey, ImMessageKey, ImSourceId, STOP_BUTTON_PREFIX, sessionIdOf, splitKey,
+  ImChatKey, ImMessageKey, ImSourceId, splitKey,
   type ImActivity, type ImConfig, type ImOutcome, type ImOutputRenderer,
-} from '../src/index.ts'
+} from '../src/api.ts'
+import { Config } from '../src/config.ts'
+import { sessionIdOf } from '../src/hosting.ts'
+import { STOP_BUTTON_PREFIX } from '../src/outputs.ts'
+import { IM_TOOLS } from '../src/tools.ts'
 import { errorValue, imReadFileParameters, imReadImageParameters, imSendParameters } from '../src/schema.ts'
 
 const root = join(import.meta.dirname, '..')

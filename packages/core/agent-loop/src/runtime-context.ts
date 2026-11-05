@@ -1,7 +1,7 @@
 /**
- * Durable projection state for the two loop-owned surface messages the system
- * prompt plugin forms: the system prompt (surface node 0 and any in-history
- * replacement) and the dynamic runtime-context snapshot.
+ * Durable admission state for the loop-owned system prompt (surface node 0 and
+ * in-history updates) and runtime context. The prompt registry supplies named
+ * contributions; this module owns runtime reminder framing and supersession.
  * @module @deepseek-ai/dsh-agent-loop/runtime-context
  */
 
@@ -9,6 +9,7 @@ import { createSystemMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed, ContextSnapshotSection, Message } from '@deepseek-ai/dsh-llm'
 import type { Session, SessionEvent, SessionSeq, SurfaceIntent, SystemMessage, UserMessage } from '@deepseek-ai/dsh-session'
 import { isReplacementSurfaceEvent } from '@deepseek-ai/dsh-session'
+import { deepEqualJson } from '@deepseek-ai/dsh-util-values'
 import type { Context } from '@deepseek-ai/cordis'
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -17,10 +18,15 @@ declare module '@deepseek-ai/dsh-llm' {
 }
 
 const SOURCE = 'runtime-context'
-const CLEARED = 'Current runtime context: none. Earlier runtime-context snapshots no longer apply.'
+const CLEARED = '<system-reminder>\nCurrent runtime context: none. Earlier runtime-context snapshots no longer apply.\n</system-reminder>'
 
 function isOwned(message: UserMessage): boolean {
   return message.source.kind === SOURCE
+}
+
+/** Older runtime-context messages may omit the structured snapshot contributions. */
+function sectionsOf(message: UserMessage): readonly ContextSnapshotSection[] | undefined {
+  return message.source.kind === SOURCE && message.source.form === 'snapshot' ? message.source.sections : undefined
 }
 
 function textOf(message: Message): string | undefined {
@@ -118,7 +124,7 @@ export class SystemPromptProjection {
 /** Tracks the last retained runtime-context snapshot without owning its commit. */
 export class RuntimeContextProjection {
   /** `undefined` means no snapshot ever existed; `null` means none is retained. */
-  private retained: { seq: SessionSeq; text: string | undefined } | null | undefined
+  private retained: { seq: SessionSeq; sections: readonly ContextSnapshotSection[] | undefined } | null | undefined
 
   /**
    * Restore projection state once, then follow authoritative session events.
@@ -131,7 +137,7 @@ export class RuntimeContextProjection {
       if (event.type !== 'user/message' || !isOwned(event.data)) continue
       this.retained ??= null
       if (surface.has(event.seq)) {
-        this.retained = { seq: event.seq, text: textOf(event.data) }
+        this.retained = { seq: event.seq, sections: sectionsOf(event.data) }
         break
       }
     }
@@ -139,7 +145,7 @@ export class RuntimeContextProjection {
     ctx.on('session/event', (subject, event) => {
       if (subject !== session) return
       if (event.type === 'user/message' && isOwned(event.data)) {
-        this.retained = { seq: event.seq, text: textOf(event.data) }
+        this.retained = { seq: event.seq, sections: sectionsOf(event.data) }
       } else if (this.retained
         && isReplacementSurfaceEvent(event)
         && event.sourceEventSeqs?.includes(this.retained.seq) === true) {
@@ -149,21 +155,27 @@ export class RuntimeContextProjection {
   }
 
   /**
-   * Create an uncommitted snapshot only when the retained value differs.
-   * @param current - fully rendered dynamic context.
+   * Create an uncommitted reminder only when the retained value differs.
+   * The first snapshot omits supersession; later snapshots also override facts
+   * retained in compaction summaries. Proposals do not advance committed state.
    * @param sections - named contributions that formed the current snapshot.
    * @returns a candidate user message, or `undefined` when no update is needed.
    */
-  project(current: string, sections: readonly ContextSnapshotSection[]): UserMessage | undefined {
-    if (this.retained === undefined && current.length === 0) return
-    const snapshot = current.length === 0 ? CLEARED : current
-    if (this.retained?.text === snapshot) return
+  project(sections: readonly ContextSnapshotSection[]): UserMessage | undefined {
+    const previous = this.retained?.sections
+    if (this.retained === undefined && sections.length === 0) return
+    if (previous !== undefined && deepEqualJson(previous, sections)) return
+    const intro = this.retained === undefined
+      ? 'The following information describes your current session:'
+      : 'The following information describes your current session. It replaces earlier versions of this context, including any retained in conversation summaries.'
+    const body = sections.map(section => section.text).join('\n\n')
+      .replace(/<\/system-reminder\s*>/gi, tag => `<\\${tag.slice(1)}`)
+    const snapshot = sections.length === 0
+      ? CLEARED
+      : `<system-reminder>\n${intro}\n\n${body}\n</system-reminder>`
     return createUserMessage({
       content: [{ type: 'text', text: snapshot }],
-      // The cleared marker has no contributions left to attribute.
-      source: sections.length === 0
-        ? { kind: SOURCE }
-        : { kind: SOURCE, form: 'snapshot', sections },
+      source: { kind: SOURCE, form: 'snapshot', sections },
     })
   }
 }

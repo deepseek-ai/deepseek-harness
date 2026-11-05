@@ -224,15 +224,16 @@ export class TerminalView {
   /**
    * Queue input within the raw UTF-8 and encoded-frame budgets, waiting for carrier capacity.
    * @param data - input from the terminal emulator; never replayed after disconnection.
+   * @param typed - whether the person produced the input, as opposed to a terminal-protocol reply.
    */
-  write(data: string): void {
+  write(data: string, typed: boolean = false): void {
     const state = this.state.getSnapshot()
     const attachment = this.attachment
     if (!state.writable || state.info === undefined || attachment === undefined || attachment.signal.aborted) return
     if (data.length === 0) return
     const bytes = new TextEncoder().encode(data).byteLength
     if (attachment.bytes + bytes > (state.environment?.maxInputBytes ?? 0)) { this.failInput(new TerminalViewError('inputFull')); return }
-    this.send(attachment, { type: 'write', sequence: attachment.sequence + 1, data }, bytes)
+    this.send(attachment, { type: 'write', sequence: attachment.sequence + 1, data, ...typed ? { typed: true } : {} }, bytes)
   }
 
   /**

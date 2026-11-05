@@ -23,9 +23,10 @@ import * as Markdown from '@deepseek-ai/cordis-plugin-im-markdown'
 import { FakeAdapter, createTextMode } from '@deepseek-ai/cordis-plugin-im-core/src/testing.ts'
 import LarkBot from '@deepseek-ai/cordis-plugin-im-adapter-lark'
 import { Config as QQConfig } from '@deepseek-ai/cordis-plugin-im-adapter-qq'
-import { Config as ImConfig, type ImMessageEvent } from '@deepseek-ai/dsh-experimental-im'
-import { Config as CommandsConfig } from '@deepseek-ai/dsh-experimental-im-session-commands'
-import * as SessionCommands from '@deepseek-ai/dsh-experimental-im-session-commands'
+import type { ImMessageEvent } from '@deepseek-ai/dsh-im'
+import { Config as ImConfig } from '@deepseek-ai/dsh-im/src/config.ts'
+import { Config as CommandsConfig } from '@deepseek-ai/dsh-im-session-commands'
+import * as SessionCommands from '@deepseek-ai/dsh-im-session-commands'
 
 /**
  * Install a stand-in for one service the bundle only needs to see mounted. The typed `provide` overload demands the
@@ -109,8 +110,8 @@ describe('IM bundle rows', () => {
       ['im-markdown', '@deepseek-ai/cordis-plugin-im-markdown'],
       ['im-feishu', '@deepseek-ai/cordis-plugin-im-adapter-lark'],
       ['im-qq', '@deepseek-ai/cordis-plugin-im-adapter-qq'],
-      ['im', '@deepseek-ai/dsh-experimental-im'],
-      ['im-session-commands', '@deepseek-ai/dsh-experimental-im-session-commands'],
+      ['im', '@deepseek-ai/dsh-im'],
+      ['im-session-commands', '@deepseek-ai/dsh-im-session-commands'],
     ])
   })
 
@@ -206,8 +207,8 @@ async function boot(): Promise<Booted> {
       child.plugin(FakeAdapter, { modes: { text: createTextMode() }, selfId: 'cli_fake' })
     })],
     ['@deepseek-ai/cordis-plugin-im-adapter-qq', fake('im-qq')],
-    ['@deepseek-ai/dsh-experimental-im', fake('im', [], (child) => { child.provide('im', im) })],
-    ['@deepseek-ai/dsh-experimental-im-session-commands', fake('im-session-commands', ['im'])],
+    ['@deepseek-ai/dsh-im', fake('im', [], (child) => { child.provide('im', im) })],
+    ['@deepseek-ai/dsh-im-session-commands', fake('im-session-commands', ['im'])],
   ])
   // The Loader's module map (`internal`) is Node's own surface; this fixture only needs its `import()`.
   Object.defineProperty(ctx.loader, 'internal', {

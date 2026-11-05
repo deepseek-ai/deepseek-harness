@@ -13,7 +13,7 @@ import {
 import { CatalogFeedback } from './CatalogFeedback.tsx'
 import { DeliveryHistory, type DeliveryHistoryInjected } from './DeliveryHistory.tsx'
 import type { CatalogDeleteOutcome, CatalogSnapshot } from './catalog-source.ts'
-import { TaskEditorFields, draftTarget, newTaskDraft, projectChoices, reapplyTaskDraft, taskDraft, taskDraftPatch, taskDraftValid } from './TaskEditorFields.tsx'
+import { TaskEditorFields, draftTarget, newTaskDraft, projectChoices, reapplyTaskDraft, taskDraft, taskDraftIssue, taskDraftPatch } from './TaskEditorFields.tsx'
 import type { TaskEditorDraft } from './TaskEditorFields.tsx'
 import type { TaskEditorStoreProps } from './editor-store.ts'
 import { timingFromDraft } from './editor-timing.ts'
@@ -213,7 +213,8 @@ function TaskDetailView(props: TaskDetailProps): ReactNode {
   const draft = task === undefined && input.cwd === '' ? { ...input, cwd: projects.defaultCwd } : input
   const dirty = base === undefined
     ? JSON.stringify(draft) !== JSON.stringify({ ...initial, cwd: initial.cwd || projects.defaultCwd }) : storedDirty
-  const valid = !dirty || taskDraftValid(draft, changes)
+  const issue = dirty ? taskDraftIssue(draft, changes) : undefined
+  const valid = issue === undefined
   const [actionPending, setPending] = useState(false)
   const [actionFailure, setFailure] = useState<HostEditFailure | HostRunFailure | null>(null)
   const saving = cached?.pending === true
@@ -383,8 +384,8 @@ function TaskDetailView(props: TaskDetailProps): ReactNode {
             projects={projects} original={base} t={t} />
           {draft.target === 'new'
             && <NewSessionLimit load={hostActions.loadNewSessionInterval} t={t} />}
-          {failure === null && dirty && !valid && draft.title.trim() !== '' && draft.prompt.trim() !== ''
-            && <p className={css.saveFailure} role="status">{t('rule.invalid')}</p>}
+          {failure === null && issue !== undefined && issue !== 'incomplete'
+            && <p className={css.saveFailure} role="status">{t(issue)}</p>}
         </>}
         {tab === 'records' && task !== undefined && <DeliveryHistory id={task.id} latestMessageId={task.lastDelivery?.messageId}
           timeZone={recordTimeZone(task)} loadHistory={loadHistory} onOpenSession={onOpenSession}
