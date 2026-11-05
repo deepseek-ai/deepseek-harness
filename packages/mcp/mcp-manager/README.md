@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the manager once per Host. The Web and Desktop profiles mount it as the `mcp-manager` row of [`dsh-web-app`](../../bundle/web-app/README.md). Its volatile `config.servers` holds configured entries; Settings uses the owning entry id as its namespace (`mcp` in the examples below). Credential templates and OAuth grants resolve through the credentials provider, so compose the row with `inject: [credentials]` wherever entries may use them.
+Mount the manager once per Host, after an `mcp-client` entry loaded with `host: true`: that entry provides `ctx.mcpClientHost`, the only way the manager validates, mounts, probes, and authorizes servers, and the manager waits for it. The Web and Desktop profiles mount the two as the `mcp-client-host` and `mcp-manager` rows of [`dsh-web-app`](../../bundle/web-app/README.md). Its volatile `config.servers` holds configured entries; Settings uses the owning entry id as its namespace (`mcp` in the examples below). Credential templates and OAuth grants resolve through the credentials provider, so compose the row with `inject: [credentials]` wherever entries may use them.
 
 ### When to choose it
 
@@ -33,9 +33,14 @@ Choose the manager when the server set changes at runtime: a settings edit or a 
 
 ### Minimal configuration
 
-One `cordis.yml` row mounts the manager; `servers` in its config is optional and becomes the composition base layer:
+Two `cordis.yml` rows mount the host and the manager; `servers` in the manager's config is optional and becomes the composition base layer:
 
 ```yaml
+- id: mcp-client-host
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    host: true
+
 - id: mcp
   name: '@deepseek-ai/dsh-mcp-manager'
   inject: [credentials]
@@ -138,8 +143,9 @@ This section explains the design decisions and points at the code; the observabl
 - **Registrations are effects.** A registration is an effect of the calling plugin, so its owner's lifecycle decides when the server exists; no plugin writes another plugin's configuration or leaves an entry behind on removal.
 - **One serialized operation tail.** Reconciles and restarts queue on one chain, so two lifecycle operations cannot interleave one instance's unmount/mount. Probes run independently; entry changes and disposal cancel them before waiting for the operation tail and owned cleanup.
 - **Whole-entry identity.** Any field change except `enabled` rebuilds the instance — instance config is captured at mcp-client load, so an in-place update cannot exist. `enabled` alone toggles mounting.
-- **A flat entry schema, validated cross-field.** Write-time validation enforces the per-transport rules a union would have expressed and rejects them at the write, naming the offending field where a union's shape error would not.
-- **Connection handling stays in mcp-client.** Children are ordinary plugin instances mounted under the manager's fiber: `serverName` reservations collide correctly with statically composed instances, teardown unwinds tools, and the manager reads each instance's status through `connectionStatusOf` rather than duplicating supervision.
+- **A flat entry schema, validated cross-field.** Write-time validation enforces the per-transport rules a union would have expressed and rejects them at the write, naming the offending field where a union's shape error would not. The MCP client host validates the fields mcp-client owns — the entry key as `serverName`, template tokens, `reconnect`, and `oauth` — through each transport's own schema, so those refusals name the field too; the manager's schema passes `reconnect` and `oauth` through unresolved.
+- **Connection handling stays in mcp-client.** Children are ordinary mcp-client instances that the host mounts below its own Fiber: `serverName` reservations collide correctly with statically composed instances, teardown unwinds tools, and the manager reads each instance's status through the handle the host returns rather than duplicating supervision.
+- **The host is the manager's only reach into mcp-client.** The manager imports mcp-client types and no values, and injects `ctx.mcpClientHost`. A reload of mcp-client replaces the host entry together with every instance it mounted, and Cordis restarts the manager against the replacement, so the manager never keeps a replaced module's functions, classes, or instances.
 
 ### Source map
 
@@ -150,7 +156,7 @@ This section explains the design decisions and points at the code; the observabl
 
 ### Lifecycle notes
 
-The first reconcile waits for the manager's own fiber to activate, because the service is visible to dependents only from that point. Child startup does not hold the operation queue open. A changed or removed entry stops forwarding child status and cancels its probes before queued cleanup; replacement waits for both probes and the child to finish cleanup. Equal status publications are absorbed. Cleanup failures remain observable after an entry's removal; disposal stops all further events and ends every `watch` stream.
+The manager starts only while the host is provided; withdrawing the host stops the manager, and providing a host again starts it with its configured and registered entries. The first reconcile waits for the manager's own fiber to activate, because the service is visible to dependents only from that point. Child startup does not hold the operation queue open. A changed or removed entry stops forwarding child status and cancels its probes before queued cleanup; replacement waits for both probes and the child to finish cleanup. Equal status publications are absorbed. Cleanup failures remain observable after an entry's removal; disposal stops all further events and ends every `watch` stream.
 
 </details>
 

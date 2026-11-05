@@ -124,10 +124,7 @@ export const EXISTING_PLUGIN_ENTRY_EXPORTS = {
     'negotiatePositionEncoding', 'normalizeHover', 'normalizeLocations', 'readHostSource', 'requestMethod',
     'supportsOperation', 'supportsTransientOpen',
   ],
-  '@deepseek-ai/dsh-mcp-client': [
-    'ReconnectSchema', 'SERVER_NAME_PATTERN', 'assertTemplateSyntax', 'connectionStatusOf', 'createMcpToolDefinition',
-    'probeServer', 'resolveReconnectPolicy',
-  ],
+  '@deepseek-ai/dsh-mcp-client': ['createMcpToolDefinition'],
   '@deepseek-ai/dsh-office-kit': ['Config', 'OfficeKitGeneration', 'OfficeKitKey', 'OfficeSourceKey'],
   '@deepseek-ai/dsh-permission-presets': ['AUTO_PRESET', 'CUSTOM_PRESET'],
   '@deepseek-ai/dsh-persona': ['PERSONA_PREFIX_SECTION', 'PERSONA_SUFFIX_SECTION'],

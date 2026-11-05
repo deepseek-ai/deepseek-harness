@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-每个宿主挂载一次管理器。Web 与 Desktop profile 将它作为 [`dsh-web-app`](../../bundle/web-app/README.zh.md) 的 `mcp-manager` 行挂载。其 volatile `config.servers` 存放配置条目；Settings 以所属条目 id 作为命名空间（下例为 `mcp`）。凭据模板与 OAuth 授权经凭据提供方解析，因此只要条目可能用到它们，就为该行加上 `inject: [credentials]`。
+每个宿主挂载一次管理器，并先挂载一个以 `host: true` 加载的 `mcp-client` 条目：该条目提供 `ctx.mcpClientHost`，管理器只通过它校验、挂载、探测和授权服务器，并等它可用后才启动。Web 与 Desktop profile 将二者作为 [`dsh-web-app`](../../bundle/web-app/README.zh.md) 的 `mcp-client-host` 与 `mcp-manager` 行挂载。其 volatile `config.servers` 存放配置条目；Settings 以所属条目 id 作为命名空间（下例为 `mcp`）。凭据模板与 OAuth 授权经凭据提供方解析，因此只要条目可能用到它们，就为该行加上 `inject: [credentials]`。
 
 ### 何时选择它
 
@@ -33,9 +33,14 @@ kind: "package-reference"
 
 ### 最小配置
 
-一条 `cordis.yml` 行挂载管理器；其配置里的 `servers` 可选，将成为组合基层：
+两条 `cordis.yml` 行分别挂载宿主与管理器；管理器配置里的 `servers` 可选，将成为组合基层：
 
 ```yaml
+- id: mcp-client-host
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    host: true
+
 - id: mcp
   name: '@deepseek-ai/dsh-mcp-manager'
   inject: [credentials]
@@ -138,8 +143,9 @@ export function apply(ctx: Context): void {
 - **注册是副作用。** 注册是调用方插件的副作用，因此由其所有者的生命周期决定服务器何时存在；没有插件需要写入别的插件的配置，移除时也不会残留条目。
 - **单条串行操作队列。** 对账与 restart 排在一条链上，两个生命周期操作不能交错同一实例的卸载/挂载。探测独立运行；条目变化与销毁会先取消探测，再等待操作队列与所属资源的清理。
 - **整条目即身份。** 除 `enabled` 外任何字段变化都会重建实例——实例配置在 mcp-client 加载时被捕获，原地更新不存在。`enabled` 只切换是否挂载。
-- **扁平条目 schema，跨字段校验。** 写入期校验在写入处强制执行 union 本可表达的逐传输规则，拒绝时点名出错字段——union 的形状错误做不到这一点。
-- **连接处理留在 mcp-client。** 子实例是挂在管理器 fiber 下的普通插件实例：`serverName` 预留与静态组合实例正确互斥，收卷即注销工具，管理器经 `connectionStatusOf` 读取各实例状态而不重复监督。
+- **扁平条目 schema，跨字段校验。** 写入期校验在写入处强制执行 union 本可表达的逐传输规则，拒绝时点名出错字段——union 的形状错误做不到这一点。MCP 客户端宿主用各传输自己的 schema 校验 mcp-client 拥有的字段——作为 `serverName` 的条目键、模板 token、`reconnect` 与 `oauth`——因此这些拒绝同样点名字段；管理器的 schema 对 `reconnect` 与 `oauth` 原样透传、不做解析。
+- **连接处理留在 mcp-client。** 子实例是宿主挂在其自身 Fiber 下的普通 mcp-client 实例：`serverName` 预留与静态组合实例正确互斥，收卷即注销工具，管理器经宿主返回的句柄读取各实例状态而不重复监督。
+- **宿主是管理器接触 mcp-client 的唯一途径。** 管理器只从 mcp-client 导入类型、不导入值，并注入 `ctx.mcpClientHost`。mcp-client 重载时，宿主条目连同它挂载的所有实例一起被替换，Cordis 让管理器在替换后的宿主上重启，因此管理器不会保留被替换模块的函数、类或实例。
 
 ### 源码地图
 
@@ -150,7 +156,7 @@ export function apply(ctx: Context): void {
 
 ### 生命周期要点
 
-首次对账等待管理器自身 fiber 激活，因为服务从那一刻起才对依赖方可见。子实例启动不占住操作队列。条目变化或移除时，在排队清理前停止转发子实例状态并取消其探测；替换等待探测与子实例都完成清理。相等的状态不重复发布。条目移除后仍可观察清理失败；销毁停止所有后续事件并结束每个 `watch` 流。
+管理器只在宿主可用时运行；撤下宿主会停止管理器，宿主再次可用时管理器带着配置与注册的条目重新启动。首次对账等待管理器自身 fiber 激活，因为服务从那一刻起才对依赖方可见。子实例启动不占住操作队列。条目变化或移除时，在排队清理前停止转发子实例状态并取消其探测；替换等待探测与子实例都完成清理。相等的状态不重复发布。条目移除后仍可观察清理失败；销毁停止所有后续事件并结束每个 `watch` 流。
 
 </details>
 

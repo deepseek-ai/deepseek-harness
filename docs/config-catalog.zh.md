@@ -2386,11 +2386,20 @@ export interface LspLocalServerConfig {
 ## `@deepseek-ai/dsh-mcp-client`
 
 - `inject`: `tools`
-- `source`: [`packages/mcp/mcp-client/src/index.ts:146`](../packages/mcp/mcp-client/src/index.ts)
+- `source`: [`packages/mcp/mcp-client/src/index.ts:136`](../packages/mcp/mcp-client/src/index.ts)
 
 ```ts config-catalog
+/** Configuration of one mcp-client instance: a server, or the host. */
+export type Config = ServerConfig | HostConfig
+
 /** Configuration for one stdio or Streamable HTTP MCP server. */
-export type Config = StdioConfig | StreamableHttpConfig
+export type ServerConfig = StdioConfig | StreamableHttpConfig
+
+/** Config of an instance that provides `ctx.mcpClientHost` instead of connecting a server. */
+export interface HostConfig {
+  /** Provide the MCP client host. */
+  host: true
+}
 
 /** Config for connecting to an MCP server via a spawned child process over stdio. */
 export interface StdioConfig {
@@ -2491,9 +2500,9 @@ export interface McpOAuthConfig {
 
 ## `@deepseek-ai/dsh-mcp-manager`
 
-- `inject`: `tools`
-- `refs`: [`McpOAuthConfig`](../packages/mcp/mcp-client/src/index.ts) · [`ReconnectConfig`](../packages/mcp/mcp-client/src/index.ts) · `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/mcp/mcp-manager/src/index.ts:75`](../packages/mcp/mcp-manager/src/index.ts)
+- `inject`: `mcpClientHost`
+- `refs`: [`McpOAuthConfigInput`](../packages/mcp/mcp-client/src/index.ts) · [`ReconnectConfig`](../packages/mcp/mcp-client/src/index.ts) · `Volatile` (`@deepseek-ai/cordis`)
+- `source`: [`packages/mcp/mcp-manager/src/index.ts:73`](../packages/mcp/mcp-manager/src/index.ts)
 
 ```ts config-catalog
 /** Manager configuration with live server entries. */
@@ -2504,13 +2513,13 @@ export interface Config {
 
 /**
  * One managed server entry. Deliberately flat rather than a per-transport
- * union: {@link validateEntries} owns the per-transport field rules, and its
- * write-time refusals name the offending field where a union's shape error
+ * union: the manager's write-time validation owns the per-transport field
+ * rules, and its refusals name the offending field where a union's shape error
  * would not.
  */
 export interface McpManagedServerEntry {
-  /** Optional OAuth configuration; each entry owns a distinct stable credential key. */
-  oauth?: McpOAuthConfig
+  /** Optional OAuth configuration; each entry owns a distinct stable credential key, and the MCP client host resolves the rest. */
+  oauth?: McpOAuthConfigInput
   /** Which transport the instance uses. */
   transport: 'stdio' | 'streamable-http'
   /** stdio: executable used to start the server; `''` while unset. */
@@ -2533,8 +2542,8 @@ export interface McpManagedServerEntry {
   startupTimeoutMs: number
   /** Cleanup budget override in milliseconds; omission uses the mcp-client default. */
   closeTimeoutMs?: number
-  /** Reconnect policy; the schema fills the mcp-client defaults. */
-  reconnect: ReconnectConfig
+  /** Reconnect policy; the MCP client host validates it, and omission uses the mcp-client defaults. */
+  reconnect?: ReconnectConfig
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-mcp-manager -->

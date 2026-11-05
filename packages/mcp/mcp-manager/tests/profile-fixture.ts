@@ -1,4 +1,4 @@
-/** Manager configuration through a real profile, ConfigEditor, and Loader. */
+/** The MCP client host and the manager, configured through a real profile, ConfigEditor, and Loader. */
 import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -10,10 +10,11 @@ import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { initProfile, mountRootInclude, readProfilePatches, type ProfileContext } from '@deepseek-ai/dsh-app-boot'
 import ConfigEditor from '@deepseek-ai/dsh-config-editor'
 import Settings from '@deepseek-ai/dsh-settings'
+import * as McpClient from '@deepseek-ai/dsh-mcp-client'
 import McpServerManager from '../src/index.ts'
 
 /**
- * Mount the manager from an inherited bundle and optional user patch.
+ * Mount the MCP client host and the manager from an inherited bundle and optional user patch.
  * @param ctx - Test context carrying tools and optional credentials.
  * @param options - Manager entry id, base configuration, and user overrides.
  * @returns The profile and manager entry owned by the test.
@@ -33,6 +34,7 @@ export async function managerProfile(ctx: Context, options: { id?: string; base?
   writeFileSync(join(bundle, 'package.json'), JSON.stringify({ name: 'test-mcp-bundle', version: '1.0.0', dsh: { bundle: { patch: 'cordis.patch.yml' } } }))
   const id = options.id ?? 'mcp'
   writeFileSync(join(bundle, 'cordis.patch.yml'), JSON.stringify([{ insert: [
+    { id: 'mcp-client-host', name: 'cordis:mcp-client', config: { host: true } },
     { id, name: 'cordis:mcp-manager', config: options.base ?? {} },
   ] }]))
   writeFileSync(join(dir, 'cordis.yml'), '[]\n')
@@ -46,6 +48,7 @@ export async function managerProfile(ctx: Context, options: { id?: string; base?
     context.baseUrl = pathToFileURL(home).href + '/'
     context.provide('profileContext', profile)
     await context.plugin(Loader)
+    context.loader.builtins['mcp-client'] = McpClient
     context.loader.builtins['mcp-manager'] = McpServerManager
     await context.plugin(ConfigEditor)
     await context.plugin(Settings)

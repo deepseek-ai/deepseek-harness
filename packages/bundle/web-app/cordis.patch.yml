@@ -146,6 +146,14 @@
     - id: settings-controller
       name: '@deepseek-ai/dsh-api-settings-controller'
 
+    # The MCP client host connects no server: the manager below validates,
+    # mounts, probes, and authorizes servers through it, so a reload of the MCP
+    # client replaces its servers and restarts the manager.
+    - id: mcp-client-host
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        host: true
+
     # One shared MCP server fleet: Settings-configured servers plus servers
     # that installed plugins register, with status and recovery over Remote.
     # Credential templates and OAuth grants resolve through the credentials

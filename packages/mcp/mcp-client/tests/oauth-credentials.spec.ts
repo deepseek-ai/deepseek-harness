@@ -4,7 +4,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { credentialRef, parseCredentialKey, type CredentialRecord } from '@deepseek-ai/dsh-credentials'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { McpOAuthCredentials, oauthFetch, oauthRecord } from '../src/oauth-credentials.ts'
-import { probeServer } from '../src/index.ts'
+import { probeServer } from '../src/probe.ts'
 import { authorize, oauthWorld, phase } from './oauth-fixture.ts'
 
 async function credentials() {

@@ -30,7 +30,7 @@ import { McpTemplateBinding } from './credentials.ts'
 import { MissingTemplateValue } from './templates.ts'
 import { McpToolRegistrationError, syncTools } from './tools.ts'
 import type { ToolDisposers } from './tools.ts'
-import type { Config } from './index.ts'
+import type { ServerConfig } from './index.ts'
 
 /** Automatic reconnect policy for one MCP server connection. */
 export interface ReconnectConfig {
@@ -130,7 +130,7 @@ export interface ConnectionHandle extends ServerContext {
  * @returns Handle with a `ready` promise for startup-await and a `dispose` for teardown.
  */
 export function startConnection(
-  ctx: Context, config: Config, policy: ResolvedReconnectPolicy, status: McpStatusCell, oauth?: McpOAuthCredentials,
+  ctx: Context, config: ServerConfig, policy: ResolvedReconnectPolicy, status: McpStatusCell, oauth?: McpOAuthCredentials,
 ): ConnectionHandle {
   const label = `mcp-client(${config.serverName})`
   const binding = new McpTemplateBinding(ctx, config)
@@ -139,7 +139,7 @@ export function startConnection(
   const readiness = Promise.withResolvers<ConnectionOutcome>()
   type Generation = { wire: McpGeneration; connectedAt?: number }
   let current: Generation | undefined
-  let bindingValue: { config?: Config; grantId?: string } | undefined
+  let bindingValue: { config?: ServerConfig; grantId?: string } | undefined
   let disposed = false
   let serverInstructions = ''
   let disposers: ToolDisposers = new Map()
@@ -152,7 +152,7 @@ export function startConnection(
   let credentialsDirty = false
   const isCurrent = (record: Generation): boolean => !disposed && current === record && !record.wire.lifetime.signal.aborted
 
-  async function resolveBinding(signal: AbortSignal): Promise<{ config: Config; grant?: McpOAuthGrant }> {
+  async function resolveBinding(signal: AbortSignal): Promise<{ config: ServerConfig; grant?: McpOAuthGrant }> {
     const resolved = await binding.resolve(signal)
     const grant = oauth !== undefined && resolved.transport === 'streamable-http'
       ? await oauth.read(new URL(resolved.url).href, signal) : undefined
@@ -268,7 +268,7 @@ export function startConnection(
     checkingCredentials ??= (async () => {
       while (credentialsDirty && !isStopped()) {
         credentialsDirty = false
-        let next: { config: Config; grant?: McpOAuthGrant } | undefined
+        let next: { config: ServerConfig; grant?: McpOAuthGrant } | undefined
         try { next = await resolveBinding(lifetime.signal) }
         catch (error) {
           if (!(error instanceof MissingTemplateValue) && !(error instanceof McpAuthorizationRequired)) throw error

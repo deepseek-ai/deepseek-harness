@@ -4,7 +4,7 @@ import type { AuthProvider, Client, FetchLike, Transport } from '@modelcontextpr
 import { withDeadline } from './deadline.ts'
 import { McpLocalError } from './diagnostic.ts'
 import { createTransport } from './transport.ts'
-import type { Config } from './index.ts'
+import type { ServerConfig } from './index.ts'
 import type { McpCloseResult } from './types.ts'
 
 /** Tracks actual tasks separately from their interruptible callers. */
@@ -32,7 +32,7 @@ export class McpGeneration {
    * @param authProvider - optional passive OAuth callbacks, tracked through actual settlement.
    * @returns completion of negotiation, or cancellation/deadline rejection.
    */
-  connect(config: Config, timeoutMs: number | undefined, fetch?: FetchLike, authProvider?: Required<AuthProvider>): Promise<void> {
+  connect(config: ServerConfig, timeoutMs: number | undefined, fetch?: FetchLike, authProvider?: Required<AuthProvider>): Promise<void> {
     this.lifetime.signal.throwIfAborted()
     const transport = this.transport = createTransport(config, fetch, authProvider === undefined ? undefined : {
       token: () => this.run(() => authProvider.token()),
