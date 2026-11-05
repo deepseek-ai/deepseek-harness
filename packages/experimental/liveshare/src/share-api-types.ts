@@ -101,7 +101,10 @@ export interface ViewerPluginPolicy {
 /** One owner-created share as the management panel lists it. */
 export interface OwnerShareView {
   readonly shareId: string
+  /** Primary source Session, for callers that predate `sessionIds`; derived from its first entry. */
   readonly sessionId: string
+  /** Every source Session this share serves, primary first; the authoritative list. */
+  readonly sessionIds: readonly string[]
   readonly sessionTitle: string
   readonly link: string
   readonly createdAt: string
@@ -149,9 +152,25 @@ export interface CreateShareRequest {
 export interface CreatedShare {
   readonly link: string
   readonly shareId: string
+  /** Primary source Session, for callers that predate `sessionIds`; derived from its first entry. */
   readonly sessionId: string
+  /** Every source Session this share serves, primary first; the authoritative list. */
+  readonly sessionIds: readonly string[]
   readonly sessionMode: 'view' | 'write'
   readonly access: ShareAccess
+}
+
+/** One request to add source Sessions to an existing share. */
+export interface AddShareSessionsRequest {
+  readonly shareId: string
+  /** Sessions to add; ids already served by the share are ignored. */
+  readonly sessionIds: readonly string[]
+}
+
+/** The source Sessions one share serves after an addition. */
+export interface ShareSessions {
+  readonly shareId: string
+  readonly sessionIds: readonly string[]
 }
 
 /** One stop request. */
@@ -280,6 +299,17 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'liveshareShares/share-not-found': { readonly shareId: string }
     /** A share-writing request named no share. */
     'liveshareShares/missing-share-id': Record<string, never>
+    /** An addition named no usable Session id. */
+    'liveshareShares/missing-session-ids': Record<string, never>
+    /** The composition mounts no Workspace registry, so source placement cannot be checked. */
+    'liveshareShares/workspace-unavailable': Record<string, never>
+    /** A source Session belongs to no Workspace. */
+    'liveshareShares/session-workspace-unknown': { readonly sessionId: string }
+    /** A source Session belongs to a different Workspace than the share's other sources. */
+    'liveshareShares/session-workspace-mismatch': {
+      readonly sessionId: string
+      readonly workspaceId: string
+    }
     /** A creation or publish check named no Session. */
     'liveshareShares/missing-session-id': Record<string, never>
     /** A permission update named neither the tier nor the fork switch. */

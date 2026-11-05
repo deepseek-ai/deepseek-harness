@@ -4,19 +4,37 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
 import { assertTemplateSyntax, credentialRefsIn, resolveTemplateString } from './templates.ts'
 import { describeError, McpLocalError, redactSecrets } from './diagnostic.ts'
-import type { Config } from './index.ts'
+import type { ServerConfig } from './index.ts'
+
+/**
+ * The transport strings that may carry `${credential:…}` tokens, with their configuration paths.
+ * @param config - server configuration.
+ * @returns each templated value with its path relative to the configuration.
+ */
+export function templatedFields(config: ServerConfig): Array<[value: string, field: string]> {
+  if (config.transport === 'stdio') {
+    return [
+      [config.command, 'command'],
+      ...config.args.map((arg, index): [string, string] => [arg, `args[${String(index)}]`]),
+      ...Object.entries(config.env).map(([key, value]): [string, string] => [value, `env.${key}`]),
+      [config.cwd, 'cwd'],
+    ]
+  }
+  return [
+    [config.url, 'url'],
+    ...Object.entries(config.headers).map(([key, value]): [string, string] => [value, `headers.${key}`]),
+  ]
+}
 
 /** Resolves raw configuration through the current credential provider and redacts every secret the instance sent. */
-export class McpTemplateBinding<T extends Config = Config> {
+export class McpTemplateBinding<T extends ServerConfig = ServerConfig> {
   /** Enabled credential references from raw configuration, including currently unconfigured references. */
   readonly refs: ReadonlySet<string>
   /** Resolved values and their URL-encoded forms, retained for the instance lifetime. */
   private readonly secrets = new Set<string>()
 
   constructor(private readonly ctx: Context, private readonly config: T) {
-    const strings = config.transport === 'stdio'
-      ? [config.command, ...config.args, ...Object.values(config.env), config.cwd]
-      : [config.url, ...Object.values(config.headers)]
+    const strings = templatedFields(config).map(([value]) => value)
     this.refs = new Set(config.expandTemplates ? strings.flatMap(credentialRefsIn) : [])
     if (config.expandTemplates) {
       for (const value of strings) assertTemplateSyntax(value, `mcp-client(${config.serverName})`)

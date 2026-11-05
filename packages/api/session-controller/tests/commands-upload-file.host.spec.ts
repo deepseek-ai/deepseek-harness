@@ -3,7 +3,7 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { Context, FiberState } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
-import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { Agent, InboxTarget } from '@deepseek-ai/dsh-agent'
 import AttachmentStore, { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import type {
   FileAttachmentRef, ImageAttachmentLimits, ImageAttachmentRef, SaveFileAttachment, SaveFileStreamAttachment,
@@ -11,7 +11,7 @@ import type {
 } from '@deepseek-ai/dsh-attachment'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { MessageSource, UserMessage } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, SessionId, SessionLogOffset, type SessionEvent } from '@deepseek-ai/dsh-session'
 import CommandRuntime from '@deepseek-ai/dsh-commands'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import FileUploads from '@deepseek-ai/dsh-client-file-upload'
@@ -43,7 +43,11 @@ async function* chunks(...parts: readonly number[][]): AsyncIterable<Uint8Array>
   for (const part of parts) yield Uint8Array.from(part)
 }
 
-async function uploadHarness(origin?: 'subagent', imageLimits: ImageAttachmentLimits = IMAGE_LIMITS): Promise<{
+async function uploadHarness(
+  origin?: 'subagent',
+  imageLimits: ImageAttachmentLimits = IMAGE_LIMITS,
+  seed?: readonly SessionEvent[],
+): Promise<{
   ctx: Context
   controller: SessionCommandController
   uploads: FileUploads
@@ -63,10 +67,16 @@ async function uploadHarness(origin?: 'subagent', imageLimits: ImageAttachmentLi
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(CommandRuntime)
   const session = ctx.sessions.create(SESSION, {
-    meta: { cwd: '/workspace', ...(origin === undefined ? {} : { origin }) },
+    ...(seed === undefined ? {} : { seed, inheritedEventCount: SessionLogOffset(seed.length) }),
+    meta: { cwd: '/workspace', ...(origin === undefined ? {} : { origin }), ...(seed === undefined ? {} : { isSeeded: true }) },
   })
   const inbox = createInboxStub()
-  const followup = vi.fn()
+  const accept = (target: InboxTarget, message: UserMessage): void => {
+    const pending = target === 'next-turn' ? inbox.nextTurn : inbox.nextStep
+    session.append('agent/inbox/spliced', { target, start: pending.length, inserted: [message] })
+    inbox.append(target, message)
+  }
+  const followup = vi.fn((message: UserMessage) => { accept('next-turn', message) })
   const options = { provider: 'fixture', model: 'fixture-model' }
   const projection = await ctx.sessionProjections.register(modelSelectionProjectionDefinition)
   const agent = {
@@ -81,7 +91,7 @@ async function uploadHarness(origin?: 'subagent', imageLimits: ImageAttachmentLi
     inbox,
     status: 'idle',
     ctx,
-    steer: vi.fn(),
+    steer: vi.fn((message: UserMessage) => { accept('next-step', message) }),
     followup,
     cancel: vi.fn(),
   } satisfies Agent
@@ -524,11 +534,114 @@ describe('Session file uploads', () => {
   })
 
   it('deduplicates a retried rpcId already present in the Agent inbox', async () => {
-    const { controller, agent, followup } = await uploadHarness()
+    const { controller, followup } = await uploadHarness()
     const request = promptRequest([{ type: 'text', text: 'once' }])
     await controller.prompt(request, USER_SOURCE)
-    agent.inbox.append('next-turn', followup.mock.calls[0]?.[0] as UserMessage)
     await expect(controller.prompt(request, USER_SOURCE)).resolves.toEqual({ accepted: true })
+    expect(followup).toHaveBeenCalledOnce()
+  })
+
+  it.each(['claimed', 'removed'] as const)('deduplicates a %s input before user/message is logged', async (state) => {
+    const { controller, uploads, agent, followup } = await uploadHarness()
+    const file = await uploads.upload(agent, { data: 'AAAA' }, new AbortController().signal)
+    const request = promptRequest([{ type: 'file', receiptId: file.receiptId }])
+    await controller.prompt(request, USER_SOURCE)
+    if (state === 'removed') {
+      await controller.updateQueue({ sessionId: agent.id, itemId: agent.inbox.nextTurn[0]!.id, action: { kind: 'remove' } })
+      expect(uploads.resolve(agent, file.receiptId)).toBeUndefined()
+    } else {
+      agent.session.append('agent/inbox/spliced', { target: 'next-turn', start: 0, removedCount: 1, inserted: [] })
+      agent.inbox.clear()
+    }
+    expect(agent.inbox.nextTurn).toEqual([])
+    await expect(controller.prompt(request, USER_SOURCE)).resolves.toEqual({ accepted: true })
+    expect(followup).toHaveBeenCalledOnce()
+  })
+
+  it('does not reuse inherited acceptance when a copied message is reinserted in the child', async () => {
+    const ancestor = Session.create(SessionId('ancestor'))
+    const message = createUserMessage({ content: [{ type: 'text', text: 'parent input' }], source: USER_SOURCE })
+    ancestor.append('agent/inbox/spliced', { target: 'next-turn', start: 0, inserted: [message] })
+    ancestor.append('agent/inbox/spliced', { target: 'next-turn', start: 0, removedCount: 1, inserted: [] })
+    const { controller, agent, followup } = await uploadHarness(undefined, IMAGE_LIMITS, ancestor.snapshotEvents())
+    agent.session.append('agent/inbox/spliced', { target: 'next-step', start: 0, inserted: [message] })
+    const request = promptRequest([{ type: 'text', text: 'child input' }])
+    await controller.prompt(request, USER_SOURCE)
+    await controller.prompt(request, USER_SOURCE)
+    expect(followup).toHaveBeenCalledOnce()
+    expect(agent.inbox.nextTurn[0]?.id).not.toBe(message.id)
+  })
+
+  it('recovers acceptance from an insertion already removed before the first retry lookup', async () => {
+    const { controller, agent, followup } = await uploadHarness()
+    const message = createUserMessage({ content: [{ type: 'text', text: 'accepted' }], source: USER_SOURCE })
+    agent.session.append('agent/inbox/spliced', { target: 'next-turn', start: 0, inserted: [message] })
+    agent.session.append('agent/inbox/spliced', { target: 'next-turn', start: 0, removedCount: 1, inserted: [], outcome: 'canceled' })
+    await expect(controller.prompt(promptRequest([{ type: 'text', text: 'retry' }]), USER_SOURCE)).resolves.toEqual({ accepted: true })
+    expect(followup).not.toHaveBeenCalled()
+  })
+
+  it.each(['queue', 'steer'] as const)('accepts concurrent %s retries only once after asynchronous preparation', async (mode) => {
+    const { ctx, controller, agent, followup } = await uploadHarness()
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    let calls = 0
+    const admit = ctx.attachments.admitPromptContent.bind(ctx.attachments)
+    vi.spyOn(ctx.attachments, 'admitPromptContent').mockImplementation(async (content) => {
+      if (++calls === 2) entered.resolve(undefined)
+      await release.promise
+      return admit(content)
+    })
+    const request = { ...promptRequest([{ type: 'text', text: 'once' }]), mode }
+    const prompting = Promise.all([controller.prompt(request, USER_SOURCE), controller.prompt(request, USER_SOURCE)])
+    onTestFinished(async () => {
+      release.resolve(undefined)
+      await Promise.allSettled([prompting])
+    })
+    await entered.promise
+    release.resolve(undefined)
+    await expect(prompting).resolves.toEqual([{ accepted: true }, { accepted: true }])
+    expect(followup).toHaveBeenCalledTimes(mode === 'queue' ? 1 : 0)
+    expect(agent.inbox.nextTurn).toHaveLength(mode === 'queue' ? 1 : 0)
+    expect(agent.inbox.nextStep).toHaveLength(mode === 'steer' ? 1 : 0)
+  })
+
+  it('skips image preparation for a serialized retry already accepted', async () => {
+    const { controller, followup, saveImages } = await uploadHarness()
+    const release = Promise.withResolvers<readonly ImageAttachmentRef[]>()
+    saveImages.mockReturnValueOnce(release.promise)
+    const request = promptRequest([{ type: 'image', mediaType: 'image/png', data: 'AAAA' }])
+    const prompting = Promise.all([controller.prompt(request, USER_SOURCE), controller.prompt(request, USER_SOURCE)])
+    onTestFinished(async () => {
+      release.resolve([STAGED_IMAGE])
+      await Promise.allSettled([prompting])
+    })
+    await vi.waitFor(() => { expect(saveImages).toHaveBeenCalledOnce() })
+    release.resolve([STAGED_IMAGE])
+    await expect(prompting).resolves.toEqual([{ accepted: true }, { accepted: true }])
+    expect(saveImages).toHaveBeenCalledOnce()
+    expect(followup).toHaveBeenCalledOnce()
+  })
+
+  it('acknowledges acceptance when concurrent preparation fails after another call accepts', async () => {
+    const { ctx, controller, followup } = await uploadHarness()
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    vi.spyOn(ctx.attachments, 'admitPromptContent').mockImplementationOnce(async () => {
+      entered.resolve(undefined)
+      await release.promise
+      throw new Error('preparation failed')
+    })
+    const request = promptRequest([{ type: 'text', text: 'once' }])
+    const prompting = controller.prompt(request, USER_SOURCE)
+    onTestFinished(async () => {
+      release.resolve(undefined)
+      await Promise.allSettled([prompting])
+    })
+    await entered.promise
+    await expect(controller.prompt(request, USER_SOURCE)).resolves.toEqual({ accepted: true })
+    release.resolve(undefined)
+    await expect(prompting).resolves.toEqual({ accepted: true })
     expect(followup).toHaveBeenCalledOnce()
   })
 

@@ -1,17 +1,19 @@
 /**
- * Choices of each changes tab: the local scope, the side-by-side view, line
- * wrapping, and the navigation it last applied. One bucket per tab, so two
- * views in one Session keep their own choices; the bucket ends with the tab
- * record's signal.
+ * Choices of each changes tab: the local scope, the base branch of the
+ * `branch` scope, the side-by-side view, line wrapping, and the navigation it
+ * last applied. One bucket per tab, so two views in one Session keep their own
+ * choices; the bucket ends with the tab record's signal.
  */
 
 import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-store'
-import type { ForgeLocalScope } from '../types.ts'
+import type { ForgeBaseBranch, ForgeLocalScope } from '../types.ts'
 
 /** One changes tab's choices. */
 export interface ChangesTabState {
   /** Local changes shown; a change request view ignores it. */
   scope: ForgeLocalScope['kind']
+  /** Branch the `branch` scope compares with, or null for the automatic fork point; other scopes keep it. */
+  base: ForgeBaseBranch | null
   /** Whether deletions and additions show in two columns. */
   split: boolean
   /** Whether long lines wrap instead of being cut at the column edge. */
@@ -35,6 +37,7 @@ function bucket(state: ChangesState, tabId: string): ChangesTabState {
 type ChangesActions = {
   navigated: (draft: ChangesState, tabId: string, revision: number) => void
   scoped: (draft: ChangesState, tabId: string, scope: ForgeLocalScope['kind']) => void
+  based: (draft: ChangesState, tabId: string, base: ForgeBaseBranch | null) => void
   toggledSplit: (draft: ChangesState, tabId: string) => void
   toggledWrap: (draft: ChangesState, tabId: string) => void
   forget: (draft: ChangesState, tabId: string) => void
@@ -50,14 +53,14 @@ export function createChangesStore(): EngineStoreHandle<ChangesState, ChangesAct
     init: (): ChangesState => ({ byTab: {} }),
     actions: {
       /**
-       * Apply a navigation; the first one seeds the `branch` scope, two columns, and wrapped lines.
+       * Apply a navigation; the first one seeds the `branch` scope with the automatic fork point, two columns, and wrapped lines.
        * @param d - draft state.
        * @param tabId - the tab being drawn.
        * @param revision - the navigation revision being applied.
        */
       navigated: (d, tabId: string, revision: number) => {
         const tab = d.byTab[tabId]
-        if (tab === undefined) d.byTab[tabId] = { scope: 'branch', split: true, wrap: true, navigated: revision }
+        if (tab === undefined) d.byTab[tabId] = { scope: 'branch', base: null, split: true, wrap: true, navigated: revision }
         else tab.navigated = revision
       },
       /**
@@ -67,6 +70,13 @@ export function createChangesStore(): EngineStoreHandle<ChangesState, ChangesAct
        * @param scope - the scope to show.
        */
       scoped: (d, tabId: string, scope: ForgeLocalScope['kind']) => { bucket(d, tabId).scope = scope },
+      /**
+       * Compare the `branch` scope with another branch.
+       * @param d - draft state.
+       * @param tabId - the tab being drawn.
+       * @param base - the branch, or null for the automatic fork point.
+       */
+      based: (d, tabId: string, base: ForgeBaseBranch | null) => { bucket(d, tabId).base = base },
       /**
        * Switch between one column and two.
        * @param d - draft state.

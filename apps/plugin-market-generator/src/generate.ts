@@ -1,12 +1,13 @@
 /** Turn a source list into a validated format-1 index, reusing cached results for unchanged releases and commits. */
 import { existsSync } from 'node:fs'
 import { join, posix } from 'node:path'
-import { parseMarketIndex } from '@deepseek-ai/dsh-plugin-market-index'
+import { parseMarketIndex, type MarketSortKeyDeclaration } from '@deepseek-ai/dsh-plugin-market-index'
 import semver from 'semver'
 import { cacheKey, gitRefs, npmPackument, npmTarball, withGitObjects, type FetchLimits, type GitObjects, type GitTransports } from './fetchers.ts'
 import { readJsonFile, writeIfChanged, type PackageFiles } from './files.ts'
 import { GENERATED_ICON, readDisplayMetadata, type Display, type IconFile } from './metadata.ts'
 import { dshRange, findBundlePackages, isBundle, isPrivate, readManifest, type Manifest } from './packages.ts'
+import { METRIC_DECLARATIONS, metricReader } from './metrics.ts'
 import type { Source } from './sources.ts'
 
 /** One generated version, in the field order of the format. */
@@ -18,8 +19,10 @@ export interface GeneratedVersion {
 }
 
 /** One generated plugin, in the field order of the format. */
-export interface GeneratedEntry extends Display {
+export interface GeneratedEntry extends Omit<Display, 'metadata'> {
   readonly name: string
+  /** Manifest keywords and optional statistics added after reading source caches. */
+  readonly metadata?: { readonly keywords?: readonly string[]; readonly sortKeys?: Readonly<Record<string, number>> }
   readonly versions: readonly GeneratedVersion[]
 }
 
@@ -31,6 +34,8 @@ export interface GenerateOptions {
   readonly registry: string
   /** Whether versions name `registry`; false for the public registry, which clients use by default. */
   readonly recordRegistry: boolean
+  /** Nonblank token used only for GitHub API metrics; absent disables GitHub star collection. */
+  readonly githubToken?: string
   readonly title: string
   readonly description?: string
   readonly inlineIconBytes: number
@@ -43,7 +48,13 @@ export interface GenerateOptions {
 
 /** A finished run: the index document, the icon files it refers to, and the sources that could not be read. */
 export interface GenerateResult {
-  readonly index: { readonly format: 1; readonly title: string; readonly description?: string; readonly plugins: readonly GeneratedEntry[] }
+  readonly index: {
+    readonly format: 1
+    readonly title: string
+    readonly description?: string
+    readonly metadata?: { readonly sortKeys: Readonly<Record<string, MarketSortKeyDeclaration>> }
+    readonly plugins: readonly GeneratedEntry[]
+  }
   /** Icon files by index-relative path; contents live under the cache. */
   readonly icons: ReadonlyMap<string, string>
   readonly failures: readonly string[]
@@ -350,11 +361,16 @@ export async function generate(options: GenerateOptions): Promise<GenerateResult
     plugins.push(entry)
     if (entry.icon?.startsWith('icons/') === true) icons.set(entry.icon, join(options.cacheDir, entry.icon))
   }
+  const measured = await mapLimited(plugins, options.concurrency,
+    metricReader(options.limits, options.registry, options.warn, options.githubToken))
+  const sortKeys = Object.fromEntries(Object.entries(METRIC_DECLARATIONS)
+    .filter(([id]) => measured.some(entry => Object.hasOwn(entry.metadata?.sortKeys ?? {}, id))))
   const index = {
     format: 1 as const,
     title: options.title,
     ...options.description === undefined ? {} : { description: options.description },
-    plugins,
+    ...Object.keys(sortKeys).length === 0 ? {} : { metadata: { sortKeys } },
+    plugins: measured,
   }
   parseMarketIndex(index, VALIDATION_URL)
   return { index, icons, failures: failed.filter(message => message !== undefined) }

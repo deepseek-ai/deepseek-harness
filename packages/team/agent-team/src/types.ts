@@ -68,6 +68,8 @@ export interface TeamTaskSnapshot {
   readonly description: string
   readonly status: TeamTaskStatus
   readonly ownerId?: SessionId
+  /** Immutable agent path captured at assignment; absent on unnamed historical owners. */
+  readonly ownerName?: string
   readonly blockedBy: TeamTaskId[]
   readonly writeScopes: string[]
 }
@@ -82,6 +84,8 @@ export interface TeamTaskView {
   readonly blockedBy: TeamTaskId[]
   readonly writeScopes: string[]
   readonly ownerId?: SessionId
+  /** Immutable agent path captured at assignment; absent on unnamed historical owners. */
+  readonly ownerName?: string
   readonly ready: boolean
   readonly writeScopeWarnings: string[]
 }

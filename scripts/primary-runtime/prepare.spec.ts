@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { zipSync } from 'fflate'
 import { expect, it } from 'vitest'
-import { downloadPrimaryRuntimeAsset, prepareOfficeSkillAssets, primaryRuntimePayloadDigest, prunePnpmForeignNativePackages, smokePrimaryRuntime, unpackPrimaryRuntimeWheel } from './prepare.ts'
+import { downloadPrimaryRuntimeAsset, primaryRuntimePayloadDigest, prunePnpmForeignNativePackages, smokePrimaryRuntime, unpackPrimaryRuntimeWheel } from './prepare.ts'
 import lock from './lock.json' with { type: 'json' }
 
 it('covers every SDK wheel target with the shared interpreter lock', () => {
@@ -130,26 +130,6 @@ it('rejects library files requiring an unsupported installation scheme', async (
   } finally {
     await rm(root, { recursive: true, force: true })
   }
-})
-
-it('copies complete Office resources outside the application archive and removes obsolete assets', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'desktop-office-assets-'))
-  try {
-    const source = join(root, 'package', 'assets')
-    const destination = join(root, 'Contents', 'Resources', 'runtime', 'office-skills')
-    await mkdir(source, { recursive: true })
-    for (const name of ['office-docx', 'office-pptx', 'office-xlsx']) {
-      await mkdir(join(source, name))
-      await writeFile(join(source, name, 'SKILL.md'), `# ${name}\n`)
-    }
-    await prepareOfficeSkillAssets(source, destination)
-    await writeFile(join(destination, 'obsolete.py'), 'old helper')
-    await prepareOfficeSkillAssets(source, destination)
-    for (const name of ['office-docx', 'office-pptx', 'office-xlsx']) {
-      expect(await readFile(join(destination, name, 'SKILL.md'), 'utf8')).toBe(`# ${name}\n`)
-    }
-    await expect(readFile(join(destination, 'obsolete.py'))).rejects.toMatchObject({ code: 'ENOENT' })
-  } finally { await rm(root, { recursive: true, force: true }) }
 })
 
 it('gives Python-only payloads a distinct identity', () => {

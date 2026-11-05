@@ -1,0 +1,25 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    { "path": "../../../vendor/cordis" },
+    { "path": "../../../vendor/loader" },
+    { "path": "../../boot/app-boot" },
+    { "path": "../../boot/config-editor" },
+    { "path": "../../core/system-prompt" },
+    { "path": "../../core/tool-executor-native" },
+    { "path": "../../core/tools" },
+    { "path": "../../credentials/authorization" },
+    { "path": "../../credentials/credentials-local" },
+    { "path": "../../host/webserver" },
+    { "path": "../../mcp/mcp-client" },
+    { "path": "../../mcp/mcp-manager" },
+    { "path": "../../settings/settings" }
+  ]
+}

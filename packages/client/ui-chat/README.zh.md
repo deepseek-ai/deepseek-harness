@@ -39,6 +39,10 @@ kind: "package-reference"
 
 `ChatView` 通过节点列表外围既有的 `MarkdownDelegateProvider` 提供文件及 HTTP(S) 导航，直接传入 `requestOpenFile`、`openExternalLink` 和 `fileImages`。文件打开动作保留 Chat 的失败反馈与重试处理。Assistant Markdown 文件链接在消息落定后可于右侧栏打开，包括未修改文件的引用。相对路径基于当前查看的 Session 工作区解析；绝对路径仍使用同一 Session 的文件系统访问。[支持的 Markdown 行号引用](../ui-primitives/README.zh.md#rendering-agent-output)定位到指定起始行，并复用现有文件标签。文件缺失时显示预览错误状态。
 
+`ChatView` 还传入 `renderCode`，因此 Chat 消息流中带语言且有内容的每个 Markdown 围栏都经由 session 作用域的 `conversation.chat.markdown.fence` hoc slot 渲染。其 `entryKey` 为小写的围栏语言，owner props 携带该 `lang`、围栏 `code`、`streaming` 状态，以及存在时为 info string 其余部分的 `meta`。slot 内容是不带统一 diff 行的普通代码块，因此没有对应层的语言按代码渲染。Chat 自带 `math` 层，消息流式输出时显示源码，落定后显示行间 TeX；还自带 `diff` 与 `patch` 层，以统一 diff 行代替内容渲染。其他插件注册 `key` 为小写语言的层即可接入该语言：不渲染 `children` 的层替换代码块，渲染 `children` 的层装饰代码块，两者都可以自行从 `meta` 解析参数。
+
+围栏层的根元素不设外边距，因为围栏所在的[块级外框](../ui-primitives/README.zh.md#component-catalog)负责它与相邻块之间的间距。与内容相关的错误由层自己接住。层崩溃时错误照常上报，只有该围栏改为渲染崩溃层的 `children`，并在该围栏本次挂载内保持如此，props 变化也不恢复；同语言的其他围栏仍保留该层，重新挂载的围栏会再次使用它。因此，处理不了不完整内容的层在 `streaming` 为 true 时渲染 `children`。
+
 原生消息图片使用独立的用户与输出位置。`conversation.chat.user.content` Factory 声明 `conversation.chat.user.images`，由 `UserContent` 渲染；Assistant 节点注册声明 `conversation.chat.message.images`，由 `AssistantMarkdown` 渲染。两者通过显式 props 接收图片来源、授权 `loadImage` 和布局参数。官方 `MessageImages` 条目调用共享的 root 作用域 `conversation.images.content` Factory。每个位置均可独立替换，无需复制画廊实现。
 
 Session 作用域的 `conversation.chat.user.content` Factory 只渲染用户内容区域：文本、额外内容块、按输入顺序排列的图片／文件附件及引用摘要。[`UserContentInput`](src/client/contract/slots.ts) 携带预处理的 `content`、变换 `facts`、显示 props 和显式 `loadImage`；引用动作由节点自己的 Injection 提供。正文调用共享 `conversation.user.text` Factory，图片调用自身拥有的图片 Slot。直接调用需要 Session 绑定，行包装层由调用方提供。
@@ -54,7 +58,7 @@ Session 作用域的 `conversation.chat.user.content` Factory 只渲染用户内
 <a id="system-prompt-row"></a>
 ## Chat 隐藏的行
 
-Chat 在所有工作步骤展示模式下都不显示系统提示词行、普通上下文注入和 `permission` 命令行。记录中的命令名和去除首尾空白后的参数确定为 `/team on` 或 `/team off` 时，也隐藏执行中与成功回执；失败以及参数缺失或无法识别的命令仍然可见。包含工具添加或移除记录的上下文仍然可见。该过滤不改变已记录的 Session 事件或 Trajectory 查看能力，隐藏回执也不计入行间距和过程摘要。非人工轮次触发仍作为独立通知显示，其他命令行仍保留在 Chat 中。
+Chat 在所有工作步骤展示模式下都不显示系统提示词行和 `permission` 命令行。记录中的命令名和去除首尾空白后的参数确定为 `/team on` 或 `/team off` 时，也隐藏执行中与成功回执；失败以及参数缺失或无法识别的命令仍然可见。上下文注入以默认收起、与工具调用相同的展开行显示；在 Turn 内与工具调用一样加入过程组。该过滤不改变已记录的 Session 事件或 Trajectory 查看能力，隐藏回执也不计入行间距和过程摘要。非人工轮次触发仍作为独立通知显示，其他命令行仍保留在 Chat 中。
 
 Assistant 尝试结束且没有可见消息时，Chat 隐藏已发布的 Node，不移除其 key。同一 Step 的重试再次产生可见内容时，复用该 key。已加载窗口缺少 Step 起点时也遵循此规则。
 
@@ -78,7 +82,7 @@ Chat 在 `MarkdownDelegateProvider.getTriggerProps` 接入处适配 Markdown 目
 
 设置 → 通用设置 → 性能与用量位于繁忙时的发送行为之后、Session Log 上传之前，将 `ui-chat.performanceUsage` 保存为 `detailed`（默认）或 `compact`。简洁模式仅在输入框下方显示可用的输出速度和缓存命中率，不显示统计交互卡片或每轮用量。详细模式提供会话统计和每轮 token 用量。两种模式的已完成轮次页脚均不显示耗时。该偏好仅影响展示，记账和 Session 事件保持完整。
 
-输入框统计信息由两个 `conversation.composer.dock` 列表条目组成：`activity`（order 0，轮次数、步骤数与输出速度，以及 LLM 耗时、工具耗时与 TTFT）和 `usage`（order 1，token 总量与缓存命中）。这些控件遵循公共的[统计控件圆角规则](../../../docs/ui-radius.zh.md#radius-scale)。其他插件以相同的 id 和相同的 `order` 注册即可替换某个控件；dock 按 `order` 排列各行，更低的 `priority` 决定由替换者渲染：动态插件会自动获得，静态组合的插件需显式传入。以新 id 注册则新增控件。每个控件在 `data-composer-stat` 中携带其 id。按下 Escape，或在已打开的对话框之外发生 pointerdown 或点击时，该对话框会关闭，因此用指针或键盘激活另一个控件会切换对话框，而不会叠加两个。读数被省略号截断时，提示气泡会显示完整读数。带对话框的控件在悬停或键盘聚焦时显示，对话框打开期间不显示；没有对话框的读数在悬停、点击或轻触时显示。会话统计对话框的标题行显示轮次数与步骤数。
+输入框统计信息由两个 `conversation.composer.dock` 列表条目组成：`activity`（order 0，轮次数、步骤数与输出速度，以及 LLM 耗时、工具耗时与 TTFT）和 `usage`（order 1，token 总量与缓存命中）。这些控件遵循公共的[统计控件圆角规则](../../../docs/ui-radius.zh.md#radius-scale)。其他插件以相同的 id 和相同的 `order` 注册即可替换某个控件；dock 按 `order` 排列各行，更低的 `priority` 决定由替换者渲染：动态插件会自动获得，静态组合的插件需显式传入。以新 id 注册则新增控件。每个控件在 `data-composer-stat` 中携带其 id。按下 Escape，或在已打开的对话框之外发生 pointerdown 或点击时，该对话框会关闭，因此用指针或键盘激活另一个控件会切换对话框，而不会叠加两个。读数被省略号截断时，提示气泡会显示完整读数。带对话框的控件在悬停或键盘聚焦时显示，对话框打开期间不显示；没有对话框的读数在悬停、点击或轻触时显示。会话统计对话框的标题行显示轮次数与步骤数。统计对话框通过 CSS 锚点定位，并按布局视口限制尺寸；浏览器缩放和平移时随页面移动，因此可以超出视觉视口。较高的对话框内容可在内部滚动。
 
 明确选择会立即更新所有使用方；Host 接受的设置会校正实时值，因此写入被拒绝或尚未应答时保持所选模式，直到 Host 应答。
 
@@ -97,6 +101,8 @@ Chat 在 `MarkdownDelegateProvider.getTriggerProps` 接入处适配 Markdown 目
 
 <a id="turn-process-folding"></a>
 ## 轮次过程折叠
+
+带 `source.kind: 'retry'` 的空 `user/message` 记录保留在 Session 历史中，Chat 显示轻量的继续请求记录，不生成用户气泡。普通空用户消息与包含内容的重试消息保持正常展示。
 
 正常在线时，本地 transcript 与 steering 回显在 Inbox 接受与领取期间保持挂载，直到持久消息到达，不会重复触发跟随底部。跨客户端的待处理 steering 遵循 Inbox 顺序，在匹配位置使用本地回显。已入档的本地 steering 还会排除匹配的旧 Inbox 行，直到领取投影到达；没有本地提交身份的 steering 仍按 Inbox 投影显示。重连后，Host 消息替代已有接收回执的本地回显；已领取但尚未入档时，气泡可能短暂消失。
 
@@ -129,7 +135,7 @@ Chat Builder 按节点发布 `bottomSource`：节点可见且属于已加载的�
 
 每个组拥有本地 `useDisclosure` 状态，组件保持挂载时，模式切换保留该状态。
 
-Session 作用域的 `conversation.chat.reasoning.body` single Slot 仅在思考正文展开时提供原始文本 `rawText`、显示文本 `text` 和流式状态。官方条目以优先级 100 注册，并调用 `conversation.chat.reasoning.content` Factory。替换项使用更小的优先级数值，可向同一个 Factory 传入原文或派生显示文本。root 作用域的 Factory 不要求 Session，并固定使用紧凑排版。其可选 `labels` 原样接受完整的 `MarkdownLabels`，省略时使用 Chat 的默认本地化文案。宿主不提供内联 fallback 或插件操作状态。显示扩展必须保留查看未翻译文本的能力，并在自己的 Body 包装内维护控件。扩展不替换思考预览或展开策略。哪些块生成思考行由[思考展示规则](src/client/conversation-nodes/README.zh.md#display-modes)定义。
+Session 作用域的 `conversation.chat.reasoning.body` single Slot 仅在思考正文展开时提供原始文本 `rawText`、显示文本 `text` 和流式状态。官方条目以优先级 100 注册，并调用 `conversation.chat.reasoning.content` Factory。替换项使用更小的优先级数值，可向同一个 Factory 传入原文或派生显示文本。root 作用域的 Factory 不要求 Session，并固定使用紧凑排版。其可选 `labels` 原样接受完整的 `MarkdownLabels`，省略时使用 Chat 的默认本地化文案。在 Chat 消息流中，带语言的围栏经由围栏 slot 渲染并使用 Chat 视图的代码块文案，因此这些 `labels` 在那里只作用于脚注和无语言围栏。宿主不提供内联 fallback 或插件操作状态。显示扩展必须保留查看未翻译文本的能力，并在自己的 Body 包装内维护控件。扩展不替换思考预览或展开策略。哪些块生成思考行由[思考展示规则](src/client/conversation-nodes/README.zh.md#display-modes)定义。
 
 Chat 节点 slot 为推理与工具注入绑定重置来源的 `useDisclosure` 钩子。中间 renderer 只透传、不订阅，每次调用拥有独立展开状态。来源回调保留接收对象及稳定引用。外层轮次实际隐藏过程成员时，所在节点重置这些开合状态，不替换组件 key，也不改变钩子引用。展示模式切换保留展开状态。
 

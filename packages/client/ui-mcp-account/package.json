@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-mcp-account",
   "description": "MCP account surfaces for connector plugins: the Host registry connectors register their OAuth server accounts with, and the Plugins page section, title tag, activation guidance, and notices it serves over one Remote",
-  "version": "0.2.2-alpha.2",
+  "version": "0.2.2-rc.1",
   "publishConfig": {
     "access": "public"
   },
@@ -55,7 +55,7 @@
   "license": "MIT",
   "dependencies": {
     "@deepseek-ai/dsh-typert-protocol": "workspace:*",
-    "zod": "4.4.3"
+    "zod": "4.6.6"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~"
@@ -85,9 +85,13 @@
     "lib/index.js",
     "lib/client.js",
     "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
     "lib/typert.host.js",
     "lib/typert.host.d.ts",
     "lib/typert.remote-client.js",
-    "lib/typert.remote-client.d.ts"
+    "lib/typert.remote-client.d.ts",
+    "lib/typert.remote-client.d.ts.map",
+    "src"
   ]
 }

@@ -75,6 +75,19 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 After startup, the server's tools appear as `mcp__<serverName>__<tool>` — try a prompt that uses one. If the initial connection fails, the harness still starts but no tools from that server appear, and an error is logged. Setting `failOnStartupError: true` rejects plugin activation; [app-boot's startup policy](../../boot/app-boot/README.md) still permits an optional MCP entry to fail without aborting the harness.
 
+### Host for a server manager
+
+When a plugin manages servers at runtime, such as the [MCP manager](../mcp-manager/README.md), load one more entry with `host: true` instead of a server configuration. That entry connects no server and provides `ctx.mcpClientHost`, the only way such a plugin uses this package: it validates a server configuration, mounts server instances, probes servers, and creates explicit OAuth authorization owners. Instances the host mounts run below the host entry, so a reload of this package replaces them together with the host, and a plugin that injects the host restarts against the replacement.
+
+```yaml
+- id: mcp-client-host
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    host: true
+```
+
+`validate` resolves a server configuration through its transport's own schema and also refuses an invalid template token, reconnect policy, or OAuth beside an `Authorization` header, so each refusal names the field after the configuration path the caller passes.
+
 ### Tool naming and coexistence
 
 The model sees each tool under a stable server-qualified name: `mcp__<serverName>__<rawName>`, for example `mcp__github__create_issue` — the same naming shape Claude Code and Codex use. Names stay stable while the server keeps the same tool name, so session history and permission rules survive restarts and reloads. Two servers can both offer a tool named `search` and coexist as `mcp__github__search` and `mcp__web__search`.
@@ -140,7 +153,9 @@ This section explains the design decisions behind the bridge and points at the c
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Plugin entry: `Config` schema, `serverName` reservation, activation await |
+| [`src/index.ts`](src/index.ts) | Plugin entry: `Config` schema, `serverName` reservation, activation await, host startup |
+| [`src/config.ts`](src/config.ts) | Schemas of the stdio, Streamable HTTP, and host configuration shapes, and the OAuth header rule |
+| [`src/host.ts`](src/host.ts) | The MCP client host: validation, instances below the host, probes, and authorization owners |
 | [`src/connection.ts`](src/connection.ts) | Connection supervisor: client generations, reconnect policy, attempt budget, disposal |
 | [`src/generation.ts`](src/generation.ts) | Transport ownership, cancellation, pending work, and confirmed closure |
 | [`src/credentials.ts`](src/credentials.ts) | Runtime template binding and redaction of every resolved value |
@@ -164,7 +179,7 @@ The exported `createMcpToolDefinition(ctx, options)` adapts an upstream tool sch
 
 `apply` resolves the reconnect policy, reserves the `serverName` inside the current registration scope, starts the supervisor, and awaits the initial connection plus discovery. Independent Agent scopes may reuse the same namespace because their tools and transports are isolated; a duplicate inside one scope fails at load. The supervisor serializes every sync — initial, notification, and reconnect — through one queue so two syncs can never interleave their dispose-previous/register-next swap. Disposal cancels pending reconnects, closes the negotiating transport or attached client, waits for the in-flight attempt and queued syncs to quiesce, and unregisters the current generation.
 
-A manager composing instances (such as `dsh-mcp-manager`) observes one instance through `connectionStatusOf(fiber)`. The handle survives reloads of the same Fiber and retains the final connection and cleanup result after disposal; final disposal detaches its observers. Status observers may dispose the Fiber during a reload; cleanup still covers that connection attempt. `probeServer(ctx, config, options)` tests a server without reserving a name or registering tools. Its `timeoutMs` bounds template resolution, connection, and listing together, independently of runtime `startupTimeoutMs`; cleanup uses `closeTimeoutMs` and reports `closeConfirmed` separately. Confirmed transport closure can still carry a `cleanupError`; either unconfirmed closure or a cleanup error blocks replacement.
+The host's `mount` resolves each instance's status handle once activation finishes. The handle survives reloads of the same Fiber and retains the final connection and cleanup result after disposal; final disposal detaches its observers. Status observers may dispose the Fiber during a reload; cleanup still covers that connection attempt. The host's `probe(config, options)` tests a server without reserving a name or registering tools. Its `timeoutMs` bounds template resolution, connection, and listing together, independently of runtime `startupTimeoutMs`; cleanup uses `closeTimeoutMs` and reports `closeConfirmed` separately. Confirmed transport closure can still carry a `cleanupError`; either unconfirmed closure or a cleanup error blocks replacement.
 
 The SDK receives tool-list changes through legacy notifications or a modern subscription. The supervisor queues each re-sync and republishes the connected tool count; a fetch failure keeps the previous generation registered, while a registration conflict rolls back the attempted generation and closes the connection before applying the reconnect policy. Each outage shares one attempt budget: after `maxAttempts` consecutive failures the tools are unregistered and reconnection stops, and a connection that stays up past `maxDelayMs` resets the budget.
 

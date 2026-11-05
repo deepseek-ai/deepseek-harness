@@ -59,6 +59,8 @@ The package accepts no plugin config of its own; the generated [configuration ca
 
 Menus use the shared `MenuSurface` material, including the macOS backing for background blur; custom content follows the [menu rules](../../../docs/web-styling.md#component-rules).
 
+On macOS, native window regions use full element boxes without overflow clipping. The shell resets inherited regions and limits automatic control exclusions to `data-window-drag` rows or explicit `data-window-drag-controls` scopes. Scrollable content outside those scopes receives no automatic exclusion. An interactive viewport without nested drag rows uses `data-window-drag-exclude` to exclude only its own box; covering overlays and containers with their own drag rows declare their regions separately. Body portals need a real box, or an explicit exclusion on their visible content.
+
 <details>
 <summary>Implementation internals — click to expand</summary>
 

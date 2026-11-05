@@ -1,7 +1,8 @@
 /**
- * A registry bundle's Versions section and its update dialog. The section summarizes the Host's version check in one
- * row and unfolds into the newer versions; the dialog confirms one update, follows the Host's steps, and reports how
- * the update ended, including the reinstallation of the removed version after a failed installation.
+ * A registry bundle's Versions section and the update dialog. The section summarizes the Host's version check in one
+ * row and unfolds into the newer versions; the dialog confirms one update of a registry or Git copy, follows the
+ * Host's steps, and reports how the update ended, including the reinstallation of the removed version after a failed
+ * installation.
  */
 
 import { useEffect, useState, type ReactNode } from 'react'
@@ -12,7 +13,7 @@ import {
   Button, Checkbox, IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconCloseOutlineRegular,
   IconDownloadOutlineRegular, IconRefreshOutlineRegular, IconWarningOutlineRegular, Modal, StateDot, Tag, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import { installable, updateCandidate, type PackageView, type UpdateState, type VersionCheck } from './manager-store.ts'
+import { installable, updateCandidate, type PackageView, type UpdateSource, type UpdateState, type VersionCheck } from './manager-store.ts'
 import { managementText, registryText, restartText, type Translate } from './presentation.ts'
 import css from './PluginManagerPage.module.css'
 
@@ -40,6 +41,12 @@ function checkedTime(checkedAt: number): string {
 /** The registry by name: npm's own and the mainland mirror by theirs, pnpm's own configuration as the default, any other by host. */
 function registryName(registry: Registry, t: Translate): string {
   return registryText(registry, t, null).name
+}
+
+/** Where an update installs from: the registry by name, or a pinned Git spec's repository as host and path. */
+function sourceName(source: UpdateSource, t: Translate): string {
+  if (source.kind === 'registry') return registryName(source.registry, t)
+  return source.spec.replace(/^git\+/i, '').replace(/#.*$/s, '').replace(/^[a-z]+:\/\//i, '').replace(/\.git$/i, '')
 }
 
 /** The DSH requirements an incompatible version states, as one phrase: `engines.dsh` or DSH peer ranges. */
@@ -221,7 +228,7 @@ function VersionList({ list, checkedAt, t, busy, onUpdate }: {
 }
 
 /**
- * The Versions section of an updatable bundle's page. It checks once when the page opens and folds the newer versions
+ * The Versions section of a registry bundle's page. It checks once when the page opens and folds the newer versions
  * behind a summary row.
  */
 export function VersionSection({ pkg, check, t, busy, onEnsure, onCheck, onUpdate }: {
@@ -235,9 +242,10 @@ export function VersionSection({ pkg, check, t, busy, onEnsure, onCheck, onUpdat
   readonly onUpdate: (version: string) => void
 }): ReactNode {
   const [open, setOpen] = useState(false)
-  const { name, updatable } = pkg
-  useEffect(() => { if (updatable) onEnsure(name) }, [name, updatable, onEnsure])
-  if (!updatable) return null
+  const { name } = pkg
+  const listsVersions = pkg.update === 'registry'
+  useEffect(() => { if (listsVersions) onEnsure(name) }, [name, listsVersions, onEnsure])
+  if (!listsVersions) return null
   const done = check?.phase === 'done' ? check : undefined
   const summary = summaryOf(check, t)
   const refused = done?.list.status === 'refused' ? done.list : undefined
@@ -304,7 +312,7 @@ function stepLabel(step: PluginUpdateStep, update: UpdateState, t: Translate): s
   switch (step) {
     case 'checking': return t('updateStepChecking', { version: update.to })
     case 'removing': return t('updateStepRemoving', { version: update.from })
-    case 'installing': return t('updateStepInstalling', { version: update.to, registry: registryName(update.registry, t) })
+    case 'installing': return t('updateStepInstalling', { version: update.to, source: sourceName(update.source, t) })
     case 'restoring': return t('updateStepRestoring', { version: update.from })
   }
 }
@@ -367,7 +375,14 @@ function outcomeOf(update: UpdateState, title: string, t: Translate): Omit<Summa
   }
   return failed(result.restore.application)
     ? { ...error, title: t('updateBroken'), detail: t('updateBrokenDetail', { from: update.from, to: update.to, name: title }) }
-    : { ...error, title: t('updateRestored', { version: update.from }), detail: t('updateRestoredDetail', { from: update.from, to: update.to }) }
+    : {
+      ...error, title: t('updateRestored', { version: update.from }),
+      // A typed refusal says why the target failed; pnpm's own words stay behind the output toggle.
+      detail: [
+        t('updateRestoredDetail', { from: update.from, to: update.to }),
+        ...result.result.error === undefined || result.result.error.code === 'operation-error' ? [] : [reason(result.result)],
+      ].join(t('sentenceSeparator')),
+    }
 }
 
 /** The update dialog: confirmation, then the Host's steps, then the outcome. */
@@ -413,7 +428,7 @@ export function UpdateDialog({ update, title, t, onRun, onClose, onToggleOutput 
             </div>
             <dl className={css.versionFact}>
               <dt>{t('updateSource')}</dt>
-              <dd>{registryName(update.registry, t)}</dd>
+              <dd>{sourceName(update.source, t)}</dd>
             </dl>
             <p className={css.updateText}>{t('updateDescription', { from: update.from, to: update.to })}</p>
           </>

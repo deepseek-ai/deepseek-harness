@@ -14,7 +14,7 @@ import ToolRuntime from '@deepseek-ai/dsh-tools'
 import McpResources from '@deepseek-ai/dsh-mcp-resources'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { TestCredentials } from './credential-fixture.ts'
-import type { Config } from '@deepseek-ai/dsh-mcp-client'
+import type { ServerConfig } from '@deepseek-ai/dsh-mcp-client'
 
 // ---- Mock MCP SDK ----
 
@@ -85,7 +85,8 @@ vi.mock('@modelcontextprotocol/client/stdio', () => ({
 
 // vi.mock is hoisted above static imports, so the modules under test see the
 // mocked SDK even through a static import.
-import { Config as ConfigSchema, apply, connectionStatusOf } from '@deepseek-ai/dsh-mcp-client/src/index.ts'
+import { Config as ConfigSchema, apply } from '@deepseek-ai/dsh-mcp-client/src/index.ts'
+import { connectionStatusIn as connectionStatusOf } from '@deepseek-ai/dsh-mcp-client/src/status.ts'
 import { RECONNECT_DEFAULTS, resolveReconnectPolicy, startConnection } from '@deepseek-ai/dsh-mcp-client/src/connection.ts'
 import { McpStatusCell } from '@deepseek-ai/dsh-mcp-client/src/status.ts'
 import { McpGeneration } from '@deepseek-ai/dsh-mcp-client/src/generation.ts'
@@ -123,7 +124,7 @@ function captureLogs(ctx: Context): { warns: string[]; errors: string[]; infos: 
   return { warns, errors, infos }
 }
 
-function stdioConfig(reconnect?: Config['reconnect']): Config {
+function stdioConfig(reconnect?: ServerConfig['reconnect']): ServerConfig {
   return ConfigSchema({
     transport: 'stdio',
     serverName: 'srv',

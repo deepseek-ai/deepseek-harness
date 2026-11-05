@@ -40,7 +40,7 @@ export interface DesktopPublicationRecord {
  */
 export async function createDesktopPublicationRecord(
   root: string,
-  identity: { repository: string; runId: string; attempt: string; actor: string; destination: string; operation: 'publish' | 'rollback'; reason: string },
+  identity: { repository: string; runId: string; attempt: string; actor: string; destination: string; operation: 'publish' | 'rollback' | 'rollout'; reason: string; stagingPercentage?: number | undefined },
 ): Promise<DesktopPublicationRecord> {
   await mkdir(root, { recursive: true, mode: 0o700 })
   const staging = await mkdtemp(join(root, '.initializing-'))
@@ -78,10 +78,31 @@ export async function wasDesktopAttemptPublished(root: string, expected: {
   runId: string
   attempt: string
   destination: string
+  stagingPercentage?: number | undefined
 }): Promise<boolean> {
+  const evidence = await findDesktopPublication(root, expected)
+  if (!evidence) return false
+  if (evidence.stagingPercentage !== expected.stagingPercentage) {
+    throw new Error('desktop publish: staging percentage differs from the completed publication')
+  }
+  return true
+}
+
+/**
+ * Find initial feed-publication evidence independently of later rollout percentages.
+ * @param root Original machine's publication journal directory.
+ * @param expected Immutable packaging identity and destination.
+ * @returns Original publication settings, or null when no completed feed publication exists.
+ */
+export async function findDesktopPublication(root: string, expected: {
+  repository: string
+  runId: string
+  attempt: string
+  destination: string
+}): Promise<{ stagingPercentage?: number | undefined } | null> {
   let entries
   try { entries = await readdir(root, { withFileTypes: true }) } catch (error) {
-    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return false
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return null
     throw error
   }
   for (const entry of entries) {
@@ -93,7 +114,7 @@ export async function wasDesktopAttemptPublished(root: string, expected: {
       throw error
     }
     const parsed = z.object({ operation: z.string(), repository: z.string(),
-      runId: z.string(), attempt: z.string(), destination: z.string() }).parse(operation)
+      runId: z.string(), attempt: z.string(), destination: z.string(), stagingPercentage: z.number().optional() }).parse(operation)
     if (parsed.operation !== 'publish' || parsed.repository !== expected.repository || parsed.runId !== expected.runId
       || parsed.attempt !== expected.attempt || parsed.destination !== expected.destination) continue
     let events
@@ -103,8 +124,10 @@ export async function wasDesktopAttemptPublished(root: string, expected: {
     }
     // Only newline-terminated entries were completely appended before an interruption.
     for (const line of events.split('\n').slice(0, -1)) {
-      if (z.object({ type: z.string() }).parse(JSON.parse(line)).type === 'feeds-complete') return true
+      if (z.object({ type: z.string() }).parse(JSON.parse(line)).type === 'feeds-complete') {
+        return { stagingPercentage: parsed.stagingPercentage }
+      }
     }
   }
-  return false
+  return null
 }

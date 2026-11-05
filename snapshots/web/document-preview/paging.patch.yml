@@ -3,5 +3,5 @@
   name: '@deepseek-ai/dsh-api-workspace-files'
   config:
     maxLines: 64
-- id: office-to-pdf
+- id: office-kit
   disabled: true

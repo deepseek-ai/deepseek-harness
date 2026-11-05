@@ -68,6 +68,8 @@ Queue 预览启用空白折叠和文档边缘 trim，保留 emoji，并使用 CS
 <a id="shell-and-standard-props"></a>
 ## Shell 与标准 props
 
+root 作用域的 hoc Slot `conversation.hero.frame` 在所有阶段都包裹滚动区，因此首页结束时各层不会让输入框重新挂载。它的所有者 props 提供 `hero`，仅在独立 Conversation 的空白首页时为 true。各层需让滚动区仍是 body 的直接 flex 子项，例如使用 `display: contents`。首页阶段，绘制背景的 Conversation 根元素隔离层叠上下文：层中负 `z-index` 的装饰画在该背景之上、所有 Conversation 内容之下，包括输入区的接管面板。其他阶段根元素不参与层叠隔离，未经 portal 的 Conversation 浮层仍能盖住悬浮在中栏上方的 AppFrame 元素。各层自行处理输入。没有占用者时，body 保持原样。
+
 宽度小于 768px 时，Web 的 View 标签与页头的 20px 左内边距对齐。桌面客户端和较宽的 Web 窗口保留标签额外的 8px 左内边距。
 
 共享图片插槽属性将展示选择与持久化引用分开：`thumbnail` 请求完整缩放的附件列表缩略图，`compact` 请求裁剪的图片方块。每张图片可通过可选的 `label` 提供无障碍展示名称；加载和缓存标识仍使用原始附件引用。`MessageImagesContentInput` 为 root 作用域的 `conversation.images.content` Factory 增加可选的完整 `MessageImageLabels`。消息、工具及 Factory 输入显式携带视图提供的授权 `loadImage` 回调；读取和 URL 缓存仍由资源所有者负责。[ui-attachment](../ui-attachment/README.zh.md) 提供该 Factory，负责渲染与灯箱。
@@ -78,9 +80,15 @@ Queue 预览启用空白折叠和文档边缘 trim，保留 emoji，并使用 CS
 
 上下文占用率入口遵循[统计控件圆角规则](../../../docs/ui-radius.zh.md#radius-scale)。
 
+空闲且草稿为空的普通 Session，在最新轮次以 `RATE_LIMIT`、`SERVER`、`TIMEOUT`、`TRANSPORT`、`EMPTY_RESPONSE` 或 `STREAM_CLOSED` 结束后显示播放按钮。失败工作必须有已准入的普通用户输入和失败请求尝试。点击通过现有 Session prompt API 提交 `content: []`；已有草稿或附件仍使用发送按钮。新轮次正常闭合，使用已提交历史，并记录 `source.kind: 'retry'` 的空 `user/message`。请求被拒绝或传输失败时，草稿保持为空，错误沿用普通提交流程展示。
+
+Session API 拥有 `conversationContinuation`，Host 准入和浏览器展示共用该投影。它从完整 Session 历史恢复资格，并在空输入继续再次失败时保留资格，不依赖浏览器已加载的历史分页。
+
+composer 提供 `retry(failureSeq)` 处理生成失败后的恢复。输入栏通过标准 `useProjection` prop 读取 `conversationContinuation` 和 `inbox`。面向用户的操作文案为“继续生成”。
+
 composer 在挂载、切换 Session 和解除锁定时使用共享的[文字输入框聚焦策略](../ui-primitives/README.zh.md#use-this-package)。识别出的手机和平板需要点击输入框；桌面设备保留自动聚焦。在这些移动设备上，提交清空正在聚焦的草稿后，焦点移到不接受文字输入的 composer 卡片，收起键盘并保留键盘导航位置。被拒绝的提交、保留的新草稿文字，以及已经聚焦的其他控件均保留原有焦点。移动端键盘平移页面时，[Lexical 补丁](../../../patches/lexical@0.49.0.patch)让光标滚动计算与 DOM 几何使用同一坐标系。
 
-上下文占用按钮在输入卡片下方、会话统计右侧显示圆环和百分比。点击按钮可在视口内的面板查看 token 构成，没有统计项时面板也不会越界；上下文用量和容量尚不可用时，按钮保持隐藏。Hero 之外，这一行为空时仍保留一项读数的高度，因此会话统计和上下文用量稍后到达不会改变 composer 的高度；Hero 不显示空行。
+上下文占用按钮在输入卡片下方、会话统计右侧显示圆环和百分比。点击按钮可在受布局视口约束的 CSS 锚定面板中查看 token 构成，没有统计项时也可打开；上下文用量和容量尚不可用时，按钮保持隐藏。浏览器缩放和平移时面板随页面移动，因此可以超出视觉视口。Hero 之外，这一行为空时仍保留一项读数的高度，因此会话统计和上下文用量稍后到达不会改变 composer 的高度；Hero 不显示空行。
 
 关闭代码工作工具时，外壳仅隐藏 Trajectory；其他插件贡献的 View 仍然可用。可用 View 少于两个时隐藏 View 标签栏。在 Trajectory 激活时关闭代码工作工具会返回 Chat；已保存的 View 偏好和 Session 记录保持不变。开启后，Trajectory 恢复可用。View 所有者接收可用列表，使导航操作跟随相同的可见性。
 
@@ -102,11 +110,13 @@ root 作用域的 `conversation.session.header.views.actions` list 有注册项�
 
 blank Session 保留 header 的 leading 与 corner 控件，包括右侧栏展开入口，同时隐藏标题、actions、utilities 和 View tabs。选择 Workspace 会创建这些控件所需的 Session，无需先发送消息。没有选中 Session 时，strict header 不挂载；常驻 header 在所有平台都保留与 blank Session 相同的 40px 行，因此绑定 Workspace 前后 Hero 输入卡片的高度位置不变；在 macOS 桌面上，这一行同时是窗口拖拽行。侧栏各入口仍遵循自身的数据与执行环境要求。 已开始的 Session 在可用 View 少于两个时使用单行标题栏，仅在渲染标签行时保留其高度。标题与 actions 放不下时，标题区域会裁剪它们，并在 utilities 之前渐隐其末端；utilities 始终完整可见且可点击；标题与 actions slot 中的浮层通过 portal 渲染，不受该裁剪影响。
 
+Session Header 持有末尾的更多按钮，在 utility 贡献之后渲染共享 `contextMenu.button` factory。本包声明 `sessionHeader` 右键菜单目标 `{ sessionId }`，独立于会话行右键操作；Header 菜单提供者导入本包的 client 类型。只要仍注册有其他 Header 菜单提供者，未挂载导出插件时按钮也可用；没有任何提供者时隐藏。各提供者在菜单打开时决定自己的条目及可用性。[右键菜单](../ui-context-menu/README.zh.md)负责按钮开关与可访问性；[会话日志导出](../../session-query/session-log-export/README.zh.md)负责导出操作与全局下载弹窗。
+
 View 选择规则固定：有效且已注册的持久化选择优先，其次是已注册的 `chat`，否则不渲染 View；绝不选择第一个已注册 View。Shell phase 只组合 Session lifecycle 与 active-target set，不读取任何 target-specific 快照。
 
 Session 首次绑定或缓存的 Session 成为 current 时，shell 会在渲染前读取持久化 View 偏好，激活已注册的偏好 View 或 Chat fallback，并在后续 tab 或 focus 选择写入 store 前先激活对应 target。blank Session 仍不渲染 `conversation.view` slot；未选中的 target 不会激活。
 
-主 occurrence 的活跃 transcript 只在未被内容覆盖的两侧沟槽中提供正文宽度拖拽条；嵌入式 occurrence 省略这些拖拽条。View 如果绘制进沟槽，只将具体的可见元素提到拖拽条上方；透明的全宽包装层保持在下方，不会占用空白沟槽。该规则要求此元素与 Conversation body 之间不能引入中间堆叠上下文；浏览器场景固定了交付 Chromium 的行为。Chat 将该规则用于表格元素，其限定在阅读列内的工具卡片无需提高层级。指针位于拖拽条上时，滚轮仍会滚动 transcript，Ctrl+滚轮则保留为浏览器缩放手势。粘滞 composer 拥有完整的底部区带，该区域不是宽度调整目标；已捕获的拖拽会在该区带和沟槽中的表格下方继续，此时指示线被它们遮住。在活跃 transcript 中，即使没有 View 撑满整列，composer 也停在滚动区底部；它在所有状态下保持同一层级，高于 transcript 的吸顶标题与“回到底部”按钮，因此它向上打开的菜单会盖住该按钮；它也从不作为滚动锚定目标。无论下方是什么内容，它都保持自己的合成层，因此成为 fixed 定位后代的包含块：向 `conversation.composer`、`conversation.composer.bar`、`conversation.composer.dock`、`conversation.input.dock` 以及其他 `conversation.input.*` slot 贡献的内容，必须把 fixed 浮层 portal 到 document body，例如使用 `Tooltip` 或 `Menu` 的 `portal`，或 `createPortal`（[拖动手柄与 composer 样式](src/client/skeleton/ConversationRoot.module.css)）。
+主 occurrence 的活跃 transcript 只在未被内容覆盖的两侧沟槽中提供正文宽度拖拽条；嵌入式 occurrence 省略这些拖拽条。View 如果绘制进沟槽，只将具体的可见元素提到拖拽条上方；透明的全宽包装层保持在下方，不会占用空白沟槽。该规则要求此元素与 Conversation body 之间不能引入中间堆叠上下文；浏览器场景固定了交付 Chromium 的行为。Chat 将该规则用于表格元素，其限定在阅读列内的工具卡片无需提高层级。指针位于拖拽条上时，滚轮仍会滚动 transcript，Ctrl+滚轮则保留为浏览器缩放手势。拖拽条滚动的是 body 内第一个 `[data-conversation-scroll]` 元素；即使有 frame 层包在外面，它也是 body 自己的滚动区。粘滞 composer 拥有完整的底部区带，该区域不是宽度调整目标；已捕获的拖拽会在该区带和沟槽中的表格下方继续，此时指示线被它们遮住。在活跃 transcript 中，即使没有 View 撑满整列，composer 也停在滚动区底部；它在所有状态下保持同一层级，高于 transcript 的吸顶标题与“回到底部”按钮，因此它向上打开的菜单会盖住该按钮；它也从不作为滚动锚定目标。无论下方是什么内容，它都保持自己的合成层，因此成为 fixed 定位后代的包含块：向 `conversation.composer`、`conversation.composer.bar`、`conversation.composer.dock`、`conversation.input.dock` 以及其他 `conversation.input.*` slot 贡献的内容，必须把 fixed 浮层 portal 到 document body，例如使用 `Tooltip` 或 `Menu` 的 `portal`，或 `createPortal`（[拖动手柄与 composer 样式](src/client/skeleton/ConversationRoot.module.css)）。
 
 宽度拖拽条的指示线只在已捕获指针的拖拽期间跟随指针，普通悬停不改变其位置。
 
@@ -189,11 +199,19 @@ selector 必须是 owner currency 的纯函数。非 null 返回值作为 `match
 <a id="model-experience"></a>
 ## 模型体验
 
-无，因为本包渲染浏览器状态，并通过 Session Controller API 发送用户确认提交的输入，而不构造模型请求。
+### 手动继续请求
+
+#### 模型看到什么
+
+播放按钮通过现有 Session prompt API 提交 `content: []`。普通 Loop 准入记录带 `source.kind: 'retry'` 的空 `user/message`。Chat 将空重试消息显示为轻量的继续请求记录。适配器按普通消息序列化处理；该操作不添加本地化或隐藏的继续文本。待注入上下文遵循普通准入流程。
+
+#### Token 影响
+
+该操作不增加继续文本。空消息的序列化及封装开销取决于适配器。请求仍承担保留历史、当前提示词、工具声明以及新准入上下文的正常输入成本。
 
 #### KV Cache 影响
 
-无；Conversation 组装和浏览器输入状态不会改变提供方侧的 prompt cache。
+空重试消息的序列化取决于适配器。前缀复用取决于当前模型、提示词、工具、注入上下文及提供方缓存策略。
 
 ## 已知限制与暂缓事项
 
@@ -201,7 +219,9 @@ selector 必须是 owner currency 的纯函数。非 null 返回值作为 `match
 
 - **只有已注册 target 可以渲染**——除已注册的 `chat` 偏好外，shell 刻意不提供隐式 fallback target。
 - **Factory occurrence 继承渲染位置的 Session**——`conversation.content` 不接受独立寻址的 Session；该能力需要单独的 Session provider。
+- **手动继续使用固定产品白名单**——支持的失败码独立于提供方可配置的 `retryableCodes`；修改自动重试策略不会扩展或缩小此操作的范围。即使默认策略不重试 `STREAM_CLOSED`，用户仍可明确发起新轮次。该错误码也可能表示协议违规，因此再次请求不保证能够恢复。
 - **composer 内的毛玻璃只在 Chromium 中验证过**——docked composer 设置 `will-change: transform` 后，Chromium 中后代的 `backdrop-filter` 仍会采样背后的 transcript；WebKit 中的表现尚未验证。
+- **出错的 Definition 让每次发布都完整回放**——增量 flush 失败后，assembler 回放已加载的完整窗口，以保持视图正确。若某个 Definition 在每次更新中都失败，在其 owner 修复前，每次发布都会回放整个窗口（[Window 更新路径](../../../docs/subsystems/conversation.zh.md#window-update-paths)）。
 
 
 <a id="dev-note"></a>

@@ -17,7 +17,8 @@
   - text: Continuing goal
   - time: {{clock}}
 - status: Stopped
-- button "Stopped" [disabled]
+- button "Stopped" [disabled] [expanded]
+- button "Injected context"
 - paragraph: partial
 - text: Stopped
 - button "Copy"

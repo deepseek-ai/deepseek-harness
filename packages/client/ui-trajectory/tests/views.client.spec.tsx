@@ -429,6 +429,7 @@ function mount(fixture: Awaited<ReturnType<typeof bench>>) {
         useStore={bindSnapshotSelector(conversation)}
         actions={conversation.actions}
         renderSlot={() => null}
+        renderFactorySlot={() => null}
         open={vi.fn()}
         selectView={conversation.actions.setView}
         t={tConversation}

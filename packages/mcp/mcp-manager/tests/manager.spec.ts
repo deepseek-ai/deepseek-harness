@@ -75,10 +75,12 @@ vi.mock('@modelcontextprotocol/client', async importOriginal => ({
   }),
 }))
 
-import { apply as applyMcpClient, Config as ClientConfig, connectionStatusOf } from '@deepseek-ai/dsh-mcp-client'
+import * as McpClient from '@deepseek-ai/dsh-mcp-client'
+import { apply as applyMcpClient, Config as ClientConfig } from '@deepseek-ai/dsh-mcp-client'
+import { connectionStatusIn as connectionStatusOf } from '@deepseek-ai/dsh-mcp-client/src/status.ts'
 import McpServerManager from '@deepseek-ai/dsh-mcp-manager/src/index.ts'
 import type { Config, McpManagedServerStatus } from '@deepseek-ai/dsh-mcp-manager/src/index.ts'
-import { managerProfile } from './profile-fixture.ts'
+import { managerProfile } from '@deepseek-ai/dsh-mcp-testkit'
 
 /** Minimal real credential provider: reference half backed by a map. */
 class MemoryCredentials extends CredentialProvider {
@@ -127,6 +129,21 @@ class MemoryCredentials extends CredentialProvider {
 const anyNumber = expect.any(Number) as number
 const containing = (text: string): string => expect.stringContaining(text) as string
 
+/** Server instances of the mcp-client runtime, excluding the host entry, which registers no connection status. */
+function serverFibers(ctx: Context): Fiber[] {
+  return [...ctx.registry.get(applyMcpClient)!.fibers].filter(fiber => connectionStatusOf(fiber) !== undefined)
+}
+
+/** A context carrying the services the MCP client host requires, and the host. */
+async function hostContext(): Promise<Context> {
+  const ctx = new Context()
+  onTestFinished(async () => { await ctx.fiber.dispose() })
+  await ctx.plugin(SystemPrompt)
+  await ctx.plugin(ToolRuntime)
+  await ctx.plugin(McpClient, ClientConfig({ host: true }))
+  return ctx
+}
+
 function stdioEntry(overrides?: Record<string, unknown>): Record<string, unknown> {
   return { transport: 'stdio', command: 'echo', ...overrides }
 }
@@ -161,6 +178,7 @@ async function mountWorld(options?: {
   let managerFiber: Fiber
   if (options?.withSettings === false) {
     onTestFinished(async () => { await ctx.fiber.dispose() })
+    await ctx.plugin(McpClient, ClientConfig({ host: true }))
     managerFiber = ctx.plugin(McpServerManager, options.managerConfig ?? {})
     await managerFiber.await()
   } else {
@@ -314,7 +332,7 @@ describe('mcp-manager', () => {
       expect(transportConfigs.at(-1)).toMatchObject({ requestInit: { headers: { Authorization: 'Bearer first-token' } } })
     })
     await waitForState(manager, 'remote', 'connected')
-    const fiber = [...ctx.registry.get(applyMcpClient)!.fibers][0]!
+    const fiber = serverFibers(ctx)[0]!
     expect(fiber.config).toMatchObject({ headers: { Authorization: 'Bearer ${credential:MCP_SPEC_TOKEN}' } })
     const clientsBefore = instances.length
 
@@ -323,7 +341,7 @@ describe('mcp-manager', () => {
       expect(transportConfigs.at(-1)).toMatchObject({ requestInit: { headers: { Authorization: 'Bearer second-token' } } })
     })
     expect(instances.length).toBe(clientsBefore + 1)
-    expect([...ctx.registry.get(applyMcpClient)!.fibers][0]).toBe(fiber)
+    expect(serverFibers(ctx)[0]).toBe(fiber)
     // An unrelated credential rotation rebuilds nothing, and the disabled
     // sibling referencing the same credential never mounted.
     await credentials!.set(credentialRef('MCP_SPEC_UNRELATED'), 'noise')
@@ -449,7 +467,7 @@ describe('mcp-manager', () => {
       await waitForState(manager, 'srv', 'waiting-credentials')
       await credentials!.set(credentialRef('MCP_SPEC_DISPOSE'), 'first')
       await waitForState(manager, 'srv', 'connected')
-      const fiber = [...ctx.registry.get(applyMcpClient)!.fibers][0]!
+      const fiber = serverFibers(ctx)[0]!
       const errors: string[] = []
       ctx.logger.error = ((message: unknown) => { errors.push(String(message)) }) as typeof ctx.logger.error
       vi.spyOn(credentials!, 'resolve').mockImplementationOnce(async () => {
@@ -589,7 +607,7 @@ describe('mcp-manager', () => {
     })
     await waitForState(manager, 'srv', 'connected')
     const live = instances[0]!
-    const fiber = [...ctx.registry.get(applyMcpClient)!.fibers][0]!
+    const fiber = serverFibers(ctx)[0]!
     mockClose.mockImplementationOnce(async function (this: InstanceType<typeof MockClient>) {
       await this.transport?.close()
       throw new Error('probe cleanup failure')
@@ -721,8 +739,8 @@ describe('mcp-manager', () => {
     const { ctx, manager, settings, managerFiber, events } = await mountWorld()
     let disposing: Promise<void> | undefined
     ctx.on('internal/status', (fiber) => {
-      if (fiber.runtime?.callback !== applyMcpClient || fiber.state !== FiberState.ACTIVE) return
-      connectionStatusOf(fiber)!.onChange(() => { disposing = managerFiber.dispose() })
+      const status = fiber.runtime?.callback === applyMcpClient && fiber.state === FiberState.ACTIVE ? connectionStatusOf(fiber) : undefined
+      status?.onChange(() => { disposing = managerFiber.dispose() })
     }, { global: true })
     await settings!.update('mcp', { servers: { srv: stdioEntry() } })
     await waitForState(manager, 'srv', 'connected')
@@ -1068,6 +1086,25 @@ describe('mcp-manager', () => {
     expect(manager.list().map(view => view.name)).toEqual(['base'])
   })
 
+  it('restarts against a replaced host and remounts its servers below the replacement', async () => {
+    const ctx = new Context()
+    onTestFinished(async () => { await ctx.fiber.dispose() })
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime)
+    const first = ctx.plugin(McpClient, ClientConfig({ host: true }))
+    await first
+    await ctx.plugin(McpServerManager, { servers: { srv: { transport: 'stdio', command: 'echo' } } })
+    await waitForState(ctx.get('mcpManager')!, 'srv', 'connected')
+    await first.dispose()
+    expect(ctx.get('mcpManager')).toBeUndefined()
+    expect(ctx.tools.get('mcp__srv__remote')).toBeUndefined()
+    await ctx.plugin(McpClient, ClientConfig({ host: true }))
+    await vi.waitFor(() => { expect(ctx.get('mcpManager')).toBeDefined() })
+    await waitForState(ctx.get('mcpManager')!, 'srv', 'connected')
+    expect(ctx.tools.get('mcp__srv__remote')).toBeDefined()
+    expect(serverFibers(ctx)).toHaveLength(1)
+  })
+
   it('rejects a registration that takes a configured or registered name or carries an invalid entry', async () => {
     const { manager } = await mountWorld({ managerConfig: { servers: { base: stdioEntry() } }, withSettings: false })
     expect(() => manager.register('base', { transport: 'stdio', command: 'echo' })).toThrow('already configured or registered')
@@ -1156,23 +1193,25 @@ describe('entry validation at construction', () => {
   const base = (servers: Record<string, unknown>): Config =>
     McpServerManager.Config({ servers } as Parameters<typeof McpServerManager.Config>[0])
 
-  it('lists configured entries by their enablement before the first reconcile publishes status', () => {
-    const manager = new McpServerManager(new Context(), base({
+  it('lists configured entries by their enablement before the first reconcile publishes status', async () => {
+    const manager = new McpServerManager(await hostContext(), base({
       on: { transport: 'stdio', command: 'echo', enabled: true },
       off: { transport: 'stdio', command: 'echo', enabled: false },
     }))
     expect(manager.list().map(view => view.status)).toEqual([{ state: 'connecting', attempt: 0 }, { state: 'disabled' }])
   })
 
-  it('rejects ${env:…} templates and names the credential syntax', () => {
+  it('rejects ${env:…} templates and names the credential syntax', async () => {
+    const ctx = await hostContext()
     expect(() => {
-      new McpServerManager(new Context(), base({ a: { transport: 'stdio', command: 'echo', env: { K: '${env:K}' } } }))
+      new McpServerManager(ctx, base({ a: { transport: 'stdio', command: 'echo', env: { K: '${env:K}' } } }))
     }).toThrow('use ${credential:REF}')
   })
 
-  it('accepts a well-formed stdio and streamable-http pair', () => {
+  it('accepts a well-formed stdio and streamable-http pair', async () => {
+    const ctx = await hostContext()
     expect(() => {
-      new McpServerManager(new Context(), base({
+      new McpServerManager(ctx, base({
         local: { transport: 'stdio', command: 'echo', url: '', args: [], env: {}, cwd: '', headers: {}, enabled: true },
         remote: { transport: 'streamable-http', url: 'http://localhost:1', command: '', args: [], env: {}, cwd: '', headers: {}, enabled: true },
       }))
@@ -1194,9 +1233,10 @@ describe('entry validation at construction', () => {
     // its prefix behind as a literal, so the write must refuse it.
     [{ a: { transport: 'stdio', command: '${x${credential:A}', url: '', args: [], env: {}, cwd: '', headers: {}, enabled: true } }, /not a template token/],
     [{ a: { transport: 'stdio', command: 'x', url: '', args: [], env: {}, cwd: '', headers: {}, enabled: true, reconnect: { enabled: true, initialDelayMs: 5_000, maxDelayMs: 100, maxAttempts: 3 } } }, /initialDelayMs must be less than or equal to maxDelayMs/],
-  ])('rejects %j', (servers, expected) => {
+  ])('rejects %j', async (servers, expected) => {
+    const ctx = await hostContext()
     expect(() => {
-      new McpServerManager(new Context(), base(servers))
+      new McpServerManager(ctx, base(servers))
     }).toThrow(expected)
   })
 })

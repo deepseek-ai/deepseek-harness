@@ -1,0 +1,148 @@
+# Bilingual-pair consistency record for ui-design-review-cases.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/ui-design-review-cases.md
+/:
+  en: 1da13fa1c536aa24
+  zh: 52ef6218c8cea359
+/ui-design-principles-and-review-cases:
+  en: 4be954bceeeb7940
+  zh: d91f6595cd3e85f0
+/ui-design-principles-and-review-cases/summary:
+  en: 75120a3fd02294c9
+  zh: 498343d7b9b30e46
+/ui-design-principles-and-review-cases/table-of-contents:
+  en: c5680dfc600a7495
+  zh: c76ec05c69f1e93c
+/ui-design-principles-and-review-cases/what-a-review-must-judge:
+  en: eeff4a5f5e487908
+  zh: 51eab38ccd10190b
+/ui-design-principles-and-review-cases/review-the-entire-page-or-modal-as-one-unit:
+  en: 324c8d9a0ff36ebb
+  zh: 3a4c64e15b59f98f
+/ui-design-principles-and-review-cases/review-the-entire-page-or-modal-as-one-unit/judge-the-whole-the-groups-and-the-elements:
+  en: 08450af012ed9ae9
+  zh: 7776aad3791eee79
+/ui-design-principles-and-review-cases/review-the-entire-page-or-modal-as-one-unit/relate-each-finding-back-to-the-whole:
+  en: 40b5b26e5ff31ae8
+  zh: 0fdb1fdef7243c35
+/ui-design-principles-and-review-cases/review-the-entire-page-or-modal-as-one-unit/use-a-relationship-inventory-to-establish-coverage:
+  en: 138392750105bf23
+  zh: 2cf34065251d93df
+/ui-design-principles-and-review-cases/combine-the-applicable-standards-first:
+  en: fd2d0f3433eb7e20
+  zh: 2034723f45360e79
+/ui-design-principles-and-review-cases/choose-cases-that-expose-a-design-decision:
+  en: f8b0f72251aa044f
+  zh: a8b05ce5f3da4221
+/ui-design-principles-and-review-cases/principle-examples:
+  en: 7b8a8bdc5acc11d6
+  zh: 96820c11d2e61787
+/ui-design-principles-and-review-cases/1-alignment:
+  en: 0cc9d24851a11497
+  zh: f05bda4fcdf5deac
+/ui-design-principles-and-review-cases/1-alignment/text-metrics-and-unequal-content:
+  en: 14558eb00e9b4902
+  zh: 333b28dabfccbd6c
+/ui-design-principles-and-review-cases/1-alignment/example-a1-role-based-sidebar-alignment:
+  en: 593b824ab3fc6474
+  zh: 19692388cdf7da7d
+/ui-design-principles-and-review-cases/1-alignment/example-a2-distinct-header-and-row-action-groups:
+  en: 81d165cc1c5c1f7e
+  zh: 4aef022e141ced64
+/ui-design-principles-and-review-cases/1-alignment/example-a3-alignment-between-rows-and-compound-controls:
+  en: 9e7fae1a4e649ffd
+  zh: c3992d7dbedbb247
+/ui-design-principles-and-review-cases/1-alignment/example-a4-centering-a-content-group-within-its-container:
+  en: 478771b47daf2cba
+  zh: 0eee64751cff6c94
+/ui-design-principles-and-review-cases/1-alignment/example-a5-visible-size-and-center-of-peer-controls:
+  en: 376359e2a1de44e9
+  zh: 2a0b0e4472efefb7
+/ui-design-principles-and-review-cases/1-alignment/example-a6-text-starts-across-triggers-and-menus:
+  en: 1afbbce3f4908bf2
+  zh: aaf54b32b90a2c82
+/ui-design-principles-and-review-cases/1-alignment/example-a7-choosing-the-close-control-edge:
+  en: c5e9a409c13637bc
+  zh: 37c915f187d6e9f7
+/ui-design-principles-and-review-cases/2-spatial-grouping:
+  en: 5a2aebab7e8ab498
+  zh: 46a18d4ddde7fccc
+/ui-design-principles-and-review-cases/2-spatial-grouping/example-g1-separating-content-from-its-action-group:
+  en: a4c0b1f1ad441155
+  zh: 360ed71994a101a8
+/ui-design-principles-and-review-cases/2-spatial-grouping/example-g2-spacing-between-complex-sections:
+  en: 2585b4f2a35bda67
+  zh: 59b6c9d987ee95bb
+/ui-design-principles-and-review-cases/2-spatial-grouping/example-g3-nested-groups-along-the-reading-order:
+  en: 4d24915951f86d97
+  zh: 4d6c348fdb7b78de
+/ui-design-principles-and-review-cases/2-spatial-grouping/example-g3-nested-groups-along-the-reading-order/primer-equal-control-widths-do-not-fix-a-broken-reading-order:
+  en: 65f62d6b2d933d6e
+  zh: 3332fa1c82053c71
+/ui-design-principles-and-review-cases/2-spatial-grouping/example-g3-nested-groups-along-the-reading-order/carbon-different-distances-carry-different-meanings:
+  en: 9d7e04a0314ac527
+  zh: fc654332df43d0c1
+/ui-design-principles-and-review-cases/2-spatial-grouping/example-g4-separating-groups-with-different-purposes:
+  en: 77bc7ec83d75ff29
+  zh: caab9079ae3e416a
+/ui-design-principles-and-review-cases/2-spatial-grouping/composed-whitespace-and-responsive-grouping:
+  en: 47f8ea920c78c5be
+  zh: e64ab054666c3727
+/ui-design-principles-and-review-cases/3-whole-page-density:
+  en: 10fb29eddaac1951
+  zh: e05636b47e860966
+/ui-design-principles-and-review-cases/4-information-hierarchy:
+  en: 7e86e6ff5cd55742
+  zh: 852a1bb0361134a6
+/ui-design-principles-and-review-cases/4-information-hierarchy/example-c1-color-emphasis-within-one-information-unit:
+  en: c17aea1873e9a1a6
+  zh: dc7a8df8a60e582d
+/ui-design-principles-and-review-cases/5-control-states:
+  en: d247699132b484a0
+  zh: b71e25d834ce2633
+/ui-design-principles-and-review-cases/5-control-states/example-s1-persistent-selection-beside-temporary-hover:
+  en: 729e11936e471a67
+  zh: d1da0c090e78efb5
+/ui-design-principles-and-review-cases/6-component-choice:
+  en: 7a49fdd5a601aa48
+  zh: e2f9de0d5628a878
+/ui-design-principles-and-review-cases/7-icon-optics:
+  en: ff60eb03e9724e71
+  zh: 8df625c33f3fc3aa
+/ui-design-principles-and-review-cases/7-icon-optics/example-o1-optical-alignment-of-different-icon-types:
+  en: 3858a85bdf6ee111
+  zh: 9c8242a594df069f
+/ui-design-principles-and-review-cases/7-icon-optics/example-o2-shared-artwork-at-different-consumer-sizes:
+  en: 6f29eb80bfe3baf4
+  zh: eb3161af01dd752e
+/ui-design-principles-and-review-cases/8-control-geometry-and-corner-relationships:
+  en: 262cfa8e7dfb969f
+  zh: 4987ad06db795885
+/ui-design-principles-and-review-cases/8-control-geometry-and-corner-relationships/decide-geometry-in-this-order:
+  en: 26419c2cbae93712
+  zh: 0f72032f89169b75
+/ui-design-principles-and-review-cases/8-control-geometry-and-corner-relationships/decide-geometry-in-this-order/fluent-the-split-button-notch-is-a-relationship-error:
+  en: ac1410636b2683ae
+  zh: c39f006a594cbc36
+/ui-design-principles-and-review-cases/8-control-geometry-and-corner-relationships/example-r1-radii-across-container-and-control-roles:
+  en: d7833e6828c48bec
+  zh: 66728e53ef3221dc
+/ui-design-principles-and-review-cases/8-control-geometry-and-corner-relationships/example-r2-small-selection-controls-within-a-form:
+  en: e632805e838b1d3a
+  zh: 6bda70ade710d4c0
+/ui-design-principles-and-review-cases/8-control-geometry-and-corner-relationships/example-r3-justified-geometry-differences-between-roles:
+  en: 5137089b3644cfb5
+  zh: e8b0da147f77a63e
+/ui-design-principles-and-review-cases/reproduce-and-compare:
+  en: ec1ff65e6e15cea6
+  zh: 9dc2344aadbbeea7
+/ui-design-principles-and-review-cases/external-references-and-what-dsh-adopts:
+  en: 274dcca699c277ed
+  zh: ecf31d4082bbd309
+/ui-design-principles-and-review-cases/external-references-and-what-dsh-adopts/codex-a-limited-reference-for-composition:
+  en: 38e0bfd3e40da01d
+  zh: 87aa406f9138be3e
+/ui-design-principles-and-review-cases/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

@@ -10,7 +10,7 @@
 
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { CONTEXT_WINDOW_EXCEEDED_CODE, EMPTY_RESPONSE_CODE, isContextWindowExceededError, isQuotaExceededError, LlmError, QUOTA_EXCEEDED_CODE } from '@deepseek-ai/dsh-llm'
-import type { FinishReason, StreamChunk, TokenUsage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { BuiltinLlmFailureCode, FinishReason, StreamChunk, TokenUsage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { isContextOverflow } from '@earendil-works/pi-ai/utils/overflow'
 import type { AssistantMessage, AssistantMessageEvent, Usage as PiUsage } from '@earendil-works/pi-ai'
 import { toPiReplayState } from './replay.ts'
@@ -39,7 +39,7 @@ export function mapUsage(usage: PiUsage): TokenUsage {
 // wrapper a bare `terminated`, so we are left pattern-matching terse words here.
 // If pi-ai ever forwards the original Error (or a fetch/dispatcher hook that lets
 // us capture the cause ourselves), classify on `code`/`cause` instead of text.
-function classifyPiAiError(message: string): string {
+function classifyPiAiError(message: string): BuiltinLlmFailureCode {
   if (/\b(?:401|403)\b/.test(message)) return 'AUTH'
   if (isQuotaExceededError(message)) return QUOTA_EXCEEDED_CODE
   if (/\b429\b|rate.?limit/i.test(message)) return 'RATE_LIMIT'
@@ -110,15 +110,15 @@ export function mapStopReason(message: AssistantMessage, contextWindow?: number)
     case 'toolUse': return { kind: 'tool-calls' }
     case 'pending': return {
       kind: 'error',
-      failure: { message: `pi-ai stream for model "${message.model}" ended pending`, code: 'PI_AI_ERROR' },
+      failure: { message: `pi-ai stream for model "${message.model}" ended pending`, code: 'PI_AI_ERROR' satisfies BuiltinLlmFailureCode },
     }
     case 'deferred': return {
       kind: 'error',
-      failure: { message: `pi-ai deferred response for model "${message.model}" is not supported`, code: 'PI_AI_ERROR' },
+      failure: { message: `pi-ai deferred response for model "${message.model}" is not supported`, code: 'PI_AI_ERROR' satisfies BuiltinLlmFailureCode },
     }
     case 'aborted': return {
       kind: 'aborted',
-      failure: { message: message.errorMessage ?? 'pi-ai stream aborted', code: 'ABORTED' },
+      failure: { message: message.errorMessage ?? 'pi-ai stream aborted', code: 'ABORTED' satisfies BuiltinLlmFailureCode },
     }
     case 'error': {
       const text = message.errorMessage ?? 'pi-ai stream error'
@@ -136,6 +136,7 @@ export function mapStopReason(message: AssistantMessage, contextWindow?: number)
  * @param callerSignal - caller cancellation state; an aborted caller makes any
  *   in-band terminal error an aborted finish.
  * @param requestedModel - request model identity recorded for durable replay.
+ * @param prefixDigest - request-context digest recorded for durable replay.
  * @returns the harness chunks, ending with `usage` then `finish`; throws
  *   `LlmError` (`STREAM_CLOSED`) if the source ends without a terminal event, or
  *   `MALFORMED_RESPONSE` when completed tool arguments are invalid. Length-limited
@@ -146,6 +147,7 @@ export async function* toStreamChunks(
   contextWindow?: number,
   callerSignal?: AbortSignal,
   requestedModel?: string,
+  prefixDigest?: string,
 ): AsyncGenerator<StreamChunk> {
   // pi-ai contentIndex ↔ our block index map 1:1 (both count blocks from 0
   // in stream order), but we track ids per index for tool calls.
@@ -220,7 +222,7 @@ export async function* toStreamChunks(
         yield {
           type: 'finish',
           reason: mapStopReason(event.message, contextWindow),
-          replayState: toPiReplayState(event.message, requestedModel),
+          replayState: toPiReplayState(event.message, requestedModel, prefixDigest),
         }
         return
       case 'error':

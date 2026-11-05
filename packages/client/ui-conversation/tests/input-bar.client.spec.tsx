@@ -26,7 +26,7 @@ import type { SessionListState, SessionSnapshot } from '@deepseek-ai/dsh-api-ses
 import type { ContextPressureProjection } from '@deepseek-ai/dsh-token-meter/client'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type { Context } from '@deepseek-ai/cordis'
-import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId, SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { SubmitOutcome } from '../src/client/contract/input.ts'
 import { SessionInputShell } from '../src/client/input/facade.ts'
 import { $replaceDetectSpanWithText, $selectDetectSpan } from '../src/client/input/editor/span-map.ts'
@@ -81,6 +81,7 @@ interface BenchOptions {
   }
   draft?: string
   running?: boolean
+  retryableFailure?: SessionSeq
   subagent?: Exclude<SessionSnapshot['subagent'], null>
   disabled?: boolean
   inert?: boolean
@@ -161,6 +162,7 @@ function bench(over?: BenchOptions) {
   if (over?.draft !== undefined && over.draft !== '') shell.setDraft(over.draft)
   if (over?.attachments !== undefined) shell.addAttachments(over.attachments.map(attachment => attachment.id))
   const stop = vi.fn()
+  const retry = vi.fn()
   const removeAttachment = vi.fn((id: DraftAttachmentId) => { shell.removeAttachment(id) })
   const menuLauncher = createSnapshotStore<string | null>(over?.commandMenuOpen === true ? 'command' : null)
   const busyEnter = createSnapshotStore<'queue' | 'steer'>(over?.busyEnter ?? 'queue')
@@ -197,12 +199,14 @@ function bench(over?: BenchOptions) {
     ...allowAllAccess,
     useContextMenu: contextMenuHook(),
     useAccess: endpoint => !(over?.deniedEndpoints ?? []).includes(endpoint),
-    useProjection: ((key: string, selector?: (v: unknown) => unknown) =>
-      (selector ?? (v => v))(key === 'plan'
+    useProjection: ((key: string, selector: (v: unknown) => unknown = v => v) =>
+      selector(key === 'plan'
         ? over?.plan
         : key === 'goal' ? over?.goal
-          : key === 'imageLimits' ? over?.imageLimits
-            : key === 'contextPressure' ? over?.contextPressure : undefined)),
+          : key === 'conversationContinuation' ? over?.retryableFailure
+            : key === 'inbox' ? { 'next-turn': over?.queue ?? [], 'next-step': over?.nextStep ?? [] }
+              : key === 'imageLimits' ? over?.imageLimits
+                : key === 'contextPressure' ? over?.contextPressure : undefined)),
     useInput: bindSnapshotSelector(shell.state),
     inputActions: shell.actions,
     keyboard: shell,
@@ -216,6 +220,7 @@ function bench(over?: BenchOptions) {
     }),
     toggleCommandMenu: over?.toggleCommandMenu ?? vi.fn(),
     useBusyEnter: bindSnapshotSelector(busyEnter),
+    retry,
     useStopShortcut: bindSnapshotSelector(stopShortcut),
     useNotices: bindSnapshotSelector(shell.notices),
     useLexicon: bindSnapshotSelector(shell.lexicon),
@@ -252,19 +257,46 @@ function bench(over?: BenchOptions) {
   const plainMessageDraft = sendableDraft && !uploadsPending && !(over?.draft?.trimStart().startsWith('/') ?? false)
   const primaryLabel = primaryStops
     ? '停止生成'
-    : over?.running === true && steeringAvailable && !composerLocked && plainMessageDraft
-      ? (over.busyEnter === 'steer' ? '插话发送' : '排队发送')
-      : '发送消息'
+    : over?.retryableFailure !== undefined && !sendableDraft && over.running !== true && over.subagent === undefined && !composerLocked
+      && !(over.nextStep ?? []).some(message => message.source.kind === 'user')
+      ? '继续生成'
+      : over?.running === true && steeringAvailable && !composerLocked && plainMessageDraft
+        ? (over.busyEnter === 'steer' ? '插话发送' : '排队发送')
+        : '发送消息'
   const button = view.container.querySelector<HTMLButtonElement>(`button[aria-label="${primaryLabel}"]`)!
   const interruptButton = view.container.querySelector<HTMLButtonElement>('button[aria-label="停止生成"]')
   return {
     view, textarea, button, interruptButton, props, sink, shell, wiring: shell, session, stop, removeAttachment, slotCalls,
-    menuLauncher, busyEnter, stopShortcut,
+    menuLauncher, busyEnter, stopShortcut, retry,
     steerQueue: over?.steerQueue,
     get placeholder() { return placeholderOf(view.container) },
     get inputDisabled() { return textarea.getAttribute('aria-disabled') === 'true' },
   }
 }
+
+it('offers the play action only for an empty, idle composer with an eligible failure', async () => {
+  const b = bench({ retryableFailure: 2 as SessionSeq })
+  expect(b.button.disabled).toBe(false)
+  expect(b.button.querySelector('svg')).not.toBeNull()
+  fireEvent.click(b.button)
+  expect(b.retry).toHaveBeenCalledExactlyOnceWith(2)
+  expect(b.sink).not.toHaveBeenCalled()
+  await act(async () => { b.shell.setDraft('A new instruction') })
+  const send = b.view.getByRole('button', { name: '发送消息' })
+  fireEvent.click(send)
+  await vi.waitFor(() => { expect(b.sink).toHaveBeenCalledOnce() })
+  expect(b.sink.mock.calls[0]?.[0]).toBe('A new instruction')
+  expect(b.retry).toHaveBeenCalledOnce()
+})
+
+it.each([
+  { running: true }, { attachments: [{ kind: 'image' as const, id: 'image' as DraftAttachmentId, file: new File([], 'x.png'), previewUrl: 'blob:test' }] },
+  { blocked: { reason: 'Select a model' } }, { subagent: CONTINUABLE_CHILD }, { deniedEndpoints: ['session/prompt'] },
+  { nextStep: [row('new instruction')] },
+])('keeps the continue action unavailable with %j', (options) => {
+  const b = bench({ ...options, retryableFailure: 2 as SessionSeq })
+  expect(b.view.queryByRole('button', { name: '继续生成' })).toBeNull()
+})
 
 function attachmentOwner(slotCalls: readonly { key: string; owner: unknown }[]): ComposerAttachmentsOwnerProps {
   for (let i = slotCalls.length - 1; i >= 0; i -= 1) {

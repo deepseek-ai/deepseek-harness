@@ -6,7 +6,9 @@ import type { Context } from '@deepseek-ai/cordis'
 import { FsError } from '@deepseek-ai/dsh-fs'
 import { gitIn, inspectCheckout } from '../src/git.ts'
 import type { Inspection } from '../src/git.ts'
-import { aheadOf, DiffTooLarge, forkPoint, localChanges, localDiff, localText, NoForkPoint } from '../src/local-diff.ts'
+import {
+  aheadOf, BaseMissing, baseBranches, chosenForkPoint, DiffTooLarge, forkPoint, localChanges, localDiff, localText, NoForkPoint,
+} from '../src/local-diff.ts'
 import type { DiffConfig } from '../src/local-diff.ts'
 import type { ForgeLocalScope, ForgeSessionWorktree } from '../src/types.ts'
 import { git, gitContext, plainSession, repository, sandboxRecord, scratch } from './harness.ts'
@@ -82,7 +84,7 @@ describe('forkPoint', () => {
     const ctx = await context(repo)
     const git = gitIn(ctx, CONFIG, plainSession(repo), repo, signal)
 
-    await expect(forkPoint(git, await inspected(ctx, repo), null)).resolves.toEqual({ commit: fork, label: 'origin/main' })
+    await expect(forkPoint(git, await inspected(ctx, repo), null)).resolves.toEqual({ commit: fork, label: 'origin/main', worktree: false })
   })
 
   it('skips a remote without a default branch for the next one', async () => {
@@ -95,7 +97,7 @@ describe('forkPoint', () => {
     const inspection = await inspected(ctx, repo)
 
     expect(inspection.upstream).toBe('mirror/feat')
-    await expect(forkPoint(gitIn(ctx, CONFIG, plainSession(repo), repo, signal), inspection, null)).resolves.toEqual({ commit: fork, label: 'origin/main' })
+    await expect(forkPoint(gitIn(ctx, CONFIG, plainSession(repo), repo, signal), inspection, null)).resolves.toEqual({ commit: fork, label: 'origin/main', worktree: false })
   })
 
   it.each([
@@ -107,7 +109,7 @@ describe('forkPoint', () => {
     const created: ForgeSessionWorktree = { path: repo, branch: 'feat', from, baseCommit: `cccccc0${'1'.repeat(33)}`, repositoryRoot: repo }
 
     await expect(forkPoint(gitIn(ctx, CONFIG, plainSession(repo), repo, signal), await inspected(ctx, repo), created))
-      .resolves.toEqual({ commit: created.baseCommit, label })
+      .resolves.toEqual({ commit: created.baseCommit, label, worktree: true })
   })
 
   it('has no fork point without a remote default branch or a shared history', async () => {
@@ -128,16 +130,87 @@ describe('forkPoint', () => {
   })
 })
 
+describe('chosenForkPoint', () => {
+  it('forks the branch scope at the merge base of HEAD with a chosen remote-tracking or local branch', async () => {
+    const { repo, fork } = await forked(await directory())
+    await git(repo, 'branch', 'topic')
+    const head = await git(repo, 'rev-parse', 'HEAD')
+    const confined = gitIn(await context(repo), CONFIG, plainSession(repo), repo, signal)
+
+    await expect(chosenForkPoint(confined, 'refs/remotes/origin/main')).resolves.toEqual({ commit: fork, label: 'origin/main', worktree: false })
+    await expect(chosenForkPoint(confined, 'refs/heads/topic')).resolves.toEqual({ commit: head, label: 'topic', worktree: false })
+  })
+
+  it.each(['refs/heads/gone', 'refs/heads/feat@{1}', 'refs/remotes/origin/a..b'])('reports the missing base branch %s', async (ref) => {
+    const { repo } = await forked(await directory())
+    const confined = gitIn(await context(repo), CONFIG, plainSession(repo), repo, signal)
+
+    await expect(chosenForkPoint(confined, ref)).rejects.toBeInstanceOf(BaseMissing)
+  })
+
+  it('has no fork point with a branch that shares no history with HEAD', async () => {
+    const { repo } = await forked(await directory())
+    await git(repo, 'stash', '--quiet', '--include-untracked')
+    await git(repo, 'checkout', '--quiet', '--orphan', 'solo')
+    await git(repo, 'commit', '--quiet', '-m', 'solo')
+    const confined = gitIn(await context(repo), CONFIG, plainSession(repo), repo, signal)
+
+    await expect(chosenForkPoint(confined, 'refs/heads/feat')).resolves.toBeNull()
+  })
+
+  it.each(['HEAD', 'main', 'refs/tags/v1', 'refs/heads/', '--output=x'])('refuses %j, which names no branch', async (ref) => {
+    const { repo } = await forked(await directory())
+    const confined = gitIn(await context(repo), CONFIG, plainSession(repo), repo, signal)
+
+    await expect(chosenForkPoint(confined, ref)).rejects.toThrow('is not a branch ref')
+  })
+})
+
+describe('baseBranches', () => {
+  it('lists the automatic fork point, remote-tracking branches without symbolic refs, and local branches but the checked-out one', async () => {
+    const { repo } = await forked(await directory())
+    await git(repo, 'branch', 'Release-2')
+    await git(repo, 'update-ref', 'refs/remotes/origin/release/2.4', 'HEAD')
+    await git(repo, 'tag', 'v1')
+    const ctx = await context(repo)
+    const confined = gitIn(ctx, CONFIG, plainSession(repo), repo, signal)
+    const listed = await baseBranches(confined, await inspected(ctx, repo), null, '', 50)
+    const names = (branches: readonly { readonly name: string }[]): string[] => branches.map(branch => branch.name).sort()
+
+    expect(listed.automatic).toEqual({ name: 'origin/main', worktree: false })
+    expect(names(listed.remote)).toEqual(['origin/main', 'origin/release/2.4'])
+    expect(listed.remote).toContainEqual({ ref: 'refs/remotes/origin/release/2.4', name: 'origin/release/2.4' })
+    expect(names(listed.local)).toEqual(['Release-2', 'main'])
+
+    const searched = await baseBranches(confined, await inspected(ctx, repo), null, ' release ', 1)
+    expect(searched.automatic).toEqual({ name: 'origin/main', worktree: false })
+    expect([searched.remote, searched.local].map(names)).toEqual([['origin/release/2.4'], ['Release-2']])
+  })
+
+  it('names the start of the worktree the Session created, or no automatic fork point without one', async () => {
+    const { repo } = await forked(await directory())
+    const ctx = await context(repo)
+    const created: ForgeSessionWorktree = { path: repo, branch: 'feat', from: 'main', baseCommit: 'a'.repeat(40), repositoryRoot: repo }
+    const confined = gitIn(ctx, CONFIG, plainSession(repo), repo, signal)
+    await expect(baseBranches(confined, await inspected(ctx, repo), created, '', 50)).resolves.toMatchObject({ automatic: { name: 'main', worktree: true } })
+
+    const plain = await repository(await directory(), 'plain')
+    const bare = await context(plain)
+    await expect(baseBranches(gitIn(bare, CONFIG, plainSession(plain), plain, signal), await inspected(bare, plain), null, '', 50))
+      .resolves.toEqual({ automatic: null, remote: [], local: [] })
+  })
+})
+
 describe('localDiff', () => {
   it.each([
-    [{ kind: 'branch' }, 'origin/main', ['committed.txt added', 'staged.txt added', 'tracked.txt modified', 'untracked.txt added untracked']],
+    [{ kind: 'branch', base: null }, 'origin/main', ['committed.txt added', 'staged.txt added', 'tracked.txt modified', 'untracked.txt added untracked']],
     [{ kind: 'uncommitted' }, null, ['staged.txt added', 'tracked.txt modified', 'untracked.txt added untracked']],
     [{ kind: 'unstaged' }, null, ['tracked.txt modified', 'untracked.txt added untracked']],
     [{ kind: 'staged' }, null, ['staged.txt added']],
   ] as const)('reads the %o scope with untracked files last, leaving out ignored files and nested repositories', async (scope, base, files) => {
     const { repo, fork } = await forked(await directory())
     const ctx = await context(repo)
-    const diff = await localDiff(ctx, CONFIG, plainSession(repo), repo, { commit: fork, label: 'origin/main' }, scope, signal)
+    const diff = await localDiff(ctx, CONFIG, plainSession(repo), repo, { commit: fork, label: 'origin/main', worktree: false }, scope, signal)
 
     expect(diff.base).toBe(base)
     expect(diff.omitted).toBe(0)
@@ -146,7 +219,7 @@ describe('localDiff', () => {
 
   it('carries the hunks of tracked and untracked files', async () => {
     const { repo, fork } = await forked(await directory())
-    const diff = await localDiff(await context(repo), CONFIG, plainSession(repo), repo, { commit: fork, label: 'origin/main' }, { kind: 'unstaged' }, signal)
+    const diff = await localDiff(await context(repo), CONFIG, plainSession(repo), repo, { commit: fork, label: 'origin/main', worktree: false }, { kind: 'unstaged' }, signal)
 
     expect(diff.files.map(file => [file.additions, file.deletions, file.hunks.flatMap(hunk => hunk.lines)])).toEqual([
       [1, 0, [' initial', '+changed']],
@@ -157,7 +230,7 @@ describe('localDiff', () => {
   it('refuses the branch scope without a fork point', async () => {
     const { repo } = await forked(await directory())
 
-    await expect(localDiff(await context(repo), CONFIG, plainSession(repo), repo, null, { kind: 'branch' }, signal)).rejects.toBeInstanceOf(NoForkPoint)
+    await expect(localDiff(await context(repo), CONFIG, plainSession(repo), repo, null, { kind: 'branch', base: null }, signal)).rejects.toBeInstanceOf(NoForkPoint)
   })
 
   it('compares a branch without commits with the empty tree', async () => {
@@ -178,7 +251,7 @@ describe('localDiff', () => {
     const { repo, fork } = await forked(await directory())
     await writeFile(join(repo, 'tracked.txt'), 'line\n'.repeat(400))
 
-    await expect(localDiff(await context(repo), { ...CONFIG, maxDiffBytes: 512 }, plainSession(repo), repo, { commit: fork, label: 'x' }, { kind: 'unstaged' }, signal))
+    await expect(localDiff(await context(repo), { ...CONFIG, maxDiffBytes: 512 }, plainSession(repo), repo, { commit: fork, label: 'x', worktree: false }, { kind: 'unstaged' }, signal))
       .rejects.toBeInstanceOf(DiffTooLarge)
   })
 
@@ -196,7 +269,7 @@ describe('localDiff', () => {
       return await read(target, readSignal, maxBytes)
     })
     const config = { ...CONFIG, maxDiffBytes: 2048, maxUntrackedFiles: 4 }
-    const diff = await localDiff(ctx, config, plainSession(repo), repo, { commit: fork, label: 'x' }, { kind: 'unstaged' }, signal)
+    const diff = await localDiff(ctx, config, plainSession(repo), repo, { commit: fork, label: 'x', worktree: false }, { kind: 'unstaged' }, signal)
 
     expect(diff.files.filter(file => file.untracked).map(file => [file.path, file.binary, file.oversized, file.additions])).toEqual([
       ['more/big.txt', false, true, 0],
@@ -211,13 +284,13 @@ describe('localDiff', () => {
     const ctx = await context(repo)
     vi.spyOn(ctx.fs, 'readBytes').mockRejectedValue(new Error('disk on fire'))
 
-    await expect(localDiff(ctx, CONFIG, plainSession(repo), repo, { commit: fork, label: 'x' }, { kind: 'unstaged' }, signal))
+    await expect(localDiff(ctx, CONFIG, plainSession(repo), repo, { commit: fork, label: 'x', worktree: false }, { kind: 'unstaged' }, signal))
       .rejects.toThrow('disk on fire')
   })
 })
 
 describe('localText', () => {
-  const branch: ForgeLocalScope = { kind: 'branch' }
+  const branch: ForgeLocalScope = { kind: 'branch', base: null }
 
   it('reads the working tree, or the index for the staged scope', async () => {
     const { repo } = await forked(await directory())
