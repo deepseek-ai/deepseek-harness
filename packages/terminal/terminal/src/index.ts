@@ -6,8 +6,7 @@
 
 import { Context, Service } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { HarnessError } from '@deepseek-ai/dsh-error'
-import { TerminalBackendCleanupError } from './types.ts'
+import { TerminalBackendCleanupError, TerminalError } from './error.ts'
 import type {
   TerminalBackend,
   TerminalBackendSession,
@@ -41,7 +40,7 @@ export type {
   TerminalSpawnResult,
   TerminalWaitReason,
 } from './types.ts'
-export { TerminalBackendCleanupError } from './types.ts'
+export { TerminalBackendCleanupError, TerminalError, type TerminalErrorCode } from './error.ts'
 
 /** Opaque identity minted by {@link TerminalSessionService} for one live PTY session. */
 export type TerminalSessionId = TerminalSessionIdValue
@@ -49,41 +48,6 @@ export type TerminalSessionId = TerminalSessionIdValue
 declare module '@deepseek-ai/cordis' {
   interface Context {
     terminals: TerminalSessionService
-  }
-}
-
-/**
- * Machine-routable PTY service and backend failures. Backends use
- * `INIT_REJECTED` when the shell rejects its setup input, `NO_SANDBOX` when a
- * confined mode has no sandbox provider, `SESSION_CLOSING` and
- * `SESSION_EXITED` for an operation on a closing or exited session, and
- * `STARTUP_EXITED` or `STARTUP_TIMEOUT` when the shell exits or misses
- * readiness during startup.
- */
-export type TerminalErrorCode =
-  | 'DUPLICATE_BACKEND'
-  | 'DUPLICATE_NAME'
-  | 'FOREIGN_SESSION'
-  | 'INIT_REJECTED'
-  | 'NO_BACKEND'
-  | 'NO_SANDBOX'
-  | 'NO_SESSION'
-  | 'OWNER_NOT_LIVE'
-  | 'SEND_ACTIVE'
-  | 'SERVICE_DISPOSING'
-  | 'SESSION_CLOSING'
-  | 'SESSION_EXITED'
-  | 'STARTUP_EXITED'
-  | 'STARTUP_TIMEOUT'
-
-/** Harness error carrying a stable {@link TerminalErrorCode}. */
-export class TerminalError extends HarnessError {
-  override readonly code: TerminalErrorCode
-
-  constructor(message: string, code: TerminalErrorCode) {
-    super(message, code)
-    this.name = 'TerminalError'
-    this.code = code
   }
 }
 

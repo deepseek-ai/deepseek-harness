@@ -203,6 +203,9 @@ describe('TerminalSessionService ownership and lifecycle', () => {
     expect(concurrent).toBeInstanceOf(TerminalError)
     expect(concurrent).toBeInstanceOf(HarnessError)
     expect(concurrent).toMatchObject({ name: 'TerminalError', code: 'SEND_ACTIVE' })
+    const cleanup = new TerminalBackendCleanupError(new Error('setup failed'), new Error('cleanup failed'))
+    expect(cleanup).toBeInstanceOf(TerminalError)
+    expect(cleanup).toMatchObject({ name: 'TerminalBackendCleanupError', code: 'CLEANUP_FAILED' })
     expect(operation.readOutput()).toEqual({ delta: 'delta', truncated: false })
     expect(operation.cancel()).toBe(true)
     await operation.done
@@ -295,6 +298,19 @@ describe('TerminalSessionService ownership and lifecycle', () => {
     controller.abort(reason)
 
     await expect(pending).rejects.toBe(reason)
+  })
+
+  it('rejects an uncancelled spawn with the backend cleanup failure and its code', async () => {
+    const ctx = await harness()
+    const failure = new TerminalBackendCleanupError(new Error('startup failed'), new Error('backend cleanup failed'))
+    ctx.terminals.registerBackend({ type: 'cleanup-failing', spawn: () => Promise.reject(failure) })
+    const owner = stubAgent(ctx, 'owner')
+    await ctx.agents.register(owner)
+
+    await expect(ctx.terminals.spawn(owner, { type: 'cleanup-failing' })).rejects.toBe(failure)
+    expect(failure).toMatchObject({ name: 'TerminalBackendCleanupError', code: 'CLEANUP_FAILED' })
+    const internal = ctx.terminals as unknown as { disposeOwned(owner: Agent): Promise<void> }
+    await expect(internal.disposeOwned(owner)).rejects.toThrow('failed to clean up PTY lifecycle')
   })
 
   it.each(['owner', 'service'] as const)('retains caller-triggered backend cleanup failure until %s disposal', async (scope) => {

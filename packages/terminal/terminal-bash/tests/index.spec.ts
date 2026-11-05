@@ -158,8 +158,11 @@ describe('BashTerminalBackend startup rollback', () => {
     const aggregate = new BashTerminalBackend(ctx, config(), spawnTerminal, () => doublyFailed)
     await expect(aggregate.spawn(spec(agent(ctx)))).rejects.toEqual(expect.objectContaining({
       name: 'TerminalBackendCleanupError',
+      code: 'CLEANUP_FAILED',
       spawnError: startupFailure,
       cleanupError: cleanupFailure,
+      errors: [startupFailure, cleanupFailure],
+      cause: startupFailure,
     } satisfies Partial<TerminalBackendCleanupError>))
   })
 

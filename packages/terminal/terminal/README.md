@@ -74,7 +74,8 @@ The service owns everything except terminal mechanics: session identity, publica
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `TerminalSessionService`: backend registry, spawn/send/read/signal/kill/list, owner cleanups, disposal |
-| [`src/types.ts`](src/types.ts) | Shared contracts: backend interface, session types, wait reasons, signal set, error codes |
+| [`src/types.ts`](src/types.ts) | Shared contracts: backend interface, session types, wait reasons, signal set |
+| [`src/error.ts`](src/error.ts) | `TerminalError`, its codes, and `TerminalBackendCleanupError` |
 
 ### Data model and lifecycle
 
@@ -83,7 +84,7 @@ Each published session is a record of its id, owner, optional name, backend type
 ### Ownership and cleanup rules
 
 - Fencing uses the exact `Agent` object: `hasOwnerActivity(owner)` spans unpublished setup through final close with no publication gap, so lifecycle policy can fence the owner precisely.
-- A backend that cannot clean partial startup resources rejects with `TerminalBackendCleanupError`; the service retains that failure as tracked owner activity until owner or service disposal consumes and reports it.
+- A backend that cannot clean partial startup resources rejects with `TerminalBackendCleanupError`, a `TerminalError` with code `CLEANUP_FAILED` that lists both failures in `errors`; the service retains that failure as tracked owner activity until owner or service disposal consumes and reports it.
 - Caller cancellation keeps its exact `AbortSignal.reason`; `kill()` and disposal resolve only after the backend's captured process tree is quiescent.
 
 ### Send reservation
