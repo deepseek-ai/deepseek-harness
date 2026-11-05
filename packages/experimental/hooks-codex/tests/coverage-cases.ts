@@ -235,6 +235,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       const r = events(agent).find(e => e.type === 'tool/result')
       expect(r?.type === 'tool/result' && r.data.message.isError).toBe(true)
       expect(r?.type === 'tool/result' && r.data.message.content.some(b => b.type === 'text' && b.text.includes('blocked by PostToolUse hook'))).toBe(true)
+      expect(r?.type === 'tool/result' && r.data.error).toEqual({ name: 'HookError', code: 'HOOK_BLOCKED' })
     })
 
     it('PostToolUse additionalContext (clean exit) is attached after the result', async () => {
@@ -437,6 +438,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } })); await waitForIdle(ctx, agent)
       const r = events(agent).find(e => e.type === 'tool/result')
       expect(r?.type === 'tool/result' && r.data.message.content.some(b => b.type === 'text' && b.text.includes('blocked by PreToolUse hook'))).toBe(true)
+      expect(r?.type === 'tool/result' && r.data.error).toEqual({ name: 'HookError', code: 'HOOK_DENIED' })
     })
 
     it('PostToolUse block AND additionalContext are surfaced together', async () => {
