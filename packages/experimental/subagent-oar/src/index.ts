@@ -16,7 +16,7 @@ import {
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { startOarRun, type OarRunSpec } from './run.ts'
 
-export { OAR_FAILURE_CODES, OarFailure, type OarFailureCode } from './run.ts'
+export { OarFailure, type OarFailureCode } from './run.ts'
 
 export const name = 'experimental-subagent-oar'
 export const inject = ['subagents']

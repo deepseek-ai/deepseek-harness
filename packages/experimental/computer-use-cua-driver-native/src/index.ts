@@ -14,7 +14,7 @@ import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-tools'
 import { CuaDriverError } from './error.ts'
 
-export { CUA_DRIVER_ERROR_CODES, CuaDriverError, type CuaDriverErrorCode } from './error.ts'
+export { CuaDriverError, type CuaDriverErrorCode } from './error.ts'
 
 /** Cordis plugin identity for the native Cua Driver provider. */
 export const name = 'experimental-computer-use-cua-driver-native'

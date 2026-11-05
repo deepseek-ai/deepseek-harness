@@ -19,7 +19,7 @@ import type {} from '@deepseek-ai/dsh-browser-use'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import { ToolArgsError, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 
-export { STAGEHAND_ERROR_CODES, StagehandDrainError, StagehandError, type StagehandErrorCode } from './error.ts'
+export { StagehandDrainError, StagehandError, type StagehandErrorCode } from './error.ts'
 
 /** Cordis identity for the native Stagehand provider. */
 export const name = 'experimental-browser-use-stagehand-native'

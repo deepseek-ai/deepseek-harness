@@ -33,7 +33,7 @@ export type {
 export { generatedWorktreeName } from './name.ts'
 export { CREATED_RECORD, createdWorktreeSchema, worktreeProjection } from './projection.ts'
 export type { WorktreeProjectionState } from './projection.ts'
-export { WORKTREE_ERROR_CODES, WorktreeError, type WorktreeErrorCode } from './error.ts'
+export { WorktreeError, type WorktreeErrorCode } from './error.ts'
 
 /** Worktree location, generated names, executables, subprocess resource limits, and the archive cleanup switch. */
 export interface Config {

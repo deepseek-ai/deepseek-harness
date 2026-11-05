@@ -4455,7 +4455,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-tool-ralph`
 
 - `inject`: `tools` · `workflowEngine` · `subagents` · `systemPrompt`
-- `source`: [`packages/experimental/tool-ralph/src/index.ts:57`](../packages/experimental/tool-ralph/src/index.ts)
+- `source`: [`packages/experimental/tool-ralph/src/index.ts:25`](../packages/experimental/tool-ralph/src/index.ts)
 
 ```ts config-catalog
 /** Deployment policy for the fixed Ralph workflow. */
@@ -4608,7 +4608,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-tool-terminal`
 
 - `inject`: `terminals` · `tools` · `systemPrompt` · `workingDirectory`
-- `source`: [`packages/experimental/tool-terminal/src/index.ts:38`](../packages/experimental/tool-terminal/src/index.ts)
+- `source`: [`packages/experimental/tool-terminal/src/index.ts:39`](../packages/experimental/tool-terminal/src/index.ts)
 
 ```ts config-catalog
 /** Model-facing terminal tool configuration. */
