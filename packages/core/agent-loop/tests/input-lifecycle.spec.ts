@@ -166,3 +166,16 @@ it('does not start a driver when an inbox observer closes its owner during admis
     await closing
   }
 })
+
+it('reports a quiescence failure while releasing the Agent and Session', async () => {
+  const { ctx, agent, handle } = await harness()
+  const failure = new Error('injected quiescence failure')
+  const idle = vi.spyOn(agent, 'whenIdle').mockRejectedValueOnce(failure)
+  try {
+    await expect(handle.dispose()).rejects.toThrow('injected quiescence failure')
+    expect(ctx.agents.get(agent.id)).toBeUndefined()
+    expect(ctx.sessions.get(agent.id)).toBeUndefined()
+  } finally {
+    idle.mockRestore()
+  }
+})
