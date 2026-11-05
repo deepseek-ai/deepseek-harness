@@ -9,7 +9,8 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
-  Button, IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconCloseOutlineRegular, IconCopyOutlineRegular,
+  Button, IconCheckCircleOutlineRegular, IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconCloseOutlineRegular,
+  IconCopyOutlineRegular,
   IconEllipsisOutlineRegular, IconListPenOutlineRegular, IconRightUpOutlineRegular, IconTriangleRightFillRegular, IconUserOutlineRegular,
   Menu, MenuItemButton, StateDot, Tooltip,
   type MenuEntry,
@@ -420,7 +421,7 @@ function CardMenu({ entry, snapshot, name, url, actions, t }: {
     ...viewChanges !== undefined && snapshot !== null && entry.ref !== null
       ? [{ id: 'changes', label: t('change.viewChanges'), icon: <IconListPenOutlineRegular size={14} /> }]
       : [],
-    ...ready === undefined ? [] : [{ id: 'ready', label: t('change.markReady'), disabled: busy }],
+    ...ready === undefined ? [] : [{ id: 'ready', label: t('change.markReady'), icon: <IconCheckCircleOutlineRegular size={14} />, disabled: busy }],
     ...remove === undefined ? [] : [
       { type: 'separator' as const, id: 'remove-separator' },
       { id: 'remove', label: t('change.remove'), icon: <IconCloseOutlineRegular size={14} />, danger: true },

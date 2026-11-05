@@ -156,6 +156,7 @@
   align-items: center;
   gap: 6px;
   min-width: 0;
+  overflow: hidden;
   padding: 1px 0;
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
@@ -236,6 +237,12 @@
 
 .flag {
   color: var(--dsw-alias-label-tertiary);
+}
+
+/* Only the branch names shorten; the number, checks, and flags keep whole words on one line. */
+.meta > :not(.ellipsis) {
+  flex: none;
+  white-space: nowrap;
 }
 
 .finished {
