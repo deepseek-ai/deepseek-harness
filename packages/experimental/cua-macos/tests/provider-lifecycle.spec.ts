@@ -540,6 +540,26 @@ it.each(['unresolved', 'unknown', 'text-only', 'provider-error'] as const)(
   },
 )
 
+it.each([
+  { failure: 'opaque failure', summary: 'Image processing failed' },
+  { failure: new Error('image target unavailable'), summary: 'image target unavailable' },
+])('reports an unclassified model image preparation failure: $summary', async ({ failure, summary }) => {
+  const f = await setup({ provider: 'image-fixture', model: 'vision' })
+  await selectApplication(f)
+  f.ctx.llm.registerAdapter(['image-fixture'], new ImageAdapter())
+  const root = await mkdtemp(join(tmpdir(), 'dsh-cua-image-preparation-'))
+  onTestFinished(async () => { try { await f.ctx.fiber.dispose() } finally { await rm(root, { recursive: true, force: true }) } })
+  await f.ctx.plugin(LocalAttachmentStore, { dshHome: root })
+  vi.spyOn(f.ctx.attachments, 'readImageRequest').mockRejectedValue(failure)
+  native.request.mockResolvedValue({ ...imageMetadata, mimeType: 'image/png', data: imageData })
+  const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: 7 })
+  const content = JSON.stringify(result.content)
+  expect(result.isError).toBe(true)
+  expect(content).toContain('SCREENSHOT_IMAGE_FAILED: Screenshot model image preparation failed for window 7')
+  expect(content).toContain(summary)
+  expect(content).not.toContain(imageData)
+})
+
 it('returns an image-admission failure without emitting a successful screenshot', async () => {
   const f = await setup({ provider: 'image-fixture', model: 'vision' })
   await selectApplication(f)
@@ -792,10 +812,20 @@ it('retires failed cleanup without replaying an operation or retaining old handl
   await selectApplication(f)
   const previous = native.instances[0]!
   previous.disposed = true
-  native.dispose.mockRejectedValueOnce(new Error('cleanup acknowledgement missing'))
-  const failed = await f.execute('listApps')
-  expect(failed.isError).toBe(true)
-  expect(JSON.stringify(failed.content)).toContain('cleanup acknowledgement missing')
+  const bothWaiting: PromiseWithResolvers<void> = Promise.withResolvers()
+  const cleanup: PromiseWithResolvers<void> = Promise.withResolvers()
+  let waiters = 0
+  native.dispose.mockImplementation(() => {
+    if (++waiters === 2) bothWaiting.resolve()
+    return cleanup.promise
+  })
+  const requests = Promise.all([f.execute('listApps'), f.execute('listApps')])
+  try { await bothWaiting.promise } finally { cleanup.reject(new Error('cleanup acknowledgement missing')) }
+  for (const failed of await requests) {
+    expect(failed.isError).toBe(true)
+    expect(JSON.stringify(failed.content)).toContain('cleanup acknowledgement missing')
+  }
+  native.dispose.mockReset()
   expect(native.instances).toHaveLength(1)
   expect((await f.execute('getState', { appHandle: 'app-one' })).isError).toBe(true)
   expect(native.instances).toHaveLength(1)

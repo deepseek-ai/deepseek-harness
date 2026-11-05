@@ -13,3 +13,7 @@ it.each([
 ])('classifies %s with %j and %s', (platform, env, osRelease, expected) => {
   expect(isWsl({ platform, env, osRelease })).toBe(expected)
 })
+
+it('uses the current Node platform when only WSL markers are supplied', () => {
+  expect(isWsl({ env: { WSL_DISTRO_NAME: 'Ubuntu' }, osRelease: 'generic' })).toBe(process.platform === 'linux')
+})

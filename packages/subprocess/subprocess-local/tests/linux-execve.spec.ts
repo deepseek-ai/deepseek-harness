@@ -63,53 +63,28 @@ describe.skipIf(process.platform !== 'linux')('Linux libc execve binding', () =>
     expect((failure as Error).message).toContain("ENOENT: no such file or directory, execve '/missing/tool'")
   })
 
-  it('reports failure to read descriptor flags before replacing the process', async () => {
+  it.each([
+    { command: 1, calls: [[0, 1, 0]] },
+    { command: 2, calls: [[0, 1, 0], [0, 2, 0]] },
+    { command: 3, calls: [[0, 1, 0], [1, 1, 0], [2, 1, 0], [0, 3, 0]] },
+    { command: 4, calls: [[0, 1, 0], [1, 1, 0], [2, 1, 0], [0, 3, 0], [0, 4, 2]] },
+  ])('stops before execve when fcntl command $command fails', async ({ command, calls }) => {
     const nativeExecve = vi.fn()
-    const nativeFcntl = vi.fn(() => -1)
-    const func = vi.fn((declaration: string) => declaration.includes('execve')
-      ? nativeExecve
-      : nativeFcntl)
-    const errno = vi.fn(() => 9)
+    const nativeFcntl = vi.fn((_fd: number, operation: number, _arg: number) => {
+      if (operation === command) return -1
+      if (operation === 1) return command === 2 ? 1 : 0
+      return 0x802
+    })
+    const func = vi.fn((declaration: string) => declaration.includes('execve') ? nativeExecve : nativeFcntl)
     vi.doMock('@deepseek-ai/dsh-lazy-require', () => ({
-      createLazyRequire: () => () => ({ errno, load: () => ({ func }) }),
+      createLazyRequire: () => () => ({ errno: () => 9, load: () => ({ func }) }),
     }))
-
     const { loadLinuxExecve } = await import('../src/linux-execve.ts')
     expect(() => loadLinuxExecve()('/bin/tool', ['tool'], {})).toThrow(expect.objectContaining({
-      code: 'EBADF',
-      errno: -9,
-      syscall: 'fcntl',
+      code: 'EBADF', errno: -9, syscall: 'fcntl',
     }))
-    expect(nativeFcntl).toHaveBeenCalledExactlyOnceWith(0, 1, 0)
+    expect(nativeFcntl.mock.calls).toEqual(calls)
     expect(nativeExecve).not.toHaveBeenCalled()
-    expect(errno).toHaveBeenCalledOnce()
-  })
-
-  it('reports failure to clear close-on-exec before replacing the process', async () => {
-    const nativeExecve = vi.fn()
-    const nativeFcntl = vi.fn()
-      .mockReturnValueOnce(1)
-      .mockReturnValueOnce(-1)
-    const func = vi.fn((declaration: string) => declaration.includes('execve')
-      ? nativeExecve
-      : nativeFcntl)
-    const errno = vi.fn(() => 5)
-    vi.doMock('@deepseek-ai/dsh-lazy-require', () => ({
-      createLazyRequire: () => () => ({ errno, load: () => ({ func }) }),
-    }))
-
-    const { loadLinuxExecve } = await import('../src/linux-execve.ts')
-    expect(() => loadLinuxExecve()('/bin/tool', ['tool'], {})).toThrow(expect.objectContaining({
-      code: 'EIO',
-      errno: -5,
-      syscall: 'fcntl',
-    }))
-    expect(nativeFcntl.mock.calls).toEqual([
-      [0, 1, 0],
-      [0, 2, 0],
-    ])
-    expect(nativeExecve).not.toHaveBeenCalled()
-    expect(errno).toHaveBeenCalledOnce()
   })
 })
 
