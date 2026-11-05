@@ -10,6 +10,24 @@
 #include <gdiplus.h>
 #include <new>
 #include <algorithm>
+static HRESULT ApplyInstallerDwmFrame(HWND window) {
+    // DWM retains native transitions; WM_NCCALCSIZE removes the visible caption.
+    SetWindowLongW(window, GWL_STYLE, GetWindowLongW(window, GWL_STYLE) | WS_THICKFRAME | WS_CAPTION);
+    const DWMNCRENDERINGPOLICY policy = DWMNCRP_ENABLED;
+    HRESULT result = DwmSetWindowAttribute(window, DWMWA_NCRENDERING_POLICY, &policy, sizeof(policy));
+    if (FAILED(result)) return result;
+    const DWORD rounded = 2;
+    // Windows 10 does not support the Windows 11 corner preference.
+    DwmSetWindowAttribute(window, 33, &rounded, sizeof(rounded));
+    const MARGINS margins = {1, 1, 1, 1};
+    result = DwmExtendFrameIntoClientArea(window, &margins);
+    SetWindowPos(window, nullptr, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    return result;
+}
+
+#include "restart-banner.h"
+#include "restart-status.h"
 #include "progress.h"
 #include "extract.h"
 #include "extract-report.h"
@@ -419,19 +437,7 @@ extern "C" __declspec(dllexport) HRESULT __cdecl InstallerApplyFrame(HWND window
             ShowWindow(child, SW_HIDE);
         }
     }
-    // DWM retains native transitions; WM_NCCALCSIZE removes the visible caption.
-    SetWindowLongW(window, GWL_STYLE, GetWindowLongW(window, GWL_STYLE) | WS_THICKFRAME | WS_CAPTION);
-    const DWMNCRENDERINGPOLICY policy = DWMNCRP_ENABLED;
-    HRESULT result = DwmSetWindowAttribute(window, DWMWA_NCRENDERING_POLICY, &policy, sizeof(policy));
-    if (FAILED(result)) return result;
-    const DWORD rounded = 2;
-    // Windows 10 does not support the Windows 11 corner preference.
-    DwmSetWindowAttribute(window, 33, &rounded, sizeof(rounded));
-    const MARGINS margins = {1, 1, 1, 1};
-    result = DwmExtendFrameIntoClientArea(window, &margins);
-    SetWindowPos(window, nullptr, 0, 0, 0, 0,
-                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
-    return result;
+    return ApplyInstallerDwmFrame(window);
 }
 
 // Present the first interactive page after resource preparation without keeping the installer topmost.
