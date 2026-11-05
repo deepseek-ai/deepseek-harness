@@ -114,10 +114,10 @@ describe('confined fork tools', () => {
     const h = harness({ read })
     installForkEnforcement(h.target as never, h.failure)
     const confined = h.registered.get('read')!
-    await expect(confined.execute({}, { signal: undefined })).rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('may only use read with the paths') })
-    await expect(confined.execute('not a record', { signal: undefined })).rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('may only use read with the paths') })
+    await expect(confined.execute({}, { signal: undefined })).rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('may only use read with the paths') as string })
+    await expect(confined.execute('not a record', { signal: undefined })).rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('may only use read with the paths') as string })
     await expect(confined.execute({ file_path: 'outside.txt' }, { signal: undefined }))
-      .rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('inside the workspace') })
+      .rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('inside the workspace') as string })
     // The grant itself decides, so a path the fake reports inside succeeds and runs the deployment body.
     const inside = await confined.execute({ file_path: 'inside.ts' }, { signal: undefined })
     expect(inside).toBe('ran')
@@ -125,7 +125,7 @@ describe('confined fork tools', () => {
 
     h.forks.enforcementInstalled.mockReturnValue(false)
     await expect(confined.execute({ file_path: 'inside.ts' }, { signal: undefined }))
-      .rejects.toMatchObject({ name: 'LiveshareForkDeniedError', code: 'FORK_TOOL_NOT_PERMITTED', message: expect.stringContaining('no longer holds permission') })
+      .rejects.toMatchObject({ name: 'LiveshareForkDeniedError', code: 'FORK_TOOL_NOT_PERMITTED', message: expect.stringContaining('no longer holds permission') as string })
   })
 
   it('refuses a read it could not register and keeps the registration error', () => {
@@ -156,15 +156,15 @@ describe('confined fork tools', () => {
 
     // The body runs the deployment's own argument checks itself, because it replaces its execution.
     await expect(edit.execute('not a record', { signal: undefined }))
-      .rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('replacing non-empty text') })
-    await expect(edit.execute({}, { signal: undefined })).rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('replacing non-empty text') })
+      .rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('replacing non-empty text') as string })
+    await expect(edit.execute({}, { signal: undefined })).rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('replacing non-empty text') as string })
     await expect(edit.execute({ file_path: 'inside.ts', old_string: '', new_string: 'b' }, { signal: undefined }))
-      .rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('replacing non-empty text') })
+      .rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('replacing non-empty text') as string })
     await expect(edit.execute({ file_path: 'inside.ts', old_string: 'a', new_string: 'a' }, { signal: undefined }))
-      .rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('replacing non-empty text') })
+      .rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('replacing non-empty text') as string })
     // The containment check runs inside the body too, so a target the guard did not see is still refused.
     await expect(edit.execute({ file_path: '../outside.ts', old_string: 'a', new_string: 'b' }, { signal: undefined }))
-      .rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('inside the workspace') })
+      .rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('inside the workspace') as string })
     expect(h.fs.editText).not.toHaveBeenCalled()
 
     const result = await edit.execute({
@@ -184,7 +184,7 @@ describe('confined fork tools', () => {
 
     h.forks.enforcementInstalled.mockReturnValue(false)
     await expect(edit.execute({ file_path: 'inside.ts', old_string: 'a', new_string: 'b' }, { signal: undefined }))
-      .rejects.toMatchObject({ name: 'LiveshareForkDeniedError', code: 'FORK_TOOL_NOT_PERMITTED', message: expect.stringContaining('no longer holds permission') })
+      .rejects.toMatchObject({ name: 'LiveshareForkDeniedError', code: 'FORK_TOOL_NOT_PERMITTED', message: expect.stringContaining('no longer holds permission') as string })
   })
 
   it('refuses a write-capable child when the deployment ships no write to replace', () => {
@@ -211,14 +211,14 @@ describe('confined fork tools', () => {
     const confined = h.registered.get('write')!
 
     await expect(confined.execute({ file_path: 'inside.ts' }, { signal: undefined }))
-      .rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('named file with text content') })
+      .rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('named file with text content') as string })
     await expect(confined.execute('not a record', { signal: undefined }))
-      .rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('named file with text content') })
+      .rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('named file with text content') as string })
     await expect(confined.execute({ file_path: '../outside', content: 'x' }, { signal: undefined }))
-      .rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('inside the workspace') })
+      .rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('inside the workspace') as string })
     h.forks.enforcementInstalled.mockReturnValue(false)
     await expect(confined.execute({ file_path: 'inside.ts', content: 'x' }, { signal: undefined }))
-      .rejects.toMatchObject({ name: 'LiveshareForkDeniedError', code: 'FORK_TOOL_NOT_PERMITTED', message: expect.stringContaining('no longer holds permission') })
+      .rejects.toMatchObject({ name: 'LiveshareForkDeniedError', code: 'FORK_TOOL_NOT_PERMITTED', message: expect.stringContaining('no longer holds permission') as string })
 
     h.forks.enforcementInstalled.mockReturnValue(true)
     const result = await confined.execute({ file_path: 'inside.ts', content: 'hello' }, { signal: undefined })
@@ -611,7 +611,7 @@ describe('source-session sandbox', () => {
       ['present', { files: [{ path: 'inside.ts' }, { path: 'outside/secret.txt' }] }],
     ]
     for (const [name, args] of outsideCalls) {
-      await expect(h.call(name, args)).rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('inside the workspace') })
+      await expect(h.call(name, args)).rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('inside the workspace') as string })
     }
 
     const malformed: [string, unknown][] = [
@@ -623,7 +623,7 @@ describe('source-session sandbox', () => {
       ['present', { files: 'not a list' }],
     ]
     for (const [name, args] of malformed) {
-      await expect(h.call(name, args)).rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('with the paths it declares') })
+      await expect(h.call(name, args)).rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('with the paths it declares') as string })
     }
 
     // A resolution the filesystem refuses is the refusal: no verdict is guessed from the spelling.
@@ -642,9 +642,9 @@ describe('source-session sandbox', () => {
     // There is no owner bypass: the sandbox belongs to the Session, so every turn reads through it.
     await expect(confined.execute({ file_path: 'x' }, { signal: undefined })).resolves.toBe('ran')
     expect(refresh).toHaveBeenCalledTimes(1)
-    await expect(confined.execute({}, { signal: undefined })).rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('only use read with the paths') })
-    await expect(confined.execute('not a record', { signal: undefined })).rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('only use read with the paths') })
-    await expect(confined.execute({ file_path: 'outside' }, { signal: undefined })).rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('inside the workspace') })
+    await expect(confined.execute({}, { signal: undefined })).rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('only use read with the paths') as string })
+    await expect(confined.execute('not a record', { signal: undefined })).rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('only use read with the paths') as string })
+    await expect(confined.execute({ file_path: 'outside' }, { signal: undefined })).rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('inside the workspace') as string })
     await expect(confined.execute({ file_path: 'inside.ts' }, { signal: undefined })).resolves.toBe('ran')
     // Every call re-reads the grants before it consumes them, including one it then refuses.
     expect(refresh).toHaveBeenCalledTimes(5)
@@ -685,19 +685,19 @@ describe('source-session sandbox', () => {
     expect(installSourceSessionAccess(h.target as never)).toMatchObject({ readConfined: true, writeConfined: true })
     const confined = h.installed.get('write')!
 
-    await expect(confined.execute({ file_path: 'inside.ts' }, { signal: undefined })).rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('named file with text content') })
-    await expect(confined.execute('not a record', { signal: undefined })).rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('named file with text content') })
+    await expect(confined.execute({ file_path: 'inside.ts' }, { signal: undefined })).rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('named file with text content') as string })
+    await expect(confined.execute('not a record', { signal: undefined })).rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('named file with text content') as string })
     await expect(confined.execute({ file_path: '../outside', content: 'x' }, { signal: undefined }))
-      .rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('inside the workspace') })
+      .rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('inside the workspace') as string })
     const narrowing = sourceHarness({ tools: ['read', 'write'], writeGate: { mayWrite: vi.fn().mockReturnValueOnce(true).mockReturnValue(false) } })
     expect(installSourceSessionAccess(narrowing.target as never).writeConfined).toBe(true)
     await expect(narrowing.installed.get('write')!.execute({ file_path: 'inside.ts', content: 'x' }, { signal: undefined }))
-      .rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('does not allow writing') })
+      .rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('does not allow writing') as string })
 
     const blocked = sourceHarness({ tools: ['read', 'write'], writeGate: { mayWrite: () => false } })
     installSourceSessionAccess(blocked.target as never)
     await expect(blocked.installed.get('write')!.execute({ file_path: 'inside.ts', content: 'x' }, { signal: undefined }))
-      .rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('does not allow writing') })
+      .rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('does not allow writing') as string })
 
     h.target.write = { mayWrite: () => true }
     const result = await confined.execute({ file_path: 'inside.ts', content: 'hello' }, { signal: undefined })
@@ -714,15 +714,15 @@ describe('source-session sandbox', () => {
     const edit = h.installed.get('edit')!
 
     await expect(edit.execute({ file_path: 'inside.ts', old_string: '', new_string: 'b' }, { signal: undefined }))
-      .rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('replacing non-empty text') })
+      .rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('replacing non-empty text') as string })
     await expect(edit.execute({ file_path: '', old_string: 'a', new_string: 'b' }, { signal: undefined }))
-      .rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('replacing non-empty text') })
+      .rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('replacing non-empty text') as string })
     await expect(edit.execute({ file_path: 'inside.ts', old_string: 'a', new_string: 'a' }, { signal: undefined }))
-      .rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('replacing non-empty text') })
+      .rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('replacing non-empty text') as string })
     await expect(edit.execute({ file_path: 'inside.ts', old_string: 'a' }, { signal: undefined }))
-      .rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('replacing non-empty text') })
+      .rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('replacing non-empty text') as string })
     await expect(edit.execute({ file_path: 'outside.ts', old_string: 'a', new_string: 'b' }, { signal: undefined }))
-      .rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('inside the workspace') })
+      .rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('inside the workspace') as string })
     // The intent comes from the shipped waterfall, and the edit is written under the Session policy.
     const result = await edit.execute({ file_path: 'inside.ts', old_string: 'old', new_string: 'new', replace_all: true }, { signal: undefined })
     expect(result).toEqual({ path: '/granted/inside.ts', before: 'old', after: 'new' })
@@ -743,9 +743,9 @@ describe('source-session sandbox', () => {
     installSourceSessionAccess(closedEdit.target as never)
     await expect(closedEdit.installed.get('edit')!.execute({
       file_path: 'inside.ts', old_string: 'a', new_string: 'b',
-    }, { signal: undefined })).rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('does not allow writing') })
+    }, { signal: undefined })).rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('does not allow writing') as string })
     // The replacement's own argument check refuses arguments it cannot read.
-    await expect(edit.execute('not a record', { signal: undefined })).rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('replacing non-empty text') })
+    await expect(edit.execute('not a record', { signal: undefined })).rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('replacing non-empty text') as string })
 
     // A share that narrows while the edit intent awaits stops the edit before it reaches the backend.
     const narrowing = sourceHarness({
@@ -755,7 +755,7 @@ describe('source-session sandbox', () => {
     installSourceSessionAccess(narrowing.target as never)
     await expect(narrowing.installed.get('edit')!.execute({
       file_path: 'inside.ts', old_string: 'a', new_string: 'b',
-    }, { signal: undefined })).rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('does not allow writing') })
+    }, { signal: undefined })).rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('does not allow writing') as string })
     expect(narrowing.fs.editText).not.toHaveBeenCalled()
   })
 

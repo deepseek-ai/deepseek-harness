@@ -10,7 +10,7 @@ import type { LiveshareForkDeniedCode } from '../src/host/fork-errors.ts'
  */
 export function denial(reason: string | RegExp, code: LiveshareForkDeniedCode): unknown {
   return {
-    reason: typeof reason === 'string' ? expect.stringContaining(reason) : expect.stringMatching(reason),
+    reason: (typeof reason === 'string' ? expect.stringContaining(reason) : expect.stringMatching(reason)) as string,
     info: { name: 'LiveshareForkDeniedError', code },
   }
 }
