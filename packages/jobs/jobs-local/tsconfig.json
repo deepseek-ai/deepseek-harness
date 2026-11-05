@@ -28,6 +28,9 @@
     },
     {
       "path": "../jobs"
+    },
+    {
+      "path": "../../core/tools"
     }
   ]
 }
