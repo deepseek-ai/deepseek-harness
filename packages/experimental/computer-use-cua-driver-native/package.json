@@ -36,7 +36,7 @@
     "@deepseek-ai/dsh-computer-use": "workspace:*",
     "@deepseek-ai/dsh-system-prompt": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",
-    "@deepseek-ai/dsh-llm": "workspace:*"
+    "@deepseek-ai/dsh-error": "workspace:*"
   },
   "dependencies": {
     "@deepseek-ai/dsh-mcp-client": "workspace:*",
@@ -60,6 +60,7 @@
     "@deepseek-ai/dsh-system-prompt": "workspace:*",
     "@deepseek-ai/dsh-tool-executor-native": "workspace:*",
     "@deepseek-ai/dsh-tool-testkit": "workspace:*",
-    "@deepseek-ai/dsh-tools": "workspace:*"
+    "@deepseek-ai/dsh-tools": "workspace:*",
+    "@deepseek-ai/dsh-error": "workspace:*"
   }
 }

@@ -16,7 +16,8 @@ import type {
 } from '@botiverse/oar'
 import { awaitTurnEnd } from '@botiverse/oar/observe'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { HarnessError, type ContentBlock } from '@deepseek-ai/dsh-llm'
+import { HarnessError } from '@deepseek-ai/dsh-error'
+import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import {
   assertUsableCwd,

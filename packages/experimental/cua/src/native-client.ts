@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto'
 import assert from 'node:assert/strict'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
-import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { z } from 'zod'

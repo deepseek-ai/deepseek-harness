@@ -1,6 +1,6 @@
 /** Structured refusals of tool use by a forked or shared Session's viewer-driven turns. @module */
 
-import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 
 /**
  * Every {@link LiveshareForkDeniedError} code:

@@ -8802,6 +8802,9 @@ importers:
       '@deepseek-ai/dsh-browser-use':
         specifier: workspace:*
         version: link:../../browser-use/browser-use
+      '@deepseek-ai/dsh-error':
+        specifier: workspace:*
+        version: link:../../util/error
       '@deepseek-ai/dsh-fs-local':
         specifier: workspace:*
         version: link:../../fs/fs-local
@@ -8902,6 +8905,9 @@ importers:
       '@deepseek-ai/dsh-browser-use':
         specifier: workspace:*
         version: link:../../browser-use/browser-use
+      '@deepseek-ai/dsh-error':
+        specifier: workspace:*
+        version: link:../../util/error
       '@deepseek-ai/dsh-llm':
         specifier: workspace:*
         version: link:../../llm/llm
@@ -8966,6 +8972,9 @@ importers:
       '@deepseek-ai/dsh-commands':
         specifier: workspace:*
         version: link:../../interaction/commands
+      '@deepseek-ai/dsh-error':
+        specifier: workspace:*
+        version: link:../../util/error
       '@deepseek-ai/dsh-fs':
         specifier: workspace:*
         version: link:../../fs/fs
@@ -9699,6 +9708,9 @@ importers:
       '@deepseek-ai/dsh-computer-use':
         specifier: workspace:*
         version: link:../../computer-use/computer-use
+      '@deepseek-ai/dsh-error':
+        specifier: workspace:*
+        version: link:../../util/error
       '@deepseek-ai/dsh-llm':
         specifier: workspace:*
         version: link:../../llm/llm
@@ -9903,6 +9915,9 @@ importers:
       '@deepseek-ai/dsh-config-editor':
         specifier: workspace:*
         version: link:../../boot/config-editor
+      '@deepseek-ai/dsh-error':
+        specifier: workspace:*
+        version: link:../../util/error
       '@deepseek-ai/dsh-fs-local':
         specifier: workspace:*
         version: link:../../fs/fs-local
@@ -10698,6 +10713,9 @@ importers:
       '@deepseek-ai/dsh-cua':
         specifier: workspace:*
         version: link:../cua
+      '@deepseek-ai/dsh-error':
+        specifier: workspace:*
+        version: link:../../util/error
       '@deepseek-ai/dsh-experimental-api-speech-to-text':
         specifier: workspace:*
         version: link:../api-speech-to-text
@@ -11175,6 +11193,9 @@ importers:
       '@deepseek-ai/dsh-app-boot':
         specifier: workspace:*
         version: link:../../boot/app-boot
+      '@deepseek-ai/dsh-error':
+        specifier: workspace:*
+        version: link:../../util/error
       '@deepseek-ai/dsh-experimental-tool-subagent-oar':
         specifier: workspace:*
         version: link:../tool-subagent-oar
@@ -11307,6 +11328,9 @@ importers:
       '@deepseek-ai/dsh-agent-loop-testkit':
         specifier: workspace:*
         version: link:../../test-support/agent-loop-testkit
+      '@deepseek-ai/dsh-error':
+        specifier: workspace:*
+        version: link:../../util/error
       '@deepseek-ai/dsh-llm':
         specifier: workspace:*
         version: link:../../llm/llm
@@ -11457,6 +11481,9 @@ importers:
       '@deepseek-ai/dsh-agent-loop-testkit':
         specifier: workspace:*
         version: link:../../test-support/agent-loop-testkit
+      '@deepseek-ai/dsh-error':
+        specifier: workspace:*
+        version: link:../../util/error
       '@deepseek-ai/dsh-jobs':
         specifier: workspace:*
         version: link:../../jobs/jobs

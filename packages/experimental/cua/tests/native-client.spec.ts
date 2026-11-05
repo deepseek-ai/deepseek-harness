@@ -1,6 +1,7 @@
 /** Controlled connection streams exercise the platform-independent native protocol client. */
 import { PassThrough, Writable } from 'node:stream'
-import { HarnessError, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { HarnessError } from '@deepseek-ai/dsh-error'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { NativeChannel } from '../src/native-client.ts'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { z } from 'zod'

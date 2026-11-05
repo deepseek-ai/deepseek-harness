@@ -21,7 +21,7 @@
       "path": "../../core/tools"
     },
     {
-      "path": "../../llm/llm"
+      "path": "../../util/error"
     },
     {
       "path": "../../core/scope"

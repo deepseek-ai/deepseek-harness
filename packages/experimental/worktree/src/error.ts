@@ -1,6 +1,6 @@
 /** Machine-routable worktree creation and restoration failures. @module */
 
-import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 
 /**
  * Every {@link WorktreeError} code:

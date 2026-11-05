@@ -1,6 +1,6 @@
 /** Machine-routable Cua Driver SDK failures. @module */
 
-import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 
 /**
  * Every {@link CuaDriverError} code:

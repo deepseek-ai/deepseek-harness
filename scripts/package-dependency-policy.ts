@@ -91,8 +91,6 @@ const PEER_REQUIRED_HOST_EXPORTS = {
   '@deepseek-ai/dsh-experimental-worktree': ['generatedWorktreeName', 'CREATED_RECORD', 'createdWorktreeSchema'],
   // The forge panel matches ctx.fs failures with `instanceof FsError`.
   '@deepseek-ai/dsh-fs': ['FsError'],
-  // The tool registry records a failure's name and code only for `instanceof HarnessError`.
-  '@deepseek-ai/dsh-llm': ['HarnessError'],
   '@deepseek-ai/dsh-scope': ['carrierKeyOf', 'createScope', 'scopeOf', 'scopeTarget'],
   // appendPluginRecord writes through the Session class's private log; pluginRecordOf is stateless.
   '@deepseek-ai/dsh-session': ['SESSION_FORMAT_VERSION', 'appendPluginRecord', 'pluginRecordOf'],
