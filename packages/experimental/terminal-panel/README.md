@@ -40,15 +40,15 @@ Mount the plugin in a group that isolates `terminals`, beside the registry and t
 
 ### Agent terminals
 
-`terminal_open` resolves the Session's sandbox policy the way the bash tool does and opens a terminal for the calling Agent: confined modes run the shell inside the sandbox, `danger-full-access` runs it directly, and commands in the terminal cannot request more access. The terminal is titled with the `name` argument or its session id and starts in the requested directory or the Session's working directory. It returns after the shell has printed, stayed silent for `startupSilenceMs` and owns the foreground, with the rendered screen as its startup output; the person's startup files run first.
+`terminal_open` resolves the Session's sandbox policy the way the bash tool does and opens a terminal for the calling Agent: confined modes run the shell inside the sandbox, `danger-full-access` runs it directly, and commands in the terminal cannot request more access. The shell keeps that policy; once the Session resolves a different one, for example after the person changes the sandbox mode, `terminal_send` fails and tells the model to open a new terminal, while reads, signals and closing continue. The terminal is titled with the `name` argument or its session id and starts in the requested directory or the Session's working directory. It returns after the shell has printed, stayed silent for `startupSilenceMs` and owns the foreground, with the rendered screen as its startup output; the person's startup files run first.
 
 `terminal_send` writes the text and Enter, then returns `stdin_read` once output has been silent for `promptSilenceMs` and the shell, or a program waiting for terminal input, owns the foreground. A quiet command returns `inferred_idle` after `idleSilenceMs`, a busy one `timeout` after `timeoutMs`, and an exited or closed terminal `session_exit`. Cancelling a send interrupts the command its input started. Results render the screen from the line where the send began, joining wrapped rows; `terminal_read` pages the rendered screen including scrollback.
 
-Once the person types or pastes into an Agent terminal, `terminal_send` and `terminal_signal` fail with an explanation, `terminal_read` keeps working, and `terminal_close` releases the terminal to the person instead of ending it. Before takeover, `terminal_close` ends the shell and removes the tab. Subagents are refused, because their terminals would not appear in the Session the person is viewing.
+Once the person types or pastes into an Agent terminal, `terminal_send` and `terminal_signal` fail with an explanation, `terminal_read` keeps working, and `terminal_close` only removes the terminal from the Agent's list, leaving its shell and processes running for the person. Before takeover, `terminal_close` ends the shell and removes the tab. Subagents are refused, because their terminals would not appear in the Session the person is viewing.
 
 ### User terminals
 
-`user_terminal_list` lists the terminals the person controls with their start directory and whether a command is running. `user_terminal_read` renders the newest lines of one of them. Neither writes to a terminal. `readUserTerminals: false` removes both tools.
+`user_terminal_list` lists the terminals the person controls with their start directory and whether a command is running. `user_terminal_read` renders the newest lines of one of them. Neither writes to a terminal. Subagents are refused, because their Sessions hold none of the person's terminals. `readUserTerminals: false` removes both tools.
 
 ### Configuration
 
@@ -119,7 +119,7 @@ The plugin contributes this fixed section after the terminal tools' guidance:
 ##### Visible terminal guidance
 
 ```markdown
-Terminals you open with terminal_open appear in the user's side panel. The user can watch them and type into them; once the user types into one, you can only read it, and terminal_close releases it to the user. Use visible terminals for long-running processes the user should see, such as dev servers and watchers; keep using bash for short commands whose output you need now. Commands in these terminals run in the session sandbox and cannot request more access; when one is denied permission, run it with bash instead. Never type passwords or one-time codes; ask the user to enter them in the terminal.
+Terminals you open with terminal_open appear in the user's side panel. The user can watch them and type into them; once the user types into one, you can only read it, and terminal_close then only removes it from your terminal list while its shell and processes keep running for the user. Use visible terminals for long-running processes the user should see, such as dev servers and watchers; keep using bash for short commands whose output you need now. Commands in these terminals run in the session sandbox and cannot request more access; when one is denied permission, run it with bash instead. Never type passwords or one-time codes; ask the user to enter them in the terminal.
 ```
 
 #### Token effect

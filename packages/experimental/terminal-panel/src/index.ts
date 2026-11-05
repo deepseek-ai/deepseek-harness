@@ -1,6 +1,6 @@
 /**
  * Visible persistent terminals: a terminal registry backend whose sessions are Agent terminals in the
- * Session's sidebar, read-only tools for terminals the user opened, and guidance for both.
+ * Session's sidebar, read-only tools for terminals the user controls, and guidance for both.
  * @module @deepseek-ai/dsh-terminal-panel
  */
 
@@ -22,7 +22,7 @@ export const name = 'terminal-panel'
 export const inject = ['terminals', 'terminalController', 'sandboxPolicy', 'tools', 'systemPrompt']
 
 /** System-prompt guidance on visible terminals. */
-export const GUIDANCE = 'Terminals you open with terminal_open appear in the user\'s side panel. The user can watch them and type into them; once the user types into one, you can only read it, and terminal_close releases it to the user. Use visible terminals for long-running processes the user should see, such as dev servers and watchers; keep using bash for short commands whose output you need now. Commands in these terminals run in the session sandbox and cannot request more access; when one is denied permission, run it with bash instead. Never type passwords or one-time codes; ask the user to enter them in the terminal.'
+export const GUIDANCE = 'Terminals you open with terminal_open appear in the user\'s side panel. The user can watch them and type into them; once the user types into one, you can only read it, and terminal_close then only removes it from your terminal list while its shell and processes keep running for the user. Use visible terminals for long-running processes the user should see, such as dev servers and watchers; keep using bash for short commands whose output you need now. Commands in these terminals run in the session sandbox and cannot request more access; when one is denied permission, run it with bash instead. Never type passwords or one-time codes; ask the user to enter them in the terminal.'
 
 /**
  * Register the sidebar terminal backend, its guidance and, when enabled, the user-terminal tools.

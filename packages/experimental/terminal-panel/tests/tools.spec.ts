@@ -15,7 +15,7 @@ import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import * as TerminalPanel from '../src/index.ts'
-import { registerUserTerminalTools, renderUserScreen, renderUserTerminals } from '../src/tools.ts'
+import { SUBAGENT_USER_TERMINALS, registerUserTerminalTools, renderUserScreen, renderUserTerminals } from '../src/tools.ts'
 import type { UserTerminals } from '../src/tools.ts'
 import { agentFor } from './agent.ts'
 
@@ -103,6 +103,10 @@ describe('user terminal tools', () => {
     expect(text(await call(ctx, agent, 'user_terminal_read', { id: 'gone' }))).toContain('call user_terminal_list for current ids')
     expect(text(await call(ctx, agent, 'user_terminal_read', { id: 'user-a', lines: 0 }))).toContain('lines must be a positive integer')
     expect(text(await call(ctx, undefined, 'user_terminal_list', {}))).toContain('require an initiating agent')
+    const child = agentFor(ctx, 'child', { subagent: true })
+    expect(text(await call(ctx, child, 'user_terminal_list', {}))).toContain(SUBAGENT_USER_TERMINALS)
+    expect(text(await call(ctx, child, 'user_terminal_read', { id: 'user-a' }))).toContain(SUBAGENT_USER_TERMINALS)
+    expect(fake.list).not.toHaveBeenCalledWith(child.id)
     expect(ctx.tools.get('user_terminal_list')?.presentCall?.({})).toMatchObject({ card: 'generic', title: 'List user terminals', kind: 'read' })
     expect(ctx.tools.get('user_terminal_read')?.presentCall?.({ id: 'user-a' })).toMatchObject({ card: 'generic', title: 'Read user terminal user-a', kind: 'read' })
   })

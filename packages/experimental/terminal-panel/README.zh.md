@@ -40,15 +40,15 @@ kind: "package-reference"
 
 ### Agent 终端
 
-`terminal_open` 按 bash 工具的方式解析 Session 的沙箱策略，并为调用它的 Agent 打开终端：受限模式在沙箱内运行 shell，`danger-full-access` 直接运行，终端里的命令不能申请更多权限。终端以 `name` 参数或会话 id 为标题，从请求的目录或 Session 工作目录启动。shell 输出过内容、静默 `startupSilenceMs` 并占据前台后，工具才返回，并把渲染后的屏幕作为启动输出；人的启动文件会先运行。
+`terminal_open` 按 bash 工具的方式解析 Session 的沙箱策略，并为调用它的 Agent 打开终端：受限模式在沙箱内运行 shell，`danger-full-access` 直接运行，终端里的命令不能申请更多权限。shell 会一直保留这一策略；Session 解析出的策略一旦不同（例如人切换了沙箱模式），`terminal_send` 就会失败并提示模型另开终端，读取、发送信号和关闭照常可用。终端以 `name` 参数或会话 id 为标题，从请求的目录或 Session 工作目录启动。shell 输出过内容、静默 `startupSilenceMs` 并占据前台后，工具才返回，并把渲染后的屏幕作为启动输出；人的启动文件会先运行。
 
 `terminal_send` 写入文本和回车，在输出静默 `promptSilenceMs`、且 shell 或正在等待终端输入的程序占据前台时返回 `stdin_read`。安静的命令在 `idleSilenceMs` 后返回 `inferred_idle`，忙碌的命令在 `timeoutMs` 后返回 `timeout`，终端退出或关闭时返回 `session_exit`。取消发送会中断由这次输入启动的命令。结果从发送开始的那一行渲染屏幕，并拼接软换行；`terminal_read` 按页读取包括滚动缓冲区在内的渲染屏幕。
 
-人在 Agent 终端中键入或粘贴后，`terminal_send` 和 `terminal_signal` 会失败并说明原因，`terminal_read` 照常可用，`terminal_close` 只把终端交给人而不结束它。接管之前，`terminal_close` 会结束 shell 并移除标签页。子 agent 会被拒绝，因为它们打开的终端不会出现在人正在查看的 Session 中。
+人在 Agent 终端中键入或粘贴后，`terminal_send` 和 `terminal_signal` 会失败并说明原因，`terminal_read` 照常可用，`terminal_close` 只把终端移出 Agent 的列表，shell 及其进程继续为人运行。接管之前，`terminal_close` 会结束 shell 并移除标签页。子 agent 会被拒绝，因为它们打开的终端不会出现在人正在查看的 Session 中。
 
 ### 用户终端
 
-`user_terminal_list` 列出人控制的终端，包括起始目录和是否有命令正在运行。`user_terminal_read` 渲染其中一个终端最新的若干行。两者都不会写入终端。`readUserTerminals: false` 会移除这两个工具。
+`user_terminal_list` 列出人控制的终端，包括起始目录和是否有命令正在运行。`user_terminal_read` 渲染其中一个终端最新的若干行。两者都不会写入终端。子 agent 会被拒绝，因为它们的 Session 中没有人的终端。`readUserTerminals: false` 会移除这两个工具。
 
 ### 配置
 
@@ -119,7 +119,7 @@ kind: "package-reference"
 ##### 可见终端指引
 
 ```markdown
-Terminals you open with terminal_open appear in the user's side panel. The user can watch them and type into them; once the user types into one, you can only read it, and terminal_close releases it to the user. Use visible terminals for long-running processes the user should see, such as dev servers and watchers; keep using bash for short commands whose output you need now. Commands in these terminals run in the session sandbox and cannot request more access; when one is denied permission, run it with bash instead. Never type passwords or one-time codes; ask the user to enter them in the terminal.
+Terminals you open with terminal_open appear in the user's side panel. The user can watch them and type into them; once the user types into one, you can only read it, and terminal_close then only removes it from your terminal list while its shell and processes keep running for the user. Use visible terminals for long-running processes the user should see, such as dev servers and watchers; keep using bash for short commands whose output you need now. Commands in these terminals run in the session sandbox and cannot request more access; when one is denied permission, run it with bash instead. Never type passwords or one-time codes; ask the user to enter them in the terminal.
 ```
 
 #### Token 影响
