@@ -179,3 +179,30 @@ it('reports a quiescence failure while releasing the Agent and Session', async (
     idle.mockRestore()
   }
 })
+
+it('keeps creation resources alive until an interrupted creation listener finishes', async () => {
+  const { ctx } = await harness()
+  const entered = Promise.withResolvers<Agent>()
+  const release = Promise.withResolvers<undefined>()
+  const signal = new AbortController()
+  const id = SessionId('interrupted-announcement')
+  const stop = ctx.on('agent/created', async ({ agent }) => {
+    if (agent.id !== id) return
+    entered.resolve(agent)
+    await release.promise
+  })
+  const creation = ctx.agents.create({ sessionId: id, agentOptions: { provider: 'mock', model: 'mock' }, signal: signal.signal })
+    .then(handle => handle.dispose(), (error: unknown) => error)
+  try {
+    const agent = await entered.promise
+    signal.abort(new Error('creation interrupted'))
+    expect(ctx.sessions.get(id)).toBe(agent.session)
+    release.resolve(undefined)
+    expect(await creation).toEqual(new Error('creation interrupted'))
+    expect(ctx.sessions.get(id)).toBeUndefined()
+  } finally {
+    release.resolve(undefined)
+    await creation
+    stop()
+  }
+})
