@@ -6,6 +6,7 @@ import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
 import { TerminalBackendCleanupError, TerminalSessionId } from '@deepseek-ai/dsh-terminal'
 import { Config } from '../src/config.ts'
 import { PanelTerminalBackend, SUBAGENT_REFUSAL, startup } from '../src/backend.ts'
+import { POLICY_CHANGED } from '../src/session.ts'
 import type { PanelBackendServices } from '../src/backend.ts'
 import { agentFor } from './agent.ts'
 import { FakeTerminal, SHELL_PID } from './fake.ts'
@@ -40,6 +41,18 @@ describe('spawn', () => {
     }, expect.any(AbortSignal))
     expect(session.motd).toBe('$%')
     expect(session.pid).toBe(SHELL_PID)
+  })
+
+  it('checks each send against the policy the Session resolves at that moment', async () => {
+    const { terminal, services, backend: panel } = backend()
+    const owner = agentFor(new Context(), 'session')
+    const spawning = panel.spawn({ sessionId: TerminalSessionId('pty-1'), owner, type: 'shell' })
+    await vi.advanceTimersByTimeAsync(300)
+    const session = await spawning
+    services.policy.mockReturnValue({ ...policy, mode: 'read-only' })
+    expect(() => session.startSend({ text: 'ls', submit: true })).toThrow(POLICY_CHANGED)
+    expect(services.policy).toHaveBeenLastCalledWith(owner.session)
+    expect(terminal.write).not.toHaveBeenCalled()
   })
 
   it('titles an unnamed terminal with its registry id and leaves the directory to the controller', async () => {
