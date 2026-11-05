@@ -58,7 +58,7 @@ private enum ApplicationTarget {
     case running(ProcessIdentity)
     case pending(InstalledApplication, JSONValue)
 }
-enum DriverOutcome: Sendable { case result(JSONValue), capture(CaptureTarget), foreground(ForegroundPlan), launch(ApplicationLaunch), paste(PastePlan), hover(WindowRoute, WindowPoint) }
+enum DriverOutcome: Sendable { case result(JSONValue), capture(CaptureTarget), foreground(ForegroundPlan), launch(ApplicationLaunch), paste(PastePlan), mouseMove(WindowRoute, WindowPoint) }
 
 actor AXWorker {
     nonisolated let executor = NativeSerialExecutor()
@@ -330,7 +330,7 @@ actor AXWorker {
         case "selectText":
             try ax().selectText(element(handle, params), text: params.string("text"), prefix: params.optionalString("prefix"),
                                 suffix: params.optionalString("suffix"), mode: params.optionalString("selectionType") ?? "text")
-        case "click", "hover":
+        case "click", "mouseMove":
             let holdMs = params.contains("holdMs") ? try params.integer("holdMs", in: 0...maxClickHoldMs) : nil
             let button = try params.optionalString("mouseButton") ?? "left"
             let count = params.contains("clickCount") ? try params.integer("clickCount", in: 1...2) : 1
@@ -363,7 +363,7 @@ actor AXWorker {
                 point = try params.point()
             }
             let route = WindowRoute(owner: identity, windowID: window.windowID, bounds: window.bounds)
-            if method == "hover" {
+            if method == "mouseMove" {
                 try WindowPointerInput.validate(point, in: route)
                 if hoverElement == nil {
                     hoverElement = try ax().element(at: CGPoint(x: window.bounds.x + point.x, y: window.bounds.y + point.y), owner: identity)
@@ -372,9 +372,9 @@ actor AXWorker {
                 let hover = hovers[handle] ?? AXHover()
                 hovers[handle] = hover
                 if try hover.move(to: hoverElement, in: route, access: ax()) {
-                    return .result(Self.hoverResult(route: "accessibility", pointerMoved: false))
+                    return .result(Self.mouseMoveResult(route: "accessibility", pointerMoved: false))
                 }
-                return .hover(route, point)
+                return .mouseMove(route, point)
             }
             try await inputs().1.click(in: route, at: point, button: button, count: count, modifiers: modifiers, holdMs: holdMs)
         case "scroll", "drag":
@@ -457,7 +457,7 @@ actor AXWorker {
             "pixelWidth": .number(Double(image.width)), "pixelHeight": .number(Double(image.height)), "bounds": after.bounds.json,
             "coordinateSpace": .string("window-points"), "windowId": .number(Double(after.windowID))])
     }
-    static func hoverResult(route: String, pointerMoved: Bool) -> JSONValue {
+    static func mouseMoveResult(route: String, pointerMoved: Bool) -> JSONValue {
         .object(["dispatched": .bool(true), "hoverRoute": .string(route), "systemPointerMoved": .bool(pointerMoved)])
     }
     func shutdown() { closed = true; snapshots.removeAll(); observedWindowBounds.removeAll(); targets.removeAll(); hovers.removeAll(); access = nil; keyboard = nil; pointer = nil }

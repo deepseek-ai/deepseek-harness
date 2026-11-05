@@ -29,7 +29,7 @@ final class WindowPointerInput {
     }
 
     /// Move the visible cursor without restoring the prior point or reserving the application.
-    @MainActor static func hover(in route: WindowRoute, at point: WindowPoint, checkCancellation: @Sendable () throws -> Void) throws {
+    @MainActor static func mouseMove(in route: WindowRoute, at point: WindowPoint, checkCancellation: @Sendable () throws -> Void) throws {
         try checkCancellation()
         try Self.validate(point, in: route)
         try NativePlatform.verify(route.owner)

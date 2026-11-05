@@ -191,23 +191,23 @@ def main():
                     call("performSecondaryAction", {**owner, "snapshotId": current["snapshotId"],
                                                      "elementId": window_element["elementId"], "action": "raise"})
                 call("getState", primary_params)
-                def hover(target):
-                    result = call("hover", target)
+                def mouse_move(target):
+                    result = call("mouseMove", target)
                     if args.alternate_hover:
                         assert result["hoverRoute"] == "accessibility" and result["systemPointerMoved"] is False, result
                     return result
                 x, y, width, height = json.loads(state_path.read_text())["dragBounds"]
-                hover({**owner, "windowId": primary["windowId"], "x": x + 20, "y": y + 20})
+                mouse_move({**owner, "windowId": primary["windowId"], "x": x + 20, "y": y + 20})
                 wait_state(lambda actual: actual["hoverVisible"], "AppKit tracking area did not reveal hover controls")
                 time.sleep(0.25)
                 hover_state = call("getState", primary_params)
                 capture(primary, "02-native-hover.png")
                 assert json.loads(state_path.read_text())["hoverVisible"], "Observation dismissed native hover controls"
                 hover_target = button_target(hover_state, "Use native hover details")
-                hover(hover_target)
+                mouse_move(hover_target)
                 call("click", hover_target)
                 wait_state(lambda actual: actual["hoverClicks"] == 1, "Native hover control did not activate")
-                hover({**owner, "windowId": primary["windowId"], "x": 10, "y": 40})
+                mouse_move({**owner, "windowId": primary["windowId"], "x": 10, "y": 40})
                 wait_state(lambda actual: not actual["hoverVisible"], "AppKit tracking area did not exit")
                 if args.alternate_hover:
                     actual = json.loads(state_path.read_text())
@@ -222,15 +222,15 @@ def main():
                                           "Overlay input routing did not settle")
                     cycle_overlay(1)
                     target = {**owner, "windowId": primary["windowId"], "x": x + 20, "y": y + 20}
-                    hover(target)
+                    mouse_move(target)
                     wait_state(lambda actual: actual["hoverVisible"], "Input-transparent overlay blocked hover")
                     before = cycle_overlay(2)
-                    call("hover", target, "FOREGROUND_REQUIRED")
+                    call("mouseMove", target, "FOREGROUND_REQUIRED")
                     after = wait_state(lambda actual: actual["cursorSamples"] >= before["cursorSamples"] + 2,
                                        "Pointer observation did not advance")
                     assert after["cursorChanges"] == before["cursorChanges"], "Rejected hover moved the system pointer"
                     cycle_overlay(0)
-                    hover({**owner, "windowId": primary["windowId"], "x": 10, "y": 40})
+                    mouse_move({**owner, "windowId": primary["windowId"], "x": 10, "y": 40})
                     wait_state(lambda actual: not actual["hoverVisible"], "Hover did not exit after removing the overlay")
 
             if args.hover_only:

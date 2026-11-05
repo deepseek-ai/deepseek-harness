@@ -54,7 +54,7 @@ def cases():
         (request("call-中文-🧪", "protocol-absent\noperation", {}), "call-中文-🧪", "UNSUPPORTED",
          "Unsupported native operation: protocol-absent\noperation"),
     ]
-    result.append((request("hover-button", "hover", {"mouseButton": "left"}), "hover-button", "INVALID_ARGUMENT",
+    result.append((request("hover-button", "mouseMove", {"mouseButton": "left"}), "hover-button", "INVALID_ARGUMENT",
                    "Unknown operation parameter"))
     for index in range(24):
         identifier = f"ordered-{index:02d}"

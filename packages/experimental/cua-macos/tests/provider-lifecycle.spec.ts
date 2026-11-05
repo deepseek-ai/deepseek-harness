@@ -170,8 +170,8 @@ it('merges startup capabilities into runtime native fields', async () => {
   expect(result.isError).toBe(false)
   expect(result.value).toEqual({ ...runtime, platform: 'macos', appLevelAccessibility: true, keyboard: ['app'], browser: false,
     coordinateSpace: 'screenshot-pixels', methods: [
-      'activate', 'click', 'drag', 'findApps', 'getApp', 'getCapabilities', 'getState', 'hover', 'invoke',
-      'listActions', 'listApps', 'listWindows', 'paste', 'performAction', 'pressKey', 'screenshot', 'scroll',
+      'activate', 'click', 'drag', 'findApps', 'getApp', 'getCapabilities', 'getState', 'invoke',
+      'listActions', 'listApps', 'listWindows', 'mouseMove', 'paste', 'performAction', 'pressKey', 'screenshot', 'scroll',
       'selectText', 'setValue', 'show', 'typeText',
     ] })
   expect(native.request).toHaveBeenCalledExactlyOnceWith('getCapabilities', {}, expect.any(AbortSignal), ToolCallId('lifecycle-1'))

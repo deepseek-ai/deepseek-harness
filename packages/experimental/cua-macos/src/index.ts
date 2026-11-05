@@ -12,8 +12,8 @@ export { GUIDANCE } from './guidance.ts'
 const CAPABILITIES: CuaStartupCapabilities = {
   platform: 'macos',
   methods: [
-    'activate', 'click', 'drag', 'findApps', 'getApp', 'getCapabilities', 'getState', 'hover', 'invoke',
-    'listActions', 'listApps', 'listWindows', 'paste', 'performAction', 'pressKey', 'screenshot', 'scroll',
+    'activate', 'click', 'drag', 'findApps', 'getApp', 'getCapabilities', 'getState', 'invoke',
+    'listActions', 'listApps', 'listWindows', 'mouseMove', 'paste', 'performAction', 'pressKey', 'screenshot', 'scroll',
     'selectText', 'setValue', 'show', 'typeText',
   ],
   appLevelAccessibility: true,

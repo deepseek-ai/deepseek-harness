@@ -62,10 +62,10 @@ it('accepts disclosure options without accepting host traversal limits', () => {
 it.each([
   { appHandle: 'app', snapshotId: 'snapshot', elementId: '0' },
   { appHandle: 'app', windowId: 23, x: 1, y: 2 },
-])('accepts a hover target %j without button input', (params) => {
-  expect(Request.parse({ method: 'hover', params })).toEqual({ method: 'hover', params })
+])('accepts a mouse move target %j without button input', (params) => {
+  expect(Request.parse({ method: 'mouseMove', params })).toEqual({ method: 'mouseMove', params })
   for (const extra of [{ mouseButton: 'left' }, { clickCount: 1 }, { modifiers: ['shift'] }, { useSystemPointer: 'yes' }]) {
-    expect(Request.safeParse({ method: 'hover', params: { ...params, ...extra } }).success).toBe(false)
+    expect(Request.safeParse({ method: 'mouseMove', params: { ...params, ...extra } }).success).toBe(false)
   }
 })
 
@@ -73,8 +73,12 @@ it.each([
   { appHandle: 'app', elementId: '0' },
   { appHandle: 'app', x: 1, y: 2 },
   { appHandle: 'app', snapshotId: 'snapshot', elementId: '0', windowId: 23, x: 1, y: 2 },
-])('rejects incomplete or mixed hover targets %j', (params) => {
-  expect(Request.safeParse({ method: 'hover', params }).success).toBe(false)
+])('rejects incomplete or mixed mouse move targets %j', (params) => {
+  expect(Request.safeParse({ method: 'mouseMove', params }).success).toBe(false)
+})
+
+it('rejects the retired hover operation name', () => {
+  expect(Request.safeParse({ method: 'hover', params: { appHandle: 'app', snapshotId: 'snapshot', elementId: '0' } }).success).toBe(false)
 })
 
 it.each(['0', '42.12345', 'runtime:7/child', 'e12'])('admits an opaque element id %j without provider format rules', (elementId) => {
@@ -142,7 +146,7 @@ it('requires a setValue value and rejects unknown parameters', () => {
   ]) expect(Request.safeParse({ method: 'setValue', params: invalid }).success).toBe(false)
 })
 
-it.each(['click', 'hover', 'scroll', 'drag'])('validates 0–999 integer coordinates for %s', (method) => {
+it.each(['click', 'mouseMove', 'scroll', 'drag'])('validates 0–999 integer coordinates for %s', (method) => {
   const params = { appHandle: 'app', windowId: 7, relative: true,
     ...method === 'drag' ? { fromX: 0, fromY: 0, toX: 999, toY: 999 } : { x: 0, y: 999 },
     ...method === 'scroll' ? { deltaLinesX: 0, deltaLinesY: -1 } : {},

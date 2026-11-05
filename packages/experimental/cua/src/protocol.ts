@@ -48,7 +48,7 @@ export const Request = z.discriminatedUnion('method', [
   operation('listActions', snapshot),
   operation('performAction', { ...snapshot, action: z.string().min(1), argument: jsonValue.optional() }),
   operation('invoke', snapshot),
-  z.object({ method: z.literal('hover'), params: z.union([
+  z.object({ method: z.literal('mouseMove'), params: z.union([
     z.object(snapshot).strict(), z.object(absoluteCoordinate).strict(), z.object(relativeCoordinate).strict(),
   ]) }).strict(),
   z.object({ method: z.literal('click'), params: z.union([

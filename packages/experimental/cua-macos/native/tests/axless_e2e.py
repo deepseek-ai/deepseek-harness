@@ -97,7 +97,7 @@ def main():
                 actual = wait_state(lambda state: state['resizeCount'] == 1, 'fixture did not resize')
                 for snapshot in [{}, {'snapshotId': recovered['snapshotId']}]:
                     target = {**owner, 'windowId': window_id, **snapshot}
-                    helper.call('hover', {**target, 'x': x, 'y': y}, 'WINDOW_CHANGED')
+                    helper.call('mouseMove', {**target, 'x': x, 'y': y}, 'WINDOW_CHANGED')
                     helper.call('click', {**target, 'x': x, 'y': y}, 'WINDOW_CHANGED')
                     helper.call('scroll', {**target, 'x': x, 'y': y, 'deltaLinesY': -1}, 'WINDOW_CHANGED')
                     helper.call('drag', {**target, 'fromX': x, 'fromY': y, 'toX': x + 1, 'toY': y,

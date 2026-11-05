@@ -189,7 +189,7 @@ export interface CuaWindow extends CuaSurface {
    * @param options - coordinate mode; applies only to [x,y].
    * @returns dispatch evidence and the selected route; observe the resulting UI after its hover delay.
    */
-  hover(target: CuaElementId | readonly [number, number], options?: CuaCoordinateOptions): Promise<CuaHoverResult>
+  mouseMove(target: CuaElementId | readonly [number, number], options?: CuaCoordinateOptions): Promise<CuaHoverResult>
   /**
    * Click a current element id or screenshot-local point.
    * Cancellation or timeout releases the held button; received input cannot be undone. The operation deadline includes holdMs.

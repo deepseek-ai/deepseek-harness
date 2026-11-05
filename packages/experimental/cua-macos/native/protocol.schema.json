@@ -463,7 +463,7 @@
         },
         "method": {
           "type": "string",
-          "const": "hover"
+          "const": "mouseMove"
         },
         "params": {
           "anyOf": [

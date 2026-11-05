@@ -216,13 +216,13 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>, sink: CuaObser
         if (options?.emit !== false) await sink?.image(screenshot)
         return screenshot
       },
-      async hover(targetPoint, options) {
+      async mouseMove(targetPoint, options) {
         const relative = options?.relative === undefined ? {} : { relative: options.relative }
         if (typeof targetPoint === 'string') {
-          return HoverResult.parse(await base.call('hover', { ...base.elementParams(), elementId: targetPoint, ...relative }))
+          return HoverResult.parse(await base.call('mouseMove', { ...base.elementParams(), elementId: targetPoint, ...relative }))
         }
         const [x, y] = targetPoint
-        return HoverResult.parse(await base.call('hover', { ...coordinateParams(appHandle, windowId), x, y, ...relative }))
+        return HoverResult.parse(await base.call('mouseMove', { ...coordinateParams(appHandle, windowId), x, y, ...relative }))
       },
       async click(targetPoint, options) {
         const mouseButton = options?.mouseButton ?? 'left'

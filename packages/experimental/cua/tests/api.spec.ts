@@ -30,7 +30,7 @@ function fixture(withSink = true) {
       case 'listApps': return [selected, { pid: 18, name: 'Utility' }]
       case 'getApp': return selected
       case 'listWindows': return windows
-      case 'hover': return { ...delivered, hoverRoute: 'accessibility', systemPointerMoved: false }
+      case 'mouseMove': return { ...delivered, hoverRoute: 'accessibility', systemPointerMoved: false }
       case 'show': return { ...delivered, windowId: params.windowId ?? 23, foregroundChanged: false }
       case 'getState': return {
         appHandle: selected.appHandle, windowId: params.windowId ?? null,
@@ -154,29 +154,29 @@ describe('background window restoration', () => {
   })
 })
 
-describe('hover across observations', () => {
+describe('mouseMove across observations', () => {
   it('moves to an AX element then into a popup without inserting clicks or restoring a point', async () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
     const window = await app.getWindow(23)
     f.dispatch.mockClear()
-    expect(await window.hover(element('0'))).toEqual({ ...delivered, hoverRoute: 'accessibility', systemPointerMoved: false })
+    expect(await window.mouseMove(element('0'))).toEqual({ ...delivered, hoverRoute: 'accessibility', systemPointerMoved: false })
     await window.getAccessibilityTree({ emit: false })
     await window.getScreenshot({ emit: false })
-    expect(await window.hover([30, 40])).toEqual({ ...delivered, hoverRoute: 'accessibility', systemPointerMoved: false })
+    expect(await window.mouseMove([30, 40])).toEqual({ ...delivered, hoverRoute: 'accessibility', systemPointerMoved: false })
     expect(f.dispatch.mock.calls.map(([operation]) => operation)).toEqual([
-      { method: 'hover', params: { appHandle: 'app-17', snapshotId: 'snapshot-2', elementId: '0', windowId: 23 } },
+      { method: 'mouseMove', params: { appHandle: 'app-17', snapshotId: 'snapshot-2', elementId: '0', windowId: 23 } },
       { method: 'getState', params: { appHandle: 'app-17', windowId: 23 } },
       { method: 'screenshot', params: { appHandle: 'app-17', windowId: 23 } },
-      { method: 'hover', params: { appHandle: 'app-17', snapshotId: 'snapshot-3', windowId: 23, x: 30, y: 40 } },
+      { method: 'mouseMove', params: { appHandle: 'app-17', snapshotId: 'snapshot-3', windowId: 23, x: 30, y: 40 } },
     ])
     const other = await app.getWindow(24)
-    await other.hover([5, 6])
-    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'hover', params: {
+    await other.mouseMove([5, 6])
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'mouseMove', params: {
       appHandle: 'app-17', snapshotId: 'snapshot-4', windowId: 24, x: 5, y: 6,
     } })
     f.dispatch.mockRejectedValueOnce(new Error('WINDOW_CHANGED'))
-    await expect(other.hover([5, 6])).rejects.toThrow('WINDOW_CHANGED')
+    await expect(other.mouseMove([5, 6])).rejects.toThrow('WINDOW_CHANGED')
     expect(f.dispatch).toHaveBeenCalledTimes(7)
   })
 })
@@ -368,9 +368,11 @@ describe('application and window observations', () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
     expect(app).toHaveProperty('getAccessibilityTree')
-    for (const method of ['getScreenshot', 'click', 'hover', 'scroll', 'drag']) expect(app).not.toHaveProperty(method)
+    for (const method of ['getScreenshot', 'click', 'mouseMove', 'scroll', 'drag']) expect(app).not.toHaveProperty(method)
     const window = await app.getWindow(23)
-    for (const method of ['getScreenshot', 'click', 'hover', 'scroll', 'drag']) expect(window).toHaveProperty(method)
+    for (const method of ['getScreenshot', 'click', 'mouseMove', 'scroll', 'drag']) expect(window).toHaveProperty(method)
+    expect(window).not.toHaveProperty('hover')
+    expect(window).toHaveProperty('mouseMove')
   })
 
   it('attaches the shared snapshot to coordinates only within its window scope', async () => {
@@ -622,7 +624,7 @@ describe('input actions', () => {
     const app = await f.api.getApp('Editor')
     const window = await app.getWindow(23)
     await window.click([500, 250], { relative: true })
-    await window.hover([500, 250], { relative: true })
+    await window.mouseMove([500, 250], { relative: true })
     await window.drag([0, 0], [999, 999], { relative: true })
     await window.scroll({ x: 500, y: 250, relative: true, deltaLinesX: 0, deltaLinesY: -1 })
     expect(f.dispatch.mock.calls.slice(-4).map(([request]) => request.params)).toEqual([
@@ -632,7 +634,7 @@ describe('input actions', () => {
       expect.objectContaining({ x: 500, y: 250, relative: true }),
     ])
     await expect(window.click(element('1'), { relative: true })).rejects.toThrow()
-    await expect(window.hover(element('1'), { relative: true })).rejects.toThrow()
+    await expect(window.mouseMove(element('1'), { relative: true })).rejects.toThrow()
   })
 
   it('keeps the selected window when scroll options include another target identity', async () => {
@@ -671,9 +673,9 @@ describe('input actions', () => {
   const invalidActions: Array<[string, (surfaces: Surfaces) => Promise<unknown>]> = [
     ['right double click', ({ window }) => window.click([1, 2], { mouseButton: 'right', clickCount: 2 })],
     ['right AX double click', ({ window }) => window.click(element('0'), { mouseButton: 'right', clickCount: 2 })],
-    ['empty hover element id', ({ window }) => window.hover(element(''))],
-    ['negative hover point', ({ window }) => window.hover([-1, 0])],
-    ['nonfinite hover point', ({ window }) => window.hover([NaN, 0])],
+    ['empty hover element id', ({ window }) => window.mouseMove(element(''))],
+    ['negative hover point', ({ window }) => window.mouseMove([-1, 0])],
+    ['nonfinite hover point', ({ window }) => window.mouseMove([NaN, 0])],
     ['empty click element id', ({ window }) => window.click(element(''))],
     ['nonfinite coordinate', ({ window }) => window.click([NaN, 0])],
     ['negative coordinate', ({ window }) => window.click([-1, 0])],
@@ -691,8 +693,8 @@ describe('input actions', () => {
   it.each<[string, (surfaces: Surfaces) => Promise<unknown>]>([
     ['getState windowId: Too small: expected number to be >0', ({ app }) => app.getWindow(0)],
     ['selectText text: Too small: expected string to have >=1 characters', ({ app }) => app.selectText(element('0'), '')],
-    ['hover x: Invalid input: expected number, received NaN', ({ window }) => window.hover([NaN, 0])],
-    ['hover x: Too big: expected number to be <=999', ({ window }) => window.hover([1000, 0], { relative: true })],
+    ['mouseMove x: Invalid input: expected number, received NaN', ({ window }) => window.mouseMove([NaN, 0])],
+    ['mouseMove x: Too big: expected number to be <=999', ({ window }) => window.mouseMove([1000, 0], { relative: true })],
     ['click relative: not accepted for these arguments', ({ window }) => window.click(element('650'), { relative: true })],
   ])('reports a readable validation failure: %s', async (message, run) => {
     const f = fixture()
@@ -775,10 +777,10 @@ describe('input actions', () => {
     const app = await f.api.getApp('Editor')
     const window = await app.getWindow(23)
     await window.click(element('42.12345'))
-    await window.hover(element('42.12345'))
+    await window.mouseMove(element('42.12345'))
     expect(f.dispatch.mock.calls.slice(-2).map(([operation]) => operation)).toEqual([
       { method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-2', elementId: '42.12345', windowId: 23 } },
-      { method: 'hover', params: { appHandle: 'app-17', snapshotId: 'snapshot-2', elementId: '42.12345', windowId: 23 } },
+      { method: 'mouseMove', params: { appHandle: 'app-17', snapshotId: 'snapshot-2', elementId: '42.12345', windowId: 23 } },
     ])
   })
 

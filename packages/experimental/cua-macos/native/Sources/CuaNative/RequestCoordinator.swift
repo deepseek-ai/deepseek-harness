@@ -205,10 +205,10 @@ import Darwin
                 let image = try await capture.capture(target, cancellation: cancellation, trace: trace)
                 result = try await worker.finishCapture(target, image: image, trace: trace)
             case .foreground(let plan): result = try await performForeground(plan, requestID: request.id)
-            case .hover(let route, let point):
+            case .mouseMove(let route, let point):
                 let latch = cancellation
-                try WindowPointerInput.hover(in: route, at: point, checkCancellation: { try latch.check() })
-                result = AXWorker.hoverResult(route: "system-pointer", pointerMoved: true)
+                try WindowPointerInput.mouseMove(in: route, at: point, checkCancellation: { try latch.check() })
+                result = AXWorker.mouseMoveResult(route: "system-pointer", pointerMoved: true)
             case .paste(let plan):
                 try await clipboard.perform(text: plan.text, format: plan.format, maxBytes: plan.maxBytes, readTimeout: plan.readTimeout,
                     checkCancellation: { try cancellation.check() }) { requireClipboard in
