@@ -153,8 +153,8 @@
   en: 4294f78d26ed985b
   zh: 4294f78d26ed985b
 /session-persistence-event-catalog/events/plan/plan-mode-log-only:
-  en: 9ae5537eeae238de
-  zh: 6be761c7fd83fdce
+  en: bcc1f048e7a31f1e
+  zh: a9c29711722cd6c7
 /session-persistence-event-catalog/events/request:
   en: a8df82440ebdf5f8
   zh: a8df82440ebdf5f8
@@ -1227,8 +1227,8 @@
   en: b45c7e8370d7be1e
   zh: 252fdc0ff2b9338c
 /session-persistence-event-catalog/resolved-persistence-types/sessiontitlemodelidentity:
-  en: 9531468264499498
-  zh: 9da23c0ad2776563
+  en: 9815df505b8cd026
+  zh: ce4f536eec979d77
 /session-persistence-event-catalog/resolved-persistence-types/sessiontitlemodelidentity~2:
   en: 13de8e35b749db45
   zh: 01e4f3bcb6784fc8
@@ -1425,8 +1425,8 @@
   en: a74e3dfa51c987af
   zh: 6c3c87974d7a7260
 /session-persistence-event-catalog/resolved-persistence-types/active~2:
-  en: c861888d6239b700
-  zh: a9b2271d3c6b8737
+  en: 235f08eeb284a1a5
+  zh: b6ebffbfd7b44a9b
 /session-persistence-event-catalog/resolved-persistence-types/agentpreset:
   en: 1282a0b3d5fa8d4d
   zh: aa533aea643dbefb

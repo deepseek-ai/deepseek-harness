@@ -735,7 +735,7 @@ Source: [`packages/interaction/permission-presets/src/index.ts:53`](../packages/
 'plan/mode': { active: boolean }
 ```
 
-Source: [`packages/plan/plan-mode/src/index.ts:53`](../packages/plan/plan-mode/src/index.ts)
+Source: [`packages/plan/plan-mode/src/index.ts:55`](../packages/plan/plan-mode/src/index.ts)
 
 ### `request/*`
 
@@ -4779,7 +4779,7 @@ Sources: [`packages/session/session-title-llm/src/index.ts:43`](../packages/sess
 
 SHA-256: `07e1a58c58b593f507b8e7f25723bb0aa42baae6e00f5ecfddf28cb1e64d3235`
 
-Sources: [`packages/session/session-title/src/types.ts:20`](../packages/session/session-title/src/types.ts) · [`packages/subagent/tool-subagent/src/model-selection.ts:9`](../packages/subagent/tool-subagent/src/model-selection.ts)
+Sources: [`packages/session/session-title/src/types.ts:20`](../packages/session/session-title/src/types.ts) · [`packages/subagent/tool-subagent/src/model-selection.ts:11`](../packages/subagent/tool-subagent/src/model-selection.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -5870,7 +5870,7 @@ Array of `unknown` (opaque).
 
 SHA-256: `20a57544bbf204dacd1ae6beb2ab29444365c3c869f2afdf489dcdcbc3d9c8c5`
 
-Sources: [`packages/plan/plan-mode/src/index.ts:53`](../packages/plan/plan-mode/src/index.ts)
+Sources: [`packages/plan/plan-mode/src/index.ts:55`](../packages/plan/plan-mode/src/index.ts)
 
 | Property | Presence | Type |
 |---|---|---|
