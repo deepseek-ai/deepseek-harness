@@ -361,6 +361,18 @@ Required for `SurfaceEventType` events — every message-producing event must de
 
 `assistant/message` cannot carry `sourceEventSeqs`; its `stream` owns exact provider evidence. Other surface events omit the field when they cite no earlier event and use a complete non-empty list when they do.
 
+### `SessionEventInput` — one proposed event
+
+```ts type-equiv
+/** One event proposed for append, without assigned sequence or time. */
+type SessionEventInput = {
+  [K in SessionEventType]: { type: K; data: SessionEventMap[K] }
+    & (K extends SurfaceEventType ? SurfaceIntent<K> : { surfaceOp?: never; sourceEventSeqs?: never })
+}[SessionEventType]
+```
+
+Each array member keeps its event type paired with its payload and requires surface intent only for message-producing events.
+
 <a id="plugin-owned-message-projections"></a>
 ### Plugin-owned message projections
 
@@ -574,6 +586,15 @@ declare class Session {
   /** The next event's sequence number — always the log length (the `seq = log.length` contiguity contract). */
   get seq(): SessionLogOffset;
   /**
+   * Append consecutive events together after validating every candidate and dispatch.
+   * Observers read the complete committed log and final message surface. An empty
+   * array appends nothing. Persistence listeners retain their own durability rules.
+   * @param inputs - event payloads and surface intents in commit order.
+   * @returns immutable committed events in the same order.
+   * @throws before changing the log if any candidate or synchronous dispatch validation fails.
+   */
+  append(inputs: readonly SessionEventInput[]): readonly SessionEvent[];
+  /**
    * Append one typed event to the log and synchronously notify observers via
    * the store-owned, module-private publication hooks. The hot path never blocks
    * on I/O — persistence plugins buffer asynchronously. Once the event enters
@@ -620,6 +641,11 @@ declare class Session {
     data: SessionEventMap[T],
     ...opts: T extends SurfaceEventType ? [opts: SurfaceIntent<T>] : []
     ): SessionEvent<T>;
+  append<T extends SessionEventType>(
+    type: T | readonly SessionEventInput[],
+    data?: SessionEventMap[T],
+    ...opts: [opts?: SurfaceIntent]
+  ): SessionEvent<T> | readonly SessionEvent[];
   /**
    * The {@link EpochHeader} in force after the log's last header event — the
    * header the NEXT request will be compared against — or undefined before

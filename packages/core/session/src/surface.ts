@@ -645,6 +645,44 @@ export class SurfaceManager implements SessionSurface {
     }
   }
 
+  /**
+   * Validate consecutive candidates against an isolated surface fold.
+   * @param events - candidates immediately following the committed log.
+   * @returns a callback adopting the validated fold after all candidates enter the log.
+   */
+  prepareBatch(events: readonly SessionEvent[]): () => void {
+    this._assertProjections()
+    if (this._lastProcessedSeq < this.baseSeq + this.log.length - 1) this._processDelta()
+    const lastProcessedSeq = SessionSeq(this.baseSeq + this.log.length + events.length - 1)
+    if (events.every(event => event.type !== 'developer/message'
+      && (event.surfaceOp === undefined || event.surfaceOp === 'append')
+      && !this.projections.some(projection => projection.type === event.type))) {
+      const plans = events.map((event, index) => planSurfaceEvent(
+        this._state, event, SessionSeq(this.baseSeq + this.log.length + index), this.log, this.baseSeq, this.projections,
+      ))
+      return () => {
+        for (const plan of plans) applySurfacePlan(this._state, plan)
+        this._lastProcessedSeq = lastProcessedSeq
+        this._pendingPlan = undefined
+      }
+    }
+    const state: SurfaceFoldState = {
+      ...this._state,
+      nodes: [...this._state.nodes],
+      projectedMessages: new Map(this._state.projectedMessages),
+      projections: new Set(this._state.projections),
+    }
+    const log = [...this.log, ...events]
+    for (const [index, event] of events.entries()) {
+      applySurfaceEvent(state, event, SessionSeq(this.baseSeq + this.log.length + index), log, this.baseSeq, this.projections)
+    }
+    return () => {
+      this._state = state
+      this._lastProcessedSeq = lastProcessedSeq
+      this._pendingPlan = undefined
+    }
+  }
+
   /** Monotonic count of folded positional replacements. */
   get replaceGeneration(): number {
     this._assertProjections()

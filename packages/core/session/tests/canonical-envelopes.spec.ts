@@ -37,13 +37,10 @@ function toolData(isError: boolean) {
 }
 
 function appendEvent(session: Session, event: SessionEvent) {
-  const append = session.append.bind(session) as (
-    type: SessionEvent['type'], data: unknown, metadata?: unknown,
-  ) => SessionEvent
-  return append(event.type, event.data, {
+  return Reflect.apply(session.append.bind(session), session, [event.type, event.data, {
     ...event.surfaceOp === undefined ? {} : { surfaceOp: event.surfaceOp },
     ...event.sourceEventSeqs === undefined ? {} : { sourceEventSeqs: event.sourceEventSeqs },
-  })
+  }]) as SessionEvent
 }
 
 const entryPaths: Record<string, (event: SessionEvent) => unknown> = {

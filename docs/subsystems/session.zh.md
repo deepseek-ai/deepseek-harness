@@ -363,6 +363,18 @@ type SurfaceIntent<T extends SurfaceEventType = SurfaceEventType> = {
 
 `assistant/message` 不能携带 `sourceEventSeqs`；它的 `stream` 拥有精确 provider 证据。其他 surface event 不引用较早 event 时省略该字段，需要引用时使用完整非空 list。
 
+### `SessionEventInput`：一个候选事件
+
+```ts type-equiv
+/** One event proposed for append, without assigned sequence or time. */
+type SessionEventInput = {
+  [K in SessionEventType]: { type: K; data: SessionEventMap[K] }
+    & (K extends SurfaceEventType ? SurfaceIntent<K> : { surfaceOp?: never; sourceEventSeqs?: never })
+}[SessionEventType]
+```
+
+数组中的每个成员将事件类型与对应载荷配对，且仅对产生消息的事件要求消息视图意图。
+
 <a id="plugin-owned-message-projections"></a>
 ### 插件拥有的消息投影
 
@@ -576,6 +588,15 @@ declare class Session {
   /** The next event's sequence number — always the log length (the `seq = log.length` contiguity contract). */
   get seq(): SessionLogOffset;
   /**
+   * Append consecutive events together after validating every candidate and dispatch.
+   * Observers read the complete committed log and final message surface. An empty
+   * array appends nothing. Persistence listeners retain their own durability rules.
+   * @param inputs - event payloads and surface intents in commit order.
+   * @returns immutable committed events in the same order.
+   * @throws before changing the log if any candidate or synchronous dispatch validation fails.
+   */
+  append(inputs: readonly SessionEventInput[]): readonly SessionEvent[];
+  /**
    * Append one typed event to the log and synchronously notify observers via
    * the store-owned, module-private publication hooks. The hot path never blocks
    * on I/O — persistence plugins buffer asynchronously. Once the event enters
@@ -622,6 +643,11 @@ declare class Session {
     data: SessionEventMap[T],
     ...opts: T extends SurfaceEventType ? [opts: SurfaceIntent<T>] : []
     ): SessionEvent<T>;
+  append<T extends SessionEventType>(
+    type: T | readonly SessionEventInput[],
+    data?: SessionEventMap[T],
+    ...opts: [opts?: SurfaceIntent]
+  ): SessionEvent<T> | readonly SessionEvent[];
   /**
    * The {@link EpochHeader} in force after the log's last header event — the
    * header the NEXT request will be compared against — or undefined before
