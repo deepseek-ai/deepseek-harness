@@ -29,6 +29,7 @@ export function apply(ctx: Context) {
     async execute(args, exec) {
       // args is TYPED from the schema: { path: string; limit?: number }
       // exec carries immutable identity + token; signal is the operational field
+      // A production tool converts errno failures such as ENOENT into FsError codes
       return readFile(args.path, { encoding: 'utf8', signal: exec.signal })
     },
   }))
@@ -39,12 +40,12 @@ export function apply(ctx: Context) {
 
 ## execute() 约定的规则
 
-- **参数已为你校验。** `defineTool` 在 `execute` 运行前，会根据统一的 `ParameterSchemaSpec` 校验模型生成的 `arguments`（类型、必填键、字面量约束、恰好匹配一个分支的联合以及嵌套值），因此 `execute` 内的 args 会匹配 `InferArgs`。显式对象节点必须声明 `additionalProperties: true | false`；隐式参数根对象保持开放。你仍需手动检查 schema DSL 无法表达的约束，例如非空字符串、正数或跨字段规则。直接注册的原始 JSON Schema 工具自行负责输入校验。
+- **参数已为你校验。** `defineTool` 在 `execute` 运行前，会根据统一的 `ParameterSchemaSpec` 校验模型生成的 `arguments`（类型、必填键、字面量约束、恰好匹配一个分支的联合以及嵌套值），因此 `execute` 内的 args 会匹配 `InferArgs`。显式对象节点必须声明 `additionalProperties: true | false`；隐式参数根对象保持开放。你仍需手动检查 schema DSL 无法表达的约束，例如非空字符串、正数或跨字段规则，并以 `ToolArgsError` 拒绝。直接注册的原始 JSON Schema 工具自行负责输入校验。
 - **注册借用你的只读定义。** 类型化的同进程贡献不是序列化边界；注册后不要修改其 schema 或替换回调。`schemas()` 只物化显式的模型可见投影。如需热替换工具，请 dispose 其所属副作用并注册替代品；回调闭包内的可变状态仍是普通的插件状态。
 - **执行身份受保护。** 注册表在一次递归遍历中将 `arguments` 物化为分离的无损 JSON，在策略开始前冻结该值，并分配一个不透明的 `exec.token`；`callId`、`name`、`arguments`、`agent`、`token`、必填且由调用方持有的 `signal`，以及可选的外层传输 `parent` token 在整个分发过程中保持不可变。`parent` 仅用于身份标识，不暴露活跃的外层执行。请将 `args` 视为只读输入。只有 around-dispatch 包装器会收到可变视图；它可以替换并恢复必填的 `exec.signal` 以施加截止时间，但不能移除该信号。
 - **声明并返回一个规范 JSON 值。** `output.schema` 使用 `ValueSchemaSpec`，根可以是对象、数组、标量或 null。`execute` 只返回推导出的值；注册表将其快照为无损 JSON，完成校验和冻结后，再传给 `output.render(args, value)`。工具主体不要返回内容块，也不要迫使调用方从自然语言中解析 id 和字段。
-- **抛出异常或返回无效值意味着 `isError`。** 注册表会捕获异常，并在观察者运行前收敛 schema、渲染器、元数据投影器和无损 JSON 失败。基础设施故障请抛异常。成功的领域结果即使表示不理想的状态，也应写入规范值；其 Native 渲染器可以解释该状态，例如进程以非零状态退出。
-- **遵守 `exec.signal`。** 信号触发时取消进行中的工作。
+- **抛出异常或返回无效值意味着 `isError`。** 注册表会捕获异常，并在观察者运行前收敛 schema、渲染器、元数据投影器和无损 JSON 失败。每种预期失败都应抛出带稳定 `code` 的 `HarnessError` 子类；在工具主体的各种产出中，只有抛出的 `HarnessError` 会让结果保留 `error.name` 和 `error.code`，具体的错误类和 code 由[错误处理规则](../../.agents/skills/dsh-error-handling/SKILL.md#tool-failures)规定。成功的领域结果即使表示不理想的状态，也应写入规范值；其 Native 渲染器可以解释该状态，例如进程以非零状态退出。
+- **遵守 `exec.signal`。** 信号触发时取消进行中的工作，并抛出 `name` 为 `AbortError`、code 为 `TOOL_ABORTED` 常量（值为 `ABORTED`）的 `HarnessError`，与注册表自己生成的取消结果一致。
 - **使用 `presentationMeta` 投影持久化的卡片数据（可选）。** `output.presentationMeta(args, value)` 从同一个规范值派生可回放的 JSON。核心将其持久化在 `tool/result` 上并传给 `presentResult`，因此需要结果期事实的卡片——例如 `write`／`edit` 的已应用 hunk——无需持久化规范值也能在回放中重现。嵌套 Code 分发没有卡片，因此会跳过该投影器。
 - **使用 `exec.agent` 发送异步通知。** `agent.inject({ content, source: { kind: 'my-plugin' } })` 追加持久化上下文，下一次模型请求会看到它——这不是唤醒（空闲的 agent（智能体）保持空闲）。在插件里通过 [`MessageSourceMap`](../subsystems/llm-streaming.zh.md#content-blocks-and-messages) 声明该 `kind`：session format V4 在消息准入处拒绝退役的 `{ kind: 'plugin', plugin: '<name>' }` 包装。请防范已 dispose 的 agent（try/catch）。
 

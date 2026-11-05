@@ -16,6 +16,7 @@ description: "在专用 macOS 和 Windows runner 上发布留存的 Desktop 安�
 - [Runner 标签与排队排查](#runner-labels)
 - [机器配置](#machine-setup)
 - [打包与发布](#package-and-publish)
+- [放量与官网发布](#rollout-and-website-publication)
 - [恢复与记录](#recovery-and-records)
 - [恢复频道](#restore-a-channel)
 
@@ -42,7 +43,7 @@ GitHub 要求 runner 同时匹配 job 的 `runs-on` 列表中的全部标签。[
 | --- | --- |
 | Windows 打包 | `dsh-win-package-trial` |
 | macOS 打包 | `self-hosted`、`macOS`、`ARM64`、`dsh-mac-package-trial` |
-| 发布 `prepare` 和 `publish` | `self-hosted`，以及选中的 `DESKTOP_PUBLISH_RUNNERS` 条目中的 `label` |
+| 所有原机发布和放量任务 | `self-hosted`，以及选中的 `DESKTOP_PUBLISH_RUNNERS` 条目中的 `label` |
 
 只有 `dsh-win-package-trial` 的 runner 可以打包 Windows，却不能接发布任务。路由条目不会给 GitHub 中注册的 runner 添加标签。需由 runner 管理员修正注册标签；修改路由的 `target` 或重启正常监听的进程都不能补齐缺失标签。
 
@@ -77,6 +78,16 @@ Environment 审批限制此工作流，不限制同一机器账户运行的任�
 打包只保留文件。成功后，在 `master` 上打开 **Publish Desktop · COS → Run workflow**，填写打包运行 URL 中的 `package_run_id`，并可填写 `package_run_attempt`。留空选择最新尝试及其成功的 package job；归档重跑继续使用原始构建 attempt，新的构建失败时不回退到较早成功构建。显式填写则选择对应构建，独立的 GitHub 归档失败不取消其资格。Windows 必须完成签名，macOS 必须完成公证和 stapling。GitHub job 证据确定原 runner，本机清单在审批前提供 preset、版本、源码和通道。不会下载安装包或请求 artifact。旧清单的 `publishRequested=false` 不影响发布资格；本机文件缺失或变化会停止发布。
 
 在原 runner 安装依赖前，准备阶段和审批后的发布 job 都会检查所选 `publishing/<preset>.json` 是否为可读取的 JSON。配置缺失时会报告路径；补齐后可使用同一个包重试发布。之后仍会执行完整配置与签名校验。上传前，发布器校验全部留存文件的哈希、版本及目标信息，再复核平台签名。macOS 校验 DMG，并解压 ZIP 校验 app 票据；Windows 校验 Authenticode、配置的签名证书指纹及时间戳。准备阶段生成中文审批摘要，分别展示版本、通道、平台和环境，以及留存的 test release ID、安装包与升级 YAML 的完整 URL、原打包尝试链接、源码 ref/SHA、平台校验结果及拟创建的 tag。折叠详情包含 COS 存储桶，以及实际上传字节的大小和 SHA-256（包括改写后的 YAML）。公开仓库的摘要会公开测试前缀和下载 URL；前缀不提供访问鉴权。两种发布 job 均等待 **Review deployments → Approve and deploy**，随后重新核对已批准的 manifest 与上传计划摘要。文件或目标变化会被拒绝。审批不能修改版本；应拒绝并重新打包。两种环境都上传缺失文件、校验远端字节，再更新 YAML。此工作流没有只上传文件的模式。production 最后为记录的打包提交创建 `desktop-v<version>`；已有 tag 必须指向同一提交。
+
+<a id="rollout-and-website-publication"></a>
+
+## 放量与官网发布
+
+按 10% → 30% → 100% 放量时，先通过 COS 流程以 `staging_percentage=10`、`upload_website=false` 完成首次发布，再从 `master` 发起 **Publish Desktop · Rollout & Website**，填写原打包 run ID 并选择 attempt（默认 1，请与原打包 run 核对）。逐步放量时将 `rollout_percentage` 分别设为 30、100；仅发布官网时留空。`upload_website` 默认为 false；必须填写比例或启用官网发布。在此示例中，最后一轮启用它即可上传生产官网安装器并刷新缓存。官网发布独立于放量比例，不要求达到 100%；官网安装包面向所有下载用户。仅发布官网时，publish job 只校验 feed，不修改放量比例。每个平台使用各自的打包 run。
+
+准备阶段检查 GitHub 身份、保留清单、小体积更新 YAML 和已完成的首次发布记录，不重新计算安装包哈希，也不重复检查签名或公证。Environment 审批后，执行阶段读取当前 COS 更新清单，核对版本、安装包 URL、大小、哈希和其他元数据仍对应已发布包，只修改 `stagingPercentage`。更新清单缺失或已被其他包替换时拒绝执行。同一比例重复执行不写入；不允许降低比例。审批展示目标比例，当前比例在执行时从 COS 读取。
+
+官网上传复用原机保留的安装器，只校验该安装器的哈希，沿用已有上传与刷新恢复记录。仅重试缓存刷新时沿用官网审批和上传记录，不再依赖原更新 YAML 或首次 feed 发布记录。官网上传在安装器校验、上传期间保持频道锁，防止中途被更新的 feed 替换；此时竞争该频道的发布会失败。因此纯放量不需要安装器文件，发布官网则需要。比例变更前后的 YAML 写入独立放量审计记录。此流程必须在首次 COS 发布之后执行，不构建安装包、不上传版本化安装包，也不创建 release tag。
 
 <a id="recovery-and-records"></a>
 

@@ -56,7 +56,7 @@ kind: "package-reference"
 | 模式 | 效果 |
 |---|---|
 | `read-only` | 拒绝写入，必需 sink（如 `/dev/null`）除外 |
-| `workspace-write` | 允许写入工作区根目录、显式配置的额外根目录及后端定义的临时区域 |
+| `workspace-write` | 允许写入工作区根目录、受支持的额外根目录及后端定义的临时区域 |
 | `danger-full-access` | 绕过隔离；消费方直接 spawn 原始 argv |
 
 强制执行逐调用报告：`full` 表示后端管辖模式承诺的每个文件操作，`partial` 表示活动后端或较旧的内核 ABI 只管辖子集——Windows ACL 档与较旧的 Landlock ABI 是当前的部分强制执行情形，需要绝对边界的消费方可以拒绝或向上暴露它们。
@@ -100,7 +100,7 @@ kind: "package-reference"
 
 ### 可写根目录
 
-`workspaceWritableRoots` 为 bwrap 和 Landlock 推导工作区与显式额外目录。`writableRoots` 为 Seatbelt 和进程内文件系统围栏加入主机临时区域。两者都对根目录去重，并拒绝不存在、不是目录或经过符号链接解析的额外路径。参见[模式定义](../../../docs/subsystems/sandbox.zh.md)。
+`workspaceWritableRoots` 为 bwrap 和 Landlock 推导工作区与显式额外目录。`writableRoots` 为 Seatbelt 和进程内文件系统围栏加入主机临时区域。两者都对根目录去重，并拒绝不存在、不是目录或经过符号链接解析的额外路径。路径比较接受 Windows 上的大小写和分隔符差异。每次执行都会重新检查这些路径。Windows 子进程忽略额外根目录；文件工具仍然执行这些授权。参见[模式定义](../../../docs/subsystems/sandbox.zh.md)。
 
 </details>
 

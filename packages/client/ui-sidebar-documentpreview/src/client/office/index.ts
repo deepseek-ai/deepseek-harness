@@ -2,7 +2,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { retainDocumentTabs } from '../document/tab-lifetime.ts'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
-import type {} from '@deepseek-ai/dsh-office-to-pdf/remote'
+import type {} from '@deepseek-ai/dsh-office-kit/remote'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-api-workspace-files/remote'
 import { failureLine } from '../failure-line.ts'
@@ -67,10 +67,10 @@ export function apply(ctx: Context, config: Config['office']): void {
   ctx.effect(() => ctx.slots.inject('sidebar.right.tab.document.office.pdf', () => ctx.slots.register({
     name: 'sidebar.right.tab.document.office.pdf', key: id, locale: 'sidebarPdf', ...pdfPresentation,
   }, LazyPdfBody)))
-  ctx.inject(['remote', 'remote.officeToPdf', 'remote.workspaceFiles'], (scope) => {
+  ctx.inject(['remote', 'remote.officeKit', 'remote.workspaceFiles'], (scope) => {
     const convert: ReadOfficeBytes = async (file, signal, priority) => {
       signal.throwIfAborted()
-      const result = await scope.remote.officeToPdf.render(file.sessionId, file.path, priority, signal)
+      const result = await scope.remote.officeKit.render(file.sessionId, file.path, priority, signal)
       signal.throwIfAborted()
       if (!result.ok && result.error.code === 'document-render/failed') {
         throw new Error(t(conversionErrorKey(result.error.details.reason)), { cause: result.error })
@@ -93,7 +93,7 @@ export function apply(ctx: Context, config: Config['office']): void {
       },
       convert, config.maxCachedEntries, config.maxCachedBytes, config.maxPending, config.maxReaders,
       async (signal) => {
-        const result = await scope.remote.officeToPdf.generation(signal)
+        const result = await scope.remote.officeKit.generation(signal)
         signal.throwIfAborted()
         if (!result.ok) throw new Error(t('unavailable'), { cause: result.error })
         return result

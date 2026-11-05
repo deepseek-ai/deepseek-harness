@@ -6,7 +6,7 @@ import { declaredQuery, displayDeclarations, indexLabel, INITIAL_QUERY, presente
 const resolveText = (text: LocalizedText): string => typeof text === 'string' ? text : text.zh ?? text.en
 
 function release(version: string, fields: Partial<MarketListingVersion> = {}): MarketListingVersion {
-  return { version, publishTimestamp: 0, source: { type: 'npm' }, engines: {}, install: { spec: `x@${version}` }, compatibility: { compatible: true }, ...fields }
+  return { version, publishTimestamp: 0, source: { type: 'npm' }, engines: {}, install: { spec: `x@${version}` }, compatibility: { compatible: true }, update: false, ...fields }
 }
 
 function entry(name: string, fields: Partial<MarketListingEntry> = {}, metadata: Partial<MarketListingEntry['metadata']> = {}): MarketListingEntry {

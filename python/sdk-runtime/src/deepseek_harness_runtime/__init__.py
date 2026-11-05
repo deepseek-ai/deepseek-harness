@@ -176,7 +176,7 @@ def download_office() -> Path:
 
 
 def download_primary_runtime() -> Path:
-    """Download locked CPython, libraries, Node, pnpm and skills into the resource cache.
+    """Download locked CPython, libraries, Node and pnpm into the resource cache.
 
     Return the absolute primary-runtime directory. This is independent of the
     Office engine download and does not copy resources into a Harness home.

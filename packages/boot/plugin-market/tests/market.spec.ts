@@ -24,7 +24,7 @@ const URL_B = 'https://other.example/index.json'
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })
 
 function bundle(name: string, fields: Partial<BundleInfo>): BundleInfo {
-  return { name, official: false, availability: 'profile', enabled: true, installed: true, optional: false, removable: true, updatable: false, rows: [], overrides: [], ...fields }
+  return { name, official: false, availability: 'profile', enabled: true, installed: true, optional: false, removable: true, rows: [], overrides: [], ...fields }
 }
 
 function index(plugins: unknown[] = []): unknown {
@@ -163,6 +163,35 @@ it('reports a provided bundle without a version', async () => {
   serve(json(index([entry('shipped')])))
   const { market } = await mount({}, { bundles: [bundle('shipped', { installed: false, optional: true, availability: 'installation' })] })
   expect((await read(market, URL_A)).entries[0]?.installation).toEqual({ status: 'provided' })
+})
+
+it('marks the versions newer than a Git copy, from the repository directory it pins, as updates', async () => {
+  const commit = (digit: string): string => digit.repeat(40)
+  const git = (version: string, digit: string, path = 'packages/p') => release(version, { source: { type: 'git', url: 'https://git.example/o/plugins', commit: commit(digit), path } })
+  const versions = [git('1.3.0', 'd', 'packages/q'), git('1.2.0', 'c'), release('1.1.0'), git('1.0.0', 'a'), git('0.9.0', '9')]
+  serve(json(index(['from-git', 'from-registry', 'no-source', 'no-version', 'unpinned'].map(name => entry(name, {}, versions)))))
+  const pinned = `git+ssh://git@git.example/o/plugins.git#${commit('a')}&path:/packages/p`
+  const { market } = await mount({}, {
+    bundles: [
+      bundle('from-git', { version: '1.0.0', update: 'git', source: pinned }),
+      bundle('from-registry', { version: '1.0.0', update: 'registry', source: 'from-registry@1.0.0' }),
+      bundle('no-source', { version: '1.0.0', update: 'git' }),
+      bundle('no-version', { update: 'git', source: pinned }),
+      bundle('unpinned', { version: '1.0.0', update: 'git', source: 'git+https://git.example/o/plugins.git#main&path:/packages/p' }),
+    ],
+  })
+  const by = Object.fromEntries((await read(market, URL_A)).entries.map(item => [item.name, item]))
+  // The SSH form a profile saved has the HTTPS form's origin; another directory of the repository is another plugin.
+  expect(by['from-git']?.versions.map(version => [version.version, version.update])).toEqual([['1.3.0', false], ['1.2.0', true], ['1.1.0', false], ['1.0.0', false], ['0.9.0', false]])
+  expect(by['from-git']?.versions[1]?.install).toEqual({ spec: `git+https://git.example/o/plugins.git#${commit('c')}&path:/packages/p` })
+  for (const name of ['from-registry', 'no-source', 'no-version', 'unpinned']) expect(by[name]?.versions.some(version => version.update)).toBe(false)
+})
+
+it('matches a copy pnpm saved as a known host\'s shortcut with the index\'s HTTPS versions', async () => {
+  const commit = (digit: string): string => digit.repeat(40)
+  serve(json(index([entry('hosted', {}, [release('1.1.0', { source: { type: 'git', url: 'https://github.com/o/plugins', commit: commit('b'), path: 'p' } })])])))
+  const { market } = await mount({}, { bundles: [bundle('hosted', { version: '1.0.0', update: 'git', source: `github:o/plugins#${commit('a')}&path:/p` })] })
+  expect((await read(market, URL_A)).entries[0]?.versions[0]?.update).toBe(true)
 })
 
 it('shares concurrent reads, caches documents, and refetches on refresh or expiry', async () => {

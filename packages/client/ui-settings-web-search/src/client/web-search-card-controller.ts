@@ -12,9 +12,11 @@
  * in registration order, plus a selected id the Host no longer registers. A
  * failed read is reported on the page with a retry.
  *
- * The DeepSeek Search and Fetch APIs take no credential settings here: they
- * follow the DeepSeek credential of the conversation, and their own endpoint
- * fields are YAML-only. Legacy Messages search keeps its key control.
+ * The DeepSeek Search and Fetch APIs take no credential values here: each
+ * has a billing menu, written to `searchBilling` or `fetchBilling`, that
+ * chooses which DeepSeek credential it sends. Their own endpoint fields are
+ * YAML-only: the page reads them to report that they override billing and
+ * never writes them. Legacy Messages search keeps its key control.
  *
  * The legacy key's literal never rides a response, so the page learns only
  * whether one is configured and writes it through the credentials domain,
@@ -95,10 +97,38 @@ export interface WebLegacySettings {
   maxUses?: number
 }
 
+/** Credential a DeepSeek Search or Fetch API capability sends, as `web-deepseek-api` names it. */
+export type WebBilling = 'auto' | 'account' | 'api-key'
+
 /** The Search and Fetch API fields this page edits. */
 export interface WebApiSettings {
   /** Search API results per search. */
   count?: number
+  /** Credential the Search API sends. */
+  searchBilling?: WebBilling
+  /** Credential the Fetch API sends. */
+  fetchBilling?: WebBilling
+  /** Search API base set in YAML; read only, and it overrides {@link searchBilling}. */
+  readonly searchBaseURL?: string
+  /** Search API credential reference set in YAML; read only, and it overrides {@link searchBilling}. */
+  readonly searchApiKeyEnv?: string
+  /** Fetch API base set in YAML; read only, and it overrides {@link fetchBilling}. */
+  readonly fetchBaseURL?: string
+  /** Fetch API credential reference set in YAML; read only, and it overrides {@link fetchBilling}. */
+  readonly fetchApiKeyEnv?: string
+}
+
+/** One capability's billing menu. */
+export interface WebBillingState {
+  /** The staged billing; a section that carries none reads as `auto`. */
+  value: WebBilling
+  /** Whether saving would leave a user-layer entry for this field. */
+  overridden: boolean
+  /**
+   * Names of the capability's non-empty own endpoint fields, base URL first. While any is set, the provider ignores
+   * billing and the menu is locked.
+   */
+  advancedOverride: readonly string[]
 }
 
 /** One entry of a provider menu. */
@@ -156,6 +186,10 @@ export interface WebSearchCardState extends SettingsFormShell {
   fetch: WebProviderSectionState<WebFetchKind>
   /** Search API results per search, shown in the Search section while it selects the DeepSeek Search API. */
   count: SettingsFieldState
+  /** Search API billing, present only while the Search section selects the DeepSeek Search API. */
+  searchBilling: WebBillingState | undefined
+  /** Fetch API billing, present only while the Fetch section selects the DeepSeek Fetch API. */
+  fetchBilling: WebBillingState | undefined
   /** Legacy Messages endpoint. */
   messagesBaseURL: SettingsFieldState
   /** Legacy server-side search limit. */
@@ -176,10 +210,23 @@ export interface WebSearchCardFace extends Pick<SettingsFormActions, 'save' | 'd
   resetField: (field: WebSectionField) => void
   /** Stage one provider selection; the empty id stages automatic selection. */
   selectProvider: (field: keyof WebProviderSelection, id: string) => void
+  /** Stage one capability's billing; the composed billing clears the override. */
+  selectBilling: (capability: WebBillingCapability, billing: WebBilling) => void
   /** Re-read the registered providers after a failed read. */
   retryProviders: () => void
   /** Resolve a provider description to the active language. */
   resolveText: (text: NonNullable<WebProviderOption['description']>) => string
+}
+
+/** A capability whose DeepSeek API has a billing menu. */
+type WebBillingCapability = 'search' | 'fetch'
+
+/** Billing values the Host accepts. */
+const BILLINGS: readonly string[] = ['auto', 'account', 'api-key'] satisfies readonly WebBilling[]
+
+/** Whether `text` names a billing the Host accepts. */
+function isBilling(text: string): text is WebBilling {
+  return BILLINGS.includes(text)
 }
 
 /** Settings scopes for the namespaces the page edits. */
@@ -251,6 +298,8 @@ export class WebSearchCardController {
           return Number.isInteger(value) && value >= 1 && value <= 50 ? { kind: 'set', value } : undefined
         },
       },
+      // Drafts come only from selectBilling, which stages a billing the Host accepts.
+      settingsTextField('searchBilling'), settingsTextField('fetchBilling'),
     ])
     this.legacy = new SettingsFormModel(scopes.legacy, [
       settingsTextField('baseURL'),
@@ -412,10 +461,21 @@ export class WebSearchCardController {
         auto: base?.fetchProvider === undefined,
       },
       count: this.api.field('count'),
+      searchBilling: this.searchKind() === 'deepseek' ? this.billing('search') : undefined,
+      fetchBilling: this.fetchKind() === 'deepseek' ? this.billing('fetch') : undefined,
       messagesBaseURL: this.legacy.field('baseURL'),
       maxUses: this.legacy.field('maxUses'),
       legacyKey: this.keyShown() ? { ...this.selection.field(API_KEY_FIELD), ...this.credential } : undefined,
     }
+  }
+
+  /** One capability's billing as its menu renders it. */
+  private billing(capability: WebBillingCapability): WebBillingState {
+    const field = this.api.field(`${capability}Billing`)
+    const section = this.scopes.api.getSnapshot().value
+    const advancedOverride = ([`${capability}BaseURL`, `${capability}ApiKeyEnv`] as const)
+      .filter(name => (section?.[name] ?? '') !== '')
+    return { value: isBilling(field.text) ? field.text : 'auto', overridden: field.overridden, advancedOverride }
   }
 
   /**
@@ -528,6 +588,7 @@ export class WebSearchCardController {
         form.actions().resetField(field === 'messagesBaseURL' ? 'baseURL' : field)
       },
       selectProvider: (field, id) => { this.select(field, id) },
+      selectBilling: (capability, billing) => { this.selectBilling(capability, billing) },
       retryProviders: () => { this.refreshProviders() },
       resolveText: text => this.ctx.locale.resolveText(text),
       save: () => { void this.save() },
@@ -548,6 +609,19 @@ export class WebSearchCardController {
     const composed = (this.scopes.web.getSnapshot().base as WebProviderSelection | undefined)?.[field]
     if (id === '' || composed === id) this.selection.actions().resetField(field)
     else this.selection.actions().edit(field, id)
+  }
+
+  /**
+   * Stage one capability's billing. A billing equal to the composed one, which
+   * is `auto` when the deployment composes none, clears the override.
+   * @param capability - the capability whose billing changes.
+   * @param billing - the billing to stage.
+   */
+  private selectBilling(capability: WebBillingCapability, billing: WebBilling): void {
+    const field = `${capability}Billing` as const
+    const composed = (this.scopes.api.getSnapshot().base as WebApiSettings | undefined)?.[field] ?? 'auto'
+    if (composed === billing) this.api.actions().resetField(field)
+    else this.api.actions().edit(field, billing)
   }
 
   /**
