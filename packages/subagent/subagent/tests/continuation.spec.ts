@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { liveConfig } from '../../../settings/settings/tests/live-config.ts'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { agentEvents } from '@deepseek-ai/dsh-agent'
+import { AgentClosedError, agentEvents } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -2568,6 +2568,22 @@ describe('continuable review regressions', () => {
     expect(disposed).toHaveBeenCalledTimes(1)
     expect(ended).toHaveBeenCalledTimes(1)
     expect(managerState(ctx).resident.get(started.childId)).toBeUndefined()
+  })
+
+  it('settles when Agent admission closes before settlement maintenance starts', async () => {
+    const release = Promise.withResolvers<undefined>()
+    const adapter = new GatedAdapter([{ chunks: textResponse('working'), gate: release.promise }])
+    const { ctx, parent } = await setupWith(adapter)
+    const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
+    await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
+    const child = ctx.agents.get(started.childId)!
+    const maintenance = vi.spyOn(child, 'runMaintenance').mockImplementation(() => {
+      throw new AgentClosedError(child.id)
+    })
+    release.resolve(undefined)
+    await waitNoActivation(ctx, started.childId)
+    expect(maintenance).toHaveBeenCalledTimes(1)
+    expect(await started.result).toMatchObject({ stopReason: 'completed' })
   })
 
   it('keeps a maintenance task that claimed the idle phase after whenIdle resolved', async () => {
