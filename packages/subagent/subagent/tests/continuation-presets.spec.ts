@@ -139,6 +139,21 @@ describe('child preset start validation', () => {
     expect(adapter.requests).toEqual([])
   })
 
+  it('classifies an unknown independent preset as PRESET_UNAVAILABLE and keeps other mount failures', async () => {
+    const { ctx, parent, adapter } = await setup()
+    await expect(ctx.subagents.startActivation(startSpec(parent, 'absent'))).rejects.toMatchObject({
+      name: 'SubagentError',
+      code: 'PRESET_UNAVAILABLE',
+      message: 'Unknown agent preset: absent',
+      cause: { code: 'agent-preset/not-found' },
+    })
+    const failure = new Error('binding failed')
+    vi.spyOn(ctx.agentPresets, 'mount').mockRejectedValueOnce(failure)
+    await expect(ctx.subagents.startActivation(startSpec(parent, 'reviewing'))).rejects.toBe(failure)
+    expect(ctx.agents.list().map(agent => agent.id)).toEqual([parent.id])
+    expect(adapter.requests).toEqual([])
+  })
+
   it('rolls back an independent spawn when the preset service has unloaded', async () => {
     const { ctx, parent, adapter, presets } = await setup()
     await presets.dispose()

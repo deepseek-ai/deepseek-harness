@@ -162,6 +162,7 @@ describe('spawn preset selection', () => {
     const result = await callSubagent(ctx, { ...args, ...selection }, { agent: parent.agent })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('Unknown agent preset: absent')
+    expect(result.error?.info).toEqual({ name: 'SubagentError', code: 'PRESET_UNAVAILABLE' })
     expect(ctx.agents.list()).toEqual([parent.agent])
     expect(ctx.sessions.list()).toEqual(sessions)
   })
@@ -179,6 +180,7 @@ describe('spawn preset selection', () => {
     const result = await callSubagent(ctx, args, { agent: parent.agent })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('missing-plugin')
+    expect(result.error?.info).toEqual({ name: 'SubagentError', code: 'PRESET_UNAVAILABLE' })
     expect(ctx.agents.list()).toEqual([parent.agent])
     expect(ctx.sessions.list()).toEqual(sessions)
   })
@@ -363,6 +365,7 @@ describe('spawn preset selection', () => {
     const failed = await callSubagent(ctx, args, { agent: handle.agent })
     expect(failed.isError).toBe(true)
     expect(text(failed)).toContain('Unknown agent preset: later')
+    expect(failed.error?.info).toEqual({ name: 'SubagentError', code: 'PRESET_UNAVAILABLE' })
 
     await ctx.agentPresets.register({ id: 'later', plugins: [] })
     ctx.llm.registerAdapter(['mock'], new MockAdapter([textResponse('reviewed')]))

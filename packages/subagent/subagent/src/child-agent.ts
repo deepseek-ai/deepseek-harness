@@ -25,6 +25,7 @@ import type {} from '@deepseek-ai/dsh-permission-presets'
 // keeps its model-facing rows on the host plane, where the child already sees
 // them through the tool registry's global layer.
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
+import { remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
 import { delegationDepthOf } from './depth.ts'
 import { SubagentError } from './error.ts'
 
@@ -183,8 +184,9 @@ export const SUBAGENT_DELEGATION_CONTEXT
  * @param parent - creator for fresh delegation; absent during target-only restoration.
  * @param composition - independent preset and any overrides read from a historical descriptor.
  * @returns A promise when mounting an independent preset; otherwise completes synchronously.
- * @throws {SubagentError} `PRESET_UNAVAILABLE` when the preset service is absent or the
- *   child cannot join its creator's preset revision.
+ * @throws {SubagentError} `PRESET_UNAVAILABLE` when the preset service is absent, a fresh
+ *   delegation's preset is unknown or cannot load, or the child cannot join its creator's
+ *   preset revision. Restoration propagates the registry's `RemoteError` unchanged.
  */
 export function applyChildComposition(
   childCtx: Context,
@@ -196,7 +198,12 @@ export function applyChildComposition(
     if (presets === undefined) {
       throw new SubagentError('selecting a child agent preset requires the agent-presets service', 'PRESET_UNAVAILABLE')
     }
-    return presets.mount(childCtx, composition.agentPreset).then(() => {
+    const mounted = presets.mount(childCtx, composition.agentPreset)
+    // Restoration leaves an unavailable preset to its caller's NOT_RESUMABLE classification.
+    return (parent === undefined ? mounted : mounted.catch((error: unknown) => {
+      const failure = remoteErrorOf(error)
+      throw failure === undefined ? error : new SubagentError(failure.message, 'PRESET_UNAVAILABLE', { cause: error })
+    })).then(() => {
       applyChildOverrides(childCtx, composition)
     })
   }
