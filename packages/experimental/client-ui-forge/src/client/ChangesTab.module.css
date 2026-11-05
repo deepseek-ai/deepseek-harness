@@ -3,7 +3,7 @@
 .root {
   container: forge-changes / inline-size;
   --forge-changes-bg: var(--dsw-alias-bg-base);
-  --forge-fill: var(--dsw-static-neutral-50);
+  --forge-fill: var(--dsw-alias-card-fill);
   --forge-diff-empty: color-mix(in srgb, var(--dsw-alias-interactive-bg-hover) 50%, transparent);
   display: flex;
   flex-direction: column;
@@ -15,9 +15,6 @@
   line-height: 18px;
 }
 
-:global(body[data-ds-dark-theme]) .root {
-  --forge-fill: var(--dsw-static-neutral-850);
-}
 
 .header {
   display: flex;

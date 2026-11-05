@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.1/web-search-billing/guide.md
+/:
+  en: d5f047c8126e2039
+  zh: 921852a96d5fdaf2
+/deepseek-web-search-and-fetch-choose-their-credential-by-billing:
+  en: 5b4ad8a6553f2017
+  zh: 33d0dbee4bbadad8
+/deepseek-web-search-and-fetch-choose-their-credential-by-billing/change:
+  en: c479258a05c03e30
+  zh: 9479ed43eebd03c2
+/deepseek-web-search-and-fetch-choose-their-credential-by-billing/migration:
+  en: f02650a1b0730ecf
+  zh: e6ddb011af754005

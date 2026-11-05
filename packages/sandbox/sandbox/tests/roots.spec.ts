@@ -5,10 +5,10 @@
  * additional set stays one shared derivation across backend dialects.
  */
 
-import { mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { canonicalPath, workspaceWritableRoots, writableRoots } from '@deepseek-ai/dsh-sandbox'
 
 /** Every temp root created by this file, removed after each test. */
@@ -52,15 +52,45 @@ describe('workspaceWritableRoots', () => {
       .toThrow('use the physical directory path')
   })
 
-  it('rejects missing and non-directory extra roots before granting access', () => {
+  it.skipIf(process.platform !== 'win32')('accepts Windows casing and separator differences and retains the canonical directory identity', () => {
+    const ws = realpathSync.native(mkdtempSync(join(tmpdir(), 'dsh-roots-')))
+    roots.push(ws)
+    const extra = join(ws, 'Memory')
+    mkdirSync(extra)
+    const alias = join(ws, 'memory').replaceAll('\\', '/')
+    const physical = realpathSync.native(extra)
+    expect(alias).not.toBe(physical)
+    const grants = workspaceWritableRoots({
+      mode: 'workspace-write', workspaceRoot: ws, additionalWritableRoots: [alias, extra],
+    })
+    expect(grants).toEqual([ws, physical])
+  })
+
+  it('rejects invalid extra roots and checks them again on each call', () => {
     const ws = realpathSync.native(mkdtempSync(join(tmpdir(), 'dsh-roots-')))
     roots.push(ws)
     const file = join(ws, 'file.txt')
+    const extra = join(ws, 'extra')
     writeFileSync(file, 'file')
-    expect(() => workspaceWritableRoots({ mode: 'workspace-write', workspaceRoot: ws, additionalWritableRoots: [file] }))
-      .toThrow('expected an existing directory')
-    expect(() => workspaceWritableRoots({ mode: 'workspace-write', workspaceRoot: ws, additionalWritableRoots: [join(ws, 'missing')] }))
-      .toThrow('cannot read the directory')
+    for (const path of [file, join(file, 'child'), extra]) {
+      expect(() => workspaceWritableRoots({ mode: 'workspace-write', workspaceRoot: ws, additionalWritableRoots: [path] }))
+        .toThrow('Invalid additional writable directory')
+    }
+    const policy = { mode: 'workspace-write' as const, workspaceRoot: ws, additionalWritableRoots: [extra] }
+    mkdirSync(extra)
+    expect(workspaceWritableRoots(policy)).toEqual([ws, extra])
+    rmSync(extra, { recursive: true })
+    expect(() => workspaceWritableRoots(policy)).toThrow('cannot read the directory')
+  })
+
+  it('reports inspection failures that do not establish a missing or non-directory path', () => {
+    const inspect = vi.spyOn(realpathSync, 'native').mockImplementationOnce(() => {
+      throw Object.assign(new Error('access denied'), { code: 'EACCES' })
+    })
+    try {
+      expect(() => workspaceWritableRoots({ mode: 'workspace-write', workspaceRoot: '/workspace', additionalWritableRoots: ['/private'] }))
+        .toThrow('cannot read the directory')
+    } finally { inspect.mockRestore() }
   })
 
   it('read-only grants nothing even when extra roots are carried on the policy', () => {

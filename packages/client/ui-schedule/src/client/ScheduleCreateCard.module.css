@@ -1,8 +1,8 @@
 /* Created-task cards follow the file-card treatment in docs/ui-radius.md. */
 
 .card {
-  --card-fill: var(--dsw-static-neutral-50);
-  --card-hover: var(--dsw-static-neutral-100);
+  --card-fill: var(--dsw-alias-card-fill);
+  --card-hover: var(--dsw-alias-card-fill-hover);
   position: relative;
   box-sizing: border-box;
   display: flex;
@@ -16,11 +16,6 @@
   background: var(--card-fill);
   color: var(--dsw-alias-label-primary);
   transition: background-color 120ms ease;
-}
-
-:global(body[data-ds-dark-theme]) .card {
-  --card-fill: var(--dsw-static-neutral-850);
-  --card-hover: var(--dsw-static-neutral-800);
 }
 
 /* Only a card whose whole row opens the task answers hover. */
@@ -67,12 +62,8 @@
   height: 40px;
   border: 0.5px solid var(--dsw-alias-border-l1);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--dsw-static-neutral-00) 50%, transparent);
+  background: var(--dsw-alias-card-tile-fill);
   color: var(--dsw-alias-label-secondary);
-}
-
-:global(body[data-ds-dark-theme]) .leading {
-  background: color-mix(in srgb, var(--dsw-static-neutral-00) 5%, transparent);
 }
 
 .leading svg {

@@ -290,7 +290,9 @@
 .groupMore {
   flex: none;
   gap: 4px;
-  padding-inline-end: 0;
+  /* Like .card, the hover surface reaches 8px past the trailing content edge. */
+  margin-inline-end: -8px;
+  padding: 0 8px;
   font-size: 14px;
   line-height: 22px;
   font-weight: 400;

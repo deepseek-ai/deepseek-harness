@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-执行模型编写的 TypeScript，并提供宿主异步函数。默认的 `per-call` 模式在全新 Node 进程中运行异步函数体；`vm-script` 支持顶层 await，并可通过 `scriptPersistence` 为每个 Agent 保留 context。显式启用的 `persistent-in-memory` 为每个 Agent 保留 REPL。所有模式都应用所选文件沙箱策略，返回捕获日志、无损 JSON 或结构化失败。执行时限、输出上限和 V8 堆上限约束运行。未确认的停止请求与单次执行完成后清理受管进程范围；约束不可用时执行失败。
+执行模型编写的 TypeScript，并提供宿主异步函数。默认的 `per-call` 模式在全新 Node 进程中运行异步函数体；`vm-script` 支持顶层 await，并可通过 `scriptPersistence` 为每个 Agent 保留 context。显式启用的 `persistent-in-memory` 为每个 Agent 保留 REPL。所有模式都在进程启动时应用文件沙箱策略，返回捕获日志、无损 JSON 或结构化失败。执行时限、输出上限和 V8 堆上限约束运行。未确认的停止请求与单次执行完成后清理受管进程范围；约束不可用时执行失败。
 
 ## 目录
 
@@ -83,7 +83,7 @@ profile 编辑器可从 `@deepseek-ai/dsh-ptc-runtime-node/configuration` 导入
 <a id="persistent-repl"></a>
 ### 内存保留模式
 
-`persistent-in-memory` 模式和启用 `scriptPersistence: true` 的 Script 模式都按所有者保留状态。要选择 REPL 求值器，在现有 `@deepseek-ai/dsh-ptc-runtime-node` 插件上设置 `executionMode: persistent-in-memory`。所有模式都需要 `fs`、`subprocess`、`sandbox` 和 `sandboxPolicy`，并应用所选文件沙箱策略。通过配置档补丁显式启用：
+`persistent-in-memory` 模式和启用 `scriptPersistence: true` 的 Script 模式都按所有者保留状态。要选择 REPL 求值器，在现有 `@deepseek-ai/dsh-ptc-runtime-node` 插件上设置 `executionMode: persistent-in-memory`。所有模式都需要 `fs`、`subprocess`、`sandbox` 和 `sandboxPolicy`，并在进程启动时应用文件沙箱策略。通过配置档补丁显式启用：
 
 ```yaml
 - id: ptc-runtime
@@ -95,7 +95,7 @@ profile 编辑器可从 `@deepseek-ai/dsh-ptc-runtime-node/configuration` 导入
 
 在 REPL 模式下，每个存活 Agent 保留独立进程，跨 `run_code` 调用和轮次保留顶层变量、函数及导入模块。使用 `await import(...)`、`console.log(...)` 和末尾 JSON 表达式；不支持顶层 `return`。Node REPL 使用非严格模式，给未声明的名称赋值会创建保留的全局变量。`_` 和 `_error` 是普通的保留全局变量，不使用交互式 REPL 的结果设置器。声明遵循 Node REPL 规则，包括重复声明已有 `let`、`const` 或 `class` 名称时报错；应给可变绑定赋值或选择新名称。开头的 `{ ... }` 按语句块执行，可以包含顶层 await 和临时声明；需要返回对象表达式时，用圆括号包裹。保留的函数和工具方法引用调用当前执行的绑定。必须等待所有工具调用；已完成执行的回调不能在后续执行中调用工具。
 
-内存按尽力保留处理，不保存到磁盘。重启、Agent 销毁、提供方卸载、协议失败、输出超限或进程退出都会清除内存。缺失变量产生普通引用错误，模型需要重新获取句柄和创建声明。当前执行中的异常只结算一次，并保留此前发生的修改。在 REPL 模式下，已完成执行的回调抛出的异常不会在后续结果中报告。在 Script 模式下，未捕获的回调异常可能终止保留进程；结束执行前应等待异步工作完成。Session 仍记录程序、工具分派和可见结果；恢复 Session 或派生 Agent 时从空内存开始。每次执行都会将进程工作目录重置为本次解析的 cwd；程序中的 `process.chdir()` 不跨执行保留。直接 Node 访问遵循已解析的文件策略。保留状态的所有者必须先释放环境，才能更改权限模式、工作区根目录、额外可写根目录或 Session 身份。
+内存按尽力保留处理，不保存到磁盘。重启、Agent 销毁、提供方卸载、协议失败、输出超限或进程退出都会清除内存。缺失变量产生普通引用错误，模型需要重新获取句柄和创建声明。当前执行中的异常只结算一次，并保留此前发生的修改。在 REPL 模式下，已完成执行的回调抛出的异常不会在后续结果中报告。在 Script 模式下，未捕获的回调异常可能终止保留进程；结束执行前应等待异步工作完成。Session 仍记录程序、工具分派和可见结果；恢复 Session 或派生 Agent 时从空内存开始。每次执行都会将进程工作目录重置为本次解析的 cwd；程序中的 `process.chdir()` 不跨执行保留。直接 Node 访问遵循进程启动时的文件策略。保留状态的所有者必须先释放环境，才能更改权限模式、工作区根目录或 Session 身份。额外可写目录在进程启动时固定：之后的授权和撤销仅在释放并重新创建环境后生效。
 
 服务消费者通过 `stateOwner` 对象复用环境，并在结束时等待 `release(owner)`。没有所有者的请求在临时进程中执行。此类执行失败不影响其他所有者保留的变量，也不报告清空了这些变量。权限设置同步记录新模式。Session 模式变化时，运行时立即禁止复用受影响的进程并开始取消，包括空闲环境。下一次程序执行前等待这些进程清理；清理失败会阻止本次程序启动，并允许重试。权限设置成功时，旧进程可能仍在停止过程中。单次获准的提权使用独立环境，返回前等待清理；该次执行无法访问原环境的变量，也不会保留新声明。执行及必要清理完成之前，同一所有者的并发调用会被拒绝；不同所有者可以并发。空闲环境没有过期计时器，进程保留到释放或失败为止。原始 stdout/stderr 不携带执行标识：执行期间收到的字节计入本次输出预算，包括较早启动的子进程此时写出的内容；空闲期间丢弃 stdout，只保留限额内的 stderr 诊断尾部。结束本次执行前，应等待子进程完成。进程退出诊断包含退出码和保留的 stderr 尾部；空闲期间的失败写入宿主日志。清理期间无法观测进程范围时，释放所有者会重试终止；清理成功前拒绝新执行。确认进程退出后仍未排空的管道会产生诊断，但不阻止释放环境。
 

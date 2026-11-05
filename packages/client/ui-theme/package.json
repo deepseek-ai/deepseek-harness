@@ -67,7 +67,10 @@
     "lib/index.js",
     "lib/client.js",
     "lib/styles",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ],
   "scripts": {
     "bundle": "tsdown",

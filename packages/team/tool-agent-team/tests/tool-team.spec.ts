@@ -264,7 +264,7 @@ describe('dsh-tool-team', () => {
     const leadAssembly = await assembly(ctx, lead)
     expect(teamTools(leadAssembly)).toEqual(TEAM_TOOLS)
     const leadPrompt = renderPrompt(leadAssembly)
-    expect(leadPrompt).toContain('A shared task board is available in this session')
+    expect(leadPrompt).toContain('Agent Teams is available in this session')
     expect(leadPrompt).toContain('Task readiness never starts an owner')
     expect(leadPrompt).toContain('Task changes do not end wait_agent calls')
     expect(renderContextSnapshot(leadAssembly)).toContain(leadIdentity(lead))
@@ -842,7 +842,7 @@ describe('dsh-tool-team', () => {
     for (const agent of [lead, child]) {
       const built = await assembly(ctx, agent)
       expect(teamTools(built)).toEqual([])
-      expect(renderPrompt(built)).not.toContain('A shared task board is available')
+      expect(renderPrompt(built)).not.toContain('Agent Teams is available')
     }
     expect(ctx.agents.get(child.id)).toBe(child)
     expect(() => ctx.agentTeams.listTasks(child)).toThrow('enable Agent Teams')
@@ -877,7 +877,7 @@ describe('dsh-tool-team', () => {
       expect(tools.filter(tool => !TEAM_TOOLS.includes(tool.name))).toEqual(ordinaryTools)
       const system = request.messages.find(message => message.role === 'system')
       const prompt = system?.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
-      expect(prompt?.includes('A shared task board is available')).toBe(enabled)
+      expect(prompt?.includes('Agent Teams is available')).toBe(enabled)
       expect(prompt?.includes('record expected write scopes on shared tasks')).toBe(enabled)
       expect(runtimeContextText(request)).toContain(leadIdentity(lead))
       const contexts = request.messages.findLast(message => message.source?.kind === 'runtime-context')?.source
@@ -914,7 +914,7 @@ describe('dsh-tool-team', () => {
       await disabling
       const built = await assembly(ctx, lead)
       expect(teamTools(built)).toEqual([])
-      expect(renderPrompt(built)).not.toContain('A shared task board is available')
+      expect(renderPrompt(built)).not.toContain('Agent Teams is available')
       expect(renderContextSnapshot(built)).toContain(leadIdentity(lead))
     } finally {
       release.resolve(undefined)
@@ -932,11 +932,11 @@ describe('dsh-tool-team', () => {
     lead.ctx.tools.restrict({ deny: TEAM_TOOLS })
     const built = await assembly(ctx, lead)
     expect(teamTools(built)).toEqual([])
-    expect(renderPrompt(built)).toContain('A shared task board is available')
+    expect(renderPrompt(built)).toContain('Agent Teams is available')
     expect(renderContextSnapshot(built)).toContain(leadIdentity(lead))
     await ctx.agentTeams.setEnabled(lead, false)
     const disabled = await assembly(ctx, lead)
-    expect(renderPrompt(disabled)).not.toContain('A shared task board is available')
+    expect(renderPrompt(disabled)).not.toContain('Agent Teams is available')
     expect(renderContextSnapshot(disabled)).toContain(leadIdentity(lead))
   })
 

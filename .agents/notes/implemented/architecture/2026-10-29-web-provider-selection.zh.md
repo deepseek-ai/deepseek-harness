@@ -28,11 +28,11 @@ Search 与 Fetch API 读取同一个 `web-deepseek-api` namespace，并各自解
 
 ### 凭据解析
 
-Search 与 Fetch 跟随会话的 DeepSeek 凭据，设置页不为它们显示凭据控件。会话的路由是发起会话最近一次请求上下文的 `provider`，账号退出登录读取的也是它；`ready()` 使用正在准备的模型请求的路由，因此就绪判断与执行解析出相同的方案。
+Search 与 Fetch 各有一个计费方式设置 `web-deepseek-api.searchBilling` 或 `fetchBilling`，设置页在选中的 API 下方以**计费方式**下拉框编辑它。默认值 `auto` 跟随会话的 DeepSeek 凭据；`account` 只发送已登录账号的令牌，`api-key` 只发送 API 密钥，都不回退到另一种凭据。会话的路由是发起会话最近一次请求上下文的 `provider`，账号退出登录读取的也是它；`ready()` 使用正在准备的模型请求的路由，因此就绪判断与执行解析出相同的方案。
 
-在 `deepseek-account` 路由上，若模型提供方目录列出了入口根部活动且有效的 `@deepseek-ai/dsh-llm-deepseek-account` Loader 条目，操作只发送 `ctx.deepseekAccount` 为该路由 origin 加 `/v1/tools` 下的请求端点给出的账号令牌；HTTP 401 会作废该令牌。其他所有操作，包括账号会话中没有登录或没有令牌的操作，都把 `deepseek-official` 的活动 `@deepseek-ai/dsh-llm-deepseek-api-key` 条目的 `apiKeyEnv` 下的密钥（用该包自己的解析函数解析，包括 `DEEPSEEK_BASE_URL`）发往该路由基础地址的 origin 加 `/v1/tools`；没有该条目时，把 `DEEPSEEK_API_KEY` 发往 `https://api.deepseek.com/v1/tools`。未登录的账号会话发送 API 密钥，网页工具因此在其中仍然可用。因此只有 `DEEPSEEK_API_KEY` 的用户（包括所有 headless、SDK 与 ACP 运行）默认即可搜索和抓取，通过模型提供方基础地址设置的网关或内部部署也在同一 origin 上提供 Web 访问。缺少密钥时，该能力未就绪，操作以 `WEB_PROVIDER_CREDENTIAL_MISSING` 失败，指引信息点名模型页面、该引用和账号登录。已挂载、但其解析函数拒绝其设置的路由条目不视为不存在：需要该路由的操作未就绪，并以 `WEB_PROVIDER_MISCONFIGURED` 失败，不读取凭据、不发送请求，因此网关设置出错时请求不会被改发到官方端点。
+账号令牌是 `ctx.deepseekAccount` 为模型提供方目录列出的入口根部活动 `@deepseek-ai/dsh-llm-deepseek-account` Loader 条目的 origin 加 `/v1/tools` 下的请求端点给出的令牌；没有该条目时使用该路由默认基础地址的 origin。HTTP 401 会作废该令牌。`auto` 计费在 `deepseek-account` 路由上，若存在该条目且取得令牌，操作发送账号令牌。其他所有 `auto` 操作，包括账号会话中没有登录或没有令牌的操作，都把 `deepseek-official` 的活动 `@deepseek-ai/dsh-llm-deepseek-api-key` 条目的 `apiKeyEnv` 下的密钥（用该包自己的解析函数解析，包括 `DEEPSEEK_BASE_URL`）发往该路由基础地址的 origin 加 `/v1/tools`；没有该条目时，把 `DEEPSEEK_API_KEY` 发往 `https://api.deepseek.com/v1/tools`。`auto` 计费在两个 DeepSeek 路由之外的路由上或会话之外，没有配置密钥的操作改为发送账号令牌，因此已登录但没有密钥的用户在其他模型提供方的会话中仍可使用网页工具；在 `deepseek-official` 路由上从不发送令牌，因为该会话按 API 密钥计费。未登录的账号会话发送 API 密钥，网页工具因此在其中仍然可用。因此只有 `DEEPSEEK_API_KEY` 的用户（包括所有 headless、SDK 与 ACP 运行）默认即可搜索和抓取，通过模型提供方基础地址设置的网关或内部部署也在同一 origin 上提供 Web 访问。缺少凭据时，该能力未就绪，操作以 `WEB_PROVIDER_CREDENTIAL_MISSING` 失败，指引信息按计费方式点名账号登录、模型页面与该引用，以及计费方式字段。已挂载、但其解析函数拒绝其设置的路由条目不视为不存在：需要该路由的操作未就绪，并在读取依赖该路由的凭据前以 `WEB_PROVIDER_MISCONFIGURED` 失败，不再尝试后续来源，也不发送请求，因此网关设置出错时请求不会被改发到官方端点。
 
-在 YAML 中设置了非空 `searchBaseURL` 或 `searchApiKeyEnv`（Fetch 为 `fetchBaseURL` 或 `fetchApiKeyEnv`）的能力，则始终把其 `*ApiKeyEnv`（未设置时为 `DEEPSEEK_API_KEY`）下的密钥发往其 `*BaseURL`（未设置时为官方基础地址），从不发送账号令牌，因此内网或第三方端点只收到为它选择的密钥。每个能力有自己的字段，因为一个部署可以由不同网关提供搜索和抓取。这些字段只能在 YAML 中设置，空值视为未设置。schema 之外字段的已保存值，包括 `baseURL`、`apiKeyEnv` 和 `apiKey`，可以加载而不产生 schema 错误，且不生效。
+在 YAML 中设置了非空 `searchBaseURL` 或 `searchApiKeyEnv`（Fetch 为 `fetchBaseURL` 或 `fetchApiKeyEnv`）的能力，则无论计费方式如何，始终把其 `*ApiKeyEnv`（未设置时为 `DEEPSEEK_API_KEY`）下的密钥发往其 `*BaseURL`（未设置时为官方基础地址），从不发送账号令牌，因此内网或第三方端点只收到为它选择的密钥。每个能力有自己的字段，因为一个部署可以由不同网关提供搜索和抓取。这些字段只能在 YAML 中设置，空值视为未设置。schema 之外字段的已保存值，包括 `baseURL`、`apiKeyEnv` 和 `apiKey`，可以加载而不产生 schema 错误，且不生效。
 
 `@deepseek-ai/dsh-llm-deepseek` 的[凭据函数](../../../../packages/llm/llm-deepseek/src/credential.ts)为 DeepSeek 模型路由、Messages 搜索以及 Search 与 Fetch API 读取并校验 API 密钥、检查密钥是否存在、取得账号令牌，因此每个 DeepSeek 请求都以同一方式读取凭据库；账号模型路由、Messages 搜索以及 Search 与 Fetch API 还会作废被 HTTP 401 拒绝的令牌。内置配置不需要按 profile 覆盖凭据，因为只要 `DEEPSEEK_API_KEY` 或 DeepSeek API 密钥路由有密钥，API 密钥路径就能工作。
 
@@ -66,7 +66,7 @@ Messages 提供方负责声明并写入 `web/deepseek-search-llm-request`。声�
 
 **抓取也默认使用 Fetch API。** 它会给每次抓取增加按次费用，并把页面抓取和目标访问策略交给服务端，由服务端而不是用户的机器发起抓取。
 
-**在设置页为每个能力选择一种凭据来源**，下拉框列出已配置的 DeepSeek 模型提供方，外加自定义密钥和基础地址，来源之间不回退。这样可见的设置就能说明全部规则，但配置面过大，用户难以理解：每个能力都多出一个凭据下拉框，用户必须让它与自己对话所用的模型提供方保持一致；在账号路由上对话的已登录用户在修改设置前没有网页工具。跟随会话的凭据不需要任何设置，与模型提供方不同的端点由只能在 YAML 中设置的单独字段覆盖。
+**在设置页为每个能力选择一种凭据来源**，下拉框列出已配置的 DeepSeek 模型提供方，外加自定义密钥和基础地址，来源之间不回退。这样可见的设置就能说明全部规则，但配置面过大，用户难以理解：每个能力都多出一个凭据下拉框，用户必须让它与自己对话所用的模型提供方保持一致；在账号路由上对话的已登录用户在修改设置前没有网页工具。默认的 `auto` 计费无需配置即跟随会话的凭据，计费方式下拉框只提供两种 DeepSeek 凭据，与模型提供方不同的端点由只能在 YAML 中设置的单独字段覆盖。
 
 **Search 与 Fetch 共用一个自定义密钥和基础地址。** 它无法表达由不同网关分别提供两个 API 的部署。
 
@@ -76,10 +76,10 @@ Messages 提供方负责声明并写入 `web/deepseek-search-llm-request`。声�
 
 ## 影响
 
-没有已保存搜索选择的用户通过 Search API 搜索：查询发往会话的 DeepSeek 凭据所选的 Search 端点，每次计为一次 Search API 请求，并且除非关闭 `sendOriginalQuestion`，还会把最近一条用户提示的至多 128 个字符作为 `ori_question` 发送。网关没有 `/v1/tools` 路由的部署会遇到搜索失败，直到选择 Messages 搜索，或把 `searchBaseURL` 设为提供这些路由的基础地址。已保存的 `deepseek-official` 选择使用 Messages 搜索。没有已保存抓取选择的用户通过本地 HTTP 抓取。已登录但没有 API 密钥的用户只在账号路由上的会话中可以使用 DeepSeek 网页搜索；[升级指南](../../../../docs/upgrade-guide/v0.2.2-alpha.2/web-search-credential-modes/guide.zh.md)列出了每种受影响的配置。
+没有已保存搜索选择的用户通过 Search API 搜索：查询发往会话的 DeepSeek 凭据所选的 Search 端点，每次计为一次 Search API 请求，并且除非关闭 `sendOriginalQuestion`，还会把最近一条用户提示的至多 128 个字符作为 `ori_question` 发送。网关没有 `/v1/tools` 路由的部署会遇到搜索失败，直到选择 Messages 搜索，或把 `searchBaseURL` 设为提供这些路由的基础地址。已保存的 `deepseek-official` 选择使用 Messages 搜索。没有已保存抓取选择的用户通过本地 HTTP 抓取。已登录但没有 API 密钥的用户在 `auto` 计费下，除 DeepSeek API 密钥路由上的会话外，都可以使用 DeepSeek 网页搜索；[升级指南](../../../../docs/upgrade-guide/v0.2.2-alpha.2/web-search-credential-modes/guide.zh.md)列出了每种受影响的配置。
 
 插件提供方（包括在创作模式下编写的提供方）一经注册，就会以其 `title` 出现在对应的下拉框中。下拉框可能提供在当前请求中无法运行的提供方；失败会在执行搜索或抓取时出现。每次注册表变更会在每个观察它的 Client 中产生一次转发事件和一次列表读取。
 
 ## 验证
 
-[web.spec.ts](../../../../packages/web/web/tests/web.spec.ts) 覆盖列表内容与顺序、标题、注册与撤销后的事件、重复注册被拒绝时不触发事件，以及监听器失败的隔离。[deepseek.spec.ts](../../../../packages/web/web-search-deepseek/tests/deepseek.spec.ts) 覆盖独立的 Messages 提供方，[credential-resolution.spec.ts](../../../../packages/web/web-deepseek-api/tests/credential-resolution.spec.ts) 针对两个能力覆盖账号路由上的账号令牌及其在 HTTP 401 后被作废、未登录时回退到 API 密钥、官方、非 DeepSeek 和会话之外的操作使用路由密钥与端点、没有该路由时使用 `DEEPSEEK_API_KEY` 与官方基础地址、从不发送令牌的 YAML 单独字段、两个能力相互独立、就绪判断与每次操作一致，以及被忽略的已移除字段；[composition.spec.ts](../../../../packages/web/web-deepseek-api/tests/composition.spec.ts) 通过 Loader 启动真实的模型路由。[remote-events.host.spec.ts](../../../../packages/api/remotes/tests/remote-events.host.spec.ts) 覆盖事件转发，[base.spec.ts](../../../../packages/bundle/base/tests/base.spec.ts) 固定内置默认值。设置页的 controller 与 card 测试以及[插件配置浏览器场景](../../../../apps/web/tests/plugin-config.e2e.ts)覆盖下拉框内容、Search 与 Fetch 的分别选择、DeepSeek API 不显示凭据控件，以及各提供方保留的设置。
+[web.spec.ts](../../../../packages/web/web/tests/web.spec.ts) 覆盖列表内容与顺序、标题、注册与撤销后的事件、重复注册被拒绝时不触发事件，以及监听器失败的隔离。[deepseek.spec.ts](../../../../packages/web/web-search-deepseek/tests/deepseek.spec.ts) 覆盖独立的 Messages 提供方，[credential-resolution.spec.ts](../../../../packages/web/web-deepseek-api/tests/credential-resolution.spec.ts) 针对两个能力覆盖账号路由上的账号令牌及其在 HTTP 401 后被作废、未登录时回退到 API 密钥、官方、非 DeepSeek 和会话之外的操作使用路由密钥与端点、DeepSeek 路由之外没有密钥时回退到账号、在每个路由上只用账号或只用 API 密钥的计费、单独字段优先于计费方式、没有该路由时使用 `DEEPSEEK_API_KEY` 与官方基础地址、从不发送令牌的 YAML 单独字段、两个能力相互独立、就绪判断与每次操作一致，以及被忽略的已移除字段；[composition.spec.ts](../../../../packages/web/web-deepseek-api/tests/composition.spec.ts) 通过 Loader 启动真实的模型路由。[remote-events.host.spec.ts](../../../../packages/api/remotes/tests/remote-events.host.spec.ts) 覆盖事件转发，[base.spec.ts](../../../../packages/bundle/base/tests/base.spec.ts) 固定内置默认值。设置页的 controller 与 card 测试以及[插件配置浏览器场景](../../../../apps/web/tests/plugin-config.e2e.ts)覆盖下拉框内容、Search 与 Fetch 的分别选择、DeepSeek API 的计费方式下拉框，以及各提供方保留的设置。

@@ -1,7 +1,7 @@
 /* Forge tab body: one scrolling column with the checkout row on top and the
    Session's change request cards below, at the sidebar's 13px row size. */
 .root {
-  --forge-fill: var(--dsw-static-neutral-50);
+  --forge-fill: var(--dsw-alias-card-fill);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -15,9 +15,6 @@
   line-height: 20px;
 }
 
-:global(body[data-ds-dark-theme]) .root {
-  --forge-fill: var(--dsw-static-neutral-850);
-}
 
 /* Loading and disconnected states of a panel without state yet. */
 .centered {

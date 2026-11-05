@@ -16,7 +16,7 @@ export const ACTION = 'enable_official_plugin'
 
 export const bundle: BundleInfo = {
   name: 'official-search', official: true, optional: true, availability: 'installation',
-  enabled: false, installed: false, removable: false, updatable: false, rows: [], overrides: [],
+  enabled: false, installed: false, removable: false, rows: [], overrides: [],
   meta: { title: { en: 'Search', zh: '搜索' }, description: 'Search past conversations.' },
 }
 /** Text of an accepted `enable_official_plugin` call's result. */

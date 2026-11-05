@@ -53,6 +53,12 @@ export interface PackageOperationOptions {
   idleTimeoutMs?: number
   /** Bound on the pre-install registry lookup, in milliseconds; without one a fixed bound applies. */
   lookupTimeoutMs?: number
+  /**
+   * The bundle package and manifest version the run must install. A run that leaves this package missing, at another
+   * version, or without a bundle declaration or bundle patches that load, or that adds or changes another direct
+   * dependency, is undone like a compatibility rejection after it.
+   */
+  expected?: { readonly name: string; readonly version: string }
 }
 
 /** Resolve relative package specs against the caller's directory.
@@ -281,16 +287,19 @@ function bundleComponentManifests(manifest: ProfileManifest, dir: string, anchor
 }
 
 /** Execute pnpm inside a profile whose caller already holds the profile write lock.
- * Newly installed or updated direct dependencies are checked even when activation is disabled;
- * an untouched dependency never blocks an unrelated operation and stays denied at startup.
- * Compatibility denial restores the profile manifest and lockfile, but leaves downloaded modules on disk.
+ * Newly installed or updated direct dependencies are checked even when activation is disabled. With `expected`, each
+ * of them must be the expected package, which must be installed at its version with a bundle declaration. Any other
+ * untouched dependency never blocks an unrelated operation and stays denied at startup.
+ * A denial before pnpm runs changes nothing; one after it restores the profile manifest and lockfile and reinstalls
+ * the restored lockfile, while downloaded files stay in the pnpm store.
  * @param context Launcher-owned profile and resolution locations.
  * @param args Pnpm arguments, before relative path anchoring.
  * @param options Output, activation and cancellation policy.
  * @returns Exit status, whether the silence bound stopped the run, and the diagnostic path.
- * A compatibility denial returns exit code 1. Service output is bounded; CLI output uses inherited descriptors.
+ * A compatibility or `expected` denial returns exit code 1 and names what it refused.
  * Unsupported Host activation returns exit code 1 with named diagnostics; installed dependencies remain,
  * and no bundle selection changes are saved. Other reconciliation or filesystem errors reject.
+ * Service output is bounded; CLI output uses inherited descriptors.
  * The diagnostic file is closed on return or rejection, including preparation and spawn failures.
  */
 export async function runProfilePnpm(
@@ -333,6 +342,14 @@ export async function runProfilePnpm(
   }
   /** Packages a compatibility check refused; callers render them for their own surface. */
   const incompatible: IncompatiblePlugin[] = []
+  /** Why the post-install check undoes a successful run. */
+  const warnings: string[] = []
+  /** What `options.expected` found wrong with the run, `unexpected-package` taking precedence. */
+  let unmet: PackageResult['unmet']
+  const fail = (code: NonNullable<PackageResult['unmet']>, warning: string): void => {
+    if (unmet !== 'unexpected-package') unmet = code
+    warnings.push(warning)
+  }
   const rejected = async (warnings: readonly string[], restoration: string): Promise<PackageResult> => {
     const diagnostic = `\ndsh: installation rejected: ${warnings.join('\n')}\ndsh: ${restoration}.\n`
     await log.write(diagnostic)
@@ -478,7 +495,8 @@ export async function runProfilePnpm(
     // A terminated run's exit status says nothing about what it wrote, so it never reconciles the selection.
     if (exitCode === 0 && !control.stalled) {
       const after = readProfileManifest('dsh', dir)
-      const warnings: string[] = []
+      const { expected } = options
+      let seen = false
       for (const [name, spec] of Object.entries(directDependencies(after))) {
         const packageDir = join(dir, 'node_modules', name)
         const installed = optionalFile(join(packageDir, 'package.json'))
@@ -489,6 +507,18 @@ export async function runProfilePnpm(
         const issues: IncompatiblePlugin[] = []
         try {
           const manifest = readProfileManifest('dsh', packageDir)
+          const installedAs = `${name}@${String(manifest.version)}`
+          const wanted = expected === undefined ? undefined : `${expected.name}@${expected.version}`
+          // The expected package is checked even when the run left it as it was, as adding its saved spec again does.
+          if (name === expected?.name) {
+            seen = true
+            if (installedAs !== wanted) fail('unexpected-package', `${installedAs} is installed where ${String(wanted)} was expected`)
+            else if (manifest.dsh?.bundle === undefined) fail('not-bundle', `${installedAs} declares no bundle`)
+            // The caller loads these patches next; one that cannot load is refused here, while its modules can go back.
+            else for (const file of bundlePatchPaths(packageDir, manifest.dsh.bundle)) loadOverlayPatches('dsh', file)
+          } else if (wanted !== undefined && !untouched) {
+            fail('unexpected-package', `${installedAs} is installed where ${wanted} was expected`)
+          }
           for (const candidate of [manifest, ...bundleComponentManifests(manifest, packageDir, context.installAnchor)]) {
             const issue = evaluatePluginCompatibility(candidate, readProfileVersionExemptions(dir))
             if (issue !== undefined && !issue.exempted) {
@@ -510,6 +540,7 @@ export async function runProfilePnpm(
           options.onOutput?.(notice, 'stderr')
         }
       }
+      if (expected !== undefined && !seen) fail('unexpected-package', `${expected.name}@${expected.version} is not installed`)
       if (warnings.length > 0) {
         // A bundle component's requirements need installed contents, so this rejection lands after pnpm
         // replaced the tree: restore the files, then reinstall the restored lockfile so the version
@@ -553,6 +584,7 @@ export async function runProfilePnpm(
   return {
     exitCode, output: output.toString('utf8'), truncated, logPath,
     ...control.stalled ? { timedOut: true } : {}, ...incompatible.length > 0 ? { incompatible } : {},
+    ...unmet === undefined ? {} : { unmet },
   }
 }
 

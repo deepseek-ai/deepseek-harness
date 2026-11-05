@@ -69,7 +69,7 @@
     "@deepseek-ai/dsh-client-ui-sidebar-files": "workspace:*",
     "@deepseek-ai/dsh-client-ui-sidebar-right": "workspace:*",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
-    "@deepseek-ai/dsh-office-to-pdf": "workspace:*",
+    "@deepseek-ai/dsh-office-kit": "workspace:*",
     "@deepseek-ai/dsh-host-webserver": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/dsh-util-workspace-path": "workspace:*",
@@ -96,7 +96,10 @@
     "lib/index.js",
     "lib/client.js",
     "lib/client.*.js",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ],
   "dependencies": {
     "@deepseek-ai/schemastery": "workspace:~"
