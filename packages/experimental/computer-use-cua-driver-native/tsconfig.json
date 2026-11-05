@@ -11,6 +11,7 @@
     { "path": "../../computer-use/computer-use" },
     { "path": "../../core/tools" },
     { "path": "../../core/system-prompt" },
+    { "path": "../../llm/llm" },
     { "path": "../../mcp/mcp-client" }
   ]
 }
