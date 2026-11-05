@@ -11,6 +11,9 @@
     },
     {
       "path": "../../util/lazy-require"
+    },
+    {
+      "path": "../../llm/llm"
     }
   ]
 }
