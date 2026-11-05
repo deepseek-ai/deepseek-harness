@@ -7,7 +7,7 @@ import UserQuestionService, {
   type AskUserQuestionAnswer,
   type AskUserQuestionRequest,
 } from '@deepseek-ai/dsh-user-questions'
-import { createToolResultMessage, createUserMessage, ToolCallId, type ToolSchema, type UserMessage } from '@deepseek-ai/dsh-llm'
+import { createToolResultMessage, createUserMessage, HarnessError, ToolCallId, type ToolSchema, type UserMessage } from '@deepseek-ai/dsh-llm'
 import { Session, SessionId, SESSION_FORMAT_VERSION, TOOL_OUTCOME_UNKNOWN } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 
@@ -178,14 +178,16 @@ describe('UserQuestionService', () => {
       name: 'UserQuestionError',
     })],
     ['a non-Error rejection', { name: 'UserQuestionError', code: 'ASK_CANCELLED' }],
-  ])('preserves %s from the provider', async (_label, rejection) => {
+  ])('classifies %s from the provider as PROVIDER_ERROR', async (_label, rejection) => {
     const ctx = new Context()
     await ctx.plugin(UserQuestionService)
     registerAnswerer(ctx, { ask: vi.fn().mockRejectedValue(rejection) })
 
-    await expect(ctx.userQuestions.ask({
+    const failure = await ctx.userQuestions.ask({
       questions: [{ id: 'confirm', question: 'Proceed?' }],
-    })).rejects.toBe(rejection)
+    }).then(() => undefined, (error: unknown) => error)
+    expect(failure).toBeInstanceOf(UserQuestionError)
+    expect(failure).toMatchObject({ name: 'UserQuestionError', code: 'PROVIDER_ERROR', cause: rejection })
   })
 
   it('rejects empty question batches before reaching the provider', async () => {
@@ -289,10 +291,10 @@ describe('UserQuestionService', () => {
     })
   })
 
-  it('preserves a provider rejection outside the UserQuestionError taxonomy', async () => {
+  it('preserves a coded provider rejection outside the UserQuestionError taxonomy', async () => {
     const ctx = new Context()
     await ctx.plugin(UserQuestionService)
-    const failure = new Error('provider failed')
+    const failure = new HarnessError('provider failed', 'PROVIDER_OFFLINE')
     registerAnswerer(ctx, { ask: () => Promise.reject(failure) })
 
     await expect(ctx.userQuestions.ask({
@@ -568,14 +570,15 @@ describe('askTimed', () => {
     }
   })
 
-  it('rethrows a provider failure that is not a question error', async () => {
+  it('classifies a provider failure that is not a question error as PROVIDER_ERROR', async () => {
     const ctx = await timedContext()
     const agent = liveAgent('timed-provider-crash')
     ctx.agents.enter(agent)
-    registerAnswerer(ctx, { ask: () => Promise.reject(new TypeError('provider crashed')) })
+    const crash = new TypeError('provider crashed')
+    registerAnswerer(ctx, { ask: () => Promise.reject(crash) })
 
     await expect(ctx.userQuestions.askTimed({ agent, questions: timedQuestions }, timedCallId, 120_000))
-      .rejects.toThrow(TypeError)
+      .rejects.toMatchObject({ name: 'UserQuestionError', code: 'PROVIDER_ERROR', cause: crash })
     await ctx.fiber.dispose()
   })
 
