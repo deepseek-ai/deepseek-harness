@@ -56,8 +56,7 @@ const PROTOCOLS: Readonly<Record<string, () => ProviderStreams>> = {
  * Every wire protocol a configured route may name, most-reached first. The
  * order is the table's and therefore stable; a configuration surface offering
  * a choice presents the first as its default, which is why the protocol a
- * hand-declared gateway most often speaks — and the one endpoint interrogation
- * can read — leads.
+ * hand-declared gateway most often speaks leads.
  * @returns the supported protocol identifiers.
  */
 export function supportedProtocols(): readonly string[] {

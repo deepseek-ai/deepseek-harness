@@ -65,19 +65,36 @@ export interface ReasoningEffortsFailure {
   /** Zero-based model position. */
   index: number
   /** Message key owned by the Models settings section. */
-  key: 'modelReasoningValueRequired' | 'modelReasoningNeedsLevel'
+  key: 'modelReasoningValueRequired' | 'modelReasoningNeedsLevel' | 'modelReasoningLevelsOnly'
+}
+
+/**
+ * Whether an entry breaks a protocol that accepts only its offered levels,
+ * each sent under its own name.
+ * @param only - the accepted levels.
+ * @param level - the declared level.
+ * @param wire - the value stored for it.
+ * @returns whether the entry is outside the accepted levels.
+ */
+function outsideLevels(only: readonly string[], level: string, wire: unknown): boolean {
+  return !only.includes(level) || wire !== level
 }
 
 /**
  * Mirror the pi-ai refusals of a hand-declared `reasoningEfforts`, so a card
  * names the row instead of failing at the write.
  * @param value - drafted `models` value, or `undefined` while inherited.
+ * @param only - the levels the route's protocol accepts, each sent under its
+ * own name, or `undefined` when the protocol accepts any declared value.
  * @returns the first refused row, or `undefined` when the adapter will accept every row.
  */
-export function validateReasoningEfforts(value: unknown): ReasoningEffortsFailure | undefined {
+export function validateReasoningEfforts(value: unknown, only?: readonly string[]): ReasoningEffortsFailure | undefined {
   for (const [index, model] of modelDrafts(value).entries()) {
     const entries = readEfforts(model)
     if (entries === undefined) continue
+    if (only !== undefined && entries.some(([level, wire]) => outsideLevels(only, level, wire))) {
+      return { index, key: 'modelReasoningLevelsOnly' }
+    }
     if (entries.some(([level, wire]) => !acceptedValue(level, wire))) return { index, key: 'modelReasoningValueRequired' }
     if (!entries.some(([level]) => level !== 'off')) return { index, key: 'modelReasoningNeedsLevel' }
   }
@@ -90,6 +107,8 @@ interface ModelReasoningEffortsProps {
   model: DeepSeekModelDraft
   /** Levels the adapter's schema accepts as `reasoningEfforts` keys, in escalation order. */
   levels: readonly string[]
+  /** Whether the route's protocol accepts only {@link levels}, each sent under its own name. */
+  levelsOnly: boolean
   /** One-based row position for accessible names. */
   position: number
   /** Prevent changes while read-only or saving. */
@@ -107,7 +126,8 @@ interface ModelReasoningEffortsProps {
  * @param props - model declaration and row replacement action.
  * @returns the reasoning-level group.
  */
-export function ModelReasoningEfforts({ model, levels, position, disabled, t, onChange }: ModelReasoningEffortsProps): ReactNode {
+export function ModelReasoningEfforts(props: ModelReasoningEffortsProps): ReactNode {
+  const { model, levels, levelsOnly, position, disabled, t, onChange } = props
   const entries = readEfforts(model)
   // Only the focused field keeps its own text, so a field cleared while typing
   // stays empty although its level's name is stored. Leaving the field drops
@@ -124,7 +144,8 @@ export function ModelReasoningEfforts({ model, levels, position, disabled, t, on
   const changeLevel = (current: Entries, index: number, from: string, wire: unknown, to: string): void => {
     // Only a custom spelling between two thinking levels carries over; a value
     // still spelled as its old level, or one crossing to or from Off, resets.
-    const carried = typeof wire === 'string' && wire.length > 0 && wire !== from && from !== 'off' && to !== 'off'
+    // A protocol accepting only its offered levels sends each under its own name, so nothing carries.
+    const carried = !levelsOnly && typeof wire === 'string' && wire.length > 0 && wire !== from && from !== 'off' && to !== 'off'
     write(replaceAt(current, index, [to, carried ? wire : defaultValue(to)]))
   }
 
@@ -158,6 +179,7 @@ export function ModelReasoningEfforts({ model, levels, position, disabled, t, on
 
   const refused = entries?.some(([level, wire]) => !acceptedValue(level, wire)) === true
   const missingLevel = entries !== undefined && !used.some(level => level !== 'off')
+  const outside = levelsOnly && entries?.some(([level, wire]) => outsideLevels(levels, level, wire)) === true
 
   return (
     <div className={styles['modelReasoning']} role="group" aria-label={label}>
@@ -212,7 +234,8 @@ export function ModelReasoningEfforts({ model, levels, position, disabled, t, on
                   aria-label={`${level} ${t('modelReasoningValue')}`}
                   aria-invalid={!acceptedValue(level, wire)}
                   // Off only turns reasoning off; a value stored in cordis.patch.yml is shown and kept.
-                  disabled={disabled || level === 'off'}
+                  // A protocol accepting only its offered levels sends each under its own name.
+                  disabled={disabled || level === 'off' || levelsOnly}
                   onChange={(event) => { editValue(entries, index, level, event.target.value) }}
                   onBlur={() => { leaveValue(entries, index, level, wire) }}
                 />
@@ -228,9 +251,11 @@ export function ModelReasoningEfforts({ model, levels, position, disabled, t, on
                 </button>
               </div>
             ))}
-            {refused
-              ? <p className={styles['error']}>{t('modelReasoningValueRequired')}</p>
-              : missingLevel ? <p className={styles['error']}>{t('modelReasoningNeedsLevel')}</p> : null}
+            {outside
+              ? <p className={styles['error']}>{t('modelReasoningLevelsOnly')}</p>
+              : refused
+                ? <p className={styles['error']}>{t('modelReasoningValueRequired')}</p>
+                : missingLevel ? <p className={styles['error']}>{t('modelReasoningNeedsLevel')}</p> : null}
             <button
               type="button"
               className={styles['addModelButton']}

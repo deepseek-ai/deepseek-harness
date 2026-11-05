@@ -37,6 +37,8 @@ import { catalogModels } from './catalog.ts'
  * requires an `api-version` query — and Codex authenticates through OAuth;
  * guessing at either would report an authentication failure as a provider
  * with no models. pi-ai's remaining protocols are absent for the same reason.
+ * The route protocol table in `provider.ts` may name a protocol absent here;
+ * discovery reports it as unsupported.
  */
 const LISTABLE_PROTOCOLS: ReadonlySet<string> = new Set([
   'anthropic-messages',
