@@ -18,9 +18,14 @@ describe('SidebarRight.module.css', () => {
       + String.raw`\.panel\[data-sidebar-right-open\] ${host}[^{}]*\{\s*transition: none;\s*}`))
   })
 
-  it('drops the first column\'s conversation divider in fullscreen', () => {
-    expect(css).toMatch(new RegExp(String.raw`\.panel\[data-sidebar-right-panel='fullscreen'\] :global\(\[data-dockkit-host='dock'\]\[data-dockkit-column='0'\]\)`
-      + String.raw` > :global\(\[data-dockkit-pane\]\)\s*\{\s*border-left: none;\s*}`))
+  it('hides the first column\'s conversation divider in open fullscreen only after the opening slide', () => {
+    const fullscreen = String.raw`\.panel\[data-sidebar-right-panel='fullscreen'\]`
+    const pane = String.raw` :global\(\[data-dockkit-host='dock'\]\[data-dockkit-column='0'\]\) > :global\(\[data-dockkit-pane\]\)`
+    expect(css).toMatch(new RegExp(String.raw`${fullscreen}\[data-sidebar-right-open\]${pane}\s*\{\s*border-left-color: transparent;\s*}`))
+    expect(css).toMatch(new RegExp(String.raw`${fullscreen}\[data-sidebar-right-opening\]${pane}\s*\{`
+      + String.raw`\s*transition: border-left-color 0s linear var\(--ds-transition-duration-slow\);\s*}`))
+    expect(css).toMatch(new RegExp(String.raw`@media \(prefers-reduced-motion: reduce\)\s*\{[^{}]*`
+      + String.raw`${fullscreen}\[data-sidebar-right-opening\]${pane}\s*\{\s*transition: none;\s*}`))
   })
 
   it('draws the reveal glow inside a docked pane above sticky code banners, and outside a floating panel over its own shadow', () => {

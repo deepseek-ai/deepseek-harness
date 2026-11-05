@@ -83,11 +83,17 @@
   --dsh-dockkit-dock-layer: 40;
 }
 
-/* Fullscreen has no conversation beside the first column, so dockkit's
-   column-0 divider has nothing to separate. The host attribute and child
-   combinator outrank dockkit's (0,4,0) rule regardless of stylesheet order. */
-.panel[data-sidebar-right-panel='fullscreen'] :global([data-dockkit-host='dock'][data-dockkit-column='0']) > :global([data-dockkit-pane]) {
-  border-left: none;
+/* Once open, fullscreen has no conversation beside the first column, so
+   dockkit's column-0 divider has nothing to separate. While the panel slides
+   in or out across the conversation the divider stays: an opening keeps it
+   for the slide's duration, and a closing panel no longer matches. Only the
+   color changes, so the pane keeps its width. */
+.panel[data-sidebar-right-panel='fullscreen'][data-sidebar-right-open] :global([data-dockkit-host='dock'][data-dockkit-column='0']) > :global([data-dockkit-pane]) {
+  border-left-color: transparent;
+}
+
+.panel[data-sidebar-right-panel='fullscreen'][data-sidebar-right-opening] :global([data-dockkit-host='dock'][data-dockkit-column='0']) > :global([data-dockkit-pane]) {
+  transition: border-left-color 0s linear var(--ds-transition-duration-slow);
 }
 
 /* No whole-box subtraction here: Electron drag regions are window geometry,
@@ -132,7 +138,8 @@
   .panel :global([data-dockkit-divider]),
   .panel[data-sidebar-right-open] :global([data-dockkit-host='dock']),
   .panel[data-sidebar-right-open] :global([data-dockkit-empty]),
-  .panel[data-sidebar-right-open] :global([data-dockkit-divider]) {
+  .panel[data-sidebar-right-open] :global([data-dockkit-divider]),
+  .panel[data-sidebar-right-panel='fullscreen'][data-sidebar-right-opening] :global([data-dockkit-host='dock'][data-dockkit-column='0']) > :global([data-dockkit-pane]) {
     transition: none;
   }
 }
