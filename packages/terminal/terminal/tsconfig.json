@@ -18,6 +18,9 @@
       "path": "../../core/agent"
     },
     {
+      "path": "../../llm/llm"
+    },
+    {
       "path": "../../util/brand"
     }
   ]
