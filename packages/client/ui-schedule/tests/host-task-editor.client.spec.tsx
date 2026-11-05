@@ -1027,6 +1027,20 @@ describe('Host task actions', () => {
     expect(screen.getByRole('button', { name: en['host.pause'] }).hasAttribute('disabled')).toBe(false)
   })
 
+  it('holds Pause without native disabling while the Host answers', async () => {
+    const answer = Promise.withResolvers<'saved'>()
+    const h = mount([task], { hostActions: hostActions({ edit: vi.fn<HostTaskActions['edit']>(() => answer.promise) }) })
+    fireEvent.click(screen.getByRole('button', { name: task.title }))
+    const pause = screen.getByRole('button', { name: en['host.pause'] })
+    fireEvent.click(pause)
+    expect(pause.hasAttribute('disabled')).toBe(false)
+    expect(pause.getAttribute('aria-disabled')).toBe('true')
+    fireEvent.click(pause)
+    expect(h.props.hostActions.edit).toHaveBeenCalledTimes(1)
+    await act(async () => { answer.resolve('saved'); await answer.promise })
+    expect(pause.hasAttribute('aria-disabled')).toBe(false)
+  })
+
   it.each([
     { name: 'queues a run now', outcome: 'queued' as const, alert: null, notice: null },
     { name: 'states a refused run as a wait instead of an error', outcome: { failed: 'host.executionPending' as const },

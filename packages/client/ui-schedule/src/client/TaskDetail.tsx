@@ -321,8 +321,11 @@ function TaskDetailView(props: TaskDetailProps): ReactNode {
           </div>}
         <div className={css.detailActions}>
           {task !== undefined && <><Tooltip label={t(task.status === 'active' ? 'host.pause' : 'host.resume')} side="bottom" delayMs={500} portal>
-            <span><Button size="sm" className={css.detailIconButton} disabled={busy || dirty || executionActive || task.status === 'ended' || !props.authoritative}
-              aria-label={t(task.status === 'active' ? 'host.pause' : 'host.resume')} onClick={() => { void setActive(task) }}>
+            {/* While busy, the toggle uses aria-disabled: native disabling under the pointer would flash
+                the not-allowed cursor and dimmed style between two enabled states. */}
+            <span><Button size="sm" className={css.detailIconButton} disabled={dirty || executionActive || task.status === 'ended' || !props.authoritative}
+              aria-disabled={busy || undefined} aria-label={t(task.status === 'active' ? 'host.pause' : 'host.resume')}
+              onClick={() => { if (!busy) void setActive(task) }}>
               {task.status === 'active' ? <IconPauseOutlineRegular /> : <IconPlayOutlineRegular />}
             </Button></span>
           </Tooltip>
