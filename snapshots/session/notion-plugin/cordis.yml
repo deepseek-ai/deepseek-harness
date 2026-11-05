@@ -3,6 +3,10 @@
   disabled: false
 
 - insert:
+    - id: mcp-client-host
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        host: true
     - id: mcp-manager
       name: '@deepseek-ai/dsh-mcp-manager'
       inject: [credentials, mcpResources]
