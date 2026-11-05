@@ -11,7 +11,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import ApprovalService, { type ApprovalOutcome, type ApprovalRequest } from '@deepseek-ai/dsh-user-approval'
-import ToolRuntime, { TOOL_CONTEXT_UNAVAILABLE, ToolContextUnavailableError, APPROVAL_CANCELLED, APPROVAL_ERROR_NAME, APPROVAL_REJECTED, APPROVAL_UNAVAILABLE, defineTool, JsonSchemaError, parameterSchemaSpecToJsonSchema, validateArgs, ToolArgsError, ToolNotFoundError, TOOL_ABORTED, TOOL_ABORTED_BEFORE_DISPATCH, type InferArgs, type ParameterSchemaSpec, type PreToolDecision, type PostToolDecision, type JsonSchemaNode, type ToolDefinition, type ToolDispatchExecution, type ToolExecutionResult, type ToolExecutionToken } from '@deepseek-ai/dsh-tools'
+import ToolRuntime, { ToolContextUnavailableError, defineTool, JsonSchemaError, parameterSchemaSpecToJsonSchema, validateArgs, ToolArgsError, ToolNotFoundError, TOOL_ABORTED, TOOL_ABORTED_BEFORE_DISPATCH, type InferArgs, type ParameterSchemaSpec, type PreToolDecision, type PostToolDecision, type JsonSchemaNode, type ToolDefinition, type ToolDispatchExecution, type ToolExecutionResult, type ToolExecutionToken } from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 
@@ -808,7 +808,7 @@ describe('ToolRuntime', () => {
     expect(result).toMatchObject({
       content: [{ type: 'text', text: 'Error: needs-agent requires a calling agent' }],
       isError: true,
-      error: { info: { name: 'ToolContextUnavailableError', code: TOOL_CONTEXT_UNAVAILABLE } },
+      error: { info: { name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' } },
     })
   })
 
@@ -873,7 +873,7 @@ describe('ToolRuntime', () => {
     const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'echo', arguments: { text: 'hi' } })
     expect(result.isError).toBe(true)
     expect(result.content[0]).toMatchObject({ text: 'Error: tool "echo" requires approval (not yet supported)' })
-    expect(result.error?.info).toEqual({ name: APPROVAL_ERROR_NAME, code: APPROVAL_UNAVAILABLE })
+    expect(result.error?.info).toEqual({ name: 'ApprovalError', code: 'APPROVAL_UNAVAILABLE' })
   })
 
   describe('ask routing through ctx.approval', () => {
@@ -930,7 +930,7 @@ describe('ToolRuntime', () => {
       const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'echo', arguments: {}, agent: fakeAgent() })
       expect(result.isError).toBe(true)
       expect(result.content[0]).toMatchObject({ text: 'Error: the user rejected tool "echo"' })
-      expect(result.error?.info).toEqual({ name: APPROVAL_ERROR_NAME, code: APPROVAL_REJECTED })
+      expect(result.error?.info).toEqual({ name: 'ApprovalError', code: 'APPROVAL_REJECTED' })
     })
 
     it('denies with the cancellation reason on cancelled', async () => {
@@ -941,7 +941,7 @@ describe('ToolRuntime', () => {
       const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'echo', arguments: {}, agent: fakeAgent() })
       expect(result.isError).toBe(true)
       expect(result.content[0]).toMatchObject({ text: 'Error: approval for tool "echo" was cancelled' })
-      expect(result.error?.info).toEqual({ name: APPROVAL_ERROR_NAME, code: APPROVAL_CANCELLED })
+      expect(result.error?.info).toEqual({ name: 'ApprovalError', code: 'APPROVAL_CANCELLED' })
     })
 
     it('returns ABORTED_BEFORE_DISPATCH when caller cancellation overtakes approval', async () => {
@@ -986,7 +986,7 @@ describe('ToolRuntime', () => {
       const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'echo', arguments: {}, agent: fakeAgent() })
       expect(result.isError).toBe(true)
       expect(result.content[0]).toMatchObject({ text: 'Error: tool "echo" requires approval, but no approval channel is available' })
-      expect(result.error?.info).toEqual({ name: APPROVAL_ERROR_NAME, code: APPROVAL_UNAVAILABLE })
+      expect(result.error?.info).toEqual({ name: 'ApprovalError', code: 'APPROVAL_UNAVAILABLE' })
     })
 
     it('denies an agent-less execution without asking — nothing to route or audit through', async () => {
@@ -1002,7 +1002,7 @@ describe('ToolRuntime', () => {
       expect(asked).toBe(false)
       expect(result.isError).toBe(true)
       expect(result.content[0]).toMatchObject({ text: 'Error: tool "echo" requires approval, but the call has no agent to route it through' })
-      expect(result.error?.info).toEqual({ name: APPROVAL_ERROR_NAME, code: APPROVAL_UNAVAILABLE })
+      expect(result.error?.info).toEqual({ name: 'ApprovalError', code: 'APPROVAL_UNAVAILABLE' })
     })
 
     it('turns a rogue outcome from a NON-conforming approval stand-in into an isError result', async () => {
