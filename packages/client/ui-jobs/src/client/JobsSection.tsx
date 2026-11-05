@@ -5,7 +5,8 @@ import {
   IconChevronDownOutlineRegular, IconStopFillRegular, StateDot, TerminalBlock,
   type StateDotState, type TerminalBlockLabels,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { InjectFace, PropsLocale, PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale, PropsRuntime, PropsStore, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { createJobsSectionStore } from './jobs-store.ts'
 import { NS } from './locales.ts'
 import type {} from '@deepseek-ai/dsh-client-ui-session-panel/client'
 import css from './JobsSection.module.css'
@@ -42,6 +43,7 @@ export type JobsSectionProps =
   PropsRuntime<'conversation.session.panel.section'>
   & PropsLocale<typeof NS>
   & InjectFace<JobsSectionInjected>
+  & PropsStore<ReturnType<typeof createJobsSectionStore>>
 
 /** Stable empty list so a session with no jobs keeps one array identity. */
 const NO_JOBS: readonly JobView[] = []
@@ -321,7 +323,7 @@ function JobItem({ job, view, expanded, now, onToggle, kill, t }: {
  *   observation, and kill controls, and the namespace translator.
  * @returns the job list, or null when there is nothing to show.
  */
-export function JobsSection({ sessionId, useJobs, watchRows, observe, killJob, t }: JobsSectionProps) {
+export function JobsSection({ sessionId, useJobs, watchRows, observe, killJob, useStore, actions, t }: JobsSectionProps) {
   const jobs = useJobs(state => state.rows[sessionId]) ?? NO_JOBS
   const observedViews = useJobs(state => state.observed)
   const [expandedKey, setExpandedKey] = useState<string | undefined>(undefined)
@@ -331,15 +333,15 @@ export function JobsSection({ sessionId, useJobs, watchRows, observe, killJob, t
   const [settledOpen, setSettledOpen] = useState<boolean | undefined>(undefined)
   // Rows the user cleared from the settled tail (client-side hide only; the
   // registry keeps its records and a later settlement reappears normally).
-  const [clearedKeys, setClearedKeys] = useState<ReadonlySet<string>>(() => new Set())
+  const cleared = useStore(state => state.cleared)
   // One kill affordance advances at a time: arming a row disarms any other.
   const [killPhase, setKillPhase] = useState<{ key: string; state: Exclude<KillState, 'idle'> } | undefined>(undefined)
 
   const rows = useMemo(() => ordered(jobs), [jobs])
   const liveRows = useMemo(() => rows.filter(isLive), [rows])
   const settledRows = useMemo(
-    () => rows.filter(job => !isLive(job) && !clearedKeys.has(String(job.id))),
-    [rows, clearedKeys],
+    () => rows.filter(job => !isLive(job) && cleared[String(job.id)] !== true),
+    [rows, cleared],
   )
   const settledExpanded = settledOpen ?? liveRows.length === 0
 
@@ -404,11 +406,7 @@ export function JobsSection({ sessionId, useJobs, watchRows, observe, killJob, t
   if (liveRows.length + settledRows.length === 0) return null
 
   const clearSettled = (): void => {
-    setClearedKeys((current) => {
-      const next = new Set(current)
-      for (const job of settledRows) next.add(String(job.id))
-      return next
-    })
+    actions.cleared(settledRows.map(job => String(job.id)))
     if (expandedKey !== undefined && settledRows.some(job => String(job.id) === expandedKey)) {
       setExpandedKey(undefined)
     }

@@ -8,6 +8,7 @@ import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { JobId } from '@deepseek-ai/dsh-jobs/brand'
 import { JobsSection } from './JobsSection.tsx'
 import type { JobsSectionInjected } from './JobsSection.tsx'
+import { createJobsSectionStore } from './jobs-store.ts'
 import type {} from '@deepseek-ai/dsh-api-job-controller/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
@@ -43,6 +44,7 @@ export function apply(ctx: ClientContext): void {
       order: 300,
       label: () => t('list.aria'),
       locale: NS,
+      store: createJobsSectionStore(),
       inject: (): JobsSectionInjected => ({
         hooks: { jobs: ctx.jobs.state },
         watchRows: sessionId => ctx.jobs.watchRows(sessionId),

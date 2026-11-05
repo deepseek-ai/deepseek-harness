@@ -151,8 +151,8 @@ root [AppFrame]
       │     ├─ conversation.session.header.lineage
       │     ├─ conversation.session.header.actions
       │     ├─ conversation.session.header.utilities
-│     │  └─ id=session-panel [SessionPanelToggle]
-│     │     └─ conversation.session.panel.indicator [list, inline]
+      │     │  └─ id=session-panel [SessionPanelToggle]
+      │     │     └─ conversation.session.panel.indicator [list, inline]
       │     ├─ conversation.session.header.views.actions
       │     └─ conversation.session.header.corner
       └─ calls Factory: conversation.content
@@ -212,8 +212,10 @@ Factory: conversation.content [ConversationContent]
 ├─ conversation.hero.options
 └─ conversation.session.panel [SessionPanel]
    ├─ conversation.session.panel.section [list]
-   │  └─ id=environment [EnvironmentSection]
-   │     └─ conversation.session.panel.environment.row [list]
+   │  ├─ id=environment [EnvironmentSection]
+   │  │  └─ conversation.session.panel.environment.row [list]
+   │  └─ id=subagents [SubagentsSection]
+   │     └─ conversation.session.panel.subagents.footer [list]
    └─ conversation.session.panel.section.actions [keyed]
 
 Factory: conversation.chat.user.content [UserContent]

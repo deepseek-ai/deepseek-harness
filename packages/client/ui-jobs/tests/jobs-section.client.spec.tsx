@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useSyncExternalStore } from 'react'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { JobsSnapshot, JobView, ObservedJob } from '@deepseek-ai/dsh-api-job-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { JobsSection, type JobsSectionProps } from '../src/client/JobsSection.tsx'
+import { createJobsSectionStore } from '../src/client/jobs-store.ts'
 import { zh, ru } from '../src/client/locales.ts'
 
 beforeEach(() => {
@@ -55,18 +57,31 @@ function outputJob(over: Partial<JobView> = {}): JobView {
   return job({ output: { total: 12, earliest: 0 }, ...over })
 }
 
+/** One Session's section store, as the registration mints it. */
+type SectionStore = ReturnType<ReturnType<typeof createJobsSectionStore>['create']>
+
+/** Test-local selector hook over a framework-neutral store instance. */
+function hookOf<T>(instance: { subscribe: (listener: () => void) => () => void; getSnapshot: () => T }) {
+  return function useSelector<S>(select: (state: T) => S): S {
+    return select(useSyncExternalStore(instance.subscribe, instance.getSnapshot))
+  }
+}
+
 function props(
   jobs: readonly JobView[],
   observe: JobsSectionProps['observe'] = () => () => {},
   observed: Readonly<Record<string, ObservedJob>> = {},
   killJob: JobsSectionProps['killJob'] = async () => true,
   watchRows: JobsSectionProps['watchRows'] = () => () => {},
+  store: SectionStore = createJobsSectionStore().create(),
 ): JobsSectionProps {
   const jobsState: JobsSnapshot = { rows: jobs.length > 0 ? { [SESSION]: jobs } : {}, observed }
   function useJobs<T>(select: (value: JobsSnapshot) => T): T {
     return select(jobsState)
   }
-  return { sessionId: SESSION, useJobs, watchRows, observe, killJob, t } as JobsSectionProps
+  return {
+    sessionId: SESSION, useJobs, watchRows, observe, killJob, useStore: hookOf(store), actions: store.actions, t,
+  } as Pick<JobsSectionProps, 'sessionId' | 'useJobs' | 'watchRows' | 'observe' | 'killJob' | 'useStore' | 'actions' | 't'> as JobsSectionProps
 }
 
 /** The section renders its rows inline; there is no trigger to open. */
@@ -128,6 +143,18 @@ describe('JobsSection rows', () => {
     fireEvent.click(screen.getByRole('button', { name: zh['section.clear'] }))
     expect(screen.queryByText('settled work')).toBeNull()
     expect(screen.queryByRole('button', { name: zh['section.clear'] })).toBeNull()
+  })
+
+  it('keeps cleared rows hidden when the section mounts again for the same Session', () => {
+    const store = createJobsSectionStore().create()
+    const settled = job({ id: 'bash-2' as JobView['id'], label: 'settled work', status: 'completed', finishedAt: 1_700_000_012_000 })
+    const first = render(<JobsSection {...props([job(), settled], undefined, {}, undefined, undefined, store)} />)
+    fireEvent.click(screen.getByRole('button', { name: zh['section.settledCount'].replace('{count}', '1') }))
+    fireEvent.click(screen.getByRole('button', { name: zh['section.clear'] }))
+    first.unmount()
+    render(<JobsSection {...props([job(), settled], undefined, {}, undefined, undefined, store)} />)
+    expect(screen.queryByRole('button', { name: zh['section.settledCount'].replace('{count}', '1') })).toBeNull()
+    expect(screen.queryByText('settled work')).toBeNull()
   })
 
   it('opens the settled tail by default when nothing is live', () => {

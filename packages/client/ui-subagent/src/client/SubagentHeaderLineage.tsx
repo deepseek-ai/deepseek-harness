@@ -6,7 +6,9 @@ import { MenuSurface } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { NS } from './locales.ts'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { CatalogTree, deriveCatalogs, entryName, type SubagentCatalogInjected, type SubagentCatalogSnapshot } from './SubagentCatalog.tsx'
+import {
+  CatalogTree, deriveCatalogs, entryName, treeItems, type SubagentCatalogInjected, type SubagentCatalogSnapshot,
+} from './SubagentCatalog.tsx'
 import css from './SubagentCatalog.module.css'
 
 export type { SubagentCatalogInjected } from './SubagentCatalog.tsx'
@@ -160,6 +162,16 @@ function Switcher({
           tabIndex={-1}
           aria-label={t('tree.aria')}
           data-subagent-panel
+          onKeyDown={(event) => {
+            // A pinned menu takes focus itself; the tree handles keys once a row has focus.
+            if (event.target !== event.currentTarget) return
+            const items = treeItems(event.currentTarget)
+            const row = event.key === 'ArrowDown' || event.key === 'Home' ? items[0]
+              : event.key === 'ArrowUp' || event.key === 'End' ? items.at(-1) : undefined
+            if (row === undefined) return
+            event.preventDefault()
+            row.focus()
+          }}
           onPointerEnter={(event) => { if (event.pointerType !== 'touch') cancelHover() }}
           onPointerLeave={hoverOut}
         >

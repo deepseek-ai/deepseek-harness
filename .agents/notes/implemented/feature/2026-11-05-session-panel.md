@@ -45,3 +45,4 @@ The turn rail used the end edge of the scrollport, which the docked panel now oc
 - Sections from independent plugins share one surface, ordering, and title style without depending on each other, and an occupied section id can be replaced by a higher-priority registration.
 - The Conversation width controls gained one callback and the Conversation service one per-Session source; the composer stack height now lands on the content body so chrome outside the scrollport can read it.
 - The turn rail's position changed for every user; its behavior and hiding rule did not.
+- Change requests, background jobs, and subagents became sections, replacing the change requests sidebar tab, its start-page entry, and the header controls of jobs and subagents; the header keeps the subagent breadcrumb switcher for child Sessions. A section mounts only while the panel shows, so state that must outlast hiding the panel, such as cleared job rows, lives in a per-Session slot store.

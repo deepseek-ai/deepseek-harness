@@ -1283,6 +1283,25 @@ describe('breadcrumb switcher', () => {
     expect(document.activeElement).toBe(switcher)
   })
 
+  it('moves focus from a pinned menu into the tree with the arrow, Home, and End keys', async () => {
+    render(<HeaderCatalog {...childInput()} />)
+    fireEvent.click(screen.getByRole('button', { name: '切换子智能体：worker' }))
+    await act(async () => { await Promise.resolve() })
+    const menu = screen.getByRole('dialog')
+    const rows = within(menu).getAllByRole('treeitem')
+    expect(document.activeElement).toBe(menu)
+    fireEvent.keyDown(menu, { key: 'Enter' })
+    expect(document.activeElement).toBe(menu)
+    for (const [key, row] of [['ArrowDown', rows[0]], ['End', rows.at(-1)], ['Home', rows[0]], ['ArrowUp', rows.at(-1)]] as const) {
+      menu.focus()
+      fireEvent.keyDown(menu, { key })
+      expect(document.activeElement).toBe(row)
+    }
+    // Keys from a row stay with the tree's own navigation.
+    fireEvent.keyDown(rows.at(-1) as HTMLElement, { key: 'Home' })
+    expect(document.activeElement).toBe(rows[0])
+  })
+
   it('closes on Escape from the page without moving focus, and after a row opens a Session', () => {
     const input = childInput()
     render(<HeaderCatalog {...input} />)

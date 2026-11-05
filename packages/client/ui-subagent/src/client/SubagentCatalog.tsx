@@ -45,7 +45,12 @@ interface CatalogRowsProps {
   closeCatalog: () => void
 }
 
-function treeItems(root: HTMLElement): HTMLElement[] {
+/**
+ * List the focusable rows of a catalog tree in display order.
+ * @param root - the tree or an element that contains it.
+ * @returns the rows that accept focus.
+ */
+export function treeItems(root: HTMLElement): HTMLElement[] {
   return Array.from(root.querySelectorAll<HTMLElement>('[role="treeitem"]:not([aria-disabled="true"])'))
 }
 
