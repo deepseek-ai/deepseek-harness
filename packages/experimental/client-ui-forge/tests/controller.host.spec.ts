@@ -954,7 +954,9 @@ describe('forgePanel worktree creation while a message waits', () => {
     expect(opened.agent.inbox.nextStep).toEqual([notice(created?.path ?? '')])
     expect(queued(opened)).toEqual(['first'])
     expect(opened.records).toEqual([{ action: 'request', from: null }])
-    expect(opened.created).toEqual([{ path: created?.path, branch: created?.branch, baseCommit: created?.baseCommit, repositoryRoot: created?.repositoryRoot }])
+    expect(opened.created).toEqual([
+      { path: created?.path, branch: created?.branch, baseCommit: created?.baseCommit, repositoryRoot: created?.repositoryRoot },
+    ])
   })
 
   it('keeps the message waiting with the failure the panel shows, and tries again with a new branch when asked', async () => {
