@@ -43,8 +43,10 @@ export type {
   DynamicCordisPackageInspection, DynamicCordisPlugin, DynamicCordisPluginInspection,
   DynamicCordisReference, DynamicCordisRun,
 } from './registry.ts'
-export { CordisInspectRegistryService } from './inspect-registry.ts'
-export type { HostCordisInspectProviderRegistration } from './inspect-registry.ts'
+export { CordisInspectRegistryService, InspectError } from './inspect-registry.ts'
+export type { HostCordisInspectProviderRegistration, InspectErrorCode } from './inspect-registry.ts'
+export { PluginToolError } from './guard.ts'
+export type { PluginToolErrorCode } from './guard.ts'
 
 /**
  * Brand a Host-minted Plugin ID.
