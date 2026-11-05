@@ -81,7 +81,7 @@ export function buttonNode(
 ): QqNode[] {
   const attrs = el.attrs
   const raw = ctx.text(el.children).trim()
-  const label = raw || (attrs.type === 'action' ? attrs.id : attrs.type === 'link' ? attrs.href : attrs.text)
+  const label = raw || (attrs.type === 'link' ? attrs.href : attrs.type === 'input' ? attrs.text : attrs.id)
   const path = ctx.stableId(el)
   const fallback = attrs.type === 'link'
     ? linkText(label, attrs.href)
