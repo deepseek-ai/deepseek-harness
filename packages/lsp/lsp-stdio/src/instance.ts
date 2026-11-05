@@ -18,8 +18,9 @@ import { abortable, abortError } from './abort.ts'
 import { LspConnection } from './connection.ts'
 import type { ConnectionSpawner, ConnectionSpec, ConnectionWriter } from './connection.ts'
 import type { HostSource } from './host.ts'
-import type { WireInitializeResult, WireServerCapabilities } from './protocol.ts'
+import type { WireServerCapabilities } from './protocol.ts'
 import {
+  initializeCapabilities,
   negotiatePositionEncoding,
   normalizeHover,
   normalizeLocations,
@@ -97,8 +98,9 @@ export class LspInstance {
     const run = abortable(this.queue, signal)
       .then(() => this.runQuery(request, source, signal))
       .catch(async (error: unknown) => {
-        if (this.isTransportFailure(error)) await this.awaitTeardownAttempt()
-        throw error
+        if (!this.isTransportFailure(error)) throw error
+        await this.awaitTeardownAttempt()
+        throw this.connection.settledFailure(error)
       })
     // Keep the tail alive regardless of this query's outcome so the next caller still serializes. The
     // tail follows the ACTUAL prior work (this.queue), not the abortable view, so a caller giving up
@@ -116,8 +118,8 @@ export class LspInstance {
       workspaceFolders: [{ uri: this.spec.workspaceUri, name: 'workspace' }],
       capabilities: CLIENT_CAPABILITIES,
       initializationOptions: this.spec.initializationOptions,
-    }) as WireInitializeResult
-    const capabilities = initializeResult.capabilities
+    })
+    const capabilities = initializeCapabilities(initializeResult)
     // An omitted encoding defaults to utf-16; any other value is a protocol error we reject here.
     negotiatePositionEncoding(capabilities.positionEncoding)
     this.capabilities = capabilities
@@ -141,8 +143,8 @@ export class LspInstance {
       throw error
     }
     const capabilities = this.capabilities
-    /* v8 ignore next -- `ready` resolves only after capabilities are set, else it rejects above; defensive. */
-    if (capabilities === undefined) throw new Error('LSP instance is not initialized')
+    // `ready` resolves only after capabilities are set; reaching this means instance state is inconsistent.
+    if (capabilities === undefined) throw new LspError('LSP instance is not initialized', 'LSP_NOT_INITIALIZED')
     if (!supportsOperation(capabilities, request.operation)) {
       throw new LspError(`server does not support ${request.operation}`, 'LSP_UNSUPPORTED_OPERATION')
     }
