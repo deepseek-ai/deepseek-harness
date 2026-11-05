@@ -43,6 +43,9 @@
       "path": "../../ptc-runtime/ptc-runtime"
     },
     {
+      "path": "../../ptc-runtime/ptc-runtime-node"
+    },
+    {
       "path": "../../typert/protocol"
     },
     {

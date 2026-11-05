@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { chmod, mkdtemp, mkdir, rm, writeFile, realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
-import { Context } from '@deepseek-ai/cordis'
+import { Context, FiberState } from '@deepseek-ai/cordis'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import Lsp, { type LspQueryRequest } from '@deepseek-ai/dsh-lsp'
@@ -268,7 +268,7 @@ describe('lsp-stdio provider resolution', () => {
     expect(signal.aborted).toBe(false)
     const disposing = loading.dispose()
 
-    await expect(loading).rejects.toThrow('lsp-stdio setup disposed')
+    expect((await loading).state).toBe(FiberState.DISPOSED)
     await expect(disposing).resolves.toBeUndefined()
     expect(signal.aborted).toBe(true)
     await ctx.fiber.dispose()

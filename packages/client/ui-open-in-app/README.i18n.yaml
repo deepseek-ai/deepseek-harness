@@ -3,32 +3,32 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-open-in-app/README.md
 /:
-  en: be11314755d8f4f9
-  zh: dd75b03074eea543
+  en: 8caca7252f2cf5c7
+  zh: 47a157352d33265e
 /deepseek-ai-dsh-client-ui-open-in-app:
   en: 004b805ac638e884
   zh: 6ac98df58affefcf
 /deepseek-ai-dsh-client-ui-open-in-app/summary:
-  en: e69e4c6df4ddffa1
-  zh: d1ef0a722f48e9bd
+  en: 1e68d4eb8f246ed2
+  zh: d8bf9abe0c1cccee
 /deepseek-ai-dsh-client-ui-open-in-app/table-of-contents:
   en: d152484eb41ac6b4
   zh: 725b47765ee8f30b
 /deepseek-ai-dsh-client-ui-open-in-app/use-this-package:
-  en: 056e2bd9e3c78dd8
-  zh: be35d2ba53be0442
+  en: b149da9963eb9837
+  zh: 2426ea37fbd0f8b7
 /deepseek-ai-dsh-client-ui-open-in-app/use-this-package/what-to-expect:
-  en: 42f7977b585f9c3a
-  zh: a13772312d52b97f
+  en: e07d3a607d54cb47
+  zh: 9a7342f05b64db38
 /deepseek-ai-dsh-client-ui-open-in-app/understand-the-implementation:
-  en: a0304e1bd9b44370
-  zh: af0fdfd01c296dce
+  en: 22da59203ca974e6
+  zh: f288bd6a193bccef
 /deepseek-ai-dsh-client-ui-open-in-app/further-exploration:
-  en: 562c58d589fb7afa
-  zh: 9ba88b381160cc96
+  en: 720527877e452a97
+  zh: b2241c7a336a3eeb
 /deepseek-ai-dsh-client-ui-open-in-app/model-experience:
-  en: 5f9e6e0fb0438628
-  zh: fc9a81185ea6cb14
+  en: aad141aa922e23f7
+  zh: 18432b4f70971fa7
 /deepseek-ai-dsh-client-ui-open-in-app/model-experience/kv-cache-effect:
   en: ca75c51c89c2c9b0
   zh: c2241315dc0c89c9

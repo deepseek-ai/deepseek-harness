@@ -7,7 +7,7 @@
 // draws the panel is a recorded, reversible choice, so this file asserts against
 // the frame's track as much as against the panel itself. The way back in while
 // collapsed is not in the column at all: it is one button in the conversation
-// header, and it leaves when the panel opens.
+// header, visible only while the panel is collapsed.
 //
 // Ordering is the product's own: the hero comes before any session, so the
 // empty right edge is asserted first and the session-bound cases follow in a
@@ -114,7 +114,7 @@ async function holdPanelSlide(panel: Locator) {
   })
 }
 
-/** The expand button in the conversation header, present only while collapsed. */
+/** The conversation header's expand control, visible only while collapsed. */
 function expandOf(page: Page): Locator {
   return page.locator('[data-sidebar-right-expand]')
 }
@@ -379,8 +379,7 @@ describe('web e2e: shipped right Sidebar', () => {
       onTestFailed(() => saveFailureShot(page, 'web-e2e-sidebar-right-pageup'))
       const frame = page.locator('[class*="frame"]').first()
       const composer = page.locator('textarea, [contenteditable="true"]').first()
-      // The expand button exists only while the panel is collapsed, when its
-      // docked hosts sit translated past the frame's right edge.
+      // Collapsed docked hosts sit translated past the frame's right edge.
       await expandOf(page).waitFor({ timeout: 15_000 })
       await composer.click()
       await composer.pressSequentially('caret')
@@ -644,6 +643,74 @@ describe('web e2e: shipped right Sidebar', () => {
       expect(tripwire.warnings).toEqual([])
     })
 
+    it.each([390, 767])('keeps the mobile conversation title still while the right sidebar slides at %ipx', async (viewportWidth) => {
+      const caseName = `mobile-title-${viewportWidth}`
+      const mobilePage = await browser.newPage({
+        viewport: { width: viewportWidth, height: 844 },
+        locale: 'en-US', timezoneId: 'Asia/Shanghai',
+        userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1',
+        isMobile: true, hasTouch: true, reducedMotion: 'no-preference',
+        storageState: await page.context().storageState(),
+      })
+      const mobileTripwire = watchConsole(mobilePage)
+      try {
+        await mobilePage.goto(page.url(), { waitUntil: 'load' })
+        const column = await resetSidebar(mobilePage)
+        const panel = column.locator('[data-sidebar-right-panel]')
+        const title = mobilePage.locator('[class*="titleCluster"]').first()
+        const utilities = mobilePage.locator('[class*="headerUtilities"]').first()
+        await expect.poll(() => panel.getAttribute('data-sidebar-right-panel')).toBe('fullscreen')
+        await column.locator('[data-sidebar-right-toggle]').tap()
+        await panel.evaluate(async (node) => {
+          await Promise.allSettled(node.getAnimations({ subtree: true }).map(animation => animation.finished))
+        })
+        await expandOf(mobilePage).waitFor()
+        const titleNode = await title.locator('[class*="crumbCurrent"]').elementHandle()
+        if (titleNode === null) throw new Error('conversation title is not rendered')
+        const titleBefore = await title.boundingBox()
+        const utilitiesBefore = await utilities.boundingBox()
+        expect(titleBefore?.width).toBeGreaterThan(0)
+        expect(utilitiesBefore?.width).toBeGreaterThan(0)
+        await shot(mobilePage, `${caseName}-collapsed`)
+        try {
+          for (const opening of [true, false]) {
+            const held = await holdPanelSlide(panel)
+            try {
+              await (opening ? expandOf(mobilePage) : column.locator('[data-sidebar-right-toggle]')).tap()
+              await expect.poll(() => held.evaluate(state => state.animation?.playState)).toBe('paused')
+              const progress = await held.evaluate(state => state.animation?.effect?.getComputedTiming().progress)
+              expect(progress).toBeGreaterThan(0)
+              expect(progress).toBeLessThan(1)
+              expect(await title.boundingBox()).toEqual(titleBefore)
+              expect(await utilities.boundingBox()).toEqual(utilitiesBefore)
+              expect(await titleNode.evaluate(node => node.isConnected)).toBe(true)
+              expect(await expandOf(mobilePage).isDisabled()).toBe(opening)
+              expect(await mobilePage.getByRole('button', { name: 'Open right sidebar', exact: true }).count()).toBe(opening ? 0 : 1)
+              await shot(mobilePage, `${caseName}-${opening ? 'opening' : 'closing'}`)
+              await held.evaluate((state) => { (state.animation as Animation).finish() })
+              expect(await title.boundingBox()).toEqual(titleBefore)
+              expect(await utilities.boundingBox()).toEqual(utilitiesBefore)
+            } finally {
+              await held.evaluate((state) => {
+                state.dispose()
+                if (state.animation?.playState === 'paused') state.animation.finish()
+              })
+              await held.dispose()
+            }
+          }
+        } finally {
+          await titleNode.dispose()
+        }
+        expect(mobileTripwire.pageErrors).toEqual([])
+        expect(mobileTripwire.warnings).toEqual([])
+      } catch (error) {
+        await saveFailureShot(mobilePage, `web-e2e-sidebar-right-${caseName}`)
+        throw error
+      } finally {
+        await mobilePage.close()
+      }
+    })
+
     it('keeps a capacity-closed panel closed after widening and uses fullscreen on a narrow viewport', async () => {
       const viewport = page.viewportSize()
       if (viewport === null) throw new Error('expected a fixed viewport')
@@ -668,6 +735,7 @@ describe('web e2e: shipped right Sidebar', () => {
         await expect.poll(async () => await panel.getAttribute('data-sidebar-right-panel')).toBe('fullscreen')
         await expect.poll(async () => await width(panel)).toBe(767)
         await expect.poll(() => frame.getAttribute('data-rightbar-fullscreen')).toBe('true')
+        expect(await expandOf(page).count()).toBe(0)
         expect(await frame.locator('[data-side="rightbar"]').count()).toBe(0)
         await column.locator('[data-sidebar-right-mode="push"]').click()
         await expect.poll(async () => await column.locator('[data-sidebar-right-open]').count()).toBe(0)
@@ -1046,6 +1114,92 @@ describe('web e2e: shipped right Sidebar', () => {
       expect(tripwire.warnings).toEqual([])
     }, 90_000)
 
+    it('resists a floating panel dragged past the viewport edges and springs it back inside', async () => {
+      onTestFailed(() => saveFailureShot(page, 'web-e2e-sidebar-right-float-edge'))
+      const column = await resetSidebar(page)
+      const floats = page.locator('[data-sidebar-right-session]:not([hidden]) [data-dockkit-float]')
+      await proseChip(page).click()
+      await expect.poll(async () => await tabTitles(paneAt(column, 0))).toEqual(['Files', SAMPLE_NAME])
+      await floatByDrag(page, paneAt(column, 0).locator('[data-dockkit-tab]').filter({ hasText: SAMPLE_NAME }))
+      await expect.poll(async () => await floats.count()).toBe(1)
+      const panel = floats.first()
+      const viewport = page.viewportSize()
+      if (viewport === null) throw new Error('page has no viewport')
+
+      // Carrying the grip to the bottom-right corner asks for the panel well past both edges.
+      const grip = await centre(panel.locator('[data-dockkit-float-grip]'))
+      await page.mouse.move(grip.x, grip.y)
+      await page.mouse.down()
+      await page.mouse.move(viewport.width - 2, viewport.height - 2, { steps: 8 })
+      const pushed = await panel.boundingBox()
+      if (pushed === null) throw new Error('float is not rendered')
+      expect(pushed.x + pushed.width).toBeGreaterThan(viewport.width)
+      expect(pushed.x + pushed.width).toBeLessThan(viewport.width + 120)
+      expect(pushed.y + pushed.height).toBeGreaterThan(viewport.height)
+      expect(pushed.y + pushed.height).toBeLessThan(viewport.height + 120)
+      await page.mouse.up()
+
+      // The return overshoots inward and can pass the edges before it ends, so
+      // wait for the resting style, which drops the inline position.
+      await expect.poll(async () => await panel.evaluate(node => (node as HTMLElement).style.left)).toBe('')
+      const rest = await panel.boundingBox()
+      if (rest === null) throw new Error('float is not rendered')
+      expect({ right: Math.round(rest.x + rest.width), bottom: Math.round(rest.y + rest.height) })
+        .toEqual({ right: viewport.width, bottom: viewport.height })
+
+      // At rest the stylesheet clamps on its own: a rectangle published from a
+      // stale viewport reading, far outside and larger than the viewport, still
+      // draws inside it.
+      const clamped = await panel.evaluate((node) => {
+        const element = node as HTMLElement
+        for (const name of ['x', 'y', 'width', 'height']) element.style.setProperty(`--dsh-dockkit-float-${name}`, '5000px')
+        const box = element.getBoundingClientRect()
+        return { left: box.left, top: box.top, right: box.right, bottom: box.bottom }
+      })
+      expect(clamped).toEqual({ left: 0, top: 0, right: viewport.width, bottom: viewport.height })
+
+      expect(tripwire.pageErrors).toEqual([])
+      expect(tripwire.warnings).toEqual([])
+    }, 60_000)
+
+    it('expands the collapsed column when a floating panel\'s dock control returns its tab', async () => {
+      onTestFailed(() => saveFailureShot(page, 'web-e2e-sidebar-right-dock-expands'))
+      const column = await resetSidebar(page)
+      const floats = page.locator('[data-sidebar-right-session]:not([hidden]) [data-dockkit-float]')
+      const open = column.locator('[data-sidebar-right-open]')
+      const selected = (): Promise<string[]> =>
+        column.locator('[role="tab"][aria-selected="true"] [data-dockkit-tab-title]').allTextContents()
+      await proseChip(page).click()
+      await expect.poll(async () => await tabTitles(paneAt(column, 0))).toEqual(['Files', SAMPLE_NAME])
+      await floatByDrag(page, paneAt(column, 0).locator('[data-dockkit-tab]').filter({ hasText: SAMPLE_NAME }))
+      await expect.poll(async () => await floats.count()).toBe(1)
+
+      // The docked column still holds Files while collapsed.
+      await column.locator('[data-sidebar-right-toggle]').click()
+      await expect.poll(async () => await open.count()).toBe(0)
+      await floats.first().locator('[data-dockkit-float-dock]').click()
+      await expect.poll(async () => await open.count()).toBe(1)
+      expect(await floats.count()).toBe(0)
+      await expect.poll(async () => await tabTitles(column)).toEqual(['Files', SAMPLE_NAME])
+      await expect.poll(selected).toEqual([SAMPLE_NAME])
+
+      // Closing the column's only other tab collapses it empty; docking fills it with the tab alone.
+      await floatByDrag(page, column.locator('[data-dockkit-tab]').filter({ hasText: SAMPLE_NAME }))
+      await expect.poll(async () => await floats.count()).toBe(1)
+      const files = column.locator('[data-dockkit-tab]').filter({ hasText: 'Files' })
+      await files.hover()
+      await files.locator('[data-dockkit-tab-close]').click()
+      await expect.poll(async () => await open.count()).toBe(0)
+      await floats.first().locator('[data-dockkit-float-dock]').click()
+      await expect.poll(async () => await open.count()).toBe(1)
+      expect(await floats.count()).toBe(0)
+      await expect.poll(async () => await tabTitles(column)).toEqual([SAMPLE_NAME])
+      await expect.poll(selected).toEqual([SAMPLE_NAME])
+
+      expect(tripwire.pageErrors).toEqual([])
+      expect(tripwire.warnings).toEqual([])
+    }, 60_000)
+
     it('drops a pane whose last tab closes, and follows the last-tab rule on the surface', async () => {
       onTestFailed(() => saveFailureShot(page, 'web-e2e-sidebar-right-settle'))
       const column = await resetSidebar(page)
@@ -1080,8 +1234,28 @@ describe('web e2e: shipped right Sidebar', () => {
       expect(await column.locator('[data-dockkit-tab-close]').count()).toBe(0)
       expect(await column.locator('[data-dockkit-tab-quiet]').count()).toBe(1)
       await column.locator('[data-dockkit-tab]').first().click({ button: 'right' })
-      expect(await page.locator('[data-dockkit-tab-menu]').isVisible()).toBe(false)
+      // Wait for prepared content, rather than passing before the opening delay.
+      const emptyMenu = page.locator('[data-context-menu][role="menu"]')
+      await emptyMenu.waitFor({ state: 'attached' })
+      expect(await emptyMenu.evaluate(node => getComputedStyle(node).display)).toBe('none')
+      expect(await emptyMenu.isVisible()).toBe(false)
       expect(await page.getByRole('menu').count()).toBe(0)
+      expect(await column.locator('[data-dockkit-tab]').first().evaluate(node => node.contains(document.activeElement))).toBe(true)
+      const backingSize = await page.locator('[data-menu-backing]').evaluate((node) => {
+        const root = document.documentElement
+        const platform = root.getAttribute('data-platform')
+        root.setAttribute('data-platform', 'darwin')
+        try {
+          const { width, height } = node.getBoundingClientRect()
+          return { width, height }
+        } finally {
+          if (platform === null) root.removeAttribute('data-platform')
+          else root.setAttribute('data-platform', platform)
+        }
+      })
+      expect(backingSize).toEqual({ width: 0, height: 0 })
+      await page.keyboard.press('Escape')
+      await emptyMenu.waitFor({ state: 'detached' })
 
       // Any other tab standing alone closes together with the column. Open the
       // sample file, close the guide (an ordinary close with two tabs), then
@@ -1183,13 +1357,10 @@ describe('web e2e: shipped right Sidebar', () => {
       // is the secondary press.
       expect(await column.locator('[data-dockkit-tab-more]').count()).toBe(0)
       await column.locator('[data-dockkit-tab]').filter({ hasText: 'Start' }).click({ button: 'right' })
-      const menu = page.locator('[data-dockkit-tab-menu]')
+      const menu = page.locator('[data-context-menu][role="menu"]')
       await expect.poll(async () => await menu.count()).toBe(1)
 
-      // The kit's one item; the extension seat is declared and rendered, and
-      // with no registrant it contributes nothing, which is what "declared, not
-      // speculative" looks like from the outside.
-      await expect.poll(async () => await menu.getByRole('menuitem').allInnerTexts()).toEqual(['Close'])
+      await expect.poll(() => menu.ariaSnapshot()).toBe('- menu:\n  - menuitem "Close"\n  - menuitem "Close Other Tabs"')
       // The menu hangs below the strip that clips its overflow. Its pixels are
       // its own: a hit test at its centre lands on it, not on whatever the
       // strip would have shown through a clipped box.

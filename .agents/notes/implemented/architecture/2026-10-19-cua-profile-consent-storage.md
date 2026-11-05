@@ -10,7 +10,7 @@ Application grants stored as plugin configuration make each authorization change
 
 ## Decision
 
-The CUA owner uses the existing domain storage service, with one domain per canonical profile directory. It stores long-term grants and conversation decisions by native application identity. Conversation IDs scope permission without turning it into permission for every conversation. The native identity policy remains owned by [application consent](2026-09-26-cua-application-consent.md); this note replaces only that note's storage and restart-lifetime choices.
+The CUA owner uses the existing domain storage service, with one domain per canonical profile directory. It stores long-term grants and conversation decisions by native application identity. Conversation IDs scope permission without turning it into permission for every conversation. The native identity policy remains owned by [bundle-ID consent](2026-10-25-cua-bundle-id-consent.md); this note replaces only that note's storage and restart-lifetime choices.
 
 Every operation opens fresh domain state while holding the profile's existing file-lock primitive and closes the domain before releasing the lock. Native dispatch and revocation use a separate lock for the selected application. Storage reads and unrelated applications remain available during a native call. Revocation cancels this process's affected work first, then commits after other processes' already-admitted operations have finished. A completed revocation therefore leaves no operation using the old authority. App-wide revocation generations and per-conversation decision revisions prevent an old handle or delayed answer from restoring revoked access.
 

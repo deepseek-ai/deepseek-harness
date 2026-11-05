@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "búsqueda de sesión",
-    "description": "Ofrezca a los agentes herramientas para buscar y leer sesiones anteriores desde el espacio de trabajo actual.",
+    "description": "Pregunte por trabajo anterior, como “¿Cómo arreglamos la fuga del pool la semana pasada?”, y el agente busca en sus sesiones anteriores del mismo directorio de trabajo para responder.",
     "detail": "docs/DETAIL.md"
   }
 }

@@ -1,7 +1,7 @@
 import { createServer } from 'node:http'
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { zstdDecompressSync } from 'node:zlib'
 import { resolveExampleLaunch } from '@deepseek-ai/dsh-loader-smoke'
@@ -57,13 +57,22 @@ describe('Python SDK dsh profile keyless smoke', () => {
     { label: 'reports max-token turns with mapping enabled through env', envValue: 'true', editorEnabled: false },
     { label: 'reports max-token turns with mapping disabled through env', envValue: 'false', editorEnabled: false },
     { label: 'allows an explicit patch to enable str_replace_editor', envValue: undefined, editorEnabled: true },
+    { label: 'allows an explicit patch to enable apply_patch', envValue: undefined, editorEnabled: false, patchEnabled: true },
     { label: 'uses the PTC executor overlay despite the retired environment selector', envValue: undefined, editorEnabled: false, ptc: true },
+    // The shipped sdk profile mounts no observation policy: an edit of a file the model never read lands on disk.
+    { label: 'edits a file the model never read through the shipped profile', envValue: undefined, editorEnabled: false, unreadEdit: true },
   ])('$label', async (scenario) => {
     const { envValue, editorEnabled } = scenario
     const ptc = 'ptc' in scenario && scenario.ptc
+    const unreadEdit = 'unreadEdit' in scenario && scenario.unreadEdit
+    const patchEnabled = 'patchEnabled' in scenario && scenario.patchEnabled
 
     const root = await mkdtemp(join(tmpdir(), 'dsh-python-sdk-runtime-smoke-'))
+    const unreadFile = join(root, 'notes.txt')
+    if (unreadEdit) await writeFile(unreadFile, 'alpha\n')
     const editorPatch = join(root, 'editor.patch.yml')
+    const fsPatch = join(root, 'fs.patch.yml')
+    if (patchEnabled) await writeFile(fsPatch, '- {id: tool-fs, config: {applyPatch: true}}\n')
     if (editorEnabled) await writeFile(editorPatch, [
       '- insert:',
       '    - id: tool-str-replace-editor',
@@ -78,7 +87,14 @@ describe('Python SDK dsh profile keyless smoke', () => {
       request.on('end', () => {
         modelRequests.push(JSON.parse(body) as Record<string, unknown>)
         response.writeHead(200, { 'content-type': 'text/event-stream' })
-        response.end(messagesResponse({ type: 'text', text: 'done' }, 'max_tokens'))
+        if (unreadEdit && modelRequests.length === 1) {
+          response.end(messagesResponse({
+            type: 'tool_use', id: 'unread-edit', name: 'edit',
+            input: { file_path: 'notes.txt', old_string: 'alpha', new_string: 'beta' },
+          }, 'tool_use'))
+          return
+        }
+        response.end(messagesResponse({ type: 'text', text: 'done' }, unreadEdit ? 'end_turn' : 'max_tokens'))
       })
     })
     await new Promise<void>(resolve => modelServer.listen(0, '127.0.0.1', resolve))
@@ -91,6 +107,7 @@ describe('Python SDK dsh profile keyless smoke', () => {
       '--profile',
       'sdk',
       ...(editorEnabled ? ['--patch', editorPatch] : []),
+      ...(patchEnabled ? ['--patch', fsPatch] : []),
       ...(ptc ? ['--patch', join(repoRoot, 'apps/cli/config/examples/ptc.yml')] : []),
     ], {
       cwd: repoRoot,
@@ -164,23 +181,29 @@ describe('Python SDK dsh profile keyless smoke', () => {
           sessionId: 'main',
           event: {
             type: 'turn/end',
-            data: { reason: { kind: 'max-tokens' } },
+            data: { reason: { kind: unreadEdit ? 'completed' : 'max-tokens' } },
           },
         },
       })
+      if (unreadEdit) {
+        expect(modelRequests).toHaveLength(2)
+        expect(await readFile(unreadFile, 'utf8')).toBe('beta\n')
+      }
       expect(modelRequests[0]?.tools).toEqual(expect.any(Array))
       const tools = modelRequests[0]?.tools as { name?: string }[]
       const toolNames = tools.map(tool => tool.name)
       expect(modelRequests[0]?.output_config).toEqual({ effort: 'max' })
       expect(modelRequests[0]?.max_tokens).toBe(1234)
       const expectedTools = ['read', 'write', 'edit', 'web_fetch', 'web_search', 'subagent', 'subagent_fork',
-        'present', 'ask_user_question', 'schedule_create', 'schedule_delete', 'schedule_list', 'schedule_update']
+        'present', 'ask_user_question', 'schedule_create', 'schedule_edit', 'schedule_list', 'schedule_view', 'plugin_manager']
       const requestText = JSON.stringify(modelRequests[0])
       if (ptc) {
         expect(toolNames).toEqual(['run_code'])
         for (const tool of expectedTools) expect(requestText.includes(`${tool}:`), tool).toBe(true)
+        expect(requestText.includes('apply_patch:')).toBe(false)
       } else {
         expect(toolNames).toEqual(expect.arrayContaining(expectedTools))
+        expect(toolNames.includes('apply_patch')).toBe(patchEnabled)
         expect(toolNames.includes('str_replace_editor')).toBe(editorEnabled)
         expect(toolNames).not.toContain('list_subagent_models')
       }
@@ -514,31 +537,31 @@ async function officeFixture(root: string, pythonOnly: boolean) {
   await mkdir(paths.pythonPackages, { recursive: true })
   if (paths.nodePackages !== undefined) await mkdir(paths.nodePackages, { recursive: true })
   await writeFile(join(source, 'runtime.json'), JSON.stringify(manifest))
-  await cp(join(repoRoot, 'packages/skill/skill-office/assets'), join(root, 'resources', 'office-skills'), { recursive: true })
   return { source, paths }
 }
 
-it.each(['unset', 'empty', 'bundled', 'full', 'python-only', 'python-only-no-cli', 'missing-assets', 'wrong-type'] as const)('composes Office resources through the SDK profile (%s)', async (mode) => {
+it.each(['unset', 'empty', 'full', 'python-only', 'python-only-patched', 'wrong-type'] as const)('composes Office resources through the SDK profile (%s)', async (mode) => {
   const root = await mkdtemp(join(tmpdir(), 'sdk-office-'))
   onTestFinished(() => rm(root, { recursive: true, force: true }))
   const enabled = mode !== 'unset' && mode !== 'empty'
   const { source, paths } = await officeFixture(root, mode.startsWith('python-only'))
-  if (mode === 'missing-assets') await rm(join(root, 'resources', 'office-skills'), { recursive: true })
   if (mode === 'wrong-type') {
     await rm(paths.python)
     await mkdir(paths.python)
   }
   const requests: Record<string, unknown>[] = []
+  const toolUses = [
+    ...enabled ? [{ type: 'tool_use', id: 'workspace-dependencies', name: 'load_workspace_dependencies', input: {} } as const] : [],
+    { type: 'tool_use', id: 'office-docx', name: 'skill', input: { name: 'office-docx' } } as const,
+  ]
   const server = createServer((request, response) => {
     let body = ''
     request.setEncoding('utf8').on('data', (chunk: string) => { body += chunk })
     request.on('end', () => {
       requests.push(JSON.parse(body) as Record<string, unknown>)
-      const query = requests.length === 1 && enabled
+      const toolUse = toolUses[requests.length - 1]
       response.writeHead(200, { 'content-type': 'text/event-stream' })
-      response.end(messagesResponse(query
-        ? { type: 'tool_use', id: 'workspace-dependencies', name: 'load_workspace_dependencies', input: {} }
-        : { type: 'text', text: 'done' }, query ? 'tool_use' : 'end_turn'))
+      response.end(toolUse === undefined ? messagesResponse({ type: 'text', text: 'done' }, 'end_turn') : messagesResponse(toolUse, 'tool_use'))
     })
   })
   onTestFinished(() => new Promise<void>((resolve) => { server.close(() => { resolve() }) }))
@@ -547,12 +570,16 @@ it.each(['unset', 'empty', 'bundled', 'full', 'python-only', 'python-only-no-cli
   if (address === null || typeof address === 'string') throw new Error('model fixture did not bind')
   const home = join(root, 'home')
   const cliPatch = join(root, 'cli.patch.yml')
-  await writeFile(cliPatch, JSON.stringify(mode === 'python-only-no-cli' ? [{ id: 'skill-office', config: { assetRoot: join(root, 'resources', 'office-skills'), cli: false } }] : []))
+  const packagedSkills = join(repoRoot, 'packages/skill/skill-office/assets')
+  const patchedSkills = join(root, 'patched-skills')
+  if (mode === 'python-only-patched') await cp(packagedSkills, patchedSkills, { recursive: true })
+  // This patch replaces the row's config with only assetRoot; the skill-office default keeps directing the model to
+  // the bundled environment.
+  await writeFile(cliPatch, JSON.stringify(mode === 'python-only-patched' ? [{ id: 'skill-office', config: { assetRoot: patchedSkills } }] : []))
   const officeLaunch = resolveExampleLaunch({
     srcBin: fileURLToPath(new URL('../../../src/bin.ts', import.meta.url)), mode: 'lib',
     configArgs: ['--profile', 'sdk', '--patch', cliPatch],
-    env: { DSH_HOME: home, DSH_PRIMARY_RUNTIME: mode === 'unset' || mode === 'bundled' ? undefined : mode === 'empty' ? '' : source + '/',
-      DSH_BUNDLED_PRIMARY_RUNTIME: mode === 'unset' ? undefined : mode === 'bundled' || mode === 'empty' ? source : join(root, 'unused-default'),
+    env: { DSH_HOME: home, DSH_PRIMARY_RUNTIME: mode === 'unset' ? undefined : mode === 'empty' ? '' : source + '/',
       DSH_PERMISSION_MODE: 'danger-full-access', DSH_TELEMETRY_DISABLED: '1',
       DEEPSEEK_API_KEY: 'local-fixture', DEEPSEEK_BASE_URL: `http://127.0.0.1:${address.port}` },
   })
@@ -579,14 +606,25 @@ it.each(['unset', 'empty', 'bundled', 'full', 'python-only', 'python-only-no-cli
   }, () => stderr)
   const names = (requests[0]!.tools as { name: string }[]).map(value => value.name)
   expect(names.includes('load_workspace_dependencies')).toBe(enabled)
-  expect(JSON.stringify(requests[0]!.messages).includes('`office`')).toBe(enabled && mode !== 'missing-assets')
-  expect(names).not.toContain('office_tools')
+  expect(JSON.stringify(requests[0]!.messages)).toContain('`office`')
+  const officeTools = ['office_convert', 'office_recalculate', 'office_render']
+  expect(names.filter(name => name.startsWith('office'))).toEqual([])
+  const lastNames = (requests.at(-1)!.tools as { name: string }[]).map(value => value.name)
+  // Loading an Office skill declares the Office tools from the following request.
+  expect(lastNames.filter(name => name.startsWith('office')).sort()).toEqual(officeTools)
   expect(names).not.toContain('render_document')
   for (const name of ['office-docx', 'office-pptx', 'office-xlsx']) {
-    expect(JSON.stringify(requests[0]!.messages).includes(name)).toBe(enabled && mode !== 'missing-assets')
+    expect(JSON.stringify(requests[0]!.messages)).toContain(name)
   }
+  expect(requests).toHaveLength(toolUses.length + 1)
+  const messages = requests.at(-1)!.messages as { content: { type: string; tool_use_id?: string; content?: unknown }[] }[]
+  const skill = JSON.stringify(messages.flatMap(message => message.content).find(block => block.tool_use_id === 'office-docx'))
+  const skillDirectory = join(mode === 'python-only-patched' ? patchedSkills : packagedSkills, 'office-docx').split(sep).join('/')
+  expect(skill).toContain(JSON.stringify(`Base directory for this skill: ${skillDirectory}`).slice(1, -1))
+  expect(skill).toContain('## Python environment')
+  expect(skill.includes('Otherwise call `load_workspace_dependencies`')).toBe(enabled)
+  expect(skill.includes('`python3` or `python` on PATH')).toBe(!enabled)
   if (mode === 'wrong-type') {
-    expect(requests).toHaveLength(2)
     const messages = requests[1]!.messages as { content: { type: string; tool_use_id?: string; content?: unknown }[] }[]
     const result = messages.flatMap(message => message.content).find(block => block.tool_use_id === 'workspace-dependencies')
     expect(JSON.parse(JSON.stringify(result).replaceAll(JSON.stringify(paths.python).slice(1, -1), '<python>'))).toMatchInlineSnapshot(`
@@ -603,7 +641,6 @@ it.each(['unset', 'empty', 'bundled', 'full', 'python-only', 'python-only-no-cli
       }
     `)
   } else if (enabled) {
-    expect(requests).toHaveLength(2)
     const content: unknown = expect.arrayContaining([
       expect.objectContaining({ type: 'tool_result', tool_use_id: 'workspace-dependencies',
         content: [{ type: 'text', text: JSON.stringify(paths, undefined, 2) }] }),
@@ -613,7 +650,6 @@ it.each(['unset', 'empty', 'bundled', 'full', 'python-only', 'python-only-no-cli
     ]))
   }
   if (mode === 'python-only') expect(stderr).not.toContain('ENOENT')
-  if (mode === 'missing-assets') expect(stderr).toContain('SKILL.md')
   await send(3, 'shutdown')
   const exit = await child
   expect(exit.timedOut).toBe(false)

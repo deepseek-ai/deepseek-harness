@@ -7,7 +7,8 @@ import type { LayoutState, PaneId, PaneNode, TabId, TabRecord } from '../contrac
 import { findTabPane, floatRect, getNode, getPane } from '../engine/tree.ts'
 import type { SizePreview } from './PaneTree.tsx'
 import type { PaneCallbacks } from './render.ts'
-import { FloatHeader, useFloatGestures } from './FloatLayer.tsx'
+import { FloatHeader, floatStyle, useFloatGestures } from './FloatLayer.tsx'
+import { TabBody } from './TabBody.tsx'
 import { PaneDropHints, TabPanel, TabStrip } from './TabPanel.tsx'
 import css from './dockkit.module.css'
 
@@ -75,7 +76,7 @@ function TabHost({ state, callbacks, intents, tab, pane, column, floats, focusRe
     return () => { element.removeEventListener('focus', focus, true) }
   }, [visible, floating, floats, pane.id, state.activePaneId, callbacks])
   const lifted = floating && floats.preview?.paneId === pane.id ? floats.preview.rect : undefined
-  const rect = floating ? lifted ?? floatRect(pane) : undefined
+  const rect = floating ? floats.rectOf(pane.id, floatRect(pane)) : undefined
   const depth = lifted === undefined ? state.floats.indexOf(pane.id) + 1 : state.floats.length + 1
   return (
     <div className={clsx(css.tabCell, floating && css.floatingCell)} hidden={!selected}
@@ -89,9 +90,7 @@ function TabHost({ state, callbacks, intents, tab, pane, column, floats, focusRe
         data-dockkit-float={floating ? pane.id : undefined}
         data-dockkit-float-active={floating && state.activePaneId === pane.id || undefined}
         data-dockkit-column={!floating ? column : undefined}
-        style={rect === undefined ? undefined : {
-          left: rect.x, top: `max(var(--dsh-dockkit-float-top, 0px), ${rect.y}px)`, width: rect.width, height: rect.height,
-        }}
+        style={rect === undefined ? undefined : floatStyle(rect, lifted !== undefined)}
         onPointerDown={() => { if (floating) floats.raise(pane.id) }}
         onClick={() => { if (!floating && state.activePaneId !== pane.id) callbacks.onFocusPane(pane.id) }}>
         <div className={css.tabHostHeader}>
@@ -101,7 +100,7 @@ function TabHost({ state, callbacks, intents, tab, pane, column, floats, focusRe
             : <TabStrip state={state} pane={pane} callbacks={callbacks} offsets={offsets} />)}
         </div>
         <div ref={body} className={clsx(css.tabHostBody, floating ? css.floatBody : css.paneBody)}>
-          {visited && (retained || (active && selected)) ? callbacks.renderTab(tab) : null}
+          {visited && (retained || (active && selected)) ? <TabBody tab={tab} renderTab={callbacks.renderTab} /> : null}
           {!floating && <PaneDropHints pane={pane} callbacks={callbacks} />}
         </div>
         {floating && <div className={css.floatResize} data-dockkit-float-resize={pane.id}

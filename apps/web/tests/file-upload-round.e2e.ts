@@ -279,17 +279,16 @@ describe('web e2e: generic file upload through the real assembly', () => {
     await expect.poll(() => send.isEnabled(), { timeout: 15_000 }).toBe(true)
     const settled = scaffold.whenTurnSettled()
     await send.click()
-    const restoreDeadline = Date.now() + 10_000
-    let retainedCards = 0
-    while (retainedCards === 0
-      && !sessionEvents.some(event => event.type === 'turn/start')
-      && Date.now() < restoreDeadline) {
+    // The draft cards stay until the Host accepts the prompt, then leave with the cleared draft.
+    const acceptDeadline = Date.now() + 15_000
+    let retainedCards = await rail.locator(':scope > *').count()
+    while (retainedCards !== 0 && Date.now() < acceptDeadline) {
       await page.waitForTimeout(100)
       retainedCards = await rail.locator(':scope > *').count()
     }
     if (retainedCards !== 0) {
       const feedback = await page.locator('[role="alert"], [role="status"]').allTextContents()
-      throw new Error(`submission retained ${String(retainedCards)} draft cards; feedback=${JSON.stringify(feedback)}; events=${sessionEvents.map(event => event.type).join(',')}`)
+      throw new Error(`the Host did not accept the submission; ${String(retainedCards)} draft cards remain; feedback=${JSON.stringify(feedback)}; events=${sessionEvents.map(event => event.type).join(',')}`)
     }
     const sessionId = await settled
     if (MODE === 'record') await recordFixture(scaffold, sessionId, FIXTURE)

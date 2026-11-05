@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Recherche de sessions",
-    "description": "Donnez aux agents des outils pour rechercher et lire les sessions précédentes à partir de l’espace de travail actuel.",
+    "description": "Posez une question sur un travail antérieur, par exemple « Comment avons-nous corrigé la fuite du pool la semaine dernière ? », et l'agent recherche dans vos sessions antérieures du même répertoire de travail pour répondre.",
     "detail": "docs/DETAIL.md"
   }
 }

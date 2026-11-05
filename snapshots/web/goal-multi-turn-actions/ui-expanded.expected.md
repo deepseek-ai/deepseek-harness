@@ -18,6 +18,9 @@
 - status: Completed
 - button "Completed in {{duration}}" [expanded]
 - button "Ran commands and updated the plan" [expanded]
+- button "Context injection runtime-context"
+- button "Context injection skill-catalog"
+- button "Context injection time-context"
 - 'button "Think The user''s goal is: \"做两个turn，每个turn输出随机一个包的文件结构。注意你做完一个turn之后，直接输出内容，停止，我们的系统会帮你再开一个turn，你看着做一个类似的\" — which translates to: \"Do two turns, each turn output the file structure of a random package. Note that after you finish one turn, directly output the content and stop; our system will help you open another turn, and you just do something similar.\""'
 - button "Bash List package directories deterministically"
 - button "View goal 做两个turn，每个turn输出随机一个包的文件结构。注意你做完一个turn之后，直接输出内容，停止，我们的系统会帮你再开一个turn，你看着做一个类似的"
@@ -85,6 +88,7 @@
 - paragraph: 两个 turn 均已完成，目标达成，标记 goal 为完成。
 - button "Updated the plan" [expanded]
 - button "Update goal 做两个turn，每个turn输出随机一个包的文件结构。注意你做完一个turn之后，直接输出内容，停止，我们的系统会帮你再开一个turn，你看着做一个类似的"
+- 'button "Context injection tool-goal complete: 做两个turn，每个turn输出随机一个包的文件结构。注意你做完一个turn之后，直接输出内容，停止，我们的系统会帮你再开一个turn，你看着做一个类似的"'
 - paragraph: 两个 turn 都完成了 ✅
 - paragraph:
   - strong: 总结：

@@ -1,3 +1,4 @@
+import { PROGRAM_PROTOCOL_VERSION } from '../src/protocol.ts'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import { setImmediate } from 'node:timers/promises'
@@ -41,6 +42,7 @@ describe('Node runtime host failures', () => {
     [{ timeoutMs: MAX_TIMER_DELAY_MS + 1 }, 'timeoutMs'],
     [{ maxTimeoutMs: MAX_TIMER_DELAY_MS + 1 }, 'maxTimeoutMs'],
     [{ graceMs: MAX_TIMER_DELAY_MS + 1 }, 'graceMs'],
+    [{ stopGraceMs: MAX_TIMER_DELAY_MS + 1 }, 'stopGraceMs'],
     [{ maxOutputBytes: 3 }, 'maxOutputBytes'],
     [{ maxOutputBytes: 4.5 }, 'maxOutputBytes'],
     [{ maxMessageBytes: 1.5 }, 'maxMessageBytes'],
@@ -200,7 +202,7 @@ describe('Node runtime host failures', () => {
       return h.handle
     })
     expect((await h.start(request, NO_INITIAL_FRAME)).error).toEqual({
-      kind: 'worker-exit', message: 'Node process exited before completing (7)',
+      kind: 'worker-exit', message: 'Node process exited (7, signal null)',
     })
   })
 
@@ -213,13 +215,28 @@ describe('Node runtime host failures', () => {
       })
       return h.handle
     })
-    expect((await h.start(request, NO_INITIAL_FRAME)).error).toEqual({ kind: 'worker-exit', message: 'runner connection broken' })
+    expect((await h.start(request, NO_INITIAL_FRAME)).error).toEqual({ kind: 'worker-exit', message: 'runner connection broken; control channel failed: control transport closed' })
   })
 
-  it('reports control loss after readiness as a substrate failure', async () => {
-    const h = await setup()
+  it.each<Config>([{}, { executionMode: 'persistent-in-memory' },
+    { executionMode: 'vm-script' }, { executionMode: 'vm-script', scriptPersistence: true },
+  ])('reports control loss and awaits process cleanup in %j', async (config) => {
+    const h = await setup(config)
+    const cleaning = Promise.withResolvers<undefined>()
+    const cleaned = Promise.withResolvers<boolean>()
+    h.waitForExit.mockImplementation(() => { cleaning.resolve(undefined); return cleaned.promise })
     h.onBoot(() => { h.control.emit('error', new Error('control transport closed')) })
-    expect((await h.start()).error).toEqual({ kind: 'worker-exit', message: 'control transport closed' })
+    const pending = h.start({ ...request, program: '1', stateOwner: {} })
+    const settled = vi.fn()
+    void pending.then(settled)
+    try {
+      await cleaning.promise
+      expect(h.control.destroyed).toBe(true)
+      expect(settled).not.toHaveBeenCalled()
+      cleaned.resolve(true)
+      expect((await pending).error).toEqual({ kind: 'worker-exit', message: 'Node process exited (0, signal null); control channel failed: control transport closed'
+        + (h.runtime.retainsState ? '; retained variables were cleared' : '') })
+    } finally { cleaned.resolve(true); await pending }
   })
 
   it('fails at once when a bootstrap from another release sends a length-prefixed frame', async () => {
@@ -242,9 +259,30 @@ describe('Node runtime host failures', () => {
     expect((await h.start()).error?.kind).toBe('protocol')
   })
 
+  it.each([[], [0], [PROGRAM_PROTOCOL_VERSION - 1], [PROGRAM_PROTOCOL_VERSION + 1], ['1']])('refuses bootstrap readiness with incompatible version arguments %j before dispatch', async (...args) => {
+    const h = await setup()
+    const result = await h.start(request, { t: 'q', m: 'ready', a: args })
+    expect(result.error).toEqual({ kind: 'protocol', message: 'bootstrap protocol mismatch; upgrade launch.bootstrapPath with the host' })
+    expect(h.messages).not.toContainEqual(expect.objectContaining({ m: 'run' }))
+    expect(h.terminate).toHaveBeenCalledOnce()
+  })
+
+  it.each<[unknown, string]>([
+    [{ t: 'q', m: 'outputLimit', a: [] }, 'idle PTC output limit'],
+    [call(1), 'binding call arrived without an active PTC evaluation'],
+  ])('refuses program traffic before readiness %j', async (frame, message) => {
+    const h = await setup()
+    const binding = vi.fn(async () => null)
+    const result = await h.start(withBinding(binding), frame)
+    expect(result.error).toMatchObject({ kind: 'protocol', message })
+    expect(h.messages).not.toContainEqual(expect.objectContaining({ m: 'run' }))
+    expect(binding).not.toHaveBeenCalled()
+    expect(h.terminate).toHaveBeenCalledOnce()
+  })
+
   it.each<[unknown, string]>([
     [null, 'not a JSON object'],
-    [{ t: 'q', m: 'ready', a: [] }, 'duplicate program readiness'],
+    [{ t: 'q', m: 'ready', a: [PROGRAM_PROTOCOL_VERSION] }, 'duplicate program readiness'],
     [{ t: 'q', m: 'log', a: [1] }, 'invalid program log'],
     [{ t: 'q', m: 'invoke', a: [null, 'test', []], i: 'call' }, 'undeclared binding'],
     [{ t: 'q', m: 'invoke', a: ['tools', 'constructor', []], i: 'call' }, 'undeclared binding'],
@@ -372,7 +410,7 @@ describe('Node runtime host failures', () => {
       const pending = h.start()
       await cleaning.promise
       await vi.advanceTimersByTimeAsync(5)
-      expect((await pending).error).toEqual(failure ?? { kind: 'worker-exit', message: 'Node process output did not close cleanly' })
+      expect((await pending).error).toEqual({ kind: 'worker-exit', message: 'managed process exited but its output did not drain cleanly' })
       expect(h.stdout.destroyed).toBe(true)
       expect(h.stderr.destroyed).toBe(true)
     } finally { vi.useRealTimers() }
@@ -422,7 +460,7 @@ describe('Node runtime host failures', () => {
       h.stderr.write('native fatal detail')
       h.direct.resolve({ exitCode: 9, signal: null })
     })
-    expect((await h.start()).error).toEqual({ kind: 'worker-exit', message: 'Node process exited before completing (9): native fatal detail' })
+    expect((await h.start()).error).toEqual({ kind: 'worker-exit', message: 'Node process exited (9, signal null): native fatal detail' })
   })
 
   it.each([true, false])('attributes a failed confined spawn only with runner evidence (%s)', async (runnerFailed) => {
@@ -461,7 +499,7 @@ describe('Node runtime host failures', () => {
     expect(Object.hasOwn(spec?.env ?? {}, 'PATH')).toBe(false)
     expect(spec?.argv).toEqual([process.execPath, '134217728'])
     expect(Object.fromEntries(Object.entries(spec?.env ?? {}).filter(([, value]) => value !== undefined)))
-      .toEqual({ DSH_PTC_RUNTIME_NODE: '1', NODE_OPTIONS: '--max-old-space-size=512' })
+      .toEqual({ DSH_PTC_RUNTIME_NODE: '1', NODE_OPTIONS: '--max-old-space-size=512 --experimental-vm-modules' })
   })
 })
 

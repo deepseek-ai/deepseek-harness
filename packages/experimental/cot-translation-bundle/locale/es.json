@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Traducción automática de razonamiento",
-    "description": "Traducción automática de razonamiento ampliado; El texto fuente se envía al servicio seleccionado.",
+    "description": "Traduce las filas “pensar” expandidas al idioma que elija mientras el agente las escribe, y “Ver original” vuelve al texto original.",
     "detail": "docs/DETAIL.md"
   }
 }

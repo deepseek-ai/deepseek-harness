@@ -28,6 +28,12 @@
         - text: 自定义设置 API 地址
         - textbox "API 地址":
           - /placeholder: https://api.openai.com/v1
+        - group "重试策略":
+          - text: 重试策略
+          - combobox "重试策略":
+            - option "默认（仅临时错误）" [selected]
+            - option "仅临时错误"
+            - option "所有错误"
         - region "模型目录":
           - text: 模型目录 已自定义模型目录
           - button "恢复默认模型"
@@ -36,11 +42,11 @@
           - textbox "模型 ID 1":
             - /placeholder: 模型 ID
             - text: gpt-6-astra
+          - button "模型选项 1" [expanded]
+          - button "删除模型 1"
           - textbox "显示名称 1":
             - /placeholder: 显示名称
             - text: GPT-6 Astra
-          - button "模型选项 1" [expanded]
-          - button "删除模型 1"
           - text: 上下文窗口
           - textbox "上下文窗口 1":
             - /placeholder: 1M

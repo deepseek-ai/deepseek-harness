@@ -22,8 +22,10 @@ const PROVIDERS = [
 ].map((provider, providerIndex) => ({
   ...provider,
   models: Array.from({ length: 7 }, (_, index) => providerIndex === 0 && index === 0
-    ? { id: 'origin-large', name: 'Origin Large' }
-    : { id: `${provider.prefix.toLowerCase()}-model-${index + 1}`, name: `${provider.prefix} Model ${index + 1}` }),
+    ? { id: 'origin-large', name: 'Origin Large', reasoningEfforts: {
+      off: null, minimal: 'minimal', low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max',
+    } }
+    : { id: `${provider.prefix.toLowerCase()}-model-${index + 1}`, name: `${provider.prefix} Model ${index + 1}${index === 6 ? ' with a long name that exceeds the model card width' : ''}` }),
 }))
 const EXPECTED_GROUPS = [
   { label: 'DeepSeek', rows: ['DeepSeek-V4-Flash', 'DeepSeek-V4-Flash-Vision-Exp'] },
@@ -286,5 +288,184 @@ describe.skipIf(webSnapshotMode() === 'record').each([
     }
     expect(scaffold.ctx.agentDefaultModel.currentSelection()).toEqual({ provider: 'origin-gateway', model: 'origin-large' })
     expect(tripwire.pageErrors).toEqual([])
+  })
+  it.runIf(engine === chromium)('keeps the model card at layout size when zooming beyond the visual viewport', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-model-menu-zoom'))
+    const cdp = await page.context().newCDPSession(page)
+    try {
+      await page.setViewportSize({ width: 402, height: 874 })
+      await page.getByRole('button', { name: /^选择模型/ }).click()
+      await page.getByRole('menuitem', { name: /^模型/ }).click()
+      const panel = page.getByRole('group', { name: '模型与推理等级', exact: true })
+      for (const height of [874, 500]) {
+        await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1 })
+        await page.setViewportSize({ width: 402, height })
+        await frames(page)
+        const unzoomed = await panel.evaluate((node) => {
+          const rect = node.getBoundingClientRect()
+          const anchor = document.querySelector(`[aria-controls="${node.id}"]`)!.getBoundingClientRect()
+          return { width: rect.width, height: rect.height, rightGap: rect.right - anchor.right,
+            bottomGap: anchor.top - rect.bottom }
+        })
+        await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 2.5 })
+        await expect.poll(() => page.evaluate(() => window.visualViewport!.scale)).toBe(2.5)
+        await expect.poll(() => panel.evaluate((node, before) => {
+          const rect = node.getBoundingClientRect()
+          const anchor = document.querySelector(`[aria-controls="${node.id}"]`)!.getBoundingClientRect()
+          return Math.max(Math.abs(rect.width - before.width), Math.abs(rect.height - before.height),
+            Math.abs(rect.right - anchor.right - before.rightGap), Math.abs(anchor.top - rect.bottom - before.bottomGap))
+        }, unzoomed)).toBeLessThan(1)
+        expect(await panel.evaluate(node => node.getBoundingClientRect().width > window.visualViewport!.width)).toBe(true)
+        const models = page.getByRole('menu', { name: '模型', exact: true })
+        const names = models.locator('[data-model-id]').locator('..')
+        expect(await names.evaluateAll(labels => labels.every(label =>
+          getComputedStyle(label).textOverflow === 'ellipsis'))).toBe(true)
+        expect(await names.evaluateAll(labels => labels.some(label =>
+          label.scrollWidth > label.clientWidth))).toBe(true)
+        expect(await models.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true)
+        const widths = await models.locator('[role="menuitemradio"]').evaluateAll(rows => rows.map(row => ({
+          right: row.lastElementChild!.getBoundingClientRect().right,
+          width: row.getBoundingClientRect().width,
+        })))
+        expect(Math.max(...widths.map(row => row.right)) - Math.min(...widths.map(row => row.right))).toBeLessThan(1)
+        expect(Math.max(...widths.map(row => row.width)) - Math.min(...widths.map(row => row.width))).toBeLessThan(1)
+        await scrollToGroup(models, 1, 10)
+        await expect.poll(() => models.locator('[data-menu-group-heading]').nth(1).getAttribute('data-stuck')).not.toBeNull()
+        const coversViewport = await models.evaluate((node) => {
+          const viewport = node.getBoundingClientRect()
+          const heading = node.querySelector('[data-menu-group-heading][data-stuck]')!.getBoundingClientRect()
+          return heading.left <= viewport.left + 1 && heading.right >= viewport.right - 1
+        })
+        expect(coversViewport).toBe(true)
+      }
+    } finally {
+      await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1 })
+      await cdp.detach()
+      await page.keyboard.press('Escape')
+      await page.keyboard.press('Escape')
+      await page.setViewportSize({ width: 1680, height: 1000 })
+    }
+  })
+
+  it.runIf(engine === chromium)('aligns the menu with its anchor after zooming and panning both viewport axes', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-model-menu-pan'))
+    const cdp = await page.context().newCDPSession(page)
+    try {
+      await page.setViewportSize({ width: 1440, height: 1000 })
+      const trigger = page.getByRole('button', { name: /^选择模型/ })
+      await trigger.click()
+      const menu = page.getByRole('menu', { name: '模型与推理等级', exact: true })
+      await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1.5 })
+      await expect.poll(() => page.evaluate(() => window.visualViewport!.scale)).toBe(1.5)
+      await frames(page)
+      const target = await menu.evaluate((panel) => {
+        const viewport = window.visualViewport!
+        const anchor = document.querySelector(`[aria-controls="${panel.id}"]`)!.getBoundingClientRect()
+        const rect = panel.getBoundingClientRect()
+        // Keep the preferred placement away from clamps so adding an offset twice cannot pass.
+        const left = Math.max(1, anchor.right - viewport.width + 12)
+        const right = Math.min(window.innerWidth - viewport.width, anchor.right - rect.width - 12)
+        const top = Math.max(1, anchor.top - 8 + 12 - viewport.height)
+        const bottom = Math.min(window.innerHeight - viewport.height, anchor.top - 8 - rect.height - 12)
+        const dx = (left + right) / 2 - viewport.offsetLeft
+        const dy = (top + bottom) / 2 - viewport.offsetTop
+        return { left, right, top, bottom, dx, dy,
+          x: viewport.width / 2, y: viewport.height / 2 }
+      })
+      expect(target.right).toBeGreaterThan(target.left)
+      expect(target.bottom).toBeGreaterThan(target.top)
+      // Use native wheel scrolling; Linux headless synthetic touch can deliver events without scrolling.
+      await cdp.send('Input.synthesizeScrollGesture', {
+        x: target.x, y: target.y, xDistance: -target.dx, yDistance: 0, gestureSourceType: 'mouse', speed: 800,
+      })
+      await expect.poll(() => page.evaluate(() => window.visualViewport!.offsetLeft)).toBeGreaterThan(0)
+      await frames(page)
+      await cdp.send('Input.synthesizeScrollGesture', {
+        x: target.x, y: target.y, yDistance: -target.dy, gestureSourceType: 'mouse', speed: 800,
+      })
+      await expect.poll(() => page.evaluate(() => Math.min(window.visualViewport!.offsetLeft,
+        window.visualViewport!.offsetTop))).toBeGreaterThan(0)
+      await expect.poll(() => menu.evaluate((panel) => {
+        const anchor = document.querySelector(`[aria-controls="${panel.id}"]`)!.getBoundingClientRect()
+        const rect = panel.getBoundingClientRect()
+        return Math.max(Math.abs(rect.right - anchor.right), Math.abs(anchor.top - rect.bottom - 8))
+      })).toBeLessThan(1)
+    } finally {
+      await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1 })
+      await cdp.detach()
+      await page.keyboard.press('Escape')
+      await page.setViewportSize({ width: 1680, height: 1000 })
+    }
+  })
+
+  it.runIf(engine === chromium)('keeps reasoning efforts selectable after zooming with and without list overflow', async () => {
+    const cdp = await page.context().newCDPSession(page)
+    try {
+      for (const { height, scrolls } of [{ height: 500, scrolls: false }, { height: 350, scrolls: true }]) {
+        await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1 })
+        await page.setViewportSize({ width: 402, height })
+        await page.getByRole('button', { name: /^选择模型/ }).click()
+        await page.getByRole('menuitem', { name: /^推理等级/ }).click()
+        const menu = page.getByRole('menu', { name: '模型与推理等级', exact: true })
+        await menu.getByRole('menuitemradio').first().click()
+        await expect.poll(() => scaffold.ctx.agentDefaultModel.currentSelection().reasoningEffort).toBeUndefined()
+        await page.getByRole('button', { name: /^选择模型/ }).click()
+        await page.getByRole('menuitem', { name: /^推理等级/ }).click()
+        const last = menu.getByRole('menuitemradio').last()
+        await expect.poll(() => last.getAttribute('aria-checked')).toBe('false')
+        await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 2.5 })
+        await expect.poll(() => page.evaluate(() => window.visualViewport!.scale)).toBe(2.5)
+        expect(await menu.getByRole('menuitemradio').count()).toBeGreaterThanOrEqual(7)
+        await expect.poll(() => last.evaluate((row) => {
+          const scroller = row.parentElement!
+          scroller.scrollTop = scroller.scrollHeight
+          return { overflow: getComputedStyle(scroller).overflowY,
+            overflows: scroller.scrollHeight > scroller.clientHeight, moved: scroller.scrollTop > 0 }
+        })).toEqual({ overflow: 'auto', overflows: scrolls, moved: scrolls })
+        await expect.poll(() => last.evaluate((row) => {
+          const rect = row.getBoundingClientRect()
+          const viewport = row.parentElement!.getBoundingClientRect()
+          return rect.top >= viewport.top - 1 && rect.bottom <= viewport.bottom + 1
+        })).toBe(true)
+        const target = await last.evaluate((row) => {
+          const rect = row.getBoundingClientRect()
+          const viewport = window.visualViewport!
+          return {
+            left: Math.max(0, Math.min(window.innerWidth - viewport.width, rect.left + rect.width / 2 - viewport.width / 2)),
+            top: Math.max(0, Math.min(window.innerHeight - viewport.height, rect.top + rect.height / 2 - viewport.height / 2)),
+            offsetLeft: viewport.offsetLeft, offsetTop: viewport.offsetTop,
+          }
+        })
+        // Pan from the page margin so wheel input cannot scroll the list instead.
+        await cdp.send('Input.synthesizeScrollGesture', {
+          x: 1, y: 1, xDistance: target.offsetLeft - target.left, yDistance: target.offsetTop - target.top,
+          gestureSourceType: 'mouse', speed: 800,
+        })
+        await expect.poll(() => last.evaluate((row) => {
+          const rect = row.getBoundingClientRect()
+          const viewport = window.visualViewport!
+          const x = rect.left + rect.width / 2 - viewport.offsetLeft
+          const y = rect.top + rect.height / 2 - viewport.offsetTop
+          return x >= 0 && x < viewport.width && y >= 0 && y < viewport.height
+        })).toBe(true)
+        // Dispatch touch without locator auto-scrolling the last row into view.
+        const point = await last.evaluate((row) => {
+          const rect = row.getBoundingClientRect()
+          const viewport = window.visualViewport!
+          return { x: rect.left + rect.width / 2 - viewport.offsetLeft,
+            y: rect.top + rect.height / 2 - viewport.offsetTop }
+        })
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] })
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+        await expect.poll(() => scaffold.ctx.agentDefaultModel.currentSelection()).toMatchObject({ reasoningEffort: 'max' })
+        await menu.waitFor({ state: 'detached' })
+      }
+    } finally {
+      await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1 })
+      await cdp.detach()
+      await page.keyboard.press('Escape')
+      await page.keyboard.press('Escape')
+      await page.setViewportSize({ width: 1680, height: 1000 })
+    }
   })
 })

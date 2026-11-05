@@ -1,12 +1,5 @@
-/* Stat-dialog surface skin shared by the Turn-stat pills (TurnUsagePanel) and
-   the session stats pills (StatsPills.tsx): menu surface, elevation-prominent
-   — ContextMeter's panel skin. Placement comes from useStatDialog
-   (stat-dialog.ts). */
-
-/* Portal surface: fixed in the viewport, left/top supplied inline from the
-   anchored-position clamp so the panel keeps its 12px viewport margin instead
-   of hanging off the trigger and clipping at the window edge. Portaled panels
-   layer above modal overlays (z 1000). */
+/* Shared surface for TurnUsagePanel and the session statistics pills.
+   CSS anchors place the portaled panel above its trigger, with a 12px window inset. */
 .panel {
   position: fixed;
   z-index: 1100;
@@ -28,6 +21,22 @@
   line-height: 18px;
   color: var(--dsw-alias-label-secondary);
   cursor: default;
+  max-height: calc(100dvh - 12px - max(12px, var(--dsh-frame-overlay-top, 12px)));
+  overflow-x: hidden;
+  overflow-y: auto;
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+  position-area: none;
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: max(12px, calc(anchor(top) + 8px));
+  left: max(12px, anchor(left));
+  right: 12px;
+  position-try-fallbacks: --dsh-stat-window, --dsh-stat-opposite, --dsh-stat-wide-opposite, --dsh-stat-tall, --dsh-stat-viewport;
+  align-self: end;
+  justify-self: start;
+  height: fit-content;
+  min-height: 0;
+  margin: 0;
 }
 
 /* Dialog heading row: the section name left, the section's headline value
@@ -92,4 +101,49 @@
 .reasoning {
   color: var(--dsw-alias-label-tertiary);
   white-space: nowrap;
+}
+
+@position-try --dsh-stat-window {
+  position-area: none;
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: max(12px, calc(anchor(top) + 8px));
+  left: 12px;
+  right: 12px;
+  margin: 0;
+  align-self: safe end;
+  justify-self: safe end;
+}
+
+@position-try --dsh-stat-opposite {
+  top: max(12px, calc(anchor(bottom) + 8px));
+  bottom: 12px;
+  align-self: start;
+}
+
+@position-try --dsh-stat-wide-opposite {
+  top: max(12px, calc(anchor(bottom) + 8px));
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  align-self: start;
+  justify-self: safe end;
+}
+
+@position-try --dsh-stat-tall {
+  position-area: none;
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: 12px;
+  left: max(12px, anchor(left));
+  right: 12px;
+  margin: 0;
+  align-self: safe start;
+  justify-self: start;
+}
+
+@position-try --dsh-stat-viewport {
+  position-area: none;
+  inset: max(12px, var(--dsh-frame-overlay-top, 12px)) 12px 12px;
+  margin: 0;
+  align-self: safe start;
+  justify-self: safe end;
 }

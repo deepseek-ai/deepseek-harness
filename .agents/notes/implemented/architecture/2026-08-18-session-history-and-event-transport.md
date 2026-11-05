@@ -139,7 +139,7 @@ If a page request is canceled with its physical carrier generation, the journal 
 
 `packages/api/session-controller` provides Host `ctx.sessionController` and the generated `ctx.remote.session` namespace.
 
-It owns Session list, search, create, selectModel, rename, fork, prompt, attachment, updateQueue, cancel, page, follow, and control. The Host-generation model catalog is exposed separately through `session/modelCatalog` because it is not Session-specific.
+It owns Session list, search, create, selectModel, rename, fork, prompt, attachment, updateQueue, cancel, `events`, the deprecated `page`, `follow`, `control`, plus `observeEvent`, `projections`, `observeProjections`, `state`, `observeState`, and `wait`. The Host-generation model catalog is exposed separately through `session/modelCatalog` because it is not Session-specific.
 
 The package separates agent, commands, control, history, and list controllers internally, but Session identity resolution, activation policy, subagent ownership, and Remote error projection have one public owner.
 
@@ -174,9 +174,9 @@ Reading titles, lists, and projections does not require an Agent. An observation
 
 #### Session journal
 
-`session.page` returns a history window clipped on message boundaries with contiguous internal sequence numbers. Every request must carry an explicit `throughSeq`; this value comes from the corresponding `session.follow` generation's opening cursor and fixes the read at the same log cut. A tail page without `beforeSeq` must end exactly at `throughSeq`, where `-1` denotes an empty log. `beforeSeq` only selects an older page before that cut and cannot replace the synchronization cursor. `maxMessages` limits user/assistant message count without dropping chunks, tools, or state events between those messages.
+`session.events` returns a history window clipped on message boundaries with contiguous internal sequence numbers. `throughSeq` is optional: when omitted, the read selects the observed log end and returns it as the page's inclusive `cursor`; a supplied value fixes the read at that cut. A page without `beforeSeq` ends exactly at the selected cut, where `-1` denotes an empty log. `beforeSeq` only selects an older page before that cut and cannot replace the synchronization cursor. `maxMessages` limits user/assistant message count without dropping chunks, tools, or state events between those messages. The deprecated `session.page` entry returns the same type.
 
-The tail page also carries a projection baseline no later than `throughSeq`; older pages carry only historical entries. The Client merges pages and subsequent live control updates by projection watermark.
+A page carries only its records, `hasMore`, and inclusive `cursor`; a projection baseline comes from a follow opening snapshot or the control stream, never from a page. The Client merges pages and subsequent live control updates by projection watermark.
 
 Ordinary Sessions and direct subagents use one `SessionAddress` protocol. A direct-subagent address carries parent Session, child Session, and mode; a cold Host read verifies durable ownership and descriptor rather than authorizing access from the child id alone.
 

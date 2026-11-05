@@ -31,18 +31,70 @@ describe('SidebarRoot.module.css', () => {
     expect(declarations('.collapsed .panelList')?.get('gap')).toBe('12px')
   })
 
-  it('shares and cancels the wide shell trailing padding structurally', () => {
+  it('fits expanded navigation into 32px rows while retaining 36px rail controls', () => {
+    const row = declarations('.panelRow')
+    expect(row?.get('min-height')).toBe('32px')
+    expect(row?.get('padding')).toBe('5px calc(var(--dsh-sidebar-row-padding) - var(--dsh-sidebar-paint-inset))')
+    expect(row?.get('line-height')).toBe('22px')
+    expect(row?.get('box-sizing')).toBe('border-box')
+    expect(row?.get('border')).toBe('none')
+    expect(declarations('.collapsed .panelRow')?.get('width')).toBe('36px')
+    expect(declarations('.collapsed .panelRow')?.get('height')).toBe('36px')
+    expect(declarations('.collapsed .panelRow')?.get('padding')).toBe('0')
+  })
+
+  it('owns a shared scrollport whose gaps scroll away', () => {
     const root = declarations('.root')
-    expect(root?.get('--dsh-sidebar-inline-padding')).toBe('12px')
+    const scrollport = declarations('.scrollArea')
+    expect(root?.get('--dsh-sidebar-inline-padding')).toBe('8px')
+    expect(root?.get('--dsh-sidebar-row-padding')).toBe('12px')
+    expect(root?.get('--dsh-sidebar-label-gap')).toBe('6px')
+    expect(root?.get('--dsh-sidebar-paint-inset')).toBe('3px')
     expect(root?.get('padding')).toBe('6px var(--dsh-sidebar-inline-padding)')
-    expect(declarations('.regionArea')?.get('margin-left')).toBe('-4px')
-    expect(declarations('.regionArea')?.get('padding-left')).toBe('4px')
-    expect(declarations('.regionArea')?.get('margin-right')).toBe(
-      'calc(-1 * var(--dsh-sidebar-inline-padding))',
-    )
-    expect(declarations('.collapsed .regionArea')?.get('margin-left')).toBe('0')
-    expect(declarations('.collapsed .regionArea')?.get('padding-left')).toBe('0')
-    expect(declarations('.collapsed .regionArea')?.get('margin-right')).toBe('0')
+    expect(declarations('.scrollRegion')?.get('min-height')).toBe('0')
+    expect(declarations('.root:not(.collapsed) .scrollRegion')?.get('container-type')).toBe('size')
+    expect(declarations('.scrollRegion')?.get('container-type')).toBeUndefined()
+    expect(scrollport?.get('display')).toBe('grid')
+    expect(scrollport?.get('overflow-y')).toBe('auto')
+    expect(scrollport?.get('overflow-x')).toBe('hidden')
+    expect(scrollport?.get('grid-template-columns')).toBe('4px minmax(0, 1fr) calc(var(--dsh-sidebar-inline-padding) - 2px)')
+    expect(scrollport?.get('grid-template-rows')).toBe('8px max-content 2px max-content')
+    expect(declarations('.scrollRegion')?.get('margin-top')).toBe('4px')
+    expect(declarations('.collapsed .scrollRegion')?.get('margin-top')).toBe('0')
+    expect(scrollport?.get('margin-left')).toBe('-4px')
+    expect(scrollport?.get('margin-right')).toBe('calc(2px - var(--dsh-sidebar-inline-padding))')
+    expect(scrollport?.get('scroll-padding-block')).toBeUndefined()
+    expect(declarations('.panelList')?.get('grid-row')).toBe('2')
+    expect(declarations('.regionArea')?.get('grid-row')).toBe('4')
+    expect(declarations('.regionArea')?.get('overflow')).toBeUndefined()
+    expect(declarations('.regionArea')?.get('margin-right')).toBeUndefined()
+    expect(declarations('.regionArea')?.get('flex')).toBeUndefined()
+    expect(declarations('.collapsed .regionArea')?.get('flex')).toBe('1')
+    expect(declarations('.collapsed .regionArea')?.get('margin-left')).toBeUndefined()
+    expect(declarations('.collapsed .regionArea')?.get('margin-right')).toBeUndefined()
+    expect(declarations('.collapsed .regionArea')?.get('padding-left')).toBeUndefined()
+    expect(declarations('.scrollFade')?.get('height')).toBe('24px')
+    expect(declarations('.collapsed .scrollArea')?.get('overflow')).toBe('visible')
+    expect(declarations('.collapsed .scrollArea')?.get('margin')).toBe('0')
+  })
+
+  it('hides the expanded viewport scrollbar and publishes its scroll state to the section', () => {
+    const expanded = declarations('.root:not(.collapsed) .scrollArea')
+    expect(expanded?.get('container-type')).toBe('scroll-state')
+    expect(expanded?.get('scrollbar-width')).toBe('none')
+    expect(declarations('.root:not(.collapsed) .scrollArea::-webkit-scrollbar')?.get('display')).toBe('none')
+  })
+
+  it('keeps the reviewed expanded spacing separate from rail and caption controls', () => {
+    expect(declarations('.logoRow')?.get('padding')).toBe('8px 0 8px 8px')
+    expect(declarations('.logoRow')?.get('margin-bottom')).toBe('0')
+    expect(declarations('.newSession')?.get('margin')).toBe('0 calc(var(--dsh-sidebar-paint-inset) + 1px)')
+    expect(declarations('.newSessionContent')?.get('justify-content')).toBe('center')
+    expect(declarations(":global(html[data-platform='darwin']:not([data-fullscreen])) .root:not(.collapsed) > .topStrip > .toggle")?.get('transform')).toBe('translateX(4px)')
+    expect(css).not.toContain(':not(.fading)')
+    expect(declarations(':global([data-windows-titlebar]) .root:not(.collapsed) .newSession')?.has('margin-left')).toBe(false)
+    expect(declarations('.topStrip')?.get('height')).toBe('52px')
+    expect(declarations('.root.collapsed')?.get('padding')).toBe('18px 10px 6px')
   })
 
   it('moves the four upper controls while the settings seat only fades', () => {
@@ -69,7 +121,8 @@ describe('SidebarRoot.module.css', () => {
     expect(declarations('.collapsed .newSession')?.get('width')).toBe('36px')
   })
 
-  it('keeps the slotted brand row at the full artwork height', () => {
+  it('keeps full-size brand artwork with a compact mark-to-name gap', () => {
+    expect(declarations('.brandIdentity')?.get('gap')).toBe('5px')
     expect(declarations('.brandIdentity')?.get('height')).toBe('24px')
     expect(declarations('.brandName')?.get('height')).toBe('24px')
     expect(declarations('.brandName')?.get('line-height')).toBe('24px')

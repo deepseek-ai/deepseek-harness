@@ -13,7 +13,7 @@ import { CuaPermissionStore, type ApplicationPermission, type PermissionTransact
 /** Native identity admission occurs before any application observation or input. */
 export const ApplicationAuthorizationResult = z.object({
   id: z.string().regex(/^[a-f0-9]{64}$/).transform(value => value as CuaApplicationId),
-  name: z.string(), executablePath: z.string().min(1), persistable: z.boolean(),
+  name: z.string(), executablePath: z.string().min(1).optional(), persistable: z.boolean(),
 })
 /** Application consent uses one profile store, including conversation-scoped decisions. */
 export interface AccessOptions { store: CuaPermissionStore }
@@ -127,7 +127,7 @@ export class ApplicationAccess {
    * @param agent Live agent whose session owns the decision.
    * @param client Helper that issued the handle.
    * @param handle Helper handle for a running instance or an approved pending launch.
-   * @param identity Native executable/signing identity.
+   * @param identity Platform-provided application or process-instance identity.
    * @param signal Calling tool lifetime.
    * @param icon Native application icon for the permission card; never saved as an identity.
    * @returns Completion after consent; refusals reject before launch, AX, screenshots, or input.
@@ -157,7 +157,7 @@ export class ApplicationAccess {
         try {
           result = await questions.ask({ agent, signal, questions: [{ id: 'cua-app-access',
             question: `Allow computer use to launch if needed, read, capture, and control ${identity.name}?`,
-            detail: 'Session access applies only to this conversation.',
+            detail: applicationAccessDisplay.detail.en,
             options, intent: {
               kind: 'approval', approve: 'Allow for this session', reject: 'Deny',
               ...(identity.persistable && this.options.store.persistent ? { always: 'Always allow' } : {}),

@@ -4,7 +4,7 @@ import { parseGatewayFrame, parseRelayFrame, parseTunnelWorkerEvent, LIVESHARE_C
 
 const registrationToken = '12345678-1234-4123-8123-123456789abc'
 const state = { type: 'share-access-state', version: 12, accessMode: 'selected',
-  allowedSubjectIds: ['identity-key'], sessionMode: 'write', allowsFileUpload: false,
+  allowedSubjectIds: ['identity-key'], sessionMode: 'write',
   expiresAt: '2026-10-09T00:00:00Z' }
 
 describe('Relay authority snapshot frame', () => {
@@ -20,17 +20,5 @@ describe('Relay authority snapshot frame', () => {
   ])('refuses malformed authority fields %j', (fields) => {
     expect(parseRelayFrame(JSON.stringify({ ...state, ...fields }))).toBeUndefined()
     expect(parseTunnelWorkerEvent({ ...state, registrationToken, shareId: 'share', ...fields })).toBeUndefined()
-  })
-})
-
-describe('share access-state file uploads', () => {
-  it('defaults uploads off when the frame omits the field', () => {
-    const { allowsFileUpload: _ignored, ...legacy } = state
-    expect(parseRelayFrame(JSON.stringify(legacy))).toMatchObject({ allowsFileUpload: false })
-  })
-
-  it('carries an explicit upload permission through', () => {
-    expect(parseRelayFrame(JSON.stringify({ ...state, allowsFileUpload: true })))
-      .toMatchObject({ allowsFileUpload: true })
   })
 })

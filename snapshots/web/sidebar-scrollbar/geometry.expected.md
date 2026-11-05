@@ -14,7 +14,8 @@
 - list overflows: true
 - reserved band: 5px
 - scrollbar inset from the sidebar edge: 2px
-- row background inset from the sidebar edge: 12px
+- row hitbox inset from the sidebar edge: 8px
+- row background inset from the sidebar edge: 11px
 - relative time covered by the bar: 0px
 - relative time ends inside the content area: true
 - content area ends before the border box: true
@@ -33,7 +34,8 @@
 - list overflows: true
 - reserved band: 5px
 - scrollbar inset from the sidebar edge: 2px
-- row background inset from the sidebar edge: 12px
+- row hitbox inset from the sidebar edge: 8px
+- row background inset from the sidebar edge: 11px
 - relative time covered by the bar: 0px
 - relative time ends inside the content area: true
 - content area ends before the border box: true

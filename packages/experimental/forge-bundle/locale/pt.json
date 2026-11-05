@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Solicitações de alteração e árvores de trabalho",
+    "description": "Acompanhe os pull requests do GitHub vinculados à conversa: consulte verificações e revisões, compare código e envie comentários ao agente. Revise alterações locais e isole cada tarefa em uma árvore de trabalho separada. Os recursos do GitHub exigem a CLI gh instalada e uma sessão iniciada no host.",
+    "detail": "docs/DETAIL.pt.md"
+  }
+}

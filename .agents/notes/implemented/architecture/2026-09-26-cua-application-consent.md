@@ -14,9 +14,9 @@ The CUA executor owns application consent for every object-API and native-tool d
 
 System-permission buttons call the native helper on the DSH host and remain available to remote browsers. The [usage documentation](../../../../packages/experimental/cua/README.md#use-this-package) explains where to complete authorization; the page has no persistent remote-access notice.
 
-A saved identity combines the canonical executable path with a verified designated signing requirement, represented by a SHA-256 digest. The path prevents authorization from following a copied application, and the signing requirement distinguishes replacements while allowing matching signed updates. Unverifiable and ad-hoc applications receive session access only, tied to a process instance. Labels do not establish identity.
+Application identity is owned by [bundle-ID consent](2026-10-25-cua-bundle-id-consent.md), which supersedes this note's original path/signature choice. That original choice prevented copied or replaced applications from inheriting access, at the cost of separate grants per installation and no saved grants for unsigned applications. Enforcement and human decision ownership remain as described here.
 
-Cold application selection prepares an executable identity and handle without launching. The same consent decision guards the private launch continuation, and the helper checks the executable again before launch and binds the resulting process afterward. Signed selections retain the normal designated-requirement identity; an unverifiable executable uses a content identity for this pending selection and cannot create a saved grant. Preparing metadata before asking avoids starting an application the user refuses.
+Cold application selection prepares an executable identity and handle without launching. The same consent decision guards the private launch continuation, and the helper checks the executable again before launch and binds the resulting process afterward. Selections with a bundle identifier retain that identity after launch; an application without one uses its canonical executable path before and after launch and can save that grant. Preparing metadata before asking avoids starting an application the user refuses.
 
 Conversation decisions survive provider disposal and DSH restart according to [profile consent storage](2026-10-19-cua-profile-consent-storage.md). That decision owns persistence, migration and cross-process revocation. The executor continues to serialize application selections within a conversation, refuse repeated prompts after denial, and give an explicit long-term grant precedence over conversation refusals.
 
@@ -26,7 +26,7 @@ Revocation invalidates the Agent connections that retain the application's handl
 
 **Trust model instructions or hide controls.** Retained objects and direct tool calls can still reach native operations. The executor must enforce the decision at dispatch.
 
-**Persist application names or unsigned paths.** A replacement can reuse both. Durable grants require a verifiable signing identity; session access supports unsigned development applications without that promise.
+**Persist application names or unsigned paths.** A replacement can reuse both. [Bundle-ID consent](2026-10-25-cua-bundle-id-consent.md) owns the identity choices and the decision to share permission between installations.
 
 **Add an approval database or Session control stream.** User Questions already owns interactive answers. The existing domain service provides durable state without introducing a dedicated database or Session control stream; storage tradeoffs are owned by the profile consent decision.
 

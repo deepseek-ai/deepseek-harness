@@ -4,6 +4,42 @@ import { Entry, type EntryOptions } from './entry.ts'
 import { EntryGroup } from './group.ts'
 import { createResolve } from '../resolve.ts'
 
+/**
+ * One tree-side mutation, reported to `EntryTree.commit()` synchronously after
+ * it has been applied to `entry.options` / `group.data`.
+ *
+ * - `options` absent: the entry was removed from `group`.
+ * - `legacy` absent: the entry was created in `group`.
+ * - both present: the entry was updated and now lives in `group`; `from` is
+ *   the group it left if the update moved it within the same tree. A move to
+ *   another tree reports a removal to the source tree and a creation to the
+ *   destination tree.
+ *
+ * `id` is local to the receiving tree; `Entry.id` prefixes it with the parent
+ * tree's path. Only `EntryTree` mutation methods and explicit Fiber saves
+ * report changes; file-driven `EntryGroup` reconciliation does not.
+ */
+export interface EntryChange {
+  id: string
+  group: EntryGroup
+  from?: EntryGroup
+  options?: EntryOptions
+  legacy?: EntryOptions
+}
+
+/** The entry and the same-tree members of its group, recursively. */
+function members(entry: Entry): Entry[] {
+  const { tree } = entry.parent
+  const result = [entry]
+  const group = entry.subgroup
+  if (group?.tree !== tree) return result
+  for (const options of group.data) {
+    const member = tree.store[options.id]
+    if (member?.parent === group) result.push(...members(member))
+  }
+  return result
+}
+
 /** Mutable tree of loader entries. Persistence is supplied by subclasses. */
 export abstract class EntryTree {
   static readonly sep = ':'
@@ -49,6 +85,13 @@ export abstract class EntryTree {
     }
   }
 
+  /**
+   * Assign a random tree-local id when `options.id` is absent. Explicit ids
+   * may contain `EntryTree.sep`; `resolve()` and `resolveGroup()` cannot
+   * address such entries by nested path.
+   * @param options - Entry options; a generated id is written to `options.id`.
+   * @returns The existing or generated id.
+   */
   ensureId(options: Partial<EntryOptions>) {
     if (!options.id) {
       do {
@@ -82,31 +125,57 @@ export abstract class EntryTree {
   /** Create an entry in the root group or a nested group. */
   async create(options: Omit<EntryOptions, 'id'>, parent: string | null = null, position = Infinity) {
     const group = this.resolveGroup(parent)
+    const id = group.tree.ensureId(options)
     group.data.splice(position, 0, options as EntryOptions)
-    group.tree.write()
+    group.tree.commit({ id, group, options: options as EntryOptions })
     return group.create(options)
   }
 
   /** Stop and remove an entry from its parent group. */
   remove(id: string) {
     const entry = this.resolve(id)
-    entry.parent.remove(id)
-    entry.parent.tree.write()
+    const group = entry.parent
+    const legacy = entry.options
+    group.remove(legacy.id)
+    group.tree.commit({ id: legacy.id, group, legacy })
   }
 
   /** Update an entry and optionally move it to another group. */
   async update(id: string, options: Omit<EntryOptions, 'id' | 'name'>, parent?: string | null, position?: number) {
     const entry = this.resolve(id)
     const source = entry.parent
+    const legacy = { ...entry.options }
     if (parent !== undefined) {
       const target = this.resolveGroup(parent)
+      const moved = target.tree === source.tree ? [] : members(entry)
+      for (const member of moved) {
+        const { id } = member.options
+        if (target.tree.store[id]) throw new Error(`entry ${id} already exists in the target tree`)
+      }
       source.unlink(entry.options)
       target.data.splice(position ?? Infinity, 0, entry.options)
-      target.tree.write()
       entry.parent = target
+      // The target tree owns the moved entries from now on, so that it adopts
+      // them instead of creating new ones when it reconciles its source.
+      for (const member of moved) {
+        delete source.tree.store[member.options.id]
+        target.tree.store[member.options.id] = member
+        if (member.subgroup?.tree === source.tree) member.subgroup.tree = target.tree
+      }
     }
-    source.tree.write()
-    return entry.update(options, false, true)
+    // `Entry.update` assigns the new options before its first `await`, so the
+    // change is fully visible to `commit()` once the call returns.
+    const task = entry.update(options, false, true)
+    if (entry.parent.tree !== source.tree) {
+      // a move across trees removes the entry from the source tree and
+      // creates it in the target tree
+      source.tree.commit({ id: legacy.id, group: source, legacy })
+      entry.parent.tree.commit({ id: legacy.id, group: entry.parent, options: entry.options })
+    } else {
+      const from = entry.parent === source ? undefined : source
+      entry.parent.tree.commit({ id: legacy.id, group: entry.parent, from, options: entry.options, legacy })
+    }
+    return task
   }
 
   /** Import a plugin module from a specifier or `cordis:` builtin. */
@@ -131,6 +200,6 @@ export abstract class EntryTree {
     }, getOuterStack)
   }
 
-  /** Persist current tree state. In-memory trees may implement this as a no-op. */
-  abstract write(): void
+  /** Report an applied mutation synchronously. In-memory trees may use a no-op. */
+  abstract commit(change: EntryChange): void
 }

@@ -8,11 +8,11 @@ export const DESKTOP_AUTO_UPDATE_ENV = 'DSH_DESKTOP_AUTO_UPDATE_ENV'
 /**
  * Resolve the channel embedded in the installer; omitted local settings retain nightly.
  * @param {NodeJS.ProcessEnv} env Packaging or upload settings.
- * @returns {'nightly' | 'latest'} Validated channel.
+ * @returns {'nightly' | 'stable'} Validated channel.
  */
 export function resolveDesktopUpdateChannel(env) {
   const channel = env.DSH_DESKTOP_UPDATE_CHANNEL || 'nightly'
-  if (channel !== 'nightly' && channel !== 'latest') throw new Error('desktop auto-update: invalid update channel')
+  if (channel !== 'nightly' && channel !== 'stable') throw new Error('desktop auto-update: invalid update channel')
   return channel
 }
 
@@ -34,6 +34,26 @@ const UPDATE_ENVIRONMENTS = {
 }
 
 const UPDATE_TARGETS = new Set(['mac-arm64', 'mac-x64', 'win-x64'])
+
+/**
+ * Name the fixed installer object shared by uploading and cache refresh.
+ * @param {'mac-arm64' | 'mac-x64' | 'win-x64'} target Supported Desktop target.
+ * @returns {string} Fixed download filename.
+ */
+export function desktopLatestInstallerFilename(target) {
+  if (!UPDATE_TARGETS.has(target)) throw new Error(`desktop upload: unsupported target ${target}`)
+  const windows = target === 'win-x64'
+  return `dsh-latest-${windows ? 'windows' : 'macos'}-${target === 'mac-arm64' ? 'arm64' : 'x64'}.${windows ? 'exe' : 'dmg'}`
+}
+
+/**
+ * Resolve the production website installer URL shared by approval, upload and purge.
+ * @param {'mac-arm64' | 'mac-x64' | 'win-x64'} target Supported Desktop target.
+ * @returns {string} Fixed production download URL.
+ */
+export function desktopWebsiteInstallerUrl(target) {
+  return `${UPDATE_ENVIRONMENTS.production.fixedOrigin}/desktop/${desktopLatestInstallerFilename(target)}`
+}
 
 /**
  * Resolve the update deployment, defaulting local release work to test.
@@ -79,7 +99,7 @@ export function desktopBuildRecordFilename(target) {
  * Return the electron-builder channel metadata filename for an application version.
  * @param {string} version - Desktop semantic version.
  * @param {NodeJS.Platform} platform - Target platform.
- * @param {'nightly' | 'latest'} channel - Selected channel; omitted means nightly.
+ * @param {'nightly' | 'stable'} channel - Selected channel; omitted means nightly.
  * @returns {string} Channel metadata filename emitted for the target.
  */
 export function desktopUpdateMetadataFilename(version, platform, channel = 'nightly') {
@@ -99,7 +119,7 @@ export function desktopUpdateMetadataFilename(version, platform, channel = 'nigh
  * @param {string} name - Environment variable to read.
  * @returns {string} Trimmed setting.
  */
-function requiredEnvironmentValue(env, name) {
+export function requiredEnvironmentValue(env, name) {
   const value = env[name]?.trim()
   if (value === undefined || value === '') {
     throw new Error(`desktop auto-update: ${name} must be set to a non-empty value`)
@@ -137,7 +157,7 @@ function httpsOrigin(value, name) {
  * @param {NodeJS.ProcessEnv} env - Packaging or upload environment.
  * @param {NodeJS.Platform} platform - Target Node.js platform.
  * @param {string} arch - Target Node.js architecture.
- * @returns {{ environment: 'test' | 'production', channel: 'nightly' | 'latest', target: 'mac-arm64' | 'mac-x64' | 'win-x64', origin: string, publicUrl: string, keyPrefix: string, binaryKeyPrefix: string }} Resolved updater configuration.
+ * @returns {{ environment: 'test' | 'production', channel: 'nightly' | 'stable', target: 'mac-arm64' | 'mac-x64' | 'win-x64', origin: string, publicUrl: string, keyPrefix: string, binaryKeyPrefix: string }} Resolved updater configuration.
  * @throws {Error} When the test deployment lacks a valid HTTPS origin or a 32-character lowercase hexadecimal release ID.
  */
 export function resolveDesktopAutoUpdateConfig(env, platform, arch) {
@@ -166,7 +186,7 @@ export function resolveDesktopAutoUpdateConfig(env, platform, arch) {
     target,
     origin,
     keyPrefix,
-    binaryKeyPrefix: `${releasePrefix}/bin/${target}${channel === 'latest' ? '/latest' : ''}`,
+    binaryKeyPrefix: `${releasePrefix}/bin/${target}${channel === 'stable' ? '/stable' : ''}`,
     publicUrl: `${origin}/${keyPrefix}/`,
   }
 }
@@ -176,7 +196,7 @@ export function resolveDesktopAutoUpdateConfig(env, platform, arch) {
  * @param {NodeJS.ProcessEnv} env - Upload environment.
  * @param {NodeJS.Platform} platform - Target Node.js platform.
  * @param {string} arch - Target Node.js architecture.
- * @returns {{ environment: 'test' | 'production', channel: 'nightly' | 'latest', target: 'mac-arm64' | 'mac-x64' | 'win-x64', origin: string, publicUrl: string, keyPrefix: string, binaryKeyPrefix: string, bucket: string, secretIdEnvName: string, secretKeyEnvName: string }} Resolved upload configuration.
+ * @returns {{ environment: 'test' | 'production', channel: 'nightly' | 'stable', target: 'mac-arm64' | 'mac-x64' | 'win-x64', origin: string, publicUrl: string, keyPrefix: string, binaryKeyPrefix: string, bucket: string, secretIdEnvName: string, secretKeyEnvName: string }} Resolved upload configuration.
  * @throws {Error} When the selected deployment lacks a bucket or valid updater configuration.
  */
 export function resolveDesktopUploadConfig(env, platform, arch) {

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-storage-json` stores domain data as readable JSON under a configured root and registers as backend `json`. Its default `single` layout keeps one complete `<unit>.json` file per unit; its `per-record` layout keeps one version-stamped document per record. Both layouts publish each changed file atomically, while the domain layer orders calls. Choose it when operators need inspectable files and the selected layout fits the write volume; choose SQLite for larger or highly concurrent data. The backend is host-side only and contributes no prompt, tool, or schema.
+`dsh-storage-json` stores domain data as readable JSON under a configured root and registers as backend `json`. Its default `single` layout keeps one complete `<unit>.json` file per unit; its `per-record` layout keeps one version-stamped document per record. Both layouts publish each changed file atomically, while the domain layer orders calls. Choose it when operators need inspectable files and the selected layout fits the write volume; choose SQLite for larger, frequently updated units. The backend is host-side only and contributes no prompt, tool, or schema.
 
 ## Table of Contents
 
@@ -29,7 +29,7 @@ Use this package when a composition needs readable, editable JSON storage. Route
 
 ### When to choose it
 
-Choose the default `single` layout for small units that benefit from one complete, pretty-printed file. Choose `per-record` when point writes should replace only one record document. Choose the SQLite backend when data is large, writes are frequent, or multiple records need transactional updates.
+Choose the default `single` layout for small units that benefit from one complete, pretty-printed file. Choose `per-record` for disposable records whose point writes should replace only one document; unsupported or unreadable documents read as absent. Choose SQLite for frequent point updates in large units. The domain API has no multi-record transaction operation on either backend.
 
 ### Configuration
 
@@ -53,9 +53,11 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### Observable behavior
 
-A missing `single` file or `per-record` directory opens as an empty unit and materializes on the first write. In `single`, malformed content rejects with `malformed-medium`, and a different stored version rejects with `version-mismatch`. In `per-record`, each malformed or unreadable document, and each document whose version is outside the descriptor's current and compatible versions, reads as an absent record, so one bad document does not reject the unit. In `per-record`, record keys must match `[a-zA-Z0-9_-]+`; an unsafe key rejects before any file operation, while the `single` layout keeps keys opaque. Single-record writes and `single`-layout publishes are durable once resolved; a `per-record` batch deletion depends on the filesystem persisting directory-entry updates (see Known Limitations). A batch that cannot establish or restore its state rejects with `unknown-state`, after which every later operation except `close()` rejects; calls after close reject with `closed`.
+Without a legacy bootstrap, a missing `single` file or `per-record` directory opens as an empty unit and materializes on the first write. In `single`, malformed content rejects with `malformed-medium`, and a stored version outside the current and `compatibleVersions` set rejects with `version-mismatch`. An accepted older file stays unchanged on read; the next atomic write stamps the current version and preserves untouched values in declared tables. Deleting missing keys or an empty batch does not restamp. In `per-record`, each malformed or unreadable document, and each document whose version is outside the accepted set, reads as an absent record, so one bad document does not reject the unit. Version refusal does not delete the document. Per-record keys must match `[a-zA-Z0-9_-]+`; an unsafe key rejects before any file operation. Resolved writes are durable; `per-record` deletions sync their directory changes on POSIX before resolving. A batch interrupted before resolution can be partially applied. A batch that cannot restore its readable or durable state rejects with `unknown-state`, after which every later operation except `close()` rejects; calls after close reject with `closed`.
 
-An empty `per-record` tree can initialize its declared tables from a valid `<root>/<unit>.json` whole-unit document only when the source unit name matches and its version is current or declared compatible. The backend leaves that source file unchanged and stamps migrated records with the current version. A source version outside the accepted set leaves the new tree empty. Any document path in a declared table, or a declared `global.json`, suppresses this initialization for the complete unit, even if that document is unreadable or stale.
+An unmaterialized `per-record` tree can initialize its declared tables from a valid `<root>/<unit>.json` whole-unit document only when the source unit name matches and its version is current or declared compatible. This bootstrap writes during loading: it leaves the source file unchanged and copies stored values into current-stamped documents without converting them. A source version outside the accepted set leaves the new tree empty. Any declared table directory, even when empty, or a declared `global.json` suppresses this initialization for the complete unit. Deleted records therefore remain absent while the retained source file stays unchanged.
+
+A synchronous serialization failure restores the open `single` unit's previous memory and permits retry on that handle. An I/O failure can occur after file replacement, so a rejected write does not prove that disk data or its stamp stayed unchanged. Stop using and close the backend and its domains, then reopen to reload saved state before deciding whether to retry. See [domain versioning](../../../docs/subsystems/storage.md#domain-versioning) for mixed records and downgrade behavior.
 
 -----
 
@@ -69,8 +71,8 @@ The two layouts share atomic publication but assign state ownership differently.
 
 ### Design concept
 
-- **`single` keeps memory authoritative.** Each write changes the in-memory unit, serializes its complete state, and atomically replaces `<unit>.json`. A failed publish restores the prior in-memory value. A batch delete is one such publish: the whole batch is applied or restored together.
-- **`per-record` keeps the directory authoritative.** Each put or delete changes one `<unit>/<table>/<key>.json` document, and `loadAll()` rereads the tree. A batch delete renames the batch's documents out of the readable set, restores them if a rename fails, and unlinks the staged copies afterwards. If that restoration fails, the unit rejects with `unknown-state` and every later operation on it except `close()` rejects. Each document stamps the unit version and carries one record value.
+- **`single` keeps memory authoritative.** Each write changes the in-memory unit, serializes its complete state, and atomically replaces `<unit>.json`. A batch delete publishes once. Serialization failures restore every affected in-memory value; uncertain I/O outcomes require reopening instead of continuing from that snapshot.
+- **`per-record` keeps the directory authoritative.** Each put or delete changes one `<unit>/<table>/<key>.json` document, and `loadAll()` rereads the tree. A batch delete renames the batch's documents out of the readable set, syncs the directory on POSIX, then unlinks the staged copies. A failed staging or sync restores the documents and syncs the restored directory. If that restoration or sync fails, the unit rejects with `unknown-state` and every later operation on it except `close()` rejects. Each document stamps the unit version and carries one record value.
 - **Publication is durable per call.** A write uses a temporary file, fsync, atomic `rename()` replacement, and a parent-directory fsync on POSIX. The domain layer's write chain supplies ordering across calls.
 
 ### File formats
@@ -140,7 +142,7 @@ These limits define when this backend is a poor fit or needs special operational
 - **`single` rewrites the whole unit** — each write republishes the complete unit file; use `per-record` or route the domain to SQLite when this cost is too high.
 - **No cross-process write locking** — two processes writing the same unit can interleave replacements; writes to the same file use last-completion wins.
 - **Windows rename without explicit write-through** — durability relies on libuv's `rename()` (`MoveFileExW` with replacement); the stricter Win32 write-through publish helper from the session-log backend is planned to move down here when the `log` facet lands.
-- **`per-record` batch delete is not directory-fsynced** — the batch's renames and unlinks rely on the filesystem persisting directory-entry updates; a crash can restore a deleted document under its original key or leave `.deleting` residue. `single` publishes fsync the parent directory.
+- **No crash-atomic `per-record` batch** — a crash before deletion resolves can leave a partial batch and `.deleting` residue. Completed deletions sync the staged directory changes on POSIX; cleanup residue is unreadable.
 
 <a id="dev-note"></a>
 ### Dev Note

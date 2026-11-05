@@ -2,57 +2,57 @@
 
 /** English application-access messages. */
 export const en = {
-  question: 'Allow computer use to launch, read, capture and control this application?',
-  detail: 'Session access applies only to this conversation.',
+  question: 'Allow agent to control this application via computer use?',
+  detail: 'Manage app permissions for all sessions on the plugin page.',
   approve: 'Allow for this session',
 }
 
 /** Chinese application-access messages. */
 export const zh = {
-  question: '允许 Computer Use 启动、读取、截图和控制此应用吗？',
-  detail: '会话授权仅在当前对话中生效。',
+  question: '允许智能体通过 Computer Use 控制此应用吗？',
+  detail: '在插件页面管理所有会话的应用权限。',
   approve: '本会话允许',
 } satisfies Record<keyof typeof en, string>
 
 /** Japanese application-access messages. */
 export const ja = {
-  question: 'Computer Use によるこのアプリの起動、読み取り、画面キャプチャ、操作を許可しますか？',
-  detail: 'セッションの許可はこの会話にのみ適用されます。',
+  question: 'エージェントが Computer Use でこのアプリを操作することを許可しますか？',
+  detail: 'プラグインページで、すべてのセッションのアプリ権限を管理できます。',
   approve: 'このセッションで許可',
 } satisfies Record<keyof typeof en, string>
 
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
-  question: '¿Permitir que Computer Use inicie, lea, capture y controle esta aplicación?',
-  detail: 'El acceso de sesión solo se aplica a esta conversación.',
+  question: '¿Permitir que el agente controle esta aplicación mediante Computer Use?',
+  detail: 'Gestiona los permisos de las aplicaciones para todas las sesiones en la página del plugin.',
   approve: 'Permitir durante esta sesión',
 } satisfies Record<keyof typeof en, string>
 
 /** French dictionary, checked against the English keys. */
 export const fr = {
-  question: 'Autoriser Computer Use à lancer, lire, capturer et contrôler cette application ?',
-  detail: 'L’autorisation de session s’applique uniquement à cette conversation.',
+  question: 'Autoriser l’agent à contrôler cette application via Computer Use ?',
+  detail: 'Gérez les autorisations des applications pour toutes les sessions sur la page du plugin.',
   approve: 'Autoriser pour cette session',
 } satisfies Record<keyof typeof en, string>
 
 /** German dictionary, checked against the English keys. */
 export const de = {
-  question: 'Darf Computer Use diese Anwendung starten, lesen, aufnehmen und steuern?',
-  detail: 'Der Sitzungszugriff gilt nur für diese Unterhaltung.',
+  question: 'Darf der Agent diese Anwendung über Computer Use steuern?',
+  detail: 'Verwalten Sie App-Berechtigungen für alle Sitzungen auf der Plugin-Seite.',
   approve: 'Für diese Sitzung zulassen',
 } satisfies Record<keyof typeof en, string>
 
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
-  question: 'Разрешить Computer Use запуск, чтение, захват и управление этим приложением?',
-  detail: 'Доступ для сеанса действует только в этом разговоре.',
+  question: 'Разрешить агенту управлять этим приложением через Computer Use?',
+  detail: 'Управляйте разрешениями приложений для всех сеансов на странице плагина.',
   approve: 'Разрешить для этого сеанса',
 } satisfies Record<keyof typeof en, string>
 
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
-  question: 'Permitir que o Computer Use inicie, leia, capture e controle este aplicativo?',
-  detail: 'O acesso da sessão se aplica apenas a esta conversa.',
+  question: 'Permitir que o agente controle este aplicativo via Computer Use?',
+  detail: 'Gerencie as permissões dos aplicativos para todas as sessões na página do plugin.',
   approve: 'Permitir nesta sessão',
 } satisfies Record<keyof typeof en, string>
 

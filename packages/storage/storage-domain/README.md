@@ -85,7 +85,7 @@ The domain layer is a single implementation, not an abstracted seam: consumers d
 ### Design concept
 
 - **The spec object is the single source of truth.** `defineDomain` pins the spec's literal types and validates its fields at the owning package's module load, before any medium is touched. Record schemas are zod, so `z.infer` avoids duplicating consumer types; plugin `Config` stays schemastery.
-- **Memory is authoritative; the medium is the durable projection.** Reads are synchronous from validated in-memory state. Every write queues on one per-domain write chain: backend durability first, then memory mutation, then `domain/changed` — a rejected backend write leaves memory untouched, so reads never diverge from the medium; a backend that reports `unknown-state` quarantines the domain, whose reads and later writes then reject until it is closed.
+- **Memory is authoritative; the medium is the durable projection.** Reads are synchronous from validated in-memory state. Every write queues on one per-domain write chain: backend durability first, then memory mutation, then `domain/changed`. A rejected backend write does not publish a domain change; an `unknown-state` rejection quarantines reads and later writes until close. Any unknown durable outcome requires closing and reopening the backend and domain before further use.
 - **One write chain per domain.** `put`, `delete`, `deleteMany`, `update`, and `global.set` all queue on it; `update`'s transform runs at its chain slot, so concurrent updates never interleave. Records are plain immutable data — returned values are the stored objects themselves and must not be mutated in place.
 - **Writes emit after the commit point.** `domain/changed` is a notification, not a transaction participant: a throwing listener is contained with a logged warning rather than rejecting the already-durable write.
 
@@ -144,8 +144,8 @@ Independent: domain reads and writes never touch request prefixes, so nothing he
 These limits define when the domain layer is a poor fit or needs special operational care. They are current package constraints, not a task backlog.
 
 - **Single-process change visibility** — `domain/changed` is an in-process event; a second host process or a reconnecting GUI observes no changes until the cross-process revision pattern lands ([Agent Note](../../../.agents/notes/proposed/architecture/2026-07-24-domain-kv-storage-and-workspace.md)).
-- **No cross-table transactions, secondary indexes, or multi-segment keys** — each write touches one record; these extensions are deferred in the Agent Note's out-of-scope list.
-- **No data migration** — a domain whose stored version differs from its spec rejects at open (`version-mismatch`); changing a schema requires migrating the stored data by hand.
+- **No cross-table transactions, secondary indexes, or multi-segment keys** — each write targets one table or the global slot; these extensions are deferred in the Agent Note's out-of-scope list.
+- **No incompatible-value migration runner** — `compatibleVersions` admits older data for the current decoder; consumers convert values when rewriting selected records. A current stamp can still contain historical rows. See [domain versioning](../../../docs/subsystems/storage.md#domain-versioning) for backend differences, upgrades, downgrade refusal, and retiring old readers.
 
 <a id="dev-note"></a>
 ### Dev Note

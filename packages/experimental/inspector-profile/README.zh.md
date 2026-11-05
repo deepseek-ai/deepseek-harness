@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-启用这个可选组合包，即可在 Sidebar 检查 Session 数据，并在底部面板打开 NodeJS 诊断。组合包启用两个 Inspector 和 Host fetch 采集；组合包自身在插件管理器中默认关闭。
+启用这个可选组合包，即可在 Sidebar 检查 Session 数据、在底部面板打开 NodeJS 诊断，并增加「统计」会话页签。组合包启用两个 Inspector、「统计」视图和 Host fetch 采集；组合包自身在插件管理器中默认关闭。
 
 ## 目录
 
@@ -26,7 +26,7 @@ kind: "package-bundle"
 
 打开**插件**，点击**实验性插件**旁的**更多**并启用**开发者工具**；启用后它也会出现在主列表中。这会为当前 Web profile 选择 `@deepseek-ai/dsh-experimental-inspector-profile`。
 
-从 Sidebar 的新建 tab 菜单或引导页打开**会话数据诊断**。[Session Inspector](../session-inspector/README.zh.md) 提供一个视图，可选择原始数据或对话分组展示形式，初始选中原始数据。
+「对话」和「轨迹」旁的**统计**页签展示每轮/每步的上下文、耗时、缓存和工具成本，详见[性能视图包](../client-ui-stats/README.zh.md)。从 Sidebar 的新建 tab 菜单或引导页打开**会话数据诊断**。[Session Inspector](../session-inspector/README.zh.md) 提供一个视图，可选择原始数据或对话分组展示形式，初始选中原始数据。
 
 按 **Ctrl/Cmd+Shift+.** 可展开或收起底部面板中的 **NodeJS 诊断**，使用打包后的 DevTools 前端。启用组合包会启动本地调试后端和未经脱敏的 Host fetch 采集，不需要用户配置覆盖或调试参数。
 

@@ -1,4 +1,4 @@
-# Desktop 本地更新验证
+# Desktop 本地验证
 
 [English](README.md) | 中文
 
@@ -10,12 +10,26 @@
 
 ## 目录
 
+- [故障报告验证](#verification-diagnostics)
 - [更新弹窗主题](#verification-theme)
 - [原生浮层可见性](#verification-overlay)
 - [验证证据](#verification-evidence)
 - [手动演练](#verification-interactive)
 - [待验证事项](#verification-open)
 
+<a id="verification-diagnostics"></a>
+
+## 故障报告验证
+
+产品行为与限制见[故障恢复与诊断](../docs/diagnostics/README.zh.md)。
+
+使用可丢弃的 profile、独立的 Electron `userData` 和实际打包客户端。构造最小本地组合包：`package.json` 的 `dsh.bundle.patch` 指向 `cordis.patch.yml`，需要执行代码时再加入插件模块，然后打成可本地安装的 `.tgz`。这些包会故意使应用出错，不得发布或安装到日常 profile。
+
+分别构造模块导入异常、插件初始化异常、`appReady` 后的异步异常，以及 Host 非零退出。用 patch 禁用 `agent`、`session`、`llm`、`tools` 提供者，检查服务缺失诊断。跨重启场景通过 `pluginManager` 选入该组合包，再重启同一 profile。运行期场景须实际观察客户端就绪；`appReady` 不代表窗口已经显示。
+
+检查原始错误与 cause 或退出码、跨重启的操作 ID 和 Host 运行 ID、报告收集完成标记与遗漏信息、原生弹窗中的文件获取，以及禁用插件恢复后的启动。记录安装包版本和源码提交；生成测试包成功或管理操作返回成功，都不能代替客户端功能验证。测试后恢复协议关联并退出测试进程。
+
+资源验证可构造大型稀疏历史文件、大量无关文件、密集记录，以及损坏行和未完成行。在独立新进程中测量，分开记录数据构造与收集开销，并核对实际读取量、输出大小、耗时和峰值内存。验证 Worker 取消时，可用仅测试加载的模块钩子在写入进入标记后挂起异步文件打开操作；先确认标记，再观察期限到达后的 Worker 退出，并逐字节核对基本报告。该方法不模拟内核系统调用卡死，也不代替打包客户端验证。
 <a id="verification-theme"></a>
 
 ## 更新弹窗主题
@@ -50,6 +64,8 @@ apps/desktop/.desktop-build/targets/mac-arm64/electron/Electron.app/Contents/Mac
 Host、客户端与 Desktop 产物构建完成后，在 Windows 仓库根目录运行 `node --import tsx apps/desktop/scripts/test-workspace-updates.ts --interactive`。真实工作区持续打开，并提供独立控制窗口。其菜单可选择普通或强制更新、保持和放行下载、注入下载失败，以及添加或清空测试任务。失败模式须在开始下载前选择。确认安装并完成任务收尾后，fixture 消息提示安装器调用已被拦截；确认消息结束演练。关闭控制窗口也会退出。每次运行独占私有 profile 和回环服务器；载荷不是安装器。重新运行命令开始新一轮。省略 `--interactive` 则运行自动化场景，保留 120 秒截止时间和自动退出；交互模式下载的网络截止时间为十分钟。
 
 <a id="verification-evidence"></a>
+
+构建 Desktop 后，`node apps/desktop/scripts/test-update-channels.mjs` 使用本地回环清单和下载的无执行能力文件检查固定版本的 Electron updater。它验证渠道文件名、禁止降级、灰度命中，以及切换渠道后实际下载缓存和过期确认的撤销，在 macOS 上还关闭 updater 创建的本地交接服务。Windows pull request CI 在阻塞性构建后运行此检查。不运行安装器、Host 或远程发布。此验证不能替代 Windows 和 macOS 的签名安装应用测试。
 
 ## 验证证据
 

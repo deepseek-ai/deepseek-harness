@@ -15,7 +15,7 @@ import { z } from 'zod'
 import { NativeClient, NativeError, type NativeClientConfig, type NativeChannelFactory } from './native-client.ts'
 import { CuaPermissionStore } from './permission-store.ts'
 import { ApplicationAuthorizationResult, installCuaAccess } from './access.ts'
-import type { CuaApplicationGrant, CuaApplicationId } from './access-types.ts'
+import type { CuaApplicationGrant, CuaApplicationId, CuaSystemPermission } from './access-types.ts'
 import type { CuaAppHandle, CuaOperation, CuaStartupCapabilities } from './types.ts'
 import { ApplicationIcon, AppResult, NativeScreenshotResult, Request, ScreenshotResult, StateResult, WindowsResult } from './protocol.ts'
 import { CuaCoordinates } from './coordinates.ts'
@@ -40,7 +40,7 @@ export interface CuaConfig {
     /** Unbranded digest at the profile configuration boundary; admitted by the Config schema. */
     id: string
   }>
-  /** Absolute native helper override; omission prepares the package-owned executable. */
+  /** Absolute executable inside the signed macOS helper .app; omission prepares the package-owned application. */
   helperPath?: string
   /** Maximum time in milliseconds for native component preparation. */
   buildTimeoutMs: number
@@ -83,7 +83,7 @@ export const CuaConfigFields = {
   agentPreset: Schema.union([Schema.string().min(1), Schema.const(false)]).default('ptc'),
   allowedApps: Schema.array(Schema.object({
     id: Schema.string().pattern(/^[a-f0-9]{64}$/).required(),
-    name: Schema.string().required(), executablePath: Schema.string().min(1).required(),
+    name: Schema.string().required(), executablePath: Schema.string().min(1),
   })).default([]),
   helperPath: Schema.string(),
   buildTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(300_000),
@@ -152,6 +152,14 @@ export interface CuaBackend {
   createChannel: NativeChannelFactory
   guidance: string
   capabilities: CuaStartupCapabilities
+  /**
+   * Build native permission parameters for the selected action and Client language.
+   * @param method Native permission action.
+   * @param permission System privilege selected by the user.
+   * @param locale Current Client language.
+   * @returns Parameters accepted by the provider's native implementation.
+   */
+  permissionParameters: (method: 'requestPermission' | 'openPermissionSettings', permission: CuaSystemPermission, locale: string) => Record<string, JsonValue>
 }
 
 /**
@@ -171,6 +179,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
   }
   const access = installCuaAccess(ctx, {
     native, createChannel: backend.createChannel,
+    permissionParameters: backend.permissionParameters,
     store: new CuaPermissionStore(ctx, config.allowedApps.map(grant => ({ ...grant, id: grant.id as CuaApplicationId })), config.timeoutMs),
   })
   const clients = new Map<Agent, NativeClient>()
@@ -364,11 +373,17 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
     }
     const prompt: PromptSection = {
       name: 'computer-use:dsh-cua', order: ctx.systemPrompt.getSectionOrder('TOOL_COMPUTER_USE'),
-      text: () => ctx.get('ptcRuntime')?.programFormat !== 'repl' ? guidance : `${guidance}
+      text: () => {
+        const runtime = ctx.get('ptcRuntime')
+        return !runtime?.retainsState ? guidance : `${guidance}
 
 Persistent PTC initialization:
+
+\`\`\`ts
 var { connectCua } = await import(${JSON.stringify(new URL('../lib/bridge.js', import.meta.url).href)});
-var cua = connectCua(() => tools.cua, text => console.log(text));`,
+var cua = connectCua(() => tools.cua, text => console.log(text));
+\`\`\``
+      },
     }
     const register = (scope: Context): void => {
       scope.tools.register(tool)

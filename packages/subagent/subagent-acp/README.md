@@ -138,7 +138,7 @@ Independent of the parent request cache. Each ACP child can reuse only prefixes 
 
 #### What the model sees
 
-Through `dsh-tool-subagent`, the parent model first receives a child id, then a completion notice containing final or partial assistant text, the stop reason, and safe diagnostic. The parent Session independently retains the external task identity and complete terminal result. Intermediate messages and tool traffic do not enter the parent Session.
+Through `dsh-tool-subagent`, the parent model first receives the child's name, then a completion notice containing final or partial assistant text, the stop reason, and safe diagnostic. The parent Session independently retains the external task identity and complete terminal result. Intermediate messages and tool traffic do not enter the parent Session.
 
 #### Token effect
 

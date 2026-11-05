@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-ptc-runtime-python",
   "description": "CPython subprocess implementation of the DeepSeek Harness PTC execution seam",
-  "version": "0.2.1-rc.3",
+  "version": "0.2.2-rc.1",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
@@ -22,7 +22,10 @@
     "locale/*.json",
     "lib/index.js",
     "py/**/*.py",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ],
   "license": "MIT",
   "peerDependencies": {

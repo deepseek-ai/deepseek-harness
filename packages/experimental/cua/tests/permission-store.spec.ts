@@ -64,6 +64,19 @@ it('isolates different profiles that use the same storage root', async () => {
   expect(await readdir(f.storageRoot)).toHaveLength(2)
 })
 
+it('reloads saved grants and conversation decisions with omitted executable paths', async () => {
+  const f = await setup(), first = await f.open()
+  const identity = { id: grant.id, name: grant.name }
+  await first.store.withState(signal, transaction => transaction.save({ migrated: true, applications: {
+    [grant.id]: { revoked: 0, always: identity, sessions: { conversation: { identity, decision: 'allow', revision: 1 } } },
+  } }))
+  await first.ctx.fiber.dispose()
+  const resumed = await f.open()
+  const stored = await resumed.store.withState(signal, transaction => transaction.state.applications[grant.id])
+  expect(stored?.always).toEqual(identity)
+  expect(stored?.sessions.conversation?.identity).toEqual(identity)
+})
+
 it.skipIf(process.platform === 'win32')('uses the same profile identity through a directory symlink', async () => {
   const f = await setup(), a = await f.open(f.directory, [grant])
   await a.store.withState(signal, transaction => transaction.state)
@@ -135,6 +148,15 @@ it('uses temporary decisions only without a profile and fails when profile stora
   const f = await setup(), a = await f.open()
   await a.domain.dispose()
   await expect(a.store.withState(signal, transaction => transaction.state)).rejects.toThrow('require storageDomain')
+})
+
+it('does not enter authorization or dispatch when the profile directory cannot be resolved', async () => {
+  const f = await setup(), a = await f.open()
+  await rm(f.directory, { recursive: true })
+  let entered = 0
+  await expect(a.store.withState(signal, () => { entered += 1 })).rejects.toMatchObject({ code: 'ENOENT' })
+  await expect(a.store.withApplication(grant.id, signal, async () => { entered += 1 })).rejects.toMatchObject({ code: 'ENOENT' })
+  expect(entered).toBe(0)
 })
 
 it('keeps storage reads and other applications available while one native operation holds its lease', async () => {

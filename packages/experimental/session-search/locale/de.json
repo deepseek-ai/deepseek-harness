@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Sitzungssuche",
-    "description": "Geben Sie Agenten Tools an die Hand, mit denen sie frühere Sitzungen im aktuellen Arbeitsbereich durchsuchen und lesen können.",
+    "description": "Fragen Sie nach früherer Arbeit, etwa „Wie haben wir letzte Woche das Pool-Leck behoben?“, und der Agent durchsucht Ihre früheren Sitzungen aus demselben Arbeitsverzeichnis, um zu antworten.",
     "detail": "docs/DETAIL.md"
   }
 }

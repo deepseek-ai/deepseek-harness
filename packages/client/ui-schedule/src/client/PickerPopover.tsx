@@ -1,13 +1,10 @@
 /** Anchored, outside-dismissed popover shell the timing pickers share. */
 import { useRef } from 'react'
-import type { CSSProperties, ReactNode, RefObject } from 'react'
+import type { ReactNode, RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
-import { useAnchoredPosition, useDismissOnOutsidePointer } from '@deepseek-ai/dsh-client-ui-primitives'
+import { useDismissOnOutsidePointer } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './PickerPopover.module.css'
-
-/** Unplaced portal frame: laid out at the viewport origin but unpainted until measured. */
-const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
 
 /** Inputs of the picker shell. */
 export interface PickerPopoverProps {
@@ -15,6 +12,8 @@ export interface PickerPopoverProps {
   readonly open: boolean
   /** The row's trigger button, which anchors the panel and counts as inside for dismissal. */
   readonly anchorRef: RefObject<HTMLElement | null>
+  /** CSS anchor name assigned to the trigger. */
+  readonly anchorName: string
   /** Accessible name of the panel. */
   readonly label: string
   /** Layout class of this picker's contents.
@@ -34,16 +33,15 @@ export interface PickerPopoverProps {
  * @param props - open state, the trigger, the panel name and layout class, the dismissal callback, and the contents.
  * @returns the panel while open, and nothing while closed.
  */
-export function PickerPopover({ open, anchorRef, label, className, onClose, children }: PickerPopoverProps): ReactNode {
+export function PickerPopover({ open, anchorRef, anchorName, label, className, onClose, children }: PickerPopoverProps): ReactNode {
   const panelRef = useRef<HTMLDivElement>(null)
   useDismissOnOutsidePointer(anchorRef, open, onClose, panelRef)
-  const position = useAnchoredPosition({ open, anchorRef, panelRef, gap: 4, margin: 12 })
   if (!open) return null
   return createPortal(
     <div
       ref={panelRef}
       className={clsx(css.panel, className)}
-      style={position ?? MEASURE_STYLE}
+      style={{ positionAnchor: anchorName }}
       // The rows that open a picker declare `aria-haspopup="dialog"`, so the
       // panel is the dialog they announce, named by the row's own label.
       role="dialog"

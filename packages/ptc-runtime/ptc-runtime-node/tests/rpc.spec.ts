@@ -167,7 +167,7 @@ it('bounds the native writable queue and rejects all outstanding calls on overfl
   expect((await results).every(result => result.status === 'rejected')).toBe(true)
 })
 
-it.each(['error', 'close'] as const)('rejects a pending call on transport %s', async (event) => {
+it.each(['error', 'close', 'end'] as const)('rejects a pending call and distinguishes transport %s', async (event) => {
   const entered = Promise.withResolvers<undefined>()
   const stream = new Duplex({ read() {}, write(_chunk, _encoding, _callback) { entered.resolve(undefined) } })
   const failed = Promise.withResolvers<string>()
@@ -178,6 +178,6 @@ it.each(['error', 'close'] as const)('rejects a pending call on transport %s', a
   const rejected = expect(endpoint.wait()).rejects.toThrow('closed')
   await entered.promise
   stream.emit(event, new Error('transport failed'))
-  expect(await failed.promise).toBe('io')
+  expect(await failed.promise).toBe(event === 'error' ? 'io' : 'closed')
   await rejected
 })

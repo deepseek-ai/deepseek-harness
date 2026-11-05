@@ -22,6 +22,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
+import { acceptsNpmPlatform } from '../npm-platform.ts'
 import { releaseFamily } from './families.ts'
 import { capture, isEntry } from './process.ts'
 import { packedManifest } from './tarball.ts'
@@ -45,19 +46,6 @@ function consumerEnvironment(consumerRoot: string): NodeJS.ProcessEnv {
   return environment
 }
 
-function acceptsPlatform(value: unknown, current: string): boolean {
-  if (value === undefined) return true
-  if (!Array.isArray(value) || !value.every((tag): tag is string => typeof tag === 'string')) {
-    throw new Error('packed platform constraints must be arrays of strings')
-  }
-  let accepted = value.every(tag => tag.startsWith('!'))
-  for (const tag of value) {
-    if (tag === `!${current}`) return false
-    if (tag === current || (tag === 'any' && value.length === 1)) accepted = true
-  }
-  return accepted
-}
-
 /**
  * Packed tarballs and their compatibility with the verification host, as `file:` dependency entries.
  *
@@ -77,7 +65,7 @@ function packedDependencies(directories: readonly string[]): Map<string, { url: 
       const manifest = packedManifest(tarball)
       const { name, version } = manifest
       if (typeof name !== 'string' || typeof version !== 'string') throw new Error(`${tarball} manifest lacks name/version`)
-      const compatible = acceptsPlatform(manifest.os, process.platform) && acceptsPlatform(manifest.cpu, process.arch)
+      const compatible = acceptsNpmPlatform(manifest.os, process.platform) && acceptsNpmPlatform(manifest.cpu, process.arch)
       dependencies.set(name, { url: pathToFileURL(tarball).href, version, compatible })
     }
   }

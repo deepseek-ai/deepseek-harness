@@ -1,0 +1,14 @@
+{"type":"session","version":4,"id":"{{session:4}}","createdAt":1000,"cwd":"{{cwd}}","parentSession":"{{session:3}}","isSeeded":false,"origin":"subagent","delegationDepth":3}
+{"type":"subagent/descriptor","data":{"version":3,"mode":"continuable","provider":"spawn","label":"{{session:4}}","agentProvider":"deepseek-official","agentModel":"deepseek-v4-flash"}}
+{"type":"sandbox/mode","data":{"mode":"danger-full-access","source":"delegation"}}
+{"type":"approval/policy","data":{"policy":"never","source":"delegation"}}
+{"type":"permission/preset","data":{"preset":"danger-full-access"}}
+{"type":"agent/inbox/spliced","data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Reply with DONE."}],"source":{"kind":"user"},"role":"user","id":"{{message:15}}"}]}}
+{"type":"turn/start","data":{"turn":1}}
+{"type":"agent/inbox/spliced","data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}
+{"type":"turn/end","data":{"turn":1,"reason":{"kind":"aborted","reason":{"kind":"parent"}}}}
+{"type":"session/end-seed","data":{}}
+{"type":"agent/inbox/spliced","data":{"target":"next-step","start":0,"inserted":[{"content":[{"type":"text","text":"Agent lead sent a message: "},{"type":"text","text":"Continue."}],"source":{"kind":"agent-message","form":"relay","senderSessionId":"{{session:1}}"},"role":"user","id":"{{message:16}}"}]}}
+{"type":"turn/start","data":{"turn":2}}
+{"type":"agent/inbox/spliced","data":{"target":"next-step","start":0,"removedCount":1,"inserted":[]}}
+{"type":"turn/end","data":{"turn":2,"reason":{"kind":"blocked"}}}

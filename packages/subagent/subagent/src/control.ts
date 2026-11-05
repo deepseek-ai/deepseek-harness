@@ -14,15 +14,11 @@ import { SubagentError } from './error.ts'
 const SESSION_ID_SCHEMA = z.string().min(1)
 const CONTROL_ID_SCHEMAS = {
   'subagent.prompt': z.object({
-    parentSessionId: SESSION_ID_SCHEMA,
     childSessionId: SESSION_ID_SCHEMA,
-    mode: z.literal('continuable'),
     delivery: z.enum(['queue', 'steer']),
   }),
   'subagent.interrupt': z.object({
-    parentSessionId: SESSION_ID_SCHEMA,
     childSessionId: SESSION_ID_SCHEMA,
-    mode: z.literal('continuable'),
   }),
 } as const
 
@@ -79,7 +75,7 @@ export function rejectPrompt(error: unknown, childSessionId: SessionId, signal: 
       case 'UNAUTHORIZED':
         throw new RemoteError(
           'subagent/unauthorized',
-          'subagent does not belong to this parent',
+          'subagent membership in the active tree could not be verified',
           { childSessionId },
           { cause: error },
         )

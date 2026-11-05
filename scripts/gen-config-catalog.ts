@@ -504,6 +504,26 @@ function schemaObjectFields(
   world: World, ctx: FileCtx, expression: ts.Expression, where: string, violations: string[], aliases: Set<string>,
 ): Map<string, { ctx: FileCtx; value?: ts.Expression }> {
   const expr = unwrapExpr(expression)
+  if (ts.isPropertyAccessExpression(expr) && expr.name.text === 'dict' && ts.isIdentifier(expr.expression)) {
+    const name = expr.expression.text
+    const identity = `${ctx.abs}#${name}`
+    if (aliases.has(identity)) {
+      violations.push(`${where}: cyclic schema alias '${name}' in ${ctx.rel}.`)
+      return new Map()
+    }
+    try {
+      const target = schemaAlias(world, ctx, name)
+      const object = unwrapExpr(target.expr)
+      if (!ts.isCallExpression(object) || !ts.isPropertyAccessExpression(object.expression)
+        || object.expression.name.text !== 'object' || !object.arguments[0]) {
+        throw new Error(`schema spread '${expr.getText(ctx.sf)}' must refer directly to an object schema`)
+      }
+      return schemaObjectFields(world, target.ctx, object.arguments[0], where, violations, new Set([...aliases, identity]))
+    } catch (error) {
+      violations.push(`${where}: ${error instanceof Error ? error.message : String(error)}.`)
+      return new Map()
+    }
+  }
   if (ts.isIdentifier(expr)) {
     const identity = `${ctx.abs}#${expr.text}`
     if (aliases.has(identity)) {
@@ -514,7 +534,7 @@ function schemaObjectFields(
       const target = schemaAlias(world, ctx, expr.text)
       return schemaObjectFields(world, target.ctx, target.expr, where, violations, new Set([...aliases, identity]))
     } catch (error) {
-      violations.push(`${where}: ${error instanceof Error ? error.message : String(error)}.`)
+      violations.push(`${where}: object schema fields: ${error instanceof Error ? error.message : String(error)}.`)
       return new Map()
     }
   }
@@ -540,7 +560,7 @@ function schemaObjectFields(
  * packages whose schemas an intersect composes. A key path is the top-level
  * key or a nested path through object/array compositions (`agents[].id`).
  * Handles object/union calls, chained refinements, named const schema imports
- * through public workspace source paths, and `z.intersect([X.Config, …])`; errors on
+ * through public workspace source paths, object-schema dict spreads, and `z.intersect([X.Config, …])`; errors on
  * anything else, so a schema the walk cannot see fails the gate instead of
  * silently thinning it. Nested values that are neither `object` nor `array`
  * compositions (primitives, unions, dynamic-key dicts) contribute no paths.

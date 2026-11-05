@@ -17,6 +17,8 @@ import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
 import Hmr from '@deepseek-ai/dsh-hmr'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
+import { CuaConfig } from '@deepseek-ai/dsh-cua'
+import { createConfigProjector } from '@deepseek-ai/dsh-app-boot/src/config-schema/projector.ts'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import FileSystem from '@deepseek-ai/dsh-fs-local'
 import UserQuestions from '@deepseek-ai/dsh-user-questions'
@@ -59,12 +61,37 @@ vi.mock('@deepseek-ai/dsh-cua/native-client', async importOriginal => ({
 }))
 
 const config = {
+  permissionPollIntervalMs: 1000,
   agentPreset: false,
-  helperPath: resolve('fixture-helper'), buildTimeoutMs: 300_000, timeoutMs: 10_000, connectTimeoutMs: 5000, screenshotTimeoutMs: 5000, axTimeoutMs: 3000, maxRequestBytes: 1024, maxResponseBytes: 4096, maxClipboardBytes: 8192, pasteReadTimeoutMs: 1000, maxAppMatches: 20,
+  helperPath: resolve('fixture-helper'), sourceSigning: 'ad-hoc', buildTimeoutMs: 300_000, timeoutMs: 10_000, connectTimeoutMs: 5000, screenshotTimeoutMs: 5000, axTimeoutMs: 3000, maxRequestBytes: 1024, maxResponseBytes: 4096, maxClipboardBytes: 8192, pasteReadTimeoutMs: 1000, maxAppMatches: 20,
   graceMs: 10, textEventIntervalMs: 8, maxClickHoldMs: 7000, maxElements: 64, maxDepth: 8, dragDurationMs: 200, dragSteps: 10,
 } satisfies Omit<NativeProvider.Config, 'allowedApps'>
 
 const { helperPath: _helperPath, ...automaticConfig } = config
+
+it('defaults to ad-hoc signing and requires a keychain path for certificate signing', () => {
+  expect(NativeProvider.Config({}).sourceSigning).toBe('ad-hoc')
+  expect(NativeProvider.Config({ sourceSigning: 'ad-hoc' }).sourceSigning).toBe('ad-hoc')
+  for (const sourceSigning of [{ identity: 'Apple Development: Example', keychain: '/keychains/custom.keychain-db' }, { identity: 'ABC123', keychain: '/keychains/custom.keychain-db' }]) {
+    expect(NativeProvider.Config({ sourceSigning }).sourceSigning).toEqual(sourceSigning)
+  }
+  for (const sourceSigning of ['local-identity', 'developer-id', {}, { identity: 'Example' }, { identity: '' }, { identity: ' ' }, { identity: 'Example', keychain: 'relative' }, ...['-', '--help', '-Example', ' Example'].map(identity => ({ identity, keychain: '/keychains/custom.keychain-db' }))]) {
+    expect(() => NativeProvider.Config({ sourceSigning } as never)).toThrow()
+  }
+})
+
+it('projects shared controls and macOS signing without adding signing to the shared schema', async () => {
+  const project = await createConfigProjector()
+  const projected = project(NativeProvider.Config, 'cua-macos')
+  for (const field of ['sourceSigning', 'permissionPollIntervalMs', 'agentPreset', 'helperPath']) {
+    expect(projected.schema.anyOf?.[0]).toHaveProperty(`properties.${field}`)
+  }
+  expect(CuaConfig({})).not.toHaveProperty('sourceSigning')
+  expect(CuaConfig.dict).not.toHaveProperty('sourceSigning')
+  expect(NativeProvider.Config({ sourceSigning: 'ad-hoc', timeoutMs: 1234 })).toMatchObject({
+    agentPreset: 'ptc', sourceSigning: 'ad-hoc', permissionPollIntervalMs: 1000, timeoutMs: 1234,
+  })
+})
 
 it('defaults the explicit click hold limit to five seconds and accepts a configured zero or larger limit', () => {
   expect(NativeProvider.Config({}).maxClickHoldMs).toBe(5000)
@@ -588,6 +615,7 @@ it('prepares the selected native component before registering CUA and creates no
   native.prepare.mockReset().mockResolvedValue(resolve('prepared-helper'))
   await NativeProvider.apply(f.ctx, { ...automaticConfig, allowedApps: [] })
   expect(native.prepare).toHaveBeenCalledTimes(1)
+  expect(native.prepare.mock.calls[0]![0].sourceSigning).toBe('ad-hoc')
   expect(native.instances).toHaveLength(0)
   await f.execute()
   expect(native.instances).toHaveLength(1)
@@ -663,7 +691,7 @@ it('rejects an unsupported native host before starting preparation', async () =>
 })
 
 
-async function permissionProfile(allowedApps: Array<{ id: string; name: string; executablePath: string }> = []) {
+async function permissionProfile(allowedApps: Array<{ id: string; name: string; executablePath?: string }> = []) {
   const f = await setup()
   await f.provider.dispose()
   const home = await mkdtemp(join(tmpdir(), 'cua-grant-profile-')), dir = join(home, 'profile')
@@ -715,13 +743,13 @@ it('stores revocation without entering the HMR configuration queue', async () =>
   await blocked
 })
 
-it('stores signed application consent separately from configuration', async () => {
+it.each([true, false])('stores persistable application consent separately from configuration (path present: %s)', async (hasPath) => {
   const f = await permissionProfile(), { profile } = f
   expect(f.ctx.settings.describe().find(row => row.ns === 'cua')).toBeUndefined()
   await f.ctx.plugin(UserQuestions)
   f.ctx.on('user-questions/request', async () => ({ answers: [{ id: 'cua-app-access', selected: ['Always allow'] }] }))
-  const authorization = { id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app', persistable: true }
-  native.request.mockResolvedValue({ appHandle: 'signed-app', name: 'Fixture', running: true, authorization })
+  const authorization = { id: 'a'.repeat(64), name: 'Fixture', ...(hasPath ? { executablePath: '/fixture/app' } : {}), persistable: true }
+  native.request.mockResolvedValue({ appHandle: 'signed-app', running: true, name: 'Fixture', authorization })
   expect((await f.execute('getApp', { selector: 'Fixture' })).isError).toBe(false)
   expect(await readFile(profile.patchPath, 'utf8')).not.toContain(authorization.id)
   const files = await readdir(join(profile.home, 'storages'))
@@ -746,10 +774,10 @@ it('rejects an application handle before any helper or consent has been acquired
   expect(native.request).not.toHaveBeenCalled()
 })
 
-it('uses configured signed application grants without requesting a human answer', async () => {
+it.each([true, false])('uses configured grants without requesting a human answer (path present: %s)', async (hasPath) => {
   const f = await setup()
   await f.provider.dispose()
-  const grant = { id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app' }
+  const grant = { id: 'a'.repeat(64), name: 'Fixture', ...(hasPath ? { executablePath: '/fixture/app' } : {}) }
   await f.ctx.plugin(NativeProvider, { ...config, allowedApps: [grant] })
   native.request.mockResolvedValueOnce({ appHandle: 'saved-app', name: 'Fixture', running: true, authorization: { ...grant, persistable: true } })
   expect((await f.execute('getApp', { selector: 'Fixture' })).isError).toBe(false)
@@ -774,4 +802,21 @@ it('retires failed cleanup without replaying an operation or retaining old handl
   native.request.mockResolvedValueOnce([])
   expect((await f.execute()).isError).toBe(false)
   expect(native.instances).toHaveLength(2)
+})
+
+it('routes permission actions through the macOS provider with the Client language and configured interval', async () => {
+  const f = await setup()
+  native.request.mockResolvedValueOnce({ platform: 'darwin', accessibility: false, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } })
+  await f.ctx.cuaAccess.requestPermission('accessibility', 'zh')
+  expect(native.request).toHaveBeenLastCalledWith('requestPermission', {
+    permission: 'accessibility', pollIntervalMs: 1000,
+    instruction: '将 {application} 拖入上方列表以允许辅助功能', backLabel: '返回', finderLabel: '在 Finder 中显示',
+    unavailableMessage: '找不到此应用。请重新启用 Computer Use 后重试',
+    settingsMessage: '请手动打开系统设置 > 隐私与安全性 > 辅助功能',
+  }, expect.any(AbortSignal))
+  native.request.mockResolvedValueOnce({ opened: true })
+  await f.ctx.cuaAccess.openSettings('screenRecording', 'en')
+  expect(native.request).toHaveBeenLastCalledWith('openPermissionSettings', {
+    permission: 'screenRecording', settingsMessage: 'Open System Settings > Privacy & Security > Screen Recording manually.',
+  }, expect.any(AbortSignal))
 })

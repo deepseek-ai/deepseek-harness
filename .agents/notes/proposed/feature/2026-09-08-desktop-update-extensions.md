@@ -29,16 +29,7 @@ Do not use `0.1.3-dsk.1` to repair stable `0.1.3`: SemVer orders it below the st
 
 ### Stable subscription and channel switching
 
-| User option | Feed | Release contents |
-|---|---|---|
-| Stable | `latest.yml` / `latest-mac.yml` | Stable only |
-| Nightly | `nightly.yml` / `nightly-mac.yml` | Alpha, rc, and stable |
-
-The [initial publication rule](2026-09-08-desktop-update-policy-and-installation.md) adds the stable feed when shared stable releases exist, without switching fixed-Nightly clients. A user-facing stable subscription and selector remain deferred. If enabled, persist the selected channel; never infer it from the installed version. Preserve `allowDowngrade = false` when assigning the updater channel. Moving from Nightly to stable keeps a higher installed Nightly until a higher stable version exists, without downgrading Desktop or bundled dsh.
-
-Channel switching may immediately check; download behavior must follow the approved setting. Ignore old-channel responses and reconfirm downloaded artifacts against the new channel before installation. A channel change does not clear mandatory blocking without a valid policy response for the new conditions. Display a persistent Nightly explanation under the selector, with candidate Chinese copy “提前体验新功能，版本可能不稳定。”; hide it after selecting stable, while separately explaining any wait for a higher stable version.
-
-Design compatibility only for Desktop packages actually distributed. If a future migration has real clients reading `alpha.yml` or `rc.yml`, publish a higher bridge version to the old feed and Nightly until the old entry can be retired. No such bridge is required initially.
+This part of the proposal is superseded by [Desktop channel settings](../../../../apps/desktop/README.md#local-desktop-settings) and the [packaging channel policy](../../../../apps/desktop/packaging/README.md). The implemented selector persists explicit user choices; publishers select versions independently of channel names, and channel changes do not permit downgrades.
 
 ### Automatic-installation setting
 

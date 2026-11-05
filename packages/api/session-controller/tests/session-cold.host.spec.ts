@@ -11,7 +11,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import SessionStore from '@deepseek-ai/dsh-session'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
-import { SessionHistoryController } from '@deepseek-ai/dsh-api-session-controller/src/history.ts'
 import { subagentIdentityProjectionDefinition } from '@deepseek-ai/dsh-subagent/src/projection.ts'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import { createUserMessage, MessageId } from '@deepseek-ai/dsh-llm'
@@ -276,7 +275,8 @@ describe('attached updatedAt tracks human prompts', () => {
     const listed = await remote.list(request({}))
     if (!listed.ok) throw new Error('list failed')
     const summary = listed.value.items.find(item => item.sessionId === 'resumed-untouched')
-    expect(summary?.updatedAt).toBe(500)
+    // The resumed log's last human prompt, not its creation time or the later pickup.
+    expect(summary?.updatedAt).toBe(worked)
 
     // A lifecycle boundary is not a human update.
     resumed.append('turn/start', { turn: 2 })
@@ -574,10 +574,7 @@ describe('subagent ownership fence', () => {
     const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
     await ctx.sessionProjections.register(subagentIdentityProjectionDefinition)
 
-    const history = await new SessionHistoryController(
-      ctx,
-      (observation) => { observation[Symbol.dispose]() },
-    ).page({
+    const history = await ctx.sessionController.events({
       address: {
         kind: 'subagent',
         parentSessionId: meta.parentSession as SessionId,
@@ -676,10 +673,10 @@ describe('subagent ownership fence', () => {
     await ctx.agents.register(originChild)
 
     const startingSession = ctx.sessions.create(sid('session-starting-child'), {
-      meta: { cwd: '/proj', parentSession: parent.id },
+      meta: { cwd: '/proj', parentSession: parent.id, origin: 'subagent' },
     })
     const startingChild = { id: startingSession.id, session: startingSession, status: 'idle', ctx } as Agent
-    ctx.agents.enter(startingChild, parent)
+    ctx.agents.enter(startingChild)
     const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
 
     const stopped = await remote.cancel(request({ sessionId: originChild.id }))
@@ -878,7 +875,7 @@ async function modelFor(ctx: Context, session: Session): Promise<AgentModel> {
 }
 
 describe('sessions.prompt synchronous rejection', () => {
-  it('rejects content without non-whitespace text or an attachment before delivery or Session events', async () => {
+  it('rejects whitespace-only text parts before delivery or Session events', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
@@ -928,7 +925,6 @@ describe('sessions.prompt synchronous rejection', () => {
     })
     const initialEvents = session.snapshotEvents()
     const rejectedContent: readonly SessionPromptRequest['content'][] = [
-      [],
       [{ type: 'text', text: '' }],
       [{ type: 'text', text: ' \t\n' }, { type: 'text', text: '' }],
     ]

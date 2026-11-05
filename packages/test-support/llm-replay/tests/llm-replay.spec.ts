@@ -1418,7 +1418,7 @@ describe('installLlmReplay (through the real LlmRuntime)', () => {
               systemPromptUpdate: 'in-history',
               toolUpdate: 'addition-only',
             },
-            { id: 'pro', name: 'Pro', description: 'Larger model', reasoningEfforts: ['high'] },
+            { id: 'pro', name: 'Pro', description: 'Larger model', reasoningEfforts: ['high'], badge: { text: { en: 'New', zh: '新' }, tone: 'info' } },
           ],
         },
         { id: 'empty' },
@@ -1431,7 +1431,7 @@ describe('installLlmReplay (through the real LlmRuntime)', () => {
     ])
     await expect(ctx.llm.listModels('deepseek')).resolves.toEqual([
       { provider: 'deepseek', id: 'flash', name: 'flash', inputModalities: ['text', 'image'] },
-      { provider: 'deepseek', id: 'pro', name: 'Pro', description: 'Larger model' },
+      { provider: 'deepseek', id: 'pro', name: 'Pro', description: 'Larger model', badge: { text: { en: 'New', zh: '新' }, tone: 'info' } },
     ])
     await expect(ctx.llm.listModels('empty')).resolves.toEqual([])
     await expect(ctx.llm.resolveModelInfo('deepseek', 'flash')).resolves.toMatchObject({
@@ -2031,7 +2031,7 @@ describe('installLlmReplay (per-session keying)', () => {
           type: 'tool-call',
           id: ToolCallId('send-child'),
           name: 'send_message',
-          arguments: '{"agent_id":"{{session:2}}"}',
+          arguments: '{"agent":"{{session:2}}"}',
         },
       },
       { type: 'finish', reason: { kind: 'stop' } },
@@ -2052,7 +2052,7 @@ describe('installLlmReplay (per-session keying)', () => {
           type: 'tool-call',
           id: ToolCallId('send-child'),
           name: 'send_message',
-          arguments: '{"agent_id":"live-child"}',
+          arguments: '{"agent":"live-child"}',
         },
       },
       { type: 'finish', reason: { kind: 'stop' } },
@@ -2071,45 +2071,6 @@ describe('installLlmReplay (per-session keying)', () => {
     installLlmReplay(ctx, { file: parentFile, childFiles: [childFile] })
 
     await expect(drain(ctx.llm.stream(live('live-parent')))).rejects.toThrow(/used before.*bound/)
-  })
-
-  it('learns a background child id from its started-subagent tool result', async () => {
-    const reference: StreamChunk[] = [
-      { type: 'text-delta', index: 0, text: '{{session:2}}' },
-      { type: 'finish', reason: { kind: 'stop' } },
-    ]
-    const parentFile = writeSession('session.jsonl', { id: '{{session:1}}', createdAt: 1 }, [reference])
-    const childFile = writeSession('session.1.jsonl', { id: '{{session:2}}', createdAt: 2 }, [second])
-    const ctx = new Context()
-    await ctx.plugin(LlmRuntime)
-    installLlmReplay(ctx, { file: parentFile, childFiles: [childFile] })
-    const options: GenerateOptions = {
-      ...live('live-parent'),
-      messages: [createUserMessage({
-        content: [{ type: 'text', text: 'started subagent live-child-before-call started subagent live-child-before-call' }],
-        source: { kind: 'user' },
-      })],
-    }
-
-    expect(await drain(ctx.llm.stream(options))).toEqual([
-      { type: 'text-delta', index: 0, text: 'live-child-before-call' },
-      { type: 'finish', reason: { kind: 'stop' } },
-    ])
-  })
-
-  it('ignores started-subagent text after every recorded session has bound', async () => {
-    const parentFile = writeSession('session.jsonl', { id: '{{session:1}}', createdAt: 1 }, [TEXT_CHUNKS])
-    const ctx = new Context()
-    await ctx.plugin(LlmRuntime)
-    installLlmReplay(ctx, { file: parentFile })
-
-    expect(await drain(ctx.llm.stream({
-      ...live('live-parent'),
-      messages: [createUserMessage({
-        content: [{ type: 'text', text: 'started subagent unrecorded-child' }],
-        source: { kind: 'user' },
-      })],
-    }))).toEqual(TEXT_CHUNKS)
   })
 
   it('treats a call with no sessionId as the single anonymous (primary) session', async () => {
@@ -2235,6 +2196,18 @@ describe('apply (the plugin entry)', () => {
     expect(() => { apply(ctx, { file, providers }) }).toThrow(
       'llm-replay: provider "m" model "m" toolUpdate must be "in-history" or "addition-only" when present',
     )
+  })
+
+  it.each([
+    ['a non-object', '1017'],
+    ['blank text', { text: ' ', tone: 'info' }],
+    ['translations without English', { text: { zh: '新' }, tone: 'info' }],
+    ['a blank translation', { text: { en: 'New', zh: '' }, tone: 'info' }],
+    ['an unknown tone', { text: '1017', tone: 'accent' }],
+  ])('rejects a badge with %s during load', (_case, badge) => {
+    const ctx = new Context()
+    const providers: NonNullable<Config['providers']> = [{ id: 'm', models: [{ id: 'm', badge: badge as never }] }]
+    expect(() => { apply(ctx, { file, providers }) }).toThrow('llm-replay: provider "m" model "m" badge needs non-blank text')
   })
 
   it('rejects an unknown systemPromptUpdate mode during load', () => {

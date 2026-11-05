@@ -41,8 +41,8 @@ describe('Fiber configuration access', () => {
     const wrapper = ctx.plugin(apply, initial)
     await wrapper
     const fiber = wrapper.ctx.fiber
-    const hook = vi.fn(function (this: Fiber, _config: unknown, next: () => unknown) {
-      expect(this).toBe(fiber)
+    const hook = vi.fn((target: Fiber, next: () => unknown) => {
+      expect(target).toBe(fiber)
       return next()
     })
     fiber.ctx.on('internal/config', hook)
@@ -66,7 +66,7 @@ describe('Fiber configuration access', () => {
     const wrapper = ctx.plugin(apply, initial)
     await wrapper
     const raw = { value: 2 }
-    wrapper.update(raw)
+    await wrapper.update(raw)
     await wrapper.await()
     expect(apply).toHaveBeenLastCalledWith(wrapper.ctx, raw)
     expect(wrapper.rawConfig).toBe(raw)
@@ -78,14 +78,13 @@ describe('Fiber configuration access', () => {
 
   it('retains a pending raw update until its injection is available', async () => {
     const ctx = root()
-    ctx.provide('configAccessTest')
     const apply = vi.fn()
     const wrapper = ctx.plugin({ inject: ['configAccessTest'], apply }, { value: 1 })
     const raw = { value: 2 }
-    wrapper.update(raw)
+    await wrapper.ctx.fiber.update(raw)
     expect(wrapper.rawConfig).toBe(raw)
     expect(wrapper.effectiveConfig).toBeUndefined()
-    ctx.set('configAccessTest', {})
+    ctx.provide('configAccessTest', {})
     await wrapper
     expect(wrapper.effectiveConfig).toBe(raw)
     expect(apply).toHaveBeenCalledOnce()

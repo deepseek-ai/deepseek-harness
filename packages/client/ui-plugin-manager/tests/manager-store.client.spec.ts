@@ -25,7 +25,6 @@ const BUNDLE: BundleInfo = {
   source: 'dsh-better-sidebar@^0.16.0',
   optional: false,
   removable: true,
-  updatable: false,
   rows: [{ rowId: 'sidebar', moduleName: 'dsh-better-sidebar', entryId: ROW_ENTRY }, { rowId: 'theme', moduleName: 'dsh-better-sidebar/theme' }],
   overrides: [],
 }
@@ -48,9 +47,11 @@ const INSPECTED = { status: 'accepted' as const, kind: 'registry' as const, name
 const APPLIED: ChangeResult = { changed: true, application: 'applied', stage: 'enable', target: 'dsh-better-sidebar' }
 
 /** A change the Host could not apply, with the refusal it names. */
-function failed(error?: ManagementError, packageResult?: ChangeResult['packageResult']): ChangeResult {
+function failed(
+  error?: ManagementError, packageResult?: ChangeResult['packageResult'], facts: Pick<ChangeResult, 'stage' | 'enabled'> = { stage: 'install' },
+): ChangeResult {
   return {
-    changed: false, application: 'failed', stage: 'enable', target: 'dsh-better-sidebar',
+    changed: false, application: 'failed', target: 'dsh-better-sidebar', ...facts,
     ...error === undefined ? {} : { error }, ...packageResult === undefined ? {} : { packageResult },
   }
 }
@@ -130,7 +131,7 @@ describe('packageView', () => {
   it('joins a bundle with the entries its rows run as', () => {
     expect(packageView(BUNDLE, PLUGINS)).toEqual({
       name: 'dsh-better-sidebar', version: '0.16.0', description: 'A sidebar.', source: 'dsh-better-sidebar@^0.16.0',
-      installed: true, official: false, availability: 'profile', optional: false, removable: true, updatable: false, enabled: false,
+      installed: true, official: false, availability: 'profile', optional: false, removable: true, enabled: false,
       rows: [
         { rowId: 'sidebar', moduleName: 'dsh-better-sidebar', entryId: ROW_ENTRY, enabled: true, phase: 'active' },
         { rowId: 'theme', moduleName: 'dsh-better-sidebar/theme', enabled: false, phase: null },
@@ -138,13 +139,13 @@ describe('packageView', () => {
     })
     // A row the inventory no longer lists, a protected row, and a bundle the Host cannot read.
     const protectedBundle: BundleInfo = {
-      name: '@deepseek-ai/dsh-base', enabled: true, installed: false, official: false, availability: 'installation', optional: false, removable: false, updatable: false, readOnlyReason: 'management-required',
+      name: '@deepseek-ai/dsh-base', enabled: true, installed: false, official: false, availability: 'installation', optional: false, removable: false, readOnlyReason: 'management-required',
       error: { code: 'operation-error', diagnostic: 'broken' },
       rows: [{ rowId: 'core', moduleName: '@deepseek-ai/dsh-base', entryId: 'include:core' as PluginEntryId }, { rowId: 'gone', moduleName: 'x', entryId: 'include:gone' as PluginEntryId }],
       overrides: [],
     }
     expect(packageView(protectedBundle, PLUGINS)).toEqual({
-      name: '@deepseek-ai/dsh-base', installed: false, official: false, availability: 'installation', optional: false, removable: false, updatable: false, enabled: true, readOnlyReason: 'management-required',
+      name: '@deepseek-ai/dsh-base', installed: false, official: false, availability: 'installation', optional: false, removable: false, enabled: true, readOnlyReason: 'management-required',
       error: { code: 'operation-error', diagnostic: 'broken' },
       rows: [
         { rowId: 'core', moduleName: '@deepseek-ai/dsh-base', entryId: 'include:core', enabled: true, phase: 'active', readOnlyReason: 'management-required' },
@@ -156,7 +157,7 @@ describe('packageView', () => {
 
 describe('sortPackages', () => {
   it('orders packages by the short name a person reads, not by the Host order or enablement', async () => {
-    const plain = { enabled: true, installed: true, official: false, availability: 'profile' as const, optional: false, removable: true, updatable: false, rows: [], overrides: [] }
+    const plain = { enabled: true, installed: true, official: false, availability: 'profile' as const, optional: false, removable: true, rows: [], overrides: [] }
     const zeta: BundleInfo = { ...plain, name: 'dsh-zeta' }
     const alpha: BundleInfo = { ...plain, name: '@acme/dsh-alpha', enabled: false }
     const views = [zeta, BUNDLE, alpha].map(bundle => packageView(bundle, PLUGINS))
@@ -655,13 +656,14 @@ describe('PluginManagerController', () => {
     gate.resolve(ok({ ...APPLIED, bundle: 'dsh-new', version: '1.0.0' }))
     await vi.waitFor(() => { expect(state().install.phase).toBe('done') })
     expect(state().install).toMatchObject({ installed: 'dsh-new', installedVersion: '1.0.0', restartRequired: false, detailsOpen: true })
-    // The finished install settled its run; a trailing last chunk still lands
-    // on it, while a chunk for a run the dialog never saw is dropped.
+    // The answer and the log travel over separate transports: the settled dialog keeps a trailing chunk of a
+    // known run, and a run whose first chunk arrived after the answer settles with the outcome, not as running.
     controller.appendLog({ requestId, jobId: 'j1', argv, cwd: '/p', stream: 'stdout', text: '', exitCode: 0 })
-    controller.appendLog({ requestId, jobId: 'j3', argv, cwd: '/p', stream: 'stdout', text: 'stray' })
+    controller.appendLog({ requestId, jobId: 'j3', argv, cwd: '/p', stream: 'stdout', text: 'late diagnostic' })
     expect(state().install.runs).toEqual([
       { jobId: 'j1', command: 'pnpm add dsh-new', cwd: '/p', output: 'Progress\nDone\n', exitCode: 0 },
       { jobId: 'j2', command: 'pnpm remove lib', cwd: '/p', output: '- lib\n', exitCode: 0 },
+      { jobId: 'j3', command: 'pnpm add dsh-new', cwd: '/p', output: 'late diagnostic', exitCode: null },
     ])
     await vi.waitFor(() => { expect(plugins.listBundles).toHaveBeenCalledTimes(2) })
     // Cancelling from the finished screen does nothing, nor does the Host's late progress; a new spec after it starts over.
@@ -766,7 +768,7 @@ describe('PluginManagerController', () => {
 
   it('accepts a bundled package without optional version or description and reports a lost activation reply', async () => {
     const shipped: BundleInfo = { name: '@acme/shipped-exploration', installed: false, official: true, enabled: false,
-      availability: 'installation', optional: true, removable: false, updatable: false, listedByDefault: false, rows: [], overrides: [] }
+      availability: 'installation', optional: true, removable: false, listedByDefault: false, rows: [], overrides: [] }
     const { plugins, face, state, controller } = bench({
       listBundles: vi.fn(() => Promise.resolve(ok([shipped]))),
       setBundleEnabled: vi.fn(() => Promise.resolve(refused('gateway/internal', 'offline'))),
@@ -815,7 +817,7 @@ describe('PluginManagerController', () => {
     face.editInstallSpec('dsh-x')
     face.runInstall()
     await vi.waitFor(() => { expect(state().install.phase).toBe('failed') })
-    expect(state().install.failure).toEqual({ reason: 'ERR', code: 'operation-error', kind: 'network' })
+    expect(state().install.failure).toEqual({ reason: 'ERR', code: 'operation-error', kind: 'network', stage: 'install' })
     face.cancelInstall()
     expect(state().install).toMatchObject({ open: true, phase: 'idle', spec: 'dsh-x', failure: null, subject: null })
   })
@@ -1227,7 +1229,7 @@ describe('PluginManagerController', () => {
       pendingBuilds: ['native'],
     }))
     await vi.waitFor(() => { expect(state().install.phase).toBe('failed') })
-    expect(state().install.failure).toEqual({ reason: 'ERR_PNPM_IGNORED_BUILDS', code: 'operation-error', kind: 'build-blocked', pendingBuilds: ['native'] })
+    expect(state().install.failure).toEqual({ reason: 'ERR_PNPM_IGNORED_BUILDS', code: 'operation-error', kind: 'build-blocked', pendingBuilds: ['native'], stage: 'install' })
     // The retry keeps the subject the check produced and carries the approved names under a new request id.
     face.approveBuildsAndRetry()
     const second = await started()
@@ -1301,7 +1303,7 @@ describe('PluginManagerController', () => {
     answer(ok(failed({ code: 'operation-error', diagnostic: 'ERR_PNPM' }, { exitCode: 1, output: 'ERR_PNPM', truncated: false, logPath: '/l', kind: 'network' })))
     await vi.waitFor(() => { expect(state().install.phase).toBe('failed') })
     expect(state().install.runs).toEqual([])
-    expect(state().install.failure).toEqual({ reason: 'ERR_PNPM', code: 'operation-error', kind: 'network' })
+    expect(state().install.failure).toEqual({ reason: 'ERR_PNPM', code: 'operation-error', kind: 'network', stage: 'install' })
     expect(state().install.subject).toEqual({ spec: 'x', ...INSPECTED })
     // A lost answer cannot establish whether the Host stopped the process.
     await installing()
@@ -1329,21 +1331,78 @@ describe('PluginManagerController', () => {
       { jobId: 'j', command: 'pnpm add x', cwd: '/p', output: 'partial', exitCode: 0 },
       { jobId: 'k', command: 'pnpm add x', cwd: '/p', output: 'open', exitCode: null },
     ])
-    expect(state().install.failure).toEqual({ reason: '', code: 'not-bundle' })
+    expect(state().install.failure).toEqual({ reason: '', code: 'not-bundle', stage: 'install' })
     // An incompatibility keeps the packages it names.
     await installing()
     answer(ok(failed({ code: 'incompatible-version', incompatible: [INCOMPATIBLE] })))
     await vi.waitFor(() => { expect(state().install.phase).toBe('failed') })
-    expect(state().install.failure).toEqual({ reason: '', code: 'incompatible-version', incompatible: [INCOMPATIBLE] })
+    expect(state().install.failure).toEqual({ reason: '', code: 'incompatible-version', incompatible: [INCOMPATIBLE], stage: 'install' })
     // A failure the Host does not explain has neither code nor words.
     await installing()
     answer(ok(failed()))
     await vi.waitFor(() => { expect(state().install.phase).toBe('failed') })
-    expect(state().install.failure).toEqual({ reason: '' })
+    expect(state().install.failure).toEqual({ reason: '', stage: 'install' })
     expect(plugins.installBundle).toHaveBeenCalledTimes(6)
     // Editing the spec after a failure starts over too.
     face.editInstallSpec('y')
     expect(state().install).toMatchObject({ phase: 'idle', spec: 'y', runs: [], failure: null })
+  })
+
+  it('keeps the run whose first chunk arrives after the failed answer', async () => {
+    const { face, state, controller } = bench({
+      installBundle: vi.fn().mockResolvedValueOnce(ok(failed(
+        { code: 'operation-error', diagnostic: 'offline' },
+        { exitCode: 1, output: 'fatal: unable to access', truncated: false, logPath: '/l', kind: 'network' },
+      ))),
+    })
+    face.openInstall()
+    face.editInstallSpec('https://github.com/a/b.git')
+    face.runInstall()
+    await vi.waitFor(() => { expect(state().install.phase).toBe('failed') })
+    const requestId = state().install.requestId as PluginInstallRequestId
+    expect(state().install.runs).toEqual([])
+    // The check's only chunk can arrive after the answer; the settled dialog still shows it and its log.
+    const argv = ['git', '-c', 'credential.helper=', 'ls-remote', '--', 'https://github.com/a/b.git', 'HEAD']
+    controller.appendLog({ requestId, jobId: 'g1', argv, cwd: '/p', stream: 'stderr', text: 'fatal: unable to access', exitCode: 1 })
+    expect(state().install.runs).toEqual([
+      { jobId: 'g1', command: argv.join(' '), cwd: '/p', output: 'fatal: unable to access', exitCode: 1 },
+    ])
+    // A chunk of another installation still is not this dialog's.
+    controller.appendLog({ requestId: 'other' as PluginInstallRequestId, jobId: 'g2', argv, cwd: '/p', stream: 'stderr', text: 'stray', exitCode: 1 })
+    expect(state().install.runs).toHaveLength(1)
+  })
+
+  it('keeps the step a failed install reached and the complete Host log it settled with', async () => {
+    const retry = deferred<ReturnType<typeof ok<ChangeResult>>>()
+    const failedLog = '/var/log/dsh/plugin-manager/install-failed.log'
+    const doneLog = '/var/log/dsh/plugin-manager/install-done.log'
+    const { face, state, plugins, started } = bench({
+      installBundle: vi.fn()
+        .mockResolvedValueOnce(ok(failed(
+          { code: 'operation-error', diagnostic: 'activation refused' },
+          { exitCode: 0, output: 'installed', truncated: false, logPath: failedLog },
+          { stage: 'enable', enabled: true },
+        )))
+        .mockReturnValueOnce(retry.promise),
+    })
+    face.openInstall()
+    face.editInstallSpec('dsh-x')
+    face.runInstall()
+    await vi.waitFor(() => { expect(state().install.phase).toBe('failed') })
+    // The Host laid the failure at activation, and the details keep the run's complete log.
+    expect(state().install.failure).toEqual({ reason: 'activation refused', code: 'operation-error', stage: 'enable', enabled: true })
+    expect(state().install.logPath).toBe(failedLog)
+    // Retrying forgets the settled run's log until the next answer names its own.
+    face.runInstall()
+    await started()
+    expect(state().install.logPath).toBeNull()
+    retry.resolve(ok({
+      ...APPLIED, bundle: 'dsh-x',
+      packageResult: { exitCode: 0, output: '', truncated: false, logPath: doneLog },
+    }))
+    await vi.waitFor(() => { expect(state().install.phase).toBe('done') })
+    expect(state().install.logPath).toBe(doneLog)
+    expect(plugins.installBundle).toHaveBeenCalledTimes(2)
   })
 
   it('drops every late settlement after disposal', async () => {
@@ -1915,9 +1974,26 @@ it('reports a successful install with only documented result fields', async () =
 
 const CATALOG: BundleInfo = {
   name: '@deepseek-ai/dsh-subagent-codex', official: true, availability: 'missing', installed: false, optional: false,
-  enabled: false, removable: false, updatable: false, rows: [], overrides: [],
+  enabled: false, removable: false, rows: [], overrides: [],
   installTarget: { spec: '@deepseek-ai/dsh-subagent-codex@2.0.0', version: '2.0.0' },
 }
+
+it.each(['registry', 'source'] as const)('installs a typed Official catalog name using its %s target', async (mode) => {
+  const name = CATALOG.name
+  const spec = mode === 'source' ? 'link:/workspace/subagent-codex' : `${name}@2.0.0`
+  const entry = { ...CATALOG, installTarget: { spec, version: '2.0.0' } }
+  const { controller, plugins, face, state } = bench({ listBundles: vi.fn().mockResolvedValue(ok([entry])) })
+  await controller.load()
+  face.openInstall()
+  face.editInstallSpec(name)
+  face.runInstall()
+  await vi.waitFor(() => { expect(plugins.installBundle).toHaveBeenCalledOnce() })
+  expect(plugins.inspect).not.toHaveBeenCalled()
+  expect(state().install.subject?.selection).toBeUndefined()
+  expect(plugins.installBundle).toHaveBeenCalledWith(spec, {
+    enabled: false, ...mode === 'registry' ? { saveExact: true } : {}, requestId: state().install.requestId, registry: null,
+  })
+})
 
 it('installs an absent Official entry directly at the host target and enables it through the normal installer', async () => {
   const { controller, plugins, face, state } = bench({ listBundles: vi.fn().mockResolvedValue(ok([CATALOG])) })
@@ -2133,7 +2209,7 @@ it('deselects a source bundle whose target is unavailable without starting insta
 })
 
 describe('version checks and updates', () => {
-  const UPDATABLE: BundleInfo = { ...BUNDLE, updatable: true }
+  const UPDATABLE: BundleInfo = { ...BUNDLE, update: 'registry' }
   const LISTED = {
     status: 'listed' as const, installed: '0.16.0', registry: MIRROR, omitted: 0,
     attempts: [{ registry: null, problem: 'network' as const, reason: 'ETIMEDOUT' }, { registry: MIRROR }],
@@ -2180,7 +2256,7 @@ describe('version checks and updates', () => {
     await vi.waitFor(() => { expect(state().versions['dsh-a']?.phase).toBe('done') })
     await vi.waitFor(() => { expect(state().versions['dsh-better-sidebar']?.phase).toBe('done') })
     // Another surface reinstalled one package at another version and replaced the other by a linked copy.
-    listBundles.mockResolvedValue(ok([{ ...UPDATABLE, version: '0.17.0' }, { ...UPDATABLE, name: 'dsh-a', updatable: false }]))
+    listBundles.mockResolvedValue(ok([{ ...UPDATABLE, version: '0.17.0' }, { ...BUNDLE, name: 'dsh-a' }]))
     await controller.load()
     expect(state().versions).toEqual({})
   })
@@ -2222,7 +2298,8 @@ describe('version checks and updates', () => {
     await vi.waitFor(() => { expect(state().versions['dsh-better-sidebar']?.phase).toBe('done') })
     face.openUpdate('dsh-better-sidebar', '0.17.0')
     expect(state().update).toEqual({
-      packageName: 'dsh-better-sidebar', from: '0.16.0', to: '0.17.0', registry: MIRROR, phase: 'confirm', steps: [], result: null, outputOpen: false,
+      packageName: 'dsh-better-sidebar', from: '0.16.0', to: '0.17.0', source: { kind: 'registry', registry: MIRROR },
+      phase: 'confirm', steps: [], result: null, outputOpen: false,
     })
     face.closeUpdate()
     expect(state().update).toBeNull()
@@ -2284,6 +2361,39 @@ describe('version checks and updates', () => {
     late.resolve(ok(UPDATED))
     await late.promise
     expect(state().update?.phase).toBe('running')
+  })
+
+  it('confirms a Git update another tab names once the list holds the package, runs it with the spec, and checks no versions', async () => {
+    const spec = 'git+https://git.example/o/plugins.git#bbbbbbb&path:/packages/sidebar'
+    const answer = deferred<ReturnType<typeof ok<typeof UPDATED>>>()
+    const updateBundle = vi.fn(() => answer.promise)
+    const listVersions = vi.fn(() => Promise.resolve(ok(LISTED)))
+    const listBundles = vi.fn(() => Promise.resolve(ok([
+      { ...BUNDLE, update: 'git' as const, source: 'git+https://git.example/o/plugins.git#aaaaaaa&path:/packages/sidebar' },
+      { ...BUNDLE, name: 'dsh-registry', update: 'registry' as const },
+    ])))
+    const { controller, face, state } = bench({ updateBundle, listVersions, listBundles })
+    const target = { packageName: 'dsh-better-sidebar', version: '0.17.0', spec }
+    // The installed version comes from the list, which holds nothing before its first read and only Git copies update so.
+    face.openGitUpdate(target)
+    expect(state().update).toBeNull()
+    await controller.load()
+    face.openGitUpdate({ ...target, packageName: 'dsh-registry' })
+    expect(state().update).toBeNull()
+    face.openGitUpdate(target)
+    expect(state().update).toEqual({
+      packageName: 'dsh-better-sidebar', from: '0.16.0', to: '0.17.0', source: { kind: 'git', spec }, phase: 'confirm', steps: [], result: null, outputOpen: false,
+    })
+    face.runUpdate()
+    const requestId = state().update?.requestId as PluginInstallRequestId
+    expect(updateBundle).toHaveBeenCalledWith('dsh-better-sidebar', '0.17.0', { spec, requestId })
+    face.openGitUpdate({ ...target, version: '1.0.0' })
+    expect(state().update).toMatchObject({ phase: 'running', to: '0.17.0' })
+    answer.resolve(ok(UPDATED))
+    await vi.waitFor(() => { expect(state().update).toMatchObject({ phase: 'done', result: UPDATED }) })
+    await vi.waitFor(() => { expect(listBundles).toHaveBeenCalledTimes(2) })
+    await new Promise((resolve) => { setTimeout(resolve, 0) })
+    expect(listVersions).not.toHaveBeenCalled()
   })
 })
 

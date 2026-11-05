@@ -1,0 +1,227 @@
+name: Package Desktop · macOS · Intel
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: '打包源码：test 支持仓库内分支或 dsh-v* tag；production 仅支持 master 或 dsh-v* tag；源码须包含 CI 适配脚本'
+        type: string
+        default: master
+        required: true
+      preset:
+        description: '打包环境：选择机器上的 test 或 production 配置；同时决定后续发布环境'
+        type: choice
+        options: [test, production]
+        default: test
+        required: true
+      update_channel:
+        description: '升级通道：人工选择 nightly 或 stable，与版本后缀无关；默认通道由此打包输入确定'
+        type: choice
+        options: [nightly, stable]
+        default: nightly
+        required: true
+      version_mode:
+        description: '版本模式：default 按环境自动选择（test 取 build-number，production 取 follow-dsh）；follow-dsh 跟随 dsh 包版本号；build-number 自动追加构建编号；manual 手填'
+        type: choice
+        options: [default, follow-dsh, build-number, manual]
+        default: default
+        required: true
+      build_version:
+        description: '手动版本号：仅 manual 时填写完整版本；须为产品原版本或受支持的预发布后缀'
+        type: string
+        default: ''
+        required: false
+      test_release_id:
+        description: '测试 release ID：32 位小写十六进制随机前缀（非鉴权）；留空使用机器默认值，连续升级测试须保持相同值'
+        type: string
+        default: ''
+        required: false
+      compression_level:
+        description: 'ZIP 压缩等级：只影响 ZIP 和自动升级下载，不影响 DMG；3 打包较快，7 压缩更强'
+        type: choice
+        options: ['3', '7']
+        default: '3'
+        required: true
+      skip_notarization:
+        description: '跳过公证和 stapling：仅限内部调试，禁止发布到 test / production 或用于自动更新；需要发布请勿勾选'
+        type: boolean
+        default: false
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-desktop-package
+  cancel-in-progress: false
+
+jobs:
+  package:
+    outputs:
+      directory: ${{ steps.retained.outputs.directory }}
+      runner: ${{ steps.retained.outputs.runner }}
+      runner-name: ${{ steps.retained.outputs.runner-name }}
+      attempt: ${{ steps.retained.outputs.attempt }}
+      version: ${{ steps.settings.outputs.version }}
+      mode: ${{ steps.settings.outputs.mode }}
+    runs-on: [self-hosted, macOS, ARM64, dsh-mac-package-trial]
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: bash
+    env:
+      DSH_DESKTOP_TARGET_PLATFORM: darwin
+      DSH_DESKTOP_TARGET_ARCH: x64
+      PACKAGE_MACOS_ZIP_COMPRESSION_LEVEL: ${{ inputs.compression_level }}
+      PACKAGE_SKIP_NOTARIZATION: ${{ inputs.skip_notarization }}
+      PACKAGE_SOURCE_REF: ${{ inputs.source_ref }}
+      # TODO: Remove this legacy source_ref mode mapping on 2027-01-04 with the parser aliases.
+      PACKAGE_VERSION_MODE: ${{ inputs.version_mode == 'follow-dsh' && 'product' || inputs.version_mode == 'build-number' && 'auto' || inputs.version_mode }}
+      DSH_DESKTOP_UPDATE_CHANNEL: ${{ inputs.update_channel }}
+      DSH_TELEMETRY_DISABLED: '1'
+      DSH_PACKAGING_PRESET: ${{ inputs.preset }}
+      PACKAGE_TEST_RELEASE_ID: ${{ inputs.test_release_id }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        id: checkout
+        with:
+          persist-credentials: false
+          clean: true
+          ref: ${{ inputs.source_ref }}
+      - name: Validate selected source and adapter support
+        run: >-
+          node -e "const fs=require('node:fs'); const ref=process.env.PACKAGE_SOURCE_REF;
+          const cp=require('node:child_process'); const preset=process.env.DSH_PACKAGING_PRESET;
+          if(!['test','production'].includes(preset)) throw Error('Unknown packaging preset');
+          const tag=/^dsh-v[0-9][0-9A-Za-z.-]*$/.test(ref);
+          if(preset==='production' && ref!=='master' && !tag) throw Error('Production source must be master or dsh-v*');
+          if(tag) {
+          const v=JSON.parse(fs.readFileSync('package.json','utf8')).version;
+          if(ref!=='dsh-v'+v) throw Error('Source tag must match product version');
+          const tagged=cp.execFileSync('git',['rev-parse','--verify','refs/tags/'+ref+'^{commit}'],{encoding:'utf8'}).trim();
+          const head=cp.execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
+          if(tagged!==head) throw Error('Checkout does not match source tag');
+          } else {
+          const branch=cp.execFileSync('git',['rev-parse','--abbrev-ref','HEAD'],{encoding:'utf8'}).trim();
+          if(branch==='HEAD' || branch!==ref || ref.startsWith('refs/')) throw Error('Select a branch in this repository, not a SHA or PR ref');
+          }
+          if(!fs.readFileSync('apps/desktop/scripts/prepare-macos-ci.mjs','utf8').includes('resolveDesktopBuildTarget')) throw Error('Source lacks Intel macOS CI support; select a newer source');
+          if(!fs.readFileSync('apps/desktop/scripts/retain-desktop-ci.ts','utf8').includes('--check-runner')) throw Error('Source lacks independent Desktop artifact archival support; select a newer source');
+          if(!fs.readFileSync('apps/desktop/scripts/desktop-ci-version.mjs','utf8').includes('PACKAGE_VERSION_MODE')) throw Error('Source lacks Desktop channel/version CI support; select a newer release');"
+      - uses: pnpm/action-setup@v5.0.0
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24'
+      - name: Configure persistent package caches
+        env:
+          DSH_DESKTOP_PACKAGE_CACHE_DIR: ${{ runner.tool_cache }}/dsh-desktop-package-cache
+        run: |
+          echo "DSH_DESKTOP_PACKAGE_CACHE_DIR=$DSH_DESKTOP_PACKAGE_CACHE_DIR" >> "$GITHUB_ENV"
+          echo "PNPM_CONFIG_STORE_DIR=$DSH_DESKTOP_PACKAGE_CACHE_DIR/workspace-pnpm-store" >> "$GITHUB_ENV"
+      - name: Check Rosetta execution
+        run: arch -x86_64 /usr/bin/true
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Check original machine archival route
+        env:
+          DESKTOP_PUBLISH_RUNNERS: ${{ vars.DESKTOP_PUBLISH_RUNNERS }}
+        run: node --import tsx apps/desktop/scripts/retain-desktop-ci.ts --check-runner
+      - name: Validate preset and resolve build version
+        id: settings
+        env:
+          PACKAGE_BUILD_VERSION: ${{ inputs.build_version }}
+        run: node apps/desktop/scripts/prepare-macos-ci.mjs
+      - name: Check packaging configuration and toolchain
+        env:
+          PACKAGE_VERSION: ${{ steps.settings.outputs.version }}
+        run: |
+          args=()
+          if [[ "$PACKAGE_SKIP_NOTARIZATION" = true ]]; then args+=(--skip-notarization); fi
+          pnpm run package:desktop:mac:x64 --check --build-version "$PACKAGE_VERSION" "${args[@]}"
+      - name: Build and stage notarized Computer Use helpers
+        # A source whose dsh ships the Computer Use bundle packs the workspace provider into the Desktop runtime,
+        # which therefore needs the same notarized helper npm publication stages.
+        run: |
+          if ! node -e "process.exit(require('./apps/cli/package.json').dependencies?.['@deepseek-ai/dsh-cua-bundle'] ? 0 : 1)"; then
+            echo 'This source does not ship Computer Use in Desktop; no helper is staged.'
+            exit 0
+          fi
+          if [[ ! -f scripts/cua-helper/package.ts ]]; then
+            echo '::warning::This source ships Computer Use but predates helper packaging; Computer Use cannot prepare its helper in this package.'
+            exit 0
+          fi
+          mkdir -p dist
+          pnpm exec tsx scripts/cua-helper/package.ts --out dist/cua-helper
+          mkdir dist/cua-helper/extracted
+          tar -xzf dist/cua-helper/cua-helper.tgz -C dist/cua-helper/extracted
+          pnpm exec tsx scripts/cua-helper/stage.ts --from dist/cua-helper/extracted
+      - name: Build signed installers
+        env:
+          PACKAGE_VERSION: ${{ steps.settings.outputs.version }}
+        run: |
+          args=()
+          if [[ "$PACKAGE_SKIP_NOTARIZATION" = true ]]; then args+=(--skip-notarization); fi
+          pnpm run package:desktop:mac:x64 --build-version "$PACKAGE_VERSION" "${args[@]}"
+      - name: Retain complete package outside the checkout
+        id: retained
+        env:
+          DESKTOP_PUBLISH_RUNNERS: ${{ vars.DESKTOP_PUBLISH_RUNNERS }}
+          PACKAGE_SOURCE_SHA: ${{ steps.checkout.outputs.commit }}
+          PACKAGE_VERSION: ${{ steps.settings.outputs.version }}
+        run: node --import tsx apps/desktop/scripts/retain-desktop-ci.ts
+      - name: Retain packaging diagnostics
+        continue-on-error: true
+        if: always() && steps.checkout.outcome == 'success'
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: macos-x64-package-logs-${{ github.run_id }}-${{ github.run_attempt }}
+          include-hidden-files: true
+          path: apps/desktop/.desktop-build/packaging-runs/
+          if-no-files-found: warn
+          retention-days: 14
+
+  upload-artifact:
+    needs: package
+    runs-on: [self-hosted, '${{ needs.package.outputs.runner }}']
+    timeout-minutes: 30
+    env:
+      DESKTOP_RETAINED_DIRECTORY: ${{ needs.package.outputs.directory }}
+      DESKTOP_ARCHIVE_NAME: macos-x64-${{ needs.package.outputs.mode }}-${{ needs.package.outputs.version }}-${{ github.run_id }}-${{ needs.package.outputs.attempt }}.zip
+      DESKTOP_PACKAGE_ATTEMPT: ${{ needs.package.outputs.attempt }}
+      DESKTOP_PACKAGE_RUNNER: ${{ needs.package.outputs.runner-name }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+          path: artifact-archiver
+      - uses: pnpm/action-setup@v5.0.0
+        with:
+          package_json_file: artifact-archiver/package.json
+          dest: ${{ runner.temp }}/archive-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24'
+      - name: Configure persistent package caches
+        env:
+          DSH_DESKTOP_PACKAGE_CACHE_DIR: ${{ runner.tool_cache }}/dsh-desktop-package-cache
+        run: |
+          echo "DSH_DESKTOP_PACKAGE_CACHE_DIR=$DSH_DESKTOP_PACKAGE_CACHE_DIR" >> "$GITHUB_ENV"
+          echo "PNPM_CONFIG_STORE_DIR=$DSH_DESKTOP_PACKAGE_CACHE_DIR/workspace-pnpm-store" >> "$GITHUB_ENV"
+      - run: pnpm install --frozen-lockfile
+        working-directory: artifact-archiver
+      - name: Archive verified retained build
+        id: archive
+        working-directory: artifact-archiver
+        run: node --import tsx apps/desktop/scripts/archive-desktop-ci.ts
+      - name: Retain installers for the selected mode
+        if: success()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ${{ env.DESKTOP_ARCHIVE_NAME }}
+          path: ${{ steps.archive.outputs.path }}
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+          overwrite: true

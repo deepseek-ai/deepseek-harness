@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 // InputBar behavior over the editor + submit-machine wiring: Enter-send
 // semantics (IME guard, Shift newline, busy Enter policy, Ctrl/Meta steering,
 // repeat suppression), running semantics (input stays free; continuable
@@ -25,7 +26,7 @@ import type { SessionListState, SessionSnapshot } from '@deepseek-ai/dsh-api-ses
 import type { ContextPressureProjection } from '@deepseek-ai/dsh-token-meter/client'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type { Context } from '@deepseek-ai/cordis'
-import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId, SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { SubmitOutcome } from '../src/client/contract/input.ts'
 import { SessionInputShell } from '../src/client/input/facade.ts'
 import { $replaceDetectSpanWithText, $selectDetectSpan } from '../src/client/input/editor/span-map.ts'
@@ -53,7 +54,6 @@ const SCTX = {} as Context
 const SID = 's1' as SessionId
 const CONTINUABLE_CHILD = {
   address: { parentSessionId: 'parent' as SessionId, childSessionId: SID, mode: 'continuable' as const },
-  parentAvailable: true,
 }
 
 function snapshotOf(overrides: Partial<SessionSnapshot> = {}): SessionSnapshot {
@@ -81,6 +81,7 @@ interface BenchOptions {
   }
   draft?: string
   running?: boolean
+  retryableFailure?: SessionSeq
   subagent?: Exclude<SessionSnapshot['subagent'], null>
   disabled?: boolean
   inert?: boolean
@@ -161,6 +162,7 @@ function bench(over?: BenchOptions) {
   if (over?.draft !== undefined && over.draft !== '') shell.setDraft(over.draft)
   if (over?.attachments !== undefined) shell.addAttachments(over.attachments.map(attachment => attachment.id))
   const stop = vi.fn()
+  const retry = vi.fn()
   const removeAttachment = vi.fn((id: DraftAttachmentId) => { shell.removeAttachment(id) })
   const menuLauncher = createSnapshotStore<string | null>(over?.commandMenuOpen === true ? 'command' : null)
   const busyEnter = createSnapshotStore<'queue' | 'steer'>(over?.busyEnter ?? 'queue')
@@ -195,13 +197,16 @@ function bench(over?: BenchOptions) {
       items: [], archivedSessionIds: [], pinnedSessionIds: [], state: 'idle', phase: 'ready', error: null,
     })),
     ...allowAllAccess,
+    useContextMenu: contextMenuHook(),
     useAccess: endpoint => !(over?.deniedEndpoints ?? []).includes(endpoint),
-    useProjection: ((key: string, selector?: (v: unknown) => unknown) =>
-      (selector ?? (v => v))(key === 'plan'
+    useProjection: ((key: string, selector: (v: unknown) => unknown = v => v) =>
+      selector(key === 'plan'
         ? over?.plan
         : key === 'goal' ? over?.goal
-          : key === 'imageLimits' ? over?.imageLimits
-            : key === 'contextPressure' ? over?.contextPressure : undefined)),
+          : key === 'conversationContinuation' ? over?.retryableFailure
+            : key === 'inbox' ? { 'next-turn': over?.queue ?? [], 'next-step': over?.nextStep ?? [] }
+              : key === 'imageLimits' ? over?.imageLimits
+                : key === 'contextPressure' ? over?.contextPressure : undefined)),
     useInput: bindSnapshotSelector(shell.state),
     inputActions: shell.actions,
     keyboard: shell,
@@ -215,6 +220,7 @@ function bench(over?: BenchOptions) {
     }),
     toggleCommandMenu: over?.toggleCommandMenu ?? vi.fn(),
     useBusyEnter: bindSnapshotSelector(busyEnter),
+    retry,
     useStopShortcut: bindSnapshotSelector(stopShortcut),
     useNotices: bindSnapshotSelector(shell.notices),
     useLexicon: bindSnapshotSelector(shell.lexicon),
@@ -245,26 +251,52 @@ function bench(over?: BenchOptions) {
   // that claim a command or freeze the machine query the DOM directly.
   const steeringAvailable = over?.subagent === undefined || over.subagent.address.mode === 'continuable'
   const composerLocked = over?.disabled === true || over?.inert === true || over?.blocked !== undefined
-    || (over?.subagent?.address.mode === 'continuable' && over.subagent.parentAvailable !== true)
   const uploadsPending = (over?.attachments ?? []).some(attachment => attachment.kind === 'file'
     ? over?.fileUploads?.[attachment.id]?.status !== 'ready'
     : over?.fileUploads?.[attachment.id] !== undefined && over.fileUploads[attachment.id]?.status !== 'ready')
   const plainMessageDraft = sendableDraft && !uploadsPending && !(over?.draft?.trimStart().startsWith('/') ?? false)
   const primaryLabel = primaryStops
     ? '停止生成'
-    : over?.running === true && steeringAvailable && !composerLocked && plainMessageDraft
-      ? (over.busyEnter === 'steer' ? '插话发送' : '排队发送')
-      : '发送消息'
+    : over?.retryableFailure !== undefined && !sendableDraft && over.running !== true && over.subagent === undefined && !composerLocked
+      && !(over.nextStep ?? []).some(message => message.source.kind === 'user')
+      ? '继续生成'
+      : over?.running === true && steeringAvailable && !composerLocked && plainMessageDraft
+        ? (over.busyEnter === 'steer' ? '插话发送' : '排队发送')
+        : '发送消息'
   const button = view.container.querySelector<HTMLButtonElement>(`button[aria-label="${primaryLabel}"]`)!
   const interruptButton = view.container.querySelector<HTMLButtonElement>('button[aria-label="停止生成"]')
   return {
     view, textarea, button, interruptButton, props, sink, shell, wiring: shell, session, stop, removeAttachment, slotCalls,
-    menuLauncher, busyEnter, stopShortcut,
+    menuLauncher, busyEnter, stopShortcut, retry,
     steerQueue: over?.steerQueue,
     get placeholder() { return placeholderOf(view.container) },
     get inputDisabled() { return textarea.getAttribute('aria-disabled') === 'true' },
   }
 }
+
+it('offers the play action only for an empty, idle composer with an eligible failure', async () => {
+  const b = bench({ retryableFailure: 2 as SessionSeq })
+  expect(b.button.disabled).toBe(false)
+  expect(b.button.querySelector('svg')).not.toBeNull()
+  fireEvent.click(b.button)
+  expect(b.retry).toHaveBeenCalledExactlyOnceWith(2)
+  expect(b.sink).not.toHaveBeenCalled()
+  await act(async () => { b.shell.setDraft('A new instruction') })
+  const send = b.view.getByRole('button', { name: '发送消息' })
+  fireEvent.click(send)
+  await vi.waitFor(() => { expect(b.sink).toHaveBeenCalledOnce() })
+  expect(b.sink.mock.calls[0]?.[0]).toBe('A new instruction')
+  expect(b.retry).toHaveBeenCalledOnce()
+})
+
+it.each([
+  { running: true }, { attachments: [{ kind: 'image' as const, id: 'image' as DraftAttachmentId, file: new File([], 'x.png'), previewUrl: 'blob:test' }] },
+  { blocked: { reason: 'Select a model' } }, { subagent: CONTINUABLE_CHILD }, { deniedEndpoints: ['session/prompt'] },
+  { nextStep: [row('new instruction')] },
+])('keeps the continue action unavailable with %j', (options) => {
+  const b = bench({ ...options, retryableFailure: 2 as SessionSeq })
+  expect(b.view.queryByRole('button', { name: '继续生成' })).toBeNull()
+})
 
 function attachmentOwner(slotCalls: readonly { key: string; owner: unknown }[]): ComposerAttachmentsOwnerProps {
   for (let i = slotCalls.length - 1; i >= 0; i -= 1) {
@@ -384,6 +416,48 @@ describe('composer focus handoff', () => {
     // selection itself is asserted in the browser lane.
     expect(lexicalFocus).toHaveBeenCalled()
   })
+
+  it.each<[string, SubmitOutcome, boolean]>([
+    ['desktop acceptance', { kind: 'success' }, false],
+    ['desktop failure', { kind: 'error', text: 'send failed' }, false],
+    ['mobile acceptance', { kind: 'success' }, true],
+    ['mobile failure', { kind: 'error', text: 'send failed' }, true],
+  ])('returns focus within the composer after %s', async (_label, outcome, mobile) => {
+    const device = vi.spyOn(uiPrimitives, 'isMobileDevice').mockReturnValue(mobile)
+    onTestFinished(() => { device.mockRestore() })
+    const { view, shell, textarea, sink } = bench()
+    writeDraft(shell, 'draft text')
+    act(() => { shell.focus() })
+    let settle!: (outcome: SubmitOutcome) => void
+    sink.mockImplementationOnce(() => new Promise<SubmitOutcome>((resolve) => { settle = resolve }))
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+    expect(textarea.getAttribute('contenteditable')).toBe('false')
+    // A browser moves the keyboard to the body once the focused box stops being editable; jsdom does not.
+    act(() => { textarea.blur() })
+    expect(document.activeElement).toBe(document.body)
+
+    await act(async () => { settle(outcome) })
+
+    expect(textarea.getAttribute('contenteditable')).toBe('true')
+    expect(document.activeElement).toBe(mobile ? view.container.querySelector('[data-composer-card]') : textarea)
+  })
+
+  it('leaves the keyboard with a control the user moved to while a message was sending', async () => {
+    const { shell, textarea, sink } = bench()
+    const other = document.createElement('button')
+    document.body.appendChild(other)
+    onTestFinished(() => { other.remove() })
+    writeDraft(shell, 'draft text')
+    act(() => { shell.focus() })
+    let settle!: (outcome: SubmitOutcome) => void
+    sink.mockImplementationOnce(() => new Promise<SubmitOutcome>((resolve) => { settle = resolve }))
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+    act(() => { other.focus() })
+
+    await act(async () => { settle({ kind: 'success' }) })
+
+    expect(document.activeElement).toBe(other)
+  })
 })
 
 describe('composer placeholder visibility', () => {
@@ -466,7 +540,6 @@ describe('image draft rail', () => {
   })
 
   it.each([
-    ['an offline parent', { ...CONTINUABLE_CHILD, parentAvailable: false }],
     ['a one-shot child', { ...CONTINUABLE_CHILD, address: { ...CONTINUABLE_CHILD.address, mode: 'one-shot' as const } }],
   ])('keeps attachment intake closed for %s', (_name, subagent) => {
     const addFiles = vi.fn(() => null)
@@ -661,14 +734,19 @@ describe('image draft rail', () => {
     let settle!: (outcome: SubmitOutcome) => void
     sink.mockImplementationOnce(() => new Promise<SubmitOutcome>((resolve) => { settle = resolve }))
     fireEvent.keyDown(textarea, { key: 'Enter' })
-    expect(sink).toHaveBeenCalledWith('', ['draft-1'], 'queue', expect.any(AbortSignal))
-    // Optimistic commit: the rail clears at submit, before the admission settles.
-    expect(attachmentOwner(result.slotCalls).attachments).toEqual([])
+    expect(sink).toHaveBeenCalledWith('', ['draft-1'], 'queue', expect.any(AbortSignal), expect.any(Function))
+    // The rail keeps the sent image, and Send shows progress, until the Host accepts the message.
+    expect(attachmentOwner(result.slotCalls).attachments).toEqual([attachments[0]])
+    const sending = view.getByRole('button', { name: '正在发送消息' }) as HTMLButtonElement
+    expect(sending.disabled).toBe(true)
+    expect(sending.getAttribute('aria-busy')).toBe('true')
+    expect(sending.hasAttribute('data-sending')).toBe(true)
     await act(async () => { settle({ kind: 'success' }) })
     expect(attachmentOwner(result.slotCalls).attachments).toEqual([])
+    expect(view.getByRole('button', { name: '发送消息' }).getAttribute('aria-busy')).toBe('false')
   })
 
-  it('returns an image-only draft to the rail when its admission fails', async () => {
+  it('keeps an image-only draft in the rail when its admission fails', async () => {
     const file = new File([Uint8Array.of(1)], 'pixel.png', { type: 'image/png' })
     const attachments = [
       { kind: 'image' as const, id: 'draft-1' as DraftAttachmentId, file, previewUrl: 'blob:draft-1' },
@@ -678,7 +756,7 @@ describe('image draft rail', () => {
     let fail!: (outcome: SubmitOutcome) => void
     sink.mockImplementationOnce(() => new Promise<SubmitOutcome>((resolve) => { fail = resolve }))
     fireEvent.keyDown(textarea, { key: 'Enter' })
-    expect(attachmentOwner(result.slotCalls).attachments).toEqual([])
+    expect(attachmentOwner(result.slotCalls).attachments).toEqual([attachments[0]])
     await act(async () => { fail({ kind: 'error', text: '图片发送失败' }) })
     await vi.waitFor(() => {
       expect(attachmentOwner(result.slotCalls).attachments).toEqual([attachments[0]])
@@ -749,7 +827,6 @@ describe('Enter semantics', () => {
       queue: [row('q-1')],
       subagent: {
         address: { parentSessionId: 'parent' as SessionId, childSessionId: SID, mode: 'continuable' },
-        parentAvailable: true,
       },
     }).placeholder).toBe('Cmd/Ctrl+Enter 插话发送全部排队消息')
   })
@@ -795,7 +872,7 @@ describe('Enter semantics', () => {
   it('plain Enter submits queue mode through the machine; repeat and empty are suppressed', () => {
     const { textarea, sink } = bench({ draft: 'hello' })
     fireEvent.keyDown(textarea, { key: 'Enter' })
-    expect(sink).toHaveBeenCalledWith('hello', [], 'queue', expect.any(AbortSignal))
+    expect(sink).toHaveBeenCalledWith('hello', [], 'queue', expect.any(AbortSignal), expect.any(Function))
     // The submitting-phase lock, not draft emptiness, suppresses the repeat:
     // the draft is still uncleared while the sink round-trip is in flight.
     fireEvent.keyDown(textarea, { key: 'Enter', repeat: true })
@@ -823,15 +900,15 @@ describe('Enter semantics', () => {
   it('Ctrl/Meta+Enter sends normally while idle and steers while running', () => {
     const idle = bench({ draft: 'hello' })
     fireEvent.keyDown(idle.textarea, { key: 'Enter', metaKey: true })
-    expect(idle.sink).toHaveBeenCalledWith('hello', [], 'queue', expect.any(AbortSignal))
+    expect(idle.sink).toHaveBeenCalledWith('hello', [], 'queue', expect.any(AbortSignal), expect.any(Function))
 
     const busyCtrl = bench({ running: true, draft: 'steer with ctrl' })
     fireEvent.keyDown(busyCtrl.textarea, { key: 'Enter', ctrlKey: true })
-    expect(busyCtrl.sink).toHaveBeenCalledWith('steer with ctrl', [], 'steer', expect.any(AbortSignal))
+    expect(busyCtrl.sink).toHaveBeenCalledWith('steer with ctrl', [], 'steer', expect.any(AbortSignal), expect.any(Function))
 
     const busyMeta = bench({ running: true, draft: 'steer with cmd' })
     fireEvent.keyDown(busyMeta.textarea, { key: 'Enter', metaKey: true })
-    expect(busyMeta.sink).toHaveBeenCalledWith('steer with cmd', [], 'steer', expect.any(AbortSignal))
+    expect(busyMeta.sink).toHaveBeenCalledWith('steer with cmd', [], 'steer', expect.any(AbortSignal), expect.any(Function))
   })
 
   it('empty-draft Cmd/Ctrl+Enter steers the whole queue instead of submitting', () => {
@@ -868,7 +945,6 @@ describe('Enter semantics', () => {
         childSessionId: SID,
         mode: 'continuable' as const,
       },
-      parentAvailable: true,
     }
     const childSteerQueue = vi.fn()
     const child = bench({ running: true, subagent, queue: [row('q-1')], steerQueue: childSteerQueue })
@@ -897,7 +973,7 @@ describe('Enter semantics', () => {
     const steerQueue = vi.fn()
     const { textarea, sink } = bench({ running: true, queue: [row('q-1')], draft: '插话', steerQueue })
     fireEvent.keyDown(textarea, { key: 'Enter', ctrlKey: true })
-    expect(sink).toHaveBeenCalledWith('插话', [], 'steer', expect.any(AbortSignal))
+    expect(sink).toHaveBeenCalledWith('插话', [], 'steer', expect.any(AbortSignal), expect.any(Function))
     expect(steerQueue).not.toHaveBeenCalled()
   })
 
@@ -1008,7 +1084,7 @@ describe('running and lock semantics', () => {
     try {
       const { view, stopShortcut } = bench({
         running: true,
-        subagent: { address: { parentSessionId: 'parent' as SessionId, childSessionId: SID, mode: 'continuable' }, parentAvailable: true },
+        subagent: { address: { parentSessionId: 'parent' as SessionId, childSessionId: SID, mode: 'continuable' } },
         t: makeTranslate(messages, {}),
       })
       const stop = view.getByRole('button', { name: label })
@@ -1018,6 +1094,31 @@ describe('running and lock semantics', () => {
       expect(view.getByRole('tooltip').getAttribute('aria-label')).toBe(`${label} Esc Esc`)
       act(() => { stopShortcut.set([]) })
       expect(view.getByRole('tooltip').textContent).toBe(label)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // The docked seat is the containing block for fixed descendants, so control
+  // tooltips render under the document body rather than inside the composer.
+  it('renders every control tooltip outside the composer subtree', () => {
+    vi.useFakeTimers()
+    try {
+      const { view } = bench({ running: true })
+      const shown: string[] = []
+      for (const control of view.container.querySelectorAll('button')) {
+        fireEvent.pointerEnter(control)
+        act(() => { vi.advanceTimersByTime(500) })
+        const tooltip = view.queryByRole('tooltip')
+        if (tooltip !== null) {
+          shown.push(control.getAttribute('aria-label') ?? '')
+          expect(view.container.contains(tooltip)).toBe(false)
+          expect(document.body.contains(tooltip)).toBe(true)
+        }
+        fireEvent.pointerLeave(control)
+        act(() => { vi.advanceTimersByTime(500) })
+      }
+      expect(shown).toEqual(expect.arrayContaining(['添加文件或调用指令', '停止生成']))
     } finally {
       vi.useRealTimers()
     }
@@ -1055,16 +1156,32 @@ describe('running and lock semantics', () => {
     writeDraft(shell, '排队消息2')
     expect(button.getAttribute('aria-label')).toBe('排队发送')
     fireEvent.click(button)
-    expect(sink).toHaveBeenCalledWith('排队消息2', [], 'queue', expect.any(AbortSignal))
+    expect(sink).toHaveBeenCalledWith('排队消息2', [], 'queue', expect.any(AbortSignal), expect.any(Function))
     await vi.waitFor(() => { expect(button.getAttribute('aria-label')).toBe('停止生成') })
     expect(stop).toHaveBeenCalledTimes(1)
+  })
+
+  it('running keeps Stop beside the sending control until the Host accepts the message', async () => {
+    const { view, textarea, stop, sink } = bench({ running: true, draft: '排队消息' })
+    let settle!: (outcome: SubmitOutcome) => void
+    sink.mockImplementationOnce(() => new Promise<SubmitOutcome>((resolve) => { settle = resolve }))
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+    const sending = view.getByRole('button', { name: '正在发送消息' }) as HTMLButtonElement
+    expect(sending.disabled).toBe(true)
+    fireEvent.click(view.getByRole('button', { name: '停止生成' }))
+    expect(stop).toHaveBeenCalledTimes(1)
+
+    await act(async () => { settle({ kind: 'success' }) })
+
+    expect(view.queryByRole('button', { name: '正在发送消息' })).toBeNull()
+    expect(view.getAllByRole('button', { name: '停止生成' })).toHaveLength(1)
   })
 
   it('running Send follows the busy-state Steer preference and labels the delivery', () => {
     const { button, sink } = bench({ running: true, busyEnter: 'steer', draft: '按钮插话' })
     expect(button.getAttribute('aria-label')).toBe('插话发送')
     fireEvent.click(button)
-    expect(sink).toHaveBeenCalledWith('按钮插话', [], 'steer', expect.any(AbortSignal))
+    expect(sink).toHaveBeenCalledWith('按钮插话', [], 'steer', expect.any(AbortSignal), expect.any(Function))
   })
 
   it('running Send relabels when the busy-state preference changes live', () => {
@@ -1073,7 +1190,7 @@ describe('running and lock semantics', () => {
     act(() => { busyEnter.set('steer') })
     expect(button.getAttribute('aria-label')).toBe('插话发送')
     fireEvent.click(button)
-    expect(sink).toHaveBeenCalledWith('跟随设置', [], 'steer', expect.any(AbortSignal))
+    expect(sink).toHaveBeenCalledWith('跟随设置', [], 'steer', expect.any(AbortSignal), expect.any(Function))
   })
 
   it('running Send keeps the plain label for a slash line and a claimed command', () => {
@@ -1178,7 +1295,7 @@ describe('running and lock semantics', () => {
     const { button, sink } = bench({ busyEnter: 'steer', draft: '空闲发送' })
     expect(button.getAttribute('aria-label')).toBe('发送消息')
     fireEvent.click(button)
-    expect(sink).toHaveBeenCalledWith('空闲发送', [], 'queue', expect.any(AbortSignal))
+    expect(sink).toHaveBeenCalledWith('空闲发送', [], 'queue', expect.any(AbortSignal), expect.any(Function))
   })
 
   it('running treats an attachment-only draft as Send', async () => {
@@ -1191,7 +1308,7 @@ describe('running and lock semantics', () => {
     const { button, sink } = bench({ running: true, attachments: [attachment] })
     expect(button.getAttribute('aria-label')).toBe('排队发送')
     fireEvent.click(button)
-    expect(sink).toHaveBeenCalledWith('', ['draft-1'], 'queue', expect.any(AbortSignal))
+    expect(sink).toHaveBeenCalledWith('', ['draft-1'], 'queue', expect.any(AbortSignal), expect.any(Function))
     await vi.waitFor(() => { expect(button.getAttribute('aria-label')).toBe('停止生成') })
   })
 
@@ -1214,7 +1331,7 @@ describe('running and lock semantics', () => {
   it('running plain Enter follows the busy-state Steer preference', () => {
     const { textarea, sink } = bench({ running: true, busyEnter: 'steer', draft: '直接插话' })
     fireEvent.keyDown(textarea, { key: 'Enter' })
-    expect(sink).toHaveBeenCalledWith('直接插话', [], 'steer', expect.any(AbortSignal))
+    expect(sink).toHaveBeenCalledWith('直接插话', [], 'steer', expect.any(AbortSignal), expect.any(Function))
   })
 
   it('a running composer whose access excludes prompting and stopping offers neither Stop nor Send', () => {
@@ -1255,11 +1372,11 @@ describe('running and lock semantics', () => {
   it('running Cmd/Ctrl+Enter uses the opposite of the busy-state Enter preference', () => {
     const meta = bench({ running: true, busyEnter: 'steer', draft: '排到下一轮' })
     fireEvent.keyDown(meta.textarea, { key: 'Enter', metaKey: true })
-    expect(meta.sink).toHaveBeenCalledWith('排到下一轮', [], 'queue', expect.any(AbortSignal))
+    expect(meta.sink).toHaveBeenCalledWith('排到下一轮', [], 'queue', expect.any(AbortSignal), expect.any(Function))
 
     const ctrl = bench({ running: true, busyEnter: 'steer', draft: 'also queue' })
     fireEvent.keyDown(ctrl.textarea, { key: 'Enter', ctrlKey: true })
-    expect(ctrl.sink).toHaveBeenCalledWith('also queue', [], 'queue', expect.any(AbortSignal))
+    expect(ctrl.sink).toHaveBeenCalledWith('also queue', [], 'queue', expect.any(AbortSignal), expect.any(Function))
   })
 
   it('running continuable subagent keeps Send beside an independent Stop', () => {
@@ -1272,7 +1389,6 @@ describe('running and lock semantics', () => {
           childSessionId: SID,
           mode: 'continuable',
         },
-        parentAvailable: true,
       },
     })
     expect(button.getAttribute('aria-label')).toBe('排队发送')
@@ -1287,7 +1403,7 @@ describe('running and lock semantics', () => {
     expect(click).not.toHaveBeenCalled()
     click.mockRestore()
     fireEvent.click(button)
-    expect(sink).toHaveBeenCalledWith('后续消息', [], 'queue', expect.any(AbortSignal))
+    expect(sink).toHaveBeenCalledWith('后续消息', [], 'queue', expect.any(AbortSignal), expect.any(Function))
     fireEvent.click(interruptButton!)
     expect(stop).toHaveBeenCalledTimes(1)
   })
@@ -1299,12 +1415,11 @@ describe('running and lock semantics', () => {
         childSessionId: SID,
         mode: 'continuable' as const,
       },
-      parentAvailable: true,
     }
     const { button, sink } = bench({ running: true, busyEnter: 'steer', draft: '子代理插话', subagent })
     expect(button.getAttribute('aria-label')).toBe('插话发送')
     fireEvent.click(button)
-    expect(sink).toHaveBeenCalledWith('子代理插话', [], 'steer', expect.any(AbortSignal))
+    expect(sink).toHaveBeenCalledWith('子代理插话', [], 'steer', expect.any(AbortSignal), expect.any(Function))
 
     // No draft: the child has no Stop seat to fall back to, so its disabled
     // Send keeps the plain label instead of naming a delivery it cannot make.
@@ -1355,24 +1470,14 @@ describe('running and lock semantics', () => {
     expect(shell.pickFiles()).toBe(false)
   })
 
-  it('parent-offline running continuable locks Send but keeps independent Stop usable', () => {
-    const { button, interruptButton, textarea, stop, view } = bench({
+  it('keeps input and Stop available for a continuable child without parent availability', () => {
+    const { button, interruptButton, textarea, stop } = bench({
       running: true,
-      draft: '',
-      subagent: {
-        address: {
-          parentSessionId: 'parent' as SessionId,
-          childSessionId: SID,
-          mode: 'continuable',
-        },
-        parentAvailable: false,
-      },
+      draft: 'continue',
+      subagent: CONTINUABLE_CHILD,
     })
-    expect(textarea.getAttribute('aria-disabled')).toBe('true')
-    expect(placeholderOf(view.container)).toBe('父会话已离线，无法继续发送；仍可停止当前运行')
-    expect((view.getByLabelText('添加文件或调用指令') as HTMLButtonElement).disabled).toBe(true)
-    expect(button.getAttribute('aria-label')).toBe('发送消息')
-    expect(button.disabled).toBe(true)
+    expect(textarea.getAttribute('aria-disabled')).not.toBe('true')
+    expect(button.disabled).toBe(false)
     expect(interruptButton?.disabled).toBe(false)
     fireEvent.click(interruptButton!)
     expect(stop).toHaveBeenCalledTimes(1)
@@ -1388,7 +1493,6 @@ describe('running and lock semantics', () => {
           childSessionId: SID,
           mode: 'one-shot',
         },
-        parentAvailable: true,
       },
     })
     expect(button.getAttribute('aria-label')).toBe('发送消息')
@@ -1403,19 +1507,18 @@ describe('running and lock semantics', () => {
         childSessionId: SID,
         mode: 'continuable' as const,
       },
-      parentAvailable: true,
     }
     const plain = bench({ running: true, busyEnter: 'steer', draft: 'plain', subagent })
     fireEvent.keyDown(plain.textarea, { key: 'Enter' })
-    expect(plain.sink).toHaveBeenCalledWith('plain', [], 'steer', expect.any(AbortSignal))
+    expect(plain.sink).toHaveBeenCalledWith('plain', [], 'steer', expect.any(AbortSignal), expect.any(Function))
 
     const accelerated = bench({ running: true, draft: 'accelerated', subagent })
     fireEvent.keyDown(accelerated.textarea, { key: 'Enter', metaKey: true })
-    expect(accelerated.sink).toHaveBeenCalledWith('accelerated', [], 'steer', expect.any(AbortSignal))
+    expect(accelerated.sink).toHaveBeenCalledWith('accelerated', [], 'steer', expect.any(AbortSignal), expect.any(Function))
 
     const opposite = bench({ running: true, busyEnter: 'steer', draft: 'opposite', subagent })
     fireEvent.keyDown(opposite.textarea, { key: 'Enter', metaKey: true })
-    expect(opposite.sink).toHaveBeenCalledWith('opposite', [], 'queue', expect.any(AbortSignal))
+    expect(opposite.sink).toHaveBeenCalledWith('opposite', [], 'queue', expect.any(AbortSignal), expect.any(Function))
   })
 
   it('disabled (session removed) locks the textarea and chrome', () => {
@@ -1428,7 +1531,7 @@ describe('running and lock semantics', () => {
   it('idle primary sends and disables on empty draft', () => {
     const { button, sink } = bench({ draft: 'go' })
     fireEvent.click(button)
-    expect(sink).toHaveBeenCalledWith('go', [], 'queue', expect.any(AbortSignal))
+    expect(sink).toHaveBeenCalledWith('go', [], 'queue', expect.any(AbortSignal), expect.any(Function))
     const empty = bench()
     expect(empty.button.disabled).toBe(true)
   })
@@ -1579,7 +1682,7 @@ describe('running and lock semantics', () => {
         fireEvent.keyDown(textarea, { key: 'Enter' })
       }
       await act(async () => {})
-      expect(sink).toHaveBeenLastCalledWith(`send by ${gesture}`, [], 'queue', expect.any(AbortSignal))
+      expect(sink).toHaveBeenLastCalledWith(`send by ${gesture}`, [], 'queue', expect.any(AbortSignal), expect.any(Function))
       expect(shell.snapshot.draft).toBe('')
       expect(document.activeElement === textarea).toBe(automatic)
     }
@@ -1873,6 +1976,15 @@ describe('decorations', () => {
     // settled chip's alone.
     expect(mark?.getAttribute('data-ref-appearance')).toBeNull()
     expect(shell.snapshot.draft).toBe('see @src/components/')
+  })
+
+  it('a pasted path decorates as one whole file or folder token', async () => {
+    const { view, shell, textarea } = bench()
+    const marks = () => [...view.container.querySelectorAll('[data-composer-text-ref]')].map(el => el.textContent)
+    const text = 'read @"/a/nv/SM100 ISA.html" and @src/deep/file.txt then @src/deep/ first'
+    fireEvent.paste(textarea, { clipboardData: { items: [], getData: () => text } })
+    await vi.waitFor(() => { expect(shell.snapshot.draft).toBe(text) })
+    expect(marks()).toEqual(['@"/a/nv/SM100 ISA.html"', '@src/deep/file.txt', '@src/deep/'])
   })
 
   it('a plain-text reference keeps its DOM node while typing ahead of it (bug #2793 regression)', () => {

@@ -203,7 +203,6 @@ describe('tunnel worker commands', () => {
       { ...spec(), expiresAt: 'banana' },
       { ...spec(), allowsFork: 'yes' },
       { ...spec(), sessionMode: 'fork-readonly' },
-      { ...spec(), allowsFileUpload: 'yes' },
       { ...spec(), allowedSubjectIds: 'viewer' },
       { ...spec(), allowedSubjectIds: ['viewer', ''] },
       { ...spec(), allowedSubjectIds: ['viewer', 4] },
@@ -217,7 +216,7 @@ describe('tunnel worker commands', () => {
       ...spec(),
       ownerProviderId: 'p', ownerTenantId: 't', dshVersion: '1.0.0', ownerInstanceId: 'i',
       ownerCredential: 'credential', expiresAt: '2026-10-03T00:00:00.000Z',
-      allowsFork: true, sessionMode: 'write', allowsFileUpload: false,
+      allowsFork: true, sessionMode: 'write',
     }
     expect(parseTunnelWorkerCommand(addShare(allOptional))).toBeDefined()
     expect(parseTunnelWorkerCommand(addShare({ ...spec(), accessMode: 'open' }))).toBeDefined()
@@ -270,14 +269,14 @@ describe('committed authority parsing', () => {
   it('owns the snapshot fields a reader follows', () => {
     expect(parseShareAccessState(state())).toEqual({
       type: 'share-access-state', version: 3, accessMode: 'selected',
-      allowedSubjectIds: ['viewer'], sessionMode: 'view', allowsFileUpload: false,
+      allowedSubjectIds: ['viewer'], sessionMode: 'view',
     })
     expect(parseShareAccessState({
       ...state(), version: 0, accessMode: 'open', sessionMode: 'write', allowsFork: true,
-      allowsFileUpload: true, allowedSubjectIds: [], expiresAt: '2026-10-03T00:00:00.000Z',
+      allowedSubjectIds: [], expiresAt: '2026-10-03T00:00:00.000Z',
     })).toEqual({
       type: 'share-access-state', version: 0, accessMode: 'open', allowedSubjectIds: [],
-      sessionMode: 'write', allowsFork: true, allowsFileUpload: true,
+      sessionMode: 'write', allowsFork: true,
       expiresAt: '2026-10-03T00:00:00.000Z',
     })
   })
@@ -294,7 +293,6 @@ describe('committed authority parsing', () => {
       { ...state(), allowedSubjectIds: [4] },
       { ...state(), sessionMode: 'fork-readonly' },
       { ...state(), allowsFork: 'yes' },
-      { ...state(), allowsFileUpload: 'yes' },
       { ...state(), expiresAt: 4 },
       { ...state(), expiresAt: 'not-a-date' },
     ]

@@ -37,6 +37,7 @@ interface ListMetrics {
   band: number
   scrollbarEdgeOffset: number
   rowEdgeInset: number
+  rowPaintInset: number
   clientRight: number
   borderRight: number
   timeRight: number
@@ -55,7 +56,7 @@ interface ListMetrics {
  */
 function measureList(page: Page): Promise<ListMetrics> {
   return page.evaluate(() => {
-    const list = document.querySelector<HTMLElement>('[role="tree"][aria-label="Sessions"]')
+    const list = document.querySelector<HTMLElement>('[data-sidebar-list-area]')
     if (list === null) throw new Error('sidebar session list not in the DOM')
     const time = list.querySelector<HTMLElement>('[class*="time"]')
     if (time === null) throw new Error('no row relative-time element in the sidebar list')
@@ -93,7 +94,7 @@ function measureList(page: Page): Promise<ListMetrics> {
     const pseudoWidth = getComputedStyle(list, '::-webkit-scrollbar').width
     const barWidth = pseudoWidth === 'auto' ? 15 : Number.parseFloat(pseudoWidth)
     const listRect = list.getBoundingClientRect()
-    const sidebarEdge = list.parentElement?.getBoundingClientRect().right
+    const sidebarEdge = list.closest('[class*="sidebarCol"]')?.getBoundingClientRect().right
     if (sidebarEdge === undefined) throw new Error('sidebar session list has no layout parent')
     return {
       gutter: style.scrollbarGutter,
@@ -108,6 +109,7 @@ function measureList(page: Page): Promise<ListMetrics> {
       band: listRect.width - list.clientWidth,
       scrollbarEdgeOffset: sidebarEdge - listRect.right,
       rowEdgeInset: sidebarEdge - row.getBoundingClientRect().right,
+      rowPaintInset: sidebarEdge - row.getBoundingClientRect().right + Number.parseFloat(getComputedStyle(row).borderRightWidth),
       clientRight: listRect.left + list.clientWidth,
       borderRight: listRect.right,
       timeRight: time.getBoundingClientRect().right,
@@ -129,17 +131,18 @@ function measureList(page: Page): Promise<ListMetrics> {
  * @param page - the page under test.
  * @returns the list overflow state and first row's trailing inset.
  */
-function measureRowInset(page: Page): Promise<Pick<ListMetrics, 'overflows' | 'rowEdgeInset'>> {
+function measureRowInset(page: Page): Promise<Pick<ListMetrics, 'overflows' | 'rowEdgeInset' | 'rowPaintInset'>> {
   return page.evaluate(() => {
-    const list = document.querySelector<HTMLElement>('[role="tree"][aria-label="Sessions"]')
+    const list = document.querySelector<HTMLElement>('[data-sidebar-list-area]')
     if (list === null) throw new Error('sidebar session list not in the DOM')
     const row = list.querySelector<HTMLElement>('[role="treeitem"]')
     if (row === null) throw new Error('no row in the sidebar list')
-    const sidebarEdge = list.parentElement?.getBoundingClientRect().right
+    const sidebarEdge = list.closest('[class*="sidebarCol"]')?.getBoundingClientRect().right
     if (sidebarEdge === undefined) throw new Error('sidebar session list has no layout parent')
     return {
       overflows: list.scrollHeight > list.clientHeight,
       rowEdgeInset: sidebarEdge - row.getBoundingClientRect().right,
+      rowPaintInset: sidebarEdge - row.getBoundingClientRect().right + Number.parseFloat(getComputedStyle(row).borderRightWidth),
     }
   })
 }
@@ -193,7 +196,8 @@ function renderGeometry(light: PaletteMetrics, dark: PaletteMetrics): string {
     `- list overflows: ${String(metrics.overflows)}`,
     `- reserved band: ${String(metrics.band)}px`,
     `- scrollbar inset from the sidebar edge: ${String(metrics.scrollbarEdgeOffset)}px`,
-    `- row background inset from the sidebar edge: ${String(metrics.rowEdgeInset)}px`,
+    `- row hitbox inset from the sidebar edge: ${String(metrics.rowEdgeInset)}px`,
+    `- row background inset from the sidebar edge: ${String(metrics.rowPaintInset)}px`,
     `- relative time covered by the bar: ${String(metrics.timeCoveredBy)}px`,
     `- relative time ends inside the content area: ${String(metrics.timeRight <= metrics.clientRight)}`,
     `- content area ends before the border box: ${String(metrics.clientRight < metrics.borderRight)}`,
@@ -216,7 +220,7 @@ function renderGeometry(light: PaletteMetrics, dark: PaletteMetrics): string {
  */
 function resolveThumb(page: Page): Promise<string> {
   return page.evaluate(() => {
-    const list = document.querySelector<HTMLElement>('[role="tree"][aria-label="Sessions"]')
+    const list = document.querySelector<HTMLElement>('[data-sidebar-list-area]')
     if (list === null) throw new Error('sidebar session list not in the DOM')
     const probe = document.createElement('span')
     probe.style.color = 'var(--dsh-scrollbar-thumb)'
@@ -239,7 +243,7 @@ const NO_THUMB = 'rgba(0, 0, 0, 0)'
  * of the viewport (the conversation column).
  */
 async function pointAt(page: Page, where: 'list' | 'away'): Promise<void> {
-  const box = await page.locator('[role="tree"][aria-label="Sessions"]').boundingBox()
+  const box = await page.locator('[data-sidebar-list-area]').boundingBox()
   if (box === null) throw new Error('sidebar session list has no layout box')
   const viewport = page.viewportSize()
   if (viewport === null) throw new Error('page has no viewport')
@@ -268,16 +272,61 @@ async function expandSeededSessions(page: Page): Promise<void> {
     }
     const showMore = page.getByRole('button', { name: /Show \d+ more sessions/ })
     if (await bucket.getAttribute('aria-expanded') === 'true'
-      && await rows.count() <= SEED_COUNT / 2
+      && await rows.count() < SEED_COUNT
       && await showMore.count() > 0) {
       await showMore.click()
     }
-    if (await bucket.getAttribute('aria-expanded') === 'true' && await rows.count() > SEED_COUNT / 2) return
+    if (await bucket.getAttribute('aria-expanded') === 'true' && await rows.count() >= SEED_COUNT) return
     if (Date.now() > deadline) {
-      throw new Error(`Ungrouped bucket never revealed more than ${SEED_COUNT / 2} rows`)
+      throw new Error(`Ungrouped bucket never revealed all ${SEED_COUNT} rows`)
     }
     await page.waitForTimeout(200)
   }
+}
+
+/**
+ * Scroll positions of the sidebar viewport and the session list, with the fixed controls around them.
+ * @param page - the page under test.
+ * @returns both scroll offsets and ranges, plus the toolbar, navigation, and fixed-control edges.
+ */
+function nestedScrollGeometry(page: Page) {
+  return page.evaluate(() => {
+    const viewport = document.querySelector<HTMLElement>('[data-sidebar-scrollport]')!
+    const list = document.querySelector<HTMLElement>('[data-sidebar-list-area]')!
+    const column = viewport.closest('[class*="sidebarCol"]')!
+    const edge = (selector: string) => column.querySelector(selector)!.getBoundingClientRect()
+    return {
+      viewportTop: viewport.getBoundingClientRect().top,
+      viewportScroll: viewport.scrollTop,
+      viewportRange: viewport.scrollHeight - viewport.clientHeight,
+      listScroll: list.scrollTop,
+      listRange: list.scrollHeight - list.clientHeight,
+      headerTop: edge('[data-sidebar-workspace-header]').top,
+      navBottom: edge('[class*="panelList"]').bottom,
+      buttonTop: edge('button[class*="newSession"]').top,
+      footerTop: edge('[class*="footArea"]').top,
+    }
+  })
+}
+
+/**
+ * Return both scrollers to their tops.
+ * @param page - the page under test.
+ */
+async function resetNestedScroll(page: Page): Promise<void> {
+  await page.locator('[data-sidebar-list-area]').evaluate((el) => { el.scrollTop = 0 })
+  await page.locator('[data-sidebar-scrollport]').evaluate((el) => { el.scrollTop = 0 })
+}
+
+/**
+ * Park the pointer at the center of the first element matching `selector`.
+ * @param page - the page under test.
+ * @param selector - the element to point at.
+ */
+async function pointInto(page: Page, selector: string): Promise<void> {
+  const box = await page.locator(selector).first().boundingBox()
+  if (box === null) throw new Error(`${selector} has no layout box`)
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
 }
 
 describe('web e2e: sidebar session list scrollbar (reserved gutter / themed thumb)', () => {
@@ -318,10 +367,17 @@ describe('web e2e: sidebar session list scrollbar (reserved gutter / themed thum
     await expect.poll(async () => (await measureList(page)).overflows, { timeout: 10_000 }).toBe(true)
     const metrics = await measureList(page)
     expect(metrics.gutter).toBe('stable')
+    const horizontal = await page.locator('[data-sidebar-scrollport]').evaluate(viewport => ({
+      overflow: getComputedStyle(viewport).overflowX,
+      scrollbarHeight: viewport.getBoundingClientRect().height - viewport.clientHeight,
+    }))
+    expect(horizontal.overflow).toBe('hidden')
+    expect(horizontal.scrollbarHeight).toBe(0)
     // Pin presence, not width, because the width is platform-dependent.
     expect(metrics.band).toBeGreaterThan(0)
     expect(metrics.scrollbarEdgeOffset).toBe(2)
-    expect(metrics.rowEdgeInset).toBe(12)
+    expect(metrics.rowEdgeInset).toBe(8)
+    expect(metrics.rowPaintInset).toBe(11)
     // Measure against the bar because overlay scrollbars do not move the client edge.
     expect(metrics.timeCoveredBy).toBe(0)
     expect(metrics.timeRight).toBeLessThanOrEqual(metrics.clientRight)
@@ -349,7 +405,7 @@ describe('web e2e: sidebar session list scrollbar (reserved gutter / themed thum
     // leaves the column quiet. This is the one deliberate loss, and
     // it is pinned here rather than only described, so making a scroll
     // re-reveal the bar has to be a decision rather than a side effect.
-    await page.locator('[role="tree"][aria-label="Sessions"]').evaluate((el) => { el.scrollTop += 200 })
+    await page.locator('[data-sidebar-list-area]').evaluate((el) => { el.scrollTop += 200 })
     await page.waitForTimeout(500)
     expect(await resolveThumb(page)).toBe(NO_THUMB)
     await pointAt(page, 'list')
@@ -357,16 +413,103 @@ describe('web e2e: sidebar session list scrollbar (reserved gutter / themed thum
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
-  it('keeps the row background inset when overflow disappears', async () => {
+  it('removes both scroll ranges without moving row edges when grouped content fits', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-sidebar-scrollbar-stable-inset'))
-    expect(await measureRowInset(page)).toEqual({ overflows: true, rowEdgeInset: 12 })
+    const viewport = page.locator('[data-sidebar-list-area]')
+    const height = await viewport.evaluate(el => el.scrollHeight)
+    expect(await measureRowInset(page)).toEqual({ overflows: true, rowEdgeInset: 8, rowPaintInset: 11 })
     const bucket = page.getByText('Ungrouped', { exact: true }).locator('..').locator('..')
     await bucket.click()
     try {
-      await expect.poll(async () => (await measureRowInset(page)).overflows, { timeout: 10_000 }).toBe(false)
-      expect(await measureRowInset(page)).toEqual({ overflows: false, rowEdgeInset: 12 })
+      await expect.poll(async () => viewport.evaluate(el => el.scrollHeight)).toBeLessThan(height)
+      await expect.poll(async () => (await measureRowInset(page)).overflows).toBe(false)
+      expect(await measureRowInset(page)).toEqual({ overflows: false, rowEdgeInset: 8, rowPaintInset: 11 })
+      // A section that fits leaves the sidebar viewport nothing to scroll, so the navigation stays.
+      expect((await nestedScrollGeometry(page)).viewportRange).toBe(0)
     } finally {
       await expandSeededSessions(page)
+      await viewport.evaluate((el) => { el.scrollTop = 0 })
+    }
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
+  it('hands one downward wheel event from the navigation to the session list and back', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-sidebar-nested-scroll'))
+    const size = page.viewportSize()!
+    try {
+      await page.setViewportSize({ width: size.width, height: 500 })
+      await resetNestedScroll(page)
+      const before = await nestedScrollGeometry(page)
+      expect(before.viewportRange).toBeGreaterThan(0)
+      expect(before.listRange).toBeGreaterThan(60)
+      expect(before.headerTop).toBeGreaterThan(before.viewportTop)
+      await pointInto(page, '[data-sidebar-list-area] [role="treeitem"]')
+      await page.mouse.wheel(0, before.viewportRange + 60)
+      await expect.poll(async () => (await nestedScrollGeometry(page)).listScroll).toBe(60)
+      const after = await nestedScrollGeometry(page)
+      expect(after.viewportScroll).toBe(before.viewportRange)
+      expect(after.headerTop).toBe(after.viewportTop)
+      expect(after.navBottom).toBeLessThanOrEqual(after.viewportTop)
+      expect(after.buttonTop).toBe(before.buttonTop)
+      expect(after.footerTop).toBe(before.footerTop)
+      await page.mouse.wheel(0, -110)
+      await expect.poll(async () => (await nestedScrollGeometry(page)).viewportScroll).toBe(before.viewportRange - 50)
+      expect((await nestedScrollGeometry(page)).listScroll).toBe(0)
+    } finally {
+      await page.setViewportSize(size)
+      await resetNestedScroll(page)
+    }
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
+  it('continues a wheel event that starts over the navigation into the session list', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-sidebar-nested-scroll-navigation'))
+    const size = page.viewportSize()!
+    try {
+      await page.setViewportSize({ width: size.width, height: 500 })
+      await resetNestedScroll(page)
+      const before = await nestedScrollGeometry(page)
+      await pointInto(page, '[data-sidebar-scrollport] [class*="panelList"]')
+      await page.mouse.wheel(0, before.viewportRange + 30)
+      await expect.poll(async () => (await nestedScrollGeometry(page)).listScroll).toBe(30)
+      expect((await nestedScrollGeometry(page)).viewportScroll).toBe(before.viewportRange)
+    } finally {
+      await page.setViewportSize(size)
+      await resetNestedScroll(page)
+    }
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
+  it('keeps the toolbar at the top through empty search results', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-sidebar-nested-scroll-search'))
+    const header = page.locator('[data-sidebar-workspace-header]')
+    const input = header.locator('input')
+    const size = page.viewportSize()!
+    try {
+      await page.setViewportSize({ width: size.width, height: 500 })
+      await resetNestedScroll(page)
+      const range = (await nestedScrollGeometry(page)).viewportRange
+      await pointInto(page, '[data-sidebar-list-area] [role="treeitem"]')
+      await page.mouse.wheel(0, range)
+      await expect.poll(async () => {
+        const geometry = await nestedScrollGeometry(page)
+        return geometry.headerTop === geometry.viewportTop
+      }).toBe(true)
+      const searchButton = await page.getByRole('button', { name: 'Search sessions', exact: true }).boundingBox()
+      if (searchButton === null) throw new Error('Search sessions has no layout box')
+      await page.mouse.click(searchButton.x + searchButton.width / 2, searchButton.y + searchButton.height / 2)
+      expect(await input.evaluate(el => el === document.activeElement)).toBe(true)
+      await input.fill('no-sidebar-scroll-matches-9f4c')
+      await page.locator('[class*="searchTree"]').locator('..').locator('[class*="empty"]').waitFor()
+      const filtered = await nestedScrollGeometry(page)
+      expect(filtered.viewportScroll).toBe(range)
+      expect(filtered.headerTop).toBe(filtered.viewportTop)
+      expect((await header.boundingBox())?.height).toBe(36)
+    } finally {
+      if (await input.isVisible()) { await input.fill(''); await input.press('Escape') }
+      await page.setViewportSize(size)
+      await expandSeededSessions(page)
+      await resetNestedScroll(page)
     }
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)

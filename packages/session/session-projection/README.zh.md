@@ -33,7 +33,7 @@ kind: "package-reference"
 
 ### 定义投影单元
 
-领域为每个状态键贡献一个 `ProjectionDefinition`：一个 key、状态 schema、初始状态、同步折叠 `apply(state, event)`、可选的 `wire` 块（把状态投影为客户端视图），以及状态字段或折叠语义变化时递增的 `stateVersion`：
+领域为每个状态键贡献一个 `ProjectionDefinition`：一个 key、状态 schema、初始状态、同步折叠 `apply(state, event)`、可选的 `wire` 块（把状态投影为客户端视图），以及用于使检查点失效的 `stateVersion`。状态字段或折叠语义变化时递增版本。仅当缺失字段保留历史含义，且回归测试验证旧检查点加后缀恢复与全量回放一致时，新增可选字段才可保持版本；仅通过 schema 校验不足以保留版本：
 
 ```text
 const definition = {
@@ -55,13 +55,28 @@ const definition = {
 
 ### 注册与读取
 
-`await register(definition)` 从 `stateSchema` 推导宿主状态类型，安装单元，并返回提供同步 `stateOf(session)` 读取和 `dispose(): Promise<void>` 的 handle。等待 `dispose()` 完成即可释放注册；重复调用是安全的。具有相同 key 和 `stateVersion` 的注册方共享 cell；版本不兼容或非法时注册会拒绝。注册归调用方 fiber 所有。最后一个注册方注销后，单元退出全局事件驱动、快照、检查点和变更通知。已有 handle 仍可读取：它保留原有单元，按需折叠新增的 Session 事件，即使同一 key 后来注册了其他版本也不受影响。读取 handle 不会初始化无关单元，也不会重新注册。载体用 `snapshot(session)` 读取一致的客户端视图切面，用 `onChanged(listener)` 订阅已注册单元的变更。
+`await register(definition)` 从 `stateSchema` 推导宿主状态类型，安装单元，并返回提供同步 `stateOf(session)` 读取和 `dispose(): Promise<void>` 的 handle。等待 `dispose()` 完成即可释放注册；重复调用是安全的。具有相同 key 和 `stateVersion` 的注册方共享 cell；版本不兼容或非法时注册会拒绝。注册归调用方 fiber 所有。最后一个注册方注销后，单元退出全局事件驱动、快照、恢复读取和变更通知；`checkpoint(session)` 仍保留每个 Session 中该单元的最后一个 cell，直到同一 key 再次注册、由新单元重新折叠日志。注册表不再推进这个 cell，但已保留的 handle 读取时仍会把它向前推进，检查点输出推进后的 cell。已有 handle 仍可读取：它保留原有单元，按需折叠新增的 Session 事件，即使同一 key 后来注册了其他版本也不受影响。读取 handle 不会初始化无关单元，也不会重新注册。载体用 `snapshot(session)` 读取一致的客户端视图切面，用 `onChanged(listener)` 按每个变化的单元接收一次调用，用 `onEventChanged(listener)` 按每个已提交事件接收一次调用，列出该事件改变了视图的全部客户端可见单元。
 
 ```text
 const todoProjectionHandle = await ctx.sessionProjections.register(definition)
 const state = todoProjectionHandle.stateOf(session)
 const { asOfSeq, values } = ctx.sessionProjections.snapshot(session)
 ```
+
+<a id="bind-several-states-to-one-session"></a>
+### 将多个状态绑定到一个 Session
+
+对已等待注册完成的句柄调用 `handle.readerFor(session)`，即可得到 `() => S` 回调。调用它时无需 Session 参数即可读取当前状态。组合多个状态的所有者将这些回调放入一个类型化对象，交给运行时。新增状态只增加属性，不增加构造参数；普通插件仍通过领域服务的方法读取。
+
+```text
+const projections = {
+  todo: todoProjectionHandle.readerFor(session),
+  goal: goalProjectionHandle.readerFor(session),
+}
+const todo = projections.todo()
+```
+
+每个读取函数保存确切的 Session，并将读取委托给原句柄的 `stateOf(session)`，保留就绪要求、null 和 undefined 值、状态引用及同步失败。创建读取函数不读取状态、不准备 Session、不执行存储 I/O，也不创建状态缓存。读取函数不拥有注册或释放职责。原句柄仍负责释放；注销或版本替换后，读取函数仍读取原有单元。同一句柄可为多个 Session 独立创建读取函数。注册和 Session 准备仍由原所有者完成；客户端快照保持独立。
 
 持有投影状态的领域将 `sessionProjections` 声明为 Cordis 服务依赖，并在内部保留句柄。消费方注入该领域服务并使用其方法，例如 `ctx.agents.turnBoundaryOf(session)`，无需导入定义或保留投影读取句柄。可选贡献方可以在 `ctx.inject(['sessionProjections'], …)` 下注册。载体使用 `ctx.get('sessionProjections')`，注册表缺席时省略自己的块或帧。
 
@@ -76,19 +91,21 @@ const { asOfSeq, values } = ctx.sessionProjections.snapshot(session)
 
 每个 registry 实例对每个键的首次旧式 `stateOf(session, key)` 读取输出一次 `ctx.logger.warn` 弃用警告。注册、调用其返回值、句柄方法和 owner 清理不产生警告。
 
+注册表的 `cachedSnapshot(session, keys)` 已弃用。它只读取其他读取已经算好的 cell，可能缺少选中的 key，没有选中的客户端可见 cell 时返回 `undefined`；已有调用方仍可继续使用。需要 Session 当前游标处的完整值时使用 `snapshot(session, keys)`，读取 Host 状态时使用注册返回的 `handle.stateOf(session)`。持久化缓存的读取 `ctx.sessionProjectionCache.cachedSnapshot(header, keys)` 是另一个方法，本次未变。
+
 定义同步安装，句柄交付保持异步。注册错误使返回值拒绝。当前宏任务及其微任务结束前没有调用方观察该拒绝时，registry 将其记录为错误，而不留下未处理的拒绝，插件保持激活；发生键冲突后，其按键读取返回另一注册方的状态；owner 已不在加载或激活状态的拒绝会被丢弃。新插件在提供读取操作前等待注册完成。同步 `try/catch` 无法捕获异步注册错误。
 
 ### 持久检查点
 
-系统通过 `checkpoint(session)` 为每个单元的状态创建检查点，client-visible 与 host-only 一视同仁；同级包 [session-projection-cache](../session-projection-cache/README.zh.md) 持久化这些检查点，使冷读跳过全量日志加载。检查点水位使用 `SessionSeqCursor`（空日志为 `-1`），回放起点使用 `SessionLogOffset`；`restoreFloor` 与 `restore` 实现读取流程，且不会混淆已有事件与日志间隙。
+系统通过 `checkpoint(session)` 为每个单元的状态创建检查点，client-visible 与 host-only 一视同仁；同级包 [session-projection-cache](../session-projection-cache/README.zh.md) 持久化这些检查点，使冷读跳过全量日志加载。检查点水位使用 `SessionSeqCursor`（空日志为 `-1`），回放起点使用 `SessionLogOffset`；`restoreFloor` 与 `restore` 实现读取流程，且不会混淆已有事件与日志间隙。`restore` 只折叠在线单元，因此它刷新后的行不含已释放单元，用这些行回写会丢弃这些单元已存储的行。
 
 ### Session 摘要
 
-Session 摘要包含每个已注册客户端视图，但排除 `SessionProjectionMap` 条目（非空值）带 `SessionProjectionSummaryExcluded<T>` 标记的 key。`summaryKeys()` 返回该集合，从实时注册派生；在注册或注销改变 key 表之前，它保持同一实例。摘要消费方把它传给既有的带 key 读取面 —— 实时 cell 用 `cachedSnapshot(session, keys)`，checkpoint 行用 `viewCheckpoint(rows, keys)`，持久化缓存用 `cachedSnapshot(header, keys)` —— 这些读取面把 Set 视为已选好的集合，因此不存在摘要专用读取面、每次读取无需复制，集合也只有一处定义。由于集合由注册表派生，摘要消费方无法通过该集合请求被排除的 key；完整读取面仍会按显式命名的 key 提供值，打开的 Session 因此保留全部取值。列表行携带的是摘要投影，绝不是全量投影。
+Session 摘要包含每个已注册客户端视图，但排除 `SessionProjectionMap` 条目（非空值）带 `SessionProjectionSummaryExcluded<T>` 标记的 key。`summaryKeys()` 返回该集合，从实时注册派生；在注册或注销改变 key 表之前，它保持同一实例。摘要消费方把它传给既有的带 key 读取面 —— 实时 Session 用 `snapshot(session, keys)`，checkpoint 行用 `viewCheckpoint(rows, keys)`，持久化缓存用 `cachedSnapshot(header, keys)` —— 这些读取面把 Set 视为已选好的集合，因此不存在摘要专用读取面、每次读取无需复制，集合也只有一处定义。由于集合由注册表派生，摘要消费方无法通过该集合请求被排除的 key；完整读取面仍会按显式命名的 key 提供值，打开的 Session 因此保留全部取值。列表行携带的是摘要投影，绝不是全量投影。
 
-标记决定客户端视图类型，`wire.summary` 决定运行时键集合，省略即 `true`。map 条目带标记的 key 应声明 `wire.summary: false` 以保持一致；该字段就是普通布尔值，而不是类型层的互锁。可空条目把 `null` 放在包装之外（`SessionProjectionSummaryExcluded<TodoItem[]> | null`），以便首次写入前的值仍可表达。当前被标记的 key 是 `turnOutline`、`sessionStats`、`todos` 和 `imageLimits`：outline 随整份日志增长，列表行不渲染统计或 todo 清单，而图片上限是每个 Session 共享的同一个宿主级启动常量。
+标记决定客户端视图类型，`wire.summary` 决定运行时键集合，省略即 `true`。map 条目带标记的 key 应声明 `wire.summary: false` 以保持一致；该字段就是普通布尔值，而不是类型层的互锁。可空条目把 `null` 放在包装之外（`SessionProjectionSummaryExcluded<TodoItem[]> | null`），以便首次写入前的值仍可表达。当前被标记的 key 是 `turnOutline`、`sessionStats`、`todos`、`imageLimits`、`contextPressure` 和 `contextBreakdown`：outline 随整份日志增长，列表行不渲染统计、todo 清单或上下文用量，而图片上限是每个 Session 共享的同一个宿主级启动常量。
 
-摘要服务于 Session 列表行，列表无需打开 Session。`@` 引用同样以列表方式枚举 Session，但只通过带 key 的 `snapshot(session, keys)` 与 `cachedSnapshot(header, keys)` 读取其 `title` 和 `subagent` 标签 key。`snapshot`、`cachedSnapshot` 和 `viewCheckpoint` 在不传 key 子集时仍返回每个 wire key，因此打开的 Session 仍会收到全部投影值。
+摘要服务于 Session 列表行，列表无需打开 Session。`@` 引用同样以列表方式枚举 Session，但只通过带 key 的 `snapshot(session, keys)` 与 `cachedSnapshot(header, keys)` 读取其 `title` 和 `subagent` 标签 key。`snapshot(session, keys)` 只计算它返回的单元；不传 key 子集时计算每个客户端可见单元、不计算 Host 专用单元，因此打开的 Session 仍会收到全部投影值，`viewCheckpoint` 不传 key 子集时同样返回每个 wire key。
 
 -----
 
@@ -113,7 +130,7 @@ Session 摘要包含每个已注册客户端视图，但排除 `SessionProjectio
 
 ### 驱动与检查点流程
 
-一个已提交事件按注册顺序驱动每个已注册单元；原始 view 通过 `Object.is` 判定为变化的客户端可见单元会以经 schema 校验的视图与致因 seq 通知变更流。live drive 保留前后两个原始 view；snapshot 与冷读仍是彼此独立的完整读取。`checkpoint(session)` 为持久缓存返回每个单元一份独立的 `(key → {ver, seq, val})` 行；`restoreFloor` 把尾部读取锚定在最低可用水位之前一个事件处，使缩短的日志可被检出；`restore` 把持久行在存储后缀上重新折叠，丢弃任何 `ver` 不匹配或声称越过存储末尾的行。
+一个已提交事件按注册顺序驱动每个已注册单元；原始 view 通过 `Object.is` 判定为变化的客户端可见单元会以经 schema 校验的视图与致因 seq 通知每个 `onChanged` 监听器。所有单元驱动完成后，每个 `onEventChanged` 监听器收到一次调用，携带按注册顺序排列、每个变化的客户端可见单元一项的 `{ key, val }`（`val` 为经 schema 校验的视图），以及致因 seq；未改变任何客户端可见视图的事件不产生事件级调用。驱动中某个单元或 `onChanged` 监听器抛错时，事件级监听器仍会收到抛错前已产生的变化，随后错误继续抛给 Session 的监听器兜底处理。live drive 保留前后两个原始 view；snapshot 与冷读仍是彼此独立的完整读取。`checkpoint(session)` 为持久缓存返回每个单元一份独立的 `(key → {ver, seq, val})` 行；`restoreFloor` 把尾部读取锚定在最低可用水位之前一个事件处，使缩短的日志可被检出；`restore` 把持久行在存储后缀上重新折叠，丢弃任何 `ver` 不匹配或声称越过存储末尾的行。
 
 </details>
 
@@ -151,6 +168,8 @@ Session 摘要包含每个已注册客户端视图，但排除 `SessionProjectio
 - **只有带 key 子集的读取才省略 key；尾页仍携带每个客户端可见 key，也不存在惰性逐值请求**——摘要只省略那些 `SessionProjectionMap` 条目带有 `SessionProjectionSummaryExcluded<T>` 且注册声明了 `wire.summary: false` 的 key。该 opt-out 按 key 生效，不按值生效：没有任何读取会延后加载单个大值。
 - **单元表是进程级的，因此 key 是否存在不能当作逐会话的能力信号**——任何 agent preset 注册的 key 都会出现在每个会话的快照里；客户端必须读值，不能把 key 缺席当作功能缺席。
 - **主动驱动逐事件触达每个单元**——按构造开销很低（全量值规则与 state/view 引用闸门），但若出现热点路径，可加按单元的事件类型预过滤。
+- **已释放单元的检查点行停止推进**——最后一个注册方释放 key 后，`checkpoint(session)` 保留每个 Session 的最后一个 cell，直到该 key 再次注册。在正常关停之外，这期间追加的事件会让存储的行落后于日志，冷列表读到的是这个较旧的值。
+- **已释放的前任会继续引用其定义**——注册表持有已释放单元的定义闭包，直到同一 key 再次注册；因此重载后改名或不再注册的 key 会在进程生命周期内一直引用旧模块。cell 以 Session 为弱键，不会保留 Session。
 - **注册表 cell 只活在内存里**——重启后首次触达时靠折叠日志重建；挂载了 `dsh-session-projection-cache` 的组合改由持久行播种该折叠。
 - **单元同步纪律只有部分可机械把关**——`wire.viewSchema.parse` 能拒绝返回 Promise 的 view，但阻塞的 `apply`、或读取撕裂的非会话状态的 `apply`，只能靠评审把关。
 

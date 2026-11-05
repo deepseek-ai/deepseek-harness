@@ -1,5 +1,5 @@
 /** Computer Use presentation over the existing pending-question answer channel. */
-import type { PropsRenderFactories, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsLocale, PropsRenderFactories, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ComposerChainProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-user-questions/client'
 import type {} from '@deepseek-ai/dsh-client-ui-approval/client'
@@ -17,7 +17,7 @@ export function selectApplicationApproval(pending: ComposerChainProps['pendingIn
 }
 
 /** Composer bindings for an application decision and caller-owned localized copy. */
-export type ApplicationApprovalProps = PropsRuntime<'conversation.composer'> & PropsRenderFactories & {
+export type ApplicationApprovalProps = PropsRuntime<'conversation.composer'> & PropsRenderFactories & PropsLocale<'cuaPermissions'> & {
   matched: NonNullable<ReturnType<typeof selectApplicationApproval>>
   resolveText: (text: { en: string; [locale: string]: string }) => string
 }
@@ -27,11 +27,12 @@ export type ApplicationApprovalProps = PropsRuntime<'conversation.composer'> & P
  * @param props The existing pending question and renderer bindings.
  * @returns Fixed actions with the provider's original answer labels.
  */
-export function ApplicationApproval({ matched: { pending, item, intent }, resolveText, renderFactorySlot }: ApplicationApprovalProps) {
+export function ApplicationApproval({ matched: { pending, item, intent }, resolveText, renderFactorySlot, t }: ApplicationApprovalProps) {
   const always = intent.always
   const answer = (label: string) => pending.answer({ answers: [{ id: item.id, selected: [label] }] })
   return renderFactorySlot('conversation.approval.card', {
     requestKey: pending.key,
+    warning: { label: t('approvalRisks'), title: t('approvalRiskTitle'), detail: t('approvalRiskNotice') },
     title: intent.display === undefined ? item.question : resolveText(intent.display.question),
     ...(item.detail === undefined ? {} : {
       description: intent.display?.detail === undefined ? item.detail : resolveText(intent.display.detail),

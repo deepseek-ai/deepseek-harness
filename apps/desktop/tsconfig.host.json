@@ -36,7 +36,16 @@
       "path": "../../packages/client/product-analytics/tsconfig.host.json"
     },
     {
+      "path": "../../packages/boot/plugin-manager"
+    },
+    {
       "path": "../../packages/util/file-drag"
+    },
+    {
+      "path": "../../packages/client/ui-settings-general/tsconfig.host.json"
+    },
+    {
+      "path": "../../packages/client/ui-file-actions"
     }
   ],
   "exclude": [

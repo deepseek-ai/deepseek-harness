@@ -1,6 +1,6 @@
 /**
  * Assembled-app regression: a parent-owned catalog event remains sufficient
- * for direct discovery when the persisted child has no descriptor event.
+ * for descendant discovery when the persisted child has no descriptor event.
  */
 
 import { readFile, readdir, writeFile } from 'node:fs/promises'
@@ -42,7 +42,7 @@ async function expectSession(actual: string, expectedPath: string): Promise<void
 
 /**
  * Seed a completed parent turn with one catalogued cold child whose own log
- * has no descriptor event. Direct discovery must not read that child log.
+ * has no descriptor event. Descendant discovery requires no activation descriptor.
  */
 async function seedCataloguedDescriptorlessChild(root: string, cwd: string): Promise<void> {
   const ctx = new Context()
@@ -106,7 +106,7 @@ async function seedCataloguedDescriptorlessChild(root: string, cwd: string): Pro
 }
 
 describe('parent-owned cold child catalog snapshot', () => {
-  it('discovers a catalogued child without reading its descriptor through the assembled headless app', async () => {
+  it('discovers a descriptorless catalogued child with its tree position through the assembled headless app', async () => {
     let cwd = ''
     const result = await runLoaderSmoke({
       label: 'subagent diagnostic headless stream-json snapshot',
@@ -131,10 +131,9 @@ describe('parent-owned cold child catalog snapshot', () => {
         const parent = logs.find(content => content.includes('"subagent-diagnostic-parent"'))
         if (parent === undefined) throw new Error('missing persisted parent log')
 
-        // THE model-visible fact: the parent catalog supplies discovery even
-        // though consulting the descriptor-less child would classify it corrupt.
+        // Discovery reads child catalogs without requiring activation descriptors.
         expect(parent).toContain(`${childId} [inactive] — descriptorless child`)
-        expect(parent).not.toContain('[diagnostic: corrupt]')
+        expect(parent).not.toContain(`${childId} [corrupt]`)
 
         const context: NormalizeContext = { sessionIds: [parentId, childId], cwd }
         const normalizedParent = normalizeSessionSnapshot(parent, context)

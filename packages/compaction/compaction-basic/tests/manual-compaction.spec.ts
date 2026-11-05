@@ -880,17 +880,23 @@ describe('compactNow transaction and failure classification', () => {
     const { compact } = detachedService()
     const session = closedConversation(2)
     const agent = fakeAgent(session, () => () => undefined)
-    compact.gate = new Promise<undefined>((resolve) => {
-      setTimeout(() => { resolve(undefined) }, 5)
-    })
+    const openedAt = Date.now()
+    const originalNow = Date.now
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(openedAt)
+    try {
+      compact.duringSummary = () => { clock.mockReturnValue(openedAt + 25) }
 
-    await compact.compactNow(agent, SIGNAL)
+      await compact.compactNow(agent, SIGNAL)
 
-    const start = session.snapshotEvents().findLast(event => event.type === 'compaction/start')
-    const end = session.snapshotEvents().findLast(event => event.type === 'compaction/end')
-    expect(start).toBeDefined()
-    expect(end).toBeDefined()
-    expect(end!.time - start!.time).toBeGreaterThan(0)
+      const start = session.snapshotEvents().findLast(event => event.type === 'compaction/start')
+      const end = session.snapshotEvents().findLast(event => event.type === 'compaction/end')
+      expect(start?.time).toBe(openedAt)
+      expect(end?.time).toBe(openedAt + 25)
+      expect(end!.time - start!.time).toBe(25)
+    } finally {
+      clock.mockRestore()
+    }
+    expect(Date.now).toBe(originalNow)
   })
 
   it('excludes concurrent automatic and manual compaction of one session', async () => {

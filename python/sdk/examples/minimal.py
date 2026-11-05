@@ -41,6 +41,8 @@ def main() -> None:
         profile=args.profile,
     ) as harness:
         result = harness.run(args.prompt, session_id=args.session_id)
+    if result.finish_reason not in (None, "completed"):
+        raise RuntimeError(f"Input ended with {result.finish_reason}: {result.final_response}")
     print(result.final_response)
 
 

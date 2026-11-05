@@ -15,7 +15,7 @@
   padding: 3px 7px;
   border-radius: var(--dsw-radius-sm);
   background: var(--dsw-alias-tooltip-bg);
-  color: var(--dsw-static-neutral-bluish-00);
+  color: var(--dsw-alias-tooltip-label);
   font-size: 13px;
   line-height: 20px;
   white-space: pre-line;
@@ -26,6 +26,7 @@
 }
 
 .bubble[data-portal] { z-index: 1100; }
+:global(:where(html[data-platform='darwin'])) .bubble { -webkit-app-region: no-drag; }
 .bubble[data-pinned] { pointer-events: auto; }
 .label { min-width: 0; }
 

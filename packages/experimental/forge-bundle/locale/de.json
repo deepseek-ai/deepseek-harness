@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Änderungsanfragen und Arbeitsbäume",
+    "description": "Verknüpfte GitHub-Pull-Requests neben der Unterhaltung verfolgen: Prüfungen und Reviews ansehen, Code vergleichen und Feedback an den Agenten senden. Lokale Änderungen prüfen und Aufgaben mit separaten Arbeitsbäumen isolieren. GitHub-Funktionen erfordern eine installierte gh-CLI und eine Anmeldung auf dem Host.",
+    "detail": "docs/DETAIL.de.md"
+  }
+}

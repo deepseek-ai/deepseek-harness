@@ -21,7 +21,7 @@ import {
   readPluginMeta, readProfileManifest, resolveBundleDir, loadOverlayPatches, composeEntries,
   readProfilePatches, bundlePatchPaths,
   evaluatePluginCompatibility, readProfileCompatibility, readProfileVersionExemptions,
-  setProfileVersionExemption, PROFILE_COMPATIBILITY_FILENAME,
+  setProfileVersionExemption, validatePluginVersionExemption, PROFILE_COMPATIBILITY_FILENAME,
   getDshRuntimeVersion, ResolutionRestartRequired,
   assertBundlePlatform, UnsupportedBundlePlatformError,
 } from '@deepseek-ai/dsh-app-boot'
@@ -31,12 +31,12 @@ import type { ProfileContext, ProfileManifest } from '@deepseek-ai/dsh-app-boot'
 import { bundleManifest, readProfileRegistry, registryArguments, runProfilePnpm, saveManifest, viewProfilePackage } from './operations.ts'
 import { classifyInstallFailure } from './install-failure.ts'
 import { officialBundleInstallTarget } from './official-install-target.ts'
-import { dependencySpec, InvalidInstallSpecError, parseInstallSpec, type ParsedInstallSpec } from './install-spec.ts'
+import { dependencySpec, InvalidInstallSpecError, parseInstallSpec, pinnedGitOrigin, type ParsedInstallSpec } from './install-spec.ts'
 import { attributeFailure, normalizeRegistry, NPMMIRROR_REGISTRY, registryPlan } from './registry.ts'
 import { flatten, writePluginEnabled } from './patch.ts'
 import { incompatiblePlugin, ManagementFailure } from './failure.ts'
 import { approveBuilds, recordPendingBuilds } from './build-approval.ts'
-import { checkGithubConnection } from './github-connection.ts'
+import { checkGitConnection, checkGithubConnection, type GithubConnectionFailure } from './github-connection.ts'
 import { chooseGitTransport, sshGitSpec } from './git-transport.ts'
 import { newerVersions, VERSION_FIELDS, VERSION_LIST_FIELDS, versionFacts } from './versions.ts'
 import type {
@@ -44,10 +44,11 @@ import type {
   PackageResult, PluginChange, PluginEntryId, PluginInfo, PluginInstallCancellation, PluginInstallProgress, PluginInstallRequestId,
   PluginRegistries, PluginSpecInspection, PluginUpdateResult, PluginUpdateStep, PluginVersion, PluginVersionList, Registry,
   RegistryAttempt, UpdateBundleOptions,
+  PluginOperation, PluginOperationId,
 } from './types.ts'
 export type * from './types.ts'
 export { classifyInstallFailure, type InstallFailureFacts } from './install-failure.ts'
-export { InvalidInstallSpecError, parseInstallSpec, type ParsedInstallSpec } from './install-spec.ts'
+export { InvalidInstallSpecError, parseInstallSpec, pinnedGitOrigin, type ParsedInstallSpec } from './install-spec.ts'
 
 /** The pnpm executable, registries, and limits for diagnostics, lookups and connection checks. */
 export interface Config {
@@ -160,18 +161,26 @@ function refused(problem: Extract<PluginSpecInspection, { status: 'refused' }>['
   return { status: 'refused', problem, reason }
 }
 
-/** An installed registry bundle an update can replace, its installed version, and its parsed registry spec. */
-interface UpdateTarget<B> {
-  bundle: B
-  installed: string
-  parsed: Extract<ParsedInstallSpec, { kind: 'registry' }>
+/**
+ * An installed bundle an update can replace and its installed version: a registry copy with its parsed registry spec,
+ * or a Git copy with the saved spec that installs it again and the repository directory it pins.
+ */
+type UpdateTarget<B> =
+  | { kind: 'registry'; bundle: B; installed: string; parsed: Extract<ParsedInstallSpec, { kind: 'registry' }> }
+  | { kind: 'git'; bundle: B; installed: string; source: string; origin: string }
+
+/** What an update installs: the target spec, the registry asked first when one is named, and whether the save is exact. */
+interface UpdatePlan {
+  spec: string
+  registry: Registry | undefined
+  saveExact: boolean
 }
 
 /**
  * Why an update cannot replace a listed bundle, or what it replaces.
  * @param bundle The listed bundle, or undefined for a name the inventory does not list.
  * @param name The package name, for the refusal.
- * @returns The bundle, its installed version, and its registry spec; or the refusal's diagnostic.
+ * @returns The bundle, its installed version, and how it was installed; or the refusal's diagnostic.
  */
 function updateRefusal<B extends Pick<BundleInfo, 'name' | 'installed' | 'availability' | 'official' | 'version' | 'source' | 'readOnlyReason'>>(
   bundle: B | undefined, name: string,
@@ -183,12 +192,15 @@ function updateRefusal<B extends Pick<BundleInfo, 'name' | 'installed' | 'availa
   if (bundle.readOnlyReason !== undefined) return `${bundle.name} carries plugin management and cannot be removed`
   const installed = bundle.version
   if (installed === undefined || semver.valid(installed) === null) return `${bundle.name} declares no semver version`
+  // Only a pinned commit reinstalls the removed version when its replacement fails.
+  const origin = pinnedGitOrigin(bundle.source)
+  if (origin !== undefined) return { kind: 'git', bundle, installed, source: bundle.source, origin }
   const parsed = parsedForRegistry(bundle.source)
   // A protocol in the saved range, such as an `npm:` alias, names another package than the dependency.
   if (parsed.kind !== 'registry' || parsed.name !== bundle.name || parsed.range?.includes(':') === true) {
-    return `${bundle.name} is not installed from a registry under its own name`
+    return `${bundle.name} is installed neither from a registry under its own name nor from a Git commit`
   }
-  return { bundle, installed, parsed }
+  return { kind: 'registry', bundle, installed, parsed }
 }
 
 /** What asking planned registries in turn answered: the parsed output and the registry that gave it, or the last refusal. */
@@ -276,6 +288,28 @@ function parsedForRegistry(spec: string): ParsedInstallSpec {
     if (!(error instanceof InvalidInstallSpecError)) throw error
     return { kind: 'registry', spec, name: spec }
   }
+}
+
+/** Only registry package names are retained before installation resolves its target. */
+function installOperationTarget(spec: string): string | null {
+  let parsed: ParsedInstallSpec
+  try { parsed = parseInstallSpec(spec) }
+  catch (_error) { return null /* Invalid specs remain private; installation owns their refusal. */ }
+  return parsed.kind === 'registry' ? parsed.name : null
+}
+
+/** Exemption facts use canonical package identity, never the raw request or installed version. */
+function exemptionOperationIdentity(packageVersion: string, runtimeVersion: string): Pick<PluginOperation, 'target' | 'version'> {
+  try { validatePluginVersionExemption(packageVersion, runtimeVersion) }
+  catch (_error) { return { target: null } /* The operation still owns validation failure reporting. */ }
+  const separator = packageVersion.lastIndexOf('@')
+  return { target: installOperationTarget(packageVersion.slice(0, separator)),
+    version: diagnosticVersion(packageVersion.slice(separator + 1)) }
+}
+
+/** Unusable file metadata must not discard the rest of an operation record. */
+function diagnosticVersion(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length <= 128 ? value : undefined
 }
 
 declare module '@deepseek-ai/cordis' {
@@ -432,7 +466,7 @@ export class PluginManager extends TypertRemoteService {
     return this.change(result => this.configure(async () => {
       await setProfileVersionExemption(this.profile.dir, packageVersion, runtimeVersion, enabled, acceptRisk === true)
       Object.assign(result, await this.reload())
-    }), { stage: 'enable', target: packageVersion, enabled }, 'bundle')
+    }), { stage: 'enable', target: packageVersion, enabled }, 'bundle', exemptionOperationIdentity(packageVersion, runtimeVersion))
   }
 
   /** Read current plugins, including why a row cannot be changed through the profile patch.
@@ -464,11 +498,14 @@ export class PluginManager extends TypertRemoteService {
    */
   @Remote
   listBundles(): Promise<BundleInfo[]> {
-    return Promise.resolve(this.readBundles().map(bundle => ({ ...bundle, updatable: typeof updateRefusal(bundle, bundle.name) !== 'string' })))
+    return Promise.resolve(this.readBundles().map((bundle) => {
+      const target = updateRefusal(bundle, bundle.name)
+      return typeof target === 'string' ? bundle : { ...bundle, update: target.kind }
+    }))
   }
 
   /** The bundle inventory before update eligibility, which is derived from each listed bundle. */
-  private readBundles(): Omit<BundleInfo, 'updatable'>[] {
+  private readBundles(): Omit<BundleInfo, 'update'>[] {
     const manifest = readProfileManifest('dsh', this.profile.dir)
     const exemptions = readProfileVersionExemptions(this.profile.dir)
     const selected = bundleSelection(manifest)
@@ -477,7 +514,7 @@ export class PluginManager extends TypertRemoteService {
     const installation = JSON.parse(readFileSync(this.profile.installAnchor, 'utf8')) as InstallationManifest
     const catalog = new Map(OFFICIAL_ON_DEMAND_CATALOG.map(entry => [entry.packageName, entry]))
     const names = [...new Set([...selected, ...dependencies, ...Object.keys(installation.dependencies ?? {}), ...catalog.keys()])]
-    const bundles: Omit<BundleInfo, 'updatable'>[] = []
+    const bundles: Omit<BundleInfo, 'update'>[] = []
     const runtimeVersion = getDshRuntimeVersion()
     for (const name of names) {
       const installed = dependencies.includes(name)
@@ -639,6 +676,7 @@ export class PluginManager extends TypertRemoteService {
   async listVersions(name: string, options?: ListVersionsOptions, signal?: AbortSignal): Promise<PluginVersionList> {
     const target = updateRefusal((await this.listBundles()).find(bundle => bundle.name === name), name)
     if (typeof target === 'string') return { status: 'refused', problem: 'not-updatable', reason: target, attempts: [] }
+    if (target.kind === 'git') return { status: 'refused', problem: 'not-updatable', reason: `${name} is installed from Git, which lists no versions`, attempts: [] }
     const plan = registryPlan(this.registryFor(name, options?.registry), await this.registries())
     const listing = await this.askRegistries(name, VERSION_LIST_FIELDS, plan, target.parsed, signal)
     if (listing.status === 'refused') return listing
@@ -675,15 +713,21 @@ export class PluginManager extends TypertRemoteService {
   }
 
   /**
-   * Replace an installed registry bundle with a newer published version. The target is checked on the registry first:
-   * it must exist, declare a bundle, and accept the running DSH version, or nothing changes. With HMR the installed
-   * version is removed, so its plugins stop, and the target is installed with the same selection; when that
-   * installation fails or is cancelled, the removed version is installed again from the registry it came from.
-   * Without HMR the target is installed over the running version and the result reports the restart.
+   * Replace an installed bundle with a newer version. A registry copy updates to `name@version`, checked on the registry
+   * first: it must exist, declare a bundle, and accept the running DSH version, or nothing changes. A Git copy updates
+   * to the Git spec `options.spec` names, which must pin a full commit of the repository directory the copy came from;
+   * with HMR, a network failure or timeout reaching its repository stops the update before anything changes. pnpm reads
+   * a Git package only while installing it, so its bundle and compatibility are checked then. Either target
+   * installation is undone, profile files and modules included, before its bundle loads unless it installs `name` at
+   * `version`. With HMR the installed version is removed, so its plugins stop, and the target is installed with the same
+   * selection; when that installation fails or is cancelled, the removed version is installed again: a registry copy
+   * from the registry it came from, a Git copy from its saved spec. Without HMR the target is installed over the running
+   * version and the result reports the restart.
    * @param name Installed profile dependency name.
-   * @param version Exact published version newer than the installed one.
-   * @param options The registry asked first, as for `listVersions`, and the request id naming the progress and the
-   * target installation's logs and cancellation.
+   * @param version Exact version newer than the installed one.
+   * @param options The registry asked first, as for `listVersions`; the Git spec of `version`, required for and accepted
+   * only by a bundle `listBundles` lists with `update: 'git'`; and the request id naming the progress and the target
+   * installation's logs and cancellation.
    * @returns The versions, the last step that ran with its result, and the reinstallation when one ran.
    */
   @Remote
@@ -704,28 +748,33 @@ export class PluginManager extends TypertRemoteService {
     if (semver.valid(version) === null || !semver.gt(version, from)) {
       return refusedBefore({ code: 'invalid-spec', diagnostic: `${version} is not a version newer than the installed ${from}` })
     }
-    const spec = `${name}@${version}`
-    const plan = registryPlan(this.registryFor(name, options?.registry), await this.registries())
-    const checked = await this.askRegistries(spec, VERSION_FIELDS, plan, { kind: 'registry', spec, name })
-    if (checked.status === 'refused') return refusedBefore({ code: 'operation-error', diagnostic: checked.reason })
-    const facts = versionFacts(checked.answer, name, version)
-    if (!facts.bundle) return refusedBefore({ code: 'not-bundle' })
-    let compatibility
-    try { compatibility = evaluatePluginCompatibility(facts.manifest, readProfileVersionExemptions(this.profile.dir)) }
-    catch (error) { return refusedBefore({ code: 'operation-error', diagnostic: messageOf(error) }) }
-    if (compatibility !== undefined && !compatibility.exempted) {
-      return refusedBefore({ code: 'incompatible-version', incompatible: [incompatiblePlugin(compatibility)] })
-    }
+    const planned = target.kind === 'git'
+      ? this.planGitUpdate(name, target.origin, options)
+      : await this.checkRegistryUpdate(name, version, options)
+    if ('code' in planned) return refusedBefore(planned)
+    const { spec, registry, saveExact } = planned
     const { enabled } = bundle
     // A lock timeout or disposal rejects instead of reporting; it reads as the failed step it is.
     const settled = (stage: ChangeResult['stage'], target: string, operation: Promise<ChangeResult>): Promise<ChangeResult> =>
       operation.catch((error: unknown) => ({ changed: false, application: 'failed', stage, target, error: managementError(error) }))
     const installTarget = (): Promise<ChangeResult> => settled('install', spec, this.installBundle(spec, {
-      saveExact: true, registry: checked.registry, enabled, ...requestId === undefined ? {} : { requestId },
+      saveExact, enabled, expected: { name, version },
+      ...registry === undefined ? {} : { registry }, ...requestId === undefined ? {} : { requestId },
     }))
     if (this.ownerContext.get('hmr') === undefined) {
       announce('installing')
       return { from, to: version, step: 'install', result: await installTarget() }
+    }
+    // A Git host that cannot be reached would fail the target and the reinstallation alike, so nothing is removed.
+    const unreachable = target.kind === 'git' ? await this.gitHostUnreachable(spec) : undefined
+    if (unreachable !== undefined) {
+      return {
+        from, to: version, step: 'check',
+        result: {
+          changed: false, application: 'failed', stage: 'install', target: name, failedAt: 'spec-host', packageResult: unreachable,
+          error: { code: 'operation-error', diagnostic: unreachable.output },
+        },
+      }
     }
     // The removed version is installed again where it came from, else over the configured plan, as its removal asks.
     const previousRegistry = this.installedFrom.get(name)
@@ -739,11 +788,78 @@ export class PluginManager extends TypertRemoteService {
     // A target that installed but failed to start is still a dependency; it goes before the removed version returns.
     if (result.stage === 'enable') await settled('remove', name, this.removeBundle(name))
     // The reinstallation carries no request id, so cancelling the update cannot leave the package removed.
-    const previous = `${name}@${from}`
+    const previous = target.kind === 'git' ? target.source : `${name}@${from}`
     const restore = await settled('install', previous, this.installBundle(previous, {
-      saveExact: true, enabled, ...previousRegistry === undefined ? {} : { registry: previousRegistry },
+      saveExact, enabled, ...previousRegistry === undefined ? {} : { registry: previousRegistry },
     }))
     return { from, to: version, step: 'install', result, restore }
+  }
+
+  /**
+   * The target of a Git copy's update: the caller's Git spec, pinned to a full commit of the copy's repository directory.
+   * @param name The package name.
+   * @param origin The repository directory the installed copy pins.
+   * @param options The caller's spec and registry.
+   * @returns The spec and the registry its dependencies are asked from first, or why the update is refused.
+   */
+  private planGitUpdate(name: string, origin: string, options: UpdateBundleOptions | undefined): UpdatePlan | ManagementError {
+    const spec = options?.spec
+    const pinned = spec === undefined ? undefined : pinnedGitOrigin(spec)
+    if (spec === undefined || pinned === undefined) {
+      return { code: 'invalid-spec', diagnostic: `${name} is installed from Git and updates only to a Git spec pinned to a full commit` }
+    }
+    if (pinned !== origin) {
+      return { code: 'invalid-spec', diagnostic: `${spec} is not in the repository directory ${name} is installed from, ${origin}` }
+    }
+    return { spec, registry: this.registryFor(name, options?.registry), saveExact: false }
+  }
+
+  /**
+   * Check that the network reaches the repository of a Git update's target. Only a network failure or a timeout
+   * counts: a check Git cannot run, or one the repository refuses without credentials, leaves the answer to pnpm.
+   * @param spec The target's pinned Git spec.
+   * @returns The failed check, or undefined when the host answered or the check could not tell.
+   */
+  private async gitHostUnreachable(spec: string): Promise<PackageResult | undefined> {
+    const parsed = parseInstallSpec(spec)
+    /* v8 ignore next -- planGitUpdate accepts only a pinned Git spec */
+    if (parsed.kind !== 'git') return undefined
+    const env = this.profile.packageManager?.env === undefined ? {} : { env: this.profile.packageManager.env }
+    const check = checkGitConnection(parsed, this.profile.dir, {
+      timeoutMs: this.githubConnectionTimeoutMs, outputBytes: this.outputBytes, signal: this.abort.signal, ...env,
+    })
+    this.packageOperations.add(check)
+    let failure: GithubConnectionFailure | undefined
+    try { failure = await check } finally { this.packageOperations.delete(check) }
+    this.abort.signal.throwIfAborted()
+    if (failure?.kind !== 'network' && failure?.kind !== 'timeout') return undefined
+    // The answer keeps a plain PackageResult; the check's command line stays out of the wire fields.
+    const { argv: _argv, ...packageResult } = failure
+    return packageResult
+  }
+
+  /**
+   * Check a registry copy's update target on the registry plan before anything changes.
+   * @param name The package name.
+   * @param version The target version.
+   * @param options The caller's registry, as for `listVersions`; a spec is refused.
+   * @returns The exact spec and the registry that answered for it, or why the target cannot replace the bundle.
+   */
+  private async checkRegistryUpdate(
+    name: string, version: string, options: UpdateBundleOptions | undefined,
+  ): Promise<UpdatePlan | ManagementError> {
+    const spec = `${name}@${version}`
+    if (options?.spec !== undefined) return { code: 'invalid-spec', diagnostic: `${name} is installed from a registry and updates only to ${spec}` }
+    const plan = registryPlan(this.registryFor(name, options?.registry), await this.registries())
+    const checked = await this.askRegistries(spec, VERSION_FIELDS, plan, { kind: 'registry', spec, name })
+    if (checked.status === 'refused') return { code: 'operation-error', diagnostic: checked.reason }
+    const facts = versionFacts(checked.answer, name, version)
+    if (!facts.bundle) return { code: 'not-bundle' }
+    let compatibility
+    try { compatibility = evaluatePluginCompatibility(facts.manifest, readProfileVersionExemptions(this.profile.dir)) }
+    catch (error) { return { code: 'operation-error', diagnostic: messageOf(error) } }
+    if (compatibility !== undefined && !compatibility.exempted) return { code: 'incompatible-version', incompatible: [incompatiblePlugin(compatibility)] }
+    return { spec, registry: checked.registry, saveExact: true }
   }
 
   /**
@@ -834,7 +950,8 @@ export class PluginManager extends TypertRemoteService {
   /**
    * Install a package using the same pnpm implementation as dsh plugin. GitHub
    * repositories get a connection check bounded by githubConnectionTimeoutMs before pnpm starts;
-   * only network failures or timeouts stop installation, while pnpm owns authentication and transport fallback. An
+   * only network failures or timeouts stop installation, and a stop streams the check's diagnostic
+   * as the installation's install-log run under its request id, while pnpm owns authentication and transport fallback. An
    * HTTP(S) Git URL on another host is installed over SSH instead when access probes bounded by gitTransportTimeoutMs
    * find that only SSH can read it. A run
    * that fails, is cancelled, or adds a package without a bundle patch restores
@@ -878,13 +995,23 @@ export class PluginManager extends TypertRemoteService {
           timeoutMs: this.githubConnectionTimeoutMs, outputBytes: this.outputBytes, signal, ...env,
         })
         this.packageOperations.add(connection)
-        let connectionFailure: PackageResult | undefined
+        let connectionFailure: GithubConnectionFailure | undefined
         try { connectionFailure = await connection }
         finally { this.packageOperations.delete(connection) }
         if (stopped()) throw new InstallCancelledError()
         if (connectionFailure?.kind === 'network' || connectionFailure?.kind === 'timeout') {
-          result.packageResult = connectionFailure
+          // The answer keeps a plain PackageResult; the check's command line is only streamed as the run below.
+          const { argv, ...packageResult } = connectionFailure
+          result.packageResult = packageResult
           result.failedAt = 'spec-host'
+          // pnpm never runs, so the check is the installation's only run: stream its failure into the install log.
+          // A timed-out Git reports no exit code of its own, unlike the result, which records the status it is read as.
+          if (requestId !== undefined) {
+            this.ownerContext.emit('plugin-manager/install-log', {
+              requestId, jobId: randomUUID(), argv, cwd: this.profile.dir, stream: 'stderr',
+              text: connectionFailure.output, exitCode: connectionFailure.timedOut === true ? null : connectionFailure.exitCode,
+            })
+          }
           throw new Error(connectionFailure.output)
         }
         const transport = chooseGitTransport(parsed, this.profile.dir, { timeoutMs: this.gitTransportTimeoutMs, signal, ...env })
@@ -904,11 +1031,16 @@ export class PluginManager extends TypertRemoteService {
           result.registries.push(registry)
           used = registry
           announce('installing', { registry, index: index + 1, total: plan.length })
-          run = await this.runPnpm(['add', installSpec, ...options?.saveExact === true ? ['--save-exact'] : [], ...registryArguments(registry)], control.abort.signal, requestId)
+          run = await this.runPnpm(
+            ['add', installSpec, ...options?.saveExact === true ? ['--save-exact'] : [], ...registryArguments(registry)],
+            control.abort.signal, requestId, options?.expected,
+          )
           result.packageResult = run
           if (stopped()) throw new InstallCancelledError()
           // A compatibility refusal is the package's own answer, so no other registry is asked.
           if (run.incompatible !== undefined) throw new ManagementFailure('incompatible-version', run.incompatible)
+          // So is a run that installed another package, version, or no bundle where the caller expects one.
+          if (run.unmet !== undefined) throw new ManagementFailure(run.unmet)
           // A run this manager terminated is not a success, even when pnpm trapped the signal and exited 0.
           if (run.exitCode === 0 && run.timedOut !== true) break
           /* v8 ignore next 2 -- runPnpm classifies every run it does not report as succeeded */
@@ -1076,9 +1208,9 @@ export class PluginManager extends TypertRemoteService {
     return { rows, overrides }
   }
 
-  /** Run one pnpm command in the profile, streaming its output as install-log chunks. */
+  /** Run one pnpm command in the profile, streaming its output as install-log chunks; `expected` is the package an `add` must install. */
   private async runPnpm(
-    args: readonly string[], signal?: AbortSignal, requestId?: PluginInstallRequestId,
+    args: readonly string[], signal?: AbortSignal, requestId?: PluginInstallRequestId, expected?: InstallBundleOptions['expected'],
   ): Promise<PackageResult> {
     const jobId = randomUUID()
     const argv = ['pnpm', ...args]
@@ -1088,7 +1220,7 @@ export class PluginManager extends TypertRemoteService {
       execution: 'service', ...this.profile.packageManager ?? { command: this.pnpmCommand },
       signal: signal === undefined ? this.abort.signal : AbortSignal.any([this.abort.signal, signal]),
       outputBytes: this.outputBytes, activateNewBundles: false, idleTimeoutMs: this.idleTimeoutMs,
-      lookupTimeoutMs: this.inspectTimeoutMs,
+      lookupTimeoutMs: this.inspectTimeoutMs, ...expected === undefined ? {} : { expected },
       onOutput: (text, stream) => {
         this.ownerContext.emit('plugin-manager/install-log', { ...identity, jobId, argv, cwd, stream, text })
       },
@@ -1226,30 +1358,86 @@ export class PluginManager extends TypertRemoteService {
     operation: (result: ChangeResult) => Promise<ChangeResult['application'] | void>,
     request: Pick<ChangeResult, 'stage' | 'target' | 'enabled'>,
     reason: PluginChange['reason'],
+    identity?: Pick<PluginOperation, 'target' | 'version'>,
   ): Promise<ChangeResult> {
-    return withFileLock(join(this.profile.dir, 'package.json'), async () => {
-      this.abort.signal.throwIfAborted()
-      const before = this.diskState()
-      const result: ChangeResult = { ...request, changed: false,
-        ...this.ownerContext.get('hmr') !== undefined ? { application: 'applied' } : { application: 'restart-required', restartReason: 'no-hmr' } }
-      try {
-        const outcome = await operation(result)
-        if (outcome !== undefined) result.application = outcome
-        // A reload that waits for a restart leaves the change saved but not applied.
-        else if (result.application === 'applied' && result.restartReason !== undefined) result.application = 'restart-required'
-      } catch (error) {
-        if (error instanceof InstallCancelledError) {
-          result.application = 'cancelled'
-        } else {
-          result.application = 'failed'
-          result.error = managementError(error)
+    const id = randomUUID() as PluginOperationId
+    const target = identity === undefined ? this.operationTarget(reason, request.target) : identity.target
+    const version = identity === undefined ? this.operationVersion(reason, reason === 'plugin' ? request.target : target) : identity.version
+    const facts = { id, reason, stage: request.stage,
+      target,
+      ...version === undefined ? {} : { version },
+      ...request.enabled === undefined ? {} : { enabled: request.enabled } }
+    this.reportOperation({ ...facts, time: new Date().toISOString(), phase: 'started' })
+    let settled: ChangeResult
+    try {
+      settled = await withFileLock(join(this.profile.dir, 'package.json'), async () => {
+        this.abort.signal.throwIfAborted()
+        const before = this.diskState()
+        const result: ChangeResult = { ...request, changed: false,
+          ...this.ownerContext.get('hmr') !== undefined ? { application: 'applied' } : { application: 'restart-required', restartReason: 'no-hmr' } }
+        try {
+          const outcome = await operation(result)
+          if (outcome !== undefined) result.application = outcome
+          // A reload that waits for a restart leaves the change saved but not applied.
+          else if (result.application === 'applied' && result.restartReason !== undefined) result.application = 'restart-required'
+        } catch (error) {
+          if (error instanceof InstallCancelledError) {
+            result.application = 'cancelled'
+          } else {
+            result.application = 'failed'
+            result.error = managementError(error)
+          }
         }
-      }
-      if (result.application !== 'restart-required') delete result.restartReason
-      result.changed = before !== this.diskState()
-      this.ownerContext.emit('plugin-manager/changed', { reason })
-      return result
-    }, { waitMs: this.lockWaitMs })
+        if (result.application !== 'restart-required') delete result.restartReason
+        result.changed = before !== this.diskState()
+        this.ownerContext.emit('plugin-manager/changed', { reason })
+        return result
+      }, { waitMs: this.lockWaitMs })
+    } catch (error) {
+      this.reportOperation({ ...facts, time: new Date().toISOString(), phase: 'unknown' })
+      throw error
+    }
+    const refusedVersion = reason === 'install'
+      ? settled.error?.incompatible?.find(plugin => plugin.name === facts.target)?.version
+      : undefined
+    const observedVersion = diagnosticVersion(settled.version ?? refusedVersion)
+    this.reportOperation({ ...facts, time: new Date().toISOString(), phase: 'settled',
+      stage: settled.stage, target: settled.bundle === undefined ? facts.target : installOperationTarget(settled.bundle),
+      application: settled.application, changed: settled.changed,
+      ...observedVersion === undefined ? {} : { version: observedVersion },
+      ...settled.error === undefined ? {} : { errorCode: settled.error.code },
+      ...settled.restartReason === undefined ? {} : { restartReason: settled.restartReason } })
+    return settled
+  }
+
+  private reportOperation(operation: PluginOperation): void {
+    void this.ownerContext.parallel('plugin-manager/operation', operation).catch((_error: unknown) => {
+      // All subscribers run; diagnostic failures cannot change the management result.
+      console.error('dsh plugin-manager: operation diagnostic delivery failed')
+    })
+  }
+
+  private operationTarget(reason: PluginChange['reason'], target: string): string | null {
+    if (reason !== 'plugin') {
+      const name = installOperationTarget(target)
+      return reason === 'install' || name === target ? name : null
+    }
+    return target.length <= 256 && [...this.ctx.loader.entries()].some(entry => entry.id === target) ? target : null
+  }
+
+  /** Read the request-time package version without preventing recovery from damaged metadata. */
+  private operationVersion(reason: PluginChange['reason'], target: string | null): string | undefined {
+    if (reason === 'install' || target === null) return undefined
+    try {
+      if (reason !== 'plugin') return diagnosticVersion(bundleManifest(target, this.profile.dir, this.profile.installAnchor)?.version)
+      const entry = [...this.ctx.loader.entries()].find(row => row.id === target)
+      const source = entry?.parent.tree.ctx.baseUrl
+      if (entry === undefined || source === undefined) return undefined
+      return diagnosticVersion(this.ownerContext.get('pluginPackages')?.packageOf(entry.options.name, source)?.version)
+    } catch (_error) {
+      // Disabling or removing a broken package must not depend on diagnostic metadata being readable.
+      return undefined
+    }
   }
 
   private diskState(): string {
