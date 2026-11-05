@@ -84,7 +84,7 @@
 }
 
 /* Fullscreen has no conversation beside the first column, so dockkit's
-   column-0 rule separating the two would only edge the window. */
+   column-0 divider has nothing to separate. */
 .panel[data-sidebar-right-panel='fullscreen'] :global([data-dockkit-host='dock'][data-dockkit-column='0']) > :global([data-dockkit-pane]) {
   border-left: none;
 }
