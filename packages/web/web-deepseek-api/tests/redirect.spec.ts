@@ -47,9 +47,20 @@ afterAll(async () => {
 describe('dispatchDeepSeekWeb redirect policy', () => {
   it.each([301, 302, 303, 307, 308])('rejects HTTP %i before contacting Location', async (status) => {
     targetRequests.length = 0
-    await expect(dispatchDeepSeekWeb({ apiKey: TEST_API_KEY }, {
-      baseURL: redirectOrigin, path: `/${status}`, body: { query: TEST_QUERY }, decode: value => value,
+    await expect(dispatchDeepSeekWeb({ sources: [{ kind: 'api-key', baseURL: redirectOrigin, key: TEST_API_KEY }] }, {
+      path: `/${status}`, body: { query: TEST_QUERY }, decode: value => value,
       apiKeyHeaders: key => ({ 'x-api-key': key }),
+      guidance: customGuidance('search'),
+    })).rejects.toMatchObject({ code: 'WEB_PROVIDER_ERROR' })
+    expect(targetRequests).toHaveLength(0)
+  })
+
+  it('rejects a redirect of an account-token request before contacting Location', async () => {
+    targetRequests.length = 0
+    await expect(dispatchDeepSeekWeb({ sources: [{
+      kind: 'account', baseURL: redirectOrigin, resolveToken: async () => 'redirect-test-token', rejectToken: async () => {},
+    }] }, {
+      path: '/307', body: { query: TEST_QUERY }, decode: value => value,
       guidance: customGuidance('search'),
     })).rejects.toMatchObject({ code: 'WEB_PROVIDER_ERROR' })
     expect(targetRequests).toHaveLength(0)

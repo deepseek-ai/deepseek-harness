@@ -1,6 +1,7 @@
 {
   "nsisLanguage": "SPANISHINTERNATIONAL",
   "strings": {
+    "INSTALLER_UPDATE_WAIT": "Instalando la actualización. La aplicación se reiniciará automáticamente al terminar.",
     "INSTALLER_INSTALL": "Instalar ahora",
     "INSTALLER_FINISH": "Finalizar",
     "INSTALLER_NATIVE_PROGRESS": "Preparando la instalación… %d%%",

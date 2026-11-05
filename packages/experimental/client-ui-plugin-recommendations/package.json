@@ -57,7 +57,7 @@
     "@deepseek-ai/dsh-package-manifest": "workspace:*",
     "@deepseek-ai/dsh-client-ui-action-cards": "workspace:*",
     "@deepseek-ai/dsh-action-cards": "workspace:*",
-    "zod": "4.4.3",
+    "zod": "4.6.6",
     "@deepseek-ai/dsh-client-test-runtime": "workspace:*"
   },
   "files": [

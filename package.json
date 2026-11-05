@@ -263,7 +263,7 @@
     "@yarnpkg/cli-dist": "4.18.0",
     "eslint-plugin-sonarjs": "^4.2.0",
     "execa": "^10.0.1",
-    "zod": "^4.4.3",
+    "zod": "4.6.6",
     "extract-zip": "^2.0.1",
     "fast-check": "^4.9.0",
     "fflate": "^0.8.2",
