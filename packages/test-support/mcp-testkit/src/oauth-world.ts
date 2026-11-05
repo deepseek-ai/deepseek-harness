@@ -1,4 +1,8 @@
-/** Loopback OAuth/MCP server and real credential, authorization, and callback services. */
+/**
+ * A loopback OAuth authorization server and MCP endpoint with real credential, authorization, and callback services.
+ *
+ * @module
+ */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { once } from 'node:events'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -15,9 +19,9 @@ import Tools from '@deepseek-ai/dsh-tools'
 import { createMcpHandler, McpServer } from '@modelcontextprotocol/server'
 import { toNodeHandler, type NodeIncomingMessageLike } from '@modelcontextprotocol/node'
 import { z } from 'zod'
-import { Config, type StreamableHttpConfig } from '../src/index.ts'
-import { McpOAuthAuthorization } from '../src/oauth.ts'
-import type { McpOAuthAttemptView } from '../src/types.ts'
+import { Config, type McpOAuthConfig, type StreamableHttpConfig } from '@deepseek-ai/dsh-mcp-client'
+import { McpOAuthAuthorization } from '@deepseek-ai/dsh-mcp-client/src/oauth.ts'
+import type { McpOAuthAttemptView } from '@deepseek-ai/dsh-mcp-client/types'
 
 /** Recorded external request; token endpoints can be held by an explicit barrier. */
 export interface OAuthRequest {
@@ -27,8 +31,50 @@ export interface OAuthRequest {
   response: ServerResponse
 }
 
-/** Mount isolated services and a protocol server, with all teardown owned by this test. */
-export async function oauthWorld(interactive = true, webHost = '127.0.0.1') {
+/** The protocol server's answers that a test may change. */
+export interface OAuthBehavior {
+  /** Answers token requests instead of issuing sequential tokens. */
+  token?: (request: OAuthRequest) => Promise<void>
+  /** Answers authenticated MCP requests with this status and optional challenge. */
+  rejection?: { status: number; challenge?: string }
+  /** `false` answers metadata discovery with 404 and challenges without a metadata URL. */
+  metadata?: false
+  /** Authorization endpoint the authorization-server metadata advertises. */
+  authorizationEndpoint?: string
+  /** Resource the protected-resource metadata advertises. */
+  resource?: string
+}
+
+/** A loopback OAuth world and the services mounted for it, torn down with the calling test. */
+export interface OAuthWorld {
+  /** Context carrying the credential, authorization, Web server, and tool services. */
+  ctx: Context
+  /** Streamable HTTP configuration of the world's MCP endpoint with OAuth. */
+  config: StreamableHttpConfig & { oauth: McpOAuthConfig }
+  /** Create an authorization owner; teardown expects each owner to close cleanly. */
+  owner: (options?: StreamableHttpConfig & { oauth: McpOAuthConfig }) => McpOAuthAuthorization
+  /** Switches that change the protocol server's answers. */
+  behavior: OAuthBehavior
+  /** Every request the protocol server received. */
+  requests: OAuthRequest[]
+  /** The protocol server's origin. */
+  origin: string
+  /** Create a gate that teardown releases. */
+  barrier: () => PromiseWithResolvers<void>
+  /** Dynamic client registrations so far. */
+  registrations: () => number
+  /** Token requests so far. */
+  tokens: () => number
+}
+
+/**
+ * Mount isolated credential, authorization, Web server, and tool services and a protocol server, with all teardown
+ * owned by the calling test.
+ * @param interactive - mount the authorization and Web server services that explicit authorization requires.
+ * @param webHost - host the Web server binds.
+ * @returns the world, whose teardown is registered with the calling test.
+ */
+export async function oauthWorld(interactive = true, webHost = '127.0.0.1'): Promise<OAuthWorld> {
   const ctx = new Context()
   const releases: Array<() => void> = []
   const owners: McpOAuthAuthorization[] = []
@@ -36,23 +82,18 @@ export async function oauthWorld(interactive = true, webHost = '127.0.0.1') {
   let registrationCount = 0
   let tokenCount = 0
   let origin = ''
-  const behavior: {
-    token?: (request: OAuthRequest) => Promise<void>
-    rejection?: { status: number; challenge?: string }
-    metadata?: false
-    authorizationEndpoint?: string
-    resource?: string
-  } = {}
+  const behavior: OAuthBehavior = {}
   const mcp = createMcpHandler(({ requestInfo }) => {
     const server = new McpServer({ name: 'oauth-fixture', version: '1.0.0' }, { capabilities: { tools: {} } })
-    server.registerTool('ping', { description: 'Replies pong.', inputSchema: z.object({}) }, async () => ({ content: [{ type: 'text', text: 'pong' }] }))
-    server.registerTool('reject', { description: 'Echoes the request authorization in an error.', inputSchema: z.object({}) }, async () => ({
+    server.registerTool('ping', { description: 'Replies pong.', inputSchema: z.object({}) }, () => ({ content: [{ type: 'text', text: 'pong' }] }))
+    server.registerTool('reject', { description: 'Echoes the request authorization in an error.', inputSchema: z.object({}) }, () => ({
       isError: true, content: [{ type: 'text', text: `rejected ${String(requestInfo?.headers.get('authorization'))}` }],
     }))
     return server
   })
   const handleMcp = toNodeHandler(mcp)
   const server = createServer((request, response) => {
+    // A failing handler answers 500, so a fixture defect fails the request instead of leaving it open.
     void handle(request, response).catch(() => { response.writeHead(500).end() })
   })
   const dir = await mkdtemp(join(tmpdir(), 'dsh-mcp-oauth-'))
@@ -64,6 +105,7 @@ export async function oauthWorld(interactive = true, webHost = '127.0.0.1') {
     } finally {
       await mcp.close()
       await new Promise<void>((resolve, reject) => {
+        /* v8 ignore next -- a close failure fails the test's teardown */
         server.close((error) => { if (error === undefined) resolve(); else reject(error) })
         server.closeAllConnections()
       })
@@ -71,9 +113,11 @@ export async function oauthWorld(interactive = true, webHost = '127.0.0.1') {
     }
   })
   async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
-    const path = new URL(request.url!, origin).pathname
+    /* v8 ignore next -- a request a server receives always carries its URL */
+    const path = new URL(request.url ?? '/', origin).pathname
     const body: Buffer[] = []
     if (path !== '/mcp') for await (const chunk of request) {
+      /* v8 ignore next -- Node yields Buffer chunks for a request without an encoding */
       if (!(chunk instanceof Uint8Array)) throw new Error('Expected request bytes')
       body.push(Buffer.from(chunk))
     }
@@ -108,6 +152,7 @@ export async function oauthWorld(interactive = true, webHost = '127.0.0.1') {
   server.listen(0, '127.0.0.1')
   await once(server, 'listening')
   const address = server.address()
+  /* v8 ignore next -- a listening TCP server reports an address object */
   if (address === null || typeof address === 'string') throw new Error('OAuth fixture did not bind TCP')
   origin = `http://127.0.0.1:${String(address.port)}`
   await ctx.plugin(LocalCredentialProvider, { path: join(dir, 'credentials.yaml'), watch: false })
@@ -120,14 +165,15 @@ export async function oauthWorld(interactive = true, webHost = '127.0.0.1') {
   await ctx.plugin(NativeToolExecutor)
   const resolved = Config({ transport: 'streamable-http', serverName: 'oauth', url: origin + '/mcp',
     headers: { 'x-resource-only': 'fixture-resource-secret' }, oauth: { credentialKey: 'mcp-client/oauth' }, reconnect: { enabled: false } })
+  /* v8 ignore next -- the literal above resolves to a Streamable HTTP OAuth configuration */
   if (resolved.transport !== 'streamable-http' || resolved.oauth === undefined) throw new Error('Missing HTTP OAuth configuration')
-  const config: StreamableHttpConfig & { oauth: NonNullable<StreamableHttpConfig['oauth']> } = { ...resolved, oauth: resolved.oauth }
+  const config: StreamableHttpConfig & { oauth: McpOAuthConfig } = { ...resolved, oauth: resolved.oauth }
   const owner = (options = config): McpOAuthAuthorization => {
     const result = new McpOAuthAuthorization(ctx, options, () => undefined)
     owners.push(result)
     return result
   }
-  const barrier = () => {
+  const barrier = (): PromiseWithResolvers<void> => {
     const gate: PromiseWithResolvers<void> = Promise.withResolvers()
     releases.push(gate.resolve)
     return gate
@@ -136,10 +182,17 @@ export async function oauthWorld(interactive = true, webHost = '127.0.0.1') {
     registrations: () => registrationCount, tokens: () => tokenCount }
 }
 
-/** Wait for an observed authorization phase, failing promptly on a rejected flow. */
-export async function phase(read: () => McpOAuthAttemptView | undefined, expected: McpOAuthAttemptView['phase']) {
-  await vi.waitFor(() => { const view = read(); expectPhase(view, expected) }, { timeout: 5000 })
-  return read()!
+/**
+ * Wait for an observed authorization phase.
+ * @param read - reads the current attempt view.
+ * @param expected - phase to wait for.
+ * @returns the view in that phase.
+ */
+export async function phase(read: () => McpOAuthAttemptView | undefined, expected: McpOAuthAttemptView['phase']): Promise<McpOAuthAttemptView> {
+  await vi.waitFor(() => { expectPhase(read(), expected) }, { timeout: 5000 })
+  const view = read()
+  expectPhase(view, expected)
+  return view
 }
 
 /**
@@ -157,15 +210,26 @@ export function captureLogs(ctx: Context): string[] {
   return lines
 }
 
-function expectPhase(view: McpOAuthAttemptView | undefined, expected: McpOAuthAttemptView['phase']): void {
+function expectPhase(view: McpOAuthAttemptView | undefined, expected: McpOAuthAttemptView['phase']): asserts view is McpOAuthAttemptView {
   if (view?.phase !== expected) throw new Error(`Expected ${expected}, received ${JSON.stringify(view)}`)
 }
 
-/** Deliver a browser callback with the state and issuer advertised by this attempt. */
-export async function callback(view: McpOAuthAttemptView, result: { code: string } | { error: string } = { code: 'fixture-code' }) {
-  const authorization = new URL(view.authorizationUrl!)
-  const url = new URL(authorization.searchParams.get('redirect_uri')!)
-  url.searchParams.set('state', authorization.searchParams.get('state')!)
+function present<T>(value: T | null | undefined, what: string): T {
+  /* v8 ignore next -- an attempt waiting for the browser carries its authorization URL, redirect URI, and state */
+  if (value === null || value === undefined) throw new Error(`OAuth attempt has no ${what}`)
+  return value
+}
+
+/**
+ * Deliver a browser callback with the state and issuer advertised by this attempt.
+ * @param view - attempt view carrying the authorization URL.
+ * @param result - the authorization code or error the browser returns.
+ * @returns the callback's HTTP status.
+ */
+export async function callback(view: McpOAuthAttemptView, result: { code: string } | { error: string } = { code: 'fixture-code' }): Promise<number> {
+  const authorization = new URL(present(view.authorizationUrl, 'authorization URL'))
+  const url = new URL(present(authorization.searchParams.get('redirect_uri'), 'redirect URI'))
+  url.searchParams.set('state', present(authorization.searchParams.get('state'), 'state'))
   url.searchParams.set('iss', authorization.origin)
   for (const [key, value] of Object.entries(result)) url.searchParams.set(key, value)
   const response = await fetch(url)
@@ -173,10 +237,14 @@ export async function callback(view: McpOAuthAttemptView, result: { code: string
   return response.status
 }
 
-/** Finish one real discovery, registration, PKCE exchange, and durable grant commit. */
-export async function authorize(owner: McpOAuthAuthorization) {
+/**
+ * Finish one real discovery, registration, PKCE exchange, and durable grant commit.
+ * @param owner - authorization owner from the world.
+ */
+export async function authorize(owner: McpOAuthAuthorization): Promise<void> {
   await owner.start()
   const waiting = await phase(() => owner.current(), 'waiting-browser')
+  /* v8 ignore next -- a refused callback fails the helper instead of waiting for the attempt to time out */
   if (await callback(waiting) !== 200) throw new Error('OAuth callback was rejected')
   await phase(() => owner.current(), 'authorized')
 }

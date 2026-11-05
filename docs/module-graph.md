@@ -468,6 +468,7 @@ flowchart TD
     pkg_llm_mock_server["llm-mock-server"]
     pkg_llm_replay["llm-replay"]
     pkg_loader_smoke["loader-smoke"]
+    pkg_mcp_testkit["mcp-testkit"]
     pkg_remote_mock["remote-mock"]
     pkg_session_snapshot["session-snapshot"]
     pkg_tool_testkit["tool-testkit"]
@@ -1686,6 +1687,7 @@ flowchart TD
 | [`storage`](../packages/storage/storage) | `storage` | — |
 | [`win32-process`](../packages/subprocess/win32-process) | `subprocess` | — |
 | [`llm-mock-server`](../packages/test-support/llm-mock-server) | `test-support` | — |
+| [`mcp-testkit`](../packages/test-support/mcp-testkit) | `test-support` | — |
 | [`typert-generator`](../packages/typert/generator) | `typert` | — |
 | [`typert-protocol`](../packages/typert/protocol) | `typert` | — |
 | [`typert-registry`](../packages/typert/registry) | `typert` | — |

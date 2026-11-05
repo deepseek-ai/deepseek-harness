@@ -80,7 +80,7 @@ import { apply as applyMcpClient, Config as ClientConfig } from '@deepseek-ai/ds
 import { connectionStatusIn as connectionStatusOf } from '@deepseek-ai/dsh-mcp-client/src/status.ts'
 import McpServerManager from '@deepseek-ai/dsh-mcp-manager/src/index.ts'
 import type { Config, McpManagedServerStatus } from '@deepseek-ai/dsh-mcp-manager/src/index.ts'
-import { managerProfile } from './profile-fixture.ts'
+import { managerProfile } from '@deepseek-ai/dsh-mcp-testkit'
 
 /** Minimal real credential provider: reference half backed by a map. */
 class MemoryCredentials extends CredentialProvider {

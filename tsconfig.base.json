@@ -489,6 +489,7 @@
       "@deepseek-ai/dsh-mcp-client": ["./packages/mcp/mcp-client/src"],
       "@deepseek-ai/dsh-mcp-manager": ["./packages/mcp/mcp-manager/src"],
       "@deepseek-ai/dsh-mcp-resources": ["./packages/mcp/mcp-resources/src"],
+      "@deepseek-ai/dsh-mcp-testkit": ["./packages/test-support/mcp-testkit/src"],
       "@deepseek-ai/dsh-message-feedback": ["./packages/feedback/message-feedback/src"],
       "@deepseek-ai/dsh-message-quotes": ["./packages/session/message-quotes/src"],
       "@deepseek-ai/dsh-native-command": ["./packages/util/native-command/src"],

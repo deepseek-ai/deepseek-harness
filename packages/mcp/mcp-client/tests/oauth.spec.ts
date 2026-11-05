@@ -9,7 +9,7 @@ import { probeServer } from '../src/probe.ts'
 import { connectionStatusIn as connectionStatusOf } from '../src/status.ts'
 import { McpTemplateBinding } from '../src/credentials.ts'
 import { McpOAuthCredentials, oauthRecord } from '../src/oauth-credentials.ts'
-import { authorize, callback, captureLogs, oauthWorld, phase } from './oauth-fixture.ts'
+import { authorize, callback, captureLogs, oauthWorld, phase } from '@deepseek-ai/dsh-mcp-testkit'
 
 // The HTTP request deadline is 10 s; no test relies on waiting for that deadline.
 describe('MCP OAuth', () => {

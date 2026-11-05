@@ -6,7 +6,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import Tools from '@deepseek-ai/dsh-tools'
 import * as McpClient from '@deepseek-ai/dsh-mcp-client'
 import { Config, type ServerConfigInput } from '@deepseek-ai/dsh-mcp-client'
-import { authorize, oauthWorld } from './oauth-fixture.ts'
+import { authorize, oauthWorld } from '@deepseek-ai/dsh-mcp-testkit'
 import { startHttpMcpFixture } from './http-fixture.ts'
 
 async function hosted() {
