@@ -1,8 +1,16 @@
 /** Command-line parsing and help of the generator. */
+import { readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { main } from '../src/cli.ts'
+import { generate } from '../src/generate.ts'
+import { scratch } from './support.ts'
 
-afterEach(() => { vi.restoreAllMocks() })
+vi.mock('../src/generate.ts', () => ({
+  generate: vi.fn(async () => ({ index: { format: 1, title: 'T', plugins: [] }, icons: new Map(), failures: [] })),
+}))
+
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs() })
 
 /** Run the CLI and collect what it writes to stdout and stderr. */
 async function cli(...argv: string[]) {
@@ -15,6 +23,24 @@ async function cli(...argv: string[]) {
 }
 
 const REQUIRED = ['--input', '/nonexistent/list.txt', '--output', '/nonexistent/index.json', '--title', 'T']
+
+it.each([
+  [undefined, undefined], ['', undefined], [' \t ', undefined], ['  test-only-cli-token  ', 'test-only-cli-token'],
+])('resolves the GitHub token from the environment (%#)', async (authored, expected) => {
+  vi.stubEnv('GITHUB_TOKEN', authored)
+  vi.stubEnv('GH_TOKEN', 'ignored-test-token')
+  vi.mocked(generate).mockClear()
+  const dir = scratch()
+  const input = join(dir, 'plugins.txt')
+  const output = join(dir, 'index.json')
+  writeFileSync(input, 'dsh-example\n')
+  expect((await cli('--input', input, '--output', output, '--title', 'T')).status).toBe(0)
+  expect(generate).toHaveBeenCalledOnce()
+  const options = vi.mocked(generate).mock.calls[0]?.[0]
+  expect(options?.githubToken).toBe(expected)
+  if (expected === undefined) expect(options).not.toHaveProperty('githubToken')
+  expect(readFileSync(output, 'utf8')).not.toContain('test-only-cli-token')
+})
 
 it('prints help with every option, its default, and the exit statuses', async () => {
   const { status, out } = await cli('--help')

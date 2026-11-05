@@ -52,10 +52,10 @@ it('persists intent, before/after bytes and terminal state outside the checkout'
   } finally { await rm(root, { recursive: true, force: true }) }
 })
 
-it('recognizes feed completion even when the later tag failed', async () => {
+it.each([undefined, 10])('recognizes feed completion with percentage %s even when the later tag failed', async (stagingPercentage) => {
   const root = await mkdtemp(join(tmpdir(), 'desktop-recovery-'))
   try {
-    const identity = { repository: 'owner/repo', runId: '12', attempt: '2', destination: 'bucket/mac' }
+    const identity = { repository: 'owner/repo', runId: '12', attempt: '2', destination: 'bucket/mac', stagingPercentage }
     const journal = await createDesktopPublicationRecord(root, { ...identity, actor: 'operator', operation: 'publish', reason: 'publish' })
     expect(await wasDesktopAttemptPublished(root, identity)).toBe(false)
     await journal.record({ type: 'feeds-complete' })
@@ -63,6 +63,8 @@ it('recognizes feed completion even when the later tag failed', async () => {
     await journal.finish('published-tag-pending')
     expect(await wasDesktopAttemptPublished(root, identity)).toBe(true)
     expect(await wasDesktopAttemptPublished(root, { ...identity, attempt: '1' })).toBe(false)
+    await expect(wasDesktopAttemptPublished(root, { ...identity, stagingPercentage: 20 }))
+      .rejects.toThrow(/differs from the completed publication/u)
   } finally { await rm(root, { recursive: true, force: true }) }
 })
 

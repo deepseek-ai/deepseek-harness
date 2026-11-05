@@ -200,6 +200,26 @@ describe('owner dispatch', () => {
       .resolves.toEqual({ status: 200, body: { error: 'invalid-owner-response' } })
   })
 
+  it('reports an empty owner answer as an invalid response', async () => {
+    const h = harness()
+    h.handler.fetch.mockResolvedValue(new Response('', { status: 200 }))
+    await expect(h.dispatch.dispatchCall('/api/session/list', {}, 'share-1', viewer))
+      .resolves.toEqual({ status: 200, body: { error: 'invalid-owner-response' } })
+  })
+
+  it('explains an owner-only route instead of leaving the viewer with a generic response', async () => {
+    const h = harness()
+    h.handler.fetch.mockResolvedValue(new Response('forbidden', { status: 403 }))
+    await expect(h.dispatch.dispatchCall('/api/timeline/watch', {}, 'share-1', viewer))
+      .resolves.toEqual({
+        status: 403,
+        body: {
+          error: 'owner-route-not-shared',
+          hint: 'The owner route is available to the owner only. Register the method as a Typert Remote so LiveShare can authorize the viewer call.',
+        },
+      })
+  })
+
   it('forwards the caller signal and refuses a call already aborted', async () => {
     const h = harness()
     const controller = new AbortController()

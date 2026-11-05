@@ -37,7 +37,7 @@ export function createPrivacyOwnerReader(dispatch: (request: Request) => Promise
         allowsPrompt: () => ({ ok: false, code: 'fork-unknown-child', message: 'the fixture Owner holds no forks' }),
       },
       workspaces: () => [],
-      declaredCapabilities: () => [],
+      offeredPlugins: () => [],
     }))
     return owner.remoteAccess
   })()

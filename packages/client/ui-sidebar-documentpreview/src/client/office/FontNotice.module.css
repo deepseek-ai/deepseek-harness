@@ -30,7 +30,7 @@
   z-index: 100;
   box-sizing: border-box;
   width: min(340px, calc(100vw - 24px));
-  max-height: min(calc(100dvh - 24px), var(--dsh-anchored-max-height, 100vh));
+  max-height: calc(100dvh - 24px);
   padding: 16px;
   overflow: auto;
   color: var(--dsw-alias-label-primary);
@@ -40,7 +40,18 @@
   box-shadow: var(--dsw-elevation-prominent);
   font-size: 13px;
   line-height: 1.6;
-  max-width: var(--dsh-anchored-max-width, none);
+  max-width: calc(100vw - 24px);
+  position-area: none;
+  top: max(12px, calc(anchor(bottom) + 8px));
+  bottom: 12px;
+  left: max(12px, anchor(left));
+  right: 12px;
+  position-try-fallbacks: --dsh-fonts-window, --dsh-fonts-opposite, --dsh-fonts-wide-opposite, --dsh-fonts-tall, --dsh-fonts-viewport;
+  align-self: start;
+  justify-self: start;
+  height: fit-content;
+  min-height: 0;
+  margin: 0;
 }
 
 .panelHeader {
@@ -77,4 +88,49 @@
 .fonts li {
   padding: 8px 0;
   border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+@position-try --dsh-fonts-window {
+  position-area: none;
+  top: max(12px, calc(anchor(bottom) + 8px));
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  margin: 0;
+  align-self: safe start;
+  justify-self: safe end;
+}
+
+@position-try --dsh-fonts-opposite {
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: max(12px, calc(anchor(top) + 8px));
+  align-self: end;
+}
+
+@position-try --dsh-fonts-wide-opposite {
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: max(12px, calc(anchor(top) + 8px));
+  left: 12px;
+  right: 12px;
+  align-self: end;
+  justify-self: safe end;
+}
+
+@position-try --dsh-fonts-tall {
+  position-area: none;
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: 12px;
+  left: max(12px, anchor(left));
+  right: 12px;
+  margin: 0;
+  align-self: safe start;
+  justify-self: start;
+}
+
+@position-try --dsh-fonts-viewport {
+  position-area: none;
+  inset: max(12px, var(--dsh-frame-overlay-top, 12px)) 12px 12px;
+  margin: 0;
+  align-self: safe start;
+  justify-self: safe end;
 }

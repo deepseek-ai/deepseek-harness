@@ -104,16 +104,22 @@
       "path": "../../boot/plugin-manager"
     },
     {
+      "path": "../../mcp/mcp-manager"
+    },
+    {
       "path": "../../boot/plugin-market"
     },
     {
-      "path": "../../document/office-to-pdf"
+      "path": "../../document/office-kit"
     },
     {
       "path": "../account-controller"
     },
     {
       "path": "../../credentials/deepseek-account"
+    },
+    {
+      "path": "../../web/web"
     }
   ]
 }

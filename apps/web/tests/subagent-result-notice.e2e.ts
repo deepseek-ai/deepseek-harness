@@ -63,13 +63,13 @@ describe.skipIf(MODE === 'record')('web e2e: subagent result notices', () => {
       const childId = SessionId('notice-result-child')
       const notices: { title: string; message: ReturnType<typeof createUserMessage> }[] = OUTCOMES.map(outcome => ({
         title: outcome[locale],
-        message: createSettlementMessage(childId, {
+        message: createSettlementMessage(childId, 'agent-1', {
           stopReason: outcome.reason, output: [{ type: 'text', text: OUTPUT }],
         }),
       }))
       notices.push({
         title: OUTCOMES[0][locale],
-        message: createSettlementMessage(childId, { stopReason: 'completed', output: [] }),
+        message: createSettlementMessage(childId, 'agent-1', { stopReason: 'completed', output: [] }),
       })
       notices.push({
         title: locale === 'en' ? 'Subtask status updated' : '子任务状态更新',

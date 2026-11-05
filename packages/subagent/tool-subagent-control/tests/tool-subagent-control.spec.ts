@@ -118,13 +118,13 @@ describe('dsh-tool-subagent-control', () => {
     const schemas = ctx.tools.schemas().filter(schema => schema.name === 'send_message')
     expect(schemas).toHaveLength(1)
     const props = (schemas[0]!.parameters as { properties?: Record<string, unknown> }).properties ?? {}
-    expect(Object.keys(props).sort()).toEqual(['agent_id', 'message'])
+    expect(Object.keys(props).sort()).toEqual(['agent', 'message'])
     // The continuable path has no Task, so the schema must not promise one.
     expect(schemas[0]!.description).not.toContain('job_output')
     expect(schemas[0]!.description).not.toContain('job id')
     expect(schemas[0]!.description).toContain('receives it at its next step')
-    expect(props.agent_id).toMatchObject({
-      description: 'The agent id of another member of your subagent tree, as shown by list_agents.',
+    expect(props.agent).toMatchObject({
+      description: 'The name of another agent in your subagent tree, as shown by list_agents.',
     })
   })
 
@@ -193,10 +193,11 @@ describe('dsh-tool-subagent-control', () => {
     if (prompt?.type !== 'user/message') throw new Error('expected logged communication context')
     const guidance = text(prompt.data)
 
-    expect(guidance).toContain(`Your agent id is ${JSON.stringify(started.childId)}`)
-    expect(guidance).toContain(`You are a subagent delegated by agent ${JSON.stringify(parent.id)}`)
-    expect(guidance).toContain(`The root agent of your collaboration tree is ${JSON.stringify(parent.id)}`)
+    expect(started.name).toBe('agent-1')
+    expect(guidance).toContain('You are a subagent delegated by agent "lead".\nYour name is "agent-1".\n'
+      + 'The root agent of your collaboration tree is "lead".')
     expect(guidance).not.toContain(parent.id)
+    expect(guidance).not.toContain(started.childId)
   })
 
   it.each([
@@ -219,7 +220,7 @@ describe('dsh-tool-subagent-control', () => {
     }))
     expect(await communication()).not.toContain(instruction)
     expect(await communication()).toContain(other)
-    expect(await communication()).toContain('Your agent id is \"communication-child\"')
+    expect(await communication()).toContain('You are a subagent delegated by agent "lead".\nYour name is "communication-child".')
     off()
     expect(await communication()).toContain(instruction)
     child.ctx.tools.restrict({ deny: [name] })
@@ -247,9 +248,9 @@ describe('dsh-tool-subagent-control', () => {
     for (const agent of [parent, fork]) {
       const built = await ctx.systemPrompt.assemble({ agent, scope: agent })
       expect(built.contexts.find(context => context.name === 'subagent:identity')?.text).toBe(
-        `You are the root agent. Your agent id is ${JSON.stringify(agent.id)}.\n\n`
-        + 'To message other agents, use send_message({ agent_id: "<agent-id>", message: "..." }).\n'
-        + 'Use list_agents({}) to find your collaborator agents and their ids.',
+        'You are the root agent. Your name is "lead".\n\n'
+        + 'To message other agents, use send_message({ agent: "<agent-name>", message: "..." }).\n'
+        + 'Use list_agents({}) to find your collaborator agents and their names.',
       )
     }
     expect(renderContextSnapshot(await ctx.systemPrompt.assemble({}))).not.toContain('To message other agents')
@@ -260,7 +261,7 @@ describe('dsh-tool-subagent-control', () => {
     new SubagentError('root data is unreadable', 'CORRUPT'),
   ])('propagates identity lookup errors other than an unavailable root: $message', async (error) => {
     const { ctx, parent } = await setup([])
-    const lookup = vi.spyOn(ctx.subagents, 'rootOf').mockImplementation(() => { throw error })
+    const lookup = vi.spyOn(ctx.subagents, 'namesOf').mockImplementation(() => { throw error })
     try {
       await expect(ctx.systemPrompt.assemble({ agent: parent, scope: parent })).rejects.toBe(error)
     } finally {
@@ -270,7 +271,7 @@ describe('dsh-tool-subagent-control', () => {
 
   it('retains the caller id when its subagent tree root is unavailable', async () => {
     const { ctx, parent } = await setup([])
-    const lookup = vi.spyOn(ctx.subagents, 'rootOf').mockImplementation(() => {
+    const lookup = vi.spyOn(ctx.subagents, 'namesOf').mockImplementation(() => {
       throw new SubagentError('root is unavailable', 'UNAUTHORIZED')
     })
     try {
@@ -297,7 +298,7 @@ describe('dsh-tool-subagent-control', () => {
     const filtered = await ctx.systemPrompt.assemble({ agent: parent, scope: parent, toolSet })
     expect(filtered.tools.some(tool => tool.name === 'list_agents')).toBe(false)
     const context = renderContextSnapshot(filtered)
-    expect(context).toContain(`You are the root agent. Your agent id is ${JSON.stringify(parent.id)}.`)
+    expect(context).toContain('You are the root agent. Your name is "lead".')
     expect(context).not.toContain('Use list_agents')
     expect(context).not.toContain('To message other agents')
     toolSet.dispose()
@@ -340,12 +341,12 @@ describe('dsh-tool-subagent-control', () => {
     })
 
     const result = await callTool(ctx, 'send_message', {
-      agent_id: parent.id,
+      agent: 'lead',
       message: 'CHILD_FINDING',
     }, child)
 
     expect(result.isError).toBe(false)
-    expect(text(result)).toBe(`message delivered to agent ${parent.id}`)
+    expect(text(result)).toBe('message delivered to agent lead')
     expect(delivered).toHaveLength(1)
     expect(delivered[0]?.message.source).toEqual({
       kind: 'agent-message',
@@ -353,7 +354,7 @@ describe('dsh-tool-subagent-control', () => {
       senderSessionId: started.childId,
     })
     expect(delivered[0]?.message.content).toEqual([
-      { type: 'text', text: `Agent ${started.childId} sent a message: ` },
+      { type: 'text', text: `Agent ${started.name} sent a message: ` },
       { type: 'text', text: 'CHILD_FINDING' },
     ])
 
@@ -373,12 +374,12 @@ describe('dsh-tool-subagent-control', () => {
     await waitNoActivation(ctx, started.childId)
 
     const result = await callTool(ctx, 'send_message', {
-      agent_id: started.childId,
+      agent: started.name,
       message: 'and then?',
     }, parent)
 
     expect(result.isError).toBe(false)
-    expect(text(result)).toBe(`message delivered to agent ${started.childId}`)
+    expect(text(result)).toBe('message delivered to agent agent-1')
     await waitNoActivation(ctx, started.childId)
 
     const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
@@ -390,7 +391,7 @@ describe('dsh-tool-subagent-control', () => {
       senderSessionId: parent.id,
     })
     expect(followUp?.type === 'user/message' && followUp.data.content).toEqual([
-      { type: 'text', text: `Agent ${parent.id} sent a message: ` },
+      { type: 'text', text: 'Agent lead sent a message: ' },
       { type: 'text', text: 'and then?' },
     ])
   })
@@ -407,7 +408,7 @@ describe('dsh-tool-subagent-control', () => {
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
 
     const result = await callTool(ctx, 'send_message', {
-      agent_id: started.childId,
+      agent: started.childId,
       message: 'also consider Y',
     }, parent)
     expect(result.isError).toBe(false)
@@ -422,7 +423,7 @@ describe('dsh-tool-subagent-control', () => {
       : [])
     expect(prompts).toEqual([
       'long work',
-      `Agent ${parent.id} sent a message: `,
+      'Agent lead sent a message: ',
       'also consider Y',
     ])
   })
@@ -430,7 +431,7 @@ describe('dsh-tool-subagent-control', () => {
   it('reports a delivery failure as an errored, not-delivered result', async () => {
     const { ctx, parent } = await setup([])
     const result = await callTool(ctx, 'send_message', {
-      agent_id: 'no-such-child',
+      agent: 'no-such-child',
       message: 'hello?',
     }, parent)
     expect(result.isError).toBe(true)
@@ -450,7 +451,7 @@ describe('dsh-tool-subagent-control', () => {
     const stranger = await ctx.agentLoop.create(SessionId('stranger'), { provider: 'mock', model: 'mock' })
 
     const result = await callTool(ctx, 'send_message', {
-      agent_id: started.childId,
+      agent: started.childId,
       message: 'mine now',
     }, stranger)
     expect(result.isError).toBe(true)
@@ -459,7 +460,7 @@ describe('dsh-tool-subagent-control', () => {
 
   it('fails loud when invoked without a calling agent', async () => {
     const { ctx } = await setup([])
-    const result = await callTool(ctx, 'send_message', { agent_id: 'x', message: 'y' })
+    const result = await callTool(ctx, 'send_message', { agent: 'x', message: 'y' })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('requires a calling agent')
   })
@@ -515,12 +516,12 @@ describe('dsh-tool-subagent-control', () => {
 })
 
 describe('dsh-tool-subagent-control interrupt_agent', () => {
-  it('registers interrupt_agent with the single agent_id parameter and current-turn wording', async () => {
+  it('registers interrupt_agent with the single agent parameter and current-turn wording', async () => {
     const { ctx } = await setup([])
     const schemas = ctx.tools.schemas().filter(schema => schema.name === 'interrupt_agent')
     expect(schemas).toHaveLength(1)
     const props = (schemas[0]!.parameters as { properties?: Record<string, unknown> }).properties ?? {}
-    expect(Object.keys(props)).toEqual(['agent_id'])
+    expect(Object.keys(props)).toEqual(['agent'])
     expect(schemas[0]!.description).toContain('stop its current work')
     expect(schemas[0]!.description).toContain('send_message')
   })
@@ -543,16 +544,16 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
     const child = ctx.agents.get(started.childId)!
     const queued = await callTool(ctx, 'send_message', {
-      agent_id: started.childId,
+      agent: started.childId,
       message: 'parked follow-up',
     }, parent)
     expect(queued.isError).toBe(false)
     const cancelSpy = vi.spyOn(child, 'cancel')
 
-    const result = await callTool(ctx, 'interrupt_agent', { agent_id: started.childId }, parent)
+    const result = await callTool(ctx, 'interrupt_agent', { agent: started.name }, parent)
 
     expect(result.isError).toBe(false)
-    expect(text(result)).toBe(`interrupt requested for agent ${started.childId}`)
+    expect(text(result)).toBe('interrupt requested for agent agent-1')
     expect(cancelSpy).toHaveBeenCalledExactlyOnceWith({ kind: 'parent' }, { keepInbox: true })
     releaseFirst.resolve(undefined)
     await child.whenIdle()
@@ -561,7 +562,7 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
     expect(child.inbox.nextStep).toHaveLength(1)
 
     const waking = await callTool(ctx, 'send_message', {
-      agent_id: started.childId,
+      agent: started.childId,
       message: 'wake up',
     }, parent)
     expect(waking.isError).toBe(false)
@@ -575,9 +576,9 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
       : [])
     expect(prompts).toEqual([
       'long work',
-      `Agent ${parent.id} sent a message: `,
+      'Agent lead sent a message: ',
       'parked follow-up',
-      `Agent ${parent.id} sent a message: `,
+      'Agent lead sent a message: ',
       'wake up',
     ])
   })
@@ -610,7 +611,7 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
     const grandchildAgent = ctx.agents.get(grandchild.childId)!
     const cancelSpy = vi.spyOn(grandchildAgent, 'cancel')
 
-    const result = await callTool(ctx, 'interrupt_agent', { agent_id: grandchild.childId }, parent)
+    const result = await callTool(ctx, 'interrupt_agent', { agent: grandchild.childId }, parent)
 
     expect(result.isError).toBe(false)
     expect(cancelSpy).toHaveBeenCalledExactlyOnceWith({ kind: 'parent' }, { keepInbox: true })
@@ -649,13 +650,13 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
     const stranger = await ctx.agentLoop.create(SessionId('stranger'), { provider: 'mock', model: 'mock' })
     const cancelSpy = vi.spyOn(targetAgent, 'cancel')
 
-    const self = await callTool(ctx, 'interrupt_agent', { agent_id: target.childId }, targetAgent)
+    const self = await callTool(ctx, 'interrupt_agent', { agent: target.childId }, targetAgent)
     expect(self.isError).toBe(true)
     expect(text(self)).toContain('cannot interrupt itself')
-    const fromSibling = await callTool(ctx, 'interrupt_agent', { agent_id: target.childId }, siblingAgent)
+    const fromSibling = await callTool(ctx, 'interrupt_agent', { agent: target.childId }, siblingAgent)
     expect(fromSibling.isError).toBe(true)
     expect(text(fromSibling)).toContain('not a live descendant')
-    const fromStranger = await callTool(ctx, 'interrupt_agent', { agent_id: target.childId }, stranger)
+    const fromStranger = await callTool(ctx, 'interrupt_agent', { agent: target.childId }, stranger)
     expect(fromStranger.isError).toBe(true)
     expect(text(fromStranger)).toContain('not a live descendant')
     expect(cancelSpy).not.toHaveBeenCalled()
@@ -677,10 +678,10 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
     })
     await waitNoActivation(ctx, started.childId)
 
-    const settled = await callTool(ctx, 'interrupt_agent', { agent_id: started.childId }, parent)
+    const settled = await callTool(ctx, 'interrupt_agent', { agent: started.childId }, parent)
     expect(settled.isError).toBe(false)
     expect(text(settled)).toBe(`interrupt requested for agent ${started.childId}`)
-    const unknown = await callTool(ctx, 'interrupt_agent', { agent_id: 'no-such-agent' }, parent)
+    const unknown = await callTool(ctx, 'interrupt_agent', { agent: 'no-such-agent' }, parent)
     expect(unknown.isError).toBe(false)
     // No cold resume: the settled target never rematerialized.
     expect(ctx.agents.get(started.childId)).toBeUndefined()
@@ -688,7 +689,7 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
 
   it('fails loud when invoked without a calling agent', async () => {
     const { ctx } = await setup([])
-    const result = await callTool(ctx, 'interrupt_agent', { agent_id: 'x' })
+    const result = await callTool(ctx, 'interrupt_agent', { agent: 'x' })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('requires a calling agent')
   })

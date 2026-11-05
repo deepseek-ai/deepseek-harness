@@ -27,5 +27,6 @@ The agent can read and edit workspace files, run commands, delegate work, and ma
 - [Configure models](./providers.md)
 - [Use the Python SDK](./python-sdk.md)
 - [Publish the Web UI behind a reverse proxy](./public-deployments.md)
+- [Uninstall DSH Desktop](./desktop-uninstall-cleanup.md)
 - [Use other CLI modes](../../../apps/cli/README.md)
 - [Develop a plugin](../develop/basic/index.md)

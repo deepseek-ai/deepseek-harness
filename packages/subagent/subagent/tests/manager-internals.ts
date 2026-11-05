@@ -43,6 +43,7 @@ export function bindSubagentActivation(
     provider: 'fixture',
     root,
     ancestors,
+    path: undefined,
     releaseSlot() {},
     handle: { agent: child, async dispose() {} },
     outputStart: child.session.seq,

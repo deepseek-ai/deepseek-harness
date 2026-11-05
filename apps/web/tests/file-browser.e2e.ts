@@ -166,7 +166,7 @@ it('browses workspace files in tabs that share one pane tree', async () => {
   expect(await toggle.getAttribute('aria-expanded')).toBe('true')
 
   await toggle.focus()
-  // In dark mode the card takes the filled tree's background, with a soft white shadow.
+  // In dark mode the card is raised by a lighter background layer than the filled tree, and its soft shadow stays black.
   const theme = await page.locator('body').getAttribute('data-ds-dark-theme')
   try {
     await page.evaluate(() => { document.body.setAttribute('data-ds-dark-theme', '') })
@@ -174,10 +174,10 @@ it('browses workspace files in tabs that share one pane tree', async () => {
       background: getComputedStyle(node).backgroundColor,
       shadow: getComputedStyle(node).boxShadow,
     }))
-    expect(cardPaint.shadow).toContain('color(srgb 1 1 1 / 0.08)')
+    expect(cardPaint.shadow).toContain('rgba(0, 0, 0, 0.04) 0px 3px 8px 0px')
     await layout.evaluate((node) => { node.textContent = '[data-sidebar-right-panel] { width: 360px !important; }' })
     await column.locator('[data-files-navigator-mode="fill"]:visible').waitFor()
-    expect(await navigator.evaluate(node => getComputedStyle(node).backgroundColor)).toBe(cardPaint.background)
+    expect(await navigator.evaluate(node => getComputedStyle(node).backgroundColor)).not.toBe(cardPaint.background)
     await layout.evaluate((node) => { node.textContent = '[data-sidebar-right-panel] { width: 960px !important; }' })
     await navigator.getByRole('separator').waitFor()
   } finally {

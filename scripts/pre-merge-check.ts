@@ -1,6 +1,7 @@
 /**
  * Validate the tree a pull request produces once merged with its base branch: the version
- * synchronization of the released manifests, the install, and the Host and Client builds.
+ * synchronization of the released manifests, the install, the version directories of added upgrade
+ * guides, and the Host and Client builds.
  *
  * The `Policy / Pre-Merge Check` job runs this file with `node`, and knows nothing else about the
  * merged tree, so what that tree needs changes here without touching the check. The file runs under
@@ -23,13 +24,17 @@ export interface PreMergeStep {
 /**
  * The steps that check the merged tree, in order. The versions come first because reading the
  * manifests needs no install, so a mistyped release stops the check before anything is built.
+ * The upgrade-guide step compares with the base-branch commit the job merged, so a release published
+ * after the pull request was written rejects its stale guides; without that commit the step is left out.
  * @param root - Repository root.
+ * @param base - Base-branch commit merged into the pull request; the job sets it as `BASE_SHA`.
  * @returns Steps in run order.
  */
-export function preMergeSteps(root: string): PreMergeStep[] {
+export function preMergeSteps(root: string, base?: string): PreMergeStep[] {
   return [
     { name: 'versions', command: process.execPath, args: [join(root, 'scripts', 'verify-version-sync.ts'), root] },
     { name: 'install', command: 'pnpm', args: ['install', '--frozen-lockfile'] },
+    ...base === undefined ? [] : [{ name: 'upgrade guides', command: 'pnpm', args: ['run', 'verify-upgrade-guides', '--base', base] }],
     { name: 'host contracts', command: 'pnpm', args: ['exec', 'tsx', 'scripts/compile-referenced-projects.ts', 'host-contracts'] },
     { name: 'client', command: 'pnpm', args: ['exec', 'tsx', 'scripts/compile-referenced-projects.ts', 'client'] },
   ]
@@ -120,7 +125,11 @@ export async function preMergeCheck(root: string, options: PreMergeOptions = {})
 const invokedPath = process.argv[1]
 const isMain = invokedPath !== undefined && import.meta.url === pathToFileURL(resolve(invokedPath)).href
 if (isMain) {
-  const outcome = await preMergeCheck(resolve(import.meta.dirname, '..'))
+  const root = resolve(import.meta.dirname, '..')
+  // A job definition older than this file sets no BASE_SHA.
+  const base = process.env.BASE_SHA || undefined
+  if (base === undefined) process.stdout.write('pre-merge-check: BASE_SHA is not set, so added upgrade guides are not checked\n')
+  const outcome = await preMergeCheck(root, { steps: preMergeSteps(root, base) })
   if (outcome.ok) {
     process.stdout.write('pre-merge-check: passed\n')
   } else {

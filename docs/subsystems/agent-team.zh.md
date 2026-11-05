@@ -64,6 +64,8 @@ interface TeamTaskSnapshot {
   readonly description: string
   readonly status: TeamTaskStatus
   readonly ownerId?: SessionId
+  /** Immutable agent path captured at assignment; absent on unnamed historical owners. */
+  readonly ownerName?: string
   readonly blockedBy: TeamTaskId[]
   readonly writeScopes: string[]
 }
@@ -77,7 +79,7 @@ interface TeamTaskSnapshot {
 
 `agentTeam.enabled` 提供根 Session 保存的选择。新 Session 默认为 false；`team/mode` 记录显式选择。历史任务在显式选择前视为开启。仅根可调用 `setEnabled`；后代共享该模式。Web 菜单通过 `remote.agentTeams.setEnabled` 调用同一方法，Gateway 将根 Session id 解析为其存活 Agent。模式写入先立即生效，再等待刷盘。工具在步骤准备时确定可用性；提示词提供方在求值时读取选择。任务修改在排队操作开始时检查当前模式；已获准的修改可继续完成。模式变更不会结束收件箱等待。刷盘失败时已追加的选择仍然生效；重试相同选择会再次刷盘，不重复追加事件。
 
-根 Session 通过 `SessionProjectionMap.agentTeam` 发布未删除任务视图。`failure` 在最后有效状态旁报告被拒绝的持久化任务或模式记录。历史名册与邮箱记录不参与投影。任务面板以 Session id 标识每个负责人。
+根 Session 通过 `SessionProjectionMap.agentTeam` 发布未删除任务视图。`failure` 在最后有效状态旁报告被拒绝的持久化任务或模式记录。历史名册与邮箱记录不参与投影。视图以 Session id 标识每个负责人；任务面板和任务工具显示负责人的 agent 名称，负责人没有名称时显示其 Session id。
 
 ```ts type-equiv
 /** Runtime-enriched task view returned to tools and hosts. */
@@ -90,6 +92,8 @@ interface TeamTaskView {
   readonly blockedBy: TeamTaskId[]
   readonly writeScopes: string[]
   readonly ownerId?: SessionId
+  /** Immutable agent path captured at assignment; absent on unnamed historical owners. */
+  readonly ownerName?: string
   readonly ready: boolean
   readonly writeScopeWarnings: string[]
 }

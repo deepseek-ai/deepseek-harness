@@ -430,16 +430,21 @@ describe('the default seatbelt probe (sandbox-exec contract)', () => {
 })
 
 describe('the windows-acl probe (runner invocation contract)', () => {
-  it('refuses unsupported extra grants before a Windows runner or ACL mutation', async () => {
+  it.each([RO, WW])('ignores extra directory grants in $mode runner arguments', async (policy) => {
     const { ctx, sandbox } = await setup({}, {
       chain: ['windows-acl'],
       probeWindowsAcl: () => true,
       windowsAclRunnerArgs: ['node', 'windows-acl-runner.js'],
     })
+    const extra = realpathSync.native(mkdtempSync(join(tmpdir(), 'dsh-extra-acl-')))
+    tempDirs.push(extra)
+    const file = join(extra, 'file.txt')
+    writeFileSync(file, 'file')
     try {
-      await expect(sandbox.confine(['true'], { ...WW, additionalWritableRoots: ['/extra'] }))
-        .rejects.toThrow('Windows ACL confinement does not support additional writable directories')
-      await expect(sandbox.confine(['true'], { ...RO, additionalWritableRoots: ['/extra'] })).resolves.toBeDefined()
+      const original = await sandbox.confine(['true'], policy)
+      await expect(sandbox.confine(['true'], {
+        ...policy, additionalWritableRoots: [extra, join(extra, 'missing'), file],
+      })).resolves.toEqual(original)
     } finally {
       await ctx.fiber.dispose()
     }

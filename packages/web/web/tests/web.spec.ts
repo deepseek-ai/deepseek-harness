@@ -75,6 +75,72 @@ describe('WebRuntime registration', () => {
   })
 })
 
+describe('WebRuntime provider listing', () => {
+  it('lists registered providers per capability in registration order, including unavailable ones', async () => {
+    const { web } = await mountWeb()
+    expect(web.listProviders()).toEqual({ search: [], fetch: [] })
+    web.registerSearchProvider({ ...makeSearchProvider('b', available, () => Promise.resolve(searchResult('b'))), title: 'B search' })
+    const disposeA = web.registerSearchProvider(makeSearchProvider('a', unavailable, () => Promise.resolve(searchResult('a'))))
+    const description = { en: 'Fetches from this machine.', zh: '本机获取' }
+    web.registerFetchProvider({ ...makeFetchProvider('http', available, fetchResult('http')), title: 'Direct fetch', description })
+    expect(web.listProviders()).toEqual({
+      search: [{ id: 'b', title: 'B search' }, { id: 'a' }],
+      fetch: [{ id: 'http', title: 'Direct fetch', description }],
+    })
+
+    disposeA()
+    expect(web.listProviders().search).toEqual([{ id: 'b', title: 'B search' }])
+  })
+
+  it('emits web/providers-changed once after each registration and each disposal', async () => {
+    const { ctx, web } = await mountWeb()
+    const observed: Array<readonly string[]> = []
+    ctx.on('web/providers-changed', () => {
+      observed.push(web.listProviders().fetch.map(provider => provider.id))
+    })
+    const dispose = web.registerFetchProvider(makeFetchProvider('http', available, fetchResult('http')))
+    expect(observed).toEqual([['http']])
+    dispose()
+    expect(observed).toEqual([['http'], []])
+  })
+
+  it('does not emit web/providers-changed for a rejected duplicate registration', async () => {
+    const { ctx, web } = await mountWeb()
+    web.registerSearchProvider(makeSearchProvider('exa', available, () => Promise.resolve(searchResult('exa'))))
+    let changes = 0
+    ctx.on('web/providers-changed', () => { changes += 1 })
+    expect(() => web.registerSearchProvider(makeSearchProvider('exa', available, () => Promise.resolve(searchResult('exa'))))).toThrow()
+    expect(changes).toBe(0)
+  })
+
+  it('contains a throwing or rejecting listener so later listeners still run and registration commits', async () => {
+    const { ctx, web } = await mountWeb()
+    let later = 0
+    ctx.on('web/providers-changed', () => { throw new Error('sync listener failure') })
+    // oxlint-disable-next-line typescript/no-misused-promises -- exercises rejected-listener containment
+    ctx.on('web/providers-changed', () => Promise.reject(new Error('async listener failure')))
+    ctx.on('web/providers-changed', () => { later += 1 })
+    web.registerFetchProvider(makeFetchProvider('http', available, fetchResult('http')))
+    await Promise.resolve()
+    expect(later).toBe(1)
+    expect(web.listProviders().fetch).toEqual([{ id: 'http' }])
+  })
+
+  it('removes a contributing fiber\'s providers from the list and announces it (HMR safety)', async () => {
+    const { ctx, web } = await mountWeb()
+    let changes = 0
+    ctx.on('web/providers-changed', () => { changes += 1 })
+    const fiber = await ctx.plugin(Object.assign((inner: Context) => {
+      inner.web.registerSearchProvider({ ...makeSearchProvider('custom', available, () => Promise.resolve(searchResult('custom'))), title: 'Custom' })
+    }, { inject: ['web'] }))
+    expect(web.listProviders().search).toEqual([{ id: 'custom', title: 'Custom' }])
+    expect(changes).toBe(1)
+    await fiber.dispose()
+    expect(web.listProviders().search).toEqual([])
+    expect(changes).toBe(2)
+  })
+})
+
 describe('WebRuntime execution resolution', () => {
   it('throws WEB_PROVIDER_UNAVAILABLE when nothing is registered', async () => {
     const { web } = await mountWeb()

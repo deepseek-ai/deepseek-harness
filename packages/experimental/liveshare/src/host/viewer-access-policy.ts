@@ -41,7 +41,8 @@ import {
 import { VIEWER_READ_ONLY_CODE } from '../viewer-channel.ts'
 import type { ForkRecord, ForkRegistry } from './fork-registry.ts'
 import { isExpired, type ForkShareState, type ViewerSessionMode } from './fork-policy.ts'
-import type { ViewerCapabilityGroup } from './viewer-declarations.ts'
+import type { ViewerPluginAccess } from '../share-api-types.ts'
+import type { ShareablePluginCatalog, ViewerPluginPolicy } from './viewer-capability-types.ts'
 import type { ShareViewerPrincipal } from './viewer-principal.ts'
 
 /** The two write actions a reader may take on a Session. */
@@ -83,7 +84,7 @@ export interface ViewerAccessFacts {
    * reader's next call. This is an offer, not a grant: the share's own selection decides what it exposes.
    * @returns The declared endpoints, empty when no plugin declares any.
    */
-  readonly declaredCapabilities: () => readonly ViewerCapabilityGroup[]
+  readonly offeredPlugins: () => readonly ShareablePluginCatalog[]
 }
 
 /** What a condition on a Session binding receives. */
@@ -220,29 +221,33 @@ assertSameViewerActions(
 )
 
 /**
- * The endpoints one share may expose: offered by a plugin, selected by its owner, and not already decided
- * by this policy.
+ * The methods one share may expose: offered by an installed plugin and granted by the owner.
  *
- * The share's own selection is the grant and the plugin offer is the capability: an endpoint reaches the
- * reader only when both name it for the same plugin, so withdrawing either one withdraws access on the
- * next decision. Selecting an endpoint a plugin no longer offers therefore grants nothing.
- * @param offered - Endpoints plugins currently offer, grouped by declaring plugin.
- * @param selected - Endpoints this share's owner selected, grouped the same way.
- * @param kind - Endpoint kind to expose.
+ * A global `all` grants every offered method; `none` grants none; `custom` exposes an endpoint only
+ * when its plugin policy names it. Withdrawing either the plugin or the offered method withdraws
+ * access on the next decision, and an endpoint no longer offered grants nothing even if the stored
+ * selection still names it.
+ * @param offered - Methods installed plugins currently offer, grouped by plugin.
+ * @param access - Global switch over every offered method.
+ * @param policies - Per-plugin policies this share carries.
  * @returns The actions this share may expose, in a stable order.
  */
-function exposedCapabilities(
-  offered: readonly ViewerCapabilityGroup[],
-  selected: readonly ViewerCapabilityGroup[],
-  kind: 'readable' | 'writable',
+function exposedEndpoints(
+  offered: readonly ShareablePluginCatalog[],
+  access: ViewerPluginAccess,
+  policies: readonly ViewerPluginPolicy[],
 ): RemoteAccessEndpoint[] {
-  const chosen = new Map(selected.map(group => [group.plugin, new Set<string>(group[kind])]))
+  if (access === 'all') return offered.flatMap(group => [...group.endpoints] as RemoteAccessEndpoint[]).sort()
+  if (access === 'none') return []
+  const offeredByPlugin = new Map(offered.map(group => [group.plugin, group.endpoints]))
   const exposed = new Set<RemoteAccessEndpoint>()
-  for (const group of offered) {
-    const chosenByOwner = chosen.get(group.plugin)
-    if (chosenByOwner === undefined) continue
-    for (const action of group[kind]) {
-      if (chosenByOwner.has(action) && !POLICY_DECIDED_ACTIONS.has(action)) exposed.add(action)
+  for (const policy of policies) {
+    const endpoints = offeredByPlugin.get(policy.plugin)
+    if (endpoints === undefined) continue
+    const named = policy.mode === 'all' ? endpoints : (policy.endpoints ?? [])
+    for (const action of endpoints) {
+      const endpoint = action as RemoteAccessEndpoint
+      if (named.includes(endpoint)) exposed.add(endpoint)
     }
   }
   return [...exposed].sort()
@@ -286,21 +291,6 @@ function servingShare(
   if (share.stopped) return { refusal: 'share-stopped' }
   if (isExpired(share.expiresAt, Date.now())) return { refusal: 'share-expired' }
   return facts.viewerAdmitted(shareId, actor) ? { share } : { refusal: 'viewer-not-authorized' }
-}
-
-/**
- * Why a reader may not write to the share at all, whatever action names the write.
- *
- * This is the whole share-level write decision: the tier the owner set, and the confined access layer a
- * write needs. The policy's writable declarations share it, so a declaration can neither add a tier nor
- * change a refusal code.
- * @param mode - The share's drivable tier, absent while this host cannot establish one.
- * @param confined - Whether the source Session carries a usable confined access layer.
- * @returns The refusal code, or undefined when the share permits writes.
- */
-function shareWriteRefusal(mode: ViewerSessionMode | undefined, confined: boolean): string | undefined {
-  if (mode !== 'write') return 'share-not-writable'
-  return confined ? undefined : 'source-write-unavailable'
 }
 
 /**
@@ -510,49 +500,25 @@ export function createViewerAccessPolicy(facts: ViewerAccessFacts): RemoteAccess
           bindings.push({ role: VIEWER_WORKSPACE_ROLE, resource: { kind: 'workspace', id: workspace.id } })
         }
       }
-      // Exposed capabilities ride the resources the reader can already see, and they are appended after
+      // Exposed endpoints ride the resources the reader can already see, and they are appended after
       // every binding above, so a share that exposes none keeps its previous binding order byte for byte.
-      // Both sides are read here, on every computation: the plugins' offer and this share's own selection,
-      // so either withdrawing its name decides the reader's next call while an open snapshot recomputes.
-      const offered = facts.declaredCapabilities()
-      const selected = share.viewerCapabilities ?? []
-      const readable = exposedCapabilities(offered, selected, 'readable')
-      if (readable.length > 0) {
+      // Both sides are read here, on every computation: the platform catalog and this share's own
+      // policies, so either withdrawing a name decides the reader's next call while a snapshot recomputes.
+      const offered = facts.offeredPlugins()
+      const access = share.viewerPluginAccess ?? 'none'
+      const selected = share.viewerPlugins ?? []
+      const exposed = exposedEndpoints(offered, access, selected)
+      if (exposed.length > 0) {
         bindings.push(
-          { role: declarationRole('liveshare:viewer-readable-global', 'global', readable), resource: { kind: 'global' } },
+          { role: declarationRole('liveshare:viewer-method-global', 'global', exposed), resource: { kind: 'global' } },
         )
         for (const id of [source, ...children.map(child => SessionId(child.childSessionId))]) {
-          bindings.push({ role: declarationRole('liveshare:viewer-readable-session', 'session', readable),
+          bindings.push({ role: declarationRole('liveshare:viewer-method-session', 'session', exposed),
             resource: { kind: 'session', id } })
         }
         for (const id of memberWorkspaces) {
-          bindings.push({ role: declarationRole('liveshare:viewer-readable-workspace', 'workspace', readable),
+          bindings.push({ role: declarationRole('liveshare:viewer-method-workspace', 'workspace', exposed),
             resource: { kind: 'workspace', id } })
-        }
-      }
-      // A writable capability is the one that changes the owner's machine, and the owner states consent
-      // for writes only through the share's session mode. Every binding therefore carries the same
-      // decision the source write role applies, so no offer and no selection can turn a read-only share
-      // into a writable one; a revoked fork stays read-only and carries none.
-      const writable = exposedCapabilities(offered, selected, 'writable')
-      if (writable.length > 0) {
-        const condition = (): RemoteAccessDecision =>
-          answer(shareWriteRefusal(mode, facts.sourceConfined(viewer.shareId)))
-        bindings.push(
-          { role: declarationRole('liveshare:viewer-writable-global', 'global', writable),
-            resource: { kind: 'global' }, condition },
-          { role: declarationRole('liveshare:viewer-writable-session', 'session', writable),
-            resource: { kind: 'session', id: source }, condition },
-        )
-        for (const child of children) {
-          if (child.revokedAt === undefined) {
-            bindings.push({ role: declarationRole('liveshare:viewer-writable-session', 'session', writable),
-              resource: { kind: 'session', id: SessionId(child.childSessionId) }, condition })
-          }
-        }
-        for (const id of memberWorkspaces) {
-          bindings.push({ role: declarationRole('liveshare:viewer-writable-workspace', 'workspace', writable),
-            resource: { kind: 'workspace', id }, condition })
         }
       }
       return bindings

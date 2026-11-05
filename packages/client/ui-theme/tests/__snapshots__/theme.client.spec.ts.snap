@@ -1,0 +1,22 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ThemeRuntime > preserves boot preference dark until Host settings arrive 1`] = `
+{
+  "palette": "dark",
+  "preference": "dark",
+}
+`;
+
+exports[`ThemeRuntime > preserves boot preference light until Host settings arrive 1`] = `
+{
+  "palette": "light",
+  "preference": "light",
+}
+`;
+
+exports[`ThemeRuntime > preserves boot preference system until Host settings arrive 1`] = `
+{
+  "palette": "light",
+  "preference": "system",
+}
+`;
