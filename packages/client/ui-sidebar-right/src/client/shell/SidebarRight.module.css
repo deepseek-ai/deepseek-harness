@@ -84,7 +84,8 @@
 }
 
 /* Fullscreen has no conversation beside the first column, so dockkit's
-   column-0 divider has nothing to separate. */
+   column-0 divider has nothing to separate. The host attribute and child
+   combinator outrank dockkit's (0,4,0) rule regardless of stylesheet order. */
 .panel[data-sidebar-right-panel='fullscreen'] :global([data-dockkit-host='dock'][data-dockkit-column='0']) > :global([data-dockkit-pane]) {
   border-left: none;
 }
