@@ -4,7 +4,7 @@
  * @module @deepseek-ai/dsh-plan-mode/error
  */
 
-import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 
 /**
  * Every machine-routable plan-mode failure:

@@ -7,7 +7,8 @@ import UserQuestionService, {
   type AskUserQuestionAnswer,
   type AskUserQuestionRequest,
 } from '@deepseek-ai/dsh-user-questions'
-import { createToolResultMessage, createUserMessage, HarnessError, ToolCallId, type ToolSchema, type UserMessage } from '@deepseek-ai/dsh-llm'
+import { HarnessError } from '@deepseek-ai/dsh-error'
+import { createToolResultMessage, createUserMessage, ToolCallId, type ToolSchema, type UserMessage } from '@deepseek-ai/dsh-llm'
 import { Session, SessionId, SESSION_FORMAT_VERSION, TOOL_OUTCOME_UNKNOWN } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 
