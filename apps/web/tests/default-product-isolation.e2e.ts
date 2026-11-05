@@ -1,7 +1,7 @@
 /** Chromium acceptance of the shipped Web profile's actual Client plugin and module registries. */
 
-import { Context, FiberState } from '@deepseek-ai/cordis'
-import type { Plugin, RegistryService } from '@deepseek-ai/cordis'
+import { FiberState } from '@deepseek-ai/cordis'
+import type { Context, Plugin, RegistryService } from '@deepseek-ai/cordis'
 import type { ClientModuleLoader, ClientModuleLoaderTarget } from '@deepseek-ai/dsh-client-modules/client'
 import { chromium } from 'playwright'
 import { hasExperimentalPackageReference } from '../../../scripts/experimental-package-policy.ts'
@@ -73,7 +73,8 @@ it('activates the actual default Client registry without experimental packages',
               // Capture the first real root and immediately restore the registry method.
               prototype.plugin = function (...args: Parameters<RegistryService['plugin']>) {
                 prototype.plugin = plugin
-                observation.ctx = this.ctx[Context.root]
+                // This init script runs in the page, where the test's `Context` import is unavailable.
+                observation.ctx = this.ctx[Symbol.for('cordis.root') as typeof Context.root]
                 return plugin.apply(this, args)
               }
               const modules = create(options)

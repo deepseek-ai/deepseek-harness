@@ -1,6 +1,6 @@
 /** Cordis rc.12 root access, intercept metadata, isolation, disposal and event errors. */
-import { Context, FiberState, Service } from '@deepseek-ai/cordis'
-import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { Context, FiberState, Service, ValidationError } from '@deepseek-ai/cordis'
+import { describe, expect, it, onTestFinished } from 'vitest'
 
 interface Metadata {
   a?: number
@@ -87,6 +87,24 @@ describe('Cordis rc.12 core', () => {
     expect(results).toEqual(['outer', 'cannot get property "rc12View" without inject'])
   })
 
+  it('isolates a context pinned to its parent realm label from the injected view', async () => {
+    const ctx = root()
+    ctx.provide('rc12View', 'outer')
+    let message = ''
+    await ctx.inject(['rc12View'], async (owner) => {
+      const pinned = owner.isolate('rc12View', owner[Context.isolate].rc12View)
+      expect(() => pinned.rc12View).toThrow('cannot get property "rc12View" without inject')
+      await pinned.plugin((child) => {
+        try {
+          void child.rc12View
+        } catch (error) {
+          message = error instanceof Error ? error.message : String(error)
+        }
+      })
+    })
+    expect(message).toBe('cannot get property "rc12View" without inject')
+  })
+
   it('settles pending and failed fibers to DISPOSED', async () => {
     const ctx = root()
     const pending = ctx.inject(['rc12NeverProvided'], () => {})
@@ -94,10 +112,9 @@ describe('Cordis rc.12 core', () => {
     await pending.dispose()
     expect(pending.state).toBe(FiberState.DISPOSED)
 
-    const error = vi.spyOn(ctx.logger('fiber'), 'error').mockImplementation(() => {})
-    onTestFinished(() => { error.mockRestore() })
     const failed = ctx.plugin(() => { throw new Error('rc12 boom') })
     await expect(failed.await()).rejects.toThrow('rc12 boom')
+    expect(ctx.logger.buffer.some(message => message.type === 'error' && message.args[0] instanceof Error && message.args[0].message === 'rc12 boom')).toBe(true)
     expect(failed.state).toBe(FiberState.FAILED)
     await failed.dispose()
     expect(failed.state).toBe(FiberState.DISPOSED)
@@ -110,5 +127,23 @@ describe('Cordis rc.12 core', () => {
     ctx.on(symbol as never, () => { throw new Error('symbol listener failed') })
     await expect(ctx.parallel('rc12-parallel' as never)).rejects.toThrow('one or more listeners of event "rc12-parallel" failed')
     await expect(ctx.parallel(symbol as never)).rejects.toThrow('one or more listeners of event Symbol(rc12-symbol) failed')
+  })
+
+  it('formats config validation paths with keyed segments', () => {
+    const error = new ValidationError([{ message: 'bad', path: [{ key: 0 }, 'name'] }])
+    expect(ValidationError.is(error)).toBe(true)
+    expect(ValidationError.is(new TypeError('bad'))).toBe(false)
+    expect(error.issues).toHaveLength(1)
+    expect(error.message).toBe('invalid config:\n  - bad (at 0.name)')
+    expect(ValidationError.normalizePath([{ key: 'a' }, 1])).toEqual(['a', 1])
+    expect(ValidationError.formatPath(undefined)).toBe('')
+    expect(new ValidationError([{ message: 'bad', path: [] }]).message).toBe('invalid config:\n  - bad')
+  })
+
+  it('logs an AggregateError without members as itself', () => {
+    const ctx = root()
+    const aggregate = new AggregateError([], 'empty')
+    ctx.logger.error(aggregate)
+    expect(ctx.logger.buffer.at(-1)?.args[0]).toBe(aggregate)
   })
 })
