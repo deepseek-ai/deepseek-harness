@@ -264,6 +264,10 @@
                   "appHandle": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "includeHidden": {
+                    "description": "Include offscreen and zero-size windows for explicit selection or restoration.",
+                    "type": "boolean"
                   }
                 },
                 "required": [

@@ -37,7 +37,7 @@ Use cua with method getCapabilities and params {} to inspect permissions and ses
 
 Initialize the object API once in persistent PTC. Reuse its variables in later calls; put temporary declarations inside { ... } blocks to avoid redeclaration errors. All object methods are async. getAXState returns text, not a structured state object. Its text separates values and placeholders, and reports subroles, help, URLs, disabled/focused/selected/expanded state and UTF-16 selection ranges when available. Writability is true, false or unknown on relevant controls; omitted state fields do not assert false. selection=unavailable means the reported range exceeds the observed text. Compact output omits ordinary Press/Pick (click), ShowMenu (right click) and ScrollToVisible actions; details=true lists every available action. Use the displayed action name with performSecondaryAction; ambiguous aliases require the complete name from details=true. Truncation reports the reached provider limit. Narrow the window or increase that provider limit before reading again.
 
-Use app methods directly for single-window tasks; getApp already reads initial AX state. Call app.getWindows() and await app.getWindow(windowId) only to target a particular window or resolve ambiguous window selection. App screenshots and coordinate actions use the latest AX observation: its focused on-screen, nonzero-size window, otherwise the sole such window. They do not refresh focus automatically. Read app.getAXState() to follow changed focus. Independent floating panels have their own window IDs. After opening one, refresh app.getWindows() and select its window for AX, screenshots and input; a panel may leave keyboard focus in the main window.
+Use app methods directly for single-window tasks; getApp already reads initial AX state. Call app.getWindows() and await app.getWindow(windowId) only to target a particular window or resolve ambiguous window selection. App screenshots and coordinate actions use the latest AX observation: its focused on-screen, nonzero-size window, otherwise the sole visible normal-layer window. They do not refresh focus automatically. Read app.getAXState() to follow changed focus. Visible panels, menus, tooltips and status items can have their own window IDs. Select a panel from app.getWindows() for its AX, screenshot and input even if the main window retains focus. Use includeHidden:true in listWindows or app.getWindows({includeHidden:true}) to list offscreen and zero-size windows.
 
 CuaScreenshot contains { bytes: Uint8Array, mimeType: "image/png" | "image/jpeg" | "image/webp" | "image/gif", pixelWidth: number, pixelHeight: number, windowId: number }. Use mimeType to choose a file extension or declare an image; do not assume PNG.
 
@@ -49,7 +49,7 @@ Object API signatures (options default to { emit: true }):
 - cua.getState(options?) -> { apps, browsers: [] }
 - cua.getApp(selector: string) -> App
 - app.activate() -> { dispatched: true, verified: false }
-- app.getWindows(options?) -> Array<{ windowId, pid, appName, title, bounds, isOnScreen, onCurrentSpace }>
+- app.getWindows(options?: { emit?: boolean, includeHidden?: boolean }) -> Array<{ windowId, pid, appName, title, bounds, isOnScreen, onCurrentSpace, layer? }>
 - app.getWindow(windowId: number) -> Window
 - app.typeText(text: string), app.pressKey(chord: string) -> action result
 - app.paste(text: string, options?: { format?: "text" | "html" }) -> action result
