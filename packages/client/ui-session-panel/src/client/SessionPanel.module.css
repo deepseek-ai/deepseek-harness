@@ -16,7 +16,8 @@
   overscroll-behavior: contain;
   padding: 6px 8px;
   border: 0;
-  border-radius: var(--dsw-radius-panel);
+  /* The standard menu tier: a compact summary surface, not an enclosing panel. */
+  border-radius: var(--dsw-radius-lg);
   color: var(--dsw-alias-label-primary);
   background: var(--dsw-alias-bg-layer-1);
   box-shadow: var(--dsw-elevation-panel);
