@@ -9,7 +9,7 @@ type ListAnswer = { ok: true; value: BundleInfo[] } | { ok: false; error: { code
 function bundle(name: string, installed: boolean, enabled: boolean): BundleInfo {
   return {
     name, official: false, availability: installed ? 'profile' : 'missing', enabled, installed,
-    optional: false, removable: true, updatable: false, rows: [], overrides: [],
+    optional: false, removable: true, rows: [], overrides: [],
   }
 }
 
