@@ -26,6 +26,7 @@
 }
 
 .bubble[data-portal] { z-index: 1100; }
+:global(:where(html[data-platform='darwin'])) .bubble { -webkit-app-region: no-drag; }
 .bubble[data-pinned] { pointer-events: auto; }
 .label { min-width: 0; }
 

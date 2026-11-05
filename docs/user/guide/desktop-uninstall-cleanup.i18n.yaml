@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for desktop-uninstall-cleanup.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/user/guide/desktop-uninstall-cleanup.md
+/uninstall-dsh-desktop:
+  en: bbd616011b211905
+  zh: 93b6146e97d9bb88
+/uninstall-dsh-desktop/1-uninstall-the-app:
+  en: 6ba6b5bc4153c3cd
+  zh: 36712b216d118155
+/uninstall-dsh-desktop/2-clean-up-local-data:
+  en: 848cdeea29e23d4c
+  zh: ccd2260681a94c45
+/uninstall-dsh-desktop/3-verify-cleanup:
+  en: 396bdba7cd24b278
+  zh: 2488dc9721081aee

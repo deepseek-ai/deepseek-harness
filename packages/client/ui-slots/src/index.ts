@@ -288,12 +288,18 @@ export interface ChainRenderOpts {
 
 /**
  * renderSlot options for a hoc slot. `children` is the owner's content; every
- * live entry wraps it, and the slot renders it unchanged when no entry is live.
- * Omitted content renders the layers around nothing.
+ * live layer for the dispatch wraps it, and the slot renders it unchanged when
+ * no layer applies. Omitted content renders the layers around nothing.
  */
-export interface HocRenderOpts {
-  /** Innermost content wrapped by the slot's entries. */
+export interface HocRenderOpts<EntryKey extends string = string> {
+  /** Innermost content wrapped by the slot's layers. */
   children?: ReactNode
+  /**
+   * Dispatch key: layers registered with exactly this `key` join the wildcard
+   * layers (registered without `key`); within one `id` the exact-key layer
+   * replaces the wildcard one. Omitted, only wildcard layers apply.
+   */
+  entryKey?: EntryKey
 }
 
 /**
@@ -331,7 +337,7 @@ type OrdinaryKeysOf<S extends keyof SlotMap & string> = Exclude<S, ContextualKey
  */
 type RenderSlotFn<S extends keyof SlotMap & string> =
   ([HocKeysOf<S>] extends [never] ? object : {
-    <K extends HocKeysOf<S>>(key: K, owner: OwnerOf<K>, opts?: HocRenderOpts): ReactNode
+    <K extends HocKeysOf<S>>(key: K, owner: OwnerOf<K>, opts?: HocRenderOpts<EntryKeyOf<K>>): ReactNode
   }) &
   ([Exclude<ContextualKeysOf<S>, HocKeysOf<S>>] extends [never] ? object : {
     <
@@ -365,7 +371,8 @@ export type MatchedShare<E extends SlotEntryDef, M> =
 /**
  * Hoc children share: a hoc-slot component receives the next inner layer, or
  * the owner's content at the innermost layer, as the framework-injected
- * `children` prop and renders it exactly once.
+ * `children` prop and renders it at most once; a layer that omits it replaces
+ * everything inside it.
  */
 export type HocShare<E extends SlotEntryDef> =
   E['kind'] extends 'hoc' ? { children: ReactNode } : object
@@ -789,7 +796,7 @@ export type SlotLabel = string | (() => string)
 
 /**
  * Kind shape fields carried in register options (keyed dispatch key; list
- * id/order/label; hoc id/order; chain select/priority; for every other kind
+ * id/order/label; hoc id/key/order; chain select/priority; for every other kind
  * priority is the cell shadowing rank, and hoc nesting follows order).
  */
 export type KindOptions<
@@ -817,9 +824,17 @@ export type KindOptions<
       }
         : SlotMap[K]['kind'] extends 'hoc' ? {
           id: string
+          /**
+           * Dispatch key this layer serves; omitted, the layer serves every
+           * dispatch (wildcard). Within one `id`, an exact-key layer replaces
+           * the wildcard layer for that key.
+           */
+          key?: EntryKey
           /** Nesting position: ascending, default 0; the lowest order is the outermost layer. */
           order?: number
-          /** Cell shadowing rank (ascending, default 0, lowest renders; same id + same priority throws — see {@link SlotCore.register}). */
+          /**
+           * Cell shadowing rank (ascending, default 0, lowest renders; same key + id + priority throws — see {@link SlotCore.register}).
+           */
           priority?: number
         }
           : {
@@ -1007,6 +1022,16 @@ export interface LiveFactoryNode {
 export type LiveCompositionNode = LiveSlotNode | LiveFactoryNode
 
 /**
+ * A hoc layer's shadowing cell: its dispatch key and id, encoded so no key/id
+ * pair collides with another; a wildcard layer's absent key encodes as `null`.
+ * @param entry - one hoc registration.
+ * @returns the cell identity.
+ */
+function hocCell(entry: StoredEntry): string {
+  return JSON.stringify([entry.options.key, entry.options.id])
+}
+
+/**
  * Pure slot registry (no cordis; event emission and the renderer installation contract
  * live in the runtime Service wrapper).
  *
@@ -1170,7 +1195,7 @@ export class SlotCore {
    * throws (the selector is the entry's routing seat, see {@link ChainSelect}).
    *
    * Shadowing (single/keyed/list/hoc): entries sharing one cell (single — the
-   * slot itself; keyed — same `key`; list and hoc — same `id`) coexist at distinct
+   * slot itself; keyed — same `key`; list — same id; hoc — same key (or wildcard) and id) coexist at distinct
    * priorities, sorted ascending with ties keeping registration order; the
    * cell's lowest live entry renders ({@link SlotCore.entriesOfSlot}). A
    * second registration at an occupied cell's exact priority (default 0)
@@ -1264,12 +1289,21 @@ export class SlotCore {
         }
         break
       }
-      case 'list':
-      case 'hoc': {
-        if (options.id === undefined) throw new Error(`${spec.kind} slot "${options.name}" requires options.id`)
+      case 'list': {
+        if (options.id === undefined) throw new Error(`list slot "${options.name}" requires options.id`)
         const occupant = rec.entries.find(e => e.options.id === options.id && (e.options.priority ?? 0) === priority)
         if (occupant) {
-          throw new Error(`${spec.kind} slot "${options.name}" already has an entry with id "${options.id}" ${occupantHint(occupant)}`)
+          throw new Error(`list slot "${options.name}" already has an entry with id "${options.id}" ${occupantHint(occupant)}`)
+        }
+        break
+      }
+      case 'hoc': {
+        if (options.id === undefined) throw new Error(`hoc slot "${options.name}" requires options.id`)
+        const occupant = rec.entries.find(e => e.options.id === options.id && e.options.key === options.key
+          && (e.options.priority ?? 0) === priority)
+        if (occupant) {
+          const cell = options.key === undefined ? `id "${options.id}"` : `id "${options.id}" for key "${options.key}"`
+          throw new Error(`hoc slot "${options.name}" already has an entry with ${cell} ${occupantHint(occupant)}`)
         }
         break
       }
@@ -1380,7 +1414,7 @@ export class SlotCore {
   /**
    * Project a key's entries to its shadowing winners: the first live
    * (non-abdicated) entry of each cell in priority order — single: the slot
-   * is one cell; keyed: one cell per `key`; list and hoc: one cell per `id`
+   * is one cell; keyed: one cell per `key`; list: one cell per id; hoc: one cell per (key or wildcard, id)
    * (winners keep ledger sequence; renderers still refine list display and hoc
    * nesting by `order`).
    * Chain keys return the raw entries unchanged: election consumes every
@@ -1400,7 +1434,10 @@ export class SlotCore {
     for (const entry of rec.entries) {
       if (this.abdicated.has(entry)) continue
       // Single-kind entries all share the one undefined cell.
-      const cell = kind === 'keyed' ? entry.options.key : kind === 'list' || kind === 'hoc' ? entry.options.id : undefined
+      const cell = kind === 'keyed' ? entry.options.key
+        : kind === 'list' ? entry.options.id
+          : kind === 'hoc' ? hocCell(entry)
+            : undefined
       if (seenCells.has(cell)) continue
       seenCells.add(cell)
       heads.push(entry)
@@ -1566,11 +1603,12 @@ export class SlotCore {
   /**
    * Renderer crash report from an entry boundary. Always notifies
    * {@link SlotCore.onEntryError} listeners; with `info.abdicate` set (the
-   * shadowing kinds — single/keyed/list/hoc) it first retires the entry from its
+   * shadowing kinds — single/keyed/list) it first retires the entry from its
    * cell, one-shot: the record's version bumps through the ordinary mutation
    * channel so outlets re-project onto the cell's next survivor, and a
-   * repeat abdicating report no-ops entirely. Chain crashes report with
-   * `abdicate: false` — election alternatives resolve at select time, so the
+   * repeat abdicating report no-ops entirely. Chain and hoc crashes report
+   * with `abdicate: false` — chain alternatives resolve at select time, and a
+   * hoc layer's failure stays with the occurrence that rendered it — so the
    * entry keeps its cell and only the notification fires. The registration
    * itself stays on the ledger either way — raw {@link SlotCore.entries}
    * still lists the entry and its disposer keeps working.

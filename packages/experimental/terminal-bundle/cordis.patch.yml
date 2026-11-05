@@ -7,13 +7,9 @@
       config:
         - id: optional-terminal-registry
           name: '@deepseek-ai/dsh-terminal'
-        - id: optional-terminal-bash
-          name: '@deepseek-ai/dsh-terminal-bash'
-          disabled: !!js process.platform === 'win32'
-        - id: optional-terminal-pwsh
-          name: '@deepseek-ai/dsh-terminal-bash'
-          disabled: !!js process.platform !== 'win32'
+        - id: optional-terminal-panel
+          name: '@deepseek-ai/dsh-terminal-panel'
           config:
-            shellDialect: pwsh
+            preferredShells: !!js "process.platform === 'win32' ? ['pwsh', 'powershell'] : []"
         - id: optional-tool-terminal
           name: '@deepseek-ai/dsh-tool-terminal'

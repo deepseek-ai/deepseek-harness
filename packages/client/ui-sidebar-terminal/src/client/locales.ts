@@ -23,6 +23,10 @@ export const zh = {
   attachmentEnded: '终端连接已结束，请重新连接。',
   invalidOutput: '终端画面传输异常，请重新连接。',
   terminalLimit: '终端数量已达上限，请关闭不用的终端后重试。已退出的终端也计入数量。',
+  'badge.agent': 'Agent', 'badge.agentHint': '由 Agent 打开。你一输入就由你接管，Agent 之后只能读取。',
+  'badge.sandbox': '沙箱',
+  'badge.readOnlyHint': '命令在 Agent 的只读沙箱里运行，包括你在这里输入的命令。',
+  'badge.workspaceWriteHint': '命令在 Agent 的工作区沙箱里运行，包括你在这里输入的命令。',
 } satisfies Record<string, string>
 
 /** English terminal copy. */
@@ -41,6 +45,10 @@ export const en = {
   attachmentEnded: 'The terminal connection ended. Reconnect to continue.',
   invalidOutput: 'The terminal screen could not be received. Reconnect to recover it.',
   terminalLimit: 'The terminal limit has been reached. Close unused terminals and try again. Exited terminals also count toward the limit.',
+  'badge.agent': 'Agent', 'badge.agentHint': 'Opened by the agent. Typing here takes over; the agent can then only read it.',
+  'badge.sandbox': 'Sandbox',
+  'badge.readOnlyHint': "Commands run in the agent's read-only sandbox, including commands you type here.",
+  'badge.workspaceWriteHint': "Commands run in the agent's workspace sandbox, including commands you type here.",
 } satisfies Record<keyof typeof zh, string>
 
 /** Japanese copy, checked against the English keys. */
@@ -73,6 +81,11 @@ export const ja = {
   'attachmentEnded': 'ターミナル接続が終了しました。続行するには再接続してください。',
   'invalidOutput': 'ターミナル画面を受信できませんでした。再接続して復元してください。',
   'terminalLimit': 'ターミナルの上限に達しました。未使用のターミナルを閉じて再試行してください。終了したターミナルも上限に含まれます。',
+  'badge.agent': 'エージェント',
+  'badge.agentHint': 'エージェントが開きました。ここで入力すると操作を引き継ぎ、以後エージェントは読み取りのみ可能になります。',
+  'badge.sandbox': 'サンドボックス',
+  'badge.readOnlyHint': 'コマンドはエージェントの読み取り専用サンドボックスで実行されます（ここで入力したコマンドも含みます）。',
+  'badge.workspaceWriteHint': 'コマンドはエージェントのワークスペースサンドボックスで実行されます（ここで入力したコマンドも含みます）。',
 } satisfies Record<keyof typeof en, string>
 
 /** Spanish dictionary, checked against the English keys. */
@@ -91,6 +104,10 @@ export const es = {
   attachmentEnded: 'La conexión del terminal terminó. Vuelva a conectarse para continuar.',
   invalidOutput: 'No se pudo recibir la pantalla del terminal. Vuelva a conectarse para recuperarlo.',
   terminalLimit: 'Se ha alcanzado el límite terminal. Cierre los terminales no utilizados y vuelva a intentarlo. Las terminales salidas también cuentan para el límite.',
+  'badge.agent': 'Agente', 'badge.agentHint': 'Abierto por el agente. Al escribir aquí toma el control; después el agente solo podrá leerlo.',
+  'badge.sandbox': 'Sandbox',
+  'badge.readOnlyHint': 'Los comandos se ejecutan en el sandbox de solo lectura del agente, incluidos los que escriba aquí.',
+  'badge.workspaceWriteHint': 'Los comandos se ejecutan en el sandbox del espacio de trabajo del agente, incluidos los que escriba aquí.',
 } satisfies Record<keyof typeof en, string>
 
 /** French dictionary, checked against the English keys. */
@@ -109,6 +126,10 @@ export const fr = {
   attachmentEnded: 'La connexion du terminal est terminée. Reconnectez-vous pour continuer.',
   invalidOutput: "L'écran du terminal n'a pas pu être reçu. Reconnectez-vous pour le récupérer.",
   terminalLimit: 'La limite terminale a été atteinte. Fermez les terminaux inutilisés et réessayez. Les terminaux sortis comptent également dans la limite.',
+  'badge.agent': 'Agent', 'badge.agentHint': 'Ouvert par l’agent. Saisir du texte ici vous en donne le contrôle ; l’agent ne peut ensuite que le lire.',
+  'badge.sandbox': 'Sandbox',
+  'badge.readOnlyHint': 'Les commandes s’exécutent dans le sandbox en lecture seule de l’agent, y compris celles que vous saisissez ici.',
+  'badge.workspaceWriteHint': 'Les commandes s’exécutent dans le sandbox de l’espace de travail de l’agent, y compris celles que vous saisissez ici.',
 } satisfies Record<keyof typeof en, string>
 
 /** German dictionary, checked against the English keys. */
@@ -127,6 +148,10 @@ export const de = {
   attachmentEnded: 'Die Terminalverbindung wurde beendet. Stellen Sie die Verbindung wieder her, um fortzufahren.',
   invalidOutput: 'Der Terminalbildschirm konnte nicht empfangen werden. Stellen Sie die Verbindung wieder her, um es wiederherzustellen.',
   terminalLimit: 'Das Endlimit wurde erreicht. Schließen Sie nicht verwendete Terminals und versuchen Sie es erneut. Auch verlassene Terminals werden auf das Limit angerechnet.',
+  'badge.agent': 'Agent', 'badge.agentHint': 'Vom Agenten geöffnet. Wenn Sie hier tippen, übernehmen Sie die Kontrolle; der Agent kann es danach nur noch lesen.',
+  'badge.sandbox': 'Sandbox',
+  'badge.readOnlyHint': 'Befehle laufen in der schreibgeschützten Sandbox des Agenten, auch Befehle, die Sie hier eingeben.',
+  'badge.workspaceWriteHint': 'Befehle laufen in der Arbeitsbereich-Sandbox des Agenten, auch Befehle, die Sie hier eingeben.',
 } satisfies Record<keyof typeof en, string>
 
 /** Russian dictionary, checked against the English keys. */
@@ -145,6 +170,10 @@ export const ru = {
   attachmentEnded: 'Терминальное соединение завершилось. Подключитесь повторно, чтобы продолжить.',
   invalidOutput: 'Не удалось получить экран терминала. Повторно подключитесь, чтобы восстановить его.',
   terminalLimit: 'Достигнут лимит терминала. Закройте неиспользуемые терминалы и повторите попытку. Вышедшие терминалы также учитываются в лимите.',
+  'badge.agent': 'Агент', 'badge.agentHint': 'Открыт агентом. Если вы начнёте вводить здесь, управление перейдёт к вам; после этого агент сможет только читать его.',
+  'badge.sandbox': 'Песочница',
+  'badge.readOnlyHint': 'Команды выполняются в песочнице агента только для чтения, включая команды, которые вы вводите здесь.',
+  'badge.workspaceWriteHint': 'Команды выполняются в песочнице рабочей области агента, включая команды, которые вы вводите здесь.',
 } satisfies Record<keyof typeof en, string>
 
 /** Portuguese dictionary, checked against the English keys. */
@@ -163,4 +192,8 @@ export const pt = {
   attachmentEnded: 'A conexão do terminal terminou. Reconecte para continuar.',
   invalidOutput: 'A tela do terminal não pôde ser recebida. Reconecte para recuperá-lo.',
   terminalLimit: 'O limite terminal foi atingido. Feche os terminais não utilizados e tente novamente. Os terminais encerrados também contam para o limite.',
+  'badge.agent': 'Agente', 'badge.agentHint': 'Aberto pelo agente. Digitar aqui assume o controle; depois o agente só poderá lê-lo.',
+  'badge.sandbox': 'Sandbox',
+  'badge.readOnlyHint': 'Os comandos são executados no sandbox somente leitura do agente, incluindo os que você digitar aqui.',
+  'badge.workspaceWriteHint': 'Os comandos são executados no sandbox do espaço de trabalho do agente, incluindo os que você digitar aqui.',
 } satisfies Record<keyof typeof en, string>

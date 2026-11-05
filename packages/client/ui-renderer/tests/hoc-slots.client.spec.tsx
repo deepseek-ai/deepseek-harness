@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * Hoc slots over the real ui-slots SlotCore: nesting order, owner and
- * children delivery, remount semantics, crash skipping, and every scope.
+ * children delivery, remount semantics, crash containment, and every scope.
  */
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -18,10 +18,11 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'spec.hoc': { kind: 'hoc'; scope: 'root'; owner: { tone: string } }
     'spec.hoc.maybe': { kind: 'hoc'; scope: 'session-maybe' }
     'spec.hoc.session': { kind: 'hoc'; scope: 'session' }
+    'spec.hoc.keyed': { kind: 'hoc'; scope: 'root'; owner: { tone: string } }
   }
 }
 
-type Frame = PropsRenderSlots<'spec.hoc' | 'spec.hoc.maybe' | 'spec.hoc.session'>
+type Frame = PropsRenderSlots<'spec.hoc' | 'spec.hoc.maybe' | 'spec.hoc.session' | 'spec.hoc.keyed'>
 
 afterEach(() => {
   cleanup()
@@ -87,6 +88,7 @@ function mount(core: SlotCore, body?: (renderSlot: Frame['renderSlot']) => React
       'spec.hoc': { kind: 'hoc', scope: 'root' },
       'spec.hoc.maybe': { kind: 'hoc', scope: 'session-maybe' },
       'spec.hoc.session': { kind: 'hoc', scope: 'session' },
+      'spec.hoc.keyed': { kind: 'hoc', scope: 'root' },
     },
   }, function Root(props: Frame) {
     const [tone, set] = useState('calm')
@@ -136,18 +138,69 @@ describe('hoc slots', () => {
     expect(view.getByTestId('content')).toBeTruthy()
   })
 
-  it('skips a crashed layer: its content still renders and the layer leaves the slot', async () => {
+  it('contains a crashed layer to its occurrence: content renders there and the layer stays for other occurrences', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     const core = new SlotCore()
-    const view = mount(core)
+    const reported = vi.fn()
+    core.onEntryError(reported)
+    const view = mount(core, renderSlot => (
+      <>
+        <div data-testid="calm-outlet">{renderSlot('spec.hoc', { tone: 'calm' }, { children: <Content label="calm-content" /> })}</div>
+        <div data-testid="loud-outlet">{renderSlot('spec.hoc', { tone: 'loud' }, { children: <Content label="loud-content" /> })}</div>
+      </>
+    ))
     core.register({ name: 'spec.hoc', id: 'outer' }, layer('outer') as never)
-    core.register({ name: 'spec.hoc', id: 'broken', order: 10 }, (() => { throw new Error('layer failed') }) as never)
+    core.register({ name: 'spec.hoc', id: 'fragile', order: 10 }, (({ tone, children }: { tone: string; children: ReactNode }) => {
+      if (tone === 'loud') throw new Error('layer failed')
+      return <section data-layer="fragile">{children}</section>
+    }) as never)
     await flush()
     await flush()
-    expect(view.container.querySelector('section[data-layer="outer"] p')?.textContent).toBe('content')
+    const loud = view.getByTestId('loud-outlet')
+    expect(loud.querySelector('section[data-layer="outer"] > p')?.textContent).toBe('loud-content')
+    expect(loud.querySelector('section[data-layer="fragile"]')).toBeNull()
+    const calm = view.getByTestId('calm-outlet')
+    expect(calm.querySelector('section[data-layer="outer"] > section[data-layer="fragile"] > p')?.textContent).toBe('calm-content')
     expect(view.container.querySelector('[data-slot-error]')).toBeNull()
-    expect(core.entriesOfSlot('spec.hoc').map(entry => entry.options.id)).toEqual(['outer'])
+    expect(core.entriesOfSlot('spec.hoc').map(entry => entry.options.id)).toEqual(['outer', 'fragile'])
+    expect(reported).toHaveBeenCalledWith('spec.hoc', expect.anything(), expect.objectContaining({ message: 'layer failed' }), { abdicated: false })
     expect(error).toHaveBeenCalled()
+  })
+
+  it('a crashed occurrence does not retry while it stays mounted', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const core = new SlotCore()
+    let ownerTone = 'loud'
+    let shown = true
+    const view = mount(core, renderSlot => (shown
+      ? renderSlot('spec.hoc', { tone: ownerTone }, { children: <Content label="retry-content" /> })
+      : false))
+    const calls = vi.fn()
+    core.register({ name: 'spec.hoc', id: 'fragile' }, (({ tone, children }: { tone: string; children: ReactNode }) => {
+      calls(tone)
+      if (tone === 'loud') throw new Error('layer failed')
+      return <section data-layer="fragile">{children}</section>
+    }) as never)
+    await flush()
+    expect(calls).toHaveBeenCalledWith('loud')
+    expect(view.getByTestId('retry-content')).toBeTruthy()
+    calls.mockClear()
+
+    act(() => { setTone('same-owner') })
+    expect(calls).not.toHaveBeenCalled()
+    ownerTone = 'calm'
+    act(() => { setTone('changed-owner') })
+    expect(calls).not.toHaveBeenCalled()
+    expect(view.getByTestId('retry-content')).toBeTruthy()
+    expect(view.container.querySelector('section[data-layer="fragile"]')).toBeNull()
+
+    shown = false
+    act(() => { setTone('unmounted') })
+    expect(view.queryByTestId('retry-content')).toBeNull()
+    shown = true
+    act(() => { setTone('remounted') })
+    expect(calls).toHaveBeenCalledWith('calm')
+    expect(view.container.querySelector('section[data-layer="fragile"] > p')?.textContent).toBe('retry-content')
   })
 
   it('passes content errors upward without blaming or removing any layer', async () => {
@@ -201,5 +254,209 @@ describe('hoc slots', () => {
     await flush()
     expect(view.container.querySelector('section[data-layer="maybe"] p')?.textContent).toBe('maybe-content')
     expect(view.container.querySelector('section[data-layer="session"] p')?.textContent).toBe('session-content')
+  })
+})
+
+function keyedOutlet(renderSlot: Frame['renderSlot'], entryKey: string, label: string) {
+  return (
+    <div data-testid={`${label}-outlet`}>
+      {renderSlot('spec.hoc.keyed', { tone: 'x' }, { entryKey, children: <Content label={label} /> })}
+    </div>
+  )
+}
+
+describe('keyed hoc slots', () => {
+  it('applies wildcard layers to every key and exact-key layers only to their key', async () => {
+    const core = new SlotCore()
+    const view = mount(core, renderSlot => (
+      <>
+        {keyedOutlet(renderSlot, 'ts', 'ts-content')}
+        {keyedOutlet(renderSlot, 'md', 'md-content')}
+      </>
+    ))
+    core.register({ name: 'spec.hoc.keyed', id: 'w' }, layer('w') as never)
+    core.register({ name: 'spec.hoc.keyed', id: 'ts', key: 'ts', order: 1 }, layer('ts') as never)
+    await flush()
+    const ts = view.getByTestId('ts-content-outlet')
+    expect(ts.querySelector('section[data-layer="w"] > section[data-layer="ts"] > p')?.textContent).toBe('ts-content')
+    const md = view.getByTestId('md-content-outlet')
+    expect(md.querySelector('section[data-layer="w"] > p')?.textContent).toBe('md-content')
+    expect(md.querySelector('section[data-layer="ts"]')).toBeNull()
+  })
+
+  it('omitted entryKey applies only wildcard layers', async () => {
+    const core = new SlotCore()
+    const view = mount(core, renderSlot => renderSlot('spec.hoc.keyed', { tone: 'x' }, { children: <Content label="wild-content" /> }))
+    core.register({ name: 'spec.hoc.keyed', id: 'w' }, layer('w') as never)
+    core.register({ name: 'spec.hoc.keyed', id: 'ts', key: 'ts', order: 1 }, layer('ts') as never)
+    await flush()
+    expect(view.container.querySelector('section[data-layer="w"] > p')?.textContent).toBe('wild-content')
+    expect(view.container.querySelector('section[data-layer="ts"]')).toBeNull()
+  })
+
+  it('an exact-key layer replaces the wildcard layer with the same id', async () => {
+    const core = new SlotCore()
+    const view = mount(core, renderSlot => (
+      <>
+        {keyedOutlet(renderSlot, 'ts', 'ts-content')}
+        {keyedOutlet(renderSlot, 'md', 'md-content')}
+      </>
+    ))
+    core.register({ name: 'spec.hoc.keyed', id: 'x' }, layer('wild') as never)
+    core.register({ name: 'spec.hoc.keyed', id: 'x', key: 'ts' }, layer('exact') as never)
+    await flush()
+    const ts = view.getByTestId('ts-content-outlet')
+    expect(ts.querySelector('section[data-layer="exact"] > p')?.textContent).toBe('ts-content')
+    expect(ts.querySelector('section[data-layer="wild"]')).toBeNull()
+    const md = view.getByTestId('md-content-outlet')
+    expect(md.querySelector('section[data-layer="wild"] > p')?.textContent).toBe('md-content')
+    expect(md.querySelector('section[data-layer="exact"]')).toBeNull()
+  })
+
+  it('a layer may skip its children, so the content never mounts', async () => {
+    const core = new SlotCore()
+    mounts.mockClear()
+    let outletShown = false
+    const view = mount(core, renderSlot => (outletShown ? keyedOutlet(renderSlot, 'ts', 'skipped-content') : null))
+    core.register({ name: 'spec.hoc.keyed', id: 'replace', key: 'ts' }, (() => <i data-testid="replaced" />) as never)
+    outletShown = true
+    act(() => { setTone('loud') })
+    await flush()
+    expect(view.getByTestId('replaced')).toBeTruthy()
+    expect(view.queryByTestId('skipped-content')).toBeNull()
+    expect(mounts).not.toHaveBeenCalledWith('skipped-content')
+  })
+
+  it('a crashed keyed layer falls back to its children', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const core = new SlotCore()
+    const view = mount(core, renderSlot => (
+      <>
+        {keyedOutlet(renderSlot, 'ts', 'ts-content')}
+        <div data-testid="calm-outlet">
+          {renderSlot('spec.hoc.keyed', { tone: 'calm' }, { entryKey: 'ts', children: <Content label="calm-content" /> })}
+        </div>
+      </>
+    ))
+    core.register({ name: 'spec.hoc.keyed', id: 'fragile', key: 'ts' }, (({ tone, children }: { tone: string; children: ReactNode }) => {
+      if (tone === 'x') throw new Error('layer failed')
+      return <section data-layer="fragile">{children}</section>
+    }) as never)
+    await flush()
+    await flush()
+    expect(view.getByTestId('ts-content').textContent).toBe('ts-content')
+    expect(view.getByTestId('ts-content-outlet').querySelector('section[data-layer="fragile"]')).toBeNull()
+    expect(view.getByTestId('calm-outlet').querySelector('section[data-layer="fragile"] > p')?.textContent).toBe('calm-content')
+    expect(core.entriesOfSlot('spec.hoc.keyed').map(entry => [entry.options.key, entry.options.id])).toEqual([['ts', 'fragile']])
+  })
+
+  it('interleaves wildcard and exact-key layers by order', async () => {
+    const core = new SlotCore()
+    const view = mount(core, renderSlot => (
+      <>
+        {keyedOutlet(renderSlot, 'ts', 'ts-content')}
+        {keyedOutlet(renderSlot, 'md', 'md-content')}
+      </>
+    ))
+    core.register({ name: 'spec.hoc.keyed', id: 'w2', order: 2 }, layer('w2') as never)
+    core.register({ name: 'spec.hoc.keyed', id: 'e1', key: 'ts', order: 1 }, layer('e1') as never)
+    core.register({ name: 'spec.hoc.keyed', id: 'w0', order: 0 }, layer('w0') as never)
+    await flush()
+    const ts = view.getByTestId('ts-content-outlet')
+    expect(ts.querySelector('section[data-layer="w0"] > section[data-layer="e1"] > section[data-layer="w2"] > p')?.textContent)
+      .toBe('ts-content')
+    const md = view.getByTestId('md-content-outlet')
+    expect(md.querySelector('section[data-layer="w0"] > section[data-layer="w2"] > p')?.textContent).toBe('md-content')
+    expect(md.querySelector('section[data-layer="e1"]')).toBeNull()
+  })
+
+  it('a lower-priority registration at the same key and id shadows the layer until disposed', async () => {
+    const core = new SlotCore()
+    const view = mount(core, renderSlot => keyedOutlet(renderSlot, 'ts', 'ts-content'))
+    core.register({ name: 'spec.hoc.keyed', id: 'w0', order: 0 }, layer('w0') as never)
+    core.register({ name: 'spec.hoc.keyed', id: 'e1', key: 'ts', order: 1 }, layer('e1') as never)
+    await flush()
+    const dispose = core.register({ name: 'spec.hoc.keyed', id: 'e1', key: 'ts', order: 1, priority: -1 }, layer('shadow') as never)
+    await flush()
+    const ts = view.getByTestId('ts-content-outlet')
+    expect(ts.querySelector('section[data-layer="w0"] > section[data-layer="shadow"] > p')?.textContent).toBe('ts-content')
+    expect(ts.querySelector('section[data-layer="e1"]')).toBeNull()
+    dispose()
+    await flush()
+    expect(ts.querySelector('section[data-layer="w0"] > section[data-layer="e1"] > p')?.textContent).toBe('ts-content')
+    expect(ts.querySelector('section[data-layer="shadow"]')).toBeNull()
+  })
+
+  it('an outer wildcard layer still wraps an exact-key layer that skips its children', async () => {
+    const core = new SlotCore()
+    const view = mount(core, renderSlot => keyedOutlet(renderSlot, 'ts', 'ts-content'))
+    mounts.mockClear()
+    core.register({ name: 'spec.hoc.keyed', id: 'w0', order: 0 }, layer('w0') as never)
+    core.register({ name: 'spec.hoc.keyed', id: 'replace', key: 'ts', order: 1 }, (() => <i data-testid="replaced" />) as never)
+    core.register({ name: 'spec.hoc.keyed', id: 'w2', order: 2 }, layer('w2') as never)
+    await flush()
+    const ts = view.getByTestId('ts-content-outlet')
+    expect(ts.querySelector('section[data-layer="w0"] > i[data-testid="replaced"]')).not.toBeNull()
+    expect(ts.querySelector('section[data-layer="w2"]')).toBeNull()
+    expect(view.queryByTestId('ts-content')).toBeNull()
+    expect(mounts).not.toHaveBeenCalledWith('ts-content')
+  })
+
+  it('registering a layer for another key keeps this key\'s content mounted', async () => {
+    const core = new SlotCore()
+    mounts.mockClear()
+    const view = mount(core, renderSlot => keyedOutlet(renderSlot, 'ts', 'ts-content'))
+    core.register({ name: 'spec.hoc.keyed', id: 'w' }, layer('w') as never)
+    await flush()
+    const before = mounts.mock.calls.length
+    act(() => { core.register({ name: 'spec.hoc.keyed', id: 'md', key: 'md' }, layer('md') as never) })
+    await flush()
+    expect(mounts).toHaveBeenCalledTimes(before)
+    act(() => { core.register({ name: 'spec.hoc.keyed', id: 'ts2', key: 'ts' }, layer('ts2') as never) })
+    await flush()
+    expect(mounts).toHaveBeenCalledTimes(before + 1)
+    expect(view.container.querySelector('section[data-layer="ts2"] > p')?.textContent).toBe('ts-content')
+  })
+
+  it('keeps every outlet of a key mounted when another key registers', async () => {
+    const core = new SlotCore()
+    mounts.mockClear()
+    const view = mount(core, renderSlot => (
+      <>
+        {keyedOutlet(renderSlot, 'ts', 'first-content')}
+        {keyedOutlet(renderSlot, 'ts', 'second-content')}
+      </>
+    ))
+    core.register({ name: 'spec.hoc.keyed', id: 'w' }, layer('w') as never)
+    await flush()
+    const before = mounts.mock.calls.length
+    act(() => { core.register({ name: 'spec.hoc.keyed', id: 'md', key: 'md' }, layer('md') as never) })
+    await flush()
+    expect(mounts).toHaveBeenCalledTimes(before)
+    expect(view.getByTestId('first-content-outlet').querySelector('section[data-layer="w"] > p')?.textContent).toBe('first-content')
+    expect(view.getByTestId('second-content-outlet').querySelector('section[data-layer="w"] > p')?.textContent).toBe('second-content')
+  })
+
+  it('recompiles a key\'s chain for a redeclared slot', async () => {
+    const core = new SlotCore()
+    const declare = () => core.register({
+      name: 'root',
+      children: { 'spec.hoc.keyed': { kind: 'hoc', scope: 'root' } },
+    }, function Root(props: Frame) {
+      return <>{keyedOutlet(props.renderSlot, 'ts', 'ts-content')}</>
+    } as never)
+    const undeclare = declare()
+    const view = render(<>{createSlotRenderer().renderRoot(hostOver(core), {})}</>)
+    core.register({ name: 'spec.hoc.keyed', id: 'first', key: 'ts' }, layer('first') as never)
+    await flush()
+    expect(view.container.querySelector('section[data-layer="first"] > p')?.textContent).toBe('ts-content')
+    act(() => {
+      undeclare()
+      declare()
+      core.register({ name: 'spec.hoc.keyed', id: 'second', key: 'ts' }, layer('second') as never)
+    })
+    await flush()
+    expect(view.container.querySelector('section[data-layer="second"] > p')?.textContent).toBe('ts-content')
+    expect(view.container.querySelector('section[data-layer="first"]')).toBeNull()
   })
 })

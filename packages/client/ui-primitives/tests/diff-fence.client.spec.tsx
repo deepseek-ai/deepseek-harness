@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it } from 'vitest'
-import { cleanup, render } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import type { ComponentProps } from 'react'
 import { CodeBlock as LocalizedCodeBlock } from '../src/markdown/CodeBlock.tsx'
 import { diffBlockLabels, markdownLabels } from './labels.client.ts'
@@ -183,6 +183,13 @@ describe('diff fences', () => {
     expect(rows(container)).toHaveLength(3)
   })
 
+  it('omits the local wrap action from the toolbar when the owner supplies wrapping', () => {
+    const { container } = render(<CodeBlock code={'@@ -1 +1 @@\n-old\n+new'} lang="diff" toolbarLabels={diffBlockLabels} wrap />)
+    expect(container.querySelector('[data-code-wrap="true"]')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: diffBlockLabels.wrapLabel })).toBeNull()
+    expect(rows(container)).toHaveLength(3)
+  })
+
 
   it('renders content under a malformed hunk header', () => {
     const code = ['@@ not a hunk header @@', '+add', '-del', ' ctx'].join('\n')
@@ -205,5 +212,19 @@ describe('diff fences', () => {
     const { container } = render(<CodeBlock code={TS_DIFF} lang="diff" lineNumbers showHeader={false} />)
     expect(container.querySelector('[data-line-numbers="true"]')).toBeTruthy()
     expect(rows(container)).toHaveLength(9)
+  })
+
+  it('diff={false} renders a diff-language block without diff rows', () => {
+    const { container } = render(<CodeBlock code={'@@ -1 +1 @@\n-old\n+new'} lang="diff" diff={false} showHeader={false} />)
+    expect(container.querySelectorAll('[class*="_diffAdd_"], [class*="_diffDel_"]').length).toBe(0)
+    expect(container.querySelector('pre')!.textContent).toBe('@@ -1 +1 @@\n-old\n+new')
+  })
+
+  it('diff forces rows for any language', () => {
+    const { container } = render(<CodeBlock code={'@@ -1 +1 @@\n-old\n+new'} lang="text" diff showHeader={false} />)
+    const lines = rows(container)
+    expect(lines).toHaveLength(3)
+    expect(lines[1]!.className).toContain('_diffDel_')
+    expect(lines[2]!.className).toContain('_diffAdd_')
   })
 })

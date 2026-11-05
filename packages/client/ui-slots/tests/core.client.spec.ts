@@ -12,6 +12,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'test.keyed': { kind: 'keyed'; scope: 'session' }
     'test.chain': { kind: 'chain'; scope: 'session'; owner: { tags: string[] } }
     'test.hoc': { kind: 'hoc'; scope: 'root' }
+    'test.hoc.keyed': { kind: 'hoc'; scope: 'root' }
     'test.grandchild': { kind: 'single'; scope: 'root' }
   }
 }
@@ -38,6 +39,7 @@ function mountFrame(core: SlotCore) {
       'test.keyed': { kind: 'keyed', scope: 'session' },
       'test.chain': { kind: 'chain', scope: 'session' },
       'test.hoc': { kind: 'hoc', scope: 'root' },
+      'test.hoc.keyed': { kind: 'hoc', scope: 'root' },
     },
   // Type-level renderSlot presence is proven by the type-chain spec; erasing
   // here keeps runtime fixtures terse.
@@ -156,6 +158,19 @@ describe('kind semantics', () => {
     // @ts-expect-error keyed registration requires options.key
     expect(() => core.register({ name: 'test.keyed' }, Comp)).toThrow('requires options.key')
     expect(() => core.register({ name: 'test.keyed', key: 'b' }, Comp)).not.toThrow()
+  })
+
+  it('hoc: a cell is key plus id; same cell and priority throws; wildcard and keyed layers coexist', () => {
+    const core = new SlotCore()
+    mountFrame(core)
+    core.register({ name: 'test.hoc.keyed', id: 'a' }, Comp)
+    core.register({ name: 'test.hoc.keyed', id: 'a', key: 'ts' }, Comp)
+    core.register({ name: 'test.hoc.keyed', id: 'a', key: 'md' }, Comp)
+    expect(() => core.register({ name: 'test.hoc.keyed', id: 'a' }, Comp)).toThrow('with id "a"')
+    expect(() => core.register({ name: 'test.hoc.keyed', id: 'a', key: 'ts' }, Comp)).toThrow('id "a" for key "ts"')
+    expect(() => core.register({ name: 'test.hoc.keyed', id: 'a', key: 'ts', priority: -1 }, Comp)).not.toThrow()
+    expect(core.entriesOfSlot('test.hoc.keyed').map(e => [e.options.key, e.options.id, e.options.priority]))
+      .toEqual([['ts', 'a', -1], [undefined, 'a', undefined], ['md', 'a', undefined]])
   })
 
   it('list: duplicate id throws, missing id throws, entries sort by order stably', () => {
@@ -408,7 +423,7 @@ describe('subscription API', () => {
     const off = core.onMutate(key => keys.push(key))
     mountFrame(core)
     // Contribution first, then each declared child key.
-    expect(keys).toEqual(['root', 'test.single', 'test.session', 'test.list', 'test.keyed', 'test.chain', 'test.hoc'])
+    expect(keys).toEqual(['root', 'test.single', 'test.session', 'test.list', 'test.keyed', 'test.chain', 'test.hoc', 'test.hoc.keyed'])
     keys.length = 0
     core.register({ name: 'test.list', id: 'a' }, Comp)
     expect(keys).toEqual(['test.list'])

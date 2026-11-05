@@ -20,27 +20,29 @@ Status: implemented
 
 ## Decision
 
+[Markdown fence keyed hoc slot 的 Note](2026-11-05-markdown-fence-hoc-slot.zh.md) 记录了 hoc 层为何接受可选的分派 `key`、可以不渲染 `children`、为何按 key 共享编译好的层链，以及为何崩溃后仍保持注册。
+
 新增第五种 kind：`hoc`。
 
 | 项 | 约定 |
 |---|---|
 | 声明 | 父 entry 的 `children` 写 `{ kind: 'hoc', scope }`；`SlotMap` 中 `kind: 'hoc'` |
-| 渲染 | `renderSlot(key, owner, { children })`；`entryKey` / `only` / `fallback` / `hookContext` 不可用；省略 `children` 时各层包裹空内容 |
-| 注册 | 与 `list` 相同：必填 `id`，可选 `order`、`priority`；同 `id` 同 `priority` 抛错，不同 `priority` 遮蔽 |
+| 渲染 | `renderSlot(key, owner, { children, entryKey })`；`only` / `fallback` / `hookContext` 不可用；省略 `children` 时各层包裹空内容；省略 `entryKey` 时只叠加通配层 |
+| 注册 | 必填 `id`，可选 `key`、`order`、`priority`；不带 `key` 的层是通配层，服务所有分派，带 `key` 的层只服务该 `entryKey`；cell 为 `(key 或通配, id)`，同一 `id` 下精确 key 的层替换该 key 的通配层；同 cell 同 `priority` 抛错，不同 `priority` 遮蔽 |
 | 嵌套顺序 | 依次按 `order`、`priority`、注册顺序升序，最小者在最外层 |
 | 层的 props | 每层收到同一份 owner props，加上框架注入的 `children`（内一层，最内层是宿主内容）；`children` 不属于 owner props，类型由 `HocShare` 提供，owner props 不得使用这个名字 |
-| 层的义务 | 恰好渲染一次 `children`，自身不产生盒子；不能修改传给内层的 props |
+| 层的义务 | 至多渲染一次 `children`；不渲染 `children` 的层替换其内部全部内容；包裹 `children` 的层自身不产生盒子（其 slot 另有说明的除外）；不能修改传给内层的 props |
 | 无 entry | 原样渲染 `children` |
-| 层崩溃 | 每层有独立 error boundary；崩溃时该层渲染自己的 `children` 并 abdicate，下一次渲染不再包含该层 |
+| 层崩溃 | 每层有独立 error boundary；崩溃时错误照常上报，该层在出错的那一处渲染自己的 `children`，直到该处本次挂载结束，owner props 变化也不恢复；该层不 abdicate，因此其他出现处（包括分派同一 key 的出现处）仍保留它，重新挂载的出现处会再次渲染它 |
 | 内容出错 | 被包裹内容抛出的错误以原始错误穿过所有层，不记到任何层名下 |
-| 重新挂载 | 增减一层会让其内部内容重新挂载；`session` 或 `session-maybe` 作用域的层在 Session binding 变化时也会让内部内容重新挂载 |
+| 重新挂载 | 增减一个对本次分派生效的层会让其内部内容重新挂载，为其他 key 注册的层不会；`session` 或 `session-maybe` 作用域的层在 Session binding 变化时也会让内部内容重新挂载 |
 
 ### 实现
 
 | 包 | 实现 |
 |---|---|
-| `ui-slots` | `SlotKind` 包含 `'hoc'`；`HocRenderOpts`、`HocKeysOf`、`HocShare`；`RenderSlotFn` 为 hoc key 提供接受可选 `{ children }` 的重载；`KindOptions` 有 hoc 分支；`SlotCore.register` / `entriesOfSlot` 按 `id` 划分 hoc cell |
-| `ui-renderer` | `HocOutlet` 在插槽 ledger 版本或声明变化时调用 `composeHocLayers`（`useMemo` 缓存在 outlet 实例上），把各层组合成一个嵌套渲染函数。每层是一个组件，在组合时固定按 scope 选定的 Entry（`StrictSessionEntry` / `SessionMaybeEntry` / `RootEntry`）、entry、slot inject 与崩溃上报，渲染时只接收 `owner` 与内一层。没有层时 outlet 直接返回宿主内容。`HocContentBoundary` 包住每层的内层内容，把其中的错误包装为 `HocContentError` 重新抛出；层的边界放行这种错误，`HocOutletBoundary` 再解开为原始错误。Entry 链以 JSX children 把 `children` 交给注册组件；非 hoc entry 收到 `undefined`。`SlotErrorBoundary` 接受 `crashed` 替换节点 |
+| `ui-slots` | `SlotKind` 包含 `'hoc'`；`HocRenderOpts`（可选 `children` 与 `entryKey`）、`HocKeysOf`、`HocShare`；`RenderSlotFn` 为 hoc key 提供接受可选 `{ children, entryKey }` 的重载；`KindOptions` 的 hoc 分支含可选 `key`；`SlotCore.register` / `entriesOfSlot` 按 `(key 或通配, id)` 划分 hoc cell |
+| `ui-renderer` | `HocOutlet` 从 `hocChainFor` 取渲染函数，该缓存按 host、存活声明与分派 key 划分，分派同一 key 的所有 outlet 共享。每个 ledger 版本它只用 `hocLayersFor` 重新选出一次该 key 的层（通配胜者加精确 key 胜者，精确 key 的层替换同 id 的通配层，按 `order` 排序），仅当这一有序列表按 entry 身份比较发生变化时才调用 `composeHocLayers` 把各层组合成一个嵌套渲染函数。每层是一个组件，在组合时固定按 scope 选定的 Entry（`StrictSessionEntry` / `SessionMaybeEntry` / `RootEntry`）、entry、slot inject 与崩溃上报，渲染时只接收 `owner` 与内一层。没有层时 outlet 直接返回宿主内容。`HocContentBoundary` 包住每层的内层内容，把其中的错误包装为 `HocContentError` 重新抛出；层的边界放行这种错误，`HocOutletBoundary` 再解开为原始错误。Entry 链以 JSX children 把 `children` 交给注册组件；非 hoc entry 收到 `undefined`。`SlotErrorBoundary` 接受 `crashed` 替换节点，层的边界在本次挂载内一直渲染该节点；层的崩溃上报传 `abdicate: false` |
 | `scripts/gen-client-catalog.ts` | hoc 插槽的注册选项、渲染 `children` 的示例，以及 `wraps-owner-content` 替换风险 |
 
 ### 首个使用者
@@ -68,5 +70,5 @@ Status: implemented
 - React 18 会在错误被重新抛出的位置重新采集组件栈，因此有层的 hoc 插槽之上的边界收到的内容错误，组件栈从 `HocOutletBoundary` 开始。
 - 层如果自己在 `children` 外包错误边界，捕获到的是内部的 `HocContentError`，而不是原始的内容错误。
 - frame 契约只在首页阶段成立：其他阶段根元素不参与层叠隔离，未经 portal 的 Conversation 浮层仍能盖住悬浮在中栏上方的 AppFrame 元素；首页阶段它们只在根元素内部比较层级。
-- `HocOutlet` 与 Factory 局部组件一样用 `useMemo` 保持层组件身份；如果 React 将来会丢弃 memo 缓存，两处都需要改成显式缓存，因为这些组件是其内部内容的重新挂载边界。
+- `HocOutlet` 把层组件保存在按 host、存活声明与分派 key 共享的编译缓存中，而不是 outlet 实例状态里，因此不依赖 React 保留 memo 缓存；这些组件是其内部内容的重新挂载边界，重新声明的插槽从空缓存开始。
 - 其他 kind 仍以 [slot 体系标准](2026-07-22-slot-type-chain-implementation.zh.md) 为准；本 Note 新增第五种。

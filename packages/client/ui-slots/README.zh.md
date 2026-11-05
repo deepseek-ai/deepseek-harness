@@ -25,7 +25,7 @@ kind: "package-library"
 <a id="use-this-package"></a>
 ## 使用本包
 
-编写客户端插件时都通过本包组合 UI：把组件注册进父级已声明的 slot，或声明组件将要渲染的子 slot。五种 kind 覆盖组合形态——`single`（单个占位者）、`list`（有序条目）、`keyed`（按键分派）、`chain`（条目自行提名）与 `hoc`（条目层层包裹 owner 的 `children`）。
+编写客户端插件时都通过本包组合 UI：把组件注册进父级已声明的 slot，或声明组件将要渲染的子 slot。五种 kind 覆盖组合形态——`single`（单个占位者）、`list`（有序条目）、`keyed`（按键分派）、`chain`（条目自行提名）与 `hoc`（各层包裹 owner 的 `children`，每层至多渲染它一次；可选的 `key` 让该层只作用于 owner 传入的相同 `entryKey`）。
 
 ### 可复用 Component Factory
 

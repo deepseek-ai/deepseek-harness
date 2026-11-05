@@ -299,7 +299,7 @@ export interface SettingsControllerInternals {
 ## `@deepseek-ai/dsh-api-terminal-controller`
 
 - `inject`: `subprocess` · `sandboxPolicy` · `workingDirectory` · `typert`
-- `source`: [`packages/api/terminal-controller/src/index.ts:27`](../packages/api/terminal-controller/src/index.ts)
+- `source`: [`packages/api/terminal-controller/src/index.ts:32`](../packages/api/terminal-controller/src/index.ts)
 
 ```ts config-catalog
 /** Deployment limits and an optional shell profile. */
@@ -317,6 +317,11 @@ export interface Config {
   readonly shellCandidates: string[]
   /** Maximum retained terminals and pending allocations per Session. */
   readonly maxTerminals: number
+  /**
+   * Maximum running Agent-controlled terminals and pending Agent allocations per Session; `maxTerminals` still bounds
+   * every terminal, including exited ones and failed allocations awaiting cleanup.
+   */
+  readonly maxAgentTerminals: number
   /** Maximum terminal width in columns. */
   readonly maxCols: number
   /** Maximum terminal height in rows. */
@@ -3858,7 +3863,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-system-prompt`
 
-- `source`: [`packages/core/system-prompt/src/index.ts:264`](../packages/core/system-prompt/src/index.ts)
+- `source`: [`packages/core/system-prompt/src/index.ts:265`](../packages/core/system-prompt/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: the deployment-authored fragment of the system prompt (see {@link Config.personaPrefix} for its contract). */
@@ -3946,6 +3951,47 @@ export interface Config {
 export type ShellDialect = 'bash' | 'pwsh'
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-terminal-bash -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-terminal-panel -->
+<a id="deepseek-aidsh-terminal-panel"></a>
+
+## `@deepseek-ai/dsh-terminal-panel`
+
+- `inject`: `terminals` · `terminalController` · `sandboxPolicy` · `tools` · `systemPrompt`
+- `source`: [`packages/experimental/terminal-panel/src/config.ts:6`](../packages/experimental/terminal-panel/src/config.ts)
+
+```ts config-catalog
+/** Public plugin configuration. */
+export interface Config {
+  /** Terminal registry type served by sidebar terminals. */
+  backendType: string
+  /** Initial terminal width; an attached sidebar view resizes it to its panel. */
+  cols: number
+  /** Initial terminal height; an attached sidebar view resizes it to its panel. */
+  rows: number
+  /** Executable names tried among the discovered shells before the execution environment's default shell. */
+  preferredShells: string[]
+  /** Variables added to Agent terminal environments, such as pagers that would otherwise wait for input. */
+  environment: Record<string, string>
+  /** Output silence that ends shell startup once the shell owns the foreground. */
+  startupSilenceMs: number
+  /** Bound on shell startup, including the person's startup files. */
+  startupTimeoutMs: number
+  /** Output silence after which a send checks whether the shell or a reading program waits for input. */
+  promptSilenceMs: number
+  /** Minimum interval between foreground process inspections, each of which may start `ps` twice. */
+  probeIntervalMs: number
+  /** Output silence that ends a send as `inferred_idle`. */
+  idleSilenceMs: number
+  /** Bound on one send. */
+  timeoutMs: number
+  /** Maximum UTF-8 bytes in one screen read, send output or startup screen. */
+  maxReadBytes: number
+  /** Register `user_terminal_list` and `user_terminal_read`, whose screen text enters the Session log and model requests. */
+  readUserTerminals: boolean
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-terminal-panel -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-time-context -->
 <a id="deepseek-aidsh-time-context"></a>

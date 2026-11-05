@@ -1,4 +1,4 @@
-/* Plugin manager page: the main header and content share one scroller; the header retains its flow height.
+/* Plugin manager page: the main header and content share one scroller; the header bar retains its flow height.
    The More list has a separate fixed head, and detail views scroll with their content.
 
    Hover affordances sit under @media (hover: hover): a tap latches :hover, which
@@ -99,14 +99,18 @@
 .pageBody > .pageBar[data-natural] {
   position: sticky;
   top: 0;
+  height: var(--plugin-header-rest-height);
   z-index: 2;
   pointer-events: none;
 }
 
+/* The bar preserves scroll flow; the header owns only its painted native drag box.
+   Chromium collects that box without applying clip-path. */
 .pageBar[data-natural] .pageHead {
   position: relative;
-  height: var(--plugin-header-rest-height);
-  clip-path: inset(0 0 max(0px, calc(var(--plugin-header-rest-height) - var(--plugin-header-paint-height))) 0);
+  height: var(--plugin-header-paint-height);
+  padding-top: 0;
+  clip-path: inset(0);
   pointer-events: auto;
 }
 
