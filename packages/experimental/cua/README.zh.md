@@ -94,7 +94,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 通过 `await cua.getCapabilities()` 返回的 `methods` 和 `keyboard` 确认支持的操作和输入范围。`pressKey(key, modifiers?)` 在按住所列修饰键时按下并释放一个键；`sendKeyEvent(key, direction)` 只发送一次按下或抬起。`typeText` 和 `paste` 在 provider 声明的键盘作用域内传送字面文本。键盘修饰键名称是 provider 解释的普通字符串。
 
 
-根 Host 入口导出 `installCua`、`CuaConfig` 和供 Typert 发现的 `CuaAccess` 服务，`apply()` 只标记可选 Client 贡献。`/client` 通过现有模块加载器加载权限界面。Host 和 Client 使用独立编译项目，headless 导入不会加载 React、CSS 或浏览器注册。`/api` 提供应用、窗口 API 及其类型；`/bridge`、`/native-client` 和 `/protocol` 保留运行时和平台消费者。`/types` 仅导出生成 Remote 声明所需的命名类型，Client 使用包内类型。`/typert` 提供 Host 反射，`/remote` 提供浏览器描述和编解码，权限判断仍由 Host 执行。
+平台提供方从 `@deepseek-ai/dsh-cua/config` 导入 `CuaConfigFields` 来扩展共享配置。根 Host 入口导出 `installCua`、`CuaConfig` 和供 Typert 发现的 `CuaAccess` 服务，`apply()` 只标记可选 Client 贡献。`/client` 通过现有模块加载器加载权限界面。Host 和 Client 使用独立编译项目，headless 导入不会加载 React、CSS 或浏览器注册。`/api` 提供应用、窗口 API 及其类型；`/bridge`、`/native-client` 和 `/protocol` 保留运行时和平台消费者。`/types` 仅导出生成 Remote 声明所需的命名类型，Client 使用包内类型。`/typert` 提供 Host 反射，`/remote` 提供浏览器描述和编解码，权限判断仍由 Host 执行。
 
 可选浏览器插件挂载原生 provider 的权限 Remote，复用插件页的启用引导和配置插槽。四排使用条件始终可见，未加载的字段保留占位；平台确认后，查询期间和权限已允许时均保留权限管理说明。默认模式、执行方式、系统权限、应用列表和应用图标分别查询，结果返回后各自显示。应用名称和操作按钮不等待图标，图标位置保留空位。用户操作按顺序执行，不等待尚未完成的查询；卸载时等待操作和查询全部结束，再释放独立持有的 Remote 挂载。已知查询错误和只读设置提示在管理操作或重试期间保持可见，操作按钮禁用。查询错误只显示在对应部分，启用引导只等待系统权限结果。注入层独立于页面观察插件管理操作。组合包和组件行变更会暂停四项查询，并使进行中的结果失效；操作结束后即使页面已关闭，也会重新查询。已知错误保留至读取成功；卸载后的迟到结果会被丢弃。控制器直接接收生成的 `ctx.remote.cuaAccess`，在现有查询和操作流程中处理失败响应，并把查询结果投影到页面和设置弹窗；重新连接时刷新状态。进入页面、窗口聚焦或操作完成后读取当前授权存储。操作提示挂载到 shell overlay，关闭页面后仍可显示。provider 负责权限检查、持久授权和取消；浏览器不保存授权决定。
 

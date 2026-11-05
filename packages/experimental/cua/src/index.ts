@@ -18,6 +18,7 @@ import { ApplicationAuthorizationResult, installCuaAccess } from './access.ts'
 import type { CuaApplicationGrant, CuaApplicationId, CuaSystemPermission } from './access-types.ts'
 import type { CuaAppHandle, CuaOperation, CuaStartupCapabilities } from './types.ts'
 import { ApplicationIcon, AppResult, NativeScreenshotResult, Request, ScreenshotResult, StateResult, WindowsResult } from './protocol.ts'
+import { CuaConfigFields } from './config.ts'
 import { CuaCoordinates } from './coordinates.ts'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
@@ -76,33 +77,6 @@ export interface CuaConfig {
   maxElements: number
   /** Maximum depth traversed by a native accessibility snapshot. */
   maxDepth: number
-}
-
-/** Shared configuration fields extended by native platform providers. */
-export const CuaConfigFields = {
-  agentPreset: Schema.union([Schema.string().min(1), Schema.const(false)]).default('ptc'),
-  allowedApps: Schema.array(Schema.object({
-    id: Schema.string().pattern(/^[a-f0-9]{64}$/).required(),
-    name: Schema.string().required(), executablePath: Schema.string().min(1),
-  })).default([]),
-  helperPath: Schema.string(),
-  buildTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(300_000),
-  timeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(30_000),
-  connectTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(5000),
-  screenshotTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(5000),
-  axTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(3000),
-  maxAppMatches: Schema.number().step(1).min(1).max(1000).default(20),
-  maxClipboardBytes: Schema.number().step(1).min(1024).default(32 * 1024 * 1024),
-  pasteReadTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(1000),
-  maxRequestBytes: Schema.number().step(1).min(1024).default(1024 * 1024),
-  dragDurationMs: Schema.number().step(1).min(1).max(5000).default(400),
-  maxClickHoldMs: Schema.number().step(1).min(0).max(2 ** 31 - 1).default(5000),
-  dragSteps: Schema.number().step(1).min(1).max(240).default(20),
-  maxResponseBytes: Schema.number().step(1).min(1024).default(32 * 1024 * 1024),
-  textEventIntervalMs: Schema.number().min(0).max(1000).default(0.25),
-  graceMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(3000),
-  maxElements: Schema.number().step(1).min(1).max(10000).default(2000),
-  maxDepth: Schema.number().step(1).min(1).max(100).default(25),
 }
 
 /** Validate shared configuration for native providers. */
