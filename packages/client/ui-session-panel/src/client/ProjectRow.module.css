@@ -1,0 +1,12 @@
+/* The More button appears on row hover or focus; without hover it stays visible. */
+@media (hover: hover) {
+  .row .more {
+    opacity: 0;
+  }
+
+  .row:hover .more,
+  .row:focus-within .more,
+  .more[aria-expanded='true'] {
+    opacity: 1;
+  }
+}

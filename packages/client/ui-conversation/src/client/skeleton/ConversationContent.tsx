@@ -23,7 +23,7 @@ export function ConversationContent(props: ConversationContentProps) {
   const {
     sessionId, phase, hero, useSession, useSessions, useSessionStatus,
     useWorkspaces, useInput, useComposerBlock, renderSlot, renderSlotChain,
-    selectWorkspace, t, useFactorySlot,
+    selectWorkspace, reportEndGutter, t, useFactorySlot,
   } = props
   const session = useSession(snapshot => snapshot)
   const Views = useFactorySlot('views', ConversationSessionView)
@@ -42,22 +42,25 @@ export function ConversationContent(props: ConversationContentProps) {
   const [pendingWorkspaceId, setPendingWorkspaceId] = useState<WorkspaceId | undefined>()
   const pickerAnchor = useRef<HTMLButtonElement>(null)
 
-  // Publishes the two live measurements floating View chrome reads off the
-  // scroll body: the seat's height as --dsh-composer-height, so controls clear
-  // the composer as it grows, and the scrollport's own height as
+  // Publishes the two live measurements floating chrome reads: the seat's
+  // height as --dsh-composer-height, so controls clear the composer as it
+  // grows, and the scrollport's own height as
   // --dsh-conversation-viewport-height, so a control can sit in the band the
-  // seat leaves visible. Callback ref, not an effect; stable identity prevents
-  // observer churn while the first blank session fills the resident body
-  // outlet.
+  // seat leaves visible. They land on the content body, so View chrome inside
+  // the scrollport and the Session panel beside it read the same values.
+  // Callback ref, not an effect; stable identity prevents observer churn while
+  // the first blank session fills the resident body outlet.
   const seatObserver = useRef<ResizeObserver | null>(null)
   const seatResizeRef = useCallback((seat: HTMLDivElement | null): void => {
     seatObserver.current?.disconnect()
     seatObserver.current = null
     const scroller = seat?.parentElement ?? null
     if (seat === null || scroller === null) return
+    /* v8 ignore next -- the seat always renders inside the content body. */
+    const target = scroller.closest<HTMLElement>('[data-conversation-content]') ?? scroller
     seatObserver.current = new ResizeObserver(() => {
-      scroller.style.setProperty('--dsh-composer-height', `${seat.offsetHeight}px`)
-      scroller.style.setProperty(
+      target.style.setProperty('--dsh-composer-height', `${seat.offsetHeight}px`)
+      target.style.setProperty(
         '--dsh-conversation-viewport-height',
         `${scroller.clientHeight}px`,
       )
@@ -204,7 +207,9 @@ export function ConversationContent(props: ConversationContentProps) {
           </div>
         ),
       })}
-      <WidthControls container={body} phase={phase} />
+      <WidthControls container={body} phase={phase} onEndGutter={reportEndGutter} />
+      {props.variant === 'main' && sessionId !== undefined && phase === 'active'
+        && renderSlot('conversation.session.panel', {})}
     </div>
   )
 }

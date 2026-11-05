@@ -433,6 +433,11 @@
     - id: ui-schedule
       name: '@deepseek-ai/dsh-client-ui-schedule'
 
+    # Session panel: the header toggle and the floating panel over the main
+    # Conversation body, with the Environment section other plugins extend.
+    - id: ui-session-panel
+      name: '@deepseek-ai/dsh-client-ui-session-panel'
+
     # Goal surface: GoalBar in the input dock over the goal session projection.
     - id: ui-goal
       name: '@deepseek-ai/dsh-client-ui-goal'

@@ -147,6 +147,8 @@ function mount(
     entryActions?: boolean
     /** Isolate header capability checks from the composer's required layout observers. */
     headerOnly?: boolean
+    /** Render the content Factory as another presentation host would. */
+    contentVariant?: 'embedded'
   } = {},
 ) {
   const sessionId = 'sessionId' in options ? options.sessionId : SID
@@ -204,6 +206,8 @@ function mount(
   const frameOwners: HeroFrameOwnerProps[] = []
   let actionsOwner: ConversationViewActionsOwnerProps | undefined
   const setPinned = vi.fn<(id: string, pinned: boolean) => void>()
+  /** End gutters the main width controls reported, in order. */
+  const gutters: number[] = []
   const renderSlot = ((key: string, owner: object, opts?: { only?: string; fallback?: ReactNode; children?: ReactNode }) => {
     slotCalls.push(key)
     if (key === 'conversation.input.model' || key === 'conversation.input.plan') {
@@ -376,6 +380,7 @@ function mount(
       renderSlotChain,
       renderFactorySlot,
       selectWorkspace: retargetWorkspace,
+      reportEndGutter: (gutter) => { gutters.push(gutter) },
       t,
     }
     const useFactorySlot = ((name: string, fallback: (props: never) => ReactNode) => (
@@ -383,7 +388,11 @@ function mount(
     )) as ConversationContentProps['useFactorySlot']
     return (
       <FactoryViewsTestContext.Provider value={common}>
-        <ConversationContent {...({ ...common, ...runtimeProps, ...input, useFactorySlot })} />
+        <ConversationContent {...({
+          ...common, ...runtimeProps, ...input,
+          ...options.contentVariant === undefined ? {} : { variant: options.contentVariant },
+          useFactorySlot,
+        })} />
       </FactoryViewsTestContext.Provider>
     )
   }) as ConversationSlotProps['renderFactorySlot']
@@ -407,7 +416,7 @@ function mount(
   const props: ConversationSlotProps = { ...runtimeProps, renderSlot, renderFactorySlot }
   const view = render(<ConversationMainPanel {...props} />)
   return {
-    view, store, wiring, sink, retargetWorkspace, session, conversation, slotCalls, headerFactory, lineageOwners, seatOwners, open,
+    view, store, wiring, sink, retargetWorkspace, session, conversation, slotCalls, headerFactory, lineageOwners, seatOwners, open, gutters,
     pickerOwner: () => pickerOwner,
     frameOwner: () => frameOwners.at(-1),
     setPinned,
@@ -1073,5 +1082,54 @@ describe('ConversationRoot resident composer', () => {
   it('hero phase renders no width handles (no transcript to size)', () => {
     const b = mount(sessionSnapshotOf({ blank: true }))
     expect(b.view.container.querySelector('[data-width-handle]')).toBeNull()
+  })
+
+  it('reports the end gutter after each measurement and drag frame, and zero on unmount', () => {
+    const b = mount(sessionSnapshotOf())
+    const content = b.view.container.querySelector('[data-conversation-content]') as HTMLElement
+    Object.defineProperty(content, 'offsetWidth', { value: 1600, configurable: true })
+    act(() => { fireResize(content) })
+    // Adaptive width min(1600 × 0.64, 920) = 920 leaves (1600 − 920) / 2.
+    expect(b.gutters.at(-1)).toBe(340)
+    const handle = b.view.container.querySelector('[data-width-handle="right"]') as HTMLElement
+    const names = ['setPointerCapture', 'releasePointerCapture', 'hasPointerCapture'] as const
+    const originals = names.map(name => [name, Object.getOwnPropertyDescriptor(Element.prototype, name)] as const)
+    const captured = new Set<Element>()
+    Element.prototype.setPointerCapture = function () { captured.add(this) }
+    Element.prototype.releasePointerCapture = function () { captured.delete(this) }
+    Element.prototype.hasPointerCapture = function () { return captured.has(this) }
+    try {
+      fireEvent.pointerDown(handle, { pointerId: 1, clientX: 800, clientY: 300 })
+      fireEvent.pointerMove(handle, { pointerId: 1, clientX: 825, clientY: 300 })
+      fireEvent.pointerUp(handle, { pointerId: 1, clientX: 825, clientY: 300 })
+      // The dragged width 970 leaves (1600 − 970) / 2.
+      expect(b.gutters.at(-1)).toBe(315)
+    } finally {
+      for (const [name, descriptor] of originals) {
+        if (descriptor === undefined) Reflect.deleteProperty(Element.prototype, name)
+        else Object.defineProperty(Element.prototype, name, descriptor)
+      }
+    }
+    b.view.unmount()
+    expect(b.gutters.at(-1)).toBe(0)
+  })
+
+  it('renders the Session panel seat only for the main occurrence of an active Session', () => {
+    expect(mount(sessionSnapshotOf()).slotCalls).toContain('conversation.session.panel')
+    cleanup()
+    expect(mount(sessionSnapshotOf({ blank: true })).slotCalls).not.toContain('conversation.session.panel')
+    cleanup()
+    expect(mount(sessionSnapshotOf(), undefined, undefined, { contentVariant: 'embedded' }).slotCalls)
+      .not.toContain('conversation.session.panel')
+  })
+
+  it('publishes the composer stack measurements on the content body', () => {
+    const b = mount(sessionSnapshotOf())
+    const content = b.view.container.querySelector('[data-conversation-content]') as HTMLElement
+    const seat = content.querySelector('[data-composer-seat]') as HTMLElement
+    Object.defineProperty(seat, 'offsetHeight', { value: 140, configurable: true })
+    act(() => { fireResize(seat) })
+    expect(content.style.getPropertyValue('--dsh-composer-height')).toBe('140px')
+    expect(content.style.getPropertyValue('--dsh-conversation-viewport-height')).toBe('0px')
   })
 })

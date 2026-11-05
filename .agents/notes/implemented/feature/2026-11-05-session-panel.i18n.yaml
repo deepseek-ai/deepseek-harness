@@ -1,0 +1,28 @@
+# Bilingual-pair consistency record for 2026-11-05-session-panel.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-11-05-session-panel.md
+/agent-note-session-panel-over-the-conversation-body-s-end-gutter:
+  en: e4548a86fa537e4a
+  zh: 87821d4285485faa
+/agent-note-session-panel-over-the-conversation-body-s-end-gutter/problem:
+  en: c69d9843bc6f0b87
+  zh: c31bb1b2b4d9b781
+/agent-note-session-panel-over-the-conversation-body-s-end-gutter/decision:
+  en: 547fe8129b027892
+  zh: dc0807d782f551ae
+/agent-note-session-panel-over-the-conversation-body-s-end-gutter/decision/docking-follows-the-transcript-gutter:
+  en: 150a7e8bf3ad556a
+  zh: c40fcf40af63b353
+/agent-note-session-panel-over-the-conversation-body-s-end-gutter/decision/sections-are-registrations-the-panel-draws-titles:
+  en: f8e69329e832c764
+  zh: 2453aa8e794f46f5
+/agent-note-session-panel-over-the-conversation-body-s-end-gutter/decision/the-turn-rail-moves-to-the-start-edge:
+  en: 05a494885d439fde
+  zh: 1dc65e5266a9c7b1
+/agent-note-session-panel-over-the-conversation-body-s-end-gutter/alternatives-considered:
+  en: 9cf81cde02bf900b
+  zh: 549d92a260541e3d
+/agent-note-session-panel-over-the-conversation-body-s-end-gutter/consequences:
+  en: c1f661c6a62953b6
+  zh: 8642f081c2879307

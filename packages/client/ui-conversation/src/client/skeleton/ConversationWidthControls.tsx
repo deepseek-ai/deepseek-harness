@@ -20,7 +20,12 @@ function readWidthPreference(): number | null {
   return Number.isFinite(value) && value > 0 ? value : null
 }
 
-/** Resolve the width displayed for one measured Conversation column. */
+/**
+ * Resolve the width displayed for one measured Conversation column.
+ * @param columnWidth - measured body width in CSS px.
+ * @param preference - persisted dragged width, or null for the adaptive default.
+ * @returns the transcript column width in CSS px.
+ */
 function resolveContentWidth(columnWidth: number, preference: number | null): number {
   const max = Math.max(CONTENT_MIN, columnWidth - CONTENT_EDGE_BUDGET)
   if (preference !== null) return Math.min(Math.max(preference, CONTENT_MIN), max)
@@ -129,11 +134,14 @@ function WidthHandle(props: {
 }
 
 /**
- * Install the main Conversation width axis and render its drag handles.
+ * Install the main Conversation width axis, report its end gutter, and render its drag handles.
  * @param props - Mounted Conversation body and current presentation phase.
  * @returns two active-phase width handles, or no controls outside the active phase.
  */
-export function ConversationWidthControls({ container, phase }: ConversationWidthControlsProps) {
+export function ConversationWidthControls({ container, phase, onEndGutter }: ConversationWidthControlsProps) {
+  // The observer outlives renders; it reports through the latest callback.
+  const report = useRef(onEndGutter)
+  report.current = onEndGutter
   const publishWidths = useCallback((container: HTMLDivElement): void => {
     const target = container.parentElement ?? container
     const column = container.offsetWidth
@@ -141,6 +149,7 @@ export function ConversationWidthControls({ container, phase }: ConversationWidt
     const preference = readWidthPreference()
     if (preference === null) target.style.removeProperty('--dsh-chat-user-width')
     else target.style.setProperty('--dsh-chat-user-width', `${resolveContentWidth(column, preference)}px`)
+    report.current((column - resolveContentWidth(column, preference)) / 2)
   }, [])
 
   useLayoutEffect(() => {
@@ -148,7 +157,10 @@ export function ConversationWidthControls({ container, phase }: ConversationWidt
     const observer = new ResizeObserver(() => { publishWidths(container) })
     observer.observe(container)
     publishWidths(container)
-    return () => { observer.disconnect() }
+    return () => {
+      observer.disconnect()
+      report.current(0)
+    }
   }, [container, publishWidths])
 
   const onStart = useCallback((): number => {
@@ -158,7 +170,10 @@ export function ConversationWidthControls({ container, phase }: ConversationWidt
   const onDrag = useCallback((width: number): void => {
     if (container === null) return
     const target = container.parentElement ?? container
-    target.style.setProperty('--dsh-chat-user-width', `${resolveContentWidth(container.offsetWidth, width)}px`)
+    const column = container.offsetWidth
+    const content = resolveContentWidth(column, width)
+    target.style.setProperty('--dsh-chat-user-width', `${content}px`)
+    report.current((column - content) / 2)
   }, [container])
   const onCommit = useCallback((width: number): void => {
     if (container === null) return

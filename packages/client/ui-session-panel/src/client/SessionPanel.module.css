@@ -1,0 +1,93 @@
+/* The panel floats over the main Conversation body (position: relative),
+   which defines the transcript axis --dsh-chat-content-width and publishes
+   the composer stack height --dsh-composer-height. */
+.panel {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  /* Above the turn rail (7), level with the back-to-bottom control (8), and
+     below the composer seat (9); the docked width keeps 48px clear of the
+     transcript column and its width handle. */
+  z-index: 8;
+  box-sizing: border-box;
+  width: clamp(280px, calc((100% - var(--dsh-chat-content-width)) / 2 - 64px), 340px);
+  max-height: calc(100% - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--dsw-radius-panel);
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-1);
+  box-shadow: var(--dsw-elevation-panel);
+  animation: dsh-session-panel-enter 120ms ease-out;
+}
+
+/* Over the transcript the panel takes the prominent elevation and stops above
+   the composer stack, whose card it would otherwise cover. */
+.panel[data-session-panel='overlay'] {
+  right: 12px;
+  z-index: 10;
+  width: min(340px, calc(100% - 24px));
+  max-height: calc(100% - var(--dsh-composer-height, 152px) - 24px);
+  box-shadow: var(--dsw-elevation-prominent);
+}
+
+.section {
+  padding: 4px 0 6px;
+}
+
+/* An empty body hides its section: a plain section renders into one outlet
+   anchor, and a shared section renders its own row outlet inside it. */
+.section:has(> .body > [data-slot]:empty),
+.section:has(> .body > [data-slot] > [data-slot]:only-child:empty) {
+  display: none;
+}
+
+.section:not(:has(> .body > [data-slot]:empty), :has(> .body > [data-slot] > [data-slot]:only-child:empty))
+  ~ .section:not(:has(> .body > [data-slot]:empty), :has(> .body > [data-slot] > [data-slot]:only-child:empty)) {
+  margin-top: 2px;
+  padding-top: 8px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 0 6px;
+}
+
+.title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actions {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+
+.actions:has(> [data-slot]:empty) {
+  display: none;
+}
+
+@keyframes dsh-session-panel-enter {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel {
+    animation: none;
+  }
+}

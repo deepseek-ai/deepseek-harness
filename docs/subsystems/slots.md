@@ -16,6 +16,8 @@ The root-scoped lists `sidebar.panellist.actions`, `conversation.session.header.
 
 [ui-settings](../../packages/client/ui-settings/README.md#filling-the-settings-slots) documents the settings page and navigation-icon extension points.
 
+[ui-session-panel](../../packages/client/ui-session-panel/README.md#contribute-a-section) documents the Session panel's section, title-control, row, and toggle-indicator extension positions.
+
 ## Declaration and lifecycle
 
 `SlotMap` is the compile-time registry. A package declaration-merges the key, cardinality, scope, owner props, keyed props, and optional slot-level inject face. The runtime declaration is the matching `children` entry on the component that owns the render location.
@@ -145,6 +147,8 @@ root [AppFrame]
       │     ├─ conversation.session.header.lineage
       │     ├─ conversation.session.header.actions
       │     ├─ conversation.session.header.utilities
+│     │  └─ id=session-panel [SessionPanelToggle]
+│     │     └─ conversation.session.panel.indicator [list, inline]
       │     ├─ conversation.session.header.views.actions
       │     └─ conversation.session.header.corner
       └─ calls Factory: conversation.content
@@ -200,7 +204,12 @@ Factory: conversation.content [ConversationContent]
 ├─ conversation.hero.workspace
 │  └─ conversation.hero.workspace.directoryFlow
 ├─ conversation.hero.agentPreset
-└─ conversation.hero.options
+├─ conversation.hero.options
+└─ conversation.session.panel [SessionPanel]
+   ├─ conversation.session.panel.section [list]
+   │  └─ id=environment [EnvironmentSection]
+   │     └─ conversation.session.panel.environment.row [list]
+   └─ conversation.session.panel.section.actions [keyed]
 
 Factory: conversation.chat.user.content [UserContent]
 ├─ conversation.chat.user.images [MessageImages]
