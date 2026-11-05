@@ -3,22 +3,12 @@
  * @module scripts/cordis-yaml
  */
 
-import * as yaml from 'js-yaml'
+import { parseEntryYaml } from '@deepseek-ai/cordis-plugin-include'
 
 /** A Loader `!!js` expression preserved as data instead of executed. */
 export interface JsExpr {
   __jsExpr: string
 }
-
-const jsExprType = new yaml.Type('tag:yaml.org,2002:js', {
-  kind: 'scalar',
-  resolve: data => typeof data === 'string',
-  construct: (data: unknown): JsExpr => {
-    if (typeof data !== 'string') throw new TypeError('!!js requires a scalar string')
-    return { __jsExpr: data }
-  },
-})
-const schema = yaml.JSON_SCHEMA.extend(jsExprType)
 
 /**
  * Parse a Cordis config while preserving Loader `!!js` expressions as data.
@@ -26,7 +16,7 @@ const schema = yaml.JSON_SCHEMA.extend(jsExprType)
  * @returns the parsed YAML value.
  */
 export function loadCordisYaml(source: string): unknown {
-  return yaml.load(source, { schema })
+  return parseEntryYaml(source)
 }
 
 /**

@@ -7,8 +7,7 @@ import { lstatSync, readdirSync, readFileSync, readlinkSync, realpathSync, statS
 import { dirname, join, matchesGlob, resolve } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { fileURLToPath } from 'node:url'
-import * as yaml from 'js-yaml'
-import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
+import { parseEntryYaml } from '@deepseek-ai/cordis-plugin-include'
 import { codePointLength } from '@deepseek-ai/dsh-compaction-tool-result-pruner'
 import SkillRegistry, { renderSkillContent } from '@deepseek-ai/dsh-skill'
 import * as SkillFileSystem from '@deepseek-ai/dsh-skill-filesystem'
@@ -94,7 +93,7 @@ describe('the shipped creator skills', () => {
     for (const name of readdirSync(templates)) {
       const dir = join(templates, name)
       const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as { dsh: { bundle: { patch: string } } }
-      const patch = yaml.load(readFileSync(join(dir, manifest.dsh.bundle.patch), 'utf8'), { schema: entryListSchema })
+      const patch = parseEntryYaml(readFileSync(join(dir, manifest.dsh.bundle.patch), 'utf8'))
       expect(Array.isArray(patch)).toBe(true)
       for (const file of readdirSync(dir).filter(entry => entry.endsWith('.js'))) {
         execFileSync(process.execPath, ['--check', join(dir, file)])

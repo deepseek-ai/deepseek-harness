@@ -8,10 +8,9 @@ import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { dump } from 'js-yaml'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
-import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
+import { stringifyEntryYaml } from '@deepseek-ai/cordis-plugin-include'
 import { bundlePatchPaths, composeEntries, loadOverlayPatches } from '@deepseek-ai/dsh-app-boot'
 import { MessageId, ToolCallId, createUserMessage, LlmAdapter } from '@deepseek-ai/dsh-llm'
 import { appendDelivery } from '../../../packages/schedule/schedule/src/delivery-history.ts'
@@ -98,9 +97,9 @@ async function writeEveryStepOverlay(dir: string): Promise<string> {
     ? { ...plugin, config: { refreshIntervalMs: 0 } }
     : plugin)
   const path = join(dir, 'time-context-every-step.patch.yml')
-  await writeFile(path, dump([
+  await writeFile(path, stringifyEntryYaml([
     { id: 'preset-standard', config: { ...config, plugins } },
-  ], { schema: entryListSchema, noRefs: true, lineWidth: -1 }))
+  ], { lineWidth: -1 }))
   return path
 }
 

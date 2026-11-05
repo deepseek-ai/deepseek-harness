@@ -65,8 +65,7 @@
   "dependencies": {
     "@deepseek-ai/dsh-app-boot": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
-    "zod": "4.4.3",
-    "js-yaml": "^4.3.2"
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@deepseek-ai/cordis-plugin-group": "workspace:~",
@@ -94,7 +93,6 @@
     "@deepseek-ai/dsh-sandbox-policy": "workspace:*",
     "@deepseek-ai/dsh-user-approval": "workspace:*",
     "@deepseek-ai/dsh-agent-preset": "workspace:*",
-    "@deepseek-ai/dsh-working-directory": "workspace:*",
-    "@types/js-yaml": "^4.0.9"
+    "@deepseek-ai/dsh-working-directory": "workspace:*"
   }
 }

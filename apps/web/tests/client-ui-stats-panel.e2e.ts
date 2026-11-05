@@ -7,8 +7,7 @@ import { readFileSync } from 'node:fs'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
-import * as yaml from 'js-yaml'
-import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
+import { parseEntryYaml } from '@deepseek-ai/cordis-plugin-include'
 import {
   createAssistantMessage, createMessage, createUserMessage, ToolCallId,
   type AssistantStreamRecord, type TokenUsage,
@@ -31,7 +30,7 @@ const MODE = webSnapshotMode()
 
 /** Overlay layer entries, for the composition guard below. */
 function profileEntries(path: string): unknown[] {
-  const parsed = yaml.load(readFileSync(path, 'utf8'), { schema: entryListSchema })
+  const parsed = parseEntryYaml(readFileSync(path, 'utf8'))
   if (!Array.isArray(parsed)) throw new Error(`profile layer at ${path} must be a list`)
   return parsed
 }

@@ -4,9 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
-import { entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
+import { parseEntryYaml, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
-import { load } from 'js-yaml'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import {
   PROFILE_COMPATIBILITY_FILENAME, PluginPackages, boot, getDshRuntimeVersion,
@@ -358,7 +357,7 @@ it('reuses the documented literal Include dialect when reading included entries'
   f.plugin('allowed-plugin')
   const list = join(f.dir, 'nested.cordis.yml')
   writeFileSync(list, '- id: nested\n  name: allowed-plugin\n')
-  expect(load(readFileSync(list, 'utf8'), { schema: entryListSchema })).toEqual([{ id: 'nested', name: 'allowed-plugin' }])
+  expect(parseEntryYaml(readFileSync(list, 'utf8'))).toEqual([{ id: 'nested', name: 'allowed-plugin' }])
   // The launcher mounts an Include with a file URL, which a Windows path cannot stand in for: `C:` reads as a scheme.
   expect(await f.run([{ insert: [{ id: 'outer', name: 'cordis:include', config: { path: pathToFileURL(list).href } }] }]))
     .toEqual(['import:allowed-plugin', 'apply:allowed-plugin'])

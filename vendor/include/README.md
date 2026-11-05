@@ -44,7 +44,7 @@ Patches can insert entries or override fields on entries with a matching `id`.
 
 ## Patch composition and persistence
 
-`applyEntryPatches(data, patches, warn)` uses the same upstream algorithm as mounting. It clones file entries even without patches and clones inserted entry lists before indexing them, so later patches can address inserted rows without mutating those input lists. `entryListSchema` exposes Include’s YAML dialect to configuration tools. Nested entry expressions remain literal until their owning Loader entry evaluates them.
+`applyEntryPatches(data, patches, warn)` uses the same upstream algorithm as mounting. It clones file entries even without patches and clones inserted entry lists before indexing them, so later patches can address inserted rows without mutating those input lists. `parseEntryYaml(content)` and `stringifyEntryYaml(value, options)` read and write Include’s YAML dialect for configuration tools, and `entryYamlErrorPosition(error)` locates a parse error. `stringifyEntryYaml` writes repeated references in full instead of as aliases. Nested entry expressions remain literal until their owning Loader entry evaluates them.
 
 Tree mutations arrive through `commit(change)` and enter a journal. Include merges them with the latest file before writing; file edits win conflicts on the same fields and produce a diagnostic. Patch-owned fields and inserted entries update the parent Include’s patches instead of the included file. Invalid, missing or read-only files leave unsaved changes in memory.
 

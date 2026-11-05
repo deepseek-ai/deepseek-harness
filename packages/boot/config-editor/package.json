@@ -37,15 +37,13 @@
   },
   "dependencies": {
     "@deepseek-ai/dsh-atomic-write": "workspace:*",
-    "yaml": "^2.8.1",
-    "js-yaml": "^4.3.2"
+    "yaml": "^2.8.1"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/cordis-plugin-loader": "workspace:~",
     "@deepseek-ai/dsh-hmr": "workspace:*",
     "@deepseek-ai/cordis-plugin-include": "workspace:~",
-    "@types/js-yaml": "^4.0.9",
     "@deepseek-ai/dsh-app-boot": "workspace:*"
   },
   "peerDependenciesMeta": {
