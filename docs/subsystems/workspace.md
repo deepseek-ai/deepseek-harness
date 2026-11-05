@@ -268,6 +268,44 @@ Typed Remote control of transient Session-owned terminal processes.
 @Remote async create(agent: Agent, request: TerminalCreateRequest, signal: AbortSignal): Promise<WebTerminalInfo>
 
 /**
+ * Open a terminal for the Session's Agent under a caller-resolved sandbox policy; it appears in every
+ * window that watches the Session and passes to the person on the person's first typed input.
+ * @param agent - Session owner whose Agent requests the terminal.
+ * @param request - title, directory, dimensions, sandbox policy and shell preference.
+ * @param signal - allocation cancellation; a committed terminal outlives it.
+ * @returns the Agent's handle for the committed terminal.
+ * @throws RemoteError `terminal/limit-reached` when the Session or Agent terminal limit is reached.
+ * @throws Error when the title is blank or longer than 120 characters.
+ */
+async openForAgent(agent: Agent, request: AgentTerminalRequest, signal: AbortSignal): Promise<AgentTerminal>
+
+/**
+ * Render a page of any terminal in the Agent's Session, including terminals the person opened.
+ * @param agent - Session owner.
+ * @param id - terminal identity.
+ * @param request - page position and byte bound.
+ * @returns rendered screen text, including output received before the call.
+ * @throws RemoteError `terminal/unavailable` when the terminal is missing or closes before the screen is read.
+ */
+readScreen(agent: Agent, id: WebTerminalId, request: TerminalScreenRequest): Promise<TerminalScreenPage>
+
+/**
+ * Observe whether a Session terminal's shell is running a command.
+ * @param agent - Session owner.
+ * @param id - terminal identity.
+ * @returns idle, busy, or unknown for unsupported shells and sandboxed launches.
+ */
+inspectActivity(agent: Agent, id: WebTerminalId): Promise<'idle' | 'busy' | 'unknown'>
+
+/**
+ * Stream the Session's retained terminals as whole sets, without resolving or activating an Agent.
+ * @param sessionId - watched Session identity.
+ * @param signal - stream cancellation.
+ * @returns the current set, then a new set after creation, removal or any published state change.
+ */
+@Remote({ mode: 'stream' }) async *watch(sessionId: SessionId, signal: AbortSignal): AsyncIterable<WebTerminalInfo[]>
+
+/**
  * Retain an existing terminal for a window without activating its Agent or taking input control.
  * @param sessionId - owning Session identity, including an inactive saved layout.
  * @param id - retained Host terminal identity.

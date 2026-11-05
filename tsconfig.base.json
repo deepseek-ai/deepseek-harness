@@ -571,6 +571,7 @@
       "@deepseek-ai/dsh-system-prompt": ["./packages/core/system-prompt/src"],
       "@deepseek-ai/dsh-terminal": ["./packages/terminal/terminal/src"],
       "@deepseek-ai/dsh-terminal-bash": ["./packages/terminal/terminal-bash/src"],
+      "@deepseek-ai/dsh-terminal-panel": ["./packages/experimental/terminal-panel/src"],
       "@deepseek-ai/dsh-time-context": ["./packages/context/time-context/src"],
       "@deepseek-ai/dsh-timeout": ["./packages/util/timeout/src"],
       "@deepseek-ai/dsh-tmux-context": ["./packages/context/tmux-context/src"],
