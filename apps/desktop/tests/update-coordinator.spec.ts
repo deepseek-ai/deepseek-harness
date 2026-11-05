@@ -244,18 +244,28 @@ it.each([new DesktopUpdatePreparationError('stop-failed', 'private diagnostic'),
 })
 
 
-it('keeps a stable-version nightly installation on nightly and rejects prereleases on stable', async () => {
-  const nightly = fixture('nightly', '1.0.0')
-  expect(nightly.updater.channel).toBe('nightly')
-  expect(nightly.updater.allowPrerelease).toBe(true)
-  expect((await nightly.coordinator.check()).phase).toBe('available')
-  expect(nightly.updater.channel).toBe('nightly')
-  const stable = fixture('stable', '1.0.0')
-  expect(stable.updater.channel).toBe('stable')
-  expect(stable.updater.allowPrerelease).toBe(false)
-  expect(stable.updater.allowDowngrade).toBe(false)
-  expect((await stable.coordinator.check()).phase).toBe('error')
-  expect(stable.downloadUpdate).not.toHaveBeenCalled()
+it.each(['nightly', 'stable'] as const)('accepts newer prereleases on the selected %s channel', async (channel) => {
+  const f = fixture(channel, '1.0.0')
+  expect(f.updater.channel).toBe(channel)
+  expect(f.updater.allowPrerelease).toBe(true)
+  expect(f.updater.allowDowngrade).toBe(false)
+  for (const version of ['1.1.0-alpha.1', '1.1.0-rc.2', '1.1.0']) {
+    f.checkForUpdates.mockResolvedValueOnce({ isUpdateAvailable: true, updateInfo: { version } })
+    expect(await f.coordinator.check()).toMatchObject({ phase: 'available', version })
+    expect(f.updater.channel).toBe(channel)
+  }
+})
+
+it.each(['nightly', 'stable'] as const)('rejects older, equal and malformed versions on %s', async (channel) => {
+  for (const version of ['0.9.0', '1.0.0-rc.1', '1.0.0', 'invalid']) {
+    const f = fixture(channel, '1.0.0')
+    f.checkForUpdates.mockResolvedValueOnce({ isUpdateAvailable: true, updateInfo: { version } })
+    expect((await f.coordinator.check()).phase).toBe(version === 'invalid' ? 'error' : 'idle')
+    await expect(f.coordinator.download(version)).rejects.toThrow(/no checked update/u)
+    await expect(f.coordinator.install(version)).rejects.toThrow(/confirmed target is not ready/u)
+    expect(f.downloadUpdate).not.toHaveBeenCalled()
+    expect(f.quitAndInstall).not.toHaveBeenCalled()
+  }
 })
 
 

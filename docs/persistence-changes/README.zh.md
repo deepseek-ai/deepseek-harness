@@ -43,7 +43,7 @@ description: "审阅和维护已记录的会话持久化类型变更、对应 sc
 
 维护者通过 [`createPersistenceFinalizationCheckpoint`](../../scripts/persistence-finalization.ts) 捕获已确认格式，写入按版本命名的新检查点而不替换旧文件，并推进双语 `latestFinalizedVersion`。该函数要求当前 schema 与完整确认历史一致。提交前运行常规验证器。
 
-[记录模板](../../.agents/skills/dsh-doc/templates/persistence-change.md)定义人工编写的格式。创建记录时可以提供双语说明输入，由命令生成机器声明、快照、目录对和一致性记录。验证器从英文文件读取一次机器声明，并检查中文声明是否相同。声明列出每个受影响的根、其前驱记录、变更后摘要和兼容性决策。新根没有前驱；删除操作没有变更后 schema，并保留显式删除标记。
+[记录模板](../../.agents/skills/dsh-doc-writing/templates/persistence-change.md)定义人工编写的格式。创建记录时可以提供双语说明输入，由命令生成机器声明、快照、目录对和一致性记录。验证器从英文文件读取一次机器声明，并检查中文声明是否相同。声明列出每个受影响的根、其前驱记录、变更后摘要和兼容性决策。新根没有前驱；删除操作没有变更后 schema，并保留显式删除标记。
 
 <a id="compatibility-rules"></a>
 ## 兼容性规则

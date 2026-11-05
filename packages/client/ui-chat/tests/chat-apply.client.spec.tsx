@@ -144,6 +144,13 @@ describe('Chat apply wiring', () => {
       .toEqual(['activity', 'usage'])
     expect(b.runtime.slots.entries('settings.general.item').map(row => row.options.id))
       .toEqual(['transcript-view', 'link-opening', 'composer-enter', 'performance-usage'])
+    expect(b.runtime.slots.spec('conversation.chat.markdown.fence')).toMatchObject({ kind: 'hoc', scope: 'session' })
+    expect(b.runtime.slots.entries('conversation.chat.markdown.fence').map(row => [row.options.key, row.options.id]))
+      .toEqual([
+        ['math', '@deepseek-ai/dsh-client-ui-chat/fence/math'],
+        ['diff', '@deepseek-ai/dsh-client-ui-chat/fence/diff'],
+        ['patch', '@deepseek-ai/dsh-client-ui-chat/fence/diff'],
+      ])
     await b.runtime.dispose()
   })
 
@@ -297,6 +304,8 @@ describe('Chat apply wiring', () => {
   it('removes only Chat contributions when Chat unloads', async () => {
     const b = await bench()
     await b.chat.dispose()
+    expect(b.runtime.slots.spec('conversation.chat.markdown.fence')).toBeUndefined()
+    expect(b.runtime.slots.entries('conversation.chat.markdown.fence')).toHaveLength(0)
     expect(b.runtime.slots.entries('conversation.view')).toHaveLength(0)
     expect(b.runtime.slots.spec('conversation.chat.node')).toBeUndefined()
     expect(b.runtime.slots.entries('main').map(row => row.options.key)).toEqual(['conversation'])

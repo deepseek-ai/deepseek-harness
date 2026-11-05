@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { baseBranches, parseName, parseRemotes, parseTopLevel, remoteOrder, upstreamBranch } from '../src/parse.ts'
+import { baseBranches, parseBaseBranches, parseName, parseRemotes, parseTopLevel, remoteOrder, upstreamBranch } from '../src/parse.ts'
 import type { GitRemote } from '../src/parse.ts'
 
 describe('parseTopLevel', () => {
@@ -45,6 +45,41 @@ describe('baseBranches', () => {
   it('returns at most `limit` names and skips empty lines', () => {
     expect(baseBranches('main', '\nmain\n\nfeat\nfix\n', 2)).toEqual(['main', 'feat'])
     expect(baseBranches(null, 'main\nfeat\nfix\n', 1)).toEqual(['main'])
+  })
+})
+
+describe('parseBaseBranches', () => {
+  const output = [
+    'refs/remotes/origin/HEAD\0refs/remotes/origin/main',
+    'refs/remotes/origin/main\0',
+    'refs/heads/feat\0',
+    'refs/heads/Release/2.4\0',
+    'refs/remotes/upstream/release/2.3\0',
+    'refs/heads/main\0',
+    'refs/tags/v1\0',
+    '',
+  ].join('\r\n')
+
+  it('keeps the listed order, leaving out symbolic refs, the checked-out branch, and other ref kinds', () => {
+    expect(parseBaseBranches(output, 'feat', '', 10)).toEqual({
+      remote: [
+        { ref: 'refs/remotes/origin/main', name: 'origin/main' },
+        { ref: 'refs/remotes/upstream/release/2.3', name: 'upstream/release/2.3' },
+      ],
+      local: [
+        { ref: 'refs/heads/Release/2.4', name: 'Release/2.4' },
+        { ref: 'refs/heads/main', name: 'main' },
+      ],
+    })
+  })
+
+  it('keeps names containing the trimmed query in any case, at most limit in each group', () => {
+    expect(parseBaseBranches(output, null, '  RELEASE ', 1)).toEqual({
+      remote: [{ ref: 'refs/remotes/upstream/release/2.3', name: 'upstream/release/2.3' }],
+      local: [{ ref: 'refs/heads/Release/2.4', name: 'Release/2.4' }],
+    })
+    expect(parseBaseBranches(output, null, '', 1).local).toEqual([{ ref: 'refs/heads/feat', name: 'feat' }])
+    expect(parseBaseBranches('refs/heads/\0\n', null, '', 10)).toEqual({ remote: [], local: [] })
   })
 })
 

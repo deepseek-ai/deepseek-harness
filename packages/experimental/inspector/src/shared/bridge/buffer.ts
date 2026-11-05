@@ -6,6 +6,21 @@ import type { InspectorRecordInput, SourceAppendFrame, SourceReplaceFrame } from
 import { INSPECTOR_PROTOCOL_VERSION } from './version.ts'
 
 const SOURCE_FRAME_OVERHEAD_BYTES = 4_096
+const MAX_TOPIC_CODE_UNITS = 128
+/**
+ * Upper bound on the JSON around one replacement state payload: 38 bytes of punctuation and keys,
+ * at most 24 for `monotonicMs`, and at most 6 per escaped topic code unit plus quotes (770).
+ */
+const STATE_RECORD_OVERHEAD_BYTES = 1_024
+
+/**
+ * Compute the payload budget of a source's single retained state topic.
+ * @param maxFrameBytes - Source-frame byte limit.
+ * @returns Encoded payload bytes that {@link InspectorSourceBuffer.setState} accepts when no other state topic is retained.
+ */
+export function maxStatePayloadBytes(maxFrameBytes: number): number {
+  return maxFrameBytes - SOURCE_FRAME_OVERHEAD_BYTES - STATE_RECORD_OVERHEAD_BYTES
+}
 
 /** Limits and declared topics shared by both source transports. */
 export interface InspectorSourceBufferOptions {
@@ -129,8 +144,8 @@ export class InspectorSourceBuffer {
   }
 
   private record(topic: string, payload: InspectorJsonValue, monotonicMs: number): InspectorRecordInput {
-    if (topic.length === 0 || topic.length > 128) {
-      throw new Error('inspector: topic must contain 1 to 128 characters')
+    if (topic.length === 0 || topic.length > MAX_TOPIC_CODE_UNITS) {
+      throw new Error(`inspector: topic must contain 1 to ${String(MAX_TOPIC_CODE_UNITS)} characters`)
     }
     if (!this.options.topics.includes('*') && !this.options.topics.includes(topic)) {
       throw new Error(`inspector: source does not declare topic ${JSON.stringify(topic)}`)

@@ -420,7 +420,7 @@ describe('web e2e: agent teamwork panel', () => {
       taskId: task.id, expectedRevision: task.revision, action: 'claim',
     })
     await row.getByRole('img', { name: 'In progress', exact: true }).waitFor()
-    await row.locator('[data-team-task-owner]').filter({ hasText: agent.id }).waitFor()
+    await row.locator('[data-team-task-owner]').filter({ hasText: 'Owner: lead' }).waitFor()
     await action.getByRole('heading', { name: 'Shared tasks 1 in progress', exact: true }).waitFor()
     expect(await action.getByRole('button', { name: /^(New task|Edit|Complete|Reopen|Delete)$/u }).count()).toBe(0)
     expect(await action.locator('input, select, textarea').count()).toBe(0)
@@ -762,7 +762,7 @@ describe('web e2e: agent teamwork panel', () => {
       expect(await row.getAttribute('data-expanded')).toBe('false')
       expect(await row.locator('[data-team-task-details]').count()).toBe(0)
       expect(await board.locator('[data-team-task-details]').count()).toBe(1)
-      expect(await emptyRow.locator('[data-team-task-owner]').textContent()).toBe(`Owner: ${agent.id}`)
+      expect(await emptyRow.locator('[data-team-task-owner]').textContent()).toBe('Owner: lead')
       expect(await emptyRow.locator('[data-team-task-details] p:not([data-team-task-owner])').textContent()).toBe(completed.description)
       expect(await emptyRow.locator('dl, dt, dd').count()).toBe(0)
       expect(await emptyRow.locator('[data-team-task-details]').textContent()).not.toContain(completed.id)

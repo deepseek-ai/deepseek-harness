@@ -7,7 +7,7 @@ import type {} from '@deepseek-ai/dsh-api-remote-access'
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type { ChangeRequestSnapshot, ForgeActionFailure, ForgeFailure, ForgeReviewRequest, ForgeReviewResult, MergeMethod } from '@deepseek-ai/dsh-experimental-forge'
 import type { SessionChangeRequest } from '@deepseek-ai/dsh-experimental-forge-session'
-import type {} from '@deepseek-ai/dsh-experimental-worktree'
+import type { WorktreeCleanup } from '@deepseek-ai/dsh-experimental-worktree/types'
 import { appendPluginRecord } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
@@ -18,14 +18,16 @@ import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typer
 import { gitIn, inspectCheckout, listBranches } from './git.ts'
 import type { Inspection } from './git.ts'
 import { parseDiff } from './diff.ts'
-import { aheadOf, DiffTooLarge, FilterConfigError, forkPoint, localDiff, localText, NoForkPoint } from './local-diff.ts'
+import {
+  aheadOf, BaseMissing, baseBranches, chosenForkPoint, DiffTooLarge, FilterConfigError, forkPoint, localDiff, localText, NoForkPoint,
+} from './local-diff.ts'
 import { missingWorktree, SessionPanel } from './panel.ts'
 import { PatchCache } from './patch-cache.ts'
 import { ChangeRequestStates, changeRequestStatesDomain } from './states.ts'
 import type { PanelConfig } from './panel.ts'
 import type {
-  Config, ForgeBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame, ForgeLocalDiff, ForgeLocalScope, ForgeMissingWorktree,
-  ForgePanelState, ForgeSessionWorktree, ForgeWorktreeState,
+  Config, ForgeBaseBranches, ForgeBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame, ForgeLocalDiff, ForgeLocalScope,
+  ForgeMissingWorktree, ForgePanelState, ForgeSessionWorktree, ForgeWorktreeState,
 } from './types.ts'
 import { forgeWorktreeProjection, messageOf, within, WORKTREE_RECORD, WorktreeCreations } from './worktree.ts'
 import type { HeldWork } from './worktree.ts'
@@ -178,6 +180,17 @@ export class ForgePanelController extends TypertRemoteService {
   }
 
   /**
+   * Read or await the worktree service's archive cleanup of the Session's checkout.
+   * @param session - Session whose cleanup is visible to the caller.
+   * @param revision - null reads now; a matching revision waits for completion.
+   * @returns the cleanup state, or null without a worktree service, an attempt, or a current revision.
+   */
+  @Remote
+  async worktreeCleanup(session: Session, revision: number | null): Promise<WorktreeCleanup | null> {
+    return await this.home.get('worktrees')?.cleanupOf(session, revision) ?? null
+  }
+
+  /**
    * List the local branches that can start a worktree of the Session's current checkout.
    * @param session - Session whose current directory is listed.
    * @param signal - request cancellation.
@@ -187,6 +200,24 @@ export class ForgePanelController extends TypertRemoteService {
   @Remote
   async branches(session: Session, signal: AbortSignal): Promise<ForgeBranches> {
     return await listBranches(this.home, this.config, session, this.home.workingDirectory.get(session), this.config.maxBranches, signal)
+  }
+
+  /**
+   * List the branches the `branch` scope of the Session's current checkout can compare with.
+   * @param session - Session whose checkout is read.
+   * @param query - text the branch names must contain, ignoring case; empty for every branch.
+   * @param signal - request cancellation.
+   * @returns the automatic fork point and at most `maxBranches` remote-tracking and local branches each,
+   * most recently committed first, without the checked-out branch.
+   * @throws `forgePanel/not-a-checkout` outside a checkout; the Git error when Git fails or the listed refs exceed `maxDiffBytes`.
+   */
+  @Remote
+  async diffBases(session: Session, query: string, signal: AbortSignal): Promise<ForgeBaseBranches> {
+    signal.throwIfAborted()
+    const inspection = await this.checkoutOf(session, signal)
+    // A search can match any branch, so every ref is listed; a repository's refs can far exceed other short Git output.
+    const git = gitIn(this.home, { ...this.config, maxOutputBytes: this.config.maxDiffBytes }, session, inspection.checkout.root, signal)
+    return await baseBranches(git, inspection, this.worktreeState(session).created, query, this.config.maxBranches)
   }
 
   /* oxlint-disable typescript/require-await -- async keeps a refused or cancelled request a rejection, as Remote callers expect */
@@ -238,18 +269,20 @@ export class ForgePanelController extends TypertRemoteService {
    * @param scope - which changes to read.
    * @param signal - request cancellation.
    * @returns the files, the base of the `branch` scope, and the untracked files left out.
-   * @throws `forgePanel/not-a-checkout` outside a checkout; `forgePanel/no-fork-point` for the `branch`
-   * scope of a checkout without one; `forgePanel/filter-config-failed` when filter configuration cannot be read
-   * completely, before any comparison; `forgePanel/diff-too-large` over `maxDiffBytes`; the Git error when Git fails.
+   * @throws `forgePanel/not-a-checkout` outside a checkout; `forgePanel/base-missing` when the base branch
+   * chosen for the `branch` scope does not exist; `forgePanel/no-fork-point` for the `branch` scope without
+   * a fork point; `forgePanel/filter-config-failed` when filter configuration cannot be read completely, before
+   * any comparison; `forgePanel/diff-too-large` over `maxDiffBytes`; the Git error when Git fails.
    */
   @Remote
   async localDiff(session: Session, scope: ForgeLocalScope, signal: AbortSignal): Promise<ForgeLocalDiff> {
     signal.throwIfAborted()
     const inspection = await this.checkoutOf(session, signal)
     const root = inspection.checkout.root
-    const fork = scope.kind === 'branch'
-      ? await forkPoint(gitIn(this.home, this.config, session, root, signal), inspection, this.worktreeState(session).created)
-      : null
+    const git = gitIn(this.home, this.config, session, root, signal)
+    const created = this.worktreeState(session).created
+    const fork = scope.kind !== 'branch' ? null
+      : await diffing(scope.base === null ? forkPoint(git, inspection, created) : chosenForkPoint(git, scope.base))
     return await diffing(localDiff(this.home, this.config, session, root, fork, scope, signal))
   }
 
@@ -693,7 +726,7 @@ function readError(failure: ForgeFailure): RemoteError {
 }
 
 /**
- * Settle a diff read, reporting its size limit and a missing fork point as Remote errors.
+ * Settle a diff read, reporting its size limit, its filter configuration, a missing fork point, and a missing base branch as Remote errors.
  * @param reading - the read.
  * @returns what the read returned.
  */
@@ -704,6 +737,7 @@ async function diffing<T>(reading: Promise<T>): Promise<T> {
     if (error instanceof FilterConfigError) throw new RemoteError('forgePanel/filter-config-failed', error.message, {}, { cause: error })
     if (error instanceof DiffTooLarge) throw new RemoteError('forgePanel/diff-too-large', error.message, {}, { cause: error })
     if (error instanceof NoForkPoint) throw new RemoteError('forgePanel/no-fork-point', error.message, {}, { cause: error })
+    if (error instanceof BaseMissing) throw new RemoteError('forgePanel/base-missing', error.message, {}, { cause: error })
     throw error
   }
 }

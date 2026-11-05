@@ -7,7 +7,8 @@ import { appendPluginRecord, SessionId } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import WorktreeService from '@deepseek-ai/dsh-experimental-worktree'
 import ForgePanelController from '../src/index.ts'
-import type { Config, ForgePanelState, ForgeSessionWorktree, ForgeWorktreeState } from '../src/index.ts'
+import type { Config, ForgeLocalDiff, ForgePanelState, ForgeSessionWorktree, ForgeWorktreeState } from '../src/index.ts'
+import { GitOutputTooLarge } from '../src/git.ts'
 import { WORKTREE_RECORD } from '../src/worktree.ts'
 import { missingWorktree } from '../src/panel.ts'
 import {
@@ -500,11 +501,55 @@ describe('forgePanel local changes', () => {
     await writeFile(join(repo, 'notes.md'), 'hello\n')
     const opened = await open(repo)
 
-    const diff = await opened.ctx.forgePanel.localDiff(opened.session, { kind: 'branch' }, signal)
+    const diff = await opened.ctx.forgePanel.localDiff(opened.session, { kind: 'branch', base: null }, signal)
     expect(diff.base).toBe('origin/main')
     expect(diff.files.map(file => [file.path, file.status, file.untracked])).toEqual([['tracked.txt', 'modified', false], ['notes.md', 'added', true]])
     await expect(opened.ctx.forgePanel.localDiff(opened.session, { kind: 'staged' }, signal)).resolves.toEqual({ base: null, files: [], omitted: 0 })
     await expect(opened.ctx.forgePanel.localText(opened.session, { kind: 'unstaged' }, 'tracked.txt', signal)).resolves.toBe('initial\nmore\n')
+  })
+
+  it('compares the branch scope with a chosen base branch and lists the branches it can choose', async () => {
+    const { repo } = await project()
+    await withDefaultBranch(repo)
+    await writeFile(join(repo, 'feature.txt'), 'feature\n')
+    await git(repo, 'add', 'feature.txt')
+    await git(repo, 'commit', '--quiet', '-m', 'feature')
+    await git(repo, 'branch', 'topic')
+    await writeFile(join(repo, 'notes.md'), 'hello\n')
+    const opened = await open(repo)
+    const paths = (diff: ForgeLocalDiff): string[] => diff.files.map(file => file.path)
+
+    const automatic = await opened.ctx.forgePanel.localDiff(opened.session, { kind: 'branch', base: null }, signal)
+    expect([automatic.base, paths(automatic)]).toEqual(['origin/main', ['feature.txt', 'notes.md']])
+    const chosen = await opened.ctx.forgePanel.localDiff(opened.session, { kind: 'branch', base: 'refs/heads/topic' }, signal)
+    expect([chosen.base, paths(chosen)]).toEqual(['topic', ['notes.md']])
+    await expect(opened.ctx.forgePanel.diffBases(opened.session, '', signal)).resolves.toEqual({
+      automatic: { name: 'origin/main', worktree: false },
+      remote: [{ ref: 'refs/remotes/origin/main', name: 'origin/main' }],
+      local: [{ ref: 'refs/heads/topic', name: 'topic' }],
+    })
+    await expect(opened.ctx.forgePanel.localDiff(opened.session, { kind: 'branch', base: 'refs/heads/gone' }, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/base-missing' })
+
+    const outside = await open(await plain())
+    await expect(outside.ctx.forgePanel.diffBases(outside.session, '', signal)).rejects.toMatchObject({ code: 'forgePanel/not-a-checkout' })
+  })
+
+  it('lists more refs than other Git output may print, up to maxDiffBytes', async () => {
+    const { repo } = await project()
+    await withDefaultBranch(repo)
+    for (let index = 0; index < 40; index += 1) await git(repo, 'update-ref', `refs/remotes/origin/a-long-branch-name-${index}`, 'HEAD')
+    const listing = await git(repo, 'for-each-ref', 'refs/remotes/')
+    expect(listing.length).toBeGreaterThan(1024)
+
+    const limited = await open(repo, { maxOutputBytes: 1024, maxBranches: 3 })
+    await expect(limited.ctx.forgePanel.diffBases(limited.session, '', signal)).resolves.toMatchObject({ remote: { length: 3 } })
+    await expect(limited.ctx.forgePanel.diffBases(limited.session, 'name-39', signal)).resolves.toMatchObject({
+      remote: [{ name: 'origin/a-long-branch-name-39' }],
+    })
+
+    const refused = await open(repo, { maxOutputBytes: 1024, maxDiffBytes: 1024 })
+    await expect(refused.ctx.forgePanel.diffBases(refused.session, '', signal)).rejects.toBeInstanceOf(GitOutputTooLarge)
   })
 
   it('reports a directory outside a checkout, a branch without a fork point, and a diff over the limit', async () => {
@@ -516,7 +561,7 @@ describe('forgePanel local changes', () => {
     const { repo } = await project()
     await writeFile(join(repo, 'tracked.txt'), 'x\n'.repeat(2000))
     const opened = await open(repo, { maxDiffBytes: 1024 })
-    await expect(opened.ctx.forgePanel.localDiff(opened.session, { kind: 'branch' }, signal)).rejects.toMatchObject({ code: 'forgePanel/no-fork-point' })
+    await expect(opened.ctx.forgePanel.localDiff(opened.session, { kind: 'branch', base: null }, signal)).rejects.toMatchObject({ code: 'forgePanel/no-fork-point' })
     await expect(opened.ctx.forgePanel.localDiff(opened.session, { kind: 'unstaged' }, signal)).rejects.toMatchObject({ code: 'forgePanel/diff-too-large' })
     await expect(opened.ctx.forgePanel.localText(opened.session, { kind: 'unstaged' }, 'tracked.txt', signal))
       .rejects.toMatchObject({ code: 'forgePanel/diff-too-large' })
@@ -775,7 +820,18 @@ describe('forgePanel worktree requests', () => {
     await expect(opened.ctx.forgePanel.requestWorktree(opened.session, 'main', signal)).rejects.toMatchObject({ code: 'forgePanel/session-started' })
     await expect(opened.ctx.forgePanel.cancelWorktree(opened.session, signal)).rejects.toMatchObject({ code: 'forgePanel/session-started' })
     expect(worktreeState(opened)).toMatchObject({ request: { from: null }, locked: false, stepped: false, restoring: false })
-    expect(opened.records).toHaveLength(2)
+    expect(opened.records).toEqual([{ action: 'request', from: null }])
+    expect(opened.created).toHaveLength(1)
+  })
+
+  it('forwards the worktree service\'s cleanup state and answers null without the service', async () => {
+    const { repo } = await project()
+    const without = await open(repo)
+    expect(await without.ctx.forgePanel.worktreeCleanup(without.session, null)).toBeNull()
+    const opened = await open(repo, {}, { worktrees: true })
+    expect(await opened.ctx.forgePanel.worktreeCleanup(opened.session, null)).toBeNull()
+    vi.spyOn(opened.ctx.worktrees, 'cleanupOf').mockResolvedValue({ revision: 3, status: 'removed' })
+    expect(await opened.ctx.forgePanel.worktreeCleanup(opened.session, 3)).toEqual({ revision: 3, status: 'removed' })
   })
 
   it('refuses worktree requests and restoration without a worktree service, and keeps a waiting message for the withdrawal', async () => {
@@ -907,7 +963,10 @@ describe('forgePanel worktree creation while a message waits', () => {
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(created?.path)
     expect(opened.agent.inbox.nextStep).toEqual([notice(created?.path ?? '')])
     expect(queued(opened)).toEqual(['first'])
-    expect(opened.records).toEqual([{ action: 'request', from: null }, { action: 'created', worktree: created }])
+    expect(opened.records).toEqual([{ action: 'request', from: null }])
+    expect(opened.created).toEqual([
+      { path: created?.path, branch: created?.branch, baseCommit: created?.baseCommit, repositoryRoot: created?.repositoryRoot },
+    ])
   })
 
   it('keeps the message waiting with the failure the panel shows, and tries again with a new branch when asked', async () => {
@@ -935,7 +994,8 @@ describe('forgePanel worktree creation while a message waits', () => {
     expect(created?.branch).not.toBe(failed.worktree.failure?.branch)
     expect(opened.agent.wakes).toBe(1)
     expect(queued(opened)).toEqual(['first'])
-    expect(opened.records).toEqual([{ action: 'request', from: 'later' }, { action: 'created', worktree: created }])
+    expect(opened.records).toEqual([{ action: 'request', from: 'later' }])
+    expect(opened.created).toHaveLength(1)
   })
 
   it('keeps the message waiting when the request changes, and lets it go on in the current checkout once the request is withdrawn', async () => {
@@ -1079,7 +1139,8 @@ describe('forgePanel worktree creation while a message waits', () => {
 
     expect(opened.agent.wakes).toBe(1)
     expect(queued(opened)).toEqual(['first', 'second'])
-    expect(opened.records).toHaveLength(2)
+    expect(opened.records).toEqual([{ action: 'request', from: null }])
+    expect(opened.created).toHaveLength(1)
   })
 
   it('leaves a message that arrives while the Agent has other work to the first step', async () => {
@@ -1136,7 +1197,8 @@ describe('forgePanel worktree requests during a creation', () => {
     const created = worktreeState(opened)?.created ?? null
     expect(created).toMatchObject({ from: null, repositoryRoot: repo })
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(created?.path)
-    expect(opened.records).toEqual([{ action: 'request', from: null }, { action: 'created', worktree: created }])
+    expect(opened.records).toEqual([{ action: 'request', from: null }])
+    expect(opened.created).toHaveLength(1)
   })
 })
 

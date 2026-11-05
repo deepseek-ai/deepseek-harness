@@ -237,7 +237,7 @@ function toolResult(callId: string, text: string, isError = false) {
 }
 
 describe('built-in conversation node Definitions', () => {
-  it.each(['replay', 'live', 'prepend'] as const)('keeps developer tool changes visible while hiding ordinary Context (%s)', (mode) => {
+  it.each(['replay', 'live', 'prepend'] as const)('shows ordinary Context and developer tool changes in Chat order (%s)', (mode) => {
     const entries = [
       at(0, 'request/header', { reason: 'initial', header: {
         config: { provider: 'test', model: 'test' },
@@ -266,11 +266,11 @@ describe('built-in conversation node Definitions', () => {
     }
     const current = snapshot(value)
     const visible = current.order.map(key => current.nodes.get(key))
-    expect(visible.map(candidate => candidate?.kind)).toEqual(['context'])
-    expect(visible[0]?.data).toMatchObject({
+    expect(visible.map(candidate => candidate?.kind)).toEqual(['context', 'context'])
+    expect(visible[0]?.data).toMatchObject({ kind: 'context', content: [{ type: 'text', text: 'workspace context' }] })
+    expect(visible[1]?.data).toMatchObject({
       kind: 'context', content: [{ type: 'tool-addition', toolName: 'search' }, { type: 'tool-removal', toolName: 'old_search' }],
     })
-    expect(current.nodes.values().filter(candidate => candidate.kind === 'context')).toHaveLength(2)
   })
 
   it('preserves tool removals without a loaded header', () => {
@@ -379,7 +379,7 @@ describe('built-in conversation node Definitions', () => {
     expect(hasAssistantReplyContent([{ kind: 'other', block: { type: 'future' } }])).toBe(true)
   })
 
-  it.each(['replay', 'live', 'prepend'] as const)('retains permission and Context data outside visible Chat order (%s)', (mode) => {
+  it.each(['replay', 'live', 'prepend'] as const)('retains permission data outside visible Chat order and shows Context (%s)', (mode) => {
     const entries = [
       at(1, 'command/run', { commandId: 'permission-1', name: 'permission', source: { kind: 'user' } }),
       at(2, 'command/done', { commandId: 'permission-1', kind: 'success', text: 'Granted' }),
@@ -407,13 +407,13 @@ describe('built-in conversation node Definitions', () => {
     }
     const current = snapshot(value)
     const visible = current.order.map(key => current.nodes.get(key))
-    expect(visible.map(candidate => candidate?.kind)).toEqual(['command', 'turn-process'])
+    expect(visible.map(candidate => candidate?.kind)).toEqual(['command', 'turn-process', 'context'])
     expect(visible[0]?.data).toMatchObject({ name: 'plan' })
+    expect(visible[2]?.data).toMatchObject({ content: [{ type: 'text', text: 'workspace context' }] })
     expect(current.nodes.values().filter(candidate => candidate.kind === 'command')).toHaveLength(2)
     expect(node(current, 'command')?.data).toMatchObject({
       name: 'permission', outcome: { kind: 'success', text: 'Granted' },
     })
-    expect(node(current, 'context')?.data).toMatchObject({ content: [{ type: 'text', text: 'workspace context' }] })
   })
 
   it('projects one reversible process window before the finalized answer', () => {
@@ -564,7 +564,7 @@ describe('built-in conversation node Definitions', () => {
     ])
     const opening = snapshot(value)
     expect(opening.order.map(key => opening.nodes.get(key)?.kind)).toEqual([
-      'user', 'turn-process',
+      'user', 'turn-process', 'context',
     ])
     expect(node(opening, 'context')?.data).toMatchObject({ content: [{ type: 'text', text: 'runtime context' }] })
 
@@ -574,7 +574,7 @@ describe('built-in conversation node Definitions', () => {
     value.flush()
     const running = snapshot(value)
     expect(running.order.map(key => running.nodes.get(key)?.kind)).toEqual([
-      'user', 'turn-process', 'assistant-step',
+      'user', 'turn-process', 'context', 'assistant-step',
     ])
 
     value.append(at(6, 'agent/inbox/spliced', {
@@ -595,7 +595,7 @@ describe('built-in conversation node Definitions', () => {
     const current = snapshot(value)
 
     expect(current.order.map(key => current.nodes.get(key)?.kind)).toEqual([
-      'user', 'turn-process', 'steering', 'assistant-step', 'assistant-step', 'turn-tail',
+      'user', 'turn-process', 'context', 'steering', 'assistant-step', 'assistant-step', 'turn-tail',
     ])
   })
 
@@ -625,6 +625,39 @@ describe('built-in conversation node Definitions', () => {
       expect(running.order.map(key => running.nodes.get(key)?.kind)).toEqual([kind, 'turn-process', 'assistant-step'])
     },
   )
+
+  it.each(['replay', 'live', 'prepend'] as const)('presents empty retry receipts through %s while retaining other input', (mode) => {
+    const retry = { id: 'empty-retry', role: 'user', content: [], source: { kind: 'retry' } }
+    const before = [
+      at(1, 'agent/inbox/spliced', { target: 'next-turn', start: 0, inserted: [retry] }),
+      at(2, 'turn/start', { turn: 1 }),
+      at(3, 'agent/inbox/spliced', { target: 'next-turn', start: 0, removedCount: 1, inserted: [] }),
+      at(4, 'step/start', { turn: 1, step: 1 }),
+    ]
+    const message = at(5, 'user/message', retry, { surfaceOp: 'append' })
+    const value = assembler(mode === 'replay' ? [...before, message] : mode === 'prepend' ? [message] : [], mode === 'prepend')
+    if (mode === 'live') for (const entry of [...before, message]) value.append(entry)
+    if (mode === 'prepend') value.prepend(before, false)
+    value.flush()
+    const current = snapshot(value)
+    const receipt = node(current, 'turn-trigger')
+    expect(receipt).toMatchObject({ anchorSeq: 5, groupTree: 'input', data: { content: [], source: { kind: 'retry' } } })
+    expect(current.order).toContain(receipt?.key)
+    expect(node(current, 'unknown')).toBeUndefined()
+
+    value.append(at(6, 'user/message', { ...retry, id: 'retry-with-content',
+      content: [{ type: 'text', text: 'retained context' }],
+    }, { surfaceOp: 'append' }))
+    value.append(at(7, 'user/message', { ...retry, id: 'ordinary-empty', source: { kind: 'user' } }, { surfaceOp: 'append' }))
+    value.append(at(8, 'developer/message', { turn: 1, step: 1,
+      message: { ...retry, id: 'developer-empty', role: 'developer' },
+    }, { surfaceOp: 'append' }))
+    value.flush()
+    expect(node(snapshot(value), 'context')?.data).toMatchObject({ content: [{ type: 'text', text: 'retained context' }] })
+    expect(node(snapshot(value), 'user')?.data).toMatchObject({ content: [], source: { kind: 'user' } })
+    expect(snapshot(value).nodes.values().find(candidate => candidate.anchorSeq === 8)?.data)
+      .toMatchObject({ content: [], source: { kind: 'retry' } })
+  })
 
   it.each(['replay', 'live', 'prepend'] as const)('classifies waking Inbox messages through %s', (mode) => {
     const notice = { ...textMessage('notice', 'scheduled work'), source: { kind: 'schedule' } }
@@ -667,7 +700,8 @@ describe('built-in conversation node Definitions', () => {
       const current = snapshot(value)
       const input = node(current, test.waking ? 'turn-trigger' : 'context')
       expect(input, test.name).toMatchObject({ data: { waking: test.waking, source: { kind: 'schedule' } } })
-      expect(current.order.includes(input!.key), test.name).toBe(test.waking)
+      expect(current.order.includes(input!.key), test.name).toBe(true)
+      expect(node(current, test.waking ? 'context' : 'turn-trigger'), test.name).toBeUndefined()
     }
   })
 
@@ -973,7 +1007,7 @@ describe('built-in conversation node Definitions', () => {
     ])
   })
 
-  it('keeps Process before Assistant work and retains excluded Context as answer eligibility changes', () => {
+  it('keeps Process before Context and Assistant work as answer eligibility changes', () => {
     const value = assembler([
       at(1, 'turn/start', { turn: 1 }),
       at(2, 'user/message', {
@@ -987,7 +1021,7 @@ describe('built-in conversation node Definitions', () => {
     ])
     const running = snapshot(value)
     expect(running.order.map(key => running.nodes.get(key)?.kind)).toEqual([
-      'turn-process', 'assistant-step',
+      'turn-process', 'context', 'assistant-step',
     ])
     expect(node(running, 'context')?.data).toMatchObject({ content: [{ type: 'text', text: 'runtime context' }] })
 
@@ -999,7 +1033,7 @@ describe('built-in conversation node Definitions', () => {
     value.flush()
     const answered = snapshot(value)
     expect(answered.order.map(key => answered.nodes.get(key)?.kind)).toEqual([
-      'turn-process', 'assistant-step', 'assistant-step',
+      'turn-process', 'context', 'assistant-step', 'assistant-step',
     ])
     expect(node(answered, 'context')?.data).toMatchObject({ content: [{ type: 'text', text: 'runtime context' }] })
 
@@ -1011,7 +1045,7 @@ describe('built-in conversation node Definitions', () => {
     value.flush()
     const retried = snapshot(value)
     expect(retried.order.map(key => retried.nodes.get(key)?.kind)).toEqual([
-      'turn-process', 'assistant-step', 'model-retry',
+      'turn-process', 'context', 'assistant-step', 'model-retry',
     ])
     expect(node(retried, 'context')?.data).toMatchObject({ content: [{ type: 'text', text: 'runtime context' }] })
   })
@@ -2188,6 +2222,7 @@ describe('built-in conversation node Definitions', () => {
     expect(current.order.map(key => current.nodes.get(key)?.kind)).toEqual([
       'user',
       'turn-process',
+      'context',
     ])
     expect(node(current, 'context')?.data).toMatchObject({ content: [{ type: 'text', text: 'runtime facts' }] })
     expect(node(current, 'system-prompt')?.anchorSeq).toBe(1)
@@ -2376,14 +2411,14 @@ describe('built-in conversation node Definitions', () => {
     }
     const promptKey = node(snapshot(value), 'system-prompt')?.key
 
-    expect(kinds()).toEqual(['user', 'turn-process'])
+    expect(kinds()).toEqual(['user', 'turn-process', 'context'])
 
     value.append(at(7, 'assistant/live-chunk', {
       turn: 1, step: 1, chunk: { type: 'reasoning-delta', index: 0, text: 'thinking' },
     }))
     value.flush()
     expect(kinds()).toEqual([
-      'user', 'turn-process', 'assistant-step',
+      'user', 'turn-process', 'context', 'assistant-step',
     ])
 
     value.append(at(8, 'step/end', { turn: 1, step: 1 }))
@@ -2396,7 +2431,7 @@ describe('built-in conversation node Definitions', () => {
     value.flush()
 
     expect(kinds()).toEqual([
-      'user', 'turn-process', 'assistant-step', 'assistant-step', 'turn-tail',
+      'user', 'turn-process', 'context', 'assistant-step', 'assistant-step', 'turn-tail',
     ])
     expect(node(snapshot(value), 'system-prompt')?.key).toBe(promptKey)
     expect(node(snapshot(value), 'context')?.data).toMatchObject({ content: [{ type: 'text', text: 'runtime facts' }] })

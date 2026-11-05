@@ -1,3 +1,4 @@
+import { expectDesktopArchive } from './desktop-archive-workflow-test.ts'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import yaml from 'js-yaml'
@@ -24,8 +25,16 @@ describe.each(['arm64', 'x64'])('macOS %s packaging', (arch) => {
     }>
   }
 
+  it('archives using the same persistent pnpm store as packaging', () => {
+    const cache = (job: string) => workflow.jobs[job]!.steps.find(step => step.name === 'Configure persistent package caches')
+    expect(cache('upload-artifact')).toEqual(cache('package'))
+    expect(cache('upload-artifact')?.run).toContain('PNPM_CONFIG_STORE_DIR=')
+  })
+
   it('confines signed Mac packaging to manual dispatch and a dedicated Apple Silicon runner', () => {
     expect(Object.keys(workflow.on)).toEqual(['workflow_dispatch'])
+    expect(workflow.jobs.package!.env.PACKAGE_VERSION_MODE).toBe("${{ inputs.version_mode == 'follow-dsh' && 'product' || inputs.version_mode == 'build-number' && 'auto' || inputs.version_mode }}")
+    expect(workflow.on.workflow_dispatch).toMatchObject({ inputs: { version_mode: { default: 'default', options: ['default', 'follow-dsh', 'build-number', 'manual'] } } })
     expect(workflow.jobs.package).not.toHaveProperty('name')
     expect(workflow.on.workflow_dispatch).toMatchObject({ inputs: { test_release_id: { type: 'string', default: '', required: false } } })
     expect(workflow.on.workflow_dispatch).not.toHaveProperty('inputs.publish')
@@ -36,11 +45,14 @@ describe.each(['arm64', 'x64'])('macOS %s packaging', (arch) => {
     expect(steps.find(step => step.id === 'checkout')?.with).toMatchObject({ 'persist-credentials': false, clean: true })
     for (const step of steps) expect(step.run ?? '').not.toContain('${{ inputs.')
     const uploads = steps.filter(step => step.uses?.startsWith('actions/upload-artifact@'))
-    expect(uploads).toHaveLength(2)
+    expect(uploads).toHaveLength(1)
+    const archive = workflow.jobs['upload-artifact']!
+    expect(archive['runs-on']).toEqual(['self-hosted', '${{ needs.package.outputs.runner }}'])
+    const installer = archive.steps.find(step => step.uses?.startsWith('actions/upload-artifact@'))!
     expect(uploads[0]?.if).toBe("always() && steps.checkout.outcome == 'success'")
-    expect(uploads[1]?.if).toBe('success()')
-    expect(uploads[1]?.with?.path).toBe('${{ steps.retained.outputs.directory }}/*')
-    expect(uploads[1]?.with?.['compression-level']).toBe(0)
+    expect(installer.if).toBe('success()')
+    expect(installer.with?.path).toBe('${{ steps.archive.outputs.path }}')
+    expect(installer.with).toMatchObject({ archive: false, overwrite: true, name: '${{ env.DESKTOP_ARCHIVE_NAME }}' })
   })
 
   it('defaults to notarization and labels the explicit debugging option', () => {
@@ -50,7 +62,6 @@ describe.each(['arm64', 'x64'])('macOS %s packaging', (arch) => {
     } } })
     const steps = workflow.jobs.package!.steps
     expect(steps.filter(step => step.run?.includes('args+=(--skip-notarization)'))).toHaveLength(2)
-    expect(steps.find(step => step.name === 'Retain installers for the selected mode')?.with?.name).toContain('${{ steps.settings.outputs.mode }}')
   })
 
   it('retains build inputs outside checkout and run-specific pnpm installations', () => {
@@ -85,13 +96,15 @@ describe.each(['arm64', 'x64'])('macOS %s packaging', (arch) => {
   })
 
   it('passes the same target to preparation, packaging and retention', () => {
+    const archive = workflow.jobs['upload-artifact']!
+    expectDesktopArchive(archive, 1)
     const job = workflow.jobs.package!
     expect(job.env.DSH_DESKTOP_TARGET_PLATFORM).toBe('darwin')
     expect(job.env.DSH_DESKTOP_TARGET_ARCH).toBe(arch)
     const builds = job.steps.filter(step => step.run?.includes('pnpm run package:desktop:mac:'))
     expect(builds).toHaveLength(2)
     for (const step of builds) expect(step.run).toContain(`package:desktop:mac:${arch}`)
-    expect(job.steps.find(step => step.name === 'Retain installers for the selected mode')?.with?.name).toContain(`macos-${arch}-`)
+    expect(archive.env.DESKTOP_ARCHIVE_NAME).toBe('macos-' + arch + '-${{ needs.package.outputs.mode }}-${{ needs.package.outputs.version }}-${{ github.run_id }}-${{ needs.package.outputs.attempt }}.zip')
     if (arch === 'x64') {
       const rosetta = job.steps.findIndex(step => step.run === 'arch -x86_64 /usr/bin/true')
       expect(rosetta).toBeGreaterThan(-1)

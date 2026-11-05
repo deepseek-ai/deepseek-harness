@@ -1,8 +1,9 @@
+import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
-import { collectUpgradeGuideViolations } from './verify-upgrade-guides.ts'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { collectStaleUpgradeGuideAdditions, collectUpgradeGuideViolations } from './verify-upgrade-guides.ts'
 
 const roots: string[] = []
 
@@ -39,15 +40,36 @@ const VALID_ZH = VALID
   .replace('## Change', '## 变更')
   .replace('## Migration', '## 迁移')
 
-function fixtureRoot(files: Record<string, string>): string {
-  const root = mkdtempSync(join(tmpdir(), 'dsh-upgrade-guides-'))
-  roots.push(root)
+function writeGuides(root: string, files: Record<string, string>): void {
   for (const [file, source] of Object.entries(files)) {
     const path = join(root, 'docs/upgrade-guide', file)
     mkdirSync(dirname(path), { recursive: true })
     writeFileSync(path, source)
   }
+}
+
+function fixtureRoot(files: Record<string, string>): string {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-upgrade-guides-'))
+  roots.push(root)
+  writeGuides(root, files)
   return root
+}
+
+/** Run Git with an identity and no user or system configuration, so the fixture ignores the host's settings. */
+function git(cwd: string, ...args: string[]): string {
+  return execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', '-c', 'commit.gpgsign=false', '-c', 'init.defaultBranch=master', ...args], {
+    cwd,
+    encoding: 'utf8',
+    env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' },
+  })
+}
+
+/** Commit `files` with the root version `version` on top of the current branch. */
+function commit(root: string, version: string, files: Record<string, string>): void {
+  writeFileSync(join(root, 'package.json'), `${JSON.stringify({ version })}\n`)
+  writeGuides(root, files)
+  git(root, 'add', '-A')
+  git(root, 'commit', '-q', '-m', version)
 }
 
 describe('upgrade guide gate', () => {
@@ -126,5 +148,81 @@ describe('upgrade guide gate', () => {
       'v0.1.7/over-limit/guide.md': `${VALID}${'word '.repeat(501 - words)}\n`,
       'v0.1.7/over-limit/guide.zh.md': `${VALID_ZH}${'词 '.repeat(600)}\n`,
     }))).toEqual(['docs/upgrade-guide/v0.1.7/over-limit/guide.md: 501 words exceeds the 500-word ceiling'])
+  })
+
+  describe('added guide versions', () => {
+    const MESSAGE = ': added outside the current version directory; the root version is 0.2.2-rc.1, so move the guide to docs/upgrade-guide/v0.2.2-rc.1/<item>/'
+
+    beforeEach(() => {
+      vi.stubEnv('GIT_CONFIG_GLOBAL', '/dev/null')
+      vi.stubEnv('GIT_CONFIG_NOSYSTEM', '1')
+    })
+    afterEach(() => {
+      vi.unstubAllEnvs()
+    })
+
+    /** An `origin` whose master holds released guides and whose `release/dsh-0.2.1` branch adds a backported one. */
+    function originRoot(): string {
+      const origin = fixtureRoot({})
+      git(origin, 'init', '-q')
+      commit(origin, '0.2.2-alpha.3', { 'v0.2.2-alpha.3/frozen/guide.md': VALID, 'v0.2.2-alpha.3/moving/guide.md': VALID })
+      git(origin, 'checkout', '-q', '-b', 'release/dsh-0.2.1')
+      commit(origin, '0.2.1-rc.4', { 'v0.2.1-rc.4/backport/guide.md': VALID })
+      git(origin, 'checkout', '-q', 'master')
+      return origin
+    }
+
+    /** A clone of `origin`'s master whose index bumps the root version to 0.2.2-rc.1 and stages `files`. */
+    function bumpedClone(origin: string, files: Record<string, string>, ...cloneArgs: string[]): string {
+      const root = fixtureRoot({})
+      git(root, 'clone', '-q', '--single-branch', ...cloneArgs, origin, '.')
+      writeFileSync(join(root, 'package.json'), `${JSON.stringify({ version: '0.2.2-rc.1' })}\n`)
+      writeGuides(root, files)
+      git(root, 'add', '-A')
+      return root
+    }
+
+    it('accepts guides added in the current directory, edits of released guides, and moves out of a released directory', () => {
+      const root = bumpedClone(originRoot(), { 'v0.2.2-rc.1/current/guide.md': VALID, 'v0.2.2-alpha.3/frozen/guide.md': `${VALID}edited\n` })
+      git(root, 'mv', 'docs/upgrade-guide/v0.2.2-alpha.3/moving', 'docs/upgrade-guide/v0.2.2-rc.1/moving')
+      expect(collectStaleUpgradeGuideAdditions(root, 'HEAD')).toEqual([])
+    })
+
+    it('rejects guides added in a released directory unless the release branch of their line has them', () => {
+      const root = bumpedClone(originRoot(), {
+        'v0.2.2-alpha.3/stale/guide.md': VALID,
+        'v0.2.1-rc.4/backport/guide.md': VALID,
+        'v0.2.1-rc.4/backport/guide.zh.md': VALID_ZH,
+        'v0.2.0-rc.2/no-branch/guide.md': VALID,
+        'README.md': VALID,
+      })
+      expect(collectStaleUpgradeGuideAdditions(root, 'HEAD')).toEqual([
+        'docs/upgrade-guide/v0.2.0-rc.2/no-branch/guide.md',
+        'docs/upgrade-guide/v0.2.1-rc.4/backport/guide.zh.md',
+        'docs/upgrade-guide/v0.2.2-alpha.3/stale/guide.md',
+      ].map(path => `${path}${MESSAGE}`))
+      expect(git(root, 'for-each-ref', 'refs/remotes/origin/release')).toBe('')
+    })
+
+    it('reads a release branch tip in a shallow clone, fetching it only when absent, without cutting the history it already has', () => {
+      const origin = originRoot()
+      git(origin, 'merge', '-q', '--no-edit', 'release/dsh-0.2.1')
+      commit(origin, '0.2.2-alpha.3', { 'v0.2.2-alpha.3/later/guide.md': VALID })
+      const root = bumpedClone(`file://${origin}`, { 'v0.2.1-rc.4/backport-again/guide.md': VALID }, '--depth=3')
+      const history = git(root, 'rev-list', 'HEAD')
+      expect(git(root, 'rev-parse', '--is-shallow-repository').trim()).toBe('true')
+      expect(collectStaleUpgradeGuideAdditions(root, 'HEAD')).toEqual([`docs/upgrade-guide/v0.2.1-rc.4/backport-again/guide.md${MESSAGE}`])
+      expect(git(root, 'rev-list', 'HEAD')).toBe(history)
+
+      git(origin, 'checkout', '-q', 'release/dsh-0.2.1')
+      commit(origin, '0.2.1-rc.5', { 'v0.2.1-rc.4/backport-again/guide.md': VALID })
+      expect(collectStaleUpgradeGuideAdditions(root, 'HEAD')).toEqual([])
+      expect(git(root, 'rev-list', 'HEAD')).toBe(history)
+    })
+
+    it('names the failing Git command for an unknown base', () => {
+      const root = bumpedClone(originRoot(), {})
+      expect(() => collectStaleUpgradeGuideAdditions(root, 'no-such-ref')).toThrow(/`git diff .* no-such-ref -- docs\/upgrade-guide` failed: /u)
+    })
   })
 })

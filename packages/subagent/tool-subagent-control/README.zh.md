@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-tool-subagent-control` 让 agent（智能体）按 Session id 发现和联系其 subagent（子智能体）树、中断后代，并等待自身下一步收件箱。默认情况下，一个插件实例注册全部四个工具；成员继承相同定义和顺序。
+`dsh-tool-subagent-control` 让 agent（智能体）按名称发现和联系其 subagent（子智能体）树、中断后代，并等待自身下一步收件箱。默认情况下，一个插件实例注册全部四个工具；成员继承相同定义和顺序。
 
 ## 目录
 
@@ -44,20 +44,20 @@ kind: "package-reference"
 
 ### send_message
 
-通过 `agent_id` 向同一 subagent 树中的另一个 agent 发送消息。调用方必须是在线根代理或驻留的可继续子代理。工作中的目标在下一步接收 Steer 输入；不活跃目标开始或恢复一个轮次。只恢复目标，其创建祖先保持离线。成功返回收件箱接受结果（`messageId`），不返回回复。自身、无关树、不支持的目标、未知 id、不可用历史和被拒绝的输入都会返回错误。
+向同一 subagent 树中的另一个 agent 发送消息。`agent` 接受 `list_agents` 中的名称：根为 `lead`，其他成员为完整名称，例如 `reviewer/checker`。不是树中名称的文本按 Session id 处理，因此 Session id 同样可用，包括以 Session id 列出的成员。调用方必须是在线根代理或驻留的可继续子代理。工作中的目标在下一步接收 Steer 输入；不活跃目标开始或恢复一个轮次。只恢复目标，其创建祖先保持离线。成功返回收件箱接受结果（`messageId`），不返回回复。自身、无关树、不支持的目标、未知名称或 id、不可用历史和被拒绝的输入都会返回错误。
 
 ### interrupt_agent
 
-`agent_id` 使用 Session id 指定后代。外部执行永久停止，不能接收后续消息。本地目标只停止当前轮次：排队消息保留到后续 `send_message`，后代继续运行，子级仍可接受后续任务。调用在停止请求被接受时返回，不等待目标静止；中断已结束代理是成功的空操作，自身、同级、过期或非祖先调用方会收到错误。
+`agent` 指定后代的方式与 `send_message` 指定目标的方式相同。外部执行永久停止，不能接收后续消息。本地目标只停止当前轮次：排队消息保留到后续 `send_message`，后代继续运行，子级仍可接受后续任务。调用在停止请求被接受时返回，不等待目标静止；中断已结束代理是成功的空操作，自身、同级、过期或非祖先调用方会收到错误。
 
 <a id="wait_agent"></a>
 ### wait_agent
 
-等待当前调用者的下一步收件箱。已有待处理输入时立即返回；之后到达的输入，包括消息、完成通知和用户引导，会结束等待。排队的下一轮消息、其他收件箱和 Agent 状态变化不会结束等待。任务变化不会结束等待。工具既不消费输入，也不启动 Agent。`timeout_ms` 默认为 30000，必须是 10000 至 3600000 的整数。结果仅含 `timedOut`；取消、调用者释放或插件卸载会拒绝等待。
+等待当前调用者的下一步收件箱。已有待处理输入时立即返回，除非同一次模型工具调用中先前的等待已报告过该输入，因此同一个 `run_code` 程序中的重复等待会阻塞直到有新输入或超时；之后到达的输入，包括消息、完成通知和用户引导，会结束等待。排队的下一轮消息、其他收件箱和 Agent 状态变化不会结束等待。任务变化不会结束等待。工具既不消费输入，也不启动 Agent。`timedOut: false` 表示有新输入待处理。待处理输入会在代码执行结束后交付给模型。`timeout_ms` 默认为 30000，必须是 10000 至 3600000 的整数。结果仅含 `timedOut`；取消、调用者释放或插件卸载会拒绝等待。
 
 ### list_agents
 
-按稳定前序列出根与所有可达的可继续后代，包括调用方。后代行包含直接父级 id 与相对根的深度。在线状态为 `running` 或 `inactive`。外部条目被省略，且不读取其子 Session；可读的一次性子级仍作为遍历节点。未知模式与不可读目录产生诊断。普通 Session 分叉形成独立的 subagent 树。
+按稳定前序列出根与所有可达的可继续后代，包括调用方。每行包含 `name`、`status`；根和可继续后代还包含 `description`。根的名称为 `lead`，描述为 `root agent`；后代的名称是其相对根的完整路径，描述是其创建标签。目录条目没有名称的子级及其下所有后代以 Session id 列出。在线状态为 `running` 或 `inactive`。外部条目被省略，且不读取其子 Session；可读的一次性子级仍作为遍历节点。未知模式与不可读目录产生状态为 `unsupported`、`corrupt` 或 `unavailable` 的行；该状态表示这一行自身的后代目录无法读取，该行本身仍可寻址。普通 Session 分叉形成独立的 subagent 树。
 
 -----
 
@@ -71,15 +71,15 @@ kind: "package-reference"
 
 ### 设计理念
 
-通信、中断和发现委派给 `ctx.subagents`；驻留、冷恢复和授权属于该服务。等待工具在启动定时器并检查待处理下一步输入前订阅当前调用者的收件箱事件，并在每次结束时移除监听器和定时器。
+通信、中断和发现委派给 `ctx.subagents`；驻留、冷恢复和授权属于该服务。消息和中断先通过 `ctx.subagents.resolveName()` 把 `agent` 映射为 Session id，该映射不授予权限；随后由服务对该 Session id 授权。等待工具在启动定时器并检查待处理下一步输入前订阅当前调用者的收件箱事件，并在每次结束时移除监听器和定时器。每次成功的等待会按 Agent 记录其报告的待处理 id 及其根工具调用；之后来自同一根调用的等待会忽略这些 id。
 
 ### 投递与信号所有权
 
-执行信号只负责收件箱接受前的工作。已接受的消息不能通过此工具撤回。每条消息以 `Agent <sender-id> sent a message:` 为前缀，并记录 `{ kind: 'agent-message', form: 'relay', senderSessionId: sender.id }`。树成员身份授予通信权限；subagent 树根管理运行时实例和容量。
+执行信号只负责收件箱接受前的工作。已接受的消息不能通过此工具撤回。每条消息以 `Agent <sender-name> sent a message:` 为前缀，并记录 `{ kind: 'agent-message', form: 'relay', senderSessionId: sender.id }`。树成员身份授予通信权限；subagent 树根管理运行时实例和容量。
 
 ### 列表投影
 
-`list_agents` 解析调用方的在线根，从根开始无游标遍历目录，并通过在线 Agent 注册表细化活动状态。未知模式附带诊断并继续遍历；不可读目录停止对应分支。可达目录之外的 Session 无法被发现。
+`list_agents` 解析调用方的在线根，从根开始无游标遍历目录，并通过在线 Agent 注册表细化活动状态。名称取自每个 `listDescendants()` 行的 `path`。未知模式附带诊断并继续遍历；不可读目录停止对应分支。可达目录之外的 Session 无法被发现。
 
 ### 源码地图
 
@@ -111,7 +111,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-生成的 [schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent-control) 定义按 id 寻址的通信与中断、整树发现，以及带 `timeout_ms` 的收件箱等待。`wait_agent` 在输入可用时返回 `{ "timedOut": false }`，超时时返回 `{ "timedOut": true }`。它不返回消息正文或其他成员活动诊断。
+生成的 [schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent-control) 定义按名称寻址的通信与中断、整树发现，以及带 `timeout_ms` 的收件箱等待。`wait_agent` 在输入可用时返回 `{ "timedOut": false }`，超时时返回 `{ "timedOut": true }`。它不返回消息正文或其他成员活动诊断。
 
 #### Token 影响
 
@@ -125,21 +125,32 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-必需的 `subagent:identity` 运行时上下文通过 Session id 标识每个 agent。委派子级会被明确标识为 subagent，并收到直接父级和根级 id。该上下文独立于 Team 模式和工具过滤；活动根缺失时会明确报告，但不阻止独立工作。活动根可用时，身份上下文会分别根据标准工具的获准情况提供通信与发现指引。自动结果交付仍由 subagent 服务负责。
+必需的 `subagent:identity` 运行时上下文按名称标识每个 agent。该上下文独立于 Team 模式和工具过滤。活动根可用时，身份上下文会分别根据标准工具的获准情况提供通信与发现指引。根看到 `You are the root agent. Your name is "lead".`，后接相同指引。活动根缺失时，上下文使用该 agent 的 Session id 明确报告，但不阻止独立工作。自动结果交付仍由 subagent 服务负责。根的子级名为 `reviewer`、两个工具均获准时，它看到：
+
+##### Subagent 身份
+
+```markdown
+You are a subagent delegated by agent "lead".
+Your name is "reviewer".
+The root agent of your collaboration tree is "lead".
+
+To message other agents, use send_message({ agent: "<agent-name>", message: "..." }).
+Use list_agents({}) to find your collaborator agents and their names.
+```
 
 #### Token 影响
 
-每个 agent 接收一条简短上下文，长度与树规模无关。
+每个 agent 接收一条简短上下文，长度与树规模无关；完整名称随嵌套深度变长。
 
 #### KV Cache 影响
 
-身份与通信指引作为持久记录的运行时上下文位于继承历史之后，共享系统提示词和工具定义不变。设置 `includeRuntimeContext: false` 后，该必需上下文仍会提供，并会在压缩后恢复。Team 模式不会改变它。
+身份与通信指引作为持久记录的运行时上下文位于继承历史之后，共享系统提示词和工具定义不变。保留快照中的身份文本与当前文本不同时，会追加一份当前运行时上下文快照。设置 `includeRuntimeContext: false` 后，该必需上下文仍会提供，并会在压缩后恢复。Team 模式不会改变它。
 
 ### 中断结果
 
 #### 模型看到什么
 
-接受时返回 `interrupt requested for agent <agent_id>`。未授权的调用方——self、sibling、陈旧或非 ancestor——会成为指明拒绝原因的出错结果；目标不存在或已结算仍渲染接受行。
+接受时返回 `interrupt requested for agent <agent>`，回显 `agent` 参数。未授权的调用方——self、sibling、陈旧或非 ancestor——会成为指明拒绝原因的出错结果；目标不存在或已结算仍渲染接受行。
 
 #### Token 影响
 
@@ -153,11 +164,11 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-接受时返回 `message delivered to agent <id>`；规范输出携带已接受的 `messageId`。目标不属于调用方的 subagent 树或输入被拒绝时，返回错误结果。
+接受时返回 `message delivered to agent <agent>`，回显 `agent` 参数；规范输出携带已接受的 `messageId`。目标不属于调用方的 subagent 树或输入被拒绝时，返回错误结果。
 
 #### Token 影响
 
-每次调用返回一条简短确认；回复通过单独指定收件人的消息到达。使用 `list_agents` 中的 id 向 subagent 树内成员发送后续消息。
+每次调用返回一条简短确认；回复通过单独指定收件人的消息到达。使用 `list_agents` 中的名称向 subagent 树内成员发送后续消息。
 
 #### KV Cache 影响
 
@@ -167,11 +178,11 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-首行为 `<id> [<status>] — root agent`。各可继续后代随后显示为 `<id> [<status>] parent=<id> depth=<n> — <label>`。根使用 `kind: root`；后代相对该根使用 `kind: child`。诊断显示为 `<id> [diagnostic: <reason>] parent=<id> depth=<n>`。状态描述轮次活动，不表示任务完成、成功或失败。
+每行显示为 `<name> [<status>] — <description>`；没有描述时显示为 `<name> [<status>]`。首行为 `lead [<status>] — root agent`；随后是可继续后代，例如 `reviewer/checker [inactive] — Check the diff`。不可读分支显示为 `<name> [corrupt]`、`<name> [unsupported]` 或 `<name> [unavailable]`。规范值是 `{ name, status, description? }` 数组。状态描述轮次活动，不表示任务完成、成功或失败。
 
 #### Token 影响
 
-随整棵 subagent 树列出的行数线性增长。没有游标或上限。
+随整棵 subagent 树列出的行数线性增长。没有游标或上限。行不携带父级 id 或深度；完整名称已包含这两项信息。
 
 #### KV Cache 影响
 
@@ -187,6 +198,7 @@ kind: "package-reference"
 - **已投递消息没有独立结果**——接受时只返回其 inbox `messageId`；目标后续工作会落入该目标的持久化会话，绝不会通过本工具收集。回复是另一条显式指定地址的 `send_message`，而非本次调用的结果。
 - **消息需要在线 subagent 树根**——中间创建者可以离线。仅恢复目标，占用一个共享容量名额。无关树、外部目标与一次性目标不能接收消息。
 - **列表是快照，而非投递承诺**——它可能与发布、dispose（资源释放）或后续消息发生竞态，另一个进程也可能激活当前进程报告为 `inactive` 的子级；跨进程准确性需要共享租约。`interrupt_agent` 自己执行权威的在线 lineage 检查，因此过期的发现结果不会授予权限。
+- **编辑已报告的输入不会结束等待**——替换待处理消息会保留其 id，因此在同一次模型工具调用中，已报告过该消息的等待会继续挂起；编辑后的内容仍会在下一步送达模型。
 - **没有分页或删除**——系统返回完整且稳定排序的集合；只要子级会话仍在持久化存储中，它就会继续出现在列表中，服务级上限或删除操作留待后续产品决策。
 
 <a id="dev-note"></a>

@@ -43,3 +43,8 @@ it('runs the local preflight before dependency installation in both self-hosted 
     expect(section.indexOf('node apps/desktop/scripts/preflight-desktop-publish-local.mjs')).toBeLessThan(section.indexOf('pnpm install --frozen-lockfile'))
   }
 })
+
+it('rejects missing website preparation outputs before reading local configuration', async () => {
+  await expect(preflightDesktopPublishLocal({ DSH_PACKAGING_CONFIG_DIR: tmpdir(), DESKTOP_PUBLISH_ROUTE: '' }))
+    .rejects.toThrow('selected package must identify a positive run ID and attempt')
+})

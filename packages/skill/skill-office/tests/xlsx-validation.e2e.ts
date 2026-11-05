@@ -9,8 +9,7 @@ import { runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
 import { readImageFile } from '@deepseek-ai/dsh-attachment-local'
 import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
-import { expectNoRenderContext, officeModelPatches } from './fixtures/real-office.ts'
-import { renderCliFixture } from './fixtures/render-cli.ts'
+import { expectNoRenderContext, officeCalls, officeModelPatches, officeToolPatches } from './fixtures/real-office.ts'
 
 const repo = fileURLToPath(new URL('../../../../', import.meta.url))
 const assetRoot = fileURLToPath(new URL('../assets/', import.meta.url))
@@ -25,8 +24,8 @@ s = w.active
 s.title = 'Revenue'
 for row in [('Quarterly revenue', 'Amount'), ('Q1', 12), ('Q2', 18)]:
     s.append(row)
-s.column_dimensions['A'].width = 5 if sys.argv[1] in ('layout', 'blank') else 24
-s.column_dimensions['B'].width = 5 if sys.argv[1] in ('layout', 'blank') else 12
+s.column_dimensions['A'].width = 5 if sys.argv[1] == 'layout' else 24
+s.column_dimensions['B'].width = 5 if sys.argv[1] == 'layout' else 12
 w.create_sheet('Notes')['A1'] = 'Preserve this note'
 w.save('input.xlsx')
 `
@@ -55,11 +54,6 @@ const cases = [
     task: 'Fix the cramped layout of Revenue!A1:B3: make the column headers fully readable and the amounts easy to read. Adjust column widths and header styling, then visually inspect the final affected range.',
     kind: 'layout',
   },
-  {
-    name: 'blank previews end visual checking without changing print settings',
-    task: 'Fix the cramped layout of Revenue!A1:B3: make the column headers fully readable and the amounts easy to read. Adjust column widths and header styling, then visually inspect the final affected range.',
-    kind: 'blank',
-  },
 ] as const
 
 describe.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each(['native', 'ptc'])('Excel validation scope (%s)', (mode) => {
@@ -67,7 +61,6 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each(['native', 'ptc'
     let events: SessionEvent[] = []
     let original: Buffer | undefined
     let previewHasContent = false
-    let fixtureCalls: { args: string[]; status: number | null }[] = []
     const controlRoot = await mkdtemp(join(tmpdir(), 'dsh-xlsx-control-test-'))
     onTestFinished(() => rm(controlRoot, { recursive: true, force: true }))
     const configPath = join(controlRoot, 'office.patch.json')
@@ -96,10 +89,9 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each(['native', 'ptc'
       async prepare(cwd) {
         await execa(python!, ['-c', seed, kind], { cwd })
         original = await readFile(join(cwd, 'input.xlsx'))
-        const fixture = kind === 'blank' || kind === 'formula'
-          ? await renderCliFixture(controlRoot, python!, kind === 'blank') : undefined
         await writeFile(configPath, JSON.stringify([
-          { insert: [{ id: 'skill-office', name: '@deepseek-ai/dsh-skill-office', config: { assetRoot, node: process.execPath, ...fixture ? { cli: fixture.cli } : {} } }] },
+          { insert: [{ id: 'skill-office', name: '@deepseek-ai/dsh-skill-office', config: { assetRoot } }] },
+          ...officeToolPatches(),
           { insert: [{ id: 'workspace-dependencies', name: '@deepseek-ai/dsh-tool-workspace-dependencies', config: { source: runtime! } }] },
           ...officeModelPatches(),
           { id: 'attachment-local', config: { dshHome: imageRoot } },
@@ -126,7 +118,7 @@ assert w.sheetnames == ['Revenue', 'Notes']
 assert w['Notes']['A1'].value == 'Preserve this note'
 assert s['B3'].value == 18
 kind = '${kind}'
-if kind in ('layout', 'blank'):
+if kind == 'layout':
     assert s['B2'].value == 12
     assert s.column_dimensions['A'].width > 5
     assert s.column_dimensions['B'].width > 5
@@ -145,28 +137,11 @@ else:
         assert load_workbook('result.xlsx', data_only=True)['Revenue']['B4'].value == 38
 `], { cwd })
         expect(verified.exitCode).toBe(0)
-        if (kind === 'blank' || kind === 'formula') {
-          fixtureCalls = (await readFile(join(controlRoot, '.fixture/calls.jsonl'), 'utf8')).trim().split('\n')
-            .map(line => JSON.parse(line) as { args: string[]; status: number | null })
-          if (kind === 'blank') expect(fixtureCalls.some(call => call.args[0] === 'convert')).toBe(false)
-          else expect(fixtureCalls.some(call => call.args[0] === 'recalculate' && call.status === 0)).toBe(true)
-        }
+        if (kind === 'formula') expect(officeCalls(events).some(call => call.name === 'office_recalculate')).toBe(true)
         const imageBlocks = events.flatMap(event => event.type === 'tool/result'
           ? event.data.message.content.filter(block => block.type === 'image')
           : event.type === 'user/message' && event.data.source.kind === 'ptc-mode'
             ? event.data.content.filter(block => block.type === 'image') : [])
-        if (kind === 'layout' && imageBlocks.length === 0) {
-          const kit = fileURLToPath(import.meta.resolve('@deepseek-ai/libreoffice-kit/cli'))
-          const previewDir = join(cwd, '.verification-preview')
-          await execa(process.execPath, [kit, 'render', '--input', join(cwd, 'result.xlsx'),
-            '--output-dir', previewDir, '--sheet', 'Revenue', '--range', 'A1:B3'], { cwd })
-          const pngs = (await readdir(previewDir, { recursive: true })).filter(path => path.endsWith('.png'))
-          expect(pngs.length).toBeGreaterThan(0)
-          for (const path of pngs) {
-            const pixels = await execa(python!, ['-c', previewPixels], { input: await readFile(join(previewDir, path)) })
-            previewHasContent ||= pixels.stdout === 'content'
-          }
-        }
         for (const block of imageBlocks) {
           const stored = await readImageFile(join(imageRoot, 'attachments/v1'), block.attachment)
           const pixels = await execa(python!, ['-c', previewPixels], { input: Buffer.from(stored.data) })
@@ -186,16 +161,11 @@ else:
         ? answer.data.message.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n').slice(0, 800) : undefined })
     expect(loaded, diagnostic).toContain('office-xlsx')
     expect(calls.some(call => call.name === 'load_workspace_dependencies'), diagnostic).toBe(true)
-    if (kind === 'formula') {
-      expect(loaded, diagnostic).toContain('office-recalculate')
-    }
-    if (kind === 'layout' || kind === 'blank') {
-      expect(calls.some(call => call.name === 'skill' && call.arguments.includes('office-render'))).toBe(true)
-      expect(commands).toMatch(/\srender\b/u)
-      expect(commands).toContain('--sheet')
-      expect(commands).toContain('--range')
-      expect(commands).not.toMatch(/\sconvert\b/u)
-      const reads = calls.filter(call => call.name === 'read_image')
+    if (kind === 'layout') {
+      const office = officeCalls(events)
+      expect(office.some(call => call.name === 'office_render' && 'sheet' in call.args && 'range' in call.args), diagnostic).toBe(true)
+      expect(office.some(call => call.name === 'office_convert'), diagnostic).toBe(false)
+      const reads = calls.filter(call => call.name === 'office_render')
       const results = events.flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
       if (previewHasContent) {
         expect(reads.length).toBeGreaterThan(0)
@@ -206,7 +176,6 @@ else:
             && event.data.content.some(block => block.type === 'image'))
         expect(visibleImage).toBe(true)
       }
-      if (kind === 'blank') expect(previewHasContent).toBe(false)
       if (!previewHasContent) {
         const answer = events.findLast(event => event.type === 'assistant/message')
         if (answer?.type !== 'assistant/message') throw new Error('Agent did not finish with an answer')
@@ -215,16 +184,10 @@ else:
         expect(text).toMatch(/visual (?:inspection|check)[^.!?]{0,100}(?:not completed|incomplete|could not be completed|unverified)/iu)
         expect(text).not.toMatch(/visually (?:verified|validated|confirmed)|visual (?:check|inspection) (?:passed|successful)/iu)
         expect(reads.length).toBeLessThanOrEqual(1)
-        if (kind === 'blank') {
-          const firstBlank = fixtureCalls.findIndex(call => call.args[0] === 'render' && call.status === 0)
-          expect(firstBlank, JSON.stringify(fixtureCalls)).toBeGreaterThanOrEqual(0)
-          expect(fixtureCalls.slice(firstBlank + 1).filter(call => call.args[0] === 'render'), JSON.stringify(fixtureCalls)).toEqual([])
-        }
       }
     } else {
       expectNoRenderContext(events)
-      expect(calls.some(call => call.name === 'read_image')).toBe(false)
-      expect(calls.some(call => call.name === 'skill' && call.arguments.includes('office-render'))).toBe(false)
+      expect(officeCalls(events).some(call => call.name === 'office_render')).toBe(false)
       expect(commands).not.toMatch(/(?<![\w/.-])(?:render|convert)(?![\w/.-])|\.pdf\b|\.png\b/iu)
       const answer = events.findLast(event => event.type === 'assistant/message')
       if (answer?.type !== 'assistant/message') throw new Error('Agent did not finish with an answer')

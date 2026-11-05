@@ -44,7 +44,7 @@ const TEAM_TOOLS = [
   'team_task_list',
   'team_task_update',
 ]
-const leadIdentity = (agent: Agent): string => `You are the root agent. Your agent id is ${JSON.stringify(agent.id)}.`
+const leadIdentity = (_agent: Agent): string => 'You are the root agent. Your name is "lead".'
 
 const roots: string[] = []
 const contexts = new Set<Context>()
@@ -161,8 +161,8 @@ function teamTools(assembled: Awaited<ReturnType<typeof assembly>>): string[] {
   return assembled.tools.map(schema => schema.name).filter(name => TEAM_TOOLS.includes(name)).sort()
 }
 
-function agentIdentity(id: SessionId, parentId: SessionId, rootId: SessionId): string {
-  return `You are a subagent delegated by agent ${JSON.stringify(parentId)}.\nYour agent id is ${JSON.stringify(id)}.\nThe root agent of your collaboration tree is ${JSON.stringify(rootId)}.`
+function agentIdentity(name: string, parentName = 'lead'): string {
+  return `You are a subagent delegated by agent ${JSON.stringify(parentName)}.\nYour name is ${JSON.stringify(name)}.\nThe root agent of your collaboration tree is "lead".`
 }
 
 async function runTurn(agent: Agent, text: string): Promise<void> {
@@ -214,6 +214,26 @@ describe('dsh-tool-team', () => {
     expect((await stored.read()).events.filter(event => event.type === 'team/task')).toHaveLength(1)
   })
 
+  it('accepts and reports task owners by agent name', async () => {
+    const { ctx, lead } = await setup(['hang'])
+    const childActivation = await spawn(ctx, lead, 'worker', 'stay running')
+    await waitRunning(ctx, childActivation.childId)
+    const task = await ctx.agentTeams.createTask(lead, { subject: 'work', description: 'assign by name' })
+    const reassigned = await execute(ctx, lead, 'team_task_update', {
+      task_id: task.id, expected_revision: task.revision, action: 'reassign', owner: childActivation.name,
+    })
+    expect(JSON.parse(text(reassigned))).toMatchObject({ owner: 'agent-1' })
+    expect(JSON.parse(text(reassigned))).not.toHaveProperty('ownerId')
+    expect(ctx.agentTeams.getTask(lead, task.id)).toMatchObject({ ownerId: childActivation.childId, ownerName: 'agent-1' })
+    expect(JSON.parse(text(reassigned))).not.toHaveProperty('ownerName')
+    expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', { owner: 'agent-1' }))))
+      .toMatchObject({ tasks: [{ id: task.id, owner: 'agent-1' }] })
+    expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', { owner: 'lead' })))).toEqual({ tasks: [] })
+    expect(JSON.parse(text(await execute(ctx, lead, 'team_task_get', { task_id: task.id })))).toMatchObject({ owner: 'agent-1' })
+    await childActivation.dispose()
+    await waitNoAgent(ctx, childActivation.childId)
+  })
+
   it('keeps Team tools local when an external activation starts and settles', async () => {
     const { ctx, lead } = await setup([])
     const externalId = SessionId('team-external-result')
@@ -244,7 +264,7 @@ describe('dsh-tool-team', () => {
     const leadAssembly = await assembly(ctx, lead)
     expect(teamTools(leadAssembly)).toEqual(TEAM_TOOLS)
     const leadPrompt = renderPrompt(leadAssembly)
-    expect(leadPrompt).toContain('A shared task board is available in this session')
+    expect(leadPrompt).toContain('Agent Teams is available in this session')
     expect(leadPrompt).toContain('Task readiness never starts an owner')
     expect(leadPrompt).toContain('Task changes do not end wait_agent calls')
     expect(renderContextSnapshot(leadAssembly)).toContain(leadIdentity(lead))
@@ -259,12 +279,12 @@ describe('dsh-tool-team', () => {
     const namedId = namedActivation.childId
     const unnamedActivation = await spawn(ctx, lead, undefined, 'stay available too')
     const unnamedId = unnamedActivation.childId
-    for (const id of [namedId, unnamedId]) {
-      const child = await waitRunning(ctx, id)
+    for (const activation of [namedActivation, unnamedActivation]) {
+      const child = await waitRunning(ctx, activation.childId)
       const childAssembly = await assembly(ctx, child)
       expect(teamTools(childAssembly)).toEqual(TEAM_TOOLS)
       expect(renderPrompt(childAssembly)).toBe(leadPrompt)
-      expect(renderContextSnapshot(childAssembly)).toContain(agentIdentity(child.id, lead.id, lead.id))
+      expect(renderContextSnapshot(childAssembly)).toContain(agentIdentity(activation.name))
       expect(ctx.tools.get('send_message', scopeOf(child.ctx))).toBe(ctx.tools.get('send_message'))
     }
     await namedActivation.dispose()
@@ -292,10 +312,10 @@ describe('dsh-tool-team', () => {
     } else {
       expect(JSON.stringify(childRequest.messages)).not.toContain('Parent task')
     }
-    expect(runtimeContextText(adapter.requests[1]!)).toContain(agentIdentity(childId, lead.id, lead.id))
+    expect(runtimeContextText(adapter.requests[1]!)).toContain(agentIdentity('agent-1'))
   })
 
-  it('appends the new Lead id after inherited history in an ordinary fork', async () => {
+  it('reuses the inherited Lead identity in an ordinary fork', async () => {
     const { ctx, lead, adapter } = await setup([textResponse('parent answer'), textResponse('fork answer')])
     await runTurn(lead, 'Parent task')
     const seed = lead.session.snapshotEvents()
@@ -316,7 +336,8 @@ describe('dsh-tool-team', () => {
     expect(childRequest.messages.slice(0, parentRequest.messages.length)).toEqual(parentRequest.messages)
     expect(childRequest.messages.at(-1)?.content).toContainEqual({ type: 'text', text: 'Continue independently' })
     expect(runtimeContextText(adapter.requests[1]!)).toContain(leadIdentity(handle.agent))
-    expect(JSON.stringify(childRequest.messages)).not.toContain('system-reminder')
+    expect(handle.agent.session.snapshotEvents().slice(seed.length).filter(event =>
+      event.type === 'user/message' && event.data.source.kind === 'runtime-context')).toHaveLength(0)
     expect(handle.agent.session.snapshotEvents().slice(0, seed.length)).toEqual(seed)
     expect(ctx.subagents.rootOf(handle.agent)).toBe(handle.agent)
     await handle.dispose()
@@ -334,7 +355,7 @@ describe('dsh-tool-team', () => {
       meta: { parentSession: child.agent.id, origin: 'subagent' },
       setup: (_ctx, agent) => { bindSubagentActivation(ctx, agent, lead, [lead.id, child.agent.id]) },
     })
-    expect(renderContextSnapshot(await assembly(ctx, nested.agent))).toContain(agentIdentity(nested.agent.id, child.agent.id, lead.id))
+    expect(renderContextSnapshot(await assembly(ctx, nested.agent))).toContain(agentIdentity(nested.agent.id, child.agent.id))
     expect(renderContextSnapshot(await assembly(ctx, nested.agent))).not.toContain(`The root agent of your collaboration tree is ${JSON.stringify(child.agent.id)}.`)
   })
 
@@ -398,7 +419,7 @@ describe('dsh-tool-team', () => {
     for (const request of adapter.requests.filter(request => request.sessionId === childId)) {
       const snapshots = request.messages.filter(message => message.source?.kind === 'runtime-context')
       expect(snapshots).toHaveLength(1)
-      expect(runtimeContextText(request)).toContain(agentIdentity(childId, lead.id, lead.id))
+      expect(runtimeContextText(request)).toContain(agentIdentity('agent-1'))
     }
     await using persisted = await ctx.sessionPersistence.open(childId, 'read')
     const { events } = await persisted.read()
@@ -413,7 +434,7 @@ describe('dsh-tool-team', () => {
     const childId = childActivation.childId
     await waitNoAgent(ctx, childId)
     expect(renderContextSnapshot(await assembly(ctx, lead))).toContain(leadIdentity(lead))
-    expect(runtimeContextText(adapter.requests[0]!)).toContain(agentIdentity(childId, lead.id, lead.id))
+    expect(runtimeContextText(adapter.requests[0]!)).toContain(agentIdentity('agent-1'))
   })
 
   it('keeps ordinary inbox waiting when the task plugin unloads', async () => {
@@ -451,7 +472,7 @@ describe('dsh-tool-team', () => {
       expected_revision: task.revision,
       action: 'claim',
     })
-    expect(JSON.parse(text(claimed))).toMatchObject({ status: 'in_progress', ownerId: childId })
+    expect(JSON.parse(text(claimed))).toMatchObject({ status: 'in_progress', owner: 'agent-1' })
     const stale = await execute(ctx, lead, 'team_task_update', {
       task_id: task.id,
       expected_revision: task.revision,
@@ -500,7 +521,7 @@ describe('dsh-tool-team', () => {
       status: 'in_progress', owner: lead.id, cursor: 0, limit: 1,
     })))).toMatchObject({ tasks: [{ id: first.id }] })
     expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', {
-      owner: 'unowned', limit: 1,
+      unowned: true, limit: 1,
     })))).toMatchObject({ tasks: [{ id: second.id }] })
     expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', {
       cursor: 0, limit: 1,
@@ -551,7 +572,46 @@ describe('dsh-tool-team', () => {
     await waitNoAgent(ctx, childId)
   })
 
-  it('returns a historical task owner by its Session id', async () => {
+  it('distinguishes an agent named unowned from tasks without an owner', async () => {
+    const { ctx, lead } = await setup(['hang'])
+    const child = await ctx.subagents.startActivation({
+      provider: 'spawn', name: 'unowned', label: 'Worker', parent: lead,
+      prompt: [{ type: 'text', text: 'wait' }], signal: SIGNAL, delivery: 'caller',
+    })
+    await waitRunning(ctx, child.childId)
+    const assigned = await ctx.agentTeams.createTask(lead, { subject: 'Assigned', description: 'Owned work' })
+    const pending = await ctx.agentTeams.createTask(lead, { subject: 'Pending', description: 'Unowned work' })
+    const result = await execute(ctx, lead, 'team_task_update', {
+      task_id: assigned.id, expected_revision: assigned.revision, action: 'reassign', owner: 'unowned',
+    })
+    expect(result.isError, text(result)).toBe(false)
+    expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', { owner: 'unowned' })))).toMatchObject({ tasks: [{ id: assigned.id }] })
+    expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', { unowned: true })))).toMatchObject({ tasks: [{ id: pending.id }] })
+    expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', { unowned: false })))).toMatchObject({ tasks: [{ id: assigned.id }] })
+    expect((await execute(ctx, lead, 'team_task_list', { owner: 'unowned', unowned: true })).isError).toBe(true)
+    await child.dispose()
+  })
+
+  it('reads and edits saved owner names without traversing descendant Sessions', async () => {
+    const { ctx, lead } = await setup([])
+    const created = await ctx.agentTeams.createTask(lead, { subject: 'Review', description: 'Saved ownership' })
+    const { ready: _ready, writeScopeWarnings: _warnings, ...saved } = created
+    lead.session.append('team/task', {
+      version: 2, teamId: TeamId(lead.id),
+      task: { ...saved, revision: 2, ownerId: SessionId('cold-worker'), ownerName: 'reviewer/checker' },
+    })
+    const lookup = vi.spyOn(ctx.subagents, 'listDescendants').mockRejectedValue(new Error('catalog unavailable'))
+    expect(JSON.parse(text(await execute(ctx, lead, 'team_task_get', { task_id: created.id })))).toMatchObject({ owner: 'reviewer/checker' })
+    expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', {})))).toMatchObject({ tasks: [{ owner: 'reviewer/checker' }] })
+    const edited = await execute(ctx, lead, 'team_task_update', {
+      task_id: created.id, expected_revision: 2, action: 'edit', subject: 'Edited',
+    })
+    expect(edited.isError, text(edited)).toBe(false)
+    expect(JSON.parse(text(edited))).toMatchObject({ subject: 'Edited', owner: 'reviewer/checker' })
+    expect(lookup).not.toHaveBeenCalled()
+  })
+
+  it('names a historical task owner by its Session id', async () => {
     const { ctx, lead } = await setup([])
     const task = await ctx.agentTeams.createTask(lead, { subject: 'Review', description: 'Read old ownership' })
     const { ready: _ready, writeScopeWarnings: _warnings, ...saved } = task
@@ -560,10 +620,10 @@ describe('dsh-tool-team', () => {
       task: { ...saved, revision: 2, ownerId: SessionId('missing-worker') },
     })
     expect(JSON.parse(text(await execute(ctx, lead, 'team_task_get', { task_id: task.id }))))
-      .toMatchObject({ ownerId: 'missing-worker' })
+      .toMatchObject({ owner: 'missing-worker' })
   })
 
-  it('edits a task owner without traversing unreadable child catalogs', async () => {
+  it('edits a task whose historical owner is outside the readable catalogs', async () => {
     const { ctx, lead } = await setup([])
     const created = await ctx.agentTeams.createTask(lead, { subject: 'Review', description: 'Read old ownership' })
     const { ready: _ready, writeScopeWarnings: _warnings, ...saved } = created
@@ -580,7 +640,7 @@ describe('dsh-tool-team', () => {
       task_id: task.id, expected_revision: task.revision, action: 'edit', subject: 'Edited',
     })
     expect(result.isError).toBe(false)
-    expect(JSON.parse(text(result))).toMatchObject({ subject: 'Edited', ownerId: 'unobserved-worker' })
+    expect(JSON.parse(text(result))).toMatchObject({ subject: 'Edited', owner: 'unobserved-worker' })
     expect(ctx.agentTeams.getTask(lead, task.id)).toMatchObject({ subject: 'Edited', revision: task.revision + 1 })
     expect(lead.session.ownEvents().filter(event => event.type === 'team/task')).toHaveLength(3)
   })
@@ -598,7 +658,7 @@ describe('dsh-tool-team', () => {
       task_id: created.id, expected_revision: created.revision, action: 'reassign',
       owner: id,
     })).isError).toBe(true)
-    expect((await execute(ctx, lead, 'send_message', { agent_id: id, message: 'hello' })).isError).toBe(true)
+    expect((await execute(ctx, lead, 'send_message', { agent: id, message: 'hello' })).isError).toBe(true)
     expect((await execute(ctx, lead, 'team_task_update', {
       task_id: created.id, expected_revision: 2, action: 'reassign', owner: 'missing',
     })).isError).toBe(true)
@@ -623,7 +683,7 @@ describe('dsh-tool-team', () => {
       const assembled = await assembly(ctx, agent)
       expect(teamTools(assembled)).toEqual(TEAM_TOOLS)
       expect(assembled.contexts.filter(context => context.name === 'subagent:identity')).toHaveLength(1)
-      expect(renderContextSnapshot(assembled)).toContain(agent === lead ? leadIdentity(lead) : agentIdentity(childId, lead.id, lead.id))
+      expect(renderContextSnapshot(assembled)).toContain(agent === lead ? leadIdentity(lead) : agentIdentity('agent-1'))
     }
     expect(child.status).toBe('running')
     await childActivation.dispose()
@@ -783,7 +843,7 @@ describe('dsh-tool-team', () => {
     for (const agent of [lead, child]) {
       const built = await assembly(ctx, agent)
       expect(teamTools(built)).toEqual([])
-      expect(renderPrompt(built)).not.toContain('A shared task board is available')
+      expect(renderPrompt(built)).not.toContain('Agent Teams is available')
     }
     expect(ctx.agents.get(child.id)).toBe(child)
     expect(() => ctx.agentTeams.listTasks(child)).toThrow('enable Agent Teams')
@@ -818,7 +878,7 @@ describe('dsh-tool-team', () => {
       expect(tools.filter(tool => !TEAM_TOOLS.includes(tool.name))).toEqual(ordinaryTools)
       const system = request.messages.find(message => message.role === 'system')
       const prompt = system?.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
-      expect(prompt?.includes('A shared task board is available')).toBe(enabled)
+      expect(prompt?.includes('Agent Teams is available')).toBe(enabled)
       expect(prompt?.includes('record expected write scopes on shared tasks')).toBe(enabled)
       expect(runtimeContextText(request)).toContain(leadIdentity(lead))
       const contexts = request.messages.findLast(message => message.source?.kind === 'runtime-context')?.source
@@ -855,7 +915,7 @@ describe('dsh-tool-team', () => {
       await disabling
       const built = await assembly(ctx, lead)
       expect(teamTools(built)).toEqual([])
-      expect(renderPrompt(built)).not.toContain('A shared task board is available')
+      expect(renderPrompt(built)).not.toContain('Agent Teams is available')
       expect(renderContextSnapshot(built)).toContain(leadIdentity(lead))
     } finally {
       release.resolve(undefined)
@@ -873,11 +933,11 @@ describe('dsh-tool-team', () => {
     lead.ctx.tools.restrict({ deny: TEAM_TOOLS })
     const built = await assembly(ctx, lead)
     expect(teamTools(built)).toEqual([])
-    expect(renderPrompt(built)).toContain('A shared task board is available')
+    expect(renderPrompt(built)).toContain('Agent Teams is available')
     expect(renderContextSnapshot(built)).toContain(leadIdentity(lead))
     await ctx.agentTeams.setEnabled(lead, false)
     const disabled = await assembly(ctx, lead)
-    expect(renderPrompt(disabled)).not.toContain('A shared task board is available')
+    expect(renderPrompt(disabled)).not.toContain('Agent Teams is available')
     expect(renderContextSnapshot(disabled)).toContain(leadIdentity(lead))
   })
 
@@ -917,7 +977,7 @@ describe('dsh-tool-team', () => {
     await ctx.subagents.sendMessage(lead, childId, [{ type: 'text', text: 'resume with Team scope' }], { signal: SIGNAL })
     const resumed = await waitRunning(ctx, childId)
     expect(teamTools(await assembly(ctx, resumed))).toEqual(TEAM_TOOLS)
-    expect(renderContextSnapshot(await assembly(ctx, resumed))).toContain(agentIdentity(childId, lead.id, lead.id))
+    expect(renderContextSnapshot(await assembly(ctx, resumed))).toContain(agentIdentity('agent-1'))
     const childRequests = () => adapter.requests.filter(request => request.sessionId === childId)
     await vi.waitFor(() => { expect(childRequests()).toHaveLength(2) })
     const firstMessages = childRequests()[0]!.messages
@@ -976,9 +1036,9 @@ describe('dsh-tool-team', () => {
 
   it('omits Team guidance when its root is unavailable', async () => {
     const { ctx, lead } = await setup([])
-    vi.spyOn(ctx.subagents, 'rootOf').mockImplementation(() => {
-      throw new SubagentError('Team root is unavailable', 'UNAUTHORIZED')
-    })
+    const unavailable = (): never => { throw new SubagentError('Team root is unavailable', 'UNAUTHORIZED') }
+    vi.spyOn(ctx.subagents, 'rootOf').mockImplementation(unavailable)
+    vi.spyOn(ctx.subagents, 'namesOf').mockImplementation(unavailable)
     const context = renderContextSnapshot(await assembly(ctx, lead))
     expect(context).toContain('Your subagent tree root is unavailable. Continue independent work;')
     expect(context).not.toContain('You are a teammate in the Team')

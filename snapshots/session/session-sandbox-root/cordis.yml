@@ -7,7 +7,6 @@
   config:
     mode: !!js "process.env.DSH_PERMISSION_MODE ?? (process.env.DSH_SNAPSHOT === undefined ? 'workspace-write' : 'danger-full-access')"
     workspaceRoot: /tmp
-    additionalWritableRoots: !!js "[process.cwd() + '/extra']"
 
 - id: headless-runner
   inject: [headlessStartup]
@@ -16,3 +15,7 @@
     sessionId: !!js ctx.headlessStartup.sessionId
     json: !!js ctx.headlessStartup.json
     permissionMode: workspace-write
+
+- insert:
+    - id: session-write-grant
+      name: '../../../packages/test-support/session-snapshot/tests/fixtures/session-write-grant.ts'

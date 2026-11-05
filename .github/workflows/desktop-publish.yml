@@ -9,6 +9,16 @@ on:
         description: '打包运行 ID：填写成功的 Package Desktop run ID；发布环境和 release ID 沿用原包'
         type: string
         required: true
+      staging_percentage:
+        description: '更新灰度比例：0–100 整数，默认 100；留空沿用包内值，作用于原包所属渠道'
+        type: string
+        required: false
+        default: '100'
+      upload_website:
+        description: '同时上传官网安装包并刷新缓存（仅 production）；取消后仅执行版本与自动更新发布'
+        type: boolean
+        default: true
+        required: true
       package_run_attempt:
         description: '打包尝试次数：留空选择最新一次，且必须成功；失败时不会回退到旧包'
         type: string
@@ -57,9 +67,14 @@ jobs:
       route: ${{ steps.local.outputs.route }}
       preset: ${{ steps.local.outputs.preset }}
       approval: ${{ steps.check.outputs.approval }}
+      website-approval: ${{ steps.check.outputs.website-approval }}
+      website-destination: ${{ steps.check.outputs.website-destination }}
       label: ${{ steps.check.outputs.label }}
     env:
+      DESKTOP_STAGING_PERCENTAGE: ${{ inputs.staging_percentage }}
       DESKTOP_PACKAGE_SELECTION: ${{ needs.route.outputs.selection }}
+      DESKTOP_UPLOAD_WEBSITE: ${{ inputs.upload_website }}
+      DOWNLOAD_PROD_EO_ZONE_ID: ${{ vars.DOWNLOAD_PROD_EO_ZONE_ID }}
       DSH_TELEMETRY_DISABLED: '1'
     steps:
       - uses: actions/checkout@v7.0.1
@@ -102,6 +117,7 @@ jobs:
       cancel-in-progress: false
     timeout-minutes: 90
     env:
+      DESKTOP_STAGING_PERCENTAGE: ${{ inputs.staging_percentage }}
       DESKTOP_APPROVED_PACKAGE: ${{ needs.prepare.outputs.approval }}
       DESKTOP_PUBLISH_ROUTE: ${{ needs.prepare.outputs.route }}
       DSH_TELEMETRY_DISABLED: '1'
@@ -151,10 +167,101 @@ jobs:
           DESKTOP_TAG_TOKEN: ${{ steps.app.outputs.token }}
         run: node --import tsx apps/desktop/scripts/publish-desktop-ci.ts --publish
       - name: Retain publication audit
+        continue-on-error: true
         if: always() && steps.publish.outputs.record != ''
         uses: actions/upload-artifact@v7.0.1
         with:
           name: desktop-publication-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ steps.publish.outputs.record }}/
           if-no-files-found: error
+          retention-days: 30
+
+  upload-website-installer:
+    needs: [route, prepare, publish]
+    if: inputs.upload_website && needs.prepare.outputs.preset != 'test'
+    runs-on: [self-hosted, '${{ needs.route.outputs.runner }}']
+    environment: desktop-production
+    timeout-minutes: 60
+    concurrency:
+      group: desktop-website-upload-${{ needs.prepare.outputs.website-destination }}
+      cancel-in-progress: false
+    env:
+      DESKTOP_PUBLISH_ROUTE: ${{ needs.prepare.outputs.route }}
+      DESKTOP_WEBSITE_APPROVAL: ${{ needs.prepare.outputs.website-approval }}
+      DOWNLOAD_PROD_EO_ZONE_ID: ${{ vars.DOWNLOAD_PROD_EO_ZONE_ID }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+          clean: false
+          path: website-publisher
+      - uses: pnpm/action-setup@v5.0.0
+        with:
+          package_json_file: website-publisher/package.json
+          dest: ${{ runner.temp }}/website-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24'
+      - name: Check local publication configuration
+        working-directory: website-publisher
+        run: node apps/desktop/scripts/preflight-desktop-publish-local.mjs
+      - run: pnpm install --frozen-lockfile
+        working-directory: website-publisher
+      - name: Upload website installer
+        id: website
+        working-directory: website-publisher
+        run: node --import tsx apps/desktop/scripts/publish-website-ci.ts upload
+      - name: Archive website publication diagnostics
+        if: always() && steps.website.outputs.record != ''
+        continue-on-error: true
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: website-upload-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.website.outputs.record }}/
+          if-no-files-found: warn
+          retention-days: 30
+
+  purge-website-installer:
+    needs: [route, prepare, upload-website-installer]
+    if: inputs.upload_website && needs.prepare.outputs.preset != 'test'
+    runs-on: [self-hosted, '${{ needs.route.outputs.runner }}']
+    environment: desktop-production
+    timeout-minutes: 60
+    concurrency:
+      group: desktop-website-purge-${{ needs.prepare.outputs.website-destination }}
+      cancel-in-progress: false
+    env:
+      DESKTOP_PUBLISH_ROUTE: ${{ needs.prepare.outputs.route }}
+      DESKTOP_WEBSITE_APPROVAL: ${{ needs.prepare.outputs.website-approval }}
+      DOWNLOAD_PROD_EO_ZONE_ID: ${{ vars.DOWNLOAD_PROD_EO_ZONE_ID }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+          clean: false
+          path: website-publisher
+      - uses: pnpm/action-setup@v5.0.0
+        with:
+          package_json_file: website-publisher/package.json
+          dest: ${{ runner.temp }}/website-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24'
+      - name: Check local publication configuration
+        working-directory: website-publisher
+        run: node apps/desktop/scripts/preflight-desktop-publish-local.mjs
+      - run: pnpm install --frozen-lockfile
+        working-directory: website-publisher
+      - name: Recover and observe website cache purge
+        id: website
+        working-directory: website-publisher
+        run: node --import tsx apps/desktop/scripts/publish-website-ci.ts purge
+      - name: Archive website publication diagnostics
+        if: always() && steps.website.outputs.record != ''
+        continue-on-error: true
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: website-purge-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.website.outputs.record }}/
+          if-no-files-found: warn
           retention-days: 30

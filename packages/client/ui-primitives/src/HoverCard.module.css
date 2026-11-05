@@ -7,14 +7,13 @@
 
 /* The preview remains hit-testable so pointer entry cancels the grace close. */
 .card {
-  --dsw-hovercard-bg: #2C2C2E;
   position: fixed;
   z-index: 100;
   box-sizing: border-box;
   width: 244px;
   padding: 12px 16px;
   border-radius: var(--dsw-radius-lg);
-  background: var(--dsw-hovercard-bg);
+  background: var(--dsw-alias-hovercard-bg);
   box-shadow: var(--dsw-shadow-lv3);
 }
 
@@ -34,7 +33,7 @@
 }
 
 .copied {
-  color: #FFFFFF;
+  color: var(--dsw-alias-hovercard-label-primary);
   font-size: 14px;
   line-height: 20px;
   text-align: center;
@@ -100,4 +99,10 @@
 .bridge {
   position: fixed;
   z-index: 100;
+}
+
+/* The display:contents portal has no box to subtract from native drag regions. */
+:global(:where(html[data-platform='darwin'])) .card,
+:global(:where(html[data-platform='darwin'])) .bridge {
+  -webkit-app-region: no-drag;
 }

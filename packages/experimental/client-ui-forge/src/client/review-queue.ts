@@ -7,7 +7,8 @@ import type { ReviewSelection, ReviewSource } from './review.ts'
 const line = z.object({ path: z.string(), side: z.enum(['L', 'R']), startLine: z.number().int().positive(), endLine: z.number().int().positive(), body: z.string() })
 const selection = z.object({ source: z.object({ kind: z.literal('change'), url: z.string(), headSha: z.string() }), comment: line.extend({ hunk: z.string() }) })
 const recordedSelection = selection.extend({ source: z.discriminatedUnion('kind', [
-  selection.shape.source, z.object({ kind: z.literal('local'), scope: z.string() }),
+  selection.shape.source,
+  z.object({ kind: z.literal('local'), scope: z.string(), base: z.string().nullable().default(null), baseRef: z.string().nullable().default(null) }),
 ]) })
 const record = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('agent'), selection: recordedSelection }),
@@ -108,7 +109,7 @@ export class ReviewQueue {
       ...this.state.records.filter(item => matches(item.selection)).map(item => ({ ...item, key: this.keyOf(item.selection) })),
       ...this.state.comments.filter(matches).map(item => ({ kind: 'pending' as const, selection: item, key: this.keyOf(item) })),
     ]
-    const key = JSON.stringify([path, source.kind, source.kind === 'local' ? source.scope : source.url])
+    const key = JSON.stringify([path, source.kind, source.kind === 'local' ? [source.scope, source.baseRef] : source.url])
     const previous = this.files.get(key)
     const locked = this.state.uncertain !== null
     if (previous !== undefined && previous.locked === locked && previous.error === this.state.error
@@ -250,9 +251,9 @@ export class ReviewQueue {
  * Compare review identity while allowing records from an older PR head to remain visible.
  * @param left - recorded source.
  * @param right - displayed source.
- * @returns whether the sources name the same PR or local scope.
+ * @returns whether the sources name the same PR, or the same local scope and base ref.
  */
 export function sameReviewSource(left: ReviewSource, right: ReviewSource): boolean {
-  return left.kind === 'local' ? right.kind === 'local' && left.scope === right.scope
+  return left.kind === 'local' ? right.kind === 'local' && left.scope === right.scope && left.baseRef === right.baseRef
     : right.kind === 'change' && left.url === right.url
 }

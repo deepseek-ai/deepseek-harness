@@ -74,7 +74,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   agentPresets: 'core.md',
   agents: 'core.md',
   approval: 'approval.md',
-  officeToPdf: 'office-to-pdf.md',
+  officeKit: 'office-kit.md',
   attachments: 'attachment.md',
   shell: 'shell.md',
   shellEnv: 'shell.md',
@@ -270,6 +270,8 @@ export const EVENT_SCOPE_PAGE: Record<string, string> = {
   'webserver': 'web-server.md',
   'workflow': 'workflow.md',
   'workspace': 'workspace.md',
+  'working-directory': 'working-directory.md',
+  'worktree': 'worktrees.md',
 }
 
 /**
@@ -283,6 +285,9 @@ export const EVENT_SCOPE_PAGE: Record<string, string> = {
  * exemption cannot mask another declaration in that scope.
  */
 export const EVENT_WALK_EXEMPTIONS: Record<string, string> = {
+  'workspace/archive-notice': 'client-face archive follow-up copy — packages/client/ui-workspace/README.md owns the API',
+  'workspace/archive-followup-failed': 'client-face archive follow-up failure — packages/client/ui-workspace/README.md owns the API',
+  'workspace/archive-followup-settled': 'client-face archive follow-up settlement — packages/client/ui-workspace/README.md owns the API',
   'agent/request': 'deprecated compatibility hook — packages/core/agent/README.md documents migration',
   'command/executed': 'client-face local command acknowledgment — packages/client/ui-commands/README.md owns the API',
   'connection/reset': 'client-face transport signal — packages/api/session-controller/README.md owns the API',
@@ -356,11 +361,16 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   CuaApplicationState: 'computer-use.md',
   CuaSystemPermission: 'computer-use.md',
   CuaSystemPermissionState: 'computer-use.md',
-  RenderedDocumentBytes: 'office-to-pdf.md',
-  OfficeToPdfRequest: 'office-to-pdf.md',
-  OfficeToPdfResult: 'office-to-pdf.md',
-  OfficeToPdfPriority: 'office-to-pdf.md',
-  OfficeToPdfGeneration: 'office-to-pdf.md',
+  RenderedDocumentBytes: 'office-kit.md',
+  OfficeKitRequest: 'office-kit.md',
+  OfficeKitResult: 'office-kit.md',
+  OfficeImagesRequest: 'office-kit.md',
+  OfficeImagesResult: 'office-kit.md',
+  OfficeConversionRequest: 'office-kit.md',
+  OfficeRecalculationRequest: 'office-kit.md',
+  OfficeFileResult: 'office-kit.md',
+  OfficeKitPriority: 'office-kit.md',
+  OfficeKitGeneration: 'office-kit.md',
   CreatedShare: 'liveshare.md',
   CreateShareRequest: 'liveshare.md',
   OwnerIdentityRequest: 'liveshare.md',
@@ -397,6 +407,8 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   CreatedWorktree: 'worktrees.md',
   CreateWorktreePhase: 'worktrees.md',
   RestoreWorktreeRequest: 'worktrees.md',
+  WorktreeCleanup: 'worktrees.md',
+  WorktreeCreation: 'worktrees.md',
   RestoredWorktree: 'worktrees.md',
   ChangeRequestListener: 'forge.md',
   ChangeRequestRef: 'forge.md',
@@ -406,6 +418,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   ForgeLineComment: 'forge.md',
   ForgeReviewRequest: 'forge.md',
   ForgeReviewResult: 'forge.md',
+  ForgeBaseBranches: 'forge.md',
   ForgeBranches: 'forge.md',
   ForgeChangeRequestDiff: 'forge.md',
   ForgeChangeRequestStatesFrame: 'forge.md',
@@ -742,6 +755,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   SubagentInterruptAuthority: 'subagent.md',
   SubagentInterruptReceipt: 'subagent.md',
   SubagentListEntry: 'subagent.md',
+  SubagentMemberNames: 'subagent.md',
   SubagentPromptReceipt: 'subagent.md',
   SubagentPromptRequest: 'subagent.md',
   SubagentProvider: 'subagent.md',
@@ -1109,6 +1123,10 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   TerminalFrame: 'Browser terminal stream frames are owned by packages/api/terminal-controller/README.md',
   TerminalRetentionFrame: 'Browser terminal window holds are owned by packages/api/terminal-controller/README.md',
   WebTerminalId: 'Browser terminal identity is owned by packages/api/terminal-controller/README.md',
+  AgentTerminal: 'Agent terminal handles are owned by packages/api/terminal-controller/README.md',
+  AgentTerminalRequest: 'Agent terminal allocation fields are owned by packages/api/terminal-controller/README.md',
+  TerminalScreenRequest: 'Browser terminal screen reads are owned by packages/api/terminal-controller/README.md',
+  TerminalScreenPage: 'Browser terminal screen reads are owned by packages/api/terminal-controller/README.md',
 }
 
 /** Repository data policy consumed by the Cordis catalog projector. */

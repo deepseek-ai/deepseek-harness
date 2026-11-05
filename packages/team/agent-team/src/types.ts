@@ -68,6 +68,8 @@ export interface TeamTaskSnapshot {
   readonly description: string
   readonly status: TeamTaskStatus
   readonly ownerId?: SessionId
+  /** Immutable agent path captured at assignment; absent on unnamed historical owners. */
+  readonly ownerName?: string
   readonly blockedBy: TeamTaskId[]
   readonly writeScopes: string[]
 }
@@ -82,6 +84,8 @@ export interface TeamTaskView {
   readonly blockedBy: TeamTaskId[]
   readonly writeScopes: string[]
   readonly ownerId?: SessionId
+  /** Immutable agent path captured at assignment; absent on unnamed historical owners. */
+  readonly ownerName?: string
   readonly ready: boolean
   readonly writeScopeWarnings: string[]
 }
@@ -128,8 +132,10 @@ declare module '@deepseek-ai/dsh-llm' {
   }
 }
 
-/** Team-service deployment limits. */
+/** Team-service defaults and deployment limits. */
 export interface Config {
+  /** Enable new roots without a saved selection before their first step; defaults to false. Resumes retain saved mode. */
+  readonly defaultEnabled?: boolean
   /** Maximum non-deleted tasks retained by one Team. */
   readonly maxTasks?: number
 }

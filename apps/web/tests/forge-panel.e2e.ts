@@ -1,6 +1,6 @@
 /** Worktree Sessions and the change request panel through the real optional bundle, a Git checkout, and a scripted GitHub CLI. */
 import { execFile } from 'node:child_process'
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -376,7 +376,9 @@ async function sendPrompt(page: Page, scaffold: WebScaffold): Promise<{ readonly
 function worktreeRecords(events: readonly SessionEvent[]): unknown[] {
   return events.flatMap((event) => {
     const record = pluginRecordOf(event)
-    return record?.type === 'plugin:client-ui-forge/worktree' ? [record.data] : []
+    if (record?.type === 'plugin:client-ui-forge/worktree') return [record.data]
+    if (record?.type === 'plugin:worktree/created') return [{ created: record.data }]
+    return []
   })
 }
 
@@ -491,13 +493,12 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
   expect(worktreeRecords(events)).toEqual([
     { action: 'request', from: 'main' },
     { action: 'request', from: 'release' },
-    { action: 'created', worktree: { path: directory, branch, from: 'release', baseCommit, repositoryRoot: project } },
+    { created: { path: directory, branch, baseCommit, repositoryRoot: project } },
   ])
   // The worktree existed before the turn, so the first model request carried its directory notice.
   const created = events.findIndex((event) => {
     const record = pluginRecordOf(event)
-    const data = record?.type === 'plugin:client-ui-forge/worktree' ? record.data : null
-    return typeof data === 'object' && data !== null && 'action' in data && data.action === 'created'
+    return record?.type === 'plugin:worktree/created'
   })
   const turn = events.findIndex(event => event.type === 'turn/start')
   const notice = events.findIndex(event => event.type === 'user/message' && event.data.source.kind === 'working-directory')
@@ -688,7 +689,8 @@ it.skipIf(MODE === 'record')('marks a draft change request ready for review and 
 
 it.skipIf(MODE === 'record')('shows the local changes of the Session by scope and the changes of its change requests, expanding unchanged lines', async () => {
   const { scaffold, page, root, project, tripwire } = await launchPanel('web-e2e-forge-panel-changes', 'follow-up', { branch: 'feat' })
-  // origin/main stops at the twelve-line README; the branch adds a commit, a staged file, an edit, and an untracked file.
+  // origin/main stops at the twelve-line README; the branch adds a commit, which `topic` also has, a staged file, an edit,
+  // and an untracked file.
   await writeFile(join(project, 'README.md'), Array.from({ length: 12 }, (_, index) => `line ${index + 1}\n`).join(''))
   await git(project, 'commit', '--quiet', '-am', 'readme')
   await git(project, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
@@ -697,6 +699,7 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   await writeFile(join(project, 'src', 'app.ts'), 'export const app = 1\n')
   await git(project, 'add', 'src/app.ts')
   await git(project, 'commit', '--quiet', '-m', 'app')
+  await git(project, 'branch', 'topic')
   await writeFile(join(project, 'src', 'extra.ts'), 'export const extra = 1\n')
   await git(project, 'add', 'src/extra.ts')
   await writeFile(join(project, 'README.md'), Array.from({ length: 12 }, (_, index) => index === 9 ? 'line ten\n' : `line ${index + 1}\n`).join(''))
@@ -721,7 +724,8 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   await card.getByRole('button', { name: '查看本会话的变更：4 个文件，新增 4 行，删除 1 行', exact: true }).click()
 
   const local = page.locator('[data-forge-changes="local"]')
-  await local.getByText('与 origin/main 比较，包含未提交的修改', { exact: true }).waitFor({ timeout: 20_000 })
+  await local.getByRole('button', { name: '基准分支：origin/main', exact: true }).waitFor({ timeout: 20_000 })
+  await local.getByText('包含未提交的修改', { exact: true }).waitFor()
   const files = local.locator('[data-forge-diff-file]')
   await expect.poll(() => files.evaluateAll(sections => sections.map(section => section.getAttribute('data-forge-diff-file'))), { timeout: 20_000 })
     .toEqual(['src/app.ts', 'src/extra.ts', 'README.md', 'notes.md'])
@@ -767,6 +771,18 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
     ? event.data.content.flatMap(block => block.type === 'text' && block.text.includes('## User Comment') ? [block.text] : []) : [])
   expect(comments).toHaveLength(1)
   await compareOrRefreshGolden(join(EXPECTED, 'review-message.expected.md'), comments.join('').trimEnd(), MODE)
+
+  // Compared with `topic`, which already has the committed `src/app.ts`, the branch scope keeps only the later changes.
+  await local.getByRole('button', { name: '基准分支：origin/main', exact: true }).click()
+  const bases = page.locator('[data-forge-base-menu]')
+  await bases.getByRole('menuitem', { name: 'topic', exact: true }).waitFor({ timeout: 20_000 })
+  await compareOrRefreshGolden(join(EXPECTED, 'base-menu.expected.md'), await captureStableAria(page, '[data-forge-base-menu]', scaffold.workspaceCwd), MODE)
+  await bases.getByRole('textbox', { name: '搜索分支' }).fill('TOP')
+  await expect.poll(() => bases.getByRole('menuitem').allTextContents()).toEqual(['topic'])
+  await bases.getByRole('textbox', { name: '搜索分支' }).press('Enter')
+  await local.getByRole('button', { name: '基准分支：topic', exact: true }).waitFor()
+  await expect.poll(() => files.evaluateAll(sections => sections.map(section => section.getAttribute('data-forge-diff-file'))), { timeout: 20_000 })
+    .toEqual(['src/extra.ts', 'README.md', 'notes.md'])
 
   await local.getByRole('button', { name: '分支', exact: true }).click()
   await page.getByRole('menuitem', { name: '已暂存', exact: true }).click()
@@ -1154,6 +1170,63 @@ it.skipIf(MODE === 'record')('uses horizontal arrows to navigate files while pre
   expect(tripwire.warnings).toEqual([])
 })
 
+it.skipIf(MODE === 'record')('keeps tall branch and changed-file menus aligned with their triggers', async () => {
+  const { scaffold, page, project, tripwire } = await launchPanel('web-e2e-forge-tall-menus')
+  await Promise.all(Array.from({ length: 45 }, (_, index) =>
+    git(project, 'update-ref', `refs/heads/worktree/long-menu-regression-${index}`, 'HEAD')))
+  const option = page.locator('[data-forge-worktree]')
+  await option.getByRole('checkbox', { name: '新建工作树', exact: true }).check()
+  const base = option.getByRole('button', { name: '基于 main', exact: true })
+  await base.click()
+  const menu = page.getByRole('menu')
+  await menu.getByRole('menuitem', { name: 'worktree/long-menu-regression-44', exact: true }).waitFor()
+  await expect.poll(async () => {
+    const trigger = await base.boundingBox()
+    const card = await menu.boundingBox()
+    return trigger === null || card === null ? Infinity : Math.abs(trigger.x + trigger.width - card.x - card.width)
+  }).toBeLessThan(1)
+  await page.keyboard.press('Escape')
+  expect(await base.getAttribute('aria-expanded')).toBe('false')
+  await option.getByRole('checkbox', { name: '新建工作树', exact: true }).uncheck()
+
+  await git(project, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
+  await git(project, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
+  await mkdir(join(project, 'src'))
+  await Promise.all(Array.from({ length: 60 }, (_, index) =>
+    writeFile(join(project, 'src', `long-file-list-${index}.ts`), `export const value = ${index}\n`)))
+  await git(project, 'add', 'src')
+  await git(project, 'commit', '--quiet', '-m', 'long file list')
+  const { settled } = await sendPrompt(page, scaffold)
+  await settled
+  await page.locator('[data-forge-header]').click()
+  const panel = page.locator('[data-forge-panel]')
+  await panel.getByRole('button', { name: '刷新状态', exact: true }).click()
+  await panel.getByRole('button', { name: /^查看本会话的变更：60 个文件/ }).click()
+  const changes = page.locator('[data-forge-changes="local"]')
+  const files = changes.getByRole('button', { name: '全部 60 个文件', exact: true })
+  await files.click()
+  await menu.getByRole('textbox', { name: '筛选文件…', exact: true }).waitFor()
+  await expect.poll(async () => {
+    const trigger = await files.boundingBox()
+    const card = await menu.boundingBox()
+    return trigger === null || card === null ? Infinity : Math.abs(trigger.x - card.x)
+  }).toBeLessThan(1)
+  await menu.getByRole('textbox', { name: '筛选文件…', exact: true }).fill('long-file-list-59')
+  expect(await menu.getByRole('menuitem', { name: 'src/long-file-list-59.ts', exact: true }).isVisible()).toBe(true)
+  await page.keyboard.press('Escape')
+  expect(await menu.count()).toBe(0)
+  await page.setViewportSize({ width: 390, height: 700 })
+  await files.click()
+  await menu.getByRole('textbox', { name: '筛选文件…', exact: true }).waitFor()
+  await expect.poll(() => menu.evaluate((node) => {
+    const rect = node.getBoundingClientRect()
+    return rect.left >= 12 && rect.right <= 378 && rect.top >= 12 && rect.bottom <= 688
+  })).toBe(true)
+  await page.keyboard.press('Escape')
+  expect(tripwire.pageErrors).toEqual([])
+  expect(tripwire.warnings).toEqual([])
+})
+
 it.skipIf(MODE === 'record')('keeps localized status columns separate and long file lists inside one vertical scroller', async () => {
   const { scaffold, page, project, tripwire } = await launchPanel('web-e2e-forge-layout')
   await page.locator('[data-forge-current-branch]').waitFor()
@@ -1332,6 +1405,42 @@ it.skipIf(MODE === 'record').each(['darwin', 'win32'] as const)('closes diff men
     await expect.poll(() => page.getByRole('menu').count()).toBe(0)
   }
   expect(tripwire.warnings).toEqual([])
+})
+
+
+it.skipIf(MODE === 'record')('archives a clean UI worktree and restores its retained branch', async () => {
+  const { scaffold, page, project, tripwire } = await requestReleaseWorktree('web-e2e-forge-archive')
+  const { settled } = await sendPrompt(page, scaffold)
+  const sessionId = await settled
+  const session = scaffold.ctx.sessions.get(sessionId)
+  if (session === undefined) throw new Error('The completed Session was not retained')
+  const directory = scaffold.ctx.workingDirectory.get(session)
+  const branch = await git(directory, 'branch', '--show-current')
+  const head = await git(directory, 'rev-parse', 'HEAD')
+  const title = '工作树归档恢复'
+  await scaffold.ctx.sessionController.rename({ sessionId, title })
+  const row = page.getByRole('treeitem').filter({ has: page.getByText(title, { exact: true }) })
+  await row.hover()
+  await row.getByRole('button', { name: '归档会话', exact: true }).click()
+  await expect.poll(async () => {
+    try { await access(directory); return true } catch { return false }
+  }, { timeout: 20_000 }).toBe(false)
+  expect(scaffold.ctx.workspaceRegistry.archivedSessionIds).toContain(sessionId)
+  expect(await git(project, 'rev-parse', branch)).toBe(head)
+  await page.getByRole('button', { name: '视图选项', exact: true }).click()
+  await page.getByRole('menuitem', { name: '全部对话（显示已归档）', exact: true }).click()
+  await row.hover()
+  await row.getByRole('button', { name: '取消归档', exact: true }).click()
+  await row.click()
+  const missing = page.locator('[data-forge-missing]')
+  await missing.getByRole('button', { name: '恢复工作树', exact: true }).waitFor({ timeout: 20_000 })
+  await compareOrRefreshGolden(join(EXPECTED, 'archive-restore.expected.md'),
+    await captureStableAria(page, '[data-forge-missing]', scaffold.workspaceCwd, { replacements: [[branch, 'dsh-{{worktree}}']] }), MODE)
+  expect(scaffold.ctx.workingDirectory.get(session)).toBe(directory)
+  await missing.getByRole('button', { name: '恢复工作树', exact: true }).click()
+  await missing.waitFor({ state: 'detached', timeout: 20_000 })
+  expect(await git(directory, 'rev-parse', 'HEAD')).toBe(head)
+  expect(tripwire.pageErrors).toEqual([])
 })
 
 it.skipIf(MODE === 'record').each([120, 4000])('types a review comment beside %i changed lines', async (count) => {

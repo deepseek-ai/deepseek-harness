@@ -196,7 +196,7 @@ describe('workflow runtime outcomes', () => {
       return completed
     })
     const activation = vi.spyOn(ctx.subagents, 'startActivation').mockResolvedValue({
-      childId: SessionId('ready-child'),
+      childId: SessionId('ready-child'), name: 'ready-child',
       result: Promise.resolve({ output: [], structured: { answer: 42 }, stopReason: 'completed' }),
       dispose: () => { disposing.resolve(undefined); return released.promise },
     })
@@ -274,7 +274,7 @@ describe('workflow runtime outcomes', () => {
       return publication.promise
     })
     const child: SubagentActivation = {
-      childId: SessionId('late-child'),
+      childId: SessionId('late-child'), name: 'late-child',
       result: Promise.resolve({ output: [], stopReason: 'aborted' }),
       dispose: disposed,
     }
@@ -302,7 +302,7 @@ describe('workflow runtime outcomes', () => {
       return completed
     })
     vi.spyOn(ctx.subagents, 'startActivation').mockResolvedValue({
-      childId: SessionId('output-pending'), result: childResult.promise, dispose: disposed,
+      childId: SessionId('output-pending'), name: 'output-pending', result: childResult.promise, dispose: disposed,
     })
     const handle = start()
     let settled = false

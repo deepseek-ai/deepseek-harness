@@ -57,5 +57,7 @@ export const remoteDefaultResponses: RemoteTable = {
     'workspace/follow': openStream([{ type: 'baseline', value: { items: [], archivedSessionIds: [], pinnedSessionIds: [] } }]),
     // api-remote-access client `mountAccess`: the owner's access snapshot, then open.
     'remoteAccess/follow': openStream([{ type: 'baseline', owner: true }]),
+    // ui-sidebar-terminal header entry `agent-terminals`: the displayed Session's terminal roster, then open.
+    'terminal/watch': openStream([[]]),
   },
 }

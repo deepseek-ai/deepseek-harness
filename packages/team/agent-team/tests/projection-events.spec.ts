@@ -94,7 +94,7 @@ describe('Agent Teams projection events', () => {
     expect(off.tasks).toBe(legacy.tasks)
     expect(teamProjectionView(off)).toMatchObject({ enabled: false, tasks: [{ id: 'task-1' }] })
     const completed = teamProjectionDefinition.apply(off, event('team/task', {
-      version: 2, teamId: TEAM, task: task({ revision: 2, status: 'completed' }),
+      version: 2, teamId: TEAM, task: task({ revision: 2, status: 'completed', ownerId: CHILD, ownerName: 'reviewer/checker' }),
     }, SessionSeq(2)))
     expect(teamProjectionView(completed)).toMatchObject({ enabled: false, tasks: [{ status: 'completed' }] })
     const on = teamProjectionDefinition.apply(completed, event('team/mode', { enabled: true }, SessionSeq(3)))
@@ -300,7 +300,7 @@ describe('Agent Teams projection events', () => {
     ])
   })
 
-  it('rebuilds version-6 state without historical mailbox failures and restores current checkpoint suffixes', async () => {
+  it('rebuilds version-6 state and restores saved owner names through current checkpoint suffixes', async () => {
     const ctx = new Context()
     onTestFinished(() => ctx.fiber.dispose())
     await ctx.plugin(SessionProjectionRegistry)
@@ -312,7 +312,7 @@ describe('Agent Teams projection events', () => {
       event('team/task', { version: 2, teamId: TEAM, task: task() }, SessionSeq(2)),
       event('team/mode', { enabled: false }, SessionSeq(3)),
       event('team/message/queued', { version: 2, teamId: TEAM, message: message() }, SessionSeq(4)),
-      event('team/task', { version: 2, teamId: TEAM, task: task({ revision: 2, status: 'completed' }) }, SessionSeq(5)),
+      event('team/task', { version: 2, teamId: TEAM, task: task({ revision: 2, status: 'completed', ownerId: CHILD, ownerName: 'reviewer/checker' }) }, SessionSeq(5)),
     ]
     const oldState = {
       ...project(ROOT, []), members: [member()], messages: [message()], delivered: [],
@@ -330,10 +330,46 @@ describe('Agent Teams projection events', () => {
     const state = teamProjectionDefinition.stateSchema.parse(full.checkpoint['agentTeam']!.val)
     expect(state).toEqual({
       id: TEAM, inheritedEventCount: 0, enabled: false, nextTaskNumber: 2,
-      tasks: [task({ revision: 2, status: 'completed' })],
+      tasks: [task({ revision: 2, status: 'completed', ownerId: CHILD, ownerName: 'reviewer/checker' })],
     })
     expect(full.checkpoint['agentTeam']!.ver).toBe(7)
     expect(teamProjectionView(state)).toMatchObject({ enabled: false, tasks: [{ status: 'completed' }] })
+  })
+
+  it('reuses version-7 checkpoints without owner names and applies named task suffixes', async () => {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.sessionProjections.register(teamProjectionDefinition)
+    const header: SessionHeader = { version: SESSION_FORMAT_VERSION, id: ROOT, createdAt: 0, isSeeded: false }
+    const historicalTask = task({ ownerId: CHILD, status: 'in_progress' })
+    const records = [
+      event('team/mode', { enabled: true }, SessionSeq(0)),
+      event('team/task', { version: 2, teamId: TEAM, task: historicalTask }, SessionSeq(1)),
+      event('team/task', {
+        version: 2, teamId: TEAM,
+        task: task({ revision: 2, status: 'completed', ownerId: CHILD, ownerName: 'reviewer/checker' }),
+      }, SessionSeq(2)),
+    ]
+    const checkpoint = { agentTeam: { ver: 7, seq: SessionSeq(1), val: {
+      id: TEAM, inheritedEventCount: 0, enabled: true, nextTaskNumber: 2, tasks: [historicalTask],
+    } } }
+    expect(ctx.sessionProjections.restoreFloor(checkpoint)).toBe(1)
+    const cached = ctx.sessionProjections.viewCheckpoint(checkpoint)
+    expect(cached.agentTeam).toMatchObject({ tasks: [{ ownerId: CHILD }] })
+    expect(cached.agentTeam?.tasks[0]).not.toHaveProperty('ownerName')
+    const restored = ctx.sessionProjections.restore(checkpoint, records.slice(1), SessionLogOffset(1), header, SessionLogOffset(0))
+    const full = ctx.sessionProjections.restore({}, records, SessionLogOffset(0), header, SessionLogOffset(0))
+    expect(restored).toEqual(full)
+    expect(restored.checkpoint['agentTeam']!.ver).toBe(7)
+    expect(restored.snapshot.values.agentTeam).toMatchObject({ tasks: [{ ownerName: 'reviewer/checker' }] })
+    const invalid = { agentTeam: { ...checkpoint.agentTeam, val: {
+      ...checkpoint.agentTeam.val, tasks: [task({ ownerName: 'reviewer' })],
+    } } }
+    expect(ctx.sessionProjections.viewCheckpoint(invalid)).not.toHaveProperty('agentTeam')
+    expect(() => ctx.sessionProjections.restore(
+      invalid, records.slice(1), SessionLogOffset(1), header, SessionLogOffset(0),
+    )).toThrow(/ownerName requires ownerId/)
   })
 
   it('records unsupported event versions without applying them', () => {
@@ -511,4 +547,12 @@ describe('Agent Teams projection events', () => {
       })
     })
   })
+})
+
+it('rejects a persisted owner name without an owner id', () => {
+  const state = project(ROOT, [event('team/task', {
+    version: 2, teamId: TEAM, task: task({ ownerName: 'reviewer' }),
+  }, SessionSeq(0))])
+  expect(state.failure).toContain('payload is invalid')
+  expect(state.tasks).toEqual([])
 })
