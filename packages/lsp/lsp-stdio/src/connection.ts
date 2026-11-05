@@ -12,7 +12,7 @@
 
 import type { Writable } from 'node:stream'
 import { LspError } from '@deepseek-ai/dsh-lsp'
-import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import type { SubprocessHandle, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import { encodeMessage, MessageDecoder } from './framing.ts'
 

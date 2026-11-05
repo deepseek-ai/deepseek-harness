@@ -1,6 +1,6 @@
 /** Typed `read_image` failures. @module @deepseek-ai/dsh-tool-fs/src/image-error */
 
-import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 
 /**
  * Every machine-routable `read_image` failure code:

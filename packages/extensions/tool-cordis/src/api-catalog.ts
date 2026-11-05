@@ -5818,7 +5818,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'AttachmentError',
-    declaration: 'export class AttachmentError extends Error {\n    readonly code: AttachmentErrorCode;\n    constructor(message: string, code: AttachmentErrorCode, options?: ErrorOptions);\n}',
+    declaration: 'export class AttachmentError extends HarnessError {\n    override readonly code: AttachmentErrorCode;\n    constructor(message: string, code: AttachmentErrorCode, options?: ErrorOptions);\n}',
   },
   {
     name: 'AttachmentErrorCode',
@@ -6791,6 +6791,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'GrantRecord',
     declaration: 'export interface GrantRecord {\n    readonly kind: \'grant\';\n    readonly payload: unknown;\n}',
+  },
+  {
+    name: 'HarnessError',
+    declaration: 'export class HarnessError extends Error {\n    readonly code: string;\n    constructor(message: string, code: string, options?: ErrorOptions);\n}',
   },
   {
     name: 'HookBudget',

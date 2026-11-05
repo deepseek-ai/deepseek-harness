@@ -16,7 +16,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { AttachmentError, AttachmentId } from '@deepseek-ai/dsh-attachment'
 import type { AttachmentStore, ImageAttachmentRef, ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import { defineTool, ToolArgsError, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView, ToolExecution } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-fs'
@@ -217,21 +217,24 @@ interface SaveFailureFacts {
 
 /**
  * Classify one `saveImage` rejection as the error `read_image` throws.
- * An `AbortError` and an already classified `HarnessError` pass through
- * unchanged; attachment admission codes become {@link ImageInputError} codes,
- * and every other failure becomes `IMAGE_STORE_FAILED` with the original as `cause`.
+ * Attachment admission codes become {@link ImageInputError} codes and other
+ * `AttachmentError` codes become `IMAGE_STORE_FAILED`; any other `HarnessError`
+ * and an `AbortError` pass through unchanged; every other failure becomes
+ * `IMAGE_STORE_FAILED`. Converted errors keep the original as `cause`.
  * @param error - the value `saveImage` rejected with.
  * @param attachments - the store whose limits the refusal names.
  * @param facts - the path and media-type facts the refusal names.
  * @returns the error to throw from the tool body.
  */
 function saveFailure(error: unknown, attachments: AttachmentStore, facts: SaveFailureFacts): unknown {
-  if (error instanceof HarnessError || (error instanceof Error && error.name === 'AbortError')) return error
   const { displayPath, extension, mediaType, sniffed } = facts
   const refusal = (detail: string, code: ImageInputError['code']) =>
     new ImageInputError(`cannot read "${displayPath}": ${detail}`, code, { cause: error })
   const storeFailed = (detail: string) => refusal(`the attachment store could not save the image: ${detail}`, 'IMAGE_STORE_FAILED')
-  if (!(error instanceof AttachmentError)) return storeFailed(error instanceof Error ? error.message : String(error))
+  if (!(error instanceof AttachmentError)) {
+    if (error instanceof HarnessError || (error instanceof Error && error.name === 'AbortError')) return error
+    return storeFailed(error instanceof Error ? error.message : String(error))
+  }
   // Size refusals stay recoverable tool errors: an oversized image must never
   // enter durable history, where it would ride every later model request past
   // provider-side dimension rejections.

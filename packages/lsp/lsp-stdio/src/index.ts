@@ -14,7 +14,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { LspError, LspProviderId } from '@deepseek-ai/dsh-lsp'
-import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import type {
   LspProvider,
   LspProviderQuery,
