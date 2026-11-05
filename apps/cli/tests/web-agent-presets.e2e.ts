@@ -599,9 +599,7 @@ describe('the shipped Web composition', () => {
         expect(codePointLength(text) - codePointLength(path) + 256, file).toBeLessThan(8192)
       }
 
-      // The persona is `standard`'s, pinned verbatim so the two declarations
-      // cannot drift apart: tool descriptions and the skill catalog carry
-      // every creation-mode instruction.
+      // Creator adds its DSH customization intent to the shared coding persona.
       const standard = await ctx.agents.create({
         sessionId: SessionId('preset-cordis-standard-persona'),
         setup: agentCtx => ctx.agentPresets.mount(agentCtx, 'standard').then(() => undefined),
@@ -611,7 +609,30 @@ describe('the shipped Web composition', () => {
           .filter(section => section.name.startsWith('deployment:persona-'))
         const cordisPersona = await persona(handle.agent)
         expect(cordisPersona.map(section => section.name)).toEqual(['deployment:persona-prefix', 'deployment:persona-suffix'])
-        expect(cordisPersona).toEqual(await persona(standard.agent))
+        const standardPersona = await persona(standard.agent)
+        const standardPrefix = standardPersona.find(section => section.name === 'deployment:persona-prefix')
+        expect(standardPrefix?.text).toMatch(/^You are a coding agent powered by the .+ model\.$/u)
+        expect(cordisPersona).toEqual(standardPersona.map(section => section.name === 'deployment:persona-prefix'
+          ? { ...section, text: `${section.text} You help the user customize DeepSeek Harness itself.` }
+          : section))
+        const definition = composeEntries([webPatches('Creator persona')])
+          .find(row => row.id === 'preset-cordis')!.config as import('@deepseek-ai/dsh-agent-preset-registry').PresetDefinition
+        const unregister = await ctx.agentPresets.register({
+          ...definition, id: 'cordis-coding-only',
+          plugins: definition.plugins.map(row => row.id === 'persona'
+            ? { ...row, config: { prefix: standardPrefix!.text } }
+            : row),
+        })
+        try {
+          const codingOnly = await ctx.agents.create({
+            sessionId: SessionId('preset-cordis-coding-only'),
+            setup: agentCtx => ctx.agentPresets.mount(agentCtx, 'cordis-coding-only').then(() => undefined),
+          })
+          try {
+            expect(ctx.tools.schemas(handle.agent).toSorted((left, right) => left.name.localeCompare(right.name)))
+              .toEqual(ctx.tools.schemas(codingOnly.agent).toSorted((left, right) => left.name.localeCompare(right.name)))
+          } finally { await codingOnly.dispose() }
+        } finally { await unregister() }
       } finally {
         await standard.dispose()
       }

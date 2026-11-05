@@ -166,6 +166,20 @@ The preset contributes one catalog entry. A session with no other skills also re
 
 The catalog is logged at the first step and remains stable until its entries change. Loading the skill appends tool output without changing the tool schemas.
 
+### Creator persona
+
+#### What the model sees
+
+The Creator preset adds “You help the user customize DeepSeek Harness itself.” after the shared coding-agent sentence. Plugin implementation and authorization rules remain in the on-demand `dsh-doc` skill.
+
+#### Token effect
+
+One fixed sentence is added to Creator requests. Standard requests are unchanged.
+
+#### KV Cache effect
+
+The sentence is stable within the Creator preset; switching to a different preset changes the persona prefix.
+
 ### Web runtime variable
 
 #### What the model sees
