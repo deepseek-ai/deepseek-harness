@@ -124,6 +124,8 @@ Creates retained Git worktrees under the mounted filesystem and sandbox provider
  * @param signal - cancellation of lookup, creation, and working-directory publication.
  * @param onPhase - receives each stage before it begins; it must not throw.
  * @returns canonical checkout path, branch name, pinned commit, and source repository root.
+ * @throws {WorktreeError} for an invalid request, an existing branch or path, or a failed, oversized, or timed-out
+ *   command; a failure after allocation keeps its `name` and `code` and adds retained-artifact context.
  */
 async create( agent: Agent, request: CreateWorktreeRequest = {}, signal?: AbortSignal, onPhase?: (phase: CreateWorktreePhase) => void, ): Promise<CreatedWorktree>
 
@@ -140,6 +142,8 @@ async create( agent: Agent, request: CreateWorktreeRequest = {}, signal?: AbortS
  * @param signal - cancellation of the restoration.
  * @param onPhase - receives each stage before it begins; it must not throw.
  * @returns the directory and whether the branch was created again.
+ * @throws {WorktreeError} for an invalid request, an existing path, a locked registration, or a failed, oversized,
+ *   or timed-out command; a failure after allocation keeps its `name` and `code` and adds retained-artifact context.
  */
 async restore( agent: Agent, request: RestoreWorktreeRequest, signal?: AbortSignal, onPhase?: (phase: CreateWorktreePhase) => void, ): Promise<RestoredWorktree>
 
