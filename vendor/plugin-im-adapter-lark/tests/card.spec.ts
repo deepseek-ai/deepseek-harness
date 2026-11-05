@@ -370,12 +370,23 @@ describe('card structure', () => {
     expect(submit!.text).toEqual({ tag: 'plain_text', content: 'Send' })
   })
 
-  it('a multiple select becomes multi_select_static with the selected values', async () => {
-    const { payloads } = await render(h('select', { id: 'sel-tags', name: 'tags', multiple: true, value: ['a'], onSelect: () => {} },
-      h('option', { value: 'a' }, 'Alpha'), h('option', { value: 'b' }, 'Beta')))
-    const [select] = elements(payloads[0])
-    expect(select).toMatchObject({ tag: 'multi_select_static', name: 'tags', selected_values: ['a'] })
-    expect(select!.initial_option).toBeUndefined()
+  it('a multiple select seeds selected_values and is reported only through its form', async () => {
+    // Inside a form it is a native form field: the platform reports the values in the submit's `action.form_value`.
+    const inForm = await render(h('form', { name: 'order' },
+      h('select', { name: 'tags', multiple: true, value: ['a'] },
+        h('option', { value: 'a' }, 'Alpha'), h('option', { value: 'b' }, 'Beta'))))
+    const [field] = elements(inForm.payloads[0])[0]!.elements
+    expect(field).toMatchObject({ tag: 'multi_select_static', name: 'tags', selected_values: ['a'] })
+    expect(field!.initial_option).toBeUndefined()
+    expect(field!.behaviors).toBeUndefined()
+    expect(inForm.report.dropped).toEqual([])
+
+    // A multi-select has no pick callback of its own, so outside a form its selection cannot come back: the render
+    // reports the lost interaction instead of promising a behavior the platform would never fire.
+    const loose = await render(h('select', { id: 'sel-tags', name: 'tags', multiple: true, onSelect: () => {} },
+      h('option', { value: 'a' }, 'Alpha')))
+    expect(elements(loose.payloads[0])[0]!.behaviors).toBeUndefined()
+    expect(loose.report.dropped).toEqual([{ what: 'select:tags', reason: 'interaction-dropped' }])
   })
 
   it('an <option selected> seeds the initial value when the select declares none', async () => {

@@ -38,7 +38,10 @@ export interface StreamScript {
 const onClick = () => {}
 const onSelect = () => {}
 
-/** One set of form controls: a form with a text field, a checkbox, a single select and a submit button. */
+/**
+ * One set of form controls: a form with a text field, a checkbox, a single select, a multiple select and a submit
+ * button. The multiple one lives in the form on purpose — a platform reports it only through the submit.
+ */
 function formControls() {
   return h('form', { name: 'order' },
     h('input', { name: 'title', label: 'Title', placeholder: 'Type a title', value: 'Untitled' }),
@@ -46,6 +49,9 @@ function formControls() {
     h('select', { id: 'sel-size', name: 'size', placeholder: 'Size', onSelect },
       h('option', { value: 's' }, 'Small'),
       h('option', { value: 'l', selected: true }, 'Large')),
+    h('select', { name: 'tags', multiple: true, value: ['a'] },
+      h('option', { value: 'a' }, 'Alpha'),
+      h('option', { value: 'b' }, 'Beta')),
     h('button', { type: 'submit', id: 'btn-submit', onClick }, 'Send'))
 }
 
@@ -236,12 +242,7 @@ export function corpusCases(): CorpusCase[] {
     {
       name: 'form',
       title: 'form with a text field, a checkbox, a select and a submit button',
-      content: [
-        formControls(),
-        h('select', { id: 'sel-tags', name: 'tags', multiple: true, value: ['a'], onSelect },
-          h('option', { value: 'a' }, 'Alpha'),
-          h('option', { value: 'b' }, 'Beta')),
-      ],
+      content: [formControls()],
     },
     {
       name: 'title',
@@ -329,9 +330,6 @@ export function everything(): Fragment {
     h('p', 'run ', h('button', { type: 'input', text: '/status' }, 'Status'), ' to check'),
     h('button', { type: 'action', id: 'btn-danger', theme: 'danger', onClick }, 'Delete everything'),
     formControls(),
-    h('select', { id: 'sel-everything', name: 'tags', multiple: true, onSelect },
-      h('option', { value: 'a' }, 'Alpha'),
-      h('option', { value: 'b' }, 'Beta')),
     h('forward', { id: 'forward-1' }),
     h('raw', { platform: 'fake', type: 'card' }, 'raw fallback text'),
   ])

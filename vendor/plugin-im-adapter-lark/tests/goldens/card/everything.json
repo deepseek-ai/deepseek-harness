@@ -241,8 +241,32 @@
                   ]
                 },
                 {
+                  "tag": "multi_select_static",
+                  "element_id": "eldmltgrsto7q7li",
+                  "name": "tags",
+                  "options": [
+                    {
+                      "text": {
+                        "tag": "plain_text",
+                        "content": "Alpha"
+                      },
+                      "value": "a"
+                    },
+                    {
+                      "text": {
+                        "tag": "plain_text",
+                        "content": "Beta"
+                      },
+                      "value": "b"
+                    }
+                  ],
+                  "selected_values": [
+                    "a"
+                  ]
+                },
+                {
                   "tag": "button",
-                  "element_id": "ek67bh4uvhueyiss",
+                  "element_id": "eznewhkbpcjg3pft",
                   "text": {
                     "tag": "plain_text",
                     "content": "Send"
@@ -264,39 +288,8 @@
               ]
             },
             {
-              "tag": "multi_select_static",
-              "element_id": "elxkxljlurufywtf",
-              "name": "tags",
-              "options": [
-                {
-                  "text": {
-                    "tag": "plain_text",
-                    "content": "Alpha"
-                  },
-                  "value": "a"
-                },
-                {
-                  "text": {
-                    "tag": "plain_text",
-                    "content": "Beta"
-                  },
-                  "value": "b"
-                }
-              ],
-              "behaviors": [
-                {
-                  "type": "callback",
-                  "value": {
-                    "v4": {
-                      "id": "sel-everything"
-                    }
-                  }
-                }
-              ]
-            },
-            {
               "tag": "markdown",
-              "element_id": "ep6iw6vsva4azxv2",
+              "element_id": "euzghpvqkkyp5pyc",
               "content": "\\[合并转发]\n\nraw fallback text",
               "text_align": "left"
             }
@@ -359,12 +352,12 @@
       {
         "tag": "forward",
         "via": "p",
-        "path": "message/forward[26]"
+        "path": "message/forward[25]"
       },
       {
         "tag": "raw",
         "via": "p",
-        "path": "message/raw[27]"
+        "path": "message/raw[26]"
       }
     ],
     "moved": [],

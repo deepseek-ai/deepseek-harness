@@ -75,8 +75,32 @@
                   ]
                 },
                 {
+                  "tag": "multi_select_static",
+                  "element_id": "ew4yzlxrp2dzbayp",
+                  "name": "tags",
+                  "options": [
+                    {
+                      "text": {
+                        "tag": "plain_text",
+                        "content": "Alpha"
+                      },
+                      "value": "a"
+                    },
+                    {
+                      "text": {
+                        "tag": "plain_text",
+                        "content": "Beta"
+                      },
+                      "value": "b"
+                    }
+                  ],
+                  "selected_values": [
+                    "a"
+                  ]
+                },
+                {
                   "tag": "button",
-                  "element_id": "edqyvcjfz6xvknmj",
+                  "element_id": "ebz7gzqm5yls3nmb",
                   "text": {
                     "tag": "plain_text",
                     "content": "Send"
@@ -94,40 +118,6 @@
                       }
                     }
                   ]
-                }
-              ]
-            },
-            {
-              "tag": "multi_select_static",
-              "element_id": "epg55tokhtflknyh",
-              "name": "tags",
-              "options": [
-                {
-                  "text": {
-                    "tag": "plain_text",
-                    "content": "Alpha"
-                  },
-                  "value": "a"
-                },
-                {
-                  "text": {
-                    "tag": "plain_text",
-                    "content": "Beta"
-                  },
-                  "value": "b"
-                }
-              ],
-              "selected_values": [
-                "a"
-              ],
-              "behaviors": [
-                {
-                  "type": "callback",
-                  "value": {
-                    "v4": {
-                      "id": "sel-tags"
-                    }
-                  }
                 }
               ]
             }

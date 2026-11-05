@@ -12,11 +12,12 @@
  *   recursively — panels nest), `button` and `column_set` (`button-group`, one auto-width column per button, or one
  *   equally weighted column per button with `width="fill"`).
  * - `form` (the platform form container, children assembled recursively), `input` (`input`, or `checker` for
- *   `type="checkbox"`) and `select` (`select_static`, or `multi_select_static` for a `multiple` one). A select
- *   reports every pick through its own `callback` behavior; an input has no callback of its own, so its value reaches
- *   the code only as the form value of a submit button (`button[type=submit]` → `form_action_type: 'submit'`, whose
- *   callback carries `action.form_value`). `callbacks: false` leaves the select without a behavior: it still renders
- *   and still feeds a form.
+ *   `type="checkbox"`) and `select` (`select_static`, or `multi_select_static` for a `multiple` one). Only a **single**
+ *   select reports a pick of its own (`callback` behavior); a `multiple` one is reported by the platform only when the
+ *   enclosing form's submit button is clicked — its values then arrive in `action.form_value[<name>]` on that button's
+ *   callback — so a `multiple` select outside a form is reported `dropped`. An `input` has no callback of its own
+ *   either; its value reaches the code the same way (`button[type=submit]` → `form_action_type: 'submit'`).
+ *   `callbacks: false` leaves a select without a behavior: it still renders and still feeds a form.
  * - `title` → card `header` (`template` from `theme`; the mode declares `title` as an envelope tag, so core puts it in
  *   the envelope).
  * - `audio` / `video` / `file` split the logical message into their own messages in tree order (`message.split`),
@@ -49,8 +50,8 @@ import {
   type Align, type ButtonSize, type ButtonVariant, type Element, isPhrasingContainer, type Theme,
 } from '@deepseek-ai/satori-element'
 import {
-  defineMode, ElementRegistry, type Envelope, type LimitKey, type LimitViolation, type Mode, type ModeTypes,
-  type Prepared, type RenderContext, type RenderReport, ResourceRef, type ResolvedResource,
+  defineMode, ElementRegistry, type Envelope, INTERACTION_DROPPED, type LimitKey, type LimitViolation, type Mode,
+  type ModeTypes, type Prepared, type RenderContext, type RenderReport, ResourceRef, type ResolvedResource,
   type SerializeContext,
 } from '@deepseek-ai/cordis-plugin-im-core'
 import {
@@ -148,8 +149,8 @@ export interface CardInputComponent {
 }
 
 /**
- * One choice control. A single select reports every pick through its own callback (`behaviors`); a `multiple` one is
- * `multi_select_static`. Inside a form the pick is also part of the submit.
+ * One choice control. A single select reports a pick through its own callback (`behaviors`); a `multiple` one is
+ * `multi_select_static`, which the platform reports only through the submit of the form it stands in.
  */
 export interface CardSelectComponent {
   tag: 'select_static' | 'multi_select_static'
@@ -1056,6 +1057,13 @@ export function createCardMode(config: CardModeConfig = {}): Mode<CardTypes> {
       const many = Array.isArray(chosen) && chosen.length ? chosen : marked
       // A live control uses its id as the form key; a form-only control names the field explicitly.
       const name = el.attrs.name ?? el.attrs.id
+      // The platform reports a multi-select only when the enclosing form's submit button is clicked — never on a pick
+      // (`multi_select_static` 回调示例: the callback is that button's event, with the picked values in
+      // `action.form_value[<name>]`). Outside a form the selection therefore has no way back into the code.
+      const inForm = ctx.ancestors.some(ancestor => ancestor.type === 'form')
+      if (multiple && !inForm) {
+        ctx.report.dropped.push({ what: `select:${name ?? 'multiple'}`, reason: INTERACTION_DROPPED })
+      }
       const component: CardSelectComponent = {
         tag: multiple ? 'multi_select_static' : 'select_static',
         id: cardElementId(ctx.stableId(el)),
@@ -1065,9 +1073,9 @@ export function createCardMode(config: CardModeConfig = {}): Mode<CardTypes> {
         ...multiple
           ? many.length ? { selectedValues: many } : {}
           : single ? { initialOption: single } : {},
-        // A callback behavior needs an id to route a pick back through. Without one — or without callbacks — the
-        // platform sends no event for this control and its value arrives only with a form submit.
-        ...callbacks && el.attrs.id !== undefined
+        // Only a single select reports a pick of its own. It needs a callback behavior and an id to route it back
+        // through; without callbacks the platform sends nothing and the value arrives only with a form submit.
+        ...callbacks && !multiple && el.attrs.id !== undefined
           ? {
             behavior: {
               type: 'callback' as const,
