@@ -88,7 +88,7 @@ Each published session is a record of its id, owner, optional name, backend type
 
 ### Send reservation
 
-The service reserves a session synchronously for one active send before returning the operation, including before a background job id becomes visible; a second send fails with `SEND_ACTIVE`, so output and cancellation never cross operation ownership.
+The service reserves a session synchronously for one active send before returning the operation, including before a background job id becomes visible; a second send fails with `SEND_ACTIVE`, so output and cancellation never cross operation ownership. Failures are `TerminalError` instances (a `HarnessError`); besides the registry codes, a send to a closing session fails with `SESSION_CLOSING`, and backends report `SESSION_EXITED`, `STARTUP_EXITED`, `STARTUP_TIMEOUT`, `NO_SANDBOX`, and `INIT_REJECTED` with the same class.
 
 </details>
 

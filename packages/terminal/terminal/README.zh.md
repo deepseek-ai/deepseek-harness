@@ -88,7 +88,7 @@ kind: "package-reference"
 
 ### 发送预留
 
-服务在返回操作之前同步为一个活跃发送预留会话，包括在后台任务的 job id 可见之前；第二次发送会以 `SEND_ACTIVE` 失败，因此输出与取消永远不会跨操作所有权。
+服务在返回操作之前同步为一个活跃发送预留会话，包括在后台任务的 job id 可见之前；第二次发送会以 `SEND_ACTIVE` 失败，因此输出与取消永远不会跨操作所有权。失败均为 `TerminalError`（一种 `HarnessError`）；除注册表 code 外，向正在关闭的会话发送会以 `SESSION_CLOSING` 失败，后端以同一类报告 `SESSION_EXITED`、`STARTUP_EXITED`、`STARTUP_TIMEOUT`、`NO_SANDBOX` 与 `INIT_REJECTED`。
 
 </details>
 

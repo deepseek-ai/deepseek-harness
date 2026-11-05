@@ -525,6 +525,8 @@ describe('TerminalSessionService ownership and lifecycle', () => {
     b.sessions[0]!.closeGate = Promise.withResolvers<undefined>()
     const first = ctx.terminals.kill(owner, created.sessionId)
     expect(() => ctx.terminals.startSend(owner, created.sessionId, { text: '', submit: false })).toThrow('closing')
+    expect(() => ctx.terminals.startSend(owner, created.sessionId, { text: '', submit: false }))
+      .toThrow(expect.objectContaining({ name: 'TerminalError', code: 'SESSION_CLOSING' }))
     const second = ctx.terminals.kill(owner, created.sessionId)
     b.sessions[0]!.closeGate?.resolve(undefined)
     expect(await first).toBe(true)
