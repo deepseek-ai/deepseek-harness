@@ -18,7 +18,7 @@ export interface Context {
   [symbols.root]: this
   /** Isolation map: service name → scope label. Lookups for a name resolve within its label. */
   [symbols.isolate]: Dict<symbol>
-  /** Intercept map: service name → config merged into that service's per-plugin config. */
+  /** Intercept map: service name → intercept metadata merged into that service's resolved metadata. */
   [symbols.intercept]: Dict
   /** Base URL used to resolve relative plugin/module specifiers, if the runtime sets one. */
   baseUrl?: string | undefined
@@ -40,15 +40,15 @@ export interface Context {
  * contexts without mutating their parent.
  */
 export class Context {
-  /** Symbol key of the root context (see the `Context[symbols.root]` property). */
+  /** Symbol key of the root context: `ctx[Context.root]` is the application's root context, shared by every child context. */
   static readonly root: unique symbol = symbols.root
   /** Symbol key under which a disposer exposes its {@link EffectMeta} diagnostics tree. */
   static readonly effect: unique symbol = symbols.effect
   /** Symbol key for a context's listener filter, consulted on every event dispatch. */
   static readonly filter: unique symbol = symbols.filter
-  /** Symbol key of the isolation map (see the `Context[symbols.isolate]` property). */
+  /** Symbol key of the isolation map: `ctx[Context.isolate]` maps each service name to its scope label. */
   static readonly isolate: unique symbol = symbols.isolate
-  /** Symbol key of the intercept map (see the `Context[symbols.intercept]` property). */
+  /** Symbol key of the intercept map: `ctx[Context.intercept]` maps each service name to its intercept metadata. */
   static readonly intercept: unique symbol = symbols.intercept
 
   /**
@@ -115,6 +115,9 @@ export class Context {
    * resolve against the new label instead of the parent's, so a different
    * implementation can be provided without affecting the parent scope.
    * Passing the same `label` to two `isolate()` calls joins their scopes.
+   * The returned context and plugins started below it never fall back to the
+   * enclosing plugin's injected `name`, even when `label` equals the parent's
+   * label; until a provider in the new scope supplies `name`, reading it throws.
    *
    * @param name — the service name to isolate.
    * @param label — scope label to join; defaults to a fresh unique symbol.

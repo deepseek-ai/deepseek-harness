@@ -12,11 +12,11 @@
   en: 18c7f34127f5c5fc
   zh: fa37a391e9c49f24
 /context/ctx-isolate-name-label:
-  en: e086cbc07d463960
-  zh: 7912984e036dbae9
+  en: 4b61ce02474b983b
+  zh: 5ab2948ddcff2687
 /context/ctx-intercept-name-config:
-  en: e4a9d3a55ed550fc
-  zh: 85ebe8f0d30770e3
+  en: 7efc60c71ddc4a6e
+  zh: 58dd647c41c10897
 /context/ctx-baseurl:
   en: 29c28e7558cea0ad
   zh: 9b591e449c1bfd72
@@ -36,8 +36,8 @@
   en: ceb197529207a8ed
   zh: 7d444c03f8be0f0d
 /context/static-members/context-root:
-  en: ad7203bb4b3533fe
-  zh: 02b867b883050548
+  en: 7616dd841e4f04cb
+  zh: 2f1a3bdb9ed1f6f7
 /context/static-members/context-effect:
   en: 6c3b77ace7d4fda3
   zh: 470c685819275d5f
@@ -45,11 +45,11 @@
   en: 1c97248eeabea2d0
   zh: 08eadac6a0871429
 /context/static-members/context-isolate:
-  en: 471d09c9440bf738
-  zh: eecc52f4e5984dbf
+  en: 6c490ac1293b0315
+  zh: 51d371b38de7773a
 /context/static-members/context-intercept:
-  en: 57e806faa3abfff6
-  zh: 3d32af39e2019758
+  en: d3f44b89b641a11b
+  zh: b88177e0a59ef9a5
 /context/static-members/context-is-value:
   en: 0ef94fa412edfe17
   zh: 30b64cd2fbb2d12e

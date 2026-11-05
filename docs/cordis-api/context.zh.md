@@ -48,6 +48,9 @@ extend(meta = {}): this
  * resolve against the new label instead of the parent's, so a different
  * implementation can be provided without affecting the parent scope.
  * Passing the same `label` to two `isolate()` calls joins their scopes.
+ * The returned context and plugins started below it never fall back to the
+ * enclosing plugin's injected `name`, even when `label` equals the parent's
+ * label; until a provider in the new scope supplies `name`, reading it throws.
  *
  * @param name — the service name to isolate.
  * @param label — scope label to join; defaults to a fresh unique symbol.
@@ -58,14 +61,14 @@ isolate(name: string, label?: symbol)
 
 创建一个子上下文，使 `name` 拥有独立的服务作用域。
 
-在返回的上下文之下，对服务 `name` 的读写会根据新标签解析，而不再根据父上下文的标签解析，因此可以提供不同的实现而不影响父作用域。将同一个 `label` 传给两次 `isolate()` 调用，可使二者加入同一作用域。
+在返回的上下文之下，对服务 `name` 的读写会根据新标签解析，而不再根据父上下文的标签解析，因此可以提供不同的实现而不影响父作用域。将同一个 `label` 传给两次 `isolate()` 调用，可使二者加入同一作用域。返回的上下文及在其下启动的插件都不会回退到外层插件注入的 `name`，即使 `label` 与父上下文的标签相同也是如此；在新作用域中有提供者提供 `name` 之前，读取它会抛出错误。
 
 - `name`：要隔离的服务名称。
 - `label`：要加入的作用域标签；默认为一个新建的唯一 symbol。
 
 **返回**一个子上下文，其 `name` 服务在新作用域中解析。
 
-[源码](../../vendor/cordis/src/context.ts#L123)
+[源码](../../vendor/cordis/src/context.ts#L126)
 
 ### ctx.intercept(name, config)
 
@@ -96,7 +99,7 @@ intercept(name: string, config: any): this
 
 **返回**一个携带额外拦截条目的子上下文。
 
-[源码](../../vendor/cordis/src/context.ts#L142)
+[源码](../../vendor/cordis/src/context.ts#L145)
 
 ### ctx.baseUrl
 
@@ -158,11 +161,11 @@ registry: RegistryService
 ### Context.root
 
 ```ts cordis-catalog
-/** Symbol key of the root context (see the `Context[symbols.root]` property). */
+/** Symbol key of the root context: `ctx[Context.root]` is the application's root context, shared by every child context. */
 static readonly root: unique symbol
 ```
 
-根上下文的 symbol 键（见 `Context[symbols.root]` 属性）。
+根上下文的 symbol 键：`ctx[Context.root]` 是应用的根上下文，所有子上下文共享它。
 
 [源码](../../vendor/cordis/src/context.ts#L44)
 
@@ -191,22 +194,22 @@ static readonly filter: unique symbol
 ### Context.isolate
 
 ```ts cordis-catalog
-/** Symbol key of the isolation map (see the `Context[symbols.isolate]` property). */
+/** Symbol key of the isolation map: `ctx[Context.isolate]` maps each service name to its scope label. */
 static readonly isolate: unique symbol
 ```
 
-隔离映射的 symbol 键（见 `Context[symbols.isolate]` 属性）。
+隔离映射的 symbol 键：`ctx[Context.isolate]` 将每个服务名称映射到其作用域标签。
 
 [源码](../../vendor/cordis/src/context.ts#L50)
 
 ### Context.intercept
 
 ```ts cordis-catalog
-/** Symbol key of the intercept map (see the `Context[symbols.intercept]` property). */
+/** Symbol key of the intercept map: `ctx[Context.intercept]` maps each service name to its intercept metadata. */
 static readonly intercept: unique symbol
 ```
 
-拦截映射的 symbol 键（见 `Context[symbols.intercept]` 属性）。
+拦截映射的 symbol 键：`ctx[Context.intercept]` 将每个服务名称映射到其拦截元数据。
 
 [源码](../../vendor/cordis/src/context.ts#L52)
 

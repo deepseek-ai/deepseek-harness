@@ -46,6 +46,9 @@ The child prototypally inherits every property of this context; own properties o
  * resolve against the new label instead of the parent's, so a different
  * implementation can be provided without affecting the parent scope.
  * Passing the same `label` to two `isolate()` calls joins their scopes.
+ * The returned context and plugins started below it never fall back to the
+ * enclosing plugin's injected `name`, even when `label` equals the parent's
+ * label; until a provider in the new scope supplies `name`, reading it throws.
  *
  * @param name — the service name to isolate.
  * @param label — scope label to join; defaults to a fresh unique symbol.
@@ -56,14 +59,14 @@ isolate(name: string, label?: symbol)
 
 Create a child context with an independent service scope for `name`.
 
-Below the returned context, reads and writes of the service `name` resolve against the new label instead of the parent's, so a different implementation can be provided without affecting the parent scope. Passing the same `label` to two `isolate()` calls joins their scopes.
+Below the returned context, reads and writes of the service `name` resolve against the new label instead of the parent's, so a different implementation can be provided without affecting the parent scope. Passing the same `label` to two `isolate()` calls joins their scopes. The returned context and plugins started below it never fall back to the enclosing plugin's injected `name`, even when `label` equals the parent's label; until a provider in the new scope supplies `name`, reading it throws.
 
 - `name` — the service name to isolate.
 - `label` — scope label to join; defaults to a fresh unique symbol.
 
 **Returns** a child context whose `name` service resolves in the new scope.
 
-[Source](../../vendor/cordis/src/context.ts#L123)
+[Source](../../vendor/cordis/src/context.ts#L126)
 
 ### ctx.intercept(name, config)
 
@@ -94,7 +97,7 @@ Plugins loaded under the returned context see `config` merged into the service's
 
 **Returns** a child context carrying the additional intercept entry.
 
-[Source](../../vendor/cordis/src/context.ts#L142)
+[Source](../../vendor/cordis/src/context.ts#L145)
 
 ### ctx.baseUrl
 
@@ -156,11 +159,11 @@ The plugin registry. Its methods are mixed onto `ctx` (`ctx.plugin`, `ctx.inject
 ### Context.root
 
 ```ts cordis-catalog
-/** Symbol key of the root context (see the `Context[symbols.root]` property). */
+/** Symbol key of the root context: `ctx[Context.root]` is the application's root context, shared by every child context. */
 static readonly root: unique symbol
 ```
 
-Symbol key of the root context (see the `Context[symbols.root]` property).
+Symbol key of the root context: `ctx[Context.root]` is the application's root context, shared by every child context.
 
 [Source](../../vendor/cordis/src/context.ts#L44)
 
@@ -189,22 +192,22 @@ Symbol key for a context's listener filter, consulted on every event dispatch.
 ### Context.isolate
 
 ```ts cordis-catalog
-/** Symbol key of the isolation map (see the `Context[symbols.isolate]` property). */
+/** Symbol key of the isolation map: `ctx[Context.isolate]` maps each service name to its scope label. */
 static readonly isolate: unique symbol
 ```
 
-Symbol key of the isolation map (see the `Context[symbols.isolate]` property).
+Symbol key of the isolation map: `ctx[Context.isolate]` maps each service name to its scope label.
 
 [Source](../../vendor/cordis/src/context.ts#L50)
 
 ### Context.intercept
 
 ```ts cordis-catalog
-/** Symbol key of the intercept map (see the `Context[symbols.intercept]` property). */
+/** Symbol key of the intercept map: `ctx[Context.intercept]` maps each service name to its intercept metadata. */
 static readonly intercept: unique symbol
 ```
 
-Symbol key of the intercept map (see the `Context[symbols.intercept]` property).
+Symbol key of the intercept map: `ctx[Context.intercept]` maps each service name to its intercept metadata.
 
 [Source](../../vendor/cordis/src/context.ts#L52)
 
