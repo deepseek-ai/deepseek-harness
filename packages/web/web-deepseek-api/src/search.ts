@@ -26,9 +26,7 @@ const ORIGINAL_QUESTION_MAX_CHARS = 128
 
 /** Authentication, endpoint, and result settings snapshotted for one search. */
 export interface DeepSeekSearchApiOptions {
-  /** API base the API key is sent to, including its path prefix; `/search` is appended. An account token goes to its own base. */
-  baseURL: string
-  /** Authentication sources of the search. */
+  /** Ordered authentication sources of the search; `/search` is appended to the base of the source sent. */
   auth: DeepSeekWebAuth
   /** Settings that endpoint failures of the search name. */
   guidance: DeepSeekWebGuidance
@@ -75,14 +73,14 @@ export class DeepSeekSearchApiProvider implements WebSearchProvider {
   private readonly starts: number[] = []
   /** Picker description: what this provider suits and what it costs or cannot do. */
   readonly description: NonNullable<WebSearchProvider['description']> = {
-    en: 'Queries the search endpoint directly for titles, URLs, and snippets without an extra model call. Uses the DeepSeek account of the current conversation, or a DeepSeek API key, and may incur API charges.',
-    zh: '直接请求搜索接口返回标题、URL 与摘要，无需额外调用模型。使用当前会话的 DeepSeek 账号或 DeepSeek API Key，可能产生计费',
-    ja: '追加のモデル呼び出しなしで検索エンドポイントに直接問い合わせ、タイトル、URL、スニペットを返します。現在の会話の DeepSeek アカウント、または DeepSeek API キーを使用し、API 料金が発生する場合があります。',
-    es: 'Consulta directamente el punto de conexión de búsqueda y devuelve títulos, URL y fragmentos sin una llamada adicional al modelo. Usa la cuenta de DeepSeek de la conversación actual o una clave de API de DeepSeek, y puede generar cargos de API.',
-    fr: "Interroge directement le point de terminaison de recherche pour obtenir titres, URL et extraits, sans appel de modèle supplémentaire. Utilise le compte DeepSeek de la conversation en cours ou une clé API DeepSeek, et peut entraîner des frais d'API.",
-    de: 'Fragt den Suchendpunkt direkt nach Titeln, URLs und Ausschnitten ab, ohne zusätzlichen Modellaufruf. Verwendet das DeepSeek-Konto der aktuellen Unterhaltung oder einen DeepSeek-API-Schlüssel und kann API-Kosten verursachen.',
-    ru: 'Напрямую запрашивает поисковый сервис и возвращает заголовки, URL и фрагменты без дополнительного вызова модели. Использует учётную запись DeepSeek текущего разговора или ключ API DeepSeek; возможна оплата API.',
-    pt: 'Consulta diretamente o endpoint de pesquisa e retorna títulos, URLs e trechos sem uma chamada extra ao modelo. Usa a conta DeepSeek da conversa atual ou uma chave de API da DeepSeek e pode gerar cobranças de API.',
+    en: 'Incurs charges, paid by the account or API key chosen under Billing.',
+    zh: '会产生费用，由「计费方式」选定的账号或 API Key 支付。',
+    ja: '料金が発生し、「課金方法」で選んだアカウントまたは API キーに請求されます。',
+    es: 'Genera cargos, que paga la cuenta o la clave de API elegida en Facturación.',
+    fr: 'Entraîne des frais, payés par le compte ou la clé API choisi dans Facturation.',
+    de: 'Verursacht Kosten, die das unter Abrechnung gewählte Konto oder der API-Schlüssel trägt.',
+    ru: 'Услуга платная: оплата идёт с аккаунта или ключа API, выбранного в разделе «Оплата».',
+    pt: 'Gera cobranças, pagas pela conta ou chave de API escolhida em Cobrança.',
   }
 
   /**
@@ -93,7 +91,8 @@ export class DeepSeekSearchApiProvider implements WebSearchProvider {
 
   available(): boolean {
     const options = this.resolveOptions()
-    return hasDeepSeekWebCredential(options.auth) && URL.canParse(options.baseURL)
+    return hasDeepSeekWebCredential(options.auth)
+      && options.auth.sources.every(source => source.kind === 'misconfigured' || URL.canParse(source.baseURL))
       && isPositiveInteger(options.count) && isPositiveInteger(options.requestsPerSecond)
   }
 
@@ -101,7 +100,6 @@ export class DeepSeekSearchApiProvider implements WebSearchProvider {
     const options = this.resolveOptions()
     const question = boundedQuestion(options.originalQuestion?.())
     return dispatchDeepSeekWeb(options.auth, {
-      baseURL: options.baseURL,
       path: '/search',
       body: {
         query: request.query,

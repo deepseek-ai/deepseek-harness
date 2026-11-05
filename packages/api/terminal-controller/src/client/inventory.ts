@@ -7,6 +7,8 @@ interface Loading {
   readonly kind: 'loading'
   readonly promise: Promise<Inventory>
   readonly updates: Map<WebTerminalId, WebTerminalInfo | undefined>
+  /** Terminals of the latest whole roster received while loading; the response keeps no other unchanged terminal. */
+  roster?: ReadonlySet<WebTerminalId>
 }
 type LoadState = { readonly kind: 'unloaded' | 'ready' | 'disposed' }
   | { readonly kind: 'failed'; readonly error: Error }
@@ -46,6 +48,9 @@ export class TerminalInventory {
       if (this.state !== request) return await this.read()
       if (!result.ok) throw result.error
       const items = new Map(result.value.map(info => [info.id, info]))
+      if (request.roster !== undefined) {
+        for (const id of items.keys()) if (!request.roster.has(id) && !request.updates.has(id)) items.delete(id)
+      }
       for (const [id, info] of request.updates) {
         if (info === undefined) items.delete(id)
         else items.set(id, info)
@@ -79,6 +84,18 @@ export class TerminalInventory {
     if (this.state.kind === 'disposed') return
     this.items.delete(id)
     if (this.state.kind === 'loading') this.state.updates.set(id, undefined)
+  }
+
+  /**
+   * Apply a whole Host roster: listed terminals update their metadata and the others leave the list.
+   * @param terminals - every terminal the Host retains for the Session.
+   */
+  reconcile(terminals: readonly WebTerminalInfo[]): void {
+    if (this.state.kind === 'disposed') return
+    const listed = new Set(terminals.map(info => info.id))
+    for (const id of [...this.items.keys()]) if (!listed.has(id)) this.remove(id)
+    for (const info of terminals) this.update(info)
+    if (this.state.kind === 'loading') this.state.roster = listed
   }
 
   /**

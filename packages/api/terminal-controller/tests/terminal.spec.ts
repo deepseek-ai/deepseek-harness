@@ -2,26 +2,27 @@
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SubprocessOutcome, SubprocessTerminalHandle } from '@deepseek-ai/dsh-subprocess'
+import { AgentTerminalError } from '../src/agent.ts'
 import { BrowserTerminal } from '../src/terminal.ts'
 import { inputChannel } from './input.ts'
 import { TerminalFollower } from '../src/stream.ts'
 import type { TerminalInput, TerminalFrame, WebTerminalId, WebTerminalInfo } from '../src/types.ts'
 
-const info: WebTerminalInfo = { id: 'terminal-test' as WebTerminalId, title: 'bash', shell: { path: '/bin/bash', name: 'bash', args: ['-i'] }, cwd: '/workspace', cols: 80, rows: 24, state: 'running', exitCode: null }
+const info: WebTerminalInfo = { id: 'terminal-test' as WebTerminalId, title: 'bash', shell: { path: '/bin/bash', name: 'bash', args: ['-i'] }, cwd: '/workspace', cols: 80, rows: 24, state: 'running', exitCode: null, origin: 'user', control: 'user' }
 const cleanups: (() => Promise<void>)[] = []
 afterEach(async () => { await Promise.all(cleanups.splice(0).map(close => close())) })
 
-function fixture() {
+function fixture(overrides: Partial<WebTerminalInfo> = {}) {
   const output = new PassThrough()
   const outcome = Promise.withResolvers<SubprocessOutcome>()
   const handle = {
     pid: 123, output, done: outcome.promise, write: vi.fn(async () => {}), resize: vi.fn(async () => {}),
     inspectActivity: async () => ({ state: 'unknown' as const, revision: 0 }),
-    inspectForeground: async () => undefined, signalForeground: async () => 123,
+    inspectForeground: async (): ReturnType<SubprocessTerminalHandle['inspectForeground']> => undefined, signalForeground: async () => 123,
     terminate: vi.fn(async () => { output.end(); outcome.resolve({ exitCode: 0, signal: null }) }),
   }
   const checked: SubprocessTerminalHandle = handle
-  const terminal = new BrowserTerminal(checked, info, 100, 100_000)
+  const terminal = new BrowserTerminal(checked, { ...info, ...overrides }, 100, 100_000)
   cleanups.push(() => terminal.close())
   return { terminal, output, outcome, handle }
 }
@@ -328,4 +329,117 @@ it('preserves the current controller when a queued attachment is cancelled durin
   first.input.push({ type: 'write', sequence: 2, data: 'still writable' })
   expect(await readFrame(first.iterator)).toEqual({ type: 'ack', sequence: 2 })
   expect(handle.write).toHaveBeenLastCalledWith('still writable')
+})
+
+describe('agent access', () => {
+  const agentInfo = { origin: 'agent', control: 'agent', sandboxMode: 'workspace-write' } as const
+
+  it('passes control to the person on typed input and not on terminal-protocol replies', async () => {
+    const { terminal, handle } = fixture(agentInfo)
+    const view = await attach(terminal)
+    view.input.push({ type: 'write', sequence: 1, data: '\x1b[?1;2c' })
+    expect(await readFrame(view.iterator)).toEqual({ type: 'ack', sequence: 1 })
+    expect(terminal.info.control).toBe('agent')
+    view.input.push({ type: 'write', sequence: 2, data: 'ls\r', typed: true })
+    expect(await readFrame(view.iterator)).toMatchObject({ type: 'state', info: { control: 'user', origin: 'agent' } })
+    expect(await readFrame(view.iterator)).toEqual({ type: 'ack', sequence: 2 })
+    expect(handle.write.mock.calls).toEqual([['\x1b[?1;2c'], ['ls\r']])
+    await expect(terminal.agentWrite('pwd\r')).rejects.toMatchObject({ code: 'user-control' })
+    await expect(terminal.agentSignal('SIGINT')).rejects.toBeInstanceOf(AgentTerminalError)
+    expect(handle.write).toHaveBeenCalledTimes(2)
+  })
+
+  it('writes and signals for the agent only while it controls a running terminal', async () => {
+    const { terminal, output, outcome, handle } = fixture(agentInfo)
+    const signal = vi.spyOn(handle, 'signalForeground')
+    await terminal.agentWrite('echo ready\r')
+    expect(handle.write).toHaveBeenCalledExactlyOnceWith('echo ready\r')
+    expect(await terminal.agentSignal('SIGINT')).toBe(123)
+    expect(signal).toHaveBeenCalledExactlyOnceWith('SIGINT')
+    output.end()
+    outcome.resolve({ exitCode: 0, signal: null })
+    await expect.poll(() => terminal.info.state).toBe('exited')
+    await expect(terminal.agentWrite('late\r')).rejects.toMatchObject({ code: 'not-running' })
+  })
+
+  it('refuses agent input for terminals the person created', async () => {
+    const { terminal, handle } = fixture()
+    await expect(terminal.agentWrite('ls\r')).rejects.toMatchObject({ code: 'user-control' })
+    expect(handle.write).not.toHaveBeenCalled()
+  })
+
+  it('renders pages and marked output once draining applies queued output', async () => {
+    const { terminal, output } = fixture(agentInfo)
+    output.write(Buffer.from('$ earlier\r\n'))
+    await expect.poll(() => terminal.revision).toBeGreaterThan(0)
+    await terminal.drain()
+    const mark = terminal.markScreen()
+    output.write(Buffer.from('$ make\r\nprogress 10%\rprogress 100%\r\n$ '))
+    await expect.poll(() => terminal.revision).toBeGreaterThan(1)
+    await terminal.drain()
+    expect(mark.lines().lines).toEqual(['$ make', 'progress 100%', '$'])
+    expect(terminal.readScreen({ offset: 0, count: 2, maxBytes: 1000 })).toEqual({ text: 'progress 100%\n$', totalLines: 4, lineBegin: 0, lineEnd: 2, truncated: false })
+    mark.dispose()
+  })
+
+  it('marks the start of a wrapped cursor line and reports the process id', async () => {
+    const { terminal, output } = fixture({ ...agentInfo, cols: 10 })
+    output.write(Buffer.from('$ 0123456789abcdefghij'))
+    await expect.poll(() => terminal.revision).toBeGreaterThan(0)
+    await terminal.drain()
+    const mark = terminal.markScreen()
+    output.write(Buffer.from('\r\nok\r\n$ '))
+    await expect.poll(() => mark.lines().lines).toEqual(['$ 0123456789abcdefghij', 'ok', '$'])
+    expect(terminal.pid).toBe(123)
+  })
+
+  it('renders the whole alternate screen after the application switches buffers', async () => {
+    const { terminal, output } = fixture(agentInfo)
+    output.write(Buffer.from('$ vim notes\r\n'))
+    await expect.poll(() => terminal.revision).toBeGreaterThan(0)
+    const mark = terminal.markScreen()
+    output.write(Buffer.from('\x1b[?1049h\x1b[Hediting notes'))
+    await expect.poll(() => mark.lines()).toEqual({ lines: ['editing notes'], truncated: false })
+  })
+
+  it('reports foreground process facts without taking control', async () => {
+    const { terminal, handle } = fixture()
+    vi.spyOn(handle, 'inspectForeground').mockResolvedValue({ processGroupId: 77, inputWaiting: true })
+    expect(await terminal.inspectForeground()).toEqual({ processGroupId: 77, inputWaiting: true })
+    expect(terminal.info.control).toBe('user')
+  })
+
+  it('reports a mark trimmed out of scrollback as truncated', async () => {
+    const { terminal, output } = fixture(agentInfo)
+    const mark = terminal.markScreen()
+    output.write(Buffer.from(Array.from({ length: 200 }, (_, index) => `line ${index}`).join('\r\n')))
+    await expect.poll(() => mark.lines().truncated).toBe(true)
+    await terminal.drain()
+    expect(mark.lines().lines.at(-1)).toBe('line 199')
+  })
+
+  it('wakes revision waiters on output and state changes and honors cancellation', async () => {
+    const { terminal, output } = fixture(agentInfo)
+    const start = terminal.revision
+    const waiting = terminal.changed(start, new AbortController().signal)
+    output.write(Buffer.from('x'))
+    expect(await waiting).toBeGreaterThan(start)
+    const renamed = terminal.changed(terminal.revision, new AbortController().signal)
+    terminal.rename('build')
+    expect(await renamed).toBe(terminal.revision)
+    const abort = new AbortController()
+    const cancelled = terminal.changed(terminal.revision, abort.signal)
+    abort.abort(new Error('stop waiting'))
+    await expect(cancelled).rejects.toThrow('stop waiting')
+  })
+
+  it('refuses screen reads after the screen is released', async () => {
+    const { terminal } = fixture(agentInfo)
+    const mark = terminal.markScreen()
+    await terminal.close()
+    await terminal.drain()
+    expect(() => terminal.readScreen({ offset: 0, count: 10, maxBytes: 100 })).toThrow(expect.objectContaining({ code: 'unavailable' }))
+    expect(() => terminal.markScreen()).toThrow(expect.objectContaining({ code: 'unavailable' }))
+    expect(() => mark.lines()).toThrow(expect.objectContaining({ code: 'unavailable' }))
+  })
 })
