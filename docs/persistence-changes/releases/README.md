@@ -90,7 +90,7 @@ pnpm run doc-sync
 
 The marker-delimited index, inventory cells, and structural-change facts are generated from the snapshots. Default verification rejects stale facts. Run `pnpm run verify-persistence-releases --write` to refresh those regions and pairing records after validating all machine data; authored summaries, source evidence, machine declarations, and schema files are preserved.
 
-Tag completeness is relative to the manifest’s captured scope; offline checks do not discover later tags automatically. Standard documentation checks validate pairing records and Markdown links. The [format template](../../../.agents/skills/dsh-doc/templates/persistence-release.md) defines each record’s fields.
+Tag completeness is relative to the manifest’s captured scope; offline checks do not discover later tags automatically. Standard documentation checks validate pairing records and Markdown links. The [format template](../../../.agents/skills/dsh-doc-writing/templates/persistence-release.md) defines each record’s fields.
 
 <a id="dev-note"></a>
 ## Dev Note

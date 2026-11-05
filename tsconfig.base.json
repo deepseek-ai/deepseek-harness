@@ -380,6 +380,7 @@
       "@deepseek-ai/dsh-experimental-claude-code-mods": ["./packages/experimental/claude-code-mods/src"],
       "@deepseek-ai/dsh-tool-agent-team": ["./packages/team/tool-agent-team/src"],
       "@deepseek-ai/dsh-experimental-worktree": ["./packages/experimental/worktree/src"],
+      "@deepseek-ai/dsh-experimental-worktree/types": ["./packages/experimental/worktree/src/types.ts"],
       "@deepseek-ai/dsh-experimental-tool-worktree": ["./packages/experimental/tool-worktree/src"],
       "@deepseek-ai/dsh-experimental-forge": ["./packages/experimental/forge/src"],
       "@deepseek-ai/dsh-experimental-forge/types": ["./packages/experimental/forge/src/types.ts"],
