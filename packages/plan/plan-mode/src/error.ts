@@ -12,7 +12,7 @@ import { HarnessError } from '@deepseek-ai/dsh-llm'
  * - `PLAN_REVIEW_INTERRUPTED`: the plan-mode service was reloaded during the review; present the plan again.
  * - `PLAN_REVISION_REQUESTED`: the user chose to keep planning; revise the plan from the feedback in `message`.
  */
-export const PLAN_MODE_ERROR_CODES = [
+const PLAN_MODE_ERROR_CODES = [
   'PLAN_NOT_ACTIVE',
   'PLAN_REVIEW_INTERRUPTED',
   'PLAN_REVISION_REQUESTED',

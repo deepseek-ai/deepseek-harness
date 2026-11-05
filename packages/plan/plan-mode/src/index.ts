@@ -43,7 +43,7 @@ declare module '@deepseek-ai/dsh-llm' {
   }
 }
 export type * from './types.ts'
-export { PLAN_MODE_ERROR_CODES, PlanModeError, type PlanModeErrorCode } from './error.ts'
+export { PlanModeError, type PlanModeErrorCode } from './error.ts'
 
 declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
