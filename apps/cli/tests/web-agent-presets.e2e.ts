@@ -866,7 +866,7 @@ describe.each(['web', 'desktop'] as const)('%s native subagent bundles', (surfac
 })
 
 describe('the standard preset documentation skill', () => {
-  it.for([false, true])('loads the packaged skill without adding tools (existing catalog: %s)', async (existingCatalog: boolean) => {
+  it.for([false, true])('loads the packaged skill without adding tools (badge skill: %s)', async (withBadge: boolean) => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-standard-doc-'))
     vi.stubEnv('DSH_HOME', join(root, 'home'))
     vi.stubEnv('DSH_AGENTS_HOME', join(root, 'agents-home'))
@@ -876,7 +876,7 @@ describe('the standard preset documentation skill', () => {
       const standard = composeEntries([webPatches('standard documentation')])
         .find(row => row.id === 'preset-standard')!.config as import('@deepseek-ai/dsh-agent-preset-registry').PresetDefinition
       docCtx = await bootWeb(root, [
-        { id: 'skill-badge', disabled: !existingCatalog },
+        { id: 'skill-badge', disabled: !withBadge },
         { insert: [{
           id: 'preset-standard-without-doc', name: '@deepseek-ai/dsh-agent-preset',
           config: {
@@ -935,7 +935,7 @@ describe('the standard preset documentation skill', () => {
         }
       }
       console.info('Standard dsh-doc catalog context', {
-        existingCatalog, before: catalogSize(baselineCatalogs), after: catalogSize(catalogs),
+        withBadge, before: catalogSize(baselineCatalogs), after: catalogSize(catalogs),
       })
       const requestTexts = requests.flatMap(request => request.messages.flatMap(message =>
         message.content.flatMap(block => block.type === 'text' ? [block.text] : [])))
