@@ -45,6 +45,113 @@
   line-height: 24px;
 }
 
+.heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.warningTrigger {
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.warningTag { gap: 4px; }
+
+/* The tag supplies the fill; keep its larger button hit target transparent. */
+.heading .warningTrigger:active:not(:disabled) { background: transparent; }
+
+@media (hover: hover) {
+  .heading .warningTrigger:hover:not(:disabled) { background: transparent; }
+  .warningTrigger:hover:not(:disabled) .warningTag {
+    background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 18%, transparent);
+  }
+}
+
+.warningTrigger:active:not(:disabled) .warningTag {
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 22%, transparent);
+}
+
+.warningPopover {
+  --dsh-warning-window-top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+  border: 0;
+  box-shadow: var(--dsw-elevation-panel);
+  position: fixed;
+  position-area: none;
+  top: var(--dsh-warning-window-top);
+  bottom: max(12px, calc(anchor(top) + 8px));
+  left: 12px;
+  right: max(12px, anchor(right));
+  align-self: end;
+  justify-self: end;
+  margin: 0;
+  position-try-fallbacks: --dsh-warning-wide-above, --dsh-warning-below, --dsh-warning-wide-below, --dsh-warning-window, --dsh-warning-wide-window;
+  z-index: 1100;
+  box-sizing: border-box;
+  width: 420px;
+  max-width: calc(100vw - 24px);
+  height: fit-content;
+  max-height: calc(100dvh - 12px - var(--dsh-warning-window-top));
+  overflow-y: auto;
+  padding: 24px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+@position-try --dsh-warning-wide-above {
+  right: 12px;
+  justify-self: safe end;
+}
+
+@position-try --dsh-warning-below {
+  top: max(var(--dsh-warning-window-top), calc(anchor(bottom) + 8px));
+  bottom: 12px;
+  align-self: start;
+}
+
+@position-try --dsh-warning-wide-below {
+  top: max(var(--dsh-warning-window-top), calc(anchor(bottom) + 8px));
+  bottom: 12px;
+  right: 12px;
+  align-self: start;
+  justify-self: safe end;
+}
+
+@position-try --dsh-warning-window {
+  top: var(--dsh-warning-window-top);
+  bottom: 12px;
+  align-self: safe start;
+}
+
+@position-try --dsh-warning-wide-window {
+  top: var(--dsh-warning-window-top);
+  bottom: 12px;
+  right: 12px;
+  align-self: safe start;
+  justify-self: safe end;
+}
+
+.warningPopover p { margin: 16px 0 0; }
+
+.warningPopover p + p:last-child {
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+  padding-top: 16px;
+  color: var(--dsw-alias-label-primary);
+  font-weight: 500;
+}
+
+.warningTitle {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 15px;
+  line-height: 24px;
+  font-weight: 500;
+}
+
 .command {
   color: var(--dsw-alias-label-tertiary);
   font-family: var(--ds-font-family-code);

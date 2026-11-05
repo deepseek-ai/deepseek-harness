@@ -1,9 +1,8 @@
 /** Delivery cards use one full-width row or a two-column, four-card summary. */
-.root { --deliverable-fill: var(--dsw-static-neutral-50); --deliverable-hover: var(--dsw-static-neutral-100); container-type: inline-size; display: flex; flex-direction: column; gap: 16px; min-width: 0; margin-top: 4px; }
+.root { --deliverable-fill: var(--dsw-alias-card-fill); --deliverable-hover: var(--dsw-alias-card-fill-hover); container-type: inline-size; display: flex; flex-direction: column; gap: 16px; min-width: 0; margin-top: 4px; }
 /* The turn-tail gap alone separates adjacent file sections. The default top
    margin remains when deliveries are the first file section after prose. */
 .root[data-after-changes='true'] { margin-top: 0; }
-:global(body[data-ds-dark-theme]) .root { --deliverable-fill: var(--dsw-static-neutral-850); --deliverable-hover: var(--dsw-static-neutral-800); }
 .hostStatus { display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
 .presented { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; min-width: 0; }
 .presented[data-single='true'] { grid-template-columns: minmax(0, 1fr); }
@@ -13,8 +12,7 @@
 }
 .cardPreview { position: absolute; z-index: 1; inset: 0; width: 100%; padding: 0; border: 0; border-radius: inherit; background: transparent; cursor: pointer; }
 .cardPreview:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); }
-.fileIcon { position: relative; z-index: 2; box-sizing: border-box; flex: 0 0 auto; display: grid; place-items: center; width: 40px; height: 40px; overflow: hidden; pointer-events: none; border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 10px; background: color-mix(in srgb, var(--dsw-static-neutral-00) 50%, transparent); color: var(--dsw-alias-link); }
-:global(body[data-ds-dark-theme]) .fileIcon { background: color-mix(in srgb, var(--dsw-static-neutral-00) 5%, transparent); }
+.fileIcon { position: relative; z-index: 2; box-sizing: border-box; flex: 0 0 auto; display: grid; place-items: center; width: 40px; height: 40px; overflow: hidden; pointer-events: none; border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 10px; background: var(--dsw-alias-card-tile-fill); color: var(--dsw-alias-link); }
 .fileBody { position: relative; z-index: 2; display: flex; flex: 1; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; pointer-events: none; }
 .details { display: flex; flex: 1; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; }
 .fileName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; line-height: 20px; }

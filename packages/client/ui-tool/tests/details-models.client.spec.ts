@@ -54,6 +54,31 @@ describe('shared detail values', () => {
 })
 
 describe('control detail adapters', () => {
+  it('localizes unreadable catalog statuses in English and Chinese', () => {
+    const states = ['corrupt', 'unsupported', 'unavailable']
+    for (const [dictionary, common, locale, labels] of [
+      [en, commonEn, 'en', ['Corrupt', 'Unsupported', 'Unavailable']],
+      [zh, commonZh, 'zh-CN', ['已损坏', '不支持', '不可用']],
+    ] as const) {
+      const translate = makeTranslate(dictionary, common)
+      const result = states.map(status => ({ name: status, status }))
+      expect(detailsCardModel(output('list_agents', JSON.stringify(result)), translate, locale)
+        ?.items.map(item => item.badge?.label)).toEqual(labels)
+    }
+  })
+
+  it('localizes Team owners while preserving inspection owner fields', () => {
+    const translate = makeTranslate(zh, commonZh)
+    for (const tool of ['team_task_get', 'team_task_create', 'team_task_update', 'team_task_list']) {
+      const task = { subject: 'Review', owner: 'reviewer/checker' }
+      const value = tool === 'team_task_list' ? { tasks: [task] } : task
+      expect(detailsCardModel(output(tool, JSON.stringify(value)), translate, 'zh-CN')?.items[0]?.fields)
+        .toContainEqual({ label: '负责人', value: 'reviewer/checker' })
+    }
+    expect(inspectionItems({ owner: 'client-ui-tool' }, translate)[0]?.fields)
+      .toEqual([{ label: 'owner', value: 'client-ui-tool' }])
+  })
+
   it.each([
     [{ timedOut: false }, '等待已结束'],
     [{ timedOut: true }, '等待已超时'],
@@ -65,12 +90,26 @@ describe('control detail adapters', () => {
   })
 
   it('uses producer wording for agent, job, terminal, and LSP lists', () => {
-    const agents = details('list_agents', 'a1 [running] — Build\na2 [ready] parent=a1 depth=1 — Review', { scope: 'descendants' })
-    expect(agents?.summary).toBe('2 agents')
+    const agents = details('list_agents', 'lead [running] — root agent\nreviewer/checker [inactive] — Check tests\nold-id [unavailable]')
+    expect(agents?.summary).toBe('3 agents')
     expect(agents?.items).toEqual([
+      { title: 'lead', subtitle: 'root agent', badge: { label: 'Running', tone: 'info' }, fields: [] },
+      { title: 'reviewer/checker', subtitle: 'Check tests', badge: { label: 'Inactive', tone: 'warning' }, fields: [] },
+      { title: 'old-id', badge: { label: 'Unavailable', tone: 'neutral' }, fields: [] },
+    ])
+    const historical = details('list_agents', 'a1 [running] — Build\na2 [ready] parent=a1 depth=1 — Review\na3 [diagnostic: corrupt] parent=a1 depth=1', { scope: 'descendants' })
+    expect(historical?.summary).toBe('3 agents')
+    expect(historical?.items).toEqual([
       { title: 'a1', subtitle: 'Build', badge: { label: 'Running', tone: 'info' }, fields: [] },
       { title: 'a2', subtitle: 'Review', badge: { label: 'Ready', tone: 'neutral' }, fields: [] },
+      { title: 'a3', badge: { label: 'diagnostic: corrupt', tone: 'neutral' }, fields: [] },
     ])
+    const structured = details('list_agents', JSON.stringify([{ name: 'lead', status: 'running', description: 'root agent' }, { name: 'reviewer', status: 'inactive' }]))
+    expect(structured?.items).toEqual([
+      { title: 'lead', description: 'root agent', badge: { label: 'Running', tone: 'info' }, fields: [] },
+      { title: 'reviewer', badge: { label: 'Inactive', tone: 'warning' }, fields: [] },
+    ])
+    expect(details('list_agents', 'reviewer running')).toBeNull()
     expect(details('list_agents', '(no subagents)')?.empty).toBe('No results')
     expect(details('job_list', 'j1 [bash] running — Build')?.items[0]?.fields).toContainEqual({ label: 'Type', value: 'bash' })
     expect(details('job_list', '(no background jobs)')?.empty).toBe('No results')
@@ -103,20 +142,37 @@ describe('control detail adapters', () => {
 
   it.each(['subagent', 'subagent_fork'])('%s renders persisted creation metadata independently of result wording', (name) => {
     const args = { description: 'Review the changes', prompt: 'Read the diff and report defects.' }
-    const block = { ...output(name, 'Delegation accepted.', args), meta: { kind: 'activation', subagentId: 'child-1' } }
+    const block = { ...output(name, 'Delegation accepted.', args), meta: { kind: 'activation', name: 'reviewer' } }
     const model = detailsCardModel(block, t, 'en')
     expect(model?.items[0]).toEqual({
       title: 'Started',
-      fields: [{ label: 'Agent task description', value: args.description }, { label: 'ID', value: 'child-1' }],
+      fields: [
+        { label: 'Agent task description', value: args.description },
+        { label: 'Agent name', value: 'reviewer' },
+      ],
       groups: [{ label: 'Task', items: [{ description: args.prompt, fields: [] }] }],
     })
     expect(detailsCardModel({ ...block, content: [] }, t, 'en')).toEqual(model)
     expect(detailsCardModel({ ...block, isError: true }, t, 'en')).toBeNull()
-    expect(detailsCardModel(block, makeTranslate(zh, commonZh), 'zh-CN')?.items[0]?.fields)
-      .toEqual([{ label: '智能体任务描述', value: args.description }, { label: 'ID', value: 'child-1' }])
+    expect(detailsCardModel(block, makeTranslate(zh, commonZh), 'zh-CN')?.items[0]?.fields).toEqual([
+      { label: '智能体任务描述', value: args.description },
+      { label: '智能体名称', value: 'reviewer' },
+    ])
   })
 
-  it.each([null, [], {}, { kind: 'other', subagentId: 'child-1' }, { kind: 'activation' }, { kind: 'activation', subagentId: 1 }, { kind: 'activation', subagentId: ' ' }])(
+  it('omits the name from metadata recorded before agents had names', () => {
+    const args = { description: 'Review the changes', prompt: 'Read the diff and report defects.' }
+    const block = { ...output('subagent', 'started subagent child-1', args), meta: { kind: 'activation', subagentId: 'child-1' } }
+    expect(detailsCardModel(block, t, 'en')?.items[0]?.fields).toEqual([
+      { label: 'Agent task description', value: args.description }, { label: 'ID', value: 'child-1' },
+    ])
+  })
+
+  it.each([
+    null, [], {}, { kind: 'other', subagentId: 'child-1' }, { kind: 'activation' }, { kind: 'activation', subagentId: 1 },
+    { kind: 'activation', subagentId: ' ' }, { kind: 'activation', subagentId: 'child-1', name: 1 },
+    { kind: 'activation', subagentId: 'child-1', name: ' ' },
+  ])(
     'keeps malformed metadata on the generic result path (%j)', (meta) => {
       const block = { ...output('subagent', 'started subagent child-1'), meta }
       expect(detailsCardModel(block, t, 'en')).toBeNull()
@@ -127,7 +183,10 @@ describe('control detail adapters', () => {
     expect(details('spawn_teammate', '{"member":{"id":"a1","status":"running"}}', { name: 'A' })?.items[0]).toMatchObject({ title: 'a1', badge: { label: 'Running' } })
     expect(details('team_task_create', '{"id":"task-1","subject":"Review","status":"pending"}')?.summary).toBe('Review')
     expect(details('team_task_list', '{"tasks":[{"id":"task-1","subject":"Review"}],"nextCursor":3}')?.caption).toBe('More tasks available; next cursor is 3')
-    expect(details('send_message', '{"status":"queued"}', { agent_id: 'a1', message: 'hello' })?.items[0]?.badge?.label).toBe('Queued')
+    expect(details('team_task_get', '{"id":"task-1","subject":"Review","owner":"reviewer/checker"}')?.items[0]?.fields).toContainEqual({ label: 'Owner', value: 'reviewer/checker' })
+    expect(details('team_task_get', '{"id":"task-1","subject":"Review","ownerId":"child-1"}')?.items[0]?.fields).toContainEqual({ label: 'Owner', value: 'child-1' })
+    expect(details('send_message', '{"status":"queued"}', { agent: 'reviewer', message: 'hello' })?.items[0]).toMatchObject({ title: 'reviewer', badge: { label: 'Queued' } })
+    expect(details('send_message', 'message delivered to agent reviewer/checker', { agent: 'reviewer/checker', message: 'hello' })?.summary).toBe('reviewer/checker · Message delivered')
     expect(details('send_message', 'message delivered to agent reviewer', { agent_id: 'reviewer', message: 'hello' })?.summary).toBe('reviewer · Message delivered')
     expect(details('interrupt_agent', '{"previousStatus":"running"}', { agent_id: 'a1' })?.items[0]?.fields).toContainEqual({ label: 'Previous status', value: 'Running' })
     expect(details('wait_agent', '{"timedOut":true}')?.summary).toBe('Wait timed out')
@@ -149,6 +208,7 @@ describe('control detail adapters', () => {
     expect(details('unknown', 'x')).toBeNull()
     expect(details('team_task_list', '{"tasks":[],"nextCursor":"bad"}')).toBeNull()
     expect(details('terminal_read', 'bad', { sessionId: 'pty-1' })).toBeNull()
+    expect(details('interrupt_agent', 'interrupt requested for agent reviewer', { agent: 'reviewer' })?.summary).toBe('reviewer · Interrupt requested')
     expect(details('interrupt_agent', 'interrupt requested for agent reviewer', { agent_id: 'reviewer' })?.summary).toContain('Interrupt')
     expect(details('interrupt_agent', 'unexpected', { agent_id: 'a1' })).toBeNull()
     expect(details('job_kill', 'unexpected', { job_id: 'j1' })).toBeNull()

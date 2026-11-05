@@ -5,7 +5,7 @@ import { createRequire } from 'node:module'
 import { randomUUID } from 'node:crypto'
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
@@ -31,6 +31,7 @@ import { applyChildComposition, childSessionMeta } from '@deepseek-ai/dsh-subage
 import { ToolCallId, LlmAdapter, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-compaction-basic'
+import { codePointLength } from '@deepseek-ai/dsh-compaction-tool-result-pruner'
 import type {} from '@deepseek-ai/dsh-skill'
 import type {} from '@deepseek-ai/dsh-tools'
 // Type-only: resolves `ctx.get('sessionProjections')` and `ctx.get('tokenMeter')`.
@@ -301,7 +302,7 @@ describe('the shipped Web composition', () => {
       // depend on ripgrep being present on the machine.
       expect(toolNames(ctx, handle.agent).filter(name => name !== 'glob' && name !== 'grep')).toEqual([
         'ask_user_question', 'bash', 'create_goal', 'edit', 'exit_plan_mode',
-        'get_goal', 'interrupt_agent', 'job_kill', 'job_list', 'job_output', 'list_agents', 'list_subagent_models', 'plugin_manager', 'present', 'read', 'read_image',
+        'get_goal', 'interrupt_agent', 'job_kill', 'job_list', 'job_output', 'list_agents', 'list_subagent_models', 'office_convert', 'office_recalculate', 'office_render', 'plugin_manager', 'present', 'read', 'read_image',
         'schedule_create', 'schedule_edit', 'schedule_list', 'schedule_view',
         'send_message', 'skill',
         'subagent', 'subagent_fork', 'team_task_create', 'team_task_get', 'team_task_list', 'team_task_update', 'todo_write', 'update_goal', 'wait_agent', 'web_fetch', 'web_search',
@@ -345,7 +346,7 @@ describe('the shipped Web composition', () => {
         'model', 'provider', 'reasoning_effort',
       ]))
       for (const agent of [disabled.agent, enabled.agent]) {
-        expect(toolParameterNames(ctx, agent, 'subagent_fork')).toEqual(['cwd', 'description', 'prompt'])
+        expect(toolParameterNames(ctx, agent, 'subagent_fork')).toEqual(['cwd', 'description', 'name', 'prompt'])
       }
     } finally {
       await policy.dispose()
@@ -561,11 +562,42 @@ describe('the shipped Web composition', () => {
       expect(tools).not.toContain('str_replace_editor')
       expect(ctx.commands.find(handle.agent, 'goal')).toBeDefined()
 
-      // The preset's own authoring skill registers into ITS layer of the host
+      // The preset's own skill registers into ITS layer of the host
       // registry: the cordis agent's view carries it, the global view does not.
-      const scoped = (await ctx.skills.list({ scope: handle.agent })).map(skill => skill.name)
-      expect(scoped).toContain('editing-cordis-compositions')
-      expect((await ctx.skills.list()).map(skill => skill.name)).not.toContain('editing-cordis-compositions')
+      const packageSkills = realpathSync(join(REPO_ROOT, 'packages/preset/agent-preset/skills'))
+      const shipped = (await ctx.skills.list({ scope: handle.agent }))
+        .filter(skill => skill.path?.startsWith(packageSkills) === true).map(skill => skill.name)
+      expect(shipped).toEqual(['dsh-doc'])
+      expect((await ctx.skills.list()).map(skill => skill.name)).not.toContain('dsh-doc')
+      const loaded = await executeToolFixture(ctx, {
+        callId: ToolCallId('preset-cordis-dsh-doc'),
+        name: 'skill',
+        arguments: { name: 'dsh-doc' },
+        signal: new AbortController().signal,
+        agent: handle.agent,
+      })
+      expect(loaded.isError).toBe(false)
+      const output = loaded.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
+      expect(output).toContain('<skill_content name="dsh-doc">')
+      expect(output).toContain(`Base directory for this skill: ${join(packageSkills, 'dsh-doc')}`)
+      expect(output).toContain('Loading this skill does not authorize changes.')
+      // The composed `read` tool, behind the fs sandbox, returns each whole reference below the
+      // pruner threshold, leaving room for an installation path of up to 256 characters.
+      const references = join(packageSkills, 'dsh-doc', 'references')
+      for (const file of readdirSync(references).filter(entry => entry !== 'packages.md')) {
+        const path = join(references, file)
+        const result = await executeToolFixture(ctx, {
+          callId: ToolCallId(`preset-cordis-dsh-doc-${file}`),
+          name: 'read',
+          arguments: { file_path: path },
+          signal: new AbortController().signal,
+          agent: handle.agent,
+        })
+        expect(result.isError, file).toBe(false)
+        const text = result.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
+        expect(text, file).toContain('(End of file - total ')
+        expect(codePointLength(text) - codePointLength(path) + 256, file).toBeLessThan(8192)
+      }
 
       // The persona is `standard`'s, pinned verbatim so the two declarations
       // cannot drift apart: tool descriptions and the skill catalog carry
@@ -634,12 +666,10 @@ describe('the shipped Web composition', () => {
     }
   })
 
-  it('ships the composition-authoring skill in the declaration package', async () => {
-    const skill = join(
-      REPO_ROOT, 'packages/preset/agent-preset', 'skills', 'editing-cordis-compositions', 'SKILL.md',
-    )
+  it('ships the dsh-doc skill in the declaration package', async () => {
+    const skill = join(REPO_ROOT, 'packages/preset/agent-preset', 'skills', 'dsh-doc', 'SKILL.md')
 
-    expect((await readFile(skill, 'utf8')).startsWith('---\nname: editing-cordis-compositions')).toBe(true)
+    expect((await readFile(skill, 'utf8')).startsWith('---\nname: dsh-doc\n')).toBe(true)
   })
 
   it('merges the global skill layer into a preset agent\'s catalog, keeping local discovery preset-side', async () => {
@@ -662,9 +692,11 @@ describe('the shipped Web composition', () => {
       setup: agentCtx => ctx.agentPresets.mount(agentCtx, 'standard').then(() => undefined),
     })
     try {
-      // The host (global) view carries the deployment-level provider alone:
+      // The host (global) view carries the deployment-level providers alone:
       // local discovery moved behind the presets with `skill-filesystem`.
-      expect((await ctx.skills.list({ cwd: proj })).map(skill => skill.name)).toEqual(['dsh-badge'])
+      expect((await ctx.skills.list({ cwd: proj })).map(skill => skill.name)).toEqual([
+        'dsh-badge', 'office', 'office-docx', 'office-pptx', 'office-xlsx',
+      ])
 
       // The standard agent's view merges the global layer with its preset's
       // own local discovery over the session cwd.
@@ -802,7 +834,7 @@ describe.each(['web', 'desktop'] as const)('%s native subagent bundles', (surfac
         })
         try {
           for (const product of installed) {
-            expect(toolParameterNames(productCtx, handle.agent, toolName(product))).toEqual(['cwd', 'description', 'prompt'])
+            expect(toolParameterNames(productCtx, handle.agent, toolName(product))).toEqual(['cwd', 'description', 'name', 'prompt'])
           }
         } finally { await handle.dispose() }
         expect(spawn).not.toHaveBeenCalled()

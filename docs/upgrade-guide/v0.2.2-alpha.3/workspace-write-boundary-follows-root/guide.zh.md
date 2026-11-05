@@ -10,7 +10,7 @@ description: "workspace-write 边界跟随 Session 的工作区根而不是原�
 
 `ctx.sandboxPolicy.resolve({ session })` 返回的 `workspaceRoot` 是 Session 的工作区根，即它所在的检出目录。此前整个 Session 期间返回的都是 Session header 记录的原始项目。通过 `create_worktree` 或 forge 的"新建工作树"选项进入 worktree 的 Session 现在只能在该 worktree 内写入；原始项目不再整体可写，根内部的 `cd` 不会移动边界。
 
-对于链接 worktree，策略从检出目录的 `.git` 指针推导出仓库公共目录，只接受 Git 写出的 `<common>/worktrees/<name>` 布局及其 `commondir`、`gitdir` 指针，并加入 `additionalWritableRoots`，因此在 `workspace-write` 下可以在 worktree 内运行 `git commit` 与 `git checkout`。该授权也覆盖共享的 `.git/hooks` 与 `.git/config`，与主检出目录中的 Session 此前拥有的权限相同。Windows ACL 限制接受额外可写根目录，不再以 `SANDBOX_UNSUPPORTED_POLICY` 失败。
+对于链接 worktree，策略从检出目录的 `.git` 指针推导出仓库公共目录，只接受 Git 写出的 `<common>/worktrees/<name>` 布局及其 `commondir`、`gitdir` 指针，并加入 `additionalWritableRoots`，因此在 `workspace-write` 下可以在 worktree 内运行 `git commit` 与 `git checkout`。该授权也覆盖共享的 `.git/hooks` 与 `.git/config`，与主检出目录中的 Session 此前拥有的权限相同。在 Windows 上只有 harness 的 `write` 与 `edit` 工具执行该授权；受限进程保留工作区与私有临时目录权限。
 
 文件树、目录列举与监听、交付物与变更摘要、新开的侧栏终端、`@` 文件补全、技能目录、项目指令发现和 LSP 工作区读取同一个根。`WorkspaceChangesSummary.cwd` 由 `root` 取代，`TerminalEnvironment.cwd` 表示该根。
 

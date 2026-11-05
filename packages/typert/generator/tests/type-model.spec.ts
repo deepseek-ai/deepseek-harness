@@ -1722,7 +1722,8 @@ describe('FaceModelEmitter', { timeout: 60_000 }, () => {
         skipLibCheck: false,
         target: ts.ScriptTarget.ES2024,
         lib: ['lib.es2024.d.ts'],
-        types: [],
+        // zod 4.6 declares its URL schemas with the global URL type; host consumers load node types.
+        types: ['node'],
         module: ts.ModuleKind.ESNext,
         moduleResolution: ts.ModuleResolutionKind.Bundler,
       },

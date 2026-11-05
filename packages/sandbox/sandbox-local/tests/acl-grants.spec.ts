@@ -146,40 +146,17 @@ describe('windows-acl write grants (LocalSandboxProvider)', () => {
       ])
       expect(existsSync(tempDir ?? '')).toBe(true)
 
-      expect((await sandbox.confine(['pwsh', '/Command', 'x'], policy)).argv).toEqual(confined.argv)
+      const extra = workspaceRoot()
+      scratch.push(extra)
+      expect((await sandbox.confine(['pwsh', '/Command', 'x'], {
+        ...policy, additionalWritableRoots: [extra],
+      })).argv).toEqual(confined.argv)
       expect(mockState.grants).toHaveLength(2)
+      expect(mockState.grants.flatMap(grant => grant.added.map(added => added.path))).toEqual([ws, tempDir])
 
       await fiber.dispose()
       expect(mockState.grants.every(grant => grant.disposed)).toBe(true)
       expect(existsSync(tempDir ?? '')).toBe(false)
-    } finally {
-      cleanup()
-    }
-  })
-
-  it('grants each extra writable root one revocable ACE under the workspace SID and passes it as --writable', async () => {
-    try {
-      const { sandbox, fiber } = await setup()
-      const ws = workspaceRoot()
-      const extra = realpathSync(mkdtempSync(join(tmpdir(), 'dsh-acl-grants-extra-')))
-      scratch.push(ws, extra)
-      const policy: SandboxPolicy = {
-        mode: 'workspace-write', workspaceRoot: ws, additionalWritableRoots: [extra], sessionId: SessionId('linked'),
-      }
-
-      const confined = await sandbox.confine(['true'], policy)
-      expect(confined.argv.slice(confined.argv.indexOf('--temp-write-sid') + 2)).toEqual(['--writable', extra, '--', 'true'])
-      expect(mockState.grants[0]).toEqual(expect.objectContaining({
-        writeSid: WORKSPACE_SID, added: [{ path: ws, standing: true }, { path: extra, standing: false }],
-      }))
-
-      // The same pair applies its ACE once per provider lifetime, for this session and for another on the workspace.
-      await sandbox.confine(['true'], policy)
-      await sandbox.confine(['true'], { ...policy, sessionId: SessionId('linked-peer') })
-      expect(mockState.grants[0]?.added).toHaveLength(2)
-      expect(mockState.grants).toHaveLength(3)
-
-      await fiber.dispose()
     } finally {
       cleanup()
     }

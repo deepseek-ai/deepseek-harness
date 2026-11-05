@@ -36,8 +36,8 @@ describe.skipIf(MODE === 'record')('web e2e: default Workspace', () => {
         await input.waitFor()
         // Language-neutral on disk, localized in the hero chip. The chip's
         // aria-label is its fixed call to action, so the label is its text.
-        await expect.poll(() => page.getByRole('button', { name: 'Choose workspace', exact: true }).textContent())
-          .toBe('Default workspace')
+        await page.getByRole('button', { name: 'Choose workspace', exact: true })
+          .getByText('Default workspace', { exact: true }).waitFor()
         expect(scaffold.ctx.workspaceRegistry.list()).toHaveLength(1)
         const initialSession = scaffold.ctx.sessions.list()[0]!
         expect(scaffold.ctx.sessions.list()).toHaveLength(1)
@@ -82,7 +82,7 @@ describe.skipIf(MODE === 'record')('web e2e: default Workspace', () => {
       })
       await page.goto(scaffold.authenticatedUrl)
       const trigger = page.getByRole('button', { name: 'Choose workspace', exact: true })
-      await expect.poll(() => trigger.textContent()).toBe('Default workspace')
+      await trigger.getByText('Default workspace', { exact: true }).waitFor()
       await trigger.tap()
       const menu = page.getByRole('menu').filter({ has: page.getByRole('menuitem', { name: 'Default workspace', exact: true }) })
       await menu.waitFor({ state: 'visible', timeout: 10_000 })

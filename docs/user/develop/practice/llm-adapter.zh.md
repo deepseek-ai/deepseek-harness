@@ -153,7 +153,7 @@ ctx.llm.registerAdapter(['my-provider'], adapter)
 
 ## 错误处理
 
-适配器应通过带稳定 code 的 `LlmError` 抛出传输和协议故障；agent loop（智能体循环）会保留该错误及其 code，用于诊断和策略处理。不要依赖普通 `Error` 被自动转换。每个提供方 HTTP 请求还必须合并 `attributionHeaders()`，并传递 `options.signal`。
+适配器应通过带稳定 code 的 `LlmError` 抛出传输和协议故障。`new LlmError` 只接受 `LLM_FAILURE_CODES` 中的内置 code；适配器自己的 code 通过 `LlmError.fromFailure` 抛出。agent loop（智能体循环）会保留该错误及其 code，用于诊断和策略处理。不要依赖普通 `Error` 被自动转换。每个提供方 HTTP 请求还必须合并 `attributionHeaders()`，并传递 `options.signal`。
 
 ```ts
 import {
@@ -180,7 +180,7 @@ class HttpAdapter extends LlmAdapter {
       ...options.signal ? { signal: options.signal } : {},
     })
     if (!response.ok) {
-      throw new LlmError(`Provider API error: ${response.status}`, 'PROVIDER_HTTP_ERROR')
+      throw LlmError.fromFailure({ message: `Provider API error: ${response.status}`, code: 'PROVIDER_HTTP_ERROR', status: response.status })
     }
     // A real adapter parses the response and emits the complete chunk sequence.
     yield { type: 'finish', reason: { kind: 'stop' } }

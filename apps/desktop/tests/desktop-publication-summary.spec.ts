@@ -21,7 +21,7 @@ const plan: DesktopUploadPlan = {
 }
 
 it('shows production destinations and tag after approval with upload-byte fingerprints', async () => {
-  const summary = await desktopPublicationSummary(source, plan, 'c'.repeat(64))
+  const summary = await desktopPublicationSummary(source, plan, 'c'.repeat(64), false)
   await expect(summary).toMatchFileSnapshot('./expected/publication-production.md')
   expect(summary).toContain('/stable/deepseek-harness-1.0.0-win-x64.exe')
   expect(summary).toContain('https&#58;//download.example.com/dsh-desk/feeds/win-x64/stable.yml')
@@ -32,7 +32,7 @@ it('shows production destinations and tag after approval with upload-byte finger
 })
 
 it('escapes runner display text without adding Markdown rows or HTML elements', async () => {
-  const summary = await desktopPublicationSummary({ ...source, runnerName: 'runner|\n<script>`&"__win__![x](https://example.com/x.png)' }, plan, 'c'.repeat(64))
+  const summary = await desktopPublicationSummary({ ...source, runnerName: 'runner|\n<script>`&"__win__![x](https://example.com/x.png)' }, plan, 'c'.repeat(64), false)
   expect(summary).toContain('runner&#124;&#10;&#60;script&#62;&#96;&#38;&#34;')
   expect(summary).not.toContain('<script>')
   expect(summary).toContain('&#95;&#95;win&#95;&#95;&#33;&#91;x&#93;&#40;https&#58;//example.com/x.png&#41;')
@@ -42,5 +42,15 @@ it('fails instead of rendering success when an upload file cannot be read', asyn
   await expect(desktopPublicationSummary(source, { ...plan,
     artifacts: [{ path: '/missing-desktop-summary-artifact/installer.exe', filename: 'installer.exe',
       key: 'installer.exe', contentType: 'application/octet-stream', channelMetadata: false }],
-  }, 'c'.repeat(64))).rejects.toThrow()
+  }, 'c'.repeat(64), false)).rejects.toThrow()
+})
+
+it('shows the fixed website replacement before production approval only when selected', async () => {
+  const summary = await desktopPublicationSummary(source, plan, 'c'.repeat(64), true)
+  await expect(summary).toMatchFileSnapshot('./expected/publication-production-website.md')
+  expect(summary).toContain('download.deepseek.com/desktop/dsh-latest-windows-x64.exe')
+  expect(summary).toContain('无防降级保护')
+  expect(await desktopPublicationSummary(source, plan, 'c'.repeat(64), false)).not.toContain('官网固定安装包')
+  expect(await desktopPublicationSummary({ ...source, preset: 'test', testReleaseId: 'a'.repeat(32) },
+    { ...plan, environment: 'test' }, 'c'.repeat(64), true)).not.toContain('官网固定安装包')
 })

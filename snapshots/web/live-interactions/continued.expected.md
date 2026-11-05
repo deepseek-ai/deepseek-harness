@@ -1,0 +1,39 @@
+- banner:
+  - navigation "Session hierarchy": Reply with a one-sentence description
+  - text: Standard mode
+  - button "More actions"
+  - button "Open right sidebar"
+  - tablist:
+    - tab "Chat" [selected]
+    - tab "Trajectory"
+  - button "More conversation views"
+- navigation "Turn navigation":
+  - button "Jump to turn 1"
+  - button "Jump to turn 2"
+- text: Reply with a one-sentence description of event sourcing, then stop. {{clock}}
+- button "Copy"
+- status: Failed
+- button "Failed" [disabled] [expanded]
+- button "Injected context"
+- group:
+  - status: Retried model request (2/2) · {{duration}}
+- status:
+  - text: This turn failedupstream 503
+  - code: SERVER
+- text: plan Plan mode on. Use /plan off to leave. plan Plan mode off. Requested to continue generation
+- status: Completed
+- button "Completed in {{duration}}"
+- paragraph: Event sourcing is a pattern where all changes to an application's state are stored as an immutable, append-only sequence of events, rather than persisting only the current state, enabling full auditability, temporal queries, and event-driven architectures.
+- button "Copy"
+- button "Good response"
+- button "Bad response"
+- button "Branch into a new conversation"
+- text: {{clock}}
+- textbox "Message or run a task, / commands, @ files or sessions"
+- button "Add files or run commands"
+- 'button "Access mode, current: Workspace Write"': Workspace Write
+- button "Select model, current DeepSeek-V4-Flash": DeepSeek-V4-Flash
+- button "Send message" [disabled]
+- button "2 turns 2 steps · {{throughput}} tok/s": 2 turns 2 steps{{throughput}} tok/s
+- button "7.9K tok · Cache hit 99%": 7.9K tokCache hit 99%
+- button "6% of context used": 6%

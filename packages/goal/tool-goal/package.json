@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-tool-goal",
   "description": "Model-facing same-session goal tools with execution-time authority checks",
-  "version": "0.2.2-alpha.3",
+  "version": "0.2.2-rc.1",
   "publishConfig": {
     "access": "public"
   },
@@ -25,7 +25,10 @@
   "files": [
     "locale/*.json",
     "lib/index.js",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ],
   "license": "MIT",
   "peerDependencies": {

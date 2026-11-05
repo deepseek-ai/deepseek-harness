@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-04-unprefixed-experimental-package-names.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-04-unprefixed-experimental-package-names.md
+/agent-note-name-new-experimental-packages-without-the-experimental-prefix:
+  en: b84bbfa015f35105
+  zh: dff2c32694314996
+/agent-note-name-new-experimental-packages-without-the-experimental-prefix/problem:
+  en: 84638e34c7b1d291
+  zh: 0c3928b3424db016
+/agent-note-name-new-experimental-packages-without-the-experimental-prefix/decision:
+  en: 0f13619da3b05747
+  zh: fac563c2a8b61270
+/agent-note-name-new-experimental-packages-without-the-experimental-prefix/alternatives-considered:
+  en: 1c6a08a813dcb3a7
+  zh: 16bf31184377c80b
+/agent-note-name-new-experimental-packages-without-the-experimental-prefix/consequences:
+  en: 2b536c42672e8850
+  zh: f6a551964855308e

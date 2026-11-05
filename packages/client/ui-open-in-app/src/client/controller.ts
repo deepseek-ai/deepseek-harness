@@ -1,4 +1,4 @@
-/** Browser availability/choice state and the launch carrier for the split button. */
+/** Shared directory application catalog, preference, and launch carrier for controls and menus. */
 
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import {
@@ -20,7 +20,7 @@ type Fetch = (input: string | URL, init?: RequestInit) => Promise<Response>
 /**
  * Owns the once-per-page availability read, the persisted last choice, and
  * the launch POST. Availability and choice publish through uSES-safe sources
- * so every Session header shares one truth.
+ * so Session menus and directory controls share the same catalog and choice.
  */
 export class OpenInAppController {
   /** Installed app ids in host menu order; null until the host answered. */
@@ -107,9 +107,8 @@ export class OpenInAppController {
         const payload = await response.json() as OpenInAppAppsPayload
         if (Array.isArray(payload.apps)) apps = payload.apps.filter(id => typeof id === 'string')
       }
-    } catch {
-      // Swallows network failures: an unreachable host reads as no apps, and
-      // the header simply shows no button rather than a broken one.
+    } catch (_error) {
+      // An unreachable Host supplies no directory openers in menus or controls.
     }
     this.apps.set(apps)
   }

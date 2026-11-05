@@ -51,7 +51,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### What a delegation does
 
-One tool call creates a background child and returns its session id immediately. The child works in its own session; the parent receives its final answer in a completion notice. The child can also send messages through `send_message`. A rejected start leaves no published child. Programmatic callers such as workflows can await the activation result directly.
+One tool call creates a background child and returns its name immediately. The child works in its own session; the parent receives its final answer in a completion notice. The child can also send messages through `send_message`. A rejected start leaves no published child. Programmatic callers such as workflows can await the activation result directly.
 
 An explicit `agentPreset` selects the currently registered preset independently; omission joins the parent's active revision. Only spawn supports this choice. Persona and tools belong in the [preset definition](../../preset/agent-preset-registry/README.md). Cold resume follows the shared [child composition rules](../subagent/README.md#restoring-child-composition).
 
@@ -120,7 +120,7 @@ The child's request cache is independent of the parent's. Child history grows ap
 
 #### What the model sees
 
-Through `dsh-tool-subagent`, the parent first receives the child session id, then a completion notice with its final answer. Child-authored messages arrive through `send_message`. Internal child tool calls remain in the child session.
+Through `dsh-tool-subagent`, the parent first receives the child's name, then a completion notice with its final answer. Child-authored messages arrive through `send_message`. Internal child tool calls remain in the child session.
 
 #### Token effect
 

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use `dsh-tool-fs` to let a model read UTF-8 files with line numbers, read supported images, create or atomically replace files, apply targeted literal edits, and apply Codex-style multi-file patches. Results are capped, and failures provide stable error codes and recovery instructions. Add `dsh-fs-observation-policy` when writes and edits must follow a successful read; without it, mutations remain atomic but are unconditional. Image reads require durable attachment storage and an image-capable routed model. Choose the sibling discovery package for glob or grep searches.
+Use `dsh-tool-fs` to let a model read UTF-8 files with line numbers, read supported images, create or atomically replace files, apply targeted literal edits, and apply multi-file patches. Results are capped, and failures provide stable error codes and recovery instructions. Add `dsh-fs-observation-policy` when writes and edits must follow a successful read; without it, mutations remain atomic but are unconditional. Image reads require durable attachment storage and an image-capable routed model. Choose the sibling discovery package for glob or grep searches.
 
 ## Table of Contents
 
@@ -260,7 +260,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 #### What the model sees
 
-The `apply_patch` schema requires one `input` string (the Codex parameter name, which models trained on that tool send unprompted) containing `*** Begin Patch` / `*** End Patch`, Add/Update/Delete headers, optional Move to, and context/add/remove hunk lines. Paths are Session-relative. A confining backend adds the same escalation fields as write/edit. Success lines group A/M/D and a completed move reports `M <destination>`, matching Codex rust-v0.158.0. An empty patch renders `Success. No operations in patch.`. A stopped patch includes only the applicable Completed, Failed, Outcome unknown and Not executed sections; unknown outcomes end with the re-read remedy. Syntax errors keep the parser message.
+The `apply_patch` schema requires one `input` string containing `*** Begin Patch` / `*** End Patch`, Add/Update/Delete headers, optional Move to, and context/add/remove hunk lines. Paths are Session-relative. A confining backend adds the same escalation fields as write/edit. Success lines group A/M/D and a completed move reports `M <destination>`, matching Codex rust-v0.158.0. An empty patch renders `Success. No operations in patch.`. A stopped patch includes only the applicable Completed, Failed, Outcome unknown and Not executed sections; unknown outcomes end with the re-read remedy. Syntax errors keep the parser message.
 
 ##### System guidance
 

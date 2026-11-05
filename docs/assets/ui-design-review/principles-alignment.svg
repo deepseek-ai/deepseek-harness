@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="540" viewBox="0 0 1000 540" role="img">
+<title>Sidebar alignment follows roles and states</title>
+<rect width="1000" height="540" fill="#fff"/>
+<g font-family="Arial,sans-serif" fill="#263044">
+<text x="28" y="34" font-size="17">ALIGNMENT · schematic only; use the recorded master design for dimensions</text>
+<rect x="28" y="60" width="430" height="450" rx="16" fill="#f8f9fb" stroke="#d9dfe7"/>
+<rect x="52" y="80" width="382" height="46" rx="12" fill="#fff" stroke="#d9dfe7"/>
+<text x="243" y="109" text-anchor="middle" font-size="18">＋ New conversation</text>
+<g fill="none" stroke="#647184" stroke-width="2"><circle cx="74" cy="160" r="7"/><circle cx="74" cy="200" r="7"/><rect x="67" y="300" width="14" height="12" rx="2"/></g>
+<g font-size="17"><text x="98" y="166">Navigation</text><text x="98" y="206">Navigation</text><text x="52" y="268" fill="#707b8a">Workspaces</text><text x="98" y="312">Project</text><text x="98" y="352">Conversation</text><text x="98" y="392">Conversation</text></g>
+<g fill="none" stroke="#647184" stroke-width="2"><circle cx="333" cy="262" r="6"/><circle cx="374" cy="262" r="6"/><circle cx="415" cy="262" r="6"/><circle cx="341" cy="346" r="5"/><circle cx="375" cy="346" r="5"/><circle cx="409" cy="346" r="5"/></g>
+<path d="M74 142V218 M98 142V218 M74 290V407 M98 290V407" stroke="#20826a" stroke-dasharray="5 5" fill="none"/>
+<path d="M52 432H434" stroke="#d9dfe7"/><circle cx="76" cy="472" r="17" fill="#d9e4ee"/><text x="110" y="478" font-size="17">Signed-in account</text>
+<g font-size="19"><text x="500" y="108">Center the primary action as a unit.</text><text x="500" y="177">Continue axes across intended peers.</text><text x="500" y="267">Header and row controls have distinct roles.</text><text x="500" y="307">Search expansion changes header geometry.</text><text x="500" y="386">Compare paint and hit targets separately.</text><text x="500" y="476">Keep the account row’s own geometry.</text></g>
+</g></svg>

@@ -29,7 +29,7 @@ describe('review references', () => {
     const deleted = { ...file, hunks: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 0, lines: ['-old'] }] }
     expect(selectReviewLines(added, 'R', 1, 1)?.hunk).toContain('@@ -0,0 +1,1 @@')
     expect(selectReviewLines(deleted, 'L', 1, 1)?.hunk).toContain('@@ -1,1 +0,0 @@')
-    expect(reviewMatches(selection, { kind: 'local', scope: 'branch' }, file)).toBe(false)
+    expect(reviewMatches(selection, { kind: 'local', scope: 'branch', base: 'origin/main', baseRef: null }, file)).toBe(false)
     expect(reviewMatches(selection, { kind: 'change', url: 'x', headSha: 'b' }, file)).toBe(false)
     expect(reviewMatches(selection, selection.source, added)).toBe(false)
     expect(reviewMatches(selection, selection.source, file)).toBe(true)
@@ -104,8 +104,10 @@ describe('review references', () => {
     expect(selectReviewLines(file, 'L', 4, 4)).toBeUndefined()
     expect(selectReviewLines(file, 'R', 4, 11)).toBeUndefined()
     expect(formatReviewComment(selection, 1)).toBe(`## User Comment 1\nFile: a.ts\nSide: R\nLines: 3-4\nSource: https://github.com/octo/demo/pull/7\nCommit: ${'a'.repeat(40)}\nDiff hunk:\n\`\`\`diff\n@@ -2,2 +2,3 @@\n unchanged\n-old\n+new\n+another\n\`\`\`\nComment:\n为什么新增这两行？`)
-    expect(formatReviewComment({ source: { kind: 'local', scope: 'staged' }, comment: { ...selection.comment, startLine: 4, hunk: '```' } }, 2))
+    expect(formatReviewComment({ source: { kind: 'local', scope: 'staged', base: null, baseRef: null }, comment: { ...selection.comment, startLine: 4, hunk: '```' } }, 2))
       .toContain('Lines: 4\nSource: Local (staged)\nDiff hunk:\n````diff\n```\n````')
+    expect(formatReviewComment({ source: { kind: 'local', scope: 'branch', base: 'origin/release/2.4', baseRef: 'refs/remotes/origin/release/2.4' }, comment: selection.comment }, 3))
+      .toContain('Lines: 3-4\nSource: Local (branch)\nBase: origin/release/2.4\nDiff hunk:\n')
   })
   it('adds a quote without posting or closing when the input refuses it', () => {
     const addToInput = vi.fn<(selection: ReviewSelection) => boolean>().mockReturnValue(false)
@@ -153,7 +155,7 @@ describe('review references', () => {
 describe('pending reviews', () => {
   it('edits only the chosen occurrence and refuses edits after publication or during dispatch', () => {
     const queue = new ReviewQueue('review-test')
-    expect(queue.add({ ...selection, source: { kind: 'local', scope: 'branch' } })).toBe(false)
+    expect(queue.add({ ...selection, source: { kind: 'local', scope: 'branch', base: 'origin/main', baseRef: null } })).toBe(false)
     queue.add(selection)
     queue.add({ ...selection, comment: { ...selection.comment, body: 'Second' } })
     const first = queue.fileComments('a.ts', selection.source).threads[0]!
@@ -223,10 +225,14 @@ describe('pending reviews', () => {
     queue.finish(true, 'https://github.com/octo/demo/pull/7#review-1')
     expect(queue.fileComments('a.ts', selection.source).threads[0]).toMatchObject({ key, kind: 'published' })
     expect(new ReviewQueue('review-test').fileComments('a.ts', selection.source).threads[0]).toMatchObject({ kind: 'published' })
-    const local = { ...selection, source: { kind: 'local' as const, scope: 'staged' } }
+    const local = { ...selection, source: { kind: 'local' as const, scope: 'staged', base: null, baseRef: null } }
     expect(queue.recordAgent(local)).toBe(true)
     expect(queue.fileComments('a.ts', local.source).threads).toHaveLength(1)
-    expect(queue.fileComments('a.ts', { kind: 'local', scope: 'branch' }).threads).toHaveLength(0)
+    expect(queue.fileComments('a.ts', { kind: 'local', scope: 'branch', base: 'origin/main', baseRef: null }).threads).toHaveLength(0)
+    const based = { ...selection, source: { kind: 'local' as const, scope: 'branch', base: 'origin/release', baseRef: 'refs/remotes/origin/release' } }
+    expect(queue.recordAgent(based)).toBe(true)
+    expect(queue.fileComments('a.ts', based.source).threads).toHaveLength(1)
+    expect(queue.fileComments('a.ts', { ...based.source, baseRef: null }).threads).toHaveLength(0)
   })
   it('preserves malformed stored bytes and refuses to overwrite them', () => {
     localStorage.setItem('review-test', 'broken')
@@ -234,6 +240,34 @@ describe('pending reviews', () => {
     expect(queue.getSnapshot().error).toBe('load')
     expect(queue.add(selection)).toBe(false)
     expect(localStorage.getItem('review-test')).toBe('broken')
+  })
+  it.each([
+    ['staged', null],
+    ['branch', 'origin/main'],
+  ])('shows a stored %s record that names no base in the comparison without a chosen branch', (scope, base) => {
+    const local = { ...selection, source: { kind: 'local' as const, scope, base, baseRef: null } }
+    expect(new ReviewQueue('review-test').recordAgent(local)).toBe(true)
+    const stored = JSON.parse(localStorage.getItem('review-test') ?? '') as { records: { selection: { source: Record<string, unknown> } }[] }
+    for (const record of stored.records) {
+      Reflect.deleteProperty(record.selection.source, 'base')
+      Reflect.deleteProperty(record.selection.source, 'baseRef')
+    }
+    localStorage.setItem('review-test', JSON.stringify(stored))
+
+    const reopened = new ReviewQueue('review-test')
+    expect(reopened.fileComments('a.ts', local.source).threads).toHaveLength(1)
+    expect(reopened.fileComments('a.ts', { ...local.source, base: 'topic', baseRef: 'refs/heads/topic' }).threads).toHaveLength(0)
+  })
+  it.each([
+    ['the automatic start of a worktree and a local branch', { base: 'main', baseRef: null }, { base: 'main', baseRef: 'refs/heads/main' }],
+    ['a local and a remote-tracking branch', { base: 'origin/x', baseRef: 'refs/heads/origin/x' }, { base: 'origin/x', baseRef: 'refs/remotes/origin/x' }],
+  ])('keeps comparisons with one name apart: %s', (_label, left, right) => {
+    const source = { kind: 'local' as const, scope: 'branch' }
+    const queue = new ReviewQueue('review-test')
+    expect(queue.recordAgent({ ...selection, source: { ...source, ...left } })).toBe(true)
+
+    expect(queue.fileComments('a.ts', { ...source, ...left }).threads).toHaveLength(1)
+    expect(queue.fileComments('a.ts', { ...source, ...right }).threads).toHaveLength(0)
   })
   it('keeps the previous queue on quota failure and allows retry after recovery', () => {
     const queue = new ReviewQueue('review-test')
@@ -328,7 +362,7 @@ describe('submission availability', () => {
       vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('quota') })
       queue.summarize('Summary', 'comment')
     }
-    if (kind === 'local') vi.spyOn(queue, 'getSnapshot').mockReturnValue({ ...queue.getSnapshot(), comments: [{ ...selection, source: { kind: 'local', scope: 'branch' } }] })
+    if (kind === 'local') vi.spyOn(queue, 'getSnapshot').mockReturnValue({ ...queue.getSnapshot(), comments: [{ ...selection, source: { kind: 'local', scope: 'branch', base: 'origin/main', baseRef: null } }] })
     const view = render(<SubmitReview queue={queue} url="https://github.com/octo/demo/pull/7" headSha={'a'.repeat(40)} busy={false} error={null}
       submit={vi.fn()} close={vi.fn()} check={vi.fn()} reconcile={vi.fn()} t={t} />)
     expect(view.getByRole('button', { name: 'Submit review' })).toHaveProperty('disabled', true)

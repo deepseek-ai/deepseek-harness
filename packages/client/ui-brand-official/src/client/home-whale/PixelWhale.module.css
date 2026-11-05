@@ -1,0 +1,20 @@
+/* Layout-neutral: the wrapped scroll body stays a direct flex item of the Conversation body. */
+.layer {
+  display: contents;
+}
+
+.canvas {
+  --home-whale-code-ink: var(--dsw-alias-label-primary);
+  /* The host isolates stacking at the Conversation root, so -1 lands above its background and below its content. */
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+  opacity: 0.18;
+  color: var(--dsw-alias-label-secondary);
+  filter: grayscale(1);
+  font-family: var(--ds-font-family-code);
+}

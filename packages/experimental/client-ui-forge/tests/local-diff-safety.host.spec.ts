@@ -26,7 +26,7 @@ async function setup(mode: SandboxMode = 'danger-full-access', real = false) {
   const session = plainSession(repo)
   setSandboxMode(session, mode)
   const signal = new AbortController().signal
-  const fork = { commit: await git(repo, 'rev-parse', 'HEAD'), label: 'main' }
+  const fork = { commit: await git(repo, 'rev-parse', 'HEAD'), label: 'main', worktree: false }
   await git(repo, 'remote', 'add', 'origin', 'https://example.invalid/repo')
   await git(repo, 'update-ref', 'refs/remotes/origin/main', fork.commit)
   await git(repo, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')

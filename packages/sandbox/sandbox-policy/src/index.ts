@@ -2,9 +2,10 @@
  * The sandbox POLICY home (`ctx.sandboxPolicy`): the single owner of the
  * deployment's sandbox fallbacks plus per-session resolution: the file-effect
  * {@link SandboxMode}, the `workspace-write` root, the explicit extra writable
- * directories, the Git administration directories a linked checkout writes
- * outside that root, and the override kit (the `sandbox/mode` event, its fold,
- * and its write path; the fold is the `sandboxMode` session-projection unit
+ * directories from configuration and live Session registrations, the Git
+ * administration directories a linked checkout writes outside that root, and
+ * the override kit (the `sandbox/mode` event, its fold, and its write path;
+ * the fold is the `sandboxMode` session-projection unit
  * registered here, while the event and write path come from
  * `./session-mode.ts`).
  * Before each agent request, the owner also contributes the resolved policy to
@@ -55,7 +56,7 @@ function resolveAdditionalWritableRoots(roots: readonly string[] | undefined): r
   if (roots === undefined || roots.length === 0) return undefined
   for (const root of roots) {
     if (!isAbsolute(root) || root.includes('\0')) {
-      throw new Error('sandbox-policy: additionalWritableRoots entries must be absolute execution-world paths')
+      throw new Error('sandbox-policy: writable directories must be absolute execution-world paths without NUL bytes')
     }
   }
   return Object.freeze([...new Set(roots)])
@@ -70,7 +71,7 @@ function renderPolicyContext(policy: SandboxExecutionPolicy): string {
       const additional = policy.additionalWritableRoots
       const extra = additional === undefined
         ? ''
-        : ` Additional writable directories: ${JSON.stringify(additional)}.`
+        : ` Additional writable directories: ${JSON.stringify(additional)}. On Windows, these additional grants apply to file tools only, not sandboxed processes.`
       return `Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: ${JSON.stringify(policy.workspaceRoot)}.${extra} Some platform temporary areas may also be writable.`
     }
     case 'danger-full-access':
@@ -171,7 +172,7 @@ export interface Config {
    * and need no entry here. Entries are execution-world paths: this service
    * validates absoluteness and detaches the list, while the enforcing host
    * rejects missing, non-directory, or symlinked paths. They grant nothing under
-   * `read-only`.
+   * `read-only`. Windows process confinement ignores them; harness file tools honor them.
    */
   additionalWritableRoots?: string[]
 }
@@ -193,8 +194,8 @@ const sandboxModeStateSchema = zod.union([
 
 /**
  * The sandbox-policy service (`ctx.sandboxPolicy`). Owns the deployment
- * default mode, fallback workspace root, and current request-time policy
- * section. Tool layers call {@link resolve} for each execution so a session's
+ * default mode, fallback workspace root, session-scoped directory grants, and
+ * request-time policy section. Tool layers call {@link resolve} for each execution so a session's
  * mode log and workspace root travel together to every enforcing capability.
  *
  * A session's workspace root comes from the working-directory service when
@@ -224,6 +225,8 @@ export class SandboxPolicyService extends Service {
   readonly workspaceRoot: string
   /** The frozen extra writable directories shared by every resolved policy, or `undefined` for none. */
   readonly additionalWritableRoots: readonly string[] | undefined
+  /** Independently owned grants for each live Session; never restored from its log. */
+  private readonly writableRootRegistrations = new WeakMap<Session, Map<symbol, string>>()
   private sandboxModeProjectionHandle!: ProjectionHandle<SandboxMode | null>
   /** Derived Git administration directories by workspace root; present only once the root's `.git` entry was read. */
   private readonly gitAdministration = new Map<string, readonly string[]>()
@@ -288,20 +291,57 @@ export class SandboxPolicyService extends Service {
    * boundary, and the Git administration directories {@link prepare} derived
    * for that root join the configured extra writable directories; the
    * configured root is the fallback for agentless calls and sessions without a
-   * recorded directory.
+   * recorded directory. Configured extra roots, this Session's active registrations,
+   * and the derived Git directories are snapshotted together; existing operations
+   * and processes keep their policy.
    * @param request - optional session and approved mode override.
    * @returns the fully resolved per-call mode, absolute workspace root, and extra writable directories.
    */
   resolve(request: SandboxPolicyRequest = {}): SandboxExecutionPolicy {
     const { session } = request
     const workspaceRoot = resolveWorkspaceRoot(this.rootOf(session))
-    const additional = this.additionalRootsWith(session === undefined ? undefined : this.gitAdministration.get(workspaceRoot))
+    const registrations = session === undefined ? undefined : this.writableRootRegistrations.get(session)
+    const derived = session === undefined ? undefined : this.gitAdministration.get(workspaceRoot)
+    const additional = registrations === undefined && (derived === undefined || derived.length === 0)
+      ? this.additionalWritableRoots
+      : resolveAdditionalWritableRoots([...(this.additionalWritableRoots ?? []), ...(registrations?.values() ?? []), ...(derived ?? [])])
     return {
       mode: request.mode ?? (session === undefined ? undefined : this.overrideOf(session)) ?? this.defaultMode,
       workspaceRoot,
       ...additional === undefined ? {} : { additionalWritableRoots: additional },
       ...session === undefined ? {} : { sessionId: session.id },
     }
+  }
+
+  /**
+   * Permit writes under one directory in this Session's future workspace-write
+   * operations. The calling context owns the effect; disposal removes only this
+   * registration. Other grants to the directory remain effective. Existing
+   * operations and persistent processes retain their resolved permissions.
+   * Grants are runtime-only and must be registered again after resume or fork.
+   * On Windows, only harness file tools honor extra grants; process permissions stay unchanged.
+   * @param session - exact live Session receiving the grant; other Sessions and agentless calls are unaffected.
+   * @param directory - absolute execution-world path; execution rejects missing, non-directory, or symlinked paths.
+   * @returns the exact Cordis effect disposer for this registration.
+   * @throws when the directory is relative or contains a NUL byte.
+   */
+  registerWritableRoot(session: Session, directory: string): () => void {
+    resolveAdditionalWritableRoots([directory])
+    const dispose = this.ctx.effect(() => {
+      let registrations = this.writableRootRegistrations.get(session)
+      if (registrations === undefined) {
+        registrations = new Map()
+        this.writableRootRegistrations.set(session, registrations)
+      }
+      const key = Symbol()
+      registrations.set(key, directory)
+      return () => {
+        registrations.delete(key)
+        if (registrations.size === 0) this.writableRootRegistrations.delete(session)
+      }
+    }, 'sandboxPolicy.registerWritableRoot()')
+    // oxlint-disable-next-line typescript/no-misused-promises -- synchronous cleanup preserves the exact Cordis effect disposer
+    return dispose
   }
 
   /**
@@ -394,11 +434,17 @@ export class SandboxPolicyService extends Service {
     }
   }
 
-  /** The policy as the model sees it: the derived Git directories are a filesystem fact, not model-visible input. */
+  /**
+   * The policy as the model sees it: configured roots and the Session's registered grants, which the model
+   * may use on purpose; the derived Git directories are a filesystem fact, not model-visible input.
+   */
   private configuredPolicy(session: Session): SandboxExecutionPolicy {
     const { mode, workspaceRoot } = this.resolve({ session })
-    const configured = this.additionalWritableRoots
-    return { mode, workspaceRoot, ...configured === undefined ? {} : { additionalWritableRoots: configured } }
+    const registrations = this.writableRootRegistrations.get(session)
+    const advertised = registrations === undefined
+      ? this.additionalWritableRoots
+      : resolveAdditionalWritableRoots([...(this.additionalWritableRoots ?? []), ...registrations.values()])
+    return { mode, workspaceRoot, ...advertised === undefined ? {} : { additionalWritableRoots: advertised } }
   }
 
   /**
@@ -410,10 +456,6 @@ export class SandboxPolicyService extends Service {
     return this.ctx.get('workingDirectory')?.recordedRootOf(session) ?? session.header.cwd ?? this.workspaceRoot
   }
 
-  private additionalRootsWith(derived: readonly string[] | undefined): readonly string[] | undefined {
-    if (derived === undefined || derived.length === 0) return this.additionalWritableRoots
-    return Object.freeze([...new Set([...this.additionalWritableRoots ?? [], ...derived])])
-  }
 }
 
 export default SandboxPolicyService

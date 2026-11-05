@@ -10,11 +10,12 @@ import { chromium, type Browser, type Page } from 'playwright'
 import { afterEach, beforeEach, describe, expect, it, onTestFailed } from 'vitest'
 import { credentialKey, credentialRef } from '@deepseek-ai/dsh-credentials'
 import type {} from '@deepseek-ai/dsh-settings'
+import { isDraggableAt } from '@deepseek-ai/dsh-client-web/src/window-drag/regions.ts'
 import {
   acknowledgeReloadConnectionLoss, captureStableAria, compareOrRefreshGolden,
   launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { REPO_ROOT, saveFailureShot, ZH_BROWSER_LOCALE } from './support.ts'
+import { collectWindowSurface, REPO_ROOT, saveFailureShot, ZH_BROWSER_LOCALE } from './support.ts'
 
 const MODE = webSnapshotMode()
 const EXPECTED = fileURLToPath(new URL('./expected/desktop-onboarding', import.meta.url))
@@ -252,6 +253,16 @@ describe.skipIf(MODE === 'record')('web e2e: App-only desktop onboarding', () =>
       await page.evaluate((value) => { document.documentElement.dataset.platform = value }, platform)
       expect(await page.locator('[data-desktop-onboarding]').evaluate(element => getComputedStyle(element).getPropertyValue('-webkit-app-region'))).toBe('none')
       expect(await page.getByRole('button', { name: '开始设置', exact: true }).evaluate(element => getComputedStyle(element).getPropertyValue('-webkit-app-region'))).toBe(platform === 'darwin' ? 'no-drag' : 'none')
+      if (platform === 'darwin') {
+        expect(await page.locator('[data-window-drag-controls] [data-desktop-onboarding]').count()).toBe(1)
+        const { regions } = await collectWindowSurface(page)
+        const band = await page.locator('[data-window-drag-controls]').locator('..').locator('[data-window-drag]').boundingBox()
+        const button = await page.getByRole('button', { name: '开始设置', exact: true }).boundingBox()
+        if (band === null || button === null) throw new Error('The onboarding drag fixture has no layout box')
+        expect(isDraggableAt(regions, band.x + 4, band.y + 4), 'the introduction keeps its blank drag band').toBe(true)
+        expect(isDraggableAt(regions, button.x + button.width / 2, button.y + button.height / 2),
+          'the introduction action receives clicks over the full-window drag band').toBe(false)
+      }
     }
     await page.evaluate(() => { delete document.documentElement.dataset.platform })
     await page.getByRole('button', { name: '开始设置', exact: true }).click()

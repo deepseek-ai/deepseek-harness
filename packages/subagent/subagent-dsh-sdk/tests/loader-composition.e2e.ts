@@ -47,7 +47,7 @@ function settlementText(events: SessionEvent[]): string[] {
   const notice = notices[0]!
   if (notice.type !== 'user/message' || notice.data.source.kind !== 'subagent-settled') throw new Error('missing completion notice')
   expect(results[0]!.data.message.content).toEqual([
-    { type: 'text', text: `started subagent ${notice.data.source.senderSessionId}` },
+    { type: 'text', text: 'started subagent agent-1' },
   ])
   return notice.data.content.slice(1).filter(block => block.type === 'text').map(block => block.text)
 }

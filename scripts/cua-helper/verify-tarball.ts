@@ -8,10 +8,10 @@ import { verifyCuaHelperPayload } from './payload.ts'
 /**
  * Verify both helper applications in the exact provider tarball being published.
  * @param tarball - pnpm-produced provider package archive.
- * @param expected - Product version and source commit of the publishing checkout.
+ * @param expected - Helper source digest of the publishing checkout.
  * @returns Resolves only when the archive has complete, digest-verified application generations.
  */
-export async function verifyCuaHelperTarball(tarball: string, expected: { version: string; commit: string }): Promise<void> {
+export async function verifyCuaHelperTarball(tarball: string, expected: { sourceDigest: string }): Promise<void> {
   const root = mkdtempSync(join(tmpdir(), 'cua-publish-verify-'))
   try {
     await extract({ file: tarball, cwd: root, strict: true, filter: (path, entry) => {

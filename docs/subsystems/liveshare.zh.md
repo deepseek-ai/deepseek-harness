@@ -16,11 +16,11 @@
 
 ## 分享模式
 
-`ViewerSessionMode` 只有两档，两档都对应一个沙箱：`view` 读取共享会话，并在授予工作区的只读沙箱里驱动它的 loop，绝不写文件；它可以使用读取与检索面（`read`、`read_image`、`glob`、`grep`、`present`）和无本地文件副作用的工具（`todo_write`、`skill`、`web_search`、`web_fetch`），每个声明路径都按授予范围检查。`write` 在受宿主写入上限约束的可写沙箱里运行，通过有界 `edit` 与 `write` 修改该工作区内的文件。fork 不是一档：分享自带独立的 `allowsFork` 开关，与档位无关。附件上传也不是一档：分享向读者提供的每条会话都接受文件，与档位和分叉开关无关。已退场的 `fork-readonly` 名称不会读回为 `view`：持久化的 owner 记录若写有该值，owner 状态加载时会直接拒绝。任何环节都不会推断出 `write`，而宿主机无法确定模式的分享仍可读取，但绝不会被驱动。两档也都准入 PTC 传输工具 `run_code`：程序运行在所有者自己的常驻文件策略下而不是分享档位下，因此可以读写授权范围之外的文件；它发起的嵌套工具调用仍走同样的守卫与路径检查。
+`ViewerSessionMode` 只有两档，两档都对应一个沙箱：`view` 读取共享会话，并在授予工作区的只读沙箱里驱动它的 loop，其文件工具绝不写入；它可以使用读取与检索面（`read`、`read_image`、`glob`、`grep`、`present`）和无本地文件副作用的工具（`todo_write`、`skill`、`web_search`、`web_fetch`），每个声明路径都按授予范围检查。`write` 在受宿主写入上限约束的可写沙箱里运行，通过有界 `edit` 与 `write` 修改该工作区内的文件。fork 不是一档：分享自带独立的 `allowsFork` 开关，与档位无关。附件上传也不是一档：分享向读者提供的每条会话都接受文件，与档位和分叉开关无关。已退场的 `fork-readonly` 名称不会读回为 `view`：持久化的 owner 记录若写有该值，owner 状态加载时会直接拒绝。任何环节都不会推断出 `write`，而宿主机无法确定模式的分享仍可读取，但绝不会被驱动。两档也都准入 PTC 传输工具 `run_code`：程序运行在所有者自己的常驻文件策略下而不是分享档位下，因此可以读写授权范围之外的文件；它发起的嵌套工具调用仍走同样的守卫与路径检查。
 
 ## fork 与其上限
 
-fork 创建查看者拥有的新会话，源会话保持不变。Fork 授权检查分享、其 fork 开关、有效期、查看者准入、源身份与请求的边界。`READ_ONLY_FORK_CEILING` 允许读取与检索面——`read`、`read_image`、`glob`、`grep`、`present`、`todo_write`、`skill`、`web_search`、`web_fetch`——，`WRITE_FORK_CEILING` 增加 Host 的有界 `edit` 与 `write`。每个带路径的工具都有受限替代定义：解析它声明的所有路径并按授予根目录检查，再以规范路径委托；`bash`、`pwsh`、`cua`、`plugin_manager`、`schedule_*` 及工具面未列出的名字一律拒绝。
+fork 创建查看者拥有的新会话，源会话保持不变。Fork 授权检查分享、其 fork 开关、有效期、查看者准入、源身份与请求的边界。`READ_ONLY_FORK_CEILING` 允许读取与检索面——`read`、`read_image`、`glob`、`grep`、`present`、`todo_write`、`skill`、`web_search`、`web_fetch`——并放行 PTC 传输工具 `run_code`，`WRITE_FORK_CEILING` 增加 Host 的有界 `edit` 与 `write`。每个带路径的工具都有受限替代定义：解析它声明的所有路径并按授予根目录检查，再以规范路径委托；`bash`、`pwsh`、`cua`、`plugin_manager`、`schedule_*` 及其他任何未列出的名字一律拒绝。
 
 每个分叉会话都会记录授权它的分享、Liveshare 服务端断言的可信 viewer，以及它起始的边界，因此 viewer 的列表只显示它自己的分叉会话，被移除的分享会终止它们。只有在分叉会话自身作用域上安装好上限之后它才会被驱动：`ForkRegistry` 会拒绝每个上限未安装的分叉会话的 prompt（`fork-ceiling-uninstalled`），且安装是按分叉会话逐个验证，而非按宿主机验证。若分叉会话作用域拒绝注册受限替换或上限，就拒绝该分叉会话，而不是让它带着部署自身的工具发布。
 

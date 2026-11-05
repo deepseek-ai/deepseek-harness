@@ -825,6 +825,10 @@ describe('ModelsSection', () => {
       .toEqual([{ op: 'set', path: ['b'], value: 2 }, { op: 'set', path: ['d'], value: 3 }])
     expect(pathOps([], undefined, {})).toEqual([])
     expect(pathOps([], { a: 1 }, { a: 1 })).toEqual([])
+    expect(pathOps([], { p: { m: 'x', n: 1 } }, { p: { m: 'y' } }))
+      .toEqual([{ op: 'set', path: ['p', 'm'], value: 'y' }, { op: 'unset', path: ['p', 'n'] }])
+    expect(pathOps([], {}, { p: { m: 'x' } })).toEqual([{ op: 'set', path: ['p', 'm'], value: 'x' }])
+    expect(pathOps([], { p: 'x' }, { p: { m: 'x' } })).toEqual([{ op: 'set', path: ['p'], value: { m: 'x' } }])
   })
 
   it('stores a typed key write-only from the setup card without touching settings', async () => {

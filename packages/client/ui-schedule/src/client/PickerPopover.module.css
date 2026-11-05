@@ -3,7 +3,7 @@
 .panel {
   position: fixed;
   position-area: none;
-  position-try-fallbacks: --dsh-schedule-picker-above, --dsh-schedule-picker-end, --dsh-schedule-picker-above-end, --dsh-schedule-picker-window;
+  position-try-fallbacks: --dsh-schedule-picker-above, --dsh-schedule-picker-end, --dsh-schedule-picker-above-end, --dsh-schedule-picker-window, --dsh-schedule-picker-viewport;
   top: max(12px, calc(anchor(bottom) + 4px));
   bottom: 12px;
   left: max(12px, anchor(left));
@@ -55,6 +55,13 @@
 }
 
 @position-try --dsh-schedule-picker-window {
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: 12px;
+  margin: 0;
+  align-self: safe end;
+}
+
+@position-try --dsh-schedule-picker-viewport {
   position-area: none;
   inset: max(12px, var(--dsh-frame-overlay-top, 12px)) 12px 12px;
   margin: 0;
