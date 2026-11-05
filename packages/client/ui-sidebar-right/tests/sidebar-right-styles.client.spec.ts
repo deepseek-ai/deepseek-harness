@@ -1,4 +1,4 @@
-/** Right sidebar slide and reveal-flash style contracts. */
+/** Right sidebar slide, fullscreen edge, and reveal-flash style contracts. */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -16,6 +16,11 @@ describe('SidebarRight.module.css', () => {
   it('removes the open slide as well as the close slide for reduced motion', () => {
     expect(css).toMatch(new RegExp(String.raw`@media \(prefers-reduced-motion: reduce\)\s*\{[^{}]*`
       + String.raw`\.panel\[data-sidebar-right-open\] ${host}[^{}]*\{\s*transition: none;\s*}`))
+  })
+
+  it('drops the first column\'s conversation divider in fullscreen', () => {
+    expect(css).toMatch(new RegExp(String.raw`\.panel\[data-sidebar-right-panel='fullscreen'\] :global\(\[data-dockkit-host='dock'\]\[data-dockkit-column='0'\]\)`
+      + String.raw` > :global\(\[data-dockkit-pane\]\)\s*\{\s*border-left: none;\s*}`))
   })
 
   it('draws the reveal glow inside a docked pane above sticky code banners, and outside a floating panel over its own shadow', () => {
