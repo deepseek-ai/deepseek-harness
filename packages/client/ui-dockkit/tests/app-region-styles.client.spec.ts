@@ -3,10 +3,11 @@
  * embedder may pin the surface at the window's top edge (the right sidebar does),
  * so the strip row marks itself `data-window-drag` in markup (TabPanel) and ui-web
  * base.css drags the row over its own box. Electron composes app-regions from
- * geometry in DOM order — every box that must stay usable subtracts itself from
- * that row. The divider must be listed explicitly: it is a plain div, so base.css's
- * interactive-element subtraction never matches it, and an unsubtracted vertical
- * divider's top run would drag the window instead of resizing the split.
+ * geometry in DOM order — pane boxes are excluded before marked strip rows add
+ * their geometry back. The divider must be listed explicitly: it is a plain div
+ * outside a drag row, so base.css's scoped controls rule cannot exclude it. An
+ * unsubtracted vertical divider's top run would drag the window instead of
+ * resizing the split.
  */
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -42,21 +43,19 @@ it('clamps a resting floating panel\'s position and size into the viewport and b
 })
 
 describe('macOS app-region ownership', () => {
-  it('subtracts the chip run, strip-end chrome, pane body, and divider, and declares no drag itself', () => {
+  it('subtracts panes, strip-end chrome, floats, and dividers without declaring drag', () => {
     // The strip row's drag is the markup mark's job: a sheet that declares it
     // here would drag the same box twice and hide the row from the ownership gate.
     expect(regionRules).toHaveLength(1)
 
     const [selector, value] = regionRules[0]!
     expect(value).toBe('no-drag')
-    for (const part of ['.stripTabs', '.stripChrome', '.paneBody', '.divider']) {
-      expect(selector, part).toContain(`:global(html[data-platform='darwin']) ${part}`)
+    for (const part of ['.pane', '.stripChrome', '.float', '.divider']) {
+      expect(selector, part).toContain(`:global(:where(html[data-platform='darwin'])) ${part}`)
     }
   })
 
   it('scopes the subtraction to the darwin root', () => {
-    // A floating panel lives beside #root, where ui-web base.css subtracts it, so
-    // the strip's drag must never reach a non-macOS host.
     for (const [selector] of regionRules) {
       expect(selector).toContain("html[data-platform='darwin']")
     }
