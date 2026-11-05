@@ -6,6 +6,8 @@ recording: authored
 header:
   class: ptc-script-imports
   pin: true
+  systemPromptSource: ptc-persistent
+  toolSchemasSource: ptc-reset
 replay:
   override: true
 permission: workspace-write

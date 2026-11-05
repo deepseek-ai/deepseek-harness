@@ -6,6 +6,7 @@ recording: authored
 header:
   class: ptc-reset
   pin: true
+  systemPromptSource: ptc-persistent
 replay:
   override: true
 permission: workspace-write
