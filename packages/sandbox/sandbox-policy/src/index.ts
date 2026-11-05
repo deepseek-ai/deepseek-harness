@@ -22,7 +22,7 @@
  * @module @deepseek-ai/dsh-sandbox-policy
  */
 
-import { isAbsolute, relative, sep } from 'node:path'
+import { basename, dirname, isAbsolute, relative, sep } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { z as zod } from 'zod'
 import z from '@deepseek-ai/schemastery'
@@ -112,6 +112,36 @@ async function pointerDirectory(fs: FileSystem, path: string, cwd: string, signa
   return info?.type === 'directory' ? fs.processPath(target) : undefined
 }
 
+/**
+ * The Git administration directories a linked checkout at `root` writes outside itself, in the
+ * layout Git creates for a linked worktree: `.git` names `<common>/worktrees/<name>`, whose
+ * `commondir` names `<common>` and whose `gitdir` names `<root>/.git` again. The checkout's own
+ * tree is writable under workspace-write, so its `.git` pointer is untrusted on its own; the
+ * reverse pointer lives inside the directory being granted, which a forger would already have to
+ * write. A common directory containing the root, including the filesystem root, never joins. Every
+ * other layout yields nothing: a root without `.git`, a `.git` directory, a submodule pointer, or
+ * a hand-written pointer to an arbitrary directory.
+ * @returns the common directory and the administration directory, canonical, or an empty list.
+ */
+async function linkedCheckoutAdministration(fs: FileSystem, root: string, signal: AbortSignal): Promise<string[]> {
+  const pointer = await fs.lstat('.git', { cwd: root }, signal)
+  if (pointer?.type !== 'file') return []
+  const pointerTarget = await fs.resolve('.git', { cwd: root, signal })
+  const target = GITDIR_POINTER.exec(await fs.readText(pointerTarget, signal))?.[1]
+  if (target === undefined) return []
+  const gitDirectory = await pointerDirectory(fs, target, root, signal)
+  if (gitDirectory === undefined || basename(dirname(gitDirectory)) !== 'worktrees') return []
+  const common = dirname(dirname(gitDirectory))
+  const commonPointer = (await pointerText(fs, 'commondir', gitDirectory, signal))?.trim()
+  if (commonPointer === undefined || commonPointer.length === 0) return []
+  if (await pointerDirectory(fs, commonPointer, gitDirectory, signal) !== common) return []
+  const back = (await pointerText(fs, 'gitdir', gitDirectory, signal))?.trim()
+  if (back === undefined || back.length === 0) return []
+  if (fs.processPath(await fs.resolve(back, { cwd: gitDirectory, signal })) !== fs.processPath(pointerTarget)) return []
+  if (within(common, root)) return []
+  return [common, gitDirectory]
+}
+
 declare module '@deepseek-ai/cordis' {
   interface Context {
     sandboxPolicy: SandboxPolicyService
@@ -199,6 +229,8 @@ export class SandboxPolicyService extends Service {
   private readonly gitAdministration = new Map<string, readonly string[]>()
   /** Derivations in flight by workspace root. */
   private readonly derivations = new Map<string, Promise<readonly string[]>>()
+  /** Roots whose failed derivation was already logged; cleared by the next successful read. */
+  private readonly derivationWarnings = new Set<string>()
   private readonly lifecycle = new AbortController()
 
   constructor(ctx: Context, config: Config) {
@@ -227,15 +259,17 @@ export class SandboxPolicyService extends Service {
         order: scope.systemPrompt.getContextOrder('SANDBOX_POLICY'),
         text: (context) => {
           const session = context.agent?.session
-          return session === undefined
-            ? ''
-            : renderPolicyContext(this.resolve({ session }))
+          return session === undefined ? '' : renderPolicyContext(this.configuredPolicy(session))
         },
       })
     })
     ctx.on('session/created', (session) => { this.prewarm(session) })
     ctx.on('session/event', (session, event) => {
-      if (event.type === 'working-directory/change') this.prewarm(session)
+      if (event.type !== 'working-directory/change') return
+      // Entering a registered checkout is a trusted point to read its layout again: a root settled
+      // without administration directories may have become a linked worktree since.
+      if (event.data.anchor !== undefined) this.gitAdministration.delete(this.rootOf(session))
+      this.prewarm(session)
     })
     ctx.on('tools/pre-execute', async (exec, next) => {
       if (exec.agent !== undefined) await this.prepare(exec.agent.session, exec.signal)
@@ -282,11 +316,16 @@ export class SandboxPolicyService extends Service {
   /**
    * Derive the Git administration directories of the session's workspace root
    * so the next {@link resolve} grants them: a linked checkout's `.git` file
-   * names its administration directory, whose `commondir` names the
-   * repository's common directory. Directories inside the root, missing
-   * directories, and a root without a `.git` entry add nothing. One derivation
-   * runs per root; its result is kept once the root's `.git` entry was read,
-   * and a failed read is logged and retried on the next call.
+   * names `<common>/worktrees/<name>`, whose `commondir` names the repository's
+   * common directory and whose `gitdir` names the checkout's `.git` again; only
+   * that layout grants the common directory, since the checkout's own `.git`
+   * pointer is writable under workspace-write. Any other layout, a root without
+   * `.git`, and a common directory containing the root add nothing. One
+   * derivation runs per root and its result is kept once the layout was read,
+   * so a pointer written later does not widen the policy until the Session
+   * enters a registered checkout again; a derived directory that disappears is
+   * derived again, and a failed read is logged once per root and retried on
+   * the next call.
    * @param session - session whose workspace root is inspected.
    * @param signal - caller cancellation, checked before and after the shared derivation.
    * @returns the derived directories outside the root, canonical in the execution world.
@@ -295,7 +334,10 @@ export class SandboxPolicyService extends Service {
     signal?.throwIfAborted()
     const root = this.rootOf(session)
     const settled = this.gitAdministration.get(root)
-    if (settled !== undefined) return settled
+    if (settled !== undefined) {
+      if (await this.present(settled, signal)) return settled
+      this.gitAdministration.delete(root)
+    }
     let derivation = this.derivations.get(root)
     if (derivation === undefined) {
       derivation = this.derive(root).finally(() => { this.derivations.delete(root) })
@@ -311,39 +353,52 @@ export class SandboxPolicyService extends Service {
     void this.prepare(session).catch(() => undefined)
   }
 
+  /** Whether every derived directory still exists; a vanished or uninspectable one invalidates the settled result. */
+  private async present(directories: readonly string[], signal: AbortSignal | undefined): Promise<boolean> {
+    const fs = this.ctx.get('fs')
+    if (directories.length === 0 || fs === undefined) return true
+    for (const directory of directories) {
+      try {
+        if ((await fs.lstat(directory, undefined, signal))?.type !== 'directory') return false
+      } catch (error) {
+        signal?.throwIfAborted()
+        // Deriving again reports the failure once per root.
+        this.ctx.logger.debug(`sandbox-policy: could not inspect ${JSON.stringify(directory)}: ${String(error)}`)
+        return false
+      }
+    }
+    return true
+  }
+
   private async derive(root: string): Promise<readonly string[]> {
     const fs = this.ctx.get('fs')
     if (fs === undefined) return []
     const signal = this.lifecycle.signal
     try {
-      const pointer = await fs.lstat('.git', { cwd: root }, signal)
-      if (pointer === undefined) return []
-      const outside: string[] = []
-      if (pointer.type === 'file') {
-        const text = await fs.readText(await fs.resolve('.git', { cwd: root, signal }), signal)
-        const target = GITDIR_POINTER.exec(text)?.[1]
-        const gitDirectory = target === undefined ? undefined : await pointerDirectory(fs, target, root, signal)
-        if (gitDirectory !== undefined) {
-          outside.push(gitDirectory)
-          const common = (await pointerText(fs, 'commondir', gitDirectory, signal))?.trim()
-          const commonDirectory = common === undefined || common.length === 0
-            ? undefined
-            : await pointerDirectory(fs, common, gitDirectory, signal)
-          if (commonDirectory !== undefined) outside.push(commonDirectory)
-        }
-      }
+      const outside = await linkedCheckoutAdministration(fs, root, signal)
       signal.throwIfAborted()
       // Distinct directories outside the root, keeping only those no other candidate already contains.
       const candidates = [...new Set(outside)].filter(directory => !within(root, directory))
       const derived = Object.freeze(candidates.filter(directory =>
         !candidates.some(other => other !== directory && within(other, directory))))
       this.gitAdministration.set(root, derived)
+      this.derivationWarnings.delete(root)
       return derived
     } catch (error) {
       if (signal.aborted) throw error
-      this.ctx.logger.warn(`sandbox-policy: could not derive the Git administration directories of ${JSON.stringify(root)}: ${String(error)}`)
+      if (!this.derivationWarnings.has(root)) {
+        this.derivationWarnings.add(root)
+        this.ctx.logger.warn(`sandbox-policy: could not derive the Git administration directories of ${JSON.stringify(root)}: ${String(error)}`)
+      }
       return []
     }
+  }
+
+  /** The policy as the model sees it: the derived Git directories are a filesystem fact, not model-visible input. */
+  private configuredPolicy(session: Session): SandboxExecutionPolicy {
+    const { mode, workspaceRoot } = this.resolve({ session })
+    const configured = this.additionalWritableRoots
+    return { mode, workspaceRoot, ...configured === undefined ? {} : { additionalWritableRoots: configured } }
   }
 
   /**

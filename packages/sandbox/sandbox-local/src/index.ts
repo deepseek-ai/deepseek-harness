@@ -273,7 +273,7 @@ export class LocalSandboxProvider extends SandboxProvider {
    * dispose).
    */
   private readonly workspaceGrants = new Map<string, AclWriteGrant>()
-  /** Extra roots already carrying a standing ACE, keyed by workspace root and extra root. */
+  /** Extra roots already carrying a revocable ACE, keyed by workspace root and extra root; cleared with the grants. */
   private readonly extraGrants = new Set<string>()
   private readonly tempCapabilities = new Map<string, AclTempCapability>()
 
@@ -407,7 +407,7 @@ export class LocalSandboxProvider extends SandboxProvider {
    * removed before the error propagates.
    * @param sessionId - the policy's calling-session identity.
    * @param workspaceRoot - the resolved policy root.
-   * @param extras - canonical extra writable roots that share the workspace SID.
+   * @param extras - canonical extra writable roots that share the workspace SID through revocable ACEs.
    * @returns the pair's private temp directory and write capability.
    */
   private materializeAclGrant(sessionId: SessionId, workspaceRoot: string, extras: readonly string[]): AclTempCapability {
@@ -432,11 +432,13 @@ export class LocalSandboxProvider extends SandboxProvider {
       this.workspaceGrants.set(workspaceRoot, grant)
       workspaceGrant = grant
     }
-    // Each extra root carries one standing ACE for the workspace SID, applied once per provider lifetime.
+    // Each extra root carries one revocable ACE for the workspace SID, applied once per provider
+    // lifetime and removed with the provider: extras come from configuration and from the policy's
+    // derived Git directories, so none of them may outlive the process that resolved them.
     for (const extra of extras) {
       const extraKey = JSON.stringify([workspaceRoot, extra])
       if (this.extraGrants.has(extraKey)) continue
-      workspaceGrant.add(extra, true)
+      workspaceGrant.add(extra)
       this.extraGrants.add(extraKey)
     }
     const key = JSON.stringify([String(sessionId), workspaceRoot])
@@ -499,6 +501,7 @@ export class LocalSandboxProvider extends SandboxProvider {
       }
     }
     this.workspaceGrants.clear()
+    this.extraGrants.clear()
     this.tempCapabilities.clear()
     if (failures.length > 0) {
       this.ctx.logger.warn(`sandbox-local: windows-acl grant cleanup completed with ${failures.length} failure(s)`)

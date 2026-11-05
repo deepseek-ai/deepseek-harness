@@ -228,11 +228,16 @@ overrideOf(session: Session): SandboxMode | undefined
 /**
  * Derive the Git administration directories of the session's workspace root
  * so the next {@link resolve} grants them: a linked checkout's `.git` file
- * names its administration directory, whose `commondir` names the
- * repository's common directory. Directories inside the root, missing
- * directories, and a root without a `.git` entry add nothing. One derivation
- * runs per root; its result is kept once the root's `.git` entry was read,
- * and a failed read is logged and retried on the next call.
+ * names `<common>/worktrees/<name>`, whose `commondir` names the repository's
+ * common directory and whose `gitdir` names the checkout's `.git` again; only
+ * that layout grants the common directory, since the checkout's own `.git`
+ * pointer is writable under workspace-write. Any other layout, a root without
+ * `.git`, and a common directory containing the root add nothing. One
+ * derivation runs per root and its result is kept once the layout was read,
+ * so a pointer written later does not widen the policy until the Session
+ * enters a registered checkout again; a derived directory that disappears is
+ * derived again, and a failed read is logged once per root and retried on
+ * the next call.
  * @param session - session whose workspace root is inspected.
  * @param signal - caller cancellation, checked before and after the shared derivation.
  * @returns the derived directories outside the root, canonical in the execution world.

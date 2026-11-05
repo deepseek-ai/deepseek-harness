@@ -157,7 +157,7 @@ describe('windows-acl write grants (LocalSandboxProvider)', () => {
     }
   })
 
-  it('grants each extra writable root one standing ACE under the workspace SID and passes it as --writable', async () => {
+  it('grants each extra writable root one revocable ACE under the workspace SID and passes it as --writable', async () => {
     try {
       const { sandbox, fiber } = await setup()
       const ws = workspaceRoot()
@@ -170,7 +170,7 @@ describe('windows-acl write grants (LocalSandboxProvider)', () => {
       const confined = await sandbox.confine(['true'], policy)
       expect(confined.argv.slice(confined.argv.indexOf('--temp-write-sid') + 2)).toEqual(['--writable', extra, '--', 'true'])
       expect(mockState.grants[0]).toEqual(expect.objectContaining({
-        writeSid: WORKSPACE_SID, added: [{ path: ws, standing: true }, { path: extra, standing: true }],
+        writeSid: WORKSPACE_SID, added: [{ path: ws, standing: true }, { path: extra, standing: false }],
       }))
 
       // The same pair applies its ACE once per provider lifetime, for this session and for another on the workspace.
