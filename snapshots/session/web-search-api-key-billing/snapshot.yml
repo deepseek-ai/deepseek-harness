@@ -1,0 +1,13 @@
+version: 1
+scenario: web-search-api-key-billing
+profile: headless
+composition: web-search-api-key-billing
+recording: authored
+header:
+  class: web-search-api-key-billing
+  pin: true
+  toolSchemasSource: web-fetch
+environment:
+  # No DeepSeek API key, and a fixed DeepSeek origin for the account token.
+  DEEPSEEK_API_KEY: ''
+  DEEPSEEK_BASE_URL: https://api.deepseek.com/anthropic

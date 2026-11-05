@@ -1661,8 +1661,8 @@ describe.skipIf(MODE === 'record')('web e2e: Host Office preview', () => {
       ...['doc', 'ppt'].map(extension => writeFile(join(cwd, `renamed.${extension}`), 'Plain text is not a binary Office document.')),
     ])
     const releaseConversion = Promise.withResolvers<undefined>()
-    const convertOffice = scaffold.ctx.officeToPdf.convert.bind(scaffold.ctx.officeToPdf)
-    const convert = vi.spyOn(scaffold.ctx.officeToPdf, 'convert').mockImplementationOnce(async (...args) => {
+    const convertOffice = scaffold.ctx.officeKit.convert.bind(scaffold.ctx.officeKit)
+    const convert = vi.spyOn(scaffold.ctx.officeKit, 'convert').mockImplementationOnce(async (...args) => {
       await releaseConversion.promise
       return convertOffice(...args)
     })
@@ -1682,7 +1682,7 @@ describe.skipIf(MODE === 'record')('web e2e: Host Office preview', () => {
         await successShot(page, `office-loading-${colorScheme}`)
       }
       const pdfResponse = page.waitForResponse(
-        response => new URL(response.url()).pathname === '/api/officeToPdf/render',
+        response => new URL(response.url()).pathname === '/api/officeKit/render',
         { timeout: 60_000 },
       )
       releaseConversion.resolve(undefined)

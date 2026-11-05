@@ -11,7 +11,9 @@
     "src/terminal.ts",
     "src/retention.ts",
     "src/stream.ts",
-    "src/shells.ts"
+    "src/shells.ts",
+    "src/agent.ts",
+    "src/screen.ts"
   ],
   "references": [
     {

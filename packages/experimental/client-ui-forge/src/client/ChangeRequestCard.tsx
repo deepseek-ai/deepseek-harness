@@ -9,7 +9,8 @@ import { useEffect, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
   Button, IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconCloseOutlineRegular, IconCopyOutlineRegular,
-  IconListPenOutlineRegular, IconRightUpOutlineRegular, IconUserOutlineRegular, Menu, MenuItemButton, StateDot, Tooltip,
+  IconListPenOutlineRegular, IconRightUpOutlineRegular, IconTriangleRightFillRegular, IconUserOutlineRegular, Menu, MenuItemButton,
+  StateDot, Tooltip,
   type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
@@ -327,7 +328,7 @@ function MergeMenu({ snapshot, name, usual, busy, onMerge, t }: {
         <Button
           size="sm"
           variant="primary"
-          className={css.primaryAction}
+          className={clsx(css.primaryAction, css.mergeAction)}
           aria-haspopup="menu"
           aria-expanded={open}
           disabled={busy}
@@ -337,7 +338,7 @@ function MergeMenu({ snapshot, name, usual, busy, onMerge, t }: {
           }}
         >
           {t('change.merge')}
-          <IconChevronDownOutlineRegular size={12} className={clsx(css.chevron, open && css.chevronOpen)} />
+          <IconTriangleRightFillRegular size={10} className={clsx(css.mergeCaret, open && css.mergeCaretOpen)} />
         </Button>
       )}
       items={items}

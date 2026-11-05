@@ -33,7 +33,7 @@ kind: "package-reference"
 
 ### 定义投影单元
 
-领域为每个状态键贡献一个 `ProjectionDefinition`：一个 key、状态 schema、初始状态、同步折叠 `apply(state, event)`、可选的 `wire` 块（把状态投影为客户端视图），以及状态字段或折叠语义变化时递增的 `stateVersion`：
+领域为每个状态键贡献一个 `ProjectionDefinition`：一个 key、状态 schema、初始状态、同步折叠 `apply(state, event)`、可选的 `wire` 块（把状态投影为客户端视图），以及用于使检查点失效的 `stateVersion`。状态字段或折叠语义变化时递增版本。仅当缺失字段保留历史含义，且回归测试验证旧检查点加后缀恢复与全量回放一致时，新增可选字段才可保持版本；仅通过 schema 校验不足以保留版本：
 
 ```text
 const definition = {

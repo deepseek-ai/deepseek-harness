@@ -40,8 +40,9 @@ function fixture(test: TestContext, files: Record<string, string>): PackOptions 
 
 const CHUNKS = {
   'client.browser.js': 'module.exports = { load: () => require.async("./client.pdf.js") }',
-  'client.pdf.js': 'module.exports = { worker: () => require.async(\'./client.pdf-worker.js\') }',
+  'client.pdf.js': 'module.exports = { worker: () => require.async(\'./client.pdf-worker.js\'), minified: () => require.async(`./client.pdf-font.js`) }',
   'client.pdf-worker.js': 'module.exports = "pdf worker"',
+  'client.pdf-font.js': 'module.exports = "pdf font"',
   'client.orphan.js': 'module.exports = "nobody asks for me"',
 }
 
@@ -52,8 +53,10 @@ it('moves every require.async chunk into its own archive and registers it', (tes
   expect(base).toContain(`${PREFIX}/client.orphan.js`)
   expect(base).not.toContain(`${PREFIX}/client.pdf.js`)
   expect(base).not.toContain(`${PREFIX}/client.pdf-worker.js`)
+  expect(base).not.toContain(`${PREFIX}/client.pdf-font.js`)
 
   expect(result.lazyArchives.map(archive => archive.files)).toEqual([
+    [`${PREFIX}/client.pdf-font.js`],
     [`${PREFIX}/client.pdf-worker.js`],
     [`${PREFIX}/client.pdf.js`],
   ])

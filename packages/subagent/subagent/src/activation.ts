@@ -51,6 +51,8 @@ interface ActivationBase {
   readonly root: Agent
   /** Verified creation ancestors, from subagent tree root to direct creator. */
   readonly ancestors: readonly SessionId[]
+  /** Slash-separated names from the root; undefined when this child or a creator below the root has no name. */
+  readonly path: string | undefined
   readonly delivery: 'parent' | 'caller'
   readonly result: PromiseWithResolvers<SubagentResult>
   /** Published synchronously before teardown; subsequent callers share this transaction. */

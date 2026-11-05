@@ -53,6 +53,12 @@ The [CLI behavior reference](reference/README.md) owns exact layer precedence, f
 
 `config/examples/` ships opt-in overlays for GitHub review webhooks, memory MCP servers, and runtime Cordis tools. They are never part of a default profile; the [user guides](../../docs/user/guide/index.md) and [developer practice guides](../../docs/user/develop/practice/index.md) own setup and safety instructions.
 
+## Installed payload
+
+The published tarball carries the bundled runtime under `lib/`, the TypeScript under `src/`, the declaration and JavaScript maps beside the files they describe, and the documentation under `docs/`. Only `prepack` stages `docs/`, and `postpack` removes that copy again, so a reader of the working tree sees whatever the checkout holds.
+
+`docs/` holds the documentation website's pages plus every upgrade guide, with the assets those pages reference. `docs/upgrade-guide/README.md` is generated during staging: it groups the guides by the release each `v<T>` directory upgrades from and lists each guide's title, English and Chinese descriptions, and relative paths. The Desktop application carries the same `docs/` and `src/` inside its `app.asar`. The generated `persistence-changes/` records, the `i18n/` guidelines, and the `*.i18n.yaml` consistency records are not published. Its pages keep the repository's relative links, so a link into `../packages/**` or into the omitted `persistence-changes/` records resolves only in a checkout.
+
 ## Development
 
 Production runs require built package and frontend artifacts. From the repository root, run `pnpm run build` separately, then use `pnpm dsh <args...>` to run the TypeScript entry and forward every argument; the [source-execution reference](reference/README.md#source-execution) owns the module-resolution contract.

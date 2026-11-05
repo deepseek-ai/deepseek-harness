@@ -296,7 +296,7 @@ export function TabStrip({ state, pane, callbacks, offsets }: TabStripProps): Re
     // float's own subtraction and swallows the panel's header and controls.
     <div className={css.tabStrip} role="tablist" data-dockkit-strip={pane.id}
       data-window-drag={state.floats.length === 0 ? true : undefined}>
-      <div ref={stripTabs} className={css.stripTabs} role="presentation" data-dockkit-strip-tabs={pane.id}>
+      <div ref={stripTabs} className={css.stripTabs} role="presentation" data-dockkit-strip-tabs={pane.id} data-window-drag-exclude>
         {pane.tabs.map((tabId, index) => {
           const tab = getTab(state, tabId)
           const selected = tabId === pane.activeTabId

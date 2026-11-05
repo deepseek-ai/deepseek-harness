@@ -99,12 +99,12 @@ pnpm --filter @deepseek-ai/dsh-plugin-market-generator start --input plugins.txt
 
 对于 npm 包，索引列出所有未弃用、未设为私有且声明了 `dsh.bundle` 的版本。对于 Git 仓库，生成器在默认分支上查找 `package.json` 没有设置 `"private": true` 的组合包，列出它们在 `vX.Y.Z`、`X.Y.Z` 和 `<name>@X.Y.Z` 标签处的版本，以及每个包在默认分支上的版本。标题、描述、图标、作者和主页取自每个插件的最高版本。路径相对于你运行 pnpm 的目录。
 
-生成器只下载和读取文件，从不安装包或运行其代码。它在列表旁的 `.plugin-market-cache` 中保存缓存，因此再次运行时只下载新的版本和提交。按上文所述发布输出目录，即 `index.json` 及其 `icons/` 目录。
+生成器只下载和读取文件，从不安装包或运行其代码。它在列表旁的 `.plugin-market-cache` 中保存包数据，并复用未变更的版本和提交。每次运行仍会读取源文档或 Git 引用，并刷新已启用的指标；不可用的指标值会被省略。设置 `GITHUB_TOKEN` 以采集 GitHub star 数；没有非空白令牌时，不会发起 GitHub 指标请求，也不会输出 `github_stars`，但 npm 周下载量仍保持启用。按上文所述发布输出目录，即 `index.json` 及其 `icons/` 目录。
 
 <a id="index-format"></a>
 ## 索引格式参考
 
-标为 `LocalizedText` 的文本字段是字符串，或以小写语言 id 为键的字符串对象，例如 `{ "en": "Foo", "zh": "甲" }`；对象必须包含 `en`。DSH 不认识的成员会被忽略。
+标为 `LocalizedText` 的文本字段是字符串，或以小写语言 id 为键的字符串对象，例如 `{ "en": "Foo", "zh": "甲" }`；对象必须包含 `en`。DSH 在每一层都忽略未知的对象字段。已知字段和 `source.type` 仍须具有有效值；声明映射、本地化文本映射和插件排序值映射中的键作为数据进行校验。
 
 | 索引字段 | 必填 | 含义 |
 |---|---|---|
@@ -112,7 +112,7 @@ pnpm --filter @deepseek-ai/dsh-plugin-market-generator start --input plugins.txt
 | `title`、`description` | 仅 `title` | 索引名称和描述，类型为 `LocalizedText`。 |
 | `metadata.categories`、`metadata.labels` | 否 | 将 id 映射为 `{ "title": LocalizedText }` 的对象。 |
 | `metadata.sortKeys` | 否 | 将 id 映射为 `{ "title": LocalizedText, "order": "asc" \| "desc" }` 的对象；`order` 是初始方向。 |
-| `plugins` | 是 | 按索引默认顺序排列的插件。 |
+| `plugins` | 是 | 按发布者的默认顺序排列的插件；客户端必须在初次展示和筛选时保留此数组顺序，除非用户选择其他排序方式，或文本搜索按相关性排序。 |
 
 | 插件字段 | 必填 | 含义 |
 |---|---|---|
@@ -124,8 +124,10 @@ pnpm --filter @deepseek-ai/dsh-plugin-market-generator start --input plugins.txt
 | `repository` | 否 | `{ "url": string, "directory"?: string }`：源代码仓库的网页，以及包在其中的目录。插件页面以**源代码**链接到它。 |
 | `metadata.category` | 否 | 一个已声明的分类 id。 |
 | `metadata.labels` | 否 | 已声明的标签 id。 |
-| `metadata.sortKeys` | 否 | 将已声明的排序键 id 映射为数值的对象，例如下载量或评分。 |
+| `metadata.sortKeys` | 否 | 将已声明的排序键 id 映射为有限数值的对象；不可用时值为 `null`。 |
 | `versions` | 是 | 至少一个版本，顺序不限。 |
+
+插件可以省略 `metadata`、其中的任意字段或单个排序值，也可以用 `null` 表示数据不可用。无论升序还是降序，缺失值都排在最后；实际的零是有效值，不是缺失数据。建议采用的统一定义是：`github_stars` 表示仓库的 GitHub star 数，`npm_weekly_downloads` 表示公共 npm 包在 npm `last-week` 时间窗口内的下载量。两者均为非负整数；周下载量不是月下载量。发布者使用这些键时，在根级 `metadata.sortKeys` 中声明，并在各插件的 `metadata.sortKeys` 中填入可用值。其他已声明的数值键仍受支持。
 
 | 版本字段 | 必填 | 含义 |
 |---|---|---|

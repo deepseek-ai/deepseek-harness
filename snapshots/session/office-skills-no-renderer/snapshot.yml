@@ -7,6 +7,5 @@ header:
   class: office-skills-no-renderer
   pin: true
   systemPromptSource: office-skills
-  toolSchemasSource: office-skills
 workspace:
   setup: office-skills

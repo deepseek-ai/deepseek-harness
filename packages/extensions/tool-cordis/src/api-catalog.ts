@@ -1310,11 +1310,24 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when the Host lacks the Session query, projection cache, storage, or Session store service.'],
       },
       {
+        signature: '@Remote async worktreeCleanup(session: Session, revision: number | null): Promise<WorktreeCleanup | null>',
+        description: 'Read or await the worktree service\'s archive cleanup of the Session\'s checkout.',
+        parameters: [{ name: 'session', description: 'Session whose cleanup is visible to the caller.' }, { name: 'revision', description: 'null reads now; a matching revision waits for completion.' }],
+        returns: 'the cleanup state, or null without a worktree service, an attempt, or a current revision.',
+      },
+      {
         signature: '@Remote async branches(session: Session, signal: AbortSignal): Promise<ForgeBranches>',
         description: 'List the local branches that can start a worktree of the Session\'s current checkout.',
         parameters: [{ name: 'session', description: 'Session whose current directory is listed.' }, { name: 'signal', description: 'request cancellation.' }],
         returns: 'the checked-out branch and at most `maxBranches` local branches, the checked-out one first.',
         throws: ['when the current directory is not inside a checkout or Git fails.'],
+      },
+      {
+        signature: '@Remote async diffBases(session: Session, query: string, signal: AbortSignal): Promise<ForgeBaseBranches>',
+        description: 'List the branches the `branch` scope of the Session\'s current checkout can compare with.',
+        parameters: [{ name: 'session', description: 'Session whose checkout is read.' }, { name: 'query', description: 'text the branch names must contain, ignoring case; empty for every branch.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'the automatic fork point and at most `maxBranches` remote-tracking and local branches each, most recently committed first, without the checked-out branch.',
+        throws: ['`forgePanel/not-a-checkout` outside a checkout; the Git error when Git fails or the listed refs exceed `maxDiffBytes`.'],
       },
       {
         signature: '@Remote async track(session: Session, url: string, signal: AbortSignal): Promise<void>',
@@ -1338,7 +1351,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Read the changes one scope covers in the checkout of the Session\'s current directory, with Git using the Session\'s sandbox policy.',
         parameters: [{ name: 'session', description: 'Session whose checkout is read.' }, { name: 'scope', description: 'which changes to read.' }, { name: 'signal', description: 'request cancellation.' }],
         returns: 'the files, the base of the `branch` scope, and the untracked files left out.',
-        throws: ['`forgePanel/not-a-checkout` outside a checkout; `forgePanel/no-fork-point` for the `branch` scope of a checkout without one; `forgePanel/filter-config-failed` when filter configuration cannot be read completely, before any comparison; `forgePanel/diff-too-large` over `maxDiffBytes`; the Git error when Git fails.'],
+        throws: ['`forgePanel/not-a-checkout` outside a checkout; `forgePanel/base-missing` when the base branch chosen for the `branch` scope does not exist; `forgePanel/no-fork-point` for the `branch` scope without a fork point; `forgePanel/filter-config-failed` when filter configuration cannot be read completely, before any comparison; `forgePanel/diff-too-large` over `maxDiffBytes`; the Git error when Git fails.'],
       },
       {
         signature: '@Remote async localText(session: Session, scope: ForgeLocalScope, path: string, signal: AbortSignal): Promise<string>',
@@ -2116,30 +2129,56 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
-    key: 'officeToPdf',
+    key: 'officeKit',
     summary: 'A provider lifetime owns all converters, queued calls, and temporary files.',
     description: 'A provider lifetime owns all converters, queued calls, and temporary files.',
     methods: [
       {
-        signature: 'readonly generation: OfficeToPdfGeneration = OfficeToPdfGeneration(randomUUID())',
+        signature: 'readonly generation: OfficeKitGeneration = OfficeKitGeneration(randomUUID())',
         description: 'Changes whenever engine, font, or conversion configuration is replaced.',
         parameters: [],
       },
       {
-        signature: 'convert(request: OfficeToPdfRequest, signal?: AbortSignal): Promise<OfficeToPdfResult>',
-        description: 'Convert Office bytes without modifying the source or writing Session events.',
-        parameters: [{ name: 'request', description: 'authorized metadata and deferred bounded source read.' }, { name: 'signal', description: 'caller cancellation; provider disposal also stops active work.' }],
-        returns: 'caller-owned PDF bytes after conversion and scratch cleanup settle; canceled readers reject independently.',
-        throws: ['{OfficeToPdfError} Invalid input, unusable output, or engine failure; cancellation rejects with its reason.'],
+        signature: 'readonly outputDirectory: string',
+        description: 'Absolute Host directory holding converted and recalculated files; consumers check that their execution world reads it.',
+        parameters: [],
       },
       {
-        signature: '@Remote async render( workspaceFileScope: WorkspaceFileScope, path: string, priority: OfficeToPdfPriority, signal: AbortSignal, ): Promise<RenderedDocumentBytes>',
+        signature: 'async convert(request: OfficeKitRequest, signal?: AbortSignal): Promise<OfficeKitResult>',
+        description: 'Convert Office bytes to PDF without modifying the source or writing Session events.',
+        parameters: [{ name: 'request', description: 'authorized metadata and deferred bounded source read.' }, { name: 'signal', description: 'caller cancellation; provider disposal also stops active work.' }],
+        returns: 'caller-owned PDF bytes after conversion and scratch cleanup settle; canceled readers reject independently.',
+        throws: ['{OfficeKitError} Invalid input, unusable output, or engine failure; cancellation rejects with its reason.'],
+      },
+      {
+        signature: 'async renderImages(request: OfficeImagesRequest, signal?: AbortSignal): Promise<OfficeImagesResult>',
+        description: 'Render selected pages, slides, or worksheet areas of one document as PNG images. Requests share the admission queue, concurrency, source-byte reservation, and cache with previews, and run at foreground priority.',
+        parameters: [{ name: 'request', description: 'authorized metadata, deferred bounded source read, selection, and complete-result limits.' }, { name: 'signal', description: 'caller cancellation; provider disposal also stops active work.' }],
+        returns: 'caller-owned images in document order whose count, per-image size, and total bytes satisfy the limits.',
+        throws: ['{OfficeKitError} `invalid-request` for a selection the engine rejects, `output-too-large` when the selection exceeds a limit, and the other conversion codes; cancellation rejects with its reason.'],
+      },
+      {
+        signature: 'async convertTo(request: OfficeConversionRequest, signal?: AbortSignal): Promise<OfficeFileResult>',
+        description: 'Convert one document to another format at foreground priority, sharing admission, concurrency, and cache with previews, and save the result in the provider\'s output store.',
+        parameters: [{ name: 'request', description: 'authorized metadata, deferred bounded source read, target format, and output owner and name.' }, { name: 'signal', description: 'caller cancellation; provider disposal also stops active work.' }],
+        returns: 'the saved file\'s absolute Host path and size; the file is deleted after `outputRetentionMs`, when older outputs need `maxOutputStoreBytes`, when the Session whose id is `output.owner` is disposed, or when the provider is disposed.',
+        throws: ['{OfficeKitError} `invalid-request` for a format or sheet the engine rejects and the other conversion codes; cancellation rejects with its reason.'],
+      },
+      {
+        signature: 'async recalculate(request: OfficeRecalculationRequest, signal?: AbortSignal): Promise<OfficeFileResult>',
+        description: 'Recalculate every formula of one workbook at foreground priority and save formulas with refreshed cached results, sharing admission, concurrency, and cache with previews, and save the workbook in the provider\'s output store. This does not validate formulas or business data.',
+        parameters: [{ name: 'request', description: 'authorized workbook metadata, deferred bounded source read, output format, and output owner and name.' }, { name: 'signal', description: 'caller cancellation; provider disposal also stops active work.' }],
+        returns: 'the saved workbook\'s absolute Host path and size, retained like {@link convertTo} outputs.',
+        throws: ['{OfficeKitError} Invalid input, unusable output, or engine failure; cancellation rejects with its reason.'],
+      },
+      {
+        signature: '@Remote async render( workspaceFileScope: WorkspaceFileScope, path: string, priority: OfficeKitPriority, signal: AbortSignal, ): Promise<RenderedDocumentBytes>',
         description: 'Read and convert one Office file using the Session\'s ordinary filesystem authorization.',
         parameters: [{ name: 'workspaceFileScope', description: 'Session header lookup shared with workspaceFiles.' }, { name: 'path', description: 'absolute or workspace-relative Office path.' }, { name: 'priority', description: 'foreground preview or speculative background work.' }, { name: 'signal', description: 'Remote cancellation; disposal also cancels outstanding reads and conversions.' }],
         returns: 'complete PDF bytes with original source identity and missing font families.',
       },
       {
-        signature: '@Remote(\'generation\') getGeneration(signal: AbortSignal): OfficeToPdfGeneration',
+        signature: '@Remote(\'generation\') getGeneration(signal: AbortSignal): OfficeKitGeneration',
         description: 'Read the current rendering generation before reusing a Client PDF.',
         parameters: [{ name: 'signal', description: 'Remote caller cancellation.' }],
         returns: 'provider lifetime, replaced with rendering, font, or engine configuration.',
@@ -2284,8 +2323,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote async updateBundle(name: string, version: string, options?: UpdateBundleOptions): Promise<PluginUpdateResult>',
-        description: 'Replace an installed registry bundle with a newer published version. The target is checked on the registry first: it must exist, declare a bundle, and accept the running DSH version, or nothing changes. With HMR the installed version is removed, so its plugins stop, and the target is installed with the same selection; when that installation fails or is cancelled, the removed version is installed again from the registry it came from. Without HMR the target is installed over the running version and the result reports the restart.',
-        parameters: [{ name: 'name', description: 'Installed profile dependency name.' }, { name: 'version', description: 'Exact published version newer than the installed one.' }, { name: 'options', description: 'The registry asked first, as for `listVersions`, and the request id naming the progress and the target installation\'s logs and cancellation.' }],
+        description: 'Replace an installed bundle with a newer version. A registry copy updates to `name@version`, checked on the registry first: it must exist, declare a bundle, and accept the running DSH version, or nothing changes. A Git copy updates to the Git spec `options.spec` names, which must pin a full commit of the repository directory the copy came from; with HMR, a network failure or timeout reaching its repository stops the update before anything changes. pnpm reads a Git package only while installing it, so its bundle and compatibility are checked then. Either target installation is undone, profile files and modules included, before its bundle loads unless it installs `name` at `version`. With HMR the installed version is removed, so its plugins stop, and the target is installed with the same selection; when that installation fails or is cancelled, the removed version is installed again: a registry copy from the registry it came from, a Git copy from its saved spec. Without HMR the target is installed over the running version and the result reports the restart.',
+        parameters: [{ name: 'name', description: 'Installed profile dependency name.' }, { name: 'version', description: 'Exact version newer than the installed one.' }, { name: 'options', description: 'The registry asked first, as for `listVersions`; the Git spec of `version`, required for and accepted only by a bundle `listBundles` lists with `update: \'git\'`; and the request id naming the progress and the target installation\'s logs and cancellation.' }],
         returns: 'The versions, the last step that ran with its result, and the reinstallation when one ran.',
       },
       {
@@ -2553,7 +2592,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'sandboxPolicy',
     summary: 'The sandbox-policy service (`ctx.sandboxPolicy`).',
-    description: 'The sandbox-policy service (`ctx.sandboxPolicy`). Owns the deployment default mode, fallback workspace root, and current request-time policy section. Tool layers call resolve for each execution so a session\'s mode log and immutable cwd travel together to every enforcing capability.',
+    description: 'The sandbox-policy service (`ctx.sandboxPolicy`). Owns the deployment default mode, fallback workspace root, session-scoped directory grants, and request-time policy section. Tool layers call resolve for each execution so a session\'s mode log and immutable cwd travel together to every enforcing capability.',
     methods: [
       {
         signature: 'readonly defaultMode: SandboxMode',
@@ -2572,9 +2611,16 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'resolve(request: SandboxPolicyRequest = {}): SandboxExecutionPolicy',
-        description: 'Resolve the complete policy for one capability call. An approved explicit mode outranks the session\'s last `sandbox/mode` event, which outranks the deployment default. A session cwd is its workspace-write boundary; the configured root is the fallback for agentless calls and sessions without a cwd.',
+        description: 'Resolve the complete policy for one capability call. An approved explicit mode outranks the session\'s last `sandbox/mode` event, which outranks the deployment default. A session cwd is its workspace-write boundary; the configured root is the fallback for agentless calls and sessions without a cwd. Configured extra roots and this Session\'s active registrations are snapshotted together; existing operations and processes keep their policy.',
         parameters: [{ name: 'request', description: 'optional session and approved mode override.' }],
         returns: 'the fully resolved per-call mode and absolute workspace root.',
+      },
+      {
+        signature: 'registerWritableRoot(session: Session, directory: string): () => void',
+        description: 'Permit writes under one directory in this Session\'s future workspace-write operations. The calling context owns the effect; disposal removes only this registration. Other grants to the directory remain effective. Existing operations and persistent processes retain their resolved permissions. Grants are runtime-only and must be registered again after resume or fork. On Windows, only harness file tools honor extra grants; process permissions stay unchanged.',
+        parameters: [{ name: 'session', description: 'exact live Session receiving the grant; other Sessions and agentless calls are unaffected.' }, { name: 'directory', description: 'absolute execution-world path; execution rejects missing, non-directory, or symlinked paths.' }],
+        returns: 'the exact Cordis effect disposer for this registration.',
+        throws: ['when the directory is relative or contains a NUL byte.'],
       },
       {
         signature: 'overrideOf(session: Session): SandboxMode | undefined',
@@ -3038,6 +3084,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Observe one exact live or prepared Session without a persistence listing preflight.',
         parameters: [{ name: 'sessionId', description: 'logical Session identity.' }, { name: 'options', description: 'cancellation and projection selection for this read.' }],
         returns: 'a caller-owned observation lease.',
+      },
+      {
+        signature: 'inspectSession<T>(sessionId: SessionId, read: (session: Session) => T, signal?: AbortSignal): Promise<T>',
+        description: 'Inspect domain-owned state without attaching or resuming a cold Session. The getter runs synchronously after preparation and must not mutate or retain the Session.',
+        parameters: [{ name: 'sessionId', description: 'logical Session identity.' }, { name: 'read', description: 'domain getter returning detached data.' }, { name: 'signal', description: 'preparation cancellation.' }],
+        returns: 'the getter\'s value at the current live or prepared cut.',
       },
       {
         signature: 'abstract searchSessions( request: SessionSearchRequest, exec?: SessionSearchExecContext, ): Promise<SessionSearchPage<SessionSearchHit>>',
@@ -3689,6 +3741,20 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when the caller or its runtime owner is unavailable.'],
       },
       {
+        signature: 'namesOf(agent: Agent): SubagentMemberNames',
+        description: 'Report the model-facing names of a live tree member and its direct creator. The root is `lead`; a descendant is the slash-separated path of names from the root, or its Session id when it or a creator below the root has no name.',
+        parameters: [{ name: 'agent', description: 'exact live root or resident tree member.' }],
+        returns: 'the member\'s name and, for a descendant, its creator\'s name.',
+        throws: ['when the caller or its runtime owner is unavailable.'],
+      },
+      {
+        signature: 'async resolveName(caller: Agent, name: string, signal: AbortSignal): Promise<SessionId>',
+        description: 'Resolve a model-supplied agent reference within the caller\'s tree. `lead` selects the root and a slash-separated path is looked up through the catalogs along it. Any other text that is not a name in the tree is returned as a Session id, because a single token can be one; a slash-separated address never is, so an unmatched path fails instead of reaching a member lookup as an unknown id. Resolution grants no authority: messaging, interruption, and assignment authorize the result.',
+        parameters: [{ name: 'caller', description: 'exact live Agent whose tree root anchors the lookup.' }, { name: 'name', description: '`lead`, a full name from the root, or a Session id.' }, { name: 'signal', description: 'cancellation forwarded to each catalog read.' }],
+        returns: 'the referenced Session id.',
+        throws: ['{@link SubagentError} `AGENT_NAME_NOT_FOUND` when a path names no member; when the caller\'s root is unavailable; or when a catalog along the path cannot be read.'],
+      },
+      {
         signature: 'async waitForTreeWork(root: Agent): Promise<boolean>',
         description: 'Join progressing subagent tree work for its root. Idle members with parked input stay resident without delaying host completion. Ordinary members return false.',
         parameters: [{ name: 'root', description: 'exact live subagent tree root whose member work is awaited.' }],
@@ -3870,6 +3936,32 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Allocate a user shell once for a caller-generated identity, without Agent sandbox or approval restrictions.',
         parameters: [{ name: 'agent', description: 'Session owner supplied by the Gateway.' }, { name: 'request', description: 'initial dimensions and idempotency identity.' }, { name: 'signal', description: 'allocation cancellation; committed terminals survive disconnection.' }],
         returns: 'the existing or newly committed terminal.',
+      },
+      {
+        signature: 'async openForAgent(agent: Agent, request: AgentTerminalRequest, signal: AbortSignal): Promise<AgentTerminal>',
+        description: 'Open a terminal for the Session\'s Agent under a caller-resolved sandbox policy; it appears in every window that watches the Session and passes to the person on the person\'s first typed input.',
+        parameters: [{ name: 'agent', description: 'Session owner whose Agent requests the terminal.' }, { name: 'request', description: 'title, directory, dimensions, sandbox policy and shell preference.' }, { name: 'signal', description: 'allocation cancellation; a committed terminal outlives it.' }],
+        returns: 'the Agent\'s handle for the committed terminal.',
+        throws: ['RemoteError `terminal/limit-reached` when the Session or Agent terminal limit is reached.', 'Error when the title is blank or longer than 120 characters.'],
+      },
+      {
+        signature: 'readScreen(agent: Agent, id: WebTerminalId, request: TerminalScreenRequest): Promise<TerminalScreenPage>',
+        description: 'Render a page of any terminal in the Agent\'s Session, including terminals the person opened.',
+        parameters: [{ name: 'agent', description: 'Session owner.' }, { name: 'id', description: 'terminal identity.' }, { name: 'request', description: 'page position and byte bound.' }],
+        returns: 'rendered screen text, including output received before the call.',
+        throws: ['RemoteError `terminal/unavailable` when the terminal is missing or closes before the screen is read.'],
+      },
+      {
+        signature: 'inspectActivity(agent: Agent, id: WebTerminalId): Promise<\'idle\' | \'busy\' | \'unknown\'>',
+        description: 'Observe whether a Session terminal\'s shell is running a command.',
+        parameters: [{ name: 'agent', description: 'Session owner.' }, { name: 'id', description: 'terminal identity.' }],
+        returns: 'idle, busy, or unknown for unsupported shells and sandboxed launches.',
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *watch(sessionId: SessionId, signal: AbortSignal): AsyncIterable<WebTerminalInfo[]>',
+        description: 'Stream the Session\'s retained terminals as whole sets, without resolving or activating an Agent.',
+        parameters: [{ name: 'sessionId', description: 'watched Session identity.' }, { name: 'signal', description: 'stream cancellation.' }],
+        returns: 'the current set, then a new set after creation, removal or any published state change.',
       },
       {
         signature: '@Remote({ mode: \'stream\' }) retain(sessionId: SessionId, id: WebTerminalId, signal: AbortSignal): AsyncIterable<TerminalRetentionFrame>',
@@ -4452,7 +4544,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Validate the current directory and restore the original project when it disappeared.',
         parameters: [{ name: 'agent', description: 'live or unpublished Agent owning the Session.' }, { name: 'signal', description: 'cancellation for filesystem inspection.' }],
         returns: 'the existing directory; recovery is committed before fulfillment. A notice failure is warned without reverting the committed state.',
-        throws: ['when the original project is also unavailable.'],
+        throws: ['when the original project is also unavailable, or when a `working-directory/access` listener rejects.'],
       },
       {
         signature: 'set(agent: Agent, path: string, signal?: AbortSignal): Promise<string>',
@@ -4639,7 +4731,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: 'archiveSession(sessionId: SessionId, options: ArchiveSessionOptions = {}): Promise<void>',
         description: 'Archive one session durably. The session must exist (live or in session persistence); its workspace accounting — or lack of one — is irrelevant. Without `stopActivity` the session must also be inactive: the `workspace/session-activity` waterfall is asked once, and any reported activity rejects with WorkspaceActiveSessionError before anything is written. With `stopActivity` the archive is written without an activity check, and the `workspace/session-stop` providers are then asked to stop the session\'s work: the durable archive set is what a provider\'s `agent/pre-step` gate reads, so every wake the stops induce is already blocked. Archiving drops the session\'s pin in the same durable write (pinning and archival are mutually exclusive). An already archived id resolves without writing, asking, or stopping.',
         parameters: [{ name: 'sessionId', description: 'The session to archive.' }, { name: 'options', description: 'Whether running work is stopped instead of refusing.' }],
-        returns: 'resolution after durability and, with `stopActivity`, after every stop request was issued.',
+        returns: 'resolution after durability, any stop requests, and follow-up admission.',
       },
       {
         signature: 'unarchiveSession(sessionId: SessionId): Promise<void>',
@@ -4669,8 +4761,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'worktrees',
-    summary: 'Creates retained Git worktrees under the mounted filesystem and sandbox providers.',
-    description: 'Creates retained Git worktrees under the mounted filesystem and sandbox providers.',
+    summary: 'Creates retained Git worktrees under the mounted filesystem and sandbox providers, records each creation in the Session log, and reclaims a clean, unreferenced checkout when the Session that created it is archived.',
+    description: 'Creates retained Git worktrees under the mounted filesystem and sandbox providers, records each creation in the Session log, and reclaims a clean, unreferenced checkout when the Session that created it is archived.',
     methods: [
       {
         signature: 'async create( agent: Agent, request: CreateWorktreeRequest = {}, signal?: AbortSignal, onPhase?: (phase: CreateWorktreePhase) => void, ): Promise<CreatedWorktree>',
@@ -4683,6 +4775,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Check out a removed worktree again at its recorded directory: its branch when the branch still exists, otherwise a new branch of the same name at `baseCommit`. Only the missing target\'s unlocked registration is removed, and an existing directory fails. Changes that were never committed are not recovered. Checkout disables configured clean, smudge, and process filters, as creation does. The calling Session\'s working directory does not change. Failures may retain newly allocated Git/filesystem artifacts.',
         parameters: [{ name: 'agent', description: 'caller whose sandbox policy confines the commands.' }, { name: 'request', description: 'recorded directory, branch, base commit, and source repository root.' }, { name: 'signal', description: 'cancellation of the restoration.' }, { name: 'onPhase', description: 'receives each stage before it begins; it must not throw.' }],
         returns: 'the directory and whether the branch was created again.',
+      },
+      {
+        signature: 'async cleanupOf(session: Session, revision: number | null): Promise<WorktreeCleanup | null>',
+        description: 'Read the archive cleanup of a Session\'s created checkout; waiting never starts one. Absent without the Workspace and query providers.',
+        parameters: [{ name: 'session', description: 'archived Session whose cleanup is read.' }, { name: 'revision', description: 'null reads at once; a matching revision waits for that attempt to settle.' }],
+        returns: 'the attempt state, or null when none exists, the revision was superseded, or the service is stopping.',
       },
     ],
   },
@@ -5395,6 +5493,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'info', description: 'the run\'s identity snapshot (id + meta).' }],
   },
   {
+    name: 'working-directory/access',
+    mode: 'waterfall',
+    signature: '\'working-directory/access\'( request: { agent: Agent; path: string | null; signal: AbortSignal }, next: () => Promise<string>, ): Promise<string>',
+    summary: 'Coordinate directory validation and publication with a resource operation on the directory, such as a checkout being removed.',
+    description: 'Coordinate directory validation and publication with a resource operation on the directory, such as a checkout being removed. A listener that must wait awaits that operation, then calls `next()`; every other listener calls `next()` at once. A rejection fails this access and leaves the recorded directory unchanged; it is not a fallback.',
+    parameters: [{ name: 'request', description: 'owner, requested path (null validates the current directory), and the access\'s cancellation.' }, { name: 'next', description: 'perform validation and commit.' }],
+  },
+  {
     name: 'workspace/session-activity',
     mode: 'waterfall',
     signature: '\'workspace/session-activity\'( request: SessionActivityRequest, next: () => Promise<readonly SessionActivity[]>, ): Promise<readonly SessionActivity[]>',
@@ -5403,12 +5509,36 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'request', description: 'the session about to be archived.' }, { name: 'next', description: 'delegate to the remaining providers.' }],
   },
   {
+    name: 'workspace/session-archived',
+    mode: 'parallel',
+    signature: '\'workspace/session-archived\'(request: SessionActivityRequest): Promise<void> | void',
+    summary: 'Admit optional follow-up work after durable archival and any stop requests.',
+    description: 'Admit optional follow-up work after durable archival and any stop requests. Dispatched inside the registry\'s write queue: a listener registers its work and returns, and runs the work and any unbounded I/O afterwards. Listener failures are logged without undoing archival. Listeners own and drain their background work.',
+    parameters: [{ name: 'request', description: 'newly archived Session; repeated archive requests do not dispatch.' }],
+  },
+  {
     name: 'workspace/session-stop',
     mode: 'parallel',
     signature: '\'workspace/session-stop\'(request: SessionActivityRequest): Promise<void> | void',
     summary: 'Stop a session\'s running work because the caller archived it with `stopActivity`; the archive set is durable when this dispatches.',
     description: 'Stop a session\'s running work because the caller archived it with `stopActivity`; the archive set is durable when this dispatches. Each provider stops its own families — cancelling a turn, its subagent descendants, owned jobs, or active schedules — through the same cancel paths the user\'s own stop actions use, so the session log ends every open turn regularly and a later unarchive can continue the conversation. Listeners issue their stop requests without waiting for running work to settle; a listener may await its own durability barrier. A rejection is logged by the registry and does not undo the archive.',
     parameters: [{ name: 'request', description: 'the session being archived.' }],
+  },
+  {
+    name: 'workspace/session-unarchiving',
+    mode: 'parallel',
+    signature: '\'workspace/session-unarchiving\'(request: SessionActivityRequest): Promise<void> | void',
+    summary: 'Cancel or settle archive follow-up work before making a Session available again.',
+    description: 'Cancel or settle archive follow-up work before making a Session available again. A rejection retains the archived state.',
+    parameters: [{ name: 'request', description: 'Session about to leave the archive set.' }],
+  },
+  {
+    name: 'worktree/cleanup',
+    mode: 'emit',
+    signature: '\'worktree/cleanup\'(info: { sessionId: SessionId; path: string; cleanup: WorktreeCleanup }): void',
+    summary: 'A cleanup attempt changed state.',
+    description: 'A cleanup attempt changed state. Fires once at admission with `scheduled` and once at settlement with the final status.',
+    parameters: [{ name: 'info', description: 'the archived Session, the checkout, and the attempt state.' }],
   },
 ]
 
@@ -5557,6 +5687,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'AgentStatus',
     declaration: 'export type AgentStatus = \'idle\' | \'running\';',
+  },
+  {
+    name: 'AgentTerminal',
+    declaration: 'export interface AgentTerminal {\n    readonly id: WebTerminalId;\n    readonly pid: number;\n    readonly info: WebTerminalInfo;\n    readonly revision: number;\n    changed(after: number, signal: AbortSignal): Promise<number>;\n    write(data: string): Promise<void>;\n    drain(): Promise<void>;\n    read(request: TerminalScreenRequest): TerminalScreenPage;\n    mark(): TerminalScreenMark;\n    inspectForeground(): Promise<SubprocessTerminalForeground | undefined>;\n    signal(signal: SubprocessTerminalSignal): Promise<number>;\n    close(): Promise<void>;\n}',
+  },
+  {
+    name: 'AgentTerminalRequest',
+    declaration: 'export interface AgentTerminalRequest {\n    readonly title: string;\n    readonly cwd?: string;\n    readonly cols: number;\n    readonly rows: number;\n    readonly policy: SandboxExecutionPolicy;\n    readonly preferredShells: readonly string[];\n    readonly env?: Readonly<Record<string, string>>;\n}',
   },
   {
     name: 'AnalyticsPreset',
@@ -5780,7 +5918,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'BundleInfo',
-    declaration: 'export interface BundleInfo {\n    name: string;\n    official: boolean;\n    availability: \'installation\' | \'profile\' | \'missing\';\n    installTarget?: {\n        spec: string;\n        version: string;\n    };\n    version?: string;\n    meta?: PluginLocalizedMeta;\n    description?: string;\n    listedByDefault?: boolean;\n    enabled: boolean;\n    installed: boolean;\n    source?: string;\n    optional: boolean;\n    removable: boolean;\n    updatable: boolean;\n    readOnlyReason?: ReadOnlyReason;\n    error?: ManagementError;\n    rows: BundleRowInfo[];\n    overrides: string[];\n}',
+    declaration: 'export interface BundleInfo {\n    name: string;\n    official: boolean;\n    availability: \'installation\' | \'profile\' | \'missing\';\n    installTarget?: {\n        spec: string;\n        version: string;\n    };\n    version?: string;\n    meta?: PluginLocalizedMeta;\n    description?: string;\n    listedByDefault?: boolean;\n    enabled: boolean;\n    installed: boolean;\n    source?: string;\n    optional: boolean;\n    removable: boolean;\n    update?: \'registry\' | \'git\';\n    readOnlyReason?: ReadOnlyReason;\n    error?: ManagementError;\n    rows: BundleRowInfo[];\n    overrides: string[];\n}',
   },
   {
     name: 'BundleRowInfo',
@@ -6403,6 +6541,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ForgeActionFailure {\n    readonly code: \'unauthenticated\' | \'stale\' | \'failed\';\n    readonly message: string;\n}',
   },
   {
+    name: 'ForgeAutomaticBase',
+    declaration: 'export interface ForgeAutomaticBase {\n    readonly name: string;\n    readonly worktree: boolean;\n}',
+  },
+  {
+    name: 'ForgeBaseBranch',
+    declaration: 'export interface ForgeBaseBranch {\n    readonly ref: string;\n    readonly name: string;\n}',
+  },
+  {
+    name: 'ForgeBaseBranches',
+    declaration: 'export interface ForgeBaseBranches {\n    readonly automatic: ForgeAutomaticBase | null;\n    readonly remote: readonly ForgeBaseBranch[];\n    readonly local: readonly ForgeBaseBranch[];\n}',
+  },
+  {
     name: 'ForgeBranches',
     declaration: 'export interface ForgeBranches {\n    readonly current: string | null;\n    readonly branches: readonly string[];\n}',
   },
@@ -6460,7 +6610,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgeLocalScope',
-    declaration: 'export type ForgeLocalScope = {\n    readonly kind: \'branch\';\n} | {\n    readonly kind: \'uncommitted\';\n} | {\n    readonly kind: \'unstaged\';\n} | {\n    readonly kind: \'staged\';\n};',
+    declaration: 'export type ForgeLocalScope = {\n    readonly kind: \'branch\';\n    readonly base: string | null;\n} | {\n    readonly kind: \'uncommitted\';\n} | {\n    readonly kind: \'unstaged\';\n} | {\n    readonly kind: \'staged\';\n};',
   },
   {
     name: 'ForgeMissingWorktree',
@@ -6736,7 +6886,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'InstallBundleOptions',
-    declaration: 'export interface InstallBundleOptions {\n    enabled?: boolean;\n    saveExact?: boolean;\n    requestId?: PluginInstallRequestId;\n    approvedBuilds?: string[];\n    registry?: Registry;\n}',
+    declaration: 'export interface InstallBundleOptions {\n    enabled?: boolean;\n    saveExact?: boolean;\n    requestId?: PluginInstallRequestId;\n    approvedBuilds?: string[];\n    registry?: Registry;\n    expected?: {\n        readonly name: string;\n        readonly version: string;\n    };\n}',
   },
   {
     name: 'InstallSpecKind',
@@ -6888,7 +7038,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'KnownSubagentCatalogFields',
-    declaration: 'export type KnownSubagentCatalogFields = {\n    readonly mode: \'one-shot\';\n    readonly label?: string;\n} | {\n    readonly mode: \'external\';\n    readonly label?: string;\n} | {\n    readonly mode: \'continuable\';\n    readonly label: string;\n};',
+    declaration: 'export type KnownSubagentCatalogFields = {\n    readonly mode: \'one-shot\';\n    readonly label?: string;\n} | {\n    readonly mode: \'external\';\n    readonly label?: string;\n    readonly name?: string;\n} | {\n    readonly mode: \'continuable\';\n    readonly label: string;\n    readonly name?: string;\n};',
   },
   {
     name: 'KvFacet',
@@ -7056,7 +7206,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ManagementError',
-    declaration: 'export interface ManagementError {\n    code: ReadOnlyReason | \'unknown-plugin\' | \'invalid-spec\' | \'already-installed\' | \'ambiguous-install\' | \'not-bundle\' | \'not-removable\' | \'stop-profile\' | \'bundle-in-use\' | \'stale-approval\' | \'incompatible-version\' | \'unsupported-platform\' | \'operation-error\';\n    diagnostic?: string;\n    incompatible?: IncompatiblePlugin[];\n}',
+    declaration: 'export interface ManagementError {\n    code: ReadOnlyReason | \'unknown-plugin\' | \'invalid-spec\' | \'already-installed\' | \'ambiguous-install\' | \'not-bundle\' | \'not-removable\' | \'stop-profile\' | \'bundle-in-use\' | \'stale-approval\' | \'incompatible-version\' | \'unsupported-platform\' | \'unexpected-package\' | \'operation-error\';\n    diagnostic?: string;\n    incompatible?: IncompatiblePlugin[];\n}',
   },
   {
     name: 'ManualCompactAgentContext',
@@ -7100,7 +7250,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'MarketListingVersion',
-    declaration: 'export interface MarketListingVersion extends MarketVersion {\n    readonly install: MarketInstallTarget;\n    readonly compatibility: MarketCompatibility;\n}',
+    declaration: 'export interface MarketListingVersion extends MarketVersion {\n    readonly install: MarketInstallTarget;\n    readonly compatibility: MarketCompatibility;\n    readonly update: boolean;\n}',
   },
   {
     name: 'MarketPlugin',
@@ -7371,32 +7521,84 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ObjectJsonSchema = JsonSchemaNode & {\n    type: \'object\';\n};',
   },
   {
+    name: 'OfficeConversionFormat',
+    declaration: 'export type OfficeConversionFormat = \'pdf\' | \'docx\' | \'odt\' | \'txt\' | \'xlsx\' | \'ods\' | \'csv\' | \'pptx\' | \'odp\';',
+  },
+  {
+    name: 'OfficeConversionRequest',
+    declaration: 'export interface OfficeConversionRequest {\n    readonly extension: OfficeDocumentExtension;\n    readonly format: OfficeConversionFormat;\n    readonly sheet?: string;\n    readonly source: OfficeKitSource;\n    readonly output: OfficeOutputTarget;\n}',
+  },
+  {
+    name: 'OfficeDocumentExtension',
+    declaration: 'export type OfficeDocumentExtension = OfficeExtension | \'odt\' | \'ods\' | \'odp\';',
+  },
+  {
     name: 'OfficeExtension',
     declaration: 'export type OfficeExtension = \'doc\' | \'docx\' | \'xls\' | \'xlsx\' | \'ppt\' | \'pptx\';',
+  },
+  {
+    name: 'OfficeFileResult',
+    declaration: 'export interface OfficeFileResult {\n    readonly path: string;\n    readonly bytes: number;\n    readonly pageCount?: number;\n    readonly missingFonts: string[];\n}',
+  },
+  {
+    name: 'OfficeImage',
+    declaration: 'export interface OfficeImage {\n    readonly png: Uint8Array;\n    readonly width: number;\n    readonly height: number;\n    readonly page?: number;\n    readonly sheet?: string;\n    readonly range?: string;\n}',
+  },
+  {
+    name: 'OfficeImageInputExtension',
+    declaration: 'export type OfficeImageInputExtension = OfficeDocumentExtension | \'pdf\';',
+  },
+  {
+    name: 'OfficeImagesRequest',
+    declaration: 'export interface OfficeImagesRequest {\n    readonly extension: OfficeImageInputExtension;\n    readonly source: OfficeKitSource;\n    readonly pages?: readonly number[];\n    readonly sheet?: string;\n    readonly range?: string;\n    readonly dpi?: number;\n    readonly maxImages: number;\n    readonly maxPixels: number;\n    readonly maxDimension: number;\n    readonly maxBytes: number;\n}',
+  },
+  {
+    name: 'OfficeImagesResult',
+    declaration: 'export interface OfficeImagesResult {\n    readonly images: readonly OfficeImage[];\n    readonly pageCount: number;\n    readonly dpi: number;\n    readonly missingFonts: string[];\n}',
+  },
+  {
+    name: 'OfficeKitGeneration',
+    declaration: 'export type OfficeKitGeneration = Branded<\'OfficeKitGeneration\'>;',
+  },
+  {
+    name: 'OfficeKitKey',
+    declaration: 'export type OfficeKitKey = Branded<\'OfficeKitKey\'>;',
+  },
+  {
+    name: 'OfficeKitPriority',
+    declaration: 'export type OfficeKitPriority = \'foreground\' | \'background\';',
+  },
+  {
+    name: 'OfficeKitRequest',
+    declaration: 'export interface OfficeKitRequest {\n    readonly extension: OfficeExtension;\n    readonly priority: OfficeKitPriority;\n    readonly source: OfficeKitSource;\n}',
+  },
+  {
+    name: 'OfficeKitResult',
+    declaration: 'export interface OfficeKitResult {\n    readonly pdf: Uint8Array;\n    readonly missingFonts: string[];\n    readonly cacheKey: OfficeKitKey;\n    readonly generation: OfficeKitGeneration;\n}',
+  },
+  {
+    name: 'OfficeKitSource',
+    declaration: 'export interface OfficeKitSource {\n    readonly key: OfficeSourceKey;\n    readonly version: string;\n    readonly bytes?: number;\n    read(signal: AbortSignal, maxBytes: number): Promise<{\n        readonly bytes: Uint8Array;\n        readonly version: string;\n    }>;\n}',
+  },
+  {
+    name: 'OfficeOutputTarget',
+    declaration: 'export interface OfficeOutputTarget {\n    readonly owner: string;\n    readonly name: string;\n}',
+  },
+  {
+    name: 'OfficeRecalculationFormat',
+    declaration: 'export type OfficeRecalculationFormat = \'xlsx\' | \'ods\';',
+  },
+  {
+    name: 'OfficeRecalculationRequest',
+    declaration: 'export interface OfficeRecalculationRequest {\n    readonly extension: OfficeWorkbookExtension;\n    readonly format: OfficeRecalculationFormat;\n    readonly source: OfficeKitSource;\n    readonly output: OfficeOutputTarget;\n}',
   },
   {
     name: 'OfficeSourceKey',
     declaration: 'export type OfficeSourceKey = Branded<\'OfficeSourceKey\'>;',
   },
   {
-    name: 'OfficeToPdfGeneration',
-    declaration: 'export type OfficeToPdfGeneration = Branded<\'OfficeToPdfGeneration\'>;',
-  },
-  {
-    name: 'OfficeToPdfKey',
-    declaration: 'export type OfficeToPdfKey = Branded<\'OfficeToPdfKey\'>;',
-  },
-  {
-    name: 'OfficeToPdfPriority',
-    declaration: 'export type OfficeToPdfPriority = \'foreground\' | \'background\';',
-  },
-  {
-    name: 'OfficeToPdfRequest',
-    declaration: 'export interface OfficeToPdfRequest {\n    readonly extension: OfficeExtension;\n    readonly priority: OfficeToPdfPriority;\n    readonly source: {\n        readonly key: OfficeSourceKey;\n        readonly version: string;\n        readonly bytes?: number;\n        read(signal: AbortSignal, maxBytes: number): Promise<{\n            readonly bytes: Uint8Array;\n            readonly version: string;\n        }>;\n    };\n}',
-  },
-  {
-    name: 'OfficeToPdfResult',
-    declaration: 'export interface OfficeToPdfResult {\n    readonly pdf: Uint8Array;\n    readonly missingFonts: string[];\n    readonly cacheKey: OfficeToPdfKey;\n    readonly generation: OfficeToPdfGeneration;\n}',
+    name: 'OfficeWorkbookExtension',
+    declaration: 'export type OfficeWorkbookExtension = \'xls\' | \'xlsx\' | \'ods\';',
   },
   {
     name: 'OnboardingPage',
@@ -7444,7 +7646,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'PackageResult',
-    declaration: 'export interface PackageResult {\n    exitCode: number;\n    output: string;\n    truncated: boolean;\n    logPath: string;\n    kind?: PluginInstallFailureKind;\n    timedOut?: boolean;\n    incompatible?: IncompatiblePlugin[];\n}',
+    declaration: 'export interface PackageResult {\n    exitCode: number;\n    output: string;\n    truncated: boolean;\n    logPath: string;\n    kind?: PluginInstallFailureKind;\n    timedOut?: boolean;\n    incompatible?: IncompatiblePlugin[];\n    unmet?: \'unexpected-package\' | \'not-bundle\';\n}',
   },
   {
     name: 'PaidTranslationProvider',
@@ -7948,7 +8150,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RenderedDocumentBytes',
-    declaration: 'export interface RenderedDocumentBytes extends WorkspaceFileBytes {\n    readonly missingFonts: string[];\n    readonly generation: OfficeToPdfGeneration;\n}',
+    declaration: 'export interface RenderedDocumentBytes extends WorkspaceFileBytes {\n    readonly missingFonts: string[];\n    readonly generation: OfficeKitGeneration;\n}',
   },
   {
     name: 'ReplayEnvelope',
@@ -9188,11 +9390,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SubagentActivation',
-    declaration: 'export interface SubagentActivation {\n    readonly childId: SessionId;\n    readonly messageId?: MessageId;\n    readonly result: Promise<SubagentResult>;\n    dispose(): Promise<void>;\n}',
+    declaration: 'export interface SubagentActivation {\n    readonly childId: SessionId;\n    readonly name: string;\n    readonly messageId?: MessageId;\n    readonly result: Promise<SubagentResult>;\n    dispose(): Promise<void>;\n}',
   },
   {
     name: 'SubagentActivationSpec',
-    declaration: 'export interface SubagentActivationSpec extends Omit<SubagentStartRequest, \'label\' | \'signal\'> {\n    readonly provider: string;\n    readonly label: string;\n    readonly childId?: SessionId;\n    readonly signal: AbortSignal;\n    readonly delivery: \'parent\' | \'caller\';\n}',
+    declaration: 'export interface SubagentActivationSpec extends Omit<SubagentStartRequest, \'label\' | \'signal\'> {\n    readonly provider: string;\n    readonly label: string;\n    readonly name?: string;\n    readonly childId?: SessionId;\n    readonly signal: AbortSignal;\n    readonly delivery: \'parent\' | \'caller\';\n}',
   },
   {
     name: 'SubagentCapabilities',
@@ -9208,7 +9410,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SubagentDescendantListEntry',
-    declaration: 'export type SubagentDescendantListEntry = SubagentListEntry & {\n    readonly parentId: SessionId;\n    readonly depth: number;\n};',
+    declaration: 'export type SubagentDescendantListEntry = SubagentListEntry & {\n    readonly parentId: SessionId;\n    readonly depth: number;\n    readonly path?: string;\n};',
   },
   {
     name: 'SubagentInterruptAuthority',
@@ -9221,6 +9423,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SubagentListEntry',
     declaration: 'export type SubagentListEntry = SubagentCatalogRow & {\n    readonly kind: \'child\';\n    readonly hasChildren: boolean;\n} | {\n    readonly kind: \'diagnostic\';\n    readonly id: SessionId;\n    readonly reason: \'corrupt\' | \'unsupported\' | \'unavailable\';\n};',
+  },
+  {
+    name: 'SubagentMemberNames',
+    declaration: 'export interface SubagentMemberNames {\n    readonly self: string;\n    readonly parent?: string;\n}',
   },
   {
     name: 'SubagentPromptReceipt',
@@ -9260,7 +9466,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SubagentRuntime',
-    declaration: 'export class SubagentRuntime extends TypertRemoteService {\n    static Config;\n    static inject;\n    constructor(ctx: Context, private config: Config);\n    resolveMaxDepth(configured?: number | \'provider-managed\'): number | undefined;\n    startActivation(spec: SubagentActivationSpec & {\n        readonly childId: SessionId;\n    }): Promise<SubagentActivation & {\n        readonly messageId: MessageId;\n    }>;\n    startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>;\n    async startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>;\n    rootOf(caller: Agent): Agent;\n    async waitForTreeWork(root: Agent): Promise<boolean>;\n    async sendMessage(sender: Agent, targetId: SessionId, content: ContentBlock[], options: SubagentSendMessageOptions): Promise<MessageId>;\n    interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): void;\n    async drainDescendants(parents: readonly Agent[]): Promise<void>;\n    listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<SubagentDescendantListEntry[]>;\n    @Remote({ name: \'prompt\', resources: { session: request => request.childSessionId } })\n    async prompt(request: SubagentPromptRequest, signal: AbortSignal): Promise<SubagentPromptReceipt>;\n    @Remote({ name: \'interruptByUser\', resources: { session: childSessionId => childSessionId } })\n    interruptByUser(childSessionId: SessionId): SubagentInterruptReceipt;\n    registerProvider(provider: SubagentProvider): () =>  /* …truncated — full shape in source */',
+    declaration: 'export class SubagentRuntime extends TypertRemoteService {\n    static Config;\n    static inject;\n    constructor(ctx: Context, private config: Config);\n    resolveMaxDepth(configured?: number | \'provider-managed\'): number | undefined;\n    startActivation(spec: SubagentActivationSpec & {\n        readonly childId: SessionId;\n    }): Promise<SubagentActivation & {\n        readonly messageId: MessageId;\n    }>;\n    startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>;\n    async startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>;\n    rootOf(caller: Agent): Agent;\n    namesOf(agent: Agent): SubagentMemberNames;\n    async resolveName(caller: Agent, name: string, signal: AbortSignal): Promise<SessionId>;\n    async waitForTreeWork(root: Agent): Promise<boolean>;\n    async sendMessage(sender: Agent, targetId: SessionId, content: ContentBlock[], options: SubagentSendMessageOptions): Promise<MessageId>;\n    interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): void;\n    async drainDescendants(parents: readonly Agent[]): Promise<void>;\n    listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<SubagentDescendantListEntry[]>;\n    @Remote({ name: \'prompt\', resources: { session: request => request.childSessionId } })\n    async prompt(request: SubagentPromptRequest, signal: AbortSignal): Promise<SubagentPromptReceipt>;\n    @Remote({ name: \'interruptByUser\', resources: { session: childSessionId => childSess /* …truncated — full shape in source */',
   },
   {
     name: 'SubagentSendMessageOptions',
@@ -9400,7 +9606,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeamTaskView',
-    declaration: 'export interface TeamTaskView {\n    readonly id: TeamTaskId;\n    readonly revision: number;\n    readonly subject: string;\n    readonly description: string;\n    readonly status: TeamTaskStatus;\n    readonly blockedBy: TeamTaskId[];\n    readonly writeScopes: string[];\n    readonly ownerId?: SessionId;\n    readonly ready: boolean;\n    readonly writeScopeWarnings: string[];\n}',
+    declaration: 'export interface TeamTaskView {\n    readonly id: TeamTaskId;\n    readonly revision: number;\n    readonly subject: string;\n    readonly description: string;\n    readonly status: TeamTaskStatus;\n    readonly blockedBy: TeamTaskId[];\n    readonly writeScopes: string[];\n    readonly ownerId?: SessionId;\n    readonly ownerName?: string;\n    readonly ready: boolean;\n    readonly writeScopeWarnings: string[];\n}',
   },
   {
     name: 'TerminalBackend',
@@ -9432,7 +9638,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TerminalInput',
-    declaration: 'export type TerminalInput = {\n    readonly type: \'write\';\n    readonly sequence: number;\n    readonly data: string;\n} | {\n    readonly type: \'resize\';\n    readonly sequence: number;\n    readonly cols: number;\n    readonly rows: number;\n};',
+    declaration: 'export type TerminalInput = {\n    readonly type: \'write\';\n    readonly sequence: number;\n    readonly data: string;\n    readonly typed?: boolean;\n} | {\n    readonly type: \'resize\';\n    readonly sequence: number;\n    readonly cols: number;\n    readonly rows: number;\n};',
+  },
+  {
+    name: 'TerminalParty',
+    declaration: 'export type TerminalParty = \'user\' | \'agent\';',
   },
   {
     name: 'TerminalReadRequest',
@@ -9449,6 +9659,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TerminalRetentionFrame',
     declaration: 'export interface TerminalRetentionFrame {\n    readonly type: \'retained\';\n}',
+  },
+  {
+    name: 'TerminalSandboxMode',
+    declaration: 'export type TerminalSandboxMode = \'read-only\' | \'workspace-write\' | \'danger-full-access\';',
+  },
+  {
+    name: 'TerminalScreenMark',
+    declaration: 'export interface TerminalScreenMark {\n    lines(): {\n        readonly lines: readonly string[];\n        readonly truncated: boolean;\n    };\n    dispose(): void;\n}',
+  },
+  {
+    name: 'TerminalScreenPage',
+    declaration: 'export interface TerminalScreenPage {\n    readonly text: string;\n    readonly totalLines: number;\n    readonly lineBegin: number;\n    readonly lineEnd: number;\n    readonly truncated: boolean;\n}',
+  },
+  {
+    name: 'TerminalScreenRequest',
+    declaration: 'export interface TerminalScreenRequest {\n    readonly offset: number;\n    readonly count: number;\n    readonly maxBytes: number;\n}',
   },
   {
     name: 'TerminalSendOperation',
@@ -9908,7 +10134,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'UpdateBundleOptions',
-    declaration: 'export interface UpdateBundleOptions {\n    readonly registry?: Registry;\n    readonly requestId?: PluginInstallRequestId;\n}',
+    declaration: 'export interface UpdateBundleOptions {\n    readonly registry?: Registry;\n    readonly spec?: string;\n    readonly requestId?: PluginInstallRequestId;\n}',
   },
   {
     name: 'UpdateSharePermissionsRequest',
@@ -10064,7 +10290,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WebTerminalInfo',
-    declaration: 'export interface WebTerminalInfo {\n    readonly id: WebTerminalId;\n    readonly title: string;\n    readonly shell: TerminalShell;\n    readonly cwd: string;\n    readonly cols: number;\n    readonly rows: number;\n    readonly state: \'running\' | \'exited\' | \'failed\';\n    readonly exitCode: number | null;\n    readonly error?: string;\n}',
+    declaration: 'export interface WebTerminalInfo {\n    readonly id: WebTerminalId;\n    readonly title: string;\n    readonly shell: TerminalShell;\n    readonly cwd: string;\n    readonly cols: number;\n    readonly rows: number;\n    readonly state: \'running\' | \'exited\' | \'failed\';\n    readonly exitCode: number | null;\n    readonly error?: string;\n    readonly origin: TerminalParty;\n    readonly control: TerminalParty;\n    readonly sandboxMode?: TerminalSandboxMode;\n}',
   },
   {
     name: 'WebUpgradeRoute',
@@ -10265,6 +10491,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'WorkspaceView',
     declaration: 'export interface WorkspaceView {\n    readonly workspaceId: WorkspaceId;\n    readonly path: string;\n    readonly title: string;\n    readonly sessionIds: readonly SessionId[];\n    readonly createdAt: string;\n    readonly updatedAt: string;\n}',
+  },
+  {
+    name: 'WorktreeCleanup',
+    declaration: 'export interface WorktreeCleanup {\n    readonly revision: number;\n    readonly status: \'scheduled\' | \'retained\' | \'removed\' | \'failed\';\n}',
   },
 ]
 

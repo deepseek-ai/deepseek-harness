@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-plugin-manager",
   "description": "Plugin management for the dsh web client: the sidebar Plugins panel installs, enables, disables, retries, and composes installed plugin packages",
-  "version": "0.2.2-alpha.2",
+  "version": "0.2.2-rc.1",
   "publishConfig": {
     "access": "public"
   },
@@ -81,15 +81,19 @@
     "lib/index.js",
     "lib/client.js",
     "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
     "lib/typert.host.js",
     "lib/typert.host.d.ts",
     "lib/typert.remote-client.js",
-    "lib/typert.remote-client.d.ts"
+    "lib/typert.remote-client.d.ts",
+    "lib/typert.remote-client.d.ts.map",
+    "src"
   ],
   "dependencies": {
     "@deepseek-ai/dsh-timeout": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
-    "zod": "4.4.3",
+    "zod": "4.6.6",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*"
   }
 }

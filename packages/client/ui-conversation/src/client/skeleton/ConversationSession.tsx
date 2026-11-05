@@ -107,7 +107,7 @@ function equalBreadcrumbs(left: readonly Breadcrumb[], right: readonly Breadcrum
  */
 export function ConversationSessionHeader({
   sessionId, hideChrome, useSessions, useConversationViews, useStore,
-  renderSlot, open, useContextMenu, selectView, setPinned, t, useEntryPins, useEntryActions,
+  renderSlot, renderFactorySlot, open, useContextMenu, selectView, setPinned, t, useEntryPins, useEntryActions,
 }: ConversationSessionHeaderProps) {
   const { getTriggerProps } = useContextMenu()
   const tabs = useConversationViews(value => value)
@@ -208,6 +208,10 @@ export function ConversationSessionHeader({
             </div>
             <div className={css.headerUtilities}>
               {renderSlot('conversation.session.header.utilities', {})}
+              {renderFactorySlot('contextMenu.button', {
+                target: { kind: 'sessionHeader', value: { sessionId } },
+                label: t('header.more'), className: css.headerMenuButton, size: 'sm',
+              })}
             </div>
           </>
         )}

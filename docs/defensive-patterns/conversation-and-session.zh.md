@@ -10,7 +10,7 @@ Session 数据一律经 Projection 读取与计算。客户端读投影值，而
 
 - 判定条件：客户端渲染的每个 Session 派生值都在渲染位置经投影读取取得，每个新增的会话内计算都注册为单元、其结果以已发布值的形式到达客户端。组件自己拉取 Session 数据、或读者按需触发一次计算，都属违规。
 - State 与 View：单元折叠 host 侧 State，并在其上声明客户端可见的 View，二者分工写在注册里。`ProjectionDefinition` 的字段与驱动它们的注册表归 [session-projection.zh.md](../subsystems/session-projection.zh.md#ctxsessionprojections--sessionprojectionregistry)。
-- 版本：`stateVersion` 从 1 起，只要序列化 state 字段或折叠语义变化就自增，兼容与否都一样。存在兼容改法时优先兼容，但版本仍要自增；同一 key 以不同 `stateVersion` 注册两次会抛错，而不是合并。
+- 版本：`stateVersion` 从 1 起。遵循[检查点版本规则](../../packages/session/session-projection/README.zh.md)：状态字段或折叠变化需要递增版本，但经过测试、保留历史含义且旧检查点加后缀恢复与全量回放一致的可选字段扩展除外。同一 key 以不同版本注册两次会抛错，而不是合并。
 - 计算策略：单元默认全量计算。收窄某个单元的计算范围需要对应领域专家确认，绝不能由实现者自行决定。
 - 边界：非完全 projection 渲染可用于某些 key 的界面可用性展示，例如在连接中的 Session 应答之前先画缓存块。它绝不参与对外可见结果的判定，那些结果等标准 projection 值。
 

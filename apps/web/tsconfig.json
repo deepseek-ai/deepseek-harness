@@ -23,6 +23,7 @@
   // this client-registered project must not also hold them (one program
   // cannot see both sides of the cordis Context merges).
   "exclude": [
+    "tests/home-whale.e2e.ts",
     "tests/sidebar-drawer.e2e.ts",
     "tests/creation-recommendations.e2e.ts",
     "tests/plugin-recommendations.e2e.ts",
@@ -186,6 +187,7 @@
     "tests/file-upload-round.e2e.ts",
     "tests/message-actions.e2e.ts",
     "tests/open-in-app-ssh.e2e.ts",
+    "tests/open-in-app-menus.e2e.ts",
     "tests/fork-mid-turn.e2e.ts",
     "tests/message-feedback.e2e.ts",
     "tests/markdown-images.e2e.ts",
@@ -248,6 +250,7 @@
     "tests/composer-tab-geometry.e2e.ts",
     "tests/conversation-view-tabs.e2e.ts",
     "tests/window-drag-coverage.e2e.ts",
+    "tests/window-drag-inheritance.e2e.ts",
     "tests/complex-history.perf.ts",
     "tests/pwsh-terminal.e2e.ts",
     "tests/workflow-run.e2e.ts"

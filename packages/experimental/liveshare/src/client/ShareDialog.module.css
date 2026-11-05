@@ -206,12 +206,12 @@
 }
 
 .testOk {
-  color: var(--dsw-static-green-500);
+  color: var(--dsw-alias-state-success-primary);
   font-size: 12px;
 }
 
 .testWarn {
-  color: var(--dsw-static-amber-500);
+  color: var(--dsw-alias-state-warn-primary);
   font-size: 12px;
 }
 
@@ -328,7 +328,7 @@
 }
 
 .online::before {
-  background: var(--dsw-static-green-500);
+  background: var(--dsw-alias-state-success-primary);
 }
 
 .outgoingLink {

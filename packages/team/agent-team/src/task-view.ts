@@ -24,7 +24,7 @@ export function taskReady(state: TeamState, task: TeamTaskSnapshot): boolean {
 }
 
 /**
- * Derive one task view with owner id, readiness, and advisory write overlaps.
+ * Derive one task view with saved owner identity, readiness, and advisory write overlaps.
  * A committing caller may pass its pre-append state because `task` supplies the
  * new value explicitly; blocker readiness, and other task scopes
  * do not change when that snapshot is appended.
@@ -49,6 +49,7 @@ export function projectTaskView(state: TeamState, task: TeamTaskSnapshot): TeamT
     blockedBy: [...task.blockedBy],
     writeScopes: [...task.writeScopes],
     ...task.ownerId === undefined ? {} : { ownerId: task.ownerId },
+    ...task.ownerName === undefined ? {} : { ownerName: task.ownerName },
     ready: task.status === 'pending' && taskReady(state, task),
     writeScopeWarnings: [...warnings],
   }
