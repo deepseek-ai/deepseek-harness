@@ -19,7 +19,7 @@ const creator = { providerId: 'feishu', tenantId: 'tenant-a', subjectId: 'ou_vie
 
 const share: ForkShareState = {
   shareId: 'share-1',
-  sessionId: 'session-shared',
+  sessionIds: ['session-shared'],
   // The view tier with the share's own fork switch on: forking is no longer a tier of its own.
   sessionMode: 'view',
   allowsFork: true,
@@ -114,7 +114,7 @@ async function service(childCreator = creator): Promise<{ read: ReturnType<typeo
   ctx.remoteAccess.registerPolicy('share-viewer', createViewerAccessPolicy(accessFacts))
   const read = createViewerReadService({
     connection: owner(ctx.remoteAccess).connection,
-    sharedSessionId: () => 'session-shared',
+    sharedSessionIds: () => ['session-shared'],
     forkStateOf: () => share,
     forks,
     writeRefusal: (viewer, action, sessionId, concrete) => readerWriteRefusal(accessFacts, viewer, action, sessionId, concrete),

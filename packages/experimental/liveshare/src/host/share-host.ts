@@ -109,7 +109,7 @@ export interface Config {
 export function publishedShareState(share: OwnerShare): ForkShareState {
   return {
     shareId: share.shareId,
-    sessionId: share.sessionId,
+    sessionIds: share.sessionIds,
     allowsFork: share.allowsFork,
     viewerAdmitted: true,
     stopped: false,
@@ -274,8 +274,8 @@ export async function apply(ctx: Context, config: Config): Promise<() => Promise
   }
 
   /** @see SourceAccess.confined */
-  function sourceConfined(shareId: string): boolean {
-    return sourceAccess.confined(shareId)
+  function sourceConfined(shareId: string, sessionId: string): boolean {
+    return sourceAccess.confined(shareId, sessionId)
   }
 
   const accessFacts: ViewerAccessFacts = {
@@ -364,7 +364,7 @@ export async function apply(ctx: Context, config: Config): Promise<() => Promise
   const viewerRead: ViewerReadService = createViewerReadService({
     connection,
     ...(gateway === undefined ? {} : { gateway }),
-    sharedSessionId: shareId => ownerShares.get(shareId)?.sessionId,
+    sharedSessionIds: shareId => ownerShares.get(shareId)?.sessionIds,
     forks,
     // The Relay admitted this viewer before the request reached this host, so admission is a fact
     // here; the share's own switch, session, and expiry are what the fork decision reads.
@@ -383,11 +383,11 @@ export async function apply(ctx: Context, config: Config): Promise<() => Promise
     writeRefusal: (viewer, action, sessionId, concrete) => readerWriteRefusal(accessFacts, viewer, action, sessionId, concrete),
     accessChanged,
     // The same record the confinement answer reads, so a refusal can say why the layer is missing.
-    sourceRefusal: (shareId) => {
+    sourceRefusal: (shareId, sessionId) => {
       const share = ownerShares.get(shareId)
       /* v8 ignore next -- the refusal is only read for a share this host still publishes. */
       if (share === undefined) return undefined
-      return sourceAccess.refusalOf(shareId)
+      return sourceAccess.refusalOf(shareId, sessionId)
     },
     prepareSource: sessionId => sourceAccess.prepareSourceSession(sessionId, 'prompt'),
     prepareSourceForReader: (shareId) => { sourceAccess.prepareSourceForReader(shareId) },
@@ -439,10 +439,10 @@ export async function apply(ctx: Context, config: Config): Promise<() => Promise
     // A shared Session is the other case this listener covers: it must carry the layer that confines an
     // externally driven turn before it is published, and a resumed one reaches this listener with its own
     // scope. A Session no published share names installs nothing here.
-    const published = [...ownerShares.values()].find(candidate => candidate.sessionId === childSessionId)
+    const published = [...ownerShares.values()].find(candidate => candidate.sessionIds.includes(childSessionId))
     const arriving = agent.session
     if (published !== undefined) {
-      await sourceAccess.apply(published, { context: agent.ctx, session: arriving }, 'publish')
+      await sourceAccess.apply(published, childSessionId, { context: agent.ctx, session: arriving }, 'publish')
     }
     const record = forks.find(childSessionId)
     if (record === undefined) return
@@ -468,7 +468,7 @@ export async function apply(ctx: Context, config: Config): Promise<() => Promise
     if (share === undefined || !relay.viewerAdmitted(origin.shareId, origin.actor)) return false
     // Both tiers drive the shared Session; what the tier permits is decided per tool by the confined
     // layer, which refuses the write name for a view-tier turn.
-    if (sessionId === share.sessionId) return relay.drivableModeOf(origin.shareId) !== undefined
+    if (share.sessionIds.includes(sessionId)) return relay.drivableModeOf(origin.shareId) !== undefined
     const child = forks.find(sessionId)
     return child !== undefined && child.shareId === origin.shareId
       && identityKeyOf(child.creator) === identityKeyOf(origin.actor)
@@ -520,7 +520,8 @@ export async function apply(ctx: Context, config: Config): Promise<() => Promise
   for (const share of ownerShares.values()) tunnel.scheduleShareExpiry(share)
   // A host that starts with write-mode shares installs their access layers before serving any request for
   // them, so a restored share is never briefly writable without the layer that judges its turns.
-  void Promise.all([...ownerShares.values()].map(share => sourceAccess.apply(share, undefined, 'restore')))
+  void Promise.all([...ownerShares.values()].flatMap(share =>
+    share.sessionIds.map(sessionId => sourceAccess.apply(share, sessionId, undefined, 'restore'))))
   // Reconnecting a share, refreshing its title, and probing or claiming at the Relay all need an address
   // the owner saved. A host that has none still serves the sharing surfaces and stops its shares' turns
   // on their deadlines, but contacts no Relay: there is no address to ask, and the dialog states that.
@@ -570,6 +571,8 @@ export async function apply(ctx: Context, config: Config): Promise<() => Promise
     forks,
     viewerRead,
     offeredCapabilities,
+    /* v8 ignore next -- the Host reads the registry lazily; the consuming operation is covered in owner-share-operations. */
+    workspaces: () => ctx.get('workspaceRegistry')?.list(),
     relay,
     tunnel,
     effectiveRelay: () => effectiveRelay,
@@ -578,7 +581,7 @@ export async function apply(ctx: Context, config: Config): Promise<() => Promise
     bumpRelayRevision: () => { relayRevision += 1 },
     storedCredential: () => storedCredential,
     persistOwnerState,
-    applySourceAccess: (share, ready, trigger) => sourceAccess.apply(share, ready, trigger),
+    applySourceAccess: (share, sessionId, ready, trigger) => sourceAccess.apply(share, sessionId, ready, trigger),
     sourceConfined,
     accessChanged,
     cancelShareTurn: (shareId) => { sourceAccess.cancelShareTurn(shareId) },
