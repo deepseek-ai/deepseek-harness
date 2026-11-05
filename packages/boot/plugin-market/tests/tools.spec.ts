@@ -3,7 +3,7 @@ import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { Context, Service } from '@deepseek-ai/cordis'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime from '@deepseek-ai/dsh-tools'
+import ToolRuntime, { ToolArgsError } from '@deepseek-ai/dsh-tools'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import PluginMarket from '../src/index.ts'
@@ -127,15 +127,49 @@ it.each([
   { action: 'list_plugins', target: URL_A, limit: 0 },
   { action: 'list_plugins', target: URL_A, limit: 101 },
   { action: 'list_plugins', target: URL_A, offset: 1.5 },
-  { action: 'list_plugins', target: 'https://unknown.example/index.json' },
   { action: 'list_versions', name: 'dsh-a' },
   { action: 'list_versions', target: URL_A },
   { action: 'list_versions', target: URL_A, name: 'dsh-a', limit: 101 },
-  { action: 'list_versions', target: URL_A, name: 'dsh-missing' },
-])('rejects an incomplete, unbounded, or unconfigured request: %j', async (args) => {
+])('rejects an incomplete or unbounded request as INVALID_ARGS: %j', async (args) => {
   serve(document)
   const { call } = await fixture()
-  expect((await call(args)).isError).toBe(true)
+  const result = await call(args)
+  expect(result.isError).toBe(true)
+  expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
+})
+
+it.each([
+  [{ action: 'list_plugins', target: 'https://unknown.example/index.json' }, 'PLUGIN_MARKET_INDEX_NOT_FOUND', 'Not a configured index source: https://unknown.example/index.json'],
+  [{ action: 'list_versions', target: URL_A, name: 'dsh-missing' }, 'PLUGIN_MARKET_PLUGIN_NOT_FOUND', `dsh-missing is not listed in ${URL_A}`],
+] as const)('rejects an unconfigured index or unlisted bundle with a PluginMarketError: %j', async (args, code, message) => {
+  serve(document)
+  const { call } = await fixture()
+  expect((await call(args)).error).toEqual({ message, info: { name: 'PluginMarketError', code } })
+})
+
+it.each([
+  ['an unreachable index', () => Promise.reject(new TypeError('fetch failed')), 'PLUGIN_MARKET_FETCH_FAILED'],
+  ['a non-2xx index', () => Promise.resolve(new Response('missing', { status: 404 })), 'PLUGIN_MARKET_FETCH_FAILED'],
+  ['an invalid index document', () => Promise.resolve(new Response(JSON.stringify({ format: 2 }))), 'PLUGIN_MARKET_INVALID_INDEX'],
+] as const)('converts the market Remote failure for %s', async (_label, respond, code) => {
+  vi.stubGlobal('fetch', vi.fn(respond))
+  const { call } = await fixture()
+  const result = await call({ action: 'list_plugins', target: URL_A })
+  expect(result.error?.info).toEqual({ name: 'PluginMarketError', code })
+})
+
+it('keeps a HarnessError from the market and classifies any other failure', async () => {
+  serve(document)
+  const { call, ctx } = await fixture()
+  const coded = new ToolArgsError(['limit must be small'])
+  const search = vi.spyOn(ctx.pluginMarket, 'search').mockRejectedValueOnce(coded)
+  expect((await call({ action: 'list_plugins', target: URL_A })).error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
+  search.mockRejectedValueOnce(new Error('index cache broke'))
+  expect((await call({ action: 'list_plugins', target: URL_A })).error).toEqual({
+    message: 'index cache broke', info: { name: 'PluginMarketError', code: 'PLUGIN_MARKET_FAILED' },
+  })
+  search.mockRejectedValueOnce('bare failure')
+  expect((await call({ action: 'list_plugins', target: URL_A })).error?.message).toBe('bare failure')
 })
 
 it('presents a read and disposes its registration', async () => {
