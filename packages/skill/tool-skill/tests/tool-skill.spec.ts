@@ -1026,6 +1026,9 @@ describe('dsh-tool-skill', () => {
     expect(invalid.isError).toBe(true)
     expect(disabled.isError).toBe(true)
     expect(modelOnly.isError).toBe(false)
+    expect(unknown.error?.info).toEqual({ name: 'SkillError', code: 'SKILL_NOT_FOUND' })
+    expect(invalid.error?.info).toEqual({ name: 'SkillError', code: 'SKILL_INVALID_NAME' })
+    expect(disabled.error?.info).toEqual({ name: 'SkillError', code: 'SKILL_NOT_MODEL_INVOCABLE' })
     const unknownBlock = unknown.content[0]
     if (unknownBlock?.type !== 'text') throw new Error('expected text tool result')
     expect(unknownBlock.text).toContain('skill "missing" is unknown or no longer available')
@@ -1087,6 +1090,9 @@ describe('dsh-tool-skill', () => {
     expect(raced.isError).toBe(true)
     expect(vanished.isError).toBe(true)
     expect(getCalls).toEqual(['policy-race-skill', 'vanishing-skill'])
+    expect(denied.error?.info).toEqual({ name: 'SkillError', code: 'SKILL_NOT_MODEL_INVOCABLE' })
+    expect(raced.error?.info).toEqual({ name: 'SkillError', code: 'SKILL_NOT_MODEL_INVOCABLE' })
+    expect(vanished.error?.info).toEqual({ name: 'SkillError', code: 'SKILL_NOT_FOUND' })
     for (const result of [denied, raced]) {
       const block = result.content[0]
       if (block?.type !== 'text') throw new Error('expected text tool result')
