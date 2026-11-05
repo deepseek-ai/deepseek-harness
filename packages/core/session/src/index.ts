@@ -862,7 +862,8 @@ export class Session {
     this.publicationEntry()
     if (inputs.length === 0) return []
     const startSeq = this.log.length
-    const events = Array.from(inputs, (input, index) => {
+    const events = Array.from({ length: inputs.length }, (_, index) => {
+      const input = inputs.at(index)
       if (input === undefined) throw new Error(`session batch has an empty member at index ${index}`)
       const [type, data, surfaceOpts] = input
       const snapshot = snapshotJsonValue({
