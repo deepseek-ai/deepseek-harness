@@ -59,6 +59,8 @@ Web 和 Desktop 的数学公式渲染要求支持 WOFF2。[Web 构建](../../../
 
 菜单采用共享 `MenuSurface` 材质，包括用于背景模糊的 macOS 底层；自定义内容遵循[菜单规则](../../../docs/web-styling.zh.md#component-rules)。
 
+在 macOS 上，原生窗口区域使用元素完整矩形，不考虑 overflow 裁剪。Shell 重置继承的区域，并将控件的自动排除限制在 `data-window-drag` 行或显式 `data-window-drag-controls` 范围内。范围外的滚动内容不会获得自动排除。不含嵌套拖动行的交互视口使用 `data-window-drag-exclude`，仅排除自身矩形；覆盖浮层和含自有拖动行的容器单独声明区域。Body portal 必须具有实际矩形，否则需在可见内容上显式声明排除。
+
 <details>
 <summary>实现细节——点击展开</summary>
 

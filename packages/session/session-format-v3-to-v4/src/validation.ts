@@ -2,7 +2,7 @@
 
 import { isAbsolute } from 'node:path'
 import { SessionFormatError, SessionFormatUnsupportedMigrationError, isSessionFormatJsonObject, sessionFormatCount } from '@deepseek-ai/dsh-session-format'
-import type { SessionFormatArtifact, SessionFormatEvent } from '@deepseek-ai/dsh-session-format'
+import type { SessionFormatArtifact, SessionFormatEvent, SessionFormatJsonObject, SessionFormatJsonValue } from '@deepseek-ai/dsh-session-format'
 import { assertV4DeveloperData } from './developer.ts'
 import { assertV4LifecycleRelationships } from './relationships.ts'
 import { assertV4MessageSources } from './message-sources.ts'
@@ -109,6 +109,7 @@ export function validateDeliveryAccepted(event: SessionFormatEvent, currentVersi
  */
 export function assertReleasedV4Relationships(artifact: SessionFormatArtifact, knownEventTypes: ReadonlySet<string>): void {
   const ids = new Set<string>()
+  const names = new Set<string>()
   for (const event of artifact.events) {
     if (!knownEventTypes.has(event.type)) continue
     assertV4DeveloperData(event)
@@ -120,11 +121,37 @@ export function assertReleasedV4Relationships(artifact: SessionFormatArtifact, k
       throw new SessionFormatError('current-generation delivery marker names the wrong Session')
     }
     if (event.type === 'subagent/catalog' && event.seq >= artifact.inheritedEventCount) {
-      const fact = catalogFact(event.data)
+      const fact = nativeCatalogFact(event.data)
       const id = fact['childId'] as string
       if (ids.has(id)) throw new SessionFormatError(`duplicate catalog child ${id}`)
       ids.add(id)
+      // Sibling names are unique by construction, so a log that repeats one makes name lookup ambiguous.
+      if (fact['name'] === undefined) continue
+      const name = fact['name'] as string
+      if (names.has(name)) throw new SessionFormatError(`duplicate catalog child name ${name}`)
+      names.add(name)
     }
   }
   assertV4LifecycleRelationships(artifact, knownEventTypes)
+}
+
+/**
+ * Validate an own native V4 catalog payload: a historical version or version 3,
+ * which adds the child's name and is written only by native V4 creation.
+ * @param value - native `subagent/catalog` payload.
+ * @returns validated catalog payload.
+ */
+function nativeCatalogFact(value: SessionFormatJsonValue): SessionFormatJsonObject {
+  if (!isSessionFormatJsonObject(value) || value['version'] !== 3) return catalogFact(value)
+  if (typeof value['childId'] !== 'string'
+    || (value['mode'] !== 'continuable' && value['mode'] !== 'external')
+    || typeof value['name'] !== 'string'
+    || !/^[a-z][a-z0-9-]{0,31}$/u.test(value['name'])
+    || value['name'] === 'lead'
+    || (value['mode'] === 'continuable' && typeof value['label'] !== 'string')
+    || (value['label'] !== undefined && typeof value['label'] !== 'string')) {
+    throw new SessionFormatError('subagent/catalog requires a supported versioned catalog fact')
+  }
+  sessionFormatCount(value['childCreatedAt'], 'catalog child creation time')
+  return value
 }

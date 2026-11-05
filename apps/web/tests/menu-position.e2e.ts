@@ -9,7 +9,7 @@ const cases = [
   { name: 'above placement near the desktop titlebar', side: 'top', align: 'start', x: 120, y: 110, width: 160, height: 80, left: 120, top: 142, clearance: 60 },
   { name: 'below placement near the bottom edge', side: 'bottom', align: 'start', x: 120, y: 330, width: 160, height: 100, left: 120, top: 226, clearance: 12 },
   { name: 'right placement near the right edge', side: 'right', align: 'start', x: 540, y: 100, width: 160, height: 100, left: 376, top: 100, clearance: 12 },
-  { name: 'window fallback when neither vertical side fits', side: 'bottom', align: 'start', x: 120, y: 180, width: 300, height: 320, left: 12, top: 60, clearance: 60 },
+  { name: 'window fallback retains horizontal anchoring when neither vertical side fits', side: 'bottom', align: 'start', x: 120, y: 180, width: 300, height: 320, left: 120, top: 60, clearance: 60 },
 ] as const
 
 type Placement = (typeof cases)[number]

@@ -24,7 +24,7 @@ describe('package README Summary limit', () => {
     const summary = Array.from({ length: MAX_PACKAGE_README_SUMMARY_WORDS + 1 }, () => 'word').join(' ')
 
     expect(packageReadmeSummaryErrors('packages/example/example/README.md', readme(summary, kind))).toEqual([
-      `packages/example/example/README.md: Summary has 101 words; the limit is 100. Read .agents/skills/dsh-doc/SKILL.md and .agents/skills/dsh-doc/templates/${kind}.md before rewriting it.`,
+      `packages/example/example/README.md: Summary has 101 words; the limit is 100. Read .agents/skills/dsh-doc-writing/SKILL.md and .agents/skills/dsh-doc-writing/templates/${kind}.md before rewriting it.`,
     ])
   })
 

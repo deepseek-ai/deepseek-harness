@@ -1,6 +1,7 @@
 /** Live terminal names in docked and floating tab chrome. */
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import { Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import { TerminalIcon } from './TerminalIcon.tsx'
 import type { TerminalInjected } from './face.ts'
 import type {} from './locales.ts'
@@ -14,6 +15,9 @@ import css from './TerminalTitle.module.css'
 export function TerminalTitle({ useTabInfo, useTerminal, view, t }: PropsRuntime<'sidebar.right.pane.tab.title'> & PropsLocale<'sidebarTerminal'> & InjectFace<TerminalInjected>): ReactNode {
   const { tab } = useTabInfo()
   const title = useTerminal(tab.id, state => state?.info?.title ?? state?.title) ?? tab.title
+  const agentControl = useTerminal(tab.id, state => state?.info?.origin === 'agent' && state.info.control === 'agent')
+  const sandboxMode = useTerminal(tab.id, state => state?.info?.origin === 'agent' ? state.info.sandboxMode : undefined)
+  const sandboxHint = sandboxMode === 'read-only' ? t('badge.readOnlyHint') : sandboxMode === 'workspace-write' ? t('badge.workspaceWriteHint') : undefined
   const [editing, setEditing] = useState(false)
   const input = useRef<HTMLInputElement>(null)
   const label = useRef<HTMLSpanElement>(null)
@@ -37,6 +41,13 @@ export function TerminalTitle({ useTabInfo, useTerminal, view, t }: PropsRuntime
   }, [editing])
   return <>
     <TerminalIcon />
+    {/* The badge precedes the name because the tab's close button covers the end of the title. One badge at a time:
+        Agent control first, then the sandbox of a taken-over terminal. */}
+    {agentControl
+      ? <span className={css.badge} title={sandboxHint === undefined ? t('badge.agentHint') : `${t('badge.agentHint')} ${sandboxHint}`}>
+        <Tag tone="info">{t('badge.agent')}</Tag>
+      </span>
+      : sandboxHint !== undefined && <span className={css.badge} title={sandboxHint}><Tag tone="neutral">{t('badge.sandbox')}</Tag></span>}
     {editing ? <input ref={input} className={css.name} defaultValue={title} maxLength={120} aria-label={t('rename')}
       onPointerDown={(event) => { event.stopPropagation() }}
       onClick={(event) => { event.stopPropagation() }}

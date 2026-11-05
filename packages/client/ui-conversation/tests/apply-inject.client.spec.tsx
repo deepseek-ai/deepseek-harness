@@ -7,6 +7,7 @@ import { registerComposerKeymap } from '../src/client/input/editor/keymap.ts'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { CommandContribution, CommandUiContract } from '@deepseek-ai/dsh-client-ui-commands/client'
+import type { SessionRequestId } from '@deepseek-ai/dsh-api-session-controller/types'
 import type { ISession, SessionReference } from '@deepseek-ai/dsh-api-session-controller/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import * as messageQuotes from '@deepseek-ai/dsh-message-quotes/client'
@@ -24,6 +25,10 @@ import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import { createConversationStore } from '../src/client/stores.ts'
 import type { SessionInputShell } from '../src/client/input/facade.ts'
 import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
+import { SessionSeq } from '@deepseek-ai/dsh-session/types'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { InboxWireState } from '@deepseek-ai/dsh-agent/types'
+import { continuationTurn } from './continuation-fixture.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
@@ -161,6 +166,125 @@ async function bench(renderQuote = false) {
 }
 
 describe('Conversation inject API', () => {
+  it.each(['zh', 'en'])('submits empty continuation input in the %s locale', async (locale) => {
+    const b = await bench()
+    onTestFinished(() => b.runtime.dispose())
+    await b.runtime.sessions.replaceEvents(ROOT, continuationTurn({ kind: 'error', error: { code: 'SERVER', message: 'busy' } }))
+    await b.runtime.sessions.setProjection(ROOT, 'conversationContinuation', SessionSeq(5))
+    const composer = b.composerApi(ROOT)
+    b.runtime.ctx.locale.setLocale(locale)
+    const pending = Promise.withResolvers<Awaited<ReturnType<ISession['prompt']>>>()
+    onTestFinished(() => { pending.resolve({ ok: true, value: { accepted: true } }) })
+    b.sessionFake.prompt.mockImplementationOnce(() => pending.promise)
+    composer.retry!(SessionSeq(5))
+    composer.retry!(SessionSeq(5))
+    expect(composer.keyboard!.snapshot.phase).toBe('sending')
+    await vi.waitFor(() => { expect(b.sessionFake.prompt).toHaveBeenCalledOnce() })
+    expect(b.sessionFake.prompt.mock.calls[0]?.[0]).toEqual([])
+    expect(b.sessionFake.prompt.mock.calls[0]?.[1]).toBe('queue')
+    pending.resolve({ ok: true, value: { accepted: true } })
+    await vi.waitFor(() => { expect(composer.keyboard!.snapshot.phase).toBe('plain') })
+    expect(composer.keyboard!.snapshot.draft).toBe('')
+  })
+
+  it('rechecks the addressed failure, draft, and live activity before continuing', async () => {
+    const b = await bench()
+    onTestFinished(() => b.runtime.dispose())
+    await b.runtime.sessions.replaceEvents(ROOT, continuationTurn({ kind: 'error', error: { code: 'TIMEOUT', message: 'timeout' } }))
+    await b.runtime.sessions.setProjection(ROOT, 'conversationContinuation', SessionSeq(5))
+    const composer = b.composerApi(ROOT)
+    const input = b.inputApi(ROOT)
+    composer.retry!(SessionSeq(1))
+    input.actions.setDraft('Keep my new instruction')
+    composer.retry!(SessionSeq(5))
+    expect(input.state.getSnapshot().draft).toBe('Keep my new instruction')
+    input.actions.setDraft('')
+    await b.runtime.sessions.updateSessionSnapshot(ROOT, (state) => { state.running = true })
+    composer.retry!(SessionSeq(5))
+    await b.runtime.sessions.updateSessionSnapshot(ROOT, (state) => { state.running = false })
+    await b.runtime.sessions.appendEvent(ROOT, {
+      type: 'event', event: { type: 'turn/start', seq: SessionSeq(6), time: 1, data: { turn: 2 } },
+    })
+    await b.runtime.sessions.setProjection(ROOT, 'conversationContinuation', null)
+    composer.retry!(SessionSeq(5))
+    expect(input.state.getSnapshot().draft).toBe('')
+    expect(b.sessionFake.prompt).not.toHaveBeenCalled()
+  })
+
+  it('keeps continuation available with injected mode context but excludes pending human steering', async () => {
+    const b = await bench()
+    onTestFinished(() => b.runtime.dispose())
+    await b.runtime.sessions.setProjection(ROOT, 'conversationContinuation', SessionSeq(5))
+    const composer = b.composerApi(ROOT)
+    const context = { id: 'context', role: 'user', content: [{ type: 'text', text: 'approval policy context' }], source: { kind: 'user-approval' } }
+    const inbox: InboxWireState = { 'next-turn': [], 'next-step': [context] }
+    await b.runtime.sessions.setProjection(ROOT, 'inbox', inbox)
+    const user = createUserMessage({ content: [{ type: 'text', text: 'new instruction' }], source: { kind: 'user' } })
+    await b.runtime.sessions.setProjection(ROOT, 'inbox', { ...inbox, 'next-step': [context, user] })
+    composer.retry!(SessionSeq(5))
+    expect(b.sessionFake.prompt).not.toHaveBeenCalled()
+    await b.runtime.sessions.setProjection(ROOT, 'inbox', inbox)
+    composer.retry!(SessionSeq(5))
+    await vi.waitFor(() => { expect(b.sessionFake.prompt).toHaveBeenCalledOnce() })
+    expect(b.sessionFake.prompt.mock.calls[0]?.[0]).toEqual([])
+  })
+
+  it.each(['next-turn', 'pending', 'block', 'attachment', 'subagent', 'removed', 'closed'] as const)(
+    'rejects a stale continuation click after %s changes', async (condition) => {
+      const b = await bench()
+      onTestFinished(() => b.runtime.dispose())
+      await b.runtime.sessions.setProjection(ROOT, 'conversationContinuation', SessionSeq(5))
+      const composer = b.composerApi(ROOT)
+      switch (condition) {
+        case 'pending':
+          await b.runtime.sessions.updateSessionSnapshot(ROOT, (state) => { state.pendingSubmissions = [{ requestId: 'pending' as SessionRequestId, placement: 'transcript', time: 0, text: 'newer message', attachments: [] }] })
+          break
+        case 'next-turn':
+          await b.runtime.sessions.setProjection(ROOT, 'inbox', { 'next-turn': [createUserMessage({ content: [{ type: 'text', text: 'queued' }], source: { kind: 'user' } })], 'next-step': [] })
+          break
+        case 'block':
+          b.runtime.ctx.conversation.blocks.set(ROOT, { reason: 'Choose a model' })
+          break
+        case 'attachment':
+          expect(composer.addFiles?.([new File([Uint8Array.of(1)], 'draft.pdf', { type: 'application/pdf' })])).toBeNull()
+          break
+        case 'subagent':
+          await b.runtime.sessions.updateSessionSnapshot(ROOT, (state) => { state.subagent = { address: { parentSessionId: ROOT, childSessionId: ROOT, mode: 'continuable' } } })
+          break
+        case 'removed':
+          await b.runtime.sessions.updateSessionSnapshot(ROOT, (state) => { state.removed = true })
+          break
+        case 'closed':
+          await b.runtime.sessions.updateSessionSnapshot(ROOT, (state) => { state.openState = 'error' })
+          break
+      }
+      const before = b.inputApi(ROOT).state.getSnapshot().draft
+      composer.retry!(SessionSeq(5))
+      expect(b.inputApi(ROOT).state.getSnapshot().draft).toBe(before)
+      expect(b.sessionFake.prompt).not.toHaveBeenCalled()
+    },
+  )
+
+  it.each(['refused', 'failed'] as const)('keeps continuation input empty and exposes submission failure when %s', async (outcome) => {
+    const b = await bench()
+    onTestFinished(() => b.runtime.dispose())
+    await b.runtime.sessions.setProjection(ROOT, 'conversationContinuation', SessionSeq(5))
+    const composer = b.composerApi(ROOT)
+    if (outcome === 'refused') b.sessionFake.prompt.mockImplementationOnce(async () => {
+      const error = new RemoteError('gateway/internal', 'request refused', {})
+      await b.runtime.sessions.updateSessionSnapshot(ROOT, (state) => { state.promptError = { op: 'send', error } })
+      return { ok: false, error }
+    })
+    else b.sessionFake.prompt.mockRejectedValueOnce(new Error('connection lost'))
+    composer.retry!(SessionSeq(5))
+    await vi.waitFor(() => { expect(b.sessionFake.prompt).toHaveBeenCalledOnce(); expect(composer.keyboard!.snapshot.phase).toBe('plain') })
+    expect(composer.keyboard!.snapshot.draft).toBe('')
+    if (outcome === 'refused') expect(b.runtime.sessions.binding(ROOT)!.session.getSnapshot().promptError?.error.message).toBe('request refused')
+    else expect(composer.hooks.notices.getSnapshot()).toMatchObject({ level: 'error', text: 'connection lost' })
+    composer.retry!(SessionSeq(5))
+    await vi.waitFor(() => { expect(b.sessionFake.prompt).toHaveBeenCalledTimes(2) })
+  })
+
   it('renders literal quote text through the actual Factory and keyed node registration', async () => {
     const b = await bench(true)
     onTestFinished(() => b.runtime.dispose())

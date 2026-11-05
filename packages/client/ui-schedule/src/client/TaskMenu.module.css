@@ -39,7 +39,7 @@
 .portal {
   position: fixed;
   position-area: none;
-  position-try-fallbacks: --dsh-schedule-task-above, --dsh-schedule-task-end, --dsh-schedule-task-above-end, --dsh-schedule-task-window;
+  position-try-fallbacks: --dsh-schedule-task-above, --dsh-schedule-task-end, --dsh-schedule-task-above-end, --dsh-schedule-task-window, --dsh-schedule-task-viewport;
   top: max(12px, calc(anchor(bottom) + 4px));
   bottom: 12px;
   left: max(12px, anchor(left));
@@ -61,7 +61,7 @@
   left: 12px;
   right: max(12px, anchor(right));
   justify-self: end;
-  position-try-fallbacks: --dsh-schedule-task-above, --dsh-schedule-task-start, --dsh-schedule-task-above-start, --dsh-schedule-task-window;
+  position-try-fallbacks: --dsh-schedule-task-above, --dsh-schedule-task-start, --dsh-schedule-task-above-start, --dsh-schedule-task-window, --dsh-schedule-task-viewport;
 }
 
 /* Tall lists scroll inside the window's layout bounds. */
@@ -243,6 +243,13 @@
 }
 
 @position-try --dsh-schedule-task-window {
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: 12px;
+  margin: 0;
+  align-self: safe end;
+}
+
+@position-try --dsh-schedule-task-viewport {
   position-area: none;
   inset: max(12px, var(--dsh-frame-overlay-top, 12px)) 12px 12px;
   margin: 0;

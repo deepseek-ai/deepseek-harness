@@ -8,7 +8,7 @@
 {"type":"agent/inbox/spliced","data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}
 {"type":"turn/end","data":{"turn":1,"reason":{"kind":"aborted","reason":{"kind":"parent"}}}}
 {"type":"session/end-seed","data":{}}
-{"type":"agent/inbox/spliced","data":{"target":"next-step","start":0,"inserted":[{"content":[{"type":"text","text":"Agent {{session:1}} sent a message: "},{"type":"text","text":"Continue."}],"source":{"kind":"agent-message","form":"relay","senderSessionId":"{{session:1}}"},"role":"user","id":"{{message:16}}"}]}}
+{"type":"agent/inbox/spliced","data":{"target":"next-step","start":0,"inserted":[{"content":[{"type":"text","text":"Agent lead sent a message: "},{"type":"text","text":"Continue."}],"source":{"kind":"agent-message","form":"relay","senderSessionId":"{{session:1}}"},"role":"user","id":"{{message:16}}"}]}}
 {"type":"turn/start","data":{"turn":2}}
 {"type":"agent/inbox/spliced","data":{"target":"next-step","start":0,"removedCount":1,"inserted":[]}}
 {"type":"turn/end","data":{"turn":2,"reason":{"kind":"blocked"}}}

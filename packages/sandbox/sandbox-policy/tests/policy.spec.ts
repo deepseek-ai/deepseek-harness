@@ -90,7 +90,7 @@ describe('SandboxPolicyService', () => {
     try {
       await ctx.plugin(SessionProjectionRegistry)
       await expect(ctx.plugin(SandboxPolicyService, { additionalWritableRoots: ['relative/extra'] }))
-        .rejects.toThrow('sandbox-policy: additionalWritableRoots entries must be absolute execution-world paths')
+        .rejects.toThrow('sandbox-policy: writable directories must be absolute execution-world paths without NUL bytes')
       expect(ctx.get('sandboxPolicy')).toBeUndefined()
     } finally {
       await ctx.fiber.dispose()
@@ -182,6 +182,84 @@ describe('SandboxPolicyService', () => {
   })
 })
 
+describe('session writable-root registrations', () => {
+  it('isolates live Sessions, preserves configured roots, and detaches resolved policies', async ({ onTestFinished }) => {
+    const ctx = await mounted({ mode: 'workspace-write', additionalWritableRoots: ['/shared'] })
+    onTestFinished(() => ctx.fiber.dispose())
+    const first = session('first', '/workspace')
+    const second = session('second', '/workspace')
+    const before = ctx.sandboxPolicy.resolve({ session: first })
+    const remove = ctx.sandboxPolicy.registerWritableRoot(first, '/memory')
+    const granted = ctx.sandboxPolicy.resolve({ session: first })
+
+    expect(granted.additionalWritableRoots).toEqual(['/shared', '/memory'])
+    expect(Object.isFrozen(granted.additionalWritableRoots)).toBe(true)
+    expect(before.additionalWritableRoots).toEqual(['/shared'])
+    expect(ctx.sandboxPolicy.resolve({ session: second }).additionalWritableRoots).toEqual(['/shared'])
+    expect(ctx.sandboxPolicy.resolve().additionalWritableRoots).toEqual(['/shared'])
+    const resumed = Session.create(first.id, first.snapshotEvents(), first.header)
+    expect(ctx.sandboxPolicy.resolve({ session: resumed }).additionalWritableRoots).toEqual(['/shared'])
+
+    remove()
+    expect(ctx.sandboxPolicy.resolve({ session: first }).additionalWritableRoots).toEqual(['/shared'])
+    expect(granted.additionalWritableRoots).toEqual(['/shared', '/memory'])
+  })
+
+  it('keeps duplicate grants independently owned across plugin unload and explicit disposal', async ({ onTestFinished }) => {
+    const ctx = await mounted({ mode: 'workspace-write', additionalWritableRoots: ['/shared'] })
+    onTestFinished(() => ctx.fiber.dispose())
+    const active = session('duplicates')
+    const fiber = await ctx.plugin({
+      inject: ['sandboxPolicy'],
+      apply(scope: Context) {
+        scope.sandboxPolicy.registerWritableRoot(active, '/memory')
+        scope.sandboxPolicy.registerWritableRoot(active, '/plugin-only')
+        scope.sandboxPolicy.registerWritableRoot(active, '/shared')
+      },
+    })
+    const remove = ctx.sandboxPolicy.registerWritableRoot(active, '/memory')
+    expect(ctx.sandboxPolicy.resolve({ session: active }).additionalWritableRoots).toEqual(['/shared', '/memory', '/plugin-only'])
+    await fiber.dispose()
+    expect(ctx.sandboxPolicy.resolve({ session: active }).additionalWritableRoots).toEqual(['/shared', '/memory'])
+    remove()
+    const replacement = ctx.sandboxPolicy.registerWritableRoot(active, '/replacement')
+    remove()
+    expect(ctx.sandboxPolicy.resolve({ session: active }).additionalWritableRoots).toEqual(['/shared', '/replacement'])
+    replacement()
+    expect(ctx.sandboxPolicy.resolve({ session: active }).additionalWritableRoots).toEqual(['/shared'])
+  })
+
+  it.each(['relative/memory', '/memory\0invalid'])('rejects an invalid directory without installing a grant: %j', async (directory) => {
+    const ctx = await mounted()
+    try {
+      const active = session('invalid')
+      expect(() => ctx.sandboxPolicy.registerWritableRoot(active, directory)).toThrow('absolute execution-world paths')
+      expect(ctx.sandboxPolicy.resolve({ session: active }).additionalWritableRoots).toBeUndefined()
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('updates request context without changing read-only policy or the stable prompt', async ({ onTestFinished }) => {
+    const ctx = await mounted({ mode: 'workspace-write' })
+    onTestFinished(() => ctx.fiber.dispose())
+    await ctx.plugin(SystemPrompt)
+    const active = session('context', '/workspace')
+    const before = await ctx.systemPrompt.assemble({ agent: agentFor(active) })
+    const remove = ctx.sandboxPolicy.registerWritableRoot(active, '/memory')
+    const after = await ctx.systemPrompt.assemble({ agent: agentFor(active) })
+    expect(renderPrompt(after)).toBe(renderPrompt(before))
+    expect(renderContextSnapshot(after)).toContain('Additional writable directories: ["/memory"]')
+    setSandboxMode(active, 'read-only')
+    expect(ctx.sandboxPolicy.resolve({ session: active }).mode).toBe('read-only')
+    expect(await policyContext(ctx, active)).not.toContain('/memory')
+    setSandboxMode(active, 'workspace-write')
+    remove()
+    expect(ctx.sandboxPolicy.resolve({ session: active }).additionalWritableRoots).toBeUndefined()
+    expect(await policyContext(ctx, active)).not.toContain('/memory')
+  })
+})
+
 describe('sandbox:policy request context', () => {
   async function promptMounted(config: { mode?: 'read-only' | 'workspace-write' | 'danger-full-access'; workspaceRoot?: string; additionalWritableRoots?: string[] } = {}): Promise<Context> {
     const ctx = new Context()
@@ -210,7 +288,7 @@ describe('sandbox:policy request context', () => {
       additionalWritableRoots: ['/projects/shared/.git', '/projects/shared/worktrees'],
     })
     expect(await policyContext(ctx, session('sess-extra', '/projects/current'))).toBe(
-      `Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: ${JSON.stringify('/projects/current')}. Additional writable directories: ["/projects/shared/.git","/projects/shared/worktrees"]. Some platform temporary areas may also be writable.`,
+      `Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: ${JSON.stringify('/projects/current')}. Additional writable directories: ["/projects/shared/.git","/projects/shared/worktrees"]. On Windows, these additional grants apply to file tools only, not sandboxed processes. Some platform temporary areas may also be writable.`,
     )
   })
 

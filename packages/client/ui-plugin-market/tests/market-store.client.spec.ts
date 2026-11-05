@@ -62,6 +62,12 @@ function setup(indexes: MarketIndexSummary[] = [{ url: A }, { url: B }]) {
 describe('DiscoverController', () => {
   it('reads sources on first render, selects the first, and reads its listing', async () => {
     const { face, market, snapshot } = setup()
+    const entries = [plugin('publisher-first'), plugin('more-downloads')]
+    market.search.mockImplementationOnce(() => ok(listing(A, 'A', 'Desc', {
+      metadata: { categories: {}, labels: {}, sortKeys: { downloads: { title: 'Downloads', order: 'desc' } } },
+      entries: entries.map((entry, index) => ({ ...entry, metadata: { ...entry.metadata, sortKeys: { downloads: index + 1 } } })),
+      total: 2,
+    })))
     expect(snapshot().status).toBe('idle')
     face.ensure()
     expect(snapshot().status).toBe('loading')
@@ -70,7 +76,8 @@ describe('DiscoverController', () => {
     expect(market.listIndexes).toHaveBeenCalledOnce()
     expect(snapshot()).toMatchObject({ status: 'ready', selected: A, listing: { url: A, value: { title: 'A' } } })
     expect(snapshot().indexes).toEqual([{ url: A, title: 'A', description: 'Desc' }, { url: B }])
-    expect(market.search).toHaveBeenCalledWith(A, FIRST_PAGE)
+    expect(market.search).toHaveBeenCalledExactlyOnceWith(A, FIRST_PAGE)
+    expect(snapshot().listing?.value?.entries.map(entry => entry.name)).toEqual(['publisher-first', 'more-downloads'])
     expect(face.hooks.locale.getSnapshot().active).toBeTypeOf('string')
   })
 

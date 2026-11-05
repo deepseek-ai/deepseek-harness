@@ -26,7 +26,9 @@ async function fixture() {
   await file(join(root, 'node/node_modules/@deepseek-ai/dsh/lib/bin.js'), `
     export async function runCli(options = {}) {
       const result = process.argv[2] ? { argv: process.argv.slice(2) }
-        : { primary: process.env.DSH_BUNDLED_PRIMARY_RUNTIME, office: process.env.DSH_BUNDLED_OFFICE_CLI };
+        : { primary: process.env.DSH_PRIMARY_RUNTIME };
+      const office = Object.keys(process.env).filter(name => /^DSH_BUNDLED_OFFICE_(?:CLI|NODE)$/.test(name));
+      if (office.length > 0) result.office = office;
       if (options.packageManager) Object.assign(result, { packageManager: options.packageManager, hostPath: process.env.PATH });
       console.log(JSON.stringify(result));
     }
@@ -74,8 +76,8 @@ async function fixture() {
   `)
   function run(resource?: string, extra: NodeJS.ProcessEnv = {}, args: string[] = []) {
     const child = spawn(process.execPath, [bootstrap, ...args], {
-      env: { ...process.env, DSH_RESOURCE_CACHE: cache, DSH_RUNTIME_DOWNLOAD: resource, DSH_BUNDLED_PRIMARY_RUNTIME: undefined,
-        DSH_PRIMARY_RUNTIME: undefined, DSH_OFFICE_SIDECAR: undefined, DSH_BUNDLED_OFFICE_CLI: undefined, ...extra },
+      env: { ...process.env, DSH_RESOURCE_CACHE: cache, DSH_RUNTIME_DOWNLOAD: resource,
+        DSH_PRIMARY_RUNTIME: undefined, DSH_OFFICE_SIDECAR: undefined, ...extra },
       stdio: ['pipe', 'pipe', 'pipe'],
     })
     let stdout = '', stderr = ''
@@ -146,6 +148,10 @@ it('starts without downloading, independently downloads either resource, and reu
     const location = JSON.parse(office.stdout) as string
     expect(await readFile(join(location, 'node_modules/@deepseek-ai/libreoffice-kit/lib/cli.js'), 'utf8')).toBe('cli')
     expect(await run('office', { DSH_FIXTURE_FAIL: '1' }).done).toMatchObject({ code: 0, stdout: office.stdout })
+    // A cached sidecar only redirects Kit resolution; the CLI process receives no Office executable paths.
+    const started = await run().done
+    expect(started.code, started.stderr).toBe(0)
+    expect(JSON.parse(started.stdout)).toEqual({ primary: join(cache, 'a'.repeat(64), 'primary', 'primary-runtime') })
   } finally { await rm(root, { recursive: true, force: true }) }
 })
 

@@ -108,6 +108,7 @@ jobs:
         if: steps.merge.outputs.merged == 'true'
         env:
           CHECK_MODE: ${{ vars.MERGE_POLICY_PRE_MERGE }}
+          BASE_SHA: ${{ needs.master.outputs.base_sha }}
         run: |
           # The check names one file and knows nothing else about how the merged tree builds itself.
           if [ ! -f scripts/pre-merge-check.ts ]; then

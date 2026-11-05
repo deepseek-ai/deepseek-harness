@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-26-session-writable-directory-effects.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-26-session-writable-directory-effects.md
+/agent-note-session-writable-directory-effects:
+  en: b5a98da65d44e212
+  zh: ba6842a9b4a890f7
+/agent-note-session-writable-directory-effects/problem:
+  en: 2a32db1f27371403
+  zh: 89cf04705ef66769
+/agent-note-session-writable-directory-effects/decision:
+  en: af67969841bedb67
+  zh: edabdfaa30bcadd1
+/agent-note-session-writable-directory-effects/alternatives-considered:
+  en: dad77744dea17bde
+  zh: bb3838f9f9099944
+/agent-note-session-writable-directory-effects/consequences:
+  en: 1c2468df41bfbb46
+  zh: 2118230c0091b20e

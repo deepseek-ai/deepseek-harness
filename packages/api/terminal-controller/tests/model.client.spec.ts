@@ -11,7 +11,7 @@ import { TerminalInventory } from '../src/client/inventory.ts'
 import type { TerminalInput, TerminalEnvironment, TerminalFrame, WebTerminalId, WebTerminalInfo } from '../src/types.ts'
 
 const sessionId = 'session' as SessionId
-const info: WebTerminalInfo = { id: 'terminal' as WebTerminalId, shell: { name: 'bash', path: '/bin/bash', args: ['-i'] }, title: 'bash', cwd: '/workspace', rows: 24, cols: 80, state: 'running', exitCode: null }
+const info: WebTerminalInfo = { id: 'terminal' as WebTerminalId, shell: { name: 'bash', path: '/bin/bash', args: ['-i'] }, title: 'bash', cwd: '/workspace', rows: 24, cols: 80, state: 'running', exitCode: null, origin: 'user', control: 'user' }
 const environment: TerminalEnvironment = {
   cwd: info.cwd, maxInputBytes: 1000, maxBufferedBytes: 100_000, maxCols: 200, maxRows: 100, scrollback: 100,
 }
@@ -31,6 +31,7 @@ function failure(message: string): RemoteResult<never> {
 }
 
 function fixture(prepareStream?: <Item>(stream: RemoteStream<Item>) => void, inputWindow?: RemoteUplinkWindow) {
+  const rosterFrames: WebTerminalInfo[][] = []
   const attachments: StreamHandle[] = []
   const sent: TerminalInput[][] = []
   const mock = RemoteMock.create().stream('terminal/attach', async (args, stream) => {
@@ -52,6 +53,13 @@ function fixture(prepareStream?: <Item>(stream: RemoteStream<Item>) => void, inp
     environment: vi.fn<TerminalRemote['environment']>(async () => success(environment)), list: vi.fn<TerminalRemote['list']>(async () => success([])),
     create: vi.fn<TerminalRemote['create']>(async (_sessionId, request) => success({ ...info, id: request.id })),
     close: vi.fn<TerminalRemote['close']>(async () => success(undefined)), rename: vi.fn<TerminalRemote['rename']>(async () => success(undefined)),
+    watch: vi.fn<TerminalRemote['watch']>(streamMethod<TerminalRemote['watch']>(async function* (_session, signal) {
+      yield* rosterFrames
+      await new Promise<void>((resolve) => {
+        if (signal?.aborted) resolve()
+        else signal?.addEventListener('abort', () => { resolve() }, { once: true })
+      })
+    })),
     attach: mock.remote.terminal.attach,
   }
   const options: RemoteStreamOptions<unknown>[] = []
@@ -365,6 +373,18 @@ it('sends input and clamped resize in order without waiting for acknowledgements
     { type: 'write', sequence: 1, data: 'first' },
     { type: 'write', sequence: 2, data: 'second' },
     { type: 'resize', sequence: 3, cols: 200, rows: 100 },
+  ])
+})
+
+it('marks only person-produced input as typed', async () => {
+  const h = fixture()
+  await connected(h.model)
+  h.model.write('\x1b[?1;2c')
+  h.model.write('ls\r', true)
+  await expect.poll(() => h.sent[0]?.length).toBe(2)
+  expect(h.sent[0]).toEqual([
+    { type: 'write', sequence: 1, data: '\x1b[?1;2c' },
+    { type: 'write', sequence: 2, data: 'ls\r', typed: true },
   ])
 })
 

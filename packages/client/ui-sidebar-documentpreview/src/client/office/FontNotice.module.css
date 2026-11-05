@@ -41,13 +41,17 @@
   font-size: 13px;
   line-height: 1.6;
   max-width: calc(100vw - 24px);
-  position-area: bottom span-right;
-  position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline, --dsh-fonts-window, --dsh-fonts-viewport;
+  position-area: none;
+  top: max(12px, calc(anchor(bottom) + 8px));
+  bottom: 12px;
+  left: max(12px, anchor(left));
+  right: 12px;
+  position-try-fallbacks: --dsh-fonts-window, --dsh-fonts-opposite, --dsh-fonts-wide-opposite, --dsh-fonts-tall, --dsh-fonts-viewport;
   align-self: start;
   justify-self: start;
   height: fit-content;
   min-height: 0;
-  margin: 8px 0;
+  margin: 0;
 }
 
 .panelHeader {
@@ -94,7 +98,33 @@
   right: 12px;
   margin: 0;
   align-self: safe start;
-  justify-self: safe start;
+  justify-self: safe end;
+}
+
+@position-try --dsh-fonts-opposite {
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: max(12px, calc(anchor(top) + 8px));
+  align-self: end;
+}
+
+@position-try --dsh-fonts-wide-opposite {
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: max(12px, calc(anchor(top) + 8px));
+  left: 12px;
+  right: 12px;
+  align-self: end;
+  justify-self: safe end;
+}
+
+@position-try --dsh-fonts-tall {
+  position-area: none;
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: 12px;
+  left: max(12px, anchor(left));
+  right: 12px;
+  margin: 0;
+  align-self: safe start;
+  justify-self: start;
 }
 
 @position-try --dsh-fonts-viewport {
@@ -102,5 +132,5 @@
   inset: max(12px, var(--dsh-frame-overlay-top, 12px)) 12px 12px;
   margin: 0;
   align-self: safe start;
-  justify-self: safe start;
+  justify-self: safe end;
 }

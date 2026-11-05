@@ -29,16 +29,7 @@ Status: proposed
 
 ### 稳定版订阅与通道切换
 
-| 用户选项 | Feed | 发布内容 |
-|---|---|---|
-| 稳定版 | `latest.yml` / `latest-mac.yml` | 仅稳定版本 |
-| Nightly | `nightly.yml` / `nightly-mac.yml` | alpha、rc 和稳定版本 |
-
-[一期发布规则](2026-09-08-desktop-update-policy-and-installation.zh.md)在共用稳定版本出现时增加稳定 feed，不切换固定 Nightly 客户端。面向用户的稳定版订阅与选择器仍延后。启用后持久化所选通道，不从已安装版本反推。设置 updater 通道时保持 `allowDowngrade = false`。从 Nightly 切到稳定版时，较高的已安装 Nightly 持续运行，直到出现更高稳定版；不得降级 Desktop 或内置 dsh。
-
-切换通道可以立即检查，下载行为必须遵循获准设置。忽略旧通道响应，安装前按新通道重新确认已下载产物。通道改变不能在缺少新条件有效策略响应时解除强制阻断。选择器下方常驻 Nightly 说明，候选中文为“提前体验新功能，版本可能不稳定。”；选择稳定版后隐藏，必要时另行说明需等待更高稳定版。
-
-仅为实际分发过的 Desktop 安装包设计兼容。后续迁移若存在读取 `alpha.yml` 或 `rc.yml` 的真实客户端，应向旧 feed 与 Nightly 发布更高桥接版本，直到可淘汰旧入口。一期不需要这类桥接。
+本提案的这一部分已由[桌面渠道设置](../../../../apps/desktop/README.zh.md#local-desktop-settings)和[打包渠道策略](../../../../apps/desktop/packaging/README.zh.md)取代。已实现的选择器持久化用户的显式选择；发布者独立于渠道名称选择版本，切换渠道不允许降级。
 
 ### 自动安装设置
 

@@ -48,6 +48,7 @@ vi.mock('tar', () => ({
   create: async ({ file }: { file: string }) => writeFile(file, 'fixture archive'),
   extract: async () => {},
 }))
+vi.mock('./build-inputs.ts', () => ({ cuaHelperSourceDigest: () => 'a'.repeat(64), cuaHelperBuildKey: () => 'b'.repeat(64) }))
 vi.mock('./payload.ts', async importOriginal => ({
   ...await importOriginal<typeof import('./payload.ts')>(),
   readCuaApplication: (directory: string) => ({ application: join(directory, 'fixture/DSH Computer Use.app') }),

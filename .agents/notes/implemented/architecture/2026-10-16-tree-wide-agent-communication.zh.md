@@ -10,13 +10,13 @@ Status: implemented
 
 ## Decision
 
-`list_agents` 从调用方的在线根开始，列出该根与所有可达的可继续后代，包括调用方。父级 id 和深度始终相对根计算。现有父级目录仍是权威来源；不单独存储 Team 目录。
+`list_agents` 从调用方的在线根开始，列出该根与所有可达的可继续后代，包括调用方。完整名称始终相对根计算。现有父级目录仍是权威来源；不单独存储 Team 目录。
 
 `send_message` 接受同一棵树中的其他根或可继续成员。发送者必须是确切在线根或驻留的可继续子代理。跨分支投递验证目标描述符和创建目录后，仅在 Team 根下恢复目标。最终收件箱准入重新检查发送者与根。接受前的取消或拒绝释放新建目标实例；已接受输入遵循普通 Agent 持久化。
 
 现有 Agent 注册表记录 Team 根对运行时实例的所有权。创建父级 id 和目录保留用于发现及中断授权的祖先关系。成员完成或释放只影响自身实例；关闭 Team 根会等待全部启动和清理。这删除了祖先恢复、父级保留和递归释放，无需增加 Team 运行时注册表。目标保存的 preset 和权限事件提供恢复配置。
 
-本决策替代[相邻消息](2026-08-27-adjacent-agent-steer-messaging.zh.md)与[子代理队友](2026-10-15-agent-teams-as-subagents.zh.md)中的邻接、发现及父子生命周期限制。它们的共享收件箱、调度、发送者归属和 Team 复用决策仍有效。成员使用 Session id 寻址；普通 Session 分叉领导独立 Team。
+本决策替代[相邻消息](2026-08-27-adjacent-agent-steer-messaging.zh.md)与[子代理队友](2026-10-15-agent-teams-as-subagents.zh.md)中的邻接、发现及父子生命周期限制。它们的共享收件箱、调度、发送者归属和 Team 复用决策仍有效。成员使用[目录名称](2026-11-02-subagent-catalog-names.zh.md)定义的名称或 Session id 互相寻址；普通 Session 分叉领导独立 Team。
 
 ## Alternatives considered
 

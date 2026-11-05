@@ -10,6 +10,8 @@ export interface WelcomeState {
   readonly hasApiKey: boolean
   readonly writable: boolean
   readonly localePreference: string | null
+  /** Effective Host theme preference; absent or invalid optional theme settings use system appearance. */
+  readonly themePreference: 'light' | 'dark' | 'system'
 }
 
 /** Narrow operations available to the native welcome flow. */
@@ -19,7 +21,7 @@ export interface DesktopWelcomeBackend {
   readonly account: DesktopAccountBackend
   /** @param event - desktop-owned fields. @returns after local Host intake. */
   report(event: ProductEvent): Promise<void>
-  /** @returns Configured-key presence and the shared language preference, without credential values. */
+  /** @returns Configured-key presence and the shared language and theme preferences, without credential values. */
   read(): Promise<WelcomeState>
   /** @returns The saved UI language without account or provider requests. */
   readLocalePreference(): Promise<string | null>
@@ -85,6 +87,14 @@ export function connectDesktopWelcome(
     }
     return locale.value.preference ?? null
   }
+  const themePreference = (namespaces: unknown[]): WelcomeState['themePreference'] => {
+    const theme = namespaces.find(item => record(item) && item.ns === 'ui-theme')
+    if (theme === undefined) return 'system'
+    const preference = record(theme) && record(theme.value) ? theme.value.preference : undefined
+    if (preference === 'light' || preference === 'dark' || preference === 'system') return preference
+    console.warn('desktop appearance: invalid Host theme preference; using system appearance')
+    return 'system'
+  }
   const read = async (): Promise<WelcomeState> => {
     const { settings, ref } = await settingsAndReference()
     const providers = await invoke({ namespace: 'llm', method: 'listConfigurableProviders', args: {} })
@@ -116,6 +126,7 @@ export function connectDesktopWelcome(
       hasApiKey: Object.values(states).some(value => record(value) && value.configured === true),
       writable: ref !== undefined && record(states[ref]) && states[ref].writable === true,
       localePreference: localePreference(namespaces),
+      themePreference: themePreference(namespaces),
     }
   }
   return {

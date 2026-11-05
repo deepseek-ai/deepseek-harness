@@ -25,6 +25,20 @@ function trigger(source: unknown): ChatNode<'turn-trigger'> {
 
 describe('Turn trigger notices', () => {
   it.each([
+    [en, 'Requested to continue generation'],
+    [zh, '已请求继续生成'],
+  ])('shows an empty retry as a compact continuation receipt', (locale, title) => {
+    const node = trigger({ kind: 'retry' })
+    node.data.content = []
+    expect(turnTriggerDetails(node.data)).toEqual({ title: 'message.continuation.requested', icon: 'continue', compact: true })
+    const view = render(<TurnTriggerNodeView node={node} t={makeTranslate(locale)} />)
+    expect(view.getByText(title)).toBeDefined()
+    expect(view.queryByRole('button')).toBeNull()
+    expect(view.container.querySelector('[data-generation-continuation] svg')).not.toBeNull()
+    expect(view.container.querySelector('time')).toBeNull()
+  })
+
+  it.each([
     [{ kind: 'schedule' }, 'schedule', 'Automation task'],
     [{ kind: 'tool-jobs' }, 'job', 'Background task updated'],
     [{ kind: 'cordis-host-runner' }, 'plugin', 'Plugin status updated'],
@@ -35,6 +49,7 @@ describe('Turn trigger notices', () => {
     [{ kind: 'webhook', provider: 'github' }, 'github', 'GitHub event received'],
     [{ kind: 'webhook', provider: 'custom' }, 'webhook', 'External event received'],
     [{ kind: 'custom-extension' }, 'request', 'Execution requested'],
+    [{ kind: 'retry' }, 'request', 'Execution requested'],
   ] as const)('presents the recorded %j source', (source, icon, title) => {
     const node = trigger(source)
     const details = turnTriggerDetails(node.data)
