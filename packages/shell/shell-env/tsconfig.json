@@ -30,7 +30,7 @@
       "path": "../../boot/app-boot"
     },
     {
-      "path": "../../llm/llm"
+      "path": "../../util/error"
     }
   ]
 }

@@ -21,7 +21,7 @@
       "path": "../../util/launch-environment"
     },
     {
-      "path": "../../llm/llm"
+      "path": "../../util/error"
     }
   ]
 }

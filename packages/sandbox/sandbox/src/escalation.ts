@@ -16,7 +16,7 @@
  * @module dsh-sandbox/escalation
  */
 
-import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { escalationDisplayReason } from './locales.ts'
 import type { SandboxMode } from './index.ts'

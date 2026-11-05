@@ -1,6 +1,6 @@
 import koffi from 'koffi'
 import { describe, expect, it, vi } from 'vitest'
-import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import {
   WIN32_ERROR,
   Win32Error,

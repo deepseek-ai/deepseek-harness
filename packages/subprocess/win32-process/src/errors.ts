@@ -1,4 +1,4 @@
-import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 
 /** Code of every {@link Win32Error}; the failing API and its numeric code stay in `api`, `win32Code`, and `message`. */
 export const WIN32_ERROR = 'WIN32_ERROR'

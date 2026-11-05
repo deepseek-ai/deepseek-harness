@@ -14,39 +14,16 @@ import z from '@deepseek-ai/schemastery'
 import { DSH_ENV_PREFIX } from '@deepseek-ai/dsh-shell'
 import type { DshEnvironment, DshEnvironmentKey } from '@deepseek-ai/dsh-shell'
 import { DSH_HOME_ENV, resolveDshHome } from '@deepseek-ai/dsh-home-paths'
-import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { ShellEnvError } from './error.ts'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 // Declares `Context.profileContext`, the launcher-provided profile the built-ins read.
 import type {} from '@deepseek-ai/dsh-app-boot'
 
+export { ShellEnvError, type ShellEnvErrorCode } from './error.ts'
+
 declare module '@deepseek-ai/cordis' {
   interface Context {
     shellEnv: ShellEnvRegistry
-  }
-}
-
-/**
- * Every {@link ShellEnvError} code:
- * - `SHELL_ENV_CONTRIBUTION_INVALID` — a registered contributor returned an undeclared key or a non-string value; the
- *   shell command does not run, and the contributing plugin must be fixed.
- */
-export const SHELL_ENV_ERROR_CODES = ['SHELL_ENV_CONTRIBUTION_INVALID'] as const
-
-/** One code from {@link SHELL_ENV_ERROR_CODES}. */
-export type ShellEnvErrorCode = typeof SHELL_ENV_ERROR_CODES[number]
-
-/** Shell environment failure carrying a stable {@link ShellEnvErrorCode}. */
-export class ShellEnvError extends HarnessError {
-  override readonly code: ShellEnvErrorCode
-
-  /**
-   * @param message - names the contributor and the offending key.
-   * @param code - the failure class consumers route on.
-   */
-  constructor(message: string, code: ShellEnvErrorCode) {
-    super(message, code)
-    this.name = 'ShellEnvError'
-    this.code = code
   }
 }
 

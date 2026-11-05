@@ -87,6 +87,7 @@ contributor 必须声明它返回的每个键；返回未声明或非字符串�
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口、`ShellEnvRegistry` 服务与内置事实 |
+| [`src/error.ts`](src/error.ts) | `ShellEnvError` 及其 code |
 
 ### 收集
 

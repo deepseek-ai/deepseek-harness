@@ -87,6 +87,7 @@ This section explains the design decisions behind the registry and points at the
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry, `ShellEnvRegistry` service, and the built-in facts |
+| [`src/error.ts`](src/error.ts) | `ShellEnvError` and its codes |
 
 ### Collection
 

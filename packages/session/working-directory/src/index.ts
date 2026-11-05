@@ -15,7 +15,7 @@ import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import { WorkingDirectoryError } from './error.ts'
 
-export { WORKING_DIRECTORY_ERROR_CODES, WorkingDirectoryError, type WorkingDirectoryErrorCode } from './error.ts'
+export { WorkingDirectoryError, type WorkingDirectoryErrorCode } from './error.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Events {

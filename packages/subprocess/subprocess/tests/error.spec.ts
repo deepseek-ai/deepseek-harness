@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import {
   SUBPROCESS_ERROR_CODES,
   SubprocessError,

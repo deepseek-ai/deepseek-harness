@@ -13,7 +13,7 @@
       "path": "../../util/lazy-require"
     },
     {
-      "path": "../../llm/llm"
+      "path": "../../util/error"
     }
   ]
 }
