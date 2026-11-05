@@ -14,6 +14,9 @@ interface Provider {
 
 /** React-free registry; each occurrence captures the providers registered at opening. */
 export class MenuRegistry {
+  private readonly kindsSource = createSnapshotStore<readonly (keyof ContextMenuTargetMap)[]>([])
+  /** Registered target kinds, independent of asynchronous action availability. */
+  readonly registeredKinds: ObservableSnapshot<readonly (keyof ContextMenuTargetMap)[]> = this.kindsSource
   private readonly providers = new Map<string, Provider>()
   private readonly occurrences = new Set<() => void>()
   private disposed = false
@@ -34,9 +37,11 @@ export class MenuRegistry {
       resolve: (target, signal) => input.resolve(target.value as ContextMenuTargetMap[K], signal),
     }
     this.providers.set(key, provider)
+    this.publishKinds()
     return () => {
       if (provider.lifetime.signal.aborted) return
       this.providers.delete(key)
+      this.publishKinds()
       provider.lifetime.abort()
     }
   }
@@ -156,5 +161,13 @@ export class MenuRegistry {
     for (const dispose of this.occurrences) dispose()
     for (const provider of this.providers.values()) provider.lifetime.abort()
     this.providers.clear()
+    this.publishKinds()
+  }
+
+  private publishKinds(): void {
+    const kinds = [...new Set([...this.providers.values()].map(provider => provider.kind))].sort()
+    const previous = this.kindsSource.getSnapshot()
+    if (kinds.length === previous.length && kinds.every((kind, index) => kind === previous[index])) return
+    this.kindsSource.set(kinds)
   }
 }

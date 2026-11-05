@@ -307,16 +307,18 @@ describe('release pack CLI', () => {
   it('validates every parallel tarball before recording the publish order', async () => {
     const root = fixture()
     packageFixture(root, 'packages/util/alpha', '@deepseek-ai/alpha')
-    packageFixture(root, 'packages/util/zebra', '@deepseek-ai/zebra', { files: ['lib/index.js', 'src/index.ts'] })
-    write(join(root, 'packages/util/zebra/src/index.ts'), 'export const source = 1\n')
+    packageFixture(root, 'apps/cli', '@deepseek-ai/dsh', { files: ['lib/index.js', 'src/bin.ts'] })
+    packageFixture(root, 'packages/subagent/subagent-claude-code', '@deepseek-ai/dsh-subagent-claude-code')
+    packageFixture(root, 'packages/subagent/subagent-codex', '@deepseek-ai/dsh-subagent-codex')
+    write(join(root, 'apps/cli/src/bin.ts'), 'export const bin = 1\n')
     write(join(root, 'apps/web/dist/index.html'), '<main></main>')
     writeClientBuildRecord(root, officialClientBuildEnvironment(root, { DSH_CLIENT_COMMIT_HASH: commit }))
 
     const result = await runPack(root, ['--family', 'dsh', '--concurrency', '8'])
 
     expect(result.status).not.toBe(0)
-    expect(result.stderr).toContain('@deepseek-ai/zebra publishes source file package/src/index.ts')
-    expect(readdirSync(join(root, 'packed')).filter(name => name.endsWith('.tgz'))).toHaveLength(2)
+    expect(result.stderr).toContain('@deepseek-ai/dsh packed no documentation')
+    expect(readdirSync(join(root, 'packed')).filter(name => name.endsWith('.tgz'))).toHaveLength(4)
     expect(existsSync(join(root, 'packed', PUBLISH_ORDER_FILE))).toBe(false)
   })
 

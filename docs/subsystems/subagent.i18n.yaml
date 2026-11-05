@@ -11,6 +11,9 @@
 /subagents/local-children-and-activations:
   en: 6f87231d18d82916
   zh: 9f064b23058f8766
+/subagents/agent-names:
+  en: 55b2912080a2b021
+  zh: d234521ecce44275
 /subagents/messages-and-interruption:
   en: 9befacb931520842
   zh: c214b4fffa779b06
@@ -24,5 +27,5 @@
   en: 226ba8094a8cf96c
   zh: 719678662905d1eb
 /subagents/durable-enumeration-listdescendants-and-catalog-entries:
-  en: 8000138f84fd15fa
-  zh: 32fa91d3aebd3d01
+  en: 992acbcc3ac77e30
+  zh: 83b9dd42ade734ab

@@ -80,6 +80,12 @@ The composer measures its expanded control groups after size, content, visibilit
 
 The context meter follows the [statistics-control radius](../../../docs/ui-radius.md#radius-scale).
 
+An empty, idle ordinary Session composer offers a play action after `RATE_LIMIT`, `SERVER`, `TIMEOUT`, `TRANSPORT`, `EMPTY_RESPONSE`, or `STREAM_CLOSED` ends its latest turn. The failed turn must include admitted ordinary user input and a settled failed model attempt. Clicking submits `content: []` through the existing Session prompt API; drafts and attachments keep the Send action. A new balanced turn uses committed history and records an empty `user/message` with `source.kind: 'retry'`. Refusal or transport failure leaves the draft empty and reports the error through the ordinary submission lifecycle.
+
+The Session API owns `conversationContinuation`, shared by Host admission and browser presentation. It restores eligibility from complete Session history and preserves it across repeated failed empty continuations, independently of loaded browser pages.
+
+The composer exposes `retry(failureSeq)` for failed-generation recovery. The input bar reads `conversationContinuation` and `inbox` through the standard `useProjection` prop. User-facing text calls the action Continue generating.
+
 The composer uses the shared [text-input focus policy](../ui-primitives/README.md#use-this-package) on mount, Session switching, and unlock. Identified phones and tablets require tapping the input; desktop devices retain automatic focus. On these mobile devices, a submission that empties the focused draft moves focus to the non-text composer card, dismissing the keyboard while retaining its navigation position. Rejected submissions, retained newer draft text, and another control already holding focus preserve focus. The [Lexical patch](../../../patches/lexical@0.49.0.patch) keeps caret scrolling in the same coordinate system as DOM geometry when a mobile keyboard pans the page.
 
 The context-occupancy button shows a ring and percentage below the input card, after the Session statistics. Clicking it opens the token breakdown in a CSS-anchored panel bounded by the layout viewport, including when no statistics are shown; the button stays hidden until context usage and capacity are available. Browser zoom and panning move the panel with the page, so it may extend beyond the visual viewport. Outside the Hero, that row keeps one reading's height while it is empty, so statistics and context usage arriving later do not change the composer's height; the Hero shows no empty row.
@@ -103,6 +109,8 @@ Workspace selection uses `uiWorkspace.openWorkspace` to prepare the target and c
 The package occupies the root-scoped `main` key `conversation`. Its `main.conversation` shell keeps the resident `conversation.header` outside the optional-Session `conversation.content` Component Factory. The header hosts root-scoped navigation without a selected Session; titles, actions, and View tabs remain in its strict Session child. The Factory owns the shared body and Composer, reads the current Session through its standard Hook, and exposes strict-Session `views` plus root-scoped `widthControls` local positions. Its default adapter renders the existing `conversation.session` entry, while the main occurrence selects the width handles; an embedded occurrence can replace `views` and omit those handles without rendering the main Header. The shared body and Composer register the queue and Todo docks. The Todo dock uses the shared panel elevation above the composer; its rows use the shared idle, ongoing, and done markers for pending, in-progress, and completed items. `ctx.uiSession.provide()` materializes the Conversation and input sources from the same Session binding and supplies `inputActions` as a stable standard prop.
 
 A blank Session retains the header's leading and corner controls, including the right-sidebar opener, while hiding its title, actions, utilities, and View tabs. Selecting a Workspace creates the Session needed by these controls; the first message is not required. Without a selected Session, the strict header is absent; the resident header keeps the blank-Session 40px row on every platform, so the Hero input card sits at the same height before and after a Workspace is bound; on macOS desktop that row is also the window drag row. Sidebar entries retain their own data and execution prerequisites. A started Session header uses one row when fewer than two Views are available; the tab row reserves space only while rendered. When the title and actions do not fit, the title area clips them and fades its trailing edge before the utilities, which stay fully visible and clickable; overlays in the title and actions slots portal to stay outside that clip.
+
+The Session Header owns its trailing More button and renders the shared `contextMenu.button` factory after utility contributions. This package declares the `sessionHeader` context-menu target `{ sessionId }`, independent of Session-row context actions; Header-menu providers import its client types. The button remains available without the export plugin while another Header-menu provider is registered; it hides when none are registered. Providers determine their own items and availability when the menu opens. [Context menus](../ui-context-menu/README.md) own button toggling and accessibility; [Session log export](../../session-query/session-log-export/README.md) owns export actions and global download dialogs.
 
 View selection is deterministic: a registered persisted selection wins, otherwise registered `chat` wins, otherwise no View renders. It never chooses the first registered View. Shell phase combines Session lifecycle with the active-target set; no target-specific snapshot is read by the shell.
 
@@ -191,11 +199,19 @@ Session title context gestures use the shared [context menu](../ui-context-menu/
 <a id="model-experience"></a>
 ## Model Experience
 
-None, as this package renders browser state and sends user-admitted inputs through Session Controller APIs without constructing model requests.
+### Manual continuation request
+
+#### What the model sees
+
+The play action submits `content: []` through the existing Session prompt API. Ordinary Loop admission records an empty `user/message` with `source.kind: 'retry'`. Chat presents the empty retry as a compact continuation-request receipt. The adapter applies its ordinary message serialization; the action adds no localized or hidden continuation text. Pending injected context follows ordinary admission.
+
+#### Token effect
+
+The action adds no continuation text. Empty-message serialization and framing costs depend on the adapter. The request still incurs the ordinary cost of retained history, current prompt sections, tool declarations, and any newly admitted context.
 
 #### KV Cache effect
 
-None; Conversation assembly and browser input state do not alter provider-side prompt caching.
+Serialization of the empty retry message depends on the adapter. Prefix reuse depends on the current model, prompt, tools, injected context, and provider cache policy.
 
 ## Known Limitations and Deferred Work
 
@@ -203,6 +219,7 @@ None; Conversation assembly and browser input state do not alter provider-side p
 
 - **Only registered targets can render** — the shell deliberately has no implicit fallback target beyond the registered `chat` preference.
 - **Factory occurrences inherit their render-position Session** — `conversation.content` does not accept an independently addressed Session; that requires a separate Session-provider capability.
+- **Manual continuation uses a fixed product allowlist** — the supported failure codes are independent of the provider's configurable `retryableCodes`; changing automatic retry policy does not expand or reduce this action. `STREAM_CLOSED` permits an explicit new user turn even when the default policy does not retry it. That code can also identify a protocol violation, so another request is not guaranteed to recover.
 - **Composer backdrop blur is verified only in Chromium** — with `will-change: transform` on the docked composer, descendant `backdrop-filter` still samples the transcript in Chromium; WebKit behavior has not been verified.
 - **A failing Definition costs a full replay per publication** — after an incremental flush fails, the assembler replays the complete loaded window to keep the views correct. A Definition that fails on every update therefore replays the whole window on each publication until its owner fixes it ([window update paths](../../../docs/subsystems/conversation.md#window-update-paths)).
 

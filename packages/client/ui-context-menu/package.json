@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-context-menu",
   "description": "Typed, plugin-extensible context menus with captured targets and shared Web presentation",
-  "version": "0.2.2-alpha.3",
+  "version": "0.2.2-rc.1",
   "publishConfig": {
     "access": "public"
   },
@@ -65,6 +65,9 @@
     "locale/*.json",
     "lib/index.js",
     "lib/client.js",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ]
 }

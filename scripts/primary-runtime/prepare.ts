@@ -172,17 +172,6 @@ export function prunePnpmForeignNativePackages(pnpm: string, platform: NodeJS.Pl
   }
 }
 
-/**
- * Copy the skill package's complete asset tree to ordinary filesystem resources.
- * @param source - The package's assets directory.
- * @param destination - External Office skill resource directory.
- * @returns Resolves after replacing the external assets with the complete package tree.
- */
-export async function prepareOfficeSkillAssets(source: string, destination: string): Promise<void> {
-  rmSync(destination, { recursive: true, force: true })
-  await cp(source, destination, { recursive: true, dereference: true })
-}
-
 /** A locked interpreter and wheel target. */
 export type PrimaryRuntimeTarget = keyof typeof lock.targets
 
@@ -190,7 +179,7 @@ export type PrimaryRuntimeTarget = keyof typeof lock.targets
 export interface PreparePrimaryRuntimeOptions {
   /** Target whose archives and wheels are downloaded. */
   readonly target: PrimaryRuntimeTarget
-  /** Resource directory receiving primary-runtime/ and office-skills/. */
+  /** Resource directory receiving primary-runtime/. */
   readonly output: string
   /** SHA-256-addressed archive cache. */
   readonly cache: string
@@ -198,16 +187,14 @@ export interface PreparePrimaryRuntimeOptions {
   readonly version: string
   /** Locked npm pnpm tarball for installed carriers; build hosts otherwise copy their installed pnpm. */
   readonly pnpmArchive?: RuntimeNpmArchive
-  /** Ordinary filesystem Office assets; build hosts otherwise resolve the workspace package. */
-  readonly skillSource?: string
   /** Omit Node.js and pnpm for carriers providing only Python. */
   readonly pythonOnly?: boolean
 }
 
 /**
- * Materialize locked interpreters, libraries and Office resources without executing target code.
+ * Materialize locked interpreters and libraries without executing target code.
  * @param options - Explicit target and carrier-owned output locations.
- * @returns Resolves after the complete payload and skills have been copied to the output directory.
+ * @returns Resolves after the complete payload has been copied to the output directory.
  */
 export async function preparePrimaryRuntime(options: PreparePrimaryRuntimeOptions): Promise<void> {
   const { target } = options
@@ -259,9 +246,6 @@ export async function preparePrimaryRuntime(options: PreparePrimaryRuntimeOption
   } finally {
     rmSync(staging, { recursive: true, force: true })
   }
-  const assets = options.skillSource ?? join(dirname(createRequire(import.meta.url).resolve('@deepseek-ai/dsh-skill-office/package.json')), 'assets')
-  await prepareOfficeSkillAssets(assets,
-    join(paths.runtime, 'office-skills'))
 }
 
 /**

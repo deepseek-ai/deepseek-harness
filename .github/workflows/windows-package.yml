@@ -15,15 +15,15 @@ on:
         default: test
         required: true
       update_channel:
-        description: '升级通道：nightly 或 stable（须为稳定版本）；默认通道由此打包输入确定'
+        description: '升级通道：人工选择 nightly 或 stable，与版本后缀无关；默认通道由此打包输入确定'
         type: choice
         options: [nightly, stable]
         default: nightly
         required: true
       version_mode:
-        description: '版本模式：default 为 test 自动编号、production 跟随产品；product 保留原版本，auto 自动编号，manual 手填'
+        description: '版本模式：default 按环境自动选择（test 取 build-number，production 取 follow-dsh）；follow-dsh 跟随 dsh 包版本号；build-number 自动追加构建编号；manual 手填'
         type: choice
-        options: [default, product, auto, manual]
+        options: [default, follow-dsh, build-number, manual]
         default: default
         required: true
       build_version:
@@ -77,7 +77,8 @@ jobs:
         shell: pwsh
     env:
       PACKAGE_SOURCE_REF: ${{ inputs.source_ref }}
-      PACKAGE_VERSION_MODE: ${{ inputs.version_mode }}
+      # TODO: Remove this legacy source_ref mode mapping on 2027-01-04 with the parser aliases.
+      PACKAGE_VERSION_MODE: ${{ inputs.version_mode == 'follow-dsh' && 'product' || inputs.version_mode == 'build-number' && 'auto' || inputs.version_mode }}
       DSH_DESKTOP_UPDATE_CHANNEL: ${{ inputs.update_channel }}
       DSH_TELEMETRY_DISABLED: '1'
       DSH_PACKAGING_PRESET: ${{ inputs.preset }}
@@ -220,6 +221,7 @@ jobs:
     env:
       PACKAGE_CACHE_NAMESPACE: ${{ inputs.cache_namespace }}
       DESKTOP_RETAINED_DIRECTORY: ${{ needs.package.outputs.directory }}
+      DESKTOP_ARCHIVE_NAME: windows-x64-${{ inputs.signing }}-${{ needs.package.outputs.version }}-${{ github.run_id }}-${{ needs.package.outputs.attempt }}.zip
       DESKTOP_PACKAGE_ATTEMPT: ${{ needs.package.outputs.attempt }}
       DESKTOP_PACKAGE_RUNNER: ${{ needs.package.outputs.runner-name }}
     steps:
@@ -251,28 +253,17 @@ jobs:
           "PNPM_CONFIG_STORE_DIR=$storeRoot" >> $env:GITHUB_ENV
       - run: pnpm install --frozen-lockfile
         working-directory: artifact-archiver
-      - name: Verify original retained build before GitHub archival
+      - name: Archive verified retained build
+        id: archive
         working-directory: artifact-archiver
         run: node --import tsx apps/desktop/scripts/archive-desktop-ci.ts
-      - name: Retain verified unsigned installer
-        if: success() && inputs.signing == 'unsigned'
+      - name: Retain installers for the selected mode
+        if: success()
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: windows-x64-unsigned-${{ needs.package.outputs.version }}-${{ github.run_id }}-${{ needs.package.outputs.attempt }}
-          compression-level: 0
-          include-hidden-files: true
-          path: ${{ needs.package.outputs.directory }}/*
-          if-no-files-found: error
-          retention-days: 14
-          overwrite: true
-      - name: Retain verified signed installer
-        if: success() && inputs.signing == 'signed'
-        uses: actions/upload-artifact@v7.0.1
-        with:
-          name: windows-x64-signed-${{ needs.package.outputs.version }}-${{ github.run_id }}-${{ needs.package.outputs.attempt }}
-          compression-level: 0
-          include-hidden-files: true
-          path: ${{ needs.package.outputs.directory }}/*
+          name: ${{ env.DESKTOP_ARCHIVE_NAME }}
+          path: ${{ steps.archive.outputs.path }}
+          archive: false
           if-no-files-found: error
           retention-days: 14
           overwrite: true

@@ -26,6 +26,17 @@
   .header:hover { color: var(--dsw-alias-label-secondary); }
 }
 .icon { display: inline-flex; flex: none; color: inherit; }
+.continuation {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 2px 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
+  overflow-wrap: anywhere;
+}
 .title { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: var(--dsh-content-font-size, 14px); }
 .time { flex: none; margin-left: auto; color: inherit; font: var(--dsw-font-xxs-12); }
 .chevron, .openChevron { flex: none; color: inherit; }

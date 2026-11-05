@@ -47,13 +47,25 @@
               - id: deepseek-v4-pro
 
 - insert:
+    - id: office-kit
+      name: '@deepseek-ai/dsh-office-kit'
+      config:
+        outputDirectory: !!js dshHomePath('office-kit', 'outputs')
+
+    - id: tool-office
+      name: '@deepseek-ai/dsh-tool-office'
+
+    - id: workspace-dependencies
+      name: '@deepseek-ai/dsh-tool-workspace-dependencies'
+      config:
+        source: !!js process.cwd() + '/runtime-source'
+        root: !!js process.cwd() + '/runtime-installed'
+
     - id: skill-office
       name: '@deepseek-ai/dsh-skill-office'
       disabled: false
       config:
         assetRoot: !!js process.cwd() + '/office-skills'
-        node: !!js process.cwd() + '/office-node'
-        cli: !!js process.cwd() + '/render-cli.cjs'
 
 - id: tool-bash
   disabled: true

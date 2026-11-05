@@ -178,13 +178,33 @@ describe('desktop upload plan', () => {
   })
 
   it.each(['test', 'production'] as const)('isolates stable-channel packages from nightly in %s', async (environment) => {
-    const nightly = await createDesktopUploadPlan('win-x64', await fixture('win-x64', '1.2.3', environment, 'nightly'))
-    const stable = await createDesktopUploadPlan('win-x64', await fixture('win-x64', '1.2.3', environment, 'stable'))
+    const nightly = await createDesktopUploadPlan('win-x64', { ...await fixture('win-x64', '1.2.3', environment, 'nightly'), stagingPercentage: 10 })
+    const stable = await createDesktopUploadPlan('win-x64', { ...await fixture('win-x64', '1.2.3', environment, 'stable'), stagingPercentage: 10 })
     expect(stable.artifacts.filter(file => file.channelMetadata).map(file => file.filename)).toEqual(['stable.yml'])
     expect(nightly.artifacts.filter(file => file.channelMetadata).map(file => file.filename)).toEqual(['nightly.yml'])
     expect(stable.artifacts.every(file => !nightly.artifacts.some(other => other.key === file.key))).toBe(true)
-    const prerelease = await fixture('win-x64', '1.2.3-alpha.1', environment, 'stable')
-    await expect(createDesktopUploadPlan('win-x64', prerelease)).rejects.toThrow(/stable requires a stable version/u)
+    for (const plan of [nightly, stable]) {
+      expect(plan.artifacts.find(file => file.channelMetadata)!.contents).toContain('stagingPercentage: 10')
+    }
+  })
+
+  it.each(['mac-arm64', 'mac-x64', 'win-x64'] as const)('publishes manually selected prereleases on stable for %s', async (target) => {
+    const summaries: { environment: string; version: string; keys: string[] }[] = []
+    for (const environment of ['test', 'production'] as const) {
+      for (const version of ['1.2.3-alpha.1', '1.2.3-rc.1']) {
+        const plan = await createDesktopUploadPlan(target, await fixture(target, version, environment, 'stable'))
+        expect(plan.version).toBe(version)
+        const feed = plan.artifacts.find(file => file.channelMetadata)!
+        expect(feed.filename).toBe(target === 'win-x64' ? 'stable.yml' : 'stable-mac.yml')
+        const payload = plan.artifacts.find(file => file.filename.endsWith(target === 'win-x64' ? '.exe' : '.zip'))!
+        expect(payload.key).toContain(`/bin/${target}/stable/`)
+        expect(load(feed.contents!)).toMatchObject({ version, files: [{
+          url: `${environment === 'test' ? TEST_ORIGIN : 'https://download.deepseek.com'}/${payload.key}`,
+        }] })
+        summaries.push({ environment, version, keys: plan.artifacts.map(file => file.key) })
+      }
+    }
+    await expect(`${JSON.stringify(summaries, null, 2)}\n`).toMatchFileSnapshot(`./expected/stable-prerelease-${target}.json`)
   })
 
   it('publishes fixed feeds referencing versioned binaries without overriding CDN cache policy', async () => {

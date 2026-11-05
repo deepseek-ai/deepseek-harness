@@ -51,11 +51,10 @@
   }
 }
 
-/* Selected cube: #F5F6F7 fill + #ADB2B8 border (static token — the bluish-400
- * step has no alias-layer name). */
+/* Selected cube: platform fill + the selected border. */
 .selected {
   background: var(--dsw-alias-bg-module-platform);
-  border-color: var(--dsw-static-neutral-bluish-400);
+  border-color: var(--dsw-alias-border-selected);
 }
 
 /* Narrow settings panel: all three cubes share one row instead of wrapping to

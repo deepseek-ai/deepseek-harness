@@ -218,15 +218,10 @@
  */
 .panel :global([data-dockkit-pane][data-sidebar-right-flash]),
 .panel :global([data-dockkit-float][data-sidebar-right-flash]) {
-  --sidebar-right-flash-color: var(--dsw-alias-brand-primary-new-colorprimary-new-color);
+  --sidebar-right-flash-color: var(--dsw-specific-sidebar-right-flash);
   --sidebar-right-flash-ring: color-mix(in srgb, var(--sidebar-right-flash-color) 48%, transparent);
   --sidebar-right-flash-near: color-mix(in srgb, var(--sidebar-right-flash-color) 16%, transparent);
   --sidebar-right-flash-far: color-mix(in srgb, var(--sidebar-right-flash-color) 10%, transparent);
-}
-
-:global(body[data-ds-dark-theme]) .panel :global([data-dockkit-pane][data-sidebar-right-flash]),
-:global(body[data-ds-dark-theme]) .panel :global([data-dockkit-float][data-sidebar-right-flash]) {
-  --sidebar-right-flash-color: var(--dsw-static-neutral-00);
 }
 
 .panel :global([data-dockkit-pane][data-sidebar-right-flash]) {

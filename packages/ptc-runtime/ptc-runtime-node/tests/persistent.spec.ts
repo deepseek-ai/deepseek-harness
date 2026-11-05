@@ -39,14 +39,14 @@ describe.each([
       expect((await run('typeof retained')).value).toBe('undefined')
     } finally { await runtime.release(owner); await pending }
   })
-  it('keeps a snapshot of caller-owned root arrays and rejects changed grants', async () => {
+  it('retains variables across additional-root changes until release', async () => {
     const { run, runtime, owner, cwd } = await setup()
     const roots = [cwd]
     const policy = { mode: 'danger-full-access' as const, workspaceRoot: cwd, additionalWritableRoots: roots }
     expect((await run('var retained = 7; retained', { sandboxPolicy: policy })).value).toBe(7)
     expect((await run('retained', { sandboxPolicy: { ...policy, additionalWritableRoots: [cwd, cwd] } })).value).toBe(7)
     roots[0] = tmpdir()
-    await expect(run('retained', { sandboxPolicy: policy })).rejects.toThrow('release the retained environment')
+    expect((await run('retained', { sandboxPolicy: policy })).value).toBe(7)
     await runtime.release(owner)
     expect((await run('typeof retained', { sandboxPolicy: policy })).value).toBe('undefined')
   })

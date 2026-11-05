@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-11-02-subagent-catalog-names.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-02-subagent-catalog-names.md
+/agent-note-subagent-names-live-in-the-creator-s-catalog:
+  en: 987d2272bb47fe75
+  zh: 54e701ecbaa60457
+/agent-note-subagent-names-live-in-the-creator-s-catalog/problem:
+  en: d4798e7bbbd5d49d
+  zh: b388470cf1ff33ac
+/agent-note-subagent-names-live-in-the-creator-s-catalog/decision:
+  en: 8fafb256536d1bc5
+  zh: f45f9e6d6f9a2407
+/agent-note-subagent-names-live-in-the-creator-s-catalog/alternatives-considered:
+  en: 14b564fd848248da
+  zh: 5f65c05bbe22d581
+/agent-note-subagent-names-live-in-the-creator-s-catalog/consequences:
+  en: 4baa2557e5415ee1
+  zh: 8e8d7819c04f9043
+/agent-note-subagent-names-live-in-the-creator-s-catalog/testing:
+  en: a7963eadbfe52c21
+  zh: 10bfc9fb28f6ae73

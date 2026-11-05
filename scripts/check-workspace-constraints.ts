@@ -18,7 +18,7 @@ import {
   LEGACY_PREFIXED_EXPERIMENTAL_PACKAGE_DIRECTORIES,
   PRIVATE_EXPERIMENTAL_PACKAGE_DIRECTORIES,
 } from './experimental-package-policy.ts'
-import { hasTypertRemoteNavigation, isForbiddenPublicationFile } from './publication-payload.ts'
+import { hasTypertRemoteNavigation } from './publication-payload.ts'
 import type { DshBundleManifest } from '../packages/util/package-manifest/src/types.ts'
 import { detailPath } from '../packages/util/plugin-detail/src/document.ts'
 import { bundlePatchFiles } from '../packages/boot/app-boot/src/profile.ts'
@@ -57,10 +57,6 @@ const publicNativePackages = new Set([
   '@deepseek-ai/node-addon-system-linux-arm64',
   '@deepseek-ai/node-addon-system-linux-x64',
 ])
-/** Deliberate source payloads whose exact bytes are part of the package's audit surface. */
-const publicationSourceAllowlist: Readonly<Record<string, readonly string[]>> = {
-  '@deepseek-ai/node-addon-system': ['src/main.c', 'src/flock.c'],
-}
 /** Public source home recorded in maintained package manifests. */
 const publishedRepositoryUrl = 'git+https://github.com/deepseek-ai/deepseek-harness.git'
 /** Packages that participate in the experimental policy. */
@@ -79,14 +75,15 @@ const standardReleaseMemberDirectory = new RegExp(
 const desktopApplicationDirectory = 'apps/desktop'
 const localArtifactDirs = new Set(['node_modules'])
 const appPackageFiles: Readonly<Record<string, readonly string[]>> = {
-  '@deepseek-ai/dsh': ['lib/*.js', 'lib/types/*.d.ts'],
+  // Only `prepack` stages `docs`; every other reader of this directory sees
+  // whatever the checkout holds.
+  '@deepseek-ai/dsh': ['lib/*.js', 'lib/*.js.map', 'lib/types/*.d.ts', 'lib/types/*.d.ts.map', 'docs', 'src'],
   '@deepseek-ai/dsh-desktop-host': [
     'lib/index.js', 'lib/cli.js',
   ],
-  // Sourcemaps stay out by payload policy; the worker-preview surface
-  // (dist/preview.html and dist/preview/) backs opt-in experimental
-  // packages and is not published.
-  '@deepseek-ai/dsh-web-frontend': ['dist', '!dist/**/*.map', '!dist/preview.html', '!dist/preview'],
+  // The worker-preview surface (dist/preview.html and dist/preview/) backs
+  // opt-in experimental packages and is not published.
+  '@deepseek-ai/dsh-web-frontend': ['dist', '!dist/preview.html', '!dist/preview', 'src'],
 }
 
 /** The subset of package.json fields this constraint check cares about. */
@@ -364,6 +361,13 @@ export function expectedDshPackageFiles(manifest: PackageManifest, detailFiles: 
     // declarations.
     ...usesEmittedTreeDefaults(manifest) ? ['lib/types/**/*.js'] : [],
     'lib/types/**/*.d.ts',
+    // A published declaration map plus `src` lets a consumer editor open the
+    // implementation behind an exported declaration, and lets a plugin author
+    // read it without a repository checkout.
+    'lib/types/**/*.d.ts.map',
+    // Every emitted map ships beside the JavaScript it describes, so a stack
+    // frame or a debugger session resolves into the published `src`.
+    'lib/**/*.js.map',
     ...hasExportPair(manifest, './typert', './lib/typert.host.d.ts', './lib/typert.host.js')
       ? ['lib/typert.host.js', 'lib/typert.host.d.ts']
       : [],
@@ -371,8 +375,11 @@ export function expectedDshPackageFiles(manifest: PackageManifest, detailFiles: 
       ? ['lib/typert.client.js', 'lib/typert.client.d.ts']
       : [],
     ...hasTypertRemoteNavigation(manifest)
-      ? ['lib/typert.remote-client.js', 'lib/typert.remote-client.d.ts']
+      // The generated Remote declaration carries a `sourceMappingURL` its map
+      // resolves, and that map resolves the Host method through `src`.
+      ? ['lib/typert.remote-client.js', 'lib/typert.remote-client.d.ts', 'lib/typert.remote-client.d.ts.map']
       : [],
+    'src',
   ]
 }
 
@@ -549,15 +556,6 @@ export function checkWorkspaceManifest({ dir, manifest }: WorkspaceManifest): st
 
   if (manifest.name && vendoredPackages.has(manifest.name)) {
     return errors
-  }
-
-  if (manifest.name?.startsWith('@deepseek-ai/')) {
-    const allowedSources = publicationSourceAllowlist[manifest.name] ?? []
-    for (const file of manifest.files ?? []) {
-      if (isForbiddenPublicationFile(file) && !allowedSources.includes(file)) {
-        errors.push(`${label}: package.json files must not publish ${JSON.stringify(file)}`)
-      }
-    }
   }
 
   if (dir.startsWith('apps/') && dir !== desktopApplicationDirectory && dir !== pluginMarketGeneratorDirectory && manifest.name?.startsWith('@deepseek-ai/')) {

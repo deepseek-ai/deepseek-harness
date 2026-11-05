@@ -175,6 +175,7 @@
     "apps/web/tests/file-upload-round.e2e.ts",
     "apps/web/tests/message-actions.e2e.ts",
     "apps/web/tests/open-in-app-ssh.e2e.ts",
+    "apps/web/tests/open-in-app-menus.e2e.ts",
     "apps/web/tests/fork-mid-turn.e2e.ts",
     "apps/web/tests/message-feedback.e2e.ts",
     "apps/web/tests/markdown-images.e2e.ts",
@@ -322,7 +323,8 @@
     { "path": "./packages/client/ui-sidebar-documentpreview/tsconfig.host.json" },
     { "path": "./packages/client/ui-sidebar-browser/tsconfig.host.json" },
     { "path": "./packages/client/ui-settings-general/tsconfig.host.json" },
-    { "path": "./packages/document/office-to-pdf" },
+    { "path": "./packages/document/office-kit" },
+    { "path": "./packages/document/tool-office" },
 
     { "path": "./packages/api/account-controller" },
     { "path": "./packages/credentials/deepseek-account-platform" },

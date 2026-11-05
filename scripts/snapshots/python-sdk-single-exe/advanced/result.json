@@ -890,11 +890,12 @@
       "seq": 37,
       "time": 0,
       "data": {
-        "version": 0,
+        "version": 3,
         "childId": "{{child-1}}",
         "childCreatedAt": 0,
         "mode": "continuable",
-        "label": "Check direct child"
+        "label": "Check direct child",
+        "name": "agent-1"
       }
     },
     {
@@ -914,7 +915,7 @@
           "content": [
             {
               "type": "text",
-              "text": "started subagent {{child-1}}"
+              "text": "started subagent agent-1"
             }
           ],
           "isError": false,
@@ -922,7 +923,7 @@
         },
         "meta": {
           "kind": "activation",
-          "subagentId": "{{child-1}}"
+          "name": "agent-1"
         }
       },
       "sourceEventSeqs": [
@@ -970,7 +971,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Background subagent {{child-1}} finished and will do no further work unless you send it more."
+                "text": "Background subagent agent-1 finished and will do no further work unless you send it more."
               },
               {
                 "type": "text",
@@ -984,7 +985,7 @@
             "source": {
               "kind": "subagent-settled",
               "form": "notice",
-              "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
+              "summary": "Background subagent agent-1 finished and will do no further work unless you send it more.",
               "stopReason": "completed",
               "senderSessionId": "{{child-1}}"
             },
@@ -1144,11 +1145,12 @@
       "seq": 46,
       "time": 0,
       "data": {
-        "version": 0,
+        "version": 3,
         "childId": "{{child-2}}",
         "childCreatedAt": 0,
         "mode": "continuable",
-        "label": "advanced-exe-snapshot child 1"
+        "label": "advanced-exe-snapshot child 1",
+        "name": "agent-2"
       }
     },
     {
@@ -1248,7 +1250,7 @@
         "content": [
           {
             "type": "text",
-            "text": "Background subagent {{child-1}} finished and will do no further work unless you send it more."
+            "text": "Background subagent agent-1 finished and will do no further work unless you send it more."
           },
           {
             "type": "text",
@@ -1262,7 +1264,7 @@
         "source": {
           "kind": "subagent-settled",
           "form": "notice",
-          "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
+          "summary": "Background subagent agent-1 finished and will do no further work unless you send it more.",
           "stopReason": "completed",
           "senderSessionId": "{{child-1}}"
         },
@@ -2778,11 +2780,12 @@
           "seq": 37,
           "time": 0,
           "data": {
-            "version": 0,
+            "version": 3,
             "childId": "{{child-1}}",
             "childCreatedAt": 0,
             "mode": "continuable",
-            "label": "Check direct child"
+            "label": "Check direct child",
+            "name": "agent-1"
           }
         }
       }
@@ -2808,7 +2811,7 @@
               "content": [
                 {
                   "type": "text",
-                  "text": "started subagent {{child-1}}"
+                  "text": "started subagent agent-1"
                 }
               ],
               "isError": false,
@@ -2816,7 +2819,7 @@
             },
             "meta": {
               "kind": "activation",
-              "subagentId": "{{child-1}}"
+              "name": "agent-1"
             }
           },
           "sourceEventSeqs": [
@@ -3275,7 +3278,7 @@
                 "content": [
                   {
                     "type": "text",
-                    "text": "Background subagent {{child-1}} finished and will do no further work unless you send it more."
+                    "text": "Background subagent agent-1 finished and will do no further work unless you send it more."
                   },
                   {
                     "type": "text",
@@ -3289,7 +3292,7 @@
                 "source": {
                   "kind": "subagent-settled",
                   "form": "notice",
-                  "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
+                  "summary": "Background subagent agent-1 finished and will do no further work unless you send it more.",
                   "stopReason": "completed",
                   "senderSessionId": "{{child-1}}"
                 },
@@ -3676,11 +3679,12 @@
           "seq": 46,
           "time": 0,
           "data": {
-            "version": 0,
+            "version": 3,
             "childId": "{{child-2}}",
             "childCreatedAt": 0,
             "mode": "continuable",
-            "label": "advanced-exe-snapshot child 1"
+            "label": "advanced-exe-snapshot child 1",
+            "name": "agent-2"
           }
         }
       }
@@ -4228,7 +4232,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Background subagent {{child-1}} finished and will do no further work unless you send it more."
+                "text": "Background subagent agent-1 finished and will do no further work unless you send it more."
               },
               {
                 "type": "text",
@@ -4242,7 +4246,7 @@
             "source": {
               "kind": "subagent-settled",
               "form": "notice",
-              "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
+              "summary": "Background subagent agent-1 finished and will do no further work unless you send it more.",
               "stopReason": "completed",
               "senderSessionId": "{{child-1}}"
             },

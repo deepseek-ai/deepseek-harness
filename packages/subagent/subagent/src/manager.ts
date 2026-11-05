@@ -30,14 +30,16 @@ import {
 import { installSubagentArchiveAdmission } from './archive-admission.ts'
 import { foldSubagentDescriptor, snapshotSubagentDescriptor } from './descriptor.ts'
 import type { SubagentDescriptorData } from './descriptor.ts'
-import { establishCatalogChild, establishExternalCatalogChild } from './catalog.ts'
+import { catalogNames, establishCatalogChild, establishExternalCatalogChild } from './catalog.ts'
 import { SubagentError } from './error.ts'
 import type { LifecycleEmitter } from './lifecycle.ts'
-import type { SubagentIdentityProjection } from './projection-types.ts'
+import { ROOT_AGENT_NAME, SiblingNameReservations, agentAddress, joinAgentPath, parentAgentPath } from './names.ts'
+import type { SiblingNameReservation } from './names.ts'
+import type { SubagentCatalogEntry, SubagentIdentityProjection } from './projection-types.ts'
 import { SubagentRunId } from './types.ts'
 import type {
   ContinuableCreateRequest, ContinuableCreateSpec, SubagentInterruptAuthority,
-  SubagentActivationSpec, SubagentActivation, SubagentStartRequest, SubagentRun,
+  SubagentActivationSpec, SubagentActivation, SubagentMemberNames, SubagentStartRequest, SubagentRun,
   SubagentSendMessageOptions, SubagentResult, SubagentRunInfo, ResolvedSubagentStartRequest,
 } from './types.ts'
 import { attachStructuredRuntime } from './structured.ts'
@@ -61,6 +63,8 @@ type ChildDeliveryOptions = {
 interface SubagentHost {
   /** Read the current descriptor identity through the service-owned projection. */
   identityOf(session: Session): SubagentIdentityProjection | undefined
+  /** Read a live Session's direct-child catalog through the service-owned projection. */
+  catalogOf(session: Session): readonly SubagentCatalogEntry[]
   /** Publish lifecycle events through the owning service's scoped dispatcher. */
   readonly emitLifecycle: LifecycleEmitter
 }
@@ -70,6 +74,8 @@ interface MaterializeBase {
   provider: string
   root: Agent
   ancestors: readonly SessionId[]
+  /** Slash-separated names from the root, undefined when any link is unnamed. */
+  path: string | undefined
   signal: AbortSignal
   delivery?: 'parent' | 'caller' | undefined
 }
@@ -143,6 +149,8 @@ export class SubagentManager {
   private readonly ownerCtx: Context
   /** Exact subagent tree roots whose host teardown has closed admission. */
   private readonly closingRoots = new Set<Agent>()
+  /** Sibling names held by creations that have not committed their catalog entry. */
+  private readonly names = new SiblingNameReservations()
   private draining = false
 
   /**
@@ -298,6 +306,24 @@ export class SubagentManager {
     const parent = spec.parent
     this.assertAdmitting(parent)
     const ancestry = this.ancestryForChild(parent)
+    const reservation = this.reserveName(parent, spec.name)
+    const path = joinAgentPath(this.pathOf(parent, ancestry.root), reservation.name)
+    try {
+      return await this.startLocalNamed(spec, prepare, ancestry, reservation, path)
+    } finally {
+      reservation.release()
+    }
+  }
+
+  /** Create one local child under a name reserved before any await. */
+  private startLocalNamed(
+    spec: SubagentActivationSpec,
+    prepare: (request: ContinuableCreateRequest) => Promise<ContinuableCreateSpec>,
+    ancestry: Pick<MaterializeBase, 'root' | 'ancestors'>,
+    reservation: SiblingNameReservation,
+    path: string | undefined,
+  ): Promise<SubagentActivation & { messageId: MessageId }> {
+    const parent = spec.parent
     return this.trackStartup(ancestry.root, spec.signal, async (signal) => {
       const persistence = spec.delivery === 'caller' ? this.ctx.get('sessionPersistence') : this.requirePersistence()
       const childId = spec.childId ?? brandString<SessionId>(randomUUID())
@@ -352,6 +378,7 @@ export class SubagentManager {
           childId,
           provider: spec.provider,
           ...ancestry,
+          path,
           create: {
             parent,
             cwd,
@@ -379,7 +406,7 @@ export class SubagentManager {
           ancestry.root,
           () => {
             this.assertAdmitting(parent)
-            establishCatalogChild(parent.session, childHeader, descriptor)
+            establishCatalogChild(parent.session, childHeader, descriptor, reservation.name)
           },
         )
       })
@@ -397,10 +424,32 @@ export class SubagentManager {
     spec: SubagentActivationSpec,
     start: (request: ResolvedSubagentStartRequest) => Promise<SubagentRun>,
   ): Promise<SubagentActivation> {
-    const { provider, delivery, childId: _childId, ...request } = spec
-    const parent = request.parent
+    const { delivery, name: requestedName, parent } = spec
     this.assertAdmitting(parent)
     const ancestry = this.ancestryForChild(parent)
+    if (delivery === 'caller' && requestedName !== undefined) {
+      throw new SubagentError('agent names require a cataloged child; caller-delivered external runs are not cataloged', 'UNSUPPORTED_CAPABILITY')
+    }
+    // Only parent-delivered external runs enter the catalog, so only they hold a name.
+    const reservation = delivery === 'parent' ? this.reserveName(parent, requestedName) : undefined
+    const path = joinAgentPath(this.pathOf(parent, ancestry.root), reservation?.name)
+    try {
+      return await this.startExternalNamed(spec, start, ancestry, reservation, path)
+    } finally {
+      reservation?.release()
+    }
+  }
+
+  /** Start one external execution, cataloging parent-delivered runs under their reserved name. */
+  private startExternalNamed(
+    spec: SubagentActivationSpec,
+    start: (request: ResolvedSubagentStartRequest) => Promise<SubagentRun>,
+    ancestry: Pick<MaterializeBase, 'root' | 'ancestors'>,
+    reservation: SiblingNameReservation | undefined,
+    path: string | undefined,
+  ): Promise<SubagentActivation> {
+    const { provider, delivery, childId: _childId, name: _name, ...request } = spec
+    const parent = request.parent
     return this.trackStartup(ancestry.root, spec.signal, async (signal) => {
       let activation: Activation | undefined
       try {
@@ -409,6 +458,7 @@ export class SubagentManager {
           kind: 'external',
           provider,
           ...ancestry,
+          path,
           signal,
           delivery,
           start: signal => start({
@@ -417,8 +467,8 @@ export class SubagentManager {
         })
         this.assertAdmitting(parent)
         signal.throwIfAborted()
-        if (delivery === 'parent') {
-          establishExternalCatalogChild(parent.session, activation.childId, spec.label)
+        if (reservation !== undefined) {
+          establishExternalCatalogChild(parent.session, activation.childId, spec.label, reservation.name)
         }
         this.accept(activation)
         return this.receipt(activation)
@@ -472,6 +522,34 @@ export class SubagentManager {
     return { root, ancestors: [...ancestors, creator.id] }
   }
 
+  /** Claim a sibling name against the creator's committed catalog and in-flight siblings. */
+  private reserveName(parent: Agent, requested: string | undefined): SiblingNameReservation {
+    return this.names.reserve(parent, catalogNames(this.host.catalogOf(parent.session)), requested)
+  }
+
+  /** Path of an exact live tree member: `''` for the root, undefined for unnamed history. */
+  private pathOf(member: Agent, root: Agent): string | undefined {
+    return member === root ? '' : this.resident.get(member.id)?.path
+  }
+
+  /**
+   * Report the model-facing names of a live member and its direct creator.
+   * @param agent - exact live root or resident tree member.
+   * @returns `lead` for the root, otherwise the member's and creator's names or Session ids.
+   * @throws when the caller has no active runtime owner.
+   */
+  namesOf(agent: Agent): SubagentMemberNames {
+    const root = this.rootOf(agent)
+    if (root === agent) return { self: ROOT_AGENT_NAME }
+    // rootOf returns another root only for the caller's own resident Activation.
+    const activation = this.resident.get(agent.id) as Activation
+    const parentId = activation.ancestors.at(-1) as SessionId
+    const parentPath = activation.path === undefined
+      ? parentId === root.id ? '' : this.resident.get(parentId)?.path
+      : parentAgentPath(activation.path)
+    return { self: agentAddress(activation.path, agent.id), parent: agentAddress(parentPath, parentId) }
+  }
+
   /**
    * Deliver to another agent in the subagent tree, restoring only the target when absent.
    * @param sender - exact live root or resident continuable Agent.
@@ -485,7 +563,7 @@ export class SubagentManager {
     const root = this.rootOf(sender)
     if (sender.id === targetId) throw new SubagentError('send_message requires another agent in the subagent tree', 'UNAUTHORIZED')
     this.assertAdmitting(sender)
-    const message = createAgentMessage(sender, content)
+    const message = createAgentMessage(sender, agentAddress(this.pathOf(sender, root), sender.id), content)
     const activation = this.resident.get(sender.id)
     return this.deliverToMember(root, targetId, [...message.content], {
       signal: options.signal, delivery: 'steer', source: message.source,
@@ -499,10 +577,14 @@ export class SubagentManager {
   }
 
   /** Resolve the live owner through verified creation edges without activating ancestors. */
-  private async resolveCreationAncestry(source: SessionObservation, signal: AbortSignal, root?: Agent): Promise<Pick<MaterializeBase, 'root' | 'ancestors'>> {
+  private async resolveCreationAncestry(
+    source: SessionObservation, signal: AbortSignal, root?: Agent,
+  ): Promise<Pick<MaterializeBase, 'root' | 'ancestors' | 'path'>> {
     const ancestors: SessionId[] = []
+    const names: (string | undefined)[] = []
     const seen = new Set<SessionId>([source.header.id])
     let { header, projections, inheritedEventCount } = source
+    const pathFromRoot = (): string | undefined => names.reduce<string | undefined>(joinAgentPath, '')
     while (true) {
       signal.throwIfAborted()
       const parentId = header.parentSession
@@ -511,11 +593,13 @@ export class SubagentManager {
       if (seen.has(parentId)) throw new SubagentError('cyclic subagent creation ancestry', 'UNAUTHORIZED')
       seen.add(parentId)
       using parent = await this.observeContinuation(parentId, signal)
-      if (!parent.projections?.values.subagentCatalog?.some(entry => entry.id === header.id)) {
+      const entry = parent.projections?.values.subagentCatalog?.find(entry => entry.id === header.id)
+      if (entry === undefined) {
         throw new SubagentError('subagent is absent from its creator catalog', 'UNAUTHORIZED')
       }
       ancestors.unshift(parentId)
-      if (parentId === root?.id) return { root, ancestors }
+      names.unshift('name' in entry ? entry.name : undefined)
+      if (parentId === root?.id) return { root, ancestors, path: pathFromRoot() }
       ;({ header, projections, inheritedEventCount } = parent)
     }
     if (root === undefined && ancestors.length > 0 && header.origin !== 'subagent') {
@@ -523,7 +607,7 @@ export class SubagentManager {
       if (owner === undefined || this.rootOf(owner) !== owner) {
         throw new SubagentError('subagent tree root is not live', 'CONTINUATION_UNAVAILABLE')
       }
-      return { root: owner, ancestors }
+      return { root: owner, ancestors, path: pathFromRoot() }
     }
     throw new SubagentError(`agent "${source.header.id}" is not a member of this subagent tree`, 'UNAUTHORIZED')
   }
@@ -793,6 +877,7 @@ export class SubagentManager {
       ...resource,
       root,
       ancestors: inputs.ancestors,
+      path: inputs.path,
       delivery: inputs.delivery ?? 'parent',
       result: Promise.withResolvers<SubagentResult>(),
       closing: undefined,
@@ -1028,7 +1113,8 @@ export class SubagentManager {
       const parent = this.ctx.agents.get(parentId)
       if (parent === undefined || this.rootOf(parent) !== activation.root) return
       const message = createSettlementMessage(
-        activation.childId, terminal, activation.kind === 'local', activation.kind === 'local' && activation.omitClosingText,
+        activation.childId, agentAddress(activation.path, activation.childId), terminal,
+        activation.kind === 'local', activation.kind === 'local' && activation.omitClosingText,
       )
       if (this.closingTeardownFor(parent) !== undefined) {
         parent.inject(message)
@@ -1059,6 +1145,7 @@ export class SubagentManager {
   private receipt(activation: Activation): SubagentActivation {
     return {
       childId: activation.childId,
+      name: agentAddress(activation.path, activation.childId),
       result: activation.result.promise,
       dispose: () => this.dispose(activation),
     }
@@ -1125,7 +1212,7 @@ export class SubagentManager {
           'NOT_RESUMABLE',
         )
       }
-      const { ancestors } = await this.resolveCreationAncestry(source, signal, root)
+      const { ancestors, path } = await this.resolveCreationAncestry(source, signal, root)
       let activation: Activation
       try {
         const projectedPreset = source.projections?.values.agentPreset
@@ -1139,6 +1226,7 @@ export class SubagentManager {
           provider: descriptor.provider,
           root,
           ancestors,
+          path,
           agentOptions: {
             ...descriptor.agentProvider !== undefined ? { provider: descriptor.agentProvider } : {},
             ...descriptor.agentModel !== undefined ? { model: descriptor.agentModel } : {},

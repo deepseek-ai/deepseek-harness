@@ -44,6 +44,15 @@ export interface ContextMenuTargetMap {
 export type ContextMenuTarget = {
   [K in keyof ContextMenuTargetMap]: { readonly kind: K; readonly value: ContextMenuTargetMap[K] }
 }[keyof ContextMenuTargetMap]
+/** Owner data for the shared ellipsis button; labels are already localized. */
+export interface ContextMenuButtonProps {
+  readonly target: ContextMenuTarget
+  readonly label: string
+  readonly className?: string | undefined
+  /** Use the compact toolbar control with a label tooltip; omission preserves caller-styled row button geometry without a tooltip. */
+  readonly size?: 'sm'
+}
+
 /** Pointer position in CSS pixels; keyboard gestures use the trigger's bottom edge. */
 export interface MenuPoint { readonly x: number; readonly y: number }
 /** Keyed icon renderer and optional image URL captured with the action. */
@@ -109,6 +118,8 @@ export interface MenuResolution {
 export interface ContextMenus {
   /** Captured target of the shared popup; null after dismissal. */
   readonly active: ObservableSnapshot<ContextMenuTarget | null>
+  /** Target kinds with registered contributions; updates synchronously on registration and withdrawal, without resolving actions. */
+  readonly registeredKinds: ObservableSnapshot<readonly (keyof ContextMenuTargetMap)[]>
   /**
    * Register for subsequent openings; unloading withdraws actions and aborts their queries. Duplicate ids within a target fail.
    * @param contribution - target provider.
@@ -116,11 +127,12 @@ export interface ContextMenus {
    */
   register<K extends keyof ContextMenuTargetMap>(contribution: MenuContribution<K>): () => void
   /**
-   * Open the single shared popup.
+   * Open the single shared popup; a repeated gesture on the same target within 4 CSS pixels closes it instead.
    * @param target - captured object.
    * @param point - viewport position.
+   * @param options - set by the shared `contextMenu.button`: its instance id replaces the repeated-gesture check.
    */
-  open(target: ContextMenuTarget, point: MenuPoint): void
+  open(target: ContextMenuTarget, point: MenuPoint, options?: { readonly button: string }): void
   /**
    * Resolve an embedded menu without opening the shared popup.
    * @param target - captured object.
