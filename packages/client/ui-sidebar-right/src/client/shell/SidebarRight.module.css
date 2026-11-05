@@ -96,6 +96,13 @@
   transition: border-left-color 0s linear var(--ds-transition-duration-slow);
 }
 
+/* A pane mounted by the opening starts with the divider, like one already mounted. */
+@starting-style {
+  .panel[data-sidebar-right-panel='fullscreen'][data-sidebar-right-opening] :global([data-dockkit-host='dock'][data-dockkit-column='0']) > :global([data-dockkit-pane]) {
+    border-left-color: var(--dsw-alias-border-l4);
+  }
+}
+
 /* No whole-box subtraction here: Electron drag regions are window geometry,
    not stacking, so a strip row inside this fullscreen content that marks itself
    `data-window-drag` (ui-dockkit) still owns the drag over its own box, and

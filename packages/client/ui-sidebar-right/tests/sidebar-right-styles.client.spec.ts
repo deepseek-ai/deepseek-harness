@@ -24,6 +24,8 @@ describe('SidebarRight.module.css', () => {
     expect(css).toMatch(new RegExp(String.raw`${fullscreen}\[data-sidebar-right-open\]${pane}\s*\{\s*border-left-color: transparent;\s*}`))
     expect(css).toMatch(new RegExp(String.raw`${fullscreen}\[data-sidebar-right-opening\]${pane}\s*\{`
       + String.raw`\s*transition: border-left-color 0s linear var\(--ds-transition-duration-slow\);\s*}`))
+    expect(css).toMatch(new RegExp(String.raw`@starting-style\s*\{\s*${fullscreen}\[data-sidebar-right-opening\]${pane}\s*\{`
+      + String.raw`\s*border-left-color: var\(--dsw-alias-border-l4\);\s*}\s*}`))
     expect(css).toMatch(new RegExp(String.raw`@media \(prefers-reduced-motion: reduce\)\s*\{[^{}]*`
       + String.raw`${fullscreen}\[data-sidebar-right-opening\]${pane}\s*\{\s*transition: none;\s*}`))
   })

@@ -626,7 +626,11 @@ describe('RightbarSeat presentation', () => {
     // The tab the opening seeds mounts under the mark, so it starts at the closed position.
     const host = element(h.view.container, "[data-dockkit-host='dock']")
     expect(panel.hasAttribute('data-sidebar-right-opening')).toBe(true)
-    fireEvent.transitionEnd(host)
+    // Short transitions inside an item, or other properties, do not end the slide.
+    fireEvent.transitionEnd(element(host, '[data-dockkit-pane]'), { propertyName: 'transform' })
+    fireEvent.transitionEnd(host, { propertyName: 'opacity' })
+    expect(panel.hasAttribute('data-sidebar-right-opening')).toBe(true)
+    fireEvent.transitionEnd(host, { propertyName: 'transform' })
     expect(panel.hasAttribute('data-sidebar-right-opening')).toBe(false)
     act(() => { h.actions.splitPane(SESSION) })
     expect(panel.hasAttribute('data-sidebar-right-opening')).toBe(false)
