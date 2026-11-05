@@ -82,7 +82,7 @@ it.each([
     expect(await rolloutDesktopRelease(f.plan, 100, operations)).toEqual({ before: 100, after: 100 })
     expect(await rolloutDesktopRelease(f.plan, undefined, operations)).toEqual({ before: 100, after: 100 })
     expect(mock.writes).toHaveLength(2)
-    expect(new Set(mock.reads)).toEqual(new Set([f.plan.upload.artifacts[0]!.key]))
+    expect(new Set(mock.reads)).toEqual(new Set([f.plan.upload.artifacts[0].key]))
     for (const [index, value] of mock.writes.entries()) {
       expect(load(value)).toEqual({ ...original, stagingPercentage: index === 0 ? 30 : 100 })
     }

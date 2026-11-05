@@ -1,8 +1,8 @@
 /** Run only in a clean checkout after installing this workspace's production dependencies. */
-import '../src/resolve-desktop-publish-ci.ts'
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import '../src/resolve-desktop-publish-ci.ts'
 import { prepareDesktopRolloutCi } from '../src/publish-desktop-rollout-ci.ts'
 import { desktopReleasesRoot } from '../src/desktop-releases-root.ts'
 import { teo } from 'tencentcloud-sdk-nodejs-teo'

@@ -45,7 +45,7 @@ jobs:
         id: preflight
         env:
           GH_TOKEN: ${{ github.token }}
-        run: node apps/desktop/scripts/preflight-desktop-publish.mjs
+        run: node apps/desktop-publisher/src/preflight-desktop-publish.mjs
       - uses: pnpm/action-setup@v5.0.0
       - uses: actions/setup-node@v7.0.0
         with:
@@ -82,28 +82,28 @@ jobs:
         with:
           persist-credentials: false
           clean: false
-          path: desktop-publisher
+          path: desktop-rollout
       - uses: pnpm/action-setup@v5.0.0
         with:
-          package_json_file: desktop-publisher/package.json
+          package_json_file: desktop-rollout/package.json
           dest: ${{ runner.temp }}/publish-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
       - uses: actions/setup-node@v7.0.0
         with:
           node-version: '24'
       - name: Check local publication configuration before dependency installation
-        working-directory: desktop-publisher
-        run: node apps/desktop/scripts/preflight-desktop-publish-local.mjs
+        working-directory: desktop-rollout
+        run: node apps/desktop-publisher/src/preflight-desktop-publish-local.mjs
       - run: pnpm --filter @deepseek-ai/dsh-desktop-publisher --fail-if-no-match install --prod --frozen-lockfile --ignore-scripts
-        working-directory: desktop-publisher
+        working-directory: desktop-rollout
       - name: Resolve retained package and approval environment
         id: local
-        working-directory: desktop-publisher/apps/desktop-publisher
+        working-directory: desktop-rollout/apps/desktop-publisher
         env:
           GH_TOKEN: ${{ github.token }}
         run: node --import tsx src/publish-desktop-rollout-ci.ts route
       - name: Verify initial publication and metadata without upload credentials
         id: check
-        working-directory: desktop-publisher/apps/desktop-publisher
+        working-directory: desktop-rollout/apps/desktop-publisher
         env:
           DESKTOP_PUBLISH_ROUTE: ${{ steps.local.outputs.route }}
         run: node --import tsx src/publish-desktop-rollout-ci.ts check
@@ -129,26 +129,26 @@ jobs:
         with:
           persist-credentials: false
           clean: false
-          path: desktop-publisher
+          path: desktop-rollout
       - uses: pnpm/action-setup@v5.0.0
         with:
-          package_json_file: desktop-publisher/package.json
+          package_json_file: desktop-rollout/package.json
           dest: ${{ runner.temp }}/publish-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
       - uses: actions/setup-node@v7.0.0
         with:
           node-version: '24'
       - name: Check local publication configuration before dependency installation
-        working-directory: desktop-publisher
-        run: node apps/desktop/scripts/preflight-desktop-publish-local.mjs
+        working-directory: desktop-rollout
+        run: node apps/desktop-publisher/src/preflight-desktop-publish-local.mjs
       - run: pnpm --filter @deepseek-ai/dsh-desktop-publisher --fail-if-no-match install --prod --frozen-lockfile --ignore-scripts
-        working-directory: desktop-publisher
+        working-directory: desktop-rollout
       - name: Verify initial publication and metadata without upload credentials
         id: check
-        working-directory: desktop-publisher/apps/desktop-publisher
+        working-directory: desktop-rollout/apps/desktop-publisher
         run: node --import tsx src/publish-desktop-rollout-ci.ts check
       - name: Apply rollout to the published feed
         id: publish
-        working-directory: desktop-publisher/apps/desktop-publisher
+        working-directory: desktop-rollout/apps/desktop-publisher
         run: node --import tsx src/publish-desktop-rollout-ci.ts apply
       - name: Retain publication audit
         continue-on-error: true
@@ -181,22 +181,22 @@ jobs:
         with:
           persist-credentials: false
           clean: false
-          path: website-publisher
+          path: website-rollout
       - uses: pnpm/action-setup@v5.0.0
         with:
-          package_json_file: website-publisher/package.json
+          package_json_file: website-rollout/package.json
           dest: ${{ runner.temp }}/website-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
       - uses: actions/setup-node@v7.0.0
         with:
           node-version: '24'
       - name: Check local publication configuration
-        working-directory: website-publisher
-        run: node apps/desktop/scripts/preflight-desktop-publish-local.mjs
+        working-directory: website-rollout
+        run: node apps/desktop-publisher/src/preflight-desktop-publish-local.mjs
       - run: pnpm --filter @deepseek-ai/dsh-desktop-publisher --fail-if-no-match install --prod --frozen-lockfile --ignore-scripts
-        working-directory: website-publisher
+        working-directory: website-rollout
       - name: Upload website installer
         id: website
-        working-directory: website-publisher/apps/desktop-publisher
+        working-directory: website-rollout/apps/desktop-publisher
         run: node --import tsx src/publish-desktop-rollout-ci.ts website-upload
       - name: Archive website feed verification
         if: always() && steps.website.outputs.rollout-record != ''
@@ -236,22 +236,22 @@ jobs:
         with:
           persist-credentials: false
           clean: false
-          path: website-publisher
+          path: website-rollout
       - uses: pnpm/action-setup@v5.0.0
         with:
-          package_json_file: website-publisher/package.json
+          package_json_file: website-rollout/package.json
           dest: ${{ runner.temp }}/website-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
       - uses: actions/setup-node@v7.0.0
         with:
           node-version: '24'
       - name: Check local publication configuration
-        working-directory: website-publisher
-        run: node apps/desktop/scripts/preflight-desktop-publish-local.mjs
+        working-directory: website-rollout
+        run: node apps/desktop-publisher/src/preflight-desktop-publish-local.mjs
       - run: pnpm --filter @deepseek-ai/dsh-desktop-publisher --fail-if-no-match install --prod --frozen-lockfile --ignore-scripts
-        working-directory: website-publisher
+        working-directory: website-rollout
       - name: Recover and observe website cache purge
         id: website
-        working-directory: website-publisher/apps/desktop-publisher
+        working-directory: website-rollout/apps/desktop-publisher
         run: node --import tsx src/publish-desktop-rollout-ci.ts website-purge
       - name: Archive website publication diagnostics
         if: always() && steps.website.outputs.record != ''

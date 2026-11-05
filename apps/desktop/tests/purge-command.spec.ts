@@ -31,7 +31,11 @@ it('forwards the documented pnpm purge command through both package scripts to t
     await symlink(join(root, 'node_modules', dependency), join(directory, 'node_modules', dependency), 'junction')
   }
   await mkdir(join(directory, 'node_modules/@deepseek-ai'), { recursive: true })
-  await symlink(join(root, 'apps/desktop-publisher'), join(directory, 'node_modules/@deepseek-ai/dsh-desktop-publisher'), 'junction')
+  const publisher = join(directory, 'node_modules/@deepseek-ai/dsh-desktop-publisher')
+  await mkdir(publisher)
+  await writeFile(join(publisher, 'package.json'), JSON.stringify({ type: 'module', exports: { './*': './*' } }))
+  await copyFile(join(root, 'apps/desktop-publisher/src/desktop-auto-update-environment.mjs'), join(publisher, 'desktop-auto-update-environment.mjs'))
+  await writeFile(join(publisher, 'desktop-cos.ts'), "export const createDesktopCos = () => { throw new Error('unexpected COS') }")
   await copyFile(join(root, 'apps/desktop/scripts/upload-target.ts'), join(scripts, 'upload-target.ts'))
   for (const filename of ['desktop-build-paths.mjs']) {
     await copyFile(join(root, 'apps/desktop/scripts', filename), join(scripts, filename))
@@ -39,7 +43,6 @@ it('forwards the documented pnpm purge command through both package scripts to t
   // Only command forwarding and parsing are under test; all external work fails closed.
   const stubs = {
     'desktop-package-environment.mjs': "export const loadDesktopPackageEnvironment = () => ({ DSH_DESKTOP_AUTO_UPDATE_ENV: 'production' })",
-    'desktop-cos.ts': "export const createDesktopCos = () => { throw new Error('unexpected COS') }",
     'desktop-upload-plan.ts': "export const createDesktopUploadPlan = () => { throw new Error('unexpected installer read') }",
     'desktop-upload-run.ts': "export const uploadDesktopRelease = () => { throw new Error('unexpected upload') }",
     'desktop-release-tag.ts': "export const desktopReleaseTag = () => { throw new Error('unexpected tag') }; export const tagDesktopRelease = desktopReleaseTag",

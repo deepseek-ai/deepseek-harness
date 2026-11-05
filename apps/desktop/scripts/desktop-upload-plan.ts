@@ -1,11 +1,12 @@
 /** Validate packaged Desktop update artifacts before any network upload begins. */
 
+import type { DesktopPackageTargetName } from './package-target.ts'
+import type { DesktopUploadArtifact, DesktopUploadPlan } from '@deepseek-ai/dsh-desktop-publisher/desktop-upload-types.ts'
 import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import { basename, join, resolve } from 'node:path'
 import { dump, load } from 'js-yaml'
-import type { DesktopPackageTargetName } from './package-target.ts'
 import {
   desktopBuildRecordFilename,
   desktopLatestInstallerFilename,
@@ -14,6 +15,8 @@ import {
 } from '@deepseek-ai/dsh-desktop-publisher/desktop-auto-update-environment.mjs'
 import { desktopTargetBuildPaths } from './desktop-build-paths.mjs'
 import { validateDesktopBuildVersion } from './desktop-build-version.mjs'
+
+export type { DesktopUploadArtifact, DesktopUploadPlan } from '@deepseek-ai/dsh-desktop-publisher/desktop-upload-types.ts'
 
 const APP_ROOT = resolve(import.meta.dirname, '..')
 const REPOSITORY_ROOT = resolve(APP_ROOT, '..', '..')
@@ -26,9 +29,6 @@ const TARGETS = {
   readonly arch: string
   readonly os: string
 }>
-
-import type { DesktopUploadArtifact, DesktopUploadPlan } from '@deepseek-ai/dsh-desktop-publisher/desktop-upload-types.ts'
-export type { DesktopUploadArtifact, DesktopUploadPlan } from '@deepseek-ai/dsh-desktop-publisher/desktop-upload-types.ts'
 
 /** Filesystem and environment inputs used to validate one upload. */
 export interface DesktopUploadPlanOptions {

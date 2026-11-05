@@ -45,7 +45,7 @@ jobs:
         id: preflight
         env:
           GH_TOKEN: ${{ github.token }}
-        run: node apps/desktop/scripts/preflight-desktop-publish.mjs
+        run: node apps/desktop-publisher/src/preflight-desktop-publish.mjs
       - uses: pnpm/action-setup@v5.0.0
       - uses: actions/setup-node@v7.0.0
         with:
@@ -91,7 +91,7 @@ jobs:
           node-version: '24'
       - name: Check local publication configuration before dependency installation
         working-directory: desktop-publisher
-        run: node apps/desktop/scripts/preflight-desktop-publish-local.mjs
+        run: node apps/desktop-publisher/src/preflight-desktop-publish-local.mjs
       - run: pnpm install --frozen-lockfile
         working-directory: desktop-publisher
       - name: Resolve retained package and approval environment
@@ -136,7 +136,7 @@ jobs:
           node-version: '24'
       - name: Check local publication configuration before dependency installation
         working-directory: desktop-publisher
-        run: node apps/desktop/scripts/preflight-desktop-publish-local.mjs
+        run: node apps/desktop-publisher/src/preflight-desktop-publish-local.mjs
       - run: pnpm install --frozen-lockfile
         working-directory: desktop-publisher
       - name: Verify local package without upload credentials
@@ -204,7 +204,7 @@ jobs:
           node-version: '24'
       - name: Check local publication configuration
         working-directory: website-publisher
-        run: node apps/desktop/scripts/preflight-desktop-publish-local.mjs
+        run: node apps/desktop-publisher/src/preflight-desktop-publish-local.mjs
       - run: pnpm install --frozen-lockfile
         working-directory: website-publisher
       - name: Upload website installer
@@ -249,7 +249,7 @@ jobs:
           node-version: '24'
       - name: Check local publication configuration
         working-directory: website-publisher
-        run: node apps/desktop/scripts/preflight-desktop-publish-local.mjs
+        run: node apps/desktop-publisher/src/preflight-desktop-publish-local.mjs
       - run: pnpm install --frozen-lockfile
         working-directory: website-publisher
       - name: Recover and observe website cache purge

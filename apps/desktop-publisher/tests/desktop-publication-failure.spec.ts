@@ -24,6 +24,7 @@ it('does not retain provider bodies, unknown messages, JSON input or invalid fie
   expect(desktopPublicationFailure({ code: 'AccessDenied', statusCode: 403 }, 'upload').message).toContain('HTTP 403')
 })
 
+// These repository integration tests execute Desktop CLIs; the publisher runtime never imports them.
 it('prints rollback usage through the real CLI before any audit or remote operation', () => {
   const result = spawnSync(process.execPath, ['--import', 'tsx/esm',
     fileURLToPath(new URL('../../desktop/scripts/rollback-desktop-channel.ts', import.meta.url))], { encoding: 'utf8', timeout: 30_000 })
@@ -56,7 +57,6 @@ it('prints structured archival failure through the real CLI', () => {
   expect(JSON.parse(result.stderr)).toEqual({ phase: 'artifact archival', code: 'validation',
     message: 'desktop archival: invalid ZIP output settings' })
 })
-
 
 it.each(['percentage cannot decrease; inspect the current rollout', 'feed changed before write; inspect and retry',
   'written feed is unconfirmed; inspect before retrying'])('retains rollout recovery instructions: %s', (message) => {

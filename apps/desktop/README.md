@@ -243,6 +243,7 @@ Use the dedicated guides for build and release operations. Shared Windows runner
 - [Desktop packaging](packaging/README.md): local and Actions builds, versions, deployment settings, artifacts, logs and verification.
 - [Windows signing and runner operations](windows-signing/README.md): machine setup, accepted isolation risks, signing credentials, token failures and cache maintenance.
 - [Desktop publication](publishing/README.md): upload credentials, release identity, fixed downloads, update feeds and upload recovery.
+- [Publisher workspace](../desktop-publisher/README.md): dependency ownership and isolated rollout installation.
 
 <a id="windows-uninstall-rules"></a>
 

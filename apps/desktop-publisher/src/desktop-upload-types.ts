@@ -31,7 +31,6 @@ export interface DesktopUploadPlan {
   readonly dirty?: boolean
 }
 
-
 /** A publication operation targeting exactly one metadata object or installer. */
 export type DesktopSingleUploadPlan = Omit<DesktopUploadPlan, 'artifacts'> & {
   readonly artifacts: readonly [DesktopUploadArtifact]

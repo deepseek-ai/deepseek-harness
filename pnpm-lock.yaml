@@ -734,9 +734,6 @@ importers:
         specifier: ^8.21.3
         version: 8.21.3
     devDependencies:
-      '@deepseek-ai/dsh-desktop-publisher':
-        specifier: workspace:*
-        version: link:../desktop-publisher
       '@deepseek-ai/dsh-app-boot':
         specifier: workspace:*
         version: link:../../packages/boot/app-boot
@@ -767,6 +764,9 @@ importers:
       '@deepseek-ai/dsh-deepseek-account':
         specifier: workspace:*
         version: link:../../packages/credentials/deepseek-account
+      '@deepseek-ai/dsh-desktop-publisher':
+        specifier: workspace:*
+        version: link:../desktop-publisher
       '@deepseek-ai/dsh-home-paths':
         specifier: workspace:*
         version: link:../../packages/util/home-paths
@@ -846,27 +846,6 @@ importers:
         specifier: 4.6.6
         version: 4.6.6
 
-  apps/desktop-publisher:
-    dependencies:
-      zod:
-        specifier: 4.6.6
-        version: 4.6.6
-      js-yaml:
-        specifier: ^4.3.2
-        version: 4.3.2
-      semver:
-        specifier: ^7.8.5
-        version: 7.8.5
-      cos-nodejs-sdk-v5:
-        specifier: 3.0.0
-        version: 3.0.0
-      tencentcloud-sdk-nodejs-teo:
-        specifier: 4.1.330
-        version: 4.1.330(supports-color@9.4.0)
-      tsx:
-        specifier: ^4.23.13
-        version: 4.23.13
-
   apps/desktop-host:
     dependencies:
       '@deepseek-ai/cordis':
@@ -927,6 +906,27 @@ importers:
       '@deepseek-ai/dsh-util-workspace-path':
         specifier: workspace:*
         version: link:../../packages/util/workspace-path
+
+  apps/desktop-publisher:
+    dependencies:
+      cos-nodejs-sdk-v5:
+        specifier: 3.0.0
+        version: 3.0.0
+      js-yaml:
+        specifier: ^4.3.2
+        version: 4.3.2
+      semver:
+        specifier: ^7.8.5
+        version: 7.8.5
+      tencentcloud-sdk-nodejs-teo:
+        specifier: 4.1.330
+        version: 4.1.330(supports-color@9.4.0)
+      tsx:
+        specifier: ^4.23.13
+        version: 4.23.13
+      zod:
+        specifier: 4.6.6
+        version: 4.6.6
 
   apps/plugin-market-generator:
     dependencies:

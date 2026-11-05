@@ -1,10 +1,10 @@
 /** Submit one production fixed-installer cache purge to EdgeOne. */
 import type { teo } from 'tencentcloud-sdk-nodejs-teo'
 import type { DesktopPackageTargetName } from './package-target.ts'
+import type { DesktopPurgeConfig } from '@deepseek-ai/dsh-desktop-publisher/desktop-purge-types.ts'
 import { desktopLatestInstallerFilename, requiredEnvironmentValue, resolveDesktopAutoUpdateEnvironment, resolveDesktopUploadConfig } from '@deepseek-ai/dsh-desktop-publisher/desktop-auto-update-environment.mjs'
 import { desktopTargetPlatform } from './desktop-build-paths.mjs'
 
-import type { DesktopPurgeConfig } from '@deepseek-ai/dsh-desktop-publisher/desktop-purge-types.ts'
 export type { DesktopPurgeConfig } from '@deepseek-ai/dsh-desktop-publisher/desktop-purge-types.ts'
 
 /** The single SDK operation needed to submit a purge. */

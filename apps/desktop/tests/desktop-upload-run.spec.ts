@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { createDesktopCos, DESKTOP_COS_REGION } from '@deepseek-ai/dsh-desktop-publisher/desktop-cos.ts'
 import { uploadDesktopRelease } from '../scripts/desktop-upload-run.ts'
 import type { DesktopUploadPlan } from '../scripts/desktop-upload-plan.ts'
+// Repository-only fixture: deliberately excluded from the publisher runtime exports.
 import { answer, cosError, startCosLoopback, type CosLoopback, type CosLoopbackRequest } from '../../desktop-publisher/tests/cos-loopback.ts'
 
 const roots: string[] = []

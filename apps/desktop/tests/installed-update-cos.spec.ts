@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import type COS from 'cos-nodejs-sdk-v5'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createInstalledUpdateCos } from '../scripts/installed-update-cos.ts'
+// Repository-only fixture: deliberately excluded from the publisher runtime exports.
 import { answer, cosError, startCosLoopback, type CosLoopback, type CosLoopbackResponder } from '../../desktop-publisher/tests/cos-loopback.ts'
 
 const state = vi.hoisted(() => ({
