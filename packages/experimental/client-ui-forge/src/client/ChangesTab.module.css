@@ -459,6 +459,11 @@
   padding: 0 16px 0 6px;
 }
 
+/* Side-by-side cells have no sign column, so commentable code keeps one as an empty lane for the comment plus. */
+.code[data-split][data-review] .text {
+  padding-left: calc(1.4em + 6px);
+}
+
 .add {
   --forge-diff-gutter: var(--dsw-alias-file-diff-added-gutter);
   --forge-diff-marker: var(--dsw-alias-file-diff-added-marker);

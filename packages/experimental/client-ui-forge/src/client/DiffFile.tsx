@@ -151,7 +151,8 @@ function Lines({ file, text, open, onExpand, split, wrap, review, visible, comme
   const [selection, setSelection] = useState<ReviewSelection | null>(null)
   const root = useRef<HTMLDivElement>(null)
   const origin = useRef<{ side: 'L' | 'R'; line: number } | null>(null)
-  const dragging = useRef<'gutter' | 'text' | null>(null)
+  // `add` is a gutter drag that began on a row's hover plus and opens the editor when the pointer is released.
+  const dragging = useRef<'gutter' | 'add' | 'text' | null>(null)
   const [selecting, setSelecting] = useState(false)
   const [editing, setEditing] = useState(false)
   const [nativeSide, setNativeSide] = useState<'L' | 'R' | null>(null)
@@ -190,10 +191,12 @@ function Lines({ file, text, open, onExpand, split, wrap, review, visible, comme
   }, [nativeSide])
   useEffect(() => {
     if (!selecting) return
-    const finish = (): void => {
+    const finish = (event: PointerEvent): void => {
       if (dragging.current === 'text') nativeSelection()
+      const compose = dragging.current === 'add' && event.type === 'pointerup'
       dragging.current = null
       setSelecting(false)
+      if (compose) setEditing(true)
     }
     window.addEventListener('pointerup', finish)
     window.addEventListener('pointercancel', finish)
@@ -215,14 +218,19 @@ function Lines({ file, text, open, onExpand, split, wrap, review, visible, comme
   }
   const selected = (side: 'L' | 'R', line: number | null): boolean => line !== null && selection !== null
     && selection.comment.side === side && line >= selection.comment.startLine && line <= selection.comment.endLine
-  const number = (side: 'L' | 'R', line: number | null): ReactNode => {
+  // `hover` adds the mouse shortcut: a plus shown while a hovering pointer is over this side of the row.
+  const number = (side: 'L' | 'R', line: number | null, hover: boolean): ReactNode => {
     if (line === null || review === undefined || !file.hunks.some((hunk) => {
       const start = side === 'L' ? hunk.oldStart : hunk.newStart
       return line >= start && line < start + (side === 'L' ? hunk.oldLines : hunk.newLines)
     })) {
       return <span className={css.number}>{line ?? ''}</span>
     }
-    return <span className={clsx(css.number, reviewCss.gutter)}>
+    const plus = !selecting && !editing && selection?.comment.side === side && selection.comment.endLine === line
+    return <span className={clsx(css.number, reviewCss.gutter)}
+      onPointerEnter={(event) => {
+        if ((dragging.current === 'gutter' || dragging.current === 'add') && origin.current?.side === side && event.buttons === 1) choose(side, line, true)
+      }}>
       <button type="button" className={reviewCss.line}
         aria-label={t('review.selectLine', { line: `${side}${line}` })} aria-pressed={selected(side, line)}
         onPointerDown={(event) => {
@@ -234,14 +242,13 @@ function Lines({ file, text, open, onExpand, split, wrap, review, visible, comme
           setSelecting(true)
           choose(side, line, event.shiftKey)
         }}
-        onPointerEnter={(event) => { if (dragging.current === 'gutter' && origin.current?.side === side && event.buttons === 1) choose(side, line, true) }}
         onClick={(event) => {
           if (event.detail !== 0) return
           window.getSelection()?.removeAllRanges()
           setNativeSide(null)
           choose(side, line, event.shiftKey)
         }}>{line}</button>
-      {!selecting && !editing && selection?.comment.side === side && selection.comment.endLine === line && (
+      {plus && (
         <Tooltip label={t('review.addComment')} portal>
           <button type="button" className={reviewCss.add} aria-label={t('review.addComment')}
             onPointerDown={(event) => { event.preventDefault() }} onClick={() => { setEditing(true) }}>
@@ -249,13 +256,28 @@ function Lines({ file, text, open, onExpand, split, wrap, review, visible, comme
           </button>
         </Tooltip>
       )}
+      {/* Keyboard and assistive technology reach the same editor through the line button and the labeled plus above. */}
+      {hover && !plus && !editing && (
+        <span className={reviewCss.hoverAdd} aria-hidden="true" data-review-add={`${side}${line}`}
+          onPointerDown={(event) => {
+            if (event.button !== 0) return
+            event.preventDefault()
+            window.getSelection()?.removeAllRanges()
+            setNativeSide(null)
+            dragging.current = 'add'
+            setSelecting(true)
+            choose(side, line, event.shiftKey)
+          }}>
+          <IconPlusOutlineRegular size={14} />
+        </span>
+      )}
     </span>
   }
   const cell = (value: SplitCell | null, spans: SideSpans, side: 'L' | 'R'): ReactNode => value === null
     ? <span className={clsx(css.cell, css.empty)} data-diff-side={side} />
     : <span className={clsx(css.cell, css[value.kind], selected(side, value.no) && (editing || nativeSide === null) && reviewCss.selected)}
       data-diff-side={side}>
-      {number(side, value.no)}<Code text={value.text} spans={spans?.get(value.no)} old={side === 'L' ? value.no : null} next={side === 'R' ? value.no : null} />
+      {number(side, value.no, true)}<Code text={value.text} spans={spans?.get(value.no)} old={side === 'L' ? value.no : null} next={side === 'R' ? value.no : null} />
     </span>
   const rows: ReactNode[] = []
   let inserted = false
@@ -301,7 +323,7 @@ function Lines({ file, text, open, onExpand, split, wrap, review, visible, comme
     } else {
       for (const [index, row] of segment.rows.entries()) {
         rows.push(<div key={`${at}-${index}`} className={clsx(css.line, css[row.kind], (selected('L', row.old) || selected('R', row.new)) && (editing || nativeSide === null) && reviewCss.selected)} data-diff-line={row.kind}>
-          {singleSide !== 'R' && number('L', row.old)}{singleSide !== 'L' && number('R', row.new)}<span className={css.sign}>{SIGN[row.kind]}</span>
+          {singleSide !== 'R' && number('L', row.old, row.kind === 'del')}{singleSide !== 'L' && number('R', row.new, row.kind !== 'del')}<span className={css.sign}>{SIGN[row.kind]}</span>
           <Code text={row.text} old={row.old} next={row.new} spans={row.kind === 'del' ? segment.old?.get(row.old) : segment.new?.get(row.new)} />
         </div>)
         if (!inserted && endsAt(row.old, row.new)) {
@@ -317,6 +339,7 @@ function Lines({ file, text, open, onExpand, split, wrap, review, visible, comme
   }
   if (!inserted) rows.push(editor)
   return <div ref={root} className={css.code} style={style} data-single-side={singleSide ?? undefined} data-split={columns ? '' : undefined} data-wrap={wrap ? '' : undefined}
+    data-review={review === undefined ? undefined : ''}
     data-native-side={nativeSide ?? undefined}
     onPointerDownCapture={(event) => {
       if (event.button !== 0 || !(event.target instanceof Node)) return

@@ -133,6 +133,44 @@ it('keeps shift text selection and allows ordinary text selection when review ac
   m.rerender(<DiffFile {...withoutReview} />)
   m.select('R', 3, 4)
   expect(m.queryByRole('button', { name: 'Add comment' })).toBeNull()
+  expect(m.container.querySelector('[data-review-add]')).toBeNull()
+})
+
+it('opens the editor from a hover plus in one press, extending the range on its side while dragging', () => {
+  const m = mount()
+  const plus = (name: string): HTMLElement => {
+    const element = m.container.querySelector<HTMLElement>(`[data-review-add="${name}"]`)
+    if (element === null) throw new Error(`missing hover plus ${name}`)
+    return element
+  }
+  expect(plus('L3').getAttribute('aria-hidden')).toBe('true')
+  fireEvent.pointerDown(plus('R3'), { button: 2 })
+  expect(m.line('R3').getAttribute('aria-pressed')).toBe('false')
+  fireEvent.pointerDown(plus('R3'), { button: 0 })
+  fireEvent.pointerOver(m.line('L4'), { buttons: 1 })
+  expect(m.line('L4').getAttribute('aria-pressed')).toBe('false')
+  fireEvent.pointerOver(plus('R4'), { buttons: 1 })
+  expect(m.line('R4').getAttribute('aria-pressed')).toBe('true')
+  fireEvent.pointerUp(window)
+  expect(m.getByRole('region', { name: 'Comment on R3–4' })).toBeTruthy()
+  expect(m.container.querySelector('[data-review-add]')).toBeNull()
+  fireEvent.click(m.getByRole('button', { name: 'Cancel' }))
+  fireEvent.pointerDown(plus('L2'), { button: 0 })
+  fireEvent.pointerCancel(window)
+  expect(m.queryByRole('textbox')).toBeNull()
+  expect(m.line('L2').getAttribute('aria-pressed')).toBe('true')
+  expect(m.container.querySelector('[data-review-add="L2"]')).toBeNull()
+  fireEvent.click(m.getByRole('button', { name: 'Add comment' }))
+  expect(m.getByRole('region', { name: 'Comment on L2' })).toBeTruthy()
+})
+
+it('offers one hover plus per unified row, on the side its line belongs to', () => {
+  const m = mount({ split: false })
+  expect(Array.from(m.container.querySelectorAll('[data-review-add]'), element => element.getAttribute('data-review-add')))
+    .toEqual(['R2', 'L3', 'L4', 'R3', 'R4', 'R5'])
+  fireEvent.pointerDown(m.container.querySelector('[data-review-add="L3"]')!, { button: 0 })
+  fireEvent.pointerUp(window)
+  expect(m.getByRole('region', { name: 'Comment on L3' })).toBeTruthy()
 })
 
 it('refuses native and gutter ranges spanning collapsed context between hunks', () => {
