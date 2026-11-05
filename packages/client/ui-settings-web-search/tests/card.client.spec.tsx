@@ -123,11 +123,10 @@ describe('WebSearchCard billing', () => {
     expect(billingMenu(en.searchSection).textContent).toBe('Automatic')
     expect(billingMenu(en.fetchSection).textContent).toBe('Signed-in DeepSeek account')
     expect(region(en.searchSection).getByText(
-      "Uses the conversation's DeepSeek account or API key when it chats on DeepSeek; on other models, the DeepSeek API key,"
-      + ' or the signed-in DeepSeek account without one.',
+      "Follows the conversation's DeepSeek account or API key; with other models, uses the API key first, then the signed-in account.",
       { exact: true },
     )).toBeTruthy()
-    expect(region(en.fetchSection).getByText('Bills the signed-in DeepSeek account. Unavailable when signed out.', { exact: true }))
+    expect(region(en.fetchSection).getByText('Requires signing in to DeepSeek.', { exact: true }))
       .toBeTruthy()
     expect(screen.queryByText(/^Overridden by /)).toBeNull()
   })
@@ -164,7 +163,7 @@ describe('WebSearchCard billing', () => {
   it('explains API-key billing', () => {
     renderPage({ ...shipped(), searchBilling: { value: 'api-key', overridden: true, advancedOverride: [] } })
     expect(billingMenu(en.searchSection).textContent).toBe('DeepSeek API key')
-    expect(region(en.searchSection).getByText('Bills the DeepSeek API key set on the Models page. Unavailable without a key.', { exact: true }))
+    expect(region(en.searchSection).getByText('Uses the API key from the Models page; set one first.', { exact: true }))
       .toBeTruthy()
   })
 
@@ -191,16 +190,15 @@ describe('WebSearchCard billing', () => {
     expect([zh.billing, zh.billingAuto, zh.billingAccount, zh.billingApiKey])
       .toEqual(['计费方式', '自动', '已登录的 DeepSeek 账号', 'DeepSeek API Key'])
     expect([zh.billingAutoHint, zh.billingAccountHint, zh.billingApiKeyHint, zh.billingAdvancedOverride]).toEqual([
-      '会话使用 DeepSeek 模型时，沿用该会话的账号或 API Key；使用其他模型时，先用 DeepSeek API Key，没有则用已登录的 DeepSeek 账号。',
-      '由已登录的 DeepSeek 账号计费，未登录时不可用。',
-      '由模型页中配置的 DeepSeek API Key 计费，未配置时不可用。',
+      '跟随当前会话的 DeepSeek 账号或 API Key；会话用其他模型时，优先用 API Key，没有则用已登录账号。',
+      '需要先登录 DeepSeek 账号。',
+      '使用「模型」页配置的 API Key，需要先配置。',
       '已被 {fields} 覆盖',
     ])
     expect([en.billingAutoHint, en.billingAccountHint, en.billingApiKeyHint, en.billingAdvancedOverride]).toEqual([
-      "Uses the conversation's DeepSeek account or API key when it chats on DeepSeek; on other models, the DeepSeek API key, or the"
-      + ' signed-in DeepSeek account without one.',
-      'Bills the signed-in DeepSeek account. Unavailable when signed out.',
-      'Bills the DeepSeek API key set on the Models page. Unavailable without a key.',
+      "Follows the conversation's DeepSeek account or API key; with other models, uses the API key first, then the signed-in account.",
+      'Requires signing in to DeepSeek.',
+      'Uses the API key from the Models page; set one first.',
       'Overridden by {fields}',
     ])
   })

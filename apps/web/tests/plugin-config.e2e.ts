@@ -182,8 +182,8 @@ describe('web e2e: plugin configuration pages', () => {
     expect(await panel.getByRole('link', { name: '网页搜索与获取指南', exact: true }).getAttribute('href'))
       .toBe('https://api-docs.deepseek.com/zh-cn/guides/search')
     // Each section shows the description its selected provider registered with the Host, in the active language.
-    expect(await searchSection.getByText('直接请求搜索接口返回标题、URL 与摘要，无需额外调用模型。会产生费用，按「计费方式」向 DeepSeek 账号或 DeepSeek API Key 计费，计费规则详见「网页搜索与获取指南」。', { exact: true }).count()).toBe(1)
-    expect(await fetchSection.getByText('本机直接请求，免 API Key 与计费，可访问内网和本机。仅解码 HTML、JSON 等文本，不执行 JavaScript、不带登录态，不支持 PDF；也可以试试 DeepSeek Fetch API', { exact: true }).count()).toBe(1)
+    expect(await searchSection.getByText('会产生费用，由「计费方式」选定的账号或 API Key 支付。', { exact: true }).count()).toBe(1)
+    expect(await fetchSection.getByText('免费，可访问内网和本机。不支持需要 JavaScript 或登录的页面，也不支持 PDF。', { exact: true }).count()).toBe(1)
     // The Fetch API suggestion is text, not an action.
     expect(await fetchSection.getByRole('button').count()).toBe(1)
     expect(await save.isDisabled()).toBe(true)
@@ -201,12 +201,12 @@ describe('web e2e: plugin configuration pages', () => {
 
     // The Fetch API shows only its billing menu, and the page saves the billing with the selection.
     await choose(fetchMenu, 'DeepSeek Fetch API')
-    expect(await fetchSection.getByText('由 DeepSeek 服务端抓取公网页面并返回 Markdown，无法访问内网和本机。会产生费用，按「计费方式」向 DeepSeek 账号或 DeepSeek API Key 计费，计费规则详见「网页搜索与获取指南」。', { exact: true }).count()).toBe(1)
+    expect(await fetchSection.getByText('无法访问内网和本机。会产生费用，由「计费方式」选定的账号或 API Key 支付。', { exact: true }).count()).toBe(1)
     expect(await fetchSection.getByRole('textbox').count()).toBe(0)
     expect(await fetchSection.getByRole('button').count()).toBe(2)
     const fetchBilling = panel.locator('#plugin-config-web-fetch-billing')
     await choose(fetchBilling, 'DeepSeek API Key')
-    await fetchSection.getByText('由模型页中配置的 DeepSeek API Key 计费，未配置时不可用。', { exact: true }).waitFor()
+    await fetchSection.getByText('使用「模型」页配置的 API Key，需要先配置。', { exact: true }).waitFor()
     await save.click()
     await expect.poll(() => save.isDisabled()).toBe(true)
     await expect.poll(settingsDocument).toContain('fetchProvider: deepseek-fetch-api')

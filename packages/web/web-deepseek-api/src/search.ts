@@ -73,14 +73,14 @@ export class DeepSeekSearchApiProvider implements WebSearchProvider {
   private readonly starts: number[] = []
   /** Picker description: what this provider suits and what it costs or cannot do. */
   readonly description: NonNullable<WebSearchProvider['description']> = {
-    en: 'Queries the search endpoint directly for titles, URLs, and snippets without an extra model call. Incurs charges, billed to the DeepSeek account or DeepSeek API key that the Billing setting selects; see the Search & Fetch guide for pricing.',
-    zh: '直接请求搜索接口返回标题、URL 与摘要，无需额外调用模型。会产生费用，按「计费方式」向 DeepSeek 账号或 DeepSeek API Key 计费，计费规则详见「网页搜索与获取指南」。',
-    ja: '追加のモデル呼び出しなしで検索エンドポイントに直接問い合わせ、タイトル、URL、スニペットを返します。料金が発生し、「課金方法」の設定に応じて DeepSeek アカウントまたは DeepSeek API キーに課金されます。料金の詳細は「検索と取得のガイド」を参照してください。',
-    es: 'Consulta directamente el punto de conexión de búsqueda y devuelve títulos, URL y fragmentos sin una llamada adicional al modelo. Genera cargos, facturados a la cuenta de DeepSeek o a la clave de API de DeepSeek que elija el ajuste Facturación; consulte la Guía de búsqueda y recuperación para ver los precios.',
-    fr: 'Interroge directement le point de terminaison de recherche pour obtenir titres, URL et extraits, sans appel de modèle supplémentaire. Entraîne des frais, facturés au compte DeepSeek ou à la clé API DeepSeek que choisit le paramètre Facturation ; consultez le Guide de recherche et de récupération pour les tarifs.',
-    de: 'Fragt den Suchendpunkt direkt nach Titeln, URLs und Ausschnitten ab, ohne zusätzlichen Modellaufruf. Verursacht Kosten, die dem DeepSeek-Konto oder DeepSeek-API-Schlüssel berechnet werden, den die Einstellung Abrechnung auswählt; Preise siehe Leitfaden zum Suchen und Abrufen.',
-    ru: 'Напрямую запрашивает поисковый сервис и возвращает заголовки, URL и фрагменты без дополнительного вызова модели. Услуга платная: оплата списывается с учётной записи DeepSeek или ключа API DeepSeek, выбранных в настройке «Оплата»; тарифы см. в документе «Руководство по поиску и получению».',
-    pt: 'Consulta diretamente o endpoint de pesquisa e retorna títulos, URLs e trechos sem uma chamada extra ao modelo. Gera cobranças, feitas na conta DeepSeek ou na chave de API da DeepSeek selecionada pela configuração Cobrança; consulte o Guia de pesquisa e busca para ver os preços.',
+    en: 'Incurs charges, paid by the account or API key chosen under Billing.',
+    zh: '会产生费用，由「计费方式」选定的账号或 API Key 支付。',
+    ja: '料金が発生し、「課金方法」で選んだアカウントまたは API キーに請求されます。',
+    es: 'Genera cargos, que paga la cuenta o la clave de API elegida en Facturación.',
+    fr: 'Entraîne des frais, payés par le compte ou la clé API choisi dans Facturation.',
+    de: 'Verursacht Kosten, die das unter Abrechnung gewählte Konto oder der API-Schlüssel trägt.',
+    ru: 'Услуга платная: оплата идёт с аккаунта или ключа API, выбранного в разделе «Оплата».',
+    pt: 'Gera cobranças, pagas pela conta ou chave de API escolhida em Cobrança.',
   }
 
   /**
