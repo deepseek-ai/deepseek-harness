@@ -1,0 +1,34 @@
+# Bilingual-pair consistency record for 2026-11-05-markdown-fence-hoc-slot.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-05-markdown-fence-hoc-slot.md
+/agent-note-dispatch-markdown-fences-by-language-through-a-keyed-hoc-slot:
+  en: 08e828c3c043e2c1
+  zh: badc07274d22c3d3
+/agent-note-dispatch-markdown-fences-by-language-through-a-keyed-hoc-slot/problem:
+  en: 54a89cba05169f09
+  zh: 5258e00d91b20a4b
+/agent-note-dispatch-markdown-fences-by-language-through-a-keyed-hoc-slot/decision:
+  en: a15c7c13f167e5ac
+  zh: ff261e3705c47ff0
+/agent-note-dispatch-markdown-fences-by-language-through-a-keyed-hoc-slot/decision/dispatch-entry:
+  en: a4afcb1e86bd8131
+  zh: 4aa2f07b36a5cf85
+/agent-note-dispatch-markdown-fences-by-language-through-a-keyed-hoc-slot/decision/primitives-presets:
+  en: b15ed1d19b74aa35
+  zh: 2ed221485c5f67a3
+/agent-note-dispatch-markdown-fences-by-language-through-a-keyed-hoc-slot/decision/hoc-dispatch-ui-slots-ui-renderer:
+  en: 41fdaf7d6f451834
+  zh: d363f3424b28c151
+/agent-note-dispatch-markdown-fences-by-language-through-a-keyed-hoc-slot/decision/chat-flow-ui-chat:
+  en: a50b7c38db7f8a58
+  zh: b9fffb45c834917b
+/agent-note-dispatch-markdown-fences-by-language-through-a-keyed-hoc-slot/decision/styling:
+  en: 6b9af0b5564d0b51
+  zh: f3ee17fce2140523
+/agent-note-dispatch-markdown-fences-by-language-through-a-keyed-hoc-slot/alternatives-considered:
+  en: 52ad660eb563f4d2
+  zh: 1f23ea4d4e2063a2
+/agent-note-dispatch-markdown-fences-by-language-through-a-keyed-hoc-slot/consequences:
+  en: 5261c339a4a10e83
+  zh: d4e207e63ca30f21
