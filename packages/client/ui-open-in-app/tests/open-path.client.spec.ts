@@ -99,11 +99,12 @@ describe('OpenInAppPathController association answers', () => {
   type Answer = Awaited<ReturnType<SessionRemote['workspacePathApplications']>>
   const app = (name: string, icon: string | null = null) => ({ id: `/Applications/${name}.app`, name, default: true, icon })
   const answered = (...apps: ReturnType<typeof app>[]): Answer => ({ ok: true, value: apps })
-  /** A Remote whose association queries settle when the test answers them. */
+  /** A Remote whose association queries settle when the test answers them, and reject once cancelled. */
   function deferredRemote() {
     const queries: { path: string; signal: AbortSignal | undefined; answer: (result: Answer) => void }[] = []
-    const workspacePathApplications = vi.fn((request: { path: string }, signal?: AbortSignal) => new Promise<Answer>((answer) => {
+    const workspacePathApplications = vi.fn((request: { path: string }, signal?: AbortSignal) => new Promise<Answer>((answer, reject) => {
       queries.push({ path: request.path, signal, answer })
+      signal?.addEventListener('abort', () => { reject(new Error('cancelled')) }, { once: true })
     }))
     return { queries, controller: new OpenInAppPathController(remoteOf({ workspacePathApplications })) }
   }
@@ -166,19 +167,17 @@ describe('OpenInAppPathController association answers', () => {
     expect(controller.cachedApplications('/w/b.png')).toEqual([app('Preview')])
   })
 
-  it('runs one background refresh per association class until it settles, and disposal cancels it', async () => {
+  it('runs one background refresh at a time, cancelling the older for the newer file, and disposal cancels it', async () => {
     const { queries, controller } = deferredRemote()
     controller.refreshApplications('/w/a.txt')
     controller.refreshApplications('/w/b.txt')
-    controller.refreshApplications('/w/c.md')
-    expect(queries.map(query => query.path)).toEqual(['/w/a.txt', '/w/c.md'])
-    queries[0]!.answer(answered(app('TextEdit')))
-    await vi.waitFor(() => { expect(controller.cachedApplications('/w/b.txt')).toEqual([app('TextEdit')]) })
-    controller.refreshApplications('/w/b.txt')
-    expect(queries.map(query => query.path)).toEqual(['/w/a.txt', '/w/c.md', '/w/b.txt'])
+    expect(queries.map(query => [query.path, query.signal?.aborted])).toEqual([['/w/a.txt', true], ['/w/b.txt', false]])
+    queries[1]!.answer(answered(app('TextEdit')))
+    await vi.waitFor(() => { expect(controller.cachedApplications('/w/c.txt')).toEqual([app('TextEdit')]) })
+    controller.refreshApplications('/w/d.md')
     controller.dispose()
-    expect(queries.every(query => query.signal?.aborted)).toBe(true)
-    controller.refreshApplications('/w/d.json')
+    expect(queries[2]).toMatchObject({ path: '/w/d.md', signal: { aborted: true } })
+    controller.refreshApplications('/w/e.json')
     expect(queries).toHaveLength(3)
     expect(controller.cachedApplications('/w/a.txt')).toEqual([app('TextEdit')])
   })

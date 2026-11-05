@@ -20,7 +20,7 @@ function associationKey(path: string): string {
   return dot > 0 && dot < name.length - 1 ? `extension:${name.slice(dot)}` : `path:${path}`
 }
 
-/** Compare two answers field by field, including icon data. */
+/** Equal answers keep the published snapshot, so observers re-resolve only when an answer changes. */
 function sameApplications(left: Applications, right: Applications): boolean {
   return left.length === right.length && left.every((app, index) => {
     const other = right[index]
@@ -58,10 +58,11 @@ export class OpenInAppPathController {
   readonly associations: ObservableSnapshot<ReadonlyMap<string, Applications>> = this.answers
   private loading: Promise<void> | undefined
   private readonly lifetime = new AbortController()
-  private readonly refreshing = new Set<string>()
+  /** The background refresh in flight; a newer refresh cancels it. */
+  private refresh: AbortController | undefined
   /** Start order of the query whose answer each class holds; an earlier query never replaces a later one. */
   private readonly answeredBy = new Map<string, number>()
-  /** One icon string per application id, reused by every class that lists the application. */
+  /** One icon string per application id, reused by every class that lists the application so its data URL is held once. */
   private readonly icons = new Map<string, string>()
   private queries = 0
 
@@ -131,15 +132,16 @@ export class OpenInAppPathController {
   }
 
   /**
-   * Re-query a file's associations in the background. One refresh per association class runs at a time;
-   * it outlives the requesting menu and ends with its answer or {@link dispose}.
+   * Re-query a file's associations in the background. One refresh runs at a time: it outlives the
+   * requesting menu and ends with its answer, the next refresh, which cancels it, or {@link dispose}.
    * @param path - absolute Host path of the file.
    */
   refreshApplications(path: string): void {
-    const key = associationKey(path)
-    if (this.lifetime.signal.aborted || this.refreshing.has(key)) return
-    this.refreshing.add(key)
-    void this.applications(path, this.lifetime.signal).finally(() => { this.refreshing.delete(key) })
+    if (this.lifetime.signal.aborted) return
+    this.refresh?.abort()
+    const refresh = new AbortController()
+    this.refresh = refresh
+    void this.applications(path, AbortSignal.any([this.lifetime.signal, refresh.signal]))
   }
 
   /** Cancel background refreshes and refuse new ones; recorded answers stay readable. */

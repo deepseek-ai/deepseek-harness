@@ -111,13 +111,18 @@ export function registerContextMenus(
   }
   // The verified Host path of each open file menu. Association answers re-resolve the menu from it
   // synchronously, so the registry keeps the other rows while the application row changes in place.
+  // This relies on the registry subscribing once per occurrence before its first resolution, and on a
+  // synchronous resolution replacing rows without clearing them first.
   const verified = new WeakMap<ContextMenuTargetMap['file'], { readonly absolutePath: string | undefined } | null>()
   ctx.effect(() => ctx.contextMenus.register({
     id: 'open-in-app.file', target: 'file', order: 100,
     observe: (target) => {
-      // Each occurrence subscribes before its first resolution, so a reopened target is verified again.
       verified.set(target, null)
-      return [paths.associations]
+      // The first resolution reads the newest answers once verified; answers arriving earlier need no re-resolution.
+      return [{
+        getSnapshot: paths.associations.getSnapshot.bind(paths.associations),
+        subscribe: (listener: () => void) => paths.associations.subscribe(() => { if (verified.get(target)) listener() }),
+      }]
     },
     resolve: (target, signal) => {
       const settled = verified.get(target)
