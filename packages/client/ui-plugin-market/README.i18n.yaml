@@ -3,23 +3,23 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-plugin-market/README.md
 /:
-  en: b77d6d729562a88f
-  zh: b1634cc1d027424c
+  en: 3685af81d8cbfba4
+  zh: 2ec4eeb51778e2c8
 /deepseek-ai-dsh-client-ui-plugin-market:
   en: 62972eb0dff8c145
   zh: 682cc03b492cd730
 /deepseek-ai-dsh-client-ui-plugin-market/summary:
-  en: 71328d505b984fe5
-  zh: 9281e7dbaa01ef9a
+  en: ee0bd00afa1e0887
+  zh: b54e1bdd523437dd
 /deepseek-ai-dsh-client-ui-plugin-market/table-of-contents:
   en: 76368b6b1da79c80
   zh: 52384aee991ac542
 /deepseek-ai-dsh-client-ui-plugin-market/use-this-package:
-  en: 4e582bcd8434b513
-  zh: 39334bf8ae435e09
+  en: d633d36f830d052c
+  zh: 07de610c0b1bb34c
 /deepseek-ai-dsh-client-ui-plugin-market/understand-the-implementation:
-  en: e1a480caaff8efea
-  zh: 0b725fa5bc929f22
+  en: 66cef49ded72a290
+  zh: c89a13fa5e5fb965
 /deepseek-ai-dsh-client-ui-plugin-market/model-experience:
   en: 08d25ab9cbdd7567
   zh: 26e6e75c123951ee
@@ -27,8 +27,8 @@
   en: 4f0eadf94828e66e
   zh: 4f8a6ec170ebbfb6
 /deepseek-ai-dsh-client-ui-plugin-market/known-limitations-and-deferred-work:
-  en: 493d1326b1645f3f
-  zh: 878a53ed6cb7878d
+  en: 1a06b23ccce41074
+  zh: 8c4f5d607b342ef9
 /deepseek-ai-dsh-client-ui-plugin-market/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

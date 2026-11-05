@@ -107,6 +107,8 @@ minimumReleaseAgeExclude:
   - pnpm@11.28.5
   # Desktop packaging requires this Electron fingerprint with node-addon-require-builtin 0.1.9.
   - electron@44.7.0
+  # Stagehand 4.4.0 carries the reviewed zod 4.6.6 pin; install it without the release-age wait.
+  - '@browserbasehq/stagehand@4.4.0'
 patchedDependencies:
   '@botiverse/oar@0.67.0': patches/@botiverse__oar@0.67.0.patch
   '@earendil-works/pi-ai@1.3.0': patches/@earendil-works__pi-ai@1.3.0.patch
