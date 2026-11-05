@@ -157,6 +157,7 @@ describe('dsh-tool-todo', () => {
       const result = await callTodo(ctx, { todos: parallel }, { agent })
       expect(result.isError).toBe(true)
       expect(text(result)).toContain('at most one task may be in_progress')
+      expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
       // A rejected call must not reach the durable log.
       expect(agent.session.snapshotEvents().some(e => e.type === 'todo/write')).toBe(false)
     })
@@ -198,6 +199,7 @@ describe('dsh-tool-todo', () => {
     const result = await callTodo(ctx, { todos })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain(fragment)
+    expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
   })
 
   it('rejects a non-agent caller (the list has no owning session)', async () => {
@@ -205,6 +207,7 @@ describe('dsh-tool-todo', () => {
     const result = await callTodo(ctx, { todos: [{ content: 'a', status: 'pending' }] }, { agent: undefined })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('owning agent session')
+    expect(result.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
   })
 
   it('presents the call with a stable title and the list as raw input', async () => {

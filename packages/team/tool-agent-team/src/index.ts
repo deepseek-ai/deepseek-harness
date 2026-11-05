@@ -6,7 +6,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SubagentError } from '@deepseek-ai/dsh-subagent'
 import { TeamTaskId } from '@deepseek-ai/dsh-agent-team'
 import type { TeamTaskView } from '@deepseek-ai/dsh-agent-team'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { defineTool, ToolArgsError, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 import type { InferValue, ValueSchemaSpec } from '@deepseek-ai/dsh-tools'
 
 /** Cordis plugin name. */
@@ -82,7 +82,7 @@ type NamedTaskView = Omit<TeamTaskView, 'ownerId' | 'ownerName'> & { readonly ow
 /** Recover the exact caller guaranteed by conditional Team-tool discovery. */
 function callingAgent(agent: Agent | undefined, toolName: string): Agent {
   /* v8 ignore next 2 -- The Team condition rejects callers without an Agent before execution. */
-  if (agent === undefined) throw new Error(`${toolName} requires a calling Agent`)
+  if (agent === undefined) throw new ToolContextUnavailableError(`${toolName} requires a calling Agent`)
   return agent
 }
 
@@ -159,10 +159,10 @@ export function apply(ctx: Context, config: Config = {}): void {
     async execute(args, exec) {
       const cursor = args.cursor ?? 0
       const limit = args.limit ?? 50
-      if (!Number.isSafeInteger(cursor) || cursor < 0) throw new Error('cursor must be a non-negative safe integer')
-      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new Error('limit must be an integer from 1 through 100')
+      if (!Number.isSafeInteger(cursor) || cursor < 0) throw new ToolArgsError(['cursor must be a non-negative safe integer'])
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new ToolArgsError(['limit must be an integer from 1 through 100'])
       const caller = callingAgent(exec.agent, 'team_task_list')
-      if (args.owner !== undefined && args.unowned !== undefined) throw new Error('owner and unowned filters cannot be combined')
+      if (args.owner !== undefined && args.unowned !== undefined) throw new ToolArgsError(['owner and unowned filters cannot be combined'])
       const owner = args.owner === undefined
         ? undefined
         : await ctx.subagents.resolveName(caller, args.owner, exec.signal)

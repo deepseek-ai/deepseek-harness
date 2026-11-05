@@ -280,10 +280,11 @@ describe('Tree-owned task boards', () => {
         status: 'pending', blockedBy: [], writeScopes: [],
       },
     })
-    expect(() => ctx.agentTeams.listTasks(lead)).toThrow('must begin at revision 1')
+    const corrupt = { name: 'TeamError', code: 'TEAM_STATE_CORRUPT', message: expect.stringContaining('must begin at revision 1') as string }
+    expect(() => ctx.agentTeams.listTasks(lead)).toThrow(expect.objectContaining(corrupt))
     const eventCount = lead.session.snapshotEvents().length
     await expect(ctx.agentTeams.createTask(lead, { subject: 'blocked', description: 'blocked' }))
-      .rejects.toThrow('must begin at revision 1')
+      .rejects.toMatchObject(corrupt)
     expect(lead.session.snapshotEvents()).toHaveLength(eventCount)
   })
 
