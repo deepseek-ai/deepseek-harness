@@ -1,6 +1,6 @@
 /** Worktree Sessions and the change request panel through the real optional bundle, a Git checkout, and a scripted GitHub CLI. */
 import { execFile } from 'node:child_process'
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -376,7 +376,9 @@ async function sendPrompt(page: Page, scaffold: WebScaffold): Promise<{ readonly
 function worktreeRecords(events: readonly SessionEvent[]): unknown[] {
   return events.flatMap((event) => {
     const record = pluginRecordOf(event)
-    return record?.type === 'plugin:client-ui-forge/worktree' ? [record.data] : []
+    if (record?.type === 'plugin:client-ui-forge/worktree') return [record.data]
+    if (record?.type === 'plugin:worktree/created') return [{ created: record.data }]
+    return []
   })
 }
 
@@ -491,13 +493,12 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
   expect(worktreeRecords(events)).toEqual([
     { action: 'request', from: 'main' },
     { action: 'request', from: 'release' },
-    { action: 'created', worktree: { path: directory, branch, from: 'release', baseCommit, repositoryRoot: project } },
+    { created: { path: directory, branch, baseCommit, repositoryRoot: project } },
   ])
   // The worktree existed before the turn, so the first model request carried its directory notice.
   const created = events.findIndex((event) => {
     const record = pluginRecordOf(event)
-    const data = record?.type === 'plugin:client-ui-forge/worktree' ? record.data : null
-    return typeof data === 'object' && data !== null && 'action' in data && data.action === 'created'
+    return record?.type === 'plugin:worktree/created'
   })
   const turn = events.findIndex(event => event.type === 'turn/start')
   const notice = events.findIndex(event => event.type === 'user/message' && event.data.source.kind === 'working-directory')
@@ -1404,6 +1405,42 @@ it.skipIf(MODE === 'record').each(['darwin', 'win32'] as const)('closes diff men
     await expect.poll(() => page.getByRole('menu').count()).toBe(0)
   }
   expect(tripwire.warnings).toEqual([])
+})
+
+
+it.skipIf(MODE === 'record')('archives a clean UI worktree and restores its retained branch', async () => {
+  const { scaffold, page, project, tripwire } = await requestReleaseWorktree('web-e2e-forge-archive')
+  const { settled } = await sendPrompt(page, scaffold)
+  const sessionId = await settled
+  const session = scaffold.ctx.sessions.get(sessionId)
+  if (session === undefined) throw new Error('The completed Session was not retained')
+  const directory = scaffold.ctx.workingDirectory.get(session)
+  const branch = await git(directory, 'branch', '--show-current')
+  const head = await git(directory, 'rev-parse', 'HEAD')
+  const title = '工作树归档恢复'
+  await scaffold.ctx.sessionController.rename({ sessionId, title })
+  const row = page.getByRole('treeitem').filter({ has: page.getByText(title, { exact: true }) })
+  await row.hover()
+  await row.getByRole('button', { name: '归档会话', exact: true }).click()
+  await expect.poll(async () => {
+    try { await access(directory); return true } catch { return false }
+  }, { timeout: 20_000 }).toBe(false)
+  expect(scaffold.ctx.workspaceRegistry.archivedSessionIds).toContain(sessionId)
+  expect(await git(project, 'rev-parse', branch)).toBe(head)
+  await page.getByRole('button', { name: '视图选项', exact: true }).click()
+  await page.getByRole('menuitem', { name: '全部对话（显示已归档）', exact: true }).click()
+  await row.hover()
+  await row.getByRole('button', { name: '取消归档', exact: true }).click()
+  await row.click()
+  const missing = page.locator('[data-forge-missing]')
+  await missing.getByRole('button', { name: '恢复工作树', exact: true }).waitFor({ timeout: 20_000 })
+  await compareOrRefreshGolden(join(EXPECTED, 'archive-restore.expected.md'),
+    await captureStableAria(page, '[data-forge-missing]', scaffold.workspaceCwd, { replacements: [[branch, 'dsh-{{worktree}}']] }), MODE)
+  expect(scaffold.ctx.workingDirectory.get(session)).toBe(directory)
+  await missing.getByRole('button', { name: '恢复工作树', exact: true }).click()
+  await missing.waitFor({ state: 'detached', timeout: 20_000 })
+  expect(await git(directory, 'rev-parse', 'HEAD')).toBe(head)
+  expect(tripwire.pageErrors).toEqual([])
 })
 
 it.skipIf(MODE === 'record').each([120, 4000])('types a review comment beside %i changed lines', async (count) => {

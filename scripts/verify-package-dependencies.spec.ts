@@ -250,7 +250,7 @@ describe('package dependency scope', () => {
     expect(PACKAGE_DEPENDENCY_POLICY.peerRequiredHostExports['@deepseek-ai/dsh-experimental-forge'])
       .toEqual(['changeRequestKey'])
     expect(PACKAGE_DEPENDENCY_POLICY.peerRequiredHostExports['@deepseek-ai/dsh-experimental-worktree'])
-      .toEqual(['generatedWorktreeName'])
+      .toEqual(['generatedWorktreeName', 'CREATED_RECORD', 'createdWorktreeSchema'])
     expect(PACKAGE_DEPENDENCY_POLICY.peerRequiredHostExports['@deepseek-ai/dsh-fs']).toEqual(['FsError'])
     expect(PACKAGE_DEPENDENCY_POLICY.peerRequiredHostExports['@deepseek-ai/dsh-session'])
       .toEqual(['SESSION_FORMAT_VERSION', 'appendPluginRecord', 'pluginRecordOf'])
