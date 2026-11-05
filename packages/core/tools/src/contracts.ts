@@ -318,6 +318,26 @@ export class ToolNotFoundError extends HarnessError {
   }
 }
 
+/** Code of {@link ToolContextUnavailableError}. */
+export const TOOL_CONTEXT_UNAVAILABLE = 'TOOL_CONTEXT_UNAVAILABLE'
+
+/**
+ * Thrown by a tool body when its composition or call lacks context the tool
+ * requires, such as a calling Agent, an injected service, or an open turn.
+ * The failure is not an argument the model can correct; `message` names the
+ * missing context.
+ */
+export class ToolContextUnavailableError extends HarnessError {
+  /**
+   * @param message - names the tool and the missing context.
+   * @param options - standard `cause` chaining.
+   */
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, TOOL_CONTEXT_UNAVAILABLE, options)
+    this.name = 'ToolContextUnavailableError'
+  }
+}
+
 /** Thrown when a tool body or post-policy value violates its declared output. */
 export class ToolOutputError extends HarnessError {
   /** Schema/value violations in validation order. */

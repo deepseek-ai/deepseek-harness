@@ -11,7 +11,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import ApprovalService, { type ApprovalOutcome, type ApprovalRequest } from '@deepseek-ai/dsh-user-approval'
-import ToolRuntime, { APPROVAL_CANCELLED, APPROVAL_ERROR_NAME, APPROVAL_REJECTED, APPROVAL_UNAVAILABLE, defineTool, JsonSchemaError, parameterSchemaSpecToJsonSchema, validateArgs, ToolArgsError, ToolNotFoundError, TOOL_ABORTED, TOOL_ABORTED_BEFORE_DISPATCH, type InferArgs, type ParameterSchemaSpec, type PreToolDecision, type PostToolDecision, type JsonSchemaNode, type ToolDefinition, type ToolDispatchExecution, type ToolExecutionResult, type ToolExecutionToken } from '@deepseek-ai/dsh-tools'
+import ToolRuntime, { TOOL_CONTEXT_UNAVAILABLE, ToolContextUnavailableError, APPROVAL_CANCELLED, APPROVAL_ERROR_NAME, APPROVAL_REJECTED, APPROVAL_UNAVAILABLE, defineTool, JsonSchemaError, parameterSchemaSpecToJsonSchema, validateArgs, ToolArgsError, ToolNotFoundError, TOOL_ABORTED, TOOL_ABORTED_BEFORE_DISPATCH, type InferArgs, type ParameterSchemaSpec, type PreToolDecision, type PostToolDecision, type JsonSchemaNode, type ToolDefinition, type ToolDispatchExecution, type ToolExecutionResult, type ToolExecutionToken } from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 
@@ -790,6 +790,25 @@ describe('ToolRuntime', () => {
     })).resolves.toMatchObject({
       isError: true,
       content: [{ type: 'text', text: 'Error: <unprintable thrown value>' }],
+    })
+  })
+
+  it('records ToolContextUnavailableError thrown by a tool body', async () => {
+    const ctx = await setup()
+    ctx.tools.register({
+      ...echoTool,
+      name: 'needs-agent',
+      execute() { return Promise.reject(new ToolContextUnavailableError('needs-agent requires a calling agent')) },
+    })
+
+    const result = await executeToolFixture(ctx, {
+      signal: testToolSignal, callId: ToolCallId('needs-agent'), name: 'needs-agent', arguments: {},
+    })
+
+    expect(result).toMatchObject({
+      content: [{ type: 'text', text: 'Error: needs-agent requires a calling agent' }],
+      isError: true,
+      error: { info: { name: 'ToolContextUnavailableError', code: TOOL_CONTEXT_UNAVAILABLE } },
     })
   })
 

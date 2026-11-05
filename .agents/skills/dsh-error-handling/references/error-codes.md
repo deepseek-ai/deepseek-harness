@@ -17,7 +17,7 @@ Use this guide when adding or reviewing an error class, an error code, or a fail
 ## Choose the class
 
 1. Reuse the owning domain's existing class when the failure belongs to that domain: `FsError` for filesystem targets, `SearchError` for `glob`/`grep`, `LspError`, `WebError`, `SubagentError`, `TeamError`, `GoalError`, `WorkflowError`, `UserQuestionError`, `SessionQueryError`, the `Sandbox*Error` classes, and `CodeRunFailedError`.
-2. Use `ToolArgsError` (`INVALID_ARGS`) for argument constraints the parameter schema cannot express, such as an empty string, a range, or a cross-field rule.
+2. Use `ToolArgsError` (`INVALID_ARGS`) for argument constraints the parameter schema cannot express, such as an empty string, a range, or a cross-field rule, and `ToolContextUnavailableError` (`TOOL_CONTEXT_UNAVAILABLE`) for a tool call that lacks a required Agent, service, or open turn.
 3. Declare a new class only for a new owning domain. Prefer one class with a code union over one class per failure; a separate subclass is justified when consumers must catch it by type or it carries its own structured fields, such as `ToolArgsError.violations`, and it then extends the domain class when one exists so the domain still matches with `instanceof`.
 4. Never declare a coded class that extends bare `Error`. An existing one is migrated by changing its base class and keeping every `name` and `code`.
 
