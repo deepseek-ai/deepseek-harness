@@ -20,8 +20,10 @@ import { copyPrimaryRuntime, installPrimaryRuntime, parsePrimaryRuntime, readPri
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof fs>()
-  return { ...actual, rename: vi.fn(actual.rename), lstat: vi.fn(actual.lstat), cp: vi.fn(actual.cp) }
+  return { ...actual, rename: vi.fn(actual.rename), lstat: vi.fn(actual.lstat), cp: vi.fn(actual.cp), stat: vi.fn(actual.stat) }
 })
+
+const INVALID_PAYLOAD = { name: 'WorkspaceDependencyError', code: 'WORKSPACE_DEPENDENCY_INVALID_PAYLOAD' }
 
 const roots: string[] = []
 afterEach(async () => {
@@ -103,6 +105,7 @@ it.skipIf(process.platform === 'win32').each(['copy', 'reuse', 'in-place'] as co
   await symlink('../outside-python', python)
   const operation = mode === 'in-place' ? resolvePrimaryRuntime(source) : installPrimaryRuntime(source, root)
   await expect(operation).rejects.toThrow('invalid Python alias')
+  await expect(operation).rejects.toMatchObject(INVALID_PAYLOAD)
 })
 
 it('copies Windows payloads without creating interpreter aliases', async () => {
@@ -200,6 +203,7 @@ it.each(['in-place', 'copy', 'reuse'] as const)('rejects wrong payload entry typ
     else await mkdir(path)
     const operation = mode === 'in-place' ? resolvePrimaryRuntime(source) : installPrimaryRuntime(source, root)
     await expect(operation).rejects.toThrow(`expected ${directory ? 'directory' : 'file'} at`)
+    await expect(operation).rejects.toMatchObject(INVALID_PAYLOAD)
     if (mode === 'copy') await expect(readFile(join(root, 'runtime.json'))).rejects.toMatchObject({ code: 'ENOENT' })
   }
 })
@@ -208,8 +212,49 @@ it('rejects malformed metadata and incompatible targets', async () => {
   const { source, root, manifest } = await fixture()
   await writeFile(join(source, 'runtime.json'), JSON.stringify({ ...manifest, arch: process.arch === 'x64' ? 'arm64' : 'x64' }))
   await expect(installPrimaryRuntime(source, root)).rejects.toThrow('incompatible')
+  await expect(installPrimaryRuntime(source, root)).rejects.toMatchObject({ name: 'WorkspaceDependencyError', code: 'WORKSPACE_DEPENDENCY_UNSUPPORTED_PLATFORM' })
   await writeFile(join(source, 'runtime.json'), JSON.stringify({ ...manifest, python: '../escape' }))
   await expect(readPrimaryRuntime(source)).rejects.toThrow('invalid metadata')
+  await expect(readPrimaryRuntime(source)).rejects.toMatchObject(INVALID_PAYLOAD)
+  await writeFile(join(source, 'runtime.json'), '{')
+  await expect(readPrimaryRuntime(source)).rejects.toMatchObject(INVALID_PAYLOAD)
+  await expect(readPrimaryRuntime(source)).rejects.toHaveProperty('cause', expect.any(SyntaxError))
+  await rm(join(source, 'runtime.json'))
+  await expect(readPrimaryRuntime(source)).rejects.toMatchObject({ ...INVALID_PAYLOAD, cause: { code: 'ENOENT' } })
+})
+
+it('reports an unreadable payload entry as a preparation failure', async () => {
+  const { source } = await fixture()
+  vi.mocked(fs.stat).mockRejectedValueOnce(Object.assign(new Error('entry denied'), { code: 'EACCES' }))
+  await expect(resolvePrimaryRuntime(source)).rejects.toThrow('entry denied')
+})
+
+it('reports preparation failures with structured tool errors', async () => {
+  const ctx = new Context()
+  try {
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
+    const { source, root, manifest, directory } = await fixture()
+    await ctx.plugin(workspaceDependencies, { source, root })
+    const call = async (id: string) => (await executeToolFixture(ctx, {
+      name: 'load_workspace_dependencies', arguments: {}, callId: ToolCallId(id), signal: new AbortController().signal,
+    })).error
+    await writeFile(join(source, 'runtime.json'), JSON.stringify({ ...manifest, platform: process.platform === 'linux' ? 'darwin' : 'linux' }))
+    expect(await call('platform')).toEqual({
+      message: 'primary runtime: incompatible platform or architecture',
+      info: { name: 'WorkspaceDependencyError', code: 'WORKSPACE_DEPENDENCY_UNSUPPORTED_PLATFORM' },
+    })
+    await writeFile(join(source, 'runtime.json'), JSON.stringify(manifest))
+    await mkdir(dirname(root), { recursive: true })
+    await mkdir(join(directory, 'outside'))
+    await symlink(join(directory, 'outside'), root, process.platform === 'win32' ? 'junction' : 'dir')
+    const linked = await call('linked')
+    expect(linked?.message).toContain('preparation failed: primary runtime: installation path is a filesystem link')
+    expect(linked?.info).toEqual({ name: 'WorkspaceDependencyError', code: 'WORKSPACE_DEPENDENCY_PREPARATION_FAILED' })
+  } finally {
+    await ctx.fiber.dispose()
+  }
 })
 
 /** Previous Desktop files carry interpreter and selected library versions under components. */
@@ -293,7 +338,7 @@ it('uses a payload in place without copying and tolerates a payload without Node
   })
   await expect(readFile(join(directory, 'home', 'dsh-runtimes', 'dsh-primary-runtime', 'runtime.json'))).rejects.toMatchObject({ code: 'ENOENT' })
   await rm(paths.python)
-  await expect(resolvePrimaryRuntime(source)).rejects.toMatchObject({ code: 'ENOENT' })
+  await expect(resolvePrimaryRuntime(source)).rejects.toMatchObject({ ...INVALID_PAYLOAD, cause: { code: 'ENOENT' } })
 })
 
 it('rejects a payload whose Node.js or pnpm version is malformed', async () => {
