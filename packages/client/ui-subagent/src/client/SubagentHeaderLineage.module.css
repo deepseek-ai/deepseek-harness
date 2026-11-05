@@ -350,8 +350,7 @@
 }
 
 .label,
-.secondaryLabel,
-.summary {
+.secondaryLabel {
   white-space: normal;
   overflow-wrap: anywhere;
 }
@@ -370,14 +369,10 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-.summary,
 .metrics {
   color: var(--dsw-alias-label-tertiary);
   font-size: 10px;
   line-height: 15px;
-}
-
-.metrics {
   display: grid;
   grid-template-rows: 17px 15px;
   flex: none;

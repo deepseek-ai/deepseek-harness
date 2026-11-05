@@ -462,7 +462,10 @@ it.skipIf(MODE === 'record')('automatically shows a numbered PR when gh JSON omi
   await change.getByText('等待评审 · 1 条未解决讨论', { exact: true }).waitFor()
   await compareOrRefreshGolden(join(EXPECTED, 'reference.expected.md'),
     await captureStableAria(page, `[data-forge-change="${PULL}"]`, scaffold.workspaceCwd), MODE)
-  expect(events.flatMap((event) => {
+  // Reference lookup can finish after the turn; the visible card confirms its binding was appended.
+  await scaffold.ctx.sessionPersistence.flush()
+  const boundEvents = await readPersistedEvents(scaffold, sessionId)
+  expect(boundEvents.flatMap((event) => {
     const record = pluginRecordOf(event)
     return record?.type === 'plugin:forge-session/binding' ? [record.data] : []
   })).toEqual([{ action: 'reference', url: PULL }])
