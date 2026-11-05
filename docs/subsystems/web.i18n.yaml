@@ -3,20 +3,20 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/web.md
 /web-access:
-  en: 86d12e6e81fb63b8
-  zh: 52ed66dcacaf6d85
+  en: 3186d79f26bd8c45
+  zh: de31c570ea8be79c
 /web-access/why-one-capability-has-two-operations:
   en: 380da3cd0aabd52b
   zh: 1317c26089c3ab07
 /web-access/search-request-and-result:
-  en: 1ad94deb713024e2
-  zh: 9d3df730fa99ad89
+  en: c6eee490ae914ae0
+  zh: d576eaeb48480c81
 /web-access/fetch-request-and-result:
   en: b96bcdf42ced9eab
   zh: aa927e2450238557
 /web-access/provider-availability:
-  en: 38515cfa348e0950
-  zh: 890b624c15d8aa41
+  en: ba99c3876cb05fd9
+  zh: cd366d7c3279bd87
 /web-access/fetch-network-policy:
   en: 6851874be5841d90
   zh: dc085bf3b82d77df

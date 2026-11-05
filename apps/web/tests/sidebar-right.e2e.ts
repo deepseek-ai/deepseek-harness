@@ -7,7 +7,7 @@
 // draws the panel is a recorded, reversible choice, so this file asserts against
 // the frame's track as much as against the panel itself. The way back in while
 // collapsed is not in the column at all: it is one button in the conversation
-// header, and it leaves when the panel opens.
+// header, visible only while the panel is collapsed.
 //
 // Ordering is the product's own: the hero comes before any session, so the
 // empty right edge is asserted first and the session-bound cases follow in a
@@ -114,7 +114,7 @@ async function holdPanelSlide(panel: Locator) {
   })
 }
 
-/** The expand button in the conversation header, present only while collapsed. */
+/** The conversation header's expand control, visible only while collapsed. */
 function expandOf(page: Page): Locator {
   return page.locator('[data-sidebar-right-expand]')
 }
@@ -379,8 +379,7 @@ describe('web e2e: shipped right Sidebar', () => {
       onTestFailed(() => saveFailureShot(page, 'web-e2e-sidebar-right-pageup'))
       const frame = page.locator('[class*="frame"]').first()
       const composer = page.locator('textarea, [contenteditable="true"]').first()
-      // The expand button exists only while the panel is collapsed, when its
-      // docked hosts sit translated past the frame's right edge.
+      // Collapsed docked hosts sit translated past the frame's right edge.
       await expandOf(page).waitFor({ timeout: 15_000 })
       await composer.click()
       await composer.pressSequentially('caret')
@@ -644,6 +643,74 @@ describe('web e2e: shipped right Sidebar', () => {
       expect(tripwire.warnings).toEqual([])
     })
 
+    it.each([390, 767])('keeps the mobile conversation title still while the right sidebar slides at %ipx', async (viewportWidth) => {
+      const caseName = `mobile-title-${viewportWidth}`
+      const mobilePage = await browser.newPage({
+        viewport: { width: viewportWidth, height: 844 },
+        locale: 'en-US', timezoneId: 'Asia/Shanghai',
+        userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1',
+        isMobile: true, hasTouch: true, reducedMotion: 'no-preference',
+        storageState: await page.context().storageState(),
+      })
+      const mobileTripwire = watchConsole(mobilePage)
+      try {
+        await mobilePage.goto(page.url(), { waitUntil: 'load' })
+        const column = await resetSidebar(mobilePage)
+        const panel = column.locator('[data-sidebar-right-panel]')
+        const title = mobilePage.locator('[class*="titleCluster"]').first()
+        const utilities = mobilePage.locator('[class*="headerUtilities"]').first()
+        await expect.poll(() => panel.getAttribute('data-sidebar-right-panel')).toBe('fullscreen')
+        await column.locator('[data-sidebar-right-toggle]').tap()
+        await panel.evaluate(async (node) => {
+          await Promise.allSettled(node.getAnimations({ subtree: true }).map(animation => animation.finished))
+        })
+        await expandOf(mobilePage).waitFor()
+        const titleNode = await title.locator('[class*="crumbCurrent"]').elementHandle()
+        if (titleNode === null) throw new Error('conversation title is not rendered')
+        const titleBefore = await title.boundingBox()
+        const utilitiesBefore = await utilities.boundingBox()
+        expect(titleBefore?.width).toBeGreaterThan(0)
+        expect(utilitiesBefore?.width).toBeGreaterThan(0)
+        await shot(mobilePage, `${caseName}-collapsed`)
+        try {
+          for (const opening of [true, false]) {
+            const held = await holdPanelSlide(panel)
+            try {
+              await (opening ? expandOf(mobilePage) : column.locator('[data-sidebar-right-toggle]')).tap()
+              await expect.poll(() => held.evaluate(state => state.animation?.playState)).toBe('paused')
+              const progress = await held.evaluate(state => state.animation?.effect?.getComputedTiming().progress)
+              expect(progress).toBeGreaterThan(0)
+              expect(progress).toBeLessThan(1)
+              expect(await title.boundingBox()).toEqual(titleBefore)
+              expect(await utilities.boundingBox()).toEqual(utilitiesBefore)
+              expect(await titleNode.evaluate(node => node.isConnected)).toBe(true)
+              expect(await expandOf(mobilePage).isDisabled()).toBe(opening)
+              expect(await mobilePage.getByRole('button', { name: 'Open right sidebar', exact: true }).count()).toBe(opening ? 0 : 1)
+              await shot(mobilePage, `${caseName}-${opening ? 'opening' : 'closing'}`)
+              await held.evaluate((state) => { (state.animation as Animation).finish() })
+              expect(await title.boundingBox()).toEqual(titleBefore)
+              expect(await utilities.boundingBox()).toEqual(utilitiesBefore)
+            } finally {
+              await held.evaluate((state) => {
+                state.dispose()
+                if (state.animation?.playState === 'paused') state.animation.finish()
+              })
+              await held.dispose()
+            }
+          }
+        } finally {
+          await titleNode.dispose()
+        }
+        expect(mobileTripwire.pageErrors).toEqual([])
+        expect(mobileTripwire.warnings).toEqual([])
+      } catch (error) {
+        await saveFailureShot(mobilePage, `web-e2e-sidebar-right-${caseName}`)
+        throw error
+      } finally {
+        await mobilePage.close()
+      }
+    })
+
     it('keeps a capacity-closed panel closed after widening and uses fullscreen on a narrow viewport', async () => {
       const viewport = page.viewportSize()
       if (viewport === null) throw new Error('expected a fixed viewport')
@@ -668,6 +735,7 @@ describe('web e2e: shipped right Sidebar', () => {
         await expect.poll(async () => await panel.getAttribute('data-sidebar-right-panel')).toBe('fullscreen')
         await expect.poll(async () => await width(panel)).toBe(767)
         await expect.poll(() => frame.getAttribute('data-rightbar-fullscreen')).toBe('true')
+        expect(await expandOf(page).count()).toBe(0)
         expect(await frame.locator('[data-side="rightbar"]').count()).toBe(0)
         await column.locator('[data-sidebar-right-mode="push"]').click()
         await expect.poll(async () => await column.locator('[data-sidebar-right-open]').count()).toBe(0)

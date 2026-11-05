@@ -14,7 +14,7 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionPendingInteraction } from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
-import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId, SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import type { ComposerBlock } from './composer-blocks.ts'
 import type { DraftAttachmentId, InputActions, InputNotice, InputState } from './input.ts'
@@ -24,6 +24,13 @@ import type { BusyEnterBehavior } from './composer-submission.ts'
 import type { ConversationSnapshot } from './snapshot.ts'
 import type { ViewTab } from './views.ts'
 import type { UserTextDocumentInput, UserTextEvaluator, UserTextId, UserTextNode } from './user-text.ts'
+
+declare module '@deepseek-ai/dsh-client-ui-context-menu/client' {
+  interface ContextMenuTargetMap {
+    /** Session Header More menu, independent of Session-row and title context actions. */
+    sessionHeader: { readonly sessionId: SessionId }
+  }
+}
 
 /** Browser-owned draft attachment that has not crossed the durable Host boundary. */
 export type ComposerAttachment = ComposerImageAttachment | ComposerFileAttachment
@@ -276,44 +283,81 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'conversation.session.header.views.actions': { kind: 'list'; scope: 'root'; owner: ConversationViewActionsOwnerProps }
     /** Registered Conversation target Views, rendered one at a time. */
     'conversation.view': { kind: 'list'; scope: 'session'; owner: ConvViewOwnerProps }
-    /** Selector-routed replacements for the current Session's resident composer. */
+    /**
+     * Selector-routed replacements for the current Session's resident composer; fixed overlays must
+     * portal to the document body because the docked composer contains them.
+     */
     'conversation.composer': { kind: 'chain'; scope: 'session'; owner: ComposerChainProps }
     /** Workspace picker shown by the blank-session Hero. */
     'conversation.hero.workspace': { kind: 'single'; scope: 'root'; owner: EmptyWorkspaceOwnerProps }
+    /** Layers wrapping the Conversation scroll body; `hero` reports a blank, standalone home. */
+    'conversation.hero.frame': { kind: 'hoc'; scope: 'root'; owner: HeroFrameOwnerProps }
     /** Brand mark shown before the blank-session headline. */
     'conversation.hero.brand.mark': { kind: 'single'; scope: 'root'; owner: HeroBrandMarkOwnerProps }
     /** Agent-preset control staged for a New Session. */
     'conversation.hero.agentPreset': { kind: 'single'; scope: 'session-maybe'; owner: HeroAgentPresetOwnerProps }
     /** Compact options right-aligned in the New Session row after the workspace and preset controls; rendered only with a Session. */
     'conversation.hero.options': { kind: 'list'; scope: 'session' }
-    /** Full-width entries above the composer card. */
+    /**
+     * Full-width entries above the composer card; fixed overlays must portal to the document body
+     * because the docked composer contains them.
+     */
     'conversation.input.dock': { kind: 'list'; scope: 'session'; owner: InputZone }
-    /** Floating entries rendered inside the resident composer card. */
+    /**
+     * Floating entries rendered inside the resident composer card; fixed overlays must portal to
+     * the document body because the docked composer contains them.
+     */
     'conversation.input.overlay': { kind: 'list'; scope: 'session' }
-    /** Ambient entries below the composer card. */
+    /**
+     * Ambient entries below the composer card; fixed overlays must portal to the document body
+     * because the docked composer contains them.
+     */
     'conversation.composer.dock': { kind: 'list'; scope: 'session' }
-    /** Compact controls at the left of the composer tool row. */
+    /**
+     * Compact controls at the left of the composer tool row; fixed overlays must portal to the
+     * document body because the docked composer contains them.
+     */
     'conversation.input.left': { kind: 'list'; scope: 'session' }
-    /** Compact controls before the composer submit action. */
+    /**
+     * Compact controls before the composer submit action; fixed overlays must portal to the
+     * document body because the docked composer contains them.
+     */
     'conversation.input.right': { kind: 'list'; scope: 'session' }
-    /** Compact action after the model selector; it can expand across the toolbar while retaining the editor and submit action. */
+    /**
+     * Compact action after the model selector; it can expand across the toolbar while retaining the
+     * editor and submit action, and fixed overlays must portal to the document body because the
+     * docked composer contains them.
+     */
     'conversation.input.activity': { kind: 'single'; scope: 'session'; owner: InputActivityOwnerProps }
-    /** Resident composer body, including the no-Session inert state. */
+    /**
+     * Resident composer body, including the no-Session inert state; fixed overlays must portal to
+     * the document body because the docked composer contains them.
+     */
     'conversation.composer.bar': { kind: 'single'; scope: 'session-maybe'; owner: ComposerBarOwnerProps }
-    /** Optional draft-attachment rail and drop target. */
+    /**
+     * Optional draft-attachment rail and drop target; fixed overlays must portal to the document
+     * body because the docked composer contains them.
+     */
     'conversation.input.attachments': {
       kind: 'single'
       scope: 'session-maybe'
       owner: ComposerAttachmentsOwnerProps
     }
-    /** Plan control inside the composer tool row. */
+    /**
+     * Plan control inside the composer tool row; fixed overlays must portal to the document body
+     * because the docked composer contains them.
+     */
     'conversation.input.plan': { kind: 'single'; scope: 'session'; owner: InputControlOwnerProps }
-    /** Current-session permission control inside the composer tool row. */
+    /**
+     * Current-session permission control inside the composer tool row; fixed overlays must portal
+     * to the document body because the docked composer contains them.
+     */
     'conversation.input.permission': { kind: 'single'; scope: 'session'; owner: InputControlOwnerProps }
     /**
      * Model selector inside the composer tool row. When expanded controls cannot
      * share a line, the row sets --dsh-composer-model-text-display to none and
      * --dsh-composer-model-icon-display to block for an occupant's compact display.
+     * Fixed overlays must portal to the document body because the docked composer contains them.
      */
     'conversation.input.model': { kind: 'single'; scope: 'session'; owner: InputControlOwnerProps }
   }
@@ -328,6 +372,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
         'conversation.composer': { kind: 'chain'; scope: 'session' }
         'conversation.composer.bar': { kind: 'single'; scope: 'session-maybe' }
         'conversation.input.dock': { kind: 'list'; scope: 'session' }
+        'conversation.hero.frame': { kind: 'hoc'; scope: 'root' }
         'conversation.hero.brand.mark': { kind: 'single'; scope: 'root' }
         'conversation.hero.workspace': { kind: 'single'; scope: 'root' }
         'conversation.hero.agentPreset': { kind: 'single'; scope: 'session-maybe' }
@@ -530,6 +575,11 @@ export interface ComposerBarInjected {
   retryFileUpload: ((id: DraftAttachmentId) => void) | undefined
   toggleCommandMenu: ((selection: EditSelection) => void) | undefined
   stop: (() => void) | undefined
+  /**
+   * Submit empty input to retry the displayed failed generation.
+   * @param failureSeq - sequence of the displayed failed turn/end.
+   */
+  retry: ((failureSeq: SessionSeq) => void) | undefined
   hooks: {
     /** Readable sequence while the fixed Stop command is registered. */
     stopShortcut: ObservableSnapshot<readonly string[]>
@@ -581,7 +631,13 @@ export interface ComposerChainProps {
   pendingInteraction: SessionPendingInteraction | undefined
 }
 
-/** Presentation props supplied to the blank-session brand mark. */
+/** Conversation state exposed to scroll-body frame layers. */
+export interface HeroFrameOwnerProps {
+  /** Whether the body shows the blank home of a standalone, non-embedded Conversation. */
+  hero: boolean
+}
+
+/** Brand-mark presentation selected by the blank home. */
 export interface HeroBrandMarkOwnerProps {
   /** Requested square edge in pixels. */
   size: number
@@ -638,6 +694,7 @@ export type ConversationHeaderProps =
 /** Full props of the strict Session header. */
 export type ConversationSessionHeaderSlotProps =
   PropsRuntime<'conversation.session.header'>
+  & PropsRenderFactories
   & PropsRenderSlots<
     'conversation.session.header.lineage'
     | 'conversation.session.header.actions'

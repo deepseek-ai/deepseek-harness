@@ -493,9 +493,13 @@ describe('ChangeRequestCard actions', () => {
     const button = within(b.item).getByRole('button', { name: en['change.merge'] })
     expect(within(b.item).queryByRole('button', { name: en['change.markReady'] })).toBeNull()
     expect(button.getAttribute('aria-expanded')).toBe('false')
+    expect(button.classList.contains(css.mergeAction ?? '')).toBe(true)
+    const caret = (): Element | null => button.querySelector(`.${css.mergeCaret}`)
+    expect(caret()?.classList.contains(css.mergeCaretOpen ?? '')).toBe(false)
 
     fireEvent.click(button)
     expect(button.getAttribute('aria-expanded')).toBe('true')
+    expect(caret()?.classList.contains(css.mergeCaretOpen ?? '')).toBe(true)
     expect(within(screen.getByRole('menu')).getByText('Merge #7 into main')).toBeTruthy()
     expect(mergeRows()).toEqual([
       'Create a merge commitKeep every commit and add a merge commit ✓',

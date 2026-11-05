@@ -1,0 +1,23 @@
+{
+  "formatVersion": 2,
+  "roots": [
+    {"key":"event:team/task","kind":"event","event":"team/task","surface":false,"digest":"bca0f9cb63d8620b6954bb045b07bb07cb557513a7f0e2e177f5e87f704e7ba7"}
+  ],
+  "types": [],
+  "nodes": {
+    "0657d3ca5ac4e7bf": {"kind":"primitive","type":"number"},
+    "1ebc6f9ff3aa9e3a": {"kind":"literal","value":"completed"},
+    "234142ee4f996f38": {"kind":"literal","value":"pending"},
+    "4018a00144474b6c": {"kind":"object","properties":[{"name":"blockedBy","type":"93c33d9687613293","optional":false},{"name":"description","type":"4cd48f3e5108bd6e","optional":false},{"name":"id","type":"4cd48f3e5108bd6e","optional":false},{"name":"ownerId","type":"4cd48f3e5108bd6e","optional":true},{"name":"ownerName","type":"4cd48f3e5108bd6e","optional":true},{"name":"revision","type":"0657d3ca5ac4e7bf","optional":false},{"name":"status","type":"b2d2a01e51341a3b","optional":false},{"name":"subject","type":"4cd48f3e5108bd6e","optional":false},{"name":"writeScopes","type":"93c33d9687613293","optional":false}],"indices":[]},
+    "4cd48f3e5108bd6e": {"kind":"primitive","type":"string"},
+    "93c33d9687613293": {"kind":"array","element":"4cd48f3e5108bd6e"},
+    "94c56aeb1564ad73": {"kind":"literal","value":"in_progress"},
+    "a0f906856fc06f1c": {"kind":"literal","value":2},
+    "a9427866376b691a": {"kind":"object","properties":[{"name":"task","type":"4018a00144474b6c","optional":false},{"name":"teamId","type":"4cd48f3e5108bd6e","optional":false},{"name":"version","type":"a0f906856fc06f1c","optional":false}],"indices":[]},
+    "b2d2a01e51341a3b": {"kind":"union","types":["1ebc6f9ff3aa9e3a","234142ee4f996f38","94c56aeb1564ad73","e7e8f1318170b828"]},
+    "b57ae1b37e52bee0": {"kind":"literal","value":"team/task"},
+    "bca0f9cb63d8620b": {"kind":"object","properties":[{"name":"data","type":"a9427866376b691a","optional":false},{"name":"ignorable","type":"dacf3d5f3e4ff619","optional":true},{"name":"seq","type":"0657d3ca5ac4e7bf","optional":false},{"name":"time","type":"0657d3ca5ac4e7bf","optional":false},{"name":"type","type":"b57ae1b37e52bee0","optional":false}],"indices":[]},
+    "dacf3d5f3e4ff619": {"kind":"literal","value":true},
+    "e7e8f1318170b828": {"kind":"literal","value":"deleted"}
+  }
+}

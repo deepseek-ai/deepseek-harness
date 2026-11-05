@@ -18,6 +18,14 @@ import { FsError } from '@deepseek-ai/dsh-fs'
  * @param displayPath - the resolved target path shown to the model.
  * @returns a remediated `FsError` for the two guarded-mutation codes, else the original value.
  */
+export function remediateFsError(error: FsError, displayPath: string): FsError
+/**
+ * Remediate a caught value, preserving non-filesystem failures.
+ * @param error - value thrown by an execution.
+ * @param displayPath - resolved target path shown to the model.
+ * @returns a remediated filesystem error, or the unchanged caught value.
+ */
+export function remediateFsError(error: unknown, displayPath: string): unknown
 export function remediateFsError(error: unknown, displayPath: string): unknown {
   if (!(error instanceof FsError)) return error
   if (error.code === 'FS_NOT_OBSERVED') {

@@ -11,10 +11,17 @@ import { detailsCardModel, todosDetail } from '../src/client/tool/models/details
 import { DetailsRow, detailsToolview } from '../src/client/tool/toolviews/details-row.tsx'
 import { useDisclosure } from '@deepseek-ai/dsh-client-ui-chat/src/client/chat/use-disclosure.ts'
 import { PartialArguments } from '@deepseek-ai/dsh-util-values'
+import { ToolDetails } from '../src/client/tool/components/ToolDetails.tsx'
 
 const t = makeTranslate(en, commonEn)
 const goal = { id: 'goal-1', revision: 2, objective: 'Ship compact cards', phase: 'active', roundsStarted: 2, maxGoalRounds: 8 }
 const schedule = { id: 'schedule-1', prompt: 'Review the build', kind: 'every', everySeconds: 3600, scheduledAt: '2026-09-10T09:00:00.000Z', state: 'scheduled', deliveryMode: 'session-local' }
+const task = {
+  id: 'task-1', kind: 'rrule', title: 'Queue check', prompt: 'Check the queue', rrule: 'DTSTART:20260916T010000Z\nRRULE:FREQ=DAILY;BYHOUR=1',
+  scheduledAt: '2026-09-16T01:00:00.000Z', target: { kind: 'session', sessionId: 'session-1' }, involvedSessionIds: ['session-1'],
+  status: 'active', createdAt: '2026-09-15T00:00:00.000Z', updatedAt: '2026-09-15T00:00:00.000Z',
+}
+const page = { shown: 2, total: 2, limit: 100, offset: 0 }
 
 function result(name: string, value: unknown, args = '{}'): ToolResultNode {
   return { kind: 'tool-result', seq: 10, time: 2000, callTime: 1000, callId: 'c1', name, args: PartialArguments.fromText(args), call: { name, argsRaw: args }, content: [{ type: 'text', text: JSON.stringify(value) }], isError: false, subCalls: [] }
@@ -33,11 +40,11 @@ describe('detailsCardModel', () => {
   it('keeps all reminders and their recorded state, including one-shot and empty lists', () => {
     const model = detailsCardModel(result('schedule_list', [schedule, { ...schedule, id: 'schedule-2', kind: 'at', state: 'overdue' }, { ...schedule, id: 'schedule-3', kind: 'after', afterSeconds: 30 }]), t, 'en')
     expect(model?.items).toHaveLength(3)
-    expect(model?.summary).toBe('3 reminders')
+    expect(model?.summary).toBe('3 automation tasks')
     expect(model?.items[0]?.fields).toContainEqual({ label: 'Repeat', value: 'Every 1 h' })
     expect(model?.items[1]?.fields).toContainEqual({ label: 'Status', value: 'Overdue, awaiting session resume' })
     expect(model?.items[2]?.fields).toContainEqual({ label: 'Repeat', value: 'Once' })
-    expect(detailsCardModel(result('schedule_list', []), t, 'en')).toMatchObject({ summary: '0 reminders', empty: 'No reminders' })
+    expect(detailsCardModel(result('schedule_list', []), t, 'en')).toMatchObject({ summary: '0 automation tasks', empty: 'No automation tasks' })
     expect(detailsCardModel(result('schedule_delete', { id: 'schedule-1', deleted: true }), t, 'en')?.items[0]?.fields).toContainEqual({ label: 'Status', value: 'Deleted' })
   })
 
@@ -62,6 +69,25 @@ describe('detailsCardModel', () => {
     expect(untitled?.items[0]?.title).toBe('Ship the weekly report')
   })
 
+  it('presents the Host task entries that the current tools return', () => {
+    const view = detailsCardModel(result('schedule_view', task), t, 'en')
+    expect(view?.items[0]?.title).toBe('Queue check')
+    expect(view?.items[0]?.fields).toContainEqual({ label: 'Repeat', value: 'Custom' })
+    expect(view?.items[0]?.fields).toContainEqual({ label: 'Status', value: 'Enabled' })
+    expect(detailsCardModel(result('schedule_create', task), t, 'en')).toEqual(view)
+    const paused = detailsCardModel(result('schedule_edit', { ...task, status: 'paused' }), t, 'en')
+    expect(paused?.items[0]?.fields).toContainEqual({ label: 'Status', value: 'Paused' })
+    const deleted = detailsCardModel(result('schedule_edit', { id: 'task-1', deleted: true }), t, 'en')
+    expect(deleted?.items[0]).toEqual({ title: 'task-1', fields: [{ label: 'Status', value: 'Deleted' }] })
+    const listed = detailsCardModel(result('schedule_list', { ...page, items: [task, { ...task, id: 'task-2', status: 'ended' }] }), t, 'en')
+    expect(listed?.summary).toBe('2 automation tasks')
+    expect(listed?.items[1]?.fields).toContainEqual({ label: 'Status', value: 'Ended' })
+    expect(detailsCardModel(result('schedule_list', { ...page, items: [], shown: 0, total: 0 }), t, 'en'))
+      .toMatchObject({ summary: '0 automation tasks', empty: 'No automation tasks' })
+    const cron = detailsCardModel(result('schedule_view', { ...task, kind: 'cron', rrule: undefined, expression: '0 9 * * 1-5', timeZone: 'Asia/Shanghai' }), t, 'en')
+    expect(cron?.items[0]?.fields).toContainEqual({ label: 'Repeat', value: t('detail.schedule.cron', { expression: '0 9 * * 1-5', zone: 'Asia/Shanghai' }) })
+  })
+
   it('presents an in-place update by the reminder it committed', () => {
     const model = detailsCardModel(result('schedule_update', {
       ...schedule, deliveryMode: 'host', kind: 'daily', time: '10:30:00.000', timeZone: 'Asia/Shanghai', everySeconds: undefined,
@@ -77,12 +103,28 @@ describe('detailsCardModel', () => {
     ['schedule_create', { ...schedule, scheduledAt: 'invalid' }],
     ['schedule_create', { ...schedule, kind: 'unknown' }],
     ['schedule_create', { ...schedule, everySeconds: -1 }],
+    ['schedule_create', { ...schedule, title: 'Recorded reminder', prompt: '' }],
+    ['schedule_create', { ...schedule, deliveryMode: 'unknown' }],
+    ['schedule_create', { ...schedule, state: 'unknown' }],
     ['schedule_list', [schedule, {}]],
+    ['schedule_list', false],
     ['schedule_list', { code: 'corrupt_schedule_log', message: 'The session schedule log is corrupt.' }],
     ['schedule_delete', { id: 'schedule-1', deleted: false, code: 'schedule_not_found' }],
     ['schedule_delete', { code: 'persistence_uncertain', operation: 'delete', id: 'schedule-1', message: 'Persistence is uncertain.' }],
     ['schedule_update', { ...schedule, kind: 'weekly', weekdays: [0], time: '09:00:00.000', timeZone: 'UTC' }],
     ['schedule_update', { ...schedule, kind: 'cron', expression: '', timeZone: 'UTC' }],
+    ['schedule_view', { id: 'task-1', code: 'schedule_not_found' }],
+    ['schedule_view', { ...task, title: '' }],
+    ['schedule_view', { ...task, title: '', prompt: '' }],
+    ['schedule_view', { ...task, rrule: 1 }],
+    ['schedule_view', { ...task, kind: undefined }],
+    ['schedule_view', { ...task, scheduledAt: 1 }],
+    ['schedule_view', { ...task, scheduledAt: '2026-09-16T01:00:00Z' }],
+    ['schedule_view', { ...task, status: 'unknown' }],
+    ['schedule_view', { ...task, rrule: 'DTSTART:20260916T010000Z' }],
+    ['schedule_view', { ...task, kind: 'cron' }],
+    ['schedule_edit', { id: 'task-1', code: 'schedule_conflict' }],
+    ['schedule_list', { ...page, items: [task, {}] }],
     ['unknown_tool', { goal, activation: 'armed' }],
   ])('retains raw output for unsupported %s results (%j)', (name, value) => {
     expect(detailsCardModel(result(name, value), t, 'en')).toBeNull()
@@ -111,6 +153,28 @@ describe('todosDetail', () => {
 })
 
 describe('DetailsRow', () => {
+  it('puts agent names first and lets a compact description expand and collapse', () => {
+    const description = 'Verify every construction bound. '.repeat(20)
+    const block = { ...result('list_agents', null), content: [{ type: 'text' as const, text: `reviewer/checker [running] — ${description}` }] }
+    const model = detailsCardModel(block, t, 'en')!
+    render(<ToolDetails model={model} t={t} />)
+    const name = screen.getByText('reviewer/checker')
+    const toggle = screen.getByRole('button', { name: 'Expand description for reviewer/checker' })
+    expect(name.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(toggle.textContent).toBe(description)
+    fireEvent.click(toggle)
+    expect(screen.getByRole('button', { name: 'Collapse description for reviewer/checker' }).getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('uses an unqualified accessible name when a compact description has no title', () => {
+    render(<ToolDetails model={{ compact: true, items: [{ subtitle: 'Details', fields: [] }] }} t={t} />)
+    const toggle = screen.getByRole('button', { name: 'Expand' })
+    fireEvent.click(toggle)
+    expect(screen.getByRole('button', { name: 'Collapse' })).toBe(toggle)
+  })
+
   it('expands fields with the keyboard and keeps Inspect available', () => {
     const inspect = vi.fn()
     render(<DetailsRow {...{ useDisclosure, toolName: 'get_goal', block: result('get_goal', { goal, activation: 'armed' }), inspect, t } as Parameters<typeof DetailsRow>[0]} />)
@@ -123,12 +187,37 @@ describe('DetailsRow', () => {
     expect(inspect).toHaveBeenCalledOnce()
   })
 
-  it('presents teammate-coordination tools under the two-person team icon', () => {
+  it.each([
+    ['subagent', 'Create subagent'],
+    ['subagent_fork', 'Fork subagent'],
+    ['list_subagent_models', 'List models'],
+  ])('%s uses the two-person icon and its own title', (name, title) => {
     const inspect = vi.fn()
     const expectedIcon = render(<IconUsersOutlineRegular size={14} />).container.querySelector('svg')!.outerHTML
-    const view = render(<DetailsRow {...{ useDisclosure, toolName: 'wait_agent', block: result('wait_agent', { timedOut: true }), inspect, t } as Parameters<typeof DetailsRow>[0]} />)
-    expect(screen.getByText('Wait for subagent')).toBeTruthy()
+    const props = { useDisclosure, toolName: name, block: result(name, { timedOut: true }), inspect, t } as Parameters<typeof DetailsRow>[0]
+    const view = render(<DetailsRow {...props} />)
+    expect(screen.getByText(title)).toBeTruthy()
     expect(view.container.querySelector('svg')?.outerHTML).toBe(expectedIcon)
+  })
+
+  it.each([[false, 'Wait ended'], [true, 'Wait timed out']] as const)('shows one settled wait label with the team icon (%s)', (timedOut, label) => {
+    const inspect = vi.fn()
+    const expectedIcon = render(<IconUsersOutlineRegular size={14} />).container.querySelector('svg')!.outerHTML
+    const view = render(<DetailsRow {...{ useDisclosure, toolName: 'wait_agent', block: result('wait_agent', { timedOut }), inspect, t } as Parameters<typeof DetailsRow>[0]} />)
+    const header = screen.getByRole('button', { expanded: false })
+    expect(header.textContent).toBe(label)
+    expect(view.container.querySelector('svg')?.outerHTML).toBe(expectedIcon)
+    fireEvent.click(header)
+    expect(screen.getByRole('button', { expanded: true }).textContent).toBe(label)
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect' }))
+    expect(inspect).toHaveBeenCalledOnce()
+  })
+
+  it('shows a running wait without appending its timeout arguments', () => {
+    const block = { phase: 'start' as const, args: PartialArguments.fromText('{"timeout_ms":30000}'), callId: 'wait', name: 'wait_agent', argsRaw: '{"timeout_ms":30000}', turn: 1, step: 1, time: 1000, subCalls: [] }
+    render(<DetailsRow {...{ useDisclosure, toolName: 'wait_agent', block, t } as Parameters<typeof DetailsRow>[0]} />)
+    const header = screen.getByRole('button', { expanded: false })
+    expect(header.textContent).toBe('Waiting for messages…')
   })
 
   it('registers the supported tool names through the scoped keyed slot', () => {
@@ -137,8 +226,12 @@ describe('DetailsRow', () => {
       for (const dispose of callback()) dispose()
     })
     detailsToolview.apply({ slots: { inject, register } } as never)
-    expect(register.mock.calls).toHaveLength(37)
-    expect(register.mock.calls.map(([spec]) => spec)).toContainEqual({ name: 'tool.call.toolview', key: 'cordis_inspect_query', locale: 'conversation' })
-    expect(register.mock.calls.map(([spec]) => spec)).toContainEqual({ name: 'tool.call.toolview', key: 'schedule_update', locale: 'conversation' })
+    expect(register.mock.calls).toHaveLength(40)
+    const specs = register.mock.calls.map(([spec]) => spec)
+    expect(specs).toContainEqual({ name: 'tool.call.toolview', key: 'subagent_fork', locale: 'conversation' })
+    expect(specs).toContainEqual({ name: 'tool.call.toolview', key: 'cordis_inspect_query', locale: 'conversation' })
+    for (const key of ['schedule_create', 'schedule_list', 'schedule_view', 'schedule_edit', 'schedule_update', 'schedule_delete']) {
+      expect(specs).toContainEqual({ name: 'tool.call.toolview', key, locale: 'conversation' })
+    }
   })
 })

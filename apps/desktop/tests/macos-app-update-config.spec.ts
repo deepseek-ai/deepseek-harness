@@ -66,10 +66,10 @@ describe('macOS packaged updater configuration', () => {
 })
 
 
-it('seals latest into the macOS updater file and rejects a different expected channel', async () => {
+it('seals stable into the macOS updater file and rejects a different expected channel', async () => {
   const paths = await fixture()
-  const latest = resolveMacOSAppUpdateFeed([{ provider: 'generic', url: update.publicUrl, channel: 'latest' }])
-  await writeMacOSAppUpdateConfig(paths.resourcesDir, latest, 'fixture-updater')
-  await expect(verifyMacOSAppUpdateConfig(paths.appPath, latest)).resolves.toBeUndefined()
+  const stable = resolveMacOSAppUpdateFeed([{ provider: 'generic', url: update.publicUrl, channel: 'stable' }])
+  await writeMacOSAppUpdateConfig(paths.resourcesDir, stable, 'fixture-updater')
+  await expect(verifyMacOSAppUpdateConfig(paths.appPath, stable)).resolves.toBeUndefined()
   await expect(verifyMacOSAppUpdateConfig(paths.appPath, update)).rejects.toThrow(/does not match/u)
 })

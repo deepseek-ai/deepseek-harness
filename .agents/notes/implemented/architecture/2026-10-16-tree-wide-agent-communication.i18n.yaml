@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-16-tree-wide-agent-communication.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-16-tree-wide-agent-communication.md
+/agent-note-communication-follows-the-subagent-tree:
+  en: 849d806b901e9f04
+  zh: 649b2984f844d510
+/agent-note-communication-follows-the-subagent-tree/problem:
+  en: c583c3cdb894e417
+  zh: 6edc0354b79f4f26
+/agent-note-communication-follows-the-subagent-tree/decision:
+  en: 767b4b4dfd84f72e
+  zh: 36617ec0dab777ee
+/agent-note-communication-follows-the-subagent-tree/alternatives-considered:
+  en: 470f9cf8c3e32af9
+  zh: 73bbe29767c5d02a
+/agent-note-communication-follows-the-subagent-tree/consequences:
+  en: 6d409833d762d473
+  zh: 000cd93577ec6b34

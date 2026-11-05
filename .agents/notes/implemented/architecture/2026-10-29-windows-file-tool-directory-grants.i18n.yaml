@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-29-windows-file-tool-directory-grants.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-29-windows-file-tool-directory-grants.md
+/agent-note-windows-additional-directory-grants-stay-in-file-tools:
+  en: aea9858c74dfd36e
+  zh: 4064573838d6000f
+/agent-note-windows-additional-directory-grants-stay-in-file-tools/problem:
+  en: da14bde7ed3eae49
+  zh: 6aad2181b2756b50
+/agent-note-windows-additional-directory-grants-stay-in-file-tools/decision:
+  en: acec40cda6036f2c
+  zh: 149c9eecb9863643
+/agent-note-windows-additional-directory-grants-stay-in-file-tools/alternatives-considered:
+  en: 09d6cceef8004a65
+  zh: e9009eb5bbae1d87
+/agent-note-windows-additional-directory-grants-stay-in-file-tools/consequences:
+  en: a37925f508bb5644
+  zh: f5a6cb4e099f94c6

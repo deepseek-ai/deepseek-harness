@@ -3,7 +3,9 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makeTranslate, RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import type { RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
-import type { ScheduleCatalogEntry, ScheduleDeleteResult, ScheduleId } from '@deepseek-ai/dsh-schedule/client'
+import type {
+  ScheduleDeleteResult, ScheduleId, ScheduleCatalogEntry as ScheduleCatalogEntry,
+} from '@deepseek-ai/dsh-schedule/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-ui-renderer/src/client/bind.ts'
 import { createCatalogSource, type CatalogInjected } from '../src/client/catalog-source.ts'
@@ -16,10 +18,12 @@ const id = 'mark-task' as ScheduleId
 
 afterEach(cleanup)
 
-function entry(taskId: string, sessionId: SessionId, status: 'active' | 'inactive' = 'active'): ScheduleCatalogEntry {
-  return {
-    id: taskId as ScheduleId, sessionId, status, kind: 'at',
-    title: 'Read status', prompt: 'Read status', scheduledAt: '2026-10-01T00:00:00.000Z',
+function entry(taskId: string, sessionId: SessionId, status: ScheduleCatalogEntry['status'] = 'active'): ScheduleCatalogEntry {
+  return { kind: 'rrule',
+    id: taskId as ScheduleId, title: 'Read status', prompt: 'Read status',
+    rrule: 'DTSTART;TZID=UTC:20261001T000000\nRRULE:FREQ=DAILY;COUNT=1', scheduledAt: '2026-10-01T00:00:00.000Z',
+    target: { kind: 'session', sessionId }, involvedSessionIds: [sessionId], status,
+    createdAt: '2026-09-30T00:00:00.000Z', updatedAt: '2026-09-30T00:00:00.000Z',
   }
 }
 
@@ -53,7 +57,7 @@ async function settle(): Promise<void> {
 }
 
 describe('Session schedule sidebar mark', () => {
-  it('shows no mark until a read settles, and none for an empty, ended-only, or failed read', async () => {
+  it('shows no mark until a read settles, and none for an empty, paused-or-ended-only, or failed read', async () => {
     const pending = renderMark(sourceFor(() => new Promise(() => {})))
     expect(pending.container.querySelector('[data-session-schedule-mark]')).toBeNull()
     pending.unmount()
@@ -62,7 +66,9 @@ describe('Session schedule sidebar mark', () => {
     await settle()
     expect(empty.container.querySelector('[data-session-schedule-mark]')).toBeNull()
 
-    const ended = renderMark(sourceFor(async () => ({ ok: true, value: [entry('ended', SESSION, 'inactive')] })))
+    const ended = renderMark(sourceFor(async () => ({
+      ok: true, value: [entry('paused', SESSION, 'paused'), entry('ended', SESSION, 'ended')],
+    })))
     await settle()
     expect(ended.container.querySelector('[data-session-schedule-mark]')).toBeNull()
 

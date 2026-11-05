@@ -78,7 +78,7 @@ export class Entry {
     if (this.options.group) return false
     let entry: Entry | undefined = this
     do {
-      if (this.disabledOf(entry.options)) return true
+      if (this._resolveDisabled(entry.options)) return true
       entry = entry.parent.ctx.fiber.entry
     } while (entry)
     return false
@@ -88,7 +88,7 @@ export class Entry {
    * Effective disabled state: a `!!js` expression evaluates against the loader
    * context. The raw node stays in the options, so write-back keeps the form.
    */
-  private disabledOf(options: EntryOptions): boolean {
+  private _resolveDisabled(options: EntryOptions): boolean {
     return isJsExpr(options.disabled)
       ? Boolean(this.evaluate(options.disabled.__jsExpr))
       : Boolean(options.disabled)

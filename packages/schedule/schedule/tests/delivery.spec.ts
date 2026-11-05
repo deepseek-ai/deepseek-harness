@@ -6,6 +6,7 @@ import { expect, it, vi } from 'vitest'
 import { createAfterScheduleRecord, ScheduleId } from '../src/domain.ts'
 import { ScheduleRuntime } from '../src/runtime.ts'
 import type { ScheduleTask } from '../src/storage.ts'
+import { boundTask } from './harness.ts'
 
 it('acknowledges the real synchronous inbox splice after flush without claiming model execution', async () => {
   vi.useFakeTimers()
@@ -22,7 +23,8 @@ it('acknowledges the real synchronous inbox splice after flush without claiming 
       const resolve = vi.fn(async (_sessionId: SessionId) => ({ agent }))
       ctx.provide('sessionController', { resolveAgent: resolve } as never)
       const record = createAfterScheduleRecord(ScheduleId('receipt'), 'Inbox only', 1, Date.now() - 2000, 'Inbox only')
-      const tasks: ScheduleTask[] = [{ sessionId: agent.session.id, record, status: 'active' }]
+      const seeded = boundTask(agent.session.id, record)
+      const tasks: ScheduleTask[] = [seeded]
       const flushStarted = Promise.withResolvers<undefined>()
       const releaseFlush = Promise.withResolvers<undefined>()
       let eventsAtFlush: readonly SessionEvent[] = []
@@ -32,8 +34,9 @@ it('acknowledges the real synchronous inbox splice after flush without claiming 
         return releaseFlush.promise
       })
       const commit = vi.fn(async (task: ScheduleTask) => { tasks[0] = task })
-      const runtime = new ScheduleRuntime(ctx, () => tasks, work => work(), commit, { days: 30, records: 200 },
-        async sessionId => (await resolve(sessionId)).agent)
+      const runtime = new ScheduleRuntime(ctx, () => tasks, work => work(), commit, () => {}, {
+        retention: { days: 30, records: 200 }, newSessionIntervalMs: 3_600_000,
+      }, async sessionId => (await resolve(sessionId)).agent)
       try {
         runtime.requestDrive()
         await flushStarted.promise
@@ -43,19 +46,19 @@ it('acknowledges the real synchronous inbox splice after flush without claiming 
         expect(inserted[0]?.source).toEqual({ kind: 'schedule' })
         expect(agent.inbox.nextTurn).toEqual(inserted)
         expect(commit).not.toHaveBeenCalled()
-        expect(tasks).toEqual([{ sessionId: agent.session.id, record, status: 'active' }])
+        expect(tasks).toEqual([seeded])
         vi.setSystemTime(new Date('2026-09-16T00:00:03.000Z'))
         releaseFlush.resolve(undefined)
         await runtime.dispose()
         expect(commit).toHaveBeenCalledTimes(1)
+        const receipt = {
+          scheduledAt: record.scheduledAt, deliveredAt: '2026-09-16T00:00:03.000Z', messageId: inserted[0]!.id,
+          targetSessionId: agent.session.id,
+        }
         expect(tasks).toEqual([{
-          sessionId: agent.session.id, record, status: 'inactive',
-          deliveryHistory: { records: [{
-            scheduledAt: record.scheduledAt, deliveredAt: '2026-09-16T00:00:03.000Z', messageId: inserted[0]!.id,
-            prompt: 'Inbox only',
-          }], earlierRecordsUnavailable: true, earlierRecordsPruned: false },
-          lastDelivery: {
-            scheduledAt: record.scheduledAt, deliveredAt: '2026-09-16T00:00:03.000Z', messageId: inserted[0]!.id,
+          ...seeded, status: 'ended', updatedAt: receipt.deliveredAt, lastDelivery: receipt,
+          deliveryHistory: {
+            records: [{ ...receipt, prompt: 'Inbox only' }], earlierRecordsUnavailable: false, earlierRecordsPruned: false,
           },
         }])
         expect(agent.inbox.nextTurn).toEqual(inserted)

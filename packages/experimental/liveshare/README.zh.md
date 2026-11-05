@@ -37,12 +37,10 @@ Owner、查看页和 Liveshare 服务端必须使用匹配的协议版本。构�
 
 dsh 安装会把本包作为运行时依赖一起安装，但没有任何随发行版交付的 profile 选中它的组合包，因此它的插件一条都不会运行，插件管理器既不会在**内置插件配置**里列出它，也不会在**实验性插件**（含**更多**页）里列出。组合包 ID 仍可按 ID 打开，因此按 ID 打开组合包的页面仍能到达它的详情。
 
-要启用它，把它的两条条目插入当前 profile 的 patch 文件 `$DSH_HOME/profiles/<profile>/cordis.patch.yml`。该文件是一个 YAML 序列的 Loader patch；这两条就是组合包自己的 [patch](cordis.patch.yml) 插入的条目，其中允许使用 `!!js` 表达式：
+要启用它，把它的一条条目插入当前 profile 的 patch 文件 `$DSH_HOME/profiles/<profile>/cordis.patch.yml`。该文件是一个 YAML 序列的 Loader patch；这一条就是组合包自己的 [patch](cordis.patch.yml) 插入的条目，其中允许使用 `!!js` 表达式：
 
 ```yaml
 - insert:
-    - id: liveshare-viewer-declarations
-      name: '@deepseek-ai/dsh-experimental-liveshare/viewer-declarations'
     - id: liveshare-share-host
       name: '@deepseek-ai/dsh-experimental-liveshare'
       config:
@@ -81,16 +79,21 @@ Liveshare 服务端地址在首次使用时设置：在分享弹窗的地址输�
 
 ### 会话档位
 
+<a id="session-tiers"></a>
+
 | 档位 | 查看者操作 | 执行限制 |
 |---|---|---|
-| `view` | 向源会话发送提示词，并停止其正在运行的轮次 | 挂在会话上的只读沙箱，只约束分享查看者发起的轮次：该轮次只能使用读取与检索面（`read`、`read_image`、`glob`、`grep`、`present`）、无本地文件副作用的工具（`todo_write`、`skill`、`web_search`、`web_fetch`）；每次调用声明的每个路径都按获授工作区检查 |
+| `view` | 向源会话发送提示词，并停止其正在运行的轮次 | 挂在会话上的只读沙箱，只约束分享查看者发起的轮次：该轮次只能使用读取与检索面（`read`、`read_image`、`glob`、`grep`、`present`）、无本地文件副作用的工具（`todo_write`、`skill`、`web_search`、`web_fetch`），以及 PTC 传输工具 `run_code`；每次调用声明的每个路径都按获授工作区检查 |
 | `write` | 还可修改该工作区内的文件 | 有上限的可写沙箱：读取与检索面加上有界 `edit` 与 `write`，同样作用于查看者发起的轮次 |
 
 两档都会驱动共享会话，区别在于能否写入。沙箱挂在会话上，只要该会话还有分享活跃就会安装，但它只约束分享查看者发起的轮次：所有者自己发起的轮次保留会话原生工具，包括 `bash` 与不受限的文件工具；所有者在查看者轮次中追加的输入仍留在该受限轮次内。该判定只存在于 Host 内存、按轮次重算，不写入会话日志；所有分享停止或全部过期后执行层被释放，会话恢复自己的工具。分叉会话不是一个档位：分享自带独立开关，与档位无关；被允许的查看者可从已完成的源前缀分叉出会话，分叉会话运行在只读上限下；分享处于 `write` 档时改为受约束的写上限。
 
+**共享出去的 PTC 程序并不受分享沙箱约束。** 两档都准入 `run_code`，因为查看者可能需要用程序调用工具；但程序运行在所有者自己的常驻文件策略下，而不是分享档位下：它可以读写共享工作区之外的文件，档位不会收窄它。查看者发起的嵌套 `tools.*` 调用仍走与其它调用相同的守卫与路径检查，因此 `bash` 仍被拒绝、文件工具仍限制在获授范围内。在 PTC 可以被收窄到分享范围之前，只分享给可信任的人。
+
 附件上传既不是档位，也不属于分叉开关：它跟随可见性。无论分享处于哪个档位、是否允许分叉，已准入的查看者都可以向共享会话以及自己通过本分享分叉出的会话上传附件。所有者没有单独的附件开关。
 
-任何档位都不授予会话配置、重命名、归档、工作区管理或所有者全局设置与凭据权限；附件上传跟随可见性，不是档位授予。Owner Gateway 以 Remote 失败 `remote-access/denied`（reason 为 `liveshare/read-only`）拒绝查看者的 `settings/describe`、`credentials/describe`、`agentPresets/list`、`agentPresets/read` 以及分享未授予的其它端点；配置值、凭据引用元信息及 preset 插件配置不属于查看者数据。查看者保留本地展示默认值。这些管理决定与向会话发送消息的权限保持独立。**临时机制**：拥有本页所需端点的插件通过 [`viewerDeclarationsOf(ctx)`](src/host/viewer-declarations.ts) 提供能力——不改动任何状态的端点用 `registerViewerReadable(actions)`，会写入的端点用 `registerViewerWritable(actions)`——直到 Typert 元数据中的端点级访问声明取代这一接口。**提供能力本身不授予任何权限**：owner 按分享逐个开放某插件的端点，只有该插件的当前能力与这份分享自己的选择都指明同一端点、且资源在读者可见范围内时，该分享才暴露它。可写的选择沿用分享自身的写入规则，因此**只在会话本身已允许写入、且源执行已 confine 的分享中生效，任何能力与选择都不会把只读分享变成可写**；两种选择都把这个 policy 已经判定的 action——`session/prompt`、`session/cancel`、`session/fork` 及其 role 列出的其余 action——留给档位自己的结论。所有者自己的页面以所有者访问基线打开，界面保持不变。
+
+可分享给 viewer 的方法是已安装插件注册的 Remote 方法，由 Host 的 Typert registry 在 [`shareable-catalog.ts`](src/host/shareable-catalog.ts) 动态枚举。DSH 核心服务命名空间被排除（[`EXCLUDED_SHARE_NAMESPACES`](src/host/shareable-catalog.ts) 列出这些命名空间），插件管理器报告为核心 profile bundle 组件的插件也被排除；其他用户安装的插件和 DSH 实验性插件保留。所有者可以一次性开放全部已安装插件，也可以按插件设为不可用、全部方法或部分方法。这里没有读写之分：只有当前目录与该 share 的策略同时点名某个方法、且资源对读者可见时，该方法才可被调用。
 
 Owner Gateway 按调用指明的 Session 与工作区判定每次调用，并拒绝目标缺失或无效的调用。查看页的会话列表和工作区成员裁剪为源会话及该查看者自己的分叉会话。页面从读者的访问快照读取每个会话自己的答案，因此切换选择不会把前一会话的权限带过去。未知或无法读取的模式默认拒绝。Owner 为源会话与分叉会话调用重新检查准入；撤权会取消受影响的调用和流，分享准入收窄时还会停止共享会话正在运行的轮次。页面区分认证、访问、过期、停止分享、所有者离线和传输失败，仅重试明确分类为可重试的失败。
 
@@ -106,13 +109,12 @@ Owner Gateway 按调用指明的 Session 与工作区判定每次调用，并拒
 
 Fork 请求绑定主体、分享、源会话、操作身份和已完成前缀。持久化预留记录与已记录的分叉会话使重试已记录的操作时重放同一分叉会话；owner 的 `SessionForkRequest` 自己生成分叉会话 id，因此在分叉会话已创建、但尚未记录时中断的请求会再次 fork。注册表变更为异步操作，仅在加锁的读取、修改与原子发布后完成；调用方必须等待预留、记录与撤销。冷态激活使用 Host 常规 Agent lookup，由串行 `agent/created` 在排队输入运行前安装限制，不使用 Remote `session/prepare` 端点。分叉会话作用域保留单个默认拒绝的 guard；重连替换其限制安装，释放旧安装不会移除继任。
 
-读者的提示词以 `user-rpc` 消息进入会话，其 `source.principal` 指明该读者；pre-step 在每条进入消息到达模型前，按 Relay 的准入重新检查其查看者。执行按轮次受限：只要有分享处于活跃状态，已准入输入中带有 share-viewer principal 的轮次就运行 Host 挂载的读取与检索面（`read`、`read_image`、`glob`、`grep`、`present`）受限替代、无本地文件副作用工具（`todo_write`、`skill`、`web_search`、`web_fetch`）的替代，以及（当某个分享允许写入时）有界 `edit` 与 `write`。其余所有工具对该轮次一律拒绝，且每次允许的调用声明的每个路径都会解析并按获授根目录检查。所有者自己发起的轮次保留会话原生工具，直到最后一个分享停止或过期。该轮次判定只存在于 Host 内存，按轮次重算，不写入会话日志。每次操作都会重新读取分享当前的 Relay 授权，并按获授根目录检查解析后的目标。读者的停止与提示词一样经 Gateway 分派：`share-viewer` 策略在分享档位确立且会话受沙箱限制时放行，随后由所有者自己的会话控制器停止该会话当前运行的轮次，包括所有者发起的轮次。读写保留正常写入观察策略。执行规则见 [LiveShare 子系统](../../../docs/subsystems/liveshare.zh.md)。
+读者的提示词以 `user-rpc` 消息进入会话，其 `source.principal` 指明该读者；pre-step 在每条进入消息到达模型前，按 Relay 的准入重新检查其查看者。执行按轮次受限：只要有分享处于活跃状态，已准入输入中带有 share-viewer principal 的轮次就运行 Host 挂载的读取与检索面（`read`、`read_image`、`glob`、`grep`、`present`）受限替代、保留无本地文件副作用工具（`todo_write`、`skill`、`web_search`、`web_fetch`）的原生定义、放行选定执行器提供的 PTC 传输工具 `run_code`，以及（当某个分享允许写入时）有界 `edit` 与 `write`。其余所有工具对该轮次一律拒绝，且每次允许的调用声明的每个路径都会解析并按获授根目录检查。所有者自己发起的轮次保留会话原生工具，直到最后一个分享停止或过期。该轮次判定只存在于 Host 内存，按轮次重算，不写入会话日志。每次操作都会重新读取分享当前的 Relay 授权，并按获授根目录检查解析后的目标。读者的停止与提示词一样经 Gateway 分派：`share-viewer` 策略在分享档位确立且会话受沙箱限制时放行，随后由所有者自己的会话控制器停止该会话当前运行的轮次，包括所有者发起的轮次。读写保留正常写入观察策略。执行规则见 [LiveShare 子系统](../../../docs/subsystems/liveshare.zh.md)。
 
 | 职责 | 源码 |
 |---|---|
 | 登录、凭据存储及网关生命周期 | [share-host.ts](src/host/share-host.ts) |
 | 分享管理操作及其 `liveshareShares` Remote | [share-operations.ts](src/host/share-operations.ts), [share-remote.ts](src/host/share-remote.ts) |
-| 查看请求分派、读者 Peer 与访问策略 | [viewer-read.ts](src/host/viewer-read.ts)、[viewer-principal.ts](src/host/viewer-principal.ts)、[viewer-access-policy.ts](src/host/viewer-access-policy.ts)、[viewer-declarations.ts](src/host/viewer-declarations.ts)、[source-access.ts](src/host/source-access.ts) |
 | Fork 记录与运行时限制 | [fork-registry.ts](src/host/fork-registry.ts)、[fork-enforcement.ts](src/host/fork-enforcement.ts)、[shared-tools.ts](src/host/shared-tools.ts) |
 | 页面载体、查看页界面和页面资源读取 | [viewer-carrier.ts](../liveshare-protocol/src/viewer-carrier.ts)、[client/index.ts](src/client/index.ts)、[viewer-session-plugin.ts](src/client/viewer-session-plugin.ts)、[viewer-assets.ts](src/host/viewer-assets.ts) |
 | 共享身份和帧定义 | [协议包](../liveshare-protocol/README.zh.md) |
@@ -154,10 +156,10 @@ viewer 的 prompt 以普通用户输入进入共享会话，因此扩展的是�
 
 - Owner、查看页和 Liveshare 服务端需要匹配版本；尚未建立跨版本兼容保证。
 - 所有者无法拒绝已准入查看者的附件上传：能读取某条会话的查看者也可以向它附加文件，与档位和分叉开关无关。这是已接受的风险。
-- 查看者的文件操作按获授根目录做路径检查，若本地进程在检查与打开之间把获授范围内的目录换成符号链接，读写可能被改指别处；目录句柄锚定留待单独变更引入。查看者工具仅限受限的读取与检索面（`read`、`read_image`、`glob`、`grep`、`present`）、无本地文件副作用的工具（`todo_write`、`skill`、`web_search`、`web_fetch`），以及 write 档下的有界 `edit` 与 `write`；不授予 `bash`、`pwsh`、`cua`、`plugin_manager`、`schedule_*` 及该工具面未列出的任何工具。
-- 查看页没有独立工作区文件编辑界面，也没有管理权限。
-- 端点能力是临时机制且不经审查即被信任：注册表只校验名称形如 `<namespace>/<method>` 的 Remote 端点，因此被勾选的端点会在 policy 绑定的资源上被任意已认证分享读者调用，端点自身的 confine 是唯一限制。被勾选的可写端点在已允许写入的分享中具有破坏性。能力只覆盖 `global`、`session`、`workspace` 三种资源种类，`event:` 名称会被拒绝。
-- owner 在分享面板里为每份分享选一个开放档位——不可用 / 可读 / 可写——默认不可用，统一作用于所有声明了端点的插件；分享管理里能看到每份分享已开放的端点。档位在保存时展开成插件当时声明的端点，因此记录始终是显式端点列表，插件之后新增的端点不会自动开放，直到 owner 再次保存。当前能力填不满的档位不可选：没有任何插件声明可写端点时，「可写」按不可用呈现，而不是降级成可读。一次保存按顺序写这三项（档位、分叉开关、端点）；靠后的端点写入被拒时，前面的权限写入已经生效，界面报错并保留 owner 的选择以便重试。选择是分享级的：该分享的每位已准入查看者都可以在 policy 绑定的资源上调用被选中的端点，尚未建立逐查看者端点级别。插件不再声明的端点即使留在记录里也不暴露；不是整档的记录按不可用显示并说明重新保存会覆盖它。
+- 查看者的文件操作按获授根目录做路径检查，若本地进程在检查与打开之间把获授范围内的目录换成符号链接，读写可能被改指别处；目录句柄锚定留待单独变更引入。查看者工具仅限受限的读取与检索面（`read`、`read_image`、`glob`、`grep`、`present`）、无本地文件副作用的工具（`todo_write`、`skill`、`web_search`、`web_fetch`）、PTC 传输工具 `run_code`，以及 write 档下的有界 `edit` 与 `write`；不授予 `bash`、`pwsh`、`cua`、`plugin_manager`、`schedule_*` 及其他任何未列出的工具。`run_code` 程序不受分享范围约束，[会话档位](#session-tiers) 一节说明其程序可以触及什么。
+- 查看页没有独立工作区文件编辑界面，也没有 DSH 核心管理权限；所有者开放的已安装插件方法仍可改变该插件自己拥有的状态。
+- 端点能力从 Typert registry 枚举已安装插件的 Remote 方法（见 [`shareable-catalog.ts`](src/host/shareable-catalog.ts)），DSH 核心服务命名空间被排除。方法调用不经过沙箱，也没有读写分类：开放一个方法即信任该已安装插件的代码，它在 Host 进程中执行。被选中的方法会在 policy 绑定的资源上被任意已认证分享读者调用，覆盖 `global`、`session`、`workspace` 三种资源种类。
+- owner 在分享面板里通过全局开关和按插件行选择已安装插件的方法。全局开关为“不可用”（全部关闭）、“自定义”（按插件列表）或“全部允许”（开放当前目录全部方法）。每个插件再设为不可用、全部方法或部分方法；部分选择保存显式方法列表，因此目录之后新增的方法不会自动开放，直到 owner 再次保存。插件行优先显示包内本地化名称，取不到时回退到包名末段或 namespace；搜索与限高滚动让大目录仍可操作。选择是分享级的：每位已准入查看者都可以在 policy 绑定的资源上调用被选中的方法，尚未建立逐查看者方法级别。方法授权独立于会话档位，Session 与 Workspace 调用仍由核心分享角色决定。目录不再提供的方法即使留在记录里也不暴露。
 - 工作区不再包含读者可见的会话后，要到该工作区或工作区顺序下次变化时才离开读者的工作区订阅（[remote access 限制](../../api/remote-access/README.zh.md#known-limitations-and-deferred-work)）。
 - 注册表文件锁防止并发文件写入丢失持久条目，但每个注册表读取自身内存快照。多个 Host 之间不协调 Owner 分享状态更新与网关归属；每个 home 只使用一个活动 Owner Host。这不是多宿主授权服务。
 - 不发布运行时 invariant 配套模块：授权在操作本身检查，本包没有单独的 invariant 观察器。

@@ -28,13 +28,13 @@ kind: "package-reference"
 
 `@deepseek-ai/dsh-web-app` 组合包默认加载本包，无需在插件页开启或由 profile 选择。区域只在其 actions slot 有注册项时显示“更多”按钮，因此卸载本包会移除三个按钮。
 
-打开左侧导航入口下方的**更多**、会话 View 标签之后的**更多会话视图**，或右侧栏起始页卡片之后的**更多工具**。左侧栏和起始页菜单仅提供**浏览更多插件**（可用时）与**创建你的插件**。会话菜单在这些操作之前列出收起的 View，并在当前 View 右侧显示勾选标记。所有菜单都不提供 Pin 或排序操作。
+打开左侧导航入口下方的**更多**、会话 View 标签之后的**更多会话视图**，或右侧栏起始页卡片之后的**更多工具**。三个菜单均提供**浏览更多插件**（可用时）与**创建你的插件**。左侧栏菜单在这些操作之前仅列出未固定的侧栏入口，每项带有其注册的面板图标：打开入口不会将其固定，独立的固定图标则将入口放回侧栏并关闭菜单。插件管理入口始终固定在侧栏中。侧栏和菜单入口保持相同的注册排序，固定操作不改变顺序。当前侧栏入口在最右侧显示勾号，悬停菜单行或键盘聚焦时由固定操作原位替换。悬停固定图标时只改变图标颜色，整行高亮保持；不支持悬停的设备直接显示固定操作。其提示为“固定到左侧栏”。会话菜单在这些操作之前列出收起的 View，并在当前 View 右侧显示勾选标记。起始页和会话菜单不提供 Pin 控件；所有菜单都不提供排序操作。
 
-**浏览更多插件**进入插件页主列表，不打开安装弹窗。**创建你的插件**用 Creator 预设打开新 Session 或可复用的空白 Session，并把对应区域的简短本地化插件创建请求加入草稿：空草稿直接以该请求为文字，已有草稿保留其文字、引用和附件，请求另起一段追加在后面。它绝不发送消息。请自行审阅并发送草稿。无论区域是否有入口，创建操作始终可用；分隔线仅显示在收起的 View 与操作之间，浏览可用时位于浏览之前，否则位于创建之前。
+**浏览更多插件**进入插件页主列表，不打开安装弹窗。**创建你的插件**用 Creator 预设打开新 Session 或可复用的空白 Session，并把对应区域的简短本地化插件创建请求加入草稿：空草稿直接以该请求为文字，已有草稿保留其文字、引用和附件，请求另起一段追加在后面。它绝不发送消息。请自行审阅并发送草稿。无论区域是否有入口，创建操作始终可用；分隔线仅显示在未固定的侧栏入口或收起的 View 与操作之间，浏览可用时位于浏览之前，否则位于创建之前。
 
 在桌面端，**浏览更多插件**与**创建你的插件**在执行前上报 `more_menu_item_click`，`action` 为 `browse_plugins` 或 `create_plugin`，`region` 为菜单所在区域：**更多**为 `sidebar`，**更多会话视图**为 `conversation`，**更多工具**为 `rightbar`。菜单不上报曝光事件。没有埋点服务时，两项操作行为不变且不上报。
 
-「浏览插件」一行只在 `pluginNavigation` 服务存在时出现；没有该服务时插件照常启动。该服务缺失时仅移除浏览操作，不影响“更多”按钮、收起的 View 或创建操作。
+「浏览插件」一行只在 `pluginNavigation` 服务存在时出现；没有该服务时插件照常启动。该服务缺失时仅移除浏览操作，不影响“更多”按钮、未固定的侧栏入口、收起的 View 或创建操作。
 
 -----
 
@@ -44,7 +44,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-[`apply`](src/client/index.ts) 通过 `ctx.slots.inject` 以 id `entry-customization` 把 [`EntryMenuContent`](src/client/EntryMenuContent.tsx) 注册到 `sidebar.panellist.actions`、`conversation.session.header.views.actions` 和 `sidebar.right.tab.guide.actions`，每个注册项跟随所在区域声明的生命周期。各区域在自己的 `Menu` 中渲染这些 slot；菜单行先调用 `onDismiss`，再执行浏览或创建操作。仅会话菜单消费 owner 提供的收起入口列表及导航回调；Pin 回调不被消费。
+[`apply`](src/client/index.ts) 通过 `ctx.slots.inject` 以 id `entry-customization` 把 [`EntryMenuContent`](src/client/EntryMenuContent.tsx) 注册到 `sidebar.panellist.actions`、`conversation.session.header.views.actions` 和 `sidebar.right.tab.guide.actions`，每个注册项跟随所在区域声明的生命周期。各区域在自己的 `Menu` 中渲染这些 slot；菜单行先调用 `onDismiss`，再执行浏览或创建操作。侧栏菜单消费 owner 提供的未固定入口及导航、Pin 回调；会话菜单消费 owner 提供的收起入口列表及导航回调。
 
 每个注册项的 `inject` 提供所属区域与两个回调。每个回调先调用 `ctx.get('productAnalytics')?.track('more_menu_item_click', { region, action })`。浏览随后调用 `ctx.get('pluginNavigation')?.openList()`；ui-plugin-manager 只在插件页有权限时提供该服务，因此本包按可选方式读取，不把它写进 `inject`。创建随后按区域取本地化提示语，调用 `uiWorkspace.startSession(undefined, { agentPreset: 'cordis', prompt, whenDraftExists: 'append' })`；该调用不经过 `ui-agent-preset`，预设标签不播放介绍动画。[`dsh-web-app` bundle patch](../../bundle/web-app/cordis.patch.yml) 挂载浏览器插件。
 
@@ -65,7 +65,7 @@ kind: "package-reference"
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 更多菜单不提供入口显隐管理。其他注册项仍可调用区域 Pin 回调，仅修改内存中的选择；插件重新加载后恢复默认值。
+- 只有左侧栏提供 Pin 控件：侧栏行取消固定，侧栏更多菜单重新固定。固定选择仅保存在所属区域的内存中；插件重新加载后恢复默认值。
 - 不读取或写入 localStorage 中的旧 Pin 值。
 - **创建你的插件**不检查 Creator 预设是否存在。预设缺失时 Session 创建失败，Workspace 显示创建失败提示，不准备草稿。草稿准备还要求可确定目标 Workspace；没有目标时，现有流程提示需要 Workspace。
 - 会话区域负责按估算值分组；菜单不提供排序。

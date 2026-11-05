@@ -7,6 +7,7 @@
  */
 import type { ToolArgs, ToolCallBlock, ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { LocaleKeysOf } from '@deepseek-ai/dsh-client-ui-slots'
+import { parsePatch, PatchParseError, type PatchOperation } from '@deepseek-ai/dsh-fs-patch'
 import { abbreviateHomePath, isAbsoluteWorkspacePath, relativizeToCwd } from '@deepseek-ai/dsh-util-workspace-path'
 import { recordedAbsolutePath } from './recorded-path.ts'
 
@@ -59,6 +60,7 @@ const TOOL_VARIANTS: Record<string, ToolRowVariant> = {
   glob: 'search',
   write: 'write',
   edit: 'edit',
+  apply_patch: 'edit',
   run_code: 'code',
   cordis_package_inspect: 'read',
   cordis_runtime_inspect: 'read',
@@ -73,6 +75,7 @@ const TOOL_VARIANTS: Record<string, ToolRowVariant> = {
 
 /** Tool-owned titles that refine a generic row variant without replacing it. */
 const TOOL_TITLE_KEYS: Record<string, ToolTitleKey> = {
+  apply_patch: 'tool.title.applyPatch',
   cordis_package_inspect: 'tool.title.inspect',
   cordis_runtime_inspect: 'tool.title.inspect',
   cordis_run: 'tool.title.runCordis',
@@ -87,6 +90,8 @@ const TOOL_TITLE_KEYS: Record<string, ToolTitleKey> = {
   update_goal: 'tool.title.updateGoal',
   schedule_create: 'tool.title.createSchedule',
   schedule_list: 'tool.title.listSchedules',
+  schedule_view: 'tool.title.viewSchedule',
+  schedule_edit: 'tool.title.editSchedule',
   schedule_delete: 'tool.title.deleteSchedule',
   schedule_update: 'tool.title.updateSchedule',
   cordis_inspect_list: 'tool.title.inspectProviders',
@@ -101,6 +106,7 @@ const TOOL_TITLE_KEYS: Record<string, ToolTitleKey> = {
   session_trace: 'tool.title.traceSession',
   list_subagent_models: 'tool.title.listModels',
   subagent: 'tool.title.subagent',
+  subagent_fork: 'tool.title.subagentFork',
   list_agents: 'tool.title.listAgents',
   send_message: 'tool.title.sendMessage',
   interrupt_agent: 'tool.title.interruptAgent',
@@ -139,6 +145,24 @@ export function toolTitleKey(toolName: string): ToolTitleKey {
   return TOOL_TITLE_KEYS[toolName] ?? VARIANT_TITLE_KEYS[classifyTool(toolName)]
 }
 
+/** Text between two files a patch row names. */
+export const FILE_TARGET_SEPARATOR = ', '
+
+/** Text between a moved file's source and destination. */
+export const FILE_TARGET_MOVE = ' → '
+
+/** One file a patch row names, rendered as its own link when `filePath` is set. */
+export interface ToolRowFileTarget {
+  /** One-based patch line of the file header; identifies the file operation within its call. */
+  readonly id: number
+  /** Display path of a moved file's source; the source no longer exists once the move completes. */
+  readonly from?: string | undefined
+  /** Display path of the file, or of a move's destination. */
+  readonly label: string
+  /** Path to open; absent for a deletion or while the row cannot open argument paths. */
+  readonly filePath: string | undefined
+}
+
 /** Everything ToolRow needs, derived once from the frozen slice. */
 export interface ToolRowModel {
   variant: ToolRowVariant
@@ -151,6 +175,11 @@ export interface ToolRowModel {
    * stay unavailable until their result identifies the target.
    */
   filePath: string | undefined
+  /**
+   * Per-file links for a patch naming several files or a move; undefined for
+   * every other row, which uses `filePath` for the whole summary.
+   */
+  fileTargets: readonly ToolRowFileTarget[] | undefined
   /** Original argument JSON retained for expansion-time body formatting. */
   bodyRaw: string | null
   /** Flattened result text ({@link resultText}); null while running or when the result carries no text. */
@@ -264,6 +293,47 @@ function argumentSummary(
   return { summary: description === undefined ? '' : firstLine(description), filePath: undefined }
 }
 
+/** Summary material read from patch file headers; `targets` keep each file's raw openable path. */
+interface PatchSummary {
+  summary: string
+  filePath: string | undefined
+  targets: readonly ToolRowFileTarget[]
+}
+
+/**
+ * Summary material for `apply_patch`: the files a complete `input` names, parsed
+ * by the same `parsePatch` the executor uses. A move reads `source → destination`,
+ * and only its destination is openable; a deletion is not. Only a lone added or
+ * updated file without a move sets `filePath`. Incomplete or malformed patch text
+ * yields an empty summary.
+ */
+function patchSummary(args: ToolArgs, cwd?: string, home?: string): PatchSummary {
+  const patch = args.complete('input') ? args.text('input') : undefined
+  let operations: PatchOperation[] = []
+  if (patch !== undefined) {
+    try {
+      operations = parsePatch(patch)
+    } catch (error) {
+      // PatchParseError: the executor rejects this patch before changing any file, so no file is named.
+      if (!(error instanceof PatchParseError)) throw error
+    }
+  }
+  const display = (path: string) => abbreviateHomePath(relativizeToCwd(path, cwd), home)
+  const targets = operations.map((operation): ToolRowFileTarget => {
+    const moveTo = operation.kind === 'update' ? operation.moveTo : undefined
+    return moveTo === undefined
+      ? { id: operation.lineNumber, label: display(operation.path), filePath: operation.kind === 'delete' ? undefined : operation.path }
+      : { id: operation.lineNumber, from: display(operation.path), label: display(moveTo), filePath: moveTo }
+  })
+  const summary = targets.map(target => target.from === undefined ? target.label
+    : `${target.from}${FILE_TARGET_MOVE}${target.label}`).join(FILE_TARGET_SEPARATOR)
+  const only = operations.length === 1 ? operations[0] : undefined
+  return {
+    summary, targets,
+    filePath: only?.kind === 'add' || only?.kind === 'update' && only.moveTo === undefined ? only.path : undefined,
+  }
+}
+
 function deriveFilePath(variant: ToolRowVariant, argsRaw: string): string | undefined {
   if (!FILE_PATH_VARIANTS.has(variant)) return undefined
   const parsed = parseArgs(argsRaw)
@@ -304,18 +374,29 @@ export function toolRowModel(toolName: string, block: ToolCallBlock, cwd?: strin
   const titleKey = toolTitleKey(toolName)
   const done = 'kind' in block
   const argsRaw = done ? block.call?.argsRaw ?? '' : block.phase === 'start' ? block.argsRaw : null
-  const primary = argumentSummary(variant, block.args, cwd, home)
+  // Result metadata marks a settled call that did not finish every requested effect.
+  const stopped = done && typeof block.meta === 'object' && block.meta !== null
+    && !Array.isArray(block.meta) && (block.meta as Record<string, unknown>).stopped === true
+  const patch = toolName === 'apply_patch' ? patchSummary(block.args, cwd, home) : undefined
+  const primary = patch ?? argumentSummary(variant, block.args, cwd, home)
   const argumentPath = primary.filePath ?? (argsRaw === null ? undefined : deriveFilePath(variant, argsRaw))
   const recordedPath = done ? recordedAbsolutePath(block.meta, 'path') : undefined
-  const canUseArgumentPath = argumentPath !== undefined
-    && (isAbsoluteWorkspacePath(argumentPath) || done && !block.isError && block.parentCallId === undefined)
+  const usableArgumentPath = (path: string) => isAbsoluteWorkspacePath(path)
+    || done && !block.isError && block.parentCallId === undefined
+  const canUseArgumentPath = argumentPath !== undefined && usableArgumentPath(argumentPath)
+  // A lone added or updated file keeps the whole-summary link; several files or a move link each file.
+  const fileTargets = patch !== undefined && (patch.targets.length > 1 || patch.targets.some(target => target.from !== undefined))
+    ? patch.targets.map(target => target.filePath === undefined || usableArgumentPath(target.filePath) ? target
+      : { ...target, filePath: undefined })
+    : undefined
   const filePath = argumentPath === undefined ? undefined
     : recordedPath ?? (canUseArgumentPath ? argumentPath : undefined)
   const state: ToolRowState = !done ? block.phase === 'preparing' ? 'preparing' : 'running'
     : block.error?.code === 'interrupted' ? 'stopped'
-      : block.isError ? 'error' : 'ok'
+      : block.isError || stopped ? 'error' : 'ok'
   // The argument view serves every stage; the raw text is the fallback when it carries nothing useful.
-  const base = primary.summary !== '' || argsRaw === null ? primary.summary
+  // An incomplete patch keeps an empty summary instead of falling back to the raw patch text.
+  const base = toolName === 'apply_patch' || primary.summary !== '' || argsRaw === null ? primary.summary
     : argsRaw === '' ? block.callId
       : abbreviateHomePath(relativizeToCwd(deriveSummary(variant, argsRaw), cwd), home)
   const summary = [titleKey === 'tool.title.generic' ? toolName : '', base].filter(Boolean).join(' · ')
@@ -330,6 +411,7 @@ export function toolRowModel(toolName: string, block: ToolCallBlock, cwd?: strin
     titleKey,
     summary,
     filePath,
+    fileTargets,
     bodyRaw,
     output,
     errorSummary,

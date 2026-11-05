@@ -22,7 +22,7 @@ import {
   type ViewerAccessFacts,
 } from '../src/host/viewer-access-policy.ts'
 import type { RemoteAccessEndpoint } from '@deepseek-ai/dsh-api-remote-access/types'
-import type { ViewerCapabilityGroup } from '../src/host/viewer-declarations.ts'
+import type { ShareablePluginCatalog, ViewerPluginPolicy } from '../src/host/viewer-capability-types.ts'
 import { shareViewerPrincipal } from '../src/host/viewer-principal.ts'
 
 const reader = { providerId: 'feishu', tenantId: 'tenant-a', subjectId: 'ou_reader' }
@@ -77,22 +77,19 @@ afterEach(async () => {
 /** The declaring plugin every capability in these cases is attributed to. */
 const PLUGIN = 'mekGit'
 
-/** One plugin's offered (or selected) endpoints, in the shape the registry and the share record use. */
-const capabilityGroup = (
-  readable: readonly RemoteAccessEndpoint[] = [],
-  writable: readonly RemoteAccessEndpoint[] = [],
-): ViewerCapabilityGroup =>
-  ({ plugin: PLUGIN, readable, writable })
+/** One plugin's catalog group. */
+const catalogGroup = (endpoints: readonly RemoteAccessEndpoint[] = []): ShareablePluginCatalog =>
+  ({ plugin: PLUGIN, endpoints })
 
-/** What the plugins offer and what this share's owner selected; both start empty and are mutable. */
+/** What the catalog offers and what this share's owner selected; both start empty and are mutable. */
 interface CapabilityState {
-  declared: ViewerCapabilityGroup[]
-  selected: ViewerCapabilityGroup[]
+  catalog: ShareablePluginCatalog[]
+  policies: ViewerPluginPolicy[]
 }
 
 function facts(
   options: FixtureOptions = {},
-  capabilities: CapabilityState = { declared: [], selected: [] },
+  capabilities: CapabilityState = { catalog: [], policies: [] },
 ): ViewerAccessFacts {
   const children: ForkRecord[] = [
     { childSessionId: 'own-child', shareId: 'share', sourceSessionId: 'source', boundary: 1, creator: reader, createdAt: '' },
@@ -110,7 +107,8 @@ function facts(
     stopped: options.stopped ?? false,
     ...(mode === null ? {} : { sessionMode: mode }),
     ...(options.expiresAt === undefined ? {} : { expiresAt: options.expiresAt }),
-    viewerCapabilities: capabilities.selected,
+    get viewerPluginAccess() { return capabilities.policies.length > 0 ? 'custom' : 'none' },
+    viewerPlugins: capabilities.policies,
   }
   return {
     share: shareId => shareId === 'share' && options.published !== false ? share : undefined,
@@ -128,7 +126,7 @@ function facts(
       { id: WorkspaceId('child-ws'), sessionIds: [SessionId('own-child')] },
       { id: WorkspaceId('private-ws'), sessionIds: [SessionId('private'), SessionId('other-child')] },
     ],
-    declaredCapabilities: () => capabilities.declared,
+    offeredPlugins: () => capabilities.catalog,
   }
 }
 
@@ -138,9 +136,9 @@ async function fixture(options: FixtureOptions = {}) {
   await ctx.plugin(TypertRegistry)
   await ctx.plugin(RemoteAccessService)
   const access = ctx.remoteAccess
-  const capabilities: CapabilityState = { declared: [], selected: [] }
+  const capabilities: CapabilityState = { catalog: [], policies: [] }
   access.registerPolicy('share-viewer', createViewerAccessPolicy(facts(options, capabilities)))
-  const replace = (target: ViewerCapabilityGroup[], groups: readonly ViewerCapabilityGroup[]) => {
+  const replace = <T>(target: T[], groups: readonly T[]) => {
     target.splice(0, target.length, ...groups)
   }
   const decide = (action: RemoteAccessAction, resource: RemoteAccessResource, args?: Readonly<Record<string, unknown>>) =>
@@ -153,10 +151,10 @@ async function fixture(options: FixtureOptions = {}) {
     access,
     decide,
     grants,
-    /** What the mounted plugins currently offer, as registering them through {@link ViewerDeclarations} reports. */
-    offer: (groups: readonly ViewerCapabilityGroup[]) => { replace(capabilities.declared, groups) },
+    /** What the platform catalog currently offers. */
+    offer: (groups: readonly ShareablePluginCatalog[]) => { replace(capabilities.catalog, groups) },
     /** What this share's owner selected in the share panel. */
-    select: (groups: readonly ViewerCapabilityGroup[]) => { replace(capabilities.selected, groups) },
+    select: (policies: readonly ViewerPluginPolicy[]) => { replace(capabilities.policies, policies) },
   }
 }
 
@@ -401,7 +399,9 @@ describe('viewer page startup contract', () => {
   it('keeps the owner’s own surfaces refused and out of the reader’s snapshot', async () => {
     const { decide, grants } = await fixture()
     const ownerOnly = ['account/watch', 'job/list', 'job/follow', 'settings/describe',
-      'credentials/describe', 'pluginManager/listPlugins', 'schedule/list'] as const
+      'credentials/describe', 'pluginManager/listPlugins', 'schedule/catalog', 'schedule/create',
+      'schedule/deliveryLimits', 'schedule/deleteInactive', 'schedule/edit', 'schedule/history',
+      'schedule/list', 'schedule/run', 'schedule/view', 'agentTeams/setEnabled'] as const
     for (const action of ownerOnly) expect(decide(action, GLOBAL)).toEqual(deny('liveshare/read-only'))
     const granted = new Set(grants().flatMap(grant => [...grant.actions]))
     for (const action of ownerOnly) expect(granted.has(action)).toBe(false)
@@ -468,189 +468,45 @@ describe('reader write refusal', () => {
   })
 })
 
-describe('plugin capabilities a share exposes', () => {
+describe('plugin policies a share exposes', () => {
   const READABLE = 'mekGit/getGraph'
-  const WRITABLE = 'mekGit/commit'
-  /** Every resource a served reader can see, where an exposed readable capability rides. */
+  const SECOND = 'mekGit/graphMeta'
   const VISIBLE = [
     GLOBAL, session('source'), session('own-child'), session('revoked-child'),
     workspace('shared-ws'), workspace('child-ws'),
   ]
 
-  it.each(['view', 'write'] as const)(
-    'allows an exposed readable capability on every resource the reader can see in the %s tier',
-    async (mode) => {
-      const { decide, offer, select, grants } = await fixture({ mode })
-      // The policy is built before both sides, so these decisions prove it reads them per decision.
-      expect(decide(READABLE, GLOBAL)).toEqual(deny('liveshare/read-only'))
-      expect(decide(READABLE, session('source'))).toEqual(deny('liveshare/read-only'))
-      offer([capabilityGroup([READABLE])])
-      // A plugin's offer is not a grant: nothing is exposed until the owner selects it in this share.
-      expect(decide(READABLE, GLOBAL)).toEqual(deny('liveshare/read-only'))
-      expect(grants().flatMap(grant => [...grant.actions])).not.toContain(READABLE)
-      select([capabilityGroup([READABLE])])
-      for (const resource of VISIBLE) expect(decide(READABLE, resource)).toEqual(ALLOW)
-    })
-
-  it('keeps an exposed capability off the resources the reader cannot see', async () => {
-    const { decide, offer, select } = await fixture()
-    offer([capabilityGroup([READABLE], [WRITABLE])])
-    select([capabilityGroup([READABLE], [WRITABLE])])
-    for (const resource of [session('private'), session('other-child'), session('foreign-child'),
-      workspace('private-ws'), workspace('missing-ws')]) {
-      expect(decide(READABLE, resource)).toEqual(deny('liveshare/read-only'))
-      expect(decide(WRITABLE, resource)).toEqual(deny('liveshare/read-only'))
-    }
-    // A revoked fork stays bound for reading only, so a writable capability carries no binding there.
-    expect(decide(READABLE, session('revoked-child'))).toEqual(ALLOW)
-    expect(decide(WRITABLE, session('revoked-child'))).toEqual(deny('liveshare/read-only'))
-  })
-
-  it('refuses again as soon as the owner clears the selection', async () => {
-    const { decide, offer, select } = await fixture()
-    offer([capabilityGroup([READABLE], [WRITABLE])])
-    select([capabilityGroup([READABLE], [WRITABLE])])
-    expect(decide(READABLE, session('source'))).toEqual(ALLOW)
-    expect(decide(WRITABLE, session('source'))).toEqual(ALLOW)
-    select([capabilityGroup()])
-    expect(decide(READABLE, session('source'))).toEqual(deny('liveshare/read-only'))
-    expect(decide(WRITABLE, session('source'))).toEqual(deny('liveshare/read-only'))
-  })
-
-  it('refuses a selection whose plugin no longer offers the endpoint', async () => {
-    const { decide, offer, select, grants } = await fixture()
-    offer([capabilityGroup([READABLE], [WRITABLE])])
-    select([capabilityGroup([READABLE], [WRITABLE])])
-    expect(decide(READABLE, session('source'))).toEqual(ALLOW)
-    // The plugin withdrew its declaration while the share still carries the owner's stale selection.
-    offer([])
-    expect(decide(READABLE, session('source'))).toEqual(deny('liveshare/read-only'))
-    expect(decide(WRITABLE, session('source'))).toEqual(deny('liveshare/read-only'))
-    expect(grants().flatMap(grant => [...grant.actions])).not.toContain(READABLE)
-    // A selection under another plugin cannot expose this plugin's endpoint either.
-    offer([capabilityGroup([READABLE])])
-    select([{ plugin: 'other-plugin', readable: [READABLE], writable: [] }])
-    expect(decide(READABLE, session('source'))).toEqual(deny('liveshare/read-only'))
-  })
-
-  it('binds no capability while the share does not serve the reader', async () => {
-    const { decide, grants, offer, select } = await fixture({ published: false })
-    offer([capabilityGroup([READABLE], [WRITABLE])])
-    select([capabilityGroup([READABLE], [WRITABLE])])
-    expect(decide(READABLE, session('source'))).toEqual(deny('share-not-found'))
-    expect(decide(WRITABLE, session('source'))).toEqual(deny('share-not-found'))
-    expect(grants()).toEqual([])
-  })
-
-  it('grants an exposed readable capability to the served page on every visible resource', async () => {
-    const { grants, offer, select } = await fixture()
-    offer([capabilityGroup([READABLE])])
-    select([capabilityGroup([READABLE])])
-    const list = grants()
-    const actionsOn = (kind: 'session' | 'workspace', id: string) =>
-      list.find(grant => grant.resource.kind === kind && grant.resource.id === id)?.actions ?? []
-    expect(list.find(grant => grant.resource.kind === 'global')?.actions ?? []).toContain(READABLE)
-    for (const id of ['source', 'own-child', 'revoked-child']) expect(actionsOn('session', id)).toContain(READABLE)
-    for (const id of ['shared-ws', 'child-ws']) expect(actionsOn('workspace', id)).toContain(READABLE)
-  })
-
-  it('exposes a writable capability only where the share mode already allows writes', async () => {
-    const write = await fixture({ mode: 'write' })
-    write.offer([capabilityGroup([], [WRITABLE])])
-    write.select([capabilityGroup([], [WRITABLE])])
-    for (const resource of [GLOBAL, session('source'), session('own-child'),
-      workspace('shared-ws'), workspace('child-ws')]) {
-      expect(write.decide(WRITABLE, resource)).toEqual(ALLOW)
-    }
-    // The owner states consent for writes only through the write tier, so a read share keeps refusing.
-    for (const mode of ['view'] as const) {
-      const { decide, offer, select } = await fixture({ mode })
-      offer([capabilityGroup([], [WRITABLE])])
-      select([capabilityGroup([], [WRITABLE])])
-      expect(decide(WRITABLE, session('source'))).toEqual(deny('share-not-writable'))
-      expect(decide(WRITABLE, GLOBAL)).toEqual(deny('share-not-writable'))
-      expect(decide(WRITABLE, workspace('shared-ws'))).toEqual(deny('share-not-writable'))
-    }
-  })
-
-  it('refuses an exposed writable capability while the source Session carries no confined layer', async () => {
-    const { decide, offer, select } = await fixture({ confined: false })
-    offer([capabilityGroup([], [WRITABLE])])
-    select([capabilityGroup([], [WRITABLE])])
-    expect(decide(WRITABLE, session('source'))).toEqual(deny('source-write-unavailable'))
-    // The capability neither allows the endpoint nor changes why the share refuses its own write.
-    expect(decide('session/prompt', session('source'), CALL)).toEqual(deny('source-write-unavailable'))
-  })
-
-  it('keeps the readable and writable selections apart', async () => {
+  it('denies every catalog endpoint until a policy selects it', async () => {
     const { decide, offer, select } = await fixture({ mode: 'view' })
-    offer([capabilityGroup([], [WRITABLE])])
-    // The owner selected the endpoint as readable, which the plugin never offered as readable.
-    select([capabilityGroup([WRITABLE])])
-    expect(decide(WRITABLE, session('source'))).toEqual(deny('liveshare/read-only'))
-    // Selected as writable it is exposed under the write rule, so a read-only share still refuses it.
-    select([capabilityGroup([], [WRITABLE])])
-    expect(decide(WRITABLE, session('source'))).toEqual(deny('share-not-writable'))
-    // Offered and selected as readable, the same endpoint is exposed in a read-only share.
-    offer([capabilityGroup([WRITABLE])])
-    select([capabilityGroup([WRITABLE])])
-    expect(decide(WRITABLE, session('source'))).toEqual(ALLOW)
-    // And a writable selection never exposes an endpoint as readable.
-    offer([capabilityGroup([READABLE], [READABLE])])
-    select([capabilityGroup([], [READABLE])])
-    expect(decide(READABLE, session('source'))).toEqual(deny('share-not-writable'))
-    select([capabilityGroup([READABLE])])
-    expect(decide(READABLE, session('source'))).toEqual(ALLOW)
+    offer([catalogGroup([READABLE, SECOND])])
+    for (const resource of VISIBLE) expect(decide(READABLE, resource)).toEqual(deny('liveshare/read-only'))
+    select([{ plugin: PLUGIN, mode: 'none' }])
+    expect(decide(READABLE, GLOBAL)).toEqual(deny('liveshare/read-only'))
+    select([{ plugin: PLUGIN, mode: 'all' }])
+    for (const resource of VISIBLE) expect(decide(READABLE, resource)).toEqual(ALLOW)
   })
 
-  it('keeps a writable capability out of the grants a share without writes publishes', async () => {
-    const view = await fixture({ mode: 'view' })
-    view.offer([capabilityGroup([], [WRITABLE])])
-    view.select([capabilityGroup([], [WRITABLE])])
-    expect(view.grants().flatMap(grant => [...grant.actions])).not.toContain(WRITABLE)
-    const write = await fixture({ mode: 'write' })
-    write.offer([capabilityGroup([], [WRITABLE])])
-    write.select([capabilityGroup([], [WRITABLE])])
-    const source = write.grants()
-      .find(grant => grant.resource.kind === 'session' && grant.resource.id === 'source')?.actions ?? []
-    expect(source).toContain(WRITABLE)
+  it('allows only the endpoints a selected policy names', async () => {
+    const { decide, offer, select } = await fixture()
+    offer([catalogGroup([READABLE, SECOND])])
+    select([{ plugin: PLUGIN, mode: 'selected', endpoints: [READABLE] }])
+    expect(decide(READABLE, GLOBAL)).toEqual(ALLOW)
+    expect(decide(SECOND, GLOBAL)).toEqual(deny('liveshare/read-only'))
   })
 
-  it('cannot replace the decision a share mode makes for a policy action', async () => {
-    const decideds: readonly RemoteAccessEndpoint[] = ['session/prompt', 'session/cancel', 'session/fork']
-    const view = await fixture({ mode: 'view' })
-    // Every isolation probe offers and selects a policy-decided action in both kinds at once.
-    view.offer([capabilityGroup(decideds, decideds)])
-    view.select([capabilityGroup(decideds, decideds)])
-    // A view-tier share drives its Session in this deployment, so the isolation probe needs the share's
-    // own switch and the reader's branch to show what the capability cannot change.
-    expect(view.decide('session/cancel', session('source'), CALL)).toEqual(ALLOW)
-    expect(view.decide('session/prompt', GLOBAL, CALL)).toEqual(deny('liveshare/read-only'))
-    const switchedOff = await fixture({ mode: 'view', allowsFork: false })
-    expect(switchedOff.decide('session/fork', session('source'), CALL)).toEqual(deny('fork-not-permitted'))
-
-    // A write share keeps its own rules: a capability neither grants beyond them nor refuses within them.
-    const unconfined = await fixture({ confined: false })
-    unconfined.offer([capabilityGroup(['session/prompt'], ['session/prompt'])])
-    unconfined.select([capabilityGroup(['session/prompt'], ['session/prompt'])])
-    expect(unconfined.decide('session/prompt', session('source'), CALL)).toEqual(deny('source-write-unavailable'))
-    const write = await fixture()
-    write.offer([capabilityGroup(['session/prompt'], ['session/prompt'])])
-    write.select([capabilityGroup(['session/prompt'], ['session/prompt'])])
-    expect(write.decide('session/prompt', session('source'), CALL)).toEqual(ALLOW)
-    // The reader's own fork keeps the child write role's ceiling decision as well.
-    const cold = await fixture({ ceilings: [] })
-    cold.offer([capabilityGroup([], ['session/prompt'])])
-    cold.select([capabilityGroup([], ['session/prompt'])])
-    expect(cold.decide('session/prompt', session('own-child'), CALL)).toEqual(deny('fork-ceiling-uninstalled'))
+  it('ignores a selected endpoint the catalog does not offer', async () => {
+    const { decide, offer, select } = await fixture()
+    offer([])
+    select([{ plugin: PLUGIN, mode: 'selected', endpoints: [READABLE] }])
+    expect(decide(READABLE, GLOBAL)).toEqual(deny('liveshare/read-only'))
   })
 
-  it('keeps an exposed policy action out of the grants where its condition refuses it', async () => {
-    const { grants, offer, select } = await fixture({ mode: 'view', confined: false })
-    offer([capabilityGroup(['session/prompt', READABLE])])
-    select([capabilityGroup(['session/prompt', READABLE])])
-    const source = grants().find(grant => grant.resource.kind === 'session' && grant.resource.id === 'source')?.actions ?? []
-    expect(source).toContain(READABLE)
-    expect(source).not.toContain('session/prompt')
+  it('stops exposing an endpoint when the catalog withdraws it', async () => {
+    const { decide, offer, select } = await fixture()
+    offer([catalogGroup([READABLE])])
+    select([{ plugin: PLUGIN, mode: 'all' }])
+    expect(decide(READABLE, GLOBAL)).toEqual(ALLOW)
+    offer([])
+    expect(decide(READABLE, GLOBAL)).toEqual(deny('liveshare/read-only'))
   })
 })

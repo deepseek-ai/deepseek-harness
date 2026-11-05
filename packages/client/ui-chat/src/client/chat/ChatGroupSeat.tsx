@@ -2,12 +2,12 @@
 import { memo, useCallback, useEffect, useId, useRef, useState, type ComponentProps, type ReactNode } from 'react'
 import {
   IconAgentPresetOutlineRegular, IconApiOutlineRegular, IconBrowseOutlineRegular, IconChevronDownOutlineRegular,
-  IconChevronUpOutlineRegular, IconCodeOutlineRegular, IconEditOutlineRegular, IconGlobeOutlineRegular,
-  IconPlanOutlineRegular, IconQuestionOutlineRegular, IconSearchOutlineRegular, IconSparkleRegular,
+  IconChevronUpOutlineRegular, IconCodeOutlineRegular, IconContextInjectionOutlineRegular, IconEditOutlineRegular,
+  IconGlobeOutlineRegular, IconPlanOutlineRegular, IconQuestionOutlineRegular, IconSearchOutlineRegular, IconSparkleRegular,
   IconThinkOutlineRegular, TextShimmer,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { GroupKey, NodeReference } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { ProcessActivity } from '../contract/process-groups.ts'
+import type { ProcessActivity, RunningProcessActivity } from '../contract/process-groups.ts'
 import type { ChatStoreState } from '../contract/store.ts'
 import type { ChatFlowSlotProps } from '../contract/slots.ts'
 import { turnProcessOpen } from '../stores.ts'
@@ -30,7 +30,7 @@ const PROCESS_TITLE_MINIMUM_MS = 150
 type ProcessTitleActivity = ProcessActivity | 'thinking'
 
 interface LiveProcessTitle {
-  readonly activity: ProcessTitleActivity
+  readonly activity: RunningProcessActivity | 'thinking'
   readonly detail: string
   readonly preparing: boolean
 }
@@ -50,6 +50,7 @@ const PROCESS_ICONS: Record<ProcessTitleActivity, ReactNode> = {
   plan: <IconPlanOutlineRegular />,
   questions: <IconQuestionOutlineRegular />,
   tools: <IconSparkleRegular size={14} />,
+  context: <IconContextInjectionOutlineRegular size={14} />,
 }
 
 function sameLiveProcessTitle(left: LiveProcessTitle, right: LiveProcessTitle): boolean {

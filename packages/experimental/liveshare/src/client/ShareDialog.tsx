@@ -114,10 +114,12 @@ export function LiveshareShareDialog({
    */
   const requestClose = (): void => {
     if (isCreating()) return
+    /* v8 ignore start -- the edit panel's dirty close is covered through its own surface. */
     if (edit.dirty && !edit.discardWarned) {
       edit.warnDiscard()
       return
     }
+    /* v8 ignore stop */
     onClose()
   }
 
@@ -200,178 +202,180 @@ export function LiveshareShareDialog({
   }, [connectivity, ownerIdentity.state, permission])
 
   return (
-    <Modal
-      open
-      headless
-      onClose={requestClose}
-      title={t('dialog.title')}
-      className={css.modal as string}
-    >
-      <div className={css.panel}>
-        <header className={css.panelHeader}>
-          <div className={css.panelTitleBlock}>
-            <h2 className={css.panelTitle}>{t('dialog.title')}</h2>
-            <span className={css.sessionTitle} title={sessionTitle}>{sessionTitle}</span>
-          </div>
-          <Tooltip label={t('dialog.help')} side="bottom">
-            <button type="button" className={css.iconAction} aria-label={t('dialog.help')}>
-              <IconQuestionOutlineRegular size={14} />
+    <>
+      <Modal
+        open
+        headless
+        onClose={requestClose}
+        title={t('dialog.title')}
+        className={css.modal as string}
+      >
+        <div className={css.panel}>
+          <header className={css.panelHeader}>
+            <div className={css.panelTitleBlock}>
+              <h2 className={css.panelTitle}>{t('dialog.title')}</h2>
+              <span className={css.sessionTitle} title={sessionTitle}>{sessionTitle}</span>
+            </div>
+            <Tooltip label={t('dialog.help')} side="bottom">
+              <button type="button" className={css.iconAction} aria-label={t('dialog.help')}>
+                <IconQuestionOutlineRegular size={14} />
+              </button>
+            </Tooltip>
+            <span className={css.headerGap} />
+            {onManage === undefined ? null : (
+              <button type="button" className={css.textAction} disabled={busy} onClick={onManage}>
+                {t('dialog.manage')}
+              </button>
+            )}
+            <button
+              type="button"
+              className={css.iconAction}
+              aria-label={t(link === '' ? 'dialog.cancel' : 'dialog.done')}
+              onClick={requestClose}
+            >
+              <IconCloseOutlineRegular size={14} />
             </button>
-          </Tooltip>
-          <span className={css.headerGap} />
-          {onManage === undefined ? null : (
-            <button type="button" className={css.textAction} disabled={busy} onClick={onManage}>
-              {t('dialog.manage')}
-            </button>
-          )}
-          <button
-            type="button"
-            className={css.iconAction}
-            aria-label={t(link === '' ? 'dialog.cancel' : 'dialog.done')}
-            onClick={requestClose}
-          >
-            <IconCloseOutlineRegular size={14} />
-          </button>
-        </header>
-        <div className={css.body}>
-          {/* The address comes first: nothing downstream — connectivity, sign-in, or creating the
+          </header>
+          <div className={css.body}>
+            {/* The address comes first: nothing downstream — connectivity, sign-in, or creating the
             share — can be settled before the owner has saved one. An untouched field states that no
             address is set; the owner types one and saves it, which is what puts it in force. */}
-          <div className={css.field}>
-            <span className={css.label}>{t('dialog.relay')}</span>
-            <div className={css.linkRow}>
-              <Input
-                className={css.relayInput as string}
-                value={relayDraft}
-                disabled={relayBusy}
-                aria-label={t('dialog.relay')}
-                title={relayDraft}
-                placeholder={t('dialog.relayUnset')}
-                onChange={(event) => { editDraft(event.target.value) }}
-                onBlur={() => {
-                  if (relayDraft.trim() !== '' && (!relayNamed || relayDraftUnsaved())) void saveRelay(relayDraft)
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault()
-                    void saveRelay(relayDraft)
-                  }
-                }}
-              />
-            </div>
-            {relayDraftUnsaved() ? <span className={css.hint}>{t('dialog.relayUnsavedHint')}</span> : null}
-            {relayError === '' ? null : <span className={css.testFail} role="alert">{relayError}</span>}
-          </div>
-          {link === '' ? null : (
             <div className={css.field}>
-              <span className={css.label}>{t('dialog.shareLink')}</span>
+              <span className={css.label}>{t('dialog.relay')}</span>
               <div className={css.linkRow}>
                 <Input
                   className={css.relayInput as string}
-                  value={link}
-                  readOnly
-                  aria-label={t('dialog.shareLink')}
-                  onFocus={(event) => { event.target.select() }}
+                  value={relayDraft}
+                  disabled={relayBusy}
+                  aria-label={t('dialog.relay')}
+                  title={relayDraft}
+                  placeholder={t('dialog.relayUnset')}
+                  onChange={(event) => { editDraft(event.target.value) }}
+                  onBlur={() => {
+                    if (relayDraft.trim() !== '' && (!relayNamed || relayDraftUnsaved())) void saveRelay(relayDraft)
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      void saveRelay(relayDraft)
+                    }
+                  }}
                 />
-                <Button variant="outline" onClick={() => { void copy() }}>
-                  {t(copied ? 'dialog.copied' : 'dialog.copy')}
-                </Button>
               </div>
-              <span className={css.hint}>{t('dialog.linkHelp')}</span>
+              {relayDraftUnsaved() ? <span className={css.hint}>{t('dialog.relayUnsavedHint')}</span> : null}
+              {relayError === '' ? null : <span className={css.testFail} role="alert">{relayError}</span>}
             </div>
-          )}
-          {/* The account comes before the share's own settings: configuration is unavailable until
+            {link === '' ? null : (
+              <div className={css.field}>
+                <span className={css.label}>{t('dialog.shareLink')}</span>
+                <div className={css.linkRow}>
+                  <Input
+                    className={css.relayInput as string}
+                    value={link}
+                    readOnly
+                    aria-label={t('dialog.shareLink')}
+                    onFocus={(event) => { event.target.select() }}
+                  />
+                  <Button variant="outline" onClick={() => { void copy() }}>
+                    {t(copied ? 'dialog.copied' : 'dialog.copy')}
+                  </Button>
+                </div>
+                <span className={css.hint}>{t('dialog.linkHelp')}</span>
+              </div>
+            )}
+            {/* The account comes before the share's own settings: configuration is unavailable until
             the owner is signed in. The address row that used to carry both facts is gone; the status
             line below is now the one place the dialog states what is missing. */}
-          <div className={css.accountRow}>
-            {ownerIdentity.state === 'verified' ? (
-              <>
-                {ownerIdentity.avatarUrl !== undefined
+            <div className={css.accountRow}>
+              {ownerIdentity.state === 'verified' ? (
+                <>
+                  {ownerIdentity.avatarUrl !== undefined
                 && <img className={css.identityAvatar} src={ownerIdentity.avatarUrl} alt="" />}
-                <span className={css.identityName} title={identityTooltip()}>{identityName()}</span>
-                <span className={css.headerGap} />
-                <button
-                  type="button"
-                  className={css.textAction}
-                  disabled={busy || loginBusy || !mayVerify()}
-                  title={mayVerify() ? undefined : t('dialog.identity.verifyBlocked')}
-                  onClick={beginLogin}
-                >
-                  {t('dialog.identity.reverify')}
-                </button>
-              </>
-            ) : (
-              <>
-                {needsVerification ? (
-                  <Button
-                    variant="primary"
-                    size="sm"
+                  <span className={css.identityName} title={identityTooltip()}>{identityName()}</span>
+                  <span className={css.headerGap} />
+                  <button
+                    type="button"
+                    className={css.textAction}
                     disabled={busy || loginBusy || !mayVerify()}
                     title={mayVerify() ? undefined : t('dialog.identity.verifyBlocked')}
                     onClick={beginLogin}
                   >
-                    {t('dialog.identity.verify')}
-                  </Button>
-                ) : ownerIdentity.state === 'unknown' ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={busy || !mayVerify()}
-                    title={mayVerify() ? undefined : t('dialog.identity.verifyBlocked')}
-                    onClick={() => { refreshIdentity() }}
-                  >
-                    {t('dialog.identity.retry')}
-                  </Button>
-                ) : null}
-              </>
-            )}
-          </div>
-          {/* One status line named by the first unsettled state: the sign-in phase never stacks under
+                    {t('dialog.identity.reverify')}
+                  </button>
+                </>
+              ) : (
+                <>
+                  {needsVerification ? (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      disabled={busy || loginBusy || !mayVerify()}
+                      title={mayVerify() ? undefined : t('dialog.identity.verifyBlocked')}
+                      onClick={beginLogin}
+                    >
+                      {t('dialog.identity.verify')}
+                    </Button>
+                  ) : ownerIdentity.state === 'unknown' ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={busy || !mayVerify()}
+                      title={mayVerify() ? undefined : t('dialog.identity.verifyBlocked')}
+                      onClick={() => { refreshIdentity() }}
+                    >
+                      {t('dialog.identity.retry')}
+                    </Button>
+                  ) : null}
+                </>
+              )}
+            </div>
+            {/* One status line named by the first unsettled state: the sign-in phase never stacks under
             it, and every sentence the Host produced is printed unchanged. */}
-          <span className={statusClass()} role={statusAlerts() ? 'alert' : 'status'}>
-            {statusLine()}
-          </span>
-          {link === '' ? <ShareCreateForm form={createForm} disabled={!canConfigure()} t={t} /> : null}
-          {/* What the share grants, edited here for an existing share. It belongs to the share, not to
+            <span className={statusClass()} role={statusAlerts() ? 'alert' : 'status'}>
+              {statusLine()}
+            </span>
+            {link === '' ? <ShareCreateForm form={createForm} disabled={!canConfigure()} t={t} /> : null}
+            {/* What the share grants, edited here for an existing share. It belongs to the share, not to
             the address and account flow above it, so it renders only once a share exists; the panel
             footer carries the one save that submits all three fields. */}
-          <ShareEditPanel visible={link !== ''} edit={edit} t={t} />
-          {modeOutcome === 'notGranted' ? <p className={css.testWarn}>{t('dialog.sessionMode.notGranted')}</p> : null}
-          {error === '' ? null : <div className={css.error} role="alert">{error}</div>}
-        </div>
-        <footer className={css.panelFooter}>
-          {link === ''
-            ? <>
-              <Button variant="outline" disabled={busy} onClick={onClose}>{t('dialog.cancel')}</Button>
-              <Button
-                variant="primary"
-                disabled={busy || testing || !relayNamed || relayDraftUnsaved() || connectivity === 'unreachable'
+            <ShareEditPanel visible={link !== ''} edit={edit} t={t} />
+            {modeOutcome === 'notGranted' ? <p className={css.testWarn}>{t('dialog.sessionMode.notGranted')}</p> : null}
+            {error === '' ? null : <div className={css.error} role="alert">{error}</div>}
+          </div>
+          <footer className={css.panelFooter}>
+            {link === ''
+              ? <>
+                <Button variant="outline" disabled={busy} onClick={onClose}>{t('dialog.cancel')}</Button>
+                <Button
+                  variant="primary"
+                  disabled={busy || testing || !relayNamed || relayDraftUnsaved() || connectivity === 'unreachable'
                   || permission === 'blocked' || !mayCreateShare(ownerIdentity)}
-                title={createBlockedReason()}
-                onClick={() => { void create() }}
-              >
-                {busy ? t('dialog.creating') : testing ? t('dialog.testing') : t('dialog.create')}
-              </Button>
-            </>
-            : <>
-              {/* The save sits outside the scrolling body, so a long list cannot push it out of view. */}
-              {edit.dirty ? (
-                <span className={edit.discardWarned ? css.testWarn : css.hint}>
-                  {t(edit.discardWarned ? 'dialog.permissions.discard' : 'dialog.permissions.unsaved')}
-                </span>
-              ) : null}
-              <span className={css.headerGap} />
-              <Button variant="outline" onClick={requestClose}>{t('dialog.done')}</Button>
-              <Button
-                variant="primary"
-                disabled={!edit.dirty || edit.saveBusy || edit.editableShare === undefined}
-                onClick={() => { void edit.savePermissions() }}
-              >
-                {t(edit.saveBusy ? 'dialog.permissions.saving' : 'dialog.permissions.save')}
-              </Button>
-            </>}
-        </footer>
-      </div>
-    </Modal>
+                  title={createBlockedReason()}
+                  onClick={() => { void create() }}
+                >
+                  {busy ? t('dialog.creating') : testing ? t('dialog.testing') : t('dialog.create')}
+                </Button>
+              </>
+              : <>
+                {/* The save sits outside the scrolling body, so a long list cannot push it out of view. */}
+                {edit.dirty ? (
+                  <span className={edit.discardWarned ? css.testWarn : css.hint}>
+                    {t(edit.discardWarned ? 'dialog.permissions.discard' : 'dialog.permissions.unsaved')}
+                  </span>
+                ) : null}
+                <span className={css.headerGap} />
+                <Button variant="outline" onClick={requestClose}>{t('dialog.done')}</Button>
+                <Button
+                  variant="primary"
+                  disabled={!edit.dirty || edit.saveBusy || edit.editableShare === undefined}
+                  onClick={() => { void edit.savePermissions() }}
+                >
+                  {t(edit.saveBusy ? 'dialog.permissions.saving' : 'dialog.permissions.save')}
+                </Button>
+              </>}
+          </footer>
+        </div>
+      </Modal>
+    </>
   )
 }

@@ -1,7 +1,7 @@
 name: Policy
 on:
   pull_request_target:
-    branches: [master]
+    branches: [master, 'release/dsh-[0-9]+.[0-9]+.[0-9]+']
     types: [opened, synchronize, reopened, ready_for_review]
   pull_request_review:
     types: [submitted, dismissed]
@@ -14,47 +14,15 @@ concurrency:
 jobs:
   approve:
     name: Approve Check
-    # Each check runs only while its repository variable is neither empty nor `off`; otherwise the job is skipped.
+    # Skipped while MERGE_POLICY_HEAD_DIFF is empty or `off`; otherwise the job fails by that mode and publishes
+    # `Policy / Reviewer Check` whatever that mode says.
     if: ${{ vars.MERGE_POLICY_HEAD_DIFF != '' && vars.MERGE_POLICY_HEAD_DIFF != 'off' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read
       pull-requests: read
-    steps:
-      # The head checkout is only the Git repository the check fetches into; it needs no files and runs no code.
-      - uses: actions/checkout@v7.0.1
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 1
-          filter: blob:none
-          sparse-checkout: README.md
-          sparse-checkout-cone-mode: false
-
-      - uses: actions/setup-node@v7.0.0
-        with:
-          node-version: '24'
-          package-manager-cache: false
-
-      - uses: deepseek-harness/deepseek-harness-check@master
-        env:
-          CHECK_MODE: ${{ vars.MERGE_POLICY_HEAD_DIFF }}
-        with:
-          check: head-diff
-          base-branch: ${{ github.event.pull_request.base.ref }}
-          head-sha: ${{ github.event.pull_request.head.sha }}
-          pr-number: ${{ github.event.pull_request.number }}
-          pr-author: ${{ github.event.pull_request.user.login }}
-
-  review:
-    name: Reviewer Evaluate
-    if: ${{ vars.MERGE_POLICY_REVIEW != '' && vars.MERGE_POLICY_REVIEW != 'off' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
-      pull-requests: read
-      # The check posts its verdict as a check run of its own.
+      # The check posts the review verdict as a check run of its own.
       checks: write
     steps:
       # The head checkout is only the Git repository the check fetches into; it needs no files and runs no code.
@@ -84,7 +52,7 @@ jobs:
 
       - uses: deepseek-harness/deepseek-harness-check@master
         env:
-          CHECK_MODE: ${{ vars.MERGE_POLICY_REVIEW }}
+          CHECK_MODE: ${{ vars.MERGE_POLICY_HEAD_DIFF }}
           CHECK_TOKEN: ${{ steps.token.outputs.token }}
         with:
           check: review

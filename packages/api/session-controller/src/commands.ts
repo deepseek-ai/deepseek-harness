@@ -1,5 +1,8 @@
 /** Session commands whose activation policy is explicit at each Remote method. */
 
+import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
+import { continuationProjectionDefinition, type ContinuationState } from './continuation.ts'
+
 import { modelAvailable } from './catalog.ts'
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
@@ -14,10 +17,10 @@ import type {} from '@deepseek-ai/dsh-client-file-upload'
 import {
   ReasoningEffortId, createUserMessage, freezeMessage,
 } from '@deepseek-ai/dsh-llm'
-import type { MessageSource } from '@deepseek-ai/dsh-llm'
+import type { MessageId, MessageSource } from '@deepseek-ai/dsh-llm'
 import { buildForkSeed } from '@deepseek-ai/dsh-session/fork'
 import { SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
-import type { SessionEvent, SessionHeader, SessionId, UserMessage } from '@deepseek-ai/dsh-session'
+import type { Session, SessionEvent, SessionHeader, SessionId, UserMessage } from '@deepseek-ai/dsh-session'
 import { SessionQueryError, type SessionObservation } from '@deepseek-ai/dsh-session-query'
 import { SessionTitleInvalidError } from '@deepseek-ai/dsh-session-title'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
@@ -59,7 +62,7 @@ type PromptContentCandidate =
 /**
  * Whether prompt content carries non-whitespace text or an attachment.
  * @param content - submitted or edited prompt parts.
- * @returns false for content the Agent must not receive.
+ * @returns whether any part supplies ordinary prompt content.
  */
 export function hasPromptContent(content: readonly PromptContentCandidate[]): boolean {
   return content.some(part => part.type !== 'text' || part.text.trim().length > 0)
@@ -83,6 +86,20 @@ function latestCompletedPrefixBoundary(events: readonly SessionEvent[]): Session
 
 /** Implements Session business commands delegated by the Session Controller Remote service. */
 export class SessionCommandController {
+  /** First-insertion facts cached per exact Session; the log remains the recovery source. */
+  private readonly promptReceipts = new WeakMap<Session, {
+    offset: SessionLogOffset
+    messages: Set<MessageId>
+    requests: Set<SessionRequestId>
+  }>()
+
+  private continuation!: ProjectionHandle<ContinuationState>
+
+  /** Register complete-history empty-prompt eligibility. @returns when command admission is ready. */
+  async initialize(): Promise<void> {
+    this.continuation = await this.ctx.sessionProjections.register(continuationProjectionDefinition)
+  }
+
   /**
    * @param ctx - Host context carrying Agent, model, attachment, title, and Workspace services.
    * @param agents - sole owner of create, resume, and Agent composition.
@@ -298,12 +315,28 @@ export class SessionCommandController {
    * Admit one prompt after Agent and attachment validation; the Remote method
    * has already validated the content and built the durable message source.
    * @param request - Session identity, prompt content, and delivery mode.
-   * @param source - the `user-rpc` source recorded on the accepted message.
+   * @param source - caller metadata recorded on the accepted ordinary or retry user message.
    * @returns acknowledgement that the Agent accepted the prompt.
    */
   async prompt(request: SessionPromptRequest, source: MessageSource): Promise<SessionPromptValue> {
     const agent = await this.resolveAgent(request.sessionId)
-    if (hasPromptRequest(agent, request.requestId)) return { accepted: true }
+    if (this.hasPromptRequest(agent.session, request.requestId)) return { accepted: true }
+    if (request.content.length === 0) {
+      try {
+        return await agent.runMaintenance(() => {
+          const inbox = agent.inbox
+          if (request.mode !== 'queue' || this.continuation.stateOf(agent.session).ending === null
+            || inbox.nextTurn.length > 0 || inbox.nextStep.some(message => message.source.kind === 'user')) {
+            throw new RemoteError('session/agent-busy', 'generation continuation is unavailable', { reason: 'NO_CONTINUABLE_FAILURE_OR_PENDING_INPUT' })
+          }
+          agent.followup(createUserMessage({ content: [], source }))
+          return Promise.resolve({ accepted: true as const })
+        })
+      } catch (error: unknown) {
+        if (remoteErrorOf(error) !== undefined) throw error
+        throw new RemoteError('session/agent-busy', 'generation continuation was not accepted', { reason: String(error) })
+      }
+    }
     const admission = resolvePromptFileReceipts(
       request.content,
       receiptId => this.ctx.fileUploads.resolve(agent, receiptId),
@@ -312,6 +345,7 @@ export class SessionCommandController {
     const hasImage = admission.content.some(part => part.type === 'image')
     const admit = async (): Promise<SessionPromptValue> => {
       try {
+        if (this.hasPromptRequest(agent.session, request.requestId)) return { accepted: true }
         if (hasImage) {
           const current = agent.model.current()
           if (current !== undefined) {
@@ -326,6 +360,7 @@ export class SessionCommandController {
           }
         }
         const content = await this.ctx.attachments.admitPromptContent(admission.content)
+        if (this.hasPromptRequest(agent.session, request.requestId)) return { accepted: true }
         const message: UserMessage = createUserMessage({ content, source })
         if (this.ctx.agents.get(agent.id) !== agent) {
           throw new RemoteError(
@@ -339,6 +374,7 @@ export class SessionCommandController {
         else agent.followup(message)
         binding.commit()
       } catch (error) {
+        if (this.hasPromptRequest(agent.session, request.requestId)) return { accepted: true }
         if (remoteErrorOf(error) !== undefined) throw error
         if (error instanceof AttachmentError) {
           throw new RemoteError('session/attachment-invalid', error.message, { reason: error.code })
@@ -348,6 +384,32 @@ export class SessionCommandController {
       return { accepted: true }
     }
     return hasImage ? this.agents.serializeImageAdmission(agent, admit) : admit()
+  }
+
+  /** Recover first input acceptance, including claimed or removed messages, from unseen log entries. */
+  private hasPromptRequest(session: Session, requestId: SessionRequestId): boolean {
+    let receipts = this.promptReceipts.get(session)
+    if (receipts === undefined) {
+      receipts = { offset: SessionLogOffset(0), messages: new Set(), requests: new Set() }
+      this.promptReceipts.set(session, receipts)
+    }
+    if (receipts.offset !== session.seq) {
+      // oxlint-disable-next-line typescript/no-deprecated -- Existing prompt retry history read, retained for acceptance recovery.
+      for (const event of session.snapshotEvents(receipts.offset)) {
+        if (event.type !== 'agent/inbox/spliced' && event.type !== 'user/message') continue
+        const messages = event.type === 'agent/inbox/spliced' ? event.data.inserted : [event.data]
+        for (const message of messages) {
+          if (receipts.messages.has(message.id)) continue
+          receipts.messages.add(message.id)
+          // A copied input is not a new request in the child, even if later reinserted there.
+          if (event.seq < session.inheritedEventCount) continue
+          const source = message.source
+          if ((source.kind === 'user' || source.kind === 'retry') && 'rpcId' in source) receipts.requests.add(source.rpcId)
+        }
+      }
+      receipts.offset = session.seq
+    }
+    return receipts.requests.has(requestId)
   }
 
   private async requireModel(selection: Pick<AgentModelSelection, 'provider' | 'model'>): Promise<void> {
@@ -409,7 +471,7 @@ export class SessionCommandController {
       }
       agent = found.agent
     }
-    if (hasApiSessionSubagentOwner(this.ctx, agent.session, agent)) {
+    if (hasApiSessionSubagentOwner(agent.session)) {
       const identity = this.ctx.sessionProjections
         .snapshot(agent.session, ['subagent'])
         .values.subagent
@@ -470,7 +532,7 @@ export class SessionCommandController {
         { sessionId: request.sessionId },
       )
     }
-    if (hasApiSessionSubagentOwner(this.ctx, agent.session, agent)) {
+    if (hasApiSessionSubagentOwner(agent.session)) {
       throw apiSessionSubagentOwnershipError(request.sessionId)
     }
     agent.cancel({ kind: 'user' }, { keepInbox: true })
@@ -537,18 +599,4 @@ function resolvePromptFileReceipts(
     return attachment
   })
   return { content: resolved, receiptIds: [...receiptIds] }
-}
-
-function hasPromptRequest(agent: Agent, requestId: SessionRequestId): boolean {
-  const matches = (message: UserMessage): boolean => {
-    const source = message.source
-    return source.kind === 'user' && 'rpcId' in source && source.rpcId === requestId
-  }
-  if (agent.inbox.nextTurn.some(matches) || agent.inbox.nextStep.some(matches)) return true
-  // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
-  return agent.session.snapshotEvents().some((event) => {
-    if (event.type !== 'user/message') return false
-    const source = event.data.source
-    return source.kind === 'user' && 'rpcId' in source && source.rpcId === requestId
-  })
 }

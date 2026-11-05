@@ -1,0 +1,40 @@
+# Keyless replay counterpart: the failed search remains real; only the
+# conversation model adapter is replaced by replay.
+- id: llm-deepseek
+  name: '@deepseek-ai/dsh-llm-deepseek-api-key'
+  disabled: true
+
+- id: plugin-package-inventory-deepseek
+  disabled: true
+
+- insert:
+    - id: llm-replay
+      name: '@deepseek-ai/dsh-llm-replay'
+      config:
+        providers:
+          - id: deepseek-official
+            name: DeepSeek
+            models:
+              - id: deepseek-v4-flash
+                contextWindow: 1000000
+                defaultMaxTokens: 256000
+                reasoningEfforts: ['off', 'low', 'high', 'max']
+                defaultReasoningEffort: max
+              - id: deepseek-v4-pro
+
+    - id: web-search-error-fixture
+      name: './web-search-error-fixture.mjs'
+
+- id: web-search-deepseek
+  name: '@deepseek-ai/dsh-web-search-deepseek'
+  config:
+    apiKey: snapshot-key
+    # The fixture maps this recorded authority to its OS-assigned listener.
+    baseURL: http://127.0.0.1:43118/anthropic/v1
+
+# The case exercises legacy Messages search, which the base no longer selects by default.
+- id: web
+  name: '@deepseek-ai/dsh-web'
+  config:
+    searchProvider: deepseek-official
+    fetchProvider: http

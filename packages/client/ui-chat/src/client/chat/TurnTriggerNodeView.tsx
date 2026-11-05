@@ -1,10 +1,10 @@
-/** An independent, expandable notice explaining a non-human Turn trigger. */
+/** Recorded Turn triggers and compact manual-continuation receipts. */
 import { useId, useState, type ComponentType } from 'react'
 import {
   IconAgentPresetOutlineRegular, IconClockOutlineRegular, IconBranchOutlineRegular,
   IconChevronDownOutlineRegular, IconContextInjectionOutlineRegular, IconCordisPluginOutlineRegular,
   IconGoalOutlineRegular, IconGlobeOutlineRegular, IconPaperPlaneOutlineRegular, IconQueueOutlineRegular,
-  type IconProps,
+  IconUsersOutlineRegular, IconPlayOutlineRegular, type IconProps,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatNodeViewProps } from '../contract/slots.ts'
 import { formatMessageClock } from './message-chrome.ts'
@@ -13,11 +13,12 @@ import { turnTriggerDetails, type TurnTriggerIcon } from './turn-trigger.ts'
 import css from './TurnTriggerNodeView.module.css'
 
 const TRIGGER_ICONS: Record<TurnTriggerIcon, ComponentType<IconProps>> = {
+  continue: IconPlayOutlineRegular,
   request: IconContextInjectionOutlineRegular,
   goal: IconGoalOutlineRegular,
   agent: IconPaperPlaneOutlineRegular,
   team: IconAgentPresetOutlineRegular,
-  subagent: IconAgentPresetOutlineRegular,
+  subagent: IconUsersOutlineRegular,
   github: IconBranchOutlineRegular,
   webhook: IconGlobeOutlineRegular,
   schedule: IconClockOutlineRegular,
@@ -31,6 +32,12 @@ export function TurnTriggerNodeView({ node, t }: Pick<ChatNodeViewProps<'turn-tr
   const bodyId = useId()
   const details = turnTriggerDetails(node.data)
   const TriggerIcon = TRIGGER_ICONS[details.icon]
+  if (details.compact) return (
+    <div className={css.continuation} data-generation-continuation>
+      <span className={css.icon} aria-hidden><TriggerIcon size={14} /></span>
+      <span>{t(details.title)}</span>
+    </div>
+  )
   const date = new Date(node.data.time)
   const time = formatMessageClock(node.data.time, t)
   return (
