@@ -102,8 +102,10 @@ export type WorkflowEventName =
 /**
  * Machine-routable fatal workflow failures: parse/meta/argument/schema errors,
  * resource caps, subagent infrastructure failures, unserializable boundary
- * values, and cancellation. An ordinary child failure resolves its item to
- * `null` and is not one of these fatal codes.
+ * values, and cancellation. `RUN_FAILED` is the consumer's classification of a
+ * run that settled with `stopReason: 'error'`, whose {@link WorkflowResult}
+ * carries only the failure message. An ordinary child failure resolves its item
+ * to `null` and is not one of these fatal codes.
  */
 export type WorkflowErrorCode =
   | 'SCRIPT_PARSE'
@@ -117,6 +119,7 @@ export type WorkflowErrorCode =
   | 'AGENT_RESULT'
   | 'RESULT_UNSERIALIZABLE'
   | 'CANCELLED'
+  | 'RUN_FAILED'
 
 /**
  * Typed error for workflow-seam failures. Extends {@link HarnessError}, so the

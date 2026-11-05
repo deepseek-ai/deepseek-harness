@@ -5,7 +5,7 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime, { TOOL_ABORTED_BEFORE_DISPATCH } from '@deepseek-ai/dsh-tools'
+import ToolRuntime, { TOOL_ABORTED, TOOL_ABORTED_BEFORE_DISPATCH } from '@deepseek-ai/dsh-tools'
 import type { ToolExecutionResult, ToolExecutionToken } from '@deepseek-ai/dsh-tools'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { WorkflowRunId, WorkflowEngine } from '@deepseek-ai/dsh-workflow'
@@ -303,6 +303,7 @@ describe('dsh-tool-workflow', () => {
     const result = await pending
     expect(result.isError).toBe(true)
     expect((result.content[0] as { text: string }).text).toContain('workflow run failed: script threw: boom')
+    expect(result.error?.info).toEqual({ name: 'WorkflowError', code: 'RUN_FAILED' })
     expect(engine.disposed).toBe(1)
   })
 
@@ -314,6 +315,7 @@ describe('dsh-tool-workflow', () => {
     const result = await pending
     expect(result.isError).toBe(true)
     expect((result.content[0] as { text: string }).text).toContain('workflow run was cancelled (user)')
+    expect(result.error?.info).toEqual({ name: 'WorkflowError', code: 'CANCELLED' })
 
     const bare = execute(ctx, { script: SCRIPT, meta: META }, { agent: parent })
     await vi.waitFor(() => { expect(engine.requests.length).toBe(2) })
@@ -337,6 +339,7 @@ describe('dsh-tool-workflow', () => {
     controller.abort()
     const result = await pending
     expect(result.isError).toBe(true)
+    expect(result.error?.info).toEqual({ name: 'AbortError', code: TOOL_ABORTED })
     expect(engine.cancels).toContain('parent step aborted')
     expect(engine.disposed).toBe(1)
   })
@@ -354,6 +357,7 @@ describe('dsh-tool-workflow', () => {
     const result = await execute(ctx, { script: SCRIPT, meta: META })
     expect(result.isError).toBe(true)
     expect((result.content[0] as { text: string }).text).toContain('requires a calling agent')
+    expect(result.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
     expect(engine.requests.length).toBe(0)
   })
 
@@ -614,6 +618,7 @@ describe('dsh-tool-workflow', () => {
       expect(result.isError).toBe(true)
       expect((result.content[0] as { text: string }).text)
         .toContain('background jobs unavailable: load @deepseek-ai/dsh-jobs and @deepseek-ai/dsh-tool-jobs')
+      expect(result.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
     })
 
     it('a disabled composition hides the parameter and rejects the call', async () => {
@@ -624,6 +629,7 @@ describe('dsh-tool-workflow', () => {
       const result = await execute(ctx, { script: SCRIPT, meta: META, run_in_background: true }, { agent: parent })
       expect(result.isError).toBe(true)
       expect((result.content[0] as { text: string }).text).toContain('run_in_background is disabled')
+      expect(result.error?.info).toEqual({ name: 'WorkflowError', code: 'UNSUPPORTED_OPTION' })
     })
 
     it('advertises the background semantics in the parameter', async () => {
@@ -665,7 +671,7 @@ describe('dsh-tool-workflow', () => {
       controller.abort('user abort')
       const result = await pending
       expect(result.isError).toBe(true)
-      expect((result.content[0] as { text: string }).text).toContain('cancelled')
+      expect(result.error?.info).toEqual({ name: 'AbortError', code: TOOL_ABORTED })
     })
 
     it('a background run over the sandboxed PTC engine settles its job with the rendered return value', async () => {
