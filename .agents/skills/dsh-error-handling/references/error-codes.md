@@ -26,7 +26,7 @@ Use this guide when adding or reviewing an error class, an error code, or a fail
 - `name` is the PascalCase class name ending in `Error`, such as `JobError` or `SandboxEscalationError`.
 - Assign `this.name` a string literal in the constructor. `HarnessError` defaults `name` to `new.target.name`, but a bundler may rename a colliding class binding, and a renamed class would change persisted data.
 - Do not reuse another domain's class name, and do not encode a code in the name.
-- Cancellation is the one exception: a tool throws a `HarnessError` whose `name` is `AbortError` and whose code is the `dsh-tools` `TOOL_ABORTED` constant (`ABORTED`), so tool-thrown and registry-generated cancellations share one `name` and `code`.
+- Cancellation is the one exception: its `name` is `AbortError` and its code is the `dsh-tools` `TOOL_ABORTED` constant (`ABORTED`). The registry applies both to a signal reason or `AbortError` a tool throws after cancellation; a tool that throws its own cancellation error uses a `HarnessError` with the same `name` and code.
 
 ## Format the code
 

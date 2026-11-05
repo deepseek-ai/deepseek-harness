@@ -1729,6 +1729,119 @@ describe('ToolRuntime', () => {
     })
   })
 
+  it.each([
+    ['the signal reason', (signal: AbortSignal): void => { signal.throwIfAborted() }, 'caller stopped'],
+    ['a dependency AbortError', (): void => { throw new DOMException('This operation was aborted', 'AbortError') }, 'This operation was aborted'],
+  ])('classifies %s thrown after cancellation as ABORTED', async (_label, fail, message) => {
+    const ctx = await setup()
+    const entered = Promise.withResolvers<undefined>()
+    ctx.tools.register({
+      ...echoTool,
+      name: 'throws-on-abort',
+      async execute(_args, exec) {
+        entered.resolve(undefined)
+        await new Promise<void>((resolve) => {
+          exec.signal.addEventListener('abort', () => { resolve() }, { once: true })
+        })
+        fail(exec.signal)
+        return 'not reached'
+      },
+    })
+    const controller = new AbortController()
+    const pending = executeToolFixture(ctx, {
+      callId: ToolCallId('throws-on-abort'), name: 'throws-on-abort', arguments: {}, signal: controller.signal,
+    })
+    await entered.promise
+    controller.abort('caller stopped')
+
+    await expect(pending).resolves.toMatchObject({
+      content: [{ type: 'text', text: `Error: ${message}` }],
+      isError: true,
+      error: { message, info: { name: 'AbortError', code: TOOL_ABORTED } },
+    })
+  })
+
+  it('keeps a HarnessError thrown after cancellation', async () => {
+    const ctx = await setup()
+    const entered = Promise.withResolvers<undefined>()
+    ctx.tools.register({
+      ...echoTool,
+      name: 'domain-abort',
+      execute(_args, exec) {
+        entered.resolve(undefined)
+        return new Promise<string>((_resolve, reject) => {
+          exec.signal.addEventListener('abort', () => {
+            reject(new HarnessError('search cancelled', 'SEARCH_ABORTED'))
+          }, { once: true })
+        })
+      },
+    })
+    const controller = new AbortController()
+    const pending = executeToolFixture(ctx, {
+      callId: ToolCallId('domain-abort'), name: 'domain-abort', arguments: {}, signal: controller.signal,
+    })
+    await entered.promise
+    controller.abort('caller stopped')
+
+    await expect(pending).resolves.toMatchObject({
+      content: [{ type: 'text', text: 'Error: search cancelled' }],
+      isError: true,
+      error: { info: { name: 'HarnessError', code: 'SEARCH_ABORTED' } },
+    })
+  })
+
+  it.each([
+    ['a distinct failure', (): void => { throw new Error('cleanup failed') }, 'Error: cleanup failed'],
+    ['an uninspectable value', (): void => {
+      throw new Proxy({}, {
+        getPrototypeOf: () => { throw new Error('prototype trap') },
+        has: () => { throw new Error('has trap') },
+        get: () => { throw new Error('get trap') },
+      })
+    }, 'Error: <unprintable thrown value>'],
+  ])('keeps %s thrown during cancellation without info', async (_label, fail, text) => {
+    const ctx = await setup()
+    const entered = Promise.withResolvers<undefined>()
+    ctx.tools.register({
+      ...echoTool,
+      name: 'fails-during-abort',
+      async execute(_args, exec) {
+        entered.resolve(undefined)
+        await new Promise<void>((resolve) => {
+          exec.signal.addEventListener('abort', () => { resolve() }, { once: true })
+        })
+        fail()
+        return 'not reached'
+      },
+    })
+    const controller = new AbortController()
+    const pending = executeToolFixture(ctx, {
+      callId: ToolCallId('fails-during-abort'), name: 'fails-during-abort', arguments: {}, signal: controller.signal,
+    })
+    await entered.promise
+    controller.abort('caller stopped')
+
+    const result = await pending
+    expect(result).toMatchObject({ content: [{ type: 'text', text }], isError: true })
+    expect(result.error?.info).toBeUndefined()
+  })
+
+  it('keeps a plain failure without info when the call was not cancelled', async () => {
+    const ctx = await setup()
+    ctx.tools.register({
+      ...echoTool,
+      name: 'plain-failure',
+      execute() { return Promise.reject(new Error('disk full')) },
+    })
+
+    const result = await executeToolFixture(ctx, {
+      callId: ToolCallId('plain-failure'), name: 'plain-failure', arguments: {}, signal: new AbortController().signal,
+    })
+
+    expect(result).toMatchObject({ isError: true, error: { message: 'disk full' } })
+    expect(result.error?.info).toBeUndefined()
+  })
+
   it('materializes a pre-aborted call and publishes one result without entering pipeline phases', async () => {
     const ctx = await setup()
     const phases = { pre: 0, around: 0, body: 0, post: 0, result: 0 }

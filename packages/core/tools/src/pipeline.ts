@@ -254,6 +254,9 @@ export class ToolExecutionPipeline {
    * Dispatch the registered body with the original caller signal fused back
    * into any around-wrapper replacement. Cancellation never abandons the body:
    * a started promise reaches quiescence before its outcome becomes `ABORTED`.
+   * After cancellation, a thrown signal reason or `AbortError` without
+   * `HarnessError` identity keeps its message and gains the `ABORTED`
+   * identity; a thrown `HarnessError` and any other failure stay unchanged.
    */
   private async dispatchToolBody(exec: MutableToolRunContext): Promise<ToolExecutionResult> {
     const state = this.cancellationStates.get(exec)
@@ -278,7 +281,9 @@ export class ToolExecutionPipeline {
         ? toolAbortedResult(result)
         : result
     } catch (error: unknown) {
-      return toolErrorResult(error)
+      return isAborted(signal) && isUnclassifiedCancellation(error, signal)
+        ? toolErrorResult(error, { name: 'AbortError', code: TOOL_ABORTED })
+        : toolErrorResult(error)
     } finally {
       fused.dispose()
       exec.signal = wrapperSignal
@@ -687,13 +692,23 @@ function errorInfo(error: unknown): ToolErrorInfo | undefined {
   }
 }
 
+/** Whether a value thrown after cancellation is that cancellation and carries no identity of its own. */
+function isUnclassifiedCancellation(error: unknown, signal: AbortSignal): boolean {
+  if (errorInfo(error) !== undefined) return false
+  try {
+    return error === signal.reason || (error instanceof Error && error.name === 'AbortError')
+  } catch {
+    // A value whose prototype or `name` cannot be read is not a recognizable cancellation.
+    return false
+  }
+}
+
 /** Mint a same-process correlation token whose identity is its value. */
 function createExecutionToken(): ToolExecutionToken {
   return Symbol('dsh.tool.execution') as ToolExecutionToken
 }
 
-function toolErrorResult(error: unknown): ToolExecutionResult {
-  const info = errorInfo(error)
+function toolErrorResult(error: unknown, info = errorInfo(error)): ToolExecutionResult {
   const message = toolErrorMessage(error)
   return {
     content: [{ type: 'text', text: `Error: ${message}` }],
