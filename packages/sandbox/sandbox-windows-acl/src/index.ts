@@ -56,7 +56,7 @@ import { createRestrictedToken, findLogonSid, makeWellKnownSid, openCurrentProce
 import * as abi from './win32-abi.ts'
 
 export { AclWriteGrant } from './grant.ts'
-export { assertTempRootOutsideWorkspace } from './path-boundary.ts'
+export { assertTempRootOutsideWorkspace, isTempRootInsideWorkspace } from './path-boundary.ts'
 export { tempWriteSid, workspaceWriteSid } from './workspace-sid.ts'
 export { ACL_DIAGNOSIS_SKILL, registerAclDiagnosisSkill } from './acl-skill.ts'
 /** Construction options: the workspace/temp allowlists and their distinct SID identities. */
