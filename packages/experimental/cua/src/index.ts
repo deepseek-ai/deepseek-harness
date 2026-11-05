@@ -95,7 +95,7 @@ function executionAgent(execution: Readonly<ToolExecution>): Agent {
 /** Parse the tool request; refinements the parameter schema cannot express fail as argument errors. */
 function parseRequest<T>(schema: z.ZodType<T>, args: unknown): T {
   const parsed = schema.safeParse(args)
-  if (!parsed.success) throw new ToolArgsError(parsed.error.issues.map(issue => `${issue.path.join('.') || '<root>'}: ${issue.message}`))
+  if (!parsed.success) throw new ToolArgsError([z.prettifyError(parsed.error)])
   return parsed.data
 }
 
