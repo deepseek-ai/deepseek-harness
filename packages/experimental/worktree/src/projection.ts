@@ -29,7 +29,8 @@ export interface WorktreeProjectionState {
   readonly inheritedEventCount: number
 }
 
-const worktreeSchema: z.ZodType<CreatedWorktree> = z.object({
+/** Validates a `plugin:worktree/created` payload; a reader of the record applies it before trusting the data. */
+export const createdWorktreeSchema: z.ZodType<CreatedWorktree> = z.object({
   path: z.string().min(1),
   branch: z.string().min(1),
   baseCommit: z.string().min(1),
@@ -37,7 +38,7 @@ const worktreeSchema: z.ZodType<CreatedWorktree> = z.object({
 }).strict()
 
 const creationSchema: z.ZodType<WorktreeCreation> = z.object({
-  worktree: worktreeSchema,
+  worktree: createdWorktreeSchema,
   owned: z.boolean(),
 }).strict()
 
@@ -61,7 +62,7 @@ export const worktreeProjection = {
   apply: (state, event: SessionEvent) => {
     const record = pluginRecordOf(event)
     if (record?.type !== CREATED_RECORD) return state
-    const parsed = worktreeSchema.safeParse(record.data)
+    const parsed = createdWorktreeSchema.safeParse(record.data)
     if (!parsed.success) return state
     return { ...state, created: [...state.created, { worktree: parsed.data, owned: record.seq >= state.inheritedEventCount }] }
   },

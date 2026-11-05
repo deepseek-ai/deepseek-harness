@@ -3,7 +3,7 @@
 import { isAbsolute, relative, sep } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
-import { CREATED_RECORD, generatedWorktreeName } from '@deepseek-ai/dsh-experimental-worktree'
+import { CREATED_RECORD, createdWorktreeSchema, generatedWorktreeName } from '@deepseek-ai/dsh-experimental-worktree'
 import type { CreatedWorktree, CreateWorktreePhase } from '@deepseek-ai/dsh-experimental-worktree'
 import { appendPluginRecord, pluginRecordOf } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
@@ -20,13 +20,6 @@ import type {
 export const WORKTREE_RECORD = 'plugin:client-ui-forge/worktree'
 
 const EMPTY: Omit<ForgeWorktreeState, 'cwd'> = { request: null, created: null, locked: false, stepped: false, restoring: false }
-
-const createdSchema: z.ZodType<CreatedWorktree> = z.object({
-  path: z.string().min(1),
-  branch: z.string().min(1),
-  baseCommit: z.string().min(1),
-  repositoryRoot: z.string().min(1),
-}).strict()
 
 const worktreeSchema: z.ZodType<ForgeSessionWorktree> = z.object({
   path: z.string().min(1),
@@ -113,7 +106,7 @@ function apply(state: ForgeWorktreeState, event: SessionEvent): ForgeWorktreeSta
 function applyRecord(state: ForgeWorktreeState, event: SessionEvent): ForgeWorktreeState {
   const record = pluginRecordOf(event)
   if (record?.type === CREATED_RECORD) {
-    const created = createdSchema.safeParse(record.data)
+    const created = createdWorktreeSchema.safeParse(record.data)
     return !created.success || state.created !== null || state.stepped || state.request === null
       ? state
       : { ...state, created: { ...created.data, from: state.request.from } }

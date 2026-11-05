@@ -27,7 +27,7 @@ export type {
   CreatedWorktree, CreateWorktreePhase, CreateWorktreeRequest, RestoredWorktree, RestoreWorktreeRequest, WorktreeCleanup, WorktreeCreation,
 } from './types.ts'
 export { generatedWorktreeName } from './name.ts'
-export { CREATED_RECORD, worktreeProjection } from './projection.ts'
+export { CREATED_RECORD, createdWorktreeSchema, worktreeProjection } from './projection.ts'
 export type { WorktreeProjectionState } from './projection.ts'
 
 /** Worktree location, generated names, executables, and subprocess resource limits. */
