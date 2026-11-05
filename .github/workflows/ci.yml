@@ -21,6 +21,7 @@ concurrency:
 jobs:
   publisher-isolated:
     strategy:
+      max-parallel: 1
       fail-fast: false
       matrix:
         os: [linux, macos]
@@ -46,7 +47,7 @@ jobs:
       - uses: pnpm/action-setup@v5.0.0
         with:
           package_json_file: publisher-isolated/package.json
-          dest: ${{ runner.temp }}/setup-pnpm-publisher-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
+          dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Install only publisher production dependencies
         working-directory: publisher-isolated
         run: pnpm --filter @deepseek-ai/dsh-desktop-publisher --fail-if-no-match install --prod --frozen-lockfile --ignore-scripts
@@ -494,6 +495,7 @@ jobs:
 
 
   node-compat:
+    needs: publisher-isolated
     if: github.event_name == 'pull_request'
     # Under the selfhosted leg this job admits only repository-owned PR code
     # to the persistent shared VM; the blacksmith branch targets ephemeral

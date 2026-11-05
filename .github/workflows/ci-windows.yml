@@ -48,7 +48,7 @@ jobs:
       - uses: pnpm/action-setup@v5.0.0
         with:
           package_json_file: publisher-isolated/package.json
-          dest: ${{ runner.temp }}/setup-pnpm-publisher-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
+          dest: ${{ runner.temp }}/setup-pnpm-js-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
       - name: Install only publisher production dependencies
         working-directory: publisher-isolated
         run: pnpm --filter @deepseek-ai/dsh-desktop-publisher --fail-if-no-match install --prod --frozen-lockfile --ignore-scripts
@@ -63,6 +63,7 @@ jobs:
   # Blacksmith uses 2 vCPU for file-serial native tests and 16 for coverage
   # and the shared build/observational workspace.
   windows-build:
+    needs: windows-publisher
     if: github.event_name == 'pull_request'
     runs-on: >-
       ${{ vars.DSH_CI_FAILOVER_WINDOWS == 'blacksmith' && 'blacksmith-16vcpu-windows-2025'
