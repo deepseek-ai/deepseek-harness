@@ -41,7 +41,8 @@
     "@deepseek-ai/dsh-agent": "workspace:*",
     "@deepseek-ai/dsh-browser-use": "workspace:*",
     "@deepseek-ai/dsh-system-prompt": "workspace:*",
-    "@deepseek-ai/dsh-tools": "workspace:*"
+    "@deepseek-ai/dsh-tools": "workspace:*",
+    "@deepseek-ai/dsh-llm": "workspace:*"
   },
   "dependencies": {
     "@browserbasehq/stagehand": "4.4.0",

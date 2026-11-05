@@ -9,14 +9,17 @@ import { BrowserUseProviderName } from '@deepseek-ai/dsh-browser-use/brand'
 import { SessionResources } from '@deepseek-ai/dsh-experimental-browser-use-runtime'
 import { createMcpToolDefinition } from '@deepseek-ai/dsh-mcp-client'
 import { z } from 'zod'
-import { browserInputs, stagehandModelSchema, StagehandDrainError } from './native.ts'
+import { browserInputs, stagehandModelSchema } from './native.ts'
+import { StagehandDrainError } from './error.ts'
 import type { BrowserMethod, NativeBrowserRuntime, StagehandModelConfig } from './native.ts'
 import { openBrowserWorker } from './worker-client.ts'
 import { launchChromium } from './launch.ts'
 import type {} from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-browser-use'
 import type {} from '@deepseek-ai/dsh-system-prompt'
-import type {} from '@deepseek-ai/dsh-tools'
+import { ToolArgsError, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
+
+export { STAGEHAND_ERROR_CODES, StagehandDrainError, StagehandError, type StagehandErrorCode } from './error.ts'
 
 /** Cordis identity for the native Stagehand provider. */
 export const name = 'experimental-browser-use-stagehand-native'
@@ -178,6 +181,10 @@ function mountTools(ctx: Context, resources: SessionResources<BrowserResource>):
       description: descriptions[method],
       inputSchema: { ...z.record(z.string(), z.json()).parse(z.toJSONSchema(browserInputs[method])), type: 'object' },
       async call(args) {
+        const parsed = browserInputs[method].safeParse(args)
+        if (!parsed.success) {
+          throw new ToolArgsError(parsed.error.issues.map(issue => `${['arguments', ...issue.path].join('.')}: ${issue.message}`))
+        }
         const agent = ctx.agents.requireInitiator()
         const resource = await resources.get(agent)
         return resource.native.execute(method, args, resource.operationSignal)
@@ -189,7 +196,7 @@ function mountTools(ctx: Context, resources: SessionResources<BrowserResource>):
     if (!names.has(exec.name)) return next()
     const agent = exec.agent
     if (agent === undefined || ctx.agents.get(agent.id) !== agent) {
-      throw new Error('Stagehand browser tools require an exact live Agent')
+      throw new ToolContextUnavailableError('Stagehand browser tools require an exact live Agent')
     }
     return resources.run(agent, exec.signal, async (resource, activeSignal) => {
       const upstreamSignal = exec.signal
