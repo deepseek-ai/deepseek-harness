@@ -7,6 +7,8 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { MenuRegistry } from '@deepseek-ai/dsh-client-ui-context-menu/src/client/registry.ts'
 import type { ContextMenus, ContextMenuTarget } from '@deepseek-ai/dsh-client-ui-context-menu/client'
+import type { RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
+import type { SessionWorkspacePathApplication } from '@deepseek-ai/dsh-api-session-controller/types'
 import type { FileActionSource, FileSaveResult } from '@deepseek-ai/dsh-client-ui-file-actions/client'
 import { OpenInAppPathController } from '../src/client/open-path.ts'
 import { OpenInAppController } from '../src/client/controller.ts'
@@ -15,6 +17,7 @@ import { registerContextMenus } from '../src/client/context-menus.tsx'
 import type { OpenInAppToastSource } from '../src/client/open-toast.tsx'
 
 const sessionId = SessionId('menu-actions')
+type Applications = readonly SessionWorkspacePathApplication[]
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 async function boot() {
@@ -27,13 +30,13 @@ async function boot() {
   const remote = {
     session: {
       canOpenWorkspacePath: vi.fn(async () => ({ ok: true as const, value: true })),
-      workspacePathApplications: vi.fn(async () => ({ ok: true as const, value: [
-        { id: 'preview', name: 'Preview', default: true, icon: 'data:image/png;base64,a' },
-      ] })),
+      workspacePathApplications: vi.fn(async (_request: { path: string }, _signal?: AbortSignal): Promise<RemoteResult<Applications>> => ({
+        ok: true, value: [{ id: 'preview', name: 'Preview', default: true, icon: 'data:image/png;base64,a' }],
+      })),
       openWorkspacePath: vi.fn(async () => ({ ok: true as const, value: undefined })),
     },
     workspaceFiles: {
-      stat: vi.fn(async () => ({ ok: true as const, value: { absolutePath: '/workspace/file.svg' } })),
+      stat: vi.fn(async (_sessionId: SessionId, path: string) => ({ ok: true as const, value: { absolutePath: path.startsWith('/') ? path : `/workspace/${path}` } })),
       readBytes: vi.fn(async () => ({ ok: true as const, value: { data: [...new TextEncoder().encode('<svg/>')] } })),
     },
   }
@@ -82,14 +85,17 @@ it('routes file actions through an explicit host, the line, native association a
   const h = await boot()
   // A menu raised inside a floating panel names that panel; the open names a host instead, never a pane.
   const file = { kind: 'file', value: { sessionId, path: 'file.svg', paneId: 'float7' as never, line: 24 } } as const
-  const items = (await h.resolve(file)).source.getSnapshot().filter(item => item.id.startsWith('open-in-app.file/'))
-  expect(items.map(item => [item.id, item.label, item.icon?.key])).toEqual([
+  const first = await h.resolve(file)
+  const items = () => first.source.getSnapshot().filter(item => item.id.startsWith('open-in-app.file/'))
+  await vi.waitFor(() => { expect(items().find(item => item.id === 'open-in-app.file/open')?.label).toBe('open.title') })
+  expect(items().map(item => [item.id, item.label, item.icon?.key])).toEqual([
     ['open-in-app.file/sidebar', 'menu.openInSidebar', 'open-in-app.sidebar'],
     ['open-in-app.file/float', 'menu.openInFloat', 'open-in-app.float'],
     ['open-in-app.file/reveal', 'menu.reveal', 'open-in-app.reveal'],
     ['open-in-app.file/open', 'open.title', 'open-in-app.application'],
     ['open-in-app.file/copyPath', 'menu.copyPath', 'open-in-app.copy'],
   ])
+  first.dispose()
   await h.choose(file, 'open-in-app.file/sidebar')
   expect(h.sidebar.openResourceIn).toHaveBeenLastCalledWith(sessionId, expect.stringContaining('file.svg'),
     { destination: 'sidebar', params: { line: 24 } })
@@ -114,7 +120,8 @@ it('routes file actions through an explicit host, the line, native association a
   const simple = { kind: 'file', value: { sessionId: SessionId('absent'), path: '/file.unknown' } } as const
   h.remote.session.workspacePathApplications.mockResolvedValueOnce({ ok: true, value: [] })
   const menu = await h.resolve(simple)
-  expect(menu.source.getSnapshot().find(item => item.id.endsWith('/open'))?.disabled).toBe(true)
+  // Without an answer the row opens through the association; the Host's empty answer then disables it in place.
+  await vi.waitFor(() => { expect(menu.source.getSnapshot().find(item => item.id.endsWith('/open'))?.disabled).toBe(true) })
   expect(menu.source.getSnapshot().some(item => item.id.endsWith('/copyImage'))).toBe(false)
   expect(menu.source.getSnapshot().filter(item => item.id.startsWith('file-actions.')).map(item => item.id))
     .toEqual(['file-actions.file/saveAs'])
@@ -122,8 +129,57 @@ it('routes file actions through an explicit host, the line, native association a
   expect(h.sidebar.openResourceIn).toHaveBeenLastCalledWith(SessionId('absent'), expect.any(String), { destination: 'sidebar' })
   h.remote.session.workspacePathApplications.mockResolvedValueOnce({ ok: true, value: [] })
   const floating = await h.resolve(simple)
+  expect(floating.source.getSnapshot().find(item => item.id.endsWith('/open'))?.disabled).toBe(true)
   floating.select('open-in-app.file/float')
   expect(h.sidebar.openResourceIn).toHaveBeenLastCalledWith(SessionId('absent'), expect.any(String), { destination: 'float' })
+})
+
+it('opens file menus before the Host answers and changes only the application row in place', async () => {
+  const h = await boot()
+  const answers: ((answer: RemoteResult<Applications>) => void)[] = []
+  h.remote.session.workspacePathApplications.mockImplementation(() => new Promise((answer) => { answers.push(answer) }))
+  const file = { kind: 'file', value: { sessionId, path: 'notes.txt' } } as const
+  const menu = await h.resolve(file)
+  const rows = () => menu.source.getSnapshot().filter(item => item.id.startsWith('open-in-app.file/'))
+  const application = () => rows().find(item => item.id === 'open-in-app.file/open')
+  expect(answers).toHaveLength(1)
+  expect(application()).toMatchObject({ label: 'menu.defaultApp', disabled: false })
+  expect(application()?.icon).toEqual({ key: 'open-in-app.application' })
+  const published: number[] = []
+  const stop = menu.source.subscribe(() => { published.push(rows().length) })
+  answers[0]!({ ok: true, value: [
+    { id: '/Applications/TextEdit.app', name: 'TextEdit', default: false, icon: null },
+    { id: '/Applications/Sublime Text.app', name: 'Sublime Text', default: true, icon: 'data:image/png;base64,c3Vi' },
+  ] })
+  await vi.waitFor(() => { expect(application()).toMatchObject({ label: 'open.title', icon: { src: 'data:image/png;base64,c3Vi' } }) })
+  stop()
+  expect(published.length).toBeGreaterThan(0)
+  expect(published.every(count => count === 5)).toBe(true)
+  menu.select('open-in-app.file/open')
+  await vi.waitFor(() => {
+    expect(h.remote.session.openWorkspacePath).toHaveBeenLastCalledWith({ path: '/workspace/notes.txt', application: '/Applications/Sublime Text.app' })
+  })
+  // Another file of the same type shows the recorded answer at once and asks the Host again.
+  const other = await h.resolve({ kind: 'file', value: { sessionId, path: 'todo.txt' } })
+  const otherApplication = () => other.source.getSnapshot().find(item => item.id === 'open-in-app.file/open')
+  expect(otherApplication()?.label).toBe('open.title')
+  expect(answers).toHaveLength(2)
+  answers[1]!({ ok: true, value: [] })
+  await vi.waitFor(() => { expect(otherApplication()).toMatchObject({ label: 'menu.defaultApp', disabled: true }) })
+  other.dispose()
+  expect(h.failure).not.toHaveBeenCalled()
+})
+
+it('opens through the OS association until the Host first answers, including after failed queries', async () => {
+  const h = await boot()
+  h.remote.session.workspacePathApplications.mockResolvedValue({ ok: false } as never)
+  const menu = await h.resolve({ kind: 'file', value: { sessionId, path: 'notes.md' } })
+  await vi.waitFor(() => { expect(h.remote.session.workspacePathApplications).toHaveBeenCalledOnce() })
+  const application = menu.source.getSnapshot().find(item => item.id === 'open-in-app.file/open')
+  expect(application).toMatchObject({ label: 'menu.defaultApp', disabled: false })
+  menu.select('open-in-app.file/open')
+  await vi.waitFor(() => { expect(h.remote.session.openWorkspacePath).toHaveBeenLastCalledWith({ path: '/workspace/notes.md' }) })
+  await vi.waitFor(() => { expect(h.report).toHaveBeenLastCalledWith({ kind: 'opened' }) })
 })
 
 it('keeps copy-path available on failed metadata and reports native action failures', async () => {
@@ -139,14 +195,23 @@ it('keeps copy-path available on failed metadata and reports native action failu
   h.remote.session.openWorkspacePath.mockResolvedValueOnce({ ok: false } as never)
   await h.choose(file, 'open-in-app.file/reveal')
   await vi.waitFor(() => { expect(h.report).toHaveBeenLastCalledWith({ kind: 'failed', failure: 'revealError' }) })
+  await vi.waitFor(() => { expect(h.paths.cachedApplications('/workspace/file.svg')).toHaveLength(1) })
+  // A failed query keeps the recorded answer.
   h.remote.session.workspacePathApplications.mockResolvedValueOnce({ ok: false } as never)
-  expect((await h.resolve(file)).source.getSnapshot().find(item => item.id.endsWith('/open'))?.disabled).toBe(true)
+  const kept = await h.resolve(file)
+  await vi.waitFor(() => {
+    expect(h.remote.session.workspacePathApplications.mock.settledResults.every(result => result.type !== 'incomplete')).toBe(true)
+  })
+  expect(kept.source.getSnapshot().find(item => item.id.endsWith('/open'))).toMatchObject({ label: 'open.title', disabled: false })
+  kept.dispose()
   h.paths.desktop.set(false)
   h.fileActions.canSaveAs = false
+  const queried = h.remote.session.workspacePathApplications.mock.calls.length
   const web = await h.resolve(file)
   expect(web.source.getSnapshot().some(item => item.id.endsWith('/saveAs'))).toBe(false)
   expect(web.source.getSnapshot().filter(item => ['/open', '/reveal'].some(suffix => item.id.endsWith(suffix)))
     .every(item => item.disabled)).toBe(true)
+  expect(h.remote.session.workspacePathApplications).toHaveBeenCalledTimes(queried)
 })
 
 it('opens links in the registered browser, externally, and on the clipboard', async () => {

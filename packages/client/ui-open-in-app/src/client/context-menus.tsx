@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { IconRightUpOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { Context } from '@deepseek-ai/cordis'
-import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client'
+import type { ContextMenuTargetMap, MenuAction } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from '@deepseek-ai/dsh-api-workspace-files/remote'
@@ -76,40 +76,61 @@ export function registerContextMenus(
       ]
     },
   }), 'open-in-app: directory context menu')
+  const fileMenu = (target: ContextMenuTargetMap['file'], absolutePath: string | undefined): MenuAction[] => {
+    const { sessionId, path, line } = target
+    const available = absolutePath !== undefined
+    const desktop = paths.desktop.getSnapshot() === true && available
+    // Undefined until the Host first answers for this file type; the row then opens through the association.
+    const apps = desktop ? paths.cachedApplications(absolutePath) : []
+    const application = apps?.find(app => app.default)
+    const openApplication = absolutePath === undefined || !desktop ? undefined
+      : application !== undefined ? () => open(absolutePath, 'open', application.id)
+        : apps === undefined ? () => open(absolutePath, 'open') : undefined
+    // The menu names a host, not the pane it was raised in: a floating pane is never a docked landing place.
+    const openIn = (destination: 'sidebar' | 'float') => () => {
+      const cwd = ctx.sessions.list.getSnapshot().byId[sessionId]?.cwd
+      ctx.sidebarRight.openResourceIn(sessionId, fileAddressFor(sessionId, cwd, path), {
+        destination, ...(line === undefined ? {} : { params: { line } }),
+      })
+    }
+    return [
+      { id: 'sidebar', icon: { key: 'open-in-app.sidebar' }, label: t('menu.openInSidebar'), disabled: !available, run: openIn('sidebar') },
+      { id: 'float', icon: { key: 'open-in-app.float' }, label: t('menu.openInFloat'), disabled: !available, run: openIn('float') },
+      { id: 'reveal', icon: { key: 'open-in-app.reveal' }, label: fileManager(), disabled: !desktop,
+        ...absolutePath === undefined ? {} : { run: () => open(absolutePath, 'reveal') } },
+      { id: 'open', label: application ? t('open.title', { app: application.name }) : t('menu.defaultApp'),
+        icon: { key: 'open-in-app.application', ...application?.icon ? { src: application.icon } : {} },
+        disabled: openApplication === undefined, ...openApplication === undefined ? {} : { run: openApplication } },
+      { id: 'copyPath', icon: { key: 'open-in-app.copy' }, failureLabel: t('menu.copyFailed'), label: t('menu.copyPath'),
+        run: async () => {
+          const cwd = ctx.sessions.list.getSnapshot().byId[sessionId]?.cwd
+          await navigator.clipboard.writeText(absolutePath ?? resolveWorkspacePath(cwd, path))
+          ctx.contextMenus.notify(t('menu.copied'), true)
+        } },
+    ]
+  }
+  // The verified Host path of each open file menu. Association answers re-resolve the menu from it
+  // synchronously, so the registry keeps the other rows while the application row changes in place.
+  const verified = new WeakMap<ContextMenuTargetMap['file'], { readonly absolutePath: string | undefined } | null>()
   ctx.effect(() => ctx.contextMenus.register({
     id: 'open-in-app.file', target: 'file', order: 100,
-    resolve: async (target, signal) => {
-      const { sessionId, path, line } = target
-      await paths.load()
-      const absolutePath = await resolvePath(sessionId, path, signal)
-      const available = absolutePath !== undefined
-      const desktop = paths.desktop.getSnapshot() === true && available
-      const apps = desktop ? await paths.applications(absolutePath, signal) : []
-      signal.throwIfAborted()
-      const application = apps?.find(app => app.default)
-      // The menu names a host, not the pane it was raised in: a floating pane is never a docked landing place.
-      const openIn = (destination: 'sidebar' | 'float') => () => {
-        const cwd = ctx.sessions.list.getSnapshot().byId[sessionId]?.cwd
-        ctx.sidebarRight.openResourceIn(sessionId, fileAddressFor(sessionId, cwd, path), {
-          destination, ...(line === undefined ? {} : { params: { line } }),
-        })
-      }
-      return [
-        { id: 'sidebar', icon: { key: 'open-in-app.sidebar' }, label: t('menu.openInSidebar'), disabled: !available, run: openIn('sidebar') },
-        { id: 'float', icon: { key: 'open-in-app.float' }, label: t('menu.openInFloat'), disabled: !available, run: openIn('float') },
-        { id: 'reveal', icon: { key: 'open-in-app.reveal' }, label: fileManager(), disabled: !desktop,
-          ...absolutePath === undefined ? {} : { run: () => open(absolutePath, 'reveal') } },
-        { id: 'open', label: application ? t('open.title', { app: application.name }) : t('menu.defaultApp'),
-          icon: { key: 'open-in-app.application', ...application?.icon ? { src: application.icon } : {} },
-          disabled: application === undefined,
-          ...absolutePath === undefined || application === undefined ? {} : { run: () => open(absolutePath, 'open', application.id) } },
-        { id: 'copyPath', icon: { key: 'open-in-app.copy' }, failureLabel: t('menu.copyFailed'), label: t('menu.copyPath'),
-          run: async () => {
-            const cwd = ctx.sessions.list.getSnapshot().byId[sessionId]?.cwd
-            await navigator.clipboard.writeText(absolutePath ?? resolveWorkspacePath(cwd, path))
-            ctx.contextMenus.notify(t('menu.copied'), true)
-          } },
-      ]
+    observe: (target) => {
+      // Each occurrence subscribes before its first resolution, so a reopened target is verified again.
+      verified.set(target, null)
+      return [paths.associations]
+    },
+    resolve: (target, signal) => {
+      const settled = verified.get(target)
+      if (settled) return fileMenu(target, settled.absolutePath)
+      return (async () => {
+        await paths.load()
+        const absolutePath = await resolvePath(target.sessionId, target.path, signal)
+        signal.throwIfAborted()
+        verified.set(target, { absolutePath })
+        // A cached answer shows at once; every opening re-queries so a changed association reaches this menu.
+        if (absolutePath !== undefined && paths.desktop.getSnapshot() === true) paths.refreshApplications(absolutePath)
+        return fileMenu(target, absolutePath)
+      })()
     },
   }), 'open-in-app: file context menu')
   ctx.effect(() => ctx.contextMenus.register({
