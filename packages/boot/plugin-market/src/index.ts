@@ -7,6 +7,8 @@ import semver from 'semver'
 import { evaluatePluginCompatibility, getDshRuntimeVersion } from '@deepseek-ai/dsh-app-boot'
 import { marketInstallTarget, type MarketIndex, type MarketPlugin, type MarketVersion } from '@deepseek-ai/dsh-plugin-market-index'
 import type { BundleInfo } from '@deepseek-ai/dsh-plugin-manager/types'
+// Also declares the `pluginManager` service this one reads bundles from.
+import { pinnedGitOrigin } from '@deepseek-ai/dsh-plugin-manager'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import {
@@ -19,9 +21,7 @@ import { normalizeIndexUrl } from './index-url.ts'
 import { RepositoryCache } from './repository-cache.ts'
 import { parseIndexInWorker } from './parse-thread.ts'
 import { MarketSearch } from './search.ts'
-// Type-only: the `pluginManager` service, `settings.update`, the Loader's `loader/volatile-update` event, and the
-// `connection` Fetch routes.
-import type {} from '@deepseek-ai/dsh-plugin-manager'
+// Type-only: `settings.update`, the Loader's `loader/volatile-update` event, and the `connection` Fetch routes.
 import type {} from '@deepseek-ai/dsh-settings'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 import type {} from '@deepseek-ai/dsh-client-connection'
@@ -476,11 +476,16 @@ export default class PluginMarket extends TypertRemoteService {
 function listingOf(
   plugin: MarketPlugin, bundles: readonly BundleInfo[], exemptions: Readonly<Record<string, readonly string[]>>, runtimeVersion: string,
 ): MarketListingEntry {
-  const versions = plugin.versions.map((version): MarketListingVersion => ({
-    ...version,
-    install: marketInstallTarget(plugin.name, version),
-    compatibility: compatibilityOf(plugin.name, version, exemptions, runtimeVersion),
-  }))
+  const bundle = bundles.find(candidate => candidate.name === plugin.name)
+  // A Git copy updates only to another commit of the repository directory it came from.
+  const origin = bundle?.update === 'git' && bundle.source !== undefined ? pinnedGitOrigin(bundle.source) : undefined
+  const installedVersion = bundle?.version
+  const versions = plugin.versions.map((version): MarketListingVersion => {
+    const install = marketInstallTarget(plugin.name, version)
+    const update = origin !== undefined && installedVersion !== undefined && semver.gt(version.version, installedVersion)
+      && pinnedGitOrigin(install.spec) === origin
+    return { ...version, install, compatibility: compatibilityOf(plugin.name, version, exemptions, runtimeVersion), update }
+  })
   const compatible = versions.filter(version => version.compatibility.compatible)
   const stable = plugin.versions.some(version => semver.prerelease(version.version) === null)
   const defaultVersion = compatible.find(version => !stable || semver.prerelease(version.version) === null)?.version
@@ -490,12 +495,11 @@ function listingOf(
     ...plugin,
     versions,
     ...defaultVersion === undefined ? {} : { defaultVersion },
-    installation: installationOf(plugin.name, measured, bundles),
+    installation: installationOf(bundle, measured),
   }
 }
 
-function installationOf(name: string, version: string, bundles: readonly BundleInfo[]): MarketInstallation {
-  const bundle = bundles.find(candidate => candidate.name === name)
+function installationOf(bundle: BundleInfo | undefined, version: string): MarketInstallation {
   // An on-demand catalog entry is listed before the profile installs it.
   if (bundle === undefined || (!bundle.installed && bundle.availability !== 'installation')) return { status: 'not-installed' }
   if (!bundle.installed) return { status: 'provided', ...bundle.version === undefined ? {} : { installedVersion: bundle.version } }

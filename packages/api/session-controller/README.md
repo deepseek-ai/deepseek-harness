@@ -27,6 +27,8 @@ Desktop analytics follows the [product collection policy](../../client/product-a
 <a id="use-this-package"></a>
 ## Use this package
 
+Prompt retries use the request identity in the first committed inbox insertion, including after the message is claimed or removed. Admission checks again after asynchronous attachment preparation, so concurrent retries accept one input. Acceptance acknowledges insertion, not execution or completion.
+
 The controller reads a Session's recorded preset through the optional `agentPresets.presetForSession(session)` service method. A null result means no preset was recorded; an absent service means preset identity is unavailable to the controller.
 
 History pages and follow opening snapshots carry one `{ type: 'event', event: SessionWireEvent }` record per durable Session event. The Client retains each accepted record as one durable `SessionEventLikeEntry`; Assistant token boundaries remain inside the compact stream on `assistant/message` or `assistant/attempt`. Tool arguments, result content, failures, and `tool/result.data.meta` pass through unchanged; the controller does not resolve a Tool definition, run a presenter, or attach UI data.
@@ -64,7 +66,7 @@ During uninterrupted following, transcript and steering echoes stay in Chat thro
 
 The user-invocable `skills/list` metadata includes the winning provider’s optional instruction-file `path`. The composer can preview that file without loading every skill body or activating a cold Agent.
 
-Fork copies the exact inclusive event prefix selected by `atSeq`, including a cut inside an open turn, into an independent Session without `parentSession`. Client placeholders likewise omit `parentSessionId`; list indentation applies only to subagent-origin rows, including when historical ordinary forks retain a parent id. Workspace attachment and optional title increments use the source selected for the operation. The child records its inherited marker before synthetic fork results and closing events. Omitting `atSeq` selects the latest completed turn and its standalone tail, stopping before the next turn or queued input; a nonexistent event is rejected. The chat action selects a completed turn.
+Fork copies the exact inclusive event prefix selected by `atSeq`, including a cut inside an open turn, into an independent Session without `parentSession`. Client placeholders likewise omit `parentSessionId`; list indentation applies only to subagent-origin rows, including when historical ordinary forks retain a parent id. Workspace attachment and optional title increments use the source selected for the operation; an increment skips numbers that other Host-listed titles already use. The child records its inherited marker before synthetic fork results and closing events. Omitting `atSeq` selects the latest completed turn and its standalone tail, stopping before the next turn or queued input; a nonexistent event is rejected. The chat action selects a completed turn.
 
 A resume blocked by an existing write handle returns `session/writer-held` with the Session id; other resume failures retain `gateway/internal`.
 
@@ -110,6 +112,8 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 Blockquotes travel as ordinary prompt text without quote metadata. Local submission echoes and durable messages use the same text rendering rules; queue edits replace content while retaining prompt correlation.
 
+An empty `prompt.content` array requests a new turn only for an eligible failed, idle ordinary Session in queue mode. Pending human input prevents admission; non-waking injected context is retained. `conversationContinuation` supplies the shared six-code manual policy, independently of provider retry configuration. The input follows ordinary inbox and Loop admission and records an empty `user/message` with `source.kind: 'retry'`; its input identity and caller metadata support deduplication and recovery. Whitespace-only text parts remain invalid.
+
 <a id="model-experience"></a>
 ## Model Experience
 
@@ -127,6 +131,7 @@ No direct effect; model requests remain owned by the Agent and LLM packages.
 - The image byte cap does not validate decoded dimensions or pixel count.
 - A failed follow resumption remains visible to the caller instead of retrying indefinitely.
 - The raw browser upload is one streaming HTTP request without resumable offsets; a retry sends the file again from byte zero.
+- Fork title increments compare candidates with the Client list before the Host normalizes them: concurrent forks of one source, or a title the Host truncates at its byte limit, can still produce duplicate titles.
 - File-reference completion uses the shared Agent lookup and can resume a cold Session; the `skills/list` catalog is the non-activating alternative for skill metadata.
 - Accepted/running display memory lives only in Client memory and is lost on page reload.
 - That memory is not shared between tabs: one tab can show a converted row while another still shows `New Session` for the same Session.

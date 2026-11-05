@@ -2,8 +2,8 @@
 import type { ChatNode } from './chat-nodes.ts'
 
 /**
- * Exclude system prompts, ordinary Context, permission commands, and normal Team toggle receipts.
- * Failed Team toggles and Context containing tool changes remain visible.
+ * Exclude system prompts, permission commands, and normal Team toggle receipts.
+ * Failed Team toggles remain visible.
  * @param node - projected Chat node.
  * @returns whether the node contributes a visible Chat row.
  */
@@ -17,6 +17,4 @@ export function isVisibleChatNode(node: ChatNode): boolean {
   }
   return node.visibility === 'visible'
     && node.kind !== 'system-prompt'
-    && (node.kind !== 'context'
-      || node.data.content.some(block => block.type === 'tool-addition' || block.type === 'tool-removal'))
 }

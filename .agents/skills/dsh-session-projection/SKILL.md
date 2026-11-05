@@ -17,7 +17,7 @@ Keep recoverable session facts in Projection and expose them through their ownin
 
 3. State recovery through `init` and `apply` is synchronous and deterministic. Do not perform I/O or trigger Cordis hooks, models, or tools. Runtime hooks own those effects. Replay must not repeat them. Return the same state reference for unrelated events. Keep views synchronous and preserve their references when visible values do not change.
 
-4. Persist JSON state that its schema accepts. Follow the README's state-version and checkpoint-watermark rules. Restoring a checkpoint and replaying its suffix must match full replay. Change the version when state fields or recovery semantics change.
+4. Persist JSON state that its schema accepts. Follow the README's state-version and checkpoint-watermark rules. Restoring a checkpoint and replaying its suffix must match full replay. Change the version when state fields or recovery semantics change, except for optional additions that preserve historical meaning when absent and have tested old-checkpoint suffix equivalence with full replay. Schema acceptance alone is insufficient.
 
 5. Prefer fixed-size or sublinear state. Growth is acceptable only when slow enough to remain negligible. Necessary linear state must have a current use and explicit memory, replay, and per-event costs. Do not retain history-sized indexes, including event sequence collections, by habit. Do not discard required data or change behavior to reduce size. Start with a complete implementation; optimize for a concrete need.
 

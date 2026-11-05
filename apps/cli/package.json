@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh",
   "description": "dsh CLI: profile launch, plugin management, and configuration inspection",
-  "version": "0.2.2-alpha.2",
+  "version": "0.2.2-rc.1",
   "publishConfig": {
     "access": "public"
   },
@@ -16,8 +16,16 @@
   },
   "files": [
     "lib/*.js",
-    "lib/types/*.d.ts"
+    "lib/*.js.map",
+    "lib/types/*.d.ts",
+    "lib/types/*.d.ts.map",
+    "docs",
+    "src"
   ],
+  "scripts": {
+    "prepack": "tsx ../../scripts/stage-dsh-docs.ts",
+    "postpack": "tsx ../../scripts/stage-dsh-docs.ts --clean"
+  },
   "license": "MIT",
   "dependencies": {
     "@deepseek-ai/cordis": "workspace:~",

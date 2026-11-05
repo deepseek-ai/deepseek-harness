@@ -4,6 +4,7 @@ import { Button, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from './contract/slots.ts'
 import css from './ApprovalPanel.module.css'
+import { ApprovalWarning } from './ApprovalWarning.tsx'
 
 /**
  * Render one decision with caller-owned actions and an optional persistent choice.
@@ -15,7 +16,7 @@ export function ApprovalCard(props: FactoryComponentPropsOf<'conversation.approv
 }
 
 function ApprovalFlow(props: FactoryComponentPropsOf<'conversation.approval.card'>) {
-  const { requestKey, title, description, subject, allowLabel, canAnswer, onAllow, onReject, onAlways, t } = props
+  const { requestKey, title, description, subject, warning, allowLabel, canAnswer, onAllow, onReject, onAlways, t } = props
   const detail = props.callId === undefined ? null : props.renderSlot('conversation.approval.detail', { callId: props.callId })
   const [answered, setAnswered] = useState(false)
   const waiting = useRef(false)
@@ -68,7 +69,10 @@ function ApprovalFlow(props: FactoryComponentPropsOf<'conversation.approval.card
             {subject.icon !== undefined && <img src={subject.icon} alt="" width={40} height={40} draggable={false} />}
             <strong>{subject.name}</strong>
           </div>}
-          <div className={css.headline}>{title}</div>
+          <div className={css.heading}>
+            <div className={css.headline}>{title}</div>
+            {warning !== undefined && <ApprovalWarning warning={warning} />}
+          </div>
           {description !== undefined && <p className={css.description}>{description}</p>}
           {detail !== null && <div className={css.command}>{detail}</div>}
         </div>

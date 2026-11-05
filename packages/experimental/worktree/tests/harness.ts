@@ -69,7 +69,10 @@ export async function repository(parent = tmpdir()): Promise<string> {
   }
 }
 
-export async function harness(root: string, config: Config = {}, mode: SandboxMode = 'danger-full-access'): Promise<Context> {
+/** Plugin config as the schema accepts it: the volatile `retainOnArchive` is given as its plain value. */
+export type HarnessConfig = Omit<Config, 'retainOnArchive'> & { retainOnArchive?: boolean }
+
+export async function harness(root: string, config: HarnessConfig = {}, mode: SandboxMode = 'danger-full-access'): Promise<Context> {
   const ctx = new Context()
   try {
     await ctx.plugin(SessionProjectionRegistry)

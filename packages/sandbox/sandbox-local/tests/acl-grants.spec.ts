@@ -146,8 +146,13 @@ describe('windows-acl write grants (LocalSandboxProvider)', () => {
       ])
       expect(existsSync(tempDir ?? '')).toBe(true)
 
-      expect((await sandbox.confine(['pwsh', '/Command', 'x'], policy)).argv).toEqual(confined.argv)
+      const extra = workspaceRoot()
+      scratch.push(extra)
+      expect((await sandbox.confine(['pwsh', '/Command', 'x'], {
+        ...policy, additionalWritableRoots: [extra],
+      })).argv).toEqual(confined.argv)
       expect(mockState.grants).toHaveLength(2)
+      expect(mockState.grants.flatMap(grant => grant.added.map(added => added.path))).toEqual([ws, tempDir])
 
       await fiber.dispose()
       expect(mockState.grants.every(grant => grant.disposed)).toBe(true)

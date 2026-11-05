@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Persistente Terminals",
-    "description": "Stellt dem Agenten Terminals bereit, deren Prozesse zwischen Tool-Aufrufen im Hintergrund weiterlaufen, sodass er einen Entwicklungsserver oder eine REPL starten und später zurückkehren kann, um Ausgaben zu lesen oder Eingaben zu tippen.",
+    "description": "Stellt dem Agenten Terminals bereit, die als Seitenleisten-Tabs geöffnet werden; Sie können zusehen und durch Tippen die Kontrolle übernehmen. Prozesse laufen zwischen Tool-Aufrufen weiter, sodass er einen Entwicklungsserver oder eine REPL starten und später die Ausgabe lesen kann; er kann auch Terminals lesen, die Sie selbst öffnen.",
     "detail": "docs/DETAIL.md"
   }
 }

@@ -121,15 +121,17 @@ for (const backend of backends) {
       expect(first.ctx.agentTeams.isEnabled(lead)).toBe(false)
       await first.ctx.agentTeams.setEnabled(lead, true)
       const task = await first.ctx.agentTeams.createTask(lead, { subject: 'saved', description: 'retained while off' })
+      const claimed = await first.ctx.agentTeams.updateTask(lead, { taskId: task.id, expectedRevision: task.revision, action: 'claim' })
+      expect(claimed.ownerName).toBe('lead')
       await first.ctx.agentTeams.setEnabled(lead, false)
       await first.dispose()
       const second = await stack(backend, storageRoot, [])
       const resumed = await second.ctx.agents.resume({ resumeSessionId: id, agentOptions: { provider: 'mock', model: 'mock' } })
       expect(second.ctx.agentTeams.isEnabled(resumed.agent)).toBe(false)
       expect(second.ctx.sessionProjections.snapshot(resumed.agent.session).values.agentTeam)
-        .toMatchObject({ enabled: false, tasks: [task] })
+        .toMatchObject({ enabled: false, tasks: [claimed] })
       await second.ctx.agentTeams.setEnabled(resumed.agent, true)
-      expect(second.ctx.agentTeams.listTasks(resumed.agent)).toEqual([task])
+      expect(second.ctx.agentTeams.listTasks(resumed.agent)).toEqual([claimed])
     })
 
     it('restores continuable teammates and tasks from the Lead log after restart', {
@@ -168,7 +170,7 @@ for (const backend of backends) {
       ])
       await expect(second.ctx.agentTeams.updateTask(rootHandle.agent, {
         taskId: created.id, expectedRevision: 1, action: 'reassign', owner: started.childId,
-      })).resolves.toMatchObject({ ownerId: started.childId })
+      })).resolves.toMatchObject({ ownerId: started.childId, ownerName: 'agent-1' })
       expect(second.adapter.requests).toEqual([])
       await rootHandle.dispose()
       await second.dispose()

@@ -4,8 +4,9 @@
  * `appendPluginRecord` in `@deepseek-ai/dsh-session` appends an ignorable `plugin:` record that the
  * experimental persistence catalogue lists and that a Session format migration keeps only on a best-effort
  * basis. Experimental packages may rely on that; a release package must declare its events instead.
- * The owning module and test files, which exercise the operation, are exempt, as is the published
- * dependency policy, which names the function to classify the export without calling it.
+ * The owning module and test files, which exercise the operation, are exempt, as are the published
+ * dependency policy and the plugin entry export list, which name the function to classify or record its
+ * export without calling it.
  *
  * Discovery is syntax-aware: every identifier spelled `appendPluginRecord` counts — an import, a
  * named re-export, a call, a namespace member, a destructured binding, or an alias source — and so
@@ -45,6 +46,9 @@ const GATE_FILES: ReadonlySet<string> = new Set([
 
 /** The published dependency policy names the restricted function to classify the export's package edge. */
 export const DEPENDENCY_POLICY_FILE = 'scripts/package-dependency-policy.ts'
+
+/** The plugin entry export list names the restricted function to record the session entry's existing export. */
+export const ENTRY_EXPORT_LIST_FILE = 'scripts/plugin-entry-existing-exports.ts'
 
 const SOURCE_EXTENSION = /\.(?:[cm]?[jt]s|[jt]sx)$/u
 
@@ -103,11 +107,12 @@ export function isTestFile(file: string): boolean {
 /**
  * Whether a file may reference the restricted function.
  * @param file - repository-relative path, in POSIX separators.
- * @returns whether the file is experimental source, the owner, a test, this gate, or the dependency policy.
+ * @returns whether the file is experimental source, the owner, a test, this gate, the dependency policy, or the plugin
+ * entry export list.
  */
 export function isAdmittedCaller(file: string): boolean {
   return file.startsWith(EXPERIMENTAL_PREFIX) || file === OWNER_FILE || isTestFile(file) || GATE_FILES.has(file)
-    || file === DEPENDENCY_POLICY_FILE
+    || file === DEPENDENCY_POLICY_FILE || file === ENTRY_EXPORT_LIST_FILE
 }
 
 function scriptKind(file: string): ts.ScriptKind {

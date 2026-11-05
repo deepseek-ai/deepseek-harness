@@ -1,4 +1,5 @@
 /** Native path and URL menu contributions, independent of their trigger components. */
+import { useState } from 'react'
 import { IconRightUpOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { Context } from '@deepseek-ai/cordis'
@@ -141,5 +142,8 @@ export function registerContextMenus(
 
 /** @param props - icon metadata captured with the resolved action. @returns Application image or the native-open glyph. */
 export function ContextMenuApplicationIcon({ icon }: Pick<PropsRuntime<'contextMenu.icon'>, 'icon'>) {
-  return icon.src ? <img src={icon.src} width={14} height={14} alt="" /> : <IconRightUpOutlineRegular />
+  const [failedSource, setFailedSource] = useState<string>()
+  return icon.src && icon.src !== failedSource
+    ? <img src={icon.src} width={14} height={14} alt="" draggable={false} onError={() => { setFailedSource(icon.src) }} />
+    : <IconRightUpOutlineRegular />
 }

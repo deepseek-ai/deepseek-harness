@@ -42,7 +42,7 @@ function recordingGateway() {
 }
 
 function service(gateway: ViewerReadGateway, readers: ReaderConnection = readerConnection()) {
-  return createViewerReadService({ connection: readers.connection, gateway, sharedSessionId: () => 'session-1' })
+  return createViewerReadService({ connection: readers.connection, gateway, sharedSessionIds: () => ['session-1'] })
 }
 
 /** One gateway whose stream rejects on its first poll, as a broken owner-side read does. */

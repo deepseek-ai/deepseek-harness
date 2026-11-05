@@ -6,7 +6,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { Transport } from '@modelcontextprotocol/client'
-import { Config } from '@deepseek-ai/dsh-mcp-client'
+import { Config, type ServerConfig } from '@deepseek-ai/dsh-mcp-client'
 
 const { mockConnect, mockClose, mockListTools, mockGetServerVersion, MockClient, MockTransport } = vi.hoisted(() => {
   const mockConnect = vi.fn<() => Promise<void>>()
@@ -56,7 +56,7 @@ import { probeServer } from '@deepseek-ai/dsh-mcp-client/src/probe.ts'
 const anyNumber = expect.any(Number) as number
 const containing = (text: string): string => expect.stringContaining(text) as string
 
-function httpConfig(): Config {
+function httpConfig(): ServerConfig {
   return Config({
     transport: 'streamable-http',
     serverName: 'probe',

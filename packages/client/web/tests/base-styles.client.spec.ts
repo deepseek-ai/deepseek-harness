@@ -39,11 +39,20 @@ describe('web shell base.css', () => {
     expect(baseCss).not.toContain(THEME_PACKAGE)
   })
 
-  it('declares exactly the interactive subtraction the drag contract publishes', () => {
+  it('resets inherited regions on elements while preserving pseudo-element regions', () => {
+    expect(normalizedCss).toContain(
+      ":where(html[data-platform='darwin'] *) { -webkit-app-region: initial; }",
+    )
+    expect(normalizedCss).not.toMatch(/[^{}]*::[^{}]*\{[^{}]*app-region:\s*initial\b/)
+  })
+
+  it('limits interactive subtraction to controls inside marked chrome rows', () => {
     // One source for the selector: the model constant. The darwin rule must
     // declare the same list, so a new interactive role is added in one place
     // and a drift between the sheet and the composition model fails here.
-    const rule = /html\[data-platform='darwin'\] :is\(([^)]*)\)\s*\{[^}]*app-region:\s*no-drag/.exec(normalizedCss)
+    const scope = "html[data-platform='darwin'] :where([data-window-drag], [data-window-drag-controls])"
+    const rule = /:is\(([^)]*)\):where\(:not\(\[data-window-drag-exclude\] \*\)\)\s*\{[^}]*app-region:\s*no-drag/
+      .exec(normalizedCss.split(scope)[1] ?? '')
     expect(rule, 'base.css declares no darwin interactive no-drag rule').not.toBeNull()
     const declared = rule![1]!.split(',').map(part => part.trim()).join(', ')
     expect(declared).toBe(INTERACTIVE_SELECTOR)

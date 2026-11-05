@@ -10,7 +10,6 @@ import { isMobileDevice } from '@deepseek-ai/dsh-client-ui-primitives'
  * proving removal (HMR safety) and the injected controller faces.
  */
 
-import type { PropsRuntime, SlotComponent } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ShortcutCommand } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -118,6 +117,11 @@ describe('open-in-app browser half', () => {
   it('renders captured application images and the default glyph without an image URL', () => {
     const view = render(createElement(ContextMenuApplicationIcon, { icon: { key: 'open-in-app.application', src: '/captured.png' } }))
     expect(view.container.querySelector('img')?.getAttribute('src')).toBe('/captured.png')
+    fireEvent.error(view.container.querySelector('img')!)
+    expect(view.container.querySelector('img')).toBeNull()
+    expect(view.container.querySelector('svg')).not.toBeNull()
+    view.rerender(createElement(ContextMenuApplicationIcon, { icon: { key: 'open-in-app.application', src: '/new.png' } }))
+    expect(view.container.querySelector('img')?.getAttribute('src')).toBe('/new.png')
     view.rerender(createElement(ContextMenuApplicationIcon, { icon: { key: 'open-in-app.application' } }))
     expect(view.container.querySelector('img')).toBeNull()
     expect(view.container.querySelector('svg')).not.toBeNull()
@@ -141,14 +145,14 @@ describe('open-in-app browser half', () => {
         'open-in-app.reveal', 'open-in-app.copy', 'open-in-app.sidebar', 'open-in-app.float', 'open-in-app.application',
       ])
       expect(ctx.slots.entries('sidebar.workspaces.session.menu.item')).toHaveLength(0)
-      await vi.waitFor(() => { expect(menu.source.getSnapshot()[0]).toMatchObject({ label: 'Show in Finder', disabled: false }) })
-      menu.select('open-in-app.reveal/reveal')
+      await vi.waitFor(() => { expect(menu.source.getSnapshot()[0]).toMatchObject({ label: 'Open in', disabled: false }) })
+      menu.select(menu.source.getSnapshot()[0]!.children![0]!.id)
       menu.dispose()
-      const face: Partial<OpenInAppActionInjected> = ctx.slots.entries('conversation.session.header.utilities')[0]!.inject!()
+      const face: Partial<OpenInAppActionInjected> = ctx.slots.entries('sidebar.right.tab.files.actions')[0]!.inject!()
       await vi.waitFor(() => { expect(face.hooks?.openInAppLaunch.getSnapshot().phase).toBe(success ? 'idle' : 'error') })
       expect(toast.hooks.toast.getSnapshot()).toEqual(success
         ? mobile ? { kind: 'opened', seq: 1 } : null
-        : { kind: 'failed', failure: 'revealError', seq: 1 })
+        : { kind: 'failed', failure: 'openError', seq: 1 })
       expect(notify).not.toHaveBeenCalled()
       expect(fetcher).toHaveBeenCalledWith('open-in-app/open', expect.objectContaining({
         body: JSON.stringify({ app: 'finder', path: '/captured' }),
@@ -196,7 +200,7 @@ describe('open-in-app browser half', () => {
     const select = (cwd: string) => { list.set({ ...list.getSnapshot(), ids: [id], byId: {
       [id]: { id, displayTitle: 'Main', cwd, running: false, blank: false, updatedAt: 0, retainedBy: { mainView: 1 } },
     } }) }
-    const entry = ctx.slots.entries('conversation.session.header.utilities')[0]
+    const entry = ctx.slots.entries('sidebar.right.tab.files.actions')[0]
     const face = (entry?.inject as unknown as () => OpenInAppActionInjected)()
     await vi.waitFor(() => { expect(face.hooks.openInAppApps.getSnapshot()).toEqual(['finder', 'cursor']) })
     select('/first')
@@ -281,7 +285,7 @@ describe('open-in-app browser half', () => {
       list.set({ ...list.getSnapshot(), ids: [id], byId: {
         [id]: { id, displayTitle: 'Main', cwd: '/workspace', running: false, blank: false, updatedAt: 0, retainedBy: { mainView: 1 } },
       } })
-      const entry = ctx.slots.entries('conversation.session.header.utilities')[0]
+      const entry = ctx.slots.entries('sidebar.right.tab.files.actions')[0]
       const face = (entry?.inject as unknown as () => OpenInAppActionInjected)()
       await vi.waitFor(() => { expect(face.hooks.openInAppApps.getSnapshot()).toEqual(['finder']) })
       const command = commands.get('workspace.openLocal')!
@@ -343,30 +347,13 @@ describe('open-in-app browser half', () => {
     expect(ctx.slots.entries('shell.overlay')).toHaveLength(0)
   })
 
-  it('adapts the Session directory, shares the controller with the file tree, and removes both on teardown', async () => {
+  it('keeps the file-tree control without an independent Session header opener and removes it on teardown', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ apps: [] }), { status: 200 })))
-    const { ctx, fiber, list } = await bench()
-    try {
-      const entry = ctx.slots.entries('conversation.session.header.utilities')[0]
-      const files = ctx.slots.entries('sidebar.right.tab.files.actions')[0]
-      expect(files?.component).toBe(OpenInAppAction)
-      expect(files?.inject).toBe(entry?.inject)
-      expect(entry?.options).toMatchObject({ id: 'open-in-app' })
-      const header = entry?.component as SlotComponent<Pick<
-        PropsRuntime<'conversation.session.header.utilities'>, 'sessionId' | 'useSessions'
-      >>
-      const id = 'main' as SessionId
-      const props = { sessionId: id, useSessions: <T>(select: (state: SessionListState) => T) => select(list.getSnapshot()) }
-      expect(header(props)).toBeNull()
-      for (const cwd of ['', '/first', '/second']) {
-        list.set({ ...list.getSnapshot(), ids: [id], byId: {
-          [id]: { id, displayTitle: 'Main', cwd, running: false, blank: false, updatedAt: 0, retainedBy: {} },
-        } })
-        if (cwd === '') expect(header(props)).toBeNull()
-        else expect(header(props)).toMatchObject({ type: OpenInAppAction, props: { absolutePath: cwd } })
-      }
-    } finally { await fiber.dispose() }
-    expect(headerEntryIds(ctx)).not.toContain('open-in-app')
+    const { ctx, fiber } = await bench()
+    expect(headerEntryIds(ctx)).toEqual([])
+    expect(ctx.slots.entries('sidebar.right.tab.files.actions')[0]?.component).toBe(OpenInAppAction)
+    await fiber.dispose()
+    expect(headerEntryIds(ctx)).toEqual([])
     expect(ctx.slots.entries('sidebar.right.tab.files.actions')).toHaveLength(0)
   })
 
@@ -381,7 +368,7 @@ describe('open-in-app browser half', () => {
     })
     vi.stubGlobal('fetch', fetcher)
     const { ctx, fiber } = await bench()
-    const entry = ctx.slots.entries('conversation.session.header.utilities')[0]
+    const entry = ctx.slots.entries('sidebar.right.tab.files.actions')[0]
     const injected: Partial<OpenInAppActionInjected> | undefined = entry?.inject?.()
     if (injected?.hooks === undefined || injected.iconUrl === undefined
       || injected.choose === undefined || injected.launch === undefined || injected.report === undefined) {
@@ -417,7 +404,7 @@ describe('open-in-app browser half', () => {
       return new Response('', { status: 502 })
     }))
     const { ctx, fiber } = await bench()
-    const entry = ctx.slots.entries('conversation.session.header.utilities')[0]
+    const entry = ctx.slots.entries('sidebar.right.tab.files.actions')[0]
     const injected: Partial<OpenInAppActionInjected> | undefined = entry?.inject?.()
     if (injected?.hooks === undefined || injected.launch === undefined) throw new Error('expected the injected launch action')
     const { hooks } = injected

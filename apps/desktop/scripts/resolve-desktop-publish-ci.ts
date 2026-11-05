@@ -8,11 +8,11 @@ import { desktopPublishRunnersSchema, desktopPackageWorkflows } from './desktop-
 const positiveId = z.string().regex(/^[1-9]\d*$/u)
 const inputsSchema = z.object({ package_run_id: positiveId, package_run_attempt: z.union([positiveId, z.literal('')]).optional() })
 const runSchema = z.object({ id: z.number().int().positive(), run_attempt: z.number().int().positive(),
-  head_sha: z.string().regex(/^[a-f0-9]{40}$/u), status: z.literal('completed'), conclusion: z.literal('success'),
+  head_sha: z.string().regex(/^[a-f0-9]{40}$/u), status: z.literal('completed'), conclusion: z.string(),
   event: z.literal('workflow_dispatch'), path: z.enum(Object.values(desktopPackageWorkflows)),
   repository: z.object({ full_name: z.string() }) })
 const jobsSchema = z.object({ jobs: z.array(z.object({
-  name: z.string(), runner_name: z.string().nullable(), conclusion: z.string().nullable(),
+  name: z.string(), run_attempt: z.number().int().positive(), runner_name: z.string().nullable(), conclusion: z.string().nullable(),
 })) })
 
 /**
@@ -29,12 +29,29 @@ export function selectDesktopPackage(repository: string, inputsValue: unknown, r
   const inputs = inputsSchema.parse(inputsValue)
   const base = `repos/${repository}/actions/runs/${inputs.package_run_id}`
   const attempt = inputs.package_run_attempt || String(z.object({ run_attempt: z.number().int().positive() }).parse(api(base)).run_attempt)
-  const run = runSchema.parse(api(`${base}/attempts/${attempt}`))
+  let run = runSchema.parse(api(`${base}/attempts/${attempt}`))
   if (String(run.id) !== inputs.package_run_id || String(run.run_attempt) !== attempt || run.repository.full_name !== repository) {
     throw new Error('desktop publish: selected run or attempt does not match GitHub evidence')
   }
-  const jobs = z.array(jobsSchema).parse(api(`${base}/attempts/${attempt}/jobs?per_page=100`, true)).flatMap(page => page.jobs)
-  const packages = jobs.filter(job => job.name === 'package' && job.conclusion === 'success' && job.runner_name)
+  let jobs = z.array(jobsSchema).parse(api(`${base}/attempts/${attempt}/jobs?per_page=100`, true)).flatMap(page => page.jobs)
+  let packages = jobs.filter(job => job.name === 'package')
+  if (packages.length === 0 || packages.every(job => job.run_attempt < Number(attempt))) {
+    // An archival-only attempt owns no new build; select the latest actual package job, never a prior success over a failed build.
+    const history = z.array(jobsSchema).parse(api(`${base}/jobs?filter=all&per_page=100`, true)).flatMap(page => page.jobs)
+      .filter(job => job.name === 'package' && job.run_attempt <= Number(attempt))
+      .sort((left, right) => right.run_attempt - left.run_attempt)
+    const original = history[0]
+    if (!original || original.conclusion !== 'success') throw new Error('desktop publish: latest original package job was not successful')
+    const selected = run
+    run = runSchema.parse(api(`${base}/attempts/${original.run_attempt}`))
+    if (String(run.id) !== inputs.package_run_id || run.run_attempt !== original.run_attempt || run.repository.full_name !== repository
+      || run.head_sha !== selected.head_sha || run.path !== selected.path) {
+      throw new Error('desktop publish: original build identity differs from GitHub evidence')
+    }
+    jobs = z.array(jobsSchema).parse(api(`${base}/attempts/${original.run_attempt}/jobs?per_page=100`, true)).flatMap(page => page.jobs)
+    packages = jobs.filter(job => job.name === 'package')
+  }
+  packages = packages.filter(job => job.run_attempt === run.run_attempt && job.conclusion === 'success' && job.runner_name)
   if (packages.length !== 1) throw new Error('desktop publish: expected one successful package job')
   const runnerName = packages[0]!.runner_name!
   const routes = desktopPublishRunnersSchema.parse(routesValue)

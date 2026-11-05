@@ -19,7 +19,7 @@ import type {
 } from '../contract/request-inspection.ts'
 import { inspectRequestPrompt } from '../contract/request-inspection.ts'
 import { inspectSystemPrompt, type SystemPromptState } from '../contract/system-prompt.ts'
-import { ConversationNodeAssembler } from './assembler.ts'
+import { ConversationNodeAssembler, ConversationUpdateError } from './assembler.ts'
 import { ConversationEventRegistry } from './event-registry.ts'
 import { HistoricalImageCache } from './historical-images.ts'
 import { ConversationViewRegistry } from './view-registry.ts'
@@ -94,8 +94,7 @@ class BoundConversation implements ConversationBinding {
   }
 
   activate(target: string): void {
-    if (this.assembler.activateTarget(target)) this.snapshot.set(this.currentSnapshot())
-    this.openTurn.set(this.assembler.openTurn())
+    this.publishing(() => this.assembler.activateTarget(target))
   }
 
   rebuild(): void { this.publish(this.assembler.rebuildRegistry()) }
@@ -166,7 +165,23 @@ class BoundConversation implements ConversationBinding {
   }
 
   private flush(): void {
-    if (this.assembler.flush()) this.snapshot.set(this.currentSnapshot())
+    this.publishing(() => this.assembler.flush())
+  }
+
+  /** Publish an assembler result, including a complete rebuild that the assembler finished before it reported a failure. */
+  private publishing(operation: () => boolean): void {
+    let changed: boolean
+    try {
+      changed = operation()
+    } catch (error: unknown) {
+      if (error instanceof ConversationUpdateError && error.rebuilt) this.publishSnapshot(true)
+      throw error
+    }
+    this.publishSnapshot(changed)
+  }
+
+  private publishSnapshot(changed: boolean): void {
+    if (changed) this.snapshot.set(this.currentSnapshot())
     this.openTurn.set(this.assembler.openTurn())
   }
 

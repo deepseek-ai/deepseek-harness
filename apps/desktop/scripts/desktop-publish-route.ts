@@ -1,4 +1,4 @@
-/** Validate a completed packaging attempt and route publication back to its original runner. */
+/** Validate package-job success and route publication; attempt selection enforces run completion. */
 import { z } from 'zod'
 import { desktopPublishRunnersSchema, desktopPackageWorkflows } from './desktop-publish-targets.ts'
 import { desktopPublishQualificationError } from './desktop-publish-qualification.mjs'
@@ -6,7 +6,7 @@ import { desktopPublishQualificationError } from './desktop-publish-qualificatio
 const positive = z.number().int().positive()
 const runSchema = z.object({
   id: positive, run_attempt: positive, head_sha: z.string().regex(/^[a-f0-9]{40}$/u),
-  path: z.string(), conclusion: z.literal('success'), event: z.literal('workflow_dispatch'),
+  path: z.string(), event: z.literal('workflow_dispatch'),
   repository: z.object({ full_name: z.string() }),
 })
 const requestSchema = z.object({ source: z.object({

@@ -12,7 +12,7 @@ Users need to run commands themselves while keeping the Agent restricted. Sharin
 
 The Web sidebar terminal runs directly through the Session's subprocess provider with the execution environment's system-user permissions. It neither confines the shell through the Agent sandbox nor requests Agent approval. Operating-system permissions, container isolation and the provider's credential-environment scrubbing continue to apply. Session identity owns access, process cleanup and the initial directory; sandbox policy supplies only the configured directory fallback when the Session has no cwd.
 
-Agent permission changes leave user terminals running. Agent-owned shell and terminal tools retain their own sandbox enforcement. User terminal input and output create no model input or Session events.
+Agent permission changes leave user terminals running. Agent-owned shell and terminal tools retain their own sandbox enforcement. User terminal input and output create no model input or Session events, except screens the experimental `user_terminal_read` tool of the [Agent terminal panel decision](../feature/2026-10-12-agent-terminal-panel.md) returns as tool results.
 
 This decision supersedes only the shared sandbox policy and mode-switch restriction in the [Web sidebar terminal decision](../feature/2026-09-09-web-sidebar-terminal.md). That note remains active for process ownership, transport, screen recovery and shell selection. OpenCode's `packages/core/src/pty.ts` and `packages/core/src/pty/pty.node.ts` provide adjacent evidence: its interactive terminal creates a PTY directly with the selected shell and working directory.
 
