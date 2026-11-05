@@ -223,7 +223,7 @@
    single darwin rule carries the drag over its own box — below the top strip
    (40–100px: the strip's 52px foot with the row's -12px tuck). The brand rides
    that box (SidebarRoot renders the wordmark as a plain span there, so the
-   global interactive no-drag rule never subtracts it; only the local-build
+   drag-row controls rule never subtracts it; only the local-build
    fallbacks opt out through .copyVersion); the dedicated New
    Session button below keeps the pointer and keyboard paths. Safe as a drag
    source: it precedes the sidebar's overlay slots in document order, so their

@@ -237,6 +237,7 @@
     "apps/web/tests/conversation-view-tabs.e2e.ts",
     "apps/web/tests/composer-shortcuts.e2e.ts",
     "apps/web/tests/window-drag-coverage.e2e.ts",
+    "apps/web/tests/window-drag-inheritance.e2e.ts",
     "apps/web/tests/complex-history.perf.ts",
     "apps/web/tests/pwsh-terminal.e2e.ts",
     "apps/web/tests/workflow-run.e2e.ts",
