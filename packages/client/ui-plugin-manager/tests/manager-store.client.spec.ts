@@ -2268,9 +2268,14 @@ describe('version checks and updates', () => {
     const listBundles = vi.fn(() => Promise.resolve(ok([UPDATABLE, { ...UPDATABLE, name: 'dsh-a' }, { ...BUNDLE, name: 'dsh-linked' }])))
     const { face, state } = bench({ listVersions, listBundles })
     face.refresh()
+    expect(state().refreshProgress).toEqual({ phase: 'loading' })
     await vi.waitFor(() => { expect(order).toEqual(['dsh-a', 'dsh-better-sidebar']) })
     expect(state().refreshStatus).toBe('refreshing')
+    expect(state().refreshProgress).toEqual({ phase: 'checking', current: 2, total: 2 })
     last.resolve(ok(LISTED))
+    // The spinner's minimum hold no longer reports a step.
+    await vi.waitFor(() => { expect(state().refreshProgress).toBeNull() })
+    expect(state().refreshStatus).toBe('refreshing')
     await vi.waitFor(() => { expect(state().refreshStatus).toBe('idle') })
     expect(state().versions['dsh-better-sidebar']?.phase).toBe('done')
   })
@@ -2281,6 +2286,7 @@ describe('version checks and updates', () => {
     const { face, state } = bench({ listVersions, listBundles })
     face.refresh()
     await vi.waitFor(() => { expect(state().refreshStatus).toBe('failed') })
+    expect(state().refreshProgress).toBeNull()
     expect(listVersions).not.toHaveBeenCalled()
   })
 

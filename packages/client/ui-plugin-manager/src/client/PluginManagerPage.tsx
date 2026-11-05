@@ -545,8 +545,11 @@ function versionUpdate(check: VersionCheck | undefined): string | undefined {
   return check?.phase === 'done' ? updateCandidate(check.list)?.version : undefined
 }
 
-/** The list toolbar's sentence about the last update check of every registry package. */
-function updatesNote(packages: readonly PackageView[], versions: PluginManagerState['versions'], t: Translate): { text: string; tone?: 'info' | 'error' } | undefined {
+/** The list toolbar's sentence: what a manual refresh waits for, otherwise the last update check of every registry package. */
+function updatesNote(packages: readonly PackageView[], state: PluginManagerState, t: Translate): { text: string; tone?: 'info' | 'error' } | undefined {
+  const { versions, refreshProgress: progress } = state
+  if (progress?.phase === 'loading') return { text: t('refreshLoading') }
+  if (progress?.phase === 'checking') return { text: t('refreshChecking', { current: String(progress.current), total: String(progress.total) }) }
   const checks = packages.filter(pkg => pkg.update === 'registry').map(pkg => versions[pkg.name])
   if (checks.length === 0 || checks.some(check => check === undefined || check.phase === 'checking')) return undefined
   const available = checks.filter(check => versionUpdate(check) !== undefined).length
@@ -1679,7 +1682,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
     has: row => ledger.rows.has(rowConfigKey(pkg.name, row.rowId)) || sectionsOf(pkg, row).length > 0,
     open: (row) => { setView({ kind: 'row', name: pkg.name, rowId: row.rowId, ...pkgOrigin }) },
   })
-  const updates = updatesNote(mine, state.versions, t)
+  const updates = updatesNote(mine, state, t)
   const updatePkg = state.update === null ? undefined : state.packages.find(pkg => pkg.name === state.update?.packageName)
   const packageBusy = (pkg: PackageView): boolean => bundleBusy(state, pkg.name)
   const packageCard = (pkg: PackageView): ReactNode => (

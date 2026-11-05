@@ -397,6 +397,14 @@ export interface PluginManagerState {
    * cached refresh failures reported by toast. Background reads do not start the spinner.
    */
   readonly refreshStatus: 'idle' | 'refreshing' | 'failed'
+  /**
+   * What a manual refresh is waiting for: its reads, then the version check of the `current`th of `total` registry
+   * packages; `null` outside a manual refresh and once its reads and checks settled.
+   */
+  readonly refreshProgress:
+    | { readonly phase: 'loading' }
+    | { readonly phase: 'checking'; readonly current: number; readonly total: number }
+    | null
   readonly packages: readonly PackageView[]
   /** Package names and row keys with an action crossing the wire. */
   readonly busy: readonly string[]
@@ -702,7 +710,7 @@ export class PluginManagerController {
   ) {
     this.details = new BundleDetailController(ctx, () => document.baseURI)
     this.store = createSnapshotStore<PluginManagerState>({
-      status: 'idle', refreshStatus: 'idle', packages: [], busy: [], notice: null,
+      status: 'idle', refreshStatus: 'idle', refreshProgress: null, packages: [], busy: [], notice: null,
       install: IDLE_INSTALL, confirm: null, highlight: null, versions: {}, update: null,
     })
   }
@@ -944,9 +952,16 @@ export class PluginManagerController {
     this.patchVersions(packageName, { phase: 'done', list, checkedAt: Date.now() })
   }
 
-  /** Check the registry packages one after another, so one click starts at most one package's registry lookups. */
+  /**
+   * Check the registry packages one after another, so one click starts at most one package's registry lookups,
+   * publishing which one the refresh waits for.
+   */
   private async checkAllVersions(): Promise<void> {
-    for (const pkg of this.getSnapshot().packages.filter(item => item.update === 'registry')) await this.checkVersions(pkg.name)
+    const registry = this.getSnapshot().packages.filter(item => item.update === 'registry')
+    for (const [index, pkg] of registry.entries()) {
+      this.patch({ refreshProgress: { phase: 'checking', current: index + 1, total: registry.length } })
+      await this.checkVersions(pkg.name)
+    }
   }
 
   /** Hand the confirmed update to the Host, keep its outcome, then read the package and a registry package's versions again. */
@@ -1083,6 +1098,7 @@ export class PluginManagerController {
     const startedAt = Date.now()
     this.patch({
       refreshStatus: 'refreshing',
+      refreshProgress: { phase: 'loading' },
       ...this.getSnapshot().notice?.kind === 'refresh-failed' ? { notice: null } : {},
     })
     try {
@@ -1092,6 +1108,7 @@ export class PluginManagerController {
       // A rejected transport request leaves the cached cards available for retry.
       this.patch({ status: 'error' })
     } finally {
+      this.patch({ refreshProgress: null })
       // Hold the spinner to its minimum so a fast read does not flash it, then settle.
       const remaining = REFRESH_SPINNER_MIN_MS - (Date.now() - startedAt)
       if (remaining > 0) await new Promise<void>((resolve) => { setTimeout(resolve, remaining) })

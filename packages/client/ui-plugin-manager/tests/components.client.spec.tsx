@@ -78,6 +78,7 @@ const IDLE_INSTALL: InstallState = {
 const READY: PluginManagerState = {
   status: 'ready',
   refreshStatus: 'idle',
+  refreshProgress: null,
   packages: [],
   busy: [],
   notice: null,
@@ -3012,7 +3013,7 @@ it('keeps bundle configuration mounted while its operation is pending', () => {
 
 describe('registry versions and updates', () => {
   const MIRROR = 'https://registry.npmmirror.com/'
-  const updatable = (): PackageView => pkg({ update: 'registry', version: '0.16.0', source: 'dsh-better-sidebar@0.16.0' })
+  const updatable = (more: Partial<PackageView> = {}): PackageView => pkg({ update: 'registry', version: '0.16.0', source: 'dsh-better-sidebar@0.16.0', ...more })
   const runtime = '0.8.3'
   const listed = (versions: PluginVersion[], attempts: RegistryAttempt[] = [{ registry: null }]): VersionCheck => ({
     phase: 'done', checkedAt: 0,
@@ -3145,6 +3146,18 @@ describe('registry versions and updates', () => {
     expect(screen.getByText(en.updatesNone)).toBeTruthy()
     set({ versions: { 'dsh-better-sidebar': { phase: 'done', checkedAt: 0, list: { status: 'refused', problem: 'unknown', reason: 'x', attempts: [] } } } })
     expect(screen.getByText(en.updatesFailed)).toBeTruthy()
+  })
+
+  it('says in the toolbar how far a manual refresh has come', () => {
+    const second = updatable({ name: 'dsh-second' })
+    const { set } = renderTab({ packages: [updatable(), second], refreshStatus: 'refreshing', refreshProgress: { phase: 'loading' } })
+    expect(screen.getByText(en.refreshLoading)).toBeTruthy()
+    set({ versions: { 'dsh-better-sidebar': listed([]), 'dsh-second': { phase: 'checking' } }, refreshProgress: { phase: 'checking', current: 2, total: 2 } })
+    expect(screen.getByText('Checking for updates 2/2')).toBeTruthy()
+    // The spinner's minimum hold already shows what the checks found.
+    set({ versions: { 'dsh-better-sidebar': listed([]), 'dsh-second': listed([]) }, refreshProgress: null })
+    expect(screen.queryByText(/Checking for updates/)).toBeNull()
+    expect(screen.getByText(en.updatesNone)).toBeTruthy()
   })
 
   const base: UpdateState = {
