@@ -7,9 +7,9 @@ import { BrowserUseProviderName } from '@deepseek-ai/dsh-browser-use/brand'
 import * as McpClient from '@deepseek-ai/dsh-mcp-client'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import type { Scope } from '@deepseek-ai/dsh-scope'
-import { SessionResources } from './index.ts'
+import { BrowserSessionError, SessionResources } from './index.ts'
 import type {} from '@deepseek-ai/dsh-browser-use'
-import type {} from '@deepseek-ai/dsh-tools'
+import { ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-working-directory'
 
@@ -141,7 +141,7 @@ export function mountSessionMcp(ctx: Context, options: SessionMcpOptions): void 
             if (!exec.name.startsWith(toolPrefix)) return next()
             if (exec.agent !== agent) {
               if (ctx.tools.get(exec.name, exec.agent) !== ctx.tools.get(exec.name, agent)) return next()
-              throw new Error(`${options.name}: browser tool belongs to another Session`)
+              throw new BrowserSessionError(`${options.name}: browser tool belongs to another Session`, 'BROWSER_FOREIGN_SESSION')
             }
             return next()
           })
@@ -199,8 +199,9 @@ export function mountSessionMcp(ctx: Context, options: SessionMcpOptions): void 
       && (exec.arguments as { server?: unknown }).server === options.name
     if (!exec.name.startsWith(toolPrefix) && !ownResource) return next()
     const agent = exec.agent
-    if (agent === undefined || clients.get(agent)?.status !== 'ready') {
-      throw new Error(`${options.name}: browser tool belongs to another Session`)
+    if (agent === undefined) throw new ToolContextUnavailableError(`${options.name}: browser tools require a calling Agent`)
+    if (clients.get(agent)?.status !== 'ready') {
+      throw new BrowserSessionError(`${options.name}: browser tool belongs to another Session`, 'BROWSER_FOREIGN_SESSION')
     }
     return resources.run(agent, exec.signal, async (_scope, combined) => {
       const original = exec.signal

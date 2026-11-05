@@ -118,6 +118,8 @@ async function warm(ctx: Context, agent: Agent, signal = new AbortController().s
   return ctx.systemPrompt.assemble({ agent, scope: agent, signal })
 }
 
+const FOREIGN = { name: 'BrowserSessionError', code: 'BROWSER_FOREIGN_SESSION' }
+
 function execute(ctx: Context, agent: Agent, name = TOOL) {
   return executeToolFixture(ctx, { agent, name, arguments: name === TOOL ? { label: 'direct' } : {}, callId: ToolCallId('direct'), signal: new AbortController().signal })
 }
@@ -238,7 +240,7 @@ describe('Session MCP Loader composition', () => {
     expect(model.requests.map(request => request.tools?.map(tool => tool.name))).toEqual([['unrelated'], ['unrelated']])
     for (const { agent } of [second, child]) {
       expect(ctx.tools.schemas(agent).map(tool => tool.name)).toEqual(['unrelated'])
-      expect((await execute(ctx, agent)).isError).toBe(true)
+      expect((await execute(ctx, agent)).error?.info).toEqual(FOREIGN)
       expect((await execute(ctx, agent, 'unrelated')).isError).toBe(false)
       expect((await warm(ctx, agent)).tools.map(tool => tool.name)).toEqual(['unrelated'])
     }
@@ -249,13 +251,13 @@ describe('Session MCP Loader composition', () => {
     })
     expect(ctx.tools.schemas(child.agent).filter(tool => tool.name.startsWith('mcp__browser-fixture__'))).toEqual([])
     expect((await warm(ctx, child.agent)).tools.map(tool => tool.name)).toEqual(['unrelated'])
-    expect((await execute(ctx, child.agent, 'mcp__browser-fixture__late')).isError).toBe(true)
+    expect((await execute(ctx, child.agent, 'mcp__browser-fixture__late')).error?.info).toEqual(FOREIGN)
     expect((await events(root)).filter(event => event.event === 'initialize')).toHaveLength(1)
     expect((await events(root)).filter(event => event.event === 'call')).toEqual([])
     expect((await execute(ctx, first.agent)).isError).toBe(false)
     await first.dispose()
     expect((await warm(ctx, child.agent)).tools.some(tool => tool.name === TOOL)).toBe(false)
-    expect((await execute(ctx, child.agent)).isError).toBe(true)
+    expect((await execute(ctx, child.agent)).error?.info).toEqual(FOREIGN)
     expect((await warm(ctx, second.agent)).tools.map(tool => tool.name)).toEqual(['unrelated'])
     const successor = await ctx.agents.create({ sessionId: SessionId('successor') })
     expect((await warm(ctx, successor.agent)).tools.some(tool => tool.name === TOOL)).toBe(true)
@@ -366,9 +368,9 @@ describe('Session MCP Loader composition', () => {
     expect(renderPrompt(blocked)).not.toContain('BROWSER_FIXTURE_INSTRUCTION')
     expect(renderPrompt(blocked)).toContain('browser-fixture')
     for (const name of ['list_mcp_resources', 'list_mcp_resource_templates', 'read_mcp_resource']) {
-      expect((await resource(ctx, child.agent, name)).isError).toBe(true)
+      expect((await resource(ctx, child.agent, name)).error?.info).toEqual(FOREIGN)
     }
-    expect((await resource(ctx, undefined)).isError).toBe(true)
+    expect((await resource(ctx, undefined)).error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
     expect((await events(root)).filter(event => event.event === 'resource')).toEqual([])
     expect((await resource(ctx, child.agent, 'read_mcp_resource', 'docs')).value)
       .toEqual({ contents: [{ uri: 'docs://memo', text: 'Independent document.' }] })
@@ -378,7 +380,7 @@ describe('Session MCP Loader composition', () => {
     expect(browserState(await resource(ctx, parent.agent)).counter).toBe(0)
     await parent.dispose()
     expect(renderPrompt(await warm(ctx, child.agent))).not.toContain('BROWSER_FIXTURE_INSTRUCTION')
-    expect((await resource(ctx, child.agent)).isError).toBe(true)
+    expect((await resource(ctx, child.agent)).error?.info).toEqual(FOREIGN)
     const successor = await ctx.agents.create({ sessionId: SessionId('resource-successor') })
     expect(renderPrompt(await warm(ctx, successor.agent))).toContain('BROWSER_FIXTURE_INSTRUCTION')
     expect(browserState(await resource(ctx, successor.agent)).counter).toBe(0)
@@ -400,7 +402,7 @@ describe('Session MCP Loader composition', () => {
       name: 'mcp__browser-fixture__parent_only', description: 'A browser operation available only in the parent.', parameters: { type: 'object' },
       output: { schema: { type: 'boolean' }, render: () => [] }, execute: parentOnly,
     })
-    expect((await execute(ctx, child.agent, 'mcp__browser-fixture__parent_only')).isError).toBe(true)
+    expect((await execute(ctx, child.agent, 'mcp__browser-fixture__parent_only')).error?.info).toEqual(FOREIGN)
     expect(parentOnly).not.toHaveBeenCalled()
     const parentState = browserState(await resource(ctx, parent.agent))
     const childState = browserState(await resource(ctx, child.agent))
