@@ -1,13 +1,32 @@
 import { describe, expect, it, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import SessionStore, { Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, SessionId, SessionSeq, type SessionEventInput } from '@deepseek-ai/dsh-session'
 
 function message(text: string) {
   return createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } })
 }
 
 describe('multiple Session appends', () => {
+  it('rejects sparse arrays before changing the log or surface', () => {
+    const session = Session.create(SessionId('sparse-append'))
+    const inputs = new Array<SessionEventInput>(3)
+    inputs[0] = ['turn/start', { turn: 1 }]
+    inputs[2] = ['user/message', message('last'), { surfaceOp: 'append' }]
+    expect(() => session.append(inputs)).toThrow(/empty member at index 1/)
+    expect(session.seq).toBe(0)
+    expect(session.surface.nodes).toEqual([])
+  })
+
+  it('reads only surface metadata from event options', () => {
+    const session = Session.create(SessionId('options-append'))
+    const old = session.append('user/message', message('old'), { surfaceOp: 'append' })
+    const next = message('new')
+    const events = session.append([['user/message', next, old]])
+    expect(events[0]?.data).toEqual(next)
+    expect(session.deriveMessages()).toEqual([old.data, next])
+  })
+
   it('leaves the log unchanged for empty input and accepts a single array member', () => {
     const session = Session.create(SessionId('empty-append'))
     expect(session.append([])).toEqual([])

@@ -862,8 +862,14 @@ export class Session {
     this.publicationEntry()
     if (inputs.length === 0) return []
     const startSeq = this.log.length
-    const events = inputs.map(([type, data, surfaceOpts], index) => {
-      const snapshot = snapshotJsonValue({ type, data, ...surfaceOpts })
+    const events = Array.from(inputs, (input, index) => {
+      if (input === undefined) throw new Error(`session batch has an empty member at index ${index}`)
+      const [type, data, surfaceOpts] = input
+      const snapshot = snapshotJsonValue({
+        type, data,
+        ...surfaceOpts?.surfaceOp === undefined ? {} : { surfaceOp: surfaceOpts.surfaceOp },
+        ...surfaceOpts?.sourceEventSeqs === undefined ? {} : { sourceEventSeqs: surfaceOpts.sourceEventSeqs },
+      })
       if (snapshot === undefined) throw new Error('session batch carries non-JSON-serializable data')
       const event = {
         ...snapshot, seq: SessionSeq(startSeq + index), time: Date.now(),
