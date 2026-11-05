@@ -98,6 +98,7 @@ describe('spawn preset selection', () => {
     const forced = await callSubagent(ctx, { ...args, agent_preset: 'writer' })
     expect(forced.isError).toBe(true)
     expect(text(forced)).toContain('selection is disabled')
+    expect(forced.error?.info).toEqual({ name: 'SubagentError', code: 'PRESET_SELECTION_DISABLED' })
     expect(onStart).toHaveBeenCalledTimes(1)
   })
 
@@ -134,8 +135,13 @@ describe('spawn preset selection', () => {
 
   it('rejects forced selection at the model JSON resolver', () => {
     const selection = new SubagentPresetSelection({ allowedAgentPresets: ['writer'] })
-    expect(() => selection.resolve({ agent_preset: 'unlisted' })).toThrow(/must be one of/)
-    expect(() => selection.resolve({ agent_preset: 1 })).toThrow(/must be one of/)
+    for (const agent_preset of ['unlisted', 1]) {
+      expect(() => selection.resolve({ agent_preset })).toThrow(expect.objectContaining({
+        name: 'SubagentError',
+        code: 'PRESET_NOT_ALLOWED',
+        message: 'agent_preset must be one of: writer',
+      }))
+    }
   })
 
   it('requires the preset service when selection is configured', async () => {

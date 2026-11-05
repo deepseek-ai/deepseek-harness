@@ -1,7 +1,7 @@
 /** Independent spawn presets and compatibility of persisted child compositions. */
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -121,6 +121,21 @@ describe('child preset start validation', () => {
     expect(ctx.sessions.list()).toHaveLength(beforeSessions)
     expect(parent.session.snapshotEvents()).toEqual(beforeEvents)
     expect(published).toEqual([])
+    expect(adapter.requests).toEqual([])
+  })
+
+  it('classifies a failed join of the parent preset revision as PRESET_UNAVAILABLE', async () => {
+    const { ctx, parent, adapter } = await setup()
+    const failure = new Error('Parent preset revision is unavailable')
+    vi.spyOn(ctx.agentPresets, 'composeFrom').mockImplementation(() => { throw failure })
+
+    await expect(ctx.subagents.startActivation(startSpec(parent))).rejects.toMatchObject({
+      name: 'SubagentError',
+      code: 'PRESET_UNAVAILABLE',
+      message: 'the child cannot join the parent agent\'s current preset revision',
+      cause: failure,
+    })
+    expect(ctx.agents.list().map(agent => agent.id)).toEqual([parent.id])
     expect(adapter.requests).toEqual([])
   })
 

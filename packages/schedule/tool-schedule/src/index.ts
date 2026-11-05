@@ -303,10 +303,10 @@ async function runForCaller<T, const C extends ScheduleToolError['code']>(
 ): Promise<T | DeclaredError<C> | SubagentSessionError | InternalScheduleError> {
   const agent = exec.agent
   if (agent === undefined) return internalError()
-  if (delegationDepthOf(agent) > 0) {
-    return { code: 'subagent_session', message: 'A delegated subagent cannot use scheduled tasks.' }
-  }
   try {
+    if (delegationDepthOf(agent) > 0) {
+      return { code: 'subagent_session', message: 'A delegated subagent cannot use scheduled tasks.' }
+    }
     return await operation(agent)
   } catch (error: unknown) {
     if (error instanceof ScheduleInputError) {

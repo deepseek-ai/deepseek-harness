@@ -271,6 +271,7 @@ describe('list_agents', () => {
     const result = await callTool(ctx, 'list_agents', {})
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('requires a calling agent')
+    expect(result.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
   })
 
   it('unregisters with its plugin fiber (HMR safety)', async () => {

@@ -229,6 +229,21 @@ describe('Schedule model tools', () => {
     expect((await test.service.list({})).total).toBe(0)
   })
 
+  it('answers internal_error when the caller carries an invalid runtime delegation depth', async () => {
+    const test = await harness(); tests.push(test)
+    const caller = { ...agentFor(test.ctx, 'invalid-depth'), options: { subagentDepth: -1 } }
+    await test.ctx.agents.register(caller)
+    await mountToolSchedule(test.ctx, caller)
+    for (const [name, args] of CALLS) {
+      const result = await executeToolFixture(test.ctx, {
+        callId: ToolCallId('invalid-depth-call'), signal: new AbortController().signal, name, arguments: args, agent: caller,
+      })
+      expect(result.isError).toBe(false)
+      expect(result.value).toEqual(INTERNAL_ERROR)
+    }
+    expect((await test.service.list({})).total).toBe(0)
+  })
+
   it('describes the create parameters for the model', async () => {
     const test = await setup()
     const schema = test.ctx.tools.schemas(test.agent).find(candidate => candidate.name === 'schedule_create')
