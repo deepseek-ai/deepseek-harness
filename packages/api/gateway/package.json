@@ -83,6 +83,6 @@
     "@deepseek-ai/dsh-util-crypto": "workspace:*",
     "@types/ws": "^8.18.1",
     "@deepseek-ai/cordis": "workspace:~",
-    "zod": "4.4.3"
+    "zod": "4.6.6"
   }
 }

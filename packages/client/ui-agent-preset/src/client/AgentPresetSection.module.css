@@ -68,11 +68,10 @@
 }
 
 /* The default preset reads as selected exactly like the Appearance cubes:
-   platform fill + the bluish-400 border (static token — the bluish-400 step
-   has no alias-layer name). */
+   platform fill + the selected border. */
 .cardActive {
   background: var(--dsw-alias-bg-module-platform);
-  border-color: var(--dsw-static-neutral-bluish-400);
+  border-color: var(--dsw-alias-border-selected);
 }
 
 /* Mode selection is off, not the preset itself: mute only the selectable

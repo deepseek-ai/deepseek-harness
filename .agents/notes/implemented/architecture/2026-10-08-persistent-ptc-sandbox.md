@@ -28,4 +28,4 @@ An approved one-time escalation omits the state owner and receives a fresh tempo
 
 ## Consequences
 
-Normal calls retain variables without changing file permissions. Changing sandbox mode discards variables. Escalated programs must be self-contained. Runtime consumers must release a retained owner before supplying a different policy without a Session mode change; the provider rejects inconsistent reuse. The sandbox inherits the existing backends’ file-effect coverage and platform limitations.
+Normal calls retain variables without changing file permissions. Changing sandbox mode discards variables. Escalated programs must be self-contained. Runtime consumers must release a retained owner before changing its mode, workspace root or Session identity; the provider rejects inconsistent reuse. [Directory-effect lifetimes](2026-10-26-session-writable-directory-effects.md) permit extra-directory changes while retained processes keep their launch grants. The sandbox inherits the existing backends’ file-effect coverage and platform limitations.

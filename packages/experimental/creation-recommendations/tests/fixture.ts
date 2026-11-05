@@ -36,7 +36,7 @@ export function recordCard(session: Agent['session'], { callId: id, phase, ...da
 
 export function installedBundle(name: string): BundleInfo {
   return { name, official: false, optional: false, availability: 'profile', installed: true,
-    enabled: true, removable: true, updatable: true, rows: [], overrides: [] }
+    enabled: true, removable: true, update: 'registry', rows: [], overrides: [] }
 }
 
 export async function writeBundle(directory: string, name: string): Promise<void> {

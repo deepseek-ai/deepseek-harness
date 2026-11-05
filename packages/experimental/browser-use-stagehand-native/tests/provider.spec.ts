@@ -117,11 +117,11 @@ it('lazily launches distinct browsers and preserves each Session tab state', asy
 })
 
 it('reserves an attached browser for one live owner and rejects model connection overrides', async () => {
-  await ctx.plugin(Provider, { model: nativeModel, mode: 'attach', cdpEndpoint: 'http://localhost:9222', extensionId: 'fixture-extension' })
+  await ctx.plugin(Provider, { model: nativeModel, mode: 'attach', cdpEndpoint: 'http://localhost:9222' })
   expect((await execute(first, 'tabs', { action: 'list' })).isError).toBe(false)
   expect((await execute(second, 'tabs', { action: 'list' })).isError).toBe(true)
   expect(fixture.browsers).toHaveLength(1)
-  expect(fixture.browsers[0]?.options).toEqual({ cdpUrl: 'http://localhost:9222', extensionId: 'fixture-extension' })
+  expect(fixture.browsers[0]?.options).toEqual({ cdpUrl: 'http://localhost:9222' })
   expect((await execute(first, 'navigate', { url: 'https://example.com', cdpEndpoint: 'http://other' })).isError).toBe(true)
   expect((await execute(first, 'act', { instruction: 'click', model: 'other' })).isError).toBe(true)
 })
