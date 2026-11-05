@@ -1,6 +1,8 @@
+#pragma once
 #include <shellapi.h>
 #include <memory>
 #include <string>
+#include "restart-banner.h"
 
 namespace restart_status {
 struct Launch {
@@ -83,7 +85,11 @@ extern "C" __declspec(dllexport) HANDLE __cdecl InstallerStartRestartStatus(LPCW
     return nullptr;
 }
 
+#if defined(_M_IX86)
 #pragma comment(linker, "/EXPORT:ShowRestartStatusW=_ShowRestartStatusW@16")
+#else
+#pragma comment(linker, "/EXPORT:ShowRestartStatusW")
+#endif
 extern "C" void CALLBACK ShowRestartStatusW(HWND, HINSTANCE instance, LPWSTR raw, int) {
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
     if (!raw || *raw != L'"') return;
@@ -100,7 +106,12 @@ extern "C" void CALLBACK ShowRestartStatusW(HWND, HINSTANCE instance, LPWSTR raw
     const bool dark = wcscmp(theme, L"dark") == 0;
     wchar_t locale[LOCALE_NAME_MAX_LENGTH]{};
     LCIDToLocaleName(MAKELCID(language, SORT_DEFAULT), locale, ARRAYSIZE(locale), 0);
-    SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+#pragma warning(push)
+#pragma warning(disable: 4191)
+    const auto setDpi = reinterpret_cast<decltype(&SetThreadDpiAwarenessContext)>(
+        GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetThreadDpiAwarenessContext"));
+#pragma warning(pop)
+    if (setDpi) setDpi(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     struct { DLGTEMPLATE dialog; WORD menu, cls, title; } layout{};
     layout.dialog.style = WS_POPUP | DS_CENTER | DS_MODALFRAME;
     layout.dialog.dwExtendedStyle = WS_EX_APPWINDOW;
@@ -111,10 +122,10 @@ extern "C" void CALLBACK ShowRestartStatusW(HWND, HINSTANCE instance, LPWSTR raw
     SetWindowTextW(window, L"DeepSeek Harness");
     const DWORD style = WS_CHILD | WS_VISIBLE;
     HWND image = CreateWindowW(L"STATIC", L"", style | SS_ICON, 0,0,0,0, window,
-        reinterpret_cast<HMENU>(0xffff), instance, nullptr);
-    HWND title = CreateWindowW(L"STATIC", L"", style, 0,0,0,0, window, reinterpret_cast<HMENU>(76), instance, nullptr);
-    HWND label = CreateWindowW(L"STATIC", text, style, 0,0,0,0, window, reinterpret_cast<HMENU>(1030), instance, nullptr);
-    if (!image || !title || !label) return;
+        reinterpret_cast<HMENU>(restart_banner::iconId), instance, nullptr);
+    HWND title = CreateWindowW(L"STATIC", L"", style, 0,0,0,0, window, reinterpret_cast<HMENU>(restart_banner::titleId), instance, nullptr);
+    HWND label = CreateWindowW(L"STATIC", text, style, 0,0,0,0, window, reinterpret_cast<HMENU>(restart_banner::bodyId), instance, nullptr);
+    if (!image || !title || !label) { DestroyWindow(window); return; }
     HICON large{}, smallIcon{};
     ExtractIconExW(installer, 0, &large, &smallIcon, 1);
     SendMessageW(image, STM_SETICON, reinterpret_cast<WPARAM>(large), 0);
@@ -122,11 +133,15 @@ extern "C" void CALLBACK ShowRestartStatusW(HWND, HINSTANCE instance, LPWSTR raw
     SendMessageW(window, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(smallIcon));
     InstallerStyleRestartBanner(window, text, locale, L"Microsoft YaHei UI", 14,
         dark ? RGB(21,21,23) : RGB(255,255,255), dark ? RGB(255,255,255) : RGB(15,17,21));
-    if (!GetPropW(window, restart_banner::stateKey)) return;
-    ShowWindow(window, SW_SHOWNOACTIVATE);
-    MSG message{};
-    while (GetMessageW(&message, nullptr, 0, 0) > 0) {
-        TranslateMessage(&message);
-        DispatchMessageW(&message);
+    if (GetPropW(window, restart_banner::stateKey)) {
+        ShowWindow(window, SW_SHOWNOACTIVATE);
+        MSG message{};
+        while (GetMessageW(&message, nullptr, 0, 0) > 0) {
+            TranslateMessage(&message);
+            DispatchMessageW(&message);
+        }
     }
+    if (IsWindow(window)) DestroyWindow(window);
+    DestroyIcon(large);
+    DestroyIcon(smallIcon);
 }

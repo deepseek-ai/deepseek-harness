@@ -1,6 +1,10 @@
+#pragma once
+#include <algorithm>
+#include <new>
 #include "restart-text.h"
 namespace restart_banner {
 constexpr wchar_t stateKey[] = L"HarnessInstaller.RestartBanner";
+constexpr int iconId = 0xffff, titleId = 76, bodyId = 1030;
 struct Style {
     DLGPROC previous;
     HBRUSH brush;
@@ -8,6 +12,7 @@ struct Style {
     HFONT titleFont;
     COLORREF background;
     COLORREF foreground;
+    HBITMAP bitmap;
 };
 
 inline INT_PTR CALLBACK DialogProc(HWND window, UINT message, WPARAM wp, LPARAM lp) {
@@ -43,6 +48,7 @@ inline INT_PTR CALLBACK DialogProc(HWND window, UINT message, WPARAM wp, LPARAM 
         DeleteObject(state->font);
         DeleteObject(state->brush);
         DeleteObject(state->titleFont);
+        DeleteObject(state->bitmap);
         delete state;
     }
     return result;
@@ -52,10 +58,15 @@ inline INT_PTR CALLBACK DialogProc(HWND window, UINT message, WPARAM wp, LPARAM 
 // Size the localized paragraph with the font and wrapping used by its static control.
 static void InstallerStyleRestartBanner(HWND window, LPCWSTR text,
     LPCWSTR locale, LPCWSTR face, int logicalFontSize, COLORREF background, COLORREF foreground) {
-    const HWND label = GetDlgItem(window, 1030);
-    const HWND icon = GetDlgItem(window, 0xffff);
+    const HWND label = GetDlgItem(window, restart_banner::bodyId);
+    const HWND icon = GetDlgItem(window, restart_banner::iconId);
     if (!label || !icon) return;
-    const UINT dpi = GetDpiForWindow(window);
+    const HMODULE user = GetModuleHandleW(L"user32.dll");
+#pragma warning(push)
+#pragma warning(disable: 4191)
+    const auto getDpi = reinterpret_cast<decltype(&GetDpiForWindow)>(GetProcAddress(user, "GetDpiForWindow"));
+#pragma warning(pop)
+    const UINT dpi = getDpi ? getDpi(window) : 96;
     const auto px = [dpi](int value) { return MulDiv(value, dpi, 96); };
     HMODULE module;
     if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
@@ -63,7 +74,7 @@ static void InstallerStyleRestartBanner(HWND window, LPCWSTR text,
     auto* state = new (std::nothrow) restart_banner::Style{
         reinterpret_cast<DLGPROC>(GetWindowLongPtrW(window, DWLP_DLGPROC)), CreateSolidBrush(background),
         CreateFontW(-px(logicalFontSize), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
-            OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, face), CreateFontW(-px(16), 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, face), background, foreground};
+            OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, face), CreateFontW(-px(16), 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, face), background, foreground, nullptr};
     if (!state) return;
     if (!state->brush || !state->titleFont || !state->font || !SetPropW(window, restart_banner::stateKey, state)) {
         DeleteObject(state->font);
@@ -82,6 +93,7 @@ static void InstallerStyleRestartBanner(HWND window, LPCWSTR text,
     ReleaseDC(window, dc);
     const int bodyWidth = width - 2 * padding - gap - iconSize;
     HBITMAP bitmap = RenderRestartParagraph(window, text, face, locale, logicalFontSize, bodyWidth, dpi, background, foreground, paragraph.bottom);
+    state->bitmap = bitmap;
     const int titleHeight = px(22), titleGap = px(4);
     const int textHeight = titleHeight + titleGap + paragraph.bottom;
     const int height = 2 * padding + std::max<int>(iconSize, textHeight);
@@ -99,7 +111,7 @@ static void InstallerStyleRestartBanner(HWND window, LPCWSTR text,
     const int newHeight = height + outer.bottom - outer.top - client.bottom;
     SetWindowPos(window, nullptr, (outer.left + outer.right - newWidth) / 2,
         (outer.top + outer.bottom - newHeight) / 2, newWidth, newHeight, SWP_NOACTIVATE | SWP_NOZORDER);
-    const HWND title = GetDlgItem(window, 76);
+    const HWND title = GetDlgItem(window, restart_banner::titleId);
     SetWindowLongPtrW(title, GWL_STYLE, (GetWindowLongPtrW(title, GWL_STYLE) & ~SS_TYPEMASK) | SS_LEFT | SS_NOPREFIX);
     SetWindowTextW(title, L"DeepSeek Harness");
     SendMessageW(title, WM_SETFONT, reinterpret_cast<WPARAM>(state->titleFont), FALSE);

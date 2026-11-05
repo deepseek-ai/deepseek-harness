@@ -6,7 +6,7 @@ OutFile "${OWNER_EXE}"
 !include "LogicLib.nsh"
 !include "${BANNER_INCLUDE}"
 LoadLanguageFile "${NSISDIR}\Contrib\Language files\English.nlf"
-LangString INSTALLER_UPDATE_WAIT ${LANG_ENGLISH} "Installing the update."
+LangString INSTALLER_UPDATE_WAIT ${LANG_ENGLISH} "Installing the $\"update$\". It's almost ready."
 Var InstallerTheme
 Section
   InitPluginsDir
