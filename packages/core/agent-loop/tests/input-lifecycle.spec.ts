@@ -71,7 +71,7 @@ it('cancellation still aborts the running request when queue clearing fails', as
       if (session === agent.session && event.type === 'agent/inbox/spliced' && event.data.target === 'next-turn'
         && (event.data.removedCount ?? 0) > 0) throw new Error('injected queue clear failure')
     })
-    expect(() =>{  agent.cancel({ kind: 'user' }) }).toThrow('injected queue clear failure')
+    expect(() => { agent.cancel({ kind: 'user' }) }).toThrow('injected queue clear failure')
     expect(signal.aborted).toBe(true)
   } finally {
     stopRejecting()
@@ -96,7 +96,7 @@ it('an Agent still in the registry rejects new input while its owner is closing'
     await aborted.promise
     expect(ctx.agents.get(agent.id)).toBe(agent)
     const message = input('during closing')
-    for (const submit of [() =>{  agent.followup(message) }, () =>{  agent.steer(message) }, () =>{  agent.inject(message) }, () =>{  agent.send(message, 'next-turn', true) }, () => agent.runMaintenance(async () => {}), () => agent.inbox.append('next-turn', message), () => agent.inbox.prepend('next-step', message), () => agent.inbox.splice('next-turn', 0, 0, [message]), () => agent.inbox.replace(message.id, message)]) {
+    for (const submit of [() => { agent.followup(message) }, () => { agent.steer(message) }, () => { agent.inject(message) }, () => { agent.send(message, 'next-turn', true) }, () => agent.runMaintenance(async () => {}), () => { agent.inbox.append('next-turn', message) }, () => { agent.inbox.prepend('next-step', message) }, () => agent.inbox.splice('next-turn', 0, 0, [message]), () => agent.inbox.replace(message.id, message)]) {
       expect(submit).toThrow(AgentClosedError)
     }
     const pending = [...agent.inbox.nextTurn, ...agent.inbox.nextStep].some(entry => entry.id === message.id)
