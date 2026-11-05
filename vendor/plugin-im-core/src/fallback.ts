@@ -8,11 +8,13 @@
  *
  * Conventions of the core table:
  * - **Variant-preserving fallbacks** keep the tag and drop only the variant (`pre[lang]` → `pre`, `span[color]` →
- *   `span`, `table[align]` → `table`, `button[theme]` → `button`, `li[checked]` → `li` with a `☐`/`☑` prefix,
- *   `li[nested]` → `li` with the nested list flattened into indented paragraphs, `td[block]` → `td` with one
- *   paragraph). The output keeps the element's `key`, so stable ids survive (`stableId`).
- * - Every other variant (`at.*`, `img.inline`, `button.action|link|input|inline`) uses the element's full
- *   fallback: a variant the mode cannot render means the element as a whole is not native.
+ *   `span`, `table[align]` → `table`, `button[theme]` → `button`, `button[submit]` → `button[type=action]` (the click
+ *   stays, its form values do not), `li[checked]` → `li` with a `☐`/`☑` prefix, `li[nested]` → `li` with the nested
+ *   list flattened into indented paragraphs, `td[block]` → `td` with one paragraph). The output keeps the element's
+ *   `key`, so stable ids survive (`stableId`).
+ * - Every other variant (`at.*`, `img.inline`, `button.action|link|input|submit|inline`, `input.checkbox`,
+ *   `select.multiple`) uses the element's full fallback: a variant the mode cannot render means the element as a
+ *   whole is not native.
  * - Text is never lost: every `text` of the input reappears in the output.
  * - Fallbacks are pure. `ctx.report` is only for `dropped` entries (e.g. an action button without a text
  *   equivalent); the engine records the `degraded` entry itself.
@@ -98,6 +100,10 @@ const TAG_NAMES: Partial<Record<Tag, { zh: string; en: string }>> = {
   file: { zh: '文件', en: 'file' },
   button: { zh: '按钮', en: 'button' },
   'button-group': { zh: '按钮组', en: 'button group' },
+  form: { zh: '表单', en: 'form' },
+  input: { zh: '输入框', en: 'input' },
+  select: { zh: '下拉选择', en: 'select' },
+  option: { zh: '选项', en: 'option' },
   forward: { zh: '合并转发', en: 'forwarded messages' },
   raw: { zh: '原始消息', en: 'raw content' },
 }
@@ -105,7 +111,7 @@ const TAG_NAMES: Partial<Record<Tag, { zh: string; en: string }>> = {
 const VARIANT_NAMES_ZH: Record<string, string> = {
   user: '用户', all: '所有人', here: '在线成员', role: '角色', checked: '勾选框', nested: '嵌套', lang: '语言',
   color: '颜色', align: '对齐', block: '块内容', inline: '行内', action: '回调', link: '链接', command: '指令',
-  theme: '样式',
+  theme: '样式', submit: '提交', checkbox: '勾选框', multiple: '多选',
 }
 
 class Report implements RenderReport {
@@ -398,6 +404,8 @@ function emojiText(el: Element<'emoji'>) {
 function buttonFallback(el: Element<'button'>, ctx: FallbackContext): Fragment {
   const attrs = el.attrs
   if (ctx.variant === 'theme') return withAttrs(el, omit(attrs, 'theme'))
+  // A submit button on a mode without forms keeps its label and click, losing only the submitted values.
+  if (ctx.variant === 'submit') return withAttrs(el, { ...attrs, type: 'action' })
   const label = toText(el.children).trim()
   switch (attrs.type) {
     case 'link':
@@ -496,6 +504,16 @@ export const coreFallbacks: { readonly [K in Tag]?: Fallback<K> } = {
   },
   // Reached while no plugin contributes `markdown`: the source is all there is to show.
   markdown: el => el.attrs.content,
+  form: children,
+  input: (el, ctx) => {
+    ctx.report.dropped.push({ what: `input:${el.attrs.name}`, reason: INTERACTION_DROPPED })
+    return h('p', toText(el))
+  },
+  select: (el, ctx) => {
+    ctx.report.dropped.push({ what: `select:${el.attrs.id}`, reason: INTERACTION_DROPPED })
+    return h('p', toText(el))
+  },
+  option: children,
   forward: () => '[合并转发]',
   raw: children,
 }
@@ -511,5 +529,5 @@ export function defaultFallback<K extends Tag>(tag: K): Fallback<K> | undefined 
  * container; any other unsupported child makes the container itself fall back.
  */
 export const preservingVariants: ReadonlySet<string> = new Set([
-  'li.checked', 'li.nested', 'pre.lang', 'span.color', 'table.align', 'td.block', 'button.theme',
+  'li.checked', 'li.nested', 'pre.lang', 'span.color', 'table.align', 'td.block', 'button.theme', 'button.submit',
 ])

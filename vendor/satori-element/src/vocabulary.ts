@@ -21,6 +21,12 @@ export interface ButtonEvent {
   id: string
   /** Optional payload (≤ 256 bytes; QQ data, Lark value). */
   data?: string
+  /**
+   * Values of the `<form>` the button stands in, keyed by control `name` — present when the click submitted a form
+   * (`button[type=submit]`, or a plain action button inside a `<form>` on a platform that submits with any button).
+   * A checkbox reports a boolean, a multiple `<select>` an array in option order.
+   */
+  values?: FormValues
   /** Passive-reply / reply context the adapter may use (QQ event_id, Lark open_message_id). */
   referrer: unknown
   time: number
@@ -46,6 +52,33 @@ export interface ButtonAnswer {
 }
 
 export type ButtonCallback = (event: ButtonEvent) => void | Promise<void>
+
+/** Values one `<form>` submitted, keyed by the `name` of each control. */
+export type FormValues = Record<string, string | string[] | boolean>
+
+/**
+ * Payload of a `<select>` interaction: the reader picked an option.
+ *
+ * The same forward-declaration rule as {@link ButtonEvent} applies — `plugin-im-core` augments this interface with
+ * `bot`, `user`, `chat` and `message`.
+ */
+export interface SelectEvent {
+  /** Control id (`select.id`). */
+  id: string
+  /** Chosen option values: one for a single select, in option order for a `multiple` one. */
+  values: string[]
+  /** Optional payload (≤ 256 bytes), as on a button. */
+  data?: string
+  /** Passive-reply / reply context the adapter may use. */
+  referrer: unknown
+  time: number
+  /** Answer the interaction on the platform; same contract as {@link ButtonEvent.respond}. */
+  respond?(answer: ButtonAnswer): Promise<void>
+  /** Claim the platform's answer for asynchronous work; same contract as {@link ButtonEvent.defer}. */
+  defer?(): void
+}
+
+export type SelectCallback = (event: SelectEvent) => void | Promise<void>
 
 /** Size of a button (`ButtonStyle.size`). */
 export type ButtonSize = 'tiny' | 'small' | 'medium' | 'large'
@@ -125,8 +158,49 @@ export interface ElementMap {
     | ({ type: 'action'; id: string; data?: string; onClick?: ButtonCallback } & ButtonStyle)
     | ({ type: 'link'; href: string } & ButtonStyle)
     | ({ type: 'input'; text: string; send?: boolean } & ButtonStyle)
+    | ({ type: 'submit'; id: string; data?: string; onClick?: ButtonCallback } & ButtonStyle)
   /** `width: 'fill'` shares the row among the buttons (each defaults to `width: 'fill'`); `align` places the row. */
   'button-group': { width?: 'auto' | 'fill'; align?: Align }
+  /**
+   * A group of form controls whose values one submit button sends together. A platform without a form container
+   * renders the controls one by one and reports them as dropped interactions.
+   */
+  form: { name: string }
+  /**
+   * One form control. `checkbox` is a separate native component on platforms that have one; the other types are the
+   * same component with its input mode set. `name` keys the value in the enclosing `<form>`'s submit.
+   */
+  input: {
+    name: string
+    type?: 'text' | 'multiline' | 'password' | 'checkbox'
+    /** Visible text of a checkbox; the caption above a text field. */
+    label?: string
+    placeholder?: string
+    /** Initial value: the text of a text field, the state of a checkbox. */
+    value?: string | boolean
+    maxLength?: number
+    required?: boolean
+    disabled?: boolean
+  }
+  /**
+   * A choice control. Unlike `<input>` it reports every change by itself (`onSelect`), which is what platforms with a
+   * dropdown do; inside a `<form>` its value is also part of the submit.
+   */
+  select: {
+    id: string
+    data?: string
+    onSelect?: SelectCallback
+    multiple?: boolean
+    /** Form key of this control inside a `<form>`; defaults to `id`. */
+    name?: string
+    placeholder?: string
+    /** Initially chosen option value(s). */
+    value?: string | string[]
+    required?: boolean
+    disabled?: boolean
+  }
+  /** One choice of a `<select>`; the label is the element's content. */
+  option: { value: string; selected?: boolean }
   /**
    * Ordered alternatives: each direct child (a fragment counts as one) is a candidate, and a renderer uses the first
    * candidate it renders without degrading anything, else the last candidate.
@@ -153,7 +227,9 @@ export interface VariantMap {
   table: 'align'
   td: 'block'
   img: 'inline'
-  button: 'action' | 'link' | 'input' | 'theme' | 'inline'
+  button: 'action' | 'link' | 'input' | 'submit' | 'theme' | 'inline'
+  input: 'checkbox'
+  select: 'multiple'
 }
 
 /** Variants declared for a tag (`never` for tags without variants). */

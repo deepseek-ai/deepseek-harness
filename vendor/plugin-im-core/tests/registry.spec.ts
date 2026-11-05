@@ -168,6 +168,10 @@ describe('transform with the minimal text/p/br mode', () => {
         case 'img': case 'audio': case 'video': case 'file': return h(tag, { src: 'https://x.test/m' })
         case 'button': return h('button', { type: 'input', text: '/x', theme: 'danger' }, 'x')
         case 'button-group': return h('button-group', h('button', { type: 'action', id: 'a' }, 'x'))
+        case 'form': return h('form', { name: 'f' }, h('input', { name: 'a' }), h('button', { type: 'submit', id: 's' }, 'x'))
+        case 'input': return h('form', { name: 'f' }, h('input', { name: 'a', label: 'x' }))
+        case 'select': return h('select', { id: 's' }, h('option', { value: 'v' }, 'x'))
+        case 'option': return h('select', { id: 's' }, h('option', { value: 'v' }, 'x'))
         case 'title': return h('title', { subtitle: 's' }, 'x')
         case 'forward': return h('forward', { id: 'f' })
         case 'hr': return h('hr')
@@ -185,8 +189,10 @@ describe('transform with the minimal text/p/br mode', () => {
     for (const tag of tags) {
       if (['message', 'text', 'p', 'br', 'quote', 'markdown', 'fallback', 'case'].includes(tag)) continue
       const { report } = run(mode, sample(tag))
-      // structural children (li, tr, th, td, summary) are consumed by their container's fallback
-      const owner = ({ li: 'ul', tr: 'table', th: 'table', td: 'table', summary: 'details' } as Record<string, string>)[tag] ?? tag
+      // structural children (li, tr, th, td, summary, option) are consumed by their container's fallback
+      const owner = ({
+        li: 'ul', tr: 'table', th: 'table', td: 'table', summary: 'details', option: 'select',
+      } as Record<string, string>)[tag] ?? tag
       expect(report.degraded.some(entry => entry.tag === owner), tag).toBe(true)
       expect(maxSteps(report), tag).toBeLessThanOrEqual(4)
       checked.push(tag)
@@ -212,8 +218,11 @@ describe('variants', () => {
       'button.action': h('button', { type: 'action', id: 'a' }, 'x'),
       'button.link': h('button', { type: 'link', href: 'https://x.test' }, 'x'),
       'button.input': h('button', { type: 'input', text: '/x' }, 'x'),
+      'button.submit': h('form', { name: 'f' }, h('button', { type: 'submit', id: 's' }, 'x')),
       'button.theme': h('button', { type: 'link', href: 'https://x.test', theme: 'danger' }, 'x'),
       'button.inline': h('p', 'a', h('button', { type: 'link', href: 'https://x.test' }, 'x')),
+      'input.checkbox': h('form', { name: 'f' }, h('input', { name: 'a', type: 'checkbox', label: 'x' })),
+      'select.multiple': h('select', { id: 's', multiple: true }, h('option', { value: 'v' }, 'x')),
     }
     for (const [tag, variants] of Object.entries(variantTable)) {
       for (const variant of variants) {
@@ -374,16 +383,27 @@ describe('envelope and actions', () => {
     expect(result.msgs).toEqual(['body'])
   })
 
-  it('collects onClick of natively rendered action buttons only', () => {
+  it('collects the interaction callbacks of natively rendered controls only', () => {
     const a = () => {}
     const b = () => {}
-    const elements = minimal().register('button', (el, ctx) => `[${ctx.text(el.children)}]`, { variants: ['action'] })
+    const c = () => {}
+    const elements = minimal()
+      .register('button', (el, ctx) => `[${ctx.text(el.children)}]`, { variants: ['action', 'submit', 'link'] })
+      .register('select', (el, ctx) => `{${ctx.text(el.children)}}`, { variants: ['multiple'] })
+      .register('option', (el, ctx) => ctx.text(el.children))
     const { actions } = run(modeOf(elements), h('message',
       h('button', { type: 'action', id: 'x', onClick: a }, 'X'),
       h('button', { type: 'action', id: 'x', onClick: b }, 'X again'),
       h('button', { type: 'action', id: 'y' }, 'no callback'),
+      h('button', { type: 'link', href: 'https://e.x' }, 'link'),
+      h('button', { type: 'submit', id: 's', onClick: c }, 'submit'),
+      h('select', { id: 'sel', onSelect: c }, h('option', { value: 'v' }, 'V')),
       h('p', 'in text ', h('button', { type: 'action', id: 'z', onClick: b }, 'inline'))))
-    expect(actions).toEqual([{ id: 'x', callback: a }])
+    expect(actions).toEqual([
+      { kind: 'button', id: 'x', callback: a },
+      { kind: 'button', id: 's', callback: c },
+      { kind: 'select', id: 'sel', callback: c },
+    ])
   })
 })
 

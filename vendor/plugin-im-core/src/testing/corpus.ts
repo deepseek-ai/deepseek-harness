@@ -36,6 +36,18 @@ export interface StreamScript {
 }
 
 const onClick = () => {}
+const onSelect = () => {}
+
+/** One set of form controls: a form with a text field, a checkbox, a single select and a submit button. */
+function formControls() {
+  return h('form', { name: 'order' },
+    h('input', { name: 'title', label: 'Title', placeholder: 'Type a title', value: 'Untitled' }),
+    h('input', { name: 'agree', type: 'checkbox', label: 'I agree', value: true }),
+    h('select', { id: 'sel-size', name: 'size', placeholder: 'Size', onSelect },
+      h('option', { value: 's' }, 'Small'),
+      h('option', { value: 'l', selected: true }, 'Large')),
+    h('button', { type: 'submit', id: 'btn-submit', onClick }, 'Send'))
+}
 
 /** Case content of `title-and-quote` and friends: envelope elements are direct root children. */
 function envelope(title: string | undefined, quote: string | undefined, body: Element[]) {
@@ -222,6 +234,16 @@ export function corpusCases(): CorpusCase[] {
       content: h('p', 'run ', h('button', { type: 'input', text: '/status' }, 'Status'), ' to check'),
     },
     {
+      name: 'form',
+      title: 'form with a text field, a checkbox, a select and a submit button',
+      content: [
+        formControls(),
+        h('select', { id: 'sel-tags', name: 'tags', multiple: true, value: ['a'], onSelect },
+          h('option', { value: 'a' }, 'Alpha'),
+          h('option', { value: 'b' }, 'Beta')),
+      ],
+    },
+    {
       name: 'title',
       title: 'message title with a subtitle',
       content: envelope('Release notes', undefined, [h('p', 'body of the titled message')]),
@@ -306,6 +328,10 @@ export function everything(): Fragment {
       h('button', { type: 'input', text: '/compact' }, 'Compact')),
     h('p', 'run ', h('button', { type: 'input', text: '/status' }, 'Status'), ' to check'),
     h('button', { type: 'action', id: 'btn-danger', theme: 'danger', onClick }, 'Delete everything'),
+    formControls(),
+    h('select', { id: 'sel-everything', name: 'tags', multiple: true, onSelect },
+      h('option', { value: 'a' }, 'Alpha'),
+      h('option', { value: 'b' }, 'Beta')),
     h('forward', { id: 'forward-1' }),
     h('raw', { platform: 'fake', type: 'card' }, 'raw fallback text'),
   ])
@@ -477,6 +503,7 @@ export function minimalContent(tag: Tag, variant?: string): Fragment {
       switch (first) {
         case 'link': return h('button', { type: 'link', href: 'https://example.com/open' }, 'Minimal link')
         case 'input': return h('button', { type: 'input', text: '/status' }, 'Minimal input')
+        case 'submit': return h('form', { name: 'form-minimal' }, h('button', { type: 'submit', id: 'btn-minimal', onClick }, 'Minimal submit'))
         case 'theme': return h('button', { type: 'action', id: 'btn-minimal', theme: 'danger', onClick }, 'Minimal themed')
         case 'inline': return h('p', 'before ', h('button', { type: 'action', id: 'btn-minimal', onClick }, 'Minimal action'), ' after')
         default: return h('button', { type: 'action', id: 'btn-minimal', onClick }, 'Minimal action')
@@ -484,6 +511,17 @@ export function minimalContent(tag: Tag, variant?: string): Fragment {
     }
     case 'button-group':
       return h('button-group', h('button', { type: 'action', id: 'btn-minimal', onClick }, 'Minimal action'))
+    case 'form': return formControls()
+    case 'input':
+      return first === 'checkbox'
+        ? h('form', { name: 'form-minimal' }, h('input', { name: 'agree', type: 'checkbox', label: 'Minimal checkbox' }))
+        : h('form', { name: 'form-minimal' }, h('input', { name: 'field', label: 'Minimal field' }))
+    case 'select':
+      return first === 'multiple'
+        ? h('select', { id: 'sel-minimal', multiple: true, onSelect },
+          h('option', { value: 'a' }, 'Minimal choice'), h('option', { value: 'b' }, 'Other choice'))
+        : h('select', { id: 'sel-minimal', onSelect }, h('option', { value: 'a' }, 'Minimal choice'))
+    case 'option': return h('select', { id: 'sel-minimal', onSelect }, h('option', { value: 'a' }, 'Minimal choice'))
     case 'forward': return h('forward', { id: 'forward-minimal' })
     case 'raw': return h('raw', { platform: 'fake', type: 'card' }, 'raw fallback text')
     default: throw new Error(`minimalContent: no minimal tree for <${tag}>`)

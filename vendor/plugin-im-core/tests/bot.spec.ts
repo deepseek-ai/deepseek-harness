@@ -288,9 +288,9 @@ describe('bot.send', () => {
     await bot.send(target, message(h('p', 'go'), h('button', { type: 'action', id: 'b1', onClick: () => { clicked.push('b1') } }, 'ok')))
     expect(sends.length).toBe(1)
     expect(sends[0]!.handle.parts.length).toBe(1)
-    expect(bot.callbacks.get('b1')).toBeTypeOf('function')
+    expect(bot.callbacks.getButton('b1')).toBeTypeOf('function')
     const event: ButtonEvent = { id: 'b1', referrer: undefined, time: 0, bot, user: { id: 'u1' }, chat: target.chat }
-    await expect(bot.callbacks.dispatch(event)).resolves.toBe(true)
+    await expect(bot.callbacks.dispatchButton(event)).resolves.toBe(true)
     expect(clicked).toEqual(['b1'])
   })
 

@@ -14,7 +14,9 @@ export const variantTable: { readonly [K in keyof VariantMap]: readonly VariantM
   table: ['align'],
   td: ['block'],
   img: ['inline'],
-  button: ['action', 'link', 'input', 'theme', 'inline'],
+  button: ['action', 'link', 'input', 'submit', 'theme', 'inline'],
+  input: ['checkbox'],
+  select: ['multiple'],
 }
 
 /** Capability key of a tag or one of its variants: `variantKey('at', 'all')` → `'element.at.all'`. */
@@ -43,7 +45,10 @@ function hasAlign(table: Element): boolean {
  * Rules: `li.checked` = `checked` is a boolean (task item); `li.nested` = the item contains a `ul`/`ol`;
  * `pre.lang` = non-empty `lang`; `span.color` = a `color` other than `default`; `table.align` = some cell has an
  * `align` other than `left` (left is every platform's default, so dropping it is lossless); `td.block` = the cell
- * holds more than one block or anything but a `<p>`; `button.theme` = a `theme` other than `default`.
+ * holds more than one block or anything but a `<p>`; `button.theme` = a `theme` other than `default`;
+ * `input.checkbox` = `type="checkbox"` (a separate platform component where one exists); `select.multiple` = the
+ * `multiple` flag (a multi-value picker where one exists). `button` variants start with its `type`, so
+ * `type="submit"` asks for `element.button.submit`.
  */
 export function variantsOf<K extends Tag>(el: Element<K>, ancestors?: readonly Element[]): readonly VariantOf<K>[]
 export function variantsOf(el: Element, ancestors?: readonly Element[]): readonly string[] {
@@ -60,6 +65,8 @@ export function variantsOf(el: Element, ancestors?: readonly Element[]): readonl
     case 'table': return hasAlign(el) ? ['align'] : []
     case 'td': return el.children.length > 1 || el.children.some(child => child.type !== 'p') ? ['block'] : []
     case 'img': return isInlinePosition(ancestors) ? ['inline'] : []
+    case 'input': return el.attrs.type === 'checkbox' ? ['checkbox'] : []
+    case 'select': return el.attrs.multiple ? ['multiple'] : []
     case 'button': {
       const out: string[] = [el.attrs.type]
       if (el.attrs.theme && el.attrs.theme !== 'default') out.push('theme')

@@ -331,6 +331,87 @@ describe('card structure', () => {
     expect(elements(rendered.payloads[0])[0]!.content).toBe('\\[Go]')
   })
 
+  it('renders a form with its controls and a submit button that submits it', async () => {
+    const { payloads } = await render(h('form', { name: 'order' },
+      h('input', { name: 'title', label: 'Title', placeholder: 'Type a title', maxLength: 40 }),
+      h('input', { name: 'agree', type: 'checkbox', label: 'I agree', value: true }),
+      h('input', { name: 'notes', type: 'multiline', placeholder: 'Notes' }),
+      h('select', { id: 'sel-size', name: 'size', value: 'l', onSelect: () => {} },
+        h('option', { value: 's' }, 'Small'), h('option', { value: 'l' }, 'Large')),
+      h('button', { type: 'submit', id: 'btn-submit', onClick: () => {} }, 'Send')))
+    const [form] = elements(payloads[0])
+    expect(form).toMatchObject({ tag: 'form', name: 'order' })
+    const [field, check, notes, select, submit] = form!.elements
+    expect(field).toMatchObject({
+      tag: 'input',
+      name: 'title',
+      max_length: 40,
+      label: { tag: 'plain_text', content: 'Title' },
+      placeholder: { tag: 'plain_text', content: 'Type a title' },
+    })
+    expect(check).toMatchObject({ tag: 'checker', name: 'agree', checked: true, text: { tag: 'lark_md', content: 'I agree' } })
+    expect(notes).toMatchObject({ tag: 'input', name: 'notes', input_type: 'multiline_text' })
+    expect(select).toMatchObject({
+      tag: 'select_static',
+      name: 'size',
+      initial_option: 'l',
+      options: [
+        { text: { tag: 'plain_text', content: 'Small' }, value: 's' },
+        { text: { tag: 'plain_text', content: 'Large' }, value: 'l' },
+      ],
+      behaviors: [{ type: 'callback', value: { v4: { id: 'sel-size' } } }],
+    })
+    // The submit button is what turns the controls into one callback carrying `form_value`.
+    expect(submit).toMatchObject({
+      tag: 'button',
+      form_action_type: 'submit',
+      behaviors: [{ type: 'callback', value: { v4: { id: 'btn-submit' } } }],
+    })
+    expect(submit!.text).toEqual({ tag: 'plain_text', content: 'Send' })
+  })
+
+  it('a multiple select becomes multi_select_static with the selected values', async () => {
+    const { payloads } = await render(h('select', { id: 'sel-tags', name: 'tags', multiple: true, value: ['a'], onSelect: () => {} },
+      h('option', { value: 'a' }, 'Alpha'), h('option', { value: 'b' }, 'Beta')))
+    const [select] = elements(payloads[0])
+    expect(select).toMatchObject({ tag: 'multi_select_static', name: 'tags', selected_values: ['a'] })
+    expect(select!.initial_option).toBeUndefined()
+  })
+
+  it('an <option selected> seeds the initial value when the select declares none', async () => {
+    const { payloads } = await render(h('select', { id: 'sel', onSelect: () => {} },
+      h('option', { value: 'a' }, 'A'), h('option', { value: 'b', selected: true }, 'B')))
+    expect(elements(payloads[0])[0]!.initial_option).toBe('b')
+  })
+
+  it('without callbacks a select still renders, but sends no event of its own', async () => {
+    const { bot, mode } = await mount({ callbacks: false })
+    const target = { chat: { id: 'lark:test', type: 'group' as const } }
+    const rendered = await renderContent(bot, h('select', { id: 'sel', name: 'field', onSelect: () => {} },
+      h('option', { value: 'a' }, 'A')), { target, mode })
+    const [select] = elements(rendered.payloads[0])
+    expect(select!.behaviors).toBeUndefined()
+    expect(select).toMatchObject({ tag: 'select_static', name: 'field' })
+    // The element renders natively: nothing was degraded.
+    expect(rendered.report.degraded).toEqual([])
+  })
+
+  it('a form inside a panel is assembled recursively; a folded panel shows its controls as text', async () => {
+    const content = h('details', h('summary', 'Order'), h('form', { name: 'order' },
+      h('input', { name: 'title', label: 'Title' }),
+      h('select', { id: 'sel', onSelect: () => {} }, h('option', { value: 'a' }, 'Alpha'))))
+    const nested = await render(content)
+    const panel = elements(nested.payloads[0]).find(element => element.tag === 'collapsible_panel')!
+    expect(panel.elements[0]).toMatchObject({ tag: 'form', name: 'order' })
+    expect(panel.elements[0].elements.map((child: Record<string, unknown>) => child.tag)).toEqual(['input', 'select_static'])
+    // Under an element budget the panel folds into markdown: the controls stay named, their labels escaped.
+    const folded = await render(content, { elementLimit: 6 })
+    const rendered = elements(folded.payloads[0])
+    expect(rendered.every(element => element.tag === 'markdown')).toBe(true)
+    expect(JSON.stringify(rendered)).toContain('[Title]')
+    expect(JSON.stringify(rendered)).toContain('选择: Alpha')
+  })
+
   it('allowAtAll: false renders @all as text', async () => {
     const { payloads, report } = await render(h('p', h('at', { type: 'all' }), ' hi'), { allowAtAll: false })
     expect(elements(payloads[0])[0]!.content).toBe('@所有人 hi')

@@ -215,7 +215,12 @@ export abstract class Bot<C = unknown> {
     ctx.on('interaction/button', (session) => {
       // Cordis proxies event arguments: compare the stable id, never object identity.
       if (session.bot?.id !== this.id || !session.button) return
-      void this.callbacks.dispatch(session.button).catch(error => ctx.logger.warn(error))
+      void this.callbacks.dispatchButton(session.button).catch(error => ctx.logger.warn(error))
+    })
+
+    ctx.on('interaction/select', (session) => {
+      if (session.bot?.id !== this.id || !session.select) return
+      void this.callbacks.dispatchSelect(session.select).catch(error => ctx.logger.warn(error))
     })
   }
 
@@ -801,7 +806,10 @@ export abstract class Bot<C = unknown> {
   }
 
   private registerActions(actions: TransformResult<unknown>['actions']) {
-    for (const action of actions) this.callbacks.register(action.id, action.callback)
+    for (const action of actions) {
+      if (action.kind === 'select') this.callbacks.registerSelect(action.id, action.callback)
+      else this.callbacks.registerButton(action.id, action.callback)
+    }
   }
 
   /** Publish a result: register its `onClick` actions and emit `send` (once per logical message). */

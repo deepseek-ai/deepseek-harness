@@ -176,8 +176,127 @@
               ]
             },
             {
+              "tag": "form",
+              "element_id": "eubuzwqa33sr5ozr",
+              "name": "order",
+              "elements": [
+                {
+                  "tag": "input",
+                  "element_id": "e2nxz3goytigrdbh",
+                  "name": "title",
+                  "label": {
+                    "tag": "plain_text",
+                    "content": "Title"
+                  },
+                  "placeholder": {
+                    "tag": "plain_text",
+                    "content": "Type a title"
+                  },
+                  "default_value": "Untitled"
+                },
+                {
+                  "tag": "checker",
+                  "element_id": "eynkmaycnwmvp26y",
+                  "name": "agree",
+                  "checked": true,
+                  "text": {
+                    "tag": "lark_md",
+                    "content": "I agree"
+                  }
+                },
+                {
+                  "tag": "select_static",
+                  "element_id": "eguuy3tpumls47ig",
+                  "name": "size",
+                  "placeholder": {
+                    "tag": "plain_text",
+                    "content": "Size"
+                  },
+                  "options": [
+                    {
+                      "text": {
+                        "tag": "plain_text",
+                        "content": "Small"
+                      },
+                      "value": "s"
+                    },
+                    {
+                      "text": {
+                        "tag": "plain_text",
+                        "content": "Large"
+                      },
+                      "value": "l"
+                    }
+                  ],
+                  "initial_option": "l",
+                  "behaviors": [
+                    {
+                      "type": "callback",
+                      "value": {
+                        "v4": {
+                          "id": "sel-size"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "tag": "button",
+                  "element_id": "ek67bh4uvhueyiss",
+                  "text": {
+                    "tag": "plain_text",
+                    "content": "Send"
+                  },
+                  "type": "default",
+                  "form_action_type": "submit",
+                  "disabled": false,
+                  "behaviors": [
+                    {
+                      "type": "callback",
+                      "value": {
+                        "v4": {
+                          "id": "btn-submit"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tag": "multi_select_static",
+              "element_id": "elxkxljlurufywtf",
+              "name": "tags",
+              "options": [
+                {
+                  "text": {
+                    "tag": "plain_text",
+                    "content": "Alpha"
+                  },
+                  "value": "a"
+                },
+                {
+                  "text": {
+                    "tag": "plain_text",
+                    "content": "Beta"
+                  },
+                  "value": "b"
+                }
+              ],
+              "behaviors": [
+                {
+                  "type": "callback",
+                  "value": {
+                    "v4": {
+                      "id": "sel-everything"
+                    }
+                  }
+                }
+              ]
+            },
+            {
               "tag": "markdown",
-              "element_id": "eec2zqo7morhzi7t",
+              "element_id": "ep6iw6vsva4azxv2",
               "content": "\\[合并转发]\n\nraw fallback text",
               "text_align": "left"
             }
@@ -240,12 +359,12 @@
       {
         "tag": "forward",
         "via": "p",
-        "path": "message/forward[24]"
+        "path": "message/forward[26]"
       },
       {
         "tag": "raw",
         "via": "p",
-        "path": "message/raw[25]"
+        "path": "message/raw[27]"
       }
     ],
     "moved": [],

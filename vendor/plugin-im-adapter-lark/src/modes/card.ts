@@ -11,6 +11,12 @@
  * - `hr`, `img` (block image; `alt` is the hover text), `collapsible_panel` (`details`, children assembled
  *   recursively — panels nest), `button` and `column_set` (`button-group`, one auto-width column per button, or one
  *   equally weighted column per button with `width="fill"`).
+ * - `form` (the platform form container, children assembled recursively), `input` (`input`, or `checker` for
+ *   `type="checkbox"`) and `select` (`select_static`, or `multi_select_static` for a `multiple` one). A select
+ *   reports every pick through its own `callback` behavior; an input has no callback of its own, so its value reaches
+ *   the code only as the form value of a submit button (`button[type=submit]` → `form_action_type: 'submit'`, whose
+ *   callback carries `action.form_value`). `callbacks: false` leaves the select without a behavior: it still renders
+ *   and still feeds a form.
  * - `title` → card `header` (`template` from `theme`; the mode declares `title` as an envelope tag, so core puts it in
  *   the envelope).
  * - `audio` / `video` / `file` split the logical message into their own messages in tree order (`message.split`),
@@ -95,6 +101,8 @@ export interface CardButtonComponent {
   type: LarkButtonType
   behavior: CardButtonBehavior
   disabled: boolean
+  /** `button[type=submit]`: submits the enclosing `form` (`form_action_type: 'submit'`). */
+  submit?: boolean
   size?: ButtonSize
   /** Lark `width`: `default`, `fill` or `<n>px`. */
   width?: string
@@ -117,9 +125,60 @@ export interface CardButtonRowComponent {
   align?: Align
 }
 
+/**
+ * One form control: a text `input`, or a `checker` for `input[type=checkbox]` (a separate platform component). Its
+ * value reaches the code through the enclosing form's submit (`name` → form value), never on its own.
+ */
+export interface CardInputComponent {
+  tag: 'input' | 'checker'
+  id: string
+  /** Form key of this control; what the submit callback reports. */
+  name: string
+  /** Visible text of a checkbox, or the caption of a text field. */
+  label?: string
+  placeholder?: string
+  /** `input.default_value`, or `checker.checked`. */
+  defaultValue?: string
+  checked?: boolean
+  maxLength?: number
+  /** Lark `input_type`; absent = `text`. */
+  inputType?: 'multiline_text' | 'password'
+  required?: boolean
+  disabled?: boolean
+}
+
+/**
+ * One choice control. A single select reports every pick through its own callback (`behaviors`); a `multiple` one is
+ * `multi_select_static`. Inside a form the pick is also part of the submit.
+ */
+export interface CardSelectComponent {
+  tag: 'select_static' | 'multi_select_static'
+  id: string
+  /** Form key; the control's `id` when it declares none. */
+  name: string
+  placeholder?: string
+  options: { text: string; value: string }[]
+  /** `select_static.initial_option`. */
+  initialOption?: string
+  /** `multi_select_static.selected_values`. */
+  selectedValues?: string[]
+  /** Absent without `callbacks`, or when the control only feeds a form. */
+  behavior?: CardButtonBehavior
+  required?: boolean
+  disabled?: boolean
+}
+
+/** `form`: the platform container that turns its controls' values into one submit callback. */
+export interface CardFormComponent {
+  tag: 'form'
+  id: string
+  name: string
+  elements: CardComponent[]
+}
+
 export type CardComponent =
   | CardMarkdownComponent | CardHrComponent | CardImageComponent | CardPanelComponent | CardButtonComponent
-  | CardButtonRowComponent
+  | CardButtonRowComponent | CardInputComponent | CardSelectComponent | CardFormComponent
 
 /** Card header (from `<title>`); plain text. */
 export interface CardHeader { title: string; subtitle?: string; template?: string }
@@ -174,11 +233,13 @@ export type CardLiNode = { kind: 'li'; checked?: boolean; tables: number } & Md
 export type CardCellNode = { kind: 'cell'; header: boolean; align?: Align } & Md
 export interface CardRowNode { kind: 'row'; cells: CardCellNode[] }
 export type CardSummaryNode = { kind: 'summary' } & Md
+/** One `<option>` of a `<select>`: read by the select handler, never placed on its own. */
+export interface CardOptionNode { kind: 'option'; value: string; text: string; selected: boolean }
 
 /** Anything a handler returns; `assemble` consumes the flow-level members. */
 export type CardNode =
   | CardInlineNode | CardBlockNode | CardComponentNode | CardMediaNode | CardLiNode | CardCellNode | CardRowNode
-  | CardSummaryNode
+  | CardSummaryNode | CardOptionNode
 
 export interface CardTypes extends ModeTypes {
   node: CardNode
@@ -249,6 +310,15 @@ function componentMd(component: CardComponent): Md & { tables: number } {
     case 'img': return { md: imageMd(component.alt, component.ref), refs: [component.ref], buttons: [], tables: 0 }
     case 'button': return { md: '', refs: [], buttons: [component], tables: 0 }
     case 'column_set': return { md: '', refs: [], buttons: [...component.buttons], tables: 0 }
+    case 'form': {
+      // A folded panel shows its form as the controls' text: the fields a reader would have filled in.
+      const inner = joinBlocks(component.elements.map(child => ({ ...componentMd(child), list: false })), false)
+      return { md: inner.md, refs: inner.refs, buttons: inner.buttons, tables: inner.tables }
+    }
+    case 'input':
+    case 'checker': return { md: inputText(component), refs: [], buttons: [], tables: 0 }
+    case 'select_static':
+    case 'multi_select_static': return { md: selectText(component), refs: [], buttons: [], tables: 0 }
     case 'collapsible_panel': {
       const inner = joinBlocks(component.elements.map(child => ({ ...componentMd(child), list: false })), false)
       return {
@@ -271,6 +341,21 @@ function mediaLink(node: CardMediaNode): string {
   return /^https?:\/\//i.test(node.ref.src) ? `[${label}](${escapeLinkHref(node.ref.src)})` : label
 }
 
+/** Text of a control where only markdown can stand (a folded panel): `☐ label`, or `[caption]`. */
+function inputText(component: CardInputComponent): string {
+  if (component.tag === 'checker') {
+    return `${component.checked ? '☑' : '☐'} ${escapeCardText(component.label ?? component.name)}`
+  }
+  return `[${escapeCardText(component.label ?? component.placeholder ?? component.name)}]`
+}
+
+/** Text of a select: `[选择: A / B / C]`, so a degradation still names what could have been picked. */
+function selectText(component: CardSelectComponent): string {
+  const head = escapeCardText(component.placeholder ?? '选择')
+  const labels = component.options.map(option => escapeCardText(option.text))
+  return labels.length ? `[${head}: ${labels.join(' / ')}]` : `[${head}]`
+}
+
 /** Flow-level markdown of any node. */
 function blockOf(node: CardNode): Md & { tables: number; list: boolean } {
   switch (node.kind) {
@@ -282,6 +367,7 @@ function blockOf(node: CardNode): Md & { tables: number; list: boolean } {
       return { ...run, tables: 0, list: false }
     }
     case 'li': return { md: node.md, refs: node.refs, buttons: node.buttons, tables: node.tables, list: false }
+    case 'option': return { md: escapeCardText(node.text), refs: [], buttons: [], tables: 0, list: false }
     default: return { md: node.md, refs: node.refs, buttons: node.buttons, tables: 0, list: false }
   }
 }
@@ -420,6 +506,13 @@ function mediaNode(kind: 'audio' | 'video' | 'file', el: Element<'audio' | 'vide
   return { kind: 'media', msgType, ref: ctx.resource(kind, src, name ? { name } : {}), ...name ? { name } : {}, path }
 }
 
+/** Lark `input_type` of a `<input>` mode; `text` and `checkbox` need none. */
+function inputType(type: Element<'input'>['attrs']['type']): { inputType?: 'multiline_text' | 'password' } {
+  if (type === 'multiline') return { inputType: 'multiline_text' }
+  if (type === 'password') return { inputType: 'password' }
+  return {}
+}
+
 function buttonComponent(el: Element<'button'>, ctx: RenderContext<CardTypes>): CardButtonComponent {
   const attrs = el.attrs
   // `input` is not a variant of this mode, so the engine renders the core fallback before any handler runs.
@@ -436,6 +529,7 @@ function buttonComponent(el: Element<'button'>, ctx: RenderContext<CardTypes>): 
     // become visible text. A button without any label still shows its link or, for an action, an ideographic space.
     text: label || (raw.length > 0 ? '\u3000' : attrs.type === 'link' ? attrs.href : '\u3000'),
     type: attrs.variant ?? BUTTON_TYPES[attrs.theme ?? 'default'] ?? 'default',
+    ...attrs.type === 'submit' ? { submit: true } : {},
     behavior,
     disabled: !!attrs.disabled,
     ...attrs.size ? { size: attrs.size } : {},
@@ -527,6 +621,7 @@ function mergeMarkdown(components: readonly CardComponent[]): CardComponent[] {
 /** Panels in document pre-order (outer before inner): the folding order ("oldest first"). */
 function panelOrder(components: readonly CardComponent[], out: string[] = []): string[] {
   for (const component of components) {
+    if (component.tag === 'form') panelOrder(component.elements, out)
     if (component.tag !== 'collapsible_panel') continue
     out.push(component.id)
     panelOrder(component.elements, out)
@@ -611,6 +706,11 @@ function finalize(draft: CardMessageDraft): void {
         const id = unique(component.id)
         return { ...component, id, buttons: component.buttons.map(button => ({ ...button, id: unique(button.id) })) }
       }
+      case 'form': {
+        const id = unique(component.id)
+        return { ...component, id, elements: visit(component.elements) }
+      }
+      case 'checker': return { ...component, id: unique(component.id), ...component.label ? { label: normalizeCardMarkdown(component.label) } : {} }
       default: return { ...component, id: unique(component.id) }
     }
   })
@@ -688,6 +788,7 @@ function serializeButton(button: CardButtonComponent): Record<string, unknown> {
     element_id: button.id,
     text: plainText(button.text),
     type: button.type,
+    ...button.submit ? { form_action_type: 'submit' } : {},
     ...button.size ? { size: button.size } : {},
     ...button.width ? { width: button.width } : {},
     ...button.icon ? { icon: { tag: 'standard_icon', token: button.icon } } : {},
@@ -730,6 +831,51 @@ export function serializeComponent(component: CardComponent, key: KeyOf): Record
         elements: component.elements.map(child => serializeComponent(child, key)),
       }
     case 'button': return serializeButton(component)
+    case 'form':
+      return {
+        tag: 'form',
+        element_id: component.id,
+        name: component.name,
+        elements: component.elements.map(child => serializeComponent(child, key)),
+      }
+    case 'input':
+    case 'checker':
+      return component.tag === 'checker'
+        ? {
+          tag: 'checker',
+          element_id: component.id,
+          name: component.name,
+          checked: !!component.checked,
+          ...component.label ? { text: { tag: 'lark_md', content: normalizeCardMarkdown(component.label) } } : {},
+          ...component.disabled ? { disabled: true } : {},
+        }
+        : {
+          tag: 'input',
+          element_id: component.id,
+          name: component.name,
+          ...component.label ? { label: plainText(component.label) } : {},
+          ...component.placeholder ? { placeholder: plainText(component.placeholder) } : {},
+          ...component.defaultValue ? { default_value: component.defaultValue } : {},
+          ...component.maxLength === undefined ? {} : { max_length: component.maxLength },
+          ...component.inputType ? { input_type: component.inputType } : {},
+          ...component.required ? { required: true } : {},
+          ...component.disabled ? { disabled: true } : {},
+        }
+    case 'select_static':
+    case 'multi_select_static':
+      return {
+        tag: component.tag,
+        element_id: component.id,
+        name: component.name,
+        ...component.placeholder ? { placeholder: plainText(component.placeholder) } : {},
+        options: component.options.map(option => ({ text: plainText(option.text), value: option.value })),
+        ...component.tag === 'multi_select_static'
+          ? component.selectedValues?.length ? { selected_values: component.selectedValues } : {}
+          : component.initialOption ? { initial_option: component.initialOption } : {},
+        ...component.behavior ? { behaviors: [component.behavior] } : {},
+        ...component.required ? { required: true } : {},
+        ...component.disabled ? { disabled: true } : {},
+      }
     case 'column_set':
       return {
         tag: 'column_set',
@@ -874,7 +1020,7 @@ export function createCardMode(config: CardModeConfig = {}): Mode<CardTypes> {
       return inline('', [], [button])
     // Action buttons need `card.action.trigger`: without callbacks the variant is not declared (text fallback). `input`
     // buttons are never declared — a card cannot make the clicker send a message.
-    }, { variants: callbacks ? ['action', 'link', 'theme', 'inline'] : ['link', 'theme', 'inline'] })
+    }, { variants: callbacks ? ['action', 'submit', 'link', 'theme', 'inline'] : ['link', 'theme', 'inline'] })
     .register('button-group', (el, ctx) => {
       const buttons: CardButtonComponent[] = []
       for (const node of ctx.render(el.children)) {
@@ -889,6 +1035,72 @@ export function createCardMode(config: CardModeConfig = {}): Mode<CardTypes> {
         buttons: fill ? buttons.map(button => button.width ? button : { ...button, width: 'fill' }) : buttons,
         ...fill ? { width: 'fill' } : {},
         ...el.attrs.align ? { align: el.attrs.align } : {},
+      }
+      return { kind: 'component', component }
+    })
+
+    .register('option', (el, ctx): CardOptionNode => ({
+      kind: 'option',
+      value: el.attrs.value,
+      text: ctx.text(el.children).trim() || el.attrs.value,
+      selected: !!el.attrs.selected,
+    }))
+    .register('select', (el, ctx): CardNode => {
+      const options = ctx.render(el.children).filter((node): node is CardOptionNode => node.kind === 'option')
+      const multiple = !!el.attrs.multiple
+      const chosen = el.attrs.value
+      // An initial value comes from `value`, or from the `selected` options when the element declares none.
+      const marked = options.filter(option => option.selected).map(option => option.value)
+      const single = typeof chosen === 'string' && chosen ? chosen : marked[0]
+      const many = Array.isArray(chosen) && chosen.length ? chosen : marked
+      const component: CardSelectComponent = {
+        tag: multiple ? 'multi_select_static' : 'select_static',
+        id: cardElementId(ctx.stableId(el)),
+        // The platform keys a form value by `name`; a control that only reports its own callback uses its id.
+        name: el.attrs.name ?? el.attrs.id,
+        ...el.attrs.placeholder ? { placeholder: el.attrs.placeholder } : {},
+        options: options.map(option => ({ text: option.text, value: option.value })),
+        ...multiple
+          ? many.length ? { selectedValues: many } : {}
+          : single ? { initialOption: single } : {},
+        // Without callbacks the platform sends no event; the pick then only reaches the code through a form submit.
+        ...callbacks
+          ? {
+            behavior: {
+              type: 'callback' as const,
+              value: { v4: { id: el.attrs.id, ...el.attrs.data === undefined ? {} : { data: el.attrs.data } } },
+            },
+          }
+          : {},
+        ...el.attrs.required ? { required: true } : {},
+        ...el.attrs.disabled ? { disabled: true } : {},
+      }
+      return { kind: 'component', component }
+    }, { variants: ['multiple'] })
+    .register('input', (el, ctx): CardNode => {
+      const checkbox = el.attrs.type === 'checkbox'
+      const component: CardInputComponent = {
+        tag: checkbox ? 'checker' : 'input',
+        id: cardElementId(ctx.stableId(el)),
+        name: el.attrs.name,
+        ...el.attrs.label ? { label: el.attrs.label } : {},
+        ...el.attrs.placeholder ? { placeholder: el.attrs.placeholder } : {},
+        ...typeof el.attrs.value === 'string' && el.attrs.value ? { defaultValue: el.attrs.value } : {},
+        ...typeof el.attrs.value === 'boolean' ? { checked: el.attrs.value } : {},
+        ...el.attrs.maxLength === undefined ? {} : { maxLength: el.attrs.maxLength },
+        ...inputType(el.attrs.type),
+        ...el.attrs.required ? { required: true } : {},
+        ...el.attrs.disabled ? { disabled: true } : {},
+      }
+      return { kind: 'component', component }
+    }, { variants: ['checkbox'] })
+    .register('form', (el, ctx): CardNode => {
+      const elements = assembleFlow(ctx.render(el.children), ctx.report)
+      const component: CardFormComponent = {
+        tag: 'form',
+        id: cardElementId(ctx.stableId(el)),
+        name: el.attrs.name,
+        elements,
       }
       return { kind: 'component', component }
     })

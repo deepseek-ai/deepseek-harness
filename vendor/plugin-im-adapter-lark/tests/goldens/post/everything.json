@@ -166,6 +166,36 @@
           [
             {
               "tag": "md",
+              "text": "\\[Title\\]"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "☑ I agree"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "\\[Size: Small / Large\\]"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "\\[Send\\]"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "\\[选择: Alpha / Beta\\]"
+            }
+          ],
+          [
+            {
+              "tag": "md",
               "text": "\\[合并转发\\]"
             }
           ],

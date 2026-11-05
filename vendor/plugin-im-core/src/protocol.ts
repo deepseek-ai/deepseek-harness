@@ -108,6 +108,15 @@ declare module '@deepseek-ai/satori-element' {
     /** The platform message that carried the button. */
     message?: MessageRef
   }
+
+  /** Platform context of a `<select>` interaction; augments the vocabulary's forward declaration. */
+  interface SelectEvent {
+    bot: Bot
+    user: UserRef
+    chat: ChatRef
+    /** The platform message that carried the control. */
+    message?: MessageRef
+  }
 }
 
 // ---------------------------------------------------------------------------------------------------------------

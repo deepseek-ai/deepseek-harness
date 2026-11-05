@@ -1,16 +1,17 @@
 /**
- * Event wrapper: `session.message` (`InboundMessage`), `session.button` (`ButtonEvent`), plus the per-bot `onClick`
- * callback registry used by `interaction/button` routing.
+ * Event wrapper: `session.message` (`InboundMessage`), `session.button` (`ButtonEvent`), `session.select`
+ * (`SelectEvent`), plus the per-bot interaction callback registry used by `interaction/button` and
+ * `interaction/select` routing.
  */
 
-import type { ButtonCallback, ButtonEvent } from '@deepseek-ai/satori-element'
+import type { ButtonCallback, ButtonEvent, SelectCallback, SelectEvent } from '@deepseek-ai/satori-element'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineProperty, Time } from '@deepseek-ai/cosmokit'
 import type { Bot } from './bot.ts'
 import type { InboundMessage, Login, MessageRef, UserRef } from './protocol.ts'
 
 export interface SessionEvent {
-  /** Event name: `message`, `message-deleted`, `interaction/button`, `reaction-added`, `login-added`, `internal` … */
+  /** Event name: `message`, `message-deleted`, `interaction/button`, `interaction/select`, `reaction-added`, … */
   type: string
   /** Platform event id (intake dedupe key). */
   id?: string
@@ -19,13 +20,15 @@ export interface SessionEvent {
   message?: InboundMessage
   /** `interaction/button` */
   button?: ButtonEvent
+  /** `interaction/select` */
+  select?: SelectEvent
   /** `message-deleted` */
   deleted?: MessageRef & { operator?: UserRef }
   /** `reaction-added` / `reaction-removed` */
   reaction?: { message: MessageRef; emoji: string; user?: UserRef }
   /** `login-*` */
   login?: Login
-  /** Passive-reply context (also on `message.referrer` / `button.referrer`). */
+  /** Passive-reply context (also on `message.referrer` / `button.referrer` / `select.referrer`). */
   referrer?: unknown
   /** `type === 'internal'`: re-emitted by `bot.dispatch` as `ctx.emit(internal.type, internal.data, bot)`. */
   internal?: { type: string; data: unknown }
@@ -74,8 +77,13 @@ export class Session {
     return this.event.button
   }
 
+  get select() {
+    return this.event.select
+  }
+
   get referrer() {
     return this.event.referrer ?? this.event.message?.referrer ?? this.event.button?.referrer
+      ?? this.event.select?.referrer
   }
 
   /**
@@ -99,9 +107,13 @@ export interface CallbackRegistryOptions {
   now?: () => number
 }
 
-/** In-memory `onClick` registry keyed by button id, with TTL. */
+/** What one registry entry holds, with its expiry. */
+interface Entry<C> { callback: C; until: number }
+
+/** In-memory interaction registry keyed by control id, with TTL. Buttons and selects are separate keyspaces. */
 export class CallbackRegistry {
-  private readonly entries = new Map<string, { callback: ButtonCallback; until: number }>()
+  private readonly buttons = new Map<string, Entry<ButtonCallback>>()
+  private readonly selects = new Map<string, Entry<SelectCallback>>()
 
   constructor(readonly options: CallbackRegistryOptions = {}) {}
 
@@ -113,34 +125,61 @@ export class CallbackRegistry {
     return this.options.ttlMs ?? Time.day
   }
 
-  /** Register (or replace) a callback; returns its disposer. */
-  register(id: string, callback: ButtonCallback, ttlMs?: number): () => void {
+  private put<C>(map: Map<string, Entry<C>>, id: string, callback: C, ttlMs?: number): () => void {
     const entry = { callback, until: this.now + (ttlMs ?? this.ttlMs) }
-    this.entries.set(id, entry)
+    map.set(id, entry)
     return () => {
-      if (this.entries.get(id) === entry) this.entries.delete(id)
+      if (map.get(id) === entry) map.delete(id)
     }
   }
 
-  get(id: string): ButtonCallback | undefined {
-    const entry = this.entries.get(id)
+  /** The live callback of `id`; an expired entry is dropped on the way. */
+  private live<C>(map: Map<string, Entry<C>>, id: string): C | undefined {
+    const entry = map.get(id)
     if (!entry) return
     if (entry.until <= this.now) {
-      this.entries.delete(id)
+      map.delete(id)
       return
     }
     return entry.callback
   }
 
-  /** Invoke the callback of `event.id` if registered and unexpired; resolves whether one ran. */
-  async dispatch(event: ButtonEvent): Promise<boolean> {
-    const callback = this.get(event.id)
+  /** Register (or replace) a button callback; returns its disposer. */
+  registerButton(id: string, callback: ButtonCallback, ttlMs?: number): () => void {
+    return this.put(this.buttons, id, callback, ttlMs)
+  }
+
+  /** Register (or replace) a select callback; returns its disposer. */
+  registerSelect(id: string, callback: SelectCallback, ttlMs?: number): () => void {
+    return this.put(this.selects, id, callback, ttlMs)
+  }
+
+  getButton(id: string): ButtonCallback | undefined {
+    return this.live(this.buttons, id)
+  }
+
+  getSelect(id: string): SelectCallback | undefined {
+    return this.live(this.selects, id)
+  }
+
+  /** Invoke the button callback of `event.id` if registered and unexpired; resolves whether one ran. */
+  async dispatchButton(event: ButtonEvent): Promise<boolean> {
+    const callback = this.getButton(event.id)
+    if (!callback) return false
+    await callback(event)
+    return true
+  }
+
+  /** Invoke the select callback of `event.id` if registered and unexpired; resolves whether one ran. */
+  async dispatchSelect(event: SelectEvent): Promise<boolean> {
+    const callback = this.getSelect(event.id)
     if (!callback) return false
     await callback(event)
     return true
   }
 
   clear(): void {
-    this.entries.clear()
+    this.buttons.clear()
+    this.selects.clear()
   }
 }

@@ -8,10 +8,10 @@
  * Accepted families:
  * - `im.message.receive_v1` and `im.message.recalled_v1`: decoded to sessions by {@link LarkBot.decodeEvent},
  *   each awaited through `bot.receive` (the intake gate) **before** the frame is acknowledged;
- * - `card.action.trigger`: published as an `interaction/button` session and answered **once**, before intake is
- *   awaited to the end — with the toast a listener passes to `button.respond()`, else `{}` when intake settles or
- *   `config.callbackAnswerMs` elapses — because the platform gives a card callback 3 seconds while the intake store
- *   may be slower;
+ * - `card.action.trigger`: published as an `interaction/button` session (a click or a form submit) or an
+ *   `interaction/select` session (a pick in a `<select>`) and answered **once**, before intake is awaited to the end —
+ *   with the toast a listener passes to `respond()`, else `{}` when intake settles or `config.callbackAnswerMs`
+ *   elapses — because the platform gives a card callback 3 seconds while the intake store may be slower;
  * - `im.message.reaction.created_v1` / `deleted_v1`: admitted like messages when they arrive.
  *
  * Any other family, and `card.action.trigger` when `config.callbacks` is off, is acknowledged **without** admission:
@@ -29,13 +29,14 @@
 
 import { type Context } from '@deepseek-ai/cordis'
 import {
-  type ButtonAnswer, type ButtonEvent, type ChatRef, type Session, Status, type UserRef, WsClientBase, type WebSocket,
+  type ButtonAnswer, type ButtonEvent, type ChatRef, type SelectEvent, type Session, Status, type UserRef,
+  WsClientBase, type WebSocket,
 } from '@deepseek-ai/cordis-plugin-im-core'
 import {} from '@deepseek-ai/cordis-plugin-http'
 import pb from 'protobufjs/light.js'
 import {
-  type LarkCardActionEvent, decodeTimestamp, isDict, nonEmpty, parseEventEnvelope, type LarkRawEvent,
-  type LarkReferrer,
+  type LarkCardActionEvent, cardFormValues, cardOptionValues, decodeTimestamp, isDict, nonEmpty,
+  parseEventEnvelope, type LarkRawEvent, type LarkReferrer,
 } from './api/events.ts'
 import { type LarkBot } from './bot.ts'
 import { resolveBaseUrl } from './config.ts'
@@ -108,17 +109,21 @@ function requiredString(value: unknown, field: string): string {
 }
 
 /**
- * Decode one `card.action.trigger` into an `interaction/button` session, if it carries one of this adapter's buttons.
+ * Decode one `card.action.trigger` into an `interaction/button` or `interaction/select` session, if it carries one of
+ * this adapter's controls.
  *
- * An action button sends `value: { v4: { id, data } }`, so an older card (or another application's value) simply
- * carries no click this process can route and yields no session. The chat kind is probed through
- * {@link LarkBot.chatTypeOf} because the callback does not say whether it happened in a group or a direct chat.
+ * A card control sends `value: { v4: { id, data } }`, so an older card (or another application's value) simply
+ * carries no interaction this process can route and yields no session. `action.tag` says which control fired: a
+ * `select_static` / `multi_select_static` reports its picked option(s) as a select event, anything else (a button,
+ * including a form submit) as a button event — and a submit also carries `action.form_value`, the values of the form
+ * the button stands in. The chat kind is probed through {@link LarkBot.chatTypeOf} because the callback does not say
+ * whether it happened in a group or a direct chat.
  *
  * @param bot - receiving bot.
  * @param raw - validated event envelope.
  * @param signal - cancellation of the chat probe.
  * @param now - clock used for `referrer.receivedAt` and the timestamp fallback.
- * @returns the click as a session, or `undefined` when the value is not a v4 button.
+ * @returns the interaction as a session, or `undefined` when the value is not one of this adapter's controls.
  */
 export async function cardActionSession(
   bot: LarkBot,
@@ -148,10 +153,29 @@ export async function cardActionSession(
     chatId,
   }
   if (messageId) referrer.messageId = messageId
+  const tag = nonEmpty(action.tag)
+  if (tag === 'select_static' || tag === 'multi_select_static') {
+    const select: SelectEvent & { user: UserRef; chat: ChatRef } = {
+      bot,
+      id,
+      values: cardOptionValues(action),
+      referrer,
+      time,
+      user,
+      chat,
+    }
+    const data = v4.data
+    if (typeof data === 'string' && data) select.data = data
+    else if (data !== undefined && data !== null) select.data = JSON.stringify(data)
+    if (messageId) select.message = { id: messageId, chat }
+    return bot.session({ type: 'interaction/select', id: raw.header.event_id, timestamp: time, select, referrer })
+  }
   const button: ButtonEvent & { user: UserRef; chat: ChatRef } = { bot, id, referrer, time, user, chat }
   const data = v4.data
   if (typeof data === 'string' && data) button.data = data
   else if (data !== undefined && data !== null) button.data = JSON.stringify(data)
+  const values = cardFormValues(action.form_value)
+  if (values) button.values = values
   if (messageId) button.message = { id: messageId, chat }
   return bot.session({ type: 'interaction/button', id: raw.header.event_id, timestamp: time, button, referrer })
 }
@@ -377,10 +401,10 @@ export class WsClient extends WsClientBase<LarkBot> {
   }
 
   /**
-   * One `card.action.trigger`: decode the click, hand it to intake with {@link ButtonEvent.respond} attached, and
-   * answer the frame once — with the listener's answer when it calls `respond`, else `{}` when intake settles or
-   * `config.callbackAnswerMs` after arrival elapses, whichever comes first. The platform wants the answer within 3 s,
-   * so intake is never awaited past that deadline; a failed intake still rejects and is logged by the caller.
+   * One `card.action.trigger`: decode the interaction, hand it to intake with `respond` attached, and answer the frame
+   * once — with the listener's answer when it calls `respond`, else `{}` when intake settles or `config.callbackAnswerMs`
+   * after arrival elapses, whichever comes first. The platform wants the answer within 3 s, so intake is never awaited
+   * past that deadline; a failed intake still rejects and is logged by the caller.
    *
    * @param socket - socket the frame arrived on.
    * @param frame - the callback frame (answered in place).
@@ -399,10 +423,12 @@ export class WsClient extends WsClientBase<LarkBot> {
     let deferred = false
     try {
       const session = await cardActionSession(this.bot, raw, signal)
-      if (!session?.button) return
-      session.button.respond = async (reply: ButtonAnswer) => { answer(cardAnswerBody(reply)) }
+      if (!session) return
+      const interaction = session.button ?? session.select
+      if (!interaction) return
+      interaction.respond = async (reply: ButtonAnswer) => { answer(cardAnswerBody(reply)) }
       // A listener that answers asynchronously claims the answer; the deadline still bounds it.
-      session.button.defer = () => { deferred = true }
+      interaction.defer = () => { deferred = true }
       await this.bot.receive(session)
     } finally {
       if (!deferred) answer({})

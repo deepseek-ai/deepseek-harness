@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { Http } from '@deepseek-ai/cordis-plugin-http'
-import { Bot, type ButtonEvent, CallbackRegistry, h, type InboundMessage, Satori } from '@deepseek-ai/cordis-plugin-im-core'
+import { Bot, type ButtonEvent, CallbackRegistry, h, type InboundMessage, Satori, type SelectEvent } from '@deepseek-ai/cordis-plugin-im-core'
 import type {} from '@deepseek-ai/cordis-plugin-http'
 
 class TestBot extends Bot<Record<string, never>> {}
@@ -41,6 +41,18 @@ function button(bot: Bot, id: string, referrer: unknown = { msg_id: 'p1' }): But
   return {
     id,
     referrer,
+    time: 1_700_000_000_000,
+    bot,
+    user: { id: 'u1' },
+    chat: { id: 'c1', type: 'group' },
+  }
+}
+
+function selection(bot: Bot, id: string, values: string[]): SelectEvent {
+  return {
+    id,
+    values,
+    referrer: { msg_id: 'p1' },
     time: 1_700_000_000_000,
     bot,
     user: { id: 'u1' },
@@ -101,11 +113,11 @@ describe('CallbackRegistry', () => {
     const { bot } = await setup()
     const calls: string[] = []
     const registry = new CallbackRegistry()
-    registry.register('a', () => { calls.push('a') })
+    registry.registerButton('a', () => { calls.push('a') })
 
-    expect(registry.get('a')).toBeTypeOf('function')
-    expect(await registry.dispatch(button(bot, 'a'))).toBe(true)
-    expect(await registry.dispatch(button(bot, 'other'))).toBe(false)
+    expect(registry.getButton('a')).toBeTypeOf('function')
+    expect(await registry.dispatchButton(button(bot, 'a'))).toBe(true)
+    expect(await registry.dispatchButton(button(bot, 'other'))).toBe(false)
     expect(calls).toEqual(['a'])
   })
 
@@ -113,11 +125,11 @@ describe('CallbackRegistry', () => {
     const { bot } = await setup()
     const calls: string[] = []
     const registry = new CallbackRegistry()
-    const disposeFirst = registry.register('a', () => { calls.push('first') })
-    registry.register('a', () => { calls.push('second') })
+    const disposeFirst = registry.registerButton('a', () => { calls.push('first') })
+    registry.registerButton('a', () => { calls.push('second') })
 
     disposeFirst()
-    expect(await registry.dispatch(button(bot, 'a'))).toBe(true)
+    expect(await registry.dispatchButton(button(bot, 'a'))).toBe(true)
     expect(calls).toEqual(['second'])
   })
 
@@ -125,15 +137,15 @@ describe('CallbackRegistry', () => {
     const { bot } = await setup()
     let now = 1_000
     const registry = new CallbackRegistry({ now: () => now, ttlMs: 500 })
-    registry.register('a', () => { /* only reachable while unexpired */ })
+    registry.registerButton('a', () => { /* only reachable while unexpired */ })
 
     now = 1_499
-    expect(registry.get('a')).toBeTypeOf('function')
-    expect(await registry.dispatch(button(bot, 'a'))).toBe(true)
+    expect(registry.getButton('a')).toBeTypeOf('function')
+    expect(await registry.dispatchButton(button(bot, 'a'))).toBe(true)
 
     now = 1_500
-    expect(registry.get('a')).toBeUndefined()
-    expect(await registry.dispatch(button(bot, 'a'))).toBe(false)
+    expect(registry.getButton('a')).toBeUndefined()
+    expect(await registry.dispatchButton(button(bot, 'a'))).toBe(false)
   })
 
   it('honours a per-registration TTL and clear()', async () => {
@@ -141,23 +153,44 @@ describe('CallbackRegistry', () => {
     let now = 1_000
     const calls: string[] = []
     const registry = new CallbackRegistry({ now: () => now, ttlMs: 10_000 })
-    registry.register('short', () => { calls.push('short') }, 100)
-    registry.register('long', () => { calls.push('long') })
+    registry.registerButton('short', () => { calls.push('short') }, 100)
+    registry.registerButton('long', () => { calls.push('long') })
 
     now = 1_200
-    expect(await registry.dispatch(button(bot, 'short'))).toBe(false)
-    expect(await registry.dispatch(button(bot, 'long'))).toBe(true)
+    expect(await registry.dispatchButton(button(bot, 'short'))).toBe(false)
+    expect(await registry.dispatchButton(button(bot, 'long'))).toBe(true)
 
     registry.clear()
-    expect(await registry.dispatch(button(bot, 'long'))).toBe(false)
+    expect(await registry.dispatchButton(button(bot, 'long'))).toBe(false)
     expect(calls).toEqual(['long'])
   })
 
   it('lets a callback failure reach the caller', async () => {
     const { bot } = await setup()
     const registry = new CallbackRegistry()
-    registry.register('a', () => { throw new Error('handler failed') })
-    await expect(registry.dispatch(button(bot, 'a'))).rejects.toThrow('handler failed')
+    registry.registerButton('a', () => { throw new Error('handler failed') })
+    await expect(registry.dispatchButton(button(bot, 'a'))).rejects.toThrow('handler failed')
+  })
+
+  it('keeps button and select callbacks apart by kind', async () => {
+    const { bot } = await setup()
+    const calls: string[] = []
+    const registry = new CallbackRegistry()
+    registry.registerButton('shared', () => { calls.push('button') })
+    registry.registerSelect('shared', () => { calls.push('select') })
+
+    expect(await registry.dispatchButton(button(bot, 'shared'))).toBe(true)
+    expect(await registry.dispatchSelect(selection(bot, 'shared', ['v']))).toBe(true)
+    expect(calls).toEqual(['button', 'select'])
+  })
+
+  it('never routes a pick to a button callback of the same id', async () => {
+    const { bot } = await setup()
+    const registry = new CallbackRegistry()
+    registry.registerButton('shared', () => { throw new Error('a pick must not reach a button callback') })
+    expect(await registry.dispatchSelect(selection(bot, 'shared', ['v']))).toBe(false)
+    expect(registry.getSelect('shared')).toBeUndefined()
+    expect(registry.getButton('shared')).toBeTypeOf('function')
   })
 })
 
@@ -165,7 +198,7 @@ describe('bot.callbacks routing', () => {
   it('dispatches interaction/button events of its own bot to the registered onClick', async () => {
     const { bot } = await setup()
     const calls: string[] = []
-    bot.callbacks.register('stop', (event) => { calls.push(event.id) })
+    bot.callbacks.registerButton('stop', (event) => { calls.push(event.id) })
 
     bot.dispatch(bot.session({ type: 'interaction/button', button: button(bot, 'stop') }))
     await tick()
@@ -180,7 +213,7 @@ describe('bot.callbacks routing', () => {
     const { ctx, bot } = await setup()
     const other = new TestBot(ctx, {}, { id: 'test:other', platform: 'test' })
     const calls: string[] = []
-    bot.callbacks.register('stop', () => { calls.push('stop') })
+    bot.callbacks.registerButton('stop', () => { calls.push('stop') })
 
     other.dispatch(other.session({ type: 'interaction/button', button: button(other, 'stop') }))
     other.dispatch(other.session({ type: 'message', message: inbound() }))
@@ -190,10 +223,24 @@ describe('bot.callbacks routing', () => {
 
   it('never throws into the transport when an onClick fails', async () => {
     const { bot } = await setup()
-    bot.callbacks.register('boom', () => { throw new Error('boom') })
+    bot.callbacks.registerButton('boom', () => { throw new Error('boom') })
     const session = bot.session({ type: 'interaction/button', button: button(bot, 'boom') })
     expect(() => bot.dispatch(session)).not.toThrow()
     await tick()
+  })
+
+  it('dispatches interaction/select events of its own bot to the registered onSelect', async () => {
+    const { bot } = await setup()
+    const picked: string[][] = []
+    bot.callbacks.registerSelect('sel', (event) => { picked.push(event.values) })
+
+    bot.dispatch(bot.session({ type: 'interaction/select', select: selection(bot, 'sel', ['a', 'b']) }))
+    await tick()
+    expect(picked).toEqual([['a', 'b']])
+
+    bot.dispatch(bot.session({ type: 'interaction/select', select: selection(bot, 'unknown', ['a']) }))
+    await tick()
+    expect(picked).toEqual([['a', 'b']])
   })
 })
 

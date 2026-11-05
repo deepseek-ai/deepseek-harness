@@ -65,6 +65,20 @@ describe('toText', () => {
     expect(toText(h('raw', { platform: 'lark', type: 'sticker' }, '[sticker]'))).toBe('[sticker]')
   })
 
+  it('projects form controls as the labels and options a reader would have used', () => {
+    const form = h('form', { name: 'order' },
+      h('input', { name: 'title', label: 'Title' }),
+      h('input', { name: 'notes', placeholder: 'Notes' }),
+      h('input', { name: 'agree', type: 'checkbox', label: 'I agree', value: true }),
+      h('input', { name: 'plain', type: 'checkbox', label: 'Unchecked' }),
+      h('select', { id: 'sel', placeholder: 'Size' },
+        h('option', { value: 's' }, 'Small'), h('option', { value: 'l' }, 'Large')),
+      h('select', { id: 'empty' }, h('option', { value: 'only' }, 'Only')),
+      h('button', { type: 'submit', id: 'go' }, 'Send'))
+    expect(toText(normalize(form))).toBe(
+      '[Title]\n[Notes]\n☑ I agree\n☐ Unchecked\n[Size: Small / Large]\n[选择: Only]\n[Send]')
+  })
+
   it('projects markdown as its source and tolerates unknown or reserved tags', () => {
     expect(toText(h.markdown('a\n\n**b**'))).toBe('a\n\n**b**')
     expect(toText(parse('x<sup>2</sup> <lark:card>c</lark:card>'))).toBe('x2 c')

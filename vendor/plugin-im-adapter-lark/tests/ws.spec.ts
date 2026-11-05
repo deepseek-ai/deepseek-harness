@@ -574,4 +574,62 @@ describe('cardActionSession', () => {
     expect(noChat).toBeUndefined()
     await mounted.bot.disconnect()
   })
+
+  it('decodes a select pick as an interaction/select session', async () => {
+    const mounted = await mount()
+    await vi.waitFor(() => { expect(mounted.bot.adapter).toBeInstanceOf(WsClient) })
+    const single = await cardActionSession(mounted.bot, parseEventEnvelope(envelope('card.action.trigger', {
+      operator: { open_id: 'ou_user' },
+      action: { tag: 'select_static', value: { v4: { id: 'sel-size', data: 'step-2' } }, option: 'l' },
+      context: { open_chat_id: 'oc_chat', open_message_id: 'om_card' },
+    })), undefined, 1_700_000_000_000)
+    expect(single?.type).toBe('interaction/select')
+    expect(single?.button).toBeUndefined()
+    expect(single?.select).toMatchObject({
+      id: 'sel-size',
+      values: ['l'],
+      data: 'step-2',
+      user: { id: 'ou_user' },
+      chat: { id: 'oc_chat', type: 'group' },
+      message: { id: 'om_card' },
+    })
+    const multiple = await cardActionSession(mounted.bot, parseEventEnvelope(envelope('card.action.trigger', {
+      operator: { open_id: 'ou_user' },
+      action: { tag: 'multi_select_static', value: { v4: { id: 'sel-tags' } }, options: ['a', 'b'] },
+      context: { open_chat_id: 'oc_chat' },
+    })))
+    expect(multiple?.select?.values).toEqual(['a', 'b'])
+    // A pick the platform reports without a value carries an empty selection instead of failing.
+    const empty = await cardActionSession(mounted.bot, parseEventEnvelope(envelope('card.action.trigger', {
+      operator: { open_id: 'ou_user' },
+      action: { tag: 'select_static', value: { v4: { id: 'sel-size' } } },
+      context: { open_chat_id: 'oc_chat' },
+    })))
+    expect(empty?.select?.values).toEqual([])
+    await mounted.bot.disconnect()
+  })
+
+  it('carries the submitted form values on the button event of a submit', async () => {
+    const mounted = await mount()
+    await vi.waitFor(() => { expect(mounted.bot.adapter).toBeInstanceOf(WsClient) })
+    const session = await cardActionSession(mounted.bot, parseEventEnvelope(envelope('card.action.trigger', {
+      operator: { open_id: 'ou_user' },
+      action: {
+        tag: 'button',
+        value: { v4: { id: 'btn-submit' } },
+        form_value: { title: 'Weekly report', agree: true, tags: ['a', 'b'], count: 3 },
+      },
+      context: { open_chat_id: 'oc_chat' },
+    })))
+    expect(session?.type).toBe('interaction/button')
+    expect(session?.button?.values).toEqual({ title: 'Weekly report', agree: true, tags: ['a', 'b'], count: '3' })
+    // A click that submitted nothing has no `values` at all.
+    const plain = await cardActionSession(mounted.bot, parseEventEnvelope(envelope('card.action.trigger', {
+      operator: { open_id: 'ou_user' },
+      action: { tag: 'button', value: { v4: { id: 'btn-1' } } },
+      context: { open_chat_id: 'oc_chat' },
+    })))
+    expect(plain?.button?.values).toBeUndefined()
+    await mounted.bot.disconnect()
+  })
 })

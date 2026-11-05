@@ -12,9 +12,9 @@
  *    (`normalizeChildren`), recorded as `RenderReport.degraded`, and rendered again. Each fallback application is
  *    one *step*; more than {@link MAX_FALLBACK_STEPS} nested steps throw (a fallback loop).
  * 4. Structural containers whose children are fixed by the content model (`ul`/`ol` → `li`, `table` → `tr` →
- *    `th`/`td`, `details` → `summary`, `button-group` → `button`) cannot host a lowered child (a `<p>` is not a
- *    valid child of `<ul>`), so when such a child is not native — and its missing variants are not tag-preserving
- *    (`preservingVariants`) — the container falls back as a whole.
+ *    `th`/`td`, `details` → `summary`, `button-group` → `button`, `select` → `option`) cannot host a lowered child (a
+ *    `<p>` is not a valid child of `<ul>`), so when such a child is not native — and its missing variants are not
+ *    tag-preserving (`preservingVariants`) — the container falls back as a whole.
  * 5. A `<fallback>` renders its first candidate whose every element, at any depth, is native (rule 2, with a nested
  *    `<fallback>` counting as native when one of its candidates is), else its last candidate with the usual lowering.
  *    A candidate other than the first is recorded in `RenderReport.fallbacks`. Candidates stand in the place of the
@@ -35,13 +35,13 @@
  */
 
 import {
-  type ButtonCallback, type Element, type ElementKey, type Fragment, normalizeChildren, type Tag, toText, variantKey,
-  variantsOf, type VariantOf,
+  type ButtonCallback, type Element, type ElementKey, type Fragment, normalizeChildren, type SelectCallback, type Tag,
+  toText, variantKey, variantsOf, type VariantOf,
 } from '@deepseek-ai/satori-element'
 import type { Bot } from './bot.ts'
 import type { ElementContributions } from './contributions.ts'
 import { defaultFallback, type Fallback, preservingVariants, type RenderReport } from './fallback.ts'
-import type { ElementHandler, HandlerOptions, LimitKey, Mode, ModeTypes } from './mode.ts'
+import type { ElementHandler, HandlerOptions, LimitKey, Mode, ModeTypes, InteractionAction } from './mode.ts'
 import type { Target } from './protocol.ts'
 import { type ResourceKind, type ResourceMeta, ResourceRef } from './resource.ts'
 import type { StreamPhase } from './stream.ts'
@@ -194,6 +194,7 @@ const STRUCTURAL: Partial<Record<Tag, readonly Tag[]>> = {
   'tr': ['th', 'td'],
   'details': ['summary'],
   'button-group': ['button'],
+  'select': ['option'],
 }
 
 const ENGINE = Symbol('plugin-im-core.render-engine')
@@ -303,7 +304,7 @@ class Context<T extends ModeTypes> implements RenderContext<T> {
  */
 export class RenderEngine<T extends ModeTypes> {
   private readonly frames = new WeakMap<Element, Frame>()
-  private readonly collected = new Map<string, ButtonCallback>()
+  private readonly collected = new Map<string, InteractionAction>()
 
   constructor(
     readonly registry: ElementRegistry<T, any>,
@@ -329,9 +330,9 @@ export class RenderEngine<T extends ModeTypes> {
     return variant === undefined && this.entry(tag) !== undefined
   }
 
-  /** `onClick` callbacks of natively rendered `button[type=action]` elements, first registration per id wins. */
-  actions(): { id: string; callback: ButtonCallback }[] {
-    return [...this.collected].map(([id, callback]) => ({ id, callback }))
+  /** Interaction callbacks of natively rendered controls, first registration per id wins. */
+  actions(): InteractionAction[] {
+    return [...this.collected.values()]
   }
 
   /**
@@ -457,8 +458,12 @@ export class RenderEngine<T extends ModeTypes> {
     if (isThenable(out)) {
       throw new TypeError(`handler of <${el.type}> in mode "${this.base.mode}" returned a promise; transform is synchronous (do I/O in prepare)`)
     }
-    if (el.type === 'button' && el.attrs.type === 'action' && typeof el.attrs.onClick === 'function' && !this.collected.has(el.attrs.id)) {
-      this.collected.set(el.attrs.id, el.attrs.onClick)
+    if (el.type === 'button' && (el.attrs.type === 'action' || el.attrs.type === 'submit')) {
+      const { id, onClick } = el.attrs
+      if (onClick && !this.collected.has(id)) this.collected.set(id, { kind: 'button', id, callback: onClick })
+    } else if (el.type === 'select' && el.attrs.onSelect && !this.collected.has(el.attrs.id)) {
+      const { id, onSelect } = el.attrs
+      this.collected.set(id, { kind: 'select', id, callback: onSelect })
     }
     if (out === undefined) return []
     return Array.isArray(out) ? [...out] : [out as T['node']]

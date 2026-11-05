@@ -217,6 +217,57 @@ describe('normalize: markdown', () => {
   })
 })
 
+describe('normalize: form controls', () => {
+  it('keeps a form and its controls in document order', () => {
+    const [form] = normalize(parse(
+      '<form name="order"><input name="title" label="Title"/>interstitial'
+      + '<select id="sel" name="size"><option value="s">Small</option></select>'
+      + '<button type="submit" id="go">Send</button></form>')).children
+    expect(form).toMatchObject({ type: 'form', attrs: { name: 'order' } })
+    expect(form!.children.map(child => child.type)).toEqual(['input', 'p', 'select', 'button'])
+    expect(form!.children[2]!.children.map(child => child.type)).toEqual(['option'])
+  })
+
+  it('wraps controls at flow level and rejects them inside phrasing content', () => {
+    expect(xml([h('p', 'before'), h('input', { name: 'a' })])).toBe('<message><p>before</p><input name="a"/></message>')
+    expect(errorOf(() => normalize(h('p', 'x', h('input', { name: 'a' })))).message)
+      .toMatch(/block <input> inside inline content/)
+    expect(errorOf(() => normalize(h('p', 'x', h('select', { id: 's' })))).message)
+      .toMatch(/block <select> inside inline content/)
+  })
+
+  it('validates the form key, the control name and each option value', () => {
+    expect(errorOf(() => normalize(parse('<form><input name="a"/></form>'))).message)
+      .toMatch(/<form> requires a non-empty "name"/)
+    expect(errorOf(() => normalize(parse('<input/>'))).message).toMatch(/<input> requires a non-empty "name"/)
+    expect(errorOf(() => normalize(parse('<select/>'))).message).toMatch(/<select> requires a non-empty "id"/)
+    expect(errorOf(() => normalize(parse('<select id="s"><option>A</option></select>'))).message)
+      .toMatch(/<option> requires a non-empty "value"/)
+    expect(errorOf(() => normalize(parse('<select id="s"><p>x</p></select>'))).message)
+      .toMatch(/<select> only contains <option>, got <p>/)
+    expect(errorOf(() => normalize(parse('<option value="a">A</option>'))).message)
+      .toMatch(/<option> is only allowed directly inside <select>/)
+  })
+
+  it('validates the input mode, its bounds and the value type each mode takes', () => {
+    expect(errorOf(() => normalize(parse('<input name="a" type="date"/>'))).message)
+      .toMatch(/<input> type must be text \| multiline \| password \| checkbox/)
+    expect(errorOf(() => normalize(parse('<input name="a" maxLength="0"/>'))).message).toMatch(/positive integer/)
+    expect(errorOf(() => normalize(h('input', { name: 'a', value: true }))).message).toMatch(/value must be a string/)
+    expect(errorOf(() => normalize(parse('<input name="a" type="checkbox" value="yes"/>'))).message)
+      .toMatch(/value must be a boolean/)
+    expect(normalize(h('input', { name: 'a', type: 'checkbox', value: true })).children[0]!.attrs)
+      .toMatchObject({ name: 'a', type: 'checkbox', value: true })
+  })
+
+  it('validates the arity of a select initial value', () => {
+    expect(normalize(parse('<select id="s" value="a"/>')).children[0]).toMatchObject({ type: 'select', attrs: { value: 'a' } })
+    expect(errorOf(() => normalize(parse('<select id="s" multiple="true" value="a"/>'))).message)
+      .toMatch(/value must be string\[\]/)
+    expect(normalize(h('select', { id: 's', multiple: true, value: ['a', 'b'] })).children).toHaveLength(1)
+  })
+})
+
 describe('normalize: plain element objects', () => {
   it('accepts { type, attrs, children } objects (e.g. deserialized content)', () => {
     const plain = { type: 'p', attrs: {}, children: [{ type: 'text', attrs: { content: 'x' }, children: [] }] }

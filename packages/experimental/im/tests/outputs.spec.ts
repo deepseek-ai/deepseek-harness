@@ -16,7 +16,7 @@ import { ImOutputRegistry, NO_OUTPUT, STOP_BUTTON_PREFIX, type ImOutputDeps } fr
 import { ImSender } from '../src/send.ts'
 import { ImStore } from '../src/store.ts'
 import {
-  activity, BOT, chatOf, click, flush, inbound, inboundDraft, noClick, OutputsHarness, record,
+  activity, BOT, chatOf, click, flush, inbound, inboundDraft, noClick, OutputsHarness, pick, record,
 } from './support/outputs-harness.ts'
 
 const open: OutputsHarness[] = []
@@ -343,6 +343,53 @@ describe('ImOutputRegistry buttons', () => {
     harness.stopFails = true
     await harness.registry.button(click(`${STOP_BUTTON_PREFIX}${hosted.sessionId}`))
     expect(harness.stopped).toEqual([hosted.sessionId])
+  })
+})
+
+describe('ImOutputRegistry selects', () => {
+  it('re-emits a pick of an admitted chat with its message and session attribution', async () => {
+    const harness = booted()
+    const hosted = harness.host({ output: 'probe' })
+    const message = inbound()
+    harness.messages.set(message.key, message)
+    harness.sender.owners.set(message.key, hosted.sessionId)
+
+    // The registry subscribes `interaction/select` itself.
+    harness.ctx.emit('interaction/select', pick('sel-size', ['l'], { message: 'm1', data: 'step-2' }))
+    await flush()
+    expect(harness.selects).toHaveLength(1)
+    expect(harness.selects[0]).toMatchObject({
+      id: 'sel-size',
+      values: ['l'],
+      data: 'step-2',
+      chat: chatOf(),
+      user: { id: 'user-1' },
+      bot: BOT,
+      message,
+      session: hosted.sessionId,
+      time: 1000,
+    })
+    expect(harness.buttons).toEqual([])
+  })
+
+  it('ignores a pick from a sender the admitting source does not allow, and one in a foreign chat', async () => {
+    const harness = booted()
+    harness.host({ output: 'probe' })
+    harness.sources.set('team', { id: 'team', bot: BOT.id, writable: true, store: 'all', users: ['another-user'] })
+    await harness.registry.select(pick('sel-size', ['l']))
+    expect(harness.selects).toEqual([])
+
+    harness.sources.set('team', { id: 'team', bot: BOT.id, writable: true, store: 'all', users: ['user-1'] })
+    await harness.registry.select(pick('sel-size', ['l'], { chat: 'elsewhere' }))
+    expect(harness.selects).toEqual([])
+
+    // An envelope without a select is not a pick.
+    harness.ctx.emit('interaction/select', noClick())
+    await flush()
+    expect(harness.selects).toEqual([])
+
+    await harness.registry.select(pick('sel-size', ['l']))
+    expect(harness.selects).toHaveLength(1)
   })
 })
 

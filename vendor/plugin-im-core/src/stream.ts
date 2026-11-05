@@ -27,11 +27,11 @@
  *   published state after every successful publication.
  */
 
-import type { ButtonCallback, Element, Fragment } from '@deepseek-ai/satori-element'
+import type { Element, Fragment } from '@deepseek-ai/satori-element'
 import type { Bot, MessageHandle, SendContext, SendOptions, SendResult, SentPart } from './bot.ts'
 import { type LimitViolation, PlatformError, StreamLimitError } from './errors.ts'
 import type { RenderReport } from './fallback.ts'
-import type { Mode, ModeTypes, TransformResult } from './mode.ts'
+import type { InteractionAction, Mode, ModeTypes, TransformResult } from './mode.ts'
 import type { Target } from './protocol.ts'
 import type { Prepared } from './resource.ts'
 
@@ -309,7 +309,7 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
   private lastFinish = 0
   private closing: Promise<void> | undefined
   private readonly sleepers = new Set<{ wake: () => void; interruptible: boolean }>()
-  private readonly registered = new Map<string, ButtonCallback>()
+  private readonly registered = new Map<string, InteractionAction['callback']>()
 
   constructor(private readonly host: StreamHost<T>, private readonly options: StreamOptions) {
     this.driver = host.driver

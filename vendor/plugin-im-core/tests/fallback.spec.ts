@@ -192,6 +192,26 @@ describe('core fallback table', () => {
     expect(p!.children.map(node => node.type)).toEqual(['button', 'text', 'button'])
   })
 
+  it('form controls become labelled text and report the lost interaction', () => {
+    const report = createRenderReport()
+    expect(xml(lower(h('input', { name: 'title', label: 'Title' }), { report }))).toBe('<p>[Title]</p>')
+    expect(xml(lower(h('input', { name: 'notes', placeholder: 'Notes' }), { report }))).toBe('<p>[Notes]</p>')
+    expect(xml(lower(h('input', { name: 'agree', type: 'checkbox', label: 'I agree', value: true }), { report })))
+      .toBe('<p>☑ I agree</p>')
+    expect(xml(lower(h('select', { id: 'sel', placeholder: 'Size' }, h('option', { value: 's' }, 'Small')), { report })))
+      .toBe('<p>[Size: Small]</p>')
+    expect(report.dropped.map(entry => entry.what)).toEqual(['input:title', 'input:notes', 'input:agree', 'select:sel'])
+    expect(report.dropped.every(entry => entry.reason === INTERACTION_DROPPED)).toBe(true)
+    expect(report.summary()).toContain('按钮不可点击')
+  })
+
+  it('a form keeps its children; a lost submit keeps its click', () => {
+    expect(xml(lower(h('form', { name: 'order' }, h('p', 'body')), {}))).toBe('<p>body</p>')
+    const [submit] = lower(h('button', { type: 'submit', id: 'go' }, 'Send'), { variant: 'submit' })
+    expect(submit).toMatchObject({ type: 'button', attrs: { type: 'action', id: 'go' } })
+    expect(preservingVariants.has('button.submit')).toBe(true)
+  })
+
   it('markdown (its literal source without the markdown service), forward and raw', () => {
     const md = defaultFallback('markdown')!(h.markdown('**x**'), { renders: rendersWith(), ancestors: [], report: createRenderReport() })
     expect(xml(normalizeChildren(md as never, 'message'))).toBe('<p>**x**</p>')

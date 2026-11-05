@@ -67,6 +67,22 @@ function buttonText(node: Node) {
   return `[${text}]`
 }
 
+/** A control's text: a checkbox keeps its box and label, every other mode names what would be entered. */
+function inputText(node: Node) {
+  const { label, name, type, placeholder, value } = node.attrs
+  if (type === 'checkbox') return `${value ? '☑' : '☐'} ${label ?? name ?? ''}`.trimEnd()
+  return `[${label ?? placeholder ?? name ?? ''}]`
+}
+
+/** A select lists what could have been chosen, so the reader sees the options a click would have offered. */
+function selectText(node: Node) {
+  const head = node.attrs.placeholder ?? '选择'
+  const labels = (node.children as Node[])
+    .filter(child => child.type === 'option')
+    .map(option => children(option) || String(option.attrs.value ?? ''))
+  return labels.length ? `[${head}: ${labels.join(' / ')}]` : `[${head}]`
+}
+
 /** The last candidate of a `<fallback>`: the plainest alternative, which a text projection stands for. */
 function lastCandidate(node: Node): Node[] {
   const last = (node.children as Node[]).at(-1)
@@ -103,6 +119,9 @@ function blockText(node: Node): string | undefined {
     case 'td': return flow(kids)
     case 'details': return flow(kids)
     case 'button-group': return kids.map(child => child.type === 'button' ? buttonText(child) : inlineText(child)).join(' ')
+    case 'input': return inputText(node)
+    case 'select': return selectText(node)
+    case 'option': return children(node) || String(attrs.value ?? '')
     case 'markdown': return String(attrs.content ?? children(node))
     default: {
       if (!isTag(node.type)) return children(node)

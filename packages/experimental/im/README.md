@@ -108,7 +108,7 @@ A `forward` element renders as one line: `[合并转发 #id]` while nothing has 
 
 For each turn of a hosted session, the activity tracker builds an `ImActivity` snapshot containing the turn number, status (`running`, `done`, `cancelled`, `error`), trigger message, and ordered `segments` (accumulated assistant `text`, `reasoning`, and `tool` calls with bounded argument and result previews). Every update emits `im/activity` with the change kind (`start`, `delta`, `tool`, `end`).
 
-If a session's `output` names a renderer a mounted plugin registered, `ctx.im.outputs` calls `renderer.begin(activity, io)` on `start`, `update(activity, change)` on `delta` and `tool`, and `end(activity)` on `end`. The target chat is the trigger message's chat when the session has a writable binding for it, or the session's writable `home` binding otherwise; if neither is writable, nothing is rendered. When `output` is `'none'` (the default), no renderer runs and the agent publishes only when it calls `im_send`, `im_reply`, or `im_send_file`. `ctx.im.outputs` also re-emits button clicks in admitted chats as `im/button` and routes `dsh:stop:<sessionId>` clicks to `sessions.stop`.
+If a session's `output` names a renderer a mounted plugin registered, `ctx.im.outputs` calls `renderer.begin(activity, io)` on `start`, `update(activity, change)` on `delta` and `tool`, and `end(activity)` on `end`. The target chat is the trigger message's chat when the session has a writable binding for it, or the session's writable `home` binding otherwise; if neither is writable, nothing is rendered. When `output` is `'none'` (the default), no renderer runs and the agent publishes only when it calls `im_send`, `im_reply`, or `im_send_file`. `ctx.im.outputs` also re-emits button clicks in admitted chats as `im/button`, option picks in a `<select>` as `im/select`, and routes `dsh:stop:<sessionId>` clicks to `sessions.stop`.
 
 ### The IM tools
 
@@ -151,7 +151,7 @@ Below `@deepseek-ai/dsh-experimental-im`, `@deepseek-ai/cordis-plugin-im-core` a
 | [`hosting.ts`](src/hosting.ts) | Live `Agent` creation, resumption, disposal, and deterministic `sessionId` derivation |
 | [`send.ts`](src/send.ts) | Outbound `send`/`stream`, `im_receipts` domain, write-grant checks, `<quote>` injection, and own-message attribution |
 | [`format.ts`](src/format.ts) / [`media.ts`](src/media.ts) | `xml` and `line` transcript formatting, stable `#<seq>.<n>` media labels, and bounded download into attachments — normalized for an image, verbatim for every other kind |
-| [`activity.ts`](src/activity.ts) / [`outputs.ts`](src/outputs.ts) | Turn activity tracking (`im/activity`), output renderer lifecycle driver, and `im/button` / stop-button routing |
+| [`activity.ts`](src/activity.ts) / [`outputs.ts`](src/outputs.ts) | Turn activity tracking (`im/activity`), output renderer lifecycle driver, and `im/button` / `im/select` / stop-button routing |
 | [`tools.ts`](src/tools.ts) / [`schema.ts`](src/schema.ts) | `im_*` tool definitions, parameter/output schemas, grant resolution, and `tool:im` system prompt section |
 | [`state.ts`](src/state.ts) | Zod schemas and record types for the `im_messages` storage domain |
 

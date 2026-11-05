@@ -10,7 +10,7 @@ import type {
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import {
   ImChatKey, ImMessageKey, ImSourceId,
-  type ImActivity, type ImButtonEvent, type ImChat, type ImMessage, type ImSendOptions,
+  type ImActivity, type ImButtonEvent, type ImChat, type ImMessage, type ImSelectEvent, type ImSendOptions,
   type ImSendResult, type ImSessionRecord, type ImSourceConfig,
 } from '../../src/api.ts'
 import { ImOutputRegistry, type ImOutputDeps } from '../../src/outputs.ts'
@@ -136,6 +136,27 @@ export function noClick(): Session {
   return { bot: BOT, timestamp: 1000 } as Session
 }
 
+/** One `interaction/select` session of the fake bot. */
+export function pick(
+  id: string,
+  values: string[],
+  patch: { message?: string; data?: string; chat?: string } = {},
+): Session {
+  const chat = chatOf(patch.chat).ref
+  const select = {
+    bot: BOT,
+    id,
+    values,
+    referrer: {},
+    time: 1000,
+    user: { id: 'user-1' },
+    chat,
+    ...patch.message === undefined ? {} : { message: { id: patch.message, chat } },
+    ...patch.data === undefined ? {} : { data: patch.data },
+  }
+  return { select, bot: BOT, timestamp: 1000 } as Session
+}
+
 /** Everything one registry test needs. */
 export class OutputsHarness {
   readonly ctx = new Context()
@@ -143,6 +164,8 @@ export class OutputsHarness {
   readonly sender = new FakeSender()
   /** Every `im/button` emission. */
   readonly buttons: ImButtonEvent[] = []
+  /** Every `im/select` emission. */
+  readonly selects: ImSelectEvent[] = []
   /** Chats `chat()` knows. */
   readonly chats = new Map<ImChatKey, ImChat>()
   /** Stored messages by key (`history.get`). */
@@ -173,6 +196,7 @@ export class OutputsHarness {
     } satisfies ImOutputDeps['im']
     this.registry = new ImOutputRegistry(this.ctx, { im, sender: this.sender })
     this.ctx.on('im/button', (event) => { this.buttons.push(event) })
+    this.ctx.on('im/select', (event) => { this.selects.push(event) })
     this.registry.start()
   }
 

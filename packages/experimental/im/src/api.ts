@@ -6,7 +6,7 @@
 import { brandString, type Branded } from '@deepseek-ai/dsh-brand'
 import type {
   Bot, ButtonEvent, ChatRef, Element, Fragment, InboundMessage, MessageHandle, MessageStream,
-  RenderReport, SendOptions, StreamOptions, UserRef,
+  RenderReport, SelectEvent, SendOptions, StreamOptions, UserRef,
 } from '@deepseek-ai/cordis-plugin-im-core'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
@@ -142,6 +142,8 @@ export interface ImButtonEvent {
   /** `button.id` as rendered, e.g. `dsh:stop:<sessionId>`. */
   readonly id: string
   readonly data?: unknown
+  /** Values of the `<form>` a submit button stood in, keyed by control name. */
+  readonly values?: ButtonEvent['values']
   readonly chat: ImChat
   readonly user: UserRef
   readonly bot: Bot
@@ -152,6 +154,25 @@ export interface ImButtonEvent {
   readonly time: number
   /** The raw core interaction event. */
   readonly raw: ButtonEvent
+}
+
+/** A `<select>` pick in an admitted chat, re-emitted by the core as `im/select`. */
+export interface ImSelectEvent {
+  /** `select.id` as rendered. */
+  readonly id: string
+  /** Chosen option values, one for a single select, in option order for a multiple one. */
+  readonly values: string[]
+  readonly data?: unknown
+  readonly chat: ImChat
+  readonly user: UserRef
+  readonly bot: Bot
+  /** The own stored message that carried the control, when known. */
+  readonly message?: ImMessage
+  /** The session whose send/output produced that message, when known. */
+  readonly session?: SessionId
+  readonly time: number
+  /** The raw core interaction event. */
+  readonly raw: SelectEvent
 }
 
 declare module '@deepseek-ai/cordis' {
@@ -175,6 +196,12 @@ declare module '@deepseek-ai/cordis' {
      * @mode emit
      */
     'im/button'(event: ImButtonEvent): void
+    /**
+     * A `<select>` of a published message was used, with the chat, sender, picked values and producing session.
+     * @param event - the pick, its message and the raw platform interaction.
+     * @mode emit
+     */
+    'im/select'(event: ImSelectEvent): void
     /**
      * A hosted session's turn activity changed; output renderers subscribe to redraw their message.
      * @param activity - the whole activity of the turn, with every segment so far.

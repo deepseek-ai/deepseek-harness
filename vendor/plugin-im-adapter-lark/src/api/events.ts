@@ -8,9 +8,10 @@
  *
  * ## Referrer contract
  *
- * `InboundMessage.referrer` and `ButtonEvent.referrer` are a {@link LarkReferrer}: everything a reply needs without
- * re-reading the event — the chat and its kind, the message the reply answers or the card that was clicked, the
- * thread the message belongs to, and when this process saw the event. {@link readLarkReferrer} is the narrowing guard
+ * `InboundMessage.referrer`, `ButtonEvent.referrer` and `SelectEvent.referrer` are a {@link LarkReferrer}: everything
+ * a reply needs without re-reading the event — the chat and its kind, the message the reply answers or the card that
+ * was interacted with, the thread the message belongs to, and when this process saw the event.
+ * {@link readLarkReferrer} is the narrowing guard for a `Target.referrer: unknown`.
  * for a `Target.referrer: unknown`.
  *
  * @module @deepseek-ai/cordis-plugin-im-adapter-lark/api/events
@@ -152,6 +153,37 @@ export interface LarkEventMap {
   'im.message.reaction.created_v1': LarkReactionChangedEvent
   'im.message.reaction.deleted_v1': LarkReactionChangedEvent
   'card.action.trigger': LarkCardActionEvent
+}
+
+/**
+ * What a submit callback reports for one `<form>`: each control's value keyed by its component `name`. A checkbox
+ * reports a boolean, a multiple select an array, every other control a string.
+ *
+ * @param value - the wire `action.form_value`.
+ * @returns the values, or `undefined` when the event carries none.
+ */
+export function cardFormValues(value: unknown): Record<string, string | string[] | boolean> | undefined {
+  if (!isDict(value)) return
+  const out: Record<string, string | string[] | boolean> = {}
+  for (const [name, entry] of Object.entries(value)) {
+    if (typeof entry === 'string' || typeof entry === 'boolean') out[name] = entry
+    else if (typeof entry === 'number') out[name] = String(entry)
+    else if (Array.isArray(entry)) out[name] = entry.filter((item): item is string => typeof item === 'string')
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
+/**
+ * Option values one select callback reports: `options` for a multiple control, `option` for a single one.
+ *
+ * @param action - the wire `action` of a `card.action.trigger`.
+ * @returns the chosen option values, in the platform's order; empty when the callback carried none.
+ */
+export function cardOptionValues(action: LarkCardAction): string[] {
+  const many = arrayOf(action.options).filter((item): item is string => typeof item === 'string')
+  if (many.length) return many
+  const single = nonEmpty(action.option)
+  return single ? [single] : []
 }
 
 /**

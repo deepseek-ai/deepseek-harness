@@ -8,7 +8,7 @@
  * changes the answer.
  */
 
-import type { ButtonCallback, Element, Tag, VariantOf } from '@deepseek-ai/satori-element'
+import type { ButtonCallback, Element, SelectCallback, Tag, VariantOf } from '@deepseek-ai/satori-element'
 import type { Bot, SendOptions } from './bot.ts'
 import type { DegradationCosts } from './degradation.ts'
 import type { LimitViolation } from './errors.ts'
@@ -57,13 +57,22 @@ export interface Envelope {
   title?: Element<'title'>
 }
 
+/**
+ * One in-process interaction callback a mode's handlers collected from the rendered elements: an `onClick` of a
+ * `button[type=action|submit]` or an `onSelect` of a `select`, registered by the send stage under its id so the
+ * platform event of that id reaches it.
+ */
+export type InteractionAction =
+  | { kind: 'button'; id: string; callback: ButtonCallback }
+  | { kind: 'select'; id: string; callback: SelectCallback }
+
 export interface TransformResult<D> {
   /** ≥ 1, in send order. */
   msgs: D[]
   /** From `<quote id>`. */
   quote?: string
-  /** `onClick` callbacks of `button[type=action]`, registered by the send stage. */
-  actions: { id: string; callback: ButtonCallback }[]
+  /** Interactions of the rendered tree, registered by the send stage. */
+  actions: InteractionAction[]
   report: RenderReport
 }
 

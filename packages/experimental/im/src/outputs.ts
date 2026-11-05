@@ -1,7 +1,8 @@
 /**
  * Output renderer registry: drives the renderer named by `spec.output` for each `im/activity` turn of a session that
  * may publish (per-turn {@link ImOutputIO} with quote/thread from the trigger, attributed sends); re-emits
- * `interaction/button` in admitted chats as `im/button`, routing `dsh:stop:<id>` to `sessions.stop`.
+ * `interaction/button` and `interaction/select` in admitted chats as `im/button` / `im/select`, routing
+ * `dsh:stop:<id>` to `sessions.stop`.
  *
  * Target chat per turn ({@link targetOf}): the trigger's chat when the session holds a writable binding for it (that
  * binding's thread), else the writable home binding. A trigger of another chat is not quoted.
@@ -13,13 +14,15 @@
  * activity anyway.
  */
 import type { Context } from '@deepseek-ai/cordis'
-import type { Fragment, MessageStream, Session, StreamOptions } from '@deepseek-ai/cordis-plugin-im-core'
+import type {
+  ButtonEvent, Fragment, MessageStream, SelectEvent, Session, StreamOptions,
+} from '@deepseek-ai/cordis-plugin-im-core'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import {
   ImChatKey, ImMessageKey,
   type ImActivity, type ImActivityChange, type ImBinding, type ImButtonEvent, type ImChat, type ImHistory,
-  type ImOutputIO, type ImOutputRenderer, type ImOutputs, type ImSendOptions, type ImSendResult, type ImSessions,
-  type ImSourceConfig, type ImTurnOutput,
+  type ImMessage, type ImOutputIO, type ImOutputRenderer, type ImOutputs, type ImSelectEvent, type ImSendOptions,
+  type ImSendResult, type ImSessions, type ImSourceConfig, type ImTurnOutput,
 } from './api.ts'
 import { ImError } from './error.ts'
 import { allows } from './intake.ts'
@@ -69,12 +72,17 @@ export class ImOutputRegistry implements ImOutputs {
 
   constructor(readonly ctx: Context, readonly deps: ImOutputDeps) {}
 
-  /** Subscribe `im/activity` and `interaction/button` (disposed with `ctx`). */
+  /** Subscribe `im/activity`, `interaction/button` and `interaction/select` (disposed with `ctx`). */
   start(): void {
     this.ctx.on('im/activity', (activity, change) => { this.activity(activity, change) })
     this.ctx.on('interaction/button', (session) => {
       void this.button(session).catch((error: unknown) => {
         this.ctx.logger.warn('IM button click was not handled: %s', String(error))
+      })
+    })
+    this.ctx.on('interaction/select', (session) => {
+      void this.select(session).catch((error: unknown) => {
+        this.ctx.logger.warn('IM select was not handled: %s', String(error))
       })
     })
   }
@@ -101,31 +109,70 @@ export class ImOutputRegistry implements ImOutputs {
   async button(session: Session): Promise<void> {
     const button = session.button
     if (button === undefined) return
-    const bot = session.bot
-    const chat = this.deps.im.chat(ImChatKey(bot.id, button.chat.id))
+    const context = this.interaction(button)
     // A click outside the admitted chats is invisible to this host.
-    if (chat === undefined) return
-    // The clicker is admitted like any sender: a button must not be a way around the source's user allowlist.
-    const source = this.deps.im.source(chat.source)
-    if (source !== undefined && !allows(source.users, button.user.id)) return
-    const message = button.message === undefined
-      ? undefined
-      : this.deps.im.history.get(ImMessageKey(bot.id, button.message.id))
-    const owner = message === undefined ? undefined : this.deps.sender.sessionOf(message.key)
+    if (context === undefined) return
     const event: ImButtonEvent = {
       id: button.id,
-      chat,
+      chat: context.chat,
       user: button.user,
-      bot,
+      bot: button.bot,
       time: button.time,
       raw: button,
       ...button.data === undefined ? {} : { data: button.data },
-      ...message === undefined ? {} : { message },
-      ...owner === undefined ? {} : { session: owner },
+      ...button.values === undefined ? {} : { values: button.values },
+      ...context.message === undefined ? {} : { message: context.message },
+      ...context.session === undefined ? {} : { session: context.session },
     }
     this.ctx.emit('im/button', event)
     if (!button.id.startsWith(STOP_BUTTON_PREFIX)) return
-    await this.stop(chat, button.id.slice(STOP_BUTTON_PREFIX.length))
+    await this.stop(context.chat, button.id.slice(STOP_BUTTON_PREFIX.length))
+  }
+
+  /**
+   * `interaction/select` listener body (exposed for tests).
+   * @param session - the core interaction session whose control was picked.
+   */
+  async select(session: Session): Promise<void> {
+    const select = session.select
+    if (select === undefined) return
+    const context = this.interaction(select)
+    if (context === undefined) return
+    const event: ImSelectEvent = {
+      id: select.id,
+      values: select.values,
+      chat: context.chat,
+      user: select.user,
+      bot: select.bot,
+      time: select.time,
+      raw: select,
+      ...select.data === undefined ? {} : { data: select.data },
+      ...context.message === undefined ? {} : { message: context.message },
+      ...context.session === undefined ? {} : { session: context.session },
+    }
+    this.ctx.emit('im/select', event)
+  }
+
+  /**
+   * The admitted chat of one interaction, the own message that carried the control and the session that produced it.
+   *
+   * The interacting user is admitted like any sender: an interaction must not be a way around the source's user
+   * allowlist.
+   *
+   * @param interaction - the core interaction event.
+   * @returns the host context, or `undefined` when the chat is not admitted or the user is not allowed.
+   */
+  private interaction(interaction: ButtonEvent | SelectEvent):
+    { chat: ImChat; message?: ImMessage; session?: SessionId } | undefined {
+    const chat = this.deps.im.chat(ImChatKey(interaction.bot.id, interaction.chat.id))
+    if (chat === undefined) return
+    const source = this.deps.im.source(chat.source)
+    if (source !== undefined && !allows(source.users, interaction.user.id)) return
+    const message = interaction.message === undefined
+      ? undefined
+      : this.deps.im.history.get(ImMessageKey(interaction.bot.id, interaction.message.id))
+    const owner = message === undefined ? undefined : this.deps.sender.sessionOf(message.key)
+    return { chat, ...message === undefined ? {} : { message }, ...owner === undefined ? {} : { session: owner } }
   }
 
   /** End every open turn output (service shutdown). */

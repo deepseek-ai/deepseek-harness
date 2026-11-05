@@ -31,9 +31,12 @@ const positive: { [K in keyof VariantMap]: Record<VariantMap[K], Case> } = {
     action: { el: h('button', { type: 'action', id: 'b' }, 'go') },
     link: { el: h('button', { type: 'link', href: 'https://e.x' }, 'go') },
     input: { el: h('button', { type: 'input', text: '/help' }, 'help') },
+    submit: { el: h('button', { type: 'submit', id: 'b' }, 'go') },
     theme: { el: h('button', { type: 'action', id: 'b', theme: 'info' }, 'go') },
     inline: { el: h('button', { type: 'action', id: 'b' }, 'go'), ancestors: [h('message'), p] },
   },
+  input: { checkbox: { el: h('input', { name: 'agree', type: 'checkbox' }) } },
+  select: { multiple: { el: h('select', { id: 's', multiple: true }, h('option', { value: 'a' }, 'A')) } },
 }
 
 describe('variantsOf', () => {
@@ -58,6 +61,9 @@ describe('variantsOf', () => {
     expect(variantsOf(h('img', { src: 'x' }))).toEqual([])
     expect(variantsOf(h('img', { src: 'x' }), [h('message')])).toEqual([])
     expect(variantsOf(h('button', { type: 'link', href: 'x', theme: 'default' }, 'go'))).toEqual(['link'])
+    expect(variantsOf(h('input', { name: 'a' }))).toEqual([])
+    expect(variantsOf(h('input', { name: 'a', type: 'text' }))).toEqual([])
+    expect(variantsOf(h('select', { id: 's' }, h('option', { value: 'a' }, 'A')))).toEqual([])
     expect(variantsOf(h('b', 'x'))).toEqual([])
   })
 

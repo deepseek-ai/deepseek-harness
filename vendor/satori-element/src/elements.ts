@@ -5,7 +5,9 @@
 import type { Tag } from './vocabulary.ts'
 
 /** Element category. */
-export type Category = 'root' | 'envelope' | 'inline' | 'block' | 'media' | 'interactive' | 'alternative' | 'input' | 'inbound'
+export type Category =
+  | 'root' | 'envelope' | 'inline' | 'block' | 'media' | 'interactive' | 'control' | 'alternative' | 'input'
+  | 'inbound'
 
 /** T1 = core fallback + at least one v1 mode; T2 = vocabulary + core fallback only. T3 tags are `reservedTags`. */
 export type Tier = 1 | 2
@@ -23,11 +25,12 @@ export type Position = 'inline' | 'block' | 'any'
  * - `details`: flow content with an optional leading `<summary>`;
  * - `phrasing`: inline content;
  * - `text`: text only (`br` becomes `\n`);
- * - `list` / `table` / `row` / `buttons`: only `li` / `tr` / `th|td` / `button` children;
+ * - `list` / `table` / `row` / `buttons` / `options`: only `li` / `tr` / `th|td` / `button` / `option` children;
  * - `cases`: only `case` children, each holding content of the model of the `<fallback>`'s own parent;
  * - `empty`: no children.
  */
-export type ContentModel = 'flow' | 'details' | 'phrasing' | 'text' | 'list' | 'table' | 'row' | 'buttons' | 'cases' | 'empty'
+export type ContentModel =
+  | 'flow' | 'details' | 'phrasing' | 'text' | 'list' | 'table' | 'row' | 'buttons' | 'options' | 'cases' | 'empty'
 
 export interface ElementInfo {
   readonly category: Category
@@ -91,6 +94,10 @@ export const elementInfo: { readonly [K in Tag]: ElementInfo } = {
   file: media,
   button: { category: 'interactive', tier: 1, position: 'any', content: 'phrasing' },
   'button-group': { category: 'interactive', tier: 1, position: 'block', content: 'buttons' },
+  form: { category: 'control', tier: 1, position: 'block', content: 'flow', required: ['name'] },
+  input: { category: 'control', tier: 1, position: 'block', content: 'empty', required: ['name'] },
+  select: { category: 'control', tier: 1, position: 'block', content: 'options', required: ['id'] },
+  option: { category: 'control', tier: 1, position: 'block', content: 'phrasing', parents: ['select'], required: ['value'] },
   fallback: { category: 'alternative', tier: 1, position: 'any', content: 'cases' },
   case: { category: 'alternative', tier: 1, position: 'any', content: 'cases', parents: ['fallback'] },
   markdown: { category: 'input', tier: 1, position: 'any', content: 'text' },
@@ -100,8 +107,8 @@ export const elementInfo: { readonly [K in Tag]: ElementInfo } = {
 
 /** T3: names reserved for later versions; `normalize` rejects them in v1. */
 export const reservedTags = [
-  'math', 'time', 'sup', 'sub', 'mark', 'sticker', 'gallery', 'figure', 'select', 'input', 'form', 'columns', 'poll',
-  'location', 'contact', 'progress', 'countdown',
+  'math', 'time', 'sup', 'sub', 'mark', 'sticker', 'gallery', 'figure', 'columns', 'poll', 'location', 'contact',
+  'progress', 'countdown',
 ] as const
 export type ReservedTag = typeof reservedTags[number]
 

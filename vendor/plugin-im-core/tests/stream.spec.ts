@@ -151,7 +151,7 @@ function fakeHost(driver: StreamDriver<FakeTypes> | undefined, mode = fakeMode()
         result: {
           msgs: prepared.map(p => p.draft),
           ...quote === undefined ? {} : { quote },
-          actions: actions ? [{ id: actions[1]!, callback: callbacks[actions[1]!] ??= () => {} }] : [],
+          actions: actions ? [{ kind: 'button' as const, id: actions[1]!, callback: callbacks[actions[1]!] ??= () => {} }] : [],
           report,
         },
         prepared,

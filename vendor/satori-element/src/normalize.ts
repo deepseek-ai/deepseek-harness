@@ -60,6 +60,7 @@ export function normalizeChildren(content: Child, parent: Tag, path: string = pa
     case 'table': return normalizeOnly(nodes, parent, path, ['tr'])
     case 'row': return normalizeOnly(nodes, parent, path, ['th', 'td'])
     case 'buttons': return normalizeOnly(nodes, parent, path, ['button'])
+    case 'options': return normalizeOnly(nodes, parent, path, ['option'])
     case 'cases':
       // A `<fallback>`'s candidates are normalized as content of *its* parent, which this function cannot see.
       if (!nodes.length) return []
@@ -130,14 +131,56 @@ function checkAttrs(tag: Tag, attrs: Record<string, unknown>, path: string) {
     }
   }
   if (tag === 'button') {
-    const field = ({ action: 'id', link: 'href', input: 'text' } as Record<string, string>)[attrs.type as string]
-    if (!field) throw new NormalizeError(`<button> type must be action | link | input, got ${String(attrs.type)}`, path)
+    const field = ({ action: 'id', link: 'href', input: 'text', submit: 'id' } as Record<string, string>)[attrs.type as string]
+    if (!field) throw new NormalizeError(`<button> type must be action | link | input | submit, got ${String(attrs.type)}`, path)
     if (!nonEmptyString(attrs[field])) throw new NormalizeError(`<button type="${attrs.type}"> requires "${field}"`, path)
     checkButtonStyle(attrs, path)
   }
   if (tag === 'button-group') {
     checkOneOf('button-group', 'width', attrs.width, ['auto', 'fill'], path)
     checkOneOf('button-group', 'align', attrs.align, ['left', 'center', 'right'], path)
+  }
+  if (tag === 'input') checkInput(attrs, path)
+  if (tag === 'select') checkSelect(attrs, path)
+  if (tag === 'option' && attrs.selected !== undefined && typeof attrs.selected !== 'boolean') {
+    throw new NormalizeError('<option> selected must be a boolean', path)
+  }
+}
+
+/** A `<select>`: the initial value matches the arity its `multiple` flag asks for. */
+function checkSelect(attrs: Record<string, unknown>, path: string) {
+  for (const name of ['placeholder', 'data', 'name']) {
+    if (attrs[name] !== undefined && !nonEmptyString(attrs[name])) {
+      throw new NormalizeError(`<select> ${name} must be a non-empty string`, path)
+    }
+  }
+  const value = attrs.value
+  if (value === undefined) return
+  const ok = attrs.multiple
+    ? Array.isArray(value) && value.every(item => typeof item === 'string')
+    : typeof value === 'string'
+  if (!ok) {
+    throw new NormalizeError(`<select${attrs.multiple ? ' multiple' : ''}> value must be ${attrs.multiple ? 'string[]' : 'a string'}`, path)
+  }
+}
+
+/** A control's input mode, its bounds and the value type each mode takes. */
+function checkInput(attrs: Record<string, unknown>, path: string) {
+  checkOneOf('input', 'type', attrs.type, ['text', 'multiline', 'password', 'checkbox'], path)
+  for (const name of ['label', 'placeholder']) {
+    if (attrs[name] !== undefined && !nonEmptyString(attrs[name])) {
+      throw new NormalizeError(`<input> ${name} must be a non-empty string`, path)
+    }
+  }
+  if (attrs.maxLength !== undefined) {
+    const max = attrs.maxLength
+    if (typeof max !== 'number' || !Number.isInteger(max) || max <= 0) {
+      throw new NormalizeError(`<input> maxLength must be a positive integer, got ${String(max)}`, path)
+    }
+  }
+  const checkbox = attrs.type === 'checkbox'
+  if (attrs.value !== undefined && typeof attrs.value !== (checkbox ? 'boolean' : 'string')) {
+    throw new NormalizeError(`<input${checkbox ? ' type="checkbox"' : ''}> value must be a ${checkbox ? 'boolean' : 'string'}`, path)
   }
 }
 
