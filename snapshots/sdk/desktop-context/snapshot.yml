@@ -6,4 +6,3 @@ recording: authored
 header:
   class: sdk-desktop
   pin: true
-  systemPromptSource: background-wait-steer
