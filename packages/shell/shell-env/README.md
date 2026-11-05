@@ -50,7 +50,7 @@ export function apply(ctx: Context): void {
 }
 ```
 
-Contributors must declare every key they return; returning an undeclared or non-string value fails the call. Registration is disposed with the registering plugin, so hot-reloading a plugin removes its facts.
+Contributors must declare every key they return; returning an undeclared or non-string value fails the call with `ShellEnvError` (`SHELL_ENV_CONTRIBUTION_INVALID`). Registration is disposed with the registering plugin, so hot-reloading a plugin removes its facts.
 
 ### Choosing the Harness home
 

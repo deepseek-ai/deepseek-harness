@@ -50,7 +50,7 @@ export function apply(ctx: Context): void {
 }
 ```
 
-contributor 必须声明它返回的每个键；返回未声明或非字符串的值会让该次调用失败。注册随注册插件的释放而释放，因此热重载插件会移除它的事实。
+contributor 必须声明它返回的每个键；返回未声明或非字符串的值会让该次调用以 `ShellEnvError`（`SHELL_ENV_CONTRIBUTION_INVALID`）失败。注册随注册插件的释放而释放，因此热重载插件会移除它的事实。
 
 ### 选择 Harness 主目录
 
