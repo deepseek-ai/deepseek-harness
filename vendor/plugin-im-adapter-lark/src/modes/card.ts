@@ -154,8 +154,8 @@ export interface CardInputComponent {
 export interface CardSelectComponent {
   tag: 'select_static' | 'multi_select_static'
   id: string
-  /** Form key; the control's `id` when it declares none. */
-  name: string
+  /** Form key; the control's `id` when it declares none, absent on a control that only reports its own pick. */
+  name?: string
   placeholder?: string
   options: { text: string; value: string }[]
   /** `select_static.initial_option`. */
@@ -866,7 +866,8 @@ export function serializeComponent(component: CardComponent, key: KeyOf): Record
       return {
         tag: component.tag,
         element_id: component.id,
-        name: component.name,
+        // A control that only reports its own pick has no form key, so the platform gets no `name` at all.
+        ...component.name === undefined ? {} : { name: component.name },
         ...component.placeholder ? { placeholder: plainText(component.placeholder) } : {},
         options: component.options.map(option => ({ text: plainText(option.text), value: option.value })),
         ...component.tag === 'multi_select_static'
@@ -1053,18 +1054,20 @@ export function createCardMode(config: CardModeConfig = {}): Mode<CardTypes> {
       const marked = options.filter(option => option.selected).map(option => option.value)
       const single = typeof chosen === 'string' && chosen ? chosen : marked[0]
       const many = Array.isArray(chosen) && chosen.length ? chosen : marked
+      // A live control uses its id as the form key; a form-only control names the field explicitly.
+      const name = el.attrs.name ?? el.attrs.id
       const component: CardSelectComponent = {
         tag: multiple ? 'multi_select_static' : 'select_static',
         id: cardElementId(ctx.stableId(el)),
-        // The platform keys a form value by `name`; a control that only reports its own callback uses its id.
-        name: el.attrs.name ?? el.attrs.id,
+        ...name === undefined ? {} : { name },
         ...el.attrs.placeholder ? { placeholder: el.attrs.placeholder } : {},
         options: options.map(option => ({ text: option.text, value: option.value })),
         ...multiple
           ? many.length ? { selectedValues: many } : {}
           : single ? { initialOption: single } : {},
-        // Without callbacks the platform sends no event; the pick then only reaches the code through a form submit.
-        ...callbacks
+        // A callback behavior needs an id to route a pick back through. Without one — or without callbacks — the
+        // platform sends no event for this control and its value arrives only with a form submit.
+        ...callbacks && el.attrs.id !== undefined
           ? {
             behavior: {
               type: 'callback' as const,

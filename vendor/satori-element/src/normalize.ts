@@ -147,12 +147,18 @@ function checkAttrs(tag: Tag, attrs: Record<string, unknown>, path: string) {
   }
 }
 
-/** A `<select>`: the initial value matches the arity its `multiple` flag asks for. */
+/** A `<select>`: it names a channel (`id` or `name`), and its initial value matches the arity `multiple` asks for. */
 function checkSelect(attrs: Record<string, unknown>, path: string) {
   for (const name of ['placeholder', 'data', 'name']) {
     if (attrs[name] !== undefined && !nonEmptyString(attrs[name])) {
       throw new NormalizeError(`<select> ${name} must be a non-empty string`, path)
     }
+  }
+  if (attrs.id !== undefined && !nonEmptyString(attrs.id)) {
+    throw new NormalizeError('<select> id must be a non-empty string', path)
+  }
+  if (!nonEmptyString(attrs.id) && !nonEmptyString(attrs.name)) {
+    throw new NormalizeError('<select> requires an "id" (reports its pick) or a "name" (feeds its form)', path)
   }
   const value = attrs.value
   if (value === undefined) return

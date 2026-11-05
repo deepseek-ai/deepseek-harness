@@ -396,6 +396,25 @@ describe('card structure', () => {
     expect(rendered.report.degraded).toEqual([])
   })
 
+  it('names the channel of a select: an id reports its pick, a name feeds the form', async () => {
+    const { payloads, transform } = await render(h('form', { name: 'order' },
+      h('select', { id: 'sel-live', onSelect: () => {} }, h('option', { value: 'a' }, 'A')),
+      h('select', { name: 'tags', multiple: true }, h('option', { value: 'x' }, 'X')),
+      h('button', { type: 'submit', id: 'go', onClick: () => {} }, 'Send')))
+    const [live, field] = elements(payloads[0])[0]!.elements
+    // A live control routes its pick back: behavior, and the id doubles as the form key.
+    expect(live).toMatchObject({
+      tag: 'select_static',
+      name: 'sel-live',
+      behaviors: [{ type: 'callback', value: { v4: { id: 'sel-live' } } }],
+    })
+    // A form-only control names its field and carries no behavior: its value arrives with the submit.
+    expect(field).toMatchObject({ tag: 'multi_select_static', name: 'tags' })
+    expect(field!.behaviors).toBeUndefined()
+    // Both are native; only the two routable callbacks were collected (the select and the submit).
+    expect(transform.actions.map(action => action.kind)).toEqual(['select', 'button'])
+  })
+
   it('a form inside a panel is assembled recursively; a folded panel shows its controls as text', async () => {
     const content = h('details', h('summary', 'Order'), h('form', { name: 'order' },
       h('input', { name: 'title', label: 'Title' }),

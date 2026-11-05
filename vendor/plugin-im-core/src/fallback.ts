@@ -510,7 +510,7 @@ export const coreFallbacks: { readonly [K in Tag]?: Fallback<K> } = {
     return h('p', toText(el))
   },
   select: (el, ctx) => {
-    ctx.report.dropped.push({ what: `select:${el.attrs.id}`, reason: INTERACTION_DROPPED })
+    ctx.report.dropped.push({ what: `select:${el.attrs.id ?? el.attrs.name ?? 'select'}`, reason: INTERACTION_DROPPED })
     return h('p', toText(el))
   },
   option: children,

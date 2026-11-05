@@ -183,11 +183,16 @@ export interface ElementMap {
     disabled?: boolean
   }
   /**
-   * A choice control. Unlike `<input>` it reports every change by itself (`onSelect`), which is what platforms with a
-   * dropdown do; inside a `<form>` its value is also part of the submit.
+   * A choice control.
+   *
+   * `id` and `name` name the channel, and at least one is required: an `id` makes it a live control that reports its
+   * pick (`onSelect`), a `name` makes it a form field whose value arrives with the enclosing `<form>`'s submit. A
+   * `multiple` control is normally a form field — what a pick reports is one option, while the complete selection is
+   * what the submit carries.
    */
   select: {
-    id: string
+    /** Callback identity of a live control; absent on a control that only feeds a form. */
+    id?: string
     data?: string
     onSelect?: SelectCallback
     multiple?: boolean

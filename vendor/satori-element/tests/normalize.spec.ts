@@ -240,7 +240,11 @@ describe('normalize: form controls', () => {
     expect(errorOf(() => normalize(parse('<form><input name="a"/></form>'))).message)
       .toMatch(/<form> requires a non-empty "name"/)
     expect(errorOf(() => normalize(parse('<input/>'))).message).toMatch(/<input> requires a non-empty "name"/)
-    expect(errorOf(() => normalize(parse('<select/>'))).message).toMatch(/<select> requires a non-empty "id"/)
+    expect(errorOf(() => normalize(parse('<select/>'))).message)
+      .toMatch(/<select> requires an "id" \(reports its pick\) or a "name" \(feeds its form\)/)
+    // Either channel alone is enough: an id reports the pick, a name feeds the enclosing form.
+    expect(normalize(parse('<select id="s"><option value="a">A</option></select>')).children).toHaveLength(1)
+    expect(normalize(parse('<select name="s"><option value="a">A</option></select>')).children).toHaveLength(1)
     expect(errorOf(() => normalize(parse('<select id="s"><option>A</option></select>'))).message)
       .toMatch(/<option> requires a non-empty "value"/)
     expect(errorOf(() => normalize(parse('<select id="s"><p>x</p></select>'))).message)

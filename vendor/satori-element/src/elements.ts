@@ -96,7 +96,7 @@ export const elementInfo: { readonly [K in Tag]: ElementInfo } = {
   'button-group': { category: 'interactive', tier: 1, position: 'block', content: 'buttons' },
   form: { category: 'control', tier: 1, position: 'block', content: 'flow', required: ['name'] },
   input: { category: 'control', tier: 1, position: 'block', content: 'empty', required: ['name'] },
-  select: { category: 'control', tier: 1, position: 'block', content: 'options', required: ['id'] },
+  select: { category: 'control', tier: 1, position: 'block', content: 'options' },
   option: { category: 'control', tier: 1, position: 'block', content: 'phrasing', parents: ['select'], required: ['value'] },
   fallback: { category: 'alternative', tier: 1, position: 'any', content: 'cases' },
   case: { category: 'alternative', tier: 1, position: 'any', content: 'cases', parents: ['fallback'] },
