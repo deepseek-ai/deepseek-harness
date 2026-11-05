@@ -47,9 +47,9 @@ kind: "package-reference"
 
 声明行的 `id` 是 Loader 编辑地址；`config.id` 是会话保存的 preset 标识符。子插件可省略行 ID，由 Loader 分配。
 
-本包还随包出货创造模式通过 `skill-filesystem` 挂载的 `skills/` 目录：`agent-experience`（工具描述与高效上下文加载）、`cordis-plugin-development`（简短流程，配合按需读取的 `references/` 与可复制的 `templates/` 组合包）、`editing-cordis-compositions`，以及 `cordis-composition-reference`，后者的 `references/packages.md` 由 `scripts/gen-plugin-packages.ts` 生成并在 `doc-sync` 中做新鲜度门禁。两个流程 skill 让 agent 先读检查结果，再读 `Config.listConfigs` 报告的 `packageDir` 下的包 README，最后读构建后的 `lib/` 或 checkout 源码。每个出货的 `SKILL.md` 作为 `skill` 工具结果渲染后都保持在 8192 字符阈值之下，标准 preset 的工具结果修剪器超过该阈值才会裁剪。
+本包还随包出货创造模式通过 `skill-filesystem` 挂载的 `skills/` 目录。该目录只包含一个 skill，即 `dsh-doc`：一份简短的 `SKILL.md`，规定查找 DSH 事实的顺序（运行时检查工具可用时先做运行时检查，再查阅已安装的文档与包源码），并说明加载该 skill 不授权任何文件或 profile 修改；另有按需读取的 `references/` 与可复制的 `templates/` 组合包。参考文件涵盖定位文档、插件开发、组合包展示元数据与详情文档、Web UI 插件、MCP 组合包、扩展实践、用户操作、验证与用户体验评审、图标与功能配图绘制、Agent preset、Loader 补丁方言、工具设计、跨 DSH 版本升级，以及 `references/packages.md`；后者由 `scripts/gen-plugin-packages.ts` 生成，并在 `doc-sync` 中做新鲜度门禁。渲染后的 `SKILL.md` 与除 `packages.md` 外的每个参考文件在带行号读取时都保持在 8192 字符阈值之下；标准 preset 的工具结果修剪器会裁剪超过该阈值的结果。
 
-在 [skills/agent-experience/SKILL.md](skills/agent-experience/SKILL.md) 编辑 `agent-experience`。仓库发现路径 `.agents/skills/agent-experience/SKILL.md` 是指向该文件的相对符号链接；发布包包含普通文件。
+工具设计规则在 [skills/dsh-doc/references/tool-design.md](skills/dsh-doc/references/tool-design.md) 中编辑。仓库 skill `.agents/skills/agent-experience/SKILL.md` 只包含指向该文件的链接。
 
 <a id="understand-the-implementation"></a>
 ## 理解实现
@@ -82,7 +82,6 @@ kind: "package-reference"
 <a id="known-limitations-and-deferred-work"></a>
 
 - 需要 `agentPresets` 服务。重复的 preset ID 会导致声明加载失败。声明不提供目录、文件复制或文件删除操作。
-- 从仓库发现 `agent-experience` 要求 checkout 启用符号链接。设置 `core.symlinks=false` 时，Git 会将链接目标写成纯文本，而不是 skill。创造模式使用包内的普通文件，不依赖该别名。
 
 <a id="dev-note"></a>
 ### 开发备注
