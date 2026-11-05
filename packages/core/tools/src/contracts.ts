@@ -266,6 +266,18 @@ export const TOOL_ABORTED = 'ABORTED'
 /** Canonical error code for cancellation before a tool body was invoked. */
 export const TOOL_ABORTED_BEFORE_DISPATCH = 'ABORTED_BEFORE_DISPATCH'
 
+/** Error name the registry records when approval does not grant a call. */
+export const APPROVAL_ERROR_NAME = 'ApprovalError'
+
+/** Approval code for a call the user rejected. */
+export const APPROVAL_REJECTED = 'APPROVAL_REJECTED'
+
+/** Approval code for an approval request cancelled without a caller cancellation. */
+export const APPROVAL_CANCELLED = 'APPROVAL_CANCELLED'
+
+/** Approval code for a call that needs approval when no approval service, Agent, or channel can answer it. */
+export const APPROVAL_UNAVAILABLE = 'APPROVAL_UNAVAILABLE'
+
 /** Structured error metadata for a failed tool call (alongside the model-facing text). */
 export interface ToolErrorInfo {
   name: string

@@ -7,7 +7,7 @@ import { HarnessError } from '@deepseek-ai/dsh-llm'
 import type { UserMessage } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-user-approval'
 import { assertNever, deepFreeze, snapshotJsonValue, type JsonValue } from '@deepseek-ai/dsh-util-values'
-import { TOOL_ABORTED, TOOL_ABORTED_BEFORE_DISPATCH, ToolNotFoundError, ToolOutputError } from './contracts.ts'
+import { APPROVAL_CANCELLED, APPROVAL_ERROR_NAME, APPROVAL_REJECTED, APPROVAL_UNAVAILABLE, TOOL_ABORTED, TOOL_ABORTED_BEFORE_DISPATCH, ToolNotFoundError, ToolOutputError } from './contracts.ts'
 import { validateJsonSchemaValue } from './json-schema.ts'
 import type { ToolsService } from './index.ts'
 import type { ResolvedToolSet, ToolDefinition, ToolExecutionInput, ToolExecutionMode, ToolExecution, ToolRunContext, ToolExecutionResult, ToolExecutionSuccess, ToolErrorInfo, ToolExecutionToken, PreToolDecision, PostToolDecision } from './contracts.ts'
@@ -432,7 +432,8 @@ export class ToolExecutionPipeline {
    * session to audit to and no UI to route to. Otherwise the outcome maps
    * one-to-one — `allowed-once` proceeds; the three non-grants deny with
    * distinct reasons so the model can tell a human "no" from an absent
-   * approval channel.
+   * approval channel. Every denial carries `ApprovalError` with
+   * `APPROVAL_REJECTED`, `APPROVAL_CANCELLED`, or `APPROVAL_UNAVAILABLE`.
    */
   private async serviceAsk(
     exec: ToolExecution,
@@ -441,13 +442,13 @@ export class ToolExecutionPipeline {
     const approval = this.ctx.get('approval')
     if (approval === undefined) {
       return {
-        decision: { kind: 'deny', reason: ask.reason ?? `tool "${exec.name}" requires approval (not yet supported)` },
+        decision: approvalDenial(ask.reason ?? `tool "${exec.name}" requires approval (not yet supported)`, APPROVAL_UNAVAILABLE),
         approvalCancelled: false,
       }
     }
     if (exec.agent === undefined) {
       return {
-        decision: { kind: 'deny', reason: `tool "${exec.name}" requires approval, but the call has no agent to route it through` },
+        decision: approvalDenial(`tool "${exec.name}" requires approval, but the call has no agent to route it through`, APPROVAL_UNAVAILABLE),
         approvalCancelled: false,
       }
     }
@@ -462,15 +463,15 @@ export class ToolExecutionPipeline {
     switch (outcome) {
       case 'allowed-once': return { decision: { kind: 'allow' }, approvalCancelled: false }
       case 'rejected': return {
-        decision: { kind: 'deny', reason: `the user rejected tool "${exec.name}"` },
+        decision: approvalDenial(`the user rejected tool "${exec.name}"`, APPROVAL_REJECTED),
         approvalCancelled: false,
       }
       case 'cancelled': return {
-        decision: { kind: 'deny', reason: `approval for tool "${exec.name}" was cancelled` },
+        decision: approvalDenial(`approval for tool "${exec.name}" was cancelled`, APPROVAL_CANCELLED),
         approvalCancelled: true,
       }
       case 'unavailable': return {
-        decision: { kind: 'deny', reason: `tool "${exec.name}" requires approval, but no approval channel is available` },
+        decision: approvalDenial(`tool "${exec.name}" requires approval, but no approval channel is available`, APPROVAL_UNAVAILABLE),
         approvalCancelled: false,
       }
       default: return assertNever(outcome, 'ApprovalOutcome')
@@ -690,6 +691,11 @@ function errorInfo(error: unknown): ToolErrorInfo | undefined {
   } catch {
     return undefined
   }
+}
+
+/** Materialize a non-granting approval outcome as a denial with routable `ApprovalError` identity. */
+function approvalDenial(reason: string, code: string): Extract<PreToolDecision, { kind: 'deny' }> {
+  return { kind: 'deny', reason, info: { name: APPROVAL_ERROR_NAME, code } }
 }
 
 /** Whether a value thrown after cancellation is that cancellation and carries no identity of its own. */
