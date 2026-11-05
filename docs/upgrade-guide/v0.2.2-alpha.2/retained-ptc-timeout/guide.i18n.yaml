@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-alpha.2/retained-ptc-timeout/guide.md
+/:
+  en: 81282ebd9fb3522f
+  zh: a10b0dd429c1e527
+/retained-ptc-timeout-recovery:
+  en: 077a655f2f967e61
+  zh: 2c3458dc17023b75
+/retained-ptc-timeout-recovery/change:
+  en: f3ebfde587b16d65
+  zh: b48f8fdc91d84ccb
+/retained-ptc-timeout-recovery/migration:
+  en: 969be7aa004c1c83
+  zh: a8dfde8f75efaa9a

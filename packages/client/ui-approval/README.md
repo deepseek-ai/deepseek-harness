@@ -22,6 +22,8 @@ Focus the approval detail region to approve with Enter or reject with Escape. Th
 
 When offered, **Always allow** is the highlighted primary button. Otherwise, the current-request allow action is primary. Enter in the detail region always grants the limited scope: once for a tool approval, or the current session for CUA. Persistent access requires explicitly activating Always allow. The shortcut reference uses Allow because the caller supplies that scope.
 
+Callers can supply localized warning copy through the shared card's optional `warning` field, with paragraphs separated by blank lines (`\n\n`). Hovering or keyboard-focusing the tag opens a formatted nonmodal card; clicking or tapping also opens it. The pointer can cross into the card to read or select its text. Leaving both surfaces closes it after a short grace period unless keyboard focus remains inside. Moving focus outside, clicking outside, and Escape also dismiss it without rejecting the request. Hover does not move focus. Moving focus elsewhere also closes a hover-open card, including when a foreground modal takes focus. Switching away from the window or hiding the browser tab closes it without restoring focus. Foreground modals and input-method composition retain their keyboard handling. CSS anchors position the card above the tag with window-edge fallbacks and internal scrolling when space is limited.
+
 <a id="model-experience"></a>
 ## Model Experience
 

@@ -104,7 +104,7 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
     expect(Math.abs(
       launchedBox!.y + launchedBox!.height - typedBox!.y - typedBox!.height,
     )).toBeLessThan(1)
-    await writeComposerDraft(page, input, '/cpt')
+    await writeComposerDraft(page, input, '/cmpt')
     await expect.poll(() => menu.getByRole('option').allTextContents()).toEqual([
       'CompactCompact older conversation history',
     ])

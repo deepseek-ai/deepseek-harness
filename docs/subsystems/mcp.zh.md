@@ -122,6 +122,50 @@ interface McpResourceProvider {
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxmcpclienthost--mcpclienthost"></a>
+
+### `ctx.mcpClientHost` — `McpClientHost`
+
+Validates, mounts, probes, and authorizes MCP servers for the plugin that manages them.
+
+```ts cordis-catalog
+/**
+ * Resolve a server configuration and refuse what an instance would refuse when it starts.
+ * @param input - server configuration before defaults.
+ * @param path - configuration path naming the server; every failure message starts with it.
+ * @returns the resolved configuration.
+ * @throws when the server name, a field, a template token, the reconnect policy, or OAuth beside an Authorization
+ *   header is invalid.
+ */
+validate(input: ServerConfigInput, path: readonly string[]): ServerConfig
+
+/**
+ * Mount one server instance below the host. The instance registers its tools and holds its `serverName` until disposed.
+ * @param config - resolved server configuration, usually from {@link McpClientHost.validate}.
+ * @returns the instance's activation and disposal.
+ */
+mount(config: ServerConfig): McpServerInstance
+
+/**
+ * Probe a server without mounting it: resolve its templates, connect, list its tools, and close.
+ * @param config - resolved server configuration; its startup budget does not bound the probe.
+ * @param options - whole-probe budget, listing caps, and cancellation signal.
+ * @returns the connect and list outcome with the cleanup result.
+ * @throws for invalid options, malformed templates, or a missing required credentials provider.
+ */
+probe(config: ServerConfig, options?: McpProbeOptions): Promise<McpProbeResult>
+
+/**
+ * Create the explicit OAuth authorization owner of one server.
+ * @param config - resolved Streamable HTTP configuration with OAuth.
+ * @param changed - called after each change of the owner's attempt view.
+ * @returns the owner; its caller retires and disposes it.
+ */
+authorization(config: StreamableHttpConfig & { oauth: McpOAuthConfig }, changed: () => void): McpOAuthAuthorization
+```
+
+Source: [`packages/mcp/mcp-client/src/host.ts`](../../packages/mcp/mcp-client/src/host.ts)
+
 <a id="ctxmcpmanager--mcpservermanager"></a>
 
 ### `ctx.mcpManager` — `McpServerManager`

@@ -354,6 +354,25 @@ describe('Tree-owned task boards', () => {
     await handle.dispose()
   })
 
+  it('clears a prior owner name when reassigning to an unnamed historical member', async () => {
+    const { ctx, lead } = await setup([])
+    const legacy = await resident(ctx, lead, 'legacy-worker')
+    lead.session.append('subagent/catalog', {
+      version: 0, childId: legacy.id, childCreatedAt: legacy.session.header.createdAt,
+      mode: 'continuable', label: 'Historical worker',
+    })
+    const created = await ctx.agentTeams.createTask(lead, { subject: 'Review', description: 'Historical assignment' })
+    const claimed = await ctx.agentTeams.updateTask(lead, {
+      taskId: created.id, expectedRevision: created.revision, action: 'claim',
+    })
+    expect(claimed.ownerName).toBe('lead')
+    const reassigned = await ctx.agentTeams.updateTask(lead, {
+      taskId: created.id, expectedRevision: claimed.revision, action: 'reassign', owner: legacy.id,
+    })
+    expect(reassigned.ownerId).toBe(legacy.id)
+    expect(reassigned).not.toHaveProperty('ownerName')
+  })
+
   it('assigns deep descendants by id and rejects historical roster authority', async () => {
     const { ctx, lead } = await setup(['hang', 'hang'])
     const child = await waitRunning(ctx, (await spawn(ctx, lead, 'parent')).childId)
@@ -362,7 +381,7 @@ describe('Tree-owned task boards', () => {
     const assigned = await ctx.agentTeams.updateTask(lead, {
       taskId: task.id, expectedRevision: task.revision, action: 'reassign', owner: grandchild.id,
     })
-    expect(assigned.ownerId).toBe(grandchild.id)
+    expect(assigned).toMatchObject({ ownerId: grandchild.id, ownerName: 'agent-1/agent-1' })
     for (const phase of ['provisioning', 'active'] as const) {
       lead.session.append('team/member', {
         version: 2, teamId: TeamId(lead.id),
@@ -581,6 +600,7 @@ describe('Team shared task DAG', () => {
     })
     expect(released).toMatchObject({ status: 'pending', ready: true })
     expect('ownerId' in released).toBe(false)
+    expect('ownerName' in released).toBe(false)
 
     await Promise.all([firstMember.dispose(), secondMember.dispose()])
     await Promise.all([waitNoAgent(ctx, alpha.id), waitNoAgent(ctx, beta.id)])
@@ -691,6 +711,8 @@ describe('Team shared task DAG', () => {
       expectedRevision: complete.revision,
       action: 'reopen',
     })
+    expect(reopened).not.toHaveProperty('ownerId')
+    expect(reopened).not.toHaveProperty('ownerName')
     const claimed = await ctx.agentTeams.updateTask(owner, {
       taskId: task.id,
       expectedRevision: reopened.revision,
@@ -733,7 +755,7 @@ describe('Team shared task DAG', () => {
     const leadClaim = await ctx.agentTeams.updateTask(lead, {
       taskId: blocker.id, expectedRevision: blocker.revision, action: 'claim',
     })
-    expect(leadClaim.ownerId).toBe(lead.id)
+    expect(leadClaim).toMatchObject({ ownerId: lead.id, ownerName: 'lead' })
     const completedBlocker = await ctx.agentTeams.updateTask(lead, {
       taskId: blocker.id, expectedRevision: leadClaim.revision, action: 'complete',
     })
@@ -766,6 +788,7 @@ describe('Team shared task DAG', () => {
     })
     expect(unassigned).toMatchObject({ status: 'pending' })
     expect('ownerId' in unassigned).toBe(false)
+    expect('ownerName' in unassigned).toBe(false)
 
     const broad = await ctx.agentTeams.createTask(lead, {
       subject: 'broad scope', description: 'broad scope', writeScopes: ['src'],
@@ -791,7 +814,7 @@ describe('Team shared task DAG', () => {
     const rootAssigned = await ctx.agentTeams.updateTask(lead, {
       taskId: task.id, expectedRevision: unassigned.revision, action: 'reassign', owner: lead.id,
     })
-    expect(rootAssigned).toMatchObject({ status: 'in_progress', ownerId: lead.id })
+    expect(rootAssigned).toMatchObject({ status: 'in_progress', ownerId: lead.id, ownerName: 'lead' })
 
     await started.dispose()
     await waitNoAgent(ctx, editor.id)

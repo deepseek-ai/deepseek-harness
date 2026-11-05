@@ -7,7 +7,7 @@ import Timer from '@deepseek-ai/cordis-plugin-timer'
 import Hmr from '@deepseek-ai/dsh-hmr'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
-import { managerProfile } from './profile-fixture.ts'
+import { managerProfile } from '@deepseek-ai/dsh-mcp-testkit'
 
 const { MockClient, MockTransport } = vi.hoisted(() => {
   class MockTransport {
@@ -137,5 +137,15 @@ describe('mcp-manager real composition', () => {
     } } })).rejects.toThrow('servers.one.oauth.credentialKey: credential key segment "Foo" must match')
     expect(await readFile(profile.patchPath, 'utf8')).toBe(saved)
     expect(ctx.mcpManager.list()).toEqual([])
+  })
+
+  it('names the oauth field when a settings write supplies an OAuth configuration without a credential key', async () => {
+    const ctx = await registry()
+    const { profile } = await managerProfile(ctx, { base: { servers: {} } })
+    const saved = await readFile(profile.patchPath, 'utf8')
+    await expect(ctx.settings.update('mcp', { servers: { one: {
+      transport: 'streamable-http', url: 'https://example.invalid/mcp', oauth: {}, enabled: false,
+    } } })).rejects.toThrow('servers.one.oauth expected')
+    expect(await readFile(profile.patchPath, 'utf8')).toBe(saved)
   })
 })

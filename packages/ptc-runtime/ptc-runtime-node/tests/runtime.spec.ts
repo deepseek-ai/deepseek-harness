@@ -168,11 +168,21 @@ describe('Node program process', () => {
     expect((await run({ program, bindings: [] })).error?.kind).toBe('timeout')
   })
 
-  it('retains console output emitted immediately before a non-yielding program', async () => {
-    const { run } = await setup({ timeoutMs: 1000, graceMs: 50 })
-    const result = await run({ program: 'console.log("before hot loop"); for (;;) {}', bindings: [] })
-    expect(result.error?.kind).toBe('timeout')
-    expect(result.logs).toEqual(['before hot loop'])
+  it('retains console output when a non-yielding program is canceled', async () => {
+    const { run, cwd } = await setup()
+    const controller = new AbortController()
+    const pending = run({
+      program: 'const fs = await import("node:fs"); console.log("before hot loop"); await tools.enter({}); fs.writeFileSync("entered-loop", "ready"); for (;;) {}',
+      signal: controller.signal, timeoutMs: null,
+      bindings: bindings({ enter: async () => null }),
+    })
+    try {
+      await expect.poll(async () => readFile(join(cwd, 'entered-loop'), 'utf8')).toBe('ready')
+      controller.abort('stop')
+      const result = await pending
+      expect(result.error?.kind).toBe('abort')
+      expect(result.logs).toEqual(['before hot loop'])
+    } finally { controller.abort(); await pending }
   })
 
   it('does not pause the deadline while a binding is pending', async () => {

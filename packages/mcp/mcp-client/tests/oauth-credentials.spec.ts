@@ -4,8 +4,8 @@ import { Context } from '@deepseek-ai/cordis'
 import { credentialRef, parseCredentialKey, type CredentialRecord } from '@deepseek-ai/dsh-credentials'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { McpOAuthCredentials, oauthFetch, oauthRecord } from '../src/oauth-credentials.ts'
-import { probeServer } from '../src/index.ts'
-import { authorize, oauthWorld, phase } from './oauth-fixture.ts'
+import { probeServer } from '../src/probe.ts'
+import { authorize, oauthWorld, phase } from '@deepseek-ai/dsh-mcp-testkit'
 
 async function credentials() {
   const world = await oauthWorld()

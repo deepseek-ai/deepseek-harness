@@ -8,6 +8,7 @@ import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import ToolRuntime, { defineTool } from '@deepseek-ai/dsh-tools'
 import * as McpClient from '../src/index.ts'
+import { connectionStatusIn } from '../src/status.ts'
 import { McpToolLoader } from '../src/tool-loading.ts'
 import { McpToolRegistrationError, syncTools, type ToolBridgeOptions, type ToolDisposers } from '../src/tools.ts'
 import { startHttpMcpFixture } from './http-fixture.ts'
@@ -248,7 +249,7 @@ it('loads and calls an on-demand server\'s tool through the plugin and withdraws
     toolLoading: 'on-demand', failOnStartupError: true, reconnect: { enabled: false },
   }))
 
-  expect(McpClient.connectionStatusOf(fiber)!.current()).toMatchObject({ state: 'connected', toolCount: 1 })
+  expect(connectionStatusIn(fiber)!.current()).toMatchObject({ state: 'connected', toolCount: 1 })
   expect(ctx.tools.get('mcp__demo__ping', agent)).toBeUndefined()
   const prompt = await ctx.systemPrompt.assemble({ scope: agent })
   expect(prompt.sections.map(section => section.text)).toContain([

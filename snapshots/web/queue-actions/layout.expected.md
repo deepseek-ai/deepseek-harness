@@ -12,6 +12,9 @@
 - button "Continuing goal {{clock}}":
   - text: Continuing goal
   - time: {{clock}}
+- button "Context injection runtime-context"
+- button "Context injection skill-catalog"
+- button "Context injection time-context"
 - paragraph: partial
 - status: Deep diving
 - text: Deep diving for {{duration}} ···

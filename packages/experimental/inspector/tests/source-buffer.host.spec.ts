@@ -1,10 +1,15 @@
 /** Worker-side source buffer behavior. */
 
 import { MessageChannel } from 'node:worker_threads'
+import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
+import { resolveInspectorOptions } from '../src/host/bridge/controller.ts'
 import { HostBridgePublisher } from '../src/host/bridge/publisher.ts'
 import { inspectorId } from '../src/shared/bridge/ids.ts'
-import { InspectorSourceBuffer, type InspectorSourceBufferOptions } from '../src/shared/bridge/buffer.ts'
+import { InspectorSourceBuffer, maxStatePayloadBytes, type InspectorSourceBufferOptions } from '../src/shared/bridge/buffer.ts'
+import { CORDIS_TREE_TOPIC } from '../src/shared/bridge/messages/cordis.ts'
+import { CordisTreeCollector } from '../src/shared/cordis/collector.ts'
+import { jsonByteLength, type InspectorJsonValue } from '../src/shared/json.ts'
 import type { InspectorSourceDescriptor } from '../src/shared/bridge/messages/observation.ts'
 
 const sourceId = inspectorId<'InspectorSourceId'>('source-buffer-test', 'sourceId')
@@ -73,6 +78,40 @@ describe('Inspector source buffer', () => {
     expect(records.replacement(sourceId, generation).records).toEqual([
       { topic: 'state', payload: { value: 'kept' }, monotonicMs: 1 },
     ])
+  })
+
+  it('accepts a single state payload at its budget with the largest record envelope', () => {
+    const maxFrameBytes = 8_192
+    const budget = maxStatePayloadBytes(maxFrameBytes)
+    const topic = '\u0001'.repeat(128)
+    const payload = 'x'.repeat(budget - 2)
+    expect(jsonByteLength(payload)).toBe(budget)
+    const records = buffer(4, { maxFrameBytes })
+    records.setState(topic, payload, -Number.MAX_VALUE)
+    const frame = JSON.stringify(records.replacement(sourceId, generation))
+    expect(new TextEncoder().encode(frame).byteLength).toBeLessThanOrEqual(maxFrameBytes)
+  })
+
+  it('rejects a source-frame limit that leaves no state payload budget at option resolution', () => {
+    const smallest = 5_121
+    expect(maxStatePayloadBytes(smallest)).toBe(1)
+    expect(resolveInspectorOptions({ maxSourceFrameBytes: smallest, maxBodyChunkBytes: 1 }).maxSourceFrameBytes).toBe(smallest)
+    expect(() => resolveInspectorOptions({ maxSourceFrameBytes: smallest - 1, maxBodyChunkBytes: 1 }))
+      .toThrow('maxSourceFrameBytes cannot carry a Cordis tree snapshot')
+  })
+
+  it('retains every pruned Cordis snapshot whose collector uses the state budget', async (test) => {
+    const root = new Context()
+    test.onTestFinished(async () => { await root.fiber.dispose() })
+    for (let index = 0; index < 200; index++) await root.plugin({ name: `plugin-${String(index)}`, apply() {} })
+    for (let maxFrameBytes = 8_192; maxFrameBytes < 8_448; maxFrameBytes++) {
+      const collector = new CordisTreeCollector(root, { maxNodes: 1_000, maxBytes: maxStatePayloadBytes(maxFrameBytes) })
+      const snapshot = collector.snapshot()
+      collector.close()
+      expect(snapshot.truncated).toBe(true)
+      const payload = JSON.parse(JSON.stringify(snapshot)) as InspectorJsonValue
+      buffer(4, { maxFrameBytes }).setState(CORDIS_TREE_TOPIC, payload, performance.now())
+    }
   })
 
   it('splits frames at record, byte, and sequence gaps and discards pending records', () => {

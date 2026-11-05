@@ -101,7 +101,7 @@ export async function uploadDesktopRelease(plan: DesktopUploadPlan, cos: COS, re
       try {
         const response = await cos.putObject({ Bucket: plan.bucket, Region: DESKTOP_COS_REGION, Key: key,
           Body: body, ContentLength: artifact.size, ContentType: artifact.contentType,
-          Headers: { 'Content-MD5': artifact.md5 } })
+          Headers: { 'Content-MD5': artifact.md5, ...(artifact.contentDisposition ? { 'Content-Disposition': artifact.contentDisposition } : {}) } })
         confirmedPuts++
         stage = 'record-response'
         recordPackagingEvent(directory, { type: 'put-confirmed', key, attempts: 1, ...receipt(response) })

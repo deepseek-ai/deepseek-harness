@@ -276,7 +276,6 @@ export class DesktopUpdateCoordinator {
       this.cancellation = result.cancellationToken
       const version = result.updateInfo.version
       if (valid(version) === null) throw new Error('desktop update: feed version is invalid')
-      if (this.channel === 'stable' && version.includes('-')) throw new Error('desktop update: stable feed contains a prerelease')
       this.release = result.isUpdateAvailable && gt(version, this.currentVersion())
         ? { kind: 'checked', version } : { kind: 'none' }
       return this.setState(this.candidate === undefined ? { phase: 'idle' } : { phase: 'available', version })

@@ -1,4 +1,4 @@
-/** Bounded GitHub repository checks using the installer's Git configuration and environment. */
+/** Bounded Git repository connection checks using the installer's Git configuration and environment. */
 import { mkdir, mkdtemp, open } from 'node:fs/promises'
 import { join } from 'node:path'
 import { execa } from 'execa'
@@ -19,7 +19,7 @@ export interface GithubConnectionFailure extends PackageResult {
   readonly argv: readonly string[]
 }
 
-/** Deadline, diagnostics and cancellation for one read-only GitHub check. */
+/** Deadline, diagnostics and cancellation for one read-only Git repository check. */
 export interface GithubConnectionOptions {
   timeoutMs: number
   outputBytes: number
@@ -30,13 +30,10 @@ export interface GithubConnectionOptions {
 
 /**
  * Check a GitHub repository before pnpm starts, without downloading or building its package.
- * Git reads the profile's Git and proxy configuration without invoking credential helpers or prompting.
- * Timeout and cancellation terminate its descendants too; pnpm owns authentication and transport fallback.
  * @param spec The parsed installation address; npm packages, local paths and other hosts are not checked.
  * @param dir The profile directory where installation runs.
  * @param options The connection deadline, output bound and operation cancellation.
- * @returns A failed check carrying the command line it ran (without URL user information) and its bounded output, with a
- * complete log at logPath, or undefined for a reachable repository or an unhandled spec.
+ * @returns As {@link checkGitConnection}, or undefined for a spec that does not name a GitHub repository.
  */
 export async function checkGithubConnection(
   spec: ParsedInstallSpec, dir: string, options: GithubConnectionOptions,
@@ -44,9 +41,25 @@ export async function checkGithubConnection(
   if (spec.kind !== 'git') return undefined
   const host = spec.host.toLowerCase().replace(/:.*$/, '')
   if (host !== 'github.com' && !host.endsWith('.github.com')) return undefined
+  return checkGitConnection(spec, dir, options)
+}
+
+/**
+ * Check a Git repository with `git ls-remote`, without downloading or building its package. A host shorthand is read
+ * over HTTPS; any other spec over the URL it names. Git reads the profile's Git and proxy configuration without
+ * invoking credential helpers or prompting, so a repository that needs credentials fails as `unknown`, not as a
+ * connection failure. Timeout and cancellation terminate its descendants too.
+ * @param spec The parsed address of a Git repository.
+ * @param dir The profile directory where installation runs.
+ * @param options The connection deadline, output bound and operation cancellation.
+ * @returns A failed check carrying the command line it ran (without URL user information), its bounded output and its
+ * failure kind, with a complete log at logPath, or undefined for a reachable repository.
+ */
+export async function checkGitConnection(
+  spec: ParsedInstallSpec & { readonly kind: 'git' }, dir: string, options: GithubConnectionOptions,
+): Promise<GithubConnectionFailure | undefined> {
   const repository = spec.spec.replace(/#.*$/s, '')
-    .replace(/^github:/i, 'https://github.com/')
-    .replace(/^gist:/i, 'https://gist.github.com/')
+    .replace(/^(?:github|gitlab|bitbucket|gist):/i, `https://${spec.host}/`)
     .replace(/^git\+/i, '')
   const logRoot = join(dir, '.plugin-manager', 'logs')
   await mkdir(logRoot, { recursive: true, mode: 0o700 })
@@ -70,7 +83,7 @@ export async function checkGithubConnection(
     })
     if (!result.failed) return undefined
     if (result.timedOut) await log.write(`dsh: connection to ${spec.host} timed out after ${String(options.timeoutMs)}ms\n`)
-    if ((await log.stat()).size === 0) await log.write(result.shortMessage ?? 'GitHub connection check failed')
+    if ((await log.stat()).size === 0) await log.write(result.shortMessage ?? 'Git connection check failed')
     const { size } = await log.stat()
     const bytes = Buffer.alloc(Math.min(size, options.outputBytes))
     await log.read(bytes, 0, bytes.length, size - bytes.length)

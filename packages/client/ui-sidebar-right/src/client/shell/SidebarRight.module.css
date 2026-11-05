@@ -83,11 +83,10 @@
   --dsh-dockkit-dock-layer: 40;
 }
 
-/* No whole-box subtraction here: Electron drag regions are window geometry,
-   not stacking, so a strip row inside this fullscreen content that marks itself
-   `data-window-drag` (ui-dockkit) still owns the drag over its own box, and
-   ui-web base.css subtracts interactive elements and portalled overlays. A
-   panel-wide no-drag would trade that drag affordance away. */
+/* Dockkit owns its pane exclusions and marked strip rows. Electron composes
+   their boxes in DOM order: a pane subtracts its box, then a marked strip adds
+   its row back. ui-web excludes controls within that row and body portals;
+   this outer panel declares no additional region. */
 
 /* Windows keeps caption controls above fullscreen file and terminal panels. */
 :global([data-windows-titlebar]) .panel[data-sidebar-right-panel='fullscreen'] {
@@ -218,15 +217,10 @@
  */
 .panel :global([data-dockkit-pane][data-sidebar-right-flash]),
 .panel :global([data-dockkit-float][data-sidebar-right-flash]) {
-  --sidebar-right-flash-color: var(--dsw-alias-brand-primary-new-colorprimary-new-color);
+  --sidebar-right-flash-color: var(--dsw-specific-sidebar-right-flash);
   --sidebar-right-flash-ring: color-mix(in srgb, var(--sidebar-right-flash-color) 48%, transparent);
   --sidebar-right-flash-near: color-mix(in srgb, var(--sidebar-right-flash-color) 16%, transparent);
   --sidebar-right-flash-far: color-mix(in srgb, var(--sidebar-right-flash-color) 10%, transparent);
-}
-
-:global(body[data-ds-dark-theme]) .panel :global([data-dockkit-pane][data-sidebar-right-flash]),
-:global(body[data-ds-dark-theme]) .panel :global([data-dockkit-float][data-sidebar-right-flash]) {
-  --sidebar-right-flash-color: var(--dsw-static-neutral-00);
 }
 
 .panel :global([data-dockkit-pane][data-sidebar-right-flash]) {

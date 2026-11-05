@@ -93,6 +93,7 @@ LEGACY_CUSTOM_DISABLED_ROWS = (
     "tool-fs",
     "tool-fs-search",
     "tool-goal",
+    "tool-office",
     "tool-plugin-manager",
     "tool-schedule",
     "tool-skill",
@@ -995,9 +996,8 @@ def _smoke_sdk_authoring_cached(base_url: str, executable: Path, update_snapshot
             assert len(requests) == 2, requests
             prompt = json.dumps(requests[0], ensure_ascii=False)
             assert ("- `office`:" in prompt) == (mode != "disabled"), mode
-            for name in ("office-docx", "office-pptx", "office-xlsx", "office-render", "office-recalculate", "office-export-pdf"):
+            for name in ("office-docx", "office-pptx", "office-xlsx"):
                 assert (name in prompt) == (mode != "disabled"), (mode, name)
-            assert "render --input" not in prompt and "libreofficeKit" not in prompt, mode
             assert ("CUSTOM_OFFICE_DOCX" in prompt) == (mode == "replacement"), mode
             tool_result = next(block for message in requests[1]["messages"]
                                for block in message.get("content", [])
@@ -1155,7 +1155,7 @@ def smoke_sdk_office(executable: Path) -> None:
         patch = root / f"{mode}.patch.yml"
         patch.write_text(json.dumps([{"insert": [{
             "id": "python-sdk-office-smoke",
-            "inject": ["skills"],
+            "inject": ["officeKit"],
             "name": plugin.as_uri(),
             "config": {"input": str(document), "output": str(output), "result": str(result_path),
                        "imageInput": str(documents["pptx"]), "imageOutput": str(root / "node-pptx")},

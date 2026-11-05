@@ -23,6 +23,8 @@ export interface Config {
   maxMessageBytes?: number
   /** Maximum simultaneous host binding calls accepted from a program. */
   maxPendingCalls?: number
+  /** Time to wait for cooperative stop acknowledgment before terminating the process. */
+  stopGraceMs?: number
   /** Managed process termination and output-drain grace in milliseconds. */
   graceMs?: number
 }
@@ -39,6 +41,7 @@ export const NodeConfig: z<Config> = z.object({
   maxOldGenerationSizeMb: z.number().default(512),
   maxMessageBytes: z.number().default(134_217_728),
   maxPendingCalls: z.number().default(128),
+  stopGraceMs: z.number().default(3_000),
   graceMs: z.number().default(3_000),
   launch: z.union([
     z.object({ kind: z.const('node-script').required(), executable: z.string().required(), bootstrapPath: z.string() }),
@@ -55,7 +58,7 @@ export function validateConfig(config: ResolvedConfig): void {
   for (const [key, value] of Object.entries(config)) {
     if (typeof value === 'number' && (!Number.isFinite(value) || value <= 0)) throw new Error(`ptc-runtime-node: ${key} must be positive and finite`)
   }
-  for (const key of ['timeoutMs', 'maxTimeoutMs', 'graceMs'] as const) {
+  for (const key of ['timeoutMs', 'maxTimeoutMs', 'graceMs', 'stopGraceMs'] as const) {
     if (config[key] > MAX_TIMER_DELAY_MS) throw new Error(`ptc-runtime-node: ${key} exceeds the supported timer range`)
   }
   if (!Number.isSafeInteger(config.maxOutputBytes) || config.maxOutputBytes < 4) throw new Error('ptc-runtime-node: maxOutputBytes must be an integer of at least 4')
