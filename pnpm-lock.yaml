@@ -7582,6 +7582,9 @@ importers:
       '@deepseek-ai/dsh-mcp-resources':
         specifier: workspace:*
         version: link:../../mcp/mcp-resources
+      '@deepseek-ai/dsh-mcp-testkit':
+        specifier: workspace:*
+        version: link:../../test-support/mcp-testkit
       '@deepseek-ai/dsh-scope':
         specifier: workspace:*
         version: link:../../core/scope
