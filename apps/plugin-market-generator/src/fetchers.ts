@@ -16,6 +16,9 @@ import { readManifest, type Manifest } from './packages.ts'
 
 const run = promisify(execFile)
 
+/** Public npm registry whose package identity permits npm download statistics. */
+export const PUBLIC_NPM_REGISTRY = 'https://registry.npmjs.org/'
+
 /** Network limits for one source. */
 export interface FetchLimits {
   readonly timeoutMs: number

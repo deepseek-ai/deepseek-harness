@@ -601,6 +601,18 @@ describe('RowActionToast', () => {
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
+
+  it.each(['archived', 'stoppedAndArchived'] as const)('renders a %s follow-up in the same toast with undo', async (kind) => {
+    const { notify, undoArchive } = await toastSurface()
+    notify({ kind, sessionId: sid('one'), message: '已归档，工作树将被清理', tone: 'success' })
+    expect(screen.getAllByRole('alert')).toHaveLength(1)
+    expect(screen.getByRole('alert').textContent).toContain('已归档，工作树将被清理')
+    notify({ kind, sessionId: sid('one'), message: '已归档，工作树清理失败', tone: 'warning' })
+    expect(screen.getAllByRole('alert')).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: '撤销' }))
+    expect(undoArchive).toHaveBeenCalledWith(sid('one'))
+  })
+
   it('the archived notice takes itself down, then undoes the archive or shows the archived rows', async () => {
     const { dismissToast, undoArchive, showArchived, notify } = await toastSurface()
     notify({ kind: 'archived', sessionId: sid('one') })

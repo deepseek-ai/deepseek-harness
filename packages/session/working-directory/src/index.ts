@@ -15,6 +15,22 @@ import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 
 declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /**
+     * Coordinate directory validation and publication with a resource operation
+     * on the directory, such as a checkout being removed. A listener that must
+     * wait awaits that operation, then calls `next()`; every other listener
+     * calls `next()` at once. A rejection fails this access and leaves the
+     * recorded directory unchanged; it is not a fallback.
+     * @param request - owner, requested path (null validates the current directory), and the access's cancellation.
+     * @param next - perform validation and commit.
+     * @mode waterfall
+     */
+    'working-directory/access'(
+      request: { agent: Agent; path: string | null; signal: AbortSignal },
+      next: () => Promise<string>,
+    ): Promise<string>
+  }
   interface Context {
     workingDirectory: WorkingDirectoryService
   }
@@ -129,10 +145,10 @@ export class WorkingDirectoryService extends Service {
    * @param signal - cancellation for filesystem inspection.
    * @returns the existing directory; recovery is committed before fulfillment.
    * A notice failure is warned without reverting the committed state.
-   * @throws when the original project is also unavailable.
+   * @throws when the original project is also unavailable, or when a `working-directory/access` listener rejects.
    */
   ensure(agent: Agent, signal?: AbortSignal): Promise<string> {
-    return this.serialize(agent, signal, async (control) => {
+    return this.serialize(agent, signal, control => this.ctx.waterfall('working-directory/access', { agent, path: null, signal: control }, async () => {
       const current = this.get(agent.session)
       const target = await this.ctx.fs.resolve(current, { signal: control })
       const info = await this.ctx.fs.stat(target, control)
@@ -148,7 +164,7 @@ export class WorkingDirectoryService extends Service {
       const restored = await this.directory(original, original, control)
       this.commit(agent, restored, true, control)
       return restored
-    })
+    }))
   }
 
   /**
@@ -161,12 +177,12 @@ export class WorkingDirectoryService extends Service {
    * @throws when the requested path is not an existing directory.
    */
   set(agent: Agent, path: string, signal?: AbortSignal): Promise<string> {
-    return this.serialize(agent, signal, async (control) => {
+    return this.serialize(agent, signal, control => this.ctx.waterfall('working-directory/access', { agent, path, signal: control }, async () => {
       if (path.length === 0) throw new Error('working-directory: cd must not be empty')
       const directory = await this.directory(path, this.get(agent.session), control)
       this.commit(agent, directory, false, control)
       return directory
-    })
+    }))
   }
 
   private contextText(session: Session): string {

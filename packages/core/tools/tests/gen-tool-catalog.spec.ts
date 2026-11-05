@@ -40,7 +40,8 @@ describe('gen-tool-catalog collectToolCatalog', () => {
       'str_replace_editor', 'subagent', 'subagent_oar', 'team_task_create',
       'team_task_get', 'team_task_list', 'team_task_update', 'terminal_close', 'terminal_list',
       'terminal_open', 'terminal_read', 'terminal_send', 'terminal_signal', 'todo_write',
-      'update_goal', 'wait_agent', 'web_fetch', 'web_search', 'workflow', 'working_directory', 'write',
+      'update_goal', 'user_terminal_list', 'user_terminal_read', 'wait_agent', 'web_fetch', 'web_search', 'workflow',
+      'working_directory', 'write',
     ])
     // Every tool carries a JSON-Schema `parameters` object (what the model sees).
     for (const entry of catalog) {

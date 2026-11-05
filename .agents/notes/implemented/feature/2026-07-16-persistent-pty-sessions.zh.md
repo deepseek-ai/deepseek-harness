@@ -43,7 +43,7 @@ agent scope dispose（资源释放）时先撤销注册，再等待全部所属 
 注册的 `shell` 后端只约束终端如何启动，不约束启动后输入的命令。因此 `dsh-terminal-bash` 在 spawn 前应用两层保护：
 
 - 它只提供终端专用的环境覆盖；挂载的子进程提供方先清除名称形似凭据的环境变量，再合并这些覆盖。
-- 它要求共享的 `ctx.sandboxPolicy`。后端在 spawn 时，以部署默认值为底折叠 owner 的有效会话模式；`danger-full-access` 会直接启动 shell，受限模式则要求同一执行世界中存在 `ctx.sandbox` 提供方，并只包装一次 shell argv。该模式与 workspace root 在 PTY 的整个生命周期中充当进程边界。只要 owner 有任何已打开的 PTY 或尚未发布的 spawn，任何会改变生效 `sandbox/mode` 的写入都会在提交前被拒绝，并提示先等待创建操作结算，再关闭这些会话；不会改变生效模式的写入仍然有效。这项进行中的预留从后端 setup 持续到发布完成，因此不存在降级后又出现权限更宽的终端这一竞态。`danger-full-access` 是现有的显式无约束选择，不另设 PTY 私有 bypass。
+- 它要求共享的 `ctx.sandboxPolicy`。后端在 spawn 时，以部署默认值为底折叠 owner 的有效会话模式；`danger-full-access` 会直接启动 shell，受限模式则要求同一执行世界中存在 `ctx.sandbox` 提供方，并只包装一次 shell argv。该模式与 workspace root 在 PTY 的整个生命周期中充当进程边界。只要 owner 有任何已打开的 PTY 或尚未发布的 spawn，任何会改变生效 `sandbox/mode` 的写入都会在提交前被拒绝，并提示先等待创建操作结算，再关闭这些会话；不会改变生效模式的写入仍然有效。这项进行中的预留从后端 setup 持续到发布完成，因此不存在降级后又出现权限更宽的终端这一竞态。`danger-full-access` 是现有的显式无约束选择，不另设 PTY 私有 bypass。[Agent 终端面板决策](2026-10-12-agent-terminal-panel.zh.md)中的侧栏后端采用相同的启动策略，但不设这道切换模式的栅栏。
 
 沙箱限制本地进程副作用，但不会让任意 shell 输入自动安全：网络调用和其他外部副作用仍由部署策略治理。工具描述会说明 PTY 会话比一次性工具更难审计，只应在确实需要持久状态或交互式 stdin 时使用。
 
