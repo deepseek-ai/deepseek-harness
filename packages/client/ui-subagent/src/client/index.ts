@@ -3,7 +3,9 @@ import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ComposerChainProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { SubagentCatalogAction, SubagentHeaderLineage, type SubagentCatalogInjected, type SubagentCatalogActionInjected } from './SubagentHeaderLineage.tsx'
+import { SubagentHeaderLineage } from './SubagentHeaderLineage.tsx'
+import type { SubagentCatalogInjected } from './SubagentCatalog.tsx'
+import { SubagentsProgress, SubagentsSection, type SubagentsSectionInjected } from './SubagentsSection.tsx'
 import {
   SubagentReadOnlyComposer, type SubagentReadOnlyMatch,
 } from './SubagentReadOnlyComposer.tsx'
@@ -12,6 +14,7 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
+import type {} from '@deepseek-ai/dsh-client-ui-session-panel/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { en, ja, es, fr, de, ru, pt, NS, zh, type SubagentKey } from './locales.ts'
@@ -24,9 +27,9 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-export type {
-  SubagentCatalogActionProps, SubagentCatalogInjected, SubagentCatalogActionInjected, SubagentHeaderLineageProps,
-} from './SubagentHeaderLineage.tsx'
+export type { SubagentCatalogInjected } from './SubagentCatalog.tsx'
+export type { SubagentHeaderLineageProps } from './SubagentHeaderLineage.tsx'
+export type { SubagentsProgressProps, SubagentsSectionInjected, SubagentsSectionProps } from './SubagentsSection.tsx'
 export type {
   SubagentReadOnlyComposerProps, SubagentReadOnlyMatch,
 } from './SubagentReadOnlyComposer.tsx'
@@ -44,11 +47,13 @@ function selectReadOnlySubagent(owner: ComposerChainProps): SubagentReadOnlyMatc
 }
 
 /**
- * Client plugin body: register the subagent catalog and read-only composer seats.
+ * Client plugin body: register the breadcrumb switcher, the Session panel
+ * subagents section, and the read-only composer.
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'ui-subagent: dictionaries')
+  const t = ctx.locale.bind(NS)
   ctx.inject(['resources', 'sidebarRightTabs'], (scope) => {
     registerSidebarChat(scope, ctx.locale.bind(NS))
   })
@@ -67,8 +72,8 @@ export function apply(ctx: ClientContext): void {
     },
   })
   const footerAvailable = {
-    getSnapshot: () => ctx.slots.entries('conversation.session.header.actions.subagent.footer').length > 0,
-    subscribe: (listener: () => void) => ctx.slots.subscribe('conversation.session.header.actions.subagent.footer', listener),
+    getSnapshot: () => ctx.slots.entries('conversation.session.panel.subagents.footer').length > 0,
+    subscribe: (listener: () => void) => ctx.slots.subscribe('conversation.session.panel.subagents.footer', listener),
   }
   ctx.slots.inject(
     'conversation.session.header.lineage',
@@ -78,20 +83,25 @@ export function apply(ctx: ClientContext): void {
       inject: catalogActions,
     }, SubagentHeaderLineage),
   )
-  ctx.slots.inject(
-    'conversation.session.header.actions',
-    () => ctx.slots.register({
-      name: 'conversation.session.header.actions',
-      id: 'subagent-catalog',
-      // Between the preset label (-10) and background tasks (20).
-      order: 10,
+  ctx.slots.inject('conversation.session.panel.section', function* () {
+    yield ctx.slots.register({
+      name: 'conversation.session.panel.section',
+      id: 'subagents',
+      // After change requests (100), before background jobs (300).
+      order: 200,
+      label: () => t('section.title'),
       locale: NS,
-      inject: (sessionId): SubagentCatalogActionInjected => ({
+      inject: (sessionId): SubagentsSectionInjected => ({
         ...catalogActions(sessionId), hooks: { footerAvailable },
       }),
-      children: { 'conversation.session.header.actions.subagent.footer': { kind: 'list', scope: 'session' } },
-    }, SubagentCatalogAction),
-  )
+      children: { 'conversation.session.panel.subagents.footer': { kind: 'list', scope: 'session' } },
+    }, SubagentsSection)
+    yield ctx.slots.register({
+      name: 'conversation.session.panel.section.actions',
+      key: 'subagents',
+      locale: NS,
+    }, SubagentsProgress)
+  })
   ctx.slots.inject(
     'conversation.composer',
     () => ctx.slots.register({

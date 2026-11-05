@@ -1,19 +1,17 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
-import { createPortal } from 'react-dom'
+import { useEffect, useMemo, useState } from 'react'
 import type { JobsSnapshot, JobView, ObservedJob } from '@deepseek-ai/dsh-api-job-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
-  IconChevronDownOutlineRegular, IconLayersOutlineRegular, IconStopFillRegular, MenuSurface, StateDot, TerminalBlock, Tooltip,
-  useDismissOnOutsidePointer,
+  IconChevronDownOutlineRegular, IconStopFillRegular, StateDot, TerminalBlock,
   type StateDotState, type TerminalBlockLabels,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { NS } from './locales.ts'
-import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
-import css from './JobListAction.module.css'
+import type {} from '@deepseek-ai/dsh-client-ui-session-panel/client'
+import css from './JobsSection.module.css'
 
-/** Registration-side business face for the job list. */
-export interface JobListInjected {
+/** Registration-side business face for the background-jobs section. */
+export interface JobsSectionInjected {
   hooks: {
     /** Client jobs snapshot (rosters and observations) bound by the renderer as useJobs. */
     jobs: {
@@ -39,17 +37,14 @@ export interface JobListInjected {
   killJob: (sessionId: SessionId, jobId: string) => Promise<boolean>
 }
 
-/** Full props for the session-header job-list action. */
-export type JobListActionProps =
-  PropsRuntime<'conversation.session.header.actions'>
+/** Full props for the Session panel's background-jobs section. */
+export type JobsSectionProps =
+  PropsRuntime<'conversation.session.panel.section'>
   & PropsLocale<typeof NS>
-  & InjectFace<JobListInjected>
+  & InjectFace<JobsSectionInjected>
 
 /** Stable empty list so a session with no jobs keeps one array identity. */
 const NO_JOBS: readonly JobView[] = []
-
-/** Keyboard-reachable controls inside the list, in document order. */
-const FOCUSABLE = 'button:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])'
 
 /** How long an armed kill waits for its confirming press before disarming. */
 const KILL_ARM_MS = 3_000
@@ -314,31 +309,21 @@ function JobItem({ job, view, expanded, now, onToggle, kill, t }: {
 }
 
 /**
- * Session-header entry point for this session's background jobs. Mounting it
- * keeps the session's roster stream open; it renders nothing at all until the
- * session can see at least one job. Expanding an observable row (a live job,
- * or a settled one with retained output) starts its observation stream, and
- * collapsing (or closing the popover) stops it — output only flows while
- * someone is watching. A running row carries a two-press stop button that
- * requests a human kill through the job controller. Non-touch hover on a
- * text-visible trigger opens after 150ms and closes after 120ms outside both
- * trigger and portal. Compact triggers toggle on click; ArrowDown opens and
- * pins either layout. Interacting inside also pins the menu until explicit
- * dismissal; timers and the pin are local to the mounted session.
+ * Session panel section for this session's background jobs. Mounting it keeps
+ * the session's roster stream open; it renders nothing until the session can
+ * see at least one job, so the panel hides the section with its title. Live
+ * rows come first; settled rows fold under a count that expands and clears
+ * client-side. Expanding an observable row (a live job, or a settled one with
+ * retained output) starts its observation stream, and collapsing stops it —
+ * output only flows while someone is watching. A running row carries a
+ * two-press stop button that requests a human kill through the job controller.
  * @param props - runtime slot currency, the jobs snapshot hook, the roster,
  *   observation, and kill controls, and the namespace translator.
- * @returns the trigger and its popover list, or null when there is nothing to show.
+ * @returns the job list, or null when there is nothing to show.
  */
-export function JobListAction({ sessionId, useJobs, watchRows, observe, killJob, t }: JobListActionProps) {
-  const activityId = useId()
+export function JobsSection({ sessionId, useJobs, watchRows, observe, killJob, t }: JobsSectionProps) {
   const jobs = useJobs(state => state.rows[sessionId]) ?? NO_JOBS
   const observedViews = useJobs(state => state.observed)
-  const [menuState, setMenuState] = useState<{ sessionId: SessionId; mode: 'closed' | 'hover' | 'pinned' }>(
-    { sessionId, mode: 'closed' },
-  )
-  const hoverOpenTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const hoverCloseTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  if (menuState.sessionId !== sessionId) setMenuState({ sessionId, mode: 'closed' })
   const [expandedKey, setExpandedKey] = useState<string | undefined>(undefined)
   const [now, setNow] = useState(() => Date.now())
   // Settled-section fold: an explicit user toggle wins; before one, the tail
@@ -349,10 +334,6 @@ export function JobListAction({ sessionId, useJobs, watchRows, observe, killJob,
   const [clearedKeys, setClearedKeys] = useState<ReadonlySet<string>>(() => new Set())
   // One kill affordance advances at a time: arming a row disarms any other.
   const [killPhase, setKillPhase] = useState<{ key: string; state: Exclude<KillState, 'idle'> } | undefined>(undefined)
-  const rootRef = useRef<HTMLDivElement>(null)
-  const triggerRef = useRef<HTMLButtonElement>(null)
-  const countRef = useRef<HTMLSpanElement>(null)
-  const menuRef = useRef<HTMLDivElement>(null)
 
   const rows = useMemo(() => ordered(jobs), [jobs])
   const liveRows = useMemo(() => rows.filter(isLive), [rows])
@@ -361,100 +342,26 @@ export function JobListAction({ sessionId, useJobs, watchRows, observe, killJob,
     [rows, clearedKeys],
   )
   const settledExpanded = settledOpen ?? liveRows.length === 0
-  const visibleCount = liveRows.length + settledRows.length
-  const hasJobs = visibleCount > 0
-  const open = hasJobs && menuState.sessionId === sessionId && menuState.mode !== 'closed'
 
-  const cancelHover = useCallback((): void => {
-    clearTimeout(hoverOpenTimer.current)
-    clearTimeout(hoverCloseTimer.current)
-    hoverOpenTimer.current = undefined
-    hoverCloseTimer.current = undefined
-  }, [])
-
-  const changeOpen = useCallback((next: boolean): void => {
-    cancelHover()
-    if (next) setNow(Date.now())
-    setMenuState({ sessionId, mode: next ? 'pinned' : 'closed' })
-  }, [cancelHover, sessionId])
-
-  // CSS owns the compact breakpoint; read its result only for pointer gestures.
-  const allowsHoverOpen = (): boolean => countRef.current !== null
-    && getComputedStyle(countRef.current).display !== 'none'
-
-  const hoverEnter = (event: PointerEvent<HTMLElement>): void => {
-    if (event.pointerType === 'touch') return
-    cancelHover()
-    if (open || !allowsHoverOpen()) return
-    hoverOpenTimer.current = setTimeout(() => {
-      hoverOpenTimer.current = undefined
-      if (!allowsHoverOpen()) return
-      setNow(Date.now())
-      setMenuState({ sessionId, mode: 'hover' })
-    }, 150)
-  }
-
-  const hoverLeave = (event: PointerEvent<HTMLElement>): void => {
-    if (event.pointerType === 'touch') return
-    cancelHover()
-    if (!open || menuState.mode === 'pinned') return
-    hoverCloseTimer.current = setTimeout(() => {
-      hoverCloseTimer.current = undefined
-      setMenuState({ sessionId, mode: 'closed' })
-    }, 120)
-  }
-
-  // Timers belong to this mounted session and cannot survive a disappearing trigger.
-  useEffect(() => cancelHover, [cancelHover, sessionId, hasJobs])
-
-  const anchorName = `--dsh-jobs-${useId().replaceAll(':', '')}`
-  useDismissOnOutsidePointer(rootRef, open, changeOpen, menuRef)
-  // Hover does not move focus; Escape must also work from the rest of the page.
-  useEffect(() => {
-    if (!open) return
-    const dismiss = (event: globalThis.KeyboardEvent): void => {
-      if (event.key !== 'Escape' || event.defaultPrevented) return
-      event.preventDefault()
-      changeOpen(false)
-    }
-    document.addEventListener('keydown', dismiss)
-    return () => { document.removeEventListener('keydown', dismiss) }
-  }, [open, changeOpen])
-
-  // The roster follows the mounted session: one stream while this control
-  // lives, released with it.
+  // The roster follows the mounted section: one stream while it lives, released with it.
   useEffect(() => watchRows(sessionId), [sessionId, watchRows])
 
-  // The clock only runs while an open list is showing something that moves.
+  // The clock only runs while the list shows something that moves.
   useEffect(() => {
-    if (!open || liveRows.length === 0) return
+    if (liveRows.length === 0) return
     setNow(Date.now())
     const timer = setInterval(() => { setNow(Date.now()) }, 1_000)
     return () => { clearInterval(timer) }
-  }, [open, liveRows.length])
+  }, [liveRows.length])
 
   // Observation follows visibility: the stream opens when an observable panel
-  // expands and closes when it collapses, unmounts, or the popover closes.
-  const expandedRow = open && expandedKey !== undefined
-    ? rows.find(job => String(job.id) === expandedKey)
-    : undefined
+  // expands and closes when it collapses or the section unmounts.
+  const expandedRow = expandedKey === undefined ? undefined : rows.find(job => String(job.id) === expandedKey)
   const activeJob = expandedRow !== undefined && isObservable(expandedRow) ? expandedRow.id : undefined
   useEffect(() => {
     if (activeJob === undefined) return
     return observe(sessionId, activeJob)
   }, [sessionId, activeJob, observe])
-
-  // A returning roster starts closed rather than restoring an obsolete pin.
-  useEffect(() => {
-    if (!hasJobs) changeOpen(false)
-  }, [hasJobs, changeOpen])
-
-  // An expanded row that left the list (owner disposal) folds its panel.
-  useEffect(() => {
-    if (expandedKey !== undefined && !rows.some(job => String(job.id) === expandedKey)) {
-      setExpandedKey(undefined)
-    }
-  }, [rows, expandedKey])
 
   // An armed kill disarms on a timer, and a failed one clears its hint; the
   // pending phase instead waits for the RPC (or the row's own status flip).
@@ -471,12 +378,9 @@ export function JobListAction({ sessionId, useJobs, watchRows, observe, killJob,
 
   // A phase whose row stopped being killable (settled, stopping, removed)
   // has no button to describe any more.
-  useEffect(() => {
-    if (killPhase !== undefined
-      && !rows.some(job => String(job.id) === killPhase.key && job.status === 'running')) {
-      setKillPhase(undefined)
-    }
-  }, [rows, killPhase])
+  const killable = killPhase !== undefined
+    && rows.some(job => String(job.id) === killPhase.key && job.status === 'running')
+  if (killPhase !== undefined && !killable) setKillPhase(undefined)
 
   const pressKill = (job: JobView): void => {
     const key = String(job.id)
@@ -490,17 +394,14 @@ export function JobListAction({ sessionId, useJobs, watchRows, observe, killJob,
       // frames (control stream) have no cross-carrier ordering, so re-enabling
       // here could offer a duplicate kill while the row still reads `running`.
       // The authoritative jobs frame flips the row to `stopping`, which removes
-      // the button and clears the phase through the killable-set effect above.
+      // the button and clears the phase above.
       setKillPhase(current => current?.key === key && !ok
         ? { key, state: 'failed' }
         : current)
     })
   }
 
-  if (visibleCount === 0) return null
-
-  const count = liveRows.length > 0 ? liveRows.length : visibleCount
-  const countLabel = t(count === 1 ? 'count.idle.one' : 'count.idle.other', { count })
+  if (liveRows.length + settledRows.length === 0) return null
 
   const clearSettled = (): void => {
     setClearedKeys((current) => {
@@ -510,35 +411,6 @@ export function JobListAction({ sessionId, useJobs, watchRows, observe, killJob,
     })
     if (expandedKey !== undefined && settledRows.some(job => String(job.id) === expandedKey)) {
       setExpandedKey(undefined)
-    }
-  }
-
-  // The portaled list sits at the end of the document, so Tab is bridged to
-  // keep the in-place order: the trigger leads into the list, and leaving
-  // either end of the list returns to the trigger's position in the page.
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
-    const trigger = triggerRef.current
-    if (event.key === 'Escape') {
-      event.preventDefault()
-      changeOpen(false)
-      trigger?.focus()
-      return
-    }
-    if (!open) return
-    const menu = menuRef.current
-    /* v8 ignore next -- both refs are attached while the open list renders. */
-    if (event.key !== 'Tab' || trigger === null || menu === null) return
-    const focusable = [...menu.querySelectorAll<HTMLElement>(FOCUSABLE)]
-    if (event.target === trigger) {
-      // Every list carries a control: a live row's toggle or the settled section's buttons.
-      if (event.shiftKey) return
-      event.preventDefault()
-      focusable[0]?.focus()
-    } else if (event.shiftKey ? event.target === focusable[0] : event.target === focusable.at(-1)) {
-      // Shift+Tab lands on the trigger itself; Tab continues from it to the
-      // control that follows the trigger.
-      if (event.shiftKey) event.preventDefault()
-      trigger.focus()
     }
   }
 
@@ -565,73 +437,27 @@ export function JobListAction({ sessionId, useJobs, watchRows, observe, killJob,
   )
 
   return (
-    <div ref={rootRef} style={{ anchorName }} onKeyDown={onKeyDown}>
-      <Tooltip label={countLabel} disabled={open} delayMs={500} portal side="bottom">
-        <button
-          ref={triggerRef}
-          type="button"
-          className={css.trigger}
-          aria-expanded={open}
-          aria-label={countLabel}
-          aria-describedby={liveRows.length > 0 ? activityId : undefined}
-          onPointerEnter={hoverEnter}
-          onPointerLeave={hoverLeave}
-          onClick={() => { changeOpen(!open || (allowsHoverOpen() && menuState.mode !== 'pinned')) }}
-          onKeyDown={(event) => {
-            if (event.key !== 'ArrowDown') return
-            event.preventDefault()
-            changeOpen(true)
-            queueMicrotask(() => { menuRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus() })
-          }}
-        >
-          <span className={css.activitySlot} aria-hidden>
-            <IconLayersOutlineRegular size={14} className={liveRows.length > 0 ? css.compactIcon : undefined} />
-            {liveRows.length > 0 && <StateDot state="ongoing" className={css.textModeActivity} />}
-          </span>
-          <span ref={countRef} className={css.count} data-job-count>{countLabel}</span>
-        </button>
-      </Tooltip>
-      {liveRows.length > 0 && <span id={activityId} hidden>{t('section.live')}</span>}
-      {open
-        ? createPortal(
-          <MenuSurface
-            ref={menuRef}
-            className={css.menu}
-            style={{ positionAnchor: anchorName }}
-            onPointerEnter={hoverEnter}
-            onPointerLeave={hoverLeave}
-            onPointerDownCapture={() => { changeOpen(true) }}
-            onFocusCapture={() => { changeOpen(true) }}
-          >
-            <ul className={css.menuBody} aria-label={t('list.aria')}>
-              {liveRows.length > 0
-                ? <li className={css.sectionHeader} aria-hidden="true">{t('section.live')}</li>
-                : null}
-              {liveRows.map(item)}
-              {settledRows.length > 0
-                ? (
-                  <li className={css.sectionHeader}>
-                    <button
-                      type="button"
-                      className={css.sectionToggle}
-                      aria-expanded={settledExpanded}
-                      onClick={() => { setSettledOpen(!settledExpanded) }}
-                    >
-                      <IconChevronDownOutlineRegular size={12} className={settledExpanded ? `${css.sectionChevron} ${css.sectionChevronOpen}` : css.sectionChevron} />
-                      {t('section.settledCount', { count: settledRows.length })}
-                    </button>
-                    <button type="button" className={css.sectionClear} onClick={clearSettled}>
-                      {t('section.clear')}
-                    </button>
-                  </li>
-                )
-                : null}
-              {settledExpanded ? settledRows.map(item) : null}
-            </ul>
-          </MenuSurface>,
-          document.body,
+    <ul className={css.list} aria-label={t('list.aria')} data-jobs-section="">
+      {liveRows.map(item)}
+      {settledRows.length > 0
+        ? (
+          <li className={css.sectionHeader}>
+            <button
+              type="button"
+              className={css.sectionToggle}
+              aria-expanded={settledExpanded}
+              onClick={() => { setSettledOpen(!settledExpanded) }}
+            >
+              <IconChevronDownOutlineRegular size={12} className={settledExpanded ? `${css.sectionChevron} ${css.sectionChevronOpen}` : css.sectionChevron} />
+              {t('section.settledCount', { count: settledRows.length })}
+            </button>
+            <button type="button" className={css.sectionClear} onClick={clearSettled}>
+              {t('section.clear')}
+            </button>
+          </li>
         )
         : null}
-    </div>
+      {settledExpanded ? settledRows.map(item) : null}
+    </ul>
   )
 }

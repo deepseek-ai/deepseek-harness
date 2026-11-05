@@ -19,14 +19,14 @@ async function bench() {
   const collapseHeader = ctx.slots.register({
     name: 'root',
     children: {
-      'conversation.session.header.actions.subagent.footer': { kind: 'list', scope: 'session' },
+      'conversation.session.panel.subagents.footer': { kind: 'list', scope: 'session' },
       'conversation.input.model': { kind: 'single', scope: 'session' },
       'shell.overlay': { kind: 'list', scope: 'root' },
     },
   } as never, () => null)
   const fiber = ctx.plugin({ inject: [...inject], apply })
   await fiber.await()
-  const entry = () => ctx.slots.entries('conversation.session.header.actions.subagent.footer')
+  const entry = () => ctx.slots.entries('conversation.session.panel.subagents.footer')
     .find(candidate => candidate.component === TeamBoard)
   return { ctx, fiber, entry, collapseHeader }
 }
@@ -55,7 +55,7 @@ describe('task-board browser plugin', () => {
     expect(b.entry()).toBeUndefined()
     b.ctx.slots.register({
       name: 'root',
-      children: { 'conversation.session.header.actions.subagent.footer': { kind: 'list', scope: 'session' } },
+      children: { 'conversation.session.panel.subagents.footer': { kind: 'list', scope: 'session' } },
     } as never, () => null)
     await Promise.resolve()
     expect(b.entry()).toBeDefined()

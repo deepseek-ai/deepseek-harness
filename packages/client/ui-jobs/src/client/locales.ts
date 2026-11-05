@@ -5,10 +5,7 @@ export const NS = 'job'
 
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
-  'count.idle.one': '{count} 个后台任务',
-  'count.idle.other': '{count} 个后台任务',
   'list.aria': '后台任务',
-  'section.live': '进行中',
   'section.settledCount': '已结束 {count}',
   'section.clear': '清空',
   'row.expandAria': '展开 {label} 的实时输出',
@@ -47,10 +44,7 @@ export const zh = {
 
 /** English dictionary, key-identical to the Chinese source of truth. */
 export const en: Record<JobKey, string> = {
-  'count.idle.one': '{count} background job',
-  'count.idle.other': '{count} background jobs',
   'list.aria': 'Background jobs',
-  'section.live': 'Running',
   'section.settledCount': 'Finished {count}',
   'section.clear': 'Clear',
   'row.expandAria': 'Show live output of {label}',
@@ -92,10 +86,7 @@ export type JobKey = keyof typeof zh
 
 /** Japanese copy, checked against the English keys. */
 export const ja = {
-  'count.idle.one': 'バックグラウンドジョブ {count} 件',
-  'count.idle.other': 'バックグラウンドジョブ {count} 件',
   'list.aria': 'バックグラウンドジョブ',
-  'section.live': '実行中',
   'section.settledCount': '完了 {count} 件',
   'section.clear': 'クリア',
   'row.expandAria': '{label} のライブ出力を表示',
@@ -134,10 +125,7 @@ export const ja = {
 
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
-  'count.idle.one': 'Tareas en segundo plano: {count}',
-  'count.idle.other': 'Tareas en segundo plano: {count}',
   'list.aria': 'Trabajos en segundo plano',
-  'section.live': 'corriendo',
   'section.settledCount': 'Terminado {count}',
   'section.clear': 'Borrar',
   'row.expandAria': 'Mostrar salida en vivo de {label}',
@@ -176,10 +164,7 @@ export const es = {
 
 /** French dictionary, checked against the English keys. */
 export const fr = {
-  'count.idle.one': 'Tâches en arrière-plan : {count}',
-  'count.idle.other': 'Tâches en arrière-plan : {count}',
   'list.aria': 'Travaux en arrière-plan',
-  'section.live': 'Courir',
   'section.settledCount': 'Terminé {count}',
   'section.clear': 'Effacer',
   'row.expandAria': 'Afficher la sortie en direct de {label}',
@@ -218,10 +203,7 @@ export const fr = {
 
 /** German dictionary, checked against the English keys. */
 export const de = {
-  'count.idle.one': 'Hintergrundaufgaben: {count}',
-  'count.idle.other': 'Hintergrundaufgaben: {count}',
   'list.aria': 'Hintergrundjobs',
-  'section.live': 'Laufen',
   'section.settledCount': 'Fertig {count}',
   'section.clear': 'Klar',
   'row.expandAria': 'Live-Ausgabe von {label} anzeigen',
@@ -260,10 +242,7 @@ export const de = {
 
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
-  'count.idle.one': 'Фоновые задачи: {count}',
-  'count.idle.other': 'Фоновые задачи: {count}',
   'list.aria': 'Фоновые задания',
-  'section.live': 'Бег',
   'section.settledCount': 'Закончено {count}',
   'section.clear': 'Очистить',
   'row.expandAria': 'Показать живой вывод {label}',
@@ -302,10 +281,7 @@ export const ru = {
 
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
-  'count.idle.one': 'Tarefas em segundo plano: {count}',
-  'count.idle.other': 'Tarefas em segundo plano: {count}',
   'list.aria': 'Trabalhos em segundo plano',
-  'section.live': 'Correndo',
   'section.settledCount': 'Concluído {count}',
   'section.clear': 'Limpar',
   'row.expandAria': 'Mostrar saída ao vivo de {label}',

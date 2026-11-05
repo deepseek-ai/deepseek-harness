@@ -9,17 +9,18 @@ import { JobId } from '@deepseek-ai/dsh-jobs/brand'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { describe, expect, it } from 'vitest'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
+import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 import { stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as applyLocale, inject as localeInject } from '@deepseek-ai/dsh-client-locale/client'
 import { apply, inject } from '../src/client/index.ts'
-import type { JobListInjected } from '../src/client/JobListAction.tsx'
+import type { JobsSectionInjected } from '../src/client/JobsSection.tsx'
 import { apply as applyNode } from '../src/index.ts'
 import { en, NS, zh } from '../src/client/locales.ts'
 
-/** Slot ledger reader: entry ids currently registered in the header list. */
-function headerEntryIds(ctx: Context): (string | undefined)[] {
+/** Slot ledger reader: entry ids currently registered in the Session panel section list. */
+function sectionEntryIds(ctx: Context): (string | undefined)[] {
   return ctx.slots
-    .entries('conversation.session.header.actions')
+    .entries('conversation.session.panel.section')
     .map(entry => entry.options.id)
 }
 
@@ -39,7 +40,7 @@ async function bench(): Promise<{ ctx: Context; fiber: ReturnType<Context['plugi
   ctx.slots.register({
     name: 'root',
     children: {
-      'conversation.session.header.actions': { kind: 'list', scope: 'session' },
+      'conversation.session.panel.section': { kind: 'list', scope: 'session' },
     },
   } as never, () => null)
   ctx.provide('jobs', {
@@ -80,10 +81,10 @@ describe('ui-jobs browser half', () => {
   it('exposes the jobs source and the roster, observation, and kill controls through the inject face', async () => {
     const { ctx } = await bench()
     const entry = ctx.slots
-      .entries('conversation.session.header.actions')
-      .find(candidate => candidate.options.id === 'job-list')
-    const inject = entry?.inject as (() => JobListInjected) | undefined
-    if (inject === undefined) throw new Error('job-list entry registered no inject face')
+      .entries('conversation.session.panel.section')
+      .find(candidate => candidate.options.id === 'background-jobs')
+    const inject = entry?.inject as (() => JobsSectionInjected) | undefined
+    if (inject === undefined) throw new Error('background-jobs entry registered no inject face')
     const face = inject()
     expect(face.hooks.jobs).toBeDefined()
     const release = face.watchRows(SessionId('session'))
@@ -102,11 +103,14 @@ describe('ui-jobs browser half', () => {
     expect(kills).toEqual([['sess-live', 'bash-3'], ['sess-live', 'bash-4']])
   })
 
-  it('registers the header action, and fiber teardown removes it (HMR safety)', async () => {
+  it('registers the Session panel section, and fiber teardown removes it (HMR safety)', async () => {
     const { ctx, fiber } = await bench()
-    expect(headerEntryIds(ctx)).toContain('job-list')
+    expect(sectionEntryIds(ctx)).toContain('background-jobs')
+    const entry = ctx.slots.entries('conversation.session.panel.section').find(candidate => candidate.options.id === 'background-jobs')
+    expect(entry?.options.order).toBe(300)
+    expect(resolveSlotLabel(entry?.options.label)).toBe(zh['list.aria'])
     await fiber.dispose()
-    expect(headerEntryIds(ctx)).not.toContain('job-list')
+    expect(sectionEntryIds(ctx)).not.toContain('background-jobs')
   })
 
   it('registers both dictionaries under its own namespace and releases them with the fiber', async () => {

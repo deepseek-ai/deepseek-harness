@@ -11,7 +11,6 @@
   margin-left: 6px;
 }
 
-.trigger,
 .switcherTrigger {
   display: inline-flex;
   align-items: center;
@@ -24,10 +23,6 @@
   font-size: 12px;
   line-height: 18px;
   cursor: pointer;
-}
-
-.trigger {
-  gap: 4px;
 }
 
 .switcherTrigger {
@@ -57,25 +52,6 @@
   flex: none;
 }
 
-.activitySlot {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 14px;
-  height: 14px;
-}
-
-.trigger:focus-visible {
-  color: var(--dsw-alias-label-primary);
-}
-
-@media (hover: hover) {
-  .trigger:hover {
-    color: var(--dsw-alias-label-primary);
-  }
-}
-
 .switcherTrigger:focus-visible {
   color: var(--dsw-alias-label-primary);
 }
@@ -98,55 +74,6 @@
 
 .switcherTrigger svg {
   transition: transform 120ms ease;
-}
-
-.trigger .compactIcon {
-  display: none;
-}
-
-/* The title-row container drops passive preset text at 540px; this action yields later. */
-@container (max-width: 460px) {
-  .trigger .compactIcon {
-    display: block;
-  }
-
-  .trigger .textModeActivity {
-    display: none;
-  }
-
-  .trigger .count {
-    display: none;
-  }
-
-  .trigger {
-    box-sizing: border-box;
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    justify-content: center;
-    color: var(--dsw-alias-label-secondary);
-  }
-
-  .trigger .activitySlot,
-  .trigger .activitySlot > svg {
-    width: 15px;
-    height: 15px;
-  }
-
-  .trigger:focus-visible {
-    color: var(--dsw-alias-label-secondary);
-  }
-
-  .trigger:active {
-    background: var(--dsw-alias-interactive-bg-active);
-  }
-
-  @media (hover: hover) {
-    .trigger:hover {
-      color: var(--dsw-alias-label-secondary);
-      background: var(--dsw-alias-interactive-bg-hover);
-    }
-  }
 }
 
 .menu {
@@ -193,40 +120,20 @@
   }
 }
 
-.sectionHeader {
-  display: flex;
-  align-items: flex-start;
-  gap: 7px;
-  padding: 4px 7px 8px;
-}
-
-.sectionIcon {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 14px;
-  height: 24px;
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.sectionTitle {
-  flex: none;
-  margin: 0;
-  color: var(--dsw-alias-label-primary);
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 24px;
-}
-
+/* Progress beside the Session panel section title, one line. */
 .sectionProgress {
-  margin-inline-start: 4px;
-  flex: 1 1 auto;
-  min-width: 0;
-  padding-top: 2px;
+  overflow: hidden;
   color: var(--dsw-alias-label-tertiary);
-  font-size: 13px;
-  line-height: 20px;
-  overflow-wrap: anywhere;
+  font: var(--dsw-font-xxs-12);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The Session panel section supplies the inset and scrolling. */
+.sectionBody {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .sectionEmpty {
@@ -240,7 +147,8 @@
   position: relative;
   min-width: 0;
 }
-.menuBody > [role="tree"] > .node {
+.menuBody > [role="tree"] > .node,
+.sectionBody > [role="tree"] > .node {
   margin-left: -2px;
 }
 

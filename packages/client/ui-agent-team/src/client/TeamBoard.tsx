@@ -14,7 +14,7 @@ import css from './TeamBoard.module.css'
 
 /** Full props of the task board below the shared subagent catalog. */
 export type TeamBoardProps =
-  PropsRuntime<'conversation.session.header.actions.subagent.footer'> & PropsLocale<typeof NS>
+  PropsRuntime<'conversation.session.panel.subagents.footer'> & PropsLocale<typeof NS>
 
 type VisibleTask = TeamTaskView & { status: Exclude<TeamTaskView['status'], 'deleted'> }
 

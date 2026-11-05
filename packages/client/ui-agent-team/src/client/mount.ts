@@ -65,7 +65,7 @@ export function registerAgentTeamUi(ctx: ClientContext): void {
       }, TeamModeToggle))
     })
   })
-  ctx.slots.inject('conversation.session.header.actions.subagent.footer', () => ctx.slots.register({
-    name: 'conversation.session.header.actions.subagent.footer', id: 'agent-team', locale: NS,
+  ctx.slots.inject('conversation.session.panel.subagents.footer', () => ctx.slots.register({
+    name: 'conversation.session.panel.subagents.footer', id: 'agent-team', locale: NS,
   }, TeamBoard))
 }
