@@ -1,0 +1,31 @@
+# Bilingual-pair consistency record for 2026-11-05-markdown-fence-hoc-slot.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-05-markdown-fence-hoc-slot.md
+/agent-note-dispatch-markdown-fences-by-language-through-a-keyed-hoc-slot:
+  en: 08e828c3c043e2c1
+  zh: badc07274d22c3d3
+/agent-note-dispatch-markdown-fences-by-language-through-a-keyed-hoc-slot/problem:
+  en: 47f1840013d9a25a
+  zh: daa30c8a43adb61d
+/agent-note-dispatch-markdown-fences-by-language-through-a-keyed-hoc-slot/decision:
+  en: a15c7c13f167e5ac
+  zh: ff261e3705c47ff0
+/agent-note-dispatch-markdown-fences-by-language-through-a-keyed-hoc-slot/decision/developer-facing-api:
+  en: 03db9adf39724644
+  zh: 59350008e49737c3
+/agent-note-dispatch-markdown-fences-by-language-through-a-keyed-hoc-slot/decision/hoc-slots-with-dispatch-keys:
+  en: efd632de6cd9612b
+  zh: 996ebdce579fa62a
+/agent-note-dispatch-markdown-fences-by-language-through-a-keyed-hoc-slot/decision/code-blocks:
+  en: 8ca893405e949ced
+  zh: d08790568180ec36
+/agent-note-dispatch-markdown-fences-by-language-through-a-keyed-hoc-slot/decision/spacing:
+  en: 5a1f4e68a5eb8492
+  zh: cc50dc7d70fe6e3b
+/agent-note-dispatch-markdown-fences-by-language-through-a-keyed-hoc-slot/alternatives-considered:
+  en: 7cc525b5fc20a009
+  zh: 00698b2f024a29e8
+/agent-note-dispatch-markdown-fences-by-language-through-a-keyed-hoc-slot/consequences:
+  en: fd3f897b3fd9fc1b
+  zh: 75ab3c49866662e0

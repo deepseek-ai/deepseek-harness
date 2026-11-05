@@ -121,6 +121,8 @@ The driver owns one agent for its lifetime and runs inside `ctx.agents.withIniti
 
 Prompt admission uses the actual `prepareCall()` result, not the preceding `request/context`. With no system node, even an empty prompt is appended (reserving node 0 without a wire message). On an incapable route, or at a new request series whose effective text differs, a non-empty rendering is consolidated at the first system node: each non-empty later system node receives a logged per-node empty replacement, then the head is rewritten if needed. Dormant empty tails need no replacement and do not determine the effective text. A series start whose latest surviving node already holds the rendering produces no system event, so the request keeps the prefix it had. On a continuing `in-history` series, an unchanged effective prompt produces no event and a non-empty change appends. An empty rendering clears every non-empty later system node through a logged per-node empty replacement, then empties the head if needed, regardless of route or series state. No older instructions remain model-visible. An empty head with no active later system node means no prompt; repeated clears and resume leave it empty. A restored non-empty prompt follows the same route/series rule: a continuing capable route may append it, while an incapable route or a new series whose effective text differs refills the head. A step starts a series when the pre-step decision declares `startsRequestSeries` or `session.surface.contentGeneration` changed since attachment or the last request (a replacement or image-offload decision). Visible tool-schema changes force prompt consolidation only when the prepared route lacks `toolUpdate`. Routes supporting both tool and system-prompt updates can append a changed prompt and activate added tools without rewriting earlier messages. If another admission condition replaces a system node, the request starts a new series with current tool declarations. Resume and a provider or model swap alone continue the series; the prepared route still governs admission. Per-node empty replacements preserve intervening history without a surface delete operation.
 
+The runtime-context projection compares the ordered names and text in committed `source.sections`, independently of reminder wording. Uncommitted proposals do not advance its state. Closing `system-reminder` tags, including case and trailing-whitespace variants, are escaped in message text while recorded sections retain their original text; this framing is a formatting convention, not a security boundary.
+
 ### Failure and cancellation
 
 `turn/end` declares `TurnEndCancelCause`; cancellation records a fresh `AgentCancelCause` there, retaining the caller's `kind` and the hook's `reason` text. The live `AbortSignal.reason` remains the caller's object, which a transport may extend — Node's fetch assigns a `stack` onto it — so the copy keeps that trace out of the log and keeps the ending appendable.
@@ -153,7 +155,7 @@ The package-level contract is enough for most consumers; read these when you nee
 
 #### What the model sees
 
-For each step, the loop sends the session's derived messages and visible tool schemas. Non-empty `system/message` nodes carry the prompt, with the latest as the effective version; an empty rendering clears all prompt versions from derived history. It supplies `provider` and `model` variable values but no additional fixed prose. The working-directory service contributes the active directory as user context. The request header always records active tools. Comparing their names with the preceding header emits one `developer/message` for additions and removals, independently of model capability; additions reference the new header. Requests also carry `Session.toolHistory()` for the LLM runtime to construct provider declarations.
+For each step, the loop sends the session's derived messages and visible tool schemas. Non-empty `system/message` nodes carry the prompt, with the latest as the effective version; an empty rendering clears all prompt versions from derived history. It supplies `provider` and `model` variable values. The working-directory service contributes the active directory as user context. The request header always records active tools. Comparing their names with the preceding header emits one `developer/message` for additions and removals, independently of model capability; additions reference the new header. Requests also carry `Session.toolHistory()` for the LLM runtime to construct provider declarations.
 
 #### Token effect
 
@@ -162,6 +164,20 @@ System text and schemas are paid again on every step, and on an `in-history` rou
 #### KV Cache effect
 
 Prefix reuse requires earlier messages and declarations to stay byte-identical under the same provider and model route. An unchanged rendered prompt keeps the cached prefix: a capable route leaves retained in-history system nodes in place even when a new series starts, and only an incapable route, or a series start whose effective text differs, consolidates them. A prompt change that replaces a system node in place makes the request differ from that node's first token — in full when the node is node 0 — so the provider prefix cache misses from there; when the prepared call declares `systemPromptUpdate: 'in-history'`, a non-empty prompt change inside a continuing request series is appended after the cached history, so the prefix through that history stays reusable. Changing a retained tool definition or rebuilding declarations invalidates reuse from the first altered request token.
+
+### Runtime context reminders
+
+#### What the model sees
+
+Runtime context is a `<system-reminder>` user message. Its first snapshot starts with `The following information describes your current session:`; later snapshots start with `The following information describes your current session. It replaces earlier versions of this context, including any retained in conversation summaries.` Unchanged contributions emit nothing; compaction removing the retained snapshot causes a new reminder, including after resume. An empty active set emits `Current runtime context: none. Earlier runtime-context snapshots no longer apply.` inside the same wrapper and records empty sections.
+
+#### Token effect
+
+Each retained reminder adds its wrapper, introduction, and contributions; later snapshots also include the supersession statement. A legacy snapshot or clear marker without `source.sections` is refreshed once on the next admitted request, even when its text already describes the current state.
+
+#### KV Cache effect
+
+Runtime reminders, including a legacy refresh, append after existing messages and preserve that prefix. Structured contributions prevent a wording-only refresh of an unchanged snapshot; compaction itself changes the replaced prefix.
 
 ### Retained message history
 
