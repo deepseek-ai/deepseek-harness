@@ -61,11 +61,11 @@ kind: "package-reference"
 
 ### 目录派生
 
-页头谱系 renderer 通过标准 `useSessions` 钩子，仅从 `projectionsBySession` 读取 `subagentCatalog`。Session 对象层将列表缓存提示、显式读取和 Host 全局 control 流合并到这些共享值；实时帧更新已加载层级，无需每个菜单单独订阅。活动状态优先使用统一 UI status，缺少时使用 Session 摘要；摘要还提供标题与用量。渲染、悬停和展开目录树仅使用本地投影，不会请求缺失目录。缺失或显式为空的目录没有展开箭头；后续共享投影包含下级时才显示箭头。读取失败后需要显式重试。需要迁移的行保留打开历史的操作，不显示格式提示，也不展开下级；打开 Session 后，历史与 control 投影提供其目录。外部行始终为叶子，不加载子 Session。
+页头谱系 renderer 通过标准 `useSessions` 钩子，仅从 `projectionsBySession` 读取 `subagentCatalog`。Session 对象层将列表缓存提示、显式读取和 Host 全局 control 流合并到这些共享值；实时帧更新已加载层级，无需每个菜单单独订阅。活动状态优先使用统一 UI status，缺少时使用 Session 摘要；摘要还提供标题与用量。渲染与悬停仅使用本地投影，不会请求缺失目录。缺失或显式为空的目录没有展开箭头；后续共享投影包含下级时才显示箭头。读取失败后需要显式重试。需要迁移的行保留打开历史的操作，不显示格式提示，也不展开下级；打开 Session 后，历史与 control 投影提供其目录。外部行始终为叶子，不加载子 Session。
 
 每个页头入口在树下方声明 footer 插槽。可选 UI 通过该插槽加入同一滚动容器；目录负责打开和关闭。CSS 锚点让面板跟随触发器，并按布局视口限制尺寸。浏览器缩放和平移时面板随页面移动，因此可以超出视觉视口。内部滚动、悬停行为、点击固定展开和焦点恢复保持独立。
 
-打开目录下拉菜单不会请求其根目录。只有显式重试失败读取时才调用 `refreshProjection`；Session 对象层负责请求去重和重连恢复。
+显式激活菜单或展开分支时，`prepareCatalog` 读取当前目录及其直接子节点。点击祖先标题会导航到该 Session。失败读取的重试按钮调用 `refreshProjection`；Session 对象层合并重复读取，并在重连后刷新之前请求过的投影。
 
 面包屑地址从 Provider 所绑定的 Session 地址、已加载的 parent 目录或已列出的 subagent 谱系推导，也包括从未选中过的祖先。
 
