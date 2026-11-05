@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentTerminalError } from '@deepseek-ai/dsh-api-terminal-controller'
 import { TerminalError } from '@deepseek-ai/dsh-terminal'
 import type { TerminalSendResult } from '@deepseek-ai/dsh-terminal'
-import { PanelTerminalSession, TAKEN_OVER, changedWithin, modelError, statusOf } from '../src/session.ts'
+import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
+import { POLICY_CHANGED, PanelTerminalSession, TAKEN_OVER, changedWithin, modelError, samePolicy, statusOf } from '../src/session.ts'
 import { FakeTerminal, SHELL_PID } from './fake.ts'
 
 const options = { promptSilenceMs: 300, probeIntervalMs: 1000, idleSilenceMs: 3000, timeoutMs: 30_000, maxReadBytes: 1000 }
@@ -11,8 +12,12 @@ const options = { promptSilenceMs: 300, probeIntervalMs: 1000, idleSilenceMs: 30
 beforeEach(() => { vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] }) })
 afterEach(() => { vi.useRealTimers() })
 
+const launched: SandboxExecutionPolicy = { mode: 'workspace-write', workspaceRoot: '/workspace' }
+
 function session(terminal = new FakeTerminal(), overrides: Partial<typeof options> = {}) {
-  return { terminal, session: new PanelTerminalSession(terminal, 'motd', { ...options, ...overrides }) }
+  const policy = { current: launched }
+  const panel = new PanelTerminalSession(terminal, 'motd', { ...options, ...overrides }, { launched, current: () => policy.current })
+  return { terminal, session: panel, policy }
 }
 
 async function settled(done: Promise<TerminalSendResult>): Promise<TerminalSendResult | undefined> {
@@ -225,6 +230,23 @@ describe('session operations', () => {
     expect(() => panel.startSend({ text: 'ls', submit: true })).toThrow('has exited')
   })
 
+  it('refuses input once the Session sandbox policy changes and keeps reads, signals and closing', async () => {
+    const { terminal, session: panel, policy } = session()
+    policy.current = { mode: 'read-only', workspaceRoot: '/workspace' }
+    expect(() => panel.startSend({ text: 'rm -rf build', submit: true })).toThrow(POLICY_CHANGED)
+    expect(terminal.write).not.toHaveBeenCalled()
+    expect(panel.read({})).toMatchObject({ text: '$' })
+    expect(await panel.signal('SIGINT')).toEqual({ delivered: true, targetPgid: 77 })
+    policy.current = { ...launched }
+    const send = panel.startSend({ text: 'ls', submit: true })
+    await vi.advanceTimersByTimeAsync(300)
+    expect(await send.done).toMatchObject({ waitReason: 'stdin_read' })
+    policy.current = { mode: 'danger-full-access', workspaceRoot: '/workspace' }
+    expect(() => panel.startSend({ text: 'ls', submit: true })).toThrow(POLICY_CHANGED)
+    await panel.close('model request')
+    expect(terminal.close).toHaveBeenCalledOnce()
+  })
+
   it('explains a takeover that refuses the write', async () => {
     const { terminal, session: panel } = session()
     terminal.write.mockRejectedValueOnce(new AgentTerminalError('user-control', 'The user has taken over this terminal'))
@@ -300,6 +322,15 @@ describe('closing', () => {
 })
 
 describe('helpers', () => {
+  it('compares the mode, workspace root and extra writable roots of two policies', () => {
+    const roots = { ...launched, additionalWritableRoots: ['/a', '/b'] }
+    expect(samePolicy(launched, { ...launched })).toBe(true)
+    expect(samePolicy(roots, { ...launched, additionalWritableRoots: ['/b', '/a'] })).toBe(true)
+    expect(samePolicy(launched, { ...launched, mode: 'read-only' })).toBe(false)
+    expect(samePolicy(launched, { ...launched, workspaceRoot: '/elsewhere' })).toBe(false)
+    expect(samePolicy(roots, launched)).toBe(false)
+  })
+
   it('passes errors other than a takeover through unchanged', () => {
     const failure = new Error('provider failed')
     expect(modelError(failure)).toBe(failure)

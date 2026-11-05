@@ -99,17 +99,19 @@ export class PanelTerminalBackend implements TerminalBackend {
     signal.throwIfAborted()
     if (spec.owner.session.header.origin === 'subagent') throw new Error(SUBAGENT_REFUSAL)
     const { config, services } = this
+    const policy = services.policy(spec.owner.session)
     const terminal = await services.open(spec.owner, {
       title: spec.name ?? spec.sessionId,
       ...spec.cwd === undefined ? {} : { cwd: spec.cwd },
       cols: config.cols,
       rows: config.rows,
-      policy: services.policy(spec.owner.session),
+      policy,
       preferredShells: config.preferredShells,
       env: config.environment,
     }, signal)
     try {
-      return new PanelTerminalSession(terminal, await startup(terminal, config, signal), config)
+      const current = (): SandboxExecutionPolicy => services.policy(spec.owner.session)
+      return new PanelTerminalSession(terminal, await startup(terminal, config, signal), config, { launched: policy, current })
     } catch (error: unknown) {
       try {
         await closeUnpublished(terminal)

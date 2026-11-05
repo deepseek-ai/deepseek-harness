@@ -3,6 +3,7 @@
 import { AgentTerminalError } from '@deepseek-ai/dsh-api-terminal-controller'
 import type { AgentTerminal, TerminalScreenMark, WebTerminalInfo } from '@deepseek-ai/dsh-api-terminal-controller'
 import { TextRetainer } from '@deepseek-ai/dsh-output-retention'
+import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
 import type { SubprocessTerminalForeground } from '@deepseek-ai/dsh-subprocess'
 import { TerminalError } from '@deepseek-ai/dsh-terminal'
 import type {
@@ -12,6 +13,9 @@ import type {
 
 /** Refusal the model receives once the person has typed into an Agent terminal. */
 export const TAKEN_OVER = 'The user has taken over this terminal; read it with terminal_read or open a new terminal.'
+
+/** Refusal the model receives once the Session's sandbox policy differs from the one the terminal launched under. */
+export const POLICY_CHANGED = 'The session sandbox settings changed after this terminal opened, so it no longer accepts input; open a new terminal with terminal_open. You can still read, signal or close this one.'
 
 /** Lines returned by `terminal_read` when the model names no count, as its schema states. */
 const DEFAULT_READ_LINES = 500
@@ -27,6 +31,23 @@ export interface PanelSendOptions {
   readonly idleSilenceMs: number
   readonly timeoutMs: number
   readonly maxReadBytes: number
+}
+
+/** The sandbox policy an Agent terminal launched under and the policy its Session resolves now. */
+export interface PanelTerminalPolicy {
+  readonly launched: SandboxExecutionPolicy
+  readonly current: () => SandboxExecutionPolicy
+}
+
+/**
+ * Whether two resolved policies confine commands the same way.
+ * @param left - one resolved policy.
+ * @param right - the other resolved policy.
+ * @returns true when mode, workspace root and extra writable roots match.
+ */
+export function samePolicy(left: SandboxExecutionPolicy, right: SandboxExecutionPolicy): boolean {
+  const roots = (policy: SandboxExecutionPolicy): string => [...policy.additionalWritableRoots ?? []].sort().join('\0')
+  return left.mode === right.mode && left.workspaceRoot === right.workspaceRoot && roots(left) === roots(right)
 }
 
 interface RenderedLines {
@@ -278,7 +299,10 @@ class PanelSend implements TerminalSendOperation {
   }
 }
 
-/** Registry session over one Agent terminal; closing before takeover ends the terminal, afterwards it only releases it. */
+/**
+ * Registry session over one Agent terminal; closing before takeover ends the terminal, afterwards it only releases it.
+ * The shell keeps its launch policy, so a send is refused once the Session resolves a different one.
+ */
 export class PanelTerminalSession implements TerminalBackendSession {
   private active: PanelSend | undefined
   private closing = false
@@ -287,11 +311,13 @@ export class PanelTerminalSession implements TerminalBackendSession {
    * @param terminal - committed Agent terminal.
    * @param motd - rendered screen after shell startup.
    * @param options - send thresholds and byte bound.
+   * @param policy - the launch policy and the Session's current policy.
    */
   constructor(
     private readonly terminal: PanelTerminal,
     readonly motd: string,
     private readonly options: PanelSendOptions,
+    private readonly policy: PanelTerminalPolicy,
   ) {}
 
   /** Top-level process id of the terminal's shell. */
@@ -304,6 +330,7 @@ export class PanelTerminalSession implements TerminalBackendSession {
     if (this.active !== undefined) throw new TerminalError('PTY session already has an active send', 'SEND_ACTIVE')
     if (this.terminal.info.state !== 'running') throw new Error('PTY session has exited')
     if (this.terminal.info.control !== 'agent') throw new Error(TAKEN_OVER)
+    if (!samePolicy(this.policy.launched, this.policy.current())) throw new Error(POLICY_CHANGED)
     if (request.signal?.aborted === true) throw new Error('PTY send aborted before write')
     // Only one send runs at a time, so the settling send is always the active one.
     const send = new PanelSend(this.terminal, request, this.options, () => { this.active = undefined })

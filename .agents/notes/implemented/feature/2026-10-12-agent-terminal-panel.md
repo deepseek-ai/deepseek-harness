@@ -18,7 +18,7 @@ Terminals are partitioned by who opened them. An Agent terminal records `origin:
 
 ### Permissions
 
-An Agent terminal starts under the Session sandbox policy that the bash tool resolves, and the controller wraps confined shells through `ctx.sandbox` exactly as `terminal-bash` does. Commands in the terminal cannot request escalation; the guidance sends denied commands back to bash. Changing the Session's sandbox mode does not stop or block open Agent terminals, which keep their launch policy like bash background jobs. User terminals keep the [system-user permissions](../architecture/2026-09-16-user-terminal-permissions.md) of their own decision. Subagents are refused, because their terminals would not appear in the Session the person is viewing.
+An Agent terminal starts under the Session sandbox policy that the bash tool resolves, and the controller wraps confined shells through `ctx.sandbox` exactly as `terminal-bash` does. Commands in the terminal cannot request escalation; the guidance sends denied commands back to bash. Changing the Session's sandbox mode neither blocks the change nor stops open Agent terminals, whose processes keep their launch policy like bash background jobs. Unlike a background job, a terminal keeps accepting commands, so once the Session resolves a different policy `terminal_send` refuses input and points the model to a new terminal; reads, signals and closing continue. User terminals keep the [system-user permissions](../architecture/2026-09-16-user-terminal-permissions.md) of their own decision. Subagents are refused, because their terminals would not appear in the Session the person is viewing.
 
 ### Readiness and reads
 
@@ -38,7 +38,7 @@ The controller streams each Session's terminal list. A displayed Session opens a
 
 **Inject shell integration for exact command completion.** Prompt markers from injected startup files give exact readiness and exit codes, but the files would have to exist inside every execution environment and sandbox; silence plus foreground inspection works wherever the provider can inspect processes.
 
-**Reuse the Agent's sandbox fence on mode changes.** `terminal-bash` rejects mode changes while terminals are open; visible terminals the person may have taken over would then block permission changes indefinitely.
+**Reuse the Agent's sandbox fence on mode changes.** `terminal-bash` rejects mode changes while terminals are open; visible terminals the person may have taken over would then block permission changes indefinitely, and counting only Agent-controlled terminals would still make the person close the Agent's dev server before tightening permissions. Closing Agent terminals on a stricter mode would end processes the person may be watching.
 
 ## Consequences
 
