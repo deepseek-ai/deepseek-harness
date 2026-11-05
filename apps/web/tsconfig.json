@@ -97,7 +97,7 @@
     "tests/excel-opc.e2e.ts",
     "tests/office-fixture.ts",
     "tests/sidebar-browser.e2e.ts",
-    "tests/jobs-menu-layering.e2e.ts",
+    "tests/jobs-panel-layering.e2e.ts",
     "tests/plugin-config.e2e.ts",
     "tests/input-plugin-extensions.e2e.ts",
     "tests/plugin-manager.e2e.ts",

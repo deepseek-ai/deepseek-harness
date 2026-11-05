@@ -2,7 +2,7 @@
 // over the real Host projection frame flow.
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
-import type { Browser, Page } from 'playwright'
+import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished, vi } from 'vitest'
 import type {} from '@deepseek-ai/dsh-agent-team'
@@ -13,12 +13,16 @@ import {
   acknowledgeReloadConnectionLoss, assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
   launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { assertWarningDialogLayout, connectFreshWorkspace, connectFreshWorkspaceZh, newEnglishPage, saveFailureShot, writeComposerDraft } from './support.ts'
+import {
+  assertWarningDialogLayout, connectFreshWorkspace, connectFreshWorkspaceZh, dismissSessionPanel, newEnglishPage,
+  saveFailureShot, sessionPanelToggle, showSessionPanel, writeComposerDraft,
+} from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./snapshots/agent-team-panel', import.meta.url))
 const PANEL_EXPECTED = join(SNAPSHOT_DIR, 'task.expected.md')
 const RESIZE_EXPECTED = join(SNAPSHOT_DIR, 'resize.expected.md')
 const MODE = webSnapshotMode()
+const SUBAGENTS_SECTION = '[data-session-panel-section="subagents"]'
 const RESEARCHER_DESCRIPTION = 'Researcher: investigate the construction and verify every bound before reporting the result. '.repeat(8).trim()
 const RECEIPT_LOCALES = [
   {
@@ -38,6 +42,16 @@ const RECEIPT_LOCALES = [
 ] as const
 
 type ReceiptLocale = typeof RECEIPT_LOCALES[number]
+
+/**
+ * Show the Session panel and return its Subagents section once the panel's
+ * entrance animation has ended, so geometry reads see its resting position.
+ * @param page - the page under test.
+ * @returns the section, hidden while it has nothing to show.
+ */
+async function showSubagentsSection(page: Page): Promise<Locator> {
+  return (await showSessionPanel(page)).locator(SUBAGENTS_SECTION)
+}
 
 async function seedTeamConversation(page: Page, scaffold: WebScaffold): Promise<void> {
   const agent = scaffold.ctx.agents.list()[0]
@@ -176,7 +190,11 @@ describe('web e2e: agent teamwork panel', () => {
 
   it('defaults off and saves a Session selection in the model menu', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-team-mode'))
-    expect(await page.locator('[data-subagent-action]').count()).toBe(0)
+    const assertNoSubagentsSection = async (): Promise<void> => {
+      expect(await (await showSubagentsSection(page)).locator('[data-subagents-section]').count()).toBe(0)
+      await dismissSessionPanel(page)
+    }
+    await assertNoSubagentsSection()
     await page.getByRole('button', { name: /^Select model/u }).click()
     const toggle = page.getByRole('switch', { name: 'Enable agent teamwork', exact: true })
     await toggle.waitFor()
@@ -189,7 +207,7 @@ describe('web e2e: agent teamwork panel', () => {
     await page.keyboard.press('Space')
     await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
     await page.keyboard.press('Escape')
-    expect(await page.locator('[data-subagent-action]').count()).toBe(0)
+    await assertNoSubagentsSection()
     const agent = scaffold.ctx.agents.list()[0]!
     expect(scaffold.ctx.commands.list(agent).some(command => command.name === 'team')).toBe(false)
     expect(agent.session.ownEvents().filter(event => event.type === 'command/run' || event.type === 'command/done')).toEqual([])
@@ -198,8 +216,8 @@ describe('web e2e: agent teamwork panel', () => {
     await other.dispose()
     const beforeReload = tripwire.warnings.length
     await page.reload({ waitUntil: 'load' })
+    await assertNoSubagentsSection()
     await page.getByRole('button', { name: /^Select model/u }).click()
-    expect(await page.locator('[data-subagent-action]').count()).toBe(0)
     expect(await toggle.getAttribute('aria-checked')).toBe('true')
     await page.keyboard.press('Escape')
     acknowledgeReloadConnectionLoss(tripwire, beforeReload)
@@ -233,22 +251,21 @@ describe('web e2e: agent teamwork panel', () => {
     expect(tripwire.pageErrors).toEqual([])
   })
 
-  it('shows tasks without children or a divider and hides the entry after the last task is deleted', async () => {
+  it('shows tasks without children or a divider and hides the section after the last task is deleted', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-team-task-only'))
     const agent = scaffold.ctx.agents.list()[0]!
-    expect(await page.locator('[data-subagent-action]').count()).toBe(0)
+    const section = await showSubagentsSection(page)
+    expect(await section.locator('[data-subagents-section]').count()).toBe(0)
+    expect(await section.isVisible()).toBe(false)
     const task = await scaffold.ctx.agentTeams.createTask(agent, {
       subject: 'Plan before delegation', description: 'Prepare shared work before creating subagents',
     })
-    await page.getByRole('button', { name: '0 subagents', exact: true }).click()
-    const board = page.locator('[data-team-panel]')
+    const board = section.locator('[data-team-panel]')
     await board.getByText(task.subject, { exact: true }).waitFor()
-    const panel = page.locator('[data-subagent-panel]')
-    expect(await panel.getByRole('treeitem').count()).toBe(0)
-    await panel.getByText('No subagents', { exact: true }).waitFor()
-    expect(await panel.locator('[data-subagent-section-header]').textContent()).toBe('Subagents')
-    expect(await panel.locator('[data-subagent-section-header] button, h3 button').count()).toBe(0)
-    expect(await panel.evaluate(element => element.getBoundingClientRect().width)).toBe(360)
+    expect(await section.getByRole('treeitem').count()).toBe(0)
+    await section.getByText('No subagents', { exact: true }).waitFor()
+    expect(await section.getByRole('heading', { level: 2 }).locator('..').textContent()).toBe('Subagents')
+    expect(await section.locator('h2 button, h3 button').count()).toBe(0)
     expect(await board.locator('[data-team-task-details]').count()).toBe(0)
     expect(await board.getByRole('button', { expanded: false }).count()).toBe(1)
     expect(await board.evaluate((element) => {
@@ -256,14 +273,15 @@ describe('web e2e: agent teamwork panel', () => {
       return { border: style.borderTopWidth, margin: style.marginTop }
     })).toEqual({ border: '0px', margin: '0px' })
     await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'task-only.expected.md'),
-      await captureStableAria(page, '[data-subagent-panel]', scaffold.workspaceCwd), MODE)
+      await captureStableAria(page, SUBAGENTS_SECTION, scaffold.workspaceCwd), MODE)
     await scaffold.ctx.agentTeams.updateTask(agent, { taskId: task.id, expectedRevision: task.revision, action: 'delete' })
-    await page.locator('[data-subagent-action]').waitFor({ state: 'hidden' })
-    await page.locator('[data-subagent-panel]').waitFor({ state: 'hidden' })
+    await section.locator('[data-subagents-section]').waitFor({ state: 'detached' })
+    await section.waitFor({ state: 'hidden' })
+    await dismissSessionPanel(page)
     expect(tripwire.pageErrors).toEqual([])
   })
 
-  it('opens the member tree and live read-only tasks in one panel', async () => {
+  it('opens the member tree and live read-only tasks in one section', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-agent-team-panel'))
     const projectionReads = vi.spyOn(scaffold.ctx.sessionController, 'projections')
     onTestFinished(() => { projectionReads.mockRestore() })
@@ -273,32 +291,16 @@ describe('web e2e: agent teamwork panel', () => {
       version: 2, childId: memberId, childCreatedAt: Date.now(), mode: 'external',
       label: RESEARCHER_DESCRIPTION,
     })
-    const countAction = page.locator('[data-subagent-action]')
-    await countAction.waitFor()
-    await page.mouse.move(2, 2)
-    expect(await countAction.evaluate((element) => {
-      const header = element.closest('[data-slot="conversation.session.header.actions"]')!.parentElement!
-      const preset = header.querySelector('[data-icon="dsw-icon-agent-preset-outline-regular"]')!
-      const users = element.querySelector('[data-icon="dsw-icon-users-outline-regular"]')!
-      return {
-        display: getComputedStyle(header).display, gap: getComputedStyle(header).gap,
-        presetOpacity: getComputedStyle(preset).opacity,
-        presetParentOpacity: getComputedStyle(preset.parentElement!).opacity,
-        sameColor: getComputedStyle(preset).color === getComputedStyle(users).color,
-      }
-    })).toEqual({ display: 'flex', gap: '10px', presetOpacity: '1', presetParentOpacity: '1', sameColor: true })
-    const countTrigger = countAction.getByRole('button', { name: /subagents?$/u })
-    await countTrigger.click()
-    await countTrigger.click()
-    await page.locator('[data-subagent-panel]').waitFor({ state: 'detached' })
-    expect(await countTrigger.evaluate(element => element === document.activeElement)).toBe(true)
-    await countTrigger.click()
-    const action = page.locator('[data-subagent-panel]')
+    const toggle = sessionPanelToggle(page)
+    await toggle.click()
+    await toggle.click()
+    await page.locator('[data-session-panel]').waitFor({ state: 'detached' })
+    expect(await toggle.evaluate(element => element === document.activeElement)).toBe(true)
+    const action = await showSubagentsSection(page)
     await action.getByRole('treeitem', { name: /Researcher/u }).waitFor()
-    expect(await action.locator('[data-team-panel], [data-subagent-section-header]').count()).toBe(0)
+    expect(await action.locator('[data-team-panel]').count()).toBe(0)
     expect(await action.getByText('No shared tasks yet. Create them through the conversation.').count()).toBe(0)
-    expect(await action.evaluate(element => element.getBoundingClientRect().width)).toBe(360)
-    expect(await action.locator('[data-subagent-section-header] button, h3 button').count()).toBe(0)
+    expect(await action.locator('h2 button, h3 button').count()).toBe(0)
     expect(await action.getByRole('heading', { name: 'Members', exact: true }).count()).toBe(0)
     expect(projectionReads).not.toHaveBeenCalled()
 
@@ -306,15 +308,16 @@ describe('web e2e: agent teamwork panel', () => {
     expect(await action.getByRole('button', { name: /Refresh/u }).count()).toBe(0)
 
     await action.getByRole('treeitem', { name: /Researcher/u }).waitFor()
-    expect(await page.locator('[data-subagent-panel]').count()).toBe(1)
+    expect(await page.locator('[data-subagents-section]').count()).toBe(1)
     expect(await page.getByRole('button', { name: 'Task board', exact: true }).count()).toBe(0)
     const task = await scaffold.ctx.agentTeams.createTask(agent, {
       subject: 'Agent task', description: 'Created by the root agent', writeScopes: ['src/web'],
     })
     const row = action.locator(`[data-team-task="${task.id}"]`)
     await row.getByRole('button', { name: 'Pending Agent task', exact: true, expanded: false }).waitFor()
-    expect(await action.locator('[data-subagent-section-header]').textContent()).toBe('Subagents1 external')
-    expect(await action.locator('[data-subagent-section-header] button, h3 button').count()).toBe(0)
+    const head = action.getByRole('heading', { level: 2 }).locator('..')
+    expect(await head.textContent()).toBe('Subagents1 external')
+    expect(await action.locator('h2 button, h3 button').count()).toBe(0)
     expect(await action.locator('[data-team-panel]').evaluate((element) => {
       const style = getComputedStyle(element)
       return { border: style.borderTopWidth, margin: style.marginTop }
@@ -327,31 +330,21 @@ describe('web e2e: agent teamwork panel', () => {
     expect(await row.evaluate(element => ({ tag: element.tagName, parent: element.parentElement?.tagName })))
       .toEqual({ tag: 'LI', parent: 'UL' })
     expect(await action.locator('[data-team-task-details], article').count()).toBe(0)
-    expect(await action.evaluate(element => element.getBoundingClientRect().width)).toBe(360)
     await action.getByRole('heading', { name: 'Shared tasks 1 pending', exact: true }).waitFor()
-    expect(await action.evaluate(element => getComputedStyle(element).padding)).toBe('6px')
-    expect(await action.locator('[data-subagent-section-header]').evaluate((element) => {
-      const style = getComputedStyle(element)
-      return { padding: style.padding, gap: style.gap }
-    })).toEqual({ padding: '4px 7px 8px', gap: '7px' })
     expect(await action.locator('[data-team-panel]').getByRole('heading')
       .evaluate(element => getComputedStyle(element).columnGap)).toBe('7px')
-    for (const [title, progress] of [
-      [action.locator('[data-subagent-section-header]').getByRole('heading'), action.getByText('1 external', { exact: true })],
-      [action.locator('[data-team-panel]').getByText('Shared tasks', { exact: true }), action.getByText('1 pending', { exact: true })],
-    ] as const) {
-      expect(await progress.evaluate(element => getComputedStyle(element).marginInlineStart)).toBe('4px')
-      const titleRight = await title.evaluate(element => element.getBoundingClientRect().right)
-      const progressLeft = await progress.evaluate(element => element.getBoundingClientRect().left)
-      expect(Math.abs(progressLeft - titleRight - 11)).toBeLessThanOrEqual(1)
-    }
+    const boardTitle = action.locator('[data-team-panel]').getByText('Shared tasks', { exact: true })
+    const boardProgress = action.getByText('1 pending', { exact: true })
+    expect(await boardProgress.evaluate(element => getComputedStyle(element).marginInlineStart)).toBe('4px')
+    const boardTitleRight = await boardTitle.evaluate(element => element.getBoundingClientRect().right)
+    const boardProgressLeft = await boardProgress.evaluate(element => element.getBoundingClientRect().left)
+    expect(Math.abs(boardProgressLeft - boardTitleRight - 11)).toBeLessThanOrEqual(1)
     const member = action.getByRole('treeitem', { name: /Researcher/u })
     const memberTitle = member.getByText(RESEARCHER_DESCRIPTION, { exact: true })
     const taskTitle = row.getByText('Agent task', { exact: true })
     const titleLefts = await Promise.all([
       memberTitle,
-      action.locator('[data-subagent-section-header]').getByRole('heading'),
-      action.locator('[data-team-panel]').getByText('Shared tasks', { exact: true }),
+      boardTitle,
       taskTitle,
     ].map(locator => locator.evaluate(element => element.getBoundingClientRect().left)))
     expect(Math.max(...titleLefts) - Math.min(...titleLefts)).toBeLessThanOrEqual(1)
@@ -415,7 +408,6 @@ describe('web e2e: agent teamwork panel', () => {
     expect(await row.locator('[data-team-task-details] p, [data-team-task-owner]')
       .evaluateAll(elements => elements.every(element => getComputedStyle(element).fontSize === '12px'))).toBe(true)
     expect(await row.getByRole('button').getAttribute('aria-expanded')).toBe('true')
-    expect(await action.evaluate(element => element.getBoundingClientRect().width)).toBe(360)
     await scaffold.ctx.agentTeams.updateTask(agent, {
       taskId: task.id, expectedRevision: task.revision, action: 'claim',
     })
@@ -425,12 +417,12 @@ describe('web e2e: agent teamwork panel', () => {
     expect(await action.getByRole('button', { name: /^(New task|Edit|Complete|Reopen|Delete)$/u }).count()).toBe(0)
     expect(await action.locator('input, select, textarea').count()).toBe(0)
 
-    const snapshot = await captureStableAria(page, '[data-subagent-panel]', scaffold.workspaceCwd)
+    const snapshot = await captureStableAria(page, SUBAGENTS_SECTION, scaffold.workspaceCwd)
     await compareOrRefreshGolden(PANEL_EXPECTED, snapshot, MODE)
     expect(projectionReads).not.toHaveBeenCalled()
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
-    await page.keyboard.press('Escape')
+    await dismissSessionPanel(page)
   }, 60_000)
 
   it('hides the board while disabled and restores its tasks when re-enabled', async () => {
@@ -438,94 +430,47 @@ describe('web e2e: agent teamwork panel', () => {
     const toggle = page.getByRole('switch', { name: 'Enable agent teamwork', exact: true })
     await toggle.click()
     await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('false')
-    expect(await page.locator('[data-subagent-action]').count()).toBe(1)
     await page.keyboard.press('Escape')
-    await page.locator('[data-subagent-action]').getByRole('button', { name: '1 subagent', exact: true }).click()
-    await page.getByRole('treeitem', { name: /Researcher/u }).waitFor()
+    const section = await showSubagentsSection(page)
+    await section.getByRole('treeitem', { name: /Researcher/u }).waitFor()
+    expect(await page.locator('[data-subagents-section]').count()).toBe(1)
     expect(await page.locator('[data-team-panel]').count()).toBe(0)
-    expect(await page.locator('[data-subagent-panel]').evaluate(element => element.getBoundingClientRect().width)).toBe(360)
-    expect(await page.locator('[data-subagent-section-header]').count()).toBe(0)
-    await page.keyboard.press('Escape')
+    await dismissSessionPanel(page)
     await page.getByRole('button', { name: /^Select model/u }).click()
     await toggle.click()
     await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
     await page.keyboard.press('Escape')
-    await page.locator('[data-subagent-action]').getByRole('button', { name: /subagents?$/u }).click()
-    await page.locator('[data-subagent-panel]').getByText('Agent task', { exact: true }).waitFor()
-    await page.keyboard.press('Escape')
+    await (await showSubagentsSection(page)).getByText('Agent task', { exact: true }).waitFor()
+    await dismissSessionPanel(page)
   })
 
-  it('keeps the narrow Users trigger focused and opens its catalog only on explicit activation', async () => {
+  it('keeps the toggle focused in a narrow window and opens the catalog only on explicit activation', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-team-narrow-trigger'))
-    const trigger = page.locator('[data-subagent-action]').getByRole('button', { name: '1 subagent', exact: true })
-    const panel = page.locator('[data-subagent-panel]')
-    const count = trigger.locator('[data-subagent-count]')
+    const trigger = sessionPanelToggle(page)
+    const panel = page.locator('[data-session-panel]')
     const viewport = page.viewportSize()!
-    expect(await count.isVisible()).toBe(true)
-    expect(await trigger.locator('[data-icon="dsw-icon-users-outline-regular"]').count()).toBe(1)
-    expect(await trigger.locator('[data-icon="dsw-icon-users-outline-regular"]').evaluate((element) => {
-      const bounds = element.getBoundingClientRect()
-      return { width: bounds.width, height: bounds.height }
-    })).toEqual({ width: 14, height: 14 })
-    expect(await trigger.locator('[data-icon="dsw-icon-chevron-down-outline-regular"]').count()).toBe(0)
-    expect(await trigger.locator('svg').count()).toBe(1)
     await trigger.focus()
     const original = await trigger.elementHandle()
-    if (original === null) throw new Error('Subagent trigger is missing')
+    if (original === null) throw new Error('Session panel toggle is missing')
     try {
       await page.setViewportSize({ width: 390, height: 700 })
-      await expect.poll(() => count.evaluate(element => getComputedStyle(element).display)).toBe('none')
       expect(await original.evaluate(element => element.isConnected && element === document.activeElement)).toBe(true)
-      const expandSidebar = page.locator('[data-sidebar-right-expand]')
-      const compactStyles = await Promise.all([trigger, expandSidebar].map(control => control.evaluate((element) => {
-        const bounds = element.getBoundingClientRect()
-        const icon = element.querySelector('svg')!.getBoundingClientRect()
-        const style = getComputedStyle(element)
-        return { width: bounds.width, height: bounds.height, padding: style.padding, radius: style.borderRadius,
-          color: style.color, iconWidth: icon.width, iconHeight: icon.height }
-      })))
-      expect(compactStyles[0]).toEqual(compactStyles[1])
-      expect(compactStyles[0]).toMatchObject({ width: 28, height: 28, padding: '0px', iconWidth: 15, iconHeight: 15 })
-      expect(await trigger.evaluate(element => getComputedStyle(element.closest('[data-slot="conversation.session.header.actions"]')!.parentElement!).gap)).toBe('8px')
-      await expandSidebar.hover()
-      const expandHover = await expandSidebar.evaluate((element) => {
-        const style = getComputedStyle(element)
-        return { background: style.backgroundColor, color: style.color }
-      })
       await page.mouse.move(1, 1)
-      await page.keyboard.press('Tab')
-      const countTooltip = page.getByRole('tooltip', { name: '1 subagent', exact: true })
-      await countTooltip.waitFor({ state: 'hidden' })
       await trigger.hover()
-      expect(await trigger.evaluate((element) => {
-        const style = getComputedStyle(element)
-        return { background: style.backgroundColor, color: style.color }
-      })).toEqual(expandHover)
-      expect(expandHover.background).not.toBe('rgba(0, 0, 0, 0)')
-      // Observe beyond the wide trigger's 150ms hover-open deadline.
+      // Hover alone opens nothing, even past the 150ms delay of hover-opened subagent menus.
       await page.waitForTimeout(200)
-      expect(await panel.count()).toBe(0)
-      await countTooltip.waitFor({ state: 'visible' })
       expect(await panel.count()).toBe(0)
       await trigger.click()
       await panel.waitFor()
+      expect(await panel.getAttribute('data-session-panel')).toBe('overlay')
       expect(await trigger.getAttribute('aria-expanded')).toBe('true')
-      expect(await page.getByRole('tooltip', { name: '1 subagent', exact: true }).count()).toBe(0)
-      await panel.getByRole('treeitem', { name: /Researcher/u }).waitFor()
-      await panel.locator('[data-team-task]').getByRole('button', { expanded: false }).waitFor()
+      const section = panel.locator(SUBAGENTS_SECTION)
+      await section.getByRole('treeitem', { name: /Researcher/u }).waitFor()
+      await section.locator('[data-team-task]').getByRole('button', { expanded: false }).waitFor()
       await trigger.click()
       await panel.waitFor({ state: 'detached' })
       expect(await trigger.getAttribute('aria-expanded')).toBe('false')
-      await trigger.press('ArrowDown')
-      await panel.waitFor()
-      await page.mouse.move(1, 1)
-      // Keyboard activation stays pinned beyond the 120ms pointer-leave grace.
-      await page.waitForTimeout(180)
-      expect(await panel.count()).toBe(1)
-      await page.keyboard.press('Escape')
-      await panel.waitFor({ state: 'detached' })
     } finally {
-      await page.keyboard.press('Escape')
       await page.setViewportSize(viewport)
       await original.dispose()
     }
@@ -533,24 +478,25 @@ describe('web e2e: agent teamwork panel', () => {
 
   it('keeps the panel inside the viewport and closes on outside click or Escape', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-agent-team-panel-keyboard'))
-    const panel = page.locator('[data-subagent-panel]')
-    const trigger = page.locator('[data-subagent-action]').getByRole('button', { name: /subagents?$/u })
+    const panel = page.locator('[data-session-panel]')
+    const section = panel.locator(SUBAGENTS_SECTION)
+    const trigger = sessionPanelToggle(page)
     const viewport = page.viewportSize()!
-    await trigger.click()
-    await panel.getByRole('heading', { name: /Shared tasks/u }).waitFor()
     try {
       for (const size of [{ width: 760, height: 540 }, { width: 600, height: 420 }, { width: 390, height: 700 }]) {
         await page.setViewportSize(size)
+        await showSessionPanel(page)
+        await section.getByRole('heading', { name: /Shared tasks/u }).waitFor()
         await expect.poll(() => panel.evaluate((element) => {
           const rect = element.getBoundingClientRect()
-          return element.parentElement === document.body
-            && rect.left >= 16 && rect.top >= 16
-            && rect.right <= window.innerWidth - 16 && rect.bottom <= window.innerHeight - 16
+          return element.getAttribute('data-session-panel') === 'overlay'
+            && rect.left >= 0 && rect.top >= 0
+            && rect.right <= window.innerWidth && rect.bottom <= window.innerHeight
             && [[rect.left + 12, rect.top + 12], [rect.right - 12, rect.bottom - 12]]
               .every(([x, y]) => element.contains(document.elementFromPoint(x!, y!)))
         })).toBe(true)
       }
-      const row = panel.getByRole('treeitem', { name: /Researcher/u })
+      const row = section.getByRole('treeitem', { name: /Researcher/u })
       const primary = row.getByText(RESEARCHER_DESCRIPTION, { exact: true })
       const secondary = row.getByText('team-panel-researcher', { exact: true })
       expect(await row.getByRole('button').count()).toBe(0)
@@ -574,15 +520,15 @@ describe('web e2e: agent teamwork panel', () => {
       expect(await secondary.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
       await secondary.hover()
       expect(await page.getByRole('tooltip').count()).toBe(0)
-      await panel.getByRole('heading', { name: /Shared tasks/u }).click()
+      await section.getByRole('heading', { name: /Shared tasks/u }).click()
       expect(await panel.count()).toBe(1)
       await page.mouse.click(2, 2)
       await panel.waitFor({ state: 'detached' })
       await page.setViewportSize(viewport)
       await trigger.focus()
       await page.keyboard.press('Enter')
-      await panel.getByRole('heading', { name: /Shared tasks/u }).waitFor()
-      expect(await panel.evaluate(element => element === document.activeElement)).toBe(true)
+      await section.getByRole('heading', { name: /Shared tasks/u }).waitFor()
+      await section.locator('[data-team-task]').getByRole('button').focus()
       await page.keyboard.press('Escape')
       await panel.waitFor({ state: 'detached' })
       expect(await trigger.evaluate(element => element === document.activeElement)).toBe(true)
@@ -599,24 +545,7 @@ describe('web e2e: agent teamwork panel', () => {
     }
   })
 
-  it('keeps the hovered panel open when the pointer returns directly to its trigger', async () => {
-    onTestFailed(async () => {
-      await saveFailureShot(page, 'web-e2e-agent-team-hover')
-      console.error('Agent Team hover diagnostics', JSON.stringify({ errors: tripwire.pageErrors, warnings: tripwire.warnings }))
-    })
-    const trigger = page.locator('[data-subagent-action]').getByRole('button', { name: /subagents?$/u })
-    const panel = page.locator('[data-subagent-panel]')
-    await trigger.hover()
-    await panel.waitFor()
-    await panel.hover()
-    await trigger.hover()
-    // The assertion spans the 120ms dismissal grace while the pointer stays on the trigger.
-    await page.waitForTimeout(180)
-    expect(await panel.count()).toBe(1)
-    await page.keyboard.press('Escape')
-  })
-
-  it('keeps compact tasks ordered, opens one full detail at a time, and scrolls only the fixed-width menu', async () => {
+  it('keeps compact tasks ordered, opens one full detail at a time, and scrolls only the Session panel', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-team-compact-details'))
     const agent = scaffold.ctx.agents.list()[0]!
     const completed = await scaffold.ctx.agentTeams.createTask(agent, {
@@ -637,17 +566,16 @@ describe('web e2e: agent teamwork panel', () => {
       subject, description, blockedBy: [blocker.id], writeScopes: ['src/web/components'],
     })
     const viewport = page.viewportSize()!
-    const trigger = page.locator('[data-subagent-action]').getByRole('button', { name: /subagents?$/u })
-    const panel = page.locator('[data-subagent-panel]')
-    const board = panel.locator('[data-team-panel]')
+    const panel = page.locator('[data-session-panel]')
+    const section = panel.locator(SUBAGENTS_SECTION)
+    const board = section.locator('[data-team-panel]')
     const row = board.locator(`[data-team-task="${task.id}"]`)
     const emptyRow = board.locator(`[data-team-task="${completed.id}"]`)
     onTestFinished(() => page.setViewportSize(viewport))
-    // Constrain the menu so closed and expanded task rows both exercise its scrollbar.
+    // Constrain the panel so closed and expanded task rows both exercise its scrollbar.
     await page.setViewportSize({ width: viewport.width, height: 540 })
-    await trigger.click()
+    await showSubagentsSection(page)
     await row.waitFor()
-    expect(await panel.evaluate(element => element.getBoundingClientRect().width)).toBe(360)
     expect(await board.locator('[data-team-task-details], article').count()).toBe(0)
     expect(await board.getByRole('button', { expanded: false }).count()).toBe(4)
     expect(await board.locator('[data-team-task]').evaluateAll(elements => elements.map(element => element.getAttribute('data-status'))))
@@ -655,46 +583,29 @@ describe('web e2e: agent teamwork panel', () => {
     const counts = board.getByText('1 completed\u2002·\u20021 in progress\u2002·\u20022 pending', { exact: true })
     await counts.waitFor()
     expect(await counts.textContent()).toBe('1 completed\u2002·\u20021 in progress\u2002·\u20022 pending')
-    expect(await panel.locator('[data-subagent-section-header] button, h3 button').count()).toBe(0)
-    expect(await panel.getByRole('button', { name: /^Show (more|less)$/u }).count()).toBe(0)
+    expect(await section.locator('h2 button, h3 button').count()).toBe(0)
+    expect(await section.getByRole('button', { name: /^Show (more|less)$/u }).count()).toBe(0)
     await row.getByRole('img', { name: 'Blocked by dependencies', exact: true }).waitFor()
+    // The panel itself scrolls; its client box ends where its scrollbar track begins.
     const measureScroll = async () => panel.evaluate((element) => {
-      const style = getComputedStyle(element)
       const bounds = element.getBoundingClientRect()
-      const scroller = element.querySelector('[role="tree"]')!.parentElement!
-      const scrollStyle = getComputedStyle(scroller)
-      const scrollBounds = scroller.getBoundingClientRect()
       const taskBounds = element.querySelector('[data-team-task] button')!.getBoundingClientRect()
-      const scrollbarWidth = Number.parseFloat(getComputedStyle(scroller, '::-webkit-scrollbar').width)
+      const trackLeft = bounds.left + element.clientLeft + element.clientWidth
       return {
-        innerWidth: bounds.width - Number.parseFloat(style.paddingLeft) - Number.parseFloat(style.paddingRight)
-          - Number.parseFloat(style.borderLeftWidth) - Number.parseFloat(style.borderRightWidth),
-        clientWidth: scroller.clientWidth, clientHeight: scroller.clientHeight, scrollHeight: scroller.scrollHeight,
-        overflowing: scroller.scrollHeight > scroller.clientHeight,
-        gutter: scrollStyle.scrollbarGutter, marginRight: scrollStyle.marginRight,
-        trackMargin: scrollStyle.getPropertyValue('--dsh-scrollbar-track-margin').trim(),
+        overflowing: element.scrollHeight > element.clientHeight,
         taskLeft: taskBounds.left, taskRight: taskBounds.right,
-        trackLeft: scrollBounds.right - scrollbarWidth, trackRight: scrollBounds.right, panelRight: bounds.right,
         arrowsBeforeTrack: [...element.querySelectorAll('[data-team-task] button svg')]
-          .every(arrow => arrow.getBoundingClientRect().right <= scrollBounds.right - scrollbarWidth),
+          .every(arrow => arrow.getBoundingClientRect().right <= trackLeft),
       }
     })
     const closedScroll = await measureScroll()
     expect(closedScroll.overflowing, JSON.stringify(closedScroll)).toBe(true)
-    expect(Math.abs(closedScroll.clientWidth - closedScroll.innerWidth), JSON.stringify(closedScroll)).toBeLessThanOrEqual(1)
-    expect(closedScroll.gutter).toBe('stable')
-    expect(closedScroll.marginRight).toBe('-5px')
-    expect(closedScroll.trackMargin).toBe('6px')
     await row.getByRole('button').click()
     const expandedScroll = await measureScroll()
     expect(expandedScroll.overflowing).toBe(true)
-    expect(expandedScroll.clientWidth).toBe(closedScroll.clientWidth)
     expect(expandedScroll.taskLeft).toBe(closedScroll.taskLeft)
     expect(expandedScroll.taskRight).toBe(closedScroll.taskRight)
     expect(expandedScroll.arrowsBeforeTrack).toBe(true)
-    expect(expandedScroll.trackLeft).toBeGreaterThanOrEqual(expandedScroll.panelRight - 6)
-    expect(expandedScroll.trackRight).toBeLessThanOrEqual(expandedScroll.panelRight - 1)
-    expect(await panel.evaluate(element => element.getBoundingClientRect().width)).toBe(360)
     const details = row.locator('[data-team-task-details]')
     expect(await details.locator('p:not([data-team-task-owner])').textContent()).toBe(description)
     expect(await details.locator('[data-team-task-owner]').textContent()).toBe('Owner: Unowned')
@@ -709,35 +620,32 @@ describe('web e2e: agent teamwork panel', () => {
       await page.setViewportSize({ width: 390, height: 700 })
       await expect.poll(() => panel.evaluate((element) => {
         const rect = element.getBoundingClientRect()
-        return rect.width === Math.min(360, innerWidth - 32) && rect.left >= 16 && rect.right <= innerWidth - 16
-          && rect.top >= 16 && rect.bottom <= innerHeight - 16
+        return element.getAttribute('data-session-panel') === 'overlay'
+          && rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight
           && element.scrollWidth <= element.clientWidth
       })).toBe(true)
-      expect(await panel.locator('*').evaluateAll((elements) => {
-        const scrollers = elements.filter(element =>
+      expect(await panel.evaluate((panelElement) => {
+        const scrollers = [panelElement, ...panelElement.querySelectorAll('*')].filter(element =>
           ['auto', 'scroll'].includes(getComputedStyle(element).overflowY)
           && element.scrollHeight > element.clientHeight)
         return scrollers.map(element => ({
-          hasHeader: element.querySelector('[data-subagent-section-header]') !== null,
+          panel: element === panelElement,
           hasTree: element.querySelector('[role="tree"]') !== null,
           hasBoard: element.querySelector('[data-team-panel]') !== null,
           fitsWidth: element.scrollWidth <= element.clientWidth,
         }))
-      })).toEqual([{ hasHeader: true, hasTree: true, hasBoard: true, fitsWidth: true }])
-      const narrowScroll = await measureScroll()
-      expect(Math.abs(narrowScroll.clientWidth - narrowScroll.innerWidth), JSON.stringify(narrowScroll)).toBeLessThanOrEqual(1)
-      expect(narrowScroll.arrowsBeforeTrack).toBe(true)
-      const scroller = panel.getByRole('tree').locator('..')
-      await scroller.hover({ position: { x: 20, y: 20 } })
+      })).toEqual([{ panel: true, hasTree: true, hasBoard: true, fitsWidth: true }])
+      expect((await measureScroll()).arrowsBeforeTrack).toBe(true)
+      await panel.hover({ position: { x: 20, y: 20 } })
       await Promise.all([
-        scroller.evaluate(element => new Promise<void>((resolve) => {
+        panel.evaluate(element => new Promise<void>((resolve) => {
           element.addEventListener('scrollend', () => { resolve() }, { once: true })
         })),
         page.mouse.wheel(0, 180),
       ])
-      await expect.poll(() => scroller.evaluate(element => element.scrollTop)).toBeGreaterThan(0)
-      await scroller.evaluate((element) => { element.scrollTo({ top: 0 }) })
-      await expect.poll(() => scroller.evaluate(element => element.scrollTop)).toBe(0)
+      await expect.poll(() => panel.evaluate(element => element.scrollTop)).toBeGreaterThan(0)
+      await panel.evaluate((element) => { element.scrollTo({ top: 0 }) })
+      await expect.poll(() => panel.evaluate(element => element.scrollTop)).toBe(0)
       expect(await row.getByText(subject, { exact: true }).evaluate(element =>
         element.scrollWidth <= element.clientWidth && getComputedStyle(element).whiteSpace === 'pre-wrap')).toBe(true)
       expect(await details.locator('p:not([data-team-task-owner])').evaluate(element => element.scrollHeight === element.clientHeight)).toBe(true)
@@ -757,7 +665,7 @@ describe('web e2e: agent teamwork panel', () => {
       expect(titleBounds).not.toBeNull()
       expect(countBounds).not.toBeNull()
       expect(countBounds!.y).toBeGreaterThanOrEqual(titleBounds!.y + titleBounds!.height)
-      await compareOrRefreshGolden(RESIZE_EXPECTED, await captureStableAria(page, '[data-subagent-panel]', scaffold.workspaceCwd), MODE)
+      await compareOrRefreshGolden(RESIZE_EXPECTED, await captureStableAria(page, SUBAGENTS_SECTION, scaffold.workspaceCwd), MODE)
       await emptyRow.getByRole('button').click()
       expect(await row.getAttribute('data-expanded')).toBe('false')
       expect(await row.locator('[data-team-task-details]').count()).toBe(0)
@@ -769,7 +677,6 @@ describe('web e2e: agent teamwork panel', () => {
       await emptyRow.getByRole('button').click()
       expect(await board.locator('[data-team-task-details]').count()).toBe(0)
       await page.setViewportSize(viewport)
-      expect(await panel.evaluate(element => element.getBoundingClientRect().width)).toBe(360)
     } finally {
       await page.keyboard.press('Escape')
       await page.setViewportSize(viewport)
@@ -819,10 +726,9 @@ describe('web e2e: agent teamwork panel', () => {
     expect(tripwire.pageErrors).toEqual([])
   })
 
-  it('removes both section headings and the board divider when the last shared task is deleted', async () => {
+  it('removes the shared-task heading and the board divider when the last shared task is deleted', async () => {
     const agent = scaffold.ctx.agents.list()[0]!
-    await page.getByRole('button', { name: '1 subagent', exact: true }).click()
-    const panel = page.locator('[data-subagent-panel]')
+    const panel = await showSubagentsSection(page)
     await panel.locator('[data-team-panel]').waitFor()
     for (const task of scaffold.ctx.agentTeams.listTasks(agent).toReversed()) {
       if (task.status === 'deleted') continue
@@ -831,12 +737,10 @@ describe('web e2e: agent teamwork panel', () => {
       })
     }
     await panel.locator('[data-team-panel]').waitFor({ state: 'detached' })
-    expect(await panel.locator('[data-subagent-section-header]').count()).toBe(0)
-    expect(await panel.getByRole('heading').count()).toBe(0)
+    expect(await panel.getByRole('heading').allTextContents()).toEqual(['Subagents'])
     expect(await panel.getByText('No shared tasks yet. Create them through the conversation.').count()).toBe(0)
     expect(await panel.getByRole('treeitem', { name: /Researcher/u }).count()).toBe(1)
-    expect(await panel.evaluate(element => element.getBoundingClientRect().width)).toBe(360)
-    await page.keyboard.press('Escape')
+    await dismissSessionPanel(page)
   })
 
   it.skipIf(MODE === 'record')('keeps the fixture inventory closed', async () => {
@@ -976,12 +880,10 @@ it('shows the Chinese empty subagent section above compact shared tasks', async 
     await scaffold.ctx.agentTeams.createTask(agent, {
       subject: '准备协作', description: '先准备共享任务，再创建子智能体。',
     })
-    await page.getByRole('button', { name: '0 个子智能体', exact: true }).click()
-    const panel = page.locator('[data-subagent-panel]')
+    const panel = await showSubagentsSection(page)
     await panel.getByText('暂无子智能体', { exact: true }).waitFor()
-    expect(await panel.locator('[data-subagent-section-header]').textContent()).toBe('子智能体')
-    expect(await panel.locator('[data-subagent-section-header] button, h3 button').count()).toBe(0)
-    expect(await panel.evaluate(element => element.getBoundingClientRect().width)).toBe(360)
+    expect(await panel.getByRole('heading', { level: 2 }).locator('..').textContent()).toBe('子智能体')
+    expect(await panel.locator('h2 button, h3 button').count()).toBe(0)
     await panel.getByRole('heading', { name: '共享任务 1 待处理', exact: true }).waitFor()
     expect(await panel.locator('[data-team-task-details]').count()).toBe(0)
   })

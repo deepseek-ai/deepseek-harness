@@ -1,7 +1,6 @@
-- dialog "Subagent sessions":
-  - heading "Subagents" [level=3]
+- region "Subagents":
+  - heading "Subagents" [level=2]
   - paragraph: No subagents
-  - tree "Subagent sessions"
   - region "Task board":
     - heading "Shared tasks 1 pending" [level=3]
     - list:

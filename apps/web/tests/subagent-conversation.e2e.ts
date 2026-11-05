@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { zstdCompressSync } from 'node:zlib'
-import type { Browser, Page } from 'playwright'
+import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished, vi } from 'vitest'
 import { prepareSessionSnapshotFixtureForComparison } from '@deepseek-ai/dsh-llm-replay'
@@ -20,7 +20,10 @@ import {
   launchWebScaffold, readPersistedEvents, realizeSeedFixture, seedSession, selectedSessionFixture, watchConsole,
   webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { connectFreshWorkspace, newEnglishPage, pinBrowserClock, pinHostClock, saveFailureShot, writeComposerDraft } from './support.ts'
+import {
+  connectFreshWorkspace, dismissSessionPanel, newEnglishPage, pinBrowserClock, pinHostClock, saveFailureShot,
+  sessionPanelToggle, showSessionPanel, writeComposerDraft,
+} from './support.ts'
 
 const BASE_FIXTURE = fileURLToPath(new URL('../../../snapshots/web/live-interactions/session.v3.jsonl', import.meta.url))
 const AVAILABLE_CHILD_EXPECTED = fileURLToPath(new URL('../../../snapshots/web/subagent-conversation/ui.expected.md', import.meta.url))
@@ -38,6 +41,7 @@ const MIGRATING_CHILD_EXPECTED = fileURLToPath(new URL(
   './expected/subagent-conversation/migration-required-child.expected.md', import.meta.url,
 ))
 const MODE = webSnapshotMode()
+const SUBAGENTS_SECTION = '[data-session-panel-section="subagents"]'
 const LABEL = 'event-sourcing researcher'
 /** The live child's catalog name; it is the parent's first named child. */
 const CHILD_NAME = 'agent-1'
@@ -77,6 +81,15 @@ function childFixture(source: string, fixtureId: string, withContinuation: boole
     return JSON.stringify({ ...event, seq: event.seq + seqOffset, data })
   })
   return [childHeader, ...eventLines, ...continued, ''].join('\n')
+}
+
+/**
+ * Show the Session panel and return its Subagents section.
+ * @param page - the page under test.
+ * @returns the section.
+ */
+async function showSubagentsSection(page: Page): Promise<Locator> {
+  return (await showSessionPanel(page)).locator(SUBAGENTS_SECTION)
 }
 
 async function waitForAgentToSettle(scaffold: WebScaffold, id: SessionId): Promise<void> {
@@ -221,7 +234,8 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     await oneShotHandle.close()
     scaffold.ctx.sessionProjectionCache.coldSnapshot(oneShotHeader, SessionLogOffset(0), oneShotEvents)
     await waitForCacheRow(scaffold, oneShotHeader)
-    await page.getByRole('button', { name: '1 subagent', exact: true }).waitFor({ timeout: 15_000 })
+    const pushedSection = await showSubagentsSection(page)
+    await pushedSection.getByRole('treeitem', { name: new RegExp(LABEL) }).waitFor({ timeout: 15_000 })
     const catalogReads = apiCalls.filter(path => path === '/api/session/projections').length
     parent.session.append('subagent/catalog', {
       version: 0,
@@ -230,10 +244,12 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       mode: 'one-shot',
       label: ONE_SHOT_LABEL,
     })
-    const pushedCount = page.getByRole('button', { name: '2 subagents', exact: true })
-    await pushedCount.waitFor({ timeout: 15_000 })
+    await pushedSection.getByRole('treeitem', { name: new RegExp(ONE_SHOT_LABEL) }).waitFor({ timeout: 15_000 })
+    await pushedSection.getByText('1 completed\u2002·\u20021 not running', { exact: true }).waitFor({ timeout: 15_000 })
     expect(apiCalls.filter(path => path === '/api/session/projections')).toHaveLength(catalogReads)
-    await compareOrRefreshGolden(CATALOG_PUSH_EXPECTED, await pushedCount.ariaSnapshot(), MODE)
+    await compareOrRefreshGolden(CATALOG_PUSH_EXPECTED,
+      await pushedSection.getByRole('heading', { level: 2 }).locator('..').ariaSnapshot(), MODE)
+    await dismissSessionPanel(page)
     grandchildId = sessionId('recorded-grandchild')
     const authoredAt = Date.now()
     const grandchildHeader: SessionHeader = {
@@ -342,13 +358,9 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     const warningStart = tripwire.warnings.length
     await page.reload({ waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
-    const catalogButton = page.getByRole('button', { name: '2 subagents', exact: true })
-    await catalogButton.waitFor({ timeout: 15_000 })
-    await catalogButton.hover()
-    const catalogTree = page.getByRole('tree', { name: 'Subagent sessions' })
+    const catalogTree = (await showSubagentsSection(page)).getByRole('tree', { name: 'Subagent sessions' })
     await catalogTree.getByRole('treeitem').nth(1).waitFor({ timeout: 15_000 })
-    await catalogTree.press('Escape')
-    await page.getByRole('button', { name: '2 subagents' }).waitFor({ timeout: 15_000 })
+    await dismissSessionPanel(page)
     acknowledgeReloadConnectionLoss(tripwire, warningStart)
   }, 120_000)
 
@@ -379,9 +391,11 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     await writeComposerDraft(page, input, '')
   })
 
-  it('enters the member tree after pointer or keyboard activation of its trigger', async () => {
+  it('enters the sibling tree after pointer or keyboard activation of the breadcrumb switcher', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-subagent-trigger-focus'))
-    const trigger = page.getByRole('button', { name: '2 subagents', exact: true })
+    await (await showSubagentsSection(page)).getByRole('treeitem', { name: new RegExp(LABEL) }).getByText(LABEL, { exact: true }).click()
+    const hierarchy = page.getByRole('navigation', { name: 'Session hierarchy' })
+    const trigger = hierarchy.getByRole('button', { name: `Switch subagent: ${LABEL}`, exact: true })
     const panel = page.locator('[data-subagent-panel]')
     try {
       for (const activation of ['click', 'Enter', 'Space']) {
@@ -397,6 +411,8 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       }
     } finally {
       await page.locator('[data-composer-input]').first().hover()
+      await hierarchy.getByRole('button').first().click()
+      await trigger.waitFor({ state: 'detached' })
     }
   })
 
@@ -407,9 +423,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     try {
       for (const width of [originalViewport.width, 390]) {
         await page.setViewportSize({ ...originalViewport, width })
-        const trigger = page.getByRole('button', { name: '2 subagents', exact: true })
-        await trigger.click()
-        const panel = page.locator('[data-subagent-panel]')
+        const panel = await showSubagentsSection(page)
         const row = panel.getByRole('treeitem', { name: new RegExp(LABEL) })
         const primary = row.getByText(LABEL, { exact: true })
         const secondary = row.getByText(CHILD_NAME, { exact: true })
@@ -427,10 +441,9 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
         expect(await row.getByRole('button', { name: `Expand ${LABEL} descendants`, exact: true }).count()).toBe(1)
         expect(await row.getByRole('button', { name: `Open ${LABEL} in sidebar`, exact: true }).count()).toBe(1)
         expect(page.url()).toBe(originalUrl)
-        expect(await page.getByRole('tooltip').count()).toBe(0)
+        expect(await page.getByRole('tooltip').filter({ hasText: LABEL }).count()).toBe(0)
         expect(scaffold.ctx.agents.get(childId)).toBeUndefined()
-        await page.keyboard.press('Escape')
-        await panel.waitFor({ state: 'detached' })
+        await dismissSessionPanel(page)
       }
     } finally {
       await page.setViewportSize(originalViewport)
@@ -440,15 +453,12 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
 
   it('recovers a current-format cold child catalog cache miss without activating either level', async () => {
     onTestFailed(() => saveFailureShot(page, 'screenshots/non-migrating-session-reads/web-e2e-subagent-tree'))
-    await page.getByRole('button', { name: '2 subagents' }).hover()
-    const catalogTree = page.getByRole('tree', { name: 'Subagent sessions' })
+    const catalogTree = (await showSubagentsSection(page)).getByRole('tree', { name: 'Subagent sessions' })
     expect(await catalogTree.evaluate((element) => {
       const rect = element.getBoundingClientRect()
       const hit = document.elementFromPoint(rect.left + 8, rect.top + 8)
       return hit !== null && element.contains(hit)
     })).toBe(true)
-    const sectionHeader = page.locator('[data-subagent-section-header]')
-    expect(await sectionHeader.count()).toBe(0)
     const oneShotDisclosure = page.getByRole('button', {
       name: `Expand ${ONE_SHOT_LABEL} descendants`,
     })
@@ -507,7 +517,6 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       await clickDisclosureGutter(3)
       await projections
       await page.getByRole('treeitem', { name: new RegExp(NESTED_LABEL) }).waitFor({ timeout: 15_000 })
-      expect(await sectionHeader.count()).toBe(0)
       expect(observe.mock.calls.some(([id]) => id === childId)).toBe(true)
       expect(observe.mock.calls.some(([id]) => id === grandchildId)).toBe(false)
     } finally {
@@ -578,13 +587,13 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     expect(scaffold.ctx.agents.get(childId)).toBeUndefined()
     expect(scaffold.ctx.agents.get(grandchildId)).toBeUndefined()
     await hierarchy.getByRole('button').first().click()
-    await page.getByRole('button', { name: '2 subagents', exact: true }).waitFor()
+    await hierarchy.getByRole('button', { name: /^Switch subagent:/u }).waitFor({ state: 'detached' })
   })
 
   it('opens child history in the right Sidebar and releases it when closed', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-subagent-sidebar-chat'))
-    await page.getByRole('button', { name: '2 subagents' }).hover()
-    await page.getByRole('treeitem', { name: new RegExp(LABEL) }).getByRole('button', { name: `Open ${LABEL} in sidebar`, exact: true }).click()
+    await (await showSubagentsSection(page)).getByRole('treeitem', { name: new RegExp(LABEL) })
+      .getByRole('button', { name: `Open ${LABEL} in sidebar`, exact: true }).click()
     const sidebarChat = page.locator('[data-sidebar-chat]')
     await sidebarChat.getByText(/^Explain event sourcing in one sentence\./).waitFor({ timeout: 15_000 })
     await compareOrRefreshGolden(
@@ -595,8 +604,8 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     await page.locator('[data-sidebar-right-panel] [data-dockkit-tab-close]').click()
     await sidebarChat.waitFor({ state: 'detached' })
 
-    await page.getByRole('button', { name: '2 subagents' }).hover()
-    await page.getByRole('treeitem', { name: new RegExp(ONE_SHOT_LABEL) }).getByRole('button', { name: `Open ${ONE_SHOT_LABEL} in sidebar`, exact: true }).click()
+    await (await showSubagentsSection(page)).getByRole('treeitem', { name: new RegExp(ONE_SHOT_LABEL) })
+      .getByRole('button', { name: `Open ${ONE_SHOT_LABEL} in sidebar`, exact: true }).click()
     await page.locator('[data-sidebar-chat]').getByText(
       'One-shot tasks do not accept follow-ups; review the full execution record here.',
     ).waitFor({ timeout: 15_000 })
@@ -606,8 +615,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
 
   it('opens the completed child from persistence without activating it', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-subagent-open'))
-    await page.getByRole('button', { name: '2 subagents' }).hover()
-    await page.getByRole('treeitem', { name: new RegExp(LABEL) }).getByText(LABEL, { exact: true }).click()
+    await (await showSubagentsSection(page)).getByRole('treeitem', { name: new RegExp(LABEL) }).getByText(LABEL, { exact: true }).click()
     await expect.poll(
       () => page.getByText(/^Explain event sourcing in one sentence\./).count(),
       { timeout: 15_000 },
@@ -633,8 +641,12 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       .toEqual([{ fontSize: '14px', lineHeight: '20px' }, { fontSize: '14px', lineHeight: '20px' }])
     expect(Math.abs(crumbGeometry[0]!.top - crumbGeometry[1]!.top), JSON.stringify(crumbGeometry)).toBeLessThanOrEqual(1)
     expect(Math.abs(crumbGeometry[0]!.bottom - crumbGeometry[1]!.bottom), JSON.stringify(crumbGeometry)).toBeLessThanOrEqual(1)
-    expect(await hierarchy.getByRole('button', { name: '1 subagent', exact: true })
-      .evaluate(element => getComputedStyle(element).fontSize)).toBe('12px')
+    // The breadcrumb holds only the two titles; the child's own subagents are listed by its Session panel.
+    expect(await hierarchy.getByRole('button').count()).toBe(2)
+    await (await showSubagentsSection(page)).getByRole('treeitem', { name: new RegExp(NESTED_LABEL) }).waitFor()
+    await dismissSessionPanel(page)
+    // Park the pointer off the toggle so its tooltip stays out of later captures.
+    await page.locator('[data-composer-input]').first().hover()
     const sidebar = await captureStableAria(
       page,
       '[role="tree"][aria-label="Sessions"]',
@@ -720,8 +732,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
 
   it('opens a persisted grandchild with input enabled while its creator is offline', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-subagent-grandchild'))
-    await page.getByRole('button', { name: '1 subagent' }).hover()
-    const tree = page.getByRole('tree', { name: 'Subagent sessions' })
+    const tree = (await showSubagentsSection(page)).getByRole('tree', { name: 'Subagent sessions' })
     const nestedRow = tree.locator('[role="treeitem"]').filter({ hasText: NESTED_LABEL })
     await nestedRow.waitFor({ timeout: 15_000 })
     const nestedDisclosure = page.getByRole('button', {
@@ -730,17 +741,17 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     expect(await nestedDisclosure.count()).toBe(0)
     const clickArea = nestedRow.locator(':scope > div')
     expect(await clickArea.count()).toBe(1)
-    const [menuBox, clickAreaBox] = await Promise.all([
-      page.locator('[data-subagent-panel]').boundingBox(),
+    const [panelBox, clickAreaBox] = await Promise.all([
+      page.locator('[data-session-panel]').boundingBox(),
       clickArea.boundingBox(),
     ])
-    expect(menuBox).not.toBeNull()
+    expect(panelBox).not.toBeNull()
     expect(clickAreaBox).not.toBeNull()
     expect([
-      Math.round(clickAreaBox!.x - menuBox!.x),
-      Math.round(menuBox!.x + menuBox!.width - clickAreaBox!.x - clickAreaBox!.width),
-    // Menu padding plus the branchless row's one-pixel leading inset.
-    ]).toEqual([7, 6])
+      Math.round(clickAreaBox!.x - panelBox!.x),
+      Math.round(panelBox!.x + panelBox!.width - clickAreaBox!.x - clickAreaBox!.width),
+    // Panel padding plus the branchless row's one-pixel leading inset.
+    ]).toEqual([9, 8])
     await compareOrRefreshGolden(
       BRANCHLESS_EXPECTED,
       await captureStableAria(page, '[role="tree"][aria-label="Subagent sessions"]', scaffold.workspaceCwd),
@@ -766,8 +777,8 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     const parentSession = page.getByRole('tree', { name: 'Sessions' })
       .getByRole('treeitem', { name: /Ask a research subagent to/ })
     await parentSession.click()
-    await page.getByRole('button', { name: '2 subagents' }).hover()
-    await page.getByRole('treeitem', { name: new RegExp(ONE_SHOT_LABEL) }).getByText(oneShotId, { exact: true }).click()
+    await (await showSubagentsSection(page)).getByRole('treeitem', { name: new RegExp(ONE_SHOT_LABEL) })
+      .getByText(oneShotId, { exact: true }).click()
     await page.getByText('One-shot tasks do not accept follow-ups; review the full execution record here.').waitFor()
     expect(scaffold.ctx.agents.get(oneShotId)).toBeUndefined()
   })
@@ -777,8 +788,8 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     await page.getByRole('tree', { name: 'Sessions' })
       .getByRole('treeitem', { name: /Ask a research subagent to/ })
       .click()
-    await page.getByRole('button', { name: '2 subagents' }).hover()
-    await page.getByRole('treeitem', { name: new RegExp(LABEL) }).getByText(CHILD_NAME, { exact: true }).click()
+    await (await showSubagentsSection(page)).getByRole('treeitem', { name: new RegExp(LABEL) })
+      .getByText(CHILD_NAME, { exact: true }).click()
     await page.getByRole('textbox', { name: 'Message or run a task, / commands, @ files or sessions' }).waitFor()
     const forkResponse = page.waitForResponse(response =>
       new URL(response.url()).pathname === '/api/session/fork')
@@ -806,8 +817,8 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     onTestFailed(() => saveFailureShot(page, 'web-e2e-subagent-post-fork-followup'))
     const sessions = page.getByRole('tree', { name: 'Sessions' })
     await sessions.getByRole('treeitem', { name: /Ask a research subagent to/ }).click()
-    await page.getByRole('button', { name: '2 subagents' }).hover()
-    await page.getByRole('treeitem', { name: new RegExp(LABEL) }).getByText(CHILD_NAME, { exact: true }).click()
+    await (await showSubagentsSection(page)).getByRole('treeitem', { name: new RegExp(LABEL) })
+      .getByText(CHILD_NAME, { exact: true }).click()
     await page.locator('[data-composer-input][contenteditable="true"]').first().waitFor()
     expect(scaffold.ctx.agents.get(childId)).toBeUndefined()
 
@@ -823,8 +834,9 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     await expect.poll(() => scaffold.ctx.agents.get(forkId)).not.toBeUndefined()
 
     await sessions.getByRole('treeitem', { name: /Ask a research subagent to/ }).click()
-    await page.getByRole('button', { name: '2 subagents' }).press('ArrowDown')
-    await page.getByRole('treeitem', { name: new RegExp(LABEL) }).getByText(CHILD_NAME, { exact: true }).click()
+    await sessionPanelToggle(page).press('Enter')
+    await page.locator(SUBAGENTS_SECTION).getByRole('treeitem', { name: new RegExp(LABEL) })
+      .getByText(CHILD_NAME, { exact: true }).click()
     const input = page.locator('[data-composer-input][contenteditable="true"]').first()
     await input.waitFor()
     const promptResponse = page.waitForResponse(response =>
@@ -860,12 +872,11 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     })
     await page.getByRole('tree', { name: 'Sessions' })
       .getByRole('treeitem', { name: /Ask a research subagent to/ }).click()
-    await page.getByRole('button', { name: '2 subagents', exact: true }).click()
-    await page.locator('[data-team-panel]').getByText('Root-only shared task', { exact: true }).waitFor()
-    const rootHeader = page.locator('[data-subagent-section-header]')
+    const rootSection = await showSubagentsSection(page)
+    await rootSection.locator('[data-team-panel]').getByText('Root-only shared task', { exact: true }).waitFor()
+    const rootHeader = rootSection.getByRole('heading', { level: 2 }).locator('..')
     expect(await rootHeader.textContent()).toBe('Subagents1 completed\u2002·\u20021 not running')
     expect(await rootHeader.getByRole('button').count()).toBe(0)
-    expect(await rootHeader.locator('[data-icon="dsw-icon-users-outline-regular"]').count()).toBe(1)
     const progress = await rootHeader.textContent()
     await page.getByRole('button', { name: `Expand ${LABEL} descendants`, exact: true }).click()
     await page.getByRole('treeitem', { name: new RegExp(NESTED_LABEL) }).waitFor()
@@ -877,8 +888,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     await panel.getByRole('treeitem', { name: new RegExp(ONE_SHOT_LABEL) }).waitFor()
     expect(await panel.locator('[data-team-panel]').count()).toBe(0)
     expect(await panel.evaluate(element => element.getBoundingClientRect().width)).toBe(360)
-    const header = panel.locator('[data-subagent-section-header]')
-    expect(await header.count()).toBe(0)
+    expect(await panel.getByRole('heading').count()).toBe(0)
     expect(await switcher.textContent()).toBe(LABEL)
     const currentRow = panel.getByRole('treeitem', { name: new RegExp(LABEL) })
     const currentCheck = currentRow.locator('[data-subagent-current]')
@@ -990,8 +1000,8 @@ describe('web e2e: migration-required subagent catalog', () => {
       const workspaceRow = page.getByRole('tree', { name: 'Sessions' }).getByRole('treeitem').first()
       await workspaceRow.click()
       await page.locator(`[data-row-key="session:${parentId}"]`).click()
-      await page.getByRole('button', { name: '1 subagent', exact: true }).hover()
-      const tree = page.getByRole('tree', { name: 'Subagent sessions' })
+      await showSessionPanel(page)
+      const tree = page.locator(SUBAGENTS_SECTION).getByRole('tree', { name: 'Subagent sessions' })
       const childRow = tree.getByRole('treeitem', { name: new RegExp(childLabel) })
       await childRow.waitFor()
       await expect.poll(() => childRow.textContent()).toContain('Migration required')
@@ -1012,7 +1022,7 @@ describe('web e2e: migration-required subagent catalog', () => {
 
       await childRow.getByText(childId, { exact: true }).click()
       await page.getByRole('button', { name: `Switch subagent: ${childLabel}`, exact: true }).waitFor()
-      await page.getByRole('button', { name: '1 subagent', exact: true }).hover()
+      await showSessionPanel(page)
       const grandchildRow = tree.getByRole('treeitem', { name: new RegExp(grandchildLabel) })
       await grandchildRow.waitFor()
       expect(await grandchildRow.textContent()).toContain('Migration required')

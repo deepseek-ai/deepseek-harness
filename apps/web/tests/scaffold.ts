@@ -1621,18 +1621,13 @@ function normalizeAria(snapshot: string, workspaceCwd: string, age: boolean): st
 /**
  * Capture the region's aria snapshot at a settled milestone: poll until two
  * consecutive normalized captures are equal — a single-shot capture races the
- * last React commits. A foreground shell command is a job while it runs, and
- * its removal reaches the browser one coalesced roster frame after the tool
- * result, so by default the capture first waits for the session header's
- * running-job control to leave; a scenario whose milestone is a running job
- * keeps it with `runningJobs: 'keep'`.
+ * last React commits.
  * @param page - the page under test.
  * @param selector - the region locator selector.
  * @param workspaceCwd - normalization input.
  * @param options - `normalizeAge` collapses relative-time buckets to `{{age}}`
  *   for a region whose rows are dated from live wall-clock state;
- *   `replacements` tokenizes scenario-owned values before generic normalization;
- *   `runningJobs` is `'settle'` (default: wait for no running-job control) or `'keep'`.
+ *   `replacements` tokenizes scenario-owned values before generic normalization.
  * @returns the stable normalized snapshot.
  */
 export async function captureStableAria(
@@ -1642,13 +1637,8 @@ export async function captureStableAria(
   options: {
     normalizeAge?: boolean
     replacements?: readonly (readonly [value: string, token: string])[]
-    runningJobs?: 'settle' | 'keep'
   } = {},
 ): Promise<string> {
-  if ((options.runningJobs ?? 'settle') === 'settle') {
-    await page.getByRole('button', { name: /background jobs? running/ })
-      .waitFor({ state: 'detached', timeout: 10_000 })
-  }
   const region = page.locator(selector).first()
   const age = options.normalizeAge === true
   const normalize = (snapshot: string): string => {

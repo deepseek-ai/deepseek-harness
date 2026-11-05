@@ -468,3 +468,46 @@ export async function openSettings(page: Page, locale: 'en' | 'zh' | 'ja'): Prom
   await trigger.click()
   await page.getByRole('menuitem', { name: labels[locale][1], exact: true }).click()
 }
+
+/** The Session panel toggle in the Session header. */
+export function sessionPanelToggle(page: Page): Locator {
+  return page.locator('[data-session-panel-toggle]')
+}
+
+/**
+ * Show the Session panel unless it already shows, and wait for its entrance
+ * animation so geometry reads see the final position. A panel over the
+ * conversation closes on presses outside it and a narrower window can hide
+ * it, so each step that reads the panel shows it first.
+ * @param page - the page under test.
+ * @returns the panel.
+ */
+export async function showSessionPanel(page: Page): Promise<Locator> {
+  const toggle = sessionPanelToggle(page)
+  if (await toggle.getAttribute('aria-expanded', { timeout: 20_000 }) !== 'true') await toggle.click()
+  const panel = page.locator('[data-session-panel]')
+  await panel.waitFor()
+  await panel.evaluate(async (element) => {
+    await Promise.all(element.getAnimations().map(animation => animation.finished))
+  })
+  return panel
+}
+
+/**
+ * Close the Session panel shown over the conversation with Escape.
+ * @param page - the page under test.
+ */
+export async function dismissSessionPanel(page: Page): Promise<void> {
+  await page.keyboard.press('Escape')
+  await page.locator('[data-session-panel]').waitFor({ state: 'detached' })
+}
+
+/**
+ * Hide the Session panel unless it is already hidden.
+ * @param page - the page under test.
+ */
+export async function hideSessionPanel(page: Page): Promise<void> {
+  const toggle = sessionPanelToggle(page)
+  if (await toggle.getAttribute('aria-expanded') === 'true') await toggle.click()
+  await expect.poll(() => toggle.getAttribute('aria-expanded')).toBe('false')
+}
