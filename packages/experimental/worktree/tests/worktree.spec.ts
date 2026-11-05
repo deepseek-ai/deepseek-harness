@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url'
 import { pluginRecordOf } from '@deepseek-ai/dsh-session'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
+import { FsError } from '@deepseek-ai/dsh-fs'
 import WorktreeService from '../src/index.ts'
 import type { RestoreWorktreeRequest } from '../src/index.ts'
 import { contents, git, harness, repository, testAgent } from './harness.ts'
@@ -304,14 +305,17 @@ describe('creating and entering retained worktrees', () => {
     expect(await readdir(join(root, '.agents/worktrees'))).toEqual(['occupied'])
   })
 
-  it('retains the checkout and branch if publishing the new cwd fails', async () => {
+  it.each([
+    ['an unclassified failure', new Error('directory publication failed'), { name: 'Error' }],
+    ['a classified failure', new FsError('directory publication failed', 'FS_NOT_FOUND'), { name: 'FsError', code: 'FS_NOT_FOUND' }],
+  ])('retains the checkout and branch if publishing the new cwd fails with %s', async (_label, failure, identity) => {
     const root = await repo()
     ctx = await harness(root)
     const agent = testAgent(ctx, root)
     await ctx.workingDirectory.ensure(agent)
-    vi.spyOn(ctx.workingDirectory, 'set').mockRejectedValueOnce(new Error('directory publication failed'))
+    vi.spyOn(ctx.workingDirectory, 'set').mockRejectedValueOnce(failure)
     await expect(ctx.worktrees.create(agent, { name: 'retained' })).rejects.toMatchObject({
-      name: 'Error', message: expect.stringContaining('Any created checkout and branch are retained') as string,
+      ...identity, message: expect.stringContaining('Any created checkout and branch are retained') as string,
     })
     expect(ctx.workingDirectory.get(agent.session)).toBe(root)
     expect(await git(root, 'branch', '--list', 'retained')).toContain('retained')
@@ -380,6 +384,24 @@ describe('creating and entering retained worktrees', () => {
       name: 'WorktreeError', code: 'WORKTREE_TIMEOUT', message: 'worktree command exceeded 20ms; inspect the repository before retrying',
     })
     expect(await readdir(root)).toEqual(['.git', 'tracked.txt'])
+  })
+
+  it.each([
+    ['a separate AbortError', () => new DOMException('publication aborted', 'AbortError'), 'AbortError'],
+    ['a distinct failure', () => new Error('publication failed during cancellation'), 'Error'],
+  ])('classifies %s thrown after caller cancellation', async (_label, failure, name) => {
+    const root = await repo()
+    ctx = await harness(root)
+    const agent = testAgent(ctx, root)
+    await ctx.workingDirectory.ensure(agent)
+    const controller = new AbortController()
+    vi.spyOn(ctx.workingDirectory, 'set').mockImplementationOnce(() => {
+      controller.abort('caller stopped')
+      return Promise.reject(failure())
+    })
+    await expect(ctx.worktrees.create(agent, { name: 'cancelled-publication' }, controller.signal)).rejects.toMatchObject({
+      name, message: expect.stringContaining('Any created checkout and branch are retained') as string,
+    })
   })
 
   it('retains a caller cancellation reason when allocation is cancelled before its child starts', async () => {
