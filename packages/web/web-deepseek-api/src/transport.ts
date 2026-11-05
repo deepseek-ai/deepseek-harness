@@ -326,7 +326,10 @@ async function authHeaders(
       }
       case 'api-key': {
         const { key } = source
-        const apiKey = typeof key === 'string' ? key : await resolveCredential(key.resolve, signal)
+        // A conditional await in a ternary can produce negative branch counts in V8-to-Istanbul mapping.
+        let apiKey: string | undefined
+        if (typeof key === 'string') apiKey = key
+        else apiKey = await resolveCredential(key.resolve, signal)
         if (apiKey !== undefined && apiKey.length > 0) return { kind: 'api-key', endpoint: joinPath(source.baseURL, request.path), headers: {
           ...request.apiKeyHeaders?.(apiKey),
           'authorization': `Bearer ${apiKey}`,
