@@ -156,7 +156,7 @@ const harness = await vi.hoisted(async () => {
     readonly updateTasks = vi.fn(async (_action: 'inspect' | 'lock' | 'unlock') => false)
     readonly inspectQuit = vi.fn(async () => ({ activeTasks: false, scheduledTasks: false }))
     url = 'http://127.0.0.1:3080/?token=test'
-    fetch = vi.fn(async () => Response.json({ hasApiKey: true, writable: true, localePreference: null }))
+    fetch = vi.fn(async () => Response.json({ hasApiKey: true, writable: true, localePreference: null, themePreference: 'system' }))
     readonly ready = deferred()
     readonly exited = deferred()
     readonly stopping = deferred()
@@ -1179,20 +1179,30 @@ describe('desktop main startup', () => {
     expect(harness.windows[0]!.options).toMatchObject({ backgroundColor: color })
   })
 
-  describe.each(['win32', 'darwin'] as const)('cached theme on %s', (platform) => {
+  describe.each(['win32', 'darwin'] as const)('Host theme on %s', (platform) => {
     it.each([
       ['light', true, '#f9fafb'], ['dark', false, '#1b1b1c'],
       ['system', true, '#1b1b1c'], ['system', false, '#f9fafb'],
-    ] as const)('restores %s with system dark=%s before creating the workspace', async (source, systemDark, color) => {
+    ] as const)('applies %s with system dark=%s before revealing the workspace', async (source, systemDark, color) => {
       vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
-      const directory = join(harness.app.getPath('userData'), 'desktop')
-      mkdirSync(directory, { recursive: true })
-      writeFileSync(join(directory, 'theme-cache'), `${source}\n`)
       harness.nativeTheme.systemDark = systemDark
       await import('../src/main.ts')
       await harness.preparing.promise
-      expect(harness.nativeTheme.themeSource).toBe(source)
-      expect(harness.windows[0]!.options).toMatchObject({ backgroundColor: platform === 'darwin' ? '#00000000' : color })
+      const window = harness.windows[0]!
+      expect(window.show).not.toHaveBeenCalled()
+      harness.prepared.resolve()
+      await harness.hostStarted.promise
+      const host = harness.hosts[0]!
+      host.fetch.mockResolvedValue(Response.json({ hasApiKey: true, localePreference: null, themePreference: source }))
+      window.show.mockImplementation(() => {
+        expect(harness.nativeTheme.themeSource).toBe(source)
+        if (platform === 'win32') expect(window.setBackgroundColor).toHaveBeenLastCalledWith(color)
+        else expect(window.options).toMatchObject({ backgroundColor: '#00000000', vibrancy: 'sidebar' })
+      })
+      host.ready.resolve()
+      await Promise.resolve(invoke(DESKTOP_IPC.boot))
+      await vi.waitFor(() => { expect(window.show).toHaveBeenCalledOnce() })
+      expect(host.fetch).toHaveBeenCalledOnce()
     })
   })
 
@@ -1209,7 +1219,7 @@ describe('desktop main startup', () => {
     expect(harness.nativeTheme.listenerCount('updated')).toBe(0)
   })
 
-  it('persists only theme sources from the owned application main frame', async () => {
+  it('accepts only theme sources from the owned application main frame', async () => {
     await import('../src/main.ts')
     await harness.preparing.promise
     const window = harness.windows[0]!
@@ -1219,11 +1229,10 @@ describe('desktop main startup', () => {
     listener(event, 'invalid')
     expect(harness.nativeTheme.themeSource).toBe('system')
     listener(event, 'dark')
-    const { readDesktopThemeCache } = await import('../src/theme-cache.ts')
-    expect(readDesktopThemeCache(harness.app.getPath('userData'))).toBe('dark')
+    expect(harness.nativeTheme.themeSource).toBe('dark')
     window.webContents.mainFrame.url = 'dsh-app://unowned/'
     listener(event, 'light')
-    expect(readDesktopThemeCache(harness.app.getPath('userData'))).toBe('dark')
+    expect(harness.nativeTheme.themeSource).toBe('dark')
   })
 
   it('serves packaged shell documents instead of rejecting the shell origin', async () => {

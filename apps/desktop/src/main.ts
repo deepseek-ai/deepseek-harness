@@ -63,7 +63,6 @@ import { DesktopMandatoryUpdateWindow } from './mandatory-update-window.ts'
 import { DesktopPolicyTestAuth } from './policy-test-auth.ts'
 import { readDesktopSettings } from './settings.ts'
 import { readDesktopLocaleCache, writeDesktopLocaleCache } from './locale-cache.ts'
-import { readDesktopThemeCache, writeDesktopThemeCache } from './theme-cache.ts'
 import { DesktopUpdateDialog, type UpdateDialogOptions } from './update-dialog.ts'
 import { readDesktopRuntime } from './runtime-tree.ts'
 import { DesktopBrowserGuests } from './browser-guests.ts'
@@ -82,7 +81,6 @@ let shuttingDown = false
  */
 let skipQuitConfirmation = false
 let windowsLanguage: string | undefined = readDesktopLocaleCache(app.getPath('userData'))
-nativeTheme.themeSource = readDesktopThemeCache(app.getPath('userData'))
 /**
  * Whether the backend has reached ready: false until the first ready, back to
  * false when a restart returns it to starting, frozen during shutdown so a
@@ -886,7 +884,6 @@ async function main(): Promise<void> {
       || !event.senderFrame.url.startsWith(`${SCHEME}://app/`)) return
     if (source !== 'light' && source !== 'dark' && source !== 'system') return
     nativeTheme.themeSource = source
-    writeDesktopThemeCache(app.getPath('userData'), source)
   })
   ipcMain.handle(DESKTOP_IPC.localeBootstrap, async (event) => {
     if (event.sender !== mainWindow?.webContents || event.senderFrame !== mainWindow.webContents.mainFrame
@@ -1360,6 +1357,7 @@ async function main(): Promise<void> {
     const window = mainWindow ?? createMainWindow()
     await navigateMain(applicationUrl)
     if (isQuitting() || recovery.active || window.isDestroyed()) return
+    if (process.platform === 'win32') window.setBackgroundColor(chromeFallbackFill())
     if (activate) window.show()
     else window.showInactive()
     enteredWorkspace = true
@@ -1443,6 +1441,7 @@ async function main(): Promise<void> {
     if (quitting || recovery.active) return
     const state = await readWelcomeState()
     if (isQuitting() || backend.state.phase !== 'ready') return
+    nativeTheme.themeSource = state.themePreference
     locale = resolveDesktopStartupLocale(state.localePreference, systemLanguages)
     writeDesktopLocaleCache(app.getPath('userData'), locale.id)
     windowsLanguage = locale.id

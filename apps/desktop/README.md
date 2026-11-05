@@ -31,7 +31,7 @@ Desktop runs the Harness workspace in a native application. This reference cover
 
 ## Application overview
 
-Desktop restores the last confirmed application theme source before creating native windows. The cache is local to Electron userData; a missing, invalid or unreadable cache uses system appearance, and a write failure is logged without blocking theme changes. Windows workspace backgrounds remain opaque and follow the effective light/dark theme, including runtime changes; custom palettes use the built-in light/dark background approximation. macOS keeps its transparent sidebar vibrancy. On the first launch after upgrading from a version without this cache, the initial native palette follows the system until the application publishes its preference.
+Desktop reads the effective application theme from the existing Host startup settings response before showing the welcome or workspace window. Missing or invalid optional theme settings use system appearance; invalid values are logged. Windows workspace backgrounds remain opaque and follow the effective light/dark theme, including runtime changes; custom palettes use the built-in light/dark background approximation. macOS keeps its transparent sidebar vibrancy. No separate theme cache is maintained.
 
 Electron caches the last confirmed UI language in `userData/desktop/locale-cache` so startup recovery dialogs can use it before Host settings are available. Missing, invalid, or unreadable caches fall back to the system language; cache write failures do not block startup. A successful Host startup or a UI language change refreshes the cache. Until then, a changed system language may differ from the cached language.
 
