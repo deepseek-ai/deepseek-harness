@@ -548,7 +548,7 @@ function versionUpdate(check: VersionCheck | undefined): string | undefined {
 /** The list toolbar's sentence: what a manual refresh waits for, otherwise the last update check of every registry package. */
 function updatesNote(packages: readonly PackageView[], state: PluginManagerState, t: Translate): { text: string; tone?: 'info' | 'error' } | undefined {
   const { versions, refreshProgress: progress } = state
-  if (progress?.phase === 'loading') return { text: t('refreshLoading') }
+  if (progress?.phase === 'loading') return { text: t('loading') }
   if (progress?.phase === 'checking') return { text: t('refreshChecking', { current: String(progress.current), total: String(progress.total) }) }
   const checks = packages.filter(pkg => pkg.update === 'registry').map(pkg => versions[pkg.name])
   if (checks.length === 0 || checks.some(check => check === undefined || check.phase === 'checking')) return undefined
@@ -1750,7 +1750,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
                   </div>
                 </div>
                 <div className={css.toolbar} data-plugin-toolbar data-plugin-header-part="toolbar" hidden={!onInstalled}>
-                  {updates === undefined ? null : <span className={css.updatesNote} data-tone={updates.tone}>{updates.text}</span>}
+                  {updates === undefined ? null : <span role="status" className={css.updatesNote} data-tone={updates.tone}>{updates.text}</span>}
                   <Tooltip label={t('refresh')} delayMs={500} focusDelayMs={500} side="bottom" portal disabled={!loaded || refreshing}>
                     <Button variant="outline" size="sm" className={css.addButton} aria-label={t('refresh')} aria-busy={refreshing}
                       disabled={!loaded || refreshing} onClick={props.refresh}

@@ -3151,13 +3151,13 @@ describe('registry versions and updates', () => {
   it('says in the toolbar how far a manual refresh has come', () => {
     const second = updatable({ name: 'dsh-second' })
     const { set } = renderTab({ packages: [updatable(), second], refreshStatus: 'refreshing', refreshProgress: { phase: 'loading' } })
-    expect(screen.getByText(en.refreshLoading)).toBeTruthy()
+    const note = (): HTMLElement => within(document.querySelector<HTMLElement>('[data-plugin-toolbar]')!).getByRole('status')
+    expect(note().textContent).toBe(en.loading)
     set({ versions: { 'dsh-better-sidebar': listed([]), 'dsh-second': { phase: 'checking' } }, refreshProgress: { phase: 'checking', current: 2, total: 2 } })
-    expect(screen.getByText('Checking for updates 2/2')).toBeTruthy()
+    expect(note().textContent).toBe(en.refreshChecking.replace('{current}', '2').replace('{total}', '2'))
     // The spinner's minimum hold already shows what the checks found.
     set({ versions: { 'dsh-better-sidebar': listed([]), 'dsh-second': listed([]) }, refreshProgress: null })
-    expect(screen.queryByText(/Checking for updates/)).toBeNull()
-    expect(screen.getByText(en.updatesNone)).toBeTruthy()
+    expect(note().textContent).toBe(en.updatesNone)
   })
 
   const base: UpdateState = {

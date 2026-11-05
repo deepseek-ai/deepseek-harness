@@ -2280,6 +2280,25 @@ describe('version checks and updates', () => {
     expect(state().versions['dsh-better-sidebar']?.phase).toBe('done')
   })
 
+  it('counts each check of a manual refresh and waits for a check another action started', async () => {
+    const answers = new Map([['dsh-a', deferred<ReturnType<typeof ok<typeof LISTED>>>()], ['dsh-better-sidebar', deferred<ReturnType<typeof ok<typeof LISTED>>>()]])
+    const listVersions = vi.fn((name: string) => answers.get(name)!.promise)
+    const listBundles = vi.fn(() => Promise.resolve(ok([UPDATABLE, { ...UPDATABLE, name: 'dsh-a' }])))
+    const { controller, face, state } = bench({ listVersions, listBundles })
+    await controller.load()
+    // The detail page starts the second package's check before the refresh reaches it.
+    face.checkVersions('dsh-better-sidebar')
+    face.refresh()
+    await vi.waitFor(() => { expect(state().refreshProgress).toEqual({ phase: 'checking', current: 1, total: 2 }) })
+    answers.get('dsh-a')!.resolve(ok(LISTED))
+    await vi.waitFor(() => { expect(state().refreshProgress).toEqual({ phase: 'checking', current: 2, total: 2 }) })
+    expect(listVersions).toHaveBeenCalledTimes(2)
+    answers.get('dsh-better-sidebar')!.resolve(ok(LISTED))
+    await vi.waitFor(() => { expect(state().refreshProgress).toBeNull() })
+    expect(state().versions['dsh-better-sidebar']?.phase).toBe('done')
+    await vi.waitFor(() => { expect(state().refreshStatus).toBe('idle') })
+  })
+
   it('checks no versions after a failed refresh', async () => {
     const listVersions = vi.fn(() => Promise.resolve(ok(LISTED)))
     const listBundles = vi.fn(() => Promise.resolve(refused('gateway/internal', 'offline')))

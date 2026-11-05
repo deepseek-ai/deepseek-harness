@@ -681,6 +681,8 @@ interface InstallRequest {
 export class PluginManagerController {
   private readonly store: SnapshotStore<PluginManagerState>
   private inFlight: Promise<void> | undefined
+  /** Version checks in flight by package name, so a refresh waits for a check another action started. */
+  private readonly versionChecks = new Map<string, Promise<void>>()
   private rerun = false
   private generation = 0
   private disposed = false
@@ -940,26 +942,35 @@ export class PluginManagerController {
     this.patch({ update: { ...update, steps: [...update.steps, progress.step] } })
   }
 
-  /** Read one package's newer versions; a transport failure reads as an unknown refusal. */
-  private async checkVersions(packageName: string): Promise<void> {
-    const { versions, update } = this.getSnapshot()
+  /**
+   * Read one package's newer versions; a transport failure reads as an unknown refusal.
+   * @returns settlement of this check, or of the one already in flight for the package.
+   */
+  private checkVersions(packageName: string): Promise<void> {
+    const inFlight = this.versionChecks.get(packageName)
+    if (inFlight !== undefined) return inFlight
+    const { update } = this.getSnapshot()
     // A check during the package's update would answer for the version being replaced.
-    if (this.disposed || versions[packageName]?.phase === 'checking' || (update?.phase === 'running' && update.packageName === packageName)) return
+    if (this.disposed || (update?.phase === 'running' && update.packageName === packageName)) return Promise.resolve()
     this.patchVersions(packageName, { phase: 'checking' })
-    // The generated Remote takes every business argument before its optional signal; `{}` asks the Host's own plan.
-    const answer = await this.ctx.remote.pluginManager.listVersions(packageName, {})
-    const list: PluginVersionList = answer.ok ? answer.value : { status: 'refused', problem: 'unknown', reason: answer.error.message, attempts: [] }
-    this.patchVersions(packageName, { phase: 'done', list, checkedAt: Date.now() })
+    const check = (async () => {
+      // The generated Remote takes every business argument before its optional signal; `{}` asks the Host's own plan.
+      const answer = await this.ctx.remote.pluginManager.listVersions(packageName, {})
+      const list: PluginVersionList = answer.ok ? answer.value : { status: 'refused', problem: 'unknown', reason: answer.error.message, attempts: [] }
+      this.patchVersions(packageName, { phase: 'done', list, checkedAt: Date.now() })
+    })().finally(() => { this.versionChecks.delete(packageName) })
+    this.versionChecks.set(packageName, check)
+    return check
   }
 
   /**
-   * Check the registry packages one after another, so one click starts at most one package's registry lookups,
-   * publishing which one the refresh waits for.
+   * Check the registry packages one after another, so one click starts at most one package's registry lookups.
+   * @param report - called with the 1-based position and the count before each package's check.
    */
-  private async checkAllVersions(): Promise<void> {
+  private async checkAllVersions(report: (current: number, total: number) => void): Promise<void> {
     const registry = this.getSnapshot().packages.filter(item => item.update === 'registry')
     for (const [index, pkg] of registry.entries()) {
-      this.patch({ refreshProgress: { phase: 'checking', current: index + 1, total: registry.length } })
+      report(index + 1, registry.length)
       await this.checkVersions(pkg.name)
     }
   }
@@ -1103,7 +1114,7 @@ export class PluginManagerController {
     })
     try {
       await this.load()
-      if (this.getSnapshot().status !== 'error') await this.checkAllVersions()
+      if (this.getSnapshot().status !== 'error') await this.checkAllVersions((current, total) => { this.patch({ refreshProgress: { phase: 'checking', current, total } }) })
     } catch (_error) {
       // A rejected transport request leaves the cached cards available for retry.
       this.patch({ status: 'error' })
