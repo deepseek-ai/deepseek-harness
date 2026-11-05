@@ -36,7 +36,9 @@ export async function startup(terminal: PanelTerminal, options: StartupOptions, 
   const startedAt = now()
   const deadline = startedAt + options.startupTimeoutMs
   let revision = terminal.revision
-  let lastChange: number | undefined
+  // A screen printed before startup began counts as output; the revision alone also advances on attachment state.
+  const printed = terminal.read({ offset: 0, count: Number.MAX_SAFE_INTEGER, maxBytes: options.maxReadBytes }).text !== ''
+  let lastChange = printed ? startedAt : undefined
   let lastProbe = -Infinity
   for (;;) {
     signal.throwIfAborted()

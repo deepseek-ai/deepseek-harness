@@ -62,6 +62,7 @@ describe('spawn', () => {
 
   it('closes the terminal when startup fails and reports a failed cleanup with the cause', async () => {
     const failed = backend()
+    failed.terminal.screen = ['']
     const spawning = failed.backend.spawn({ sessionId: TerminalSessionId('pty-1'), owner: agentFor(new Context(), 'session'), type: 'shell' })
     const rejected = expect(spawning).rejects.toThrow('did not reach its prompt within 5000 ms')
     await vi.advanceTimersByTimeAsync(5000)
@@ -120,6 +121,29 @@ describe('startup', () => {
     terminal.foreground = { processGroupId: 500, inputWaiting: true }
     await vi.advanceTimersByTimeAsync(1000)
     expect(motd).toBe('$loading nvm\n$')
+  })
+
+  it('counts a prompt printed before startup began as output', async () => {
+    const terminal = new FakeTerminal()
+    const ready = startup(terminal, options, new AbortController().signal)
+    await vi.advanceTimersByTimeAsync(300)
+    expect(await ready).toBe('$')
+    expect(terminal.inspectForeground).toHaveBeenCalledOnce()
+  })
+
+  it('waits for output on an empty screen even when attachment state advances the revision', async () => {
+    const terminal = new FakeTerminal()
+    terminal.screen = ['']
+    terminal.update({ cols: 120 })
+    const ready = startup(terminal, options, new AbortController().signal)
+    let motd: string | undefined
+    void ready.then((value) => { motd = value })
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(motd).toBeUndefined()
+    expect(terminal.inspectForeground).not.toHaveBeenCalled()
+    terminal.output('$')
+    await vi.advanceTimersByTimeAsync(300)
+    expect(motd).toBe('$')
   })
 
   it('accepts silence alone when the foreground cannot be observed', async () => {
