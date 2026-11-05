@@ -145,6 +145,18 @@ export abstract class SessionQueryEngine extends Service {
   }
 
   /**
+   * Inspect domain-owned state without attaching or resuming a cold Session.
+   * The getter runs synchronously after preparation and must not mutate or retain the Session.
+   * @param sessionId - logical Session identity.
+   * @param read - domain getter returning detached data.
+   * @param signal - preparation cancellation.
+   * @returns the getter's value at the current live or prepared cut.
+   */
+  inspectSession<T>(sessionId: SessionId, read: (session: Session) => T, signal?: AbortSignal): Promise<T> {
+    return this._observations.inspect(sessionId, read, signal)
+  }
+
+  /**
    * Search the live-preferred logical corpus and group by session.
    * @param request - query text, metadata filters, page size, and cursor.
    * @param exec - optional cancellation control.

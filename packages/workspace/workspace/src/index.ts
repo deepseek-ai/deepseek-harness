@@ -145,6 +145,22 @@ declare module '@deepseek-ai/cordis' {
      * @mode parallel
      */
     'workspace/session-stop'(request: SessionActivityRequest): Promise<void> | void
+    /**
+     * Admit optional follow-up work after durable archival and any stop requests.
+     * Dispatched inside the registry's write queue: a listener registers its work
+     * and returns, and runs the work and any unbounded I/O afterwards. Listener
+     * failures are logged without undoing archival. Listeners own and drain their background work.
+     * @param request - newly archived Session; repeated archive requests do not dispatch.
+     * @mode parallel
+     */
+    'workspace/session-archived'(request: SessionActivityRequest): Promise<void> | void
+    /**
+     * Cancel or settle archive follow-up work before making a Session available again.
+     * A rejection retains the archived state.
+     * @param request - Session about to leave the archive set.
+     * @mode parallel
+     */
+    'workspace/session-unarchiving'(request: SessionActivityRequest): Promise<void> | void
   }
 }
 
@@ -360,7 +376,7 @@ export class WorkspaceRegistry extends Service {
    * resolves without writing, asking, or stopping.
    * @param sessionId - The session to archive.
    * @param options - Whether running work is stopped instead of refusing.
-   * @returns resolution after durability and, with `stopActivity`, after every stop request was issued.
+   * @returns resolution after durability, any stop requests, and follow-up admission.
    */
   archiveSession(sessionId: SessionId, options: ArchiveSessionOptions = {}): Promise<void> {
     return this.enqueueOperation(async () => {
@@ -383,6 +399,11 @@ export class WorkspaceRegistry extends Service {
         pinnedSessionIds: state.pinnedSessionIds.filter(id => id !== sessionId),
       })
       if (options.stopActivity === true) await this.stopSessionActivity(sessionId)
+      try {
+        await this.ctx.parallel('workspace/session-archived', { sessionId })
+      } catch (error) {
+        this.ctx.logger.warn('Session archived, but archive follow-up admission failed: %s', error)
+      }
     })
   }
 
@@ -402,6 +423,7 @@ export class WorkspaceRegistry extends Service {
       // check-then-write pair cannot interleave with a concurrent archive.
       const state = this.requireState()
       if (!state.archivedSessionIds.includes(sessionId)) return
+      await this.ctx.parallel('workspace/session-unarchiving', { sessionId })
       await this.setState({
         ...state,
         archivedSessionIds: state.archivedSessionIds.filter(id => id !== sessionId),

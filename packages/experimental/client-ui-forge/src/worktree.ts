@@ -3,7 +3,7 @@
 import { isAbsolute, relative, sep } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
-import { generatedWorktreeName } from '@deepseek-ai/dsh-experimental-worktree'
+import { CREATED_RECORD, createdWorktreeSchema, generatedWorktreeName } from '@deepseek-ai/dsh-experimental-worktree'
 import type { CreatedWorktree, CreateWorktreePhase } from '@deepseek-ai/dsh-experimental-worktree'
 import { appendPluginRecord, pluginRecordOf } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
@@ -48,16 +48,18 @@ const stateSchema: z.ZodType<ForgeWorktreeState> = z.object({
 
 /**
  * The `forgeWorktree` unit. `request` and `cancel` records change the request
- * until the first `turn/start` or creation; the first `created` record of an
- * open request applies until the first `step/start`. Records outside those
- * periods leave the state unchanged. The unit also follows the Session's
- * working directory, so clients, including the Session summary, see the
- * created worktree only while that directory is the worktree or lies below it.
- * Restoration records retain incomplete checkout recovery across reloads.
+ * until the first `turn/start` or creation; the first creation of an open
+ * request applies until the first `step/start`, read from the worktree
+ * service's `plugin:worktree/created` record, or from the `created` record that
+ * earlier panels wrote. Records outside those periods leave the state
+ * unchanged. The unit also follows the Session's working directory, so
+ * clients, including the Session summary, see the created worktree only while
+ * that directory is the worktree or lies below it. Restoration records retain
+ * incomplete checkout recovery across reloads.
  */
 export const forgeWorktreeProjection = {
   key: 'forgeWorktree',
-  stateVersion: 4,
+  stateVersion: 5,
   stateSchema,
   init: header => ({ ...EMPTY, cwd: header.cwd ?? null }),
   apply,
@@ -103,6 +105,12 @@ function apply(state: ForgeWorktreeState, event: SessionEvent): ForgeWorktreeSta
 
 function applyRecord(state: ForgeWorktreeState, event: SessionEvent): ForgeWorktreeState {
   const record = pluginRecordOf(event)
+  if (record?.type === CREATED_RECORD) {
+    const created = createdWorktreeSchema.safeParse(record.data)
+    return !created.success || state.created !== null || state.stepped || state.request === null
+      ? state
+      : { ...state, created: { ...created.data, from: state.request.from } }
+  }
   if (record?.type !== WORKTREE_RECORD) return state
   const parsed = recordSchema.safeParse(record.data)
   if (!parsed.success) return state
@@ -422,13 +430,9 @@ export class WorktreeCreations {
         throw new CreationFailure(status.branch, status.phase, messageOf(error), error)
       }
       signal.throwIfAborted()
-      const worktree: ForgeSessionWorktree = {
-        path: created.path, branch: created.branch, from, baseCommit: created.baseCommit, repositoryRoot: created.repositoryRoot,
-      }
-      appendPluginRecord(session, WORKTREE_RECORD, { action: 'created', worktree })
       return created
     } finally {
-      // After the record, so a follower never sees the creation end without its result.
+      // After the service's `plugin:worktree/created` record, so a follower never sees the creation end without its result.
       this.live.delete(session)
       this.changed(session)
     }

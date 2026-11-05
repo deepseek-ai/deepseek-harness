@@ -270,6 +270,8 @@ export const EVENT_SCOPE_PAGE: Record<string, string> = {
   'webserver': 'web-server.md',
   'workflow': 'workflow.md',
   'workspace': 'workspace.md',
+  'working-directory': 'working-directory.md',
+  'worktree': 'worktrees.md',
 }
 
 /**
@@ -283,6 +285,9 @@ export const EVENT_SCOPE_PAGE: Record<string, string> = {
  * exemption cannot mask another declaration in that scope.
  */
 export const EVENT_WALK_EXEMPTIONS: Record<string, string> = {
+  'workspace/archive-notice': 'client-face archive follow-up copy — packages/client/ui-workspace/README.md owns the API',
+  'workspace/archive-followup-failed': 'client-face archive follow-up failure — packages/client/ui-workspace/README.md owns the API',
+  'workspace/archive-followup-settled': 'client-face archive follow-up settlement — packages/client/ui-workspace/README.md owns the API',
   'agent/request': 'deprecated compatibility hook — packages/core/agent/README.md documents migration',
   'command/executed': 'client-face local command acknowledgment — packages/client/ui-commands/README.md owns the API',
   'connection/reset': 'client-face transport signal — packages/api/session-controller/README.md owns the API',
@@ -402,6 +407,8 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   CreatedWorktree: 'worktrees.md',
   CreateWorktreePhase: 'worktrees.md',
   RestoreWorktreeRequest: 'worktrees.md',
+  WorktreeCleanup: 'worktrees.md',
+  WorktreeCreation: 'worktrees.md',
   RestoredWorktree: 'worktrees.md',
   ChangeRequestListener: 'forge.md',
   ChangeRequestRef: 'forge.md',

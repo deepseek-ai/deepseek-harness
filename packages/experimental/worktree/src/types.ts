@@ -47,3 +47,22 @@ export interface RestoredWorktree {
   /** Whether the branch no longer existed and was created again at the base commit, without the commits it had gained. */
   branchRecreated: boolean
 }
+
+/** One checkout in a Session's log and whether that Session, rather than a fork ancestor, created it. */
+export interface WorktreeCreation {
+  readonly worktree: CreatedWorktree
+  /** False for a creation inside the fork-inherited prefix. */
+  readonly owned: boolean
+}
+
+/** Process-local state of one archive-triggered cleanup of a checkout. */
+export interface WorktreeCleanup {
+  /** Monotonic attempt number within this Host lifetime; a Remote waits on a specific one. */
+  readonly revision: number
+  /**
+   * `scheduled` until the background inspection ends; `retained` when a use,
+   * policy, or Git state keeps the checkout; `removed` after `git worktree
+   * remove`; `failed` when removal threw and may have left a partial directory.
+   */
+  readonly status: 'scheduled' | 'retained' | 'removed' | 'failed'
+}
