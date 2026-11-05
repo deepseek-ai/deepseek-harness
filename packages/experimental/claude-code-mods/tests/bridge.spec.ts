@@ -729,6 +729,8 @@ describe('mod tools: registration errors and unanswered calls', () => {
     expect(results[0]).toEqual([true, { type: 'text', text: "Error: tools-mod registered mcp__tools-mod__orphan but no tool.call hook answered it; add on('tool.call', { tool: 'mcp__tools-mod__orphan' }, hook)" }])
     expect(results[1]).toEqual([false, { type: 'text', text: '{"structured":true}' }])
     expect(results[2]).toEqual([false, { type: 'text', text: '' }])
+    const unanswered = events(agent).find(e => e.type === 'tool/result')
+    expect(unanswered?.type === 'tool/result' && unanswered.data.error).toEqual({ name: 'ModUnansweredError', code: 'MOD_UNANSWERED' })
   })
 })
 
