@@ -205,7 +205,9 @@ it.each(['apply', 'changed-approval', 'replaced-feed', 'website'] as const)('che
     await publishDesktopRolloutCi('check', env)
     expect(await readFile(env.GITHUB_OUTPUT, 'utf8')).toContain(`approval=${context.approval}`)
     if (scenario === 'website') {
-      expect(await readFile(env.GITHUB_STEP_SUMMARY, 'utf8')).toContain('官网安装包面向所有下载用户，不受自动更新放量比例限制')
+      const summary = await readFile(env.GITHUB_STEP_SUMMARY, 'utf8')
+      expect(summary).toContain('官网安装包面向所有下载用户，不受自动更新放量比例限制')
+      expect(summary).toContain('固定下载地址无防降级保护，发布较早版本会替换较新安装包')
     }
     const mock = transport(dump({ ...(load(f.plan.expected) as object), stagingPercentage: 10 }))
     if (scenario === 'replaced-feed') mock.replace(null)
