@@ -2016,6 +2016,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     occupants: [
       'client-ui-agent-preset AgentPresetLabel id \'agent-preset\'',
       'client-ui-jobs JobListAction id \'job-list\'',
+      'client-ui-sidebar-terminal AgentTerminalOpener id \'agent-terminals\'',
       'client-ui-subagent SubagentCatalogAction id \'subagent-catalog\'',
     ],
     replaceRisk: 'none',
