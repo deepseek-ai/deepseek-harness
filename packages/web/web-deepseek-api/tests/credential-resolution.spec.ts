@@ -139,7 +139,7 @@ describe.each(OPERATIONS)('%s in a conversation on the DeepSeek account route', 
     expect(await ready(ctx, operation, 'deepseek-account')).toBe(true)
     await operate(ctx, operation, 'deepseek-account')
     expect(sent()).toEqual([{ endpoint: `${ACCOUNT}/${operation}`, authorization: null, token: 'account-token' }])
-    expect(asked).toEqual([ACCOUNT, `${ACCOUNT}/${operation}`])
+    expect(asked).toEqual([`${ACCOUNT}/${operation}`, `${ACCOUNT}/${operation}`])
   })
 
   it('derives the account endpoint from DEEPSEEK_BASE_URL', async () => {
@@ -282,7 +282,7 @@ describe.each(OPERATIONS)('%s in any other conversation', (operation) => {
     expect(await ready(ctx, operation, route)).toBe(true)
     await operate(ctx, operation, route)
     expect(sent()).toEqual([{ endpoint: `${ACCOUNT}/${operation}`, authorization: null, token: 'account-token' }])
-    expect(asked).toEqual([ACCOUNT, `${ACCOUNT}/${operation}`])
+    expect(asked).toEqual([`${ACCOUNT}/${operation}`, `${ACCOUNT}/${operation}`])
   })
 
   it('sends the account token to the default account origin without the account route', async () => {
@@ -316,7 +316,7 @@ describe.each(OPERATIONS)('%s in any other conversation', (operation) => {
     }
   })
 
-  it('sends the key while the mounted account route settings do not resolve, and fails without the key', async () => {
+  it('sends the key while the mounted account route settings do not resolve, and is misconfigured without the key', async () => {
     const subject = operation === 'search' ? 'Search' : 'Fetch'
     const routes = [officialRoute(), accountRoute({ thinking: 'disabled', reasoningEffort: 'high' })]
     const withKey = await mount({ routes, account: signedIn(), environment: { DEEPSEEK_API_KEY: 'chat-key' } })
@@ -327,12 +327,12 @@ describe.each(OPERATIONS)('%s in any other conversation', (operation) => {
     const withoutKey = await mount({ routes, account: signedIn(asked) })
     expect(await ready(withoutKey.ctx, operation, 'moonshotai')).toBe(false)
     await expect(operate(withoutKey.ctx, operation, 'moonshotai')).rejects.toMatchObject({
-      code: 'WEB_PROVIDER_CREDENTIAL_MISSING',
-      message: `DeepSeek ${subject} API uses the DeepSeek API key, then the DeepSeek account sign-in, and neither is available:`
-        + ' no key is configured for "DEEPSEEK_API_KEY", and the settings of the DeepSeek account model provider do not'
-        + ' resolve: llm-deepseek: only reasoningEffort "off" can be configured when thinking is disabled. Guide the user to'
-        + ' add the DeepSeek API key on the Models page or export "DEEPSEEK_API_KEY" in the launching environment, or to'
-        + ' correct the DeepSeek account model provider\'s settings on the Models page or in the deployment configuration.',
+      code: 'WEB_PROVIDER_MISCONFIGURED',
+      message: `DeepSeek ${subject} API sends the DeepSeek account sign-in to the origin of the DeepSeek account model`
+        + ' provider, and that provider\'s settings do not resolve: llm-deepseek: only reasoningEffort "off" can be configured'
+        + ` when thinking is disabled. ${subject} did not send the request. Guide the user to correct that provider's settings`
+        + ' on the Models page or in the deployment configuration, or to set'
+        + ` web-deepseek-api.${operation}BaseURL and web-deepseek-api.${operation}ApiKeyEnv so ${subject} uses its own endpoint.`,
     })
     expect(withoutKey.sent()).toEqual([])
     expect(asked).toEqual([])
@@ -341,7 +341,8 @@ describe.each(OPERATIONS)('%s in any other conversation', (operation) => {
   it('fails without asking the account when the credential store cannot be read', async () => {
     const asked: string[] = []
     const { ctx, sent } = await mount({
-      routes: bothRoutes, account: signedIn(asked), credentials: { describe: () => Promise.reject(new Error('store locked')) },
+      routes: bothRoutes, account: signedIn(asked),
+      credentials: { describe: () => Promise.reject(new Error('store locked')), resolve: () => Promise.reject(new Error('store locked')) },
     })
     expect(await ready(ctx, operation, 'moonshotai')).toBe(false)
     await expect(operate(ctx, operation, 'moonshotai')).rejects.toMatchObject({
@@ -455,7 +456,7 @@ describe.each(OPERATIONS)('%s billed to the signed-in DeepSeek account', (operat
     expect(await ready(ctx, operation, route)).toBe(true)
     await operate(ctx, operation, route)
     expect(sent()).toEqual([{ endpoint: `${ACCOUNT}/${operation}`, authorization: null, token: 'account-token' }])
-    expect(asked).toEqual([ACCOUNT, `${ACCOUNT}/${operation}`])
+    expect(asked).toEqual([`${ACCOUNT}/${operation}`, `${ACCOUNT}/${operation}`])
   })
 
   it('sends the token to the default account origin without the account route', async () => {

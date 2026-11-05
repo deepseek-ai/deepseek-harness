@@ -59,9 +59,9 @@ kind: "package-reference"
 Search 与 Fetch 每次操作各自从同一份设置快照解析端点和凭据，因此保存的设置、模型提供方变更、登录或存入的密钥从下一次操作开始生效。会话的路由是发起会话最近一次请求上下文的 `provider`；`ready()` 使用正在准备的模型请求的路由。
 
 - **单独配置。** 设置了非空 `*BaseURL` 或 `*ApiKeyEnv` 的能力在任何路由上都只以 `Authorization: Bearer` 把其 `*ApiKeyEnv`（未设置时为 `DEEPSEEK_API_KEY`）下的密钥发往其 `*BaseURL`（未设置时为 `https://api.deepseek.com/v1/tools`），从不发送账号令牌。没有该密钥时，操作失败，诊断信息点名该引用和 `*ApiKeyEnv` 字段。
-- **账号令牌。** 操作通过 `x-dsh-auth-token` 发送 `ctx.deepseekAccount` 为请求端点给出的令牌；2026-10-16 公网 Search 与 Fetch 路由已接受该令牌。端点位于模型提供方目录为 `deepseek-account` 列出的、入口根部活动的 `@deepseek-ai/dsh-llm-deepseek-account` Loader 条目的 origin 下；没有该条目时，位于该路由默认基础地址的 origin（`https://api.deepseek.com`，或 `DEEPSEEK_BASE_URL` 的 origin）下。没有登录、没有账号服务或令牌为空都算没有令牌。账号令牌读取失败时操作失败，不再尝试其他凭据。条目活动但其设置被该路由自身的解析器拒绝时，需要令牌的操作在读取任何凭据前失败。
+- **账号令牌。** 操作通过 `x-dsh-auth-token` 发送 `ctx.deepseekAccount` 为请求端点给出的令牌；2026-10-16 公网 Search 与 Fetch 路由已接受该令牌。端点位于模型提供方目录为 `deepseek-account` 列出的、入口根部活动的 `@deepseek-ai/dsh-llm-deepseek-account` Loader 条目的 origin 下；没有该条目时，位于该路由默认基础地址的 origin（`https://api.deepseek.com`，或 `DEEPSEEK_BASE_URL` 的 origin）下。没有登录、没有账号服务或令牌为空都算没有令牌。账号令牌读取失败时操作失败，不再尝试其他凭据。条目活动但其设置被该路由自身的解析器拒绝时，操作在轮到该来源时失败，不读取该账号令牌。
 - **API 密钥。** 操作以 `Authorization: Bearer` 把目录为 `deepseek-official` 列出的活动 `@deepseek-ai/dsh-llm-deepseek-api-key` 条目的 `apiKeyEnv`（默认 `DEEPSEEK_API_KEY`）下的密钥发往该路由的 origin，并按该路由的方式解析其选项。没有该条目或条目未激活时，把 `DEEPSEEK_API_KEY` 发往 `https://api.deepseek.com/v1/tools`。条目活动但其设置被该路由自身的解析器拒绝时，每个需要该密钥的操作都在读取密钥前失败，绝不改用官方端点或 `DEEPSEEK_API_KEY`。
-- **`auto` 计费**跟随会话。在 `deepseek-account` 路由上先发送账号令牌，没有令牌时发送 API 密钥；没有账号路由条目时只发送 API 密钥。在 `deepseek-official` 路由上只发送 API 密钥。在其他路由上或会话之外先发送 API 密钥，没有配置密钥时发送账号令牌；已挂载但设置无法解析的账号路由条目使其只剩 API 密钥。
+- **`auto` 计费**跟随会话。在 `deepseek-account` 路由上先发送账号令牌，没有令牌时发送 API 密钥；没有账号路由条目时只发送 API 密钥。在 `deepseek-official` 路由上只发送 API 密钥。在其他路由上或会话之外先发送 API 密钥，没有密钥时发送账号令牌；没有密钥且已挂载的账号路由条目设置无法解析时，操作失败。
 - **`account` 计费**在任何路由上只发送账号令牌，**`api-key` 计费**只发送 API 密钥；两者都不回退到另一种凭据。
 
 没有凭据时，操作失败，诊断信息按计费方式点名缺少的登录或模型页面与密钥引用，以及网页搜索与获取设置页上的 `*Billing` 字段。
@@ -84,7 +84,7 @@ Search API 接收 `query`、`count`（配置的结果数，或请求中更小的
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-[插件](src/index.ts)在每次操作时读取一次设置，注册两个提供者，并把一个能力的设置快照、会话的路由和活动的模型路由条目转换为其端点和凭据。[Search 提供者](src/search.ts)在返回服务结果前校验响应 JSON；[Fetch 提供者](src/fetch.ts)校验 Markdown 正文。[传输层](src/transport.ts)负责凭据解析、在账号端点与 API 密钥端点之间选择、取消、重定向拒绝和失败指引；记录钩子在发送前运行，抛出异常即阻止发送。Search 与 Fetch API 调用不产生辅助请求事件。[Messages 搜索提供方](../web-search-deepseek/README.zh.md)负责声明和记录自身的 `web/deepseek-search-llm-request` 会话事件。工具调用和结果仍按常规记录到会话。
+[插件](src/index.ts)在每次操作时读取一次设置，注册两个提供者，并把一个能力的设置快照、会话的路由和活动的模型路由条目转换为该操作的有序凭据，每个凭据都绑定其发往的 API 基础地址。[Search 提供者](src/search.ts)在返回服务结果前校验响应 JSON；[Fetch 提供者](src/fetch.ts)校验 Markdown 正文。[传输层](src/transport.ts)按顺序读取这些凭据，用第一个存在的凭据发送一次请求，并负责取消、重定向拒绝和失败指引；记录钩子在发送前运行，抛出异常即阻止发送。Search 与 Fetch API 调用不产生辅助请求事件。[Messages 搜索提供方](../web-search-deepseek/README.zh.md)负责声明和记录自身的 `web/deepseek-search-llm-request` 会话事件。工具调用和结果仍按常规记录到会话。
 
 服务类型见 [Web 子系统](../../../docs/subsystems/web.zh.md)，受限的模型输出见 [tool-web](../tool-web/README.zh.md)。
 

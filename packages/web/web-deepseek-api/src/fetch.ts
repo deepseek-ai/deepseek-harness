@@ -14,9 +14,7 @@ export const DEEPSEEK_FETCH_API_PROVIDER_ID = 'deepseek-fetch-api'
 
 /** Authentication and endpoint settings snapshotted for one fetch. */
 export interface DeepSeekFetchApiOptions {
-  /** API base the API key is sent to, including its path prefix; `/fetch` is appended. An account token goes to its own base. */
-  baseURL: string
-  /** Authentication sources of the fetch. */
+  /** Ordered authentication sources of the fetch; `/fetch` is appended to the base of the source sent. */
   auth: DeepSeekWebAuth
   /** Settings that endpoint failures of the fetch name. */
   guidance: DeepSeekWebGuidance
@@ -46,13 +44,13 @@ export class DeepSeekFetchApiProvider implements WebFetchProvider {
 
   available(): boolean {
     const options = this.resolveOptions()
-    return hasDeepSeekWebCredential(options.auth) && URL.canParse(options.baseURL)
+    return hasDeepSeekWebCredential(options.auth)
+      && options.auth.sources.every(source => source.kind === 'misconfigured' || URL.canParse(source.baseURL))
   }
 
   fetch(request: WebFetchRequest, signal?: AbortSignal): Promise<WebFetchResult> {
     const options = this.resolveOptions()
     return dispatchDeepSeekWeb(options.auth, {
-      baseURL: options.baseURL,
       path: '/fetch',
       body: { url: request.url },
       decode: (payload): WebFetchResult => {
