@@ -1,15 +1,13 @@
 /** Covers fail-closed per-call classification and model-schema isolation. */
+import { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
 
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime, {
-  defineContentToolFixture,
-  type ToolDefinition,
-  type ToolExecutionInput,
-  type ToolExecutionMode,
-} from '@deepseek-ai/dsh-tools'
+import ToolRuntime, { type ToolDefinition, type ToolExecutionInput, type ToolExecutionMode } from '@deepseek-ai/dsh-tools'
+import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 const testToolSignal = new AbortController().signal
 
@@ -17,6 +15,7 @@ async function setup() {
   const ctx = new Context()
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   return ctx
 }
 
@@ -24,7 +23,7 @@ function exec(name: string, args: unknown): ToolExecutionInput {
   return { signal: testToolSignal, callId: ToolCallId('c1'), name, arguments: args }
 }
 
-describe('ToolRuntime.executionMode', () => {
+describe('ToolExecutionPipeline.executionMode', () => {
   it('returns parallel only for an explicit true classifier', async () => {
     const ctx = await setup()
     ctx.tools.register(defineContentToolFixture({
@@ -34,7 +33,7 @@ describe('ToolRuntime.executionMode', () => {
       isConcurrencySafe: () => true,
       async execute() { return [] },
     }))
-    expect(ctx.tools.executionMode(exec('safe', {}))).toEqual({ kind: 'parallel' })
+    expect(new ToolExecutionPipeline(ctx).executionMode(exec('safe', {}))).toEqual({ kind: 'parallel' })
   })
 
   it('defaults to exclusive for a tool with no isConcurrencySafe declaration', async () => {
@@ -45,12 +44,12 @@ describe('ToolRuntime.executionMode', () => {
       parameters: {},
       async execute() { return [] },
     }))
-    expect(ctx.tools.executionMode(exec('plain', {}))).toEqual({ kind: 'exclusive' })
+    expect(new ToolExecutionPipeline(ctx).executionMode(exec('plain', {}))).toEqual({ kind: 'exclusive' })
   })
 
   it('returns exclusive for an unknown tool', async () => {
     const ctx = await setup()
-    expect(ctx.tools.executionMode(exec('nonexistent', {}))).toEqual({ kind: 'exclusive' })
+    expect(new ToolExecutionPipeline(ctx).executionMode(exec('nonexistent', {}))).toEqual({ kind: 'exclusive' })
   })
 
   it('returns exclusive when the classifier returns false for these args', async () => {
@@ -62,8 +61,8 @@ describe('ToolRuntime.executionMode', () => {
       isConcurrencySafe: args => args.mode === 'read',
       async execute() { return [] },
     }))
-    expect(ctx.tools.executionMode(exec('rw', { mode: 'read' }))).toEqual({ kind: 'parallel' })
-    expect(ctx.tools.executionMode(exec('rw', { mode: 'write' }))).toEqual({ kind: 'exclusive' })
+    expect(new ToolExecutionPipeline(ctx).executionMode(exec('rw', { mode: 'read' }))).toEqual({ kind: 'parallel' })
+    expect(new ToolExecutionPipeline(ctx).executionMode(exec('rw', { mode: 'write' }))).toEqual({ kind: 'exclusive' })
   })
 
   it('classifies invalid defineContentToolFixture arguments as exclusive without throwing', async () => {
@@ -75,7 +74,7 @@ describe('ToolRuntime.executionMode', () => {
       isConcurrencySafe: () => true,
       async execute() { return [] },
     }))
-    expect(ctx.tools.executionMode(exec('needs-mode', {}))).toEqual({ kind: 'exclusive' })
+    expect(new ToolExecutionPipeline(ctx).executionMode(exec('needs-mode', {}))).toEqual({ kind: 'exclusive' })
   })
 
   it('treats a throwing raw classifier as exclusive', async () => {
@@ -89,7 +88,7 @@ describe('ToolRuntime.executionMode', () => {
       async execute() { return null },
     }
     ctx.tools.register(raw)
-    expect(ctx.tools.executionMode(exec('thrower', {}))).toEqual({ kind: 'exclusive' })
+    expect(new ToolExecutionPipeline(ctx).executionMode(exec('thrower', {}))).toEqual({ kind: 'exclusive' })
   })
 
   it('treats a truthy non-boolean raw result as exclusive', async () => {
@@ -103,7 +102,7 @@ describe('ToolRuntime.executionMode', () => {
       async execute() { return null },
     } as unknown as ToolDefinition
     ctx.tools.register(raw)
-    expect(ctx.tools.executionMode(exec('truthy', {}))).toEqual({ kind: 'exclusive' })
+    expect(new ToolExecutionPipeline(ctx).executionMode(exec('truthy', {}))).toEqual({ kind: 'exclusive' })
   })
 
   it('passes parsed arguments directly to a raw definition', async () => {
@@ -117,7 +116,7 @@ describe('ToolRuntime.executionMode', () => {
       isConcurrencySafe(args) { seen = args; return true },
       async execute() { return null },
     })
-    expect(ctx.tools.executionMode(exec('raw-safe', { anything: 1 }))).toEqual({ kind: 'parallel' })
+    expect(new ToolExecutionPipeline(ctx).executionMode(exec('raw-safe', { anything: 1 }))).toEqual({ kind: 'parallel' })
     expect(seen).toEqual({ anything: 1 })
   })
 

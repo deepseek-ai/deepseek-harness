@@ -2,12 +2,12 @@ import { expect, it } from 'vitest'
 import { macOSDownloadEnvironment, resolveMacOSPackageSettings } from '../scripts/macos-package-settings.mjs'
 
 it('defaults to four workers and keeps download and Apple proxies independent', () => {
-  expect(resolveMacOSPackageSettings({})).toEqual({ packConcurrency: 4 })
+  expect(resolveMacOSPackageSettings({})).toEqual({ packConcurrency: 4, zipCompressionLevel: 3 })
   expect(resolveMacOSPackageSettings({ DSH_DESKTOP_MACOS_PACK_CONCURRENCY: '2',
     DSH_DESKTOP_MACOS_DOWNLOAD_PROXY: 'https://download.example:8080',
     DSH_DESKTOP_MACOS_NOTARIZATION_PROXY: 'http://apple.example:8081',
-  })).toEqual({ packConcurrency: 2, downloadProxy: 'https://download.example:8080', notarizationProxy: 'http://apple.example:8081' })
-  expect(resolveMacOSPackageSettings({ DSH_DESKTOP_MACOS_DOWNLOAD_PROXY: ' ', DSH_DESKTOP_MACOS_NOTARIZATION_PROXY: '' })).toEqual({ packConcurrency: 4 })
+  })).toEqual({ packConcurrency: 2, zipCompressionLevel: 3, downloadProxy: 'https://download.example:8080', notarizationProxy: 'http://apple.example:8081' })
+  expect(resolveMacOSPackageSettings({ DSH_DESKTOP_MACOS_DOWNLOAD_PROXY: ' ', DSH_DESKTOP_MACOS_NOTARIZATION_PROXY: '' })).toEqual({ packConcurrency: 4, zipCompressionLevel: 3 })
 })
 
 it.each(['', '0', '-1', '1.5', '1e2', 'Infinity', '9007199254740992'])('rejects invalid concurrency %j', (value) => {
@@ -31,4 +31,12 @@ it('overrides conflicting child proxy variables while preserving the parent and 
   expect(child).not.toHaveProperty('npm_config_proxy')
   expect(parent.HTTPS_PROXY).toBe('http://old')
   expect(parent.NO_PROXY).toBe('*')
+})
+
+it.each(['', '-1', '10', '3.5', '03', 'NaN'])('rejects invalid ZIP compression %j', (value) => {
+  expect(() => resolveMacOSPackageSettings({ DSH_DESKTOP_MACOS_ZIP_COMPRESSION_LEVEL: value })).toThrow('ZIP_COMPRESSION_LEVEL')
+})
+
+it.each(['0', '3', '7', '9'])('accepts ZIP compression %s', (value) => {
+  expect(resolveMacOSPackageSettings({ DSH_DESKTOP_MACOS_ZIP_COMPRESSION_LEVEL: value }).zipCompressionLevel).toBe(Number(value))
 })

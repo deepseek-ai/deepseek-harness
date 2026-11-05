@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Dépendances de l'espace de travail",
+    "description": "Fournissez des chemins absolus vers les environnements d'exécution Python, Node.js et pnpm fournis."
+  }
+}

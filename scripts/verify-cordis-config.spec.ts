@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest'
 import {
   bundleManifestPaths,
   bundlePluginDependencyErrors,
+  exclusivePlaneRowIds,
   metadataExpressionErrors,
   packageTestFixtureDependencyErrors,
   packageTestPluginDependencyErrors,
@@ -48,6 +49,17 @@ describe('verify-cordis-config metadata expressions', () => {
 })
 
 describe('workspace Bundle discovery and product dependency closures', () => {
+  it('allows scoped executors on both planes while retaining other plugin rows', () => {
+    expect([...exclusivePlaneRowIds([{ insert: [
+      { id: 'native', name: '@deepseek-ai/dsh-tool-executor-native' },
+      { id: 'ptc', name: '@deepseek-ai/dsh-tool-executor-ptc' },
+      { id: 'tools', name: '@deepseek-ai/dsh-tools' },
+      { id: 'group', name: 'cordis:group', group: true, config: [
+        { id: 'tool-executor-ptc', name: '@deepseek-ai/dsh-tool-fs' },
+      ] },
+    ] }])]).toEqual(['tools', 'group', 'tool-executor-ptc'])
+  })
+
   it('discovers a Bundle outside packages/bundle from its manifest declaration', () => {
     const fixture = mkdtempSync(join(tmpdir(), 'dsh-bundle-discovery-'))
     try {

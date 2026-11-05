@@ -59,12 +59,16 @@ On a loopback browser, the shell renders **Open configuration file** only when t
 
 The onboarding ledger projects in ascending order and mounts exactly one step at a time. Registrants own durable completion, capability readiness, copy, mutations, and their visible wrapper, so independently registered flows cannot stack and the shell does not become a second configuration fact source. Visible steps own their dialog chrome and app-root `inert` lifecycle.
 
+Access: the settings shell and the `settings.open` shortcut are registered only while the current Peer may call `settings/describe`. The owner always has access.
+
 -----
+
+Desktop also contributes an **Update channel** row to General when the preload exposes the channel API. Selecting the current healthy channel leaves downloads and prepared updates intact without a save or notification. Selecting another channel calls Electron directly and temporarily displays that choice with a spinner. The reply settles the selection against actual shell state; failure rolls it back. A shell-owned toast reports success or a short save failure, including after Settings closes. Startup settings errors use a ten-second toast with a details action; dismissing it does not clear the error. Persistent updater suspensions remain in the update indicator; a failed save does not create one. Ordinary browsers omit this row. File ownership and restart rules are documented in [local desktop settings](../../../apps/desktop/README.md#local-desktop-settings).
 
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
-The shell declares settings.launcher for an account-owned sidebar menu and retains the Settings button as its fallback. The launcher receives settingsOpen, whose false-to-true edge marks one Settings entry, so a registrant acts once per entry instead of on every re-render inside one open. Closing the dialog returns focus to the active launcher.
+The shell declares settings.launcher for an account-owned sidebar menu and retains the Settings button as its fallback. The launcher receives settingsOpen, whose false-to-true edge marks one Settings entry, so a registrant acts once per entry instead of on every re-render inside one open. Closing the dialog returns focus to the active launcher. In the expanded sidebar, the fallback uses the navigation rows' compact icon-label alignment and inset hover fill. Contributed launchers own their insets; the shell keeps its row full-width and its status indicator's trailing edge independent of account state. The collapsed rail retains its centered 36 × 36 px control.
 
 <details>
 <summary>Implementation internals — click to expand</summary>
@@ -73,7 +77,7 @@ The shell owns the chrome and the projections; it contributes the Coding Tools a
 
 ### Ledger projections
 
-The navigation is a projection of the `settings.section` ledger; nav labels may be locale-following thunks, resolved through `resolveSlotLabel` and re-rendered on the section ledger bump or the locale revision (an optional `ctx.get('locale')` read; no hard locale dependency). The onboarding ledger projects in ascending order; the active registrant receives its id, `complete()`, and an `openSection(id)` callback, and completing or skipping transfers ownership to the next entry.
+The navigation is a projection of the `settings.section` ledger; nav labels may be locale-following thunks, resolved through `resolveSlotLabel` and re-rendered on the section ledger bump or the locale revision (an optional `ctx.get('locale')` read; no hard locale dependency). Each row renders its matching `settings.section.icon` contribution; without one, known built-in sections use their own glyph and other ids use the settings gear. The onboarding ledger projects in ascending order; the active registrant receives its id, `complete()`, and an `openSection(id)` callback, and completing or skipping transfers ownership to the next entry.
 
 ### Connection recovery
 

@@ -12,8 +12,8 @@ Status: implemented
 
 - [`llm-deepseek-account`](../../../../packages/llm/llm-deepseek-account/README.zh.md) 按凭据懒加载列表，首次访问最多等待 `modelsTimeoutMs`，超过 `modelsMaxAgeMs` 后在后台刷新；获取失败或返回的列表中没有模型时保留上一份，还没有加载到任何列表时使用内置目录。缓存只在内存中，以端点和 token 指纹为键，因此按账号灰度互不干扰。
 - 列出的模型在其 `client_requirements["deepseek-harness"].min_version` 按 semver 顺序不高于当前 DeepSeek Harness 版本时可用。没有这个声明时，只有内置目录认识的 id 可用，其余保持隐藏，因为客户端无法判断将来哪个版本会支持它们。请求被拒绝的已列出模型时，在网络请求之前以 `CLIENT_UPGRADE_REQUIRED` 或 `MODEL_UNSUPPORTED` 失败。
-- 列表中的能力逐字段覆盖内置能力；内置条目保留工具更新模式、图片预算等客户端知识；`modelOverrides` 最后叠加，复用 `models` 条目的字段与校验。`max_output_tokens` 只限制请求默认值，不直接成为默认值。
-- 共享传输层只新增 `connect` 与 `admit` 两个提供方钩子；列表、门控与合并都留在账号包中。
+- 列表中的能力逐字段覆盖内置能力；内置条目保留列表没有声明的客户端知识，例如图片预算，以及列表没有给出或设为 `null` 的协议模式；`modelOverrides` 最后叠加，复用 `models` 条目的字段与校验。`max_output_tokens` 只限制请求默认值，不直接成为默认值。
+- 共享传输层只新增 `connect` 与 `admit` 两个提供方钩子。列表、门控与合并位于共享传输包中，[官方路由](2026-10-22-deepseek-official-model-listing.zh.md)也使用它们。
 
 ## 考虑过的替代方案
 

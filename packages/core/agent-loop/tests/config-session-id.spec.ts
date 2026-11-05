@@ -1,3 +1,4 @@
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -42,6 +43,7 @@ async function makeCoreContext(): Promise<Context> {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(AgentRegistry)
   return ctx
 }
@@ -373,6 +375,7 @@ describe('config-driven session id', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(AgentRegistry)
     const loopFiber = await ctx.plugin(AgentLoop, {
       agents: [{ id: SessionId('main'), provider: 'mock', model: 'mock', resumeSessionId: SessionId('deferred') }],
@@ -396,6 +399,7 @@ describe('config-driven session id', () => {
     await ctx1.plugin(SessionProjectionRegistry)
     await ctx1.plugin(SystemPrompt)
     await ctx1.plugin(ToolRuntime)
+    await ctx1.plugin(NativeToolExecutor)
     await ctx1.plugin(AgentRegistry)
     await ctx1.plugin(JsonlSessionPersistence, { root })
     await ctx1.plugin(AgentLoop, { agents: [{ id: SessionId('cfg'), provider: 'mock', model: 'mock' }] })
@@ -419,6 +423,7 @@ describe('config-driven session id', () => {
     await ctx2.plugin(SessionProjectionRegistry)
     await ctx2.plugin(SystemPrompt)
     await ctx2.plugin(ToolRuntime)
+    await ctx2.plugin(NativeToolExecutor)
     await ctx2.plugin(AgentRegistry)
     await ctx2.plugin(JsonlSessionPersistence, { root })
     await ctx2.plugin(AgentLoop, { agents: [{ id: SessionId('cfg'), provider: 'mock', model: 'mock' }] })
@@ -445,6 +450,7 @@ describe('config-driven session id', () => {
     await ctx1.plugin(SessionProjectionRegistry)
     await ctx1.plugin(SystemPrompt)
     await ctx1.plugin(ToolRuntime)
+    await ctx1.plugin(NativeToolExecutor)
     await ctx1.plugin(AgentRegistry)
     await ctx1.plugin(JsonlSessionPersistence, { root })
     await ctx1.plugin(AgentLoop, { agents: [] })
@@ -463,6 +469,7 @@ describe('config-driven session id', () => {
     await ctx2.plugin(SessionProjectionRegistry)
     await ctx2.plugin(SystemPrompt)
     await ctx2.plugin(ToolRuntime)
+    await ctx2.plugin(NativeToolExecutor)
     await ctx2.plugin(AgentRegistry)
     await ctx2.plugin(AgentLoop, { agents: [{ id: SessionId('main'), provider: 'mock', model: 'mock', resumeSessionId: SessionId('sticky-1') }] })
     await ctx2.plugin(JsonlSessionPersistence, { root })
@@ -517,6 +524,7 @@ describe('config-driven session id', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(AgentLoop, { agents: [{ id: SessionId('main'), provider: 'mock', model: 'mock', resumeSessionId: SessionId('does-not-exist') }] })
     const warn = vi.spyOn((ctx.agentLoop as unknown as { ctx: { logger: { warn: (...a: unknown[]) => void } } }).ctx.logger, 'warn')

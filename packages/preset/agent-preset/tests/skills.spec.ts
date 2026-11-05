@@ -4,9 +4,9 @@
  * bans reading DSH sources. The Web preset e2e measures whole-reference reads.
  */
 import { execFileSync, spawnSync } from 'node:child_process'
-import { lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { cpSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, matchesGlob, resolve, sep } from 'node:path'
+import { dirname, join, resolve, sep } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { fileURLToPath } from 'node:url'
 import * as yaml from 'js-yaml'
@@ -16,6 +16,8 @@ import { languageChain, localFiles, readPackageDocument } from '@deepseek-ai/dsh
 import SkillRegistry, { renderSkillContent } from '@deepseek-ai/dsh-skill'
 import * as SkillFileSystem from '@deepseek-ai/dsh-skill-filesystem'
 import { describe, expect, it, type TestContext } from 'vitest'
+import { JSDOM } from 'jsdom'
+import { packageMetaProblems } from '../../../../scripts/verify-package-meta.ts'
 
 const skills = fileURLToPath(new URL('../skills/', import.meta.url))
 
@@ -24,6 +26,8 @@ const skills = fileURLToPath(new URL('../skills/', import.meta.url))
  * code points; a skill result below it reaches the model intact.
  */
 const PRUNER_THRESHOLD_CHARS = 8192
+/** Fixture read budget, independent of Plugin Manager deployment limits. */
+const TEST_DOCUMENT_MAX_BYTES = 1 << 20
 
 /** The body the `skill` tool returns: the file without its YAML frontmatter. */
 function body(name: string): string {
@@ -77,7 +81,8 @@ describe('the shipped dsh-doc skill', () => {
     const shipped = readdirSync(skill, { recursive: true, encoding: 'utf8' })
       .filter(file => file !== 'SKILL.md' && statSync(join(skill, file)).isFile())
       .map(file => file.split(sep).join('/'))
-    expect([...referenced].sort()).toEqual(shipped.sort())
+      .map(file => file.replace(/(templates\/[^/]+\/locale)\/[^/]+$/u, '$1'))
+    expect([...referenced].sort()).toEqual([...new Set(shipped)].sort())
   })
 
   it('ship templates whose manifest, patch, and JavaScript parse', () => {
@@ -101,16 +106,22 @@ describe('the shipped dsh-doc skill', () => {
         dsh: { bundle: { patch: string } }
       }
       expect(manifest).not.toHaveProperty('icon')
+      expect(manifest.files).toContain('docs')
+      const runtimeFiles = [manifest.dsh.bundle.patch, manifest.exports['.'], manifest.exports['./client']]
+        .filter((file): file is string => file !== undefined).map(file => file.replace(/^\.\//u, ''))
+      for (const file of runtimeFiles) expect(manifest.files, file).toContain(file)
       expect(manifest.exports['./locale/*.json']).toBe('./locale/*.json')
       // The package-meta gate validates these resources through the real metadata reader.
       expect(manifest.exports['./icon']).toBe('./icon.svg')
       const locales = readdirSync(join(dir, 'locale')).map(file => `locale/${file}`)
       expect(locales).toContain('locale/en.json')
+      const english = JSON.parse(readFileSync(join(dir, 'locale', 'en.json'), 'utf8')) as { meta: Record<string, string> }
       const details: string[] = []
       for (const file of locales) {
         const locale = JSON.parse(readFileSync(join(dir, file), 'utf8')) as {
           meta: { title: string; description: string; detail: string }
         }
+        expect(Object.keys(locale.meta).sort(), file).toEqual(Object.keys(english.meta).sort())
         expect(locale.meta.title).toMatch(/\S/u)
         expect(locale.meta.description).toMatch(/\S/u)
         expect(locale.meta.detail, file).toMatch(/^[^/]+\/.+\.md$/u)
@@ -120,21 +131,45 @@ describe('the shipped dsh-doc skill', () => {
         ...locales, ...details, manifest.dsh.bundle.patch])
       for (const resource of resources) {
         const file = resource.replace(/^\.\//u, '')
-        expect(body('dsh-doc'), file).toContain(`\`templates/${name}/${file}\``)
+        expect(body('dsh-doc'), file).toContain(`\`templates/${name}/${file.startsWith('locale/') ? 'locale' : file}\``)
         expect(statSync(join(dir, file)).isFile(), file).toBe(true)
-        // npm `files` publishes a listed directory with its contents.
-        const published = manifest.files.some(pattern => matchesGlob(file, pattern) || file.startsWith(`${pattern}/`))
-        if (file !== 'package.json') expect(published, file).toBe(true)
       }
     }
   })
 
+  it('publishes template metadata through the same package check as CI', (test) => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-template-meta-'))
+    test.onTestFinished(() => { rmSync(root, { recursive: true, force: true }) })
+    for (const name of readdirSync(templates)) {
+      const destination = join(root, 'packages', 'templates', name)
+      cpSync(join(templates, name), destination, { recursive: true })
+    }
+    expect(packageMetaProblems(root)).toEqual([])
+  })
+
+  it('uses a 36-unit canvas for each template icon', () => {
+    const { window } = new JSDOM()
+    try {
+      for (const name of readdirSync(templates)) {
+        const document = new window.DOMParser().parseFromString(readFileSync(join(templates, name, 'icon.svg'), 'utf8'), 'image/svg+xml')
+        expect(document.querySelector('parsererror'), name).toBeNull()
+        const svg = document.documentElement
+        expect(svg.localName, name).toBe('svg')
+        expect(svg.getAttribute('width'), name).toBe('36')
+        expect(svg.getAttribute('height'), name).toBe('36')
+        expect(svg.getAttribute('viewBox'), name).toBe('0 0 36 36')
+      }
+    } finally { window.close() }
+  })
+
   it.for(readdirSync(join(skills, 'dsh-doc', 'templates')))('shows the %s template detail document on its bundle page', async (name) => {
     const dir = join(templates, name)
-    const document = await readPackageDocument(localFiles(dir, '1.0.0'), '', languageChain('en'), 1 << 20, AbortSignal.timeout(10_000))
     const locale = JSON.parse(readFileSync(join(dir, 'locale', 'en.json'), 'utf8')) as { meta: { detail: string } }
-    expect(document).toMatchObject({ origin: 'locale', path: locale.meta.detail })
-    expect(document?.markdown).toMatch(/\n## How to use\n[\s\S]*\n## Good to know\n/u)
+    for (const file of readdirSync(join(dir, 'locale'))) {
+      const document = await readPackageDocument(localFiles(dir, '1.0.0'), '', languageChain(file.replace(/\.json$/u, '')), TEST_DOCUMENT_MAX_BYTES, AbortSignal.timeout(10_000))
+      expect(document, file).toMatchObject({ origin: 'locale', path: locale.meta.detail })
+      expect(document?.markdown, file).toMatch(/\n## How to use\n[\s\S]*\n## Good to know\n/u)
+    }
   })
 
   it('names only shipped files and no retired skill in any of its documents', () => {

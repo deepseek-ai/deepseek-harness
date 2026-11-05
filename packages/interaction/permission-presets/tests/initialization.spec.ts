@@ -1,4 +1,4 @@
-/** Permission admission must finish before a Session or Agent is published. */
+/** Permission admission must finish before Agent creation completes. */
 import { Context } from '@deepseek-ai/cordis'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
@@ -48,20 +48,18 @@ function autoSeed() {
 }
 
 describe('permission admission during activation', () => {
-  it('rejects synchronous Session creation until the permission reader is ready', async () => {
+  it('keeps Session creation read-only while permission registration is pending', async () => {
     const { ctx, fiber, release } = await setup()
     const id = SessionId('pending-session')
-    expect(() => ctx.sessions.create(id)).toThrow(/permission:.*not ready/)
-    expect(ctx.sessions.get(id)).toBeUndefined()
+    const session = ctx.sessions.create(id)
+    expect(ctx.sessions.get(id)).toBe(session)
+    expect(session.snapshotEvents()).toEqual([])
 
     release.resolve(undefined)
     await fiber
-    const session = ctx.sessions.create(id)
     expect(ctx.permissionPresets.current(session)).toBe('workspace-write')
-    expect(ctx.approval.overrideOf(session)).toBe('ask')
-    expect(session.snapshotEvents().map(event => event.type)).toEqual([
-      'permission/preset', 'sandbox/mode', 'approval/policy',
-    ])
+    expect(ctx.approval.overrideOf(session)).toBeUndefined()
+    expect(session.snapshotEvents()).toEqual([])
   })
 
   it.each(['fresh', 'auto'] as const)('rolls back %s Agent creation before publication while registration is pending', async (kind) => {

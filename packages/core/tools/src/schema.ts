@@ -1,9 +1,10 @@
-/** Unified JSON-value schema DSL, inference, compilation, and typed tool helper. @module dsh-tools/schema */
+/** Unified JSON-value schema DSL, inference, compilation, and tool definition helpers. @module dsh-tools/schema */
 
 import { HarnessError } from '@deepseek-ai/dsh-llm'
-import type { ContentBlock } from '@deepseek-ai/dsh-llm'
+import type { ContentBlock, ToolSchema } from '@deepseek-ai/dsh-llm'
+import { snapshotJsonValue } from '@deepseek-ai/dsh-util-values'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import type { ToolDefinition, ToolExecution, ToolExecutionResult, ToolRunContext, ToolResult } from './index.ts'
+import type { ToolDefinition, ToolExecution, ToolExecutionResult, ToolRunContext, ToolResult } from './contracts.ts'
 import { assertSupportedJsonSchema, isJsonSchemaRecord, isPlainJsonArray, JsonSchemaError, validateJsonSchemaValue } from './json-schema.ts'
 import type { JsonSchemaNode, JsonSchemaScalar, ObjectJsonSchema } from './json-schema.ts'
 import type { ToolCallView, ToolResultView } from './presentation.ts'
@@ -629,4 +630,17 @@ export function defineTool<const S extends ParameterSchemaSpec, const O extends 
     }
   }
   return tool
+}
+
+/**
+ * Omit execution and presentation callbacks from a tool definition.
+ * @param definition - visible capability or executor-owned transport.
+ * @param detachParameters - copy parameters for a caller-owned inspection result.
+ * @returns the model-facing schema fields.
+ */
+export function projectToolSchema(definition: ToolDefinition, detachParameters: boolean): ToolSchema {
+  const { name, description, parameters, deferLoading } = definition
+  const detached = detachParameters ? snapshotJsonValue(parameters) : parameters
+  if (detached === undefined) throw new Error(`tool "${name}" parameters must be lossless JSON before schema projection`)
+  return { name, description, parameters: detached, ...deferLoading === true ? { deferLoading } : {} }
 }

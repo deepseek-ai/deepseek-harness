@@ -13,9 +13,6 @@
     { "path": "../../packages/jobs/jobs" },
     { "path": "../../packages/schedule/schedule" },
     { "path": "../../packages/workspace/workspace" },
-    { "path": "../../packages/skill/skill-office" },
-    { "path": "../../packages/util/home-paths" },
-    { "path": "../../packages/skill/tool-workspace-dependencies" },
     {
       "path": "../cli"
     },
@@ -30,6 +27,27 @@
     },
     {
       "path": "../../packages/credentials/deepseek-account"
+    },
+    {
+      "path": "../../packages/boot/plugin-manager"
+    },
+    {
+      "path": "../../packages/fs/fs"
+    },
+    {
+      "path": "../../packages/core/session"
+    },
+    {
+      "path": "../../packages/session/session-persistence"
+    },
+    {
+      "path": "../../packages/sandbox/sandbox-policy"
+    },
+    {
+      "path": "../../packages/util/workspace-path"
+    },
+    {
+      "path": "../../packages/util/brand"
     }
   ]
 }

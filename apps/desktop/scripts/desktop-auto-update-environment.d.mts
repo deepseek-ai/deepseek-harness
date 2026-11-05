@@ -7,10 +7,24 @@ export type DesktopAutoUpdateEnvironment = 'test' | 'production'
 /** Directory name of one supported Desktop release target. */
 export type DesktopAutoUpdateTarget = 'mac-arm64' | 'mac-x64' | 'win-x64'
 
+/**
+ * Name the fixed installer object shared by uploading and cache refresh.
+ * @param target Supported Desktop target.
+ * @returns Fixed download filename.
+ */
+export function desktopLatestInstallerFilename(target: DesktopAutoUpdateTarget): string
+
+/**
+ * Resolve the production website installer URL shared by approval, upload and purge.
+ * @param target Supported Desktop target.
+ * @returns Fixed production download URL.
+ */
+export function desktopWebsiteInstallerUrl(target: DesktopAutoUpdateTarget): string
+
 /** Public updater URL and object prefixes for one release target. */
 export interface DesktopAutoUpdateConfig {
   readonly environment: DesktopAutoUpdateEnvironment
-  readonly channel: 'nightly' | 'latest'
+  readonly channel: 'nightly' | 'stable'
   readonly target: DesktopAutoUpdateTarget
   readonly origin: string
   readonly publicUrl: string
@@ -61,7 +75,7 @@ export function desktopBuildRecordFilename(target: DesktopAutoUpdateTarget): str
 export function desktopUpdateMetadataFilename(
   version: string,
   platform: NodeJS.Platform,
-  channel?: 'nightly' | 'latest',
+  channel?: 'nightly' | 'stable',
 ): string
 
 /**
@@ -97,4 +111,12 @@ export function resolveDesktopUploadConfig(
  * @param env Packaging settings.
  * @returns Validated channel.
  */
-export function resolveDesktopUpdateChannel(env: NodeJS.ProcessEnv): 'nightly' | 'latest'
+export function resolveDesktopUpdateChannel(env: NodeJS.ProcessEnv): 'nightly' | 'stable'
+
+/**
+ * Read a required nonempty deployment setting.
+ * @param env Packaging or upload settings.
+ * @param name Setting name included in missing-value diagnostics.
+ * @returns Trimmed setting value.
+ */
+export function requiredEnvironmentValue(env: NodeJS.ProcessEnv, name: string): string

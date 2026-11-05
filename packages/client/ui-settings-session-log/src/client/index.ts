@@ -6,7 +6,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { UploadPreference, type UploadSettings } from './upload-preference.ts'
 import { UploadRow, UploadToast, type UploadInjected } from './UploadRow.tsx'
-import { en, zh } from './locales.ts'
+import { en, ja, es, fr, de, ru, pt, zh } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -25,7 +25,7 @@ export const inject = ['slots', 'locale', 'configForms']
 export function apply(ctx: Context): void {
   const locale = 'settings.sessionLog'
   const namespace = 'session-log-deepseek'
-  ctx.effect(() => ctx.locale.register(locale, { en, zh }))
+  ctx.effect(() => ctx.locale.register(locale, { en, zh, ja, es, fr, de, ru, pt }))
   const form = ctx.configForms.get<UploadSettings>(namespace)
   const preference = new UploadPreference(form)
   const face = (): UploadInjected => ({

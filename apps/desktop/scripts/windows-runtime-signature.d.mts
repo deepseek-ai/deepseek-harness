@@ -41,7 +41,7 @@ export interface WindowsCodeSigningOptions {
 /**
  * Enumerate PE files by content without following links.
  * @param root Materialized directory to scan.
- * @returns Sorted PE paths; rejects malformed Windows executables and links.
+ * @returns Sorted PE paths; eight bounded readers reject links or malformed executables and drain open handles before failure.
  */
 export function windowsRuntimeCode(root: string): Promise<string[]>
 
@@ -49,7 +49,7 @@ export function windowsRuntimeCode(root: string): Promise<string[]>
  * Preserve valid signatures and sign unsigned PE files with a supervised signer.
  * @param root Materialized directory to sign.
  * @param options Signer, certificate identity and audit sink.
- * @returns Resolves after verified parallel cache restores and sequential signing; stops dispatch and drains active restores on failure, without retries.
+ * @returns Resolves after parallel cache restores, batched target verification and sequential signing; failures drain active restores or inspections without retries.
  */
 export function signWindowsCode(root: string, options: WindowsCodeSigningOptions): Promise<void>
 

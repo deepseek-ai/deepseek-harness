@@ -4,6 +4,8 @@ import { z } from 'zod'
 import type { JSONSchema } from 'zod/v4/core'
 import { NativeOnlyOperations, NativeResourceParameters, Request } from '@deepseek-ai/dsh-cua/protocol'
 
+import { PermissionGuideParameters, PermissionSettingsParameters } from '../src/permission-guide.ts'
+
 type Schema = JSONSchema.JSONSchema
 
 function object(schema: Schema | boolean | undefined): Schema {
@@ -17,7 +19,8 @@ function variants(schema: Schema): Schema[] { return schema.anyOf ?? schema.oneO
  * @returns Native JSON Schema and Swift field/enum tables, including private continuations.
  */
 export function renderNativeProtocol(): { json: string; swift: string } {
-  const resources = new Map(Object.entries(NativeResourceParameters))
+  const resources = new Map<string, z.ZodObject>([...Object.entries(NativeResourceParameters),
+    ['requestPermission', PermissionGuideParameters], ['openPermissionSettings', PermissionSettingsParameters]])
   const modelMethods = Request.options.map(schema => schema.shape.method.value).sort()
   const schemas = [...Request.options, ...NativeOnlyOperations].map(schema => z.toJSONSchema(schema))
   const fields = new Map<string, Set<string>>()

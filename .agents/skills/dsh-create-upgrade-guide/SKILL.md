@@ -29,7 +29,7 @@ Pre-stable internal APIs whose consumers are all updated in the same change need
 
 ## Maintenance
 
-While the root version is unchanged, the current version directory describes the delta from vT to current `master`. When a later change touches a surface a guide there covers, update that guide in the same change; delete the guide when the break is reverted. After the version bump, guides in older version directories are frozen; a new break goes into the new version directory. Never write a guide spanning more than one release.
+While the root version is unchanged, the current version directory describes the delta from vT to current `master`. When a later change touches a surface a guide there covers, update that guide in the same change; delete the guide when the break is reverted. After the version bump, guides in older version directories are frozen; a new break goes into the new version directory. When a release lands while your pull request is open, move its guides to the new version directory: `Policy / Pre-Merge Check` runs `verify-upgrade-guides --base` on the merged tree and rejects a guide added outside the root version's directory unless the `release/dsh-<x.y.z>` branch of that guide's version line already contains it. Never write a guide spanning more than one release.
 
 ## Format
 

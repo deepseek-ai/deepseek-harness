@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Fournisseur de serveur de langue Stdio",
+    "description": "Connectez-vous aux serveurs de langue via des sous-processus et JSON-RPC, ouvrez les fichiers selon vos besoins et exécutez des requêtes de code."
+  }
+}

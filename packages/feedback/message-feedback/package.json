@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-message-feedback",
   "description": "Canonical Session-log ratings and notes for finalized assistant messages",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.2-rc.1",
   "publishConfig": {
     "access": "public"
   },
@@ -60,7 +60,7 @@
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "workspace:~",
-    "zod": "4.4.3"
+    "zod": "4.6.6"
   },
   "devDependencies": {
     "@deepseek-ai/cordis-plugin-include": "workspace:~",

@@ -1,3 +1,5 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { unsupportedModel } from '@deepseek-ai/dsh-agent-loop-testkit'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { describe, expect, it, vi } from 'vitest'
@@ -75,18 +77,20 @@ async function setup(config: toolAskUser.Config = { mode: 'timed', timeout: -1 }
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(UserQuestionService)
   await ctx.plugin(toolAskUser, config)
   return ctx
 }
 
-function stubAgent(id: string, delegationDepth = 0): Agent {
+function stubAgent(id: string, delegationDepth = 0, origin?: 'subagent'): Agent {
   const agentId = SessionId(id)
   const agent: Agent = {
     id: agentId,
     options: {},
     session: Session.create(agentId, [], {
       version: SESSION_FORMAT_VERSION, id: agentId, createdAt: 0, isSeeded: false, delegationDepth,
+      ...origin === undefined ? {} : { origin },
     }),
     model: unsupportedModel(),
     inbox: {
@@ -107,6 +111,7 @@ describe('ask_user_question tool', () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(UserQuestionService)
 
     toolAskUser.apply(ctx)
@@ -130,6 +135,7 @@ describe('ask_user_question tool', () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(UserQuestionService)
 
     toolAskUser.apply(ctx, { mode: 'timed' })
@@ -145,9 +151,9 @@ describe('ask_user_question tool', () => {
       },
     })
     const agent = { ...stubAgent('timed-in-time'), steer: vi.fn() } as Agent
-    ctx.agents.enter(agent, undefined)
+    ctx.agents.enter(agent)
 
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
       callId: ToolCallId('ask-in-time'),
       name: 'ask_user_question',
@@ -201,7 +207,8 @@ describe('ask_user_question tool', () => {
     expect(parameters.properties.questions.items.properties.options.items.properties).not.toHaveProperty('value')
     expect(parameters.properties.questions.items.properties.options.items.properties).not.toHaveProperty('recommended')
     expect(parameters.properties.questions.items.properties.options.items.properties).not.toHaveProperty('preview')
-    expect(schema?.description).toContain('A submitted skipped question is an answer item with empty selected and no custom')
+    expect(schema?.description).toContain('An answer item with empty selected and no custom means the user skipped that question: '
+      + 'continue without it, do not ask it again, and do not treat the skip as permission.')
   })
 
   it('lets Cordis select the exact legacy blocking tool instead of the timed tool', async () => {
@@ -217,7 +224,8 @@ describe('ask_user_question tool', () => {
 
     expect(schemas).toHaveLength(1)
     expect(schemas[0]).toMatchObject({
-      description: 'Ask the user a concise question when you need confirmation, a choice, or missing information before proceeding.',
+      description: 'Ask the user a concise question when you need confirmation, a choice, or missing information before proceeding. '
+        + 'An answer item with empty selected and no custom means the user skipped that question: continue without it, do not ask it again, and do not treat the skip as permission.',
       parameters: { properties: { questions: { description: 'Questions to ask the user before continuing.' } } },
     })
     expect(schemas[0]?.parameters.properties).not.toHaveProperty('timeout')
@@ -229,7 +237,7 @@ describe('ask_user_question tool', () => {
       askedEvent(1, 'ask-legacy', '{"questions":[{"id":"continue","question":"Continue?"}]}'),
     ])).toEqual({ active: [], settled: [] })
 
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
       callId: ToolCallId('ask-legacy'),
       name: 'ask_user_question',
@@ -256,8 +264,8 @@ describe('ask_user_question tool', () => {
       },
     })
     const agent = stubAgent('legacy-agent')
-    ctx.agents.enter(agent, undefined)
-    const detailed = await ctx.tools.execute({
+    ctx.agents.enter(agent)
+    const detailed = await executeToolFixture(ctx, {
       signal: testToolSignal,
       callId: ToolCallId('ask-legacy-detailed'),
       name: 'ask_user_question',
@@ -288,7 +296,7 @@ describe('ask_user_question tool', () => {
       },
     })
 
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
       callId: ToolCallId('ask-1'),
       name: 'ask_user_question',
@@ -328,7 +336,7 @@ describe('ask_user_question tool', () => {
       },
     })
 
-    await ctx.tools.execute({
+    await executeToolFixture(ctx, {
       signal: testToolSignal,
       callId: ToolCallId('ask-recommended'),
       name: 'ask_user_question',
@@ -365,7 +373,7 @@ describe('ask_user_question tool', () => {
       },
     })
 
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
       callId: ToolCallId('ask-multi'),
       name: 'ask_user_question',
@@ -416,7 +424,7 @@ describe('ask_user_question tool', () => {
     })
     const controller = new AbortController()
 
-    await ctx.tools.execute({
+    await executeToolFixture(ctx, {
       callId: ToolCallId('ask-2'),
       name: 'ask_user_question',
       arguments: { questions: [{ id: 'continue', question: 'Continue?' }] },
@@ -436,9 +444,9 @@ describe('ask_user_question tool', () => {
       },
     })
     const agent = stubAgent('resumed-root', 1)
-    ctx.agents.enter(agent, undefined)
+    ctx.agents.enter(agent)
 
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
       callId: ToolCallId('ask-3'),
       name: 'ask_user_question',
@@ -466,8 +474,8 @@ describe('ask_user_question tool', () => {
       },
     })
     const agent = { ...stubAgent('timed-root'), steer: vi.fn() } as Agent
-    ctx.agents.enter(agent, undefined)
-    const settled = await ctx.tools.execute({
+    ctx.agents.enter(agent)
+    const settled = await executeToolFixture(ctx, {
       signal: testToolSignal,
       callId: ToolCallId('ask-timeout'),
       name: 'ask_user_question',
@@ -515,8 +523,8 @@ describe('ask_user_question tool', () => {
     try {
       const ctx = await setup({ mode: 'timed', timeout: 1 })
       const agent = { ...stubAgent('timed-unclaimed'), steer: vi.fn() } as Agent
-      ctx.agents.enter(agent, undefined)
-      const result = ctx.tools.execute({
+      ctx.agents.enter(agent)
+      const result = executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('ask-unclaimed'),
         name: 'ask_user_question',
@@ -536,7 +544,7 @@ describe('ask_user_question tool', () => {
   it('requires a live agent for the timed path', async () => {
     const ctx = await setup({ mode: 'timed' })
 
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
       callId: ToolCallId('ask-no-agent'),
       name: 'ask_user_question',
@@ -552,7 +560,7 @@ describe('ask_user_question tool', () => {
   it.each([0, 1.5, 2_147_484])('rejects invalid timeout %s', async (timeout) => {
     const ctx = await setup({ mode: 'timed', timeout: -1 })
 
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
       callId: ToolCallId(`ask-invalid-${timeout}`),
       name: 'ask_user_question',
@@ -569,7 +577,7 @@ describe('ask_user_question tool', () => {
     const answerer = vi.fn(async (): Promise<AskUserQuestionAnswer> => ({ answers: [] }))
     registerQuestionAnswerer(ctx, { ask: answerer })
 
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
       callId: ToolCallId('ask-duplicate-ids'),
       name: 'ask_user_question',
@@ -594,7 +602,7 @@ describe('ask_user_question tool', () => {
     registerQuestionAnswerer(ctx, { ask: answerer })
 
     for (const callId of ['first-scope', 'second-scope']) {
-      const result = await ctx.tools.execute({
+      const result = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId(callId),
         name: 'ask_user_question',
@@ -608,7 +616,7 @@ describe('ask_user_question tool', () => {
   it('returns structured user-questions errors through tool execution', async () => {
     const ctx = await setup()
 
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
       callId: ToolCallId('ask-no-provider'),
       name: 'ask_user_question',
@@ -621,7 +629,7 @@ describe('ask_user_question tool', () => {
     })
   })
 
-  it('rejects a live runtime-owned agent with a structured DELEGATED_CALLER error', async () => {
+  it('rejects a live subagent with a structured DELEGATED_CALLER error', async () => {
     const ctx = await setup()
     const seen: AskUserQuestionRequest[] = []
     registerQuestionAnswerer(ctx, {
@@ -631,11 +639,11 @@ describe('ask_user_question tool', () => {
       },
     })
     const root = stubAgent('root', 0)
-    const child = stubAgent('child', 0)
-    ctx.agents.enter(root, undefined)
-    ctx.agents.enter(child, root)
+    const child = stubAgent('child', 0, 'subagent')
+    ctx.agents.enter(root)
+    ctx.agents.enter(child)
 
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
       callId: ToolCallId('ask-delegated'),
       name: 'ask_user_question',
@@ -657,7 +665,7 @@ describe('ask_user_question tool', () => {
   it('returns a structured error for empty question batches', async () => {
     const ctx = await setup()
 
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
       callId: ToolCallId('ask-empty'),
       name: 'ask_user_question',
@@ -674,6 +682,7 @@ describe('ask_user_question tool', () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(UserQuestionService)
     const fiber = await ctx.plugin(toolAskUser)
     expect(ctx.tools.get('ask_user_question')).toBeDefined()

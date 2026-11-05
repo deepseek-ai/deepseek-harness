@@ -33,7 +33,8 @@ interface CardPosition {
  * readable and selectable, but it carries no dismissal affordance of its own.
  * @param props.openDelayMs - hover dwell before the card shows (default 500).
  * @param props.variant - compact card beside the anchor, or a preview above/below it
- * with 24px side insets, a 420px height cap, frame-top clearance, and 100ms opacity transitions.
+ * with 24px side insets, a 420px height cap, the frame-top clearance (capped below an anchor inside the top strip),
+ * and 100ms opacity transitions.
  * @param props.widthAnchorRef - optional element whose width and horizontal position size the preview.
  * @param props.inline - keep the anchor in prose; show a contained preview on hover or keyboard focus.
  * Its hover region connects the anchor and preview across the visual gap.
@@ -173,12 +174,16 @@ export function HoverCard({
       const wrapper = rootRef.current
       /* v8 ignore next -- the ref is attached before the layout effect runs and the listeners die with it. */
       if (wrapper === null) return
+      if (wrapper.closest('[inert], [hidden]') !== null) {
+        dismissImmediately()
+        return
+      }
       const r = wrapper.getBoundingClientRect()
       const h = cardRef.current?.offsetHeight ?? 0
       if (variant === 'preview') {
         const bounds = widthAnchorRef?.current?.getBoundingClientRect() ?? r
         const width = Math.max(0, Math.min(bounds.width - PREVIEW_INSET * 2, window.innerWidth - VIEWPORT_MARGIN * 2))
-        const topMargin = overlayTopMargin(VIEWPORT_MARGIN)
+        const topMargin = overlayTopMargin(VIEWPORT_MARGIN, r, ANCHOR_GAP)
         const belowTop = Math.max(topMargin, r.bottom + ANCHOR_GAP)
         const above = Math.max(0, r.top - ANCHOR_GAP - topMargin)
         const below = Math.max(0, window.innerHeight - belowTop - VIEWPORT_MARGIN)
@@ -195,7 +200,7 @@ export function HoverCard({
         const height = Math.max(h, cardRef.current?.scrollHeight ?? 0)
         const maxWidth = Math.max(0, Math.min(INLINE_PREVIEW_WIDTH, window.innerWidth - VIEWPORT_MARGIN * 2))
         const width = fitContent ? Math.min(cardRef.current?.offsetWidth ?? maxWidth, maxWidth) : maxWidth
-        const topMargin = overlayTopMargin(VIEWPORT_MARGIN)
+        const topMargin = overlayTopMargin(VIEWPORT_MARGIN, r, ANCHOR_GAP)
         const belowTop = Math.max(topMargin, r.bottom + ANCHOR_GAP)
         const above = Math.max(0, r.top - ANCHOR_GAP - topMargin)
         const below = Math.max(0, window.innerHeight - belowTop - VIEWPORT_MARGIN)
@@ -219,6 +224,11 @@ export function HoverCard({
       setPos({ left: r.right + ANCHOR_GAP, top })
     }
     place()
+    // Observe only the anchor's ancestors: an offscreen drawer can hide without resizing its retained row.
+    const visibility = new MutationObserver(place)
+    for (let ancestor = rootRef.current?.parentElement; ancestor != null; ancestor = ancestor.parentElement) {
+      visibility.observe(ancestor, { attributes: true, attributeFilter: ['inert', 'hidden'] })
+    }
     const observer = (variant === 'preview' || inline) && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(place) : null
     for (const element of [cardRef.current, rootRef.current, widthAnchorRef?.current]) {
       if (element !== null && element !== undefined) observer?.observe(element)
@@ -227,10 +237,11 @@ export function HoverCard({
     window.addEventListener('resize', place)
     return () => {
       observer?.disconnect()
+      visibility.disconnect()
       window.removeEventListener('scroll', place, true)
       window.removeEventListener('resize', place)
     }
-  }, [open, variant, widthAnchorRef, positioned, inline, fitContent])
+  }, [open, variant, widthAnchorRef, positioned, inline, fitContent, dismissImmediately])
 
   // The first placement ran before the card mounted (height read 0): once the
   // card's real height is measurable, correct the bottom-edge clamp. The

@@ -1,8 +1,10 @@
-import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 /** Agent controls use the same manager methods as the Web and bound inventory reads. */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime from '@deepseek-ai/dsh-tools'
+import ToolRuntime, { type ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
@@ -14,7 +16,7 @@ import type PluginManager from '../src/index.ts'
 import type { BundleInfo } from '../src/types.ts'
 import * as tool from '../src/tools.ts'
 
-function resultText(result: Awaited<ReturnType<ToolRuntime['execute']>>): string {
+function resultText(result: ToolExecutionResult): string {
   if (typeof result.value !== 'string') throw new Error('Expected a serialized manager result')
   return result.value
 }
@@ -35,11 +37,12 @@ async function fixture(mode: 'read-only' | 'workspace-write' | 'danger-full-acce
   ctx.provide('pluginManager', manager as unknown as PluginManager)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(SessionProjections)
   await ctx.plugin(SandboxPolicy, { mode })
   if (approval !== undefined) await ctx.plugin(ApprovalService, { policy: approval })
   const fiber = await ctx.plugin(tool)
-  const call = (args: unknown, agent?: Agent, signal = new AbortController().signal) => ctx.tools.execute({ name: 'plugin_manager', arguments: args,
+  const call = (args: unknown, agent?: Agent, signal = new AbortController().signal) => executeToolFixture(ctx, { name: 'plugin_manager', arguments: args,
     ...agent === undefined ? {} : { agent },
     callId: ToolCallId('manager-call'), signal })
   return { ctx, manager, call, fiber }
@@ -86,7 +89,7 @@ it('exposes an absent Official bundle installation target without display metada
   const { manager, call } = await fixture()
   const offered: BundleInfo = {
     name: '@deepseek-ai/dsh-subagent-codex', official: true, availability: 'missing',
-    installed: false, enabled: false, optional: false, removable: false, updatable: false, rows: [], overrides: [],
+    installed: false, enabled: false, optional: false, removable: false, rows: [], overrides: [],
     installTarget: { spec: '@deepseek-ai/dsh-subagent-codex@1.2.3', version: '1.2.3' },
     meta: { title: 'Codex subagent' },
   }
@@ -303,4 +306,6 @@ it('tells the agent the next step for each change outcome it can act on', async 
   expect(await outcome({ changed: false, application: 'failed', packageResult: { kind: 'unknown' }, error: { code: 'operation-error' } }))
     .toContain('Report the diagnostic')
   expect(await outcome({ changed: false, application: 'failed' })).toContain('Report the diagnostic')
+  expect(await outcome({ changed: false, application: 'failed', error: { code: 'unsupported-platform' } }))
+    .toBe('This bundle cannot run on the current Host platform; ask the user to use a supported Host.')
 })

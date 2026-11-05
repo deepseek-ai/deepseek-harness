@@ -1,0 +1,1 @@
+- 'tooltip "Current branch: feature/a-long-current-branch-name-for-mobile-review"'

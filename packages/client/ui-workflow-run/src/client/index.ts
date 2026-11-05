@@ -9,7 +9,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { WorkflowRunPanel, type WorkflowRunInjected } from './WorkflowRunPanel.tsx'
-import { en, NS, type WorkflowRunKey, zh } from './locales.ts'
+import { en, ja, es, fr, de, ru, pt, NS, type WorkflowRunKey, zh } from './locales.ts'
 import { workflowRunDefinition } from './workflow-definition.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -25,7 +25,7 @@ export const inject = ['uiConversation', 'uiWorkspace', 'slots', 'sessions', 'lo
 /** Register the workflow Definition, dictionary, and keyed Chat renderer. */
 export function apply(ctx: ClientContext): void {
   ctx.uiConversation.events.register(workflowRunDefinition)
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-workflow-run: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'ui-workflow-run: dictionaries')
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register({
     name: 'conversation.chat.node',
     key: 'workflow-run',

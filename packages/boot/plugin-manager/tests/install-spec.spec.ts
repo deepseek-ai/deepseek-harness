@@ -1,7 +1,7 @@
 /** Reading install specs and classifying pnpm failures: pure, table-driven. */
 
 import { describe, expect, it } from 'vitest'
-import { classifyInstallFailure, InvalidInstallSpecError, parseInstallSpec } from '@deepseek-ai/dsh-plugin-manager'
+import { classifyInstallFailure, InvalidInstallSpecError, parseInstallSpec, pinnedGitOrigin } from '@deepseek-ai/dsh-plugin-manager'
 
 describe('parseInstallSpec', () => {
   it('reads registry names with an optional range, scoped or not', () => {
@@ -64,6 +64,7 @@ describe('classifyInstallFailure', () => {
     expect(classifyInstallFailure({ log: 'ENOSPC', timedOut: true })).toBe('timeout')
     expect(classifyInstallFailure({ log: '', cause: Object.assign(new Error('spawn pnpm ENOENT'), { code: 'ENOENT' }) })).toBe('pnpm-missing')
     expect(classifyInstallFailure({ log: 'ERR_PNPM_IGNORED_BUILDS  Ignored build scripts: node-pty' })).toBe('build-blocked')
+    expect(classifyInstallFailure({ log: '[ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED] Failed to prepare git-hosted package' })).toBe('build-blocked')
     expect(classifyInstallFailure({ log: 'npm error code E404\nnpm error 404 Not Found - GET https://registry/x' })).toBe('not-found')
     expect(classifyInstallFailure({ log: 'ERR_PNPM_NO_MATCHING_VERSION  No matching version found for x@9' })).toBe('no-matching-version')
     expect(classifyInstallFailure({ log: 'npm error code ETARGET' })).toBe('no-matching-version')
@@ -79,5 +80,34 @@ describe('classifyInstallFailure', () => {
     expect(classifyInstallFailure({ log: 'npm error code FETCH_ERROR\nnpm error errno FETCH_ERROR' })).toBe('network')
     expect(classifyInstallFailure({ log: 'exited with 1', cause: new Error('no code') })).toBe('unknown')
     expect(classifyInstallFailure({ log: '' })).toBe('unknown')
+  })
+})
+
+describe('pinnedGitOrigin', () => {
+  const COMMIT = '0123456789abcdef0123456789abcdef01234567'
+
+  it('reads the repository directory of a Git spec pinned to a full commit, whatever form pnpm saved', () => {
+    for (const spec of [
+      `git+https://GitLab.Example.com/g/plugins.git#${COMMIT}&path:/packages/a`,
+      `git+ssh://git@gitlab.example.com/g/plugins.git#path:/packages/a/&${COMMIT.toUpperCase()}`,
+      `git@gitlab.example.com:g/plugins.git/#${COMMIT}&path:packages/a`,
+    ]) {
+      expect(pinnedGitOrigin(spec)).toBe('gitlab.example.com/g/plugins#packages/a')
+    }
+    // pnpm saves a known host's shortcut for the URL it was given.
+    expect(pinnedGitOrigin(`github:o/r#${COMMIT}&path:/p`)).toBe(pinnedGitOrigin(`git+https://github.com/o/r.git#${COMMIT}&path:/p`))
+    expect(pinnedGitOrigin(`https://github.com/a/b#${COMMIT}`)).toBe('github.com/a/b#')
+    // A port is part of the host, not an scp-like path separator.
+    expect(pinnedGitOrigin(`git+ssh://git@host:2222/a/b.git#${COMMIT}`)).toBe('host:2222/a/b#')
+  })
+
+  it('reads nothing from a spec that is not Git or names no single full commit and directory', () => {
+    for (const spec of [
+      '', 'dsh-x@1.0.0', '/plugins/dsh-x', 'git+https://host/a/b.git', 'git+https://host/a/b.git#main&path:/a',
+      `git+https://host/a/b.git#${COMMIT.slice(1)}`, `git+https://host/a/b.git#${COMMIT}&path:/a&path:/b`,
+      `git+https://host/a/b.git#${COMMIT}&${COMMIT}`,
+    ]) {
+      expect(pinnedGitOrigin(spec)).toBeUndefined()
+    }
   })
 })

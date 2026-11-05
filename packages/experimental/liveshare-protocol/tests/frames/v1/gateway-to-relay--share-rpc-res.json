@@ -1,0 +1,6 @@
+{
+  "dir": "gateway->relay",
+  "note": "the owner's opaque answer to one routed request",
+  "frame": { "type": "share-rpc-res", "id": 7, "status": 200, "body": { "ok": true } },
+  "optional": ["body"]
+}

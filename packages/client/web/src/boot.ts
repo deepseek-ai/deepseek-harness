@@ -2,7 +2,7 @@
  * Web boot kernel. It owns only the module system, Cordis loader, and a
  * framework-free boot page; plugin composition and the renderer handoff are
  * `bootClient` and `mountClient`. The dynamic UI renderer receives the mount
- * point after every client entry activates.
+ * point after the activation audit accepts the client tree.
  * @module @deepseek-ai/dsh-client-web/src/boot
  */
 import { Context } from '@deepseek-ai/cordis'
@@ -41,8 +41,10 @@ export class AppWebEntry {
   }
 
   /**
-   * Load and activate every client entry, then hand the mount point to the
-   * UI renderer. Plugin failures remain visible on the boot page.
+   * Load and activate every client entry, audit activation, then hand the
+   * mount point to the UI renderer. A required-entry failure remains visible
+   * on the boot page; optional-entry failures are reported to the console and
+   * the application mounts without them.
    * @param onFailure - Optional carrier-owned fatal presentation; keeps the boot page visible.
    * @returns Resolves after application mount or failure reporting.
    */
@@ -86,8 +88,9 @@ export class AppWebEntry {
         ctx,
         modules: this.modules,
         manifest: this.manifest,
+        // A failed entry may be optional; only the audit decides whether the boot page reports a failure.
         onEntryState: (name, state) => {
-          if (onFailure === undefined || state !== 'failed') this.page.setState(name, state)
+          if (state !== 'failed') this.page.setState(name, state)
         },
       })
       // The shell owns the one watcher that keeps Electron's window drag rects in

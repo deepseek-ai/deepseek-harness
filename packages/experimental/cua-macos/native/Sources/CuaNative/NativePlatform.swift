@@ -36,7 +36,7 @@ struct ApplicationCatalogSnapshot: Sendable {
         }
         return ApplicationCatalogSnapshot(applications: apps, frontPID: NSWorkspace.shared.frontmostApplication?.processIdentifier)
     }
-    /// A bounded PNG for human recognition; authorization continues to use executable/signing identity.
+    /// A bounded PNG for human recognition, separate from application authorization.
     static func icon(at path: String) -> String? {
         guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 64, pixelsHigh: 64,
                                             bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
@@ -72,17 +72,42 @@ enum NativePlatform {
         return responsible > 0 ? responsible : nil
     }
     static func executablePath(_ pid: Int32) -> String? {
+        try? executablePathResult(pid).get()
+    }
+    static func executablePathResult(_ pid: Int32) -> Result<String, NativeFailure> {
         var buffer = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
-        guard proc_pidpath(pid, &buffer, UInt32(buffer.count)) > 0 else { return nil }
-        return String(decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
+        errno = 0
+        guard proc_pidpath(pid, &buffer, UInt32(buffer.count)) > 0 else { return .failure(executablePathFailure(errno)) }
+        return .success(String(decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self))
+    }
+    static func executablePathFailure(_ error: Int32) -> NativeFailure {
+        let reason: String
+        switch error {
+        case ENOENT, ENOTDIR, EIO, ESTALE, ENODEV, ENXIO: reason = "macOS could not resolve the executable's filesystem path"
+        case EACCES, EPERM: reason = "macOS denied the executable path query"
+        case ENAMETOOLONG, EOVERFLOW: reason = "the executable path exceeds the system query limit"
+        case ENOMEM, ENOBUFS, EAGAIN: reason = "macOS lacked resources for the executable path query"
+        default: reason = "macOS did not provide an executable path"
+        }
+        return NativeFailure(code: "APP_PATH_UNAVAILABLE", message: "Executable path unavailable: \(reason) (errno \(error)). Check the application's installation and system access before selecting it again")
+    }
+    static func processIdentityFailure(_ error: Int32) -> NativeFailure {
+        if error == ESRCH {
+            return NativeFailure(code: "APP_UNAVAILABLE", message: "macOS could not find the application process; select the application again")
+        }
+        if error == 0 {
+            return NativeFailure(code: "PROCESS_INSPECTION_FAILED", message: "macOS returned incomplete application process information; check system access before selecting it again")
+        }
+        return NativeFailure(code: "PROCESS_INSPECTION_FAILED", message: "Cannot verify the application process identity (errno \(error): \(String(cString: strerror(error)))). Check system access and resources before selecting it again")
     }
     static func identity(_ pid: Int32) throws -> ProcessIdentity {
         var info = proc_bsdinfo()
         let size = MemoryLayout<proc_bsdinfo>.stride
+        errno = 0
         let copied = withUnsafeMutablePointer(to: &info) { pointer in
             proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, pointer, Int32(size))
         }
-        guard copied == Int32(size) else { throw NativeFailure(code: "APP_UNAVAILABLE", message: "Target application exited or cannot be inspected; select it again") }
+        guard copied == Int32(size) else { throw processIdentityFailure(copied == 0 ? errno : 0) }
         return ProcessIdentity(pid: pid, startedSeconds: info.pbi_start_tvsec, startedMicroseconds: info.pbi_start_tvusec)
     }
     static func verify(_ identity: ProcessIdentity) throws {

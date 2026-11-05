@@ -1,4 +1,4 @@
-/** Browser availability/choice state and the launch carrier for the split button. */
+/** Shared directory application catalog, preference, and launch carrier for controls and menus. */
 
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import {
@@ -7,6 +7,7 @@ import {
 } from '@deepseek-ai/dsh-host-open-in-app/shared'
 
 import { APP_LABEL_KEY } from './applications.ts'
+import type { OpenInAppOutcome } from './outcome.ts'
 
 /** Shared launch status for controls targeting the captured workspace path. */
 export interface OpenInAppLaunchState {
@@ -19,7 +20,7 @@ type Fetch = (input: string | URL, init?: RequestInit) => Promise<Response>
 /**
  * Owns the once-per-page availability read, the persisted last choice, and
  * the launch POST. Availability and choice publish through uSES-safe sources
- * so every Session header shares one truth.
+ * so Session menus and directory controls share the same catalog and choice.
  */
 export class OpenInAppController {
   /** Installed app ids in host menu order; null until the host answered. */
@@ -72,10 +73,12 @@ export class OpenInAppController {
    * @param appId - catalog id from the availability list.
    * @param path - the session's absolute workspace directory.
    * Concurrent gestures are ignored until the current Host request settles.
-   * @returns after the host acknowledged the launch; rejects on any failure.
+   * @returns the acknowledged handoff, or `{ kind: 'skipped' }` while another
+   * launch holds the operation, or a named failure when the Host refuses or
+   * cannot be reached. Host and transport failures resolve without rejecting.
    */
-  async launch(appId: string, path: string): Promise<void> {
-    if (this.operation.getSnapshot().phase === 'busy') return
+  async launch(appId: string, path: string): Promise<OpenInAppOutcome> {
+    if (this.operation.getSnapshot().phase === 'busy') return { kind: 'skipped' }
     this.operation.set({ phase: 'busy', path })
     const body: OpenInAppOpenPayload = { app: appId, path }
     try {
@@ -86,9 +89,11 @@ export class OpenInAppController {
       })
       if (!response.ok) throw new Error(`open failed: HTTP ${String(response.status)}`)
       this.operation.set({ phase: 'idle', path })
-    } catch (error) {
+      return { kind: 'opened' }
+    } catch (_error) {
+      // Refusal and transport failure share the same user-visible outcome.
       this.operation.set({ phase: 'error', path })
-      throw error
+      return { kind: 'failed', failure: 'openError' }
     }
   }
 
@@ -102,9 +107,8 @@ export class OpenInAppController {
         const payload = await response.json() as OpenInAppAppsPayload
         if (Array.isArray(payload.apps)) apps = payload.apps.filter(id => typeof id === 'string')
       }
-    } catch {
-      // Swallows network failures: an unreachable host reads as no apps, and
-      // the header simply shows no button rather than a broken one.
+    } catch (_error) {
+      // An unreachable Host supplies no directory openers in menus or controls.
     }
     this.apps.set(apps)
   }

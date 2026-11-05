@@ -1,3 +1,4 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 // Session-header job list driven by a real background bash run: the job row
 // arrives over the job roster stream, expanding it opens the output
 // observation stream, and the panel shows the process's real output while it
@@ -84,10 +85,10 @@ describe.skipIf(MODE === 'record')('web e2e: live job stream', () => {
   it('streams a running job\'s real output into the expanded panel, then settles it in place on kill', async () => {
     let phase = 'streaming'
     onTestFailed(() => saveFailureShot(page, `web-e2e-live-job-${phase}`))
-    const trigger = page.getByRole('button', { name: '1 background job running' })
+    const trigger = page.getByRole('button', { name: '1 background job', exact: true })
     expect(await trigger.count()).toBe(0)
 
-    const started = await scaffold.ctx.tools.execute({
+    const started = await executeToolFixture(scaffold.ctx, {
       signal: new AbortController().signal,
       callId: ToolCallId('live-job-stream-e2e'),
       name: 'bash',
@@ -98,6 +99,14 @@ describe.skipIf(MODE === 'record')('web e2e: live job stream', () => {
     const matched = /\bbash-[0-9a-f]{16}\b/.exec(reported)
     if (matched === null) throw new Error(`background bash reported no job id: ${reported}`)
     const jobId = JobId(matched[0])
+    await expect.poll(() => {
+      const job = scaffold.ctx.jobs.get(jobId, agent.id)
+      const output = scaffold.ctx.jobs.readAt(jobId, 0, agent.id).chunks.map(chunk => chunk.text).join('')
+      return job.status !== 'running' || output.includes('streamed-marker-line')
+    }, { timeout: 15_000 }).toBe(true)
+    const readyJob = scaffold.ctx.jobs.get(jobId, agent.id)
+    const readyOutput = scaffold.ctx.jobs.readAt(jobId, 0, agent.id).chunks.map(chunk => chunk.text).join('')
+    expect(readyJob.status, `${readyJob.detail ?? ''}\n${readyOutput}`).toBe('running')
 
     // The job row reaches the header over the job roster stream.
     await trigger.waitFor({ timeout: 15_000 })
@@ -115,13 +124,24 @@ describe.skipIf(MODE === 'record')('web e2e: live job stream', () => {
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
 
+    await trigger.click()
+    await page.getByRole('list', { name: 'Background jobs' }).waitFor({ state: 'detached' })
+    expect(await page.getByText('streamed-marker-line', { exact: true }).count()).toBe(0)
+    await page.mouse.move(2, 2)
+    await trigger.hover()
+    await page.getByRole('list', { name: 'Background jobs' }).waitFor()
+    await page.getByRole('button', { name: /Hide live output/ }).waitFor()
+    await page.getByText('streamed-marker-line', { exact: true }).waitFor()
+    expect(scaffold.ctx.jobs.get(jobId, agent.id).status).toBe('running')
+
     phase = 'settled'
     expect(scaffold.ctx.jobs.kill(jobId, agent.id, 'web e2e cancellation')).toBe('requested')
 
-    // Settlement arrives on the observation stream itself, so the open panel
-    // flips without any further interaction; the roster trigger follows.
-    const idle = page.getByRole('button', { name: '1 background job', exact: true })
-    await idle.waitFor({ timeout: 20_000 })
+    // The unchanged count label is not a settlement signal; the output row owns that state.
+    await page.getByRole('button', { name: 'Finished 1', exact: true }).waitFor({ timeout: 20_000 })
+    await expect.poll(() => page.getByRole('list', { name: 'Background jobs' }).textContent()).toContain('web e2e cancellation')
+    expect(await trigger.getAttribute('aria-label')).toBe('1 background job')
+    expect(scaffold.ctx.jobs.get(jobId, agent.id).status).toBe('killed')
     await page.getByText('streamed-marker-line').waitFor({ timeout: 10_000 })
 
     const settled = await captureStableAria(page, '[class*="menu"]', scaffold.workspaceCwd)

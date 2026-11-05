@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-commands",
   "description": "Plugin-owned human command registry for DeepSeek Harness UIs",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.2-rc.1",
   "publishConfig": {
     "access": "public"
   },
@@ -36,7 +36,11 @@
     },
     "./src/*": "./src/*",
     "./package.json": "./package.json",
-    "./locale/*.json": "./locale/*.json"
+    "./locale/*.json": "./locale/*.json",
+    "./builtin": {
+      "types": "./lib/types/builtin.d.ts",
+      "default": "./lib/types/builtin.js"
+    }
   },
   "files": [
     "locale/*.json",
@@ -65,7 +69,7 @@
   },
   "dependencies": {
     "@deepseek-ai/dsh-util-crypto": "workspace:*",
-    "zod": "4.4.3"
+    "zod": "4.6.6"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-agent": "workspace:*",

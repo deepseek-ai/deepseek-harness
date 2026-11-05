@@ -1,3 +1,4 @@
+import { executeToolFixture, executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 // Boots the shipped Web composition over the built dist this lane already uses
 // and asserts its catalog, defaults, Loader lifecycle, and one complete Auto
 // producer-to-tool path. Browser scenarios in this lane own visual behavior.
@@ -304,7 +305,7 @@ class ShippedChildAutoAdapter extends LlmAdapter {
         throw new Error('continuable child id was not observed before parent adjustment')
       }
       return toolChunks('parent-adjust', 'send_message', {
-        agent_id: this.continuableChildId,
+        agent: this.continuableChildId,
         message: [
           AUTO_CHILD_ADJUSTED,
           `Replace the earlier no-deletion restriction: permanently delete exactly ${this.continuableDeletePath}.`,
@@ -484,20 +485,28 @@ const EXPECTED_TOOLS = [
   'job_output',
   'list_agents',
   'list_subagent_models',
+  'office_convert',
+  'office_recalculate',
+  'office_render',
   'plugin_manager',
   'present',
   'read',
   'read_image',
   'schedule_create',
-  'schedule_delete',
+  'schedule_edit',
   'schedule_list',
-  'schedule_update',
+  'schedule_view',
   'send_message',
   'skill',
   'subagent',
   'subagent_fork',
+  'team_task_create',
+  'team_task_get',
+  'team_task_list',
+  'team_task_update',
   'todo_write',
   'update_goal',
+  'wait_agent',
   'web_fetch',
   'web_search',
   'workflow',
@@ -591,8 +600,10 @@ it('assembles the shipped Web transport, catalog, guidance, and defaults', async
       "mode": "always",
     }
   `)
-  // The directory tool is global; the deployment's default preset supplies the agent's remaining tools.
-  expect(ctx.tools.schemas().map(schema => schema.name)).toEqual(['working_directory'])
+  // Directory and conditional Team tools are global; presets supply the remaining registrations.
+  expect(ctx.tools.schemas().map(schema => schema.name)).toEqual([
+    'working_directory', 'team_task_create', 'team_task_list', 'team_task_get', 'team_task_update',
+  ])
   const handle = await ctx.agents.create({
     sessionId: SessionId('shipped-composition'),
     setup: agentCtx => ctx.agentPresets.mount(agentCtx).then(() => undefined),
@@ -679,7 +690,7 @@ it('lets a preset producer reach the background-job registry', async () => {
     // `tool-bash` is a preset row and `tasks` is a host registry; the producer
     // resolves it with `ctx.get`, so a registry hidden behind a preset realm
     // fails here — with every task control still listed in the catalog above.
-    const started = await ctx.tools.execute({
+    const started = await executeModelToolFixture(ctx, {
       signal,
       callId: ToolCallId('shipped-bash-background'),
       name: 'bash',
@@ -701,7 +712,7 @@ it('lets a preset producer reach the background-job registry', async () => {
 
     // The controller reads what the producer started: same registry, one
     // owner. A per-preset registry would list nothing here even on success.
-    const listed = await ctx.tools.execute({
+    const listed = await executeToolFixture(ctx, {
       signal,
       callId: ToolCallId('shipped-task-list'),
       name: 'job_list',
@@ -714,7 +725,7 @@ it('lets a preset producer reach the background-job registry', async () => {
 
     // The full round trip: the output a host-plane producer wrote is collected
     // through a preset-plane control, which is the linkage the realm severed.
-    const collected = await ctx.tools.execute({
+    const collected = await executeToolFixture(ctx, {
       signal,
       callId: ToolCallId('shipped-task-output'),
       name: 'job_output',
@@ -1036,7 +1047,7 @@ it('rolls back a failed shipped Auto initialization before publishing or interce
       // contribution performs no review, so success proves the failed shipped
       // integration left no pre-execute listener behind. It is not supported
       // Auto execution behavior.
-      const result = await ctx.tools.execute({
+      const result = await executeToolFixture(ctx, {
         signal: new AbortController().signal,
         callId: ToolCallId('shipped-auto-init-rollback-write'),
         name: 'write',

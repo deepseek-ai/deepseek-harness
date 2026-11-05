@@ -1,0 +1,25 @@
+# Bilingual-pair consistency record for 2026-09-28-apply-patch-file-editing.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-28-apply-patch-file-editing.md
+/agent-note-apply-patch-file-editing:
+  en: 2ff887cb8deab0eb
+  zh: b503b00d8690955c
+/agent-note-apply-patch-file-editing/problem:
+  en: de9b76d89795ccec
+  zh: 588d45b7d9ca9582
+/agent-note-apply-patch-file-editing/decision:
+  en: e3e174513948d0dd
+  zh: 80b13d7e40d38dee
+/agent-note-apply-patch-file-editing/alternatives-considered:
+  en: fb743c9558cf24ed
+  zh: e74bdfff00dea417
+/agent-note-apply-patch-file-editing/consequences:
+  en: b58b7324663c3c90
+  zh: 649c18a83e33e71d
+/agent-note-apply-patch-file-editing/testing:
+  en: 82ae0a96fbae53bc
+  zh: 9a8194bdb134ae8c
+/agent-note-apply-patch-file-editing/deferred:
+  en: 9fa35fed544d9a9d
+  zh: 32fced0939325341

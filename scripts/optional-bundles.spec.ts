@@ -8,7 +8,8 @@ import { describe, expect, it, onTestFinished } from 'vitest'
 import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import { loadOverlayPatches } from '../packages/boot/app-boot/src/index.ts'
 import { readPluginMeta } from '../packages/boot/app-boot/src/package-meta.ts'
-import { OPTIONAL_BUNDLES, PROFILE_TEMPLATES, bundlePatchPaths, composeEntries, initProfile, readProfileManifest } from '../packages/boot/app-boot/src/profile.ts'
+import { bundlePatchPaths, composeEntries, initProfile, readProfileManifest } from '../packages/boot/app-boot/src/profile.ts'
+import { OPTIONAL_BUNDLES, PROFILE_TEMPLATES } from '../packages/util/official-bundles/src/bundles.ts'
 import type { DshBundleManifest } from '../packages/util/package-manifest/src/types.ts'
 import { createPluginProfile } from '../apps/desktop/src/project-manager.ts'
 
@@ -91,6 +92,9 @@ describe.each(['web', 'desktop'] as const)('%s optional bundle overrides', (surf
 })
 
 describe('optional bundles', () => {
+  it('admits Computer Use only on macOS Hosts', () => {
+    expect(bundles.get('@deepseek-ai/dsh-cua-bundle')?.manifest.dsh?.bundle?.platforms).toEqual(['darwin'])
+  })
   const shipped = ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'].map(name => bundle(name).patches)
 
   it('ships at least one bundle switched off', () => {
@@ -129,7 +133,7 @@ describe('optional bundles', () => {
     }
   })
 
-  it('offers Git Worktrees as one disabled bundle with its runtime and tool', () => {
+  it('retains the standalone worktree bundle for explicit profiles', () => {
     const name = '@deepseek-ai/dsh-experimental-tool-worktree'
     expect(OPTIONAL_BUNDLES).toContain(name)
     for (const template of Object.values(PROFILE_TEMPLATES)) expect(template.bundles).not.toContain(name)
@@ -138,6 +142,40 @@ describe('optional bundles', () => {
       expect(composeEntries(shipped).some(row => row.name === moduleName)).toBe(false)
       expect(rows.filter(row => row.name === moduleName && row.disabled !== true)).toHaveLength(1)
     }
+  })
+
+  it('offers the forge panel and model worktree tool together with their separate worktree services', () => {
+    const name = '@deepseek-ai/dsh-experimental-forge-bundle'
+    expect(OPTIONAL_BUNDLES).toContain(name)
+    for (const template of Object.values(PROFILE_TEMPLATES)) expect(template.bundles).not.toContain(name)
+    const rows = flattenRows(composeEntries([...shipped, bundle(name).patches]))
+    for (const moduleName of [
+      '@deepseek-ai/dsh-experimental-forge',
+      '@deepseek-ai/dsh-experimental-forge-github',
+      '@deepseek-ai/dsh-experimental-forge-session',
+      '@deepseek-ai/dsh-experimental-client-ui-forge',
+      '@deepseek-ai/dsh-experimental-tool-worktree',
+    ]) {
+      expect(flattenRows(composeEntries(shipped)).some(row => row.name === moduleName)).toBe(false)
+      expect(rows.filter(row => row.name === moduleName && row.disabled !== true)).toHaveLength(1)
+    }
+    const group = composeEntries([...shipped, bundle(name).patches]).find(row => row.id === 'optional-forge-panel')
+    expect(group?.isolate).toEqual({ worktrees: true })
+    expect(rows.filter(row => row.name === '@deepseek-ai/dsh-experimental-worktree')).toHaveLength(2)
+  })
+
+  it('keeps the existing tool and panel row overrides addressable in the unified bundle', () => {
+    const config = { directory: '.agents/custom-worktrees' }
+    const warnings: string[] = []
+    const composed = composeEntries([...shipped, bundle('@deepseek-ai/dsh-experimental-forge-bundle').patches, [
+      { id: 'worktree', config },
+      { id: 'tool-worktree', disabled: true },
+      { id: 'optional-forge-panel', disabled: true },
+    ]], message => warnings.push(message))
+    expect(warnings).toEqual([])
+    expect(composed.find(row => row.id === 'worktree')?.config).toEqual(config)
+    expect(composed.find(row => row.id === 'tool-worktree')?.disabled).toBe(true)
+    expect(composed.find(row => row.id === 'optional-forge-panel')?.disabled).toBe(true)
   })
 
   it('ships all five lightweight bundles without selecting them in a default template', () => {

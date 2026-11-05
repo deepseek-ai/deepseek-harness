@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Boucles Ralph",
+    "description": "Demandez une boucle Ralph avec un objectif, et l'agent lance un nouvel agent dessus, tour après tour, jusqu'à ce que l'objectif soit atteint, qu'un blocage soit signalé ou que la limite de tours soit atteinte.",
+    "detail": "docs/DETAIL.md"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Lagerung",
+    "description": "Einheitliche Verwaltung des Speicher-Backends und der von Plug-Ins verwendeten Datenzugriffsmethoden."
+  }
+}

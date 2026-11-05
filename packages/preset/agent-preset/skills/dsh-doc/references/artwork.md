@@ -19,12 +19,12 @@ Draw an icon that is recognizable at row size and belongs beside the icons of in
 
 ## Export
 
-- Plugin Manager renders the icon through `<img>`, which silently drops what it cannot load. Export self-contained SVG geometry with local, uniquely named gradient, mask, and clip references. Use no scripts, event handlers, `<style>`, `<text>`, animation, `<image>`, or `foreignObject`.
+- Plugin Manager loads icons as images; an image that cannot decode falls back to the panel's default artwork. Export self-contained SVG geometry with local, uniquely named gradient, mask, and clip references. For these icons, omit scripts, event handlers, `<style>`, animation, `<image>`, and `foreignObject` to keep the asset self-contained. Draw lettering as paths rather than `<text>` so browser font substitution cannot change it.
 - Do not change assets the feature itself produces merely to change its icon.
 
 ## Feature image
 
-A detail document may start with one feature image when a picture shows the result better than text. Draw it only when the user asks for one or the result cannot be shown in text, after the plugin works. Save one SVG per document language, such as `docs/preview.svg` and `docs/preview.zh.svg`, with `width="640" height="300" viewBox="0 0 640 300"`, and reference it from the first line of that document as `![Short description](preview.svg)`, and `preview.zh.svg` from `DETAIL.zh.md`. The bundle page refuses images above 5 MiB. Show one main example of the real interface or result, optionally with one close-up, using the plugin's exact UI labels; keep important content about 32 units from the edges. The export rules above apply, so outline every word into paths. Check that it stays readable at its displayed width in light and dark themes.
+A detail document may start with one feature image when a picture shows the result better than text. Draw it only when the user asks for one or the result cannot be shown in text, after the plugin works. Save one SVG per document language, such as `docs/preview.svg` and `docs/preview.zh.svg`, with `width="640" height="300" viewBox="0 0 640 300"`, and reference it from the first line of that document as `![Short description](preview.svg)`, and `preview.zh.svg` from `DETAIL.zh.md`. Images must fit `pluginManager.detailImageMaxBytes` (5 MiB by default). Show one main example of the real interface or result, optionally with one close-up, using the plugin's exact UI labels; keep important content about 32 units from the edges. The export rules above apply, so outline every word into paths. Check that it stays readable at its displayed width in light and dark themes.
 
 ## Review
 

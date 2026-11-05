@@ -49,6 +49,8 @@ it('fetches the macOS optional tarball only for Darwin, with an empty cache for 
     ...Object.keys(bundleDependencies).map(name => ({ name, version })),
     { name: providerName, version, os: native.os, files: native.files },
   ]
+  const generation = 'a'.repeat(64)
+  const nativePayload = `native/bin/darwin-arm64/${generation}/DSH Computer Use.app/Contents/MacOS/dsh-cua-native`
   const packages = new Map<string, { manifest: Record<string, unknown>; bytes: Buffer }>()
   for (const manifest of manifests) {
     const name = String(manifest.name)
@@ -56,18 +58,20 @@ it('fetches the macOS optional tarball only for Darwin, with an empty cache for 
     await mkdir(directory)
     await writeFile(join(directory, 'package.json'), JSON.stringify(manifest))
     if (name === providerName) {
-      await mkdir(join(directory, 'native/bin/darwin-arm64'), { recursive: true })
+      await mkdir(join(directory, nativePayload, '..'), { recursive: true })
       for (const file of ['.gitignore', '.npmignore']) {
         await writeFile(join(directory, 'native', file), await readFile(join(repository, 'packages/experimental/cua-macos/native', file)))
       }
-      await writeFile(join(directory, 'native/bin/darwin-arm64/dsh-cua-native'), 'inert native payload')
+      await writeFile(join(directory, 'native/bin/darwin-arm64/current.json'), JSON.stringify({ bundle: generation }))
+      await writeFile(join(directory, nativePayload), 'inert native payload')
     }
     await command(['pack', '--out', 'package.tgz'], directory)
     const bytes = await readFile(join(directory, 'package.tgz'))
     packages.set(name, { manifest, bytes })
     if (name === providerName) {
       const result = await execa('tar', ['-tzf', join(directory, 'package.tgz')])
-      expect(result.stdout).toContain('package/native/bin/darwin-arm64/dsh-cua-native')
+      expect(result.stdout).toContain('package/native/bin/darwin-arm64/current.json')
+      expect(result.stdout).toContain(`package/${nativePayload}`)
     }
   }
   const requests: string[] = []

@@ -1,6 +1,6 @@
 /**
  * Time vocabulary shared by the boundaries that accept a caller's zone or a
- * wall-clock selector, plus one span type for elapsed and interval arithmetic.
+ * wall-clock selector, elapsed span, or bounded Cron/RRULE recurrence.
  *
  * The library validates, canonicalizes, parses, and renders one canonical instant
  * format; it produces no model-facing text and owns no failure vocabulary. A refusal that carries a
@@ -9,7 +9,8 @@
  * form and answers a name or `undefined`; `formatFourDigitYearInstant` and
  * `resolveLocalInstant` take already-validated values and answer a string or
  * epoch milliseconds directly; `Duration` holds a span in milliseconds with no
- * implicit numeric conversion.
+ * implicit numeric conversion. Cron and RRule parse distinct recurrence types
+ * and compute occurrences from explicit times without task state or timers.
  * @module @deepseek-ai/dsh-util-time
  */
 
@@ -42,3 +43,8 @@ export function canonicalClientTimeZone(value: string): string | undefined {
   const resolved = canonicalizeTimeZone(value)
   return resolved.kind === 'accepted' ? resolved.timeZone : undefined
 }
+
+export { Cron, CRON_SEARCH_HORIZON_YEARS } from './cron.ts'
+export type { CronFields } from './cron.ts'
+export { RRule } from './rrule.ts'
+export type { RecurrenceOccurrence, RecurrenceRejection, RecurrenceResult } from './recurrence.ts'

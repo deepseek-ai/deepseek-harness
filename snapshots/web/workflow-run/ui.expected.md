@@ -3,6 +3,9 @@
 - status: Completed
 - button "Completed in {{duration}}" [expanded]
 - button "Called tools" [expanded]
+- button "Context injection runtime-context"
+- button "Context injection skill-catalog"
+- button "Context injection time-context"
 - button "Think The user wants me to use the workflow tool exactly once with specific parameters. Let me carefully follow the instructions:"
 - button "Run workflow snapshot-flow"
 - button "snapshot-flow 1 member Completed"

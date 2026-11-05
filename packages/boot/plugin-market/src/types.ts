@@ -71,6 +71,12 @@ export type MarketCompatibility =
 export interface MarketListingVersion extends MarketVersion {
   readonly install: MarketInstallTarget
   readonly compatibility: MarketCompatibility
+  /**
+   * Whether `pluginManager.updateBundle` accepts this version for the installed copy: the copy came from a Git commit
+   * (`pluginManager` lists it with `update: 'git'`), this version is newer, and it pins a commit in the same repository
+   * and `path:` directory. `compatibility` reports separately whether the running DSH accepts it.
+   */
+  readonly update: boolean
 }
 
 /** One index plugin with the profile-specific facts a market list displays. */

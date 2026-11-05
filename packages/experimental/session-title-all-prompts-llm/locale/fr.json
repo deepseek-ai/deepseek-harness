@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Titres de session contenant tous les messages",
+    "description": "Générez des titres de session à partir de tous les messages utilisateur de la session."
+  }
+}

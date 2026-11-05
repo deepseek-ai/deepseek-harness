@@ -51,7 +51,7 @@ Harness 离线集成在各自的 profile Context 中通过 `ctx.typert.remotes.r
 
 Remote 调用通过 `ctx.typert.lookups` 与 `ctx.typert.contexts` 解析 Host 对象与作用域 Context。`registerHost()` 安装 Host wire 声明及其 wire 到 Context 的 resolver，`configureHost()` 只替换该 resolver。`registerClient()` 为同一个 merge-declared kind 安装双向 Client adapter。Host 到 Client 的事件源显式携带领域 identity，而不从 Context 反向投影。
 
-`ctx.typert.resources` 保存 `TypertResourceMap` 中每个资源种类的默认 wire 字段。拥有该种类的领域以 `register(kind, { field })` 登记，登记是调用方 fiber 的 Cordis effect；同一种类重复登记即抛错，登记内置的无身份资源种类 `global` 同样抛错。`get(kind)` 读取一个种类的声明，`entries()` 按登记顺序列出全部已登记的 `{ kind, field }`。lookup provider 与 Host Context adapter 可经 `resource` 声明其 wire 身份所属的资源种类，配置的 resolver 保留该声明。Gateway 解析非 owner 调用的资源时读取这三者。
+`ctx.typert.resources` 保存 `TypertResourceMap` 中每个资源种类的默认身份提取规则。拥有该种类的领域登记 `{ field }` 或 `{ resolve }`，不能同时提供两者，登记是调用方 fiber 的 Cordis effect；同一种类重复登记即抛错，登记内置的无身份资源种类 `global` 同样抛错。resolver 只以纯函数形式调用一次、不接收 receiver，因此只读取其 `{ args, parameters }` 输入；两个成员都不提供的声明在登记时抛错。`get(kind)` 读取一个种类的声明，`entries()` 按登记顺序列出每个 `kind` 及其字段或 resolver 声明。lookup provider 与 Host Context adapter 可经 `resource` 声明其 wire 身份所属的资源种类，配置的 resolver 保留该声明。Gateway 解析非 owner 调用的资源时读取这三者。
 
 -----
 
@@ -73,7 +73,7 @@ Remote 调用通过 `ctx.typert.lookups` 与 `ctx.typert.contexts` 解析 Host �
 - `ctx.typert.remotes`——在调用方 fiber 中挂载的、由消费方选中的贡献。
 - `ctx.typert.lookups`——lookup 提供方，以及按键配置的组合方解析器覆盖。
 - `ctx.typert.contexts`——按作用域键配置的 Host Context 提供方与 Client Context 绑定器。
-- `ctx.typert.resources`——每个资源种类的默认 wire 字段。
+- `ctx.typert.resources`——每个资源种类的默认字段或 resolver。
 
 每个子注册表都会向已订阅的监听器发布 `TypertRegistryChange` 事件；抛异常的监听器会被记录日志，且不会阻止后续监听器。
 

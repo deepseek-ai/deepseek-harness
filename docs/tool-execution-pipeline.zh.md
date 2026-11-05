@@ -5,7 +5,7 @@
 
 [English](tool-execution-pipeline.md) | 中文
 
-此图展示策略、钩子、沙箱、文件系统守卫、结果重写、最终结果观察和 UI 渲染在不改变循环的情况下何时运行。`tools/pre-execute` waterfall（瀑布式事件）首先运行，随后是单调守卫，然后运行 `tools/execute` 和 `tools/post-execute` waterfall；这三个 waterfall 可以改写一次调用。由定义自身控制的 `projectContent` 在执行后策略之前安装已准备内容；`finalizeContent` 和 `tools/result` 在此之后运行。
+内置执行器负责原始批次解析、调度、取消和 Session 调用／结果日志。此图展示其共享调用流水线如何执行策略、钩子、沙箱、文件系统守卫、结果改写、最终结果观测和 UI 呈现，而无需改动循环。`tools/pre-execute` 瀑布先执行，然后是单调守卫，再是 `tools/execute` 和 `tools/post-execute` 瀑布；三个瀑布可以转换调用。定义拥有的 `projectContent` 在后置策略之前安装准备好的内容，`finalizeContent` 和 `tools/result` 在之后执行。
 
 ```mermaid
 flowchart TD
@@ -22,14 +22,15 @@ flowchart TD
   owned["Tool-owned session events<br/><code>todo/write</code>, <code>fs/observed</code>, <code>hook/invoked</code>, <code>hook/result</code>, <code>tool/ptc-dispatch</code>"]
   project["ToolDefinition.projectContent<br/>execution-prepared text and images"]
   post["<code>tools/post-execute</code> waterfall<br/>accept, block, replace, add context"]
-  normalized["Registry outer normalization<br/>pipeline/result snapshot throws become isError"]
+  normalized["Invocation pipeline normalization<br/>pipeline/result snapshot throws become isError"]
   finalize["ToolDefinition.finalizeContent<br/>last content-only invariant"]
   final["<code>tools/result</code> synchronous notification<br/>frozen authoritative outcome"]
   context["Active-batch additionalContexts FIFO<br/>injected user/message after recorded tool results"]
   toolResult["Session event: <code>tool/result</code><br/>single model-facing outcome"]
   allResults["Tool batch settled<br/>recorded tool/result events complete"]
   presentResult["UI completed card<br/>presentResult(args, result)"]
-  model --> toolCall
+  executor["Selected ToolExecutor.execute<br/>raw batch, Agent, optional logging step"]
+  model --> executor --> toolCall
   toolCall --> presentCall
   toolCall --> pre
   pre -->|allow| guards

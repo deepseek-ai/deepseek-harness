@@ -121,6 +121,22 @@ describe('HoverCard', () => {
     expect(screen.getByRole('tooltip').textContent).toBe('Details')
   })
 
+  it.each(['inert', 'hidden'])('dismisses a portal when its retained anchor ancestor becomes %s', async (attribute) => {
+    const view = render(<section><HoverCard anchor={<span>row</span>} content={<div>card body</div>} /></section>)
+    const row = screen.getByText('row')
+    const wrapper = row.parentElement!
+    fireEvent.pointerEnter(wrapper)
+    act(() => { vi.advanceTimersByTime(500) })
+    expect(screen.getByText('card body')).toBeTruthy()
+    await act(async () => { view.container.firstElementChild!.setAttribute(attribute, '') })
+    expect(screen.queryByText('card body')).toBeNull()
+    expect(screen.getByText('row')).toBe(row)
+    view.container.firstElementChild!.removeAttribute(attribute)
+    fireEvent.pointerEnter(wrapper)
+    act(() => { vi.advanceTimersByTime(500) })
+    expect(screen.getByText('card body')).toBeTruthy()
+  })
+
   it('opens after the dwell delay, positioned right of the anchor', () => {
     const { wrapper } = mount()
     fireEvent.pointerEnter(wrapper)
@@ -243,7 +259,7 @@ describe('HoverCard', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('keeps previews below the desktop frame clearance', () => {
+  it('keeps previews clear of the frame top strip except below an anchor inside it', () => {
     const prior = document.documentElement.style.getPropertyValue('--dsh-frame-top-clearance')
     const priority = document.documentElement.style.getPropertyPriority('--dsh-frame-top-clearance')
     document.documentElement.style.setProperty('--dsh-frame-top-clearance', '100px')
@@ -258,6 +274,10 @@ describe('HoverCard', () => {
       fireEvent(window, new Event('resize'))
       expect(card.style.top).toBe('120px')
       expect(card.style.maxHeight).toBe('322px')
+      // An anchor inside the top strip keeps its preview directly below it.
+      wrapper.getBoundingClientRect = () => DOMRect.fromRect({ x: 100, y: 10, width: 600, height: 32 })
+      fireEvent(window, new Event('resize'))
+      expect(card.style.top).toBe('50px')
     } finally {
       if (prior === '') document.documentElement.style.removeProperty('--dsh-frame-top-clearance')
       else document.documentElement.style.setProperty('--dsh-frame-top-clearance', prior, priority)

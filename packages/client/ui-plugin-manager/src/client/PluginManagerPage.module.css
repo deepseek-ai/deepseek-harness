@@ -1,4 +1,5 @@
-/* Plugin manager page: a centred column with its header, notices, and the package cards.
+/* Plugin manager page: the main header and content share one scroller; the header bar retains its flow height.
+   The More list has a separate fixed head, and detail views scroll with their content.
 
    Hover affordances sit under @media (hover: hover): a tap latches :hover, which
    would strand a card, row, or control in its pointer-only state. Text fields take
@@ -6,25 +7,152 @@
    for a focused field under 16px and leaves the page pannable afterwards. */
 
 .page {
+  --plugin-page-inset: clamp(24px, 4vw, 48px);
+  /* Every head row's top inset; the collapsed page bar narrows it. */
+  --plugin-page-top-inset: 28px;
   --bundle-progress-size: 14px;
   --bundle-toggle-gap: 8px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+  height: 100%;
+  /* Inline inset only: the 28px top inset belongs to the head row
+     (`.pageHead`, `.detailTop`, `.moreHead`). macOS window dragging is owned by a row's own box,
+     so an inset above that box leaves a top strip no drag region covers. */
+  padding: 0 var(--plugin-page-inset);
+  color: var(--dsw-alias-label-primary);
+}
+
+@media (max-width: 767px) {
+  .page {
+    --plugin-page-inset: 20px;
+  }
+}
+
+.page > * {
+  flex: none;
+  width: 100%;
+  max-width: 960px;
+}
+
+.pageBody > .pageBar {
+  container: plugin-page-bar / inline-size;
+  align-self: flex-start;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: calc(100% + 2 * var(--plugin-page-inset) + var(--plugin-page-scrollbar-width, 0px));
+  max-width: none;
+  margin-inline: calc(-1 * var(--plugin-page-inset));
+  box-sizing: border-box;
+  padding-inline: var(--plugin-page-inset);
+}
+
+.pageBar > .pageHead {
+  align-self: center;
+  width: 100%;
+  max-width: 960px;
+}
+
+/* Spans the page's full width, so its scrollbar sits at the page edge, and re-centres the column inside. */
+.page > .pageBody {
+  flex: 1;
+  min-height: 0;
+  width: calc(100% + 2 * var(--plugin-page-inset));
+  max-width: none;
+  margin-inline: calc(-1 * var(--plugin-page-inset));
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 32px;
   box-sizing: border-box;
-  height: 100%;
-  overflow: auto;
-  /* Inline and bottom insets only: the 28px top inset belongs to the head row
-     (`.pageHead`, `.detailTop`). macOS window dragging is owned by a row's own box,
-     so an inset above that box leaves a top strip no drag region covers. */
-  padding: 0 clamp(24px, 4vw, 48px) 48px;
-  color: var(--dsw-alias-label-primary);
+  padding: 0 var(--plugin-page-inset) 48px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  position: relative;
+  scroll-padding-top: var(--plugin-header-scroll-padding, 0px);
 }
 
-.page > * {
+/* The initial list inset scrolls away; the scroll viewport meets the fixed bar directly. */
+.page > :not(.pageBody) + .pageBody {
+  padding-top: 32px;
+}
+
+.pageBody > * {
+  flex: none;
   width: 100%;
   max-width: 960px;
+}
+
+/* Endpoint copies never enter the scroll layout or the accessibility tree. */
+.pageBody > .pageBar[data-measuring] {
+  position: absolute;
+  top: 0;
+  left: 0;
+  margin: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.pageBody > .pageBar[data-natural] {
+  position: sticky;
+  top: 0;
+  height: var(--plugin-header-rest-height);
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* The bar preserves scroll flow; the header owns only its painted native drag box.
+   Chromium collects that box without applying clip-path. */
+.pageBar[data-natural] .pageHead {
+  position: relative;
+  height: var(--plugin-header-paint-height);
+  padding-top: 0;
+  clip-path: inset(0);
+  pointer-events: auto;
+}
+
+.pageBar[data-natural] .pageHeading {
+  display: contents;
+}
+
+.pageBar[data-natural] [data-plugin-header-part] {
+  position: absolute;
+  left: var(--plugin-part-x);
+  top: var(--plugin-part-y);
+  width: var(--plugin-part-width);
+  margin: 0;
+  pointer-events: auto;
+}
+
+.pageBar[data-natural] .pageTabs {
+  z-index: 2;
+  pointer-events: none;
+}
+
+.pageBar[data-natural] .pageTabList {
+  pointer-events: auto;
+}
+
+.pageBar[data-natural]::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: var(--plugin-header-paint-height, var(--plugin-header-rest-height));
+  background: var(--dsw-alias-bg-base);
+  pointer-events: none;
+}
+
+.pageBar[data-natural][data-compact]::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: var(--plugin-header-compact-height);
+  box-sizing: border-box;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
 }
 
 .pageHead {
@@ -36,7 +164,7 @@
   box-sizing: border-box;
   /* The page's former top inset: the row starts at the window's top edge, so the whole
      strip above the page content drags the window. */
-  padding-top: 28px;
+  padding-top: var(--plugin-page-top-inset);
 }
 
 /* macOS hiddenInset titlebar: the frame's top clearance keeps the head below
@@ -44,12 +172,13 @@
    owns the window drag over its own box — clearance included — so this page's
    top strip drags without a frame band. */
 :global([data-platform='darwin']) .pageHead {
-  padding-top: calc(28px + var(--dsh-frame-top-clearance, 0px));
+  padding-top: calc(var(--plugin-page-top-inset) + var(--dsh-frame-top-clearance, 0px));
 }
 
 .pageHeading {
   min-width: 0;
   max-width: 100%;
+  order: 1;
 }
 
 .pageTitle {
@@ -86,6 +215,7 @@
   gap: 8px 16px;
   min-width: 0;
   white-space: nowrap;
+  order: 2;
 }
 
 .addMenu {
@@ -164,7 +294,9 @@
 .groupMore {
   flex: none;
   gap: 4px;
-  padding-inline-end: 0;
+  /* Like .card, the hover surface reaches 8px past the trailing content edge. */
+  margin-inline-end: -8px;
+  padding: 0 8px;
   font-size: 14px;
   line-height: 22px;
   font-weight: 400;
@@ -555,7 +687,6 @@
   outline-offset: 1px;
 }
 
-
 .reason {
   margin: 0;
   font-size: 12px;
@@ -844,7 +975,7 @@
   gap: 4px;
   box-sizing: border-box;
   width: min(440px, calc(100vw - 24px));
-  margin: 0;
+
   padding: 8px;
   border: 0;
   /* An opaque layer keeps the registry form controls readable over the dialog. */
@@ -853,6 +984,23 @@
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   box-shadow: var(--dsw-elevation-prominent);
   min-width: 0;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 12px - max(12px, var(--dsh-frame-overlay-top, 12px)));
+  overflow-x: hidden;
+  overflow-y: auto;
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+  position-area: none;
+  top: max(12px, calc(anchor(bottom) + 6px));
+  bottom: 12px;
+  left: 12px;
+  right: max(12px, anchor(right));
+  position-try-fallbacks: --dsh-registry-window, --dsh-registry-opposite, --dsh-registry-wide-opposite, --dsh-registry-tall, --dsh-registry-viewport;
+  align-self: start;
+  justify-self: end;
+  height: fit-content;
+  min-height: 0;
+  margin: 0;
 }
 
 .registryOption {
@@ -1263,9 +1411,9 @@ label.registryOption {
 .detailTop,
 .moreHead {
   display: flex;
-  /* The same 28px top inset `.pageHead` carries, so the row starts at the window's
+  /* The same top inset `.pageHead` carries, so the row starts at the window's
      top edge and the strip above the detail content drags the window. */
-  padding-top: 28px;
+  padding-top: var(--plugin-page-top-inset);
 }
 
 .detailTop {
@@ -1274,7 +1422,7 @@ label.registryOption {
 
 :global([data-platform='darwin']) .detailTop,
 :global([data-platform='darwin']) .moreHead {
-  padding-top: calc(28px + var(--dsh-frame-top-clearance, 0px));
+  padding-top: calc(var(--plugin-page-top-inset) + var(--dsh-frame-top-clearance, 0px));
 }
 
 .crumb {
@@ -1457,6 +1605,11 @@ label.registryOption {
   border-bottom: 0;
 }
 
+.detail[data-plugin-detail='@deepseek-ai/dsh-cua-bundle'] .facts div,
+.detail[data-plugin-detail='@deepseek-ai/dsh-cua-bundle'] .row {
+  border-bottom-color: var(--dsw-alias-border-l3);
+}
+
 .rowLine {
   display: flex;
   align-items: center;
@@ -1551,8 +1704,6 @@ label.registryOption {
   color: var(--dsw-alias-state-error-primary);
 }
 
-
-
 .rowFailure {
   margin: 4px 0 0 56px;
   font-size: 12px;
@@ -1565,16 +1716,119 @@ label.registryOption {
   display: none;
 }
 
-/* Installed and contributed tabs under the page header, aligned with the title; the negative margin halves
-   the page's 32px row gap, so the tabs read as part of the header. */
+/* Installed and contributed tabs under the page header at rest; the scrolled bar
+   pulls them onto the actions' row. */
 .pageTabs {
   display: flex;
-  margin-top: -16px;
+  order: 3;
+  flex: 1 1 100%;
+}
+
+/* Keep spacing inside the compact bar, above its divider rather than outside the scroll viewport. */
+.pageBar[data-compact]:not([data-natural]) {
+  --plugin-page-top-inset: 16px;
+
+  padding-bottom: 16px;
+}
+
+/* With the sidebar open, native window controls sit in the sidebar rather than above the page. */
+:global([data-platform='darwin']) .pageBar[data-compact]:not([data-natural]) .pageHead {
+  padding-top: var(--plugin-page-top-inset);
+}
+
+/* Collapsing the sidebar moves those controls above the page; the compact bar then clears them. */
+:global([data-platform='darwin']) :global([data-sidebar-collapsed]) .pageBar[data-compact]:not([data-natural]) .pageHead {
+  --plugin-page-top-inset: 8px;
+
+  padding-top: calc(var(--plugin-page-top-inset) + var(--dsh-frame-top-clearance, 0px));
+}
+
+/* The collapsed bar's divider spans the page like the scrolled list and its scrollbar. */
+.pageBar[data-compact]:not([data-natural])::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+  pointer-events: none;
+}
+
+.pageBar[data-compact]:not([data-natural]) .pageHead {
+  align-items: center;
+}
+
+.pageBar[data-compact]:not([data-natural]) .pageIntro {
+  display: none;
+}
+
+/* Visually hidden rather than removed, so the page keeps its only heading for assistive technology. */
+.pageBarWithTabs[data-compact]:not([data-natural]) .pageHeading {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.pageBarWithTabs[data-compact]:not([data-natural]) .pageTabs {
+  order: 1;
+  flex: 0 0 auto;
 }
 
 .pageTabList {
   width: fit-content;
   min-width: 240px;
+}
+
+@container plugin-page-bar (width < 600px) {
+  .pageBarWithTabs .pageHead {
+    align-items: center;
+  }
+
+  .pageBarWithTabs .pageHeading {
+    flex-basis: 100%;
+  }
+
+  .pageBarWithTabs .pageTabs {
+    order: 2;
+    flex: 0 0 auto;
+  }
+
+  .pageBarWithTabs .toolbar {
+    order: 3;
+  }
+
+  .toolbarLabel {
+    display: none;
+  }
+
+  .pageHead .addButton,
+  .pageHead .addPrimary {
+    width: 32px;
+    min-width: 32px;
+    padding-inline: 0;
+  }
+
+  /* The icon actions keep their width; a wrapped update note stays within the head. */
+  .toolbar {
+    flex-shrink: 0;
+    max-width: 100%;
+  }
+
+  .updatesNote {
+    order: 3;
+    flex-basis: 100%;
+    min-width: 0;
+    white-space: normal;
+  }
+}
+
+/* Keep the usual tab width until the icon actions and their gaps need its space. */
+@container plugin-page-bar (width < 372px) {
+  .pageTabList {
+    min-width: 0;
+  }
 }
 
 /* The Installed groups keep the page's row gap inside their tab panel. */
@@ -2007,4 +2261,49 @@ button.versionSummary:focus-visible {
   .partsFilter input {
     font-size: 16px;
   }
+}
+
+@position-try --dsh-registry-window {
+  position-area: none;
+  top: max(12px, calc(anchor(bottom) + 6px));
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  margin: 0;
+  align-self: safe start;
+  justify-self: safe start;
+}
+
+@position-try --dsh-registry-opposite {
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: max(12px, calc(anchor(top) + 6px));
+  align-self: end;
+}
+
+@position-try --dsh-registry-wide-opposite {
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: max(12px, calc(anchor(top) + 6px));
+  left: 12px;
+  right: 12px;
+  align-self: end;
+  justify-self: safe start;
+}
+
+@position-try --dsh-registry-tall {
+  position-area: none;
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: 12px;
+  left: 12px;
+  right: max(12px, anchor(right));
+  margin: 0;
+  align-self: safe start;
+  justify-self: end;
+}
+
+@position-try --dsh-registry-viewport {
+  position-area: none;
+  inset: max(12px, var(--dsh-frame-overlay-top, 12px)) 12px 12px;
+  margin: 0;
+  align-self: safe start;
+  justify-self: safe start;
 }

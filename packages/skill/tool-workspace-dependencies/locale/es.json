@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Dependencias del espacio de trabajo",
+    "description": "Proporcione rutas absolutas a los tiempos de ejecución de Python, Node.js y pnpm incluidos."
+  }
+}

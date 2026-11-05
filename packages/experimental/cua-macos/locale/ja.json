@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "macOS Computer Useバックエンド",
+    "description": "共通のComputer Useサービスに macOS ネイティブのアプリとウィンドウのオブジェクトを提供します。"
+  }
+}

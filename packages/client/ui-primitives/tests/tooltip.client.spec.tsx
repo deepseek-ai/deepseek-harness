@@ -765,6 +765,30 @@ describe('Tooltip', () => {
     expect(screen.getByRole('tooltip')).toBeTruthy()
   })
 
+  it('shows a clipped-only bubble when the anchor or a descendant overflows at show time', () => {
+    render(
+      <Tooltip label="Full label" onlyWhenClipped>
+        <button type="button"><svg /><span>Full…</span></button>
+      </Tooltip>,
+    )
+    const anchor = screen.getByRole('button')
+    const label = screen.getByText('Full…')
+    const overflowing = new Set<Element>()
+    vi.spyOn(Element.prototype, 'scrollWidth', 'get').mockImplementation(function (this: Element) { return overflowing.has(this) ? 120 : 80 })
+    vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(80)
+    fireEvent.pointerEnter(anchor)
+    expect(screen.queryByRole('tooltip')).toBeNull()
+    fireEvent.pointerLeave(anchor)
+    overflowing.add(label)
+    fireEvent.pointerEnter(anchor)
+    expect(screen.getByRole('tooltip').textContent).toBe('Full label')
+    fireEvent.pointerLeave(anchor)
+    overflowing.clear()
+    overflowing.add(anchor)
+    fireEvent.pointerEnter(anchor)
+    expect(screen.getByRole('tooltip').textContent).toBe('Full label')
+  })
+
   it('mouse leave hides the bubble immediately, even while the anchor stays focused', () => {
     render(
       <Tooltip label="Sticky">

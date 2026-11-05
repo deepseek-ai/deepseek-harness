@@ -179,6 +179,7 @@ interface FixtureWindow extends Window {
   __DSH_BOOT__?: WebBootGraph
   __ModuleLoader__?: ClientModuleLoaderTarget
   __DSH_TRANSPORT__?: { readonly rpc: RemoteMock['rpc'] }
+  __DSH_FILE_UPLOAD__?: { readonly fetch: AssembledRemote['fileUpload'] }
 }
 
 class ResizeObserverStub {
@@ -195,13 +196,16 @@ class EventSourceStub {
 const win = window as FixtureWindow
 let unmount: (() => Promise<void>) | undefined
 let mountedRemote: RemoteMock | undefined
+/** Boot audit warnings of the current test; the product boot tolerates inactive optional entries, this lane does not. */
+let bootWarnings: string[] = []
 
 /**
  * Register the per-test jsdom setup and teardown the assembled boot needs:
  * English pinned before boot so role/text locators stay deterministic across
  * localized component migrations (the newEnglishPage e2e convention), the
  * observers, font events, and frame callbacks jsdom lacks, and a full reset of the document,
- * the boot globals, and the injected plugin styles afterwards.
+ * the boot globals, and the injected plugin styles afterwards. A boot audit warning about an
+ * inactive entry fails the test at teardown: every assembled composition must activate completely.
  */
 export function installAssembledBootEnv(): void {
   // jsdom implements no scroll geometry: the trigger menu reveals its
@@ -218,7 +222,15 @@ export function installAssembledBootEnv(): void {
     })
   }
   let fontsDescriptor: PropertyDescriptor | undefined
+  let restoreWarn: (() => void) | undefined
   beforeEach(() => {
+    bootWarnings = []
+    const warn = console.warn.bind(console)
+    const spy = vi.spyOn(console, 'warn').mockImplementation((message?: unknown, ...rest: unknown[]) => {
+      if (typeof message === 'string' && message.startsWith('web boot: warning')) bootWarnings.push(message)
+      warn(message, ...rest)
+    })
+    restoreWarn = () => { spy.mockRestore() }
     fontsDescriptor = Object.getOwnPropertyDescriptor(document, 'fonts')
     Object.defineProperty(document, 'fonts', { configurable: true, value: new EventTarget() })
     localStorage.clear()
@@ -253,6 +265,7 @@ export function installAssembledBootEnv(): void {
     delete win.__DSH_BOOT__
     delete win.__ModuleLoader__
     delete win.__DSH_TRANSPORT__
+    delete win.__DSH_FILE_UPLOAD__
     document.body.innerHTML = ''
     document.head.querySelectorAll('style[data-plugin]').forEach((style) => { style.remove() })
     document.title = ''
@@ -265,6 +278,9 @@ export function installAssembledBootEnv(): void {
     vi.unstubAllGlobals()
     if (fontsDescriptor === undefined) Reflect.deleteProperty(document, 'fonts')
     else Object.defineProperty(document, 'fonts', fontsDescriptor)
+    restoreWarn?.()
+    restoreWarn = undefined
+    if (bootWarnings.length > 0) failures.push(new Error(`assembled boot: every entry must activate\n${bootWarnings.join('\n')}`))
     if (failures.length > 0) throw new AggregateError(failures, 'assembled boot teardown failed')
   })
 }
@@ -281,6 +297,7 @@ export function mountAssembledApp(options: AssembledBootOptions = {}): Assembled
   const remote = createAssembledRemote(options.remote)
   mountedRemote = remote.mock
   win.__DSH_TRANSPORT__ = { rpc: remote.mock.rpc }
+  win.__DSH_FILE_UPLOAD__ = { fetch: remote.fileUpload }
   history.replaceState(null, '', '/')
   const root = document.createElement('div')
   root.id = 'root'

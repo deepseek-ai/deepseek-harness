@@ -1,0 +1,38 @@
+[
+  {
+    "environment": "test",
+    "version": "1.2.3-alpha.1",
+    "keys": [
+      "dsh-desk/0123456789abcdef0123456789abcdef/bin/win-x64/stable/deepseek-harness-1.2.3-alpha.1-win-x64.exe",
+      "dsh-desk/0123456789abcdef0123456789abcdef/bin/win-x64/stable/deepseek-harness-1.2.3-alpha.1-win-x64.exe.blockmap",
+      "dsh-desk/0123456789abcdef0123456789abcdef/feeds/win-x64/stable.yml"
+    ]
+  },
+  {
+    "environment": "test",
+    "version": "1.2.3-rc.1",
+    "keys": [
+      "dsh-desk/0123456789abcdef0123456789abcdef/bin/win-x64/stable/deepseek-harness-1.2.3-rc.1-win-x64.exe",
+      "dsh-desk/0123456789abcdef0123456789abcdef/bin/win-x64/stable/deepseek-harness-1.2.3-rc.1-win-x64.exe.blockmap",
+      "dsh-desk/0123456789abcdef0123456789abcdef/feeds/win-x64/stable.yml"
+    ]
+  },
+  {
+    "environment": "production",
+    "version": "1.2.3-alpha.1",
+    "keys": [
+      "dsh-desk/bin/win-x64/stable/deepseek-harness-1.2.3-alpha.1-win-x64.exe",
+      "dsh-desk/bin/win-x64/stable/deepseek-harness-1.2.3-alpha.1-win-x64.exe.blockmap",
+      "dsh-desk/feeds/win-x64/stable.yml"
+    ]
+  },
+  {
+    "environment": "production",
+    "version": "1.2.3-rc.1",
+    "keys": [
+      "dsh-desk/bin/win-x64/stable/deepseek-harness-1.2.3-rc.1-win-x64.exe",
+      "dsh-desk/bin/win-x64/stable/deepseek-harness-1.2.3-rc.1-win-x64.exe.blockmap",
+      "dsh-desk/feeds/win-x64/stable.yml"
+    ]
+  }
+]

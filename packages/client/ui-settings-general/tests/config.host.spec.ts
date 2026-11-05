@@ -11,7 +11,7 @@ it('validates and updates onboarding preferences without remounting', async () =
   onTestFinished(() => ctx.fiber.dispose())
   const configuration = await liveConfig(ctx, General)
   await configuration.update({ welcomeNoticeVersion: 'v1' })
-  expect(plainConfig(configuration.fiber.config)).toMatchObject({ welcomeNoticeVersion: 'v1' })
+  expect(plainConfig(configuration.fiber.effectiveConfig)).toMatchObject({ welcomeNoticeVersion: 'v1' })
   expect(configuration.entry.fiber).toBe(configuration.fiber)
 })
 

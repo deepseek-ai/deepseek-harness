@@ -1,32 +1,33 @@
-/** Browser-zone derivation and model-facing policy text for one open request turn. */
+/** Browser-zone facts from committed or proposed user-rpc messages and model-facing policy text. */
 
 import { canonicalizeTimeZone } from '@deepseek-ai/dsh-util-time'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 
-/** Browser-zone facts derived from user-rpc messages in one open turn. */
+/** Browser-zone facts for the messages selected while preparing a request. */
 export type BrowserTimeZoneContext =
   | { readonly kind: 'resolved'; readonly timeZone: string }
   | { readonly kind: 'mixed'; readonly timeZones: readonly string[] }
   | { readonly kind: 'missing' }
 
 /**
- * Read and validate a Host-canonicalized browser zone from one ordinary user-rpc message.
- *
- * A request may only name a zone another process resolves back to the same
- * identity, so the shared vocabulary's canonical answer must equal the reported
- * value; an alias is refused here rather than silently rewritten.
+ * Read the raw zone reported by a user-rpc source; validation belongs to request preparation.
+ * @param message - user message; only user sources with a string rpcId and clientTimeZone contribute.
+ * @returns the reported zone, or undefined when no user-rpc zone was reported.
  */
-function browserTimeZone(message: UserMessage): string | undefined {
+export function reportedBrowserTimeZone(message: UserMessage): string | undefined {
   const source = message.source
-  const value = source.kind === 'user'
+  return source.kind === 'user'
     && 'rpcId' in source
     && typeof source.rpcId === 'string'
     && 'clientTimeZone' in source
     && typeof source.clientTimeZone === 'string'
     ? source.clientTimeZone
     : undefined
-  if (value === undefined) return undefined
+}
+
+/** Validate a reported zone at request preparation, preserving the platform refusal. */
+function browserTimeZone(value: string): string {
   const resolved = canonicalizeTimeZone(value)
   if (resolved.kind === 'accepted') {
     if (resolved.timeZone !== value) {
@@ -51,18 +52,21 @@ function browserTimeZone(message: UserMessage): string | undefined {
 }
 
 /**
- * Derive the unique, mixed, or missing browser zone for one open turn.
- * @param messages - Entered and proposed user messages belonging to the turn.
+ * Derive the unique, mixed, or missing browser zone for the selected request messages.
+ * @param messages - proposed messages, or entered plus proposed messages selected by the legacy reader.
+ * @param enteredTimeZones - reported zones from committed messages, before the proposed messages.
  * @returns Sorted, duplicate-free browser-zone facts.
  * @throws TypeError when a user-rpc source carries an invalid or noncanonical zone.
  */
 export function deriveBrowserTimeZoneContext(
   messages: readonly UserMessage[],
+  enteredTimeZones: readonly string[] = [],
 ): BrowserTimeZoneContext {
-  const timeZones = [...new Set(messages.flatMap((message) => {
-    const timeZone = browserTimeZone(message)
+  const reported = messages.flatMap((message) => {
+    const timeZone = reportedBrowserTimeZone(message)
     return timeZone === undefined ? [] : [timeZone]
-  }))].sort()
+  })
+  const timeZones = [...new Set([...enteredTimeZones, ...reported].map(browserTimeZone))].sort()
   const [timeZone, ...remaining] = timeZones
   if (timeZone === undefined) return { kind: 'missing' }
   if (remaining.length === 0) return { kind: 'resolved', timeZone }
@@ -71,7 +75,7 @@ export function deriveBrowserTimeZoneContext(
 
 /**
  * Render the model instruction for one browser-zone context.
- * @param context - Browser-zone facts for the open turn.
+ * @param context - browser-zone facts selected for this request.
  * @returns One durable policy line.
  */
 export function renderBrowserTimeZoneContext(context: BrowserTimeZoneContext): string {

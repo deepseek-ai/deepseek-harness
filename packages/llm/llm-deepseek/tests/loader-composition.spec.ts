@@ -24,6 +24,20 @@ import { assemble } from './assemble.ts'
 import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
 import { sourceModuleLoader } from './helpers.ts'
 
+declare module '@deepseek-ai/dsh-llm/types' {
+  interface LlmRequestPurposeMap {
+    'test-upload-exclusion': true
+  }
+}
+
+const uploadExclusion = {
+  name: 'test-upload-exclusion',
+  inject: ['sessionLogDeepSeek'],
+  apply(ctx: Context) {
+    ctx.sessionLogDeepSeek.registerExclusion(request => request.purpose === 'test-upload-exclusion')
+  },
+}
+
 const NS = 'llm-deepseek'
 const KEY_REF = credentialRef('DEEPSEEK_API_KEY')
 
@@ -37,10 +51,11 @@ afterEach(async () => {
   root = undefined
   await closeMockServers()
   vi.unstubAllEnvs()
+  vi.restoreAllMocks()
 })
 
 async function loadComposition(
-  options: { withDynamic: boolean; baseURL: string; reuseRoot?: string; enableSessionLog?: boolean },
+  options: { withDynamic: boolean; baseURL: string; reuseRoot?: string; enableSessionLog?: boolean; exclusionFirst?: boolean },
 ): Promise<{ ctx: Context; settingsPath: string; credentialsPath: string }> {
   // A reused root is the restart case: the same harness home, its documents
   // exactly as the previous process left them.
@@ -66,11 +81,13 @@ async function loadComposition(
     "- name: '@deepseek-ai/dsh-session-projection'",
     '- id: deepseek-llm-api-extensions',
     "  name: '@deepseek-ai/dsh-deepseek-llm-api-extensions'",
+    ...options.exclusionFirst === true ? ["- name: '@test/upload-exclusion'"] : [],
     '- id: session-log-deepseek',
     "  name: '@deepseek-ai/dsh-session-log-deepseek'",
     ...options.enableSessionLog !== undefined
       ? ['  config:', `    enabled: ${String(options.enableSessionLog)}`]
       : [],
+    ...options.exclusionFirst === false ? ["- name: '@test/upload-exclusion'"] : [],
     '- id: plugin-package-inventory-deepseek',
     "  name: '@deepseek-ai/dsh-plugin-package-inventory-deepseek'",
     ...options.withDynamic
@@ -95,6 +112,7 @@ async function loadComposition(
   await ctx.plugin(Loader)
   ctx.loader.builtins.include = Include
   const modules = new Map<string, unknown>([
+    ['@test/upload-exclusion', uploadExclusion],
     ['@deepseek-ai/dsh-llm', LlmRuntime],
     ['@deepseek-ai/dsh-session', SessionStore],
     ['@deepseek-ai/dsh-session-projection', SessionProjectionRegistry],
@@ -133,6 +151,8 @@ async function loadComposition(
 describe('llm-deepseek real dynamic composition', () => {
   it('updates the model catalog when the stored API key is removed or added', async () => {
     vi.stubEnv('DEEPSEEK_API_KEY', '')
+    // The official endpoint's model listing is unavailable, so the route serves its built-in catalog offline.
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => Promise.resolve(new Response(null, { status: 404 })))
     const { ctx } = await loadComposition({ withDynamic: true, baseURL: 'https://api.deepseek.com/anthropic' })
     const credentials = ctx.get('credentials')!
     const models = await ctx.llm.listModels('deepseek-official')
@@ -150,6 +170,53 @@ describe('llm-deepseek real dynamic composition', () => {
     try {
       await expect(ctx.llm.listModels('deepseek-official')).rejects.toBe(failure)
     } finally { resolve.mockRestore() }
+  })
+
+  it('follows the official model listing and reloads it once the customized catalog is restored', async () => {
+    vi.stubEnv('DEEPSEEK_API_KEY', '')
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const keys: Array<string | null> = []
+    const messages = { api_capabilities: { anthropic_messages: {} } }
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+      const request = new Request(input, init)
+      if (request.url !== 'https://api.deepseek.com/models') return Promise.reject(new Error(`unexpected request to ${request.url}`))
+      keys.push(request.headers.get('x-api-key'))
+      return Promise.resolve(new Response(JSON.stringify({ data: [
+        { id: 'deepseek-flash', ...messages },
+        { id: 'deepseek-v5', ...messages, client_requirements: { 'deepseek-harness': { min_version: '0.0.1' } } },
+      ] })))
+    })
+    const { ctx } = await loadComposition({ withDynamic: true, baseURL: 'https://api.deepseek.com/anthropic' })
+    const ids = async () => (await ctx.llm.listModels('deepseek-official')).map(model => model.id)
+    expect(await ids()).toEqual(['deepseek-flash', 'deepseek-v5'])
+
+    // The Models page writes these path operations for an edited catalog and for Restore defaults.
+    await ctx.settings.mutate(NS, [{ op: 'set', path: ['models'], value: [{ id: 'custom' }] }])
+    expect(await ids()).toEqual(['custom'])
+    expect(keys).toEqual(['boot-key'])
+    await ctx.settings.mutate(NS, [{ op: 'unset', path: ['models'] }])
+    expect(await ids()).toEqual(['deepseek-flash', 'deepseek-v5'])
+    expect(keys).toEqual(['boot-key', 'boot-key'])
+  })
+
+  it('advertises listed badges through the composed route and drops them with a customized catalog', async () => {
+    vi.stubEnv('DEEPSEEK_API_KEY', '')
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const messages = { api_capabilities: { anthropic_messages: {} } }
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => Promise.resolve(new Response(JSON.stringify({ data: [
+      { id: 'deepseek-flash', ...messages, client_metadata: { 'deepseek-harness': { badge: { text: { en: 'New', zh: '新' }, tone: 'info' } } } },
+      { id: 'deepseek-v4-pro', ...messages, client_metadata: { 'deepseek-harness': { badge: { text: 'far too long a badge' } } } },
+    ] }))))
+    const { ctx } = await loadComposition({ withDynamic: true, baseURL: 'https://api.deepseek.com/anthropic' })
+    const badges = async () => (await ctx.llm.listModels('deepseek-official')).map(model => [model.id, model.badge])
+    expect(await badges()).toEqual([
+      ['deepseek-flash', { text: { en: 'New', zh: '新' }, tone: 'info' }],
+      ['deepseek-v4-pro', undefined],
+    ])
+    expect(warn).toHaveBeenCalledWith('[llm-deepseek-api-key]', expect.stringMatching(/^model "deepseek-v4-pro" shows no badge: /))
+    await ctx.settings.mutate(NS, [{ op: 'set', path: ['models'], value: [{ id: 'deepseek-flash' }] }])
+    expect(await badges()).toEqual([['deepseek-flash', undefined]])
   })
 
   it('keeps package inventory on when the Loader composition disables session upload', async () => {
@@ -198,6 +265,25 @@ describe('llm-deepseek real dynamic composition', () => {
       throughSeq: 0,
       events: [{ type: 'turn/start', seq: 0 }],
     })
+    expect(SessionLogDeepSeek.acceptedThrough(session)).toBe(0)
+  })
+
+  it.each([false, true])('applies a registered upload exclusion through HTTP with consumer first=%s', async (exclusionFirst) => {
+    vi.stubEnv('DEEPSEEK_API_KEY', 'entry-key')
+    const server = await mockServer([{ kind: 'sse', events: textEvents }, { kind: 'sse', events: textEvents }])
+    const { ctx } = await loadComposition({ withDynamic: false, baseURL: server.url, exclusionFirst })
+    const session = ctx.sessions.create(SessionId('excluded-composition'))
+    session.append('turn/start', { turn: 1 })
+
+    await assemble(ctx, { model: 'deepseek-v4-flash', messages: [], sessionId: session.id, purpose: 'test-upload-exclusion' })
+    expect(server.headers[0]?.['x-deepseek-harness-session-id']).toBe(session.id)
+    expect(server.requests[0]).not.toHaveProperty('dsh_session_log')
+    expect(server.requests[0]).toHaveProperty('dsh_plugin_packages')
+    expect(SessionLogDeepSeek.acceptedThrough(session)).toBe(-1)
+    expect(session.snapshotEvents()).toHaveLength(1)
+
+    await assemble(ctx, { model: 'deepseek-v4-flash', messages: [], sessionId: session.id })
+    expect(server.requests[1]).toHaveProperty('dsh_session_log')
     expect(SessionLogDeepSeek.acceptedThrough(session)).toBe(0)
   })
 

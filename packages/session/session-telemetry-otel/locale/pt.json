@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Upload do log da sessão de feedback",
+    "description": "De acordo com a política de autorização de feedback, os logs de sessão relevantes são carregados por meio do OpenTelemetry."
+  }
+}

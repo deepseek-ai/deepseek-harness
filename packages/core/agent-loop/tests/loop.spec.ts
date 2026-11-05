@@ -1,3 +1,4 @@
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import LlmRuntime, { createUserMessage, ToolCallId, LlmError, ReasoningEffortId, StreamChunk, expandAssistantStream } from '@deepseek-ai/dsh-llm'
@@ -5,7 +6,8 @@ import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId, TurnEndReason } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime, { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
+import ToolRuntime from '@deepseek-ai/dsh-tools'
+import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import AgentRegistry, { type Agent, type AssistantStreamFrame } from '@deepseek-ai/dsh-agent'
 
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
@@ -35,6 +37,7 @@ async function harness(adapter: MockAdapter, persona = '') {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt, { personaPrefix: persona })
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(AgentLoop, { agents: [] })
   ctx.llm.registerAdapter(['mock'], adapter)
@@ -693,7 +696,7 @@ describe('agent loop', () => {
     expect(contextEvents()).toHaveLength(1)
     expect(contextEvents()[0]?.data.content).toEqual([{
       type: 'text',
-      text: 'Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nMode: read-only.',
+      text: '<system-reminder>\nThe following information describes your current session:\n\nMode: read-only.\n</system-reminder>',
     }])
 
     send(agent, 'unchanged')
@@ -715,7 +718,7 @@ describe('agent loop', () => {
     expect(contextEvents()).toHaveLength(3)
     expect(contextEvents()[2]?.data.content).toEqual([{
       type: 'text',
-      text: 'Current runtime context: none. Earlier runtime-context snapshots no longer apply.',
+      text: '<system-reminder>\nCurrent runtime context: none. Earlier runtime-context snapshots no longer apply.\n</system-reminder>',
     }])
 
     send(agent, 'still clear')
@@ -812,7 +815,7 @@ describe('agent loop', () => {
       await agent.whenIdle()
       const users = adapter.requests[0]?.messages.filter(message => message.role === 'user') ?? []
       expect(users.map(message => message.source?.kind)).toEqual(['runtime-context', 'user'])
-      expect(users[0]?.content).toEqual([{ type: 'text', text: 'Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nafter' }])
+      expect(users[0]?.content).toEqual([{ type: 'text', text: '<system-reminder>\nThe following information describes your current session:\n\nafter\n</system-reminder>' }])
       expect(users[1]?.content).toEqual([{ type: 'text', text: 'accepted user' }])
       expect(agent.session.snapshotEvents().filter(event => event.type === 'user/message')).toHaveLength(2)
     } finally {
@@ -862,7 +865,7 @@ describe('agent loop', () => {
   })
 
   it('restores runtime context during a retry without admitting the user batch twice', async () => {
-    const adapter = new MockAdapter([textResponse('one'), () => { throw new LlmError('overflow', 'CONTEXT_LENGTH') }, textResponse('two')])
+    const adapter = new MockAdapter([textResponse('one'), () => { throw LlmError.fromFailure({ message: 'overflow', code: 'CONTEXT_LENGTH' }) }, textResponse('two')])
     const ctx = await harness(adapter)
     try {
       ctx.systemPrompt.context({ name: 'directory', order: 0, required: true, text: 'Current working directory: /workspace.' })
@@ -932,7 +935,7 @@ describe('agent loop', () => {
       message.role === 'user' && message.source?.kind === 'runtime-context')
     expect(clearing?.content).toEqual([{
       type: 'text',
-      text: 'Current runtime context: none. Earlier runtime-context snapshots no longer apply.',
+      text: '<system-reminder>\nCurrent runtime context: none. Earlier runtime-context snapshots no longer apply.\n</system-reminder>',
     }])
   })
 
@@ -978,7 +981,7 @@ describe('agent loop', () => {
     expect(runtimeContexts).toHaveLength(2)
     expect(runtimeContexts[1]?.data.content).toEqual([{
       type: 'text',
-      text: 'Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nMode: read-only.',
+      text: '<system-reminder>\nThe following information describes your current session. It replaces earlier versions of this context, including any retained in conversation summaries.\n\nMode: read-only.\n</system-reminder>',
     }])
   })
 
@@ -1905,6 +1908,7 @@ describe('agent loop', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(AgentLoop, {
       agents: [{ id: SessionId('config-agent'), provider: 'mock', model: 'mock', reasoningEffort: effort }],
@@ -1935,6 +1939,7 @@ describe('agent loop', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(AgentLoop, {
       agents: [{ id: SessionId('config-agent'), provider: 'mock', model: 'mock', cwd: '/work/project' }],

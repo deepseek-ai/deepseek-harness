@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "búsqueda de sesión",
+    "description": "Pregunte por trabajo anterior, como “¿Cómo arreglamos la fuga del pool la semana pasada?”, y el agente busca en sus sesiones anteriores del mismo directorio de trabajo para responder.",
+    "detail": "docs/DETAIL.md"
+  }
+}

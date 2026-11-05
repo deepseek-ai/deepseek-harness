@@ -33,7 +33,7 @@ const OUT = 'packages/extensions/cordis-client-runner/src/client/slot-catalog.ts
 const SOURCE_GLOBS = ['packages/*/*/src/**/*.ts', 'packages/*/*/src/**/*.tsx']
 
 /** Slot cardinalities the contract allows. */
-const KINDS = ['single', 'list', 'keyed', 'chain'] as const
+const KINDS = ['single', 'list', 'keyed', 'chain', 'hoc'] as const
 /** Slot data scopes the contract allows. */
 const SCOPES = ['root', 'session', 'session-maybe'] as const
 
@@ -48,9 +48,9 @@ const MAX_DECL_CHARS = 1200
  * share that hands down a subsystem instead of a share, and prose that grew
  * into a manual. Every report also lists one line per standard prop seat of its
  * scope, so the widest Session-scope slot (`tool.call.toolview`, with the
- * global and Session access seats) sets the current 122.
+ * global and Session access seats and one occupant line per keyed tool view) sets the current 127.
  */
-const MAX_ENTRY_LINES = 122
+const MAX_ENTRY_LINES = 127
 
 /** One register-call option as the catalog teaches it. */
 interface OptionDoc {
@@ -81,6 +81,11 @@ const REGISTER_OPTIONS: Readonly<Record<(typeof KINDS)[number], readonly OptionD
   ],
   chain: [
     { name: 'select', requirement: 'required', type: '(owner) => unknown | null', doc: 'Pure routing selector. Entries are tried in ascending order; the first non-null result wins and arrives as the component\'s `matched` prop. All-null falls through to the owner\'s fallback.' },
+  ],
+  hoc: [
+    { name: 'id', requirement: 'required', type: 'string', doc: 'Your layer key. A fresh id adds a layer; reusing a shipped id replaces that layer. Your component may omit `children`, which replaces everything inside the layer.' },
+    { name: 'key', requirement: 'optional', type: 'string', doc: 'Dispatch key this layer serves; omitted, it serves every dispatch. Within one id, an exact-key layer replaces the wildcard layer for that key.' },
+    { name: 'order', requirement: 'optional', type: 'number', doc: 'Nesting position, ascending (default 0); the lowest order is the outermost layer. Render the `children` prop at most once.' },
   ],
 }
 
@@ -301,9 +306,11 @@ function entryOf(
       ...occupant.id === undefined ? [] : [`id '${occupant.id}'`],
       ...occupant.entryKey === undefined ? [] : [`key '${occupant.entryKey}'`],
     ].join(' ')),
-    replaceRisk: cellOccupied && (declaration.kind === 'single' || declaration.kind === 'keyed')
-      ? 'shadows-shipped-ui'
-      : 'none',
+    replaceRisk: declaration.kind === 'hoc'
+      ? 'wraps-owner-content'
+      : cellOccupied && (declaration.kind === 'single' || declaration.kind === 'keyed')
+        ? 'shadows-shipped-ui'
+        : 'none',
     example: exampleOf(declaration),
     source: declaration.source,
   }
@@ -344,10 +351,13 @@ function ownerCompositionNames(type: ts.TypeNode): string[] {
   return []
 }
 
-/** How a keyed slot's key domain is constrained, '' for the other kinds. */
+/** How a keyed slot's key domain, or a hoc slot's layer dispatch keys, is constrained; '' for the other kinds. */
 function keyDomainOf(declaration: SlotDeclaration, occupants: readonly SlotRegistration[]): string {
-  if (declaration.kind !== 'keyed') return ''
   const taken = [...new Set(occupants.flatMap(occupant => occupant.entryKey === undefined ? [] : [occupant.entryKey]))].sort()
+  if (declaration.kind === 'hoc') {
+    return taken.length === 0 ? '' : `open: any entryKey the owner dispatches; a layer without key serves every dispatch, already taken: ${taken.join(', ')}`
+  }
+  if (declaration.kind !== 'keyed') return ''
   const shipped = taken.length === 0 ? 'none are taken yet' : `already taken: ${taken.join(', ')}`
   return declaration.keyProps === undefined
     ? `open: any string the owner dispatches (no compile-time key set), ${shipped}`
@@ -365,7 +375,9 @@ function exampleOf(declaration: SlotDeclaration): string {
     '  apply(ctx) {',
     `    ctx.slots.inject('${declaration.key}', () => ctx.slots.register(`,
     `      { ${options} },`,
-    "      () => React.createElement('div', null, 'hello'),",
+    declaration.kind === 'hoc'
+      ? "      ({ children }) => React.createElement('div', null, children),"
+      : "      () => React.createElement('div', null, 'hello'),",
     '    ))',
     '  },',
     '}',
@@ -393,6 +405,7 @@ const KIND_EXAMPLE: Readonly<Record<string, readonly string[]>> = {
   list: ["id: 'my-entry'", 'order: 100', "label: 'My entry'"],
   keyed: ["key: '<one key the owner dispatches>'"],
   chain: ['select: owner => null'],
+  hoc: ["id: 'my-layer'", 'order: 100'],
 }
 
 /** Drop the `@deepseek-ai/dsh-` prefix so rows stay readable. */
@@ -476,7 +489,7 @@ export function renderClientCatalog(entries: readonly SlotEntry[]): string {
     'export interface ClientSlotEntry {',
     '  /** SlotMap key passed as the register call\'s `name`. */',
     '  key: string',
-    '  /** Cardinality: `single`, `list`, `keyed`, or `chain`. */',
+    '  /** Cardinality: `single`, `list`, `keyed`, `chain`, or `hoc`. */',
     '  kind: string',
     '  /** Data scope: `root`, `session`, or `session-maybe`. */',
     '  scope: string',
@@ -502,7 +515,11 @@ export function renderClientCatalog(entries: readonly SlotEntry[]): string {
     '  declaredBy: string',
     '  /** Entries the shipped composition already registered here. */',
     '  occupants: readonly string[]',
-    '  /** `shadows-shipped-ui` when registering here replaces shipped UI; `none` when additive. */',
+    '  /**',
+    '   * `shadows-shipped-ui` when registering here replaces shipped UI; `wraps-owner-content` when your',
+    '   * component wraps the owner content and renders `children` at most once, omitting it to replace',
+    '   * that content; `none` when additive.',
+    '   */',
     '  replaceRisk: string',
     '  /** A minimal browser half that registers into this slot. */',
     '  example: string',

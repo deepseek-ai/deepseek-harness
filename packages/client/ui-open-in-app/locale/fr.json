@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Interface d'ouverture d'application externe",
+    "description": "Fournit une entrée « Ouvrir avec » dans la session et un aperçu du document."
+  }
+}

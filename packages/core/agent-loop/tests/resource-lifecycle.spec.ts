@@ -1,3 +1,4 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { setImmediate } from 'node:timers/promises'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -70,7 +71,9 @@ it.each([0, 1, 2])('retains Agent resources until all work exits with %i failed 
   expect(scopeDisposedBeforeWorkExit).toBe(false)
   expect(scopeDisposed).toBe(true)
   expect(abortHandled).toBe(1)
-  expect(projections.checkpoint(agent.session).inbox).toBeUndefined()
+  // The released inbox unit keeps this Session's last row; a Session created after the unload gets none.
+  expect(projections.checkpoint(agent.session)).toHaveProperty('inbox')
+  expect(projections.checkpoint(ctx.sessions.create())).not.toHaveProperty('inbox')
   expect(projections.checkpoint(agent.session).turnBoundary).toBeDefined()
   expect(ctx.agents.get(agent.id)).toBeUndefined()
   expect(ctx.sessions.get(agent.session.id)).toBeUndefined()
@@ -113,7 +116,7 @@ it.each(['loop', 'root'] as const)('unloads %s while a background child is stopp
     await release.promise
     return next()
   })
-  const started = await ctx.tools.execute({
+  const started = await executeToolFixture(ctx, {
     agent: parent, signal: new AbortController().signal,
     callId: ToolCallId('background-start'), name: 'subagent',
     arguments: { description: 'child', prompt: 'wait' },

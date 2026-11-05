@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Language server tools",
+    "description": "Query definitions, references, implementations, and hover information using one-based UTF-16 cursor positions and bounded results."
+  }
+}

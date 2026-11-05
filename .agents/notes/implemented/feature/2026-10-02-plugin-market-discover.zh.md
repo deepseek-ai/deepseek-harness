@@ -12,7 +12,7 @@ Status: implemented
 
 ## 决策
 
-该功能以实验性的可选[自定义插件市场组合包](../../../../packages/experimental/plugin-market-bundle/README.zh.md)发布，默认关闭，并挂载下面两行；关闭时，服务、「发现」标签页和 `plugin_market` 工具都不存在，插件页也不显示标签页。由独立的 Host 服务 [`pluginMarket`](../../../../packages/boot/plugin-market/README.zh.md) 读取索引。它依赖 `pluginManager` 进行只读调用，从不写入 profile。它的 `indexes` 配置字段是 volatile 字段：Settings 只写入 volatile 字段，Loader 把只涉及 volatile 字段的变更提交到运行中的引用，不重新挂载任何插件。其他字段（`fetchTimeoutMs`、`maxBytes`、`cacheTtlMs`）是普通配置。
+该功能以实验性的可选[自定义插件索引组合包](../../../../packages/experimental/plugin-market-bundle/README.zh.md)发布，默认关闭，并挂载下面两行；关闭时，服务、「发现」标签页和 `plugin_market` 工具都不存在，插件页也不显示标签页。由独立的 Host 服务 [`pluginMarket`](../../../../packages/boot/plugin-market/README.zh.md) 读取索引。它依赖 `pluginManager` 进行只读调用，从不写入 profile。它的 `indexes` 配置字段是 volatile 字段：Settings 只写入 volatile 字段，Loader 把只涉及 volatile 字段的变更提交到运行中的引用，不重新挂载任何插件。其他字段（`fetchTimeoutMs`、`maxBytes`、`cacheTtlMs`）是普通配置。
 
 索引 URL 使用 `http:` 或 `https:`，不含凭据或片段。排除 `file:`，因为相对图标引用会解析为浏览器无法加载的 URL。`search` 和 `entry` 只接受已配置的 URL，因此 Host 从不获取客户端提供的地址。Host 通过进程代理获取，拒绝重定向，限制响应体大小，并用共享的格式包校验；无效索引只影响它自己的 URL。
 

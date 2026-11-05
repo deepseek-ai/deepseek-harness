@@ -1,13 +1,15 @@
 /** Main-owned update confirmations; closing or replacing a dialog never grants installation permission. */
 import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent, type MessageBoxOptions, type MessageBoxReturnValue } from 'electron'
 import type { DesktopLocale } from './locale.ts'
-import type { DesktopUpdateOverlays } from './update-overlay.ts'
+import type { DesktopUpdateOverlays, DesktopUpdateOverlay } from './update-overlay.ts'
 
 /** Channels available only to the isolated update-dialog document. */
 export const UPDATE_DIALOG_IPC = { status: 'dsh-update-dialog:status', changed: 'dsh-update-dialog:changed', respond: 'dsh-update-dialog:respond' } as const
 
 /** Text and choices supplied by the main process, never by product documents. */
 export interface UpdateDialogView {
+  /** Button running a main-owned action; responses are disabled until it settles. */
+  readonly busyButton?: number
   /** Identifies the displayed choices; a response from an older prompt is rejected. */
   readonly revision: number
   readonly locale: string
@@ -24,6 +26,10 @@ export interface UpdateDialogView {
 /** Electron message options with separately expandable, main-owned diagnostics. */
 export interface UpdateDialogOptions extends MessageBoxOptions {
   readonly technicalDetails?: string
+  /** Synchronous auxiliary action that leaves the current prompt and choices open. */
+  readonly keepOpenAction?: { index: number; run: () => void }
+  /** Main-owned action kept in this dialog; false keeps the prompt open for correction. */
+  readonly action?: { index: number; run: () => Promise<boolean> }
 }
 
 /** The document can select only a displayed response index. */
@@ -40,13 +46,21 @@ const page = 'dsh-app://shell/update-dialog.html'
 export class DesktopUpdateDialog {
   private disposed = false
   private revision = 0
-  private window: BrowserWindow | undefined
+  private view: DesktopUpdateOverlay | undefined
   private parent: BrowserWindow | undefined
   private closing: ReturnType<typeof setTimeout> | undefined
-  private active: { window: BrowserWindow; view: UpdateDialogView; finish: (index: number, retain?: boolean) => void } | undefined
+  private active: {
+    view: UpdateDialogView
+    finish: (index: number, retain?: boolean) => void
+    respond: (index: number) => Promise<void>
+  } | undefined
 
   /** Focus the current explanation or confirmation without replacing it or granting permission. */
-  focus(): void { this.active?.window.focus() }
+  focus(): void {
+    if (this.active === undefined || this.parent?.isDestroyed() !== false) return
+    this.parent.focus()
+    this.view?.webContents.focus()
+  }
 
   /** Whether a shell prompt is awaiting a response. */
   get isOpen(): boolean { return this.active !== undefined }
@@ -54,7 +68,7 @@ export class DesktopUpdateDialog {
   /**
    * @param preload - Bundled isolated preload.
    * @param locale - Shell-owned copy or a reader of the current UI language.
-   * @param overlays - Application-owned overlay creation and input tracking.
+   * @param overlays - Application-owned view creation and input tracking.
    */
   constructor(private readonly preload: string, private readonly locale: DesktopLocale | (() => DesktopLocale),
     private readonly overlays: Pick<DesktopUpdateOverlays, 'create'>) {
@@ -67,7 +81,8 @@ export class DesktopUpdateDialog {
         || (index !== active.view.cancelId && (index < 0 || index >= active.view.buttons.length))) {
         throw new Error('desktop update: invalid dialog response')
       }
-      active.finish(index)
+      if (active.view.busyButton !== undefined) return
+      return active.respond(index)
     })
   }
 
@@ -87,11 +102,11 @@ export class DesktopUpdateDialog {
     this.active?.finish(this.active.view.cancelId, true)
     clearTimeout(this.closing)
     this.closing = undefined
-    const existing = this.window
-    const window = existing ?? this.overlays.create(parent, this.preload, options.title ?? locale.messages.updateTitle, false)
-    this.window = window
+    const existing = this.view
+    const surface = existing ?? this.overlays.create(parent, this.preload)
+    this.view = surface
     this.parent = parent
-    const view: UpdateDialogView = { revision: ++this.revision, locale: locale.id, title: options.title ?? '', message: options.message,
+    let view: UpdateDialogView = { revision: ++this.revision, locale: locale.id, title: options.title ?? '', message: options.message,
       detail: options.detail ?? '', buttons, cancelId, closeLabel: locale.messages.updateClose,
       technicalDetails: options.technicalDetails ?? '', technicalDetailsLabel: locale.messages.updateTechnicalDetails }
     return new Promise((resolve) => {
@@ -100,20 +115,51 @@ export class DesktopUpdateDialog {
         if (this.active?.view !== view) return
         this.active = undefined
         options.signal?.removeEventListener('abort', abort)
-        if (!retain && !window.isDestroyed()) {
-          window.webContents.send(UPDATE_DIALOG_IPC.changed, null)
+        if (!retain && !surface.webContents.isDestroyed()) {
+          surface.webContents.send(UPDATE_DIALOG_IPC.changed, null)
           this.closing = setTimeout(() => { this.close() }, 150)
         }
         resolve({ response, checkboxChecked: false })
       }
-      this.active = { window, view, finish }
+      const respond = async (index: number): Promise<void> => {
+        const publish = (busy: boolean): void => {
+          const { busyButton: _busy, ...rest } = view
+          view = { ...rest, revision: ++this.revision, ...(busy ? { busyButton: index } : {}) }
+          if (this.active !== undefined) this.active.view = view
+          surface.webContents.send(UPDATE_DIALOG_IPC.changed, view)
+        }
+        if (options.keepOpenAction?.index === index) {
+          options.keepOpenAction.run()
+          publish(false)
+          return
+        }
+        if (options.action?.index !== index) { finish(index); return }
+        publish(true)
+        // Keep a fast local read perceptible without delaying the operation itself.
+        const held = new Promise<void>((resolveHold) => { setTimeout(resolveHold, 500) })
+        try {
+          const close = await options.action.run()
+          await held
+          if (this.active?.view !== view) return
+          if (close) finish(index)
+          else publish(false)
+        } catch (error) {
+          await held
+          if (this.active?.view === view) publish(false)
+          throw error
+        }
+      }
+      this.active = { view, finish, respond }
       options.signal?.addEventListener('abort', abort, { once: true })
-      if (existing !== undefined) { window.webContents.send(UPDATE_DIALOG_IPC.changed, view); return }
-      const failed = (): void => { if (this.window === window) { this.cancel(); this.close() } }
-      window.once('closed', failed)
-      window.webContents.on('will-navigate', (event, url) => { if (url !== page) event.preventDefault() })
-      window.webContents.once('render-process-gone', failed)
-      void window.loadURL(page).catch(failed)
+      if (existing !== undefined) { surface.webContents.send(UPDATE_DIALOG_IPC.changed, view); return }
+      const failed = (): void => { if (this.view === surface) { this.cancel(); this.close() } }
+      surface.webContents.once('destroyed', failed)
+      surface.webContents.once('render-process-gone', failed)
+      surface.webContents.once('preload-error', failed)
+      surface.webContents.on('will-navigate', (event, url) => { if (url !== page) event.preventDefault() })
+      surface.webContents.on('will-redirect', (event) => { event.preventDefault() })
+      surface.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+      void surface.loadURL(page).catch(failed)
     })
   }
 
@@ -133,20 +179,16 @@ export class DesktopUpdateDialog {
   private close(): void {
     clearTimeout(this.closing)
     this.closing = undefined
-    const window = this.window
-    this.window = undefined
+    const surface = this.view
+    this.view = undefined
     this.parent = undefined
-    if (window !== undefined && !window.isDestroyed()) {
-      // Release Windows modality before destruction so another application cannot become active.
-      if (process.platform === 'win32' && window.isVisible()) window.hide()
-      window.destroy()
-    }
+    surface?.destroy()
   }
 
   private owned(event: IpcMainInvokeEvent): void {
-    const window = this.window
-    if (window === undefined || event.sender !== window.webContents
-      || event.senderFrame !== window.webContents.mainFrame || event.senderFrame.url !== page) {
+    const surface = this.view
+    if (surface === undefined || event.sender !== surface.webContents
+      || event.senderFrame !== surface.webContents.mainFrame || event.senderFrame.url !== page) {
       throw new Error('desktop update: rejected unowned dialog renderer')
     }
   }

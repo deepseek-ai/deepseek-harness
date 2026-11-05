@@ -18,6 +18,7 @@ const provider = {
     installCua(ctx, config, {
       helperPath: resolve('unused-cua-helper'),
       createChannel() { throw new Error('Scope tests must not start a native helper') },
+      permissionParameters: (_method, permission, locale) => ({ permission, locale }),
       description: 'Fixture computer interaction', guidance: 'Fixture CUA guidance',
     })
   },
@@ -103,4 +104,20 @@ it('accepts a matching preset registered after the CUA provider', async () => {
   } })
   const handle = await create('late-preset', 'ptc')
   expect(ctx.tools.get('cua', handle.agent)).toBeDefined()
+})
+
+it.each([
+  { programFormat: 'script', retainsState: true },
+  { programFormat: 'script', retainsState: false },
+  { programFormat: 'repl', retainsState: false },
+  { programFormat: 'function-body', retainsState: true },
+] as const)('selects CUA initialization from retention for $programFormat/$retainsState', async (runtime) => {
+  const { ctx, create } = await setup()
+  ctx.provide('ptcRuntime', runtime)
+  await ctx.plugin(provider, {})
+  const owner = await create('cua-runtime-guidance', 'ptc')
+  const prompt = (await ctx.systemPrompt.assemble({ scope: owner.agent })).sections.find(section => section.name === 'computer-use:dsh-cua')?.text
+  expect(prompt).toBeDefined()
+  expect(prompt?.includes('Persistent PTC initialization:')).toBe(runtime.retainsState)
+  expect(prompt?.includes('var cua = connectCua(() => tools.cua, text => console.log(text));')).toBe(runtime.retainsState)
 })

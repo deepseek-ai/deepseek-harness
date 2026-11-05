@@ -6,7 +6,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import type { ImageAttachmentLimits } from '@deepseek-ai/dsh-attachment'
 import type { Session, SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
-import type { ProjectionSnapshot } from '@deepseek-ai/dsh-session-projection'
+import type { ProjectionHandle, ProjectionSnapshot } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-session-projection-cache'
 import { SessionQueryError, type SessionRecord, type SessionSearchCursor } from '@deepseek-ai/dsh-session-query'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
@@ -76,6 +76,8 @@ export function truncateUnicodeCodePoints(value: string, maximum: number): strin
 
 /** Owns list projection registration, bounded cold summaries, and authorized search. */
 export class ApiSessionList {
+  private listMetadata!: ProjectionHandle<SessionListMetadata>
+
   /**
    * @param ctx - Host context carrying Session, query, persistence, and projection services.
    * @param workSliceMs - Resolved positive integral list-work budget in milliseconds.
@@ -87,7 +89,7 @@ export class ApiSessionList {
    * @returns when all required registrations are ready.
    */
   async initialize(): Promise<void> {
-    await this.ctx.sessionProjections.register<'sessionListMetadata', SessionListMetadata>({
+    this.listMetadata = await this.ctx.sessionProjections.register<'sessionListMetadata', SessionListMetadata>({
       key: 'sessionListMetadata',
       stateSchema: sessionListMetadataSchema,
       init: () => ({ blank: true, lastPromptAt: null }),
@@ -111,19 +113,25 @@ export class ApiSessionList {
 
   /**
    * Build one current attached-Session summary.
+   * Blankness and recency come from the `sessionListMetadata` handle; projection
+   * hints carry every summary key computed through `snapshot`. The first call
+   * for a Session computes these projections over its whole in-memory log, and
+   * later calls advance them incrementally. The handle read and the hint with
+   * the same key come from one cell; the handle read does not depend on any
+   * other unit's view.
    * @param session - attached Session to summarize.
    * @returns current list metadata and available projections.
    */
   summaryFor(session: Session): SessionSummary {
+    const metadata = this.listMetadata.stateOf(session)
     const projections = this.projectionsFor(session.header, session)
-    const metadata = projections?.values.sessionListMetadata
     return {
       sessionId: session.id,
       updatedAt: updatedAt(session.header, metadata),
       agentAvailable: this.ctx.agents.get(session.id)?.session === session,
       formatStatus: 'current',
       running: this.ctx.agents.get(session.id)?.status === 'running',
-      blank: metadata?.blank ?? session.seq === 0,
+      blank: metadata.blank,
       ...listFields(session.header),
       ...(projections === undefined ? {} : { projections }),
     }
@@ -304,9 +312,9 @@ export class ApiSessionList {
       // itself summary-excluded.
       const keys = this.ctx.sessionProjections.summaryKeys()
       if (session !== undefined) {
-        // The live registry computed the block for this Session: its watermark
+        // The live registry computes the block for this Session: its watermark
         // shares the sequence space of the Session's baselines and frames.
-        return hintsOf('sequenced', this.ctx.sessionProjections.cachedSnapshot(session, keys))
+        return hintsOf('sequenced', this.ctx.sessionProjections.snapshot(session, keys))
       }
       // A cold row reads the persisted cache by header alone; the cache serves
       // seeded and unseeded lifecycles alike because a listing never seeds a
@@ -334,8 +342,8 @@ function hintsOf(
   block: ProjectionSnapshot | undefined,
 ): SessionProjectionHints | undefined {
   if (block === undefined || Object.keys(block.values).length === 0) return undefined
-  // Listing hints contain every summary wire value the source currently holds
-  // but remain partial: missing cells and cache rows are never materialized here.
+  // Listing hints contain every summary wire value the source holds; cached
+  // hints remain partial because missing cache rows are never folded here.
   return { kind, asOfSeq: block.asOfSeq, values: block.values }
 }
 

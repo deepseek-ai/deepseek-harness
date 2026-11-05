@@ -1,10 +1,12 @@
 /**
- * Strict Schedule decoding, replay, time validation, and framing.
+ * Host task decoding, timing validation, occurrence selection, and reminder framing.
  * @module @deepseek-ai/dsh-schedule
  */
 
 import { Temporal } from '@js-temporal/polyfill'
 import {
+  Cron,
+  RRule,
   MAX_FOUR_DIGIT_YEAR_MS,
   MIN_FOUR_DIGIT_YEAR_MS,
   canonicalizeTimeZone as canonicalizeSharedTimeZone,
@@ -16,10 +18,8 @@ import {
   resolveLocalInstant,
 } from '@deepseek-ai/dsh-util-time'
 import type {
-  InstantRejection, LocalCalendarRejection, LocalCalendarTime, TimeZoneRejection,
+  InstantRejection, LocalCalendarRejection, LocalCalendarTime, TimeZoneRejection, RecurrenceResult,
 } from '@deepseek-ai/dsh-util-time'
-import { SessionLogOffset } from '@deepseek-ai/dsh-session'
-import type { SessionEvent, SessionLogOffset as SessionLogOffsetType } from '@deepseek-ai/dsh-session'
 import type {
   AfterScheduleRecord,
   AtInput,
@@ -31,38 +31,18 @@ import type {
   DailyScheduleRecord,
   WeeklyInput,
   WeeklyScheduleRecord,
-  LegacyAfterScheduleRecord,
-  LegacyAtScheduleRecord,
-  LegacyEveryScheduleRecord,
-  LegacyScheduleRecord,
   RecurringScheduleRecord,
   LocalAtInput,
-  OneShotScheduleRecord,
-  ScheduleChange,
   ScheduleId as ScheduleIdType,
-  ScheduleRecord,
-  ScheduleView,
+  ScheduleInputErrorCode,
 } from './types.ts'
+import type { ScheduleRecord, RRuleScheduleRecord } from './types.ts'
 
-/** Durable Schedule protocol version implemented by this package. */
-export const SCHEDULE_CHANGE_VERSION = 1 as const
-
-/** Fixed v1 lower bound for a fixed-rate reminder. */
+/** Minimum supported fixed-rate interval. */
 export const MIN_EVERY_INTERVAL_SECONDS = 60
 
-/** Fixed v1 upper bound for a stored task title. */
+/** Maximum stored task title length. */
 export const MAX_TITLE_LENGTH = 120
-
-/**
- * Longest forward or backward walk of the cron date search, in years.
- *
- * The proleptic Gregorian leap-year and weekday alignment repeats every 400
- * years, so a rule that matches any local date has a match within this window;
- * walking further can only reach a rule that never matches. Bounding the walk
- * keeps a valid but unsatisfiable rule's creation and decision cost fixed
- * instead of enumerating candidate dates toward the four-digit-year ceiling.
- */
-export const CRON_SEARCH_HORIZON_YEARS = 400
 
 const LOCAL_CLOCK_TIME = /^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,3})?$/
 
@@ -84,15 +64,7 @@ export class ScheduleLogError extends Error {
 /** Error from a model-supplied Schedule rule or target Session that cannot become a record. */
 export class ScheduleInputError extends Error {
   /** Stable public Schedule input code. */
-  readonly code:
-    | 'invalid_prompt'
-    | 'invalid_selector'
-    | 'invalid_rule'
-    | 'invalid_time_zone'
-    | 'not_future'
-    | 'time_out_of_range'
-    | 'frequency_too_high'
-    | 'subagent_session'
+  readonly code: ScheduleInputErrorCode
 
   /**
    * Construct a stable input failure.
@@ -101,15 +73,7 @@ export class ScheduleInputError extends Error {
    * @param options - Optional contained implementation cause.
    */
   constructor(
-    code:
-      | 'invalid_prompt'
-      | 'invalid_selector'
-      | 'invalid_rule'
-      | 'invalid_time_zone'
-      | 'not_future'
-      | 'time_out_of_range'
-      | 'frequency_too_high'
-      | 'subagent_session',
+    code: ScheduleInputErrorCode,
     message: string,
     options?: ErrorOptions,
   ) {
@@ -117,14 +81,6 @@ export class ScheduleInputError extends Error {
     this.name = 'ScheduleInputError'
     this.code = code
   }
-}
-
-/** Pure replay result, retaining active create order and every used id. */
-export interface FoldedSchedules {
-  /** Active records in their original create order. */
-  readonly active: readonly LegacyScheduleRecord[]
-  /** Every id ever created in this session-local suffix. */
-  readonly seenIds: readonly ScheduleIdType[]
 }
 
 /** One latest-only recurring decision derived without enumerating a backlog. */
@@ -136,33 +92,32 @@ export interface RecurringOccurrence {
 }
 
 /**
- * Brand a raw session-local id without changing its runtime value.
- * @param value - Raw session-local id.
+ * Brand a raw task id without changing its runtime value.
+ * @param value - Raw task id.
  * @returns The same string with the Schedule brand.
  */
 export function ScheduleId(value: string): ScheduleIdType {
   return value as ScheduleIdType
 }
 
-/** Whether an unknown value is a non-array object. */
-function isRecord(value: unknown): value is Record<string, unknown> {
+/**
+ * Narrow an unknown value to a non-array object.
+ * @param value - Value to inspect.
+ * @returns Whether the value is a non-null, non-array object.
+ */
+export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-/** Require exactly the named durable object keys. */
-function hasExactKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
+/**
+ * Require exactly the named durable object keys.
+ * @param value - Object to inspect.
+ * @param expected - Complete allowed key set.
+ * @returns Whether every expected key is present and no other key is present.
+ */
+export function hasExactKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
   const allowed = new Set(expected)
   return expected.every(key => key in value) && Object.keys(value).every(key => allowed.has(key))
-}
-
-/** Require the named durable keys while admitting further optional members. */
-function hasExactKeysWithOptional(
-  value: Record<string, unknown>,
-  required: readonly string[],
-  optional: readonly string[],
-): boolean {
-  const allowed = new Set([...required, ...optional])
-  return required.every(key => key in value) && Object.keys(value).every(key => allowed.has(key))
 }
 
 /** Stable diagnostic for a title that is missing or empty after trimming. */
@@ -226,28 +181,11 @@ function decodeRecordTitle(value: Record<string, unknown>, expected: readonly st
 }
 
 /**
- * Decode the stored title of one historical `schedule/change` create record.
- *
- * A version-1 event written before names existed has no `title` member, so the
- * key set is required without it and the absent member decodes as undefined. A
- * present title stays subject to the canonical stored form.
- * @param value - Untrusted durable record already known to be an object.
- * @param expected - Exact keys the record may carry; `title` is optional within them.
- * @param message - Diagnostic naming the record's keys.
- * @returns The stored title, or undefined when the historical record predates it.
+ * Validate one stable task id at the durable boundary.
+ * @param value - Untrusted durable id field.
+ * @returns The branded id; an invalid id throws ScheduleLogError.
  */
-function decodeHistoricalRecordTitle(
-  value: Record<string, unknown>,
-  expected: readonly string[],
-  message: string,
-): string | undefined {
-  const keys = expected.filter(key => key !== 'title')
-  if (!hasExactKeysWithOptional(value, keys, ['title'])) throw new ScheduleLogError(message)
-  return value['title'] === undefined ? undefined : decodeStoredTitle(value['title'])
-}
-
-/** Validate one stable session-local id at the durable boundary. */
-function decodeId(value: unknown): ScheduleIdType {
+export function decodeId(value: unknown): ScheduleIdType {
   if (typeof value !== 'string' || value.length === 0 || value.trim() !== value) {
     throw new ScheduleLogError('schedule id must be a non-empty string without surrounding whitespace')
   }
@@ -257,8 +195,12 @@ function decodeId(value: unknown): ScheduleIdType {
 /** Stable Schedule diagnostic for a `scheduledAt` outside the canonical profile. */
 const NON_CANONICAL_INSTANT_MESSAGE = 'scheduledAt must be a canonical four-digit-year RFC 3339 UTC instant'
 
-/** Validate one canonical four-digit-year UTC instant. */
-function decodeInstant(value: unknown): string {
+/**
+ * Validate one canonical four-digit-year UTC instant at the durable boundary.
+ * @param value - Untrusted durable instant field.
+ * @returns The canonical instant; an invalid instant throws ScheduleLogError.
+ */
+export function decodeInstant(value: unknown): string {
   if (typeof value !== 'string') {
     throw new ScheduleLogError(NON_CANONICAL_INSTANT_MESSAGE)
   }
@@ -359,8 +301,13 @@ function resolveLocalAt(parts: LocalCalendarTime, timeZone: string): number {
   return target
 }
 
-/** Require a safe, representable, strictly future UTC target. */
-function futureInstant(epoch: number, now: number): string {
+/**
+ * Require a safe, representable, strictly future UTC target.
+ * @param epoch - Candidate target in epoch milliseconds.
+ * @param now - Exclusive lower bound in epoch milliseconds.
+ * @returns The canonical UTC instant; an out-of-range or past target throws ScheduleInputError.
+ */
+export function futureInstant(epoch: number, now: number): string {
   const instant = formatFourDigitYearInstant(epoch)
   if (!Number.isSafeInteger(now) || instant === undefined) {
     throw new ScheduleInputError(
@@ -397,11 +344,9 @@ function parseAtOffsetInstant(value: string): number {
   }
 }
 
-/** Decode the exact v1 after record shape. */
-function decodeAfterRecord(value: unknown): LegacyAfterScheduleRecord {
-  /* v8 ignore next -- decodeLegacyScheduleRecord rejects a non-object before it dispatches here. */
-  if (!isRecord(value)) throw new ScheduleLogError('after schedule must be an object')
-  const title = decodeHistoricalRecordTitle(
+/** Decode a delayed one-shot Host record. */
+function decodeAfterRecord(value: Record<string, unknown>): AfterScheduleRecord {
+  const title = decodeRecordTitle(
     value,
     ['id', 'kind', 'title', 'prompt', 'afterSeconds', 'scheduledAt'],
     'after schedule must contain exactly id, kind, title, prompt, afterSeconds, and scheduledAt',
@@ -417,18 +362,16 @@ function decodeAfterRecord(value: unknown): LegacyAfterScheduleRecord {
   return Object.freeze({
     id: decodeId(value['id']),
     kind: 'after',
-    ...(title === undefined ? {} : { title }),
+    title,
     prompt,
     afterSeconds: afterSeconds as number,
     scheduledAt: decodeInstant(value['scheduledAt']),
   })
 }
 
-/** Decode the exact v1 absolute one-shot record shape. */
-function decodeAtRecord(value: unknown): LegacyAtScheduleRecord {
-  /* v8 ignore next -- decodeLegacyScheduleRecord rejects a non-object before it dispatches here. */
-  if (!isRecord(value)) throw new ScheduleLogError('at schedule must be an object')
-  const title = decodeHistoricalRecordTitle(
+/** Decode an absolute one-shot Host record. */
+function decodeAtRecord(value: Record<string, unknown>): AtScheduleRecord {
+  const title = decodeRecordTitle(
     value,
     ['id', 'kind', 'title', 'prompt', 'scheduledAt'],
     'at schedule must contain exactly id, kind, title, prompt, and scheduledAt',
@@ -440,17 +383,15 @@ function decodeAtRecord(value: unknown): LegacyAtScheduleRecord {
   return Object.freeze({
     id: decodeId(value['id']),
     kind: 'at',
-    ...(title === undefined ? {} : { title }),
+    title,
     prompt,
     scheduledAt: decodeInstant(value['scheduledAt']),
   })
 }
 
-/** Decode the exact v1 fixed-rate record shape. */
-function decodeEveryRecord(value: unknown): LegacyEveryScheduleRecord {
-  /* v8 ignore next -- decodeLegacyScheduleRecord rejects a non-object before it dispatches here. */
-  if (!isRecord(value)) throw new ScheduleLogError('every schedule must be an object')
-  const title = decodeHistoricalRecordTitle(
+/** Decode a fixed-rate Host record. */
+function decodeEveryRecord(value: Record<string, unknown>): EveryScheduleRecord {
+  const title = decodeRecordTitle(
     value,
     ['id', 'kind', 'title', 'prompt', 'everySeconds', 'scheduledAt'],
     'every schedule must contain exactly id, kind, title, prompt, everySeconds, and scheduledAt',
@@ -469,7 +410,7 @@ function decodeEveryRecord(value: unknown): LegacyEveryScheduleRecord {
   return Object.freeze({
     id: decodeId(value['id']),
     kind: 'every',
-    ...(title === undefined ? {} : { title }),
+    title,
     prompt,
     everySeconds: everySeconds as number,
     scheduledAt: decodeInstant(value['scheduledAt']),
@@ -508,8 +449,6 @@ export function weeklyTime(value: string): Temporal.PlainTime {
 
 /** Fail already-typed durable values without wrapping the stored-data diagnostic. */
 function rethrowLogError(error: unknown): never {
-  /* v8 ignore next -- every wrapped call raises ScheduleInputError, so this pass-through never fires. */
-  if (error instanceof ScheduleLogError) throw error
   throw new ScheduleLogError(String(error))
 }
 
@@ -644,7 +583,7 @@ function decodeCronRecord(value: Record<string, unknown>): CronScheduleRecord {
   }
   let canonical: string
   try {
-    canonical = parseCronExpression(expression).expression
+    canonical = canonicalizeCronExpression(expression)
   } catch (error: unknown) {
     rethrowLogError(error)
   }
@@ -656,90 +595,21 @@ function decodeCronRecord(value: Record<string, unknown>): CronScheduleRecord {
 }
 
 /**
- * Decode a current Host task record, preserving its committed target and stored zone spelling.
- *
- * Every variant of a stored Host task carries its title, so the historical
- * one-shot variants are re-checked for that member after their shape decodes.
+ * Decode one of the seven current Host timing records without recomputing its committed occurrence.
  * @param value - Untrusted durable JSON record.
- * @returns Detached frozen record; malformed fields throw ScheduleLogError.
+ * @returns Detached frozen record with its required title and authoritative timing fields.
  */
 export function decodeScheduleRecord(value: unknown): ScheduleRecord {
-  if (isRecord(value) && value['kind'] === 'daily') return decodeDailyRecord(value)
-  if (isRecord(value) && value['kind'] === 'weekly') return decodeWeeklyRecord(value)
-  if (isRecord(value) && value['kind'] === 'cron') return decodeCronRecord(value)
-  const record = decodeLegacyScheduleRecord(value)
-  if (record.title === undefined) throw new ScheduleLogError(REQUIRED_TITLE_MESSAGE)
-  return record as ScheduleRecord
-}
-
-/**
- * Decode only the variants admitted by historical version-1 Session events.
- *
- * A record written before titles existed decodes without that member, so the
- * fold keeps reading a log that the current creation path could not write.
- * @param value - Untrusted durable JSON record from a Session event.
- * @returns Detached frozen record, without a title when the event omitted it.
- */
-function decodeLegacyScheduleRecord(value: unknown): LegacyScheduleRecord {
   if (!isRecord(value)) throw new ScheduleLogError('schedule record must be an object')
   switch (value['kind']) {
     case 'after': return decodeAfterRecord(value)
     case 'at': return decodeAtRecord(value)
     case 'every': return decodeEveryRecord(value)
-    default: throw new ScheduleLogError('v1 schedule kind must be "after", "at", or "every"')
-  }
-}
-
-/**
- * Decode one strict version-1 `schedule/change` payload.
- * @param value - Untrusted durable JSON value.
- * @returns Detached, frozen Schedule change.
- */
-export function decodeScheduleChange(value: unknown): ScheduleChange {
-  if (!isRecord(value)) throw new ScheduleLogError('schedule/change payload must be an object')
-  if (value['version'] !== SCHEDULE_CHANGE_VERSION) {
-    throw new ScheduleLogError('schedule/change version must be 1')
-  }
-  switch (value['operation']) {
-    case 'create':
-      if (!hasExactKeys(value, ['version', 'operation', 'schedule'])) {
-        throw new ScheduleLogError('schedule create must contain exactly version, operation, and schedule')
-      }
-      return Object.freeze({
-        version: SCHEDULE_CHANGE_VERSION,
-        operation: 'create',
-        schedule: decodeLegacyScheduleRecord(value['schedule']),
-      })
-    case 'delete': {
-      if (!hasExactKeys(value, ['version', 'operation', 'id'])) {
-        throw new ScheduleLogError('schedule delete must contain exactly version, operation, and id')
-      }
-      return Object.freeze({
-        version: SCHEDULE_CHANGE_VERSION,
-        operation: 'delete',
-        id: decodeId(value['id']),
-      })
-    }
-    case 'dispatch': {
-      if (hasExactKeys(value, ['version', 'operation', 'id'])) {
-        return Object.freeze({
-          version: SCHEDULE_CHANGE_VERSION,
-          operation: 'dispatch',
-          id: decodeId(value['id']),
-        })
-      }
-      if (hasExactKeys(value, ['version', 'operation', 'id', 'acceptedAt'])) {
-        return Object.freeze({
-          version: SCHEDULE_CHANGE_VERSION,
-          operation: 'dispatch',
-          id: decodeId(value['id']),
-          acceptedAt: decodeInstant(value['acceptedAt']),
-        })
-      }
-      throw new ScheduleLogError('schedule dispatch must contain id and optional acceptedAt only')
-    }
-    default:
-      throw new ScheduleLogError('schedule/change operation must be create, delete, or dispatch')
+    case 'daily': return decodeDailyRecord(value)
+    case 'weekly': return decodeWeeklyRecord(value)
+    case 'cron': return decodeCronRecord(value)
+    case 'rrule': return decodeRRuleScheduleRecord(value)
+    default: throw new ScheduleLogError('schedule kind must be "after", "at", "every", "daily", "weekly", "cron", or "rrule"')
   }
 }
 
@@ -843,8 +713,13 @@ function latestDueOccurrence(
   }
 }
 
-/** Resolve a wall-clock rule only when its decision is at a representable four-digit-year instant. */
-function acceptedDecision(selector: string, acceptedAt: number): number {
+/**
+ * Resolve a wall-clock rule only when its decision is at a representable four-digit-year instant.
+ * @param selector - Rule kind named in the failure message.
+ * @param acceptedAt - Explicit wall-clock decision time in epoch milliseconds.
+ * @returns The validated decision time.
+ */
+export function acceptedDecision(selector: string, acceptedAt: number): number {
   if (!isFourDigitYearInstant(acceptedAt)) {
     throw new ScheduleLogError(`${selector} acceptedAt must be a representable four-digit-year instant`)
   }
@@ -916,161 +791,15 @@ export function resolveWeeklyOccurrence(record: WeeklyScheduleRecord, acceptedAt
 }
 
 /**
- * Build the local-date predicate of one parsed cron rule under Vixie day-of-month/day-of-week semantics.
- *
- * The star flag selects the branch only; it never excuses a field's matched values.
- * When either field text starts with `*`, a local date must satisfy BOTH fields, so a
- * stepped star such as `*` followed by `/2` still restricts the dates it matches. A bare
- * `*` matches every value, which makes that field's match always true and degrades the
- * AND to the other field, exactly like Vixie's `DOM_STAR`/`DOW_STAR` test. Only when
- * neither field text starts with `*` does either field matching suffice.
- * @param parsed - Parsed cron rule with canonical field text and matched values.
- * @returns Whether one local date matches the rule.
- */
-function cronDateMatch(parsed: ParsedCronExpression): WeekdayMatch {
-  const months = new Set(parsed.months)
-  const daysOfMonth = new Set(parsed.daysOfMonth)
-  const daysOfWeek = new Set(parsed.daysOfWeek)
-  const dayOfMonthRestricted = !parsed.dayOfMonthStar
-  const dayOfWeekRestricted = !parsed.dayOfWeekStar
-  return (date) => {
-    /* v8 ignore next -- both callers pre-filter by month before matching a date. */
-    if (!months.has(date.month)) return false
-    const dayOfMonth = daysOfMonth.has(date.day)
-    const dayOfWeek = daysOfWeek.has(date.dayOfWeek % 7)
-    if (dayOfMonthRestricted && dayOfWeekRestricted) return dayOfMonth || dayOfWeek
-    return dayOfMonth && dayOfWeek
-  }
-}
-
-/** Enumerate one parsed cron rule's local times of day in ascending wall-clock order. */
-function cronTimes(parsed: ParsedCronExpression): readonly Temporal.PlainTime[] {
-  const times: Temporal.PlainTime[] = []
-  for (const hour of parsed.hours) {
-    for (const minute of parsed.minutes) times.push(Temporal.PlainTime.from({ hour, minute }))
-  }
-  return times
-}
-
-/**
- * Find the first strictly future cron occurrence without leaving the four-digit UTC year range.
- *
- * The walk stops at {@link CRON_SEARCH_HORIZON_YEARS} past the floor date when that
- * horizon precedes the four-digit ceiling: a rule with no match inside the horizon
- * never matches, so its search resolves to exhaustion instead of scanning to the ceiling.
- * @param parsed - Parsed cron rule.
- * @param timeZone - Explicit zone interpreting its local date and time.
- * @param floor - Instant every returned target must exceed.
- * @returns The first matching target, or exhaustion as undefined.
- */
-function nextCronTarget(parsed: ParsedCronExpression, timeZone: string, floor: number): string | undefined {
-  const times = cronTimes(parsed)
-  const matches = cronDateMatch(parsed)
-  const months = new Set(parsed.months)
-  const firstDate = localDate(floor, timeZone)
-  let date = firstDate
-  // The floor's own local wall clock, so the first date converts only candidates
-  // that can exceed it instead of its whole day of times.
-  const floorTime = Temporal.Instant.fromEpochMilliseconds(floor).toZonedDateTimeISO(timeZone).toPlainTime()
-  const ceiling = localDate(MAX_FOUR_DIGIT_YEAR_MS, 'UTC').add({ days: 1 })
-  const horizon = date.add({ years: CRON_SEARCH_HORIZON_YEARS })
-  const lastDate = Temporal.PlainDate.compare(horizon, ceiling) < 0 ? horizon : ceiling
-  while (Temporal.PlainDate.compare(date, lastDate) <= 0) {
-    if (!months.has(date.month)) {
-      date = date.add({ months: 1 }).with({ day: 1 })
-      continue
-    }
-    if (matches(date)) {
-      for (const time of times) {
-        if (date.equals(firstDate) && Temporal.PlainTime.compare(time, floorTime) < 0) continue
-        const target = resolveLocalInstant(date.toPlainDateTime(time), timeZone)
-        if (target === undefined) continue
-        if (target > MAX_FOUR_DIGIT_YEAR_MS) return undefined
-        if (target >= MIN_FOUR_DIGIT_YEAR_MS && target > floor) return new Date(target).toISOString()
-      }
-    }
-    date = date.add({ days: 1 })
-  }
-  return undefined
-}
-
-/**
- * Find the latest matching cron occurrence at or before a decision without leaving the committed floor.
- *
- * The walk stops at {@link CRON_SEARCH_HORIZON_YEARS} before the decision date when that
- * horizon follows the four-digit floor, which is the local date holding that floor instant
- * in the rule's own zone: a rule with no match inside the horizon keeps the committed target
- * instead of scanning back to the floor, and a candidate before the floor instant is skipped.
- * @param parsed - Parsed cron rule.
- * @param timeZone - Explicit zone interpreting its local date and time.
- * @param decision - Wall-clock decision time in epoch milliseconds.
- * @param savedTarget - Committed target that stays due even when current zone data resolves past it.
- * @returns The latest due occurrence, or the committed target when no local occurrence is representable.
- */
-function latestCronOccurrence(
-  parsed: ParsedCronExpression,
-  timeZone: string,
-  decision: number,
-  savedTarget: number,
-): number {
-  const times = cronTimes(parsed)
-  const matches = cronDateMatch(parsed)
-  const months = new Set(parsed.months)
-  // Offsets are less than 24 hours; a date-line rollback can make a due local date
-  // later than the UTC decision date, which is why the walk starts one day after it.
-  let date = localDate(decision, 'UTC').add({ days: 1 })
-  // The floor is an instant: the earliest local date the walk may reach is the one
-  // holding it in the rule's own zone, and candidates below it are skipped, so a
-  // negative offset can still resolve a due local minute dated before the UTC floor.
-  const floorDate = localDate(MIN_FOUR_DIGIT_YEAR_MS, timeZone)
-  const horizon = date.subtract({ years: CRON_SEARCH_HORIZON_YEARS })
-  const firstDate = Temporal.PlainDate.compare(horizon, floorDate) > 0 ? horizon : floorDate
-  while (Temporal.PlainDate.compare(date, firstDate) >= 0) {
-    if (!months.has(date.month)) {
-      date = date.with({ day: 1 }).subtract({ days: 1 })
-      continue
-    }
-    if (matches(date)) {
-      // One conversion of the date's earliest wall clock decides whether the whole
-      // date lies beyond the decision: every later time on it is later too, so the
-      // walk steps back instead of converting the rest of a day that cannot match.
-      // An earliest time that a DST gap removes leaves the bound to the first time
-      // that does exist, and a date with no existing time keeps the full walk.
-      const earliest = times.reduce<number | undefined>(
-        (found, time) => found ?? resolveLocalInstant(date.toPlainDateTime(time), timeZone),
-        undefined,
-      )
-      if (earliest !== undefined && earliest > decision) {
-        date = date.subtract({ days: 1 })
-        continue
-      }
-      for (const time of [...times].reverse()) {
-        const candidate = resolveLocalInstant(date.toPlainDateTime(time), timeZone)
-        if (candidate === undefined || candidate > decision || candidate < MIN_FOUR_DIGIT_YEAR_MS) continue
-        // A committed target remains due even if current tzdata places the rule before it.
-        return Math.max(candidate, savedTarget)
-      }
-    }
-    date = date.subtract({ days: 1 })
-  }
-  return savedTarget
-}
-
-/**
- * Resolve a cron decision near the decision's local date, not across its missed history.
- * @param record - Cron rule with a committed earliest unaccepted UTC target.
- * @param acceptedAt - Explicit wall-clock decision time, at or after the committed target.
- * @returns Latest actual due occurrence and the first future occurrence.
+ * Resolve a Cron rule through the shared bounded recurrence engine.
+ * @param record - Authoritative Cron expression, zone, and committed occurrence.
+ * @param acceptedAt - Decision time at or after the committed occurrence.
+ * @returns The latest due occurrence and optional future successor.
  */
 export function resolveCronOccurrence(record: CronScheduleRecord, acceptedAt: number): RecurringOccurrence {
-  const decision = acceptedDecision('cron', acceptedAt)
-  const savedTarget = Date.parse(record.scheduledAt)
-  if (decision < savedTarget) throw new ScheduleLogError('cron dispatch cannot precede the active scheduledAt')
-  const parsed = parseCronExpression(record.expression)
-  const occurrence = latestCronOccurrence(parsed, record.timeZone, decision, savedTarget)
-  const occurrenceAt = new Date(occurrence).toISOString()
-  const nextScheduledAt = nextCronTarget(parsed, record.timeZone, decision)
-  return Object.freeze(nextScheduledAt === undefined ? { occurrenceAt } : { occurrenceAt, nextScheduledAt })
+  acceptedDecision('cron', acceptedAt)
+  if (acceptedAt < Date.parse(record.scheduledAt)) throw new ScheduleLogError('cron dispatch cannot precede the active scheduledAt')
+  return readRecurrence(Cron.parse(record.expression, record.timeZone)).resolve(record.scheduledAt, acceptedAt)
 }
 
 /**
@@ -1079,7 +808,7 @@ export function resolveCronOccurrence(record: CronScheduleRecord, acceptedAt: nu
  * @returns Whether the record uses a recurring rule.
  */
 export function isRecurringScheduleRecord(record: ScheduleRecord): record is RecurringScheduleRecord {
-  return record.kind === 'every' || record.kind === 'daily' || record.kind === 'weekly' || record.kind === 'cron'
+  return record.kind === 'every' || record.kind === 'daily' || record.kind === 'weekly' || record.kind === 'cron' || record.kind === 'rrule'
 }
 
 /**
@@ -1094,118 +823,8 @@ export function resolveRecurringOccurrence(record: RecurringScheduleRecord, acce
     case 'daily': return resolveDailyOccurrence(record, acceptedAt)
     case 'weekly': return resolveWeeklyOccurrence(record, acceptedAt)
     case 'cron': return resolveCronOccurrence(record, acceptedAt)
+    case 'rrule': return resolveRRuleOccurrence(record, acceptedAt)
   }
-}
-
-type DecodedDispatch = Extract<ScheduleChange, { operation: 'dispatch' }>
-
-/** Apply one decoded dispatch to its exact active record. */
-function dispatchedRecord(record: LegacyScheduleRecord, change: DecodedDispatch): LegacyScheduleRecord | undefined {
-  const hasAcceptedAt = 'acceptedAt' in change
-  if (record.kind !== 'every') {
-    if (hasAcceptedAt) throw new ScheduleLogError('one-shot dispatch must not contain acceptedAt')
-    return undefined
-  }
-  if (!hasAcceptedAt) throw new ScheduleLogError('every dispatch must contain acceptedAt')
-  const occurrence = resolveEveryOccurrence(record, Date.parse(change.acceptedAt))
-  return occurrence.nextScheduledAt === undefined
-    ? undefined
-    : Object.freeze({ ...record, scheduledAt: occurrence.nextScheduledAt })
-}
-
-/**
- * Apply already-decoded Schedule changes to one complete fold value.
- *
- * The transition authority for full-log replay. One mutable Map/Set pair spans
- * the whole batch; the returned arrays are materialized and frozen once.
- * @param folded - complete active records and used-id history before the changes.
- * @param changes - strictly decoded durable mutations in log order.
- * @returns the complete fold value after every mutation.
- */
-export function applyScheduleChanges(
-  folded: FoldedSchedules,
-  changes: Iterable<ScheduleChange>,
-): FoldedSchedules {
-  const active = new Map(folded.active.map(record => [record.id, record]))
-  const seen = new Set(folded.seenIds)
-  for (const change of changes) {
-    switch (change.operation) {
-      case 'create':
-        if (seen.has(change.schedule.id)) {
-          throw new ScheduleLogError(`schedule id ${JSON.stringify(change.schedule.id)} was reused`)
-        }
-        seen.add(change.schedule.id)
-        active.set(change.schedule.id, change.schedule)
-        break
-      case 'delete':
-        if (!active.delete(change.id)) {
-          throw new ScheduleLogError(`schedule delete targets inactive id ${JSON.stringify(change.id)}`)
-        }
-        break
-      case 'dispatch': {
-        const record = active.get(change.id)
-        if (record === undefined) {
-          throw new ScheduleLogError(`schedule dispatch targets inactive id ${JSON.stringify(change.id)}`)
-        }
-        const next = dispatchedRecord(record, change)
-        if (next === undefined) active.delete(change.id)
-        else active.set(change.id, next)
-        break
-      }
-      /* v8 ignore next 3 -- decodeScheduleChange returns a closed operation union. */
-      default: {
-        const unreachable: never = change
-        throw new ScheduleLogError(`unknown decoded schedule change ${String(unreachable)}`)
-      }
-    }
-  }
-  return Object.freeze({
-    active: Object.freeze([...active.values()]),
-    seenIds: Object.freeze([...seen]),
-  })
-}
-
-/**
- * Fold the package-owned stream after the durable fork seed boundary.
- * @param events - Complete ordered session log or candidate-extended log.
- * @param inheritedEventCount - Inherited prefix length excluded from child ownership.
- * @returns Active records and all previously used ids.
- */
-export function foldScheduleEvents(
-  events: readonly SessionEvent[],
-  inheritedEventCount: SessionLogOffsetType = SessionLogOffset(0),
-): FoldedSchedules {
-  if (!Number.isSafeInteger(inheritedEventCount)
-    || inheritedEventCount < 0
-    || inheritedEventCount > events.length) {
-    throw new ScheduleLogError('schedule inheritedEventCount must be within the supplied event log')
-  }
-  const initial: FoldedSchedules = Object.freeze({
-    active: Object.freeze([]),
-    seenIds: Object.freeze([]),
-  })
-  const changes = function* (): Generator<ScheduleChange> {
-    for (const event of events.slice(inheritedEventCount)) {
-      if (event.type === 'schedule/change') yield decodeScheduleChange(event.data)
-    }
-  }
-  return applyScheduleChanges(initial, changes())
-}
-
-/**
- * Allocate the next readable id without reusing any prior session-local id.
- * @param folded - Fold containing every previously created id.
- * @returns A fresh `schedule-N` identity.
- */
-export function allocateScheduleId(folded: FoldedSchedules): ScheduleIdType {
-  const seen = new Set(folded.seenIds)
-  let sequence = seen.size + 1
-  let candidate = ScheduleId(`schedule-${sequence}`)
-  while (seen.has(candidate)) {
-    sequence += 1
-    candidate = ScheduleId(`schedule-${sequence}`)
-  }
-  return candidate
 }
 
 /**
@@ -1458,7 +1077,7 @@ export function createCronScheduleRecord(
   if (!isFourDigitYearInstant(now)) {
     throw new ScheduleInputError('time_out_of_range', 'Cron creation time must be a representable four-digit-year UTC instant.')
   }
-  const scheduledAt = nextCronTarget(parseCronExpression(expression), timeZone, now)
+  const scheduledAt = readRecurrence(Cron.parse(expression, timeZone)).next(now)
   if (scheduledAt === undefined) {
     throw new ScheduleInputError('time_out_of_range', 'No future cron occurrence is representable as a four-digit-year UTC instant.')
   }
@@ -1493,295 +1112,20 @@ export function parseWeeklyInput(
   }
 }
 
-/** Field bounds of the supported five-field cron dialect, in evaluation order. */
-interface CronFieldSpec {
-  /** Field name used in diagnostics. */
-  readonly name: string
-  /** Lowest value accepted in the input dialect. */
-  readonly min: number
-  /** Highest value accepted in the input dialect; Sunday accepts both 0 and 7. */
-  readonly max: number
-  /** Highest value retained after folding Sunday 7 onto 0. */
-  readonly canonicalMax: number
-}
-
-const CRON_FIELDS: readonly [CronFieldSpec, CronFieldSpec, CronFieldSpec, CronFieldSpec, CronFieldSpec] = [
-  { name: 'minute', min: 0, max: 59, canonicalMax: 59 },
-  { name: 'hour', min: 0, max: 23, canonicalMax: 23 },
-  { name: 'day-of-month', min: 1, max: 31, canonicalMax: 31 },
-  { name: 'month', min: 1, max: 12, canonicalMax: 12 },
-  { name: 'day-of-week', min: 0, max: 7, canonicalMax: 6 },
-]
-
-/** One parsed cron field: its matched values, canonical spelling, and Vixie star flag. */
-interface ParsedCronField {
-  /** Unique ascending matched values after Sunday folding. */
-  readonly values: readonly number[]
-  /** Canonical spelling of exactly those values. */
-  readonly canonical: string
-  /** Whether the field text starts with `*`, which is Vixie's DOM_STAR/DOW_STAR test. */
-  readonly star: boolean
-}
-
-/** Build the stable diagnostic for one malformed cron field element. */
-function invalidCronField(spec: CronFieldSpec, element: string): ScheduleInputError {
-  return new ScheduleInputError(
-    'invalid_rule',
-    `cron.expression ${spec.name} field element ${JSON.stringify(element)} must be *, a value, a-b, */n, a-b/n, `
-    + 'or a comma-separated list of those.',
-  )
-}
-
-/** Read one in-range cron field value. */
-function cronFieldValue(text: string, spec: CronFieldSpec): number {
-  const value = Number(text)
-  if (!Number.isSafeInteger(value) || value < spec.min || value > spec.max) {
-    throw new ScheduleInputError(
-      'invalid_rule',
-      `cron.expression ${spec.name} field value ${text} is outside ${spec.min}-${spec.max}.`,
-    )
-  }
-  return value
-}
-
-/** Read one positive cron field step. */
-function cronFieldStep(text: string, spec: CronFieldSpec): number {
-  const step = Number(text)
-  if (!Number.isSafeInteger(step) || step < 1) {
-    throw new ScheduleInputError('invalid_rule', `cron.expression ${spec.name} field step must be a positive integer.`)
-  }
-  return step
-}
-
-/** Expand one comma-separated cron field into its matched value set. */
-function cronFieldValues(raw: string, spec: CronFieldSpec): number[] {
-  const matched = new Set<number>()
-  for (const element of raw.split(',')) {
-    if (element.length === 0) {
-      throw new ScheduleInputError(
-        'invalid_rule', `cron.expression ${spec.name} field must not contain an empty list element.`,
-      )
-    }
-    if (element === '*') {
-      for (let value = spec.min; value <= spec.max; value += 1) matched.add(value)
-      continue
-    }
-    if (element.startsWith('*')) {
-      const stepped = /^\*\/(?<step>\d+)$/.exec(element)
-      const groups = stepped?.groups
-      if (groups === undefined) throw invalidCronField(spec, element)
-      const stepText = groups['step']
-      /* v8 ignore next -- a successful fixed regex always provides the step group. */
-      if (stepText === undefined) throw invalidCronField(spec, element)
-      const step = cronFieldStep(stepText, spec)
-      for (let value = spec.min; value <= spec.max; value += step) matched.add(value)
-      continue
-    }
-    const parsed = /^(?<start>\d+)(?:-(?<end>\d+))?(?:\/(?<step>\d+))?$/.exec(element)
-    const groups = parsed?.groups
-    if (groups === undefined) throw invalidCronField(spec, element)
-    const startText = groups['start']
-    /* v8 ignore next -- a successful fixed regex always provides the start group. */
-    if (startText === undefined) throw invalidCronField(spec, element)
-    const start = cronFieldValue(startText, spec)
-    const end = groups['end']
-    const stepText = groups['step']
-    if (end === undefined) {
-      if (stepText !== undefined) throw invalidCronField(spec, element)
-      matched.add(start)
-      continue
-    }
-    const last = cronFieldValue(end, spec)
-    if (start > last) {
-      throw new ScheduleInputError(
-        'invalid_rule', `cron.expression ${spec.name} field range ${start}-${last} is inverted.`,
-      )
-    }
-    const step = stepText === undefined ? 1 : cronFieldStep(stepText, spec)
-    for (let value = start; value <= last; value += step) matched.add(value)
-  }
-  const values = new Set<number>()
-  for (const value of matched) {
-    values.add(spec.canonicalMax !== spec.max && value === spec.max ? spec.min : value)
-  }
-  return [...values].sort((left, right) => left - right)
+/** Map a shared time-parser reason into Schedule's public error vocabulary. */
+function readRecurrence<T>(result: RecurrenceResult<T>): T {
+  if (result.kind === 'accepted') return result.rule
+  const codes = { syntax: 'invalid_rule', time_zone: 'invalid_time_zone', density: 'frequency_too_high' } as const
+  throw new ScheduleInputError(codes[result.reason], result.detail, { cause: result.cause })
 }
 
 /**
- * Read one value the encoder already proved present.
- * @param values - matched value set the parser always fills.
- * @param index - index the caller derived from that set.
- * @returns the value at that index.
- */
-function cronFieldValueAt(values: readonly number[], index: number): number {
-  const value = values[index]
-  /* v8 ignore next -- a parsed cron field always matches at least one value. */
-  if (value === undefined) throw new ScheduleLogError('cron field encoding requires a non-empty value set')
-  return value
-}
-
-/** Encode one matched value set as the shortest equivalent comma-separated cron field.
- * @param values - Matched values in ascending order.
- * @returns Field text that re-parses to exactly `values`, never spelled with a leading `*`.
- */
-function encodeCronField(values: readonly number[]): string {
-  const first = cronFieldValueAt(values, 0)
-  if (values.length === 1) return String(first)
-  const last = cronFieldValueAt(values, values.length - 1)
-  const step = cronFieldValueAt(values, 1) - first
-  let uniform = true
-  for (let index = 2; index < values.length; index += 1) {
-    if (cronFieldValueAt(values, index) - cronFieldValueAt(values, index - 1) !== step) {
-      uniform = false
-      break
-    }
-  }
-  if (uniform) {
-    if (step === 1) return `${first}-${last}`
-    return `${first}-${last}/${step}`
-  }
-  const parts: string[] = []
-  let runStart = first
-  for (let index = 1; index < values.length; index += 1) {
-    const current = cronFieldValueAt(values, index)
-    const previous = cronFieldValueAt(values, index - 1)
-    if (current === previous + 1) continue
-    parts.push(runStart === previous ? String(runStart) : `${runStart}-${previous}`)
-    runStart = current
-  }
-  const final = cronFieldValueAt(values, values.length - 1)
-  parts.push(runStart === final ? String(runStart) : `${runStart}-${final}`)
-  return parts.join(',')
-}
-
-/**
- * One uniform walk from a field's minimum, folded exactly as a parsed field folds.
- * @param spec - Field range and canonical maximum.
- * @param step - Positive step of the walk.
- * @returns Ascending values `step` produces from the minimum.
- */
-function starWalk(spec: CronFieldSpec, step: number): number[] {
-  const walked = new Set<number>()
-  for (let value = spec.min; value <= spec.max; value += step) {
-    walked.add(spec.canonicalMax !== spec.max && value === spec.max ? spec.min : value)
-  }
-  return [...walked].sort((left, right) => left - right)
-}
-
-/**
- * Canonical spelling of a field whose text started with `*`.
- *
- * Only a `*`-prefixed spelling keeps the star flag, and only the bare star or a star-step
- * (a `*` followed by `/n`) admits a leading `*`, so the encoding is the bare star for every
- * value, otherwise the widest star-step walk plus any remaining values as a list.
- * Re-parsing therefore reproduces both the star flag and the matched set, which is what
- * keeps day-of-month/day-of-week AND/OR selection stable across a stored canonical
- * expression.
- * @param values - Matched values in ascending order.
- * @param spec - Field range and canonical maximum.
- * @returns Canonical field text that starts with `*`.
- */
-function encodeStarCronField(values: readonly number[], spec: CronFieldSpec): string {
-  if (values.length === spec.canonicalMax - spec.min + 1) return '*'
-  const present = new Set(values)
-  let bestStep: number | undefined
-  let bestWalk: number[] = []
-  for (let step = 1; step <= spec.max - spec.min + 1; step += 1) {
-    const walk = starWalk(spec, step)
-    if (walk.length > bestWalk.length && walk.every(value => present.has(value))) {
-      bestStep = step
-      bestWalk = walk
-    }
-  }
-  /* v8 ignore next -- the widest step yields the single minimum, which every `*`-led field matches. */
-  if (bestStep === undefined) throw new ScheduleInputError('invalid_rule', `${spec.name} cannot keep a leading \`*\`.`)
-  const walked = new Set(bestWalk)
-  const remaining = values.filter(value => !walked.has(value))
-  const walkText = `*/${bestStep}`
-  return remaining.length === 0
-    ? walkText
-    : `${walkText},${encodeCronField(remaining)}`
-}
-
-/**
- * Parse one cron field into its matched values, canonical spelling, and star flag.
- *
- * The star flag tests the field text's first character, which is how Vixie sets
- * `DOM_STAR`/`DOW_STAR`: a stepped star (`*` followed by `/2`) is a star although
- * it matches half the range, while an explicit full range such as `1-31` is
- * restricted. Canonicalization preserves the flag: a `*`-led field keeps a `*`-led
- * spelling, and a field that did not start with `*` is never spelled as a star-step.
- */
-function parseCronField(raw: string, spec: CronFieldSpec): ParsedCronField {
-  const values = cronFieldValues(raw, spec)
-  const star = raw.startsWith('*')
-  return Object.freeze({
-    values: Object.freeze(values),
-    canonical: star ? encodeStarCronField(values, spec) : encodeCronField(values),
-    star,
-  })
-}
-
-/** Parsed five-field cron rule: canonical text plus every field's matched values. */
-interface ParsedCronExpression {
-  /** Canonical expression stored in the durable record. */
-  readonly expression: string
-  /** Unique ascending matched minutes. */
-  readonly minutes: readonly number[]
-  /** Unique ascending matched hours. */
-  readonly hours: readonly number[]
-  /** Unique ascending matched days of the month. */
-  readonly daysOfMonth: readonly number[]
-  /** Unique ascending matched months. */
-  readonly months: readonly number[]
-  /** Unique ascending matched cron weekdays, Sunday 0 through Saturday 6. */
-  readonly daysOfWeek: readonly number[]
-  /** Whether the day-of-month field text starts with `*` (Vixie `DOM_STAR`). */
-  readonly dayOfMonthStar: boolean
-  /** Whether the day-of-week field text starts with `*` (Vixie `DOW_STAR`). */
-  readonly dayOfWeekStar: boolean
-}
-
-/** Parse and canonicalize one strict five-field cron expression. */
-function parseCronExpression(expression: string): ParsedCronExpression {
-  if (typeof expression !== 'string' || expression.length === 0 || expression.trim() !== expression) {
-    throw new ScheduleInputError('invalid_rule', 'cron.expression must be a non-empty trimmed string.')
-  }
-  const fields = expression.split(/\s+/)
-  if (fields.length !== 5) {
-    throw new ScheduleInputError(
-      'invalid_rule',
-      'cron.expression must contain exactly five whitespace-separated fields: '
-      + 'minute hour day-of-month month day-of-week.',
-    )
-  }
-  const [minute, hour, dayOfMonth, month, dayOfWeek] = fields.map(
-    (field, index) => {
-      const fieldSpec = CRON_FIELDS[index]
-      /* v8 ignore next -- the five-field split bounds this index. */
-      if (fieldSpec === undefined) throw new ScheduleLogError('cron field specification is missing')
-      return parseCronField(field, fieldSpec)
-    },
-  ) as [ParsedCronField, ParsedCronField, ParsedCronField, ParsedCronField, ParsedCronField]
-  return Object.freeze({
-    expression: [minute, hour, dayOfMonth, month, dayOfWeek].map(field => field.canonical).join(' '),
-    minutes: minute.values,
-    hours: hour.values,
-    daysOfMonth: dayOfMonth.values,
-    months: month.values,
-    daysOfWeek: dayOfWeek.values,
-    dayOfMonthStar: dayOfMonth.star,
-    dayOfWeekStar: dayOfWeek.star,
-  })
-}
-
-/**
- * Canonicalize one strict five-field cron expression.
- * @param expression - Candidate `minute hour day-of-month month day-of-week` expression.
- * @returns The canonical expression; malformed or unsupported input throws ScheduleInputError.
+ * Canonicalize one supported five-field Cron expression.
+ * @param expression - Strict five-field input text.
+ * @returns Canonical text preserving the Vixie day-matching semantics.
  */
 export function canonicalizeCronExpression(expression: string): string {
-  return parseCronExpression(expression).expression
+  return readRecurrence(Cron.parse(expression, 'UTC')).expression
 }
 
 /**
@@ -1799,34 +1143,22 @@ export function parseCronInput(cron: CronInput): { readonly expression: string; 
     throw new ScheduleInputError('invalid_time_zone', 'time_zone must be a string.')
   }
   return {
-    expression: parseCronExpression(cron['expression']).expression,
+    expression: canonicalizeCronExpression(cron['expression']),
     timeZone: canonicalizeTimeZone(cron['time_zone']),
   }
-}
-
-/**
- * Derive one execution-local management view.
- * @param record - Active durable record.
- * @param now - Wall-clock sample used for its timing state.
- * @returns Complete Host delivery view.
- */
-export function scheduleView(record: ScheduleRecord, now: number): ScheduleView {
-  return Object.freeze({
-    ...record,
-    state: now >= Date.parse(record.scheduledAt) ? 'overdue' : 'scheduled',
-    deliveryMode: 'host',
-  })
 }
 
 /** Fixed model-facing origin line shared by one-shot and recurring reminder delivery. */
 const SCHEDULED_MESSAGE_FRAMING = 'This is a scheduled message from the user'
 
 /**
- * Render the fixed model framing for a due reminder.
- * @param record - Due active record.
+ * Render the fixed model framing for one due reminder.
+ * @param record - Due task identity, instruction, and delivered occurrence.
  * @returns Stable model-visible text with JSON-escaped dynamic fields.
  */
-export function renderReminderFraming(record: OneShotScheduleRecord): string {
+export function renderReminderFraming(
+  record: { readonly id: ScheduleIdType; readonly prompt: string; readonly scheduledAt: string },
+): string {
   return [
     '[SCHEDULE REMINDER]',
     SCHEDULED_MESSAGE_FRAMING,
@@ -1842,7 +1174,10 @@ export function renderReminderFraming(record: OneShotScheduleRecord): string {
  * @returns Stable model-visible text whose dynamic payload is canonical JSON.
  */
 export function renderRecurringReminderBatchFraming(
-  reminders: readonly { readonly record: RecurringScheduleRecord; readonly occurrenceAt: string }[],
+  reminders: readonly {
+    readonly record: { readonly id: ScheduleIdType; readonly prompt: string }
+    readonly occurrenceAt: string
+  }[],
 ): string {
   const payload = reminders.map(({ record, occurrenceAt }) => ({
     schedule_id: record.id,
@@ -1854,4 +1189,131 @@ export function renderRecurringReminderBatchFraming(
     SCHEDULED_MESSAGE_FRAMING,
     `reminders_json: ${JSON.stringify(payload)}`,
   ].join('\n')
+}
+
+/** Freeze a record whose scheduledAt is the first occurrence of a prepared rule strictly after a time. */
+function firstRecord(id: ScheduleIdType, title: string, prompt: string, prepared: RRule, now: number): RRuleScheduleRecord {
+  if (!isFourDigitYearInstant(now)) throw new ScheduleInputError('time_out_of_range', 'The recurrence reference time is outside the supported range.')
+  const scheduledAt = prepared.next(now)
+  if (scheduledAt === undefined) {
+    throw new ScheduleInputError('not_future', 'rrule must contain an occurrence strictly in the future.')
+  }
+  return Object.freeze({ id, kind: 'rrule', title, prompt, rrule: prepared.expression, scheduledAt })
+}
+
+/**
+ * Validate and normalize the supported RFC 5545 recurrence content.
+ * @param value - Two-line DTSTART and RRULE input.
+ * @returns The trimmed newline-separated recurrence; an unsupported rule throws ScheduleInputError.
+ */
+export function normalizeRRule(value: string): string {
+  return readRecurrence(RRule.parse(value)).expression
+}
+
+/**
+ * Create one Host task record with its first committed occurrence.
+ * @param id - Host-allocated canonical schedule id.
+ * @param title - User-facing schedule title.
+ * @param prompt - Instruction delivered when the schedule fires.
+ * @param rrule - DTSTART and RRULE content.
+ * @param now - Exclusive creation-time lower bound in epoch milliseconds.
+ * @returns Frozen schedule record.
+ */
+export function createRRuleScheduleRecord(
+  id: ScheduleIdType,
+  title: string,
+  prompt: string,
+  rrule: string,
+  now: number,
+): RRuleScheduleRecord {
+  const normalizedTitle = scheduleTitle(title)
+  const normalizedPrompt = prompt.trim()
+  if (normalizedPrompt.length === 0) {
+    throw new ScheduleInputError('invalid_prompt', 'prompt must be non-empty after trimming.')
+  }
+  const prepared = readRecurrence(RRule.parse(rrule, { rejectIneffectiveSetPositions: true }))
+  return firstRecord(id, normalizedTitle, normalizedPrompt, prepared, now)
+}
+
+/**
+ * Update descriptive fields and optionally recompute the next occurrence.
+ * @param current - Existing schedule record.
+ * @param change - Supplied editable record fields.
+ * @param now - Exclusive edit-time lower bound in epoch milliseconds.
+ * @param recompute - Whether to derive a fresh next occurrence.
+ * @returns Frozen updated schedule record.
+ */
+export function updateRRuleScheduleRecord(
+  current: RRuleScheduleRecord,
+  change: { readonly title?: string; readonly prompt?: string; readonly rrule?: string },
+  now: number,
+  recompute: boolean,
+): RRuleScheduleRecord {
+  const title = scheduleTitle(change.title ?? current.title)
+  const prompt = (change.prompt ?? current.prompt).trim()
+  if (prompt.length === 0) throw new ScheduleInputError('invalid_prompt', 'prompt must be non-empty after trimming.')
+  const prepared = change.rrule === undefined
+    ? readRecurrence(RRule.parse(current.rrule))
+    : readRecurrence(RRule.parse(change.rrule, { rejectIneffectiveSetPositions: true }))
+  if (recompute) return firstRecord(current.id, title, prompt, prepared, now)
+  return Object.freeze({ ...current, title, prompt, rrule: prepared.expression })
+}
+
+/**
+ * Resolve the latest due occurrence and the first later occurrence without replaying a backlog.
+ * @param record - Due schedule record.
+ * @param acceptedAt - Dispatch admission time in epoch milliseconds.
+ * @returns Latest due occurrence and optional next occurrence.
+ */
+export function resolveRRuleOccurrence(record: RRuleScheduleRecord, acceptedAt: number): RecurringOccurrence {
+  const decision = acceptedDecision('rrule', acceptedAt)
+  const savedTarget = Date.parse(record.scheduledAt)
+  if (decision < savedTarget) throw new ScheduleLogError('rrule dispatch cannot precede the active scheduledAt')
+  return readRecurrence(RRule.parse(record.rrule)).resolve(record.scheduledAt, decision)
+}
+
+/**
+ * Decode a current Host task record.
+ * @param value - Untrusted durable JSON record.
+ * @returns Detached frozen record; malformed fields throw ScheduleLogError.
+ */
+export function decodeRRuleScheduleRecord(value: unknown): RRuleScheduleRecord {
+  if (!isRecord(value) || value['kind'] !== 'rrule' || !hasExactKeys(value, ['id', 'kind', 'title', 'prompt', 'rrule', 'scheduledAt'])) {
+    throw new ScheduleLogError('rrule schedule must contain exactly id, kind, title, prompt, rrule, and scheduledAt')
+  }
+  const title = decodeStoredTitle(value['title'])
+  const prompt = value['prompt']
+  const rrule = value['rrule']
+  if (typeof prompt !== 'string' || prompt.length === 0 || prompt.trim() !== prompt) {
+    throw new ScheduleLogError('schedule prompt must be non-empty and already trimmed')
+  }
+  if (typeof rrule !== 'string') throw new ScheduleLogError('schedule rrule must be a string')
+  let normalized: string
+  try {
+    normalized = normalizeRRule(rrule)
+  } catch (error: unknown) {
+    throw new ScheduleLogError(`invalid schedule rrule: ${String(error)}`)
+  }
+  if (normalized !== rrule) throw new ScheduleLogError('schedule rrule must be normalized')
+  return Object.freeze({
+    id: decodeId(value['id']),
+    kind: 'rrule',
+    title,
+    prompt,
+    rrule,
+    scheduledAt: decodeInstant(value['scheduledAt']),
+  })
+}
+
+/**
+ * Render an instant in the authoritative zone of any timing kind; elapsed and absolute rules use UTC.
+ * @param record - Timing record that owns the display zone.
+ * @param instant - UTC instant to render with second precision.
+ * @returns Local ISO date-time with its numeric offset.
+ */
+export function formatScheduleLocalTime(record: ScheduleRecord, instant: string): string {
+  const timeZone = record.kind === 'rrule' ? readRecurrence(RRule.parse(record.rrule)).timeZone
+    : 'timeZone' in record ? record.timeZone : 'UTC'
+  return Temporal.Instant.from(instant).toZonedDateTimeISO(timeZone)
+    .toString({ timeZoneName: 'never', smallestUnit: 'second' })
 }

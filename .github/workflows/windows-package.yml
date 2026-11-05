@@ -1,13 +1,46 @@
-name: Package Desktop · Windows
+name: Package Desktop · Windows · x64
 
 on:
   workflow_dispatch:
     inputs:
+      source_ref:
+        description: '打包源码：test 支持仓库内分支或 dsh-v* tag；production 仅支持 master 或 dsh-v* tag；源码须包含 CI 适配脚本'
+        type: string
+        default: master
+        required: true
       preset:
         description: '打包环境：选择机器上的 test 或 production 配置；同时决定后续发布环境'
         type: choice
         options: [test, production]
         default: test
+        required: true
+      update_channel:
+        description: '升级通道：人工选择 nightly 或 stable，与版本后缀无关；默认通道由此打包输入确定'
+        type: choice
+        options: [nightly, stable]
+        default: nightly
+        required: true
+      version_mode:
+        description: '版本模式：default 按环境自动选择（test 取 build-number，production 取 follow-dsh）；follow-dsh 跟随 dsh 包版本号；build-number 自动追加构建编号；manual 手填'
+        type: choice
+        options: [default, follow-dsh, build-number, manual]
+        default: default
+        required: true
+      build_version:
+        description: '手动版本号：仅 manual 时填写完整版本；须为产品原版本或受支持的预发布后缀'
+        type: string
+        default: ''
+        required: false
+      test_release_id:
+        description: '测试 release ID：32 位小写十六进制随机前缀（非鉴权）；留空使用机器默认值，连续升级测试须保持相同值'
+        type: string
+        default: ''
+        required: false
+      compression_level:
+        description: '安装器压缩等级：3 打包较快，7 压缩更强；覆盖本轮机器配置'
+        type: choice
+        options: ['3', '7']
+        default: '3'
         required: true
       signing:
         description: '签名方式：unsigned 仅限内部调试，禁止发布到 test / production 或用于自动更新；需要发布请选择 signed（EV 硬件令牌）'
@@ -15,30 +48,8 @@ on:
         options: [signed, unsigned]
         default: signed
         required: true
-      test_release_id:
-        description: '测试 release ID：32 位小写十六进制随机前缀（非鉴权）；留空使用机器默认值，连续升级测试须保持相同值'
-        type: string
-        default: ''
-        required: false
-      source_ref:
-        description: '打包源码：test 支持仓库内分支或 dsh-v* tag；production 仅支持 master 或 dsh-v* tag；源码须包含 CI 适配脚本'
-        type: string
-        default: master
-        required: true
-      update_channel:
-        description: '升级通道：nightly 或 latest（须为稳定版本）；自动更新不会切换通道'
-        type: choice
-        options: [nightly, latest]
-        default: nightly
-        required: true
-      version_mode:
-        description: '版本模式：default 为 test 自动编号、production 跟随产品；product 保留原版本，auto 自动编号，manual 手填'
-        type: choice
-        options: [default, product, auto, manual]
-        default: default
-        required: true
-      build_version:
-        description: '手动版本号：仅 manual 时填写完整版本；须为产品原版本或受支持的预发布后缀'
+      cache_namespace:
+        description: '缓存测量命名空间：留空使用共享缓存；新名称用于冷缓存，再次使用同名测热缓存，不清除现有缓存'
         type: string
         default: ''
         required: false
@@ -52,6 +63,13 @@ concurrency:
 
 jobs:
   package:
+    outputs:
+      directory: ${{ steps.retained.outputs.directory }}
+      runner: ${{ steps.retained.outputs.runner }}
+      runner-name: ${{ steps.retained.outputs.runner-name }}
+      attempt: ${{ steps.retained.outputs.attempt }}
+      version: ${{ steps.settings.outputs.version }}
+      mode: ${{ steps.settings.outputs.mode }}
     runs-on: dsh-win-package-trial
     timeout-minutes: 120
     defaults:
@@ -59,12 +77,15 @@ jobs:
         shell: pwsh
     env:
       PACKAGE_SOURCE_REF: ${{ inputs.source_ref }}
-      PACKAGE_VERSION_MODE: ${{ inputs.version_mode }}
+      # TODO: Remove this legacy source_ref mode mapping on 2027-01-04 with the parser aliases.
+      PACKAGE_VERSION_MODE: ${{ inputs.version_mode == 'follow-dsh' && 'product' || inputs.version_mode == 'build-number' && 'auto' || inputs.version_mode }}
       DSH_DESKTOP_UPDATE_CHANNEL: ${{ inputs.update_channel }}
       DSH_TELEMETRY_DISABLED: '1'
       DSH_PACKAGING_PRESET: ${{ inputs.preset }}
       PACKAGE_TEST_RELEASE_ID: ${{ inputs.test_release_id }}
       PACKAGE_SIGNING: ${{ inputs.signing }}
+      PACKAGE_CACHE_NAMESPACE: ${{ inputs.cache_namespace }}
+      PACKAGE_WINDOWS_COMPRESSION_LEVEL: ${{ inputs.compression_level }}
     steps:
       - name: Reset packaging checkout
         working-directory: ${{ runner.temp }}
@@ -77,6 +98,20 @@ jobs:
           }
           node -e "const fs = require('node:fs'); fs.rmSync(process.argv[1], { recursive: true, force: true, maxRetries: 3 }); fs.mkdirSync(process.argv[1])" $workspace
           if ($LASTEXITCODE -ne 0) { throw 'Checkout cleanup failed' }
+      - name: Checkout workflow helpers
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.workflow_sha }}
+          sparse-checkout: apps/desktop/scripts
+      - name: Stage workflow helpers
+        run: |
+          $helpers = Join-Path $env:RUNNER_TEMP "packaging-helpers-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          New-Item -ItemType Directory -Path $helpers -ErrorAction Stop | Out-Null
+          foreach ($name in @('windows-packaging-priority.ps1')) {
+            Copy-Item -LiteralPath (Join-Path 'apps/desktop/scripts' $name) -Destination $helpers -ErrorAction Stop
+          }
+          "PACKAGE_CI_HELPERS=$helpers" >> $env:GITHUB_ENV
       - uses: actions/checkout@v7.0.1
         id: checkout
         with:
@@ -100,6 +135,7 @@ jobs:
           const branch=cp.execFileSync('git',['rev-parse','--abbrev-ref','HEAD'],{encoding:'utf8'}).trim();
           if(branch==='HEAD' || branch!==ref || ref.startsWith('refs/')) throw Error('Select a branch in this repository, not a SHA or PR ref');
           }
+          if(!fs.readFileSync('apps/desktop/scripts/retain-desktop-ci.ts','utf8').includes('--check-runner')) throw Error('Source lacks independent Desktop artifact archival support; select a newer source');
           if(!fs.readFileSync('apps/desktop/scripts/desktop-ci-version.mjs','utf8').includes('PACKAGE_VERSION_MODE')) throw Error('Source lacks Desktop channel/version CI support; select a newer release');"
       - uses: pnpm/action-setup@v5.0.0
         with:
@@ -107,10 +143,34 @@ jobs:
       - uses: actions/setup-node@v7.0.0
         with:
           node-version: '24'
+      - name: Configure persistent pnpm store
+        # PNPM_HOME belongs to this run; keep downloaded packages outside its temporary directory.
+        env:
+          DSH_DESKTOP_PACKAGE_CACHE_DIR: ${{ runner.tool_cache }}/dsh-desktop-package-cache
+        run: |
+          $storeRoot = Join-Path ([IO.Path]::GetPathRoot($env:GITHUB_WORKSPACE)) '.pnpm-store'
+          $namespace = $env:PACKAGE_CACHE_NAMESPACE
+          if ($namespace) {
+            if ($namespace -cnotmatch '^[a-z0-9][a-z0-9-]{0,63}\z') { throw 'Cache namespace must contain 1-64 lowercase letters, digits or hyphens' }
+            if ($namespace -match '^(con|prn|aux|nul|com[1-9]|lpt[1-9])$') { throw 'Cache namespace cannot be a Windows device name' }
+            $storeRoot = Join-Path $storeRoot $namespace
+            $env:DSH_DESKTOP_PACKAGE_CACHE_DIR = Join-Path $env:DSH_DESKTOP_PACKAGE_CACHE_DIR $namespace
+          }
+          "DSH_DESKTOP_PACKAGE_CACHE_DIR=$env:DSH_DESKTOP_PACKAGE_CACHE_DIR" >> $env:GITHUB_ENV
+          "PNPM_CONFIG_STORE_DIR=$storeRoot" >> $env:GITHUB_ENV
       - name: Install locked dependencies
         run: |
+          & "$env:PACKAGE_CI_HELPERS/windows-packaging-priority.ps1" -BestEffort
+          node -e "const os=require('node:os'); console.log(JSON.stringify({node:process.version,availableParallelism:os.availableParallelism(),logicalCpus:os.cpus().length,totalMemoryBytes:os.totalmem(),freeMemoryBytes:os.freemem()}))"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm store path
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pnpm install --frozen-lockfile
           exit $LASTEXITCODE
+      - name: Check original machine archival route
+        env:
+          DESKTOP_PUBLISH_RUNNERS: ${{ vars.DESKTOP_PUBLISH_RUNNERS }}
+        run: node --import tsx apps/desktop/scripts/retain-desktop-ci.ts --check-runner
       - name: Validate preset and resolve build version
         id: settings
         env:
@@ -128,6 +188,7 @@ jobs:
         env:
           PACKAGE_VERSION: ${{ steps.settings.outputs.version }}
         run: |
+          & "$env:PACKAGE_CI_HELPERS/windows-packaging-priority.ps1" -BestEffort
           $packageArgs = @('run', 'package:desktop:win:x64', '--build-version', $env:PACKAGE_VERSION)
           if ($env:PACKAGE_SIGNING -eq 'unsigned') { $packageArgs += '--unsigned' }
           pnpm @packageArgs
@@ -135,33 +196,74 @@ jobs:
       - name: Retain complete package outside the checkout
         id: retained
         env:
+          DESKTOP_PUBLISH_RUNNERS: ${{ vars.DESKTOP_PUBLISH_RUNNERS }}
           PACKAGE_SOURCE_SHA: ${{ steps.checkout.outputs.commit }}
           PACKAGE_VERSION: ${{ steps.settings.outputs.version }}
         run: node --import tsx apps/desktop/scripts/retain-desktop-ci.ts
       - name: Retain packaging diagnostics
+        continue-on-error: true
         if: always() && steps.checkout.outcome == 'success'
         uses: actions/upload-artifact@v7.0.1
         with:
           name: windows-package-logs-${{ github.run_id }}-${{ github.run_attempt }}
           include-hidden-files: true
-          path: apps/desktop/.desktop-build/packaging-runs/
+          path: ${{ github.workspace }}/apps/desktop/.desktop-build/packaging-runs/
           if-no-files-found: warn
           retention-days: 14
-      - name: Retain verified unsigned installer
-        if: success() && inputs.signing == 'unsigned'
+
+  upload-artifact:
+    defaults:
+      run:
+        shell: pwsh
+    needs: package
+    runs-on: [self-hosted, '${{ needs.package.outputs.runner }}']
+    timeout-minutes: 30
+    env:
+      PACKAGE_CACHE_NAMESPACE: ${{ inputs.cache_namespace }}
+      DESKTOP_RETAINED_DIRECTORY: ${{ needs.package.outputs.directory }}
+      DESKTOP_ARCHIVE_NAME: windows-x64-${{ inputs.signing }}-${{ needs.package.outputs.version }}-${{ github.run_id }}-${{ needs.package.outputs.attempt }}.zip
+      DESKTOP_PACKAGE_ATTEMPT: ${{ needs.package.outputs.attempt }}
+      DESKTOP_PACKAGE_RUNNER: ${{ needs.package.outputs.runner-name }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+          path: artifact-archiver
+      - uses: pnpm/action-setup@v5.0.0
+        with:
+          package_json_file: artifact-archiver/package.json
+          dest: ${{ runner.temp }}/archive-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24'
+      - name: Configure persistent pnpm store
+        # PNPM_HOME belongs to this run; keep downloaded packages outside its temporary directory.
+        env:
+          DSH_DESKTOP_PACKAGE_CACHE_DIR: ${{ runner.tool_cache }}/dsh-desktop-package-cache
+        run: |
+          $storeRoot = Join-Path ([IO.Path]::GetPathRoot($env:GITHUB_WORKSPACE)) '.pnpm-store'
+          $namespace = $env:PACKAGE_CACHE_NAMESPACE
+          if ($namespace) {
+            if ($namespace -cnotmatch '^[a-z0-9][a-z0-9-]{0,63}\z') { throw 'Cache namespace must contain 1-64 lowercase letters, digits or hyphens' }
+            if ($namespace -match '^(con|prn|aux|nul|com[1-9]|lpt[1-9])$') { throw 'Cache namespace cannot be a Windows device name' }
+            $storeRoot = Join-Path $storeRoot $namespace
+            $env:DSH_DESKTOP_PACKAGE_CACHE_DIR = Join-Path $env:DSH_DESKTOP_PACKAGE_CACHE_DIR $namespace
+          }
+          "DSH_DESKTOP_PACKAGE_CACHE_DIR=$env:DSH_DESKTOP_PACKAGE_CACHE_DIR" >> $env:GITHUB_ENV
+          "PNPM_CONFIG_STORE_DIR=$storeRoot" >> $env:GITHUB_ENV
+      - run: pnpm install --frozen-lockfile
+        working-directory: artifact-archiver
+      - name: Archive verified retained build
+        id: archive
+        working-directory: artifact-archiver
+        run: node --import tsx apps/desktop/scripts/archive-desktop-ci.ts
+      - name: Retain installers for the selected mode
+        if: success()
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: windows-x64-unsigned-${{ steps.settings.outputs.version }}-${{ github.run_id }}-${{ github.run_attempt }}
-          include-hidden-files: true
-          path: ${{ steps.retained.outputs.directory }}/*
+          name: ${{ env.DESKTOP_ARCHIVE_NAME }}
+          path: ${{ steps.archive.outputs.path }}
+          archive: false
           if-no-files-found: error
           retention-days: 14
-      - name: Retain verified signed installer
-        if: success() && inputs.signing == 'signed'
-        uses: actions/upload-artifact@v7.0.1
-        with:
-          name: windows-x64-signed-${{ steps.settings.outputs.version }}-${{ github.run_id }}-${{ github.run_attempt }}
-          include-hidden-files: true
-          path: ${{ steps.retained.outputs.directory }}/*
-          if-no-files-found: error
-          retention-days: 14
+          overwrite: true

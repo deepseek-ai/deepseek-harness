@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Terminaux persistants",
+    "description": "Fournit à l'agent des terminaux qui s'ouvrent comme onglets de la barre latérale ; vous pouvez les observer et en prendre le contrôle en y tapant. Les processus continuent de s'exécuter d'un appel d'outil à l'autre, afin qu'il puisse lancer un serveur de développement ou un REPL et revenir plus tard lire la sortie ; il peut aussi lire les terminaux que vous ouvrez vous-même.",
+    "detail": "docs/DETAIL.md"
+  }
+}

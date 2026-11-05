@@ -1,4 +1,5 @@
 /** Account route cancellation uses the real loop, registry, and tool lifecycle. */
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { afterEach, expect, it, vi } from 'vitest'
 import { installAccountTaskCancellation, type DeepSeekAccount } from '@deepseek-ai/dsh-deepseek-account'
 import { Context } from '@deepseek-ai/cordis'
@@ -8,7 +9,8 @@ import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime, { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
+import ToolRuntime from '@deepseek-ai/dsh-tools'
+import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as DeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
 import * as AccountProvider from '@deepseek-ai/dsh-llm-deepseek-account'
 import { assemble } from './assemble.ts'
@@ -31,7 +33,9 @@ async function harness() {
   const ctx = new Context()
   contexts.push(ctx)
   installAccountTaskCancellation(ctx)
-  for (const plugin of [LlmRuntime, SessionStore, SessionProjectionRegistry, SystemPrompt, ToolRuntime, AgentRegistry]) {
+  for (const plugin of [
+    LlmRuntime, SessionStore, SessionProjectionRegistry, SystemPrompt, ToolRuntime, NativeToolExecutor, AgentRegistry,
+  ]) {
     await ctx.plugin(plugin)
   }
   await ctx.plugin(AgentLoop, { agents: [] })
@@ -230,7 +234,7 @@ it('cancels an account child without stopping its API-key parent', async () => {
     signal.throwIfAborted()
   })
   const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'deepseek-official', model: 'deepseek-v4-flash' })
-  const childHandle = await ctx.agents.create({ sessionId: SessionId('child'), parentAgent: parent,
+  const childHandle = await ctx.agents.create({ sessionId: SessionId('child'),
     agentOptions: { provider: 'deepseek-account', model: 'deepseek-v4-flash' } })
   send(parent)
   send(childHandle.agent)

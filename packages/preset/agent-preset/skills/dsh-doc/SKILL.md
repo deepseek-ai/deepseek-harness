@@ -24,6 +24,7 @@ The files below live in this skill's base directory, which the `skill` tool repo
 | Find the installed version's documentation and package sources | `references/locate-docs.md` |
 | Build, install, enable, or debug a plugin or bundle | `references/plugin-development.md` |
 | Bundle manifest, locale resources, detail document, icons, installation, Host exports and Config | `references/host-plugin.md` |
+| Save plugin configuration or credentials | `references/configuration.md` |
 | Web UI: Client manifest, module loader, slot registration | `references/ui-plugin.md` |
 | Connect an MCP server through a configuration-only bundle | `references/mcp-bundle.md` |
 | Choose extension points, contexts, and state mechanisms | `references/practices.md` |
@@ -35,5 +36,5 @@ The files below live in this skill's base directory, which the `skill` tool repo
 | Loader patch dialect | `references/composition-reference.md` |
 | Installable plugin packages, one table per package group | `references/packages.md` |
 | Write a DSH tool definition, skill, or multi-step workflow | `references/tool-design.md` |
-| UI plugin template | `templates/decoration/package.json`, `templates/decoration/cordis.patch.yml`, `templates/decoration/index.js`, `templates/decoration/client.js`, `templates/decoration/locale/en.json`, `templates/decoration/docs/DETAIL.md`, `templates/decoration/icon.svg` |
-| MCP bundle template | `templates/mcp/package.json`, `templates/mcp/cordis.patch.yml`, `templates/mcp/locale/en.json`, `templates/mcp/docs/DETAIL.md`, `templates/mcp/icon.svg` |
+| UI plugin template | `templates/decoration/package.json`, `templates/decoration/cordis.patch.yml`, `templates/decoration/index.js`, `templates/decoration/client.js`, `templates/decoration/locale`, `templates/decoration/docs/DETAIL.md`, `templates/decoration/icon.svg` |
+| MCP bundle template | `templates/mcp/package.json`, `templates/mcp/cordis.patch.yml`, `templates/mcp/locale`, `templates/mcp/docs/DETAIL.md`, `templates/mcp/icon.svg` |

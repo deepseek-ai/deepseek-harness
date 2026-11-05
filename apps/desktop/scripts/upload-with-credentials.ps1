@@ -18,6 +18,8 @@ COS bucket for an explicit upload. Not needed for the local credential check.
 Publish only the installer at its fixed download URL. Requires Upload.
 .PARAMETER Upload
 Authorize the existing target upload entry. Omit to check credentials locally.
+.PARAMETER PurgeOnly
+Submit a purge for the production fixed download without uploading. Requires Upload and Latest.
 #>
 [CmdletBinding(DefaultParameterSetName = 'Check')]
 param(
@@ -36,7 +38,9 @@ param(
     [Parameter(ParameterSetName = 'Publish', Mandatory = $true)]
     [switch]$Upload,
     [Parameter(ParameterSetName = 'Publish')]
-    [switch]$Latest
+    [switch]$Latest,
+    [Parameter(ParameterSetName = 'Publish')]
+    [switch]$PurgeOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -48,6 +52,11 @@ $secretKey = $null
 $credentials = $null
 $startInfo = $null
 $stage = 'decrypt-file'
+
+if ($PurgeOnly -and (-not $Latest -or $Environment -ne 'production')) {
+    Write-Output 'desktop credentials: invalid arguments; PurgeOnly requires Latest and production.'
+    exit 1
+}
 
 try {
     if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
@@ -92,7 +101,12 @@ try {
         $startInfo.EnvironmentVariables["${prefix}_BUCKET"] = $Bucket
         $startInfo.Arguments = "--import tsx/esm apps/desktop/scripts/upload-target.ts $Target --credential-launcher --environment $Environment --bucket $Bucket"
         if ($Latest) { $startInfo.Arguments += " --latest" }
-        Write-Output "desktop credentials: uploading $Target to $Environment; release validation runs before network writes."
+        if ($PurgeOnly) { $startInfo.Arguments += " --purge-only" }
+        if ($PurgeOnly) {
+            Write-Output "desktop credentials: submitting a cache purge for $Target in $Environment; no installer upload."
+        } else {
+            Write-Output "desktop credentials: uploading $Target to $Environment; release validation runs before network writes."
+        }
     } else {
         $probe = "const id=process.env.${prefix}_SECRET_ID;const key=process.env.${prefix}_SECRET_KEY;process.exit(id?.trim()&&key?.trim()?0:1)"
         $startInfo.Arguments = "-e `"$probe`""

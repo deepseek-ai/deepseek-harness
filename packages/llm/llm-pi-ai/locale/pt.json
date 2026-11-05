@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "adaptação do modelo pi-ai",
+    "description": "Fornecimento de adaptação do modelo DeepSeek via pi-ai para DeepSeek Harness como uma implementação verificada por design de dsh-llm-deepseek."
+  }
+}

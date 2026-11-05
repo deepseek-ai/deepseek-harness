@@ -1,0 +1,9 @@
+version: 1
+scenario: fs-same-mode-empty-justification
+profile: headless
+composition: default
+recording: authored
+header:
+  class: default
+workspace:
+  final: true

@@ -1,0 +1,10 @@
+version: 1
+scenario: mcp-template-error
+profile: headless
+composition: mcp-template-error
+recording: live
+environment:
+  DSH_MCP_TEMPLATE_TOKEN: snapshot-mcp-secret-do-not-log
+header:
+  class: mcp-template-error
+  pin: true

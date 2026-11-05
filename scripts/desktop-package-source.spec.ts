@@ -23,6 +23,7 @@ it.each(['macos', 'windows'])('%s packaging accepts test branches but preserves 
     mkdirSync(join(root, 'apps/desktop/scripts'), { recursive: true })
     writeFileSync(join(root, 'package.json'), '{"version":"1.0.0"}')
     writeFileSync(join(root, 'apps/desktop/scripts/desktop-ci-version.mjs'), 'PACKAGE_VERSION_MODE')
+    writeFileSync(join(root, 'apps/desktop/scripts/retain-desktop-ci.ts'), '--check-runner')
     git('add', '.')
     git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-m', 'fixture')
     const sha = git('rev-parse', 'HEAD')
@@ -51,6 +52,9 @@ it.each(['macos', 'windows'])('%s packaging accepts test branches but preserves 
     }
     for (const preset of ['test', 'production']) expect(run(preset, 'dsh-v1.0.0').status).toBe(0)
     expect(run('test', 'dsh-v2.0.0').status).not.toBe(0)
+    writeFileSync(join(root, 'apps/desktop/scripts/retain-desktop-ci.ts'), 'old archival adapter')
+    expect(run('test', 'dsh-v1.0.0').stderr).toContain('independent Desktop artifact archival support')
+    writeFileSync(join(root, 'apps/desktop/scripts/retain-desktop-ci.ts'), '--check-runner')
     writeFileSync(join(root, 'apps/desktop/scripts/desktop-ci-version.mjs'), 'old adapter')
     expect(run('test', 'dsh-v1.0.0').status).not.toBe(0)
   } finally { rmSync(root, { recursive: true, force: true, maxRetries: 3 }) }

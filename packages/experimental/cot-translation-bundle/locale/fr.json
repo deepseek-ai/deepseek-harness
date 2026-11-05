@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Traduction automatique du raisonnement",
+    "description": "Traduit les lignes « Pensez » développées dans la langue de votre choix pendant que l'agent les écrit, et « Voir l'original » permet de revenir au texte d'origine.",
+    "detail": "docs/DETAIL.md"
+  }
+}

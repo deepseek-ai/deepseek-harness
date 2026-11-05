@@ -55,7 +55,7 @@ describe('experimental Inspector Host DevTools routes', () => {
     const routes: WebRoute[] = []
     const upgrades: WebUpgradeRoute[] = []
     const webServer: Pick<WebServer, 'register' | 'registerUpgrade'> = {
-      register: (route) => { routes.push(route); return () => {} },
+      register: (route: WebRoute) => { routes.push(route); return () => {} },
       registerUpgrade: (route) => { upgrades.push(route); return () => {} },
     }
     context.provide('webServer', webServer as WebServer)

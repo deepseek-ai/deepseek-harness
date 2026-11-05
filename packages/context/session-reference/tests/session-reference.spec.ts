@@ -386,6 +386,7 @@ describe('session reference spill outcomes', () => {
       const target = ctx.sessions.create(SessionId('target'))
       const sources = ['one', 'two', 'three'].map(id => ctx.sessions.prepare(SessionId(id)))
       const detachSources = sources.map(source => ctx.sessions.enter(source))
+      sources.forEach((source) => { ctx.sessions.announce(source) })
       sources.forEach((source, index) => { appendText(source, index === 1 ? 'intact' : 'large'.repeat(300)) })
       const save = vi.spyOn(ctx.spillStore, 'saveText').mockImplementation(async input => ({
         locator: SpillLocator(`memory:${input.suggestedName}`), bytes: Buffer.byteLength(input.content), retrievalHint: 'Read the captured transcript.',
@@ -614,12 +615,14 @@ describe('model-relative reference budgets', () => {
   it('removes its pre-step listener when the resolver fiber is disposed', async () => {
     const { ctx, agent, source, resolve, resolverFiber } = await setup()
     const resolver = ctx.sessionReferenceResolver
+    resolve.mockClear()
     await resolverFiber.dispose()
     ctx.systemPrompt.variable('provider', () => 'disposed')
     ctx.systemPrompt.variable('model', () => 'disposed')
     await ctx.systemPrompt.assemble({ agent, scope: agent })
-    await resolver.prepare(agent, [], [{ sessionId: source.id }], { provider: 'seed', model: 'seed' })
-    expect(resolve).toHaveBeenLastCalledWith('seed', 'seed', undefined)
+    expect(resolve).not.toHaveBeenCalled()
+    await expect(resolver.prepare(agent, [], [{ sessionId: source.id }], { provider: 'seed', model: 'seed' }))
+      .rejects.toThrow('cannot get required service "sessionQuery" in inactive context')
     const message = createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: formatSessionReferenceMention({ sessionId: source.id }) }] })
     const seed = { kind: 'enter' as const, messages: [message] }
     await expect(agentEvents(ctx, agent).waterfall('agent/pre-step', { modelSelection: { provider: 'seed', model: 'seed' }, messages: [message], turn: 1, step: 1, signal: new AbortController().signal },

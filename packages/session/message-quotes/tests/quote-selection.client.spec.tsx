@@ -52,16 +52,13 @@ describe('quote action consumer', () => {
     expect(fixture.value.dismiss).toHaveBeenCalledOnce()
   })
 
-  it('responds to changes in a continuable subagent parent availability', () => {
+  it('allows quoting in continuable subagents and rejects one-shot records', () => {
     const child = {
       address: { parentSessionId: SessionId('parent'), childSessionId: SessionId('quote-selection'), mode: 'continuable' as const },
-      parentAvailable: true,
     }
     const fixture = props(true, child)
     const view = render(<QuoteSelectionAction {...fixture.value} />)
     expect(view.queryByRole('button')).not.toBeNull()
-    view.rerender(<QuoteSelectionAction {...props(true, { ...child, parentAvailable: false }).value} />)
-    expect(view.queryByRole('button')).toBeNull()
     view.rerender(<QuoteSelectionAction {...props(true, { ...child, address: { ...child.address, mode: 'one-shot' } }).value} />)
     expect(view.queryByRole('button')).toBeNull()
   })

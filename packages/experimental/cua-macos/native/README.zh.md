@@ -23,7 +23,33 @@ kind: "package-reference"
 <a id="build-and-service"></a>
 ## 构建与服务
 
-使用 `swift build --package-path packages/experimental/cua-macos/native --configuration release` 构建。二进制位于本目录下的 `.build/release/dsh-cua-native`。Host 将 `--ensure-shared` 作为受管启动命令运行，服务进程随后归属于已连接的客户端，最后一条连接完成清理后退出。`.build/` 不提交到仓库。
+运行 `pnpm --dir packages/experimental/cua-macos run build:native`，在 `native/bin/darwin-<arch>` 下生成带签名的 `DSH Computer Use.app`，`current.json` 选择完整的内容摘要目录。默认使用临时签名；正式打包可传入 `--identity` 指定 Developer ID，并由发布流程完成公证。Host 运行应用内的 `--ensure-shared` 入口，经 LaunchServices 后台启动服务。最后一条连接完成清理后，服务退出。 helper 嵌套在另一个 `.app` 内时，启动器先把完整的已签名应用复制到 `~/Library/Application Support/DeepSeek Harness/Computer Use/<runtime-key>/`，再启动它。每个不可变目录都校验可执行文件哈希和应用签名，旧目录保留给仍在运行的安装版本使用，使两项 macOS 权限都归属于 helper。校验失败会中止启动；删除报错中指定的缓存目录后再重试。
+
+源码检出以 `--variant dev` 构建，应用包为 `DSH Computer Use Dev.app`，Bundle ID 为 `com.deepseek.harness.computer-use.dev`。开发版和正式版默认临时签名。临时签名的指定要求包含代码哈希，二进制变化后可能需要重新授权。
+
+源码 provider 的 `sourceSigning: { identity, keychain }` 选择已有证书及其钥匙串绝对路径。构建 CLI 使用 `--identity <证书名称或 SHA-1 指纹>` 和 `--keychain <绝对路径>`；正式打包也可省略 `--keychain`，使用用户搜索列表。构建不生成、解锁或移除签名身份；所选证书不可用时签名失败。
+
+仓库的[开发者签名 skill](../../../../.agents/skills/dsh-cua-macos-signing/SKILL.md)负责 Agent 操作流程：在 `~/.cua-macos-keys/` 生成独立身份，将指向它的配置写入 DSH home，并按需解锁或移除。私钥和密码由开发者单独维护，删除 DSH home 不会删除它们。同一用户的进程可以读取保存的密码并使用该身份签名。
+
+使用相同证书的构建共用包含 Bundle ID 和证书的指定要求。首次授权仍需在系统设置中完成；签名要求相同不代替授权后重建、跨 worktree 的实际权限验证。
+
+证书签名包含签名时间。开发构建在 `sources/` 中记录每个未签名应用与证书指纹对应的目录，内容不变时复用该目录。临时签名使用独立记录。显式传入证书名称时会重新签名，因为续期可能改变名称对应的证书。
+
+`native/.build/prepared/<arch>` 和 `native/bin/darwin-<arch>` 中的各代应用不会自动清理。正式打包时使用全新的 `--output-directory`，或确认没有客户端使用后清理打包输出再构建，避免旧应用进入 tarball。安全签名时间戳可能让相同源码生成不同代应用。
+
+手动工作流 **Package CUA helper · macOS** 的[配置](../../../../.github/workflows/cua-helper-package.yml)在 `dsh-mac-package-trial` 构建两种架构。手动启动时，在 **Use workflow from** 中选择可信的分支或 tag，再选择机器 `preset`。checkout 使用本次 Actions 运行记录的提交；由发布工作流调用时使用调用方本次运行的提交。手动运行始终构建新产物。发布复用使用 Node 原生 `fetch` 和工作流提供的 `GH_TOKEN` 查询 GitHub API。签名凭据沿用[macOS 打包配置](../../../../apps/desktop/packaging/README.zh.md#macos-actions)。打包无需 macOS 桌面登录或 Rosetta。在仓库根目录运行 `node --import tsx/esm scripts/cua-helper/package.ts --out <new-directory>` 可执行相同准备。完整应用签名、公证和贴票后才确定最终内容摘要，再从解包后的 `cua-helper.tgz` 验证架构、签名、票据、Gatekeeper 和文件完整性。打包不启动 helper。在已登录的桌面会话中单独运行 `python3 scripts/cua-helper/smoke.py <helper-executable>` 检查能力、helper 身份和退出清理；Apple Silicon 上执行 x64 版本需要 Rosetta。该检查不申请权限或观察应用。命令失败、超时或启动回复无法解析时，会输出捕获的 stdout 和 stderr；无效编码只在诊断文本中替换，协议解析仍严格校验。打包成功不代表运行验收通过。 helper 打包保留独立的[诊断记录](../../../../apps/desktop/packaging/README.zh.md#macos-release-signing)，包括桌面安装包开始构建前发生的失败。
+
+工作流保留 `cua-helper.tgz` 和 `cua-helper.json`。清单记录原始构建的产品版本、commit、Team ID、两份应用摘要、源码摘要和构建摘要。[Release publish](../../../../.github/workflows/release-publish.yml)始终调用该工作流，再按返回的 run ID 和 artifact ID 下载所选产物，生成 provider 的 npm 包。准备步骤校验当前 helper 的源码摘要、选定的构建摘要、两种架构、应用目录、文件字节和执行权限。npm 发布在写入注册表前重新检查实际 provider tarball。无关 commit 或产品版本变化时，复用保留原始清单和已签名字节。普通 PR 发布检查不使用签名凭据。
+
+**Release publish (dsh)** 接受可选的 `cua_run_id`：填写构建运行页面 URL 中 `/actions/runs/` 后的数字，不填 job ID。发布工作流开启 `reuse`，并通过 helper 的 `workflow_call` 参数传入这个选择；这两个复用参数均不出现在 helper 的手动表单中。`cua_run_id` 留空时自动查找，查询这两个工作流最近 14 天创建且已结束的运行，选择未过期的匹配产物。选择在 Mac 上执行，早于 pnpm 准备和依赖安装。命中时跳过安装、编译、签名和公证，自动查找未命中时重新构建。手动指定 run ID 时先固定最新 attempt，再选取该 run 历史中最后一次实际执行的 helper job。仅重跑 pack/publish 时仍可使用原 helper 产物；若更新的 helper 执行失败，则不复用更早的成功产物。产物缺失或过期、输入不匹配时直接失败，不改选其他运行。后续 npm 失败不影响成功的 helper job。GitHub API 读取失败会停止选择。运行摘要链接实际构建者；只复用产物的运行不重新上传副本，手动选择时填写摘要所链接的构建 run ID。产物保留 14 天。选择后过期或被删除会使下载失败，不自动改选或构建不同字节；按下方重试说明处理。
+
+[源码摘要](../../../../scripts/cua-helper/build-inputs.ts)覆盖受跟踪的 helper 源码、资源、CUA/Desktop 打包脚本、两份工作流、包与编译器配置、锁定依赖、pnpm 配置和补丁；受跟踪的 `node_modules` 文件也参与比较。包清单只排除版本字段，其余字段保留。构建摘要还包含 preset、Node/Swift/Clang/Python 版本、macOS SDK build、签名身份、Team ID 和证书容器摘要，不包含密码。选择时使用生产运行的 GitHub `head_sha`，独立比较对应 Git 树与包清单 blob 和当前 checkout 的路径、字节及执行权限，不能仅凭产物自报摘要认定源码一致。helper 依赖安装禁用生命周期脚本和 pnpmfile hooks。输入缺失或 GitHub 证据无法读取时失败。没有匹配记录的旧产物需要重新构建。选择仍需等待 Mac runner 并检出代码，消费产物的 pack job 再校验下载的应用字节。
+
+npm 发布在上传部分包后失败时，只重跑 **Publish to npm**，复用保留期内的 `dsh-npm-tarballs`（7 天）。该 job 上传原 tarball，跳过已发布且字节相同的包。此次重试不要重跑全部 job。若必须新建运行，以同一 commit 和版本重新打包，填写 pack 摘要中的原始构建 `cua_run_id`。原产物不可用或任何重新打包的内容不同时，应停止发布；不能用不同内容替换已有 npm 版本。
+
+启动错误通过当前用户专用、每次启动独立的错误文件和 launcher 的 JSON 错误帧保留错误码与消息。等待启动锁和就绪状态共用一个期限，系统启动应用的耗时计入该预算。就绪记录必须指向本次启动的 PID。新实例启动失败后，launcher 强制终止并等待其退出，再报告失败；清理另有与启动超时等长的期限。连接已有服务失败时不会终止该服务。
+
+应用图标通过 `pnpm --dir packages/experimental/cua-macos run build:icon` 从 [Computer Use 图形](../../cua-bundle/icon.svg)生成。原生图标在图形下添加不透明的白色圆角底板，外侧四角保持透明。系统授权提示和 DSH 权限页使用这个应用图标。
 
 共享服务在 `/tmp/dsh-cua-<uid>` 下使用仅所有者可访问的 Unix socket，以可执行文件的 SHA-256 区分实例。版本锁选出一个进程，另一个真实可执行路径锁排除同一路径的不同构建。首帧为协议版本 1 的 `hello`，包含运行时标识以及该连接的字节、AX、操作、截图、事件间隔和清理限制。`ready` 返回已核实的运行时标识、PID 和实例 ID。每条连接拥有独立的 AXWorker。stdin/stdout 入口是该服务的诊断代理。
 
@@ -53,11 +79,11 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 | `hover`, `click`, `setValue`, `selectText`, `typeText`, `paste`, `pressKey`, `scroll`, `drag` | `{dispatched: true, verified: false}` 记录原生分派。需要读取新状态以核实预期的应用变化。 |
 | `screenshot` | `{mimeType: "image/png", data, pixelWidth, pixelHeight, bounds, coordinateSpace: "window-points", windowId}`。Retina 显示器上 PNG 像素尺寸可能不同于窗口 point 尺寸。 |
 
-每个面向应用的操作都要求使用同一 helper 的 `getApp` 返回的 `appHandle`。helper 固定 PID 和内核进程启动时间，进程退出或 PID 被复用后使句柄及其全部快照失效。再次调用 `getApp` 可取得替代进程，不会重新激活旧句柄。随机的 helper 命名空间防止已终止 helper 的句柄与替代实例重合。重复获取同一存活进程会共享句柄。
+每个面向应用的操作都要求使用同一 helper 的 `getApp` 返回的 `appHandle`。helper 固定 PID 和内核进程启动时间，进程退出或 PID 被复用后使句柄及其全部快照失效。再次调用 `getApp` 可取得替代进程，不会重新激活旧句柄。随机的 helper 命名空间防止已终止 helper 的句柄与替代实例重合。重复获取同一存活进程会共享句柄。启动后检查失败会使待启动句柄失效，并保留原错误；已经启动的进程不会被终止，launchApp 也不能复用失败的句柄。
 
-稳定错误码包括 `INVALID_REQUEST`（信封无效）、`INVALID_ARGUMENT`（参数无效）、`UNSUPPORTED`（操作未知）、`APP_UNAVAILABLE`、`AMBIGUOUS_APP`、`STALE_APP`、`STALE_SNAPSHOT`、`WINDOW_UNAVAILABLE`、`WINDOW_CHANGED`、`PERMISSION_DENIED`、`FOREGROUND_REQUIRED`（悬停目标不是未被遮挡的前台窗口）、`PANEL_NOT_READY`（输入前系统面板接收方尚不可用）及 `NATIVE_ERROR`（其余操作系统失败）。错误不保证已分派的部分输入被回滚，Host 不得自动重试输入。
+稳定错误码包括 `INVALID_REQUEST`（信封无效）、`INVALID_ARGUMENT`（参数无效）、`UNSUPPORTED`（操作未知）、`APP_UNAVAILABLE`、`APP_PATH_UNAVAILABLE`、`PROCESS_INSPECTION_FAILED`、`AMBIGUOUS_APP`、`STALE_APP`、`STALE_SNAPSHOT`、`WINDOW_UNAVAILABLE`、`WINDOW_CHANGED`、`PERMISSION_DENIED`、`FOREGROUND_REQUIRED`（悬停目标不是未被遮挡的前台窗口）、`PANEL_NOT_READY`（输入前系统面板接收方尚不可用）及 `NATIVE_ERROR`（其余操作系统失败）。错误不保证已分派的部分输入被回滚，Host 不得自动重试输入。
 
-应用选择向 Host 返回授权记录：规范化可执行路径与经验证的代码签名指定要求的摘要、显示名称、可执行路径和可持久化标记。未签名或临时签名的应用不能获得长期授权；运行中实例使用进程生命期身份，未启动应用使用可执行文件摘要。Host 从模型结果中移除此记录，并在启动、观察和输入前取得用户许可。此管道协议用于可信 Host 传输，无法隔离另一个已获授权的 shell 进程。
+应用选择向 Host 返回授权记录：区分大小写的 Bundle ID 加上 `macos:bundle-id:` 前缀后计算的 SHA-256 摘要、显示名称、可选的可执行路径和可持久化标记。相同标识的所有安装副本共用授权，包括未签名和临时签名的应用。缺少非空 Bundle ID 时，运行中和未启动应用都对 `macos:executable-path:` 与解析符号链接后的可执行路径计算 SHA-256，仍可保存长期授权。进程路径查询失败时，运行中的有效 Bundle ID 仍可用于授权，记录省略 executablePath；路径可取得时仍须与所选目标一致。两种身份均不可用时，在执行目标操作前返回 APP_PATH_UNAVAILABLE，保留路径查询原因和 errno。PROCESS_INSPECTION_FAILED 表示无法验证进程实例，只有进程检查返回 ESRCH 时才报告进程不存在；两种失败都不触发自动重试。进程号和启动时间只校验存活句柄，不进入已保存身份。Host 从模型结果中移除此记录，并在启动、观察和输入前取得用户许可。此管道协议用于可信 Host 传输，无法隔离另一个已获授权的 shell 进程。
 
 协议声明从[共享协议](../../cua/src/protocol.ts)生成。在仓库根目录运行 `pnpm exec tsx packages/experimental/cua-macos/native/generate-protocol.ts`，包测试检查生成的 JSON 和 Swift 字段/枚举表。模型参数不包含 Host 资源上限和私有启动续接操作。
 
@@ -77,9 +103,9 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 
 `typeText` 和 `pressKey` 面向所选进程当前获得焦点的控件，不指定窗口。组合键先向 PID 发送修饰键变化，再发送主键，并逆序释放修饰键，不使用全局 HID 队列。后台鼠标操作可能改变键盘焦点。KP_0 和 KP_Enter 等数字键盘名称保留物理键码。文本逐个 Unicode 字符输入，不使用剪贴板。LF、CR 和 CRLF 发送一次 Return，制表符发送 Tab。应用保留缩进和焦点导航等正常编辑行为。每次按下和抬起后等待配置的文本事件间隔，分派完成不证明应用已消费全部事件。取消可能中断部分文本或手势，无法撤销已接收事件。很长的文本可能超过 Host 操作期限。继续输入前应核实应用状态。
 
-负责执行的 host/helper 需要 macOS 辅助功能权限以读取 AX 和输入，需要屏幕录制权限以截图。能力预检和权限错误不授予权限。截图会拒绝在读取图片期间移动或缩放的窗口。无法确认归属的系统面板及仅后台辅助类型的应用不可选择。
+所选 helper 应用需要 macOS 辅助功能权限以读取 AX 和输入，需要屏幕录制权限以截图。能力预检和权限错误不授予权限。截图会拒绝在读取图片期间移动或缩放的窗口。无法确认归属的系统面板及仅后台辅助类型的应用不可选择。
 
-仅供 Host 使用的权限操作为 `permissionStatus {}`、`requestPermission {permission}` 和 `openPermissionSettings {permission}`，其中 permission 为 `accessibility` 或 `screenRecording`。这些操作不出现在模型工具及 `getCapabilities.methods` 中。权限状态包含观察到的 helper 和父进程路径，这些路径不能确定 TCC 归属的应用。系统授权提示负责指出应用并询问用户决定。helper 使用可选的 libSystem 内部接口 `responsibility_get_pid_responsible_for_pid` 查询责任进程，在报告就绪前记录对应应用的名称和图标。接口通过动态加载解析，函数签名与 [Chromium](https://chromium.googlesource.com/chromium/src/+/refs/tags/134.0.6998.28/base/process/process_info_mac.mm) 使用的一致。符号、进程或应用信息不可用时，归属保持未知，不根据最近的 GUI 祖先推断。权限检查独立于这些信息。
+仅供 Host 使用的权限操作为 `permissionStatus {}`、`requestPermission` 和 `openPermissionSettings {permission}`，其中 permission 为 `accessibility` 或 `screenRecording`。请求携带本地化的 `instruction`、`backLabel`、`finderLabel`、`unavailableMessage`、`settingsMessage`，以及 100–2147483647 的整数 `pollIntervalMs`。原生引导将 `{application}` 替换为自身应用名。状态返回权限观测、进程诊断和 `launchApplication` 信息。这些操作不出现在模型工具及 `getCapabilities.methods` 中。helper 动态解析 `responsibility_get_pid_responsible_for_pid`，函数签名与 [Chromium](https://chromium.googlesource.com/chromium/src/+/refs/tags/134.0.6998.28/base/process/process_info_mac.mm) 一致，在报告就绪前记录责任 bundle，无法获取时使用自身 bundle。父进程路径不决定授权归属。
 
 观察通过 `AXUIElementCopyMultipleAttributeValues` 读取每个非布局节点的描述属性和子节点。逐属性错误保留单独读取的规则；不支持批量 API 时使用单独读取。值只在本次观察期间保留，输入读取即时属性。应用状态可能在节点之间变化，批量读取不使整棵树具备原子性。
 
@@ -101,11 +127,17 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 <a id="verification"></a>
 ## 验证
 
-使用 `python3 packages/experimental/cua-macos/native/tests/test_swift.py` 通过选定 Apple 工具链的 Swift Testing 框架和运行时路径执行离线单元检查；使用 `python3 packages/experimental/cua-macos/native/tests/protocol_e2e.py` 检查 JSONL 接纳、有序回复和 EOF 退出，不执行桌面操作。应用与协议端到端检查接受 `--helper` 以选择单独构建的对比二进制。
+桌面检查要求给所选 helper 授权：正式版声明名称 `DSH Computer Use`，开发版声明名称 `DSH Computer Use Dev`。以系统提示为准，临时签名重建后可能需要重新授权。`--helper` 指向该应用内的可执行文件。裸二进制仅用于旧版本对比，不支持作为当前 helper 的覆盖路径。
 
-运行 `python3 packages/experimental/cua-macos/native/tests/shared_helper_e2e.py --helper /absolute/helper`，通过测试自建的 AppKit fixture 核实并发启动、共享服务 PID、独立句柄、同一应用交接、请求级截图期限、连接清理和信号退出。需要已有辅助功能和屏幕录制权限。`--without-desktop` 将检查限定为协议与进程生命期。
+运行 `python3 packages/experimental/cua-macos/native/tests/startup_e2e.py`，通过 LaunchServices 检查启动即退出、原始错误传递、过期就绪记录拒绝，以及卡住的新实例退出。检查使用自建应用，不申请系统权限。发布单元测试模拟签名；`build:native` 调用真实的 `codesign --verify --strict`，`launcher_identity_e2e.py` 验证 LaunchServices 授权归属。
 
-在 GUI 登录会话中运行 `python3 packages/experimental/cua-macos/native/tests/launcher_identity_e2e.py --helper /absolute/helper`，验证由 Launch Services 启动的应用先启动另一个 GUI 启动器，再启动 helper。helper 识别外层责任应用，并在启动器退出后保留其名称和图标。检查只使用测试自建的两个应用和 helper，结束后清理对应的 Launch Services 注册，不申请辅助功能或屏幕录制权限。
+使用 `python3 packages/experimental/cua-macos/native/tests/test_swift.py` 通过选定 Apple 工具链的 Swift Testing 框架和运行时路径执行离线单元检查；使用 `python3 packages/experimental/cua-macos/native/tests/protocol_e2e.py` 检查 JSONL 接纳、有序回复和 EOF 退出，不执行桌面操作。应用与协议端到端检查接受 `--helper` 以选择单独构建的对比二进制。 `python3 packages/experimental/cua-macos/native/tests/test_build_app.py` 验证应用发布、开发版构建、已签名目录复用、签名失败和损坏副本拒绝。开发者签名工具的单测由 `scripts/cua-macos-signing.spec.ts` 执行；真实签名验证命令见[开发者签名 skill](../../../../.agents/skills/dsh-cua-macos-signing/SKILL.md)。
+
+运行 `python3 packages/experimental/cua-macos/native/tests/shared_helper_e2e.py --helper /absolute/helper`，通过测试自建的 AppKit fixture 核实并发启动、共享服务 PID、独立句柄、同一应用交接、请求级截图期限、连接清理和信号退出。需要已经给所选的正式版或开发版 helper 授予辅助功能和屏幕录制权限。`--without-desktop` 将检查限定为协议与进程生命期。
+
+在已解锁的 macOS GUI 会话中运行 `python3 packages/experimental/cua-macos/native/tests/application_consent_e2e.py --helper /absolute/helper`，需要可用的 Apple Swift 编译器。它创建并清理自己的 AppKit 应用和独立 GUI 进程，检查元数据替换、冷启动与直接启动、共用 Bundle ID、独立程序重启后的持久路径身份，以及删除运行中可执行文件后的选择行为。默认身份检查不需要辅助功能或屏幕录制权限。添加 `--desktop` 可读取完整测试应用的控件，通过状态文件验证 AX 按钮点击，截取窗口，并记录删除可执行文件后的观察结果；此模式要求已有两项系统权限。
+
+在 GUI 登录会话中运行 `python3 packages/experimental/cua-macos/native/tests/launcher_identity_e2e.py`，验证两个嵌套 GUI 启动器启动 helper 后，授权归属仍为 helper 自己，多条连接得到相同名称和图标。检查自行创建应用并清理 LaunchServices 注册，不申请辅助功能或屏幕录制权限。 运行 `python3 packages/experimental/cua-macos/native/tests/nested_application_e2e.py`，用独立签名的测试应用验证 helper 在外层 `.app` 之外保留签名发布、并发发布和服务退出。
 
 构建并解锁 Mac 后运行 `python3 packages/experimental/cua-macos/native/tests/axless_e2e.py`，验证应用移除并恢复 AX 根节点的窗口。检查需要已有辅助功能/屏幕录制权限，会拒绝过期元素索引，捕获无 AX 窗口，通过 fixture 状态文件核实坐标点击，并检查恢复。不会修改系统权限设置。
 

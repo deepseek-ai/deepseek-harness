@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Change requests & worktrees",
+    "description": "Keep linked GitHub pull requests beside your conversation: follow checks and reviews, inspect diffs, and send feedback to the agent. Review local changes and use a separate worktree to isolate each task. GitHub features require the gh CLI installed and signed in on the host.",
+    "detail": "docs/DETAIL.md"
+  }
+}
