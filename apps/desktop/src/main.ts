@@ -63,6 +63,7 @@ import { DesktopMandatoryUpdateWindow } from './mandatory-update-window.ts'
 import { DesktopPolicyTestAuth } from './policy-test-auth.ts'
 import { readDesktopSettings } from './settings.ts'
 import { readDesktopLocaleCache, writeDesktopLocaleCache } from './locale-cache.ts'
+import { readDesktopThemeCache, writeDesktopThemeCache } from './theme-cache.ts'
 import { DesktopUpdateDialog, type UpdateDialogOptions } from './update-dialog.ts'
 import { readDesktopRuntime } from './runtime-tree.ts'
 import { DesktopBrowserGuests } from './browser-guests.ts'
@@ -81,6 +82,7 @@ let shuttingDown = false
  */
 let skipQuitConfirmation = false
 let windowsLanguage: string | undefined = readDesktopLocaleCache(app.getPath('userData'))
+nativeTheme.themeSource = readDesktopThemeCache(app.getPath('userData'))
 /**
  * Whether the backend has reached ready: false until the first ready, back to
  * false when a restart returns it to starting, frozen during shutdown so a
@@ -238,9 +240,10 @@ function developmentHostInspectPort(enabled: boolean): number | undefined {
 /**
  * Opaque chrome fallback matching the built-in sidebar palette (the resolved
  * `--dsw-static-neutral-bluish-900` / `-50` tokens). An approximation for
- * custom themes: Windows swaps in the renderer's measured palette over the
- * windowsAppearance IPC, and macOS shows it only while minimized or hidden.
- * @returns the sidebar fill hex for the active system color scheme.
+ * custom themes: Windows captions use the renderer's measured palette over
+ * windowsAppearance IPC. The Windows workspace base stays opaque and follows
+ * the effective light/dark theme; macOS uses it only while minimized or hidden.
+ * @returns the sidebar fill hex for the effective application color scheme.
  */
 function chromeFallbackFill(): string {
   return nativeTheme.shouldUseDarkColors ? '#1b1b1c' : '#f9fafb'
@@ -308,6 +311,13 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
     // Reloads and navigations re-register the preload listener; resend the
     // current state so a fullscreen reload does not fall back to windowed CSS.
     window.webContents.on('did-finish-load', sendFullscreen)
+  }
+  if (process.platform === 'win32' && primary) {
+    const updateBackground = (): void => {
+      if (!window.isDestroyed()) window.setBackgroundColor(chromeFallbackFill())
+    }
+    nativeTheme.on('updated', updateBackground)
+    window.once('closed', () => { nativeTheme.removeListener('updated', updateBackground) })
   }
   if (process.platform === 'darwin') {
     // Deminiaturize reattaches the NSVisualEffectView material late
@@ -871,8 +881,12 @@ async function main(): Promise<void> {
   ipcMain.handle(PLATFORM_IPC.close, (event) => { assertMainApplication(event); platformView.close() })
   // Only the main window may synchronize its palette with the native material.
   ipcMain.on(DESKTOP_IPC.nativeThemeSet, (event, source: unknown) => {
-    if (mainWindow === undefined || event.sender !== mainWindow.webContents) return
-    if (source === 'light' || source === 'dark' || source === 'system') nativeTheme.themeSource = source
+    if (mainWindow === undefined || event.sender !== mainWindow.webContents
+      || event.senderFrame !== mainWindow.webContents.mainFrame
+      || !event.senderFrame.url.startsWith(`${SCHEME}://app/`)) return
+    if (source !== 'light' && source !== 'dark' && source !== 'system') return
+    nativeTheme.themeSource = source
+    writeDesktopThemeCache(app.getPath('userData'), source)
   })
   ipcMain.handle(DESKTOP_IPC.localeBootstrap, async (event) => {
     if (event.sender !== mainWindow?.webContents || event.senderFrame !== mainWindow.webContents.mainFrame
