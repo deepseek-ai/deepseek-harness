@@ -343,6 +343,7 @@ describe('MCP resource tools', () => {
     const result = await call(ctx, 'read_mcp_resource', { server: 'missing', uri: 'docs://text' })
     expect(result.isError).toBe(true)
     expect(JSON.stringify(result.content)).toContain('unavailable in this agent')
+    expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
   })
 
   it('resolves scoped providers and removes only the disposed registration', async () => {

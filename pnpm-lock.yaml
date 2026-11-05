@@ -13788,6 +13788,9 @@ importers:
       '@deepseek-ai/dsh-credentials':
         specifier: workspace:*
         version: link:../../credentials/credentials
+      '@deepseek-ai/dsh-error':
+        specifier: workspace:*
+        version: link:../../util/error
       '@deepseek-ai/dsh-http-proxy':
         specifier: workspace:*
         version: link:../../util/http-proxy

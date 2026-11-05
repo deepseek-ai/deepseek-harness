@@ -264,7 +264,9 @@ describe('syncTools', () => {
       { name: 'taken', inputSchema: { type: 'object' } },
     ])
 
-    await expect(syncTools(client as never, ctx, defaultOpts, new Map())).rejects.toBeInstanceOf(McpToolRegistrationError)
+    const failure = syncTools(client as never, ctx, defaultOpts, new Map())
+    await expect(failure).rejects.toBeInstanceOf(McpToolRegistrationError)
+    await expect(failure).rejects.toMatchObject({ name: 'McpLocalError', code: 'MCP_TOOL_REGISTRATION_FAILED' })
 
     // All-or-nothing: the non-conflicting tool is rolled back too.
     expect(ctx.tools.get('mcp__srv__free')).toBeUndefined()

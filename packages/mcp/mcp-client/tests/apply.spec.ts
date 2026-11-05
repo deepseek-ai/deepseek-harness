@@ -492,6 +492,7 @@ describe('server instruction limits', () => {
       assert(failure instanceof Error)
       assert(failure.cause instanceof Error)
       expect(failure.cause.message).toContain('server instructions exceed maxInstructionBytes')
+      expect(failure.cause).toMatchObject({ name: 'McpLocalError', code: 'MCP_INSTRUCTIONS_TOO_LARGE' })
       expect(ctx.tools.schemas()).toEqual([])
     } finally {
       spy.mockRestore()

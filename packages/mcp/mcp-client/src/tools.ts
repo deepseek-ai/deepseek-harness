@@ -23,7 +23,7 @@ import type { ToolDefinition, ToolExecution, ToolExecutionResult } from '@deepse
 import { assertSupportedJsonSchema } from '@deepseek-ai/dsh-tools'
 import type { JsonSchemaNode } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import { describeError, McpLocalError } from './diagnostic.ts'
+import { McpLocalError, mcpRequestError, McpToolError } from './diagnostic.ts'
 
 /** Resolved options relevant to tool bridging. */
 export interface ToolBridgeOptions {
@@ -32,15 +32,23 @@ export interface ToolBridgeOptions {
   /** Generation cancellation combined with each tool execution's signal. */
   signal: AbortSignal
   /**
-   * Remove secret values from tool-call failures before they reach callers.
+   * Remove secret values from tool-call failures before they reach callers;
+   * a failure keeps its `name` and `code`.
    * @param text - transport or protocol failure text, or MCP `isError` result text.
    * @returns the text with secret values replaced.
    */
   redact?: (text: string) => string
 }
 
-/** Registration failed after the prior generation was removed and partial registrations were rolled back. */
-export class McpToolRegistrationError extends McpLocalError {}
+/**
+ * Registration failed after the prior generation was removed and partial
+ * registrations were rolled back (`MCP_TOOL_REGISTRATION_FAILED`).
+ */
+export class McpToolRegistrationError extends McpLocalError {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, 'MCP_TOOL_REGISTRATION_FAILED', options)
+  }
+}
 
 /** State for one sync generation: the current set of disposers keyed by public name. */
 export type ToolDisposers = Map<string, () => void>
@@ -159,8 +167,11 @@ export async function syncTools(
           if (result.isError !== true || opts.redact === undefined) return result
           return { isError: true, content: [{ type: 'text', text: opts.redact(extractText(result.content as JsonValue[], tool.name)) }] }
         } catch (error) {
-          if (opts.redact === undefined) throw error
-          throw new Error(opts.redact(describeError(error)))
+          // The SDK reports an aborted signal as a request timeout; cancellation
+          // and generation closure are reported as their own reasons instead.
+          execution.signal.throwIfAborted()
+          opts.signal.throwIfAborted()
+          throw mcpRequestError(error, `tool "${tool.name}"`, opts.redact)
         }
       },
     }))
@@ -303,7 +314,7 @@ function createExecutor(
   const { rawName, taskRequired } = options
   return async (args: unknown, exec: ToolExecution) => {
     if (taskRequired) {
-      throw new Error(`Tool "${rawName}" requires task-based execution, which this bridge does not support`)
+      throw new McpToolError(`Tool "${rawName}" requires task-based execution, which this bridge does not support`, 'MCP_UNSUPPORTED_TASK_EXECUTION')
     }
     // The agent loop passes `JSON.parse(model_arguments)` which is usually an
     // object, but can be any JSON value if the model misbehaves (outputs a bare
@@ -312,7 +323,7 @@ function createExecutor(
     const argsObj = (typeof args === 'object' && args !== null ? args : {}) as Record<string, unknown>
     const parsed = specTypeSchemas.CallToolResult['~standard'].validate(await options.call(argsObj, exec))
     if (parsed.issues !== undefined) {
-      throw new Error(`Tool "${rawName}" returned an invalid MCP result: ${parsed.issues.map(issue => issue.message).join('; ')}`)
+      throw new McpToolError(`Tool "${rawName}" returned an invalid MCP result: ${parsed.issues.map(issue => issue.message).join('; ')}`, 'MCP_INVALID_RESULT')
     }
     const result = parsed.value
 
@@ -321,7 +332,7 @@ function createExecutor(
 
     // MCP isError → throw so ToolRuntime produces an isError result for the model.
     if (result.isError === true) {
-      throw new Error(text)
+      throw new McpToolError(text, 'MCP_TOOL_ERROR')
     }
 
     const value: McpResult = {

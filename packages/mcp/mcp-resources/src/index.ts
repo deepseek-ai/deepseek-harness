@@ -7,7 +7,7 @@
 import { Service, type Context } from '@deepseek-ai/cordis'
 import { createScope, NamedEntries, ScopedLayers, scopeOf, type ScopeKey, type ScopeLayer } from '@deepseek-ai/dsh-scope'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import type { ToolExecution } from '@deepseek-ai/dsh-tools'
+import { ToolArgsError, type ToolExecution } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import { registerResourceTools } from './tools.ts'
 
@@ -123,7 +123,7 @@ export class McpResourceRuntime extends Service {
   /** Resolve the caller-visible server before starting any network operation. */
   private request(server: string, request: McpResourceRequest, exec: ToolExecution): Promise<JsonValue> {
     const provider = this.layers.merge(exec.agent, layer => layer.servers).get(server)
-    if (!provider) throw new Error(`MCP resource server "${server}" is unavailable in this agent's scope`)
+    if (!provider) throw new ToolArgsError([`server: MCP resource server "${server}" is unavailable in this agent's scope`])
     return provider.request(request, exec)
   }
 }
