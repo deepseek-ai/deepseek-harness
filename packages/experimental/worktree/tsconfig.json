@@ -52,6 +52,9 @@
     },
     {
       "path": "../../workspace/workspace"
+    },
+    {
+      "path": "../../settings/settings"
     }
   ]
 }

@@ -6,8 +6,10 @@ import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
+import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import { IconBranchOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
@@ -34,10 +36,18 @@ import {
 } from './source.ts'
 import { numberOf } from './status.ts'
 import { WorktreeProgress, type WorktreeProgressInjected } from './WorktreeProgress.tsx'
+import { WorktreeSettings } from './WorktreeSettings.tsx'
+import { WorktreeSettingsForm, type WorktreeSettings as WorktreeSettingsFields } from './worktree-settings-form.ts'
 import { WorktreeToggle, type WorktreeToggleInjected } from './WorktreeToggle.tsx'
 
 /** Services required before the Remote contribution mounts. */
-export const inject = ['remote', 'slots', 'locale', 'sidebarRightTabs', 'sidebarRight', 'sessions']
+export const inject = ['remote', 'slots', 'locale', 'sidebarRightTabs', 'sidebarRight', 'sessions', 'configForms']
+
+/** The worktree row of the Forge bundle, whose Plugins page carries the archive cleanup switch. */
+export const WORKTREE_ROW_KEY = '@deepseek-ai/dsh-experimental-forge-bundle#worktree'
+
+/** The Loader entry id the worktree service's settings namespace follows. */
+export const WORKTREE_NS = 'worktree'
 
 /** Registry id of the forge tab type, also its slot key. */
 export const TAB_ID = '@deepseek-ai/dsh-experimental-client-ui-forge'
@@ -345,6 +355,11 @@ function registerUi(ctx: Context): void {
   ctx.slots.inject('sidebar.session.row.hover', () => ctx.slots.register({
     name: 'sidebar.session.row.hover', id: 'forge-panel.row', order: 20, locale: NS, inject: listFace,
   }, SessionHoverForge))
+  const worktreeSettings = new WorktreeSettingsForm(ctx.configForms.get<WorktreeSettingsFields>(WORKTREE_NS))
+  ctx.effect(() => () => { worktreeSettings.dispose() }, 'forge-panel: worktree settings form')
+  ctx.slots.inject('plugins.row.config', () => ctx.slots.register({
+    name: 'plugins.row.config', key: WORKTREE_ROW_KEY, locale: NS, inject: () => worktreeSettings.inject(),
+  }, WorktreeSettings))
 }
 
 /**

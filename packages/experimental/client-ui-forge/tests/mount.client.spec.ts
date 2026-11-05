@@ -7,6 +7,7 @@ import assert from 'node:assert/strict'
 import { Context, Service } from '@deepseek-ai/cordis'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
+import { stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { SidebarRightTabDefinition, TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { ChangeRequestSnapshot, ForgeReviewRequest, ForgeReviewResult } from '@deepseek-ai/dsh-experimental-forge/types'
@@ -21,13 +22,15 @@ import { ForgeTab, type ForgeTabInjected } from '../src/client/ForgeTab.tsx'
 import { ForgeTabTitle } from '../src/client/ForgeTabTitle.tsx'
 import { HeaderButton, type HeaderButtonInjected } from '../src/client/HeaderButton.tsx'
 import { en, NS, zh } from '../src/client/locales.ts'
-import { inject, mountForgePanel, TAB_ID, TAB_KIND } from '../src/client/mount.ts'
+import { inject, mountForgePanel, TAB_ID, TAB_KIND, WORKTREE_NS, WORKTREE_ROW_KEY } from '../src/client/mount.ts'
 import type { SessionListInjected } from '../src/client/session-list.ts'
 import { SessionHoverForge } from '../src/client/SessionHoverForge.tsx'
 import { SessionRowForge } from '../src/client/SessionRowForge.tsx'
 import type { NoticeSource } from '../src/client/source.ts'
 import type { ReviewSelection } from '../src/client/review.ts'
 import { WorktreeProgress, type WorktreeProgressInjected } from '../src/client/WorktreeProgress.tsx'
+import { WorktreeSettings } from '../src/client/WorktreeSettings.tsx'
+import type { WorktreeSettingsInjected, WorktreeSettings as WorktreeSettingsFields } from '../src/client/worktree-settings-form.ts'
 import { WorktreeToggle, type WorktreeToggleInjected } from '../src/client/WorktreeToggle.tsx'
 import type { WorktreeCleanup } from '@deepseek-ai/dsh-experimental-worktree/types'
 import type {
@@ -187,6 +190,8 @@ async function base() {
     return fiber.ctx
   }) }
   ctx.provide('sessions', sessions)
+  const worktreeForm = stubConfigForm<WorktreeSettingsFields>()
+  ctx.provide('configForms', { get: (name: string) => { expect(name).toBe(WORKTREE_NS); return worktreeForm.scope } } as never)
   ctx.provide('sidebarRight', sidebarRight)
   await ctx.plugin(SlotRegistry)
   ctx.slots.register({
@@ -202,9 +207,12 @@ async function base() {
       'shell.overlay': { kind: 'list', scope: 'root' },
       'sidebar.session.row.trailing': { kind: 'list', scope: 'root', inline: true },
       'sidebar.session.row.hover': { kind: 'list', scope: 'root' },
+      'plugins.row.config': { kind: 'keyed', scope: 'root' },
     },
   } as never, () => null)
-  return { ctx, remote, unmount, streams, stateStreams, forgePanel, sidebarRightTabs, unregisterTab, sidebarRight, sessions, scopes }
+  return {
+    ctx, remote, unmount, streams, stateStreams, forgePanel, sidebarRightTabs, unregisterTab, sidebarRight, sessions, scopes, worktreeForm,
+  }
 }
 
 async function fixture() {
@@ -275,7 +283,7 @@ describe('mountForgePanel registration', () => {
   })
 
   it('declares the browser services it needs', () => {
-    expect(inject).toEqual(['remote', 'slots', 'locale', 'sidebarRightTabs', 'sidebarRight', 'sessions'])
+    expect(inject).toEqual(['remote', 'slots', 'locale', 'sidebarRightTabs', 'sidebarRight', 'sessions', 'configForms'])
   })
 
   it('registers the tab types, their bodies and titles, the header button, the worktree option and card, and the toast', async () => {
@@ -860,6 +868,26 @@ describe('mountForgePanel changes view', () => {
   })
 })
 
+
+describe('worktree row settings', () => {
+  it('registers the row page over the worktree namespace and stages the retain switch as a boolean write', async () => {
+    const f = await fixture()
+    try {
+      const registration = f.ctx.slots.entries('plugins.row.config').find(candidate => candidate.component === WorktreeSettings)
+      expect(registration?.options).toMatchObject({ key: WORKTREE_ROW_KEY })
+      const face = registration!.inject!() as Partial<WorktreeSettingsInjected>
+      if (face.hooks === undefined || face.edit === undefined || face.save === undefined) throw new Error('expected the worktree settings face')
+      f.worktreeForm.publish({ status: 'ready', value: { retainOnArchive: false }, base: { retainOnArchive: false }, user: {}, writable: true })
+      expect(face.hooks.worktreeForm.getSnapshot()).toMatchObject({ available: true, dirty: false, retainOnArchive: { text: 'false' } })
+      face.edit('retainOnArchive', 'true')
+      expect(face.hooks.worktreeForm.getSnapshot()).toMatchObject({ dirty: true, retainOnArchive: { text: 'true', overridden: true } })
+      face.save()
+      await vi.waitFor(() => { expect(f.worktreeForm.mutate).toHaveBeenCalledOnce() })
+      expect(f.worktreeForm.mutate.mock.calls[0]?.[0]).toEqual([{ op: 'set', path: ['retainOnArchive'], value: true }])
+    } finally { await f.ctx.fiber.dispose() }
+    expect(f.worktreeForm.listenerCount()).toBe(0)
+  })
+})
 
 describe('archive notices', () => {
   it('uses the scheduled cleanup notice and reports a later failure', async () => {

@@ -5,6 +5,13 @@ export const NS = 'forgePanel'
 
 /** Chinese copy; its keys define {@link ForgePanelKey}. */
 export const zh = {
+  'settings.retainOnArchive.title': '归档时不删除工作树',
+  'settings.retainOnArchive.description': '开启后，归档会话时保留它创建的工作树；关闭时，干净且无人引用的工作树会被删除，分支和提交仍然保留。',
+  'settings.unavailable': '工作树设置不可用。',
+  'settings.readOnly': '此部署以只读方式保存设置。',
+  'settings.saveFailed': '此部署未接受这些值，已保留以便修改。',
+  'settings.save': '保存',
+  'settings.saving': '保存中…',
   'toast.archiveCleanupScheduled': '已归档，工作树将被清理',
   'toast.archiveCleanupFailed': '已归档，工作树清理失败。分支已保留，请检查工作树。',
   'review.startReview': '开始评审',
@@ -279,6 +286,13 @@ export type ForgePanelKey = keyof typeof zh
 
 /** English copy with the same keys. */
 export const en: Record<ForgePanelKey, string> = {
+  'settings.retainOnArchive.title': 'Keep worktrees when archiving',
+  'settings.retainOnArchive.description': 'When on, archiving a Session keeps the worktree it created; when off, a clean, unreferenced worktree is removed while its branch and commits remain.',
+  'settings.unavailable': 'Worktree settings are unavailable.',
+  'settings.readOnly': 'This deployment stores settings read-only.',
+  'settings.saveFailed': 'The deployment did not accept these values; they were left for you to correct.',
+  'settings.save': 'Save',
+  'settings.saving': 'Saving…',
   'toast.archiveCleanupScheduled': 'Archived; the worktree will be cleaned up',
   'toast.archiveCleanupFailed': 'Archived; worktree cleanup failed. The branch is retained. Check the worktree.',
   'review.startReview': 'Start review',
@@ -557,6 +571,13 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** Japanese copy with the same keys. */
 export const ja: Record<ForgePanelKey, string> = {
+  'settings.retainOnArchive.title': 'アーカイブ時にワークツリーを残す',
+  'settings.retainOnArchive.description': 'オンにすると、セッションをアーカイブしてもそのセッションが作成したワークツリーを残します。オフにすると、クリーンで参照されていないワークツリーは削除され、ブランチとコミットは残ります。',
+  'settings.unavailable': 'ワークツリー設定を利用できません。',
+  'settings.readOnly': 'このデプロイでは設定は読み取り専用で保存されます。',
+  'settings.saveFailed': 'このデプロイでは値が受け入れられませんでした。修正のために値はそのまま残されています。',
+  'settings.save': '保存',
+  'settings.saving': '保存中…',
   'toast.archiveCleanupScheduled': 'アーカイブしました。ワークツリーを削除します',
   'toast.archiveCleanupFailed': 'アーカイブしましたが、ワークツリーの削除に失敗しました。ブランチは保持されています。ワークツリーを確認してください。',
   'review.startReview': 'レビューを開始',
@@ -828,6 +849,13 @@ export const ja: Record<ForgePanelKey, string> = {
 
 /** Spanish copy with the same keys. */
 export const es: Record<ForgePanelKey, string> = {
+  'settings.retainOnArchive.title': 'Conservar los árboles de trabajo al archivar',
+  'settings.retainOnArchive.description': 'Si está activado, archivar una sesión conserva el árbol de trabajo que creó; si está desactivado, un árbol de trabajo limpio y sin referencias se elimina, y la rama y sus commits se conservan.',
+  'settings.unavailable': 'La configuración del árbol de trabajo no está disponible.',
+  'settings.readOnly': 'Esta implementación guarda la configuración en modo de solo lectura.',
+  'settings.saveFailed': 'La implementación no aceptó estos valores; se dejaron para que los corrijas.',
+  'settings.save': 'Guardar',
+  'settings.saving': 'Guardando…',
   'toast.archiveCleanupScheduled': 'Archivado; se eliminará el árbol de trabajo',
   'toast.archiveCleanupFailed': 'Archivado; no se pudo eliminar el árbol de trabajo. La rama se conserva. Revisa el árbol de trabajo.',
   'review.startReview': 'Iniciar revisión',
@@ -1099,6 +1127,13 @@ export const es: Record<ForgePanelKey, string> = {
 
 /** French copy with the same keys. */
 export const fr: Record<ForgePanelKey, string> = {
+  'settings.retainOnArchive.title': 'Conserver les arbres de travail à l’archivage',
+  'settings.retainOnArchive.description': 'Activé, l’archivage d’une session conserve l’arbre de travail qu’elle a créé ; désactivé, un arbre de travail propre et non référencé est supprimé, la branche et ses commits restant conservés.',
+  'settings.unavailable': 'Les paramètres de l’arbre de travail sont indisponibles.',
+  'settings.readOnly': 'Ce déploiement enregistre les paramètres en lecture seule.',
+  'settings.saveFailed': 'Le déploiement n’a pas accepté ces valeurs ; elles ont été laissées pour correction.',
+  'settings.save': 'Enregistrer',
+  'settings.saving': 'Enregistrement…',
   'toast.archiveCleanupScheduled': 'Archivé ; l’arbre de travail sera supprimé',
   'toast.archiveCleanupFailed': 'Archivé ; échec de la suppression de l’arbre de travail. La branche est conservée. Vérifiez l’arbre de travail.',
   'review.startReview': 'Commencer la revue',
@@ -1370,6 +1405,13 @@ export const fr: Record<ForgePanelKey, string> = {
 
 /** German copy with the same keys. */
 export const de: Record<ForgePanelKey, string> = {
+  'settings.retainOnArchive.title': 'Arbeitsbäume beim Archivieren behalten',
+  'settings.retainOnArchive.description': 'Eingeschaltet behält das Archivieren einer Sitzung den von ihr erstellten Arbeitsbaum; ausgeschaltet wird ein sauberer, nicht referenzierter Arbeitsbaum entfernt, während Branch und Commits erhalten bleiben.',
+  'settings.unavailable': 'Die Arbeitsbaum-Einstellungen sind nicht verfügbar.',
+  'settings.readOnly': 'Diese Bereitstellung speichert Einstellungen schreibgeschützt.',
+  'settings.saveFailed': 'Die Bereitstellung hat diese Werte nicht übernommen; sie wurden zur Korrektur belassen.',
+  'settings.save': 'Speichern',
+  'settings.saving': 'Wird gespeichert…',
   'toast.archiveCleanupScheduled': 'Archiviert; der Arbeitsbaum wird entfernt',
   'toast.archiveCleanupFailed': 'Archiviert; der Arbeitsbaum konnte nicht entfernt werden. Der Branch bleibt erhalten. Prüfe den Arbeitsbaum.',
   'review.startReview': 'Review starten',
@@ -1641,6 +1683,13 @@ export const de: Record<ForgePanelKey, string> = {
 
 /** Russian copy with the same keys. */
 export const ru: Record<ForgePanelKey, string> = {
+  'settings.retainOnArchive.title': 'Сохранять рабочие деревья при архивации',
+  'settings.retainOnArchive.description': 'Если включено, при архивации сессии созданное ею рабочее дерево сохраняется; если выключено, чистое рабочее дерево без ссылок удаляется, а ветка и коммиты остаются.',
+  'settings.unavailable': 'Настройки рабочего дерева недоступны.',
+  'settings.readOnly': 'В этом развёртывании настройки сохраняются только для чтения.',
+  'settings.saveFailed': 'Развёртывание не приняло эти значения; они оставлены для исправления.',
+  'settings.save': 'Сохранить',
+  'settings.saving': 'Сохранение…',
   'toast.archiveCleanupScheduled': 'Архивировано; рабочее дерево будет удалено',
   'toast.archiveCleanupFailed': 'Архивировано; не удалось удалить рабочее дерево. Ветка сохранена. Проверьте рабочее дерево.',
   'review.startReview': 'Начать проверку',
@@ -1912,6 +1961,13 @@ export const ru: Record<ForgePanelKey, string> = {
 
 /** Portuguese copy with the same keys. */
 export const pt: Record<ForgePanelKey, string> = {
+  'settings.retainOnArchive.title': 'Manter árvores de trabalho ao arquivar',
+  'settings.retainOnArchive.description': 'Quando ativado, arquivar uma sessão mantém a árvore de trabalho que ela criou; quando desativado, uma árvore de trabalho limpa e sem referências é removida, e o ramo e os commits permanecem.',
+  'settings.unavailable': 'As configurações da árvore de trabalho não estão disponíveis.',
+  'settings.readOnly': 'Esta implantação guarda as configurações apenas para leitura.',
+  'settings.saveFailed': 'A implantação não aceitou estes valores; eles foram mantidos para correção.',
+  'settings.save': 'Salvar',
+  'settings.saving': 'Salvando…',
   'toast.archiveCleanupScheduled': 'Arquivado; a árvore de trabalho será removida',
   'toast.archiveCleanupFailed': 'Arquivado; a remoção da árvore de trabalho falhou. O ramo foi mantido. Verifique a árvore de trabalho.',
   'review.startReview': 'Iniciar revisão',

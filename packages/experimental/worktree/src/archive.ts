@@ -28,6 +28,8 @@ declare module '@deepseek-ai/cordis' {
 
 /** The service operations reclamation needs; kept narrow so the archive module never reaches Git directly. */
 export interface ReclamationHost {
+  /** Whether the deployment keeps every checkout on archive; read at each admission. */
+  retainOnArchive(): boolean
   /** Run `body` after every operation on `path` that was requested earlier, and before any requested later. */
   exclusiveCheckout<T>(path: string, body: () => Promise<T>): Promise<T>
   /** Inspect and, when eligible and admitted, remove the checkout without force. Rejects on Git failure. */
@@ -114,6 +116,7 @@ export class WorktreeReclamation {
 
   /** Register attempts for the Session's own creations and return; every inspection runs in the background. */
   private schedule(sessionId: SessionId): void {
+    if (this.host.retainOnArchive()) return
     const live = this.ctx.sessions.get(sessionId)
     // A cold Session's creations come from the persisted cache or its log, below.
     const owned = live === undefined ? undefined : this.projection.stateOf(live).created.filter(creation => creation.owned)

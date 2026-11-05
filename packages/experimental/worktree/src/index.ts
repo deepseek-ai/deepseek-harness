@@ -1,11 +1,12 @@
 /** Creates a new Git branch and checkout, then changes the calling Session's working directory; restores a removed checkout. */
 
-import { Context, Service } from '@deepseek-ai/cordis'
+import { Context, Service, type Volatile } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-fs'
 import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
+import type {} from '@deepseek-ai/dsh-settings'
 import { appendPluginRecord } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
@@ -30,8 +31,10 @@ export { generatedWorktreeName } from './name.ts'
 export { CREATED_RECORD, createdWorktreeSchema, worktreeProjection } from './projection.ts'
 export type { WorktreeProjectionState } from './projection.ts'
 
-/** Worktree location, generated names, executables, and subprocess resource limits. */
+/** Worktree location, generated names, executables, subprocess resource limits, and the archive cleanup switch. */
 export interface Config {
+  /** Keep every checkout when its Session is archived; editable live from the Plugins page. */
+  retainOnArchive: Volatile<boolean>
   /** Relative checkout pool inside the source repository. */
   directory?: string
   /** Prefix for automatically generated branch and checkout names. */
@@ -78,7 +81,8 @@ function relativePath(value: string): boolean {
 export class WorktreeService extends Service {
   static inject = ['workingDirectory', 'fs', 'subprocess', 'sandbox', 'sandboxPolicy', 'sessionProjections']
 
-  static Config: z<Config> = z.object({
+  static Config = z.object({
+    retainOnArchive: z.boolean().default(false).volatile(),
     directory: z.string().default('.agents/worktrees'),
     namePrefix: z.string().default('dsh-'),
     gitCommand: z.string().default('git'),
@@ -115,6 +119,8 @@ export class WorktreeService extends Service {
       this.lifetime.abort(new Error('worktree service disposed'))
       await Promise.allSettled(this.pending)
     })
+    // The Forge panel draws the retain switch on this row's Plugins page.
+    ctx.inject(['settings'], (child) => { child.effect(() => child.settings.configure({ auto: false }, ctx.fiber)) })
   }
 
   protected async [Service.init](): Promise<void> {
@@ -123,6 +129,7 @@ export class WorktreeService extends Service {
     // them the service only creates and restores, as a headless profile composes it.
     this.ctx.inject(['workspaceRegistry', 'sessionQuery', 'sessions', 'workingDirectory', 'sandboxPolicy'], (scope) => {
       const reclamation = new WorktreeReclamation(scope, {
+        retainOnArchive: () => this.config.retainOnArchive.get(),
         exclusiveCheckout: (path, body) => this.exclusiveCheckout(path, body),
         removeCheckout: (session, request, signal, admit) => this.removeCheckout(session, request, signal, admit),
       }, this.projection)

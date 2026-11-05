@@ -63,7 +63,7 @@ function agentFor(ctx: Context, session: Session): Agent {
   return agent
 }
 
-async function fixture(options: { cache?: boolean } = {}) {
+async function fixture(options: { cache?: boolean; retainOnArchive?: boolean } = {}) {
   const temporary = await realpath(await mkdtemp(join(tmpdir(), 'dsh-worktree-archive-')))
   cleanups.push(() => rm(temporary, { recursive: true, force: true }))
   const root = await repository(temporary)
@@ -87,12 +87,13 @@ async function fixture(options: { cache?: boolean } = {}) {
   ctx.provide('storageDomain', domain)
   if (options.cache === true) await ctx.plugin(SessionProjectionCache, { writeEveryEvents: 1_000, writeIntervalMs: 60_000 })
   await ctx.plugin(WorkspaceRegistry)
-  await ctx.plugin(WorktreeService, {})
+  const worktrees = ctx.plugin(WorktreeService, options.retainOnArchive === undefined ? {} : { retainOnArchive: options.retainOnArchive })
+  await worktrees
   const session = ctx.sessions.create(SessionId('archive-owner'), { meta: { cwd: root } })
   const agent = agentFor(ctx, session)
   await ctx.agents.register(agent)
   const worktree = await ctx.worktrees.create(agent, { name: 'archive-me' })
-  return { ctx, root, session, agent, worktree, temporary }
+  return { ctx, root, session, agent, worktree, temporary, worktrees }
 }
 
 type Fixture = Awaited<ReturnType<typeof fixture>>
@@ -418,6 +419,17 @@ describe('archive-triggered worktree cleanup', () => {
     const before = handle.stateOf(f.session).created
     appendPluginRecord(f.session, CREATED_RECORD, { path: '', branch: 'x', baseCommit: 'y', repositoryRoot: 'z' })
     expect(handle.stateOf(f.session).created).toEqual(before)
+  })
+
+  it('registers no attempt while retainOnArchive is set, and resumes once it is cleared', async () => {
+    const f = await fixture({ retainOnArchive: true })
+    await f.ctx.workspaceRegistry.archiveSession(f.session.id)
+    expect(await f.ctx.worktrees.cleanupOf(f.session, null)).toBeNull()
+    await access(f.worktree.path)
+    await f.ctx.workspaceRegistry.unarchiveSession(f.session.id)
+    await f.worktrees.update({ retainOnArchive: false })
+    await f.ctx.workspaceRegistry.archiveSession(f.session.id)
+    expect(await settled(f)).toMatchObject({ status: 'removed' })
   })
 
   it('withdraws listeners before draining, so disposal neither fails unrelated access nor serves a stale result', async () => {
