@@ -409,8 +409,10 @@ async function searching() {
   }
 }
 
-it('filters by category and every label, and an undeclared id matches nothing', async () => {
+it('preserves publisher order before sorting and through category and label filters', async () => {
   const names = await searching()
+  expect(await names({})).toEqual(['dsh-weather', 'dsh-auto-review', 'dsh-notes'])
+  expect(await names({ labels: ['ui'] })).toEqual(['dsh-weather', 'dsh-auto-review'])
   expect(await names({ category: 'work' })).toEqual(['dsh-auto-review', 'dsh-notes'])
   expect(await names({ labels: ['official', 'ui'] })).toEqual(['dsh-auto-review'])
   expect(await names({ category: 'fun', labels: ['official'] })).toEqual([])
@@ -503,10 +505,11 @@ it('reads one plugin by name from the cached document', async () => {
 })
 
 it('keeps index order among equal sort-key values and among plugins without one', async () => {
-  const valued = (name: string, downloads?: number) => entry(name, { metadata: { sortKeys: downloads === undefined ? {} : { downloads } } })
-  serve(json({ ...SEARCHABLE, plugins: [valued('a'), valued('b', 1), valued('c'), valued('d', 2), valued('e', 1)] }))
+  const valued = (name: string, downloads?: number | null) =>
+    entry(name, { metadata: { sortKeys: downloads === undefined ? {} : { downloads } } })
+  serve(json({ ...SEARCHABLE, plugins: [valued('a'), valued('b', 1), valued('c'), valued('d', 2), valued('e', 1), valued('f', 0), valued('g', null), entry('h'), entry('i', { metadata: null })] }))
   const { market } = await mount()
-  for (const [direction, expected] of [['asc', ['b', 'e', 'd', 'a', 'c']], ['desc', ['d', 'b', 'e', 'a', 'c']]] as const) {
+  for (const [direction, expected] of [['asc', ['f', 'b', 'e', 'd', 'a', 'c', 'g', 'h', 'i']], ['desc', ['d', 'b', 'e', 'f', 'a', 'c', 'g', 'h', 'i']]] as const) {
     const result = await market.search(URL_A, { sort: { kind: 'key', id: 'downloads', direction }, offset: 0, limit: 10 })
     expect(result.entries.map(item => item.name)).toEqual(expected)
   }
