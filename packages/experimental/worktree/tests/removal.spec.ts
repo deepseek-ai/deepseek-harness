@@ -1,18 +1,19 @@
 import { access, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { inspectRemoval } from '../src/removal.ts'
+import type { Context } from '@deepseek-ai/cordis'
+import type { Agent } from '@deepseek-ai/dsh-agent'
+import { inspectRemoval, removeCheckout } from '../src/removal.ts'
+import type { GitRead } from '../src/removal.ts'
 import type { RestoreWorktreeRequest } from '../src/types.ts'
 import { git, harness, repository, testAgent } from './harness.ts'
-import type { Agent } from '@deepseek-ai/dsh-agent'
-import type { Context } from '@deepseek-ai/cordis'
 
-/** The service's inspection-and-removal step, reached as archive cleanup reaches it. */
-function remove(ctx: Context, agent: Agent, request: RestoreWorktreeRequest, admit: () => boolean = () => true): Promise<boolean> {
-  const service = ctx.worktrees as unknown as {
-    removeCheckout(session: Agent['session'], request: RestoreWorktreeRequest, signal: AbortSignal, admit: () => boolean): Promise<boolean>
-  }
-  return service.removeCheckout(agent.session, request, new AbortController().signal, admit)
+/** A Git runner over the fixture's unconfined git, as the service's danger-full-access runner behaves. */
+const run: GitRead = async (directory, args) => ({ stdout: await git(directory, ...args), exitCode: 0 })
+
+/** The inspection-and-removal step archive cleanup runs, with the pool the harness configures. */
+function remove(ctx: Context, _agent: Agent, request: RestoreWorktreeRequest, admit: () => boolean = () => true): Promise<boolean> {
+  return removeCheckout(ctx, '.agents/worktrees', request, run, new AbortController().signal, admit)
 }
 
 const disposers: (() => Promise<void>)[] = []

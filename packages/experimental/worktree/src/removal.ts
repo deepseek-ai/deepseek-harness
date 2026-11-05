@@ -61,6 +61,28 @@ export async function registration(
 }
 
 /**
+ * Inspect the checkout and, when eligible and still admitted after inspection,
+ * remove it and its registration with a non-force `git worktree remove`. The
+ * branch is never deleted; a rejection can leave a partial directory.
+ * @param ctx - execution-world filesystem provider.
+ * @param directory - configured relative worktree pool.
+ * @param request - saved checkout identity.
+ * @param run - bounded Git runner with the owner's policy.
+ * @param signal - cancellation before or during removal.
+ * @param admit - synchronous final admission after inspection; false retains the checkout.
+ * @returns true when removed; false when inspection or admission retains it; Git failures reject.
+ */
+export async function removeCheckout(
+  ctx: Context, directory: string, request: RestoreWorktreeRequest, run: GitRead, signal: AbortSignal, admit: () => boolean,
+): Promise<boolean> {
+  if (!await inspectRemoval(ctx, directory, request, run, signal)) return false
+  signal.throwIfAborted()
+  if (!admit()) return false
+  await run(request.repositoryRoot, ['worktree', 'remove', '--', request.path])
+  return true
+}
+
+/**
  * Verify checkout identity and account for every file that Git's non-force
  * removal would refuse: tracked changes, untracked files, hidden index flags,
  * and submodules. Ignored files are not counted; `git worktree remove` discards them.

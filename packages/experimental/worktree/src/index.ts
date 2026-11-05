@@ -18,7 +18,7 @@ import { runCommand } from './process.ts'
 import type { ProcessConfig } from './process.ts'
 import { CREATED_RECORD, worktreeProjection } from './projection.ts'
 import type { WorktreeProjectionState } from './projection.ts'
-import { checkoutIdentity, inspectRemoval, registration } from './removal.ts'
+import { checkoutIdentity, registration, removeCheckout } from './removal.ts'
 import type {
   CreatedWorktree, CreateWorktreePhase, CreateWorktreeRequest, RestoredWorktree, RestoreWorktreeRequest, WorktreeCleanup,
 } from './types.ts'
@@ -213,14 +213,8 @@ export class WorktreeService extends Service {
   ): Promise<boolean> {
     const control = AbortSignal.any([this.lifetime.signal, signal])
     control.throwIfAborted()
-    const operation = (async () => {
-      const run = this.gitRunner(this.ctx.sandboxPolicy.resolve({ session }), control)
-      if (!await inspectRemoval(this.ctx, this.config.directory, request, run, control)) return false
-      control.throwIfAborted()
-      if (!admit()) return false
-      await run(request.repositoryRoot, ['worktree', 'remove', '--', request.path])
-      return true
-    })()
+    const run = this.gitRunner(this.ctx.sandboxPolicy.resolve({ session }), control)
+    const operation = removeCheckout(this.ctx, this.config.directory, request, run, control, admit)
     this.pending.add(operation)
     try { return await operation } finally { this.pending.delete(operation) }
   }

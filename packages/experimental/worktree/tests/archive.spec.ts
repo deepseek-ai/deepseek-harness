@@ -21,8 +21,10 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import WorkingDirectoryService from '@deepseek-ai/dsh-working-directory'
 import WorkspaceRegistry from '@deepseek-ai/dsh-workspace'
 import { MemoryMediaPool, MemoryStorageBackend } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
+import type {} from '../src/archive.ts'
 import WorktreeService from '../src/index.ts'
-import type { CreatedWorktree, WorktreeCleanup } from '../src/index.ts'
+import type { WorktreeCleanup } from '../src/index.ts'
+import * as removal from '../src/removal.ts'
 import { git, repository, UnusedSandbox } from './harness.ts'
 import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -33,9 +35,20 @@ class ArchiveQueries extends SessionQueryEngine {
   searchEvents(): Promise<SessionEventSearchPage> { throw new Error('search is not used') }
 }
 
+vi.mock('../src/removal.ts', async (importActual) => {
+  const actual = await importActual<typeof import('../src/removal.ts')>()
+  return { ...actual, removeCheckout: vi.fn(actual.removeCheckout) }
+})
+
+const removeCheckout = vi.mocked(removal.removeCheckout)
+/** The unmocked removal step, for interceptors that delay or observe it. */
+const actualRemoveCheckout = (await vi.importActual<typeof import('../src/removal.ts')>('../src/removal.ts')).removeCheckout
+
 const cleanups: (() => Promise<void>)[] = []
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup()
+  removeCheckout.mockReset()
+  removeCheckout.mockImplementation(actualRemoveCheckout)
   vi.restoreAllMocks()
 })
 
@@ -278,8 +291,7 @@ describe('archive-triggered worktree cleanup', () => {
   it('keeps the archive and reports a failed removal', async () => {
     const f = await fixture()
     const warning = vi.spyOn(f.ctx.logger, 'warn').mockImplementation(() => {})
-    const service = f.ctx.worktrees as unknown as { removeCheckout: () => Promise<boolean> }
-    vi.spyOn(service, 'removeCheckout').mockRejectedValue(new Error('checkout removal denied'))
+    removeCheckout.mockRejectedValue(new Error('checkout removal denied'))
     await f.ctx.workspaceRegistry.archiveSession(f.session.id)
     expect(await settled(f)).toMatchObject({ status: 'failed' })
     expect(f.ctx.workspaceRegistry.archivedSessionIds).toContain(f.session.id)
@@ -291,14 +303,10 @@ describe('archive-triggered worktree cleanup', () => {
     const f = await fixture()
     const entered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
-    const service = f.ctx.worktrees as unknown as {
-      removeCheckout: (session: Session, request: CreatedWorktree, signal: AbortSignal, admit: () => boolean) => Promise<boolean>
-    }
-    const original = service.removeCheckout.bind(service)
-    vi.spyOn(service, 'removeCheckout').mockImplementation(async (session, request, signal, admit) => {
+    removeCheckout.mockImplementation(async (...args) => {
       entered.resolve(undefined)
       await release.promise
-      return await original(session, request, signal, admit)
+      return await actualRemoveCheckout(...args)
     })
     cleanups.push(async () => { release.resolve(undefined) })
     await f.ctx.workspaceRegistry.archiveSession(f.session.id)
@@ -318,12 +326,10 @@ describe('archive-triggered worktree cleanup', () => {
     const f = await fixture()
     const entered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
-    const service = f.ctx.worktrees as unknown as { removeCheckout: (...args: unknown[]) => Promise<boolean> }
-    const original = service.removeCheckout.bind(service)
-    vi.spyOn(service, 'removeCheckout').mockImplementation(async (...args) => {
+    removeCheckout.mockImplementation(async (...args) => {
       entered.resolve(undefined)
       await release.promise
-      return await original(...args)
+      return await actualRemoveCheckout(...args)
     })
     cleanups.push(async () => { release.resolve(undefined) })
     await f.ctx.workingDirectory.set(f.agent, f.root)
@@ -349,8 +355,7 @@ describe('archive-triggered worktree cleanup', () => {
     const f = await fixture()
     const entered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
-    const service = f.ctx.worktrees as unknown as { removeCheckout: () => Promise<boolean> }
-    vi.spyOn(service, 'removeCheckout').mockImplementation(async () => {
+    removeCheckout.mockImplementation(async () => {
       entered.resolve(undefined)
       await release.promise
       return false
