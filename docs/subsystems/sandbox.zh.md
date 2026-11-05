@@ -213,6 +213,8 @@ The sandbox-policy service (`ctx.sandboxPolicy`). Owns the deployment default mo
  * snapshotted together; existing operations and processes keep their policy.
  * @param request - optional session and approved mode override.
  * @returns the fully resolved per-call mode and absolute workspace root.
+ * @throws `SandboxInvalidRootError` (`SANDBOX_INVALID_ROOT`) when the session's recorded cwd is
+ *   relative or contains a NUL byte.
  */
 resolve(request: SandboxPolicyRequest = {}): SandboxExecutionPolicy
 
