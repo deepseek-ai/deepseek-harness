@@ -80,6 +80,8 @@ const PEER_REQUIRED_HOST_EXPORTS = {
   // CUA checks UserQuestionError and preserves AttachmentError from image admission.
   '@deepseek-ai/dsh-attachment': ['admitEncodedImages'],
   '@deepseek-ai/dsh-user-questions': ['UserQuestionError'],
+  // The tool registry and every subclass rely on `instanceof` against one HarnessError class.
+  '@deepseek-ai/dsh-error': ['HarnessError'],
   // `instanceof` checks need the translator's own class instance.
   '@deepseek-ai/dsh-experimental-translator': ['TranslationError'],
   // Stateless; a safe classification would turn the forge panel's forge and worktree peers into dependencies.

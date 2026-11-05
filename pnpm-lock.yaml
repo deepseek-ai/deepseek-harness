@@ -13214,6 +13214,9 @@ importers:
       '@deepseek-ai/dsh-attachment':
         specifier: workspace:*
         version: link:../../attachment/attachment
+      '@deepseek-ai/dsh-error':
+        specifier: workspace:*
+        version: link:../../util/error
       '@deepseek-ai/dsh-package-manifest':
         specifier: workspace:*
         version: link:../../util/package-manifest
@@ -17745,6 +17748,12 @@ importers:
         version: link:../../../vendor/cordis
 
   packages/util/deque:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+
+  packages/util/error:
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:~
