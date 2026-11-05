@@ -51,7 +51,7 @@ describe('web shell base.css', () => {
     // declare the same list, so a new interactive role is added in one place
     // and a drift between the sheet and the composition model fails here.
     const scope = "html[data-platform='darwin'] :where([data-window-drag], [data-window-drag-controls])"
-    const rule = /:is\(([^)]*)\):where\(:not\(\[data-window-no-drag\] \*\)\)\s*\{[^}]*app-region:\s*no-drag/
+    const rule = /:is\(([^)]*)\):where\(:not\(\[data-window-drag-exclude\] \*\)\)\s*\{[^}]*app-region:\s*no-drag/
       .exec(normalizedCss.split(scope)[1] ?? '')
     expect(rule, 'base.css declares no darwin interactive no-drag rule').not.toBeNull()
     const declared = rule![1]!.split(',').map(part => part.trim()).join(', ')

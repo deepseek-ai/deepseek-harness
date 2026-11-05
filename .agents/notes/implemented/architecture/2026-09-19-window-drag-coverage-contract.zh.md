@@ -12,7 +12,7 @@ macOS 桌面窗口的可拖区域被写了两遍。布局决定 chrome 行在哪
 
 覆盖变成由四部分组成的、可执行的契约：
 
-1. ui-web 的 `window-drag/regions.ts` 把合成规则发布成可执行模型：当包含某点的最后一个 app-region 盒声明 `drag` 时该点可拖，这正是原生窗口施加的按 DOM 顺序的几何合成。它还发布 `INTERACTIVE_SELECTOR`，作为 `data-window-drag` 行和 `data-window-drag-controls` 范围内控件排除的来源。Shell 为每个元素重置继承的区域。不含嵌套拖动行的 `data-window-no-drag` 视口仅排除自身矩形，覆盖浮层和含嵌套拖动行的容器单独声明区域。base-styles spec 一并检查选择器、作用范围与重置声明。
+1. ui-web 的 `window-drag/regions.ts` 把合成规则发布成可执行模型：当包含某点的最后一个 app-region 盒声明 `drag` 时该点可拖，这正是原生窗口施加的按 DOM 顺序的几何合成。它还发布 `INTERACTIVE_SELECTOR`，作为 `data-window-drag` 行和 `data-window-drag-controls` 范围内控件排除的来源。Shell 为每个元素重置继承的区域。不含嵌套拖动行的 `data-window-drag-exclude` 视口仅排除自身矩形，覆盖浮层和含嵌套拖动行的容器单独声明区域。base-styles spec 一并检查选择器、作用范围与重置声明。
 2. 外壳只声明一次 darwin 拖拽面：ui-web base.css 里的 `html[data-platform='darwin'] [data-window-drag]`。每个 chrome 行在 markup 里给自己的元素打标，于是该行自己的盒子就是窗口的可拖几何，不需要任何固定 band 去匹配行高。ui-theme 的 app-region 门禁持有一份清单，把每行的 markup 标记与其样式表、类选择器和写死的高度配成一条，并拒绝清单未点名的元素上的标记——行不再打标、新增未打标的行、把标记打在内容容器上，都会在同一条门禁上失败。
 3. 浏览器车道增加 `window-drag-coverage`：以 `data-platform='darwin'` 在 Chromium 里启动真实组合，将可点击控件的探测与贡献原生区域的矩形分开。它断言控件不落在拖拽面内，检查每个 chrome 行，并覆盖页头行打标、可滚动正文保持内容的页面。
 4. 外壳持有唯一那个重收集 watcher——ui-web 的 `window-drag/recall.ts`，由引导内核安装。在表面可能移动期间，它每帧测量每个被打标的行，凡该帧几何发生变化就在 body 上打 `data-window-drag-recall`；几何在一段很短的宽限窗口内保持不动之后才清掉，这样在 CSS transition 真正移动任何东西之前到达的一次报告，不会在它第一帧未测到变化时就终止循环。它会报告表面可能移动的每一种原因：触及被打标行或承载它的容器的 DOM 变化、被打标行的盒子尺寸变化，以及持有被打标行的元素上开始的 transition 或 animation。任何 chrome 行都不再自带脉冲。
