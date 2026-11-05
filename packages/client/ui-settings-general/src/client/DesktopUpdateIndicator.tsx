@@ -80,7 +80,7 @@ export function DesktopUpdateIndicator({ wide, hidden, t, view, onOpen }: {
         {error ? <span className={css.errorDot} />
           : busy ? <IconLoadingOutlineRegular className={css.spinner} size={14} /> : <IconDownloadOutlineRegular size={14} />}
       </span>
-      <span>{label}</span>
+      <span className={!error && state?.phase === 'downloading' ? css.progress : undefined}>{label}</span>
     </button>
   </Tooltip>
 }

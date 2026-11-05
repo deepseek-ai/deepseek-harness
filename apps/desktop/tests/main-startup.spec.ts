@@ -2189,6 +2189,18 @@ describe('desktop main startup', () => {
     await started.promise
     const repeated = invoke(DESKTOP_IPC.updatesOpen, 'app')
     expect(harness.dialog.showMessageBox).not.toHaveBeenCalled()
+    const checks = harness.updateCheck.mock.calls.length
+    const check = applicationMenuItems().find(item => item.label === en.checkUpdatesMenu)!.click as () => void
+    check()
+    await vi.waitFor(() => { expect(harness.dialog.showMessageBox).toHaveBeenCalledWith(expect.objectContaining({
+      message: en.updateDownloadInProgress, detail: en.updateDetail, buttons: [en.updateClose],
+    })) })
+    expect(harness.updateCheck).toHaveBeenCalledTimes(checks)
+    harness.shellDialog.isOpen = true
+    check()
+    expect(harness.shellDialog.focus).toHaveBeenCalled()
+    expect(harness.dialog.showMessageBox).toHaveBeenCalledOnce()
+    harness.shellDialog.isOpen = false
     expect(harness.updateDownload).toHaveBeenCalledExactlyOnceWith('1.0.1-nightly.1', 0)
     expect(harness.updateInstall).not.toHaveBeenCalled()
     downloading.resolve({ phase: 'ready', version: '1.0.1-nightly.1' })
@@ -2196,6 +2208,44 @@ describe('desktop main startup', () => {
     expect(harness.updateInstall).toHaveBeenCalledExactlyOnceWith('1.0.1-nightly.1', 0)
     await harness.updateCheck()
     expect(harness.updateInstall).toHaveBeenCalledOnce()
+  })
+
+  it.each(['downloading', 'verifying'] as const)('explains %s when checking from the menu without another update operation', async (phase) => {
+    await readyForUpdate()
+    harness.updateState = { phase, version: '1.0.1-nightly.1', percent: 21 }
+    const checks = harness.updateCheck.mock.calls.length
+    const check = applicationMenuItems().find(item => item.label === en.checkUpdatesMenu)!.click as () => void
+    check()
+    await vi.waitFor(() => { expect(harness.dialog.showMessageBox).toHaveBeenCalledWith(expect.objectContaining({
+      message: phase === 'downloading' ? en.updateDownloadInProgress : en.updateVerifying,
+      detail: en.updateDetail, buttons: [en.updateClose], cancelId: 0,
+    })) })
+    expect(harness.updateCheck).toHaveBeenCalledTimes(checks)
+    expect(harness.updateDownload).not.toHaveBeenCalled()
+    expect(harness.updateInstall).not.toHaveBeenCalled()
+    expect(harness.updateState.phase).toBe(phase)
+    check()
+    await vi.waitFor(() => { expect(harness.dialog.showMessageBox).toHaveBeenCalledTimes(2) })
+    expect(harness.updateCheck).toHaveBeenCalledTimes(checks)
+    expect(harness.updateDownload).not.toHaveBeenCalled()
+    expect(harness.updateInstall).not.toHaveBeenCalled()
+    expect(harness.updateState.phase).toBe(phase)
+  })
+
+  it('reports a failed download-status dialog without restarting the update', async () => {
+    await readyForUpdate()
+    harness.updateState = { phase: 'downloading', version: '1.0.1-nightly.1', percent: 21 }
+    const checks = harness.updateCheck.mock.calls.length
+    harness.dialog.showMessageBox.mockRejectedValueOnce(new Error('overlay unavailable'))
+    const check = applicationMenuItems().find(item => item.label === en.checkUpdatesMenu)!.click as () => void
+    check()
+    await vi.waitFor(() => { expect(harness.dialog.showMessageBox).toHaveBeenLastCalledWith(expect.objectContaining({
+      type: 'error', title: en.updateFailedTitle, technicalDetails: 'overlay unavailable',
+    })) })
+    expect(harness.updateCheck).toHaveBeenCalledTimes(checks)
+    expect(harness.updateDownload).not.toHaveBeenCalled()
+    expect(harness.updateInstall).not.toHaveBeenCalled()
+    expect(harness.updateState.phase).toBe('downloading')
   })
 
   it('does not lock or stop tasks when restart confirmation is dismissed', async () => {

@@ -1000,6 +1000,17 @@ async function main(): Promise<void> {
     if (authenticationOperation !== undefined) {
       policyAuth?.focus(); updateDialog.focus()
     }
+    if (manual && !isMandatory() && (updates.state.phase === 'downloading' || updates.state.phase === 'verifying')) {
+      if (updateDialog.isOpen) {
+        updateDialog.focus()
+        return Promise.resolve()
+      }
+      return ordinaryMessageBox({ type: 'info', title: locale.messages.updateCheckTitle,
+        message: updates.state.phase === 'downloading' ? locale.messages.updateDownloadInProgress : locale.messages.updateVerifying,
+        detail: locale.messages.updateDetail, buttons: [locale.messages.updateClose], cancelId: 0,
+      }).then(() => {}).catch((error: unknown) => showUpdateFailure({ phase: 'error', failedOperation: 'check',
+        message: desktopErrorState(error).message }))
+    }
     let failedOperation: 'check' | 'download' | 'install' = 'check'
     promptOperation ??= Promise.resolve().then(async () => {
       if (manual) updateJournal?.action('check-requested')
