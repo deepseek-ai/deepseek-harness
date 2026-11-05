@@ -9,7 +9,7 @@ kind: persistence-change
 
 ## 概述
 
-新增仅用于归属的 `im` 消息来源：`@deepseek-ai/dsh-experimental-im` 在投递到托管会话的用户消息上写入该来源，使读取方能够区分外部 IM 输入与所有者输入。
+新增仅用于归属的 `im` 消息来源：`@deepseek-ai/dsh-im` 在投递到托管会话的用户消息上写入该来源，使读取方能够区分外部 IM 输入与所有者输入。
 
 ## 目录
 

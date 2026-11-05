@@ -1,6 +1,6 @@
 {
-  "name": "@deepseek-ai/dsh-experimental-im-session-commands",
-  "description": "Slash-command handling at the head of the dsh-experimental-im message waterfall",
+  "name": "@deepseek-ai/dsh-im-session-commands",
+  "description": "Slash-command handling at the head of the dsh-im message waterfall",
   "version": "0.2.2-rc.1",
   "publishConfig": {
     "access": "public"
@@ -35,7 +35,7 @@
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-agent": "workspace:*",
     "@deepseek-ai/dsh-commands": "workspace:*",
-    "@deepseek-ai/dsh-experimental-im": "workspace:*",
+    "@deepseek-ai/dsh-im": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*"
   },
   "devDependencies": {
@@ -43,7 +43,7 @@
     "@deepseek-ai/cordis-plugin-im-core": "workspace:~",
     "@deepseek-ai/dsh-agent": "workspace:*",
     "@deepseek-ai/dsh-commands": "workspace:*",
-    "@deepseek-ai/dsh-experimental-im": "workspace:*",
+    "@deepseek-ai/dsh-im": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*"
   },
   "dependencies": {

@@ -1,5 +1,5 @@
 /**
- * `@deepseek-ai/dsh-experimental-im` — platform-neutral IM host. The core stores admitted messages, runs the `im/message`
+ * `@deepseek-ai/dsh-im` — platform-neutral IM host. The core stores admitted messages, runs the `im/message`
  * waterfall, hosts sessions, publishes outbound messages with durable receipts, tracks session turn activity, and
  * drives output renderers. It never renders platform output itself: routing strategies, session commands, and output
  * renderers are separate plugins; the optional default dispatcher (`config.defaultDispatch`) only receives what every

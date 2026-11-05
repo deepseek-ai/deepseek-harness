@@ -9,30 +9,30 @@
   en: 6cc2cd9ced70bb09
   zh: 1c0e6cb4ba2ed637
 /tool-schema-catalog/tool-package-map:
-  en: fbf2d945ec0dcdb4
-  zh: d670493a9a9fcfab
-/tool-schema-catalog/deepseek-ai-dsh-experimental-im:
-  en: 31fa03c9866eb844
-  zh: 31fa03c9866eb844
-/tool-schema-catalog/deepseek-ai-dsh-experimental-im/im-history:
+  en: 2596663d8d5f4464
+  zh: 3753aa02ac0f890d
+/tool-schema-catalog/deepseek-ai-dsh-im:
+  en: 707c35f0d3451baa
+  zh: 707c35f0d3451baa
+/tool-schema-catalog/deepseek-ai-dsh-im/im-history:
   en: 6c1227a2696fab49
   zh: 6c1227a2696fab49
-/tool-schema-catalog/deepseek-ai-dsh-experimental-im/im-read:
+/tool-schema-catalog/deepseek-ai-dsh-im/im-read:
   en: 7f4765144673fc36
   zh: 7f4765144673fc36
-/tool-schema-catalog/deepseek-ai-dsh-experimental-im/im-read-file:
+/tool-schema-catalog/deepseek-ai-dsh-im/im-read-file:
   en: 1259abf38f3e6f73
   zh: 1259abf38f3e6f73
-/tool-schema-catalog/deepseek-ai-dsh-experimental-im/im-read-image:
+/tool-schema-catalog/deepseek-ai-dsh-im/im-read-image:
   en: 8b705d054087e6f8
   zh: 8b705d054087e6f8
-/tool-schema-catalog/deepseek-ai-dsh-experimental-im/im-reply:
+/tool-schema-catalog/deepseek-ai-dsh-im/im-reply:
   en: a3a892b3dee1d1f0
   zh: a3a892b3dee1d1f0
-/tool-schema-catalog/deepseek-ai-dsh-experimental-im/im-send:
+/tool-schema-catalog/deepseek-ai-dsh-im/im-send:
   en: 2869b8da22139254
   zh: 2869b8da22139254
-/tool-schema-catalog/deepseek-ai-dsh-experimental-im/im-send-file:
+/tool-schema-catalog/deepseek-ai-dsh-im/im-send-file:
   en: 133686bac6a659f4
   zh: dd1837cadb7292c6
 /tool-schema-catalog/deepseek-ai-dsh-plugin-manager:

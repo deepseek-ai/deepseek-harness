@@ -284,9 +284,6 @@ flowchart TD
     pkg_experimental_forge_bundle["experimental-forge-bundle"]
     pkg_experimental_forge_github["experimental-forge-github"]
     pkg_experimental_forge_session["experimental-forge-session"]
-    pkg_experimental_im["experimental-im"]
-    pkg_experimental_im_bundle["experimental-im-bundle"]
-    pkg_experimental_im_session_commands["experimental-im-session-commands"]
     pkg_experimental_inspector["experimental-inspector"]
     pkg_experimental_inspector_profile["experimental-inspector-profile"]
     pkg_experimental_liveshare["experimental-liveshare"]
@@ -311,6 +308,9 @@ flowchart TD
     pkg_hook_protocol["hook-protocol"]
     pkg_hooks_claude_code["hooks-claude-code"]
     pkg_hooks_codex["hooks-codex"]
+    pkg_im["im"]
+    pkg_im_bundle["im-bundle"]
+    pkg_im_session_commands["im-session-commands"]
     pkg_personalized_recommendations["personalized-recommendations"]
     pkg_plugin_recommendations["plugin-recommendations"]
     pkg_session_title_all_prompts_llm["session-title-all-prompts-llm"]
@@ -1136,16 +1136,16 @@ flowchart TD
   pkg_experimental_forge_session --> pkg_shell
   pkg_experimental_forge_session --> pkg_shell_env
   pkg_experimental_forge_session --> pkg_tools
-  pkg_experimental_im --> pkg_agent
-  pkg_experimental_im --> pkg_agent_preset_registry
-  pkg_experimental_im --> pkg_attachment
-  pkg_experimental_im --> pkg_fs
-  pkg_experimental_im --> pkg_llm
-  pkg_experimental_im --> pkg_session
-  pkg_experimental_im --> pkg_session_persistence
-  pkg_experimental_im --> pkg_storage_domain
-  pkg_experimental_im --> pkg_tools
-  pkg_experimental_im --> pkg_working_directory
+  pkg_im --> pkg_agent
+  pkg_im --> pkg_agent_preset_registry
+  pkg_im --> pkg_attachment
+  pkg_im --> pkg_fs
+  pkg_im --> pkg_llm
+  pkg_im --> pkg_session
+  pkg_im --> pkg_session_persistence
+  pkg_im --> pkg_storage_domain
+  pkg_im --> pkg_tools
+  pkg_im --> pkg_working_directory
   pkg_webhook --> pkg_agent
   pkg_webhook --> pkg_agent_default_model
   pkg_webhook --> pkg_agent_preset_registry
@@ -1289,10 +1289,6 @@ flowchart TD
   pkg_experimental_claude_code_mods --> pkg_typert_protocol
   pkg_experimental_claude_code_mods --> pkg_user_questions
   pkg_experimental_claude_code_mods --> pkg_working_directory
-  pkg_experimental_im_session_commands --> pkg_agent
-  pkg_experimental_im_session_commands --> pkg_commands
-  pkg_experimental_im_session_commands --> pkg_experimental_im
-  pkg_experimental_im_session_commands --> pkg_session
   pkg_experimental_worktree --> pkg_agent
   pkg_experimental_worktree --> pkg_fs
   pkg_experimental_worktree --> pkg_sandbox
@@ -1305,6 +1301,10 @@ flowchart TD
   pkg_experimental_worktree --> pkg_subprocess
   pkg_experimental_worktree --> pkg_working_directory
   pkg_experimental_worktree --> pkg_workspace
+  pkg_im_session_commands --> pkg_agent
+  pkg_im_session_commands --> pkg_commands
+  pkg_im_session_commands --> pkg_im
+  pkg_im_session_commands --> pkg_session
   pkg_tool_session_query --> pkg_agent
   pkg_tool_session_query --> pkg_llm
   pkg_tool_session_query --> pkg_session
@@ -1669,7 +1669,6 @@ flowchart TD
 | [`experimental-cot-translation-bundle`](../packages/experimental/cot-translation-bundle) | `experimental` | — |
 | [`experimental-forge`](../packages/experimental/forge) | `experimental` | — |
 | [`experimental-forge-bundle`](../packages/experimental/forge-bundle) | `experimental` | — |
-| [`experimental-im-bundle`](../packages/experimental/im-bundle) | `experimental` | — |
 | [`experimental-inspector`](../packages/experimental/inspector) | `experimental` | — |
 | [`experimental-inspector-profile`](../packages/experimental/inspector-profile) | `experimental` | — |
 | [`experimental-liveshare-protocol`](../packages/experimental/liveshare-protocol) | `experimental` | — |
@@ -1681,6 +1680,7 @@ flowchart TD
 | [`experimental-terminal-bundle`](../packages/experimental/terminal-bundle) | `experimental` | — |
 | [`experimental-voice-input-bundle`](../packages/experimental/voice-input-bundle) | `experimental` | — |
 | [`experimental-webworker-packer`](../packages/experimental/webworker-packer) | `experimental` | — |
+| [`im-bundle`](../packages/experimental/im-bundle) | `experimental` | — |
 | [`personalized-recommendations`](../packages/experimental/personalized-recommendations) | `experimental` | — |
 | [`client-ui-cordis`](../packages/extensions/ui-cordis) | `extensions` | — |
 | [`cordis-client-runner`](../packages/extensions/cordis-client-runner) | `extensions` | — |
@@ -1872,7 +1872,7 @@ flowchart TD
 | [`web-app`](../packages/bundle/web-app) | `bundle` | [`shell-env`](../packages/shell/shell-env) |
 | [`experimental-auto-review`](../packages/experimental/auto-review) | `experimental` | [`agent`](../packages/core/agent), [`agent-instructions`](../packages/context/agent-instructions), [`llm`](../packages/llm/llm), [`permission-presets`](../packages/interaction/permission-presets), [`session`](../packages/core/session), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
 | [`experimental-forge-session`](../packages/experimental/forge-session) | `experimental` | [`experimental-forge`](../packages/experimental/forge), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`shell`](../packages/shell/shell), [`shell-env`](../packages/shell/shell-env), [`tools`](../packages/core/tools) |
-| [`experimental-im`](../packages/experimental/im) | `experimental` | [`agent`](../packages/core/agent), [`agent-preset-registry`](../packages/preset/agent-preset-registry), [`attachment`](../packages/attachment/attachment), [`fs`](../packages/fs/fs), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence), [`storage-domain`](../packages/storage/storage-domain), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
+| [`im`](../packages/experimental/im) | `experimental` | [`agent`](../packages/core/agent), [`agent-preset-registry`](../packages/preset/agent-preset-registry), [`attachment`](../packages/attachment/attachment), [`fs`](../packages/fs/fs), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence), [`storage-domain`](../packages/storage/storage-domain), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
 | [`webhook`](../packages/experimental/webhook) | `experimental` | [`agent`](../packages/core/agent), [`agent-default-model`](../packages/core/agent-default-model), [`agent-preset-registry`](../packages/preset/agent-preset-registry), [`llm`](../packages/llm/llm), [`permission-presets`](../packages/interaction/permission-presets), [`session`](../packages/core/session), [`session-title`](../packages/session/session-title), [`workspace`](../packages/workspace/workspace) |
 | [`tool-cordis`](../packages/extensions/tool-cordis) | `extensions` | [`agent`](../packages/core/agent), [`app-boot`](../packages/boot/app-boot), [`cordis-host-runner`](../packages/extensions/cordis-host-runner), [`tools`](../packages/core/tools) |
 | [`host-plugin-inventory`](../packages/host/plugin-inventory) | `host` | [`agent-preset-registry`](../packages/preset/agent-preset-registry), [`brand`](../packages/util/brand), [`typert-protocol`](../packages/typert/protocol) |
@@ -1893,8 +1893,8 @@ flowchart TD
 | [`compaction-tool-result-pruner`](../packages/compaction/compaction-tool-result-pruner) | `compaction` | [`compaction`](../packages/compaction/compaction), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`token-meter`](../packages/llm/token-meter) |
 | [`experimental-browser-use-runtime`](../packages/experimental/browser-use-runtime) | `experimental` | [`agent`](../packages/core/agent), [`browser-use`](../packages/browser-use/browser-use), [`mcp-client`](../packages/mcp/mcp-client), [`scope`](../packages/core/scope), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
 | [`experimental-claude-code-mods`](../packages/experimental/claude-code-mods) | `experimental` | [`agent`](../packages/core/agent), [`commands`](../packages/interaction/commands), [`fs`](../packages/fs/fs), [`llm`](../packages/llm/llm), [`scope`](../packages/core/scope), [`session`](../packages/core/session), [`storage-domain`](../packages/storage/storage-domain), [`subprocess`](../packages/subprocess/subprocess), [`token-meter`](../packages/llm/token-meter), [`tools`](../packages/core/tools), [`typert-protocol`](../packages/typert/protocol), [`user-questions`](../packages/interaction/user-questions), [`working-directory`](../packages/session/working-directory) |
-| [`experimental-im-session-commands`](../packages/experimental/im-session-commands) | `experimental` | [`agent`](../packages/core/agent), [`commands`](../packages/interaction/commands), [`experimental-im`](../packages/experimental/im), [`session`](../packages/core/session) |
 | [`experimental-worktree`](../packages/experimental/worktree) | `experimental` | [`agent`](../packages/core/agent), [`fs`](../packages/fs/fs), [`sandbox`](../packages/sandbox/sandbox), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`session-projection-cache`](../packages/session/session-projection-cache), [`session-query`](../packages/session-query/session-query), [`settings`](../packages/settings/settings), [`subprocess`](../packages/subprocess/subprocess), [`working-directory`](../packages/session/working-directory), [`workspace`](../packages/workspace/workspace) |
+| [`im-session-commands`](../packages/experimental/im-session-commands) | `experimental` | [`agent`](../packages/core/agent), [`commands`](../packages/interaction/commands), [`im`](../packages/experimental/im), [`session`](../packages/core/session) |
 | [`tool-session-query`](../packages/experimental/tool-session-query) | `experimental` | [`agent`](../packages/core/agent), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-query`](../packages/session-query/session-query), [`system-prompt`](../packages/core/system-prompt), [`timeout`](../packages/util/timeout), [`tools`](../packages/core/tools) |
 | [`webhook-github`](../packages/experimental/webhook-github) | `experimental` | [`credentials`](../packages/credentials/credentials), [`host-webserver`](../packages/host/webserver), [`session`](../packages/core/session), [`webhook`](../packages/experimental/webhook) |
 | [`mcp-manager`](../packages/mcp/mcp-manager) | `mcp` | [`mcp-client`](../packages/mcp/mcp-client), [`tools`](../packages/core/tools), [`typert-protocol`](../packages/typert/protocol), [`util-values`](../packages/util/values) |

@@ -3,7 +3,7 @@ description: "Platform-neutral IM host for admitting chats, storing messages wit
 kind: "package-reference"
 ---
 
-# @deepseek-ai/dsh-experimental-im
+# @deepseek-ai/dsh-im
 
 English | [中文](README.zh.md)
 
@@ -25,18 +25,18 @@ Admit IM chats by rule, store every admitted message with a per-chat sequence nu
 <a id="use-this-package"></a>
 ## Use this package
 
-The [IM bundle](../im-bundle/README.md) adds `@deepseek-ai/dsh-experimental-im`, the Feishu/Lark adapter, and [`session-commands`](../im-session-commands/README.md) to an existing profile, whose base layer supplies persistence, agent presets, and compaction; the operator's patch configures `defaultDispatch`. In a custom composition, mount `@deepseek-ai/dsh-experimental-im` with explicit `sources` and either mount a plugin that listens on `im/message` or configure `defaultDispatch`; without one of those, admitted messages are stored and marked `ignored` without reaching any agent.
+The [IM bundle](../im-bundle/README.md) adds `@deepseek-ai/dsh-im`, the Feishu/Lark adapter, and [`session-commands`](../im-session-commands/README.md) to an existing profile, whose base layer supplies persistence, agent presets, and compaction; the operator's patch configures `defaultDispatch`. In a custom composition, mount `@deepseek-ai/dsh-im` with explicit `sources` and either mount a plugin that listens on `im/message` or configure `defaultDispatch`; without one of those, admitted messages are stored and marked `ignored` without reaching any agent.
 
 ### Responsibilities across packages
 
-`@deepseek-ai/dsh-experimental-im` manages message storage, session hosting, access control, and tool registration, while separate plugins can handle slash commands, custom message routing, and turn rendering.
+`@deepseek-ai/dsh-im` manages message storage, session hosting, access control, and tool registration, while separate plugins can handle slash commands, custom message routing, and turn rendering.
 
 | Responsibility | Owner |
 |---|---|
-| Message admission, `im_messages` store, `im/message` waterfall, default dispatcher | `@deepseek-ai/dsh-experimental-im` |
-| Hosted sessions (`im_sessions`), outbound publication (`im_receipts`), formatting, history | `@deepseek-ai/dsh-experimental-im` |
-| Turn activity tracking (`im/activity`) and output renderer registry (`ctx.im.outputs`) | `@deepseek-ai/dsh-experimental-im` |
-| `im_read`, `im_history`, `im_read_image`, `im_read_file`, `im_send`, `im_reply`, `im_send_file` | `@deepseek-ai/dsh-experimental-im` (when `tools` and `systemPrompt` are present) |
+| Message admission, `im_messages` store, `im/message` waterfall, default dispatcher | `@deepseek-ai/dsh-im` |
+| Hosted sessions (`im_sessions`), outbound publication (`im_receipts`), formatting, history | `@deepseek-ai/dsh-im` |
+| Turn activity tracking (`im/activity`) and output renderer registry (`ctx.im.outputs`) | `@deepseek-ai/dsh-im` |
+| `im_read`, `im_history`, `im_read_image`, `im_read_file`, `im_send`, `im_reply`, `im_send_file` | `@deepseek-ai/dsh-im` (when `tools` and `systemPrompt` are present) |
 | Chat slash commands (`/stop`, `/clear`, `/new`, `/status`, `/help`, passthrough) | [`session-commands`](../im-session-commands/README.md) |
 | Platform protocol, element normalization, mode selection, and transport adapters | `@deepseek-ai/cordis-plugin-im-core` and the Lark/QQ adapters |
 
@@ -61,7 +61,7 @@ Each entry in `sources` is an ordered admission rule. A rule specifies a unique 
 | `tools.readOnly` / `tools.maxReadBytes` / `tools.maxHistoryItems` / `tools.fileDir` | `false` / 64 KiB / 50 / `.dsh/im` | Whether to register only read tools, maximum tool output bytes, maximum `im_history` page size, and the session-relative directory `im_read_file` stages a downloaded file in |
 | `defaultDispatch` | absent | Optional [default dispatcher](#the-default-dispatcher): `agentPreset`, `provider`, `model`, and absolute `cwd` (required), plus `output` (`'none'`), `delivery` (`'steer'`), `restrict` (no tool restriction), and `prompt` (`im:dispatcher` at order 81) |
 
-Messages from chats that match no rule are neither stored nor emitted. See the generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-experimental-im) for the complete schema.
+Messages from chats that match no rule are neither stored nor emitted. See the generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-im) for the complete schema.
 
 ### Durability and the message store
 
@@ -121,7 +121,7 @@ The `tool:im` system prompt section (order 80) lists the session's readable and 
 <a id="the-default-dispatcher"></a>
 ### The default dispatcher
 
-When `defaultDispatch` is configured on `@deepseek-ai/dsh-experimental-im`, any addressed message that no earlier `im/message` listener handled is delivered to a single shared session (`key: 'im:dispatcher'`, `owner: 'dispatcher'`). Own messages and unaddressed group messages are still ignored. As the dispatcher receives messages from different chats, it adds each chat to its session bindings (with `writable` matching the admitting source and the first chat marked `home`). Each delivered message is prefixed with `<im-chat key="…" source="…" type="…" />` so the model can identify the source chat and reply using `im_reply` or `im_send` with that `chat` key.
+When `defaultDispatch` is configured on `@deepseek-ai/dsh-im`, any addressed message that no earlier `im/message` listener handled is delivered to a single shared session (`key: 'im:dispatcher'`, `owner: 'dispatcher'`). Own messages and unaddressed group messages are still ignored. As the dispatcher receives messages from different chats, it adds each chat to its session bindings (with `writable` matching the admitting source and the first chat marked `home`). Each delivered message is prefixed with `<im-chat key="…" source="…" type="…" />` so the model can identify the source chat and reply using `im_reply` or `im_send` with that `chat` key.
 
 The dispatcher session also receives the `im:dispatcher` system prompt section (order 81 by default), which renders only for `im:dispatcher` and is empty for all other agents.
 
@@ -129,7 +129,7 @@ The dispatcher session also receives the `im:dispatcher` system prompt section (
 
 `im/message` is a Cordis waterfall. Plugins registered with `{ prepend: true }`—such as [`session-commands`](../im-session-commands/README.md)—run before other listeners so commands like `/stop` and `/clear` are handled immediately instead of becoming model input. A deployment's own routing plugins run in registration order and call `next()` when a message does not match their rules; if no listener claims the message, the waterfall falls back to the default dispatcher (if configured) or returns `{ kind: 'ignored' }`.
 
-Below `@deepseek-ai/dsh-experimental-im`, `@deepseek-ai/cordis-plugin-im-core` and `@deepseek-ai/satori-element` implement the element model, the `<fallback>` alternatives a renderer uses to adapt content, mode selection, degradation scoring, resource preparation, and stream scheduling, while the Lark and QQ adapters implement the platform modes.
+Below `@deepseek-ai/dsh-im`, `@deepseek-ai/cordis-plugin-im-core` and `@deepseek-ai/satori-element` implement the element model, the `<fallback>` alternatives a renderer uses to adapt content, mode selection, degradation scoring, resource preparation, and stream scheduling, while the Lark and QQ adapters implement the platform modes.
 
 -----
 
@@ -263,7 +263,7 @@ Append-only, like standard tool results.
 
 <a id="known-limitations-and-deferred-work"></a>
 
-The following constraints apply to `@deepseek-ai/dsh-experimental-im`:
+The following constraints apply to `@deepseek-ai/dsh-im`:
 
 - **Single process per storage directory** — `im_messages`, `im_sessions`, and `im_receipts` are owned by one process in memory and on disk; concurrent processes cannot share the same storage domains.
 - **No replies without a routing plugin or `defaultDispatch`** — if no `im/message` listener claims an admitted message and `defaultDispatch` is not configured, the message is stored and settled as `ignored`.
@@ -288,6 +288,6 @@ The following constraints apply to `@deepseek-ai/dsh-experimental-im`:
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 
-See the [IM architecture note](../../../.agents/notes/implemented/architecture/2026-10-25-im-architecture-v4.md) for the separation between `@deepseek-ai/dsh-experimental-im` and its plugins, the [shared-session note](../../../.agents/notes/implemented/simplification/2026-10-28-im-shared-session-minimal-plane.md) for why the profile mounts only the host and the commands plugin, and the [IM storage unit identity note](../../../.agents/notes/implemented/architecture/2026-10-25-im-storage-unit-identity.md) for the storage domain naming rules.
+See the [IM architecture note](../../../.agents/notes/implemented/architecture/2026-10-25-im-architecture-v4.md) for the separation between `@deepseek-ai/dsh-im` and its plugins, the [shared-session note](../../../.agents/notes/implemented/simplification/2026-10-28-im-shared-session-minimal-plane.md) for why the profile mounts only the host and the commands plugin, and the [IM storage unit identity note](../../../.agents/notes/implemented/architecture/2026-10-25-im-storage-unit-identity.md) for the storage domain naming rules.
 
 </details>

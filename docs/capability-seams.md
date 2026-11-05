@@ -16,9 +16,9 @@ flowchart LR
   pkg_client_ui_plugin_recommendations["client-ui-plugin-recommendations"]
   pkg_headless["headless"]
   svc_headlessStartup["ctx.headlessStartup<br/>Headless invocation options"]
-  pkg_experimental_im["experimental-im"]
+  pkg_im["im"]
   svc_im["ctx.im<br/>Persistent IM automation"]
-  pkg_experimental_im_session_commands["experimental-im-session-commands"]
+  pkg_im_session_commands["im-session-commands"]
   pkg_experimental_client_ui_cot_translation["experimental-client-ui-cot-translation"]
   svc_cotTranslation["ctx.cotTranslation<br/>Reasoning translation Remote"]
   pkg_experimental_translator["experimental-translator"]
@@ -377,7 +377,6 @@ flowchart LR
   pkg_experimental_forge --> svc_forge
   pkg_experimental_forge_github --> svc_forge
   pkg_experimental_forge_session --> svc_forgeSession
-  pkg_experimental_im --> svc_im
   pkg_experimental_liveshare --> svc_liveshareShares
   pkg_experimental_ptc_runtime_python --> svc_ptcRuntime
   pkg_experimental_speech_to_text --> svc_speechToText
@@ -398,6 +397,7 @@ flowchart LR
   pkg_host_directory_picker_native --> svc_directoryPicker
   pkg_host_product_telemetry_otel --> svc_productTelemetry
   pkg_host_webserver --> svc_webServer
+  pkg_im --> svc_im
   pkg_inspector --> svc_inspector
   pkg_jobs --> svc_jobs
   pkg_jobs_local --> svc_jobs
@@ -535,7 +535,7 @@ flowchart LR
   svc_fs --> pkg_tool_fs
   svc_headlessStartup --> pkg_headless
   svc_hmr --> pkg_app_boot
-  svc_im --> pkg_experimental_im_session_commands
+  svc_im --> pkg_im_session_commands
   svc_jobs --> pkg_api_job_controller
   svc_jobs --> pkg_tool_bash
   svc_jobs --> pkg_tool_jobs
@@ -663,7 +663,7 @@ flowchart LR
 | `ctx.actionCards` | `service` | [`action-cards`](../packages/experimental/action-cards) | - | [`creation-recommendations`](../packages/experimental/creation-recommendations), [`client-ui-action-cards`](../packages/experimental/client-ui-action-cards) | - | Owns the card tool, card state, user actions and status notices; card kinds register their actions and handlers. |
 | `ctx.pluginRecommendations` | `service` | [`plugin-recommendations`](../packages/experimental/plugin-recommendations) | - | [`client-ui-plugin-recommendations`](../packages/experimental/client-ui-plugin-recommendations) | - | Reads the current catalog text of an official plugin card and enables the plugin through the profile plugin manager after a click. |
 | `ctx.headlessStartup` | `core` | [`headless`](../packages/bundle/headless) | - | [`headless`](../packages/bundle/headless) | - | Supplies parsed task and run options to the headless runner and its sandbox-policy configuration. |
-| `ctx.im` | `service` | [`experimental-im`](../packages/experimental/im) | - | [`experimental-im-session-commands`](../packages/experimental/im-session-commands) | - | Owns durable intake, the hosted sessions of every admitted chat, and explicitly authorized reads and publications. |
+| `ctx.im` | `service` | [`im`](../packages/experimental/im) | - | [`im-session-commands`](../packages/experimental/im-session-commands) | - | Owns durable intake, the hosted sessions of every admitted chat, and explicitly authorized reads and publications. |
 | `ctx.cotTranslation` | `service` | [`experimental-client-ui-cot-translation`](../packages/experimental/client-ui-cot-translation) | - | - | - | Serves reasoning translations, reuses saved results, and joins ordinary Session activation for uncached inactive Sessions. |
 | `ctx.translator` | `service` | [`experimental-translator`](../packages/experimental/translator) | - | [`experimental-client-ui-cot-translation`](../packages/experimental/client-ui-cot-translation) | - | Resolves Google or Bing requests and retains shared experimental records through the active Session writer. |
 | `ctx.hmr` | `core` | [`hmr`](../packages/boot/hmr) | - | [`app-boot`](../packages/boot/app-boot) | - | Owns module and exact configuration watchers; application mutations share its queue and automatic reloads await the application file lock. |

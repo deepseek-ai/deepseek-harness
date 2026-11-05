@@ -3,7 +3,7 @@ description: "在路由策略运行前处理 IM 聊天斜杠命令（`/stop`、`
 kind: "package-reference"
 ---
 
-# @deepseek-ai/dsh-experimental-im-session-commands
+# @deepseek-ai/dsh-im-session-commands
 
 [English](README.md) | 中文
 
@@ -25,11 +25,11 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用方式
 
-将 `@deepseek-ai/dsh-experimental-im-session-commands` 与 `@deepseek-ai/dsh-experimental-im` 一起挂载。本插件使用 `{ prepend: true }` 注册 `im/message` 监听器，因此被它处理的命令不会进入后续路由策略。随附的 [IM profile](../im-bundle/README.zh.md) 使用以下默认配置挂载本插件。
+将 `@deepseek-ai/dsh-im-session-commands` 与 `@deepseek-ai/dsh-im` 一起挂载。本插件使用 `{ prepend: true }` 注册 `im/message` 监听器，因此被它处理的命令不会进入后续路由策略。随附的 [IM profile](../im-bundle/README.zh.md) 使用以下默认配置挂载本插件。
 
 ```yaml
 - id: im-session-commands
-  name: '@deepseek-ai/dsh-experimental-im-session-commands'
+  name: '@deepseek-ai/dsh-im-session-commands'
   config:
     allow: all
     admins: []
@@ -46,7 +46,7 @@ kind: "package-reference"
 | `resettable` | `['dispatcher']` | 允许被 `/clear` 与 `/new` 重置的会话 `owner` 名称列表 |
 | `locale` | `'zh'` | 命令回复语言（`'zh'` 或 `'en'`） |
 
-完整字段定义见生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-im-session-commands)。
+完整字段定义见生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-im-session-commands)。
 
 ### 支持的命令
 
@@ -113,7 +113,7 @@ kind: "package-reference"
 
 <a id="known-limitations-and-deferred-work"></a>
 
-`@deepseek-ai/dsh-experimental-im-session-commands` 当前存在以下限制：
+`@deepseek-ai/dsh-im-session-commands` 当前存在以下限制：
 
 - **群聊命令必须 `@` 机器人** — 群聊中未 `@` 机器人的 `/stop` 不会被本插件执行，而是会传递给后续监听器。
 - **`/stop` 会停止目标范围内的全部运行中会话** — 不支持通过参数指定只停止某一个会话或单个后台任务。

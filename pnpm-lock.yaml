@@ -10486,10 +10486,10 @@ importers:
       '@deepseek-ai/cordis-plugin-im-markdown':
         specifier: workspace:~
         version: link:../../../vendor/plugin-im-markdown
-      '@deepseek-ai/dsh-experimental-im':
+      '@deepseek-ai/dsh-im':
         specifier: workspace:*
         version: link:../im
-      '@deepseek-ai/dsh-experimental-im-session-commands':
+      '@deepseek-ai/dsh-im-session-commands':
         specifier: workspace:*
         version: link:../im-session-commands
     devDependencies:
@@ -10521,7 +10521,7 @@ importers:
       '@deepseek-ai/dsh-commands':
         specifier: workspace:*
         version: link:../../interaction/commands
-      '@deepseek-ai/dsh-experimental-im':
+      '@deepseek-ai/dsh-im':
         specifier: workspace:*
         version: link:../im
       '@deepseek-ai/dsh-session':

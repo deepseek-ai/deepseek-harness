@@ -133,10 +133,10 @@ const SERVICE_ROLES: ServiceRole[] = [
   },
   {
     key: 'im',
-    pkg: 'experimental-im',
+    pkg: 'im',
     title: 'Persistent IM automation',
     mode: 'service',
-    consumers: ['experimental-im-session-commands'],
+    consumers: ['im-session-commands'],
     note: 'Owns durable intake, the hosted sessions of every admitted chat, and explicitly authorized reads and publications.',
   },
   {

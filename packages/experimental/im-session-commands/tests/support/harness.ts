@@ -12,10 +12,10 @@ import CommandRuntime from '@deepseek-ai/dsh-commands'
 import {
   ImMessageKey, type ImConfig, type ImMessage, type ImMessageEvent, type ImOutcome, type ImSendResult,
   type ImSourceConfig,
-} from '@deepseek-ai/dsh-experimental-im/src/api.ts'
-import { Config as ImConfigSchema } from '@deepseek-ai/dsh-experimental-im/src/config.ts'
-import { ImIntake } from '@deepseek-ai/dsh-experimental-im/src/intake.ts'
-import { ImStore } from '@deepseek-ai/dsh-experimental-im/src/store.ts'
+} from '@deepseek-ai/dsh-im/src/api.ts'
+import { Config as ImConfigSchema } from '@deepseek-ai/dsh-im/src/config.ts'
+import { ImIntake } from '@deepseek-ai/dsh-im/src/intake.ts'
+import { ImStore } from '@deepseek-ai/dsh-im/src/store.ts'
 import {
   boot, cleanRoots, type BootOptions, type SessionsHarness,
 } from '../../../im/tests/support/sessions-harness.ts'

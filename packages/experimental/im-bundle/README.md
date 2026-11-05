@@ -3,13 +3,13 @@ description: "Connect Feishu/Lark chats to one persistent agent session shared b
 kind: "package-bundle"
 ---
 
-# @deepseek-ai/dsh-experimental-im-bundle
+# @deepseek-ai/dsh-im-bundle
 
 English | [中文](README.zh.md)
 
 ## Summary
 
-Add experimental IM automation to an existing profile such as `web`. This bundle inserts Host rows for the Satori IM core, the Feishu/Lark and QQ adapters, the IM host (`@deepseek-ai/dsh-experimental-im`), and slash commands. Operators configure admitted chats, sender allowlists, write permissions, and the model route of the shared session through a profile patch. A Feishu application and durable local storage are required; the QQ adapter is included but disabled by default. The installation does not ship this bundle; install it explicitly.
+Add experimental IM automation to an existing profile such as `web`. This bundle inserts Host rows for the Satori IM core, the Feishu/Lark and QQ adapters, the IM host (`@deepseek-ai/dsh-im`), and slash commands. Operators configure admitted chats, sender allowlists, write permissions, and the model route of the shared session through a profile patch. A Feishu application and durable local storage are required; the QQ adapter is included but disabled by default. The installation does not ship this bundle; install it explicitly.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ Add experimental IM automation to an existing profile such as `web`. This bundle
 <a id="use-this-package"></a>
 ## Use this package
 
-Install the bundle into a long-running profile with `dsh plugin --profile web add @deepseek-ai/dsh-experimental-im-bundle`. The IM rows run while that profile's process runs and stop with it.
+Install the bundle into a long-running profile with `dsh plugin --profile web add @deepseek-ai/dsh-im-bundle`. The IM rows run while that profile's process runs and stop with it.
 
 ### Configure a deployment
 
@@ -79,7 +79,7 @@ When the `im` row activates, it recovers pending deliveries from its storage dom
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The [bundle patch](cordis.patch.yml) inserts HTTP (`im-http`), Satori core (`im-core`), the plugin that renders the `<markdown>` element every answer is written as (`im-markdown`), the Feishu adapter (`im-feishu`), the QQ adapter (`im-qq`, disabled), the IM host (`im`), and slash commands (`im-session-commands`). It declares no application entry and overrides no row of the profile. Because `dsh-experimental-im` registers the `im_*` tools globally, the shared session's preset needs no plugin rows of its own.
+The [bundle patch](cordis.patch.yml) inserts HTTP (`im-http`), Satori core (`im-core`), the plugin that renders the `<markdown>` element every answer is written as (`im-markdown`), the Feishu adapter (`im-feishu`), the QQ adapter (`im-qq`, disabled), the IM host (`im`), and slash commands (`im-session-commands`). It declares no application entry and overrides no row of the profile. Because `dsh-im` registers the `im_*` tools globally, the shared session's preset needs no plugin rows of its own.
 
 </details>
 

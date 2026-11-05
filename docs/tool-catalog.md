@@ -15,7 +15,7 @@ This table connects model-visible tool names to the plugin package and service s
 
 | Tool package | Model-visible names | Requires | Writes / affects | Shipped aliases | Deployment note |
 | --- | --- | --- | --- | --- | --- |
-| `@deepseek-ai/dsh-experimental-im` | `im_history`, `im_read`, `im_read_file`, `im_read_image`, `im_reply`, `im_send`, `im_send_file` | `ctx.tools`, `ctx.im`, `ctx.systemPrompt`, `ctx.fs + ctx.workingDirectory (im_send_file)` | `tool/call`, `IM send receipts for publication`, `tool/result` | - | Read messages, history pages, and the media of the chats the caller may use, explicitly publish markdown messages, replies, or files, and read one image or one file of a message. `tools.readOnly` registers only the reads. Assistant output remains private unless the session streams replies; uncertain sends are never automatically repeated. |
+| `@deepseek-ai/dsh-im` | `im_history`, `im_read`, `im_read_file`, `im_read_image`, `im_reply`, `im_send`, `im_send_file` | `ctx.tools`, `ctx.im`, `ctx.systemPrompt`, `ctx.fs + ctx.workingDirectory (im_send_file)` | `tool/call`, `IM send receipts for publication`, `tool/result` | - | Read messages, history pages, and the media of the chats the caller may use, explicitly publish markdown messages, replies, or files, and read one image or one file of a message. `tools.readOnly` registers only the reads. Assistant output remains private unless the session streams replies; uncertain sends are never automatically repeated. |
 | `@deepseek-ai/dsh-plugin-manager` | `plugin_manager` | `ctx.tools`, `ctx.pluginManager`, `ctx.sandboxPolicy` | `tool/call`, `tool/result`, `user/message` | - | - |
 | `@deepseek-ai/dsh-plugin-market` | `plugin_market` | `ctx.tools`, `ctx.pluginMarket` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-mcp-resources` | `list_mcp_resource_templates`, `list_mcp_resources`, `read_mcp_resource` | `ctx.tools`, `ctx.mcpResources` | `tool/call`, `tool/result` | - | - |
@@ -54,9 +54,9 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-workspace-dependencies` | `load_workspace_dependencies` | `ctx.tools` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`, `web_search` | `ctx.tools`, `ctx.web`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps. |
 
-<a id="deepseek-aidsh-experimental-im"></a>
+<a id="deepseek-aidsh-im"></a>
 
-## `@deepseek-ai/dsh-experimental-im`
+## `@deepseek-ai/dsh-im`
 
 ### `im_history`
 

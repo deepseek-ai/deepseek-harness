@@ -5,42 +5,42 @@
 /:
   en: b5766ae6d9a7f50e
   zh: 6e0404a5e0c5e21b
-/deepseek-ai-dsh-experimental-im-session-commands:
-  en: 1903f69f6c1898ec
-  zh: 8c566a5bddd17b36
-/deepseek-ai-dsh-experimental-im-session-commands/summary:
+/deepseek-ai-dsh-im-session-commands:
+  en: 7a118244ca350278
+  zh: 330bc7207b51200a
+/deepseek-ai-dsh-im-session-commands/summary:
   en: 57782a41531f87a8
   zh: 60f492d7658f33d7
-/deepseek-ai-dsh-experimental-im-session-commands/table-of-contents:
+/deepseek-ai-dsh-im-session-commands/table-of-contents:
   en: d152484eb41ac6b4
   zh: 4ebceb2533647b32
-/deepseek-ai-dsh-experimental-im-session-commands/use-this-package:
-  en: 814b37a1a42e444b
-  zh: a1755ccf070dd0b9
-/deepseek-ai-dsh-experimental-im-session-commands/use-this-package/commands:
+/deepseek-ai-dsh-im-session-commands/use-this-package:
+  en: 42a8c23653ea9087
+  zh: c935e8f12e056a3f
+/deepseek-ai-dsh-im-session-commands/use-this-package/commands:
   en: bf62a9a63667de5a
   zh: f04d0c7695c22a00
-/deepseek-ai-dsh-experimental-im-session-commands/use-this-package/command-matching-rules:
+/deepseek-ai-dsh-im-session-commands/use-this-package/command-matching-rules:
   en: 228190c2a259fc12
   zh: db687daa7d80a819
-/deepseek-ai-dsh-experimental-im-session-commands/understand-the-implementation:
+/deepseek-ai-dsh-im-session-commands/understand-the-implementation:
   en: b8ca434869b06225
   zh: e1f996a138cfd01a
-/deepseek-ai-dsh-experimental-im-session-commands/understand-the-implementation/source-map:
+/deepseek-ai-dsh-im-session-commands/understand-the-implementation/source-map:
   en: ff357bf4d62e62ab
   zh: 20030ebba4ea8f2a
-/deepseek-ai-dsh-experimental-im-session-commands/further-exploration:
+/deepseek-ai-dsh-im-session-commands/further-exploration:
   en: 890ce151137b1c07
   zh: 0a223309e0119243
-/deepseek-ai-dsh-experimental-im-session-commands/model-experience:
+/deepseek-ai-dsh-im-session-commands/model-experience:
   en: 077223ae5b543fd9
   zh: 6d1b583e186ee517
-/deepseek-ai-dsh-experimental-im-session-commands/model-experience/kv-cache-effect:
+/deepseek-ai-dsh-im-session-commands/model-experience/kv-cache-effect:
   en: 7951e08ff0995fea
   zh: 9fb76c97b31d1c1d
-/deepseek-ai-dsh-experimental-im-session-commands/known-limitations-and-deferred-work:
-  en: bc8b1592fbe38a25
-  zh: cd25bb25cc67da4b
-/deepseek-ai-dsh-experimental-im-session-commands/known-limitations-and-deferred-work/dev-note:
+/deepseek-ai-dsh-im-session-commands/known-limitations-and-deferred-work:
+  en: a9f8fb4ce0cc3944
+  zh: f4f852c60b229cf2
+/deepseek-ai-dsh-im-session-commands/known-limitations-and-deferred-work/dev-note:
   en: 883f5f0882a4eedc
   zh: 1ab431133941237c

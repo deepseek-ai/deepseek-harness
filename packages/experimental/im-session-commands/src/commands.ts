@@ -7,7 +7,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-commands'
 import type { SessionId } from '@deepseek-ai/dsh-session'
-import type { ImChatKey, ImMessage, ImMessageEvent, ImOutcome, ImSessionRecord } from '@deepseek-ai/dsh-experimental-im'
+import type { ImChatKey, ImMessage, ImMessageEvent, ImOutcome, ImSessionRecord } from '@deepseek-ai/dsh-im'
 import type { SessionCommandsConfig } from './config.ts'
 import {
   describeAge, fill, stringsOf, type BuiltinCommandName, type SessionCommandStrings,

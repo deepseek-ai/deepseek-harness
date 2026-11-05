@@ -65,9 +65,9 @@ import TerminalSessionService from '@deepseek-ai/dsh-terminal'
 import * as ToolPty from '@deepseek-ai/dsh-tool-terminal'
 import * as TerminalPanel from '@deepseek-ai/dsh-terminal-panel'
 import * as ToolGoal from '@deepseek-ai/dsh-tool-goal'
-import { Config as ImConfig } from '@deepseek-ai/dsh-experimental-im'
-import type { ImToolHost } from '@deepseek-ai/dsh-experimental-im/src/tools.ts'
-import { applyTools as applyImTools } from '@deepseek-ai/dsh-experimental-im/src/tools.ts'
+import { Config as ImConfig } from '@deepseek-ai/dsh-im'
+import type { ImToolHost } from '@deepseek-ai/dsh-im/src/tools.ts'
+import { applyTools as applyImTools } from '@deepseek-ai/dsh-im/src/tools.ts'
 import * as ToolSchedule from '@deepseek-ai/dsh-tool-schedule'
 import ScheduleService from '@deepseek-ai/dsh-schedule'
 import Lsp from '@deepseek-ai/dsh-lsp'
@@ -211,7 +211,7 @@ export interface ToolPackage {
  */
 const TOOL_PACKAGES: ToolPackage[] = [
   {
-    pkg: '@deepseek-ai/dsh-experimental-im',
+    pkg: '@deepseek-ai/dsh-im',
     dir: 'im',
     source: 'packages/experimental/im/src/tools.ts',
     requires: ['ctx.tools', 'ctx.im', 'ctx.systemPrompt', 'ctx.fs + ctx.workingDirectory (im_send_file)'],

@@ -3,7 +3,7 @@ description: "Handle IM chat slash commands (`/stop`, `/clear`, `/new`, `/status
 kind: "package-reference"
 ---
 
-# @deepseek-ai/dsh-experimental-im-session-commands
+# @deepseek-ai/dsh-im-session-commands
 
 English | [中文](README.zh.md)
 
@@ -25,11 +25,11 @@ Execute slash commands in IM chats without sending the command text to the model
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount `@deepseek-ai/dsh-experimental-im-session-commands` alongside `@deepseek-ai/dsh-experimental-im`. Because it registers its `im/message` listener with `{ prepend: true }`, commands it handles never reach downstream routing strategies. The shipped [IM profile](../im-bundle/README.md) mounts it with the default configuration below.
+Mount `@deepseek-ai/dsh-im-session-commands` alongside `@deepseek-ai/dsh-im`. Because it registers its `im/message` listener with `{ prepend: true }`, commands it handles never reach downstream routing strategies. The shipped [IM profile](../im-bundle/README.md) mounts it with the default configuration below.
 
 ```yaml
 - id: im-session-commands
-  name: '@deepseek-ai/dsh-experimental-im-session-commands'
+  name: '@deepseek-ai/dsh-im-session-commands'
   config:
     allow: all
     admins: []
@@ -46,7 +46,7 @@ Mount `@deepseek-ai/dsh-experimental-im-session-commands` alongside `@deepseek-a
 | `resettable` | `['dispatcher']` | Session `owner` names that `/clear` and `/new` are allowed to reset |
 | `locale` | `'zh'` | Reply language (`'zh'` or `'en'`) |
 
-See the generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-experimental-im-session-commands) for the complete schema.
+See the generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-im-session-commands) for the complete schema.
 
 ### Commands
 
@@ -113,7 +113,7 @@ Independent: a command starts no model request, and a reset it performs only mak
 
 <a id="known-limitations-and-deferred-work"></a>
 
-The following constraints apply to `@deepseek-ai/dsh-experimental-im-session-commands`:
+The following constraints apply to `@deepseek-ai/dsh-im-session-commands`:
 
 - **Group commands require addressing the bot** — an unaddressed `/stop` in a group chat is ignored by this plugin and passed to downstream listeners.
 - **`/stop` cancels all running sessions targeted in the chat or thread** — it does not accept a session id or task number argument to stop a single session selectively.

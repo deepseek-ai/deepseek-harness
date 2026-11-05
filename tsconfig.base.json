@@ -36,15 +36,15 @@
       "@deepseek-ai/dsh-client-ui-entry-customization": ["./packages/client/ui-entry-customization/src/index.ts"],
       "@deepseek-ai/dsh-client-ui-entry-customization/client": ["./packages/client/ui-entry-customization/src/client/index.ts"],
       "@deepseek-ai/dsh-client-ui-entry-customization/src/*": ["./packages/client/ui-entry-customization/src/*"],
-      "@deepseek-ai/dsh-experimental-im-bundle": ["./packages/experimental/im-bundle/src/index.ts"],
-      "@deepseek-ai/dsh-experimental-im-bundle/src/*": ["./packages/experimental/im-bundle/src/*"],
-      "@deepseek-ai/dsh-experimental-im": ["./packages/experimental/im/src/index.ts"],
-      "@deepseek-ai/dsh-experimental-im/src/*": ["./packages/experimental/im/src/*"],
+      "@deepseek-ai/dsh-im-bundle": ["./packages/experimental/im-bundle/src/index.ts"],
+      "@deepseek-ai/dsh-im-bundle/src/*": ["./packages/experimental/im-bundle/src/*"],
+      "@deepseek-ai/dsh-im": ["./packages/experimental/im/src/index.ts"],
+      "@deepseek-ai/dsh-im/src/*": ["./packages/experimental/im/src/*"],
       // The IM plugin tier. Their npm names carry the `im-` infix while
       // their directories do not, so the generated region below cannot map them and
       // these hand-written aliases are the only source-level resolution they get.
-      "@deepseek-ai/dsh-experimental-im-session-commands": ["./packages/experimental/im-session-commands/src/index.ts"],
-      "@deepseek-ai/dsh-experimental-im-session-commands/src/*": ["./packages/experimental/im-session-commands/src/*"],
+      "@deepseek-ai/dsh-im-session-commands": ["./packages/experimental/im-session-commands/src/index.ts"],
+      "@deepseek-ai/dsh-im-session-commands/src/*": ["./packages/experimental/im-session-commands/src/*"],
       "@deepseek-ai/cordis-plugin-im-core": ["./vendor/plugin-im-core/src/index.ts"],
       "@deepseek-ai/cordis-plugin-im-core/src/*": ["./vendor/plugin-im-core/src/*"],
       "@deepseek-ai/cordis-plugin-im-core/testing": ["./vendor/plugin-im-core/src/testing.ts"],

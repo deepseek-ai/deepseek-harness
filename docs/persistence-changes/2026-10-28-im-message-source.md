@@ -9,7 +9,7 @@ English | [中文](2026-10-28-im-message-source.zh.md)
 
 ## Summary
 
-Adds the attribution-only `im` message source that `@deepseek-ai/dsh-experimental-im` writes on the user messages it delivers into a hosted session, so readers can tell external IM input apart from owner input.
+Adds the attribution-only `im` message source that `@deepseek-ai/dsh-im` writes on the user messages it delivers into a hosted session, so readers can tell external IM input apart from owner input.
 
 ## Table of Contents
 
