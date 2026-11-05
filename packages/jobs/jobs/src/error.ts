@@ -1,6 +1,6 @@
 /** Machine-routable background-job failures. @module */
 
-import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 
 /**
  * Every {@link JobError} code:

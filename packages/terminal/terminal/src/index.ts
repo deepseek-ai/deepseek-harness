@@ -6,7 +6,7 @@
 
 import { Context, Service } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import { TerminalBackendCleanupError } from './types.ts'
 import type {
   TerminalBackend,

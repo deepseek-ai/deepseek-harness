@@ -13091,9 +13091,9 @@ importers:
       '@deepseek-ai/dsh-brand':
         specifier: workspace:*
         version: link:../../util/brand
-      '@deepseek-ai/dsh-llm':
+      '@deepseek-ai/dsh-error':
         specifier: workspace:*
-        version: link:../../llm/llm
+        version: link:../../util/error
       '@deepseek-ai/dsh-session':
         specifier: workspace:*
         version: link:../../core/session
@@ -17193,9 +17193,9 @@ importers:
       '@deepseek-ai/dsh-brand':
         specifier: workspace:*
         version: link:../../util/brand
-      '@deepseek-ai/dsh-llm':
+      '@deepseek-ai/dsh-error':
         specifier: workspace:*
-        version: link:../../llm/llm
+        version: link:../../util/error
       '@deepseek-ai/dsh-session':
         specifier: workspace:*
         version: link:../../core/session
@@ -18401,6 +18401,9 @@ importers:
       '@deepseek-ai/dsh-deepseek-llm-api-extensions':
         specifier: workspace:*
         version: link:../../packages/llm/deepseek-llm-api-extensions
+      '@deepseek-ai/dsh-error':
+        specifier: workspace:*
+        version: link:../../packages/util/error
       '@deepseek-ai/dsh-file-reference':
         specifier: workspace:*
         version: link:../../packages/context/file-reference

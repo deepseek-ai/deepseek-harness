@@ -18,7 +18,7 @@
       "path": "../../core/agent"
     },
     {
-      "path": "../../llm/llm"
+      "path": "../../util/error"
     },
     {
       "path": "../../util/brand"

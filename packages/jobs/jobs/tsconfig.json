@@ -21,7 +21,7 @@
       "path": "../../core/agent"
     },
     {
-      "path": "../../llm/llm"
+      "path": "../../util/error"
     },
     {
       "path": "../../core/session"
