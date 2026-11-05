@@ -2,14 +2,15 @@ import { expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { SessionId, type Session, type SessionEvent } from '@deepseek-ai/dsh-session'
 import SubagentRuntime from '../src/index.ts'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 import { managerState } from './manager-internals.ts'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 
-it('settles an activation when its factory unloads during the final flush', async () => {
+it.each([false, true])('settles an activation after factory unload with queue-clear failure=%s', async (rejectQueueClear) => {
   const ctx = new Context()
   const release = Promise.withResolvers<undefined>()
   const flushing = Promise.withResolvers<undefined>()
@@ -36,7 +37,18 @@ it('settles an activation when its factory unloads during the final flush', asyn
     const released = vi.spyOn(activation, 'releaseSlot')
     const ended = vi.fn()
     ctx.on('subagent/end', ended)
+    const child = ctx.agents.get(started.childId)!
+    if (rejectQueueClear) child.inject(createUserMessage({ content: [{ type: 'text', text: 'pending' }], source: { kind: 'user' } }))
+    const rejectClear = ctx.on('internal/dispatch', (_mode, name, args) => {
+      if (name !== 'session/event') return
+      const [session, event] = args as [Session, SessionEvent]
+      if (rejectQueueClear && session === child.session && event.type === 'agent/inbox/spliced' && (event.data.removedCount ?? 0) > 0) {
+        throw new Error('queue clear rejected')
+      }
+    })
     await loop.dispose()
+    expect(child.inbox.hasPending).toBe(rejectQueueClear)
+    rejectClear()
     expect(ctx.agents.get(started.childId)).toBeUndefined()
     release.resolve(undefined)
     await vi.waitFor(() => { expect(state.resident.has(started.childId)).toBe(false) }, { timeout: 1000 })

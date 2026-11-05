@@ -148,7 +148,7 @@ export class ReactLoopAgent implements Agent {
     this.scope = createScope(loopCtx, this)
     this.ctx = this.scope.ctx
     this.model = new AgentModel(projections.modelSelection, session, options)
-    this.inbox = new ReactLoopInbox(projections.inbox, session, this.dispatch)
+    this.inbox = new ReactLoopInbox(projections.inbox, session, this.dispatch, () => this.assertOpen())
     this.phase = { kind: 'idle', lastTurn }
     this.runtimeContext = new RuntimeContextProjection(this.ctx, session)
     this.systemPrompt = new SystemPromptProjection(session)
@@ -606,13 +606,13 @@ export class ReactLoopAgent implements Agent {
             maxParallelToolCalls, toolSet: decision.toolSet,
           })
           for (const context of result.additionalContexts) {
-            this.inbox.splice('next-step', this.inbox.nextStep.length, 0, [context])
+            this.inbox.retainContext(context)
           }
           return result.concluded ? { kind: 'completed' } : null
         } catch (error: unknown) {
           if (!(error instanceof ToolBatchExecutionError)) throw error
           for (const context of error.partial.additionalContexts) {
-            this.inbox.splice('next-step', this.inbox.nextStep.length, 0, [context])
+            this.inbox.retainContext(context)
           }
           throw error.cause
         }

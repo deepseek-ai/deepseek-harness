@@ -96,7 +96,7 @@ it('an Agent still in the registry rejects new input while its owner is closing'
     await aborted.promise
     expect(ctx.agents.get(agent.id)).toBe(agent)
     const message = input('during closing')
-    for (const submit of [() =>{  agent.followup(message) }, () =>{  agent.steer(message) }, () =>{  agent.inject(message) }, () =>{  agent.send(message, 'next-turn', true) }, () => agent.runMaintenance(async () => {})]) {
+    for (const submit of [() =>{  agent.followup(message) }, () =>{  agent.steer(message) }, () =>{  agent.inject(message) }, () =>{  agent.send(message, 'next-turn', true) }, () => agent.runMaintenance(async () => {}), () => agent.inbox.append('next-turn', message), () => agent.inbox.prepend('next-step', message), () => agent.inbox.splice('next-turn', 0, 0, [message]), () => agent.inbox.replace(message.id, message)]) {
       expect(submit).toThrow(AgentClosedError)
     }
     const pending = [...agent.inbox.nextTurn, ...agent.inbox.nextStep].some(entry => entry.id === message.id)
@@ -146,6 +146,23 @@ it('waits for admitted maintenance after a queue-clear failure before releasing 
     spy.mockRestore()
     release.resolve(undefined)
     await work
+    await closing
+  }
+})
+
+it('does not start a driver when an inbox observer closes its owner during admission', async () => {
+  const { ctx, agent, handle, adapter } = await harness()
+  let closing: Promise<void> | undefined
+  const stop = ctx.on('agent/inbox/inserted', ({ message }) => {
+    if (message.source.kind === 'user') closing = handle.dispose()
+  })
+  try {
+    agent.followup(input('close during admission'))
+    expect(closing).toBeDefined()
+    await closing
+    expect(adapter.requests).toHaveLength(0)
+  } finally {
+    stop()
     await closing
   }
 })

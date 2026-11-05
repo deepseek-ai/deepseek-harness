@@ -174,6 +174,12 @@ export class SubagentManager {
     }, session => host.identityOf(session))
     ctx.on('agent/disposed', ({ agent }) => {
       this.closingRoots.delete(agent)
+      const activation = this.resident.get(agent.id)
+      if (activation?.kind === 'local' && activation.handle.agent === agent) {
+        void this.close(activation, () => this.finishDisposal(activation, false)).catch((error: unknown) => {
+          this.reportTeardownFailure(activation, error)
+        })
+      }
     })
     ctx.effect(function* (this: SubagentManager) {
       yield scope.dispose
@@ -1127,6 +1133,7 @@ export class SubagentManager {
       }
       this.sendWaking(parent, message, parent.status === 'idle' ? 'queue' : 'steer')
     } catch (error: unknown) {
+      if (error instanceof AgentClosedError) return
       this.ctx.logger.warn(
         `subagent "${activation.childId}" settlement notice was not delivered to its parent: `
         + errorChain(error),
