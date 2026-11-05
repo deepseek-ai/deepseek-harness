@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-rc.4/sandbox-unsupported-policy-error/guide.md
+/:
+  en: d7c1fc703991b92a
+  zh: f5cddebaa6b311a0
+/remove-sandboxunsupportedpolicyerror-imports:
+  en: fc8fa3704fa036ce
+  zh: e96b09c9882f760b
+/remove-sandboxunsupportedpolicyerror-imports/change:
+  en: 3ca1bb8d19b7781e
+  zh: 9f3800c847791344
+/remove-sandboxunsupportedpolicyerror-imports/migration:
+  en: 29b8d3231a83e606
+  zh: 24416c92a4dc9b71

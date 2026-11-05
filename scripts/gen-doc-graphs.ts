@@ -216,7 +216,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'experimental-client-ui-forge',
     title: 'Forge panel Remote',
     mode: 'service',
-    note: 'Streams one panel state per followed Session: a read-only Git inspection in the Session sandbox, the recognized code host and its sign-in, and the bound change requests with polled status.',
+    note: 'Streams one panel state per followed Session: Git inspection using Session permissions, the recognized code host and its sign-in, and the bound change requests with polled status.',
   },
   {
     key: 'worktrees',
@@ -269,9 +269,9 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'The native provider owns application consent and cancellation; the optional Client page queries and changes those decisions through its Remote.',
   },
   {
-    key: 'officeToPdf', pkg: 'office-to-pdf', title: 'Office to PDF conversion',
-    mode: 'core', consumers: ['client-ui-sidebar-documentpreview'],
-    note: 'Authorized Office bytes are converted on the Host using the declared native target engine, or Node WASM when no native target is declared.',
+    key: 'officeKit', pkg: 'office-kit', title: 'Office rendering, conversion, and recalculation',
+    mode: 'core', consumers: ['client-ui-sidebar-documentpreview', 'tool-office'],
+    note: 'Authorized Office bytes are rendered as PDFs or images, converted, or recalculated on the Host using the declared native target engine, or Node WASM when no native target is declared.',
   },
   {
     key: 'attachments',
@@ -298,6 +298,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     implementations: ['llm-deepseek', 'llm-pi-ai', 'llm-replay'],
     consumers: ['agent-loop', 'compaction-basic'],
     note: 'Adapters register provider implementations; the loop and compaction call the provider-neutral stream service.',
+  },
+  {
+    key: 'sessionLogDeepSeek',
+    pkg: 'session-log-deepseek',
+    title: 'Session-log upload policy',
+    mode: 'core',
+    implementations: [],
+    note: 'Plugins register caller-owned exclusions before the canonical Session-log request contribution is prepared; unmatched requests use normal upload eligibility.',
   },
   {
     key: 'deepseekLlmApiExtensions',
@@ -698,11 +706,18 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'The one concrete loop plugin; extension packages depend on dsh-agent events and services, not on this package.',
   },
   {
+    key: 'mcpManager',
+    pkg: 'mcp-manager',
+    title: 'Settings-driven MCP server fleet',
+    mode: 'core',
+    note: 'Reconciles mcp-client instances against its volatile servers configuration, aggregates their connection statuses, and serves restart and probe to management surfaces.',
+  },
+  {
     key: 'schedule',
     pkg: 'schedule',
     title: 'Host scheduled messages',
     mode: 'core',
-    note: 'Stores tasks independently of Session activation and queues due messages in the original Session.',
+    note: 'Stores tasks independently of Session activation and queues due messages in each task\'s target Session.',
   },
   {
     key: 'goals',
@@ -750,7 +765,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'terminal',
     title: 'Persistent PTY session registry',
     mode: 'seam',
-    implementations: ['terminal-bash'],
+    implementations: ['terminal-bash', 'terminal-panel'],
     consumers: ['tool-terminal'],
     note: 'The registry owns exact-Agent session identity and cleanup; backends own terminal mechanics, while tool-terminal exposes the owner-scoped model tools.',
   },
@@ -760,7 +775,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Process-sandbox seam',
     mode: 'seam',
     implementations: ['sandbox-local', 'sandbox-ssh'],
-    consumers: ['bash-sandbox', 'terminal-bash'],
+    consumers: ['bash-sandbox', 'terminal-bash', 'api-terminal-controller'],
     note: 'Consumers hand over the exact argv they are about to spawn; same-world backends wrap it under a per-call policy and report enforcement.',
   },
   {
@@ -769,7 +784,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Sandbox policy home',
     mode: 'core',
     implementations: [],
-    consumers: ['bash-sandbox', 'fs-sandbox', 'terminal-bash'],
+    consumers: ['bash-sandbox', 'fs-sandbox', 'terminal-bash', 'terminal-panel'],
     note: 'The one home for the deployment default mode + workspace root; only the sandboxed executor and provider read the service (the tool layers use the pure `sandbox/mode` fold it also exports). Both enforcing families read it so bash and fs cannot confine to different roots.',
   },
   {
@@ -837,11 +852,11 @@ const SERVICE_ROLES: ServiceRole[] = [
   },
   {
     key: 'agentTeams',
-    pkg: 'experimental-agent-team',
+    pkg: 'agent-team',
     title: 'Agent Teams coordination domain',
     mode: 'core',
-    consumers: ['experimental-tool-agent-team'],
-    note: 'Owns the implicit-root roster, direct peer inbox delivery, shared task DAG, and continuable-child lifecycle; tool-agent-team contributes model controls.',
+    consumers: ['tool-agent-team'],
+    note: 'Owns the shared task DAG for a subagent tree; tool-agent-team contributes task controls.',
   },
   {
     key: 'claudeCodeMods',
@@ -871,7 +886,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'web',
     title: 'Web access provider registry',
     mode: 'seam',
-    implementations: ['web-search-exa', 'web-search-perplexity', 'web-search-deepseek', 'web-deepseek-api', 'web-fetch-http'],
+    implementations: ['web-search-deepseek', 'web-deepseek-api', 'web-fetch-http'],
     consumers: ['tool-web'],
     note: 'Search and fetch providers register into one ctx.web seam; tool-web owns the stable model-facing names.',
   },
@@ -958,6 +973,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     mode: 'core',
     consumers: ['tool-cordis'],
     note: 'Registers host inspect providers, mirrors the client provider manifest, and routes client queries through the dynamic Cordis transport.',
+  },
+  {
+    key: 'liveshareShares',
+    pkg: 'experimental-liveshare',
+    title: 'Owner share management Remote',
+    mode: 'service',
+    note: 'Publishes the owner share-management operations as one Typert Remote namespace that the owner client face calls; every method delegates to the same operations the same-origin routes used.',
   },
 ]
 

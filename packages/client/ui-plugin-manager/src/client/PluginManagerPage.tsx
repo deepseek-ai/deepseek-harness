@@ -17,7 +17,7 @@ import {
   IconDownloadOutlineRegular, IconInfoOutlineRegular, IconPlusOutlineRegular, IconRefreshOutlineRegular, IconTrashOutlineRegular,
   IconWarningOutlineRegular, Input, Menu, MenuItemButton, Modal, pointerModality,
   PluginArtworkDefault, PluginArtworkLoop, PluginArtworkSearch, PluginArtworkSubagent, PluginArtworkTerminal,
-  SegmentedTabs, StateDot, Switch, Tag, TerminalBlock, Toast, Tooltip, useAnchoredPosition, useDismissOnOutsidePointer,
+  SegmentedTabs, StateDot, Switch, Tag, TerminalBlock, Toast, Tooltip, useDismissOnOutsidePointer,
   type IconProps, type StateDotState, type TerminalBlockLabels,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
@@ -98,6 +98,18 @@ function AddPluginMenu({ t, disabled, openInstall, renderSlot }: {
 
 /** How long the list marks a package an install just enabled. */
 const HIGHLIGHT_MS = 2_400
+
+/**
+ * Whether any plugin row this bundle's patch declares is running.
+ *
+ * A default-hidden bundle's rows may run without the profile selecting it, for example through
+ * `cordis.patch.yml`; that run state is the effective enablement the lists offer.
+ * @param pkg - the bundle as the Host reports it.
+ * @returns whether at least one declared row runs.
+ */
+function rowsRunning(pkg: PackageView): boolean {
+  return pkg.rows.some(row => row.enabled)
+}
 
 /**
  * Whether the main list shows an official optional bundle: any bundle outside `MORE_BUNDLES`, and any held-back one the profile enabled.
@@ -517,9 +529,9 @@ function versionUpdate(check: VersionCheck | undefined): string | undefined {
   return check?.phase === 'done' ? updateCandidate(check.list)?.version : undefined
 }
 
-/** The list toolbar's sentence about the last update check of every updatable package. */
+/** The list toolbar's sentence about the last update check of every registry package. */
 function updatesNote(packages: readonly PackageView[], versions: PluginManagerState['versions'], t: Translate): { text: string; tone?: 'info' | 'error' } | undefined {
-  const checks = packages.filter(pkg => pkg.updatable).map(pkg => versions[pkg.name])
+  const checks = packages.filter(pkg => pkg.update === 'registry').map(pkg => versions[pkg.name])
   if (checks.length === 0 || checks.some(check => check === undefined || check.phase === 'checking')) return undefined
   const available = checks.filter(check => versionUpdate(check) !== undefined).length
   if (available > 0) return { text: t('updatesAvailable', { count: String(available) }), tone: 'info' }
@@ -957,7 +969,9 @@ function failureText(failure: InstallState['failure'], t: Translate, install?: P
   }
   if (failure.kind !== undefined) return t(FAILURE_KIND_KEYS[failure.kind])
   if (failure.code !== undefined) return managementText({ code: failure.code, diagnostic: failure.reason }, t)
-  return failure.reason === '' ? t('installFailureGeneric') : failure.reason
+  if (failure.reason !== '') return failure.reason
+  // An enabled install that failed applying the bundle names that step, never the install command it already finished.
+  return failure.stage === 'enable' && failure.enabled === true ? t('installFailedEnabling') : t('installFailureGeneric')
 }
 
 interface SubjectLines {
@@ -1054,13 +1068,10 @@ function InstallDialog({
   const registryShown = install.registryOpen && phase === 'idle'
   const specComposition = useInstallComposition(install.open && phase === 'idle')
   const registryComposition = useInstallComposition(install.open && registryShown)
-  const registryPosition = useAnchoredPosition({
-    open: registryShown, anchorRef: registryToggleRef, panelRef: registryPanelRef, align: 'end', gap: 6, margin: 12,
-  })
-  const registryReady = registryShown && registryPosition !== null
+  const registryAnchorName = `--dsh-registry-${registryId.replaceAll(':', '')}`
   useEffect(() => {
-    if (registryReady && install.registryError) registryCustomRef.current?.focus()
-  }, [registryReady, install.registryError])
+    if (registryShown && install.registryError) registryCustomRef.current?.focus()
+  }, [registryShown, install.registryError])
   // The hook only ever asks to close.
   useDismissOnOutsidePointer(registryToggleRef, registryShown, onToggleRegistry, registryPanelRef)
   useEffect(() => {
@@ -1210,6 +1221,7 @@ function InstallDialog({
             </button>
             <button
               ref={registryToggleRef}
+              style={{ anchorName: registryAnchorName }}
               type="button"
               className={css.registryToggle}
               aria-expanded={install.registryOpen}
@@ -1259,7 +1271,7 @@ function InstallDialog({
                 ref={registryPanelRef}
                 id={registryId}
                 className={css.registry}
-                style={registryPosition ?? { visibility: 'hidden', left: 0, top: 0 }}
+                style={{ positionAnchor: registryAnchorName }}
                 data-install-registry
                 aria-label={t('registryLegend')}
                 onKeyDown={(event) => {
@@ -1342,6 +1354,8 @@ function InstallDialog({
   }
   const heading = t(phase === 'done' && install.subject?.bundled ? 'installBundledTitle' : SCREEN_TITLE_KEYS[phase])
   const pending = isInstallPending(phase)
+  // A settled screen whose install never reported a run can say the details received no terminal output.
+  const settledDetails = phase === 'failed' || phase === 'done' || phase === 'unknown'
   const cancellable = phase === 'starting' || phase === 'running' || phase === 'unconfirmed'
   const stoppable = cancellable || phase === 'failed' || phase === 'unknown'
   const failure = install.failure
@@ -1402,6 +1416,10 @@ function InstallDialog({
             <h2 className={css.wizardTitle} role={phase === 'failed' ? 'alert' : 'status'}>{heading}</h2>
             {phase === 'done' && subject?.bundled ? <p className={css.wizardSub}>{t('installBundledDescription')}</p> : null}
             {phase === 'failed' ? <p className={css.wizardSub}>{failureText(install.failure, t, install)}</p> : null}
+            {phase === 'failed' && failure?.stage === 'enable' && failure.enabled === true
+              && (failure.code !== undefined || failure.reason !== '')
+              ? <p className={css.wizardSub}>{t('installFailedEnabling')}</p>
+              : null}
             {attemptLine === null ? null : <p className={css.wizardSub}>{attemptLine}</p>}
             {uncertaintyText === null ? null : <p className={css.wizardSub} role="alert">{uncertaintyText}</p>}
             {phase === 'unknown' ? <p className={css.wizardSub}>{t('installUnknownDescription')}</p> : null}
@@ -1473,7 +1491,11 @@ function InstallDialog({
           {install.detailsOpen
             ? (
               <div className={css.detailsBody}>
-                <p className={css.installLocation}>{firstRun === undefined ? t('terminalNoOutput') : t('installLocation', { dir: firstRun.cwd })}</p>
+                {firstRun !== undefined
+                  ? <p className={css.installLocation}>{t('installLocation', { dir: firstRun.cwd })}</p>
+                  : settledDetails
+                    ? <p className={css.installLocation}>{t('installDetailsNoOutput')}</p>
+                    : null}
                 {install.runs.map((run, index) => {
                   const registry = asked?.registries[index]
                   return (
@@ -1493,6 +1515,9 @@ function InstallDialog({
                     </div>
                   )
                 })}
+                {install.logPath === null
+                  ? null
+                  : <p className={css.installLocation}>{t('installLogPath', { path: install.logPath })}</p>}
               </div>
             )
             : null}
@@ -1571,7 +1596,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   // The page omits profile bundles and persistent terminals. Other installed or offered bundles and
   // unreadable selections remain manageable; Settings' Plugin list inspects the full Host inventory.
   const listed = state.packages.filter(pkg => !HIDDEN_BUNDLES.has(pkg.name)
-    && (pkg.listedByDefault !== false || pkg.enabled || pkg.installed)
+    && (pkg.listedByDefault !== false || pkg.enabled || pkg.installed || rowsRunning(pkg))
     && (pkg.installed || pkg.official || pkg.error !== undefined))
   const mine = listed.filter(pkg => !pkg.official)
   const official = listed.filter(pkg => pkg.official)
@@ -1584,7 +1609,9 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   const more = ordered
   const loaded = state.status === 'ready' || state.status === 'error'
   const refreshing = state.refreshStatus === 'refreshing'
-  const openPkg = view.kind === 'package' || view.kind === 'row' ? listed.find(pkg => pkg.name === view.name) : undefined
+  const openPkg = view.kind === 'package' || view.kind === 'row'
+    ? listed.find(pkg => pkg.name === view.name)
+    : undefined
   const openItem = view.kind === 'item' ? ledger.items.find(item => item.id === view.id) : undefined
   const openRow = view.kind === 'row' && openPkg !== undefined ? openPkg.rows.find(row => row.rowId === view.rowId) : undefined
   const onInstalled = tab === INSTALLED_TAB
@@ -1729,6 +1756,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
             <div role="tabpanel" id={`${tabsId}-${tab}-panel`} aria-labelledby={`${tabsId}-${tab}`} className={css.tabPanel}>
               {renderSlot('plugins.tab', {
                 install: props.installFrom,
+                update: props.openGitUpdate,
                 openPackage: (name) => { setTab(INSTALLED_TAB); setView({ kind: 'package', name, returnTab: tab }) },
               }, { only: tab })}
             </div>

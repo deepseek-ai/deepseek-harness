@@ -63,6 +63,8 @@ Web 与桌面端的通用设置底部显示当前发布版本，使用构建注�
 
 -----
 
+当预加载提供渠道 API 时，桌面版还会在通用设置中提供**更新渠道**。重复选择当前正常渠道不会保存、提示或影响下载与待安装更新。选择其他渠道直接调用 Electron，等待期间显示所选项和加载指示；返回后按实际运行状态确定选项，失败则回滚。由 shell 持有的 toast 显示成功或简短保存失败，关闭设置后仍可见。启动配置错误使用可查看详情的十秒 toast；提示消失不会清除错误。持续的更新暂停保留在更新入口；保存失败本身不会产生暂停。普通浏览器不显示该行。文件归属和重启规则见[本地桌面设置](../../../apps/desktop/README.zh.md#local-desktop-settings)。
+
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
@@ -75,7 +77,7 @@ Web 与桌面端的通用设置底部显示当前发布版本，使用构建注�
 
 ### 账本投影
 
-导航是 `settings.section` 账本的投影；导航 label 可以是跟随语言的 thunk，经 `resolveSlotLabel` 解析，并在分区账本更新或 locale revision 变化时重新渲染（`ctx.get('locale')` 可选读取，无硬 locale 依赖）。引导账本按升序投影；当前注册方会收到该条目的 id、`complete()` 与 `openSection(id)` 回调，完成或跳过当前步骤后，所有权转交给下一项。
+导航是 `settings.section` 账本的投影；导航 label 可以是跟随语言的 thunk，经 `resolveSlotLabel` 解析，并在分区账本更新或 locale revision 变化时重新渲染（`ctx.get('locale')` 可选读取，无硬 locale 依赖）。每行渲染匹配的 `settings.section.icon` 贡献；没有贡献时，已知内置分区使用各自的图标，其他 id 使用设置齿轮。引导账本按升序投影；当前注册方会收到该条目的 id、`complete()` 与 `openSection(id)` 回调，完成或跳过当前步骤后，所有权转交给下一项。
 
 ### 连接恢复
 

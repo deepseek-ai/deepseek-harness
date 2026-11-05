@@ -174,6 +174,10 @@ export function HoverCard({
       const wrapper = rootRef.current
       /* v8 ignore next -- the ref is attached before the layout effect runs and the listeners die with it. */
       if (wrapper === null) return
+      if (wrapper.closest('[inert], [hidden]') !== null) {
+        dismissImmediately()
+        return
+      }
       const r = wrapper.getBoundingClientRect()
       const h = cardRef.current?.offsetHeight ?? 0
       if (variant === 'preview') {
@@ -220,6 +224,11 @@ export function HoverCard({
       setPos({ left: r.right + ANCHOR_GAP, top })
     }
     place()
+    // Observe only the anchor's ancestors: an offscreen drawer can hide without resizing its retained row.
+    const visibility = new MutationObserver(place)
+    for (let ancestor = rootRef.current?.parentElement; ancestor != null; ancestor = ancestor.parentElement) {
+      visibility.observe(ancestor, { attributes: true, attributeFilter: ['inert', 'hidden'] })
+    }
     const observer = (variant === 'preview' || inline) && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(place) : null
     for (const element of [cardRef.current, rootRef.current, widthAnchorRef?.current]) {
       if (element !== null && element !== undefined) observer?.observe(element)
@@ -228,10 +237,11 @@ export function HoverCard({
     window.addEventListener('resize', place)
     return () => {
       observer?.disconnect()
+      visibility.disconnect()
       window.removeEventListener('scroll', place, true)
       window.removeEventListener('resize', place)
     }
-  }, [open, variant, widthAnchorRef, positioned, inline, fitContent])
+  }, [open, variant, widthAnchorRef, positioned, inline, fitContent, dismissImmediately])
 
   // The first placement ran before the card mounted (height read 0): once the
   // card's real height is measurable, correct the bottom-edge clamp. The

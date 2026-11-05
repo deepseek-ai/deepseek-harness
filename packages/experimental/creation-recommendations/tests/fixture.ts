@@ -36,7 +36,7 @@ export function recordCard(session: Agent['session'], { callId: id, phase, ...da
 
 export function installedBundle(name: string): BundleInfo {
   return { name, official: false, optional: false, availability: 'profile', installed: true,
-    enabled: true, removable: true, updatable: true, rows: [], overrides: [] }
+    enabled: true, removable: true, update: 'registry', rows: [], overrides: [] }
 }
 
 export async function writeBundle(directory: string, name: string): Promise<void> {
@@ -108,7 +108,7 @@ export async function fixture(initial?: PageCardState) {
       ? { slot, ...customLocation === undefined ? {} : { customLocation } } : undefined)
   const complete = async () => {
     const spec = await entered.promise
-    await writeBundle(spec.request.cwd!, current()!.bundleName!)
+    await writeBundle(spec.cwd!, current()!.bundleName!)
     result.resolve({ output: [], stopReason: 'completed', structured: { ready: true } })
     await vi.waitFor(() => { expect(current()?.phase).toBe('installed') })
     return spec

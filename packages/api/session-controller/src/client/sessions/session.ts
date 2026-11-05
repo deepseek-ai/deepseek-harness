@@ -71,8 +71,6 @@ interface PendingHistory {
 export interface SessionOptions {
   /** Catalog-discovered address selecting non-activating subagent transport. */
   address?: SubagentAddress
-  /** Whether the exact direct parent Agent is available in Host summaries; absent until known. */
-  parentAvailable?: boolean
   /**
    * Publish each accepted prompt to the Manager, including after this Session
    * object is replaced. Acceptance converts display state, but does not
@@ -113,7 +111,6 @@ export class Session implements SessionFace {
   private readonly assistantStream = new ClientAssistantStream()
   private running = false
   private address: SubagentAddress | undefined
-  private parentAvailable: boolean | undefined
   /**
    * Sticky send marker, private input of the composerPhase derivation: set
    * when the Host accepts a prompt, never reset — the blank → engaging edge of
@@ -193,7 +190,6 @@ export class Session implements SessionFace {
   ) {
     this.projections = options.projections ?? new ProjectionValueStore()
     this.address = options.address
-    this.parentAvailable = options.parentAvailable
     this.notifier = new Notifier(() => {
       this.snapshotCache = this.buildSnapshot()
     })
@@ -294,9 +290,7 @@ export class Session implements SessionFace {
       const routedContent = content as Exclude<PromptContentPart, { readonly type: 'file' }>[]
       const routed = await this.remote.subagents.prompt({
         requestId: requestId ?? randomUUID() as SessionRequestId,
-        parentSessionId: this.address.parentSessionId,
         childSessionId: this.address.childSessionId,
-        mode: 'continuable',
         delivery: mode,
         content: routedContent,
         clientTimeZone: resolvedClientTimeZone(),
@@ -363,18 +357,14 @@ export class Session implements SessionFace {
   /**
    * Stop the active turn while the Host preserves pending inbox work; failures
    * land in promptError (same error-strip display slot). A subagent address
-   * routes through `subagents.interruptByParent`, whose durable parent-address
-   * authority works without a live parent Agent.
+   * routes through `subagents.interruptByUser`, authorized on the target Session
+   * without requiring a live parent Agent.
    * @returns the cancel result.
    */
   async cancel(): Promise<RemoteResult<{ accepted: true }>> {
     const address = this.address
     const result = address !== undefined
-      ? await this.remote.subagents.interruptByParent(
-        address.childSessionId,
-        address.parentSessionId,
-        'continuable',
-      )
+      ? await this.remote.subagents.interruptByUser(address.childSessionId)
       : await this.remote.session.cancel({ sessionId: this.sessionId })
     if (!result.ok) {
       this.promptError = { op: 'stop', error: result.error }
@@ -562,26 +552,14 @@ export class Session implements SessionFace {
    * Install or clear the catalog-discovered transport address. A changed
    * address rebuilds an already-open window through its new history route.
    * @param address - direct parent/child address, or undefined for ordinary transport.
-   * @param parentAvailable - latest exact-parent availability hint, or undefined before a catalog read.
    */
-  configureSubagent(address: SubagentAddress | undefined, parentAvailable?: boolean): void {
+  configureSubagent(address: SubagentAddress | undefined): void {
     const same = this.address?.parentSessionId === address?.parentSessionId
       && this.address?.childSessionId === address?.childSessionId
       && this.address?.mode === address?.mode
     this.address = address
-    this.parentAvailable = parentAvailable
     if (!same && this.openState !== 'cold') void this.resync()
     else this.notifier.markDirty()
-  }
-
-  /**
-   * Update only the parent availability hint from a catalog refresh.
-   * @param available - whether the exact direct parent is live.
-   */
-  handleSubagentParentAvailable(available: boolean): void {
-    if (this.parentAvailable === available) return
-    this.parentAvailable = available
-    this.notifier.markDirty()
   }
 
   /**
@@ -800,7 +778,10 @@ export class Session implements SessionFace {
         }
       }
       this.observeSubmissionInsertions(target, inserted, start, event.seq)
-      for (const message of inserted) this.observeSubmissionMessage(message, false)
+      // A queued echo waits for the inbox projection the queue dock renders, which can arrive after this
+      // event; retiring it here would empty the dock for a frame. A claim in the same projection notification
+      // still retires it through the durable user message.
+      for (const message of inserted) this.observeSubmissionMessage(message, false, false)
       return
     }
     if (event.type === 'request/context' || event.type === 'turn/end') {
@@ -818,21 +799,24 @@ export class Session implements SessionFace {
       const source = message.source
       if (source.kind !== 'user' || !('rpcId' in source)) continue
       const settlement = this.submissionSettlements.get(source.rpcId)
-      if (settlement === undefined || settlement.placement === 'queued'
-        || settlement.retiring || (settlement.receipt?.seq ?? -1) > seq) continue
+      if (settlement === undefined || settlement.retiring || (settlement.receipt?.seq ?? -1) > seq) continue
+      // Either proof accepts a prompt; an Inbox row can reach the Client before the prompt receipt. Later splices
+      // move the recorded position, so a canceled splice that removes the row retires its echo, queued ones
+      // included; a queued echo otherwise leaves once the queue dock renders its row or its message is admitted.
       settlement.receipt = { target, seq, index: start + index, attachments: attachmentRefsIn(message.content) }
-      // An Inbox row can reach the Client before the prompt receipt.
       this.acceptPrompt(source.rpcId)
     }
   }
 
-  private observeSubmissionMessage(message: UserMessage, admitted: boolean): void {
+  private observeSubmissionMessage(message: UserMessage, admitted: boolean, retireQueued = true): void {
     const source = message.source
     if (source.kind !== 'user' || !('rpcId' in source)) return
     const settlement = this.submissionSettlements.get(source.rpcId)
     if (settlement === undefined || settlement.retiring) return
     if (!admitted) {
-      if (settlement.placement === 'queued') this.scheduleObservedRetirement(source.rpcId, attachmentRefsIn(message.content))
+      if (settlement.placement === 'queued' && retireQueued) {
+        this.scheduleObservedRetirement(source.rpcId, attachmentRefsIn(message.content))
+      }
       return
     }
     settlement.admitted = attachmentRefsIn(message.content)
@@ -928,7 +912,6 @@ export class Session implements SessionFace {
           address: this.address.mode === 'unknown' && identity != null
             ? { ...this.address, mode: identity.mode }
             : this.address,
-          ...(this.parentAvailable === undefined ? {} : { parentAvailable: this.parentAvailable }),
         },
       removed: this.removed,
       openState: this.openState,

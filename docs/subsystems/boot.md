@@ -10,15 +10,15 @@ The [boot package group](../../packages/boot/README.md) owns launcher-provided p
 
 `PluginInfo` carries module identity, effective enablement, fiber phase and optional display `meta`, plus a unique `patchId` or a `readOnlyReason`.
 
-`BundleInfo.official` identifies project-maintained shipped optional bundles and on-demand catalog entries independently of installation. `availability` identifies a readable installation-provided or profile package, or `missing`; on-demand catalog entries exclude undeclared transitive copies. `installed` records the profile dependency declaration. An on-demand `installTarget` carries the host-derived exact spec and version. `BundleInfo` also carries the package name, optional installed version, selected enablement, removal availability, update eligibility (`updatable`), optional resolution or unsupported-platform error, and, for a bundle the profile's own dependency supplies and the installation does not, `source`: that dependency as a spec `pnpm add` accepts. Its optional `meta` and each `BundleRowInfo.meta` contain display text or a metadata diagnostic; Clients select a language at render time.
+`BundleInfo.official` identifies project-maintained shipped optional bundles and on-demand catalog entries independently of installation. `availability` identifies a readable installation-provided or profile package, or `missing`; on-demand catalog entries exclude undeclared transitive copies. `installed` records the profile dependency declaration. An on-demand `installTarget` carries the host-derived exact spec and version. `BundleInfo` also carries the package name, optional installed version, selected enablement, removal availability, update method (`update`: `registry` or `git`, absent when the bundle cannot be updated), optional resolution or unsupported-platform error, and, for a bundle the profile's own dependency supplies and the installation does not, `source`: that dependency as a spec `pnpm add` accepts. Its optional `meta` and each `BundleRowInfo.meta` contain display text or a metadata diagnostic; Clients select a language at render time.
 
-`InstallBundleOptions.saveExact` passes `--save-exact` to the shared package installer. `InstallBundleOptions.enabled` defaults to true. False installs without selecting the bundle layer. `approvedBuilds` grants persistent script permission to the supplied pending package names before installation. `registry` names the registry asked first; absent, the configured one.
+`InstallBundleOptions.saveExact` passes `--save-exact` to the shared package installer. `InstallBundleOptions.enabled` defaults to true. False installs without selecting the bundle layer. `approvedBuilds` grants persistent script permission to the supplied pending package names before installation. `registry` names the registry asked first; absent, the configured one. `expected` names the package and manifest version the spec must install; a run that installs anything else is undone with its profile files and modules and fails with `unexpected-package`, one whose package declares no bundle fails with `not-bundle`, and one whose bundle patches cannot load fails as an operation error.
 
 `BundleDetail` is a profile bundle's long description: `{ status: 'found' }` with its `origin` (`locale` or `readme`), its `path` inside the package, and its `markdown`, or `{ status: 'none' }`; [`readBundleDetail`](../../packages/boot/plugin-manager/README.md#bundle-detail-documents) documents the order and the image route. `NpmFileSource` names a public npm file CDN, `jsdelivr`, `unpkg`, or `npmmirror`; a read's `npmFileSources` lists the ones to ask first.
 
 `PluginRegistries` carries the configured first registry, `null` for the one pnpm's own configuration names, the fallbacks asked after it, and `resolved`, the URL pnpm's own configuration names or `null` while unread. `InspectOptions.registry` names the registry a lookup asks first.
 
-`ChangeResult.changed` reports a disk edit independently of `application`: `applied`, `restart-required`, `overridden` or `failed`. Optional `error` carries a localizable code and external diagnostic. `packageResult` records the pnpm exit code, bounded output, truncation flag and complete diagnostic log path, plus `timedOut` when the manager terminated a run that stopped printing. A terminated run is classified `timeout` whatever exit status the signal left behind, so installation and removal report failure instead of success and no further registry is asked. `pendingBuilds` lists undecided packages across the profile; `approvedBuilds` records the names granted permission by this operation; `registries` lists the registries an installation asked, in order; `bundle` and `version` name the package a finished installation added and its manifest version; `failedAt` says whether the last failed run could not reach the registry it asked or the host a git or tarball spec is fetched from.
+`ChangeResult.changed` reports a disk edit independently of `application`: `applied`, `restart-required`, `overridden` or `failed`. Optional `error` carries a localizable code and external diagnostic. `packageResult` records the run's exit status, bounded output, truncation flag and complete diagnostic log path, plus `timedOut` when the manager terminated a run that stopped printing or the GitHub connection check hit its deadline; a terminated run records the coerced status 1 because its process returned none. A terminated run is classified `timeout` whatever exit status the signal left behind, so installation and removal report failure instead of success and no further registry is asked. `pendingBuilds` lists undecided packages across the profile; `approvedBuilds` records the names granted permission by this operation; `registries` lists the registries an installation asked, in order; `bundle` and `version` name the package a finished installation added and its manifest version; `failedAt` says whether the last failed run could not reach the registry it asked or the host a git or tarball spec is fetched from.
 
 ## Market records
 
@@ -26,7 +26,7 @@ The [boot package group](../../packages/boot/README.md) owns launcher-provided p
 
 `MarketIndexSummary` carries one configured index URL with the `title` and `description` of its last successful read and, when the last read failed, its `error`.
 
-`MarketQuery` selects one page of an index: fuzzy `text`, a `category`, `labels` that must all be present, a `MarketSort`, `offset`, `limit` up to 100, `refresh` to fetch again instead of using a cached document, and `fetchedAt` to continue the pages of one document. `MarketSearchResult` carries the index URL, `title`, optional `description`, market `metadata`, the document's `fetchedAt`, the page's `entries`, the `total` number of matches, and the `nextOffset`. Each `MarketListingEntry` adds `defaultVersion`, the version installed by default, and `installation`, the profile's status for the package name; each of its `versions` adds `install`, the exact spec and optional first registry for `installBundle`, and `compatibility`, the evaluation of its `engines.dsh` including a version exemption.
+`MarketQuery` selects one page of an index: fuzzy `text`, a `category`, `labels` that must all be present, a `MarketSort`, `offset`, `limit` up to 100, `refresh` to fetch again instead of using a cached document, and `fetchedAt` to continue the pages of one document. `MarketSearchResult` carries the index URL, `title`, optional `description`, market `metadata`, the document's `fetchedAt`, the page's `entries`, the `total` number of matches, and the `nextOffset`. Each `MarketListingEntry` adds `defaultVersion`, the version installed by default, and `installation`, the profile's status for the package name; each of its `versions` adds `install`, the exact spec and optional first registry for `installBundle`, `compatibility`, the evaluation of its `engines.dsh` including a version exemption, and `update`, whether the version can replace an installed Git copy through `updateBundle`: it is newer and pins a commit of the repository directory that copy came from.
 
 `PluginDetail` is a market entry's long description: `{ status: 'found' }` with its `origin` (`locale`, `readme`, or `repository`), its `markdown`, and a `document` id whose images `GET /api/plugin-market/detail-file` serves, or `{ status: 'none' }`. The [plugin market documents the order](../../packages/boot/plugin-market/README.md#plugin-detail-documents) its sources are read in.
 
@@ -267,15 +267,21 @@ Manage profile files and apply their declared reload lifecycle.
 @Remote async listVersions(name: string, options?: ListVersionsOptions, signal?: AbortSignal): Promise<PluginVersionList>
 
 /**
- * Replace an installed registry bundle with a newer published version. The target is checked on the registry first:
- * it must exist, declare a bundle, and accept the running DSH version, or nothing changes. With HMR the installed
- * version is removed, so its plugins stop, and the target is installed with the same selection; when that
- * installation fails or is cancelled, the removed version is installed again from the registry it came from.
- * Without HMR the target is installed over the running version and the result reports the restart.
+ * Replace an installed bundle with a newer version. A registry copy updates to `name@version`, checked on the registry
+ * first: it must exist, declare a bundle, and accept the running DSH version, or nothing changes. A Git copy updates
+ * to the Git spec `options.spec` names, which must pin a full commit of the repository directory the copy came from;
+ * with HMR, a network failure or timeout reaching its repository stops the update before anything changes. pnpm reads
+ * a Git package only while installing it, so its bundle and compatibility are checked then. Either target
+ * installation is undone, profile files and modules included, before its bundle loads unless it installs `name` at
+ * `version`. With HMR the installed version is removed, so its plugins stop, and the target is installed with the same
+ * selection; when that installation fails or is cancelled, the removed version is installed again: a registry copy
+ * from the registry it came from, a Git copy from its saved spec. Without HMR the target is installed over the running
+ * version and the result reports the restart.
  * @param name Installed profile dependency name.
- * @param version Exact published version newer than the installed one.
- * @param options The registry asked first, as for `listVersions`, and the request id naming the progress and the
- * target installation's logs and cancellation.
+ * @param version Exact version newer than the installed one.
+ * @param options The registry asked first, as for `listVersions`; the Git spec of `version`, required for and accepted
+ * only by a bundle `listBundles` lists with `update: 'git'`; and the request id naming the progress and the target
+ * installation's logs and cancellation.
  * @returns The versions, the last step that ran with its result, and the reinstallation when one ran.
  */
 @Remote async updateBundle(name: string, version: string, options?: UpdateBundleOptions): Promise<PluginUpdateResult>
@@ -297,7 +303,8 @@ Manage profile files and apply their declared reload lifecycle.
 /**
  * Install a package using the same pnpm implementation as dsh plugin. GitHub
  * repositories get a connection check bounded by githubConnectionTimeoutMs before pnpm starts;
- * only network failures or timeouts stop installation, while pnpm owns authentication and transport fallback. An
+ * only network failures or timeouts stop installation, and a stop streams the check's diagnostic
+ * as the installation's install-log run under its request id, while pnpm owns authentication and transport fallback. An
  * HTTP(S) Git URL on another host is installed over SSH instead when access probes bounded by gitTransportTimeoutMs
  * find that only SSH can read it. A run
  * that fails, is cancelled, or adds a package without a bundle patch restores
@@ -532,11 +539,11 @@ Source: [`packages/boot/plugin-manager/src/types.ts`](../../packages/boot/plugin
 
 #### `plugin-manager/install-log` — emit
 
-One chunk of a pnpm run's output, streamed as the run produces it.
+One chunk of an installation run's output, streamed as the run produces it.
 
 ```ts cordis-catalog
 /**
- * One chunk of a pnpm run's output, streamed as the run produces it.
+ * One chunk of an installation run's output, streamed as the run produces it.
  * @mode emit
  * @param chunk - the chunk and the run it belongs to.
  */

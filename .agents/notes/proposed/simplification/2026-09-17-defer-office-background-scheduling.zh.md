@@ -6,15 +6,15 @@ Status: proposed
 
 ## 问题
 
-[转换队列](../../../../packages/document/office-to-pdf/src/queue.ts) 实现了前台优先级提升、读取方取消后的降级、排队后台任务的驱逐、预留前台读取名额，以及独立的后台并发计数。这些机制保护前台转换不受推测性预热影响；普通转换仍需要队列的通用资源限制。
+[转换队列](../../../../packages/document/office-kit/src/queue.ts) 实现了前台优先级提升、读取方取消后的降级、排队后台任务的驱逐、预留前台读取名额，以及独立的后台并发计数。这些机制保护前台转换不受推测性预热影响；普通转换仍需要队列的通用资源限制。
 
-[Office 预览](../../../../packages/client/ui-sidebar-documentpreview/src/client/office/index.ts) 调用缓存时未传优先级，因此[Client 缓存](../../../../packages/client/ui-sidebar-documentpreview/src/client/office/cache.ts) 向 Host 转发默认前台优先级。在仓库中搜索 `officeToPdf`、`OfficeToPdfRequest`、`OfficeToPdfPriority` 和 `maxBackgroundConversions`，未发现生产后台请求。[转换冒烟测试](../../../../packages/bundle/web-app/tests/document-conversion.e2e.ts) 也提交前台请求。后台请求出现在队列、Remote 和 Client 缓存测试中。仅凭暴露 API 和 Client 优先级传递逻辑，无法确定预热需要哪种调度策略。开放的交付文件预热 PR #4064已经提供具体预热消费者，但其实现仍调用不含优先级的旧 `documentRender` API。删除调度前必须先与该消费者协调；尚未进入 master 不足以支持直接实施。
+[Office 预览](../../../../packages/client/ui-sidebar-documentpreview/src/client/office/index.ts) 调用缓存时未传优先级，因此[Client 缓存](../../../../packages/client/ui-sidebar-documentpreview/src/client/office/cache.ts) 向 Host 转发默认前台优先级。在仓库中搜索 `officeKit`、`OfficeKitRequest`、`OfficeKitPriority` 和 `maxBackgroundConversions`，未发现生产后台请求。[转换冒烟测试](../../../../packages/bundle/web-app/tests/document-conversion.e2e.ts) 也提交前台请求。后台请求出现在队列、Remote 和 Client 缓存测试中。仅凭暴露 API 和 Client 优先级传递逻辑，无法确定预热需要哪种调度策略。开放的交付文件预热 PR #4064已经提供具体预热消费者，但其实现仍调用不含优先级的旧 `documentRender` API。删除调度前必须先与该消费者协调；尚未进入 master 不足以支持直接实施。
 
 [有界转换决策](../../implemented/architecture/2026-09-15-bounded-office-conversion.zh.md) 有意为前台消费者预留容量。存在推测性任务时，这条规则仍然正确，但当前调用方清单不足以支持维护推测性请求类别及其生命周期交互。
 
 ## 提案
 
-移除 `OfficeToPdfPriority`、请求中的 `priority` 和配置 `maxBackgroundConversions`。删除读取方及任务的优先级字段、升降级、推测性任务驱逐、前台读取名额预留，以及队列的后台计数器。同时删除 Client 缓存的优先级传递逻辑并更新 Remote 签名。在转换容量可用时，接纳源预留容量足够的最早排队任务；元数据队列满时拒绝新的独立任务。仍允许在共享读取方数量限制内加入已有源任务。
+移除 `OfficeKitPriority`、请求中的 `priority` 和配置 `maxBackgroundConversions`。删除读取方及任务的优先级字段、升降级、推测性任务驱逐、前台读取名额预留，以及队列的后台计数器。同时删除 Client 缓存的优先级传递逻辑并更新 Remote 签名。在转换容量可用时，接纳源预留容量足够的最早排队任务；元数据队列满时拒绝新的独立任务。仍允许在共享读取方数量限制内加入已有源任务。
 
 保留提供者、可复用转换器、延迟授权读取、其余所有资源限制、源版本校验、内容共享、有界结果缓存、读取方独立取消，以及等待实际工作结束的清理。这项提案改变接纳策略，不改变转换所有权或引擎选择。
 

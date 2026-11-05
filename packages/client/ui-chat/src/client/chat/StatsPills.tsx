@@ -17,7 +17,7 @@ import type { ChatSnapshot } from '../contract/snapshot.ts'
 import { formatTokensPerSecond } from './message-chrome.ts'
 import { assistantStepReading } from '../contract/turn-metrics.ts'
 import { formatCacheHitPercent, formatExactTokens, formatTokens } from './token-format.ts'
-import { MEASURE_STYLE, useStatDialog } from './stat-dialog.ts'
+import { useStatDialog } from './stat-dialog.ts'
 import css from './StatsPills.module.css'
 import dialogCss from './stat-dialog.module.css'
 
@@ -203,9 +203,9 @@ function DialogPill({ stat, icon, label, text, title, titleValue, children }: Pi
   titleValue?: string
   children: ReactNode
 }) {
-  const { open, setOpen, rootRef, panelRef, pos } = useStatDialog()
+  const { open, setOpen, rootRef, panelRef, anchorName } = useStatDialog()
   return (
-    <span ref={rootRef} className={css.anchor} data-composer-stat={stat}>
+    <span ref={rootRef} style={{ anchorName }} className={css.anchor} data-composer-stat={stat}>
       {/* The open dialog already shows every figure; a tooltip would cover it. */}
       <Tooltip label={text} {...FULL_READING_TOOLTIP} disabled={open}>
         <button
@@ -226,7 +226,7 @@ function DialogPill({ stat, icon, label, text, title, titleValue, children }: Pi
           className={dialogCss.panel}
           role="dialog"
           aria-label={title}
-          style={pos ?? MEASURE_STYLE}
+          style={{ positionAnchor: anchorName }}
         >
           <div className={dialogCss.title}>
             <span className={dialogCss.titleLabel}>

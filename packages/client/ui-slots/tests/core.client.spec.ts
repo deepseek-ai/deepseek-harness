@@ -11,6 +11,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'test.list': { kind: 'list'; scope: 'root' }
     'test.keyed': { kind: 'keyed'; scope: 'session' }
     'test.chain': { kind: 'chain'; scope: 'session'; owner: { tags: string[] } }
+    'test.hoc': { kind: 'hoc'; scope: 'root' }
+    'test.hoc.keyed': { kind: 'hoc'; scope: 'root' }
     'test.grandchild': { kind: 'single'; scope: 'root' }
   }
 }
@@ -36,6 +38,8 @@ function mountFrame(core: SlotCore) {
       'test.list': { kind: 'list', scope: 'root' },
       'test.keyed': { kind: 'keyed', scope: 'session' },
       'test.chain': { kind: 'chain', scope: 'session' },
+      'test.hoc': { kind: 'hoc', scope: 'root' },
+      'test.hoc.keyed': { kind: 'hoc', scope: 'root' },
     },
   // Type-level renderSlot presence is proven by the type-chain spec; erasing
   // here keeps runtime fixtures terse.
@@ -156,6 +160,19 @@ describe('kind semantics', () => {
     expect(() => core.register({ name: 'test.keyed', key: 'b' }, Comp)).not.toThrow()
   })
 
+  it('hoc: a cell is key plus id; same cell and priority throws; wildcard and keyed layers coexist', () => {
+    const core = new SlotCore()
+    mountFrame(core)
+    core.register({ name: 'test.hoc.keyed', id: 'a' }, Comp)
+    core.register({ name: 'test.hoc.keyed', id: 'a', key: 'ts' }, Comp)
+    core.register({ name: 'test.hoc.keyed', id: 'a', key: 'md' }, Comp)
+    expect(() => core.register({ name: 'test.hoc.keyed', id: 'a' }, Comp)).toThrow('with id "a"')
+    expect(() => core.register({ name: 'test.hoc.keyed', id: 'a', key: 'ts' }, Comp)).toThrow('id "a" for key "ts"')
+    expect(() => core.register({ name: 'test.hoc.keyed', id: 'a', key: 'ts', priority: -1 }, Comp)).not.toThrow()
+    expect(core.entriesOfSlot('test.hoc.keyed').map(e => [e.options.key, e.options.id, e.options.priority]))
+      .toEqual([['ts', 'a', -1], [undefined, 'a', undefined], ['md', 'a', undefined]])
+  })
+
   it('list: duplicate id throws, missing id throws, entries sort by order stably', () => {
     const core = new SlotCore()
     mountFrame(core)
@@ -166,6 +183,19 @@ describe('kind semantics', () => {
     // @ts-expect-error list registration requires options.id
     expect(() => core.register({ name: 'test.list' }, Comp)).toThrow('requires options.id')
     expect(core.entries('test.list').map(e => e.options.id)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('hoc: missing or duplicate id throws, layers sort by priority then order, one winner per id', () => {
+    const core = new SlotCore()
+    mountFrame(core)
+    core.register({ name: 'test.hoc', id: 'inner', order: 10 }, Comp as never)
+    core.register({ name: 'test.hoc', id: 'outer' }, Comp as never)
+    expect(() => core.register({ name: 'test.hoc', id: 'outer' }, Comp as never)).toThrow('hoc slot "test.hoc" already has an entry with id "outer"')
+    // @ts-expect-error hoc registration requires options.id
+    expect(() => core.register({ name: 'test.hoc' }, Comp)).toThrow('hoc slot "test.hoc" requires options.id')
+    core.register({ name: 'test.hoc', id: 'inner', priority: -1, registrant: 'shadow' }, Comp as never)
+    expect(core.entries('test.hoc').map(e => e.options.id)).toEqual(['inner', 'outer', 'inner'])
+    expect(core.entriesOfSlot('test.hoc').map(e => e.registrant ?? e.options.id)).toEqual(['shadow', 'outer'])
   })
 
   it('chain: missing select throws; select and priority land on the stored entry', () => {
@@ -393,7 +423,7 @@ describe('subscription API', () => {
     const off = core.onMutate(key => keys.push(key))
     mountFrame(core)
     // Contribution first, then each declared child key.
-    expect(keys).toEqual(['root', 'test.single', 'test.session', 'test.list', 'test.keyed', 'test.chain'])
+    expect(keys).toEqual(['root', 'test.single', 'test.session', 'test.list', 'test.keyed', 'test.chain', 'test.hoc', 'test.hoc.keyed'])
     keys.length = 0
     core.register({ name: 'test.list', id: 'a' }, Comp)
     expect(keys).toEqual(['test.list'])

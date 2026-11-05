@@ -7,7 +7,7 @@
  */
 import type { CommandDescriptor } from '@deepseek-ai/dsh-commands/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import { resolveCommand } from './resolution.ts'
+import { resolveCommand } from '@deepseek-ai/dsh-commands/builtin'
 
 export type { CommandDescriptor } from '@deepseek-ai/dsh-commands/types'
 

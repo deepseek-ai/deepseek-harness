@@ -1,0 +1,282 @@
+/** Shared Team task DAG commands and runtime-enriched views. */
+
+import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { Context } from '@deepseek-ai/cordis'
+import type { SessionId } from '@deepseek-ai/dsh-session'
+import type {} from '@deepseek-ai/dsh-subagent'
+import { TeamError } from './error.ts'
+import type { TeamJournal } from './journal.ts'
+import type { TeamState } from './projection.ts'
+import { assertTaskGraphCandidate, TeamTaskGraphError } from './task-graph.ts'
+import type { TeamTaskGraphViolation } from './task-graph.ts'
+import { TeamTaskId } from './types.ts'
+import type {
+  CreateTeamTaskRequest,
+  TeamTaskSnapshot,
+  TeamTaskView,
+  UpdateTeamTaskRequest,
+} from './types.ts'
+import { projectTaskView, taskReady } from './task-view.ts'
+import { requiredText, writeScope } from './validation.ts'
+
+const TASK_GRAPH_ERROR_CODES: Record<TeamTaskGraphViolation, string> = {
+  missing: 'TEAM_TASK_NOT_FOUND',
+  duplicate: 'TEAM_INVALID_ARGUMENT',
+  cycle: 'TEAM_TASK_DEPENDENCY_CYCLE',
+}
+
+/** Owns Team task limits, authorization, transitions, and derived views. */
+export class TeamTaskBoard {
+  /**
+   * @param ctx - subagent discovery for task assignees.
+   * @param journal - authoritative Lead-log transaction owner.
+   * @param maxTasks - maximum non-deleted tasks retained by one Team.
+   */
+  constructor(
+    private readonly ctx: Context,
+    private readonly journal: TeamJournal,
+    private readonly maxTasks: number,
+  ) {}
+
+  private state(root: Agent) {
+    const state = this.journal.state(root)
+    if (state.enabled !== true) throw new TeamError('enable Agent Teams for this Session before using the task board', 'TEAM_DISABLED')
+    return state
+  }
+
+  /**
+   * Create one unowned pending task in the Team Lead log.
+   * @param caller - exact live Agent creating the task.
+   * @param root - live subagent tree root owning the board.
+   * @param request - task text, blockers, and advisory write scopes.
+   * @param signal - cancellation before append; omitted means no cancellation.
+   * @returns the revision-one task view.
+   */
+  async create(caller: Agent, root: Agent, request: CreateTeamTaskRequest, signal?: AbortSignal): Promise<TeamTaskView> {
+    return this.journal.transact(root.id, async () => {
+      signal?.throwIfAborted()
+      const state = this.state(root)
+      const active = state.tasks.filter(task => task.status !== 'deleted').length
+      if (active >= this.maxTasks) {
+        throw new TeamError(`Team task limit ${this.maxTasks} reached`, 'TEAM_TASK_LIMIT')
+      }
+      const id = TeamTaskId(`task-${state.nextTaskNumber}`)
+      if (state.tasks.some(task => task.id === id)) {
+        throw new TeamError('Team task id space exhausted', 'TEAM_TASK_LIMIT')
+      }
+      const task: TeamTaskSnapshot = {
+        id,
+        revision: 1,
+        subject: requiredText(request.subject, 'subject', 200),
+        description: requiredText(request.description, 'description', 16_384),
+        status: 'pending',
+        blockedBy: this.dependencies(request.blockedBy ?? [], state),
+        writeScopes: this.writeScopes(request.writeScopes ?? []),
+      }
+      this.assertTaskGraph(state, task)
+      // The transaction queue may outlive its caller.
+      this.ctx.subagents.rootOf(caller)
+      await this.journal.appendAndFlush(root, task)
+      return projectTaskView(state, task)
+    })
+  }
+
+  /**
+   * Return one task, including a deleted tombstone.
+   * @param root - live subagent tree root owning the board.
+   * @param id - Team-local task identity.
+   * @returns the latest task value and derived readiness diagnostics.
+   */
+  get(root: Agent, id: TeamTaskId): TeamTaskView {
+    const state = this.state(root)
+    const task = state.tasks.find(candidate => candidate.id === id)
+    if (task === undefined) throw new TeamError(`team task "${id}" not found`, 'TEAM_TASK_NOT_FOUND')
+    return projectTaskView(state, task)
+  }
+
+  /**
+   * List current non-deleted tasks in numeric creation order.
+   * @param root - live subagent tree root owning the board.
+   * @returns detached current task views.
+   */
+  list(root: Agent): TeamTaskView[] {
+    const state = this.state(root)
+    return state.tasks
+      .filter(task => task.status !== 'deleted')
+      .map(task => projectTaskView(state, task))
+  }
+
+  /**
+   * Compare-and-set one authorized task transition.
+   * @param caller - exact live Team member authorizing the mutation.
+   * @param root - live subagent tree root owning the board.
+   * @param request - task identity, expected revision, action, and action fields.
+   * @param signal - cancellation before append; omitted means no cancellation.
+   * @returns the committed next task revision.
+   */
+  async update(
+    caller: Agent,
+    root: Agent,
+    request: UpdateTeamTaskRequest,
+    signal?: AbortSignal,
+  ): Promise<TeamTaskView> {
+    return this.journal.transact(root.id, async () => {
+      signal?.throwIfAborted()
+      const state = this.state(root)
+      const current = state.tasks.find(task => task.id === request.taskId)
+      if (current === undefined) throw new TeamError(`team task "${request.taskId}" not found`, 'TEAM_TASK_NOT_FOUND')
+      if (current.revision !== request.expectedRevision) {
+        throw new TeamError(
+          `stale team task "${current.id}" revision ${request.expectedRevision}; current revision is ${current.revision}`,
+          'TEAM_TASK_STALE_REVISION',
+        )
+      }
+      if (current.status === 'deleted') throw new TeamError(`team task "${current.id}" is deleted`, 'TEAM_TASK_DELETED')
+      const lead = caller === root
+      const owner = current.ownerId === caller.id
+      const authorizeOwner = (): void => {
+        if (!lead && !owner) throw new TeamError('task mutation requires its owner or Team Lead', 'TEAM_TASK_UNAUTHORIZED')
+      }
+      let next: TeamTaskSnapshot
+      switch (request.action) {
+        case 'claim': {
+          if (current.ownerId !== undefined && current.ownerId !== caller.id) {
+            throw new TeamError(`team task "${current.id}" is owned by another member`, 'TEAM_TASK_ALREADY_CLAIMED')
+          }
+          if (current.status !== 'pending' || !taskReady(state, current)) {
+            throw new TeamError(`team task "${current.id}" is not ready to claim`, 'TEAM_TASK_BLOCKED')
+          }
+          const name = this.ctx.subagents.namesOf(caller).self
+          next = { ...this.withoutOwner(current), status: 'in_progress', ownerId: caller.id,
+            ...name === caller.id ? {} : { ownerName: name } }
+          break
+        }
+        case 'release':
+          authorizeOwner()
+          if (current.status !== 'in_progress') throw new TeamError('only an in-progress task can be released', 'TEAM_TASK_INVALID_TRANSITION')
+          next = this.withoutOwner({ ...current, status: 'pending' })
+          break
+        case 'edit':
+          authorizeOwner()
+          if (request.subject === undefined && request.description === undefined && request.writeScopes === undefined) {
+            throw new TeamError('task edit requires subject, description, or write_scopes', 'TEAM_INVALID_ARGUMENT')
+          }
+          next = {
+            ...current,
+            ...request.subject === undefined ? {} : { subject: requiredText(request.subject, 'subject', 200) },
+            ...request.description === undefined
+              ? {}
+              : { description: requiredText(request.description, 'description', 16_384) },
+            ...request.writeScopes === undefined ? {} : { writeScopes: this.writeScopes(request.writeScopes) },
+          }
+          break
+        case 'set_dependencies':
+          authorizeOwner()
+          if (request.blockedBy === undefined) throw new TeamError('set_dependencies requires blocked_by', 'TEAM_INVALID_ARGUMENT')
+          next = { ...current, blockedBy: this.dependencies(request.blockedBy, state, current.id) }
+          break
+        case 'complete':
+          authorizeOwner()
+          if (current.status !== 'in_progress') throw new TeamError('only an in-progress task can complete', 'TEAM_TASK_INVALID_TRANSITION')
+          next = { ...current, status: 'completed' }
+          break
+        case 'reopen':
+          authorizeOwner()
+          if (current.status !== 'completed') throw new TeamError('only a completed task can reopen', 'TEAM_TASK_INVALID_TRANSITION')
+          next = this.withoutOwner({ ...current, status: 'pending' })
+          break
+        case 'reassign': {
+          if (!lead) throw new TeamError('only the Team Lead can reassign tasks', 'TEAM_LEAD_REQUIRED')
+          if (current.status !== 'pending' && current.status !== 'in_progress') {
+            throw new TeamError(
+              'only a pending or in-progress task can be reassigned',
+              'TEAM_TASK_INVALID_TRANSITION',
+            )
+          }
+          if (request.owner === undefined) {
+            next = this.withoutOwner({ ...current, status: 'pending' })
+            break
+          }
+          if (!taskReady(state, current)) throw new TeamError(`team task "${current.id}" is blocked`, 'TEAM_TASK_BLOCKED')
+          next = { ...this.withoutOwner(current), status: 'in_progress', ...await this.resolveAssignee(root, request.owner, signal) }
+          break
+        }
+        case 'delete': {
+          authorizeOwner()
+          const dependent = state.tasks.find(task =>
+            task.status !== 'deleted' && task.id !== current.id && task.blockedBy.includes(current.id))
+          if (dependent !== undefined) {
+            throw new TeamError(`team task "${current.id}" still blocks "${dependent.id}"`, 'TEAM_TASK_HAS_DEPENDENTS')
+          }
+          next = { ...current, status: 'deleted' }
+          break
+        }
+        /* v8 ignore next 2 -- TeamTaskAction is closed and every member is handled above. */
+        default:
+          throw new TeamError(`unsupported task action ${String(request.action)}`, 'TEAM_INVALID_ARGUMENT')
+      }
+      const task: TeamTaskSnapshot = {
+        ...next,
+        revision: current.revision + 1,
+      }
+      this.assertTaskGraph(state, task)
+      signal?.throwIfAborted()
+      // Queueing and assignee discovery may outlive the caller.
+      this.ctx.subagents.rootOf(caller)
+      await this.journal.appendAndFlush(root, task)
+      return projectTaskView(state, task)
+    })
+  }
+
+  /** Resolve a task owner through the same durable tree used by Agent discovery. */
+  private async resolveAssignee(root: Agent, target: SessionId, signal?: AbortSignal): Promise<{ ownerId: SessionId; ownerName?: string }> {
+    if (target === root.id) return { ownerId: target, ownerName: this.ctx.subagents.namesOf(root).self }
+    const descendants = await this.ctx.subagents.listDescendants(root.id, signal)
+    const member = descendants.find(entry => entry.kind !== 'diagnostic' && entry.mode === 'continuable' && entry.id === target)
+    if (member !== undefined) return { ownerId: target, ...member.path === undefined ? {} : { ownerName: member.path } }
+    throw new TeamError(`agent "${target}" is not a continuable descendant of this task board's root`, 'TEAM_MEMBER_NOT_FOUND')
+  }
+
+  /** Validate and de-duplicate dependency ids against the current task graph. */
+  private dependencies(
+    values: readonly TeamTaskId[],
+    state: TeamState,
+    self?: TeamTaskId,
+  ): TeamTaskId[] {
+    const seen = new Set<TeamTaskId>()
+    const result: TeamTaskId[] = []
+    for (const id of values) {
+      if (id === self) throw new TeamError('a team task cannot block itself', 'TEAM_TASK_DEPENDENCY_CYCLE')
+      if (seen.has(id)) throw new TeamError(`duplicate blocker "${id}"`, 'TEAM_INVALID_ARGUMENT')
+      const task = state.tasks.find(candidate => candidate.id === id)
+      if (task === undefined || task.status === 'deleted') {
+        throw new TeamError(`blocker task "${id}" not found`, 'TEAM_TASK_NOT_FOUND')
+      }
+      seen.add(id)
+      result.push(id)
+    }
+    return result
+  }
+
+  /** Normalize and de-duplicate task write scopes. */
+  private writeScopes(values: readonly string[]): string[] {
+    return [...new Set(values.map(writeScope))]
+  }
+
+  /** Map shared task-graph validation onto stable command error codes. */
+  private assertTaskGraph(state: TeamState, candidate: TeamTaskSnapshot): void {
+    try {
+      assertTaskGraphCandidate(state.tasks, candidate)
+    } catch (error: unknown) {
+      /* v8 ignore next -- the shared validator is the only statement in the try and throws this exact error. */
+      if (!(error instanceof TeamTaskGraphError)) throw error
+      throw new TeamError(error.message, TASK_GRAPH_ERROR_CODES[error.violation], { cause: error })
+    }
+  }
+
+  /** Remove both optional owner fields under exactOptionalPropertyTypes. */
+  private withoutOwner(task: TeamTaskSnapshot): TeamTaskSnapshot {
+    const { ownerId: _ownerId, ownerName: _ownerName, ...without } = task
+    return without
+  }
+}

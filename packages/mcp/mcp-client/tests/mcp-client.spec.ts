@@ -12,9 +12,9 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { PostToolDecision } from '@deepseek-ai/dsh-tools'
-import { publicToolName, syncTools, type ToolBridgeOptions } from '@deepseek-ai/dsh-mcp-client/src/tools.ts'
+import { McpToolRegistrationError, publicToolName, syncTools, type ToolBridgeOptions } from '@deepseek-ai/dsh-mcp-client/src/tools.ts'
 import { createTransport } from '@deepseek-ai/dsh-mcp-client/src/transport.ts'
-import type { Config } from '@deepseek-ai/dsh-mcp-client'
+import { Config } from '@deepseek-ai/dsh-mcp-client'
 
 const testToolSignal = new AbortController().signal
 
@@ -138,7 +138,7 @@ function textAt(content: readonly ContentBlock[], index = 0): string {
 }
 
 const defaultOpts: ToolBridgeOptions = {
-  registrationFailure: 'contain',
+  signal: testToolSignal,
   serverName: 'srv',
   toolCallTimeoutMs: 60_000,
 }
@@ -264,10 +264,9 @@ describe('syncTools', () => {
       { name: 'taken', inputSchema: { type: 'object' } },
     ])
 
-    const disposers = await syncTools(client as never, ctx, defaultOpts, new Map())
+    await expect(syncTools(client as never, ctx, defaultOpts, new Map())).rejects.toBeInstanceOf(McpToolRegistrationError)
 
     // All-or-nothing: the non-conflicting tool is rolled back too.
-    expect(disposers.size).toBe(0)
     expect(ctx.tools.get('mcp__srv__free')).toBeUndefined()
     // The squatter is untouched.
     expect(ctx.tools.get('mcp__srv__taken')).toBeDefined()
@@ -903,20 +902,26 @@ describe('tool execution', () => {
     expect(client.callTool).not.toHaveBeenCalled()
   })
 
-  it('passes abort signal to callTool', async () => {
+  it.each(['execution', 'connection'])('cancels callTool when the %s is aborted', async (source) => {
     const controller = new AbortController()
+    const lifetime = new AbortController()
     const client = createMockClient(
       [{ name: 'slow', inputSchema: { type: 'object' } }],
       { content: [{ type: 'text', text: 'done' }] },
     )
 
-    await syncTools(client as never, ctx, defaultOpts, new Map())
+    await syncTools(client as never, ctx, { ...defaultOpts, signal: lifetime.signal }, new Map())
     await executeToolFixture(ctx, { callId: ToolCallId('c1'), name: 'mcp__srv__slow', arguments: {}, signal: controller.signal })
 
     expect(client.callTool).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ signal: controller.signal }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) as AbortSignal }),
     )
+    const options = client.callTool.mock.calls[0]?.[1] as { signal: AbortSignal }
+    expect(options.signal.aborted).toBe(false)
+    const reason = new Error(`${source} cancelled`)
+    ;(source === 'execution' ? controller : lifetime).abort(reason)
+    expect(options.signal.reason).toBe(reason)
   })
 
   it('reports unsupported audio without claiming the raw block was discarded', async () => {
@@ -1089,7 +1094,7 @@ describe('tool execution', () => {
 
 describe('createTransport', () => {
   it('creates StdioClientTransport for stdio config', () => {
-    const config: Config = {
+    const config = Config({
       transport: 'stdio',
       serverName: 'srv',
       command: 'node',
@@ -1097,8 +1102,9 @@ describe('createTransport', () => {
       env: {},
       cwd: '/tmp',
       toolCallTimeoutMs: 60_000,
+      startupTimeoutMs: 30_000,
       failOnStartupError: false,
-    }
+    })
     const transport = createTransport(config)
     expect(transport).toBeDefined()
     expect(transport).toHaveProperty('start')
@@ -1106,14 +1112,15 @@ describe('createTransport', () => {
   })
 
   it('creates StreamableHTTPClientTransport for http config without headers', () => {
-    const config: Config = {
+    const config = Config({
       transport: 'streamable-http',
       serverName: 'srv',
       url: 'http://localhost:3000/mcp',
       headers: {},
       toolCallTimeoutMs: 60_000,
+      startupTimeoutMs: 30_000,
       failOnStartupError: false,
-    }
+    })
     const transport = createTransport(config)
     expect(transport).toBeDefined()
     expect(transport).toHaveProperty('start')
@@ -1121,14 +1128,15 @@ describe('createTransport', () => {
   })
 
   it('creates StreamableHTTPClientTransport for http config with headers', () => {
-    const config: Config = {
+    const config = Config({
       transport: 'streamable-http',
       serverName: 'srv',
       url: 'http://localhost:3000/mcp',
       headers: { Authorization: 'Bearer token' },
       toolCallTimeoutMs: 60_000,
+      startupTimeoutMs: 30_000,
       failOnStartupError: false,
-    }
+    })
     const transport = createTransport(config)
     expect(transport).toBeDefined()
     expect(transport).toHaveProperty('start')
@@ -1143,7 +1151,7 @@ describe('createTransport', () => {
       process.env.API_KEY = 'hidden'
       process.env.AUTH_TOKEN = 'hidden'
 
-      const config: Config = {
+      const config = Config({
         transport: 'stdio',
         serverName: 'srv',
         command: 'echo',
@@ -1151,8 +1159,9 @@ describe('createTransport', () => {
         env: { EXTRA: 'injected' },
         cwd: '',
         toolCallTimeoutMs: 60_000,
+        startupTimeoutMs: 30_000,
         failOnStartupError: false,
-      }
+      })
       // StdioClientTransport keeps its env private; the observable contract is
       // that createTransport(config) returns a transport without throwing.
       const transport = createTransport(config)
@@ -1169,7 +1178,7 @@ describe('createTransport', () => {
   })
 
   it('merges explicit env on top of scrubbed ambient env', () => {
-    const config: Config = {
+    const config = Config({
       transport: 'stdio',
       serverName: 'srv',
       command: 'echo',
@@ -1177,8 +1186,9 @@ describe('createTransport', () => {
       env: { CUSTOM: 'value' },
       cwd: '',
       toolCallTimeoutMs: 60_000,
+      startupTimeoutMs: 30_000,
       failOnStartupError: false,
-    }
+    })
     const transport = createTransport(config)
     expect(transport).toBeDefined()
   })

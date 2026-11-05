@@ -1,3 +1,4 @@
+import { expectDesktopArchive } from './desktop-archive-workflow-test.ts'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -11,7 +12,8 @@ const workflow = yaml.load(readFileSync(resolve(root, '.github/workflows/windows
   permissions: Record<string, string>
   concurrency: { group: string; 'cancel-in-progress': boolean }
   jobs: Record<string, {
-    'runs-on': string
+    defaults?: { run: { shell: string } }
+    'runs-on': string | string[]
     env: Record<string, string>
     steps: Array<{
       id?: string
@@ -60,6 +62,7 @@ it.skipIf(process.platform !== 'win32')('resets only the allocated checkout with
 
 it('routes manual packaging to the dedicated runner with explicit preset and signing selection', () => {
   expect(Object.keys(workflow.on)).toEqual(['workflow_dispatch'])
+  expect(workflow.on.workflow_dispatch).toMatchObject({ inputs: { version_mode: { default: 'default', options: ['default', 'follow-dsh', 'build-number', 'manual'] } } })
   expect(workflow.jobs.package).not.toHaveProperty('name')
   expect(job['runs-on']).toBe('dsh-win-package-trial')
   expect(JSON.stringify(job.env)).not.toContain('runner.')
@@ -68,7 +71,7 @@ it('routes manual packaging to the dedicated runner with explicit preset and sig
   expect(workflow.concurrency).toEqual({ group: 'windows-desktop-package', 'cancel-in-progress': false })
   expect(workflow.permissions).toEqual({ contents: 'read' })
   expect(Object.keys(workflow.on.workflow_dispatch!.inputs).sort()).toEqual([
-    'build_root', 'build_version', 'cache_namespace', 'compression_level', 'preset', 'signing', 'source_ref', 'test_release_id', 'update_channel', 'version_mode',
+    'build_version', 'cache_namespace', 'compression_level', 'preset', 'signing', 'source_ref', 'test_release_id', 'update_channel', 'version_mode',
   ])
   expect(workflow.on.workflow_dispatch!.inputs.signing!.default).toBe('signed')
   expect(workflow.on.workflow_dispatch!.inputs.compression_level).toMatchObject({ type: 'choice', options: ['3', '7'], default: '3', required: true })
@@ -77,7 +80,7 @@ it('routes manual packaging to the dedicated runner with explicit preset and sig
   expect(workflow.on.workflow_dispatch!.inputs.version_mode!.default).toBe('default')
   expect(workflow.on.workflow_dispatch!.inputs.source_ref!.default).toBe('master')
   expect(workflow.on.workflow_dispatch!.inputs.update_channel!.default).toBe('nightly')
-  expect(job.env.PACKAGE_VERSION_MODE).toBe('${{ inputs.version_mode }}')
+  expect(job.env.PACKAGE_VERSION_MODE).toBe("${{ inputs.version_mode == 'follow-dsh' && 'product' || inputs.version_mode == 'build-number' && 'auto' || inputs.version_mode }}")
   expect(job.env.PACKAGE_SOURCE_REF).toBe('${{ inputs.source_ref }}')
   expect(job.env.DSH_DESKTOP_UPDATE_CHANNEL).toBe('${{ inputs.update_channel }}')
   expect(job.env.DSH_PACKAGING_PRESET).toBe('${{ inputs.preset }}')
@@ -105,61 +108,16 @@ it('validates before building and passes the same mode and version to checks and
 
 it('retains failure diagnostics and uploads only the selected successful installer', () => {
   const uploads = job.steps.filter(step => step.uses?.startsWith('actions/upload-artifact@'))
-  expect(uploads).toHaveLength(3)
+  expect(uploads).toHaveLength(1)
+  const archive = workflow.jobs['upload-artifact']!
+  const archival = expectDesktopArchive(archive, 1)
   expect(uploads[0]!.if).toBe("always() && steps.checkout.outcome == 'success'")
   expect(uploads[0]!.with).toMatchObject({
-    path: '${{ steps.build_workspace.outputs.directory || github.workspace }}/apps/desktop/.desktop-build/packaging-runs/',
+    path: '${{ github.workspace }}/apps/desktop/.desktop-build/packaging-runs/',
     'include-hidden-files': true,
   })
-  for (const mode of ['unsigned', 'signed']) {
-    const upload = uploads.find(step => step.if === `success() && inputs.signing == '${mode}'`)!
-    expect(upload.with).toMatchObject({ path: '${{ steps.retained.outputs.directory }}/*', 'if-no-files-found': 'error', 'compression-level': 0 })
-  }
-})
-
-it('routes all packaging consumers to the selected workspace and removes it only after successful uploads', () => {
-  expect(workflow.on.workflow_dispatch!.inputs.build_root).toMatchObject({ type: 'string', default: '', required: false })
-  expect(job.env.PACKAGE_BUILD_ROOT).toBe('${{ inputs.build_root }}')
-  const selected = job.steps.find(step => step.id === 'build_workspace')!
-  expect(selected.name).toBe('Select packaging workspace')
-  expect(selected.env).toEqual({ PACKAGE_SOURCE_SHA: '${{ steps.checkout.outputs.commit }}' })
-  expect(selected['working-directory']).toBeUndefined()
-  expect(selected.run).toContain('if (!$env:PACKAGE_BUILD_ROOT)')
-  expect(selected.run).toContain('"directory=$env:GITHUB_WORKSPACE" >> $env:GITHUB_OUTPUT')
-  expect(selected.run).toContain('} else {')
-  expect(selected.run).toContain('node "$env:PACKAGE_CI_HELPERS/windows-build-workspace.mjs"')
-  expect(selected.run).toContain('exit $LASTEXITCODE')
-  const index = job.steps.indexOf(selected)
-  expect(index).toBeGreaterThan(job.steps.findIndex(step => step.uses?.startsWith('actions/setup-node@')))
-  expect(index).toBeLessThan(job.steps.findIndex(step => step.name === 'Configure persistent pnpm store'))
-  const consumers = [
-    'Install locked dependencies',
-    'Validate preset and resolve build version',
-    'Check packaging configuration and toolchain',
-    'Build installer and verify packaged runtime',
-    'Retain complete package outside the checkout',
-  ]
-  for (const name of consumers) {
-    const step = job.steps.find(entry => entry.name === name)!
-    expect(step['working-directory']).toBe('${{ steps.build_workspace.outputs.directory }}')
-    expect(job.steps.indexOf(step)).toBeGreaterThan(index)
-  }
-  expect(job.steps.filter(step => step['working-directory'] === '${{ steps.build_workspace.outputs.directory }}'))
-    .toHaveLength(consumers.length)
-  const store = job.steps.find(step => step.name === 'Configure persistent pnpm store')!
-  expect(store.run).toContain('[IO.Path]::GetPathRoot($env:GITHUB_WORKSPACE)')
-  expect(store['working-directory']).toBeUndefined()
-  const cleanup = job.steps.at(-1)!
-  expect(cleanup).toMatchObject({
-    name: 'Remove isolated packaging workspace',
-    if: "success() && inputs.build_root != ''",
-    env: { PACKAGE_SOURCE_SHA: '${{ steps.checkout.outputs.commit }}' },
-    run: 'node "$env:PACKAGE_CI_HELPERS/windows-build-workspace.mjs" --remove',
-  })
-  expect(cleanup['working-directory']).toBeUndefined()
-  for (const upload of job.steps.filter(step => step.uses?.startsWith('actions/upload-artifact@'))) {
-    expect(job.steps.indexOf(upload)).toBeLessThan(job.steps.indexOf(cleanup))
-  }
+  expect(archive.env.DESKTOP_ARCHIVE_NAME).toBe('windows-x64-${{ inputs.signing }}-${{ needs.package.outputs.version }}-${{ github.run_id }}-${{ needs.package.outputs.attempt }}.zip')
+  expect(archival[0]!.with).toMatchObject({ path: '${{ steps.archive.outputs.path }}', 'if-no-files-found': 'error', archive: false, overwrite: true, name: '${{ env.DESKTOP_ARCHIVE_NAME }}' })
 })
 
 it('normalizes priority in the dependency and packaging shells before launching their children', () => {
@@ -170,33 +128,6 @@ it('normalizes priority in the dependency and packaging shells before launching 
     const step = job.steps.find(entry => entry.name === name)!
     expect(step.run!.trimStart().startsWith(command + '\n')).toBe(true)
   }
-})
-
-it('scopes the optional temporary directory to installer building without changing Actions or later steps', () => {
-  const build = job.steps.find(step => step.name === 'Build installer and verify packaged runtime')!
-  expect(build.env?.PACKAGE_BUILD_TEMP).toBe('${{ steps.build_workspace.outputs.temporaryDirectory }}')
-  expect(build.run).toContain([
-    'if ($env:PACKAGE_BUILD_TEMP) {',
-    '  $env:TEMP = $env:PACKAGE_BUILD_TEMP',
-    '  $env:TMP = $env:PACKAGE_BUILD_TEMP',
-    '}',
-  ].join('\n'))
-  expect(build.run!.indexOf('if ($env:PACKAGE_BUILD_TEMP)')).toBeLessThan(build.run!.indexOf('$packageArgs ='))
-  expect(build.run).not.toContain('GITHUB_ENV')
-  expect(build.run).not.toContain('RUNNER_TEMP')
-  expect(job.env).not.toHaveProperty('TEMP')
-  expect(job.env).not.toHaveProperty('TMP')
-  expect(job.env).not.toHaveProperty('PACKAGE_BUILD_TEMP')
-  for (const step of job.steps.filter(step => step !== build)) {
-    expect(step.env ?? {}).not.toHaveProperty('PACKAGE_BUILD_TEMP')
-    expect(step.env ?? {}).not.toHaveProperty('TEMP')
-    expect(step.env ?? {}).not.toHaveProperty('TMP')
-    expect(step.run ?? '').not.toMatch(/\$env:(?:TEMP|TMP)\s*=/u)
-  }
-  const selected = job.steps.find(step => step.id === 'build_workspace')!
-  const defaultBranch = selected.run!.split('} else {')[0]!
-  expect(defaultBranch).toContain('"directory=$env:GITHUB_WORKSPACE" >> $env:GITHUB_OUTPUT')
-  expect(defaultBranch).not.toContain('temporaryDirectory')
 })
 
 it.skipIf(process.platform !== 'win32')('keeps the dependency store stable across run-specific pnpm homes', () => {
@@ -251,11 +182,9 @@ it('pins environment helpers to the workflow commit before selecting product sou
   expect(job.steps.indexOf(helper)).toBeLessThan(job.steps.indexOf(stage))
   expect(job.steps.indexOf(stage)).toBeLessThan(job.steps.indexOf(source))
   expect(stage.run).toContain('RUNNER_TEMP')
-  expect(stage.run).toContain('windows-build-workspace.mjs')
   expect(stage.run).toContain('windows-packaging-priority.ps1')
   for (const step of job.steps.filter(step => step.name !== 'Stage workflow helpers')) {
     expect(step.run ?? '').not.toContain('./apps/desktop/scripts/windows-packaging-priority.ps1')
-    expect(step.run ?? '').not.toContain('node apps/desktop/scripts/windows-build-workspace.mjs')
   }
 })
 
@@ -267,7 +196,7 @@ it.skipIf(process.platform !== 'win32')('stages helpers that remain usable when 
     const temporary = resolve(directory, 'temporary')
     mkdirSync(scripts, { recursive: true })
     mkdirSync(temporary)
-    for (const name of ['windows-packaging-priority.ps1', 'windows-build-workspace.mjs']) {
+    for (const name of ['windows-packaging-priority.ps1']) {
       writeFileSync(resolve(scripts, name), readFileSync(resolve(root, 'apps/desktop/scripts', name)))
     }
     const stage = resolve(directory, 'stage.ps1')
@@ -278,11 +207,17 @@ it.skipIf(process.platform !== 'win32')('stages helpers that remain usable when 
     const helper = resolve(temporary, 'packaging-helpers-123-1/windows-packaging-priority.ps1')
     expect(execFileSync('pwsh', ['-NoProfile', '-File', helper, '-InspectOnly'], { cwd: source, stdio: 'pipe' }).toString())
       .toContain('packaging-process-priority')
-    expect(existsSync(resolve(temporary, 'packaging-helpers-123-1/windows-build-workspace.mjs'))).toBe(true)
     expect(() => execFileSync('pwsh', ['-NoProfile', '-File', stage], {
       cwd: source, env: { ...env, GITHUB_RUN_ATTEMPT: '2' }, stdio: 'pipe',
     })).toThrow()
   } finally {
     rmSync(directory, { recursive: true, force: true, maxRetries: 3 })
   }
+})
+
+it('archives with native PowerShell and the persistent packaging store', () => {
+  const archival = workflow.jobs['upload-artifact']!
+  expect(archival.defaults?.run.shell).toBe('pwsh')
+  expect(archival.steps.find(step => step.name === 'Configure persistent pnpm store')?.run)
+    .toBe(job.steps.find(step => step.name === 'Configure persistent pnpm store')?.run)
 })

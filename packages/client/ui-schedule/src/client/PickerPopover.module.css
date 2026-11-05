@@ -2,8 +2,17 @@
    translucent surface, portal-positioned from its trigger. */
 .panel {
   position: fixed;
-  top: auto;
-  left: auto;
+  position-area: none;
+  position-try-fallbacks: --dsh-schedule-picker-above, --dsh-schedule-picker-end, --dsh-schedule-picker-above-end, --dsh-schedule-picker-window, --dsh-schedule-picker-viewport;
+  top: max(12px, calc(anchor(bottom) + 4px));
+  bottom: 12px;
+  left: max(12px, anchor(left));
+  right: 12px;
+  margin: 0;
+  width: max-content;
+  height: fit-content;
+  align-self: start;
+  justify-self: start;
   box-sizing: border-box;
   z-index: 1100;
   display: flex;
@@ -17,4 +26,45 @@
      every other menu card (see ui-theme styles/scrollbar.css). */
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 12px - max(12px, var(--dsh-frame-overlay-top, 12px)));
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* Flipping preserves the window margins instead of testing against its zero edge. */
+@position-try --dsh-schedule-picker-above {
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: max(12px, calc(anchor(top) + 4px));
+  align-self: end;
+}
+
+@position-try --dsh-schedule-picker-end {
+  left: 12px;
+  right: max(12px, anchor(right));
+  justify-self: end;
+}
+
+@position-try --dsh-schedule-picker-above-end {
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: max(12px, calc(anchor(top) + 4px));
+  left: 12px;
+  right: max(12px, anchor(right));
+  align-self: end;
+  justify-self: end;
+}
+
+@position-try --dsh-schedule-picker-window {
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: 12px;
+  margin: 0;
+  align-self: safe end;
+}
+
+@position-try --dsh-schedule-picker-viewport {
+  position-area: none;
+  inset: max(12px, var(--dsh-frame-overlay-top, 12px)) 12px 12px;
+  margin: 0;
+  align-self: safe end;
+  justify-self: safe end;
 }

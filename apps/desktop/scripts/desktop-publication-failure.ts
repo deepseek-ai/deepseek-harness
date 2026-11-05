@@ -1,5 +1,6 @@
 /** Safe failure details shared by publication diagnostics and durable journals. */
 import { ZodError } from 'zod'
+import { DesktopPurgeExecutionError } from './desktop-purge-recovery.ts'
 import { DesktopPublishError } from './desktop-publish.ts'
 
 const publicCodes = new Set(['AccessDenied', 'InternalError', 'NoSuchBucket', 'BadDigest', 'SignatureDoesNotMatch',
@@ -39,12 +40,15 @@ export function desktopPublicationFailure(error: unknown, phase: string): {
       ...(typeof requestId === 'string' && /^[\w+/=.-]{1,256}$/u.test(requestId) ? { requestId } : {}),
       ...(typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599 ? { httpStatus: status } : {}) }
   }
+  if (error instanceof DesktopPurgeExecutionError) return { phase, code: `purge-${error.status}`, message: error.message }
   if (error instanceof DesktopPublishError) return { phase, code: error.code, message: error.message }
   if (error instanceof ZodError) return { phase, code: 'invalid-data',
     message: `Invalid fields: ${error.issues.map(issue => `${issue.path.join('.') || '(root)'} (${issue.code})`).join(', ')}` }
   if (error instanceof SyntaxError) return { phase, code: 'invalid-json', message: 'Invalid JSON; check the configuration or retained record for this stage.' }
-  const ownedMessage = /^(desktop (?:publish|release store|retention|rollback|tag|upload|auto-update|macOS signing|build)[^\n]*:|Usage:)/u
-  if (error instanceof Error && ownedMessage.test(error.message)) {
+  const ownedMessage =
+    /^(desktop (?:publish|rollout|archival|release store|retention|rollback|tag|upload|auto-update|macOS signing|build)[^\n]*:|Usage:)/u
+  const websiteMessage = /^website (?:publication|installer|cache purge):/u
+  if (error instanceof Error && (ownedMessage.test(error.message) || websiteMessage.test(error.message))) {
     return { phase, code: 'validation', message: error.message }
   }
   const record = typeof error === 'object' && error !== null ? error : {}

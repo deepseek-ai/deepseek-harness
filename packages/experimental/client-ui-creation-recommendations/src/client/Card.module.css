@@ -9,9 +9,9 @@
 .body { padding: 12px 20px 20px; }
 .content { margin-top: 12px; }
 .contentLabel { display: block; font-size: 12px; line-height: 1.6; color: var(--dsw-alias-label-secondary); }
-.description { margin: 16px 0 0; padding-top: 12px; border-top: 0.5px solid var(--dsw-alias-border-l1); font-size: 12px; line-height: 1.6; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+.placement { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; padding-top: 12px; border-top: 0.5px solid var(--dsw-alias-border-l1); }
+.description { margin: 0; min-width: 0; font-size: 12px; line-height: 1.6; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
 .footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
-.scope { font-size: 12px; line-height: 1.5; color: var(--dsw-alias-label-secondary); }
 .actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .status { margin: 12px 0 0; font-size: 12px; line-height: 1.6; color: var(--dsw-alias-label-secondary); }
 .controls { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 16px; padding-top: 16px; border-top: 0.5px solid var(--dsw-alias-border-l1); }

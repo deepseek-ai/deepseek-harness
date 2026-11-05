@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-从插件页为已有和新建 PTC 会话开启 macOS Computer Use。Windows 支持正在开发中。本组合包暂放在 `experimental`，待 Windows 支持完成后迁回 `computer-use` 组。默认关闭，启用或单独安装前不在默认插件列表中显示；关闭时不准备本机组件、不注册 CUA 工具或添加其模型指引。
+从插件页为已有和新建 PTC 会话开启 macOS Computer Use。Windows 支持正在开发中。本组合包暂放在 `experimental`，待 Windows 支持完成后迁回 `computer-use` 组。随 DSH 提供且默认关闭，在 macOS Host 的实验性插件列表中显示；关闭时不准备本机组件、不注册 CUA 工具或添加其模型指引。
 
 ## 目录
 
@@ -24,7 +24,7 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用本包
 
-本流程面向从源码运行 macOS Web 或未打包 Desktop 的开发者。在「插件 → 添加插件」中输入 `@deepseek-ai/dsh-cua-bundle`，点击「安装」，再点击「立即启用」。DSH 会启用随应用提供的副本，无需重新下载。已启用的组合包保留在插件页，可打开 Computer Use 管理权限或将其关闭。关闭后卡片再次隐藏，除非该 profile 单独安装了它。权限页通过可选系统查询显示 macOS 报告的责任应用，指引用户申请权限并在系统设置中开启对应开关。若 macOS 显示其他应用名称，以系统提示为准。Web 版在仓库根目录运行以下命令：
+在 macOS 上打开“插件 → 更多”，在实验性插件列表中开启 Computer Use。组合包随 DSH 提供并随之升级，开启时无需下载。发布包包含已签名和公证的 helper，用户无需编译工具。源码 Web 和开发 Desktop 在开启时准备临时签名的 helper。打开它的详情，按需设置 PTC，并为 `DSH Computer Use.app` 授予辅助功能和屏幕录制权限。开启后组合包也会出现在插件主列表中，关闭后只留在实验性插件列表。源码 Web 在仓库根目录运行以下命令：
 
 ```sh
 pnpm run build
@@ -33,7 +33,7 @@ pnpm dsh web
 
 源码 Desktop 的启动方式和独立开发配置档见[桌面开发说明](../../../apps/desktop/README.zh.md)。需要使用 Computer Use 的配置档分别开启该功能。
 
-开关将组合包选择保存到 profile 的 `package.json`。Computer Use 仅安装在 PTC 会话中。通过「添加插件」、可见卡片或详情页启用时，系统权限未就绪会显示设置引导。详情页提供“设为 PTC”按钮来修改新会话默认模式，已有会话保留原 preset。开关保持 PTC 执行方式和其他设置不变。详情页的“设为持久化”按钮单独开启 PTC 跨调用的内存状态保留，作用范围和重载行为见[权限页面](../cua/README.zh.md)。提供方加载时准备本机组件，已有与源码摘要匹配的可执行文件时直接复用。
+开关将组合包选择保存到 profile 的 `package.json`。Computer Use 仅安装在 PTC 会话中。通过卡片或详情页启用时，系统权限未就绪会显示设置引导。详情页提供“设为 PTC”按钮来修改新会话默认模式，已有会话保留原 preset。开关保持 PTC 执行方式和其他设置不变。详情页的“设为持久化”按钮单独开启 PTC 跨调用的内存状态保留，作用范围和重载行为见[权限页面](../cua/README.zh.md)。提供方加载时准备本机组件，已有与源码摘要匹配的可执行文件时直接复用。
 
 关闭会卸载提供方，并从其 Agent 作用域中撤回 CUA 工具。执行器配置、新会话默认值和已保存的授权保留。
 
@@ -85,7 +85,7 @@ CUA 生效和卸载会改变 PTC SDK 与系统指引，后续请求使用更新�
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 源码 Web 与 Desktop 共用 macOS 权限控件。桌面安装包的 helper 分发、签名和权限归属留待后续处理。
+- 系统权限需用户在 macOS 中确认，开启组合包不会自动授予权限。
 - PTC 执行方式由 profile 共享，需单独配置。未启用 HMR 的 Host 在重启时应用已保存的变更。
 
 <a id="dev-note"></a>

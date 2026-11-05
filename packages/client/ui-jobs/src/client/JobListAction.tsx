@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { createPortal } from 'react-dom'
 import type { JobsSnapshot, JobView, ObservedJob } from '@deepseek-ai/dsh-api-job-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
-  IconChevronDownOutlineRegular, IconStopFillRegular, MenuSurface, StateDot, TerminalBlock,
-  useAnchoredPosition, useDismissOnOutsidePointer,
+  IconChevronDownOutlineRegular, IconLayersOutlineRegular, IconStopFillRegular, MenuSurface, StateDot, TerminalBlock, Tooltip,
+  useDismissOnOutsidePointer,
   type StateDotState, type TerminalBlockLabels,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
@@ -47,15 +47,6 @@ export type JobListActionProps =
 
 /** Stable empty list so a session with no jobs keeps one array identity. */
 const NO_JOBS: readonly JobView[] = []
-
-/** Minimum gap kept between the popover and the viewport edges (the Menu primitive's portal margin). */
-const VIEWPORT_MARGIN = 12
-
-/** Distance between the trigger's bottom edge and the popover. */
-const MENU_GAP = 5
-
-/** Unplaced list: hidden but laid out so the first placement measures real dimensions. */
-const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
 
 /** Keyboard-reachable controls inside the list, in document order. */
 const FOCUSABLE = 'button:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])'
@@ -329,15 +320,25 @@ function JobItem({ job, view, expanded, now, onToggle, kill, t }: {
  * or a settled one with retained output) starts its observation stream, and
  * collapsing (or closing the popover) stops it — output only flows while
  * someone is watching. A running row carries a two-press stop button that
- * requests a human kill through the job controller.
+ * requests a human kill through the job controller. Non-touch hover on a
+ * text-visible trigger opens after 150ms and closes after 120ms outside both
+ * trigger and portal. Compact triggers toggle on click; ArrowDown opens and
+ * pins either layout. Interacting inside also pins the menu until explicit
+ * dismissal; timers and the pin are local to the mounted session.
  * @param props - runtime slot currency, the jobs snapshot hook, the roster,
  *   observation, and kill controls, and the namespace translator.
  * @returns the trigger and its popover list, or null when there is nothing to show.
  */
 export function JobListAction({ sessionId, useJobs, watchRows, observe, killJob, t }: JobListActionProps) {
+  const activityId = useId()
   const jobs = useJobs(state => state.rows[sessionId]) ?? NO_JOBS
   const observedViews = useJobs(state => state.observed)
-  const [open, setOpen] = useState(false)
+  const [menuState, setMenuState] = useState<{ sessionId: SessionId; mode: 'closed' | 'hover' | 'pinned' }>(
+    { sessionId, mode: 'closed' },
+  )
+  const hoverOpenTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const hoverCloseTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  if (menuState.sessionId !== sessionId) setMenuState({ sessionId, mode: 'closed' })
   const [expandedKey, setExpandedKey] = useState<string | undefined>(undefined)
   const [now, setNow] = useState(() => Date.now())
   // Settled-section fold: an explicit user toggle wins; before one, the tail
@@ -350,6 +351,7 @@ export function JobListAction({ sessionId, useJobs, watchRows, observe, killJob,
   const [killPhase, setKillPhase] = useState<{ key: string; state: Exclude<KillState, 'idle'> } | undefined>(undefined)
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const countRef = useRef<HTMLSpanElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
   const rows = useMemo(() => ordered(jobs), [jobs])
@@ -360,14 +362,64 @@ export function JobListAction({ sessionId, useJobs, watchRows, observe, killJob,
   )
   const settledExpanded = settledOpen ?? liveRows.length === 0
   const visibleCount = liveRows.length + settledRows.length
+  const hasJobs = visibleCount > 0
+  const open = hasJobs && menuState.sessionId === sessionId && menuState.mode !== 'closed'
 
-  // The popover portals to the document body: the session header sits in a
-  // clipping column that the right sidebar borders or overlaps, so an in-place
-  // popover is cut off or covered there.
-  const menuPosition = useAnchoredPosition({
-    open, anchorRef: rootRef, panelRef: menuRef, gap: MENU_GAP, margin: VIEWPORT_MARGIN,
-  })
-  useDismissOnOutsidePointer(rootRef, open, setOpen, menuRef)
+  const cancelHover = useCallback((): void => {
+    clearTimeout(hoverOpenTimer.current)
+    clearTimeout(hoverCloseTimer.current)
+    hoverOpenTimer.current = undefined
+    hoverCloseTimer.current = undefined
+  }, [])
+
+  const changeOpen = useCallback((next: boolean): void => {
+    cancelHover()
+    if (next) setNow(Date.now())
+    setMenuState({ sessionId, mode: next ? 'pinned' : 'closed' })
+  }, [cancelHover, sessionId])
+
+  // CSS owns the compact breakpoint; read its result only for pointer gestures.
+  const allowsHoverOpen = (): boolean => countRef.current !== null
+    && getComputedStyle(countRef.current).display !== 'none'
+
+  const hoverEnter = (event: PointerEvent<HTMLElement>): void => {
+    if (event.pointerType === 'touch') return
+    cancelHover()
+    if (open || !allowsHoverOpen()) return
+    hoverOpenTimer.current = setTimeout(() => {
+      hoverOpenTimer.current = undefined
+      if (!allowsHoverOpen()) return
+      setNow(Date.now())
+      setMenuState({ sessionId, mode: 'hover' })
+    }, 150)
+  }
+
+  const hoverLeave = (event: PointerEvent<HTMLElement>): void => {
+    if (event.pointerType === 'touch') return
+    cancelHover()
+    if (!open || menuState.mode === 'pinned') return
+    hoverCloseTimer.current = setTimeout(() => {
+      hoverCloseTimer.current = undefined
+      setMenuState({ sessionId, mode: 'closed' })
+    }, 120)
+  }
+
+  // Timers belong to this mounted session and cannot survive a disappearing trigger.
+  useEffect(() => cancelHover, [cancelHover, sessionId, hasJobs])
+
+  const anchorName = `--dsh-jobs-${useId().replaceAll(':', '')}`
+  useDismissOnOutsidePointer(rootRef, open, changeOpen, menuRef)
+  // Hover does not move focus; Escape must also work from the rest of the page.
+  useEffect(() => {
+    if (!open) return
+    const dismiss = (event: globalThis.KeyboardEvent): void => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return
+      event.preventDefault()
+      changeOpen(false)
+    }
+    document.addEventListener('keydown', dismiss)
+    return () => { document.removeEventListener('keydown', dismiss) }
+  }, [open, changeOpen])
 
   // The roster follows the mounted session: one stream while this control
   // lives, released with it.
@@ -392,11 +444,10 @@ export function JobListAction({ sessionId, useJobs, watchRows, observe, killJob,
     return observe(sessionId, activeJob)
   }, [sessionId, activeJob, observe])
 
-  // The last visible job disappearing removes this control; close first so
-  // focus does not vanish from an unmounting node.
+  // A returning roster starts closed rather than restoring an obsolete pin.
   useEffect(() => {
-    if (visibleCount === 0 && open) setOpen(false)
-  }, [visibleCount, open])
+    if (!hasJobs) changeOpen(false)
+  }, [hasJobs, changeOpen])
 
   // An expanded row that left the list (owner disposal) folds its panel.
   useEffect(() => {
@@ -448,10 +499,8 @@ export function JobListAction({ sessionId, useJobs, watchRows, observe, killJob,
 
   if (visibleCount === 0) return null
 
-  const countKey = liveRows.length > 0
-    ? (liveRows.length === 1 ? 'count.live.one' : 'count.live.other')
-    : (visibleCount === 1 ? 'count.idle.one' : 'count.idle.other')
-  const countLabel = t(countKey, { count: liveRows.length > 0 ? liveRows.length : visibleCount })
+  const count = liveRows.length > 0 ? liveRows.length : visibleCount
+  const countLabel = t(count === 1 ? 'count.idle.one' : 'count.idle.other', { count })
 
   const clearSettled = (): void => {
     setClearedKeys((current) => {
@@ -468,14 +517,14 @@ export function JobListAction({ sessionId, useJobs, watchRows, observe, killJob,
   // keep the in-place order: the trigger leads into the list, and leaving
   // either end of the list returns to the trigger's position in the page.
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
-    if (!open) return
     const trigger = triggerRef.current
     if (event.key === 'Escape') {
       event.preventDefault()
-      setOpen(false)
+      changeOpen(false)
       trigger?.focus()
       return
     }
+    if (!open) return
     const menu = menuRef.current
     /* v8 ignore next -- both refs are attached while the open list renders. */
     if (event.key !== 'Tab' || trigger === null || menu === null) return
@@ -516,29 +565,44 @@ export function JobListAction({ sessionId, useJobs, watchRows, observe, killJob,
   )
 
   return (
-    <div ref={rootRef} onKeyDown={onKeyDown}>
-      <button
-        ref={triggerRef}
-        type="button"
-        className={css.trigger}
-        aria-expanded={open}
-        aria-label={countLabel}
-        onClick={() => {
-          // Sample the clock in the same commit that opens the list: the
-          // mount-time value predates every job, so the first painted frame
-          // would otherwise clamp a long-running row to zero until the
-          // open effect corrects it a frame later.
-          setNow(Date.now())
-          setOpen(current => !current)
-        }}
-      >
-        {liveRows.length > 0 ? <StateDot state="ongoing" className={css.triggerDot} /> : null}
-        <span className={css.count}>{countLabel}</span>
-        <IconChevronDownOutlineRegular size={12} className={open ? css.triggerOpen : undefined} />
-      </button>
+    <div ref={rootRef} style={{ anchorName }} onKeyDown={onKeyDown}>
+      <Tooltip label={countLabel} disabled={open} delayMs={500} portal side="bottom">
+        <button
+          ref={triggerRef}
+          type="button"
+          className={css.trigger}
+          aria-expanded={open}
+          aria-label={countLabel}
+          aria-describedby={liveRows.length > 0 ? activityId : undefined}
+          onPointerEnter={hoverEnter}
+          onPointerLeave={hoverLeave}
+          onClick={() => { changeOpen(!open || (allowsHoverOpen() && menuState.mode !== 'pinned')) }}
+          onKeyDown={(event) => {
+            if (event.key !== 'ArrowDown') return
+            event.preventDefault()
+            changeOpen(true)
+            queueMicrotask(() => { menuRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus() })
+          }}
+        >
+          <span className={css.activitySlot} aria-hidden>
+            <IconLayersOutlineRegular size={14} className={liveRows.length > 0 ? css.compactIcon : undefined} />
+            {liveRows.length > 0 && <StateDot state="ongoing" className={css.textModeActivity} />}
+          </span>
+          <span ref={countRef} className={css.count} data-job-count>{countLabel}</span>
+        </button>
+      </Tooltip>
+      {liveRows.length > 0 && <span id={activityId} hidden>{t('section.live')}</span>}
       {open
         ? createPortal(
-          <MenuSurface ref={menuRef} className={css.menu} style={menuPosition ?? MEASURE_STYLE}>
+          <MenuSurface
+            ref={menuRef}
+            className={css.menu}
+            style={{ positionAnchor: anchorName }}
+            onPointerEnter={hoverEnter}
+            onPointerLeave={hoverLeave}
+            onPointerDownCapture={() => { changeOpen(true) }}
+            onFocusCapture={() => { changeOpen(true) }}
+          >
             <ul className={css.menuBody} aria-label={t('list.aria')}>
               {liveRows.length > 0
                 ? <li className={css.sectionHeader} aria-hidden="true">{t('section.live')}</li>

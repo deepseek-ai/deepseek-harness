@@ -1,0 +1,31 @@
+# Bilingual-pair consistency record for 2026-10-12-agent-terminal-panel.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-10-12-agent-terminal-panel.md
+/agent-note-agent-terminals-in-the-web-sidebar:
+  en: 8848102fb82b68ca
+  zh: 833c922944a24e26
+/agent-note-agent-terminals-in-the-web-sidebar/problem:
+  en: 82f0228676e804f1
+  zh: b4f2e309f0570cfa
+/agent-note-agent-terminals-in-the-web-sidebar/decision:
+  en: 9b82bdaf681bad16
+  zh: f245c74d84f26d14
+/agent-note-agent-terminals-in-the-web-sidebar/decision/ownership-by-creator:
+  en: 06adc75d5ec6b509
+  zh: fb3272ef1d8a3985
+/agent-note-agent-terminals-in-the-web-sidebar/decision/permissions:
+  en: cabac18c98fe9931
+  zh: 4edc9e88c27689c3
+/agent-note-agent-terminals-in-the-web-sidebar/decision/readiness-and-reads:
+  en: 326e3fead9936f32
+  zh: 8e45a00cf61307f1
+/agent-note-agent-terminals-in-the-web-sidebar/decision/presentation:
+  en: da4a53abe0752ec7
+  zh: 5937e83bca8c0951
+/agent-note-agent-terminals-in-the-web-sidebar/alternatives-considered:
+  en: 05d662a9e9862ae0
+  zh: 220c65b5fb4b6baa
+/agent-note-agent-terminals-in-the-web-sidebar/consequences:
+  en: d0657d7ac9f6eeca
+  zh: 173d0e9df6afaebb

@@ -7,6 +7,7 @@
  * read, behind one documented cast, so the specs exercise the components and
  * not the slot runtime.
  */
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 import { onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { ResourceRegistry } from '../../resources/src/client/resources.ts'
@@ -140,13 +141,12 @@ export function harness(script: Record<number, RemoteResult<WorkspaceFileText>> 
   onTestFinished(() => { controller.abort() })
   const tabActions = { bindCommands: vi.fn(() => vi.fn()), openResource: vi.fn(), openTab: vi.fn(), close: vi.fn(), replace: vi.fn() }
   const definitions = [textBodyDefinition(() => t('viewer.text'))]
-  // The document seat renders the plain body; the file-handoff seats render a
-  // marker carrying what the owner handed them.
+  // The document slot renders the plain body; other positions mark their input.
   const renderSlot: TextPreviewProps['renderSlot'] = (key: string, owner: unknown, opts?: { hookContext?: unknown }) =>
     key === 'sidebar.right.tab.document'
       ? createElement(TextBody, {
         ...owner as object, useTabInfo: opts?.hookContext, sessionId: SESSION, useResource,
-      } as unknown as DocumentPreviewProps)
+      } as DocumentPreviewProps)
       : key === 'sidebar.right.tab.document.action' ? null : createElement('div', {
         'data-slot': key,
         'data-slot-path': (owner as { absolutePath: string }).absolutePath,
@@ -154,7 +154,7 @@ export function harness(script: Record<number, RemoteResult<WorkspaceFileText>> 
   const props = (navigation: { params?: unknown; revision: number } = { revision: 1 }) => ({
     useTabInfo: () => ({
       sidebar: { expanded: true, fullscreen: false },
-      panel: { id: 'pane-1' },
+      panel: { id: 'pane-1', isFloating: false },
       tab: {
         id: tabId, kind: 'text', contentId: ADDRESS, title: 'notes.md', visible: true,
         navigation: { address: ADDRESS, params: navigation.params, revision: navigation.revision },
@@ -164,6 +164,7 @@ export function harness(script: Record<number, RemoteResult<WorkspaceFileText>> 
     }),
     sessionId: SESSION,
     useResource,
+    useContextMenu: contextMenuHook(),
     useStore: hookOf(instance),
     actions: instance.actions,
     loadPage: face.loadPage,
@@ -173,8 +174,9 @@ export function harness(script: Record<number, RemoteResult<WorkspaceFileText>> 
     addResource: face.addResource, setResources: face.setResources,
     useDocumentPreviews: () => definitions,
     renderSlot,
+    renderFactorySlot: (key: string) => createElement('div', { 'data-navigator-factory': key }),
     t,
-  }) as unknown as TextPreviewProps
+  }) as TextPreviewProps
   return {
     instance,
     face,

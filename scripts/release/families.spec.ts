@@ -50,8 +50,6 @@ describe('release families', () => {
       .filter(member => member.directory.startsWith('packages/experimental/'))
       .map(member => member.name)).toEqual([
       '@deepseek-ai/dsh-action-cards',
-      '@deepseek-ai/dsh-experimental-agent-team-profile',
-      '@deepseek-ai/dsh-experimental-agent-team',
       '@deepseek-ai/dsh-experimental-api-speech-to-text',
       '@deepseek-ai/dsh-experimental-auto-review',
       '@deepseek-ai/dsh-experimental-badge-skill-bundle',
@@ -61,7 +59,6 @@ describe('release families', () => {
       '@deepseek-ai/dsh-experimental-browser-use-stagehand-native',
       '@deepseek-ai/dsh-experimental-claude-code-mods',
       '@deepseek-ai/dsh-client-ui-action-cards',
-      '@deepseek-ai/dsh-experimental-client-ui-agent-team',
       '@deepseek-ai/dsh-experimental-client-ui-claude-code-mods',
       '@deepseek-ai/dsh-experimental-client-ui-cot-translation',
       '@deepseek-ai/dsh-client-ui-creation-recommendations',
@@ -86,6 +83,7 @@ describe('release families', () => {
       '@deepseek-ai/dsh-experimental-inspector-profile',
       '@deepseek-ai/dsh-experimental-inspector',
       '@deepseek-ai/dsh-experimental-liveshare-protocol',
+      '@deepseek-ai/dsh-experimental-liveshare',
       '@deepseek-ai/dsh-personalized-recommendations',
       '@deepseek-ai/dsh-experimental-plugin-market-bundle',
       '@deepseek-ai/dsh-plugin-recommendations',
@@ -100,7 +98,7 @@ describe('release families', () => {
       '@deepseek-ai/dsh-experimental-speech-to-text',
       '@deepseek-ai/dsh-experimental-subagent-oar',
       '@deepseek-ai/dsh-experimental-terminal-bundle',
-      '@deepseek-ai/dsh-experimental-tool-agent-team',
+      '@deepseek-ai/dsh-terminal-panel',
       '@deepseek-ai/dsh-tool-ralph',
       '@deepseek-ai/dsh-tool-session-query',
       '@deepseek-ai/dsh-experimental-tool-subagent-oar',
@@ -263,7 +261,7 @@ describe('release families', () => {
     const dsh = member('apps/cli', '@deepseek-ai/dsh')
     const providers = ON_DEMAND_BUNDLES.map(name => member(`packages/subagent/${name}`, name))
     const plan = releaseFamily('dsh').publishOrder([dsh, ...providers])
-    expect(plan.order.map(entry => entry.name)).toEqual([...ON_DEMAND_BUNDLES, dsh.name])
+    expect(plan.order.map(entry => entry.name)).toEqual([...ON_DEMAND_BUNDLES.toSorted(), dsh.name])
     expect(dsh.manifest).toEqual({})
     expect(plan.droppedPeerEdges).toEqual([])
   })
@@ -279,8 +277,8 @@ describe('release families', () => {
       peerDependencies: { '@deepseek-ai/dsh': 'workspace:*' },
     }))
     const plan = releaseFamily('dsh').publishOrder([dsh, ...providers])
-    expect(plan.order.map(entry => entry.name)).toEqual([...ON_DEMAND_BUNDLES, dsh.name])
-    expect(plan.droppedPeerEdges).toEqual(ON_DEMAND_BUNDLES.map(name => ({ consumer: name, peer: dsh.name })))
+    expect(plan.order.map(entry => entry.name)).toEqual([...ON_DEMAND_BUNDLES.toSorted(), dsh.name])
+    expect(plan.droppedPeerEdges).toEqual(ON_DEMAND_BUNDLES.toSorted().map(name => ({ consumer: name, peer: dsh.name })))
   })
 
   it.each(['dependencies', 'optionalDependencies', 'peerDependencies'])(
@@ -401,16 +399,30 @@ describe('release families', () => {
     ])
   })
 
-  it('applies the harness payload policy to dsh and keeps upstream payloads for vendored packages', () => {
+  it('accepts the harness payload and keeps upstream payloads for vendored packages', () => {
     const dsh = releaseFamily('dsh')
     const vendor = releaseFamily('vendor')
     const harness = member('packages/a/library', '@deepseek-ai/dsh-library')
     const vendored = member('vendor/cordis', '@deepseek-ai/cordis')
 
-    expect(() => { dsh.validatePayload(harness, ['package/lib/index.js', 'package/src/index.ts']) })
-      .toThrow(/publishes source file/)
+    expect(() => { dsh.validatePayload(harness, ['package/lib/index.js', 'package/lib/index.js.map', 'package/src/index.ts']) }).not.toThrow()
     expect(() => { vendor.validatePayload(vendored, ['package/lib/index.js', 'package/src/index.ts']) }).not.toThrow()
     expect(() => { vendor.validatePayload(vendored, []) }).toThrow(/empty tarball/)
+  })
+
+  it('requires the installed package payload the staging hook supplies', () => {
+    const dsh = releaseFamily('dsh')
+    const installed = member('apps/cli', '@deepseek-ai/dsh')
+
+    expect(() => { dsh.validatePayload(installed, ['package/lib/index.js', 'package/src/bin.ts']) })
+      .toThrow(/@deepseek-ai\/dsh packed no documentation/)
+    expect(() => { dsh.validatePayload(installed, ['package/lib/index.js', 'package/docs/guide.md', 'package/src/bin.ts']) })
+      .toThrow(/@deepseek-ai\/dsh packed no upgrade guide index/)
+    const docs = ['package/docs/guide.md', 'package/docs/upgrade-guide/README.md']
+    expect(() => { dsh.validatePayload(installed, ['package/lib/index.js', ...docs]) })
+      .toThrow(/@deepseek-ai\/dsh packed no source/)
+    expect(() => { dsh.validatePayload(installed, ['package/lib/index.js', ...docs, 'package/src/bin.ts']) })
+      .not.toThrow()
   })
 
   it('drives the installed entry only for the family that publishes one', () => {

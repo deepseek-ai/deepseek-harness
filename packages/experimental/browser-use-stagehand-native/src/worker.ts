@@ -7,12 +7,11 @@ import { answer } from './worker-rpc.ts'
 
 const port = parentPort
 if (port === null) throw new Error('Stagehand attachment requires a Worker parent')
-const { extensionId, cdpEndpoint, executablePath, ...config } = z.object({
+const { cdpEndpoint, executablePath, ...config } = z.object({
   model: stagehandModelSchema,
   mode: z.enum(['launch', 'attach']),
   cdpEndpoint: z.string().optional(),
   executablePath: z.string().optional(),
-  extensionId: z.string().optional(),
   headless: z.boolean(),
   operationTimeoutMs: z.number().int().positive(),
   shutdownGraceMs: z.number().int().positive(),
@@ -20,7 +19,7 @@ const { extensionId, cdpEndpoint, executablePath, ...config } = z.object({
 const methodSchema = z.enum(Object.keys(browserInputs) as [keyof typeof browserInputs, ...Array<keyof typeof browserInputs>])
 const opening = openNativeBrowser(
   {
-    ...config, ...extensionId === undefined ? {} : { extensionId },
+    ...config,
     ...cdpEndpoint === undefined ? {} : { cdpEndpoint },
     ...executablePath === undefined ? {} : { executablePath },
   },

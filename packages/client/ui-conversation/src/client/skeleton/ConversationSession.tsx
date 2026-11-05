@@ -107,8 +107,9 @@ function equalBreadcrumbs(left: readonly Breadcrumb[], right: readonly Breadcrum
  */
 export function ConversationSessionHeader({
   sessionId, hideChrome, useSessions, useConversationViews, useStore,
-  renderSlot, open, selectView, setPinned, t, useEntryPins, useEntryActions,
+  renderSlot, renderFactorySlot, open, useContextMenu, selectView, setPinned, t, useEntryPins, useEntryActions,
 }: ConversationSessionHeaderProps) {
+  const { getTriggerProps } = useContextMenu()
   const tabs = useConversationViews(value => value)
   const selectedId = useStore(s => s.view)
   const active = resolveActiveView(tabs, selectedId)
@@ -156,14 +157,14 @@ export function ConversationSessionHeader({
                   // base.css) and leave the title inert for dragging too.
                   const title = last
                     ? (
-                      <span className={clsx(css.crumb, summary.subagent && css.crumbSubagent, css.crumbCurrent)}>
+                      <span className={clsx(css.crumb, css.crumbCurrent)}>
                         {summary.displayTitle}
                       </span>
                     )
                     : (
                       <button
                         type="button"
-                        className={clsx(css.crumb, summary.subagent && css.crumbSubagent)}
+                        className={css.crumb}
                         onClick={() => { open(summary.id) }}
                       >
                         {summary.displayTitle}
@@ -176,7 +177,7 @@ export function ConversationSessionHeader({
                     ...last ? {} : { openTitle: () => { open(summary.id) } },
                   }
                   return (
-                    <span key={summary.id} className={css.crumbSeg}>
+                    <span key={summary.id} className={css.crumbSeg} {...getTriggerProps({ kind: 'session', value: { sessionId: summary.id, displayTitle: summary.displayTitle } })}>
                       {index > 0 && <span className={css.crumbSep}>/</span>}
                       {lineage
                         ? summary.subagent
@@ -207,6 +208,10 @@ export function ConversationSessionHeader({
             </div>
             <div className={css.headerUtilities}>
               {renderSlot('conversation.session.header.utilities', {})}
+              {renderFactorySlot('contextMenu.button', {
+                target: { kind: 'sessionHeader', value: { sessionId } },
+                label: t('header.more'), className: css.headerMenuButton, size: 'sm',
+              })}
             </div>
           </>
         )}

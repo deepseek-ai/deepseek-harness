@@ -18,7 +18,7 @@
 
 在仓库根目录使用 `pnpm run build:bench` 构建库和 worker，然后运行 `pnpm exec vitest run --config vitest.bench.config.ts benchmarks/session-corpus/session-corpus.bench.ts`。不要让计时运行与构建或其他基准重叠。播种过程会在私有临时根目录下写入约 1.5 GB 的 Zstandard 日志，测试成功或失败后都会删除该目录。
 
-测试报告每个新进程样本、CPU 型号、可用并行度、平台和 Node 版本，并约束中位数预算。当整个文件（包括播种）超过五分钟时，最后一个用例失败。worker 失败时报告退出状态、信号、超时和 stderr 末尾。必需基准通道自动发现此文件。
+测试报告每个新进程样本、CPU 型号、可用并行度、平台和 Node 版本，并约束中位数预算。当整个文件（包括播种）超过五分钟时，最后一个用例失败。Fork worker 使用固定的 V8 堆上限；峰值 RSS 仍测量整个进程。worker 失败时报告退出状态、信号、超时和 stderr 末尾。必需基准通道自动发现此文件。
 
 <a id="measurements"></a>
 

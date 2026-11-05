@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-personalized-recommendations",
   "description": "Personalized pages and built-in plugin recommendations offered as cards below answers",
-  "version": "0.2.1-rc.4",
+  "version": "0.2.2-rc.1",
   "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"
@@ -30,7 +30,10 @@
     "docs",
     "lib/index.js",
     "cordis.patch.yml",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ],
   "license": "MIT",
   "dependencies": {

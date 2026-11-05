@@ -18,6 +18,8 @@ parent Agent 还需要在不改变当前轮次的前提下，向同一个在线 
 
 ## 决策
 
+人工控制的地址和权限由[目标 Session 用户控制](../architecture/2026-10-22-subagent-target-user-controls.zh.md)取代；模型消息的相邻关系限制和父级运行时所有权限制由[整树通信](../architecture/2026-10-16-tree-wide-agent-communication.zh.md)取代。下文的直接父级授权表述不约束这些当前操作。
+
 共享 activation 入口、外部执行所有权，以及调用方与父级之间的结果投递选择由[统一 subagent activation](../simplification/2026-09-17-unified-subagent-activations.zh.md) 决策拥有。本记录保留下述独立理由。
 
 一个可继续 subagent 拥有一个持久化会话，并且至多拥有一个进程内激活：

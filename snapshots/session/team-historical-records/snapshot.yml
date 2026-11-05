@@ -1,0 +1,9 @@
+version: 1
+scenario: team-historical-records
+profile: headless
+composition: team-session-mode
+recording: authored
+header:
+  class: team-session-mode
+  systemPromptSource: text-turn
+  toolSchemasSource: text-turn

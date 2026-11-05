@@ -1,0 +1,109 @@
+name: Package CUA helper · macOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      preset:
+        description: '机器上的签名配置'
+        type: choice
+        options: [test, production]
+        default: test
+        required: true
+  workflow_call:
+    inputs:
+      reuse:
+        type: boolean
+        default: false
+      cua_run_id:
+        type: string
+        default: ''
+      preset:
+        type: string
+        default: production
+    outputs:
+      artifact-id:
+        description: '包含两个架构的已签名、公证 helper 的产物编号'
+        value: ${{ jobs.package.outputs.artifact-id }}
+      run-id:
+        description: '产物所属的构建运行编号'
+        value: ${{ jobs.package.outputs.run-id }}
+      build-key:
+        description: '源码和构建配置的摘要'
+        value: ${{ jobs.package.outputs.build-key }}
+
+permissions:
+  contents: read
+  actions: read
+
+# Desktop uses the same keychain search list and optional system proxy transaction.
+concurrency:
+  group: macos-desktop-package
+  cancel-in-progress: false
+
+jobs:
+  package:
+    runs-on: [self-hosted, macOS, ARM64, dsh-mac-package-trial]
+    timeout-minutes: 60
+    outputs:
+      artifact-id: ${{ steps.retained.outputs.artifact-id || steps.upload.outputs.artifact-id }}
+      run-id: ${{ steps.retained.outputs.run-id || github.run_id }}
+      build-key: ${{ steps.build-inputs.outputs.build-key }}
+    env:
+      DSH_PACKAGING_PRESET: ${{ inputs.preset }}
+      DSH_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+          clean: true
+      - name: Validate run ref and preset
+        run: |
+          node -e 'const fs=require("node:fs"); const ref=process.env.GITHUB_REF;
+          if(!ref || (!ref.startsWith("refs/heads/") && !ref.startsWith("refs/tags/"))) throw Error("Select a trusted repository branch or release tag");
+          const tag=ref.replace(/^refs\/tags\//, "");
+          if(tag.startsWith("dsh-v") && tag!=="dsh-v"+JSON.parse(fs.readFileSync("package.json","utf8")).version) throw Error("Release tag must match product version");
+          if(!["test","production"].includes(process.env.DSH_PACKAGING_PRESET)) throw Error("Invalid preset");'
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Record CUA helper build inputs
+        id: build-inputs
+        run: node scripts/cua-helper/build-inputs.ts
+      - name: Find reusable CUA helper
+        if: inputs.reuse
+        id: retained
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CUA_RUN_ID: ${{ inputs.cua_run_id }}
+          CUA_BUILD_KEY: ${{ steps.build-inputs.outputs.build-key }}
+        run: node scripts/cua-helper/select-artifact.ts
+      - uses: pnpm/action-setup@v5.0.0
+        if: steps.retained.outputs.artifact-id == ''
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm-cua-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Install locked dependencies
+        if: steps.retained.outputs.artifact-id == ''
+        run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
+      - name: Build and verify notarized applications
+        if: steps.retained.outputs.artifact-id == ''
+        env:
+          CUA_EXPECTED_BUILD_KEY: ${{ steps.build-inputs.outputs.build-key }}
+        run: |
+          mkdir -p dist
+          node --import tsx/esm scripts/cua-helper/package.ts --out dist/cua-helper
+      - uses: actions/upload-artifact@v7.0.1
+        if: steps.retained.outputs.artifact-id == ''
+        id: upload
+        with:
+          name: cua-helper-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.build-inputs.outputs.build-key }}
+          path: dist/cua-helper/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+      - name: Record newly built artifact
+        if: steps.retained.outputs.artifact-id == ''
+        env:
+          CUA_ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+        run: |
+          printf '已构建 CUA helper，run ID `%s`，artifact ID `%s`。\n' "$GITHUB_RUN_ID" "$CUA_ARTIFACT_ID" >> "$GITHUB_STEP_SUMMARY"

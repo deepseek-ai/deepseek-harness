@@ -12,6 +12,9 @@
 - status: Completed
 - button "Completed in {{duration}}" [expanded]
 - button "Ran commands" [expanded]
+- button "Context injection runtime-context"
+- button "Context injection skill-catalog"
+- button "Context injection time-context"
 - button "Think The user wants me to run a simple bash command and reply with \"DONE\"."
 - button "Bash Echo the test string"
 - button "Think The command executed successfully and output \"WEB_E2E_OK\". I just need to reply with \"DONE\"."

@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "Configuración de búsqueda web",
-    "description": "Configure la clave, la dirección del servicio y solicite el presupuesto para la búsqueda web DeepSeek."
+    "title": "Configuración de búsqueda y obtención web",
+    "description": "Elija los proveedores de búsqueda y obtención web y configure la facturación, la clave, la dirección del servicio y los límites de los proveedores DeepSeek."
   }
 }

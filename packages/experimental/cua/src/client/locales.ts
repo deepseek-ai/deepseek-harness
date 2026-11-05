@@ -2,6 +2,9 @@
 export const NS = 'cuaPermissions'
 /** English permission-page dictionary. */
 export const en = {
+  approvalRisks: 'Risks',
+  approvalRiskTitle: 'Computer use risks',
+  approvalRiskNotice: 'The agent can access only apps you approve, and can read and control them in the background.\n\nOnline games, messaging apps, and other apps may restrict automation. Violating their rules could result in your account with that app being suspended or banned.\n\nProceed at your own risk. To stop automated control at any time, press Stop in DeepSeek Harness.',
   title: 'Authorize computer use',
   applicationsTitle: 'Manage applications computer use can access',
   setupTitle: 'Set up computer use before use',
@@ -26,13 +29,13 @@ export const en = {
   accessibilityUse: 'Read interface controls, click, and type.', screenRecordingUse: 'Capture the selected application window.',
   accessibilityPermission: 'In System Settings, allow {application} to read interface controls, click, and type.',
   screenRecordingPermission: 'In System Settings, allow {application} to capture application windows.',
-  permissionHint: 'Manage permissions in System Settings for the application named by macOS.',
+  permissionHint: 'Manage Accessibility and Screen Recording permissions in System Settings.',
   granted: 'Allowed', unknown: 'Unknown', request: 'Request permission', settings: 'Open System Settings', retry: 'Retry',
   allowedApps: 'Always-allowed applications',
   blockedApps: 'Applications not allowed', retryApproval: 'Allow asking again',
   retryAllowed: 'The next application selection will ask again; access has not been granted',
   noApps: 'No always-allowed or blocked applications.',
-  revoke: 'Revoke', revoked: 'Application access revoked', requested: 'Review the macOS prompt, or open System Settings if no prompt appears', opened: 'System Settings opened',
+  revoke: 'Revoke', revoked: 'Application access revoked', requested: 'Follow the guide at the bottom of System Settings', opened: 'System Settings opened',
   applicationsFailed: 'Could not load application access: {message}', iconsFailed: 'Could not load application icons: {message}',
   failed: 'Could not update permissions: {message}', queryFailed: 'Could not check permissions: {message}',
 }
@@ -40,6 +43,9 @@ export const en = {
 export type CuaPermissionLocaleKey = keyof typeof en
 /** Chinese permission-page dictionary. */
 export const zh: Record<CuaPermissionLocaleKey, string> = {
+  approvalRisks: '风险提示',
+  approvalRiskTitle: 'Computer Use 风险提示',
+  approvalRiskNotice: '智能体只能访问你已授权的应用，并可在后台读取应用内容、操作应用。\n\n网络游戏、即时通讯等应用可能对自动化操作有所限制。违反相关规则可能导致你在该应用中的账号被暂停使用或封禁。\n\n请自行承担使用风险。如需停止自动化操作，可随时点击 DeepSeek Harness 中的停止按钮。',
   title: '给 Computer Use 授权', applicationsTitle: '管理 Computer Use 可访问的应用', setupTitle: '使用 Computer Use 前需要设置',
   setupBody: 'Computer Use 插件已开启。使用前请切换到 PTC 模式，并授予辅助功能和屏幕录制权限。请前往插件详情页完成设置。',
   setupQueryFailed: 'Computer Use 插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。',
@@ -62,19 +68,22 @@ export const zh: Record<CuaPermissionLocaleKey, string> = {
   accessibilityUse: '读取界面控件、点击和输入文字', screenRecordingUse: '截取所选应用的窗口',
   accessibilityPermission: '在系统设置中允许 {application} 读取界面、点击和输入。',
   screenRecordingPermission: '在系统设置中允许 {application} 截取应用窗口。',
-  permissionHint: '在系统设置中管理 macOS 提示的应用权限',
+  permissionHint: '在系统设置中管理辅助功能和屏幕录制权限',
   granted: '已允许', unknown: '未确认', request: '申请权限', settings: '打开系统设置', retry: '重试',
   allowedApps: '始终允许的应用',
   blockedApps: '不允许访问的应用', retryApproval: '允许再次询问',
   retryAllowed: '下次选择此应用时将重新询问，当前尚未授权',
   noApps: '暂无始终允许或不允许访问的应用。',
-  revoke: '撤销', revoked: '已撤销应用访问权限', requested: '请查看 macOS 提示；若未出现，请打开系统设置', opened: '已打开系统设置',
+  revoke: '撤销', revoked: '已撤销应用访问权限', requested: '请按系统设置底部的引导完成授权', opened: '已打开系统设置',
   applicationsFailed: '无法读取应用授权：{message}', iconsFailed: '无法读取应用图标：{message}',
   failed: '无法更新权限：{message}', queryFailed: '无法检测权限：{message}',
 }
 
 /** Japanese copy, checked against the English keys. */
 export const ja = {
+  approvalRisks: 'リスク',
+  approvalRiskTitle: 'コンピュータ操作のリスク',
+  approvalRiskNotice: 'エージェントがアクセスできるのは、あなたが許可したアプリだけです。許可したアプリの内容を読み取ったり、バックグラウンドで操作したりできます。\n\nオンラインゲームやメッセージアプリなどでは、自動操作が制限されている場合があります。規約に違反すると、そのアプリのアカウントが一時停止または永久停止になる可能性があります。\n\n自己責任でご利用ください。自動操作は、DeepSeek Harness の停止ボタンでいつでも止められます。',
   'title': 'コンピュータ操作を承認',
   'applicationsTitle': 'Computer Useがアクセスできるアプリを管理',
   'setupTitle': '使用前にComputer Useを設定',
@@ -105,7 +114,7 @@ export const ja = {
   'screenRecordingUse': '選択したアプリケーションのウィンドウをキャプチャします。',
   'accessibilityPermission': 'システム設定で、{application}にインターフェースのコントロールの読み取り、クリック、入力を許可してください。',
   'screenRecordingPermission': 'システム設定で、{application}にアプリケーションウィンドウのキャプチャを許可してください。',
-  'permissionHint': 'macOS が示すアプリの権限をシステム設定で管理してください。',
+  'permissionHint': 'システム設定でアクセシビリティと画面収録の権限を管理してください。',
   'granted': '許可済み',
   'unknown': '不明',
   'request': '権限をリクエスト',
@@ -118,7 +127,7 @@ export const ja = {
   'noApps': '常に許可またはブロックされたアプリケーションはありません。',
   'revoke': '取り消し',
   'revoked': 'アプリケーションのアクセスを取り消しました',
-  'requested': 'macOSのプロンプトを確認するか、プロンプトが表示されない場合はシステム設定を開いてください',
+  'requested': 'システム設定の下部にあるガイドに従ってください。',
   'opened': 'システム設定を開きました',
   'applicationsFailed': 'アプリケーションのアクセスを読み込めませんでした: {message}',
   'iconsFailed': 'アプリケーションのアイコンを読み込めませんでした: {message}',
@@ -128,6 +137,9 @@ export const ja = {
 
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
+  approvalRisks: 'Riesgos',
+  approvalRiskTitle: 'Riesgos del control del equipo',
+  approvalRiskNotice: 'El agente solo puede acceder a las aplicaciones que autorices, y puede leer su contenido y controlarlas en segundo plano.\n\nLos juegos en línea, las aplicaciones de mensajería y otras aplicaciones pueden restringir la automatización. Incumplir sus normas podría provocar la suspensión o el bloqueo permanente de tu cuenta en esa aplicación.\n\nContinúa bajo tu propia responsabilidad. Para detener el control automatizado en cualquier momento, pulsa Detener en DeepSeek Harness.',
   title: 'Autorizar el uso de la computadora',
   applicationsTitle: 'Administrar aplicaciones a las que puede acceder el uso de la computadora',
   setupTitle: 'Configurar el uso de la computadora antes de usarla',
@@ -152,19 +164,22 @@ export const es = {
   accessibilityUse: 'Lea los controles de la interfaz, haga clic y escriba.', screenRecordingUse: 'Capture la ventana de la aplicación seleccionada.',
   accessibilityPermission: 'En Configuración del sistema, permita que {application} lea los controles de la interfaz, haga clic y escriba.',
   screenRecordingPermission: 'En Configuración del sistema, permita que {application} capture ventanas de aplicaciones.',
-  permissionHint: 'Administre los permisos en Configuración del sistema para la aplicación nombrada por macOS.',
+  permissionHint: 'Administre los permisos de accesibilidad y grabación de pantalla en Configuración del sistema.',
   granted: 'Permitido', unknown: 'Desconocido', request: 'Solicitar permiso', settings: 'Abrir configuración del sistema', retry: 'Reintentar',
   allowedApps: 'Aplicaciones siempre permitidas',
   blockedApps: 'Aplicaciones no permitidas', retryApproval: 'Permitir preguntar de nuevo',
   retryAllowed: 'La siguiente selección de aplicación le preguntará nuevamente; el acceso no ha sido concedido',
   noApps: 'No hay aplicaciones siempre permitidas o bloqueadas.',
-  revoke: 'Revocar', revoked: 'Acceso a la aplicación revocado', requested: 'Revise el mensaje macOS o abra Configuración del sistema si no aparece ningún mensaje', opened: 'Configuración del sistema abierta',
+  revoke: 'Revocar', revoked: 'Acceso a la aplicación revocado', requested: 'Siga la guía en la parte inferior de Configuración del sistema', opened: 'Configuración del sistema abierta',
   applicationsFailed: 'No se pudo cargar el acceso a la aplicación: {message}', iconsFailed: 'No se pudieron cargar los íconos de la aplicación: {message}',
   failed: 'No se pudieron actualizar los permisos: {message}', queryFailed: 'No se pudieron verificar los permisos: {message}',
 } satisfies Record<keyof typeof en, string>
 
 /** French dictionary, checked against the English keys. */
 export const fr = {
+  approvalRisks: 'Risques',
+  approvalRiskTitle: 'Risques du contrôle de l’ordinateur',
+  approvalRiskNotice: 'L’agent ne peut accéder qu’aux applications que vous autorisez. Il peut en lire le contenu et les contrôler en arrière-plan.\n\nLes jeux en ligne, les messageries et d’autres applications peuvent limiter l’automatisation. Le non-respect de leurs règles pourrait entraîner la suspension ou le bannissement de votre compte dans l’application concernée.\n\nUtilisez cette fonction à vos risques et périls. Vous pouvez interrompre le contrôle automatisé à tout moment en cliquant sur Arrêter dans DeepSeek Harness.',
   title: "Autoriser l'utilisation de l'ordinateur",
   applicationsTitle: "Gérer les applications auxquelles l'ordinateur peut accéder",
   setupTitle: "Configurer l'utilisation de l'ordinateur avant utilisation",
@@ -189,19 +204,22 @@ export const fr = {
   accessibilityUse: 'Lisez les commandes de l’interface, cliquez et tapez.', screenRecordingUse: "Capturez la fenêtre de l'application sélectionnée.",
   accessibilityPermission: "Dans Paramètres système, autorisez {application} à lire les commandes de l'interface, à cliquer et à taper.",
   screenRecordingPermission: "Dans Paramètres système, autorisez {application} à capturer les fenêtres d'application.",
-  permissionHint: "Gérez les autorisations dans les paramètres système pour l'application nommée par macOS.",
+  permissionHint: 'Gérez les autorisations d’accessibilité et d’enregistrement de l’écran dans les réglages système.',
   granted: 'Autorisé', unknown: 'Inconnu', request: "Demander l'autorisation", settings: 'Ouvrir les paramètres système', retry: 'Réessayer',
   allowedApps: 'Applications toujours autorisées',
   blockedApps: 'Applications non autorisées', retryApproval: 'Autoriser la demande à nouveau',
   retryAllowed: "La prochaine sélection de candidatures demandera à nouveau ; l'accès n'a pas été accordé",
   noApps: 'Aucune application toujours autorisée ou bloquée.',
-  revoke: 'Révoquer', revoked: "Accès à l'application révoqué", requested: "Consultez l'invite macOS ou ouvrez les paramètres système si aucune invite n'apparaît.", opened: 'Paramètres système ouverts',
+  revoke: 'Révoquer', revoked: "Accès à l'application révoqué", requested: 'Suivez le guide en bas des réglages système.', opened: 'Paramètres système ouverts',
   applicationsFailed: "Impossible de charger l'accès à l'application : {message}", iconsFailed: "Impossible de charger les icônes d'application : {message}",
   failed: 'Impossible de mettre à jour les autorisations : {message}', queryFailed: 'Impossible de vérifier les autorisations : {message}',
 } satisfies Record<keyof typeof en, string>
 
 /** German dictionary, checked against the English keys. */
 export const de = {
+  approvalRisks: 'Risiken',
+  approvalRiskTitle: 'Risiken der Computersteuerung',
+  approvalRiskNotice: 'Der Agent kann nur auf Apps zugreifen, die Sie freigeben. Er kann deren Inhalte lesen und die Apps im Hintergrund steuern.\n\nOnline-Spiele, Messenger und andere Apps können die Automatisierung einschränken. Bei Verstößen gegen ihre Regeln könnte Ihr Konto bei der jeweiligen App vorübergehend oder dauerhaft gesperrt werden.\n\nDie Nutzung erfolgt auf eigenes Risiko. Über Stopp in DeepSeek Harness können Sie die automatisierte Steuerung jederzeit beenden.',
   title: 'Autorisieren Sie die Computernutzung',
   applicationsTitle: 'Verwalten Sie Anwendungen, auf die der Computer zugreifen kann',
   setupTitle: 'Richten Sie die Computernutzung vor der Nutzung ein',
@@ -226,19 +244,22 @@ export const de = {
   accessibilityUse: 'Lesen Sie die Steuerelemente der Benutzeroberfläche, klicken Sie und geben Sie ein.', screenRecordingUse: 'Erfassen Sie das ausgewählte Anwendungsfenster.',
   accessibilityPermission: 'Erlauben Sie {application} in den Systemeinstellungen, Schnittstellensteuerelemente zu lesen, zu klicken und zu tippen.',
   screenRecordingPermission: 'Erlauben Sie {application} in den Systemeinstellungen, Anwendungsfenster zu erfassen.',
-  permissionHint: 'Verwalten Sie Berechtigungen in den Systemeinstellungen für die Anwendung mit dem Namen macOS.',
+  permissionHint: 'Verwalten Sie die Berechtigungen für Bedienungshilfen und Bildschirmaufnahme in den Systemeinstellungen.',
   granted: 'Erlaubt', unknown: 'Unbekannt', request: 'Bitte um Erlaubnis', settings: 'Öffnen Sie die Systemeinstellungen', retry: 'Erneut versuchen',
   allowedApps: 'Immer zulässige Anwendungen',
   blockedApps: 'Nicht erlaubte Anwendungen', retryApproval: 'Erlaube noch einmal nachzufragen',
   retryAllowed: 'Bei der nächsten Anwendungsauswahl werden Sie erneut gefragt; Der Zugriff wurde nicht gewährt',
   noApps: 'Keine immer erlaubten oder blockierten Anwendungen.',
-  revoke: 'Widerrufen', revoked: 'Anwendungszugriff widerrufen', requested: 'Überprüfen Sie die macOS-Eingabeaufforderung oder öffnen Sie die Systemeinstellungen, wenn keine Eingabeaufforderung angezeigt wird', opened: 'Systemeinstellungen geöffnet',
+  revoke: 'Widerrufen', revoked: 'Anwendungszugriff widerrufen', requested: 'Folgen Sie der Anleitung unten in den Systemeinstellungen', opened: 'Systemeinstellungen geöffnet',
   applicationsFailed: 'Anwendungszugriff konnte nicht geladen werden: {message}', iconsFailed: 'Anwendungssymbole konnten nicht geladen werden: {message}',
   failed: 'Berechtigungen konnten nicht aktualisiert werden: {message}', queryFailed: 'Berechtigungen konnten nicht überprüft werden: {message}',
 } satisfies Record<keyof typeof en, string>
 
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
+  approvalRisks: 'Риски',
+  approvalRiskTitle: 'Риски управления компьютером',
+  approvalRiskNotice: 'Агент получает доступ только к приложениям, которые вы разрешили, и может читать их содержимое и управлять ими в фоновом режиме.\n\nВ онлайн-играх, мессенджерах и других приложениях могут действовать ограничения на автоматизацию. Нарушение их правил может привести к временной или постоянной блокировке вашей учётной записи в соответствующем приложении.\n\nВы пользуетесь этой возможностью на свой страх и риск. Чтобы в любой момент остановить автоматизированное управление, нажмите «Остановить» в DeepSeek Harness.',
   title: 'Разрешить использование компьютера',
   applicationsTitle: 'Управление приложениями, к которым может иметь доступ компьютер',
   setupTitle: 'Настройте использование компьютера перед использованием',
@@ -263,19 +284,22 @@ export const ru = {
   accessibilityUse: 'Прочтите элементы управления интерфейсом, щелкните и введите текст.', screenRecordingUse: 'Захват выбранного окна приложения.',
   accessibilityPermission: 'В настройках системы разрешите {application} читать элементы управления интерфейсом, щелкать и печатать.',
   screenRecordingPermission: 'В настройках системы разрешите {application} захватывать окна приложений.',
-  permissionHint: 'Управляйте разрешениями в настройках системы для приложения с именем macOS.',
+  permissionHint: 'Управляйте разрешениями на универсальный доступ и запись экрана в системных настройках.',
   granted: 'Разрешено', unknown: 'Неизвестно', request: 'Запросить разрешение', settings: 'Открыть настройки системы', retry: 'Повторить',
   allowedApps: 'Всегда разрешенные приложения',
   blockedApps: 'Приложения не разрешены', retryApproval: 'Разрешить спросить еще раз',
   retryAllowed: 'При следующем выборе приложения запрос будет повторен; доступ не предоставлен',
   noApps: 'Никаких всегда разрешенных или заблокированных приложений.',
-  revoke: 'Отозвать', revoked: 'Доступ к приложению отозван', requested: 'Просмотрите подсказку macOS или откройте «Системные настройки», если подсказка не появляется.', opened: 'Системные настройки открыты',
+  revoke: 'Отозвать', revoked: 'Доступ к приложению отозван', requested: 'Следуйте инструкциям внизу окна «Системные настройки».', opened: 'Системные настройки открыты',
   applicationsFailed: 'Не удалось загрузить доступ к приложению: {message}.', iconsFailed: 'Не удалось загрузить значки приложений: {message}.',
   failed: 'Не удалось обновить разрешения: {message}.', queryFailed: 'Не удалось проверить разрешения: {message}',
 } satisfies Record<keyof typeof en, string>
 
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
+  approvalRisks: 'Riscos',
+  approvalRiskTitle: 'Riscos do controle do computador',
+  approvalRiskNotice: 'O agente só pode acessar os aplicativos que você autorizar e pode ler seu conteúdo e controlá-los em segundo plano.\n\nJogos on-line, aplicativos de mensagens e outros aplicativos podem restringir a automação. Violar essas regras pode levar à suspensão ou ao banimento da sua conta no aplicativo em questão.\n\nUse por sua conta e risco. Para interromper o controle automatizado a qualquer momento, clique em Parar no DeepSeek Harness.',
   title: 'Autorizar o uso do computador',
   applicationsTitle: 'Gerenciar aplicativos que o computador pode acessar',
   setupTitle: 'Configure o uso do computador antes de usar',
@@ -300,13 +324,13 @@ export const pt = {
   accessibilityUse: 'Leia os controles da interface, clique e digite.', screenRecordingUse: 'Capture a janela do aplicativo selecionado.',
   accessibilityPermission: 'Nas configurações do sistema, permita que {application} leia os controles da interface, clique e digite.',
   screenRecordingPermission: 'Nas configurações do sistema, permita que {application} capture janelas de aplicativos.',
-  permissionHint: 'Gerencie as permissões nas Configurações do sistema para o aplicativo nomeado por macOS.',
+  permissionHint: 'Gerencie as permissões de acessibilidade e gravação de tela nas Configurações do sistema.',
   granted: 'Permitido', unknown: 'Desconhecido', request: 'Solicitar permissão', settings: 'Abra as configurações do sistema', retry: 'Tentar novamente',
   allowedApps: 'Aplicativos sempre permitidos',
   blockedApps: 'Aplicativos não permitidos', retryApproval: 'Permitir perguntar novamente',
   retryAllowed: 'A próxima seleção de aplicativos perguntará novamente; o acesso não foi concedido',
   noApps: 'Nenhum aplicativo sempre permitido ou bloqueado.',
-  revoke: 'Revogar', revoked: 'Acesso ao aplicativo revogado', requested: 'Revise o prompt macOS ou abra as Configurações do sistema se nenhum prompt aparecer', opened: 'Configurações do sistema abertas',
+  revoke: 'Revogar', revoked: 'Acesso ao aplicativo revogado', requested: 'Siga o guia na parte inferior das Configurações do sistema', opened: 'Configurações do sistema abertas',
   applicationsFailed: 'Não foi possível carregar o acesso ao aplicativo: {message}', iconsFailed: 'Não foi possível carregar os ícones do aplicativo: {message}',
   failed: 'Não foi possível atualizar as permissões: {message}', queryFailed: 'Não foi possível verificar as permissões: {message}',
 } satisfies Record<keyof typeof en, string>

@@ -13,18 +13,12 @@ it.each([false, true])('settles startup after parent IPC disconnect (boot failur
   const modules = join(root, 'node_modules', '@deepseek-ai')
   const hostDirectory = fileURLToPath(new URL('../../desktop-host/', import.meta.url))
   const manifest = JSON.parse(readFileSync(join(hostDirectory, 'package.json'), 'utf8')) as { dependencies: Record<string, string> }
-  const stubbed = new Set(['@deepseek-ai/dsh-app-boot', '@deepseek-ai/dsh', '@deepseek-ai/dsh-home-paths'])
+  const stubbed = new Set(['@deepseek-ai/dsh-app-boot', '@deepseek-ai/dsh'])
   for (const name of Object.keys(manifest.dependencies)) {
     const destination = join(root, 'node_modules', name)
     mkdirSync(dirname(destination), { recursive: true })
     if (stubbed.has(name)) mkdirSync(destination)
     else symlinkSync(realpathSync(join(hostDirectory, 'node_modules', name)), destination, 'junction')
-  }
-  for (const [name, source] of [
-    ['dsh-home-paths', `export const resolveDshHome = () => ${JSON.stringify(root)}`],
-  ] as const) {
-    writeFileSync(join(modules, name, 'package.json'), '{"type":"module","exports":"./index.js"}')
-    writeFileSync(join(modules, name, 'index.js'), source)
   }
   writeFileSync(join(root, 'package.json'), '{"type":"module"}')
   writeFileSync(join(modules, 'dsh-app-boot', 'package.json'), '{"type":"module","exports":"./index.js"}')

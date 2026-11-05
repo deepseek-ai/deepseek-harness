@@ -114,8 +114,11 @@ it('waits for injected consumer teardown, persists its final event, and releases
     expect(persisted.at(-1)).toMatchObject({ type: 'turn/end', seq: 1, data: { turn: 1, reason: { kind: 'completed' } } })
 
     await consumingEntry.fiber!.dispose()
-    await provider.init()
+    // Self-disposal records disabled: true; re-enable through Loader so the journal agrees with the runtime.
+    await ctx.loader.update(provider.id, { disabled: false })
+    await (provider.parent.tree as Include).flush()
     await provider.fiber!.await()
+    expect(provider.disabled).toBe(false)
     const reopened = await ctx.sessionPersistence.open(live.id, 'write')
     try {
       expect((await reopened.read()).events).toEqual(live.snapshotEvents())

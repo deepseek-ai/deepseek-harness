@@ -1,6 +1,6 @@
 # AGENTS.md — The documentation standard
 
-This file defines document structure, Markdown tiers, writing rules, and `verify-doc-budgets` ceilings. Use [dsh-doc](../.agents/skills/dsh-doc/SKILL.md) for placement and validation, and [dsh-prose-standard](../.agents/skills/dsh-prose-standard/SKILL.md) for required coverage and editorial judgment; the [archived doc-tiers Agent Note](../.agents/notes/archived/process/2026-07-04-doc-tiers-and-budgets.md) records the historical rationale.
+This file defines document structure, Markdown tiers, writing rules, and `verify-doc-budgets` ceilings. Use [dsh-doc-writing](../.agents/skills/dsh-doc-writing/SKILL.md) for placement and validation, and [dsh-prose-standard](../.agents/skills/dsh-prose-standard/SKILL.md) for required coverage and editorial judgment; the [archived doc-tiers Agent Note](../.agents/notes/archived/process/2026-07-04-doc-tiers-and-budgets.md) records the historical rationale.
 
 ## Document structure
 
@@ -60,7 +60,7 @@ Ceilings are guardrails, not reduction targets. At or below target, retain at le
 
 ## The slop checklist
 
-Hunt these in any doc; [dsh-doc](../.agents/skills/dsh-doc/SKILL.md) runs this list as an audit:
+Hunt these in any doc; [dsh-doc-writing](../.agents/skills/dsh-doc-writing/SKILL.md) runs this list as an audit:
 
 - Duplicated rules: search a distinctive phrase; keep one home and link the rest.
 - History outside its permitted tier: state current facts and link the historical owner.
@@ -74,4 +74,4 @@ Hunt these in any doc; [dsh-doc](../.agents/skills/dsh-doc/SKILL.md) runs this l
 
 ## Repository references
 
-Use relative Markdown links for current files and tags or PR numbers for historical references. `verify-md-links` checks local targets. [Reference validation](../scripts/verify-repository-references.ts) rejects actual commit identifiers and disallowed organization URLs in maintained files.
+Use relative Markdown links for current files and tags or PR numbers for historical references. `verify-md-links` checks local targets. [Reference validation](../scripts/verify-repository-references.ts) rejects commit identifiers containing a hexadecimal letter and disallowed organization URLs in maintained files. Decimal-only tokens are ignored to avoid collisions with numeric data, even when they identify commits.

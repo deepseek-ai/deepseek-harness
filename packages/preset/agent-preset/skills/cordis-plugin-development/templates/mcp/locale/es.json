@@ -1,6 +1,0 @@
-{
-  "meta": {
-    "title": "Conexión de demostración MCP",
-    "description": "Conecta un servidor MCP remoto para que sus herramientas estén disponibles para el agente."
-  }
-}

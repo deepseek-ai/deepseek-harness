@@ -16,6 +16,7 @@ import type {
 } from '@deepseek-ai/dsh-attachment'
 import type { Context as PiContext, ImageContent, Message as PiMessage, SystemMessage, TextContent, Tool as PiTool } from '@earendil-works/pi-ai'
 import { toPiAssistant } from './replay.ts'
+import type { PrefixDigests } from './prefix-binding.ts'
 import { requestImageDimensions } from '@deepseek-ai/dsh-attachment'
 import { DEFAULT_REQUEST_IMAGE_MAX_BYTES, DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET } from './config.ts'
 
@@ -205,8 +206,9 @@ function appendAssistant(
   messages: PiMessage[],
   toolNames: Map<ToolCallId, string>,
   onReplayDegrade?: (reason: string) => void,
+  prefixDigests?: PrefixDigests,
 ): void {
-  const assistant = toPiAssistant(message, onReplayDegrade)
+  const assistant = toPiAssistant(message, onReplayDegrade, prefixDigests)
   for (const block of assistant.content) {
     if (block.type === 'toolCall') toolNames.set(brandString<ToolCallId>(block.id), block.name)
   }
@@ -221,6 +223,7 @@ function appendSharedHistory(
   toolNames: Map<ToolCallId, string>,
   supportsMidConvoSystemMessages: boolean,
   onReplayDegrade?: (reason: string) => void,
+  prefixDigests?: PrefixDigests,
 ): boolean {
   if (message.role === 'developer') {
     appendDeveloper(message, options, messages)
@@ -239,7 +242,7 @@ function appendSharedHistory(
     return true
   }
   if (message.role === 'assistant') {
-    appendAssistant(message, messages, toolNames, onReplayDegrade)
+    appendAssistant(message, messages, toolNames, onReplayDegrade, prefixDigests)
     return true
   }
   return false
@@ -249,6 +252,7 @@ function textOnlyContext(
   options: GenerateOptions,
   supportsMidConvoSystemMessages: boolean,
   onReplayDegrade?: (reason: string) => void,
+  prefixDigests?: PrefixDigests,
 ): PiContext {
   assertSupportedHistory(options.messages)
   const split = splitSystemPrompt(options)
@@ -258,7 +262,7 @@ function textOnlyContext(
     if (contentHasImage(message.content)) {
       throw new LlmError('pi-ai image conversion requires the durable attachment service', 'UNSUPPORTED_CONTENT')
     }
-    if (appendSharedHistory(message, options, messages, toolNames, supportsMidConvoSystemMessages, onReplayDegrade)) continue
+    if (appendSharedHistory(message, options, messages, toolNames, supportsMidConvoSystemMessages, onReplayDegrade, prefixDigests)) continue
     if (message.role === 'tool') {
       messages.push(toolResultOf(message, toolNames, flattenText(message)))
       continue
@@ -276,6 +280,10 @@ export interface PiImageRequestContext {
   resolveImageAccess: ImageAttachmentAccessResolver
   /** Request-level bound on the base64-encoded payload of retained images; omission leaves the bound unchecked. */
   maxRequestImageBytes?: number
+  /** Request-level bound on retained image occurrences; omission leaves the count unchecked. */
+  maxRequestImages?: number
+  /** Oldest occurrences offloaded per count overflow; omission offloads the minimum. */
+  imageOffloadCountQuantum?: number
   /** Route pixel and raw encoded-byte budgets. */
   requestImagePolicy?: PiImageRequestBudget
 }
@@ -305,6 +313,7 @@ export function requestImageTarget(ref: ImageAttachmentRef, budget: PiImageReque
  * @param images - absent; selects the synchronous conversion.
  * @param onReplayDegrade - forwarded to {@link toPiAssistant} for each assistant message.
  * @param supportsMidConvoSystemMessages - native model capability; otherwise later system text becomes a user-role system-reminder.
+ * @param prefixDigests - receives the recorded request-prefix digest of each replayed assistant message that has one.
  * @returns the pi-ai context; `tools` is omitted when the request declares none.
  * @throws {LlmError} `UNSUPPORTED_CONTENT` for images in any history role, including a leading system message.
  */
@@ -313,18 +322,21 @@ export function toPiContext(
   images?: undefined,
   onReplayDegrade?: (reason: string) => void,
   supportsMidConvoSystemMessages?: boolean,
+  prefixDigests?: PrefixDigests,
 ): PiContext
 /**
  * Convert harness history to a pi-ai Context while resolving durable images.
  * Tool result names are recovered from preceding assistant tool calls. Image
  * occurrences the surface marks offloaded become text placeholders; when the
- * retained occurrences' exact base64 payload still exceeds
- * `maxRequestImageBytes`, the call fails with `IMAGE_OFFLOAD_REQUIRED` naming
- * how many more oldest occurrences must be offloaded.
+ * retained occurrences still exceed `maxRequestImages` or their exact base64
+ * payload exceeds `maxRequestImageBytes`, the call fails with
+ * `IMAGE_OFFLOAD_REQUIRED` naming how many more oldest occurrences must be
+ * offloaded, rounded up to `imageOffloadCountQuantum` for a count overflow.
  * @param options - projected request; one-shot system text precedes the leading history prompt.
  * @param images - attachment provider, current path resolver, and request limits.
  * @param onReplayDegrade - forwarded to {@link toPiAssistant} for each assistant message.
  * @param supportsMidConvoSystemMessages - native model capability; otherwise later system text becomes a user-role system-reminder.
+ * @param prefixDigests - receives the recorded request-prefix digest of each replayed assistant message that has one.
  * @returns the asynchronously resolved pi-ai context.
  */
 export function toPiContext(
@@ -332,16 +344,18 @@ export function toPiContext(
   images: PiImageRequestContext,
   onReplayDegrade?: (reason: string) => void,
   supportsMidConvoSystemMessages?: boolean,
+  prefixDigests?: PrefixDigests,
 ): Promise<PiContext>
 export function toPiContext(
   options: GenerateOptions,
   images?: PiImageRequestContext,
   onReplayDegrade?: (reason: string) => void,
   supportsMidConvoSystemMessages = false,
+  prefixDigests?: PrefixDigests,
 ): PiContext | Promise<PiContext> {
   return images === undefined
-    ? textOnlyContext(options, supportsMidConvoSystemMessages, onReplayDegrade)
-    : toPiContextWithImages(options, images, supportsMidConvoSystemMessages, onReplayDegrade)
+    ? textOnlyContext(options, supportsMidConvoSystemMessages, onReplayDegrade, prefixDigests)
+    : toPiContextWithImages(options, images, supportsMidConvoSystemMessages, onReplayDegrade, prefixDigests)
 }
 
 async function toPiContextWithImages(
@@ -349,8 +363,9 @@ async function toPiContextWithImages(
   images: PiImageRequestContext,
   supportsMidConvoSystemMessages: boolean,
   onReplayDegrade?: (reason: string) => void,
+  prefixDigests?: PrefixDigests,
 ): Promise<PiContext> {
-  const { attachments, resolveImageAccess, maxRequestImageBytes } = images
+  const { attachments, resolveImageAccess, maxRequestImageBytes, maxRequestImages, imageOffloadCountQuantum } = images
   const requestImagePolicy = images.requestImagePolicy ?? {
     maxPixels: DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET,
     maxBytes: DEFAULT_REQUEST_IMAGE_MAX_BYTES,
@@ -358,19 +373,22 @@ async function toPiContextWithImages(
   assertSupportedHistory(options.messages)
   const split = splitSystemPrompt(options)
   const requestImages = await prepareRequestImages(split.messages, attachments, requestImagePolicy, options.signal)
-  if (maxRequestImageBytes !== undefined) {
-    const offloadImages = requiredImageOffload(
-      split.messages,
-      { representation: 'base64', maxBytes: maxRequestImageBytes },
-      block => (requestImages.get(block.attachment.attachmentId) as RequestImageAttachment).bytes,
+  const offloadImages = requiredImageOffload(
+    split.messages,
+    {
+      representation: 'base64',
+      ...maxRequestImageBytes === undefined ? {} : { maxBytes: maxRequestImageBytes },
+      ...maxRequestImages === undefined ? {} : { maxImages: maxRequestImages },
+      ...imageOffloadCountQuantum === undefined ? {} : { countQuantum: imageOffloadCountQuantum },
+    },
+    block => (requestImages.get(block.attachment.attachmentId) as RequestImageAttachment).bytes,
+  )
+  if (offloadImages > 0) {
+    throw new LlmError(
+      `pi-ai request images exceed the route image budget; ${offloadImages} more oldest occurrence(s) must be offloaded.`,
+      IMAGE_OFFLOAD_REQUIRED_CODE,
+      { offloadImages },
     )
-    if (offloadImages > 0) {
-      throw new LlmError(
-        `pi-ai request images exceed the ${maxRequestImageBytes}-byte base64 bound; ${offloadImages} more oldest occurrence(s) must be offloaded.`,
-        IMAGE_OFFLOAD_REQUIRED_CODE,
-        { offloadImages },
-      )
-    }
   }
   const exactMessages = projectOffloadedImages(
     split.messages,
@@ -380,7 +398,7 @@ async function toPiContextWithImages(
   const messages: PiMessage[] = []
 
   for (const message of exactMessages) {
-    if (appendSharedHistory(message, options, messages, toolNames, supportsMidConvoSystemMessages, onReplayDegrade)) continue
+    if (appendSharedHistory(message, options, messages, toolNames, supportsMidConvoSystemMessages, onReplayDegrade, prefixDigests)) continue
     if (message.role === 'tool') {
       messages.push(toolResultOf(message, toolNames, userContent(message.content, requestImages, resolveImageAccess)))
       continue

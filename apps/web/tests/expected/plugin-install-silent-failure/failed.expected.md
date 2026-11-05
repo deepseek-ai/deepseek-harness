@@ -1,0 +1,14 @@
+- dialog "插件安装失败":
+  - button "返回编辑": 编辑
+  - button "关闭"
+  - alert: 插件安装失败
+  - paragraph: 安装命令失败，原因见安装详情
+  - paragraph: silent-package
+  - paragraph: 版本 1.0.0
+  - button "收起安装详情" [expanded]
+  - button "重试"
+  - paragraph: 安装位置：{{cwd}}/.dsh-home/profiles/scaffold
+  - text: 失败 $ pnpm add silent-package 退出码 1
+  - button "复制"
+  - text: "Command failed with exit code 1: {{node}} add silent-package"
+  - paragraph: 完整日志：{{cwd}}/.dsh-home/profiles/scaffold/.plugin-manager/logs/operation-{{suffix}}/pnpm.log

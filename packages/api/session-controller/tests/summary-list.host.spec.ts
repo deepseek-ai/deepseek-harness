@@ -1,7 +1,8 @@
 /**
  * Session-list summary payloads: a `session.list` row carries every registered
  * wire projection except the units that declare `summary: false`
- * (`turnOutline`, `sessionStats`, `todos`, `imageLimits`), while an opened Session's
+ * (`turnOutline`, `sessionStats`, `todos`, `imageLimits`, `contextPressure`,
+ * `contextBreakdown`), while an opened Session's
  * `session/follow` opening snapshot keeps serving them.
  */
 
@@ -21,9 +22,10 @@ import {
 import {
   apply as toolTodoApply, Config as toolTodoConfig, inject as toolTodoInject, name as toolTodoName,
 } from '@deepseek-ai/dsh-tool-todo'
+import TokenMeter from '@deepseek-ai/dsh-token-meter'
 import { createSessionTestRemote } from './test-remote.ts'
 
-const SUMMARY_EXCLUDED_KEYS = ['turnOutline', 'sessionStats', 'todos', 'imageLimits'] as const
+const SUMMARY_EXCLUDED_KEYS = ['turnOutline', 'sessionStats', 'todos', 'imageLimits', 'contextPressure', 'contextBreakdown'] as const
 
 const ownedContexts = new Set<Context>()
 afterEach(async () => {
@@ -51,7 +53,7 @@ async function opening(
 }
 
 /**
- * Mount the registry plus the four summary-excluded units and one ordinary
+ * Mount the registry plus the summary-excluded units and one ordinary
  * wire unit. The tool plugin needs a tool registry; the list path never
  * executes a tool, so a registration sink is enough.
  */
@@ -71,6 +73,7 @@ async function harness(): Promise<{ ctx: Context; sessionContext: Context }> {
     Config: toolTodoConfig,
     apply: toolTodoApply,
   }, { allowParallelInProgress: false })
+  await ctx.plugin(TokenMeter)
   // Build the remote (and with it the list owner that registers
   // `sessionListMetadata`) before any Session exists, so every registered unit
   // seeds a cell at `session/created`.

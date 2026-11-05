@@ -19,9 +19,23 @@ export interface ModelLabelOwner {
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
+    /** Session options appended after model and reasoning controls in the root menu. */
+    'conversation.input.model.options': {
+      kind: 'list'
+      scope: 'session'
+      owner: {
+        /** Whether the composer currently refuses selection changes. */
+        locked: boolean
+        /** Close the menu and focus its trigger synchronously before opening another overlay. */
+        dismiss: () => void
+        /** Report a failed selection through the menu owner's persistent toast. */
+        reportFailure: (message: string) => void
+      }
+    }
     /**
      * Non-interactive inline model label; selection controls remain owner-managed.
-     * Without a contribution, the composer displays the catalog name.
+     * Without a contribution, the badge precedes the catalog name in the trigger
+     * and follows it in menus.
      * @example
      * return {
      *   inject: ['slots'],
@@ -50,6 +64,12 @@ export interface ModelSelectInjected {
   directory: SnapshotStore<ModelDirectoryState>
   /** Ensure the shared advisory catalog is loaded (errors land on the store). */
   load: () => void
+  /**
+   * Choose a catalog badge's provider-authored text for the active locale.
+   * @param text - the badge's literal text or translations.
+   * @returns the text to display.
+   */
+  resolveText: (text: NonNullable<ModelCatalogModel['badge']>['text']) => string
   /**
    * Select a complete provider/model/reasoning selection.
    * @param selection - model selection and optional adapter-owned effort.

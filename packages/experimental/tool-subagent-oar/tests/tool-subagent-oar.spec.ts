@@ -44,19 +44,21 @@ it('selects one configured provider per call and exposes only task inputs', asyn
   })
   const schema = ctx.tools.schemas().find(tool => tool.name === 'subagent_oar')
   expect(schema?.parameters.required).toEqual(['runtime', 'description', 'prompt'])
-  expect(Object.keys(schema?.parameters.properties as Record<string, unknown>).sort()).toEqual(['cwd', 'description', 'prompt', 'runtime'])
+  expect(Object.keys(schema?.parameters.properties as Record<string, unknown>).sort()).toEqual(['cwd', 'description', 'name', 'prompt', 'runtime'])
   expect(schema?.parameters.properties).toMatchObject({ runtime: { enum: ['codex', 'claude', 'future'] } })
-  for (const runtime of ['codex', 'claude', 'future']) {
+  for (const [runtime, name, expected] of [['codex', undefined, 'agent-1'], ['claude', 'reviewer', 'reviewer'], ['future', undefined, 'agent-2']] as const) {
     const result = await executeToolFixture(ctx, {
       agent: parent, name: 'subagent_oar', signal: test.signal,
       callId: ToolCallId(randomUUID()),
-      arguments: { runtime, description: `Use ${runtime}`, prompt: 'independent task' },
+      arguments: { runtime, description: `Use ${runtime}`, prompt: 'independent task', ...name === undefined ? {} : { name } },
     })
     expect(result.isError, JSON.stringify(result.content)).toBe(false)
-    expect(result.content).toHaveLength(1)
-    const content = result.content[0]
-    expect(content?.type).toBe('text')
-    if (content?.type === 'text') expect(content.text).toMatch(/^started subagent /u)
+    expect(result.content).toEqual([{ type: 'text', text: `started subagent ${expected}` }])
+    if (!result.isError) {
+      expect(result.value).toEqual({ kind: 'activation', name: expected })
+      expect(ctx.tools.get('subagent_oar')?.output.presentationMeta?.({}, result.value))
+        .toEqual({ kind: 'activation', name: expected })
+    }
   }
   expect(calls.map(call => call.provider)).toEqual(['codex-provider', 'claude-provider', 'future-provider'])
   expect(calls[0]?.request.prompt).toEqual([{ type: 'text', text: 'independent task' }])

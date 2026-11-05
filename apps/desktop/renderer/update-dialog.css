@@ -35,3 +35,8 @@ body.update-dialog.visible { opacity: 1; }
   .primary:hover:not(:disabled) { background: var(--dsw-alias-button-primary-hover); }
   .secondary:hover:not(:disabled), .close:hover { background: var(--dsw-alias-interactive-bg-hover); }
 }
+
+button[aria-busy="true"] { opacity: 1; display: flex; align-items: center; justify-content: center; gap: 8px; }
+button[aria-busy="true"]::before { content: ""; width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: reload-spin 800ms linear infinite; }
+@keyframes reload-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { button[aria-busy="true"]::before { animation: none; } }

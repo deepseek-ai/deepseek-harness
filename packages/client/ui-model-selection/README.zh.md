@@ -29,7 +29,7 @@ Web GUI 允许用户通过 `/model` 弹窗或 composer 模型控件切换既有�
 
 DeepSeek 账号和 API Key 路由显示为独立提供方分组，各自展示相同的已配置模型目录。
 
-未选择模型或已保存的选择不在目录中时，composer 以常规字重显示“请选择模型”，并隐藏推理强度文案。点击后直接打开模型列表，Escape 和 Shift+Tab 关闭列表。目录为空时显示“暂无可用模型”
+未选择模型或已保存的选择不在目录中时，composer 以常规字重显示“请选择模型”，并隐藏推理强度文案。点击后直接打开模型列表，Escape 和 Shift+Tab 关闭列表。目录为空时，模型菜单不显示，也不进入无障碍树；状态区域显示“暂无可用模型”
 
 与 `ui-conversation` 及命令包一起挂载本插件；composer 随即在待处理指示器旁显示模型位，`/model` 则以弹窗打开同一份目录。模型位菜单打开期间，`↑`／`↓` 在根菜单和推理等级行间移动焦点，或在模型列表中移动高亮并让焦点保留在搜索框。Enter 和 Tab 选定高亮模型或聚焦行；Escape 与 `Shift+Tab` 先退出已下钻的面板，否则关闭并回到触发器。下钻时，桌面设备在显示模型搜索框时聚焦搜索框；其他情况聚焦当前模型或推理强度行，没有选中项时聚焦首个可用行。返回时聚焦打开该面板的格子。手机和平板在用户主动点按搜索框或使用键盘导航前，不会聚焦搜索框。所选模型可用时，composer 显示目录中的模型名称。模型或提供方被删除时（包括账号退登），保留已保存的提供方、模型和推理强度，但不展示其 ID。目录条目恢复后重新显示名称和推理强度。
 
@@ -39,7 +39,7 @@ DeepSeek 账号和 API Key 路由显示为独立提供方分组，各自展示�
 
 按钮模型菜单仅在完整目录超过四个模型时显示搜索框；较小目录直接支持键盘导航，并在所有设备上聚焦当前模型或首个可用行。`/model` 命令始终保留搜索框。两个搜索框均按模型名称进行不区分大小写的匹配，支持按顺序输入不连续字符，并忽略首尾空格。每个提供方内的结果优先按前缀匹配、其次按匹配得分、最后按目录顺序排列。没有匹配项的分组会隐藏。空目录和无匹配结果均通过状态区域通知屏幕阅读器。方向键在各提供方分组的结果间循环移动高亮，焦点保留在搜索框；Enter 或 Tab 选定高亮项。左右方向键仍用于移动输入光标。打开时高亮当前模型或首个可用选项，修改搜索内容后高亮首个结果。重新打开模型面板会清空搜索内容。
 
-composer 菜单中的模型名称和推理等级均使用 400（regular）字重，包括选中项。搜索框沿用 command 弹窗的紧凑样式，在浅／深色主题下均保持背景和边框透明，不显示前置图标，占位文字使用 caption 色。搜索内容非空时显示清除按钮；点击后恢复完整列表，并将焦点留在搜索框。
+composer 菜单中的模型名称和推理等级均使用 400（regular）字重，包括选中项。搜索框沿用 command 弹窗的紧凑样式，在浅／深色主题下均保持背景和边框透明，不显示前置图标，占位文字使用 caption 色。主指针精度较低的设备使用 16px 搜索文字，避免 Safari 聚焦缩放；精细指针设备保留 12px。搜索内容非空时显示清除按钮；点击后恢复完整列表，并将焦点留在搜索框。
 
 两个入口均按提供方分组，DeepSeek 账号排第一，DeepSeek 排第二，第三方提供方保持目录原有顺序。两者采用 [ui-primitives](../ui-primitives/README.zh.md#understand-the-implementation) 异步观察的共享吸顶标题：原位透明，仅吸顶时使用主题的 94% 不透明填充，macOS 桌面端以外使用 `md` 圆角。composer 菜单只显示模型与推理强度名称。导航箭头使用 `--dsw-alias-menu-icon` 文本色。`/model` 弹窗以提供方名称作为分组标题、模型名称作为选项行，不在每行重复提供方，也不显示目录说明。搜索占位文字、无匹配提示和空目录提示与 composer 模型菜单共用同一组本地化文案。弹窗应用所选模型的默认推理强度；composer 随后可以选择任一已公布的推理强度。适配器没有推理元数据时不显示 Effort 行；不存在任意推理强度输入。
 
@@ -49,7 +49,7 @@ composer 菜单中的模型名称和推理等级均使用 400（regular）字重
 
 `conversation.input.model.label` 是会话作用域的内联 `single` slot，覆盖 composer 触发按钮（`placement: 'trigger'`）、根菜单中的当前值（`'menu'`）和各模型选项（`'option'`）。owner props 提供 `provider: { id, name }`、准确的目录 `model`、`placement` 和 `selected`。提供方名称是本地化显示名称；按 `provider.id` 匹配渠道，按提供方与模型 ID 的组合识别模型。slot 不接收连接 URL 或凭据。
 
-扩展必须渲染非交互的内联内容，例如带颜色的名称或徽标。选择器负责点击、搜索、焦点、禁用状态、勾选标记、推理强度和触发按钮的无障碍文字。没有扩展（包括插件卸载后）时显示目录名称。触发按钮和根菜单当前值仅在所选模型存在于显示目录中时调用 slot，否则保留内置占位文字。刷新期间保留的目录条目仍调用 slot。菜单打开时会跟随名称内容的尺寸变化调整位置，保持在视口内。`/model` 命令行使用命令弹窗独立的渲染 API。
+扩展必须渲染非交互的内联内容，例如带颜色的名称或徽标。选择器负责点击、搜索、焦点、禁用状态、勾选标记、推理强度和触发按钮的无障碍文字。没有扩展（包括插件卸载后）时显示目录名称；模型带有目录角标 `model.badge` 时，触发按钮在名称前显示一个按角标语调着色的 `Tag`，菜单仍放在名称后，文字按当前语言解析。较长的目录名称会在可用宽度内省略，角标保持可见。扩展会同时替换两者，并从 owner props 收到角标。触发按钮和根菜单当前值仅在所选模型存在于显示目录中时调用 slot，否则保留内置占位文字。刷新期间保留的目录条目仍调用 slot。输入框的模型菜单通过 CSS 锚点跟随触发按钮及标签大小变化，并按布局视口排版。双指缩放时菜单随页面一起缩放，可以超出视觉视口，包括键盘打开时。`/model` 命令行使用命令弹窗独立的渲染 API。
 
 以 type-only 方式导入本包的 `/client` 声明，再通过 `ctx.slots.inject('conversation.input.model.label', () => ctx.slots.register({ name: 'conversation.input.model.label' }, ModelLabel))` 注册。`ModelLabel` 的 props 从 `PropsRuntime<'conversation.input.model.label'>` 派生；用提供方 ID 选择 CSS Module 类，并保留 `model.name` 作为文字。注册随声明和贡献插件的生命周期清理。不替换组件时，样式也可以在三个显示位置通过名称外层的 `data-provider-id` 和 `data-model-id` 属性定位。
 
@@ -61,19 +61,21 @@ composer 菜单中的模型名称和推理等级均使用 400（regular）字重
 
 当会话被其他写句柄占用时，模型选择失败提示用户退出其他正在运行的 DSH 后重试。
 
+会话级列表 slot `conversation.input.model.options` 在模型与推理等级选项下方追加控件。Owner props 提供 `locked`、`reportFailure(message)` 和 `dismiss()`，后者关闭菜单并同步聚焦触发按钮，供贡献方随后打开其他浮层；贡献方读取自身投影并提供专用命令。启用的开关按钮参与菜单键盘导航。
+
 -----
 
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-菜单采用共享 `MenuSurface` 材质，包括用于背景模糊的 macOS 底层；自定义内容遵循[菜单规则](../../../docs/web-styling.zh.md#component-rules)。
+菜单采用共享 `MenuSurface` 材质，包括用于背景模糊的 macOS 底层；自定义内容遵循[菜单规则](../../../docs/web-styling.zh.md#component-rules)。composer 菜单通过 body portal 使用 fixed 定位及 CSS Anchor Positioning，要求浏览器支持 `anchor-name`、`position-anchor` 和 `anchor()`。触发按钮和菜单共享唯一的锚点名称。CSS 优先将菜单放在按钮上方，右边缘对齐、间距为 8px，并将菜单限制在布局视口的 12px 内边距及桌面窗口边框间距内。桌面页面缩放导致 sticky 输入区重新布局时，面板仍保持与触发器的间距。定位不通过 JavaScript 读取按钮矩形或追踪视口变化。双指缩放时菜单随页面一起缩放，可以超出视觉视口，包括键盘打开时。模型名称超出面板宽度时以省略号截断，角标保持可见。模型与推理等级列表在面板高度限制内纵向滚动。
 
 <details>
 <summary>实现细节——点击展开</summary>
 
 composer 的 `ModelSelect` 与 `/model` 选项构建器共用[提供方排序](src/client/provider-order.ts)，两个搜索框均在每个提供方内使用 `rankByName`。命令通过 [popupSelect API](../ui-commands/README.zh.md#use-this-package) 提供可选分组与 `searchMode: 'fuzzy-label'`；两个入口均使用 `MenuGroup`，并在渲染分组变化时重建其吸顶观察器。命令弹窗撑满 composer 浮层，按钮则保留紧凑菜单。
 
-两个入口共用一份由 `ModelDirectoryResolver`（`ctx.modelDirectories`）持有的会话级目录：`/model` popupSelect 贡献项（经 `ctx.commandUi` 注册）与 composer 的具名 `conversation.input.model` 位都经 `session.models` 加载会话的可用目录、经 `session.selectModel` 通过同一个 `ModelDirectory` 实例提交，因此任一入口所做的切换正是另一个入口接下来显示的。目录加载与选择共享一个代次计数器，旧响应不会覆盖新结果。目录把最近一次提交的选择发布为 `pending`，直到它完成或被连接重置作废；连接重置丢弃所有常驻投影，并在显示前重新拉取 Host 恢复的选择。目录按会话惰性解析，随会话作用域一并 dispose（资源释放）；已寻址 subagent 会话不公开任一入口。每份常驻目录都会直接在转发的 `llm/adapters-updated`、`settings/document-updated` 与凭据更新事件上重拉。
+两个入口共用一份由 `ModelDirectoryResolver`（`ctx.modelDirectories`）持有的会话级目录：`/model` popupSelect 贡献项（经 `ctx.commandUi` 注册）与 composer 的具名 `conversation.input.model` 位都经 `session.models` 加载会话的可用目录、经 `session.selectModel` 通过同一个 `ModelDirectory` 实例提交，因此任一入口所做的切换正是另一个入口接下来显示的。目录加载与选择共享一个代次计数器，旧响应不会覆盖新结果。目录把最近一次提交的选择发布为 `pending`，直到它完成或被连接重置作废；连接重置丢弃所有常驻投影，并在显示前重新拉取 Host 恢复的选择。目录按会话惰性解析，随会话作用域一并 dispose（资源释放）；已寻址 subagent 会话不公开任一入口。每份常驻目录都会直接在转发的 `llm/adapters-updated`、`llm/models-updated`、`settings/document-updated` 与凭据更新事件上重拉。
 
 </details>
 
@@ -109,6 +111,7 @@ composer 的 `ModelSelect` 与 `/model` 选项构建器共用[提供方排序](s
 - **无创建期或已寻址 subagent 选择**——两个入口都要求既有普通会话的 agent（智能体）；没有可纳入会话创建的草稿阶段模型选择，subagent 继续执行也有意不公开独立的模型选择约定。
 - **目录名仅供呈现**——选择与持久化使用提供方／模型／推理强度 id；目录查询或确切模型元数据查询失败的提供方以不可选失败行列出，重新加载前保持原样。
 - **不能任意输入推理强度**——composer 仅提供确切模型由适配器公布的推理强度；适配器没有推理元数据时不显示 Effort 行。
+- **角标只出现在 composer 模型位**——`/model` 弹窗各行、触发按钮的无障碍名称及其提示仍只显示目录名称。
 
 <a id="dev-note"></a>
 ### 开发备注

@@ -77,6 +77,8 @@ export class ClientEntries {
 
   /**
    * Create the initial roster and retain its entry identities for subsequent reconciliation.
+   * As the Host Loader group does, a row whose creation rejects (for example a module that exports no
+   * plugin) is logged and stays an inactive entry, so one row cannot abort startup before the boot audit.
    * @param loader - Page Loader, already configured with the module system.
    * @param manifest - Initial roster audited by the boot caller.
    * @returns after initial entries and their activation settle; boot owns its activation audit.
@@ -92,7 +94,7 @@ export class ClientEntries {
     }, 'client-modules: entry reconciliation')
     return this.enqueue(async () => {
       await Promise.all(this.desired.plugins.map(async ({ id }) => {
-        await this.create(loader, id)
+        await this.create(loader, id).catch((error: unknown) => { loader.ctx.logger.error(error) })
       }))
       await loader.await()
       for (const row of this.modules.manifest.modules) this.revisions.set(row.id, row.rev)
@@ -236,7 +238,8 @@ export class ClientEntries {
         } else if (entry.fiber === undefined) {
           await this.replace(entry, row.id, row.rev, generation)
         } else if (entry.fiber.state === FAILED) {
-          entry.fiber.update(entry.options.config)
+          // A retry with unchanged config is not a configuration change to persist.
+          await entry.fiber.update(entry.options.config, true)
         }
       } catch (error) {
         failures.push({ id: row.id, message: String(error) })
