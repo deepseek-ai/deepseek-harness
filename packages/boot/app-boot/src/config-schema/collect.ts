@@ -150,7 +150,7 @@ export async function collectConfigSchemas(
           source = extension === '.json' ? JSON.parse(content) : parseEntryYaml(content)
         } catch (error) {
           // Parser messages can quote configuration values; retain only the file and location.
-          const position = extension === '.json' ? undefined : entryYamlErrorPosition(error)
+          const position = entryYamlErrorPosition(error)
           const at = position === undefined ? '' : ` at line ${position.line}, column ${position.column}`
           throw new Error(`invalid ${extension === '.json' ? 'JSON' : 'YAML'} include ${filename}${at}`)
         }

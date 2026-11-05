@@ -41,8 +41,8 @@ export function parseEntryYaml(content: string): unknown {
 }
 
 /**
- * Serialize a value in Include's YAML dialect. JavaScript expression nodes are written as `!!js` scalars, and
- * repeated object references are written out in full instead of as aliases.
+ * Serialize a value in Include's YAML dialect. JavaScript expression nodes are written as `!!js` scalars. The output
+ * never contains anchors or aliases: repeated object references are written out in full, and no option changes this.
  * @param value - entry list, patch list, or entry fragment to serialize.
  * @param options - output formatting.
  * @returns YAML text ending with a newline.
@@ -53,7 +53,7 @@ export function stringifyEntryYaml(value: unknown, options: EntryYamlStringifyOp
 
 /**
  * Locate a syntax error thrown by {@link parseEntryYaml}.
- * @param error - value thrown by {@link parseEntryYaml}.
+ * @param error - any caught value; only a parse error thrown by {@link parseEntryYaml} yields a position.
  * @returns the one-based line and column of the error, or `undefined` when the error carries no source location.
  */
 export function entryYamlErrorPosition(error: unknown): { line: number; column: number } | undefined {
