@@ -274,7 +274,9 @@ it.each([
   { action: 'set_version_exemption', target: 'plugin@1.0.0', runtimeVersion: '1.0.0' },
 ])('rejects incomplete or unbounded tool inputs: %j', async (args) => {
   const { call } = await fixture()
-  expect((await call(args)).isError).toBe(true)
+  const result = await call(args)
+  expect(result.isError).toBe(true)
+  expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
 })
 
 it('presents reads and changes distinctly and disposes its registration', async () => {
