@@ -138,4 +138,14 @@ describe('mcp-manager real composition', () => {
     expect(await readFile(profile.patchPath, 'utf8')).toBe(saved)
     expect(ctx.mcpManager.list()).toEqual([])
   })
+
+  it('names the oauth field when a settings write supplies an OAuth configuration without a credential key', async () => {
+    const ctx = await registry()
+    const { profile } = await managerProfile(ctx, { base: { servers: {} } })
+    const saved = await readFile(profile.patchPath, 'utf8')
+    await expect(ctx.settings.update('mcp', { servers: { one: {
+      transport: 'streamable-http', url: 'https://example.invalid/mcp', oauth: {}, enabled: false,
+    } } })).rejects.toThrow('servers.one.oauth expected')
+    expect(await readFile(profile.patchPath, 'utf8')).toBe(saved)
+  })
 })

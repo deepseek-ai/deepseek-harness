@@ -104,8 +104,6 @@ const ServerEntrySchema = z.object({
   reconnect: z.any(),
 }) as z<EntryInput, McpManagedServerEntry>
 
-
-
 /** One server's child instance, probes, and any cleanup failure retained by the manager. */
 interface ManagedRecord {
   oauth?: McpOAuthAuthorization
@@ -621,10 +619,11 @@ export default class McpServerManager extends TypertRemoteService {
     const oauthKeys = new Set<string>()
     for (const [name, entry] of Object.entries(entries)) {
       const path = `servers.${name}`
+      this.clientConfig(name, entry)
       if (entry.oauth !== undefined) {
+        if (entry.transport !== 'streamable-http') throw new Error(path + ': OAuth requires streamable-http')
         try { parseCredentialKey(entry.oauth.credentialKey) }
         catch (error) { throw new Error(`${path}.oauth.credentialKey: ${(error as TypeError).message}`, { cause: error }) }
-        if (entry.transport !== 'streamable-http') throw new Error(path + ': OAuth requires streamable-http')
         if (oauthKeys.has(entry.oauth.credentialKey)) throw new Error(path + ': OAuth credentialKey is already assigned to another server')
         oauthKeys.add(entry.oauth.credentialKey)
       }
@@ -655,7 +654,6 @@ export default class McpServerManager extends TypertRemoteService {
           throw new Error(`${path}: "cwd" is not a streamable-http field — remove it or set transport: stdio`)
         }
       }
-      this.clientConfig(name, entry)
     }
   }
 
