@@ -1,3 +1,11 @@
 {
-  "cases": ["interactive", "silent", "upgrade", "replaced", "home-inside"]
+  "cases": [
+    "interactive",
+    "silent",
+    "upgrade",
+    "replaced",
+    "home-inside",
+    "registration-error",
+    "self-copy"
+  ]
 }

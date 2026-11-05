@@ -92,6 +92,29 @@ try {
     Require ((UserPath) -eq ($desktop + ';' + $invalidPath)) 'a notification failure changed the committed PATH'
     [void](Apply 'remove' $desktop)
     Require ((UserPath) -eq $invalidPath) 'removal changed invalid user PATH entries'
+    # Uninstalling A must preserve independently registered B integrations.
+    $app = Join-Path $Root 'Uninstall A'
+    $bin = Join-Path $app 'resources\runtime\cli\bin'
+    New-Item -ItemType Directory -Force $bin | Out-Null
+    [IO.File]::WriteAllText((Join-Path $bin 'dsh.cmd'), 'fixture')
+    [void](Apply 'install' $other)
+    $protocolKey = $keyRoot + '\Protocol'
+    $foreignCommand = '"' + (Join-Path $other 'DeepSeek Harness.exe') + '" "%1"'
+    $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($protocolKey + '\shell\open\command')
+    try { $key.SetValue('', $foreignCommand) } finally { $key.Dispose() }
+    $helper = Join-Path (Split-Path $Worker) 'uninstall-registration.ps1'
+    & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $helper -Directory $app -EnvironmentKey $environmentKey -OwnerKey $ownerKey -ProtocolKey $protocolKey
+    Require ($LASTEXITCODE -eq 0) 'foreign integration cleanup failed'
+    Require ((State $other).managed) 'uninstall removed foreign command ownership'
+    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($protocolKey + '\shell\open\command')
+    try { Require ($key.GetValue('') -eq $foreignCommand) 'uninstall removed foreign protocol' } finally { $key.Dispose() }
+    [void](Apply 'install' $bin)
+    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($protocolKey + '\shell\open\command', $true)
+    try { $key.SetValue('', '"' + (Join-Path $app 'DeepSeek Harness.exe') + '" "%1"') } finally { $key.Dispose() }
+    & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $helper -Directory $app -EnvironmentKey $environmentKey -OwnerKey $ownerKey -ProtocolKey $protocolKey
+    Require ($LASTEXITCODE -eq 0) 'owned integration cleanup failed'
+    Require (-not (State $bin).managed) 'uninstall retained command ownership'
+    Require (-not (Test-Path -LiteralPath ('HKCU:\' + $protocolKey))) 'uninstall retained protocol'
     'WINDOWS_COMMAND_PATH_OK'
 } finally {
     [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree($keyRoot, $false)

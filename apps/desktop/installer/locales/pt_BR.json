@@ -32,7 +32,9 @@
     "INSTALLER_EXTRACT_COLLAPSE": "Ocultar detalhes",
     "INSTALLER_EXTRACT_SAVED": "O relatório completo foi salvo em %s",
     "INSTALLER_EXTRACT_UNSAVED": "Não foi possível salvar o relatório completo. Use Copiar detalhes do erro para mantê-lo.",
-    "INSTALLER_EXTRACT_COPIED": "Os detalhes do erro foram copiados para a área de transferência."
+    "INSTALLER_EXTRACT_COPIED": "Os detalhes do erro foram copiados para a área de transferência.",
+    "INSTALLER_UNINSTALL_OWNER": "Este desinstalador pertence a outra instalação. Use Aplicativos instalados para desinstalar a instalação atual.",
+    "INSTALLER_UNINSTALL_REGISTRATION": "Não foi possível remover o registro de comandos ou links do Windows. Os arquivos do aplicativo foram mantidos. Feche os outros instaladores e tente novamente."
   },
   "uninstaller": {
     "welcome": "Bem-vindo",

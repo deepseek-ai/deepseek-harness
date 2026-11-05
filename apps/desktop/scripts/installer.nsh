@@ -94,6 +94,7 @@ ManifestDPIAware true
 !macroend
 
 !macro customUnInstall
+  Call un.CleanRegistration
   Call un.CleanData
 !macroend
 

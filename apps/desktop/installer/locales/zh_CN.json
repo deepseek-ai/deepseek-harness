@@ -32,7 +32,9 @@
     "INSTALLER_EXTRACT_COLLAPSE": "隐藏详情",
     "INSTALLER_EXTRACT_SAVED": "完整错误报告已保存到 %s",
     "INSTALLER_EXTRACT_UNSAVED": "无法保存完整错误报告，请使用“复制错误信息”保留。",
-    "INSTALLER_EXTRACT_COPIED": "错误信息已复制到剪贴板。"
+    "INSTALLER_EXTRACT_COPIED": "错误信息已复制到剪贴板。",
+    "INSTALLER_UNINSTALL_OWNER": "此卸载程序属于另一安装目录。请从“已安装的应用”卸载当前安装。",
+    "INSTALLER_UNINSTALL_REGISTRATION": "无法清理 Windows 命令或链接注册。应用文件已保留。请关闭其他安装程序后重试。"
   },
   "uninstaller": {
     "welcome": "欢迎",

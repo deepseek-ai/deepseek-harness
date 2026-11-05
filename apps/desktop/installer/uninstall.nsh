@@ -34,3 +34,25 @@ Function un.CleanData
   StrCpy $UnTarget "$LOCALAPPDATA\${DSH_UPDATER_CACHE_NAME}"
   Call un.RemoveData
 FunctionEnd
+
+; Upgrade replacement retains integrations; KEEP_APP_DATA controls only user data.
+!define /ifndef DSH_COMMAND_ENVIRONMENT_KEY "Environment"
+!define /ifndef DSH_COMMAND_OWNER_KEY "Software\DeepSeekHarness\Command"
+!define /ifndef DSH_PROTOCOL_KEY "Software\Classes\dsh"
+Function un.CleanRegistration
+  ${If} ${isUpdated}
+    Return
+  ${EndIf}
+  InitPluginsDir
+  File /oname=$PLUGINSDIR\command-path.ps1 "${__FILEDIR__}\..\scripts\command-path.ps1"
+  File /oname=$PLUGINSDIR\uninstall-registration.ps1 "${__FILEDIR__}\..\scripts\uninstall-registration.ps1"
+  nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\uninstall-registration.ps1" -Directory "$INSTDIR" -ExecutableName "${APP_EXECUTABLE_FILENAME}" -EnvironmentKey "${DSH_COMMAND_ENVIRONMENT_KEY}" -OwnerKey "${DSH_COMMAND_OWNER_KEY}" -ProtocolKey "${DSH_PROTOCOL_KEY}"'
+  Pop $0
+  Pop $1
+  ${If} $0 != 0
+    DetailPrint $1
+    MessageBox MB_OK|MB_ICONSTOP "$(INSTALLER_UNINSTALL_REGISTRATION)" /SD IDOK
+    SetErrorLevel 2
+    Quit
+  ${EndIf}
+FunctionEnd

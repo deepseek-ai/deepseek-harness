@@ -32,7 +32,9 @@
     "INSTALLER_EXTRACT_COLLAPSE": "Hide details",
     "INSTALLER_EXTRACT_SAVED": "The full report was saved to %s",
     "INSTALLER_EXTRACT_UNSAVED": "The full report could not be saved. Use Copy error details to keep it.",
-    "INSTALLER_EXTRACT_COPIED": "Error details were copied to the clipboard."
+    "INSTALLER_EXTRACT_COPIED": "Error details were copied to the clipboard.",
+    "INSTALLER_UNINSTALL_OWNER": "This uninstaller belongs to another installation. Use Installed apps to uninstall the current installation.",
+    "INSTALLER_UNINSTALL_REGISTRATION": "Windows command or link registration could not be removed. Application files were kept. Close other installers and retry."
   },
   "uninstaller": {
     "welcome": "Welcome",

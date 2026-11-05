@@ -15,7 +15,7 @@ export function directoryInstallSection(source: string): string
 export function directoryInstallerExits(source: string): string
 
 /**
- * Keep user-data removal in the native helper, which refuses unsafe roots and never follows links.
+ * Retain the original uninstall directory, reject another installation owner, and use native data cleanup.
  * @param source - Pinned upstream uninstaller source.
  * @returns Uninstaller with long-path application removal and no upstream RMDir data removal.
  */

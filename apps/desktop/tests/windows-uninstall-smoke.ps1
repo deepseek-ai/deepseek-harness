@@ -20,6 +20,9 @@ $scopePath = Join-Path $roaming $PackageName.Split('/')[0]
 $userDataPath = Join-Path $roaming ($PackageName -replace '/', '\')
 $cachePath = Join-Path $local (($PackageName -replace '[/\\?<>:*|"]', '').ToLowerInvariant() + '-updater')
 $uninstaller = Join-Path $OutputDirectory 'uninstall-copy.exe'
+$environmentKey = "Software\DSHUninstallTests\$RegistryKey\CommandEnvironment"
+$ownerKey = "Software\DSHUninstallTests\$RegistryKey\CommandOwner"
+$protocolKey = "Software\Classes\dsh-test-$RegistryKey"
 $process = $null
 function Wait-Text([string]$Text) {
     $timer = [Diagnostics.Stopwatch]::StartNew()
@@ -62,13 +65,31 @@ try {
         [IO.File]::WriteAllText((Join-Path $userDataPath 'Local State'), 'chromium profile')
         [IO.File]::WriteAllText((Join-Path $cachePath 'download.txt'), 'update')
         Copy-Item -LiteralPath (Join-Path $installPath ('Uninstall ' + $ProductName + '.exe')) -Destination $uninstaller -Force
+        $commandDirectory = Join-Path $installPath 'resources\runtime\cli\bin'
+        $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($environmentKey)
+        try { $key.SetValue('Path', $commandDirectory + ';C:\Windows', [Microsoft.Win32.RegistryValueKind]::ExpandString) } finally { $key.Dispose() }
+        $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($ownerKey)
+        try { $key.SetValue('Directory', $commandDirectory); $key.SetValue('RetainedEntries', 0) } finally { $key.Dispose() }
+        $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($protocolKey + '\shell\open\command')
+        try { $key.SetValue('', '"' + (Join-Path $installPath ($ProductName + '.exe')) + '" "%1"') } finally { $key.Dispose() }
+        $launchUninstaller = $uninstaller
         $arguments = '_?=' + $installPath
-        if ($mode -in @('silent', 'home-inside')) { $arguments = '/S ' + $arguments }
+        if ($mode -in @('silent', 'home-inside', 'registration-error')) { $arguments = '/S ' + $arguments }
         # electron-builder's installUtil.nsh runs an older uninstaller with exactly these flags when replacing it.
-        if ($mode -eq 'upgrade') { $arguments = '/S /KEEP_APP_DATA --updated /currentuser ' + $arguments }
+        if ($mode -eq 'upgrade') {
+            Set-ItemProperty -LiteralPath ('HKCU:\Software\' + $RegistryKey) -Name InstallLocation -Value ($installPath + '\')
+            $arguments = '/S /KEEP_APP_DATA --updated /currentuser ' + $arguments }
         if ($mode -eq 'replaced') { $arguments = '/S /KEEP_APP_DATA /currentuser ' + $arguments }
+        if ($mode -eq 'self-copy') {
+            $launchUninstaller = Join-Path $installPath ('Uninstall ' + $ProductName + '.exe')
+            $arguments = '/S /KEEP_APP_DATA'
+        }
         if ($mode -eq 'home-inside') { $env:DSH_HOME = Join-Path $userDataPath 'home' } else { Remove-Item Env:DSH_HOME -ErrorAction SilentlyContinue }
-        $process = Start-Process -FilePath $uninstaller -ArgumentList $arguments -PassThru -WindowStyle ($(if ($mode -eq 'interactive') { 'Normal' } else { 'Hidden' }))
+        if ($mode -eq 'registration-error') {
+            $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($environmentKey, $true)
+            try { $key.SetValue('Path', 42, [Microsoft.Win32.RegistryValueKind]::DWord) } finally { $key.Dispose() }
+        }
+        $process = Start-Process -FilePath $launchUninstaller -ArgumentList $arguments -PassThru -WindowStyle ($(if ($mode -eq 'interactive') { 'Normal' } else { 'Hidden' }))
         if ($mode -eq 'interactive') {
             $welcomeText = $copy.welcome
             $welcome = Wait-Text $welcomeText
@@ -79,8 +100,16 @@ try {
             [void](Wait-Text $finishedText)
             [InstallerCapture]::Click([InstallerCapture]::GetDlgItem($window, 1))
         }
+        if ($mode -eq 'registration-error') {
+            if (-not $process.WaitForExit(30000) -or $process.ExitCode -ne 2) { throw 'Registration failure did not stop uninstall' }
+            $process.Dispose(); $process = $null
+            if (-not (Test-Path -LiteralPath (Join-Path $installPath ($ProductName + '.exe')))) { throw 'Failed registration cleanup deleted application' }
+            $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($environmentKey, $true)
+            try { $key.SetValue('Path', $commandDirectory + ';C:\Windows', [Microsoft.Win32.RegistryValueKind]::ExpandString) } finally { $key.Dispose() }
+            $process = Start-Process -FilePath $launchUninstaller -ArgumentList $arguments -PassThru -WindowStyle Hidden
+        }
         Wait-Exit
-        $retained = $mode -in @('upgrade', 'replaced')
+        $retained = $mode -in @('upgrade', 'replaced', 'self-copy')
         # A DSH_HOME inside the Electron directory protects that directory (and its scope) but not the other roots.
         $userDataRetained = $retained -or $mode -eq 'home-inside'
         if ([IO.File]::ReadAllText((Join-Path $externalPath 'keep.txt')) -ne 'outside data root') { throw 'Cleanup followed a junction into a project' }
@@ -89,9 +118,45 @@ try {
         if ((Test-Path (Join-Path $userDataPath 'Local State')) -ne $userDataRetained) { throw "Electron user data retention failed: $mode" }
         if ((Test-Path -LiteralPath $scopePath) -ne $userDataRetained) { throw "Package scope directory retention failed: $mode" }
         if ((Test-Path (Join-Path $cachePath 'download.txt')) -ne $retained) { throw "Update cache retention failed: $mode" }
+        $integrationsRetained = $mode -eq 'upgrade'
+        $owner = Get-ItemProperty -LiteralPath ('HKCU:\' + $ownerKey)
+        if ([bool]$owner.Directory -ne $integrationsRetained) { throw "Command ownership cleanup failed: $mode" }
+        $path = (Get-ItemProperty -LiteralPath ('HKCU:\' + $environmentKey)).Path
+        if ($path.Contains($commandDirectory) -ne $integrationsRetained -or -not $path.Contains('C:\Windows')) { throw "PATH cleanup failed: $mode" }
+        if ((Test-Path -LiteralPath ('HKCU:\' + $protocolKey)) -ne $integrationsRetained) { throw "Protocol cleanup failed: $mode" }
         Write-Output "passed: $mode"
     }
+    # Real replacement publishes B after the old A uninstaller has been retained.
+    $setup = Start-Process $Installer -ArgumentList ('/S /D=' + $installPath) -PassThru -WindowStyle Hidden
+    try { if (-not $setup.WaitForExit(30000) -or $setup.ExitCode -ne 0) { throw 'Takeover A setup failed' } } finally { $setup.Dispose() }
+    Copy-Item -LiteralPath (Join-Path $installPath ('Uninstall ' + $ProductName + '.exe')) -Destination $uninstaller -Force
+    $newPath = Join-Path $OutputDirectory 'Replacement App'
+    $setup = Start-Process $Installer -ArgumentList ('/S /D=' + $newPath) -PassThru -WindowStyle Hidden
+    try { if (-not $setup.WaitForExit(30000) -or $setup.ExitCode -ne 0) { throw 'Takeover B setup failed' } } finally { $setup.Dispose() }
+    $newCommand = Join-Path $newPath 'resources\runtime\cli\bin'
+    $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($ownerKey)
+    try { $key.SetValue('Directory', $newCommand) } finally { $key.Dispose() }
+    $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($environmentKey)
+    try { $key.SetValue('Path', $newCommand + ';C:\Windows') } finally { $key.Dispose() }
+    $newProtocol = '"' + (Join-Path $newPath ($ProductName + '.exe')) + '" "%1"'
+    $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($protocolKey + '\shell\open\command')
+    try { $key.SetValue('', $newProtocol) } finally { $key.Dispose() }
+    $process = Start-Process $uninstaller -ArgumentList ('/S /currentuser _?=' + $installPath) -PassThru -WindowStyle Hidden
+    if (-not $process.WaitForExit(30000) -or $process.ExitCode -ne 2) { throw 'Stale uninstaller was not rejected' }
+    $process.Dispose(); $process = $null
+    if (-not (Test-Path -LiteralPath (Join-Path $newPath ($ProductName + '.exe')))) { throw 'Stale uninstaller deleted B' }
+    $entry = Get-ItemProperty ('HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\' + $RegistryKey)
+    if ($entry.InstallLocation.TrimEnd('\') -ne $newPath) { throw 'Stale uninstaller removed B registration' }
+    if ((Get-ItemProperty ('HKCU:\' + $ownerKey)).Directory -ne $newCommand) { throw 'Stale uninstaller changed B command owner' }
+    if ((Get-ItemProperty ('HKCU:\' + $environmentKey)).Path -ne ($newCommand + ';C:\Windows')) { throw 'Stale uninstaller changed B PATH' }
+    if ((Get-Item ('HKCU:\' + $protocolKey + '\shell\open\command')).GetValue('') -ne $newProtocol) { throw 'Stale uninstaller changed B protocol' }
+    $installPath = $newPath
+    Copy-Item -LiteralPath (Join-Path $installPath ('Uninstall ' + $ProductName + '.exe')) -Destination $uninstaller -Force
+    $process = Start-Process $uninstaller -ArgumentList ('/S _?=' + $installPath) -PassThru -WindowStyle Hidden
+    Wait-Exit
+    Write-Output 'passed: installation takeover'
 } finally {
+    foreach ($key in @("Software\DSHUninstallTests\$RegistryKey", $protocolKey)) { [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree($key, $false) }
     Remove-Item Env:DSH_HOME -ErrorAction SilentlyContinue
     if ($process) { if (-not $process.HasExited) { $process.Kill(); $process.WaitForExit() }; $process.Dispose() }
     # Only unique test identities below known application-data parents are removed.

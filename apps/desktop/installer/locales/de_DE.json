@@ -32,7 +32,9 @@
     "INSTALLER_EXTRACT_COLLAPSE": "Details ausblenden",
     "INSTALLER_EXTRACT_SAVED": "Der vollständige Bericht wurde unter %s gespeichert",
     "INSTALLER_EXTRACT_UNSAVED": "Der vollständige Bericht konnte nicht gespeichert werden. Verwenden Sie „Fehlerdetails kopieren“, um sie beizubehalten.",
-    "INSTALLER_EXTRACT_COPIED": "Fehlerdetails wurden in die Zwischenablage kopiert."
+    "INSTALLER_EXTRACT_COPIED": "Fehlerdetails wurden in die Zwischenablage kopiert.",
+    "INSTALLER_UNINSTALL_OWNER": "Dieses Deinstallationsprogramm gehört zu einer anderen Installation. Entfernen Sie die aktuelle Installation über Installierte Apps.",
+    "INSTALLER_UNINSTALL_REGISTRATION": "Die Windows-Befehls- oder Linkregistrierung konnte nicht entfernt werden. Die Anwendungsdateien wurden beibehalten. Schließen Sie andere Installationsprogramme und versuchen Sie es erneut."
   },
   "uninstaller": {
     "welcome": "Willkommen",

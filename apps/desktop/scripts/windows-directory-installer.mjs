@@ -85,12 +85,25 @@ export function installWindowsDirectoryInstaller() {
 }
 
 /**
- * Keep user-data removal in the native helper, which refuses unsafe roots and never follows links.
+ * Retain the original uninstall directory, reject another installation owner, and use native data cleanup.
  * @param {string} source - Pinned upstream uninstaller source.
  * @returns {string} Uninstaller with long-path application removal and no upstream RMDir data removal.
  */
 export function directoryUninstaller(source) {
-  const normalized = source.replaceAll('\r\n', '\n')
+  let normalized = source.replaceAll('\r\n', '\n')
+  normalized = replaceOnce(normalized, 'Function un.onInit\n', 'Var dshUninstallDirectory\nFunction un.onInit\n  StrCpy $dshUninstallDirectory $INSTDIR\n')
+  normalized = replaceOnce(normalized, '  !insertmacro initMultiUser', `  !insertmacro initMultiUser
+  StrCpy $INSTDIR $dshUninstallDirectory
+  ReadRegStr $R0 SHELL_CONTEXT "\${INSTALL_REGISTRY_KEY}" InstallLocation
+  \${If} $R0 != ""
+    GetFullPathName $R0 "$R0\\."
+    GetFullPathName $R1 "$INSTDIR\\."
+    \${If} $R0 != $R1
+      MessageBox MB_OK|MB_ICONSTOP "$(INSTALLER_UNINSTALL_OWNER)" /SD IDOK
+      SetErrorLevel 2
+      Quit
+    \${EndIf}
+  \${EndIf}`)
   const start = normalized.indexOf('  Var /GLOBAL isDeleteAppData\n')
   const end = normalized.indexOf('  DeleteRegKey SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}"', start)
   if (start < 0 || end < 0) throw new Error('NSIS uninstaller data removal template changed')
