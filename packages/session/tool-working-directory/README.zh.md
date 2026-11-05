@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用此包
 
-与 `tools` 和 `workingDirectory` 一起挂载。调用 `working_directory({})` 读取目录，或调用 `working_directory({ cd: "src" })` 改变目录。此工具没有配置字段。
+与 `tools` 和 `workingDirectory` 一起挂载。调用 `working_directory({})` 读取目录，或调用 `working_directory({ cd: "src" })` 改变目录。此工具没有配置字段。没有调用方 Agent 的调用以 `ToolContextUnavailableError`（`TOOL_CONTEXT_UNAVAILABLE`）失败，`cd` 为空以 `ToolArgsError`（`INVALID_ARGS`）失败，目录不存在时使用服务的 `WorkingDirectoryError` code。
 
 ```yaml
 - name: '@deepseek-ai/dsh-tool-working-directory'
