@@ -8,7 +8,7 @@ import type { UserMessage } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-user-approval'
 import { assertNever, deepFreeze, snapshotJsonValue, type JsonValue } from '@deepseek-ai/dsh-util-values'
 import { TOOL_ABORTED, TOOL_ABORTED_BEFORE_DISPATCH, ToolNotFoundError, ToolOutputError } from './contracts.ts'
-import { APPROVAL_CANCELLED, APPROVAL_ERROR_NAME, APPROVAL_REJECTED, APPROVAL_UNAVAILABLE } from './error-codes.ts'
+import { APPROVAL_CANCELLED, APPROVAL_ERROR_NAME, APPROVAL_REJECTED, APPROVAL_UNAVAILABLE, type ApprovalErrorCode } from './error-codes.ts'
 import { validateJsonSchemaValue } from './json-schema.ts'
 import type { ToolsService } from './index.ts'
 import type { ResolvedToolSet, ToolDefinition, ToolExecutionInput, ToolExecutionMode, ToolExecution, ToolRunContext, ToolExecutionResult, ToolExecutionSuccess, ToolErrorInfo, ToolExecutionToken, PreToolDecision, PostToolDecision } from './contracts.ts'
@@ -255,9 +255,10 @@ export class ToolExecutionPipeline {
    * Dispatch the registered body with the original caller signal fused back
    * into any around-wrapper replacement. Cancellation never abandons the body:
    * a started promise reaches quiescence before its outcome becomes `ABORTED`.
-   * After cancellation, a thrown signal reason or `AbortError` without
-   * `HarnessError` identity keeps its message and gains the `ABORTED`
-   * identity; a thrown `HarnessError` and any other failure stay unchanged.
+   * After cancellation, a thrown signal reason or an `Error` named
+   * `AbortError` without `HarnessError` identity keeps its message and gains
+   * the `ABORTED` identity, whichever operation inside the body aborted; a
+   * thrown `HarnessError` and any other failure stay unchanged.
    */
   private async dispatchToolBody(exec: MutableToolRunContext): Promise<ToolExecutionResult> {
     const state = this.cancellationStates.get(exec)
@@ -695,7 +696,7 @@ function errorInfo(error: unknown): ToolErrorInfo | undefined {
 }
 
 /** Materialize a non-granting approval outcome as a denial with routable `ApprovalError` identity. */
-function approvalDenial(reason: string, code: string): Extract<PreToolDecision, { kind: 'deny' }> {
+function approvalDenial(reason: string, code: ApprovalErrorCode): Extract<PreToolDecision, { kind: 'deny' }> {
   return { kind: 'deny', reason, info: { name: APPROVAL_ERROR_NAME, code } }
 }
 

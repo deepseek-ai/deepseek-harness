@@ -5,7 +5,8 @@ import { HarnessError } from '@deepseek-ai/dsh-llm'
 /**
  * Every {@link JobError} code:
  * - `JOB_BACKGROUND_DISABLED` — the calling tool's configuration turns background execution off.
- * - `JOB_CONTROLLER_UNAVAILABLE` — no attached job controller serves the job's owner.
+ * - `JOB_CONTROLLER_UNAVAILABLE` — the jobs service is composed but no attached job controller serves the
+ *   job's owner. A call whose composition lacks the jobs service itself throws `ToolContextUnavailableError`.
  * - `JOB_NOT_FOUND` — the job id names no listed job.
  * - `JOB_FOREIGN_SESSION` — the job belongs to another Session.
  * - `JOB_OWNER_NOT_LIVE` — the owning Agent is no longer live.

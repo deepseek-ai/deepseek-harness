@@ -54,7 +54,7 @@ kind: "package-reference"
 
 ### 可能出什么问题
 
-任何预检拒绝都不会留下 job id 或已注册的工作。实现和任务工具用 `JobError` 报告预期的任务失败；它是 `HarnessError`，code 取自 `JOB_ERROR_CODES`（如 `JOB_NOT_FOUND`、`JOB_FOREIGN_SESSION`、`JOB_LIMIT_REACHED`），因此工具结果会保留 `error.name` 和 `error.code`。由随附的进程内注册表管理的任务会随 harness 进程终止而消失；跨重启的持久执行需要一个实现本约定的不同后端。
+任何预检拒绝都不会留下 job id 或已注册的工作。接缝导出 `JobError`：它是 `HarnessError`，code 取自 `JOB_ERROR_CODES`（如 `JOB_NOT_FOUND`、`JOB_FOREIGN_SESSION`、`JOB_LIMIT_REACHED`），供实现和任务工具报告预期的任务失败，使结果带有可路由的 `error.name` 和 `error.code`。由随附的进程内注册表管理的任务会随 harness 进程终止而消失；跨重启的持久执行需要一个实现本约定的不同后端。
 
 -----
 

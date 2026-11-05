@@ -194,13 +194,13 @@ describe('TerminalSessionService ownership and lifecycle', () => {
     await expect(ctx.terminals.spawn(owner, { type: 'stub', name: 'main' })).rejects.toMatchObject({ code: 'DUPLICATE_NAME' })
 
     const operation = ctx.terminals.startSend(owner, created.sessionId, { text: 'echo hi', submit: true })
-    expect(() => ctx.terminals.startSend(owner, created.sessionId, { text: 'pwd', submit: true })).toThrow(TerminalError)
     let concurrent: unknown
     try {
       ctx.terminals.startSend(owner, created.sessionId, { text: 'pwd', submit: true })
     } catch (error: unknown) {
       concurrent = error
     }
+    expect(concurrent).toBeInstanceOf(TerminalError)
     expect(concurrent).toBeInstanceOf(HarnessError)
     expect(concurrent).toMatchObject({ name: 'TerminalError', code: 'SEND_ACTIVE' })
     expect(operation.readOutput()).toEqual({ delta: 'delta', truncated: false })

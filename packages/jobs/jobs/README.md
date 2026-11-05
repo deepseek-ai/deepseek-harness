@@ -54,7 +54,7 @@ Loading these two plugins on a harness base that already provides the agent, too
 
 ### What can go wrong
 
-Any preflight rejection leaves no job id or registered work. Implementations and job tools report expected job failures as `JobError`, a `HarnessError` whose code is one of `JOB_ERROR_CODES` (`JOB_NOT_FOUND`, `JOB_FOREIGN_SESSION`, `JOB_LIMIT_REACHED`, and others), so a tool result keeps `error.name` and `error.code`. Jobs managed by the shipped in-process registry die with the harness process; durable execution across restarts needs a different backend implementing this contract.
+Any preflight rejection leaves no job id or registered work. The seam exports `JobError`, a `HarnessError` whose code is one of `JOB_ERROR_CODES` (`JOB_NOT_FOUND`, `JOB_FOREIGN_SESSION`, `JOB_LIMIT_REACHED`, and others), for implementations and job tools to report expected job failures with a routable `error.name` and `error.code`. Jobs managed by the shipped in-process registry die with the harness process; durable execution across restarts needs a different backend implementing this contract.
 
 -----
 
