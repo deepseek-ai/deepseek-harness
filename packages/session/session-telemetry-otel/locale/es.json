@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Carga del registro de sesión de comentarios",
+    "description": "De acuerdo con la política de autorización de comentarios, los registros de sesiones relevantes se cargan a través de OpenTelemetry."
+  }
+}

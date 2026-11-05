@@ -16,6 +16,7 @@ import SessionProjectionRegistry from './packages/session/session-projection/lib
 import LocalFileSystem from './packages/fs/fs-local/lib/index.js'
 import SystemPrompt from './packages/core/system-prompt/lib/index.js'
 import ToolRuntime from './packages/core/tools/lib/index.js'
+import { executeToolFixture } from './packages/test-support/tool-testkit/lib/index.js'
 import { Session, SESSION_FORMAT_VERSION } from './packages/core/session/lib/index.js'
 import * as Present from './packages/deliverables/tool-present/lib/index.js'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -40,7 +41,7 @@ try {
   ctx.on('tools/result', (_exec, result) => events.push(result))
   let n = 0
   for (const [files, code] of [[[{ path: 'missing' }], 'FS_NOT_FOUND'], [[{ path: 42 }], 'INVALID_ARGS']]) {
-    const result = await ctx.tools.execute({ signal: new AbortController().signal, name: 'present', callId: 'call-' + (++n), arguments: { files }, agent: owner })
+    const result = await executeToolFixture(ctx, { signal: new AbortController().signal, name: 'present', callId: 'call-' + (++n), arguments: { files }, agent: owner })
     assert.equal(result.isError, true)
     assert.equal(result.error.info.code, code)
     assert.equal(events.at(-1).error.info.code, code)

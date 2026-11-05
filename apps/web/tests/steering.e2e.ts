@@ -7,10 +7,11 @@ import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import type { Browser, Page, WebSocketRoute } from 'playwright'
 import { chromium } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, onTestFailed, type MockInstance } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished, type MockInstance } from 'vitest'
+import type { Agent } from '@deepseek-ai/dsh-agent'
 import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
-import { expandAssistantStream } from '@deepseek-ai/dsh-llm'
+import { expandAssistantStream, type UserMessage } from '@deepseek-ai/dsh-llm'
 import { parseRemoteStreamServerMessage } from '@deepseek-ai/dsh-api-gateway/stream-protocol'
 import {
   acknowledgeReloadConnectionLoss, assertFixtureInventory, captureExpandedTurnProcessAria, captureStableAria,
@@ -109,7 +110,7 @@ describe('web e2e: mid-turn steering lands durably and visibly', () => {
     }
   })
 
-  it('strictly steers one queued row; the interjection is logged, rendered, and obeyed', async () => {
+  it('strictly steers one queued row and deduplicates its retry after claiming', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-steering'))
     if (MODE !== 'record') {
       // The steer lands as a durable user/message, so the inventory holds
@@ -155,12 +156,34 @@ describe('web e2e: mid-turn steering lands durably and visibly', () => {
       await compareOrRefreshGolden(MID_EXPECTED, snapshot, MODE)
     }
 
-    // Answer the composer; the tool result closes the step, the loop drains
-    // the steer as user/message, and the steered continuation runs the
-    // final model call.
-    await composer.getByRole('radio', { name: 'Yes' }).click()
-    await composer.getByRole('radio', { name: 'Yes' }).press('Enter')
-    await settled
+    const claimed = Promise.withResolvers<{ agent: Agent; message: UserMessage }>()
+    const release = Promise.withResolvers<undefined>()
+    const stopHolding = scaffold.ctx.on('agent/pre-step', async ({ agent, messages }, next) => {
+      const message = messages.find(item => item.content.some(block => block.type === 'text' && block.text === STEER))
+      if (message !== undefined) {
+        claimed.resolve({ agent, message })
+        await release.promise
+      }
+      return next()
+    })
+    onTestFinished(() => { release.resolve(undefined); stopHolding() })
+    try {
+      await composer.getByRole('radio', { name: 'Yes' }).click()
+      await composer.getByRole('radio', { name: 'Yes' }).press('Enter')
+      const { agent, message } = await claimed.promise
+      expect(claimedMessages(sessionEvents, STEER)).toHaveLength(0)
+      const source = message.source
+      if (source.kind !== 'user' || !('rpcId' in source)) throw new Error('steering input has no request identity')
+      await expect(scaffold.ctx.sessionController.prompt({
+        sessionId: agent.id, requestId: source.rpcId, mode: 'queue',
+        content: [{ type: 'text', text: STEER }],
+      }, new AbortController().signal)).resolves.toEqual({ accepted: true })
+      expect([...agent.inbox.nextTurn, ...agent.inbox.nextStep]).toEqual([])
+    } finally {
+      release.resolve(undefined)
+      stopHolding()
+      await settled
+    }
 
     if (MODE === 'record') {
       const sessionId = await settled
@@ -224,6 +247,8 @@ describe.skipIf(MODE === 'record')('web e2e: retained steering and a post-stop m
   let hostClock: MockInstance<typeof Date.now> | undefined
   const sessionEvents: SessionEvent[] = []
   const requestInputs: string[][] = []
+  let firstRequestSignal: AbortSignal | undefined
+  const questionStarted = Promise.withResolvers<undefined>()
   const releaseQuestion = Promise.withResolvers<undefined>()
   const FOLLOWUP = 'Also acknowledge this second message.'
   const RESPONSE = "Great, let's move forward. BANANA!"
@@ -239,9 +264,13 @@ describe.skipIf(MODE === 'record')('web e2e: retained steering and a post-stop m
         message.role === 'user'
           ? message.content.flatMap(block => block.type === 'text' ? [block.text] : [])
           : []))
+      if (requestInputs.length === 1) firstRequestSignal = options.signal
       for await (const chunk of next()) {
         yield chunk
-        if (requestInputs.length === 1 && chunk.type === 'block-start') await releaseQuestion.promise
+        if (requestInputs.length === 1 && chunk.type === 'block-start') {
+          questionStarted.resolve(undefined)
+          await releaseQuestion.promise
+        }
       }
     }, { prepend: true })
     browser = await chromium.launch()
@@ -271,11 +300,13 @@ describe.skipIf(MODE === 'record')('web e2e: retained steering and a post-stop m
     const input = page.locator('[data-composer-input][contenteditable="true"]').first()
     await input.fill(PROMPT)
     await input.press('Enter')
+    await questionStarted.promise
     await expect.poll(() => requestInputs.length, { timeout: 10_000 }).toBe(1)
     await input.fill(STEER)
     await input.press('Meta+Enter')
     await page.locator('[data-pending-steering]').filter({ hasText: STEER }).waitFor({ timeout: 10_000 })
     await page.getByRole('button', { name: 'Stop generating', exact: true }).click()
+    await expect.poll(() => firstRequestSignal?.aborted).toBe(true)
     releaseQuestion.resolve(undefined)
     await expect.poll(() => sessionEvents.filter(event => event.type === 'turn/end').length, { timeout: 10_000 }).toBe(1)
     expect(claimedMessages(sessionEvents, STEER)).toHaveLength(0)
@@ -363,8 +394,8 @@ describe.each(['reconnect', 'delayed-inbox'] as const)('web e2e: composer shortc
       server.onMessage((message) => {
         const frame = parseRemoteStreamServerMessage(String(message))
         if (holdInbox && frame.type === 'item') {
-          const value = frame.value as { type?: string; key?: string }
-          if (value.type === 'projection' && value.key === 'inbox') heldStream = frame.streamId
+          const value = frame.value as { type?: string; changes?: readonly { key: string }[] }
+          if (value.type === 'projection' && value.changes?.some(change => change.key === 'inbox') === true) heldStream = frame.streamId
         }
         // Hold the remaining control stream in FIFO order, while history keeps flowing.
         if (holdInbox && frame.streamId === heldStream) heldControl.push(() => { route.send(message) })

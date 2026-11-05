@@ -21,3 +21,45 @@ export const en = {
   copy: 'Copy',
   copied: 'Copied',
 } satisfies Record<keyof typeof zh, string>
+
+/** Japanese copy, checked against the English keys. */
+export const ja = {
+  'title': 'コード',
+  'copy': 'コピー',
+  'copied': 'コピーしました',
+} satisfies Record<keyof typeof en, string>
+
+/** Spanish dictionary, checked against the English keys. */
+export const es = {
+  title: 'Código',
+  copy: 'Copiar',
+  copied: 'Copiado',
+} satisfies Record<keyof typeof en, string>
+
+/** French dictionary, checked against the English keys. */
+export const fr = {
+  title: 'Coder',
+  copy: 'Copier',
+  copied: 'Copié',
+} satisfies Record<keyof typeof en, string>
+
+/** German dictionary, checked against the English keys. */
+export const de = {
+  title: 'Code',
+  copy: 'Kopieren',
+  copied: 'Kopiert',
+} satisfies Record<keyof typeof en, string>
+
+/** Russian dictionary, checked against the English keys. */
+export const ru = {
+  title: 'Код',
+  copy: 'Копировать',
+  copied: 'Скопировано',
+} satisfies Record<keyof typeof en, string>
+
+/** Portuguese dictionary, checked against the English keys. */
+export const pt = {
+  title: 'Código',
+  copy: 'Copiar',
+  copied: 'Copiado',
+} satisfies Record<keyof typeof en, string>

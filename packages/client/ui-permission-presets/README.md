@@ -27,6 +27,8 @@ Choose permission presets for the current Web session or future sessions. Genera
 
 Mount this plugin alongside the settings, commands, and conversation packages. General settings receives the future-default row; the composer receives the `conversation.input.permission` control, and bare `/permission` opens the slash picker. Current-session controls require both the Session projection and a complete catalog snapshot. A permission-less composition exposes neither current-session controls nor the Settings row.
 
+In narrow browser settings, the default-permission label uses a smaller gutter before its control. Windows and macOS desktop windows retain the standard spacing.
+
 ### The picker
 
 A pick submits the `/permission <preset>` command line. The argument-bearing form (`/permission <preset>` typed directly) still switches directly; the decoration replaces only the bare invocation. The built-in labels are `Read Only`, `Workspace Write`, `Full access`, and `Auto review` in English and `仅可查看`, `工作区内修改`, `完全权限`, and `自动审查` in Chinese. Explicit host labels remain unchanged, unknown kebab-case names render in title case, and `auto` carries an `EXP` badge in menu options plus an experimental-risk confirmation. The selected composer control shows the mode without the badge. `custom` is display state, never a target.

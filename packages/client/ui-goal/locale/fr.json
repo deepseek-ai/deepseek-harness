@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "barre de cible de session",
+    "description": "Affiche l'objectif et le statut de la session en cours au-dessus de la zone de saisie."
+  }
+}

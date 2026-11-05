@@ -1,4 +1,4 @@
-/** The shipped patch leaves shared entries available while skipping an absent native provider. */
+/** Explicit patch overlays bypass bundle admission and must not import an absent native provider. */
 import { readFile } from 'node:fs/promises'
 import { Context } from '@deepseek-ai/cordis'
 import Loader, { interpolate, type EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
@@ -6,7 +6,7 @@ import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
 import { load } from 'js-yaml'
 import { expect, it, vi } from 'vitest'
 
-it.each(['darwin', 'win32', 'linux'])('loads the native provider only on Darwin for %s', async (platform) => {
+it.each(['darwin', 'win32', 'linux'])('loads the exported patch directly on %s and imports the native provider only on Darwin', async (platform) => {
   const patch = load(await readFile(new URL('../cordis.patch.yml', import.meta.url), 'utf8'), {
     schema: entryListSchema,
   }) as { insert: EntryOptions[] }[]

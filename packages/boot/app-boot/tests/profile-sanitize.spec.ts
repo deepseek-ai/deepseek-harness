@@ -4,7 +4,8 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSy
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import { initProfile, PROFILE_PATCH_FILENAME, PROFILE_TEMPLATES, readProfileManifest, sanitizeProfile } from '../src/index.ts'
+import { initProfile, PROFILE_PATCH_FILENAME, readProfileManifest, sanitizeProfile } from '../src/index.ts'
+import { PROFILE_TEMPLATES } from '@deepseek-ai/dsh-official-bundles'
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs')>()

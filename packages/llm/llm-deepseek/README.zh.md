@@ -50,7 +50,7 @@ kind: "package-reference"
     filesApiTimeoutMs: 60000
 ```
 
-请求用 `provider: deepseek-official` 选择路由；模型 id 原样传到协议，因此新增 DeepSeek 模型无需重新注册。省略 `models` 时公布支持文本和图像的 `deepseek-flash`，以及仅支持文本的 `deepseek-v4-pro`，各自的上下文窗口均为 1,000,000 token。显式列表会替换这些默认值，核心调用中未列出的模型 id 仍作为纯文本路由原样通过。GUI 选择要求模型具有目录条目；条目消失后，已保存的选择仍可提交请求。包括模型发现工具在内的客户端可通过 `ctx.llm.listModels('deepseek-official')` 读取这些建议性条目。支持图片的条目可把 `imagePixelBudget` 设置为正整数或 `low`，也可以设置 `imageMaxBytes`。当端点把 `messages` 中任意位置最新的 `system` 消息读作完整的有效系统提示词时，条目可以声明 `systemPromptUpdate: in-history`；适配器会在已解析模型与已准备调用上报告该模式，agent loop（智能体循环）随后把变化后的提示词追加到已缓存历史之后，而不是改写开头的 system 消息（[决策规则](../../core/agent-loop/README.zh.md#understand-the-implementation)）。默认的 `deepseek-flash` 条目声明该模式；其他模型需通过 `models` 显式声明，`in-history` 以外的任何值都会在加载时以 `llm-deepseek: catalog model "<id>" systemPromptUpdate must be "in-history" when present` 失败。
+请求用 `provider: deepseek-official` 选择路由；模型 id 原样传到协议，因此新增 DeepSeek 模型无需重新注册。省略 `models` 时公布支持文本和图像的 `deepseek-flash`，以及仅支持文本的 `deepseek-v4-pro`，各自的上下文窗口均为官方模型列表声明的 1,048,576 token。显式列表会替换这些默认值，核心调用中未列出的模型 id 仍作为纯文本路由原样通过。在官方端点上，当 `models` 保持这些默认值时，API key 路由改为使用服务端的模型列表（[列表规则](../llm-deepseek-api-key/README.zh.md#use-this-package)）。GUI 选择要求模型具有目录条目；条目消失后，已保存的选择仍可提交请求。包括模型发现工具在内的客户端可通过 `ctx.llm.listModels('deepseek-official')` 读取这些建议性条目。支持图片的条目可把 `imagePixelBudget` 设置为正整数或 `low`，也可以设置 `imageMaxBytes`。当端点把 `messages` 中任意位置最新的 `system` 消息读作完整的有效系统提示词时，条目可以声明 `systemPromptUpdate: in-history`；适配器会在已解析模型与已准备调用上报告该模式，agent loop（智能体循环）随后把变化后的提示词追加到已缓存历史之后，而不是改写开头的 system 消息（[决策规则](../../core/agent-loop/README.zh.md#understand-the-implementation)）。默认的 `deepseek-flash` 条目声明该模式；其他模型需通过 `models` 显式声明，`in-history` 以外的任何值都会在加载时以 `llm-deepseek: catalog model "<id>" systemPromptUpdate must be "in-history" when present` 失败。
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
@@ -84,11 +84,14 @@ kind: "package-reference"
 
 Messages 以内容块发送文本、思考、工具调用和工具结果，以 `output_config.effort` 发送推理强度，并以 Files 引用或内联 base64 发送图片。声明 `systemPromptUpdate: in-history` 的模型保留初始顶层 system，在对应 user/tool-result 轮次之后发送新的 system 快照；未声明能力时，使用最新快照作为顶层 system。回放元数据保留模型与思考签名。无效的回放元数据产生警告并省略签名，不丢弃文本或工具历史。 模型条目可声明 `toolUpdate: addition-only` 或 `in-history`；默认 `deepseek-flash` 条目声明 `addition-only`。投影后的 developer 工具更新转换为 system 角色的 `tool_addition` 和 `tool_removal` 块，引用已声明名称，延迟声明携带 `defer_loading`。包含这些块的请求发送 `mid-conversation-tool-changes-2026-07-01` beta 请求头。 Messages 会省略 assistant 的空文本块，并跳过转换后没有内容的 assistant 消息，包括其他协议保存的历史。已存储的 Session 内容保持原样。
 
+<a id="account-credentials"></a>
 ### 账号凭据
 
 `deepseek-official` 仅解析配置的 API Key 引用。`deepseek-account` 仅解析[账号提供者](../../credentials/deepseek-account-platform/README.zh.md)保存的授权，其允许的 `inferenceOrigin` 默认为 `https://api.deepseek.com`。两条路由均不回退到另一凭证。退出登录删除账号授权，保留 API Key。
 
 Messages 和 Files 请求通过 `x-dsh-auth-token` 发送账号 token，不加 Bearer 前缀；API Key 使用 `x-api-key`。两种凭据模式均拒绝重定向。账号 provider 负责 HTTP 401 分类和凭据失效处理；传输层将错误交给其回调。
+
+[共享凭据函数](src/credential.ts)为模型路由和 Web 提供方获取凭据，不决定请求头。`resolveDeepSeekApiKey(ctx, ref)` 返回规范化并校验后的密钥或 `undefined`；已安装的凭据服务具有权威性，仅在该服务缺席时读取启动环境。存储与密钥格式错误向上传播。`deepSeekApiKeyConfigured(ctx, ref)` 检查是否存在，不读取已存密钥值。账号函数将目标地址许可检查和精确 token 作废交给账号服务；作废时隔离存储失败，保留原请求错误。
 
 ### 带 thinking 与图片的流式调用
 
@@ -118,7 +121,7 @@ Files 模式通过 `maxRequestFilesBytes` 与 `maxImagesPerRequest` 限制保留
 
 非 2xx 响应以稳定 code 失败：`AUTH`（401/403）、`QUOTA`、`RATE_LIMIT`、`CONTEXT_WINDOW_EXCEEDED`、`INVALID_REQUEST`、`SERVER` 以及其他情况的 `HTTP_<status>`；响应前传输失败抛出 `TRANSPORT`，调用方中止抛出 `ABORTED`，流空闲超时抛出 `TIMEOUT`。请求扩展字段冲突，或直接提供的 `prepareExtensions` 拒绝准备时，使用 `REQUEST_EXTENSION` 失败，并在消息中附上原因链；2xx 后接受失败只记录告警，响应仍会继续流式返回。当提供方未指出 file id 时，规范化图片拒绝会列出所有可能附件及其持久位置。陈旧文件拒绝会在一次上传索引更新中删除全部点名映射（或该次尝试使用的全部映射），并允许一次替换模型请求。协议违规抛出 `STREAM_CLOSED` 或 `MALFORMED_RESPONSE`；不带内容块的终止 `stop` 变成 `EMPTY_RESPONSE`，默认重试策略会重试它。官方路由缺少 API Key 的请求以 `MISSING_CREDENTIAL` 失败；格式错误的凭据以 `INVALID_CREDENTIAL` 失败，并点名需要修复的引用——绝不包含密钥的任何部分。
 
-提供方插件负责目录可用性：API key 路由在能解析到 API key 时提供配置中的 `models`，账号路由在登录时提供账号的模型列表（见[账号提供方](../llm-deepseek-account/README.zh.md)）。传输层提供内置目录、目录条目字段的 schema 和能力解析。提供方还可以提供 `connect(signal)`：在提供方自己的工作（例如加载目录）完成后，为精确模型查询和预备调用解析连接；以及 `admit(connection, model)`：在网络请求之前拒绝某个模型。
+提供方插件负责目录可用性：API key 路由在能解析到 API key 时提供配置中的 `models`，在官方端点上且 `models` 为内置目录时改为提供官方模型列表；账号路由在登录时提供账号的模型列表（见 [API key](../llm-deepseek-api-key/README.zh.md) 与[账号](../llm-deepseek-account/README.zh.md)提供方）。传输层提供内置目录、目录条目字段的 schema 和能力解析，以及两条路由共用的列表机制：`requestModelListing`、按凭据区分的 `ModelListingCache`（由 `createModelListingCache` 持有，负责自动刷新、通知与插件清理），以及带客户端版本门控和列表角标的 `resolveListedCatalog` 与 `refuseListedModel`；`catalogModelInfo` 把列表角标附到公布的条目上。角标文字拒绝控制字符、Unicode 行分隔符、双向控制符及仅由空白或默认可忽略字符组成的字符串，组合 emoji 仍有效。提供方还可以提供 `connect(signal)`：在提供方自己的工作（例如加载目录）完成后，为精确模型查询和预备调用解析连接；以及 `admit(connection, model)`：在网络请求之前拒绝某个模型。
 
 -----
 
@@ -136,7 +139,7 @@ Files 模式通过 `maxRequestFilesBytes` 与 `maxImagesPerRequest` 限制保留
 
 ### 源码导航
 
-[`src/index.ts`](src/index.ts) 导出协议库；[`src/host.ts`](src/host.ts) 为 provider 插件绑定共享 Host 服务。[`src/adapter.ts`](src/adapter.ts) 管理请求生命周期；[`src/serialize.ts`](src/serialize.ts) 和 [`src/translate.ts`](src/translate.ts) 映射模型输入与流式输出。[`src/file-store.ts`](src/file-store.ts) 通过 [`src/files-api.ts`](src/files-api.ts) 管理上传复用与恢复。
+[`src/index.ts`](src/index.ts) 导出协议库；[`src/host.ts`](src/host.ts) 为 provider 插件绑定共享 Host 服务。[`src/adapter.ts`](src/adapter.ts) 管理请求生命周期；[`src/serialize.ts`](src/serialize.ts) 和 [`src/translate.ts`](src/translate.ts) 映射模型输入与流式输出。[`src/file-store.ts`](src/file-store.ts) 通过 [`src/files-api.ts`](src/files-api.ts) 管理上传复用与恢复。[`src/listing.ts`](src/listing.ts)、[`src/listing-cache.ts`](src/listing-cache.ts) 和 [`src/listed-catalog.ts`](src/listed-catalog.ts) 负责 `/models` 请求与解码、列表缓存和列表目录解析。
 
 ### 协议流程
 
@@ -170,7 +173,7 @@ Files 模式通过 `maxRequestFilesBytes` 与 `maxImagesPerRequest` 限制保留
 
 #### 模型看到什么
 
-所选 DeepSeek 模型会收到 harness 系统提示词、消息历史、工具 schema、停止序列与调用配置（`maxTokens`、`reasoningEffort`、`temperature`），不包含适配器撰写的提示词散文。提供方专用请求扩展字段留在模型输入之外。视觉模型通常接收 Files API 引用形式的用户与工具结果图片，其旁带附件句柄和请求预览尺寸。当前执行文件系统可以映射附件提供方的宿主对象时，它还会收到规范化对象路径；描述符会把该副本标记为只读，并警告规范化可能缩放或重新编码上传内容。Files 解析失败时，全部保留图片改用内联 base64；超出预算的较旧图片则在占位文本中保留当前请求已解析的访问方式。此前 assistant 轮次的推理内容会原样传回，无论该轮次是否调用了工具。 对于非法 JSON 或非对象的历史工具参数，Messages 发送 `{}`。此参数兜底保留调用 ID、工具名和工具结果；原始参数仍保留在 Session 日志中。新生成的 Messages 工具参数仍须是有效 JSON 对象。 Messages 会省略用户消息和工具结果中的 `reasoning` 与 `tool-call` 块。这也允许回放包含助手输出的已保存子 Agent 通知；原始 Session 内容保持完整。转换后的空用户消息会被跳过，空工具结果则保留调用 id 和错误标记。其他不支持的输入块仍会以 `UNSUPPORTED_CONTENT` 失败。
+所选 DeepSeek 模型会收到 harness 系统提示词、消息历史、工具 schema、停止序列与调用配置（`maxTokens`、`reasoningEffort`、`temperature`），不包含适配器撰写的提示词散文。提供方专用请求扩展字段留在模型输入之外。视觉模型通常接收 Files API 引用形式的用户与工具结果图片，其旁带附件句柄和请求预览尺寸。当前执行文件系统可以映射附件提供方的宿主对象时，它还会收到规范化对象路径；描述符会把该副本标记为只读，并警告规范化可能缩放或重新编码上传内容。Files 解析失败时，全部保留图片改用内联 base64；超出预算的较旧图片则在占位文本中保留当前请求已解析的访问方式。此前 assistant 轮次的推理内容会原样传回，无论该轮次是否调用了工具。 对于非法 JSON 或非对象的历史工具参数，Messages 发送 `{}`。此参数兜底保留调用 ID、工具名和工具结果；原始参数仍保留在 Session 日志中。新生成的 Messages 工具参数仍须是有效 JSON 对象。 Messages 会省略用户消息和工具结果中的 `reasoning` 与 `tool-call` 块。这也允许回放包含助手输出的已保存子 Agent 通知；原始 Session 内容保持完整。转换后的空用户消息会被跳过，空工具结果则保留调用 id 和错误标记。其他不支持的输入块仍会以 `UNSUPPORTED_CONTENT` 失败。 适配器原样发送全延迟工具列表，并传递提供方的拒绝错误，不添加占位工具或激活真实工具。共享的[工具更新投影](../llm/README.zh.md#known-limitations-and-deferred-work)在移除任何工具或向空工具集添加工具时重建 addition-only 基线，后续添加仍保持延迟加载。
 
 #### Token 影响
 

@@ -8,20 +8,27 @@
  * workspace unknown — takes the same bar's place over the pages already loaded,
  * with the same reload. The type's controls, viewer choice, wrap and reload, sit at the end of
  * the path row; the Sidebar's strip carries none of them.
+ *
+ * Every state renders inside `PreviewFrame`, which places the workspace
+ * navigator and its header toggle from the files Factories, in docked and
+ * floating panes. Both render empty when unregistered and stay mounted across
+ * loading states. A document layer handling Escape calls `preventDefault()` to
+ * keep the navigator from also closing.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import clsx from 'clsx'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale, PropsRenderFactories, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import {
   FileTypeIcon, IconNowrapFillRegular, IconPauseOutlineRegular, IconPlayOutlineRegular,
-  IconRefreshOutlineRegular, IconWrapFillRegular, Menu, PathLabel, Tooltip, classifyFileType,
+  IconRefreshOutlineRegular, IconWrapFillRegular, Menu, Tooltip, classifyFileType,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { pathPartsOf } from '@deepseek-ai/dsh-util-workspace-path'
 import type { TextInjected } from './face.ts'
 import { emptyFailureRecourse, failureLine } from './failure-line.ts'
 import { LoadingIndicator } from './LoadingIndicator.tsx'
+import { PreviewFrame } from './PreviewFrame.tsx'
 import { hostFileOf } from './rpc.ts'
 import type { TextStore } from './store.ts'
 import type { DocumentContent } from './document/contract.ts'
@@ -43,7 +50,11 @@ export interface TextPreviewInjected extends TextInjected {
 /** The body's composed props: the tab, its navigation, the shared store and face, and copy. */
 export type TextPreviewProps =
   & PropsRuntime<'sidebar.right.pane.tab'>
-  & PropsRenderSlots<'sidebar.right.tab.document' | 'sidebar.right.tab.document.action' | 'sidebar.right.tab.document.actions' | 'sidebar.right.tab.document.unpreviewable'>
+  & PropsRenderSlots<
+    | 'sidebar.right.tab.document' | 'sidebar.right.tab.document.action' | 'sidebar.right.tab.document.actions'
+    | 'sidebar.right.tab.document.unpreviewable'
+  >
+  & PropsRenderFactories
   & PropsStore<TextStore>
   & InjectFace<TextPreviewInjected>
   & PropsLocale<'sidebarDocumentPreview'>
@@ -55,10 +66,11 @@ export type TextPreviewProps =
  */
 export function TextPreview({
   useTabInfo, useResource, useStore, actions, loadPage, reloadPages,
-  loadAll, reloadAll, prepareRenderer, useDocumentPreviews, renderSlot, t,
-  addResource, setResources,
+  loadAll, reloadAll, prepareRenderer, useDocumentPreviews, renderSlot, renderFactorySlot, t,
+  addResource, setResources, useContextMenu, sessionId,
 }: TextPreviewProps): ReactNode {
-  const { tab } = useTabInfo()
+  const { tab, panel } = useTabInfo()
+  const { getTriggerProps } = useContextMenu()
   const { navigation, signal } = tab
   const meta = useResource<'file'>(tab.contentId)
   const canRead = meta.status !== 'none'
@@ -124,21 +136,31 @@ export function TextPreview({
   }, [started, tab.id, file, signal, loadPage, loadAll, prepareRenderer, canRead, mode, selected, meta.value?.version])
 
   // Come back where the reader was once there is content to scroll: on a remount,
-  // after a reload rebuilt the content, or after the selected renderer changed.
-  // Scroll writes preserve both identities, so they never re-land.
+  // after a reload rebuilt the content, after the selected renderer changed, or
+  // after another text page arrived. The offset only moves down to the remembered
+  // one, and the next page is read while the remembered offset lies past the
+  // loaded pages. A line navigation not answered yet positions the body itself.
+  // Scroll writes preserve every identity here, so they never re-land.
   useEffect(() => {
     const body = scrollportRef.current
-    if (hasContent && body !== null && state !== undefined) body.scrollTop = state.scrollTop
-  }, [hasContent, selected?.id])
+    if (!hasContent || body === null || state === undefined) return
+    if (mode === 'text-pages' && line !== undefined && current?.revision !== navigation.revision) return
+    body.scrollTop = Math.max(body.scrollTop, state.scrollTop)
+    if (mode === 'text-pages' && body.scrollTop + 1 < state.scrollTop && current !== undefined
+      && !current.eof && !current.loading && current.failure === undefined && canRead) {
+      loadPage(tab.id, file, loadedThrough + 1, signal, meta.value?.version)
+    }
+  }, [hasContent, selected?.id, pages, current?.revision])
 
   // Answer a navigation once: a line the pages do not reach yet loads the next
   // page (again, until the pages cover it or the file ends); a line they hold
-  // is scrolled to and marked with a fading band. The store remembers the
-  // answer, so a remount restores the reader's place instead.
+  // is scrolled to and marked with a fading band. A renderer without source-line
+  // anchors answers it without moving. The store remembers the answer, so a
+  // remount restores the reader's place instead.
   useEffect(() => {
     const body = scrollportRef.current
     if (current === undefined || body === null || current.revision === navigation.revision) return
-    if (line === undefined || mode !== 'text-pages') {
+    if (line === undefined || mode !== 'text-pages' || selected?.sourceLines !== true) {
       actions.navigated(tab.id, navigation.revision)
       return
     }
@@ -194,17 +216,21 @@ export function TextPreview({
     return { kind: 'text', pages: loaded, text: loaded.filter(page => page.lines > 0).map(page => page.text).join('\n'), eof: current.eof }
   }, [mode, loaded, current?.complete, current?.eof, current?.loadRevision, rendererReload, actions, tab.id])
 
+  const frame = {
+    path: displayPath,
+    pathTrigger: getTriggerProps({ kind: 'file', value: { sessionId, path: displayPath, paneId: panel.id, ...(line === undefined ? {} : { line }) } }),
+    useTabInfo,
+    renderFactorySlot,
+  }
+  const handoff = fileOwner !== undefined && renderSlot('sidebar.right.tab.document.actions', fileOwner)
+
   // A known binary suffix with no matching renderer never reads: no plain-text
   // fallback, no viewer control, only the path, the unsupported line, and the
   // contributions that hand the file to the Host.
   if (selected === undefined && unviewable) {
     const { name: unsupportedName } = pathPartsOf(displayPath)
     return (
-      <div className={css.preview} data-textpreview-state="unsupported" data-textpreview-url={tab.contentId}>
-        <div className={css.header}>
-          <PathLabel path={displayPath} className={css.path} data-textpreview-path />
-          {fileOwner !== undefined && renderSlot('sidebar.right.tab.document.actions', fileOwner)}
-        </div>
+      <PreviewFrame {...frame} handoff={handoff} data-textpreview-state="unsupported" data-textpreview-url={tab.contentId}>
         <div className={css.body} data-textpreview-body>
           <div className={css.empty} data-textpreview-unsupported>
             <FileTypeIcon kind={classifyFileType(unsupportedName)} size={36} className={css.emptyIcon} />
@@ -212,16 +238,18 @@ export function TextPreview({
             {fileOwner !== undefined && renderSlot('sidebar.right.tab.document.unpreviewable', fileOwner)}
           </div>
         </div>
-      </div>
+      </PreviewFrame>
     )
   }
   if (state === undefined || selected === undefined) {
     return (
-      <div className={css.status} data-textpreview-state="loading">
-        {meta.status === 'none'
-          ? <p className={css.statusLine}>{t('resourceUnavailable')}</p>
-          : <LoadingIndicator label={t('loading')} />}
-      </div>
+      <PreviewFrame {...frame} handoff={handoff} data-textpreview-state="loading">
+        <div className={css.status}>
+          {meta.status === 'none'
+            ? <p className={css.statusLine}>{t('resourceUnavailable')}</p>
+            : <LoadingIndicator label={t('loading')} />}
+        </div>
+      </PreviewFrame>
     )
   }
   const next = loadedThrough + 1
@@ -231,8 +259,12 @@ export function TextPreview({
     loadPage(tab.id, file, next, signal, meta.value?.version)
   }
   return (
-    <div className={css.preview} data-textpreview-state="text" data-textpreview-url={tab.contentId} data-document-preview={selected.id}>
-      {meta.failure !== undefined && hasContent
+    <PreviewFrame
+      {...frame}
+      data-textpreview-state="text"
+      data-textpreview-url={tab.contentId}
+      data-document-preview={selected.id}
+      banner={meta.failure !== undefined && hasContent
         ? (
           // The file's metadata failed — gone, or its workspace unknown — which
           // outranks a pending change; the pages already read stay under it.
@@ -263,75 +295,77 @@ export function TextPreview({
             </button>
           </p>
         )}
-      <div className={css.header}>
-        <PathLabel path={displayPath} className={css.path} data-textpreview-path />
-        {candidates.length > 1
-          && (
-            <Menu
-              open={menuOpen}
-              anchor={(
-                <button type="button" className={clsx(css.tool, css.viewerTool)} aria-label={t('openWith')} title={selected.title()} data-document-viewer-menu onClick={() => { setMenuOpen(value => !value) }}>
-                  {selected.title()}
-                </button>
-              )}
-              items={candidates.map(candidate => ({ id: candidate.id, label: candidate.title() }))}
-              selectedId={selected.id}
-              onSelect={(id) => { actions.selected(tab.id, id); setMenuOpen(false) }}
-              onClose={() => { setMenuOpen(false) }}
-              align="end"
-              portal
-              dense
-            />
+      tools={(
+        <>
+          {candidates.length > 1
+            && (
+              <Menu
+                open={menuOpen}
+                anchor={(
+                  <button type="button" className={clsx(css.tool, css.viewerTool)} aria-label={t('openWith')} title={selected.title()} data-document-viewer-menu onClick={() => { setMenuOpen(value => !value) }}>
+                    {selected.title()}
+                  </button>
+                )}
+                items={candidates.map(candidate => ({ id: candidate.id, label: candidate.title() }))}
+                selectedId={selected.id}
+                onSelect={(id) => { actions.selected(tab.id, id); setMenuOpen(false) }}
+                onClose={() => { setMenuOpen(false) }}
+                align="end"
+                portal
+                dense
+              />
+            )}
+          {selected.wrap === true && (
+            // The tooltip names the action while the stable aria name and
+            // `aria-pressed` expose the control and its current state.
+            <Tooltip label={t(state.wrap ? 'wrap.disable' : 'wrap.enable')} side="bottom" delayMs={500}>
+              <button
+                type="button"
+                className={css.tool}
+                aria-pressed={state.wrap}
+                aria-label={t('wrap.aria')}
+                data-textpreview-tool="wrap"
+                onClick={() => {
+                  actions.toggledWrap(tab.id)
+                  // Wrapping reflows the lines under a line mark without resizing its scrollport.
+                  const body = scrollportRef.current
+                  /* v8 ignore next -- callback refs bind the scrollport during commit, before user input. */
+                  if (body !== null) clearLineMark(body)
+                }}
+              >
+                {state.wrap ? <IconNowrapFillRegular /> : <IconWrapFillRegular />}
+              </button>
+            </Tooltip>
           )}
-        {selected.wrap === true && (
-          // The tooltip names the action while the stable aria name and
-          // `aria-pressed` expose the control and its current state.
-          <Tooltip label={t(state.wrap ? 'wrap.disable' : 'wrap.enable')} side="bottom" delayMs={500}>
+          {content !== undefined && renderSlot('sidebar.right.tab.document.action', { content }, { entryKey: selected.id, hookContext: useTabInfo })}
+          <span hidden>
+            <Tooltip label={t(state.autoRefresh ? 'autoRefresh.disable' : 'autoRefresh.enable')} side="bottom" delayMs={500}>
+              <button type="button" className={css.tool} aria-label={t('autoRefresh')}
+                aria-pressed={state.autoRefresh} data-textpreview-tool="auto-refresh"
+                onClick={() => { actions.toggledAutoRefresh(tab.id) }}>
+                {state.autoRefresh ? <IconPauseOutlineRegular /> : <IconPlayOutlineRegular />}
+              </button>
+            </Tooltip>
+          </span>
+          {/* Preview and file-tree refresh controls own different reload lifecycles and locale namespaces. */}
+          {/* jscpd:ignore-start */}
+          <Tooltip label={t('reload')} shortcutKeys={tab.refreshShortcut?.keys} side="bottom" delayMs={500}>
             <button
               type="button"
               className={css.tool}
-              aria-pressed={state.wrap}
-              aria-label={t('wrap.aria')}
-              data-textpreview-tool="wrap"
-              onClick={() => {
-                actions.toggledWrap(tab.id)
-                // Wrapping reflows the lines under a line mark without resizing its scrollport.
-                const body = scrollportRef.current
-                /* v8 ignore next -- callback refs bind the scrollport during commit, before user input. */
-                if (body !== null) clearLineMark(body)
-              }}
+              aria-label={t('reload')}
+              data-textpreview-tool="reload"
+              aria-keyshortcuts={tab.refreshShortcut?.aria}
+              onClick={reload}
             >
-              {state.wrap ? <IconNowrapFillRegular /> : <IconWrapFillRegular />}
+              <IconRefreshOutlineRegular />
             </button>
           </Tooltip>
-        )}
-        {content !== undefined && renderSlot('sidebar.right.tab.document.action', { content }, { entryKey: selected.id, hookContext: useTabInfo })}
-        <span hidden>
-          <Tooltip label={t(state.autoRefresh ? 'autoRefresh.disable' : 'autoRefresh.enable')} side="bottom" delayMs={500}>
-            <button type="button" className={css.tool} aria-label={t('autoRefresh')}
-              aria-pressed={state.autoRefresh} data-textpreview-tool="auto-refresh"
-              onClick={() => { actions.toggledAutoRefresh(tab.id) }}>
-              {state.autoRefresh ? <IconPauseOutlineRegular /> : <IconPlayOutlineRegular />}
-            </button>
-          </Tooltip>
-        </span>
-        {/* Preview and file-tree refresh controls own different reload lifecycles and locale namespaces. */}
-        {/* jscpd:ignore-start */}
-        <Tooltip label={t('reload')} shortcutKeys={tab.refreshShortcut?.keys} side="bottom" delayMs={500}>
-          <button
-            type="button"
-            className={css.tool}
-            aria-label={t('reload')}
-            data-textpreview-tool="reload"
-            aria-keyshortcuts={tab.refreshShortcut?.aria}
-            onClick={reload}
-          >
-            <IconRefreshOutlineRegular />
-          </button>
-        </Tooltip>
-        {/* jscpd:ignore-end */}
-        {fileOwner !== undefined && renderSlot('sidebar.right.tab.document.actions', fileOwner)}
-      </div>
+          {/* jscpd:ignore-end */}
+        </>
+      )}
+      handoff={handoff}
+    >
       <div
         ref={bindBody}
         className={clsx(css.body, state.wrap && css.wrap)}
@@ -342,7 +376,11 @@ export function TextPreview({
           /* v8 ignore next -- callback refs bind the scrollport during commit, before user input. */
           if (body === null) return
           if (event.target !== body) return
-          actions.scrolled(tab.id, body.scrollTop)
+          // Shorter or emptied content pins the body to its end below the remembered
+          // offset; that clamp is layout, not the reader, so the offset survives it.
+          const clamped = body.scrollTop >= body.scrollHeight - body.clientHeight - 1
+            && body.scrollTop < state.scrollTop
+          if (!clamped) actions.scrolled(tab.id, body.scrollTop)
           if (mode === 'text-pages' && current?.failure === undefined && body.clientHeight > 0
             && body.scrollTop + body.clientHeight >= body.scrollHeight - 1) loadNext()
         }}
@@ -407,6 +445,6 @@ export function TextPreview({
           </button>
         )}
       </div>
-    </div>
+    </PreviewFrame>
   )
 }

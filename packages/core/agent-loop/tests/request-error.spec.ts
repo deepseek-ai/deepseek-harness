@@ -1,3 +1,4 @@
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
@@ -17,6 +18,7 @@ async function harness(adapter: MockAdapter): Promise<Context> {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(AgentLoop, { agents: [] })
   ctx.llm.registerAdapter(['mock'], adapter)
@@ -25,7 +27,7 @@ async function harness(adapter: MockAdapter): Promise<Context> {
 
 function fail(message: string, code: string): () => never {
   return () => {
-    throw new LlmError(message, code)
+    throw LlmError.fromFailure({ message: message, code: code })
   }
 }
 
@@ -36,7 +38,7 @@ describe('agent/request-error', () => {
     const agent = await ctx.agentLoop.create(SessionId('request-error-narrow'), { provider: 'mock', model: 'mock' })
     let recoveries = 0
     ctx.on('agent/request', () => {
-      throw new LlmError('middleware failed', 'MIDDLEWARE')
+      throw LlmError.fromFailure({ message: 'middleware failed', code: 'MIDDLEWARE' })
     })
     ctx.on('agent/request-error', async () => {
       recoveries += 1

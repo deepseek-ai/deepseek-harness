@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Interface de aprovação de operação",
+    "description": "Exibe ações com aprovação pendente e retorna as seleções do usuário para tarefas em execução."
+  }
+}

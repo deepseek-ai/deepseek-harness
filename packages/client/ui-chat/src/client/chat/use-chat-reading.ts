@@ -89,11 +89,12 @@ export class ChatReading {
 
   /**
    * Follow the tail on the active fold's animation clock.
+   * @param input - whether the reader's own input requests the landing rather than a content change.
    * @returns whether a fold batch owns the tail movement instead of a separate scroll animation.
    */
-  followInputFold(): boolean {
+  followInputFold(input: boolean): boolean {
     this.cancelPending()
-    return this.viewport.followInputFold(this.follow)
+    return this.viewport.followInputFold(this.follow, input)
   }
 
   /**
@@ -217,8 +218,6 @@ export class ChatReading {
 
   private publish(state: ChatReadingState): void {
     this.follow.setFollowing(state.followingTail)
-    // Follow intent and pending sampling settle here, not only on the next scroll or resize.
-    this.viewport.refreshTailPin()
     if (state.initialized === this.state.initialized && state.followingTail === this.state.followingTail
       && state.activeTurn === this.state.activeTurn) return
     this.state = state

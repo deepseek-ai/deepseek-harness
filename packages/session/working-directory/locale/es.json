@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Directorios de trabajo de sesiones",
+    "description": "Administre los directorios de trabajo de las sesiones, guarde los cambios de directorio y proporcione al modelo el contexto del directorio de trabajo."
+  }
+}

@@ -151,9 +151,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when fields are malformed, the id is occupied, or the fallback target is unknown or creates a cycle.'],
       },
       {
-        signature: 'register<N extends Extract<keyof LocaleNamespaceMap, string>>(ns: N, dicts: Record<BuiltInLocaleId, LocaleDictOf<N>>): () => void',
-        description: 'Register a declared namespace\'s dictionaries, all locales in one call — the typed form: each dictionary is checked against the namespace\'s LocaleNamespaceMap key union (a missing or extra key is a compile error), and every shipped locale is required (bilingual balance enforced at registration). Duplicate (ns, locale) throws (single occupant; a namespace\'s texts have one owner). Registration bumps the revision so mounted outlets pick up late-arriving dictionaries.',
-        parameters: [{ name: 'ns', description: 'a namespace merged into LocaleNamespaceMap.' }, { name: 'dicts', description: 'complete dictionaries keyed by built-in locale id.' }],
+        signature: 'register<N extends Extract<keyof LocaleNamespaceMap, string>>( ns: N, dicts: Record<BuiltInLocaleId, LocaleDictOf<N>> & Record<LocaleId, LocaleDictOf<N>>, ): () => void',
+        description: 'Register a declared namespace\'s dictionaries, all locales in one call — the typed form: each dictionary is checked against the namespace\'s LocaleNamespaceMap key union (a missing or extra key is a compile error), and both baseline locales are required (bilingual balance enforced at registration). Duplicate (ns, locale) throws (single occupant; a namespace\'s texts have one owner). Registration bumps the revision so mounted outlets pick up late-arriving dictionaries.',
+        parameters: [{ name: 'ns', description: 'a namespace merged into LocaleNamespaceMap.' }, { name: 'dicts', description: 'complete baseline dictionaries and optional dictionaries for additional locale ids.' }],
         returns: 'disposer removing every locale registered by this call (idempotent).',
       },
       {
@@ -215,7 +215,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       {
         signature: 'fork(opts: { sessionId: SessionId atSeq?: number increaseTitle?: boolean onCreated?: (childId: SessionId) => void /** False refuses source migration; omission preserves the Host default. */ allowMigration?: boolean }): Promise<SessionId>',
         description: 'Fork a session from an exact inclusive prefix of the source; on resolution the child is catalogued and can be explicitly retained.',
-        parameters: [{ name: 'opts', description: 'source session id, the optional exact inclusive boundary seq (a real event seq the caller already knows; a cut inside an open turn is balanced Host-side with synthetic closers, and omission selects the latest completed-turn prefix), and whether to increment an inherited durable title before resolving. `onCreated` observes the catalogued child before that optional rename.' }],
+        parameters: [{ name: 'opts', description: 'source session id, the optional exact inclusive boundary seq (a real event seq the caller already knows; a cut inside an open turn is balanced Host-side with synthetic closers, and omission selects the latest completed-turn prefix), and whether to increment an inherited durable title, skipping numbers Host-listed titles already use, before resolving. `onCreated` observes the catalogued child before that optional rename.' }],
         returns: 'the child session id.',
         throws: ['when the fork fails, or when a requested child-title rename fails after creation.'],
       },
@@ -282,7 +282,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       {
         signature: 'register(definition: ThemeDefinition): () => void',
         description: 'Register a theme. Duplicate id throws (single occupant per id; the built-in pair counts; `system` is a preference, not a registrable id).',
-        parameters: [{ name: 'definition', description: 'theme id, colorScheme, and alias-token overrides.' }],
+        parameters: [{ name: 'definition', description: 'theme id, colorScheme, alias-token overrides, and optional icon replacements; the runtime keeps a frozen copy of `icons`. Invalid icon replacements throw a `TypeError` naming the theme and icon.' }],
         returns: 'disposer. Disposing the theme backing the active preference resets the preference to the default so the UI never keeps tokens of an unregistered theme.',
       },
       {
@@ -355,7 +355,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'connectWorkspace(workspaceId: WorkspaceId, options?: Pick<StartSessionOptions, \'agentPreset\'>): Promise<SessionId>',
-        description: 'Resolve the Session for a new conversation in a Workspace: navigation names the first reusable blank member, skipping blanks that list a preset other than a requested one, and the Host reuses it under the requested preset or its default, or creates another Session.',
+        description: 'Resolve the Session for a new conversation in a Workspace: navigation names the first reusable blank member — listed in the Workspace, not archived, and listing no preset or the requested one — and the Host reuses it under the requested preset or its default, creating another Session when it reuses none. Concurrent calls for the same Workspace and preset share one attempt.',
         parameters: [{ name: 'workspaceId', description: 'target Workspace.' }, { name: 'options', description: 'choices for the created or reused Session.' }],
         returns: 'a Session already addressable through the Session Controller.',
       },
@@ -493,7 +493,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'BeginSubmissionInput',
-    declaration: 'export interface BeginSubmissionInput {\n    readonly mode: \'queue\' | \'steer\';\n    readonly text: string;\n    readonly attachments: readonly PendingSubmissionAttachment[];\n    readonly onRetire?: (retirement: PendingSubmissionRetirement) => void;\n}',
+    declaration: 'export interface BeginSubmissionInput {\n    readonly mode: \'queue\' | \'steer\';\n    readonly text: string;\n    readonly attachments: readonly PendingSubmissionAttachment[];\n    readonly onAccept?: () => void;\n    readonly onRetire?: (retirement: PendingSubmissionRetirement) => void;\n}',
   },
   {
     name: 'BoundActions',
@@ -529,7 +529,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ComposedProps',
-    declaration: 'export type ComposedProps<K extends keyof SlotMap & string, EntryKey extends EntryKeyOf<K>, S extends keyof SlotMap & string, H, I extends object, M = never, N = undefined> = PropsRuntime<K, EntryKey> & PropsRenderSlots<S> & PropsRenderFactories & PropsStore<H> & InjectFace<I> & MatchedShare<SlotMap[K], M> & PropsLocale<N>;',
+    declaration: 'export type ComposedProps<K extends keyof SlotMap & string, EntryKey extends EntryKeyOf<K>, S extends keyof SlotMap & string, H, I extends object, M = never, N = undefined> = PropsRuntime<K, EntryKey> & PropsRenderSlots<S> & PropsRenderFactories & PropsStore<H> & InjectFace<I> & MatchedShare<SlotMap[K], M> & HocShare<SlotMap[K]> & PropsLocale<N>;',
   },
   {
     name: 'ConnectionGeneration',
@@ -640,12 +640,32 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type HandleOf<H> = H extends () => infer R ? R : H;',
   },
   {
+    name: 'HocShare',
+    declaration: 'export type HocShare<E extends SlotEntryDef> = E[\'kind\'] extends \'hoc\' ? {\n    children: ReactNode;\n} : object;',
+  },
+  {
     name: 'HooksSources',
     declaration: 'export type HooksSources = Record<string, HostObservable<unknown>>;',
   },
   {
     name: 'HostObservable',
     declaration: 'export type HostObservable<T> = ObservableSnapshot<T>;',
+  },
+  {
+    name: 'IconGlyph',
+    declaration: 'export type IconGlyph = keyof typeof ICON_ARTWORK;',
+  },
+  {
+    name: 'IconReplacements',
+    declaration: 'export type IconReplacements = Readonly<Partial<Record<IconSymbolId, string>>>;',
+  },
+  {
+    name: 'IconSymbolId',
+    declaration: 'export type IconSymbolId = `dsw-icon-${IconGlyph}-${IconWeight}`;',
+  },
+  {
+    name: 'IconWeight',
+    declaration: 'export type IconWeight = \'regular\' | \'medium\';',
   },
   {
     name: 'InjectFace',
@@ -657,7 +677,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ISession',
-    declaration: 'export interface ISession {\n    readonly sessionId: SessionId;\n    readonly projections: ProjectionsFace;\n    beginSubmission(input: BeginSubmissionInput): SubmissionHandle;\n    prompt(content: PromptContentPart[], mode: \'queue\' | \'steer\', signal?: AbortSignal, requestId?: SessionRequestId): Promise<RemoteResult<{\n        accepted: true;\n    }>>;\n    readAttachment(attachmentId: AttachmentIdType): Promise<RemoteResult<{\n        attachment: ImageAttachmentRef;\n        data: Uint8Array;\n    }>>;\n    updateQueue(itemId: MessageId, action: QueueAction): Promise<RemoteResult<{\n        accepted: true;\n    }>>;\n    cancel(): Promise<RemoteResult<{\n        accepted: true;\n    }>>;\n    rename(title: string): Promise<RemoteResult<{\n        title: string;\n        seq: SessionSeq;\n    }>>;\n    loadOlder(): Promise<void>;\n    loadThrough(seq: SessionSeq): Promise<void>;\n    command(line: string): Promise<RemoteResult<{\n        matched: boolean;\n    }>>;\n}',
+    declaration: 'export interface ISession {\n    readonly sessionId: SessionId;\n    readonly projections: ProjectionsFace;\n    beginSubmission(input: BeginSubmissionInput): SubmissionHandle;\n    prompt(content: PromptContentPart[], mode: \'queue\' | \'steer\', signal?: AbortSignal, requestId?: SessionRequestId): Promise<RemoteResult<{\n        accepted: true;\n    }>>;\n    readAttachment(attachment: ImageAttachmentRef): Promise<RemoteResult<{\n        attachment: ImageAttachmentRef;\n        data: Uint8Array;\n    }>>;\n    updateQueue(itemId: MessageId, action: QueueAction): Promise<RemoteResult<{\n        accepted: true;\n    }>>;\n    cancel(): Promise<RemoteResult<{\n        accepted: true;\n    }>>;\n    rename(title: string): Promise<RemoteResult<{\n        title: string;\n        seq: SessionSeq;\n    }>>;\n    loadOlder(): Promise<void>;\n    loadThrough(seq: SessionSeq): Promise<void>;\n    command(line: string): Promise<RemoteResult<{\n        matched: boolean;\n    }>>;\n}',
   },
   {
     name: 'ISessions',
@@ -949,7 +969,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionSnapshot',
-    declaration: 'export interface SessionSnapshot {\n    readonly sessionId: SessionId;\n    readonly pendingSubmissions: readonly PendingSubmission[];\n    readonly running: boolean;\n    readonly subagent: {\n        readonly address: SubagentAddress;\n        readonly parentAvailable?: boolean;\n    } | null;\n    readonly removed: boolean;\n    readonly openState: OpenState;\n    readonly openError: RemoteFailure | null;\n    readonly hasMore: boolean;\n    readonly loadingOlder: boolean;\n    readonly promptError: PromptError | null;\n    readonly blank: boolean;\n    readonly lastAgentError: string | null;\n    readonly promptAttempted: boolean;\n    readonly awaitingFirstTurn: boolean;\n}',
+    declaration: 'export interface SessionSnapshot {\n    readonly sessionId: SessionId;\n    readonly pendingSubmissions: readonly PendingSubmission[];\n    readonly running: boolean;\n    readonly subagent: {\n        readonly address: SubagentAddress;\n    } | null;\n    readonly removed: boolean;\n    readonly openState: OpenState;\n    readonly openError: RemoteFailure | null;\n    readonly hasMore: boolean;\n    readonly loadingOlder: boolean;\n    readonly promptError: PromptError | null;\n    readonly blank: boolean;\n    readonly lastAgentError: string | null;\n    readonly promptAttempted: boolean;\n    readonly awaitingFirstTurn: boolean;\n}',
   },
   {
     name: 'SessionStandardProps',
@@ -985,7 +1005,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SlotKind',
-    declaration: 'export type SlotKind = \'single\' | \'list\' | \'keyed\' | \'chain\';',
+    declaration: 'export type SlotKind = \'single\' | \'list\' | \'keyed\' | \'chain\' | \'hoc\';',
   },
   {
     name: 'SlotLabel',
@@ -1049,7 +1069,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ThemeDefinition',
-    declaration: 'export interface ThemeDefinition {\n    id: string;\n    colorScheme: \'light\' | \'dark\';\n    tokens: ThemeTokens;\n}',
+    declaration: 'export interface ThemeDefinition {\n    id: string;\n    colorScheme: \'light\' | \'dark\';\n    tokens: ThemeTokens;\n    icons?: IconReplacements | undefined;\n}',
   },
   {
     name: 'ThemePreference',

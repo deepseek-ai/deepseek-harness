@@ -14,7 +14,7 @@ from pathlib import Path
 
 
 def validate_resources(root: Path | zipfile.Path, target: str) -> None:
-    """Reject a missing or wrong-target Python/Node environment or bundled Office skill tree."""
+    """Reject a missing or wrong-target Python/Node environment."""
     manifest_path = root / "primary-runtime/runtime.json"
     if not manifest_path.is_file():
         raise FileNotFoundError(f"runtime authoring resources are missing: {manifest_path}")
@@ -32,9 +32,7 @@ def validate_resources(root: Path | zipfile.Path, target: str) -> None:
     executable = python_root / ("python.exe" if platform == "win32" else "bin/python3")
     packages = python_root / ("Lib/site-packages" if platform == "win32" else f"lib/python{version.rsplit('.', 1)[0]}/site-packages")
     node = root / "primary-runtime/dependencies/node/bin" / ("node.exe" if platform == "win32" else "node")
-    required = [executable, node]
-    required.extend(root / f"office-skills/office-{kind}/SKILL.md" for kind in ("docx", "pptx", "xlsx"))
-    for path in required:
+    for path in (executable, node):
         if not path.is_file():
             raise FileNotFoundError(f"runtime authoring resource is missing: {path}")
     if not packages.is_dir():
@@ -57,9 +55,6 @@ def validate_downloads(root: Path | zipfile.Path, target: str) -> dict:
             or not isinstance(value.get("office"), list) or not value["office"]
             or not isinstance(value.get("pnpm"), dict)):
         raise ValueError(f"invalid runtime download manifest: {path}")
-    for file in (f"office-{kind}/SKILL.md" for kind in ("docx", "pptx", "xlsx")):
-        if not (root / "office-skills" / file).is_file():
-            raise FileNotFoundError(f"runtime Office skill is missing: {root / 'office-skills' / file}")
     return value
 
 

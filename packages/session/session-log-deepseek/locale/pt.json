@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "DeepSeek Upload do registro da sessão",
+    "description": "Quando ativado, os logs de sessão são enviados para DeepSeek com solicitações de modelo oficial API."
+  }
+}

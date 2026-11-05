@@ -51,7 +51,7 @@ import type {
   SessionOpenWorkspacePathRequest,
   SessionOpenWorkspacePathValue,
   SessionWorkspacePathApplication,
-  SessionPage,
+  SessionEventsPage,
   SessionPageRequest,
   SessionPromptRequest,
   SessionPromptValue,
@@ -62,11 +62,12 @@ import type {
   SessionSelectModelRequest,
   SessionSelectModelValue,
   SessionProjectionsRequest,
+  SessionProjectionFrame,
   SessionUpdateQueueRequest,
   SessionUpdateQueueValue,
 } from '../src/types.ts'
 
-/** Direct test face matching the generated `ctx.remote.session` unary methods. */
+/** Direct test face for the generated `ctx.remote.session` unary methods these tests exercise. */
 export interface TestSessionRemote {
   workspacePathApplications(
     request: { readonly path: string }, signal?: AbortSignal,
@@ -87,9 +88,10 @@ export interface TestSessionRemote {
     request: SessionOpenWorkspacePathRequest,
     signal?: AbortSignal,
   ): Promise<RemoteResult<SessionOpenWorkspacePathValue>>
-  page(request: SessionPageRequest, signal?: AbortSignal): Promise<RemoteResult<SessionPage>>
+  page(request: SessionPageRequest, signal?: AbortSignal): Promise<RemoteResult<SessionEventsPage>>
   projections(request: SessionProjectionsRequest, signal?: AbortSignal): Promise<RemoteResult<SessionProjectionsValue>>
   follow(request: SessionFollowRequest, signal?: AbortSignal): AsyncIterable<SessionFollowFrame>
+  observeProjections(request: SessionProjectionsRequest, signal?: AbortSignal): AsyncIterable<SessionProjectionFrame>
   control(signal?: AbortSignal): AsyncIterable<SessionControlFrame>
 }
 
@@ -388,6 +390,7 @@ export async function createSessionTestRemote(
       signal,
     ),
     page: (request, signal = new AbortController().signal) => remoteResult(
+      // oxlint-disable-next-line typescript/no-deprecated -- Test face keeps the legacy page entry covered.
       () => direct.page(request, signal),
       signal,
     ),
@@ -396,6 +399,7 @@ export async function createSessionTestRemote(
       signal,
     ),
     follow: (request, signal = new AbortController().signal) => direct.follow(request, signal),
+    observeProjections: (request, signal = new AbortController().signal) => direct.observeProjections(request, signal),
     control: (signal = new AbortController().signal) => direct.control(signal),
   }
 }

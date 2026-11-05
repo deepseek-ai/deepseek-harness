@@ -50,6 +50,25 @@ async function initialized(root: string) {
 }
 
 describe('SDK persisted session resume', () => {
+  it('rejects independent subagent restoration before opening or repairing its log', async () => {
+    const root = await storageRoot()
+    const { ctx, server } = await initialized(root)
+    const child = await ctx.agents.create({
+      sessionId: SessionId('saved-child'),
+      meta: { origin: 'subagent', parentSession: SessionId('creator'), cwd: root },
+    })
+    child.agent.session.append('turn/start', { turn: 1 })
+    await ctx.sessions.flush(child.agent.session)
+    await child.dispose()
+    const resume = vi.spyOn(ctx.agents, 'resume')
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await expect(server.resume({ sessionId: 'saved-child' })).rejects.toThrow('resume its root session instead')
+    }
+    expect(resume).not.toHaveBeenCalled()
+    expect(ctx.agents.get(SessionId('saved-child'))).toBeUndefined()
+    await expect(server.shutdown()).resolves.toEqual({})
+  })
+
   it.each([
     { model: 'mock', effort: undefined, expected: 'high' },
     { model: 'other', effort: undefined, expected: undefined },
@@ -167,7 +186,9 @@ describe('SDK persisted session resume', () => {
       { type: 'model/selection', data: { provider: 'mock', model: 'resumed-model' } },
     ])
     expect(second.adapter.requests).toHaveLength(0)
-    expect(second.events).toEqual([])
+    expect(second.events).toEqual([
+      { sessionId: 'saved-session', event: restored.snapshotEvents().at(-1) },
+    ])
     await second.server.prompt({ sessionId: 'saved-session', contentBlocks: [{ type: 'text', text: 'what did I say?' }] })
     await second.server.wait({ sessionId: 'saved-session' })
     expect(second.events.length).toBeGreaterThan(0)

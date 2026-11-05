@@ -1,3 +1,4 @@
+import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client'
 /** Browser Chat target plugin. */
 export { apply, inject } from './apply.ts'
 export type {} from './conversation-nodes/assistant.ts'
@@ -39,6 +40,7 @@ export type {
   CommandRowOwnerProps, CommandRowProps, MessageImagesProps, OpenFileOptions, PresentationInjected,
   QuotaNoticeCode, QuotaNoticeHostProps, QuotaNoticeInjected, QuotaNoticeOwnerProps, QuotaNoticeState,
   ReasoningBodyOwnerProps, ReasoningContentInput, UserContentAttachment, UserContentData, UserContentInput,
+  UserBeforeOwnerProps,
   TurnProcessOwnerProps, TurnTailOwnerProps, UseChat, UseChatNodeTurnData, UseDisclosure, UsePresentation, UseGroupAction,
 } from './contract/slots.ts'
 export type {
@@ -64,4 +66,4 @@ type PublicChatNodeDataMap = ChatNodeDataMap
 declare module './contract/chat-nodes.ts' {
   interface ChatNodeDataMap extends PublicChatNodeDataMap {}
 }
-export type { ProcessActivity, ProcessActivitySummary, ProcessGroupData } from './contract/process-groups.ts'
+export type { ProcessActivity, ProcessActivitySummary, ProcessGroupData, RunningProcessActivity } from './contract/process-groups.ts'

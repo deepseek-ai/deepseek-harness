@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Interface de controle do espaço de trabalho",
+    "description": "Fornece aos clientes operações de espaço de trabalho e um estado que pode ser restaurado após a reconexão."
+  }
+}

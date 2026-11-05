@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "SQLite storage",
+    "description": "Store Harness key-value data in SQLite."
+  }
+}

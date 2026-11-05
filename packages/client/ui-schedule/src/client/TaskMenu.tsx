@@ -6,12 +6,12 @@
  * the Time zone row's search box, so the four call sites here keep that
  * capability locally instead of extending the shared card.
  */
-import { useCallback, useEffect, useRef } from 'react'
-import type { CSSProperties, ReactNode } from 'react'
+import { useCallback, useEffect, useId, useRef } from 'react'
+import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import {
-  IconCheckOutlineRegular, useAnchoredPosition, useDismissOnOutsidePointer,
+  IconCheckOutlineRegular, isMobileDevice, useDismissOnOutsidePointer,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './TaskMenu.module.css'
 
@@ -61,7 +61,7 @@ export interface TaskMenuProps {
   onClose: () => void
   /** List alignment against the anchor (default 'start'). */
   align?: 'start' | 'end'
-  /** Render the list into document.body, fixed-positioned from the anchor rect. */
+  /** Render the list into document.body, fixed-positioned by its CSS anchor. */
   portal?: boolean
   /** Owner content pinned above the scrolling rows. */
   header?: ReactNode
@@ -70,15 +70,6 @@ export interface TaskMenuProps {
   /** Extra class on the dropdown card itself; the only style hook that reaches a portaled list. */
   listClassName?: string | undefined
 }
-
-/** Unplaced portal list: hidden but laid out at a fixed origin so its offset size is real. */
-const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
-
-/** Distance the list keeps from the anchor edge. */
-const ANCHOR_GAP = 4
-
-/** Distance the list keeps from each viewport edge. */
-const VIEWPORT_MARGIN = 12
 
 /**
  * Whether an entry is a group hairline.
@@ -112,15 +103,17 @@ function isLabel(entry: TaskMenuEntry): entry is TaskMenuLabel {
  * window blur that moved focus into a cross-origin iframe.
  * @param props.align - list alignment against the anchor (default 'start').
  * @param props.portal - render the list into document.body, fixed-positioned
- * from the anchor rect (follows scroll and resize while open).
+ * by its CSS anchor (follows scroll and resize while open).
  * @param props.header - owner content pinned above the scrolling rows; a control
- * it marks `data-menu-field` takes the keyboard once the list is placed, which
- * is the frame a portaled list becomes focusable in.
+ * it marks `data-menu-field` takes the keyboard on desktop when opened. Phones and tablets
+ * require explicit field focus.
  * @param props.className - extra class on the anchor wrapper span.
  * @param props.listClassName - extra class on the dropdown card itself.
  * @returns the anchor wrapper with the conditional list.
  */
 export function TaskMenu({ open, anchor, items = [], selectedId, onSelect, onClose, align = 'start', portal = false, header, className, listClassName }: TaskMenuProps) {
+  const id = useId()
+  const anchorName = `--dsh-task-menu-${id.replaceAll(':', '')}`
   const rootRef = useRef<HTMLSpanElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   /** Index the arrow walk last focused, the resume point when focus left the rows. */
@@ -134,9 +127,6 @@ export function TaskMenu({ open, anchor, items = [], selectedId, onSelect, onClo
   closeRef.current = onClose
   const dismiss = useCallback(() => { closeRef.current() }, [])
 
-  const position = useAnchoredPosition({
-    open: open && portal, anchorRef: rootRef, panelRef: listRef, align, gap: ANCHOR_GAP, margin: VIEWPORT_MARGIN,
-  })
   useDismissOnOutsidePointer(rootRef, open, dismiss, listRef)
 
   /* jscpd:ignore-start -- schedule-local copy of the shared ui-primitives Menu; the two owners change independently. */
@@ -164,29 +154,21 @@ export function TaskMenu({ open, anchor, items = [], selectedId, onSelect, onClo
   }
   /* jscpd:ignore-end */
 
-  // A portaled list paints hidden until the placement effect measures it, and a
-  // hidden control refuses focus, so neither a header field's own autoFocus nor
-  // this effect can take the keyboard in the opening commit. Once the list is
-  // placed, a header control marked `data-menu-field` takes it. Focus is handed
-  // over once per open, so a reposition while the reader is on a row does not
-  // pull the keyboard back.
+  // Header fields take focus once per open; mobile fields require an explicit tap.
   useEffect(() => {
     if (!open) {
       handedOver.current = false
       return
     }
-    if (handedOver.current) return
+    if (handedOver.current || isMobileDevice()) return
     const list = listRef.current
     /* v8 ignore next -- the list is rendered in the same commit that sets `open`, before this effect runs. */
     if (list === null) return
-    // A portaled list paints hidden until the position hook has measured it,
-    // and a hidden control refuses focus: the handover waits for that frame.
-    if (portal && position === null) return
     const field = list.querySelector<HTMLElement>('[data-menu-field]')
     if (field === null) return
     handedOver.current = true
     field.focus()
-  }, [open, portal, position])
+  }, [open])
 
   useEffect(() => {
     if (!open) {
@@ -195,12 +177,15 @@ export function TaskMenu({ open, anchor, items = [], selectedId, onSelect, onClo
     }
     /* jscpd:ignore-start -- schedule-local copy of the shared ui-primitives Menu; the two owners change independently. */
     const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.defaultPrevented) return
       // Where the keyboard is, computed once: the menu owns it when it holds a
       // row or sits on its anchor region.
       const focused = document.activeElement
       const insideList = listRef.current?.contains(focused) === true
       const anchored = rootRef.current?.contains(focused) === true || insideList
       if (e.key === 'Escape') {
+        e.preventDefault()
+        e.stopPropagation()
         // Closing hands the keyboard back when the menu had it.
         dismiss()
         if (anchored) refocusAnchor()
@@ -271,10 +256,10 @@ export function TaskMenu({ open, anchor, items = [], selectedId, onSelect, onClo
     const onWindowBlur = (): void => {
       if (document.activeElement instanceof HTMLIFrameElement) dismiss()
     }
-    document.addEventListener('keydown', onKeyDown)
+    document.addEventListener('keydown', onKeyDown, true)
     window.addEventListener('blur', onWindowBlur)
     return () => {
-      document.removeEventListener('keydown', onKeyDown)
+      document.removeEventListener('keydown', onKeyDown, true)
       window.removeEventListener('blur', onWindowBlur)
     }
   }, [open, dismiss])
@@ -309,14 +294,11 @@ export function TaskMenu({ open, anchor, items = [], selectedId, onSelect, onClo
     )
   }
 
-  // Portal lists render hidden until placed: the position hook measures this
-  // pre-render in the same commit, so the first painted frame is already at
-  // the final coordinates.
   const list = open && (
     <div
       ref={listRef}
-      className={clsx(css.list, listClassName, css.scrollable, portal && css.portal, align === 'end' && !portal && css.alignEnd)}
-      style={portal ? position ?? MEASURE_STYLE : undefined}
+      className={clsx(css.list, listClassName, css.scrollable, portal && css.portal, align === 'end' && css.alignEnd)}
+      style={portal ? { positionAnchor: anchorName } : undefined}
       role="menu"
       // React portals bubble synthetic events through the React tree: without
       // this stop, an item click re-fires an owner handler above the anchor.
@@ -338,7 +320,7 @@ export function TaskMenu({ open, anchor, items = [], selectedId, onSelect, onClo
   )
 
   return (
-    <span ref={rootRef} className={clsx(css.root, className)}>
+    <span ref={rootRef} style={{ anchorName }} className={clsx(css.root, className)}>
       {anchor}
       {portal ? (list !== false && createPortal(list, document.body)) : list}
     </span>

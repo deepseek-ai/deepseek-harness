@@ -1,0 +1,7 @@
+# Test-only composition: mount the experimental @@STATSORMANCE@@ view beside Chat
+# and Trajectory over the shipped Web surface. No shipped profile mounts this
+# package (default-product isolation forbids it), so this overlay is the only
+# real-Web composition that can render it.
+- insert:
+    - id: ui-client-ui-stats
+      name: '@deepseek-ai/dsh-experimental-client-ui-stats'

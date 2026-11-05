@@ -1,3 +1,4 @@
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent, type ModelSelection } from '@deepseek-ai/dsh-agent'
@@ -8,7 +9,8 @@ import { toPiContext } from '@deepseek-ai/dsh-llm-pi-ai/src/context.ts'
 import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime, { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
+import ToolRuntime from '@deepseek-ai/dsh-tools'
+import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { MockAdapter, textResponse } from './mock-adapter.ts'
 
 declare module '@deepseek-ai/dsh-llm' {
@@ -30,6 +32,7 @@ async function harness(capable = new MockAdapter(Array.from({ length: 8 }, () =>
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt, { personaPrefix: '', personaSuffix: '' })
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(AgentLoop, { agents: [] })
   capable.systemPromptUpdate = 'in-history'
@@ -120,7 +123,7 @@ describe('prepared-route prompt admission', () => {
       expect(request.messages.filter(message => message.role === 'developer')).toEqual([])
     })
 
-    it.each(['explicit', 'replacement'] as const)('rebuilds prompt and declarations at a %s series start', async (reason) => {
+    it.each(['explicit', 'replacement'] as const)('rebuilds declarations without re-baselining an unchanged prompt at a %s series start', async (reason) => {
       const h = await harness()
       h.capable.toolUpdate = toolUpdate
       await send(h.agent, 'first')
@@ -141,7 +144,13 @@ describe('prepared-route prompt admission', () => {
       await send(h.agent, 'add fetch')
 
       const request = h.capable.requests.at(-1)!
-      expectPlain(request, 'prompt two')
+      const previous = h.capable.requests.at(-2)!
+      // The rendering is unchanged: the surviving prompt node keeps its place and the new series
+      // only rebuilds declarations. Rewriting node 0 would invalidate the provider prefix.
+      expect(systemTexts(request)).toEqual([
+        [{ type: 'text', text: 'prompt one' }], [{ type: 'text', text: 'prompt two' }],
+      ])
+      expect(request.messages[0]).toEqual(previous.messages[0])
       expect(request.tools?.find(tool => tool.name === 'fetch')?.deferLoading).not.toBe(true)
       expect(request.messages.filter(message => message.role === 'developer')).toEqual([])
       const header = h.agent.session.snapshotEvents().filter(event => event.type === 'request/header').at(-1)
@@ -214,7 +223,7 @@ describe('prepared-route prompt admission', () => {
     expect(JSON.stringify(adapter.requests.at(-1)!)).not.toContain('prompt ')
   })
 
-  it.each(['explicit', 'tools'] as const)('normalizes surviving prompt versions with unchanged text at a %s series start', async (reason) => {
+  it.each(['explicit', 'tools'] as const)('keeps surviving prompt versions with unchanged text at a %s series start', async (reason) => {
     const h = await harness()
     await send(h.agent, 'first')
     h.setPrompt('prompt two')
@@ -231,14 +240,54 @@ describe('prepared-route prompt admission', () => {
       }))
     }
     await send(h.agent, 'third')
-    expectPlain(h.capable.requests[2]!, 'prompt two')
+    const previous = h.capable.requests[1]!
+    const request = h.capable.requests[2]!
+    // The rendering is unchanged, so the new series keeps the surviving prompt node: the whole
+    // previous request stays a wire prefix instead of moving the prompt into message 0.
+    expect(systemTexts(request)).toEqual([
+      [{ type: 'text', text: 'prompt one' }], [{ type: 'text', text: 'prompt two' }],
+    ])
+    expect(request.messages.slice(0, previous.messages.length)).toEqual(previous.messages)
     const header = h.agent.session.snapshotEvents().filter(event => event.type === 'request/header').at(-1)
     expect(header?.data.reason).toBe(reason === 'explicit' ? 'series' : 'change')
-    if (reason === 'tools') expect(header?.data.startsSeries).toBe(true)
+    if (reason === 'tools') {
+      // A tool-schema change starts the prompt series without a system event. The header records
+      // the declaration change without `startsSeries`; the unsupported-route projection supplies
+      // the complete active set, while tool history keeps its incremental baseline.
+      expect(header?.data.startsSeries).toBeUndefined()
+      expect(request.tools?.map(tool => tool.name)).toEqual(['extra'])
+    }
+  })
+
+  it('keeps the cached prefix at a compaction series start when the prompt text is unchanged', async () => {
+    const h = await harness()
+    await send(h.agent, 'first')
+    h.setPrompt('prompt two')
+    await send(h.agent, 'second')
+    const previous = h.capable.requests[1]!
+
+    // A prune/compaction replaces the last admitted user message: the surface changes, so the
+    // next step starts a new request series while the appended prompt node still holds the
+    // rendered text.
+    const seq = h.agent.session.surface.nodes.findLast(node => h.agent.session.eventAt(node)?.type === 'user/message')!
+    h.agent.session.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'compacted history' }], source: { kind: 'test-compaction' },
+    }), { surfaceOp: { op: 'replace', startSeq: seq, endSeq: seq }, sourceEventSeqs: [seq] })
+    await send(h.agent, 'third')
+
+    // Folding the prompt back into node 0 would move the system segment to wire message 0 and
+    // miss the provider prefix cache from the first token, although no prompt text changed.
+    const request = h.capable.requests[2]!
+    expect(systemTexts(request)).toEqual([
+      [{ type: 'text', text: 'prompt one' }], [{ type: 'text', text: 'prompt two' }],
+    ])
+    // The replacement shadows the previous request's last admitted message, so the shared wire
+    // prefix is everything before it.
+    expect(request.messages.slice(0, previous.messages.length - 1)).toEqual(previous.messages.slice(0, -1))
   })
 
   it.each([false, true])('reconciles compaction retries without replaying admission, older tail survives=%s', async (retainOlder) => {
-    const overflow = () => { throw new LlmError('context window exceeded', 'CONTEXT_LENGTH') }
+    const overflow = () => { throw LlmError.fromFailure({ message: 'context window exceeded', code: 'CONTEXT_LENGTH' }) }
     const adapter = new MockAdapter([textResponse('one'), textResponse('two'), overflow, overflow, textResponse('done')])
     const h = await harness(adapter)
     const resolve = vi.spyOn(adapter, 'resolveModel')
@@ -350,9 +399,15 @@ describe('prepared-route prompt admission', () => {
       return next()
     })
     await send(resumed, 'resume')
-    expect(systemTexts(h.capable.requests[2]!)).toEqual(replace
-      ? [[{ type: 'text', text: 'prompt two' }]]
-      : [[{ type: 'text', text: 'prompt one' }], [{ type: 'text', text: 'prompt two' }]])
+    const previous = h.capable.requests[1]!
+    const request = h.capable.requests[2]!
+    // The first resumed pre-step replacement still starts a series, but an unchanged rendering
+    // keeps both prompt versions in place instead of re-baselining node 0.
+    expect(systemTexts(request)).toEqual([
+      [{ type: 'text', text: 'prompt one' }], [{ type: 'text', text: 'prompt two' }],
+    ])
+    expect(request.messages[0]).toEqual(previous.messages[0])
+    if (!replace) expect(request.messages.slice(0, previous.messages.length)).toEqual(previous.messages)
     expect(resumed.session.snapshotEvents().filter(event => event.type === 'request/header').map(event => event.data.reason))
       .toEqual(['initial', 'resume'])
   })

@@ -98,7 +98,7 @@
         "content": [
           {
             "type": "text",
-            "text": "Serial agent creation completed."
+            "text": "Serial agent creation completed. Ordinary and nested forks are independent; historical fork metadata remains readable."
           }
         ],
         "source": {
@@ -890,11 +890,12 @@
       "seq": 37,
       "time": 0,
       "data": {
-        "version": 0,
+        "version": 3,
         "childId": "{{child-1}}",
         "childCreatedAt": 0,
         "mode": "continuable",
-        "label": "Check direct child"
+        "label": "Check direct child",
+        "name": "agent-1"
       }
     },
     {
@@ -914,11 +915,15 @@
           "content": [
             {
               "type": "text",
-              "text": "started subagent {{child-1}}"
+              "text": "started subagent agent-1"
             }
           ],
           "isError": false,
           "id": "{{messageId}}"
+        },
+        "meta": {
+          "kind": "activation",
+          "name": "agent-1"
         }
       },
       "sourceEventSeqs": [
@@ -966,7 +971,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Background subagent {{child-1}} finished and will do no further work unless you send it more."
+                "text": "Background subagent agent-1 finished and will do no further work unless you send it more."
               },
               {
                 "type": "text",
@@ -980,7 +985,8 @@
             "source": {
               "kind": "subagent-settled",
               "form": "notice",
-              "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
+              "summary": "Background subagent agent-1 finished and will do no further work unless you send it more.",
+              "stopReason": "completed",
               "senderSessionId": "{{child-1}}"
             },
             "role": "user",
@@ -1139,11 +1145,12 @@
       "seq": 46,
       "time": 0,
       "data": {
-        "version": 0,
+        "version": 3,
         "childId": "{{child-2}}",
         "childCreatedAt": 0,
         "mode": "continuable",
-        "label": "advanced-exe-snapshot child 1"
+        "label": "advanced-exe-snapshot child 1",
+        "name": "agent-2"
       }
     },
     {
@@ -1243,7 +1250,7 @@
         "content": [
           {
             "type": "text",
-            "text": "Background subagent {{child-1}} finished and will do no further work unless you send it more."
+            "text": "Background subagent agent-1 finished and will do no further work unless you send it more."
           },
           {
             "type": "text",
@@ -1257,7 +1264,8 @@
         "source": {
           "kind": "subagent-settled",
           "form": "notice",
-          "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
+          "summary": "Background subagent agent-1 finished and will do no further work unless you send it more.",
+          "stopReason": "completed",
           "senderSessionId": "{{child-1}}"
         },
         "role": "user",
@@ -1628,7 +1636,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Serial agent creation completed."
+                "text": "Serial agent creation completed. Ordinary and nested forks are independent; historical fork metadata remains readable."
               }
             ],
             "source": {
@@ -2585,6 +2593,70 @@
       "payload": {
         "sessionId": "{{child-1}}",
         "event": {
+          "type": "subagent/descriptor",
+          "seq": 0,
+          "time": 0,
+          "data": {
+            "version": 3,
+            "mode": "continuable",
+            "provider": "spawn",
+            "label": "Check direct child",
+            "agentProvider": "deepseek-official",
+            "agentModel": "smoke-model",
+            "agentReasoningEffort": "high"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-1}}",
+        "event": {
+          "type": "sandbox/mode",
+          "seq": 1,
+          "time": 0,
+          "data": {
+            "mode": "danger-full-access",
+            "source": "delegation"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-1}}",
+        "event": {
+          "type": "approval/policy",
+          "seq": 2,
+          "time": 0,
+          "data": {
+            "policy": "never",
+            "source": "delegation"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-1}}",
+        "event": {
+          "type": "permission/preset",
+          "seq": 3,
+          "time": 0,
+          "data": {
+            "preset": "danger-full-access"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-1}}",
+        "event": {
           "type": "agent/inbox/spliced",
           "seq": 4,
           "time": 0,
@@ -2627,6 +2699,10 @@
                   {
                     "type": "text",
                     "text": "Reply with exactly DIRECT_CHILD_OK and nothing else."
+                  },
+                  {
+                    "type": "text",
+                    "text": "Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. If your last action is a message to your parent, the completion notice omits your final answer; include the result and relevant evidence in that message."
                   }
                 ],
                 "source": {
@@ -2704,11 +2780,12 @@
           "seq": 37,
           "time": 0,
           "data": {
-            "version": 0,
+            "version": 3,
             "childId": "{{child-1}}",
             "childCreatedAt": 0,
             "mode": "continuable",
-            "label": "Check direct child"
+            "label": "Check direct child",
+            "name": "agent-1"
           }
         }
       }
@@ -2734,11 +2811,15 @@
               "content": [
                 {
                   "type": "text",
-                  "text": "started subagent {{child-1}}"
+                  "text": "started subagent agent-1"
                 }
               ],
               "isError": false,
               "id": "{{messageId}}"
+            },
+            "meta": {
+              "kind": "activation",
+              "name": "agent-1"
             }
           },
           "sourceEventSeqs": [
@@ -2876,6 +2957,10 @@
               {
                 "type": "text",
                 "text": "Reply with exactly DIRECT_CHILD_OK and nothing else."
+              },
+              {
+                "type": "text",
+                "text": "Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. If your last action is a message to your parent, the completion notice omits your final answer; include the result and relevant evidence in that message."
               }
             ],
             "source": {
@@ -3193,7 +3278,7 @@
                 "content": [
                   {
                     "type": "text",
-                    "text": "Background subagent {{child-1}} finished and will do no further work unless you send it more."
+                    "text": "Background subagent agent-1 finished and will do no further work unless you send it more."
                   },
                   {
                     "type": "text",
@@ -3207,7 +3292,8 @@
                 "source": {
                   "kind": "subagent-settled",
                   "form": "notice",
-                  "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
+                  "summary": "Background subagent agent-1 finished and will do no further work unless you send it more.",
+                  "stopReason": "completed",
                   "senderSessionId": "{{child-1}}"
                 },
                 "role": "user",
@@ -3410,6 +3496,70 @@
       "payload": {
         "sessionId": "{{child-2}}",
         "event": {
+          "type": "subagent/descriptor",
+          "seq": 0,
+          "time": 0,
+          "data": {
+            "version": 3,
+            "mode": "continuable",
+            "provider": "spawn",
+            "label": "advanced-exe-snapshot child 1",
+            "agentProvider": "deepseek-official",
+            "agentModel": "smoke-model",
+            "agentReasoningEffort": "high"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-2}}",
+        "event": {
+          "type": "sandbox/mode",
+          "seq": 1,
+          "time": 0,
+          "data": {
+            "mode": "danger-full-access",
+            "source": "delegation"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-2}}",
+        "event": {
+          "type": "approval/policy",
+          "seq": 2,
+          "time": 0,
+          "data": {
+            "policy": "never",
+            "source": "delegation"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-2}}",
+        "event": {
+          "type": "permission/preset",
+          "seq": 3,
+          "time": 0,
+          "data": {
+            "preset": "danger-full-access"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-2}}",
+        "event": {
           "type": "agent/inbox/spliced",
           "seq": 4,
           "time": 0,
@@ -3529,11 +3679,12 @@
           "seq": 46,
           "time": 0,
           "data": {
-            "version": 0,
+            "version": 3,
             "childId": "{{child-2}}",
             "childCreatedAt": 0,
             "mode": "continuable",
-            "label": "advanced-exe-snapshot child 1"
+            "label": "advanced-exe-snapshot child 1",
+            "name": "agent-2"
           }
         }
       }
@@ -4081,7 +4232,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Background subagent {{child-1}} finished and will do no further work unless you send it more."
+                "text": "Background subagent agent-1 finished and will do no further work unless you send it more."
               },
               {
                 "type": "text",
@@ -4095,7 +4246,8 @@
             "source": {
               "kind": "subagent-settled",
               "form": "notice",
-              "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
+              "summary": "Background subagent agent-1 finished and will do no further work unless you send it more.",
+              "stopReason": "completed",
               "senderSessionId": "{{child-1}}"
             },
             "role": "user",

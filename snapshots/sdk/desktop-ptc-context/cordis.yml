@@ -35,6 +35,13 @@
   config:
     timeZone: UTC
 
-- id: tools
+- id: tool-executor-native
+  disabled: true
+
+- id: tool-executor-ptc
+  disabled: false
+
+# The recorded tool catalog includes the optional patch tool.
+- id: tool-fs
   config:
-    mode: ptc
+    applyPatch: true

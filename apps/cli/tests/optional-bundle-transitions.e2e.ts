@@ -1,4 +1,5 @@
 /** Optional bundles through the shipped Web Loader, live package manager, and real Agent loop. */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -170,8 +171,8 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
   it('keeps the default host and minimal tool catalogs while every optional bundle is off', async () => {
     const minimal = await agent('minimal')
     const standard = await agent()
-    expect(names()).toEqual(['working_directory'])
-    expect(names(minimal.agent)).toEqual([process.platform === 'win32' ? 'pwsh' : 'bash', 'read_image', 'working_directory'])
+    expect(names()).toEqual(['team_task_create', 'team_task_get', 'team_task_list', 'team_task_update', 'working_directory'])
+    expect(names(minimal.agent)).toEqual([process.platform === 'win32' ? 'pwsh' : 'bash', 'read_image', 'team_task_create', 'team_task_get', 'team_task_list', 'team_task_update', 'working_directory'])
     for (const name of ['str_replace_editor', 'session_search', 'terminal_open', 'ralph']) expect(names(standard.agent)).not.toContain(name)
     expect((await ctx.skills.list({ cwd: workspace, scope: standard.agent })).some(skill => skill.name === 'dsh-badge')).toBe(false)
   })
@@ -232,7 +233,7 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
 
   it('loads the actual badge asset only while its bundle is selected', async () => {
     const owner = await agent()
-    const load = (callId: string) => ctx.tools.execute({
+    const load = (callId: string) => executeToolFixture(ctx, {
       callId: ToolCallId(callId), name: 'skill', arguments: { name: 'dsh-badge' },
       agent: owner.agent, signal: new AbortController().signal,
     })
@@ -245,7 +246,7 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
     expect(toolResult(owner.agent, 'badge-on')).toContain('dsh-badge.png')
     const minimal = await agent('minimal')
     expect((await ctx.skills.list({ cwd: workspace, scope: minimal.agent })).map(skill => skill.name)).toContain('dsh-badge')
-    expect(names(minimal.agent)).toEqual([process.platform === 'win32' ? 'pwsh' : 'bash', 'read_image', 'working_directory'])
+    expect(names(minimal.agent)).toEqual([process.platform === 'win32' ? 'pwsh' : 'bash', 'read_image', 'team_task_create', 'team_task_get', 'team_task_list', 'team_task_update', 'working_directory'])
     await select(bundles.badge, false)
     expect((await load('badge-after')).isError).toBe(true)
   })

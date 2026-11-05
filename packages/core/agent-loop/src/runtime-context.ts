@@ -41,9 +41,9 @@ export interface SystemPromptDecisionInput {
   /** Whether the prepared route for this attempt reads a later `system` message as the effective prompt. */
   inHistory: boolean
   /**
-   * Whether prompt admission must consolidate: a pre-step listener declared a
-   * new series, the surface changed since the last request, or assembled tools
-   * changed on a route without tool-update support.
+   * Whether this step starts a new request series: a pre-step listener declared
+   * one, the surface changed since the last request, or assembled tools changed
+   * on a route without tool-update support.
    */
   startsSeries: boolean
 }
@@ -58,9 +58,12 @@ function eventsNewestFirst(session: Session): readonly SessionEvent[] {
  * Decides how a rendered system prompt reaches the surface without owning the
  * commit. The first prompt, even empty, reserves surface node 0.
  * A capable continuing series appends changed nonempty text after the
- * cached history. An incapable route, broken series, or cleared prompt instead
- * normalizes the first system node and empties later active nodes. Dormant empty
- * tails do not supply effective text or require repeated replacements.
+ * cached history. An incapable route, a cleared prompt, or a new series whose
+ * effective text differs instead normalizes the first system node and empties
+ * later active nodes. A series start whose latest surviving node already holds
+ * the rendering emits nothing: moving the same text to node 0 would change the
+ * request prefix without changing the prompt. Dormant empty tails do not supply
+ * effective text or require repeated replacements.
  */
 export class SystemPromptProjection {
   constructor(private readonly session: Session) {}
@@ -81,6 +84,8 @@ export class SystemPromptProjection {
 
   /**
    * Reconcile effective text and retained nodes with the prepared route and series.
+   * A series start re-baselines node 0 only when the effective text differs; a
+   * capable continuing series keeps appended nodes in place to preserve the prefix.
    * @param rendered - the fully rendered system prompt; `''` when none is active.
    * @param input - the route capability and series facts for this step.
    * @returns ordered per-node updates; an empty list means no update is needed.
@@ -92,7 +97,7 @@ export class SystemPromptProjection {
       return [{ message: createSystemMessage(rendered), intent: { surfaceOp: 'append' } }]
     }
     const latest = nodes.findLast(node => node.text !== '') ?? head
-    if (!input.inHistory || input.startsSeries || rendered.length === 0) {
+    if (!input.inHistory || rendered.length === 0 || (input.startsSeries && latest.text !== rendered)) {
       const updates = nodes.slice(1).filter(node => node.text !== '')
         .map(node => this.replace(node.seq, ''))
       if (head.text !== rendered) updates.push(this.replace(head.seq, rendered))

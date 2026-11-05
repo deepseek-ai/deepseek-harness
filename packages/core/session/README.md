@@ -29,7 +29,9 @@ Mount `dsh-session` wherever a session must exist. It creates and holds event-so
 
 ### Create and inspect sessions
 
-`ctx.sessions.create()` builds a live session bound to the calling fiber; `get(id)` and `list()` find sessions, and `fork()` creates a child session from a stable prefix of a live one.
+`ctx.sessions.create()` builds a live session bound to the calling fiber; `get(id)` and `list()` find sessions, and `fork()` creates an independent session from a stable prefix of a live one. It copies history, `cwd`, `isSeeded`, and the inherited event count without recording a source relationship. `parentSession` records a subagent’s direct creator; historical ordinary forks may retain their source there, so classification uses `origin`.
+
+Independent `Session.create()` and `Session.fromRestore()` instances accept events and plugin records without sending `session/event`. A `SessionStore` takes ownership through `prepare()` or `enter()`; writes then require store membership and a completed synchronous `session/created` announcement. Creation listeners are read-only and see all existing history; entering an independent instance does not replay that history as `session/event`. Failed announcement or removal leaves writes disabled. Removal emits `session/disposed` only if `session/created` began, including a failed announcement; an entered but never announced instance emits neither notification.
 
 ```text
 const session = ctx.sessions.create(sessionId, { meta: { cwd: '/workspace' } })
@@ -39,7 +41,7 @@ ctx.sessions.list()              // every live session, in creation order
 
 ### Append and derive
 
-`session.append(type, data, opts?)` commits one typed event — it snapshots and freezes the payload, validates it as lossless JSON, and notifies observers. `session.deriveMessages()` projects the log into the `Message[]` the model sees, incrementally and cached:
+`session.append(type, data, opts?)` commits one typed event. It rejects read-only instances before reading payload fields, snapshots and freezes valid JSON, then rechecks write permission before committing and notifying observers. `session.deriveMessages()` projects the log into the `Message[]` the model sees, incrementally and cached:
 
 ```text
 session.append('user/message', { role: 'user', content: [{ type: 'text', text: 'hello' }], source: { kind: 'user' } },
@@ -69,7 +71,7 @@ Session log positions use two numeric types. `SessionSeq` identifies an existing
 
 `appendPluginRecord(session, type, data)` appends one plugin record for a package under `packages/experimental/`; the `verify-plugin-record-callers` check rejects any other production caller in this repository. Plugins outside this repository must not call it either, although no repository check can inspect them.
 
-Declare each record in `PluginRecordMap` through `@deepseek-ai/dsh-session/types`, with a description and an explicit payload type annotation in the owning experimental package's `src/`. Names use `plugin:<owner>/<record>`, where `owner` is the suffix of the package name `@deepseek-ai/dsh-experimental-<owner>`; for example, `plugin:pi-extensions/entry`. TypeScript checks each name and payload against its declaration; the writer's runtime JSON snapshot rejects values that cannot be preserved losslessly. Put extension-defined or other dynamic names inside the payload of a declared record.
+Declare each record in `PluginRecordMap` through `@deepseek-ai/dsh-session/types`, with a description and an explicit payload type annotation in the owning experimental package's `src/`. Names use `plugin:<owner>/<record>`, where `owner` is the package name after removing the legacy `@deepseek-ai/dsh-experimental-` prefix when present, otherwise `@deepseek-ai/dsh-`; for example, `plugin:pi-extensions/entry`. TypeScript checks each name and payload against its declaration; the writer's runtime JSON snapshot rejects values that cannot be preserved losslessly. Put extension-defined or other dynamic names inside the payload of a declared record.
 
 The [experimental persistence catalog](../../../docs/experimental-persistence-catalog.md) lists current plugin-record declarations with their owners, descriptions, payload type annotations, and source files. These declarations remain separate from `SessionEventMap`, expanded persistence schemas, released type history, and `KNOWN_SESSION_EVENT_TYPES`. Records carry `ignorable: true`: a build that does not recognize one retains and skips it on read. Records never enter the model-visible surface. Resume and fork carry them with the rest of the log; Session format migration keeps them on a best-effort basis.
 

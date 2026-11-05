@@ -23,6 +23,7 @@ beforeEach(() => {
   vi.stubEnv('DSH_WEB_SNAPSHOT_WORKERS', undefined)
   vi.stubEnv('DSH_COVERAGE_MAX_WORKERS', undefined)
   vi.stubEnv('DSH_COVERAGE_PARTITIONS', undefined)
+  vi.stubEnv('DSH_CLI_HELP_CONCURRENCY', undefined)
 })
 afterEach(() => vi.unstubAllEnvs())
 
@@ -282,7 +283,7 @@ describe('gate graph validation', () => {
       'npm run build:native-system && npm run build:lib && tsdown --config-loader native --config benchmarks/tsdown.config.ts',
     )
     expect(scripts['build:native-system']).toBe('tsx native/system/scripts/build.ts --host-addon-only')
-    expect(scripts['test:bench:built']).toBe('vitest run --config vitest.bench.config.ts')
+    expect(scripts['test:bench:built']).toBe('tsx scripts/run-bench-suite.ts')
   })
 
   it('checks all maintained repository references locally and in CI', () => {
@@ -305,11 +306,19 @@ describe('gate graph validation', () => {
     expect(ids).toContain('public-repository-links')
   })
 
-  it('checks the complete CLI reference locally and in the static CI lane', () => {
-    for (const mode of ['doc-sync', 'ci-static'] as const) {
+  it.each([undefined, ''])('allocates one CLI help child inside each aggregate when its allowance is %j', (raw) => {
+    vi.stubEnv('DSH_CLI_HELP_CONCURRENCY', raw)
+    for (const mode of ['doc-sync', 'ci-static', 'ci-windows-observational-ready'] as const) {
       const gates = withPnpmEntrypoint(() => gatesForMode(mode))
-      expect(gates.find(gate => gate.id === 'cli-help')).toBeDefined()
+      expect(gates.find(gate => gate.id === 'cli-help')).toMatchObject({ env: { DSH_CLI_HELP_CONCURRENCY: '1' } })
+      expect(gates.filter(gate => gate.id !== 'cli-help').every(gate => gate.env?.DSH_CLI_HELP_CONCURRENCY === undefined)).toBe(true)
     }
+  })
+
+  it.each(['3', 'invalid'])('passes an explicit CLI help allowance %j to its owner', (raw) => {
+    vi.stubEnv('DSH_CLI_HELP_CONCURRENCY', raw)
+    const gates = withPnpmEntrypoint(() => gatesForMode('ci-windows-observational-ready'))
+    expect(gates.find(gate => gate.id === 'cli-help')).toMatchObject({ env: { DSH_CLI_HELP_CONCURRENCY: raw } })
   })
 
   it('keeps the concrete terminology policy in the documentation gate', () => {
@@ -370,10 +379,20 @@ describe('gate graph validation', () => {
     expect(ids).toEqual([
       'rescope-vendor', 'publint', 'constraints', 'default-product-isolation', 'product-use', 'official-bundle-catalog', 'provider-data', 'package-dependencies', 'application-entrypoints',
       'dsh-package-licenses', 'node-next-types',
-      'optional-dependency-imports', 'client-packages', 'client-ui-i18n', 'client-route-resolution', 'no-bare-dispatcher',
+      'optional-dependency-imports', 'client-packages', 'installer-locales', 'locale-metadata', 'client-ui-i18n', 'client-route-resolution', 'no-bare-dispatcher',
       'plugin-record-callers', 'no-unknown-casts', 'no-top-level-await',
       'cordis-config', 'runtime-closure',
     ])
+  })
+
+  it('includes JSON resource checks in local and CI aggregates', () => {
+    for (const mode of ['i18n', 'check-all', 'ci-static', 'hygiene'] as const) {
+      const ids = withPnpmEntrypoint(() => gatesForMode(mode).map(gate => gate.id))
+      expect(ids).toEqual(expect.arrayContaining(['installer-locales', 'locale-metadata']))
+      if (mode !== 'i18n') expect(ids).not.toContain('locale-dictionaries')
+    }
+    expect(withPnpmEntrypoint(() => gatesForMode('i18n').map(gate => gate.id)))
+      .toEqual(['installer-locales', 'locale-metadata', 'locale-dictionaries'])
   })
 
   it('caps the local hygiene aggregate at eight workers', () => {
@@ -827,10 +846,12 @@ describe('Typert contract preparation', () => {
   it('reuses contracts from the validated consumer build', () => {
     const subject = withPnpmEntrypoint(() => gatesForMode('ci-consumers'))
 
-    expect(subject.find(item => item.id === 'lint-and-duplication')).toMatchObject({
-      displayCommand: 'pnpm run check:ci:lint:contracts-ready',
-      args: ['/private/pnpm.cjs', 'run', 'check:ci:lint:contracts-ready'],
-    })
+    // Lint and duplication run in their own lane; the consumers graph only
+    // keeps the readers that consume built artifacts.
+    expect(subject.map(item => item.id)).not.toContain('lint-and-duplication')
+    expect(withPnpmEntrypoint(() => gatesForMode('ci-lint-contracts-ready'))).toContainEqual(expect.objectContaining({
+      id: 'lint',
+    }))
     expect(subject.find(item => item.id === 'doc-typecheck')).toMatchObject({
       displayCommand: 'pnpm run doc-typecheck:contracts-ready',
       args: ['/private/pnpm.cjs', 'run', 'doc-typecheck:contracts-ready'],
@@ -946,7 +967,6 @@ describe('Node 24 lane ownership', () => {
       'build',
       'node-compat',
       'publint',
-      'lint-and-duplication',
       'snapshot',
       'expected-output',
       'web-snapshot',
@@ -955,13 +975,15 @@ describe('Node 24 lane ownership', () => {
       'built-bin-smoke',
     ])
     expect(subject.find(item => item.id === 'publint')?.needs).toEqual(['build'])
-    expect(subject.find(item => item.id === 'build')?.env).toEqual({
-      DSH_BUILD_CLIENT_PROFILE: 'official',
+    // The consumers lane emits artifacts only: the aggregate test and script
+    // type checks belong to the master lanes, not to every pull request.
+    expect(subject.find(item => item.id === 'build')).toMatchObject({
+      displayCommand: 'pnpm run build:artifacts',
+      env: { DSH_BUILD_CLIENT_PROFILE: 'official' },
     })
     expect(subject.find(item => item.id === 'node-compat')?.env).toEqual({
       DSH_BUILD_CLIENT_PROFILE: 'official',
     })
-    expect(subject.find(item => item.id === 'lint-and-duplication')?.needs).toEqual(['build'])
     for (const id of [
       'snapshot',
       'expected-output',
@@ -982,10 +1004,11 @@ describe('Node 24 lane ownership', () => {
       expect.arrayContaining([
         'apps/cli/tests/profiles/headless/tests/source-tool.built.e2e.ts',
         'apps/desktop/tests/acl-skill.built.e2e.ts',
+        'apps/desktop/tests/installed-docs-asar.built.e2e.ts',
         'packages/subprocess/subprocess-local/tests/spawn-runner-built.e2e.ts',
         'packages/subagent/subagent-codex/tests/loader-composition.e2e.ts',
         'packages/subagent/subagent-claude-code/tests/loader-composition.e2e.ts',
-        'packages/experimental/agent-team/tests/built-lib.e2e.ts',
+        'packages/team/agent-team/tests/built-lib.e2e.ts',
       ]),
     )
     expect(subject.find(item => item.id === 'web-snapshot')).toMatchObject({
@@ -993,7 +1016,6 @@ describe('Node 24 lane ownership', () => {
       env: { DSH_SNAPSHOT: 'replay' },
       after: [
         'publint',
-        'lint-and-duplication',
         'snapshot',
         'expected-output',
         'doc-typecheck',

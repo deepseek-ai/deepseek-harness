@@ -60,6 +60,10 @@ export class SdkUserQuestionBridge {
 /** Validate the untrusted host response before it enters a tool result or approval decision. */
 function parseHostAnswer(value: unknown, questionIds: readonly string[]): SdkUserQuestionAnswer {
   const badAnswer = (): never => { throw new UserQuestionError('SDK host must answer each question id exactly once with selected labels and optional custom text', 'BAD_ANSWER') }
+  if (value !== null && typeof value === 'object' && 'cancelled' in value) {
+    if (value.cancelled !== true || Object.keys(value).length !== 1) return badAnswer()
+    throw new UserQuestionError('The user dismissed the SDK question', 'ASK_CANCELLED')
+  }
   if (value === null || typeof value !== 'object' || !('answers' in value) || !Array.isArray(value.answers)) return badAnswer()
   const answers = value.answers.map((answer: unknown) => {
     if (answer === null || typeof answer !== 'object' || !('id' in answer) || typeof answer.id !== 'string'

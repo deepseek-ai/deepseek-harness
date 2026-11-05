@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Proveedor de servidor de idioma Stdio",
+    "description": "Conéctese a servidores de idiomas a través de subprocesos y JSON-RPC, abra archivos según sea necesario y ejecute consultas de código."
+  }
+}

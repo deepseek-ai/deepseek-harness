@@ -14,34 +14,34 @@ Without an explicit owner, `SubagentManager` creates and resumes children throug
 
 ## Decision
 
-Runtime interfaces carry Agent identity at the point that owns it. `AgentSetup` receives `(agentCtx, agent)`; Agent creation and resume options carry `parentAgent` for a runtime child; scoped events carry their Agent in the payload; Remote forwarding verifies that `request.agent` is the carrier key; and Host Typert Context resolution maps wire identity to a live Agent Context without a reverse scan. `agent.ctx` remains the registration and lifecycle owner and exposes no reverse Agent property.
+Runtime interfaces carry Agent identity at the point that owns it. `AgentSetup` receives `(agentCtx, agent)`; each subagent Activation retains its exact runtime root; scoped events carry their Agent in the payload; Remote forwarding verifies that `request.agent` is the carrier key; and Host Typert Context resolution maps wire identity to a live Agent Context without a reverse scan. `agent.ctx` remains the registration and lifecycle owner and exposes no reverse Agent property.
 
-Scope-aware registries continue to use the opaque scope key only for registration membership. Tool-subagent does not classify that key or resolve an Agent from Context. A direct `AgentSetup` passes the unpublished Session explicitly and installs through the supplied Context before publication. For a settings-backed standing preset, the event payload supplies the Agent, its Session supplies the policy target, and its Context owns the registrations.
+Scope-aware registries continue to use the opaque scope key only for registration membership. Tool-subagent does not classify that key or resolve an Agent from Context. A direct `AgentSetup` receives the Agent explicitly and installs through the supplied Context before Agent publication. For a settings-backed standing preset, the event payload supplies the Agent, its Session supplies the policy target, and its Context owns the registrations.
 
-`SubagentManager` puts the exact parent in both fresh-creation and cold-resume options. A live continuable child is therefore excluded from `AgentRegistry.roots()` and satisfies `isOwnedBy(child.id, parent)`. Durable `parentSession` metadata does not substitute for this relation: a fork or resumed Session may be a runtime root when no live Agent owns it.
+`SubagentManager.rootOf(agent)` reads runtime membership from existing Activations; both the child and root must match their live registry objects. Ordinary Sessions resolve to themselves, and unmanaged subagent headers grant no membership. Durable `parentSession` describes creation edges; an Activation retains the exact root while intermediate creators are offline, and same-id replacements cannot inherit it. Root-only consumers classify the explicit subagent origin.
 
 The [scope reference](../../../../packages/core/scope/README.md) and [Agent loop reference](../../../../packages/core/agent-loop/README.md) document registration and lifecycle behavior. The [initiator-scope decision](2026-07-15-agent-initiator-scope.md) owns private-chain rationale; explicit runtime ownership does not change causal initiation or registration lifetime.
 
 ## Verification
 
-Agent creation tests pin explicit root and child ownership. Continuation integration tests keep a real child live long enough to assert both `roots()` exclusion and `isOwnedBy()` membership. Existing Schedule tests verify that root-only registrations stay absent from an explicitly owned child.
+Managed-child tests verify intermediate-creator disposal and exact-instance checks after child or root replacement. SDK approval tests verify routing during a turn after the direct creator exits. Schedule and user-question tests reject delegated Sessions while ordinary historical forks remain independent.
 
-Remote-event tests reject a missing or mismatched Agent before forwarding a scoped waterfall. Tool-subagent tests verify that direct setup installs before Session publication; standing-preset tests verify per-Session policy sampling and inheritance.
+Remote-event tests reject a missing or mismatched Agent before forwarding a scoped waterfall. Tool-subagent tests verify that direct setup installs before Agent publication; standing-preset tests verify per-Session policy sampling and inheritance.
 
 ## Alternatives considered
 
 **Keep `Context.agent`.** A reverse accessor makes registration ownership look like operation identity and requires every Context derivation, adapter, and test double to preserve an association unrelated to Cordis service selection or effect cleanup.
 
-**Infer runtime ownership from the caller Context.** A private manager Context, an Agent Context, and a standing preset Context can all call the same factory. Context ancestry therefore does not state which live Agent owns the result; the creator must put the parent it already knows in the request options.
+**Infer runtime ownership from the caller Context.** A private manager Context, an Agent Context, and a standing preset Context can all call the same factory. Context ancestry therefore does not state which live Agent owns the result; the subagent Activation retains the exact root supplied at admission.
 
 **Classify Agent scope keys.** An opaque scope key states routing membership, not domain identity. Classifying it would make Agent the center of composition and would still couple a plugin's effect owner to the Session whose policy it needs.
 
 **Use the initiating Agent as creation ownership.** Initiator scope records causal asynchronous execution, not lifetime ownership. A parent may initiate work that intentionally creates a root, and setup remains outside the child's driver boundary.
 
-**Use durable Session lineage.** `parentSession` records conversation ancestry across process lifetimes. Runtime ownership controls live roots and teardown, so equating the two would prevent a legitimately resumed fork from becoming a top-level Agent.
+**Use durable Session lineage.** `parentSession` records creation ancestry across process lifetimes. An intermediate creator can be offline while its descendant remains managed by a live root; durable ids also cannot distinguish replaced Agent instances. Historical ordinary forks may retain parent metadata without being delegated.
 
 ## Consequences
 
 Lifecycle options, events, service requests, and transport requests carry explicit Agent identities, so each operation states the identity it uses and TypeScript checks both sides. Context remains reusable for dependency access and effect ownership without becoming an alternate domain-object locator.
 
-Continuable children have the same runtime parent relation as one-shot in-process children. Root-only consumers exclude them, parent teardown can reason from one live ownership graph, and durable lineage remains free to describe history rather than process-local lifetime.
+Continuable children have one runtime root independent of creator residency. The subagent manager owns tree teardown and local membership; the core factory and registry retain only instance creation, publication, and disposal. Third-party callers create managed children through the subagent service rather than assigning ownership to arbitrary factory-created Agents.

@@ -8,6 +8,13 @@
  * @module @deepseek-ai/dsh-experimental-auto-review
  */
 
+declare module '@deepseek-ai/dsh-llm/types' {
+  interface LlmRequestPurposeMap {
+    'auto-review': true
+  }
+}
+
+import type {} from '@deepseek-ai/dsh-tool-executor-ptc/types'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import { FiberState, type Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -32,6 +39,7 @@ import {
   type PreToolDecision,
   type ToolExecution,
 } from '@deepseek-ai/dsh-tools'
+import { deniedDisplayReason } from './locales.ts'
 
 /** Structured error name persisted for every final reviewer denial. */
 const AUTO_REVIEW_DENIED_ERROR_NAME = 'AutoReviewDeniedError'
@@ -670,12 +678,15 @@ async function classifyRisk(
   const snapshot = snapshotAutoReview(agent, exec, cwd, shown)
   shown.set(snapshot.pending.key, snapshot.pending.schema)
   // This review prompt is sent only through ctx.llm.stream and never enters a Session log.
+  // The Session id also supplies provider routing and request-extension identity.
   const options: GenerateOptions = deepFreeze({
     provider: snapshot.provider,
     model: snapshot.model,
     system: REVIEW_POLICY,
     messages: reviewMessages(snapshot),
     temperature: 0,
+    sessionId: agent.session.id,
+    purpose: 'auto-review',
     signal,
   })
   return readDecision(ctx.llm.stream(options))
@@ -703,9 +714,7 @@ function askUser(exec: ToolExecution, reason?: string): PreToolDecision {
   return {
     kind: 'ask',
     reason: reason === undefined ? denial : `${denial}: ${reason}`,
-    displayReason: reason === undefined
-      ? { en: 'Auto review denied this call.', zh: 'Auto review 拒绝了此调用。' }
-      : { en: `Auto review denied this call: ${reason}`, zh: `Auto review 拒绝了此调用：${reason}` },
+    displayReason: deniedDisplayReason(reason),
   }
 }
 

@@ -1,3 +1,5 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { unsupportedModel, provideWorkingDirectoryFixture, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
@@ -69,7 +71,7 @@ function call(
   command: string,
   signal = new AbortController().signal,
 ) {
-  return ctx.tools.execute({
+  return executeToolFixture(ctx, {
     signal,
     callId: ToolCallId(`persistent-pwsh-${++callNumber}`),
     name: 'pwsh',
@@ -324,6 +326,7 @@ async function setup(
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRegistry)
   await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(TerminalSessionService)
   const stub = stubBackend(initialMode)
@@ -796,6 +799,7 @@ describe('tool-pwsh-persistent', () => {
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRegistry)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(TerminalSessionService)
     const spawnStarted = Promise.withResolvers<undefined>()

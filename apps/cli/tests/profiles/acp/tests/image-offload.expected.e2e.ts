@@ -117,6 +117,7 @@ it('pins Messages Files offload and inline fallback in assembled requests', asyn
       },
     })
     expect(result.stderr).toBe('')
+    if (result.sessionId === undefined) throw new Error('image-offload scenario did not create a session')
     expect(requests).toHaveLength(2)
     expect(fileRequests).toEqual([{ method: 'POST', path: filesPath, bytes: 69 }])
     const attachmentDigest = 'b1ff9c8ea3a780bad09b346c423d2d0e46815926879b18e841d928376a946640'
@@ -142,7 +143,10 @@ it('pins Messages Files offload and inline fallback in assembled requests', asyn
     const runtimeContext = (cwd: string): string => 'Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\n'
       + `Current working directory: ${JSON.stringify(cwd)}.\n\n`
       + 'Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\n'
-      + 'Approval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).'
+      + 'Approval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).\n\n'
+      + 'You are the root agent. Your name is "lead".\n\n'
+      + 'To message other agents, use send_message({ agent: "<agent-name>", message: "..." }).\n'
+      + 'Use list_agents({}) to find your collaborator agents and their names.'
     const messages = requests[0]?.messages as { content?: unknown }[] | undefined
     const offloaded = messages?.find(message => JSON.stringify(message.content).includes('[image omitted'))
     expect(offloaded?.content).toEqual([
@@ -188,6 +192,7 @@ it('pins Messages Files offload and inline fallback in assembled requests', asyn
       },
     })
     expect(fallback.stderr).toBe('')
+    if (fallback.sessionId === undefined) throw new Error('image-offload fallback scenario did not create a session')
     expect(fileRequests).toEqual([
       { method: 'POST', path: filesPath, bytes: 69 },
       { method: 'POST', path: filesPath, bytes: 69 },

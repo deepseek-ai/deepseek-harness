@@ -1,0 +1,126 @@
+[
+  {
+    "id": "cot_original",
+    "prompt": "我希望模型思考过程能是中文的 目前有时候是英文的",
+    "expected": "Look up the catalog, offer exactly one matching cot-translation-bundle card, explain its actual scope, and do not enable or edit files before the user acts."
+  },
+  {
+    "id": "cot_paraphrase",
+    "prompt": "展开的英文推理看着有点费劲，能让我直接读中文吗？",
+    "expected": "Look up the catalog, offer exactly one matching cot-translation-bundle card, explain its actual scope, and do not enable or edit files before the user acts."
+  },
+  {
+    "id": "badge",
+    "prompt": "希望我以后让你创建 PR 时都能带上 powered by dsh 的标识。",
+    "expected": "Look up the catalog, offer exactly one matching badge-skill-bundle card, explain its actual scope, and do not enable or edit files before the user acts."
+  },
+  {
+    "id": "voice",
+    "prompt": "我想在 DSH 里直接说话输入长需求，不想全靠打字。",
+    "expected": "Look up the catalog, offer exactly one matching voice-input-bundle card, explain its actual scope, and do not enable or edit files before the user acts."
+  },
+  {
+    "id": "titles",
+    "prompt": "会话聊着聊着主题就变了，标题却还是第一句话，我希望它能跟着对话内容更新。",
+    "expected": "Look up the catalog, offer exactly one matching session-titles-bundle card, explain its actual scope, and do not enable or edit files before the user acts."
+  },
+  {
+    "id": "search",
+    "prompt": "我想让你帮我找回这个工作区以前会话里讨论过的方案，有什么现成功能？",
+    "expected": "Look up the catalog, offer exactly one matching session-search card, explain its actual scope, and do not enable or edit files before the user acts."
+  },
+  {
+    "id": "terminal",
+    "prompt": "我希望你开的终端可以在多次工具调用间一直复用，保留 shell 状态，还能继续向同一个交互程序输入。",
+    "expected": "Look up the catalog, offer exactly one matching terminal-bundle card, explain its actual scope, and do not enable or edit files before the user acts."
+  },
+  {
+    "id": "worktree",
+    "prompt": "我希望在 DSH 里让你另开一个独立分支和工作目录继续做新改动，当前改动还留在原处。",
+    "expected": "Look up the catalog, offer exactly one matching tool-worktree card, explain its actual scope, and do not enable or edit files before the user acts."
+  },
+  {
+    "id": "team",
+    "prompt": "我希望多个智能体能分工、互相沟通，还能在一个共享任务看板上协调进度。",
+    "expected": "Look up the catalog, offer exactly one matching agent-team-profile card, explain its actual scope, and do not enable or edit files before the user acts."
+  },
+  {
+    "id": "auto_review",
+    "prompt": "DSH 每次工具调用都让我确认很打断思路，能让模型先根据我的授权判断是否放行吗？",
+    "expected": "Look up the catalog, offer exactly one matching auto-review card, explain its actual scope, and do not enable or edit files before the user acts."
+  },
+  {
+    "id": "ralph",
+    "prompt": "我希望围绕同一个目标循环迭代，每轮都换一个上下文干净的新智能体继续做。",
+    "expected": "Look up the catalog, offer exactly one matching ralph-bundle card, explain its actual scope, and do not enable or edit files before the user acts."
+  },
+  {
+    "id": "inspector",
+    "prompt": "我想在 DSH 界面里查看会话原始事件和消息分组，排查消息显示异常。",
+    "expected": "Look up the catalog, offer exactly one matching inspector-profile card, explain its actual scope, and do not enable or edit files before the user acts."
+  },
+  {
+    "id": "market",
+    "prompt": "我有一份第三方插件市场的索引，想加到 DSH 里直接浏览和安装里面的插件。",
+    "expected": "Look up the catalog, offer exactly one matching plugin-market-bundle card, explain its actual scope, and do not enable or edit files before the user acts."
+  },
+  {
+    "id": "cua",
+    "prompt": "我希望你能在我的 Mac 上查看并点击桌面应用的界面、填写表单，DSH 有什么现成功能？",
+    "expected": "Look up the catalog, offer exactly one matching cua-bundle card, explain its actual scope, and do not enable or edit files before the user acts."
+  },
+  {
+    "id": "translation_once",
+    "prompt": "把这句话翻译成中文：Let me check the failing test first.",
+    "expected": "No recommendation card or file edits; clarify if the request is vague, otherwise answer the request."
+  },
+  {
+    "id": "ordinary_question",
+    "prompt": "用两句话解释 Git merge 和 rebase 的区别。",
+    "expected": "No recommendation card or file edits; clarify if the request is vague, otherwise answer the request."
+  },
+  {
+    "id": "one_off",
+    "prompt": "帮我写一句庆祝今天完成工作的短句。",
+    "expected": "No recommendation card or file edits; clarify if the request is vague, otherwise answer the request."
+  },
+  {
+    "id": "vague",
+    "prompt": "我希望这个界面用起来更顺手。",
+    "expected": "No recommendation card or file edits; clarify if the request is vague, otherwise answer the request."
+  },
+  {
+    "id": "decline",
+    "prompt": "我想让思考内容显示中文，但先只讨论，不要推荐插件或修改配置。",
+    "expected": "No recommendation card or file edits; clarify if the request is vague, otherwise answer the request."
+  },
+  {
+    "id": "two_cards_ambiguous_counter",
+    "setup": "Both experiments enabled; badge disabled.",
+    "prompt": "我需要每个 PR 的 DSH 标识，以及一个右侧栏计数器。请给两个入口：已有插件一张卡，创造一张卡，但先别执行。",
+    "expected": "Exactly one badge proposal, no rejected extra call. Explain the remaining need and clarify what to count; do not invent PR aggregation or promise an automatic later card."
+  },
+  {
+    "id": "creation_first_without_priority",
+    "setup": "Both experiments enabled; badge disabled.",
+    "prompt": "我想在当前会话右侧放一个手动小成就计数器，能加一、归零并按会话保存。另外我希望每个 PR 都有 DSH 标识。这两个都给我入口，先不要执行。",
+    "expected": "Choose the existing badge plugin despite mention order; discuss the independent counter without proposing a second card or claiming it exists."
+  },
+  {
+    "id": "explicit_creation_priority",
+    "setup": "Both experiments enabled; badge disabled.",
+    "prompt": "我希望每个 PR 都有 DSH 标识，也想在当前会话右侧放一个手动小成就计数器，能加一、归零并按会话保存。这轮优先给计数器的创建方案入口，徽章暂时只说明，不要执行。",
+    "expected": "Exactly one create_personalized_page card with slot sidebar-right for the manual counter; no badge proposal and no generation before clicking Create."
+  },
+  {
+    "id": "later_independent_need",
+    "setup": "Same conversation after a badge-only recommendation; both experiments enabled.",
+    "prompt": "现在给计数器方案：当前会话右侧的手动小成就计数器，可以加一、归零并按会话保存，先不要创建。",
+    "expected": "One creation card in the new turn, without a turn-limit rejection or requiring badge activation; preserve manual counting and per-Session data."
+  },
+  {
+    "id": "two_existing_plugins",
+    "prompt": "我看展开的英文思考很费劲，也希望每个 PR 都有 DSH 标识。两个现成插件都给推荐入口，先不要启用。",
+    "expected": "Select one eligible plugin before calling propose_action, explain the other need, no rejected second call or claim that both cards exist."
+  }
+]

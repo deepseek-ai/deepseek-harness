@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-cua-bundle",
   "description": "Optional macOS Computer Use and permission setup",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.2-rc.1",
   "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"
@@ -30,12 +30,18 @@
     "docs",
     "lib/index.js",
     "cordis.patch.yml",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ],
   "license": "MIT",
   "dsh": {
     "bundle": {
-      "patch": "./cordis.patch.yml"
+      "patch": "./cordis.patch.yml",
+      "platforms": [
+        "darwin"
+      ]
     }
   },
   "dependencies": {

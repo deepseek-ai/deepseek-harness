@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Uso de la computadora",
+    "description": "Actualmente es compatible con macOS; El soporte para Windows está en desarrollo. Carga el uso de la computadora para sesiones PTC nuevas y existentes. Cambie al modo PTC y otorgue permisos de Accesibilidad y Grabación de pantalla para usarlo.",
+    "detail": "docs/DETAIL.md"
+  }
+}

@@ -75,6 +75,72 @@ describe('WebRuntime registration', () => {
   })
 })
 
+describe('WebRuntime provider listing', () => {
+  it('lists registered providers per capability in registration order, including unavailable ones', async () => {
+    const { web } = await mountWeb()
+    expect(web.listProviders()).toEqual({ search: [], fetch: [] })
+    web.registerSearchProvider({ ...makeSearchProvider('b', available, () => Promise.resolve(searchResult('b'))), title: 'B search' })
+    const disposeA = web.registerSearchProvider(makeSearchProvider('a', unavailable, () => Promise.resolve(searchResult('a'))))
+    const description = { en: 'Fetches from this machine.', zh: '本机获取' }
+    web.registerFetchProvider({ ...makeFetchProvider('http', available, fetchResult('http')), title: 'Direct fetch', description })
+    expect(web.listProviders()).toEqual({
+      search: [{ id: 'b', title: 'B search' }, { id: 'a' }],
+      fetch: [{ id: 'http', title: 'Direct fetch', description }],
+    })
+
+    disposeA()
+    expect(web.listProviders().search).toEqual([{ id: 'b', title: 'B search' }])
+  })
+
+  it('emits web/providers-changed once after each registration and each disposal', async () => {
+    const { ctx, web } = await mountWeb()
+    const observed: Array<readonly string[]> = []
+    ctx.on('web/providers-changed', () => {
+      observed.push(web.listProviders().fetch.map(provider => provider.id))
+    })
+    const dispose = web.registerFetchProvider(makeFetchProvider('http', available, fetchResult('http')))
+    expect(observed).toEqual([['http']])
+    dispose()
+    expect(observed).toEqual([['http'], []])
+  })
+
+  it('does not emit web/providers-changed for a rejected duplicate registration', async () => {
+    const { ctx, web } = await mountWeb()
+    web.registerSearchProvider(makeSearchProvider('exa', available, () => Promise.resolve(searchResult('exa'))))
+    let changes = 0
+    ctx.on('web/providers-changed', () => { changes += 1 })
+    expect(() => web.registerSearchProvider(makeSearchProvider('exa', available, () => Promise.resolve(searchResult('exa'))))).toThrow()
+    expect(changes).toBe(0)
+  })
+
+  it('contains a throwing or rejecting listener so later listeners still run and registration commits', async () => {
+    const { ctx, web } = await mountWeb()
+    let later = 0
+    ctx.on('web/providers-changed', () => { throw new Error('sync listener failure') })
+    // oxlint-disable-next-line typescript/no-misused-promises -- exercises rejected-listener containment
+    ctx.on('web/providers-changed', () => Promise.reject(new Error('async listener failure')))
+    ctx.on('web/providers-changed', () => { later += 1 })
+    web.registerFetchProvider(makeFetchProvider('http', available, fetchResult('http')))
+    await Promise.resolve()
+    expect(later).toBe(1)
+    expect(web.listProviders().fetch).toEqual([{ id: 'http' }])
+  })
+
+  it('removes a contributing fiber\'s providers from the list and announces it (HMR safety)', async () => {
+    const { ctx, web } = await mountWeb()
+    let changes = 0
+    ctx.on('web/providers-changed', () => { changes += 1 })
+    const fiber = await ctx.plugin(Object.assign((inner: Context) => {
+      inner.web.registerSearchProvider({ ...makeSearchProvider('custom', available, () => Promise.resolve(searchResult('custom'))), title: 'Custom' })
+    }, { inject: ['web'] }))
+    expect(web.listProviders().search).toEqual([{ id: 'custom', title: 'Custom' }])
+    expect(changes).toBe(1)
+    await fiber.dispose()
+    expect(web.listProviders().search).toEqual([])
+    expect(changes).toBe(2)
+  })
+})
+
 describe('WebRuntime execution resolution', () => {
   it('throws WEB_PROVIDER_UNAVAILABLE when nothing is registered', async () => {
     const { web } = await mountWeb()
@@ -156,6 +222,61 @@ describe('WebRuntime execution resolution', () => {
   })
 })
 
+describe('WebRuntime search readiness', () => {
+  /** A search provider whose readiness answer is scripted and whose calls are recorded. */
+  function readyProvider(id: string, isAvailable: boolean, ready: boolean, asked: (string | undefined)[] = []): WebSearchProvider {
+    return {
+      ...makeSearchProvider(id, isAvailable, () => Promise.resolve(searchResult(id))),
+      ready: (llmProvider) => {
+        asked.push(llmProvider)
+        return Promise.resolve(ready)
+      },
+    }
+  }
+
+  it('answers from the selected provider and passes it the request route', async () => {
+    const { web } = await mountWeb({ searchProvider: 'deepseek' })
+    const asked: (string | undefined)[] = []
+    web.registerSearchProvider(readyProvider('deepseek', available, false, asked))
+    await expect(web.searchReady('deepseek-official')).resolves.toBe(false)
+    expect(asked).toEqual(['deepseek-official'])
+  })
+
+  it('does not ask a provider that search() would not select', async () => {
+    const { web } = await mountWeb({ searchProvider: 'exa' })
+    const deepseekAsked: (string | undefined)[] = []
+    web.registerSearchProvider(readyProvider('exa', available, true))
+    web.registerSearchProvider(readyProvider('deepseek', available, false, deepseekAsked))
+    await expect(web.searchReady('deepseek-official')).resolves.toBe(true)
+    expect(deepseekAsked).toEqual([])
+  })
+
+  it('asks the single usable provider when none is configured', async () => {
+    const { web } = await mountWeb()
+    web.registerSearchProvider(readyProvider('usable', available, false))
+    web.registerSearchProvider(readyProvider('unusable', unavailable, true))
+    await expect(web.searchReady(undefined)).resolves.toBe(false)
+  })
+
+  it('treats a selected provider without ready() as ready', async () => {
+    const { web } = await mountWeb()
+    web.registerSearchProvider(makeSearchProvider('plain', available, () => Promise.resolve(searchResult('plain'))))
+    await expect(web.searchReady('deepseek-official')).resolves.toBe(true)
+  })
+
+  it.each([
+    ['nothing is registered', {}, []],
+    ['the configured provider is not registered', { searchProvider: 'missing' }, [readyProvider('other', available, false)]],
+    ['the configured provider is unavailable', { searchProvider: 'down' }, [readyProvider('down', unavailable, false)]],
+    ['several usable providers are registered', {}, [readyProvider('a', available, false), readyProvider('b', available, false)]],
+  ] as const)('answers true when %s, leaving search() to report the failure', async (_label, config, providers) => {
+    const { web } = await mountWeb(config)
+    for (const provider of providers) web.registerSearchProvider(provider)
+    await expect(web.searchReady('deepseek-official')).resolves.toBe(true)
+    await expect(web.search({ query: 'q' })).rejects.toBeInstanceOf(WebError)
+  })
+})
+
 describe('WebRuntime maxResults enforcement', () => {
   it('truncates sources and sets truncated when a provider over-returns', async () => {
     const { web } = await mountWeb()
@@ -203,6 +324,43 @@ describe('WebRuntime fetch capability', () => {
     await expect(web.fetch({ url: 'https://example.com' })).rejects.toThrow(
       expect.objectContaining({ code: 'WEB_PROVIDER_UNAVAILABLE' }),
     )
+  })
+})
+
+describe('WebRuntime fetch readiness', () => {
+  /** A fetch provider whose readiness answer is scripted and whose calls are recorded. */
+  function readyFetchProvider(id: string, isAvailable: boolean, ready: boolean, asked: (string | undefined)[] = []): WebFetchProvider {
+    return {
+      ...makeFetchProvider(id, isAvailable, fetchResult(id)),
+      ready: (llmProvider) => {
+        asked.push(llmProvider)
+        return Promise.resolve(ready)
+      },
+    }
+  }
+
+  it('answers from the provider fetch() selects and passes it the request route', async () => {
+    const { web } = await mountWeb({ fetchProvider: 'deepseek' })
+    const asked: (string | undefined)[] = []
+    const httpAsked: (string | undefined)[] = []
+    web.registerFetchProvider(readyFetchProvider('deepseek', available, false, asked))
+    web.registerFetchProvider(readyFetchProvider('http', available, true, httpAsked))
+    await expect(web.fetchReady('deepseek-official')).resolves.toBe(false)
+    expect(asked).toEqual(['deepseek-official'])
+    expect(httpAsked).toEqual([])
+  })
+
+  it('treats a selected provider without ready() as ready', async () => {
+    const { web } = await mountWeb()
+    web.registerFetchProvider(makeFetchProvider('http', available, fetchResult('http')))
+    await expect(web.fetchReady('deepseek-official')).resolves.toBe(true)
+  })
+
+  it('answers true when no provider qualifies, leaving fetch() to report the failure', async () => {
+    const { web } = await mountWeb({ fetchProvider: 'down' })
+    web.registerFetchProvider(readyFetchProvider('down', unavailable, false))
+    await expect(web.fetchReady('deepseek-official')).resolves.toBe(true)
+    await expect(web.fetch({ url: 'https://example.com' })).rejects.toMatchObject({ code: 'WEB_PROVIDER_CONFIGURED_UNAVAILABLE' })
   })
 })
 

@@ -153,10 +153,11 @@ describe('GoalBar', () => {
     expect(actions.onPause).toHaveBeenCalledTimes(1)
   })
 
-  it('active disarmed goal: "已暂停的目标" with a resume action instead of pause', () => {
+  it('active disarmed goal: "待继续的目标" with a resume action instead of pause', () => {
     const actions = makeActions()
     render(<GoalBar goal={makeGoal()} activation="disarmed" {...actions} t={t} />)
-    expect(screen.getByText('已暂停的目标')).toBeTruthy()
+    expect(screen.getByText('待继续的目标')).toBeTruthy()
+    expect(screen.queryByText('已暂停的目标')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '恢复目标' }))
     expect(actions.onResume).toHaveBeenCalledTimes(1)
     expect(screen.queryByRole('button', { name: '暂停目标' })).toBeNull()
@@ -205,6 +206,14 @@ describe('GoalBar', () => {
     render(<GoalBar goal={goal} {...actions} t={t} />)
     expect(screen.getByText('受阻的目标')).toBeTruthy()
     expect(screen.getByText('受阻的目标').closest('[title]')?.getAttribute('title')).toBe('No progress in 3 rounds')
+  })
+
+  it('blocked goal: offers resume and no pause', () => {
+    const actions = makeActions()
+    render(<GoalBar goal={makeGoal({ phase: 'blocked' })} {...actions} t={t} />)
+    expect(screen.queryByRole('button', { name: '暂停目标' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '恢复目标' }))
+    expect(actions.onResume).toHaveBeenCalledTimes(1)
   })
 
   it('blocked goal without a reason carries no tooltip', () => {

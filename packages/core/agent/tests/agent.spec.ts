@@ -61,9 +61,13 @@ describe('AgentRegistry', () => {
     })
     session.append('turn/end', { turn: 3, reason: { kind: 'completed' } })
     expect(ctx.agents.turnBoundaryOf(session)).toMatchObject({ openTurnStartSeq: null, lastTurn: 3 })
-    expect(ctx.sessionProjections.checkpoint(session).turnBoundary).toBeDefined()
+    const row = ctx.sessionProjections.checkpoint(session).turnBoundary
+    expect(row).toBeDefined()
     await fiber.dispose()
-    expect(ctx.sessionProjections.checkpoint(session).turnBoundary).toBeUndefined()
+    session.append('turn/start', { turn: 4 })
+    // The released unit keeps its last row and folds no event after the unload.
+    expect(ctx.sessionProjections.checkpoint(session)).toHaveProperty('turnBoundary', row)
+    expect(ctx.sessionProjections.checkpoint(Session.create(SessionId('turn-positions-after-unload')))).not.toHaveProperty('turnBoundary')
   })
 
   it('contributes Agent lookup and scoped Context providers while Typert is live', async () => {
@@ -107,7 +111,6 @@ describe('AgentRegistry', () => {
     const dispose = await ctx.agents.register(agent)
     expect(ctx.agents.get(agent.id)).toBe(agent)
     expect(ctx.agents.list()).toEqual([agent])
-    expect(ctx.agents.roots()).toEqual([agent])
     await expect(Promise.resolve(ctx.agents.register(stubAgent('a1')))).rejects.toThrow(/already registered/)
 
     await dispose()
@@ -121,31 +124,9 @@ describe('AgentRegistry', () => {
     await ctx.plugin(AgentRegistry)
     const agent = stubAgent('agent-id', { session: Session.create(SessionId('session-id')) })
 
-    expect(() => ctx.agents.enter(agent, undefined))
+    expect(() => ctx.agents.enter(agent))
       .toThrow('agent id "agent-id" does not match session id "session-id"')
     expect(ctx.agents.list()).toEqual([])
-  })
-
-  it('tracks runtime creator ownership separately from registry order', async () => {
-    const ctx = new Context()
-    await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(AgentRegistry)
-    const root = stubAgent('root')
-    const child = stubAgent('child')
-    const detachRoot = ctx.agents.enter(root, undefined)
-    await ctx.agents.announce(root, 'startup')
-    const detachChild = ctx.agents.enter(child, root)
-    await ctx.agents.announce(child, 'startup')
-
-    expect(ctx.agents.list()).toEqual([root, child])
-    expect(ctx.agents.roots()).toEqual([root])
-    expect(ctx.agents.isOwnedBy(child.id, root)).toBe(true)
-    expect(ctx.agents.isOwnedBy(root.id, root)).toBe(false)
-    expect(ctx.agents.isOwnedBy(SessionId('missing'), root)).toBe(false)
-
-    detachChild()
-    expect(ctx.agents.isOwnedBy(child.id, root)).toBe(false)
-    detachRoot()
   })
 
   it('rolls an entry back and pairs a partially delivered creation when a listener throws', async () => {
@@ -226,7 +207,7 @@ describe('AgentRegistry', () => {
     ctx.on('agent/disposed', ({ agent }) => void lifecycle.push(`disposed:${agent.id}`))
 
     const first = stubAgent('split')
-    const detachFirst = ctx.agents.enter(first, undefined)
+    const detachFirst = ctx.agents.enter(first)
     expect(lifecycle).toEqual([])
     await ctx.agents.announce(first, 'startup')
     await expect(ctx.agents.announce(first, 'startup')).rejects.toThrow(/already announced/)
@@ -234,7 +215,7 @@ describe('AgentRegistry', () => {
     detachFirst()
 
     const replacement = stubAgent('split')
-    const detachReplacement = ctx.agents.enter(replacement, undefined)
+    const detachReplacement = ctx.agents.enter(replacement)
     detachFirst()
     expect(ctx.agents.get(replacement.id)).toBe(replacement)
     await expect(ctx.agents.announce(first, 'startup')).rejects.toThrow(/not live/)
@@ -255,7 +236,7 @@ describe('AgentRegistry', () => {
     })
     ctx.on('agent/created', () => void order.push(`second:${ctx.agents.get(agent.id) === agent}`))
     ctx.on('agent/disposed', () => void order.push('disposed'))
-    const detach = ctx.agents.enter(agent, undefined)
+    const detach = ctx.agents.enter(agent)
     await ctx.agents.announce(agent, 'startup')
     expect(order).toEqual(['first:true', 'after-detach:true', 'second:true', 'disposed'])
     expect(ctx.agents.get(agent.id)).toBeUndefined()
@@ -354,23 +335,6 @@ describe('AgentRegistry factory seam', () => {
     }, { inject: ['agents'] }))
     expect(calls.create[0]?.ownerCtx.fiber).toBe(callerFiber)
     expect(calls.resume[0]?.ownerCtx.fiber).toBe(callerFiber)
-    expect(calls.create[0]?.options.parentAgent).toBeUndefined()
-    expect(calls.resume[0]?.options.parentAgent).toBeUndefined()
-  })
-
-  it('keeps the runtime parent in options separately from the caller context', async () => {
-    const ctx = new Context()
-    await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(AgentRegistry)
-    const { factory, calls } = stubFactory()
-    ctx.agents.setFactory(factory)
-    const parent = stubAgent('parent')
-    const unregister = await ctx.agents.register(parent)
-
-    await ctx.agents.create({ sessionId: SessionId('child'), parentAgent: parent })
-
-    expect(calls.create[0]?.options.parentAgent).toBe(parent)
-    await unregister()
   })
 
   it('rejects a second factory and clears the slot with its owner (HMR)', async () => {

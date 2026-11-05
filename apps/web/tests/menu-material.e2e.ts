@@ -2,12 +2,51 @@
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
-import { chromium, type Locator } from 'playwright'
+import { chromium, webkit, type Locator } from 'playwright'
+import sharp from 'sharp'
 import { expect, it, onTestFinished } from 'vitest'
 import { captureStableAria, compareOrRefreshGolden, launchWebScaffold, seedSession, webSnapshotMode } from './scaffold.ts'
 
 const expected = fileURLToPath(new URL('./expected/menu-material', import.meta.url))
 const seed = new URL('../../../snapshots/web/seeded-history/session.v3.jsonl', import.meta.url)
+
+it('keeps the view options menu anchored and dismissible through WebKit window resizing', async () => {
+  const scaffold = await launchWebScaffold({})
+  onTestFinished(() => scaffold.close())
+  const browser = await webkit.launch()
+  onTestFinished(() => browser.close())
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, locale: 'en-US' })
+  await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+  const anchor = page.getByRole('button', { name: 'View options', exact: true })
+  await anchor.click()
+  const menu = page.getByRole('menu').filter({ has: page.getByRole('menuitem', { name: 'Workspace Tree', exact: true }) })
+  await menu.waitFor()
+  for (const viewport of [{ width: 1440, height: 1000 }, { width: 1200, height: 700 }]) {
+    await page.setViewportSize(viewport)
+    await expect.poll(async () => {
+      const trigger = await anchor.boundingBox()
+      const panel = await menu.boundingBox()
+      if (trigger === null || panel === null) return null
+      return {
+        // The menu can be wider than the sidebar, so its left margin takes precedence over end alignment.
+        horizontalOffset: Math.round(panel.x - Math.max(12, trigger.x + trigger.width - panel.width)),
+        topGap: Math.round(panel.y - trigger.y - trigger.height),
+        insideViewport: panel.x >= 12 && panel.y >= 12
+          && panel.x + panel.width <= viewport.width - 12
+          && panel.y + panel.height <= viewport.height - 12,
+      }
+    }).toEqual({ horizontalOffset: 0, topGap: 4, insideViewport: true })
+  }
+  await page.keyboard.press('Escape')
+  await menu.waitFor({ state: 'hidden' })
+  await anchor.click()
+  await menu.waitFor()
+  await page.mouse.click(800, 500)
+  await menu.waitFor({ state: 'hidden' })
+  await anchor.click()
+  await page.getByRole('menuitem', { name: 'In one list', exact: true }).click()
+  await menu.waitFor({ state: 'hidden' })
+})
 
 async function material(menu: Locator) {
   return menu.evaluate((node) => {
@@ -48,13 +87,13 @@ it('shares menu transparency and blur across palettes and follows native menu bo
       })
       expect(overlayFill).toBe(platform === 'darwin'
         ? dark ? 'rgba(48, 49, 54, 0.94)' : 'rgba(248, 249, 250, 0.94)'
-        : dark ? 'rgba(67, 69, 74, 0.45)' : 'rgba(248, 249, 250, 0.58)')
+        : dark ? 'rgba(48, 49, 54, 0.64)' : 'rgba(252, 253, 254, 0.7)')
       await account.click()
       const menu = page.getByRole('menu').filter({ has: page.getByRole('menuitem', { name: 'Settings', exact: true }) })
       await menu.waitFor()
       const appearance = await material(menu)
       expect(appearance).toMatchObject({
-        fill: dark ? 'rgba(67, 69, 74, 0.45)' : 'rgba(248, 249, 250, 0.58)',
+        fill: dark ? 'rgba(48, 49, 54, 0.64)' : 'rgba(252, 253, 254, 0.7)',
         blur: 'blur(40px) saturate(1.5)',
       })
       expect(appearance.shadow).toContain(`${dark ? 'rgba(255, 255, 255, 0.16)' : 'rgba(0, 0, 0, 0.04)'} 0px 0px 0px 0.5px`)
@@ -109,4 +148,57 @@ it('shares menu transparency and blur across palettes and follows native menu bo
     await captureStableAria(page, '[role="menu"]', scaffold.workspaceCwd), webSnapshotMode())
   await page.keyboard.press('Escape')
   await expect.poll(() => page.locator('[data-menu-backing]').count()).toBe(0)
+
+  await action.locator('xpath=ancestor::*[@role="treeitem"][1]').click({ button: 'right' })
+  await sessionMenu.waitFor()
+  const popup = page.locator('[data-context-menu]')
+  const stripes = await page.evaluateHandle(() => {
+    const element = document.createElement('div')
+    element.style.cssText = 'position:fixed;inset:0;z-index:1099;pointer-events:none;background:repeating-linear-gradient(90deg,#000 0 4px,#fff 4px 8px)'
+    document.body.appendChild(element)
+    return element
+  })
+  try {
+    // Hide text while preserving layout so pixel contrast measures only the material.
+    await popup.evaluate((node) => {
+      for (const child of node.children) {
+        if (child instanceof HTMLElement && child.getAttribute('aria-hidden') !== 'true') child.style.visibility = 'hidden'
+      }
+    })
+    const box = (await popup.boundingBox())!
+    const clip = { x: Math.floor(box.x + box.width / 2 - 32), y: Math.floor(box.y + box.height / 2 - 16), width: 64, height: 32 }
+    for (const phase of ['enter', 'dismiss', 'replace']) {
+      await popup.evaluate((node, phase) => {
+        node.removeAttribute('data-menu-phase')
+        void (node as HTMLElement).offsetWidth
+        node.setAttribute('data-menu-phase', phase)
+        for (const animation of node.getAnimations({ subtree: true })) {
+          animation.pause()
+          animation.currentTime = Number(animation.effect!.getComputedTiming().duration) / 2
+        }
+      }, phase)
+      const stats = await sharp(await page.screenshot({ clip })).stats()
+      // During a fade the unpainted fraction exposes stripes; a working blur still
+      // removes substantially more contrast than opacity without backdrop sampling.
+      expect(stats.channels[0]!.stdev, phase).toBeLessThan(90)
+    }
+    await popup.evaluate((node) => {
+      node.setAttribute('data-menu-phase', 'enter')
+      for (const animation of node.getAnimations({ subtree: true })) animation.finish()
+    })
+    const settled = await sharp(await page.screenshot({ clip })).stats()
+    expect(settled.channels[0]!.stdev).toBeLessThan(3)
+    await popup.evaluate((node) => {
+      node.style.opacity = '0.999'
+      // The negative control measures backdrop isolation independently of the theme's fill alpha.
+      const material = node.querySelector<HTMLElement>(':scope > [aria-hidden="true"]')!
+      material.style.backgroundColor = 'transparent'
+    })
+    const isolated = await sharp(await page.screenshot({ clip })).stats()
+    expect(isolated.channels[0]!.stdev).toBeGreaterThan(90)
+  } finally {
+    await stripes.evaluate((node) => { node.remove() })
+    await stripes.dispose()
+    await page.keyboard.press('Escape')
+  }
 })

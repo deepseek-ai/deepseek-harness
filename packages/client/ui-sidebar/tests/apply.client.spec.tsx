@@ -6,7 +6,7 @@ import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { apply, inject } from '@deepseek-ai/dsh-client-ui-sidebar/client'
-import type { SidebarRootInjected } from '@deepseek-ai/dsh-client-ui-sidebar/client'
+import type { SidebarRootInjected, SidebarSectionInjected, UseSectionScroller } from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { TrackProductEvent } from '@deepseek-ai/dsh-client-product-analytics/client'
 import { HeaderLeadingControls } from '../src/client/HeaderLeadingControls.tsx'
@@ -22,7 +22,7 @@ afterEach(async () => {
 })
 
 function SidebarFrame({ renderSlot }: PropsRenderSlots<'sidebar'>) {
-  return renderSlot('sidebar', { collapsed: false, width: 300 })
+  return renderSlot('sidebar', { collapsed: false, width: 300, drawer: false })
 }
 
 async function bench(declare = true) {
@@ -68,7 +68,11 @@ describe('ui-sidebar apply', () => {
     expect(b.slots.entries('sidebar')).toHaveLength(1)
     expect(b.slots.spec('sidebar.brand.mark')).toEqual({ kind: 'single', scope: 'root' })
     expect(b.slots.spec('sidebar.brand.name')).toEqual({ kind: 'single', scope: 'root' })
-    expect(b.slots.spec('sidebar.workspaces')).toEqual({ kind: 'single', scope: 'root' })
+    const section = b.slots.spec('sidebar.workspaces') as { kind: string; scope: string; inject: SidebarSectionInjected }
+    expect(section).toMatchObject({ kind: 'single', scope: 'root' })
+    // The section occupant's scroller hook is the one each sidebar render supplies.
+    const useSectionScroller: UseSectionScroller = () => ({ bindScrollerRef: () => {} })
+    expect(section.inject.hooks.sectionScroller({} as never, { useSectionScroller })).toBe(useSectionScroller)
     expect(b.slots.spec('sidebar.settings')).toEqual({ kind: 'single', scope: 'root' })
     expect(b.slots.spec('sidebar.footer.action')).toEqual({ kind: 'list', scope: 'root' })
     expect(b.slots.spec('sidebar.panellist')).toEqual({ kind: 'list', scope: 'root' })
@@ -125,13 +129,23 @@ describe('ui-sidebar apply', () => {
     const fiber = b.ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
     expect(b.slots.entries('sidebar')).toHaveLength(0)
-    const disposeRoot = b.slots.register({
+    expect(b.slots.spec('sidebar.panellist')).toBeUndefined()
+    const declareSidebar = () => b.slots.register({
       name: 'root',
       children: { sidebar: { kind: 'single', scope: 'root' } },
     }, SidebarFrame)
+    const disposeRoot = declareSidebar()
     expect(b.slots.entries('sidebar')).toHaveLength(1)
+    expect(b.slots.spec('sidebar.panellist')).toEqual({ kind: 'list', scope: 'root' })
     disposeRoot()
+    expect(b.slots.entries('sidebar')).toEqual([])
+    expect(b.slots.spec('sidebar.panellist')).toBeUndefined()
+    const disposeReplacement = declareSidebar()
+    expect(b.slots.entries('sidebar')).toHaveLength(1)
+    expect(b.slots.spec('sidebar.panellist')).toEqual({ kind: 'list', scope: 'root' })
     await fiber.dispose()
+    expect(b.slots.spec('sidebar.panellist')).toBeUndefined()
+    disposeReplacement()
   })
 
   it('projects plugin-owned panel entries and removes them with their owner', async () => {

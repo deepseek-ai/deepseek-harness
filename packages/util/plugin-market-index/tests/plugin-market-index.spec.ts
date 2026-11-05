@@ -114,6 +114,36 @@ describe('parseMarketIndex', () => {
     })
   })
 
+  it('ignores extra object fields while validating declaration maps and known discriminators', () => {
+    const original = document()
+    const extended = document({
+      future: { nested: true },
+      metadata: {
+        future: [],
+        categories: { productivity: { title: 'Productivity', future: null } },
+        labels: { official: { title: { en: 'Official', zh: '官方' }, future: false }, ui: { title: 'UI' } },
+        sortKeys: { downloads: { title: 'Downloads', order: 'desc', future: {} } },
+      },
+      plugins: [entry({ versions: [npmVersion({ future: [], source: { type: 'npm', future: false } })] })],
+    })
+    expect(parseMarketIndex(extended, INDEX_URL)).toEqual(parseMarketIndex(original, INDEX_URL))
+    expect(rejection(document({ format: 2, future: true })).path).toBe('$.format')
+    expect(versionRejection({ source: { type: 'future', extra: true } })).toContain('.source.type')
+    expect(entryRejection({ metadata: { sortKeys: { future: null } } })).toContain('references undeclared id')
+  })
+
+  it('normalizes absent and null plugin metadata to unavailable values without inventing zero', () => {
+    const cases = [undefined, null, {}, { category: null, keywords: null, labels: null, sortKeys: null }, { sortKeys: { downloads: null } }]
+    for (const metadata of cases) {
+      const plugin = entry(metadata === undefined ? {} : { metadata })
+      expect(parseMarketIndex(document({ plugins: [plugin] }), INDEX_URL).plugins[0]?.metadata)
+        .toEqual({ keywords: [], labels: [], sortKeys: {} })
+    }
+    expect(parseMarketIndex(document({ plugins: [entry({ metadata: { sortKeys: { downloads: 0 } } })] }), INDEX_URL)
+      .plugins[0]?.metadata.sortKeys).toEqual({ downloads: 0 })
+    expect(entryRejection({ metadata: { sortKeys: { downloads: 'n/a' } } })).toContain('must be a finite number')
+  })
+
   it('preserves free-form keywords without declarations, including order, duplicates, and empty strings', () => {
     for (const keywords of [[], ['market-specific', ' npm ', '中文', '', 'market-specific']]) {
       const index = parseMarketIndex({ format: 1, title: 'Keywords', plugins: [entry({ metadata: { keywords } })] }, INDEX_URL)
@@ -122,7 +152,7 @@ describe('parseMarketIndex', () => {
   })
 
   it('rejects keywords that are not a string array with the offending JSON path', () => {
-    for (const keywords of ['review', null, {}]) {
+    for (const keywords of ['review', {}]) {
       expect(entryRejection({ metadata: { keywords } })).toBe('$.plugins[0].metadata.keywords must be an array')
     }
     expect(entryRejection({ metadata: { keywords: ['review', 1] } })).toBe('$.plugins[0].metadata.keywords[1] must be a string')

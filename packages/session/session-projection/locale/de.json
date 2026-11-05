@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Zusammenfassung des Sitzungsstatus",
+    "description": "Generieren Sie Titel, Status und andere Informationen aus dem Sitzungsprotokoll, damit andere Funktionen sie lesen können."
+  }
+}

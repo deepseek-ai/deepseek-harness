@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 /** FontSettingsGroup behavior: the text font-size row shows collapsed, its
  * disclosure button toggles the font and size rows, and each row routes its
  * write to its own role. */
@@ -56,6 +57,7 @@ function mount() {
     usePanelInfo, useSessionRetainInfo: () => undefined, useResource,
     useWorkspaces: emptyWorkspaces(),
     ...allowAllAccess,
+    useContextMenu: contextMenuHook(),
     useStore: bindSnapshotSelector(store),
     actions: store.actions,
     t: (key: string) => COPY[key] ?? key,

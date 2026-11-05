@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "NodeJS inspetor",
+    "description": "Pressione Ctrl/Cmd+Shift+. para abrir o Chrome DevTools no painel inferior para desenvolvimento e depuração."
+  }
+}

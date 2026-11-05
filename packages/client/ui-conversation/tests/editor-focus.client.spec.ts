@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 /** Composer selection survives focus transfers and background editor reconciliation. */
+import * as uiPrimitives from '@deepseek-ai/dsh-client-ui-primitives'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { $getRoot, $getSelection, $isRangeSelection, SELECTION_CHANGE_COMMAND, UNDO_COMMAND } from 'lexical'
 import { DraftEditorRuntime } from '../src/client/input/editor/runtime.ts'
-import { focusDraftEditor } from '../src/client/input/editor/view-binding.ts'
+import { focusDraftEditor, installDraftKeyboardDismissal } from '../src/client/input/editor/view-binding.ts'
 
 function fixture(start = 1, end = 4) {
   // jsdom has no Range geometry; these cases observe selection and focus, not scrolling.
@@ -16,9 +17,12 @@ function fixture(start = 1, end = 4) {
   const root = document.createElement('div')
   root.setAttribute('contenteditable', 'true')
   root.tabIndex = 0
+  const card = document.createElement('div')
+  card.tabIndex = -1
+  card.append(root)
   const outside = document.createElement('button')
-  document.body.append(root, outside)
-  onTestFinished(() => { root.remove(); outside.remove() })
+  document.body.append(card, outside)
+  onTestFinished(() => { card.remove(); outside.remove() })
   // jsdom collapses document Selection on every focus(); Chromium retains the
   // editor range here. Keep native focus events and activeElement changes.
   for (const element of [root, outside]) {
@@ -37,6 +41,7 @@ function fixture(start = 1, end = 4) {
   const onUpdate = vi.fn()
   const runtime: DraftEditorRuntime = new DraftEditorRuntime({
     onUpdate: () => { runtime.refreshProjection(); onUpdate() },
+    quoteLabels: () => ({ remove: 'Remove quote' }),
     openReference: () => false,
     lexicon: () => new Map(), resolveLexicon: () => undefined,
   })
@@ -65,7 +70,7 @@ function fixture(start = 1, end = 4) {
     editor.read(() => {})
     return reveal
   }
-  return { runtime, editor, root, outside, onUpdate, dispose, selection, domSelection, focusComposer }
+  return { runtime, editor, root, card, outside, onUpdate, dispose, selection, domSelection, focusComposer }
 }
 
 it.each([
@@ -135,6 +140,48 @@ it('restores a pending selection when blur and explicit focus share one update b
   expect(f.selection()).toMatchObject({ anchor: 6, focus: 6 })
   expect(f.domSelection()).toMatchObject({ anchor: 6, focus: 6, text: '' })
   expect(reveal).toHaveBeenCalledOnce()
+})
+
+it('hands mobile submission focus to the composer without stealing focus from another control', async () => {
+  const userAgent = vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1')
+  onTestFinished(() => { userAgent.mockRestore() })
+  vi.resetModules()
+  const detection = await import('@deepseek-ai/dsh-client-ui-primitives/src/focus.ts')
+  const device = vi.spyOn(uiPrimitives, 'isMobileDevice').mockImplementation(detection.isMobileDevice)
+  onTestFinished(() => { device.mockRestore() })
+  const f = fixture()
+  const dispose = installDraftKeyboardDismissal(f.editor, { current: f.card })
+  onTestFinished(dispose)
+
+  f.runtime.clearCommittedDraft(() => null)
+  expect(f.root.textContent).toBe('')
+  expect(document.activeElement).toBe(f.card)
+
+  f.runtime.setDraft('next draft')
+  f.outside.focus()
+  f.runtime.clearCommittedDraft(() => null)
+  expect(document.activeElement).toBe(f.outside)
+})
+
+it('retains mobile focus for a newer draft suffix and removes dismissal with the view', async () => {
+  const userAgent = vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1')
+  onTestFinished(() => { userAgent.mockRestore() })
+  vi.resetModules()
+  const detection = await import('@deepseek-ai/dsh-client-ui-primitives/src/focus.ts')
+  const device = vi.spyOn(uiPrimitives, 'isMobileDevice').mockImplementation(detection.isMobileDevice)
+  onTestFinished(() => { device.mockRestore() })
+  const f = fixture()
+  const dispose = installDraftKeyboardDismissal(f.editor, { current: f.card })
+  onTestFinished(dispose)
+
+  f.runtime.clearCommittedDraft(() => 6)
+  expect(f.root.textContent).toBe('beta')
+  expect(document.activeElement).toBe(f.root)
+
+  dispose()
+  f.runtime.clearCommittedDraft(() => null)
+  expect(f.root.textContent).toBe('')
+  expect(document.activeElement).toBe(f.root)
 })
 
 it('removes focus preservation and update subscriptions when registration is disposed', () => {

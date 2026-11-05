@@ -27,6 +27,10 @@ English | [中文](README.zh.md)
 
 Load the plugin through the web-app manifest; it renders nothing until the session can see at least one job, so an ordinary conversation never grows a control for a capability it is not using.
 
+The header shows the live job count when any jobs are running or stopping, otherwise the visible job count, without repeating the spinner's running state in visible text. The trigger's accessible description identifies live work in both wide and compact layouts. In wide layout, a 14px icon slot shows the spinner for live jobs or the 14px layers icon for idle jobs; the root trigger has no disclosure arrow. At container widths up to 460px, the count hides and the trigger always shows the layers icon, including while jobs are live; running indicators remain inside the menu. The trigger matches More and sidebar controls: a 28×28px icon button with no padding, a 15px glyph in a 15px slot, secondary ink, and ghost hover and active backgrounds. Header actions use an 8px gap in compact layout and 10px in wide layout. Its count tooltip appears after 500ms of hover or immediately on keyboard focus, and stays hidden while the list is open.
+
+Non-touch hover on the text-visible trigger opens the list after 150ms; leaving both the trigger and its portaled list closes it after 120ms. Clicking the wide trigger opens or pins the list; clicking an already pinned trigger closes it. The compact trigger toggles on click and never opens on hover, including when the count hides during a pending hover. ArrowDown opens and pins the list and focuses its first control. Pointer interaction or keyboard focus inside also pins it. Outside click or Escape dismisses it, and Tab connects the trigger to the portaled controls. Hover timers and pins reset when the session changes, no visible jobs remain, or the component unmounts.
+
 ### One row per job
 
 The `job.list` stream `ctx.jobs` mirrors is the single roster: each `JobView` row carries lifecycle, duration, the live `progress` line or the terminal `detail`, and its retained byte count — a live job, or a settled one with retained output, is what makes a row expandable. There is no second roster to join.
@@ -45,7 +49,7 @@ Expanding an observable row opens that job's output observation stream from `ctx
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-One slot entry in the header actions band (after the preset label) renders the trigger; its popover uses a body-mounted `MenuSurface` with fixed positioning so dock panels and clipping ancestors cannot cover it. The shared anchoring hook tracks scrolling, resizing, and panel-size changes. All data arrives through `ctx.jobs` — the component holds no transport state. The roster follows the mount: one `useEffect` keeps the session's `job.list` stream open while the control lives. Observation follows visibility: another `useEffect` opens the stream for the expanded row's job and closes it on collapse, unmount, or popover close.
+One slot entry in the header actions band (after the preset label) renders the trigger; its popover uses a body-mounted `MenuSurface` with fixed positioning so dock panels and clipping ancestors cannot cover it. CSS anchors keep the popover attached to its trigger within layout-viewport size limits. Browser zoom and panning move it with the page, so it may extend beyond the visual viewport. Its internal scrolling and dismissal remain available. All data arrives through `ctx.jobs` — the component holds no transport state. The roster follows the mount: one `useEffect` keeps the session's `job.list` stream open while the control lives. Observation follows visibility: another `useEffect` opens the stream for the expanded row's job and closes it on collapse, unmount, or popover close.
 
 | File | Role |
 |---|---|

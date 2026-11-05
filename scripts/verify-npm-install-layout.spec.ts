@@ -117,13 +117,19 @@ describe('npm install layout verifier', () => {
 })
 
 describe('resolution work budget', () => {
-  it('accepts the measured dual-release graph', () => {
-    expect(assertResolutionWorkBudget({ dshPackagesPerVersion: 277, checkedDshEdges: 2524 }))
-      .toBe(699_148)
+  it.each([
+    [277, 2524, 699_148],
+    [316, 2780, 878_480],
+    [316, 2786, 880_376],
+    [317, 2786, 883_162],
+    [320, 2836, 907_520],
+  ])('accepts the measured dual-release graph with %i packages and %i edges', (packages, edges, units) => {
+    expect(assertResolutionWorkBudget({ dshPackagesPerVersion: packages, checkedDshEdges: edges }))
+      .toBe(units)
   })
 
   it('accepts a graph exactly at the budget and rejects one internal edge above it', () => {
-    const packages = 350
+    const packages = 320
     const edgesAtBudget = Math.floor(MAX_RESOLUTION_WORK_UNITS / packages)
 
     expect(packages * edgesAtBudget).toBe(MAX_RESOLUTION_WORK_UNITS)
@@ -136,9 +142,9 @@ describe('resolution work budget', () => {
   })
 
   it('accepts the headroom and rejects a runaway graph with its own measured counts', () => {
-    expect(assertResolutionWorkBudget({ dshPackagesPerVersion: 300, checkedDshEdges: 2800 }))
-      .toBe(840_000)
+    expect(assertResolutionWorkBudget({ dshPackagesPerVersion: 350, checkedDshEdges: 3200 }))
+      .toBe(1_120_000)
     expect(() => assertResolutionWorkBudget({ dshPackagesPerVersion: 400, checkedDshEdges: 3000 }))
-      .toThrow('400 package(s) per release x 3000 internal edge(s) = 1200000 unit(s), budget 875000 unit(s)')
+      .toThrow(`400 package(s) per release x 3000 internal edge(s) = 1200000 unit(s), budget ${String(MAX_RESOLUTION_WORK_UNITS)} unit(s)`)
   })
 })

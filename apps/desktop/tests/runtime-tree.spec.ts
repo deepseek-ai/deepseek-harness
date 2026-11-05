@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { DESKTOP_HOST_PACKAGE, DESKTOP_HOST_RUNTIME_FILES } from '../src/core-package-set.ts'
-import { DESKTOP_RUNTIME_FILE, readDesktopRuntime, runtimePath, verifyDesktopRuntime } from '../src/runtime-tree.ts'
+import { DESKTOP_RUNTIME_FILE, readDesktopRuntime, runtimePath, verifyDesktopRuntime, writeDesktopRuntime, writeDesktopRuntimeAsync } from '../src/runtime-tree.ts'
 import { runtimeFixture } from './runtime-fixture.ts'
 
 const roots: string[] = []
@@ -14,6 +14,29 @@ function fixture(): string {
   return root
 }
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
+
+it('seals final file bytes identically with concurrent and synchronous inventory', async () => {
+  const dsh = join(fixture(), 'dsh')
+  const original = readDesktopRuntime(dsh)
+  const names = original.sharedPackages.map(entry => entry.name)
+  writeFileSync(join(dsh, 'extra.bin'), Buffer.from([0, 1, 255]))
+  writeFileSync(join(dsh, 'package.json'), '{"type":"module","private":true}\n')
+  const expected = writeDesktopRuntime(dsh, original.release, names)
+  const expectedBytes = readFileSync(join(dsh, DESKTOP_RUNTIME_FILE))
+  expect(await writeDesktopRuntimeAsync(dsh, original.release, names)).toEqual(expected)
+  expect(readFileSync(join(dsh, DESKTOP_RUNTIME_FILE))).toEqual(expectedBytes)
+  expect(await verifyDesktopRuntime(dsh, original.release.version)).toEqual(expected)
+})
+
+it.each(['manifest', 'link'])('leaves the descriptor unchanged when concurrent sealing rejects a %s', async (failure) => {
+  const dsh = join(fixture(), 'dsh')
+  const original = readDesktopRuntime(dsh)
+  const before = readFileSync(join(dsh, DESKTOP_RUNTIME_FILE))
+  if (failure === 'manifest') writeFileSync(join(dsh, 'node_modules', DESKTOP_HOST_PACKAGE, 'package.json'), '{}')
+  else symlinkSync(join(dsh, 'node_modules'), join(dsh, 'outside'), process.platform === 'win32' ? 'junction' : 'dir')
+  await expect(writeDesktopRuntimeAsync(dsh, original.release, original.sharedPackages.map(entry => entry.name))).rejects.toThrow()
+  expect(readFileSync(join(dsh, DESKTOP_RUNTIME_FILE))).toEqual(before)
+})
 
 it('verifies a runtime after relocation without depending on build paths', async () => {
   const root = fixture()

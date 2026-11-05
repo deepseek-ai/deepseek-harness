@@ -7,8 +7,10 @@ import type { LaunchConfig } from './launch.ts'
 export interface Config {
   /** Worker invocation in the subprocess world; omitted selects the local carrier. */
   launch?: LaunchConfig
-  /** per-call starts fresh processes; persistent-in-memory retains a REPL per owner under the same file policy. */
-  executionMode?: 'per-call' | 'persistent-in-memory'
+  /** per-call uses fresh async function bodies; vm-script uses VM contexts; persistent-in-memory retains a REPL per owner. */
+  executionMode?: 'per-call' | 'persistent-in-memory' | 'vm-script'
+  /** Retain a Script process and context per stateOwner; only supported with executionMode: vm-script. */
+  scriptPersistence?: boolean
   /** Default elapsed deadline, including nested tool and approval waits. */
   timeoutMs?: number
   /** Maximum numeric elapsed budget accepted by resolve. */
@@ -21,6 +23,8 @@ export interface Config {
   maxMessageBytes?: number
   /** Maximum simultaneous host binding calls accepted from a program. */
   maxPendingCalls?: number
+  /** Time to wait for cooperative stop acknowledgment before terminating the process. */
+  stopGraceMs?: number
   /** Managed process termination and output-drain grace in milliseconds. */
   graceMs?: number
 }
@@ -29,13 +33,15 @@ export interface Config {
 export type ResolvedConfig = Required<Config>
 /** Loader defaults for the Node PTC provider. */
 export const NodeConfig: z<Config> = z.object({
-  executionMode: z.union([z.const('per-call'), z.const('persistent-in-memory')]).default('per-call'),
+  executionMode: z.union([z.const('per-call'), z.const('persistent-in-memory'), z.const('vm-script')]).default('per-call'),
+  scriptPersistence: z.boolean().default(false),
   timeoutMs: z.number().default(120_000),
   maxTimeoutMs: z.number().default(600_000),
   maxOutputBytes: z.number().default(67_108_864),
   maxOldGenerationSizeMb: z.number().default(512),
   maxMessageBytes: z.number().default(134_217_728),
   maxPendingCalls: z.number().default(128),
+  stopGraceMs: z.number().default(3_000),
   graceMs: z.number().default(3_000),
   launch: z.union([
     z.object({ kind: z.const('node-script').required(), executable: z.string().required(), bootstrapPath: z.string() }),
@@ -48,10 +54,11 @@ export const NodeConfig: z<Config> = z.object({
  * @param config - Loader-defaulted fields with the selected executable.
  */
 export function validateConfig(config: ResolvedConfig): void {
+  if (config.scriptPersistence && config.executionMode !== 'vm-script') throw new Error('ptc-runtime-node: scriptPersistence requires executionMode: vm-script')
   for (const [key, value] of Object.entries(config)) {
     if (typeof value === 'number' && (!Number.isFinite(value) || value <= 0)) throw new Error(`ptc-runtime-node: ${key} must be positive and finite`)
   }
-  for (const key of ['timeoutMs', 'maxTimeoutMs', 'graceMs'] as const) {
+  for (const key of ['timeoutMs', 'maxTimeoutMs', 'graceMs', 'stopGraceMs'] as const) {
     if (config[key] > MAX_TIMER_DELAY_MS) throw new Error(`ptc-runtime-node: ${key} exceeds the supported timer range`)
   }
   if (!Number.isSafeInteger(config.maxOutputBytes) || config.maxOutputBytes < 4) throw new Error('ptc-runtime-node: maxOutputBytes must be an integer of at least 4')

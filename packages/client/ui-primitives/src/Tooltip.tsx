@@ -33,6 +33,11 @@ interface AnchorProps {
 
 type TooltipLabel = string | (() => string)
 
+function clipped(anchor: HTMLElement): boolean {
+  return [anchor, ...anchor.querySelectorAll<HTMLElement>('*')]
+    .some(el => el instanceof HTMLElement && el.scrollWidth > el.clientWidth)
+}
+
 /**
  * Attach a hover/focus tooltip to an anchor element.
  * @param props.label - bubble text, or a resolver evaluated only while visible; an empty string shows only shortcut keys.
@@ -54,6 +59,9 @@ type TooltipLabel = string | (() => string)
  * half-viewport cap would render a slab wider than the surface the anchor sits on; always bounded by viewport margins.
  * @param props.openOnClick - clicking or tapping also pins the bubble for reading; another click, Escape,
  * Tab, or an outside pointerdown dismisses it. Defaults to false for ordinary action tooltips.
+ * @param props.onlyWhenClipped - show the bubble only when the anchor or an HTML element inside it
+ * overflows horizontally, measured when the bubble is about to show; for labels that repeat
+ * text an ellipsis may cut off. Defaults to false.
  * @param props.children - a single anchor element; its own ref (callback or object) is forwarded alongside the tooltip's.
  * @returns the cloned anchor plus a fixed-position bubble, optionally portaled to the body.
  * The bubble stays hidden until ResizeObserver supplies its size for viewport fitting; clicking the
@@ -62,7 +70,7 @@ type TooltipLabel = string | (() => string)
  * tooltips; tapping still invokes the child's action and can open an openOnClick explanation.
  * When no side fits, the viewport-bounded fallback may overlap the anchor; oversized content is scrollable when pinned.
  */
-export function Tooltip({ label, shortcutKeys, side = 'right', align = 'center', delayMs = 0, focusDelayMs = 0, gap = 8, disabled = false, portal = false, maxWidth, openOnClick = false, children }: { label: TooltipLabel; shortcutKeys?: readonly string[] | undefined; side?: TooltipSide; align?: 'center' | 'end'; delayMs?: number; focusDelayMs?: number; gap?: number; disabled?: boolean; portal?: boolean; maxWidth?: number; openOnClick?: boolean; children: ReactElement<AnchorProps> }) {
+export function Tooltip({ label, shortcutKeys, side = 'right', align = 'center', delayMs = 0, focusDelayMs = 0, gap = 8, disabled = false, portal = false, maxWidth, openOnClick = false, onlyWhenClipped = false, children }: { label: TooltipLabel; shortcutKeys?: readonly string[] | undefined; side?: TooltipSide; align?: 'center' | 'end'; delayMs?: number; focusDelayMs?: number; gap?: number; disabled?: boolean; portal?: boolean; maxWidth?: number; openOnClick?: boolean; onlyWhenClipped?: boolean; children: ReactElement<AnchorProps> }) {
   const id = useId()
   const [pinned, setPinned] = useState(false)
   const anchor = useRef<HTMLElement | null>(null)
@@ -156,6 +164,7 @@ export function Tooltip({ label, shortcutKeys, side = 'right', align = 'center',
     const el = anchor.current
     /* v8 ignore next -- the ref is attached by event time: events fire on the cloned anchor. */
     if (el === null) return
+    if (onlyWhenClipped && !clipped(el)) return
     setPos(el.getBoundingClientRect())
     announce(true)
   }

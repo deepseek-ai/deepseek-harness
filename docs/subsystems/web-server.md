@@ -2,7 +2,7 @@
 
 English | [中文](web-server.zh.md)
 
-[dsh-host-webserver](../../packages/host/webserver) is the browser HTTP carrier for the GUI host: one `node:http` server — `node:https` when `tls` is configured — providing `ctx.webServer`, a named-route registry, optional gzip response compression, index.html transform callbacks, and one fallback handler that a plugin may claim. It is not part of the agent loop and not a capability seam; it knows no harness concepts, and another plugin registers every feature route, including the `/api` bridge, plugin bundles, and the HMR event stream ([layering reference](../../packages/boot/app-boot/README.md)). It serves browsers only: Electron loads the built files over `file://` and sends fetch requests through an IPC bridge instead of this server.
+[dsh-host-webserver](../../packages/host/webserver) is the browser HTTP carrier for the GUI host: one `node:http` server — `node:https` when `tls` is configured — providing `ctx.webServer`, a named-route registry, optional gzip response compression, index.html transform callbacks, and one fallback, a handler or a resource, that a plugin may claim. It is not part of the agent loop and not a capability seam; its only harness concept is the Peer an index render speaks for, and another plugin registers every feature route, including the `/api` bridge, plugin bundles, and the HMR event stream ([layering reference](../../packages/boot/app-boot/README.md)). It serves browsers only: Electron loads the built files over `file://` and sends fetch requests through an IPC bridge instead of this server.
 
 Source: [`packages/host/webserver/src/index.ts`](../../packages/host/webserver/src/index.ts)
 
@@ -24,7 +24,29 @@ interface WebRoute {
 }
 ```
 
+```ts type-equiv
+/**
+ * Answers one GET or HEAD request with a Fetch response. An HTTP request
+ * arrives without a Peer and carries the client's headers; an in-process
+ * {@link WebServer.readResource} read passes the Peer its caller admitted.
+ */
+type WebResource = (request: Request, peer?: PeerScope) => Promise<Response>
+```
+
+```ts type-equiv
+/** One named route answered by a resource instead of a handler. */
+interface WebResourceRoute {
+  kind: WebRouteKind
+  /** Absolute pathname, no trailing slash. */
+  path: string
+  /** Answers HTTP GET and HEAD requests and in-process reads. */
+  resource: WebResource
+}
+```
+
 Match order is fixed: exact table first, then longest matching prefix, then the registered fallback. Registration order carries no request-facing semantics — named routes are composed to be disjoint, and the fallback seat answers anything no named route claims; one owner only, a second registration throws. The shipped Web composition claims the seat with [`dsh-host-frontend-static`](../../packages/host/frontend-static/src/index.ts), the SPA dist server with locked semantics: Connection authenticates the dist root and configured index before their HTML is read; non-index assets remain public; non-GET/HEAD is 405, traversal outside the dist root is 403, existing files are served directly, absent or non-file targets are empty 404 responses, and unknown extensions ship as octet-stream.
+
+A route or the fallback may give a resource, a function from a Fetch `Request` to a `Response`, instead of a handler. HTTP `GET` and `HEAD` requests reach it without a Peer, and `readResource(request, peer)` reads it in process for the Peer its caller admitted; a read follows the same match order but reaches only resources, so a route that returns owner-private data or performs an action stays a handler even when it answers `GET`.
 
 <a id="config"></a>
 
@@ -81,7 +103,7 @@ No composition can bind every interface at once: the unspecified address is reje
 
 ## The service
 
-`WebServer` (`ctx.webServer`) listens immediately on activation; a listen failure (EADDRINUSE…) rejects initialization, and the boot process reports the failed fiber. The `tls` pair is read once before the listener binds, and an unreadable, empty, or mismatched pair rejects initialization the same way instead of falling back to HTTP. `register(route)` adds one named route and returns its disposer; a duplicate `(kind, path)` throws because route patterns are a composition-level contract and a collision is a misconfiguration. Gzip wraps eligible socket-backed responses inside the server, so route handlers retain direct `ServerResponse` ownership and no response-writing API is added to the service. Existing content encodings, `Cache-Control: no-transform`, ranges, SSE, ZIP, and the packaged `.gz` Worker image remain identity responses. `collectIndexInjections()` gathers structured `IndexInjection` rows over one `webserver/index-inject` emit, and `renderIndex(html)` renders them into successful root and configured index responses before applying the raw `tapIndex(transform)` escape-hatch transforms in registration order; [dsh-client-modules](../../packages/client/modules) answers the event with the boot manifest rows. `port` reads the listening port, including the port assigned by the OS when `config.port` is 0, and `protocol` reports the scheme the listener serves (`http:` or `https:`).
+`WebServer` (`ctx.webServer`) listens immediately on activation; a listen failure (EADDRINUSE…) rejects initialization, and the boot process reports the failed fiber. The `tls` pair is read once before the listener binds, and an unreadable, empty, or mismatched pair rejects initialization the same way instead of falling back to HTTP. `register(route)` adds one named route and returns its disposer; a duplicate `(kind, path)` throws because route patterns are a composition-level contract and a collision is a misconfiguration. Gzip wraps eligible socket-backed responses inside the server, so handlers keep direct `ServerResponse` ownership, and a resource hands the service a `Response` to write back. Existing content encodings, `Cache-Control: no-transform`, ranges, SSE, ZIP, and the packaged `.gz` Worker image remain identity responses. `collectIndexInjections(peer)` gathers structured `IndexInjection` rows over one `webserver/index-inject` emit that passes the Peer the page speaks for, and `renderIndex(html, peer)` renders them into successful root and configured index responses before applying the raw `tapIndex(transform)` escape-hatch transforms in registration order; [dsh-client-modules](../../packages/client/modules) answers the event with the boot manifest rows. `port` reads the listening port, including the port assigned by the OS when `config.port` is 0, and `protocol` reports the scheme the listener serves (`http:` or `https:`).
 
 A request whose handling throws (a malformed %-escape hitting `decodeURIComponent`, a client dropping mid-body) is logged as a warning and answered 400 — or the socket destroyed when headers are already out — never a process exit. Disposal pairs `close()` with `closeAllConnections()` because a handler may hold its response open (SSE) and such connections never end on their own; without the force-close, teardown would hang. A TLS socket counts as a connection only after its handshake, so the server tracks raw TLS sockets beside upgraded ones and destroys both at disposal. The package never prints: the URL line belongs to the shell. Per-package operational detail, including the dev-mode bundle watch pipeline, stays in the [README](../../packages/host/webserver/README.md).
 
@@ -180,7 +202,7 @@ Source: [`packages/bundle/web-app/src/index.ts`](../../packages/bundle/web-app/s
 
 ### `ctx.webServer` — `WebServer`
 
-The browser HTTP carrier service. Activation loads any configured TLS material, then listens immediately; a material or listen failure rejects initialization, and the boot process reports the failed fiber. Route registration order does not affect requests because configured named routes must be distinct, and the fallback handler answers anything not yet claimed during startup with 404 until its owner registers.
+The browser HTTP carrier service. Activation loads any configured TLS material, then listens immediately; a material or listen failure rejects initialization, and the boot process reports the failed fiber. Route registration order does not affect requests because configured named routes must be distinct, and a request no named route matches is answered 404 until the fallback owner registers.
 
 ```ts cordis-catalog
 /**
@@ -194,10 +216,10 @@ getOrigin(): string
 /**
  * Register a named route. Duplicate (kind, path) throws — route patterns are
  * a composition-level contract, so a collision is a misconfiguration.
- * @param route - kind, path, and the owning handler.
+ * @param route - kind, path, and the owning handler or resource.
  * @returns the disposer removing the route.
  */
-register(route: WebRoute): () => void
+register(route: WebRoute | WebResourceRoute): () => void
 
 /**
  * Register an exact-path HTTP upgrade route. Duplicate paths throw because
@@ -208,14 +230,32 @@ register(route: WebRoute): () => void
 registerUpgrade(route: WebUpgradeRoute): () => void
 
 /**
- * Claim the fallback seat: the handler answering every request no named
- * route matches (the SPA dist server in the shipped Web composition). One
- * owner only — a second registration throws, because two fallbacks cannot
- * compose.
- * @param handler - owns the full response lifecycle of unmatched requests.
+ * Claim the fallback seat: the handler or resource answering every request
+ * no named route matches (the SPA dist server in the shipped Web
+ * composition). One owner only — a second registration throws, because two
+ * fallbacks cannot compose.
+ * @param fallback - a handler owning the full response lifecycle of
+ * unmatched requests, or `{ resource }` answering them.
  * @returns the disposer releasing the seat.
  */
-registerFallback(handler: WebRoute['handler']): () => void
+registerFallback(fallback: WebRoute['handler'] | Pick<WebResourceRoute, 'resource'>): () => void
+
+/**
+ * Read the response an HTTP request for the same URL would receive, as the
+ * resource computes it for `peer`, without an HTTP exchange. The request
+ * path picks the responder by the HTTP match order — exact, longest prefix,
+ * then the fallback — and only a resource answers. This method checks no
+ * cookie, Host, or Origin: the caller admits the reader before reading.
+ * @param request - the read; its URL path selects the responder.
+ * @param peer - the Peer the read speaks for, passed to the resource.
+ * @returns the resource's response, without a body for HEAD as over HTTP;
+ * 405 with `Allow: GET, HEAD` for any other method, checked before matching,
+ * where over HTTP a handler route or an unmatched path answers such a
+ * method itself; 404 when the path matches a handler route, or reaches the
+ * fallback seat while it is unclaimed or holds a handler. A resource that
+ * throws rejects the read, where an HTTP request would receive 400.
+ */
+async readResource(request: Request, peer: PeerScope): Promise<Response>
 
 /**
  * Register a raw-HTML index transform, the escape hatch for markup no
@@ -235,20 +275,23 @@ tapIndex(transform: (html: string) => string): () => void
 applyIndexTaps(html: string): string
 
 /**
- * Gather the structured injection table: one `webserver/index-inject` emit,
- * every subscriber pushes its current rows. Fresh per call, so subscribers
- * read live state (module graph, theme preference) at emit time.
+ * Gather the structured injection table for one Peer: one
+ * `webserver/index-inject` emit, every subscriber pushes its current rows.
+ * Fresh per call, so subscribers read live state (module graph, theme
+ * preference, the Peer's access) at emit time.
+ * @param peer - the Peer the page speaks for.
  * @returns rows in subscriber activation order.
  */
-collectIndexInjections(): IndexInjection[]
+collectIndexInjections(peer: PeerScope): IndexInjection[]
 
 /**
- * Render one index.html body: the structured injection table first, then
- * the raw `tapIndex` transforms over the result.
+ * Render one index.html body for one Peer: the structured injection table
+ * first, then the raw `tapIndex` transforms over the result.
  * @param html - the raw index.html body.
+ * @param peer - the Peer the page speaks for.
  * @returns the transformed body.
  */
-renderIndex(html: string): string
+renderIndex(html: string, peer: PeerScope): string
 ```
 
 Source: [`packages/host/webserver/src/index.ts`](../../packages/host/webserver/src/index.ts)
@@ -285,17 +328,19 @@ Source: [`packages/client/connection/src/index.ts`](../../packages/client/connec
 
 #### `webserver/index-inject` — emit
 
-Collect the structured index injection table. Emitted on every index render and every worker boot-payload request; listeners push their current rows, so a row's data is read fresh at emit time.
+Collect the structured index injection table for the page `peer` speaks for. Emitted on every index render and every worker boot-payload request; listeners push their current rows, so a row's data is read fresh at emit time.
 
 ```ts cordis-catalog
 /**
- * Collect the structured index injection table. Emitted on every index
- * render and every worker boot-payload request; listeners push their
- * current rows, so a row's data is read fresh at emit time.
+ * Collect the structured index injection table for the page `peer` speaks
+ * for. Emitted on every index render and every worker boot-payload
+ * request; listeners push their current rows, so a row's data is read
+ * fresh at emit time.
  * @param table - Mutable row table; listeners append in activation order.
+ * @param peer - The Peer the rendered page speaks for.
  * @mode emit
  */
-'webserver/index-inject'(table: IndexInjection[]): void
+'webserver/index-inject'(table: IndexInjection[], peer: PeerScope): void
 ```
 
 Source: [`packages/host/webserver/src/index.ts`](../../packages/host/webserver/src/index.ts)

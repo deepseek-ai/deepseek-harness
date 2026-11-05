@@ -15,6 +15,7 @@ kind: "package-reference"
 
 - [配置](#configuration)
 - [请求字段](#request-field)
+- [上传排除条件](#upload-exclusions)
 - [接受与重试](#acceptance-and-retry)
 - [模型体验](#model-experience)
 - [已知限制与暂缓事项](#known-limitations-and-deferred-work)
@@ -41,6 +42,24 @@ Web **设置 → 通用 → 在使用官方模型 API 时上传 Session Log** �
 
 `maxBytes` 按 UTF-8 字节限制完整的序列化字段，包括 header 与数值型 envelope 字段。超过上限的积压会分多次已接受的请求补传，每次都从上一次的 `throughSeq` 之后继续。第一条待发事件本身就超过上限时，请求会省略 `dsh_session_log`，插件对每个阻塞事件只记录一次告警，水位停在该事件之前，直到 `maxBytes` 能容纳它。运行时根本无法序列化的超大事件也按同样方式处理，且任何 `maxBytes` 都无法容纳它。
 
+<a id="upload-exclusions"></a>
+## 上传排除条件
+
+插件可通过 `ctx.sessionLogDeepSeek.registerExclusion()` 注册同步、无副作用的判断函数。函数接收存活的 `sessionId` 与可选请求用途 `purpose`；返回 `true` 时，省略本次请求的日志字段与接受回调。任意条件匹配都会排除上传。没有条件匹配时，应用普通上传资格判断。条件抛错时省略本次日志贡献，请求扩展注册器报告首次准备失败；模型请求继续携带其他已准备字段。
+
+```ts
+import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-session-log-deepseek'
+
+export function apply(ctx: Context): void {
+  ctx.inject(['sessionLogDeepSeek'], (child) => {
+    child.sessionLogDeepSeek.registerExclusion(request => request.purpose === 'private-operation')
+  })
+}
+```
+
+注册归调用方插件所有，并返回 effect 释放函数。释放该注册或卸载调用方时，只移除对应规则。排除条件在读取 Session 日志前执行；其他请求扩展仍可参与。已经准备好的在途贡献保留其载荷与接受回调。
+
 <a id="acceptance-and-retry"></a>
 ## 接受与重试
 
@@ -48,7 +67,7 @@ DeepSeek 适配器会在 HTTP 2xx 后、消费 SSE（Server-Sent Events）正文
 
 服务端接受后、持久化水位前发生崩溃，可能让恢复后的进程重放已经接受的范围。这是至少一次交付的失败方向：不确定性会制造重复，绝不会跳过序列。普通会话检查点策略会在下一个语义检查点持久化水位；本插件不执行独立 I/O。
 
-缺少存活会话的直接请求会省略 `dsh_session_log`。普通 agent（智能体）、压缩（compaction）与会话标题调用都会携带存活会话 id。
+缺少存活会话的直接请求会省略 `dsh_session_log`。普通 agent（智能体）、压缩（compaction）、会话标题与 Auto 审查调用都会携带存活会话 id，并应用相同的上传资格判断。
 
 <a id="model-experience"></a>
 ## 模型体验

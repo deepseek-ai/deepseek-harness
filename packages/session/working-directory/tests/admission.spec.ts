@@ -61,7 +61,7 @@ describe.each(['pre-step', 'prepareCall'] as const)('%s context changes', (phase
       expect(body).toContain(`Current working directory: ${JSON.stringify(selected)}.`)
       expect(body).not.toContain(`Current working directory: ${JSON.stringify(root)}.`)
       expect(body.includes('Current DSH file policy: danger-full-access')).toBe(optional)
-      expect(body.includes('Approval policy: ask.')).toBe(optional)
+      expect(body.includes('Approval prompts are enabled in this session')).toBe(optional)
       expect(body).not.toContain('Current DSH file policy: read-only')
       expect(body).not.toContain('Approval prompts are disabled')
       expect(ctx.workingDirectory.get(agent.session)).toBe(selected)

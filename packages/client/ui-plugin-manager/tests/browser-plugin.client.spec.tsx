@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 import assert from 'node:assert/strict'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -8,7 +9,7 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { ILayout, PanelInfo } from '@deepseek-ai/dsh-client-ui-layout/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
-import { allowAllAccess, TestRemote, usePinnedBrowserLanguages } from '@deepseek-ai/dsh-client-test-runtime'
+import { allowAllAccess, StaticRemoteAccess, TestRemote, usePinnedBrowserLanguages } from '@deepseek-ai/dsh-client-test-runtime'
 import * as settings from '@deepseek-ai/dsh-client-ui-settings/client'
 import { apply, inject, NS, PANEL_ID } from '../src/client/index.ts'
 import { PluginManagerPage } from '../src/client/PluginManagerPage.tsx'
@@ -21,10 +22,53 @@ usePinnedBrowserLanguages('zh-CN')
 beforeEach(() => { localStorage.clear() })
 afterEach(cleanup)
 
-async function bench() {
+type AccessEffect = (() => void) | Iterable<() => void>
+
+/** One guarded callback, the Context that owns it, and the disposer of its current installation. */
+interface Guard {
+  readonly owner: Context
+  readonly callback: () => AccessEffect
+  dispose: (() => void) | undefined
+}
+
+/** A `remoteAccess` stand-in whose one answer a spec switches, installing or withdrawing every guarded effect. */
+class SwitchableAccess extends Service {
+  private allowed = true
+  private readonly guards: Guard[] = []
+
+  constructor(serviceCtx: Context) {
+    super(serviceCtx, 'remoteAccess')
+  }
+
+  whenAccess(_action: string, callback: () => AccessEffect): () => void {
+    const guard: Guard = { owner: this.ctx, callback, dispose: undefined }
+    this.guards.push(guard)
+    this.install(guard)
+    return () => {}
+  }
+
+  /** @param allowed - the answer every guarded effect follows from now on. */
+  set(allowed: boolean): void {
+    this.allowed = allowed
+    for (const guard of this.guards) {
+      if (allowed) this.install(guard)
+      else { guard.dispose?.(); guard.dispose = undefined }
+    }
+  }
+
+  private install(guard: Guard): void {
+    if (!this.allowed || guard.dispose !== undefined) return
+    const dispose = guard.owner.effect(guard.callback)
+    guard.dispose = () => { void dispose() }
+  }
+}
+
+async function bench(allows: ((action: string) => boolean) | 'switchable' = () => true) {
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose() })
   await ctx.plugin(SlotRegistry).await()
+  const access = allows === 'switchable' ? new SwitchableAccess(ctx) : undefined
+  if (allows !== 'switchable') new StaticRemoteAccess(ctx, allows)
   const locale = new LocaleRuntime(ctx)
   ctx.provide('locale', locale)
   class LocaleHolder extends Service {
@@ -50,7 +94,7 @@ async function bench() {
   ctx.provide('layout', { panelInfo, selectPanel, beginNavigation: () => new AbortController().signal,
     toggleSidebar: vi.fn(), openRightbar: vi.fn(), closeRightbar: vi.fn() })
   await ctx.plugin(settings).await()
-  return { ctx, slots: ctx.get('slots') as SlotRegistry, locale, list, remote, selectPanel, panelInfo }
+  return { ctx, slots: ctx.get('slots') as SlotRegistry, locale, list, remote, selectPanel, panelInfo, access }
 }
 
 function declare(slots: SlotRegistry): () => void {
@@ -153,7 +197,41 @@ describe('ui-plugin-manager browser plugin', () => {
   })
 
   it('declares only the services the page and its Remote methods use', () => {
-    expect(inject).toEqual(['slots', 'locale', 'remote', 'remote.pluginManager', 'remote.pluginInventory', 'remote.pluginRegistryProbe', 'configForms', 'layout'])
+    expect(inject).toEqual(['slots', 'locale', 'remote', 'remote.pluginManager', 'remote.pluginInventory', 'remote.pluginRegistryProbe', 'configForms', 'layout', 'remoteAccess'])
+  })
+
+  it('reads the Host again on a later grant after showing the page, and not while access is withdrawn', async () => {
+    const b = await bench('switchable')
+    declare(b.slots)
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    const injected: object = b.slots.entries('main')[0]!.inject!()
+    const face = injected as PluginManagerFace
+    face.ensure()
+    await vi.waitFor(() => { expect(face.hooks.pluginManager.getSnapshot().status).toBe('ready') })
+    expect(b.list).toHaveBeenCalledTimes(1)
+
+    b.access!.set(false)
+    expect(b.slots.entries('main')).toEqual([])
+    b.remote.emit('plugin-manager/changed', [{ reason: 'install' }])
+    await Promise.resolve()
+    expect(b.list).toHaveBeenCalledTimes(1)
+
+    b.access!.set(true)
+    expect(b.slots.entries('main')).toHaveLength(1)
+    await vi.waitFor(() => { expect(b.list).toHaveBeenCalledTimes(2) })
+  })
+
+  it('contributes the entry, page, and navigation only while the current Peer may list bundles, and observes changes either way', async () => {
+    const allows = vi.fn(() => false)
+    const b = await bench(allows)
+    declare(b.slots)
+    const fiber = b.ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    expect(allows).toHaveBeenCalledWith('pluginManager/listBundles')
+    for (const name of ['main', 'shell.overlay', 'sidebar.panellist'] as const) expect(b.slots.entries(name)).toEqual([])
+    expect(b.ctx.get('pluginNavigation')).toBeUndefined()
+    expect(b.ctx.get('pluginChanges')?.bundle('dsh-any').getSnapshot()).toBe(false)
+    await fiber.dispose()
   })
 
   it('registers the sidebar entry and its page, which reads the Host only once rendered and follows Host changes', async () => {
@@ -176,7 +254,7 @@ describe('ui-plugin-manager browser plugin', () => {
     const unread = () => { throw new Error('The sidebar icon must not read application state') }
     const glyph = render(<PluginsPanelIcon size={18} active={false}
       usePanelInfo={unread} useSessions={unread} useSessionStatus={unread} useSessionRetainInfo={unread}
-      useWorkspaces={unread} useResource={unread} {...allowAllAccess} />)
+      useWorkspaces={unread} useContextMenu={contextMenuHook()} useResource={unread} {...allowAllAccess} />)
     expect(glyph.container.querySelector('svg')?.getAttribute('width')).toBe('18')
     expect(icon.options).toMatchObject({ id: PANEL_ID, order: 0 })
     expect(icon.locale).toBe(NS)

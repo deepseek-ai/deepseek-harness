@@ -8,9 +8,11 @@
  *
  * Docked content stays mounted while collapsed, translated off the frame's right
  * edge, so opening and closing are one gesture in both presentations: a slide
- * from and to that edge. Normal presentation moves the frame's tracks with
- * the panel. A fullscreen opening reserves its underlying track only after
- * the panel covers the frame, without animating those hidden columns.
+ * from and to that edge. An item mounted by the opening, such as the first tab
+ * of an empty column, starts at that edge, so it joins the slide. Normal
+ * presentation moves the frame's tracks with the panel. A fullscreen opening
+ * reserves its underlying track only after the panel covers the frame, without
+ * animating those hidden columns.
  *
  * The panel has no header of its own: its two controls — presentation switch
  * and collapse — ride the docking kit's chrome seat at the end of the top-right
@@ -27,34 +29,36 @@
  * signal, actions — is read through the slot-owned useTabInfo hook. The Tab
  * domain follows each session's store commits, including sessions off screen.
  */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode, RefObject } from 'react'
+import type { ContextMenuTarget } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import type { ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/client'
 import { IconPanelLeftOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
   HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore,
 } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '../contract/slots.ts'
-import type { DockIntents, DockMode, FloatRect, TabId, TabRecord, TabRenderer } from '@deepseek-ai/dsh-client-ui-dockkit'
+import type { DockIntents, DockMode, DockSurfaceProps, FloatRect, TabId, TabRecord, TabRenderer } from '@deepseek-ai/dsh-client-ui-dockkit'
 import { canSplit, dockPaneIds, DockLayout, findPaneContentTab } from '@deepseek-ai/dsh-client-ui-dockkit'
 import type { HalvesFit, LayoutState, PaneId } from '@deepseek-ai/dsh-client-ui-dockkit'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { GUIDE_KIND, pageAddress } from '../contract/seed.ts'
 import { dockLabels } from '../labels.ts'
-import type { SidebarRightOpenTabOptions } from '../service.ts'
+import type { SidebarRightFlash, SidebarRightOpenTabOptions } from '../service.ts'
 import type { SidebarRightTabDefinition } from '../tab-registry.ts'
 import type { createSidebarRightStore, SurfaceState } from '../stores.ts'
 import { canCloseTab } from '../stores.ts'
 import type { TabOccurrence } from '../tab-domain.ts'
 import type { SidebarRightTabNavigation } from '../contract/slots.ts'
 import type { TabHookContext } from '../tab-info.ts'
+import { flashPane } from './flash.ts'
 import css from './SidebarRight.module.css'
 
 /** The store share the seat receives. */
 type Store = PropsStore<ReturnType<typeof createSidebarRightStore>>
 
 /** The child seats this component renders. */
-type Children = PropsRenderSlots<'sidebar.right.pane.tab' | 'sidebar.right.pane.tab.title' | 'sidebar.right.tab.menu.item'>
+type Children = PropsRenderSlots<'sidebar.right.pane.tab' | 'sidebar.right.pane.tab.title'>
 
 /** What the panel reports to the frame: drawn or not, and whether it wants a track. */
 export interface SidebarRightPresentation {
@@ -104,8 +108,11 @@ export interface SidebarRightInjected {
   /** Toggle the dock panel using its current display mode. */
   readonly toggleFullscreen: () => void
   readonly hooks: {
+    readonly contextMenuTarget: HostObservable<ContextMenuTarget | null>
     readonly shortcuts: HostObservable<readonly ShortcutCatalogEntry[]>
     readonly tabTypes: HostObservable<readonly SidebarRightTabDefinition[]>
+    /** This Session's latest request to make the pane holding a revealed tab glow. */
+    readonly flash: HostObservable<SidebarRightFlash | undefined>
   }
   readonly keyedHooks: {
     readonly tabNavigation: (key: string) => HostObservable<SidebarRightTabNavigation>
@@ -131,12 +138,15 @@ interface PanelProps {
   readonly renderSlot: Children['renderSlot']
   readonly openTab: SidebarRightInjected['openTab']
   readonly closeTab: SidebarRightInjected['closeTab']
+  readonly getTabTriggerProps: NonNullable<DockSurfaceProps['getTabTriggerProps']>
+  readonly tabMenuOpen: boolean
   readonly splitPane: SidebarRightInjected['splitPane']
   readonly toggleFullscreen: SidebarRightInjected['toggleFullscreen']
   readonly shortcuts: readonly ShortcutCatalogEntry[]
   readonly useTabTypes: RightbarSeatProps['useTabTypes']
   readonly useTabNavigation: RightbarSeatProps['useTabNavigation']
   readonly useStore: Store['useStore']
+  readonly useFlash: RightbarSeatProps['useFlash']
   readonly occurrence: SidebarRightInjected['occurrence']
   readonly fullscreen: boolean
   readonly autoFullscreen: boolean
@@ -300,9 +310,31 @@ function PanelChrome({ sessionId, fullscreen, actions, t, shortcuts, toggleFulls
  * anchored to the frame's right edge and slid off it while collapsed.
  */
 function SidebarPanel(panel: PanelProps & { width: number; panelRef: RefObject<HTMLDivElement> }): ReactNode {
-  const { sessionId, surface, actions, t, renderSlot, openTab, width, reportRoom, fullscreen, panelRef } = panel
+  const { sessionId, surface, actions, t, openTab, width, reportRoom, fullscreen, panelRef } = panel
   const { expanded } = surface.layout
   const types = panel.useTabTypes(value => value)
+  const flash = panel.useFlash(value => value)
+  // Each request plays at most once, and only on screen: the request current
+  // when the panel mounts, or one arriving while its Session is hidden, is
+  // already past. Hiding the Session ends a glow in progress.
+  const played = useRef(flash?.serial)
+  // The glow is DOM-only: the docking kit owns the pane elements it marks.
+  useLayoutEffect(() => {
+    if (flash === undefined || flash.serial === played.current) return undefined
+    played.current = flash.serial
+    return panel.active ? flashPane(panelRef.current, flash) : undefined
+  }, [flash, panel.active, panelRef])
+  // True from the render that opens the on-screen panel until a transition in
+  // it ends, the panel closes, or it leaves the screen, which cancels the
+  // slide; the stylesheet starts items mounted meanwhile at the closed position.
+  const [opened, setOpened] = useState(expanded)
+  const [opening, setOpening] = useState(false)
+  if (opened !== expanded) {
+    setOpened(expanded)
+    setOpening(expanded && panel.active)
+  } else if (opening && !panel.active) {
+    setOpening(false)
+  }
   return (
     <div
       ref={panelRef}
@@ -312,6 +344,8 @@ function SidebarPanel(panel: PanelProps & { width: number; panelRef: RefObject<H
       data-sidebar-right-session={sessionId}
       data-sidebar-right-panel={fullscreen ? 'fullscreen' : 'push'}
       data-sidebar-right-open={expanded || undefined}
+      data-sidebar-right-opening={opening || undefined}
+      onTransitionEnd={opening ? () => { setOpening(false) } : undefined}
       // Dockkit hides individual docked hosts; floating descendants remain accessible.
       aria-hidden={(!expanded && surface.layout.floats.length === 0) || undefined}
     >
@@ -329,8 +363,7 @@ function SidebarPanel(panel: PanelProps & { width: number; panelRef: RefObject<H
           renderTabTitle={titlesFor(panel)}
           active={panel.active}
           keepMounted={tab => types.find(type => type.kind === tab.kind)?.keepMounted === true}
-          renderTabMenuItems={(tab, dismiss) =>
-            renderSlot('sidebar.right.tab.menu.item', { tab, dismiss })}
+          getTabTriggerProps={panel.getTabTriggerProps} tabMenuOpen={panel.tabMenuOpen}
           chrome={<PanelChrome
             sessionId={sessionId} fullscreen={fullscreen} actions={actions} t={t}
             shortcuts={panel.shortcuts} toggleFullscreen={panel.toggleFullscreen}
@@ -351,9 +384,14 @@ function SidebarPanel(panel: PanelProps & { width: number; panelRef: RefObject<H
  */
 export function RightbarSeat({
   sessionId, width, viewportWidth, canShow, useStore, actions, t, renderSlot, syncPresentation, measureRoom, reportAutoFullscreen,
-  openTab, closeTab, useTabTypes, useTabNavigation, occurrence, retainTab, active, useShortcuts, splitPane, toggleFullscreen,
+  openTab, closeTab, useContextMenu, useContextMenuTarget, useTabTypes, useTabNavigation, occurrence, retainTab,
+  active, useShortcuts, splitPane, toggleFullscreen, useFlash,
 }: RightbarSeatProps): ReactNode {
+  const { getTriggerProps } = useContextMenu()
+  const getTabTriggerProps: PanelProps['getTabTriggerProps'] = (tab, paneId, handlers) =>
+    getTriggerProps({ kind: 'tab', value: { sessionId, tab, paneId } }, handlers)
   // One store instance per session, so this map holds this session's surface.
+  const tabMenuOpen = useContextMenuTarget(target => target?.kind === 'tab' && target.value.sessionId === sessionId)
   const shortcuts = useShortcuts(entries => entries)
   const surface = useStore(state => state.bySession[sessionId])
   const shown = active && surface !== undefined && surface.layout.expanded
@@ -416,7 +454,8 @@ export function RightbarSeat({
 
   if (surface === undefined) return null
   const panel: PanelProps = {
-    sessionId, actions, t, renderSlot, surface, openTab, closeTab, useTabTypes, useTabNavigation, useStore, occurrence,
+    sessionId, actions, t, renderSlot, surface, openTab, closeTab, getTabTriggerProps, tabMenuOpen, useTabTypes, useTabNavigation,
+    useStore, useFlash, occurrence,
     fullscreen, autoFullscreen, reportRoom, active, retainTab, shortcuts, splitPane, toggleFullscreen,
   }
   return <SidebarPanel {...panel} width={width} panelRef={panelRef} />

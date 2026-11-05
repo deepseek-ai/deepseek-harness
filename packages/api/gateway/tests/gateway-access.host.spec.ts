@@ -21,6 +21,7 @@ import {
   type TypertContext,
   type TypertLookup,
   type TypertResource,
+  type TypertResourceResolveInput,
 } from '@deepseek-ai/dsh-typert-protocol'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import { z } from 'zod'
@@ -48,6 +49,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     /** Test-only resource kinds; the Gateway itself names no kind. */
     'test-shelf': TypertResource<string>
     'test-desk': TypertResource<string>
+    'test-frame': TypertResource<string>
   }
 }
 
@@ -58,11 +60,12 @@ const GUEST: Guest = { kind: 'test-guest', guest: 'gateway' }
 const GLOBAL = { kind: 'global' } as const
 const shelf = (id: string) => ({ kind: 'test-shelf', id }) as const
 const desk = (id: string) => ({ kind: 'test-desk', id }) as const
+const frame = (id: string) => ({ kind: 'test-frame', id }) as const
 
 const FIXTURE_ACTIONS: readonly RemoteAccessAction[] = [
   'accessFixture/open', 'accessFixture/read', 'accessFixture/byAgent', 'accessFixture/byLookup',
   'accessFixture/byLookupAndOption', 'accessFixture/byList', 'accessFixture/scoped', 'accessFixture/scopedOnDesk',
-  'accessFixture/scopedByReader', 'accessFixture/annotate', 'absentAccess/read', 'event:fixture/notice', 'event:fixture/shelf',
+  'accessFixture/scopedByReader', 'accessFixture/annotate', 'accessFixture/bySession', 'absentAccess/read', 'event:fixture/notice', 'event:fixture/shelf',
 ]
 
 function role<K extends RemoteAccessResourceKind>(resource: K): RemoteAccessRole<K> {
@@ -78,6 +81,8 @@ function on(resource: RemoteAccessResource): RemoteAccessBinding {
       return { role: role('test-shelf'), resource }
     case 'test-desk':
       return { role: role('test-desk'), resource }
+    case 'test-frame':
+      return { role: role('test-frame'), resource }
     default:
       throw new Error('no fixture role for this resource kind')
   }
@@ -123,6 +128,12 @@ class AccessFixture extends TypertRemoteService {
   @Remote({ resources: { 'test-shelf': shelfIds => shelfIds } })
   byList(shelfIds: readonly string[]): string {
     void shelfIds
+    return this.seen()
+  }
+
+  @Remote
+  bySession(sessionId: string): string {
+    void sessionId
     return this.seen()
   }
 
@@ -363,6 +374,22 @@ describe('Gateway access checks', () => {
     await expect(ctx.typertGateway.invoke({ peer: peerFor(ctx, GUEST), namespace: 'absentAccess', method: 'read', args: {} }))
       .rejects.toMatchObject({ code: 'remote-access/denied', details: { action: 'absentAccess/read', reason: 'no-allow' } })
     expect(decisions()).toEqual([{ action: 'absentAccess/read', resources: [GLOBAL] }])
+  })
+
+  it('passes declared parameter names to a registered resolver through dispatch', async () => {
+    const { ctx, hold } = await setup()
+    const resolve = vi.fn(({ args, parameters }: TypertResourceResolveInput) => {
+      const named = parameters.find(parameter => parameter.name === 'sessionId')
+      return named === undefined ? undefined : args[named.wire] as string
+    })
+    const dispose = ctx.typert.resources.register('test-frame', { resolve })
+    const guest = peerFor(ctx, GUEST)
+    hold(frame('f1'))
+    await expect(call(ctx, guest, 'bySession', { sessionId: 'f1' })).resolves.toBe('test-guest')
+    await expect(call(ctx, guest, 'bySession', { sessionId: 'f2' }))
+      .rejects.toMatchObject({ code: 'remote-access/denied' })
+    expect(resolve).toHaveBeenCalledTimes(2)
+    await dispose()
   })
 
   it('checks access before resolving lookups, so a refused call activates nothing', async () => {
@@ -703,6 +730,7 @@ describe('Gateway forwarded events for non-owner Peers', () => {
     await expect(ownerEvents.next()).resolves.toMatchObject({ value: { type: 'ready', host: { home: '/fixture' } } })
     expect(ctx.typertGateway.hasLiveClient()).toBe(true)
 
+    expect(ctx.typertGateway.getPendingRemoteEvents()).toEqual([])
     const agentCtx = ctx.extend({})
     const subject = {}
     const settled = vi.fn()
@@ -718,6 +746,10 @@ describe('Gateway forwarded events for non-owner Peers', () => {
     push({ event: 'fixture/shelf', args: ['s2'], resources })
     push({ event: 'fixture/shelf', args: ['s1'], resources })
     await expect(ownerEvents.next()).resolves.toMatchObject({ value: { type: 'waterfall', event: 'fixture/ask' } })
+    const pending = ctx.typertGateway.getPendingRemoteEvents()
+    expect(pending).toEqual([{ event: 'fixture/ask', agentId: 'agent-1' }])
+    expect(pending).not.toBe(ctx.typertGateway.getPendingRemoteEvents())
+    expect(pending[0]).not.toBe(ctx.typertGateway.getPendingRemoteEvents()[0])
     await expect(ownerEvents.next()).resolves.toMatchObject({ value: { type: 'emit', event: 'fixture/notice' } })
     await expect(ownerEvents.next()).resolves.toMatchObject({ value: { type: 'emit', event: 'fixture/shelf', args: ['s2'] } })
     await expect(ownerEvents.next()).resolves.toMatchObject({ value: { type: 'emit', event: 'fixture/shelf', args: ['s1'] } })
@@ -866,6 +898,55 @@ describe('resource resolution', () => {
     expect(callResources(typert, undefined, method('first', 'second'), { first: {}, second: { roomId: 'r1' } }, NEVER))
       .toEqual([GLOBAL])
     expect(callResources(typert, undefined, method(), {}, NEVER)).toEqual([GLOBAL])
+  })
+
+  it('resolves default identities through the registered function and preserves explicit overrides', async () => {
+    const ctx = new Context()
+    roots.push(ctx)
+    await ctx.plugin(TypertRegistry)
+    const resolve = vi.fn(({ args, parameters }: TypertResourceResolveInput) => {
+      const named = parameters.find(parameter => parameter.wire === 'roomId')
+      if (named !== undefined) return args[named.wire] as string | undefined
+      const first = parameters[0]
+      const request = first === undefined ? undefined : args[first.wire] as { address?: { id: string } } | undefined
+      return request?.address?.id
+    })
+    const dispose = ctx.typert.resources.register('test-shelf', { resolve })
+    expect(callResources(ctx.typert, undefined, method('roomId'), { roomId: 'r1' }, NEVER)).toEqual([ROOM])
+    expect(callResources(ctx.typert, undefined, method('request'), { request: { address: { id: 'r1' } } }, NEVER)).toEqual([ROOM])
+    expect(callResources(ctx.typert, undefined, method('request'), { request: {} }, NEVER)).toEqual([GLOBAL])
+    resolve.mockClear()
+    const args = { other: {}, later: { address: { id: 'r1' } } }
+    expect(callResources(ctx.typert, undefined, method('other', 'later'), args, NEVER)).toEqual([GLOBAL])
+    expect(resolve).toHaveBeenCalledExactlyOnceWith({ args, parameters: method('other', 'later').parameters })
+    resolve.mockClear()
+    expect(callResources(ctx.typert, undefined, {
+      ...method('renamed'), cancellation: { parameter: 'signal' },
+    }, { renamed: { address: { id: 'r1' } } }, NEVER)).toEqual([ROOM])
+    expect(resolve).toHaveBeenCalledExactlyOnceWith({
+      args: { renamed: { address: { id: 'r1' } } }, parameters: method('renamed').parameters,
+    })
+    expect(callResources(ctx.typert, { 'test-shelf': () => 'override' }, method('request'), {
+      request: { address: { id: 'r1' } },
+    }, NEVER)).toEqual([shelf('override')])
+    await dispose()
+    expect(ctx.typert.resources.entries()).toEqual([])
+    ctx.typert.resources.register('test-shelf', { resolve: () => { throw new Error('cannot resolve') } })
+    expect(callResources(ctx.typert, undefined, method('request'), { request: {} }, NEVER)).toBeUndefined()
+  })
+
+  it('rejects arrays from a default resolver instead of authorizing several identities', async () => {
+    const ctx = new Context()
+    roots.push(ctx)
+    await ctx.plugin(TypertRegistry)
+    for (const ids of [[], ['r1'], ['r1', 'r2']]) {
+      const dispose = ctx.typert.resources.register('test-shelf', {
+        // Exercise invalid results from an untyped provider at the authorization boundary.
+        resolve: () => ids as never,
+      })
+      expect(callResources(ctx.typert, undefined, method(), {}, NEVER)).toBeUndefined()
+      await dispose()
+    }
   })
 
   it('lets a reader replace the defaults for its kind, called with the positional wire arguments', async () => {

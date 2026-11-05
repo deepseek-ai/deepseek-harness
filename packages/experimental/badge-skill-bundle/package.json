@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-badge-skill-bundle",
   "description": "Let agents add a “powered by dsh” badge to documents, pull requests, and other outputs.",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.2-rc.1",
   "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"
@@ -30,7 +30,10 @@
     "docs",
     "lib/index.js",
     "cordis.patch.yml",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ],
   "license": "MIT",
   "dsh": {

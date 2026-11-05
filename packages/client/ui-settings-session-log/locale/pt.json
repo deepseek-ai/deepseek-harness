@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Configurações de upload de log de sessão",
+    "description": "Define se os logs de sessão serão carregados com solicitações de DeepSeekmodelo oficialAPI."
+  }
+}

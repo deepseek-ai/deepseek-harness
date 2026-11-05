@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Static frontend server",
+    "description": "Serve the Web application's entry page and static files, reject paths outside their directory, and return 404 for missing resources."
+  }
+}

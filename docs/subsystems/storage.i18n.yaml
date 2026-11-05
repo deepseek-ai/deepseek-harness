@@ -9,14 +9,17 @@
   en: b11e06e7c0e0fd13
   zh: 4585f26ff416cb41
 /storage/the-backend-contract:
-  en: 2316787902c6a94e
-  zh: e3bda06e1c33acac
+  en: 50afeec4e9fd3e08
+  zh: e8d2892c83ad3441
 /storage/declaring-a-domain:
-  en: 775cce941500f01f
-  zh: 78acbc67f48574cb
+  en: fa4613279da360c5
+  zh: 09e7a7d63bd1774a
+/storage/domain-versioning:
+  en: 37e40cc29f3bb898
+  zh: bbd55e732bd4b83b
 /storage/the-open-domain:
-  en: 2468b5df66c49b51
-  zh: 1587f460e9769db2
+  en: c0787f6a496b4c46
+  zh: f219b16ec96d6cb6
 /storage/the-domain-facility-ctx-storagedomain:
   en: deed74fcd4506ef4
   zh: 8e3e6e5d2dc2e989

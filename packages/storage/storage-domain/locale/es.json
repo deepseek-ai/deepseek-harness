@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Almacenamiento de datos estructurados",
+    "description": "Guarde los datos clave-valor mediante suma de verificación de la estructura de datos y notifique a otros complementos sobre los cambios."
+  }
+}

@@ -1,72 +1,118 @@
 ---
 name: dsh-client-ui-ux
-description: Design and review DeepSeek Harness client UI changes — visual token discipline, reuse-before-adding, feedback surfaces (toast vs in-place notice vs empty state), overlay and menu safety, platform window adaptation, loading states, and error copy placement. Use when adding or changing product-user-visible GUI behavior in packages/client, or when reviewing such a PR.
+description: "Design and review DSH user-visible UI: alignment, spacing, icons, visual foundation, geometry and interaction. Use before UI changes in client, experimental and app packages; verify affected rendered results before handoff."
 ---
 
-# DeepSeek Harness Client UI/UX
+# DeepSeek Harness UI development
 
-This skill is guidance, not a complete checklist. It covers judgment calls that lint, typecheck, and the i18n gate cannot make: where feedback appears, what gets reused, and how surfaces behave at window edges and across platforms. Copy quality itself follows [dsh-prose-standard](../dsh-prose-standard/SKILL.md); locale ownership follows the [locale-owned copy decision](../../notes/implemented/architecture/2026-08-23-locale-owned-client-ui-copy.md); styling ownership and token rules live in [docs/web-styling.md](../../../docs/web-styling.md) and the [ui-primitives component catalog](../../../packages/client/ui-primitives/README.md#component-catalog) — this skill adds judgment on top of those rules, not a second copy of them.
+Use this skill as the entry point for UI design and review. It owns the workflow, visual foundation, geometry and interaction guidance; alignment, spacing and icon details live in its references below. Load only the references relevant to the task; examples explain judgment, not coverage.
 
-## Architecture prerequisites
+<a id="required-review-loop"></a>
+## UI change workflow
 
-Component structure, state flow, and effect usage follow the architecture rules; read them before redesigning a component:
+Use applicable design rules for UI changes, including visible loading, error, disabled, expanded and focus states. Choose effort by impact and regression risk; ordinary development does not require a full design audit.
 
-- [packages/client/AGENTS.md](../../../packages/client/AGENTS.md) — Slot and props discipline, reactive read, export, ctx, and layering rules.
-- [Client component rules](../../../docs/defensive-patterns/client-components.md) — those requirements stated with the defects they prevent.
+| Change | Required inspection | Additional records |
+|---|---|---|
+| Local copy, icon reuse, color or spacing | Inspect the actual page, affected neighbors and relevant states; run applicable tests. Apply the minimum checks below. | Briefly report results and material gaps. No separate plan, axis drawing, scene inventory, source snapshot or screenshot report is required by default. |
+| Page layout, shared components or global styles | Identify affected relationships and consumers; inspect distinct affected layout, content and state variants in assembled pages. Reuse evidence only for justified equivalents. | Briefly state scope. Preserve the starting version and comparable images when requested or needed to explain broad changes or assess regression risk. |
+| Explicit comprehensive review | Cover the agreed regions and relevant states; distinguish inspected results, defects and uninspected scope. | Use the [review cookbook](../../../docs/cookbook/reviewing-ui-design.md) for coverage records, findings and supporting evidence. A comparison request alone does not require a product-wide audit. |
 
-## Visual foundation
+### Minimum checks for affected UI
 
-- **Use existing tokens for color, radius, and spacing.** Before introducing a literal value, search the target page and its nearest established sibling (the Plugins page is the usual reference for full-page surfaces) for the token or value already in use, and adopt it. The same applies to whole treatments — toasts, menus, in-message artifact previews, sidebar tab layout, colors, clearance rules, page padding: reuse the established component or rule wherever one exists instead of inventing a parallel one.
-- **Verify every color in both light and dark mode.** An ink/background pair must stay readable under both themes before it ships. Dimmed tones are the standing counter-example: they suit decorative surfaces, but on text they routinely fall below readability in one theme — never put a dimmed color on text without checking both.
-- **Font weight tops out at 500 in feature CSS you add or change.** Do not use 600+ for emphasis; differentiate with size or ink instead. The markdown typography tokens owned by ui-theme are the standing exception.
-- **Pick font sizes from the theme typography variables when an existing role matches, otherwise from the page's existing scale.** Parallel content shares one size; never invent a size for a single element, and keep the number of distinct sizes on a page small (13px is the established row/detail size). When the page itself has no precedent, borrow the size and spacing ratios of the most similar existing page or element.
-- **Icons, text, and neighbouring elements stay proportionate and aligned.** Every element lines up with its siblings along a deliberate axis (baseline, vertical center, or shared edge), and an icon's size stays in proportion to the text beside it; never ship an element that aligns to nothing or visibly outweighs its neighbours.
+These checks apply even to small changes; optional documentation does not make inspection optional. Open the actual page and inspect the changed element with its directly affected neighbors, rather than judging CSS or an isolated component alone.
+
+- **Color or opacity:** inspect light and dark themes, including affected foreground/background and state combinations.
+- **Layout, spacing, typography or sizing:** inspect a constrained container and long or wrapping content; check both sides of a changed breakpoint, alignment, clipping and access to actions.
+- **Interaction:** exercise the changed path and affected focus, disabled, loading, error, expanded and overlapping states. Check only states the change can affect, not every possible combination.
+- **Shared components or global styles:** trace affected consumers and inspect distinct assembled layouts and states; one isolated example cannot establish coverage.
+
+If a required scene is unavailable, state what was not checked, why and how it can be verified; a labeled production-component fixture can provide partial evidence, not an actual-page pass. Do not claim verification complete while required checks remain missing. Run the original applicable tests; source inspection and passing tests alone do not establish the rendered result.
+
+Read unchanged owners once; consult examples for uncertain judgments. Inspect relevant states and actual usage sizes, not a fixed screenshot count or every width × theme × state combination. Batch related edits and reuse a current application instance and valid evidence. Documentation-only changes and refactors with evidence of unchanged rendering need no new UI captures; state that basis.
+
+When a before/after comparison is needed, preserve the actual starting implementation, including uncommitted work, and use comparable capture conditions. Never recreate a missing before image and present it as an original. Protect existing work regardless of whether extra evidence is needed.
+
+Before handoff, review or push, check only new cumulative interactions, missing required checks and invalidated evidence; do not repeat completed verification at each stage. Report results and material gaps accurately. Do not claim full coverage or visual acceptance when required scenes or checks are missing.
+
+These effort levels change only the additional design-review procedure. Existing [client test requirements](../../../packages/client/AGENTS.md), [GUI PR GIF requirements](../record-browser-gif/SKILL.md#every-gui-pull-request-includes-a-gif), and [designer/product approval](#design-review-escalation) still apply, including to local changes when their original triggers are met.
+
+## Select the rule owners
+
+For layout changes, read the alignment and spacing references. Read the icon reference when selecting, drawing or reviewing artwork, or when adding, changing or reviewing icon buttons, icon-only actions or informational icons, including reuse without artwork changes. Other tasks use the relevant sections below. Do not load all references by default. Existing responsive and official-artwork skills retain their scopes; numeric scales stay with their implementation owners.
+
+| Decision needed before implementation | Section or reference |
+|---|---|
+| Shared axes, text starts, centering, tree indentation, complete icon boxes | [Alignment](references/alignment.md) |
+| Semantic groups, inner/outer gaps, repeated rhythm, section separation | [Spacing and grouping](references/spacing.md) |
+| Interface icon selection and artwork; icon buttons and icon-only actions, tooltips, informational hover content, accessible labels and focus | [Icons](references/icons.md) |
+| Color, typography and existing treatments | [Visual foundation](#visual-foundation); [Web styling](../../../docs/web-styling.md) owns tokens/materials |
+| Component geometry, nested contours and state fills | [Geometry decisions](#component-geometry); [radius standard](../../../docs/ui-radius.md) owns values and exceptions |
+| Feedback lifetime, loading, overlays, scrolling and platform clearance | [Interaction and feedback](#interaction-and-feedback); [error handling](../dsh-error-handling/SKILL.md) owns failure guarantees |
+| Responsive layout rules, mobile-specific interactions, and truncation/ellipsis rules for components like text and buttons | [Responsive UI](../dsh-responsive-ui/SKILL.md) |
+| Official plugin artwork and feature previews | [Official artwork](../dsh-official-plugin-artwork/SKILL.md) |
+| Copy, locale ownership and component semantics | [Prose standard](../dsh-prose-standard/SKILL.md), [locale ownership](../../notes/implemented/architecture/2026-08-23-locale-owned-client-ui-copy.md), [primitives catalog](../../../packages/client/ui-primitives/README.md#component-catalog) |
+| Density, information hierarchy, combined control states and component choice | [Principle reference](../../../docs/ui-design-review-cases.md#density) sections 3–6 |
 
 ## Reuse before adding
 
-- **Extend an existing component, container, or interaction before creating a new one.** A new capability that fits an existing surface (an extra menu item, a new prop on an existing primitive) beats a parallel element stacked beside it.
-- **Icons come from the existing icon library.** Pick the semantically closest existing icon; a new glyph requires designer approval before it lands — when reviewing a PR that adds one, suggest requesting a designer review.
-- **Right-sidebar content registers a slot in the existing sidebar**, never a separate sidebar. Every sidebar tab declares a tab icon matching its meaning.
-- **Icon-only actions whose meaning is not obvious get a Tooltip.** Informational content the pointer must rest on or select uses HoverCard instead. Prefer these shared primitives over ad-hoc title attributes.
+Extend existing components, containers and interactions when the capability fits. Register right-sidebar content through a slot in the existing sidebar; do not create a separate sidebar. Follow [icon reuse](references/icons.md#reuse-existing-icons-first). Before restructuring, read [client instructions](../../../packages/client/AGENTS.md) and [client defensive patterns](../../../docs/defensive-patterns/client-components.md) for component/state ownership and layering.
 
-## Feedback surfaces
+## Visual foundation
 
-Apply [dsh-error-handling](../dsh-error-handling/SKILL.md#localized-actionable-visible-reports) to failure reports. Choose the surface by the lifetime of the message relative to the surface that produced it:
+- Reuse tokens, values and complete treatments from the target page or nearest established sibling before adding literals; Plugins is the usual full-page reference.
+- Verify colors in light and dark themes; keep ink/background pairs readable, especially dimmed text.
+- Feature CSS you add or change uses **font weight ≤500**; emphasize with size or ink. ui-theme markdown typography tokens are the exception.
+- Use theme typography roles, then the page's scale, then a comparable page's size/spacing ratios. Do not invent a size for a single element. Peers share sizes; keep the scale small (13px is the established row/detail size).
+- Apply [alignment](references/alignment.md) and the [same-foreground rule](references/icons.md#placement-and-use) to icon/text relationships, including value chevrons and search prompts.
 
-- **Transient operation outcomes use the app-wide Toast primitive**, not in-place notices, and the toast's state and rendering live in a host that outlives the reporting surface (a `shell.overlay` entry, as RowActionToast does) — a toast rendered by the panel itself unmounts with that panel. A deletion can close the panel or tab that requested it; only a toast held outside that surface survives the close. Report success and failure; do not report still-pending states.
-- **A failed operation keeps the data visible.** A failed deletion keeps its row; the toast announces the failure. Never blank content to show an error for a transient operation.
-- **In-place notices are for states tied to the surface itself**: a query failure with its Retry action, field validation on the form that owns the field. A populated panel keeps a compact notice beside its retained content; only an empty panel centers a full error state.
-- **Error copy is plain language, and short.** No internal jargon or technical nouns unless an error code must be exposed for debugging. Prefer one clear sentence; anything explainable in two sentences must not grow into paragraphs. A Chinese notice of at most two sentences omits the trailing 句号（。）. The notice must not break the existing layout — reserve its space or overlay it; never shift neighbouring elements.
+## Component geometry
 
-## Loading states
+Choose component role and size variant, then its container relationship. Compare height, radius, curve, inset and material together; equal radii alone do not establish coherence, and wrapping/expansion alone does not justify larger radii. [Radius standards](../../../docs/ui-radius.md#radius-scale) own values and exceptions.
 
-- Lists use their skeleton; every other page-level load centers a bare spinner. Never place a spinner in a corner of the page.
-- One loading treatment per page/component — concurrent regions must not each flash their own style.
-- No loading text unless the context needs it (narrow sidebars almost never do).
+- **Inset:** coordinate inner/outer curves and inset. Radius subtraction is exact for concentric circular arcs; for superellipses, subtraction is only a nominal sizing rule, so inspect diagonal whitespace as well as side gaps.
+- **Flush or adjoining:** the enclosure owns exposed corners; internal joins stay square. Hover fills and pseudo-elements follow that contour without clipping menus or focus.
+- **Independent child card/group:** use its own role/size tier, not the dialog radius or subtraction of all parent padding.
+- **Circles/capsules:** preserve shape, including avatar container and image, using the theme's round-curve exception; ordinary controls use the shared curve.
 
-## Overlays and menus
+Keep fills, strokes and overlays geometrically stable across hover, pressed, selected, loading and disabled states. Reuse [card/elevation materials](../../../docs/ui-radius.md#settings-cards): shadows already include neutral hairlines; retain semantic state-colored borders without doubling neutral edges.
 
-Every menu, popover, and tooltip must be verified for all three before merge:
+Compare related controls, including small selection controls, at actual size in affected themes/states and relevant long-label/narrow layouts. Static checks reject unsupported declarations; rendered comparison judges fit. Consult [geometry cases](../../../docs/ui-design-review-cases.md#geometry) when needed. Apply to scoped changes, not bulk restyling.
 
-- **Dismissable**: outside click (and Escape where focusable) closes it.
-- **Viewport-fitting**: it slides or flips to stay inside the window with an edge margin, and flips only into a side that actually fits (no oscillation when neither side fits).
-- **Unclipped**: it escapes `overflow` ancestors and containing blocks (portal to body where needed) and is never covered by neighbouring elements.
+## Interaction and feedback
 
-Scrollbars stay inside their container: use the shared scrollbar styles rather than component-specific selectors, and verify the bar neither overflows the container nor gets clipped by its rounded corners or edges — keep a small inset instead of letting it sit flush against the container edge.
+### Feedback surfaces
 
-## Responsive layouts
+Follow [error handling](../dsh-error-handling/SKILL.md#localized-actionable-visible-reports). Choose feedback by message lifetime:
 
-Use [dsh-responsive-ui](../dsh-responsive-ui/SKILL.md) for responsive layouts, mobile and touch detection, text truncation, title wrapping, icon-only controls, and focus during width changes.
+- Transient success/failure uses the app-wide Toast, with state and rendering in a host that survives the reporting panel/tab, such as a `shell.overlay` entry. A deletion may close its source panel; a Toast owned by that panel would disappear with it. Do not toast pending states.
+- Failed operations retain visible data; failed deletion keeps the row.
+- Surface-owned failures use in-place notices: query failure with Retry or field validation. Keep a compact notice beside populated content; only empty panels center a full error state.
+- Use short plain-language errors, preferably one sentence, without internal jargon except necessary diagnostic codes. Chinese notices of at most two sentences omit the trailing 句号（。）. Reserve space or overlay notices so neighbors do not shift.
 
-## Platform window adaptation
+### Loading states
 
-- Any new header element or full page must account for macOS and Windows window chrome. On macOS the titlebar clearance is `--dsh-frame-top-clearance`, consumed by Menu, Modal, and overlay primitives as their top safe margin — **never change the global variable to fix one page**. Add a scoped `[data-platform='darwin']` override on the page's own inset instead, and assert the override in the page's stylesheet spec.
-- State the intended total offset (clearance + page inset) when reviewing, so two pages aligning to "the same top spacing" agree on the sum, not just one addend.
+Lists use skeletons; other page-level loads center a bare spinner. Keep one loading treatment per page/component, including concurrent regions. Add loading text only when context requires it.
 
-## Spacing review
+### Overlays and menus
 
-- Review every changed region for gaps: nothing sits flush against its neighbour without an intentional gap, and adjacent icons and elements keep the region's established spacing.
-- Prefer symmetry for parallel elements; an unexplained one-off gap or offset usually signals a missed shared value.
+Before merge, verify every menu, popover and tooltip closes on outside click (and Escape when focusable), fits the viewport with an edge margin, and escapes ancestor clipping, containing blocks and neighbor coverage, using a portal to body when needed. Flip only into a side that fits; never oscillate when neither fits.
+
+Use shared scrollbar styles and a small inset; bars must stay inside containers without being clipped by rounded corners or edges.
+
+### Platform window adaptation
+
+New headers/pages account for macOS and Windows chrome. Menu, Modal and overlay primitives consume `--dsh-frame-top-clearance`; fix local macOS insets with scoped `[data-platform='darwin']` overrides and stylesheet assertions, not global-variable changes. Review the total clearance + page inset.
+
+## Check the rules together
+
+Inspect the composition, then affected internal/cross-group relationships, distant peers and expanded content. Match both endpoints of axes; compare complete icon boxes before optical adjustments. Preserve popup/focus visibility, field feedback, narrow-layout actions and drafts. Check affected theme materials/platform backdrops. Full-interface claims cover all regions; fixtures/crops establish only what they render.
+
+## Maintain one owner per rule
+
+Update the owning section or reference within this skill; do not expose its design specialties as separate skills. Keep examples in the [case reference](../../../docs/ui-design-review-cases.md); AGENTS and PR workflows link here instead of duplicating rules.
+
+Rule changes state applicability, decisions, exceptions and observable verification; update a distinguishing case and remove superseded statements elsewhere. Declare migration versus future-edit scope without implying existing UI conforms. Automate only mechanically decidable checks. Local review tools consume repository rules and retain source/rule revisions rather than maintaining another standards copy.
 
 ## Design review escalation
 

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Utilisation de l'ordinateur (Cua Driver)",
+    "description": "Laissez le modèle faire fonctionner le bureau avec le runtime Cua Driver fourni ; a besoin d'autorisations de bureau pour l'application qui lance dsh."
+  }
+}

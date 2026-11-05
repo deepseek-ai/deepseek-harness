@@ -15,7 +15,7 @@ import { ok, type RemoteMock } from '@deepseek-ai/dsh-remote-mock'
 import { createClientTest, type TestClient, webApp } from '@deepseek-ai/dsh-client-test-runtime/src/assembly/index.ts'
 import { Session } from '../src/client/sessions/session.ts'
 import { SessionEventStream } from '../src/client/transport.ts'
-import type { SessionFollowRequest, SessionPage, SessionPageRequest } from '../src/types.ts'
+import type { SessionFollowRequest, SessionEventsPage, SessionPageRequest } from '../src/types.ts'
 import { entries, ev, historyValue, plainTurn } from './event-script.client.ts'
 import { sessionBench } from './remote/bench.client.ts'
 import {
@@ -122,7 +122,7 @@ describe('Session open', () => {
 
   it('stitches live frames landing right behind the opening snapshot, dropping the page overlap', async ({ mock, start }) => {
     const session = await sessionBench(mock, start, SID)
-    const gate = Promise.withResolvers<SessionPage>()
+    const gate = Promise.withResolvers<SessionEventsPage>()
     const page = plainTurn(SessionSeq(10), 0, '早', '安')
     mock.stream(FOLLOW, async ([request], stream) => {
       stream.push(followSnapshot(await gate.promise, request as SessionFollowRequest))
@@ -243,7 +243,7 @@ describe('paging', () => {
     mock.stream(FOLLOW, followScript(history(newest, true)))
     await session.open()
 
-    const gate = Promise.withResolvers<RemoteResult<SessionPage>>()
+    const gate = Promise.withResolvers<RemoteResult<SessionEventsPage>>()
     mock.remote.session.page.mockImplementation(pageRule(request => (request.beforeSeq === 12 ? history(middle, true) : history(oldest))))
     mock.remote.session.page.mockReturnValueOnce(gate.promise)
     const jump = session.loadThrough(SessionSeq(0))
@@ -279,7 +279,7 @@ describe('paging', () => {
     mock.stream(FOLLOW, followScript(history(newest, true)))
     await session.open()
     const secondRequested = Promise.withResolvers<undefined>()
-    const lastPage = Promise.withResolvers<RemoteResult<SessionPage>>()
+    const lastPage = Promise.withResolvers<RemoteResult<SessionEventsPage>>()
     mock.remote.session.page.mockImplementation(pageRule((request) => {
       if (request.beforeSeq === 12) return history(middle, true)
       secondRequested.resolve(undefined)
@@ -334,7 +334,7 @@ describe('paging', () => {
     mock.stream(FOLLOW, followScript(history(newest, true)))
     await session.open()
     const secondRequested = Promise.withResolvers<undefined>()
-    const lastPage = Promise.withResolvers<RemoteResult<SessionPage>>()
+    const lastPage = Promise.withResolvers<RemoteResult<SessionEventsPage>>()
     mock.remote.session.page.mockImplementation(pageRule((request) => {
       if (request.beforeSeq === 12) return history(plainTurn(SessionSeq(6), 1, 'middle', 'answer'), true)
       secondRequested.resolve(undefined)
@@ -360,7 +360,7 @@ describe('paging', () => {
     mock.stream(FOLLOW, followScript(history(plainTurn(SessionSeq(12), 2, 'e', 'f'), true)))
     await session.open()
 
-    const gate = Promise.withResolvers<RemoteResult<SessionPage>>()
+    const gate = Promise.withResolvers<RemoteResult<SessionEventsPage>>()
     mock.remote.session.page.mockImplementation(pageRule(history(oldest)))
     mock.remote.session.page.mockReturnValueOnce(gate.promise)
     const first = session.loadThrough(SessionSeq(6))
@@ -381,7 +381,7 @@ describe('paging', () => {
     await session.open()
 
     // A plain single-page pull holds the busy flag while the jump is refused.
-    const gate = Promise.withResolvers<RemoteResult<SessionPage>>()
+    const gate = Promise.withResolvers<RemoteResult<SessionEventsPage>>()
     mock.remote.session.page.mockReturnValueOnce(gate.promise)
     const older = session.loadOlder()
     await session.loadThrough(SessionSeq(0)) // refused: must not park seq 0 anywhere
@@ -409,7 +409,7 @@ describe('paging', () => {
     mock.stream(FOLLOW, followScript(history(plainTurn(SessionSeq(12), 2, 'x', 'y'), true)))
     await session.open()
 
-    const gate = Promise.withResolvers<RemoteResult<SessionPage>>()
+    const gate = Promise.withResolvers<RemoteResult<SessionEventsPage>>()
     mock.remote.session.page.mockReturnValueOnce(gate.promise)
     const jump = session.loadThrough(SessionSeq(0))
     // The address is rebuilt while the first page is in flight; the same follow script serves the new generation.
@@ -459,7 +459,7 @@ describe('paging', () => {
     const session = await sessionBench(mock, start, SID)
     mock.stream(FOLLOW, followScript(history(plainTurn(SessionSeq(6), 1, 'x', 'y'), true)))
     await session.open()
-    const gate = Promise.withResolvers<RemoteResult<SessionPage>>()
+    const gate = Promise.withResolvers<RemoteResult<SessionEventsPage>>()
     mock.remote.session.page.mockImplementation(pageRule(gate.promise))
     const first = session.loadOlder()
     const second = session.loadOlder()
@@ -474,7 +474,7 @@ describe('prompt and cancel errors', () => {
   const CHILD = { parentSessionId: PARENT, childSessionId: SID, mode: 'continuable' } as const
 
   it('routes an addressed child through non-activating history, continuation prompt, and interrupt only', async ({ mock, start }) => {
-    const session = await sessionBench(mock, start, SID, { address: CHILD, parentAvailable: true })
+    const session = await sessionBench(mock, start, SID, { address: CHILD })
     await session.open()
     const prompted = await session.prompt([{ type: 'text', text: '继续' }], 'queue')
     const steered = await session.prompt([{ type: 'text', text: '现在处理' }], 'steer')
@@ -484,41 +484,41 @@ describe('prompt and cancel errors', () => {
     expect(steered).toEqual({ ok: true, value: { accepted: true } })
     expect(cancelled).toEqual({ ok: true, value: { accepted: true } })
     expect(mock.log.requests(FOLLOW)).toEqual([
-      { address: { kind: 'subagent', ...CHILD }, assistantStream: true, maxMessages: 500, turnWindow: { minMessages: 50, minTurns: 2 } },
+      { address: { kind: 'subagent', ...CHILD }, activate: true, assistantStream: true, maxMessages: 500, turnWindow: { minMessages: 50, minTurns: 2 } },
     ])
     expect(mock.log.requests(PAGE)).toEqual([])
     // The prompt mode crosses the wire as the request's delivery.
     expect(mock.log.requests('subagents/prompt')).toEqual([
       {
         requestId: expect.any(String) as unknown as string,
-        ...CHILD,
+        childSessionId: SID,
         delivery: 'queue',
         content: [{ type: 'text', text: '继续' }],
         clientTimeZone: TIME_ZONE,
       },
       {
         requestId: expect.any(String) as unknown as string,
-        ...CHILD,
+        childSessionId: SID,
         delivery: 'steer',
         content: [{ type: 'text', text: '现在处理' }],
         clientTimeZone: TIME_ZONE,
       },
     ])
     // Positional parameters cross the wire as positional args.
-    expect(mock.log.calls('subagents/interruptByParent').map(call => call.args)).toEqual([[SID, PARENT, 'continuable']])
+    expect(mock.log.calls('subagents/interruptByUser').map(call => call.args)).toEqual([[SID]])
     expect(mock.log.requests('session/prompt')).toEqual([])
     expect(mock.log.requests('session/cancel')).toEqual([])
     // A successful interrupt leaves no stop error behind.
     expect(session.getSnapshot().promptError).toBeNull()
-    expect(session.getSnapshot().subagent).toEqual({ address: CHILD, parentAvailable: true })
+    expect(session.getSnapshot().subagent).toEqual({ address: CHILD })
   })
 
   it('sends an addressed child continuation under its echo request id and retires a refused echo', async ({ mock, start }) => {
-    const session = await sessionBench(mock, start, SID, { address: CHILD, parentAvailable: true })
+    const session = await sessionBench(mock, start, SID, { address: CHILD })
     await session.open()
     const accepted = session.beginSubmission({ mode: 'queue', text: '继续', attachments: [] })
     await session.prompt([{ type: 'text', text: '继续' }], 'queue', undefined, accepted.requestId)
-    expect(mock.log.requests('subagents/prompt')).toMatchObject([{ requestId: accepted.requestId, ...CHILD }])
+    expect(mock.log.requests('subagents/prompt')).toMatchObject([{ requestId: accepted.requestId, childSessionId: SID }])
     expect(session.getSnapshot().pendingSubmissions.map(echo => echo.requestId)).toEqual([accepted.requestId])
 
     const refused = session.beginSubmission({ mode: 'queue', text: '附件', attachments: [] })
@@ -527,7 +527,7 @@ describe('prompt and cancel errors', () => {
   })
 
   it('forwards continuation image parts to the subagent prompt Remote unstripped', async ({ mock, start }) => {
-    const session = await sessionBench(mock, start, SID, { address: CHILD, parentAvailable: true })
+    const session = await sessionBench(mock, start, SID, { address: CHILD })
     await session.open()
     const content = [
       { type: 'text' as const, text: '看这张图' },
@@ -539,7 +539,7 @@ describe('prompt and cancel errors', () => {
     expect(mock.log.requests('subagents/prompt')).toEqual([
       {
         requestId: expect.any(String) as unknown as string,
-        ...CHILD,
+        childSessionId: SID,
         delivery: 'queue',
         content,
         clientTimeZone: TIME_ZONE,
@@ -549,18 +549,18 @@ describe('prompt and cancel errors', () => {
   })
 
   it('lands an interrupt business failure in promptError with op=stop', async ({ mock, start }) => {
-    const session = await sessionBench(mock, start, SID, { address: CHILD, parentAvailable: true })
-    mock.remote.subagents.interruptByParent.mockResolvedValue(err(new RemoteError('subagent/unauthorized', 'nope', { childSessionId: SID })))
+    const session = await sessionBench(mock, start, SID, { address: CHILD })
+    mock.remote.subagents.interruptByUser.mockResolvedValue(err(new RemoteError('remote-access/denied', 'nope', { action: 'subagents/interruptByUser', reason: 'no-allow' })))
     await session.open()
     const cancelled = await session.cancel()
-    expect(cancelled).toMatchObject({ ok: false, error: { code: 'subagent/unauthorized' } })
+    expect(cancelled).toMatchObject({ ok: false, error: { code: 'remote-access/denied' } })
     expect(session.getSnapshot().promptError).toMatchObject({
-      op: 'stop', error: { code: 'subagent/unauthorized' },
+      op: 'stop', error: { code: 'remote-access/denied' },
     })
   })
 
   it('rejects staged files instead of dropping them from subagent continuations', async ({ mock, start }) => {
-    const session = await sessionBench(mock, start, SID, { address: CHILD, parentAvailable: true })
+    const session = await sessionBench(mock, start, SID, { address: CHILD })
     await session.open()
 
     const prompted = await session.prompt([
@@ -578,7 +578,7 @@ describe('prompt and cancel errors', () => {
     expect(mock.log.requests('subagents/prompt')).toEqual([])
   })
 
-  it('sends a one-shot address to the Host under the continuable marker', async ({ mock, start }) => {
+  it('lets the Host validate the target continuation state', async ({ mock, start }) => {
     const session = await sessionBench(mock, start, SID, { address: { ...CHILD, mode: 'one-shot' } })
     mock.remote.subagents.prompt.mockResolvedValue(err(new RemoteError(
       'subagent/not-resumable', 'subagent cannot be resumed', { childSessionId: SID },
@@ -587,13 +587,12 @@ describe('prompt and cancel errors', () => {
     const prompted = await session.prompt([{ type: 'text', text: '继续' }], 'queue')
     const cancelled = await session.cancel()
 
-    // The Host reads the durable descriptor; the wire marker stays 'continuable'.
     expect(prompted).toMatchObject({ ok: false, error: { code: 'subagent/not-resumable' } })
     expect(cancelled).toEqual({ ok: true, value: { accepted: true } })
-    expect(mock.log.requests('subagents/prompt')).toMatchObject([CHILD])
-    expect(mock.log.calls('subagents/interruptByParent').map(call => call.args)).toEqual([[SID, PARENT, 'continuable']])
+    expect(mock.log.requests('subagents/prompt')).toMatchObject([{ childSessionId: SID }])
+    expect(mock.log.calls('subagents/interruptByUser').map(call => call.args)).toEqual([[SID]])
     expect(mock.log.requests(FOLLOW)).toEqual([
-      { address: { kind: 'subagent', ...CHILD, mode: 'one-shot' }, assistantStream: true, maxMessages: 500, turnWindow: { minMessages: 50, minTurns: 2 } },
+      { address: { kind: 'subagent', ...CHILD, mode: 'one-shot' }, activate: true, assistantStream: true, maxMessages: 500, turnWindow: { minMessages: 50, minTurns: 2 } },
     ])
     expect(mock.log.requests(PAGE)).toEqual([])
     expect(mock.log.requests('session/cancel')).toEqual([])
@@ -613,15 +612,17 @@ describe('prompt and cancel errors', () => {
     ])
   })
 
-  it('publishes the first-prompt lifecycle synchronously before the Remote settles', async ({ mock, start }) => {
+  it('publishes the first-prompt lifecycle once the Host accepts the prompt', async ({ mock, start }) => {
     const session = await sessionBench(mock, start, SID)
     session.handleBlank(true)
     expect(session.getSnapshot()).toMatchObject({
       blank: true, promptAttempted: false, awaitingFirstTurn: false,
     })
     const inFlight = session.prompt([{ type: 'text', text: '要发的' }], 'queue')
+    // An unrelated update rebuilds the snapshot while the Host has not answered yet.
+    session.handleAgentError('unrelated live failure')
     expect(session.getSnapshot()).toMatchObject({
-      blank: true, promptAttempted: true, awaitingFirstTurn: true,
+      blank: true, promptAttempted: false, awaitingFirstTurn: false, lastAgentError: 'unrelated live failure',
     })
     const result = await inFlight
     expect(result.ok).toBe(true)
@@ -642,9 +643,22 @@ describe('prompt and cancel errors', () => {
     const session = await sessionBench(mock, start, SID)
     session.handleBlank(false)
     const inFlight = session.prompt([{ type: 'text', text: '继续' }], 'queue')
-    expect(session.getSnapshot()).toMatchObject({ blank: false, promptAttempted: true, awaitingFirstTurn: false })
+    expect(session.getSnapshot()).toMatchObject({ blank: false, promptAttempted: false, awaitingFirstTurn: false })
     expect((await inFlight).ok).toBe(true)
-    expect(session.getSnapshot()).toMatchObject({ blank: false, awaitingFirstTurn: false })
+    expect(session.getSnapshot()).toMatchObject({ blank: false, promptAttempted: true, awaitingFirstTurn: false })
+  })
+
+  it('does not await a first turn that started before the Host receipt arrived', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
+    session.handleBlank(true)
+    const receipt = Promise.withResolvers<{ ok: true; value: { accepted: true } }>()
+    mock.remote.session.prompt.mockImplementationOnce(() => receipt.promise)
+    const inFlight = session.prompt([{ type: 'text', text: '很快' }], 'queue')
+    session.handleRunning(true)
+    session.handleRunning(false)
+    receipt.resolve({ ok: true, value: { accepted: true } })
+    expect((await inFlight).ok).toBe(true)
+    expect(session.getSnapshot()).toMatchObject({ blank: false, promptAttempted: true, awaitingFirstTurn: false })
   })
 
   it('keeps an accepted first prompt converted when a later prompt is rejected', async ({ mock, start }) => {
@@ -662,7 +676,7 @@ describe('prompt and cancel errors', () => {
     })
   })
 
-  it('keeps the attempted-first-prompt state when the Host rejects the prompt', async ({ mock, start }) => {
+  it('keeps a first prompt the Host rejects blank and unattempted', async ({ mock, start }) => {
     const session = await sessionBench(mock, start, SID)
     session.handleBlank(true)
     mock.remote.session.prompt.mockResolvedValue(err(new RemoteError('session/agent-busy', 'busy', { reason: 'x' })))
@@ -670,7 +684,7 @@ describe('prompt and cancel errors', () => {
     expect(result.ok).toBe(false)
     expect(session.getSnapshot().promptError).toMatchObject({ op: 'send', error: { code: 'session/agent-busy' } })
     expect(session.getSnapshot()).toMatchObject({
-      blank: true, promptAttempted: true, awaitingFirstTurn: true,
+      blank: true, promptAttempted: false, awaitingFirstTurn: false,
     })
   })
 
@@ -684,9 +698,11 @@ describe('prompt and cancel errors', () => {
     expect(session.getSnapshot().promptError).toMatchObject({ op: 'stop', error: { code: 'gateway/internal' } })
   })
 
-  it('reads session-authorized attachment bytes and keeps the opaque id on the wire', async ({ mock, start }) => {
+  it('sends the complete image reference and decodes the gateway response', async ({ mock, start }) => {
     const session = await sessionBench(mock, start, SID)
-    const result = await session.readAttachment('attachment-1' as never)
+    const attachment = { attachmentId: AttachmentId('attachment-1'), mediaType: 'image/png' as const,
+      bytes: 1, width: 1, height: 1, name: 'picture.png', originalDimensions: { width: 2, height: 2 } }
+    const result = await session.readAttachment(attachment)
     expect(result).toEqual({
       ok: true,
       value: {
@@ -695,7 +711,7 @@ describe('prompt and cancel errors', () => {
       },
     })
     expect(mock.log.requests('session/attachment')).toEqual([{
-      sessionId: SID, attachmentId: 'attachment-1',
+      sessionId: SID, attachment,
     }])
   })
 
@@ -703,7 +719,9 @@ describe('prompt and cancel errors', () => {
     const session = await sessionBench(mock, start, SID)
     const failure = new RemoteError('gateway/internal', 'attachment unavailable', {})
     mock.remote.session.attachment.mockResolvedValueOnce(err(failure))
-    await expect(session.readAttachment(AttachmentId('missing'))).resolves.toMatchObject({ ok: false, error: failure })
+    await expect(session.readAttachment({
+      attachmentId: AttachmentId('missing'), mediaType: 'image/png', bytes: 1, width: 1, height: 1,
+    })).resolves.toMatchObject({ ok: false, error: failure })
   })
 
   it('reports an unmatched command and forwards execution failures without opening history', async ({ mock, start }) => {
@@ -874,7 +892,7 @@ describe('remaining branches', () => {
     const session = await sessionBench(mock, start, SID)
     mock.stream(FOLLOW, followScript(history(plainTurn(SessionSeq(0), 0, 'a', 'b'))))
     await session.open()
-    const gate = Promise.withResolvers<RemoteResult<SessionPage>>()
+    const gate = Promise.withResolvers<RemoteResult<SessionEventsPage>>()
     mock.remote.session.page.mockImplementation(pageRule(gate.promise))
     await pushEvent(mock, ev.user(SessionSeq(9), '洞一'))
     await pushEvent(mock, ev.user(SessionSeq(10), '洞二'))
@@ -887,7 +905,7 @@ describe('remaining branches', () => {
 
   it('drops a stale opening without replacing the new generation error state', async ({ mock, start }) => {
     const session = await sessionBench(mock, start, SID)
-    const stale = Promise.withResolvers<RemoteResult<SessionPage>>()
+    const stale = Promise.withResolvers<RemoteResult<SessionEventsPage>>()
     mock.stream(FOLLOW, followScript(() => stale.promise))
     const opening = session.open()
     mock.stream(FOLLOW, followScript(history(plainTurn(SessionSeq(0), 0, 'a', 'b'))))
@@ -899,7 +917,7 @@ describe('remaining branches', () => {
 
   it('drops a stale doOpen whose history resolved successfully after resync superseded it', async ({ mock, start }) => {
     const session = await sessionBench(mock, start, SID)
-    const stale = Promise.withResolvers<RemoteResult<SessionPage>>()
+    const stale = Promise.withResolvers<RemoteResult<SessionEventsPage>>()
     mock.stream(FOLLOW, followScript(() => stale.promise))
     const opening = session.open()
     mock.stream(FOLLOW, followScript(history(plainTurn(SessionSeq(6), 1, '新', '代'))))
@@ -913,7 +931,7 @@ describe('remaining branches', () => {
     const session = await sessionBench(mock, start, SID)
     mock.stream(FOLLOW, followScript(history(plainTurn(SessionSeq(0), 0, 'a', 'b'))))
     await session.open()
-    const repairPull = Promise.withResolvers<RemoteResult<SessionPage>>()
+    const repairPull = Promise.withResolvers<RemoteResult<SessionEventsPage>>()
     mock.remote.session.page.mockImplementation(pageRule(repairPull.promise))
     await pushEvent(mock, ev.user(SessionSeq(9), '洞'))
     await vi.waitFor(() => { expect(mock.log.requests(PAGE)).toHaveLength(1) })
@@ -955,7 +973,7 @@ describe('resync', () => {
     mock.stream(FOLLOW, followScript(history(plainTurn(SessionSeq(0), 0, '旧', '窗'))))
     await session.open()
     const oldWindow = session.eventSource.getSnapshot()
-    const replacement = Promise.withResolvers<SessionPage>()
+    const replacement = Promise.withResolvers<SessionEventsPage>()
     // The reconnect generation: its snapshot is gated, then two live frames land out of order right behind it.
     mock.stream(FOLLOW, async ([request], stream) => {
       stream.push(followSnapshot(await replacement.promise, request as SessionFollowRequest))
@@ -1014,7 +1032,7 @@ describe('resync', () => {
 
   it('drops a stale in-flight open superseded by resync (generation guard)', async ({ mock, start }) => {
     const session = await sessionBench(mock, start, SID)
-    const stale = Promise.withResolvers<RemoteResult<SessionPage>>()
+    const stale = Promise.withResolvers<RemoteResult<SessionEventsPage>>()
     mock.stream(FOLLOW, followScript(() => stale.promise))
     const firstOpen = session.open()
     mock.stream(FOLLOW, followScript(history(plainTurn(SessionSeq(6), 1, '新', '代'))))

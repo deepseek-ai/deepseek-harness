@@ -11,6 +11,11 @@
 - button "Copy"
 - status: Completed
 - button "Completed in {{duration}}"
+- group "Questions and answers":
+  - term: Pick one Which color do you prefer?
+  - definition: Blue, Include accessibility notes
+  - text: {{clock}}
+  - button "Copy"
 - paragraph: DONE
 - button "Copy"
 - button "Good response"

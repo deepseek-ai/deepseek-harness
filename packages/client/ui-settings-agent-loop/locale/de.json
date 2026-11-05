@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Einstellungen für die Ausführung des Agenten",
+    "description": "Konfigurieren Sie die maximale Anzahl an Werkzeugaufrufen, die gleichzeitig ausgeführt werden können."
+  }
+}

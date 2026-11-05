@@ -280,6 +280,19 @@ describe.skipIf(process.platform === 'win32')('shared native Unix connection', (
     expect(String(await reply)).toContain('created')
   })
 
+  it('preserves the native startup failure code and message after managed cleanup', async () => {
+    const failure = { type: 'error', code: 'NATIVE_RUNTIME_CONFLICT', message: 'Another helper version is using this executable path' }
+    const output = JSON.stringify(failure)
+    const f = await fixture({ launch: () => ({ ...launcherFixture(),
+      done: Promise.resolve({ exitCode: 1, signal: null }),
+      collected: { stdout: { readFrom: () => ({ text: output, nextOffset: output.length, lossy: false }) } },
+    }) })
+    const channel = f.open()
+    await expect(channel.done).rejects.toMatchObject({ code: failure.code, message: failure.message })
+    await channel.waitForClose()
+    expect(f.hellos).toEqual([])
+  })
+
   it('returns a failed launcher outcome with its retained stderr and releases the managed range', async () => {
     const f = await fixture({ launch: () => ({ ...launcherFixture(),
       done: Promise.resolve({ exitCode: 12, signal: null }),

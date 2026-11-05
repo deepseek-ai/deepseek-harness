@@ -58,10 +58,8 @@ it('keeps the automation title intact before moving New to another line', async 
             facts.push(`${language} ${width}px: title and New single-line, New beside the title; contained; New retains focus`)
           }
           if (language === 'en') {
-            // 509px collapses the left sidebar to its rail; expanding it leaves the
-            // page column narrow enough (measured 172px) to force the wrap.
-            await page.setViewportSize({ width: 509, height: 1000 })
-            await page.getByRole('button', { name: 'Open sidebar', exact: true }).first().click()
+            // Constrain this page independently of the shell's drawer breakpoint.
+            await header.evaluate((element) => { element.style.width = '220px' })
             await expect.poll(() => header.evaluate((element) => {
               const title = element.querySelector('h1')!
               const button = element.querySelector('button')!
@@ -76,7 +74,7 @@ it('keeps the automation title intact before moving New to another line', async 
                   : buttonRect.top >= titleRect.bottom - 1 ? 'below' as const : 'overlapping' as const,
               }
             })).toEqual({ titleSingleLine: true, placement: 'below' })
-            facts.push('en 509px with sidebar expanded: title single-line; New moves below the title')
+            facts.push('en 220px page column: title single-line; New moves below the title')
           }
           expect(consoleWatch.pageErrors).toEqual([])
         } finally {

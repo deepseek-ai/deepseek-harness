@@ -40,6 +40,15 @@
 
 .menu {
   position: fixed;
+  position-area: none;
+  position-try-fallbacks: --dsh-schedule-catalog-wide-below, --dsh-schedule-catalog-above, --dsh-schedule-catalog-wide-above, --dsh-schedule-catalog-window, --dsh-schedule-catalog-viewport;
+  top: max(16px, calc(anchor(bottom) + 5px));
+  bottom: 16px;
+  left: max(16px, anchor(left));
+  right: 16px;
+  height: fit-content;
+  align-self: start;
+  justify-self: start;
   z-index: 100;
   box-sizing: border-box;
   display: flex;
@@ -202,4 +211,41 @@
 /* The open entry keeps the same quiet gray as its hover state. */
 .trigger[aria-expanded='true'] {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* A wide catalog first shifts horizontally without leaving its trigger's row. */
+@position-try --dsh-schedule-catalog-wide-below {
+  left: 16px;
+  right: 16px;
+  justify-self: safe end;
+}
+
+@position-try --dsh-schedule-catalog-above {
+  top: max(16px, var(--dsh-frame-overlay-top, 16px));
+  bottom: max(16px, calc(anchor(top) + 5px));
+  align-self: end;
+}
+
+@position-try --dsh-schedule-catalog-wide-above {
+  top: max(16px, var(--dsh-frame-overlay-top, 16px));
+  bottom: max(16px, calc(anchor(top) + 5px));
+  left: 16px;
+  right: 16px;
+  align-self: end;
+  justify-self: safe end;
+}
+
+@position-try --dsh-schedule-catalog-window {
+  top: max(16px, var(--dsh-frame-overlay-top, 16px));
+  bottom: 16px;
+  margin: 0;
+  align-self: safe end;
+}
+
+@position-try --dsh-schedule-catalog-viewport {
+  position-area: none;
+  inset: max(16px, var(--dsh-frame-overlay-top, 16px)) 16px 16px;
+  margin: 0;
+  align-self: safe end;
+  justify-self: safe end;
 }
