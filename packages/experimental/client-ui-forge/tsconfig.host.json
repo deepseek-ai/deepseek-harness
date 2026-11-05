@@ -15,8 +15,7 @@
     "src/patch-cache.ts",
     "src/states.ts",
     "src/types.ts",
-    "src/worktree.ts",
-    "src/worktree-archive.ts"
+    "src/worktree.ts"
   ],
   "references": [
     {
@@ -78,15 +77,6 @@
     },
     {
       "path": "../worktree"
-    },
-    {
-      "path": "../../terminal/terminal"
-    },
-    {
-      "path": "../../workspace/workspace"
-    },
-    {
-      "path": "../../jobs/jobs"
     }
   ]
 }

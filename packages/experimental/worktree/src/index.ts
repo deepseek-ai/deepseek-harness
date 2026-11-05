@@ -3,20 +3,32 @@
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { inspectRemoval } from './removal.ts'
 import type {} from '@deepseek-ai/dsh-fs'
 import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
+import { appendPluginRecord } from '@deepseek-ai/dsh-session'
+import type { Session } from '@deepseek-ai/dsh-session'
+import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
+import { WorktreeReclamation } from './archive.ts'
 import { PREPARE_DIRECTORY } from './directory.ts'
 import { generatedWorktreeName } from './name.ts'
 import { runCommand } from './process.ts'
 import type { ProcessConfig } from './process.ts'
-import type { CreatedWorktree, CreateWorktreePhase, CreateWorktreeRequest, RestoredWorktree, RestoreWorktreeRequest } from './types.ts'
+import { CREATED_RECORD, worktreeProjection } from './projection.ts'
+import type { WorktreeProjectionState } from './projection.ts'
+import { checkoutIdentity, inspectRemoval, registration } from './removal.ts'
+import type {
+  CreatedWorktree, CreateWorktreePhase, CreateWorktreeRequest, RestoredWorktree, RestoreWorktreeRequest, WorktreeCleanup,
+} from './types.ts'
 
-export type { CreatedWorktree, CreateWorktreePhase, CreateWorktreeRequest, RestoredWorktree, RestoreWorktreeRequest } from './types.ts'
+export type {
+  CreatedWorktree, CreateWorktreePhase, CreateWorktreeRequest, RestoredWorktree, RestoreWorktreeRequest, WorktreeCleanup, WorktreeCreation,
+} from './types.ts'
 export { generatedWorktreeName } from './name.ts'
+export { CREATED_RECORD, worktreeProjection } from './projection.ts'
+export type { WorktreeProjectionState } from './projection.ts'
 
 /** Worktree location, generated names, executables, and subprocess resource limits. */
 export interface Config {
@@ -58,9 +70,13 @@ function relativePath(value: string): boolean {
     && value.split('/').every(part => part.length > 0 && part !== '.' && part !== '..')
 }
 
-/** Creates retained Git worktrees under the mounted filesystem and sandbox providers. */
+/**
+ * Creates retained Git worktrees under the mounted filesystem and sandbox
+ * providers, records each creation in the Session log, and reclaims a clean,
+ * unreferenced checkout when the Session that created it is archived.
+ */
 export class WorktreeService extends Service {
-  static inject = ['workingDirectory', 'fs', 'subprocess', 'sandbox', 'sandboxPolicy']
+  static inject = ['workingDirectory', 'fs', 'subprocess', 'sandbox', 'sandboxPolicy', 'sessionProjections']
 
   static Config: z<Config> = z.object({
     directory: z.string().default('.agents/worktrees'),
@@ -76,6 +92,8 @@ export class WorktreeService extends Service {
   private readonly lifetime = new AbortController()
   private readonly pending = new Set<Promise<unknown>>()
   private readonly checkouts = new Map<string, Promise<void>>()
+  private projection!: ProjectionHandle<WorktreeProjectionState>
+  private reclamation: WorktreeReclamation | undefined
 
   constructor(ctx: Context, config: Config) {
     super(ctx, 'worktrees')
@@ -96,6 +114,20 @@ export class WorktreeService extends Service {
     ctx.effect(() => async () => {
       this.lifetime.abort(new Error('worktree service disposed'))
       await Promise.allSettled(this.pending)
+    })
+  }
+
+  protected async [Service.init](): Promise<void> {
+    this.projection = await this.ctx.sessionProjections.register(worktreeProjection)
+    // Reclamation needs the Workspace archive events and the Session corpus; without
+    // them the service only creates and restores, as a headless profile composes it.
+    this.ctx.inject(['workspaceRegistry', 'sessionQuery', 'sessions', 'workingDirectory', 'sandboxPolicy'], (scope) => {
+      const reclamation = new WorktreeReclamation(scope, {
+        exclusiveCheckout: (path, body) => this.exclusiveCheckout(path, body),
+        removeCheckout: (session, request, signal, admit) => this.removeCheckout(session, request, signal, admit),
+      }, this.projection)
+      this.reclamation = reclamation
+      scope.effect(() => () => { this.reclamation = undefined })
     })
   }
 
@@ -161,49 +193,34 @@ export class WorktreeService extends Service {
   }
 
   /**
-   * Inspect a recorded checkout for non-destructive removal. Dirty, ignored, locked,
-   * detached, nested, mismatched, and missing checkouts are retained. Inspection errors reject.
-   * @param policy - resolved execution policy of the owning Session.
-   * @param request - recorded checkout identity.
-   * @param signal - cancellation of inspection.
-   * @returns whether the checkout is currently eligible; removal always inspects again.
+   * Read the archive cleanup of a Session's created checkout; waiting never
+   * starts one. Absent without the Workspace and query providers.
+   * @param session - archived Session whose cleanup is read.
+   * @param revision - null reads at once; a matching revision waits for that attempt to settle.
+   * @returns the attempt state, or null when none exists, the revision was superseded, or the service is stopping.
    */
-  canRemove(policy: SandboxExecutionPolicy, request: RestoreWorktreeRequest, signal?: AbortSignal): Promise<boolean> {
-    return this.removal(policy, request, signal, null)
+  async cleanupOf(session: Session, revision: number | null): Promise<WorktreeCleanup | null> {
+    return await this.reclamation?.cleanupOf(session, revision) ?? null
   }
 
   /**
-   * Remove an eligible checkout and its registration without force or branch deletion.
-   * Callers must exclude new users until settlement. A rejection can leave a partially
-   * removed directory; the branch remains available for restoration.
-   * @param policy - resolved execution policy of the owning Session.
-   * @param request - recorded checkout identity.
-   * @param signal - cancellation before or during removal.
-   * @param admit - synchronous final admission after inspection; false retains the checkout.
-   * @returns true when removed; false when inspection or admission requires retention.
+   * Inspect a recorded checkout under the Session's policy and, when eligible
+   * and admitted, remove it and its registration without force or branch
+   * deletion. A rejection can leave a partial directory; the branch stays.
    */
-  remove(
-    policy: SandboxExecutionPolicy, request: RestoreWorktreeRequest, signal?: AbortSignal, admit: () => boolean = () => true,
+  private async removeCheckout(
+    session: Session, request: RestoreWorktreeRequest, signal: AbortSignal, admit: () => boolean,
   ): Promise<boolean> {
-    return this.removal(policy, request, signal, admit)
-  }
-
-  private async removal(
-    policy: SandboxExecutionPolicy, request: RestoreWorktreeRequest, signal: AbortSignal | undefined, admit: (() => boolean) | null,
-  ): Promise<boolean> {
-    const control = signal === undefined ? this.lifetime.signal : AbortSignal.any([this.lifetime.signal, signal])
+    const control = AbortSignal.any([this.lifetime.signal, signal])
     control.throwIfAborted()
-    const operation = this.exclusiveCheckout(request.path, async () => {
-      control.throwIfAborted()
-      const run = this.gitRunner(policy, control)
+    const operation = (async () => {
+      const run = this.gitRunner(this.ctx.sandboxPolicy.resolve({ session }), control)
       if (!await inspectRemoval(this.ctx, this.config.directory, request, run, control)) return false
       control.throwIfAborted()
-      if (admit !== null) {
-        if (!admit()) return false
-        await run(request.repositoryRoot, ['worktree', 'remove', '--', request.path])
-      }
+      if (!admit()) return false
+      await run(request.repositoryRoot, ['worktree', 'remove', '--', request.path])
       return true
-    })
+    })()
     this.pending.add(operation)
     try { return await operation } finally { this.pending.delete(operation) }
   }
@@ -254,7 +271,9 @@ export class WorktreeService extends Service {
       onPhase?.('checkout')
       await run(path, ['--work-tree', path, 'reset', '--hard', '--no-recurse-submodules', baseCommit], undefined, overrides)
       const canonicalPath = await this.ctx.workingDirectory.set(agent, path, signal)
-      return { path: canonicalPath, branch, baseCommit, repositoryRoot }
+      const created: CreatedWorktree = { path: canonicalPath, branch, baseCommit, repositoryRoot }
+      appendPluginRecord(agent.session, CREATED_RECORD, created)
+      return created
     } catch (error) {
       throw new Error(`Could not finish worktree ${branch} at ${path}. Any created checkout and branch are retained. ${error instanceof Error ? error.message : String(error)}`, { cause: error })
     }
@@ -270,27 +289,14 @@ export class WorktreeService extends Service {
     const policy = this.ctx.sandboxPolicy.resolve({ session: agent.session })
     const run = this.gitRunner(policy, signal)
     if (await this.ctx.fs.lstat(path, undefined, signal) !== undefined) throw new Error(`worktree path already exists: ${path}`)
-    const root = await this.ctx.fs.resolve(repositoryRoot, { signal })
-    const pool = await this.ctx.fs.resolve(this.config.directory, { cwd: repositoryRoot, signal })
-    const target = await this.ctx.fs.resolve(path, { cwd: repositoryRoot, signal })
-    if (this.ctx.fs.processPath(root) !== repositoryRoot || this.ctx.fs.processPath(target) !== path
-      || !this.ctx.fs.contains(root, pool) || !this.ctx.fs.contains(pool, target) || pool.targetKey === target.targetKey) {
-      throw new Error('worktree restoration must use a canonical directory inside the configured pool')
-    }
     if (!relativePath(branch) || branch.startsWith('-')) throw new Error('worktree branch must be a relative Git branch name')
     if (!/^(?:[a-f\d]{40}|[a-f\d]{64})$/i.test(baseCommit)) throw new Error('worktree baseCommit must be a full commit object name')
+    const identity = await checkoutIdentity(this.ctx, this.config.directory, { path, branch, baseCommit, repositoryRoot }, run, signal)
+    if (identity === null) throw new Error('worktree restoration must use a canonical directory inside the configured pool of the source checkout root')
     await run(repositoryRoot, ['check-ref-format', `refs/heads/${branch}`])
-    const top = await run(repositoryRoot, ['rev-parse', '--show-toplevel'])
-    const actualRoot = await this.ctx.fs.resolve(top.stdout.replace(/\r?\n$/, ''), { cwd: repositoryRoot, signal })
-    if (actualRoot.targetKey !== root.targetKey) throw new Error('worktree repositoryRoot must be the source checkout root')
     await run(repositoryRoot, ['rev-parse', '--verify', '--end-of-options', `${baseCommit}^{commit}`])
-    const registered = await run(repositoryRoot, ['worktree', 'list', '--porcelain', '-z'])
-    for (const entry of registered.stdout.split('\0\0')) {
-      const fields = entry.split('\0')
-      const recordedPath = fields.find(field => field.startsWith('worktree '))?.slice('worktree '.length)
-      if (recordedPath === undefined) continue
-      const recorded = await this.ctx.fs.resolve(recordedPath, { cwd: repositoryRoot, signal })
-      if (recorded.targetKey !== target.targetKey) continue
+    const fields = await registration(this.ctx, { path, branch, baseCommit, repositoryRoot }, identity.target, run, signal)
+    if (fields !== undefined) {
       if (fields.some(field => field === 'locked' || field.startsWith('locked '))) throw new Error(`worktree is locked: ${path}`)
       if (await this.ctx.fs.lstat(path, undefined, signal) !== undefined) throw new Error(`worktree path already exists: ${path}`)
       await run(repositoryRoot, ['worktree', 'remove', '--', path])
@@ -298,6 +304,7 @@ export class WorktreeService extends Service {
     const existing = await run(repositoryRoot, ['show-ref', '--verify', '--quiet', `refs/heads/${branch}`], [0, 1])
     const branchRecreated = existing.exitCode !== 0
     try {
+      const pool = await this.ctx.fs.resolve(this.config.directory, { cwd: repositoryRoot, signal })
       await this.prepareDirectory(policy, repositoryRoot, this.ctx.fs.processPath(pool), path, signal)
       await run(repositoryRoot, [
         '--work-tree', repositoryRoot, 'worktree', 'add', '--no-checkout',

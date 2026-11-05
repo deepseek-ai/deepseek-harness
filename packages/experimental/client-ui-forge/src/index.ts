@@ -7,7 +7,7 @@ import type {} from '@deepseek-ai/dsh-api-remote-access'
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type { ChangeRequestSnapshot, ForgeActionFailure, ForgeFailure, ForgeReviewRequest, ForgeReviewResult, MergeMethod } from '@deepseek-ai/dsh-experimental-forge'
 import type { SessionChangeRequest } from '@deepseek-ai/dsh-experimental-forge-session'
-import type {} from '@deepseek-ai/dsh-experimental-worktree'
+import type { WorktreeCleanup } from '@deepseek-ai/dsh-experimental-worktree/types'
 import { appendPluginRecord } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
@@ -27,10 +27,9 @@ import { ChangeRequestStates, changeRequestStatesDomain } from './states.ts'
 import type { PanelConfig } from './panel.ts'
 import type {
   Config, ForgeBaseBranches, ForgeBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame, ForgeLocalDiff, ForgeLocalScope,
-  ForgeMissingWorktree, ForgePanelState, ForgeSessionWorktree, ForgeWorktreeState, ForgeWorktreeCleanup, ForgeWorktreeRetention,
+  ForgeMissingWorktree, ForgePanelState, ForgeSessionWorktree, ForgeWorktreeState,
 } from './types.ts'
-import { WorktreeArchives } from './worktree-archive.ts'
-import { forgeWorktreeRetentionProjection, forgeWorktreeProjection, messageOf, within, WORKTREE_RECORD, WorktreeCreations } from './worktree.ts'
+import { forgeWorktreeProjection, messageOf, within, WORKTREE_RECORD, WorktreeCreations } from './worktree.ts'
 import type { HeldWork } from './worktree.ts'
 
 export type * from './types.ts'
@@ -83,8 +82,6 @@ export class ForgePanelController extends TypertRemoteService {
   private readonly panels = new Map<Session, SessionPanel>()
   private worktreeStates!: ProjectionHandle<ForgeWorktreeState>
   private creations!: WorktreeCreations
-  private archives: WorktreeArchives | undefined
-  private retention!: ProjectionHandle<ForgeWorktreeRetention>
   private readonly patches: PatchCache
   private states: ChangeRequestStates | undefined
   private readonly stopPanels: () => Promise<void>
@@ -124,18 +121,12 @@ export class ForgePanelController extends TypertRemoteService {
       inject: ['sessionProjections'],
       apply: async (scope: Context) => {
         this.worktreeStates = await scope.sessionProjections.register(forgeWorktreeProjection)
-        this.retention = await scope.sessionProjections.register(forgeWorktreeRetentionProjection)
       },
     })
     await stateOwner
     // Inbox insertions, step proposals, and Session events read the worktree state, so they start once its reader is ready.
     this.creations = new WorktreeCreations(ctx, this.worktreeStates, this.config.worktreePrefix, (session) => {
       this.panels.get(session)?.updateWorktree()
-    })
-    const archiveOwner = ctx.inject(['workspaceRegistry', 'sessionQuery', 'worktrees'], (scope) => {
-      const archives = new WorktreeArchives(scope, this.retention)
-      this.archives = archives
-      scope.effect(() => () => { this.archives = undefined })
     })
     const inbox = ctx.on('agent/inbox/inserted', ({ agent }) => { this.holdTurn(agent) })
     const events = ctx.on('session/event', (session: Session, event: SessionEvent) => {
@@ -154,7 +145,6 @@ export class ForgePanelController extends TypertRemoteService {
       yield stopPanels
       yield stopStates
       yield creations.dispose
-      yield archiveOwner.dispose
     }, 'forge-panel: drain before releasing state')
   }
 
@@ -190,14 +180,14 @@ export class ForgePanelController extends TypertRemoteService {
   }
 
   /**
-   * Read or await an archive cleanup owned by this Host lifetime.
+   * Read or await the worktree service's archive cleanup of the Session's checkout.
    * @param session - Session whose cleanup is visible to the caller.
    * @param revision - null reads now; a matching revision waits for completion.
-   * @returns the cleanup state, or null when none exists or the revision was superseded.
+   * @returns the cleanup state, or null without a worktree service, an attempt, or a current revision.
    */
   @Remote
-  async worktreeCleanup(session: Session, revision: number | null): Promise<ForgeWorktreeCleanup | null> {
-    return await this.archives?.result(session, revision) ?? null
+  async worktreeCleanup(session: Session, revision: number | null): Promise<WorktreeCleanup | null> {
+    return await this.home.get('worktrees')?.cleanupOf(session, revision) ?? null
   }
 
   /**

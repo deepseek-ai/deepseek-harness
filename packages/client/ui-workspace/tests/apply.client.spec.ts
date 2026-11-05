@@ -950,6 +950,29 @@ it('keeps one archive notice for queued cleanup and replaces it on failure', asy
   expect(toast.hooks.toast.getSnapshot()?.seq).toBe(2)
 })
 
+it('returns to the ordinary archive notice when a queued cleanup settles without acting', async () => {
+  const b = await bench()
+  declare(b.slots, 'sidebar.workspaces', 'shell.overlay')
+  await b.ctx.plugin({ inject: [...inject], apply }).await()
+  vi.spyOn(b.ctx.uiWorkspace, 'archiveSession').mockResolvedValue(undefined)
+  const toast = faceOf(entry(b.slots, 'shell.overlay', 'workspace.row-toast')) as RowToastInjected
+  const archive = faceOf(entry(b.slots, ROW_ACTION, 'archive')) as ArchiveSessionInjected
+  b.ctx.on('workspace/archive-notice', async (_id, next) => {
+    await next()
+    return { text: '已归档，工作树将被清理', tone: 'success' }
+  })
+  archive.archiveSession(sid('one'))
+  await vi.waitFor(() => { expect(toast.hooks.toast.getSnapshot()).toMatchObject({ kind: 'archived', message: '已归档，工作树将被清理', seq: 1 }) })
+  b.setWorkspaces(workspaceState([], [sid('one')]))
+  b.ctx.emit('workspace/archive-followup-settled', sid('one'))
+  const settled = toast.hooks.toast.getSnapshot()
+  expect(settled).toMatchObject({ kind: 'archived', seq: 2 })
+  expect(settled).not.toHaveProperty('message')
+  b.setWorkspaces(workspaceState([]))
+  b.ctx.emit('workspace/archive-followup-settled', sid('one'))
+  expect(toast.hooks.toast.getSnapshot()?.seq).toBe(2)
+})
+
 it('falls back to the ordinary notice when a follow-up notice provider fails', async () => {
   const b = await bench()
   declare(b.slots, 'sidebar.workspaces', 'shell.overlay')

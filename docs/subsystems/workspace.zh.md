@@ -623,12 +623,14 @@ Source: [`packages/workspace/workspace/src/index.ts`](../../packages/workspace/w
 
 #### `workspace/session-archived` — parallel
 
-Admit optional follow-up work after durable archival and any stop requests. Listener failures are logged without undoing archival. Listeners own and drain their background work.
+Admit optional follow-up work after durable archival and any stop requests. Dispatched inside the registry's write queue: a listener registers its work and returns, and runs the work and any unbounded I/O afterwards. Listener failures are logged without undoing archival. Listeners own and drain their background work.
 
 ```ts cordis-catalog
 /**
  * Admit optional follow-up work after durable archival and any stop requests.
- * Listener failures are logged without undoing archival. Listeners own and drain their background work.
+ * Dispatched inside the registry's write queue: a listener registers its work
+ * and returns, and runs the work and any unbounded I/O afterwards. Listener
+ * failures are logged without undoing archival. Listeners own and drain their background work.
  * @param request - newly archived Session; repeated archive requests do not dispatch.
  * @mode parallel
  */

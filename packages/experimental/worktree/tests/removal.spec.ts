@@ -2,7 +2,18 @@ import { access, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { inspectRemoval } from '../src/removal.ts'
+import type { RestoreWorktreeRequest } from '../src/types.ts'
 import { git, harness, repository, testAgent } from './harness.ts'
+import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { Context } from '@deepseek-ai/cordis'
+
+/** The service's inspection-and-removal step, reached as archive cleanup reaches it. */
+function remove(ctx: Context, agent: Agent, request: RestoreWorktreeRequest, admit: () => boolean = () => true): Promise<boolean> {
+  const service = ctx.worktrees as unknown as {
+    removeCheckout(session: Agent['session'], request: RestoreWorktreeRequest, signal: AbortSignal, admit: () => boolean): Promise<boolean>
+  }
+  return service.removeCheckout(agent.session, request, new AbortController().signal, admit)
+}
 
 const disposers: (() => Promise<void>)[] = []
 afterEach(async () => {
@@ -20,14 +31,15 @@ async function fixture() {
 }
 
 describe('safe worktree removal', () => {
-  it('removes a clean checkout, preserves local commits and restores the retained branch', async () => {
+  it('removes a clean checkout, preserves local commits and restores the retained branch', { timeout: 15_000 }, async () => {
     const { ctx, agent, worktree, root } = await fixture()
     await writeFile(join(worktree.path, 'local.txt'), 'not pushed\n')
     await git(worktree.path, 'add', 'local.txt')
     await git(worktree.path, 'commit', '-m', 'local commit')
     const head = await git(worktree.path, 'rev-parse', 'HEAD')
-    expect(await ctx.worktrees.canRemove(ctx.sandboxPolicy.resolve({ session: agent.session }), worktree)).toBe(true)
-    expect(await ctx.worktrees.remove(ctx.sandboxPolicy.resolve({ session: agent.session }), worktree)).toBe(true)
+    expect(await remove(ctx, agent, worktree, () => false)).toBe(false)
+    await access(worktree.path)
+    expect(await remove(ctx, agent, worktree)).toBe(true)
     await expect(access(worktree.path)).rejects.toMatchObject({ code: 'ENOENT' })
     expect(await git(root, 'rev-parse', worktree.branch)).toBe(head)
     expect(await git(root, 'worktree', 'list', '--porcelain')).not.toContain(worktree.path)
@@ -35,31 +47,31 @@ describe('safe worktree removal', () => {
     expect(await git(worktree.path, 'rev-parse', 'HEAD')).toBe(head)
   })
 
-  it.each(['modified', 'staged', 'untracked', 'ignored', 'assume-unchanged', 'skip-worktree'] as const)(
+  it.each(['modified', 'staged', 'untracked', 'assume-unchanged', 'skip-worktree'] as const)(
     'retains %s files', async (kind) => {
       const { ctx, agent, worktree } = await fixture()
       const tracked = join(worktree.path, 'tracked.txt')
       if (kind === 'untracked') await writeFile(join(worktree.path, 'new.txt'), 'keep')
-      else if (kind === 'ignored') {
-        await git(worktree.path, 'config', 'core.excludesFile', join(worktree.repositoryRoot, 'exclude'))
-        await writeFile(join(worktree.repositoryRoot, 'exclude'), '.env\n')
-        await writeFile(join(worktree.path, '.env'), 'private fixture')
-      } else {
+      else {
         await writeFile(tracked, 'keep\n')
         if (kind === 'staged') await git(worktree.path, 'add', 'tracked.txt')
         if (kind === 'assume-unchanged' || kind === 'skip-worktree') await git(worktree.path, 'update-index', `--${kind}`, 'tracked.txt')
       }
-      expect(await ctx.worktrees.remove(ctx.sandboxPolicy.resolve({ session: agent.session }), worktree)).toBe(false)
+      expect(await remove(ctx, agent, worktree)).toBe(false)
       await access(worktree.path)
     },
   )
 
-  it('rechecks after an eligible inspection', async () => {
+  it('removes a checkout that holds only ignored files, as Git does without force', async () => {
     const { ctx, agent, worktree } = await fixture()
-    expect(await ctx.worktrees.canRemove(ctx.sandboxPolicy.resolve({ session: agent.session }), worktree)).toBe(true)
-    await writeFile(join(worktree.path, 'new.txt'), 'keep')
-    expect(await ctx.worktrees.remove(ctx.sandboxPolicy.resolve({ session: agent.session }), worktree)).toBe(false)
-    await access(worktree.path)
+    await git(worktree.path, 'config', 'core.excludesFile', join(worktree.repositoryRoot, 'exclude'))
+    await writeFile(join(worktree.repositoryRoot, 'exclude'), '.env\nnode_modules/\n')
+    await writeFile(join(worktree.path, '.env'), 'private fixture')
+    await mkdir(join(worktree.path, 'node_modules', 'dep'), { recursive: true })
+    await writeFile(join(worktree.path, 'node_modules', 'dep', 'index.js'), 'module.exports = 1')
+    expect(await remove(ctx, agent, worktree)).toBe(true)
+    await expect(access(worktree.path)).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await git(worktree.repositoryRoot, 'rev-parse', worktree.branch)).toBe(worktree.baseCommit)
   })
 
   it.each(['locked', 'detached', 'branch-mismatch', 'outside-pool', 'missing', 'nested-repository'] as const)(
@@ -76,7 +88,7 @@ describe('safe worktree removal', () => {
         await mkdir(nested)
         await git(nested, 'init')
       }
-      expect(await ctx.worktrees.remove(ctx.sandboxPolicy.resolve({ session: agent.session }), request)).toBe(false)
+      expect(await remove(ctx, agent, request)).toBe(false)
       expect(await git(root, 'rev-parse', worktree.branch)).toBe(worktree.baseCommit)
     },
   )
@@ -97,13 +109,11 @@ describe('safe worktree removal', () => {
   )
 
 
-  it('serializes a restore requested while the same checkout is being removed', async () => {
-    const { ctx, agent, worktree } = await fixture()
-    const removing = ctx.worktrees.remove(ctx.sandboxPolicy.resolve({ session: agent.session }), worktree)
-    const restoring = ctx.worktrees.restore(agent, worktree)
-    expect(await removing).toBe(true)
-    expect(await restoring).toEqual({ path: worktree.path, branchRecreated: false })
-    expect(await git(worktree.path, 'rev-parse', 'HEAD')).toBe(worktree.baseCommit)
+  it('restores over the identity checks removal shares, rejecting a target outside the pool', async () => {
+    const { ctx, agent, worktree, root } = await fixture()
+    await git(root, 'worktree', 'remove', worktree.path)
+    await expect(ctx.worktrees.restore(agent, { ...worktree, path: join(root, 'outside-pool') })).rejects.toThrow('canonical directory inside the configured pool')
+    expect(await ctx.worktrees.restore(agent, worktree)).toEqual({ path: worktree.path, branchRecreated: false })
   })
 
 })

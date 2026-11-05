@@ -1310,10 +1310,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when the Host lacks the Session query, projection cache, storage, or Session store service.'],
       },
       {
-        signature: '@Remote async worktreeCleanup(session: Session, revision: number | null): Promise<ForgeWorktreeCleanup | null>',
-        description: 'Read or await an archive cleanup owned by this Host lifetime.',
+        signature: '@Remote async worktreeCleanup(session: Session, revision: number | null): Promise<WorktreeCleanup | null>',
+        description: 'Read or await the worktree service\'s archive cleanup of the Session\'s checkout.',
         parameters: [{ name: 'session', description: 'Session whose cleanup is visible to the caller.' }, { name: 'revision', description: 'null reads now; a matching revision waits for completion.' }],
-        returns: 'the cleanup state, or null when none exists or the revision was superseded.',
+        returns: 'the cleanup state, or null without a worktree service, an attempt, or a current revision.',
       },
       {
         signature: '@Remote async branches(session: Session, signal: AbortSignal): Promise<ForgeBranches>',
@@ -4518,7 +4518,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Validate the current directory and restore the original project when it disappeared.',
         parameters: [{ name: 'agent', description: 'live or unpublished Agent owning the Session.' }, { name: 'signal', description: 'cancellation for filesystem inspection.' }],
         returns: 'the existing directory; recovery is committed before fulfillment. A notice failure is warned without reverting the committed state.',
-        throws: ['when the original project is also unavailable.'],
+        throws: ['when the original project is also unavailable, or when a `working-directory/access` listener rejects.'],
       },
       {
         signature: 'set(agent: Agent, path: string, signal?: AbortSignal): Promise<string>',
@@ -4735,8 +4735,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'worktrees',
-    summary: 'Creates retained Git worktrees under the mounted filesystem and sandbox providers.',
-    description: 'Creates retained Git worktrees under the mounted filesystem and sandbox providers.',
+    summary: 'Creates retained Git worktrees under the mounted filesystem and sandbox providers, records each creation in the Session log, and reclaims a clean, unreferenced checkout when the Session that created it is archived.',
+    description: 'Creates retained Git worktrees under the mounted filesystem and sandbox providers, records each creation in the Session log, and reclaims a clean, unreferenced checkout when the Session that created it is archived.',
     methods: [
       {
         signature: 'async create( agent: Agent, request: CreateWorktreeRequest = {}, signal?: AbortSignal, onPhase?: (phase: CreateWorktreePhase) => void, ): Promise<CreatedWorktree>',
@@ -4751,16 +4751,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the directory and whether the branch was created again.',
       },
       {
-        signature: 'canRemove(policy: SandboxExecutionPolicy, request: RestoreWorktreeRequest, signal?: AbortSignal): Promise<boolean>',
-        description: 'Inspect a recorded checkout for non-destructive removal. Dirty, ignored, locked, detached, nested, mismatched, and missing checkouts are retained. Inspection errors reject.',
-        parameters: [{ name: 'policy', description: 'resolved execution policy of the owning Session.' }, { name: 'request', description: 'recorded checkout identity.' }, { name: 'signal', description: 'cancellation of inspection.' }],
-        returns: 'whether the checkout is currently eligible; removal always inspects again.',
-      },
-      {
-        signature: 'remove( policy: SandboxExecutionPolicy, request: RestoreWorktreeRequest, signal?: AbortSignal, admit: () => boolean = () => true, ): Promise<boolean>',
-        description: 'Remove an eligible checkout and its registration without force or branch deletion. Callers must exclude new users until settlement. A rejection can leave a partially removed directory; the branch remains available for restoration.',
-        parameters: [{ name: 'policy', description: 'resolved execution policy of the owning Session.' }, { name: 'request', description: 'recorded checkout identity.' }, { name: 'signal', description: 'cancellation before or during removal.' }, { name: 'admit', description: 'synchronous final admission after inspection; false retains the checkout.' }],
-        returns: 'true when removed; false when inspection or admission requires retention.',
+        signature: 'async cleanupOf(session: Session, revision: number | null): Promise<WorktreeCleanup | null>',
+        description: 'Read the archive cleanup of a Session\'s created checkout; waiting never starts one. Absent without the Workspace and query providers.',
+        parameters: [{ name: 'session', description: 'archived Session whose cleanup is read.' }, { name: 'revision', description: 'null reads at once; a matching revision waits for that attempt to settle.' }],
+        returns: 'the attempt state, or null when none exists, the revision was superseded, or the service is stopping.',
       },
     ],
   },
@@ -5475,10 +5469,10 @@ export const EVENT_API: readonly EventApiEntry[] = [
   {
     name: 'working-directory/access',
     mode: 'waterfall',
-    signature: '\'working-directory/access\'(request: { agent: Agent; path: string | null }, next: () => Promise<string>): Promise<string>',
-    summary: 'Coordinate directory validation and publication with resource lifecycle operations.',
-    description: 'Coordinate directory validation and publication with resource lifecycle operations.',
-    parameters: [{ name: 'request', description: 'owner and requested path; null validates the current directory.' }, { name: 'next', description: 'perform validation and commit after competing operations settle.' }],
+    signature: '\'working-directory/access\'( request: { agent: Agent; path: string | null; signal: AbortSignal }, next: () => Promise<string>, ): Promise<string>',
+    summary: 'Coordinate directory validation and publication with a resource operation on the directory, such as a checkout being removed.',
+    description: 'Coordinate directory validation and publication with a resource operation on the directory, such as a checkout being removed. A listener that must wait awaits that operation, then calls `next()`; every other listener calls `next()` at once. A rejection fails this access and leaves the recorded directory unchanged; it is not a fallback.',
+    parameters: [{ name: 'request', description: 'owner, requested path (null validates the current directory), and the access\'s cancellation.' }, { name: 'next', description: 'perform validation and commit.' }],
   },
   {
     name: 'workspace/session-activity',
@@ -5493,7 +5487,7 @@ export const EVENT_API: readonly EventApiEntry[] = [
     mode: 'parallel',
     signature: '\'workspace/session-archived\'(request: SessionActivityRequest): Promise<void> | void',
     summary: 'Admit optional follow-up work after durable archival and any stop requests.',
-    description: 'Admit optional follow-up work after durable archival and any stop requests. Listener failures are logged without undoing archival. Listeners own and drain their background work.',
+    description: 'Admit optional follow-up work after durable archival and any stop requests. Dispatched inside the registry\'s write queue: a listener registers its work and returns, and runs the work and any unbounded I/O afterwards. Listener failures are logged without undoing archival. Listeners own and drain their background work.',
     parameters: [{ name: 'request', description: 'newly archived Session; repeated archive requests do not dispatch.' }],
   },
   {
@@ -5511,6 +5505,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'Cancel or settle archive follow-up work before making a Session available again.',
     description: 'Cancel or settle archive follow-up work before making a Session available again. A rejection retains the archived state.',
     parameters: [{ name: 'request', description: 'Session about to leave the archive set.' }],
+  },
+  {
+    name: 'worktree/cleanup',
+    mode: 'emit',
+    signature: '\'worktree/cleanup\'(info: { sessionId: SessionId; path: string; cleanup: WorktreeCleanup }): void',
+    summary: 'A cleanup attempt changed state.',
+    description: 'A cleanup attempt changed state. Fires once at admission with `scheduled` and once at settlement with the final status.',
+    parameters: [{ name: 'info', description: 'the archived Session, the checkout, and the attempt state.' }],
   },
 ]
 
@@ -6619,10 +6621,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ForgeWorktreeBlocker',
     declaration: 'export type ForgeWorktreeBlocker = \'not-git\' | \'outside-writable-root\' | \'read-only\';',
-  },
-  {
-    name: 'ForgeWorktreeCleanup',
-    declaration: 'export interface ForgeWorktreeCleanup {\n    readonly revision: number;\n    readonly status: \'scheduled\' | \'retained\' | \'removed\' | \'failed\';\n}',
   },
   {
     name: 'ForgeWorktreeCreation',
@@ -10439,6 +10437,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'WorkspaceView',
     declaration: 'export interface WorkspaceView {\n    readonly workspaceId: WorkspaceId;\n    readonly path: string;\n    readonly title: string;\n    readonly sessionIds: readonly SessionId[];\n    readonly createdAt: string;\n    readonly updatedAt: string;\n}',
+  },
+  {
+    name: 'WorktreeCleanup',
+    declaration: 'export interface WorktreeCleanup {\n    readonly revision: number;\n    readonly status: \'scheduled\' | \'retained\' | \'removed\' | \'failed\';\n}',
   },
 ]
 

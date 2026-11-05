@@ -75,7 +75,9 @@ function registerUi(ctx: Context): void {
     if (status === 'failed') return { text: t('toast.archiveCleanupFailed'), tone: 'warning' }
     if (status !== 'scheduled') return fallback
     void ctx.remote.forgePanel.worktreeCleanup(sessionId, revision).then((completed) => {
-      if (!lifetime.signal.aborted && completed.ok && completed.value?.status === 'failed') ctx.emit('workspace/archive-followup-failed', sessionId, t('toast.archiveCleanupFailed'))
+      if (lifetime.signal.aborted || !completed.ok || completed.value === null) return
+      if (completed.value.status === 'failed') ctx.emit('workspace/archive-followup-failed', sessionId, t('toast.archiveCleanupFailed'))
+      else if (completed.value.status === 'retained') ctx.emit('workspace/archive-followup-settled', sessionId)
     }).catch((error: unknown) => {
       if (!lifetime.signal.aborted) console.warn('archive worktree cleanup result unavailable:', error)
     })

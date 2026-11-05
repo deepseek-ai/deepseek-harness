@@ -29,8 +29,9 @@ import type { NoticeSource } from '../src/client/source.ts'
 import type { ReviewSelection } from '../src/client/review.ts'
 import { WorktreeProgress, type WorktreeProgressInjected } from '../src/client/WorktreeProgress.tsx'
 import { WorktreeToggle, type WorktreeToggleInjected } from '../src/client/WorktreeToggle.tsx'
+import type { WorktreeCleanup } from '@deepseek-ai/dsh-experimental-worktree/types'
 import type {
-  ForgeWorktreeCleanup, ForgeBaseBranches, ForgeBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame,
+  ForgeBaseBranches, ForgeBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame,
   ForgeLocalDiff, ForgeLocalScope, ForgePanelState,
 } from '../src/types.ts'
 import { entry, listState, ready, snapshot, unserved } from './client-fixtures.client.ts'
@@ -145,7 +146,7 @@ async function base() {
       stateStreams.push(handle)
       return handle
     }),
-    worktreeCleanup: vi.fn(async (_sessionId: SessionId, _revision: number | null): Promise<RemoteResult<ForgeWorktreeCleanup | null>> =>
+    worktreeCleanup: vi.fn(async (_sessionId: SessionId, _revision: number | null): Promise<RemoteResult<WorktreeCleanup | null>> =>
       ({ ok: true, value: null })),
     track: vi.fn(async (_sessionId: SessionId, _url: string): Promise<RemoteResult<void>> => OK),
     dismiss: vi.fn(async (_sessionId: SessionId, _url: string): Promise<RemoteResult<void>> => OK),
@@ -866,7 +867,7 @@ describe('archive notices', () => {
     try {
       const failed = vi.fn()
       f.ctx.on('workspace/archive-followup-failed', failed)
-      const settled = Promise.withResolvers<RemoteResult<ForgeWorktreeCleanup | null>>()
+      const settled = Promise.withResolvers<RemoteResult<WorktreeCleanup | null>>()
       f.forgePanel.worktreeCleanup.mockImplementation(async (_id, revision) => revision === null
         ? { ok: true, value: { revision: 1, status: 'scheduled' } }
         : await settled.promise)
@@ -885,6 +886,18 @@ describe('archive notices', () => {
       f.forgePanel.worktreeCleanup.mockResolvedValue({ ok: true, value: { revision: 1, status } })
       expect(await f.ctx.waterfall('workspace/archive-notice', S1, () => Promise.resolve({ text: 'fallback', tone: 'success' as const }))).toEqual({ text: 'fallback', tone: 'success' })
       expect(f.notice()).toBeNull()
+    } finally { await f.ctx.fiber.dispose() }
+  })
+
+  it('restores the ordinary notice when a scheduled cleanup ends retained', async () => {
+    const f = await fixture()
+    try {
+      const settled = vi.fn()
+      f.ctx.on('workspace/archive-followup-settled', settled)
+      f.forgePanel.worktreeCleanup.mockImplementation(async (_id, revision) => ({ ok: true, value: { revision: 1, status: revision === null ? 'scheduled' : 'retained' } }))
+      expect(await f.ctx.waterfall('workspace/archive-notice', S1, () => Promise.resolve({ text: 'fallback', tone: 'success' as const })))
+        .toEqual({ text: en['toast.archiveCleanupScheduled'], tone: 'success' })
+      await vi.waitFor(() => { expect(settled).toHaveBeenCalledWith(S1) })
     } finally { await f.ctx.fiber.dispose() }
   })
 
@@ -910,7 +923,7 @@ describe('archive notices', () => {
         .mockRejectedValueOnce(new Error('connection lost'))
       await f.ctx.waterfall('workspace/archive-notice', S1, () => Promise.resolve(undefined))
       await vi.waitFor(() => { expect(warning).toHaveBeenCalledTimes(1) })
-      const completed = Promise.withResolvers<RemoteResult<ForgeWorktreeCleanup | null>>()
+      const completed = Promise.withResolvers<RemoteResult<WorktreeCleanup | null>>()
       f.forgePanel.worktreeCleanup.mockResolvedValueOnce({ ok: true, value: { revision: 2, status: 'scheduled' } })
         .mockImplementationOnce(async () => await completed.promise)
       await f.ctx.waterfall('workspace/archive-notice', S1, () => Promise.resolve(undefined))

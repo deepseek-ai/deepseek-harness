@@ -147,7 +147,9 @@ declare module '@deepseek-ai/cordis' {
     'workspace/session-stop'(request: SessionActivityRequest): Promise<void> | void
     /**
      * Admit optional follow-up work after durable archival and any stop requests.
-     * Listener failures are logged without undoing archival. Listeners own and drain their background work.
+     * Dispatched inside the registry's write queue: a listener registers its work
+     * and returns, and runs the work and any unbounded I/O afterwards. Listener
+     * failures are logged without undoing archival. Listeners own and drain their background work.
      * @param request - newly archived Session; repeated archive requests do not dispatch.
      * @mode parallel
      */

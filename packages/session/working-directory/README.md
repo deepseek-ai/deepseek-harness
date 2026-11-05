@@ -33,7 +33,7 @@ Mount alongside `fs`, `sessionProjections`, and `systemPrompt`. `defaultDirector
 
 -----
 
-Directory validation and publication delegate through `working-directory/access`, allowing resource owners to serialize checkout removal against `ensure` and `set`. A listener must call `next()` for admitted access; rejecting leaves the recorded directory unchanged. Existing subprocesses keep their own directories.
+Directory validation and publication delegate through `working-directory/access`, so the owner of a directory being removed can hold `ensure` and `set` into that directory until its operation settles. A listener waits only for an operation on the requested or current path, honours the request's `signal` while waiting, and otherwise calls `next()` at once; a rejection fails that access and leaves the recorded directory unchanged, with no fallback. Existing subprocesses keep their own directories.
 
 <a id="understand-the-implementation"></a>
 ## Understand the implementation

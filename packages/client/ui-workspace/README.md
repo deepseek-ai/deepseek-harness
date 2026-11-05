@@ -230,7 +230,7 @@ These pages cover the sidebar host, the hero surface, and the picking backends.
 
 -----
 
-The client `workspace/archive-notice` waterfall supplies localized follow-up text and tone for the existing archive notice. `workspace/archive-followup-failed` replaces that notice after an admitted background operation fails, while preserving undo and the archive filter action.
+The client `workspace/archive-notice` waterfall supplies localized follow-up text and tone for the existing archive notice. `workspace/archive-followup-failed` replaces that notice after an admitted background operation fails, and `workspace/archive-followup-settled` returns to the plain notice when an announced follow-up ended without acting; both preserve undo and the archive filter action.
 
 <a id="model-experience"></a>
 ## Model Experience

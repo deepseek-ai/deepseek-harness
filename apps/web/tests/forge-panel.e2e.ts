@@ -376,7 +376,9 @@ async function sendPrompt(page: Page, scaffold: WebScaffold): Promise<{ readonly
 function worktreeRecords(events: readonly SessionEvent[]): unknown[] {
   return events.flatMap((event) => {
     const record = pluginRecordOf(event)
-    return record?.type === 'plugin:client-ui-forge/worktree' ? [record.data] : []
+    if (record?.type === 'plugin:client-ui-forge/worktree') return [record.data]
+    if (record?.type === 'plugin:worktree/created') return [{ created: record.data }]
+    return []
   })
 }
 
@@ -491,13 +493,12 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
   expect(worktreeRecords(events)).toEqual([
     { action: 'request', from: 'main' },
     { action: 'request', from: 'release' },
-    { action: 'created', worktree: { path: directory, branch, from: 'release', baseCommit, repositoryRoot: project } },
+    { created: { path: directory, branch, baseCommit, repositoryRoot: project } },
   ])
   // The worktree existed before the turn, so the first model request carried its directory notice.
   const created = events.findIndex((event) => {
     const record = pluginRecordOf(event)
-    const data = record?.type === 'plugin:client-ui-forge/worktree' ? record.data : null
-    return typeof data === 'object' && data !== null && 'action' in data && data.action === 'created'
+    return record?.type === 'plugin:worktree/created'
   })
   const turn = events.findIndex(event => event.type === 'turn/start')
   const notice = events.findIndex(event => event.type === 'user/message' && event.data.source.kind === 'working-directory')

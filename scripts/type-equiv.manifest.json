@@ -2609,6 +2609,16 @@
     },
     {
       "doc": "docs/subsystems/worktrees.md",
+      "symbol": "WorktreeCleanup",
+      "source": "packages/experimental/worktree/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/worktrees.md",
+      "symbol": "WorktreeCreation",
+      "source": "packages/experimental/worktree/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/worktrees.md",
       "symbol": "RestoredWorktree",
       "source": "packages/experimental/worktree/src/types.ts"
     },
@@ -2765,11 +2775,6 @@
     {
       "doc": "docs/subsystems/forge.md",
       "symbol": "ForgeLocalChanges",
-      "source": "packages/experimental/client-ui-forge/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/forge.md",
-      "symbol": "ForgeWorktreeCleanup",
       "source": "packages/experimental/client-ui-forge/src/types.ts"
     },
     {

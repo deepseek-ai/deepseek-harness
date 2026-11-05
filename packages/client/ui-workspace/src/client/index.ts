@@ -91,6 +91,12 @@ declare module '@deepseek-ai/cordis' {
      * @mode emit
      */
     'workspace/archive-followup-failed'(sessionId: SessionId, text: string): void
+    /**
+     * Restore the plain archive notice when an announced follow-up ended without acting.
+     * @param sessionId - Session whose successful archive remains in effect.
+     * @mode emit
+     */
+    'workspace/archive-followup-settled'(sessionId: SessionId): void
   }
 }
 
@@ -218,6 +224,9 @@ export function apply(ctx: Context): void {
   })
   ctx.on('workspace/archive-followup-failed', (sessionId, text) => {
     if (archivedSet.getSnapshot().has(sessionId)) notify({ kind: 'archived', sessionId, message: text, tone: 'warning' })
+  })
+  ctx.on('workspace/archive-followup-settled', (sessionId) => {
+    if (archivedSet.getSnapshot().has(sessionId)) notify({ kind: 'archived', sessionId })
   })
   const archiveNotice = async (sessionId: SessionId, kind: 'archived' | 'stoppedAndArchived'): Promise<void> => {
     let message: ArchiveNotice | undefined

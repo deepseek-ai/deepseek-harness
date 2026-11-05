@@ -74,6 +74,29 @@ interface RestoredWorktree {
 }
 ```
 
+```ts type-equiv
+/** One checkout in a Session's log and whether that Session, rather than a fork ancestor, created it. */
+interface WorktreeCreation {
+  readonly worktree: CreatedWorktree
+  /** False for a creation inside the fork-inherited prefix. */
+  readonly owned: boolean
+}
+```
+
+```ts type-equiv
+/** Process-local state of one archive-triggered cleanup of a checkout. */
+interface WorktreeCleanup {
+  /** Monotonic attempt number within this Host lifetime; a Remote waits on a specific one. */
+  readonly revision: number
+  /**
+   * `scheduled` until the background inspection ends; `retained` when a use,
+   * policy, or Git state keeps the checkout; `removed` after `git worktree
+   * remove`; `failed` when removal threw and may have left a partial directory.
+   */
+  readonly status: 'scheduled' | 'retained' | 'removed' | 'failed'
+}
+```
+
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
 <a id="cordis-surface"></a>
@@ -86,7 +109,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.worktrees` — `WorktreeService`
 
-Creates retained Git worktrees under the mounted filesystem and sandbox providers.
+Creates retained Git worktrees under the mounted filesystem and sandbox providers, records each creation in the Session log, and reclaims a clean, unreferenced checkout when the Session that created it is archived.
 
 ```ts cordis-catalog
 /**
@@ -121,29 +144,40 @@ async create( agent: Agent, request: CreateWorktreeRequest = {}, signal?: AbortS
 async restore( agent: Agent, request: RestoreWorktreeRequest, signal?: AbortSignal, onPhase?: (phase: CreateWorktreePhase) => void, ): Promise<RestoredWorktree>
 
 /**
- * Inspect a recorded checkout for non-destructive removal. Dirty, ignored, locked,
- * detached, nested, mismatched, and missing checkouts are retained. Inspection errors reject.
- * @param policy - resolved execution policy of the owning Session.
- * @param request - recorded checkout identity.
- * @param signal - cancellation of inspection.
- * @returns whether the checkout is currently eligible; removal always inspects again.
+ * Read the archive cleanup of a Session's created checkout; waiting never
+ * starts one. Absent without the Workspace and query providers.
+ * @param session - archived Session whose cleanup is read.
+ * @param revision - null reads at once; a matching revision waits for that attempt to settle.
+ * @returns the attempt state, or null when none exists, the revision was superseded, or the service is stopping.
  */
-canRemove(policy: SandboxExecutionPolicy, request: RestoreWorktreeRequest, signal?: AbortSignal): Promise<boolean>
-
-/**
- * Remove an eligible checkout and its registration without force or branch deletion.
- * Callers must exclude new users until settlement. A rejection can leave a partially
- * removed directory; the branch remains available for restoration.
- * @param policy - resolved execution policy of the owning Session.
- * @param request - recorded checkout identity.
- * @param signal - cancellation before or during removal.
- * @param admit - synchronous final admission after inspection; false retains the checkout.
- * @returns true when removed; false when inspection or admission requires retention.
- */
-remove( policy: SandboxExecutionPolicy, request: RestoreWorktreeRequest, signal?: AbortSignal, admit: () => boolean = () => true, ): Promise<boolean>
+async cleanupOf(session: Session, revision: number | null): Promise<WorktreeCleanup | null>
 ```
 
-Types: [Agent](core.md) · [SandboxExecutionPolicy](sandbox.md)
+Types: [Agent](core.md) · [Session](session.md)
 
 Source: [`packages/experimental/worktree/src/index.ts`](../../packages/experimental/worktree/src/index.ts)
+
+<a id="worktree-events"></a>
+
+### `worktree/*` events
+
+<a id="worktreecleanup--emit"></a>
+
+#### `worktree/cleanup` — emit
+
+A cleanup attempt changed state. Fires once at admission with `scheduled` and once at settlement with the final status.
+
+```ts cordis-catalog
+/**
+ * A cleanup attempt changed state. Fires once at admission with
+ * `scheduled` and once at settlement with the final status.
+ * @param info - the archived Session, the checkout, and the attempt state.
+ * @mode emit
+ */
+'worktree/cleanup'(info: { sessionId: SessionId; path: string; cleanup: WorktreeCleanup }): void
+```
+
+Types: [SessionId](core.md)
+
+Source: [`packages/experimental/worktree/src/archive.ts`](../../packages/experimental/worktree/src/archive.ts)
 <!-- END GENERATED cordis-surface -->

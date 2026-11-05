@@ -37,6 +37,21 @@
     },
     {
       "path": "../../util/timeout"
+    },
+    {
+      "path": "../../core/session"
+    },
+    {
+      "path": "../../session/session-projection"
+    },
+    {
+      "path": "../../session/session-projection-cache"
+    },
+    {
+      "path": "../../session-query/session-query"
+    },
+    {
+      "path": "../../workspace/workspace"
     }
   ]
 }
