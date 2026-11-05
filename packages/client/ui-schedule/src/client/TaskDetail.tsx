@@ -281,6 +281,8 @@ function TaskDetailView(props: TaskDetailProps): ReactNode {
     } else props.actions.setDraft(key, { base, draft, failure: outcome.failed, ...(task === undefined ? { initial } : {}) })
   }
   const setActive = async (task: ScheduleCatalogEntry): Promise<void> => {
+    // The toggle stays focusable while busy, so a second press is ignored here instead of by `disabled`.
+    if (busy) return
     setPending(true)
     const outcome = await hostActions.edit({ id: task.id, action: 'update', patch: { active: task.status !== 'active' }, expectedUpdatedAt: task.updatedAt ?? null })
     if (!mounted.current) return
@@ -321,11 +323,10 @@ function TaskDetailView(props: TaskDetailProps): ReactNode {
           </div>}
         <div className={css.detailActions}>
           {task !== undefined && <><Tooltip label={t(task.status === 'active' ? 'host.pause' : 'host.resume')} side="bottom" delayMs={500} portal>
-            {/* While busy, the toggle uses aria-disabled: native disabling under the pointer would flash
-                the not-allowed cursor and dimmed style between two enabled states. */}
+            {/* Native disabling while busy would flash the not-allowed cursor and dimmed icon for the length of the request. */}
             <span><Button size="sm" className={css.detailIconButton} disabled={dirty || executionActive || task.status === 'ended' || !props.authoritative}
               aria-disabled={busy || undefined} aria-label={t(task.status === 'active' ? 'host.pause' : 'host.resume')}
-              onClick={() => { if (!busy) void setActive(task) }}>
+              onClick={() => { void setActive(task) }}>
               {task.status === 'active' ? <IconPauseOutlineRegular /> : <IconPlayOutlineRegular />}
             </Button></span>
           </Tooltip>

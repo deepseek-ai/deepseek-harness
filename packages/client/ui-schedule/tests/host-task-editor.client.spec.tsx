@@ -1027,6 +1027,18 @@ describe('Host task actions', () => {
     expect(screen.getByRole('button', { name: en['host.pause'] }).hasAttribute('disabled')).toBe(false)
   })
 
+  it.each([
+    { name: 'a running execution', entry: { ...task, executionActive: true as const }, filter: undefined, label: en['host.pause'] },
+    { name: 'an ended task', entry: { ...task, status: 'ended' as const }, filter: en['status.ended'], label: en['host.resume'] },
+  ])('keeps the toggle natively disabled for $name', ({ entry, filter, label }) => {
+    mount([entry])
+    if (filter !== undefined) fireEvent.click(screen.getByRole('button', { name: filter }))
+    fireEvent.click(screen.getByRole('button', { name: task.title }))
+    const toggle = screen.getByRole('button', { name: label })
+    expect(toggle.hasAttribute('disabled')).toBe(true)
+    expect(toggle.hasAttribute('aria-disabled')).toBe(false)
+  })
+
   it('holds Pause without native disabling while the Host answers', async () => {
     const answer = Promise.withResolvers<'saved'>()
     const h = mount([task], { hostActions: hostActions({ edit: vi.fn<HostTaskActions['edit']>(() => answer.promise) }) })
