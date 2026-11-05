@@ -919,7 +919,7 @@ describe('the standard preset documentation skill', () => {
         event.type === 'user/message' && event.data.source.kind === 'skill-catalog' ? [event.data] : [])
       const catalogs = standardAgent.agent.session.snapshotEvents().flatMap(event =>
         event.type === 'user/message' && event.data.source.kind === 'skill-catalog' ? [event.data] : [])
-      expect(baselineCatalogs).toHaveLength(existingCatalog ? 1 : 0)
+      expect(baselineCatalogs).toHaveLength(baselineSkills.length > 0 ? 1 : 0)
       expect(catalogs).toHaveLength(1)
       expect(catalogs[0]?.source).toMatchObject({
         entries: skills.map(skill => ({ name: skill.name, description: skill.description })),

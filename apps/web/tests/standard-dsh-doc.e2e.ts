@@ -8,7 +8,7 @@ import { connectFreshWorkspace, newEnglishPage } from './support.ts'
 
 const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/standard-dsh-doc/session.v4.jsonl', import.meta.url))
 
-it('lists only dsh-doc without loading instructions or calling tools for an ordinary task', async () => {
+it('lists dsh-doc once without loading instructions or calling tools for an ordinary task', async () => {
   const scaffold = await launchWebScaffold({ replayFixture: FIXTURE, compareReplaySession: true, paceMs: 10 })
   try {
     const browser = await chromium.launch()
@@ -31,7 +31,9 @@ it('lists only dsh-doc without loading instructions or calling tools for an ordi
       const catalogs = events.flatMap(event => event.type === 'user/message'
         && event.data.source.kind === 'skill-catalog' ? [event.data] : [])
       expect(catalogs).toHaveLength(1)
-      expect(catalogs[0]?.source).toMatchObject({ entries: [{ name: 'dsh-doc' }] })
+      const skills = await scaffold.ctx.skills.list({ cwd: agent.session.header.cwd, scope: agent })
+      expect(skills.filter(skill => skill.name === 'dsh-doc')).toHaveLength(1)
+      expect(catalogs[0]?.source).toMatchObject({ entries: skills.map(skill => ({ name: skill.name })) })
       expect(events.filter(event => event.type === 'user/message'
         && event.data.source.kind === 'skill-invocation')).toEqual([])
       const names = scaffold.ctx.tools.schemas(agent).map(tool => tool.name)
