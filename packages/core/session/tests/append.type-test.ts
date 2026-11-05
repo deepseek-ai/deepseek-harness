@@ -10,6 +10,12 @@ import type { UserMessage } from '@deepseek-ai/dsh-llm'
  */
 export function checkAppendTypes(session: Session, message: UserMessage): void {
   expectTypeOf(session.append('turn/start', { turn: 1 })).toEqualTypeOf<SessionEvent<'turn/start'>>()
+  expectTypeOf(session.append({ type: 'turn/start', data: { turn: 1 } })).toEqualTypeOf<SessionEvent<'turn/start'>>()
+  expectTypeOf(session.append({ type: 'user/message', data: message, surfaceOp: 'append' })).toEqualTypeOf<SessionEvent<'user/message'>>()
+  // @ts-expect-error -- a single message object also requires a surface operation.
+  session.append({ type: 'user/message', data: message })
+  // @ts-expect-error -- single event objects retain event-specific payload requirements.
+  session.append({ type: 'turn/start', data: message })
   const inputs: readonly SessionEventInput[] = [
     { type: 'turn/start', data: { turn: 1 } },
     { type: 'user/message', data: message, surfaceOp: 'append' },

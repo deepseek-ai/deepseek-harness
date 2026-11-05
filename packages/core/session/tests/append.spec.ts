@@ -8,6 +8,20 @@ function message(text: string) {
 }
 
 describe('multiple Session appends', () => {
+  it('accepts one event object while retaining positional appends', () => {
+    const session = Session.create(SessionId('single-object'))
+    const value = message('object input')
+    const event = session.append({ type: 'user/message', data: value, surfaceOp: 'append' })
+    expect(event).toMatchObject({ type: 'user/message', seq: 0, data: value })
+    expect(Object.isFrozen(event)).toBe(true)
+    expect(Object.isFrozen(event.data)).toBe(true)
+    const positional = session.append('turn/start', { turn: 1 })
+    expect(positional).toMatchObject({ type: 'turn/start', seq: 1 })
+    expect(session.surface.nodes).toEqual([0])
+    expect(session.deriveMessages()).toEqual([value])
+    expect(session.append({ type: 'turn/start', data: { turn: 2 } }).seq).toBe(2)
+  })
+
   it('leaves the log unchanged for empty input and accepts a single array member', () => {
     const session = Session.create(SessionId('empty-append'))
     expect(session.append([])).toEqual([])

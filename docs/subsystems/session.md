@@ -595,6 +595,12 @@ declare class Session {
    */
   append(inputs: readonly SessionEventInput[]): readonly SessionEvent[];
   /**
+   * Append one event input with the same validation and publication as the positional form.
+   * @param input - event payload and any required surface intent.
+   * @returns the immutable committed event with its assigned sequence and time.
+   */
+  append<T extends SessionEventInput>(input: T): SessionEvent<T['type']>;
+  /**
    * Append one typed event to the log and synchronously notify observers via
    * the store-owned, module-private publication hooks. The hot path never blocks
    * on I/O — persistence plugins buffer asynchronously. Once the event enters
@@ -641,11 +647,11 @@ declare class Session {
     data: SessionEventMap[T],
     ...opts: T extends SurfaceEventType ? [opts: SurfaceIntent<T>] : []
     ): SessionEvent<T>;
-  append<T extends SessionEventType>(
-    type: T | readonly SessionEventInput[],
-    data?: SessionEventMap[T],
+  append(
+    type: SessionEventType | SessionEventInput | readonly SessionEventInput[],
+    data?: SessionEventMap[SessionEventType],
     ...opts: [opts?: SurfaceIntent]
-  ): SessionEvent<T> | readonly SessionEvent[];
+  ): SessionEvent | readonly SessionEvent[];
   /**
    * The {@link EpochHeader} in force after the log's last header event — the
    * header the NEXT request will be compared against — or undefined before
