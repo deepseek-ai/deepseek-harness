@@ -292,17 +292,21 @@ describe('tool-terminal foreground API', () => {
 
   it('fails without an initiating agent and rejects background before writing', async () => {
     const { ctx, agent, stub } = await setup(false)
-    expect((await call(ctx, 'terminal_open', { type: 'stub' })).isError).toBe(true)
+    expect((await call(ctx, 'terminal_open', { type: 'stub' })).error?.info)
+      .toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
     await call(ctx, 'terminal_open', { type: 'stub' }, agent)
     const result = await call(ctx, 'terminal_send', { sessionId: 'pty-1', text: 'sleep 1', run_in_background: true }, agent)
     expect(result.isError).toBe(true)
+    expect(result.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
     expect(stub.sessions[0]?.operation).toBeUndefined()
   })
 
   it('validates required values and forwards optional spawn/read arguments', async () => {
     const { ctx, agent } = await setup(false)
-    expect((await call(ctx, 'terminal_open', { type: '' }, agent)).isError).toBe(true)
-    expect((await call(ctx, 'terminal_send', { sessionId: '', text: 'x' }, agent)).isError).toBe(true)
+    expect((await call(ctx, 'terminal_open', { type: '' }, agent)).error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
+    expect((await call(ctx, 'terminal_send', { sessionId: '', text: 'x' }, agent)).error?.info).toEqual({
+      name: 'ToolArgsError', code: 'INVALID_ARGS',
+    })
     expect((await call(ctx, 'terminal_send', { sessionId: 1, text: 'x' }, agent)).isError).toBe(true)
     expect((await call(ctx, 'terminal_send', { sessionId: 'pty-1', text: 1 }, agent)).isError).toBe(true)
     await call(ctx, 'terminal_open', { type: 'stub', name: 'named', cwd: '/tmp' }, agent)
@@ -320,7 +324,9 @@ describe('tool-terminal foreground API', () => {
     expect(definition?.presentResult?.({ sessionId: 'pty-1', text: 'x' }, { content: [], isError: false })).toBeUndefined()
     expect(definition?.presentResult?.({ sessionId: 'pty-1', text: 'x' }, { content: [{ type: 'text', text: 'a' }, { type: 'text', text: 'b' }], isError: false })).toBeUndefined()
     expect(definition?.presentResult?.({ sessionId: 'pty-1', text: 'x' }, { content: [undefined as never], isError: false })).toBeUndefined()
-    expect(definition?.presentResult?.({ sessionId: 'pty-1', text: 'x' }, { content: [{ type: 'text', text: 'ok' }], isError: false })).toEqual({ card: 'terminal', output: 'ok' })
+    expect(definition?.presentResult?.({ sessionId: 'pty-1', text: 'x' }, { content: [{ type: 'text', text: 'ok' }], isError: false })).toEqual({
+      card: 'terminal', output: 'ok',
+    })
 
     expect(ctx.tools.get('terminal_open')?.presentCall?.({ type: 'stub' })).toMatchObject({ card: 'generic', title: 'Open terminal stub' })
     expect(ctx.tools.get('terminal_open')?.presentCall?.({ type: 'stub', name: 'main' })).toMatchObject({ card: 'generic', title: 'Open terminal main' })
@@ -338,7 +344,7 @@ describe('tool-terminal foreground API', () => {
     await call(disabled.ctx, 'terminal_open', { type: 'stub' }, disabled.agent)
     expect((await call(disabled.ctx, 'terminal_send', {
       sessionId: 'pty-1', text: 'work', run_in_background: true,
-    }, disabled.agent)).isError).toBe(true)
+    }, disabled.agent)).error?.info).toEqual({ name: 'JobError', code: 'JOB_BACKGROUND_DISABLED' })
 
     const defaults = await setupBase(false)
     ToolPty.apply(defaults.ctx)
@@ -503,7 +509,9 @@ describe('tool-terminal task integration', () => {
     await expect.poll(() => stub.sessions[0]!.operation).toBeDefined()
     controller.abort()
     stub.sessions[0]!.operation?.cancel()
-    expect((await pending).isError).toBe(true)
+    const cancelled = await pending
+    expect(cancelled.isError).toBe(true)
+    expect(cancelled.error?.info).toEqual({ name: 'AbortError', code: 'ABORTED' })
   })
 
   it('renders the already-closing kill result', async () => {
