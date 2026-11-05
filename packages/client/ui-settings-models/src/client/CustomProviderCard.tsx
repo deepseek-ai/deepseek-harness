@@ -1,7 +1,6 @@
 /**
- * The card that declares a provider pi-ai does not ship — an OpenAI-compatible
- * gateway, a self-hosted server, or a provider newer than the installed
- * catalog.
+ * The card that declares a provider pi-ai does not ship — a gateway, a
+ * self-hosted server, or a provider newer than the installed catalog.
  *
  * This is a create, not an edit, which is why it is its own form rather than
  * the provider editor with extra fields: the route id is being *chosen* here,
@@ -53,6 +52,16 @@ const NS = 'llm-pi-ai'
  * credential seam with a raw regular expression the user cannot act on.
  */
 const ROUTE_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
+
+/**
+ * Endpoint examples for protocols whose SDK expects a different base than an
+ * OpenAI-compatible `/v1`: Anthropic's SDK appends `/v1/messages`, and the
+ * Gemini protocol expects the API version in the base URL.
+ */
+const BASE_URL_PLACEHOLDERS: Readonly<Record<string, keyof typeof en>> = {
+  'anthropic-messages': 'customAnthropicBaseUrlPlaceholder',
+  'google-generative-ai': 'customGeminiBaseUrlPlaceholder',
+}
 
 function isHttpUrl(value: string): boolean {
   try {
@@ -250,9 +259,7 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
           className={styles['input']}
           type="text"
           value={baseURL}
-          placeholder={t(protocol === 'anthropic-messages'
-            ? 'customAnthropicBaseUrlPlaceholder'
-            : 'customBaseUrlPlaceholder')}
+          placeholder={t(BASE_URL_PLACEHOLDERS[protocol] ?? 'customBaseUrlPlaceholder')}
           aria-label={t('baseUrl')}
           aria-invalid={baseUrlInvalid}
           disabled={profileDisabled}

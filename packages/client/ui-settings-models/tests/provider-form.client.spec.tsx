@@ -22,7 +22,7 @@ afterEach(cleanup)
 
 const t: ModelsSectionInjected['t'] = key => en[key]
 
-const PROTOCOLS = ['openai-completions', 'openai-responses', 'anthropic-messages']
+const PROTOCOLS = ['openai-completions', 'openai-responses', 'anthropic-messages', 'google-generative-ai']
 const LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
 
 /** The pi-ai profile shape as the host serializes it, including the layer-1 fields. */
@@ -1545,6 +1545,8 @@ describe('hand-declared providers', () => {
     expect(baseUrl.placeholder).toBe('https://gateway.example/v1')
     fireEvent.change(protocol, { target: { value: 'openai-responses' } })
     expect(baseUrl.placeholder).toBe('https://gateway.example/v1')
+    fireEvent.change(protocol, { target: { value: 'google-generative-ai' } })
+    expect(baseUrl.placeholder).toBe('https://gateway.example/v1beta')
 
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
     fireEvent.change(baseUrl, { target: { value: 'https://acme.test/anthropic' } })
@@ -1609,14 +1611,15 @@ describe('hand-declared providers', () => {
   })
 
   it('names each protocol by its product name and falls back to the identifier of an unknown one', () => {
-    mountCard({ protocols: [...PROTOCOLS, 'google-generative-ai'] })
+    mountCard({ protocols: [...PROTOCOLS, 'mistral-conversations'] })
     const protocol = screen.getByLabelText<HTMLSelectElement>(en.customApi)
     const labels = [...protocol.options].map(option => [option.value, option.textContent])
     expect(labels).toEqual([
       ['openai-completions', en.protocolOpenAiCompletions],
       ['openai-responses', en.protocolOpenAiResponses],
       ['anthropic-messages', en.protocolAnthropicMessages],
-      ['google-generative-ai', 'google-generative-ai'],
+      ['google-generative-ai', en.protocolGemini],
+      ['mistral-conversations', 'mistral-conversations'],
     ])
   })
 
