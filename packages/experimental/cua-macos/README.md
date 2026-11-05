@@ -109,7 +109,7 @@ void await app.getScreenshot()
 
 Use app methods directly for single-window tasks. `getApp` reads initial AX state, so a screenshot needs no window enumeration or additional AX read. Use `app.getWindows()` and `app.getWindow(windowId)` when the task needs a particular window or default selection is ambiguous; choose by the observed title and bounds.
 
-`getWindow` emits its initial AX tree. An owned window without an AX surface returns an empty snapshot and remains available for screenshots and coordinate input. Window objects retain separate snapshots, so reading one window does not invalidate another. Re-reading the same scope invalidates old indices. An AX node removed during observation rejects the read with `STALE_SNAPSHOT` and publishes no partial tree; read again without repeating the preceding input. App-scoped screenshots and coordinates reuse the latest AX observation: its focused on-screen, nonzero-size window, otherwise the sole such window. They do not query current focus again; read `app.getAXState()` to follow a focus change. Explicit window objects retain their selected target. Keyboard methods stay on `app` because input follows the app’s current focus.
+`getWindow` emits its initial AX tree. An owned window without an AX surface returns an empty snapshot and remains available for screenshots and coordinate input. Window objects retain separate snapshots, so reading one window does not invalidate another. Re-reading the same scope invalidates old indices. An AX node removed during observation rejects the read with `STALE_SNAPSHOT` and publishes no partial tree; read again without repeating the preceding input. App-scoped screenshots and coordinates reuse the latest AX observation: its focused on-screen, nonzero-size window, otherwise the sole visible normal-layer window. They do not query current focus again; read `app.getAXState()` to follow a focus change. Explicit window objects retain their selected target. Keyboard methods stay on `app` because input follows the app’s current focus.
 
 `hover(target)` first reveals advertised AX alternate UI without moving the system cursor. Entering a revealed descendant preserves its parent UI, and leaving restores the default UI. When unavailable, hover moves the visible system cursor to an AX element center or window-local point without pressing a button, including over disabled controls. It requires the selected app to be foreground and the target point unobscured; otherwise `FOREGROUND_REQUIRED` requires explicit activation or raising and a fresh observation. Completion, AX reads and screenshots do not restore the previous point. Wait for the application’s hover delay, observe the revealed content, then hover into it and click; successive calls can visit intermediate points. Other input or application changes can interrupt the interaction. [Continuous-interaction rationale](../../../.agents/notes/implemented/architecture/2026-10-13-cua-continuous-hover.md).
 
@@ -174,7 +174,7 @@ Use cua with method getCapabilities and params {} to inspect permissions and ses
 
 Initialize the object API once in persistent PTC. Reuse its variables in later calls; put temporary declarations inside { ... } blocks to avoid redeclaration errors. All object methods are async. getAXState returns text, not a structured state object. Its text separates values and placeholders, and reports subroles, help, URLs, disabled/focused/selected/expanded state and UTF-16 selection ranges when available. Writability is true, false or unknown on relevant controls; omitted state fields do not assert false. selection=unavailable means the reported range exceeds the observed text. Compact output omits ordinary Press/Pick (click), ShowMenu (right click) and ScrollToVisible actions; details=true lists every available action. Use the displayed action name with performSecondaryAction; ambiguous aliases require the complete name from details=true. Truncation reports the reached provider limit. Narrow the window or increase that provider limit before reading again.
 
-Use app methods directly for single-window tasks; getApp already reads initial AX state. Call app.getWindows() and await app.getWindow(windowId) only to target a particular window or resolve ambiguous window selection. App screenshots and coordinate actions use the latest AX observation: its focused on-screen, nonzero-size window, otherwise the sole such window. They do not refresh focus automatically. Read app.getAXState() to follow changed focus. Independent floating panels have their own window IDs. After opening one, refresh app.getWindows() and select its window for AX, screenshots and input; a panel may leave keyboard focus in the main window.
+Use app methods directly for single-window tasks; getApp already reads initial AX state. Call app.getWindows() and await app.getWindow(windowId) only to target a particular window or resolve ambiguous window selection. App screenshots and coordinate actions use the latest AX observation: its focused on-screen, nonzero-size window, otherwise the sole visible normal-layer window. They do not refresh focus automatically. Read app.getAXState() to follow changed focus. Visible panels, menus, tooltips and status items can have their own window IDs. Select a panel from app.getWindows() for its AX, screenshot and input even if the main window retains focus. Use includeHidden:true in listWindows or app.getWindows({includeHidden:true}) to list offscreen and zero-size windows.
 
 CuaScreenshot contains { bytes: Uint8Array, mimeType: "image/png" | "image/jpeg" | "image/webp" | "image/gif", pixelWidth: number, pixelHeight: number, windowId: number }. Use mimeType to choose a file extension or declare an image; do not assume PNG.
 
@@ -186,7 +186,7 @@ Object API signatures (options default to { emit: true }):
 - cua.getState(options?) -> { apps, browsers: [] }
 - cua.getApp(selector: string) -> App
 - app.activate() -> { dispatched: true, verified: false }
-- app.getWindows(options?) -> Array<{ windowId, pid, appName, title, bounds, isOnScreen, onCurrentSpace }>
+- app.getWindows(options?: { emit?: boolean, includeHidden?: boolean }) -> Array<{ windowId, pid, appName, title, bounds, isOnScreen, onCurrentSpace, layer? }>
 - app.getWindow(windowId: number) -> Window
 - app.typeText(text: string), app.pressKey(chord: string) -> action result
 - app.paste(text: string, options?: { format?: "text" | "html" }) -> action result
@@ -216,7 +216,7 @@ Use selectText only on controls advertising selectionWritable. It selects a uniq
 
 #### Token effect
 
-Enabling the plugin adds a fixed schema and guidance. AX observations, operation results and admitted images add model input. Retained objects are not serialized into prompts by this package.
+Enabling the plugin adds a fixed schema and guidance. AX observations, operation results and admitted images add model input. Default window metadata includes only visible windows and the explicitly observed target. Requesting the complete list adds one record per owned window, including hidden auxiliary windows.
 
 #### KV Cache effect
 

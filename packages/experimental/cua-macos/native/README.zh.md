@@ -74,7 +74,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 | `findApps` | 从标准应用目录或绝对应用路径返回已安装匹配项 `{id, displayName, path, isRunning, pid?}`；发现过程不启动应用。 |
 | `getApp` | 按精确名称、bundle ID、十进制 PID 或应用路径选择，返回 `{appHandle, pid, name, bundleId, authorization}`。未运行的选择具有 `pid: null`，等待 Host 授权。名称歧义会失败。 |
 | `launchApp` | 授权后的 Host 专用续接操作；不请求激活，等待应用启动完成后将句柄绑定到已核实的进程身份。 |
-| `listWindows` | 应用所属各层级窗口，包括独立浮层和菜单，包含 `{windowId, pid, appName, title, bounds, isOnScreen, onCurrentSpace}`。Space 归属可为 null。 |
+| `listWindows` | 所选进程在 WindowServer 中的全部窗口，包括离屏窗口、面板、菜单、工具提示和状态栏图标。非零层级另含数字字段 `layer`。窗口字段包括 `{windowId, pid, appName, title, bounds, isOnScreen, onCurrentSpace}`。Space 归属可为 null。 |
 | `getState` | `{appHandle, pid, windowId, focusedWindowId, snapshotId, tree, elements, windows, truncated}`。应用级观察的 `windowId` 为 null。元素包含 index、role、title、value、description、identifier、bounds、actions 和 enabled 状态。元素边界为 null 或屏幕 point 单位的 [x, y, width, height]，窗口输入使用局部 point。这些结构化元素诊断供原生检查保留，模型工具投影会移除它们。不可用的可选描述属性为 null，无法取得的动作列表为空；权限、通信和窗口发现失败仍会拒绝观察。 |
 | `hover`, `click`, `setValue`, `selectText`, `typeText`, `paste`, `pressKey`, `scroll`, `drag` | `{dispatched: true, verified: false}` 记录原生分派。需要读取新状态以核实预期的应用变化。 |
 | `screenshot` | `{mimeType: "image/png", data, pixelWidth, pixelHeight, bounds, coordinateSpace: "window-points", windowId}`。Retina 显示器上 PNG 像素尺寸可能不同于窗口 point 尺寸。 |
@@ -93,7 +93,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 <a id="observation-and-input"></a>
 ## 观察与输入
 
-`getState` 可将 AX 遍历限定到应用所属窗口或嵌套 sheet 的 `windowId`。 窗口清单与 `listWindows` 一致，窗口级观察会登记所选浮层的坐标信息。截图单独捕获所选窗口，因此主窗口截图不包含独立浮层。新的刷新或失败的刷新使同一应用/窗口范围的旧快照失效，其他窗口范围仍可使用。应用所属 CG 窗口没有匹配 AX 界面时，getState 返回空 tree/elements、truncated 为 false 的新快照，仍可截图和坐标输入。遍历后重新检查进程生命期、窗口归属、会话未锁定及辅助功能权限。窗口发现中的 APIDisabled 和通信错误仍会失败；不支持或缺失的可选 AX 属性可以产生空观察。不存在或属于其他应用的窗口不会返回空成功结果。遍历中 AX 元素失效会以 `STALE_SNAPSHOT` 拒绝整次读取，不发布部分树。应用变化后可以重新观察，但不重复输入。元素动作要求精确的快照 ID，原生引用不跨 JSON 传递。坐标动作的可选快照 ID 必须属于该窗口或应用级观察。刷新窗口列表会释放已关闭窗口的快照。进程身份、快照代次和窗口归属检查不会锁住桌面，用户或应用仍可同时改变状态。
+`getState` 可将 AX 遍历限定到应用所属窗口或嵌套 sheet 的 `windowId`。窗口清单与 `listWindows` 一致，窗口级观察会登记所选浮层的坐标信息。截图单独捕获所选窗口，因此主窗口截图不包含独立浮层。新的刷新或失败的刷新使同一应用/窗口范围的旧快照失效，其他窗口范围仍可使用。应用所属 CG 窗口没有匹配 AX 界面时，getState 返回空 tree/elements、truncated 为 false 的新快照，仍可截图和坐标输入。遍历后重新检查进程生命期、窗口归属、会话未锁定及辅助功能权限。窗口发现中的 APIDisabled 和通信错误仍会失败；不支持或缺失的可选 AX 属性可以产生空观察。不存在或属于其他应用的窗口不会返回空成功结果。遍历中 AX 元素失效会以 `STALE_SNAPSHOT` 拒绝整次读取，不发布部分树。应用变化后可以重新观察，但不重复输入。元素动作要求精确的快照 ID，原生引用不跨 JSON 传递。坐标动作的可选快照 ID 必须属于该窗口或应用级观察。刷新窗口列表会释放已关闭窗口的快照。进程身份、快照代次和窗口归属检查不会锁住桌面，用户或应用仍可同时改变状态。
 
 未指定 holdMs 的元素点击优先使用声明的 AX 动作，否则通过鼠标事件发送。坐标点击、滚动和拖动核实窗口归属和边界后，使用后台 PID/窗口定向输入。事件优先使用 SkyLight，不可用时使用公开的 PID 定向 API；已发送的事件不通过另一 API 重发。坐标是整个窗口左上角起算的 macOS point，包含标题栏。`deltaLinesY` 为正时显示上方内容，为负时显示下方内容；`deltaLinesX` 为正时显示左侧内容，为负时显示右侧内容。每个轴接受 -10 到 10 的整数，至少一个轴非零。helper 直接发送按行计量的滚轮事件。点击和拖动支持左、右、中键及 command/control/option/shift/fn 修饰键，只有左键支持双击。带修饰键的元素点击使用鼠标输入。拖动在一个窗口中完成一次按下、移动、抬起，调用方显式提供 durationMs（1..5000）和 steps（1..240）。移动延迟按小数精度分配到各段，按下和抬起的固定等待及调度延迟另计。不存在隐式改用全局桌面输入的后备路径。
 

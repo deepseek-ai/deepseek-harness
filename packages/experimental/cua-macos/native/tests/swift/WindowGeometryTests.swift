@@ -70,7 +70,7 @@ private let geometryOwner = ProcessIdentity(pid: 42, startedSeconds: 1, startedM
 
 private func geometryWindow(_ bounds: WindowBounds) -> WindowInfo {
     WindowInfo(windowID: 7, pid: geometryOwner.pid, appName: "Fixture", title: "Fixture", bounds: bounds,
-               isOnScreen: true, onCurrentSpace: true)
+               isOnScreen: true, onCurrentSpace: true, layer: 0)
 }
 
 @Test func resolveDetectsMovementDuringTheAXQueryEvenWhenTheFinalFramesMatch() {

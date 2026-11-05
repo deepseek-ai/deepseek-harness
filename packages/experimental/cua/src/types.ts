@@ -49,7 +49,7 @@ export type CuaAppInfo = Pick<Extract<CuaFoundAppInfo, { isRunning: true }>, 'id
 export type CuaFoundAppInfo = z.output<typeof FoundAppsResult>[number]
 /** Window bounds in global macOS points. Local operations use an origin of [0,0]. */
 export type CuaBounds = CuaWindowInfo['bounds']
-/** Observed window metadata; identifiers are valid only while the window exists, and null Space membership is unknown. */
+/** Window IDs expire on destruction. An omitted layer is normal level zero; null Space membership is unknown. */
 export type CuaWindowInfo = z.output<typeof WindowsResult>[number]
 /** Successful input dispatch; application outcome still requires observation. */
 export type CuaActionResult = z.output<typeof ActionResult>
@@ -175,7 +175,7 @@ export interface CuaWindow extends CuaSurface { readonly windowId: number }
 /**
  * Native app handle supporting direct observations and actions without window enumeration.
  * Screenshots and coordinates reuse the latest AX observation's focused on-screen,
- * nonzero-size window, or require exactly one such window. Read fresh AX to follow
+ * nonzero-size window, or the sole visible normal-layer window. Read fresh AX to follow
  * focus changes; explicit window objects retain their selected target.
  */
 export interface CuaApp extends CuaSurface {
@@ -187,11 +187,11 @@ export interface CuaApp extends CuaSurface {
    */
   activate(): Promise<CuaActionResult>
   /**
-   * Enumerate current windows.
-   * @param options - output options.
+   * Enumerate visible windows, including independent panels and menus.
+   * @param options - Output options; includeHidden returns the complete inventory for explicit selection.
    * @returns current window records.
    */
-  getWindows(options?: CuaObservationOptions): Promise<CuaWindowInfo[]>
+  getWindows(options?: CuaObservationOptions & { includeHidden?: boolean }): Promise<CuaWindowInfo[]>
   /**
    * Observe a specific window.
    * @param windowId - ID obtained from getWindows.

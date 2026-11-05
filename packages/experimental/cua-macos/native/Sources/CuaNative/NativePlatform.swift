@@ -158,7 +158,7 @@ enum NativePlatform {
             return WindowInfo(windowID: id, pid: pid, appName: row[kCGWindowOwnerName as String] as? String ?? "",
                               title: row[kCGWindowName as String] as? String ?? "", bounds: bounds,
                               isOnScreen: (row[kCGWindowIsOnscreen as String] as? NSNumber)?.boolValue ?? false,
-                              onCurrentSpace: memberships[id]?.onCurrentSpace)
+                              onCurrentSpace: memberships[id]?.onCurrentSpace, layer: (row[kCGWindowLayer as String] as? NSNumber)?.intValue ?? 0)
         }
     }
     static func frontPID() -> Int32? { WindowSpaces().frontPID() }

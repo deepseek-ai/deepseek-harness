@@ -61,6 +61,7 @@ def main():
                 assert panel_id in [window['windowId'] for window in windows], windows
                 assert all(window['pid'] == fixture.pid for window in windows), windows
                 listed = next(window for window in windows if window['windowId'] == panel_id)
+                assert listed['layer'] == actual['panelLayer'], listed
                 assert listed['onCurrentSpace'] is True, listed
                 application = helper.call('getState', params)
                 assert application['focusedWindowId'] == actual['mainWindowId'], application

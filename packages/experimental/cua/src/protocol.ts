@@ -37,7 +37,7 @@ export const Request = z.discriminatedUnion('method', [
   operation('getApp', { selector: z.string().min(1) }),
   operation('activate', app),
   operation('show', { ...app, windowId: id.optional() }),
-  operation('listWindows', app),
+  operation('listWindows', { ...app, includeHidden: z.boolean().optional().describe('Include offscreen and zero-size windows for explicit selection or restoration.') }),
   operation('getState', { ...app, windowId: id.optional(),
     includeMenus: z.boolean().optional().describe('Expand menu contents; omitted or false shows menu-bar entries only.'),
     details: z.boolean().optional().describe('Include identifiers, global-point bounds and complete action names.'),
@@ -101,7 +101,7 @@ export const FoundAppsResult = z.array(z.intersection(z.object({ id: z.string().
 /** Current windows and their global point bounds. */
 export const WindowsResult = z.array(z.object({
   windowId: id, pid, appName: z.string(), title: z.string(), bounds,
-  isOnScreen: z.boolean(), onCurrentSpace: z.boolean().nullable(),
+  isOnScreen: z.boolean(), onCurrentSpace: z.boolean().nullable(), layer: z.number().int().optional(),
 }))
 /** Observed state with window and process identity for stale-target rejection. */
 export const StateResult = z.object({

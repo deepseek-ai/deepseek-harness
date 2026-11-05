@@ -427,6 +427,33 @@ it('keeps native element diagnostics out of model-visible state and structured t
   expect(JSON.parse(content.text)).toEqual(visible)
 })
 
+it('omits hidden windows from model output without forgetting their observed coordinates', async () => {
+  const f = await setup()
+  await selectApplication(f)
+  const params = { appHandle: 'app-one' }
+  const main = { windowId: 7, pid: 17, appName: 'Fixture', title: 'Main',
+    bounds: { x: 0, y: 0, width: 10, height: 10 }, isOnScreen: true, onCurrentSpace: true }
+  const panel = { ...main, windowId: 8, layer: 3, onCurrentSpace: null }
+  const hidden = { ...panel, windowId: 9, isOnScreen: false }
+  const all = [main, panel, hidden, { ...main, windowId: 10, onCurrentSpace: false },
+    { ...main, windowId: 11, bounds: { ...main.bounds, width: 0 } }]
+  for (const [includeHidden, expected] of [[false, [main, panel]], [true, all]] as const) {
+    native.request.mockResolvedValueOnce(all)
+    const result = await f.execute('listWindows', { ...params, includeHidden })
+    expect(result.value).toEqual(expected)
+    expect(result.content).toEqual([{ type: 'text', text: JSON.stringify(expected) }])
+  }
+  for (const windowId of [null, 9]) {
+    native.request.mockResolvedValueOnce({ ...params, pid: 17, windowId, windows: all, snapshotId: 's', tree: '', truncated: false })
+    const result = await f.execute('getState', windowId === null ? params : { ...params, windowId })
+    expect(result.value).toMatchObject({ windows: windowId === null ? [main, panel] : [main, panel, hidden] })
+  }
+  native.request.mockResolvedValueOnce(all)
+  await f.execute('listWindows', params)
+  native.request.mockResolvedValueOnce({ dispatched: true, verified: false })
+  expect((await f.execute('click', { ...params, windowId: 9, x: 500, y: 500, relative: true })).isError).toBe(false)
+})
+
 it('preserves screenshot attachments and invalidates pixel coordinates when window listings observe a resize', async () => {
   const f = await setup({ provider: 'image-fixture', model: 'vision' })
   await selectApplication(f)

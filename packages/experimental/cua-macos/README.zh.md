@@ -109,7 +109,7 @@ void await app.getScreenshot()
 
 单窗口任务直接使用 app 方法。`getApp` 已读取初始 AX，截图不需要枚举窗口或额外读取 AX。任务需要指定窗口或默认选窗存在歧义时，再调用 `app.getWindows()` 和 `app.getWindow(windowId)`，根据观察到的标题与位置选择目标。
 
-`getWindow` 会输出初始 AX 树。已确认归属但没有 AX 界面的窗口返回空快照，仍可截图和发送坐标输入。不同窗口分别保留快照，读取一个窗口不会使另一个窗口失效；重新读取同一范围会使旧索引失效。观察期间节点被移除时，该次读取返回 `STALE_SNAPSHOT`，不发布部分树；可以重新读取，但不要重复此前的输入。应用级截图和坐标操作复用最近一次 AX 观察：优先使用其中在屏幕上且尺寸非零的焦点窗口，否则要求只有一个符合条件的窗口。它们不会重新查询即时焦点；需要跟随焦点变化时，先读取 `app.getAXState()`。显式窗口对象保持选定的目标。键盘方法保留在 `app` 上，因为输入跟随应用的当前焦点。
+`getWindow` 会输出初始 AX 树。已确认归属但没有 AX 界面的窗口返回空快照，仍可截图和发送坐标输入。不同窗口分别保留快照，读取一个窗口不会使另一个窗口失效；重新读取同一范围会使旧索引失效。观察期间节点被移除时，该次读取返回 `STALE_SNAPSHOT`，不发布部分树；可以重新读取，但不要重复此前的输入。应用级截图和坐标操作复用最近一次 AX 观察：优先使用其中在屏幕上且尺寸非零的焦点窗口，否则要求只有一个可见的普通层窗口。它们不会重新查询即时焦点；需要跟随焦点变化时，先读取 `app.getAXState()`。显式窗口对象保持选定的目标。键盘方法保留在 `app` 上，因为输入跟随应用的当前焦点。
 
 `hover(target)` 优先通过控件声明的 AX 动作展开替代界面，不移动系统鼠标。进入展开区域的子控件时保持父控件展开，离开后恢复默认界面。没有这条路径时，再将可见系统鼠标移到 AX 元素中心或窗口内坐标，不按鼠标按钮，也可用于禁用控件。所选应用必须在前台，且目标点未被遮挡，否则返回 `FOREGROUND_REQUIRED`，调用方需显式激活或抬起窗口并重新观察。调用结束、AX 读取和截图不恢复先前的位置。等待应用的悬停延迟后，观察出现的内容，再移入并点击；连续调用可经过中间位置。其他输入或应用自身变化可能中断交互。[连续交互的设计理由](../../../.agents/notes/implemented/architecture/2026-10-13-cua-continuous-hover.zh.md)。
 
@@ -174,7 +174,7 @@ Use cua with method getCapabilities and params {} to inspect permissions and ses
 
 Initialize the object API once in persistent PTC. Reuse its variables in later calls; put temporary declarations inside { ... } blocks to avoid redeclaration errors. All object methods are async. getAXState returns text, not a structured state object. Its text separates values and placeholders, and reports subroles, help, URLs, disabled/focused/selected/expanded state and UTF-16 selection ranges when available. Writability is true, false or unknown on relevant controls; omitted state fields do not assert false. selection=unavailable means the reported range exceeds the observed text. Compact output omits ordinary Press/Pick (click), ShowMenu (right click) and ScrollToVisible actions; details=true lists every available action. Use the displayed action name with performSecondaryAction; ambiguous aliases require the complete name from details=true. Truncation reports the reached provider limit. Narrow the window or increase that provider limit before reading again.
 
-Use app methods directly for single-window tasks; getApp already reads initial AX state. Call app.getWindows() and await app.getWindow(windowId) only to target a particular window or resolve ambiguous window selection. App screenshots and coordinate actions use the latest AX observation: its focused on-screen, nonzero-size window, otherwise the sole such window. They do not refresh focus automatically. Read app.getAXState() to follow changed focus. Independent floating panels have their own window IDs. After opening one, refresh app.getWindows() and select its window for AX, screenshots and input; a panel may leave keyboard focus in the main window.
+Use app methods directly for single-window tasks; getApp already reads initial AX state. Call app.getWindows() and await app.getWindow(windowId) only to target a particular window or resolve ambiguous window selection. App screenshots and coordinate actions use the latest AX observation: its focused on-screen, nonzero-size window, otherwise the sole visible normal-layer window. They do not refresh focus automatically. Read app.getAXState() to follow changed focus. Visible panels, menus, tooltips and status items can have their own window IDs. Select a panel from app.getWindows() for its AX, screenshot and input even if the main window retains focus. Use includeHidden:true in listWindows or app.getWindows({includeHidden:true}) to list offscreen and zero-size windows.
 
 CuaScreenshot contains { bytes: Uint8Array, mimeType: "image/png" | "image/jpeg" | "image/webp" | "image/gif", pixelWidth: number, pixelHeight: number, windowId: number }. Use mimeType to choose a file extension or declare an image; do not assume PNG.
 
@@ -186,7 +186,7 @@ Object API signatures (options default to { emit: true }):
 - cua.getState(options?) -> { apps, browsers: [] }
 - cua.getApp(selector: string) -> App
 - app.activate() -> { dispatched: true, verified: false }
-- app.getWindows(options?) -> Array<{ windowId, pid, appName, title, bounds, isOnScreen, onCurrentSpace }>
+- app.getWindows(options?: { emit?: boolean, includeHidden?: boolean }) -> Array<{ windowId, pid, appName, title, bounds, isOnScreen, onCurrentSpace, layer? }>
 - app.getWindow(windowId: number) -> Window
 - app.typeText(text: string), app.pressKey(chord: string) -> action result
 - app.paste(text: string, options?: { format?: "text" | "html" }) -> action result
@@ -216,7 +216,7 @@ Use selectText only on controls advertising selectionWritable. It selects a uniq
 
 #### Token 影响
 
-启用插件会增加固定参数定义和指导文本。AX 观察、操作结果和已接入的图片会增加模型输入。本包不将保留的对象序列化进提示。
+启用插件会增加固定参数定义和指导文本。AX 观察、操作结果和已接入的图片会增加模型输入。默认窗口清单只列出可见窗口和显式观察的目标。请求完整清单时，每个窗口都会增加一条记录，包括隐藏的辅助窗口。
 
 #### KV Cache 影响
 

@@ -18,6 +18,7 @@ import { ApplicationAuthorizationResult, installCuaAccess } from './access.ts'
 import type { CuaApplicationGrant, CuaApplicationId, CuaSystemPermission } from './access-types.ts'
 import type { CuaAppHandle, CuaOperation } from './types.ts'
 import { ApplicationIcon, AppResult, NativeScreenshotResult, Request, ScreenshotResult, StateResult, WindowsResult } from './protocol.ts'
+import { isVisibleWindow } from './windows.ts'
 import { CuaCoordinates } from './coordinates.ts'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
@@ -229,6 +230,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
     const callNative = async (request: CuaOperation, execution: Readonly<CuaExecution>) => {
       const { method, params: parsedParams } = request
       const params = execution.coordinates.parameters(request)
+      if (method === 'listWindows') delete params.includeHidden
       const agent = execution.agent
       const signal = execution.signal
       signal.throwIfAborted()
@@ -282,9 +284,13 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       if (method === 'getState') {
         const state = StateResult.parse(result)
         execution.coordinates.observe(state.appHandle, state.windows, state.windowId ?? undefined)
-        return state
+        return { ...state, windows: state.windows.filter(window => window.windowId === state.windowId || isVisibleWindow(window)) }
       }
-      if (method === 'listWindows') execution.coordinates.observe(parsedParams.appHandle as CuaAppHandle, WindowsResult.parse(result))
+      if (method === 'listWindows') {
+        const windows = WindowsResult.parse(result)
+        execution.coordinates.observe(parsedParams.appHandle as CuaAppHandle, windows)
+        return parsedParams.includeHidden ? windows : windows.filter(isVisibleWindow)
+      }
       return result
     }
     const tool: ToolDefinition = {

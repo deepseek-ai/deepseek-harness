@@ -4,6 +4,7 @@ import type { z } from 'zod'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { ActionResult, AppResult, AppsResult, CapabilitiesResult, FoundAppsResult, HoverResult, Request, ScreenshotResult, ShowResult, StateResult, WindowsResult } from './protocol.ts'
 import type { CuaApi, CuaApp, CuaAppHandle, CuaDispatch, CuaObservationOptions, CuaObservationSink, CuaOperation, CuaScreenshot, CuaSurface, CuaWindow } from './types.ts'
+import { isVisibleWindow } from './windows.ts'
 export type * from './types.ts'
 
 function requestIssueMessage(issues: readonly z.core.$ZodIssue[], parent: readonly PropertyKey[] = []): string {
@@ -69,11 +70,12 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
     }
     function windowId(): number {
       if (selectedWindow !== undefined) return selectedWindow
-      const windows = observed?.windows.filter(window => window.isOnScreen && window.bounds.width > 0 && window.bounds.height > 0)
+      const windows = observed?.windows.filter(isVisibleWindow)
       const focused = windows?.find(window => window.windowId === observed?.focusedWindowId)
       if (focused) return focused.windowId
-      const first = windows?.[0]
-      if (!first || windows.length !== 1) throw new Error('Select a window with app.getWindows() and app.getWindow(windowId) before this operation')
+      const ordinary = windows?.filter(window => !window.layer)
+      const first = ordinary?.[0]
+      if (!first || ordinary.length !== 1) throw new Error('Select a window with app.getWindows() and app.getWindow(windowId) before this operation')
       return first.windowId
     }
     const result: CuaSurface = {
@@ -194,7 +196,7 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
         ...surface(appHandle, pid), pid, appHandle,
         async activate() { return action('activate', { appHandle }) },
         async getWindows(options) {
-          const windows = WindowsResult.parse(await call('listWindows', { appHandle }))
+          const windows = WindowsResult.parse(await call('listWindows', { appHandle, ...options?.includeHidden === undefined ? {} : { includeHidden: options.includeHidden } }))
           if (windows.some(window => window.pid !== pid)) throw new Error('Native windows belong to another application')
           await emit(windows, options)
           return windows

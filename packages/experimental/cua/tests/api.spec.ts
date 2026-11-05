@@ -299,7 +299,8 @@ describe('application and window observations', () => {
     ]
     f.setWindowRecords(windows)
     const app = await f.api.getApp('Editor')
-    expect(await app.getWindows({ emit: false })).toEqual(windows)
+    expect(await app.getWindows({ emit: false, includeHidden: true })).toEqual(windows)
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'listWindows', params: { appHandle: 'app-17', includeHidden: true } })
     await app.getScreenshot()
     expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'screenshot', params: { appHandle: 'app-17', windowId: 23 } })
     await app.click([10, 20])
@@ -332,6 +333,32 @@ describe('application and window observations', () => {
     await app.getAXState()
     await app.getScreenshot()
     expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'screenshot', params: { appHandle: 'app-17', windowId: 24 } })
+  })
+
+  it('uses only the sole ordinary window as a fallback without AX focus', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    const panel = { ...windowInfo(24), layer: 3 }
+    const status = { ...windowInfo(25), layer: 25 }
+    for (const [windows, target] of [
+      [[panel, status, windowInfo(23)], 23],
+      [[panel, status], null],
+      [[windowInfo(23), status, windowInfo(26)], null],
+    ] as const) {
+      f.dispatch.mockResolvedValueOnce(state({ focusedWindowId: null, windows: [...windows] }))
+      await app.getAXState()
+      if (target === null) {
+        await expect(app.getScreenshot()).rejects.toThrow('Select a window')
+        await expect(app.click([0, 0])).rejects.toThrow('Select a window')
+      } else {
+        expect((await app.getScreenshot()).windowId).toBe(target)
+        await app.click([0, 0])
+        expect(f.dispatch.mock.lastCall?.[0].params).toMatchObject({ windowId: target })
+      }
+    }
+    f.dispatch.mockResolvedValueOnce(state({ focusedWindowId: 24, windows: [panel, status, windowInfo(23)] }))
+    await app.getAXState()
+    expect((await app.getScreenshot()).windowId).toBe(24)
   })
 
   it('captures and clicks an explicitly selected floating panel while the main window keeps focus', async () => {

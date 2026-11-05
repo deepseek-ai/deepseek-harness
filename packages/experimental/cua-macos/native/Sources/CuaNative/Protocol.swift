@@ -138,12 +138,15 @@ struct WindowInfo: Sendable {
     let bounds: WindowBounds
     let isOnScreen: Bool
     let onCurrentSpace: Bool?
+    let layer: Int
 
     var json: JSONValue {
-        .object([
+        var fields: [String: JSONValue] = [
             "windowId": .number(Double(windowID)), "pid": .number(Double(pid)),
             "appName": .string(appName), "title": .string(title), "bounds": bounds.json,
             "isOnScreen": .bool(isOnScreen), "onCurrentSpace": onCurrentSpace.map(JSONValue.bool) ?? .null,
-        ])
+        ]
+        if layer != 0 { fields["layer"] = .number(Double(layer)) }
+        return .object(fields)
     }
 }

@@ -1794,9 +1794,42 @@
         "index": 0,
         "block": {
           "type": "tool-call",
+          "id": "cua-floating-complete-list",
+          "name": "cua",
+          "arguments": "{\"method\":\"listWindows\",\"params\":{\"appHandle\":\"fixture-app\",\"includeHidden\":true}}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
           "id": "cua-floating-refresh",
           "name": "cua",
-          "arguments": "{\"method\":\"listWindows\",\"params\":{\"appHandle\":\"fixture-app\"}}"
+          "arguments": "{\"method\":\"getState\",\"params\":{\"appHandle\":\"fixture-app\"}}"
         }
       },
       {

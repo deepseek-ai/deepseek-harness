@@ -37,7 +37,10 @@ export function renderNativeProtocol(): { json: string; swift: string } {
     const extension = resources.get(method)
     for (const variant of variants(params)) {
       // The Host resolves image pixels and relative coordinates before native dispatch.
-      if (variant.properties) delete variant.properties.relative
+      if (variant.properties) {
+        delete variant.properties.relative
+        if (method === 'listWindows') delete variant.properties.includeHidden
+      }
       if (variant.required) variant.required = variant.required.filter(name => name !== 'relative')
       if (extension !== undefined) {
         const extra = z.toJSONSchema(extension)

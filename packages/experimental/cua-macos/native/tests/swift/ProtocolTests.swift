@@ -43,7 +43,7 @@ func refusesInvalidRequestEnvelopes(_ source: String) {
     let window = WindowInfo(
         windowID: 7, pid: 42, appName: "Fixture", title: "Canvas",
         bounds: WindowBounds(x: -100, y: 40, width: 320, height: 200),
-        isOnScreen: true, onCurrentSpace: nil
+        isOnScreen: true, onCurrentSpace: nil, layer: 0
     )
     let encoded = try JSONEncoder().encode(window.json)
     let object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
