@@ -366,10 +366,9 @@ type SurfaceIntent<T extends SurfaceEventType = SurfaceEventType> = {
 ### `SessionEventInput`：一个候选事件
 
 ```ts type-equiv
-/** One event proposed for append, without assigned sequence or time. */
+/** One positional event call proposed for append, without assigned sequence or time. */
 type SessionEventInput = {
-  [K in SessionEventType]: { type: K; data: SessionEventMap[K] }
-    & (K extends SurfaceEventType ? SurfaceIntent<K> : { surfaceOp?: never; sourceEventSeqs?: never })
+  [K in SessionEventType]: readonly [type: K, data: SessionEventMap[K], ...opts: K extends SurfaceEventType ? [opts: SurfaceIntent<K>] : []]
 }[SessionEventType]
 ```
 
@@ -597,12 +596,6 @@ declare class Session {
    */
   append(inputs: readonly SessionEventInput[]): readonly SessionEvent[];
   /**
-   * Append one event input with the same validation and publication as the positional form.
-   * @param input - event payload and any required surface intent.
-   * @returns the immutable committed event with its assigned sequence and time.
-   */
-  append<T extends SessionEventInput>(input: T): SessionEvent<T['type']>;
-  /**
    * Append one typed event to the log and synchronously notify observers via
    * the store-owned, module-private publication hooks. The hot path never blocks
    * on I/O — persistence plugins buffer asynchronously. Once the event enters
@@ -650,7 +643,7 @@ declare class Session {
     ...opts: T extends SurfaceEventType ? [opts: SurfaceIntent<T>] : []
     ): SessionEvent<T>;
   append(
-    type: SessionEventType | SessionEventInput | readonly SessionEventInput[],
+    type: SessionEventType | readonly SessionEventInput[],
     data?: SessionEventMap[SessionEventType],
     ...opts: [opts?: SurfaceIntent]
   ): SessionEvent | readonly SessionEvent[];

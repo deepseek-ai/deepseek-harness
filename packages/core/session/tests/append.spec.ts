@@ -8,25 +8,11 @@ function message(text: string) {
 }
 
 describe('multiple Session appends', () => {
-  it('accepts one event object while retaining positional appends', () => {
-    const session = Session.create(SessionId('single-object'))
-    const value = message('object input')
-    const event = session.append({ type: 'user/message', data: value, surfaceOp: 'append' })
-    expect(event).toMatchObject({ type: 'user/message', seq: 0, data: value })
-    expect(Object.isFrozen(event)).toBe(true)
-    expect(Object.isFrozen(event.data)).toBe(true)
-    const positional = session.append('turn/start', { turn: 1 })
-    expect(positional).toMatchObject({ type: 'turn/start', seq: 1 })
-    expect(session.surface.nodes).toEqual([0])
-    expect(session.deriveMessages()).toEqual([value])
-    expect(session.append({ type: 'turn/start', data: { turn: 2 } }).seq).toBe(2)
-  })
-
   it('leaves the log unchanged for empty input and accepts a single array member', () => {
     const session = Session.create(SessionId('empty-append'))
     expect(session.append([])).toEqual([])
     expect(session.seq).toBe(0)
-    const events = session.append([{ type: 'turn/start', data: { turn: 1 } }])
+    const events = session.append([['turn/start', { turn: 1 }]])
     expect(events).toHaveLength(1)
     expect(events[0]).toMatchObject({ type: 'turn/start', seq: 0, data: { turn: 1 } })
   })
@@ -46,8 +32,8 @@ describe('multiple Session appends', () => {
     })
     const messageValue = message('visible')
     session.append([
-      { type: 'turn/start', data: { turn: 1 } },
-      { type: 'user/message', data: messageValue, surfaceOp: 'append' },
+      ['turn/start', { turn: 1 }],
+      ['user/message', messageValue, { surfaceOp: 'append' }],
     ])
     expect(observed).toEqual([0, 1])
   })
@@ -56,12 +42,8 @@ describe('multiple Session appends', () => {
     const session = Session.create(SessionId('replace-append'))
     const replacement = message('replacement')
     session.append([
-      { type: 'user/message', data: message('original'), surfaceOp: 'append' },
-      {
-        type: 'user/message', data: replacement,
-        surfaceOp: { op: 'replace', startSeq: SessionSeq(0), endSeq: SessionSeq(0) },
-        sourceEventSeqs: [SessionSeq(0)],
-      },
+      ['user/message', message('original'), { surfaceOp: 'append' }],
+      ['user/message', replacement, { surfaceOp: { op: 'replace', startSeq: SessionSeq(0), endSeq: SessionSeq(0) }, sourceEventSeqs: [SessionSeq(0)] }],
     ])
     expect(session.surface.nodes).toEqual([1])
     expect(session.deriveMessages()).toEqual([replacement])
@@ -70,8 +52,8 @@ describe('multiple Session appends', () => {
   it('rejects non-JSON data before publishing any member', () => {
     const session = Session.create(SessionId('non-json-append'))
     expect(() => session.append([
-      { type: 'turn/start', data: { turn: 1 } },
-      { type: 'turn/start', data: { turn: Number.NaN } },
+      ['turn/start', { turn: 1 }],
+      ['turn/start', { turn: Number.NaN }],
     ])).toThrow(/non-JSON/)
     expect(session.seq).toBe(0)
   })
@@ -90,8 +72,8 @@ describe('multiple Session appends', () => {
       observed.push(event.seq)
     })
     session.append([
-      { type: 'turn/start', data: { turn: 1 } },
-      { type: 'step/start', data: { turn: 1, step: 1 } },
+      ['turn/start', { turn: 1 }],
+      ['step/start', { turn: 1, step: 1 }],
     ])
     expect(observed).toEqual([0, 1])
     expect(ctx.sessions.get(session.id)).toBeUndefined()
@@ -100,7 +82,7 @@ describe('multiple Session appends', () => {
   it('folds preceding single appends before admitting an array', () => {
     const session = Session.create(SessionId('mixed-append'))
     session.append('user/message', message('before'), { surfaceOp: 'append' })
-    session.append([{ type: 'user/message', data: message('after'), surfaceOp: 'append' }])
+    session.append([['user/message', message('after'), { surfaceOp: 'append' }]])
     expect(session.surface.nodes).toEqual([0, 1])
     expect(session.surface.replaceGeneration).toBe(0)
   })
@@ -108,8 +90,8 @@ describe('multiple Session appends', () => {
   it('publishes a complete group with its final surface', () => {
     const session = Session.create(SessionId('batch'))
     const events = session.append([
-      { type: 'turn/start', data: { turn: 1 } },
-      { type: 'user/message', data: message('hello'), surfaceOp: 'append' },
+      ['turn/start', { turn: 1 }],
+      ['user/message', message('hello'), { surfaceOp: 'append' }],
     ])
     expect(events.map(event => event.seq)).toEqual([0, 1])
     expect(session.surface.nodes).toEqual([1])
@@ -121,8 +103,8 @@ describe('multiple Session appends', () => {
     session.append('user/message', message('before'), { surfaceOp: 'append' })
     const before = session.deriveMessages()
     expect(() => session.append([
-      { type: 'user/message', data: message('candidate'), surfaceOp: 'append' },
-      { type: 'user/message', data: message('invalid'), surfaceOp: { op: 'replace', startSeq: SessionSeq(40), endSeq: SessionSeq(41) } },
+      ['user/message', message('candidate'), { surfaceOp: 'append' }],
+      ['user/message', message('invalid'), { surfaceOp: { op: 'replace', startSeq: SessionSeq(40), endSeq: SessionSeq(41) } }],
     ])).toThrow()
     expect(session.seq).toBe(1)
     expect(session.deriveMessages()).toEqual(before)
@@ -144,8 +126,8 @@ describe('multiple Session appends', () => {
       if (current === session && event.seq === 1) throw new Error('veto final event')
     })
     expect(() => session.append([
-      { type: 'turn/start', data: { turn: 1 } },
-      { type: 'user/message', data: message('candidate'), surfaceOp: 'append' },
+      ['turn/start', { turn: 1 }],
+      ['user/message', message('candidate'), { surfaceOp: 'append' }],
     ])).toThrow('veto final event')
     expect(session.seq).toBe(0)
     expect(session.surface.nodes).toEqual([])

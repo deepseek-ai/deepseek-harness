@@ -63,8 +63,8 @@ describe('plugin-owned message projections', () => {
     const session = Session.create(SessionId('array-projection'), undefined, undefined, undefined, [projection])
     const original = createUserMessage({ content: [{ type: 'text', text: 'original' }], source: { kind: 'user' } })
     const append = () => session.append([
-      { type: 'user/message', data: original, surfaceOp: 'append' },
-      { type: 'test/project', data: { seq: SessionSeq(0), text } },
+      ['user/message', original, { surfaceOp: 'append' }],
+      ['test/project', { seq: SessionSeq(0), text }],
     ])
     if (text === 'reject') {
       expect(append).toThrow('rejected decision')

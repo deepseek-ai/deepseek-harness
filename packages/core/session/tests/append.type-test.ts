@@ -10,21 +10,15 @@ import type { UserMessage } from '@deepseek-ai/dsh-llm'
  */
 export function checkAppendTypes(session: Session, message: UserMessage): void {
   expectTypeOf(session.append('turn/start', { turn: 1 })).toEqualTypeOf<SessionEvent<'turn/start'>>()
-  expectTypeOf(session.append({ type: 'turn/start', data: { turn: 1 } })).toEqualTypeOf<SessionEvent<'turn/start'>>()
-  expectTypeOf(session.append({ type: 'user/message', data: message, surfaceOp: 'append' })).toEqualTypeOf<SessionEvent<'user/message'>>()
-  // @ts-expect-error -- a single message object also requires a surface operation.
-  session.append({ type: 'user/message', data: message })
-  // @ts-expect-error -- single event objects retain event-specific payload requirements.
-  session.append({ type: 'turn/start', data: message })
   const inputs: readonly SessionEventInput[] = [
-    { type: 'turn/start', data: { turn: 1 } },
-    { type: 'user/message', data: message, surfaceOp: 'append' },
+    ['turn/start', { turn: 1 }],
+    ['user/message', message, { surfaceOp: 'append' }],
   ]
   expectTypeOf(session.append(inputs)).toEqualTypeOf<readonly SessionEvent[]>()
   // @ts-expect-error -- message-producing members require a surface operation.
-  session.append([{ type: 'user/message', data: message }])
+  session.append([['user/message', message]])
   // @ts-expect-error -- log-only members cannot carry a surface operation.
-  session.append([{ type: 'turn/start', data: { turn: 1 }, surfaceOp: 'append' }])
+  session.append([['turn/start', { turn: 1 }, { surfaceOp: 'append' }]])
   // @ts-expect-error -- each payload must match its event type.
-  session.append([{ type: 'turn/start', data: message }])
+  session.append([['turn/start', message]])
 }

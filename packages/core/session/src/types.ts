@@ -485,10 +485,9 @@ export type SurfaceIntent<T extends SurfaceEventType = SurfaceEventType> = {
   sourceEventSeqs?: SessionSeq[]
 })
 
-/** One event proposed for append, without assigned sequence or time. */
+/** One positional event call proposed for append, without assigned sequence or time. */
 export type SessionEventInput = {
-  [K in SessionEventType]: { type: K; data: SessionEventMap[K] }
-    & (K extends SurfaceEventType ? SurfaceIntent<K> : { surfaceOp?: never; sourceEventSeqs?: never })
+  [K in SessionEventType]: readonly [type: K, data: SessionEventMap[K], ...opts: K extends SurfaceEventType ? [opts: SurfaceIntent<K>] : []]
 }[SessionEventType]
 
 /**

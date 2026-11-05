@@ -83,7 +83,7 @@ session.deriveMessages()         // the derived model history
 
 逻辑 `SessionHeader.isSeeded` 字段报告是否存在 fork 历史，而不公开位置整数。`Session.inheritedEventCount` 保留经过校验的精确 `SessionLogOffset`；`ownEvents()` 返回从该切点开始的事件，`isOwnSeq(seq)` 只接受已存在且由子会话拥有的位置。底层带 seed 构造必须显式提供 `seed` 与 `inheritedEventCount`，因为构造 seed 可以在继承前缀之后包含子会话自有的设置事件。
 
-`session.append(input)` 和 `session.append(type, data, ...opts)` 追加一个事件并返回该事件。`session.append(inputs)` 接受 `SessionEventInput` 的只读数组，并按输入顺序返回已提交事件；空数组不追加任何内容。数组准入会在改变日志或消息视图前验证所有候选和同步分发，因此观察者读取完整的已提交组。持久化监听器保留各自的持久性规则；仅数组准入不保证进程崩溃时整组存储的原子性。
+`session.append(type, data, ...opts)` 追加一个事件并返回该事件。`session.append(inputs)` 接受位置参数元组 `[type, data, ...opts]`（`SessionEventInput`）的只读数组，并按输入顺序返回已提交事件；空数组不追加任何内容。数组准入会在改变日志或消息视图前验证所有候选和同步分发，因此观察者读取完整的已提交组。持久化监听器保留各自的持久性规则；仅数组准入不保证进程崩溃时整组存储的原子性。
 
 ### 刷新持久状态
 

@@ -772,13 +772,6 @@ export class Session {
   append(inputs: readonly SessionEventInput[]): readonly SessionEvent[]
 
   /**
-   * Append one event input with the same validation and publication as the positional form.
-   * @param input - event payload and any required surface intent.
-   * @returns the immutable committed event with its assigned sequence and time.
-   */
-  append<T extends SessionEventInput>(input: T): SessionEvent<T['type']>
-
-  /**
    * Append one typed event to the log and synchronously notify observers via
    * the store-owned, module-private publication hooks. The hot path never blocks
    * on I/O — persistence plugins buffer asynchronously. Once the event enters
@@ -826,38 +819,36 @@ export class Session {
     ...opts: T extends SurfaceEventType ? [opts: SurfaceIntent<T>] : []
   ): SessionEvent<T>
   append(
-    type: SessionEventType | SessionEventInput | readonly SessionEventInput[],
+    type: SessionEventType | readonly SessionEventInput[],
     data?: SessionEventMap[SessionEventType],
     ...opts: [opts?: SurfaceIntent]
   ): SessionEvent | readonly SessionEvent[] {
-    if (typeof type !== 'string' && !('type' in type)) return this.#appendEvents(type)
+    if (typeof type !== 'string') return this.#appendEvents(type)
     this.publicationEntry()
-    const eventType = typeof type === 'string' ? type : type.type
-    const eventData = typeof type === 'string' ? data : type.data
-    const surfaceOpts = typeof type === 'string' ? opts[0] : type.surfaceOp === undefined ? undefined : type
+    const surfaceOpts = opts[0]
     const surfaceMetadata = {
       ...surfaceOpts?.sourceEventSeqs === undefined ? {} : { sourceEventSeqs: surfaceOpts.sourceEventSeqs },
       ...surfaceOpts?.surfaceOp === undefined ? {} : { surfaceOp: surfaceOpts.surfaceOp },
     }
-    const dataSnapshot = snapshotJsonValue(eventData)
+    const dataSnapshot = snapshotJsonValue(data)
     if (dataSnapshot === undefined) {
-      throw new Error(`session event "${eventType}" carries non-JSON-serializable data`)
+      throw new Error(`session event "${type}" carries non-JSON-serializable data`)
     }
     const surfaceMetadataSnapshot = snapshotJsonValue(surfaceMetadata)
     if (surfaceMetadataSnapshot === undefined) {
-      throw new Error(`session event "${eventType}" carries non-JSON-serializable surface metadata`)
+      throw new Error(`session event "${type}" carries non-JSON-serializable surface metadata`)
     }
     // Payload getters can detach the Session while the snapshots are read.
     const entry = this.publicationEntry()
     const event = deepFreeze({
-      type: eventType,
+      type,
       seq: SessionSeq(this.log.length),
       time: Date.now(),
       data: dataSnapshot,
       ...(surfaceMetadataSnapshot as { surfaceOp?: unknown; sourceEventSeqs?: unknown }),
     } as SessionEvent)
-    validateSessionEventData(event, `session event "${eventType}" at seq ${event.seq}`)
-    this.commit(event as SessionEvent, entry)
+    validateSessionEventData(event, `session event "${type}" at seq ${event.seq}`)
+    this.commit(event, entry)
     return event
   }
 
@@ -871,8 +862,8 @@ export class Session {
     this.publicationEntry()
     if (inputs.length === 0) return []
     const startSeq = this.log.length
-    const events = inputs.map((input, index) => {
-      const snapshot = snapshotJsonValue(input)
+    const events = inputs.map(([type, data, surfaceOpts], index) => {
+      const snapshot = snapshotJsonValue({ type, data, ...surfaceOpts })
       if (snapshot === undefined) throw new Error('session batch carries non-JSON-serializable data')
       const event = {
         ...snapshot, seq: SessionSeq(startSeq + index), time: Date.now(),
