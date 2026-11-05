@@ -609,6 +609,31 @@ describe('cardActionSession', () => {
     await mounted.bot.disconnect()
   })
 
+  it('decodes a checkbox toggle as an interaction/check session', async () => {
+    const mounted = await mount()
+    await vi.waitFor(() => { expect(mounted.bot.adapter).toBeInstanceOf(WsClient) })
+    const on = await cardActionSession(mounted.bot, parseEventEnvelope(envelope('card.action.trigger', {
+      operator: { open_id: 'ou_user' },
+      action: { tag: 'checker', value: { v4: { id: 'chk-1' } }, checked: true },
+      context: { open_chat_id: 'oc_chat', open_message_id: 'om_card' },
+    })))
+    expect(on?.type).toBe('interaction/check')
+    expect(on?.check).toMatchObject({
+      id: 'chk-1',
+      checked: true,
+      user: { id: 'ou_user' },
+      chat: { id: 'oc_chat', type: 'group' },
+      message: { id: 'om_card' },
+    })
+    const off = await cardActionSession(mounted.bot, parseEventEnvelope(envelope('card.action.trigger', {
+      operator: { open_id: 'ou_user' },
+      action: { tag: 'checker', value: { v4: { id: 'chk-1' } }, checked: false },
+      context: { open_chat_id: 'oc_chat' },
+    })))
+    expect(off?.check?.checked).toBe(false)
+    await mounted.bot.disconnect()
+  })
+
   it('carries the submitted form values on the button event of a submit', async () => {
     const mounted = await mount()
     await vi.waitFor(() => { expect(mounted.bot.adapter).toBeInstanceOf(WsClient) })

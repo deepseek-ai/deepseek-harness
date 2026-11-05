@@ -465,6 +465,9 @@ export class RenderEngine<T extends ModeTypes> {
       // A select without an id is a form field only: it names no callback, so there is nothing to collect.
       const { id, onSelect } = el.attrs
       if (id !== undefined && !this.collected.has(id)) this.collected.set(id, { kind: 'select', id, callback: onSelect })
+    } else if (el.type === 'input' && el.attrs.onChange) {
+      const { id, onChange } = el.attrs
+      if (id !== undefined && !this.collected.has(id)) this.collected.set(id, { kind: 'check', id, callback: onChange })
     }
     if (out === undefined) return []
     return Array.isArray(out) ? [...out] : [out as T['node']]

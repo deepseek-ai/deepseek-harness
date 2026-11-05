@@ -222,6 +222,11 @@ export abstract class Bot<C = unknown> {
       if (session.bot?.id !== this.id || !session.select) return
       void this.callbacks.dispatchSelect(session.select).catch(error => ctx.logger.warn(error))
     })
+
+    ctx.on('interaction/check', (session) => {
+      if (session.bot?.id !== this.id || !session.check) return
+      void this.callbacks.dispatchCheck(session.check).catch(error => ctx.logger.warn(error))
+    })
   }
 
   async* [Service.init]() {
@@ -808,6 +813,7 @@ export abstract class Bot<C = unknown> {
   private registerActions(actions: TransformResult<unknown>['actions']) {
     for (const action of actions) {
       if (action.kind === 'select') this.callbacks.registerSelect(action.id, action.callback)
+      else if (action.kind === 'check') this.callbacks.registerCheck(action.id, action.callback)
       else this.callbacks.registerButton(action.id, action.callback)
     }
   }

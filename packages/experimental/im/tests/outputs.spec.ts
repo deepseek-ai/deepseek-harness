@@ -16,7 +16,7 @@ import { ImOutputRegistry, NO_OUTPUT, STOP_BUTTON_PREFIX, type ImOutputDeps } fr
 import { ImSender } from '../src/send.ts'
 import { ImStore } from '../src/store.ts'
 import {
-  activity, BOT, chatOf, click, flush, inbound, inboundDraft, noClick, OutputsHarness, pick, record,
+  activity, BOT, chatOf, click, flush, inbound, inboundDraft, noClick, OutputsHarness, pick, record, toggle,
 } from './support/outputs-harness.ts'
 
 const open: OutputsHarness[] = []
@@ -390,6 +390,53 @@ describe('ImOutputRegistry selects', () => {
 
     await harness.registry.select(pick('sel-size', ['l']))
     expect(harness.selects).toHaveLength(1)
+  })
+})
+
+describe('ImOutputRegistry checks', () => {
+  it('re-emits a toggle of an admitted chat with its state, message and session attribution', async () => {
+    const harness = booted()
+    const hosted = harness.host({ output: 'probe' })
+    const message = inbound()
+    harness.messages.set(message.key, message)
+    harness.sender.owners.set(message.key, hosted.sessionId)
+
+    // The registry subscribes `interaction/check` itself.
+    harness.ctx.emit('interaction/check', toggle('chk-agree', true, { message: 'm1', data: 'row-3' }))
+    await flush()
+    expect(harness.checks).toHaveLength(1)
+    expect(harness.checks[0]).toMatchObject({
+      id: 'chk-agree',
+      checked: true,
+      data: 'row-3',
+      chat: chatOf(),
+      user: { id: 'user-1' },
+      bot: BOT,
+      message,
+      session: hosted.sessionId,
+      time: 1000,
+    })
+    expect(harness.buttons).toEqual([])
+    expect(harness.selects).toEqual([])
+
+    await harness.registry.check(toggle('chk-agree', false))
+    expect(harness.checks[1]?.checked).toBe(false)
+    expect(harness.checks[1]?.message).toBeUndefined()
+  })
+
+  it('ignores a toggle from a user the source does not allow, and one in a foreign chat', async () => {
+    const harness = booted()
+    harness.host({ output: 'probe' })
+    harness.sources.set('team', { id: 'team', bot: BOT.id, writable: true, store: 'all', users: ['another-user'] })
+    await harness.registry.check(toggle('chk-agree', true))
+    expect(harness.checks).toEqual([])
+
+    harness.sources.set('team', { id: 'team', bot: BOT.id, writable: true, store: 'all', users: ['user-1'] })
+    await harness.registry.check(toggle('chk-agree', true, { chat: 'elsewhere' }))
+    expect(harness.checks).toEqual([])
+    // An envelope without a checkbox is not a toggle.
+    await harness.registry.check(noClick())
+    expect(harness.checks).toEqual([])
   })
 })
 

@@ -80,6 +80,30 @@ export interface SelectEvent {
 
 export type SelectCallback = (event: SelectEvent) => void | Promise<void>
 
+/**
+ * Payload of a checkbox toggle: the reader checked or cleared a `input[type=checkbox]`.
+ *
+ * The same forward-declaration rule as {@link ButtonEvent} applies — `plugin-im-core` augments this interface with
+ * `bot`, `user`, `chat` and `message`.
+ */
+export interface CheckEvent {
+  /** Control id (`input.id`). */
+  id: string
+  /** State after the toggle. */
+  checked: boolean
+  /** Optional payload (≤ 256 bytes), as on a button. */
+  data?: string
+  /** Passive-reply / reply context the adapter may use. */
+  referrer: unknown
+  time: number
+  /** Answer the interaction on the platform; same contract as {@link ButtonEvent.respond}. */
+  respond?(answer: ButtonAnswer): Promise<void>
+  /** Claim the platform's answer for asynchronous work; same contract as {@link ButtonEvent.defer}. */
+  defer?(): void
+}
+
+export type CheckCallback = (event: CheckEvent) => void | Promise<void>
+
 /** Size of a button (`ButtonStyle.size`). */
 export type ButtonSize = 'tiny' | 'small' | 'medium' | 'large'
 
@@ -167,11 +191,16 @@ export interface ElementMap {
    */
   form: { name: string }
   /**
-   * One form control. `checkbox` is a separate native component on platforms that have one; the other types are the
-   * same component with its input mode set. `name` keys the value in the enclosing `<form>`'s submit.
+   * One form control. `checkbox` is the separate native component a platform may have, and the only one that reports
+   * itself (`onChange`); every other type delivers its value only with the enclosing `<form>`'s submit, keyed by
+   * `name`. At least one of `name` and `id` is required: `name` feeds a form, `id` names the toggle callback.
    */
   input: {
-    name: string
+    /** Form key inside a `<form>`; absent on a live checkbox that only reports its own toggles. */
+    name?: string
+    /** Callback identity of a live checkbox. */
+    id?: string
+    onChange?: CheckCallback
     type?: 'text' | 'multiline' | 'password' | 'checkbox'
     /** Visible text of a checkbox; the caption above a text field. */
     label?: string

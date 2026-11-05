@@ -8,7 +8,7 @@
  * changes the answer.
  */
 
-import type { ButtonCallback, Element, SelectCallback, Tag, VariantOf } from '@deepseek-ai/satori-element'
+import type { ButtonCallback, CheckCallback, Element, SelectCallback, Tag, VariantOf } from '@deepseek-ai/satori-element'
 import type { Bot, SendOptions } from './bot.ts'
 import type { DegradationCosts } from './degradation.ts'
 import type { LimitViolation } from './errors.ts'
@@ -59,12 +59,13 @@ export interface Envelope {
 
 /**
  * One in-process interaction callback a mode's handlers collected from the rendered elements: an `onClick` of a
- * `button[type=action|submit]` or an `onSelect` of a `select`, registered by the send stage under its id so the
- * platform event of that id reaches it.
+ * `button[type=action|submit]`, an `onSelect` of a `select`, or an `onChange` of a checkbox `input` — registered by the
+ * send stage under its id so the platform event of that id reaches it.
  */
 export type InteractionAction =
   | { kind: 'button'; id: string; callback: ButtonCallback }
   | { kind: 'select'; id: string; callback: SelectCallback }
+  | { kind: 'check'; id: string; callback: CheckCallback }
 
 export interface TransformResult<D> {
   /** ≥ 1, in send order. */

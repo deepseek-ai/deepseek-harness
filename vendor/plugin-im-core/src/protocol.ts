@@ -117,6 +117,15 @@ declare module '@deepseek-ai/satori-element' {
     /** The platform message that carried the control. */
     message?: MessageRef
   }
+
+  /** Platform context of a checkbox toggle; augments the vocabulary's forward declaration. */
+  interface CheckEvent {
+    bot: Bot
+    user: UserRef
+    chat: ChatRef
+    /** The platform message that carried the checkbox. */
+    message?: MessageRef
+  }
 }
 
 // ---------------------------------------------------------------------------------------------------------------

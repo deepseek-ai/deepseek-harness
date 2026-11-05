@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { Http } from '@deepseek-ai/cordis-plugin-http'
-import { Bot, type ButtonEvent, CallbackRegistry, h, type InboundMessage, Satori, type SelectEvent } from '@deepseek-ai/cordis-plugin-im-core'
+import { Bot, type ButtonEvent, CallbackRegistry, type CheckEvent, h, type InboundMessage, Satori, type SelectEvent } from '@deepseek-ai/cordis-plugin-im-core'
 import type {} from '@deepseek-ai/cordis-plugin-http'
 
 class TestBot extends Bot<Record<string, never>> {}
@@ -52,6 +52,18 @@ function selection(bot: Bot, id: string, values: string[]): SelectEvent {
   return {
     id,
     values,
+    referrer: { msg_id: 'p1' },
+    time: 1_700_000_000_000,
+    bot,
+    user: { id: 'u1' },
+    chat: { id: 'c1', type: 'group' },
+  }
+}
+
+function toggle(bot: Bot, id: string, checked: boolean): CheckEvent {
+  return {
+    id,
+    checked,
     referrer: { msg_id: 'p1' },
     time: 1_700_000_000_000,
     bot,
@@ -192,6 +204,20 @@ describe('CallbackRegistry', () => {
     expect(registry.getSelect('shared')).toBeUndefined()
     expect(registry.getButton('shared')).toBeTypeOf('function')
   })
+
+  it('dispatches a checkbox toggle to its own callback, never to a click or a pick', async () => {
+    const { bot } = await setup()
+    const calls: string[] = []
+    const registry = new CallbackRegistry()
+    registry.registerButton('shared', () => { calls.push('button') })
+    registry.registerSelect('shared', () => { calls.push('select') })
+    registry.registerCheck('shared', event => { calls.push(event.checked ? 'checked' : 'cleared') })
+
+    expect(await registry.dispatchCheck(toggle(bot, 'shared', true))).toBe(true)
+    expect(await registry.dispatchCheck(toggle(bot, 'shared', false))).toBe(true)
+    expect(calls).toEqual(['checked', 'cleared'])
+    expect(await registry.dispatchCheck(toggle(bot, 'unknown', true))).toBe(false)
+  })
 })
 
 describe('bot.callbacks routing', () => {
@@ -241,6 +267,22 @@ describe('bot.callbacks routing', () => {
     bot.dispatch(bot.session({ type: 'interaction/select', select: selection(bot, 'unknown', ['a']) }))
     await tick()
     expect(picked).toEqual([['a', 'b']])
+  })
+
+  it('dispatches interaction/check events of its own bot to the registered onChange', async () => {
+    const { bot } = await setup()
+    const states: boolean[] = []
+    bot.callbacks.registerCheck('chk', (event) => { states.push(event.checked) })
+
+    bot.dispatch(bot.session({ type: 'interaction/check', check: toggle(bot, 'chk', true) }))
+    await tick()
+    bot.dispatch(bot.session({ type: 'interaction/check', check: toggle(bot, 'chk', false) }))
+    await tick()
+    expect(states).toEqual([true, false])
+
+    bot.dispatch(bot.session({ type: 'interaction/check', check: toggle(bot, 'unknown', true) }))
+    await tick()
+    expect(states).toEqual([true, false])
   })
 })
 

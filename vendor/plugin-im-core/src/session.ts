@@ -1,17 +1,19 @@
 /**
  * Event wrapper: `session.message` (`InboundMessage`), `session.button` (`ButtonEvent`), `session.select`
- * (`SelectEvent`), plus the per-bot interaction callback registry used by `interaction/button` and
- * `interaction/select` routing.
+ * (`SelectEvent`), `session.check` (`CheckEvent`), plus the per-bot interaction callback registry used by
+ * `interaction/button`, `interaction/select` and `interaction/check` routing.
  */
 
-import type { ButtonCallback, ButtonEvent, SelectCallback, SelectEvent } from '@deepseek-ai/satori-element'
+import type {
+  ButtonCallback, ButtonEvent, CheckCallback, CheckEvent, SelectCallback, SelectEvent,
+} from '@deepseek-ai/satori-element'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineProperty, Time } from '@deepseek-ai/cosmokit'
 import type { Bot } from './bot.ts'
 import type { InboundMessage, Login, MessageRef, UserRef } from './protocol.ts'
 
 export interface SessionEvent {
-  /** Event name: `message`, `message-deleted`, `interaction/button`, `interaction/select`, `reaction-added`, … */
+  /** Event name: `message`, `interaction/button`, `interaction/select`, `interaction/check`, `reaction-added`, … */
   type: string
   /** Platform event id (intake dedupe key). */
   id?: string
@@ -22,13 +24,15 @@ export interface SessionEvent {
   button?: ButtonEvent
   /** `interaction/select` */
   select?: SelectEvent
+  /** `interaction/check` */
+  check?: CheckEvent
   /** `message-deleted` */
   deleted?: MessageRef & { operator?: UserRef }
   /** `reaction-added` / `reaction-removed` */
   reaction?: { message: MessageRef; emoji: string; user?: UserRef }
   /** `login-*` */
   login?: Login
-  /** Passive-reply context (also on `message.referrer` / `button.referrer` / `select.referrer`). */
+  /** Passive-reply context (also on `message.referrer` / `button.referrer` / `select.referrer` / `check.referrer`). */
   referrer?: unknown
   /** `type === 'internal'`: re-emitted by `bot.dispatch` as `ctx.emit(internal.type, internal.data, bot)`. */
   internal?: { type: string; data: unknown }
@@ -81,9 +85,13 @@ export class Session {
     return this.event.select
   }
 
+  get check() {
+    return this.event.check
+  }
+
   get referrer() {
     return this.event.referrer ?? this.event.message?.referrer ?? this.event.button?.referrer
-      ?? this.event.select?.referrer
+      ?? this.event.select?.referrer ?? this.event.check?.referrer
   }
 
   /**
@@ -110,10 +118,11 @@ export interface CallbackRegistryOptions {
 /** What one registry entry holds, with its expiry. */
 interface Entry<C> { callback: C; until: number }
 
-/** In-memory interaction registry keyed by control id, with TTL. Buttons and selects are separate keyspaces. */
+/** In-memory interaction registry keyed by control id, with TTL. Buttons, selects and checkboxes are separate. */
 export class CallbackRegistry {
   private readonly buttons = new Map<string, Entry<ButtonCallback>>()
   private readonly selects = new Map<string, Entry<SelectCallback>>()
+  private readonly checks = new Map<string, Entry<CheckCallback>>()
 
   constructor(readonly options: CallbackRegistryOptions = {}) {}
 
@@ -154,12 +163,21 @@ export class CallbackRegistry {
     return this.put(this.selects, id, callback, ttlMs)
   }
 
+  /** Register (or replace) a checkbox callback; returns its disposer. */
+  registerCheck(id: string, callback: CheckCallback, ttlMs?: number): () => void {
+    return this.put(this.checks, id, callback, ttlMs)
+  }
+
   getButton(id: string): ButtonCallback | undefined {
     return this.live(this.buttons, id)
   }
 
   getSelect(id: string): SelectCallback | undefined {
     return this.live(this.selects, id)
+  }
+
+  getCheck(id: string): CheckCallback | undefined {
+    return this.live(this.checks, id)
   }
 
   /** Invoke the button callback of `event.id` if registered and unexpired; resolves whether one ran. */
@@ -178,8 +196,17 @@ export class CallbackRegistry {
     return true
   }
 
+  /** Invoke the checkbox callback of `event.id` if registered and unexpired; resolves whether one ran. */
+  async dispatchCheck(event: CheckEvent): Promise<boolean> {
+    const callback = this.getCheck(event.id)
+    if (!callback) return false
+    await callback(event)
+    return true
+  }
+
   clear(): void {
     this.buttons.clear()
     this.selects.clear()
+    this.checks.clear()
   }
 }

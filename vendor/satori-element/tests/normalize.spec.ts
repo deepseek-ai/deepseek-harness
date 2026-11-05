@@ -239,7 +239,14 @@ describe('normalize: form controls', () => {
   it('validates the form key, the control name and each option value', () => {
     expect(errorOf(() => normalize(parse('<form><input name="a"/></form>'))).message)
       .toMatch(/<form> requires a non-empty "name"/)
-    expect(errorOf(() => normalize(parse('<input/>'))).message).toMatch(/<input> requires a non-empty "name"/)
+    expect(errorOf(() => normalize(parse('<input/>'))).message)
+      .toMatch(/<input> requires a "name" \(feeds its form\) or an "id" \(reports its toggle\)/)
+    // A checkbox may report its own toggles instead of feeding a form, but only a checkbox has a toggle callback.
+    expect(normalize(h('input', { type: 'checkbox', id: 'c', onChange: () => {} })).children).toHaveLength(1)
+    expect(errorOf(() => normalize(h('input', { name: 'a', onChange: () => {} }))).message)
+      .toMatch(/<input> onChange needs type="checkbox"/)
+    expect(errorOf(() => normalize(h('input', { name: 'a', type: 'checkbox', onChange: () => {} }))).message)
+      .toMatch(/requires an "id"/)
     expect(errorOf(() => normalize(parse('<select/>'))).message)
       .toMatch(/<select> requires an "id" \(reports its pick\) or a "name" \(feeds its form\)/)
     // Either channel alone is enough: an id reports the pick, a name feeds the enclosing form.

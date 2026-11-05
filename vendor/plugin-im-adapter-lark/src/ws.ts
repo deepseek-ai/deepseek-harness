@@ -29,8 +29,8 @@
 
 import { type Context } from '@deepseek-ai/cordis'
 import {
-  type ButtonAnswer, type ButtonEvent, type ChatRef, type SelectEvent, type Session, Status, type UserRef,
-  WsClientBase, type WebSocket,
+  type ButtonAnswer, type ButtonEvent, type ChatRef, type CheckEvent, type SelectEvent, type Session, Status,
+  type UserRef, WsClientBase, type WebSocket,
 } from '@deepseek-ai/cordis-plugin-im-core'
 import {} from '@deepseek-ai/cordis-plugin-http'
 import pb from 'protobufjs/light.js'
@@ -169,6 +169,23 @@ export async function cardActionSession(
     else if (data !== undefined && data !== null) select.data = JSON.stringify(data)
     if (messageId) select.message = { id: messageId, chat }
     return bot.session({ type: 'interaction/select', id: raw.header.event_id, timestamp: time, select, referrer })
+  }
+  if (tag === 'checker') {
+    // A checkbox reports its own toggles (`勾选器回调示例`: `action.checked`), unlike a text input.
+    const check: CheckEvent & { user: UserRef; chat: ChatRef } = {
+      bot,
+      id,
+      checked: action.checked === true,
+      referrer,
+      time,
+      user,
+      chat,
+    }
+    const data = v4.data
+    if (typeof data === 'string' && data) check.data = data
+    else if (data !== undefined && data !== null) check.data = JSON.stringify(data)
+    if (messageId) check.message = { id: messageId, chat }
+    return bot.session({ type: 'interaction/check', id: raw.header.event_id, timestamp: time, check, referrer })
   }
   const button: ButtonEvent & { user: UserRef; chat: ChatRef } = { bot, id, referrer, time, user, chat }
   const data = v4.data
@@ -424,7 +441,7 @@ export class WsClient extends WsClientBase<LarkBot> {
     try {
       const session = await cardActionSession(this.bot, raw, signal)
       if (!session) return
-      const interaction = session.button ?? session.select
+      const interaction = session.button ?? session.select ?? session.check
       if (!interaction) return
       interaction.respond = async (reply: ButtonAnswer) => { answer(cardAnswerBody(reply)) }
       // A listener that answers asynchronously claims the answer; the deadline still bounds it.

@@ -1,8 +1,8 @@
 /**
  * Output renderer registry: drives the renderer named by `spec.output` for each `im/activity` turn of a session that
  * may publish (per-turn {@link ImOutputIO} with quote/thread from the trigger, attributed sends); re-emits
- * `interaction/button` and `interaction/select` in admitted chats as `im/button` / `im/select`, routing
- * `dsh:stop:<id>` to `sessions.stop`.
+ * `interaction/button`, `interaction/select` and `interaction/check` in admitted chats as `im/button`, `im/select` and
+ * `im/check`, routing `dsh:stop:<id>` to `sessions.stop`.
  *
  * Target chat per turn ({@link targetOf}): the trigger's chat when the session holds a writable binding for it (that
  * binding's thread), else the writable home binding. A trigger of another chat is not quoted.
@@ -15,14 +15,14 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type {
-  ButtonEvent, Fragment, MessageStream, SelectEvent, Session, StreamOptions,
+  ButtonEvent, CheckEvent, Fragment, MessageStream, SelectEvent, Session, StreamOptions,
 } from '@deepseek-ai/cordis-plugin-im-core'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import {
   ImChatKey, ImMessageKey,
-  type ImActivity, type ImActivityChange, type ImBinding, type ImButtonEvent, type ImChat, type ImHistory,
-  type ImMessage, type ImOutputIO, type ImOutputRenderer, type ImOutputs, type ImSelectEvent, type ImSendOptions,
-  type ImSendResult, type ImSessions, type ImSourceConfig, type ImTurnOutput,
+  type ImActivity, type ImActivityChange, type ImBinding, type ImButtonEvent, type ImChat, type ImCheckEvent,
+  type ImHistory, type ImMessage, type ImOutputIO, type ImOutputRenderer, type ImOutputs, type ImSelectEvent,
+  type ImSendOptions, type ImSendResult, type ImSessions, type ImSourceConfig, type ImTurnOutput,
 } from './api.ts'
 import { ImError } from './error.ts'
 import { allows } from './intake.ts'
@@ -72,7 +72,7 @@ export class ImOutputRegistry implements ImOutputs {
 
   constructor(readonly ctx: Context, readonly deps: ImOutputDeps) {}
 
-  /** Subscribe `im/activity`, `interaction/button` and `interaction/select` (disposed with `ctx`). */
+  /** Subscribe `im/activity`, `interaction/button`, `interaction/select` and `interaction/check` (disposed with `ctx`). */
   start(): void {
     this.ctx.on('im/activity', (activity, change) => { this.activity(activity, change) })
     this.ctx.on('interaction/button', (session) => {
@@ -83,6 +83,11 @@ export class ImOutputRegistry implements ImOutputs {
     this.ctx.on('interaction/select', (session) => {
       void this.select(session).catch((error: unknown) => {
         this.ctx.logger.warn('IM select was not handled: %s', String(error))
+      })
+    })
+    this.ctx.on('interaction/check', (session) => {
+      void this.check(session).catch((error: unknown) => {
+        this.ctx.logger.warn('IM checkbox toggle was not handled: %s', String(error))
       })
     })
   }
@@ -154,6 +159,30 @@ export class ImOutputRegistry implements ImOutputs {
   }
 
   /**
+   * `interaction/check` listener body (exposed for tests).
+   * @param session - the core interaction session whose checkbox was toggled.
+   */
+  async check(session: Session): Promise<void> {
+    const check = session.check
+    if (check === undefined) return
+    const context = this.interaction(check)
+    if (context === undefined) return
+    const event: ImCheckEvent = {
+      id: check.id,
+      checked: check.checked,
+      chat: context.chat,
+      user: check.user,
+      bot: check.bot,
+      time: check.time,
+      raw: check,
+      ...check.data === undefined ? {} : { data: check.data },
+      ...context.message === undefined ? {} : { message: context.message },
+      ...context.session === undefined ? {} : { session: context.session },
+    }
+    this.ctx.emit('im/check', event)
+  }
+
+  /**
    * The admitted chat of one interaction, the own message that carried the control and the session that produced it.
    *
    * The interacting user is admitted like any sender: an interaction must not be a way around the source's user
@@ -162,7 +191,7 @@ export class ImOutputRegistry implements ImOutputs {
    * @param interaction - the core interaction event.
    * @returns the host context, or `undefined` when the chat is not admitted or the user is not allowed.
    */
-  private interaction(interaction: ButtonEvent | SelectEvent):
+  private interaction(interaction: ButtonEvent | SelectEvent | CheckEvent):
     { chat: ImChat; message?: ImMessage; session?: SessionId } | undefined {
     const chat = this.deps.im.chat(ImChatKey(interaction.bot.id, interaction.chat.id))
     if (chat === undefined) return

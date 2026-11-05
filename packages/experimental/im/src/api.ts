@@ -5,7 +5,7 @@
  */
 import { brandString, type Branded } from '@deepseek-ai/dsh-brand'
 import type {
-  Bot, ButtonEvent, ChatRef, Element, Fragment, InboundMessage, MessageHandle, MessageStream,
+  Bot, ButtonEvent, ChatRef, CheckEvent, Element, Fragment, InboundMessage, MessageHandle, MessageStream,
   RenderReport, SelectEvent, SendOptions, StreamOptions, UserRef,
 } from '@deepseek-ai/cordis-plugin-im-core'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -175,6 +175,25 @@ export interface ImSelectEvent {
   readonly raw: SelectEvent
 }
 
+/** A checkbox toggle in an admitted chat, re-emitted by the core as `im/check`. */
+export interface ImCheckEvent {
+  /** `input.id` as rendered. */
+  readonly id: string
+  /** State after the toggle. */
+  readonly checked: boolean
+  readonly data?: unknown
+  readonly chat: ImChat
+  readonly user: UserRef
+  readonly bot: Bot
+  /** The own stored message that carried the checkbox, when known. */
+  readonly message?: ImMessage
+  /** The session whose send/output produced that message, when known. */
+  readonly session?: SessionId
+  readonly time: number
+  /** The raw core interaction event. */
+  readonly raw: CheckEvent
+}
+
 declare module '@deepseek-ai/cordis' {
   interface Events {
     /**
@@ -202,6 +221,12 @@ declare module '@deepseek-ai/cordis' {
      * @mode emit
      */
     'im/select'(event: ImSelectEvent): void
+    /**
+     * A checkbox of a published message was toggled, with the chat, sender, new state and producing session.
+     * @param event - the toggle, its message and the raw platform interaction.
+     * @mode emit
+     */
+    'im/check'(event: ImCheckEvent): void
     /**
      * A hosted session's turn activity changed; output renderers subscribe to redraw their message.
      * @param activity - the whole activity of the turn, with every segment so far.

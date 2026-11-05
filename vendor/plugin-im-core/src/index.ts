@@ -58,6 +58,8 @@ declare module '@deepseek-ai/cordis' {
     'interaction/button'(session: Session): void
     /** `session.select`; the bot routes `onSelect` callbacks, dsh-im re-emits as `im/select`. */
     'interaction/select'(session: Session): void
+    /** `session.check`; the bot routes `onChange` callbacks of a checkbox, dsh-im re-emits as `im/check`. */
+    'interaction/check'(session: Session): void
     /** `session.event.reaction` */
     'reaction-added'(session: Session): void
     'reaction-removed'(session: Session): void

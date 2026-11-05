@@ -10,7 +10,8 @@ import type {
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import {
   ImChatKey, ImMessageKey, ImSourceId,
-  type ImActivity, type ImButtonEvent, type ImChat, type ImMessage, type ImSelectEvent, type ImSendOptions,
+  type ImActivity, type ImButtonEvent, type ImChat, type ImCheckEvent, type ImMessage, type ImSelectEvent,
+  type ImSendOptions,
   type ImSendResult, type ImSessionRecord, type ImSourceConfig,
 } from '../../src/api.ts'
 import { ImOutputRegistry, type ImOutputDeps } from '../../src/outputs.ts'
@@ -157,6 +158,27 @@ export function pick(
   return { select, bot: BOT, timestamp: 1000 } as Session
 }
 
+/** One `interaction/check` session of the fake bot. */
+export function toggle(
+  id: string,
+  checked: boolean,
+  patch: { message?: string; data?: string; chat?: string } = {},
+): Session {
+  const chat = chatOf(patch.chat).ref
+  const check = {
+    bot: BOT,
+    id,
+    checked,
+    referrer: {},
+    time: 1000,
+    user: { id: 'user-1' },
+    chat,
+    ...patch.message === undefined ? {} : { message: { id: patch.message, chat } },
+    ...patch.data === undefined ? {} : { data: patch.data },
+  }
+  return { check, bot: BOT, timestamp: 1000 } as Session
+}
+
 /** Everything one registry test needs. */
 export class OutputsHarness {
   readonly ctx = new Context()
@@ -166,6 +188,8 @@ export class OutputsHarness {
   readonly buttons: ImButtonEvent[] = []
   /** Every `im/select` emission. */
   readonly selects: ImSelectEvent[] = []
+  /** Every `im/check` emission. */
+  readonly checks: ImCheckEvent[] = []
   /** Chats `chat()` knows. */
   readonly chats = new Map<ImChatKey, ImChat>()
   /** Stored messages by key (`history.get`). */
@@ -197,6 +221,7 @@ export class OutputsHarness {
     this.registry = new ImOutputRegistry(this.ctx, { im, sender: this.sender })
     this.ctx.on('im/button', (event) => { this.buttons.push(event) })
     this.ctx.on('im/select', (event) => { this.selects.push(event) })
+    this.ctx.on('im/check', (event) => { this.checks.push(event) })
     this.registry.start()
   }
 

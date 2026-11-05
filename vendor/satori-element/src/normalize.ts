@@ -170,13 +170,21 @@ function checkSelect(attrs: Record<string, unknown>, path: string) {
   }
 }
 
-/** A control's input mode, its bounds and the value type each mode takes. */
+/** A control's channel, its input mode, its bounds and the value type each mode takes. */
 function checkInput(attrs: Record<string, unknown>, path: string) {
   checkOneOf('input', 'type', attrs.type, ['text', 'multiline', 'password', 'checkbox'], path)
-  for (const name of ['label', 'placeholder']) {
+  for (const name of ['label', 'placeholder', 'name', 'id']) {
     if (attrs[name] !== undefined && !nonEmptyString(attrs[name])) {
       throw new NormalizeError(`<input> ${name} must be a non-empty string`, path)
     }
+  }
+  if (!nonEmptyString(attrs.name) && !nonEmptyString(attrs.id)) {
+    throw new NormalizeError('<input> requires a "name" (feeds its form) or an "id" (reports its toggle)', path)
+  }
+  const checkbox = attrs.type === 'checkbox'
+  if (attrs.onChange !== undefined) {
+    if (!checkbox) throw new NormalizeError('<input> onChange needs type="checkbox"', path)
+    if (!nonEmptyString(attrs.id)) throw new NormalizeError('<input type="checkbox" onChange> requires an "id"', path)
   }
   if (attrs.maxLength !== undefined) {
     const max = attrs.maxLength
@@ -184,7 +192,6 @@ function checkInput(attrs: Record<string, unknown>, path: string) {
       throw new NormalizeError(`<input> maxLength must be a positive integer, got ${String(max)}`, path)
     }
   }
-  const checkbox = attrs.type === 'checkbox'
   if (attrs.value !== undefined && typeof attrs.value !== (checkbox ? 'boolean' : 'string')) {
     throw new NormalizeError(`<input${checkbox ? ' type="checkbox"' : ''}> value must be a ${checkbox ? 'boolean' : 'string'}`, path)
   }

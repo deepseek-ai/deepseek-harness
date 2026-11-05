@@ -127,14 +127,15 @@ export interface CardButtonRowComponent {
 }
 
 /**
- * One form control: a text `input`, or a `checker` for `input[type=checkbox]` (a separate platform component). Its
- * value reaches the code through the enclosing form's submit (`name` → form value), never on its own.
+ * One form control: a text `input`, or a `checker` for `input[type=checkbox]` (a separate platform component). A text
+ * input reaches the code only through the enclosing form's submit (`name` → form value); a checkbox with a callback
+ * behavior reports every toggle of its own as well.
  */
 export interface CardInputComponent {
   tag: 'input' | 'checker'
   id: string
   /** Form key of this control; what the submit callback reports. */
-  name: string
+  name?: string
   /** Visible text of a checkbox, or the caption of a text field. */
   label?: string
   placeholder?: string
@@ -144,13 +145,15 @@ export interface CardInputComponent {
   maxLength?: number
   /** Lark `input_type`; absent = `text`. */
   inputType?: 'multiline_text' | 'password'
+  /** The toggle callback of a live checkbox; absent on a form-only control. */
+  behavior?: CardButtonBehavior
   required?: boolean
   disabled?: boolean
 }
 
 /**
- * One choice control. A single select reports a pick through its own callback (`behaviors`); a `multiple` one is
- * `multi_select_static`, which the platform reports only through the submit of the form it stands in.
+ * One choice control. Both kinds report a pick through their own callback (`behaviors`); a select inside a form also
+ * gives its value to that form's submit.
  */
 export interface CardSelectComponent {
   tag: 'select_static' | 'multi_select_static'
@@ -345,9 +348,9 @@ function mediaLink(node: CardMediaNode): string {
 /** Text of a control where only markdown can stand (a folded panel): `☐ label`, or `[caption]`. */
 function inputText(component: CardInputComponent): string {
   if (component.tag === 'checker') {
-    return `${component.checked ? '☑' : '☐'} ${escapeCardText(component.label ?? component.name)}`
+    return `${component.checked ? '☑' : '☐'} ${escapeCardText(component.label ?? component.name ?? 'checkbox')}`
   }
-  return `[${escapeCardText(component.label ?? component.placeholder ?? component.name)}]`
+  return `[${escapeCardText(component.label ?? component.placeholder ?? component.name ?? 'input')}]`
 }
 
 /** Text of a select: `[选择: A / B / C]`, so a degradation still names what could have been picked. */
@@ -355,6 +358,19 @@ function selectText(component: CardSelectComponent): string {
   const head = escapeCardText(component.placeholder ?? '选择')
   const labels = component.options.map(option => escapeCardText(option.text))
   return labels.length ? `[${head}: ${labels.join(' / ')}]` : `[${head}]`
+}
+
+/**
+ * Report a control whose value can never reach the code: a form field with no enclosing `<form>`, that also has no
+ * callback of its own. The card still renders it; the report is what tells the author it does nothing.
+ *
+ * @param ctx - render context of the control.
+ * @param what - the control, as `input:<name>` / `select:<name>`.
+ * @param live - whether the rendered control reports itself (it carries a callback identity).
+ */
+function requireDelivery(ctx: RenderContext<CardTypes>, what: string, live: boolean): void {
+  if (live || ctx.ancestors.some(ancestor => ancestor.type === 'form')) return
+  ctx.report.dropped.push({ what, reason: INTERACTION_DROPPED })
 }
 
 /** Flow-level markdown of any node. */
@@ -845,15 +861,16 @@ export function serializeComponent(component: CardComponent, key: KeyOf): Record
         ? {
           tag: 'checker',
           element_id: component.id,
-          name: component.name,
+          ...component.name === undefined ? {} : { name: component.name },
           checked: !!component.checked,
           ...component.label ? { text: { tag: 'lark_md', content: normalizeCardMarkdown(component.label) } } : {},
+          ...component.behavior ? { behaviors: [component.behavior] } : {},
           ...component.disabled ? { disabled: true } : {},
         }
         : {
           tag: 'input',
           element_id: component.id,
-          name: component.name,
+          ...component.name === undefined ? {} : { name: component.name },
           ...component.label ? { label: plainText(component.label) } : {},
           ...component.placeholder ? { placeholder: plainText(component.placeholder) } : {},
           ...component.defaultValue ? { default_value: component.defaultValue } : {},
@@ -1057,13 +1074,8 @@ export function createCardMode(config: CardModeConfig = {}): Mode<CardTypes> {
       const many = Array.isArray(chosen) && chosen.length ? chosen : marked
       // A live control uses its id as the form key; a form-only control names the field explicitly.
       const name = el.attrs.name ?? el.attrs.id
-      // The platform reports a multi-select only when the enclosing form's submit button is clicked — never on a pick
-      // (`multi_select_static` 回调示例: the callback is that button's event, with the picked values in
-      // `action.form_value[<name>]`). Outside a form the selection therefore has no way back into the code.
-      const inForm = ctx.ancestors.some(ancestor => ancestor.type === 'form')
-      if (multiple && !inForm) {
-        ctx.report.dropped.push({ what: `select:${name ?? 'multiple'}`, reason: INTERACTION_DROPPED })
-      }
+      const live = callbacks && el.attrs.id !== undefined
+      requireDelivery(ctx, `select:${name ?? 'select'}`, live)
       const component: CardSelectComponent = {
         tag: multiple ? 'multi_select_static' : 'select_static',
         id: cardElementId(ctx.stableId(el)),
@@ -1073,9 +1085,9 @@ export function createCardMode(config: CardModeConfig = {}): Mode<CardTypes> {
         ...multiple
           ? many.length ? { selectedValues: many } : {}
           : single ? { initialOption: single } : {},
-        // Only a single select reports a pick of its own. It needs a callback behavior and an id to route it back
-        // through; without callbacks the platform sends nothing and the value arrives only with a form submit.
-        ...callbacks && !multiple && el.attrs.id !== undefined
+        // A pick reports a callback of its own — the platform treats every interactive component that way — and a
+        // select inside a form additionally gives its value to that form's submit (`action.form_value[<name>]`).
+        ...callbacks && el.attrs.id !== undefined
           ? {
             behavior: {
               type: 'callback' as const,
@@ -1090,16 +1102,24 @@ export function createCardMode(config: CardModeConfig = {}): Mode<CardTypes> {
     }, { variants: ['multiple'] })
     .register('input', (el, ctx): CardNode => {
       const checkbox = el.attrs.type === 'checkbox'
+      // A checkbox is the one form component that reports itself: a `checker` with a callback behavior fires on every
+      // toggle (`action.tag: 'checker'`, `action.checked`). Without an id it is a plain form field.
+      const id = checkbox ? el.attrs.id : undefined
+      const live = callbacks && id !== undefined
+      requireDelivery(ctx, `input:${el.attrs.name ?? el.attrs.id ?? 'input'}`, live)
       const component: CardInputComponent = {
         tag: checkbox ? 'checker' : 'input',
         id: cardElementId(ctx.stableId(el)),
-        name: el.attrs.name,
+        ...el.attrs.name === undefined ? {} : { name: el.attrs.name },
         ...el.attrs.label ? { label: el.attrs.label } : {},
         ...el.attrs.placeholder ? { placeholder: el.attrs.placeholder } : {},
         ...typeof el.attrs.value === 'string' && el.attrs.value ? { defaultValue: el.attrs.value } : {},
         ...typeof el.attrs.value === 'boolean' ? { checked: el.attrs.value } : {},
         ...el.attrs.maxLength === undefined ? {} : { maxLength: el.attrs.maxLength },
         ...inputType(el.attrs.type),
+        ...callbacks && id !== undefined
+          ? { behavior: { type: 'callback' as const, value: { v4: { id } } } }
+          : {},
         ...el.attrs.required ? { required: true } : {},
         ...el.attrs.disabled ? { disabled: true } : {},
       }
