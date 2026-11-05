@@ -335,6 +335,20 @@ describe('scoped execution dispatch', () => {
     expect(bodyCalls).toBe(0)
   })
 
+  it('records the structured identity of a guard denial', async () => {
+    const ctx = await mount()
+    ctx.tools.register(tool('t'))
+    ctx.tools.guard(() => ({ reason: 'outside the shared workspace', info: { name: 'ForkDeniedError', code: 'FORK_PATH_OUTSIDE_WORKSPACE' } }))
+
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 't', arguments: {} })
+
+    expect(result).toMatchObject({
+      content: [{ type: 'text', text: 'Error: outside the shared workspace' }],
+      isError: true,
+      error: { message: 'outside the shared workspace', info: { name: 'ForkDeniedError', code: 'FORK_PATH_OUTSIDE_WORKSPACE' } },
+    })
+  })
+
   it('live-iterates a guard registered by an earlier guard', async () => {
     const ctx = await mount()
     const calls: string[] = []

@@ -569,6 +569,23 @@ describe('ToolRuntime', () => {
     expect(result.error?.message).toBe(message)
   })
 
+  it('records the structured identity of a post-execute block', async () => {
+    const ctx = await setup()
+    ctx.tools.register(echoTool)
+    ctx.on('tools/post-execute', async (): Promise<PostToolDecision> => ({
+      kind: 'block',
+      feedback: [{ type: 'text', text: 'blocked by hook' }],
+      info: { name: 'HookBlockedError', code: 'HOOK_BLOCKED' },
+    }))
+
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('block-info'), name: 'echo', arguments: {} })
+    expect(result).toMatchObject({
+      content: [{ type: 'text', text: 'blocked by hook' }],
+      isError: true,
+      error: { message: 'blocked by hook', info: { name: 'HookBlockedError', code: 'HOOK_BLOCKED' } },
+    })
+  })
+
   it('contains a non-JSON post-execute failure projection as a safe final error', async () => {
     const ctx = await setup()
     ctx.tools.register(echoTool)

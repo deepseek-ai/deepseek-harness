@@ -374,12 +374,13 @@ export type PreToolDecision =
 
 /**
  * Post-dispatch decision: accept, replace one projection, attach context for the
- * next request, or block by turning corrective feedback into an error result.
+ * next request, or block by turning corrective feedback into an error result
+ * whose optional `info` is its structured error identity.
  */
 export type PostToolDecision =
   | { kind: 'accept'; content?: ContentBlock[]; value?: never; additionalContexts?: UserMessage[] }
   | { kind: 'accept'; value: JsonValue; content?: never; additionalContexts?: UserMessage[] }
-  | { kind: 'block'; feedback: ContentBlock[]; additionalContexts?: UserMessage[] }
+  | { kind: 'block'; feedback: ContentBlock[]; info?: ToolErrorInfo; additionalContexts?: UserMessage[] }
 
 /**
  * Per-scope filter over global tools. Restrictions intersect and do not affect
@@ -398,6 +399,14 @@ export interface ToolRestriction {
  * returning `undefined` leaves it unchanged. Because guards have no allow
  * result, listener ordering cannot turn a denial back into permission.
  * @param execution - the identity-protected call after extensible pre-execute policy completed.
- * @returns a final denial reason, or `undefined` to leave the call allowed.
+ * @returns a final denial reason, a denial with structured error identity, or `undefined` to leave the call allowed.
  */
-export type ToolGuard = (execution: Readonly<ToolExecution>) => string | undefined
+export type ToolGuard = (execution: Readonly<ToolExecution>) => string | ToolGuardDenial | undefined
+
+/** A guard denial: the model-facing reason and optional structured error identity recorded on the result. */
+export interface ToolGuardDenial {
+  /** Model-facing reason rendered as the failed call's content. */
+  readonly reason: string
+  /** Structured error identity persisted beside the reason. */
+  readonly info?: ToolErrorInfo
+}

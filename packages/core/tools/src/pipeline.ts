@@ -210,9 +210,9 @@ export class ToolExecutionPipeline {
       if (decision.kind === 'cancel') {
         return { kind: 'post-result', exec, result: toolAbortedBeforeDispatchResult() }
       }
-      const denialReason = decision.kind === 'allow' ? this.tools.checkGuards(exec) : decision.reason
-      const denialInfo = decision.kind === 'deny' ? decision.info : undefined
-      if (denialReason !== undefined) {
+      const denial = decision.kind === 'allow' ? this.tools.checkGuards(exec) : decision
+      if (denial !== undefined) {
+        const { reason: denialReason, info: denialInfo } = denial
         return {
           kind: 'post-result',
           exec,
@@ -500,7 +500,7 @@ export class ToolExecutionPipeline {
       return this.markCanonical(exec, {
         content: decision.feedback,
         isError: true,
-        error: { message },
+        error: { message, ...decision.info === undefined ? {} : { info: decision.info } },
         ...decisionContexts.length > 0 ? { additionalContexts: decisionContexts } : {},
       })
     }
