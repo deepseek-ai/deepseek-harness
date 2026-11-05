@@ -1,5 +1,6 @@
 - banner:
   - navigation "Session hierarchy": Load the editing-cordis-compositions ski
+  - button "Session panel"
   - button "More actions"
   - button "Open right sidebar"
   - tablist:
