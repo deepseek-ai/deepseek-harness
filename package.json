@@ -229,6 +229,7 @@
     "@deepseek-ai/dsh-tool-executor-ptc": "workspace:*",
     "@deepseek-ai/dsh-tool-ralph": "workspace:*",
     "@deepseek-ai/dsh-tool-terminal": "workspace:*",
+    "@deepseek-ai/dsh-terminal-panel": "workspace:*",
     "@deepseek-ai/dsh-agent": "workspace:*",
     "@deepseek-ai/dsh-browser-use": "workspace:*",
     "@deepseek-ai/dsh-experimental-browser-use-runtime": "workspace:*",

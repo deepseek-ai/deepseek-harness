@@ -60,10 +60,6 @@ const repoRoot = fileURLToPath(new URL('../../', import.meta.url))
 const snapshotsRoot = fileURLToPath(new URL('./', import.meta.url))
 const dshBin = join(repoRoot, 'apps/cli/src/bin.ts')
 const tsconfigPath = join(repoRoot, 'tsconfig.json')
-const editingCordisSkill = join(
-  repoRoot,
-  'packages/preset/agent-preset/skills/editing-cordis-compositions/SKILL.md',
-)
 
 type SnapshotMode = 'replay' | 'record' | 'refresh'
 
@@ -521,6 +517,9 @@ const workspaceSetups: Record<string, (cwd: string) => Promise<void>> = {
     await symlink(join(source, 'node_modules'), join(target, 'node_modules'), 'dir')
     await copyFile(join(repoRoot, `packages/experimental/cua-macos/${guidanceDirectory}/guidance.${extension}`), join(target, `guidance.${extension}`))
   },
+  async 'dsh-doc-resources'(cwd) {
+    await cp(join(repoRoot, 'packages/preset/agent-preset/skills/dsh-doc'), join(cwd, '.dsh/skills/dsh-doc'), { recursive: true })
+  },
   async 'windows-acl-skill'(cwd) {
     const target = join(cwd, '.dsh', 'skills', 'diagnose-windows-sandbox-acl', 'SKILL.md')
     await mkdir(dirname(target), { recursive: true })
@@ -549,13 +548,10 @@ const workspaceSetups: Record<string, (cwd: string) => Promise<void>> = {
     await writeFile(join(cwd, 'tracked.txt'), 'DIRTY SOURCE\n')
     await writeFile(join(cwd, 'local.txt'), 'UNTRACKED SOURCE\n')
   },
-  async 'editing-cordis-skill'(cwd) {
+  async 'skill-root-isolation'(cwd) {
     const target = join(cwd, '.dsh', 'skills', 'editing-cordis-compositions', 'SKILL.md')
     await mkdir(dirname(target), { recursive: true })
-    await copyFile(editingCordisSkill, target)
-  },
-  async 'skill-root-isolation'(cwd) {
-    await workspaceSetups['editing-cordis-skill']!(cwd)
+    await copyFile(join(snapshotsRoot, 'skill-load/workspace/.dsh/skills/editing-cordis-compositions/SKILL.md'), target)
     // A symlink loop produces a real, non-absence read error without relying on chmod or root privileges.
     await symlink('broken-skills', join(cwd, 'broken-skills'))
   },
