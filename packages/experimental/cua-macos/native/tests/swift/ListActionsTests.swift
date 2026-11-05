@@ -31,3 +31,8 @@ import Testing
         return false
     } == ["AXValue"])
 }
+
+@Test func preservesDistinctNativeNamesWithTheSameDisplayLabel() throws {
+    let names = ["Name:Move previous\nTarget:0x123\nSelector:(null)", "Name:Move previous\nTarget:0x456\nSelector:(null)"]
+    #expect(try AXAccess.listActionNames(actions: names, role: "AXButton", writableAttributes: []) == names)
+}

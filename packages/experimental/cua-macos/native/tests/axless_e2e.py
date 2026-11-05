@@ -16,7 +16,7 @@ import tempfile
 import time
 
 from native_test_support import ROOT, NativeHelper, run_cleanup
-from capabilities_e2e import stop_application
+from capabilities_e2e import stop_application, wait_for_state
 
 
 def main():
@@ -50,7 +50,9 @@ def main():
             binary = app_binary('Target', state_path)
             subprocess.run(['swiftc', str(ROOT / 'tests/AxlessFixture.swift'), '-o', str(binary)], check=True)
             pending = helper.call('getApp', {'selector': str(binary.parents[2])})
-            fixture = helper.call('launchApp', {'appHandle': pending['appHandle']})['pid']
+            launched = helper.call('launchApp', {'appHandle': pending['appHandle']})
+            assert launched['running'] is True, launched
+            fixture = wait_for_state(state_path, lambda state: state['pid'] > 0)['pid']
             try:
 
                 def wait_state(predicate, description):
@@ -128,7 +130,9 @@ def main():
                 binary = app_binary('Restoration', state_path)
                 shutil.copy2(original_binary, binary)
                 pending = helper.call('getApp', {'selector': str(binary.parents[2])})
-                fixture = helper.call('launchApp', {'appHandle': pending['appHandle']})['pid']
+                launched = helper.call('launchApp', {'appHandle': pending['appHandle']})
+                assert launched['running'] is True, launched
+                fixture = wait_for_state(state_path, lambda state: state['pid'] > 0)['pid']
                 actual = wait_state(lambda state: bool(state.get('windowId')), 'restoration fixture did not initialize')
                 owner = {'appHandle': pending['appHandle']}
                 window_id = actual['windowId']
@@ -137,7 +141,9 @@ def main():
                 foreground_binary = app_binary('Foreground', foreground_path)
                 shutil.copy2(binary, foreground_binary)
                 pending_foreground = helper.call('getApp', {'selector': str(foreground_binary.parents[2])})
-                foreground = helper.call('launchApp', {'appHandle': pending_foreground['appHandle']})['pid']
+                launched = helper.call('launchApp', {'appHandle': pending_foreground['appHandle']})
+                assert launched['running'] is True, launched
+                foreground = wait_for_state(foreground_path, lambda state: state['pid'] > 0)['pid']
                 subprocess.run(['open', '-a', str(foreground_binary.parents[2])], check=True)
                 wait_state(lambda state: foreground_path.exists() and json.loads(foreground_path.read_text()).get('active')
                            and not state['active'], 'foreground fixture did not take focus')

@@ -147,12 +147,12 @@ def main():
             matches = call("findApps", {"query": str(application), "maxAppMatches": 20})
             assert len(matches) == 1 and matches[0]["isRunning"] is False, matches
             pending = call("getApp", {"selector": str(application)})
-            assert pending["pid"] is None and not state_file.exists(), pending
+            assert pending["running"] is False and not state_file.exists(), pending
             owner = {"appHandle": pending["appHandle"]}
             # The Host consent barrier is separately exercised by provider-lifecycle.spec.ts.
             app = call("launchApp", owner)
-            pid = app["pid"]
-            wait_for_state(state_file, lambda value: value["pid"] == pid and value["windowId"] > 0)
+            assert app["running"] is True, app
+            pid = wait_for_state(state_file, lambda value: value["windowId"] > 0)["pid"]
             if not args.click_only:
                 call("activate", owner)
                 state = wait_for_state(state_file, lambda value: value["pid"] == pid and value["active"] and value["keyWindow"])

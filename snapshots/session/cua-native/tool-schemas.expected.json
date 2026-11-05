@@ -332,14 +332,19 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "windowId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 4294967295
+                  },
                   "snapshotId": {
                     "type": "string",
                     "minLength": 1
                   },
                   "elementId": {
-                    "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot.",
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
                   }
                 },
                 "required": [
@@ -370,14 +375,19 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "windowId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 4294967295
+                  },
                   "snapshotId": {
                     "type": "string",
                     "minLength": 1
                   },
                   "elementId": {
-                    "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot.",
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
                   },
                   "action": {
                     "type": "string",
@@ -416,14 +426,19 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "windowId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 4294967295
+                  },
                   "snapshotId": {
                     "type": "string",
                     "minLength": 1
                   },
                   "elementId": {
-                    "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot.",
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
                   }
                 },
                 "required": [
@@ -445,7 +460,7 @@
             "properties": {
               "method": {
                 "type": "string",
-                "const": "hover"
+                "const": "mouseMove"
               },
               "params": {
                 "anyOf": [
@@ -456,14 +471,19 @@
                         "type": "string",
                         "minLength": 1
                       },
+                      "windowId": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 4294967295
+                      },
                       "snapshotId": {
                         "type": "string",
                         "minLength": 1
                       },
                       "elementId": {
-                        "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot.",
                         "type": "string",
-                        "minLength": 1
+                        "minLength": 1,
+                        "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
                       }
                     },
                     "required": [
@@ -577,14 +597,19 @@
                         "type": "string",
                         "minLength": 1
                       },
+                      "windowId": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 4294967295
+                      },
                       "snapshotId": {
                         "type": "string",
                         "minLength": 1
                       },
                       "elementId": {
-                        "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot.",
                         "type": "string",
-                        "minLength": 1
+                        "minLength": 1,
+                        "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
                       },
                       "mouseButton": {
                         "type": "string",
@@ -813,14 +838,19 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "windowId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 4294967295
+                  },
                   "snapshotId": {
                     "type": "string",
                     "minLength": 1
                   },
                   "elementId": {
-                    "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot.",
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
                   },
                   "value": {
                     "$ref": "#/$defs/__schema0"
@@ -855,14 +885,19 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "windowId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 4294967295
+                  },
                   "snapshotId": {
                     "type": "string",
                     "minLength": 1
                   },
                   "elementId": {
-                    "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot.",
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
                   },
                   "text": {
                     "type": "string",
@@ -903,49 +938,6 @@
             "properties": {
               "method": {
                 "type": "string",
-                "const": "performSecondaryAction"
-              },
-              "params": {
-                "type": "object",
-                "properties": {
-                  "appHandle": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "snapshotId": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "elementId": {
-                    "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot.",
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "action": {
-                    "type": "string",
-                    "minLength": 1
-                  }
-                },
-                "required": [
-                  "appHandle",
-                  "snapshotId",
-                  "elementId",
-                  "action"
-                ],
-                "additionalProperties": false
-              }
-            },
-            "required": [
-              "method",
-              "params"
-            ],
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "properties": {
-              "method": {
-                "type": "string",
                 "const": "typeText"
               },
               "params": {
@@ -954,6 +946,11 @@
                   "appHandle": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "windowId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 4294967295
                   },
                   "text": {
                     "type": "string"
@@ -985,6 +982,11 @@
                   "appHandle": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "windowId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 4294967295
                   },
                   "text": {
                     "type": "string"
@@ -1024,6 +1026,11 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "windowId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 4294967295
+                  },
                   "key": {
                     "type": "string",
                     "minLength": 1
@@ -1031,20 +1038,58 @@
                   "modifiers": {
                     "type": "array",
                     "items": {
-                      "type": "string",
-                      "enum": [
-                        "command",
-                        "control",
-                        "option",
-                        "shift",
-                        "fn"
-                      ]
+                      "type": "string"
                     }
                   }
                 },
                 "required": [
                   "appHandle",
                   "key"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "method",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "method": {
+                "type": "string",
+                "const": "sendKeyEvent"
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "appHandle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "windowId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 4294967295
+                  },
+                  "key": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "direction": {
+                    "type": "string",
+                    "enum": [
+                      "down",
+                      "up"
+                    ]
+                  }
+                },
+                "required": [
+                  "appHandle",
+                  "key",
+                  "direction"
                 ],
                 "additionalProperties": false
               }

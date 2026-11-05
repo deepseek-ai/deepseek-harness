@@ -51,7 +51,7 @@ def check_file_panel(call, owner, primary_params, primary, directory, wait_state
     assert any(e["role"] == "AXSheet" for e in scoped["elements"]), scoped
     assert "Increment primary" not in scoped["tree"], scoped
     panel = next(e for e in scoped["elements"] if e["identifier"] == "open-panel")
-    call("performSecondaryAction", {**owner, "snapshotId": scoped["snapshotId"], "elementId": panel["elementId"], "action": "raise"})
+    call("performAction", {**owner, "snapshotId": scoped["snapshotId"], "elementId": panel["elementId"], "action": "AXRaise"})
     deadline = time.monotonic() + 30
     while True:
         try:
@@ -188,8 +188,8 @@ def main():
                     call("activate", owner)
                     current = call("getState", primary_params)
                     window_element = next(element for element in current["elements"] if element["role"] == "AXWindow")
-                    call("performSecondaryAction", {**owner, "snapshotId": current["snapshotId"],
-                                                     "elementId": window_element["elementId"], "action": "raise"})
+                    call("performAction", {**owner, "snapshotId": current["snapshotId"],
+                                                     "elementId": window_element["elementId"], "action": "AXRaise"})
                 call("getState", primary_params)
                 def mouse_move(target):
                     result = call("mouseMove", target)
