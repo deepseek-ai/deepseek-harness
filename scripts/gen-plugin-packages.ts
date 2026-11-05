@@ -1,6 +1,6 @@
 /**
  * Generate the loadable-plugin package list shipped inside the
- * `cordis-composition-reference` skill from the workspace manifests and the
+ * `dsh-doc` skill from the workspace manifests and the
  * config-catalog classification. `--check` exits 1 when the committed file is stale.
  */
 
@@ -9,7 +9,7 @@ import { resolve } from 'node:path'
 import { collectConfigCatalog, type CatalogEntry } from './gen-config-catalog.ts'
 
 const root = resolve(import.meta.dirname, '..')
-const OUT = 'packages/preset/agent-preset/skills/cordis-composition-reference/references/packages.md'
+const OUT = 'packages/preset/agent-preset/skills/dsh-doc/references/packages.md'
 
 interface Row {
   pkg: string
@@ -42,7 +42,7 @@ export function render(entries: readonly CatalogEntry[]): string {
     '',
     'This file is GENERATED from workspace manifests (`scripts/gen-plugin-packages.ts`) and verified fresh by `pnpm run verify-plugin-packages` (part of `doc-sync`); do not edit it by hand.',
     '',
-    'Every package below exports a Cordis plugin that a bundle patch can name in a Loader row. `Config` marks packages whose row accepts a `config` mapping; query `Config.listConfigs` through `cordis_inspect_query` (filter by `name`, then query the `entry` id) for the mounted schema. Packages under `experimental` are pre-stable.',
+    'Every package below exports a Cordis plugin that a bundle patch can name in a Loader row. `Config` marks packages whose row accepts a `config` mapping; read the mounted schema from `Config.listConfigs` through `cordis_inspect_query` (filter by `name`, then query the `entry` id) when available, otherwise from the package README. Packages under `experimental` are pre-stable.',
     '',
   ]
   let group = ''
