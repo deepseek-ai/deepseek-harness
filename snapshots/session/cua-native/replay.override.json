@@ -1202,7 +1202,7 @@
           "type": "tool-call",
           "id": "cua-hover-enter",
           "name": "cua",
-          "arguments": "{\"method\":\"hover\",\"params\":{\"appHandle\":\"fixture-app\",\"snapshotId\":\"fixture-snapshot-9\",\"elementId\":\"0\"}}"
+          "arguments": "{\"method\":\"mouseMove\",\"params\":{\"appHandle\":\"fixture-app\",\"snapshotId\":\"fixture-snapshot-9\",\"elementId\":\"0\"}}"
         }
       },
       {
@@ -1301,7 +1301,7 @@
           "type": "tool-call",
           "id": "cua-hover-popup",
           "name": "cua",
-          "arguments": "{\"method\":\"hover\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7,\"x\":100,\"y\":200,\"relative\":true}}"
+          "arguments": "{\"method\":\"mouseMove\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7,\"x\":100,\"y\":200,\"relative\":true}}"
         }
       },
       {
@@ -1367,7 +1367,7 @@
           "type": "tool-call",
           "id": "cua-hover-exit",
           "name": "cua",
-          "arguments": "{\"method\":\"hover\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7,\"x\":0,\"y\":200,\"relative\":true}}"
+          "arguments": "{\"method\":\"mouseMove\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7,\"x\":0,\"y\":200,\"relative\":true}}"
         }
       },
       {

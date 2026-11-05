@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.1/cua-native-platform/guide.md
 /:
-  en: 88d75e75f3ad3212
-  zh: ff9a93c65f5115a8
-/native-cua-platform-interfaces:
-  en: 3ec7ed3b34f644bf
-  zh: ee62906c01cef70e
-/native-cua-platform-interfaces/change:
-  en: 32ef8c2419b1bf8d
-  zh: 8041362ebe9fb5ff
-/native-cua-platform-interfaces/migration:
-  en: 55fafd6b50ec41b7
-  zh: 478c1ea5381ad190
+  en: 3938944aa9e69309
+  zh: 82f148f46c1e50cf
+/native-cua-application-and-window-api:
+  en: 207c515390c5e529
+  zh: bd4d90881efb011d
+/native-cua-application-and-window-api/change:
+  en: e5d1027faa55adba
+  zh: 4b88ad6a70977fb3
+/native-cua-application-and-window-api/migration:
+  en: ecbd85a36241873d
+  zh: 0a0e126a012a919f

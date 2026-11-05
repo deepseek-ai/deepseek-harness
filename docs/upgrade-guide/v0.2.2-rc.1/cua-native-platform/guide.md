@@ -1,24 +1,23 @@
 ---
 kind: upgrade-guide
-description: "Custom native CUA helpers must tag permission responses with their platform, and provider integrations must remove CuaBackend.description."
+description: "Migrate CUA scripts and custom native providers to scoped window input, string element IDs, and platform capabilities."
 ---
 
-# Native CUA platform interfaces
+# Native CUA application and window API
 
 English | [中文](guide.zh.md)
 
 ## Change
 
-Native CUA `permissionStatus` and `requestPermission` responses require a `platform` discriminator. macOS responses use `darwin` and retain their permission and process fields. Windows responses use `win32` with `sessionLocked`, `captureAvailable`, `elevated` and `helper`. Untagged responses from a custom `helperPath` are rejected. The model-facing `getCapabilities.platform` names remain unchanged.
+CUA scripts use an explicit window for screenshots and pointer input. App and Window objects share the latest accessibility snapshot for their application handle. Their identifiers are `appHandle` and `windowId` respectively. Application discovery still reports the PID of a running match.
 
-The exported `CuaBackend` no longer accepts `description`. The shared executor owns the operation tool description; providers still supply platform instructions through `guidance`.
-
-The object API now reads initial AX state silently in `getApp` and `getWindow`. Selecting an application or window no longer automatically prints its AX tree.
+Providers supply startup capabilities alongside their platform guidance. The native helper reports runtime permissions and session lock state. The Host combines both in `getCapabilities()`. Human-facing permission responses carry a `darwin` or `win32` platform tag.
 
 ## Migration
 
-1. If using the bundled native helper, upgrade the CUA packages together. No profile edit is needed.
-2. If setting `helperPath`, rebuild that helper against the current protocol. Add `platform: "darwin"` to macOS permission responses, or implement the Windows response fields in [`CuaSystemPermissionState`](../../../../packages/experimental/cua/src/access-types.ts).
-3. In custom provider integrations, remove `description` from the object passed to `installCua`. Pass the provider’s `capabilities`, `guidance`, and `permissionParameters` to the shared executor.
-4. If a script relies on selection to print the AX tree, explicitly call `await app.getAccessibilityTree()` or `await window.getAccessibilityTree()` afterward. Selection still initializes element IDs.
-5. Restart the provider and open Computer Use details. Confirm that status queries succeed and show the platform's access controls; rebuild custom TypeScript consumers to check the updated interface.
+1. After `cua.getApp(selector)`, select the target from `app.getWindows()` with `app.getWindow(windowId)`. Use `window.getScreenshot()`, `window.click()`, `window.scroll()`, and `window.drag()`. Replace `hover` with `window.mouseMove()`.
+2. Replace `getAXState()` with `getAccessibilityTree()`. Replace `getAXStateAndScreenshot()` with separate tree and screenshot reads. Selection reads the initial tree silently for a window, and for an app when `appLevelAccessibility` is true. Read the tree explicitly to display it.
+3. Pass the opaque string ID from the latest tree wherever you passed a numeric element index. In raw requests use `elementId` with `snapshotId`. Replace `performSecondaryAction` with `listActions(id)` and `performAction(id, exactName, argument?)`, or use `invoke(id)` for the default action. `setValue` accepts the provider’s supported JSON values.
+4. Replace a packed chord such as `pressKey('shift+Tab')` with `pressKey('Tab', ['shift'])`. Check `(await cua.getCapabilities()).methods` before using `sendKeyEvent`: macOS supports complete keystrokes and rejects directional events with `NOT_IMPLEMENTED`.
+5. Read `dispatched` from action results, then observe the application to verify the outcome. `invoke` returns `dispatched: false` when the element has no default action. Remove reads of the old `verified` field and of `pid` on selected objects or window records. Use `listApps()` or running `findApps()` matches when you need a PID.
+6. For a custom provider, replace `CuaBackend.description` with `capabilities` and pass `guidance` and `permissionParameters` to `installCua`. Rebuild any custom `helperPath` against the [operation schema](../../../../packages/experimental/cua/src/protocol.ts) and [tagged permission response](../../../../packages/experimental/cua/src/access-types.ts). Restart the provider, inspect its advertised methods and keyboard scopes, and open the Computer Use permission page to verify its platform controls.

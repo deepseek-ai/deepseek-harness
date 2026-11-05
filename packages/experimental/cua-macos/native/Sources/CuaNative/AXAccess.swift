@@ -646,7 +646,7 @@ final class AXAccess {
             }
             current = try self.element(node, "AXParent")
         }
-        throw NativeFailure(code: "WINDOW_UNAVAILABLE", message: "Element has no app-owned window or sheet; refresh getAXState")
+        throw NativeFailure(code: "WINDOW_UNAVAILABLE", message: "Element has no app-owned window or sheet; refresh getAccessibilityTree")
     }
     func keyboardRecipient(_ owner: ProcessIdentity, catalog: ApplicationCatalogSnapshot) throws -> ProcessIdentity {
         var current = try element(AXUIElementCreateApplication(owner.pid), "AXFocusedWindow")

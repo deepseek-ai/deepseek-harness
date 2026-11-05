@@ -117,7 +117,6 @@ function createApplicationState(socket, record, application, captureBroker, conn
   const screenshotConfig = new URL('./fixture-screenshot.json', import.meta.url)
   const customScreenshot = existsSync(screenshotConfig) ? JSON.parse(readFileSync(screenshotConfig, 'utf8')) : undefined
   const snapshots = new Map()
-  const methods = ['getCapabilities', 'listApps', 'getApp', 'activate', 'show', 'listWindows', 'getState', 'hover', 'click', 'setValue', 'typeText', 'paste', 'pressKey', 'scroll', 'drag', 'screenshot']
   let acquired = false
   let generation = 0
   let observationChanged = false
@@ -131,7 +130,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
       const state = JSON.parse(readFileSync(new URL('./permissions.json', import.meta.url), 'utf8'))
       return { platform: 'darwin', ...state, helper: { pid: process.pid }, parent: { pid: process.ppid } }
     }
-    if (method === 'getCapabilities') return { platform: 'macos', sessionLocked: false, permissions: { accessibility: true, screenRecording: true }, appLevelAccessibility: true, keyboard: ['app'], methods, coordinateSpace: 'window-points', browser: false }
+    if (method === 'getCapabilities') return { sessionLocked: false, permissions: { accessibility: true, screenRecording: true } }
     if (method === 'listApps') return [{ pid: app.pid, name: app.name, bundleId: app.bundleId }]
     if (method === 'getApp') {
       if (params.selector === 'Denied Fixture' || params.selector === 'Revocable Fixture') {
@@ -164,7 +163,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
       snapshots.delete(params.windowId ?? null)
       if (observationChanged) {
         observationChanged = false
-        refuse('STALE_SNAPSHOT', 'Accessibility tree changed during observation; read fresh getAXState')
+        refuse('STALE_SNAPSHOT', 'Accessibility tree changed during observation; read fresh getAccessibilityTree')
       }
       generation++
       const axless = params.windowId === 8
@@ -178,7 +177,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
           identifier: null, bounds: [60, 80, 100, 20], actions: ['AXPress'], enabled: true }],
         windows: [params.windowId === 9 ? transformedWindow : window], truncated: false }
     }
-    if (params.windowId === 9 && ['screenshot', 'hover', 'click', 'scroll', 'drag'].includes(method) && params.elementId === undefined) {
+    if (params.windowId === 9 && ['screenshot', 'mouseMove', 'click', 'scroll', 'drag'].includes(method) && params.elementId === undefined) {
       refuse('WINDOW_CHANGED', 'Window display and accessibility bounds disagree. Read fresh state; if unchanged, use AX actions or explicitly restore the window before capture or coordinate input')
     }
     if (method === 'screenshot' && captureBroker.pendingCapture) {
@@ -194,19 +193,19 @@ function createApplicationState(socket, record, application, captureBroker, conn
         windowId: params.windowId, mimeType: 'image/png', coordinateSpace: 'window-points',
         data: readFileSync(new URL(customScreenshot.file, import.meta.url)).toString('base64') }
       : { windowId: params.windowId, mimeType: 'image/png', data: png, pixelWidth: 1, pixelHeight: 1, bounds, coordinateSpace: 'window-points' }
-    if (method === 'click' || method === 'setValue' || method === 'hover') {
+    if (method === 'click' || method === 'setValue' || method === 'mouseMove') {
       const observed = params.snapshotId === undefined && params.elementId === undefined
         ? snapshots.get(params.windowId) ?? snapshots.get(null)
         : [...snapshots.values()].find(snapshot => snapshot.snapshotId === params.snapshotId)
       if (!observed) refuse('STALE_SNAPSHOT', 'Read fresh state before acting')
       if (params.windowId !== undefined && observed.windowId !== null && observed.windowId !== params.windowId) refuse('STALE_SNAPSHOT', 'Snapshot belongs to another window')
       if (observed.axless && params.elementId !== undefined) refuse('INVALID_ARGUMENT', 'Element id is absent from the selected snapshot')
-      if (method === 'hover') application.hovering = params.elementId === '0' || (params.x >= 20 && params.x <= 40)
+      if (method === 'mouseMove') application.hovering = params.elementId === '0' || (params.x >= 20 && params.x <= 40)
       else if (method === 'click' && params.windowId === 8) application.visualCount++
       else if (method === 'click') application.count++
       else application.value = params.value
       record('state', { count: application.count, value: application.value, visualCount: application.visualCount })
-      return { dispatched: true, ...method === 'hover' ? { hoverRoute: 'accessibility', systemPointerMoved: false } : {} }
+      return { dispatched: true, ...method === 'mouseMove' ? { hoverRoute: 'accessibility', systemPointerMoved: false } : {} }
     }
     if (method === 'pressKey' && params.key === 'Return') observationChanged = true
     // Fixture-only keys simulate a pending system callback and its eventual completion.

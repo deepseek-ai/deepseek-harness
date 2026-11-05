@@ -136,7 +136,7 @@ actor AXWorker {
     }
     private func snapshot(_ handle: String, _ id: String) throws -> NativeSnapshot {
         guard let result = snapshots.values.first(where: { $0.scope.appHandle == handle && $0.id == id }) else {
-            throw NativeFailure(code: "STALE_SNAPSHOT", message: "Snapshot expired; read fresh getAXState")
+            throw NativeFailure(code: "STALE_SNAPSHOT", message: "Snapshot expired; read fresh getAccessibilityTree")
         }
         return result
     }
@@ -184,7 +184,7 @@ actor AXWorker {
     static func observationFailure(_ failure: NativeFailure) -> NativeFailure {
         guard failure.accessibilityError == AXError.invalidUIElement.rawValue else { return failure }
         return NativeFailure(code: "STALE_SNAPSHOT",
-                             message: "Accessibility tree changed during observation; read fresh getAXState",
+                             message: "Accessibility tree changed during observation; read fresh getAccessibilityTree",
                              accessibilityError: failure.accessibilityError)
     }
 

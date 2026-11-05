@@ -17,7 +17,7 @@ The CUA provider owns `ctx.cuaAccess` for system-permission status, explicit sys
 | `CuaPermissionProcess`, `CuaSystemPermissionState` | Native access observations tagged `darwin` or `win32`, with helper process identity. macOS includes permission checks, parent identity and responsible-application metadata when available (falling back to the helper’s own bundle); Windows includes desktop lock, capture availability and elevation status. |
 | `CuaApplicationState` | Saved grants, refused applications, and whether persistence is available. Session-only grants remain internal to the provider. System observations and application icons are queried separately so the page can display each result as it arrives. |
 
-Window-directed providers select a separate CUA tool schema and `connectCuaWindows` facade. Window discovery grants no observation or input access; each selected window has a connection-owned handle, and every subsequent operation checks live consent. Launch entries have their own identifiers and optional executable paths, separate from window IDs. The shared screenshot-pixel and relative-coordinate mapping applies to both facades.
+The [shared object API](../../packages/experimental/cua/README.md) uses `connectCua` to select an application, then `app.getWindows()` and `app.getWindow(windowId)` to select a window for screenshots and pointer input. Accessibility operations use element IDs from the latest tree for that application handle. Providers declare keyboard scopes and application-level accessibility in `getCapabilities()`.
 
 ## Choose a provider
 

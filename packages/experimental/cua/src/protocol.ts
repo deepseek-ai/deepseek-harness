@@ -15,6 +15,7 @@ const click = { ...pointer, clickCount: z.union([z.literal(1), z.literal(2)]).op
     .describe('Milliseconds between each mouse press and release; omitted for an ordinary click.') }
 const window = { ...app, windowId: id }
 const jsonValue = z.json()
+/** Provider-issued element reference from an accessibility observation. */
 export const elementId = z.string().min(1)
   .describe('Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot.')
 const snapshot = { ...app, windowId: id.optional(), snapshotId: z.string().min(1), elementId }

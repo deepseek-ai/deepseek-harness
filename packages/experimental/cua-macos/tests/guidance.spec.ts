@@ -83,7 +83,8 @@ it('preserves image formats and pointer modifier enums without restricting keybo
 })
 
 it('states platform-dependent levels without qualifying grouped method names', () => {
-  for (const heading of ['Accessibility tree', 'Simulated mouse', 'Simulated keyboard']) {
+  expect(COMMON_GUIDANCE).toContain('## Simulated mouse\nUse an explicit window for screenshots and pointer input.')
+  for (const heading of ['Accessibility tree', 'Simulated keyboard']) {
     expect(COMMON_GUIDANCE).toContain(`## ${heading}\nAvailable at app or window level depending on the platform.`)
   }
   expect(GUIDANCE).not.toMatch(/\bsurface\b/)
