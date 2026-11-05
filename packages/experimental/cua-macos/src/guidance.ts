@@ -1,14 +1,10 @@
-/** Platform guidance appended to the shared application/window instructions. */
+/** Platform setup guidance prefixed to the shared application and window instructions. */
 import { COMMON_GUIDANCE } from '@deepseek-ai/dsh-cua/guidance'
 
-/** Platform-specific access and input behavior. */
-export const PLATFORM_GUIDANCE = `macOS: getApp also accepts bundle IDs and .app paths. findApps searches /Applications, /System/Applications and ~/Applications. Accessibility and Screen Recording permissions belong to the responsible launching application. Use the Computer Use permission page to request access, open System Settings, and check again. Native window and AX bounds use macOS points. show does not switch Spaces. Stage Manager can present reduced window geometry; explain any required foreground step before activate or raise.
-
-Hover first uses advertised AX alternate UI without moving the system cursor, preserving revealed descendants until the pointer target leaves their region. The system-pointer fallback requires the target point to be unobscured in the foreground app. FOREGROUND_REQUIRED requires explicit activation or raising and a fresh observation before retrying.
-
-Paste delivers plain text or HTML through the application's enabled standard Paste menu command. Paste follows the target app's focused text input. Foreground requirements vary by application; for example, ChatGPT/Codex was observed to accept background Paste without reading clipboard data. PASTE_NOT_CONSUMED means the command was dispatched but no clipboard read was observed before the configured deadline. Inspect the target contents, explicitly activate the app and focus the intended input, then observe again before deciding whether to retry; a delayed paste may still run.`
+/** macOS operation levels, permissions, selectors, and native measurement units. */
+export const PLATFORM_GUIDANCE = 'macOS: accessibility tree operations are available at app or window level. Simulated keyboard input is available at app level. Simulated mouse input is available at window level. getApp also accepts bundle IDs and .app paths, and findApps searches /Applications, /System/Applications, and ~/Applications. Accessibility and Screen Recording permissions belong to the responsible launching application; use the Computer Use permission page to request access, open System Settings, and check again. Native window and AX bounds use macOS points, while delivered screenshots carry their own pixel dimensions. show does not switch Spaces, and Stage Manager can present reduced window geometry; explain any required foreground step before activate or raise.'
 
 /** Complete model instructions for this provider. */
-export const GUIDANCE = `${COMMON_GUIDANCE}
+export const GUIDANCE = `${PLATFORM_GUIDANCE}
 
-${PLATFORM_GUIDANCE}`
+${COMMON_GUIDANCE}`
