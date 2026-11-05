@@ -1,6 +1,6 @@
 name: Publish Desktop · Rollout & Website
 
-run-name: Rollout Desktop package ${{ inputs.package_run_id }} / attempt ${{ inputs.package_run_attempt }} to ${{ inputs.rollout_percentage || 'unchanged' }}
+run-name: Rollout Desktop package ${{ inputs.package_run_id }} / attempt ${{ inputs.package_run_attempt }} · ${{ inputs.rollout_percentage && format('{0}%', inputs.rollout_percentage) || 'website only' }}
 
 on:
   workflow_dispatch:
@@ -15,7 +15,7 @@ on:
         required: false
         default: ''
       upload_website:
-        description: '上传已发布版本的官网安装包并刷新缓存（仅 production）'
+        description: '上传已发布版本的官网安装包并刷新缓存（仅 production，不要求放量达到 100%）'
         type: boolean
         default: false
         required: true
@@ -228,8 +228,6 @@ jobs:
     env:
       DESKTOP_PUBLISH_ROUTE: ${{ needs.prepare.outputs.route }}
       DESKTOP_WEBSITE_APPROVAL: ${{ needs.prepare.outputs.website-approval }}
-      DESKTOP_ROLLOUT_APPROVAL: ${{ needs.prepare.outputs.approval }}
-      DESKTOP_ROLLOUT_PERCENTAGE: ${{ inputs.rollout_percentage }}
       DESKTOP_UPLOAD_WEBSITE: ${{ inputs.upload_website }}
       DOWNLOAD_PROD_EO_ZONE_ID: ${{ vars.DOWNLOAD_PROD_EO_ZONE_ID }}
     steps:

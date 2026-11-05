@@ -181,7 +181,6 @@ it('keeps rollout approval and website recovery separate without tag creation or
   expect(text).toContain('steps.website.outputs.rollout-record')
 })
 
-
 it.each(['apply', 'changed-approval', 'replaced-feed', 'website'] as const)('checks approval, current feed and audit at the %s entrypoint', async (scenario) => {
   const f = await fixture()
   try {
@@ -205,6 +204,9 @@ it.each(['apply', 'changed-approval', 'replaced-feed', 'website'] as const)('che
     const context = await prepareDesktopRolloutCi(env)
     await publishDesktopRolloutCi('check', env)
     expect(await readFile(env.GITHUB_OUTPUT, 'utf8')).toContain(`approval=${context.approval}`)
+    if (scenario === 'website') {
+      expect(await readFile(env.GITHUB_STEP_SUMMARY, 'utf8')).toContain('官网安装包面向所有下载用户，不受自动更新放量比例限制')
+    }
     const mock = transport(dump({ ...(load(f.plan.expected) as object), stagingPercentage: 10 }))
     if (scenario === 'replaced-feed') mock.replace(null)
     const createTransport = vi.spyOn(cosTransport, 'desktopPublishCos').mockReturnValue(mock.api)
@@ -235,7 +237,6 @@ it.each(['apply', 'changed-approval', 'replaced-feed', 'website'] as const)('che
   } finally { vi.restoreAllMocks(); await rm(f.root, { recursive: true, force: true }) }
 })
 
-
 it('routes without package binaries only for the explicit metadata-only reader and keeps reviewer checks', async () => {
   const f = await fixture()
   try {
@@ -256,7 +257,6 @@ it('routes without package binaries only for the explicit metadata-only reader a
       ? { protection_rules: [] } : api(path), readRetainedDesktopManifest)).rejects.toThrow('requires configured reviewers')
   } finally { await rm(f.root, { recursive: true, force: true }) }
 })
-
 
 it('runs the real route CLI without gh and emits the selected route and preset', async () => {
   const f = await fixture()
@@ -294,9 +294,12 @@ it('runs the real route CLI without gh and emits the selected route and preset',
     const lines = (await readFile(output, 'utf8')).trim().split('\n')
     expect(lines[1]).toBe('preset=production')
     expect(JSON.parse(lines[0]!.slice('route='.length))).toMatchObject({ runId: '42', attempt: '1', target: 'mac-arm64' })
-    expect(requests).toHaveLength(3)
+    expect(requests.map(request => request.url)).toEqual([
+      `/repos/owner/repo/commits/${f.manifest.source.commit}`,
+      `/repos/owner/repo/commits/${encodeURIComponent(`refs/tags/${f.manifest.source.sourceRef}`)}`,
+      '/repos/owner/repo/environments/desktop-production',
+    ])
     expect(requests.every(request => request.token === 'Bearer fixture-token')).toBe(true)
-    expect(requests[2]!.url).toContain('/environments/desktop-production')
   } finally {
     server.closeAllConnections()
     if (server.listening) {
@@ -376,7 +379,6 @@ it.each(['missing-yaml', 'wrong-approval', 'not-uploaded', 'wrong-zone', 'not-se
       expect(submit).not.toHaveBeenCalled()
     } finally { vi.restoreAllMocks(); await rm(f.root, { recursive: true, force: true }) }
   })
-
 
 it('executes the master guard and keeps all rollout preflights ahead of dependency installation', async () => {
   const workflow = load(await readFile('.github/workflows/desktop-rollout.yml', 'utf8')) as {

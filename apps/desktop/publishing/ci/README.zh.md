@@ -83,7 +83,7 @@ Environment 审批限制此工作流，不限制同一机器账户运行的任�
 
 ## 放量与官网发布
 
-按 10% → 30% → 100% 放量时，先通过 COS 流程以 `staging_percentage=10`、`upload_website=false` 完成首次发布，再从 `master` 发起 **Publish Desktop · Rollout & Website**，填写原打包 run ID 并选择 attempt（默认 1，请与原打包 run 核对）。逐步放量时将 `rollout_percentage` 分别设为 30、100；仅发布官网时留空。`upload_website` 默认为 false；必须填写比例或启用官网发布。最后一轮启用它即可上传生产官网安装器并刷新缓存。每个平台使用各自的打包 run。
+按 10% → 30% → 100% 放量时，先通过 COS 流程以 `staging_percentage=10`、`upload_website=false` 完成首次发布，再从 `master` 发起 **Publish Desktop · Rollout & Website**，填写原打包 run ID 并选择 attempt（默认 1，请与原打包 run 核对）。逐步放量时将 `rollout_percentage` 分别设为 30、100；仅发布官网时留空。`upload_website` 默认为 false；必须填写比例或启用官网发布。在此示例中，最后一轮启用它即可上传生产官网安装器并刷新缓存。官网发布独立于放量比例，不要求达到 100%；官网安装包面向所有下载用户。仅发布官网时，publish job 只校验 feed，不修改放量比例。每个平台使用各自的打包 run。
 
 准备阶段检查 GitHub 身份、保留清单、小体积更新 YAML 和已完成的首次发布记录，不重新计算安装包哈希，也不重复检查签名或公证。Environment 审批后，执行阶段读取当前 COS 更新清单，核对版本、安装包 URL、大小、哈希和其他元数据仍对应已发布包，只修改 `stagingPercentage`。更新清单缺失或已被其他包替换时拒绝执行。同一比例重复执行不写入；不允许降低比例。审批展示目标比例，当前比例在执行时从 COS 读取。
 
