@@ -17,16 +17,17 @@ beforeEach(() => {
     else Object.defineProperty(Element.prototype, 'scrollIntoView', descriptor)
   })
 })
-afterEach(cleanup)
+afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
-function setup(count = 2, hasReasoning = true) {
+function setup(count = 2, hasReasoning = true, providerDefault = false) {
   const select = vi.fn(async () => ({ ok: true as const, value: undefined }))
   const toggle = vi.fn()
   const directory = createSnapshotStore<ModelDirectoryState>({
     current: { provider: 'sample', model: 'model-1' }, routable: true,
     groups: [{ id: 'sample', name: 'Sample', models: Array.from({ length: count }, (_, index) => ({
       id: `model-${index + 1}`, name: `Model ${index + 1}`,
-      ...hasReasoning ? { reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }], defaultEffort: 'high' } } : {},
+      ...hasReasoning ? { reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }],
+        ...providerDefault ? {} : { defaultEffort: 'high' } } } : {},
     })) }], failures: [], status: 'ready', pending: null, error: null,
   })
   const renderSlot: ComponentProps<typeof ModelSelect>['renderSlot'] = (name, owner: object, options) => {
@@ -34,10 +35,16 @@ function setup(count = 2, hasReasoning = true) {
       const controls = owner as OwnerOf<'conversation.input.model.options'>
       return <>
         <button hidden>Hidden option</button><button disabled>Disabled option</button>
-        <button role="menuitem" data-model-menu-page="team-test" onClick={() => { controls.openPage({ key: 'team-test', title: 'Team settings' }) }}>Agent teamwork</button>
+        <button role="menuitem" data-model-menu-page="team-test" disabled={controls.locked}
+          aria-disabled={controls.locked || controls.pending}
+          onClick={() => { if (!controls.pending) controls.openPage({ key: 'team-test', title: 'Team settings' }) }}>Agent teamwork</button>
       </>
     }
-    if (name === 'conversation.input.model.page') return <button role="switch" aria-checked="false" onClick={toggle}>Enable teamwork</button>
+    if (name === 'conversation.input.model.page') {
+      const controls = owner as OwnerOf<'conversation.input.model.page'>
+      return <button role="switch" aria-checked="false" disabled={controls.locked} aria-disabled={controls.locked || controls.pending}
+        onClick={() => { if (!controls.pending) toggle() }}>Enable teamwork</button>
+    }
     return options?.fallback ?? null
   }
   render(<><button>Before</button><ModelSelect locked={false} available directory={directory} load={vi.fn()}
@@ -68,6 +75,79 @@ it('Tab moves from the trigger through root controls without opening a page or s
   expect(document.activeElement).toBe(view.model())
   expect(screen.queryByRole('menuitemradio')).toBeNull()
   expect(screen.queryByRole('switch')).toBeNull()
+  expect(view.select).not.toHaveBeenCalled()
+  expect(view.toggle).not.toHaveBeenCalled()
+})
+
+it('includes default information before the range and keeps Escape at the tooltip layer first', () => {
+  vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
+  const view = setup(2, true, true)
+  tab()
+  expect(document.activeElement).toBe(view.model())
+  tab()
+  const info = screen.getByRole('button', { name: en['effort.defaultInfoLabel'] })
+  expect(document.activeElement).toBe(info)
+  fireEvent.click(info)
+  expect(screen.getByRole('tooltip', { hidden: true }).textContent).toBe(en['effort.defaultExplanation'])
+  fireEvent.keyDown(info, { key: 'Escape' })
+  expect(screen.queryByRole('tooltip', { hidden: true })).toBeNull()
+  expect(screen.getByRole('menu')).toBeTruthy()
+  expect(document.activeElement).toBe(info)
+  fireEvent.click(info)
+  tab()
+  const slider = screen.getByRole('slider')
+  expect(screen.queryByRole('tooltip', { hidden: true })).toBeNull()
+  expect(document.activeElement).toBe(slider)
+  tab()
+  expect(document.activeElement).toBe(view.team())
+  tab(true)
+  expect(document.activeElement).toBe(slider)
+  tab(true)
+  expect(document.activeElement).toBe(info)
+  expect(view.select).not.toHaveBeenCalled()
+  expect(view.toggle).not.toHaveBeenCalled()
+})
+
+it('removes only the default information Tab stop when the selection changes', () => {
+  vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
+  const view = setup(2, true, true)
+  const info = screen.getByRole('button', { name: en['effort.defaultInfoLabel'] })
+  info.focus()
+  act(() => { view.directory.update((snapshot) => {
+    snapshot.current = { provider: 'sample', model: 'model-1', reasoningEffort: 'high' }
+  }) })
+  const slider = screen.getByRole('slider')
+  expect(screen.queryByRole('button', { name: en['effort.defaultInfoLabel'] })).toBeNull()
+  expect(document.activeElement).toBe(slider)
+  tab(true)
+  expect(document.activeElement).toBe(view.model())
+  act(() => { view.directory.update((snapshot) => {
+    snapshot.current = { provider: 'sample', model: 'model-1' }
+  }) })
+  tab()
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: en['effort.defaultInfoLabel'] }))
+  expect(view.select).not.toHaveBeenCalled()
+})
+
+it('keeps a pending contributed entry in Tab order without allowing navigation', () => {
+  const view = setup()
+  tab(); tab(); tab()
+  const team = view.team()
+  expect(document.activeElement).toBe(team)
+  act(() => { view.directory.update((snapshot) => {
+    snapshot.status = 'selecting'
+    snapshot.pending = { provider: 'sample', model: 'model-1', reasoningEffort: 'low' }
+  }) })
+  expect(view.team()).toBe(team)
+  expect(team.hasAttribute('disabled')).toBe(false)
+  expect(team.getAttribute('aria-disabled')).toBe('true')
+  expect(document.activeElement).toBe(team)
+  fireEvent.click(team)
+  expect(screen.queryByRole('switch')).toBeNull()
+  tab(true)
+  expect(document.activeElement).toBe(screen.getByRole('slider'))
+  tab()
+  expect(document.activeElement).toBe(team)
   expect(view.select).not.toHaveBeenCalled()
   expect(view.toggle).not.toHaveBeenCalled()
 })

@@ -45,7 +45,7 @@
 .page {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -53,8 +53,8 @@
   margin: 0;
   padding: 4px 8px;
   color: var(--dsw-alias-label-secondary);
-  font-size: 13px;
-  line-height: 20px;
+  font-size: 12px;
+  line-height: 18px;
   overflow-wrap: anywhere;
 }
 

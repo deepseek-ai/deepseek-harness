@@ -36,7 +36,7 @@ export function TeamModeToggle(props: TeamModeToggleProps) {
   return <RootTeamModeSummary {...props} />
 }
 
-function RootTeamModeSummary({ useProjection, locked, openPage, t }: TeamModeToggleProps) {
+function RootTeamModeSummary({ useProjection, locked, pending, openPage, t }: TeamModeToggleProps) {
   const mode = useProjection('agentTeam')
   if (mode === undefined) return null
   return (
@@ -46,7 +46,9 @@ function RootTeamModeSummary({ useProjection, locked, openPage, t }: TeamModeTog
       className={css.summary}
       data-model-menu-page="agent-team"
       disabled={locked}
-      onClick={() => { openPage({ key: 'agent-team', title: t('command.title') }) }}
+      aria-disabled={locked || pending || undefined}
+      aria-busy={pending || undefined}
+      onClick={() => { if (!locked && !pending) openPage({ key: 'agent-team', title: t('command.title') }) }}
     >
       <span className={css.summaryLabel}>{t('command.title')}</span>
       <span className={css.state}>{t(mode.enabled ? 'mode.on' : 'mode.off')}</span>
@@ -69,14 +71,14 @@ export function TeamModePage(props: TeamModePageProps) {
 
 /** Read and change the selection only for root Sessions. */
 function RootTeamModePage({
-  useProjection, locked, dismiss, reportFailure, selectTeamMode, requestDisableConfirmation, t,
+  useProjection, locked, pending: modelPending, dismiss, reportFailure, selectTeamMode, requestDisableConfirmation, t,
 }: TeamModePageProps) {
   const mode = useProjection('agentTeam')
   const modelSelection = useProjection('modelSelection')
   const [pending, setPending] = useState(false)
   if (mode === undefined) return null
   const select = (enabled: boolean): void => {
-    if (locked || pending || modelSelection === undefined) return
+    if (locked || modelPending || pending || modelSelection === undefined) return
     if (!enabled && modelSelection.lastUsed !== null) {
       dismiss()
       requestDisableConfirmation()
@@ -94,7 +96,7 @@ function RootTeamModePage({
       <div className={css.row}>
         <span className={css.label}>{t('mode.label')}</span>
         <Switch className={css.toggle} checked={mode.enabled} disabled={locked || modelSelection === undefined}
-          pending={pending} label={t('mode.label')} onChange={select} />
+          pending={modelPending || pending} label={t('mode.label')} onChange={select} />
       </div>
       <p className={css.description}>{t('mode.description')}</p>
     </div>

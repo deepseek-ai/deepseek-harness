@@ -6,7 +6,7 @@
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
-import type { Browser, Locator, Page, Request } from 'playwright'
+import type { Browser, Locator, Page, Request, Route } from 'playwright'
 import { chromium, webkit } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished } from 'vitest'
 import {
@@ -21,6 +21,57 @@ const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/declared-reasoning', impo
 const UI_EXPECTED = fileURLToPath(new URL('./expected/declared-reasoning/ui.expected.md', import.meta.url))
 const POINTER_EXPECTED = fileURLToPath(new URL('./expected/declared-reasoning/pointer-menu.expected.md', import.meta.url))
 const MODE = webSnapshotMode()
+
+async function readEffortMotion(slider: Locator) {
+  return slider.evaluate((element) => {
+    const input = element as HTMLInputElement
+    const group = input.closest('[role="group"]')!
+    const thumb = group.querySelector<HTMLElement>('[data-effort-thumb]')!
+    const scale = group.querySelector<HTMLElement>('[data-effort-thumb-scale]')!
+    const fill = group.querySelector<HTMLElement>('[data-effort-fill]')!
+    const label = group.querySelector<HTMLElement>('[data-effort-label]')!
+    const rangeRect = input.getBoundingClientRect()
+    const thumbRect = thumb.getBoundingClientRect()
+    const fillRect = fill.getBoundingClientRect()
+    const labelRect = label.parentElement!.getBoundingClientRect()
+    const thumbSize = Number.parseFloat(getComputedStyle(thumb).width)
+    const ratio = (input.valueAsNumber - Number(input.min)) / (Number(input.max) - Number(input.min))
+    return {
+      value: input.valueAsNumber, dragging: input.parentElement!.hasAttribute('data-dragging'),
+      nativeWidth: rangeRect.width, nativeHeight: rangeRect.height,
+      left: rangeRect.left, right: rangeRect.right, y: rangeRect.top + rangeRect.height / 2,
+      center: thumbRect.left + thumbRect.width / 2, centerY: thumbRect.top + thumbRect.height / 2,
+      expectedCenter: rangeRect.left + thumbSize / 2 + (rangeRect.width - thumbSize) * ratio,
+      thumbSize, visualWidth: scale.getBoundingClientRect().width, fillRight: fillRect.right,
+      dotWidth: Number.parseFloat(getComputedStyle(scale, '::after').width),
+      dotDuration: getComputedStyle(scale, '::after').transitionDuration,
+      dotEasing: getComputedStyle(scale, '::after').transitionTimingFunction,
+      labelCenter: labelRect.left + labelRect.width / 2,
+      thumbDuration: getComputedStyle(thumb).transitionDuration,
+      thumbEasing: getComputedStyle(thumb).transitionTimingFunction,
+      fillDuration: getComputedStyle(fill).transitionDuration,
+      tickDuration: getComputedStyle(group.querySelector('[data-effort-tick]')!).transitionDuration,
+      ticks: [...group.querySelectorAll<HTMLElement>('[data-effort-tick]')].map((tick) => {
+        const rect = tick.getBoundingClientRect()
+        return { center: rect.left + rect.width / 2, width: rect.width,
+          hovered: tick.hasAttribute('data-hovered'), visibility: getComputedStyle(tick).visibility }
+      }),
+    }
+  })
+}
+
+async function assertSettledEffort(slider: Locator) {
+  await expect.poll(async () => {
+    const view = await readEffortMotion(slider)
+    return Math.max(Math.abs(view.center - view.expectedCenter), Math.abs(view.fillRight - view.center))
+  }).toBeLessThan(1)
+  const view = await readEffortMotion(slider)
+  expect(view.nativeHeight).toBe(40)
+  expect(view.thumbSize).toBe(20)
+  expect(Math.abs(view.centerY - view.y)).toBeLessThan(1)
+  expect(Math.abs(view.labelCenter - (view.left + view.right) / 2)).toBeLessThan(1)
+  return view
+}
 
 describe.skipIf(MODE === 'record').each([
   { name: 'Chromium', engine: chromium },
@@ -85,16 +136,19 @@ describe.skipIf(MODE === 'record').each([
     const rootModel = page.locator('[data-model-menu-root] > button[role="menuitem"]')
     const slider = page.getByRole('slider', { name: '推理等级', exact: true })
     const team = page.locator('[data-model-menu-page="agent-team"]')
+    const info = page.getByRole('button', { name: '默认推理等级说明', exact: true })
     const focused = async (locator: Locator): Promise<void> => {
       await expect.poll(() => locator.evaluate(element => element === document.activeElement)).toBe(true)
     }
     await trigger.click()
     await page.keyboard.press('Tab'); await focused(rootModel)
     expect(await page.getByRole('menuitemradio').count()).toBe(0)
+    await page.keyboard.press('Tab'); await focused(info)
     await page.keyboard.press('Tab'); await focused(slider)
     await page.keyboard.press('Tab'); await focused(team)
     expect(await page.getByRole('switch').count()).toBe(0)
     await page.keyboard.press('Shift+Tab'); await focused(slider)
+    await page.keyboard.press('Shift+Tab'); await focused(info)
     await page.keyboard.press('Shift+Tab'); await focused(rootModel)
     await page.keyboard.press('Enter')
     const search = page.getByRole('searchbox', { name: '搜索模型…', exact: true })
@@ -116,6 +170,7 @@ describe.skipIf(MODE === 'record').each([
     await page.keyboard.press('Tab')
     await focused(page.locator('[role="menuitemradio"][aria-checked="true"]'))
     await page.keyboard.press('Space'); await focused(rootModel)
+    await page.keyboard.press('Tab'); await focused(info)
     await page.keyboard.press('Tab'); await focused(slider)
     await page.keyboard.press('Tab'); await focused(team)
     await page.keyboard.press('Space')
@@ -137,6 +192,76 @@ describe.skipIf(MODE === 'record').each([
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
+  it('reads default information by mouse and keyboard without selecting or closing the menu', async () => {
+    const trigger = page.getByRole('button', { name: /^选择模型/ })
+    let requests = 0
+    const count = (request: Request): void => {
+      if (new URL(request.url()).pathname.endsWith('/session/selectModel')) requests++
+    }
+    page.on('request', count)
+    try {
+      await trigger.click()
+      const menu = page.getByRole('menu', { name: '模型与推理等级', exact: true })
+      const slider = menu.getByRole('slider', { name: '推理等级', exact: true })
+      const info = menu.getByRole('button', { name: '默认推理等级说明', exact: true })
+      const explanation = '未显式指定推理等级，将使用模型与配置的默认设置；这不代表关闭推理'
+      const defaultHeight = await menu.evaluate(element => element.getBoundingClientRect().height)
+      await menu.locator('[data-effort-label]').click()
+      expect(await slider.inputValue()).toBe('0')
+      await info.click()
+      const tooltip = page.getByRole('tooltip')
+      await tooltip.waitFor()
+      expect(await tooltip.textContent()).toBe(explanation)
+      expect(await menu.isVisible()).toBe(true)
+      await info.click()
+      await tooltip.waitFor({ state: 'hidden' })
+      await trigger.focus()
+      await page.keyboard.press('Tab')
+      await page.keyboard.press('Tab')
+      expect(await info.evaluate(element => element === document.activeElement)).toBe(true)
+      await page.keyboard.press('Enter')
+      await tooltip.waitFor()
+      await page.keyboard.press('Escape')
+      await tooltip.waitFor({ state: 'hidden' })
+      expect(await menu.isVisible()).toBe(true)
+      expect(await info.evaluate(element => element === document.activeElement)).toBe(true)
+      await page.keyboard.press('Space')
+      await tooltip.waitFor()
+      await page.keyboard.press('Tab')
+      await tooltip.waitFor({ state: 'hidden' })
+      expect(await slider.evaluate(element => element === document.activeElement)).toBe(true)
+      expect(requests).toBe(0)
+      await slider.press('ArrowRight')
+      await expect.poll(() => scaffold.ctx.agentDefaultModel.currentSelection().reasoningEffort).toBe('off')
+      expect(await slider.getAttribute('aria-valuetext')).toBe('关闭')
+      expect(await menu.locator('[data-effort-label]').textContent()).toBe('推理等级：关闭')
+      expect(await info.count()).toBe(0)
+      expect(await menu.evaluate(element => element.getBoundingClientRect().height)).toBe(defaultHeight)
+      expect(await slider.evaluate(element => element === document.activeElement)).toBe(true)
+      await slider.press('Home')
+      await expect.poll(() => slider.getAttribute('aria-busy')).toBe('false')
+      await expect.poll(() => scaffold.ctx.agentDefaultModel.currentSelection()).toEqual({
+        provider: 'acme-gateway', model: 'acme-think',
+      })
+      expect(await info.count()).toBe(1)
+      expect(await slider.evaluate(element => element === document.activeElement)).toBe(true)
+      await page.keyboard.press('Shift+Tab')
+      await page.keyboard.press('Enter')
+      await tooltip.waitFor()
+      await page.keyboard.press('Escape')
+      await tooltip.waitFor({ state: 'hidden' })
+      expect(await menu.isVisible()).toBe(true)
+      await page.keyboard.press('Escape')
+      await menu.waitFor({ state: 'hidden' })
+      expect(await trigger.evaluate(element => element === document.activeElement)).toBe(true)
+      expect(requests).toBe(2)
+      expect(tripwire.pageErrors).toEqual([])
+    } finally {
+      page.off('request', count)
+      if (await trigger.getAttribute('aria-expanded') === 'true') await trigger.click()
+    }
+  })
+
   it('offers exactly the declared levels in the root slider and records one keyboard selection', async () => {
     onTestFailed(() => saveFailureShot(page, `web-e2e-declared-reasoning-${engine.name()}`))
     const trigger = page.getByRole('button', { name: /^选择模型/ })
@@ -147,11 +272,12 @@ describe.skipIf(MODE === 'record').each([
     await trigger.click()
     const slider = page.getByRole('slider', { name: '推理等级', exact: true })
     const levels = page.getByRole('group', { name: '推理等级', exact: true }).getByRole('button')
-    expect(await levels.count()).toBe(0)
+    expect(await levels.count()).toBe(1)
+    expect(await levels.getAttribute('aria-label')).toBe('默认推理等级说明')
     expect(await slider.getAttribute('min')).toBe('0')
     expect(await slider.getAttribute('max')).toBe('3')
-    expect(await slider.getAttribute('aria-valuetext')).toBe('Default')
-    const tag = page.getByRole('group', { name: '推理等级', exact: true }).getByText('Default', { exact: true })
+    expect(await slider.getAttribute('aria-valuetext')).toBe('默认')
+    const tag = page.getByRole('group', { name: '推理等级', exact: true }).getByText('推理等级：默认', { exact: true })
     expect(await tag.evaluate(element => ({
       cursor: getComputedStyle(element).cursor,
       userSelect: getComputedStyle(element).getPropertyValue(CSS.supports('user-select', 'none') ? 'user-select' : '-webkit-user-select'),
@@ -177,8 +303,8 @@ describe.skipIf(MODE === 'record').each([
       async () => readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8'),
       { timeout: 10_000 },
     ).toContain('reasoningEffort: high')
-    await expect.poll(() => trigger.getAttribute('aria-label')).toBe('选择模型，当前 Acme Think，推理等级 High')
-    expect(await slider.getAttribute('aria-valuetext')).toBe('High')
+    await expect.poll(() => trigger.getAttribute('aria-label')).toBe('选择模型，当前 Acme Think，推理等级 高')
+    expect(await slider.getAttribute('aria-valuetext')).toBe('高')
     await slider.focus()
     await page.keyboard.press('Shift+Tab')
     await expect.poll(() => page.getByRole('menuitem', { name: /^模型/ })
@@ -272,8 +398,13 @@ describe.skipIf(MODE === 'record').each([
     await expect.poll(() => rootModel.evaluate(element => getComputedStyle(element).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)')
     await page.mouse.move(0, 0)
     await page.keyboard.press('Tab')
+    const info = page.getByRole('button', { name: '默认推理等级说明', exact: true })
+    expect(await info.evaluate(element => element === document.activeElement)).toBe(true)
+    await page.keyboard.press('Tab')
     const slider = page.getByRole('slider', { name: '推理等级', exact: true })
     expect(await slider.evaluate(element => element === document.activeElement)).toBe(true)
+    await page.keyboard.press('Shift+Tab')
+    expect(await info.evaluate(element => element === document.activeElement)).toBe(true)
     await page.keyboard.press('Shift+Tab')
     expect(await rootModel.evaluate(element => element === document.activeElement)).toBe(true)
     expect(await rootModel.evaluate(element => getComputedStyle(element).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)')
@@ -281,7 +412,7 @@ describe.skipIf(MODE === 'record').each([
     const rangeBounds = await slider.boundingBox()
     if (rangeBounds === null) throw new Error('Reasoning slider is not visible')
     await page.mouse.click(rangeBounds.x + rangeBounds.width - 8, rangeBounds.y + rangeBounds.height / 2)
-    await expect.poll(() => slider.getAttribute('aria-valuetext')).toBe('Max')
+    await expect.poll(() => slider.getAttribute('aria-valuetext')).toBe('最高')
     expect(selections).toBe(2)
     await expect.poll(() => scaffold.ctx.agentDefaultModel.currentSelection().reasoningEffort, { timeout: 10_000 })
       .toBe('max')
@@ -353,8 +484,9 @@ describe.skipIf(MODE === 'record').each([
       const menu = page.getByRole('menu', { name: '模型与推理等级', exact: true })
       const group = menu.getByRole('group', { name: '推理等级', exact: true })
       const slider = group.getByRole('slider', { name: '推理等级', exact: true })
-      expect(await group.getByRole('button').count()).toBe(0)
-      expect(await slider.getAttribute('aria-valuetext')).toBe('Default')
+      expect(await group.getByRole('button').count()).toBe(1)
+      expect(await group.getByRole('button').getAttribute('aria-label')).toBe('默认推理等级说明')
+      expect(await slider.getAttribute('aria-valuetext')).toBe('默认')
       expect(await slider.getAttribute('max')).toBe('5')
       await expect.poll(() => menu.evaluate((element) => {
         const rect = element.getBoundingClientRect()
@@ -382,7 +514,7 @@ describe.skipIf(MODE === 'record').each([
           label: input.getAttribute('aria-valuetext'),
           busy: input.getAttribute('aria-busy'),
           disabled: (input as HTMLInputElement).disabled,
-        }))).toEqual({ value: '5', label: 'Max', busy: 'false', disabled: false })
+        }))).toEqual({ value: '5', label: '最高', busy: 'false', disabled: false })
       } catch (error) {
         await page.screenshot({ path: fileURLToPath(new URL(
           `../../../.artifacts/model-picker-master-sync/drag-${engine.name()}-regression.png`, import.meta.url,
@@ -400,6 +532,379 @@ describe.skipIf(MODE === 'record').each([
     } finally {
       await page.keyboard.press('Escape')
       await page.setViewportSize(viewport)
+    }
+  })
+
+  it('keeps visual motion aligned with native dragging, hover targets and pending saves at 390px', async () => {
+    onTestFailed(() => saveFailureShot(page, `web-e2e-effort-motion-${engine.name()}`))
+    const viewport = page.viewportSize()!
+    const trigger = page.getByRole('button', { name: /^选择模型/ })
+    try {
+      await trigger.click()
+      await page.getByRole('menuitem', { name: /^模型/ }).click()
+      await page.getByRole('menuitemradio', { name: 'Acme Lite', exact: true }).click()
+      await page.setViewportSize({ width: 390, height: 700 })
+      const slider = page.getByRole('slider', { name: '推理等级', exact: true })
+      await slider.press('Home')
+      await expect.poll(() => slider.getAttribute('aria-busy')).toBe('false')
+      await slider.hover()
+      await page.mouse.move(0, 0)
+      await expect.poll(async () => (await readEffortMotion(slider)).dotWidth).toBeCloseTo(8, 1)
+      const rest = await assertSettledEffort(slider)
+      await expect.poll(async () => (await readEffortMotion(slider)).visualWidth).toBeCloseTo(20, 1)
+      expect(rest.dotWidth).toBeCloseTo(8, 1)
+      expect(rest.thumbDuration).toBe('0.3s')
+      expect(rest.fillDuration).toBe('0.3s')
+      expect(rest.thumbEasing).toBe('cubic-bezier(0.23, 1, 0.32, 1)')
+      expect(rest.dotDuration.split(',').map(value => value.trim())).toEqual(['0.14s', '0.14s'])
+      expect(rest.dotEasing).toBe('cubic-bezier(0.23, 1, 0.32, 1), cubic-bezier(0.23, 1, 0.32, 1)')
+      expect(rest.tickDuration).toBe('0.12s')
+      await page.mouse.move(rest.center, rest.y)
+      await expect.poll(async () => (await readEffortMotion(slider)).dotWidth).toBeCloseTo(9.6, 1)
+      const expanded = await readEffortMotion(slider)
+      expect(expanded.visualWidth).toBeCloseTo(20, 1)
+      expect(Math.abs(expanded.center - rest.center)).toBeLessThan(1)
+      const tick = rest.ticks[2]!
+      await page.mouse.move(tick.center + 7, rest.y)
+      await expect.poll(async () => (await readEffortMotion(slider)).ticks[2]!.width).toBeCloseTo(8, 1)
+      const hovered = await readEffortMotion(slider)
+      expect(hovered.ticks.filter(point => point.hovered)).toHaveLength(1)
+      expect(Math.abs(hovered.ticks[2]!.center - tick.center)).toBeLessThan(1)
+      await page.mouse.move(tick.center + 9, rest.y)
+      await expect.poll(async () => (await readEffortMotion(slider)).ticks[2]!.width).toBeCloseTo(4, 1)
+      const release = Promise.withResolvers<undefined>()
+      let requests = 0
+      let forwarding: Promise<void> | undefined
+      const holdSelection = (route: Route): Promise<void> => {
+        requests++
+        forwarding = (async () => { await release.promise; await route.continue() })()
+        return forwarding
+      }
+      await page.route('**/api/session/selectModel', holdSelection)
+      try {
+        const grabOffset = 6
+        await page.mouse.move(rest.center + grabOffset, rest.y)
+        await page.mouse.down()
+        await expect.poll(async () => (await readEffortMotion(slider)).dotWidth).toBeCloseTo(9.6, 1)
+        expect((await readEffortMotion(slider)).visualWidth).toBeCloseTo(20, 1)
+        const step = (rest.nativeWidth - rest.thumbSize) / 5
+        const between = rest.center + step * 0.3
+        await page.mouse.move(between + grabOffset, rest.y, { steps: 3 })
+        const tracking = await readEffortMotion(slider)
+        expect(tracking.value).toBe(0)
+        expect(Math.abs(tracking.center - between)).toBeLessThan(1)
+        expect(Math.abs(tracking.fillRight - tracking.center)).toBeLessThan(1)
+        expect(tracking.ticks.every(point => point.visibility === 'visible')).toBe(true)
+        expect(tracking.thumbDuration).toBe('0s')
+        expect(tracking.fillDuration).toBe('0s')
+        expect(Math.abs(tracking.labelCenter - rest.labelCenter)).toBeLessThan(1)
+        await page.mouse.move(tick.center + grabOffset, rest.y, { steps: 4 })
+        const dragging = await readEffortMotion(slider)
+        expect(dragging.ticks.every(point => !point.hovered)).toBe(true)
+        expect(dragging.ticks.every(point => Math.abs(point.width - 4) < 0.1)).toBe(true)
+        await page.mouse.move(rest.right + 24, rest.y, { steps: 8 })
+        expect(requests).toBe(0)
+        await page.mouse.up()
+        await expect.poll(() => requests).toBe(1)
+        await expect.poll(() => slider.getAttribute('aria-busy')).toBe('true')
+        const pending = await assertSettledEffort(slider)
+        expect(pending.value).toBe(5)
+        expect(await slider.evaluate(element => element === document.activeElement)).toBe(true)
+        expect(await slider.evaluate(element => (element as HTMLInputElement).disabled)).toBe(false)
+        await slider.press('ArrowLeft')
+        expect((await readEffortMotion(slider)).value).toBe(5)
+        expect(requests).toBe(1)
+        release.resolve(undefined)
+        await expect.poll(() => slider.getAttribute('aria-busy')).toBe('false')
+        const saved = await assertSettledEffort(slider)
+        expect(Math.abs(saved.center - pending.center)).toBeLessThan(1)
+        expect(await slider.evaluate(element => element === document.activeElement)).toBe(true)
+        expect(requests).toBe(1)
+      } finally {
+        release.resolve(undefined)
+        await page.mouse.up()
+        await forwarding
+        await page.unroute('**/api/session/selectModel', holdSelection)
+      }
+      await page.mouse.move(rest.ticks[2]!.center, rest.y)
+      await page.mouse.down()
+      try {
+        await expect.poll(() => slider.inputValue()).toBe('2')
+        const clicked = await readEffortMotion(slider)
+        expect(clicked.dragging).toBe(false)
+        expect(clicked.thumbDuration).toBe('0.3s')
+        expect(clicked.fillDuration).toBe('0.3s')
+      } finally {
+        await page.mouse.up()
+      }
+      await expect.poll(() => slider.getAttribute('aria-busy')).toBe('false')
+      expect((await assertSettledEffort(slider)).value).toBe(2)
+      await slider.press('Home')
+      await expect.poll(() => slider.getAttribute('aria-busy')).toBe('false')
+      expect((await assertSettledEffort(slider)).value).toBe(0)
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      await slider.press('End')
+      await expect.poll(() => slider.getAttribute('aria-busy')).toBe('false')
+      const reduced = await assertSettledEffort(slider)
+      expect(reduced.value).toBe(5)
+      expect(reduced.thumbDuration).toBe('0s')
+      expect(reduced.fillDuration).toBe('0s')
+      expect(reduced.dotDuration).toBe('0s')
+      expect(reduced.tickDuration).toBe('0s')
+      await page.mouse.move(reduced.center, reduced.y)
+      expect((await readEffortMotion(slider)).visualWidth).toBeCloseTo(20, 1)
+      expect((await readEffortMotion(slider)).dotWidth).toBeCloseTo(8, 1)
+      await page.mouse.move(reduced.ticks[2]!.center, reduced.y)
+      expect((await readEffortMotion(slider)).ticks[2]!.width).toBeCloseTo(4, 1)
+      expect(tripwire.pageErrors).toEqual([])
+    } finally {
+      await page.mouse.up()
+      await page.emulateMedia({ reducedMotion: null })
+      if (await trigger.getAttribute('aria-expanded') === 'true') await trigger.click()
+      await page.setViewportSize(viewport)
+    }
+  })
+
+  it('does not leave thumb or tick hover enlarged after a native touch tap', async () => {
+    const touch = await browser.newPage({
+      viewport: { width: 390, height: 700 }, locale: ZH_BROWSER_LOCALE, hasTouch: true, isMobile: true,
+    })
+    const consoleWatch = watchConsole(touch)
+    try {
+      await touch.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+      await connectFreshWorkspaceZh(touch, scaffold.workspaceCwd)
+      await touch.getByRole('button', { name: /^选择模型/ }).click()
+      await touch.getByRole('menuitem', { name: /^模型/ }).click()
+      await touch.getByRole('menuitemradio', { name: 'Acme Lite', exact: true }).click()
+      const slider = touch.getByRole('slider', { name: '推理等级', exact: true })
+      await slider.press('Home')
+      await expect.poll(() => slider.getAttribute('aria-busy')).toBe('false')
+      const before = await assertSettledEffort(slider)
+      expect(before.value).toBe(0)
+      expect(await touch.evaluate(() => matchMedia('(hover: hover) and (pointer: fine)').matches)).toBe(false)
+      let requests = 0
+      const count = (request: Request): void => {
+        if (new URL(request.url()).pathname.endsWith('/session/selectModel')) requests++
+      }
+      touch.on('request', count)
+      try {
+        const info = touch.getByRole('button', { name: '默认推理等级说明', exact: true })
+        const bounds = await info.boundingBox()
+        if (bounds === null) throw new Error('Default information is not visible')
+        await touch.touchscreen.tap(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
+        const tooltip = touch.getByRole('tooltip')
+        await tooltip.waitFor()
+        expect(await tooltip.textContent()).toBe('未显式指定推理等级，将使用模型与配置的默认设置；这不代表关闭推理')
+        expect(await slider.inputValue()).toBe('0')
+        expect(requests).toBe(0)
+        await touch.touchscreen.tap(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
+        await tooltip.waitFor({ state: 'hidden' })
+        expect(await info.isVisible()).toBe(true)
+        await touch.touchscreen.tap(before.right - 10, before.y)
+        await expect.poll(() => slider.inputValue()).toBe('5')
+        await expect.poll(() => slider.getAttribute('aria-busy')).toBe('false')
+        await assertSettledEffort(slider)
+        await expect.poll(async () => (await readEffortMotion(slider)).visualWidth).toBeCloseTo(20, 1)
+        await expect.poll(async () => (await readEffortMotion(slider)).dotWidth).toBeCloseTo(8, 1)
+        expect(await touch.locator('[data-effort-thumb-scale][data-expanded]').count()).toBe(0)
+        expect((await readEffortMotion(slider)).ticks.every(tick => !tick.hovered && Math.abs(tick.width - 4) < 0.1)).toBe(true)
+        expect(requests).toBe(1)
+        expect(consoleWatch.pageErrors).toEqual([])
+      } finally {
+        touch.off('request', count)
+      }
+    } finally {
+      await touch.close()
+    }
+  })
+
+  it('keeps the compact Spanish caption and default information readable at 390px', async () => {
+    const probe = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: 'es-ES' })
+    const consoleWatch = watchConsole(probe)
+    try {
+      await probe.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+      await probe.getByRole('button', { name: 'Agregar espacio de trabajo', exact: true }).click()
+      const directory = probe.getByRole('dialog', { name: 'Seleccionar carpeta de trabajo', exact: true })
+      await directory.getByRole('button', { name: 'Editar ruta', exact: true }).click()
+      const path = directory.getByRole('textbox', { name: 'Editar ruta', exact: true })
+      await path.fill(join(scaffold.workspaceCwd, 'workspace'))
+      await path.press('Enter')
+      await directory.getByRole('button', { name: 'Abrir', exact: true }).click()
+      await probe.locator('[data-composer-input][contenteditable="true"]').waitFor()
+      await probe.getByRole('button', { name: /^Seleccionar modelo/ }).click()
+      await probe.getByRole('menuitem', { name: /^modelo/ }).click()
+      await probe.getByRole('menuitemradio', { name: 'Acme Lite', exact: true }).click()
+      const menu = probe.getByRole('menu', { name: 'Esfuerzo de modelo y razonamiento.', exact: true })
+      const slider = menu.getByRole('slider', { name: 'Esfuerzo', exact: true })
+      await slider.press('Home')
+      await expect.poll(() => slider.getAttribute('aria-busy')).toBe('false')
+      await probe.setViewportSize({ width: 390, height: 700 })
+      const label = menu.locator('[data-effort-label]')
+      const info = menu.getByRole('button', { name: 'Acerca del esfuerzo de razonamiento predeterminado', exact: true })
+      await info.waitFor()
+      const layout = await info.evaluate((button) => {
+        const tag = button.parentElement!
+        const text = tag.querySelector<HTMLElement>('[data-effort-label]')!
+        const name = text.querySelector<HTMLElement>('[data-effort-name]')!
+        const prefix = name.previousElementSibling!
+        const bounds = button.getBoundingClientRect()
+        const tagBounds = tag.getBoundingClientRect()
+        const nameBounds = name.getBoundingClientRect()
+        const hit = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2)
+        return { width: bounds.width, height: bounds.height, textWidth: text.clientWidth,
+          textGap: bounds.left - text.getBoundingClientRect().right, endInset: tagBounds.right - bounds.right,
+          clipped: prefix.scrollWidth > prefix.clientWidth, ellipsis: getComputedStyle(prefix).textOverflow,
+          nameText: name.textContent, nameFits: name.scrollWidth <= name.clientWidth,
+          nameVisible: nameBounds.width > 0 && nameBounds.left >= tagBounds.left && nameBounds.right <= bounds.left,
+          contained: bounds.left >= tagBounds.left && bounds.right <= tagBounds.right,
+          reachable: hit?.closest('button') === button }
+      })
+      expect(layout).toMatchObject({ width: 24, height: 24, clipped: false, ellipsis: 'ellipsis',
+        nameText: 'Predeterminado', nameFits: true, nameVisible: true, contained: true, reachable: true })
+      expect(layout.textWidth).toBeGreaterThan(0)
+      expect(layout.textGap).toBeCloseTo(2, 1)
+      expect(layout.endInset).toBeCloseTo(2, 1)
+      expect(await label.textContent()).toBe('Esfuerzo: Predeterminado')
+      await label.hover()
+      const tooltip = probe.getByRole('tooltip')
+      expect(await tooltip.count()).toBe(0)
+      await info.click()
+      await expect.poll(() => tooltip.allTextContents()).toEqual([
+        'No se ha seleccionado explícitamente un esfuerzo de razonamiento. Se aplican los valores predeterminados del modelo y de la configuración; esto no significa que el razonamiento esté desactivado.',
+      ])
+      expect(await menu.isVisible()).toBe(true)
+      expect(await slider.inputValue()).toBe('0')
+      await probe.keyboard.press('Escape')
+      await tooltip.waitFor({ state: 'hidden' })
+      expect(await menu.isVisible()).toBe(true)
+      await info.focus()
+      await probe.keyboard.press('Enter')
+      await tooltip.waitFor()
+      await probe.keyboard.press('Tab')
+      await tooltip.waitFor({ state: 'hidden' })
+      expect(await slider.evaluate(element => element === document.activeElement)).toBe(true)
+      expect(await slider.inputValue()).toBe('0')
+      expect(consoleWatch.pageErrors).toEqual([])
+    } finally {
+      await probe.close()
+    }
+  })
+
+  it.each(['success', 'failure'] as const)('keeps Team undimmed and guarded through a pending effort %s', async (outcome) => {
+    const trigger = page.getByRole('button', { name: /^选择模型/ })
+    const release = Promise.withResolvers<undefined>()
+    let selections = 0
+    let teamWrites = 0
+    let forwarding: Promise<void> | undefined
+    const countTeamWrites = (request: Request): void => {
+      if (new URL(request.url()).pathname.endsWith('/agentTeams/setEnabled')) teamWrites++
+    }
+    const holdSelection = (route: Route): Promise<void> => {
+      selections++
+      forwarding = (async () => {
+        await release.promise
+        if (outcome === 'success') { await route.continue(); return }
+        const envelope = route.request().postDataJSON() as { rpcId: string }
+        await route.fulfill({ json: { type: 'server-response', rpcId: envelope.rpcId, result: {
+          ok: false, error: { code: 'session/writer-held', message: 'held', details: { sessionId: 'team-pending-fixture' } },
+        } } })
+      })()
+      return forwarding
+    }
+    await trigger.click()
+    await page.getByRole('menuitem', { name: /^模型/ }).click()
+    await page.getByRole('menuitemradio', { name: 'Acme Lite', exact: true }).click()
+    const slider = page.getByRole('slider', { name: '推理等级', exact: true })
+    await slider.press('Home')
+    await expect.poll(() => slider.getAttribute('aria-busy')).toBe('false')
+    await page.keyboard.down('ArrowRight')
+    await page.keyboard.down('ArrowRight')
+    await page.keyboard.down('ArrowRight')
+    await page.keyboard.up('ArrowRight')
+    await expect.poll(() => slider.getAttribute('aria-busy')).toBe('false')
+    await expect.poll(() => scaffold.ctx.agentDefaultModel.currentSelection().reasoningEffort).toBe('high')
+    await page.mouse.move(0, 0)
+    const menuLocator = page.getByRole('menu', { name: '模型与推理等级', exact: true })
+    const teamLocator = page.locator('[data-model-menu-page="agent-team"]')
+    const menu = await menuLocator.elementHandle()
+    const root = await page.locator('[data-model-menu-root]').elementHandle()
+    const team = await teamLocator.elementHandle()
+    if (menu === null || root === null || team === null) throw new Error('Missing pending Team controls')
+    const sample = () => page.evaluate(({ menu, root, team }) => {
+      const rect = (element: Element) => {
+        const value = element.getBoundingClientRect()
+        return { x: value.x, y: value.y, width: value.width, height: value.height }
+      }
+      return {
+        same: {
+          menu: menu === document.querySelector('[role="menu"][aria-label="模型与推理等级"]'),
+          root: root === document.querySelector('[data-model-menu-root]'),
+          team: team === document.querySelector('[data-model-menu-page="agent-team"]'),
+        },
+        connected: menu.isConnected && root.isConnected && team.isConnected,
+        rect: { menu: rect(menu), root: rect(root), team: rect(team) },
+        disabled: (team as HTMLButtonElement).disabled, opacity: getComputedStyle(team).opacity,
+        ariaDisabled: team.getAttribute('aria-disabled'), ariaBusy: team.getAttribute('aria-busy'),
+        focus: document.activeElement === team ? 'team' : document.activeElement === root.querySelector('input[type="range"]') ? 'range' : 'other',
+      }
+    }, { menu, root, team })
+    page.on('request', countTeamWrites)
+    try {
+      const before = await sample()
+      expect(before).toMatchObject({ same: { menu: true, root: true, team: true }, connected: true,
+        disabled: false, opacity: '1', ariaDisabled: null, ariaBusy: null, focus: 'range' })
+      await page.route('**/api/session/selectModel', holdSelection)
+      await page.keyboard.down('ArrowLeft')
+      await page.keyboard.down('ArrowLeft')
+      await page.keyboard.up('ArrowLeft')
+      await expect.poll(() => selections).toBe(1)
+      await expect.poll(() => teamLocator.getAttribute('aria-busy')).toBe('true')
+      const during = await sample()
+      expect(during).toEqual({ ...before, ariaDisabled: 'true', ariaBusy: 'true' })
+      const bounds = during.rect.team
+      await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
+      expect(await menuLocator.getByRole('switch').count()).toBe(0)
+      expect(await slider.evaluate(element => element === document.activeElement)).toBe(true)
+      await page.keyboard.press('Tab')
+      expect(await teamLocator.evaluate(element => element === document.activeElement)).toBe(true)
+      await page.keyboard.press('Enter')
+      await page.keyboard.press('Space')
+      expect(await teamLocator.evaluate(element => element === document.activeElement)).toBe(true)
+      expect(await menuLocator.getByRole('switch').count()).toBe(0)
+      expect(teamWrites).toBe(0)
+      expect(selections).toBe(1)
+      release.resolve(undefined)
+      await expect.poll(() => teamLocator.getAttribute('aria-busy')).toBeNull()
+      await expect.poll(() => slider.getAttribute('aria-busy')).toBe('false')
+      const after = await sample()
+      expect(after).toEqual({ ...before, focus: 'team' })
+      expect(await teamLocator.evaluate(element => element === document.activeElement)).toBe(true)
+      await page.keyboard.press('Shift+Tab')
+      expect(await slider.evaluate(element => element === document.activeElement)).toBe(true)
+      expect(scaffold.ctx.agentDefaultModel.currentSelection().reasoningEffort).toBe(outcome === 'success' ? 'low' : 'high')
+      if (outcome === 'failure') await page.getByRole('alert').waitFor()
+      expect(selections).toBe(1)
+      expect(teamWrites).toBe(0)
+      const lockedOpacity = await team.evaluate((element) => {
+        const button = element as HTMLButtonElement
+        try { button.disabled = true; return getComputedStyle(button).opacity } finally { button.disabled = false }
+      })
+      expect(lockedOpacity).toBe('0.5')
+      await page.keyboard.press('Tab')
+      expect(await teamLocator.evaluate(element => element === document.activeElement)).toBe(true)
+      await teamLocator.click()
+      await page.getByRole('switch', { name: '启用智能体团队协作', exact: true }).waitFor()
+      expect(teamWrites).toBe(0)
+      expect(tripwire.pageErrors).toEqual([])
+    } finally {
+      release.resolve(undefined)
+      await forwarding
+      await page.unroute('**/api/session/selectModel', holdSelection)
+      page.off('request', countTeamWrites)
+      await menu.dispose()
+      await root.dispose()
+      await team.dispose()
+      if (await trigger.getAttribute('aria-expanded') === 'true') await trigger.click()
     }
   })
 

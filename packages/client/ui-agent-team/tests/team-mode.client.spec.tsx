@@ -19,7 +19,8 @@ function props(enabled: boolean | undefined, selectTeamMode = vi.fn(async () => 
     useProjection: (key: string) => key === 'modelSelection'
       ? requestedModel === 'loading' ? undefined : { lastUsed: requestedModel ? { provider: 'mock', model: 'mock' } : null, next: { provider: 'mock', model: 'mock' } }
       : enabled === undefined ? undefined : { enabled, tasks: [] },
-    locked: false, openPage: vi.fn(), dismiss: vi.fn(), reportFailure: vi.fn(), selectTeamMode, requestDisableConfirmation: vi.fn(),
+    locked: false, pending: false, openPage: vi.fn(), dismiss: vi.fn(), reportFailure: vi.fn(),
+    selectTeamMode, requestDisableConfirmation: vi.fn(),
     t: makeTranslate(zh),
   } as TestProps
 }
@@ -53,6 +54,82 @@ it('keeps summary state projection-owned and blocks navigation while locked', ()
   expect(summary.hasAttribute('disabled')).toBe(true)
   fireEvent.click(summary)
   expect(lockedInput.openPage).not.toHaveBeenCalled()
+})
+
+it.each([false, true])('keeps the summary node focused and natively enabled during a model save (enabled: %s)', (enabled) => {
+  const input = props(enabled)
+  const view = render(<TeamModeToggle {...input} />)
+  const summary = screen.getByRole('menuitem')
+  summary.focus()
+  view.rerender(<TeamModeToggle {...input} pending />)
+  expect(screen.getByRole('menuitem')).toBe(summary)
+  expect(summary.isConnected).toBe(true)
+  expect(summary.hasAttribute('disabled')).toBe(false)
+  expect(summary.getAttribute('aria-disabled')).toBe('true')
+  expect(summary.getAttribute('aria-busy')).toBe('true')
+  expect(document.activeElement).toBe(summary)
+  fireEvent.click(summary)
+  expect(input.openPage).not.toHaveBeenCalled()
+  expect(input.selectTeamMode).not.toHaveBeenCalled()
+  view.rerender(<TeamModeToggle {...input} />)
+  expect(screen.getByRole('menuitem')).toBe(summary)
+  expect(summary.getAttribute('aria-disabled')).toBeNull()
+  expect(summary.getAttribute('aria-busy')).toBeNull()
+  expect(document.activeElement).toBe(summary)
+  fireEvent.click(summary)
+  expect(input.openPage).toHaveBeenCalledOnce()
+})
+
+it.each([false, true])('blocks Team writes and confirmation without dropping switch focus during a model save (enabled: %s)', (enabled) => {
+  const input = props(enabled, undefined, undefined, true)
+  const view = render(<TeamModePage {...input} />)
+  const toggle = screen.getByRole('switch')
+  toggle.focus()
+  view.rerender(<TeamModePage {...input} pending />)
+  expect(screen.getByRole('switch')).toBe(toggle)
+  expect(toggle.hasAttribute('disabled')).toBe(false)
+  expect(toggle.getAttribute('aria-disabled')).toBe('true')
+  expect(toggle.getAttribute('aria-busy')).toBe('true')
+  fireEvent.click(toggle)
+  expect(input.selectTeamMode).not.toHaveBeenCalled()
+  expect(input.requestDisableConfirmation).not.toHaveBeenCalled()
+  expect(input.dismiss).not.toHaveBeenCalled()
+  expect(document.activeElement).toBe(toggle)
+  view.rerender(<TeamModePage {...input} />)
+  expect(toggle.getAttribute('aria-disabled')).toBeNull()
+  expect(toggle.getAttribute('aria-busy')).toBeNull()
+  expect(document.activeElement).toBe(toggle)
+})
+
+it.each([TeamModeToggle, TeamModePage])('keeps a genuine lock natively disabled while a model write is pending', (Component) => {
+  const input = props(false)
+  render(<Component {...input} locked pending />)
+  const control = screen.queryByRole('menuitem') ?? screen.getByRole('switch')
+  expect(control.hasAttribute('disabled')).toBe(true)
+  expect(control.getAttribute('aria-disabled')).toBe('true')
+  expect(control.getAttribute('aria-busy')).toBe('true')
+  fireEvent.click(control)
+  expect(input.openPage).not.toHaveBeenCalled()
+  expect(input.selectTeamMode).not.toHaveBeenCalled()
+})
+
+it('keeps model pending protection after the Team write settles', async () => {
+  const pending = Promise.withResolvers<string | null>()
+  onTestFinished(async () => { await act(async () => { pending.resolve(null) }) })
+  const input = props(false, vi.fn(() => pending.promise))
+  const view = render(<TeamModePage {...input} />)
+  const toggle = screen.getByRole('switch')
+  toggle.focus()
+  fireEvent.click(toggle)
+  view.rerender(<TeamModePage {...input} pending />)
+  await act(async () => { pending.resolve(null) })
+  expect(toggle.getAttribute('aria-busy')).toBe('true')
+  expect(toggle.hasAttribute('disabled')).toBe(false)
+  fireEvent.click(toggle)
+  expect(input.selectTeamMode).toHaveBeenCalledTimes(1)
+  view.rerender(<TeamModePage {...input} />)
+  expect(toggle.getAttribute('aria-busy')).toBeNull()
+  expect(document.activeElement).toBe(toggle)
 })
 
 it('allows reading settings from the summary while model history loads', () => {

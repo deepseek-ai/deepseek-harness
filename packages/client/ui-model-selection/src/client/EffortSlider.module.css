@@ -8,13 +8,18 @@
   grid-row: 2;
   display: flex;
   justify-content: center;
-  height: 22px;
+  height: 28px;
   margin: 10px 14px 0;
 }
 
 .value {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
   max-width: 100%;
-  padding: 1px 10px;
+  height: 28px;
+  padding: 1px 8px;
   border: 1px solid color-mix(in srgb, var(--dsw-alias-state-business-primary) 45%, transparent);
   border-radius: 999px;
   corner-shape: round;
@@ -25,11 +30,63 @@
   font-weight: 500;
   text-align: center;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   cursor: default;
   -webkit-user-select: none;
   user-select: none;
+}
+
+.value:has(.infoButton) {
+  gap: 2px;
+  padding-inline-end: 1px;
+}
+
+.valueLabel {
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.valuePrefix {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.valueName {
+  flex: 0 0 auto;
+  max-width: calc(100% - 2px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.infoButton {
+  display: inline-flex;
+  flex: 0 0 24px;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  corner-shape: round;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.infoButton:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
+}
+
+@media (hover: hover) {
+  .infoButton:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .rail {
@@ -38,8 +95,32 @@
   margin: 0 8px 2px;
 }
 
+.track {
+  position: absolute;
+  inset-inline: 0;
+  top: 50%;
+  height: var(--effort-track-size);
+  transform: translateY(-50%);
+  border-radius: 999px;
+  corner-shape: round;
+  overflow: hidden;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 5%, transparent);
+}
+
+.fill {
+  display: block;
+  height: 100%;
+  width: calc(var(--effort-thumb-size) / 2 + (100% - var(--effort-thumb-size)) * var(--effort-visual-position));
+  background: linear-gradient(to right,
+    color-mix(in srgb, var(--dsw-alias-state-business-primary) 8%, transparent),
+    color-mix(in srgb, var(--dsw-alias-state-business-primary) 54%, transparent));
+  transition: width 300ms cubic-bezier(.23, 1, .32, 1);
+}
+
 .range {
   appearance: none;
+  position: relative;
   display: block;
   box-sizing: border-box;
   width: 100%;
@@ -54,56 +135,32 @@
 
 .range::-webkit-slider-runnable-track {
   height: var(--effort-track-size);
-  border-radius: 999px;
-  corner-shape: round;
-  background:
-    linear-gradient(to right,
-      color-mix(in srgb, var(--dsw-alias-state-business-primary) 8%, transparent) 0,
-      color-mix(in srgb, var(--dsw-alias-state-business-primary) 54%, transparent) var(--effort-progress),
-      color-mix(in srgb, var(--dsw-alias-label-primary) 5%, transparent) var(--effort-progress),
-      color-mix(in srgb, var(--dsw-alias-label-primary) 5%, transparent) 100%),
-    color-mix(in srgb, var(--dsw-alias-label-primary) 5%, transparent);
+  background: transparent;
 }
 
-.range::-moz-range-track {
-  height: var(--effort-track-size);
-  border-radius: 999px;
-  corner-shape: round;
-  background: color-mix(in srgb, var(--dsw-alias-label-primary) 5%, transparent);
-}
-
+.range::-moz-range-track,
 .range::-moz-range-progress {
   height: var(--effort-track-size);
-  border-radius: 999px;
-  corner-shape: round;
-  background: linear-gradient(to right,
-    color-mix(in srgb, var(--dsw-alias-state-business-primary) 8%, transparent),
-    color-mix(in srgb, var(--dsw-alias-state-business-primary) 54%, transparent));
+  background: transparent;
 }
 
-
-
+/* Native thumb geometry owns hit testing; the inert sibling owns all visual motion. */
 .range::-webkit-slider-thumb {
   appearance: none;
+  box-sizing: border-box;
   width: var(--effort-thumb-size);
   height: var(--effort-thumb-size);
   margin-top: calc((var(--effort-track-size) - var(--effort-thumb-size)) / 2);
-  border: 0.5px solid var(--dsw-alias-border-l2);
-  border-radius: 50%;
-  corner-shape: round;
-  background: radial-gradient(circle, var(--dsw-alias-slider-thumb-mark) 0 4px, var(--dsw-alias-slider-thumb) 4.5px);
-  box-shadow: var(--dsw-elevation-panel);
+  border: 0;
+  background: transparent;
 }
 
 .range::-moz-range-thumb {
   box-sizing: border-box;
   width: var(--effort-thumb-size);
   height: var(--effort-thumb-size);
-  border: 0.5px solid var(--dsw-alias-border-l2);
-  border-radius: 50%;
-  corner-shape: round;
-  background: radial-gradient(circle, var(--dsw-alias-slider-thumb-mark) 0 4px, var(--dsw-alias-slider-thumb) 4.5px);
-  box-shadow: var(--dsw-elevation-panel);
+  border: 0;
+  background: transparent;
 }
 
 .range:focus-visible {
@@ -113,29 +170,102 @@
 }
 
 .range:disabled {
-  opacity: 0.5;
   cursor: default;
 }
 
-.ticks {
+.rail[data-disabled] {
+  opacity: 0.5;
+}
+
+.ticks,
+.thumbRail {
   position: absolute;
   inset: 0 calc(var(--effort-thumb-size) / 2);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   pointer-events: none;
 }
 
 .tick,
 .tickActive {
+  position: absolute;
+  top: 50%;
   width: 4px;
   height: 4px;
+  transform: translate(-50%, -50%);
   border-radius: 50%;
   corner-shape: round;
   background: var(--dsw-alias-label-caption);
   opacity: 0.6;
+  transition: transform 120ms ease;
 }
 
-.ticks [data-current] {
-  visibility: hidden;
+@media (hover: hover) and (pointer: fine) {
+  .ticks [data-hovered] {
+    transform: translate(-50%, -50%) scale(2);
+  }
+}
+
+.thumbPosition {
+  position: absolute;
+  top: 50%;
+  left: calc(var(--effort-visual-position) * 100%);
+  width: var(--effort-thumb-size);
+  height: var(--effort-thumb-size);
+  transform: translate(-50%, -50%);
+  transition: left 300ms cubic-bezier(.23, 1, .32, 1);
+}
+
+.thumb {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 50%;
+  corner-shape: round;
+  background: var(--dsw-alias-slider-thumb);
+  box-shadow: var(--dsw-elevation-panel);
+}
+
+/* The white disc holds its size; only the blue center grows on hover or press. */
+.thumb::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  corner-shape: round;
+  background: var(--dsw-alias-slider-thumb-mark);
+  transform: translate(-50%, -50%);
+  transition: width 140ms cubic-bezier(.23, 1, .32, 1), height 140ms cubic-bezier(.23, 1, .32, 1);
+}
+
+.thumb[data-expanded]::after {
+  width: 9.6px;
+  height: 9.6px;
+}
+
+.rail[data-dragging] .thumbPosition,
+.rail[data-dragging] .fill {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thumbPosition,
+  .fill,
+  .thumb::after,
+  .thumb[data-expanded]::after,
+  .tick,
+  .tickActive {
+    transition: none;
+  }
+
+  .thumb[data-expanded]::after {
+    width: 8px;
+    height: 8px;
+  }
+
+  .ticks [data-hovered] {
+    transform: translate(-50%, -50%);
+  }
 }

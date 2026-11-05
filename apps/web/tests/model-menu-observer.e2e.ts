@@ -413,7 +413,9 @@ describe.skipIf(webSnapshotMode() === 'record').each([
         await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 2.5 })
         await expect.poll(() => page.evaluate(() => window.visualViewport!.scale)).toBe(2.5)
         expect(Number(await slider.getAttribute('max'))).toBeGreaterThanOrEqual(7)
-        expect(await menu.getByRole('group', { name: '推理等级', exact: true }).getByRole('button').count()).toBe(0)
+        const information = menu.getByRole('group', { name: '推理等级', exact: true }).getByRole('button')
+        expect(await information.count()).toBe(1)
+        expect(await information.getAttribute('aria-label')).toBe('默认推理等级说明')
         await expect.poll(() => slider.evaluate((range) => {
           const scroller = range.closest<HTMLElement>('[data-model-menu-root]')!
           scroller.scrollTop = scroller.scrollHeight
@@ -457,7 +459,7 @@ describe.skipIf(webSnapshotMode() === 'record').each([
         await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
         await expect.poll(() => scaffold.ctx.agentDefaultModel.currentSelection()).toMatchObject({ reasoningEffort: 'max' })
         expect(await menu.isVisible()).toBe(true)
-        await expect.poll(() => slider.getAttribute('aria-valuetext')).toBe('Max')
+        await expect.poll(() => slider.getAttribute('aria-valuetext')).toBe('最高')
         await page.keyboard.press('Escape')
         await menu.waitFor({ state: 'detached' })
       }

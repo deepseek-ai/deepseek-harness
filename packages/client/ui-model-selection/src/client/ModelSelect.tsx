@@ -18,6 +18,7 @@ import {
 import type { PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ModelLabelOwner, ModelMenuPage, ModelSelectInjected } from './slots.ts'
 import { EffortSlider, type EffortChoice } from './EffortSlider.tsx'
+import { effortDisplayName } from './effort-label.ts'
 import css from './ModelSelect.module.css'
 import { orderModelProviders } from './provider-order.ts'
 
@@ -105,7 +106,10 @@ export function ModelSelect(
       ? state.retainedEffort
       : effectiveEffort === undefined
         ? t('effort.providerDefault')
-        : reasoning.efforts.find(level => level.id === effectiveEffort)?.name ?? effectiveEffort
+        : effortDisplayName({
+          id: effectiveEffort,
+          name: reasoning.efforts.find(level => level.id === effectiveEffort)?.name ?? effectiveEffort,
+        }, t)
   const effortChoices = useMemo<readonly EffortChoice[]>(() => reasoning === undefined
     ? []
     : [
@@ -115,7 +119,7 @@ export function ModelSelect(
       ...reasoning.efforts.map((effort: ModelReasoningEffort) => ({
         key: `effort:${effort.id}`,
         effort: effort.id,
-        label: effort.name,
+        label: effortDisplayName(effort, t),
       })),
     ], [reasoning, t])
   const { pending } = state
@@ -147,19 +151,14 @@ export function ModelSelect(
 
   // Pane switches unmount the focused row; restore focus inside the menu so
   // keyboard navigation remains available.
-  const paneFocus = useRef<'drill' | 'model' | 'effort' | ModelMenuPage | null>(null)
+  const paneFocus = useRef<'drill' | 'model' | ModelMenuPage | null>(null)
   const previousShowSearch = useRef(showSearch)
   useEffect(() => {
     const changedSearchMode = previousShowSearch.current !== showSearch
     previousShowSearch.current = showSearch
     const intent = paneFocus.current ?? (changedSearchMode && pane === 'model' ? 'drill' : null)
-    if (intent === 'effort' && busy) return
     paneFocus.current = null
     if (!open || intent === null) return
-    if (intent === 'effort') {
-      menuRef.current?.querySelector<HTMLInputElement>('input[type="range"]:not([disabled])')?.focus()
-      return
-    }
     if (intent === 'drill') {
       if (typeof pane === 'object') {
         const first = menuRef.current?.querySelector<HTMLElement>('[role="switch"]:not([disabled])')
@@ -329,10 +328,12 @@ export function ModelSelect(
   const settleSelection = (result: Awaited<ReturnType<ModelSelectInjected['select']>>, origin: 'model' | 'effort'): void => {
     if (result === undefined) return
     if (menuRef.current !== null) {
-      paneFocus.current = origin
-      if (result.ok) {
-        setModelReturnFocus(origin === 'model')
-        setPane('root')
+      if (origin === 'model') {
+        paneFocus.current = 'model'
+        if (result.ok) {
+          setModelReturnFocus(true)
+          setPane('root')
+        }
       }
       setSelectionFocus(false)
     }
@@ -492,14 +493,17 @@ export function ModelSelect(
                     : effectiveEffort}
                   label={t('menu.effort')}
                   currentLabel={effortLabel ?? t('effort.providerDefault')}
-                  formatTooltip={effort => t('effort.tooltip', { effort })}
+                  formatLabel={effort => t('effort.tooltip', { effort })}
+                  defaultInfoLabel={t('effort.defaultInfoLabel')}
+                  defaultExplanation={t('effort.defaultExplanation')}
                   disabled={locked}
                   pending={busy}
                   onSelect={chooseEffort}
                 />
               )}
               {renderSlot('conversation.input.model.options', {
-                locked: locked || busy,
+                locked,
+                pending: busy,
                 openPage: (page) => { drill(page) },
                 dismiss: () => {
                   close()
@@ -616,7 +620,8 @@ export function ModelSelect(
           {typeof pane === 'object' && (
             <div className={css.pageBody}>
               {renderSlot('conversation.input.model.page', {
-                locked: locked || busy,
+                locked,
+                pending: busy,
                 dismiss: () => {
                   close()
                   triggerRef.current?.focus()
