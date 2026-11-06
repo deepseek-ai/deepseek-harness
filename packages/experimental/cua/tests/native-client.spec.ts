@@ -1,5 +1,6 @@
 /** Controlled connection streams exercise the platform-independent native protocol client. */
 import { PassThrough, Writable } from 'node:stream'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { NativeChannel } from '../src/native-client.ts'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -391,6 +392,8 @@ describe('native helper transport', () => {
 
   it('keeps native codes available to callers and in the model-visible diagnostic', () => {
     const error = new NativeError('PERMISSION_DENIED', 'Enable Accessibility')
+    expect(error).toBeInstanceOf(HarnessError)
+    expect(error.name).toBe('NativeError')
     expect(error.code).toBe('PERMISSION_DENIED')
     expect(error.message).toBe('PERMISSION_DENIED: Enable Accessibility')
   })
