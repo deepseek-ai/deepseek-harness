@@ -476,6 +476,7 @@ function assertLeanChildRecord(agent: Agent): void {
 const EXPECTED_TOOLS = [
   'ask_user_question',
   'bash',
+  'cordis_inspect',
   'create_goal',
   'edit',
   'exit_plan_mode',

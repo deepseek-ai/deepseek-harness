@@ -58,7 +58,7 @@ The [tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-tool-cordis) des
 
 #### Token effect
 
-Only one tool schema enters model requests while this plugin is visible. Query results append to the transcript; exact queries avoid loading unrelated declarations.
+In the shipped Standard and Creator modes, this plugin contributes one tool schema to each model request. Query results append to the transcript; exact queries avoid loading unrelated declarations.
 
 #### KV Cache effect
 

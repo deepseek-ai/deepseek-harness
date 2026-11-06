@@ -366,7 +366,10 @@ describe('the shipped Web composition', () => {
         })
         expect(inspected.isError).toBe(false)
         const text = inspected.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('')
-        expect(text).toContain(query === undefined ? '"providers"' : '"patchId": "agent-loop"')
+        const value: unknown = JSON.parse(text)
+        const path = query === undefined ? 'providers' : 'data.entries'
+        const entry = query === undefined ? { platform: 'host', id: 'Config' } : { name: '@deepseek-ai/dsh-agent-loop' }
+        expect(value).toHaveProperty(path, expect.arrayContaining([expect.objectContaining(entry)]))
       }
     } finally {
       await handle.dispose()
