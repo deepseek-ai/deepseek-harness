@@ -128,6 +128,7 @@ describe('archive-triggered worktree cleanup', () => {
     const head = await git(f.worktree.path, 'rev-parse', 'HEAD')
     const statuses: WorktreeCleanup['status'][] = []
     f.ctx.on('worktree/cleanup', ({ cleanup }) => { statuses.push(cleanup.status) })
+    const resolve = vi.spyOn(f.ctx.sandboxPolicy, 'resolve')
     await f.ctx.workspaceRegistry.archiveSession(f.session.id)
     expect(await f.ctx.worktrees.cleanupOf(f.session, null)).toMatchObject({ status: 'scheduled' })
     expect(await settled(f)).toMatchObject({ status: 'removed' })
@@ -135,6 +136,10 @@ describe('archive-triggered worktree cleanup', () => {
     await expect(access(f.worktree.path)).rejects.toMatchObject({ code: 'ENOENT' })
     expect(await git(f.root, 'rev-parse', f.worktree.branch)).toBe(head)
     expect(f.ctx.workspaceRegistry.archivedSessionIds).toContain(f.session.id)
+    // The creator's root is the checkout being removed; its commands are bounded by the source checkout instead.
+    expect(f.ctx.workingDirectory.rootOf(f.session)).toBe(f.worktree.path)
+    const roots = resolve.mock.calls.filter(([request]) => request?.session === f.session).map(([request]) => request?.root)
+    expect(roots).toEqual([undefined, f.root])
   })
 
   it('returns from admission before the inspection runs', async () => {

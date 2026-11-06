@@ -1222,6 +1222,9 @@ describe('forgePanel removed worktrees', () => {
     sendPrompt(opened.agent, 'next')
     const missing = await follower.until(state => state.worktree.waiting === 'restoration')
     expect(opened.agent.wakes).toBe(1)
+    // The Session's own root is the removed directory; the branch probe runs under the source repository's boundary.
+    const probe = opened.sandbox.calls.find(call => call.argv.includes('show-ref'))
+    expect(probe?.policy).toMatchObject({ mode: 'workspace-write', workspaceRoot: repo })
     const pruning = hold(opened.sandbox, 'list')
     const resetting = hold(opened.sandbox, 'reset')
     const restoring = opened.ctx.forgePanel.restoreWorktree(opened.session, signal)

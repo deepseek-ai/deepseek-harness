@@ -107,12 +107,35 @@ describe('workspace root as the write boundary', () => {
     expect(ctx.sandboxPolicy.resolve({ session })).toEqual({ mode: 'workspace-write', workspaceRoot: repo, sessionId: session.id })
   })
 
+  it('bounds a Host operation to another checkout on request and derives that checkout\'s Git administration', async () => {
+    const { base, repo } = await scratch()
+    const extra = join(base, 'extra')
+    await mkdir(extra)
+    const { ctx } = await mounted(base, { additionalWritableRoots: [extra] })
+    const worktree = join(base, 'wt')
+    await git(repo, 'worktree', 'add', '-q', '-b', 'wt', worktree)
+    const other = join(base, 'other')
+    await git(repo, 'worktree', 'add', '-q', '-b', 'other', other)
+    const session = ctx.sessions.create(SessionId('maintenance'), { meta: { cwd: worktree } })
+    expect(await ctx.sandboxPolicy.prepare({ session })).toEqual([join(repo, '.git')])
+    // The source checkout keeps its Git directory inside itself, so nothing is derived for it.
+    expect(await ctx.sandboxPolicy.prepare({ session, root: repo })).toEqual([])
+    expect(ctx.sandboxPolicy.resolve({ session, root: repo })).toEqual({
+      mode: 'workspace-write', workspaceRoot: repo, additionalWritableRoots: [extra], sessionId: session.id,
+    })
+    expect(await ctx.sandboxPolicy.prepare({ session, root: other })).toEqual([join(repo, '.git')])
+    expect(ctx.sandboxPolicy.resolve({ session, root: other }).additionalWritableRoots).toEqual([extra, join(repo, '.git')])
+    expect(ctx.sandboxPolicy.resolve({ session }).workspaceRoot).toBe(worktree)
+    expect(() => ctx.sandboxPolicy.resolve({ session, root: 'relative' })).toThrow('absolute execution-world path')
+    await expect(ctx.sandboxPolicy.prepare({ session, root: 'relative' })).rejects.toThrow('absolute execution-world path')
+  })
+
   it('falls back to the configured root for a Session without a recorded directory while the directory service is mounted', async () => {
     const { base } = await scratch()
     const { ctx } = await mounted(base)
     const session = ctx.sessions.create(SessionId('no-directory'))
     expect(ctx.sandboxPolicy.resolve({ session }).workspaceRoot).toBe(base)
-    expect(await ctx.sandboxPolicy.prepare(session)).toEqual([])
+    expect(await ctx.sandboxPolicy.prepare({ session: session })).toEqual([])
   })
 })
 
@@ -132,7 +155,7 @@ describe('Git administration directories of a linked checkout', () => {
     expect(policy.workspaceRoot).toBe(worktree)
     expect(policy.additionalWritableRoots).toEqual([extra, join(repo, '.git')])
     expect(Object.isFrozen(policy.additionalWritableRoots)).toBe(true)
-    expect(await ctx.sandboxPolicy.prepare(session)).toEqual([join(repo, '.git')])
+    expect(await ctx.sandboxPolicy.prepare({ session: session })).toEqual([join(repo, '.git')])
     expect(ctx.sandboxPolicy.resolve()).toEqual({ mode: 'workspace-write', workspaceRoot: base, additionalWritableRoots: [extra] })
   })
 
@@ -140,23 +163,23 @@ describe('Git administration directories of a linked checkout', () => {
     const { base, repo } = await scratch()
     const { ctx } = await mounted(base)
     const plain = ctx.sessions.create(SessionId('plain'), { meta: { cwd: repo } })
-    expect(await ctx.sandboxPolicy.prepare(plain)).toEqual([])
+    expect(await ctx.sandboxPolicy.prepare({ session: plain })).toEqual([])
     expect(ctx.sandboxPolicy.resolve({ session: plain })).toEqual({ mode: 'workspace-write', workspaceRoot: repo, sessionId: plain.id })
 
     // A directory that is no checkout yet settles as granting nothing; a worktree created there afterwards
     // does not widen the policy of a Session already working in it, nor can a pointer written by the model.
     const later = join(base, 'later')
     const early = ctx.sessions.create(SessionId('early'), { meta: { cwd: later } })
-    expect(await ctx.sandboxPolicy.prepare(early)).toEqual([])
+    expect(await ctx.sandboxPolicy.prepare({ session: early })).toEqual([])
     await git(repo, 'worktree', 'add', '-q', '-b', 'later', later)
-    expect(await ctx.sandboxPolicy.prepare(early)).toEqual([])
+    expect(await ctx.sandboxPolicy.prepare({ session: early })).toEqual([])
     expect(ctx.sandboxPolicy.resolve({ session: early }).additionalWritableRoots).toBeUndefined()
 
     // Entering the checkout as a registered anchor is the trusted point that reads its layout again.
     const entering = ctx.sessions.create(SessionId('entering'), { meta: { cwd: repo } })
     await ctx.workingDirectory.relocate(agentFor(ctx, entering), later)
-    expect(await ctx.sandboxPolicy.prepare(entering)).toEqual([join(repo, '.git')])
-    expect(await ctx.sandboxPolicy.prepare(early)).toEqual([join(repo, '.git')])
+    expect(await ctx.sandboxPolicy.prepare({ session: entering })).toEqual([join(repo, '.git')])
+    expect(await ctx.sandboxPolicy.prepare({ session: early })).toEqual([join(repo, '.git')])
   })
 
   it('grants nothing for pointer files the checkout itself could have written', async () => {
@@ -171,11 +194,11 @@ describe('Git administration directories of a linked checkout', () => {
 
     // A pointer to the filesystem root, to the home of the workspace, or to any directory outside Git's
     // worktree layout names no administration directory.
-    expect(await ctx.sandboxPolicy.prepare(await checkout('root-pointer', 'gitdir: /\n'))).toEqual([])
-    expect(await ctx.sandboxPolicy.prepare(await checkout('base-pointer', `gitdir: ${base}\n`))).toEqual([])
+    expect(await ctx.sandboxPolicy.prepare({ session: await checkout('root-pointer', 'gitdir: /\n') })).toEqual([])
+    expect(await ctx.sandboxPolicy.prepare({ session: await checkout('base-pointer', `gitdir: ${base}\n`) })).toEqual([])
     const administration = join(base, 'administration')
     await mkdir(administration)
-    expect(await ctx.sandboxPolicy.prepare(await checkout('handmade', `gitdir: ${administration}\n`))).toEqual([])
+    expect(await ctx.sandboxPolicy.prepare({ session: await checkout('handmade', `gitdir: ${administration}\n`) })).toEqual([])
 
     // A forged worktree layout whose commondir escapes, or whose administration directory does not point
     // back at the checkout, grants nothing; a layout whose common directory contains the root grants nothing.
@@ -183,38 +206,38 @@ describe('Git administration directories of a linked checkout', () => {
     await mkdir(forgedCommon, { recursive: true })
     await writeFile(join(forgedCommon, 'commondir'), '/\n')
     await writeFile(join(forgedCommon, 'gitdir'), `${join(base, 'escaping', '.git')}\n`)
-    expect(await ctx.sandboxPolicy.prepare(await checkout('escaping', `gitdir: ${forgedCommon}\n`))).toEqual([])
+    expect(await ctx.sandboxPolicy.prepare({ session: await checkout('escaping', `gitdir: ${forgedCommon}\n`) })).toEqual([])
     await writeFile(join(forgedCommon, 'commondir'), '../..\n')
-    expect(await ctx.sandboxPolicy.prepare(await checkout('unlinked', `gitdir: ${forgedCommon}\n`))).toEqual([])
+    expect(await ctx.sandboxPolicy.prepare({ session: await checkout('unlinked', `gitdir: ${forgedCommon}\n`) })).toEqual([])
     const enclosing = join(base, 'worktrees', 'inner')
     await mkdir(enclosing, { recursive: true })
     await writeFile(join(enclosing, 'commondir'), '../..\n')
     await writeFile(join(enclosing, 'gitdir'), `${join(base, 'enclosed', '.git')}\n`)
-    expect(await ctx.sandboxPolicy.prepare(await checkout('enclosed', `gitdir: ${enclosing}\n`))).toEqual([])
+    expect(await ctx.sandboxPolicy.prepare({ session: await checkout('enclosed', `gitdir: ${enclosing}\n`) })).toEqual([])
 
     // A missing commondir or gitdir file, a commondir that is a directory, and a missing gitdir text grant nothing.
     const partial = join(base, 'partial', 'worktrees', 'z')
     await mkdir(join(partial, 'commondir'), { recursive: true })
-    expect(await ctx.sandboxPolicy.prepare(await checkout('partial-checkout', `gitdir: ${partial}\n`))).toEqual([])
+    expect(await ctx.sandboxPolicy.prepare({ session: await checkout('partial-checkout', `gitdir: ${partial}\n`) })).toEqual([])
     const noBack = join(base, 'no-back', 'worktrees', 'w')
     await mkdir(noBack, { recursive: true })
     await writeFile(join(noBack, 'commondir'), '../..\n')
-    expect(await ctx.sandboxPolicy.prepare(await checkout('no-back-checkout', `gitdir: ${noBack}\n`))).toEqual([])
+    expect(await ctx.sandboxPolicy.prepare({ session: await checkout('no-back-checkout', `gitdir: ${noBack}\n`) })).toEqual([])
     await writeFile(join(noBack, 'gitdir'), '\n')
-    expect(await ctx.sandboxPolicy.prepare(await checkout('blank-back-checkout', `gitdir: ${noBack}\n`))).toEqual([])
+    expect(await ctx.sandboxPolicy.prepare({ session: await checkout('blank-back-checkout', `gitdir: ${noBack}\n`) })).toEqual([])
 
     // Dangling, blank, and malformed pointers grant nothing either.
-    expect(await ctx.sandboxPolicy.prepare(await checkout('dangling', `gitdir: ${join(base, 'missing-administration')}\n`))).toEqual([])
+    expect(await ctx.sandboxPolicy.prepare({ session: await checkout('dangling', `gitdir: ${join(base, 'missing-administration')}\n`) })).toEqual([])
     const blank = join(base, 'blank', 'worktrees', 'y')
     await mkdir(blank, { recursive: true })
     await writeFile(join(blank, 'commondir'), '')
-    expect(await ctx.sandboxPolicy.prepare(await checkout('blank-checkout', `gitdir: ${blank}\n`))).toEqual([])
-    expect(await ctx.sandboxPolicy.prepare(await checkout('malformed', 'not a pointer\n'))).toEqual([])
+    expect(await ctx.sandboxPolicy.prepare({ session: await checkout('blank-checkout', `gitdir: ${blank}\n`) })).toEqual([])
+    expect(await ctx.sandboxPolicy.prepare({ session: await checkout('malformed', 'not a pointer\n') })).toEqual([])
 
     // The layout Git writes still grants the common directory, and nothing else.
     const worktree = join(base, 'genuine')
     await git(repo, 'worktree', 'add', '-q', '-b', 'genuine', worktree)
-    expect(await ctx.sandboxPolicy.prepare(sessionIn('genuine'))).toEqual([join(repo, '.git')])
+    expect(await ctx.sandboxPolicy.prepare({ session: sessionIn('genuine') })).toEqual([join(repo, '.git')])
   })
 
   it('derives again when a derived directory disappears and keeps confinement resolvable', async () => {
@@ -223,9 +246,9 @@ describe('Git administration directories of a linked checkout', () => {
     const worktree = join(base, 'orphaned')
     await git(repo, 'worktree', 'add', '-q', '-b', 'orphaned', worktree)
     const session = ctx.sessions.create(SessionId('orphaned'), { meta: { cwd: worktree } })
-    expect(await ctx.sandboxPolicy.prepare(session)).toEqual([join(repo, '.git')])
+    expect(await ctx.sandboxPolicy.prepare({ session: session })).toEqual([join(repo, '.git')])
     await rm(repo, { recursive: true, force: true })
-    expect(await ctx.sandboxPolicy.prepare(session)).toEqual([])
+    expect(await ctx.sandboxPolicy.prepare({ session: session })).toEqual([])
     expect(ctx.sandboxPolicy.resolve({ session }).additionalWritableRoots).toBeUndefined()
 
     // An uninspectable directory invalidates the settled result the same way, and the derivation runs again.
@@ -236,10 +259,10 @@ describe('Git administration directories of a linked checkout', () => {
     await git(join(base, 'again-repo'), 'worktree', 'add', '-q', '-b', 'again', again)
     const other = ctx.sessions.create(SessionId('again'), { meta: { cwd: again } })
     const common = join(base, 'again-repo', '.git')
-    expect(await ctx.sandboxPolicy.prepare(other)).toEqual([common])
+    expect(await ctx.sandboxPolicy.prepare({ session: other })).toEqual([common])
     const probe = vi.spyOn(ctx.fs, 'lstat').mockImplementationOnce(async () => { throw new Error('inspection denied') })
     try {
-      expect(await ctx.sandboxPolicy.prepare(other)).toEqual([common])
+      expect(await ctx.sandboxPolicy.prepare({ session: other })).toEqual([common])
       expect(probe.mock.calls[0]?.[0]).toBe(common)
       expect(probe.mock.calls.length).toBeGreaterThan(1)
     } finally {
@@ -281,9 +304,9 @@ describe('Git administration directories of a linked checkout', () => {
       await vi.waitFor(() => { expect(warn).toHaveBeenCalledTimes(1) })
       expect(warn.mock.calls[0]?.[0]).toContain('could not derive the Git administration directories')
       expect(ctx.sandboxPolicy.resolve({ session }).additionalWritableRoots).toBeUndefined()
-      expect(await ctx.sandboxPolicy.prepare(session)).toEqual([])
+      expect(await ctx.sandboxPolicy.prepare({ session: session })).toEqual([])
       expect(warn).toHaveBeenCalledTimes(1)
-      expect(await ctx.sandboxPolicy.prepare(session)).toEqual([join(repo, '.git')])
+      expect(await ctx.sandboxPolicy.prepare({ session: session })).toEqual([join(repo, '.git')])
     } finally {
       lstat.mockRestore()
       warn.mockRestore()
@@ -307,8 +330,8 @@ describe('Git administration directories of a linked checkout', () => {
     try {
       const session = ctx.sessions.create(SessionId('shared'), { meta: { cwd: worktree } })
       await entered.promise
-      const first = ctx.sandboxPolicy.prepare(session)
-      const second = ctx.sandboxPolicy.prepare(session)
+      const first = ctx.sandboxPolicy.prepare({ session: session })
+      const second = ctx.sandboxPolicy.prepare({ session: session })
       expect(probe).toHaveBeenCalledTimes(1)
       const disposal = fiber.dispose()
       release.resolve(undefined)
@@ -328,7 +351,7 @@ describe('Git administration directories of a linked checkout', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SandboxPolicyService, { mode: 'workspace-write', workspaceRoot: '/fallback' })
     const session = ctx.sessions.create(SessionId('no-fs'), { meta: { cwd: '/projects/current' } })
-    expect(await ctx.sandboxPolicy.prepare(session)).toEqual([])
+    expect(await ctx.sandboxPolicy.prepare({ session: session })).toEqual([])
     expect(ctx.sandboxPolicy.resolve({ session })).toEqual({ mode: 'workspace-write', workspaceRoot: '/projects/current', sessionId: session.id })
   })
 })

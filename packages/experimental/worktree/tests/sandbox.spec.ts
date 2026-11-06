@@ -94,4 +94,20 @@ describe.skipIf(!sandboxUsable)('worktree standing sandbox policy', () => {
     // The registration write lands in the shared Git directory outside the linked root; only the derived grant admits it.
     expect(confine.mock.calls.some(call => call[1].additionalWritableRoots?.includes(administration))).toBe(true)
   })
+
+  it('restores a removed worktree under the source checkout boundary while the Session root is the removed directory', async () => {
+    root = await repository(process.cwd())
+    ctx = await harness(root, {}, 'workspace-write')
+    const agent = testAgent(ctx, root)
+    const created = await ctx.worktrees.create(agent, { name: 'restored' })
+    expect(ctx.workingDirectory.rootOf(agent.session)).toBe(created.path)
+    await rm(created.path, { recursive: true, force: true })
+    const confine = vi.spyOn(ctx.sandbox, 'confine')
+
+    expect(await ctx.worktrees.restore(agent, created)).toEqual({ path: created.path, branchRecreated: false })
+
+    expect(await git(created.path, 'branch', '--show-current')).toBe('restored')
+    expect(confine.mock.calls.length).toBeGreaterThan(0)
+    expect(confine.mock.calls.every(call => call[1].mode === 'workspace-write' && call[1].workspaceRoot === root)).toBe(true)
+  })
 })

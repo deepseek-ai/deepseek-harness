@@ -315,7 +315,7 @@ export class SessionPanel {
 
   /** Decide whether the Session's sandbox lets the worktree service write the checkout and its shared Git directory. */
   private async blockerOf(inspection: Inspection): Promise<ForgeWorktreeBlocker | null> {
-    await this.ctx.sandboxPolicy.prepare(this.session, this.lifetime.signal)
+    await this.ctx.sandboxPolicy.prepare({ session: this.session }, this.lifetime.signal)
     const policy = this.ctx.sandboxPolicy.resolve({ session: this.session })
     if (policy.mode === 'danger-full-access') return null
     if (policy.mode === 'read-only') return 'read-only'
@@ -398,7 +398,7 @@ export async function missingWorktree(
       const root = await ctx.fs.resolve(top.stdout.replace(/\r?\n$/, ''), { cwd: created.path, signal })
       if (root.targetKey === target.targetKey) {
         const common = await git('common-dir', ['rev-parse', '--path-format=absolute', '--git-common-dir'])
-        const source = await gitIn(ctx, config, session, created.repositoryRoot, signal)(
+        const source = await gitIn(ctx, config, session, created.repositoryRoot, signal, created.repositoryRoot)(
           'common-dir', ['rev-parse', '--path-format=absolute', '--git-common-dir'],
         )
         const actual = await ctx.fs.resolve(common.stdout.replace(/\r?\n$/, ''), { cwd: created.path, signal })

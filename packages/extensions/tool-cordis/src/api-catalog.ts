@@ -2617,8 +2617,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'resolve(request: SandboxPolicyRequest = {}): SandboxExecutionPolicy',
-        description: 'Resolve the complete policy for one capability call. An approved explicit mode outranks the session\'s last `sandbox/mode` event, which outranks the deployment default. A session\'s workspace root is its workspace-write boundary, and the Git administration directories prepare derived for that root join the configured extra writable directories; the configured root is the fallback for agentless calls and sessions without a recorded directory. Configured extra roots, this Session\'s active registrations, and the derived Git directories are snapshotted together; existing operations and processes keep their policy.',
-        parameters: [{ name: 'request', description: 'optional session and approved mode override.' }],
+        description: 'Resolve the complete policy for one capability call. An approved explicit mode outranks the session\'s last `sandbox/mode` event, which outranks the deployment default. A session\'s workspace root is its workspace-write boundary, and the Git administration directories prepare derived for that root join the configured extra writable directories; the configured root is the fallback for agentless calls and sessions without a recorded directory, and a requested `root` replaces the session\'s root for the call. Configured extra roots, this Session\'s active registrations, and the derived Git directories are snapshotted together; existing operations and processes keep their policy.',
+        parameters: [{ name: 'request', description: 'optional session, approved mode override, and root override.' }],
         returns: 'the fully resolved per-call mode, absolute workspace root, and extra writable directories.',
       },
       {
@@ -2635,9 +2635,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the last logged mode, or `undefined` without one.',
       },
       {
-        signature: 'async prepare(session: Session, signal?: AbortSignal): Promise<readonly string[]>',
+        signature: 'async prepare(request: Pick<SandboxPolicyRequest, \'session\' | \'root\'>, signal?: AbortSignal): Promise<readonly string[]>',
         description: 'Derive the Git administration directories of the session\'s workspace root so the next resolve grants them: a linked checkout\'s `.git` file names `<common>/worktrees/<name>`, whose `commondir` names the repository\'s common directory and whose `gitdir` names the checkout\'s `.git` again; only that layout grants the common directory, since the checkout\'s own `.git` pointer is writable under workspace-write. Any other layout, a root without `.git`, and a common directory containing the root add nothing. One derivation runs per root and its result is kept once the layout was read, so a pointer written later does not widen the policy until the Session enters a registered checkout again; a derived directory that disappears is derived again, and a failed read is logged once per root and retried on the next call.',
-        parameters: [{ name: 'session', description: 'session whose workspace root is inspected.' }, { name: 'signal', description: 'caller cancellation, checked before and after the shared derivation.' }],
+        parameters: [{ name: 'request', description: 'session whose workspace root is inspected, or the root {@link resolve} would select for the same request.' }, { name: 'signal', description: 'caller cancellation, checked before and after the shared derivation.' }],
         returns: 'the derived directories outside the root, canonical in the execution world.',
       },
     ],
@@ -8321,7 +8321,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SandboxPolicyRequest',
-    declaration: 'export interface SandboxPolicyRequest {\n    session?: Session;\n    mode?: SandboxMode;\n}',
+    declaration: 'export interface SandboxPolicyRequest {\n    session?: Session;\n    mode?: SandboxMode;\n    root?: string;\n}',
   },
   {
     name: 'SaveFileAttachment',

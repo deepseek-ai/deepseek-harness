@@ -183,6 +183,13 @@ export interface SandboxPolicyRequest {
   session?: Session
   /** Explicit approved mode override, which outranks session policy. */
   mode?: SandboxMode
+  /**
+   * Checkout that bounds this call instead of the session's workspace root: Host maintenance of a
+   * checkout the session does not work in, such as removing or restoring the session's worktree from
+   * its source repository while the session's own root is that worktree. The session's mode and
+   * registered grants still apply. Never reachable from model input.
+   */
+  root?: string
 }
 
 /** The sandbox-mode projection's state schema (state equals the public shape). */
@@ -275,7 +282,7 @@ export class SandboxPolicyService extends Service {
       this.prewarm(session)
     })
     ctx.on('tools/pre-execute', async (exec, next) => {
-      if (exec.agent !== undefined) await this.prepare(exec.agent.session, exec.signal)
+      if (exec.agent !== undefined) await this.prepare({ session: exec.agent.session }, exec.signal)
       return next()
     })
     ctx.effect(() => async () => {
@@ -291,15 +298,16 @@ export class SandboxPolicyService extends Service {
    * boundary, and the Git administration directories {@link prepare} derived
    * for that root join the configured extra writable directories; the
    * configured root is the fallback for agentless calls and sessions without a
-   * recorded directory. Configured extra roots, this Session's active registrations,
+   * recorded directory, and a requested `root` replaces the session's root for the
+   * call. Configured extra roots, this Session's active registrations,
    * and the derived Git directories are snapshotted together; existing operations
    * and processes keep their policy.
-   * @param request - optional session and approved mode override.
+   * @param request - optional session, approved mode override, and root override.
    * @returns the fully resolved per-call mode, absolute workspace root, and extra writable directories.
    */
   resolve(request: SandboxPolicyRequest = {}): SandboxExecutionPolicy {
     const { session } = request
-    const workspaceRoot = resolveWorkspaceRoot(this.rootOf(session))
+    const workspaceRoot = resolveWorkspaceRoot(request.root ?? this.rootOf(session))
     const registrations = session === undefined ? undefined : this.writableRootRegistrations.get(session)
     const derived = session === undefined ? undefined : this.gitAdministration.get(workspaceRoot)
     const additional = registrations === undefined && (derived === undefined || derived.length === 0)
@@ -366,13 +374,14 @@ export class SandboxPolicyService extends Service {
    * enters a registered checkout again; a derived directory that disappears is
    * derived again, and a failed read is logged once per root and retried on
    * the next call.
-   * @param session - session whose workspace root is inspected.
+   * @param request - session whose workspace root is inspected, or the root {@link resolve} would select
+   * for the same request.
    * @param signal - caller cancellation, checked before and after the shared derivation.
    * @returns the derived directories outside the root, canonical in the execution world.
    */
-  async prepare(session: Session, signal?: AbortSignal): Promise<readonly string[]> {
+  async prepare(request: Pick<SandboxPolicyRequest, 'session' | 'root'>, signal?: AbortSignal): Promise<readonly string[]> {
     signal?.throwIfAborted()
-    const root = this.rootOf(session)
+    const root = resolveWorkspaceRoot(request.root ?? this.rootOf(request.session))
     const settled = this.gitAdministration.get(root)
     if (settled !== undefined) {
       if (await this.present(settled, signal)) return settled
@@ -390,7 +399,7 @@ export class SandboxPolicyService extends Service {
 
   private prewarm(session: Session): void {
     // Failures are logged inside the derivation; disposal rejects the pending wait.
-    void this.prepare(session).catch(() => undefined)
+    void this.prepare({ session }).catch(() => undefined)
   }
 
   /** Whether every derived directory still exists; a vanished or uninspectable one invalidates the settled result. */
