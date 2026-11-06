@@ -84,15 +84,9 @@ if (resource !== undefined) {
 } else if (aclRunner !== undefined && process.argv[2] === aclRunner) {
   process.argv.splice(1, 1)
   await import('@deepseek-ai/dsh-sandbox-windows-acl/runner')
-} else if (process.env.DSH_PTC_RUNTIME_NODE !== undefined) {
-  const mode = process.env.DSH_PTC_RUNTIME_NODE
+} else if (process.env.DSH_PTC_RUNTIME_NODE === '1') {
   Reflect.deleteProperty(process.env, 'DSH_PTC_RUNTIME_NODE')
-  if (mode !== '1' && mode !== 'persistent') {
-    throw new Error('DSH_PTC_RUNTIME_NODE must be 1 or persistent')
-  }
-  await import(mode === 'persistent'
-    ? '@deepseek-ai/dsh-ptc-runtime-node/persistent-process'
-    : '@deepseek-ai/dsh-ptc-runtime-node/process')
+  await import('@deepseek-ai/dsh-ptc-runtime-node/process')
 } else if (selection === undefined) {
   // A DSH_PRIMARY_RUNTIME set or inherited from the environment, including the empty opt-out, takes precedence over the
   // downloaded cache.

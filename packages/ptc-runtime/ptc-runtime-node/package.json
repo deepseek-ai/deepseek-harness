@@ -27,10 +27,6 @@
       "types": "./lib/types/process-entry.d.ts",
       "default": "./lib/process.js"
     },
-    "./persistent-process": {
-      "types": "./lib/types/persistent-process-entry.d.ts",
-      "default": "./lib/persistent-process.js"
-    },
     "./locale/*.json": "./locale/*.json"
   },
   "files": [

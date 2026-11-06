@@ -501,22 +501,6 @@ describe('Node runtime host failures', () => {
     expect(Object.fromEntries(Object.entries(spec?.env ?? {}).filter(([, value]) => value !== undefined)))
       .toEqual({ DSH_PTC_RUNTIME_NODE: '1', NODE_OPTIONS: '--max-old-space-size=512 --experimental-vm-modules' })
   })
-
-  it('selects the persistent embedded bootstrap for retained state', async () => {
-    const h = await setup({
-      executionMode: 'persistent-in-memory',
-      maxMessageBytes: 2048,
-      launch: { kind: 'embedded', executable: '/remote/helper' },
-    })
-    h.onBoot(() => { h.complete({ value: encodePtcJsonWire(1) }) })
-    const owner = {}
-    expect((await h.start({ program: '1', bindings: [], stateOwner: owner })).error).toBeUndefined()
-    const spec = h.spawn.mock.calls[0]?.[0]
-    expect(spec?.env?.DSH_PTC_RUNTIME_NODE).toBe('persistent')
-    expect(spec?.argv).toEqual([process.execPath, '2048'])
-    expect(Object.fromEntries(Object.entries(spec?.env ?? {}).filter(([, value]) => value !== undefined)))
-      .toEqual({ DSH_PTC_RUNTIME_NODE: 'persistent', NODE_OPTIONS: '--max-old-space-size=512 --experimental-vm-modules' })
-  })
 })
 
 it('keeps failed per-call cleanup registered until process observation succeeds', async () => {
