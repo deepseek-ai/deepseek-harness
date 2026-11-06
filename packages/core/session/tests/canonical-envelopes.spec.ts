@@ -47,10 +47,10 @@ const entryPaths: Record<string, (event: SessionEvent) => unknown> = {
   append: (event: SessionEvent) => appendEvent(Session.create(id), event),
   batch: (event: SessionEvent) => {
     const session = Session.create(id)
-    return Reflect.apply(session.append, session, [[[event.type, event.data, {
+    return Reflect.apply(session.append.bind(session), session, [[[event.type, event.data, {
       ...event.surfaceOp === undefined ? {} : { surfaceOp: event.surfaceOp },
       ...event.sourceEventSeqs === undefined ? {} : { sourceEventSeqs: event.sourceEventSeqs },
-    }]]])
+    }]]]) as readonly SessionEvent[]
   },
   seed: (event: SessionEvent) => Session.create(id, [event]),
   restore: (event: SessionEvent) => Session.fromRestore(id, [event], { ...header }, SessionLogOffset(0), 'detached'),
