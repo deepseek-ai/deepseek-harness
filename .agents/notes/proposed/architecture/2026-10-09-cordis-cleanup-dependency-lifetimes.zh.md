@@ -36,7 +36,7 @@ Status: proposed
 
 ### Authorization 丢失必需的提交观察或已接受的凭据写入
 
-**所有者与证据。** Authorization 的[提交观察器 (`AuthorizationService.attempt`)](../../../../packages/credentials/authorization/src/index.ts)是调用方拥有的 `ctx.on` effect。[提交操作 (`AuthorizationService.attempt`)](../../../../packages/credentials/authorization/src/index.ts)等待凭据存储，而[成功要求观察到更新 (`AuthorizationService.attempt`)](../../../../packages/credentials/authorization/src/index.ts)。账号服务[不会中止正在提交的尝试，并等待其完成 (`PlatformAccount`)](../../../../packages/credentials/deepseek-account-platform/src/index.ts)。
+**所有者与证据。** Authorization 的[提交观察器 (`AuthorizationService.attempt`)](../../../../packages/credentials/authorization/src/index.ts)是调用方拥有的 `ctx.on` effect。[提交操作 (`AuthorizationService.attempt`)](../../../../packages/credentials/authorization/src/index.ts)等待凭据存储，而[成功要求观察到更新 (`AuthorizationService.attempt`)](../../../../packages/credentials/authorization/src/index.ts)。账号服务[不会中止正在提交的尝试，并等待其完成 (`DeepSeekAccount`)](../../../../packages/credentials/deepseek-account/src/index.ts)。
 
 **写入成功，却报告失败。** 暂停凭据写入，释放账号消费者，再完成写入并发出更新。观察器可以与账号的排空并发自动退订；随后 Authorization 即使存储成功也会以 `NOT_COMMITTED` 拒绝。应让操作拥有观察器直到结果确定，或直接确认成功的 `session.commit`，同时给旧式直接写入观察明确的生命周期。使用实际 Cordis 与 Authorization、配合延迟的内存凭据 provider 的实验，复现了 provider 写入成功后返回 `NOT_COMMITTED`；完整浏览器登录路径由源码追踪确认。
 

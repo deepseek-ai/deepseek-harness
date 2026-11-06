@@ -578,6 +578,22 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-shortcuts -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-client-ui-account-notifications -->
+<a id="deepseek-aidsh-client-ui-account-notifications"></a>
+
+## `@deepseek-ai/dsh-client-ui-account-notifications`
+
+- `source`: [`packages/client/ui-account-notifications/src/config.ts:5`](../packages/client/ui-account-notifications/src/config.ts)
+
+```ts config-catalog
+/** Initial polling interval before the server supplies its next delay. */
+export interface Config {
+  /** Initial query delay in milliseconds, replaced by each successful server response. */
+  notificationPollIntervalMs: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-ui-account-notifications -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-client-ui-plugin-manager -->
 <a id="deepseek-aidsh-client-ui-plugin-manager"></a>
 
@@ -625,16 +641,12 @@ export interface Config extends ContactConfig {
   developerTools: Volatile<boolean>
 }
 
-/** Questionnaire destination and bonus notice timings shared by Host and Client. */
+/** Questionnaire destination shared by Host and Client. */
 export interface ContactConfig {
   /** HTTPS questionnaire URL; override for a test form. */
   contactFormUrl: string
   /** Questionnaire source option; empty until Harness is supported by the form. */
   contactSource: string
-  /** First delay before retrying a failed bonus acknowledgement. */
-  bonusAckRetryDelayMs: number
-  /** Ceiling for the acknowledgement retry backoff. */
-  bonusAckRetryMaxDelayMs: number
 }
 
 /** Persisted steps; a native top-up page leaves the durable step at credit. */
@@ -858,19 +870,21 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-credentials-local -->
 
-<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-deepseek-account-platform -->
-<a id="deepseek-aidsh-deepseek-account-platform"></a>
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-deepseek-account -->
+<a id="deepseek-aidsh-deepseek-account"></a>
 
-## `@deepseek-ai/dsh-deepseek-account-platform`
+## `@deepseek-ai/dsh-deepseek-account`
 
 - `inject`: `credentials` · `authorization`
-- `source`: [`packages/credentials/deepseek-account-platform/src/index.ts:23`](../packages/credentials/deepseek-account-platform/src/index.ts)
+- `source`: [`packages/credentials/deepseek-account/src/index.ts:40`](../packages/credentials/deepseek-account/src/index.ts)
 
 ```ts config-catalog
 /** Deployment-specific platform and request deadlines. */
 export interface Config {
   /** Platform origin serving auth-api and browser pages. */
   platformOrigin?: string
+  /** Harness API origin for account notifications. */
+  harnessOrigin?: string
   /** Native desktop identity for Host API and embedded Platform requests; null identifies the client as web. */
   desktopPlatform?: 'darwin' | 'win32' | null
   /** Optional frontend deployment selector for embedded Usage and Top-up pages. */
@@ -881,9 +895,11 @@ export interface Config {
   allowLoopbackHttp?: boolean
   /** Map authorization and completion pages to platformOrigin for private development proxies. */
   rewriteBrowserOrigin?: boolean
-  /** Host-only headers sent exclusively to platformOrigin; account authorization cannot be overridden. */
+  /** Host-only headers for Platform and notification APIs; account authorization cannot be overridden. */
   requestHeaders?: Record<string, string>
-  /** Overrides for profile, balance and embedded Platform requests; Cookie pairs merge by name. Logout retains requestHeaders. */
+  /** Overrides for profile, balance, notification and embedded Platform requests;
+   * Cookie pairs merge by name. Logout retains requestHeaders.
+   */
   accountRequestHeaders?: Record<string, string>
   /** Deadline for each platform HTTP request. */
   requestTimeoutMs?: number
@@ -897,7 +913,7 @@ export interface Config {
   attemptTimeoutMs?: number
 }
 ```
-<!-- END GENERATED config-catalog:@deepseek-ai/dsh-deepseek-account-platform -->
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-deepseek-account -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-experimental-api-speech-to-text -->
 <a id="deepseek-aidsh-experimental-api-speech-to-text"></a>
@@ -4990,7 +5006,6 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | --- | --- | --- |
 | `@deepseek-ai/dsh-acp-app` | `cmdlineArgs` | [`packages/bundle/acp-app/src/index.ts`](../packages/bundle/acp-app/src/index.ts) |
 | `@deepseek-ai/dsh-agent` | `sessionProjections` | [`packages/core/agent/src/index.ts`](../packages/core/agent/src/index.ts) |
-| `@deepseek-ai/dsh-api-account-controller` | `deepseekAccount` · `agents` | [`packages/api/account-controller/src/index.ts`](../packages/api/account-controller/src/index.ts) |
 | `@deepseek-ai/dsh-api-remote-access` | — | [`packages/api/remote-access/src/index.ts`](../packages/api/remote-access/src/index.ts) |
 | `@deepseek-ai/dsh-api-remotes` | `typertGateway` | [`packages/api/remotes/src/index.ts`](../packages/api/remotes/src/index.ts) |
 | `@deepseek-ai/dsh-authorization` | `credentials` | [`packages/credentials/authorization/src/index.ts`](../packages/credentials/authorization/src/index.ts) |
@@ -5119,7 +5134,6 @@ Abstract service classes — a deployment loads a concrete implementation packag
 | `@deepseek-ai/dsh-attachment` | `AttachmentStore` | — | [`packages/attachment/attachment/src/index.ts`](../packages/attachment/attachment/src/index.ts) |
 | `@deepseek-ai/dsh-compaction` | `CompactionEngine` | — | [`packages/compaction/compaction/src/index.ts`](../packages/compaction/compaction/src/index.ts) |
 | `@deepseek-ai/dsh-credentials` | `CredentialProvider` | — | [`packages/credentials/credentials/src/index.ts`](../packages/credentials/credentials/src/index.ts) |
-| `@deepseek-ai/dsh-deepseek-account` | `DeepSeekAccount` | — | [`packages/credentials/deepseek-account/src/index.ts`](../packages/credentials/deepseek-account/src/index.ts) |
 | `@deepseek-ai/dsh-file-reference` | `FileReferenceService` | — | [`packages/context/file-reference/src/index.ts`](../packages/context/file-reference/src/index.ts) |
 | `@deepseek-ai/dsh-fs` | `FileSystem` | — | [`packages/fs/fs/src/index.ts`](../packages/fs/fs/src/index.ts) |
 | `@deepseek-ai/dsh-host-directory-picker` | `DirectoryPicker` | — | [`packages/host/directory-picker/src/index.ts`](../packages/host/directory-picker/src/index.ts) |

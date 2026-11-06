@@ -10,7 +10,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-api-remote-access/client'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
-import type { AccountView, AccountDetails } from '@deepseek-ai/dsh-deepseek-account/types'
+import type { AccountUpdate, AccountDetails } from '@deepseek-ai/dsh-deepseek-account/types'
 import type { OnboardingChange } from './onboarding-contract.ts'
 import type { PlatformBridge } from './PlatformOverlay.tsx'
 import { ContactConfig, CONTACT_CONFIG_GLOBAL } from '../contact-config.ts'
@@ -22,7 +22,6 @@ import { AccountPlatformHost, type AccountPlatformHostInjected } from './Account
 import { AccountMenu } from './AccountMenu.tsx'
 import { createPlatformPages, type PlatformPages } from './platform-pages.ts'
 import { AccountSection, type AccountSnapshot, type AccountSectionInjected } from './AccountSection.tsx'
-import { createBonusNoticeController } from './bonus-notices.ts'
 import { accountClientMetadata } from './client-metadata.ts'
 import { en, ja, es, fr, de, ru, pt, zh, type AccountKey } from './locales.ts'
 import { AccountQuotaNotice, type AccountQuotaNoticeInjected } from './AccountQuotaNotice.tsx'
@@ -36,6 +35,7 @@ export type { AccountSectionInjected, AccountSectionProps } from './AccountSecti
 export type { AccountMenuProps } from './AccountMenu.tsx'
 export type { AccountSnapshot } from './AccountSection.tsx'
 export type { AccountKey } from './locales.ts'
+export type { AccountUi, AccountUiState, AccountNotificationsOwnerProps } from './account-ui.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap { 'settings.account': AccountKey }
@@ -60,31 +60,9 @@ export function apply(ctx: Context): void {
   const publish = (value: AccountSnapshot) => { snapshot = value; for (const listener of listeners) listener() }
   const avatar = new AccountAvatarLoader((value) => { publish({ ...snapshot, avatar: value }) })
   ctx.effect(() => () => { avatar.dispose() }, 'account: profile picture lifetime')
-  /** @returns the client identity for one account call, read at call time so it carries the language and zone in effect then. */
-  const client = () => accountClientMetadata(ctx.locale.getSnapshot().active, process.env.DSH_CLIENT_VERSION)
-  // The browser half of the notice lifecycle: reads when the account becomes
-  // active and on an explicit refresh, and acknowledges an order only after its
-  // card reports a presented frame. The Host owns which bonus is unnotified and
-  // the server owns the copy.
-  const notices = createBonusNoticeController({
-    ackRetryDelayMs: config.bonusAckRetryDelayMs,
-    ackRetryMaxDelayMs: config.bonusAckRetryMaxDelayMs,
-    read: async () => {
-      const result = await ctx.remote.account.getUnnotifiedBonuses(client())
-      if (!result.ok) throw new Error('account bonus read failed')
-      return result.value
-    },
-    acknowledge: async (accountId, orderId) => {
-      const result = await ctx.remote.account.ackBonusNotified(accountId, orderId, client())
-      if (!result.ok) throw new Error('account bonus acknowledgement failed')
-      return result.value
-    },
-    publish: (notices) => {
-      const { notices: _replaced, ...withoutNotices } = snapshot
-      publish(notices.length === 0 ? withoutNotices : { ...withoutNotices, notices })
-    },
-  })
-  ctx.effect(() => () => { notices.end() }, 'account: bonus notice lifetime')
+  /** @param locale - requested language. @returns client metadata with the current timezone. */
+  const client = (locale: string) => accountClientMetadata(locale, process.env.DSH_CLIENT_VERSION)
+  ctx.provide('accountUi', { getSnapshot: () => snapshot, clientMetadata: client })
   let revision = 0
   let refreshing: Promise<void> | undefined
   const refresh = (): Promise<void> => {
@@ -101,13 +79,13 @@ export function apply(ctx: Context): void {
     }
     const request = Promise.all([
       read('profile', async () => {
-        const result = await ctx.remote.account.getProfile(client())
+        const result = await ctx.remote.account.getProfile(client(ctx.locale.getSnapshot().active))
         if (!result.ok) throw new Error('account profile failed')
         if (generation === revision && result.value?.status === 'ready') avatar.setUrl(result.value.value.avatarUrl)
         return result.value
       }),
       read('balance', async () => {
-        const result = await ctx.remote.account.getBalance(client())
+        const result = await ctx.remote.account.getBalance(client(ctx.locale.getSnapshot().active))
         if (!result.ok) throw new Error('account balance failed')
         return result.value
       }),
@@ -119,17 +97,17 @@ export function apply(ctx: Context): void {
   ctx.effect(() => () => { revision++ }, 'account: details request lifetime')
   // The account stream, and the reads it starts, follow access to this host's account state.
   ctx.remoteAccess.whenAccess('account/watch', function* () {
-    const stream = ctx.remote.$stream<AccountView>({
+    const stream = ctx.remote.$stream<AccountUpdate>({
       name: 'account', open: signal => ctx.remote.account.watch(signal), ended: () => new Error('account stream ended'),
+      carrierFailed: () => {
+        publish({ ...snapshot, failed: true })
+        ctx.emit('account-ui/change', snapshot, true)
+      },
     })
+    let accountGeneration = 0
     // Read across closures: the disposer ends this grant while the frame loop awaits.
     const grant = { ended: false }
-    // Withdrawing access invalidates the reads this grant started, closes the
-    // pending authorization tab, and clears the account view and the sign-in
-    // dialog state, synchronously, so the next grant starts from no account
-    // state. `notices.end()` disposes this generation's notice lifetime, which a
-    // frame of this stream begins; the notice controller stays outside and
-    // begins again under the next grant.
+    // Revocation clears shared account state before another access grant can start.
     yield () => {
       grant.ended = true
       revision++
@@ -138,25 +116,27 @@ export function apply(ctx: Context): void {
       browser.dispose()
       const { loginFailed: _loginFailed, ...current } = snapshot
       publish({ ...current, view: undefined, details: undefined, avatar: undefined, failed: false, loginVisible: false })
-      notices.end()
+      ctx.emit('account-ui/change', snapshot, true)
       return stream.dispose()
     }
     void (async () => {
       for await (const frame of stream) {
         // A frame the stream delivered before the revocation is not this grant's to apply.
         if (grant.ended) return
+        const credentialsChanged = frame.value.type === 'credentials-changed'
+        const view = frame.value.state
+        const generationChanged = frame.generation !== accountGeneration
+        const reset = credentialsChanged || generationChanged || snapshot.view?.status !== view.status || snapshot.failed
+        accountGeneration = frame.generation
         revision++
         refreshing = undefined
         avatar.reset()
-        const initialize = frame.value.status === 'credential-stored' && frame.value.attempt?.phase === 'succeeded'
+        const initialize = view.status === 'credential-stored' && view.attempt?.phase === 'succeeded'
           && snapshot.view?.attempt?.phase !== 'succeeded'
-        const { notices: previousNotices, ...previous } = snapshot
-        publish({ ...previous, view: frame.value, details: undefined, avatar: undefined, failed: false,
-          ...(frame.value.status === 'credential-stored' && previousNotices ? { notices: previousNotices } : {}) })
-        browser.update(frame.value)
+        publish({ ...snapshot, view, details: undefined, avatar: undefined, failed: false })
+        browser.update(view)
         frame.accept()
-        if (frame.value.status === 'credential-stored') notices.begin()
-        else notices.end()
+        ctx.emit('account-ui/change', snapshot, reset)
         if (initialize) void (async () => {
           try {
             const initialized = await ctx.remote.session.initializeDefaultModel()
@@ -167,7 +147,12 @@ export function apply(ctx: Context): void {
         })()
         void refresh()
       }
-    })().catch(() => { if (!grant.ended) publish({ ...snapshot, failed: true }) })
+    })().catch(() => {
+      if (!grant.ended) {
+        publish({ ...snapshot, failed: true })
+        ctx.emit('account-ui/change', snapshot, true)
+      }
+    })
   })
   const nativePlatform = (globalThis as typeof globalThis & { dshPlatform?: PlatformBridge }).dshPlatform
   // One request channel for the single native Platform view. It always exists
@@ -175,12 +160,10 @@ export function apply(ctx: Context): void {
   // lets an entry request one.
   const platformPages = createPlatformPages()
   ctx.effect(() => () => { platformPages.dispose() }, 'account: platform page request')
-  // One account refresh: the recharge/bonus wallet and the unnotified-bonus read,
-  // whichever surface asks — a Settings entry, or returning from top-up. Both
-  // reads are independent, and a concurrent refresh shares the in-flight request.
+  // Extensions share explicit refreshes; profile and wallet reads remain coalesced.
   const refreshAccount = async (): Promise<void> => {
     avatar.retry()
-    await Promise.all([refresh(), notices.refresh()])
+    await Promise.all([refresh(), ctx.parallel('account-ui/refresh')])
   }
   /**
    * Narrow the shared channel to one surface's post-return read: only a viewer
@@ -231,8 +214,6 @@ export function apply(ctx: Context): void {
     },
     showLogin(visible) { publish({ ...snapshot, loginVisible: visible }) },
     setOnboarding(active) { publish({ ...snapshot, onboarding: active }) },
-    bonusNoticeShown(orderId) { notices.shown(orderId) },
-    bonusNoticeDismissed(orderId) { notices.dismiss(orderId) },
     hooks: {
       account: {
         getSnapshot: () => snapshot,
@@ -249,7 +230,7 @@ export function apply(ctx: Context): void {
         __DSH_TRANSPORT__?: { streamBaseUrl?: string }
       }).__DSH_TRANSPORT__
       const request = async () => {
-        const result = await ctx.remote.account.startSignIn(client(),
+        const result = await ctx.remote.account.startSignIn(client(ctx.locale.getSnapshot().active),
           desktop && transport?.streamBaseUrl !== undefined ? new URL(transport.streamBaseUrl).origin : window.location.origin,
           desktop ? 'desktop' : 'web')
         if (!result.ok) throw new Error('account start failed')
@@ -270,7 +251,7 @@ export function apply(ctx: Context): void {
       return result.value
     },
     async signOut() {
-      const result = await ctx.remote.account.signOut(client())
+      const result = await ctx.remote.account.signOut(client(ctx.locale.getSnapshot().active))
       if (result.ok) return
       throw result.error
     },
@@ -332,6 +313,7 @@ export function apply(ctx: Context): void {
   }
   ctx.remoteAccess.whenAccess('account/watch', () => ctx.slots.inject('settings.launcher', () => ctx.slots.register({
     name: 'settings.launcher', locale: 'settings.account', inject: () => operations,
+    children: { 'settings.launcher.notifications': { kind: 'single', scope: 'root' } },
   }, AccountMenu)))
   ctx.remoteAccess.whenAccess('account/watch', () => ctx.slots.inject('settings.section', () => {
     let unregister: (() => void) | undefined
