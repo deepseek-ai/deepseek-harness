@@ -122,7 +122,7 @@ it('routes file actions through an explicit host, the line, native association a
   const simple = { kind: 'file', value: { sessionId: SessionId('absent'), path: '/file.unknown' } } as const
   h.remote.session.workspacePathApplications.mockResolvedValueOnce({ ok: true, value: [] })
   const menu = await h.resolve(simple)
-  // Without an answer the row opens through the association; the Host's empty answer then disables it in place.
+  // The Host's empty answer arrives within the first-answer wait, so the row opens disabled.
   await vi.waitFor(() => { expect(menu.source.getSnapshot().find(item => item.id.endsWith('/open'))?.disabled).toBe(true) })
   expect(menu.source.getSnapshot().some(item => item.id.endsWith('/copyImage'))).toBe(false)
   expect(menu.source.getSnapshot().filter(item => item.id.startsWith('file-actions.')).map(item => item.id))
@@ -136,7 +136,47 @@ it('routes file actions through an explicit host, the line, native association a
   expect(h.sidebar.openResourceIn).toHaveBeenLastCalledWith(SessionId('absent'), expect.any(String), { destination: 'float' })
 })
 
-it('opens file menus before the Host answers and changes only the application row in place', async () => {
+it('names the application when the first answer of a file type arrives within the wait', async () => {
+  const h = await boot()
+  // The answer arrives a macrotask later, after a resolution that did not wait would have published its rows.
+  h.remote.session.workspacePathApplications.mockImplementationOnce(() => new Promise((answer) => {
+    setTimeout(() => { answer({ ok: true, value: [{ id: 'preview', name: 'Preview', default: true, icon: null }] }) }, 10)
+  }))
+  const menu = h.registry.resolve({ kind: 'file', value: { sessionId, path: 'notes.txt' } })
+  const labels: (string | undefined)[] = []
+  const stop = menu.source.subscribe(() => {
+    labels.push(menu.source.getSnapshot().find(item => item.id === 'open-in-app.file/open')?.label)
+  })
+  await menu.ready
+  stop()
+  expect(labels.filter(label => label !== undefined)).toEqual(['open.title'])
+  menu.dispose()
+})
+
+it('waits for the first answer of a file type at most 300 ms, and a dismissal ends the wait', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  onTestFinished(() => { vi.useRealTimers() })
+  const h = await boot()
+  h.remote.session.workspacePathApplications.mockImplementation(() => new Promise(() => {}))
+  const menu = h.registry.resolve({ kind: 'file', value: { sessionId, path: 'notes.txt' } })
+  let ready = false
+  void menu.ready.then(() => { ready = true })
+  await vi.advanceTimersByTimeAsync(299)
+  expect(ready).toBe(false)
+  await vi.advanceTimersByTimeAsync(1)
+  expect(ready).toBe(true)
+  expect(menu.source.getSnapshot().find(item => item.id === 'open-in-app.file/open')).toMatchObject({ label: 'menu.defaultApp', disabled: false })
+  menu.dispose()
+  const dismissed = h.registry.resolve({ kind: 'file', value: { sessionId, path: 'todo.md' } })
+  await vi.advanceTimersByTimeAsync(100)
+  expect(vi.getTimerCount()).toBe(1)
+  dismissed.dispose()
+  await dismissed.ready
+  expect(vi.getTimerCount()).toBe(0)
+  expect(h.failure).not.toHaveBeenCalled()
+})
+
+it('opens file menus after the first-answer wait and changes only the application row in place', async () => {
   const h = await boot()
   const answers: ((answer: RemoteResult<Applications>) => void)[] = []
   h.remote.session.workspacePathApplications.mockImplementation(() => new Promise((answer) => { answers.push(answer) }))
@@ -228,6 +268,13 @@ it('re-resolves an open file menu only when its own file type answers differentl
   await h.paths.applications('/workspace/other.md', new AbortController().signal)
   expect(h.paths.cachedApplications('/workspace/other.md')).toHaveLength(1)
   expect(menu.source.getSnapshot()).toBe(shown)
+  h.remote.session.workspacePathApplications.mockResolvedValueOnce({ ok: true, value: [] })
+  await h.paths.applications('/workspace/todo.txt', new AbortController().signal)
+  const changed = menu.source.getSnapshot()
+  expect(changed.find(item => item.id === 'open-in-app.file/open')).toMatchObject({ label: 'menu.defaultApp', disabled: true })
+  h.remote.session.workspacePathApplications.mockResolvedValueOnce({ ok: true, value: [] })
+  await h.paths.applications('/workspace/other.md', new AbortController().signal)
+  expect(menu.source.getSnapshot()).toBe(changed)
   menu.dispose()
 })
 

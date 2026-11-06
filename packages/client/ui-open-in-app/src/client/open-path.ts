@@ -139,13 +139,15 @@ export class OpenInAppPathController {
    * Re-query a file's associations in the background. One refresh runs at a time: it outlives the
    * requesting menu and ends with its answer, the next refresh, which cancels it, or {@link dispose}.
    * @param path - absolute Host path of the file.
+   * @returns settles without rejecting when this refresh's query settles, after any answer is recorded;
+   * already settled after {@link dispose}.
    */
-  refreshApplications(path: string): void {
-    if (this.lifetime.signal.aborted) return
+  refreshApplications(path: string): Promise<void> {
+    if (this.lifetime.signal.aborted) return Promise.resolve()
     this.refresh?.abort()
     const refresh = new AbortController()
     this.refresh = refresh
-    void this.applications(path, AbortSignal.any([this.lifetime.signal, refresh.signal]))
+    return this.applications(path, AbortSignal.any([this.lifetime.signal, refresh.signal])).then(() => {})
   }
 
   /** Cancel background refreshes and refuse new ones; recorded answers stay readable. */

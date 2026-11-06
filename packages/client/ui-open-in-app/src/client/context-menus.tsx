@@ -9,11 +9,37 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from '@deepseek-ai/dsh-api-workspace-files/remote'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-browser/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionWorkspacePathApplication } from '@deepseek-ai/dsh-api-session-controller/types'
 import type { OpenInAppController } from './controller.ts'
 import { fileAddressFor, resolveWorkspacePath } from '@deepseek-ai/dsh-util-workspace-path'
 import type { OpenInAppPathController } from './open-path.ts'
 import type { OpenInAppKey } from './locales.ts'
 import type { OpenInAppToastSource } from './open-toast.tsx'
+
+type Applications = readonly SessionWorkspacePathApplication[]
+/** A file menu's verified Host path and the association answer its resolution showed. */
+interface Verification { readonly absolutePath: string; readonly shown: Applications | undefined }
+
+/**
+ * How long a file menu waits for the first association answer of its file type before opening with the
+ * unnamed default-application row; most first answers arrive sooner, so the row rarely changes after opening.
+ */
+const FIRST_ANSWER_WAIT_MS = 300
+
+/**
+ * @param pending - settles without rejecting.
+ * @param ms - longest wait.
+ * @param signal - ends the wait early.
+ * @returns settles when `pending` settles, after `ms`, or on abort, whichever comes first; the timer never outlives it.
+ */
+function settleWithin(pending: Promise<void>, ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((settle) => {
+    const done = (): void => { clearTimeout(timer); signal.removeEventListener('abort', done); settle() }
+    const timer = setTimeout(done, ms)
+    signal.addEventListener('abort', done, { once: true })
+    void pending.then(done)
+  })
+}
 
 /**
  * Register native opening, original-path reveal, and URL actions.
@@ -109,10 +135,10 @@ export function registerContextMenus(
         } },
     ]
   }
-  // The Host path from each file target's latest successful stat, shared by menus open on one target object at once.
-  // A stat clears it while running; answers arriving meanwhile need no re-resolution, as that stat's resolution reads
-  // the newest answers.
-  const verified = new WeakMap<ContextMenuTargetMap['file'], string>()
+  // The Host path from each file target's latest successful stat and the answer its menu showed, shared by menus open
+  // on one target object at once. A stat clears it while running; answers arriving meanwhile need no re-resolution, as
+  // that stat's resolution reads the newest answers.
+  const verified = new WeakMap<ContextMenuTargetMap['file'], Verification>()
   // The target whose changed association answer is being applied; only that re-resolution reuses the verified path,
   // so every opening runs its own stat. The in-place update relies on the registry re-resolving synchronously from
   // the notification, without which the menu stats again, and on a synchronous resolution replacing rows without
@@ -123,32 +149,39 @@ export function registerContextMenus(
     observe: target => [{
       getSnapshot: paths.associations.getSnapshot.bind(paths.associations),
       subscribe: (listener: () => void) => {
-        // Answers for other file types leave this menu unchanged.
-        let shown: ReturnType<typeof paths.cachedApplications>
+        // The answer this subscription last applied for a verification; answers for other file types leave it unchanged.
+        let applied: { readonly verification: Verification; readonly applications: Applications | undefined } | undefined
         return paths.associations.subscribe(() => {
-          const absolutePath = verified.get(target)
-          if (absolutePath === undefined) return
-          const applications = paths.cachedApplications(absolutePath)
-          if (applications === shown) return
-          shown = applications
+          const verification = verified.get(target)
+          if (verification === undefined) return
+          const applications = paths.cachedApplications(verification.absolutePath)
+          const current = applied?.verification === verification ? applied.applications : verification.shown
+          if (applications === current) return
+          applied = { verification, applications }
           answering = target
           try { listener() } finally { answering = undefined }
         })
       },
     }],
     resolve: (target, signal) => {
-      const verifiedPath = answering === target ? verified.get(target) : undefined
-      if (verifiedPath !== undefined) return fileMenu(target, verifiedPath)
+      const reused = answering === target ? verified.get(target) : undefined
+      if (reused !== undefined) return fileMenu(target, reused.absolutePath)
       verified.delete(target)
       return (async () => {
         await paths.load()
         const absolutePath = await resolvePath(target.sessionId, target.path, signal)
         signal.throwIfAborted()
-        if (absolutePath !== undefined) {
-          verified.set(target, absolutePath)
-          // A cached answer shows at once; every opening re-queries so a changed association reaches this menu.
-          if (paths.desktop.getSnapshot() === true) paths.refreshApplications(absolutePath)
+        if (absolutePath === undefined) return fileMenu(target, undefined)
+        if (paths.desktop.getSnapshot() === true) {
+          // Every opening re-queries so a changed association reaches this menu; a type's first opening waits for it briefly.
+          const unanswered = paths.cachedApplications(absolutePath) === undefined
+          const refreshed = paths.refreshApplications(absolutePath)
+          if (unanswered) {
+            await settleWithin(refreshed, FIRST_ANSWER_WAIT_MS, signal)
+            signal.throwIfAborted()
+          }
         }
+        verified.set(target, { absolutePath, shown: paths.cachedApplications(absolutePath) })
         return fileMenu(target, absolutePath)
       })()
     },
