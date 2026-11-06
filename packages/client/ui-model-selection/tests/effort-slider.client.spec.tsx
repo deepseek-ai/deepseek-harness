@@ -52,7 +52,7 @@ it.each(Object.entries({ zh, en, ja, es, fr, de, ru, pt }))('shows the full loca
   expect(effortLabel().textContent).toBe(dictionary['effort.tooltip'].replace('{effort}', high))
   expect(effortLabel().tabIndex).toBe(-1)
   expect(effortLabel().querySelector('[data-effort-name]')!.textContent).toBe(high)
-  expect(screen.queryByRole('button')).toBeNull()
+  expect(screen.getAllByRole('button')).toHaveLength(1)
   view.rerender(<EffortSlider {...inputProps} value={undefined} />)
   expect(effortLabel().textContent).toBe(dictionary['effort.tooltip'].replace('{effort}', defaultLabel))
   expect(effortLabel().querySelector('[data-effort-name]')!.textContent).toBe(defaultLabel)
@@ -131,7 +131,7 @@ it('shows exact advertised stops and the selected value', () => {
   expect(range().step).toBe('1')
   expect(effortLabel().textContent).toBe('Effort: high')
   expect(effortLabel().tabIndex).toBe(-1)
-  expect(screen.queryByRole('button')).toBeNull()
+  expect(screen.getAllByRole('button')).toHaveLength(1)
 })
 
 it('previews a drag but submits only its final stop on release', () => {
@@ -258,7 +258,7 @@ it('does not pretend an unknown stored effort matches the first supported stop',
   expect(range().disabled).toBe(true)
   expect(range().getAttribute('aria-valuetext')).toBe('retired')
   expect(effortLabel().textContent).toBe('Effort: retired')
-  expect(screen.queryByRole('button')).toBeNull()
+  expect(screen.getAllByRole('button')).toHaveLength(1)
 })
 
 it.each([{ levels: [] }, { levels: choices.slice(0, 1) }])('does not offer dragging with fewer than two choices', ({ levels }) => {
@@ -285,14 +285,14 @@ function motionSetup() {
   return { ...view, input, inputProps, thumb, scale, pointer }
 }
 
-it('keeps the visual track and thumb inert while the native range owns interaction', () => {
+it('keeps motion decoration inert beside the native range and caption', () => {
   const view = motionSetup()
   expect(screen.getAllByRole('slider')).toHaveLength(1)
   expect(view.thumb.closest('[aria-hidden="true"]')).toBeTruthy()
   expect(view.container.querySelector('[data-effort-fill]')!.closest('[aria-hidden="true"]')).toBeTruthy()
   expect(view.thumb.tabIndex).toBe(-1)
   expect(view.scale.tabIndex).toBe(-1)
-  expect(screen.queryByRole('button')).toBeNull()
+  expect(screen.getAllByRole('button')).toHaveLength(1)
 })
 
 it('hovers one tick in its 16px target without selecting and does not retain touch hover', () => {

@@ -30,12 +30,25 @@ export interface EffortSliderProps {
 type PointerGeometry = { start: number; length: number; size: number; centerY: number; offset: number }
 type Gesture =
   | { kind: 'pointer'; source: string; index: number; geometry: PointerGeometry | null; position: number | null }
+  | {
+    kind: 'caption'
+    source: string
+    index: number
+    pointerId: number
+    startX: number
+    startY: number
+    startPosition: number
+    length: number
+    position: number | null
+  }
   | { kind: 'keyboard' | 'cancelled'; source: string; index: number }
   | { kind: 'hover'; catalog: string; thumb: boolean; tick: number | null }
 const ADJUST_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'])
+/** Pointer travel under which a dragged thumb settles onto the nearest stop. */
+const SNAP_DISTANCE_PX = 10
 
 /**
- * Preview native discrete values while an inert visual thumb follows pointer movement.
+ * Preview discrete effort choices with a native range and a draggable, range-focusing caption.
  * @param props - Exact-model choices, persisted value, and selection callback.
  * @returns A native range with a live value label and independent motion decoration.
  */
@@ -44,6 +57,7 @@ export function EffortSlider({
 }: EffortSliderProps) {
   const thumbRef = useRef<HTMLSpanElement>(null)
   const rangeRef = useRef<HTMLInputElement>(null)
+  const captionRef = useRef<HTMLButtonElement>(null)
   const infoFocused = useRef(false)
   const selectedIndex = choices.findIndex(choice => choice.effort === value)
   const catalog = JSON.stringify(choices.map(choice => [choice.key, choice.effort]))
@@ -72,10 +86,25 @@ export function EffortSlider({
       infoFocused.current = false
     }
   }, [defaultSelected])
+  const capturedPointer = gesture?.kind === 'caption' ? gesture.pointerId : null
+  useEffect(() => {
+    const caption = captionRef.current
+    if (capturedPointer === null || caption === null) return
+    // Source changes, locks, and unmounts end the caption's capture as well as its preview.
+    return () => { if (caption.hasPointerCapture(capturedPointer)) caption.releasePointerCapture(capturedPointer) }
+  }, [capturedPointer])
   const progress = choices.length > 1 ? index / (choices.length - 1) : 0
-  const dragging = active?.kind === 'pointer' && active.position !== null
-  const visualProgress = dragging ? active.position : progress
-  const expanded = active?.kind === 'pointer' || hover?.thumb === true
+  const dragging = (active?.kind === 'pointer' || active?.kind === 'caption') && active.position !== null
+  const snapPosition = (position: number, length: number | null): number => {
+    if (length === null || choices.length < 2) return position
+    const nearest = Math.round(position * (choices.length - 1)) / (choices.length - 1)
+    return Math.abs(position - nearest) * length <= SNAP_DISTANCE_PX ? nearest : position
+  }
+  const dragLength = active?.kind === 'caption' ? active.length : active?.kind === 'pointer' ? active.geometry?.length ?? null : null
+  const visualProgress = active !== null && (active.kind === 'pointer' || active.kind === 'caption') && active.position !== null
+    ? snapPosition(active.position, dragLength)
+    : progress
+  const expanded = active?.kind === 'pointer' || (active?.kind === 'caption' && dragging) || hover?.thumb === true
 
   // Pointer geometry comes from the unscaled wrapper, so zoom and the spring cannot change the grab offset.
   const measure = (input: HTMLInputElement): PointerGeometry | null => {
@@ -124,6 +153,54 @@ export function EffortSlider({
         && previous.catalog === next.catalog && previous.thumb === next.thumb && previous.tick === next.tick ? previous : next)
     }
   }
+  const releaseCaption = (pointerId: number): void => {
+    const caption = captionRef.current
+    if (caption?.hasPointerCapture(pointerId)) caption.releasePointerCapture(pointerId)
+  }
+  const cancelCaption = (pointerId: number): void => {
+    releaseCaption(pointerId)
+    setGesture(previous => previous?.kind === 'caption' && previous.pointerId === pointerId
+      ? { kind: 'cancelled', source: previous.source, index: previous.index } : previous)
+  }
+  const startCaption = (event: PointerEvent<HTMLButtonElement>): void => {
+    if (pending || rangeDisabled) { event.preventDefault(); return }
+    if (!event.isPrimary || event.button > 0) return
+    event.preventDefault()
+    const input = rangeRef.current
+    if (input === null) return
+    input.focus()
+    const geometry = measure(input)
+    const thumb = thumbRef.current?.getBoundingClientRect()
+    if (geometry === null || thumb === undefined) return
+    // The caption may be clamped at an edge; its center is never the drag's value origin.
+    const startPosition = (thumb.left + thumb.width / 2 - geometry.start) / geometry.length
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setGesture({ kind: 'caption', source, index, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY,
+      startPosition, length: geometry.length, position: null })
+  }
+  const moveCaption = (event: PointerEvent<HTMLButtonElement>): void => {
+    if (gesture?.kind !== 'caption' || gesture.pointerId !== event.pointerId || gesture.source !== source || rangeDisabled || pending) return
+    const deltaX = event.clientX - gesture.startX
+    const deltaY = event.clientY - gesture.startY
+    if (gesture.position === null) {
+      if (event.pointerType === 'touch' && Math.abs(deltaY) >= 3 && Math.abs(deltaY) > Math.abs(deltaX)) {
+        cancelCaption(event.pointerId)
+        return
+      }
+      if (Math.abs(deltaX) < 3) return
+    }
+    event.preventDefault()
+    const position = Math.max(0, Math.min(1, gesture.startPosition + deltaX / gesture.length))
+    const nextIndex = Math.round(position * (choices.length - 1))
+    setGesture(previous => previous?.kind === 'caption' && previous.pointerId === event.pointerId && previous.source === source
+      ? { ...previous, position, index: nextIndex } : previous)
+  }
+  const finishCaption = (event: PointerEvent<HTMLButtonElement>): void => {
+    releaseCaption(event.pointerId)
+    if (gesture?.kind !== 'caption' || gesture.pointerId !== event.pointerId || gesture.source !== source) return
+    if (gesture.position !== null && gesture.index !== selectedIndex && !rangeDisabled && !pending) commit(gesture.index)
+    else setGesture(null)
+  }
   return (
     <div
       className={css.root}
@@ -132,15 +209,28 @@ export function EffortSlider({
       style={{
         '--effort-count': Math.max(1, choices.length),
         '--effort-progress': `${progress * 100}%`,
+        '--effort-visual-position': visualProgress,
       } as CSSProperties}
     >
-      <div className={css.heading}>
-        <Tooltip label={valueLabel} side="top" delayMs={500} maxWidth={260} onlyWhenClipped portal>
-          <span className={css.value}>
-            <span className={css.valueLabel} data-effort-label>
-              <span className={css.valuePrefix}>{valueLabel.slice(0, valueStart)}</span>
-              <span className={css.valueName} data-effort-name>{valueLabel.slice(valueStart)}</span>
-            </span>
+      <div className={css.heading} data-dragging={dragging ? '' : undefined}>
+        <Tooltip label={valueLabel} side="top" delayMs={500} maxWidth={260} onlyWhenClipped portal disabled={dragging}>
+          <span className={css.value} data-effort-tag>
+            <button ref={captionRef} type="button" className={css.caption} data-effort-caption aria-label={valueLabel}
+              disabled={rangeDisabled} aria-disabled={rangeDisabled || pending} aria-busy={pending}
+              onPointerDown={startCaption} onPointerMove={moveCaption} onPointerUp={finishCaption}
+              onPointerCancel={(event) => { cancelCaption(event.pointerId) }}
+              onLostPointerCapture={(event) => { cancelCaption(event.pointerId) }}
+              onClick={(event) => {
+                // Pointer clicks already focused on down; zero-detail keyboard/AT activation is a new focus request.
+                if (event.detail !== 0 || rangeDisabled || pending) return
+                setGesture(null)
+                rangeRef.current?.focus()
+              }}>
+              <span className={css.valueLabel} data-effort-label>
+                <span className={css.valuePrefix}>{valueLabel.slice(0, valueStart)}</span>
+                <span className={css.valueName} data-effort-name>{valueLabel.slice(valueStart)}</span>
+              </span>
+            </button>
             {defaultSelected && (
               <Tooltip label={defaultExplanation} side="top" delayMs={300} focusDelayMs={0} maxWidth={260} portal openOnClick>
                 <button type="button" className={css.infoButton} aria-label={defaultInfoLabel}
@@ -152,8 +242,7 @@ export function EffortSlider({
           </span>
         </Tooltip>
       </div>
-      <div className={css.rail} data-dragging={dragging ? '' : undefined} data-disabled={rangeDisabled ? '' : undefined}
-        style={{ '--effort-visual-position': visualProgress } as CSSProperties}>
+      <div className={css.rail} data-dragging={dragging ? '' : undefined} data-disabled={rangeDisabled ? '' : undefined}>
         <div className={css.track} data-effort-track aria-hidden="true">
           <span className={css.fill} data-effort-fill />
         </div>
@@ -190,8 +279,8 @@ export function EffortSlider({
             if (pending || rangeDisabled) return
             const nextIndex = event.currentTarget.valueAsNumber
             if (gesture === null || gesture.kind === 'hover') commit(nextIndex)
-            else if (gesture.source === source && gesture.kind !== 'cancelled') {
-              setGesture(previous => previous !== null && previous.kind !== 'hover' && previous.source === source && previous.kind !== 'cancelled'
+            else if (gesture.source === source && (gesture.kind === 'pointer' || gesture.kind === 'keyboard')) {
+              setGesture(previous => (previous?.kind === 'pointer' || previous?.kind === 'keyboard') && previous.source === source
                 ? { ...previous, index: nextIndex } : previous)
             }
           }}
@@ -204,7 +293,11 @@ export function EffortSlider({
           onBlur={(event) => {
             // WebKit focuses the enclosing menu when its native range takes over a pointer drag.
             const insideAncestor = event.relatedTarget instanceof Node && event.relatedTarget.contains(event.currentTarget)
-            setGesture(previous => insideAncestor && previous?.kind === 'pointer' && previous.source === source ? previous : null)
+            if (gesture?.kind === 'caption') releaseCaption(gesture.pointerId)
+            setGesture(previous => previous?.kind === 'caption'
+              ? { kind: 'cancelled', source: previous.source, index: previous.index }
+              : previous?.kind === 'cancelled' || (insideAncestor && previous?.kind === 'pointer' && previous.source === source)
+                ? previous : null)
           }}
           onKeyDown={(event) => {
             if (event.nativeEvent.isComposing) return
@@ -213,13 +306,18 @@ export function EffortSlider({
               event.stopPropagation()
               return
             }
-            if (event.key === 'Escape' && gesture !== null && gesture.kind !== 'hover') {
+            if (event.key === 'Escape' && gesture !== null && gesture.kind !== 'hover' && gesture.kind !== 'cancelled') {
               event.preventDefault()
               event.stopPropagation()
+              if (gesture.kind === 'caption') releaseCaption(gesture.pointerId)
               setGesture({ kind: 'cancelled', source, index })
             } else if (ADJUST_KEYS.has(event.key)) {
               event.stopPropagation()
-              if (gesture === null || gesture.kind === 'hover') setGesture({ kind: 'keyboard', source, index })
+              if (gesture?.kind === 'caption') releaseCaption(gesture.pointerId)
+              if (gesture === null || gesture.kind === 'hover' || gesture.kind === 'caption'
+                || (gesture.kind === 'cancelled' && !event.repeat)) {
+                setGesture({ kind: 'keyboard', source, index })
+              }
             }
           }}
           onKeyUp={(event) => {

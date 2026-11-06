@@ -325,10 +325,14 @@ export function ModelSelect(
     close()
   }
 
-  const settleSelection = (result: Awaited<ReturnType<ModelSelectInjected['select']>>, origin: 'model' | 'effort'): void => {
+  const settleSelection = (
+    result: Awaited<ReturnType<ModelSelectInjected['select']>>, origin: 'model' | 'effort', selectionPage: HTMLDivElement | null,
+  ): void => {
     if (result === undefined) return
     if (menuRef.current !== null) {
-      if (origin === 'model') {
+      // Restore only the selection's own view and focus, not navigation made while saving.
+      if (origin === 'model' && selectionPage !== null && selectionPage === groupsRef.current
+        && document.activeElement === triggerRef.current) {
         paneFocus.current = 'model'
         if (result.ok) {
           setModelReturnFocus(true)
@@ -353,7 +357,8 @@ export function ModelSelect(
     // Model rows may unmount; the inline slider keeps focus while its value is saved.
     setSelectionFocus(true)
     if (origin === 'model') triggerRef.current?.focus()
-    void select(selection).then((result) => { settleSelection(result, origin) })
+    const selectionPage = origin === 'model' ? groupsRef.current : null
+    void select(selection).then((result) => { settleSelection(result, origin, selectionPage) })
   }
 
   const choose = (selection: ModelSelection): void => {

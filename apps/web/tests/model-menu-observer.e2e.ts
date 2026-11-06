@@ -413,9 +413,11 @@ describe.skipIf(webSnapshotMode() === 'record').each([
         await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 2.5 })
         await expect.poll(() => page.evaluate(() => window.visualViewport!.scale)).toBe(2.5)
         expect(Number(await slider.getAttribute('max'))).toBeGreaterThanOrEqual(7)
-        const information = menu.getByRole('group', { name: '推理等级', exact: true }).getByRole('button')
+        const effort = menu.getByRole('group', { name: '推理等级', exact: true })
+        expect(await effort.getByRole('button').count()).toBe(2)
+        expect(await effort.getByRole('button', { name: '推理等级：默认', exact: true }).count()).toBe(1)
+        const information = effort.getByRole('button', { name: '默认推理等级说明', exact: true })
         expect(await information.count()).toBe(1)
-        expect(await information.getAttribute('aria-label')).toBe('默认推理等级说明')
         await expect.poll(() => slider.evaluate((range) => {
           const scroller = range.closest<HTMLElement>('[data-model-menu-root]')!
           scroller.scrollTop = scroller.scrollHeight

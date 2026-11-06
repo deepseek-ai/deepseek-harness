@@ -53,7 +53,8 @@ function setup(count = 2, hasReasoning = true, providerDefault = false) {
   fireEvent.click(trigger)
   const model = () => screen.getByRole('menuitem', { name: /Model.*Model 1/ })
   const team = () => screen.getByRole('menuitem', { name: 'Agent teamwork' })
-  return { select, toggle, directory, trigger, model, team }
+  const tag = () => screen.getByRole('button', { name: /^Effort:/ })
+  return { select, toggle, directory, trigger, model, team, tag }
 }
 function tab(shiftKey = false) {
   const event = new KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true })
@@ -66,11 +67,15 @@ it('Tab moves from the trigger through root controls without opening a page or s
   tab()
   expect(document.activeElement).toBe(view.model())
   tab()
+  expect(document.activeElement).toBe(view.tag())
+  tab()
   expect(document.activeElement).toBe(screen.getByRole('slider', { name: 'Effort' }))
   tab()
   expect(document.activeElement).toBe(view.team())
   tab(true)
   expect(document.activeElement).toBe(screen.getByRole('slider'))
+  tab(true)
+  expect(document.activeElement).toBe(view.tag())
   tab(true)
   expect(document.activeElement).toBe(view.model())
   expect(screen.queryByRole('menuitemradio')).toBeNull()
@@ -84,6 +89,8 @@ it('includes default information before the range and keeps Escape at the toolti
   const view = setup(2, true, true)
   tab()
   expect(document.activeElement).toBe(view.model())
+  tab()
+  expect(document.activeElement).toBe(view.tag())
   tab()
   const info = screen.getByRole('button', { name: en['effort.defaultInfoLabel'] })
   expect(document.activeElement).toBe(info)
@@ -120,7 +127,7 @@ it('removes only the default information Tab stop when the selection changes', (
   expect(screen.queryByRole('button', { name: en['effort.defaultInfoLabel'] })).toBeNull()
   expect(document.activeElement).toBe(slider)
   tab(true)
-  expect(document.activeElement).toBe(view.model())
+  expect(document.activeElement).toBe(view.tag())
   act(() => { view.directory.update((snapshot) => {
     snapshot.current = { provider: 'sample', model: 'model-1' }
   }) })
@@ -131,7 +138,7 @@ it('removes only the default information Tab stop when the selection changes', (
 
 it('keeps a pending contributed entry in Tab order without allowing navigation', () => {
   const view = setup()
-  tab(); tab(); tab()
+  tab(); tab(); tab(); tab()
   const team = view.team()
   expect(document.activeElement).toBe(team)
   act(() => { view.directory.update((snapshot) => {

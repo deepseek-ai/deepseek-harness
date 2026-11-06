@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.1/model-menu-pending/guide.md
+/:
+  en: ebebf4bc1ef9481b
+  zh: b4ed29de386704e4
+/model-menu-save-state-is-separate-from-locking:
+  en: b7b55a3a795a61c2
+  zh: 38b482bdfdaa9f36
+/model-menu-save-state-is-separate-from-locking/change:
+  en: 93b3eede8138d457
+  zh: 77059bce0d8bed83
+/model-menu-save-state-is-separate-from-locking/migration:
+  en: f7ae11e689abe49f
+  zh: 66d0085592ff8244

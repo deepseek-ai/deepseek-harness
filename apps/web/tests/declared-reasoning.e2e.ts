@@ -29,11 +29,11 @@ async function readEffortMotion(slider: Locator) {
     const thumb = group.querySelector<HTMLElement>('[data-effort-thumb]')!
     const scale = group.querySelector<HTMLElement>('[data-effort-thumb-scale]')!
     const fill = group.querySelector<HTMLElement>('[data-effort-fill]')!
-    const label = group.querySelector<HTMLElement>('[data-effort-label]')!
+    const tag = group.querySelector<HTMLElement>('[data-effort-tag]')!
     const rangeRect = input.getBoundingClientRect()
     const thumbRect = thumb.getBoundingClientRect()
     const fillRect = fill.getBoundingClientRect()
-    const labelRect = label.parentElement!.getBoundingClientRect()
+    const labelRect = tag.getBoundingClientRect()
     const thumbSize = Number.parseFloat(getComputedStyle(thumb).width)
     const ratio = (input.valueAsNumber - Number(input.min)) / (Number(input.max) - Number(input.min))
     return {
@@ -46,10 +46,10 @@ async function readEffortMotion(slider: Locator) {
       dotWidth: Number.parseFloat(getComputedStyle(scale, '::after').width),
       dotDuration: getComputedStyle(scale, '::after').transitionDuration,
       dotEasing: getComputedStyle(scale, '::after').transitionTimingFunction,
-      labelCenter: labelRect.left + labelRect.width / 2,
-      thumbDuration: getComputedStyle(thumb).transitionDuration,
-      thumbEasing: getComputedStyle(thumb).transitionTimingFunction,
-      fillDuration: getComputedStyle(fill).transitionDuration,
+      labelCenter: labelRect.left + labelRect.width / 2, labelWidth: labelRect.width,
+      thumbDuration: getComputedStyle(input.parentElement!).transitionDuration,
+      thumbEasing: getComputedStyle(input.parentElement!).transitionTimingFunction,
+      fillDuration: getComputedStyle(input.parentElement!).transitionDuration,
       tickDuration: getComputedStyle(group.querySelector('[data-effort-tick]')!).transitionDuration,
       ticks: [...group.querySelectorAll<HTMLElement>('[data-effort-tick]')].map((tick) => {
         const rect = tick.getBoundingClientRect()
@@ -58,6 +58,12 @@ async function readEffortMotion(slider: Locator) {
       }),
     }
   })
+}
+
+/** The tag tracks the handle but stops at the menu edges. */
+function expectedTagCenter(view: { left: number; right: number; labelWidth: number }, target: number): number {
+  const half = view.labelWidth / 2
+  return Math.min(Math.max(target, view.left + half), view.right - half)
 }
 
 async function assertSettledEffort(slider: Locator) {
@@ -69,8 +75,33 @@ async function assertSettledEffort(slider: Locator) {
   expect(view.nativeHeight).toBe(40)
   expect(view.thumbSize).toBe(20)
   expect(Math.abs(view.centerY - view.y)).toBeLessThan(1)
-  expect(Math.abs(view.labelCenter - (view.left + view.right) / 2)).toBeLessThan(1)
+  expect(Math.abs(view.labelCenter - expectedTagCenter(view, view.center))).toBeLessThan(1)
   return view
+}
+
+async function restoreSelectionAfterTest(page: Page, scaffold: WebScaffold): Promise<void> {
+  const trigger = page.getByRole('button', { name: /^选择模型/ })
+  const agent = scaffold.ctx.agents.list()[0]!
+  const savedModel = agent.model.current()!
+  const savedDefault = scaffold.ctx.agentDefaultModel.currentSelection()
+  const savedLabel = await trigger.getAttribute('aria-label')
+  const viewport = page.viewportSize()!
+  onTestFinished(async () => {
+    try {
+      await page.mouse.up()
+      await page.keyboard.up('ArrowRight')
+      await page.keyboard.up('ArrowLeft')
+      await expect.poll(() => trigger.getAttribute('aria-busy')).toBe('false')
+      if (JSON.stringify(agent.model.current()) !== JSON.stringify(savedModel)) agent.model.select(savedModel)
+      // Queue restoration behind background default saves even if the visible default has not changed yet.
+      await scaffold.ctx.agentDefaultModel.saveSelection(savedDefault)
+      await expect.poll(() => trigger.getAttribute('aria-label')).toBe(savedLabel)
+    } finally {
+      try {
+        if (await trigger.getAttribute('aria-expanded') === 'true') await trigger.click()
+      } finally { await page.setViewportSize(viewport) }
+    }
+  })
 }
 
 describe.skipIf(MODE === 'record').each([
@@ -133,6 +164,7 @@ describe.skipIf(MODE === 'record').each([
     onTestFinished(() => { page.off('request', countSelection) })
     const previous = scaffold.ctx.agentDefaultModel.currentSelection()
     const trigger = page.getByRole('button', { name: /^选择模型/ })
+    await restoreSelectionAfterTest(page, scaffold)
     const rootModel = page.locator('[data-model-menu-root] > button[role="menuitem"]')
     const slider = page.getByRole('slider', { name: '推理等级', exact: true })
     const team = page.locator('[data-model-menu-page="agent-team"]')
@@ -141,14 +173,17 @@ describe.skipIf(MODE === 'record').each([
       await expect.poll(() => locator.evaluate(element => element === document.activeElement)).toBe(true)
     }
     await trigger.click()
+    const caption = page.locator('[data-effort-caption]')
     await page.keyboard.press('Tab'); await focused(rootModel)
     expect(await page.getByRole('menuitemradio').count()).toBe(0)
+    await page.keyboard.press('Tab'); await focused(caption)
     await page.keyboard.press('Tab'); await focused(info)
     await page.keyboard.press('Tab'); await focused(slider)
     await page.keyboard.press('Tab'); await focused(team)
     expect(await page.getByRole('switch').count()).toBe(0)
     await page.keyboard.press('Shift+Tab'); await focused(slider)
     await page.keyboard.press('Shift+Tab'); await focused(info)
+    await page.keyboard.press('Shift+Tab'); await focused(caption)
     await page.keyboard.press('Shift+Tab'); await focused(rootModel)
     await page.keyboard.press('Enter')
     const search = page.getByRole('searchbox', { name: '搜索模型…', exact: true })
@@ -170,6 +205,7 @@ describe.skipIf(MODE === 'record').each([
     await page.keyboard.press('Tab')
     await focused(page.locator('[role="menuitemradio"][aria-checked="true"]'))
     await page.keyboard.press('Space'); await focused(rootModel)
+    await page.keyboard.press('Tab'); await focused(caption)
     await page.keyboard.press('Tab'); await focused(info)
     await page.keyboard.press('Tab'); await focused(slider)
     await page.keyboard.press('Tab'); await focused(team)
@@ -194,6 +230,7 @@ describe.skipIf(MODE === 'record').each([
 
   it('reads default information by mouse and keyboard without selecting or closing the menu', async () => {
     const trigger = page.getByRole('button', { name: /^选择模型/ })
+    await restoreSelectionAfterTest(page, scaffold)
     let requests = 0
     const count = (request: Request): void => {
       if (new URL(request.url()).pathname.endsWith('/session/selectModel')) requests++
@@ -216,6 +253,7 @@ describe.skipIf(MODE === 'record').each([
       await info.click()
       await tooltip.waitFor({ state: 'hidden' })
       await trigger.focus()
+      await page.keyboard.press('Tab')
       await page.keyboard.press('Tab')
       await page.keyboard.press('Tab')
       expect(await info.evaluate(element => element === document.activeElement)).toBe(true)
@@ -265,24 +303,61 @@ describe.skipIf(MODE === 'record').each([
   it('offers exactly the declared levels in the root slider and records one keyboard selection', async () => {
     onTestFailed(() => saveFailureShot(page, `web-e2e-declared-reasoning-${engine.name()}`))
     const trigger = page.getByRole('button', { name: /^选择模型/ })
+    await restoreSelectionAfterTest(page, scaffold)
     await trigger.waitFor({ timeout: 15_000 })
     onTestFinished(async () => {
       if (await trigger.getAttribute('aria-expanded') === 'true') await trigger.click()
     })
     await trigger.click()
+    const model = page.getByRole('menuitem', { name: /^模型/ })
+    const layout = await model.evaluate((row) => {
+      const label = row.children[0]!
+      const value = row.children[1]!
+      const name = value.querySelector('[data-model-id]')!
+      const chevron = row.querySelector(':scope > svg')!
+      const labelStyle = getComputedStyle(label)
+      const valueStyle = getComputedStyle(value)
+      const labelRect = label.getBoundingClientRect()
+      const valueRect = value.getBoundingClientRect()
+      const chevronRect = chevron.getBoundingClientRect()
+      const probe = document.createElement('span')
+      probe.style.position = 'absolute'
+      probe.style.color = 'var(--dsw-alias-label-tertiary)'
+      row.append(probe)
+      try {
+        return {
+          label: label.textContent, labelSize: labelStyle.fontSize, labelPosition: labelStyle.position,
+          labelClip: labelStyle.clipPath, labelWidth: labelRect.width, labelHeight: labelRect.height,
+          valueAlign: valueStyle.textAlign, valueColor: valueStyle.color, tertiaryColor: getComputedStyle(probe).color,
+          valueRightError: Math.abs(name.getBoundingClientRect().right - valueRect.right),
+          gapToChevron: chevronRect.left - valueRect.right,
+          chevronWidth: chevronRect.width, chevronHeight: chevronRect.height,
+        }
+      } finally { probe.remove() }
+    })
+    expect(layout).toMatchObject({ label: '模型', labelSize: '13px', labelPosition: 'absolute', labelClip: 'inset(50%)',
+      valueAlign: 'center', chevronWidth: 10, chevronHeight: 10 })
+    expect(layout.labelWidth).toBeLessThan(2)
+    expect(layout.labelHeight).toBeLessThan(2)
+    expect(layout.gapToChevron).toBe(2)
     const slider = page.getByRole('slider', { name: '推理等级', exact: true })
     const levels = page.getByRole('group', { name: '推理等级', exact: true }).getByRole('button')
-    expect(await levels.count()).toBe(1)
-    expect(await levels.getAttribute('aria-label')).toBe('默认推理等级说明')
+    expect(await levels.count()).toBe(2)
+    expect(await levels.nth(1).getAttribute('aria-label')).toBe('默认推理等级说明')
     expect(await slider.getAttribute('min')).toBe('0')
     expect(await slider.getAttribute('max')).toBe('3')
     expect(await slider.getAttribute('aria-valuetext')).toBe('默认')
-    const tag = page.getByRole('group', { name: '推理等级', exact: true }).getByText('推理等级：默认', { exact: true })
+    const tag = page.locator('[data-effort-tag]')
     expect(await tag.evaluate(element => ({
       cursor: getComputedStyle(element).cursor,
       userSelect: getComputedStyle(element).getPropertyValue(CSS.supports('user-select', 'none') ? 'user-select' : '-webkit-user-select'),
+    }))).toEqual({ cursor: 'default', userSelect: 'none' })
+    const caption = page.locator('[data-effort-caption]')
+    expect(await caption.evaluate(element => ({
+      cursor: getComputedStyle(element).cursor,
       tabIndex: element.tabIndex,
-    }))).toEqual({ cursor: 'default', userSelect: 'none', tabIndex: -1 })
+      label: element.getAttribute('aria-label'),
+    }))).toEqual({ cursor: 'grab', tabIndex: 0, label: '推理等级：默认' })
     expect(await page.getByRole('menuitem', { name: /推理等级/ }).count()).toBe(0)
     const snapshot = await captureStableAria(page, '[role="menu"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(UI_EXPECTED, snapshot, MODE)
@@ -307,7 +382,10 @@ describe.skipIf(MODE === 'record').each([
     expect(await slider.getAttribute('aria-valuetext')).toBe('高')
     await slider.focus()
     await page.keyboard.press('Shift+Tab')
-    await expect.poll(() => page.getByRole('menuitem', { name: /^模型/ })
+    await expect.poll(() => page.locator('[data-effort-caption]')
+      .evaluate(element => element === document.activeElement)).toBe(true)
+    await page.keyboard.press('Shift+Tab')
+    await expect.poll(() => page.locator('[data-model-menu-root] > button[role="menuitem"]')
       .evaluate(element => element === document.activeElement)).toBe(true)
     await page.keyboard.press('Shift+Tab')
     await expect.poll(() => page.getByRole('menu').count()).toBe(0)
@@ -317,6 +395,7 @@ describe.skipIf(MODE === 'record').each([
   it('opens from the pointer with keyboard focus and closes from the trigger in every pane', async () => {
     onTestFailed(() => saveFailureShot(page, `web-e2e-model-trigger-${engine.name()}`))
     const trigger = page.getByRole('button', { name: /^选择模型/ })
+    await restoreSelectionAfterTest(page, scaffold)
     const menu = page.getByRole('menu')
     for (const pane of ['root', 'model', 'slider']) {
       await page.locator('[data-composer-input][contenteditable="true"]').focus()
@@ -350,6 +429,7 @@ describe.skipIf(MODE === 'record').each([
     page.on('request', countSelection)
     onTestFinished(() => { page.off('request', countSelection) })
     const trigger = page.getByRole('button', { name: /^选择模型/ })
+    await restoreSelectionAfterTest(page, scaffold)
     const menu = page.getByRole('menu')
     onTestFinished(async () => {
       if (await trigger.getAttribute('aria-expanded') === 'true') await trigger.click()
@@ -398,6 +478,9 @@ describe.skipIf(MODE === 'record').each([
     await expect.poll(() => rootModel.evaluate(element => getComputedStyle(element).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)')
     await page.mouse.move(0, 0)
     await page.keyboard.press('Tab')
+    const caption = page.locator('[data-effort-caption]')
+    expect(await caption.evaluate(element => element === document.activeElement)).toBe(true)
+    await page.keyboard.press('Tab')
     const info = page.getByRole('button', { name: '默认推理等级说明', exact: true })
     expect(await info.evaluate(element => element === document.activeElement)).toBe(true)
     await page.keyboard.press('Tab')
@@ -405,6 +488,8 @@ describe.skipIf(MODE === 'record').each([
     expect(await slider.evaluate(element => element === document.activeElement)).toBe(true)
     await page.keyboard.press('Shift+Tab')
     expect(await info.evaluate(element => element === document.activeElement)).toBe(true)
+    await page.keyboard.press('Shift+Tab')
+    expect(await caption.evaluate(element => element === document.activeElement)).toBe(true)
     await page.keyboard.press('Shift+Tab')
     expect(await rootModel.evaluate(element => element === document.activeElement)).toBe(true)
     expect(await rootModel.evaluate(element => getComputedStyle(element).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)')
@@ -417,7 +502,7 @@ describe.skipIf(MODE === 'record').each([
     await expect.poll(() => scaffold.ctx.agentDefaultModel.currentSelection().reasoningEffort, { timeout: 10_000 })
       .toBe('max')
 
-    await page.route('**/api/session/selectModel', async (route) => {
+    const rejectSelection = async (route: Route): Promise<void> => {
       const envelope = route.request().postDataJSON() as { rpcId: string }
       await route.fulfill({
         json: {
@@ -428,12 +513,17 @@ describe.skipIf(MODE === 'record').each([
           },
         },
       })
-    }, { times: 1 })
-    await page.getByRole('menuitem', { name: /^模型/ }).click()
-    await expect.poll(() => search.evaluate(element => element === element.ownerDocument.activeElement)).toBe(true)
-    expect(await search.getAttribute('aria-activedescendant')).toBe(await target.getAttribute('id'))
-    await current.click()
-    await page.getByRole('alert').waitFor()
+    }
+    await page.route('**/api/session/selectModel', rejectSelection, { times: 1 })
+    try {
+      await page.getByRole('menuitem', { name: /^模型/ }).click()
+      await expect.poll(() => search.evaluate(element => element === element.ownerDocument.activeElement)).toBe(true)
+      expect(await search.getAttribute('aria-activedescendant')).toBe(await target.getAttribute('id'))
+      await current.click()
+      await page.getByRole('alert').waitFor()
+    } finally {
+      await page.unroute('**/api/session/selectModel', rejectSelection)
+    }
     expect(selections).toBe(3)
     await compareOrRefreshGolden(POINTER_EXPECTED,
       await captureStableAria(page, '[role="group"][aria-label="模型"]', scaffold.workspaceCwd), MODE)
@@ -468,6 +558,7 @@ describe.skipIf(MODE === 'record').each([
   it('shows six stops including Default and commits only after releasing a drag outside the range', async () => {
     onTestFailed(() => saveFailureShot(page, `web-e2e-six-effort-drag-${engine.name()}`))
     const trigger = page.getByRole('button', { name: /^选择模型/ })
+    await restoreSelectionAfterTest(page, scaffold)
     const viewport = page.viewportSize()!
     await trigger.click()
     await page.getByRole('menuitem', { name: /^模型/ }).click()
@@ -484,8 +575,8 @@ describe.skipIf(MODE === 'record').each([
       const menu = page.getByRole('menu', { name: '模型与推理等级', exact: true })
       const group = menu.getByRole('group', { name: '推理等级', exact: true })
       const slider = group.getByRole('slider', { name: '推理等级', exact: true })
-      expect(await group.getByRole('button').count()).toBe(1)
-      expect(await group.getByRole('button').getAttribute('aria-label')).toBe('默认推理等级说明')
+      expect(await group.getByRole('button').count()).toBe(2)
+      expect(await group.getByRole('button').nth(1).getAttribute('aria-label')).toBe('默认推理等级说明')
       expect(await slider.getAttribute('aria-valuetext')).toBe('默认')
       expect(await slider.getAttribute('max')).toBe('5')
       await expect.poll(() => menu.evaluate((element) => {
@@ -539,6 +630,7 @@ describe.skipIf(MODE === 'record').each([
     onTestFailed(() => saveFailureShot(page, `web-e2e-effort-motion-${engine.name()}`))
     const viewport = page.viewportSize()!
     const trigger = page.getByRole('button', { name: /^选择模型/ })
+    await restoreSelectionAfterTest(page, scaffold)
     try {
       await trigger.click()
       await page.getByRole('menuitem', { name: /^模型/ }).click()
@@ -574,11 +666,12 @@ describe.skipIf(MODE === 'record').each([
       await expect.poll(async () => (await readEffortMotion(slider)).ticks[2]!.width).toBeCloseTo(4, 1)
       const release = Promise.withResolvers<undefined>()
       let requests = 0
-      let forwarding: Promise<void> | undefined
+      const forwarding: Promise<void>[] = []
       const holdSelection = (route: Route): Promise<void> => {
         requests++
-        forwarding = (async () => { await release.promise; await route.continue() })()
-        return forwarding
+        const forwarded = (async () => { await release.promise; await route.continue() })()
+        forwarding.push(forwarded)
+        return forwarded
       }
       await page.route('**/api/session/selectModel', holdSelection)
       try {
@@ -597,7 +690,17 @@ describe.skipIf(MODE === 'record').each([
         expect(tracking.ticks.every(point => point.visibility === 'visible')).toBe(true)
         expect(tracking.thumbDuration).toBe('0s')
         expect(tracking.fillDuration).toBe('0s')
-        expect(Math.abs(tracking.labelCenter - rest.labelCenter)).toBeLessThan(1)
+        expect(Math.abs(tracking.labelCenter - expectedTagCenter(tracking, tracking.center))).toBeLessThan(1)
+        for (const offset of [-11, -9, 9, 11]) {
+          await page.mouse.move(tick.center + offset + grabOffset, rest.y)
+          const snapped = await readEffortMotion(slider)
+          const expected = Math.abs(offset) < 10 ? tick.center : tick.center + offset
+          expect(Math.abs(snapped.center - expected)).toBeLessThan(1)
+          expect(Math.abs(snapped.fillRight - expected)).toBeLessThan(1)
+          expect(Math.abs(snapped.labelCenter - expectedTagCenter(snapped, expected))).toBeLessThan(1)
+          expect(snapped.value).toBe(2)
+          expect(requests).toBe(0)
+        }
         await page.mouse.move(tick.center + grabOffset, rest.y, { steps: 4 })
         const dragging = await readEffortMotion(slider)
         expect(dragging.ticks.every(point => !point.hovered)).toBe(true)
@@ -622,9 +725,9 @@ describe.skipIf(MODE === 'record').each([
         expect(requests).toBe(1)
       } finally {
         release.resolve(undefined)
-        await page.mouse.up()
-        await forwarding
-        await page.unroute('**/api/session/selectModel', holdSelection)
+        try { await page.mouse.up() } finally {
+          try { await page.unroute('**/api/session/selectModel', holdSelection) } finally { await Promise.all(forwarding) }
+        }
       }
       await page.mouse.move(rest.ticks[2]!.center, rest.y)
       await page.mouse.down()
@@ -658,14 +761,18 @@ describe.skipIf(MODE === 'record').each([
       expect((await readEffortMotion(slider)).ticks[2]!.width).toBeCloseTo(4, 1)
       expect(tripwire.pageErrors).toEqual([])
     } finally {
-      await page.mouse.up()
-      await page.emulateMedia({ reducedMotion: null })
-      if (await trigger.getAttribute('aria-expanded') === 'true') await trigger.click()
-      await page.setViewportSize(viewport)
+      try { await page.mouse.up() } finally {
+        try { await page.emulateMedia({ reducedMotion: null }) } finally {
+          try {
+            if (await trigger.getAttribute('aria-expanded') === 'true') await trigger.click()
+          } finally { await page.setViewportSize(viewport) }
+        }
+      }
     }
   })
 
   it('does not leave thumb or tick hover enlarged after a native touch tap', async () => {
+    await restoreSelectionAfterTest(page, scaffold)
     const touch = await browser.newPage({
       viewport: { width: 390, height: 700 }, locale: ZH_BROWSER_LOCALE, hasTouch: true, isMobile: true,
     })
@@ -714,11 +821,15 @@ describe.skipIf(MODE === 'record').each([
         touch.off('request', count)
       }
     } finally {
-      await touch.close()
+      try {
+        const trigger = touch.getByRole('button', { name: /^选择模型/ })
+        if (await trigger.count() === 1) await expect.poll(() => trigger.getAttribute('aria-busy')).toBe('false')
+      } finally { await touch.close() }
     }
   })
 
   it('keeps the compact Spanish caption and default information readable at 390px', async () => {
+    await restoreSelectionAfterTest(page, scaffold)
     const probe = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: 'es-ES' })
     const consoleWatch = watchConsole(probe)
     try {
@@ -786,22 +897,26 @@ describe.skipIf(MODE === 'record').each([
       expect(await slider.inputValue()).toBe('0')
       expect(consoleWatch.pageErrors).toEqual([])
     } finally {
-      await probe.close()
+      try {
+        const trigger = probe.getByRole('button', { name: /^Seleccionar modelo/ })
+        if (await trigger.count() === 1) await expect.poll(() => trigger.getAttribute('aria-busy')).toBe('false')
+      } finally { await probe.close() }
     }
   })
 
   it.each(['success', 'failure'] as const)('keeps Team undimmed and guarded through a pending effort %s', async (outcome) => {
     const trigger = page.getByRole('button', { name: /^选择模型/ })
+    await restoreSelectionAfterTest(page, scaffold)
     const release = Promise.withResolvers<undefined>()
     let selections = 0
     let teamWrites = 0
-    let forwarding: Promise<void> | undefined
+    const forwarding: Promise<void>[] = []
     const countTeamWrites = (request: Request): void => {
       if (new URL(request.url()).pathname.endsWith('/agentTeams/setEnabled')) teamWrites++
     }
     const holdSelection = (route: Route): Promise<void> => {
       selections++
-      forwarding = (async () => {
+      const forwarded = (async () => {
         await release.promise
         if (outcome === 'success') { await route.continue(); return }
         const envelope = route.request().postDataJSON() as { rpcId: string }
@@ -809,7 +924,8 @@ describe.skipIf(MODE === 'record').each([
           ok: false, error: { code: 'session/writer-held', message: 'held', details: { sessionId: 'team-pending-fixture' } },
         } } })
       })()
-      return forwarding
+      forwarding.push(forwarded)
+      return forwarded
     }
     await trigger.click()
     await page.getByRole('menuitem', { name: /^模型/ }).click()
@@ -827,8 +943,11 @@ describe.skipIf(MODE === 'record').each([
     const menuLocator = page.getByRole('menu', { name: '模型与推理等级', exact: true })
     const teamLocator = page.locator('[data-model-menu-page="agent-team"]')
     const menu = await menuLocator.elementHandle()
+    onTestFinished(async () => { await menu?.dispose() })
     const root = await page.locator('[data-model-menu-root]').elementHandle()
+    onTestFinished(async () => { await root?.dispose() })
     const team = await teamLocator.elementHandle()
+    onTestFinished(async () => { await team?.dispose() })
     if (menu === null || root === null || team === null) throw new Error('Missing pending Team controls')
     const sample = () => page.evaluate(({ menu, root, team }) => {
       const rect = (element: Element) => {
@@ -898,13 +1017,149 @@ describe.skipIf(MODE === 'record').each([
       expect(tripwire.pageErrors).toEqual([])
     } finally {
       release.resolve(undefined)
-      await forwarding
-      await page.unroute('**/api/session/selectModel', holdSelection)
       page.off('request', countTeamWrites)
-      await menu.dispose()
-      await root.dispose()
-      await team.dispose()
-      if (await trigger.getAttribute('aria-expanded') === 'true') await trigger.click()
+      try { await page.keyboard.up('ArrowLeft') } finally {
+        try { await page.unroute('**/api/session/selectModel', holdSelection) } finally { await Promise.all(forwarding) }
+      }
+    }
+  })
+
+  it('clicks the caption without changing effort and drags outside it to submit Default once', async () => {
+    const viewport = page.viewportSize()!
+    const trigger = page.getByRole('button', { name: /^选择模型/ })
+    await restoreSelectionAfterTest(page, scaffold)
+    let writes = 0
+    const count = (request: Request): void => {
+      if (new URL(request.url()).pathname.endsWith('/session/selectModel')) writes++
+    }
+    try {
+      await trigger.click()
+      await page.getByRole('menuitem', { name: /^模型/ }).click()
+      await page.getByRole('menuitemradio', { name: 'Acme Lite', exact: true }).click()
+      await page.setViewportSize({ width: 390, height: 700 })
+      const slider = page.getByRole('slider', { name: '推理等级', exact: true })
+      const caption = page.locator('[data-effort-caption]')
+      await slider.press('End')
+      await expect.poll(() => slider.getAttribute('aria-busy')).toBe('false')
+      await expect.poll(() => scaffold.ctx.agentDefaultModel.currentSelection().reasoningEffort).toBe('max')
+      expect(await page.locator('[data-effort-tag] svg').count()).toBe(0)
+      expect(await page.locator('[data-effort-tail-frame], [data-effort-tail]').count()).toBe(0)
+      page.on('request', count)
+      await caption.click()
+      expect(await slider.evaluate(element => element === document.activeElement)).toBe(true)
+      expect(await slider.inputValue()).toBe('5')
+      expect(writes).toBe(0)
+      const before = await assertSettledEffort(slider)
+      const bounds = await caption.boundingBox()
+      if (bounds === null) throw new Error('Effort caption is not visible')
+      const start = bounds.x + bounds.width / 2
+      const end = start - (before.nativeWidth - before.thumbSize)
+      const y = bounds.y + bounds.height / 2
+      await page.mouse.move(start, y)
+      await page.mouse.down()
+      try {
+        const tick = before.ticks[2]!
+        for (const offset of [-11, -9, 9, 11]) {
+          await page.mouse.move(start + tick.center - before.center + offset, y)
+          const snapped = await readEffortMotion(slider)
+          const expected = Math.abs(offset) < 10 ? tick.center : tick.center + offset
+          expect(Math.abs(snapped.center - expected)).toBeLessThan(1)
+          expect(Math.abs(snapped.fillRight - expected)).toBeLessThan(1)
+          expect(Math.abs(snapped.labelCenter - expectedTagCenter(snapped, expected))).toBeLessThan(1)
+          expect(snapped.value).toBe(2)
+          expect(writes).toBe(0)
+        }
+        await page.mouse.move(end, y, { steps: 8 })
+        await expect.poll(() => slider.inputValue()).toBe('0')
+        await assertSettledEffort(slider)
+        expect(await page.evaluate(({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest('[data-effort-caption]')),
+          { x: end, y })).toBe(false)
+        expect(writes).toBe(0)
+      } finally {
+        await page.mouse.up()
+      }
+      await expect.poll(() => writes).toBe(1)
+      await expect.poll(() => slider.getAttribute('aria-busy')).toBe('false')
+      await expect.poll(() => scaffold.ctx.agentDefaultModel.currentSelection().reasoningEffort).toBeUndefined()
+      expect(await slider.evaluate(element => element === document.activeElement)).toBe(true)
+      expect(tripwire.pageErrors).toEqual([])
+    } finally {
+      page.off('request', count)
+      try { await page.mouse.up() } finally {
+        try {
+          if (await trigger.getAttribute('aria-expanded') === 'true') await trigger.click()
+        } finally { await page.setViewportSize(viewport) }
+      }
+    }
+  })
+
+  it.each(['Escape', 'capture loss'] as const)('cancels a native caption drag on %s and lets Escape close the root afterward', async (cancel) => {
+    const trigger = page.getByRole('button', { name: /^选择模型/ })
+    await restoreSelectionAfterTest(page, scaffold)
+    await trigger.click()
+    await page.getByRole('menuitem', { name: /^模型/ }).click()
+    await page.getByRole('menuitemradio', { name: 'Acme Lite', exact: true }).click()
+    const slider = page.getByRole('slider', { name: '推理等级', exact: true })
+    await slider.press('End')
+    await expect.poll(() => slider.getAttribute('aria-busy')).toBe('false')
+    await expect.poll(() => scaffold.ctx.agentDefaultModel.currentSelection().reasoningEffort).toBe('max')
+    const before = await assertSettledEffort(slider)
+    const caption = page.locator('[data-effort-caption]')
+    const capture = await caption.evaluateHandle((element) => {
+      const button = element as HTMLButtonElement
+      let pointerId: number | null = null
+      let lost = 0
+      const started = (event: PointerEvent) => { pointerId = event.pointerId }
+      const released = () => { lost++ }
+      button.addEventListener('pointerdown', started)
+      button.addEventListener('lostpointercapture', released)
+      return {
+        read: () => ({ held: pointerId !== null && button.hasPointerCapture(pointerId), lost }),
+        release: () => { if (pointerId !== null) button.releasePointerCapture(pointerId) },
+        dispose: () => {
+          button.removeEventListener('pointerdown', started)
+          button.removeEventListener('lostpointercapture', released)
+        },
+      }
+    })
+    let writes = 0
+    const count = (request: Request): void => {
+      if (new URL(request.url()).pathname.endsWith('/session/selectModel')) writes++
+    }
+    page.on('request', count)
+    try {
+      const bounds = await caption.boundingBox()
+      if (bounds === null) throw new Error('Effort caption is not visible')
+      const x = bounds.x + bounds.width / 2
+      const y = bounds.y + bounds.height / 2
+      const end = x - (before.nativeWidth - before.thumbSize) * 0.6
+      await page.mouse.move(x, y)
+      await page.mouse.down()
+      await page.mouse.move(end, y, { steps: 4 })
+      await expect.poll(() => capture.evaluate(probe => probe.read().held)).toBe(true)
+      await expect.poll(() => slider.inputValue()).toBe('2')
+      expect(writes).toBe(0)
+      if (cancel === 'Escape') await page.keyboard.press('Escape')
+      else await capture.evaluate((probe) => { probe.release() })
+      // Moving flushes the browser's pending lostpointercapture, not a synthetic event.
+      await page.mouse.move(end - 1, y)
+      await expect.poll(() => capture.evaluate(probe => probe.read())).toEqual({ held: false, lost: 1 })
+      expect(await slider.inputValue()).toBe('5')
+      expect(await trigger.getAttribute('aria-expanded')).toBe('true')
+      expect(await slider.evaluate(element => element === document.activeElement)).toBe(true)
+      await page.mouse.up()
+      expect(writes).toBe(0)
+      expect(scaffold.ctx.agentDefaultModel.currentSelection().reasoningEffort).toBe('max')
+      await page.keyboard.press('Escape')
+      await expect.poll(() => trigger.getAttribute('aria-expanded')).toBe('false')
+      expect(await trigger.evaluate(element => element === document.activeElement)).toBe(true)
+      expect(writes).toBe(0)
+      expect(tripwire.pageErrors).toEqual([])
+    } finally {
+      page.off('request', count)
+      try { await page.mouse.up() } finally {
+        try { await capture.evaluate((probe) => { probe.dispose() }) } finally { await capture.dispose() }
+      }
     }
   })
 
