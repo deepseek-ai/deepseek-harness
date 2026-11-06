@@ -922,11 +922,23 @@ describe('PluginManagerPage', () => {
   })
 
   it('keeps a selected bundle whose rows run as a problem when the Host reports an error beside them', () => {
-    renderTab({ packages: [pkg({ error: { code: 'operation-error', diagnostic: 'dsh.bundle.listedByDefault must be a boolean' }, rows: [row()] })] })
+    renderTab({ packages: [pkg({ error: { code: 'unsupported-platform' }, rows: [row()] })] })
     const card = document.querySelector('[data-plugin-package="dsh-better-sidebar"]') as HTMLElement
     expect(card.getAttribute('data-plugin-status')).toBe('problem')
     expect(within(card).getByText(en.statusProblem)).toBeTruthy()
-    expect(within(card).queryByText(/listedByDefault/)).toBeNull()
+  })
+
+  it('keeps a selected bundle running when only its metadata carries a diagnostic', () => {
+    const name = 'dsh-better-sidebar'
+    const error = 'dsh.bundle.listedByDefault must be a boolean'
+    renderTab({ packages: [pkg({ meta: { error }, rows: [row()] })] })
+    const card = document.querySelector(`[data-plugin-package="${name}"]`) as HTMLElement
+    expect(card.getAttribute('data-plugin-status')).toBe('running')
+    expect(within(card).queryByText(en.statusNotRunning)).toBeNull()
+    expect(within(card).getByText(en.metadataError.replace('{error}', error))).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', name) }))
+    const detail = document.querySelector(`[data-plugin-detail="${name}"]`) as HTMLElement
+    expect(detail.querySelector('[data-plugin-rows]')).not.toBeNull()
   })
 
   it('lists the rows of a skipped layer whose patch the Host read, none of them live', () => {

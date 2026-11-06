@@ -86,8 +86,8 @@ export interface BundleInfo {
   /** Default GUI visibility after package and Host checks; selected or profile-installed bundles remain manageable. */
   listedByDefault?: boolean
   /**
-   * Selected in the profile manifest. A selected bundle whose layer was skipped carries the load `error`, and none of
-   * its `rows` has an `entryId`; an `error` beside a live row reports a problem that did not stop the layer.
+   * Selected in the profile manifest; a selected bundle whose layer was skipped carries the load `error`, and none of
+   * its `rows` has an `entryId`.
    */
   enabled: boolean
   /** Whether the profile declares this dependency; availability separately reports whether its files can be read. */
