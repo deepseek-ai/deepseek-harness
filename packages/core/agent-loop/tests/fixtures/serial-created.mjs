@@ -6,11 +6,11 @@ export const name = 'serial-created-fixture'
 export const inject = ['agents', 'sessions']
 
 /** Install ordered creation listeners whose context must precede the first turn. */
-export function apply(ctx) {
+export function apply(ctx, config = {}) {
   const checkedCancellation = new WeakSet()
   ctx.on('agent/pre-step', async ({ agent, messages, signal }, next) => {
     if (checkedCancellation.has(agent)
-      || agent.session.header.origin !== 'subagent') return next()
+      || (!config.checkRootCancellation && agent.session.header.origin !== 'subagent')) return next()
     checkedCancellation.add(agent)
     const pending = {
       id: randomUUID(), role: 'user',
@@ -25,13 +25,18 @@ export function apply(ctx) {
       if (session === agent.session && event.type === 'agent/inbox/spliced'
         && event.data.outcome === 'canceled' && (event.data.removedCount ?? 0) > 0) throw failure
     })
+    let rejected = false
     try {
-      try { agent.cancel({ kind: 'user' }) }
-      catch (error) { if (error !== failure) throw error }
+      try {
+        agent.cancel({ kind: 'user' })
+      } catch (error) {
+        if (error !== failure) throw error
+        rejected = true
+      }
     } finally {
       stopRejecting()
     }
-    if (!signal.aborted) throw new Error('queue-clear failure prevented cancellation')
+    if (!rejected || !signal.aborted) throw new Error('expected queue-clear rejection and activity cancellation')
     agent.inbox.remove(pending.id)
     for (const message of messages) {
       const ordinary = message.source.kind === 'user'

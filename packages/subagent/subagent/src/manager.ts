@@ -9,7 +9,7 @@
 import { randomUUID } from 'node:crypto'
 import { isAbsolute, resolve } from 'node:path'
 import type {} from '@deepseek-ai/dsh-working-directory'
-import type { Context } from '@deepseek-ai/cordis'
+import { FiberState, type Context } from '@deepseek-ai/cordis'
 import type { Agent, AgentOptions, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { ReasoningEffortId, contentHasImage, createUserMessage, errorChain } from '@deepseek-ai/dsh-llm'
@@ -1095,6 +1095,10 @@ export class SubagentManager {
         { cause: new AggregateError(failures) },
       )
     }
+    if (failure !== undefined && result.stopReason === 'completed' && child !== undefined
+      && (child.inbox.nextStep.length > 0 || child.inbox.nextTurn.length > 0)) {
+      result = { ...result, stopReason: 'error' }
+    }
     this.resident.delete(childId)
     activation.releaseSlot()
     const terminal: SubagentResult = failure === undefined ? result : { output: [], stopReason: 'error' }
@@ -1117,7 +1121,8 @@ export class SubagentManager {
     try {
       const parentId = activation.ancestors.at(-1) as SessionId
       const parent = this.ctx.agents.get(parentId)
-      if (parent === undefined || this.rootOf(parent) !== activation.root) return
+      if (parent === undefined || parent.ctx.fiber.state !== FiberState.ACTIVE
+        || this.rootOf(parent) !== activation.root) return
       const message = createSettlementMessage(
         activation.childId, agentAddress(activation.path, activation.childId), terminal,
         activation.kind === 'local', activation.kind === 'local' && activation.omitClosingText,

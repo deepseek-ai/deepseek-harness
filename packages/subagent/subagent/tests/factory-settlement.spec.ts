@@ -52,9 +52,13 @@ it.each([false, true])('settles an activation after factory unload with queue-cl
     expect(ctx.agents.get(started.childId)).toBeUndefined()
     release.resolve(undefined)
     await vi.waitFor(() => { expect(state.resident.has(started.childId)).toBe(false) }, { timeout: 1000 })
-    expect(await started.result).toMatchObject({ stopReason: 'completed' })
+    const stopReason = rejectQueueClear ? 'error' : 'completed'
+    expect(await started.result).toMatchObject({
+      output: [{ type: 'text', text: 'answer' }],
+      stopReason,
+    })
     expect(released).toHaveBeenCalledTimes(1)
-    expect(ended).toHaveBeenCalledTimes(1)
+    expect(ended).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ stopReason }))
   } finally {
     release.resolve(undefined)
     await ctx.fiber.dispose()
