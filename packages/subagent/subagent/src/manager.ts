@@ -1104,7 +1104,7 @@ export class SubagentManager {
     const terminal: SubagentResult = failure === undefined ? result : { output: [], stopReason: 'error' }
     this.notifySettlement(activation, result)
     // The sole end publication follows resource release and parent notification,
-    // before result delivery. Cleanup failure changes the event, not the captured result.
+    // before result delivery.
     this.host.emitLifecycle('subagent/end', {
       ...this.runInfo(activation),
       stopReason: terminal.stopReason,

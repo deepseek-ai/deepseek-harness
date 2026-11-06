@@ -331,6 +331,39 @@ describe('Agent.cancel()', () => {
     expect(userTexts(agent)).toEqual(['active'])
   })
 
+  it.each(['before scope cleanup', 'during scope cleanup'])('does not start an idle Agent after disposal begins %s', async (window) => {
+    const adapter = new MockAdapter([textResponse('late reply')])
+    const ctx = await harness(adapter)
+    const cleanupStarted = Promise.withResolvers<undefined>()
+    const releaseCleanup = Promise.withResolvers<undefined>()
+    let disposal: Promise<void> | undefined
+    try {
+      const handle = await ctx.agents.create({
+        sessionId: SessionId('idle-disposal-wake'),
+        agentOptions: { provider: 'mock', model: 'mock' },
+      })
+      const agent = handle.agent
+      agent.ctx.effect(() => async () => {
+        cleanupStarted.resolve(undefined)
+        await releaseCleanup.promise
+      })
+      disposal = handle.dispose()
+      if (window === 'during scope cleanup') await cleanupStarted.promise
+      send(agent, 'late wake')
+      await agent.whenIdle()
+
+      expect(agent.session.snapshotEvents().filter(event => event.type === 'turn/start')).toHaveLength(0)
+      expect(adapter.requests).toHaveLength(0)
+    } finally {
+      releaseCleanup.resolve(undefined)
+      try {
+        await disposal
+      } finally {
+        await ctx.fiber.dispose()
+      }
+    }
+  })
+
   it('cancel after waking send closes its synchronously opened turn without a step', async () => {
     const adapter = new MockAdapter([textResponse('should not run')])
     const ctx = await harness(adapter)
