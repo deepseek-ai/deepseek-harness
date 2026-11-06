@@ -1,0 +1,34 @@
+# Bilingual-pair consistency record for 2026-11-06-chat-history-consumption-details.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/feature/2026-11-06-chat-history-consumption-details.md
+/agent-note-chat-history-consumption-classes-and-interactions:
+  en: 69ce0866b2608208
+  zh: 55fdeded5d7a4779
+/agent-note-chat-history-consumption-classes-and-interactions/problem:
+  en: edaa7ca0e55a9c33
+  zh: 33d2b5ac07760988
+/agent-note-chat-history-consumption-classes-and-interactions/proposal:
+  en: 5e5553981c48d0e2
+  zh: 1195ac8d64180451
+/agent-note-chat-history-consumption-classes-and-interactions/proposal/owners-and-interfaces:
+  en: 58f6f76fd263cafb
+  zh: 13ac0a6259d30cda
+/agent-note-chat-history-consumption-classes-and-interactions/proposal/data-lifetimes:
+  en: ffdbe0e796463624
+  zh: f10bd2ced5748017
+/agent-note-chat-history-consumption-classes-and-interactions/proposal/consumption-intent-and-wakeups:
+  en: 993c2985bf6f3c8f
+  zh: 8f88fb46584fb272
+/agent-note-chat-history-consumption-classes-and-interactions/proposal/shared-anchors-and-layout-reads:
+  en: 2439cd4cb6a81bc4
+  zh: 63b8c83897a88d2c
+/agent-note-chat-history-consumption-classes-and-interactions/alternatives-considered:
+  en: 1b9b8eb12ee5dbd7
+  zh: e4ecc3cdc3375438
+/agent-note-chat-history-consumption-classes-and-interactions/acceptance-criteria:
+  en: 8a51c549570a5e0d
+  zh: eb7b3c27b9dcd98c
+/agent-note-chat-history-consumption-classes-and-interactions/risks:
+  en: aee9f541d058818b
+  zh: 74e4b6098b9f4b46
