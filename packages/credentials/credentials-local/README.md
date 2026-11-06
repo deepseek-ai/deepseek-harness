@@ -60,11 +60,11 @@ declare const ctx: Context
 
 const ref = credentialRef('DEEPSEEK_API_KEY')
 await ctx.credentials.set(ref, 'sk-…')          // save
-await ctx.credentials.describe(ref)             // { configured, source?, writable } — never the value
+await ctx.credentials.describe(ref)             // { configured, source?, writable, masked? } — never the value
 await ctx.credentials.unset(ref)                // remove
 ```
 
-A key you save is usable by the next request that names it, and `describe` reports whether it is set, where it comes from, and whether you can write to it — never the value itself. Records persist in the same file, addressed by `<owner>/<id>` and managed with the seam's record operations (`readRecord`, `describeRecord`, `listRecords`, `modifyRecord`, `deleteRecord`).
+A key you save is usable by the next request that names it, and `describe` reports whether it is set, where it comes from, and whether you can write to it — never the value itself. A stored file value also reports a `masked` preview; environment fallbacks omit this field. The preview splits the provider identifier after the first hyphen or underscore, or uses no identifier when neither exists. It keeps the identifier and the first five/last four key code points only when at least eight key code points remain hidden. Otherwise it masks the whole value, including the identifier. Counts and slicing use `Array.from` Unicode code points; combining sequences are not treated as one grapheme. The identifier is intentionally visible and must not be assumed nonsensitive merely because it precedes a separator. Records persist in the same file, addressed by `<owner>/<id>` and managed with the seam's record operations (`readRecord`, `describeRecord`, `listRecords`, `modifyRecord`, `deleteRecord`).
 
 ### Where keys come from
 

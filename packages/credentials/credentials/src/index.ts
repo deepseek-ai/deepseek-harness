@@ -4,7 +4,7 @@
  * the actual values and their storage. Consumers resolve a reference once per
  * operation, so a changed credential reaches the next operation without any
  * plugin restart, and configuration surfaces describe a reference without
- * ever seeing its value.
+ * ever seeing its full value.
  * @module @deepseek-ai/dsh-credentials
  */
 
@@ -185,9 +185,9 @@ export abstract class CredentialProvider extends Service {
 
   /**
    * Describe one reference for configuration surfaces without exposing the
-   * value.
+   * full value.
    * @param ref - the reference to describe.
-   * @returns configured state, supplying source, and writability.
+   * @returns configured state, supplying source, writability, and optional masked preview.
    */
   abstract describe(ref: CredentialRef): Promise<CredentialInfo>
 
