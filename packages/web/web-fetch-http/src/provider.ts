@@ -255,5 +255,34 @@ function translateAbortOrNetwork(error: unknown, signal: AbortSignal): WebError 
   const timeout = timeoutOf(signal, 'WEB_FETCH_TIMEOUT')
   if (timeout !== undefined) return new WebError('web fetch timed out', 'WEB_FETCH_TIMEOUT', { cause: timeout })
   if (signal.aborted) return new WebError('web fetch aborted', 'WEB_ABORTED', { cause: error })
-  return new WebError(`web fetch failed: ${String(error)}`, 'WEB_PROVIDER_ERROR', { cause: error })
+  return new WebError(`web fetch failed: ${networkReason(error)}`, 'WEB_PROVIDER_ERROR', { cause: error })
+}
+
+/** Causes followed below a transport rejection; a deeper or cyclic chain is cut there. */
+const MAX_CAUSES = 4
+
+/** `AggregateError` members named in a transport failure; the rest are counted. */
+const MAX_ATTEMPTS = 4
+
+/**
+ * Name the innermost cause of a transport failure. Undici rejects with a generic
+ * `TypeError: fetch failed` whose `cause` holds the system error, such as
+ * `getaddrinfo ENOTFOUND host` or `connect ECONNREFUSED addr:port`; a connection
+ * attempt across several resolved addresses nests those errors in an `AggregateError`,
+ * whose members are expanded one level deep. An empty innermost message falls back to
+ * the rejection itself.
+ * @param error - the rejection or one `AggregateError` member.
+ * @param nested - whether `error` is an `AggregateError` member.
+ * @returns the bounded failure reason.
+ */
+function networkReason(error: unknown, nested = false): string {
+  let current = error
+  for (let hop = 0; hop < MAX_CAUSES && current instanceof Error && current.cause !== undefined; hop++) current = current.cause
+  if (!nested && current instanceof AggregateError && current.errors.length > 0) {
+    const named = current.errors.slice(0, MAX_ATTEMPTS).map(member => networkReason(member, true))
+    const rest = current.errors.length - named.length
+    return named.join('; ') + (rest > 0 ? `; ${rest} more` : '')
+  }
+  const message = current instanceof Error ? current.message : String(current)
+  return message === '' ? String(error) : message
 }

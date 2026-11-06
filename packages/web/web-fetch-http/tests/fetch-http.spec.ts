@@ -452,10 +452,16 @@ describe('HttpFetchProvider invalid URLs and abort', () => {
       .rejects.toThrow(expect.objectContaining({ code: 'WEB_FETCH_TIMEOUT' }))
   })
 
-  it('maps a connection failure to WEB_PROVIDER_ERROR', async () => {
-    // Port 1 on loopback is not listening: a real connection failure (not abort).
-    await expect(provider().fetch({ url: 'http://127.0.0.1:1/' }))
-      .rejects.toThrow(expect.objectContaining({ code: 'WEB_PROVIDER_ERROR' }))
+  it('maps a connection failure to WEB_PROVIDER_ERROR naming the system error', async () => {
+    // A closed listener's port refuses the connection: a real transport failure (not abort).
+    const closed = createServer()
+    await new Promise<void>(resolve => closed.listen(0, '127.0.0.1', resolve))
+    const { port } = closed.address() as AddressInfo
+    await new Promise<void>(resolve => closed.close(() => { resolve() }))
+    await expect(provider().fetch({ url: `http://127.0.0.1:${port}/` })).rejects.toThrow(expect.objectContaining({
+      code: 'WEB_PROVIDER_ERROR',
+      message: `web fetch failed: connect ECONNREFUSED 127.0.0.1:${port}`,
+    }))
   })
 })
 
