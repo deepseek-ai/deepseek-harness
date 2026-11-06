@@ -384,10 +384,20 @@ export type ChatFlowSlotProps =
   & InjectFace<ChatFlowDataInjected>
   & PropsLocale<'chat'>
 
+/** Geometry the Chat View gives its aside occupant. */
+export interface ChatAsideOwnerProps {
+  /**
+   * Inline space in CSS px between the transcript column's end edge and the
+   * Chat frame's end edge, measured again whenever the frame or the column
+   * resizes; zero before the first measurement.
+   */
+  readonly endGutter: number
+}
+
 /** Full Chat view props. */
 export type ChatViewSlotProps =
   PropsRuntime<'conversation.view'>
-  & PropsRenderSlots<'conversation.chat.flow' | 'conversation.chat.text-interaction' | 'conversation.chat.markdown.fence'>
+  & PropsRenderSlots<'conversation.chat.flow' | 'conversation.chat.text-interaction' | 'conversation.chat.markdown.fence' | 'conversation.chat.aside'>
   & PropsStore<ChatStore>
   & InjectFace<ChatViewInjected>
   & PropsLocale<'chat'>
@@ -428,6 +438,16 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'conversation.chat.text-interaction': { kind: 'keyed'; scope: 'session'; owner: TextInteractionSurface }
     /** Language-keyed layers around one Markdown fence in the Chat flow; the content is the plain code block. */
     'conversation.chat.markdown.fence': { kind: 'hoc'; scope: 'session'; owner: MarkdownDelegateFenceInfo }
+    /**
+     * One Session-level occupant beside the transcript, such as a summary
+     * panel. Every Chat View occurrence renders it in a zero-height layer at
+     * the top of the Chat frame, which stays in place while the transcript
+     * scrolls and inherits the shared scrollport's composer and viewport
+     * heights. The layer passes pointer events through; the occupant
+     * positions itself in it, enables its own pointer events, and keeps
+     * within `endGutter` to stay clear of the transcript column.
+     */
+    'conversation.chat.aside': { kind: 'single'; scope: 'session'; owner: ChatAsideOwnerProps }
 
     /** Ordered Chat rows and local echoes with viewport-bound visibility hooks. */
     'conversation.chat.flow': {
