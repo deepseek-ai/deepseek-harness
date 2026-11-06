@@ -892,10 +892,13 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   await view.getByRole('button', { name: /^(将文件树移到右侧|隐藏文件树|在左侧显示文件树)$/ }).click()
   expect(await resizeTree.getAttribute('aria-valuenow')).toBe(rightWidth)
   for (const side of ['old', 'new'] as const) {
-    const firstLine = await panelFile.locator(`[data-review-code][data-${side}-line="2"]`).boundingBox()
+    const firstCode = panelFile.locator(`[data-review-code][data-${side}-line="2"]`)
+    const firstLine = await firstCode.boundingBox()
     const lastLine = await panelFile.locator(`[data-review-code][data-${side}-line="4"]`).boundingBox()
     if (firstLine === null || lastLine === null) throw new Error('Review text must be visible')
-    await page.mouse.move(firstLine.x + 7, firstLine.y + firstLine.height / 2)
+    // Press on the first character, past the lane where the hovered row shows its comment plus.
+    const textStart = await firstCode.evaluate(element => Number.parseFloat(getComputedStyle(element).paddingLeft))
+    await page.mouse.move(firstLine.x + textStart + 1, firstLine.y + firstLine.height / 2)
     await page.mouse.down()
     await page.mouse.move(lastLine.x + 120, lastLine.y + lastLine.height / 2, { steps: 5 })
     await page.mouse.up()
@@ -1166,6 +1169,109 @@ it.skipIf(MODE === 'record')('uses horizontal arrows to navigate files while pre
   expect(await input.inputValue()).toBe('keep editing')
   expect(await tree.getByRole('button', { name: 'src/a.txt', exact: true }).getAttribute('aria-current')).toBe('true')
   expect(await input.evaluate(element => document.activeElement === element)).toBe(true)
+  expect(tripwire.pageErrors).toEqual([])
+  expect(tripwire.warnings).toEqual([])
+})
+
+it.skipIf(MODE === 'record')('opens a comment from the hover plus in one press without covering the line number or the code', async () => {
+  const { scaffold, page, project, tripwire } = await launchPanel('web-e2e-forge-hover-plus')
+  // notes.txt changes into context, a deletion followed by context, and an addition, so unified rows show both numbers.
+  await writeFile(join(project, 'notes.txt'), ['keep 1', 'keep 2', 'drop 3', 'keep 4', 'keep 5', 'keep 6'].map(line => `${line}\n`).join(''))
+  await git(project, 'add', 'notes.txt')
+  await git(project, 'commit', '--quiet', '-m', 'notes')
+  await git(project, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
+  await git(project, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
+  await writeFile(join(project, 'README.md'), `changed\n${Array.from({ length: 8 }, (_, line) => `line ${line + 2}\n`).join('')}`)
+  await writeFile(join(project, 'notes.txt'), ['keep 1', 'keep 2', 'keep 4', 'keep 5', 'added', 'keep 6'].map(line => `${line}\n`).join(''))
+  const { settled } = await sendPrompt(page, scaffold)
+  await settled
+  await page.locator('[data-forge-header]').click()
+  await page.locator('[data-forge-panel]').getByRole('button', { name: '刷新状态', exact: true }).click()
+  await page.locator('[data-forge-local]').getByRole('button', { name: /查看本会话的变更/ }).click()
+  const view = page.locator('[data-forge-changes="local"]')
+  const file = view.locator('[data-forge-diff-file="README.md"]')
+  const number = (name: string) => file.getByRole('button', { name: `选择第 ${name} 行`, exact: true })
+  const plus = (name: string) => file.locator(`[data-review-add="${name}"]`)
+  const code = (line: number) => file.locator(`[data-review-code][data-new-line="${line}"]`)
+  const draggable = async (from: string, to: string) => {
+    const start = await plus(from).boundingBox(), end = await number(to).boundingBox()
+    if (start === null || end === null) throw new Error('The plus and the line number must be rendered')
+    const x = start.x + start.width / 2
+    return { start: { x, y: start.y + start.height / 2 }, end: { x, y: end.y + end.height / 2 } }
+  }
+  await number('R3').waitFor()
+
+  // The plus appears only on the hovered side of the hovered row, for the code as for the line number.
+  expect(await plus('R3').isVisible()).toBe(false)
+  await code(3).hover()
+  expect(await plus('R3').isVisible()).toBe(true)
+  expect(await plus('R4').isVisible()).toBe(false)
+  expect(await plus('L1').isVisible()).toBe(false)
+  await number('L1').hover()
+  expect(await plus('L1').isVisible()).toBe(true)
+  expect(await plus('R3').isVisible()).toBe(false)
+
+  // Playwright refuses a click on a covered point, so these prove the hovered number and first character stay reachable.
+  await number('R3').hover()
+  await number('R3').click()
+  expect(await number('R3').getAttribute('aria-pressed')).toBe('true')
+  const first = await code(5).boundingBox()
+  const textStart = await code(5).evaluate(element => Number.parseFloat(getComputedStyle(element).paddingLeft))
+  if (first === null) throw new Error('Review text must be visible')
+  await page.mouse.move(first.x + textStart + 1, first.y + first.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(first.x + textStart + 30, first.y + first.height / 2, { steps: 3 })
+  await page.mouse.up()
+  expect(await page.evaluate(() => document.getSelection()?.toString())).toMatch(/^li/)
+  await page.evaluate(() => { document.getSelection()?.removeAllRanges() })
+
+  // One press selects, a drag extends within the side, and the release opens the editor.
+  await code(6).hover()
+  const { start, end } = await draggable('R6', 'R8')
+  await page.mouse.move(start.x, start.y)
+  await page.mouse.down()
+  await page.mouse.move(end.x, end.y, { steps: 5 })
+  expect(await number('R8').getAttribute('aria-pressed')).toBe('true')
+  expect(await file.getByRole('textbox').count()).toBe(0)
+  await page.mouse.up()
+  await file.getByRole('region', { name: '评论 R6–8', exact: true }).waitFor()
+  expect(await plus('R6').count()).toBe(0)
+  await file.getByRole('button', { name: '取消', exact: true }).click()
+  await file.getByRole('textbox').waitFor({ state: 'detached' })
+
+  // The single-column layout keeps the same gesture on the line's own side.
+  await view.getByRole('button', { name: '左右对比', exact: true }).click()
+  await file.locator('[data-diff-line]').first().waitFor()
+  await code(4).hover()
+  expect(await plus('R4').isVisible()).toBe(true)
+  await number('R4').click()
+  expect(await number('R4').getAttribute('aria-pressed')).toBe('true')
+
+  // With both numbers shown, a deleted line's plus sits where a context line's does: in the sign column.
+  const notes = view.locator('[data-forge-diff-file="notes.txt"]')
+  const notesPlus = (name: string) => notes.locator(`[data-review-add="${name}"]`)
+  const notesCode = (side: 'old' | 'new', line: number) => notes.locator(`[data-review-code][data-${side}-line="${line}"]`)
+  await notesCode('new', 3).hover()
+  const contextPlus = await notesPlus('R3').boundingBox()
+  await notesCode('old', 3).hover()
+  const deletedPlus = await notesPlus('L3').boundingBox()
+  const nextRow = await notesCode('old', 4).boundingBox()
+  if (contextPlus === null || deletedPlus === null || nextRow === null) throw new Error('The pluses and the next row must be rendered')
+  expect(deletedPlus.x).toBe(contextPlus.x)
+  // A drag from the deleted line's plus extends through the context row below it on the old side.
+  const x = deletedPlus.x + deletedPlus.width / 2
+  await page.mouse.move(x, deletedPlus.y + deletedPlus.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(x, nextRow.y + nextRow.height / 2, { steps: 5 })
+  await page.mouse.up()
+  await notes.getByRole('region', { name: '评论 L3–4', exact: true }).waitFor()
+  await notes.getByRole('button', { name: '取消', exact: true }).click()
+  await notes.getByRole('textbox').waitFor({ state: 'detached' })
+  // The labeled plus of a left context line stays reachable; Playwright refuses a covered target.
+  await notes.getByRole('button', { name: '选择第 L2 行', exact: true }).click()
+  expect((await notes.getByRole('button', { name: '添加评论', exact: true }).boundingBox())?.x).toBe(contextPlus.x)
+  await notes.getByRole('button', { name: '添加评论', exact: true }).click()
+  await notes.getByRole('region', { name: '评论 L2', exact: true }).waitFor()
   expect(tripwire.pageErrors).toEqual([])
   expect(tripwire.warnings).toEqual([])
 })

@@ -307,10 +307,11 @@
   border-bottom: 0.5px solid var(--dsw-alias-border-l3);
 }
 
+/* Above the comment plus (z-index 1) of rows scrolled beneath it. */
 .fileHeader {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -457,6 +458,11 @@
 
 .text {
   padding: 0 16px 0 6px;
+}
+
+/* Side-by-side cells have no sign column, so commentable code keeps one as an empty lane for the comment plus. */
+.code[data-split][data-review] .text {
+  padding-left: calc(1.4em + 6px);
 }
 
 .add {
