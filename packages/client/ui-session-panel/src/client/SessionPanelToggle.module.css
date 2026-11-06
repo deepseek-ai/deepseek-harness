@@ -20,6 +20,16 @@
     color: var(--dsw-alias-label-primary);
     background: var(--dsw-alias-interactive-bg-active);
   }
+
+  .trigger[aria-disabled='true']:hover:not(:disabled) {
+    background: transparent;
+  }
+}
+
+/* No Chat View shows the Session: the toggle stays focusable for its tooltip. */
+.trigger[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.4;
 }
 
 /* The name reaches assistive technology; the tooltip carries it visually. */

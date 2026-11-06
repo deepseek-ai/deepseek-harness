@@ -1,4 +1,4 @@
-# Agent Note: Session panel over the Conversation body's end gutter
+# Agent Note: Session panel in the Chat View's end gutter
 
 Status: implemented
 
@@ -10,15 +10,15 @@ Facts about the current Session — its project directory, the change requests i
 
 ## Decision
 
-[`dsh-client-ui-session-panel`](../../../../packages/client/ui-session-panel/README.md) adds a Session header toggle (`conversation.session.header.utilities`, order −10) and a floating panel that [`ui-conversation`](../../../../packages/client/ui-conversation/README.md) seats inside the main Conversation body as `conversation.session.panel`. The seat renders only for the main occurrence of an active Session, beside the width handles and outside the scrollport, so the panel neither scrolls with the transcript nor appears in embedded occurrences or on the blank home.
+[`dsh-client-ui-session-panel`](../../../../packages/client/ui-session-panel/README.md) adds a Session header toggle (`conversation.session.header.utilities`, order −10) and a floating panel that occupies `conversation.chat.aside`, a slot that [`ui-chat`](../../../../packages/client/ui-chat/README.md#scroll-ownership) renders in the Chat View beside the turn rail. The aside is a zero-height layer at the top of the Chat frame and, like the turn rail, is sticky inside the shared scrollport: the panel does not scroll with the transcript, inherits the scrollport's composer and viewport heights, and needs no seat in the Conversation shell. Views other than Chat show no panel.
 
 ### Docking follows the transcript gutter
 
-The panel docks only while the gutter between the transcript column and the body's end edge can hold it (344px: 48px clear of the column and its width handle, a 280px minimum width, and a 16px margin). The gutter, not the viewport width, decides because the column width is adaptive and user-draggable and the right sidebar shares the frame: the same viewport can leave 75px or 600px. The Conversation width controls already measure the body and resolve the column width, so they report the gutter after each measurement and drag frame into `ctx.uiConversation.layouts`, a per-Session source on the existing Conversation service. View activation reports whether the active View follows the transcript column; every View other than Chat fills the body, so the gutter reads zero there.
+The panel docks only while the gutter between the transcript column and the Chat frame's end edge can hold it (344px: 48px clear of the column and its width handle, a 280px minimum width, and a 16px margin). The gutter, not the viewport width, decides because the column width is adaptive and user-draggable and the right sidebar shares the frame: the same viewport can leave 75px or 600px. The Chat View owns the frame and the transcript column, so it computes the gutter from the widths a `ResizeObserver` reports for both and passes it to the aside occupant as the `endGutter` owner prop.
 
-The toggle and the panel read that source and one plugin-owned visibility state and decide the presentation with the same pure function. The toggle therefore reports `aria-expanded` truthfully and knows whether a press flips docking or opens the overlay, which a CSS-only container query cannot tell an element outside the body.
+Each mounted panel reports its gutter into the plugin's state, and the toggle reads the widest gutter reported for its Session; a Session without a report shows no Chat View. The toggle and the panel decide the presentation with the same pure function, so the toggle reports `aria-expanded` truthfully and knows whether a press flips docking or opens the overlay, which a CSS-only container query cannot tell an element outside the Chat View. While no Chat View shows the Session, as in the trajectory View, the toggle is unavailable and its tooltip asks for the Chat view; `ui-conversation` keeps View selection inside its shell, so the toggle does not switch Views itself.
 
-Docking follows one persisted preference shared by every Session and defaults to on. Without room, a press opens a transient overlay for that Session above the transcript and the composer stack; it never changes the preference, and it closes once its gutter can dock the panel or the main body shows another Session, so it never reappears on its own. The panel state follows the open overlay's layout source, which the Conversation shell marks as no longer shown when the main body leaves the Session, instead of a component cleanup that React's double mount would also run. Hiding automatically and overlaying on request keeps the transcript uncovered without making the facts unreachable on laptop widths.
+Docking follows one persisted preference shared by every Session and defaults to on. Without room, a press opens a transient overlay for that Session above the transcript; it never changes the preference, and it closes once its gutter can dock the panel or no Chat View shows the Session any longer, so it never reappears on its own. The panel state follows the reported gutter of the open overlay's Session. A panel withdraws its report when it unmounts or its Chat View moves to another Session, in a layout-effect cleanup kept apart from the gutter update, so a changed gutter never reads as an unmount. Hiding automatically and overlaying on request keeps the transcript uncovered without making the facts unreachable on laptop widths.
 
 ### Sections are registrations; the panel draws titles
 
@@ -32,16 +32,18 @@ The turn rail sits at the scrollport's start edge with its marks, focus ring, an
 
 ## Alternatives considered
 
+- **A seat in `conversation.content`.** Rejected: it made `ui-conversation` render the panel beside the width handles and outside the scrollport, have its width controls measure the gutter into a per-Session `ctx.uiConversation.layouts` source, and move the composer and viewport height variables from the scrollport to the content body so the seat could read them. The Conversation shell would carry geometry and variable placement for one feature, while chrome that must not scroll can sit sticky inside the scrollport as the turn rail does, and the Chat View already owns the column it would measure.
 - **A right-sidebar tab.** It already exists for change requests, but it narrows the transcript while shown, shows one tab at a time, and the [UI guidance](../../../skills/dsh-client-ui-ux/SKILL.md#reuse-before-adding) reserves the sidebar for content opened on demand rather than a resident summary.
 - **The dock kit's floating window.** `FloatLayer` windows are draggable, resizable, and positioned in viewport coordinates; a summary anchored to the transcript gutter needs none of that and would have to fight the window's own placement rules.
 - **Viewport-width breakpoints.** The transcript width is adaptive and draggable and the right sidebar takes a variable track, so a viewport breakpoint either covers the transcript or hides the panel with room to spare.
 - **CSS-only hiding with a click-time read.** A container query on the gutter can hide the docked panel, and the toggle could read the computed result when pressed, as the background-job trigger does. The toggle would still render without knowing whether the panel shows, so `aria-expanded` and its tooltip would be wrong whenever the preference says dock but the gutter is too narrow.
 - **Squeezing the transcript to make room.** Docking on laptop widths by moving the transcript column aside changes the centered column, the composer, and both width handles; it remains a separate layout decision.
-- **A Session-scoped standard hook for the layout.** Adding `useConversationLayout` to every Session-scoped Slot made every component fixture in the client restate it; the layout has two readers, so a source on the existing Conversation service serves them without widening the standard props.
+- **A Session-scoped standard hook for the gutter.** Adding a hook to every Session-scoped Slot would make every component fixture in the client restate it; the gutter has two readers, the panel through its owner props and the toggle through the plugin's own state.
 
 ## Consequences
 
 - With the default transcript width the body must be about 1608px wide to dock, so laptop widths use the overlay; the panel never covers the transcript unless the user opens it.
 - Sections from independent plugins share one surface, ordering, and title style without depending on each other, and an occupied section id can be replaced by a higher-priority registration.
-- The Conversation width controls gained one callback and the Conversation service one per-Session source; the composer stack height now lands on the content body so chrome outside the scrollport can read it.
+- `ui-chat` gained one slot and one `ResizeObserver` per Chat View; `ui-conversation` is unchanged.
+- The panel shows only in Chat Views; elsewhere the toggle stays in the header, unavailable. Every Chat View occurrence renders the aside, so a Session shown in the main body and in an embedded Conversation at once shows its overlay in both.
 - The turn rail's position changed for every user; its behavior and hiding rule did not.

@@ -5,7 +5,8 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { ConversationLayout } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type { NS } from './locales.ts'
@@ -38,7 +39,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** How the panel currently shows. */
 export type SessionPanelPresentation =
-  /** Beside the transcript in the body's end gutter. */
+  /** Beside the transcript in the Chat View's end gutter. */
   | 'docked'
   /** Over the transcript, opened from the toggle while the gutter is too narrow. */
   | 'overlay'
@@ -67,31 +68,43 @@ export interface SessionPanelVisibility {
   readonly overlay: SessionId | null
 }
 
+/**
+ * End gutter of each Session whose Chat View holds a panel, in CSS px; the
+ * widest one when several Chat Views show the Session. A Session without an
+ * entry shows no Chat View.
+ */
+export type SessionPanelGutters = ReadonlyMap<SessionId, number>
+
 /** Business face of the header toggle. */
 export interface SessionPanelToggleInjected {
-  /** Shared visibility and the Session's main body layout; the renderer binds them as `useVisibility` and `useLayout`. */
+  /** Shared visibility and the Chat View gutters; the renderer binds them as `useVisibility` and `useGutters`. */
   readonly hooks: {
     readonly visibility: ObservableSnapshot<SessionPanelVisibility>
-    readonly layout: ObservableSnapshot<ConversationLayout>
+    readonly gutters: ObservableSnapshot<SessionPanelGutters>
   }
   /**
    * Show or hide the panel. With room to dock this flips the docking
    * preference and closes any overlay; otherwise it opens or closes the
-   * Session's overlay.
+   * Session's overlay. No effect while no Chat View shows the Session.
    * @param sessionId - Session whose header holds the toggle.
-   * @param fits - whether the main body's gutter can hold the docked panel now.
    */
-  readonly toggle: (sessionId: SessionId, fits: boolean) => void
+  readonly toggle: (sessionId: SessionId) => void
 }
 
 /** Business face of the panel. */
 export interface SessionPanelInjected {
-  /** Shared visibility, the Session's main body layout, and the projected section roster. */
+  /** Shared visibility and the projected section roster. */
   readonly hooks: {
     readonly visibility: ObservableSnapshot<SessionPanelVisibility>
-    readonly layout: ObservableSnapshot<ConversationLayout>
     readonly sections: ObservableSnapshot<readonly SessionPanelSectionEntry[]>
   }
+  /**
+   * Record the end gutter of one mounted panel, or that it unmounted.
+   * @param sessionId - Session the panel's Chat View shows.
+   * @param instance - identity of the panel within the page.
+   * @param endGutter - the Chat View's end gutter in CSS px; null when the panel unmounts or leaves the Session.
+   */
+  readonly measure: (sessionId: SessionId, instance: string, endGutter: number | null) => void
   /**
    * Close the Session's overlay.
    * @param sessionId - Session whose overlay closes; another Session's overlay stays.
@@ -114,7 +127,7 @@ export type SessionPanelToggleProps =
 
 /** Full props of the panel. */
 export type SessionPanelProps =
-  PropsRuntime<'conversation.session.panel'>
+  PropsRuntime<'conversation.chat.aside'>
   & PropsRenderSlots<'conversation.session.panel.section' | 'conversation.session.panel.section.actions'>
   & InjectFace<SessionPanelInjected>
   & PropsLocale<typeof NS>

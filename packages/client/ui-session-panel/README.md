@@ -1,5 +1,5 @@
 ---
-description: "The Session panel: a header toggle and a floating panel over the main Conversation body whose sections other plugins register, with the built-in Environment section."
+description: "The Session panel: a header toggle and a floating panel in the Chat View's aside whose sections other plugins register, with the built-in Environment section."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-client-ui-session-panel` adds a Session header toggle that shows or hides a floating panel of facts about the current Session. The panel docks in the main Conversation body's end gutter when the gutter can hold it, and otherwise opens over the transcript on request. It draws section titles and leaves section content to the plugins that register sections; it ships the Environment section with the working folder row.
+`dsh-client-ui-session-panel` adds a Session header toggle that shows or hides a floating panel of facts about the current Session. The panel lives in the Chat View: it docks in the Chat View's end gutter when the gutter can hold it, and otherwise opens over the transcript on request. It draws section titles and leaves section content to the plugins that register sections; it ships the Environment section with the working folder row.
 
 ## Table of Contents
 
@@ -29,9 +29,11 @@ The `@deepseek-ai/dsh-web-app` bundle loads this package by default. The toggle 
 
 ### Docking and the overlay
 
-The panel docks while the gutter between the transcript column and the body's end edge is at least 344px: 48px clear of the column and its width handle, the panel's 280px minimum width, and a 16px edge margin. Docked, it is 280–340px wide, starts 12px below the header, and scrolls inside itself. Pressing the toggle then flips one docking preference that every Session shares and that persists in `localStorage` under `dsh.sessionPanel.pinned`; the panel docks by default.
+The panel docks while the gutter between the transcript column and the Chat frame's end edge is at least 344px: 48px clear of the column and its width handle, the panel's 280px minimum width, and a 16px edge margin. Docked, it is 280–340px wide, starts 12px below the header, and scrolls inside itself. Pressing the toggle then flips one docking preference that every Session shares and that persists in `localStorage` under `dsh.sessionPanel.pinned`; the panel docks by default.
 
-A narrower gutter hides the docked panel, so it never covers the transcript. This includes a narrow window, an expanded right sidebar, a dragged-wide transcript column, and every View other than Chat, because those Views fill the body. Pressing the toggle then opens the panel over the transcript with the prominent elevation, above the composer stack and not covering it. The overlay closes from the toggle, on Escape, and on a pointer press outside the panel, the toggle, and any open menu, such as a row's context menu; Escape returns focus to the toggle when focus was inside the panel. A modal above the page, an input method composing text, and a handler that already took the key, such as an open menu's, keep Escape; otherwise the overlay takes it first, so with the overlay open the first Escape from the composer closes the overlay and does not count toward stopping a running turn. Closing it does not change the docking preference. At most one Session's overlay is open; it closes once the gutter widens enough to dock and once the main body shows another Session, and switching back does not reopen it. When the panel hides while focus is inside it, focus moves to the toggle.
+A narrower gutter hides the docked panel, so it never covers the transcript. This includes a narrow window, an expanded right sidebar, and a dragged-wide transcript column. Pressing the toggle then opens the panel over the transcript with the prominent elevation, above the composer stack and not covering it. The overlay closes from the toggle, on Escape, and on a pointer press outside the panel, the toggle, and any open menu, such as a row's context menu; Escape returns focus to the toggle when focus was inside the panel. A modal above the page, an input method composing text, and a handler that already took the key, such as an open menu's, keep Escape; otherwise the overlay takes it first, so with the overlay open the first Escape from the composer closes the overlay and does not count toward stopping a running turn. Closing it does not change the docking preference. At most one Session's overlay is open; it closes once the gutter widens enough to dock and once no Chat View shows the Session, as after switching to another Session or View, and switching back does not reopen it. When the panel hides while focus is inside it, focus moves to the toggle.
+
+Other Views, such as the trajectory View, show no panel. While no Chat View shows the Session, the toggle is unavailable: it stays in the header with its indicators, dimmed, and its tooltip asks to switch to the Chat view.
 
 <a id="contribute-a-section"></a>
 ### Contribute a section
@@ -52,7 +54,7 @@ Summary rows from every package use the `PanelRow` primitive, so icon, text, and
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The toggle and the panel are separate Slot entries that share one plugin-owned visibility source: the persisted docking preference and the Session whose overlay is open. Both read the Session's main body geometry from `ctx.uiConversation.layouts`, which the Conversation width controls write from their existing measurement, and decide the presentation with the same pure function, so the toggle's state never disagrees with the panel. The panel renders inside the main Conversation body, which owns its positioning context, the transcript axis, and the composer stack height.
+The panel is the `conversation.chat.aside` occupant of [`dsh-client-ui-chat`](../ui-chat/README.md#scroll-ownership), so it renders only in Chat Views. The toggle and the panel are separate Slot entries that share one plugin-owned state: the persisted docking preference, the Session whose overlay is open, and the end gutter each mounted panel reports from its `endGutter` owner prop. A panel withdraws its report when it unmounts or its Chat View moves to another Session. The panel decides its presentation from its own gutter; the toggle reads the widest gutter of its Session, and a Session without one shows no Chat View. Both decide with the same pure function, so the toggle's state never disagrees with the panel. The aside layer inherits the scrollport's composer and viewport heights, and the docked width follows the gutter through `--dsh-session-panel-gutter`.
 
 The panel projects the section list's live registrations (`entriesOfSlot`, so a higher-priority registration with the same `id` replaces a shipped section) into `{ id, label }` rows, recomputed only when the ledger version or the locale revision changes. It renders each section through `renderSlot(..., { only: id })` inside its own title and body; a CSS `:has()` rule hides a section whose body outlet stayed empty, including a shared section whose row outlet stayed empty.
 
@@ -60,7 +62,7 @@ The panel projects the section list's live registrations (`entriesOfSlot`, so a 
 |---|---|
 | [`src/client/index.ts`](src/client/index.ts) | Dictionaries, the toggle, the panel, the Environment section, and the project row |
 | [`src/client/slots.ts`](src/client/slots.ts) | Slot declarations and component props |
-| [`src/client/visibility.ts`](src/client/visibility.ts) | Docking threshold, presentation, and the shared visibility state |
+| [`src/client/visibility.ts`](src/client/visibility.ts) | Docking threshold, presentation, the shared visibility state, and the reported gutters |
 | [`src/client/sections.ts`](src/client/sections.ts) | Section roster projection |
 | [`src/client/SessionPanel.tsx`](src/client/SessionPanel.tsx) | The panel, its section titles, and Escape handling |
 | [`src/client/SessionPanelToggle.tsx`](src/client/SessionPanelToggle.tsx) | The header toggle and its indicators |
@@ -74,7 +76,8 @@ The panel projects the section list's live registrations (`entriesOfSlot`, so a 
 ## Further Exploration
 
 - [Web Client Slots](../../../docs/subsystems/slots.md) — list, keyed, and owner-prop semantics the sections rely on.
-- [`dsh-client-ui-conversation`](../ui-conversation/README.md) — the Session header utilities, the panel seat, and the main body geometry.
+- [`dsh-client-ui-chat`](../ui-chat/README.md#scroll-ownership) — the `conversation.chat.aside` layer and its end gutter.
+- [`dsh-client-ui-conversation`](../ui-conversation/README.md) — the Session header utilities.
 - [`dsh-client-ui-primitives`](../ui-primitives/README.md#component-catalog) — `PanelRow` and `PathLabel`.
 
 -----
@@ -97,6 +100,8 @@ These limits define current package constraints, not a task backlog.
 - **Laptop widths overlay rather than dock** — with the default transcript width the body must be at least about 1608px wide to dock; narrower bodies use the overlay. Docking by moving the transcript column aside is a separate layout decision.
 - **No execution environment row** — the Client has no per-Session fact for the local machine, an SSH host, or the sandbox mode, so the Environment section names only the working folder.
 - **No section customization** — every live section shows; hiding or reordering sections from the panel is not offered.
+- **No switch back to Chat from other Views** — `dsh-client-ui-conversation` exposes no View selection to plugins, so the toggle in the trajectory View cannot select the Chat View for the user.
+- **An overlay shows in each Chat View of its Session** — every Chat View occurrence, main or embedded, renders the aside, so a Session shown in the main body and in an embedded Conversation at once shows its overlay in both.
 
 <a id="dev-note"></a>
 ### Dev Note

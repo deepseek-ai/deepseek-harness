@@ -30,6 +30,9 @@
       "path": "../store"
     },
     {
+      "path": "../ui-chat/tsconfig.client.json"
+    },
+    {
       "path": "../ui-context-menu"
     },
     {

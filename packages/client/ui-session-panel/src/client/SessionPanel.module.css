@@ -1,17 +1,16 @@
-/* The panel floats over the main Conversation body (position: relative),
-   which defines the transcript axis --dsh-chat-content-width and publishes
-   the composer stack height --dsh-composer-height. */
+/* The panel floats in the Chat View's aside layer, a zero-height box at the
+   top of the Chat frame that passes pointer events through. The layer
+   inherits the scrollport's --dsh-conversation-viewport-height and
+   --dsh-composer-height; the panel receives the Chat View's end gutter as
+   --dsh-session-panel-gutter. */
 .panel {
   position: absolute;
   top: 12px;
   right: 16px;
-  /* Above the turn rail (7), level with the back-to-bottom control (8), and
-     below the composer seat (9); the docked width keeps 48px clear of the
-     transcript column and its width handle. */
-  z-index: 8;
   box-sizing: border-box;
-  width: clamp(280px, calc((100% - var(--dsh-chat-content-width)) / 2 - 64px), 340px);
-  max-height: calc(100% - 24px);
+  /* The docked width keeps 48px clear of the transcript column and its width handle. */
+  width: clamp(280px, calc(var(--dsh-session-panel-gutter, 0px) - 64px), 340px);
+  max-height: calc(var(--dsh-conversation-viewport-height, 100dvh) - 24px);
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 6px 8px;
@@ -21,6 +20,7 @@
   color: var(--dsw-alias-label-primary);
   background: var(--dsw-alias-bg-layer-1);
   box-shadow: var(--dsw-elevation-panel);
+  pointer-events: auto;
   animation: dsh-session-panel-enter 120ms ease-out;
 }
 
@@ -28,9 +28,8 @@
    the composer stack, whose card it would otherwise cover. */
 .panel[data-session-panel='overlay'] {
   right: 12px;
-  z-index: 10;
   width: min(340px, calc(100% - 24px));
-  max-height: calc(100% - var(--dsh-composer-height, 152px) - 24px);
+  max-height: calc(var(--dsh-conversation-viewport-height, 100dvh) - var(--dsh-composer-height, 152px) - 24px);
   box-shadow: var(--dsw-elevation-prominent);
 }
 

@@ -1,5 +1,5 @@
 ---
-description: "会话面板：会话标题栏开关与主对话区上方的悬浮面板，分栏由其他插件注册，并内置「环境」分栏。"
+description: "会话面板：会话标题栏开关与 Chat 视图侧边层中的悬浮面板，分栏由其他插件注册，并内置「环境」分栏。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-client-ui-session-panel` 在会话标题栏加一个开关，用来显示或隐藏一块汇总当前会话信息的悬浮面板。主对话区末端留白放得下面板时，面板停靠在留白里；放不下时，按需浮在对话正文上方。面板只绘制分栏标题，分栏内容交给注册分栏的插件；本包内置「环境」分栏及其工作目录行。
+`dsh-client-ui-session-panel` 在会话标题栏加一个开关，用来显示或隐藏一块汇总当前会话信息的悬浮面板。面板只出现在 Chat 视图中：Chat 视图末端留白放得下面板时，面板停靠在留白里；放不下时，按需浮在对话正文上方。面板只绘制分栏标题，分栏内容交给注册分栏的插件；本包内置「环境」分栏及其工作目录行。
 
 ## 目录
 
@@ -29,9 +29,11 @@ kind: "package-reference"
 
 ### 停靠与浮层
 
-正文列到对话区末端边缘的留白不少于 344px 时，面板停靠：与正文列及其宽度手柄保持 48px 间距，面板最小宽度 280px，外加 16px 边距。停靠时面板宽 280–340px，位于标题栏下方 12px，内容在面板内滚动。此时按开关会切换所有会话共用的停靠偏好，偏好存放在 `localStorage` 的 `dsh.sessionPanel.pinned` 中；默认停靠。
+正文列到 Chat 外框末端边缘的留白不少于 344px 时，面板停靠：与正文列及其宽度手柄保持 48px 间距，面板最小宽度 280px，外加 16px 边距。停靠时面板宽 280–340px，位于标题栏下方 12px，内容在面板内滚动。此时按开关会切换所有会话共用的停靠偏好，偏好存放在 `localStorage` 的 `dsh.sessionPanel.pinned` 中；默认停靠。
 
-留白更窄时隐藏停靠面板，保证不遮挡正文。窗口变窄、展开右侧栏、把正文列拖宽，以及切换到 Chat 以外的视图（这些视图占满对话区）都会如此。此时按开关，面板以更强的阴影浮在正文上方，位于输入框区域之上，且不遮挡输入框。浮层可以用开关关闭，也会在按 Esc 时，或在面板、开关和任何已打开的菜单（例如行的上下文菜单）之外按下指针时关闭；焦点原本在面板内时，按 Esc 后焦点回到开关。页面上方有模态框、输入法正在组字，或已有处理程序（例如打开的菜单）接手了这次按键时，Esc 不归浮层；其余情况由浮层先处理，因此浮层打开时，在输入框按下的第一次 Esc 只关闭浮层，不计入停止当前轮次的连按。关闭浮层不改变停靠偏好。同一时间最多一个会话的浮层处于打开状态；留白变宽到可以停靠时，以及主正文切到其他会话时，浮层都会关闭，切回来也不会重新打开。面板隐藏时如果焦点在面板内，焦点移到开关。
+留白更窄时隐藏停靠面板，保证不遮挡正文。窗口变窄、展开右侧栏、把正文列拖宽都会如此。此时按开关，面板以更强的阴影浮在正文上方，位于输入框区域之上，且不遮挡输入框。浮层可以用开关关闭，也会在按 Esc 时，或在面板、开关和任何已打开的菜单（例如行的上下文菜单）之外按下指针时关闭；焦点原本在面板内时，按 Esc 后焦点回到开关。页面上方有模态框、输入法正在组字，或已有处理程序（例如打开的菜单）接手了这次按键时，Esc 不归浮层；其余情况由浮层先处理，因此浮层打开时，在输入框按下的第一次 Esc 只关闭浮层，不计入停止当前轮次的连按。关闭浮层不改变停靠偏好。同一时间最多一个会话的浮层处于打开状态；留白变宽到可以停靠时，以及没有 Chat 视图再显示该会话时（例如切到其他会话或其他视图），浮层都会关闭，切回来也不会重新打开。面板隐藏时如果焦点在面板内，焦点移到开关。
+
+轨迹等其他视图不显示面板。没有 Chat 视图显示该会话时，开关不可用：它连同角标留在标题栏中并变淡，悬停提示请用户切换到「对话」视图。
 
 <a id="contribute-a-section"></a>
 ### 贡献分栏
@@ -52,7 +54,7 @@ kind: "package-reference"
 <details>
 <summary>实现内幕——点击展开</summary>
 
-开关与面板是两个独立的 Slot 条目，共享一个插件持有的可见性 source：持久化的停靠偏好，以及打开了浮层的会话。两者都从 `ctx.uiConversation.layouts` 读取该会话的主对话区几何信息（由 Conversation 宽度控件在已有的测量中写入），并用同一个纯函数决定呈现方式，因此开关状态始终与面板一致。面板渲染在主对话区内部，对话区持有其定位上下文、正文轴线和输入框区域高度。
+面板是 [`dsh-client-ui-chat`](../ui-chat/README.zh.md#scroll-ownership) 中 `conversation.chat.aside` 的占位组件，因此只渲染在 Chat 视图中。开关与面板是两个独立的 Slot 条目，共享一份插件持有的状态：持久化的停靠偏好、打开了浮层的会话，以及每个已挂载面板从 owner 属性 `endGutter` 上报的末端留白。面板卸载或其 Chat 视图换到另一个会话时撤回上报。面板根据自己的留白决定呈现方式；开关读取该会话最宽的留白，没有留白的会话表示没有 Chat 视图在显示它。两者用同一个纯函数决定，因此开关状态始终与面板一致。侧边层从滚动容器继承输入框区域与视口高度，停靠宽度通过 `--dsh-session-panel-gutter` 跟随留白。
 
 面板把分栏列表的实时注册（`entriesOfSlot`，因此同 `id` 且优先级更高的注册会替换已发布的分栏）投影为 `{ id, label }` 行，只在台账版本或语言版本变化时重新计算。它在各分栏自己的标题和正文容器里用 `renderSlot(..., { only: id })` 渲染内容；CSS `:has()` 规则隐藏正文出口为空的分栏，也包括行出口为空的共享分栏。
 
@@ -60,7 +62,7 @@ kind: "package-reference"
 |---|---|
 | [`src/client/index.ts`](src/client/index.ts) | 字典、开关、面板、「环境」分栏与项目行 |
 | [`src/client/slots.ts`](src/client/slots.ts) | Slot 声明与组件 props |
-| [`src/client/visibility.ts`](src/client/visibility.ts) | 停靠阈值、呈现方式与共享可见性状态 |
+| [`src/client/visibility.ts`](src/client/visibility.ts) | 停靠阈值、呈现方式、共享可见性状态与上报的留白 |
 | [`src/client/sections.ts`](src/client/sections.ts) | 分栏名单投影 |
 | [`src/client/SessionPanel.tsx`](src/client/SessionPanel.tsx) | 面板、分栏标题与 Esc 处理 |
 | [`src/client/SessionPanelToggle.tsx`](src/client/SessionPanelToggle.tsx) | 标题栏开关及其角标 |
@@ -74,7 +76,8 @@ kind: "package-reference"
 ## 进一步探索
 
 - [Web Client Slots](../../../docs/subsystems/slots.zh.md)——分栏依赖的 list、keyed 与 owner props 语义。
-- [`dsh-client-ui-conversation`](../ui-conversation/README.zh.md)——会话标题栏工具区、面板落位与主对话区几何信息。
+- [`dsh-client-ui-chat`](../ui-chat/README.zh.md#scroll-ownership)——`conversation.chat.aside` 图层及其末端留白。
+- [`dsh-client-ui-conversation`](../ui-conversation/README.zh.md)——会话标题栏工具区。
 - [`dsh-client-ui-primitives`](../ui-primitives/README.zh.md#component-catalog)——`PanelRow` 与 `PathLabel`。
 
 -----
@@ -97,6 +100,8 @@ kind: "package-reference"
 - **笔记本宽度下使用浮层而非停靠**——在默认正文宽度下，对话区宽度需约 1608px 以上才能停靠；更窄时使用浮层。通过把正文列移开来停靠属于另一项布局决策。
 - **没有运行环境行**——客户端没有区分本机、SSH 主机或沙箱模式的会话级信息，因此「环境」分栏只显示工作目录。
 - **不能自定义分栏**——所有有内容的分栏都会显示；面板不提供隐藏或重新排序分栏的功能。
+- **不能从其他视图切回 Chat**——`dsh-client-ui-conversation` 没有向插件开放视图选择，因此轨迹视图中的开关无法替用户切换到 Chat 视图。
+- **浮层会出现在其会话的每个 Chat 视图中**——每个 Chat 视图实例（主正文区或嵌入的）都会渲染侧边层，因此同一会话同时显示在主正文区和嵌入的对话中时，两处都会显示浮层。
 
 <a id="dev-note"></a>
 ### 开发备注
