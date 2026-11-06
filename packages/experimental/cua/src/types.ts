@@ -79,7 +79,6 @@ export type CuaMouseButton = NonNullable<CuaParameters<'click'>['mouseButton']>
 /**
  * Left clicks support one or two presses; right and middle clicks support one.
  * holdMs is a nonnegative integer in milliseconds, limited by maxClickHoldMs; zero releases immediately.
- * Explicit holds use pointer input; omission preserves ordinary clicks.
  */
 export type CuaClickOptions = Pick<CuaParameters<'click'>, 'mouseButton' | 'clickCount' | 'modifiers' | 'holdMs'> & CuaCoordinateOptions
 /** One same-window drag; omitted button is left and omitted modifiers are empty. */
@@ -201,9 +200,10 @@ export interface CuaWindow extends CuaSurface {
    */
   mouseMove(target: CuaElementId | readonly [number, number], options?: CuaCoordinateOptions): Promise<CuaHoverResult>
   /**
-   * Click a current element id or screenshot-local point.
+   * Click an element or a point in this window. On macOS both forms send mouse-down and mouse-up events.
+   * Use {@link CuaSurface.invoke} for the element's default accessibility action.
    * Cancellation or timeout releases the held button; received input cannot be undone. The operation deadline includes holdMs.
-   * @param target - element id or [x,y].
+   * @param target - On macOS, an id from the latest tree targets the element center. A coordinate pair targets the given point.
    * @param options - button, click count, modifiers, optional hold duration and coordinate mode.
    * @returns dispatch evidence.
    */
