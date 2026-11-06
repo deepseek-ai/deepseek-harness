@@ -54,6 +54,9 @@
       "path": "../../util/workspace-path"
     },
     {
+      "path": "../../session/working-directory"
+    },
+    {
       "path": "../../workspace/workspace"
     }
   ]

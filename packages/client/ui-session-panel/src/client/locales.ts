@@ -9,7 +9,8 @@ export const zh = {
   'toggle.show': '显示会话面板',
   'toggle.hide': '隐藏会话面板',
   'section.environment': '环境',
-  'project.actions': '项目目录操作',
+  'project.label': '工作目录',
+  'project.actions': '工作目录操作',
 } as const
 
 /** Every key of the `sessionPanel` namespace. */
@@ -21,7 +22,8 @@ export const en: Record<SessionPanelKey, string> = {
   'toggle.show': 'Show session panel',
   'toggle.hide': 'Hide session panel',
   'section.environment': 'Environment',
-  'project.actions': 'Project directory actions',
+  'project.label': 'Working folder',
+  'project.actions': 'Working folder actions',
 }
 
 /** Japanese dictionary. */
@@ -30,7 +32,8 @@ export const ja = {
   'toggle.show': 'セッションパネルを表示',
   'toggle.hide': 'セッションパネルを非表示',
   'section.environment': '環境',
-  'project.actions': 'プロジェクトディレクトリの操作',
+  'project.label': '作業フォルダー',
+  'project.actions': '作業フォルダーの操作',
 } satisfies Record<keyof typeof en, string>
 
 /** Spanish dictionary. */
@@ -39,7 +42,8 @@ export const es = {
   'toggle.show': 'Mostrar el panel de la sesión',
   'toggle.hide': 'Ocultar el panel de la sesión',
   'section.environment': 'Entorno',
-  'project.actions': 'Acciones del directorio del proyecto',
+  'project.label': 'Carpeta de trabajo',
+  'project.actions': 'Acciones de la carpeta de trabajo',
 } satisfies Record<keyof typeof en, string>
 
 /** French dictionary. */
@@ -48,7 +52,8 @@ export const fr = {
   'toggle.show': 'Afficher le panneau de session',
   'toggle.hide': 'Masquer le panneau de session',
   'section.environment': 'Environnement',
-  'project.actions': 'Actions sur le dossier du projet',
+  'project.label': 'Dossier de travail',
+  'project.actions': 'Actions sur le dossier de travail',
 } satisfies Record<keyof typeof en, string>
 
 /** German dictionary. */
@@ -57,7 +62,8 @@ export const de = {
   'toggle.show': 'Sitzungsbereich anzeigen',
   'toggle.hide': 'Sitzungsbereich ausblenden',
   'section.environment': 'Umgebung',
-  'project.actions': 'Aktionen für das Projektverzeichnis',
+  'project.label': 'Arbeitsordner',
+  'project.actions': 'Aktionen für den Arbeitsordner',
 } satisfies Record<keyof typeof en, string>
 
 /** Russian dictionary. */
@@ -66,7 +72,8 @@ export const ru = {
   'toggle.show': 'Показать панель сеанса',
   'toggle.hide': 'Скрыть панель сеанса',
   'section.environment': 'Среда',
-  'project.actions': 'Действия с каталогом проекта',
+  'project.label': 'Рабочая папка',
+  'project.actions': 'Действия с рабочей папкой',
 } satisfies Record<keyof typeof en, string>
 
 /** Brazilian Portuguese dictionary. */
@@ -75,5 +82,6 @@ export const pt = {
   'toggle.show': 'Mostrar painel da sessão',
   'toggle.hide': 'Ocultar painel da sessão',
   'section.environment': 'Ambiente',
-  'project.actions': 'Ações da pasta do projeto',
+  'project.label': 'Pasta de trabalho',
+  'project.actions': 'Ações da pasta de trabalho',
 } satisfies Record<keyof typeof en, string>

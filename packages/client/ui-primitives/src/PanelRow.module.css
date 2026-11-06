@@ -104,6 +104,12 @@
   }
 }
 
+/* Row actions share the row's highlight instead of drawing their own fill. */
+.menu button:hover:not(:disabled),
+.menu button:active:not(:disabled) {
+  background: transparent;
+}
+
 /* An open menu keeps its row highlighted and its trigger visible after the pointer leaves for the menu. */
 .interactive:has([aria-expanded='true']) {
   background: var(--dsw-alias-interactive-bg-hover);

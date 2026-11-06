@@ -18,6 +18,10 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./types": {
+      "types": "./lib/types/types.d.ts",
+      "default": "./lib/types/types.js"
+    },
     "./src/*": "./src/*",
     "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json"
@@ -25,6 +29,7 @@
   "files": [
     "locale/*.json",
     "lib/index.js",
+    "lib/types/**/*.js",
     "lib/types/**/*.d.ts",
     "lib/types/**/*.d.ts.map",
     "lib/**/*.js.map",

@@ -275,6 +275,7 @@ describe('EnvironmentSection', () => {
 
 describe('ProjectRow', () => {
   function rowProps(over: {
+    workingDirectory?: string | null
     workspacePath?: string
     cwd?: string
     home?: string
@@ -282,6 +283,7 @@ describe('ProjectRow', () => {
     const renderFactorySlot = vi.fn((_name: string, input: { label: string }) => <button type="button">{input.label}</button>)
     const props = {
       sessionId: SID,
+      useProjection: (key: string) => key === 'workingDirectory' ? over.workingDirectory : undefined,
       useWorkspaces: selectorOf({
         items: over.workspacePath === undefined ? [] : [{ path: over.workspacePath, sessionIds: [SID] }],
       }),
@@ -294,27 +296,46 @@ describe('ProjectRow', () => {
     return { props, renderFactorySlot, open }
   }
 
-  it('shows the listing Workspace directory with the home directory abbreviated', () => {
+  function folderOf(container: HTMLElement): { name: string | null; parent: string | null } {
+    const folder = container.querySelector('[data-session-panel-project] [tabindex="0"]') as HTMLElement
+    const [name, parent] = [...folder.children]
+    return { name: name?.textContent ?? null, parent: parent?.textContent ?? null }
+  }
+
+  it('shows the working directory as its name and parent folder, with the label and full path in the tooltip', () => {
     const { props, renderFactorySlot } = rowProps({
-      workspacePath: '/Users/me/projects/deepseek-harness', cwd: '/Users/me/elsewhere', home: '/Users/me',
+      workingDirectory: '/Users/me/projects/app/.worktrees/fix',
+      cwd: '/Users/me/projects/app',
+      workspacePath: '/Users/me/projects/app',
+      home: '/Users/me',
     })
     const view = render(<ProjectRow {...props} />)
-    const label = view.container.querySelector('[data-path-label]') as HTMLElement
-    expect(label.getAttribute('title')).toBe('~/projects/deepseek-harness')
+    expect(folderOf(view.container)).toEqual({ name: 'fix', parent: '~/projects/app/.worktrees' })
+    fireEvent.keyDown(document.body, { key: 'Tab' })
+    fireEvent.focus(view.container.querySelector('[data-session-panel-project] [tabindex="0"]') as HTMLElement)
+    expect(screen.getByRole('tooltip', { hidden: true }).textContent).toBe('工作目录\n~/projects/app/.worktrees/fix')
     expect(renderFactorySlot).toHaveBeenCalledWith('contextMenu.button', expect.objectContaining({
-      target: { kind: 'directory', value: { sessionId: SID, path: '/Users/me/projects/deepseek-harness' } },
-      label: '项目目录操作',
+      target: { kind: 'directory', value: { sessionId: SID, path: '/Users/me/projects/app/.worktrees/fix' } },
+      label: '工作目录操作',
       size: 'sm',
     }))
-    expect(screen.getByRole('button', { name: '项目目录操作' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '工作目录操作' })).toBeTruthy()
   })
 
   it('falls back to the directory the Session was created in and opens the directory menu on right-click', () => {
-    const { props, open } = rowProps({ cwd: '/srv/app' })
+    const { props, open } = rowProps({ cwd: '/srv/app', workspacePath: '/srv' })
     const view = render(<ProjectRow {...props} />)
-    expect(view.container.querySelector('[data-path-label]')?.getAttribute('title')).toBe('/srv/app')
+    expect(folderOf(view.container)).toEqual({ name: 'app', parent: '/srv' })
     fireEvent.contextMenu(view.container.querySelector('[data-session-panel-project]') as HTMLElement)
     expect(open).toHaveBeenCalledWith({ kind: 'directory', value: { sessionId: SID, path: '/srv/app' } }, expect.anything())
+  })
+
+  it('falls back to the listing Workspace when no directory is recorded, keeping a root parent and omitting an absent one', () => {
+    const atRoot = render(<ProjectRow {...rowProps({ workingDirectory: null, workspacePath: '/srv' }).props} />)
+    expect(folderOf(atRoot.container)).toEqual({ name: 'srv', parent: '/' })
+    atRoot.unmount()
+    const atHome = render(<ProjectRow {...rowProps({ workingDirectory: '/Users/me', home: '/Users/me' }).props} />)
+    expect(folderOf(atHome.container)).toEqual({ name: '~', parent: null })
   })
 
   it('renders nothing before the Session directory is known', () => {
