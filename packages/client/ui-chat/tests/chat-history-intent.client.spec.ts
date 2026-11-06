@@ -71,25 +71,22 @@ describe('history consumption intent', () => {
     h.navigation.dispose()
   })
 
-  it('retains an explicit click until the fold ends without requesting the cached page again', () => {
-    const h = fixture()
-    h.ready()
-    h.mode.mockReturnValue('motion')
-    vi.spyOn(h.viewport.motion, 'foldActive').mockReturnValue(true)
-    let idle: (() => void) | undefined
-    const stop = vi.fn()
-    vi.spyOn(h.viewport.motion, 'onFoldIdle').mockImplementation((callback) => { idle = callback; return stop })
-    h.navigation.loadEarlier()
-    h.check()
-    expect(h.onIntent).toHaveBeenLastCalledWith('manual')
-    expect(h.loadOlder).not.toHaveBeenCalled()
-    expect(h.consumeOlder).not.toHaveBeenCalled()
-    h.mode.mockReturnValue('native')
-    idle?.()
-    vi.advanceTimersByTime(20)
-    expect(h.consumeOlder).toHaveBeenCalledOnce()
-    h.navigation.dispose()
-  })
+  it.each(['motion', 'touch', 'pointer', 'inner-scroll', 'unavailable'] as const)(
+    'uses baseline manual paging for a cached page without consulting the automatic %s gate', (blocker) => {
+      const h = fixture()
+      h.ready()
+      h.mode.mockReturnValue(blocker)
+      const begin = vi.spyOn(h.viewport, 'beginManualPaging')
+      h.navigation.loadEarlier()
+      h.check()
+      expect(h.mode).not.toHaveBeenCalled()
+      expect(begin).toHaveBeenCalledOnce()
+      expect(h.loadOlder).not.toHaveBeenCalled()
+      expect(h.consumeOlder).toHaveBeenCalledOnce()
+      expect(h.onIntent).toHaveBeenLastCalledWith('none')
+      h.navigation.dispose()
+    },
+  )
 
   it('joins a pending automatic request when clicked and consumes once after it returns', () => {
     const h = fixture()
@@ -102,6 +99,22 @@ describe('history consumption intent', () => {
     expect(h.consumeOlder).toHaveBeenCalledOnce()
     expect(h.onIntent).toHaveBeenLastCalledWith('none')
     h.navigation.dispose()
+  })
+
+  it.each(['touch', 'inner-scroll'] as const)('keeps %s ahead of an active motion blocker', (input) => {
+    const viewport = new ChatViewport()
+    const root = document.createElement('div')
+    const inner = document.createElement('div')
+    inner.dataset.stepProcessBody = ''
+    root.append(inner)
+    document.body.append(root)
+    viewport.attach(root, root)
+    vi.spyOn(viewport.motion, 'active').mockReturnValue(true)
+    if (input === 'touch') root.dispatchEvent(new Event('touchstart', { bubbles: true }))
+    else inner.dispatchEvent(new Event('scroll'))
+    expect(viewport.historyConsumption()).toBe(input)
+    viewport.detach()
+    root.remove()
   })
 
   it('does not consume a cached page on a fresh view until clicked', () => {

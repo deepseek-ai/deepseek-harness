@@ -161,11 +161,13 @@ export function useChatScroll(input: ChatScrollInput): ChatScrollState {
     }
     viewport.updateTurns(loadedTurns)
     const layoutChanged = previous.order !== order || previous.isOpen !== isOpen
-    if (layoutChanged) {
+    const historyConsumed = previous.historyLoadStatus === 'pendingConsumption' && historyLoadStatus === 'idle'
+    if (!isOpen || historyLoadStatus === 'error') viewport.cancelHistoryPrepend()
+    else if (layoutChanged || historyConsumed) {
       const landing = viewport.finishHistoryPrepend()
       if (landing !== null) reading.preservePosition(landing)
-      viewport.invalidate()
     }
+    if (layoutChanged) viewport.invalidate()
     viewport.reclaimBelow()
     processContent()
     if (layoutChanged && content.current.opened) reading.refreshActiveTurn()

@@ -18,7 +18,7 @@ Status: proposed
 |---|---|
 | [Session](../../../../packages/api/session-controller/src/client/sessions/session.ts) | `loadOlder({ deferConsumption?: boolean })` 准备并按选项消费一页；`consumeOlder()` 同步发布有效暂存页；`historyLoadStatus` 表达 idle/loading/pendingConsumption/error，`loadingOlder` 从 loading 派生并包含 Turn 跳转 |
 | Session 请求记录 | 保存 generation、请求前游标、页内容、hasMore、Promise 与消费/失效标记；缓存页不提前改变可见窗口游标 |
-| [ChatNavigation](../../../../packages/client/ui-chat/src/client/chat/use-chat-navigation.ts) | 保存 none/auto/manual 消费意图和请求互斥；按阻塞原因等待或退回按钮；仅手动消费注册折叠结束通知 |
+| [ChatNavigation](../../../../packages/client/ui-chat/src/client/chat/use-chat-navigation.ts) | 保存 none/auto/manual 消费意图和请求互斥；自动按阻塞原因等待或退回按钮，手动采集锚点后消费，不注册阻塞结束等待 |
 | [ChatViewport](../../../../packages/client/ui-chat/src/client/chat/use-chat-viewport.ts) | 读取内部输入/动画状态与 scrollTop，报告阻塞原因或 native/preserve/prepend；执行距离测量和已有锚点算法 |
 | [useChatScroll](../../../../packages/client/ui-chat/src/client/chat/use-chat-scroll.ts) | 把既有阅读、滚动、内容及尺寸通知接到消费检查；在提交阶段结算待执行的一次补偿 |
 | [ChatView](../../../../packages/client/ui-chat/src/client/chat/ChatView.tsx) | 通过注入回调请求/消费，通过 useSession 读取状态；固定高度显示历史控件，不保存 Session 历史数据或累计 historyWasPartial |
@@ -26,13 +26,14 @@ Status: proposed
 ```text
 ChatNavigation.checkHistory
   ├─ pendingConsumption + intent=none → retain page until clicked
-  ├─ pendingConsumption + intent=auto/manual → viewport.historyConsumption
-  │    ├─ touch/inner-scroll → retain consumption intent
-  │    ├─ motion/pointer/unavailable → auto falls back, manual waits
+  ├─ pendingConsumption + intent=manual → beginManualPaging → consumeOlder
+  ├─ pendingConsumption + intent=auto → viewport.historyConsumption
+  │    ├─ touch/inner-scroll → retain automatic intent before checking motion
+  │    ├─ motion/pointer/unavailable → return to button
   │    ├─ native → consumeOlder
   │    ├─ prepend → capture paging position → consumeOlder → correct once after commit
   │    └─ preserve → beginPreserving → consumeOlder
-  ├─ loading → no duplicate request
+  ├─ loading → no duplicate request; a click records manual intent
   ├─ error → wait for explicit retry
   └─ idle + hasMore + (manual intent or near top without following) → request a page
 
@@ -63,17 +64,17 @@ Session.consumeOlder
 
 ### 消费意图与唤醒
 
-自动请求开始时登记 auto，点击登记 manual。消费成功、失败、耗尽或取消导航时清除意图。缓存存在但意图为 none 时，普通事件不测量或消费该缓存；按钮重新登记 manual，不重复取页。motion、pointer 或 unavailable 使 auto 退回 none；touch 与 inner-scroll 保留 auto。manual 在这些阻塞下继续等待，不把暂缓当成成功。
+自动请求开始时登记 auto，点击登记 manual。消费成功、失败、耗尽或取消导航时清除意图。缓存存在但意图为 none 时，普通事件不测量或消费该缓存；按钮重新登记 manual，不重复取页。touch 与实际 inner-scroll 优先于 motion 判断保留 auto，释放后重新检查当前状态；其余 motion、pointer 或 unavailable 使 auto 退回 none。manual 在页面可用时绕过这些自动阻塞：`beginManualPaging()` 在 `scrollTop ≤ 0.5` 时调用 `beginPaging()`；其他位置调用 `beginPreserving()`，并以 `beginPaging()` 兜底。没有产生锚点时仍继续消费。加载和处理状态的点击加入当前请求，不重复请求。
 
 历史预取复用已有 500ms 阅读采样、scrollend、内容提交和尺寸通知，并合并为一次 rAF 检查。不使用 IntersectionObserver，不新增采样计时器，不在原始 scroll 事件中测量。仅 scroller 自身的 ResizeObserver 条目在回调读阶段更新 clientHeight 缓存，column 增长不重新读取视口高度。内部状态允许自动请求时，读取历史控件相对视口的位置，与缓存的两屏高度比较。
 
-`historyConsumption()` 不查询 DOM 或测量尺寸。`FlowMotion.active()` 从已有 running、batchScheduled、batch、settling 状态提供只读查询；输入状态来自被动事件监听。滚动目标失效的清理在尺寸观察处进行。手指释放、内层滚动结束、过渡结束/取消和既有通知可以唤醒保留的意图；折叠结束回调只为 manual 注册。没有消费意图时这些通知不恢复已经放弃的自动页。
+`historyConsumption()` 不查询 DOM 或测量尺寸。`FlowMotion.active()` 从已有 running、batchScheduled、batch、settling 状态提供只读查询；输入状态来自被动事件监听。滚动目标失效的清理在尺寸观察处进行。手指释放、内层滚动结束、过渡结束/取消和既有通知可以唤醒保留的自动意图；手动消费不注册折叠结束等待。没有消费意图时这些通知不恢复已经放弃的自动页。
 
 ### 锚点复用与布局读取
 
-顶部 `scrollTop ≤ 0.5` 使用 `beginPaging` 的首条分页锚点规则，不先执行阅读位置命中检测。`measurePaging()` 只采集 `PagingPosition`；`retainPaging()` 单独拥有持续保位和内层尺寸观察。普通静止保位与一次补偿共用 `resolvePaging()` 的重挂载查找及 `applyPaging()` 的内外层计算。
+自动消费在顶部 `scrollTop ≤ 0.5` 时使用 `beginPaging` 的首条分页锚点规则，不先执行阅读位置命中检测。`measurePaging()` 只采集 `PagingPosition`；`retainPaging()` 单独拥有持续保位和内层尺寸观察。普通静止保位与一次补偿共用 `resolvePaging()` 的重挂载查找及 `applyPaging()` 的内外层计算。
 
-持续保位和一次补偿用相同的 `applyPaging()` 公式恢复采集时的屏幕位置，先补内层、再补外层。计算不叠加采集后 scrollTop 的变化，因为这些变化可能已经来自原生锚定。两者只区分生命周期：一次补偿不进入 paging 状态、不注册内层尺寸观察，应用一次后释放。`finishHistoryPrepend()` 返回实际落点，提交处理立即通过 `reading.preservePosition()` 保存阅读位置，不依赖后续 scroll 事件。会话实际滚动容器设置 `overscroll-behavior-y: none`，不创建平滑滚动或新的惯性动画。
+持续保位和一次补偿用相同的 `applyPaging()` 公式恢复采集时的屏幕位置，先补内层、再补外层。计算不叠加采集后 scrollTop 的变化，因为这些变化可能已经来自原生锚定。两者只区分生命周期：一次补偿不进入 paging 状态、不注册内层尺寸观察，应用一次后释放。`finishHistoryPrepend()` 返回实际落点，提交处理立即通过 `reading.preservePosition()` 保存阅读位置，不依赖后续 scroll 事件。已提交的 `pendingConsumption` 到 `idle` 状态转换，即使可见 Node 顺序未变化，也会结算一次补偿记录；视图关闭或进入 `error` 时丢弃记录，不应用补偿。几何失效仍只由已有布局变化信号触发，不增加页 token 或 React 发布机制。会话实际滚动容器设置 `overscroll-behavior-y: none`，不创建平滑滚动或新的惯性动画。
 
 距离检查仍需要当前几何；前插后的一次补偿仍需要读取新位置。这些读数有正确性用途，但不能仅凭位于 rAF、ResizeObserver 或提交回调中，就认定不会增加布局。读取频率、读写顺序及实际 Layout/Paint 成本分别验收；位置不漂移不能替代性能证明。
 
@@ -98,6 +99,6 @@ Session.consumeOlder
 
 屏幕位置恢复使用原生锚定后测得的剩余位移，而不是叠加滚动位置增量。它不保留采集到应用之间任意输入造成的移动，也不保证惯性轨迹连续。外层近零位置、内层原生锚定以及前插附近到达的输入，都需要当前构建的浏览器验证。
 
-显式导航与多个视图共享 Session，不能把 Chat 的自动等待条件放进全局事件源。手动操作若永远得不到可用定位条件仍可能等待；实际页面应验证取消、重连和无锚点结构。一次补偿的布局测量、内层浏览器锚定及异步内容增长需要当前构建的浏览器证据。
+显式导航与多个视图共享 Session，不能把 Chat 的自动等待条件放进全局事件源。手动消费在消费时建立持续保位；已经进行的触摸随后可能进入 paging 滚动分支而非读者采样，移动受限直到新输入释放锚点。这项[手动分页限制](../../../../packages/client/ui-chat/README.zh.md#known-limitations-and-deferred-work)仍未解决。手动消费在无法采集锚点时仍继续，因此该结构不保证位置稳定。取消、重连和所选锚点被移除属于不同生命周期情况；锚点缺失时无法提供位置保留。一次补偿的布局测量、内层浏览器锚定及异步内容增长需要当前构建的浏览器证据。
 
 验收报告应列明源码/产物版本、真实或合成输入、未覆盖条件以及清理结果。V8 函数或区间命中不等于 TypeScript 行/分支百分比；早期迭代的录像、Chrome/Safari 手工体验和单个构建通过不能证明本提案的完整矩阵已通过。

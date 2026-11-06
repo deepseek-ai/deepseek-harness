@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 
+import { ChatViewport } from '../src/client/chat/use-chat-viewport.ts'
 import type { ProcessGroupData } from '../src/client/contract/process-groups.ts'
 import type { InboxState } from '@deepseek-ai/dsh-agent/types'
 import { MessageId } from '@deepseek-ai/dsh-llm/brand'
@@ -4182,6 +4183,36 @@ describe('ChatView', () => {
     }
   })
 
+  it('settles a top prepend with unchanged node order before a later unrelated append', async () => {
+    const h = makeHarness({ nodes: [user(5, 'retained'), assistant(6, 'answer')] }, { hasMore: true })
+    h.chatScroll.save({ anchorKey: 'fixture:user:5', anchorTop: 0, scrollTop: 0 })
+    vi.spyOn(ChatViewport.prototype, 'confirmHistoryStart').mockReturnValue(true)
+    const begin = vi.spyOn(ChatViewport.prototype, 'beginHistoryPrepend')
+    const view = render(<h.ChatView {...h.props} />)
+    const scroller = view.container.querySelector('[data-chat-flow]')!.parentElement as HTMLDivElement
+    Object.defineProperties(scroller, {
+      scrollHeight: { configurable: true, value: 1500 },
+      clientHeight: { configurable: true, value: 200 },
+    })
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this === scroller) return new DOMRect(0, 0, 500, 200)
+      const offset = this.dataset.chatAnchorKey === 'fixture:user:5' ? 0 : 400
+      return new DOMRect(0, offset - scroller.scrollTop, 500, 40)
+    })
+    readerScroll(scroller, 300)
+    await historyFrame()
+    readerScroll(scroller, 0)
+    act(() => { h.prepareOlder(() => { h.setSession({ hasMore: false }) }) })
+    await historyFrame()
+    expect(begin).toHaveBeenCalledOnce()
+    expect(h.consumeOlder).toHaveBeenCalledOnce()
+    readerScroll(scroller, 300)
+    const write = vi.spyOn(scroller, 'scrollTop', 'set')
+    act(() => { h.setChat({ nodes: [user(5, 'retained'), assistant(6, 'answer'), assistant(7, 'later reply')] }) })
+    expect(scroller.scrollTop).toBe(300)
+    expect(write).not.toHaveBeenCalled()
+  })
+
   it('back-to-bottom cancels pending history consumption without reviving it when the page arrives', async () => {
     const h = makeHarness({ nodes: [user(9, 'late')] }, { hasMore: true })
     const view = render(<h.ChatView {...h.props} />)
@@ -4698,10 +4729,14 @@ describe('ChatView', () => {
     const view = render(<h.ChatView {...h.props} />)
     fireEvent.click(view.getByText('加载更早'))
     expect(h.loadOlder).not.toHaveBeenCalled()
-    expect(view.getByRole('button', { name: '正在处理' }).hasAttribute('disabled')).toBe(true)
+    expect(view.getByRole('button', { name: '正在处理' }).hasAttribute('disabled')).toBe(false)
     await historyFrame()
     expect(h.loadOlder).toHaveBeenCalledTimes(1)
-    expect(view.getByRole('button', { name: '正在加载' }).hasAttribute('disabled')).toBe(true)
+    const loading = view.getByRole('button', { name: '正在加载' })
+    expect(loading.hasAttribute('disabled')).toBe(false)
+    fireEvent.click(loading)
+    await historyFrame()
+    expect(h.loadOlder).toHaveBeenCalledTimes(1)
   })
 
   it('shows open error and loading states', () => {

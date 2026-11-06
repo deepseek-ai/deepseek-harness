@@ -797,6 +797,16 @@ export class ChatViewport {
     return metrics === null ? null : this.write(position.scrollTop, metrics, null)
   }
 
+  /** Capture a manual paging anchor without consulting automatic-consumption blockers. */
+  beginManualPaging(): void {
+    if (this.elements === null) return
+    if (this.elements.scroller.scrollTop <= 0.5) this.beginPaging()
+    else {
+      this.beginPreserving()
+      if (!this.preserving) this.beginPaging()
+    }
+  }
+
   /** Retain the first eligible transcript seat in DOM order; selection reads no geometry. */
   beginPaging(): void {
     this.stopPreserving()
@@ -1003,26 +1013,18 @@ export class ChatViewport {
   get historyInputHeld(): boolean { return this.historyTouch || this.historyPointer }
 
   /**
-   * Expose reader activity that prevents stationary preservation.
-   * @returns whether input is held or scrolling has not ended.
-   */
-  get historyReaderActive(): boolean {
-    this.pruneHistoryScrolling()
-    return this.historyTouch || this.historyPointer || this.historyScrolling.size > 0
-  }
-
-  /**
    * Select consumption behavior from current input and motion state.
    * @returns the blocker or positioning path for a prepared page.
    */
   historyConsumption(): 'motion' | 'touch' | 'pointer' | 'inner-scroll' | 'unavailable' | 'native' | 'preserve' | 'prepend' {
     const elements = this.elements
     if (elements === null) return 'unavailable'
-    if (this.motion.active() || this.reader?.follow.animating) return 'motion'
     if (this.historyTouch) return 'touch'
+    if (this.historyScrolling.size > 0
+      && (this.historyScrolling.size !== 1 || !this.historyScrolling.has(elements.scroller))) return 'inner-scroll'
+    if (this.motion.active() || this.reader?.follow.animating) return 'motion'
     if (this.historyPointer) return 'pointer'
     if (this.historyScrolling.size === 0) return elements.scroller.scrollTop <= 0.5 ? 'prepend' : 'preserve'
-    if (this.historyScrolling.size !== 1 || !this.historyScrolling.has(elements.scroller)) return 'inner-scroll'
     if (this.preserving || typeof CSS === 'undefined' || !CSS.supports('overflow-anchor', 'auto')) return 'unavailable'
     return elements.scroller.scrollTop <= 0.5 ? 'prepend' : 'native'
   }

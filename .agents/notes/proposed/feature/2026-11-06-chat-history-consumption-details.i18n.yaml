@@ -12,17 +12,17 @@
   en: 5e5553981c48d0e2
   zh: 1195ac8d64180451
 /agent-note-chat-history-consumption-classes-and-interactions/proposal/owners-and-interfaces:
-  en: 58f6f76fd263cafb
-  zh: 13ac0a6259d30cda
+  en: efbe7ccc25cf1f42
+  zh: 3bb8f803677824bd
 /agent-note-chat-history-consumption-classes-and-interactions/proposal/data-lifetimes:
   en: ffdbe0e796463624
   zh: f10bd2ced5748017
 /agent-note-chat-history-consumption-classes-and-interactions/proposal/consumption-intent-and-wakeups:
-  en: 993c2985bf6f3c8f
-  zh: 8f88fb46584fb272
+  en: db8763250020e58c
+  zh: 4d9a17f1b209d4f2
 /agent-note-chat-history-consumption-classes-and-interactions/proposal/shared-anchors-and-layout-reads:
-  en: 3d59702a5b7021ea
-  zh: 25c9762647c7c0e0
+  en: 21df3db6bc83e702
+  zh: 43b49ceb7407a422
 /agent-note-chat-history-consumption-classes-and-interactions/alternatives-considered:
   en: 7b3b9b0c7b8f293b
   zh: e20045fc3080418f
@@ -30,5 +30,5 @@
   en: 1b22cf3616302960
   zh: 418ead8421a91bee
 /agent-note-chat-history-consumption-classes-and-interactions/risks:
-  en: 29e718a7d1c07a68
-  zh: a81e5bc6c84b0712
+  en: 9a61970e311751ac
+  zh: b24d0eac7b12af62

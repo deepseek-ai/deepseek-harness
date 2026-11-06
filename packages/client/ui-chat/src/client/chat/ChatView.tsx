@@ -252,7 +252,7 @@ export function ChatView({
             )}
             {(hasMore || historyWasPartial) && (
               <div className={css.older} ref={scroll.historyEdgeRef} data-chat-history={historyLoadStatus}>
-                <button type="button" disabled={!hasMore || loadingOlder || scroll.historyPending}
+                <button type="button" disabled={!hasMore}
                   onClick={scroll.loadEarlier}>
                   {([
                     ['more', t('chat.loadOlder')],

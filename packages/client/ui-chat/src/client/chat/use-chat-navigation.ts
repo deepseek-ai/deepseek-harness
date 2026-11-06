@@ -32,7 +32,6 @@ export class ChatNavigation {
   private jump: TurnJump | null = null
   private settleFrame: number | null = null
   private historyFrame: number | null = null
-  private stopFoldWait: (() => void) | null = null
   private historyIntent: HistoryIntent = 'none'
   private historyRequested = false
 
@@ -64,8 +63,6 @@ export class ChatNavigation {
     this.clearTask()
     if (this.historyFrame !== null) cancelAnimationFrame(this.historyFrame)
     this.historyFrame = null
-    this.stopFoldWait?.()
-    this.stopFoldWait = null
   }
 
   /** Release the jump, paging anchor, and busy indicator without cancelling shared history I/O. */
@@ -130,10 +127,6 @@ export class ChatNavigation {
   private setHistoryIntent(intent: HistoryIntent): void {
     if (intent === this.historyIntent) return
     this.historyIntent = intent
-    if (intent !== 'manual') {
-      this.stopFoldWait?.()
-      this.stopFoldWait = null
-    }
     this.onHistoryIntent(intent)
   }
 
@@ -159,6 +152,12 @@ export class ChatNavigation {
         this.setHistoryIntent('none')
         return
       }
+      if (this.historyIntent === 'manual') {
+        this.viewport.beginManualPaging()
+        this.reading.pauseFollowing()
+        this.consumeHistory('preserve')
+        return
+      }
       const mode = this.viewport.historyConsumption()
       switch (mode) {
         case 'touch':
@@ -167,17 +166,11 @@ export class ChatNavigation {
         case 'motion':
         case 'pointer':
         case 'unavailable':
-          if (this.historyIntent === 'auto') this.setHistoryIntent('none')
-          else if (mode === 'motion' && this.viewport.motion.foldActive()) {
-            this.stopFoldWait ??= this.viewport.motion.onFoldIdle(() => {
-              this.stopFoldWait = null
-              this.requestHistoryCheck()
-            })
-          }
+          this.setHistoryIntent('none')
           return
         case 'prepend':
           if (!this.viewport.beginHistoryPrepend() && input.firstSeq !== null) {
-            if (this.historyIntent === 'auto') this.setHistoryIntent('none')
+            this.setHistoryIntent('none')
             return
           }
           break
@@ -189,19 +182,12 @@ export class ChatNavigation {
         this.viewport.beginPreserving()
         if (!this.viewport.preserving) this.viewport.beginPaging()
         if (!this.viewport.preserving && input.firstSeq !== null) {
-          if (this.historyIntent === 'auto') this.setHistoryIntent('none')
+          this.setHistoryIntent('none')
           return
         }
         this.reading.pauseFollowing()
       }
-      this.historyRequested = true
-      const consumed = input.consumeOlder()
-      if (consumed) this.setHistoryIntent('none')
-      else {
-        this.historyRequested = false
-        if (mode === 'preserve') this.viewport.stopPreserving()
-        if (mode === 'prepend') this.viewport.cancelHistoryPrepend()
-      }
+      this.consumeHistory(mode)
       return
     }
     if (!input.hasMore || this.historyIntent !== 'manual' && (this.reading.followingTail
@@ -209,6 +195,16 @@ export class ChatNavigation {
     if (this.historyIntent === 'none') this.setHistoryIntent('auto')
     this.historyRequested = true
     input.loadOlder()
+  }
+
+  private consumeHistory(mode: 'native' | 'preserve' | 'prepend'): void {
+    this.historyRequested = true
+    if (this.input.consumeOlder()) this.setHistoryIntent('none')
+    else {
+      this.historyRequested = false
+      if (mode === 'preserve') this.viewport.stopPreserving()
+      if (mode === 'prepend') this.viewport.cancelHistoryPrepend()
+    }
   }
 
   /**
