@@ -267,7 +267,7 @@ describe('windows-acl write grants (LocalSandboxProvider)', () => {
         name: 'SandboxPreparationError',
         code: 'SANDBOX_PREPARATION_FAILED',
         message: expect.stringMatching(/workspace grant failed and its cleanup also failed/u) as string,
-        cause: expect.objectContaining({ errors: [mockState.addFailure, mockState.disposeFailure] }) as unknown,
+        cause: { errors: [mockState.addFailure, mockState.disposeFailure] },
       })
       expect(mockState.grants).toHaveLength(2)
     } finally {
@@ -290,7 +290,7 @@ describe('windows-acl write grants (LocalSandboxProvider)', () => {
         name: 'SandboxPreparationError',
         code: 'SANDBOX_PREPARATION_FAILED',
         message: expect.stringContaining('workspace and temp directory resolution failed') as string,
-        cause: expect.objectContaining({ code: 'ENOENT' }) as unknown,
+        cause: { code: 'ENOENT' },
       })
       expect(mockState.grants).toHaveLength(0)
     } finally {
@@ -313,7 +313,7 @@ describe('windows-acl write grants (LocalSandboxProvider)', () => {
         name: 'SandboxPreparationError',
         code: 'SANDBOX_PREPARATION_FAILED',
         message: expect.stringContaining('private temp directory creation failed') as string,
-        cause: expect.objectContaining({ code: 'EACCES' }) as unknown,
+        cause: { code: 'EACCES' },
       })
     } finally {
       if (previous === undefined) delete process.env.TMPDIR

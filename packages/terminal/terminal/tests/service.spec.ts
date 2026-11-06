@@ -309,8 +309,7 @@ describe('TerminalSessionService ownership and lifecycle', () => {
 
     await expect(ctx.terminals.spawn(owner, { type: 'cleanup-failing' })).rejects.toBe(failure)
     expect(failure).toMatchObject({ name: 'TerminalBackendCleanupError', code: 'CLEANUP_FAILED' })
-    const internal = ctx.terminals as unknown as { disposeOwned(owner: Agent): Promise<void> }
-    await expect(internal.disposeOwned(owner)).rejects.toThrow('failed to clean up PTY lifecycle')
+    expect(ctx.terminals.hasOwnerActivity(owner)).toBe(true)
   })
 
   it.each(['owner', 'service'] as const)('retains caller-triggered backend cleanup failure until %s disposal', async (scope) => {
