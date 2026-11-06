@@ -43,9 +43,12 @@ jobs:
           || 'ubuntu-24.04' }}
     name: cloudflare pages preview
     steps:
+      # The pull_request checkout is the merge commit; depth 2 brings its first
+      # parent, the base branch tip, for the snapshot diff page.
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 2
 
       - uses: pnpm/action-setup@v5.0.0
         with:
@@ -97,6 +100,11 @@ jobs:
         run: |
           find apps/web/dist -name '*.map' -delete
           cp apps/web/dist/preview.html apps/web/dist/index.html
+
+      # Reviewers read snapshot changes at /snapshot-diff/, which opens on the
+      # SDK blank-Session catalog (system prompt and tool schemas).
+      - name: Render the snapshot diff page
+        run: pnpm exec tsx scripts/snapshot-diff-page.ts --base HEAD^1 --head HEAD --out apps/web/dist/snapshot-diff/index.html
 
       - name: Upload to Cloudflare Pages
         id: upload
@@ -164,7 +172,8 @@ jobs:
       # The alias URL follows from the pull request number, so it is stable
       # across redeploys and worth stating once. The marker makes the comment
       # idempotent: a pull request opened before this workflow existed never
-      # sees an `opened` event, and every later push must not restate the URL.
+      # sees an `opened` event, and every later push must not restate the URL;
+      # an existing comment with older text is edited in place.
       - name: Comment the preview URL
         id: comment
         continue-on-error: true
@@ -173,18 +182,21 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
         run: |
           marker='<!-- dsh-preview-url -->'
-          existing=$(gh pr view "$PR" --json comments \
-            --jq "[.comments[] | select(.body | contains(\"$marker\")) | .url] | first // empty")
-          if [ -n "$existing" ]; then
-            echo "preview URL already commented: $existing"
-            exit 0
-          fi
+          url="https://pr-$PR.${CF_PROJECT}.pages.dev"
           # The marker sits on its own line: markdown renders no link on a
           # line that opens with a raw HTML comment.
-          printf '%s\n\n%s\n' \
+          body=$(printf '%s\n\n%s\n' \
             "$marker" \
-            "[Preview for #$PR](https://pr-$PR.${CF_PROJECT}.pages.dev) (requires Cloudflare Access sign-in)" \
-            | gh pr comment "$PR" --body-file -
+            "[Preview for #$PR]($url) · [snapshot changes]($url/snapshot-diff/) (requires Cloudflare Access sign-in)")
+          existing=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+            --jq "[.[] | select(.body | contains(\"$marker\"))] | first // empty | [.id, .body] | @json")
+          if [ -z "$existing" ]; then
+            printf '%s\n' "$body" | gh pr comment "$PR" --body-file -
+          elif [ "$(jq -r '.[1]' <<< "$existing")" != "$body" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$(jq -r '.[0]' <<< "$existing")" -f body="$body" > /dev/null
+          else
+            echo "preview URL already commented"
+          fi
 
       # Publishing stays outside the required verdict: a Cloudflare, Access, or
       # comment failure warns, while a build failure still fails this check.

@@ -25,12 +25,12 @@ describe('PR preview workflow', () => {
     expect(preview['runs-on']).toContain('DSH_CI_FAILOVER_LINUX')
     expect(workflow.on).toEqual({ pull_request: { types: ['opened', 'synchronize', 'reopened'] } })
     expect(workflow.permissions).toEqual({ contents: 'read', 'pull-requests': 'write' })
-    expect(preview.steps.find(step => step.uses === 'actions/checkout@v7.0.1')?.with).toEqual({ 'persist-credentials': false })
+    expect(preview.steps.find(step => step.uses === 'actions/checkout@v7.0.1')?.with).toEqual({ 'persist-credentials': false, 'fetch-depth': 2 })
   })
 
   it('fails the check only for build failures and warns about publication', () => {
     const byName = (name: string) => preview.steps.find(step => step.name === name)
-    for (const name of ['Build workspace and check aggregate programs', 'Build the preview page and pack the VFS image', 'Shape the upload']) {
+    for (const name of ['Build workspace and check aggregate programs', 'Build the preview page and pack the VFS image', 'Shape the upload', 'Render the snapshot diff page']) {
       expect(byName(name)?.['continue-on-error'], `${name} must stay blocking`).toBeUndefined()
     }
     for (const name of ['Upload to Cloudflare Pages', 'Verify the protected deployment serves the image', 'Comment the preview URL']) {
@@ -79,5 +79,15 @@ describe('PR preview workflow', () => {
     const comment = preview.steps.find(step => step.name === 'Comment the preview URL')!
     expect(comment.run).toContain('<!-- dsh-preview-url -->')
     expect(comment.run).toContain('gh pr comment "$PR" --body-file -')
+    expect(comment.run).toContain('[snapshot changes]($url/snapshot-diff/)')
+    expect(comment.run).toContain('gh api -X PATCH')
+  })
+
+  it('renders the snapshot diff page into the upload against the base branch tip', () => {
+    const steps = preview.steps.map(step => step.name)
+    const page = preview.steps.find(step => step.name === 'Render the snapshot diff page')!
+    expect(page.run).toBe('pnpm exec tsx scripts/snapshot-diff-page.ts --base HEAD^1 --head HEAD --out apps/web/dist/snapshot-diff/index.html')
+    expect(steps.indexOf('Render the snapshot diff page')).toBeGreaterThan(steps.indexOf('Shape the upload'))
+    expect(steps.indexOf('Render the snapshot diff page')).toBeLessThan(steps.indexOf('Upload to Cloudflare Pages'))
   })
 })
