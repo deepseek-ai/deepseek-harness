@@ -282,7 +282,7 @@ export class ProgramWorker {
     const packaged = this.config.launch.kind === 'embedded'
     const heapFlag = `--max-old-space-size=${this.config.maxOldGenerationSizeMb}`
     const argv = [executable, ...packaged ? [] : [heapFlag],
-      ...bootstrapArgs(this.ctx.fs, this.config.launch, this.config.maxMessageBytes, this.retainsState)]
+      ...bootstrapArgs(this.ctx.fs, this.config.launch, this.config.maxMessageBytes)]
     const policy = this.policy
     this.confined = policy.mode === 'danger-full-access' ? undefined : await this.ctx.sandbox.confine(argv, { ...policy, mode: policy.mode }, this.controller.signal)
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- Confinement may yield while disposal closes the process.
@@ -291,7 +291,7 @@ export class ProgramWorker {
       .filter(key => !STARTUP_ENVIRONMENT_NAMES.has(key.toUpperCase()) && key.toUpperCase() !== 'ELECTRON_RUN_AS_NODE')
       .map(key => [key, undefined]))
     if (packaged) {
-      env.DSH_PTC_RUNTIME_NODE = '1'
+      env.DSH_PTC_RUNTIME_NODE = this.retainsState ? 'persistent' : '1'
       env.NODE_OPTIONS = `${heapFlag} --experimental-vm-modules`
     }
     const handle = this.ctx.subprocess.spawn({ argv: this.confined?.argv ?? argv, cwd, env, stdio: { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', control: 'pipe' }, graceMs: this.config.graceMs })

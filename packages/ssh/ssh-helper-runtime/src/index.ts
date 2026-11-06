@@ -27,9 +27,15 @@ export async function runSshHelperRuntime(): Promise<void> {
 
   const selection = process.env.DSH_SUBPROCESS_RUNNER
   Reflect.deleteProperty(process.env, 'DSH_SUBPROCESS_RUNNER')
-  if (process.env.DSH_PTC_RUNTIME_NODE === '1') {
+  if (process.env.DSH_PTC_RUNTIME_NODE !== undefined) {
+    const mode = process.env.DSH_PTC_RUNTIME_NODE
     Reflect.deleteProperty(process.env, 'DSH_PTC_RUNTIME_NODE')
-    await import('@deepseek-ai/dsh-ptc-runtime-node/process')
+    if (mode !== '1' && mode !== 'persistent') {
+      throw new Error('DSH_PTC_RUNTIME_NODE must be 1 or persistent')
+    }
+    await import(mode === 'persistent'
+      ? '@deepseek-ai/dsh-ptc-runtime-node/persistent-process'
+      : '@deepseek-ai/dsh-ptc-runtime-node/process')
   } else if (selection !== undefined) {
     const { runSelectedSubprocessRunner } = await import('@deepseek-ai/dsh-subprocess-local/runner')
     await runSelectedSubprocessRunner(selection)
