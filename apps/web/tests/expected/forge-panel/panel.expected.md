@@ -1,7 +1,7 @@
 - complementary "会话面板":
   - region "环境":
     - heading "环境" [level=2]
-    - text: {{cwd}}/workspace dsh-{{worktree}} 工作树 · 基于 release
+    - text: dsh-{{worktree}} {{cwd}}/workspace/.agents/worktrees dsh-{{worktree}} 工作树 · 基于 release
   - region "变更请求":
     - heading "变更请求" [level=2]
     - text: "1"
