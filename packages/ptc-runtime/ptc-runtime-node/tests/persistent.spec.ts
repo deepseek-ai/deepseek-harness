@@ -39,14 +39,14 @@ describe.each([
       expect((await run('typeof retained')).value).toBe('undefined')
     } finally { await runtime.release(owner); await pending }
   })
-  it('keeps a snapshot of caller-owned root arrays and rejects changed grants', async () => {
+  it('retains variables across additional-root changes until release', async () => {
     const { run, runtime, owner, cwd } = await setup()
     const roots = [cwd]
     const policy = { mode: 'danger-full-access' as const, workspaceRoot: cwd, additionalWritableRoots: roots }
     expect((await run('var retained = 7; retained', { sandboxPolicy: policy })).value).toBe(7)
     expect((await run('retained', { sandboxPolicy: { ...policy, additionalWritableRoots: [cwd, cwd] } })).value).toBe(7)
     roots[0] = tmpdir()
-    await expect(run('retained', { sandboxPolicy: policy })).rejects.toThrow('release the retained environment')
+    expect((await run('retained', { sandboxPolicy: policy })).value).toBe(7)
     await runtime.release(owner)
     expect((await run('typeof retained', { sandboxPolicy: policy })).value).toBe('undefined')
   })
@@ -372,13 +372,14 @@ describe.each([
     expect((await run('typeof retained')).value).toBe('undefined')
   })
 
-  it('rejects a packaged host without a persistent bootstrap during provider loading', async () => {
+  it('accepts an embedded carrier for a packaged host', async () => {
     const previous = Object.getOwnPropertyDescriptor(process, 'pkg')
     try {
       Object.defineProperty(process, 'pkg', { configurable: true, value: {} })
-      await expect(setup()).rejects.toThrow('requires a node-script launch')
-      const { runtime } = await setup({ launch: { kind: 'node-script', executable: process.execPath, bootstrapPath: join(process.cwd(), 'persistent-process.js') } })
-      expect(runtime.programFormat).toBe(format)
+      const embedded = await setup()
+      expect(embedded.runtime.programFormat).toBe(format)
+      const scripted = await setup({ launch: { kind: 'node-script', executable: process.execPath, bootstrapPath: join(process.cwd(), 'persistent-process.js') } })
+      expect(scripted.runtime.programFormat).toBe(format)
     } finally {
       if (previous === undefined) Reflect.deleteProperty(process, 'pkg')
       else Object.defineProperty(process, 'pkg', previous)

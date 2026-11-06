@@ -95,7 +95,7 @@ The pinned [ExcelJS patch](../../../patches/exceljs@4.4.0.patch) resolves the wo
 <a id="office-preview"></a>
 ## Office preview
 
-Open `.doc`, `.docx`, `.ppt`, and `.pptx` as PDF previews with the same loading state, zoom controls, cancellation, and selectable text as PDF files. The [Host provider](../../document/office-to-pdf/README.md) performs local conversion and retains its spreadsheet conversion API for other consumers. Invalid supported files, conversion failures, and timeouts receive localized messages. Missing Host services show configuration guidance.
+Open `.doc`, `.docx`, `.ppt`, and `.pptx` as PDF previews with the same loading state, zoom controls, cancellation, and selectable text as PDF files. The [Host provider](../../document/office-kit/README.md) performs local conversion and retains its spreadsheet conversion API for other consumers. Invalid supported files, conversion failures, and timeouts receive localized messages. Missing Host services show configuration guidance.
 
 The [Web bundle](../../bundle/web-app/README.md) mounts this package as `ui-sidebar-documentpreview`. Configure its transient Office cache through that entry's `office` settings; the [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-client-ui-sidebar-documentpreview) defines accepted values. Settings are embedded in each served page; reload the browser page after changing YAML.
 
@@ -114,7 +114,7 @@ A yellow rounded-triangle warning appears before Reload in the document toolbar 
 <details>
 <summary>Office implementation — click to expand</summary>
 
-Office registration, loading, caching, and font notices live in `src/client/office/`. The injected Office face writes converted PDF bytes, font metadata, and failures through the declared store actions. The Office body triggers loading, binds cancellation to its lifecycle, and declares a nested PDF slot that reuses the lazy PDF body and its tab viewing state. The keyed `sidebar.right.tab.document.action` slot places renderer controls before Reload. The Office action shares the body’s store and reads only the current revision’s font metadata. Registration remains available without the Host renderer; optional `remote.officeToPdf` and `remote.workspaceFiles` injections supply conversion and freshness callbacks, and their removal restores unavailable guidance. Registrations and tab retention follow effect lifetimes. The [conversion service](../../document/office-to-pdf/README.md) owns the Host Remote methods, mounted by `api/remotes`.
+Office registration, loading, caching, and font notices live in `src/client/office/`. The injected Office face writes converted PDF bytes, font metadata, and failures through the declared store actions. The Office body triggers loading, binds cancellation to its lifecycle, and declares a nested PDF slot that reuses the lazy PDF body and its tab viewing state. The keyed `sidebar.right.tab.document.action` slot places renderer controls before Reload. The Office action shares the body’s store and reads only the current revision’s font metadata. Registration remains available without the Host renderer; optional `remote.officeKit` and `remote.workspaceFiles` injections supply conversion and freshness callbacks, and their removal restores unavailable guidance. Registrations and tab retention follow effect lifetimes. The [conversion service](../../document/office-kit/README.md) owns the Host Remote methods, mounted by `api/remotes`.
 
 The Office Remote returns converted PDFs as native `Uint8Array` values through Connection's multipart binary transport. Renderers borrow retained bytes read-only and copy them before Worker transfer.
 
@@ -142,7 +142,7 @@ No direct effect; what the user reads here never enters a model request.
 
 <a id="known-limitations-and-deferred-work"></a>
 - **Preview, not editing.** The viewers provide no file editing or shared search interface; a directory address fails with `not-regular-file`. Unknown extensions use the plain-text reader and remain subject to its UTF-8/NUL checks.
-- **Office conversion limits.** The preview does not launch native Office editors or download an engine. Binary `.doc` and `.ppt` files return no missing-font diagnostics. Conversion fidelity and resource limits belong to the [LibreOffice provider](../../document/office-to-pdf/README.md).
+- **Office conversion limits.** The preview does not launch native Office editors or download an engine. Binary `.doc` and `.ppt` files return no missing-font diagnostics. Conversion fidelity and resource limits belong to the [LibreOffice provider](../../document/office-kit/README.md).
 - **Sequential text and bounded complete files.** Deep source lines require the preceding pages; PDF, HTML, and images require a complete result within the Host's `maxFileBytes` cap.
 - **PDF raster allocation is bounded.** Each page bitmap is capped at 16,777,216 pixels; very large pages or high zoom on high-density displays can still render below device resolution.
 - **Byte-view scroll state is not restored.** PDF, HTML, and images can return to the top when their renderer remounts or reloads; fixed PDF and image zoom can overflow horizontally, and HTML iframe scrolling belongs to its opaque browsing context.

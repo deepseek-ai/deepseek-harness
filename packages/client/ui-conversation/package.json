@@ -99,13 +99,16 @@
     "@deepseek-ai/dsh-message-quotes": "workspace:*",
     "@deepseek-ai/dsh-session-projection": "workspace:*",
     "@deepseek-ai/dsh-brand": "workspace:*",
-    "zod": "4.4.3",
+    "zod": "4.6.6",
     "@deepseek-ai/dsh-client-ui-context-menu": "workspace:*"
   },
   "files": [
     "locale/*.json",
     "lib/index.js",
     "lib/client.js",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ]
 }

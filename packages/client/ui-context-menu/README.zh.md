@@ -29,7 +29,7 @@ Web 应用 bundle 挂载此客户端插件。外部客户端插件在 `dsh.clien
 
 插件通过 `ctx.slots.provideRoot` 向每个 Slot 作用域注入 `useContextMenu`。组件调用一次 `const { getTriggerProps } = useContextMenu()`，再将 `getTriggerProps(target, handlers?)` 展开到各个触发元素上。该工厂是普通函数，可以在循环中调用；它统一处理右键、Shift+F10、ContextMenu 键、视口坐标及无滚动聚焦。已有处理器先运行，`preventDefault()` 保留其处理权，并防止组合或嵌套绑定重复处理。重复、输入法组合及无关按键保持原状。传入 `undefined` 保留原生行为，也可传入目标解析函数，在手势开始时读取业务状态。解析后的对象会在焦点变化前捕获。普通子组件通过 props 或现有 delegate 接收事件 props 或工厂，无需额外 React Context。特殊编辑器和 Canvas 可直接调用 `ctx.contextMenus.open()`。
 
-省略号触发器使用 `renderFactorySlot('contextMenu.button', { target, label, className?, size? })`。`label` 由调用方本地化；`size: 'sm'` 选择紧凑工具栏按钮，省略时保留调用方设置的行按钮尺寸。工厂统一管理焦点、指针和点击隔离、下边缘锚点与展开状态。每个已渲染的按钮只切换自己打开的弹出菜单：按钮移动或目标展示字段变化后，再次激活仍会关闭该菜单；另一个目标相同的按钮则打开自己的菜单。重复的右键和键盘手势仍沿用 4 像素规则。目标类别无需在此声明身份规则。仅当目标类别没有注册贡献时隐藏按钮，不提前解析操作。稳定的 `ctx.contextMenus.registeredKinds` observable 即时发布注册和注销，包括按钮挂载后才激活的提供方。已注册提供方即使返回空操作，按钮仍可用。
+省略号触发器使用 `renderFactorySlot('contextMenu.button', { target, label, className?, size? })`。`label` 由调用方本地化；`size: 'sm'` 选择带标签提示的紧凑工具栏按钮，省略时保留调用方设置的行按钮尺寸，不显示提示。工厂统一管理焦点、指针和点击隔离、下边缘锚点与展开状态。每个已渲染的按钮只切换自己打开的弹出菜单：按钮移动或目标展示字段变化后，再次激活仍会关闭该菜单；另一个目标相同的按钮则打开自己的菜单。重复的右键和键盘手势仍沿用 4 像素规则。目标类别无需在此声明身份规则。仅当目标类别没有注册贡献时隐藏按钮，不提前解析操作。稳定的 `ctx.contextMenus.registeredKinds` observable 即时发布注册和注销，包括按钮挂载后才激活的提供方。已注册提供方即使返回空操作，按钮仍可用。
 
 ### 注册操作
 

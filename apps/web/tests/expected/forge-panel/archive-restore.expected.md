@@ -1,0 +1,5 @@
+- region "工作树不可用":
+  - text: 工作树不可用 dsh-{{worktree}}
+  - paragraph: 可以在原位置恢复分支 dsh-{{worktree}} 的工作树。删除前未提交的修改无法恢复
+  - button "恢复工作树"
+  - button "在项目目录继续"

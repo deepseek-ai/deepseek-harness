@@ -1545,3 +1545,42 @@ declare module '@deepseek-ai/dsh-workspace/types' {
     'probe-items': true
   }
 }
+
+describe('archive follow-up lifecycle', () => {
+  it('dispatches only after durability and waits before unarchiving', async () => {
+    const result = await harness({ sessions: [header('cleanup')] })
+    try {
+      const archived = vi.fn(() => {
+        expect(result.registry.archivedSessionIds).toContain('cleanup')
+        expect(storedState(result.pool).archivedSessionIds).toContain('cleanup')
+      })
+      result.ctx.on('workspace/session-archived', archived)
+      await result.registry.archiveSession(SessionId('cleanup'))
+      await result.registry.archiveSession(SessionId('cleanup'))
+      expect(archived).toHaveBeenCalledTimes(1)
+      const entered = Promise.withResolvers<undefined>()
+      const release = Promise.withResolvers<undefined>()
+      result.ctx.on('workspace/session-unarchiving', async () => {
+        entered.resolve(undefined)
+        await release.promise
+      })
+      const unarchive = result.registry.unarchiveSession(SessionId('cleanup'))
+      await entered.promise
+      expect(result.registry.archivedSessionIds).toContain('cleanup')
+      release.resolve(undefined)
+      await unarchive
+      expect(result.registry.archivedSessionIds).toEqual([])
+    } finally { await result.ctx.fiber.dispose() }
+  })
+
+  it('retains successful archival when follow-up admission fails', async () => {
+    const result = await harness({ sessions: [header('cleanup-error')] })
+    try {
+      const warning = vi.spyOn(result.ctx.logger, 'warn').mockImplementation(() => {})
+      result.ctx.on('workspace/session-archived', () => { throw new Error('inspection unavailable') })
+      await result.registry.archiveSession(SessionId('cleanup-error'))
+      expect(storedState(result.pool).archivedSessionIds).toEqual(['cleanup-error'])
+      expect(warning).toHaveBeenCalled()
+    } finally { await result.ctx.fiber.dispose() }
+  })
+})

@@ -9,6 +9,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type {
+  AddShareSessionsRequest,
   CreateShareRequest,
   CreatedShare,
   OwnerIdentityRequest,
@@ -24,6 +25,7 @@ import type {
   ShareCapabilities,
   ShareCapabilityOffers,
   SharePermissions,
+  ShareSessions,
   StopShareRequest,
   StopShareResult,
   TestPublishRequest,
@@ -55,6 +57,16 @@ export class LiveshareShares extends TypertRemoteService {
    */
   @Remote('create')
   create(request: CreateShareRequest): Promise<CreatedShare> { return this.operations.create(request) }
+
+  /**
+   * Add source Sessions to one share this host already publishes.
+   * @param request - Share and the Sessions to add.
+   * @returns The source Sessions the share now serves.
+   */
+  @Remote('addSessions')
+  addSessions(request: AddShareSessionsRequest): Promise<ShareSessions> {
+    return this.operations.addSessions(request)
+  }
 
   /**
    * Refresh titles and Liveshare server authority, then list this host's shares.

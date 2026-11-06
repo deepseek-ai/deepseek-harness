@@ -32,13 +32,12 @@ interface ResolvedCredential {
 
 ## Description
 
-`describe(ref)` answers configuration surfaces without ever exposing a value: whether the reference resolves, from which layer, and whether `set` would currently succeed. The local provider ranks its managed file above the launch environment, so saving a value always creates the effective writable layer; removing it reveals the launch environment or `.env` fallback again.
+`describe(ref)` answers configuration surfaces without ever exposing a value: whether the reference resolves, from which layer, and whether `set` would currently succeed. The optional `masked` field carries a provider-generated preview without the full credential. The local provider ranks its managed file above the launch environment, so saving a value always creates the effective writable layer; removing it reveals the launch environment or `.env` fallback again.
 
 ```ts type-equiv
 /**
- * Source and writability facts for one reference, safe for configuration UIs —
- * never the value. The view has no slot a value could ride in, which is what
- * lets the whole read half cross the Remote wire.
+ * Configuration facts and an optional provider-masked preview for one
+ * reference. The full credential is never part of this view.
  */
 interface CredentialInfo {
   /** Whether resolving the reference would currently return a value. */
@@ -47,6 +46,8 @@ interface CredentialInfo {
   source?: string
   /** Whether the active provider can write this reference. */
   writable: boolean
+  /** Provider-generated masked preview of a stored value; never the full value. */
+  masked?: string
 }
 ```
 
@@ -154,9 +155,9 @@ abstract resolve(ref: CredentialRef): Promise<ResolvedCredential | undefined>
 
 /**
  * Describe one reference for configuration surfaces without exposing the
- * value.
+ * full value.
  * @param ref - the reference to describe.
- * @returns configured state, supplying source, and writability.
+ * @returns configured state, supplying source, writability, and optional masked preview.
  */
 abstract describe(ref: CredentialRef): Promise<CredentialInfo>
 
@@ -228,7 +229,7 @@ Source: [`packages/credentials/credentials/src/index.ts`](../../packages/credent
 
 ### `ctx.credentialsController` — `CredentialsController`
 
-Host service backing the generated `ctx.remote.credentials` namespace. It carries every wire obligation the credential seam itself does not: the batch fan-out bound, the field-by-field view projection, the reference-grammar guard, and the refusal mapping. Secret values cross in one direction only — no method here returns one.
+Host service backing the generated `ctx.remote.credentials` namespace. It carries every wire obligation the credential seam itself does not: the batch fan-out bound, the field-by-field view projection, the reference-grammar guard, and the refusal mapping. Full secret values cross in one direction only — no method here returns one.
 
 ```ts cordis-catalog
 /**

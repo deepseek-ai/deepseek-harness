@@ -56,6 +56,7 @@ Promotion requires a named product role, documented public behavior and limitati
 | [`webhook-github`](webhook-github/README.md) | Signed GitHub webhook ingress | — |
 | [`session-title-all-prompts-llm`](session-title-all-prompts-llm/README.md) | Session titles from all human prompts | — |
 | [`tool-terminal`](tool-terminal/README.md) | Persistent terminal tools | — |
+| [`terminal-panel`](terminal-panel/README.md) | Agent terminals in the Web sidebar and read-only user terminal tools | — |
 | [`tool-ralph`](tool-ralph/README.md) | Bounded repeated delegated tasks | — |
 | [`skill-badge`](skill-badge/README.md) | The powered-by-dsh badge skill | — |
 | [`translator`](translator/README.md) | Anonymous Google and Bing text translation | `ctx.translator` |

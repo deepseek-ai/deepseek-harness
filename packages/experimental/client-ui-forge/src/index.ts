@@ -7,7 +7,7 @@ import type {} from '@deepseek-ai/dsh-api-remote-access'
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type { ChangeRequestSnapshot, ForgeActionFailure, ForgeFailure, ForgeReviewRequest, ForgeReviewResult, MergeMethod } from '@deepseek-ai/dsh-experimental-forge'
 import type { SessionChangeRequest } from '@deepseek-ai/dsh-experimental-forge-session'
-import type {} from '@deepseek-ai/dsh-experimental-worktree'
+import type { WorktreeCleanup } from '@deepseek-ai/dsh-experimental-worktree/types'
 import { appendPluginRecord } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
@@ -177,6 +177,17 @@ export class ForgePanelController extends TypertRemoteService {
   async *changeRequestStates(signal: AbortSignal): AsyncIterable<ForgeChangeRequestStatesFrame> {
     const access = this.ctx.get('remoteAccess')
     yield* this.changeRequestStatesHub().stream(id => access === undefined || access.allows({ kind: 'session', id }), signal)
+  }
+
+  /**
+   * Read or await the worktree service's archive cleanup of the Session's checkout.
+   * @param session - Session whose cleanup is visible to the caller.
+   * @param revision - null reads now; a matching revision waits for completion.
+   * @returns the cleanup state, or null without a worktree service, an attempt, or a current revision.
+   */
+  @Remote
+  async worktreeCleanup(session: Session, revision: number | null): Promise<WorktreeCleanup | null> {
+    return await this.home.get('worktrees')?.cleanupOf(session, revision) ?? null
   }
 
   /**

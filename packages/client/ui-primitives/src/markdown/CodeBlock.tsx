@@ -17,12 +17,15 @@ import css from './CodeBlock.module.css'
 export interface CodeBlockProps {
   /** The source text, rendered verbatim (trailing newline trimmed for display). */
   code: string
-  /**
-   * Grammar hint (markdown fence info string or a fixed caller id); unknown = plain.
-   * A `diff` or `patch` fence renders row colors and tokenizes each file's body
-   * with the language its header names.
-   */
+  /** Grammar hint (markdown fence info string or a fixed caller id); unknown = plain. */
   lang?: string | undefined
+  /**
+   * Render unified-diff rows: row colors by marker column, and each file's
+   * removed and added sides tokenized with the language its header names.
+   * Omitted, a `diff` or `patch` `lang` selects them; `true` or `false` forces
+   * the choice for any `lang`.
+   */
+  diff?: boolean | undefined
   /**
    * The code is still growing (a streaming markdown fence): highlight through
    * a per-instance {@link StreamingHighlightSession}, which re-tokenizes only
@@ -106,16 +109,16 @@ function renderLine(line: readonly HighlightSpan[], index: number): ReactNode {
 }
 
 export function CodeBlock({
-  code, lang, streaming, className, contentRef, lineNumbers = false, showHeader = true, copyLabel, copiedLabel, toolbarLabels, wrap,
+  code, lang, diff, streaming, className, contentRef, lineNumbers = false, showHeader = true, copyLabel, copiedLabel, toolbarLabels, wrap,
 }: CodeBlockProps) {
   const trimmed = code.endsWith('\n') ? code.slice(0, -1) : code
-  const diff = useMemo(() => (isDiffFenceLanguage(lang) ? parseDiffFence(trimmed) : undefined),
-    [trimmed, lang])
+  const diffRows = useMemo(() => ((diff ?? isDiffFenceLanguage(lang)) ? parseDiffFence(trimmed) : undefined),
+    [trimmed, lang, diff])
   const sourceLines = lineNumbers ? trimmed.split('\n') : undefined
   const rootRef = useRef<HTMLDivElement>(null)
   // Diff rows join the same viewport gate as grammar-highlighted fences, so an
   // off-screen fence paints its row colors without tokenizing the body.
-  const highlighting = useViewportHighlighting(rootRef, diff === undefined ? lang : 'diff')
+  const highlighting = useViewportHighlighting(rootRef, diffRows === undefined ? lang : 'diff')
   // Re-render when a lazy grammar finishes loading, so a fence that showed plain
   // text while its language's grammar imported picks up highlighting. The
   // snapshot value is opaque; only its change across renders drives the memo.
@@ -124,8 +127,8 @@ export function CodeBlock({
   // re-tokenizes per chunk because that grouping has no incremental path, and
   // diffs in a fence are short enough to accept it.
   const diffTokens = useMemo(
-    () => (diff === undefined || !highlighting ? undefined : diffFenceTokens(diff)),
-    [diff, highlighting, loaded],
+    () => (diffRows === undefined || !highlighting ? undefined : diffFenceTokens(diffRows)),
+    [diffRows, highlighting, loaded],
   )
   // Streaming state lives in refs mutated inside the memo (the MarkdownText
   // streaming-cache pattern): the session's caches carry across chunks only
@@ -144,7 +147,7 @@ export function CodeBlock({
   const settledRef = useRef(false)
   const streamedBody = useMemo(() => {
     // A diff fence draws its own rows; the session's single-language stream is unused.
-    if (!highlighting || diff !== undefined) {
+    if (!highlighting || diffRows !== undefined) {
       sessionRef.current = null
       lineCacheRef.current = null
       settledRef.current = false
@@ -195,12 +198,12 @@ export function CodeBlock({
       code: trimmed, lang, generation: frame.generation, frame, groups, pending, nextLine, body,
     }
     return body
-  }, [streaming, highlighting, diff, trimmed, lang, loaded])
+  }, [streaming, highlighting, diffRows, trimmed, lang, loaded])
   const html = useMemo(
-    () => (diff === undefined && highlighting && streaming !== true && streamedBody === undefined
+    () => (diffRows === undefined && highlighting && streaming !== true && streamedBody === undefined
       ? highlightToHtml(trimmed, lang)
       : undefined),
-    [diff, streaming, highlighting, streamedBody, trimmed, lang, loaded],
+    [diffRows, streaming, highlighting, streamedBody, trimmed, lang, loaded],
   )
   const [copied, setCopied] = useState(false)
   const [localWrapped, setWrapped] = useState(true)
@@ -221,9 +224,9 @@ export function CodeBlock({
   // shiki's HTML output is a static span tree it generated from `code` (no
   // user HTML passes through), the sanctioned innerHTML consumption path per
   // shiki's own docs.
-  const body = diff !== undefined
+  const body = diffRows !== undefined
     ? (
-      <pre className={css.plain}><code>{diff.rows.map((row, index) => renderDiffRow(row, index, diffTokens?.get(index)))}</code></pre>
+      <pre className={css.plain}><code>{diffRows.rows.map((row, index) => renderDiffRow(row, index, diffTokens?.get(index)))}</code></pre>
     )
     : streamedBody !== undefined
       ? streamedBody
@@ -238,7 +241,7 @@ export function CodeBlock({
         )
 
   return (
-    <div ref={rootRef} className={clsx(css.block, 'md-code-block', lineNumbers && css.numbered, diff !== undefined && !lineNumbers && css.diffFence, toolbarLabels !== undefined && css.card, className)}
+    <div ref={rootRef} className={clsx(css.block, 'md-code-block', lineNumbers && css.numbered, diffRows !== undefined && !lineNumbers && css.diffFence, toolbarLabels !== undefined && css.card, className)}
       data-line-numbers={lineNumbers || undefined}
       data-code-wrap={toolbarLabels === undefined ? undefined : wrapped}
       style={sourceLines === undefined ? undefined : {

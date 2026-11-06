@@ -78,7 +78,10 @@
     "lib/index.js",
     "lib/client.js",
     "lib/assets",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ],
   "dependencies": {
     "@deepseek-ai/schemastery": "workspace:~"

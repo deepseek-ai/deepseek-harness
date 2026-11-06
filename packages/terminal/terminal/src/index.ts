@@ -6,6 +6,7 @@
 
 import { Context, Service } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import { TerminalBackendCleanupError } from './types.ts'
 import type {
   TerminalBackend,
@@ -62,11 +63,14 @@ export type TerminalErrorCode =
   | 'SEND_ACTIVE'
   | 'SERVICE_DISPOSING'
 
-/** Error carrying a stable {@link TerminalErrorCode}. */
-export class TerminalError extends Error {
-  constructor(message: string, readonly code: TerminalErrorCode) {
-    super(message)
+/** Harness error carrying a stable {@link TerminalErrorCode}. */
+export class TerminalError extends HarnessError {
+  override readonly code: TerminalErrorCode
+
+  constructor(message: string, code: TerminalErrorCode) {
+    super(message, code)
     this.name = 'TerminalError'
+    this.code = code
   }
 }
 

@@ -37,7 +37,10 @@
     "lib/runner-*.js",
     "lib/output.js",
     "scripts/ensure-spawn-helper.mjs",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ],
   "scripts": {
     "postinstall": "node scripts/ensure-spawn-helper.mjs"

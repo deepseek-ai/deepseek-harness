@@ -42,7 +42,7 @@ function gateway(signals: AbortSignal[]): NonNullable<ViewerReadDeps['gateway']>
 async function openedStream(id: number) {
   const signals: AbortSignal[] = []
   const read = createViewerReadService({
-    connection: readerConnection().connection, gateway: gateway(signals), sharedSessionId: () => 'session-1',
+    connection: readerConnection().connection, gateway: gateway(signals), sharedSessionIds: () => ['session-1'],
   })
   const opened = await read.answer('share-1', { op: 'stream-open', id, endpoint: 'session/follow',
     payload: { args: { request: { address: { kind: 'session', sessionId: 'session-1' } } } } }, viewer)
@@ -88,7 +88,7 @@ describe('Liveshare viewer stream reclamation', () => {
     vi.useFakeTimers()
     const signals: AbortSignal[] = []
     const read = createViewerReadService({
-      connection: readerConnection().connection, gateway: gateway(signals), sharedSessionId: () => 'session-1',
+      connection: readerConnection().connection, gateway: gateway(signals), sharedSessionIds: () => ['session-1'],
     })
     // Two shares one page reads side by side: the closed page abandons both, and both are reclaimed.
     for (const shareId of ['share-1', 'share-2']) {

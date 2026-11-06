@@ -57,6 +57,28 @@ it('shows late registered kinds without preparing actions and withdraws them wit
   expect(source.getSnapshot()).toEqual([])
 })
 
+it('shows the label tooltip on the compact toolbar button but not on row buttons', async () => {
+  const runtime = await SlotTestRuntime.create()
+  onTestFinished(() => runtime.dispose())
+  runtime.ctx.provide('shortcuts', { catalog: createSnapshotStore([]) } as never)
+  runtime.ctx.provide('locale', { register: () => () => {}, bind: () => (key: string) => key } as never)
+  await runtime.root.declare({}, ({ renderFactorySlot }) => <>
+    {renderFactorySlot('contextMenu.button', { target: target('header'), label: 'Header menu', size: 'sm' })}
+    {renderFactorySlot('contextMenu.button', { target: target('row'), label: 'Row menu' })}
+  </>)
+  await runtime.mount({ inject, apply })
+  await runtime.mount({ inject: ['contextMenus'], apply: (ctx: Context) => { ctx.effect(() => ctx.contextMenus.register({
+    id: 'header', target: 'header', order: 0, resolve: () => [],
+  })) } })
+  const view = runtime.renderRoot()
+  const row = view.getByRole('button', { name: 'Row menu' })
+  fireEvent.pointerEnter(row)
+  fireEvent.focus(row)
+  expect(view.queryByRole('tooltip')).toBeNull()
+  fireEvent.focus(view.getByRole('button', { name: 'Header menu' }))
+  expect(view.getByRole('tooltip').textContent).toBe('Header menu')
+})
+
 it('toggles moved buttons by target identity, replaces other targets, and preserves right-click distance rules', async () => {
   vi.useFakeTimers()
   const runtime = await SlotTestRuntime.create()

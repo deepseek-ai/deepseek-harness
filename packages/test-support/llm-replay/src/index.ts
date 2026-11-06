@@ -971,7 +971,7 @@ async function* replayEntry(entry: ReplayEntry, signal: AbortSignal | undefined,
         if (paceMs > 0) await paceDelay(paceMs, signal)
         yield chunk
       }
-      throw new LlmError(entry.message, entry.code)
+      throw LlmError.fromFailure({ message: entry.message, code: entry.code })
     case 'hang':
       // Replay a stream that stalls until cancelled (mirrors MockAdapter): one
       // chunk, then wait for abort and surface it as the consumer expects.

@@ -18,7 +18,15 @@
     "./package.json": "./package.json",
     "./locale/*.json": "./locale/*.json"
   },
-  "files": ["locale/*.json", "lib/index.js", "lib/client.js", "lib/types/**/*.d.ts"],
+  "files": [
+    "locale/*.json",
+    "lib/index.js",
+    "lib/client.js",
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
+  ],
   "license": "MIT",
   "peerDependencies": { "@deepseek-ai/cordis": "workspace:~" },
   "devDependencies": {

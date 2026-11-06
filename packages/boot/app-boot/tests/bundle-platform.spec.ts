@@ -2,6 +2,16 @@
 import { expect, it } from 'vitest'
 import { assertBundlePlatform, UnsupportedBundlePlatformError } from '../src/bundle-platform.ts'
 
+it('admits WSL independently of ordinary Linux and native Windows', () => {
+  const wsl = { env: {}, osRelease: '6.6.87.2-microsoft-standard-WSL2' }
+  const linux = { env: {}, osRelease: '6.8.0-generic' }
+  expect(() =>{  assertBundlePlatform(['win32', 'wsl'], 'linux', wsl) }).not.toThrow()
+  expect(() =>{  assertBundlePlatform(['win32', 'wsl'], 'linux', linux) }).toThrow(UnsupportedBundlePlatformError)
+  expect(() =>{  assertBundlePlatform(['wsl'], 'win32', wsl) }).toThrow(UnsupportedBundlePlatformError)
+  expect(() =>{  assertBundlePlatform(['linux'], 'linux', wsl) }).not.toThrow()
+  expect(() =>{  assertBundlePlatform(['win32'], 'linux', wsl) }).toThrow(UnsupportedBundlePlatformError)
+})
+
 it.each(['darwin', 'win32', 'linux'])('allows undeclared platforms and an explicit %s Host', (platform) => {
   expect(() => { assertBundlePlatform(undefined, platform) }).not.toThrow()
   expect(() => { assertBundlePlatform([platform], platform) }).not.toThrow()

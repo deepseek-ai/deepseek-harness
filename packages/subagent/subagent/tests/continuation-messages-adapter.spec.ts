@@ -91,8 +91,8 @@ it('continues the parent through default Messages after a reasoning-bearing cont
       ...closingContent,
       {
         type: 'text',
-        text: 'Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\n'
-          + `Current working directory: ${JSON.stringify(process.cwd())}.`,
+        text: '<system-reminder>\nThe following information describes your current session:\n\n'
+          + `Current working directory: ${JSON.stringify(process.cwd())}.\n</system-reminder>`,
       },
     ]
     expect(requests[1]?.body).toMatchObject({ messages: [{ role: 'user', content: noticeWithContext }] })

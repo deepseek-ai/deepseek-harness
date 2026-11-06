@@ -87,7 +87,7 @@
     "@deepseek-ai/dsh-atomic-write": "workspace:*",
     "@deepseek-ai/dsh-client-product-analytics": "workspace:*",
     "@deepseek-ai/dsh-plugin-manager": "workspace:*",
-    "zod": "4.4.3",
+    "zod": "4.6.6",
     "@deepseek-ai/dsh-util-file-drag": "workspace:*",
     "@deepseek-ai/dsh-client-ui-file-actions": "workspace:*",
     "tencentcloud-sdk-nodejs-teo": "4.1.330"

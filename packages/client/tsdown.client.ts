@@ -239,7 +239,10 @@ interface ClientBundleOptions {
   readonly companions?: readonly UserConfig[]
   /** Overrides for the package's primary Node-side library config. */
   readonly lib?: UserConfig
-  /** Optional legal or attribution text selected by emitted client filename. */
+  /**
+   * Optional legal or attribution text selected by emitted client filename. The preset prepends it after
+   * minification, so its comment lines reach the artifact byte for byte.
+   */
   readonly clientBanner?: (fileName: string) => string | undefined
 }
 
@@ -797,6 +800,12 @@ function clientConfig(
     // Plugin code is fetched outside Vite's module graph, so its own bundle
     // must carry the TS/TSX mapping consumed by browser profiling tools.
     sourcemap: true,
+    // Compress the browser bundle's text while identifier names stay readable
+    // and the source map still resolves through the published `src`. The
+    // compressor stays off: the browser worker image lowers `yield*` only as a
+    // whole statement, and a compressor that folds statements into expressions
+    // hides it.
+    minify: { compress: false, mangle: false },
     clean: false,
     deps: {
       neverBundle: isRequested,
@@ -929,10 +938,10 @@ function clientConfig(
         isolation.sourcePath(source, mapPath)
         return browserSourcePath(source, mapPath)
       },
-      banner: (chunk) => {
-        const registration = `window.__ModuleLoader__.load({ id: ${JSON.stringify(id)}, ${chunk.isEntry ? '' : `chunk: ${JSON.stringify(chunk.fileName)}, `}factory: (require) => {`
+      banner: chunk => `window.__ModuleLoader__.load({ id: ${JSON.stringify(id)}, ${chunk.isEntry ? '' : `chunk: ${JSON.stringify(chunk.fileName)}, `}factory: (require) => {`,
+      postBanner: (chunk) => {
         const prefix = clientBanner?.(chunk.fileName)
-        return prefix === undefined ? registration : `${prefix}\n${registration}`
+        return prefix === undefined ? '' : `${prefix}\n`
       },
       footer: 'return module.exports; } });',
       intro: 'var module = { exports: {} }; var exports = module.exports;',

@@ -6,6 +6,7 @@ recording: authored
 header:
   class: sdk-background-wait
   pin: true
+  systemPromptSource: desktop-context
 replay:
   override: true
 # Refresh caveat: `DSH_SNAPSHOT=refresh` cannot re-tokenize the job id inside

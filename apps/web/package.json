@@ -17,9 +17,9 @@
   },
   "files": [
     "dist",
-    "!dist/**/*.map",
     "!dist/preview.html",
-    "!dist/preview"
+    "!dist/preview",
+    "src"
   ],
   "scripts": {
     "build": "vite build",

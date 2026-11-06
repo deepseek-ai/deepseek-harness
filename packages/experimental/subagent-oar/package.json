@@ -27,7 +27,10 @@
     "locale/*.json",
     "lib/index.js",
     "LICENSE-OAR",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ],
   "license": "MIT",
   "icon": "./icon.svg",

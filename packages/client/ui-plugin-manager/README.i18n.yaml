@@ -15,17 +15,17 @@
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-client-ui-plugin-manager/use-this-package:
-  en: 01ba764b51f010e8
-  zh: e43a158a5b09d987
+  en: c38847d0d4d5a7b6
+  zh: b83f29416199098a
 /deepseek-ai-dsh-client-ui-plugin-manager/use-this-package/installing-a-bundle:
   en: 1fc6c5c2a54d8db4
   zh: 9e53f5164e2b7161
-/deepseek-ai-dsh-client-ui-plugin-manager/use-this-package/updating-a-registry-bundle:
-  en: 9312d8b1b381378f
-  zh: 8d0ae7ad26ada2ac
+/deepseek-ai-dsh-client-ui-plugin-manager/use-this-package/updating-a-bundle:
+  en: 2a44a378364912db
+  zh: 8c514ce17469747f
 /deepseek-ai-dsh-client-ui-plugin-manager/use-this-package/switching-a-bundle:
-  en: 390dc85aceac033a
-  zh: 746ceae45f70dd33
+  en: 188ebf6f1590bad1
+  zh: e6d41e8586190fa0
 /deepseek-ai-dsh-client-ui-plugin-manager/use-this-package/switching-one-row-of-a-bundle:
   en: d3627d4dba5e6cc2
   zh: e0d0eada4c20331f
@@ -33,11 +33,11 @@
   en: e9da90f03691101b
   zh: 902cda935a4ce3c8
 /deepseek-ai-dsh-client-ui-plugin-manager/use-this-package/detail-page-extension-points:
-  en: d5e3cad5c31cae59
-  zh: 6dc38f09b410d247
+  en: 16dbfb0ab558c951
+  zh: adf098c0751a7144
 /deepseek-ai-dsh-client-ui-plugin-manager/use-this-package/page-tabs:
-  en: fc469bab4fbd6028
-  zh: 8f5a04e1b9a46471
+  en: 99c06790c2163746
+  zh: daa87ad1ce9a76ae
 /deepseek-ai-dsh-client-ui-plugin-manager/understand-the-implementation:
   en: 203168fc87e939bd
   zh: 72d0ccd2c54f3f44

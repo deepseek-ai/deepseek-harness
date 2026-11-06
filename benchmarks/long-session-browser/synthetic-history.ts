@@ -16,8 +16,8 @@ export const FIRST = 'SYNTHETIC_REPLY_FIRST'
 export const DONE = 'SYNTHETIC_REPLY_DONE'
 /** Paced text chunks per continuation. */
 export const DELTAS = 120
-/** Replay delay per stream chunk, in milliseconds. */
-export const PACE_MS = 16
+/** Replay delay per stream chunk, in milliseconds; keeps the input-overlap probe inside the stream on loaded CI runners. */
+export const PACE_MS = 32
 
 /** Create mixed prose, code, reasoning and tool history without reading user data.
  * @returns Current Session JSONL accepted by the shared Web seeder.

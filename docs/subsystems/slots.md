@@ -61,7 +61,7 @@ The slot declaration fixes two independent axes.
 | cardinality | `list` | Cells are addressed by required `id` and ordered by `order`, then registration order. |
 | cardinality | `keyed` | The owner dispatches an `entryKey`; the matching cell renders with any key-specific props. |
 | cardinality | `chain` | Each entry supplies a pure `select(owner)` function. The first non-null result in priority order renders and receives that result as `matched`; otherwise the owner fallback renders. |
-| cardinality | `hoc` | Entries nest around the owner's `renderSlot(key, owner, { children })` content, lowest outermost; see [Hoc layers](#hoc-layers). |
+| cardinality | `hoc` | Entries nest around the owner's `renderSlot(key, owner, { children })` content, lowest outermost; an optional `key` selects layers by the owner's `entryKey`. See [Hoc layers](#hoc-layers). |
 | scope | `root` | One root-scoped component and store instance. |
 | scope | `session-maybe` | Inherits the surrounding Provider binding but stays renderable without one; Session values are optional. |
 | scope | `session` | Requires a resolved surrounding Provider binding and receives definite Session values. |
@@ -72,11 +72,13 @@ The slot declaration fixes two independent axes.
 
 ### Hoc layers
 
-A hoc entry is a layer addressed by its required `id`. Layers nest by ascending `order`, then `priority`, then registration order, lowest outermost. Each layer receives the same owner props plus the next inner layer as `children`, the owner's content at the innermost, and renders it exactly once; owner props must not use the name `children`. Omitted `children` renders the layers around nothing, and with no live layer the content renders unchanged.
+A hoc entry is a layer addressed by its required `id` and optional `key`. A layer without `key` is a wildcard that applies to every dispatch; a layer with `key` applies only when the owner passes the same `entryKey` to `renderSlot`, and an owner that omits `entryKey` gets only wildcard layers. Each `(key, id)` pair, with the wildcard as its own key, is one shadowing cell; within one `id`, an exact-key layer replaces the wildcard layer for that key.
 
-- Remounting: adding or removing a layer remounts the content inside it, including a crashed layer leaving the slot; a `session` or `session-maybe` layer also remounts it when its Session binding changes.
-- Errors: a crashed layer renders its `children` and leaves the slot. An error thrown by the wrapped content passes every layer and is reported against none; a layer that wraps its `children` in its own error boundary catches it as an internal wrapper error rather than the original.
-- Layout: the outlet inserts a `display: contents` `[data-slot]` element between the owner and its content, so owner selectors cannot rely on the content being a direct child. A layer must not create a box of its own — for example, use `display: contents` — or the content leaves its parent's layout.
+Layers nest by ascending `order`, then `priority`, then registration order, lowest outermost. Each layer receives the same owner props plus the next inner layer as `children`, the owner's content at the innermost, and renders it at most once; a layer that omits it replaces everything inside it. Owner props must not use the name `children`. Omitted `children` renders the layers around nothing, and with no applicable layer the content renders unchanged.
+
+- Remounting: adding or removing a layer that applies to a dispatch remounts the content inside it; a `session` or `session-maybe` layer also remounts it when its Session binding changes. Outlets that dispatch the same key share one compiled layer chain, so a registration for another key does not remount their content; an outlet that switches its `entryKey` switches chains and remounts its content even when the same layers apply.
+- Errors: a crashed layer reports its error and renders its `children` at the occurrence that failed, for the rest of that occurrence's mount even when its owner props change. The layer stays registered, so other occurrences, including those dispatching the same key, keep it, and a remounted occurrence renders it again. An error thrown by the wrapped content passes every layer and is reported against none; a layer that wraps its `children` in its own error boundary catches it as an internal wrapper error rather than the original.
+- Layout: the outlet inserts a `display: contents` `[data-slot]` element between the owner and its content, so owner selectors cannot rely on the content being a direct child. A layer that wraps its `children` must not create a box of its own unless its slot documents otherwise — for example, use `display: contents` — or the content leaves its parent's layout.
 
 The [context-menu plugin](../../packages/client/ui-context-menu/README.md) contributes `useContextMenu` through `provideRoot`; every scope receives the same plugin-owned trigger factory. Its prop and retained handlers retire when the provider unloads. Its root-scoped keyed `contextMenu.icon` Slot renders business-owned icons from action metadata.
 
@@ -154,6 +156,7 @@ Factory: conversation.content [ConversationContent]
 │  └─ conversation.view
 │     ├─ id=chat [ChatView]
 │     │  ├─ conversation.chat.text-interaction [list]
+│     │  ├─ conversation.chat.markdown.fence [hoc, keyed by fence language]
 │     │  └─ conversation.chat.flow [ChatFlow]
 │     │     └─ conversation.chat.node [ChatNodeSeat dispatch]
 │     │        ├─ key=user [UserMessageNodeView]

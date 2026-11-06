@@ -1,6 +1,7 @@
 {
   "nsisLanguage": "SIMPCHINESE",
   "strings": {
+    "INSTALLER_UPDATE_WAIT": "正在安装更新，更新完成后将自动重启应用。",
     "INSTALLER_INSTALL": "立即安装",
     "INSTALLER_FINISH": "完成",
     "INSTALLER_NATIVE_PROGRESS": "正在准备安装… %d%%",

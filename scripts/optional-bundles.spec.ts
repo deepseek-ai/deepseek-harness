@@ -144,7 +144,7 @@ describe('optional bundles', () => {
     }
   })
 
-  it('offers the forge panel and model worktree tool together with their separate worktree services', () => {
+  it('offers the forge panel and model worktree tool together over one worktree service', () => {
     const name = '@deepseek-ai/dsh-experimental-forge-bundle'
     expect(OPTIONAL_BUNDLES).toContain(name)
     for (const template of Object.values(PROFILE_TEMPLATES)) expect(template.bundles).not.toContain(name)
@@ -159,9 +159,8 @@ describe('optional bundles', () => {
       expect(flattenRows(composeEntries(shipped)).some(row => row.name === moduleName)).toBe(false)
       expect(rows.filter(row => row.name === moduleName && row.disabled !== true)).toHaveLength(1)
     }
-    const group = composeEntries([...shipped, bundle(name).patches]).find(row => row.id === 'optional-forge-panel')
-    expect(group?.isolate).toEqual({ worktrees: true })
-    expect(rows.filter(row => row.name === '@deepseek-ai/dsh-experimental-worktree')).toHaveLength(2)
+    expect(composeEntries([...shipped, bundle(name).patches]).some(row => row.name === 'cordis:group' && row.id === 'optional-forge-panel')).toBe(false)
+    expect(rows.filter(row => row.name === '@deepseek-ai/dsh-experimental-worktree')).toHaveLength(1)
   })
 
   it('keeps the existing tool and panel row overrides addressable in the unified bundle', () => {
@@ -170,12 +169,12 @@ describe('optional bundles', () => {
     const composed = composeEntries([...shipped, bundle('@deepseek-ai/dsh-experimental-forge-bundle').patches, [
       { id: 'worktree', config },
       { id: 'tool-worktree', disabled: true },
-      { id: 'optional-forge-panel', disabled: true },
+      { id: 'forge-panel', disabled: true },
     ]], message => warnings.push(message))
     expect(warnings).toEqual([])
     expect(composed.find(row => row.id === 'worktree')?.config).toEqual(config)
     expect(composed.find(row => row.id === 'tool-worktree')?.disabled).toBe(true)
-    expect(composed.find(row => row.id === 'optional-forge-panel')?.disabled).toBe(true)
+    expect(composed.find(row => row.id === 'forge-panel')?.disabled).toBe(true)
   })
 
   it('ships all five lightweight bundles without selecting them in a default template', () => {

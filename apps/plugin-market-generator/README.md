@@ -39,7 +39,9 @@ pnpm --filter @deepseek-ai/dsh-plugin-market-generator start \
 | `--timeout-ms <n>` | `60000` | Deadline for one request or Git command. |
 | `-h`, `--help` | | Print these options and the exit statuses. |
 
-The exit status is 0 when every source was read, 1 when a source could not be read, and 2 for invalid arguments or an invalid list. A list line that the index format would reject, such as an `http:` URL, a URL with credentials, a query, or a fragment, a URL with fewer than two path segments, or a tarball URL, is an invalid list. A source that cannot be read keeps its last successful result, so a temporary outage does not remove plugins from the index; the failure is still reported.
+Set `GITHUB_TOKEN` to collect `github_stars`. Surrounding whitespace is trimmed; an unset or blank token skips GitHub metric requests and omits that metric. The token is used only in the GitHub API Authorization header and is not written to the index, cache, or diagnostic messages. npm weekly downloads do not require it.
+
+The exit status is 0 when every source was read, 1 when a source could not be read, and 2 for invalid arguments or an invalid list. A list line that the index format would reject, such as an `http:` URL, a URL with credentials, a query, or a fragment, a URL with fewer than two path segments, or a tarball URL, is an invalid list. A source that cannot be read keeps its last successful result, so a temporary outage does not remove plugins from the index; the failure is still reported. Metric failures warn and omit the unavailable values, including counts present in an earlier output. They leave exit status 0 only when every source was read successfully; offline source fallback still returns 1.
 
 ## What gets listed
 
@@ -59,11 +61,13 @@ Display fields come from the highest listed version and follow the rules DSH use
 
 `metadata.keywords` is an optional array of strings for discovery. npm `package.json` `keywords` is the convention; index generators may supplement or adjust it. This reference generator copies the highest listed version's manifest `keywords` unchanged, including empty strings, duplicates, and an empty array. An absent field is omitted; a non-array value or an array containing any non-string produces a warning and omits the whole field without dropping the package.
 
+The generator reads optional `github_stars` from the GitHub repository API and `npm_weekly_downloads` from npm's `downloads/point/last-week` endpoint. GitHub counts use the actual Git source repository for Git packages and the author-declared manifest repository for npm packages. npm repository ownership and source correspondence are not verified, so stars are not a trust or quality signal. npm counts are requested only for public npm sources, never custom registries or Git-only packages. Weekly means the window returned by npm's `last-week`, not an upstream 30-day total. Available counts, including zero, appear in plugin `metadata.sortKeys`; root `metadata.sortKeys` declares only metrics available for at least one plugin, with descending initial order, and root `metadata` is omitted when no metric is available. Fetch failures and invalid counts produce warnings and omit the metric without dropping the plugin or failing the run.
+
 When several sources produce the same package name, the first one in the list wins.
 
 ## Caching and repeated runs
 
-Each run reads the registry document of every npm source and the refs of every Git repository. Results are cached per immutable input: an npm plugin per registry, icon threshold, package, and set of listed versions; a Git repository per default branch commit and release tags; and each Git package per commit and directory. A Git run therefore fetches only the commits whose packages are not cached. Cache files are written atomically, and a cache file that is damaged or that the index format rejects is rebuilt. Output is deterministic: entries follow the list order, and the index and icon files are rewritten only when their contents change, so running the generator again without upstream changes leaves the output untouched.
+Each run reads the registry document of every npm source and the refs of every Git repository. Results are cached per immutable input: an npm plugin per registry, icon threshold, package, and set of listed versions; a Git repository per default branch commit and release tags; and each Git package per commit and directory. A Git run therefore fetches only the commits whose packages are not cached. Cache files are written atomically, and a cache file that is damaged or that the index format rejects is rebuilt. Enabled metrics are refreshed on every run outside these caches, with shared requests per repository or package and the configured concurrency and timeout limits. Metric failures never reuse stale counts. For unchanged package data and metric responses, output is deterministic: entries follow the list order, and the index and icon files are rewritten only when their contents change, so running the generator again without upstream changes leaves the output untouched.
 
 ## Security
 
@@ -73,6 +77,8 @@ Index content is what the packages claim about themselves. Review the list you p
 
 ## Limits
 
+- GitHub token permissions and API rate limits apply; refused or rate-limited requests warn and omit the affected counts.
+- Cached package data does not make a run offline: source documents/refs and enabled metrics are requested on each run. Unreachable metric APIs remove those counts from the output, without reusing stale values; source failures follow the exit-status rules above.
 - A Git server must allow fetching a commit by its SHA, as GitHub, GitLab, and Gitea do. When a server refuses, the generator fetches the tags and the default branch by name, which fails if a ref moved after it was listed.
 - Registry tokens from `.npmrc` are not applied; only public or unauthenticated registries work.
 - Git never prompts for credentials. A repository that needs them must be readable through a credential helper or an ssh agent.

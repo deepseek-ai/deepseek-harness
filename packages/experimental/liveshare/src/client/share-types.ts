@@ -12,7 +12,10 @@ export type { ViewerPluginPolicy }
 /** One owner-created share listed by the global management UI. */
 export interface OutgoingShare {
   readonly shareId: string
-  readonly sessionId: string
+  /** Primary source Session, kept for Hosts that predate `sessionIds`. */
+  readonly sessionId?: string
+  /** Every source Session this share serves, primary first; the authoritative list. */
+  readonly sessionIds?: readonly string[]
   readonly sessionTitle: string
   readonly link: string
   readonly createdAt: string

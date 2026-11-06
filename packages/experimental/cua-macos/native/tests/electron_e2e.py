@@ -99,7 +99,7 @@ def main():
 
                 window = next(window for window in state['windows'] if window['windowId'] == window_id)
                 if not args.hover_only:
-                    call('click', {**owner, 'snapshotId': state['snapshotId'], 'elementIndex': buttons[0]['index']})
+                    call('click', {**owner, 'snapshotId': state['snapshotId'], 'elementId': buttons[0]['elementId']})
                     wait_state(lambda actual: actual['clicks'] == 1 and actual['lastClickTrusted'] is True,
                                'Native AX press did not produce one trusted DOM click')
                     state = observe()
@@ -131,10 +131,10 @@ def main():
                     before = json.loads(state_path.read_text())
                     baseline = before['pointerDowns']
                     expected_clicks = before['popupClicks'] + 1
-                    call('hover', {**owner, 'windowId': window_id, 'x': -1, 'y': 0}, 'INVALID_ARGUMENT')
-                    call('hover', {**owner, 'windowId': window_id, 'x': 100000, 'y': 0}, 'INVALID_ARGUMENT')
-                    call('hover', {**owner, 'snapshotId': state['snapshotId'], 'elementIndex': trigger['index'], 'x': 0}, 'INVALID_ARGUMENT')
-                    call('hover', {**owner, 'snapshotId': state['snapshotId'], 'elementIndex': trigger['index']})
+                    call('mouseMove', {**owner, 'windowId': window_id, 'x': -1, 'y': 0}, 'INVALID_ARGUMENT')
+                    call('mouseMove', {**owner, 'windowId': window_id, 'x': 100000, 'y': 0}, 'INVALID_ARGUMENT')
+                    call('mouseMove', {**owner, 'snapshotId': state['snapshotId'], 'elementId': trigger['elementId'], 'x': 0}, 'INVALID_ARGUMENT')
+                    call('mouseMove', {**owner, 'snapshotId': state['snapshotId'], 'elementId': trigger['elementId']})
                     actual = wait_state(lambda actual: actual['popupOpen'], 'Hover did not reveal delayed information')
                     assert actual['pointerDowns'] == baseline and actual['lastMove'] == {'buttons': 0, 'trusted': True}, actual
                     state = observe()
@@ -149,13 +149,13 @@ def main():
                     target = {**owner, 'windowId': window_id,
                               'x': bounds[0] + bounds[2] / 2 - window['bounds']['x'],
                               'y': bounds[1] + bounds[3] / 2 - window['bounds']['y']}
-                    call('hover', target)
+                    call('mouseMove', target)
                     state = observe()
                     assert 'Hover information' in state['tree'], 'Moving into the popup dismissed it'
                     call('click', target)
                     actual = wait_state(lambda actual: actual['popupClicks'] == expected_clicks, 'Popup action did not receive its click')
                     assert actual['popupOpen'] and actual['pointerDowns'] == baseline + 1 and actual['popupClickTrusted'], actual
-                    call('hover', {**owner, 'windowId': window_id, 'x': 10, 'y': 40})
+                    call('mouseMove', {**owner, 'windowId': window_id, 'x': 10, 'y': 40})
                     wait_state(lambda actual: not actual['popupOpen'], 'Leaving the hover region did not close it')
                 hover_sequence()
                 helper.eof()

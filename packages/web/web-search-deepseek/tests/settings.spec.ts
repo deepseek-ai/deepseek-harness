@@ -70,8 +70,8 @@ describe('web-search-deepseek settings section', () => {
     expect(listed).toMatchObject({ id: 'deepseek-official' })
     expect(listed).not.toHaveProperty('title')
     expect(listed?.description).toMatchObject({
-      en: 'Runs server-side web search inside a full Messages model call, adding model latency and token usage on every search. Requires a DeepSeek account or API key.',
-      zh: '通过完整模型调用在服务端执行网页搜索，每次搜索都会产生模型延迟与 token 消耗。需 DeepSeek 账号或 API Key',
+      en: 'Slower, and every search uses extra model tokens. Requires a DeepSeek account or API key.',
+      zh: '速度较慢，每次搜索都会额外消耗模型 token。需要 DeepSeek 账号或 API Key。',
     })
     await bench.ctx.fiber.dispose()
   })

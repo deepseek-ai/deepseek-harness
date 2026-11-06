@@ -6,6 +6,8 @@ recording: authored
 header:
   class: workflow-confinement
   pin: true
+  systemPromptSource: text-turn
+  toolSchemasSource: text-turn
 platform: posix
 permission: read-only
 workspace:

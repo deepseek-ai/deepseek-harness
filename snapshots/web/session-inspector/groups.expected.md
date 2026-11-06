@@ -4,6 +4,7 @@
 - group
 - context
 - context
+- context
 - assistant-step
 - tool-call
 - assistant-step

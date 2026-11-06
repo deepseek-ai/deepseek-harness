@@ -22,7 +22,7 @@ function file(): string {
 /** One persisted share with every optional fact stated. */
 const share: OwnerShare = {
   shareId: 'share-one',
-  sessionId: 'session-one',
+  sessionIds: ['session-one'],
   sessionTitle: 'Review the migration',
   accessMode: 'selected',
   link: 'https://relay.example/?shareId=share-one',
@@ -66,7 +66,7 @@ describe('owner state round trip', () => {
     ])
     expect(loaded.shares.get('share-one')).toMatchObject({
       shareId: 'share-one',
-      sessionId: 'session-one',
+      sessionIds: ['session-one'],
       // The retired `approval` spelling reads back as the mode this build uses.
       accessMode: 'selected',
       link: 'https://relay.example/?shareId=share-one',
@@ -135,6 +135,21 @@ describe('owner state round trip', () => {
       }],
     }))
     expect(loadOwnerState(path).shares.get('share-one')?.viewerPluginAccess).toBe('custom')
+  })
+
+  it('restores every source Session a share carries', async () => {
+    const path = file()
+    const multi: OwnerShare = { ...share, sessionIds: ['session-one', 'session-two'] }
+    await writeOwnerState(path, undefined, 'instance-one', new Map([[multi.shareId, multi]]), new Map())
+    expect(loadOwnerState(path).shares.get(multi.shareId)?.sessionIds)
+      .toEqual(['session-one', 'session-two'])
+  })
+
+  it('reads a record written before a share could carry several sources', async () => {
+    const path = file()
+    const { sessionIds: _sessionIds, ...legacy } = share
+    writeFileSync(path, JSON.stringify({ instanceId: 'instance-one', shares: [{ ...legacy, sessionId: 'session-one' }] }))
+    expect(loadOwnerState(path).shares.get(share.shareId)?.sessionIds).toEqual(['session-one'])
   })
 
   it('writes a share that states no optional fact as the plain record it is', async () => {

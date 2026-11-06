@@ -16,6 +16,7 @@ Publish a completed package from its original machine without downloading its in
 - [Runner labels and queue diagnosis](#runner-labels)
 - [Machine setup](#machine-setup)
 - [Package and publish](#package-and-publish)
+- [Rollout and website publication](#rollout-and-website-publication)
 - [Recovery and records](#recovery-and-records)
 - [Restore a channel](#restore-a-channel)
 
@@ -42,7 +43,7 @@ GitHub matches every label in a job's `runs-on` list. The [default-label rules](
 | --- | --- |
 | Windows packaging | `dsh-win-package-trial` |
 | macOS packaging | `self-hosted`, `macOS`, `ARM64`, `dsh-mac-package-trial` |
-| Publication `prepare` and `publish` | `self-hosted` and the selected `DESKTOP_PUBLISH_RUNNERS` entry's `label` |
+| All original-machine publication and rollout jobs | `self-hosted` and the selected `DESKTOP_PUBLISH_RUNNERS` entry's `label` |
 
 A runner with only `dsh-win-package-trial` can package Windows but cannot accept publication. Its routing entry does not add labels to its GitHub registration. Have a runner administrator correct the registered labels; changing the route's `target` or restarting a healthy listener does not supply a missing label.
 
@@ -77,6 +78,16 @@ Select the platform's `Package Desktop` workflow, preset, source, channel and ve
 Packaging only retains files. After success, open **Publish Desktop · COS → Run workflow** on `master`, enter `package_run_id` from the packaging run URL, and optionally enter `package_run_attempt`. Blank selects the latest attempt and its successful package job. An archival-only retry retains the original build attempt; a failed newer package job never falls back to an older success. An explicit attempt selects that build even when its separate GitHub archival failed. Windows must be signed; macOS must finish notarization and stapling. GitHub job evidence selects the original runner; its local manifest supplies the preset, version, source and channel before approval. No installer or request artifact is downloaded. Retained packages with the old `publishRequested=false` flag remain eligible; missing or changed local files stop publication.
 
 Before installing dependencies on the original runner, preparation and the approved publish job check that the selected `publishing/<preset>.json` is readable JSON. Missing configuration reports its path; restore it and retry publication with the same package. Full configuration and signature validation still run afterward. Before uploading, the publisher hashes all retained files, checks version and destination metadata, and rechecks the platform signatures. macOS verifies the DMG and extracts the ZIP to verify the app's ticket; Windows checks Authenticode, the configured signer thumbprint and the timestamp. Preparation writes a Chinese approval summary with separate version, channel, platform and deployment fields, the retained test release ID, full installer/feed URLs, a link to the original packaging attempt, source ref/SHA, platform verification results and proposed tag. Folded details include the COS bucket and file sizes/SHA-256 of the upload bytes, including rewritten YAML. Public-repository summaries expose the test prefix and download URLs; the prefix is not authentication. Both publishing jobs wait for **Review deployments → Approve and deploy**, then recheck the approved manifest and upload plan digest. Changed bytes or destinations reject. Approval cannot edit a version; reject and rebuild instead. Both deployments upload missing binaries, verify remote bytes, then update YAML. There is no files-only mode in this workflow. Production finally creates `desktop-v<version>` at the recorded packaging commit; an existing tag must name the same commit.
+
+<a id="rollout-and-website-publication"></a>
+
+## Rollout and website publication
+
+For a 10% → 30% → 100% rollout, first publish through COS with `staging_percentage=10` and `upload_website=false`. Then dispatch **Publish Desktop · Rollout & Website** from `master` with the original package run ID and selected attempt (defaults to 1; verify it against the package run). Set `rollout_percentage` to 30, then 100 for progressive delivery; leave it empty for website-only publication. `upload_website` defaults to false; select a percentage or enable website publication. For this sequence, enable it on the final invocation to upload the production website installer and refresh its cache. Website publication is independent of the rollout percentage and does not require 100%; the installer is available to all website download users. In website-only mode, the publish job verifies the feed without changing its percentage. Each platform uses its own package run.
+
+Preparation checks GitHub identity, the retained manifest, the small update YAML and a completed initial publication record; it does not rehash package binaries or repeat signature/notarization checks. After Environment approval, execution reads the current COS feed, verifies that its version, payload URL, size, hash and other metadata still match the published package, and changes only `stagingPercentage`. Missing or replaced feeds reject the operation. Repeating the same percentage is a no-op; lowering the percentage is rejected. The approval shows the requested percentage; the current percentage is read from COS during execution.
+
+Website upload reuses the original retained installer, hashes that installer alone and uses the existing upload/purge recovery records. Cache-only retries use the existing website approval and upload journal without requiring the retained update YAML or initial feed journal. The website upload holds the feed channel lock through installer verification and upload so a newer feed cannot replace the selected version midway; competing publications on that channel fail while the lock is held. A metadata-only rollout therefore does not require installer files, but website publication requires its installer. Percentage changes retain before/after YAML in separate rollout audit records. Initial COS publication remains required; this workflow never builds packages, uploads versioned binaries or creates release tags.
 
 <a id="recovery-and-records"></a>
 

@@ -42,7 +42,10 @@
     "lib/client.*.js",
     "lib/worker.js",
     "lib/devtools/**",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ],
   "license": "MIT",
   "dependencies": {
