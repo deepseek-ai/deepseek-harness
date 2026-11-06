@@ -1703,9 +1703,33 @@ describe('web e2e: long Chat scroll contract', () => {
       await liveRow.click()
       await expect.poll(() => liveRow.getAttribute('aria-expanded'), { timeout: 10_000 }).toBe('true')
       await expectSameFlowTop(world.page, toolAnchor)
-      await wheelToHistoryStart(world.page)
-      await world.page.getByRole('button', { name: 'Back to bottom', exact: true }).click()
-      await expectBottom(world.page)
+      // This cycle tests disclosure retention, not pagination: keep auto-prefetch from moving its scroll-away endpoint.
+      const historyGate = Promise.withResolvers<undefined>()
+      const pendingHistory = new Set<Promise<void>>()
+      let historyHeld = false
+      const holdHistory = (route: Route): Promise<void> => {
+        historyHeld = true
+        const work = historyGate.promise.then(() => route.continue())
+        pendingHistory.add(work)
+        return work.finally(() => { pendingHistory.delete(work) })
+      }
+      await world.page.route('**/api/session/page', holdHistory, { times: 1 })
+      try {
+        const beforeRows = await loadedFlowRows(world.page)
+        await wheelToHistoryStart(world.page)
+        await expect.poll(() => historyHeld, { timeout: 10_000 }).toBe(true)
+        expect(await loadedFlowRows(world.page)).toBe(beforeRows)
+        await world.page.getByRole('button', { name: 'Back to bottom', exact: true }).click()
+        await expectBottom(world.page)
+      } finally {
+        historyGate.resolve(undefined)
+        await Promise.all([...pendingHistory])
+        await world.page.unroute('**/api/session/page', holdHistory)
+      }
+      await expect.poll(async () => {
+        const state = await world.page.locator('[data-chat-history]').getAttribute('data-chat-history')
+        return state === 'pendingConsumption' || state === 'idle'
+      }, { timeout: 10_000 }).toBe(true)
       await wheelUntilMounted(world.page, liveRowSelector, -1_100)
       const restoredRow = world.page.locator(liveRowSelector)
       await restoredRow.waitFor({ timeout: 10_000 })
