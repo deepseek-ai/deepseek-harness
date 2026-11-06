@@ -50,9 +50,9 @@ describe.each(['arm64', 'x64'])('macOS %s packaging', (arch) => {
     expect(archive['runs-on']).toEqual(['self-hosted', '${{ needs.package.outputs.runner }}'])
     const installer = archive.steps.find(step => step.uses?.startsWith('actions/upload-artifact@'))!
     expect(uploads[0]?.if).toBe("always() && steps.checkout.outcome == 'success'")
-    expect(installer.if).toBe('success()')
-    expect(installer.with?.path).toBe('${{ steps.archive.outputs.path }}')
-    expect(installer.with).toMatchObject({ archive: false, overwrite: true, name: '${{ steps.archive.outputs.metadata-name }}' })
+    expect(installer.if).toBe("${{ !cancelled() && steps.archive.outcome == 'success' }}")
+    expect(installer.with?.path).toBe('${{ steps.archive.outputs.dmg-path }}')
+    expect(installer.with).toMatchObject({ archive: false, overwrite: true, name: '${{ steps.archive.outputs.dmg-name }}' })
   })
 
   it('defaults to notarization and labels the explicit debugging option', () => {
@@ -99,13 +99,13 @@ describe.each(['arm64', 'x64'])('macOS %s packaging', (arch) => {
     const archive = workflow.jobs['upload-artifact']!
     const uploads = expectDesktopArchive(archive, 3)
     expect(archive.steps.find(step => step.id === 'archive')?.run).toContain('archive-desktop-ci.ts --split-macos')
-    for (const [index, kind] of ['metadata', 'dmg', 'update'].entries()) {
+    for (const [index, kind] of ['dmg', 'update', 'metadata'].entries()) {
       expect(uploads[index]?.with).toMatchObject({
         name: '${{ steps.archive.outputs.' + kind + '-name }}',
-        path: '${{ steps.archive.outputs.' + (kind === 'metadata' ? 'path' : kind + '-path') + ' }}',
+        path: '${{ steps.archive.outputs.' + (kind + '-path') + ' }}',
         archive: false, overwrite: true, 'if-no-files-found': 'error', 'retention-days': 14,
       })
-      expect(uploads[index]?.if).toBe('success()')
+      expect(uploads[index]?.if).toBe("${{ !cancelled() && steps.archive.outcome == 'success' }}")
     }
     const job = workflow.jobs.package!
     expect(job.env.DSH_DESKTOP_TARGET_PLATFORM).toBe('darwin')

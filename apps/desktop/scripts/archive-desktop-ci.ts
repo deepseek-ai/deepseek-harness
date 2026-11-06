@@ -1,4 +1,5 @@
 /** Prepare verified installer artifacts and expose their paths to Actions upload steps. */
+import { constants } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { appendFile, copyFile, mkdtemp } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
@@ -30,7 +31,7 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
     const { DESKTOP_ARCHIVE_NAME: name, DESKTOP_RETAINED_DIRECTORY: directory, RUNNER_TEMP: temp, GITHUB_OUTPUT: output } = process.env
     if (!name || !/^[a-zA-Z0-9][a-zA-Z0-9.+_-]*\.zip$/u.test(name) || !directory || !temp || !output) throw new Error('desktop archival: invalid ZIP output settings')
     const split = process.argv[2] === '--split-macos'
-    if (process.argv.length !== (split ? 3 : 2)) throw new Error('Usage: archive-desktop-ci.ts [--split-macos]')
+    if (process.argv.length !== (split ? 3 : 2)) throw new Error('desktop archival: usage: archive-desktop-ci.ts [--split-macos]')
     const files = await verifyDesktopArchive(process.env)
     const installers = split ? files.filter(file => /\.(?:dmg|zip)$/u.test(file)) : []
     if (split && (installers.length !== 2 || !installers.some(file => file.endsWith('.dmg')) || !installers.some(file => file.endsWith('.zip')))) {
@@ -38,14 +39,15 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
     }
     // archive: false uses the file basename; keep it equal to the upload step's name used for overwrite deletion.
     const staging = await mkdtemp(join(temp, 'desktop-archive-'))
+    // Split downloads derive their common identity prefix from DESKTOP_ARCHIVE_NAME without .zip.
     const base = name.slice(0, -4)
     const path = join(staging, split ? `${base}-metadata.zip` : name)
-    const outputs = [`path=${path}`]
+    const outputs = [`${split ? 'metadata-path' : 'path'}=${path}`]
     for (const file of installers) {
       const kind = file.endsWith('.dmg') ? 'dmg' : 'update'
       const filename = `${base}${kind === 'dmg' ? '.dmg' : '-update.zip'}`
       const destination = join(staging, filename)
-      await copyFile(join(directory, file), destination)
+      await copyFile(join(directory, file), destination, constants.COPYFILE_FICLONE)
       outputs.push(`${kind}-path=${destination}`, `${kind}-name=${filename}`)
     }
     if (split) outputs.push(`metadata-name=${base}-metadata.zip`)

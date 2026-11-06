@@ -130,7 +130,7 @@ it.runIf(process.platform === 'darwin' || process.platform === 'win32').each([
 ] as const)('splits %s %s installers without changing retained publication inputs', async (target, qualification) => {
   const { root, directory, archiveEnv, names, env } = await retainedFixture(target, qualification)
   const original = await verifyRetainedDesktopRelease(desktopReleasesRoot(env), '123', '2')
-  const base = `macos-${target.slice(4)}-${qualification}-1.0.0-123-2`
+  const base = `macos-${target.slice(4)}-${qualification === 'notarized' ? 'signed' : 'unnotarized-debug'}-1.0.0-123-2`
   for (const attempt of ['3', '4']) {
     const output = join(root, `archive-output-${attempt}`)
     execFileSync(process.execPath, ['--import', 'tsx', archiveScript, '--split-macos'], {
@@ -148,7 +148,7 @@ it.runIf(process.platform === 'darwin' || process.platform === 'win32').each([
       const name = names.find(file => file.endsWith(extension!))!
       expect(await readFile(outputs[`${kind}-path`]!)).toEqual(await readFile(join(directory, name)))
     }
-    const metadata = unzipSync(await readFile(outputs.path!))
+    const metadata = unzipSync(await readFile(outputs['metadata-path']!))
     expect(Object.keys(metadata)).toEqual(['manifest.json', ...names.filter(name => !/\.(?:dmg|zip)$/u.test(name))])
     for (const [name, bytes] of Object.entries(metadata)) expect(Buffer.from(bytes)).toEqual(await readFile(join(directory, name)))
     expect(await verifyRetainedDesktopRelease(desktopReleasesRoot(env), '123', '2')).toEqual(original)
@@ -167,5 +167,17 @@ it.each(['wrong-runner', 'corrupted-installer', 'windows'] as const)('emits no s
   expect(result.status).toBe(1)
   expect(result.stderr).toContain(failure === 'wrong-runner' ? 'wrong original machine'
     : failure === 'windows' ? 'one DMG and one update ZIP' : 'changed file')
+  await expect(readFile(output)).rejects.toMatchObject({ code: 'ENOENT' })
+})
+
+it('rejects unsupported archive arguments without emitting upload paths', async () => {
+  const { root, archiveEnv } = await retainedFixture('mac-arm64', 'notarized')
+  const output = join(root, 'archive-output')
+  const result = spawnSync(process.execPath, ['--import', 'tsx', archiveScript, '--unknown'], { encoding: 'utf8',
+    env: { ...process.env, ...archiveEnv, DESKTOP_ARCHIVE_NAME: 'fixture.zip', GITHUB_OUTPUT: output, RUNNER_TEMP: root } })
+  expect(result.error).toBeUndefined()
+  expect(result.signal).toBeNull()
+  expect(result.status).toBe(1)
+  expect(result.stderr).toContain('desktop archival: usage: archive-desktop-ci.ts [--split-macos]')
   await expect(readFile(output)).rejects.toMatchObject({ code: 'ENOENT' })
 })

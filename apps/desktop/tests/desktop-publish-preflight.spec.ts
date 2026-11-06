@@ -42,7 +42,7 @@ it.each([{ response: {} }, { response: [{ artifacts: [{}] }] }])('rejects invali
 
 it.each(['arm64', 'x64'])('accepts notarized split %s artifacts and ignores debugging artifacts from other attempts', (arch) => {
   const artifacts = ['.dmg', '-update.zip', '-metadata.zip'].flatMap(suffix => [
-    { name: `macos-${arch}-notarized-1.0.0-42-2${suffix}` },
+    { name: `macos-${arch}-signed-1.0.0-42-2${suffix}` },
     { name: `macos-${arch}-unnotarized-debug-1.0.0-42-1${suffix}` },
     { name: `macos-${arch}-unnotarized-debug-1.0.0-142-2${suffix}` },
   ])
