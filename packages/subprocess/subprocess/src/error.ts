@@ -61,21 +61,17 @@ export class SubprocessExecutableNotFoundError extends SubprocessError {
  * `cause`.
  * @param error - the provider's rejection value.
  * @param program - the program the consumer asked to spawn, named in the message.
- * @returns `error` unchanged when it is a `HarnessError` or a cancellation
- *   (`name === 'AbortError'`); otherwise a {@link SubprocessError} with
- *   `SUBPROCESS_SPAWN_NOT_FOUND` for `ENOENT` and `SUBPROCESS_SPAWN_FAILED` for
- *   any other value.
+ * @returns a {@link SubprocessError} for a platform spawn error, recognized by
+ *   its string errno `code`: `SUBPROCESS_SPAWN_NOT_FOUND` for `ENOENT` and
+ *   `SUBPROCESS_SPAWN_FAILED` for any other errno. Every other value, including
+ *   a `HarnessError`, is returned unchanged, because it is not a spawn failure
+ *   this helper can classify.
  */
 export function subprocessSpawnFailure(error: unknown, program: string): unknown {
-  if (error instanceof HarnessError) return error
-  if (error instanceof Error && error.name === 'AbortError') return error
-  const errno = typeof error === 'object' && error !== null ? (error as { code?: unknown }).code : undefined
-  let detail = 'unprintable failure'
-  try {
-    detail = error instanceof Error ? error.message : String(error)
-  } catch {
-    // A provider-owned rejection whose conversion throws still yields a coded failure.
-  }
+  if (!(error instanceof Error) || error instanceof HarnessError) return error
+  const errno = (error as { code?: unknown }).code
+  if (typeof errno !== 'string') return error
+  const detail = error.message
   if (errno === 'ENOENT') {
     return new SubprocessError(
       `cannot start ${JSON.stringify(program)}: the program or the working directory does not exist (${detail})`,

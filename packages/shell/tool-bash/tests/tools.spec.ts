@@ -1576,4 +1576,20 @@ describe('launch failures without a job registry', () => {
     })
     expect(aborted).toMatchObject({ isError: true, error: { info: { name: 'AbortError', code: TOOL_ABORTED } } })
   })
+
+  it('classifies a spawn error that settles after this call was cancelled', async () => {
+    const ctx = await setup()
+    const controller = new AbortController()
+    vi.spyOn(ctx.shell, 'execute').mockImplementationOnce(() => {
+      controller.abort(new Error('caller stopped'))
+      return Promise.reject(Object.assign(new Error('spawn bash ENOENT'), { code: 'ENOENT' }))
+    })
+    const result = await executeToolFixture(ctx, {
+      signal: controller.signal,
+      callId: ToolCallId('launch-aborted-spawn-error'),
+      name: 'bash',
+      arguments: { command: 'true', description: 'd' },
+    })
+    expect(result).toMatchObject({ isError: true, error: { info: { name: 'SubprocessError', code: 'SUBPROCESS_SPAWN_NOT_FOUND' } } })
+  })
 })

@@ -34,9 +34,14 @@ describe('subprocessSpawnFailure', () => {
     })
     const denied = Object.assign(new Error('spawn bash EACCES'), { code: 'EACCES' })
     expect(subprocessSpawnFailure(denied, 'bash')).toMatchObject({ code: 'SUBPROCESS_SPAWN_FAILED', cause: denied })
-    expect(subprocessSpawnFailure('raw', 'bash')).toMatchObject({ code: 'SUBPROCESS_SPAWN_FAILED', message: 'cannot start "bash": raw' })
-    const unprintable = { [Symbol.toPrimitive]() { throw new Error('no') } }
-    expect(subprocessSpawnFailure(unprintable, 'bash')).toMatchObject({ message: 'cannot start "bash": unprintable failure' })
+  })
+
+  it('returns values without an errno code unchanged', () => {
+    const internal = new Error('subprocess implementation dropped a requested collect stream')
+    expect(subprocessSpawnFailure(internal, 'bash')).toBe(internal)
+    const numeric = Object.assign(new Error('exit'), { code: 1 })
+    expect(subprocessSpawnFailure(numeric, 'bash')).toBe(numeric)
+    expect(subprocessSpawnFailure('raw', 'bash')).toBe('raw')
   })
 
   it('returns coded errors and cancellations unchanged', () => {

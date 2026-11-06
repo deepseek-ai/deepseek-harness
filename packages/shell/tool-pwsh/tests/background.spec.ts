@@ -345,13 +345,13 @@ describe('foreground commands as jobs (pwsh)', () => {
 
   it('a command whose start fails reports the failure as an error result and leaves no job behind', async () => {
     const { ctx, pwsh } = await setup()
-    pwsh.backgroundHandler = () => { throw new Error('spawn pwsh ENOENT') }
+    pwsh.backgroundHandler = () => { throw Object.assign(new Error('spawn pwsh EACCES'), { code: 'EACCES' }) }
     const result = await call(ctx, { command: 'Get-Missing', description: 'test command' })
     expect(result).toMatchObject({
       isError: true,
       error: { info: { name: 'SubprocessError', code: 'SUBPROCESS_SPAWN_FAILED' } },
     })
-    expect((result.content[0] as { text: string }).text).toBe('Error: cannot start "pwsh": spawn pwsh ENOENT')
+    expect((result.content[0] as { text: string }).text).toBe('Error: cannot start "pwsh": spawn pwsh EACCES')
     expect(ctx.jobs.list()).toEqual([])
   })
 

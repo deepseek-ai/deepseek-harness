@@ -39,6 +39,7 @@ import type { SandboxPolicyService } from '@deepseek-ai/dsh-sandbox-policy'
 import type { ShellExecRequest, ShellExecSpec, ShellExecution, ShellRunResult } from '@deepseek-ai/dsh-shell'
 import { parseExitStatus } from '@deepseek-ai/dsh-shell'
 import { processJob, processOutcome, processSources, ringDelta } from './background.ts'
+import type { ProcessJobHooks } from './background.ts'
 import { renderPwshJobRead, renderPwshPromoted, renderPwshResult } from './render.ts'
 import type { RenderablePwshResult } from './render.ts'
 
@@ -196,13 +197,14 @@ function toolAborted(): HarnessError {
 }
 
 /**
- * Report a launch or preparation rejection as this tool's failure. A coded
- * error keeps its class and code; this call's cancellation stays as thrown so
- * the registry records it as aborted; any other value is classified as a
- * subprocess spawn failure with the original as `cause`.
+ * Report a launch or preparation rejection as this tool's failure. This
+ * call's cancellation reason stays as thrown so the registry records it as
+ * aborted; a platform spawn error is classified as a subprocess spawn failure
+ * with the original as `cause`; any other value, including a coded error,
+ * keeps its own identity.
  */
 function launchFailure(error: unknown, signal: AbortSignal): unknown {
-  return signal.aborted ? error : subprocessSpawnFailure(error, 'pwsh')
+  return signal.aborted && error === signal.reason ? error : subprocessSpawnFailure(error, 'pwsh')
 }
 
 /** A registered command: its id, the process once the starter spawned it, and the reason an outside kill gave. */
@@ -298,8 +300,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     const startJob = (registry: JobRegistry, args: PwshToolArgs, exec: ToolExecution, spec: ShellExecSpec): StartedJob => {
       let proc: ShellExecution | undefined
       let stopped: string | undefined
-      // The registry runs the starter inside start(), so this is assigned before start() returns.
-      let failure!: () => { error: unknown } | undefined
+      let hooks: ProcessJobHooks | undefined
       const id = registry.start({
         kind: 'pwsh',
         label: args.command,
@@ -307,26 +308,26 @@ export function apply(ctx: Context, config: Config = {}): void {
         ...exec.agent ? { owner: exec.agent.id } : {},
         output: processSources(() => proc),
         run: () => {
-          const hooks = processJob(
+          const job = processJob(
             async (signal) => {
               proc = await ctx.shell.execute({ ...spec, signal })
               return proc
             },
             started => processOutcome(started, escalationModes),
           )
-          failure = () => hooks.failure()
+          hooks = job
           return {
-            done: hooks.done,
+            done: job.done,
             // A kill from outside this call (the human's, a parallel job_kill)
             // reaches the process here; its reason is what the model reads.
             cancel: (reason) => {
               stopped = reason
-              hooks.cancel(reason)
+              job.cancel(reason)
             },
           }
         },
       })
-      return { id, process: () => proc, stopped: () => stopped, failure: () => failure() }
+      return { id, process: () => proc, stopped: () => stopped, failure: () => hooks?.failure() }
     }
     /** Wait on a registered foreground command until it settles or the timeout passes. */
     const waitOnJob = async (registry: JobRegistry, attached: StartedJob, exec: ToolExecution, spec: ShellExecSpec) => {
