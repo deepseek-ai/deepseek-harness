@@ -265,7 +265,7 @@ export class ReactLoopAgent implements Agent {
     } while (activity !== this.activityDone)
   }
 
-  private assertOpen(): void {
+  assertOpen(): void {
     if (this.lifetimeSignal.aborted) {
       throw new AgentClosedError(this.id, { cause: this.lifetimeSignal.reason })
     }

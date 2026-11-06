@@ -46,7 +46,7 @@ kind: "package-reference"
 
 ### 附件
 
-`/goal` 声明附件支持。附件只随目标本身：create 或 edit 成功后，命令提交一条用户 followup 消息，按选择顺序携带已准入的图片块与文件块，再附加固定文本 `Reference attachments for the goal objective.`。后续 Goal Round 从普通会话历史读取这些内容，goal 领域不存储附件状态。其他任何子命令以及被拒绝的 create 或 edit，都会在领域变更前返回直接错误，并保留 composer 的草稿和附件卡。
+`/goal` 声明附件支持。附件只随目标本身：create 或 edit 成功后，命令提交一条用户 followup 消息，按选择顺序携带已准入的图片块与文件块，再附加固定文本 `Reference attachments for the goal objective.`。后续 Goal Round 从普通会话历史读取这些内容，goal 领域不存储附件状态。其他任何子命令以及被拒绝的 create 或 edit，都会在领域变更前返回直接错误，并保留 composer 的草稿和附件卡。 如果 Agent 在命令写入目标前开始关闭，命令会以 `AGENT_CLOSED` 拒绝请求。如果目标已保存，但随后提交附件时遭到拒绝，命令会提示目标已保存，并将附件保留在输入区。
 
 ### 组合方式
 

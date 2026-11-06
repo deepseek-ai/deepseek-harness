@@ -46,7 +46,7 @@ Control words (`clear`, `pause`, `resume`, `edit`) are recognized only when they
 
 ### Attachments
 
-`/goal` declares attachment support. Attachments accompany only an objective: after a successful create or edit, the command submits one user followup carrying the admitted image and file blocks in selection order plus the fixed text `Reference attachments for the goal objective.` Later goal rounds read that ordinary session history; the goal domain stores no attachment state. Every other sub-command, and any refused create or edit, returns a direct error before a domain mutation and leaves the dispatching composer's draft and cards intact.
+`/goal` declares attachment support. Attachments accompany only an objective: after a successful create or edit, the command submits one user followup carrying the admitted image and file blocks in selection order plus the fixed text `Reference attachments for the goal objective.` Later goal rounds read that ordinary session history; the goal domain stores no attachment state. Every other sub-command, and any refused create or edit, returns a direct error before a domain mutation and leaves the dispatching composer's draft and cards intact. If the Agent starts closing before the command writes the objective, the command rejects with `AGENT_CLOSED`. If attachment submission is rejected after the objective is saved, the command reports the saved objective and leaves the attachments in the composer.
 
 ### Compose it
 

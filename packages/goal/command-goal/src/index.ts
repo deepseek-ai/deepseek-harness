@@ -4,6 +4,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import { AgentClosedError } from '@deepseek-ai/dsh-agent'
 import { CommandDefinitionId } from '@deepseek-ai/dsh-commands/brand'
 import type { CommandInvocation, CommandResult } from '@deepseek-ai/dsh-commands'
 import { GoalError } from '@deepseek-ai/dsh-goal'
@@ -109,17 +110,25 @@ function missingGoal(action: string): CommandResult {
 }
 
 /**
- * Submit the invocation's admitted composer attachments as one model-visible user
- * message ahead of the goal's next round. The attachments precede a fixed text
- * block naming their role, so a later goal round reads them from ordinary
- * session history without the goal domain storing attachment state.
+ * Report the committed objective and submit its attachments ahead of the next goal round.
+ * A closed Agent leaves the objective saved and the attachments in the composer.
  */
-function submitObjectiveAttachments(invocation: CommandInvocation): void {
-  if (invocation.attachments.length === 0) return
-  invocation.agent.followup(createUserMessage({
-    content: [...invocation.attachments, { type: 'text', text: 'Reference attachments for the goal objective.' }],
-    source: { kind: 'user' },
-  }))
+function finishObjective(invocation: CommandInvocation, title: string, goal: GoalView): CommandResult {
+  if (invocation.attachments.length > 0) {
+    try {
+      invocation.agent.followup(createUserMessage({
+        content: [...invocation.attachments, { type: 'text', text: 'Reference attachments for the goal objective.' }],
+        source: { kind: 'user' },
+      }))
+    } catch (error: unknown) {
+      if (!(error instanceof AgentClosedError)) throw error
+      return {
+        kind: 'error',
+        text: 'Goal saved. The agent is closing, so the attachments were not submitted.',
+      }
+    }
+  }
+  return renderGoal(title, goal)
 }
 
 /** Execute one parsed human command through the domain that owns persistence. */
@@ -131,6 +140,7 @@ function executeGoalCommand(ctx: Context, invocation: CommandInvocation): Comman
       text: 'Attachments only accompany a goal objective: /goal <objective> or /goal edit <objective>.',
     }
   }
+  if (command.kind === 'create' || command.kind === 'edit') invocation.agent.assertOpen?.()
   try {
     const current = ctx.goals.get(invocation.agent)
     switch (command.kind) {
@@ -148,19 +158,16 @@ function executeGoalCommand(ctx: Context, invocation: CommandInvocation): Comman
           }
         }
         const created = ctx.goals.create(invocation.agent, { objective: command.objective })
-        submitObjectiveAttachments(invocation)
-        return renderGoal('Goal created', created)
+        return finishObjective(invocation, 'Goal created', created)
       }
       case 'edit': {
         if (current === undefined) return missingGoal('edit')
         if (current.phase === 'complete') {
           const replaced = ctx.goals.create(invocation.agent, { objective: command.objective })
-          submitObjectiveAttachments(invocation)
-          return renderGoal('Goal created', replaced)
+          return finishObjective(invocation, 'Goal created', replaced)
         }
         const edited = ctx.goals.edit(invocation.agent, goalRef(current), { objective: command.objective })
-        submitObjectiveAttachments(invocation)
-        return renderGoal('Goal updated', edited)
+        return finishObjective(invocation, 'Goal updated', edited)
       }
       case 'pause':
         if (current === undefined) return missingGoal('pause')

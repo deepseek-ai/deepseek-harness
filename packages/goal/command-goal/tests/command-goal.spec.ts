@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
-import AgentRegistry from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { AgentClosedError } from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentStatus } from '@deepseek-ai/dsh-agent'
 import CommandRuntime from '@deepseek-ai/dsh-commands'
 import GoalService from '@deepseek-ai/dsh-goal'
@@ -15,14 +15,19 @@ interface Harness {
   readonly ctx: Context
   readonly agent: Agent
   readonly session: Session
+  readonly closing: AbortController
   readonly plugin: Awaited<ReturnType<Context['plugin']>>
 }
 
 /** Build a live idle agent accepted by the exact-identity goal service. */
-function stubAgent(ctx: Context, id: string): { agent: Agent; session: Session } {
+function stubAgent(ctx: Context, id: string): Pick<Harness, 'agent' | 'session' | 'closing'> {
   // Store-created: the command executor durably logs lifecycle events on it.
   const session = ctx.sessions.create(SessionId(id))
   const inbox = createInboxStub()
+  const closing = new AbortController()
+  const assertOpen = (): void => {
+    if (closing.signal.aborted) throw new AgentClosedError(session.id)
+  }
   let status: AgentStatus = 'idle'
   const agent: Agent = {
     id: session.id,
@@ -33,14 +38,18 @@ function stubAgent(ctx: Context, id: string): { agent: Agent; session: Session }
     ctx: new Context(),
     get status() { return status },
     send: () => {},
-    followup: () => {},
+    assertOpen,
+    followup(input) {
+      assertOpen()
+      inbox.append('next-turn', input)
+    },
     steer: () => {},
     inject(input) { this.inbox.append('next-step', input) },
     cancel() { status = 'idle' },
     runMaintenance: task => task(new AbortController().signal),
     whenIdle() { return Promise.resolve() },
   }
-  return { agent, session }
+  return { agent, session, closing }
 }
 
 /** Mount the real command registry, goal domain, and producer. */
@@ -52,9 +61,9 @@ async function harness(): Promise<Harness> {
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(GoalService)
   const plugin = await ctx.plugin(commandGoal)
-  const { agent, session } = stubAgent(ctx, `command-goal-${Math.random()}`)
+  const { agent, session, closing } = stubAgent(ctx, `command-goal-${Math.random()}`)
   await ctx.agents.register(agent)
-  return { ctx, agent, session, plugin }
+  return { ctx, agent, session, closing, plugin }
 }
 
 /** The log with executor-owned command lifecycle bookkeeping stripped (goal assertions target domain events). */
@@ -243,7 +252,7 @@ describe('/goal attachments', () => {
   const PNG = 'AAAA'
 
   /** Wire the fake store the executor admits through (once per harness). */
-  function provideStore(test: Harness): void {
+  function provideStore(test: Harness, beforeSave?: () => Promise<void>): void {
     let saved = 0
     const saveImage = (input: { mediaType: string; name?: string }) => {
       saved += 1
@@ -260,6 +269,7 @@ describe('/goal attachments', () => {
       validateImage: () => Promise.resolve(),
       saveImage,
       async saveImages(inputs: readonly { mediaType: string; name?: string }[]) {
+        if (beforeSave !== undefined) await beforeSave()
         const refs = []
         for (const input of inputs) refs.push(await saveImage(input))
         return refs
@@ -315,6 +325,69 @@ describe('/goal attachments', () => {
     const result = await runWithAttachments(test, ' edit refined objective')
     expect(result.kind).toBe('success')
     expect(followup).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['create', 'edit'] as const)('rejects %s when closure begins during attachment storage', async (operation) => {
+    const test = await harness()
+    const saving = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    provideStore(test, () => {
+      saving.resolve(undefined)
+      return release.promise
+    })
+    const original = operation === 'edit'
+      ? test.ctx.goals.create(test.agent, { objective: 'original objective' })
+      : undefined
+    const suffix = operation === 'edit' ? ' edit use the reference image' : ' use the reference image'
+    const result = runWithAttachments(test, suffix)
+    try {
+      await saving.promise
+      test.closing.abort()
+      release.resolve(undefined)
+      await expect(result).rejects.toMatchObject({ code: 'AGENT_CLOSED' })
+      expect(test.ctx.goals.get(test.agent)).toEqual(original)
+      expect(test.agent.inbox.nextTurn).toEqual([])
+    } finally {
+      release.resolve(undefined)
+      await result.catch(() => undefined)
+      await test.ctx.fiber.dispose()
+    }
+  })
+
+  it('reports the saved objective when closure interrupts attachment delivery after commit', async () => {
+    const test = await harness()
+    provideStore(test)
+    const stop = test.ctx.on('goal/changed', ({ change }) => {
+      if (change.operation === 'create') test.closing.abort()
+    })
+    try {
+      const result = await runWithAttachments(test, ' use the reference image')
+      expect(result).toEqual({
+        kind: 'error',
+        text: 'Goal saved. The agent is closing, so the attachments were not submitted.',
+      })
+      expect(test.ctx.goals.get(test.agent)?.objective).toBe('use the reference image')
+      expect(test.session.snapshotEvents().at(-1)).toMatchObject({
+        type: 'command/done',
+        data: result,
+      })
+      expect(test.agent.inbox.nextTurn).toEqual([])
+    } finally {
+      stop()
+      await test.ctx.fiber.dispose()
+    }
+  })
+
+  it('propagates unrelated attachment delivery failures', async () => {
+    const test = await harness()
+    provideStore(test)
+    const failure = new Error('inbox write failed')
+    vi.spyOn(test.agent, 'followup').mockImplementation(() => { throw failure })
+    try {
+      await expect(runWithAttachments(test, ' use the reference image')).rejects.toBe(failure)
+    } finally {
+      await test.ctx.fiber.dispose()
+    }
   })
 
   it('rejects attachments on sub-commands that cannot use them, leaving the domain untouched', async () => {
