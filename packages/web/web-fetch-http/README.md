@@ -67,7 +67,7 @@ A malformed comma- or whitespace-joined charset declaration containing a UTF-8 l
 
 ### Failures and recovery
 
-Failures throw `WebError` with a machine-routable code: `WEB_INVALID_URL`, `WEB_BLOCKED_URL`, `WEB_FETCH_TOO_LARGE`, `WEB_FETCH_TIMEOUT`, `WEB_REDIRECT_BLOCKED`, `WEB_UNSUPPORTED_CONTENT_TYPE`, `WEB_ABORTED`, or `WEB_PROVIDER_ERROR`. `WEB_UNSUPPORTED_CONTENT_TYPE` covers unsupported media types, unsupported charset declarations, and invalid UTF-8 during malformed-declaration recovery. A `WEB_PROVIDER_ERROR` from a transport failure names the underlying system error, such as `getaddrinfo ENOTFOUND host`, `connect ECONNREFUSED addr:port`, or a TLS certificate error. Direct callers can route on the code; the model-facing `web_fetch` tool surfaces the failure text to the model under its own error wrapper.
+Failures throw `WebError` with a machine-routable code: `WEB_INVALID_URL`, `WEB_BLOCKED_URL`, `WEB_FETCH_TOO_LARGE`, `WEB_FETCH_TIMEOUT`, `WEB_REDIRECT_BLOCKED`, `WEB_UNSUPPORTED_CONTENT_TYPE`, `WEB_ABORTED`, or `WEB_PROVIDER_ERROR`. `WEB_UNSUPPORTED_CONTENT_TYPE` covers unsupported media types, unsupported charset declarations, and invalid UTF-8 during malformed-declaration recovery. A `WEB_PROVIDER_ERROR` from a transport failure names the underlying system error, such as `getaddrinfo ENOTFOUND host`, `connect ECONNREFUSED addr:port`, or a TLS certificate error; it lists at most four connection attempts, counts the rest, and keeps at most 500 characters of the reason. Direct callers can route on the code; the model-facing `web_fetch` tool surfaces the failure text to the model under its own error wrapper.
 
 -----
 
