@@ -199,12 +199,20 @@ function createApplicationState(socket, record, application, captureBroker, conn
       if (!observed) refuse('STALE_SNAPSHOT', 'Read fresh state before acting')
       if (params.windowId !== undefined && observed.windowId !== null && observed.windowId !== params.windowId) refuse('STALE_SNAPSHOT', `Snapshot belongs to window ${observed.windowId}; read getAccessibilityTree on window ${params.windowId}`)
       if (observed.axless && params.elementId !== undefined) refuse('INVALID_ARGUMENT', 'Element id is absent from the selected snapshot')
-      if (method === 'mouseMove') application.hovering = params.elementId === '0' || (params.x >= 20 && params.x <= 40)
+      let systemPointerMoved = false
+      if (method === 'mouseMove') {
+        const alternate = params.elementId === '0' || (params.x >= 20 && params.x <= 40)
+        if (!alternate && !application.hovering) {
+          if (!params.allowSystemPointer) refuse('HOVER_UNAVAILABLE', 'No AX alternate UI at this target. No input was sent and the pointer did not move.')
+          systemPointerMoved = true
+        }
+        application.hovering = alternate
+      }
       else if (method === 'click' && params.windowId === 8) application.visualCount++
       else if (method === 'click') application.count++
       else application.value = params.value
       record('state', { count: application.count, value: application.value, visualCount: application.visualCount })
-      return { dispatched: true, ...method === 'mouseMove' ? { hoverRoute: 'accessibility', systemPointerMoved: false } : {} }
+      return { dispatched: true, ...method === 'mouseMove' ? { hoverRoute: systemPointerMoved ? 'system-pointer' : 'accessibility', systemPointerMoved } : {} }
     }
     if (method === 'pressKey' && params.key === 'Return') observationChanged = true
     // Fixture-only keys simulate a pending system callback and its eventual completion.

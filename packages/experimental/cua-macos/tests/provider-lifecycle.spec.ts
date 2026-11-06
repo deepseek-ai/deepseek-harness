@@ -61,7 +61,7 @@ vi.mock('@deepseek-ai/dsh-cua/native-client', async importOriginal => ({
 }))
 
 const config = {
-  permissionPollIntervalMs: 1000,
+  permissionPollIntervalMs: 1000, systemPointerHover: false,
   agentPreset: false,
   helperPath: resolve('fixture-helper'), sourceSigning: 'ad-hoc', buildTimeoutMs: 300_000, timeoutMs: 10_000, connectTimeoutMs: 5000, screenshotTimeoutMs: 5000, axTimeoutMs: 3000, maxRequestBytes: 1024, maxResponseBytes: 4096, maxClipboardBytes: 8192, pasteReadTimeoutMs: 1000, maxAppMatches: 20,
   graceMs: 10, textEventIntervalMs: 8, maxClickHoldMs: 7000, maxElements: 64, maxDepth: 8, dragDurationMs: 200, dragSteps: 10,
@@ -109,7 +109,7 @@ class ImageAdapter extends LlmAdapter {
 const imageData = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC'
 const imageMetadata = { pixelWidth: 1, pixelHeight: 1, bounds: { x: 2, y: 3, width: 1, height: 1 }, coordinateSpace: 'window-points', windowId: 7 }
 
-async function setup(model?: { provider: string; model: string }) {
+async function setup(model?: { provider: string; model: string }, systemPointerHover = false) {
   native.request.mockReset().mockResolvedValue([])
   native.dispose.mockReset()
   native.instances.length = 0
@@ -119,7 +119,7 @@ async function setup(model?: { provider: string; model: string }) {
   await mountAgentLoopTestDependencies(ctx)
   await ctx.plugin(ComputerUseRegistry)
   await ctx.plugin(Subprocess, [])
-  const provider = await ctx.plugin(NativeProvider, config)
+  const provider = await ctx.plugin(NativeProvider, { ...config, systemPointerHover })
   await mountAgentLoopTestHarness(ctx)
   const handle = await ctx.agents.create({ sessionId: SessionId('native-lifecycle'), ...model ? { agentOptions: model } : {} })
   let index = 0
@@ -396,6 +396,14 @@ it.each([false, true])('rejects an ended Agent with prior helper acquisition %s'
   expect(JSON.stringify(result.content)).toContain('agent has been disposed')
   expect(native.instances).toHaveLength(acquired ? 1 : 0)
   expect(native.request).toHaveBeenCalledTimes(requests)
+})
+
+it.each([false, true])('passes the deployment hover policy (%s) to native input', async (allowed) => {
+  const f = await setup(undefined, allowed)
+  await selectApplication(f)
+  const params = { appHandle: 'app-one', windowId: 7, snapshotId: 's', elementId: '0' }
+  await f.execute('mouseMove', params)
+  expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...params, allowSystemPointer: allowed }, expect.any(AbortSignal), expect.any(String))
 })
 
 it('supplies configured resource bounds and clears registrations on unload', async () => {

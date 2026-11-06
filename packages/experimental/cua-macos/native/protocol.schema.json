@@ -488,6 +488,9 @@
                   "type": "string",
                   "minLength": 1,
                   "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
+                },
+                "allowSystemPointer": {
+                  "type": "boolean"
                 }
               },
               "required": [
@@ -520,6 +523,9 @@
                 "y": {
                   "type": "number",
                   "minimum": 0
+                },
+                "allowSystemPointer": {
+                  "type": "boolean"
                 }
               },
               "required": [

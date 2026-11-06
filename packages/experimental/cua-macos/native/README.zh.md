@@ -83,7 +83,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 
 每个面向应用的操作都要求使用同一 helper 的 `getApp` 返回的 `appHandle`。helper 固定 PID 和内核进程启动时间，进程退出或 PID 被复用后使句柄及其全部快照失效。再次调用 `getApp` 可取得替代进程，不会重新激活旧句柄。随机的 helper 命名空间防止已终止 helper 的句柄与替代实例重合。重复获取同一存活进程会共享句柄。启动后检查失败会使待启动句柄失效，并保留原错误；已经启动的进程不会被终止，launchApp 也不能复用失败的句柄。
 
-稳定错误码包括 `INVALID_REQUEST`（信封无效）、`INVALID_ARGUMENT`（参数无效）、`UNSUPPORTED`（操作未知）、`APP_UNAVAILABLE`、`APP_PATH_UNAVAILABLE`、`PROCESS_INSPECTION_FAILED`、`AMBIGUOUS_APP`、`STALE_APP`、`STALE_SNAPSHOT`、`WINDOW_UNAVAILABLE`、`WINDOW_CHANGED`、`PERMISSION_DENIED`、`FOREGROUND_REQUIRED`（悬停目标不是未被遮挡的前台窗口）、`PANEL_NOT_READY`（输入前系统面板接收方尚不可用）及 `NATIVE_ERROR`（其余操作系统失败）。错误不保证已分派的部分输入被回滚，Host 不得自动重试输入。
+稳定错误码包括 `INVALID_REQUEST`（信封无效）、`INVALID_ARGUMENT`（参数无效）、`UNSUPPORTED`（操作未知）、`APP_UNAVAILABLE`、`APP_PATH_UNAVAILABLE`、`PROCESS_INSPECTION_FAILED`、`AMBIGUOUS_APP`、`STALE_APP`、`STALE_SNAPSHOT`、`WINDOW_UNAVAILABLE`、`WINDOW_CHANGED`、`PERMISSION_DENIED`、`HOVER_UNAVAILABLE`、`FOREGROUND_REQUIRED`（悬停目标不是未被遮挡的前台窗口）、`PANEL_NOT_READY`（输入前系统面板接收方尚不可用）及 `NATIVE_ERROR`（其余操作系统失败）。错误不保证已分派的部分输入被回滚，Host 不得自动重试输入。
 
 应用选择向 Host 返回授权记录：区分大小写的 Bundle ID 加上 `macos:bundle-id:` 前缀后计算的 SHA-256 摘要、显示名称、可选的可执行路径和可持久化标记。相同标识的所有安装副本共用授权，包括未签名和临时签名的应用。缺少非空 Bundle ID 时，运行中和未启动应用都对 `macos:executable-path:` 与解析符号链接后的可执行路径计算 SHA-256，仍可保存长期授权。进程路径查询失败时，运行中的有效 Bundle ID 仍可用于授权，记录省略 executablePath；路径可取得时仍须与所选目标一致。两种身份均不可用时，在执行目标操作前返回 APP_PATH_UNAVAILABLE，保留路径查询原因和 errno。PROCESS_INSPECTION_FAILED 表示无法验证进程实例，只有进程检查返回 ESRCH 时才报告进程不存在；两种失败都不触发自动重试。进程号和启动时间只校验存活句柄，不进入已保存身份。Host 从模型结果中移除此记录，并在启动、观察和输入前取得用户许可。此管道协议用于可信 Host 传输，无法隔离另一个已获授权的 shell 进程。
 
@@ -111,7 +111,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 
 观察通过 `AXUIElementCopyMultipleAttributeValues` 读取每个非布局节点的描述属性和子节点。逐属性错误保留单独读取的规则；不支持批量 API 时使用单独读取。值只在本次观察期间保留，输入读取即时属性。应用状态可能在节点之间变化，批量读取不使整棵树具备原子性。
 
-系统文件面板的键盘路由通过所选应用的 AX 焦点 sheet 解析远端接收方。只接受 Apple 的 Open and Save Panel Service，且其焦点祖先链仍须包含已识别的远端窗口。按元素发送鼠标事件时，helper 沿 AX 父节点查找所属窗口或 sheet。
+系统文件面板的键盘路由通过所选应用的 AX 焦点 sheet 解析远端接收方。只接受 Apple 的 Open and Save Panel Service，且其焦点祖先链仍须包含已识别的远端窗口。面板的元素点击和坐标点击发送至已核实的系统面板服务窗口。服务窗口的边界必须和所选宿主窗口一致。
 
 键盘修饰键名称是普通字符串。共享对象 API 原样传递名称；macOS helper 接受 `command`/`cmd`、`shift`、`option`/`alt`、`control`/`ctrl` 和 `fn`，未知名称返回 `INVALID_ARGUMENT`。它不解析组合键字符串。
 
@@ -121,9 +121,9 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 
 `paste` 提供一种纯文本或 HTML 剪贴板格式，调用应用已启用的标准 Paste 菜单命令，并等待剪贴板数据请求。随后仅在所有权标记和修改计数仍匹配时恢复原有格式。Host 通过文件锁串行化不同 helper 的粘贴。maxClipboardBytes 同时限制输入和保留内容，不支持的菜单和过大的数据在分派前失败。后续复制会被保留。取消会尽可能恢复仍持有的剪贴板数据，强制结束不保证恢复，数据请求也不证明目标已完成编辑。 分派完成后，`pasteReadTimeoutMs` 限制等待剪贴板读取的时间。到期返回 `PASTE_NOT_CONSUMED`，关闭延迟数据提供方，并仅在仍持有剪贴板时恢复原内容。该失败不能证明应用以后不会处理已排队的 Paste 命令；决定是否重试前先检查目标内容。
 
-`mouseMove` 接受已观察的元素 ID 或窗口内坐标，不按下鼠标按钮，也可用于禁用控件。调用结束、AX 读取和截图都不恢复原位置，后续 mouseMove 调用可进入新出现的内容。点击只在目标位置发送按键事件，不先在窗口外点击。单次请求串行执行，不在调用之间保留应用。其他输入或应用变化可能中断交互。
+默认情况下，`mouseMove` 通过同一窗口内启用的控件或祖先声明的 `AXShowAlternateUI` 和 `AXShowDefaultUI` 展开或恢复界面。缺少这条路径时返回 `HOVER_UNAVAILABLE`，不发送输入。Host 根据部署配置 `systemPointerHover` 传入原生布尔参数 `allowSystemPointer`，省略时为 false。只有值为 true 才允许移动全局光标，且须检查前台进程和鼠标命中的窗口。
 
-`mouseMove` 优先查找同一窗口内声明了 `AXShowAlternateUI` 和 `AXShowDefaultUI` 的元素或祖先。进入展开区域的子控件时保留父控件界面，离开时恢复一次。AX 动作失败直接返回错误，不尝试其他输入路径。没有可用 AX 路径时，该方法核实前台 PID，并通过 AppKit 查询目标点实际接收鼠标输入的窗口后，使用系统输入队列移动可见鼠标。不接收鼠标输入的窗口和透明区域不会阻挡目标。检查失败返回 `FOREGROUND_REQUIRED`，不移动鼠标。结果中的 `hoverRoute` 标明 `accessibility` 或 `system-pointer`，`systemPointerMoved` 标明是否移动系统鼠标。该方法不激活、不抬起窗口，也不恢复焦点。其他输入或窗口变化可能与检查和分派交错。
+开启后，系统指针路线会检查前台应用和坐标命中的窗口，不满足条件时返回 `FOREGROUND_REQUIRED`。返回值 `hoverRoute` 和 `systemPointerMoved` 说明走了哪条路线以及是否移动了可见光标。悬停不会按下鼠标，也不会在读取后还原光标。后续输入可能中断悬停。点击只在目标点发送按键事件，不先在窗口外点击。
 
 
 -----

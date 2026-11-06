@@ -126,6 +126,8 @@ export interface CuaBackend {
   createChannel: NativeChannelFactory
   guidance: string
   capabilities: CuaStartupCapabilities
+  /** macOS deployment policy sent only to the native mouseMove operation. */
+  systemPointerHover?: boolean
   /**
    * Build native permission parameters for the selected action and Client language.
    * @param method Native permission action.
@@ -211,6 +213,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       const signal = execution.signal
       signal.throwIfAborted()
       const client = execution.nativeClient
+      if (method === 'mouseMove' && backend.systemPointerHover !== undefined) params.allowSystemPointer = backend.systemPointerHover
       const nativeParams = method === 'findApps'
         ? { ...params, maxAppMatches: config.maxAppMatches }
         : method === 'paste'

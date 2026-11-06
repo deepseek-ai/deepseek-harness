@@ -349,6 +349,7 @@ actor AXWorker {
             let window: WindowInfo
             let point: WindowPoint
             var hoverElement: AXUIElement?
+            var elementWindow: AXUIElement?
             if params.contains("elementId") {
                 guard !params.contains("x"), !params.contains("y") else { throw RequestParameters.invalid("Element and coordinate targets cannot be combined") }
                 let requestedWindow = try params.optionalWindowID()
@@ -359,6 +360,7 @@ actor AXWorker {
                     throw NativeFailure(code: "STALE_SNAPSHOT", message: "Element belongs to window \(enclosing.id); select that window and read its tree")
                 }
                 if method == "click" { try ax().requireEnabled(selected) }
+                elementWindow = enclosing.element
                 hoverElement = selected
                 guard let bounds = try ax().bounds(selected), bounds.width > 0, bounds.height > 0 else { throw NativeFailure(code: "NATIVE_ERROR", message: "Element has no pointer bounds") }
                 window = try WindowGeometry.resolve(owner: identity, windowID: enclosing.id) { try ax().bounds(enclosing.element) }
@@ -371,6 +373,7 @@ actor AXWorker {
             }
             let route = WindowRoute(owner: identity, windowID: window.windowID, bounds: window.bounds)
             if method == "mouseMove" {
+                let allowSystemPointer = try params.optionalBoolean("allowSystemPointer") ?? false
                 try WindowPointerInput.validate(point, in: route)
                 if hoverElement == nil {
                     hoverElement = try ax().element(at: CGPoint(x: window.bounds.x + point.x, y: window.bounds.y + point.y), owner: identity)
@@ -381,9 +384,21 @@ actor AXWorker {
                 if try hover.move(to: hoverElement, in: route, access: ax()) {
                     return .result(Self.mouseMoveResult(route: "accessibility", pointerMoved: false))
                 }
+                try AXHover.requireSystemPointer(allowed: allowSystemPointer)
                 return .mouseMove(route, point)
             }
-            try await inputs().1.click(in: route, at: point, button: button, count: count, modifiers: modifiers, holdMs: holdMs)
+            var clickRoute = route
+            if AXIsProcessTrusted(), let node = try elementWindow ?? ax().windowElement(window.windowID, owner: identity),
+               let panel = try ax().filePanelRecipient(node, owner: identity, catalog: catalog) {
+                let serviceWindow = try NativePlatform.ownedWindow(panel.process.pid, panel.windowID)
+                guard serviceWindow.bounds == window.bounds else {
+                    throw NativeFailure(code: "WINDOW_CHANGED", message: "File panel and its input window have different frames; read fresh window state")
+                }
+                try NativePlatform.verify(identity)
+                try NativePlatform.verify(panel.process)
+                clickRoute = WindowRoute(owner: panel.process, windowID: panel.windowID, bounds: serviceWindow.bounds)
+            }
+            try await inputs().1.click(in: clickRoute, at: point, button: button, count: count, modifiers: modifiers, holdMs: holdMs)
         case "scroll", "drag":
             let id = try params.windowID()
             try coordinateSnapshot(handle, params, id)

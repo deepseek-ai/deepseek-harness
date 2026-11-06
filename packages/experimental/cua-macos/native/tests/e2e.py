@@ -85,7 +85,7 @@ def check_file_panel(call, owner, primary_params, primary, directory, wait_state
         assert f"window {sheet_id}; select that window" in error["message"], error
     ready = call("getState", {**owner, "windowId": sheet_id, "maxElements": 2000, "maxDepth": 25})
     open_button = next(e for e in ready["elements"] if e["identifier"] == "OKButton" and e["enabled"])
-    assert call("invoke", {**owner, "windowId": sheet_id, "snapshotId": ready["snapshotId"], "elementId": open_button["elementId"]})["dispatched"]
+    assert call("click", {**owner, "windowId": sheet_id, "snapshotId": ready["snapshotId"], "elementId": open_button["elementId"]})["dispatched"]
     wait_state(lambda state: bool(state["selectedFile"]) and Path(state["selectedFile"]).samefile(selected_file),
                "File picker did not return the intended file")
     # AppKit can retain the dismissed panel's hidden WindowServer window after
@@ -217,8 +217,18 @@ def main():
                     call("performAction", {**owner, "snapshotId": current["snapshotId"],
                                                      "elementId": window_element["elementId"], "action": "AXRaise"})
                 call("getState", primary_params)
+                current = call("getState", primary_params)
+                no_hover = {**button_target(current, "Increment primary"), "windowId": primary["windowId"]}
+                before = json.loads(state_path.read_text())
+                denied = call("mouseMove", no_hover, "HOVER_UNAVAILABLE")
+                assert "systemPointerMoved" not in denied and "No input was sent" in denied["message"], denied
+                after = wait_state(lambda s: s["cursorSamples"] > before["cursorSamples"], "Cursor sampling stopped")
+                assert after["cursorChanges"] == before["cursorChanges"] and not after["hoverVisible"], after
+
                 def mouse_move(target):
-                    result = call("mouseMove", target)
+                    result = call("mouseMove", target if args.alternate_hover else {**target, "allowSystemPointer": True})
+                    if not args.alternate_hover:
+                        assert result["hoverRoute"] == "system-pointer" and result["systemPointerMoved"] is True, result
                     if args.alternate_hover:
                         assert result["hoverRoute"] == "accessibility" and result["systemPointerMoved"] is False, result
                     return result
@@ -251,7 +261,7 @@ def main():
                     mouse_move(target)
                     wait_state(lambda actual: actual["hoverVisible"], "Input-transparent overlay blocked hover")
                     before = cycle_overlay(2)
-                    call("mouseMove", target, "FOREGROUND_REQUIRED")
+                    call("mouseMove", {**target, "allowSystemPointer": True}, "FOREGROUND_REQUIRED")
                     after = wait_state(lambda actual: actual["cursorSamples"] >= before["cursorSamples"] + 2,
                                        "Pointer observation did not advance")
                     assert after["cursorChanges"] == before["cursorChanges"], "Rejected hover moved the system pointer"

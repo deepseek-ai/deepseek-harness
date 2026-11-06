@@ -27,6 +27,9 @@ it('states the macOS accessibility, keyboard, and mouse levels', () => {
   expect(PLATFORM_GUIDANCE).toContain('accessibility tree operations are available at app or window level')
   expect(PLATFORM_GUIDANCE).toContain('Simulated keyboard input is available at app level')
   expect(PLATFORM_GUIDANCE).toContain('Simulated mouse input is available at window level')
+  const hover = COMMON_GUIDANCE.split('\n').find(line => line.startsWith('- mouseMove('))
+  for (const term of ['AXShowAlternateUI', 'AXShowDefaultUI', 'HOVER_UNAVAILABLE', 'systemPointerHover']) expect(hover).toContain(term)
+  expect(COMMON_GUIDANCE.split('\n').find(line => line.startsWith('- click('))).toContain('call app.activate() first')
 })
 
 it('enumerates every available method once in its catalog entry', () => {

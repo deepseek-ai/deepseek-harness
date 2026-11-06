@@ -165,7 +165,7 @@ import Darwin
         let params = try RequestParameters(request)
         try cancellation.check()
         if request.method == "screenshot" { try capture.requireAvailable() }
-        let requiresCatalog = ["getApp", "listApps", "findApps", "typeText", "pressKey"].contains(request.method)
+        let requiresCatalog = ["getApp", "listApps", "findApps", "typeText", "pressKey", "click"].contains(request.method)
         let catalog = requiresCatalog ? ApplicationCatalog.snapshot() : ApplicationCatalogSnapshot(applications: [], frontPID: nil)
         let result: JSONValue
         if request.method == "permissionStatus" {

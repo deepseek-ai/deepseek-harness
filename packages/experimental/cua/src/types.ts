@@ -190,10 +190,11 @@ export interface CuaWindow extends CuaSurface {
    */
   getScreenshot(options?: CuaObservationOptions): Promise<CuaScreenshot>
   /**
-   * Reveal advertised AX alternate UI, otherwise move the system cursor without pressing a button.
-   * The system-pointer route requires the app to be foreground and the point unobscured; never activates or raises it.
-   * Returning and subsequent observations do not restore the previous pointer position.
-   * Other input and application changes can interrupt hover; observe before continuing.
+   * On macOS, prefer an available control's click or advertised accessibility action over hover.
+   * By default, mouseMove reveals or restores alternate UI on an enabled target or ancestor that advertises
+   * both AXShowAlternateUI and AXShowDefaultUI. Without an AX route it throws HOVER_UNAVAILABLE before sending input.
+   * Only the macOS provider's systemPointerHover setting permits moving the visible cursor as a fallback.
+   * That route requires a foreground app and an unobscured target and leaves the cursor at the destination.
    * @param target - current element id or screenshot-local [x,y].
    * @param options - coordinate mode; applies only to [x,y].
    * @returns dispatch evidence and the selected route; observe the resulting UI after its hover delay.
@@ -201,7 +202,8 @@ export interface CuaWindow extends CuaSurface {
   mouseMove(target: CuaElementId | readonly [number, number], options?: CuaCoordinateOptions): Promise<CuaHoverResult>
   /**
    * Click an element or a point in this window. On macOS both forms send mouse-down and mouse-up events.
-   * Use {@link CuaSurface.invoke} for the element's default accessibility action.
+   * For a background control, prefer {@link CuaSurface.invoke} for its default action. When a mouse click is needed,
+   * call app.activate() first and observe the target again. Background apps can ignore dispatched mouse events.
    * Cancellation or timeout releases the held button; received input cannot be undone. The operation deadline includes holdMs.
    * @param target - On macOS, an id from the latest tree targets the element center. A coordinate pair targets the given point.
    * @param options - button, click count, modifiers, optional hold duration and coordinate mode.

@@ -3,6 +3,17 @@ import Testing
 import CoreGraphics
 @testable import CuaNative
 
+@Test func unavailableAXHoverRequiresExplicitSystemPointerPermission() throws {
+    do {
+        try AXHover.requireSystemPointer(allowed: false)
+        Issue.record("A default hover without an AX route was allowed to move the pointer")
+    } catch let failure as NativeFailure {
+        #expect(failure.code == "HOVER_UNAVAILABLE")
+        #expect(failure.message.contains("No input was sent"))
+    }
+    try AXHover.requireSystemPointer(allowed: true)
+}
+
 @Test func systemHoverRequiresTheForegroundUnobscuredTarget() throws {
     let owner = ProcessIdentity(pid: 42, startedSeconds: 1, startedMicroseconds: 0)
     let bounds = WindowBounds(x: 100, y: 100, width: 400, height: 300)

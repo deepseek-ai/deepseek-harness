@@ -1121,6 +1121,8 @@ export interface Config {
 export interface Config extends CuaConfig {
   /** Interval in milliseconds between permission and position checks while the native guide is open. */
   permissionPollIntervalMs: number
+  /** Allow mouseMove to move the visible system pointer when AX hover is unavailable. Off by default to avoid interrupting the user. */
+  systemPointerHover: boolean
   /**
    * Source-build signing: `ad-hoc` (default) binds grants to the code hash;
    * an object selects an existing certificate in an explicitly configured keychain.
