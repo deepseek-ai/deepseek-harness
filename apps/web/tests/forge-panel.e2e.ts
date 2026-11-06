@@ -1194,8 +1194,7 @@ it.skipIf(MODE === 'record')('opens a comment from the hover plus in one press w
   await writeFile(join(project, 'notes.txt'), ['keep 1', 'keep 2', 'keep 4', 'keep 5', 'added', 'keep 6'].map(line => `${line}\n`).join(''))
   const { settled } = await sendPrompt(page, scaffold)
   await settled
-  await page.locator('[data-forge-header]').click()
-  await page.locator('[data-forge-panel]').getByRole('button', { name: '刷新状态', exact: true }).click()
+  await showSessionPanel(page)
   await page.locator('[data-forge-local]').getByRole('button', { name: /查看本会话的变更/ }).click()
   const view = page.locator('[data-forge-changes="local"]')
   const file = view.locator('[data-forge-diff-file="README.md"]')
