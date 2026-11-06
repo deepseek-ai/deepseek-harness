@@ -1058,7 +1058,7 @@ describe('Node errno classification', () => {
       },
     }).then(() => undefined, (caught: unknown) => caught)
     expect(failure).toBeInstanceOf(FsError)
-    expect(['FS_NOT_REGULAR_FILE', 'FS_IO_ERROR']).toContain((failure as FsError).code)
+    expect(failure).toMatchObject({ name: 'FsError', code: 'FS_NOT_REGULAR_FILE', cause: expect.objectContaining({ code: 'EISDIR' }) as Error })
   })
 
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('maps unreadable file content to FS_PERMISSION_DENIED', async () => {

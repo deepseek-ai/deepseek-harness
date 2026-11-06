@@ -699,18 +699,13 @@ describe('image admission failures', () => {
     expect(text(result)).toBe(`Error: cannot read "${join(dir, 'red.png')}": ${detail}`)
   })
 
-  it('wraps a non-attachment save failure as IMAGE_STORE_FAILED', async () => {
-    const result = await failingSave(() => new Error('unrelated infrastructure failure'))
-    expect(result.error?.info).toEqual({ name: 'ImageInputError', code: 'IMAGE_STORE_FAILED' })
-    expect(text(result)).toBe(`Error: cannot read "${join(dir, 'red.png')}": the attachment store could not save the image: unrelated infrastructure failure`)
+  it('passes a store defect, a classified HarnessError, and an AbortError through unchanged', async () => {
+    const defect = await failingSave(() => new Error('unrelated infrastructure failure'))
+    expect(defect.isError).toBe(true)
+    expect(defect.error?.info).toBeUndefined()
+    expect(text(defect)).toBe('Error: unrelated infrastructure failure')
 
-    const nonError = await failingSave(() => 'string failure')
-    expect(nonError.error?.info).toEqual({ name: 'ImageInputError', code: 'IMAGE_STORE_FAILED' })
-    expect(text(nonError)).toContain('the attachment store could not save the image: string failure')
 
-  })
-
-  it('passes a classified HarnessError and an AbortError through unchanged', async () => {
     const fsFailure = await failingSave(() => new FsError('cannot read "x": permission denied', 'FS_PERMISSION_DENIED'))
     expect(fsFailure.error?.info).toEqual({ name: 'FsError', code: 'FS_PERMISSION_DENIED' })
     expect(text(fsFailure)).toBe('Error: cannot read "x": permission denied')

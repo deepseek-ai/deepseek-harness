@@ -29,7 +29,11 @@ export const IMAGE_INPUT_ERROR_CODES = [
 /** One `read_image` failure code. */
 export type ImageInputErrorCode = typeof IMAGE_INPUT_ERROR_CODES[number]
 
-/** Typed `read_image` failure; `code` is one of {@link IMAGE_INPUT_ERROR_CODES}. */
+/**
+ * Typed `read_image` failure; `code` is one of {@link IMAGE_INPUT_ERROR_CODES}. `IMAGE_TOO_LARGE` and
+ * `IMAGE_TYPE_MISMATCH` share their spelling with `AttachmentError` codes, so consumers route on `name`
+ * and `code` together, and code-only predicates such as `isAttachmentError` do not identify this class.
+ */
 export class ImageInputError extends HarnessError {
   override readonly code: ImageInputErrorCode
 

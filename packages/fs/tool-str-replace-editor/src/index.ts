@@ -248,9 +248,12 @@ async function createFile(
   const content = requiredForCommand(fileText, 'file_text', 'create')
   const sandboxPolicy = policy.resolve(exec)
   const target = await resolveTarget(ctx, path, exec.signal)
-  if (await ctx.fs.stat(target, exec.signal) !== undefined) {
-    throw new FsError(`File already exists at: ${target.displayPath}. Cannot overwrite files using command \`create\`.`, 'FS_ALREADY_EXISTS')
-  }
+  const alreadyExists = (cause?: FsError) => new FsError(
+    `File already exists at: ${target.displayPath}. Cannot overwrite files using command \`create\`.`,
+    'FS_ALREADY_EXISTS',
+    cause === undefined ? undefined : { cause },
+  )
+  if (await ctx.fs.stat(target, exec.signal) !== undefined) throw alreadyExists()
   const intent = await ctx.waterfall(
     'fs/write-intent',
     target,
@@ -267,6 +270,8 @@ async function createFile(
       sandboxPolicy,
     )
   } catch (error: unknown) {
+    // A file created after the absence check makes guarded creation report it as unread.
+    if (error instanceof FsError && error.code === 'FS_NOT_OBSERVED') throw alreadyExists(error)
     throw policy.mapError(error, sandboxPolicy)
   }
   ctx.emit('fs/observed', target, { kind: 'present', version: outcome.version }, exec)

@@ -632,6 +632,24 @@ describe('tool-str-replace-editor', () => {
       .rejects.toThrow('the mounted filesystem confines but ctx.sandboxPolicy is missing')
   })
 
+  it('reports a file created after the absence check as FS_ALREADY_EXISTS', async () => {
+    const { ctx, root, owner } = await setup()
+    const path = join(root, 'raced.txt')
+    await writeFile(path, 'concurrent')
+    const stat = ctx.fs.stat.bind(ctx.fs)
+    let first = true
+    ctx.fs.stat = async (target, signal) => {
+      if (!first) return stat(target, signal)
+      first = false
+      return undefined
+    }
+    const result = await call(ctx, owner, { command: 'create', path, file_text: 'mine' })
+    expect(result.isError).toBe(true)
+    expect(result.error?.info).toEqual({ name: 'FsError', code: 'FS_ALREADY_EXISTS' })
+    expect(text(result)).toContain(`File already exists at: ${path}`)
+    expect(await readFile(path, 'utf8')).toBe('concurrent')
+  })
+
   it('maps unexpected backend write failures for replace and insert', async () => {
     const { ctx, root, owner } = await setup()
     const path = join(root, 'backend-error.txt')
