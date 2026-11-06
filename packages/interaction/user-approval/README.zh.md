@@ -46,7 +46,7 @@ kind: "package-reference"
 |---|---|---|
 | `policy` | `ask` | 没有 `approval/policy` 覆盖的会话的默认策略 |
 
-生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-user-approval)是每个受支持字段及其 JSDoc 的穷尽式真源。`setPolicy(agent, policy)` 切换运行中的 agent 的策略，并为它的下一个模型步骤排队一条模型体验一节所述的切换通知；`setApprovalPolicy(session, policy)` 是会话初始化使用的直接持久写入路径。
+生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-user-approval)是每个受支持字段及其 JSDoc 的穷尽式真源。`setPolicy(agent, policy)` 持久化运行中的 Agent 的策略，并在 Agent 仍接纳输入时为下一个模型步骤排队一条模型体验一节所述的切换通知；`setApprovalPolicy(session, policy)` 是会话初始化使用的直接持久写入路径。
 
 ### 请求决定
 
@@ -83,7 +83,7 @@ kind: "package-reference"
 
 服务激活会等待 Projection 注册完成；注册失败会使激活失败。服务私有持有返回的读取句柄。宿主和注册表负责会话恢复；审批方法不会在同步读取时加载历史或调用 hydration。参见[注册与恢复 API](../../session/session-projection/README.zh.md)。待处理问题、应答者和授权仍由运行时负责。
 
-系统提示词贡献 `approval:policy` 在保留历史之后陈述有效策略的完整当前含义——`ask` 及其以拒绝方式关闭的后果，或 `never` 及其非升权后果——因此切换策略会追加一份新的完整快照，而不会改写稳定的请求头。`setPolicy()` 还会注入一条带来源的用户消息，为下一步宣布变更。
+系统提示词贡献 `approval:policy` 在保留历史之后陈述有效策略的完整当前含义——`ask` 及其以拒绝方式关闭的后果，或 `never` 及其非升权后果——因此切换策略会追加一份新的完整快照，而不会改写稳定的请求头。`setPolicy()` 还会在 Agent 仍接纳输入时注入一条带来源的用户消息，为下一步宣布变更。
 
 ### 审计
 
@@ -112,7 +112,7 @@ kind: "package-reference"
 
 #### 模型看到的内容
 
-首次请求与有效策略每次变化时，都会在保留的历史后追加一份完整运行时上下文快照。在 `ask` 下，审批上下文内容会说明系统可以咨询已配置的应答者，缺少可用应答者时则以拒绝方式关闭。在 `never` 下，它会说明确定性的拒绝与非升权后果。未变化的请求会保留先前快照，不增加另一条消息。用户切换运行中 Session 的策略时，下一次模型调用还会收到一条切换通知。
+首次请求与有效策略每次变化时，都会在保留的历史后追加一份完整运行时上下文快照。在 `ask` 下，审批上下文内容会说明系统可以咨询已配置的应答者，缺少可用应答者时则以拒绝方式关闭。在 `never` 下，它会说明确定性的拒绝与非升权后果。未变化的请求会保留先前快照，不增加另一条消息。Agent 仍接纳输入时，策略切换还会为下一次模型调用排队一条通知。
 
 ##### Ask 策略贡献
 

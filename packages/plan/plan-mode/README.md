@@ -54,7 +54,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 Type `/plan` to enter plan mode, or `/plan <message>` to enter with an instruction — the message becomes your next request under plan guidance. Type `/plan off` to leave plan mode directly; it also cancels a plan-mode entry that has not taken effect yet.
 
-You can attach images and generic files to a `/plan` message, and they are included with your instruction in selection order. `/plan off` with attachments is rejected before the mode changes, so the draft and cards remain available. The `/plan` command is available wherever slash commands are supported, such as the Web client.
+You can attach images and generic files to a `/plan` message, and they are included with your instruction in selection order. `/plan off` with attachments is rejected before the mode changes, so the draft and cards remain available. If the Agent closes before the message enters the inbox, the command reports whether plan mode is active or pending and leaves attachments in the composer. The `/plan` command is available wherever slash commands are supported, such as the Web client.
 
 ### The reviewed exit
 

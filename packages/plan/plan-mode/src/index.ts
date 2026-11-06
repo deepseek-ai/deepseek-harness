@@ -27,7 +27,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import { z as zod } from 'zod'
 import type { ZodType } from 'zod'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { HarnessError, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import type { Session, UserMessage } from '@deepseek-ai/dsh-session'
 import { defineTool } from '@deepseek-ai/dsh-tools'
@@ -259,13 +259,20 @@ export class PlanModeController extends Service {
           }
           const outcome = this.set(agent, true)
           if (message !== '' || attachments.length > 0) {
-            agent.steer(createUserMessage({
+            const input = createUserMessage({
               content: [
                 ...attachments,
                 ...(message === '' ? [] : [{ type: 'text' as const, text: message }]),
               ],
               source: { kind: 'user' },
-            }))
+            })
+            try {
+              agent.steer(input)
+            } catch (error: unknown) {
+              if (!(error instanceof HarnessError) || error.code !== 'AGENT_CLOSED') throw error
+              const state = this.loggedActive(agent.session) ? 'Plan mode is on.' : 'Plan mode is still pending.'
+              return { kind: 'error', text: `${state} The agent is closing, so the message was not submitted.` }
+            }
           }
           return {
             kind: 'success',
@@ -446,7 +453,13 @@ export class PlanModeController extends Service {
     session.append('plan/mode', { active })
     this.pendingIntents.delete(session)
     const narration = this.narration(session, active)
-    if (narration !== undefined) agent.inject(narration)
+    if (narration !== undefined) {
+      try {
+        agent.inject(narration)
+      } catch (error: unknown) {
+        if (!(error instanceof HarnessError) || error.code !== 'AGENT_CLOSED') throw error
+      }
+    }
     return 'committed'
   }
 

@@ -402,7 +402,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: 'setPolicy(agent: Agent, policy: ApprovalPolicy): void',
-        description: 'Switch one live agent\'s policy and queue the transition for its next model step. Session initialization uses setApprovalPolicy directly because there is no previously visible policy to change.',
+        description: 'Persist a live Agent\'s policy. Queue the switch notice for the next model step while the Agent accepts input. Session initialization uses setApprovalPolicy directly.',
         parameters: [{ name: 'agent', description: 'the live agent whose policy is changing.' }, { name: 'policy', description: 'the new effective policy.' }],
       },
       {

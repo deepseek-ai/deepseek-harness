@@ -14,6 +14,7 @@ import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deep
 import { Context } from '@deepseek-ai/cordis'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
+import { AgentClosedError } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import CommandRuntime from '@deepseek-ai/dsh-commands'
@@ -174,6 +175,31 @@ describe('/permission command', () => {
     })
     const run = session.snapshotEvents().find(event => event.type === 'command/run')
     expect(run?.data).toMatchObject({ name: 'permission', args: ' danger-full-access' })
+  })
+
+  it('reports the saved preset when a closing Agent rejects its policy notice', async () => {
+    const { ctx, session } = await harness()
+    const { agent, inject } = await agentFor(ctx, session)
+    inject.mockImplementation(() => { throw new AgentClosedError(agent.id) })
+
+    const execution = await ctx.commands.execute(agent, '/permission danger-full-access', [], new AbortController().signal)
+
+    expect(execution?.result).toEqual({ kind: 'success', text: 'preset danger-full-access' })
+    expect(ctx.permissionPresets.current(session)).toBe('danger-full-access')
+    const events = session.snapshotEvents()
+    expect(events.findLast(event => event.type === 'sandbox/mode')?.data.mode).toBe('danger-full-access')
+    expect(events.findLast(event => event.type === 'approval/policy')?.data.policy).toBe('never')
+    expect(events.findLast(event => event.type === 'command/done')?.data.kind).toBe('success')
+  })
+
+  it('propagates an unexpected policy notice failure', async () => {
+    const { ctx, session } = await harness()
+    const { agent, inject } = await agentFor(ctx, session)
+    const failure = new Error('could not write policy notice')
+    inject.mockImplementation(() => { throw failure })
+
+    await expect(ctx.commands.execute(agent, '/permission danger-full-access', [], new AbortController().signal))
+      .rejects.toBe(failure)
   })
 
   it('reports the current preset and the table on bare invocation', async () => {
