@@ -35,7 +35,7 @@ After fallback, scrolling, animation completion, and content notifications canno
 
 ### Position and status presentation
 
-The actual conversation scrollport uses `overscroll-behavior-y: none` to suppress vertical boundary bounce and scroll chaining, without implementing a different momentum animation. A prepend at the top reuses the existing paging-position record and correction calculation, applies it once, and releases it; persistent preservation elsewhere retains its existing lifetime. Reader movement during the correction interval is preserved rather than restoring the position from request time.
+The actual conversation scrollport uses `overscroll-behavior-y: none` to suppress vertical boundary bounce and scroll chaining, without implementing a different momentum animation. A prepend at the top reuses the existing paging-position record and correction calculation, applies it once, and releases it; persistent preservation elsewhere retains its existing lifetime. Both modes restore the screen position captured immediately before consumption with the same formula; they differ only in whether preservation remains active afterward. The one-shot path does not reconstruct intervening reader movement or restart momentum.
 
 The history control keeps the same height across states. A network request shows Loading earlier; an active consumption intent without a held input shows Processing; automatic fallback or a held input shows Load earlier; failure shows Retry loading; consuming the final page shows Start of conversation. The control is excluded from native anchoring. Session `historyWasPartial` records that this instance has displayed incomplete history and survives component remounts and reconnects; a short Session that opens complete has no history row.
 
@@ -67,7 +67,7 @@ Do not add `flushSync` or change Conversation publication cadence, fold-batch ta
 
 ## Risks
 
-**Known issue: duplicate anchoring compensation.** A deterministic geometry-model reproduction shows that one-shot correction can count native anchoring for the same page as reader movement and compensate twice: this occurs with an outer `scrollTop` of `0.5`, or with outer `0` and inner `40` when native anchoring has already moved the inner position. The algorithm is therefore not universally safe. This issue is recorded without a code fix; independent verification in actual browsers is pending. The mechanism is detailed in the [technical risks](2026-11-06-chat-history-consumption-details.md#risks).
+One-shot correction restores a captured screen position rather than estimating reader velocity. Input or browser movement between capture and application can therefore affect the resulting motion; validation must cover the actual browser and input sequence. The shared formula does not add scroll-position deltas that could already include native anchoring. See the [technical risks](2026-11-06-chat-history-consumption-details.md#risks).
 
 CSS feature support alone does not establish that native anchoring can act. Automatic prefetch waits for the first size observation, and the 500ms sample can let fast scrolling reach the top first. The synchronous geometry read after insertion is a cost of one-shot correction; its call site alone does not prove that it adds no layout. A stationary manual operation that can never obtain an anchor retains its completion intent and needs coverage for that structure.
 

@@ -121,7 +121,7 @@ it('uses a collapsed group paging anchor when no ordinary content row is visible
   expect(h.viewport.preserving).toBe(false)
 })
 
-it('keeps reader movement during a one-shot prepend without retaining paging ownership', () => {
+it('restores the captured screen position once without retaining paging ownership', () => {
   const h = fixture()
   const row = h.row(h.column, 'old', 0)
   expect(h.viewport.beginHistoryPrepend()).toBe(true)
@@ -129,8 +129,8 @@ it('keeps reader movement during a one-shot prepend without retaining paging own
   h.column.scrollTop = 25
   h.prepend(120)
   h.viewport.finishHistoryPrepend()
-  expect(h.column.scrollTop).toBe(145)
-  expect(row.getBoundingClientRect().top).toBe(-25)
+  expect(h.column.scrollTop).toBe(120)
+  expect(row.getBoundingClientRect().top).toBe(0)
   expect(h.viewport.preserving).toBe(false)
 })
 
@@ -534,7 +534,7 @@ it.each([
   expect(h.row.getBoundingClientRect().top).toBe(top)
 })
 
-it('applies one-shot inner compensation without subscribing or undoing reader movement', () => {
+it('restores the captured inner and outer screen position once without subscribing', () => {
   const h = nestedFixture(600, 400)
   h.scroller.scrollTop = 80
   h.body.scrollTop = 40
@@ -546,14 +546,14 @@ it('applies one-shot inner compensation without subscribing or undoing reader mo
   h.scroller.scrollTop = 90
   h.prepend(200)
   h.viewport.finishHistoryPrepend()
-  expect(h.body.scrollTop).toBe(260)
-  expect(h.scroller.scrollTop).toBe(90)
-  expect(h.row.getBoundingClientRect().top).toBe(screenTop - 30)
+  expect(h.body.scrollTop).toBe(240)
+  expect(h.scroller.scrollTop).toBe(80)
+  expect(h.row.getBoundingClientRect().top).toBe(screenTop)
   expect(h.observed.has(h.content)).toBe(false)
   h.prepend(20)
   h.resize()
-  expect(h.body.scrollTop).toBe(260)
-  expect(h.scroller.scrollTop).toBe(90)
+  expect(h.body.scrollTop).toBe(240)
+  expect(h.scroller.scrollTop).toBe(80)
 })
 
 it('resolves a remounted one-shot anchor without entering retained paging', () => {
@@ -565,8 +565,37 @@ it('resolves a remounted one-shot anchor without entering retained paging', () =
   h.column.scrollTop = 25
   h.prepend(120)
   h.viewport.finishHistoryPrepend()
-  expect(h.column.scrollTop).toBe(145)
-  expect(replacement.getBoundingClientRect().top).toBe(-25)
+  expect(h.column.scrollTop).toBe(120)
+  expect(replacement.getBoundingClientRect().top).toBe(0)
+  expect(h.viewport.preserving).toBe(false)
+})
+
+it('does not repeat native outer anchoring during a near-zero one-shot prepend', () => {
+  const h = fixture()
+  const row = h.row(h.column, 'old', 0)
+  h.column.scrollTop = 0.5
+  const top = row.getBoundingClientRect().top
+  expect(h.viewport.beginHistoryPrepend()).toBe(true)
+  h.prepend(120)
+  // Model the browser's adjustment before the layout effect reads the new geometry.
+  h.column.scrollTop = 120.5
+  h.viewport.finishHistoryPrepend()
+  expect(h.column.scrollTop).toBe(120.5)
+  expect(row.getBoundingClientRect().top).toBe(top)
+})
+
+it('does not repeat native inner anchoring when the outer scroller is at zero', () => {
+  const h = nestedFixture(600, 400)
+  h.body.scrollTop = 40
+  const top = h.row.getBoundingClientRect().top
+  expect(h.viewport.beginHistoryPrepend()).toBe(true)
+  h.prepend(200)
+  // Same ordering as the Chromium regression: native inner adjustment precedes our correction.
+  h.body.scrollTop = 240
+  h.viewport.finishHistoryPrepend()
+  expect(h.body.scrollTop).toBe(240)
+  expect(h.scroller.scrollTop).toBe(0)
+  expect(h.row.getBoundingClientRect().top).toBe(top)
   expect(h.viewport.preserving).toBe(false)
 })
 

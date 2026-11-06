@@ -73,7 +73,7 @@ Prefetch reuses the existing 500ms reading sample, scrollend, content commits, a
 
 At `scrollTop ≤ 0.5`, selection uses `beginPaging`'s first paging-anchor rule without a reading-position hit test. `measurePaging()` only captures a `PagingPosition`; `retainPaging()` separately owns persistent preservation and inner-size observation. Stationary preservation and one-shot correction share remount resolution in `resolvePaging()` and inner/outer calculations in `applyPaging()`.
 
-Persistent preservation restores the captured screen position. One-shot correction retains inner and outer scrolling since capture and compensates only layout displacement; it neither enters paging state nor subscribes to inner-size changes, and releases after one application. `finishHistoryPrepend()` returns the actual landing, and commit handling immediately saves it through `reading.preservePosition()` rather than waiting for a later scroll event. The actual conversation scrollport uses `overscroll-behavior-y: none`, without creating smooth scrolling or a new momentum animation.
+Persistent preservation and one-shot correction use the same `applyPaging()` formula to restore the captured screen position, compensating the inner scrollport before the outer one. They do not add changes in scrollTop since capture: native anchoring may have caused those changes. Their lifetimes differ: one-shot correction neither enters paging state nor subscribes to inner-size changes, and releases after one application. `finishHistoryPrepend()` returns the actual landing, and commit handling immediately saves it through `reading.preservePosition()` rather than waiting for a later scroll event. The actual conversation scrollport uses `overscroll-behavior-y: none`, without creating smooth scrolling or a new momentum animation.
 
 Distance confirmation still needs current geometry, and one-shot correction after prepend still needs the new position. These reads serve correctness, but placement inside rAF, ResizeObserver, or commit handling alone does not prove they add no layout. Read frequency, read/write ordering, and actual Layout/Paint costs require separate verification; position stability is not performance evidence.
 
@@ -85,16 +85,18 @@ Distance confirmation still needs current geometry, and one-shot correction afte
 
 **Store separate coordinates and continuously track the first row for one-shot correction.** That duplicates existing paging anchors and can expand scroll ownership; share the position record and calculations while keeping lifetimes separate.
 
+**Add captured-to-current scroll deltas through `preserveMovement`.** The deltas cannot distinguish reader input from native anchoring for the same prepend, so adding them can compensate twice.
+
 ## Acceptance criteria
 
 - Default single-stage calls, deferred consumption, and Turn jumps coexist; an old request cannot consume or overwrite a new one.
 - Ordinary events do not revive automatic fallback; touch/inner-scroll continuation, manual completion, and unmount cleanup have focused verification.
-- One-shot correction does not register persistent observation or undo intervening reader movement; existing persistent and inner preservation do not regress.
+- One-shot correction uses the existing screen-restoration formula without persistent observation or duplicate native compensation; persistent and inner preservation do not regress.
 - Distance checks use cached viewport height; raw scroll listeners and consumption admission perform no layout reads.
 
 ## Risks
 
-**Known issue: `preserveMovement` cannot distinguish native anchoring from reader input.** The shared correction adds changes in the outer and inner scroll positions since capture. A deterministic geometry model confirms duplicate compensation when the browser has already anchored the same prepend: an outer `scrollTop` of `0.5`, or outer `0` with inner `40`, enters the one-shot path and treats the native adjustment as movement to preserve. The resulting additional displacement is an algorithmic limitation, not evidence that every browser exhibits it. Code remains unchanged for this report-only finding; independent actual-browser verification is pending.
+Screen restoration uses the measured residual displacement after native anchoring rather than adding scroll-position deltas. It does not preserve arbitrary input movement between capture and application or guarantee an uninterrupted momentum trajectory. Near-zero outer positions, native inner anchoring, and input arriving around the prepend require current-build browser verification.
 
 Explicit navigation and multiple views share a Session, so Chat's automatic waiting policy must not move into the global event source. Manual intent can still wait if usable positioning never becomes available; actual views need cancellation, reconnect, and anchorless-structure verification. One-shot geometry measurement, native inner anchoring, and asynchronous content growth need browser evidence from the current build.
 

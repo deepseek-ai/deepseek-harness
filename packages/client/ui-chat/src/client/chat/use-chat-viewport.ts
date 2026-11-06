@@ -67,7 +67,7 @@ interface ClosingLayout {
 interface PagingPosition {
   readonly row: HTMLElement
   readonly position: ChatScrollPosition
-  readonly group: { readonly body: HTMLElement; readonly content: HTMLElement; readonly top: number; readonly scrollTop: number } | null
+  readonly group: { readonly body: HTMLElement; readonly content: HTMLElement; readonly top: number } | null
 }
 
 const READING_INTENTS = ['wheel', 'touchstart', 'pointerdown', 'keydown', 'beforematch'] as const
@@ -830,8 +830,7 @@ export class ChatViewport {
     const body = row.closest<HTMLElement>('[data-step-process-body]')
     const content = body?.querySelector<HTMLElement>('[data-step-process-content]')
     const group = body === null || content == null ? null
-      : { body, content, top: previousGroup?.top ?? top - body.getBoundingClientRect().top,
-        scrollTop: previousGroup?.body === body ? previousGroup.scrollTop : body.scrollTop }
+      : { body, content, top: previousGroup?.top ?? top - body.getBoundingClientRect().top }
     return {
       row, group,
       position: position ?? {
@@ -880,7 +879,7 @@ export class ChatViewport {
       return null
     }
     if (paging !== this.paging) this.retainPaging(paging)
-    return this.applyPaging(paging, false)
+    return this.applyPaging(paging)
   }
 
   private resolvePaging(paging: PagingPosition | null): PagingPosition | null {
@@ -896,17 +895,15 @@ export class ChatViewport {
     return paging.row.closest('[hidden]') !== null || paging.row.matches(':empty') ? null : paging
   }
 
-  /** Content correction includes reader movement since capture; screen preservation restores the captured position. */
-  private applyPaging(paging: PagingPosition, preserveMovement: boolean): ViewportLanding | null {
+  /** Restore the captured screen position; native anchoring already applied to this change needs no further correction. */
+  private applyPaging(paging: PagingPosition): ViewportLanding | null {
     const elements = this.elements
     if (elements === null) return null
     const { row, group, position } = paging
-    let innerMovement = 0
     if (group !== null && group.body.contains(row)) {
       const top = row.getBoundingClientRect().top - group.body.getBoundingClientRect().top
       const metrics = scrollMetrics(group.body)
-      if (preserveMovement) innerMovement = metrics.top - group.scrollTop
-      const target = Math.max(0, Math.min(metrics.floor, metrics.top + top - group.top + innerMovement))
+      const target = Math.max(0, Math.min(metrics.floor, metrics.top + top - group.top))
       if (metrics.top !== target) {
         const follow = ScrollFollow.forElement(group.body)
         if (follow === undefined) group.body.scrollTop = target
@@ -919,8 +916,7 @@ export class ChatViewport {
     const metrics = this.metrics()
     if (metrics === null) return null
     const top = row.getBoundingClientRect().top - elements.scroller.getBoundingClientRect().top
-    const movement = preserveMovement ? metrics.top - position.scrollTop + innerMovement : 0
-    const target = metrics.top + top - position.anchorTop + movement
+    const target = metrics.top + top - position.anchorTop
     return this.write(target, metrics, null, { key: position.anchorKey, top })
   }
 
@@ -1052,7 +1048,7 @@ export class ChatViewport {
     const pending = this.historyPrepend
     this.historyPrepend = null
     const paging = this.resolvePaging(pending)
-    return paging === null ? null : this.applyPaging(paging, true)
+    return paging === null ? null : this.applyPaging(paging)
   }
 
   private readonly onHistoryScroll = (event: Event): void => {
