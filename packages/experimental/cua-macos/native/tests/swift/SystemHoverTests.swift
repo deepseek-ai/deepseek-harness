@@ -3,15 +3,18 @@ import Testing
 import CoreGraphics
 @testable import CuaNative
 
-@Test func unavailableAXHoverRequiresExplicitSystemPointerPermission() throws {
-    do {
-        try AXHover.requireSystemPointer(allowed: false)
-        Issue.record("A default hover without an AX route was allowed to move the pointer")
-    } catch let failure as NativeFailure {
-        #expect(failure.code == "HOVER_UNAVAILABLE")
-        #expect(failure.message.contains("No input was sent"))
+@Test func unavailableAXHoverHonorsConnectionPolicyBeforeRequestFlags() throws {
+    for (connection, request): (Bool?, Bool?) in [(nil, nil), (nil, false), (false, nil), (false, true)] {
+        do {
+            try AXHover.requireSystemPointer(connectionSetting: connection, requestSetting: request)
+            Issue.record("An unapproved request was allowed to move the pointer")
+        } catch let failure as NativeFailure {
+            #expect(failure.code == "HOVER_UNAVAILABLE")
+            #expect(failure.message.contains("No input was sent"))
+        }
     }
-    try AXHover.requireSystemPointer(allowed: true)
+    try AXHover.requireSystemPointer(connectionSetting: true, requestSetting: nil)
+    try AXHover.requireSystemPointer(connectionSetting: nil, requestSetting: true)
 }
 
 @Test func systemHoverRequiresTheForegroundUnobscuredTarget() throws {

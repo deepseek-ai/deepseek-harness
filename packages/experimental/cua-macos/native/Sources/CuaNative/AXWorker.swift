@@ -108,12 +108,10 @@ actor AXWorker {
     }
     private func moveUsingAX(_ element: AXUIElement?, windowID: UInt32, handle: String, params: RequestParameters) throws -> Bool {
         let requestSetting = try params.optionalBoolean("allowSystemPointer")
-        // Diagnostic JSONL clients without a deployment setting may opt in per request.
-        let allowSystemPointer = systemPointerHover ?? requestSetting ?? false
         let hover = hovers[handle] ?? AXHover()
         hovers[handle] = hover
         if try hover.move(to: element, in: windowID, access: ax()) { return true }
-        try AXHover.requireSystemPointer(allowed: allowSystemPointer)
+        try AXHover.requireSystemPointer(connectionSetting: systemPointerHover, requestSetting: requestSetting)
         return false
     }
     private func inputs() -> (KeyboardInput, WindowPointerInput) {
