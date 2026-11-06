@@ -10,6 +10,7 @@
 
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type {
+  AddShareSessionsRequest,
   CreatedShare,
   CreateShareRequest,
   OwnerIdentityRequest,
@@ -25,6 +26,7 @@ import type {
   ShareCapabilities,
   ShareCapabilityOffers,
   SharePermissions,
+  ShareSessions,
   StopShareRequest,
   StopShareResult,
   TestPublishRequest,
@@ -39,6 +41,13 @@ export interface OwnerShares {
    * @returns The created share's link and stored values.
    */
   create(request: CreateShareRequest): Promise<RemoteResult<CreatedShare>>
+
+  /**
+   * Add source Sessions to one share this host already publishes.
+   * @param request - Share and the Sessions to add.
+   * @returns The source Sessions the share now serves.
+   */
+  addSessions(request: AddShareSessionsRequest): Promise<RemoteResult<ShareSessions>>
 
   /**
    * Refresh titles and Relay authority, then list this host's shares.
