@@ -575,7 +575,7 @@ type ForgeChangeRequestStatesFrame =
   | { readonly type: 'changed'; readonly states: readonly ForgeChangeRequestListState[] }
 ```
 
-变更视图经同一个 Remote 读取。`localDiff` 读取 Session 检出的某个 `ForgeLocalScope`；`changeRequestDiff` 经提供方的 `diff` 读取已绑定变更请求在其最新状态 head 处的变更，提供方只返回描述该 head 提交的补丁；两者返回的文件都已在宿主上解析为 `ForgeDiffFile` 的 hunk。`localText` 与 `changeRequestText` 读取一个文件的新版本，用来补出 hunk 之间未变更的行。每次检查还会把 `branch` 范围的规模统计为 `ForgePanelState.local`，供面板的变更卡片使用，始终以自动分叉点为准。`base` 指定了引用的 `branch` 范围改为与 HEAD 和该分支的合并基准比较；`diffBases` 列出视图可选的分支以及自动分叉点。head 已越过最新状态时，提供方返回 `stale`，`ctx.forge.diff` 立即重新轮询该变更请求；`changeRequestDiff` 以 `forgePanel/stale-head` 拒绝且不缓存任何内容，变更视图保持加载，直到更新的状态到达后按该状态的 head 重新读取。因此评审评论始终指向视图所显示行的那个提交。
+变更视图经同一个 Remote 读取。`localDiff` 读取 Session 检出的某个 `ForgeLocalScope`；`changeRequestDiff` 经提供方的 `diff` 读取已绑定变更请求在其最新状态 head 处的变更，提供方只返回描述该 head 提交的补丁；两者返回的文件都已在宿主上解析为 `ForgeDiffFile` 的 hunk。`localText` 与 `changeRequestText` 读取一个文件的新版本，用来补出 hunk 之间未变更的行。每次检查还会把 `branch` 范围的规模统计为 `ForgePanelState.local`，供面板的变更卡片使用，始终以自动分叉点为准。`base` 指定了引用的 `branch` 范围改为与 HEAD 和该分支的合并基准比较；`diffBases` 列出视图可选的分支以及自动分叉点。head 已越过最新状态时，提供方返回 `stale`，`ctx.forge.diff` 立即重新轮询该变更请求（每个 head 提交一次）；`changeRequestDiff` 以 `forgePanel/stale-head` 拒绝且不缓存任何内容，变更视图保持加载，直到更新的状态到达后按该状态的 head 重新读取。因此评审评论始终指向视图所显示行的那个提交。
 
 ```ts type-equiv
 /** Which local changes a diff covers; each reads the Session's checkout through Git. */
@@ -822,8 +822,10 @@ async fetchChecks(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeReq
 
 /**
  * Read the changes of a change request at one head commit as its host
- * computes them. A `stale` failure polls the change request again at once
- * when it is watched, so its next status names the current head.
+ * computes them. The first `stale` failure at a head commit polls a watched
+ * change request again at once, so its next status names the current head;
+ * later stale reads at the same commit wait for the regular poll, which
+ * bounds the reads while the host's answers disagree.
  * @param ref - change request served by a registered provider.
  * @param headSha - head commit the patch must describe, usually the head of the latest status.
  * @param signal - cancellation of the read.

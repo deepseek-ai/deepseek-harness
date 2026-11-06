@@ -441,7 +441,8 @@ function Details({ entry, snapshot, name, now, actions, locale, t }: {
         <span className={css.rowIcon}><IconUserOutlineRegular size={16} /></span>
         <span className={css.rowLabel}>{t('change.row.review')}</span>
         <span className={css.rowValue} data-tone={reviewTone}>
-          {snapshot.unresolvedThreads > 0 ? t('change.review.threads', { review, count: threadCount(snapshot, locale) }) : review}
+          {snapshot.unresolvedThreads > 0 || snapshot.threadsTruncated
+            ? t('change.review.threads', { review, count: threadCount(snapshot, locale) }) : review}
         </span>
       </div>
       <div className={css.row}>

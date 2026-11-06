@@ -20,7 +20,7 @@ import type { PanelSnapshot } from '../src/client/source.ts'
 import css from '../src/client/ChangesTab.module.css'
 import baseCss from '../src/client/BaseMenu.module.css'
 import type {
-  ForgeBaseBranch, ForgeBaseBranches, ForgeChangeRequestDiff, ForgeDiffFile, ForgeLocalDiff, ForgePanelState,
+  ForgeBaseBranch, ForgeBaseBranches, ForgeChangeRequestDiff, ForgeDiffFile, ForgeLocalDiff, ForgePanelChangeRequest, ForgePanelState,
 } from '../src/types.ts'
 import { entry, ready, snapshot } from './client-fixtures.client.ts'
 
@@ -1116,6 +1116,29 @@ describe('ChangesTab change requests', () => {
     act(() => { m.panel.set({ state: later(3, 'b'.repeat(40)), disconnected: false }) })
     await settle()
     expect(m.faces.changeRequestDiff).toHaveBeenCalledTimes(3)
+    expect(m.paths()).toEqual(['docs/gone.txt', 'docs/notes.txt', 'src/app.ts'])
+  })
+
+  it.each([
+    ['a later poll with the same head', (polled: ForgePanelChangeRequest) => polled],
+    ['a failed poll that keeps the earlier status', (polled: ForgePanelChangeRequest) => ({
+      ...polled, update: { key: polled.update!.key, fetchedAt: 2, failure: { code: 'unavailable', message: 'down' } },
+    } as const)],
+  ] as const)('reads again at once when %s arrived while a read the host refused as stale was in flight', async (_label, arrive) => {
+    const refused = Promise.withResolvers<typeof REFUSED.staleHead>()
+    const m = mount({ source, setup: (faces) => { faces.changeRequestDiff.mockReturnValueOnce(refused.promise) } })
+    await settle()
+    expect(m.faces.changeRequestDiff).toHaveBeenCalledOnce()
+
+    const polled = entry(7, snapshot(7))
+    const later = arrive({ ...polled, update: { ...polled.update!, fetchedAt: 2 } })
+    act(() => { m.panel.set({ state: ready({ changeRequests: [later] }), disconnected: false }) })
+    await settle()
+    expect(m.faces.changeRequestDiff).toHaveBeenCalledOnce()
+    refused.resolve(REFUSED.staleHead)
+    await settle()
+
+    expect(m.faces.changeRequestDiff).toHaveBeenCalledTimes(2)
     expect(m.paths()).toEqual(['docs/gone.txt', 'docs/notes.txt', 'src/app.ts'])
   })
 

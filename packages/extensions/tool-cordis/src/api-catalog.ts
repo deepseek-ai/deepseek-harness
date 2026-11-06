@@ -1247,7 +1247,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'async diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<string | ForgeFailure>',
-        description: 'Read the changes of a change request at one head commit as its host computes them. A `stale` failure polls the change request again at once when it is watched, so its next status names the current head.',
+        description: 'Read the changes of a change request at one head commit as its host computes them. The first `stale` failure at a head commit polls a watched change request again at once, so its next status names the current head; later stale reads at the same commit wait for the regular poll, which bounds the reads while the host\'s answers disagree.',
         parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'headSha', description: 'head commit the patch must describe, usually the head of the latest status.' }, { name: 'signal', description: 'cancellation of the read.' }],
         returns: 'one unified patch with `a/` and `b/` path prefixes, or why the host did not provide it at `headSha`.',
         throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],

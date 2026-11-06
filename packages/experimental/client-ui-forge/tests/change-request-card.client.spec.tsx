@@ -263,6 +263,8 @@ describe('expanded ChangeRequestCard', () => {
       'Changes requested · 1 unresolved', 'error'],
     ['more threads than the provider counted', { reviewDecision: 'review-required', unresolvedThreads: 1200, threadsTruncated: true },
       'Review required · 1,200+ unresolved', null],
+    ['uncounted threads after resolved ones', { reviewDecision: 'approved', unresolvedThreads: 0, threadsTruncated: true },
+      'Approved · 0+ unresolved', 'success'],
   ] as const)('states the review of %s', (_label, overrides, text, tone) => {
     const value = rowValue(card(entry(1, snapshot(1, overrides)), { expanded: true }).item, en['change.row.review'])
     expect(value.textContent).toBe(text)

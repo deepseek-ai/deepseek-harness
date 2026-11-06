@@ -144,6 +144,20 @@ describe('GitHub provider fetch', () => {
     }
   })
 
+  it('counts review thread pages toward the byte budget of a complete detail read, but not of polling', async () => {
+    const first = output({ data: { r0: { p0: pullRequestNode(1, { reviewThreads: threadPage([true], 'threads-1') }) } } })
+    const page = output({ data: { node: { reviewThreads: threadPage([false, false]) } } })
+    const total = Buffer.byteLength(first.stdout) + Buffer.byteLength(page.stdout)
+    for (const limit of [total, total - 1]) {
+      const gh = fakeGh(args => args.includes(`query=${THREADS_QUERY}`) ? page : first)
+      const subject = new GitHubProvider(gh.run, ['github.com'], { ...limits, maxOutputBytes: limit })
+      const result = await subject.fetchChecks(pull(1), signal)
+      if (limit === total) expect(result).toMatchObject({ unresolvedThreads: 2, threadsTruncated: false })
+      else expect(result).toEqual({ code: 'too-large', message: 'GitHub check details exceed the output size limit' })
+      expect((await subject.fetch([pull(1)], signal)).get(changeRequestKey(pull(1)))).toMatchObject({ unresolvedThreads: 2 })
+    }
+  })
+
   it('reads past 100 historical runs from the pinned rollup and counts only the latest run', async () => {
     const gh = fakeGh(args => output(args.includes('id=fixed-rollup')
       ? { data: { node: { contexts: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [
@@ -454,6 +468,16 @@ describe('GitHub provider reads', () => {
 
     await expect(provider(gh.run).diff(pull(7), head, signal)).resolves.toEqual(failure)
     expect(gh.calls).toHaveLength(1)
+  })
+
+  it('reads the diff with a gh older than 2.97, which rejects the escape option, by repeating the read without it', async () => {
+    // What gh 2.96.0 prints for an option it does not know.
+    const gh = pinned(undefined, args => args.includes('--allow-escape-sequences')
+      ? output('', 1, 'unknown flag: --allow-escape-sequences\n\nUsage:  gh api <endpoint> [flags]\n')
+      : output('diff --git a/x b/x\n'))
+
+    await expect(provider(gh.run).diff(pull(7), head, signal)).resolves.toBe('diff --git a/x b/x\n')
+    expect(gh.calls.map(call => call.includes('--allow-escape-sequences'))).toEqual([false, true, false])
   })
 
   it('refuses a head that is not a full commit object name before starting gh', async () => {

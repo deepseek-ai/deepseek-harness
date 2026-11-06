@@ -12,7 +12,7 @@ import {
   CHECKS_QUERY, hasGraphqlFields, HEAD_QUERY, mapCheckPageResponse, mapHeadResponse, mapPullRequestCommitsResponse,
   mapSnapshotResponse, mapThreadPageResponse, PULL_REQUEST_COMMITS_QUERY, snapshotQuery, THREADS_QUERY,
 } from './graphql.ts'
-import type { SnapshotPages } from './graphql.ts'
+import type { PageResult, SnapshotPages } from './graphql.ts'
 import { checkedRepository, isCommit, parsePullRequestUrl, parseRemoteUrl } from './urls.ts'
 import { submitGitHubReview } from './review.ts'
 
@@ -262,25 +262,31 @@ export class GitHubProvider implements ForgeProvider {
     const query = snapshotQuery(refs, this.limits.maxReviewThreads)
     const output = await this.gh(['api', 'graphql', '--hostname', host, '-f', `query=${query.document}`], signal)
     const body = parseJson(output.stdout)
-    const threads: SnapshotPages['threads'] = async (id, cursor, first) => {
-      const page = await this.continuation(host,
-        ['-f', `query=${THREADS_QUERY}`, '-f', `id=${id}`, '-f', `cursor=${cursor}`, '-F', `first=${first}`], signal)
-      if (!('stdout' in page)) return { ok: false, failure: page }
-      const value = parseJson(page.stdout)
-      return hasGraphqlFields(value) ? mapThreadPageResponse(value) : { ok: false, failure: responseFailure(page, value) }
-    }
-    if (!completeChecks && hasGraphqlFields(body)) return await mapSnapshotResponse(body, query, { threads })
+    // A complete check read retains every response it reads, so all of them share one byte budget.
     let bytes = Buffer.byteLength(output.stdout)
     const tooLarge: ForgeFailure = { code: 'too-large', message: 'GitHub check details exceed the output size limit' }
-    if (bytes > this.limits.maxOutputBytes) return new Map([...query.targets.values()].map(ref => [changeRequestKey(ref), tooLarge]))
-    if (hasGraphqlFields(body)) return await mapSnapshotResponse(body, query, { threads, checks: async (id, cursor) => {
-      const page = await this.continuation(host, ['-f', `query=${CHECKS_QUERY}`, '-f', `id=${id}`, '-f', `cursor=${cursor}`], signal)
-      if (!('stdout' in page)) return { ok: false, failure: page }
+    const overBudget = (page: GhOutput): boolean => {
+      if (!completeChecks) return false
       bytes += Buffer.byteLength(page.stdout)
-      if (bytes > this.limits.maxOutputBytes) return { ok: false, failure: tooLarge }
+      return bytes > this.limits.maxOutputBytes
+    }
+    const continuation = async <T>(
+      variables: readonly string[], map: (value: unknown) => PageResult<T>,
+    ): Promise<PageResult<T>> => {
+      const page = await this.continuation(host, variables, signal)
+      if (!('stdout' in page)) return { ok: false, failure: page }
+      if (overBudget(page)) return { ok: false, failure: tooLarge }
       const value = parseJson(page.stdout)
-      return hasGraphqlFields(value) ? mapCheckPageResponse(value) : { ok: false, failure: responseFailure(page, value) }
-    } })
+      return hasGraphqlFields(value) ? map(value) : { ok: false, failure: responseFailure(page, value) }
+    }
+    const threads: SnapshotPages['threads'] = async (id, cursor, first) => await continuation(
+      ['-f', `query=${THREADS_QUERY}`, '-f', `id=${id}`, '-f', `cursor=${cursor}`, '-F', `first=${first}`], mapThreadPageResponse)
+    if (!completeChecks && hasGraphqlFields(body)) return await mapSnapshotResponse(body, query, { threads })
+    if (bytes > this.limits.maxOutputBytes) return new Map([...query.targets.values()].map(ref => [changeRequestKey(ref), tooLarge]))
+    if (hasGraphqlFields(body)) {
+      return await mapSnapshotResponse(body, query, { threads, checks: async (id, cursor) => await continuation(
+        ['-f', `query=${CHECKS_QUERY}`, '-f', `id=${id}`, '-f', `cursor=${cursor}`], mapCheckPageResponse) })
+    }
     const failure = responseFailure(output, body)
     return new Map([...query.targets.values()].map(ref => [changeRequestKey(ref), failure] as const))
   }

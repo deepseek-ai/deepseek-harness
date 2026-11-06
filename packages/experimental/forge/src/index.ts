@@ -44,6 +44,8 @@ interface Watch {
   /** Epoch milliseconds of the next poll; undefined while in flight or after a terminal state. */
   dueAt: number | undefined
   failures: number
+  /** Head commit whose `stale` diff read last polled at once, so further stale reads at it wait for the regular poll. */
+  staleHead: string | undefined
 }
 
 /**
@@ -237,8 +239,10 @@ export class ForgeService extends Service {
 
   /**
    * Read the changes of a change request at one head commit as its host
-   * computes them. A `stale` failure polls the change request again at once
-   * when it is watched, so its next status names the current head.
+   * computes them. The first `stale` failure at a head commit polls a watched
+   * change request again at once, so its next status names the current head;
+   * later stale reads at the same commit wait for the regular poll, which
+   * bounds the reads while the host's answers disagree.
    * @param ref - change request served by a registered provider.
    * @param headSha - head commit the patch must describe, usually the head of the latest status.
    * @param signal - cancellation of the read.
@@ -248,7 +252,11 @@ export class ForgeService extends Service {
   async diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<string | ForgeFailure> {
     const result = await this.invoke(this.registration(ref.repository.forge), signal,
       (provider, operation) => provider.diff(ref, headSha, operation))
-    if (typeof result !== 'string' && result.code === 'stale') this.refresh(ref)
+    const watch = this.watches.get(changeRequestKey(ref))
+    if (typeof result !== 'string' && result.code === 'stale' && watch !== undefined && watch.staleHead !== headSha) {
+      watch.staleHead = headSha
+      this.refresh(ref)
+    }
     return result
   }
 
@@ -307,7 +315,7 @@ export class ForgeService extends Service {
     const dispose = this.ctx.effect(() => {
       let watch = this.watches.get(key)
       if (watch === undefined) {
-        watch = { key, ref, listeners: new Set(), latest: undefined, dueAt: Date.now(), failures: 0 }
+        watch = { key, ref, listeners: new Set(), latest: undefined, dueAt: Date.now(), failures: 0, staleHead: undefined }
         this.watches.set(key, watch)
         this.schedule()
       }
