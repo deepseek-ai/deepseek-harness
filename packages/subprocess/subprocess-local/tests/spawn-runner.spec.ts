@@ -126,7 +126,7 @@ async function runWindows(
 }
 
 describe('closed runner protocol', () => {
-  it.each([null, 'pipe', [1, 7], ['2']])('rejects invalid child-owned pipe descriptors: %j', (pipeFds) => {
+  it.each([null, 'pipe', [1, 7], ['2']].map(pipeFds => ({ pipeFds })))('rejects invalid child-owned pipe descriptors: $pipeFds', ({ pipeFds }) => {
     const files = track(createLinuxLaunchFiles({ cwd: '/work', env: {} }))
     writeFileSync(files.requestPath, JSON.stringify({ cwd: '/work', env: {}, pipeFds }))
     expect(() => consumeLinuxLaunchRequest(files.requestPath)).toThrow('invalid Linux launch request')
@@ -524,7 +524,7 @@ describe('Linux one-shot exec bootstrap', () => {
       hostArgument(new FakeRunnerHost()),
       internals({ execve: rootExecve }),
     )
-    expect(rootExecve).toHaveBeenCalledWith('/tool', ['tool'], { PATH: '' })
+    expect(rootExecve).toHaveBeenCalledWith('/tool', ['tool'], { PATH: '' }, undefined, undefined)
   })
 
   it.skipIf(process.platform === 'win32')('preserves symlink-sensitive parent traversal in PATH candidates', async () => {
