@@ -119,7 +119,8 @@ function throwTeardownFailures(results: readonly PromiseSettledResult<void>[], m
 
 /**
  * A coded query failure whose instance teardown also failed. It keeps the query failure's `name`
- * and `code` so tool results route on the query outcome; `cause` aggregates both failures.
+ * and `code` so tool results route on the query outcome; `cause` aggregates both failures. It does
+ * not keep the query failure's class, so route on `name` and `code`, not `instanceof`.
  */
 class LspQueryTeardownError extends HarnessError {
   constructor(query: HarnessError, teardown: unknown, cause: AggregateError) {

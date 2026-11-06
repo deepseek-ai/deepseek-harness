@@ -167,7 +167,7 @@ interface LspService {
 <a id="failures"></a>
 ## Failures
 
-Every expected failure of an `lsp` tool call is a `HarnessError` whose `name` and `code` the tool result keeps in `error.info`. `LspError` sets `name` to `LspError`; its `code` stays open because providers and consumers add codes, so consumers tolerate codes they do not know. Invalid tool arguments fail as `ToolArgsError` `INVALID_ARGS`, and caller cancellation as `AbortError`. Workspace and source reads keep the filesystem provider's `FsError` code, such as `FS_NOT_FOUND`, `FS_NOT_REGULAR_FILE`, or `FS_NOT_TEXT`, and prefix the LSP operand to its message; the stdio provider adds `FS_NOT_DIRECTORY` for a non-directory workspace and `FS_TOO_LARGE` for a source over `maxDocumentBytes`. A query failure whose server teardown also fails keeps the query failure's `name` and `code` and appends the teardown failure to its message.
+Every expected failure of an `lsp` tool call is a `HarnessError` whose `name` and `code` the tool result keeps in `error.info`. `LspError` sets `name` to `LspError`; its `code` stays open because providers and consumers add codes, so consumers tolerate codes they do not know. Invalid tool arguments fail as `ToolArgsError` `INVALID_ARGS`, and caller cancellation as `AbortError`. Workspace and source reads keep the filesystem provider's `FsError` code, such as `FS_NOT_FOUND`, `FS_NOT_REGULAR_FILE`, or `FS_NOT_TEXT`, and prefix the LSP operand to its message; the stdio provider adds `FS_NOT_DIRECTORY` for a non-directory workspace and `FS_TOO_LARGE` for a source over `maxDocumentBytes`. A coded query failure whose server teardown also fails keeps the query failure's `name` and `code` and appends the teardown failure to its message; a query failure without a code, such as a cancellation, surfaces with the teardown failure as an `AggregateError` without `error.info`.
 
 | Code | Raised by | Meaning | Consumer action |
 |---|---|---|---|
@@ -181,11 +181,10 @@ Every expected failure of an `lsp` tool call is a `HarnessError` whose `name` an
 | `LSP_FILE_OUTSIDE_WORKSPACE` | Stdio provider | The source resolves outside the canonical workspace | Query a file inside the workspace |
 | `LSP_UNSUPPORTED_ENCODING` | Stdio provider | The server negotiated a position encoding other than UTF-16 | Use a server that supports UTF-16 |
 | `LSP_SPAWN_FAILED` | Stdio provider | The subprocess provider failed to launch or run the server; a provider `HarnessError` keeps its own `name` and `code` instead | Fix the server command or installation |
-| `LSP_SERVER_EXITED` | Stdio provider | The server exited or closed its stdin; the message carries the retained stderr tail | Retry later; inspect the stderr tail when it repeats |
+| `LSP_SERVER_EXITED` | Stdio provider | The server exited or closed its stdin; after an exit, the message carries the retained stderr tail | Retry later; inspect the stderr tail when it repeats |
 | `LSP_PROTOCOL_ERROR` | Stdio provider | The server's output broke base-protocol framing or JSON | Report the server defect |
 | `LSP_MESSAGE_TOO_LARGE` | Stdio provider | A server message exceeded `maxMessageBytes` | Narrow the query or raise `maxMessageBytes` |
 | `LSP_SERVER_ERROR` | Stdio provider | The server answered with a JSON-RPC error; the message carries its numeric code and text | Act on the server's message |
-| `LSP_NOT_INITIALIZED` | Stdio provider | A query found the server instance without negotiated capabilities after its handshake succeeded; this is inconsistent internal state, not a server condition | Report the defect |
 
 After a transport failure (`LSP_SPAWN_FAILED`, `LSP_SERVER_EXITED`, `LSP_PROTOCOL_ERROR`, or `LSP_MESSAGE_TOO_LARGE`), the stdio provider retries the read-only query once on a fresh process when the failed process tears down cleanly.
 

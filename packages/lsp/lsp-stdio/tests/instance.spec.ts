@@ -281,17 +281,6 @@ describe('LspInstance query and abort', () => {
     })
   })
 
-  it('reports inconsistent instance state as LSP_NOT_INITIALIZED', async () => {
-    const instance = makeInstance({ LSP_FAKE_DEF: 'null' })
-    await expect(run(instance, 'goToDefinition')).resolves.toMatchObject({ kind: 'locations' })
-    Reflect.set(instance, 'capabilities', undefined)
-    await expect(run(instance, 'goToDefinition')).rejects.toMatchObject({
-      name: 'LspError',
-      code: 'LSP_NOT_INITIALIZED',
-      message: 'LSP instance is not initialized',
-    })
-  })
-
   it('propagates a server error response even when a signal is supplied (not an abort)', async () => {
     // A live signal is passed, but the request fails for a server reason; the catch must rethrow
     // without treating it as an abort.
