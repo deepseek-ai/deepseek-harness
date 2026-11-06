@@ -14,13 +14,13 @@ import tempfile
 import uuid
 
 from capabilities_e2e import stop_application, wait_for_state
-from native_test_support import BINARY, ROOT, NativeHelper, stop
+from native_test_support import ROOT, NativeHelper, stop
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--helper", type=Path, default=BINARY)
-    parser.add_argument("--desktop", action="store_true", help="Read, click and capture owned fixture windows; requires existing system grants")
+    parser.add_argument("--helper", type=Path)
+    parser.add_argument("--desktop", action="store_true", help="Read owned fixture windows, invoke their buttons and capture them; requires existing system grants")
     args = parser.parse_args()
     transcript = []
     with tempfile.TemporaryDirectory(prefix="dsh-cua-consent-") as temporary, ExitStack() as cleanup:

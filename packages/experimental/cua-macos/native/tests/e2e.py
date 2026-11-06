@@ -76,7 +76,7 @@ def check_file_panel(call, owner, primary_params, primary, directory, wait_state
                              and any(e["identifier"] == "OKButton" and e["enabled"] for e in observed["elements"]),
                              "Go to folder did not select the requested file")
     open_button = next(e for e in ready["elements"] if e["identifier"] == "OKButton")
-    call("click", {**owner, "snapshotId": ready["snapshotId"], "elementId": open_button["elementId"]})
+    assert call("invoke", {**owner, "snapshotId": ready["snapshotId"], "elementId": open_button["elementId"]})["dispatched"]
     wait_state(lambda state: bool(state["selectedFile"]) and Path(state["selectedFile"]).samefile(selected_file),
                "File picker did not return the intended file")
     # AppKit can retain the dismissed panel's hidden WindowServer window after
