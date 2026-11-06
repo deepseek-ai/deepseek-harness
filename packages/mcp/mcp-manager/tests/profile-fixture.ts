@@ -1,8 +1,4 @@
-/**
- * The MCP manager and the MCP client host it injects, mounted through a real profile, ConfigEditor, and Loader.
- *
- * @module
- */
+/** The MCP client host and manager configuration through a real profile, ConfigEditor, and Loader. */
 import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -10,31 +6,20 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { onTestFinished } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
-import Loader, { type Entry } from '@deepseek-ai/cordis-plugin-loader'
+import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { initProfile, mountRootInclude, readProfilePatches, type ProfileContext } from '@deepseek-ai/dsh-app-boot'
 import ConfigEditor from '@deepseek-ai/dsh-config-editor'
 import Settings from '@deepseek-ai/dsh-settings'
 import * as McpClient from '@deepseek-ai/dsh-mcp-client'
-import McpServerManager from '@deepseek-ai/dsh-mcp-manager'
-
-/** A profile that composes the MCP client host and the manager, torn down with the calling test. */
-export interface ManagerProfile {
-  /** The launcher's profile context. */
-  profile: ProfileContext
-  /** The manager entry in the context the profile started in. */
-  entry: Entry
-  /** Start the same profile in another context and return its manager entry there. */
-  start: (context: Context) => Promise<Entry>
-}
+import McpServerManager from '../src/index.ts'
 
 /**
  * Mount the MCP client host and the manager from an inherited bundle and optional user patch.
  * @param ctx - Test context carrying tools and optional credentials.
  * @param options - Manager entry id, base configuration, and user overrides.
- * @returns The profile, the manager entry, and a function that starts the same profile in another context, all owned
- *   by the test.
+ * @returns The profile and manager entry owned by the test.
  */
-export async function managerProfile(ctx: Context, options: { id?: string; base?: unknown; user?: unknown } = {}): Promise<ManagerProfile> {
+export async function managerProfile(ctx: Context, options: { id?: string; base?: unknown; user?: unknown } = {}) {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'dsh-mcp-manager-')))
   const contexts: Context[] = []
   onTestFinished(async () => {
@@ -69,10 +54,7 @@ export async function managerProfile(ctx: Context, options: { id?: string; base?
     await context.plugin(Settings)
     await mountRootInclude(context, join(dir, 'cordis.yml'), readProfilePatches('test', profile))
     await context.loader.await()
-    const entry = context.configEditor.entries().find(candidate => candidate.options.id === id)
-    /* v8 ignore next -- the bundle patch above inserts the manager entry with this id */
-    if (entry === undefined) throw new Error(`MCP manager entry "${id}" is not composed`)
-    return entry
+    return context.configEditor.entries().find(entry => entry.options.id === id)!
   }
   return { profile, entry: await start(ctx), start }
 }
