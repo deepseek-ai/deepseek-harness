@@ -37,6 +37,9 @@
     },
     {
       "path": "../../typert/protocol"
+    },
+    {
+      "path": "../../util/error"
     }
   ]
 }

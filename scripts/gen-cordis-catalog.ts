@@ -843,6 +843,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   ToolExecutionResult: 'tools.md',
   ToolExecutionToken: 'tools.md',
   ToolGuard: 'tools.md',
+  ToolGuardDenial: 'tools.md',
   ToolRuntime: 'tools.md',
   ToolsService: 'tools.md',
   ToolExecutor: 'tools.md',
