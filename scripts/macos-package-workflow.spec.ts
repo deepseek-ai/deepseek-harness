@@ -52,7 +52,7 @@ describe.each(['arm64', 'x64'])('macOS %s packaging', (arch) => {
     expect(uploads[0]?.if).toBe("always() && steps.checkout.outcome == 'success'")
     expect(installer.if).toBe('success()')
     expect(installer.with?.path).toBe('${{ steps.archive.outputs.path }}')
-    expect(installer.with).toMatchObject({ archive: false, overwrite: true, name: '${{ env.DESKTOP_ARCHIVE_NAME }}' })
+    expect(installer.with).toMatchObject({ archive: false, overwrite: true, name: '${{ steps.archive.outputs.metadata-name }}' })
   })
 
   it('defaults to notarization and labels the explicit debugging option', () => {
@@ -97,7 +97,16 @@ describe.each(['arm64', 'x64'])('macOS %s packaging', (arch) => {
 
   it('passes the same target to preparation, packaging and retention', () => {
     const archive = workflow.jobs['upload-artifact']!
-    expectDesktopArchive(archive, 1)
+    const uploads = expectDesktopArchive(archive, 3)
+    expect(archive.steps.find(step => step.id === 'archive')?.run).toContain('archive-desktop-ci.ts --split-macos')
+    for (const [index, kind] of ['metadata', 'dmg', 'update'].entries()) {
+      expect(uploads[index]?.with).toMatchObject({
+        name: '${{ steps.archive.outputs.' + kind + '-name }}',
+        path: '${{ steps.archive.outputs.' + (kind === 'metadata' ? 'path' : kind + '-path') + ' }}',
+        archive: false, overwrite: true, 'if-no-files-found': 'error', 'retention-days': 14,
+      })
+      expect(uploads[index]?.if).toBe('success()')
+    }
     const job = workflow.jobs.package!
     expect(job.env.DSH_DESKTOP_TARGET_PLATFORM).toBe('darwin')
     expect(job.env.DSH_DESKTOP_TARGET_ARCH).toBe(arch)

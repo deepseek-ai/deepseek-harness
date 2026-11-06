@@ -18,11 +18,9 @@ export function expectDesktopArchive<S extends { uses?: string; with?: Record<st
   })
   const uploads = job.steps.filter(step => step.uses?.startsWith('actions/upload-artifact@'))
   expect(uploads).toHaveLength(count)
-  for (const step of uploads) {
-    expect(step.with?.name).toBe('${{ env.DESKTOP_ARCHIVE_NAME }}')
-    expect(job.env.DESKTOP_ARCHIVE_NAME).toContain('${{ needs.package.outputs.version }}')
-    expect(job.env.DESKTOP_ARCHIVE_NAME).toContain('${{ needs.package.outputs.attempt }}')
-    expect(job.env.DESKTOP_ARCHIVE_NAME).not.toContain('github.run_attempt')
-  }
+  if (count === 1) expect(uploads[0]?.with?.name).toBe('${{ env.DESKTOP_ARCHIVE_NAME }}')
+  expect(job.env.DESKTOP_ARCHIVE_NAME).toContain('${{ needs.package.outputs.version }}')
+  expect(job.env.DESKTOP_ARCHIVE_NAME).toContain('${{ needs.package.outputs.attempt }}')
+  expect(job.env.DESKTOP_ARCHIVE_NAME).not.toContain('github.run_attempt')
   return uploads
 }
