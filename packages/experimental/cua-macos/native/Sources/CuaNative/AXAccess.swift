@@ -639,7 +639,7 @@ final class AXAccess {
         return AXProjection(tree: lines.joined(separator: "\n"), elements: elements, indexed: indexed, focusedWindowID: focusedID, truncated: truncated)
     }
 
-    func enclosingWindow(_ element: AXUIElement, owner: ProcessIdentity) throws -> WindowInfo {
+    func enclosingWindow(_ element: AXUIElement) throws -> (element: AXUIElement, id: UInt32) {
         var current: AXUIElement? = element
         var visited: [AXUIElement] = []
         for _ in 0..<100 {
@@ -648,7 +648,7 @@ final class AXAccess {
             visited.append(node)
             let role = try string(node, "AXRole")
             if role == "AXWindow" || role == "AXSheet", let id = try windowID(node) {
-                return try WindowGeometry.resolve(owner: owner, windowID: id) { try bounds(node) }
+                return (node, id)
             }
             current = try self.element(node, "AXParent")
         }

@@ -350,8 +350,16 @@ actor AXWorker {
             let point: WindowPoint
             var hoverElement: AXUIElement?
             if params.contains("elementId") {
-                guard !params.contains("x"), !params.contains("y"), !params.contains("windowId") else { throw RequestParameters.invalid("Element and coordinate targets cannot be combined") }
+                guard !params.contains("x"), !params.contains("y"), !params.contains("relative") else { throw RequestParameters.invalid("Element and coordinate targets cannot be combined") }
                 let selected = try element(handle, params)
+                let scopedWindow = try params.optionalWindowID().map { id in
+                    try coordinateSnapshot(handle, params, id)
+                    let enclosing = try ax().enclosingWindow(selected)
+                    guard enclosing.id == id else {
+                        throw NativeFailure(code: "STALE_SNAPSHOT", message: "Element belongs to another window; read the selected window again")
+                    }
+                    return enclosing
+                }
                 hoverElement = selected
                 if method == "click" {
                     let names = try ax().actions(selected)
@@ -364,7 +372,8 @@ actor AXWorker {
                     try ax().requireEnabled(selected)
                 }
                 guard let bounds = try ax().bounds(selected), bounds.width > 0, bounds.height > 0 else { throw NativeFailure(code: "NATIVE_ERROR", message: "Element has no pointer bounds") }
-                window = try ax().enclosingWindow(selected, owner: identity)
+                let enclosing = try scopedWindow ?? ax().enclosingWindow(selected)
+                window = try WindowGeometry.resolve(owner: identity, windowID: enclosing.id) { try ax().bounds(enclosing.element) }
                 point = WindowPoint(x: bounds.x + bounds.width / 2 - window.bounds.x, y: bounds.y + bounds.height / 2 - window.bounds.y)
             } else {
                 let id = try params.windowID()
