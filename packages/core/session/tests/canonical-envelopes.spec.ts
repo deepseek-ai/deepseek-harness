@@ -45,6 +45,13 @@ function appendEvent(session: Session, event: SessionEvent) {
 
 const entryPaths: Record<string, (event: SessionEvent) => unknown> = {
   append: (event: SessionEvent) => appendEvent(Session.create(id), event),
+  batch: (event: SessionEvent) => {
+    const session = Session.create(id)
+    return Reflect.apply(session.append, session, [[[event.type, event.data, {
+      ...event.surfaceOp === undefined ? {} : { surfaceOp: event.surfaceOp },
+      ...event.sourceEventSeqs === undefined ? {} : { sourceEventSeqs: event.sourceEventSeqs },
+    }]]])
+  },
   seed: (event: SessionEvent) => Session.create(id, [event]),
   restore: (event: SessionEvent) => Session.fromRestore(id, [event], { ...header }, SessionLogOffset(0), 'detached'),
   adopt: adoptSessionEvent,
@@ -287,7 +294,7 @@ describe('canonical event-local surface metadata', () => {
       surfaceOp: { opaque: ['not', 'placement'] }, sourceEventSeqs: { opaque: [null, true] },
     } as unknown as SessionEvent
     for (const [path, accept] of Object.entries(entryPaths)) {
-      if (path === 'append') continue
+      if (path === 'append' || path === 'batch') continue
       expect(() => accept(structuredClone(event))).not.toThrow()
     }
     const session = Session.create(id, [event])
