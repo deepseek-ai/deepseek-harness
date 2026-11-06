@@ -19,7 +19,6 @@ import type { AgentOptions, SessionStartSource } from './runtime-types.ts'
 import { turnBoundaryProjectionDefinition } from './projection.ts'
 
 export * from './runtime-types.ts'
-export { AgentClosedError } from './closed-error.ts'
 export * from './types.ts'
 export { AgentModel, modelSelectionProjectionDefinition, installModelSelection } from './model-selection.ts'
 export type { ModelSelectionProjectionState } from './model-selection.ts'

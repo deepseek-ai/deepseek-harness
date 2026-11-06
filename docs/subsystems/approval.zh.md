@@ -103,9 +103,9 @@ Approval service that applies session policy before answerers and logs every ask
 
 ```ts cordis-catalog
 /**
- * Persist a live Agent's policy. Queue the switch notice for the next model
- * step while the Agent accepts input. Session initialization uses
- * {@link setApprovalPolicy} directly.
+ * Switch one live agent's policy and queue the transition for its next model
+ * step. Session initialization uses {@link setApprovalPolicy} directly
+ * because there is no previously visible policy to change.
  * @param agent - the live agent whose policy is changing.
  * @param policy - the new effective policy.
  */

@@ -9,7 +9,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { z as zod } from 'zod'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { HarnessError, createUserMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -202,9 +202,9 @@ export class ApprovalService extends Service {
   }
 
   /**
-   * Persist a live Agent's policy. Queue the switch notice for the next model
-   * step while the Agent accepts input. Session initialization uses
-   * {@link setApprovalPolicy} directly.
+   * Switch one live agent's policy and queue the transition for its next model
+   * step. Session initialization uses {@link setApprovalPolicy} directly
+   * because there is no previously visible policy to change.
    * @param agent - the live agent whose policy is changing.
    * @param policy - the new effective policy.
    */
@@ -212,18 +212,13 @@ export class ApprovalService extends Service {
     const previous = this.effectivePolicy(agent.session)
     if (previous === policy) return
     setApprovalPolicy(agent.session, policy)
-    const notice = createUserMessage({
+    agent.inject(createUserMessage({
       content: [{
         type: 'text',
         text: `The user changed the approval policy from "${POLICY_NOTICE_NAMES[previous]}" to "${POLICY_NOTICE_NAMES[policy]}".`,
       }],
       source: { kind: 'user-approval' },
-    })
-    try {
-      agent.inject(notice)
-    } catch (error: unknown) {
-      if (!(error instanceof HarnessError) || error.code !== 'AGENT_CLOSED') throw error
-    }
+    }))
   }
 
   /**

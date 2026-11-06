@@ -98,7 +98,7 @@ interface Agent {
    * inbox until the task settles, while public status stays `idle`.
    * `whenIdle()` follows both the task and any waking work released behind it.
    * @param task - operation whose fulfillment or rejection is preserved, with a signal aborted by {@link cancel}.
-   * @throws AgentClosedError once the Agent lifetime is aborted, or an Error when another activity owns the agent.
+   * @throws synchronously when turn-driving or another maintenance task already owns the agent.
    * @returns the task promise.
    */
   runMaintenance<T>(task: (signal: AbortSignal) => Promise<T>): Promise<T>
@@ -113,7 +113,6 @@ interface Agent {
    * @param message - identified content and the source that supplied it.
    * @param target - the preferred next-turn or next-step inbox boundary.
    * @param wakeup - whether delivery may wake the driver.
-   * @throws AgentClosedError once the Agent lifetime is aborted. The inbox is unchanged.
    */
   send(message: UserMessage, target: InboxTarget, wakeup: boolean): void
 
@@ -121,7 +120,6 @@ interface Agent {
    * Queue an ordinary follow-up turn and wake the driver. The item becomes the
    * sole ordinary message of its own turn.
    * @param message - identified prompt content and the source that supplied it.
-   * @throws AgentClosedError once the Agent lifetime is aborted. The inbox is unchanged.
    */
   followup(message: UserMessage): void
 
@@ -131,7 +129,6 @@ interface Agent {
    * A rejected step leaves steering parked in the inbox until the next
    * wake; cancellation or disposal may discard pending steering.
    * @param message - identified steering content and the source that supplied it.
-   * @throws AgentClosedError once the Agent lifetime is aborted. The inbox is unchanged.
    */
   steer(message: UserMessage): void
 
@@ -142,7 +139,6 @@ interface Agent {
    * wakes them. It may miss a request whose pre-step already claimed its
    * batch. Cancellation or disposal may discard pending context.
    * @param message - identified injected context and the source that supplied it.
-   * @throws AgentClosedError once the Agent lifetime is aborted. The inbox is unchanged.
    */
   inject(message: UserMessage): void
 }
@@ -373,8 +369,6 @@ type AgentCancelCause =
 The cause is a TypeScript-enforced same-process input. An active cancellation holder exposes that same object as the runtime-only `AbortSignal.reason`; a signal grants cooperating listeners no classification authority. Durable `turn/end` records the outcome as `{ kind: 'aborted', reason: TurnEndCancelCause }`, so the cancel cause lands in the terminal result.
 
 The [event taxonomy](../architecture.md#events) owns the `agent/*` lifecycle, checkpoint, and waterfall contracts. Turn and step boundaries are durable session events rather than agent emits.
-
-`AgentClosedError` extends `HarnessError` with code `AGENT_CLOSED` and the affected `agentId`. Admission closes when the caller cancels creation, the Agent starts disposal, or its factory begins shutdown. The creation signal stops governing admission after creation succeeds.
 
 ## Initiating Agent
 

@@ -10,7 +10,7 @@ import ToolRuntime, { RUN_CODE_NAME } from '@deepseek-ai/dsh-tools'
 import type { ToolExecutionToken, ToolRunContext } from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { Session, SessionId, SESSION_FORMAT_VERSION, type SessionEvent, type UserMessage } from '@deepseek-ai/dsh-session'
-import AgentRegistry, { AgentClosedError, agentEvents, type Agent } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { agentEvents, type Agent } from '@deepseek-ai/dsh-agent'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import UserQuestionService, {
   UserQuestionError, type AskUserQuestionAnswer, type AskUserQuestionRequest,
@@ -678,62 +678,6 @@ describe('/plan', () => {
     expect((await ctx.commands.execute(agent, '/plan off', [], signal))?.result)
       .toEqual({ kind: 'success', text: 'Plan mode off.' })
     expect(foldPlanMode(agent.session.snapshotEvents())).toBe(false)
-  })
-
-  it.each([
-    { open: false, active: true, state: 'Plan mode is on.' },
-    { open: true, active: false, state: 'Plan mode is still pending.' },
-  ])('reports the mode and the rejected message when a closing Agent has open turn $open', async ({ open, active, state }) => {
-    const ctx = await setup()
-    try {
-      await ctx.plugin(CommandRuntime)
-      const agent = await agentWithSession(ctx, 'closing-plan-command')
-      if (open) openTurn(agent.session)
-      agent.steer = () => { throw new AgentClosedError(agent.id) }
-
-      const execution = await ctx.commands.execute(agent, '/plan sketch the layout', [], testToolSignal)
-
-      const expected = { kind: 'error', text: `${state} The agent is closing, so the message was not submitted.` }
-      expect(execution?.result).toEqual(expected)
-      expect(foldPlanMode(agent.session.snapshotEvents())).toBe(active)
-      expect(ctx.planMode.get(agent)).toEqual(open ? { active, pending: true } : { active })
-      expect(agent.session.snapshotEvents().findLast(event => event.type === 'command/done')?.data)
-        .toMatchObject(expected)
-    } finally {
-      await ctx.fiber.dispose()
-    }
-  })
-
-  it('reports a saved mode switch when a closing Agent rejects its switch notice', async () => {
-    const ctx = await setup()
-    try {
-      await ctx.plugin(CommandRuntime)
-      const agent = await agentWithSession(ctx, 'closing-plan-notice', { active: true })
-      header(agent.session)
-      agent.inject = () => { throw new AgentClosedError(agent.id) }
-
-      const execution = await ctx.commands.execute(agent, '/plan off', [], testToolSignal)
-
-      expect(execution?.result).toEqual({ kind: 'success', text: 'Plan mode off.' })
-      expect(foldPlanMode(agent.session.snapshotEvents())).toBe(false)
-    } finally {
-      await ctx.fiber.dispose()
-    }
-  })
-
-  it.each(['inject', 'steer'] as const)('propagates an unexpected plan %s failure', async (delivery) => {
-    const ctx = await setup()
-    try {
-      await ctx.plugin(CommandRuntime)
-      const agent = await agentWithSession(ctx, 'plan-delivery-error')
-      header(agent.session)
-      const failure = new Error('could not write plan input')
-      agent[delivery] = () => { throw failure }
-
-      await expect(ctx.commands.execute(agent, '/plan sketch the layout', [], testToolSignal)).rejects.toBe(failure)
-    } finally {
-      await ctx.fiber.dispose()
-    }
   })
 
   it('steers mixed attachments with or without text and refuses them on /plan off', async () => {

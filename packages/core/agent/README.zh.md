@@ -55,7 +55,7 @@ await handle.dispose()   // stops the loop, unregisters, removes the session, un
 
 ### 驱动 agent 的对话
 
-句柄的方法把带标识的 user 角色消息路由进 agent 的收件箱。`followup()` 排队一条普通的下一个轮次提示词并唤醒驱动器；`steer()` 提交下一步输入并唤醒它；`inject()` 添加面向模型的上下文但不唤醒驱动器，因此它落在下一个被接纳的步骤中。`cancel(cause)` 中止当前活动，并在未设置 `keepInbox` 时清除待处理工作；`whenIdle()` 会在整个 agent 达到完全停稳后完成。释放开始后，新输入和维护任务会在修改状态前抛出 `AgentClosedError`。取消期间的队列写入失败仍会中止当前工作，并把错误传给调用方。
+句柄的方法把带标识的 user 角色消息路由进 agent 的收件箱。`followup()` 排队一条普通的下一个轮次提示词并唤醒驱动器；`steer()` 提交下一步输入并唤醒它；`inject()` 添加面向模型的上下文但不唤醒驱动器，因此它落在下一个被接纳的步骤中。`cancel(cause)` 中止当前活动，并在未设置 `keepInbox` 时清除待处理工作；`whenIdle()` 会在整个 agent 达到完全停稳后完成。取消期间的队列写入失败仍会中止当前工作，并把错误传给调用方。
 
 ```text
 handle.agent.followup({
@@ -72,8 +72,6 @@ await handle.agent.whenIdle()
 ### 将注册限定到单个 agent
 
 `Agent.ctx` 是该 agent 的作用域上下文：通过它进行的注册（工具、提示词段、变量、事件监听器、限制）只对该 agent 生效，并在 dispose（资源释放）时全部撤销。同一机制也是 agent preset 用来让一个会话获得不同能力集、同时不影响其邻居的方式。
-
-输入和维护方法会以 `AgentClosedError`（`AGENT_CLOSED`）拒绝已停止接纳新工作的 Agent。生命周期规则见 [Agent 句柄](../../../docs/subsystems/core.zh.md#the-agent-handle)。
 
 ### 拦截或观察进行中的工作
 

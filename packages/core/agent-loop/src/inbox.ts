@@ -69,14 +69,12 @@ export const inboxProjectionDefinition = {
  * @param readState - reader for the live Inbox projection state.
  * @param session - session whose durable events store pending input.
  * @param dispatch - agent-scoped notifications for Inbox lifecycle events.
- * @param assertAdmission - rejects public insertions and replacements after admission closes.
  */
 export class ReactLoopInbox implements InboxContract {
   constructor(
     private readonly readState: () => InboxState,
     private readonly session: Session,
     private readonly dispatch: AgentEventDispatch,
-    private readonly assertAdmission: () => void = () => {},
   ) {}
 
   /** Prompts awaiting individual turns. */
@@ -139,7 +137,6 @@ export class ReactLoopInbox implements InboxContract {
    * @returns whether the message was still pending.
    */
   replace(messageId: MessageId, newMessage: UserMessage): boolean {
-    this.assertAdmission()
     const location = this.locate(messageId)
     if (location === undefined) return false
     this.splice(location.target, location.index, 1, [newMessage])
@@ -172,16 +169,7 @@ export class ReactLoopInbox implements InboxContract {
     deleteCount: number,
     inserted: UserMessage[],
   ): UserMessage[] {
-    if (inserted.length > 0) this.assertAdmission()
     return this.mutate(target, start, deleteCount, inserted, true)
-  }
-
-  /**
-   * Retain context finalized by admitted work, including during shutdown.
-   * @param message - context produced by the active driver.
-   */
-  retainContext(message: UserMessage): void {
-    this.mutate('next-step', this.nextStep.length, 0, [message], true)
   }
 
   /** Locate one pending identity across both owned lists. */

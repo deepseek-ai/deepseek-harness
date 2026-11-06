@@ -10,7 +10,7 @@ import { randomUUID } from 'node:crypto'
 import { isAbsolute, resolve } from 'node:path'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import type { Context } from '@deepseek-ai/cordis'
-import { AgentClosedError, type Agent, type AgentOptions, type CreateAgentOptions } from '@deepseek-ai/dsh-agent'
+import type { Agent, AgentOptions, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { ReasoningEffortId, contentHasImage, createUserMessage, errorChain } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, MessageId, MessageSource } from '@deepseek-ai/dsh-llm'
@@ -997,11 +997,7 @@ export class SubagentManager {
               done = this.close(activation, () => this.finishDisposal(activation, false))
               return Promise.resolve()
             })
-          } catch (error: unknown) {
-            if (error instanceof AgentClosedError) {
-              done = this.close(activation, () => this.finishDisposal(activation, false))
-              return Promise.resolve({ done })
-            }
+          } catch (_error: unknown) {
             // Another activity already owns the Agent's idle phase.
             return Promise.resolve('retry')
           }
@@ -1132,7 +1128,6 @@ export class SubagentManager {
       }
       this.sendWaking(parent, message, parent.status === 'idle' ? 'queue' : 'steer')
     } catch (error: unknown) {
-      if (error instanceof AgentClosedError) return
       this.ctx.logger.warn(
         `subagent "${activation.childId}" settlement notice was not delivered to its parent: `
         + errorChain(error),

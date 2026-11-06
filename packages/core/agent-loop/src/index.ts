@@ -575,7 +575,6 @@ export class AgentLoop extends Service implements AgentFactory {
           loopCtx, id, agentOptions, session,
           projections,
           lastTurn,
-          abort.signal,
         )
         machineReady.resolve()
         // Adopt the scope on its original fiber so it cannot unload before teardown.

@@ -263,8 +263,9 @@ export class HarnessSdkJsonRpcServer {
     if (!this.initialized) throw new Error('SDK server is not initialized')
     const rec = await this.getOrCreateSession(params.sessionId)
     this.lifetime.signal.throwIfAborted()
-    // An agent-loop reload can dispose the Agent while the SDK still retains
-    // this record. Reject stale records before admitting prompt attachments.
+    // An agent-loop-only reload disposes the loop's agents while this record
+    // survives; a retained agent accepts followup() silently, so validate the
+    // record against the live registry before delivery.
     this.assertLiveAgent(rec, params.sessionId)
     const content = await durablePromptContent(this.ctx, params.contentBlocks)
     this.lifetime.signal.throwIfAborted()

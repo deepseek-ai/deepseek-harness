@@ -5,7 +5,6 @@ import { join } from 'node:path'
 import { setImmediate } from 'node:timers/promises'
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
-import { AgentClosedError } from '@deepseek-ai/dsh-agent'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import WorkingDirectory, { type Config as WorkingDirectoryConfig } from '@deepseek-ai/dsh-working-directory'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
@@ -312,23 +311,6 @@ describe('Session working directories', () => {
       release.resolve(undefined)
       await Promise.allSettled([pending, rejection])
       probe.mockRestore()
-    }
-  })
-
-  it('keeps the committed directory when the Agent closes before accepting its notice', async () => {
-    await using f = await fixture()
-    const child = join(f.root, 'child')
-    await mkdir(child)
-    const inject = vi.spyOn(f.agent, 'inject').mockImplementation(() => { throw new AgentClosedError(f.agent.id) })
-    const warn = vi.spyOn(f.ctx.logger, 'warn')
-    try {
-      await expect(f.ctx.workingDirectory.set(f.agent, child)).resolves.toBe(child)
-      expect(f.ctx.workingDirectory.get(f.agent.session)).toBe(child)
-      expect(inject).toHaveBeenCalledOnce()
-      expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('could not queue its notice'))
-    } finally {
-      inject.mockRestore()
-      warn.mockRestore()
     }
   })
 

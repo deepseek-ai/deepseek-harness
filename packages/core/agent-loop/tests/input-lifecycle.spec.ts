@@ -4,9 +4,9 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import AgentRegistry, { AgentClosedError, type Agent } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import LlmRuntime, { HarnessError, createUserMessage } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createUserMessage } from '@deepseek-ai/dsh-llm'
 import SessionStore, { Session, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
@@ -82,41 +82,6 @@ it('cancellation still aborts the running request when queue clearing fails', as
   }
 })
 
-it('an Agent still in the registry rejects new input while its owner is closing', async () => {
-  const { ctx, agent, handle } = await harness()
-  const release = Promise.withResolvers<undefined>()
-  const aborted = Promise.withResolvers<undefined>()
-  const work = agent.runMaintenance(async (signal) => {
-    signal.addEventListener('abort', () => { aborted.resolve(undefined) }, { once: true })
-    await release.promise
-  })
-  const closing = handle.dispose()
-  try {
-    await aborted.promise
-    expect(ctx.agents.get(agent.id)).toBe(agent)
-    const message = input('during closing')
-    const error = vi.fn((failure: unknown) => failure)
-    try {
-      agent.followup(message)
-    } catch (failure) {
-      error(failure)
-    }
-    expect(error).toHaveBeenCalledWith(expect.objectContaining({
-      name: 'AgentClosedError', code: 'AGENT_CLOSED', agentId: agent.id,
-    }))
-    expect(error.mock.calls[0]?.[0]).toBeInstanceOf(HarnessError)
-    for (const submit of [() => { agent.followup(message) }, () => { agent.steer(message) }, () => { agent.inject(message) }, () => { agent.send(message, 'next-turn', true) }, () => agent.runMaintenance(async () => {}), () => { agent.inbox.append('next-turn', message) }, () => { agent.inbox.prepend('next-step', message) }, () => agent.inbox.splice('next-turn', 0, 0, [message]), () => agent.inbox.replace(message.id, message)]) {
-      expect(submit).toThrow(AgentClosedError)
-    }
-    const pending = [...agent.inbox.nextTurn, ...agent.inbox.nextStep].some(entry => entry.id === message.id)
-    expect(pending).toBe(false)
-  } finally {
-    release.resolve(undefined)
-    await work
-    await closing
-  }
-})
-
 it('waits for admitted maintenance after a queue-clear failure before releasing its Session', async () => {
   const { ctx, agent, handle } = await harness()
   const release = Promise.withResolvers<undefined>()
@@ -153,23 +118,6 @@ it('waits for admitted maintenance after a queue-clear failure before releasing 
     spy.mockRestore()
     release.resolve(undefined)
     await work
-    await closing
-  }
-})
-
-it('does not start a driver when an inbox observer closes its owner during admission', async () => {
-  const { ctx, agent, handle, adapter } = await harness()
-  let closing: Promise<void> | undefined
-  const stop = ctx.on('agent/inbox/inserted', ({ message }) => {
-    if (message.source.kind === 'user') closing = handle.dispose()
-  })
-  try {
-    agent.followup(input('close during admission'))
-    expect(closing).toBeDefined()
-    await closing
-    expect(adapter.requests).toHaveLength(0)
-  } finally {
-    stop()
     await closing
   }
 })

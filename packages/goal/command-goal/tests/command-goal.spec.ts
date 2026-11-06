@@ -1,12 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
-import AgentRegistry, { AgentClosedError } from '@deepseek-ai/dsh-agent'
+import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentStatus } from '@deepseek-ai/dsh-agent'
 import CommandRuntime from '@deepseek-ai/dsh-commands'
 import GoalService from '@deepseek-ai/dsh-goal'
 import type { GoalRef } from '@deepseek-ai/dsh-goal'
-import { HarnessError } from '@deepseek-ai/dsh-llm'
 import SessionStore, { Session, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import * as commandGoal from '@deepseek-ai/dsh-command-goal'
@@ -316,44 +315,6 @@ describe('/goal attachments', () => {
     const result = await runWithAttachments(test, ' edit refined objective')
     expect(result.kind).toBe('success')
     expect(followup).toHaveBeenCalledTimes(1)
-  })
-
-  it.each(['create', 'edit'] as const)('reports the saved objective when a closing Agent rejects attachments on %s', async (operation) => {
-    const test = await harness()
-    provideStore(test)
-    if (operation === 'edit') test.ctx.goals.create(test.agent, { objective: 'original objective' })
-    const failure = new AgentClosedError(test.agent.id)
-    vi.spyOn(test.agent, 'followup').mockImplementation(() => { throw failure })
-    const suffix = operation === 'edit' ? ' edit use the reference image' : ' use the reference image'
-    try {
-      const result = await runWithAttachments(test, suffix)
-      expect(result).toEqual({
-        kind: 'error',
-        text: 'Goal saved. The agent is closing, so the attachments were not submitted.',
-      })
-      expect(test.ctx.goals.get(test.agent)?.objective).toBe('use the reference image')
-      expect(test.session.snapshotEvents().at(-1)).toMatchObject({
-        type: 'command/done',
-        data: result,
-      })
-      expect(test.agent.inbox.nextTurn).toEqual([])
-    } finally {
-      await test.ctx.fiber.dispose()
-    }
-  })
-
-  it.each([
-    new Error('inbox write failed'),
-    new HarnessError('another typed failure', 'ATTACHMENT_TEST_FAILURE'),
-  ])('propagates unrelated attachment delivery failure %s', async (failure) => {
-    const test = await harness()
-    provideStore(test)
-    vi.spyOn(test.agent, 'followup').mockImplementation(() => { throw failure })
-    try {
-      await expect(runWithAttachments(test, ' use the reference image')).rejects.toBe(failure)
-    } finally {
-      await test.ctx.fiber.dispose()
-    }
   })
 
   it('rejects attachments on sub-commands that cannot use them, leaving the domain untouched', async () => {

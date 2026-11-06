@@ -16,7 +16,7 @@ import SessionStore, { Session, SessionId, SessionLogOffset, TurnEndReason } fro
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { TOOL_ABORTED_BEFORE_DISPATCH } from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import AgentRegistry, { AgentClosedError, type Agent, type AgentCancelCause } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { type Agent, type AgentCancelCause } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { MockAdapter, textResponse, toolCallResponse } from './mock-adapter.ts'
@@ -324,7 +324,7 @@ describe('Agent.cancel()', () => {
     send(agent, 'active')
     await streaming.promise
     const disposal = handle.dispose()
-    expect(() => { send(agent, 'late wake') }).toThrow(AgentClosedError)
+    send(agent, 'late wake')
     await disposal
 
     expect(adapter.requests).toHaveLength(1)

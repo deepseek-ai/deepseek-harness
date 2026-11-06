@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
-import { AgentClosedError, agentEvents } from '@deepseek-ai/dsh-agent'
+import { agentEvents } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import GoalService, { GoalId } from '@deepseek-ai/dsh-goal'
@@ -725,20 +725,6 @@ describe('same-session goal driving', () => {
     const goal = await waitForGoal(test.ctx, test.agent, current => current?.phase === 'blocked')
     expect(goal?.blockedReason?.code).toBe('round-limit')
     expect(goal?.roundsStarted).toBe(1)
-  })
-
-  it('keeps the goal active when the Agent closes before queue admission', async () => {
-    const test = await harness([])
-    const admission = Promise.withResolvers<undefined>()
-    vi.spyOn(test.agent, 'followup').mockImplementation(() => {
-      admission.resolve(undefined)
-      throw new AgentClosedError(test.agent.id)
-    })
-    test.ctx.goals.create(test.agent, { objective: 'resume after shutdown' })
-    await admission.promise
-
-    expect(test.ctx.goals.get(test.agent)).toMatchObject({ phase: 'active', roundsStarted: 0 })
-    expect(test.agent.session.snapshotEvents().some(event => event.type === 'goal/change' && event.data.operation === 'block')).toBe(false)
   })
 
   it('blocks the goal when a custom agent rejects the otherwise valid follow-up', async () => {
