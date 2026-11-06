@@ -676,8 +676,10 @@ export function launchLinuxScope(
   internals: LinuxScopeInternals = {},
 ): ManagedProcessLaunch {
   const invocation = internals.runnerInvocation ?? spawnRunnerInvocation()
+  const stdio = runnerStdio(spec, false)
   const files = createLinuxLaunchFiles({
     cwd: spec.cwd, env: targetEnv,
+    pipeFds: stdio.slice(0, 3).flatMap((disposition, fd) => disposition === 'pipe' ? [fd] : []),
     ...spec.stdio.control === undefined ? {} : { control: spec.stdio.control },
   })
   const startup = new LinuxScopeStartup(files, 'subprocess')
@@ -692,7 +694,7 @@ export function launchLinuxScope(
     ), {
       cwd: process.cwd(),
       env: runnerEnvironment(files.requestPath, invocation),
-      stdio: runnerStdio(spec, false),
+      stdio,
       detached: true,
     })
   } catch (error) {

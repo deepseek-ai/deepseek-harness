@@ -60,7 +60,6 @@ export const EXISTING_PLUGIN_ENTRY_EXPORTS = {
     'CREDENTIALS_FILENAME', 'DOCUMENT_VERSION', 'parseCredentialsDocument', 'renderFlatLayoutMigration', 'resolveSpec',
   ],
   '@deepseek-ai/dsh-cua': ['CuaConfig', 'installCua'],
-  '@deepseek-ai/dsh-deepseek-account-platform': ['Config'],
   '@deepseek-ai/dsh-experimental-claude-code-mods': [
     'DEFAULT_TOOL_ALIASES', 'KNOWN_EVENTS', 'MODS_API_VERSION', 'SERVED_EVENTS', 'defineMod',
   ],

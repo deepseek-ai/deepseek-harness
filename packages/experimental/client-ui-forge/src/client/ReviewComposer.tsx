@@ -5,7 +5,7 @@ import clsx from 'clsx'
 import { Button, IconChevronDownOutlineRegular, Menu, MenuItemButton } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ReviewQueue } from './review-queue.ts'
-import type { ReviewSelection, ReviewSource } from './review.ts'
+import { reviewRange, type ReviewSelection, type ReviewSource } from './review.ts'
 import type { NS } from './locales.ts'
 import css from './ReviewComposer.module.css'
 
@@ -72,7 +72,7 @@ export function ReviewComposer({ selection, actions, close, visible = true, spli
   const input = useRef<HTMLTextAreaElement>(null)
   useEffect(() => { input.current?.focus() }, [])
   const comment = (): ReviewSelection => ({ ...selection, comment: { ...selection.comment, body: body.current } })
-  const range = `${selection.comment.side}${selection.comment.startLine}${selection.comment.endLine === selection.comment.startLine ? '' : `–${selection.comment.endLine}`}`
+  const range = reviewRange(selection.comment)
   const publish = async (): Promise<void> => {
     if (running.current || actions.publish === undefined) return
     running.current = true

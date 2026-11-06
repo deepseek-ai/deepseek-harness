@@ -6,4 +6,5 @@ recording: authored
 header:
   class: deepseek-deferred-tools
   pin: true
+  systemPromptSource: deepseek-all-deferred-tools
   changes: 4

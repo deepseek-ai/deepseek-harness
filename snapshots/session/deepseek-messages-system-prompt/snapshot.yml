@@ -6,6 +6,7 @@ recording: authored
 header:
   class: deepseek-messages-system-prompt
   pin: true
+  toolSchemasSource: text-turn
   promptChanges: 1
 replay:
   override: true

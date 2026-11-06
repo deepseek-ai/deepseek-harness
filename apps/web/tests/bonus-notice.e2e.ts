@@ -22,10 +22,10 @@ const MODE = webSnapshotMode()
 
 const TOKEN = 'dsh_bonus_notice_test'
 const ACCOUNT_ID = 'bonus-user'
-const ORDER_FIRST = 'bonus-notice-first'
-const ORDER_LATER = '33333333-3333-4333-8333-333333333333'
+const ORDER_FIRST = 'notice-first'
+const ORDER_LATER = 'notice-later'
 const ORDER_EN = '44444444-4444-4444-8444-444444444444'
-const ORDER_RETRY = '55555555-5555-4555-8555-555555555555'
+const ORDER_FAILED_EVENT = '55555555-5555-4555-8555-555555555555'
 const ORDER_REPEAT = '66666666-6666-4666-8666-666666666666'
 const ORDER_TOPUP = '77777777-7777-4777-8777-777777777777'
 const ORDER_WEB = '99999999-9999-4999-8999-999999999999'
@@ -65,9 +65,14 @@ interface AckRecord {
 async function mockPlatform() {
   const unnotified: Granted[] = []
   const gets: GetRecord[] = []
+  const contentReads: { id: string | null; locale: string | undefined }[] = []
+  const contents = new Map<string, Granted>()
   /** Reads already answered; a request the client is still awaiting is not evidence of a delivered response. */
   const served: GetRecord[] = []
   const acks: AckRecord[] = []
+  const dismissals: AckRecord[] = []
+  const clicks: AckRecord[] = []
+  let includeUnsupportedNotification = false
   /** Wallet reads, one per balance refresh the settings panel performs. */
   const summaries: GetRecord[] = []
   let normalBalance = '12.34'
@@ -78,20 +83,31 @@ async function mockPlatform() {
   let keepUnnotified = false
   /** Refuse the wallet read, which is how a Platform outage or an unparsable payload reaches the client. */
   let failSummary = false
+  let holdProfile = false
+  const pendingProfiles: (() => void)[] = []
+  const releaseProfiles = (): void => { holdProfile = false; for (const reply of pendingProfiles.splice(0)) reply() }
   /** Reply held back while the test controls when a read can answer. */
   let heldReply: (() => void) | undefined
   const grant = (orderId: string, amount: string, extraCopy = ''): void => {
-    unnotified.unshift({
+    const value = {
       orderId, amount,
       zh_CN: `已赠送您 ${amount} 元 DSH 体验赠金。${extraCopy}`,
       en_US: `You received a CNY ${amount} DSH trial credit.${extraCopy}`,
-    })
+    }
+    unnotified.unshift(value)
+    contents.set(orderId, value)
   }
   /** @param value - granted bonus. @param locale - request language. @returns its wire fields. */
   const wire = (value: Granted, locale: string | undefined): unknown => ({
-    order_id: value.orderId, expires_at: value.orderId === ORDER_FIRST ? null : expiresAt(),
-    ...(value.orderId === ORDER_FIRST ? { title: '平台通知' } : {}),
-    msg: locale === 'en_US' ? value.en_US : value.zh_CN,
+    id: value.orderId, created_at: '2026-10-21T08:00:00Z',
+    display_until: value.orderId === ORDER_FIRST ? null : expiresAt(),
+    title: value.orderId === ORDER_FIRST ? (locale === 'en_US' ? 'Platform notice' : '平台通知')
+      : locale === 'en_US' ? 'Bonus credited' : '赠金已到账',
+    body: locale === 'en_US' ? value.en_US : value.zh_CN,
+    actions: value.orderId === 'b1111111-1111-4111-8111-111111111111' ? [
+      { label: locale === 'en_US' ? 'View balance' : '查看余额', style: 'primary', target: { type: 'app_route', name: 'account' } },
+      { label: locale === 'en_US' ? 'Got it' : '知道了', style: 'secondary', target: { type: 'dismiss' } },
+    ] : [],
   })
   const server: Server = createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1')
@@ -103,10 +119,14 @@ async function mockPlatform() {
     }
     if (req.headers['x-dsh-auth-token'] !== TOKEN) { res.writeHead(401).end(); return }
     if (url.pathname === '/auth-api/v0/users/current') {
-      // `email` is required by the provider's profile schema even when the account has none.
-      reply({ code: 0, data: { biz_code: 0, biz_data: {
-        id: ACCOUNT_ID, email: '', id_profile: { name: 'Bonus User', picture: null },
-      } } })
+      const answer = (): void => {
+        // `email` is required by the provider's profile schema even when the account has none.
+        reply({ code: 0, data: { biz_code: 0, biz_data: {
+          id: ACCOUNT_ID, email: '', id_profile: { name: 'Bonus User', picture: null },
+        } } })
+      }
+      if (holdProfile) pendingProfiles.push(answer)
+      else answer()
       return
     }
     if (url.pathname === '/api/v0/users/get_user_summary') {
@@ -118,28 +138,48 @@ async function mockPlatform() {
       } } })
       return
     }
-    if (url.pathname === '/api/v0/users/get_unnotified_bonuses') {
+    if (url.pathname === '/api/v0/users/notifications/list') {
       const record = { locale, query: url.search }
       gets.push(record)
-      const payload = { code: 0, data: { biz_code: 0, biz_data: unnotified.map(value => wire(value, locale)) } }
+      const payload = { code: 0, data: { biz_code: 0, biz_data: {
+        next_poll_after: 3600, notifications: [
+          ...includeUnsupportedNotification ? [{
+            id: 'unsupported-action', created_at: '2026-10-21T00:00:00Z', display_until: null,
+            title: 'Unsupported action', body: 'Not supported by this client',
+            actions: [{ label: 'Open', style: 'primary', target: { type: 'future' } }],
+          }] : [],
+          ...unnotified.map(value => wire(value, locale)),
+        ],
+      } } }
       const answer = (): void => { served.push(record); reply(payload) }
       if (heldReply === undefined) { answer(); return }
       heldReply = answer
       return
     }
-    if (url.pathname === '/api/v0/users/ack_bonus_notified' && req.method === 'POST') {
+    if (url.pathname === '/api/v0/users/notifications/content') {
+      const id = url.searchParams.get('id')
+      contentReads.push({ id, locale })
+      const value = id === null ? undefined : contents.get(id)
+      if (value === undefined) { res.writeHead(404).end(); return }
+      reply({ code: 0, data: { biz_code: 0, biz_data: wire(value, locale) } })
+      return
+    }
+    if (url.pathname === '/api/v0/users/notifications/events' && req.method === 'POST') {
       let body = ''
       req.setEncoding('utf8')
       req.on('data', (chunk: string) => { body += chunk })
       req.on('end', () => {
         const payload: unknown = JSON.parse(body)
-        const orderId = typeof payload === 'object' && payload !== null && 'order_id' in payload
-          && typeof payload.order_id === 'string' ? payload.order_id : null
-        acks.push({ method: req.method ?? '', path: url.pathname, locale, orderId, body,
+        const orderId = typeof payload === 'object' && payload !== null && 'notification_id' in payload
+          && typeof payload.notification_id === 'string' ? payload.notification_id : null
+        const event = typeof payload === 'object' && payload !== null && 'type' in payload ? payload.type : null
+        if (event !== 'displayed' && event !== 'cta_clicked' && event !== 'dismissed') { res.writeHead(400).end(); return }
+        const records = event === 'displayed' ? acks : event === 'cta_clicked' ? clicks : dismissals
+        records.push({ method: req.method ?? '', path: url.pathname, locale, orderId, body,
           query: url.search, contentType: req.headers['content-type'], at: performance.now() })
-        if (ackFailure !== undefined && ackFailure.orderId === orderId && ackFailure.remaining > 0) {
+        if (event === 'displayed' && ackFailure !== undefined && ackFailure.orderId === orderId && ackFailure.remaining > 0) {
           ackFailure.remaining--
-          // A transient gateway failure: the client retries it after its backoff.
+          // The event is lost; a later notification read can offer this order again.
           res.writeHead(502, { 'content-type': 'text/plain' }).end('Internal Server Error')
           return
         }
@@ -147,8 +187,8 @@ async function mockPlatform() {
           reply({ code: 0, msg: '', data: { biz_code: 1, biz_msg: 'BONUS_ORDER_NOT_FOUND', biz_data: null } }); return
         }
         const index = unnotified.findIndex(value => value.orderId === orderId)
-        if (index >= 0 && !keepUnnotified) unnotified.splice(index, 1)
-        reply({ code: 0, msg: '', data: { biz_code: 0, biz_msg: '', biz_data: null } })
+        if (index >= 0 && !keepUnnotified && event !== 'cta_clicked') unnotified.splice(index, 1)
+        reply({ code: 0, msg: '', data: { biz_code: 0, biz_msg: '', biz_data: { acked: true } } })
       })
       return
     }
@@ -160,7 +200,11 @@ async function mockPlatform() {
   if (address === null || typeof address === 'string') throw new Error('bonus notice: missing mock listener')
   return {
     origin: `http://127.0.0.1:${String(address.port)}`,
-    grant, gets, served, acks, summaries,
+    grant, gets, served, acks, clicks, dismissals, summaries, contentReads,
+    setUnsupportedNotification: (value: boolean): void => { includeUnsupportedNotification = value },
+    holdProfiles: (): void => { holdProfile = true },
+    pendingProfileResponses: (): number => pendingProfiles.length,
+    releaseProfiles,
     /** @param value - recharge balance the settings page reads next. */
     setNormalBalance: (value: string): void => { normalBalance = value },
     /** @param value - bonus balance the settings page reads next. */
@@ -176,7 +220,7 @@ async function mockPlatform() {
     /** Hold the next unnotified-bonus read so the test can observe the in-flight state. */
     holdNextGet: (): void => { heldReply = () => undefined },
     releaseGet: (): void => { const held = heldReply; heldReply = undefined; held?.() },
-    close: () => new Promise<void>((resolve) => { server.close(() => { resolve() }); server.closeAllConnections() }),
+    close: () => new Promise<void>((resolve) => { releaseProfiles(); server.close(() => { resolve() }); server.closeAllConnections() }),
   }
 }
 
@@ -286,6 +330,8 @@ describe.skipIf(MODE === 'record')('web e2e: bonus notice', () => {
     // A read the renderer never received cannot become a displayed notice: while the
     // response is held there is no card and no acknowledgement.
     platform.holdNextGet()
+    platform.holdProfiles()
+    platform.setUnsupportedNotification(true)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await expect.poll(() => platform.gets.length, { timeout: 30_000 }).toBe(1)
     observations.push(`startup.held cards=${String(await noticeCards(page).count())} acks=${String(platform.acks.length)}`)
@@ -296,21 +342,34 @@ describe.skipIf(MODE === 'record')('web e2e: bonus notice', () => {
     // Startup signs in and reads the notice; the card shows it and only then is it acknowledged.
     observations.push(`startup.notice=${await shownNotice(page, zhFirst)}`)
     observations.push(`startup.ack orders=${await acked(platform, 1)}`)
+    expect(await noticeCards(page).count()).toBe(1)
+    expect(platform.acks.some(record => record.orderId === 'unsupported-action')).toBe(false)
+    observations.push('startup.unsupported-action skipped=true valid-card=true displayed=false')
+    platform.setUnsupportedNotification(false)
+    await expect.poll(platform.pendingProfileResponses).toBeGreaterThan(0)
+    observations.push('startup.profile-pending notice=true displayed=1')
+    platform.releaseProfiles()
     const get = platform.gets[0]!
     const ack = platform.acks[0]!
     observations.push(`startup.get locale=${String(get.locale)} query=${get.query}`)
-    observations.push(`startup.ack method=${ack.method} path=${ack.path} locale=${String(ack.locale)} order_id=${String(ack.orderId)} body=${JSON.stringify(ack.body)}`)
+    observations.push(`startup.ack method=${ack.method} path=${ack.path} locale=${String(ack.locale)} notification_id=${String(ack.orderId)} body=${JSON.stringify(ack.body)}`)
     expect(get.locale).toBe('zh_CN')
     expect(get.query).toBe('')
     expect(ack).toMatchObject({
-      method: 'POST', path: '/api/v0/users/ack_bonus_notified', locale: 'zh_CN', orderId: ORDER_FIRST,
-      body: JSON.stringify({ order_id: ORDER_FIRST }), query: '', contentType: 'application/json',
+      method: 'POST', path: '/api/v0/users/notifications/events', locale: 'zh_CN', orderId: ORDER_FIRST,
+      body: JSON.stringify({ notification_id: ORDER_FIRST, type: 'displayed' }), query: '', contentType: 'application/json',
     })
 
-    // Closing the card only hides it; the acknowledgement already sent is not repeated.
+    // Explicit close reports dismissal without repeating the display event.
     await noticeCards(page).getByRole('button', { name: '关闭', exact: true }).click()
     expect(await noticeCards(page).count()).toBe(0)
     expect(platform.acks).toHaveLength(1)
+    await expect.poll(() => platform.dismissals.length).toBe(1)
+    expect(platform.dismissals[0]).toMatchObject({
+      method: 'POST', path: '/api/v0/users/notifications/events', orderId: ORDER_FIRST,
+      body: JSON.stringify({ notification_id: ORDER_FIRST, type: 'dismissed' }),
+    })
+    observations.push('startup.close event=dismissed displayed=1 dismissed=1')
 
     // A new grant and balance arrive before settings opens; one panel entry refreshes both once.
     platform.grant(ORDER_LATER, '8.00')
@@ -463,32 +522,27 @@ describe.skipIf(MODE === 'record')('web e2e: bonus notice', () => {
     await noticeCards(page).getByRole('button', { name: '关闭', exact: true }).click()
     expect(await noticeCards(page).count()).toBe(0)
 
-    // A transient acknowledgement failure keeps the card and retries the same order after
-    // the backoff; the pending retry is page state, not browser storage.
-    const zhRetry = '已赠送您 6.00 元 DSH 体验赠金。'
-    platform.grant(ORDER_RETRY, '6.00')
-    platform.failNextAcks(ORDER_RETRY, 1)
+    // A failed event leaves the card intact and is not retried in the background.
+    const zhFailedEvent = '已赠送您 6.00 元 DSH 体验赠金。'
+    platform.grant(ORDER_FAILED_EVENT, '6.00')
+    platform.failNextAcks(ORDER_FAILED_EVENT, 1)
     await openSettings(page, 'zh')
-    const retryDialog = page.getByRole('dialog', { name: '设置', exact: true })
-    await retryDialog.waitFor()
-    observations.push(`retry.notice=${await shownNotice(page, zhRetry)}`)
-    const retryAttempts = (): AckRecord[] => platform.acks.filter(item => item.orderId === ORDER_RETRY)
-    await expect.poll(() => retryAttempts().length, { timeout: 30_000 }).toBe(1)
-    // The failed attempt does not withdraw the card the user is reading.
-    expect(await noticeCards(page).count()).toBe(1)
-    await expect.poll(() => retryAttempts().length, { timeout: 30_000 }).toBe(2)
-    const attempts = retryAttempts()
-    // The first retry follows the configured first delay rather than arriving immediately.
-    // Only the lower bound is asserted: load can widen the observed gap, never shorten it
-    // below the timer's own 1s first step.
-    const retryGapMs = attempts[1]!.at - attempts[0]!.at
-    const retryBodyKept = attempts.every(item => item.body === JSON.stringify({ order_id: ORDER_RETRY })
+    const failedEventDialog = page.getByRole('dialog', { name: '设置', exact: true })
+    await failedEventDialog.waitFor()
+    observations.push(`event-failed.notice=${await shownNotice(page, zhFailedEvent)}`)
+    const failedAttempts = (): AckRecord[] => platform.acks.filter(item => item.orderId === ORDER_FAILED_EVENT)
+    await expect.poll(() => failedAttempts().length, { timeout: 30_000 }).toBe(1)
+    await page.clock.install()
+    await page.clock.fastForward(60_000)
+    const attempts = failedAttempts()
+    const eventBodyKept = attempts.every(item => item.body === JSON.stringify({ notification_id: ORDER_FAILED_EVENT, type: 'displayed' })
       && item.query === '' && item.contentType === 'application/json')
-    observations.push(`retry.attempts=${String(attempts.length)} backoff=${String(retryGapMs >= 900)} body-kept=${String(retryBodyKept)} cards=${String(await noticeCards(page).count())}`)
-    expect(retryGapMs).toBeGreaterThanOrEqual(900)
-    expect(retryBodyKept).toBe(true)
+    observations.push(`event-failed.attempts=${String(attempts.length)} body-kept=${String(eventBodyKept)} cards=${String(await noticeCards(page).count())}`)
+    expect(attempts).toHaveLength(1)
+    expect(eventBodyKept).toBe(true)
+    expect(await noticeCards(page).count()).toBe(1)
     await page.keyboard.press('Escape')
-    await retryDialog.waitFor({ state: 'detached', timeout: 30_000 })
+    await failedEventDialog.waitFor({ state: 'detached', timeout: 30_000 })
     await noticeCards(page).getByRole('button', { name: '关闭', exact: true }).click()
 
     // Display follows each response: the double keeps serving an acknowledged order, which
@@ -580,31 +634,72 @@ describe.skipIf(MODE === 'record')('web e2e: bonus notice', () => {
     observations.push(`web.notice=${webNotice} acks=1`)
     await webPage.close()
     platform.clearUnnotified()
-    platform.grant('stack-third', '23.00')
-    platform.grant('stack-second', '22.00', '\nMore details'.repeat(8))
-    platform.grant('stack-first', '21.00')
+    platform.grant('a3333333-3333-4333-8333-333333333333', '23.00')
+    platform.grant('a2222222-2222-4222-8222-222222222222', '22.00', '\nMore details'.repeat(8))
+    platform.grant('a1111111-1111-4111-8111-111111111111', '21.00')
     const ackStart = platform.acks.length
     const stackPage = await openDesktopPage('zh-CN')
+    await stackPage.setViewportSize({ width: 900, height: 960 })
     await stackPage.emulateMedia({ colorScheme: 'light' })
     await stackPage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     const cards = noticeCards(stackPage)
     await expect.poll(() => cards.count()).toBe(3)
+    expect(await cards.first().isVisible()).toBe(false)
+    expect(platform.acks.length).toBe(ackStart)
+    observations.push('stack.hidden cards=3 acks=0')
+    await stackPage.setViewportSize({ width: 1440, height: 960 })
+    await expect.poll(() => cards.first().isVisible()).toBe(true)
     await expect.poll(() => platform.acks.length).toBe(ackStart + 1)
-    expect(platform.acks.slice(ackStart).map(ack => ack.orderId)).toEqual(['stack-first'])
+    expect(platform.acks.slice(ackStart).map(ack => ack.orderId)).toEqual(['a1111111-1111-4111-8111-111111111111'])
     expect(await stackPage.getByRole('status').count()).toBe(1)
     const second = cards.filter({ hasText: '22.00' })
     const secondNode = await second.elementHandle()
     const frontBox = await cards.first().boundingBox()
     const backBox = await second.boundingBox()
-    expect(frontBox!.width).toBeCloseTo(280, 0)
-    expect(backBox!.width).toBeCloseTo(272, 0)
+    expect(frontBox!.x).toBeCloseTo(10, 0)
+    expect(frontBox!.width).toBeCloseTo(260, 0)
+    expect(frontBox!.x + frontBox!.width).toBeCloseTo(270, 0)
+    expect(backBox!.width).toBeCloseTo(252, 0)
     expect(backBox!.y).toBeCloseTo(frontBox!.y - 4, 0)
     const transition = await second.evaluate((element) => {
       const style = getComputedStyle(element)
       return `${style.transitionDuration} ${style.transitionTimingFunction}`
     })
     expect(transition).toBe('0.25s ease-out')
-    observations.push(`stack.initial cards=3 acks=stack-first widths=280,272 offset=-4 transition=${transition}`)
+    observations.push(`stack.initial cards=3 acks=stack-first widths=260,252 inset=10 offset=-4 transition=${transition}`)
+    for (const [delta, width, edge] of [[80, 280, 360], [-80, 260, 280]] as const) {
+      const handle = await stackPage.locator('[data-side="sidebar"]').boundingBox()
+      const x = handle!.x + handle!.width / 2
+      const y = handle!.y + handle!.height / 2
+      await stackPage.mouse.move(x, y)
+      await stackPage.mouse.down()
+      await stackPage.mouse.move(x + delta, y, { steps: 5 })
+      await stackPage.mouse.up()
+      await expect.poll(async () => Math.round((await cards.first().boundingBox())!.width)).toBe(width)
+      const movedHandle = await stackPage.locator('[data-side="sidebar"]').boundingBox()
+      expect(movedHandle!.x + movedHandle!.width / 2).toBeCloseTo(edge, 0)
+      const resized = await cards.first().boundingBox()
+      expect(resized!.x).toBeCloseTo(10, 0)
+      expect(resized!.x + resized!.width).toBeCloseTo(10 + width, 0)
+      observations.push(`stack.resized sidebar=${edge} card=${width} left-inset=10`)
+    }
+    const beforeCollapseAcks = platform.acks.length
+    const beforeCollapseDismissals = platform.dismissals.length
+    await stackPage.setViewportSize({ width: 900, height: 960 })
+    await stackPage.locator('[data-sidebar-collapsed]:not([data-sidebar-drawer])').waitFor()
+    await expect.poll(() => cards.first().isVisible()).toBe(false)
+    expect(await cards.count()).toBe(3)
+    expect(platform.dismissals.length).toBe(beforeCollapseDismissals)
+    observations.push('stack.rail cards=3 visible=false dismissed=0')
+    await stackPage.setViewportSize({ width: 1440, height: 960 })
+    await stackPage.locator('[data-sidebar-collapsed]').waitFor({ state: 'detached' })
+    await expect.poll(() => cards.first().isVisible()).toBe(true)
+    expect(await cards.count()).toBe(3)
+    expect(await second.evaluate((element, previous) => element === previous, secondNode)).toBe(true)
+    expect(await cardText(cards.first())).toContain('21.00')
+    expect(platform.acks.length).toBe(beforeCollapseAcks)
+    expect(platform.dismissals.length).toBe(beforeCollapseDismissals)
+    observations.push('stack.expanded cards=3 duplicate-acks=0 dismissed=0')
     const artifactDir = fileURLToPath(new URL('../../../.artifacts', import.meta.url))
     await mkdir(artifactDir, { recursive: true })
     await stackPage.screenshot({ path: join(artifactDir, 'bonus-notice-stack-light.png') })
@@ -635,19 +730,131 @@ describe.skipIf(MODE === 'record')('web e2e: bonus notice', () => {
     expect(promotion.middle.y).toBeLessThan(promotion.start.y)
     expect(promotion.middle.y).toBeGreaterThan(promotion.end.y)
     await expect.poll(() => cards.count()).toBe(2)
-    await expect.poll(async () => Math.round((await second.boundingBox())!.width)).toBe(280)
+    await expect.poll(async () => Math.round((await second.boundingBox())!.width)).toBe(260)
     expect(await second.evaluate((element, previous) => element === previous, secondNode)).toBe(true)
     expect(await second.getAttribute('data-front')).toBe('true')
     await expect.poll(() => platform.acks.length).toBe(ackStart + 2)
-    expect(platform.acks.slice(ackStart).map(ack => ack.orderId)).toEqual(['stack-first', 'stack-second'])
-    observations.push('stack.promoted cards=2 acks=stack-first,stack-second width=280 same-node=true')
+    expect(platform.acks.slice(ackStart).map(ack => ack.orderId)).toEqual(['a1111111-1111-4111-8111-111111111111', 'a2222222-2222-4222-8222-222222222222'])
+    observations.push('stack.promoted cards=2 acks=stack-first,stack-second width=260 same-node=true')
     await second.getByRole('button', { name: '关闭', exact: true }).click()
     await expect.poll(() => platform.acks.length).toBe(ackStart + 3)
-    expect(platform.acks.slice(ackStart).map(ack => ack.orderId)).toEqual(['stack-first', 'stack-second', 'stack-third'])
+    expect(platform.acks.slice(ackStart).map(ack => ack.orderId)).toEqual(['a1111111-1111-4111-8111-111111111111', 'a2222222-2222-4222-8222-222222222222', 'a3333333-3333-4333-8333-333333333333'])
     await cards.filter({ hasText: '23.00' }).getByRole('button', { name: '关闭', exact: true }).click()
     await expect.poll(() => cards.count()).toBe(0)
+    await expect.poll(() => platform.dismissals.filter(record => record.orderId?.startsWith('a')).length).toBe(3)
+    const stackDismissals = platform.dismissals.filter(record => record.orderId?.startsWith('a'))
+    expect(stackDismissals.map(record => record.body)).toEqual(stackDismissals.map(record =>
+      JSON.stringify({ notification_id: record.orderId, type: 'dismissed' })))
     observations.push('stack.dismissed cards=0 acks=stack-first,stack-second,stack-third')
     await stackPage.close()
+
+    platform.grant('b1111111-1111-4111-8111-111111111111', '31.00')
+    const refreshAckStart = platform.acks.length
+    const refreshPage = await openDesktopPage('zh-CN')
+    await refreshPage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+    const refreshCards = noticeCards(refreshPage)
+    await shownNotice(refreshPage, '已赠送您 31.00 元 DSH 体验赠金。')
+    await expect.poll(() => platform.acks.length).toBe(refreshAckStart + 1)
+    const firstNode = await refreshCards.first().elementHandle()
+    platform.grant('b3333333-3333-4333-8333-333333333333', '33.00')
+    platform.grant('b2222222-2222-4222-8222-222222222222', '32.00')
+    await openSettings(refreshPage, 'zh')
+    await expect.poll(() => refreshCards.count()).toBe(3)
+    expect(await cardText(refreshCards.first())).toContain('31.00')
+    expect(await refreshCards.first().evaluate((element, previous) => element === previous, firstNode)).toBe(true)
+    expect(platform.acks.slice(refreshAckStart).map(ack => ack.orderId)).toEqual(['b1111111-1111-4111-8111-111111111111'])
+    observations.push('refresh.retained cards=3 acks=refresh-first same-node=true')
+    const localeReads = platform.gets.length
+    const localeContents = platform.contentReads.length
+    await refreshPage.getByRole('dialog', { name: '设置', exact: true }).getByRole('button', { name: '通用设置', exact: true }).click()
+    await refreshPage.getByRole('button', { name: '中文', exact: true }).click()
+    await refreshPage.getByRole('menuitem', { name: 'English', exact: true }).click()
+    await refreshPage.getByRole('dialog', { name: 'Settings', exact: true }).waitFor()
+    await expect.poll(() => cardText(refreshCards.first())).toContain('You received a CNY 31.00')
+    expect(await refreshCards.first().evaluate((element, previous) => element === previous, firstNode)).toBe(true)
+    expect(platform.gets.length).toBe(localeReads)
+    expect(platform.acks.length).toBe(refreshAckStart + 1)
+    expect(platform.contentReads.slice(localeContents).map(read => read.locale)).toEqual(['en_US', 'en_US', 'en_US'])
+    expect(await refreshCards.first().getByRole('button', { name: 'View balance', exact: true }).count()).toBe(1)
+    observations.push('refresh.localized locale=en_US content-reads=3 list-reads=0 acks=1 same-node=true')
+    await refreshPage.keyboard.press('Escape')
+    await refreshPage.getByRole('dialog', { name: 'Settings', exact: true }).waitFor({ state: 'detached' })
+    const clicksBeforeAction = platform.clicks.length
+    const dismissalsBeforeClick = platform.dismissals.length
+    await refreshCards.first().getByRole('button', { name: 'View balance', exact: true }).click()
+    await expect.poll(() => platform.clicks.length).toBe(clicksBeforeAction + 1)
+    expect(platform.clicks.at(-1)?.body).toBe(JSON.stringify({ notification_id: 'b1111111-1111-4111-8111-111111111111', type: 'cta_clicked' }))
+    expect(platform.dismissals.length).toBe(dismissalsBeforeClick)
+    expect(await refreshCards.count()).toBe(3)
+    const accountSettings = refreshPage.getByRole('dialog', { name: 'Settings', exact: true })
+    await accountSettings.waitFor()
+    expect(await accountSettings.getByRole('button', { name: 'Account', exact: true }).getAttribute('aria-current')).toBe('true')
+    observations.push('refresh.business-action event=cta_clicked cards=3 account-open=true')
+    await refreshPage.keyboard.press('Escape')
+    await accountSettings.waitFor({ state: 'detached' })
+    await refreshPage.setViewportSize({ width: 390, height: 844 })
+    await refreshPage.locator('[data-sidebar-drawer][data-sidebar-collapsed]').waitFor()
+    await expect.poll(() => refreshCards.first().isVisible()).toBe(false)
+    expect(await refreshCards.count()).toBe(3)
+    await refreshPage.locator('[data-shell-leading]').getByRole('button', { name: 'Open sidebar', exact: true }).click()
+    const drawer = refreshPage.locator('[data-sidebar-drawer]:not([data-sidebar-collapsed])')
+    await drawer.waitFor()
+    expect(await refreshCards.first().evaluate(element => element.closest('[role="dialog"]')?.getAttribute('aria-label'))).toBe('Navigation')
+    await expect.poll(() => drawer.locator('[data-sidebar-mask]').evaluate(element => getComputedStyle(element).opacity)).toBe('1')
+    await expect.poll(() => refreshCards.first().getByRole('button', { name: 'Got it', exact: true }).evaluate((element) => {
+      const rect = element.getBoundingClientRect()
+      return element.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2))
+    })).toBe(true)
+    observations.push('refresh.drawer width=390 notice-above-sidebar=true')
+    const cardBounds = await refreshCards.first().boundingBox()
+    const drawerBounds = await drawer.getByRole('dialog', { name: 'Navigation', exact: true }).boundingBox()
+    const actionBounds = await refreshCards.first().getByRole('button', { name: 'View balance', exact: true }).boundingBox()
+    expect(cardBounds!.x - drawerBounds!.x).toBeCloseTo(10, 0)
+    expect(drawerBounds!.width - cardBounds!.width).toBeCloseTo(20, 0)
+    expect(cardBounds!.x).toBeGreaterThanOrEqual(0)
+    expect(cardBounds!.x + cardBounds!.width).toBeLessThanOrEqual(390)
+    expect(actionBounds!.x + actionBounds!.width).toBeLessThanOrEqual(cardBounds!.x + cardBounds!.width)
+    const dismissalsBeforeAction = platform.dismissals.length
+    await refreshCards.first().getByRole('button', { name: 'Got it', exact: true }).click()
+    expect(await drawer.count()).toBe(1)
+    await expect.poll(() => platform.dismissals.length).toBe(dismissalsBeforeAction + 1)
+    expect(platform.dismissals.at(-1)?.orderId).toBe('b1111111-1111-4111-8111-111111111111')
+    expect(platform.clicks.length).toBe(clicksBeforeAction + 1)
+    observations.push('refresh.action event=dismissed got-it=true')
+    await expect.poll(() => platform.acks.length).toBe(refreshAckStart + 2)
+    expect(await cardText(refreshCards.first())).toContain('32.00')
+    observations.push('refresh.promoted cards=2 acks=refresh-first,refresh-second')
+    await refreshCards.first().getByRole('button', { name: 'Close', exact: true }).click()
+    await expect.poll(() => platform.acks.length).toBe(refreshAckStart + 3)
+    expect(platform.acks.slice(refreshAckStart).map(ack => ack.orderId)).toEqual(['b1111111-1111-4111-8111-111111111111', 'b2222222-2222-4222-8222-222222222222', 'b3333333-3333-4333-8333-333333333333'])
+    await refreshCards.first().getByRole('button', { name: 'Close', exact: true }).click()
+    await expect.poll(() => refreshCards.count()).toBe(0)
+    observations.push('refresh.dismissed cards=0 acks=refresh-first,refresh-second,refresh-third')
+    await refreshPage.close()
+
+    const pollFirst = 'c1111111-1111-4111-8111-111111111111'
+    const pollSecond = 'c2222222-2222-4222-8222-222222222222'
+    platform.grant(pollFirst, '41.00')
+    const pollPage = await openDesktopPage('en-US')
+    await pollPage.clock.install()
+    await pollPage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+    await shownNotice(pollPage, 'You received a CNY 41.00 DSH trial credit.')
+    await expect.poll(() => platform.acks.at(-1)?.orderId).toBe(pollFirst)
+    const pollCards = noticeCards(pollPage)
+    const retainedNode = await pollCards.first().elementHandle()
+    const pollReads = platform.gets.length
+    const pollAcks = platform.acks.length
+    platform.grant(pollSecond, '42.00')
+    await pollPage.clock.fastForward(3_600_000)
+    await expect.poll(() => pollCards.count()).toBe(2)
+    expect(platform.gets.length).toBe(pollReads + 1)
+    expect(platform.acks.length).toBe(pollAcks)
+    expect(await pollCards.first().evaluate((element, previous) => element === previous, retainedNode)).toBe(true)
+    await openSettings(pollPage, 'en')
+    await expect.poll(() => platform.gets.length).toBe(pollReads + 2)
+    expect(await pollCards.count()).toBe(2)
+    observations.push('poll.arrival cards=2 list-reads=1 duplicate-acks=0 same-node=true settings-immediate-read=true')
+    await pollPage.close()
 
     await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'notice-flow.expected.md'), observations.join('\n'), MODE)
     for (const tripwire of tripwires) {

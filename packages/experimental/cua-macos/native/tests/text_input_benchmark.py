@@ -165,8 +165,7 @@ def run_sample(args, label, repeat, length, artifacts, summary, deadline):
             windows_deadline = min(deadline, time.monotonic() + args.event_timeout)
             while True:
                 windows, _, _ = helper.call("listWindows", owner)
-                visible = [window for window in windows if window["pid"] == fixture.process.pid and
-                           window["isOnScreen"] and window["bounds"]["width"] > 200 and window["bounds"]["height"] > 200]
+                visible = [window for window in windows if window["isOnScreen"] and window["bounds"]["width"] > 200 and window["bounds"]["height"] > 200]
                 if len(visible) == 1:
                     window = visible[0]
                     break
