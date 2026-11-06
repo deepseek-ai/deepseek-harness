@@ -1,9 +1,10 @@
 /** Standard mode offers the installed documentation skill without loading it for an unrelated task. */
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
+import { dirname } from 'node:path'
 import { chromium } from 'playwright'
 import { expect, it } from 'vitest'
-import { fixtureUserPrompts, launchWebScaffold } from './scaffold.ts'
+import { assertFixtureInventory, fixtureUserPrompts, launchWebScaffold } from './scaffold.ts'
 import { connectFreshWorkspace, newEnglishPage } from './support.ts'
 
 const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/standard-dsh-doc/session.v4.jsonl', import.meta.url))
@@ -40,6 +41,7 @@ it('lists dsh-doc once without loading instructions or calling tools for an ordi
       expect(names).not.toContain('cordis_inspect_list')
       expect(names).not.toContain('cordis_inspect_query')
       await page.getByText('READY', { exact: true }).waitFor()
+      await assertFixtureInventory(dirname(FIXTURE), ['session.v4.jsonl'])
     } finally {
       await browser.close()
     }
