@@ -152,9 +152,9 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
       arguments: { method: 'activate', params: { appHandle: 'fixture-app' } },
     })
     expect(activated.isError).toBe(false)
-    expect(activated.value).toMatchObject({
-      dispatched: true, foreground: {
-        requestId: callId, operation: 'activate', targetPid: 9, targetWindowId: null, activationRequested, raiseRequested: false,
+    expect(activated.value).toEqual({
+      dispatched: true, foregroundChanged: beforePid !== 9, foreground: {
+        requestId: callId, targetPid: 9, activationRequested,
         before: { frontPid: beforePid, focusedWindowId: 7, frontWindowId: beforeWindowId, frontWindowPid: beforePid },
         after: { frontPid: 9, focusedWindowId: 7, frontWindowId: 7, frontWindowPid: 9 },
       },
