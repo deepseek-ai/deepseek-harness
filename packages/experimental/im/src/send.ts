@@ -12,6 +12,11 @@
  *   content's `<quote id>` envelope element, so the platform reply rides the normal transform/fallback path, and the
  *   quoted stored message's adapter referrer becomes `Target.referrer` (passive replies, thread placement) — for a
  *   stream on every state, because the target is resolved once.
+ * - **Resources.** Published content carries its own bytes (`data:`, `base64:`) or names core-resolved `satori:`
+ *   resources; a reference the platform would make this host fetch — a `file:` path, an internal address — is refused
+ *   by the core's prepare stage and reads as `failed`, because that fetch runs outside the filesystem sandbox the
+ *   session's own tools answer to. A local file therefore reaches a chat through `im_send_file`, which reads it under
+ *   the caller's working directory and publishes the bytes inline.
  * - **Receipts.** A publication with `options.operationId` records `pending` *before* it reaches the platform and the
  *   observed outcome after it: `confirmed`, `failed` (the platform answered and published nothing,
  *   `PlatformError.published === 'no'`), `partial` (`PartialSendError`) or `uncertain` (anything else — transport
@@ -29,8 +34,8 @@ import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import type { Context } from '@deepseek-ai/cordis'
 import {
-  h, isElement, PartialSendError, PlatformError, StrictRenderError, type Bot, type Fragment, type MessageHandle,
-  type MessageStream, type SendResult, type StreamOptions, type Target,
+  h, isElement, PartialSendError, PlatformError, RefusedContentError, StrictRenderError, type Bot, type Fragment,
+  type MessageHandle, type MessageStream, type SendResult, type StreamOptions, type Target,
 } from '@deepseek-ai/cordis-plugin-im-core'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { defineDomain, domainTable, type Domain } from '@deepseek-ai/dsh-storage-domain'
@@ -354,6 +359,9 @@ export class ImSender {
     }
     if (error instanceof StrictRenderError) {
       return { status: 'failed', report: error.report, error: error.message }
+    }
+    if (error instanceof RefusedContentError) {
+      return { status: 'failed', error: error.message }
     }
     if (error instanceof PlatformError && error.published === 'no') {
       return { status: 'failed', error: `${REFUSED}${error.message}` }

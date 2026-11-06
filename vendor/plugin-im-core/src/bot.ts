@@ -64,8 +64,8 @@ import { type InternalRouteCallback, InternalRouter } from './internal.ts'
 import type { Mode, TransformResult } from './mode.ts'
 import { type ChatRef, type InboundMessage, type Login, type MessageRef, Status, type Target, type User } from './protocol.ts'
 import {
-  createResourceFetcher, MemoryResourceCache, type PrepareContext, prepare, type Prepared, type ResolvedResource,
-  type ResourceKind, type ResourceRef,
+  createResourceFetcher, MemoryResourceCache, PUBLISHABLE_SCHEMES, type PrepareContext, prepare, type Prepared,
+  type ResolvedResource, type ResourceKind, type ResourceRef,
 } from './resource.ts'
 import { CallbackRegistry, Session, type SessionEvent } from './session.ts'
 import {
@@ -464,7 +464,10 @@ export abstract class Bot<C = unknown> {
       adapter: this.adapterHooks,
       target,
       cache: this.resourceCache,
-      fetch: createResourceFetcher(this.ctx),
+      // A publication is content this host produced: it carries its bytes (`data:`, `base64:`) or names core-resolved
+      // `satori:` resources. Reading anything else — a `file:` path, an internal address — would let whoever wrote the
+      // content reach this host's filesystem and network through the platform upload.
+      fetch: createResourceFetcher(this.ctx, { schemes: PUBLISHABLE_SCHEMES }),
       ...signal ? { signal } : {},
       ...extra.skipUpload ? { skipUpload: true } : {},
     })

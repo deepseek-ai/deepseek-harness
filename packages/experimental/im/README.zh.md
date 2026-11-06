@@ -94,7 +94,9 @@ kind: "package-reference"
 
 所有出站消息均通过 `ctx.im.send`（单条消息）或 `ctx.im.stream`（流式更新消息）发送。传入 `options.session` 时，该会话或其托管祖先必须在目标聊天上拥有 `writable: true` 的绑定。传入 `options.quote` 会在消息内容最前面插入 `<quote>` 元素，并将被引用消息保存的适配器 `referrer` 附加到发送目标上，从而支持被动回复与话题内回复。传入 `options.thread` 可指定目标话题线程 id，设为 `true` 则跟随被引用消息所在的话题线程。
 
-传入 `options.operationId` 时，发送器会在调用平台接口前向 `im_receipts` 写入 `pending` 回执，并在调用结束后更新为观测到的结果：`confirmed`、`failed`（平台明确拒绝且未发布任何内容）、`partial`（多段消息仅部分发布成功）或 `uncertain`（网络故障、超时、发出后取消或崩溃后无结果记录）。使用相同的 `operationId`、目标与内容重放会直接返回已存回执而不会重复发送；相同 `operationId` 搭配不同参数会抛出 `conflict` 错误。
+一次发送只携带它自己的字节。媒体以 `data:`（`im_send_file` 在调用方工作目录下读取文件后发布的内容）或由核心自行解析的 `satori:` 引用进入聊天；凡是会让平台要求本机去抓取的引用——`file:` 路径、内网地址——都会在 prepare 阶段被拒绝并呈现为 `failed`，因为那种抓取走的是 http 服务，而不是会话自身工具所遵循的文件系统沙箱。该规则对内容里的每个元素都成立，markdown 图片也包括在内。
+
+传入 `options.operationId` 时，发送器会在调用平台接口前向 `im_receipts` 写入 `pending` 回执，并在调用结束后更新为观测到的结果：`confirmed`、`failed`（平台明确拒绝且未发布任何内容，或内容引用了本机拒绝抓取的资源）、`partial`（多段消息仅部分发布成功）或 `uncertain`（网络故障、超时、发出后取消或崩溃后无结果记录）。使用相同的 `operationId`、目标与内容重放会直接返回已存回执而不会重复发送；相同 `operationId` 搭配不同参数会抛出 `conflict` 错误。
 
 `ctx.im.format` 将已存 `ImMessage` 渲染为面向模型的用户消息内容：
 - `xml`（默认）：每条消息渲染为 `<im-message seq="12" from="张三" time="14:07">正文 [图片 #12.1]</im-message>`，机器人自身消息带 `self="true"`，引用同一聊天的已存消息时带 `quote="#10"`。
