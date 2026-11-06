@@ -134,6 +134,16 @@ describe('web e2e: agent teamwork panel', () => {
     const menu = page.getByRole('menu')
     const summary = menu.getByRole('menuitem', { name: 'Agent teamwork Off', exact: true })
     await summary.waitFor()
+    const stateColor = await summary.getByText('Off', { exact: true }).evaluate(element => getComputedStyle(element).color)
+    const modelColor = await menu.getByRole('menuitem', { name: 'Model DeepSeek-V4-Flash', exact: true })
+      .getByText('DeepSeek-V4-Flash', { exact: true }).evaluate(element => getComputedStyle(element).color)
+    expect(stateColor).toBe(modelColor)
+    const inspectArrow = (element: HTMLElement | SVGElement) => {
+      const { left, right, width, height } = element.getBoundingClientRect()
+      return { left, right, width, height, color: getComputedStyle(element).color, glyph: element.innerHTML }
+    }
+    const peerArrow = menu.getByRole('menuitem', { name: 'Model DeepSeek-V4-Flash', exact: true }).locator('svg').last()
+    expect(await summary.locator('svg').evaluate(inspectArrow)).toEqual(await peerArrow.evaluate(inspectArrow))
     expect(await menu.getByRole('switch').count()).toBe(0)
     expect(await page.getByRole('button', { name: 'About agent teamwork', exact: true }).count()).toBe(0)
     const rootSnapshot = await captureStableAria(page, '[role="menu"]', scaffold.workspaceCwd)
@@ -147,6 +157,15 @@ describe('web e2e: agent teamwork panel', () => {
       await menu.getByText('Coordinate work and progress across agents with a shared task board for better results on complex tasks, with correspondingly higher token costs.', { exact: true }).waitFor()
       expect(await page.getByRole('tooltip').count()).toBe(0)
       expect(await toggle.getAttribute('aria-checked')).toBe('false')
+      await page.mouse.move(0, 0)
+      await toggle.press('ArrowDown')
+      expect(await toggle.evaluate(element => ({
+        rowBackground: getComputedStyle(element.parentElement!).backgroundColor,
+        focusVisible: element.matches(':focus-visible'),
+        outline: getComputedStyle(element).outlineStyle,
+        descriptionGap: element.parentElement!.nextElementSibling!.getBoundingClientRect().top
+          - element.parentElement!.getBoundingClientRect().bottom,
+      }))).toEqual({ rowBackground: 'rgba(0, 0, 0, 0)', focusVisible: true, outline: 'solid', descriptionGap: 0 })
       const settingsSnapshot = await captureStableAria(page, '[role="menu"]', scaffold.workspaceCwd)
       await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'info.expected.md'),
         `## Root\n\n${rootSnapshot}\n\n## Team settings\n\n${settingsSnapshot}`, MODE)
@@ -208,12 +227,19 @@ describe('web e2e: agent teamwork panel', () => {
             && element.scrollHeight <= element.clientHeight && style.textOverflow !== 'ellipsis'
         })).toBe(true)
       }
-      await toggle.click()
+      const labelBounds = await menu.getByText('Enable agent teamwork', { exact: true }).boundingBox()
+      if (labelBounds === null) throw new Error('Team label is not visible')
+      await page.mouse.click(labelBounds.x + labelBounds.width / 2, labelBounds.y + labelBounds.height / 2)
       await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
       await expect.poll(() => toggle.isEnabled()).toBe(true)
       await toggle.press('Escape')
       await menu.getByRole('menuitem', { name: 'Agent teamwork On', exact: true }).click()
-      await toggle.click()
+      const gap = await toggle.evaluate((element) => {
+        const control = element.getBoundingClientRect()
+        const label = element.parentElement!.querySelector('span')!.getBoundingClientRect()
+        return { x: (label.right + control.left) / 2, y: control.top + control.height / 2 }
+      })
+      await page.mouse.click(gap.x, gap.y)
       await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('false')
       expect(await page.getByRole('tooltip').count()).toBe(0)
       expect(tripwire.pageErrors).toEqual([])

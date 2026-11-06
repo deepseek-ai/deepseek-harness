@@ -27,11 +27,12 @@ function props(enabled: boolean | undefined, selectTeamMode = vi.fn(async () => 
 
 it.each(Object.entries({ zh, en, ja, es, fr, de, ru, pt }).flatMap(([locale, dictionary]) =>
   [false, true].map(enabled => ({ locale, dictionary, enabled })),
-))('opens Team settings from the $locale summary without changing mode (enabled: $enabled)', ({ dictionary, enabled }) => {
+))('opens Team settings from the $locale summary without changing mode (enabled: $enabled)', ({ locale, dictionary, enabled }) => {
   const input = props(enabled)
   render(<TeamModeToggle {...input} t={makeTranslate(dictionary)} />)
   const summary = screen.getByRole('menuitem', { name: new RegExp(dictionary['command.title']) })
   expect(summary.textContent).toBe(dictionary['command.title'] + dictionary[enabled ? 'mode.on' : 'mode.off'])
+  if (locale === 'zh') expect(summary.textContent).toBe(`智能体团队协作${enabled ? '开启' : '关闭'}`)
   expect(summary.getAttribute('data-model-menu-page')).toBe('agent-team')
   expect(screen.queryByRole('switch')).toBeNull()
   expect(screen.queryByRole('tooltip', { hidden: true })).toBeNull()
@@ -41,17 +42,6 @@ it.each(Object.entries({ zh, en, ja, es, fr, de, ru, pt }).flatMap(([locale, dic
   expect(input.selectTeamMode).not.toHaveBeenCalled()
   expect(input.requestDisableConfirmation).not.toHaveBeenCalled()
   expect(input.dismiss).not.toHaveBeenCalled()
-})
-
-it.each([
-  { enabled: false, state: '关闭' },
-  { enabled: true, state: '开启' },
-])('shows the full Chinese saved state $state in the summary', ({ enabled, state }) => {
-  const input = props(enabled)
-  render(<TeamModeToggle {...input} />)
-  const summary = screen.getByRole('menuitem', { name: `智能体团队协作${state}` })
-  expect(summary.textContent).toBe(`智能体团队协作${state}`)
-  expect(input.selectTeamMode).not.toHaveBeenCalled()
 })
 
 it('keeps summary state projection-owned and blocks navigation while locked', () => {

@@ -35,16 +35,22 @@ export interface ModelMenuControls {
   reportFailure: (message: string) => void
 }
 
+/** Root-menu controls for opening plugin-owned settings pages. */
+export type ModelMenuOptions = ModelMenuControls & {
+  /**
+   * Open page.key in conversation.input.model.page with page.title as its localized accessible name.
+   * The root button's data-model-menu-page must match page.key for focus return.
+   */
+  openPage: (page: ModelMenuPage) => void
+}
+
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
     /** Session options appended after model and reasoning controls in the root menu. */
     'conversation.input.model.options': {
       kind: 'list'
       scope: 'session'
-      owner: ModelMenuControls & {
-        /** Open a keyed detail page inside this menu; its root button supplies data-model-menu-page for focus return. */
-        openPage: (page: ModelMenuPage) => void
-      }
+      owner: ModelMenuOptions
     }
     /** Plugin-owned content displayed as a model-menu detail page. */
     'conversation.input.model.page': {

@@ -11,7 +11,7 @@ import { en } from '../src/client/locales.ts'
 
 afterEach(cleanup)
 
-function setup(locked = false) {
+function setup() {
   const directory = createSnapshotStore<ModelDirectoryState>({
     current: { provider: 'fixture', model: 'fixture' }, routable: true,
     groups: [{ id: 'fixture', name: 'Fixture', models: [{ id: 'fixture', name: 'Fixture' }] }],
@@ -33,7 +33,7 @@ function setup(locked = false) {
     }
     return options?.fallback ?? null
   }
-  render(<ModelSelect locked={locked} available directory={directory} load={vi.fn()} select={select}
+  render(<ModelSelect locked={false} available directory={directory} load={vi.fn()} select={select}
     resolveText={text => typeof text === 'string' ? text : text.en} t={makeTranslate(en)} renderSlot={renderSlot} />)
   const trigger = screen.getByRole('button', { name: /^Select model/ })
   fireEvent.click(trigger)

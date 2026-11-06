@@ -40,7 +40,7 @@ import {
   IconDataOutlineRegular, IconWarningOutlineRegular, Input, isMobileDevice, rankByName, StateDot, Tag, Toast,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ModelLabelOwner, ModelMenuPage, ModelSelectInjected } from './slots.ts'
+import type { ModelLabelOwner, ModelMenuControls, ModelMenuPage, ModelSelectInjected } from './slots.ts'
 import css from './ModelSelect.module.css'
 import { orderModelProviders } from './provider-order.ts'
 
@@ -264,6 +264,15 @@ export function ModelSelect(
     setPane('root')
   }
 
+  const controls: ModelMenuControls = {
+    locked: locked || busy,
+    dismiss: () => {
+      close()
+      triggerRef.current?.focus()
+    },
+    reportFailure: (message) => { setToast({ seq: ++toastSeq.current, text: message }) },
+  }
+
   const moveFocus = (offset: number): void => {
     const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>(
       'button[role="menuitem"]:not([disabled]), button[role="menuitemradio"]:not([disabled]), button[role="switch"]:not([disabled])',
@@ -317,7 +326,7 @@ export function ModelSelect(
     if (event.key === 'Tab') {
       if (event.shiftKey) {
         event.preventDefault()
-        if (typeof pane === 'object' || (pane !== 'root' && currentChoice !== undefined)) back(pane)
+        if (pane !== 'root' && currentChoice !== undefined) back(pane)
         else close(true)
         return
       }
@@ -518,15 +527,7 @@ export function ModelSelect(
                   <IconChevronRightOutlineRegular className={css.cellChevron} />
                 </button>
               )}
-              {renderSlot('conversation.input.model.options', {
-                locked: locked || busy,
-                openPage: (page) => { drill(page) },
-                dismiss: () => {
-                  close()
-                  triggerRef.current?.focus()
-                },
-                reportFailure: (message) => { setToast({ seq: ++toastSeq.current, text: message }) },
-              })}
+              {renderSlot('conversation.input.model.options', { ...controls, openPage: drill })}
             </>
           )}
 
@@ -671,14 +672,7 @@ export function ModelSelect(
           )}
           {typeof pane === 'object' && (
             <div className={clsx(css.groups, 'scrollable')}>
-              {renderSlot('conversation.input.model.page', {
-                locked: locked || busy,
-                dismiss: () => {
-                  close()
-                  triggerRef.current?.focus()
-                },
-                reportFailure: (message) => { setToast({ seq: ++toastSeq.current, text: message }) },
-              }, { entryKey: pane.key })}
+              {renderSlot('conversation.input.model.page', controls, { entryKey: pane.key })}
             </div>
           )}
         </MenuSurface>,

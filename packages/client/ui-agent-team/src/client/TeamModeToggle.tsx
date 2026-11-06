@@ -46,11 +46,11 @@ function RootTeamModeSummary({ useProjection, locked, openPage, t }: TeamModeTog
       className={css.summary}
       data-model-menu-page="agent-team"
       disabled={locked}
-      onClick={() => { if (!locked) openPage({ key: 'agent-team', title: t('command.title') }) }}
+      onClick={() => { openPage({ key: 'agent-team', title: t('command.title') }) }}
     >
       <span className={css.summaryLabel}>{t('command.title')}</span>
       <span className={css.state}>{t(mode.enabled ? 'mode.on' : 'mode.off')}</span>
-      <IconChevronRightOutlineRegular size={14} className={css.chevron} aria-hidden="true" />
+      <IconChevronRightOutlineRegular className={css.chevron} aria-hidden="true" />
     </button>
   )
 }
@@ -76,8 +76,7 @@ function RootTeamModePage({
   const [pending, setPending] = useState(false)
   if (mode === undefined) return null
   const select = (enabled: boolean): void => {
-    if (locked || pending || modelSelection === undefined) return
-    if (!enabled && modelSelection.lastUsed !== null) {
+    if (!enabled && modelSelection !== undefined && modelSelection.lastUsed !== null) {
       dismiss()
       requestDisableConfirmation()
       return

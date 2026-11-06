@@ -1,11 +1,11 @@
 .summary {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   box-sizing: border-box;
   width: 100%;
-  min-height: 34px;
-  padding: 7px 8px;
+  height: 34px;
+  padding: 0 8px;
   border: 0;
   border-radius: var(--dsw-radius-md);
   background: transparent;
@@ -39,13 +39,22 @@
 .state,
 .chevron {
   flex: none;
-  color: var(--dsw-alias-label-secondary);
+}
+
+.state {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.chevron {
+  width: 12px;
+  height: 12px;
+  color: var(--dsw-alias-menu-icon);
 }
 
 .page {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0;
   min-width: 0;
 }
 
@@ -88,10 +97,6 @@
   position: absolute;
   inset: 0;
   border-radius: var(--dsw-radius-md);
-}
-
-.row:has(.toggle:focus-visible) {
-  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 @media (hover: hover) {
