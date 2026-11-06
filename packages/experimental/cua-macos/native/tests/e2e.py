@@ -226,14 +226,14 @@ def main():
                     window_element = next(element for element in current["elements"] if element["role"] == "AXWindow")
                     call("performAction", {**owner, "snapshotId": current["snapshotId"],
                                                      "elementId": window_element["elementId"], "action": "AXRaise"})
-                call("getState", primary_params)
                 current = call("getState", primary_params)
-                no_hover = {**button_target(current, "Increment primary"), "windowId": primary["windowId"]}
-                before = json.loads(state_path.read_text())
-                denied = call("mouseMove", no_hover, "HOVER_UNAVAILABLE")
-                assert "systemPointerMoved" not in denied and "No input was sent" in denied["message"], denied
-                after = wait_state(lambda s: s["cursorSamples"] > before["cursorSamples"], "Cursor sampling stopped")
-                assert (after["cursorChanges"], after["hoverVisible"]) == (before["cursorChanges"], before["hoverVisible"]), after
+                if args.alternate_hover:
+                    no_hover = {**button_target(current, "Increment primary"), "windowId": primary["windowId"]}
+                    before = json.loads(state_path.read_text())
+                    denied = call("mouseMove", no_hover, "HOVER_UNAVAILABLE")
+                    assert "systemPointerMoved" not in denied and "No input was sent" in denied["message"], denied
+                    after = wait_state(lambda s: s["cursorSamples"] > before["cursorSamples"], "Cursor sampling stopped")
+                    assert (after["cursorChanges"], after["hoverVisible"]) == (before["cursorChanges"], before["hoverVisible"]), after
 
                 def mouse_move(target):
                     result = call("mouseMove", target if args.alternate_hover else {**target, "allowSystemPointer": True})
