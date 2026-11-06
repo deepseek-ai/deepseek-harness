@@ -65,7 +65,7 @@
   min-width: 0;
   margin: 0;
   overflow: hidden;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-primary);
   font: var(--dsw-font-xxs-12);
   text-overflow: ellipsis;
   white-space: nowrap;
