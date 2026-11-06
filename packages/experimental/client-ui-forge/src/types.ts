@@ -287,8 +287,9 @@ export interface ForgeDiffHunk {
 export type ForgeDiffStatus = 'added' | 'deleted' | 'modified' | 'renamed'
 
 /**
- * Review layer of a changed file by its path: `test` for a path matching `testPaths` or one the repository's root
- * `.gitattributes` marks `linguist-generated`, else `interface` for a path matching `interfacePaths`, else `implementation`.
+ * Review layer of a changed file: the layer the repository's root `.gitattributes` names with `dsh-review-layer`, else
+ * `test` for a file it marks `linguist-generated`, else the first of `testPaths`, `interfacePaths`, and the built-in
+ * test and interface rules that the path matches, else `implementation`.
  */
 export type ForgeFileLayer = 'interface' | 'implementation' | 'test'
 
@@ -397,11 +398,14 @@ export interface Config {
   /** Most commits of the `branch` scope listed, oldest first. */
   maxCommits?: number
   /**
-   * Globs of tests, snapshots, locale dictionaries, and lockfiles, matched against repository-relative paths with
-   * dot files included; their files form the `test` layer, which the changes view can hide.
+   * Globs of files in the `test` layer, which the changes view can hide, beside the built-in rules and checked before
+   * them; matched against repository-relative paths with dot files included. A repository's `.gitattributes` overrides both.
    */
   testPaths?: string[]
-  /** Globs of package manifests, configuration, and type declarations, matched like `testPaths`; their files form the `interface` layer. */
+  /**
+   * Globs of files in the `interface` layer beside the built-in rules, matched like `testPaths`; checked after
+   * `testPaths` and before the built-in rules.
+   */
   interfacePaths?: string[]
 }
 

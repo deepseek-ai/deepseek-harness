@@ -50,26 +50,6 @@ declare module '@deepseek-ai/cordis' {
 type ControllerConfig = PanelConfig & { readonly maxBranches: number; readonly maxCommits: number; readonly worktreePrefix: string }
 
 /**
- * Tests, test data, snapshots, locale dictionaries, and lockfiles, after the review plugin's collapsed and
- * non-interface paths; `locales.ts` is the typed dictionary module of a DSH Client plugin.
- */
-const TEST_PATHS = [
-  '**/test/**', '**/tests/**', '**/__tests__/**', '**/__mocks__/**', '**/__fixtures__/**', '**/e2e/**',
-  '**/*.spec.*', '**/*.test.*', '**/*.e2e.*',
-  '**/__snapshots__/**', 'snapshots/**', '**/*.snap',
-  '**/locale/*.json', '**/locales/**', '**/locales.ts',
-  '**/pnpm-lock.yaml', '**/package-lock.json', '**/npm-shrinkwrap.json', '**/yarn.lock',
-] as const
-
-/** Package manifests, type declarations, and configuration by extension, name, or directory, after the review plugin's scanner. */
-const INTERFACE_PATHS = [
-  '**/package.json', '**/*.d.ts', '**/*.d.mts', '**/*.d.cts', '**/types.ts',
-  '**/*.{json,jsonc,yaml,yml,toml,ini,conf,cfg,properties,xml,plist}',
-  '**/.env', '**/.env.*', '**/.*rc', '**/.*rc.*', '**/*{config,settings,preferences,options}*',
-  '**/{config,configs,settings,profiles}/**',
-] as const
-
-/**
  * Serves the forge panel. Following a Session inspects the checkout of its
  * current directory using the Session's permissions and execution world, recognizes the
  * code host of the upstream remote or `origin`, probes sign-in for that host,
@@ -101,8 +81,8 @@ export class ForgePanelController extends TypertRemoteService {
     maxUntrackedFiles: z.number().default(100),
     maxCachedDiffBytes: z.number().default(16_777_216),
     maxCommits: z.number().default(250),
-    testPaths: z.array(z.string()).default([...TEST_PATHS]),
-    interfacePaths: z.array(z.string()).default([...INTERFACE_PATHS]),
+    testPaths: z.array(z.string()).default([]),
+    interfacePaths: z.array(z.string()).default([]),
   })
 
   private readonly home: Context

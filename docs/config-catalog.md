@@ -1065,7 +1065,7 @@ export interface CotTranslationPreferences {
 ## `@deepseek-ai/dsh-experimental-client-ui-forge`
 
 - `inject`: `forge` · `forgeSession` · `sessionProjections` · `workingDirectory` · `fs` · `subprocess` · `sandbox` · `sandboxPolicy` · `agents`
-- `source`: [`packages/experimental/client-ui-forge/src/types.ts:373`](../packages/experimental/client-ui-forge/src/types.ts)
+- `source`: [`packages/experimental/client-ui-forge/src/types.ts:374`](../packages/experimental/client-ui-forge/src/types.ts)
 
 ```ts config-catalog
 /** Host settings of the forge panel Remote. */
@@ -1096,11 +1096,14 @@ export interface Config {
   /** Most commits of the `branch` scope listed, oldest first. */
   maxCommits?: number
   /**
-   * Globs of tests, snapshots, locale dictionaries, and lockfiles, matched against repository-relative paths with
-   * dot files included; their files form the `test` layer, which the changes view can hide.
+   * Globs of files in the `test` layer, which the changes view can hide, beside the built-in rules and checked before
+   * them; matched against repository-relative paths with dot files included. A repository's `.gitattributes` overrides both.
    */
   testPaths?: string[]
-  /** Globs of package manifests, configuration, and type declarations, matched like `testPaths`; their files form the `interface` layer. */
+  /**
+   * Globs of files in the `interface` layer beside the built-in rules, matched like `testPaths`; checked after
+   * `testPaths` and before the built-in rules.
+   */
   interfacePaths?: string[]
 }
 ```

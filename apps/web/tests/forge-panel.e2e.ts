@@ -253,7 +253,8 @@ const REVIEW_SECTIONS = {
 
 /**
  * Pull request 7 with review layers: `src/panel.ts` and `docs/panel.md` are implementation, `package.json` is
- * interface, and the spec, the locale dictionary, and `docs/schema.json`, which `.gitattributes` marks generated, are tests.
+ * interface, and the spec, the locale dictionary, which `.gitattributes` places in the test layer, and
+ * `docs/schema.json`, which it marks generated, are tests.
  */
 const REVIEW_DIFF = [PR7_DIFF.trimEnd(), ...REVIEW_SECTIONS.test, ...REVIEW_SECTIONS.schema, ''].join('\n')
 
@@ -266,7 +267,9 @@ async function writeReviewFixture(root: string): Promise<void> {
     [`${'1'.repeat(40)}...${HEAD7}`]: [...REVIEW_SECTIONS.test, ...REVIEW_SECTIONS.schema, ''].join('\n'),
   }))
   const contents = JSON.parse(await readFile(join(root, 'contents.json'), 'utf8')) as Record<string, string>
-  for (const commit of ['2'.repeat(40), HEAD7]) contents[`.gitattributes@${commit}`] = 'docs/schema.json linguist-generated\n'
+  for (const commit of ['2'.repeat(40), HEAD7]) {
+    contents[`.gitattributes@${commit}`] = 'docs/schema.json linguist-generated\nlocale/*.json dsh-review-layer=test\n'
+  }
   await writeFile(join(root, 'contents.json'), JSON.stringify(contents))
 }
 

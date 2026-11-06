@@ -696,8 +696,9 @@ type ForgeDiffStatus = 'added' | 'deleted' | 'modified' | 'renamed'
 
 ```ts type-equiv
 /**
- * Review layer of a changed file by its path: `test` for a path matching `testPaths` or one the repository's root
- * `.gitattributes` marks `linguist-generated`, else `interface` for a path matching `interfacePaths`, else `implementation`.
+ * Review layer of a changed file: the layer the repository's root `.gitattributes` names with `dsh-review-layer`, else
+ * `test` for a file it marks `linguist-generated`, else the first of `testPaths`, `interfacePaths`, and the built-in
+ * test and interface rules that the path matches, else `implementation`.
  */
 type ForgeFileLayer = 'interface' | 'implementation' | 'test'
 ```
