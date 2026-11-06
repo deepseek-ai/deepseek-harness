@@ -398,7 +398,7 @@ export class PluginManager extends TypertRemoteService {
       await Promise.allSettled([...this.packageOperations])
     }, 'plugin-manager: package cancellation')
     ctx.effect(() => installPluginReference(
-      { on: (event, listener, options) => ctx.on(event, listener, options) },
+      ctx,
       {
         listBundles: names => this.listBundles({ names }),
         readInventory: () => readPluginInventory(ctx),

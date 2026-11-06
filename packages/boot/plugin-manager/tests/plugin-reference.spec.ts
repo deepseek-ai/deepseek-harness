@@ -4,6 +4,9 @@ import { join } from 'node:path'
 import { pluginEntryId } from '@deepseek-ai/dsh-host-plugin-inventory'
 import type { PluginInventoryEntry, PluginInventorySnapshot } from '@deepseek-ai/dsh-host-plugin-inventory/types'
 import { createUserMessage, type UserMessage } from '@deepseek-ai/dsh-llm'
+import { Context } from '@deepseek-ai/cordis'
+import { agentEvents, type Agent, type PreStepDecision } from '@deepseek-ai/dsh-agent'
+import { Session, SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import { formatPluginMention } from '../src/grammar.ts'
 import {
@@ -236,25 +239,31 @@ describe('plugin reference expansion', () => {
 })
 
 describe('plugin reference installation', () => {
-  it('registers one prepend listener that expands entering steps and passes rejections through', async () => {
-    const dispose = vi.fn()
-    let listener: Parameters<Parameters<typeof installPluginReference>[0]['on']>[1] | undefined
-    const remove = installPluginReference({
-      on: (event, registered, options) => {
-        expect(event).toBe('agent/pre-step')
-        expect(options).toEqual({ prepend: true })
-        listener = registered
-        return dispose
-      },
-    }, reader([bundle('@acme/plugin')]))
-    expect(remove).toBe(dispose)
+  it('expands entering steps outside other listeners, passes rejections through, and stops after disposal', async () => {
+    const ctx = new Context()
+    const id = SessionId('plugin-reference')
+    const session = Session.create(id, undefined, { version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false })
+    const agent = { id, ctx, session } as Agent
     const cited = createUserMessage({
       source: { kind: 'user' },
       content: [{ type: 'text', text: formatPluginMention({ packageName: '@acme/plugin' }) }],
     })
-    const payload = { agent: { session: { header: {} } }, signal: new AbortController().signal }
-    const entered = await listener?.(payload, async () => ({ kind: 'enter', messages: [cited] }))
-    expect(entered?.kind === 'enter' ? entered.messages : []).toHaveLength(2)
-    expect(await listener?.(payload, async () => ({ kind: 'reject' }))).toEqual({ kind: 'reject' })
+    const step = (decision: PreStepDecision) => agentEvents(ctx, agent).waterfall('agent/pre-step', {
+      messages: [cited], turn: 1, step: 1, signal: new AbortController().signal, modelSelection: { provider: 'mock', model: 'mock' },
+    }, () => Promise.resolve(decision))
+    // A listener registered earlier sees the unexpanded step: the prepended expansion wraps every other listener.
+    const seen: number[] = []
+    ctx.on('agent/pre-step', async (_payload, next) => {
+      const decision = await next()
+      seen.push(decision.kind === 'enter' ? decision.messages.length : 0)
+      return decision
+    })
+    const remove = installPluginReference(ctx, reader([bundle('@acme/plugin')]))
+    const entered = await step({ kind: 'enter', messages: [cited] })
+    expect(entered.kind === 'enter' ? entered.messages : []).toHaveLength(2)
+    expect(seen).toEqual([1])
+    expect(await step({ kind: 'reject' })).toEqual({ kind: 'reject' })
+    remove()
+    expect(await step({ kind: 'enter', messages: [cited] })).toEqual({ kind: 'enter', messages: [cited] })
   })
 })

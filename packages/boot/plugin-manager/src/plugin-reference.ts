@@ -1,7 +1,9 @@
 /** Bounded model context for canonical `@[label](dsh-plugin:…)` plugin references. */
 import { existsSync, realpathSync } from 'node:fs'
 import { isAbsolute, join, relative } from 'node:path'
-import type { PreStepDecision } from '@deepseek-ai/dsh-agent'
+import type { Context } from '@deepseek-ai/cordis'
+// The `agent/pre-step` event this module listens to.
+import type {} from '@deepseek-ai/dsh-agent'
 import type { ProfileContext } from '@deepseek-ai/dsh-app-boot'
 import type { PluginInventorySnapshot } from '@deepseek-ai/dsh-host-plugin-inventory/types'
 import type { PluginLocalizedMeta } from '@deepseek-ai/dsh-package-manifest'
@@ -50,28 +52,6 @@ export interface PluginReferenceReader {
   readonly bundleDir: (name: string) => string
   /** The managed profile's directory and patch file. */
   readonly profile: Pick<ProfileContext, 'dir' | 'patchPath'>
-}
-
-/** The stable slice of an entering agent this resolver reads. */
-export interface PluginReferenceAgent {
-  readonly session: {
-    readonly header: {
-      /** Absent when the session has no working directory selected. */
-      readonly cwd?: string | undefined
-    }
-  }
-}
-
-/** The waterfall registration the plugin-manager already owns. */
-export interface PluginReferenceHost {
-  on(
-    event: 'agent/pre-step',
-    listener: (
-      payload: { agent: PluginReferenceAgent; signal: AbortSignal },
-      next: () => Promise<PreStepDecision>,
-    ) => Promise<PreStepDecision>,
-    options: { prepend: true },
-  ): () => void
 }
 
 /** One cited bundle's model-visible description. */
@@ -259,15 +239,12 @@ export async function expandPluginReferenceMessages(
 
 /**
  * Register the pre-step listener that expands plugin references.
- * @param host - pre-step waterfall owner.
+ * @param ctx - the plugin manager's context, which owns the listener.
  * @param reader - bundle, inventory, and profile reads.
  * @returns the listener disposer.
  */
-export function installPluginReference(
-  host: PluginReferenceHost,
-  reader: PluginReferenceReader,
-): () => void {
-  return host.on('agent/pre-step', async ({ agent, signal }, next) => {
+export function installPluginReference(ctx: Context, reader: PluginReferenceReader): () => void {
+  return ctx.on('agent/pre-step', async ({ agent, signal }, next) => {
     const decision = await next()
     if (decision.kind === 'reject') return decision
     return {
