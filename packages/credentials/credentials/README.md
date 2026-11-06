@@ -53,12 +53,12 @@ declare const ctx: Context
 
 const ref = credentialRef('DEEPSEEK_API_KEY')          // POSIX shell identifier, branded
 const hit = await ctx.credentials.resolve(ref)         // { value, source } | undefined
-const info = await ctx.credentials.describe(ref)       // { configured, source?, writable } — never the value
+const info = await ctx.credentials.describe(ref)       // { configured, source?, writable, masked? } — never the value
 await ctx.credentials.set(ref, 'sk-…')                 // the stored value outranks environment fallbacks
 await ctx.credentials.unset(ref)                       // no-op when absent; an environment fallback then applies again
 ```
 
-Store a key with `set`, remove it with `unset`, check its status with `describe`, and read the current value with `resolve` when an operation needs it. `describe` reports whether the key is set, where it comes from, and whether you can write to it — it never returns the value.
+Store a key with `set`, remove it with `unset`, check its status with `describe`, and read the current value with `resolve` when an operation needs it. `describe` reports whether the key is set, where it comes from, and whether you can write to it — it never returns the value. Providers may disclose a masked stored-value preview through the optional `masked` field; the full value stays on the Host.
 
 ### Storing, updating, and removing records
 

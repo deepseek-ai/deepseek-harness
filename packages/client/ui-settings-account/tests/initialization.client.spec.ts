@@ -24,10 +24,12 @@ it.each(['accepted', 'refused', 'disconnected', 'pending'] as const)('initialize
   const signedIn: AccountView = {
     status: 'credential-stored', links, attempt: { id: 'login' as SignInAttemptId, phase: 'succeeded' },
   }
-  const frames: AccountView[] = [signedIn, signedIn, { status: 'signed-out', links, attempt: null }]
+  const frames: AccountView[] = [signedIn, signedIn, signedIn, { status: 'signed-out', links, attempt: null }]
+  const getNotifications = vi.fn(async () => ({ ok: true, value: null }))
   const disposers: (() => void)[] = []
   let operations: AccountSectionInjected | undefined
   const ctx = {
+    on: () => () => {}, provide: () => {}, emit: () => {}, parallel: async () => [],
     effect: (install: () => (() => void) | undefined) => { const dispose = install(); if (dispose) disposers.push(dispose) },
     locale: { register: () => () => {}, bind: () => (key: string) => key, getSnapshot: () => ({ active: 'en' }) },
     configForms: {
@@ -55,11 +57,12 @@ it.each(['accepted', 'refused', 'disconnected', 'pending'] as const)('initialize
     remote: {
       $on: () => () => {},
       session: { initializeDefaultModel },
-      account: { getProfile: async () => ({ ok: true, value: null }), getBalance: async () => ({ ok: true, value: null }) },
+      account: { getProfile: async () => ({ ok: true, value: null }), getBalance: async () => ({ ok: true, value: null }),
+        getNotifications },
       $stream: () => ({
         signal: abort.signal, dispose: () => { abort.abort(); release.resolve(undefined) },
         async *[Symbol.asyncIterator]() {
-          for (const value of frames) yield { value, accept: () => {
+          for (const [index, value] of frames.entries()) yield { generation: index < 2 ? 1 : 2, value: { type: 'snapshot', state: value }, accept: () => {
             const snapshot = operations?.hooks.account.getSnapshot()
             observed.push({ status: snapshot?.view?.status, failed: snapshot?.failed })
             if (value.status === 'signed-out') done.resolve(undefined)
@@ -73,7 +76,9 @@ it.each(['accepted', 'refused', 'disconnected', 'pending'] as const)('initialize
     apply(ctx as never)
     await done.promise
     expect(initializeDefaultModel).toHaveBeenCalledExactlyOnceWith()
+    expect(getNotifications).not.toHaveBeenCalled()
     expect(observed).toEqual([
+      { status: 'credential-stored', failed: false },
       { status: 'credential-stored', failed: false },
       { status: 'credential-stored', failed: false },
       { status: 'signed-out', failed: false },

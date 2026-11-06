@@ -844,9 +844,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'abstract describe(ref: CredentialRef): Promise<CredentialInfo>',
-        description: 'Describe one reference for configuration surfaces without exposing the value.',
+        description: 'Describe one reference for configuration surfaces without exposing the full value.',
         parameters: [{ name: 'ref', description: 'the reference to describe.' }],
-        returns: 'configured state, supplying source, and writability.',
+        returns: 'configured state, supplying source, writability, and optional masked preview.',
       },
       {
         signature: 'abstract set(ref: CredentialRef, value: string): Promise<void>',
@@ -892,7 +892,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'credentialsController',
     summary: 'Host service backing the generated `ctx.remote.credentials` namespace.',
-    description: 'Host service backing the generated `ctx.remote.credentials` namespace. It carries every wire obligation the credential seam itself does not: the batch fan-out bound, the field-by-field view projection, the reference-grammar guard, and the refusal mapping. Secret values cross in one direction only — no method here returns one.',
+    description: 'Host service backing the generated `ctx.remote.credentials` namespace. It carries every wire obligation the credential seam itself does not: the batch fan-out bound, the field-by-field view projection, the reference-grammar guard, and the refusal mapping. Full secret values cross in one direction only — no method here returns one.',
     methods: [
       {
         signature: '@Remote async describe(refs: string[]): Promise<Record<string, CredentialInfo>>',
@@ -978,86 +978,110 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'deepseekAccount',
-    summary: 'Account operations; only Host consumers can obtain a request credential.',
-    description: 'Account operations; only Host consumers can obtain a request credential.',
+    summary: 'Account login, credentials, and client-safe Remote operations.',
+    description: 'Account login, credentials, and client-safe Remote operations.',
     methods: [
       {
-        signature: 'abstract getState(): Promise<AccountView>',
+        signature: '@Remote async getState(): Promise<AccountView>',
         description: 'Read stored-account presence and the latest login attempt.',
         parameters: [],
         returns: 'a snapshot without credentials or PKCE secrets.',
       },
       {
-        signature: 'abstract getProfile(client: AccountClientMetadata): Promise<AccountDetails[\'profile\'] | null>',
+        signature: '@Remote async getProfile(client: AccountClientMetadata): Promise<AccountDetails[\'profile\'] | null>',
         description: 'Query Platform profile independently of wallet balances. A ready result whose stable profile ID first becomes available or changes notifies identity-enabled watch consumers, so they re-read getPlatformSession; repeated IDs stay silent.',
         parameters: [{ name: 'client', description: 'identity of the requesting UI for this call.' }],
         returns: 'profile outcome, or null if signed out or the grant changed during the query.',
       },
       {
-        signature: 'abstract getBalance(client: AccountClientMetadata): Promise<AccountDetails[\'balance\'] | null>',
+        signature: '@Remote getBalance(client: AccountClientMetadata): Promise<AccountDetails[\'balance\'] | null>',
         description: 'Query Platform recharge and bonus wallet balances independently of profile data.',
         parameters: [{ name: 'client', description: 'identity of the requesting UI for this call.' }],
         returns: 'balance outcome, or null if signed out or the grant changed during the query.',
       },
       {
-        signature: 'abstract getUnnotifiedBonuses(client: AccountClientMetadata): Promise<AccountBonusBatch | null>',
-        description: 'Query the granted bonuses Platform has not yet recorded as displayed.',
+        signature: '@Remote async getNotifications(client: AccountClientMetadata): Promise<AccountNotificationBatch | null>',
+        description: 'Query unconsumed account notifications in server order without reading profile data.',
         parameters: [{ name: 'client', description: 'identity of the requesting UI for this call; its language selects the server-authored message.' }],
-        returns: 'bonuses with their account, or null if signed out or the grant changed during the query.',
+        returns: 'notifications with their next query delay, or null if signed out or the grant changed during the query.',
       },
       {
-        signature: 'abstract ackBonusNotified(accountId: AccountUserId, orderId: AccountBonusOrderId, client: AccountClientMetadata): Promise<boolean>',
-        description: 'Record one displayed bonus as notified for the account it belongs to.',
-        parameters: [{ name: 'accountId', description: 'account the notification was read for; a different current account is never acknowledged.' }, { name: 'orderId', description: 'granted bonus order the user saw.' }, { name: 'client', description: 'identity of the requesting UI for this call.' }],
-        returns: 'true once Platform records the acknowledgement; false if signed out or the account changed.',
+        signature: '@Remote async getNotificationContent(id: AccountNotificationId, client: AccountClientMetadata): Promise<AccountNotification | null>',
+        description: 'Query localized content of a notification, including one already consumed.',
+        parameters: [{ name: 'id', description: 'notification whose content is requested.' }, { name: 'client', description: 'identity of the requesting UI; its language selects the localized content.' }],
+        returns: 'content without changing consumption, or null if signed out or the grant changed.',
       },
       {
-        signature: 'abstract startSignIn(client: AccountClientMetadata, callbackOrigin: string, loginSource: \'web\' | \'desktop\'): Promise<AccountView>',
-        description: 'Join an active attempt or start browser authorization.',
-        parameters: [{ name: 'client', description: 'identity of the requesting UI; a new attempt captures it, and joining retains the original attempt\'s identity.' }, { name: 'callbackOrigin', description: 'browser-accessible loopback HTTP origin, including any SSH local port.' }, { name: 'loginSource', description: 'initiating UI, used to return from a failed exchange.' }],
-        returns: 'the initial snapshot without waiting for browser approval.',
+        signature: '@Remote async reportNotificationEvent(id: AccountNotificationId, event: AccountNotificationEvent, client: AccountClientMetadata): Promise<boolean>',
+        description: 'Report a notification interaction; the backend decides consumption.',
+        parameters: [{ name: 'id', description: 'notification the user interacted with.' }, { name: 'event', description: 'displayed frame, non-dismiss action click, or explicit dismissal.' }, { name: 'client', description: 'identity of the requesting UI for this call.' }],
+        returns: 'true once the server accepts the event; false if signed out or credentials changed during the call.',
       },
       {
-        signature: 'abstract cancelSignIn(id: SignInAttemptId): Promise<AccountView>',
-        description: 'Cancel only the named attempt; committing attempts settle before returning.',
-        parameters: [{ name: 'id', description: 'attempt identity from this Host.' }],
-        returns: 'state after cancellation or an already-started commit.',
-      },
-      {
-        signature: 'abstract signOut(client: AccountClientMetadata): Promise<AccountView>',
-        description: 'Remove the local grant while retaining API keys; the provider revokes it in the background.',
-        parameters: [{ name: 'client', description: 'identity of the requesting UI, captured for the background revocation retries.' }],
-        returns: 'the signed-out state after local removal; remote failures never restore the grant.',
-      },
-      {
-        signature: 'abstract watch(signal: AbortSignal, includeIdentityChanges?: boolean): AsyncIterable<AccountView>',
-        description: 'Subscribe to snapshots including a complete initial state.',
-        parameters: [{ name: 'signal', description: 'subscription lifetime; ending it never cancels login.' }, { name: 'includeIdentityChanges', description: 'also notify when cached Platform identity changes; defaults to false.' }],
-        returns: 'complete snapshots as account state changes.',
-      },
-      {
-        signature: 'abstract resolveToken(url: string): Promise<string | undefined>',
-        description: 'Resolve a credential only for the inference origin allowed by the provider.',
-        parameters: [{ name: 'url', description: 'actual request destination or API base URL.' }],
-        returns: 'stored token, or undefined for other origins or a signed-out account.',
-      },
-      {
-        signature: 'abstract rejectToken(token: string): Promise<void>',
+        signature: 'async rejectToken(token: string): Promise<void>',
         description: 'Remove an inference-rejected token only while it still matches the stored login.',
         parameters: [{ name: 'token', description: 'token captured by the rejected inference request.' }],
         returns: 'after matching credentials are removed and the expiry notification is emitted.',
       },
       {
-        signature: 'abstract getPlatformSession(): Promise<PlatformSession | null>',
-        description: 'Read credentials for the configured Platform origin, bound to their issuing environment, and pair them with the account ID from the last successful profile read; no profile request is made.',
+        signature: 'async getDeviceIdentity(): Promise<{ deviceId?: string; userId?: AccountUserId; osVersion: string }>',
+        description: 'Read existing login identity without creating a device or returning credentials.',
+        parameters: [],
+        returns: 'optional device/account identifiers and the provider\'s OS version string.',
+      },
+      {
+        signature: 'async getPlatformSession(): Promise<PlatformSession | null>',
+        description: 'Read credentials for the configured embedded-page origin, bound to their account environment, and pair them with the account ID from the last successful profile read; no profile request is made.',
         parameters: [],
         returns: 'a Host-only snapshot, or null while signed out or when the credential changed during the read.',
       },
       {
-        signature: 'abstract getDeviceIdentity(): Promise<{ deviceId?: string; userId?: AccountUserId; osVersion: string }>',
-        description: 'Read existing login identity without creating a device or returning credentials.',
+        signature: 'async resolveToken(url: string): Promise<string | undefined>',
+        description: 'Resolve a credential only for the inference origin allowed by the provider.',
+        parameters: [{ name: 'url', description: 'actual request destination or API base URL.' }],
+        returns: 'stored token, or undefined for other origins or a signed-out account.',
+      },
+      {
+        signature: '@Remote async startSignIn(client: AccountClientMetadata, callbackOrigin: string, loginSource: \'web\' | \'desktop\'): Promise<AccountView>',
+        description: 'Join an active attempt or start browser authorization.',
+        parameters: [{ name: 'client', description: 'identity of the requesting UI; a new attempt captures it, and joining retains the original attempt\'s identity.' }, { name: 'callbackOrigin', description: 'browser-accessible loopback HTTP origin, including any SSH local port.' }, { name: 'loginSource', description: 'initiating UI, used to return from a failed exchange.' }],
+        returns: 'the initial snapshot without waiting for browser approval.',
+      },
+      {
+        signature: '@Remote async cancelSignIn(attemptId: SignInAttemptId): Promise<AccountView>',
+        description: 'Cancel only the named attempt; committing attempts settle before returning.',
+        parameters: [{ name: 'attemptId', description: 'attempt identity from this Host.' }],
+        returns: 'state after cancellation or an already-started commit.',
+      },
+      {
+        signature: '@Remote signOut(client: AccountClientMetadata): Promise<AccountView>',
+        description: 'Remove the local grant while retaining API keys; the provider revokes it in the background.',
+        parameters: [{ name: 'client', description: 'identity of the requesting UI, captured for the background revocation retries.' }],
+        returns: 'the signed-out state after local removal; remote failures never restore the grant.',
+      },
+      {
+        signature: '@Remote hasRunningAccountTasks(): boolean',
+        description: 'Inspect running work before sign-out.',
         parameters: [],
-        returns: 'optional device/account identifiers and the provider\'s OS version string.',
+        returns: 'whether a running task\'s latest request uses the account route; false when the optional agents service is absent.',
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *watchExpiry(signal: AbortSignal): AsyncIterable<\'session-expired\'>',
+        description: 'Subscribe to live credential expiry without replay.',
+        parameters: [{ name: 'signal', description: 'subscription lifetime; provider disposal also ends it.' }],
+        returns: 'expiry notifications emitted during the subscription.',
+      },
+      {
+        signature: 'watch(signal: AbortSignal, includeIdentityChanges: boolean = false): AsyncIterable<AccountUpdate>',
+        description: 'Subscribe to ordered updates including a complete initial snapshot.',
+        parameters: [{ name: 'signal', description: 'subscription lifetime; ending it never cancels login.' }, { name: 'includeIdentityChanges', description: 'also notify when cached Platform identity changes; defaults to false.' }],
+        returns: 'complete state with snapshot or credentials-changed event type; credential changes take priority when updates coalesce.',
+      },
+      {
+        signature: '@Remote({ name: \'watch\', mode: \'stream\' }) watchState(signal: AbortSignal): AsyncIterable<AccountUpdate>',
+        description: 'Stream account state without the Host-only identity subscription option.',
+        parameters: [{ name: 'signal', description: 'subscription lifetime.' }],
+        returns: 'initial state, login progress, and credential-change updates.',
       },
     ],
   },
@@ -5579,18 +5603,6 @@ export const EVENT_API: readonly EventApiEntry[] = [
 /** Shapes of every exported type the Service and Event signatures reference (transitively), sorted by name. */
 export const TYPE_API: readonly TypeApiEntry[] = [
   {
-    name: 'AccountBonusBatch',
-    declaration: 'export interface AccountBonusBatch {\n    readonly accountId: AccountUserId;\n    readonly bonuses: readonly AccountBonusNotification[];\n}',
-  },
-  {
-    name: 'AccountBonusNotification',
-    declaration: 'export interface AccountBonusNotification {\n    readonly title?: string;\n    readonly orderId: AccountBonusOrderId;\n    readonly campaign?: JsonValue;\n    readonly amount?: JsonValue;\n    readonly currency?: JsonValue;\n    readonly grantedAt?: JsonValue;\n    readonly expiresAt: string;\n    readonly message: string;\n}',
-  },
-  {
-    name: 'AccountBonusOrderId',
-    declaration: 'export type AccountBonusOrderId = Branded<\'AccountBonusOrderId\'>;',
-  },
-  {
     name: 'AccountClientMetadata',
     declaration: 'export interface AccountClientMetadata {\n    readonly version: string;\n    readonly locale: string;\n    readonly timezoneOffsetSeconds: number;\n}',
   },
@@ -5603,8 +5615,32 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface AccountLinks {\n    readonly usageUrl: string;\n    readonly topUpUrl: string;\n}',
   },
   {
+    name: 'AccountNotification',
+    declaration: 'export interface AccountNotification {\n    readonly id: AccountNotificationId;\n    readonly createdAt: string;\n    readonly displayUntil: string | null;\n    readonly title: string;\n    readonly body: string;\n    readonly actions: readonly AccountNotificationAction[];\n    readonly data?: JsonValue;\n}',
+  },
+  {
+    name: 'AccountNotificationAction',
+    declaration: 'export interface AccountNotificationAction {\n    readonly label: string;\n    readonly style: \'primary\' | \'secondary\';\n    readonly target: {\n        readonly type: \'app_route\';\n        readonly name: \'account\';\n    } | {\n        readonly type: \'dismiss\';\n    };\n}',
+  },
+  {
+    name: 'AccountNotificationBatch',
+    declaration: 'export interface AccountNotificationBatch {\n    readonly nextPollAfterSeconds: number;\n    readonly notifications: readonly AccountNotification[];\n}',
+  },
+  {
+    name: 'AccountNotificationEvent',
+    declaration: 'export type AccountNotificationEvent = \'displayed\' | \'cta_clicked\' | \'dismissed\';',
+  },
+  {
+    name: 'AccountNotificationId',
+    declaration: 'export type AccountNotificationId = Branded<\'AccountNotificationId\'>;',
+  },
+  {
     name: 'AccountProfile',
     declaration: 'export interface AccountProfile {\n    readonly id: AccountUserId | null;\n    readonly name: string | null;\n    readonly contact: string | null;\n    readonly avatarUrl?: string | null;\n}',
+  },
+  {
+    name: 'AccountUpdate',
+    declaration: 'export interface AccountUpdate {\n    readonly type: \'snapshot\' | \'credentials-changed\';\n    readonly state: AccountView;\n}',
   },
   {
     name: 'AccountUserId',
@@ -6308,7 +6344,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CredentialInfo',
-    declaration: 'export interface CredentialInfo {\n    configured: boolean;\n    source?: string;\n    writable: boolean;\n}',
+    declaration: 'export interface CredentialInfo {\n    configured: boolean;\n    source?: string;\n    writable: boolean;\n    masked?: string;\n}',
   },
   {
     name: 'CredentialKey',
