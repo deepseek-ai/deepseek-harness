@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-client-ui-session-panel` adds a Session header toggle that shows or hides a floating panel of facts about the current Session. The panel docks in the main Conversation body's end gutter when the gutter can hold it, and otherwise opens over the transcript on request. It draws section titles and leaves section content to the plugins that register sections; it ships the Environment section with the project directory row.
+`dsh-client-ui-session-panel` adds a Session header toggle that shows or hides a floating panel of facts about the current Session. The panel docks in the main Conversation body's end gutter when the gutter can hold it, and otherwise opens over the transcript on request. It draws section titles and leaves section content to the plugins that register sections; it ships the Environment section with the working folder row.
 
 ## Table of Contents
 
@@ -38,7 +38,7 @@ A narrower gutter hides the docked panel, so it never covers the transcript. Thi
 
 A section is one `conversation.session.panel.section` list registration: `id` addresses it, `order` sorts it ascending, and the required `label` is its title, which the panel draws in the active locale. The section component receives `presentation` (`docked` or `overlay`) and `dismissOverlay()` as owner props; it renders its body and renders nothing when it has nothing to show, which hides its title too. Register trailing title controls, such as a count or a refresh button, in the keyed `conversation.session.panel.section.actions` slot under the section's `id`. A section without a label is reported to the console and not shown.
 
-Plugins share a title by registering rows in a section owner's row slot. The built-in Environment section (`id: 'environment'`, `order: 0`) declares `conversation.session.panel.environment.row`; its `project` row (`order: 0`) shows the directory of the Workspace that lists the Session, or the directory the Session was created in, with the Host home abbreviated to `~`. Right-clicking the row or pressing its More button opens the shared `directory` context menu. A plugin that owns a shared section declares its own row slot the same way.
+Plugins share a title by registering rows in a section owner's row slot. The built-in Environment section (`id: 'environment'`, `order: 0`) declares `conversation.session.panel.environment.row`; its `project` row (`order: 0`) shows the Session's working folder: the current directory from the `workingDirectory` projection, or, before the projection arrives or when it records none, the directory the Session was created in, then the directory of the Workspace that lists the Session. The row shows the folder name followed by its parent folder in tertiary ink, which clips with an ellipsis; its tooltip names the working folder and gives the full path. Both abbreviate the Host home to `~`. Right-clicking the row or pressing its More button opens the shared `directory` context menu. A plugin that owns a shared section declares its own row slot the same way.
 
 Marks that must stay visible while the panel is hidden, such as an attention dot, go in the `conversation.session.panel.indicator` list. Each occupant includes text that names it, which becomes part of the toggle's accessible name.
 
@@ -64,7 +64,7 @@ The panel projects the section list's live registrations (`entriesOfSlot`, so a 
 | [`src/client/sections.ts`](src/client/sections.ts) | Section roster projection |
 | [`src/client/SessionPanel.tsx`](src/client/SessionPanel.tsx) | The panel, its section titles, and Escape handling |
 | [`src/client/SessionPanelToggle.tsx`](src/client/SessionPanelToggle.tsx) | The header toggle and its indicators |
-| [`src/client/ProjectRow.tsx`](src/client/ProjectRow.tsx) | The project directory row |
+| [`src/client/ProjectRow.tsx`](src/client/ProjectRow.tsx) | The working folder row |
 
 </details>
 
@@ -95,7 +95,7 @@ None; the package never assembles or sends provider requests.
 These limits define current package constraints, not a task backlog.
 
 - **Laptop widths overlay rather than dock** — with the default transcript width the body must be at least about 1608px wide to dock; narrower bodies use the overlay. Docking by moving the transcript column aside is a separate layout decision.
-- **No execution environment row** — the Client has no per-Session fact for the local machine, an SSH host, or the sandbox mode, so the Environment section names only the project directory.
+- **No execution environment row** — the Client has no per-Session fact for the local machine, an SSH host, or the sandbox mode, so the Environment section names only the working folder.
 - **No section customization** — every live section shows; hiding or reordering sections from the panel is not offered.
 
 <a id="dev-note"></a>

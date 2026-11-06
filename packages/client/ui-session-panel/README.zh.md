@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-client-ui-session-panel` 在会话标题栏加一个开关，用来显示或隐藏一块汇总当前会话信息的悬浮面板。主对话区末端留白放得下面板时，面板停靠在留白里；放不下时，按需浮在对话正文上方。面板只绘制分栏标题，分栏内容交给注册分栏的插件；本包内置「环境」分栏及其项目目录行。
+`dsh-client-ui-session-panel` 在会话标题栏加一个开关，用来显示或隐藏一块汇总当前会话信息的悬浮面板。主对话区末端留白放得下面板时，面板停靠在留白里；放不下时，按需浮在对话正文上方。面板只绘制分栏标题，分栏内容交给注册分栏的插件；本包内置「环境」分栏及其工作目录行。
 
 ## 目录
 
@@ -38,7 +38,7 @@ kind: "package-reference"
 
 一个分栏是 `conversation.session.panel.section` 列表里的一次注册：`id` 用于寻址，`order` 升序排列，必填的 `label` 是标题，面板按当前语言绘制。分栏组件通过 owner props 收到 `presentation`（`docked` 或 `overlay`）和 `dismissOverlay()`；它负责渲染正文，没有内容时什么都不渲染，标题随之隐藏。标题尾部的控件（例如计数或刷新按钮）注册到以分栏 `id` 为键的 keyed slot `conversation.session.panel.section.actions`。缺少 label 的分栏会报告到控制台，并且不显示。
 
-多个插件共用一个标题时，把行注册到分栏拥有者的行 slot 中。内置「环境」分栏（`id: 'environment'`，`order: 0`）声明 `conversation.session.panel.environment.row`；其 `project` 行（`order: 0`）显示列出本会话的工作区目录，或会话创建时所在的目录，宿主家目录缩写为 `~`。右键该行或点其「更多」按钮会打开共享的 `directory` 上下文菜单。拥有共享分栏的插件用同样方式声明自己的行 slot。
+多个插件共用一个标题时，把行注册到分栏拥有者的行 slot 中。内置「环境」分栏（`id: 'environment'`，`order: 0`）声明 `conversation.session.panel.environment.row`；其 `project` 行（`order: 0`）显示会话的工作目录：`workingDirectory` 投影记录的当前目录；投影尚未送达或没有记录时，依次取会话创建时所在的目录、列出本会话的工作区目录。该行先显示目录名，再以三级文字色显示父目录，放不下时以省略号截断；悬停提示写明工作目录并给出完整路径。两处都把宿主家目录缩写为 `~`。右键该行或点其「更多」按钮会打开共享的 `directory` 上下文菜单。拥有共享分栏的插件用同样方式声明自己的行 slot。
 
 面板隐藏时也要可见的标记（例如需要处理的红点）放进 `conversation.session.panel.indicator` 列表。每个占位都带有说明自身的文字，这些文字会成为开关无障碍名称的一部分。
 
@@ -64,7 +64,7 @@ kind: "package-reference"
 | [`src/client/sections.ts`](src/client/sections.ts) | 分栏名单投影 |
 | [`src/client/SessionPanel.tsx`](src/client/SessionPanel.tsx) | 面板、分栏标题与 Esc 处理 |
 | [`src/client/SessionPanelToggle.tsx`](src/client/SessionPanelToggle.tsx) | 标题栏开关及其角标 |
-| [`src/client/ProjectRow.tsx`](src/client/ProjectRow.tsx) | 项目目录行 |
+| [`src/client/ProjectRow.tsx`](src/client/ProjectRow.tsx) | 工作目录行 |
 
 </details>
 
@@ -95,7 +95,7 @@ kind: "package-reference"
 以下限制定义的是当前包的约束，而非任务待办清单。
 
 - **笔记本宽度下使用浮层而非停靠**——在默认正文宽度下，对话区宽度需约 1608px 以上才能停靠；更窄时使用浮层。通过把正文列移开来停靠属于另一项布局决策。
-- **没有运行环境行**——客户端没有区分本机、SSH 主机或沙箱模式的会话级信息，因此「环境」分栏只显示项目目录。
+- **没有运行环境行**——客户端没有区分本机、SSH 主机或沙箱模式的会话级信息，因此「环境」分栏只显示工作目录。
 - **不能自定义分栏**——所有有内容的分栏都会显示；面板不提供隐藏或重新排序分栏的功能。
 
 <a id="dev-note"></a>
