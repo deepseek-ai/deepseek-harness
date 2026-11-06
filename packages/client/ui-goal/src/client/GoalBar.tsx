@@ -1,9 +1,9 @@
 /**
  * GoalBar: the goal indicator docked above the message composer (input dock
  * strip). A present goal shows a goal glyph, a phase label, the truncated
- * objective, and icon actions — resume when active-disarmed, paused, or
- * blocked, edit (inline form in the same strip), and clear. Goal creation
- * lives on the `/goal` command, not here: loading (undefined), no goal
+ * objective, and icon actions — edit (inline form in the same strip), clear,
+ * then pause when armed or resume when active-disarmed, paused, or blocked.
+ * Goal creation lives on the `/goal` command, not here: loading (undefined), no goal
  * (null), and complete goals render nothing. Durable state arrives as the projected whole snapshot;
  * process-local activation arrives through the injected activation hook.
  */
@@ -137,20 +137,6 @@ export function GoalBar({ goal, activation, onEdit, onPause, onResume, onClear, 
         <span className={css.objective}>{goal.objective}</span>
         {actionError !== null && <span className={css.error} role="alert">{actionError}</span>}
         <div className={css.actions}>
-          {goal.phase === 'active' && activation === 'armed' && (
-            <Tooltip portal label={t('action.pause')} side="bottom" delayMs={500}>
-              <button type="button" className={css.iconBtn} disabled={pending} onClick={() => { void runAction(onPause) }} aria-label={t('action.pause')}>
-                <IconPauseOutlineRegular size={14} />
-              </button>
-            </Tooltip>
-          )}
-          {showResume && (
-            <Tooltip portal label={t('action.resume')} side="bottom" delayMs={500}>
-              <button type="button" className={css.iconBtn} disabled={pending} onClick={() => { void runAction(onResume) }} aria-label={t('action.resume')}>
-                <IconPlayOutlineRegular size={14} />
-              </button>
-            </Tooltip>
-          )}
           <Tooltip portal label={t('action.edit')} side="bottom" delayMs={500}>
             <button
               type="button"
@@ -167,6 +153,20 @@ export function GoalBar({ goal, activation, onEdit, onPause, onResume, onClear, 
               <IconTrashOutlineRegular size={14} />
             </button>
           </Tooltip>
+          {goal.phase === 'active' && activation === 'armed' && (
+            <Tooltip portal label={t('action.pause')} side="bottom" delayMs={500}>
+              <button type="button" className={css.iconBtn} disabled={pending} onClick={() => { void runAction(onPause) }} aria-label={t('action.pause')}>
+                <IconPauseOutlineRegular size={14} />
+              </button>
+            </Tooltip>
+          )}
+          {showResume && (
+            <Tooltip portal label={t('action.resume')} side="bottom" delayMs={500}>
+              <button type="button" className={css.iconBtn} disabled={pending} onClick={() => { void runAction(onResume) }} aria-label={t('action.resume')}>
+                <IconPlayOutlineRegular size={14} />
+              </button>
+            </Tooltip>
+          )}
         </div>
       </div>
     </div>
