@@ -2293,7 +2293,7 @@ describe('desktop main startup', () => {
     check()
     await vi.waitFor(() => { expect(harness.dialog.showMessageBox).toHaveBeenCalledWith(expect.objectContaining({
       message: phase === 'downloading' ? en.updateDownloadInProgress : en.updateVerifying,
-      detail: phase === 'downloading' ? en.updateDownloadDetail : en.updateDetail, buttons: [en.updateClose], cancelId: 0,
+      detail: phase === 'downloading' ? en.updateDownloadDetail : '', buttons: [en.updateClose], cancelId: 0,
     })) })
     expect(harness.updateCheck).toHaveBeenCalledTimes(checks)
     expect(harness.updateDownload).not.toHaveBeenCalled()
@@ -2314,9 +2314,9 @@ describe('desktop main startup', () => {
     harness.dialog.showMessageBox.mockRejectedValueOnce(new Error('overlay unavailable'))
     const check = applicationMenuItems().find(item => item.label === en.checkUpdatesMenu)!.click as () => void
     check()
-    await vi.waitFor(() => { expect(harness.dialog.showMessageBox).toHaveBeenLastCalledWith(expect.objectContaining({
-      type: 'error', title: en.updateFailedTitle, technicalDetails: 'overlay unavailable',
-    })) })
+    await vi.waitFor(() => { expect(harness.dialog.showErrorBox).toHaveBeenCalledWith(en.updateFailedTitle, en.updateStatusUnavailable) })
+    expect(console.error).toHaveBeenCalledWith(expect.objectContaining({ message: 'overlay unavailable' }))
+    expect(harness.dialog.showMessageBox).toHaveBeenCalledOnce()
     expect(harness.updateCheck).toHaveBeenCalledTimes(checks)
     expect(harness.updateDownload).not.toHaveBeenCalled()
     expect(harness.updateInstall).not.toHaveBeenCalled()

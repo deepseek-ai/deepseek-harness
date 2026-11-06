@@ -1019,9 +1019,11 @@ async function main(): Promise<void> {
       }
       return ordinaryMessageBox({ type: 'info', title: locale.messages.updateCheckTitle,
         message: updates.state.phase === 'downloading' ? locale.messages.updateDownloadInProgress : locale.messages.updateVerifying,
-        detail: updates.state.phase === 'downloading' ? locale.messages.updateDownloadDetail : locale.messages.updateDetail, buttons: [locale.messages.updateClose], cancelId: 0,
-      }).then(() => {}).catch((error: unknown) => showUpdateFailure({ phase: 'error', failedOperation: 'check',
-        message: desktopErrorState(error).message }))
+        detail: updates.state.phase === 'downloading' ? locale.messages.updateDownloadDetail : '', buttons: [locale.messages.updateClose], cancelId: 0,
+      }).then(() => {}).catch((error: unknown) => {
+        console.error(error)
+        dialog.showErrorBox(locale.messages.updateFailedTitle, locale.messages.updateStatusUnavailable)
+      })
     }
     let failedOperation: 'check' | 'download' | 'install' = 'check'
     promptOperation ??= Promise.resolve().then(async () => {
