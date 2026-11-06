@@ -158,7 +158,16 @@ def main():
                 assert len(matches) == 1, state
                 return {**owner, "snapshotId": state["snapshotId"], "elementId": matches[0]["elementId"]}
 
-            target = button_target(first, "Increment primary")
+            target = {**button_target(first, "Increment primary"), "windowId": primary["windowId"]}
+            app_state = call("getState", {**owner, "maxElements": 300, "maxDepth": 20})
+            other_button = button_target(app_state, "Increment secondary")
+            for method in ("click", "mouseMove"):
+                unknown = call(method, {**target, "elementId": "9999"}, "INVALID_ARGUMENT")
+                assert "elementId is absent" in unknown["message"], unknown
+                call(method, {**target, "x": 0, "y": 0}, "INVALID_ARGUMENT")
+                call(method, {**target, "relative": True}, "INVALID_ARGUMENT")
+                call(method, {**target, "windowId": secondary["windowId"]}, "STALE_SNAPSHOT")
+                call(method, {**other_button, "windowId": primary["windowId"]}, "STALE_SNAPSHOT")
             call("click", target)
             wait_state(lambda state: state["count"] == 1, "primary click was not received exactly once")
             call("click", button_target(second, "Increment secondary"))
@@ -203,7 +212,7 @@ def main():
                 hover_state = call("getState", primary_params)
                 capture(primary, "02-native-hover.png")
                 assert json.loads(state_path.read_text())["hoverVisible"], "Observation dismissed native hover controls"
-                hover_target = button_target(hover_state, "Use native hover details")
+                hover_target = {**button_target(hover_state, "Use native hover details"), "windowId": primary["windowId"]}
                 mouse_move(hover_target)
                 call("click", hover_target)
                 wait_state(lambda actual: actual["hoverClicks"] == 1, "Native hover control did not activate")
