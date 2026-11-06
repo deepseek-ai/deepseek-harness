@@ -104,6 +104,14 @@ actor AXWorker {
         access = created
         return created
     }
+    private func moveUsingAX(_ element: AXUIElement?, windowID: UInt32, handle: String, params: RequestParameters) throws -> Bool {
+        let allowSystemPointer = try params.optionalBoolean("allowSystemPointer") ?? false
+        let hover = hovers[handle] ?? AXHover()
+        hovers[handle] = hover
+        if try hover.move(to: element, in: windowID, access: ax()) { return true }
+        try AXHover.requireSystemPointer(allowed: allowSystemPointer)
+        return false
+    }
     private func inputs() -> (KeyboardInput, WindowPointerInput) {
         if let keyboard, let pointer { return (keyboard, pointer) }
         let poster = PIDEventPoster()
@@ -348,7 +356,6 @@ actor AXWorker {
             let modifiers = try params.modifiers()
             let window: WindowInfo
             let point: WindowPoint
-            var hoverElement: AXUIElement?
             var elementWindow: AXUIElement?
             if params.contains("elementId") {
                 guard !params.contains("x"), !params.contains("y") else { throw RequestParameters.invalid("Element and coordinate targets cannot be combined") }
@@ -359,9 +366,15 @@ actor AXWorker {
                 if let requestedWindow, enclosing.id != requestedWindow {
                     throw NativeFailure(code: "STALE_SNAPSHOT", message: "Element belongs to window \(enclosing.id); select that window and read its tree")
                 }
-                if method == "click" { try ax().requireEnabled(selected) }
+                if method == "mouseMove" {
+                    _ = try NativePlatform.ownedWindow(identity.pid, enclosing.id)
+                    if try moveUsingAX(selected, windowID: enclosing.id, handle: handle, params: params) {
+                        return .result(Self.mouseMoveResult(route: "accessibility", pointerMoved: false))
+                    }
+                } else {
+                    try ax().requireEnabled(selected)
+                }
                 elementWindow = enclosing.element
-                hoverElement = selected
                 guard let bounds = try ax().bounds(selected), bounds.width > 0, bounds.height > 0 else { throw NativeFailure(code: "NATIVE_ERROR", message: "Element has no pointer bounds") }
                 window = try WindowGeometry.resolve(owner: identity, windowID: enclosing.id) { try ax().bounds(enclosing.element) }
                 point = WindowPoint(x: bounds.x + bounds.width / 2 - window.bounds.x, y: bounds.y + bounds.height / 2 - window.bounds.y)
@@ -373,18 +386,14 @@ actor AXWorker {
             }
             let route = WindowRoute(owner: identity, windowID: window.windowID, bounds: window.bounds)
             if method == "mouseMove" {
-                let allowSystemPointer = try params.optionalBoolean("allowSystemPointer") ?? false
                 try WindowPointerInput.validate(point, in: route)
-                if hoverElement == nil {
-                    hoverElement = try ax().element(at: CGPoint(x: window.bounds.x + point.x, y: window.bounds.y + point.y), owner: identity)
-                    if let hit = hoverElement, try ax().windowID(hit) != window.windowID { hoverElement = nil }
+                if elementWindow == nil {
+                    var hit = try ax().element(at: CGPoint(x: window.bounds.x + point.x, y: window.bounds.y + point.y), owner: identity)
+                    if let target = hit, try ax().windowID(target) != window.windowID { hit = nil }
+                    if try moveUsingAX(hit, windowID: window.windowID, handle: handle, params: params) {
+                        return .result(Self.mouseMoveResult(route: "accessibility", pointerMoved: false))
+                    }
                 }
-                let hover = hovers[handle] ?? AXHover()
-                hovers[handle] = hover
-                if try hover.move(to: hoverElement, in: route, access: ax()) {
-                    return .result(Self.mouseMoveResult(route: "accessibility", pointerMoved: false))
-                }
-                try AXHover.requireSystemPointer(allowed: allowSystemPointer)
                 return .mouseMove(route, point)
             }
             var clickRoute = route
