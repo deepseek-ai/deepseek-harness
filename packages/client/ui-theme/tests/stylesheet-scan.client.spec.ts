@@ -19,5 +19,7 @@ it('walks shipped package files and skips dot directories holding transient root
   mkdirSync(join(root, '.typert-worker-failure-probe'))
   writeFileSync(join(root, '.typert-worker-failure-probe', 'package.json'), '{}')
 
-  expect(packageFiles(name => name === 'package.json', root)).toEqual([`${root}/pkg/package.json`])
+  // The helper reports `/`-separated paths on every platform, so the Windows
+  // temporary root's separators must not reach the expectation.
+  expect(packageFiles(name => name === 'package.json', root)).toEqual([`${root.replaceAll('\\', '/')}/pkg/package.json`])
 })
