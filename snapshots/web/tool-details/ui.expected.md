@@ -477,15 +477,9 @@
 - button "List subagents 3 agents" [expanded]
 - text: Recorded result
 - list:
-  - listitem:
-    - text: agent-demo-review Running
-    - button "Expand description for agent-demo-review": 检查工具卡片布局
-  - listitem:
-    - text: agent-demo-docs Idle
-    - button "Expand description for agent-demo-docs": 整理工具展示清单
-  - listitem:
-    - text: agent-demo-icons Ready
-    - button "Expand description for agent-demo-icons": 检查状态图标
+  - listitem: 检查工具卡片布局 Running agent-demo-review
+  - listitem: 整理工具展示清单 Idle agent-demo-docs
+  - listitem: 检查状态图标 Ready agent-demo-icons
 - button "Inspect"
 - button "Send message agent-demo-review" [expanded]
 - text: Recorded result
@@ -658,8 +652,7 @@
     - term: Role
     - definition: lead
   - listitem:
-    - text: ui-review Running
-    - paragraph: 检查工具卡片的可读性
+    - text: 检查工具卡片的可读性 Running ui-review
     - term: ID
     - definition: agent-demo-review
     - term: Role
@@ -669,8 +662,7 @@
     - term: Context
     - definition: fresh
   - listitem:
-    - text: docs Inactive
-    - paragraph: 整理工具清单
+    - text: 整理工具清单 Inactive docs
     - term: ID
     - definition: agent-demo-docs
     - term: Role
