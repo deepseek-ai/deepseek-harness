@@ -8,6 +8,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
+import type { QuoteSummary } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { SidebarRightTabDefinition, TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { ChangeRequestSnapshot, ForgeReviewRequest, ForgeReviewResult } from '@deepseek-ai/dsh-experimental-forge/types'
@@ -729,7 +730,7 @@ describe('mountForgePanel changes view', () => {
       const scope = f.sessions.scope(S1)!
       let draft = ''
       const focus = vi.fn(), send = vi.fn()
-      const insertQuote = vi.fn((text: string) => { draft += `\n> ${text}`; return true })
+      const insertQuote = vi.fn((text: string, _summary?: QuoteSummary) => { draft += `\n> ${text}`; return true })
       const input = { state: { getSnapshot: () => ({ draft }) }, insertQuote, focus }
       const resolve = vi.fn(() => input)
       // Only the input methods used by this contribution are supplied by the Session fixture.
@@ -738,6 +739,7 @@ describe('mountForgePanel changes view', () => {
       expect(view.addReviewToInput(selection)).toBe(true)
       expect(view.addReviewToInput(selection)).toBe(true)
       expect(insertQuote.mock.calls.map(([text]) => text.split('\n')[0])).toEqual(['## User Comment 1', '## User Comment 2'])
+      expect(insertQuote.mock.calls[0]?.[1]).toEqual({ label: 'a.ts R1', title: 'a.ts', detail: 'R1', body: 'Check this' })
       expect(resolve).toHaveBeenCalledWith(scope)
       expect(focus).toHaveBeenCalledTimes(2)
       insertQuote.mockReturnValueOnce(false)

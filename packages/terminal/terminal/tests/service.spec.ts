@@ -5,6 +5,7 @@ import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import TerminalSessionService, { TerminalBackendCleanupError, TerminalError, TerminalSessionId } from '@deepseek-ai/dsh-terminal'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import type {
   TerminalBackend,
   TerminalBackendSession,
@@ -193,7 +194,15 @@ describe('TerminalSessionService ownership and lifecycle', () => {
     await expect(ctx.terminals.spawn(owner, { type: 'stub', name: 'main' })).rejects.toMatchObject({ code: 'DUPLICATE_NAME' })
 
     const operation = ctx.terminals.startSend(owner, created.sessionId, { text: 'echo hi', submit: true })
-    expect(() => ctx.terminals.startSend(owner, created.sessionId, { text: 'pwd', submit: true })).toThrow(TerminalError)
+    let concurrent: unknown
+    try {
+      ctx.terminals.startSend(owner, created.sessionId, { text: 'pwd', submit: true })
+    } catch (error: unknown) {
+      concurrent = error
+    }
+    expect(concurrent).toBeInstanceOf(TerminalError)
+    expect(concurrent).toBeInstanceOf(HarnessError)
+    expect(concurrent).toMatchObject({ name: 'TerminalError', code: 'SEND_ACTIVE' })
     expect(operation.readOutput()).toEqual({ delta: 'delta', truncated: false })
     expect(operation.cancel()).toBe(true)
     await operation.done

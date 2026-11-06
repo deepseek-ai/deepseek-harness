@@ -1,5 +1,6 @@
 /** Frozen line selections shared by the diff UI, composer references, and review submission. */
 
+import type { QuoteSummary } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ForgeDiffFile } from '../types.ts'
 
 /** A comment on consecutive lines of one side of one displayed hunk. */
@@ -56,6 +57,25 @@ export function selectReviewLines(file: ForgeDiffFile, side: 'L' | 'R', from: nu
     path: file.path, side, startLine, endLine, body: '',
     hunk: [`@@ -${oldStart},${hunk.oldLines} +${newStart},${hunk.newLines} @@`, ...hunk.lines].join('\n'),
   }
+}
+
+/**
+ * Name a comment's side and lines, such as `R12` or `L3–5`.
+ * @param comment - the commented range.
+ * @returns the range label shown beside comments and in composer quotes.
+ */
+export function reviewRange(comment: ReviewComment): string {
+  return `${comment.side}${comment.startLine}${comment.endLine === comment.startLine ? '' : `–${comment.endLine}`}`
+}
+
+/**
+ * Describe a composer quote of a comment by its file, range, and text instead of the whole message reference.
+ * @param comment - the quoted comment.
+ * @returns the composer's display of the quote.
+ */
+export function reviewQuoteSummary(comment: ReviewComment): QuoteSummary {
+  const range = reviewRange(comment)
+  return { label: `${comment.path.slice(comment.path.lastIndexOf('/') + 1)} ${range}`, title: comment.path, detail: range, body: comment.body }
 }
 
 /**

@@ -112,6 +112,29 @@ describe('QuotePreview', () => {
     }
   })
 
+  it('shows an owner summary inline and in a popover that opens without clipping', async () => {
+    const text = '## User Comment 1\nFile: src/index.ts\nComment:\nrename this'
+    const view = render(<QuotePreview text={text} summary={{ label: 'index.ts L78', title: 'src/index.ts', detail: 'L78', body: 'rename this' }} />)
+    const quote = view.container.querySelector<HTMLElement>('[data-quote-preview]')!
+    const inline = quote.querySelector('[data-quote-preview-text]')!
+    expect([...inline.children].map(part => [part.textContent, part.getAttribute('aria-hidden')]))
+      .toEqual([['index.ts L78', 'true'], ['src/index.ts L78', null], ['rename this', null]])
+    expect(view.queryByText(text)).toBeNull()
+    fireEvent.pointerEnter(quote)
+    await waitFor(() => {
+      expect([...document.querySelector('[data-quote-popover]')!.children].map(line => line.textContent))
+        .toEqual(['src/index.ts', 'L78', 'rename this'])
+    })
+    view.unmount()
+
+    render(<QuotePreview text={text} summary={{ label: 'index.ts', title: 'src/index.ts', body: 'rename this' }} />)
+    expect(document.querySelector('[data-quote-preview-text]')?.children[1]?.textContent).toBe('src/index.ts')
+    fireEvent.pointerEnter(document.querySelector<HTMLElement>('[data-quote-preview]')!)
+    await waitFor(() => {
+      expect([...document.querySelector('[data-quote-popover]')!.children].map(line => line.textContent)).toEqual(['src/index.ts', 'rename this'])
+    })
+  })
+
   it('contains keyboard and pointer removal events inside the editable preview', () => {
     const onRemove = vi.fn()
     const onPointerDown = vi.fn()
