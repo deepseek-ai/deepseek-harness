@@ -1,7 +1,7 @@
 /** Browser-safe panel state, the worktree request record, Remote error codes, and Host configuration of the forge panel. */
 
 import type {} from '@deepseek-ai/dsh-typert-protocol'
-import type { ChangeRequestSnapshot, ForgeReadiness, ForgeRepository } from '@deepseek-ai/dsh-experimental-forge/types'
+import type { ChangeRequestSnapshot, ForgeCommitList, ForgeReadiness, ForgeRepository } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { SessionChangeRequest } from '@deepseek-ai/dsh-experimental-forge-session/types'
 
 /** Git facts for the checkout that contains the Session's current directory. */
@@ -242,14 +242,26 @@ export interface ForgeBaseBranches {
   readonly local: readonly ForgeBaseBranch[]
 }
 
+/**
+ * Consecutive commits a changes view shows instead of its whole comparison, named by full object names in the order
+ * the commit list shows them, oldest first; the view shows the changes from the first commit's first parent to the last.
+ */
+export interface ForgeCommitRange {
+  /** First, oldest commit shown. */
+  readonly from: string
+  /** Last, newest commit shown; equal to `from` for one commit. */
+  readonly to: string
+}
+
 /** Which local changes a diff covers; each reads the Session's checkout through Git. */
 export type ForgeLocalScope =
   /**
    * The working tree and untracked files against a fork point: the merge base of HEAD with the
    * `base` ref, or while `base` is null, the base commit of the worktree the Session created,
-   * else the merge base of HEAD with the default branch of the code host remote.
+   * else the merge base of HEAD with the default branch of the code host remote. With `commits`, only the changes
+   * of those commits between the fork point and HEAD, without uncommitted or untracked files.
    */
-  | { readonly kind: 'branch'; readonly base: string | null }
+  | { readonly kind: 'branch'; readonly base: string | null; readonly commits: ForgeCommitRange | null }
   /** The working tree and untracked files against HEAD. */
   | { readonly kind: 'uncommitted' }
   /** The working tree and untracked files against the index. */
@@ -274,6 +286,12 @@ export interface ForgeDiffHunk {
 /** How one file changed. */
 export type ForgeDiffStatus = 'added' | 'deleted' | 'modified' | 'renamed'
 
+/**
+ * Review layer of a changed file by its path: `test` for a path matching `testPaths` or one the repository's root
+ * `.gitattributes` marks `linguist-generated`, else `interface` for a path matching `interfacePaths`, else `implementation`.
+ */
+export type ForgeFileLayer = 'interface' | 'implementation' | 'test'
+
 /** One changed file of a diff. */
 export interface ForgeDiffFile {
   /** Path relative to the repository root after the change, or before it for a deleted file. */
@@ -294,6 +312,13 @@ export interface ForgeDiffFile {
   readonly deletions: number
   /** Hunks in file order; none for a binary file or a change of mode or name only. */
   readonly hunks: readonly ForgeDiffHunk[]
+  /** Review layer the path falls in. */
+  readonly layer: ForgeFileLayer
+  /**
+   * Digest of the file's change: its paths, status, and hunks, plus the blob names of a binary change, or the content
+   * of an untracked binary file. Equal digests describe the same change; reading the same comparison again keeps it.
+   */
+  readonly digest: string
 }
 
 /** Local changes of the Session's checkout in one scope. */
@@ -306,20 +331,23 @@ export interface ForgeLocalDiff {
   readonly omitted: number
 }
 
-/** Changes of a change request as its code host computes them. */
+/** Changes of a change request, or of consecutive commits of it, as its code host computes them. */
 export interface ForgeChangeRequestDiff {
-  /** Head commit the diff describes. */
+  /** Commit whose new side the diff describes: the head, or the last chosen commit. */
   readonly headSha: string
   /** Changed files in the host's order. */
   readonly files: readonly ForgeDiffFile[]
   /**
    * Commits the checkout's branch has beyond the head when that branch is the change request's head
-   * branch and the head commit is present locally; null otherwise.
+   * branch and the head commit is present locally; null otherwise and for chosen commits.
    */
   readonly localAhead: number | null
-  /** Web page of each changed file at the head commit, by path. */
+  /** Web page of each changed file at `headSha`, by path. */
   readonly fileUrls: Readonly<Record<string, string>>
 }
+
+/** Commits of the `branch` scope, which the changes view can show one or several of. */
+export type ForgeLocalCommits = ForgeCommitList
 
 /** One file the `branch` scope changes, without its hunks. */
 export interface ForgeChangedFile {
@@ -366,6 +394,15 @@ export interface Config {
   maxUntrackedFiles?: number
   /** Most UTF-8 bytes of change request diffs kept in memory for later reads at the same head commit and base branch. */
   maxCachedDiffBytes?: number
+  /** Most commits of the `branch` scope listed, oldest first. */
+  maxCommits?: number
+  /**
+   * Globs of tests, snapshots, locale dictionaries, and lockfiles, matched against repository-relative paths with
+   * dot files included; their files form the `test` layer, which the changes view can hide.
+   */
+  testPaths?: string[]
+  /** Globs of package manifests, configuration, and type declarations, matched like `testPaths`; their files form the `interface` layer. */
+  interfacePaths?: string[]
 }
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
@@ -412,6 +449,8 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'forgePanel/checks-failed': Record<string, never>
     /** The code host did not provide the change request's diff or file, or its status has not been read yet; the message says why. */
     'forgePanel/diff-failed': Record<string, never>
+    /** A chosen commit is no longer among the listed commits of the branch or change request, or the commits are out of order. */
+    'forgePanel/commits-missing': Record<string, never>
   }
 }
 

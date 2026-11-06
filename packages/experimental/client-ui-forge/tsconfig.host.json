@@ -10,6 +10,7 @@
     "src/diff.ts",
     "src/git.ts",
     "src/local-diff.ts",
+    "src/layers.ts",
     "src/panel.ts",
     "src/parse.ts",
     "src/patch-cache.ts",

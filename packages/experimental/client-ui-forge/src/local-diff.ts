@@ -10,13 +10,17 @@ import type { Context } from '@deepseek-ai/cordis'
 import { FsError } from '@deepseek-ai/dsh-fs'
 import type { Session } from '@deepseek-ai/dsh-session'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
-import { decodeText, parseDiff, parseNumstat, untrackedFile } from './diff.ts'
+import { decodeText, oversizedUntrackedFile, parseDiff, parseNumstat, untrackedFile } from './diff.ts'
+import type { ParsedDiffFile } from './diff.ts'
 import { gitIn, GitOutputTooLarge } from './git.ts'
 import type { Git, GitConfig, GitOutput, Inspection } from './git.ts'
+import { ATTRIBUTES_PATH } from './layers.ts'
+import type { FileLayers } from './layers.ts'
 import { BASE_REF_PREFIXES, parseBaseBranches, parseName, remoteOrder } from './parse.ts'
 import type {
-  ForgeBaseBranches, ForgeDiffFile, ForgeLocalChanges, ForgeLocalDiff, ForgeLocalScope, ForgeSessionWorktree,
+  ForgeCommitRange, ForgeLocalChanges, ForgeLocalCommits, ForgeLocalDiff, ForgeLocalScope, ForgeBaseBranches, ForgeSessionWorktree,
 } from './types.ts'
+import type { ForgeCommit } from '@deepseek-ai/dsh-experimental-forge/types'
 
 /** Git limits plus the size limits of local diffs. */
 export interface DiffConfig extends GitConfig {
@@ -55,6 +59,17 @@ export class NoForkPoint extends Error {
 export class BaseMissing extends Error {
   override name = 'BaseMissing'
 }
+
+/** Thrown when chosen commits are not among the commits of the `branch` scope, or are out of order. */
+export class CommitsMissing extends Error {
+  override name = 'CommitsMissing'
+}
+
+/** A full SHA-1 or SHA-256 object name, the only form of a chosen commit Git receives. */
+const COMMIT = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/
+
+/** One commit per record: object name, first parent, author, author date, and subject, separated by NUL. */
+const LOG_FORMAT = '--format=%H%x00%P%x00%an%x00%aI%x00%s%x1e'
 
 /** No executable diff helpers or submodule working-tree inspection; preserve recorded submodule commit changes. */
 const DIFF = ['-c', 'core.quotePath=false', 'diff', '--no-ext-diff', '--no-textconv', '--submodule=short', '--ignore-submodules=dirty', '--no-color', '-M', '--src-prefix=a/', '--dst-prefix=b/'] as const
@@ -155,16 +170,20 @@ export async function baseBranches(
 /**
  * Read changes at `root` with command-local clean/process filter overrides and without
  * submodule working-tree inspection. Git's built-in newline, ident, and encoding conversions still apply.
+ * Each file's layer follows `layers` and the root `.gitattributes` of the new side: the index for `staged`,
+ * else the working tree.
  * @param ctx - context that provides `fs`, `subprocess`, `sandbox`, and `sandboxPolicy`.
  * @param config - Git and size limits.
  * @param session - Session whose sandbox policy and execution world apply.
  * @param root - top-level directory of the checkout.
  * @param fork - fork point of the `branch` scope, or null without one.
  * @param scope - which changes to read.
+ * @param layers - classifier of each file's review layer.
  * @param signal - cancellation of every command and read.
  * @returns tracked files in Git's order, then untracked files unless the scope is `staged`.
  * @throws NoForkPoint for the `branch` scope without `fork`; FilterConfigError when filter configuration
- * cannot be read within `maxDiffBytes`; DiffTooLarge for oversized comparison output; an Error when Git fails.
+ * cannot be read within `maxDiffBytes`; DiffTooLarge for oversized comparison output or `.gitattributes`;
+ * an Error when Git or the `.gitattributes` read fails.
  */
 export async function localDiff(
   ctx: Context,
@@ -173,6 +192,7 @@ export async function localDiff(
   root: string,
   fork: ForkPoint | null,
   scope: ForgeLocalScope,
+  layers: FileLayers,
   signal: AbortSignal,
 ): Promise<ForgeLocalDiff> {
   const git = gitIn(ctx, { ...config, maxOutputBytes: config.maxDiffBytes }, session, root, signal)
@@ -180,6 +200,7 @@ export async function localDiff(
   switch (scope.kind) {
     case 'branch':
       if (fork === null) throw new NoForkPoint('The checkout has no fork point to compare its branch with')
+      if (scope.commits !== null) return await commitsDiff(git, fork, scope.commits, layers)
       range = [fork.commit]
       break
     case 'uncommitted': range = [await headOrEmptyTree(git)]; break
@@ -190,14 +211,28 @@ export async function localDiff(
   }
   const overrides = await diffFilterOverrides(git)
   const tracked = parseDiff((await bounded(git('diff', [...DIFF, ...range, '--'], undefined, overrides))).stdout)
-  if (scope.kind === 'staged') return { base: null, files: tracked, omitted: 0 }
+  if (scope.kind === 'staged') {
+    const shown = await bounded(git('attributes', ['show', `:${ATTRIBUTES_PATH}`], [0, 128]))
+    return { base: null, files: layers.classify(tracked, shown.exitCode === 0 ? shown.stdout : ''), omitted: 0 }
+  }
   const untracked = await untrackedFiles(ctx, config, git, root, signal)
-  return { base: fork === null || scope.kind !== 'branch' ? null : fork.label, files: [...tracked, ...untracked.files], omitted: untracked.omitted }
+  let attributes = ''
+  try {
+    attributes = decodeText(await readFile(ctx, config, root, ATTRIBUTES_PATH, signal)) ?? ''
+  } catch (error) {
+    if (!(error instanceof FsError && error.code === 'FS_NOT_FOUND')) throw error
+  }
+  return {
+    base: fork === null || scope.kind !== 'branch' ? null : fork.label,
+    files: layers.classify([...tracked, ...untracked.files], attributes),
+    omitted: untracked.omitted,
+  }
 }
 
 /**
  * Read the new side of one file in a scope, which supplies the unchanged
- * lines between hunks: the index for `staged`, else the working tree.
+ * lines between hunks: the index for `staged`, the last chosen commit for
+ * chosen commits of the `branch` scope, else the working tree.
  * @param ctx - context that provides `fs`, `subprocess`, `sandbox`, and `sandboxPolicy`.
  * @param config - Git and size limits.
  * @param session - Session whose sandbox policy and execution world apply.
@@ -219,9 +254,11 @@ export async function localText(
 ): Promise<string> {
   if (!insideCheckout(path)) throw new Error(`forge-panel: ${JSON.stringify(path)} is not a path inside the checkout`)
   let text: string | undefined
-  if (scope.kind === 'staged') {
+  const commit = scope.kind === 'staged' ? '' : scope.kind === 'branch' && scope.commits !== null ? scope.commits.to : undefined
+  if (commit !== undefined) {
+    if (commit !== '' && !COMMIT.test(commit)) throw new CommitsMissing('The chosen commit is not a full object name')
     const git = gitIn(ctx, { ...config, maxOutputBytes: config.maxDiffBytes }, session, root, signal)
-    const shown = (await bounded(git('show', ['show', `:${path}`]))).stdout
+    const shown = (await bounded(git('show', ['show', `${commit}:${path}`]))).stdout
     text = shown.slice(0, BINARY_PROBE).includes('\0') ? undefined : shown
   } else {
     text = decodeText(await readFile(ctx, config, root, path, signal))
@@ -283,10 +320,57 @@ export async function aheadOf(git: Git, branch: string, commit: string): Promise
   return Number((await git('rev-list', ['rev-list', '--count', `${commit}..HEAD`])).stdout.trim())
 }
 
+/**
+ * List the commits of the `branch` scope: those reachable from HEAD but not from the fork point, parents before children.
+ * @param git - runner bound to the checkout, whose output limit bounds the listing.
+ * @param fork - fork point of the `branch` scope.
+ * @param limit - most commits listed.
+ * @returns the oldest `limit` commits and HEAD's commit.
+ * @throws an Error when Git fails or prints more than the runner's output limit.
+ */
+export async function localCommits(git: Git, fork: ForkPoint, limit: number): Promise<ForgeLocalCommits> {
+  const head = (await git('head', ['rev-parse', '--verify', 'HEAD'])).stdout.trim()
+  const all = await branchCommits(git, fork)
+  return { headSha: head, commits: all.slice(0, limit), truncated: all.length > limit }
+}
+
+/** Every commit between the fork point and HEAD, parents before children. */
+async function branchCommits(git: Git, fork: ForkPoint): Promise<ForgeCommit[]> {
+  const output = await git('log', ['log', '--topo-order', '--reverse', LOG_FORMAT, `${fork.commit}..HEAD`, '--'])
+  return output.stdout.split('\x1e').flatMap((record): ForgeCommit[] => {
+    const fields = record.replace(/^\n/, '').split('\0')
+    // The text after the last record holds no fields.
+    if (fields.length !== 5) return []
+    const [sha, parents, author, authoredAt, title] = fields as [string, string, string, string, string]
+    return [{ sha, parent: /^\S+/.exec(parents)?.[0] ?? null, title, author, authoredAt }]
+  })
+}
+
+/** The committed changes of consecutive commits of the `branch` scope, from the first commit's first parent to the last. */
+async function commitsDiff(git: Git, fork: ForkPoint, chosen: ForgeCommitRange, layers: FileLayers): Promise<ForgeLocalDiff> {
+  if (!COMMIT.test(chosen.from) || !COMMIT.test(chosen.to)) throw new CommitsMissing('The chosen commits are not full object names')
+  const commits = await branchCommits(git, fork)
+  const first = commits.findIndex(commit => commit.sha === chosen.from)
+  const start = commits[first]
+  if (start === undefined || commits.findIndex(commit => commit.sha === chosen.to) < first) {
+    throw new CommitsMissing('The chosen commits are no longer on the branch')
+  }
+  // A first commit without a parent starts an unrelated history that HEAD merged; it adds every file.
+  const parent = start.parent ?? await emptyTree(git)
+  const overrides = await diffFilterOverrides(git)
+  const files = parseDiff((await bounded(git('diff', [...DIFF, parent, chosen.to, '--'], undefined, overrides))).stdout)
+  const shown = await bounded(git('attributes', ['show', `${chosen.to}:${ATTRIBUTES_PATH}`], [0, 128]))
+  return { base: fork.label, files: layers.classify(files, shown.exitCode === 0 ? shown.stdout : ''), omitted: 0 }
+}
+
 /** HEAD, or the empty tree while the checked-out branch has no commit. */
 async function headOrEmptyTree(git: Git): Promise<string> {
   const head = await git('head', ['rev-parse', '--verify', '--quiet', 'HEAD'], [0, 1])
-  if (head.exitCode === 0) return 'HEAD'
+  return head.exitCode === 0 ? 'HEAD' : await emptyTree(git)
+}
+
+/** The object name of the empty tree. */
+async function emptyTree(git: Git): Promise<string> {
   return (await git('empty-tree', ['hash-object', '-t', 'tree', '--stdin'])).stdout.trim()
 }
 
@@ -297,17 +381,17 @@ async function untrackedFiles(
   git: Git,
   root: string,
   signal: AbortSignal,
-): Promise<{ readonly files: ForgeDiffFile[]; readonly omitted: number }> {
+): Promise<{ readonly files: ParsedDiffFile[]; readonly omitted: number }> {
   const listed = await bounded(git('untracked', ['ls-files', '--others', '--exclude-standard', '-z']))
   const paths = listed.stdout.split('\0').filter(path => path.length > 0 && !path.endsWith('/'))
-  const files: ForgeDiffFile[] = []
+  const files: ParsedDiffFile[] = []
   for (const path of paths.slice(0, config.maxUntrackedFiles)) {
     let content: Uint8Array
     try {
       content = await readFile(ctx, config, root, path, signal)
     } catch (error) {
       if (error instanceof DiffTooLarge) {
-        files.push({ ...untrackedFile(path, new Uint8Array()), oversized: true })
+        files.push(oversizedUntrackedFile(path))
         continue
       }
       if (error instanceof FsError) continue
