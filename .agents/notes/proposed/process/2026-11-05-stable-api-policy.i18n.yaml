@@ -6,44 +6,44 @@
   en: efcff6bc65d1ae54
   zh: 2b32885373cb788d
 /agent-note-stable-api-policy/problem:
-  en: 2fdcc60662854a90
-  zh: f3a608aef7c0a19f
+  en: b6492a320d28ff1c
+  zh: 0105277d71fe43ab
 /agent-note-stable-api-policy/proposal:
-  en: e3b788c84737dd2b
-  zh: 5a77241451adb735
+  en: 88384462c8232e93
+  zh: 355ad48f96efc95e
 /agent-note-stable-api-policy/proposal/stability-levels:
-  en: f9ee42fc3b9a3d25
-  zh: 3408072f29801caf
+  en: ad9ea5e151e05ac2
+  zh: baa08299dac43ee4
 /agent-note-stable-api-policy/proposal/unit-one-capability-seam:
-  en: 2c7967117aacab78
-  zh: ec76ef3db7216b73
+  en: f6707df2621559f2
+  zh: 82dc3b81c29b5f0a
 /agent-note-stable-api-policy/proposal/what-stable-covers:
-  en: b3359a75deac0cb2
-  zh: b6202f91ff2031ab
+  en: 0a637e21cfbabeb3
+  zh: 76078282bf686e17
 /agent-note-stable-api-policy/proposal/api-report-and-ci:
-  en: daf2b29671f39467
-  zh: b3728dafff7c1c8d
+  en: 772026ec3f2512b0
+  zh: d6cf271248e85a0e
 /agent-note-stable-api-policy/proposal/plugin-author-warnings:
-  en: f5acb81f7dd4f54e
-  zh: 9670fdbd63dbbb8b
+  en: e9bdb925a73e14e4
+  zh: e04aa39a43407070
 /agent-note-stable-api-policy/proposal/plugin-requirements:
-  en: fa7610e3b6d7338b
-  zh: 40fe03120eb29e46
+  en: cce626a0c5dff76f
+  zh: d85d04d33ddcff48
 /agent-note-stable-api-policy/proposal/compatibility-layer:
   en: 40445e93d1bb8561
   zh: 05a845c5093f4abd
 /agent-note-stable-api-policy/proposal/rollout:
-  en: ee100e798d22c433
-  zh: 993a4a1f96bf84bc
+  en: 16e88b03b3f1bc38
+  zh: 5628adf979269b92
 /agent-note-stable-api-policy/proposal/open-questions:
-  en: 1983889788985670
-  zh: 8c1baeb91a74e08a
+  en: 7adf48d2e14e57bd
+  zh: 01e6160925bc6c68
 /agent-note-stable-api-policy/alternatives-considered:
-  en: 7c48764472252b93
-  zh: c18289c0d09745dc
+  en: 4154f0aadc2f0017
+  zh: cc1e120f80e7fbb8
 /agent-note-stable-api-policy/acceptance-criteria:
-  en: 62bddb29ddf4e974
-  zh: 9dadef50f9f7d920
+  en: a858ac77edabe3d3
+  zh: 63f0872b73eef7f3
 /agent-note-stable-api-policy/risks:
-  en: 64ba57f19f3996b1
-  zh: 58e58e2e9c1d960d
+  en: 16693acc4f57df3a
+  zh: 96b056ba83bf3c38

@@ -31,4 +31,4 @@ The dependency is heavy and finicky — the reason this was deferred — and the
 
 Deferred when doc-sync landed: low value for an internal monorepo where reviewers already see the source diff, and a heavy, finicky dependency. Revisit if the packages are ever published externally — at that point a stable, diffable public API earns its keep.
 
-The packages are now published to npm, so the revisit condition holds. The [stable API policy](2026-11-05-stable-api-policy.md) proposal adopts this report as its baseline phase and adds stability levels and per-seam versions to it.
+The packages are now published to npm, so the revisit condition holds. The [stable API policy](2026-11-05-stable-api-policy.md) proposal replaces the per-package reports with one report covering exports, services, and events, and adds stability levels and per-seam versions; its acceptance criteria apply if it is accepted.
