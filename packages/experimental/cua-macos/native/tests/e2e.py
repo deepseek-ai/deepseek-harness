@@ -18,6 +18,7 @@ from native_test_support import ROOT, NativeHelper, line, run_cleanup, stop
 
 
 def check_file_panel(call, owner, primary_params, primary, directory, wait_state, button_target):
+    call("activate", owner)
     selected_file = Path(directory) / "sheet-target.txt"
     selected_file.write_text("Owned file picker fixture\n")
     assert call("invoke", button_target(call("getState", primary_params), "Open fixture file"))["dispatched"]
@@ -232,7 +233,7 @@ def main():
                 denied = call("mouseMove", no_hover, "HOVER_UNAVAILABLE")
                 assert "systemPointerMoved" not in denied and "No input was sent" in denied["message"], denied
                 after = wait_state(lambda s: s["cursorSamples"] > before["cursorSamples"], "Cursor sampling stopped")
-                assert after["cursorChanges"] == before["cursorChanges"] and not after["hoverVisible"], after
+                assert (after["cursorChanges"], after["hoverVisible"]) == (before["cursorChanges"], before["hoverVisible"]), after
 
                 def mouse_move(target):
                     result = call("mouseMove", target if args.alternate_hover else {**target, "allowSystemPointer": True})
