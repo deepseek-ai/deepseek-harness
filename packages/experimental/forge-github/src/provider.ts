@@ -2,9 +2,11 @@
 
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
-  ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeFailure, ForgeProvider, ForgeReadiness,
-  ForgeRepository, ForgeReviewRequest, ForgeReviewResult, MergeRequest,
+  ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeCommitList, ForgeFailure, ForgeProvider,
+  ForgeReadiness, ForgeRepository, ForgeReviewRequest, ForgeReviewResult, MergeRequest,
 } from '@deepseek-ai/dsh-experimental-forge'
+import { listCommits } from './commits.ts'
+import type { GraphqlReader } from './commits.ts'
 import { GhOutputLimitError, GhTimeoutError, GhUnavailableError } from './gh.ts'
 import type { GhOutput, GhRunner } from './gh.ts'
 import { CHECKS_QUERY, hasGraphqlFields, HEAD_QUERY, mapCheckPageResponse, mapHeadResponse, mapSnapshotResponse, snapshotQuery } from './graphql.ts'
@@ -40,8 +42,14 @@ export class GitHubProvider implements ForgeProvider {
    * @param gh - runner that executes `gh` on the host.
    * @param hosts - host names this provider serves, such as `github.com` and Enterprise hosts.
    * @param maxOutputBytes - maximum combined JSON bytes retained by an explicit check read.
+   * @param maxCommits - most commits one commit listing returns.
    */
-  constructor(private readonly gh: GhRunner, hosts: readonly string[], private readonly maxOutputBytes: number) {
+  constructor(
+    private readonly gh: GhRunner,
+    hosts: readonly string[],
+    private readonly maxOutputBytes: number,
+    private readonly maxCommits: number,
+  ) {
     this.hosts = new Set(hosts.map(host => host.toLowerCase()))
   }
 
@@ -160,6 +168,26 @@ export class GitHubProvider implements ForgeProvider {
     ], signal)
   }
 
+  /** List the pull request's commits through GraphQL, at most `maxCommits`, all read at one head. */
+  async commits(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeCommitList | ForgeFailure> {
+    const failure = this.hostFailure(ref.repository.host)
+    if (failure !== undefined) return failure
+    return await listCommits(this.graphql, ref, this.maxCommits, signal)
+  }
+
+  /** Read the changes between two commits through the compare API in its diff form. */
+  async compare(ref: ChangeRequestRef, base: string, head: string, signal: AbortSignal): Promise<string | ForgeFailure> {
+    const { host, owner, name } = checkedRepository(ref)
+    const failure = this.hostFailure(host)
+    if (failure !== undefined) return failure
+    for (const commit of [base, head]) {
+      if (!COMMIT.test(commit)) throw new Error(`forge-github: invalid commit ${JSON.stringify(commit)}`)
+    }
+    return await this.read([
+      'api', '--hostname', host, '-H', 'Accept: application/vnd.github.diff', `repos/${owner}/${name}/compare/${base}...${head}`,
+    ], signal)
+  }
+
   fileUrl(ref: ChangeRequestRef, commit: string, path: string): string {
     const { host, owner, name } = ref.repository
     return `https://${host}/${owner}/${name}/blob/${commit}/${encodedPath(path)}`
@@ -197,6 +225,17 @@ export class GitHubProvider implements ForgeProvider {
     if (AUTHENTICATION.test(output.stderr)) return { code: 'unauthenticated', message }
     if (TOO_LARGE.test(output.stderr) || TOO_LARGE.test(output.stdout)) return { code: 'too-large', message }
     return { code: status === '404' || /could not resolve to a pullrequest/i.test(output.stderr) ? 'not-found' : 'unavailable', message }
+  }
+
+  /** Run one GraphQL request; a refusal, a body that is not GraphQL, and GraphQL errors become failures. */
+  private readonly graphql: GraphqlReader = async (args, signal) => {
+    const output = await this.read(args, signal)
+    if (typeof output !== 'string') return { ok: false, failure: output }
+    const body = parseJson(output)
+    if (!hasGraphqlFields(body)) return { ok: false, failure: { code: 'unavailable', message: 'unexpected GitHub response' } }
+    const errors = typeof body === 'object' && body !== null && 'errors' in body && Array.isArray(body.errors) ? body.errors : []
+    if (errors.length > 0) return { ok: false, failure: responseFailure({ exitCode: 0, stdout: output, stderr: '' }, errors[0]) }
+    return { ok: true, body }
   }
 
   /** Run one changing `gh` command; a refusal or a `gh` that cannot start becomes a failure. */
