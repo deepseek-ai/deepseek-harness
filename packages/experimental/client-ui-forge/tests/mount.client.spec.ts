@@ -22,9 +22,7 @@ import {
 } from '../src/client/ChangeRequestsSection.tsx'
 import { ChangesTab, type ChangesTabInjected } from '../src/client/ChangesTab.tsx'
 import { ChangesTabTitle } from '../src/client/ChangesTabTitle.tsx'
-import {
-  CheckoutRow, EnvironmentActions, LocalChangesRow, type CheckoutRowInjected, type EnvironmentActionsInjected, type LocalChangesRowInjected,
-} from '../src/client/EnvironmentRows.tsx'
+import { CheckoutRow, LocalChangesRow, type CheckoutRowInjected, type LocalChangesRowInjected } from '../src/client/EnvironmentRows.tsx'
 import { en, NS, zh } from '../src/client/locales.ts'
 import { inject, mountForgePanel, WORKTREE_NS, WORKTREE_ROW_KEY } from '../src/client/mount.ts'
 import type { SessionListInjected } from '../src/client/session-list.ts'
@@ -99,7 +97,7 @@ function isSectionFace(value: Record<string, unknown>): value is Record<string, 
 }
 
 function isActionsFace(value: Record<string, unknown>): value is Record<string, unknown> & ChangeRequestsActionsInjected {
-  return typeof value.refresh === 'function' && typeof value.hooks === 'object'
+  return Object.keys(value).length === 1 && typeof value.hooks === 'object'
 }
 
 function isCheckoutFace(value: Record<string, unknown>): value is Record<string, unknown> & CheckoutRowInjected {
@@ -243,7 +241,6 @@ async function fixture() {
     b.ctx.slots.entries(slot).find(candidate => candidate.component === component)
   const sectionInject = entry('conversation.session.panel.section', ChangeRequestsSection)?.inject
   const actionsInject = entry('conversation.session.panel.section.actions', ChangeRequestsActions)?.inject
-  const environmentActionsInject = entry('conversation.session.panel.section.actions', EnvironmentActions)?.inject
   const checkoutInject = entry('conversation.session.panel.environment.row', CheckoutRow)?.inject
   const localInject = entry('conversation.session.panel.environment.row', LocalChangesRow)?.inject
   const attentionInject = entry('conversation.session.panel.indicator', AttentionIndicator)?.inject
@@ -254,7 +251,7 @@ async function fixture() {
   const rowInject = entry('sidebar.session.row.trailing', SessionRowForge)?.inject
   const hoverInject = entry('sidebar.session.row.hover', SessionHoverForge)?.inject
   assert(sectionInject !== undefined && actionsInject !== undefined && checkoutInject !== undefined && localInject !== undefined)
-  assert(attentionInject !== undefined && environmentActionsInject !== undefined)
+  assert(attentionInject !== undefined)
   assert(worktreeInject !== undefined && toastInject !== undefined)
   assert(progressInject !== undefined && changesInject !== undefined && rowInject !== undefined && hoverInject !== undefined)
   const section = (sessionId: SessionId): ChangeRequestsSectionInjected => {
@@ -264,11 +261,6 @@ async function fixture() {
   }
   const actions = (sessionId: SessionId): ChangeRequestsActionsInjected => {
     const value = actionsInject(sessionId as never)
-    assert(isActionsFace(value))
-    return value
-  }
-  const environmentActions = (sessionId: SessionId): EnvironmentActionsInjected => {
-    const value = environmentActionsInject(sessionId as never)
     assert(isActionsFace(value))
     return value
   }
@@ -314,7 +306,7 @@ async function fixture() {
     return value
   }
   return {
-    ...b, dispose, entry, section, actions, environmentActions, checkout, local, attention, changes, worktree, progress,
+    ...b, dispose, entry, section, actions, checkout, local, attention, changes, worktree, progress,
     toast, notice, list,
   }
 }
@@ -344,7 +336,7 @@ describe('mountForgePanel registration', () => {
     expect([en['tab.title'], zh['tab.title']]).toContain(typeof label === 'function' ? label() : label)
     expect(f.entry('conversation.session.panel.section.actions', ChangeRequestsActions))
       .toMatchObject({ options: { key: 'change-requests' }, locale: NS })
-    expect(f.entry('conversation.session.panel.section.actions', EnvironmentActions)).toMatchObject({ options: { key: 'environment' }, locale: NS })
+    expect(f.ctx.slots.entries('conversation.session.panel.section.actions').map(registration => registration.options.key)).toEqual(['change-requests'])
     expect(f.entry('conversation.session.panel.environment.row', CheckoutRow)).toMatchObject({ options: { id: 'forge.checkout', order: 20 }, locale: NS })
     expect(f.entry('conversation.session.panel.environment.row', LocalChangesRow)).toMatchObject({ options: { id: 'forge.local', order: 30 }, locale: NS })
     expect(f.entry('conversation.session.panel.indicator', AttentionIndicator)).toMatchObject({ options: { id: 'forge.attention' }, locale: NS })
@@ -383,7 +375,6 @@ describe('mountForgePanel registration', () => {
     for (const [slot, component] of [
       ['conversation.session.panel.section', ChangeRequestsSection],
       ['conversation.session.panel.section.actions', ChangeRequestsActions],
-      ['conversation.session.panel.section.actions', EnvironmentActions],
       ['conversation.session.panel.environment.row', CheckoutRow],
       ['conversation.session.panel.environment.row', LocalChangesRow],
       ['conversation.session.panel.indicator', AttentionIndicator],
@@ -441,7 +432,7 @@ describe('mountForgePanel Session stores', () => {
   it('shares one panel stream per Session between the Session panel entries, the worktree option, and the worktree card', async () => {
     const f = await fixture()
     const tab = f.section(S1)
-    const faces = [f.actions(S1), f.environmentActions(S1), f.checkout(S1), f.local(S1), f.attention(S1), f.worktree(S1), f.progress(S1)]
+    const faces = [f.actions(S1), f.checkout(S1), f.local(S1), f.attention(S1), f.worktree(S1), f.progress(S1)]
     for (const face of faces) {
       expect(face.hooks.panel).toBe(tab.hooks.panel)
     }
@@ -554,17 +545,37 @@ describe('mountForgePanel Session panel actions', () => {
     await f.dispose()
   })
 
-  it('refreshes through the Remote from the section and both title controls, and reports only a failure', async () => {
+  it('refreshes through the Remote for a card retry and reports only a failure', async () => {
     const f = await fixture()
     await f.section(S1).refresh()
-    await f.actions(S1).refresh()
-    await f.environmentActions(S1).refresh()
-    expect(f.forgePanel.refresh).toHaveBeenCalledTimes(3)
     expect(f.forgePanel.refresh).toHaveBeenCalledWith(S1)
     expect(f.notice()).toBeNull()
 
     f.forgePanel.refresh.mockResolvedValueOnce(REFUSED.failed)
-    await f.actions(S1).refresh()
+    await f.section(S1).refresh()
+    expect(f.notice()).toMatchObject({ key: 'toast.refreshFailed', tone: 'failure' })
+    await f.dispose()
+  })
+
+  it('refreshes each Session automatically at most once every 10 seconds', async () => {
+    const f = await fixture()
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000)
+    const refreshIfStale = f.checkout(S1).refreshIfStale
+    expect(f.checkout(S1).refreshIfStale).toBe(refreshIfStale)
+    refreshIfStale()
+    refreshIfStale()
+    f.checkout(S2).refreshIfStale()
+    expect(f.forgePanel.refresh.mock.calls).toEqual([[S1], [S2]])
+    now.mockReturnValue(1_009_999)
+    refreshIfStale()
+    expect(f.forgePanel.refresh).toHaveBeenCalledTimes(2)
+    now.mockReturnValue(1_010_000)
+    refreshIfStale()
+    expect(f.forgePanel.refresh.mock.calls).toEqual([[S1], [S2], [S1]])
+    f.forgePanel.refresh.mockResolvedValueOnce(REFUSED.failed)
+    now.mockReturnValue(1_020_000)
+    refreshIfStale()
+    await settle()
     expect(f.notice()).toMatchObject({ key: 'toast.refreshFailed', tone: 'failure' })
     await f.dispose()
   })

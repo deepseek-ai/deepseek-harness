@@ -723,9 +723,9 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   await page.getByText('LIGHTHOUSE', { exact: true }).waitFor()
   const session = scaffold.ctx.sessions.get(sessionId)
   if (session === undefined) throw new Error('The Session must stay loaded')
-  const environment = (await showSessionPanel(page)).locator('[data-session-panel-section="environment"]')
-  // The New Session screen inspected the checkout before these changes, which came from outside the Session.
-  await environment.getByRole('button', { name: '刷新状态', exact: true }).click()
+  // The New Session screen inspected the checkout before these changes, which came from outside the Session;
+  // opening the panel inspects it again.
+  await showSessionPanel(page)
   const card = page.locator('[data-forge-local]')
   await card.getByRole('button', { name: '查看本会话的变更：4 个文件，新增 4 行，删除 1 行', exact: true }).click({ timeout: 20_000 })
 
@@ -1117,7 +1117,7 @@ it.skipIf(MODE === 'record')('uses horizontal arrows to navigate files while pre
   }
   const { settled } = await sendPrompt(page, scaffold)
   await settled
-  await (await showSessionPanel(page)).locator('[data-session-panel-section="environment"]').getByRole('button', { name: '刷新状态', exact: true }).click()
+  await showSessionPanel(page)
   await page.locator('[data-forge-local]').getByRole('button', { name: /查看本会话的变更：3 个文件/ }).click()
   const view = page.locator('[data-forge-changes="local"]')
   const scroll = view.getByRole('region', { name: '全部 3 个文件', exact: true })
@@ -1208,7 +1208,6 @@ it.skipIf(MODE === 'record')('keeps tall branch and changed-file menus aligned w
   const { settled } = await sendPrompt(page, scaffold)
   await settled
   const panel = await showSessionPanel(page)
-  await panel.locator('[data-session-panel-section="environment"]').getByRole('button', { name: '刷新状态', exact: true }).click()
   await panel.getByRole('button', { name: /^查看本会话的变更：60 个文件/ }).click()
   const changes = page.locator('[data-forge-changes="local"]')
   const files = changes.getByRole('button', { name: '全部 60 个文件', exact: true })
@@ -1254,7 +1253,6 @@ it.skipIf(MODE === 'record')('keeps localized status columns separate in the Ses
   if (session === undefined) throw new Error('The Session must stay loaded')
   scaffold.ctx.forgeSession.track(session, PULL)
   const panel = await showSessionPanel(page)
-  await panel.locator('[data-session-panel-section="environment"]').getByRole('button', { name: '刷新状态', exact: true }).click()
   await panel.locator('[data-forge-local]').getByRole('button', { name: /^查看本会话的变更：60 个文件/ }).waitFor({ timeout: 20_000 })
   const change = panel.locator(`[data-forge-change="${PULL}"]`)
   for (const [locale, labels] of [
@@ -1376,7 +1374,7 @@ it.skipIf(MODE === 'record').each(['darwin', 'win32'] as const)('closes diff men
   await writeFile(join(project, 'README.md'), 'review this change\n')
   const { settled } = await sendPrompt(page, scaffold)
   const sessionId = await settled
-  await (await showSessionPanel(page)).locator('[data-session-panel-section="environment"]').getByRole('button', { name: '刷新状态', exact: true }).click()
+  await showSessionPanel(page)
   await page.locator('[data-forge-local]').getByRole('button', { name: /查看本会话的变更：1 个文件/ }).click()
   const view = page.locator('[data-forge-changes="local"]')
   await view.locator('[data-forge-diff-file="README.md"]').waitFor()

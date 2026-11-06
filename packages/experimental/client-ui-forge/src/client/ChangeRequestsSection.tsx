@@ -8,7 +8,6 @@ import type {} from '@deepseek-ai/dsh-client-ui-session-panel/client'
 import type { ForgePanelChangeRequest, ForgePanelState } from '../types.ts'
 import { ChangeRequestCard, type ChangeRequestActions } from './ChangeRequestCard.tsx'
 import type { NS } from './locales.ts'
-import { RefreshButton } from './RefreshButton.tsx'
 import type { PanelSnapshot } from './source.ts'
 import { defaultExpanded } from './status.ts'
 import css from './Forge.module.css'
@@ -53,8 +52,6 @@ export type ChangeRequestsSectionProps =
 export interface ChangeRequestsActionsInjected {
   /** Panel snapshot of the Session; bound as `usePanel`. */
   readonly hooks: { readonly panel: HostObservable<PanelSnapshot> }
-  /** Same refresh as the section's. */
-  readonly refresh: () => Promise<void>
 }
 
 /** Full props of the section's title control. */
@@ -155,17 +152,12 @@ export function ChangeRequestsSection({
 }
 
 /**
- * Render the change request count and a refresh button beside the section title.
- * @param props - panel snapshot hook, refresh, and copy.
- * @returns the title control, or null without bound change requests.
+ * Render the change request count beside the section title.
+ * @param props - panel snapshot hook.
+ * @returns the count, or null without bound change requests.
  */
-export function ChangeRequestsActions({ usePanel, refresh, t }: ChangeRequestsActionsProps): ReactNode {
+export function ChangeRequestsActions({ usePanel }: ChangeRequestsActionsProps): ReactNode {
   const count = usePanel(snapshot => snapshot.state?.changeRequests.length ?? 0)
   if (count === 0) return null
-  return (
-    <>
-      <span className={css.count}>{count}</span>
-      <RefreshButton refresh={refresh} label={t('refresh')} />
-    </>
-  )
+  return <span className={css.count}>{count}</span>
 }

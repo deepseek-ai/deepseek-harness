@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/** Attention indicator, changes tab title, and action toast rendering. */
+/** Attention indicator, refresh glyph, changes tab title, and action toast rendering. */
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -12,6 +12,7 @@ import { changesAddress } from '../src/client/changes-address.ts'
 import { ChangesTabTitle } from '../src/client/ChangesTabTitle.tsx'
 import { AttentionIndicator, type AttentionIndicatorProps } from '../src/client/AttentionIndicator.tsx'
 import { en } from '../src/client/locales.ts'
+import { RefreshGlyph } from '../src/client/RefreshGlyph.tsx'
 import { createNoticeSource, type PanelSnapshot } from '../src/client/source.ts'
 import type { ForgePanelState } from '../src/types.ts'
 import { entry, ready, snapshot } from './client-fixtures.client.ts'
@@ -22,6 +23,30 @@ afterEach(() => {
 })
 
 const t = makeTranslate(en)
+
+/**
+ * Fire an animation event under the name React DOM listens for here: jsdom
+ * has no `AnimationEvent` but declares `WebkitAnimation`, so React DOM uses the WebKit-prefixed names.
+ */
+function animation(element: Element, phase: 'Start' | 'Iteration'): void {
+  fireEvent(element, new Event(`webkitAnimation${phase}`, { bubbles: true }))
+}
+
+describe('RefreshGlyph', () => {
+  it('turns while busy and finishes the turn under way once busy ends', () => {
+    const view = render(<RefreshGlyph busy={false} size={14} />)
+    const glyph = view.container.firstElementChild as HTMLElement
+    expect(glyph.hasAttribute('data-turning')).toBe(false)
+    view.rerender(<RefreshGlyph busy size={14} />)
+    animation(glyph, 'Start')
+    animation(glyph, 'Iteration')
+    expect(glyph.hasAttribute('data-turning')).toBe(true)
+    view.rerender(<RefreshGlyph busy={false} size={14} />)
+    expect(glyph.hasAttribute('data-turning')).toBe(true)
+    animation(glyph, 'Iteration')
+    expect(glyph.hasAttribute('data-turning')).toBe(false)
+  })
+})
 
 describe('AttentionIndicator', () => {
   function indicator(state: ForgePanelState | null) {

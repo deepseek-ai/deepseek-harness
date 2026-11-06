@@ -16,13 +16,10 @@ export type { ChangesTabInjected, ChangesTabProps } from './ChangesTab.tsx'
 export type { ChangesTabTitleProps } from './ChangesTabTitle.tsx'
 export type { DiffFileAction, DiffFileProps, DiffFileText } from './DiffFile.tsx'
 export type { AttentionIndicatorInjected, AttentionIndicatorProps } from './AttentionIndicator.tsx'
-export type { RefreshButtonProps } from './RefreshButton.tsx'
 export type {
   ChangeRequestsActionsInjected, ChangeRequestsActionsProps, ChangeRequestsSectionInjected, ChangeRequestsSectionProps,
 } from './ChangeRequestsSection.tsx'
-export type {
-  CheckoutRowInjected, CheckoutRowProps, EnvironmentActionsInjected, EnvironmentActionsProps, LocalChangesRowInjected, LocalChangesRowProps,
-} from './EnvironmentRows.tsx'
+export type { CheckoutRowInjected, CheckoutRowProps, LocalChangesRowInjected, LocalChangesRowProps } from './EnvironmentRows.tsx'
 export type { WorktreeProgressInjected, WorktreeProgressProps } from './WorktreeProgress.tsx'
 export type { WorktreeToggleInjected, WorktreeToggleProps } from './WorktreeToggle.tsx'
 export type { ActionNotice, NoticeOptions, PanelSnapshot } from './source.ts'

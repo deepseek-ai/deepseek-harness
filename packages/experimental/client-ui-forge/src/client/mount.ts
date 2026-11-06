@@ -28,9 +28,7 @@ import {
 import { createChangesStore } from './changes-store.ts'
 import { ChangesTab, type ChangesTabInjected } from './ChangesTab.tsx'
 import { ChangesTabTitle } from './ChangesTabTitle.tsx'
-import {
-  CheckoutRow, EnvironmentActions, LocalChangesRow, type CheckoutRowInjected, type LocalChangesRowInjected,
-} from './EnvironmentRows.tsx'
+import { CheckoutRow, LocalChangesRow, type CheckoutRowInjected, type LocalChangesRowInjected } from './EnvironmentRows.tsx'
 import { de, en, es, fr, ja, NS, pt, ru, zh, type ForgePanelKey } from './locales.ts'
 import type { SessionListInjected } from './session-list.ts'
 import { SessionHoverForge } from './SessionHoverForge.tsx'
@@ -65,8 +63,17 @@ function openLink(url: string): void {
 interface SessionStores {
   readonly panel: PanelSource
   readonly reviews: WeakMap<AbortSignal, ReviewQueue>
+  /** Refresh unless an automatic refresh of this Session ran within {@link AUTO_REFRESH_MIN_MS}. */
+  readonly refreshIfStale: () => void
   readonly release: () => void
 }
+
+/**
+ * Least time between automatic refreshes of one Session, which run when the
+ * Session panel opens and when the window regains focus; repeated focus
+ * changes then cost one checkout inspection and code host poll.
+ */
+const AUTO_REFRESH_MIN_MS = 10_000
 
 function registerUi(ctx: Context): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'forge-panel: dictionaries')
@@ -108,7 +115,14 @@ function registerUi(ctx: Context): void {
         panel.close()
         stores.delete(sessionId)
       }, 'forge-panel: release Session state')
-      store = { panel, reviews: new WeakMap(), release: () => { void dispose() } }
+      let refreshedAt: number | undefined
+      const refreshIfStale = (): void => {
+        const now = Date.now()
+        if (refreshedAt !== undefined && now - refreshedAt < AUTO_REFRESH_MIN_MS) return
+        refreshedAt = now
+        void refreshOf(sessionId)()
+      }
+      store = { panel, reviews: new WeakMap(), refreshIfStale, release: () => { void dispose() } }
       stores.set(sessionId, store)
     }
     return store
@@ -219,10 +233,10 @@ function registerUi(ctx: Context): void {
   }
   const sectionActionsFace = (sessionId: SessionId): ChangeRequestsActionsInjected => ({
     hooks: { panel: storesOf(sessionId).panel.hooks.panel },
-    refresh: refreshOf(sessionId),
   })
   const checkoutFace = (sessionId: SessionId): CheckoutRowInjected => ({
     hooks: { panel: storesOf(sessionId).panel.hooks.panel, host },
+    refreshIfStale: storesOf(sessionId).refreshIfStale,
     restore: () => {
       void restore(sessionId).then((message) => {
         if (message !== undefined) notices.report('toast.restoreFailed', { params: { message } })
@@ -323,10 +337,6 @@ function registerUi(ctx: Context): void {
     }, ChangeRequestsActions)
   })
   ctx.slots.inject('conversation.session.panel.environment.row', function* () {
-    // The checkout this refresh inspects is what the Environment section shows.
-    yield ctx.slots.register({
-      name: 'conversation.session.panel.section.actions', key: 'environment', locale: NS, inject: sectionActionsFace,
-    }, EnvironmentActions)
     // After the project row (0).
     yield ctx.slots.register({
       name: 'conversation.session.panel.environment.row', id: 'forge.checkout', order: 20, locale: NS, inject: checkoutFace,

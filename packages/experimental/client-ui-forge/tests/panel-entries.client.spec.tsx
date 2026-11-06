@@ -15,9 +15,7 @@ import { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
   ChangeRequestsActions, ChangeRequestsSection, type ChangeRequestsActionsProps, type ChangeRequestsSectionProps,
 } from '../src/client/ChangeRequestsSection.tsx'
-import {
-  CheckoutRow, EnvironmentActions, LocalChangesRow, type CheckoutRowProps, type EnvironmentActionsProps, type LocalChangesRowProps,
-} from '../src/client/EnvironmentRows.tsx'
+import { CheckoutRow, LocalChangesRow, type CheckoutRowProps, type LocalChangesRowProps } from '../src/client/EnvironmentRows.tsx'
 import { en } from '../src/client/locales.ts'
 import type { PanelSnapshot } from '../src/client/source.ts'
 import type { ForgePanelChangeRequest, ForgePanelState } from '../src/types.ts'
@@ -69,14 +67,6 @@ function expansion(view: ReturnType<typeof render>): boolean[] {
 function chooseAction(card: HTMLElement, name: string, item: string): void {
   fireEvent.click(within(card).getByRole('button', { name: `Actions for ${name}` }))
   fireEvent.click(screen.getByRole('menuitem', { name: item }))
-}
-
-/**
- * Fire an animation event under the name React DOM listens for here: jsdom
- * has no `AnimationEvent` but declares `WebkitAnimation`, so React DOM uses the WebKit-prefixed names.
- */
-function animation(element: Element, phase: 'Start' | 'Iteration'): void {
-  fireEvent(element, new Event(`webkitAnimation${phase}`, { bubbles: true }))
 }
 
 describe('ChangeRequestsSection', () => {
@@ -199,10 +189,9 @@ describe('ChangeRequestsSection', () => {
 describe('ChangeRequestsActions', () => {
   function actions(state: ForgePanelState | null) {
     const panel = panelStore(state)
-    const refresh = vi.fn<() => Promise<void>>(async () => {})
-    const props = { sessionId: SESSION, usePanel: bindSnapshotSelector(panel), refresh, t } as
-      Pick<ChangeRequestsActionsProps, 'sessionId' | 'usePanel' | 'refresh' | 't'> as ChangeRequestsActionsProps
-    return { view: render(<ChangeRequestsActions {...props} />), refresh }
+    const props = { sessionId: SESSION, usePanel: bindSnapshotSelector(panel) } as
+      Pick<ChangeRequestsActionsProps, 'sessionId' | 'usePanel'> as ChangeRequestsActionsProps
+    return { view: render(<ChangeRequestsActions {...props} />), panel }
   }
 
   it('renders nothing without bound change requests', () => {
@@ -211,55 +200,22 @@ describe('ChangeRequestsActions', () => {
     expect(actions(null).view.container.innerHTML).toBe('')
   })
 
-  it('counts the change requests and turns the refresh glyph until the refresh settles and its turn ends, ignoring clicks meanwhile', async () => {
-    const pending = Promise.withResolvers<undefined>()
+  it('counts the change requests, without a refresh control', () => {
     const b = actions(ready({ changeRequests: [entry(1, snapshot(1)), entry(2, snapshot(2))] }))
     expect(b.view.container.textContent).toBe('2')
-    b.refresh.mockReturnValueOnce(pending.promise)
-    const button = b.view.getByRole('button', { name: en.refresh })
-    const glyph = button.firstElementChild as HTMLElement
-    expect(glyph.hasAttribute('data-turning')).toBe(false)
-
-    fireEvent.click(button)
-    animation(glyph, 'Start')
-    fireEvent.click(button)
-    expect(b.refresh).toHaveBeenCalledOnce()
-    expect(button.getAttribute('aria-disabled')).toBe('true')
-    animation(glyph, 'Iteration')
-    expect(glyph.hasAttribute('data-turning')).toBe(true)
-
-    await act(async () => { pending.resolve(undefined) })
-    expect(button.getAttribute('aria-disabled')).toBe('false')
-    expect(glyph.hasAttribute('data-turning')).toBe(true)
-    animation(glyph, 'Iteration')
-    expect(glyph.hasAttribute('data-turning')).toBe(false)
+    expect(b.view.queryByRole('button')).toBeNull()
   })
 })
 
-describe('EnvironmentActions', () => {
-  function actions(state: ForgePanelState | null) {
-    const panel = panelStore(state)
-    const refresh = vi.fn<() => Promise<void>>(async () => {})
-    const props = { sessionId: SESSION, usePanel: bindSnapshotSelector(panel), refresh, t } as
-      Pick<EnvironmentActionsProps, 'sessionId' | 'usePanel' | 'refresh' | 't'> as EnvironmentActionsProps
-    return { view: render(<EnvironmentActions {...props} />), panel, refresh }
-  }
-
-  it('offers refresh once the panel state arrived, also outside a Git checkout', async () => {
-    const b = actions(null)
-    expect(b.view.container.innerHTML).toBe('')
-    act(() => { b.panel.set({ state: ready({ checkout: { state: 'none' } }), disconnected: false }) })
-    fireEvent.click(b.view.getByRole('button', { name: en.refresh }))
-    expect(b.refresh).toHaveBeenCalledOnce()
-    await act(async () => {})
-  })
-})
+/** The checkout row props a test supplies; the rest come from the slot runtime. */
+type CheckoutKeys = 'sessionId' | 'usePanel' | 'useHost' | 'useContextMenu' | 'renderFactorySlot' | 'refreshIfStale' | 'restore' | 't'
 
 describe('CheckoutRow', () => {
   function row(state: ForgePanelState | null, home?: string) {
     const panel = panelStore(state)
     const host = createSnapshotStore<RemoteHostFacts>({ home, isLoopback: true })
     const restore = vi.fn<() => void>()
+    const refreshIfStale = vi.fn<() => void>()
     const opened: ContextMenuTarget[] = []
     const renderFactorySlot = vi.fn((_name: string, input: { label: string }) => <button type="button">{input.label}</button>)
     const props = {
@@ -268,12 +224,38 @@ describe('CheckoutRow', () => {
       useHost: bindSnapshotSelector(host),
       useContextMenu: contextMenuHook((target: ContextMenuTarget) => { opened.push(target) }),
       renderFactorySlot,
+      refreshIfStale,
       restore,
       t,
-    } as Pick<CheckoutRowProps, 'sessionId' | 'usePanel' | 'useHost' | 'useContextMenu' | 'renderFactorySlot' | 'restore' | 't'> as CheckoutRowProps
+    } as Pick<CheckoutRowProps, CheckoutKeys> as CheckoutRowProps
     const view = render(<CheckoutRow {...props} />)
-    return { view, restore, opened, renderFactorySlot, element: () => view.container.querySelector<HTMLElement>('[data-forge-checkout]') }
+    return {
+      view, restore, refreshIfStale, opened, renderFactorySlot,
+      element: () => view.container.querySelector<HTMLElement>('[data-forge-checkout]'),
+    }
   }
+
+  /** Report the document visibility the browser would report. */
+  function visibility(state: DocumentVisibilityState): void {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state })
+    fireEvent(document, new Event('visibilitychange'))
+  }
+
+  it('refreshes when the panel shows it, when the window regains focus, and when the page becomes visible, until it unmounts', () => {
+    const b = row(null)
+    expect(b.refreshIfStale).toHaveBeenCalledOnce()
+    fireEvent.focus(window)
+    expect(b.refreshIfStale).toHaveBeenCalledTimes(2)
+    visibility('hidden')
+    expect(b.refreshIfStale).toHaveBeenCalledTimes(2)
+    visibility('visible')
+    expect(b.refreshIfStale).toHaveBeenCalledTimes(3)
+    b.view.unmount()
+    fireEvent.focus(window)
+    visibility('visible')
+    expect(b.refreshIfStale).toHaveBeenCalledTimes(3)
+    Reflect.deleteProperty(document, 'visibilityState')
+  })
 
   it.each([
     ['before the first state', null],

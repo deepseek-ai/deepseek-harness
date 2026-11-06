@@ -1,6 +1,6 @@
-/** Environment section entries: the Session's checkout and its branch changes, and the section's refresh. */
+/** Environment section rows: the Session's checkout and its branch changes. */
 
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import {
   Button, IconBranchOutlineRegular, IconEllipsisOutlineRegular, IconListPenOutlineRegular, IconWarningTriangleOutlineRegular,
   Menu, PanelRow, StateDot, Tooltip,
@@ -12,23 +12,8 @@ import type {} from '@deepseek-ai/dsh-client-ui-session-panel/client'
 import { checkoutLabel } from './checkout.ts'
 import type { NS } from './locales.ts'
 import type { PanelSnapshot } from './source.ts'
-import { RefreshButton } from './RefreshButton.tsx'
 import { openChangeRequestOf } from './status.ts'
 import css from './Forge.module.css'
-
-/** Business face of the Environment section's title control. */
-export interface EnvironmentActionsInjected {
-  /** Panel snapshot of the Session; bound as `usePanel`. */
-  readonly hooks: { readonly panel: HostObservable<PanelSnapshot> }
-  /** Reinspect the checkout, probe sign-in, and poll the change requests; settles once the Host has inspected and probed. */
-  readonly refresh: () => Promise<void>
-}
-
-/** Full props of the Environment section's title control. */
-export type EnvironmentActionsProps =
-  PropsRuntime<'conversation.session.panel.section.actions'>
-  & InjectFace<EnvironmentActionsInjected>
-  & PropsLocale<typeof NS>
 
 /** Business face of the checkout row. */
 export interface CheckoutRowInjected {
@@ -37,6 +22,11 @@ export interface CheckoutRowInjected {
     readonly panel: HostObservable<PanelSnapshot>
     readonly host: HostObservable<RemoteHostFacts>
   }
+  /**
+   * Reinspect the checkout, probe sign-in, and poll the change requests,
+   * unless an automatic refresh of this Session ran in the last 10 seconds.
+   */
+  readonly refreshIfStale: () => void
   /** Check the removed worktree of the Session out again, reporting the outcome. */
   readonly restore: () => void
 }
@@ -65,31 +55,32 @@ export type LocalChangesRowProps =
   & PropsLocale<typeof NS>
 
 /**
- * Render a refresh button beside the Environment title once the panel state
- * arrived, so a checkout changed outside the Session can be inspected again.
- * @param props - panel snapshot hook, refresh, and copy.
- * @returns the button, or null before the first state.
- */
-export function EnvironmentActions({ usePanel, refresh, t }: EnvironmentActionsProps): ReactNode {
-  const known = usePanel(snapshot => snapshot.state !== null)
-  if (!known) return null
-  return <RefreshButton refresh={refresh} label={t('refresh')} />
-}
-
-/**
  * Render the branch the Session works on and the kind of its directory. The
  * row and its More button open the shared directory menu on the checkout
  * root; a removed worktree offers Restore instead, and a failed inspection
- * shows a warning whose tooltip carries the failure.
- * @param props - panel snapshot and Host facts hooks, restore, menu bindings, and copy.
+ * shows a warning whose tooltip carries the failure. The row is mounted
+ * whenever the panel shows, so it refreshes the Session's forge state when
+ * the panel opens and when the window regains focus, which picks up changes
+ * made outside the Session.
+ * @param props - panel snapshot and Host facts hooks, refresh, restore, menu bindings, and copy.
  * @returns the row, or null before the first inspection and outside a Git checkout.
  */
 export function CheckoutRow({
-  sessionId, usePanel, useHost, useContextMenu, renderFactorySlot, restore, t,
+  sessionId, usePanel, useHost, useContextMenu, renderFactorySlot, refreshIfStale, restore, t,
 }: CheckoutRowProps): ReactNode {
   const state = usePanel(snapshot => snapshot.state)
   const home = useHost(facts => facts.home)
   const { getTriggerProps } = useContextMenu()
+  useEffect(() => {
+    refreshIfStale()
+    const onVisibility = (): void => { if (document.visibilityState === 'visible') refreshIfStale() }
+    window.addEventListener('focus', refreshIfStale)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('focus', refreshIfStale)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [refreshIfStale])
   if (state === null) return null
   const label = checkoutLabel(state, home, t)
   if (label === undefined) {
