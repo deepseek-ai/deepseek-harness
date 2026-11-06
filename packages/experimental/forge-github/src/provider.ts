@@ -7,7 +7,11 @@ import type {
 } from '@deepseek-ai/dsh-experimental-forge'
 import { GhOutputLimitError, GhTimeoutError, GhUnavailableError } from './gh.ts'
 import type { GhOutput, GhRunner } from './gh.ts'
-import { CHECKS_QUERY, hasGraphqlFields, HEAD_QUERY, mapCheckPageResponse, mapHeadResponse, mapSnapshotResponse, snapshotQuery } from './graphql.ts'
+import {
+  CHECKS_QUERY, hasGraphqlFields, HEAD_COMMIT_QUERY, HEAD_QUERY, mapCheckPageResponse, mapHeadCommitResponse, mapHeadResponse,
+  mapSnapshotResponse, mapThreadPageResponse, snapshotQuery, THREADS_QUERY,
+} from './graphql.ts'
+import type { SnapshotPages } from './graphql.ts'
 import { checkedRepository, parsePullRequestUrl, parseRemoteUrl } from './urls.ts'
 import { submitGitHubReview } from './review.ts'
 
@@ -25,6 +29,14 @@ const TOO_LARGE = /\btoo_large\b/
 /** A full SHA-1 or SHA-256 object name. */
 const COMMIT = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i
 
+/** Bounds on what one read retains or counts. */
+export interface GitHubLimits {
+  /** Maximum combined JSON bytes retained by an explicit check read. */
+  readonly maxOutputBytes: number
+  /** Most review threads counted per pull request in one status read. */
+  readonly maxReviewThreads: number
+}
+
 /** Reads GitHub and GitHub Enterprise pull requests through a `gh` runner. */
 export class GitHubProvider implements ForgeProvider {
   readonly forge = 'github'
@@ -39,9 +51,9 @@ export class GitHubProvider implements ForgeProvider {
   /**
    * @param gh - runner that executes `gh` on the host.
    * @param hosts - host names this provider serves, such as `github.com` and Enterprise hosts.
-   * @param maxOutputBytes - maximum combined JSON bytes retained by an explicit check read.
+   * @param limits - bounds on retained check bytes and counted review threads.
    */
-  constructor(private readonly gh: GhRunner, hosts: readonly string[], private readonly maxOutputBytes: number) {
+  constructor(private readonly gh: GhRunner, hosts: readonly string[], private readonly limits: GitHubLimits) {
     this.hosts = new Set(hosts.map(host => host.toLowerCase()))
   }
 
@@ -93,10 +105,7 @@ export class GitHubProvider implements ForgeProvider {
       return results.get(changeRequestKey(ref))!
     } catch (error) {
       if (signal.aborted) throw signal.reason
-      if (error instanceof GhUnavailableError || error instanceof GhTimeoutError || error instanceof GhOutputLimitError) {
-        return { code: error instanceof GhOutputLimitError ? 'too-large' : 'unavailable', message: error.message }
-      }
-      throw error
+      return processFailure(error)
     }
   }
 
@@ -140,12 +149,22 @@ export class GitHubProvider implements ForgeProvider {
     ], signal)
   }
 
-  /** Read the pull request's diff with `gh pr diff`, which GitHub computes against the merge base. */
-  async diff(ref: ChangeRequestRef, signal: AbortSignal): Promise<string | ForgeFailure> {
+  /**
+   * Read the pull request's diff with `gh pr diff`, which GitHub computes
+   * against the merge base at the head of the moment it answers. The head is
+   * read before and after the diff; the patch is returned only when both reads
+   * name `headSha`, and a different head returns `stale` without the patch.
+   */
+  async diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<string | ForgeFailure> {
     const { host, owner, name } = checkedRepository(ref)
     const failure = this.hostFailure(host)
     if (failure !== undefined) return failure
-    return await this.read(['pr', 'diff', String(ref.number), '--repo', `${host}/${owner}/${name}`, '--color', 'never'], signal)
+    if (!COMMIT.test(headSha)) throw new Error(`forge-github: invalid head commit ${JSON.stringify(headSha)}`)
+    const before = await this.headMismatch(ref, headSha, signal)
+    if (before !== undefined) return before
+    const patch = await this.read(['pr', 'diff', String(ref.number), '--repo', `${host}/${owner}/${name}`, '--color', 'never'], signal)
+    if (typeof patch !== 'string') return patch
+    return await this.headMismatch(ref, headSha, signal) ?? patch
   }
 
   /** Read one file at a commit through the contents API in its raw form. */
@@ -176,6 +195,23 @@ export class GitHubProvider implements ForgeProvider {
       if (error instanceof GhUnavailableError) return { state: 'unavailable', message: error.message }
       throw error
     }
+  }
+
+  /**
+   * Read the head commit of a pull request.
+   * @returns undefined when it is `headSha`, `stale` when it is another commit, or why it could not be read.
+   */
+  private async headMismatch(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeFailure | undefined> {
+    const { host, owner, name } = ref.repository
+    const output = await this.read([
+      'api', 'graphql', '--hostname', host,
+      '-f', `query=${HEAD_COMMIT_QUERY}`, '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `number=${ref.number}`,
+    ], signal)
+    if (typeof output !== 'string') return output
+    const head = mapHeadCommitResponse(parseJson(output))
+    if (head === undefined) return { code: 'unavailable', message: 'unexpected GitHub response to the head commit read' }
+    if (head.toLowerCase() === headSha.toLowerCase()) return undefined
+    return { code: 'stale', message: `the pull request head moved from ${headSha} to ${head}` }
   }
 
   /**
@@ -232,34 +268,61 @@ export class GitHubProvider implements ForgeProvider {
     signal: AbortSignal,
     completeChecks = false,
   ): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>> {
-    const query = snapshotQuery(refs)
+    const query = snapshotQuery(refs, this.limits.maxReviewThreads)
     const output = await this.gh(['api', 'graphql', '--hostname', host, '-f', `query=${query.document}`], signal)
     const body = parseJson(output.stdout)
-    if (!completeChecks && hasGraphqlFields(body)) return await mapSnapshotResponse(body, query)
+    const threads: SnapshotPages['threads'] = async (id, cursor, first) => {
+      const page = await this.continuation(host,
+        ['-f', `query=${THREADS_QUERY}`, '-f', `id=${id}`, '-f', `cursor=${cursor}`, '-F', `first=${first}`], signal)
+      if (!('stdout' in page)) return { ok: false, failure: page }
+      const value = parseJson(page.stdout)
+      return hasGraphqlFields(value) ? mapThreadPageResponse(value) : { ok: false, failure: responseFailure(page, value) }
+    }
+    if (!completeChecks && hasGraphqlFields(body)) return await mapSnapshotResponse(body, query, { threads })
     let bytes = Buffer.byteLength(output.stdout)
     const tooLarge: ForgeFailure = { code: 'too-large', message: 'GitHub check details exceed the output size limit' }
-    if (bytes > this.maxOutputBytes) return new Map([...query.targets.values()].map(ref => [changeRequestKey(ref), tooLarge]))
-    if (hasGraphqlFields(body)) return await mapSnapshotResponse(body, query, async (id, cursor) => {
-      signal.throwIfAborted()
-      let page: GhOutput
-      try {
-        page = await this.gh(['api', 'graphql', '--hostname', host,
-          '-f', `query=${CHECKS_QUERY}`, '-f', `id=${id}`, '-f', `cursor=${cursor}`], signal)
-      } catch (error) {
-        if (signal.aborted) throw signal.reason
-        if (error instanceof GhUnavailableError || error instanceof GhTimeoutError || error instanceof GhOutputLimitError) {
-          return { ok: false, failure: { code: error instanceof GhOutputLimitError ? 'too-large' : 'unavailable', message: error.message } }
-        }
-        throw error
-      }
+    if (bytes > this.limits.maxOutputBytes) return new Map([...query.targets.values()].map(ref => [changeRequestKey(ref), tooLarge]))
+    if (hasGraphqlFields(body)) return await mapSnapshotResponse(body, query, { threads, checks: async (id, cursor) => {
+      const page = await this.continuation(host, ['-f', `query=${CHECKS_QUERY}`, '-f', `id=${id}`, '-f', `cursor=${cursor}`], signal)
+      if (!('stdout' in page)) return { ok: false, failure: page }
       bytes += Buffer.byteLength(page.stdout)
-      if (bytes > this.maxOutputBytes) return { ok: false, failure: tooLarge }
+      if (bytes > this.limits.maxOutputBytes) return { ok: false, failure: tooLarge }
       const value = parseJson(page.stdout)
       return hasGraphqlFields(value) ? mapCheckPageResponse(value) : { ok: false, failure: responseFailure(page, value) }
-    })
+    } })
     const failure = responseFailure(output, body)
     return new Map([...query.targets.values()].map(ref => [changeRequestKey(ref), failure] as const))
   }
+
+  /**
+   * Run one continuation query of a snapshot read.
+   * @param host - host the snapshot was read from.
+   * @param variables - `gh api graphql` field flags, the query first.
+   * @param signal - cancellation of the snapshot read.
+   * @returns the output, or the failure of a `gh` that cannot start, times out, or prints over its limit.
+   * @throws with `signal.reason` when the read is cancelled.
+   */
+  private async continuation(host: string, variables: readonly string[], signal: AbortSignal): Promise<GhOutput | ForgeFailure> {
+    signal.throwIfAborted()
+    try {
+      return await this.gh(['api', 'graphql', '--hostname', host, ...variables], signal)
+    } catch (error) {
+      if (signal.aborted) throw signal.reason
+      return processFailure(error)
+    }
+  }
+}
+
+/**
+ * Report a `gh` invocation that did not run to an exit code.
+ * @param error - what the runner threw.
+ * @returns `too-large` for output over its limit, `unavailable` for a `gh` that cannot start or times out.
+ * @throws `error` when it is any other failure.
+ */
+function processFailure(error: unknown): ForgeFailure {
+  if (error instanceof GhOutputLimitError) return { code: 'too-large', message: error.message }
+  if (error instanceof GhUnavailableError || error instanceof GhTimeoutError) return { code: 'unavailable', message: error.message }
+  throw error
 }
 
 /** Why `gh` refused: GitHub's message, else its first diagnostic line, with the HTTP status it names. */

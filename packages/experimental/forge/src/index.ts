@@ -236,15 +236,20 @@ export class ForgeService extends Service {
   }
 
   /**
-   * Read the changes of a change request as its host computes them.
+   * Read the changes of a change request at one head commit as its host
+   * computes them. A `stale` failure polls the change request again at once
+   * when it is watched, so its next status names the current head.
    * @param ref - change request served by a registered provider.
+   * @param headSha - head commit the patch must describe, usually the head of the latest status.
    * @param signal - cancellation of the read.
-   * @returns one unified patch with `a/` and `b/` path prefixes, or why the host did not provide it.
+   * @returns one unified patch with `a/` and `b/` path prefixes, or why the host did not provide it at `headSha`.
    * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
    */
-  async diff(ref: ChangeRequestRef, signal: AbortSignal): Promise<string | ForgeFailure> {
-    return await this.invoke(this.registration(ref.repository.forge), signal,
-      (provider, operation) => provider.diff(ref, operation))
+  async diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<string | ForgeFailure> {
+    const result = await this.invoke(this.registration(ref.repository.forge), signal,
+      (provider, operation) => provider.diff(ref, headSha, operation))
+    if (typeof result !== 'string' && result.code === 'stale') this.refresh(ref)
+    return result
   }
 
   /**
