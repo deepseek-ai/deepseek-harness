@@ -247,21 +247,24 @@ describe.skipIf(process.platform === 'win32')('Web sidebar terminal', () => {
     expect(tripwire.pageErrors).toEqual([])
   })
 
-  it('starts in the current directory while earlier terminals and sandbox roots stay independent', async () => {
+  it('starts in the workspace root while earlier terminals and sandbox roots stay independent', async () => {
     onTestFailed(() => saveFailureShot(page, 'sidebar-terminal-directory'))
     const agent = scaffold.ctx.agents.list()[0]!
     const directories = agent.ctx.get('workingDirectory')
     if (directories === undefined) throw new Error('Session working-directory provider is missing')
     const original = directories.get(agent.session)
     const child = join(original, 'terminal-child')
+    const checkout = join(original, 'terminal-checkout')
     await mkdir(child)
+    await mkdir(checkout)
     const sandboxPolicy = agent.ctx.get('sandboxPolicy')
     if (sandboxPolicy === undefined) throw new Error('Session sandbox policy provider is missing')
     const policy = sandboxPolicy.resolve({ session: agent.session })
     const sandbox = agent.ctx.get('sandbox')
     if (sandbox === undefined) throw new Error('Session sandbox provider is missing')
     const confine = vi.spyOn(sandbox, 'confine')
-    const selected = await directories.set(agent, child)
+    // A cd inside the root moves the model's current directory, not the checkout a new terminal starts in.
+    await directories.set(agent, child)
 
     await openTerminal(page)
     const firstProcess = processIdentity(0)
@@ -271,15 +274,17 @@ describe.skipIf(process.platform === 'win32')('Web sidebar terminal', () => {
       await command(page, `[ "$PWD" = ${literal} ]; printf '${marker}:%s\\n' "$?"`)
       await expect.poll(async () => await screen.innerText()).toContain(`${marker}:0`)
     }
-    await checkDirectory('FIRST_DIRECTORY_STATUS', selected)
-    const returned = await directories.set(agent, original)
-    await checkDirectory('RETAINED_DIRECTORY_STATUS', selected)
+    await checkDirectory('FIRST_DIRECTORY_STATUS', original)
+    expect(sandboxPolicy.resolve({ session: agent.session })).toEqual(policy)
+    // Entering another checkout moves the root for later terminals; the earlier one keeps its process directory.
+    const { root: entered } = await directories.relocate(agent, checkout)
+    await checkDirectory('RETAINED_DIRECTORY_STATUS', original)
 
     await openTerminal(page)
-    await checkDirectory('SECOND_DIRECTORY_STATUS', returned)
-    expect(scaffold.ctx.terminalController.list(agent.id).map(terminal => terminal.cwd)).toEqual([selected, returned])
+    await checkDirectory('SECOND_DIRECTORY_STATUS', entered)
+    expect(scaffold.ctx.terminalController.list(agent.id).map(terminal => terminal.cwd)).toEqual([original, entered])
     expect(alive(firstProcess)).toBe(true)
-    expect(sandboxPolicy.resolve({ session: agent.session })).toEqual(policy)
+    expect(sandboxPolicy.resolve({ session: agent.session })).toEqual({ ...policy, workspaceRoot: entered })
     expect(confine).not.toHaveBeenCalled()
     expect(tripwire.pageErrors).toEqual([])
   })

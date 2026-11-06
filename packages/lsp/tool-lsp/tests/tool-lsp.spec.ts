@@ -1,6 +1,6 @@
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -126,6 +126,19 @@ describe('tool-lsp execution', () => {
       position: { line: 2, character: 4 },
       workspaceRoot,
     })
+  })
+
+  it('validates the current directory before reading the workspace root', async () => {
+    const provider = stubProvider(() => okLocations)
+    const { ctx } = await mount(provider)
+    const ensure = vi.spyOn(ctx.workingDirectory, 'ensure').mockResolvedValue(join(workspaceRoot, 'inner'))
+    const rootOf = vi.spyOn(ctx.workingDirectory, 'rootOf')
+    const result = await call(ctx, { operation: 'goToDefinition', file_path: 'a.ts', line: 1, character: 1 }, workspaceRoot)
+    expect(result.isError).toBe(false)
+    expect(ensure).toHaveBeenCalledTimes(1)
+    expect(ensure.mock.invocationCallOrder[0]).toBeLessThan(rootOf.mock.invocationCallOrder[0]!)
+    // The query uses the root, not the validated current directory.
+    expect(provider.seen[0]?.workspaceRoot).toBe(workspaceRoot)
   })
 
   it('renders locations relative to the workspace', async () => {

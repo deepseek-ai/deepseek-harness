@@ -22,7 +22,12 @@ const execute = promisify(execFile)
 async function git(cwd: string, ...args: string[]): Promise<string> {
   const result = await execute('git', ['-c', 'core.hooksPath=/dev/null', ...args], {
     cwd,
-    env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '', GIT_DIR: undefined, GIT_WORK_TREE: undefined },
+    env: {
+      ...process.env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '', GIT_DIR: undefined, GIT_WORK_TREE: undefined,
+      // Commits need an identity the host cannot infer once global configuration is disabled.
+      GIT_AUTHOR_NAME: 'Policy fixture', GIT_AUTHOR_EMAIL: 'policy@example.invalid',
+      GIT_COMMITTER_NAME: 'Policy fixture', GIT_COMMITTER_EMAIL: 'policy@example.invalid',
+    },
   })
   return result.stdout.trim()
 }
@@ -40,8 +45,6 @@ async function scratch(): Promise<{ base: string; repo: string }> {
   const repo = join(base, 'repo')
   await mkdir(repo)
   await git(repo, 'init', '-q', '-b', 'main')
-  await git(repo, 'config', 'user.name', 'Policy fixture')
-  await git(repo, 'config', 'user.email', 'policy@example.invalid')
   await git(repo, 'config', 'commit.gpgSign', 'false')
   await writeFile(join(repo, 'tracked.txt'), 'initial\n')
   await git(repo, 'add', 'tracked.txt')
