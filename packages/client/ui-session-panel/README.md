@@ -42,7 +42,7 @@ Plugins share a title by registering rows in a section owner's row slot. The bui
 
 Marks that must stay visible while the panel is hidden, such as an attention dot, go in the `conversation.session.panel.indicator` list. Each occupant includes text that names it, which becomes part of the toggle's accessible name.
 
-Summary rows from every package use the `PanelRow` primitive, so icon, text, and trailing areas line up across sections.
+Summary rows from every package use the `PanelRow` primitive, so icon, text, and trailing areas line up across sections; put a row's More button in its `menu` so every row highlights as a whole and reveals its actions the same way.
 
 -----
 

@@ -1,11 +1,18 @@
-/* One summary-panel fact: [16px icon] gap 8 [content 13/28] [trailing].
-   The icon inherits the row ink so a fact and its glyph share one foreground. */
+/* One summary-panel fact: [16px icon] gap 8 [content 13/28] [trailing] [menu].
+   The icon inherits the row ink so a fact and its glyph share one foreground.
+   A row with an action or row actions highlights as a whole; the action's
+   button covers the row, and the trailing area and menu sit above it. */
 
 .row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 4px;
+  box-sizing: border-box;
   min-width: 0;
+  min-height: 28px;
+  padding: 0 6px;
+  border-radius: var(--dsw-radius-sm);
   color: var(--dsw-alias-label-primary);
   font: var(--dsw-font-xs-13);
 }
@@ -15,15 +22,13 @@
   flex: 1 1 auto;
   align-items: center;
   gap: 8px;
-  box-sizing: border-box;
   min-width: 0;
   height: 28px;
-  padding: 0 6px;
-  border-radius: var(--dsw-radius-sm);
 }
 
 .action {
   margin: 0;
+  padding: 0;
   border: 0;
   color: inherit;
   background: transparent;
@@ -32,18 +37,19 @@
   cursor: pointer;
 }
 
-@media (hover: hover) {
-  .action:hover {
-    background: var(--dsw-alias-interactive-bg-hover);
-  }
-}
-
-.action:active {
-  background: var(--dsw-alias-interactive-bg-active);
+.action::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  content: '';
 }
 
 .action:focus-visible {
-  outline-style: solid;
+  outline: none;
+}
+
+.row:has(> .action:focus-visible) {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: -2px;
 }
 
@@ -69,10 +75,44 @@
   white-space: nowrap;
 }
 
-.trailing {
+.trailing,
+.menu {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   flex: none;
   align-items: center;
   gap: 4px;
+}
+
+.trailing {
   color: var(--dsw-alias-label-tertiary);
+}
+
+@media (hover: hover) {
+  .interactive:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+
+  .menu {
+    opacity: 0;
+  }
+
+  .row:hover .menu,
+  .row:focus-within .menu {
+    opacity: 1;
+  }
+}
+
+/* An open menu keeps its row highlighted and its trigger visible after the pointer leaves for the menu. */
+.interactive:has([aria-expanded='true']) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.menu:has([aria-expanded='true']) {
+  opacity: 1;
+}
+
+.interactive:has(> .action:active) {
+  background: var(--dsw-alias-interactive-bg-active);
 }

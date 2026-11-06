@@ -29,6 +29,20 @@ describe('PanelRow', () => {
     expect(onActivate).toHaveBeenCalledTimes(1)
   })
 
+  it('places row actions after the trailing area and marks only rows with an action or row actions as interactive', () => {
+    const view = render(
+      <PanelRow icon={<svg />} trailing={<span>value</span>} menu={<button type="button">More</button>}>Project</PanelRow>,
+    )
+    const row = view.container.querySelector('[data-panel-row]') as HTMLElement
+    expect([...row.children].map(child => child.textContent)).toEqual(['Project', 'value', 'More'])
+    const interactive = row.className
+    cleanup()
+    const plain = render(<PanelRow icon={<svg />} trailing={<span>value</span>}>Project</PanelRow>)
+    const staticRow = plain.container.querySelector('[data-panel-row]') as HTMLElement
+    expect(staticRow.children).toHaveLength(2)
+    expect(staticRow.className).not.toBe(interactive)
+  })
+
   it('forwards attributes such as context-menu handlers to the outer element', () => {
     const onContextMenu = vi.fn()
     const view = render(<PanelRow icon={<svg />} className="placed" onContextMenu={onContextMenu} tabIndex={0}>Row</PanelRow>)
