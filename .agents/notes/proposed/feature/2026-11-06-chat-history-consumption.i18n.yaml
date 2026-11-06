@@ -1,0 +1,31 @@
+# Bilingual-pair consistency record for 2026-11-06-chat-history-consumption.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/feature/2026-11-06-chat-history-consumption.md
+/agent-note-chat-history-prefetch-and-safe-consumption:
+  en: b0bb85f8780edc41
+  zh: f3576c234a2f1a99
+/agent-note-chat-history-prefetch-and-safe-consumption/problem:
+  en: fbdf714be9ea6c90
+  zh: d9b6c07347812fc1
+/agent-note-chat-history-prefetch-and-safe-consumption/proposal:
+  en: bda6c4b3dfff143e
+  zh: 4316f6dec6adaa50
+/agent-note-chat-history-prefetch-and-safe-consumption/proposal/manual-and-automatic-loading:
+  en: 9f3707f7d6c3d98e
+  zh: f8903e2d1d652535
+/agent-note-chat-history-prefetch-and-safe-consumption/proposal/position-and-status-presentation:
+  en: 33f2466b802f3957
+  zh: 095227215a22b403
+/agent-note-chat-history-prefetch-and-safe-consumption/proposal/scope-and-retained-decisions:
+  en: dd4eeadd2fccab4b
+  zh: e05d53e63cc44ddf
+/agent-note-chat-history-prefetch-and-safe-consumption/alternatives-considered:
+  en: 7c6d9d470c5b5c93
+  zh: dc12846ee0f56aae
+/agent-note-chat-history-prefetch-and-safe-consumption/acceptance-criteria:
+  en: f9efd25288474b8a
+  zh: 9271fde45be71de6
+/agent-note-chat-history-prefetch-and-safe-consumption/risks:
+  en: ff3b2da49f5fb541
+  zh: b11afa7556f3f313
