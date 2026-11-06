@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { HttpFetchProvider } from '@deepseek-ai/dsh-web-fetch-http'
 
-const failure = vi.hoisted(() => ({ value: undefined as unknown }))
+const failure = vi.hoisted((): { value: unknown } => ({ value: undefined }))
 
 vi.mock('undici', () => ({
   fetch: async () => { throw failure.value },
@@ -52,10 +52,27 @@ describe('HttpFetchProvider transport failure text', () => {
     expect(await messageFor(first)).toBe('web fetch failed: first')
   })
 
-  it('names at most four attempts and counts the rest', async () => {
-    const attempts = new AggregateError([1, 2, 3, 4, 5, 6].map(n => new Error(`attempt ${n}`)))
+  it('names exactly four attempts without a count', async () => {
+    const attempts = new AggregateError([1, 2, 3, 4].map(n => new Error(`attempt ${n}`)))
     expect(await messageFor(new TypeError('fetch failed', { cause: attempts })))
-      .toBe('web fetch failed: attempt 1; attempt 2; attempt 3; attempt 4; 2 more')
+      .toBe('web fetch failed: attempt 1; attempt 2; attempt 3; attempt 4')
+  })
+
+  it('names four of five attempts and counts the rest', async () => {
+    const attempts = new AggregateError([1, 2, 3, 4, 5].map(n => new Error(`attempt ${n}`)))
+    expect(await messageFor(new TypeError('fetch failed', { cause: attempts })))
+      .toBe('web fetch failed: attempt 1; attempt 2; attempt 3; attempt 4; 1 more')
+  })
+
+  it('follows four cause hops', async () => {
+    let chain = new Error('hop 0')
+    for (let hop = 1; hop <= 5; hop++) chain = new Error(`hop ${hop}`, { cause: chain })
+    expect(await messageFor(chain)).toBe('web fetch failed: hop 1')
+  })
+
+  it('keeps 500 characters of a long reason', async () => {
+    expect(await messageFor(new Error('x'.repeat(500)))).toBe(`web fetch failed: ${'x'.repeat(500)}`)
+    expect(await messageFor(new Error('x'.repeat(501)))).toBe(`web fetch failed: ${'x'.repeat(500)}…`)
   })
 
   it('does not expand an AggregateError nested in an attempt', async () => {

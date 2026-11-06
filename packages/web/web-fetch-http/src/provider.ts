@@ -255,14 +255,19 @@ function translateAbortOrNetwork(error: unknown, signal: AbortSignal): WebError 
   const timeout = timeoutOf(signal, 'WEB_FETCH_TIMEOUT')
   if (timeout !== undefined) return new WebError('web fetch timed out', 'WEB_FETCH_TIMEOUT', { cause: timeout })
   if (signal.aborted) return new WebError('web fetch aborted', 'WEB_ABORTED', { cause: error })
-  return new WebError(`web fetch failed: ${networkReason(error)}`, 'WEB_PROVIDER_ERROR', { cause: error })
+  const reason = networkReason(error)
+  const bounded = reason.length > MAX_REASON_CHARS ? `${reason.slice(0, MAX_REASON_CHARS)}…` : reason
+  return new WebError(`web fetch failed: ${bounded}`, 'WEB_PROVIDER_ERROR', { cause: error })
 }
 
-/** Causes followed below a transport rejection; a deeper or cyclic chain is cut there. */
-const MAX_CAUSES = 4
+/** Cause hops followed below a transport rejection; a deeper or cyclic chain is cut there. */
+const MAX_CAUSE_HOPS = 4
 
 /** `AggregateError` members named in a transport failure; the rest are counted. */
 const MAX_ATTEMPTS = 4
+
+/** Characters of a transport failure reason kept in the model-visible message. */
+const MAX_REASON_CHARS = 500
 
 /**
  * Name the innermost cause of a transport failure. Undici rejects with a generic
@@ -273,11 +278,11 @@ const MAX_ATTEMPTS = 4
  * the rejection itself.
  * @param error - the rejection or one `AggregateError` member.
  * @param nested - whether `error` is an `AggregateError` member.
- * @returns the bounded failure reason.
+ * @returns the failure reason, before the caller's character cap.
  */
 function networkReason(error: unknown, nested = false): string {
   let current = error
-  for (let hop = 0; hop < MAX_CAUSES && current instanceof Error && current.cause !== undefined; hop++) current = current.cause
+  for (let hop = 0; hop < MAX_CAUSE_HOPS && current instanceof Error && current.cause !== undefined; hop++) current = current.cause
   if (!nested && current instanceof AggregateError && current.errors.length > 0) {
     const named = current.errors.slice(0, MAX_ATTEMPTS).map(member => networkReason(member, true))
     const rest = current.errors.length - named.length
