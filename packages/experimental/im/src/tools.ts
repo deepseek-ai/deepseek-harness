@@ -438,7 +438,8 @@ function guidance(im: ImToolHost, record: ImSessionRecord, config: ImConfig): st
   parts.push('Media arrives as a label such as [图片 #12.1] or [文件 #12.2 report.pdf]; im_read_image with an image id '
     + 'shows exactly that image of the chat, and im_read_file with any media id saves that element into your workspace '
     + 'and returns the path to open with your file tools. An image or file in the message you were handed already '
-    + 'arrives with the text.')
+    + 'arrives with the text. Publishing reads nothing of this host: im_send and im_reply carry inline images only, and '
+    + 'a local file reaches the chat through im_send_file.')
   return parts.join(' ')
 }
 

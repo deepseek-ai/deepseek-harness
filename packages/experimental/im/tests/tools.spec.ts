@@ -593,3 +593,33 @@ describe('im_read_file', () => {
     expect(textOf(failed)).toContain('refused the download')
   })
 })
+
+describe('model-visible surface', () => {
+  // What the model reads is a contract, not a byproduct: the tool schemas and the `tool:im` section are pinned
+  // verbatim so a change to a description, a parameter or a guidance sentence shows up as a diff someone reviews.
+  it('pins the schema of every registered IM tool', async () => {
+    const mounted = await mount()
+    const schemas = mounted.ctx.tools.schemas().map(({ name, description, parameters }) => ({ name, description, parameters }))
+    expect(schemas).toMatchSnapshot()
+  })
+
+  it('pins the guidance of every session shape', async () => {
+    const mounted = await mount()
+    const writable = await mounted.prompt(fakeAgent(SessionId('im-session')))
+
+    // A session whose `output` names a registered renderer has its turn text rendered into the chat.
+    const rendered = mounted.im.sessions.add('rendered-pin', [{ chat: CHAT, writable: true, home: true }])
+    rendered.output = 'probe'
+    mounted.im.renderers.add('probe')
+    const withRenderer = await mounted.prompt(fakeAgent(SessionId('rendered-pin')))
+
+    const readOnlyMount = await mount({ config: { tools: { readOnly: true, maxReadBytes: 65536, maxHistoryItems: 50, fileDir: '.dsh/im' } } })
+    const readOnly = await readOnlyMount.prompt(fakeAgent(SessionId('im-session')))
+
+    const bareMount = await mount()
+    bareMount.im.sessions.add('bare-pin', [])
+    const bare = await bareMount.prompt(fakeAgent(SessionId('bare-pin')))
+
+    expect({ writable, withRenderer, readOnly, bare }).toMatchSnapshot()
+  })
+})
