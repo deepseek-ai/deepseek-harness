@@ -10,7 +10,7 @@
   - paragraph:
     - img "会话关联 GitHub PR，跟踪检查、评审与代码差异，并用工作树隔离任务改动"
 - heading "包含的组件" [level=4]
-- text: 共 7 个 · 7 已停用
+- text: 共 6 个 · 6 已停用
 - list:
   - listitem:
     - text: 工作树服务 创建命名的 Git 工作树，并切换当前会话的工作目录。
@@ -36,11 +36,6 @@
     - text: 会话变更请求 把变更请求绑定到创建、推送或跟踪它们的会话，并监听其状态。
     - code: forge-session
     - code: "@deepseek-ai/dsh-experimental-forge-session"
-    - text: 已关闭
-  - listitem:
-    - text: 工作树服务 创建命名的 Git 工作树，并切换当前会话的工作目录。
-    - code: forge-worktree
-    - code: "@deepseek-ai/dsh-experimental-worktree"
     - text: 已关闭
   - listitem:
     - text: 变更请求面板 在侧栏标签页中显示会话的变更请求，并让新会话可以在工作树中开始。

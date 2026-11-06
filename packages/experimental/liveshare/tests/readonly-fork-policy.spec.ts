@@ -20,7 +20,7 @@ const request: ForkRequest = {
 function share(overrides: Partial<ForkShareState> = {}): ForkShareState {
   return {
     shareId: 'share-1',
-    sessionId: 'session-1',
+    sessionIds: ['session-1'],
     allowsFork: true,
     viewerAdmitted: true,
     stopped: false,
@@ -82,6 +82,15 @@ describe('read-only fork authorization', () => {
     expect(decideFork(share({ viewerAdmitted: false }), request, 0)).toMatchObject({
       ok: false,
       code: 'viewer-not-authorized',
+    })
+  })
+
+  it('forks any Session the share lists as one of its sources', () => {
+    const multi = share({ sessionIds: ['session-1', 'session-2'] })
+    expect(decideFork(multi, { ...request, sourceSessionId: 'session-2' }, 0)).toMatchObject({ ok: true })
+    expect(decideFork(multi, { ...request, sourceSessionId: 'session-3' }, 0)).toMatchObject({
+      ok: false,
+      code: 'source-session-mismatch',
     })
   })
 

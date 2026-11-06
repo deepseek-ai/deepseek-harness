@@ -66,6 +66,8 @@ interface FixtureOptions {
   readonly admitted?: boolean
   readonly confined?: boolean
   readonly ceilings?: readonly string[]
+  /** Additional source Sessions the share carries; the primary is always `source`. */
+  readonly sourceIds?: readonly string[]
 }
 
 const roots: Context[] = []
@@ -101,7 +103,7 @@ function facts(
   const mode = options.mode === undefined ? 'write' : options.mode
   const share: ForkShareState = {
     shareId: 'share',
-    sessionId: 'source',
+    sessionIds: options.sourceIds ?? ['source'],
     allowsFork: options.allowsFork ?? true,
     viewerAdmitted: true,
     stopped: options.stopped ?? false,
@@ -197,6 +199,14 @@ describe('share reader access policy', () => {
     // Only the reader's own fork may be renamed; the shared Session keeps fork as its one Session verb.
     expect(decide('session/rename', session('own-child'))).toEqual(ALLOW)
     expect(decide('session/rename', session('other-child'))).toEqual(deny('liveshare/read-only'))
+  })
+
+  it('binds every source Session a multi-source share carries', async () => {
+    const { decide } = await fixture({ sourceIds: ['source', 'second'] })
+    for (const action of SESSION_READS) expect(decide(action, session('second'))).toEqual(ALLOW)
+    expect(decide('session/prompt', session('second'), CALL)).toEqual(ALLOW)
+    expect(decide('session/fork', session('second'), CALL)).toEqual(ALLOW)
+    expect(decide('session/page', session('private'))).toEqual(deny('liveshare/read-only'))
   })
 
   it('forwards Session notifications about the shared Session and the reader’s own forks only', async () => {

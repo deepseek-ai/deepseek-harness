@@ -33,7 +33,7 @@ While the root version is unchanged, the current version directory describes the
 
 ## Format
 
-Start from the [upgrade-guide template](../dsh-doc/templates/upgrade-guide.md). `verify-upgrade-guides` enforces:
+Start from the [upgrade-guide template](../dsh-doc-writing/templates/upgrade-guide.md). `verify-upgrade-guides` enforces:
 
 - frontmatter with exactly `kind: upgrade-guide` and a one-sentence `description` naming what breaks; add a key only together with its gate check, then backfill every guide;
 - one `#` title, then exactly the `## Change` and `## Migration` sections in `guide.md`, and `## 变更` and `## 迁移` in `guide.zh.md`, in that order;

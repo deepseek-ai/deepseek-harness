@@ -2,7 +2,7 @@
 
 English | [中文](forge.zh.md)
 
-The experimental forge capability seam reads change requests, meaning pull requests and merge requests, from code hosts. [`dsh-experimental-forge`](../../packages/experimental/forge/README.md) is the Service Definition and provides `ctx.forge`; [`dsh-experimental-forge-github`](../../packages/experimental/forge-github/README.md) is the Service Provider for GitHub hosts; [`dsh-experimental-forge-session`](../../packages/experimental/forge-session/README.md) is the Consumer that binds change requests to Sessions and provides `ctx.forgeSession`; [`dsh-experimental-client-ui-forge`](../../packages/experimental/client-ui-forge/README.md) is the GUI Consumer that provides `ctx.forgePanel`. The default-disabled [forge bundle](../../packages/experimental/forge-bundle/README.md) composes all four, with the [worktree model tool](../../packages/experimental/tool-worktree/README.md) and an isolated [worktree service](../../packages/experimental/worktree/README.md) for the panel, from the Plugins page; otherwise they load only through explicit composition.
+The experimental forge capability seam reads change requests, meaning pull requests and merge requests, from code hosts. [`dsh-experimental-forge`](../../packages/experimental/forge/README.md) is the Service Definition and provides `ctx.forge`; [`dsh-experimental-forge-github`](../../packages/experimental/forge-github/README.md) is the Service Provider for GitHub hosts; [`dsh-experimental-forge-session`](../../packages/experimental/forge-session/README.md) is the Consumer that binds change requests to Sessions and provides `ctx.forgeSession`; [`dsh-experimental-client-ui-forge`](../../packages/experimental/client-ui-forge/README.md) is the GUI Consumer that provides `ctx.forgePanel`. The default-disabled [forge bundle](../../packages/experimental/forge-bundle/README.md) composes all four, with the [worktree model tool](../../packages/experimental/tool-worktree/README.md) and one shared [worktree service](../../packages/experimental/worktree/README.md), from the Plugins page; otherwise they load only through explicit composition.
 
 ## Providers and change requests
 
@@ -377,6 +377,7 @@ interface ForgeSessionWorktree {
   readonly repositoryRoot: string
 }
 ```
+
 
 ```ts type-equiv
 /** Payload of the `plugin:client-ui-forge/worktree` record. */
@@ -912,6 +913,14 @@ Serves the forge panel. Following a Session inspects the checkout of its current
 @Remote({ mode: 'stream' }) async *changeRequestStates(signal: AbortSignal): AsyncIterable<ForgeChangeRequestStatesFrame>
 
 /**
+ * Read or await the worktree service's archive cleanup of the Session's checkout.
+ * @param session - Session whose cleanup is visible to the caller.
+ * @param revision - null reads now; a matching revision waits for completion.
+ * @returns the cleanup state, or null without a worktree service, an attempt, or a current revision.
+ */
+@Remote async worktreeCleanup(session: Session, revision: number | null): Promise<WorktreeCleanup | null>
+
+/**
  * List the local branches that can start a worktree of the Session's current checkout.
  * @param session - Session whose current directory is listed.
  * @param signal - request cancellation.
@@ -1135,7 +1144,7 @@ Serves the forge panel. Following a Session inspects the checkout of its current
 @Remote async continueInProject(session: Session, signal: AbortSignal): Promise<void>
 ```
 
-Types: [Session](session.md)
+Types: [Session](session.md) · [WorktreeCleanup](worktrees.md)
 
 Source: [`packages/experimental/client-ui-forge/src/index.ts`](../../packages/experimental/client-ui-forge/src/index.ts)
 
