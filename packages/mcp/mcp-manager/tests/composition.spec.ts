@@ -7,7 +7,7 @@ import Timer from '@deepseek-ai/cordis-plugin-timer'
 import Hmr from '@deepseek-ai/dsh-hmr'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
-import { managerProfile } from '@deepseek-ai/dsh-mcp-testkit'
+import { managerProfile } from './profile-fixture.ts'
 
 const { MockClient, MockTransport } = vi.hoisted(() => {
   class MockTransport {
