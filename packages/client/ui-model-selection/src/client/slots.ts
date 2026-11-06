@@ -27,10 +27,8 @@ export interface ModelMenuPage {
 
 /** Selection state and feedback shared by menu option entries and detail pages. */
 export interface ModelMenuControls {
-  /** Whether the composer is unavailable for interaction. */
+  /** Whether the composer refuses changes, including while a model selection is saving. */
   locked: boolean
-  /** A model or effort selection is saving; block new actions without dimming or removing focus. */
-  pending: boolean
   /** Close the menu and focus its trigger synchronously before opening another overlay. */
   dismiss: () => void
   /** Report a failed selection through the menu owner's persistent toast. */

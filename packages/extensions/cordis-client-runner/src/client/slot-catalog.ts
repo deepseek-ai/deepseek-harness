@@ -1619,7 +1619,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     occupants: [],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.input.model.label\', () => ctx.slots.register(\n      { name: \'conversation.input.model.label\' },\n      ({ provider, model }) => React.createElement(\'span\', { title: provider.name }, model.name),\n    ))\n  },\n}',
-    source: 'packages/client/ui-model-selection/src/client/slots.ts:72',
+    source: 'packages/client/ui-model-selection/src/client/slots.ts:70',
   },
   {
     key: 'conversation.input.model.options',
@@ -1648,7 +1648,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       },
     ],
     ownerProps: [
-      '/** Selection state and feedback shared by menu option entries and detail pages. */\nexport interface ModelMenuControls {\n  /** Whether the composer is unavailable for interaction. */\n  locked: boolean\n  /** A model or effort selection is saving; block new actions without dimming or removing focus. */\n  pending: boolean\n  /** Close the menu and focus its trigger synchronously before opening another overlay. */\n  dismiss: () => void\n  /** Report a failed selection through the menu owner\'s persistent toast. */\n  reportFailure: (message: string) => void\n}',
+      '/** Selection state and feedback shared by menu option entries and detail pages. */\nexport interface ModelMenuControls {\n  /** Whether the composer refuses changes, including while a model selection is saving. */\n  locked: boolean\n  /** Close the menu and focus its trigger synchronously before opening another overlay. */\n  dismiss: () => void\n  /** Report a failed selection through the menu owner\'s persistent toast. */\n  reportFailure: (message: string) => void\n}',
       '/** A keyed contribution displayed as a second page of the model menu. */\nexport interface ModelMenuPage {\n  /** Registration key in conversation.input.model.page; also marks its root button\'s data-model-menu-page. */\n  key: string\n  /** Localized accessible name of the detail page. */\n  title: string\n}',
     ],
     ownerPropsReferences: [],
@@ -1682,7 +1682,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.input.model.options\', () => ctx.slots.register(\n      { name: \'conversation.input.model.options\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-model-selection/src/client/slots.ts:43',
+    source: 'packages/client/ui-model-selection/src/client/slots.ts:41',
   },
   {
     key: 'conversation.input.model.page',
@@ -1699,7 +1699,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       },
     ],
     ownerProps: [
-      '/** Selection state and feedback shared by menu option entries and detail pages. */\nexport interface ModelMenuControls {\n  /** Whether the composer is unavailable for interaction. */\n  locked: boolean\n  /** A model or effort selection is saving; block new actions without dimming or removing focus. */\n  pending: boolean\n  /** Close the menu and focus its trigger synchronously before opening another overlay. */\n  dismiss: () => void\n  /** Report a failed selection through the menu owner\'s persistent toast. */\n  reportFailure: (message: string) => void\n}',
+      '/** Selection state and feedback shared by menu option entries and detail pages. */\nexport interface ModelMenuControls {\n  /** Whether the composer refuses changes, including while a model selection is saving. */\n  locked: boolean\n  /** Close the menu and focus its trigger synchronously before opening another overlay. */\n  dismiss: () => void\n  /** Report a failed selection through the menu owner\'s persistent toast. */\n  reportFailure: (message: string) => void\n}',
     ],
     ownerPropsReferences: [],
     standardProps: [
@@ -1732,7 +1732,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.input.model.page\', () => ctx.slots.register(\n      { name: \'conversation.input.model.page\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-model-selection/src/client/slots.ts:52',
+    source: 'packages/client/ui-model-selection/src/client/slots.ts:50',
   },
   {
     key: 'conversation.input.overlay',

@@ -10,17 +10,6 @@
 
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
-  'effort.tooltip': '推理等级：{effort}',
-  'effort.off': '关闭',
-  'effort.minimal': '最低',
-  'effort.low': '低',
-  'effort.medium': '中',
-  'effort.high': '高',
-  'effort.xhigh': '更高',
-  'effort.max': '最高',
-  'effort.defaultInfoLabel': '默认推理等级说明',
-  'effort.defaultExplanation': '未显式指定推理等级，将使用模型与配置的默认设置；这不代表关闭推理',
-  'menu.back': '返回',
   'provider.account': 'DeepSeek 账号',
   'command.label': '模型',
   'command.description': '选择本会话使用的模型',
@@ -33,7 +22,7 @@ export const zh = {
   'menu.aria': '模型与推理等级',
   'menu.model': '模型',
   'menu.effort': '推理等级',
-  'effort.providerDefault': '默认',
+  'effort.providerDefault': 'Default',
   'status.loading': '正在刷新模型列表…',
   'error.action': '模型操作失败：{message}',
   'error.sessionInUse': '当前会话已被占用，可能是其他正在运行的 DSH 导致的（如其他 dsh web、桌面端），请退出其他正在运行的 DSH 后重试。',
@@ -51,17 +40,6 @@ export type ModelKey = keyof typeof zh
 
 /** English dictionary, checked complete against the zh key set. */
 export const en = {
-  'effort.tooltip': 'Effort: {effort}',
-  'effort.off': 'Off',
-  'effort.minimal': 'Minimal',
-  'effort.low': 'Low',
-  'effort.medium': 'Medium',
-  'effort.high': 'High',
-  'effort.xhigh': 'Extra high',
-  'effort.max': 'Max',
-  'effort.defaultInfoLabel': 'About default reasoning effort',
-  'effort.defaultExplanation': 'No reasoning effort is explicitly selected. The model and configuration defaults apply; this does not mean reasoning is off.',
-  'menu.back': 'Back',
   'provider.account': 'DeepSeek Account',
   'command.label': 'Model',
   'command.description': 'Select the model for this conversation',
@@ -89,17 +67,6 @@ export const en = {
 
 /** Japanese copy, checked against the English keys. */
 export const ja = {
-  'effort.tooltip': '強度：{effort}',
-  'effort.off': 'オフ',
-  'effort.minimal': '最小',
-  'effort.low': '低',
-  'effort.medium': '中',
-  'effort.high': '高',
-  'effort.xhigh': 'より高い',
-  'effort.max': '最大',
-  'effort.defaultInfoLabel': 'デフォルトの推論強度について',
-  'effort.defaultExplanation': '推論強度は明示的に指定されていません。モデルと設定のデフォルト値を使用します。推論をオフにするという意味ではありません。',
-  'menu.back': '戻る',
   'provider.account': 'DeepSeek アカウント',
   'command.label': 'モデル',
   'command.description': 'この会話で使用するモデルを選択',
@@ -127,17 +94,6 @@ export const ja = {
 
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
-  'effort.tooltip': 'Esfuerzo: {effort}',
-  'effort.off': 'Desactivado',
-  'effort.minimal': 'Mínimo',
-  'effort.low': 'Bajo',
-  'effort.medium': 'Medio',
-  'effort.high': 'Alto',
-  'effort.xhigh': 'Muy alto',
-  'effort.max': 'Máximo',
-  'effort.defaultInfoLabel': 'Acerca del esfuerzo de razonamiento predeterminado',
-  'effort.defaultExplanation': 'No se ha seleccionado explícitamente un esfuerzo de razonamiento. Se aplican los valores predeterminados del modelo y de la configuración; esto no significa que el razonamiento esté desactivado.',
-  'menu.back': 'Volver',
   'provider.account': 'Cuenta DeepSeek',
   'command.label': 'modelo',
   'command.description': 'Selecciona el modelo para esta conversación',
@@ -165,17 +121,6 @@ export const es = {
 
 /** French dictionary, checked against the English keys. */
 export const fr = {
-  'effort.tooltip': 'Effort : {effort}',
-  'effort.off': 'Désactivé',
-  'effort.minimal': 'Minimal',
-  'effort.low': 'Faible',
-  'effort.medium': 'Moyen',
-  'effort.high': 'Élevé',
-  'effort.xhigh': 'Très élevé',
-  'effort.max': 'Maximal',
-  'effort.defaultInfoLabel': 'À propos de l’effort de raisonnement par défaut',
-  'effort.defaultExplanation': 'Aucun effort de raisonnement n’est explicitement sélectionné. Les valeurs par défaut du modèle et de la configuration s’appliquent ; cela ne signifie pas que le raisonnement est désactivé.',
-  'menu.back': 'Retour',
   'provider.account': 'Compte DeepSeek',
   'command.label': 'Modèle',
   'command.description': 'Sélectionnez le modèle pour cette conversation',
@@ -203,17 +148,6 @@ export const fr = {
 
 /** German dictionary, checked against the English keys. */
 export const de = {
-  'effort.tooltip': 'Aufwand: {effort}',
-  'effort.off': 'Aus',
-  'effort.minimal': 'Minimal',
-  'effort.low': 'Niedrig',
-  'effort.medium': 'Mittel',
-  'effort.high': 'Hoch',
-  'effort.xhigh': 'Sehr hoch',
-  'effort.max': 'Maximal',
-  'effort.defaultInfoLabel': 'Über den standardmäßigen Denkaufwand',
-  'effort.defaultExplanation': 'Es ist kein Denkaufwand ausdrücklich ausgewählt. Es gelten die Standardwerte des Modells und der Konfiguration; das bedeutet nicht, dass das Denken deaktiviert ist.',
-  'menu.back': 'Zurück',
   'provider.account': 'DeepSeek-Konto',
   'command.label': 'Modell',
   'command.description': 'Wählen Sie das Modell für dieses Gespräch aus',
@@ -241,17 +175,6 @@ export const de = {
 
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
-  'effort.tooltip': 'Усилие: {effort}',
-  'effort.off': 'Выключено',
-  'effort.minimal': 'Минимальный',
-  'effort.low': 'Низкий',
-  'effort.medium': 'Средний',
-  'effort.high': 'Высокий',
-  'effort.xhigh': 'Очень высокий',
-  'effort.max': 'Максимальный',
-  'effort.defaultInfoLabel': 'Об уровне рассуждений по умолчанию',
-  'effort.defaultExplanation': 'Уровень рассуждений явно не выбран. Применяются значения по умолчанию модели и конфигурации; это не означает, что рассуждения отключены.',
-  'menu.back': 'Назад',
   'provider.account': 'DeepSeek Аккаунт',
   'command.label': 'Модель',
   'command.description': 'Выберите модель для этого разговора',
@@ -279,17 +202,6 @@ export const ru = {
 
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
-  'effort.tooltip': 'Esforço: {effort}',
-  'effort.off': 'Desativado',
-  'effort.minimal': 'Mínimo',
-  'effort.low': 'Baixo',
-  'effort.medium': 'Médio',
-  'effort.high': 'Alto',
-  'effort.xhigh': 'Muito alto',
-  'effort.max': 'Máximo',
-  'effort.defaultInfoLabel': 'Sobre o esforço de raciocínio padrão',
-  'effort.defaultExplanation': 'Nenhum esforço de raciocínio foi selecionado explicitamente. Aplicam-se os valores padrão do modelo e da configuração; isso não significa que o raciocínio esteja desativado.',
-  'menu.back': 'Voltar',
   'provider.account': 'DeepSeek Conta',
   'command.label': 'Modelo',
   'command.description': 'Selecione o modelo para esta conversa',

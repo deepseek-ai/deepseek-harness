@@ -120,20 +120,13 @@ describe.skipIf(webSnapshotMode() === 'record')('web e2e: DeepSeek Messages sett
     await page.getByRole('menuitem', { name: /模型/ }).click()
     await page.getByRole('menuitemradio', { name: 'Messages Flash', exact: true }).waitFor()
     await compareOrRefreshGolden(join(EXPECTED, 'picker.expected.md'),
-      await captureStableAria(page, '[role="group"][aria-label="模型"]', scaffold.workspaceCwd), webSnapshotMode())
+      await captureStableAria(page, '[role="group"][aria-label="模型与推理等级"]', scaffold.workspaceCwd), webSnapshotMode())
     await page.keyboard.press('Escape')
-    const effort = page.getByRole('group', { name: '推理等级', exact: true })
-    await effort.getByRole('slider', { name: '推理等级', exact: true }).waitFor()
-    expect(await effort.getByRole('button').count()).toBe(1)
-    expect(await effort.getByRole('button', { name: '推理等级：高', exact: true }).count()).toBe(1)
-    expect(await effort.getByRole('button', { name: '默认推理等级说明', exact: true }).count()).toBe(0)
-    const slider = effort.getByRole('slider')
-    expect(await slider.getAttribute('min')).toBe('0')
-    expect(await slider.getAttribute('max')).toBe('3')
-    expect(await slider.getAttribute('aria-valuetext')).toBe('高')
-    const tag = effort.getByText('推理等级：高', { exact: true })
-    expect(await tag.evaluate(element => getComputedStyle(element).fontWeight)).toBe('500')
-    expect(await tag.evaluate(element => element.tabIndex)).toBe(-1)
+    await page.getByRole('menuitem', { name: /推理等级/ }).click()
+    const effortWeights = await page.getByRole('menuitemradio').evaluateAll(rows => rows.map(row =>
+      getComputedStyle(row.querySelector('span span')!).fontWeight,
+    ))
+    expect(new Set(effortWeights)).toEqual(new Set(['400']))
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 

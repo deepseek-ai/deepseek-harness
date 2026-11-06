@@ -1,7 +1,5 @@
 - menu "模型与推理等级":
-  - menuitem "模型 Acme Think"
-  - group "推理等级":
-    - button "推理等级：默认": 推理等级： 默认
-    - button "默认推理等级说明"
-    - slider "推理等级": "0"
-  - menuitem "智能体团队协作 关"
+  - menuitemradio "Default" [checked]
+  - menuitemradio "Off"
+  - menuitemradio "High"
+  - menuitemradio "Max"

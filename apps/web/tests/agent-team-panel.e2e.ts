@@ -134,8 +134,6 @@ describe('web e2e: agent teamwork panel', () => {
     const menu = page.getByRole('menu')
     const summary = menu.getByRole('menuitem', { name: 'Agent teamwork Off', exact: true })
     await summary.waitFor()
-    // The route-only fixture supplies no reasoning capability, so no range is invented.
-    expect(await menu.getByRole('slider', { name: 'Effort', exact: true }).count()).toBe(0)
     expect(await menu.getByRole('switch').count()).toBe(0)
     expect(await page.getByRole('button', { name: 'About agent teamwork', exact: true }).count()).toBe(0)
     const rootSnapshot = await captureStableAria(page, '[role="menu"]', scaffold.workspaceCwd)
@@ -202,55 +200,6 @@ describe('web e2e: agent teamwork panel', () => {
       await closeModelMenu(page)
       await page.setViewportSize(viewport)
     }
-  })
-
-  it('keeps keyboard focus on the Team switch through pending writes and rejects repeated activation', async () => {
-    onTestFailed(() => saveFailureShot(page, 'web-e2e-team-keyboard-pending'))
-    const service = scaffold.ctx.agentTeams
-    const setEnabled = service.setEnabled.bind(service)
-    const agent = scaffold.ctx.agents.list()[0]!
-    const initial = service.isEnabled(agent)
-    onTestFinished(async () => {
-      await closeModelMenu(page)
-      await setEnabled(agent, initial)
-    })
-    await openTeamSettings(page)
-    const toggle = page.getByRole('switch', { name: 'Enable agent teamwork', exact: true })
-    for (const enabled of [true, false]) {
-      const entered = Promise.withResolvers<undefined>()
-      const release = Promise.withResolvers<undefined>()
-      let inFlight: Promise<void> | undefined
-      const write = vi.spyOn(service, 'setEnabled').mockImplementation((...args) => {
-        inFlight = (async () => {
-          entered.resolve(undefined)
-          await release.promise
-          await setEnabled(...args)
-        })()
-        return inFlight
-      })
-      try {
-        await toggle.focus()
-        await page.keyboard.press('Space')
-        await entered.promise
-        await expect.poll(() => toggle.getAttribute('aria-busy')).toBe('true')
-        expect(await toggle.evaluate(element => (element as HTMLButtonElement).disabled)).toBe(false)
-        expect(await toggle.getAttribute('aria-disabled')).toBe('true')
-        expect(await toggle.evaluate(element => element === document.activeElement)).toBe(true)
-        await page.keyboard.press('Enter')
-        await page.keyboard.press('Space')
-        expect(write).toHaveBeenCalledTimes(1)
-        expect(await toggle.getAttribute('aria-checked')).toBe(String(!enabled))
-        release.resolve(undefined)
-        await expect.poll(() => toggle.getAttribute('aria-checked')).toBe(String(enabled))
-        await expect.poll(() => toggle.getAttribute('aria-busy')).toBeNull()
-        expect(await toggle.getAttribute('aria-disabled')).toBeNull()
-        expect(await toggle.evaluate(element => element === document.activeElement)).toBe(true)
-      } finally {
-        release.resolve(undefined)
-        try { await inFlight } finally { write.mockRestore() }
-      }
-    }
-    expect(tripwire.pageErrors).toEqual([])
   })
 
   it('defaults off and saves a Session selection in the model menu', async () => {

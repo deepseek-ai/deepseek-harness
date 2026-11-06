@@ -106,14 +106,13 @@
   z-index: 1100;
   display: flex;
   flex-direction: column;
-  /* Every pane shares one width so drilling in cannot resize the card. */
-  width: min(260px, calc(100vw - 24px));
+  /* Rows size the card up to its visible bounds; longer names ellipsize. */
+  width: fit-content;
   height: fit-content;
-  min-width: 0;
-  max-width: min(260px, calc(100vw - 24px));
+  min-width: min(240px, calc(100vw - 24px));
+  max-width: min(420px, calc(100vw - 24px));
   max-height: min(360px, calc(100dvh - 96px));
   overflow: hidden;
-  outline: none;
   padding: 4px;
   /* Surface tokens match the Menu primitive card (ui-primitives
    * Menu.module.css) so every dropdown reads as the same material. */
@@ -128,65 +127,6 @@
      styles/scrollbar.css for the rebinding contract). */
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
-}
-
-
-
-.rootPage {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow-y: auto;
-}
-
-.rootPage > * {
-  flex-shrink: 0;
-}
-
-.reasoningPage {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.reasoningPage .modelHeadline {
-  grid-row: 1;
-  justify-self: center;
-  justify-content: center;
-  width: fit-content;
-  min-width: 0;
-  max-width: 100%;
-  height: 34px;
-  margin: 4px 0 0;
-  padding: 0 6px;
-  gap: 2px;
-  border-radius: var(--dsw-radius-sm);
-}
-
-.reasoningPage .modelHeadline .cellChevron {
-  width: 10px;
-  height: 10px;
-}
-
-.modelHeadline .cellLabel {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-}
-
-.modelHeadline .cellValue {
-  flex: 0 1 auto;
-  text-align: center;
-  font-size: 14px;
-  color: var(--dsw-alias-label-secondary);
-}
-
-.pageBody {
-  width: 100%;
-  min-width: 0;
-  min-height: 0;
-  overflow-y: auto;
 }
 
 .status,
@@ -422,14 +362,9 @@
 }
 
 @media (hover: hover) {
-  .cell:hover:not(.modelHeadline),
-  .reasoningPage .modelHeadline:hover:not(:disabled) {
+  .cell:hover {
     background: var(--dsw-alias-interactive-bg-hover);
   }
-}
-
-.rootPage .cell[data-return-focus]:is(:hover, :focus-visible) {
-  background: transparent;
 }
 
 .cellLabel {
