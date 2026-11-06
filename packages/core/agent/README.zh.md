@@ -73,6 +73,8 @@ await handle.agent.whenIdle()
 
 `Agent.ctx` 是该 agent 的作用域上下文：通过它进行的注册（工具、提示词段、变量、事件监听器、限制）只对该 agent 生效，并在 dispose（资源释放）时全部撤销。同一机制也是 agent preset 用来让一个会话获得不同能力集、同时不影响其邻居的方式。
 
+输入和维护方法会以 `AgentClosedError`（`AGENT_CLOSED`）拒绝已停止接纳新工作的 Agent。生命周期规则见 [Agent 句柄](../../../docs/subsystems/core.zh.md#the-agent-handle)。
+
 ### 拦截或观察进行中的工作
 
 `agent/request` 已弃用，仅为现有监听器保留。不要添加新监听器。提供方、模型和可选的显式推理强度在步骤准备时固定；监听器必须保留三者，包括未指定强度的状态。`AgentOptions.maxTokens` 设置输出上限。其他逐请求控制参数覆盖没有替代 API。受影响的调用方参见[迁移指南](../../../docs/upgrade-guide/v0.2.1-alpha.4/session-model-selection/guide.zh.md)。

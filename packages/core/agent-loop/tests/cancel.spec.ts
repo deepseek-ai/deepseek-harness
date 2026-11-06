@@ -324,7 +324,7 @@ describe('Agent.cancel()', () => {
     send(agent, 'active')
     await streaming.promise
     const disposal = handle.dispose()
-    expect(() =>{  send(agent, 'late wake') }).toThrow(AgentClosedError)
+    expect(() => { send(agent, 'late wake') }).toThrow(AgentClosedError)
     await disposal
 
     expect(adapter.requests).toHaveLength(1)

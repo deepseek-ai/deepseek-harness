@@ -102,7 +102,7 @@ interface Agent {
    * inbox until the task settles, while public status stays `idle`.
    * `whenIdle()` follows both the task and any waking work released behind it.
    * @param task - operation whose fulfillment or rejection is preserved, with a signal aborted by {@link cancel}.
-   * @throws AgentClosedError after disposal begins, or an Error when another activity owns the agent.
+   * @throws AgentClosedError once the Agent lifetime is aborted, or an Error when another activity owns the agent.
    * @returns the task promise.
    */
   runMaintenance<T>(task: (signal: AbortSignal) => Promise<T>): Promise<T>
@@ -117,7 +117,7 @@ interface Agent {
    * @param message - identified content and the source that supplied it.
    * @param target - the preferred next-turn or next-step inbox boundary.
    * @param wakeup - whether delivery may wake the driver.
-   * @throws AgentClosedError after disposal begins; no input is inserted.
+   * @throws AgentClosedError once the Agent lifetime is aborted. The inbox is unchanged.
    */
   send(message: UserMessage, target: InboxTarget, wakeup: boolean): void
 
@@ -125,7 +125,7 @@ interface Agent {
    * Queue an ordinary follow-up turn and wake the driver. The item becomes the
    * sole ordinary message of its own turn.
    * @param message - identified prompt content and the source that supplied it.
-   * @throws AgentClosedError after disposal begins; no input is inserted.
+   * @throws AgentClosedError once the Agent lifetime is aborted. The inbox is unchanged.
    */
   followup(message: UserMessage): void
 
@@ -135,7 +135,7 @@ interface Agent {
    * A rejected step leaves steering parked in the inbox until the next
    * wake; cancellation or disposal may discard pending steering.
    * @param message - identified steering content and the source that supplied it.
-   * @throws AgentClosedError after disposal begins; no input is inserted.
+   * @throws AgentClosedError once the Agent lifetime is aborted. The inbox is unchanged.
    */
   steer(message: UserMessage): void
 
@@ -146,7 +146,7 @@ interface Agent {
    * wakes them. It may miss a request whose pre-step already claimed its
    * batch. Cancellation or disposal may discard pending context.
    * @param message - identified injected context and the source that supplied it.
-   * @throws AgentClosedError after disposal begins; no input is inserted.
+   * @throws AgentClosedError once the Agent lifetime is aborted. The inbox is unchanged.
    */
   inject(message: UserMessage): void
 }
@@ -379,6 +379,8 @@ cause 是由 TypeScript 强制约束的同进程输入。活跃的取消持有�
 [事件分类](../architecture.zh.md#events)负责 `agent/*` 生命周期、检查点与 waterfall（瀑布式事件）约定。轮次和步骤边界是持久会话事件，而不是 agent emit。
 
 <a id="initiating-agent"></a>
+
+`AgentClosedError` 继承 `HarnessError`，包含错误码 `AGENT_CLOSED` 和受影响的 `agentId`。调用方取消创建、Agent 开始释放或工厂开始关闭时，Agent 停止接纳新工作。创建成功后，创建信号不再控制工作接纳。
 
 ## 发起 Agent
 

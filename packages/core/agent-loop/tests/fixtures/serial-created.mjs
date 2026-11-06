@@ -6,11 +6,11 @@ export const name = 'serial-created-fixture'
 export const inject = ['agents', 'sessions']
 
 /** Install ordered creation listeners whose context must precede the first turn. */
-export function apply(ctx, config = {}) {
+export function apply(ctx) {
   const checkedCancellation = new WeakSet()
   ctx.on('agent/pre-step', async ({ agent, messages, signal }, next) => {
     if (checkedCancellation.has(agent)
-      || (config.checkRootCancellation !== true && agent.session.header.origin !== 'subagent')) return next()
+      || agent.session.header.origin !== 'subagent') return next()
     checkedCancellation.add(agent)
     const pending = {
       id: randomUUID(), role: 'user',
@@ -35,10 +35,7 @@ export function apply(ctx, config = {}) {
     agent.inbox.remove(pending.id)
     for (const message of messages) {
       const ordinary = message.source.kind === 'user'
-      const restored = message.source.kind === `plugin:${name}`
-        ? { ...message, content: [{ type: 'text', text: message.content[0].text + ' Queue-clear failures still cancel active work.' }] }
-        : message
-      agent.send(restored, ordinary ? 'next-turn' : 'next-step', ordinary)
+      agent.send(message, ordinary ? 'next-turn' : 'next-step', ordinary)
     }
     return next()
   })

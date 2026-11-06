@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { AgentClosedError, type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import LlmRuntime, { createUserMessage } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { HarnessError, createUserMessage } from '@deepseek-ai/dsh-llm'
 import SessionStore, { Session, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
@@ -52,7 +52,6 @@ async function harness() {
   return { ctx, root, adapter, handle, agent: handle.agent }
 }
 
-
 it('cancellation still aborts the running request when queue clearing fails', async () => {
   const { ctx, agent } = await harness()
   const entered = Promise.withResolvers<AbortSignal>()
@@ -73,6 +72,7 @@ it('cancellation still aborts the running request when queue clearing fails', as
     })
     expect(() => { agent.cancel({ kind: 'user' }) }).toThrow('injected queue clear failure')
     expect(signal.aborted).toBe(true)
+    expect(agent.inbox.nextTurn).toEqual([queued])
   } finally {
     stopRejecting()
     hold()
@@ -81,7 +81,6 @@ it('cancellation still aborts the running request when queue clearing fails', as
     await agent.whenIdle()
   }
 })
-
 
 it('an Agent still in the registry rejects new input while its owner is closing', async () => {
   const { ctx, agent, handle } = await harness()
@@ -96,6 +95,16 @@ it('an Agent still in the registry rejects new input while its owner is closing'
     await aborted.promise
     expect(ctx.agents.get(agent.id)).toBe(agent)
     const message = input('during closing')
+    const error = vi.fn((failure: unknown) => failure)
+    try {
+      agent.followup(message)
+    } catch (failure) {
+      error(failure)
+    }
+    expect(error).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'AgentClosedError', code: 'AGENT_CLOSED', agentId: agent.id,
+    }))
+    expect(error.mock.calls[0]?.[0]).toBeInstanceOf(HarnessError)
     for (const submit of [() => { agent.followup(message) }, () => { agent.steer(message) }, () => { agent.inject(message) }, () => { agent.send(message, 'next-turn', true) }, () => agent.runMaintenance(async () => {}), () => { agent.inbox.append('next-turn', message) }, () => { agent.inbox.prepend('next-step', message) }, () => agent.inbox.splice('next-turn', 0, 0, [message]), () => agent.inbox.replace(message.id, message)]) {
       expect(submit).toThrow(AgentClosedError)
     }
@@ -107,8 +116,6 @@ it('an Agent still in the registry rejects new input while its owner is closing'
     await closing
   }
 })
-
-
 
 it('waits for admitted maintenance after a queue-clear failure before releasing its Session', async () => {
   const { ctx, agent, handle } = await harness()

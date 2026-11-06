@@ -1787,7 +1787,6 @@ def smoke_sdk_snapshot_mode(
             {"insert": [{
                 "id": "serial-created-fixture",
                 "name": str(Path(__file__).resolve().parents[1] / "packages/core/agent-loop/tests/fixtures/serial-created.mjs"),
-                "config": {"checkRootCancellation": False},
             }]},
         ])
         with DeepSeekHarness(

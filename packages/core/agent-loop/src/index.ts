@@ -469,11 +469,8 @@ export class AgentLoop extends Service implements AgentFactory {
     const id = session.id
     const loopCtx = this.runtime.ctx
 
-    // Deactivation fuses three owners, each with its own reason: the caller's
-    // cancellation signal, the owner fiber's unload, and factory teardown.
-    // It is registered BEFORE any resource exists, over mutable slots, so an
-    // unload arriving while the scope is still minting finds a working
-    // disposer instead of a leak.
+    // The caller's signal governs creation. Owner disposal and factory
+    // shutdown can end the Agent's lifetime both during and after creation.
     const abort = new AbortController()
     const onCallerAbort = (): void => {
       abort.abort(callerSignal?.reason instanceof Error

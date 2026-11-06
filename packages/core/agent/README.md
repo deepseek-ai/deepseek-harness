@@ -73,6 +73,8 @@ await handle.agent.whenIdle()
 
 `Agent.ctx` is the agent's scoped context: registrations made through it (tools, prompt sections, variables, event listeners, restrictions) apply to that agent alone and unwind on disposal. The same mechanism is what agent presets use to give one session a different capability set without affecting its neighbors.
 
+Input and maintenance methods reject closed Agents with `AgentClosedError` (`AGENT_CLOSED`). See [Agent lifetime and admission](../../../docs/subsystems/core.md#the-agent-handle) for the lifecycle rules.
+
 ### Intercept or observe work in flight
 
 `agent/request` is deprecated and retained for existing listeners. Do not add new listeners. Provider, model, and optional explicit reasoning effort are fixed at step preparation; listeners must preserve all three, including an absent effort. `AgentOptions.maxTokens` sets the output cap. Other per-request control overrides have no replacement API. See the [migration guide](../../../docs/upgrade-guide/v0.2.1-alpha.4/session-model-selection/guide.md) for affected callers.

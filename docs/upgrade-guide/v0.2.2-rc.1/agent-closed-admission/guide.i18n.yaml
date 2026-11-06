@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.1/agent-closed-admission/guide.md
+/:
+  en: e4666ee6e813e7a3
+  zh: ab68705b61d0da3c
+/handle-agent-input-rejected-during-shutdown:
+  en: 5ec42a6575141728
+  zh: a5174b0e04526c58
+/handle-agent-input-rejected-during-shutdown/change:
+  en: def59fb50e36f026
+  zh: 91e79aad0ea758ad
+/handle-agent-input-rejected-during-shutdown/migration:
+  en: e4c7ffd0e06c01bf
+  zh: 7fc1f43747209fb7

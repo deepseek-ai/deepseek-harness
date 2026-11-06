@@ -226,7 +226,7 @@ declare module './types.ts' {
    * inbox until the task settles, while public status stays `idle`.
    * `whenIdle()` follows both the task and any waking work released behind it.
    * @param task - operation whose fulfillment or rejection is preserved, with a signal aborted by {@link cancel}.
-   * @throws AgentClosedError after disposal begins, or an Error when another activity owns the agent.
+   * @throws AgentClosedError once the Agent lifetime is aborted, or an Error when another activity owns the agent.
    * @returns the task promise.
    */
     runMaintenance<T>(task: (signal: AbortSignal) => Promise<T>): Promise<T>
@@ -241,7 +241,7 @@ declare module './types.ts' {
    * @param message - identified content and the source that supplied it.
    * @param target - the preferred next-turn or next-step inbox boundary.
    * @param wakeup - whether delivery may wake the driver.
-   * @throws AgentClosedError after disposal begins; no input is inserted.
+   * @throws AgentClosedError once the Agent lifetime is aborted. The inbox is unchanged.
    */
     send(message: UserMessage, target: InboxTarget, wakeup: boolean): void
 
@@ -249,7 +249,7 @@ declare module './types.ts' {
    * Queue an ordinary follow-up turn and wake the driver. The item becomes the
    * sole ordinary message of its own turn.
    * @param message - identified prompt content and the source that supplied it.
-   * @throws AgentClosedError after disposal begins; no input is inserted.
+   * @throws AgentClosedError once the Agent lifetime is aborted. The inbox is unchanged.
    */
     followup(message: UserMessage): void
 
@@ -259,7 +259,7 @@ declare module './types.ts' {
    * A rejected step leaves steering parked in the inbox until the next
    * wake; cancellation or disposal may discard pending steering.
    * @param message - identified steering content and the source that supplied it.
-   * @throws AgentClosedError after disposal begins; no input is inserted.
+   * @throws AgentClosedError once the Agent lifetime is aborted. The inbox is unchanged.
    */
     steer(message: UserMessage): void
 
@@ -270,7 +270,7 @@ declare module './types.ts' {
    * wakes them. It may miss a request whose pre-step already claimed its
    * batch. Cancellation or disposal may discard pending context.
    * @param message - identified injected context and the source that supplied it.
-   * @throws AgentClosedError after disposal begins; no input is inserted.
+   * @throws AgentClosedError once the Agent lifetime is aborted. The inbox is unchanged.
    */
     inject(message: UserMessage): void
   }

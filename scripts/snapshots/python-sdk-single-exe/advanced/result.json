@@ -2941,7 +2941,7 @@
                 "content": [
                   {
                     "type": "text",
-                    "text": "Serial agent creation completed. Queue-clear failures still cancel active work."
+                    "text": "Serial agent creation completed."
                   }
                 ],
                 "source": {
@@ -3127,7 +3127,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Serial agent creation completed. Queue-clear failures still cancel active work."
+                "text": "Serial agent creation completed."
               }
             ],
             "source": {
@@ -3967,7 +3967,7 @@
                 "content": [
                   {
                     "type": "text",
-                    "text": "Serial agent creation completed. Queue-clear failures still cancel active work."
+                    "text": "Serial agent creation completed."
                   }
                 ],
                 "source": {
@@ -4149,7 +4149,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Serial agent creation completed. Queue-clear failures still cancel active work."
+                "text": "Serial agent creation completed."
               }
             ],
             "source": {
