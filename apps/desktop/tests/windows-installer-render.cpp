@@ -124,14 +124,15 @@ int wmain(int argc, wchar_t** argv) {
     };
     bool captionStates = true;
     ShowWindow(progress, SW_HIDE);
-    for (int x : {504}) {
+    {
+        constexpr int x = 504;
         const LPARAM point = MAKELPARAM(MulDiv(x + 20, dpi, 96), MulDiv(24, dpi, 96));
         captionStates = expectPixel(x, normalColor) && captionStates;
         SendMessageW(progress, WM_MOUSEMOVE, 0, point);
         captionStates = expectPixel(x, hoverColor) && captionStates;
         SendMessageW(progress, WM_LBUTTONDOWN, MK_LBUTTON, point);
         captionStates = expectPixel(x, pressedColor) && captionStates;
-        const int other = x == 504 ? 548 : 504;
+        constexpr int other = 548;
         SendMessageW(progress, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(MulDiv(other + 20, dpi, 96), MulDiv(24, dpi, 96)));
         captionStates = expectPixel(other, normalColor) && captionStates;
         captionStates = expectPixel(x, normalColor) && captionStates;
@@ -167,15 +168,15 @@ int wmain(int argc, wchar_t** argv) {
     const LPARAM closePoint = MAKELPARAM(MulDiv(568, dpi, 96), MulDiv(24, dpi, 96));
     MSG closeMessage;
     SendMessageW(progress, WM_LBUTTONDOWN, MK_LBUTTON, closePoint);
-    bool closeRelease = GetCapture() != progress && expectPixel(548, normalColor)
+    bool closeDisabled = GetCapture() != progress && expectPixel(548, normalColor)
         && !PeekMessageW(&closeMessage, window, WM_CLOSE, WM_CLOSE, PM_REMOVE);
     SendMessageW(progress, WM_MOUSEMOVE, MK_LBUTTON, closePoint);
-    closeRelease = closeRelease && expectPixel(548, normalColor);
+    closeDisabled = closeDisabled && expectPixel(548, normalColor);
     SendMessageW(progress, WM_LBUTTONUP, 0, minimizePoint);
-    closeRelease = closeRelease && !PeekMessageW(&closeMessage, window, WM_CLOSE, WM_CLOSE, PM_REMOVE);
+    closeDisabled = closeDisabled && !PeekMessageW(&closeMessage, window, WM_CLOSE, WM_CLOSE, PM_REMOVE);
     SendMessageW(progress, WM_LBUTTONDOWN, MK_LBUTTON, closePoint);
     SendMessageW(progress, WM_LBUTTONUP, 0, closePoint);
-    closeRelease = closeRelease && !PeekMessageW(&closeMessage, window, WM_CLOSE, WM_CLOSE, PM_REMOVE) && GetCapture() != progress;
+    closeDisabled = closeDisabled && !PeekMessageW(&closeMessage, window, WM_CLOSE, WM_CLOSE, PM_REMOVE) && GetCapture() != progress;
     LARGE_INTEGER frequency, started, finished;
     QueryPerformanceFrequency(&frequency);
     std::vector<double> samples;
@@ -207,7 +208,7 @@ int wmain(int argc, wchar_t** argv) {
     DestroyWindow(progress);
     const DWORD finalGdi = GetGuiResources(GetCurrentProcess(), GR_GDIOBJECTS);
     DestroyWindow(window);
-    std::printf("client_frame=%d stock_preserved=%d completed=%d final_caption=%d caption_states=%d button_release=%d close_release=%d minimized=%d restored=%d gdi_before=%lu gdi_after=%lu\n",
-        clientFrame, failurePreservesStock, completed, finalCaption, captionStates, buttonRelease, closeRelease, minimized, restored, initialGdi, finalGdi);
-    return clientFrame && failurePreservesStock && completed && finalCaption && captionStates && buttonRelease && closeRelease && minimized && restored && finalGdi <= initialGdi ? 0 : 6;
+    std::printf("client_frame=%d stock_preserved=%d completed=%d final_caption=%d caption_states=%d button_release=%d close_disabled=%d minimized=%d restored=%d gdi_before=%lu gdi_after=%lu\n",
+        clientFrame, failurePreservesStock, completed, finalCaption, captionStates, buttonRelease, closeDisabled, minimized, restored, initialGdi, finalGdi);
+    return clientFrame && failurePreservesStock && completed && finalCaption && captionStates && buttonRelease && closeDisabled && minimized && restored && finalGdi <= initialGdi ? 0 : 6;
 }

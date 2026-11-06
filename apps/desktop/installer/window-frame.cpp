@@ -178,6 +178,7 @@ static UINT CaptionCommand(const ProgressPage& page, LPARAM position) {
     const int x = static_cast<short>(LOWORD(position));
     const int y = static_cast<short>(HIWORD(position));
     if (y < 0 || y >= MulDiv(48, page.dpi, 96) || x < MulDiv(504, page.dpi, 96) || x >= MulDiv(600, page.dpi, 96)) return 0;
+    // Installation cannot be cancelled with the progress page close button.
     return x >= MulDiv(548, page.dpi, 96) ? 0 : SC_MINIMIZE;
 }
 
@@ -185,7 +186,8 @@ static void PaintCaptionButtons(Graphics& graphics, const ProgressPage& page) {
     SolidBrush background(page.dark ? Color(255, 21, 21, 23) : Color(255, 255, 255, 255));
     graphics.FillRectangle(&background, 504, 0, 96, 48);
     SolidBrush ink(page.dark ? Color(255, 255, 255, 255) : Color(255, 15, 17, 21));
-    SolidBrush disabledInk(page.dark ? Color(255, 97, 102, 107) : Color(255, 173, 177, 184));
+    // Disabled caption uses the same foreground with reduced opacity in both themes.
+    SolidBrush disabledInk(page.dark ? Color(96, 255, 255, 255) : Color(96, 15, 17, 21));
     FontFamily family(L"Microsoft YaHei UI");
     Font font(&family, 16, FontStyleRegular, UnitPixel);
     StringFormat centered;
@@ -411,30 +413,32 @@ extern "C" __declspec(dllexport) BOOL __cdecl InstallerFinishProgress(HWND windo
 }
 
 struct FrameState {
-    unsigned moveDepth = 0;
+    unsigned modalDepth = 0;
     bool nextPending = false;
 };
 
 // NSIS advances synchronously into nsDialogs::Show. Its nested loop must not
-// start until DefWindowProc has returned from moving the window and released input.
-constexpr UINT NotifyOuterNext = WM_USER + 8;
+// start until DefWindowProc has returned from moving the window or tracking its system menu.
+// NSIS ui.h: WM_NOTIFY_OUTER_NEXT; also declared in installer/pages.nsh.
+constexpr UINT WM_NOTIFY_OUTER_NEXT = WM_USER + 8;
 
 static LRESULT CALLBACK FrameProc(HWND window, UINT message, WPARAM wparam,
                                  LPARAM lparam, UINT_PTR id, DWORD_PTR data) {
     auto* state = reinterpret_cast<FrameState*>(data);
-    if (message == NotifyOuterNext && wparam == 1 && state->moveDepth) {
+    if (message == WM_NOTIFY_OUTER_NEXT && wparam == 1 && state->modalDepth) {
         state->nextPending = true;
         return 0;
     }
-    if (message == WM_SYSCOMMAND && ((wparam & 0xfff0) == SC_MOVE || (wparam & 0xfff0) == SC_SIZE)) {
-        ++state->moveDepth;
+    if (message == WM_SYSCOMMAND && ((wparam & 0xfff0) == SC_MOVE || (wparam & 0xfff0) == SC_SIZE
+        || (wparam & 0xfff0) == SC_KEYMENU || (wparam & 0xfff0) == SC_MOUSEMENU)) {
+        ++state->modalDepth;
         const LRESULT result = DefSubclassProc(window, message, wparam, lparam);
         DWORD_PTR remaining = 0;
         // Destruction inside the native loop also destroys the frame state.
         if (GetWindowSubclass(window, FrameProc, id, &remaining) && remaining == data) {
-            if (--state->moveDepth == 0 && state->nextPending) {
+            if (--state->modalDepth == 0 && state->nextPending) {
                 state->nextPending = false;
-                PostMessageW(window, NotifyOuterNext, 1, 0);
+                PostMessageW(window, WM_NOTIFY_OUTER_NEXT, 1, 0);
             }
         }
         return result;

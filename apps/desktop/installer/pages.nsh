@@ -220,6 +220,7 @@ Function InstallerWelcomeLeave
     ${EndIf}
 FunctionEnd
 
+; Both Finish and Close use this exit path; Close clears the launch selection.
 Function InstallerFinishLeave
     ${NSD_GetState} $InstallerLaunch $0
     HideWindow
