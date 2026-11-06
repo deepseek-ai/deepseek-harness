@@ -43,18 +43,12 @@ def check_file_panel(call, owner, primary_params, primary, directory, wait_state
                 raise AssertionError(description + ": " + observed["tree"])
             time.sleep(0.025)
 
-    document = wait_observation(lambda observed: any(e["identifier"] == "OKButton" for e in observed["elements"]),
-                                "File panel control did not appear in the document tree", primary_params)
-    sheet_id = document["focusedWindowId"]
-    assert sheet_id is not None and sheet_id != primary["windowId"], document
-    button = next(e for e in document["elements"] if e["identifier"] == "OKButton")
-    for method in ("click", "mouseMove"):
-        error = call(method, {**owner, "windowId": primary["windowId"], "snapshotId": document["snapshotId"],
-                              "elementId": button["elementId"]}, "STALE_SNAPSHOT")
-        assert f"window {sheet_id}; select that window" in error["message"], error
+    sheet = wait_observation(lambda observed: any(e["identifier"] == "open-panel" for e in observed["elements"]),
+                             "File panel did not appear")
+    sheet_id = sheet["focusedWindowId"]
+    assert sheet_id is not None and sheet_id != primary["windowId"], sheet
     scoped = call("getState", {**primary_params, "windowId": sheet_id})
     assert any(e["role"] == "AXSheet" for e in scoped["elements"]), scoped
-    assert any(e["identifier"] == "OKButton" for e in scoped["elements"]), scoped
     assert "Increment primary" not in scoped["tree"], scoped
     panel = next(e for e in scoped["elements"] if e["identifier"] == "open-panel")
     call("performAction", {**owner, "snapshotId": scoped["snapshotId"], "elementId": panel["elementId"], "action": "AXRaise"})
@@ -78,10 +72,19 @@ def check_file_panel(call, owner, primary_params, primary, directory, wait_state
     wait_observation(lambda observed: any(e["identifier"] == "PathTextField" and e["value"] == str(selected_file)
                                          for e in observed["elements"]), "Panel text input did not arrive")
     call("pressKey", {**owner, "key": "Return"})
-    ready = wait_observation(lambda observed: not any(e["identifier"] == "PathTextField" for e in observed["elements"])
-                             and any(e["identifier"] == "OKButton" and e["enabled"] for e in observed["elements"]),
-                             "Go to folder did not select the requested file", {**primary_params, "windowId": sheet_id})
-    open_button = next(e for e in ready["elements"] if e["identifier"] == "OKButton")
+    def open_button_ready(observed):
+        return (not any(e["identifier"] == "PathTextField" for e in observed["elements"])
+                and any(e["identifier"] == "OKButton" and e["enabled"] for e in observed["elements"]))
+
+    document = wait_observation(open_button_ready, "Selected file did not enable Open in the document tree",
+                                {**primary_params, "maxElements": 2000, "maxDepth": 25})
+    button = next(e for e in document["elements"] if e["identifier"] == "OKButton")
+    for method in ("click", "mouseMove"):
+        error = call(method, {**owner, "windowId": primary["windowId"], "snapshotId": document["snapshotId"],
+                              "elementId": button["elementId"]}, "STALE_SNAPSHOT")
+        assert f"window {sheet_id}; select that window" in error["message"], error
+    ready = call("getState", {**owner, "windowId": sheet_id, "maxElements": 2000, "maxDepth": 25})
+    open_button = next(e for e in ready["elements"] if e["identifier"] == "OKButton" and e["enabled"])
     assert call("invoke", {**owner, "windowId": sheet_id, "snapshotId": ready["snapshotId"], "elementId": open_button["elementId"]})["dispatched"]
     wait_state(lambda state: bool(state["selectedFile"]) and Path(state["selectedFile"]).samefile(selected_file),
                "File picker did not return the intended file")
