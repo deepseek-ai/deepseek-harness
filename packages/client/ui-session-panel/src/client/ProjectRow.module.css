@@ -1,10 +1,14 @@
 /* [name] · [parent]: the name keeps its width up to the row, and the parent
-   takes the remaining space and clips with an ellipsis. */
+   fills the rest of the line and clips with an ellipsis. With less than 5em
+   left for it, the parent wraps onto a second line, which the one-line height
+   hides, so the row never shows a separator without a parent. */
 
 .folder {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   min-width: 0;
+  height: 1lh;
   overflow: hidden;
   white-space: nowrap;
 }
@@ -17,13 +21,14 @@
 .name {
   flex: 0 1 auto;
   min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .parent {
-  flex: 0 1000 auto;
-  min-width: 0;
+  flex: 1 1 0;
+  min-width: 5em;
   overflow: hidden;
   color: var(--dsw-alias-label-tertiary);
   text-overflow: ellipsis;
