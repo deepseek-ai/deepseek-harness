@@ -33,6 +33,12 @@ struct ForegroundObservation: Sendable {
     let focusedWindowID: UInt32?
     let frontWindowID: UInt32?
     let frontWindowPID: Int32?
+    static func change(beforePID: Int32?, beforeWindow: UInt32?, afterPID: Int32?, afterWindow: UInt32?) -> JSONValue {
+        if let beforePID, let afterPID, beforePID != afterPID { return .bool(true) }
+        if let beforeWindow, let afterWindow, beforeWindow != afterWindow { return .bool(true) }
+        guard beforePID != nil, afterPID != nil, beforeWindow != nil, afterWindow != nil else { return .null }
+        return .bool(false)
+    }
     var json: JSONValue {
         .object(["frontPid": frontPID.map { .number(Double($0)) } ?? .null,
                  "focusedWindowId": focusedWindowID.map { .number(Double($0)) } ?? .null,
@@ -266,10 +272,8 @@ actor AXWorker {
             try NativePlatform.requireUnlocked(observeSession())
             let afterPID = NativePlatform.frontPID()
             let afterWindow = NativePlatform.windows().first { $0.isOnScreen }?.windowID
-            let changed: JSONValue
-            if let beforePID, let afterPID, let beforeWindow, let afterWindow {
-                changed = .bool(beforePID != afterPID || beforeWindow != afterWindow)
-            } else { changed = .null }
+            let changed = ForegroundObservation.change(beforePID: beforePID, beforeWindow: beforeWindow,
+                                                       afterPID: afterPID, afterWindow: afterWindow)
             return .result(.object(["dispatched": .bool(true),
                 "windowId": restored.map { .number(Double($0)) } ?? .null, "foregroundChanged": changed]))
         case "activate":

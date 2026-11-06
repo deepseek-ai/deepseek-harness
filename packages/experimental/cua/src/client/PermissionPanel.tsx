@@ -96,17 +96,20 @@ function Applications({ title, apps, icons, onAction, label, disabled }: {
   </section>
 }
 
-function PermissionDescription({ application, permission, t }: Pick<PermissionProps, 't'> & {
+function PermissionDescription({ application, permission, loading = false, t }: Pick<PermissionProps, 't'> & {
   application: Extract<CuaSystemPermissionState, { platform: 'darwin' }>['launchApplication']
   permission: 'accessibility' | 'screenRecording'
+  loading?: boolean
 }) {
-  if (application === undefined) return <p>{t(permission === 'accessibility' ? 'accessibilityUse' : 'screenRecordingUse')}</p>
+  if (application === undefined && !loading) return <p>{t(permission === 'accessibility' ? 'accessibilityUse' : 'screenRecordingUse')}</p>
   const [before, after] = t(permission === 'accessibility' ? 'accessibilityPermission' : 'screenRecordingPermission').split('{application}')
   return <p>
     {before}
     <span className={css.applicationBadge}>
-      {application.icon !== undefined && <img src={application.icon} alt="" width={20} height={20} draggable={false} />}
-      <span>{application.name}</span>
+      {application === undefined ? <span className={css.appPlaceholder} /> : <>
+        {application.icon !== undefined && <img src={application.icon} alt="" width={20} height={20} draggable={false} />}
+        <span>{application.name}</span>
+      </>}
     </span>
     {after}
   </p>
@@ -126,14 +129,16 @@ function PermissionAction({ permission, granted, busy, request, openSettings, t 
 }
 
 function UnknownStatus({ loading, t }: Pick<PermissionProps, 't'> & { loading: boolean }) {
-  return (['interaction', 'capture'] as const).map(kind => <div className={css.permission} key={kind}
-    role="group" aria-label={t(kind === 'interaction' ? 'applicationInteraction' : 'windowsCapture')}>
-    <div>
-      <strong>{t(kind === 'interaction' ? 'applicationInteraction' : 'windowsCapture')}</strong>
-      <p>{t(kind === 'interaction' ? 'accessibilityUse' : 'screenRecordingUse')}</p>
+  return (['accessibility', 'screenRecording'] as const).map((permission) => {
+    const use = t(permission === 'accessibility' ? 'accessibilityUse' : 'screenRecordingUse')
+    return <div className={css.permission} key={permission} role="group" aria-label={use}>
+      {loading ? <div className={css.skeletonCopy} aria-hidden="true">
+        <strong>{t(permission)}</strong>
+        <PermissionDescription application={undefined} permission={permission} loading t={t} />
+      </div> : <div><strong>{use}</strong></div>}
+      {loading ? <span className={css.buttonPlaceholder} aria-hidden /> : <span>{t('unknown')}</span>}
     </div>
-    {loading ? <span className={css.buttonPlaceholder} aria-hidden /> : <span>{t('unknown')}</span>}
-  </div>)
+  })
 }
 
 function WindowsStatus({ system, uncertain, t }: Pick<PermissionProps, 't'> & {
@@ -202,9 +207,9 @@ export function PermissionPanel(props: PermissionPanelProps) {
                 busy={busy} request={props.request} openSettings={props.openSettings} t={t} />
             </div>)}
       </div>
-      {observed !== null && <p>{observed.platform === 'win32'
+      <p className={observed === null ? css.pendingHint : undefined} aria-hidden={observed === null || undefined}>{observed?.platform === 'win32'
         ? <>{t('windowsInstructions')} {t(observed.elevated ? 'elevated' : 'standardPrivileges')}</>
-        : t('permissionHint')}</p>}
+        : t('permissionHint')}</p>
     </section>
     <section className={css.panel} aria-label={t('applicationsTitle')}>
       <h3>{t('applicationsTitle')}</h3>

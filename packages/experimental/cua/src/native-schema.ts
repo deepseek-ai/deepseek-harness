@@ -49,6 +49,8 @@ export function nativeProtocol(permissionFields: Partial<Record<'requestPermissi
     }
     schema.properties = { id: { type: 'string' }, ...schema.properties }
     schema.required = ['id', 'method', 'params']
+    // Each embedded resource resolves its recursive JSON value references against its own definitions.
+    if (schema.$defs) schema.$id = `urn:deepseek-harness:cua:request:${method}`
     delete schema.$schema
     const names = new Set<string>()
     const values = new Map<string, Set<string>>()

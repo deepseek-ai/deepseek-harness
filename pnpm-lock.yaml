@@ -10086,6 +10086,9 @@ importers:
       '@deepseek-ai/dsh-working-directory':
         specifier: workspace:*
         version: link:../../session/working-directory
+      ajv:
+        specifier: ^8.20.0
+        version: 8.20.0
       sharp:
         specifier: ^0.35.3
         version: 0.35.5(@types/node@22.20.1)

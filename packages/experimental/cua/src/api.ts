@@ -123,6 +123,9 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>, sink: CuaObser
           ...options?.includeMenus === undefined ? {} : { includeMenus: options.includeMenus },
           ...options?.details === undefined ? {} : { details: options.details },
         }))
+        if (state.appHandle !== target.appHandle || state.windowId !== (target.windowId ?? null)) {
+          throw new Error('Native observation belongs to another application or window')
+        }
         observed.set(target.appHandle, { snapshotId: state.snapshotId, windowId: target.windowId })
         if (options?.emit !== false) await sink?.text(state.tree)
         return state.tree
@@ -185,6 +188,7 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>, sink: CuaObser
       ...base.surface, windowId,
       async getScreenshot(options) {
         const image = ScreenshotResult.parse(await base.call('screenshot', {}))
+        if (image.windowId !== windowId) throw new Error('Native screenshot belongs to another window')
         const screenshot: CuaScreenshot = {
           bytes: Uint8Array.from(Buffer.from(image.data, 'base64')),
           mimeType: image.mimeType,

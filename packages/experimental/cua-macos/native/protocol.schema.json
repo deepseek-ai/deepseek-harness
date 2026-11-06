@@ -406,7 +406,8 @@
             }
           ]
         }
-      }
+      },
+      "$id": "urn:deepseek-harness:cua:request:performAction"
     },
     {
       "type": "object",
@@ -783,7 +784,8 @@
             }
           ]
         }
-      }
+      },
+      "$id": "urn:deepseek-harness:cua:request:setValue"
     },
     {
       "type": "object",

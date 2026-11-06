@@ -46,7 +46,7 @@ it('enumerates every available method once in its catalog entry', () => {
 })
 
 it('documents option fields and return fields', () => {
-  for (const token of ['emit', 'includeMenus', 'details', 'disableDiffing', 'relative', 'mouseButton', 'clickCount', 'holdMs', 'modifiers', 'format', 'prefix', 'suffix', 'selectionType']) expect(COMMON_GUIDANCE).toContain(token)
+  for (const token of ['emit', 'includeMenus', 'details', 'relative', 'mouseButton', 'clickCount', 'holdMs', 'modifiers', 'format', 'prefix', 'suffix', 'selectionType']) expect(COMMON_GUIDANCE).toContain(token)
   for (const token of ['dispatched', 'foregroundChanged', 'hoverRoute', 'systemPointerMoved', 'bytes', 'mimeType', 'pixelWidth', 'pixelHeight', 'windowId']) expect(COMMON_GUIDANCE).toContain(token)
 })
 
@@ -124,5 +124,5 @@ it('documents facade initialization, emitted observations, and separate key argu
 })
 
 it('omits stale names and unavailable platform operations', () => {
-  for (const stale of ['getAXState', 'performSecondaryAction', 'hover(', 'keyChord', 'sendKeyEvent', 'window.typeText', 'window.pressKey', 'elementIndex', 'verified: false', 'browser tabs', 'not implemented']) expect(GUIDANCE).not.toContain(stale)
+  for (const stale of ['getAXState', 'disableDiffing', 'performSecondaryAction', 'hover(', 'keyChord', 'sendKeyEvent', 'window.typeText', 'window.pressKey', 'elementIndex', 'verified: false', 'browser tabs', 'not implemented']) expect(GUIDANCE).not.toContain(stale)
 })

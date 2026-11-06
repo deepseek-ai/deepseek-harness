@@ -459,15 +459,13 @@ describe('application and window observations', () => {
   const providerIdentities: Record<string, JsonValue>[] = [
     { appHandle: 'another-app' }, { windowId: 24 },
   ]
-  it.each(providerIdentities)('accepts provider state without revalidating identity: %j', async (identity) => {
+  it.each(providerIdentities)('rejects provider state from another target and discards the old snapshot: %j', async (identity) => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
     f.dispatch.mockResolvedValueOnce(state(identity))
-    await expect(app.getAccessibilityTree()).resolves.toBe('Changed tree')
-    await app.setValue(element('0'), 'stale')
-    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'setValue', params: {
-      appHandle: 'app-17', snapshotId: 'changed', elementId: '0', value: 'stale',
-    } })
+    await expect(app.getAccessibilityTree()).rejects.toThrow('belongs to another application or window')
+    expect(f.sink.text).not.toHaveBeenCalled()
+    await expect(app.setValue(element('0'), 'stale')).rejects.toThrow('Read getAccessibilityTree')
   })
 
   it('returns provider window records without process filtering', async () => {
@@ -596,13 +594,13 @@ describe('screenshots', () => {
     expect(f.sink.image).toHaveBeenCalledTimes(1)
   })
 
-  it('returns a screenshot captured from another window without rejecting it', async () => {
+  it('rejects a screenshot from another window before emitting its image', async () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
     const window = await app.getWindow(23)
     f.dispatch.mockResolvedValueOnce(screenshot({ windowId: 24 }))
-    await expect(window.getScreenshot()).resolves.toMatchObject({ windowId: 24 })
-    expect(f.sink.image).toHaveBeenCalledWith(expect.objectContaining({ windowId: 24 }))
+    await expect(window.getScreenshot()).rejects.toThrow('belongs to another window')
+    expect(f.sink.image).not.toHaveBeenCalled()
   })
 
   it.each(['image/jpeg', 'image/webp', 'image/gif'])('preserves Host-admitted %s bytes and metadata in the return value and image sink', async (mimeType) => {

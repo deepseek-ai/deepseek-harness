@@ -65,7 +65,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 
 截图诊断通过原始连接发送 `type: "diagnostic"` 帧。记录包含 requestId、stage、从接收开始计算的 elapsedMs 和可选的 errorCode，不含窗口标题、AX 文本或图片字节。stdin/stdout 代理在 stderr 上以 `[cua-screenshot]` 前缀转发诊断，操作回复仍写入 stdout。Host 保留有上限的诊断缓冲区，并将其附在截图失败中。
 
-成功的 `activate` 结果在 `{dispatched: true}` 之外包含 `foreground`，记录 `requestId`、`operation`、`targetPid`、可空的 `targetWindowId`、`activationRequested`、`raiseRequested` 和即时的 `before`/`after` 观察。`frontPid` 来自 WindowServer，`focusedWindowId` 为目标应用的 AX 焦点窗口，`frontWindowId` 和 `frontWindowPid` 标识最前面的可见普通窗口。未知值为 null。观察依次取得，不具备原子性，也不证明因果关系。工具发起的请求使用日志中的工具调用 ID。失败操作保留原有错误响应，可能已产生部分效果。
+成功的 `activate` 返回 `dispatched` 和 `foregroundChanged`。观察到前台进程或窗口变化时，后者为 true，两者均确认相同时为 false，证据不足时为 null。原生结果还包含 `foreground`，记录请求 ID、目标 PID、是否请求激活以及操作前后的进程和窗口。这些采样可能与其他桌面操作交错。
 
 | 方法 | 结果 |
 | --- | --- |
@@ -114,6 +114,8 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 系统文件面板的键盘路由通过所选应用的 AX 焦点 sheet 解析远端接收方。只接受 Apple 的 Open and Save Panel Service，且其焦点祖先链仍须包含已识别的远端窗口。AXWindow 不可用时，元素鼠标后备路径沿 AX 父节点解析应用所属窗口或 sheet。普通点击保持 AX 动作优先，可视点击标记不需要系统鼠标移动。
 
 键盘修饰键名称是普通字符串。共享对象 API 原样传递名称；macOS helper 接受 `command`/`cmd`、`shift`、`option`/`alt`、`control`/`ctrl` 和 `fn`，未知名称返回 `INVALID_ARGUMENT`。它不解析组合键字符串。
+
+读取树或枚举动作时，某个元素的动作名查询返回一般性 AX 失败，helper 将其视为缺少动作元数据。枚举时跳过无法确认可写性的属性。`invoke` 需要成功查询元素动作才能报告没有默认动作。`setValue` 仅在元素确认 `AXValue` 可写时尝试写入。
 
 `selectText` 要求新近元素快照和可写 AXSelectedTextRange。它匹配唯一的字面文本，可用紧邻的 prefix/suffix 缩小范围，然后选中文本或将光标放在前后。匹配和返回范围采用 UTF-16 偏移。歧义或缺失文本会失败，helper 不改写内容，并重新核实值和选区。AX 文本包含可用的可写性、禁用状态、选中状态和选区信息；AXAccess 持有元素 ID 和原生引用，AXTextFormatter 渲染已观察的值。
 

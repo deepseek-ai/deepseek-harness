@@ -493,6 +493,33 @@ it('maps the actual model-request image pixels back to native points without sto
   expect(native.request).toHaveBeenLastCalledWith('click', { appHandle: 'app-one', windowId: 7, x: 399, y: 199 }, expect.any(AbortSignal), expect.any(String))
 })
 
+it.each([{ appHandle: 'foreign', windowId: 7 }, { appHandle: 'app-one', windowId: null }])(
+  'rejects a helper observation for the wrong target before releasing its contents: %j', async (identity) => {
+    const f = await setup()
+    await selectApplication(f)
+    native.request.mockResolvedValueOnce({ ...identity, snapshotId: 'other', tree: 'foreign content', truncated: false, windows: [] })
+    const result = await f.execute('getState', { appHandle: 'app-one', windowId: 7 })
+    expect(result.isError).toBe(true)
+    expect(JSON.stringify(result.content)).toContain('NATIVE_PROTOCOL')
+    expect(JSON.stringify(result.content)).not.toContain('foreign content')
+  },
+)
+
+it('rejects a screenshot from another window before attachment admission', async () => {
+  const f = await setup({ provider: 'image-fixture', model: 'vision' })
+  await selectApplication(f)
+  f.ctx.llm.registerAdapter(['image-fixture'], new ImageAdapter())
+  const root = await mkdtemp(join(tmpdir(), 'dsh-cua-wrong-window-'))
+  onTestFinished(async () => { try { await f.ctx.fiber.dispose() } finally { await rm(root, { recursive: true, force: true }) } })
+  await f.ctx.plugin(LocalAttachmentStore, { dshHome: root })
+  const save = vi.spyOn(f.ctx.attachments, 'saveImages')
+  native.request.mockResolvedValueOnce({ ...imageMetadata, windowId: 8, mimeType: 'image/png', data: imageData })
+  const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: 7 })
+  expect(result.isError).toBe(true)
+  expect(JSON.stringify(result.content)).toContain('NATIVE_PROTOCOL')
+  expect(save).not.toHaveBeenCalled()
+})
+
 it.each([{ pixelWidth: 2 }, { pixelHeight: 2 }])('rejects native screenshot dimensions that disagree with decoded bytes: %j', async (invalid) => {
   const f = await setup({ provider: 'image-fixture', model: 'vision' })
   await selectApplication(f)

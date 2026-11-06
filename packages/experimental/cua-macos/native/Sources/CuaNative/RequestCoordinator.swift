@@ -237,10 +237,11 @@ import Darwin
             activationRequested = true
         }
         let after = try await worker.foregroundObservation(plan)
-        return .object(["dispatched": .bool(true), "foreground": .object([
-            "requestId": .string(requestID), "operation": .string("activate"),
-            "targetPid": .number(Double(plan.identity.pid)), "targetWindowId": .null,
-            "before": before.json, "after": after.json, "activationRequested": .bool(activationRequested), "raiseRequested": .bool(false),
+        let changed = ForegroundObservation.change(beforePID: before.frontPID, beforeWindow: before.frontWindowID,
+                                                   afterPID: after.frontPID, afterWindow: after.frontWindowID)
+        return .object(["dispatched": .bool(true), "foregroundChanged": changed, "foreground": .object([
+            "requestId": .string(requestID), "targetPid": .number(Double(plan.identity.pid)),
+            "before": before.json, "after": after.json, "activationRequested": .bool(activationRequested),
         ])])
     }
     private func transportFailed(_ failure: NativeFailure) {

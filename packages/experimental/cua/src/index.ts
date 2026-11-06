@@ -224,6 +224,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       if (method === 'screenshot') {
         const { attachments, target } = await screenshotStore(ctx, execution)
         const screenshot = NativeScreenshotResult.parse(await requestNative())
+        if (screenshot.windowId !== parsedParams.windowId) throw new NativeError('NATIVE_PROTOCOL', 'Native screenshot belongs to another window')
         signal.throwIfAborted()
         const stage = async <T>(name: string, operation: () => Promise<T>): Promise<T> => {
           try { return await operation() } catch (error) {
@@ -282,6 +283,9 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       }
       if (method === 'getState') {
         const state = StateResult.parse(result)
+        if (state.appHandle !== parsedParams.appHandle || state.windowId !== (parsedParams.windowId ?? null)) {
+          throw new NativeError('NATIVE_PROTOCOL', 'Native observation belongs to another application or window')
+        }
         execution.coordinates.observe(state.appHandle, state.windows, state.windowId ?? undefined)
         return state
       }

@@ -65,7 +65,7 @@ Operation frames remain `{ "id": "opaque request id", "method": "method name", "
 
 Screenshot diagnostics use `type: "diagnostic"` frames on the originating connection. Records contain requestId, stage, elapsedMs since receipt and optional errorCode, without window titles, AX text or image bytes. The stdin/stdout proxy forwards them to stderr with `[cua-screenshot]`; operation replies remain on stdout. The Host retains a bounded diagnostic buffer and includes it in screenshot failures.
 
-Successful `activate` results include `foreground` alongside `{dispatched: true}`. It records `requestId`, `operation`, `targetPid`, nullable `targetWindowId`, `activationRequested`, `raiseRequested`, and immediate `before`/`after` observations. `frontPid` comes from WindowServer; `focusedWindowId` is the target app's AX-focused window; `frontWindowId` and `frontWindowPid` identify the first visible normal window. Unknown values are null. Observations are sequential, not atomic or proof of causality. Tool-owned requests use the logged tool call ID. Failed operations retain the existing error response and may have partial effects.
+Successful `activate` returns `dispatched` and `foregroundChanged`. A known change of front process or window yields true, confirmed equality of both yields false, and incomplete evidence yields null. The raw `foreground` record includes the request ID, target PID, whether activation was requested, and the sampled processes and windows before and after the request. Other desktop activity can occur between samples.
 
 | Method | Result |
 | --- | --- |
@@ -114,6 +114,8 @@ Observation reads each non-layout node’s descriptive properties and children t
 System file-panel keyboard routing resolves the remote recipient through the selected app’s focused AX sheet. Only Apple’s Open and Save Panel Service is accepted, and its focused ancestry must still contain the identified remote window. Element pointer fallbacks resolve an app-owned window or sheet through AX parents when AXWindow is unavailable. Ordinary clicks retain AX action priority over pointer input; visual click markers need no system-cursor movement.
 
 Keyboard modifier names are plain strings. The shared object API passes the names through unchanged; the macOS helper accepts `command`/`cmd`, `shift`, `option`/`alt`, `control`/`ctrl`, and `fn`, and rejects an unknown name with `INVALID_ARGUMENT`. It does not parse chord strings.
+
+Tree observation and action discovery treat a generic AX failure reading one element’s action names as missing metadata. Discovery skips attributes whose writability cannot be determined. `invoke` requires a successful or unsupported-action query before reporting that no default action exists. `setValue` attempts a write only when the element confirms that `AXValue` is writable.
 
 `selectText` requires a fresh element snapshot and writable AXSelectedTextRange. It matches one literal occurrence, narrowed by immediately adjacent prefix/suffix, and selects text or places the cursor before/after it. Matching and reported ranges use UTF-16 offsets. Ambiguous or missing text fails; the helper rechecks the value and selected range without rewriting content. AX text includes available writable, disabled, selected and selection-range information; AXAccess owns element IDs and native references while AXTextFormatter renders the observed values.
 

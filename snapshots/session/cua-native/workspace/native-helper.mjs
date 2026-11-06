@@ -153,9 +153,8 @@ function createApplicationState(socket, record, application, captureBroker, conn
         application.frontWindowId = window.windowId
       }
       const after = { frontPid: application.frontPid, focusedWindowId: window.windowId, frontWindowId: application.frontWindowId, frontWindowPid: application.frontPid }
-      return { dispatched: true, foreground: {
-        requestId, operation: 'activate', targetPid: app.pid, targetWindowId: null,
-        before, after, activationRequested, raiseRequested: false,
+      return { dispatched: true, foregroundChanged: before.frontPid !== after.frontPid || before.frontWindowId !== after.frontWindowId, foreground: {
+        requestId, targetPid: app.pid, before, after, activationRequested,
       } }
     }
     if (method === 'listWindows') return [window, axlessWindow]
