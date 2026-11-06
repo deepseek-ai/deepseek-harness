@@ -397,7 +397,7 @@ describe('extension-less paths', () => {
     const result = await readImage(ctx, { file_path: 'broken' }, agentOn('vision-model'))
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('do not decode as a supported PNG/JPEG/WebP/GIF image')
-    expect(result.error?.info).toEqual({ name: 'ImageInputError', code: 'IMAGE_INVALID' })
+    expect(result.error?.info).toEqual({ name: 'AttachmentError', code: 'INVALID_IMAGE' })
   })
 
   it('applies the deployment media-type policy to the sniffed format', async () => {
@@ -463,7 +463,7 @@ describe('extension-less paths', () => {
     const result = await readImage(ctx, { file_path: 'sniffed' }, agentOn('vision-model'))
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('the file signature claims image/png, but the bytes decode as a different image format')
-    expect(result.error?.info).toEqual({ name: 'ImageInputError', code: 'IMAGE_TYPE_MISMATCH' })
+    expect(result.error?.info).toEqual({ name: 'AttachmentError', code: 'IMAGE_TYPE_MISMATCH' })
   })
 })
 
@@ -593,7 +593,7 @@ describe('image admission failures', () => {
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('the .jpg extension declares image/jpeg')
     expect(text(result)).toContain('rename the file to match its actual format if it is PNG/JPEG/WebP/GIF, or convert it to one of those formats')
-    expect(result.error?.info).toEqual({ name: 'ImageInputError', code: 'IMAGE_TYPE_MISMATCH' })
+    expect(result.error?.info).toEqual({ name: 'AttachmentError', code: 'IMAGE_TYPE_MISMATCH' })
   })
 
   it('caps an extension-less read at maxImageBytes before format detection', async () => {
@@ -620,7 +620,7 @@ describe('image admission failures', () => {
     const result = await readImage(ctx, { file_path: 'big.png' }, agentOn('vision-model'))
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('exceeds the 4-pixel decoded-size limit')
-    expect(result.error?.info).toEqual({ name: 'ImageInputError', code: 'IMAGE_TOO_LARGE' })
+    expect(result.error?.info).toEqual({ name: 'AttachmentError', code: 'IMAGE_TOO_MANY_PIXELS' })
     expect(text(result)).toContain('downscale the image and read the smaller copy')
   })
 
@@ -630,7 +630,7 @@ describe('image admission failures', () => {
     const result = await readImage(ctx, { file_path: 'wide.png' }, agentOn('vision-model'))
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('at least one image side exceeds the 2px limit')
-    expect(result.error?.info).toEqual({ name: 'ImageInputError', code: 'IMAGE_TOO_LARGE' })
+    expect(result.error?.info).toEqual({ name: 'AttachmentError', code: 'IMAGE_DIMENSION_TOO_LARGE' })
     expect(text(result)).toContain('downscale the image and read the smaller copy')
   })
 
@@ -674,29 +674,33 @@ describe('image admission failures', () => {
   }
 
   it.each([
-    ['IMAGE_TOO_LARGE', 'Image cannot be encoded within the configured normalized-image byte cap.', 'IMAGE_TOO_LARGE',
+    ['IMAGE_TOO_LARGE', 'Image cannot be encoded within the configured normalized-image byte cap.',
       'the image cannot be stored within the deployment\'s byte limits; downscale the image and read the smaller copy'],
-    ['IMAGES_TOO_LARGE', 'Image batch exceeds the configured aggregate image-byte limit.', 'IMAGE_TOO_LARGE',
+    ['IMAGES_TOO_LARGE', 'Image batch exceeds the configured aggregate image-byte limit.',
       'the image cannot be stored within the deployment\'s byte limits; downscale the image and read the smaller copy'],
-    ['UNSUPPORTED_IMAGE_TYPE', 'Image type image/png is not accepted by this deployment.', 'IMAGE_UNSUPPORTED_FORMAT',
+    ['UNSUPPORTED_IMAGE_TYPE', 'Image type image/png is not accepted by this deployment.',
       'image/png images are not accepted by this deployment'],
-    ['INVALID_IMAGE', 'Unsupported or malformed image data.', 'IMAGE_INVALID',
+    ['INVALID_IMAGE', 'Unsupported or malformed image data.',
       'the bytes do not decode as a supported PNG/JPEG/WebP/GIF image; the file may be truncated or corrupt'],
-    ['ATTACHMENT_WRITE_FAILED', 'The 16-bit PNG could not be converted to the normalized 8-bit sRGB form.', 'IMAGE_CONVERSION_FAILED',
+    ['ATTACHMENT_WRITE_FAILED', 'The 16-bit PNG could not be converted to the normalized 8-bit sRGB form.',
       'the 16-bit PNG could not be converted to the normalized 8-bit sRGB form; convert it to an 8-bit PNG/JPEG/WebP and retry'],
-    ['ATTACHMENT_WRITE_FAILED', 'Unable to persist attachment.', 'IMAGE_STORE_FAILED',
-      'the attachment store could not save the image: Unable to persist attachment.'],
-    ...([
-      'TOO_MANY_IMAGES', 'INVALID_IMAGE_BASE64', 'INVALID_FILE_BASE64', 'INVALID_ATTACHMENT_REF', 'ATTACHMENT_CORRUPT',
-      'ATTACHMENT_NOT_FOUND', 'ATTACHMENT_READ_FAILED', 'ATTACHMENT_PROJECTION_UNSUPPORTED', 'ATTACHMENT_FILES_UNSUPPORTED',
-    ] as const).map(code => [code, 'Stored attachment failed.', 'IMAGE_STORE_FAILED',
-      'the attachment store could not save the image: Stored attachment failed.'] as const),
-  ] as const)('classifies AttachmentError %s (%s) as %s', async (attachmentCode, message, code, detail) => {
-    const cause = new AttachmentError(message, attachmentCode)
+  ] as const)('keeps AttachmentError %s and adds the read path and remedy', async (code, message, detail) => {
+    const cause = new AttachmentError(message, code)
     const result = await failingSave(() => cause)
     expect(result.isError).toBe(true)
-    expect(result.error?.info).toEqual({ name: 'ImageInputError', code })
+    expect(result.error?.info).toEqual({ name: 'AttachmentError', code })
     expect(text(result)).toBe(`Error: cannot read "${join(dir, 'red.png')}": ${detail}`)
+  })
+
+  it.each([
+    'ATTACHMENT_WRITE_FAILED', 'TOO_MANY_IMAGES', 'INVALID_IMAGE_BASE64', 'INVALID_FILE_BASE64', 'INVALID_ATTACHMENT_REF',
+    'ATTACHMENT_CORRUPT', 'ATTACHMENT_NOT_FOUND', 'ATTACHMENT_READ_FAILED', 'ATTACHMENT_PROJECTION_UNSUPPORTED',
+    'ATTACHMENT_FILES_UNSUPPORTED',
+  ] as const)('passes AttachmentError %s without a read remedy through unchanged', async (code) => {
+    const result = await failingSave(() => new AttachmentError('Stored attachment failed.', code))
+    expect(result.isError).toBe(true)
+    expect(result.error?.info).toEqual({ name: 'AttachmentError', code })
+    expect(text(result)).toBe('Error: Stored attachment failed.')
   })
 
   it('passes a store defect, a classified HarnessError, and an AbortError through unchanged', async () => {
@@ -726,13 +730,13 @@ describe('image admission failures', () => {
     expect(text(result)).not.toContain('cannot read')
   })
 
-  it('classifies a save failure that is not cancellation even after the caller aborts', async () => {
+  it('keeps a save failure that is not cancellation even after the caller aborts', async () => {
     const controller = new AbortController()
     const result = await failingSave(() => {
       controller.abort()
       return new AttachmentError('Unable to persist attachment.', 'ATTACHMENT_WRITE_FAILED')
     }, 'red.png', controller.signal)
-    expect(result.error?.info).toEqual({ name: 'ImageInputError', code: 'IMAGE_STORE_FAILED' })
+    expect(result.error?.info).toEqual({ name: 'AttachmentError', code: 'ATTACHMENT_WRITE_FAILED' })
   })
 
   it('reports a missing image file and a directory target through the fs vocabulary', async () => {

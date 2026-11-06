@@ -215,45 +215,49 @@ interface SaveFailureFacts {
 }
 
 /**
- * Classify one `saveImage` rejection as the error `read_image` throws.
- * Attachment admission codes become {@link ImageInputError} codes and other
- * `AttachmentError` codes become `IMAGE_STORE_FAILED`, keeping the original as
- * `cause`. The attachment store reports its own failures as `AttachmentError`,
- * so any other value, including cancellation, passes through unchanged.
+ * Add the read path and the next step to one `saveImage` rejection. The attachment store
+ * classifies its own failures, so an `AttachmentError` keeps its `name` and `code` and only
+ * gains a message naming the file and remedy, with the original as `cause`; a code without
+ * a remedy, and any value that is not an `AttachmentError`, passes through unchanged.
  * @param error - the value `saveImage` rejected with.
- * @param attachments - the store whose limits the refusal names.
- * @param facts - the path and media-type facts the refusal names.
+ * @param attachments - the store whose limits the message names.
+ * @param facts - the path and media-type facts the message names.
  * @returns the error to throw from the tool body.
  */
 function saveFailure(error: unknown, attachments: AttachmentStore, facts: SaveFailureFacts): unknown {
-  const { displayPath, extension, mediaType, sniffed } = facts
-  const refusal = (detail: string, code: ImageInputError['code']) =>
-    new ImageInputError(`cannot read "${displayPath}": ${detail}`, code, { cause: error })
-  const storeFailed = (detail: string) => refusal(`the attachment store could not save the image: ${detail}`, 'IMAGE_STORE_FAILED')
   if (!(error instanceof AttachmentError)) return error
+  const detail = saveFailureDetail(error, attachments, facts)
+  return detail === undefined
+    ? error
+    : new AttachmentError(`cannot read "${facts.displayPath}": ${detail}`, error.code, { cause: error })
+}
+
+/** The model-facing remedy for one attachment rejection, or undefined when the store message stands. */
+function saveFailureDetail(error: AttachmentError, attachments: AttachmentStore, facts: SaveFailureFacts): string | undefined {
+  const { extension, mediaType, sniffed } = facts
   // Size refusals stay recoverable tool errors: an oversized image must never
   // enter durable history, where it would ride every later model request past
   // provider-side dimension rejections.
   switch (error.code) {
     case 'IMAGE_DIMENSION_TOO_LARGE':
-      return refusal(`at least one image side exceeds the ${attachments.imageLimits.maxImageDimension}px limit; downscale the image and read the smaller copy`, 'IMAGE_TOO_LARGE')
+      return `at least one image side exceeds the ${attachments.imageLimits.maxImageDimension}px limit; downscale the image and read the smaller copy`
     case 'IMAGE_TOO_MANY_PIXELS':
-      return refusal(`the image exceeds the ${attachments.imageLimits.maxImagePixels}-pixel decoded-size limit; downscale the image and read the smaller copy`, 'IMAGE_TOO_LARGE')
+      return `the image exceeds the ${attachments.imageLimits.maxImagePixels}-pixel decoded-size limit; downscale the image and read the smaller copy`
     case 'IMAGE_TOO_LARGE':
     case 'IMAGES_TOO_LARGE':
-      return refusal('the image cannot be stored within the deployment\'s byte limits; downscale the image and read the smaller copy', 'IMAGE_TOO_LARGE')
+      return 'the image cannot be stored within the deployment\'s byte limits; downscale the image and read the smaller copy'
     case 'UNSUPPORTED_IMAGE_TYPE':
-      return refusal(`${mediaType} images are not accepted by this deployment`, 'IMAGE_UNSUPPORTED_FORMAT')
+      return `${mediaType} images are not accepted by this deployment`
     case 'INVALID_IMAGE':
-      return refusal('the bytes do not decode as a supported PNG/JPEG/WebP/GIF image; the file may be truncated or corrupt', 'IMAGE_INVALID')
+      return 'the bytes do not decode as a supported PNG/JPEG/WebP/GIF image; the file may be truncated or corrupt'
     case 'IMAGE_TYPE_MISMATCH':
       return sniffed
-        ? refusal(`the file signature claims ${mediaType}, but the bytes decode as a different image format; the file may be corrupt`, 'IMAGE_TYPE_MISMATCH')
-        : refusal(`the ${extension} extension declares ${mediaType}, but the bytes use a different image format; rename the file to match its actual format if it is PNG/JPEG/WebP/GIF, or convert it to one of those formats`, 'IMAGE_TYPE_MISMATCH')
+        ? `the file signature claims ${mediaType}, but the bytes decode as a different image format; the file may be corrupt`
+        : `the ${extension} extension declares ${mediaType}, but the bytes use a different image format; rename the file to match its actual format if it is PNG/JPEG/WebP/GIF, or convert it to one of those formats`
     case 'ATTACHMENT_WRITE_FAILED':
       return /16-bit PNG/iu.test(error.message)
-        ? refusal('the 16-bit PNG could not be converted to the normalized 8-bit sRGB form; convert it to an 8-bit PNG/JPEG/WebP and retry', 'IMAGE_CONVERSION_FAILED')
-        : storeFailed(error.message)
+        ? 'the 16-bit PNG could not be converted to the normalized 8-bit sRGB form; convert it to an 8-bit PNG/JPEG/WebP and retry'
+        : undefined
     case 'TOO_MANY_IMAGES':
     case 'INVALID_IMAGE_BASE64':
     case 'INVALID_FILE_BASE64':
@@ -263,7 +267,7 @@ function saveFailure(error: unknown, attachments: AttachmentStore, facts: SaveFa
     case 'ATTACHMENT_READ_FAILED':
     case 'ATTACHMENT_PROJECTION_UNSUPPORTED':
     case 'ATTACHMENT_FILES_UNSUPPORTED':
-      return storeFailed(error.message)
+      return undefined
     /* v8 ignore next -- Closed AttachmentErrorCode union; assertNever checks exhaustiveness at compile time. */
     default:
       return assertNever(error.code)

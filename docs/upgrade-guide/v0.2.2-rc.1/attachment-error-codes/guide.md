@@ -12,7 +12,7 @@ English | [中文](guide.zh.md)
 `AttachmentError` from `@deepseek-ai/dsh-attachment` now extends `HarnessError` from `@deepseek-ai/dsh-error`. Its `name` (`AttachmentError`) and every `ATTACHMENT_*` and image admission code are unchanged. Two persisted results change:
 
 - When a model request fails because an adapter could not read an image attachment, the failed turn's `turn/end` error previously recorded `code: 'UNKNOWN'`. It now records the `AttachmentError` code, such as `ATTACHMENT_NOT_FOUND`, `ATTACHMENT_CORRUPT`, `ATTACHMENT_READ_FAILED`, or an image admission code such as `INVALID_IMAGE` or `IMAGE_TOO_LARGE`.
-- A tool whose body lets an `AttachmentError` escape now records `error: { name: 'AttachmentError', code }` on its `tool/result`; previously the result had no `error`. `read_image` converts attachment failures to `ImageInputError` codes instead.
+- A tool whose body lets an `AttachmentError` escape now records `error: { name: 'AttachmentError', code }` on its `tool/result`; previously the result had no `error`. `read_image` also records the `AttachmentError` code and names the file and the next step in the message.
 
 `instanceof HarnessError` now matches `AttachmentError`. `isAttachmentError` is unchanged.
 
