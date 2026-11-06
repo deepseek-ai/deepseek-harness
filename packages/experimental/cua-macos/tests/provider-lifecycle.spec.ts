@@ -387,6 +387,18 @@ it('rejects malformed and unowned operations before acquiring a helper', async (
   expect(native.request).not.toHaveBeenCalled()
 })
 
+it.each([false, true])('rejects an ended Agent with prior helper acquisition %s', async (acquired) => {
+  const f = await setup()
+  if (acquired) await f.execute()
+  await f.handle.dispose()
+  const requests = native.request.mock.calls.length
+  const result = await f.execute()
+  expect(result.isError).toBe(true)
+  expect(JSON.stringify(result.content)).toContain('agent has been disposed')
+  expect(native.instances).toHaveLength(acquired ? 1 : 0)
+  expect(native.request).toHaveBeenCalledTimes(requests)
+})
+
 it('supplies configured resource bounds and clears registrations on unload', async () => {
   const f = await setup()
   await selectApplication(f)
