@@ -158,7 +158,7 @@ describe('GoalBar', () => {
     const actions = makeActions()
     render(<GoalBar goal={makeGoal()} {...actions} t={t} />)
     expect(screen.getAllByRole('button').map(b => b.getAttribute('aria-label'))).toEqual(['编辑目标', '清除目标', '暂停目标'])
-    expect((screen.getByRole('button', { name: '暂停目标' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByRole('button', { name: '暂停目标' }).hasAttribute('disabled')).toBe(true)
   })
 
   it('active disarmed goal: "待继续的目标" with a resume action instead of pause', () => {
