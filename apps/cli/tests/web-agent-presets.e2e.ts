@@ -351,7 +351,7 @@ describe('the shipped Web composition', () => {
       // excluded for the reason the TUI composition e2e excludes them — they
       // depend on ripgrep being present on the machine.
       expect(toolNames(ctx, handle.agent).filter(name => name !== 'glob' && name !== 'grep')).toEqual([
-        'ask_user_question', 'bash', 'create_goal', 'edit', 'exit_plan_mode',
+        'ask_user_question', 'bash', 'cordis_inspect_list', 'cordis_inspect_query', 'create_goal', 'edit', 'exit_plan_mode',
         'get_goal', 'job_kill', 'job_list', 'job_output', 'list_agents', 'list_subagent_models', 'office_convert', 'office_recalculate', 'office_render', 'plugin_manager', 'present', 'read', 'read_image',
         'schedule_create', 'schedule_edit', 'schedule_list', 'schedule_view',
         'send_message', 'skill',
@@ -359,6 +359,18 @@ describe('the shipped Web composition', () => {
         'workflow', 'working_directory', 'write',
       ])
       expect(ctx.commands.find(handle.agent, 'goal')).toBeDefined()
+      for (const [name, args] of [
+        ['cordis_inspect_list', {}],
+        ['cordis_inspect_query', { platform: 'host', provider: 'Config', method: 'listConfigs', input: { name: '@deepseek-ai/dsh-agent-loop' } }],
+      ] as const) {
+        const inspected = await executeToolFixture(ctx, {
+          agent: handle.agent, callId: ToolCallId(`standard-${name}`), name,
+          arguments: args, signal: new AbortController().signal,
+        })
+        expect(inspected.isError).toBe(false)
+        const text = inspected.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('')
+        expect(text).toContain(name === 'cordis_inspect_list' ? '"providers"' : '"patchId": "agent-loop"')
+      }
     } finally {
       await handle.dispose()
     }
@@ -985,8 +997,8 @@ describe('the standard preset documentation skill', () => {
       expect((await testCtx.skills.get('dsh-doc', { cwd: root, scope: creator.agent }))?.path).toBe(definition.path)
       const schemas = testCtx.tools.schemas(standardAgent.agent)
       expect(schemas).toEqual(testCtx.tools.schemas(baseline.agent))
-      expect(schemas.map(tool => tool.name)).not.toContain('cordis_inspect_list')
-      expect(schemas.map(tool => tool.name)).not.toContain('cordis_inspect_query')
+      expect(schemas.map(tool => tool.name)).toContain('cordis_inspect_list')
+      expect(schemas.map(tool => tool.name)).toContain('cordis_inspect_query')
       for (const handle of [baseline, standardAgent]) {
         handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Reply ready.' }], source: { kind: 'user' } }))
         await handle.agent.whenIdle()
