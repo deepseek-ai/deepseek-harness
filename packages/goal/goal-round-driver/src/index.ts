@@ -6,7 +6,7 @@
 import { isDeepStrictEqual } from 'node:util'
 import { FiberState } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
-import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
+import { AgentClosedError, type Agent, type PreStepDecision } from '@deepseek-ai/dsh-agent'
 import type { GoalMessageSource, GoalRef, GoalView } from '@deepseek-ai/dsh-goal'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, MessageId, MessageSource } from '@deepseek-ai/dsh-llm'
@@ -208,6 +208,7 @@ export function apply(ctx: Context): void {
       agent.followup(message)
     } catch (error: unknown) {
       state.attempt = undefined
+      if (error instanceof AgentClosedError) return
       ctx.logger.warn(`goal-round-driver: could not queue round ${round} for agent "${agent.id}": ${renderThrown(error)}`)
       const latest = currentGoal(state)
       if (latest !== undefined && latest.id === goal.id && latest.revision === goal.revision
