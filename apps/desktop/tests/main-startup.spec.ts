@@ -2314,7 +2314,7 @@ describe('desktop main startup', () => {
     harness.dialog.showMessageBox.mockRejectedValueOnce(new Error('overlay unavailable'))
     await invoke(DESKTOP_IPC.updatesOpen, 'app')
     expect(harness.dialog.showMessageBox).toHaveBeenCalledTimes(2)
-    const first = harness.dialog.showMessageBox.mock.calls[0]!.at(-1)
+    const first: unknown = harness.dialog.showMessageBox.mock.calls[0]!.at(-1)
     expect(first).toEqual(expect.objectContaining(harness.dialog.showMessageBox.mock.calls[1]!.at(-1)))
     expect(first).toEqual(expect.objectContaining({
       type: 'info', message: phase === 'downloading' ? en.updateDownloadInProgress : en.updateVerifying,
