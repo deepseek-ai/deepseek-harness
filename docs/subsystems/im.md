@@ -177,6 +177,23 @@ A button of a published message was clicked, with the chat, sender and producing
 
 Source: [`packages/experimental/im/src/api.ts`](../../packages/experimental/im/src/api.ts)
 
+<a id="imcheck--emit"></a>
+
+#### `im/check` — emit
+
+A checkbox of a published message was toggled, with the chat, sender, new state and producing session.
+
+```ts cordis-catalog
+/**
+ * A checkbox of a published message was toggled, with the chat, sender, new state and producing session.
+ * @param event - the toggle, its message and the raw platform interaction.
+ * @mode emit
+ */
+'im/check'(event: ImCheckEvent): void
+```
+
+Source: [`packages/experimental/im/src/api.ts`](../../packages/experimental/im/src/api.ts)
+
 <a id="immessage--waterfall"></a>
 
 #### `im/message` — waterfall
@@ -191,6 +208,23 @@ An admitted inbound message; listeners call `next()` to pass it on and the defau
  * @mode waterfall
  */
 'im/message'(event: ImMessageEvent, next: () => Promise<ImOutcome>): Promise<ImOutcome>
+```
+
+Source: [`packages/experimental/im/src/api.ts`](../../packages/experimental/im/src/api.ts)
+
+<a id="imselect--emit"></a>
+
+#### `im/select` — emit
+
+A `<select>` of a published message was used, with the chat, sender, picked values and producing session.
+
+```ts cordis-catalog
+/**
+ * A `<select>` of a published message was used, with the chat, sender, picked values and producing session.
+ * @param event - the pick, its message and the raw platform interaction.
+ * @mode emit
+ */
+'im/select'(event: ImSelectEvent): void
 ```
 
 Source: [`packages/experimental/im/src/api.ts`](../../packages/experimental/im/src/api.ts)

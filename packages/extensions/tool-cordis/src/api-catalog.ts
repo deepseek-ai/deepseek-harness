@@ -5279,12 +5279,28 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'event', description: 'the click, its message and the raw platform interaction.' }],
   },
   {
+    name: 'im/check',
+    mode: 'emit',
+    signature: '\'im/check\'(event: ImCheckEvent): void',
+    summary: 'A checkbox of a published message was toggled, with the chat, sender, new state and producing session.',
+    description: 'A checkbox of a published message was toggled, with the chat, sender, new state and producing session.',
+    parameters: [{ name: 'event', description: 'the toggle, its message and the raw platform interaction.' }],
+  },
+  {
     name: 'im/message',
     mode: 'waterfall',
     signature: '\'im/message\'(event: ImMessageEvent, next: () => Promise<ImOutcome>): Promise<ImOutcome>',
     summary: 'An admitted inbound message; listeners call `next()` to pass it on and the default outcome ignores it.',
     description: 'An admitted inbound message; listeners call `next()` to pass it on and the default outcome ignores it.',
     parameters: [{ name: 'event', description: 'the admitted message with its chat, source and renderer state.' }, { name: 'next', description: 'the rest of the waterfall; call it to let the next listener decide the outcome.' }],
+  },
+  {
+    name: 'im/select',
+    mode: 'emit',
+    signature: '\'im/select\'(event: ImSelectEvent): void',
+    summary: 'A `<select>` of a published message was used, with the chat, sender, picked values and producing session.',
+    description: 'A `<select>` of a published message was used, with the chat, sender, picked values and producing session.',
+    parameters: [{ name: 'event', description: 'the pick, its message and the raw platform interaction.' }],
   },
   {
     name: 'im/session/created',
@@ -7036,7 +7052,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ImButtonEvent',
-    declaration: 'export interface ImButtonEvent {\n    readonly id: string;\n    readonly data?: unknown;\n    readonly chat: ImChat;\n    readonly user: UserRef;\n    readonly bot: Bot;\n    readonly message?: ImMessage;\n    readonly session?: SessionId;\n    readonly time: number;\n    readonly raw: ButtonEvent;\n}',
+    declaration: 'export interface ImButtonEvent {\n    readonly id: string;\n    readonly data?: unknown;\n    readonly values?: ButtonEvent[\'values\'];\n    readonly chat: ImChat;\n    readonly user: UserRef;\n    readonly bot: Bot;\n    readonly message?: ImMessage;\n    readonly session?: SessionId;\n    readonly time: number;\n    readonly raw: ButtonEvent;\n}',
   },
   {
     name: 'ImChat',
@@ -7045,6 +7061,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ImChatKey',
     declaration: 'export type ImChatKey = Branded<\'ImChatKey\'>;',
+  },
+  {
+    name: 'ImCheckEvent',
+    declaration: 'export interface ImCheckEvent {\n    readonly id: string;\n    readonly checked: boolean;\n    readonly data?: unknown;\n    readonly chat: ImChat;\n    readonly user: UserRef;\n    readonly bot: Bot;\n    readonly message?: ImMessage;\n    readonly session?: SessionId;\n    readonly time: number;\n    readonly raw: CheckEvent;\n}',
   },
   {
     name: 'ImCommand',
@@ -7056,7 +7076,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ImConfig',
-    declaration: 'export interface ImConfig {\n    sources: ImSourceConfig[];\n    retentionMs: number;\n    maxRecords: number;\n    maxInputBytes: number;\n    retryIntervalMs: number;\n    media: {\n        download: boolean;\n        maxBytes: number;\n        maxItems: number;\n    };\n    send: {\n        maxBytes: number;\n        maxMediaBytes: number;\n        operationTimeoutMs: number;\n    };\n    tools: {\n        readOnly: boolean;\n        maxReadBytes: number;\n        maxHistoryItems: number;\n        fileDir: string;\n    };\n    defaultDispatch?: ImDispatcherConfig | undefined;\n}',
+    declaration: 'export interface ImConfig {\n    sources: ImSourceConfig[];\n    retentionMs: number;\n    maxRecords: number;\n    maxInputBytes: number;\n    retryIntervalMs: number;\n    media: {\n        download: boolean;\n        maxBytes: number;\n        maxItems: number;\n    };\n    send: {\n        maxMediaBytes: number;\n        operationTimeoutMs: number;\n    };\n    tools: {\n        readOnly: boolean;\n        maxReadBytes: number;\n        maxHistoryItems: number;\n        fileDir: string;\n    };\n    defaultDispatch?: ImDispatcherConfig | undefined;\n}',
   },
   {
     name: 'ImDelivery',
@@ -7149,6 +7169,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ImSegment',
     declaration: 'export type ImSegment = {\n    kind: \'reasoning\';\n    text: string;\n} | {\n    kind: \'text\';\n    text: string;\n} | {\n    kind: \'tool\';\n    callId: string;\n    name: string;\n    args: string;\n    status: \'running\' | \'done\' | \'error\';\n    result?: string;\n};',
+  },
+  {
+    name: 'ImSelectEvent',
+    declaration: 'export interface ImSelectEvent {\n    readonly id: string;\n    readonly values: string[];\n    readonly data?: unknown;\n    readonly chat: ImChat;\n    readonly user: UserRef;\n    readonly bot: Bot;\n    readonly message?: ImMessage;\n    readonly session?: SessionId;\n    readonly time: number;\n    readonly raw: SelectEvent;\n}',
   },
   {
     name: 'ImSender',
