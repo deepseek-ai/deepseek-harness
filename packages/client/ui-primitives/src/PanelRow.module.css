@@ -102,10 +102,13 @@
   .row:focus-within .menu {
     opacity: 1;
   }
+
+  .menu button:hover:not(:disabled) {
+    background: transparent;
+  }
 }
 
 /* Row actions share the row's highlight instead of drawing their own fill. */
-.menu button:hover:not(:disabled),
 .menu button:active:not(:disabled) {
   background: transparent;
 }
