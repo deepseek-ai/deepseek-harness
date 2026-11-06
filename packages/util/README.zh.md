@@ -27,6 +27,7 @@ kind: "package-group"
 | 包 | 职责 |
 |---|---|
 | [`brand/`](brand/README.zh.md) | 提供名义字符串类型及其无状态构造函数 |
+| [`error/`](error/README.zh.md) | 无依赖、带稳定可路由 code 的 `HarnessError` 基类 |
 | [`package-manifest/`](package-manifest/README.zh.md) | 包 manifest（元数据清单）的共享 TypeScript 声明 |
 | [`plugin-detail/`](plugin-detail/README.zh.md) | 选择插件详细介绍文档，并从本地包和 npm 文件 CDN 读取它们 |
 | [`plugin-market-index/`](plugin-market-index/README.zh.md) | 校验插件市场索引格式 1，并生成锁定版本的安装参数 |

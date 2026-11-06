@@ -314,6 +314,19 @@
   color: var(--dsw-alias-state-error-primary);
 }
 
+/* Checks outcome filling the glyph's head branch end. */
+.checksMark[data-checks='failure'] {
+  fill: var(--dsw-alias-state-error-primary);
+}
+
+.checksMark[data-checks='pending'] {
+  fill: var(--dsw-alias-state-warn-primary);
+}
+
+.checksMark[data-checks='success'] {
+  fill: var(--dsw-alias-state-success-primary);
+}
+
 .chevron {
   flex: none;
   color: var(--dsw-alias-label-tertiary);

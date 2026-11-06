@@ -11,6 +11,7 @@ const PROTOCOL_LABEL_KEYS: Readonly<Record<string, ModelsKey>> = {
   'openai-completions': 'protocolOpenAiCompletions',
   'openai-responses': 'protocolOpenAiResponses',
   'anthropic-messages': 'protocolAnthropicMessages',
+  'google-generative-ai': 'protocolGemini',
 }
 
 /**

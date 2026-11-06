@@ -32,13 +32,33 @@ const url = 'http://127.0.0.1:19387/'
 const cookie = 'dsh-auth-fixture=signed'
 
 describe('desktop welcome Web operations', () => {
+  it.each(['light', 'dark', 'system'] as const)('reads the live %s theme in the existing settings request', async (preference) => {
+    const host = transport()
+    host.namespaces.push({ ns: 'ui-theme', value: { preference } })
+    const backend = connectDesktopWelcome(url, cookie, host.send)
+    expect(await backend.read()).toMatchObject({ themePreference: preference })
+    expect(host.send.mock.calls.filter(([input]) => input.endsWith('/api/settings/describe'))).toHaveLength(1)
+    host.namespaces.find(item => item.ns === 'ui-theme')!.value.preference = 'system'
+    expect(await backend.read()).toMatchObject({ themePreference: 'system' })
+  })
+
+  it('falls back for an invalid optional theme without blocking startup metadata', async () => {
+    const host = transport()
+    host.namespaces.push({ ns: 'ui-theme', value: { preference: 'invalid' } })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      expect(await connectDesktopWelcome(url, cookie, host.send).read()).toMatchObject({ themePreference: 'system' })
+      expect(warn).toHaveBeenCalledOnce()
+    } finally { warn.mockRestore() }
+  })
+
   it('authenticates with the explicit Host cookie and stores only through the configured credential reference', async () => {
     const host = transport()
     const backend = connectDesktopWelcome(url, cookie, host.send)
     expect(await backend.analyticsEnabled()).toBe(true)
     expect(await backend.save('sk-example')).toEqual({ ok: true })
     expect(host.keys.get('CUSTOM_DEEPSEEK_KEY')).toBe('sk-example')
-    expect(await backend.read()).toEqual({ loggedIn: false, hasApiKey: true, writable: true, localePreference: null })
+    expect(await backend.read()).toEqual({ loggedIn: false, hasApiKey: true, writable: true, localePreference: null, themePreference: 'system' })
     for (const [input, init] of host.send.mock.calls) {
       expect(input).toMatch(/^http:\/\/127\.0\.0\.1:19387\/api\//u)
       expect(init).toMatchObject({ redirect: 'error', headers: { cookie } })

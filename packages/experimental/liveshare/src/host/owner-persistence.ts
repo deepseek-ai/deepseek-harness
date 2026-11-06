@@ -21,7 +21,15 @@ import { isRecord } from './wire-json.ts'
 /** One share as the owner state file stores it. */
 export interface PersistedOwnerShare {
   readonly shareId: string
-  readonly sessionId: string
+  /**
+   * Every source Session this share serves, primary first.
+   *
+   * Absent on records written before a share could carry more than one source; such a record reads its
+   * legacy `sessionId` instead.
+   */
+  readonly sessionIds?: readonly string[]
+  /** Legacy single source from a record written before `sessionIds`; read only, never written. */
+  readonly sessionId?: string
   readonly sessionTitle: string
   /** Mode this share was created with; the retired `approval` spelling reads back as `selected`. */
   readonly accessMode: 'open' | 'selected' | 'approval'
@@ -109,7 +117,7 @@ export function loadOwnerState(file: string): LoadedOwnerState {
     const relay = normalizeRelayUrl(value.relay)
     return [value.shareId, {
       shareId: value.shareId,
-      sessionId: value.sessionId,
+      sessionIds: restoredSessionIds(value),
       sessionTitle: value.sessionTitle,
       accessMode: storedAccessMode(value.accessMode),
       link: `${relay}/?shareId=${encodeURIComponent(value.shareId)}`,
@@ -161,7 +169,7 @@ export function writeOwnerState(
 ): Promise<void> {
   const persisted: PersistedOwnerShare[] = [...shares.values()].map(share => ({
     shareId: share.shareId,
-    sessionId: share.sessionId,
+    sessionIds: [...share.sessionIds],
     sessionTitle: share.sessionTitle,
     accessMode: share.accessMode,
     relay: share.relay,
@@ -250,7 +258,9 @@ export function storedAccessMode(mode: 'open' | 'selected' | 'approval'): 'open'
 function isPersistedOwnerShare(value: unknown): value is PersistedOwnerShare {
   return isRecord(value)
     && typeof value.shareId === 'string' && value.shareId !== ''
-    && typeof value.sessionId === 'string'
+    && (value.sessionIds === undefined
+      ? typeof value.sessionId === 'string' && value.sessionId !== ''
+      : isSessionIdList(value.sessionIds))
     && typeof value.sessionTitle === 'string'
     && (value.accessMode === 'open' || value.accessMode === 'selected' || value.accessMode === 'approval')
     && typeof value.relay === 'string' && value.relay !== ''
@@ -266,6 +276,32 @@ function isPersistedOwnerShare(value: unknown): value is PersistedOwnerShare {
     && (value.viewerPluginAccess === undefined || value.viewerPluginAccess === 'all'
       || value.viewerPluginAccess === 'none' || value.viewerPluginAccess === 'custom')
     && (value.sessionMode === undefined || value.sessionMode === 'view' || value.sessionMode === 'write')
+}
+
+/**
+ * Whether one stored source list names non-empty Session ids with the primary first.
+ * @param value - Parsed field.
+ * @param primary - The record's own primary Session id.
+ * @returns True when the field is a usable source list.
+ */
+function isSessionIdList(value: unknown): value is readonly string[] {
+  return Array.isArray(value)
+    && value.length > 0
+    && value.every(id => typeof id === 'string' && id !== '')
+}
+
+/**
+ * Read a stored source list, deriving it from the legacy field for records written before it existed.
+ * @param value - Stored share record, already validated.
+ * @returns The source list, primary first.
+ */
+function restoredSessionIds(value: PersistedOwnerShare): readonly string[] {
+  if (value.sessionIds !== undefined) return [...value.sessionIds]
+  /* v8 ignore next 3 -- the validator admits a record only with one of the two fields. */
+  if (value.sessionId === undefined) {
+    throw new Error('liveshare-share-host: a stored share carries no source Session')
+  }
+  return [value.sessionId]
 }
 
 /**

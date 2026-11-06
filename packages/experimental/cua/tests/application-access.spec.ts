@@ -28,7 +28,7 @@ vi.mock('../src/native-client.ts', async original => ({
   NativeClient: class {
     disposed = false
     request = vi.fn(async (method: string) => method === 'openPermissionSettings' ? { opened: true }
-      : { accessibility: false, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } })
+      : { platform: 'darwin', accessibility: false, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } })
     invalidate() { this.disposed = true }
     dispose = vi.fn(async () => { this.disposed = true })
     constructor() { native.instances.push(this) }

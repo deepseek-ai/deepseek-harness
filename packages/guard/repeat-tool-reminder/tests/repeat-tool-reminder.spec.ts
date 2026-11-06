@@ -321,6 +321,7 @@ describe('fold onto the downstream decision', () => {
     ctx.on('tools/post-execute', async () => ({
       kind: 'block' as const,
       feedback: [{ type: 'text' as const, text: 'nope' }],
+      info: { name: 'DownstreamPolicyError', code: 'DOWNSTREAM_BLOCKED' },
       additionalContexts: [createUserMessage({
         content: [{ type: 'text' as const, text: 'downstream-ctx' }], source: { kind: 'test' as const },
       })],
@@ -347,6 +348,8 @@ describe('fold onto the downstream decision', () => {
     const results = agent.session.snapshotEvents().filter((e): e is SessionEvent<'tool/result'> => e.type === 'tool/result')
     expect(results.every(r => r.data.message.isError)).toBe(true)
     expect(results[1]!.data.message.content).toEqual([{ type: 'text', text: 'nope' }])
+    // The block's structured error identity survives the reminder fold.
+    expect(results.map(r => r.data.error)).toEqual([0, 1].map(() => ({ name: 'DownstreamPolicyError', code: 'DOWNSTREAM_BLOCKED' })))
   })
 
   it('preserves a downstream canonical value replacement while folding', async () => {

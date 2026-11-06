@@ -36,6 +36,7 @@ import type {
   ConversationViewActionsOwnerProps, ConversationViewsProps, HeroFrameOwnerProps,
 } from '../src/client/contract/slots.ts'
 import type { ViewTab } from '../src/client/contract/views.ts'
+import { createComposerFileIntake } from '../src/client/input/file-intake.ts'
 
 // Every session-scope fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
 const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined })) as GlobalStandardProps['useResource']
@@ -313,6 +314,7 @@ function mount(
           addFiles={() => null}
           useFileUploads={bindSnapshotSelector(createSnapshotStore({}))}
           retryFileUpload={undefined}
+          registerFileIntake={createComposerFileIntake()}
           removeAttachment={() => {}}
           resolveDraftAttachments={() => []}
           toggleCommandMenu={vi.fn()}

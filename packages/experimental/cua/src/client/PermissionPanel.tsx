@@ -1,6 +1,7 @@
 /** Native permission status and revocable application consent on the existing plugin page. */
 import { useEffect, useState } from 'react'
 import { Button, IconSettingsOutlineRegular, Modal, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
+import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
@@ -95,17 +96,17 @@ function Applications({ title, apps, icons, onAction, label, disabled }: {
   </section>
 }
 
-function PermissionDescription({ application, permission, loading, t }: Pick<PermissionProps, 't'> & {
-  application: CuaSystemPermissionState['launchApplication']
+function PermissionDescription({ application, permission, loading = false, t }: Pick<PermissionProps, 't'> & {
+  application: Extract<CuaSystemPermissionState, { platform: 'darwin' }>['launchApplication']
   permission: 'accessibility' | 'screenRecording'
-  loading: boolean
+  loading?: boolean
 }) {
-  if (!loading && application === undefined) return <p>{t(permission === 'accessibility' ? 'accessibilityUse' : 'screenRecordingUse')}</p>
+  if (application === undefined && !loading) return <p>{t(permission === 'accessibility' ? 'accessibilityUse' : 'screenRecordingUse')}</p>
   const [before, after] = t(permission === 'accessibility' ? 'accessibilityPermission' : 'screenRecordingPermission').split('{application}')
   return <p>
     {before}
     <span className={css.applicationBadge}>
-      {application === undefined ? <span className={css.appPlaceholder} aria-hidden /> : <>
+      {application === undefined ? <span className={css.appPlaceholder} /> : <>
         {application.icon !== undefined && <img src={application.icon} alt="" width={20} height={20} draggable={false} />}
         <span>{application.name}</span>
       </>}
@@ -114,19 +115,56 @@ function PermissionDescription({ application, permission, loading, t }: Pick<Per
   </p>
 }
 
-function PermissionAction({ permission, granted, loading, busy, request, openSettings, t }: Pick<PermissionProps, 'request' | 'openSettings' | 't'> & {
+function PermissionAction({ permission, granted, busy, request, openSettings, t }: Pick<PermissionProps, 'request' | 'openSettings' | 't'> & {
   permission: 'accessibility' | 'screenRecording'
   granted: boolean | null
-  loading: boolean
   busy: boolean
 }) {
-  if (loading) return <span className={css.buttonPlaceholder} aria-hidden />
   if (granted === false) return <Button size="sm" variant="primary" className={css.permissionAction} disabled={busy}
     onClick={() => { request(permission) }}>{t('request')}</Button>
   return <Button size="sm" variant="outline" className={css.permissionAction} disabled={busy}
     title={t('settings')} onClick={() => { openSettings(permission) }}>
     {t(granted === true ? 'granted' : 'unknown')}<IconSettingsOutlineRegular size={14} aria-hidden="true" />
   </Button>
+}
+
+function UnknownStatus({ loading, t }: Pick<PermissionProps, 't'> & { loading: boolean }) {
+  return (['accessibility', 'screenRecording'] as const).map((permission) => {
+    const use = t(permission === 'accessibility' ? 'accessibilityUse' : 'screenRecordingUse')
+    return <div className={css.permission} key={permission} role="group" aria-label={use}>
+      {loading ? <div className={css.skeletonCopy} aria-hidden="true">
+        <strong>{t(permission)}</strong>
+        <PermissionDescription application={undefined} permission={permission} loading t={t} />
+      </div> : <div><strong>{use}</strong></div>}
+      {loading ? <span className={css.buttonPlaceholder} aria-hidden /> : <span>{t('unknown')}</span>}
+    </div>
+  })
+}
+
+function WindowsStatus({ system, uncertain, t }: Pick<PermissionProps, 't'> & {
+  system: Extract<CuaSystemPermissionState, { platform: 'win32' }>
+  uncertain: boolean
+}) {
+  const unlocked = system.sessionLocked === false
+  return <>
+    <div className={css.permission} role="group" aria-label={t('windowsDesktop')}>
+      <div><strong>{t('windowsDesktop')}</strong><p>{t('windowsDesktopUse')}</p></div>
+      <span>{uncertain || system.sessionLocked === null ? t('unknown') : t(unlocked ? 'available' : 'locked')}</span>
+    </div>
+    <div className={css.permission} role="group" aria-label={t('windowsCapture')}>
+      <div><strong>{t('windowsCapture')}</strong><p>{t('screenRecordingUse')}</p></div>
+      <span>{uncertain || system.sessionLocked === null ? t('unknown') : t(unlocked && system.captureAvailable ? 'available' : 'unavailable')}</span>
+    </div>
+  </>
+}
+
+function systemReady(system: CuaSystemPermissionState): boolean {
+  switch (system.platform) {
+    case 'darwin': return system.accessibility && system.screenRecording
+    case 'win32': return system.sessionLocked === false && system.captureAvailable
+    /* v8 ignore next -- Native permission responses validate the closed platform union. */
+    default: return assertNever(system)
+  }
 }
 
 /** @param props Host observation and explicit user actions. @returns Permission controls without automatic system prompts. */
@@ -139,7 +177,8 @@ export function PermissionPanel(props: PermissionPanelProps) {
   const busy = transitioning || state.system.busy
   const appsBusy = transitioning || state.applications.busy
   const loading = observed === null && state.system.error === null
-  const application = state.system.error !== null ? undefined : observed?.launchApplication
+  const mac = observed?.platform === 'darwin' ? observed : null
+  const application = state.system.error !== null ? undefined : mac?.launchApplication
   useEffect(() => {
     refresh()
     window.addEventListener('focus', refresh)
@@ -155,18 +194,22 @@ export function PermissionPanel(props: PermissionPanelProps) {
           <span className={css.error}>{t('queryFailed', { message: state.system.error })}</span>
           <Button size="sm" variant="outline" disabled={busy} onClick={refresh}>{t('retry')}</Button>
         </div>}
-        {(['accessibility', 'screenRecording'] as const).map(permission => <div className={css.permission} key={permission}
-          role="group" aria-label={t(permission)}>
-          <div>
-            <strong>{t(permission)}</strong>
-            <PermissionDescription application={application} permission={permission} loading={loading} t={t} />
-          </div>
-          <PermissionAction permission={permission}
-            granted={observed === null || state.system.error !== null ? null : observed[permission]}
-            loading={loading} busy={busy} request={props.request} openSettings={props.openSettings} t={t} />
-        </div>)}
+        {observed === null ? <UnknownStatus loading={loading} t={t} />
+          : observed.platform === 'win32' ? <WindowsStatus system={observed} uncertain={state.system.error !== null} t={t} />
+            : (['accessibility', 'screenRecording'] as const).map(permission => <div className={css.permission} key={permission}
+              role="group" aria-label={t(permission)}>
+              <div>
+                <strong>{t(permission)}</strong>
+                <PermissionDescription application={application} permission={permission} t={t} />
+              </div>
+              <PermissionAction permission={permission}
+                granted={mac === null || state.system.error !== null ? null : mac[permission]}
+                busy={busy} request={props.request} openSettings={props.openSettings} t={t} />
+            </div>)}
       </div>
-      <p>{t('permissionHint')}</p>
+      <p className={observed === null ? css.pendingHint : undefined} aria-hidden={observed === null || undefined}>{observed?.platform === 'win32'
+        ? <>{t('windowsInstructions')} {t(observed.elevated ? 'elevated' : 'standardPrivileges')}</>
+        : t('permissionHint')}</p>
     </section>
     <section className={css.panel} aria-label={t('applicationsTitle')}>
       <h3>{t('applicationsTitle')}</h3>
@@ -195,15 +238,17 @@ export function PermissionSetup({ t, refresh, useCuaPermissions, onDismiss, onOp
   const state = useCuaPermissions(value => value.system)
   useEffect(() => { refresh() }, [refresh])
   const ready = state.value !== null && state.error === null
-    && state.value.accessibility && state.value.screenRecording
+    && systemReady(state.value)
   useEffect(() => { if (ready && !state.busy) onDismiss() }, [ready, state.busy, onDismiss])
   return <Modal open={!ready && (state.value !== null || (!state.busy && state.error !== null))}
-    title={t('setupTitle')} closeLabel={t('close')} onClose={onDismiss}
+    title={t(state.value?.platform === 'win32' ? 'windowsSetupTitle' : 'setupTitle')} closeLabel={t('close')} onClose={onDismiss}
     footer={<>
       <Button variant="ghost" onClick={onDismiss}>{t('later')}</Button>
       <Button variant="primary" data-modal-autofocus onClick={onOpenDetails}>{t('openSetup')}</Button>
     </>}>
-    <p>{t(state.error === null ? 'setupBody' : 'setupQueryFailed')}</p>
+    <p>{t(state.error !== null ? 'setupQueryFailed' : state.value?.platform !== 'win32' ? 'setupBody'
+      : state.value.sessionLocked === null ? 'windowsSessionUnknown'
+        : state.value.sessionLocked ? 'windowsSetupBody' : 'windowsCaptureUnavailable')}</p>
   </Modal>
 }
 

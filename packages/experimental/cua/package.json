@@ -52,6 +52,22 @@
     "./client": {
       "types": "./lib/types/client/index.d.ts",
       "default": "./lib/client.js"
+    },
+    "./config": {
+      "types": "./lib/types/config.d.ts",
+      "default": "./lib/config.js"
+    },
+    "./native-schema": {
+      "types": "./lib/types/native-schema.d.ts",
+      "default": "./lib/native-schema.js"
+    },
+    "./native-build": {
+      "types": "./lib/types/native-build.d.ts",
+      "default": "./lib/native-build.js"
+    },
+    "./guidance": {
+      "types": "./lib/types/guidance.d.ts",
+      "default": "./lib/guidance.js"
     }
   },
   "files": [
@@ -63,6 +79,10 @@
     "lib/bridge.js",
     "lib/native-client.js",
     "lib/protocol.js",
+    "lib/config.js",
+    "lib/native-schema.js",
+    "lib/native-build.js",
+    "lib/guidance.js",
     "lib/types/**/*.d.ts",
     "lib/types/**/*.d.ts.map",
     "lib/**/*.js.map",

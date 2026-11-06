@@ -222,11 +222,11 @@ def same_value(left, right):
     return left == right
 
 
-def check_observation(value, row_count, fixture_pid, window_id):
-    required = {"appHandle", "snapshotId", "pid", "windowId", "tree", "elements", "windows", "focusedWindowId", "truncated"}
+def check_observation(value, row_count, app_handle, window_id):
+    required = {"appHandle", "snapshotId", "windowId", "tree", "elements", "windows", "focusedWindowId", "truncated"}
     if not isinstance(value, dict) or not required.issubset(value):
         raise AssertionError("Observation is missing required result fields")
-    if value["pid"] != fixture_pid or value["windowId"] != window_id:
+    if value["appHandle"] != app_handle or value["windowId"] != window_id:
         raise AssertionError("Observation belongs to a different fixture process or window")
     if value["truncated"] is not False:
         raise AssertionError("Complete benchmark observation was truncated")
@@ -312,7 +312,7 @@ def scenario_run(args, binary, work, artifacts, row_count, deadline, summary, ow
             for label in ["reference", "candidate"]:
                 params = {**owners[label], "windowId": window_id, **OBSERVATION_LIMITS}
                 result, record = helpers[label].call("getState", params, phase, group)
-                observation = check_observation(result, row_count, fixture.process.pid, window_id)
+                observation = check_observation(result, row_count, owners[label]["appHandle"], window_id)
                 record.update({"observationSHA256": sha256(json_bytes(observation)),
                                "treeUTF8Bytes": len(result["tree"].encode("utf-8")), "elementCount": len(result["elements"]),
                                "windowCount": len(result["windows"]), "staticRows": row_count})

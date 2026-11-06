@@ -12,10 +12,10 @@ enum WindowGeometry {
     /// Window-local coordinates survive movement, but require a fresh observation after resizing.
     static func validateObservedSize(observed: WindowBounds?, current: WindowBounds) throws {
         guard let observed else {
-            throw NativeFailure(code: "STALE_SNAPSHOT", message: "Window has no observation; read getAXState or take a screenshot before coordinate input")
+            throw NativeFailure(code: "STALE_SNAPSHOT", message: "Window has no observation; read getAccessibilityTree or take a screenshot before coordinate input")
         }
         guard observed.width == current.width, observed.height == current.height else {
-            throw NativeFailure(code: "WINDOW_CHANGED", message: "Window size changed since observation; read getAXState or take a screenshot before coordinate input")
+            throw NativeFailure(code: "WINDOW_CHANGED", message: "Window size changed since observation; read getAccessibilityTree or take a screenshot before coordinate input")
         }
     }
 

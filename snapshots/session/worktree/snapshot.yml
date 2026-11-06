@@ -6,6 +6,7 @@ recording: authored
 header:
   class: worktree
   pin: true
+  systemPromptSource: text-turn
 platform: posix
 workspace:
   setup: git-worktree

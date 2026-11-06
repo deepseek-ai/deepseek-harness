@@ -1,4 +1,4 @@
-/** Agent-owned mapping from observed screenshot pixels or integer ratios to native window points. */
+/** Agent-owned mapping from observed screenshot pixels or integer ratios to native window coordinates. */
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { z } from 'zod'
 import type { CuaAppHandle, CuaOperation, CuaWindowInfo } from './types.ts'
@@ -36,7 +36,7 @@ export class CuaCoordinates {
    * Bind the exact image delivered to the model to its native window size.
    * @param appHandle - native application selection.
    * @param windowId - selected native window.
-   * @param bounds - capture-time window size in points.
+   * @param bounds - capture-time window size in the provider’s native units.
    * @param image - encoded model-request image dimensions.
    */
   screenshot(

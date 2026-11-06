@@ -942,7 +942,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: '@Remote async systemStatus(): Promise<CuaSystemPermissionState>',
         description: 'Inspect system privileges independently of application decisions and icons.',
         parameters: [],
-        returns: 'Fresh native preflight and launch metadata.',
+        returns: 'Platform-tagged access observations and native process metadata.',
       },
       {
         signature: '@Remote async applicationIcons(): Promise<Record<string, string>>',
@@ -1853,6 +1853,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Publish one Session and store the share.',
         parameters: [{ name: 'request', description: 'Session, title, access, lifetime, and both switches the owner chose.' }],
         returns: 'The created share\'s link and stored values.',
+      },
+      {
+        signature: '@Remote(\'addSessions\') addSessions(request: AddShareSessionsRequest): Promise<ShareSessions>',
+        description: 'Add source Sessions to one share this host already publishes.',
+        parameters: [{ name: 'request', description: 'Share and the Sessions to add.' }],
+        returns: 'The source Sessions the share now serves.',
       },
       {
         signature: '@Remote(\'list\') list(): Promise<OwnerShareList>',
@@ -4208,10 +4214,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the effect disposer that removes this guard.',
       },
       {
-        signature: 'checkGuards(exec: ToolExecution): string | undefined',
+        signature: 'checkGuards(exec: ToolExecution): ToolGuardDenial | undefined',
         description: 'Check global and inherited guards after pre-execute policy and approval resolve.',
         parameters: [{ name: 'exec', description: 'invocation whose guards are checked before dispatch.' }],
-        returns: 'the first denial reason, or undefined when no guard denies.',
+        returns: 'the first denial with its optional structured identity, or undefined when no guard denies.',
       },
     ],
   },
@@ -5621,6 +5627,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface AdapterRegistrationHandle {\n    (): void;\n    replace(providers: string[]): void;\n}',
   },
   {
+    name: 'AddShareSessionsRequest',
+    declaration: 'export interface AddShareSessionsRequest {\n    readonly shareId: string;\n    readonly sessionIds: readonly string[];\n}',
+  },
+  {
     name: 'AdmittedPromptContentPart',
     declaration: 'export type AdmittedPromptContentPart = {\n    readonly type: \'text\';\n    readonly text: string;\n} | {\n    readonly type: \'image\';\n    readonly attachment: ImageAttachmentRef;\n} | {\n    readonly type: \'file\';\n    readonly attachment: FileAttachmentRef;\n};',
   },
@@ -6234,7 +6244,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CreatedShare',
-    declaration: 'export interface CreatedShare {\n    readonly link: string;\n    readonly shareId: string;\n    readonly sessionId: string;\n    readonly sessionMode: \'view\' | \'write\';\n    readonly access: ShareAccess;\n}',
+    declaration: 'export interface CreatedShare {\n    readonly link: string;\n    readonly shareId: string;\n    readonly sessionId: string;\n    readonly sessionIds: readonly string[];\n    readonly sessionMode: \'view\' | \'write\';\n    readonly access: ShareAccess;\n}',
   },
   {
     name: 'CreatedWorktree',
@@ -6322,7 +6332,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CuaSystemPermissionState',
-    declaration: 'export interface CuaSystemPermissionState {\n    accessibility: boolean;\n    screenRecording: boolean;\n    helper: CuaPermissionProcess;\n    parent: CuaPermissionProcess;\n    launchApplication?: {\n        name: string;\n        path: string;\n        icon?: string | undefined;\n    } | undefined;\n}',
+    declaration: 'export type CuaSystemPermissionState = {\n    platform: \'darwin\';\n    accessibility: boolean;\n    screenRecording: boolean;\n    helper: CuaPermissionProcess;\n    parent: CuaPermissionProcess;\n    launchApplication?: {\n        name: string;\n        path: string;\n        icon?: string | undefined;\n    } | undefined;\n} | {\n    platform: \'win32\';\n    sessionLocked: boolean | null;\n    captureAvailable: boolean;\n    elevated: boolean;\n    helper: CuaPermissionProcess;\n};',
   },
   {
     name: 'DailyInput',
@@ -7642,7 +7652,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'OwnerShareView',
-    declaration: 'export interface OwnerShareView {\n    readonly shareId: string;\n    readonly sessionId: string;\n    readonly sessionTitle: string;\n    readonly link: string;\n    readonly createdAt: string;\n    readonly expiresAt?: string;\n    readonly allowsFork: boolean;\n    readonly sessionMode: \'view\' | \'write\';\n    readonly viewerPluginAccess?: ViewerPluginAccess;\n    readonly viewerPlugins: readonly ViewerPluginPolicy[];\n    readonly online: boolean;\n    readonly access?: ShareAccess;\n}',
+    declaration: 'export interface OwnerShareView {\n    readonly shareId: string;\n    readonly sessionId: string;\n    readonly sessionIds: readonly string[];\n    readonly sessionTitle: string;\n    readonly link: string;\n    readonly createdAt: string;\n    readonly expiresAt?: string;\n    readonly allowsFork: boolean;\n    readonly sessionMode: \'view\' | \'write\';\n    readonly viewerPluginAccess?: ViewerPluginAccess;\n    readonly viewerPlugins: readonly ViewerPluginPolicy[];\n    readonly online: boolean;\n    readonly access?: ShareAccess;\n}',
   },
   {
     name: 'PackageResult',
@@ -7806,7 +7816,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'PostToolDecision',
-    declaration: 'export type PostToolDecision = {\n    kind: \'accept\';\n    content?: ContentBlock[];\n    value?: never;\n    additionalContexts?: UserMessage[];\n} | {\n    kind: \'accept\';\n    value: JsonValue;\n    content?: never;\n    additionalContexts?: UserMessage[];\n} | {\n    kind: \'block\';\n    feedback: ContentBlock[];\n    additionalContexts?: UserMessage[];\n};',
+    declaration: 'export type PostToolDecision = {\n    kind: \'accept\';\n    content?: ContentBlock[];\n    value?: never;\n    additionalContexts?: UserMessage[];\n} | {\n    kind: \'accept\';\n    value: JsonValue;\n    content?: never;\n    additionalContexts?: UserMessage[];\n} | {\n    kind: \'block\';\n    feedback: ContentBlock[];\n    info?: ToolErrorInfo;\n    additionalContexts?: UserMessage[];\n};',
   },
   {
     name: 'PreparedAdapterCall',
@@ -9153,6 +9163,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ShareCapabilityOffers {\n    readonly capabilities: readonly ShareCapabilityGroup[];\n}',
   },
   {
+    name: 'ShareSessions',
+    declaration: 'export interface ShareSessions {\n    readonly shareId: string;\n    readonly sessionIds: readonly string[];\n}',
+  },
+  {
     name: 'ShellExecRequest',
     declaration: 'export interface ShellExecRequest {\n    command: string;\n    workdir?: string | undefined;\n    timeoutMs?: number | undefined;\n    onExpiry?: ShellExpiryPolicy | undefined;\n    stdoutMaxBytes?: number | undefined;\n    signal?: AbortSignal | undefined;\n    stdin?: string | undefined;\n    env?: Record<string, string> | undefined;\n    dshEnv?: DshEnvironment | undefined;\n    sandboxPolicy?: SandboxExecutionPolicy | undefined;\n}',
   },
@@ -9846,7 +9860,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ToolGuard',
-    declaration: 'export type ToolGuard = (execution: Readonly<ToolExecution>) => string | undefined;',
+    declaration: 'export type ToolGuard = (execution: Readonly<ToolExecution>) => string | ToolGuardDenial | undefined;',
+  },
+  {
+    name: 'ToolGuardDenial',
+    declaration: 'export interface ToolGuardDenial {\n    readonly reason: string;\n    readonly info?: ToolErrorInfo;\n}',
   },
   {
     name: 'ToolHistory',
@@ -9914,7 +9932,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ToolsService',
-    declaration: 'export class ToolsService extends Service {\n    static inject;\n    static Config;\n    constructor(ctx: Context);\n    register(definition: ToolDefinition, options: ToolRegistrationOptions = {}): () => void;\n    restrict(filter: ToolRestriction): () => void;\n    get(name: string, scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolDefinition | undefined;\n    executable(name: string, scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolDefinition | undefined;\n    async resolve(context: ToolActivationContext): Promise<ResolvedToolSet>;\n    definitions(scope?: ScopeKey, toolSet?: ResolvedToolSet): readonly ToolDefinition[];\n    schemas(scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolSchema[];\n    setExecutor(executor: ToolExecutor): () => void;\n    async execute(input: ToolBatchInput): Promise<ToolBatchResult>;\n    guard(guard: ToolGuard): () => void;\n    checkGuards(exec: ToolExecution): string | undefined;\n}',
+    declaration: 'export class ToolsService extends Service {\n    static inject;\n    static Config;\n    constructor(ctx: Context);\n    register(definition: ToolDefinition, options: ToolRegistrationOptions = {}): () => void;\n    restrict(filter: ToolRestriction): () => void;\n    get(name: string, scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolDefinition | undefined;\n    executable(name: string, scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolDefinition | undefined;\n    async resolve(context: ToolActivationContext): Promise<ResolvedToolSet>;\n    definitions(scope?: ScopeKey, toolSet?: ResolvedToolSet): readonly ToolDefinition[];\n    schemas(scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolSchema[];\n    setExecutor(executor: ToolExecutor): () => void;\n    async execute(input: ToolBatchInput): Promise<ToolBatchResult>;\n    guard(guard: ToolGuard): () => void;\n    checkGuards(exec: ToolExecution): ToolGuardDenial | undefined;\n}',
   },
   {
     name: 'ToolUpdate',

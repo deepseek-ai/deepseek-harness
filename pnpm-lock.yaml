@@ -1996,6 +1996,9 @@ importers:
       '@deepseek-ai/dsh-atomic-write':
         specifier: workspace:*
         version: link:../../util/atomic-write
+      '@deepseek-ai/dsh-native-command':
+        specifier: workspace:*
+        version: link:../../util/native-command
       '@deepseek-ai/dsh-official-bundles':
         specifier: workspace:*
         version: link:../../util/official-bundles
@@ -9968,9 +9971,6 @@ importers:
 
   packages/experimental/cua-macos:
     dependencies:
-      '@deepseek-ai/dsh-atomic-write':
-        specifier: workspace:*
-        version: link:../../util/atomic-write
       '@deepseek-ai/dsh-cua':
         specifier: workspace:*
         version: link:../cua
@@ -10086,6 +10086,9 @@ importers:
       '@deepseek-ai/dsh-working-directory':
         specifier: workspace:*
         version: link:../../session/working-directory
+      ajv:
+        specifier: ^8.20.0
+        version: 8.20.0
       sharp:
         specifier: ^0.35.3
         version: 0.35.5(@types/node@22.20.1)
@@ -13091,6 +13094,9 @@ importers:
       '@deepseek-ai/dsh-brand':
         specifier: workspace:*
         version: link:../../util/brand
+      '@deepseek-ai/dsh-error':
+        specifier: workspace:*
+        version: link:../../util/error
       '@deepseek-ai/dsh-session':
         specifier: workspace:*
         version: link:../../core/session
@@ -13211,6 +13217,9 @@ importers:
       '@deepseek-ai/dsh-attachment':
         specifier: workspace:*
         version: link:../../attachment/attachment
+      '@deepseek-ai/dsh-error':
+        specifier: workspace:*
+        version: link:../../util/error
       '@deepseek-ai/dsh-package-manifest':
         specifier: workspace:*
         version: link:../../util/package-manifest
@@ -17187,6 +17196,9 @@ importers:
       '@deepseek-ai/dsh-brand':
         specifier: workspace:*
         version: link:../../util/brand
+      '@deepseek-ai/dsh-error':
+        specifier: workspace:*
+        version: link:../../util/error
       '@deepseek-ai/dsh-session':
         specifier: workspace:*
         version: link:../../core/session
@@ -17739,6 +17751,12 @@ importers:
         version: link:../../../vendor/cordis
 
   packages/util/deque:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+
+  packages/util/error:
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:~
@@ -18386,6 +18404,9 @@ importers:
       '@deepseek-ai/dsh-deepseek-llm-api-extensions':
         specifier: workspace:*
         version: link:../../packages/llm/deepseek-llm-api-extensions
+      '@deepseek-ai/dsh-error':
+        specifier: workspace:*
+        version: link:../../packages/util/error
       '@deepseek-ai/dsh-file-reference':
         specifier: workspace:*
         version: link:../../packages/context/file-reference
