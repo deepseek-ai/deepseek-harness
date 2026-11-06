@@ -554,7 +554,7 @@ function createAppendEvent(snapshot: ReturnType<typeof snapshotAppend>, seq: Ses
  */
 export class Session {
   private log: SessionEvent[] = []
-  private batchPublication: { readonly event: SessionEvent; readonly endSeq: SessionSeq } | undefined
+  private batchPublication: SessionEvent | undefined
   /** Single incremental owner of surface acceptance and projection state. */
   private readonly surfaceManager: SurfaceManager
 
@@ -792,8 +792,8 @@ export class Session {
     return SessionLogOffset(this.log.length)
   }
 
-  /** Current member and final sequence while synchronously notifying a batch's observers. */
-  get currentBatchPublication(): { readonly event: SessionEvent; readonly endSeq: SessionSeq } | undefined {
+  /** Current event while synchronously notifying a batch's observers. */
+  get currentBatchPublication(): SessionEvent | undefined {
     return this.batchPublication
   }
 
@@ -901,9 +901,8 @@ export class Session {
       this.eventsSnapshot = undefined
       acceptSurface()
       if (entry !== undefined) {
-        const endSeq = SessionSeq(this.log.length - 1)
         for (const { event, args, callbacks } of publications) {
-          this.batchPublication = { event, endSeq }
+          this.batchPublication = event
           invokeContainedSessionObservers(entry.emitCtx, 'session/event', entry.id, args, callbacks)
         }
       }

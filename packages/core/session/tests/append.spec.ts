@@ -54,7 +54,7 @@ describe('multiple Session appends', () => {
     const observed: number[] = []
     ctx.on('session/event', (current, event) => {
       if (current !== session) return
-      expect(current.currentBatchPublication).toEqual({ event, endSeq: 1 })
+      expect(current.currentBatchPublication).toBe(event)
       expect(current.seq).toBe(2)
       expect(current.surface.nodes).toEqual([1])
       expect(current.deriveMessages()).toEqual([messageValue])

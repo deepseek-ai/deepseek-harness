@@ -660,11 +660,10 @@ export class SurfaceManager implements SessionSurface {
     this._assertProjections()
     if (this._lastProcessedSeq < this.baseSeq + this.log.length - 1) this._processDelta()
     const lastProcessedSeq = SessionSeq(this.baseSeq + this.log.length + events.length - 1)
-    if (events.every(event => event.type !== 'developer/message'
-      && (event.surfaceOp === undefined || event.surfaceOp === 'append')
+    if (events.every(event => (event.surfaceOp === undefined || event.surfaceOp === 'append')
       && !this.projections.some(projection => projection.type === event.type))) {
       const plans = events.map((event, index) => planSurfaceEvent(
-        this._state, event, SessionSeq(this.baseSeq + this.log.length + index), this.log, this.baseSeq, this.projections,
+        this._state, event, SessionSeq(this.baseSeq + this.log.length + index), this.log, this.baseSeq, this.projections, events,
       ))
       return () => {
         for (const plan of plans) applySurfacePlan(this._state, plan)
