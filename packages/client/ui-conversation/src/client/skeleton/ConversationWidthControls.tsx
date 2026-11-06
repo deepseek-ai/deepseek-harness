@@ -152,6 +152,9 @@ export function ConversationWidthControls({ container, phase, onEndGutter }: Con
     report.current((column - resolveContentWidth(column, preference)) / 2)
   }, [])
 
+  // A new callback means the body adopted a Session without remounting or
+  // resizing: the measurement restarts so that Session gets the current gutter,
+  // and the callback it replaces receives its final zero.
   useLayoutEffect(() => {
     if (container === null) return
     const observer = new ResizeObserver(() => { publishWidths(container) })
@@ -159,9 +162,9 @@ export function ConversationWidthControls({ container, phase, onEndGutter }: Con
     publishWidths(container)
     return () => {
       observer.disconnect()
-      report.current(0)
+      onEndGutter(null)
     }
-  }, [container, publishWidths])
+  }, [container, onEndGutter, publishWidths])
 
   const onStart = useCallback((): number => {
     if (container === null) return 680

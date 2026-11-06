@@ -34,7 +34,7 @@ async function bench() {
       'conversation.session.panel': { kind: 'single', scope: 'session' },
     },
   } as never, () => null)
-  const layout = createSnapshotStore<ConversationLayout>({ endGutter: 400 })
+  const layout = createSnapshotStore<ConversationLayout>({ endGutter: 400, shown: true })
   const layoutSources: SessionId[] = []
   ctx.provide('uiConversation', {
     layouts: {

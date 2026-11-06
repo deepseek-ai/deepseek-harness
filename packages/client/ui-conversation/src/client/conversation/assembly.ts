@@ -213,7 +213,7 @@ export class UiConversation extends Service {
   /** Plugin-owned handlers for selection and context-menu gestures. */
   readonly interactions: ConversationInteractionRegistry
   /** Main Conversation body geometry per Session; the Conversation shell writes it and floating chrome reads it. */
-  readonly layouts: ConversationLayouts = new ConversationLayouts()
+  readonly layouts: ConversationLayouts
   private readonly bindings = new WeakMapWithValues<SessionBinding, BindingRecord>()
   private readonly images: HistoricalImageCache
 
@@ -229,6 +229,7 @@ export class UiConversation extends Service {
     this.userText = new UserTextRegistry(ctx)
     this.interactions = new ConversationInteractionRegistry(ctx)
     this.images = new HistoricalImageCache(ctx, sessions)
+    this.layouts = new ConversationLayouts(sessionId => sessions.binding(sessionId)?.ctx)
     const rebuild = (): void => {
       for (const record of this.bindings.values) record.binding.rebuild()
     }
@@ -250,6 +251,7 @@ export class UiConversation extends Service {
         disposeViews()
         disposeEvents()
         for (const record of [...this.bindings.values]) this.drop(record, true)
+        this.layouts.dispose()
       }
     }, 'ui-conversation assembly')
   }

@@ -39,13 +39,20 @@ export function presentationOf(
 
 /**
  * Visibility shared by every Session's toggle and panel. Docking follows one
- * preference for all Sessions; at most one Session's overlay is open.
+ * preference for all Sessions; at most one Session's overlay is open, and it
+ * closes once its Session's gutter can hold the docked panel or the main body
+ * stops showing that Session.
  */
 export class SessionPanelState {
   // A stored value other than `false` keeps the default: the panel docks.
   private readonly pinned = createSnapshotStore<unknown>(true, { persist: { name: PINNED_STORAGE_KEY } })
   private readonly overlay = createSnapshotStore<SessionId | null>(null)
   private current: SessionPanelVisibility = { pinned: this.pinned.getSnapshot() !== false, overlay: null }
+  /** Stops following the open overlay's layout. */
+  private unfollow: () => void = () => {}
+
+  /** @param layoutOf - main body layout of a Session, which an open overlay follows. */
+  constructor(private readonly layoutOf: (sessionId: SessionId) => ObservableSnapshot<ConversationLayout>) {}
 
   /** Combined visibility; the snapshot keeps its identity until a member changes. */
   readonly visibility: ObservableSnapshot<SessionPanelVisibility> = {
@@ -73,10 +80,10 @@ export class SessionPanelState {
   toggle(sessionId: SessionId, fits: boolean): void {
     if (fits) {
       this.pinned.set(!this.visibility.getSnapshot().pinned)
-      this.overlay.set(null)
+      this.setOverlay(null)
       return
     }
-    this.overlay.set(this.overlay.getSnapshot() === sessionId ? null : sessionId)
+    this.setOverlay(this.overlay.getSnapshot() === sessionId ? null : sessionId)
   }
 
   /**
@@ -84,6 +91,24 @@ export class SessionPanelState {
    * @param sessionId - Session whose overlay closes; another Session's overlay stays open.
    */
   closeOverlay(sessionId: SessionId): void {
-    if (this.overlay.getSnapshot() === sessionId) this.overlay.set(null)
+    if (this.overlay.getSnapshot() === sessionId) this.setOverlay(null)
+  }
+
+  /** Stop following the open overlay's layout. */
+  dispose(): void {
+    this.unfollow()
+    this.unfollow = () => {}
+  }
+
+  private setOverlay(sessionId: SessionId | null): void {
+    this.dispose()
+    this.overlay.set(sessionId)
+    if (sessionId === null) return
+    const layout = this.layoutOf(sessionId)
+    const check = (): void => {
+      const current = layout.getSnapshot()
+      if (fitsLayout(current) || !current.shown) this.closeOverlay(sessionId)
+    }
+    this.unfollow = layout.subscribe(check)
   }
 }

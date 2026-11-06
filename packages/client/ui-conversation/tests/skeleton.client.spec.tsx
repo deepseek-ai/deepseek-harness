@@ -22,6 +22,7 @@ import { createConversationStore } from '../src/client/stores.ts'
 import { SessionInputShell } from '../src/client/input/facade.ts'
 import { en, zh } from '../src/client/locales.ts'
 import { ConversationContent } from '../src/client/skeleton/ConversationContent.tsx'
+import { ConversationWidthControls } from '../src/client/skeleton/ConversationWidthControls.tsx'
 import { ConversationHeader } from '../src/client/skeleton/ConversationHeader.tsx'
 import { ConversationMainPanel } from '../src/client/skeleton/ConversationMainPanel.tsx'
 import { ConversationSession, ConversationSessionHeader } from '../src/client/skeleton/ConversationSession.tsx'
@@ -33,7 +34,7 @@ import type { InputBarProps } from '../src/client/skeleton/InputBar.tsx'
 import type {
   ComposerBarOwnerProps, ConversationContentInputProps, ConversationContentProps,
   ConversationHeaderLineageOwnerProps, ConversationSessionHeaderSlotProps, ConversationSessionSlotProps, ConversationSlotProps,
-  ConversationViewActionsOwnerProps, ConversationViewsProps, HeroFrameOwnerProps,
+  ConversationViewActionsOwnerProps, ConversationViewsProps, HeroFrameOwnerProps, ConversationWidthControlsProps,
 } from '../src/client/contract/slots.ts'
 import type { ViewTab } from '../src/client/contract/views.ts'
 
@@ -207,7 +208,7 @@ function mount(
   let actionsOwner: ConversationViewActionsOwnerProps | undefined
   const setPinned = vi.fn<(id: string, pinned: boolean) => void>()
   /** End gutters the main width controls reported, in order. */
-  const gutters: number[] = []
+  const gutters: (number | null)[] = []
   const renderSlot = ((key: string, owner: object, opts?: { only?: string; fallback?: ReactNode; children?: ReactNode }) => {
     slotCalls.push(key)
     if (key === 'conversation.input.model' || key === 'conversation.input.plan') {
@@ -1084,7 +1085,7 @@ describe('ConversationRoot resident composer', () => {
     expect(b.view.container.querySelector('[data-width-handle]')).toBeNull()
   })
 
-  it('reports the end gutter after each measurement and drag frame, and zero on unmount', () => {
+  it('reports the end gutter after each measurement and drag frame, and that it stops showing the Session on unmount', () => {
     const b = mount(sessionSnapshotOf())
     const content = b.view.container.querySelector('[data-conversation-content]') as HTMLElement
     Object.defineProperty(content, 'offsetWidth', { value: 1600, configurable: true })
@@ -1111,7 +1112,27 @@ describe('ConversationRoot resident composer', () => {
       }
     }
     b.view.unmount()
-    expect(b.gutters.at(-1)).toBe(0)
+    expect(b.gutters.at(-1)).toBeNull()
+  })
+
+  it('reports the end gutter to a newly adopted Session without a resize, and only once per callback', () => {
+    const body = document.createElement('div')
+    document.body.append(body)
+    Object.defineProperty(body, 'offsetWidth', { value: 1600, configurable: true })
+    const props = (onEndGutter: (gutter: number | null) => void) => ({ container: body, phase: 'active', onEndGutter }) as
+      Pick<ConversationWidthControlsProps, 'container' | 'phase' | 'onEndGutter'> as ConversationWidthControlsProps
+    const blank = vi.fn<(gutter: number | null) => void>()
+    const adopted = vi.fn<(gutter: number | null) => void>()
+    const view = render(<ConversationWidthControls {...props(blank)} />)
+    expect(blank).toHaveBeenLastCalledWith(340)
+    view.rerender(<ConversationWidthControls {...props(adopted)} />)
+    expect(blank).toHaveBeenLastCalledWith(null)
+    expect(adopted.mock.calls).toEqual([[340]])
+    view.rerender(<ConversationWidthControls {...props(adopted)} />)
+    expect(adopted).toHaveBeenCalledOnce()
+    view.unmount()
+    expect(adopted).toHaveBeenLastCalledWith(null)
+    body.remove()
   })
 
   it('renders the Session panel seat only for the main occurrence of an active Session', () => {

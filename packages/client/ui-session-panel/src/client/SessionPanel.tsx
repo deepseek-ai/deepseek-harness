@@ -1,6 +1,6 @@
 /** Floating Session panel: section titles drawn from the section roster, bodies from the section slot. */
-import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react'
-import { isBehindModal } from '@deepseek-ai/dsh-client-ui-primitives'
+import { useCallback, useEffect, useMemo, useRef, type FocusEvent, type ReactNode } from 'react'
+import { isBehindModal, observeComposition } from '@deepseek-ai/dsh-client-ui-primitives'
 import { panelElementId, toggleElementId } from './element-ids.ts'
 import type { SessionPanelProps, SessionPanelSectionOwnerProps } from './slots.ts'
 import { fitsLayout, presentationOf } from './visibility.ts'
@@ -8,9 +8,10 @@ import css from './SessionPanel.module.css'
 
 /**
  * Close the overlay on Escape and on a pointerdown outside the panel. The
- * toggle and open menus, such as a row's context menu, count as inside, and a
- * modal above the page keeps Escape. Escape returns focus to the toggle when
- * focus was inside the panel.
+ * toggle and open menus, such as a row's context menu, count as inside; a
+ * modal above the page and an input method composing text keep Escape, as
+ * does a handler that already took it. Escape returns focus to the toggle
+ * when focus was inside the panel.
  * @param panel - the overlay element.
  * @param open - whether the overlay shows; false detaches the listeners.
  * @param toggleId - id of the Session's toggle.
@@ -19,6 +20,7 @@ import css from './SessionPanel.module.css'
 function useOverlayDismissal(panel: { readonly current: HTMLElement | null }, open: boolean, toggleId: string, close: () => void): void {
   useEffect(() => {
     if (!open) return
+    const composition = observeComposition(document)
     const inside = (target: EventTarget | null): boolean => target instanceof Element && (
       panel.current?.contains(target) === true
       || document.getElementById(toggleId)?.contains(target) === true
@@ -28,7 +30,7 @@ function useOverlayDismissal(panel: { readonly current: HTMLElement | null }, op
       if (!inside(event.target)) close()
     }
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape' || event.defaultPrevented || isBehindModal(panel.current)) return
+      if (event.key !== 'Escape' || composition.guards(event) || event.defaultPrevented || isBehindModal(panel.current)) return
       event.preventDefault()
       const focused = panel.current?.contains(document.activeElement) === true
       close()
@@ -39,8 +41,36 @@ function useOverlayDismissal(panel: { readonly current: HTMLElement | null }, op
     return () => {
       document.removeEventListener('pointerdown', onPointerDown)
       document.removeEventListener('keydown', onKeyDown)
+      composition.dispose()
     }
   }, [panel, open, toggleId, close])
+}
+
+/**
+ * Hand focus to the toggle when the panel hides with the keyboard inside it,
+ * as when a narrower gutter hides the docked panel: the focused control is
+ * gone and the toggle is the control that brings it back.
+ * @param hidden - whether the panel renders nothing.
+ * @param toggleId - id of the Session's toggle.
+ * @returns focus handlers for the panel element.
+ */
+function useFocusReturn(hidden: boolean, toggleId: string): {
+  readonly onFocus: () => void
+  readonly onBlur: (event: FocusEvent<HTMLElement>) => void
+} {
+  const inside = useRef(false)
+  useEffect(() => {
+    if (!hidden || !inside.current) return
+    inside.current = false
+    document.getElementById(toggleId)?.focus({ preventScroll: true })
+  }, [hidden, toggleId])
+  return useMemo(() => ({
+    onFocus: () => { inside.current = true },
+    onBlur: (event) => {
+      // Removal can report no next target; only a move to another element leaves the panel.
+      if (event.relatedTarget instanceof Element && !event.currentTarget.contains(event.relatedTarget)) inside.current = false
+    },
+  }), [])
 }
 
 /**
@@ -63,6 +93,7 @@ export function SessionPanel({
     : { presentation, dismissOverlay },
   [presentation, dismissOverlay])
   useOverlayDismissal(panel, presentation === 'overlay', toggleElementId(sessionId), dismissOverlay)
+  const focus = useFocusReturn(owner === undefined, toggleElementId(sessionId))
   if (owner === undefined) return null
   return (
     <aside
@@ -70,6 +101,8 @@ export function SessionPanel({
       className={css.panel}
       aria-label={t('panel.name')}
       ref={panel}
+      onFocus={focus.onFocus}
+      onBlur={focus.onBlur}
       data-session-panel={owner.presentation}
     >
       {sections.map((section) => {
