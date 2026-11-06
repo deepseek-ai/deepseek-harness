@@ -40,8 +40,18 @@
   border-radius: var(--dsw-radius-xl);
 }
 
+/* An installed connector's row opens its page as an Installed card does: the name button stretches over the row,
+   and the switch sits above that stretch, so it keeps its own clicks. */
+.link {
+  position: relative;
+}
+
+.link:active {
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
 @media (hover: hover) {
-  .row:hover {
+  .link:hover {
     background: var(--dsw-alias-interactive-bg-hover);
   }
 }
@@ -84,14 +94,18 @@
   cursor: pointer;
 }
 
-@media (hover: hover) {
-  .open:hover {
-    text-decoration: underline;
-  }
+.open::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--dsw-radius-xl);
 }
 
 .open:focus-visible {
-  border-radius: var(--dsw-radius-xs);
+  outline: none;
+}
+
+.open:focus-visible::after {
   outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 2px;
 }
@@ -107,6 +121,8 @@
 }
 
 .end {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   flex: none;
   align-items: center;

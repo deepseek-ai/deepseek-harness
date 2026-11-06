@@ -25,7 +25,7 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在**插件 → 添加插件**中输入 `@deepseek-ai/dsh-experimental-connectors-bundle`，选择**安装**，再选择**立即启用**。DSH 使用随包提供的版本，无需再次下载。也可在目标 [profile](../../boot/app-boot/README.zh.md#profiles) 的 `package.json` 中，将包名加入 `dsh.profile.bundles`。之后“已安装”旁会出现“连接器”标签；关闭这个 bundle 后，它的卡片会再次隐藏。标签中的每一行显示该连接器卡片上的开关；开启未安装的连接器时，会按当前 DSH 版本安装它。点已安装连接器的名称会打开它的详情页，详情页的返回键会回到这个标签。连接器不会出现在“已安装”中。关闭这个 bundle 会移除标签并停止所有连接器；重新开启后，它们恢复运行。
+在**插件 → 添加插件**中输入 `@deepseek-ai/dsh-experimental-connectors-bundle`，选择**安装**，再选择**立即启用**。DSH 使用随包提供的版本，无需再次下载。也可在目标 [profile](../../boot/app-boot/README.zh.md#profiles) 的 `package.json` 中，将包名加入 `dsh.profile.bundles`。之后“已安装”旁会出现“连接器”标签；关闭这个 bundle 后，它的卡片会再次隐藏。标签中的每一行显示该连接器卡片上的开关；开启未安装的连接器时，会按当前 DSH 版本安装它。点已安装连接器的这一行会打开它的详情页，详情页的返回键会回到这个标签。连接器不会出现在“已安装”中。关闭这个 bundle 会移除标签并停止所有连接器；重新开启后，它们恢复运行。
 
 -----
 

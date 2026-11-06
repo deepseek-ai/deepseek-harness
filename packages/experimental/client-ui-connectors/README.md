@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The Connectors tab of the Plugins page lists the official connectors with their brand icons and the Installed list's switch. Turning a missing connector on installs it at the running DSH version and switches it on; an installed connector's name opens its page. The Installed tab's card lists leave the connectors to this tab, and switching the Connectors bundle off stops every connector.
+The Connectors tab of the Plugins page lists the official connectors with their brand icons and the Installed list's switch. Turning a missing connector on installs it at the running DSH version and switches it on; an installed connector's row opens its page, as a card on the Installed list does. The Installed tab's card lists leave the connectors to this tab, and switching the Connectors bundle off stops every connector.
 
 ## Table of Contents
 
@@ -35,7 +35,7 @@ Enable the [Connectors bundle](../connectors-bundle/README.md). This package has
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The Host entry provides the `connectors` service while the bundle is enabled. A connector row that declares `inject: [connectors]` stays pending without it, so the Loader stops and resumes the connectors with the bundle's switch wherever it changes. The browser entry registers the tab into `plugins.tab`. `ConnectorsController` reads `pluginManager.listBundles` when the tab first renders and again on `plugin-manager/changed` and `connection/reset`; only the latest read publishes. Each row renders the page's `renderEnableSwitch`, with the install target `<package>@<DSH_CLIENT_VERSION>` for a missing connector, and an installed connector's name calls `openPackage`. Each connector's brand icon is a copy of the `icon.svg` its bundle declares, under `src/client/assets/`. The connector list is `CONNECTOR_BUNDLES` from [`dsh-official-bundles`](../../util/official-bundles/README.md), which the Plugins page also keeps off its card lists; each connector's title, description, and icon live in this package, so the tab shows connectors the profile does not hold.
+The Host entry provides the `connectors` service while the bundle is enabled. A connector row that declares `inject: [connectors]` stays pending without it, so the Loader stops and resumes the connectors with the bundle's switch wherever it changes. The browser entry registers the tab into `plugins.tab`. `ConnectorsController` reads `pluginManager.listBundles` when the tab first renders and again on `plugin-manager/changed` and `connection/reset`; only the latest read publishes. Each row renders the page's `renderEnableSwitch`, with the install target `<package>@<DSH_CLIENT_VERSION>` for a missing connector, and an installed connector's name button, stretched over its row, calls `openPackage`. Each connector's brand icon is a copy of the `icon.svg` its bundle declares, under `src/client/assets/`. The connector list is `CONNECTOR_BUNDLES` from [`dsh-official-bundles`](../../util/official-bundles/README.md), which the Plugins page also keeps off its card lists; each connector's title, description, and icon live in this package, so the tab shows connectors the profile does not hold.
 
 - [Host source](src/index.ts)
 - [Browser source](src/client/index.ts)

@@ -25,7 +25,7 @@ Enable Connectors to add a Connectors tab beside Installed on the Web or Desktop
 <a id="use-this-package"></a>
 ## Use this package
 
-In **Plugins → Add plugin**, enter `@deepseek-ai/dsh-experimental-connectors-bundle`, choose **Install**, then **Enable now**. DSH uses the shipped copy without downloading another one. Alternatively, add the name to `dsh.profile.bundles` in the target [profile](../../boot/app-boot/README.md#profiles)'s `package.json`. The Connectors tab then appears beside Installed, and switching the bundle off hides its card again. Each tab row shows the switch the connector's card would show; switching on a missing connector installs it at the running DSH version. An installed connector's name opens its page, and that page's Back button returns to the tab. The connectors never appear on Installed. Switching the bundle off removes the tab and stops every connector; switching it on again resumes them.
+In **Plugins → Add plugin**, enter `@deepseek-ai/dsh-experimental-connectors-bundle`, choose **Install**, then **Enable now**. DSH uses the shipped copy without downloading another one. Alternatively, add the name to `dsh.profile.bundles` in the target [profile](../../boot/app-boot/README.md#profiles)'s `package.json`. The Connectors tab then appears beside Installed, and switching the bundle off hides its card again. Each tab row shows the switch the connector's card would show; switching on a missing connector installs it at the running DSH version. An installed connector's row opens its page, and that page's Back button returns to the tab. The connectors never appear on Installed. Switching the bundle off removes the tab and stops every connector; switching it on again resumes them.
 
 -----
 

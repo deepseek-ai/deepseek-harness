@@ -45,7 +45,11 @@ it('lists the official connectors, switches an installed one from the tab, and k
   await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('false')
   await toggle.click()
   await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
-  await feishu.getByRole('button', { name: '打开 飞书插件', exact: true }).click()
+  // The row opens the page as an Installed card does: a click on its description reaches the name button.
+  const description = (await feishu.getByText('在对话中使用飞书文档、消息及其他已授权的功能。').boundingBox())!
+  const rowBox = (await feishu.boundingBox())!
+  const position = { x: description.x - rowBox.x + description.width / 2, y: description.y - rowBox.y + description.height / 2 }
+  await feishu.click({ position })
   await panel.locator(`[data-plugin-detail="${FEISHU}"]`).waitFor()
   await panel.getByRole('button', { name: '返回插件', exact: true }).click()
   await feishu.waitFor()

@@ -68,7 +68,7 @@ function ConnectorRow({ connector, status, version, t, openPackage, renderEnable
   const installed = status === 'installed' || status === 'enabled'
   const install = status === 'missing' && version !== undefined ? { spec: `${packageName}@${version}`, title, version } : undefined
   return (
-    <li className={css.row} data-connector={id}>
+    <li className={installed ? `${css.row} ${css.link}` : css.row} data-connector={id}>
       <span className={css.icon} aria-hidden="true"><img src={ICONS[id]} width={36} height={36} alt="" /></span>
       <div className={css.main}>
         {installed
