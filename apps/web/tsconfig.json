@@ -210,6 +210,8 @@
     "tests/queue-image.e2e.ts",
     "tests/skill-invocation-policy.e2e.ts",
     "tests/skill-user-invoke.e2e.ts",
+    "tests/standard-dsh-doc.e2e.ts",
+    "tests/creator-persona.e2e.ts",
     "tests/skill-menu-plugin-change.e2e.ts",
     "tests/permission-policy-context.e2e.ts",
     "tests/access-confirmation.e2e.ts",
