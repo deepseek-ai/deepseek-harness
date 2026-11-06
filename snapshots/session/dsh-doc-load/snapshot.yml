@@ -1,0 +1,9 @@
+version: 1
+scenario: dsh-doc-load
+profile: headless
+composition: default
+recording: authored
+header:
+  class: skill
+workspace:
+  setup: dsh-doc-resources

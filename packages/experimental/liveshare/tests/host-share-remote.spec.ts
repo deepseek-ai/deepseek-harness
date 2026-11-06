@@ -18,6 +18,16 @@ afterEach(async () => {
 })
 
 describe('owner share Remote', () => {
+  it('delegates an addition to the operations implementation', async () => {
+    const addSessions = vi.fn(async () => ({ shareId: 'share-one', sessionIds: ['session-two'] }))
+    ctx = new Context()
+    const remote = new LiveshareShares(ctx, { addSessions } as never)
+
+    await expect(remote.addSessions({ shareId: 'share-one', sessionIds: ['session-two'] }))
+      .resolves.toEqual({ shareId: 'share-one', sessionIds: ['session-two'] })
+    expect(addSessions).toHaveBeenCalledWith({ shareId: 'share-one', sessionIds: ['session-two'] })
+  })
+
   it('reads one share’s Relay audit trail through the operations implementation', async () => {
     const audit = vi.fn(async () => ({ events: [] }))
     ctx = new Context()

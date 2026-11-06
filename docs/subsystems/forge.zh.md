@@ -378,6 +378,7 @@ interface ForgeSessionWorktree {
 }
 ```
 
+
 ```ts type-equiv
 /** Payload of the `plugin:client-ui-forge/worktree` record. */
 type WorktreeRecord =
@@ -912,6 +913,14 @@ Serves the forge panel. Following a Session inspects the checkout of its current
 @Remote({ mode: 'stream' }) async *changeRequestStates(signal: AbortSignal): AsyncIterable<ForgeChangeRequestStatesFrame>
 
 /**
+ * Read or await the worktree service's archive cleanup of the Session's checkout.
+ * @param session - Session whose cleanup is visible to the caller.
+ * @param revision - null reads now; a matching revision waits for completion.
+ * @returns the cleanup state, or null without a worktree service, an attempt, or a current revision.
+ */
+@Remote async worktreeCleanup(session: Session, revision: number | null): Promise<WorktreeCleanup | null>
+
+/**
  * List the local branches that can start a worktree of the Session's current checkout.
  * @param session - Session whose current directory is listed.
  * @param signal - request cancellation.
@@ -1135,7 +1144,7 @@ Serves the forge panel. Following a Session inspects the checkout of its current
 @Remote async continueInProject(session: Session, signal: AbortSignal): Promise<void>
 ```
 
-Types: [Session](session.zh.md)
+Types: [Session](session.zh.md) · [WorktreeCleanup](worktrees.zh.md)
 
 Source: [`packages/experimental/client-ui-forge/src/index.ts`](../../packages/experimental/client-ui-forge/src/index.ts)
 

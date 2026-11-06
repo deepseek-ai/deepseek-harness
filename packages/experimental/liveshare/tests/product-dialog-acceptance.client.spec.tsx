@@ -27,7 +27,7 @@ const translate: LiveshareShareDialogProps['t'] = (key, params) => {
   return result
 }
 const existing = {
-  shareId: 'existing', sessionId: 'session', sessionTitle: 'Acceptance session',
+  shareId: 'existing', sessionIds: ['session'], sessionTitle: 'Acceptance session',
   link: 'https://relay.example.test/?shareId=existing', createdAt: '2026-09-05T00:00:00Z', online: true,
   sessionMode: 'view',
   allowsFork: false,
@@ -98,6 +98,7 @@ async function showDialog(
       link: existing.link,
       shareId: 'existing',
       sessionId: 'session',
+      sessionIds: ['session'],
       sessionMode: request.sessionMode ?? 'view',
       access: {
         mode: 'open',
@@ -1210,7 +1211,7 @@ describe('Liveshare dialog stored-record branches', () => {
           // A Host that predates the permission field answers without it; the dialog must state that
           // rather than assume the narrowest tier.
           const answer: CreatedShare = {
-            link: existing.link, shareId: 'existing', sessionId: 'session', sessionMode: 'view', access: OPEN_ACCESS,
+            link: existing.link, shareId: 'existing', sessionId: 'session', sessionIds: ['session'], sessionMode: 'view', access: OPEN_ACCESS,
           }
           delete (answer as { sessionMode?: CreatedShare['sessionMode'] }).sessionMode
           return accepted(answer)
@@ -1234,7 +1235,7 @@ describe('Liveshare dialog stored-record branches', () => {
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(onClose).not.toHaveBeenCalled()
     pending.resolve(accepted({
-      link: existing.link, shareId: 'existing', sessionId: 'session', sessionMode: 'view', access: OPEN_ACCESS,
+      link: existing.link, shareId: 'existing', sessionId: 'session', sessionIds: ['session'], sessionMode: 'view', access: OPEN_ACCESS,
     }))
     await act(async () => { await pending.promise })
   })
@@ -1256,7 +1257,7 @@ describe('Liveshare dialog stored-record branches', () => {
     await showControlled({
       overrides: {
         create: async () => accepted({
-          link: '', shareId: 'existing', sessionId: 'session', sessionMode: 'view', access: OPEN_ACCESS,
+          link: '', shareId: 'existing', sessionId: 'session', sessionIds: ['session'], sessionMode: 'view', access: OPEN_ACCESS,
         }),
         list: async () => {
           calls += 1

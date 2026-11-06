@@ -36,6 +36,9 @@
       "path": "../../client/ui-layout"
     },
     {
+      "path": "../../client/ui-plugin-manager/tsconfig.client.json"
+    },
+    {
       "path": "../../client/ui-primitives"
     },
     {
@@ -46,6 +49,9 @@
     },
     {
       "path": "../../client/ui-session-panel"
+    },
+    {
+      "path": "../../client/ui-settings/tsconfig.client.json"
     },
     {
       "path": "../../client/ui-sidebar-right"
@@ -76,6 +82,9 @@
     },
     {
       "path": "../forge-session"
+    },
+    {
+      "path": "../worktree"
     }
   ]
 }
