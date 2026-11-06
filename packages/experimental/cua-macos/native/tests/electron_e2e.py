@@ -99,7 +99,7 @@ def main():
 
                 window = next(window for window in state['windows'] if window['windowId'] == window_id)
                 if not args.hover_only:
-                    call('click', {**owner, 'snapshotId': state['snapshotId'], 'elementId': buttons[0]['elementId']})
+                    call('invoke', {**owner, 'snapshotId': state['snapshotId'], 'elementId': buttons[0]['elementId']})
                     wait_state(lambda actual: actual['clicks'] == 1 and actual['lastClickTrusted'] is True,
                                'Native AX press did not produce one trusted DOM click')
                     state = observe()

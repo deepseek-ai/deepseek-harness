@@ -44,7 +44,7 @@ def main():
             owner = {"appHandle": app["appHandle"], "windowId": state["windowId"]}
             observed = helper.call("getState", {**owner, "maxElements": 2000, "maxDepth": 25})
             pad = next(item for item in observed["elements"] if item["role"] == "AXButton" and item["title"] == "Input receiver")
-            helper.call("click", {"appHandle": app["appHandle"], "snapshotId": observed["snapshotId"], "elementId": pad["elementId"]})
+            helper.call("invoke", {**owner, "snapshotId": observed["snapshotId"], "elementId": pad["elementId"]})
             wait_for_state(state_path, lambda value: value["axPresses"] == state["axPresses"] + 1)
             captured = helper.call("screenshot", owner)
             assert base64.b64decode(captured["data"], validate=True).startswith(b"\x89PNG\r\n\x1a\n")
@@ -184,7 +184,7 @@ def main():
             os.kill(pid, 0)
             print(f"Deleted executable: bundle_id={bundle_id is not None}, proc_pidpath_bytes={copied}, errno={path_error}")
         print("PASS: changed bundles cannot launch; cold/running and direct-bundle identities agree; copies share consent; other IDs stay separate; missing IDs and standalone GUIs use persistent paths across restarts"
-              + (f"; {checked_windows} GUI instances expose controls, receive an AX click and produce a PNG" if args.desktop else ""))
+              + (f"; {checked_windows} GUI instances expose controls, receive a default AX action and produce a PNG" if args.desktop else ""))
 
 
 if __name__ == "__main__":

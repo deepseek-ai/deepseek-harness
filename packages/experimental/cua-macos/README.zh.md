@@ -122,7 +122,7 @@ void await window.getScreenshot()
 
 截图要求附件服务可用，并确认当前模型支持图片输入。共享附件接入校验规范 Base64、图像数据及配置容量，然后保存一次图片。程序调用方仍可取得原生数据，模型内容包含坐标元数据和持久图片引用。响应字节上限在解析前执行。
 
-窗口的 `click` 和 `mouseMove` 接受最新树中的元素 ID。元素必须属于所选窗口。菜单项如果不属于任何窗口，可用 `app.invoke(id)` 触发默认动作。
+`win.click(id)` 向元素中心发送鼠标事件，`win.click([x, y])` 向给定位置发送鼠标事件。`click(id)` 和 `mouseMove(id)` 使用的元素须属于所选窗口。菜单项如果不属于任何窗口，可用 `app.invoke(id)` 触发默认动作。
 
 `mouseMove`、`click` 和 `drag` 的绝对坐标使用 `[x, y]` 元组；`scroll` 使用命名的 `x` 和 `y`。它们都使用最近返回截图中的像素。传入 `relative: true` 时使用 0～999 的千分比整数；省略或传入 `false` 时使用像素。相对坐标可基于成功的 AX 读取或截图，绝对坐标必须先截图。Host 根据实际送入模型的图片尺寸换算原生 point，包含附件归一化和模型请求阶段的缩放。999 映射到窗口边缘以内。坐标选项不适用于元素 ID。窗口宽高与最近一次观察不同时，在输入前返回 `WINDOW_CHANGED`，即使原始坐标调用不传快照 ID 也会检查；重新读取 AX 或截图后再操作。单纯移动窗口不使窗口内坐标失效。截图和鼠标输入会核对所选窗口的辅助功能框与显示边界；已知两者不一致时，在发送任何鼠标事件前返回 `WINDOW_CHANGED`。当 AX 保留完整窗口框时，这也会拦住 Stage Manager 变换后的窗口。需要重新读取状态；激活应用或抬起窗口仍须显式调用。元素声明的 AX 动作保持可用。缺少 AX 几何时保留无 AX 路径，不代表变换后的窗口一定可以操作。
 
@@ -130,7 +130,7 @@ void await window.getScreenshot()
 
 AppKit sheet 可以通过其窗口 ID 单独选择，也会出现在所属文档窗口的控件树中。只有应用当前获得焦点的 sheet 指向唯一的 Apple 面板服务窗口，且该服务仍聚焦于同一面板时，键盘输入才转交系统打开或保存面板。无法确认或存在歧义的远端接收方会在输入前报错。
 
-元素点击使用当前快照中的不透明元素 ID。左键支持单击或双击；右键和中键支持单击。点击和拖动选项可指定按键与修饰键名称；带修饰键的点击使用指针输入。拖动期间保持指定按键，并在移动和释放事件中携带修饰键。AX 文本标明禁用控件、`valueWritable=true` 和可读取的 `selected` 状态。不带修饰键的点击优先使用元素声明的辅助功能动作；需要发送鼠标事件时，会重新读取元素位置并核实所属窗口。动作返回只表示输入已分派。可视指针或点击标记可以独立绘制；AX 动作无需移动系统指针。窗口定向鼠标输入仍可能改变应用焦点、选区或对话框。输入后需要读取状态确认结果。`STALE_APP` 需要重新获取应用，`STALE_SNAPSHOT` 需要重新读取 AX。请求超时或取消会等待原生停止确认，保留仍可用的句柄；无法确认清理完成时关闭该 Agent 的连接。未返回系统回调的截图 RPC 占用唯一捕获槽位，新截图立即返回 `CAPTURE_BUSY`，AX 和输入仍可使用。迟到图片被丢弃，真实回调结束后释放槽位。只有操作无法停止或清理失败时，才可能使共享进程及所有旧句柄失效。不能自动重试结果不确定的输入。关闭 Agent 会释放其连接和 AX 引用，但不会撤销应用中的修改。
+元素点击使用当前快照中的不透明元素 ID。左键支持单击或双击；右键和中键支持单击。点击和拖动选项可指定按键与修饰键名称。拖动期间保持指定按键，并在移动和释放事件中携带修饰键。AX 文本标明禁用控件、`valueWritable=true` 和可读取的 `selected` 状态。动作返回只表示输入已分派。可视指针或点击标记可以独立绘制；AX 动作无需移动系统指针。窗口定向鼠标输入仍可能改变应用焦点、选区或对话框。输入后需要读取状态确认结果。`STALE_APP` 需要重新获取应用，`STALE_SNAPSHOT` 需要重新读取 AX。请求超时或取消会等待原生停止确认，保留仍可用的句柄；无法确认清理完成时关闭该 Agent 的连接。未返回系统回调的截图 RPC 占用唯一捕获槽位，新截图立即返回 `CAPTURE_BUSY`，AX 和输入仍可使用。迟到图片被丢弃，真实回调结束后释放槽位。只有操作无法停止或清理失败时，才可能使共享进程及所有旧句柄失效。不能自动重试结果不确定的输入。关闭 Agent 会释放其连接和 AX 引用，但不会撤销应用中的修改。
 
 -----
 
@@ -175,7 +175,7 @@ AppKit sheet 可以通过其窗口 ID 单独选择，也会出现在所属文档
 ##### 操作指导文本（原文）
 
 ```markdown
-macOS: accessibility tree operations are available at app or window level. Simulated keyboard input is available at app level. Simulated mouse input is available at window level. For click and mouseMove, use window coordinates or an element ID from the latest tree that belongs to the selected window. getApp also accepts bundle IDs and .app paths, and findApps searches /Applications, /System/Applications, and ~/Applications. Use the Computer Use permission page to grant the helper application Accessibility and Screen Recording permissions in System Settings. Native window and AX bounds use macOS points, while delivered screenshots carry their own pixel dimensions. show does not switch Spaces, and Stage Manager can present reduced window geometry; explain any required foreground step before calling app.activate() or performing an advertised AXRaise action.
+macOS: accessibility tree operations are available at app or window level. Simulated keyboard input is available at app level. Simulated mouse input is available at window level. click sends mouse events at window coordinates or at the center of an element from the latest tree in that window. Use invoke for the default accessibility action, including on menu items. mouseMove accepts either target. getApp also accepts bundle IDs and .app paths, and findApps searches /Applications, /System/Applications, and ~/Applications. Use the Computer Use permission page to grant the helper application Accessibility and Screen Recording permissions in System Settings. Native window and AX bounds use macOS points, while delivered screenshots carry their own pixel dimensions. show does not switch Spaces, and Stage Manager can present reduced window geometry; explain any required foreground step before calling app.activate() or performing an advertised AXRaise action.
 
 Use cua to observe and operate native applications. Always use cua.getCapabilities() to confirm whether a specific API is available on the current platform; its reported capabilities take precedence over availability statements in these instructions. All methods are async; observation options default to { emit: true }, and emit: false suppresses sink output only, leaving returned values unchanged. Actions report dispatch evidence, not verified completion. If sessionLocked is true or an operation reports SESSION_LOCKED, stop UI actions and ask the user to unlock the desktop session; null or unknown means verify a usable unlocked desktop session first. cua.getApp requests user consent; if access is denied or revoked, stop using that application until the user explicitly permits another request, and never bypass a refusal or switch tools to avoid it. Never replay uncertain input without a fresh observation.
 
