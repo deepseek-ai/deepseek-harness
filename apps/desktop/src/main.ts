@@ -1017,12 +1017,14 @@ async function main(): Promise<void> {
         updateDialog.focus()
         return Promise.resolve()
       }
-      return ordinaryMessageBox({ type: 'info', title: locale.messages.updateCheckTitle,
+      const options = { type: 'info' as const, title: locale.messages.updateCheckTitle,
         message: updates.state.phase === 'downloading' ? locale.messages.updateDownloadInProgress : locale.messages.updateVerifying,
         detail: updates.state.phase === 'downloading' ? locale.messages.updateDownloadDetail : '', buttons: [locale.messages.updateClose], cancelId: 0,
-      }).then(() => {}).catch((error: unknown) => {
+      }
+      return ordinaryMessageBox(options).then(() => {}).catch(async (error: unknown) => {
         console.error(error)
-        dialog.showErrorBox(locale.messages.updateFailedTitle, locale.messages.updateStatusUnavailable)
+        try { await dialog.showMessageBox(options) }
+        catch (nativeError) { console.error(nativeError) }
       })
     }
     let failedOperation: 'check' | 'download' | 'install' = 'check'

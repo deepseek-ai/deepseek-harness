@@ -2307,19 +2307,35 @@ describe('desktop main startup', () => {
     expect(harness.updateState.phase).toBe(phase)
   })
 
-  it('reports a failed download-status dialog without restarting the update', async () => {
+  it.each(['downloading', 'verifying'] as const)('falls back to native %s status without changing the message or restarting the update', async (phase) => {
     await readyForUpdate()
-    harness.updateState = { phase: 'downloading', version: '1.0.1-nightly.1', percent: 21 }
+    harness.updateState = { phase, version: '1.0.1-nightly.1', percent: 21 }
     const checks = harness.updateCheck.mock.calls.length
     harness.dialog.showMessageBox.mockRejectedValueOnce(new Error('overlay unavailable'))
-    const check = applicationMenuItems().find(item => item.label === en.checkUpdatesMenu)!.click as () => void
-    check()
-    await vi.waitFor(() => { expect(harness.dialog.showErrorBox).toHaveBeenCalledWith(en.updateFailedTitle, en.updateStatusUnavailable) })
+    await invoke(DESKTOP_IPC.updatesOpen, 'app')
+    expect(harness.dialog.showMessageBox).toHaveBeenCalledTimes(2)
+    const first = harness.dialog.showMessageBox.mock.calls[0]!.at(-1)
+    expect(first).toEqual(expect.objectContaining(harness.dialog.showMessageBox.mock.calls[1]!.at(-1)))
+    expect(first).toEqual(expect.objectContaining({
+      type: 'info', message: phase === 'downloading' ? en.updateDownloadInProgress : en.updateVerifying,
+      detail: phase === 'downloading' ? en.updateDownloadDetail : '', buttons: [en.updateClose],
+    }))
     expect(console.error).toHaveBeenCalledWith(expect.objectContaining({ message: 'overlay unavailable' }))
-    expect(harness.dialog.showMessageBox).toHaveBeenCalledOnce()
+    expect(harness.dialog.showErrorBox).not.toHaveBeenCalled()
     expect(harness.updateCheck).toHaveBeenCalledTimes(checks)
     expect(harness.updateDownload).not.toHaveBeenCalled()
     expect(harness.updateInstall).not.toHaveBeenCalled()
+    expect(harness.updateState.phase).toBe(phase)
+  })
+
+  it('logs native status fallback failure without rejecting the user action', async () => {
+    await readyForUpdate()
+    harness.updateState = { phase: 'downloading', version: '1.0.1-nightly.1', percent: 21 }
+    harness.dialog.showMessageBox.mockRejectedValueOnce(new Error('overlay unavailable'))
+      .mockRejectedValueOnce(new Error('native unavailable'))
+    await expect(invoke(DESKTOP_IPC.updatesOpen, 'app')).resolves.toBeUndefined()
+    expect(console.error).toHaveBeenCalledWith(expect.objectContaining({ message: 'native unavailable' }))
+    expect(harness.dialog.showErrorBox).not.toHaveBeenCalled()
     expect(harness.updateState.phase).toBe('downloading')
   })
 
