@@ -163,6 +163,9 @@ export const VIEWER_ENDPOINT_CLASSES = {
   'productAnalytics/report': 'owner-only', // owner product analytics
   'productAnalytics/watchPolicy': 'owner-only', // owner product analytics
   'pluginRegistryProbe/fastest': 'owner-only', // owner plugin registry probe
+  'connectorAccounts/cancel': 'owner-only', // owner connector accounts on the Plugins page
+  'connectorAccounts/start': 'owner-only', // owner connector accounts on the Plugins page
+  'connectorAccounts/watch': 'owner-only', // owner connector accounts on the Plugins page
   'sessionReferenceResolver/candidates': 'owner-only', // owner composer reference resolution
   'officeKit/generation': 'owner-only', // owner document export
   'officeKit/render': 'owner-only', // owner document export
