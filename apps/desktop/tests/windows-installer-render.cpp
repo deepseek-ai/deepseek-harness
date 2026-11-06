@@ -124,7 +124,7 @@ int wmain(int argc, wchar_t** argv) {
     };
     bool captionStates = true;
     ShowWindow(progress, SW_HIDE);
-    for (int x : {504, 548}) {
+    for (int x : {504}) {
         const LPARAM point = MAKELPARAM(MulDiv(x + 20, dpi, 96), MulDiv(24, dpi, 96));
         captionStates = expectPixel(x, normalColor) && captionStates;
         SendMessageW(progress, WM_MOUSEMOVE, 0, point);
@@ -167,12 +167,15 @@ int wmain(int argc, wchar_t** argv) {
     const LPARAM closePoint = MAKELPARAM(MulDiv(568, dpi, 96), MulDiv(24, dpi, 96));
     MSG closeMessage;
     SendMessageW(progress, WM_LBUTTONDOWN, MK_LBUTTON, closePoint);
-    bool closeRelease = !PeekMessageW(&closeMessage, window, WM_CLOSE, WM_CLOSE, PM_REMOVE);
+    bool closeRelease = GetCapture() != progress && expectPixel(548, normalColor)
+        && !PeekMessageW(&closeMessage, window, WM_CLOSE, WM_CLOSE, PM_REMOVE);
+    SendMessageW(progress, WM_MOUSEMOVE, MK_LBUTTON, closePoint);
+    closeRelease = closeRelease && expectPixel(548, normalColor);
     SendMessageW(progress, WM_LBUTTONUP, 0, minimizePoint);
     closeRelease = closeRelease && !PeekMessageW(&closeMessage, window, WM_CLOSE, WM_CLOSE, PM_REMOVE);
     SendMessageW(progress, WM_LBUTTONDOWN, MK_LBUTTON, closePoint);
     SendMessageW(progress, WM_LBUTTONUP, 0, closePoint);
-    closeRelease = closeRelease && PeekMessageW(&closeMessage, window, WM_CLOSE, WM_CLOSE, PM_REMOVE);
+    closeRelease = closeRelease && !PeekMessageW(&closeMessage, window, WM_CLOSE, WM_CLOSE, PM_REMOVE) && GetCapture() != progress;
     LARGE_INTEGER frequency, started, finished;
     QueryPerformanceFrequency(&frequency);
     std::vector<double> samples;

@@ -178,13 +178,14 @@ static UINT CaptionCommand(const ProgressPage& page, LPARAM position) {
     const int x = static_cast<short>(LOWORD(position));
     const int y = static_cast<short>(HIWORD(position));
     if (y < 0 || y >= MulDiv(48, page.dpi, 96) || x < MulDiv(504, page.dpi, 96) || x >= MulDiv(600, page.dpi, 96)) return 0;
-    return x >= MulDiv(548, page.dpi, 96) ? SC_CLOSE : SC_MINIMIZE;
+    return x >= MulDiv(548, page.dpi, 96) ? 0 : SC_MINIMIZE;
 }
 
 static void PaintCaptionButtons(Graphics& graphics, const ProgressPage& page) {
     SolidBrush background(page.dark ? Color(255, 21, 21, 23) : Color(255, 255, 255, 255));
     graphics.FillRectangle(&background, 504, 0, 96, 48);
     SolidBrush ink(page.dark ? Color(255, 255, 255, 255) : Color(255, 15, 17, 21));
+    SolidBrush disabledInk(page.dark ? Color(255, 97, 102, 107) : Color(255, 173, 177, 184));
     FontFamily family(L"Microsoft YaHei UI");
     Font font(&family, 16, FontStyleRegular, UnitPixel);
     StringFormat centered;
@@ -204,7 +205,7 @@ static void PaintCaptionButtons(Graphics& graphics, const ProgressPage& page) {
             graphics.FillPath(&fill, &path);
         }
         graphics.DrawString(command == SC_MINIMIZE ? L"\x2212" : L"\x00d7", -1,
-            &font, RectF(static_cast<REAL>(x), 8, 40, 32), &centered, &ink);
+            &font, RectF(static_cast<REAL>(x), 8, 40, 32), &centered, command == SC_CLOSE ? &disabledInk : &ink);
     }
 }
 
@@ -409,8 +410,35 @@ extern "C" __declspec(dllexport) BOOL __cdecl InstallerFinishProgress(HWND windo
     return TRUE;
 }
 
+struct FrameState {
+    unsigned moveDepth = 0;
+    bool nextPending = false;
+};
+
+// NSIS advances synchronously into nsDialogs::Show. Its nested loop must not
+// start until DefWindowProc has returned from moving the window and released input.
+constexpr UINT NotifyOuterNext = WM_USER + 8;
+
 static LRESULT CALLBACK FrameProc(HWND window, UINT message, WPARAM wparam,
-                                 LPARAM lparam, UINT_PTR id, DWORD_PTR) {
+                                 LPARAM lparam, UINT_PTR id, DWORD_PTR data) {
+    auto* state = reinterpret_cast<FrameState*>(data);
+    if (message == NotifyOuterNext && wparam == 1 && state->moveDepth) {
+        state->nextPending = true;
+        return 0;
+    }
+    if (message == WM_SYSCOMMAND && ((wparam & 0xfff0) == SC_MOVE || (wparam & 0xfff0) == SC_SIZE)) {
+        ++state->moveDepth;
+        const LRESULT result = DefSubclassProc(window, message, wparam, lparam);
+        DWORD_PTR remaining = 0;
+        // Destruction inside the native loop also destroys the frame state.
+        if (GetWindowSubclass(window, FrameProc, id, &remaining) && remaining == data) {
+            if (--state->moveDepth == 0 && state->nextPending) {
+                state->nextPending = false;
+                PostMessageW(window, NotifyOuterNext, 1, 0);
+            }
+        }
+        return result;
+    }
     if (message == WM_NCCALCSIZE && wparam) return 0;
     // Activation must not repaint the standard frame over the custom client area.
     if (message == WM_NCACTIVATE) return DefSubclassProc(window, message, wparam, -1);
@@ -419,7 +447,10 @@ static LRESULT CALLBACK FrameProc(HWND window, UINT message, WPARAM wparam,
         // The installer has a fixed size; its page provides the drag area.
         return hit >= HTLEFT && hit <= HTBOTTOMRIGHT ? HTCLIENT : hit;
     }
-    if (message == WM_NCDESTROY) RemoveWindowSubclass(window, FrameProc, id);
+    if (message == WM_NCDESTROY) {
+        RemoveWindowSubclass(window, FrameProc, id);
+        delete state;
+    }
     return DefSubclassProc(window, message, wparam, lparam);
 }
 
@@ -428,7 +459,12 @@ extern "C" __declspec(dllexport) HRESULT __cdecl InstallerApplyFrame(HWND window
     HMODULE module = nullptr;
     if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_PIN | GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
                            reinterpret_cast<LPCWSTR>(&FrameProc), &module)) return E_FAIL;
-    if (!SetWindowSubclass(window, FrameProc, 1, 0)) return E_FAIL;
+    auto* state = new (std::nothrow) FrameState{};
+    if (!state) return E_OUTOFMEMORY;
+    if (!SetWindowSubclass(window, FrameProc, 1, reinterpret_cast<DWORD_PTR>(state))) {
+        delete state;
+        return E_FAIL;
+    }
     const int stockControls[] = {1, 2, 3, 1028, 1256, 1034, 1035, 1036, 1037, 1038, 1039};
     for (int id : stockControls) {
         HWND child = GetDlgItem(window, id);

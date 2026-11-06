@@ -381,6 +381,11 @@ FunctionEnd
 
 Function InstallerClose
     Pop $0
-    System::Call 'user32::PostMessageW(p $HWNDPARENT, i ${WM_CLOSE}, p 0, p 0)'
+    ${If} $InstallerPhase == "success"
+        ${NSD_Uncheck} $InstallerLaunch
+        SendMessage $HWNDPARENT ${WM_NOTIFY_OUTER_NEXT} 1 0
+    ${Else}
+        System::Call 'user32::PostMessageW(p $HWNDPARENT, i ${WM_CLOSE}, p 0, p 0)'
+    ${EndIf}
 FunctionEnd
 !endif
