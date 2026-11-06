@@ -54,6 +54,7 @@ describe('multiple Session appends', () => {
     const observed: number[] = []
     ctx.on('session/event', (current, event) => {
       if (current !== session) return
+      expect(current.currentBatchPublication).toEqual({ event, endSeq: 1 })
       expect(current.seq).toBe(2)
       expect(current.surface.nodes).toEqual([1])
       expect(current.deriveMessages()).toEqual([messageValue])
@@ -65,16 +66,18 @@ describe('multiple Session appends', () => {
       ['user/message', messageValue, { surfaceOp: 'append' }],
     ])
     expect(observed).toEqual([0, 1])
+    expect(session.currentBatchPublication).toBeUndefined()
   })
 
   it('replaces an earlier member in the same append', () => {
     const session = Session.create(SessionId('replace-append'))
+    const nodes = session.surface.nodes
     const replacement = message('replacement')
     session.append([
       ['user/message', message('original'), { surfaceOp: 'append' }],
       ['user/message', replacement, { surfaceOp: { op: 'replace', startSeq: SessionSeq(0), endSeq: SessionSeq(0) }, sourceEventSeqs: [SessionSeq(0)] }],
     ])
-    expect(session.surface.nodes).toEqual([1])
+    expect(nodes).toEqual([1])
     expect(session.deriveMessages()).toEqual([replacement])
   })
 

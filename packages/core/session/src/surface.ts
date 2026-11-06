@@ -367,14 +367,13 @@ function assertSourceEventReferences(
 /** Resolve tool additions against their immutable historical request header. */
 function assertDeveloperHeader(
   event: SessionEvent,
-  events: readonly SessionEvent[],
-  baseSeq: SessionLogOffset,
+  read: (seq: number) => SessionEvent | undefined,
 ): void {
   if (event.type !== 'developer/message') return
   validateSessionEventData(event, `developer/message at seq ${event.seq}`)
   if (event.data.headerSeq === undefined) return
   const headerSeq = event.data.headerSeq
-  const headerEvent = events[headerSeq - baseSeq]
+  const headerEvent = read(headerSeq)
   if (headerSeq >= event.seq || headerEvent?.type !== 'request/header') {
     throw new Error('developer/message headerSeq must reference an earlier request/header')
   }
@@ -456,15 +455,14 @@ function isDeepEqualJson(a: unknown, b: unknown): boolean {
 function assertToolResultRewrite(
   event: SessionEvent,
   shadowedSeqs: readonly SessionSeq[],
-  events: readonly SessionEvent[],
-  baseSeq: SessionLogOffset,
+  read: (seq: number) => SessionEvent | undefined,
 ): void {
   if (event.type !== 'tool/result') return
   if (shadowedSeqs.length !== 1) {
     throw new Error('tool/result surface replacement must rewrite exactly one current node')
   }
   for (const originalSeq of shadowedSeqs) {
-    const original = events[originalSeq - baseSeq]
+    const original = read(originalSeq)
     if (original?.type !== 'tool/result') {
       throw new Error('tool/result surface replacement must target a current tool/result')
     }
@@ -495,11 +493,10 @@ function assertSystemHeadRewrite(
   state: SurfaceFoldState,
   startIdx: number,
   shadowedSeqs: readonly SessionSeq[],
-  events: readonly SessionEvent[],
-  baseSeq: SessionLogOffset,
+  read: (seq: number) => SessionEvent | undefined,
 ): void {
   if (startIdx !== 0) return
-  const head = events[state.nodes[0] as number - baseSeq]
+  const head = read(state.nodes[0] as number)
   if (head?.type !== 'system/message') return
   if (event.type !== 'system/message' || shadowedSeqs.length !== 1) {
     throw new Error('surface replace: node 0 holds the system prompt and may be rewritten only by a system/message over exactly that node')
@@ -514,16 +511,24 @@ function planSurfaceEvent(
   events: readonly SessionEvent[],
   baseSeq: SessionLogOffset,
   projections: readonly SessionMessageProjection[],
+  candidates?: readonly SessionEvent[],
 ): SurfacePlan | undefined {
   if (event.seq !== expectedSeq) {
     throw new Error(`session event seq ${event.seq} is not contiguous; expected ${expectedSeq}`)
   }
   const surfaceOp = validateSurfaceMetadata(event)
-  assertDeveloperHeader(event, events, baseSeq)
+  const read = (seq: number): SessionEvent | undefined => {
+    const index = seq - baseSeq
+    return index < events.length ? events[index] : candidates?.[index - events.length]
+  }
+  assertDeveloperHeader(event, read)
   const projection = projections.find(item => item.type === event.type)
   if (projection !== undefined) {
     return { kind: 'project', projection, messages: projection.project(event, {
-      nodes: state.nodes, events, baseSeq, messages: state.projectedMessages,
+      nodes: state.nodes,
+      get events() { return candidates === undefined ? events : [...events, ...candidates] },
+      baseSeq,
+      messages: state.projectedMessages,
     }) }
   }
   if (MESSAGE_PROJECTION_EVENT_TYPES.has(event.type)) {
@@ -535,8 +540,8 @@ function planSurfaceEvent(
   }
   const range = replacementRange(state, surfaceOp)
   assertSourceEventReferences(event, range.shadowedSeqs)
-  assertToolResultRewrite(event, range.shadowedSeqs, events, baseSeq)
-  assertSystemHeadRewrite(event, state, range.startIdx, range.shadowedSeqs, events, baseSeq)
+  assertToolResultRewrite(event, range.shadowedSeqs, read)
+  assertSystemHeadRewrite(event, state, range.startIdx, range.shadowedSeqs, read)
   return {
     kind: 'replace',
     seq: event.seq,
@@ -672,12 +677,15 @@ export class SurfaceManager implements SessionSurface {
       projectedMessages: new Map(this._state.projectedMessages),
       projections: new Set(this._state.projections),
     }
-    const log = [...this.log, ...events]
-    for (const [index, event] of events.entries()) {
-      applySurfaceEvent(state, event, SessionSeq(this.baseSeq + this.log.length + index), log, this.baseSeq, this.projections)
-    }
+    const plans = events.map((event, index) => {
+      const plan = planSurfaceEvent(
+        state, event, SessionSeq(this.baseSeq + this.log.length + index), this.log, this.baseSeq, this.projections, events,
+      )
+      applySurfacePlan(state, plan)
+      return plan
+    })
     return () => {
-      this._state = state
+      for (const plan of plans) applySurfacePlan(this._state, plan)
       this._lastProcessedSeq = lastProcessedSeq
       this._pendingPlan = undefined
     }

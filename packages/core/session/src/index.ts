@@ -514,6 +514,33 @@ export function pluginRecordOf(event: SessionEvent): PluginRecord | undefined {
   return { type, seq: event.seq, time: event.time, data: event.data }
 }
 
+/** Copy live append inputs before sequence assignment. */
+function snapshotAppend(
+  type: SessionEventType,
+  data: SessionEventMap[SessionEventType] | undefined,
+  opts: SurfaceIntent | undefined,
+  subject: string,
+) {
+  const surfaceOp = opts?.surfaceOp
+  const sourceEventSeqs = opts?.sourceEventSeqs
+  const dataSnapshot = snapshotJsonValue(data)
+  if (dataSnapshot === undefined) throw new Error(`${subject} carries non-JSON-serializable data`)
+  const surface = snapshotJsonValue({
+    ...sourceEventSeqs === undefined ? {} : { sourceEventSeqs },
+    ...surfaceOp === undefined ? {} : { surfaceOp },
+  })
+  if (surface === undefined) throw new Error(`${subject} carries non-JSON-serializable surface metadata`)
+  return { type, data: dataSnapshot, surface }
+}
+
+/** Construct and validate one live event from detached inputs. */
+function createAppendEvent(snapshot: ReturnType<typeof snapshotAppend>, seq: SessionSeq): SessionEvent {
+  const { type, data, surface } = snapshot
+  const event = deepFreeze({ type, seq, time: Date.now(), data, ...surface } as SessionEvent)
+  validateSessionEventData(event, `session event "${type}" at seq ${seq}`)
+  return event
+}
+
 /**
  * An event-sourced session: an append-only log of {@link SessionEvent}s.
  *
@@ -524,6 +551,7 @@ export function pluginRecordOf(event: SessionEvent): PluginRecord | undefined {
  */
 export class Session {
   private log: SessionEvent[] = []
+  private batchPublication: { readonly event: SessionEvent; readonly endSeq: SessionSeq } | undefined
   /** Single incremental owner of surface acceptance and projection state. */
   private readonly surfaceManager: SurfaceManager
 
@@ -761,6 +789,11 @@ export class Session {
     return SessionLogOffset(this.log.length)
   }
 
+  /** Current member and final sequence while synchronously notifying a batch's observers. */
+  get currentBatchPublication(): { readonly event: SessionEvent; readonly endSeq: SessionSeq } | undefined {
+    return this.batchPublication
+  }
+
   /**
    * Append consecutive events together after validating every candidate and dispatch.
    * Observers read the complete committed log and final message surface.
@@ -826,29 +859,10 @@ export class Session {
   ): SessionEvent | readonly SessionEvent[] {
     if (typeof type !== 'string') return this.#appendEvents(type)
     this.publicationEntry()
-    const surfaceOpts = opts[0]
-    const surfaceMetadata = {
-      ...surfaceOpts?.sourceEventSeqs === undefined ? {} : { sourceEventSeqs: surfaceOpts.sourceEventSeqs },
-      ...surfaceOpts?.surfaceOp === undefined ? {} : { surfaceOp: surfaceOpts.surfaceOp },
-    }
-    const dataSnapshot = snapshotJsonValue(data)
-    if (dataSnapshot === undefined) {
-      throw new Error(`session event "${type}" carries non-JSON-serializable data`)
-    }
-    const surfaceMetadataSnapshot = snapshotJsonValue(surfaceMetadata)
-    if (surfaceMetadataSnapshot === undefined) {
-      throw new Error(`session event "${type}" carries non-JSON-serializable surface metadata`)
-    }
+    const snapshot = snapshotAppend(type, data, opts[0], `session event "${type}"`)
     // Payload getters can detach the Session while the snapshots are read.
     const entry = this.publicationEntry()
-    const event = deepFreeze({
-      type,
-      seq: SessionSeq(this.log.length),
-      time: Date.now(),
-      data: dataSnapshot,
-      ...(surfaceMetadataSnapshot as { surfaceOp?: unknown; sourceEventSeqs?: unknown }),
-    } as SessionEvent)
-    validateSessionEventData(event, `session event "${type}" at seq ${event.seq}`)
+    const event = createAppendEvent(snapshot, SessionSeq(this.log.length))
     this.commit(event, entry)
     return event
   }
@@ -866,41 +880,32 @@ export class Session {
       const input = inputs.at(index)
       if (input === undefined) throw new Error(`session batch has an empty member at index ${index}`)
       const [type, data, surfaceOpts] = input
-      const snapshot = snapshotJsonValue({
-        type, data,
-        ...surfaceOpts?.surfaceOp === undefined ? {} : { surfaceOp: surfaceOpts.surfaceOp },
-        ...surfaceOpts?.sourceEventSeqs === undefined ? {} : { sourceEventSeqs: surfaceOpts.sourceEventSeqs },
-      })
-      if (snapshot === undefined) {
-        throw new Error(`session batch member ${index} ("${type}") carries non-JSON-serializable data`)
-      }
-      return snapshot
+      return snapshotAppend(type, data, surfaceOpts, `session batch member ${index} ("${type}")`)
     })
     // Payload getters may append to or detach the Session.
     const entry = this.publicationEntry()
     const startSeq = this.log.length
-    const events = snapshots.map((snapshot, index) => {
-      const event = { ...snapshot, seq: SessionSeq(startSeq + index), time: Date.now() }
-      assertSessionEventEnvelope(event, startSeq + index)
-      return deepFreeze(event)
-    })
+    const events = snapshots.map((snapshot, index) => createAppendEvent(snapshot, SessionSeq(startSeq + index)))
     const acceptSurface = this.surfaceManager.prepareBatch(events)
     if (entry !== undefined) entry.appending = true
     try {
       const publications = entry === undefined ? [] : events.map((event) => {
         const args: unknown[] = [this, event]
         const callbacks = collectSessionCallbacks(entry.emitCtx, [entry.carrier, 'session/event', ...args])
-        return { args, callbacks }
+        return { event, args, callbacks }
       })
       for (const event of events) this.log.push(event)
       this.eventsSnapshot = undefined
       acceptSurface()
       if (entry !== undefined) {
-        for (const { args, callbacks } of publications) {
+        const endSeq = SessionSeq(this.log.length - 1)
+        for (const { event, args, callbacks } of publications) {
+          this.batchPublication = { event, endSeq }
           invokeContainedSessionObservers(entry.emitCtx, 'session/event', entry.id, args, callbacks)
         }
       }
     } finally {
+      this.batchPublication = undefined
       if (entry !== undefined) {
         entry.appending = false
         if (entry.detachRequested) entry.detach()

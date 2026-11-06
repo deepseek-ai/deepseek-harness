@@ -584,6 +584,8 @@ declare class Session {
   isOwnSeq(seq: SessionSeq): boolean;
   /** The next event's sequence number — always the log length (the `seq = log.length` contiguity contract). */
   get seq(): SessionLogOffset;
+  /** Current member and final sequence while synchronously notifying a batch's observers. */
+  get currentBatchPublication(): { readonly event: SessionEvent; readonly endSeq: SessionSeq } | undefined;
   /**
    * Append consecutive events together after validating every candidate and dispatch.
    * Observers read the complete committed log and final message surface.
