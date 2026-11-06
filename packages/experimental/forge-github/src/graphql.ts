@@ -7,7 +7,7 @@ import type {
   Mergeability, MergeMethod, ReviewDecision,
 } from '@deepseek-ai/dsh-experimental-forge'
 import { z } from 'zod'
-import { checkedRepository } from './urls.ts'
+import { checkedRepository, isCommit } from './urls.ts'
 
 const CHECK_FIELDS = `pageInfo { hasNextPage endCursor }
   nodes {
@@ -59,9 +59,9 @@ export const HEAD_QUERY = `query($owner: String!, $name: String!, $branch: Strin
   }
 }`
 
-/** Head commit of one pull request; variables `owner` and `name` are strings, `number` is an integer. */
-export const HEAD_COMMIT_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
-  repository(owner: $owner, name: $name) { pullRequest(number: $number) { headRefOid } }
+/** Head and base commits of one pull request; variables `owner` and `name` are strings, `number` is an integer. */
+export const PULL_REQUEST_COMMITS_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) { pullRequest(number: $number) { headRefOid baseRefOid } }
 }`
 
 const checkRunSchema = z.object({
@@ -186,7 +186,10 @@ const headSchema = z.object({
   }),
 })
 
-const headCommitSchema = z.object({ data: z.object({ repository: z.object({ pullRequest: z.object({ headRefOid: z.string() }) }) }) })
+const pullRequestCommitsSchema = z.object({ data: z.object({ repository: z.object({ pullRequest: z.object({
+  headRefOid: z.string().refine(isCommit),
+  baseRefOid: z.string().refine(isCommit),
+}) }) }) })
 
 type PullRequestNode = z.infer<typeof pullRequestSchema>
 type RepositoryNode = z.infer<typeof repositorySchema>
@@ -364,14 +367,24 @@ function mapPageResponse<T>(body: unknown, page: z.ZodType<T>, label: string): P
     message: parsed.success ? parsed.data.errors?.[0]?.message ?? `GitHub ${label} page is unavailable` : `unexpected GitHub ${label} page` } }
 }
 
+/** Head and base commits of a pull request as one read of {@link PULL_REQUEST_COMMITS_QUERY} named them. */
+export interface PullRequestCommits {
+  /** Commit at the head of the pull request. */
+  readonly head: string
+  /** Commit of the base branch GitHub recorded with that head, whose merge base with it starts the pull request's diff. */
+  readonly base: string
+}
+
 /**
- * Map a head commit read of {@link HEAD_COMMIT_QUERY}.
+ * Map a read of {@link PULL_REQUEST_COMMITS_QUERY}.
  * @param body - parsed JSON printed by `gh api graphql`.
- * @returns the head commit object name, or undefined when the response does not name one.
+ * @returns both commits, or undefined when the response does not name them as full commit object names.
  */
-export function mapHeadCommitResponse(body: unknown): string | undefined {
-  const parsed = headCommitSchema.safeParse(body)
-  return parsed.success ? parsed.data.data.repository.pullRequest.headRefOid : undefined
+export function mapPullRequestCommitsResponse(body: unknown): PullRequestCommits | undefined {
+  const parsed = pullRequestCommitsSchema.safeParse(body)
+  if (!parsed.success) return undefined
+  const { headRefOid, baseRefOid } = parsed.data.data.repository.pullRequest
+  return { head: headRefOid, base: baseRefOid }
 }
 
 /**

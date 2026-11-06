@@ -2,7 +2,7 @@ import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type { ChangeRequestSnapshot } from '@deepseek-ai/dsh-experimental-forge'
 import { describe, expect, it } from 'vitest'
 import {
-  mapCheckPageResponse, mapHeadCommitResponse, mapHeadResponse, mapSnapshotResponse, mapThreadPageResponse, snapshotQuery,
+  mapCheckPageResponse, mapHeadResponse, mapPullRequestCommitsResponse, mapSnapshotResponse, mapThreadPageResponse, snapshotQuery,
 } from '../src/graphql.ts'
 import type { SnapshotPages, ThreadPageResult } from '../src/graphql.ts'
 import { checkRun, demo, pull, pullRequestNode, repositorySettings, statusContext, threadPage } from './fixtures.ts'
@@ -413,11 +413,15 @@ describe('review thread page mapping', () => {
   })
 })
 
-describe('head commit mapping', () => {
-  it('returns the head commit, or nothing for a response that names none', () => {
-    expect(mapHeadCommitResponse({ data: { repository: { pullRequest: { headRefOid: 'a'.repeat(40) } } } })).toBe('a'.repeat(40))
-    expect(mapHeadCommitResponse({ data: { repository: { pullRequest: null } } })).toBeUndefined()
-    expect(mapHeadCommitResponse('not json')).toBeUndefined()
+describe('pull request commit mapping', () => {
+  const answer = (headRefOid: string, baseRefOid: string) => ({ data: { repository: { pullRequest: { headRefOid, baseRefOid } } } })
+
+  it('returns the head and base commits, or nothing for a response that does not name both as commit object names', () => {
+    expect(mapPullRequestCommitsResponse(answer('a'.repeat(40), 'b'.repeat(64)))).toEqual({ head: 'a'.repeat(40), base: 'b'.repeat(64) })
+    expect(mapPullRequestCommitsResponse(answer('a'.repeat(40), 'main'))).toBeUndefined()
+    expect(mapPullRequestCommitsResponse(answer('HEAD', 'b'.repeat(40)))).toBeUndefined()
+    expect(mapPullRequestCommitsResponse({ data: { repository: { pullRequest: null } } })).toBeUndefined()
+    expect(mapPullRequestCommitsResponse('not json')).toBeUndefined()
   })
 })
 

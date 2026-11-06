@@ -46,7 +46,7 @@ kind: "package-reference"
 
 pull request 处于打开状态、不是草稿、GitHub 报告其合并状态为 `CLEAN`、`HAS_HOOKS` 或 `UNSTABLE`，且已登录用户具有 write、maintain 或 admin 权限时，`mergeReady` 为真。`mergeMethods` 列出仓库允许的压缩合并、合并提交与变基合并方式，用户默认的合并方式排在最前。标记为可评审运行 `gh pr ready <number> --repo <host>/<owner>/<name>`。合并经 `gh api` 调用 `PUT repos/<owner>/<name>/pulls/<number>/merge`，带上合并方式与预期的 head SHA，因此有新提交到达后 GitHub 会拒绝，报告为 `stale`。与 `gh pr merge` 不同，它从不启用自动合并、从不加入合并队列，也从不删除 head 分支。被拒绝的操作报告 GitHub 的原因，提到身份验证的诊断转为 `unauthenticated`。
 
-`diff` 先经 GraphQL 读取 head 提交，再运行 `gh pr diff <number> --repo <host>/<owner>/<name> --color never`，然后再读一次 head 提交；两次读取都是请求的提交时才返回补丁，否则返回 `stale`。请求的提交必须是完整的 40 位或 64 位十六进制提交。`gh pr diff` 不接受提交参数，返回运行那一刻 head 的结果，因此用前后两次读取把它夹住。不使用显式指定提交的 REST compare 接口：与基准分支比较时，已合并的 pull request 得到空结果；与 `baseRefOid` 比较时，起点是 GitHub 在 pull request 最后一次更新时记录的基准提交，而不是当前的基准分支末端；它还会返回 pull request diff 拒绝的超过 300 个文件的 diff。`fileText` 经 `gh api` 以 raw 媒体类型读取 `repos/<owner>/<name>/contents/<path>?ref=<commit>`，只接受完整的 40 位或 64 位十六进制提交。`fileUrl` 返回 `https://<host>/<owner>/<name>/blob/<commit>/<path>`。两者的路径都逐段做百分号编码。被拒绝的读取在 HTTP 404 时为 `not-found`，诊断提到身份验证时为 `unauthenticated`，GitHub 报告 `too_large` 错误时（diff 超过其自身大小上限即会如此）为 `too-large`，其余为 `unavailable`，并带有 GitHub 的原因。输出超过 `maxOutputBytes` 的读取为 `too-large`，超过 `timeoutMs` 的为 `unavailable`。
+`diff` 在一次 GraphQL 查询中读取 `headRefOid` 与 `baseRefOid`，head 不是请求的提交时返回 `stale`；请求的提交必须是完整的 40 位或 64 位十六进制提交。否则经 `gh api --allow-escape-sequences` 以 diff 媒体类型读取 `repos/<owner>/<name>/compare/<baseRefOid>...<headSha>`，即两个提交的合并基准到 head 的补丁，两端都不跟随移动的分支。实测的所有 open 与已合并 pull request 上，该补丁与不接受提交参数的 `gh pr diff` 逐字节一致。与 pull request diff 不同，compare 接口会返回超过 300 个文件的 diff，因此这类 diff 只有在输出超过 `maxOutputBytes` 或 GitHub 自身拒绝时才为 `too-large`。`--allow-escape-sequences` 保留文件内容中的终端转义序列；否则 `gh` 2.97 及以上版本拒绝输出。`fileText` 经 `gh api` 以 raw 媒体类型读取 `repos/<owner>/<name>/contents/<path>?ref=<commit>`，只接受完整的 40 位或 64 位十六进制提交。`fileUrl` 返回 `https://<host>/<owner>/<name>/blob/<commit>/<path>`。两者的路径都逐段做百分号编码。被拒绝的读取在 HTTP 404 时为 `not-found`，诊断提到身份验证时为 `unauthenticated`，GitHub 以 HTTP 406 拒绝或报告 `too_large` 错误时（diff 或文件超过其大小上限即会如此）为 `too-large`，其余为 `unavailable`，并带有 GitHub 的原因。输出超过 `maxOutputBytes` 的读取为 `too-large`，超过 `timeoutMs` 的为 `unavailable`。
 
 提交评审时先检查 PR 当前的 head，再通过 REST API 发布单条行内评论或一次完整评审，并显式指定 `commit_id`。多行评论携带所属侧及包含端点的起止行号。评审结论为“评论”“批准”或“请求更改”。JSON 请求正文通过标准输入传递。provider 不会重试写操作；发送后的超时、异常响应或服务端错误会返回结果不明，由调用方到 GitHub 核对。检查与写入之间到来的新提交可能让已明确定位到旧提交的评审过时；GitHub 的这些接口不提供原子的 head 前置条件。
 
@@ -65,8 +65,9 @@ pull request 处于打开状态、不是草稿、GitHub 报告其合并状态为
 | [`src/index.ts`](src/index.ts) | 配置校验与提供方注册 |
 | [`src/provider.ts`](src/provider.ts) | URL 映射、按主机分组与失败分类 |
 | [`src/graphql.ts`](src/graphql.ts) | 构造查询，并校验和映射响应 |
+| [`src/compare.ts`](src/compare.ts) | 经 compare API 读取两个提交之间的补丁，供所有 diff 读取共用 |
 | [`src/gh.ts`](src/gh.ts) | 在宿主上执行 `gh`，清理环境变量并施加限制 |
-| [`src/urls.ts`](src/urls.ts) | 解析远端 URL 与 pull request URL |
+| [`src/urls.ts`](src/urls.ts) | 解析远端 URL 与 pull request URL，并校验写入请求的名称与提交 |
 
 </details>
 
@@ -97,7 +98,7 @@ pull request 处于打开状态、不是草稿、GitHub 报告其合并状态为
 - **宿主需要 GitHub CLI**——必须安装 `gh` 并为每个已配置主机登录；环境变量中的令牌不会被转发。不在 `hosts` 中的主机永远不会被读取，包括配置变更后保留的引用。状态读取为这些引用返回 `unavailable`；head 查找会在启动 `gh` 前拒绝。
 - **评审讨论上限**——每次状态读取每个 pull request 最多统计 `maxReviewThreads` 个评审讨论；超出时 `unresolvedThreads` 只是下限，由 `threadsTruncated` 标出。
 - **不发现 fork**——按 head 分支查找时，不包含 head 位于其他仓库的 pull request。
-- **速率限制**——每次轮询为每个主机消耗一次 GraphQL 查询，评审讨论每多一页（100 个）再消耗一次；完整检查读取时检查记录每多一页（100 条）再消耗一次；每次 diff 读取另加两次 head 读取。这些都计入已登录账号的速率配额。
+- **速率限制**——每次轮询为每个主机消耗一次 GraphQL 查询，评审讨论每多一页（100 个）再消耗一次；完整检查读取时检查记录每多一页（100 条）再消耗一次；每次 diff 读取消耗一次 GraphQL 查询与一次 REST 请求。这些都计入已登录账号的速率配额。
 - **不支持合并队列**——要求合并队列的基准分支会拒绝直接合并，提供方也不会把变更请求加入队列。
 
 <a id="dev-note"></a>

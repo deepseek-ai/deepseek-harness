@@ -2,7 +2,7 @@ import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import { describe, expect, it } from 'vitest'
 import { GhOutputLimitError, GhTimeoutError, GhUnavailableError } from '../src/gh.ts'
 import type { GhOutput, GhRunner } from '../src/gh.ts'
-import { HEAD_COMMIT_QUERY, THREADS_QUERY } from '../src/graphql.ts'
+import { PULL_REQUEST_COMMITS_QUERY, THREADS_QUERY } from '../src/graphql.ts'
 import { GitHubProvider } from '../src/provider.ts'
 import type { GitHubLimits } from '../src/provider.ts'
 import { checkRun, demo, pull, pullRequestNode, threadPage } from './fixtures.ts'
@@ -400,62 +400,64 @@ describe('GitHub provider actions', () => {
 describe('GitHub provider reads', () => {
   const head = 'c'.repeat(40)
   const pushed = 'd'.repeat(40)
+  const base = 'b'.repeat(40)
 
-  /** Answer head commit reads with `heads` in turn, the last one repeating, and every other command with `other`. */
-  function pinned(heads: readonly (string | GhOutput)[], other: (args: readonly string[]) => GhOutput = () => output('diff --git a/x b/x\n')) {
-    let read = 0
+  /** Answer the pull request commit read with `commits`, and every other command, the compare read among them, with `other`. */
+  function pinned(
+    commits: { readonly head: string; readonly base: string } | GhOutput = { head, base },
+    other: (args: readonly string[]) => GhOutput = () => output('diff --git a/x b/x\n'),
+  ) {
     return fakeGh((args) => {
-      if (!args.includes(`query=${HEAD_COMMIT_QUERY}`)) return other(args)
-      const answer = heads[Math.min(read++, heads.length - 1)]
-      return typeof answer === 'string' ? output({ data: { repository: { pullRequest: { headRefOid: answer } } } }) : answer!
+      if (!args.includes(`query=${PULL_REQUEST_COMMITS_QUERY}`)) return other(args)
+      return 'exitCode' in commits ? commits : output({ data: { repository: { pullRequest: { headRefOid: commits.head, baseRefOid: commits.base } } } })
     })
   }
 
-  it('reads the pull request diff through gh pr diff on its host between two reads of the requested head', async () => {
-    const gh = pinned([head])
+  it('reads the diff between the recorded base and the requested head through the compare API after one commit read', async () => {
+    const gh = pinned()
 
     await expect(provider(gh.run).diff(pull(7, enterprise), head, signal)).resolves.toBe('diff --git a/x b/x\n')
-    const headRead = ['api', 'graphql', '--hostname', 'ghe.corp.example',
-      '-f', `query=${HEAD_COMMIT_QUERY}`, '-f', 'owner=team', '-f', 'name=svc', '-F', 'number=7']
-    expect(gh.calls).toEqual([headRead, ['pr', 'diff', '7', '--repo', 'ghe.corp.example/team/svc', '--color', 'never'], headRead])
+    expect(gh.calls).toEqual([
+      ['api', 'graphql', '--hostname', 'ghe.corp.example',
+        '-f', `query=${PULL_REQUEST_COMMITS_QUERY}`, '-f', 'owner=team', '-f', 'name=svc', '-F', 'number=7'],
+      ['api', '--hostname', 'ghe.corp.example', '--allow-escape-sequences', '-H', 'Accept: application/vnd.github.diff',
+        `repos/team/svc/compare/${base}...${head}`],
+    ])
   })
 
-  it('compares the head commit without regard to case', async () => {
-    await expect(provider(pinned([head]).run).diff(pull(7), head.toUpperCase(), signal)).resolves.toBe('diff --git a/x b/x\n')
+  it('compares the head commit without regard to case and addresses the requested spelling', async () => {
+    const gh = pinned()
+
+    await expect(provider(gh.run).diff(pull(7), head.toUpperCase(), signal)).resolves.toBe('diff --git a/x b/x\n')
+    expect(gh.calls[1]?.at(-1)).toBe(`repos/octo/demo/compare/${base}...${head.toUpperCase()}`)
   })
 
-  it('reports a head that moved before the read as stale without reading the diff', async () => {
-    const gh = pinned([pushed])
+  it('reports a head that moved past the requested commit as stale without reading the diff', async () => {
+    const gh = pinned({ head: pushed, base })
 
     await expect(provider(gh.run).diff(pull(7), head, signal))
       .resolves.toEqual({ code: 'stale', message: `the pull request head moved from ${head} to ${pushed}` })
     expect(gh.calls).toHaveLength(1)
   })
 
-  it('discards a diff read while the head moved', async () => {
-    const gh = pinned([head, pushed])
-
-    await expect(provider(gh.run).diff(pull(7), head, signal))
-      .resolves.toEqual({ code: 'stale', message: `the pull request head moved from ${head} to ${pushed}` })
-    expect(gh.calls.map(call => call[0] === 'pr' ? 'diff' : 'head')).toEqual(['head', 'diff', 'head'])
-  })
-
   it.each([
-    ['before the diff', [output({ data: { repository: { pullRequest: null } }, errors: [{ type: 'NOT_FOUND', message: 'Could not resolve' }] }, 1,
-      'gh: Could not resolve to a PullRequest with the number of 7.')], 1,
+    ['a missing pull request', output({ data: { repository: { pullRequest: null } }, errors: [{ type: 'NOT_FOUND', message: 'Could not resolve' }] }, 1,
+      'gh: Could not resolve to a PullRequest with the number of 7.'),
     { code: 'not-found', message: 'gh: Could not resolve to a PullRequest with the number of 7.' }],
-    ['after the diff', [head, output({ message: 'Server Error' }, 1, 'gh: Server Error (HTTP 502)')], 3, { code: 'unavailable', message: 'Server Error' }],
-    ['without a head commit in the answer', [output({ data: { repository: {} } })], 1,
-      { code: 'unavailable', message: 'unexpected GitHub response to the head commit read' }],
-  ] as const)('reports a head read that fails %s', async (_label, heads, calls, failure) => {
-    const gh = pinned(heads)
+    ['a refusal', output({ message: 'Server Error' }, 1, 'gh: Server Error (HTTP 502)'), { code: 'unavailable', message: 'Server Error' }],
+    ['an answer without commits', output({ data: { repository: {} } }),
+      { code: 'unavailable', message: 'unexpected GitHub response to the pull request commit read' }],
+    ['a base that is not a commit object name', output({ data: { repository: { pullRequest: { headRefOid: head, baseRefOid: 'main' } } } }),
+      { code: 'unavailable', message: 'unexpected GitHub response to the pull request commit read' }],
+  ] as const)('reports a commit read that fails with %s without reading the diff', async (_label, answer, failure) => {
+    const gh = pinned(answer)
 
     await expect(provider(gh.run).diff(pull(7), head, signal)).resolves.toEqual(failure)
-    expect(gh.calls).toHaveLength(calls)
+    expect(gh.calls).toHaveLength(1)
   })
 
   it('refuses a head that is not a full commit object name before starting gh', async () => {
-    const gh = pinned([head])
+    const gh = pinned()
 
     await expect(provider(gh.run).diff(pull(7), 'HEAD', signal)).rejects.toThrow('forge-github: invalid head commit "HEAD"')
     expect(gh.calls).toEqual([])
@@ -479,16 +481,20 @@ describe('GitHub provider reads', () => {
     ['a missing pull request', '', 'GraphQL: Could not resolve to a PullRequest with the number of 7. (repository.pullRequest)',
       { code: 'not-found', message: 'GraphQL: Could not resolve to a PullRequest with the number of 7. (repository.pullRequest)' }],
     ['a missing file', { message: 'Not Found' }, 'gh: Not Found (HTTP 404)', { code: 'not-found', message: 'Not Found' }],
-    // What gh 2.100 prints for a pull request over 300 files.
-    ['a diff over GitHub\'s size limit', '', [
-      'could not find pull request diff: HTTP 406: Sorry, the diff exceeded the maximum number of files (300). Consider using \'List pull '
-      + 'requests files\' API or locally cloning the repository instead. (https://api.github.com/repos/octo/demo/pulls/7)',
-      'PullRequest.diff too_large',
-    ].join('\n'), {
+    // What gh 2.100 prints when GitHub refuses a diff over its size limit, as the pull request diff endpoint does past 300 files.
+    ['a diff over GitHub\'s size limit', {
+      message: 'Sorry, the diff exceeded the maximum number of files (300). Consider using \'List pull requests files\' API or locally '
+        + 'cloning the repository instead.',
+      errors: [{ resource: 'PullRequest', field: 'diff', code: 'too_large' }],
+      status: '406',
+    }, 'gh: Sorry, the diff exceeded the maximum number of files (300). Consider using \'List pull requests files\' API or locally '
+      + 'cloning the repository instead. (HTTP 406)', {
       code: 'too-large',
-      message: 'could not find pull request diff: HTTP 406: Sorry, the diff exceeded the maximum number of files (300). Consider using '
-        + '\'List pull requests files\' API or locally cloning the repository instead. (https://api.github.com/repos/octo/demo/pulls/7)',
+      message: 'Sorry, the diff exceeded the maximum number of files (300). Consider using \'List pull requests files\' API or locally '
+        + 'cloning the repository instead.',
     }],
+    ['a diff GitHub refuses to render without an error code', { message: 'Not Acceptable' }, 'gh: Not Acceptable (HTTP 406)',
+      { code: 'too-large', message: 'Not Acceptable' }],
     ['a file over the contents API limit', {
       message: 'This API returns blobs up to 1 MB in size. The requested blob is too large to fetch via the API.',
       errors: [{ resource: 'Blob', field: 'data', code: 'too_large' }],
@@ -500,7 +506,7 @@ describe('GitHub provider reads', () => {
       { code: 'unauthenticated', message: 'To get started with GitHub CLI, please run:  gh auth login' }],
     ['no output', '', '', { code: 'unavailable', message: 'gh exited with 1' }],
   ])('reports a read refused for %s', async (_label, body, stderr, failure) => {
-    await expect(provider(pinned([head], () => output(body, 1, stderr)).run).diff(pull(7), head, signal)).resolves.toEqual(failure)
+    await expect(provider(pinned(undefined, () => output(body, 1, stderr)).run).diff(pull(7), head, signal)).resolves.toEqual(failure)
   })
 
   it('reports a read as unavailable when gh cannot start, rethrows other failures, and refuses an invalid commit', async () => {
@@ -511,8 +517,10 @@ describe('GitHub provider reads', () => {
   })
 
   it('reports output over maxOutputBytes as too large and a run past timeoutMs as unavailable', async () => {
-    await expect(provider(() => Promise.reject(new GhOutputLimitError('gh pr output exceeds maxOutputBytes'))).diff(pull(7), head, signal))
-      .resolves.toEqual({ code: 'too-large', message: 'gh pr output exceeds maxOutputBytes' })
+    const overLimit = pinned(undefined, () => { throw new GhOutputLimitError('gh api output exceeds maxOutputBytes') })
+    await expect(provider(overLimit.run).diff(pull(7), head, signal))
+      .resolves.toEqual({ code: 'too-large', message: 'gh api output exceeds maxOutputBytes' })
+    expect(overLimit.calls).toHaveLength(2)
     await expect(provider(() => Promise.reject(new GhTimeoutError('gh api timed out after 30000ms'))).fileText(pull(7), head, 'a', signal))
       .resolves.toEqual({ code: 'unavailable', message: 'gh api timed out after 30000ms' })
   })

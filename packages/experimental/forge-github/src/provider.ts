@@ -7,12 +7,13 @@ import type {
 } from '@deepseek-ai/dsh-experimental-forge'
 import { GhOutputLimitError, GhTimeoutError, GhUnavailableError } from './gh.ts'
 import type { GhOutput, GhRunner } from './gh.ts'
+import { readComparison } from './compare.ts'
 import {
-  CHECKS_QUERY, hasGraphqlFields, HEAD_COMMIT_QUERY, HEAD_QUERY, mapCheckPageResponse, mapHeadCommitResponse, mapHeadResponse,
-  mapSnapshotResponse, mapThreadPageResponse, snapshotQuery, THREADS_QUERY,
+  CHECKS_QUERY, hasGraphqlFields, HEAD_QUERY, mapCheckPageResponse, mapHeadResponse, mapPullRequestCommitsResponse,
+  mapSnapshotResponse, mapThreadPageResponse, PULL_REQUEST_COMMITS_QUERY, snapshotQuery, THREADS_QUERY,
 } from './graphql.ts'
 import type { SnapshotPages } from './graphql.ts'
-import { checkedRepository, parsePullRequestUrl, parseRemoteUrl } from './urls.ts'
+import { checkedRepository, isCommit, parsePullRequestUrl, parseRemoteUrl } from './urls.ts'
 import { submitGitHubReview } from './review.ts'
 
 const AUTHENTICATION = /gh auth login|authentication|bad credentials|HTTP 401/i
@@ -21,13 +22,13 @@ const AUTHENTICATION = /gh auth login|authentication|bad credentials|HTTP 401/i
 const HTTP_STATUS = /\(HTTP (\d{3})\)/
 
 /**
- * GitHub's error code for an answer over its size limits, such as a diff over
- * 300 files: `gh pr diff` prints it after the field, and `gh api` returns it in the JSON error body.
+ * GitHub's error code for an answer over its size limits, such as a file over
+ * the contents API limit: `gh api` returns it in the JSON error body.
  */
 const TOO_LARGE = /\btoo_large\b/
 
-/** A full SHA-1 or SHA-256 object name. */
-const COMMIT = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i
+/** HTTP status GitHub answers when it refuses to render a diff over its limits. */
+const NOT_ACCEPTABLE = '406'
 
 /** Bounds on what one read retains or counts. */
 export interface GitHubLimits {
@@ -142,7 +143,7 @@ export class GitHubProvider implements ForgeProvider {
     const { host, owner, name } = checkedRepository(ref)
     const failure = this.hostFailure(host)
     if (failure !== undefined) return { code: 'failed', message: failure.message }
-    if (!COMMIT.test(request.headSha)) throw new Error(`forge-github: invalid head commit ${JSON.stringify(request.headSha)}`)
+    if (!isCommit(request.headSha)) throw new Error(`forge-github: invalid head commit ${JSON.stringify(request.headSha)}`)
     return await this.act([
       'api', '--hostname', host, '--method', 'PUT', `repos/${owner}/${name}/pulls/${ref.number}/merge`,
       '-f', `merge_method=${request.method}`, '-f', `sha=${request.headSha}`,
@@ -150,21 +151,28 @@ export class GitHubProvider implements ForgeProvider {
   }
 
   /**
-   * Read the pull request's diff with `gh pr diff`, which GitHub computes
-   * against the merge base at the head of the moment it answers. The head is
-   * read before and after the diff; the patch is returned only when both reads
-   * name `headSha`, and a different head returns `stale` without the patch.
+   * Read the pull request's diff at `headSha`. One GraphQL read names the
+   * current head and the base commit GitHub recorded with it; a head other
+   * than `headSha` returns `stale`. Otherwise the compare endpoint reads the
+   * patch from the merge base of that base commit and `headSha`, as the pull
+   * request's own diff does, with both ends fixed.
    */
   async diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<string | ForgeFailure> {
     const { host, owner, name } = checkedRepository(ref)
     const failure = this.hostFailure(host)
     if (failure !== undefined) return failure
-    if (!COMMIT.test(headSha)) throw new Error(`forge-github: invalid head commit ${JSON.stringify(headSha)}`)
-    const before = await this.headMismatch(ref, headSha, signal)
-    if (before !== undefined) return before
-    const patch = await this.read(['pr', 'diff', String(ref.number), '--repo', `${host}/${owner}/${name}`, '--color', 'never'], signal)
-    if (typeof patch !== 'string') return patch
-    return await this.headMismatch(ref, headSha, signal) ?? patch
+    if (!isCommit(headSha)) throw new Error(`forge-github: invalid head commit ${JSON.stringify(headSha)}`)
+    const output = await this.read([
+      'api', 'graphql', '--hostname', host,
+      '-f', `query=${PULL_REQUEST_COMMITS_QUERY}`, '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `number=${ref.number}`,
+    ], signal)
+    if (typeof output !== 'string') return output
+    const commits = mapPullRequestCommitsResponse(parseJson(output))
+    if (commits === undefined) return { code: 'unavailable', message: 'unexpected GitHub response to the pull request commit read' }
+    if (commits.head.toLowerCase() !== headSha.toLowerCase()) {
+      return { code: 'stale', message: `the pull request head moved from ${headSha} to ${commits.head}` }
+    }
+    return await readComparison(async (args, operation) => await this.read(args, operation), ref.repository, commits.base, headSha, signal)
   }
 
   /** Read one file at a commit through the contents API in its raw form. */
@@ -172,7 +180,7 @@ export class GitHubProvider implements ForgeProvider {
     const { host, owner, name } = checkedRepository(ref)
     const failure = this.hostFailure(host)
     if (failure !== undefined) return failure
-    if (!COMMIT.test(commit)) throw new Error(`forge-github: invalid commit ${JSON.stringify(commit)}`)
+    if (!isCommit(commit)) throw new Error(`forge-github: invalid commit ${JSON.stringify(commit)}`)
     return await this.read([
       'api', '--hostname', host, '-H', 'Accept: application/vnd.github.raw+json',
       `repos/${owner}/${name}/contents/${encodedPath(path)}?ref=${commit}`,
@@ -198,23 +206,6 @@ export class GitHubProvider implements ForgeProvider {
   }
 
   /**
-   * Read the head commit of a pull request.
-   * @returns undefined when it is `headSha`, `stale` when it is another commit, or why it could not be read.
-   */
-  private async headMismatch(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeFailure | undefined> {
-    const { host, owner, name } = ref.repository
-    const output = await this.read([
-      'api', 'graphql', '--hostname', host,
-      '-f', `query=${HEAD_COMMIT_QUERY}`, '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `number=${ref.number}`,
-    ], signal)
-    if (typeof output !== 'string') return output
-    const head = mapHeadCommitResponse(parseJson(output))
-    if (head === undefined) return { code: 'unavailable', message: 'unexpected GitHub response to the head commit read' }
-    if (head.toLowerCase() === headSha.toLowerCase()) return undefined
-    return { code: 'stale', message: `the pull request head moved from ${headSha} to ${head}` }
-  }
-
-  /**
    * Run one reading `gh` command, returning its output. A refusal, a `gh` that
    * cannot start, output over `maxOutputBytes`, and a run past `timeoutMs` become failures.
    */
@@ -231,7 +222,7 @@ export class GitHubProvider implements ForgeProvider {
     if (output.exitCode === 0) return output.stdout
     const { message, status } = refusal(output)
     if (AUTHENTICATION.test(output.stderr)) return { code: 'unauthenticated', message }
-    if (TOO_LARGE.test(output.stderr) || TOO_LARGE.test(output.stdout)) return { code: 'too-large', message }
+    if (status === NOT_ACCEPTABLE || TOO_LARGE.test(output.stderr) || TOO_LARGE.test(output.stdout)) return { code: 'too-large', message }
     return { code: status === '404' || /could not resolve to a pullrequest/i.test(output.stderr) ? 'not-found' : 'unavailable', message }
   }
 
