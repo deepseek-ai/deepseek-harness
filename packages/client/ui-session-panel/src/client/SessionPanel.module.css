@@ -60,13 +60,15 @@
   padding: 0 6px;
 }
 
+/* Secondary ink at medium weight: apart from the primary rows below and the tertiary counts beside it. */
 .title {
   flex: 1 1 auto;
   min-width: 0;
   margin: 0;
   overflow: hidden;
-  color: var(--dsw-alias-label-primary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxs-12);
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
