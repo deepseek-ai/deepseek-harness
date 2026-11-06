@@ -78,7 +78,6 @@
     "@deepseek-ai/dsh-hmr": "workspace:*",
     "@deepseek-ai/cordis-plugin-loader": "workspace:~",
     "@deepseek-ai/cordis-plugin-timer": "workspace:~",
-    "@deepseek-ai/dsh-typert-protocol": "workspace:*",
-    "@deepseek-ai/dsh-mcp-testkit": "workspace:*"
+    "@deepseek-ai/dsh-typert-protocol": "workspace:*"
   }
 }
