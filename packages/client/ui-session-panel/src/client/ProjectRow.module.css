@@ -1,7 +1,8 @@
 /* [name] · [parent]: the name keeps its width up to the row, and the parent
    fills the rest of the line and clips with an ellipsis. With less than 5em
    left for it, the parent wraps onto a second line, which the one-line height
-   hides, so the row never shows a separator without a parent. */
+   hides, so the row never shows a separator without a parent. The separator
+   is decorative, so assistive technology reads the name and the parent alone. */
 
 .folder {
   display: flex;
@@ -36,5 +37,5 @@
 
 .parent::before {
   padding: 0 4px;
-  content: '·';
+  content: '·' / '';
 }
