@@ -907,6 +907,11 @@ describe('the standard preset documentation skill', () => {
       const definition = await testCtx.skills.get('dsh-doc', { cwd: root, scope: standardAgent.agent })
       expect(definition?.path).toBe(await realpath(join(REPO_ROOT, 'packages/preset/agent-preset/skills/dsh-doc/SKILL.md')))
       if (definition === undefined) throw new Error('standard has no packaged dsh-doc skill')
+      const creator = await testCtx.agents.create({
+        sessionId: SessionId('standard-doc-creator'), meta: { cwd: root },
+        setup: agentCtx => testCtx.agentPresets.mount(agentCtx, 'cordis').then(() => undefined),
+      })
+      expect((await testCtx.skills.get('dsh-doc', { cwd: root, scope: creator.agent }))?.path).toBe(definition.path)
       const schemas = testCtx.tools.schemas(standardAgent.agent)
       expect(schemas).toEqual(testCtx.tools.schemas(baseline.agent))
       expect(schemas.map(tool => tool.name)).not.toContain('cordis_inspect_list')
@@ -934,9 +939,13 @@ describe('the standard preset documentation skill', () => {
           heuristicTokens: messages.reduce((total, message) => total + testCtx.tokenMeter.estimateMessage(message), 0),
         }
       }
-      console.info('Standard dsh-doc catalog context', {
-        withBadge, before: catalogSize(baselineCatalogs), after: catalogSize(catalogs),
-      })
+      const beforeCatalog = catalogSize(baselineCatalogs)
+      const afterCatalog = catalogSize(catalogs)
+      expect({
+        utf8Bytes: afterCatalog.utf8Bytes - beforeCatalog.utf8Bytes,
+        codePoints: afterCatalog.codePoints - beforeCatalog.codePoints,
+        heuristicTokens: afterCatalog.heuristicTokens - beforeCatalog.heuristicTokens,
+      }).toEqual({ utf8Bytes: 500, codePoints: 500, heuristicTokens: 125 })
       const requestTexts = requests.flatMap(request => request.messages.flatMap(message =>
         message.content.flatMap(block => block.type === 'text' ? [block.text] : [])))
       expect(requestTexts.some(text => text.includes(definition.content))).toBe(false)
@@ -953,6 +962,53 @@ describe('the standard preset documentation skill', () => {
       expect(await readFile(profileManifest, 'utf8')).toBe(before)
     } finally {
       try { await docCtx?.fiber.dispose() } finally {
+        vi.unstubAllEnvs()
+        await rm(root, { recursive: true, force: true })
+      }
+    }
+  })
+  it('prefers project dsh-doc overrides while packaged guidance wins over user skills', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-standard-doc-priority-'))
+    const home = join(root, 'home')
+    const agentsHome = join(root, 'agents-home')
+    const workspace = join(root, 'workspace')
+    const projectAgents = join(root, 'project-agents')
+    const projectDsh = join(root, 'project-dsh')
+    vi.stubEnv('DSH_HOME', home)
+    vi.stubEnv('DSH_AGENTS_HOME', agentsHome)
+    vi.stubEnv('DSH_BUNDLED_SKILL_DIR', join(root, 'bundled-skills'))
+    let priorityCtx: Context | undefined
+    try {
+      await mkdir(workspace)
+      for (const project of [projectAgents, projectDsh]) await mkdir(join(project, '.git'), { recursive: true })
+      for (const [directory, description] of [
+        [join(home, 'skills'), 'User DSH skill'],
+        [join(agentsHome, 'skills'), 'User agents skill'],
+        [join(projectAgents, '.agents/skills'), 'Project agents skill'],
+        [join(projectDsh, '.agents/skills'), 'Lower priority project skill'],
+        [join(projectDsh, '.dsh/skills'), 'Project DSH skill'],
+      ] as const) {
+        const skill = join(directory, 'dsh-doc')
+        await mkdir(skill, { recursive: true })
+        await writeFile(join(skill, 'SKILL.md'), `---\nname: dsh-doc\ndescription: ${description}\n---\n\n${description}\n`)
+      }
+      priorityCtx = await bootWeb(root)
+      const testCtx = priorityCtx
+      const handle = await testCtx.agents.create({
+        sessionId: SessionId('standard-doc-priority'), meta: { cwd: workspace },
+        setup: agentCtx => testCtx.agentPresets.mount(agentCtx, 'standard').then(() => undefined),
+      })
+      for (const [cwd, path] of [
+        [workspace, join(REPO_ROOT, 'packages/preset/agent-preset/skills/dsh-doc/SKILL.md')],
+        [projectAgents, join(projectAgents, '.agents/skills/dsh-doc/SKILL.md')],
+        [projectDsh, join(projectDsh, '.dsh/skills/dsh-doc/SKILL.md')],
+      ] as const) {
+        const skills = await testCtx.skills.list({ cwd, scope: handle.agent })
+        expect(skills.filter(skill => skill.name === 'dsh-doc')).toHaveLength(1)
+        expect((await testCtx.skills.get('dsh-doc', { cwd, scope: handle.agent }))?.path).toBe(await realpath(path))
+      }
+    } finally {
+      try { await priorityCtx?.fiber.dispose() } finally {
         vi.unstubAllEnvs()
         await rm(root, { recursive: true, force: true })
       }

@@ -5,5 +5,3 @@ composition: web-default
 recording: authored
 header:
   class: web-default
-  systemPromptSource: fresh-round-trip
-  toolSchemasSource: fresh-round-trip
