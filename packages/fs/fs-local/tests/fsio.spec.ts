@@ -981,6 +981,15 @@ describe('readForEdit + restoreLineEndings', () => {
     await expect(readForEdit(join(dir, 'bad'), join(dir, 'bad'))).rejects.toMatchObject({ code: 'FS_NOT_TEXT' })
   })
 
+  it('classifies a missing file and a directory read for editing', async () => {
+    await expect(readForEdit(join(dir, 'missing'), '~/missing')).rejects.toMatchObject({
+      name: 'FsError', code: 'FS_NOT_FOUND', message: 'cannot edit "~/missing": not found',
+    })
+    await expect(readForEdit(dir, '~/dir')).rejects.toMatchObject({
+      name: 'FsError', code: 'FS_NOT_REGULAR_FILE', message: 'cannot edit "~/dir": not a regular file',
+    })
+  })
+
   it('passes a live (non-aborted) signal through the read', async () => {
     const file = join(dir, 'a.txt')
     await writeFile(file, 'one\ntwo')
