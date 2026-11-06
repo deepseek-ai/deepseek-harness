@@ -305,15 +305,15 @@ describe('PTC mode typed values: keyless real-process contracts', () => {
     } as Agent
 
     const value = completion(await runCode(ctx, `
-      const listed = await tools.cordis_inspect_list({});
+      const listed = await tools.cordis_inspect({});
       const provider = listed.providers.find(item => item.id === 'Tool');
-      const inspected = await tools.cordis_inspect_query({
+      const inspected = await tools.cordis_inspect({ query: {
         platform: provider.platform, provider: provider.id, method: provider.methods[0].name,
-      });
+      } });
       inspect(JSON.stringify({ provider: provider.id, names: inspected.data.tools.map(tool => tool.name) }));
     `, testToolSignal, agent))
 
-    expect(value).toEqual({ provider: 'Tool', names: ['cordis_inspect_list', 'cordis_inspect_query'] })
+    expect(value).toEqual({ provider: 'Tool', names: ['cordis_inspect'] })
   })
 })
 

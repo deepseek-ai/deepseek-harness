@@ -351,7 +351,7 @@ describe('the shipped Web composition', () => {
       // excluded for the reason the TUI composition e2e excludes them — they
       // depend on ripgrep being present on the machine.
       expect(toolNames(ctx, handle.agent).filter(name => name !== 'glob' && name !== 'grep')).toEqual([
-        'ask_user_question', 'bash', 'cordis_inspect_list', 'cordis_inspect_query', 'create_goal', 'edit', 'exit_plan_mode',
+        'ask_user_question', 'bash', 'cordis_inspect', 'create_goal', 'edit', 'exit_plan_mode',
         'get_goal', 'job_kill', 'job_list', 'job_output', 'list_agents', 'list_subagent_models', 'office_convert', 'office_recalculate', 'office_render', 'plugin_manager', 'present', 'read', 'read_image',
         'schedule_create', 'schedule_edit', 'schedule_list', 'schedule_view',
         'send_message', 'skill',
@@ -359,17 +359,14 @@ describe('the shipped Web composition', () => {
         'workflow', 'working_directory', 'write',
       ])
       expect(ctx.commands.find(handle.agent, 'goal')).toBeDefined()
-      for (const [name, args] of [
-        ['cordis_inspect_list', {}],
-        ['cordis_inspect_query', { platform: 'host', provider: 'Config', method: 'listConfigs', input: { name: '@deepseek-ai/dsh-agent-loop' } }],
-      ] as const) {
+      for (const query of [undefined, { platform: 'host', provider: 'Config', method: 'listConfigs', input: { name: '@deepseek-ai/dsh-agent-loop' } }] as const) {
         const inspected = await executeToolFixture(ctx, {
-          agent: handle.agent, callId: ToolCallId(`standard-${name}`), name,
-          arguments: args, signal: new AbortController().signal,
+          agent: handle.agent, callId: brandString<ToolCallId>(`standard-inspect-${query === undefined ? 'list' : 'query'}`), name: 'cordis_inspect',
+          arguments: query === undefined ? {} : { query }, signal: new AbortController().signal,
         })
         expect(inspected.isError).toBe(false)
         const text = inspected.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('')
-        expect(text).toContain(name === 'cordis_inspect_list' ? '"providers"' : '"patchId": "agent-loop"')
+        expect(text).toContain(query === undefined ? '"providers"' : '"patchId": "agent-loop"')
       }
     } finally {
       await handle.dispose()
@@ -615,7 +612,7 @@ describe('the shipped Web composition', () => {
     try {
       const tools = toolNames(ctx, handle.agent)
       expect(tools).toEqual(expect.arrayContaining([
-        'cordis_inspect_list', 'cordis_inspect_query', 'plugin_manager',
+        'cordis_inspect', 'plugin_manager',
       ]))
       for (const removed of ['cordis_define', 'cordis_run', 'cordis_stop', 'cordis_undefine', 'cordis_inspect_self']) {
         expect(tools).not.toContain(removed)
@@ -997,8 +994,7 @@ describe('the standard preset documentation skill', () => {
       expect((await testCtx.skills.get('dsh-doc', { cwd: root, scope: creator.agent }))?.path).toBe(definition.path)
       const schemas = testCtx.tools.schemas(standardAgent.agent)
       expect(schemas).toEqual(testCtx.tools.schemas(baseline.agent))
-      expect(schemas.map(tool => tool.name)).toContain('cordis_inspect_list')
-      expect(schemas.map(tool => tool.name)).toContain('cordis_inspect_query')
+      expect(schemas.map(tool => tool.name)).toContain('cordis_inspect')
       for (const handle of [baseline, standardAgent]) {
         handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Reply ready.' }], source: { kind: 'user' } }))
         await handle.agent.whenIdle()
@@ -1128,13 +1124,13 @@ describe('a user preset declared from the shipped cordis rows', () => {
       try {
         for (const handle of [shipped, copied]) {
           expect(toolNames(copyCtx, handle.agent)).toEqual(expect.arrayContaining([
-            'cordis_inspect_list', 'cordis_inspect_query', 'plugin_manager',
+            'cordis_inspect', 'plugin_manager',
           ]))
         }
         const signal = new AbortController().signal
         const listed = await executeToolFixture(copyCtx, {
           callId: brandString<ToolCallId>('copied-preset-inspect-list'),
-          name: 'cordis_inspect_list',
+          name: 'cordis_inspect',
           arguments: {},
           signal,
           agent: copied.agent,
@@ -1151,15 +1147,15 @@ describe('a user preset declared from the shipped cordis rows', () => {
         onTestFinished(() => { spills.mockRestore() })
         const queried = await executeToolFixture(copyCtx, {
           callId: brandString<ToolCallId>('copied-preset-inspect-tools'),
-          name: 'cordis_inspect_query',
-          arguments: { platform: 'host', provider: 'Tool', method: 'listTools' },
+          name: 'cordis_inspect',
+          arguments: { query: { platform: 'host', provider: 'Tool', method: 'listTools' } },
           signal,
           agent: copied.agent,
         })
         expect(queried.isError).toBe(false)
         // The tool catalog may exceed the inline budget; assert its complete stored text.
         const queriedText = spills.mock.calls.at(-1)?.[0].content ?? resultText(queried)
-        for (const toolName of ['bash', 'cordis_inspect_list', 'cordis_inspect_query', 'plugin_manager']) {
+        for (const toolName of ['bash', 'cordis_inspect', 'plugin_manager']) {
           expect(queriedText).toContain(`"name": "${toolName}"`)
         }
 
@@ -1170,8 +1166,8 @@ describe('a user preset declared from the shipped cordis rows', () => {
         const listConfigs = async (input: Record<string, string | number>, callId: string): Promise<ConfigPage['data']> => {
           const page = await executeToolFixture(copyCtx, {
             callId: brandString<ToolCallId>(callId),
-            name: 'cordis_inspect_query',
-            arguments: { platform: 'host', provider: 'Config', method: 'listConfigs', input },
+            name: 'cordis_inspect',
+            arguments: { query: { platform: 'host', provider: 'Config', method: 'listConfigs', input } },
             signal,
             agent: copied.agent,
           })
@@ -1189,8 +1185,8 @@ describe('a user preset declared from the shipped cordis rows', () => {
         expect(firstPage.nextOffset).toBe(5)
         const projected = await executeToolFixture(copyCtx, {
           callId: brandString<ToolCallId>('copied-preset-inspect-config'),
-          name: 'cordis_inspect_query',
-          arguments: { platform: 'host', provider: 'Config', method: 'listConfigs', input: { entry: toolsRow!.id } },
+          name: 'cordis_inspect',
+          arguments: { query: { platform: 'host', provider: 'Config', method: 'listConfigs', input: { entry: toolsRow!.id } } },
           signal,
           agent: copied.agent,
         })
