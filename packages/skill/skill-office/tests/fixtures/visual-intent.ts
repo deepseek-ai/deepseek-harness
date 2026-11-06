@@ -7,7 +7,7 @@ import { execa } from 'execa'
 import { expect, it } from 'vitest'
 import { runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
 import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
-import { officeCalls, officeModelPatches, officeToolPatches } from './real-office.ts'
+import { formatFileReads, officeCalls, officeModelPatches, officeToolPatches } from './real-office.ts'
 
 const repo = fileURLToPath(new URL('../../../../../', import.meta.url))
 const assetRoot = fileURLToPath(new URL('../../assets/', import.meta.url))
@@ -126,7 +126,8 @@ export function registerVisualIntentCases(selected: readonly DocumentFormat[]): 
           if (text === undefined) throw new Error(`Agent did not finish with an answer: ${diagnostic}`)
           const checked = await execa(python!, ['-c', verify], { cwd, reject: false })
           expect(checked.exitCode, `${checked.stderr}\n${diagnostic}`).toBe(0)
-          expect(loaded, diagnostic).toContain(`office-${format}`)
+          expect(loaded, diagnostic).toContain('office')
+          expect(formatFileReads(events), diagnostic).toContain(format)
           if (intent === 'excluded' || intent === 'implicit' && !rendersUnrequested) {
             expect(renderCalls, diagnostic).toEqual([])
           } else {

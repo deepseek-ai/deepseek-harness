@@ -1,6 +1,6 @@
 /** Bundled Office workflows and filesystem resources for document authoring and operations. */
 
-import { readFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { isAbsolute, join, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
@@ -8,8 +8,9 @@ import z from '@deepseek-ai/schemastery'
 import { BUNDLED_SKILL_RANK, type SkillCandidate } from '@deepseek-ai/dsh-skill'
 import { parse as parseYaml } from 'yaml'
 
-const SKILL_NAMES = ['office', 'office-docx', 'office-pptx', 'office-xlsx'] as const
-const PYTHON_SKILLS: readonly string[] = ['office-docx', 'office-pptx', 'office-xlsx']
+const SKILL_NAMES = ['office'] as const
+/** Format files that the `office` instructions direct the model to read from the skill directory. */
+const FORMAT_FILES = ['docx.md', 'pptx.md', 'xlsx.md'] as const
 
 /**
  * Python source for Office scripts: `'workspace-dependencies'` directs the model to the bundled interpreter and libraries
@@ -24,15 +25,15 @@ const PYTHON_ENVIRONMENT_SECTIONS: Readonly<Record<PythonEnvironment, string>> =
 
 /** Office skill resources and Python environment. */
 export interface Config {
-  /** Absolute assets directory containing skill folders; defaults to packaged assets. */
+  /** Absolute assets directory containing the `office` skill folder; defaults to packaged assets. */
   assetRoot?: string
-  /** Python environment named in the Python authoring and verification skills. @default 'workspace-dependencies' */
+  /** Python environment named at the end of the `office` skill. @default 'workspace-dependencies' */
   pythonEnvironment?: PythonEnvironment
 }
 
 /** Configuration after schema defaults apply. */
 export interface ResolvedConfig extends Config {
-  /** Python environment named in the Python authoring and verification skills. */
+  /** Python environment named at the end of the `office` skill. */
   pythonEnvironment: PythonEnvironment
 }
 
@@ -69,10 +70,11 @@ function persistentReadFailure(error: unknown): boolean {
 }
 
 /**
- * Register Office skills whose `SKILL.md` files the Host reads from `assetRoot`.
- * Skill files are read during catalog discovery and loading, and each distinct failure is reported once. A missing
- * or invalid skill is omitted from a complete catalog, and its failed load returns `undefined` and invalidates the
- * catalog. Any other read error leaves discovery incomplete, so the registry retries it, and rejects a load.
+ * Register the `office` skill whose `SKILL.md` the Host reads from `assetRoot`; the model reads the `docx.md`,
+ * `pptx.md`, and `xlsx.md` format files beside it. Catalog discovery and loading read the skill file and require each
+ * format file to be a regular file, and each distinct failure is reported once. A missing or invalid skill or format
+ * file omits the skill from a complete catalog, and its failed load returns `undefined` and invalidates the catalog.
+ * Any other read error leaves discovery incomplete, so the registry retries it, and rejects a load.
  * @param ctx - Context carrying the skill registry.
  * @param config - Resolved configuration; `assetRoot` falls back to the packaged assets.
  * @throws When `assetRoot` is not absolute.
@@ -96,6 +98,16 @@ export function apply(ctx: Context, config: ResolvedConfig): void {
     } catch (error) {
       // Invalid metadata, including YAML errors that carry their own codes, persists until the file changes.
       return failed(skillName, error, true)
+    }
+    for (const file of FORMAT_FILES) {
+      const formatPath = join(assetRoot, skillName, file)
+      let isFile: boolean
+      try {
+        isFile = (await stat(formatPath)).isFile()
+      } catch (error) {
+        return failed(skillName, error, persistentReadFailure(error))
+      }
+      if (!isFile) return failed(skillName, new Error(`skill-office: ${formatPath} is not a regular file`), true)
     }
     reportedFailures.delete(skillName)
     return { kind: 'loaded', ...skill }
@@ -133,8 +145,7 @@ export function apply(ctx: Context, config: ResolvedConfig): void {
         control.invalidate()
         return undefined
       }
-      const content = read.content
-        + (PYTHON_SKILLS.includes(candidate.name) ? `\n\n## Python environment\n\n${PYTHON_ENVIRONMENT_SECTIONS[config.pythonEnvironment]}` : '')
+      const content = `${read.content}\n\n## Python environment\n\n${PYTHON_ENVIRONMENT_SECTIONS[config.pythonEnvironment]}`
       return { ...summary, content }
     },
   }))

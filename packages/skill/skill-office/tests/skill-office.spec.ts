@@ -1,4 +1,4 @@
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -8,19 +8,22 @@ import Include from '@deepseek-ai/cordis-plugin-include'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import * as SkillOffice from '@deepseek-ai/dsh-skill-office'
 import { describe, expect, it, vi } from 'vitest'
+import { READ_MAX_BYTES, READ_MAX_LINE_LENGTH } from '../../../fs/tool-fs/src/read-render.ts'
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>()
-  return { ...actual, readFile: vi.fn(actual.readFile) }
+  return { ...actual, readFile: vi.fn(actual.readFile), stat: vi.fn(actual.stat) }
 })
 
 const assets = fileURLToPath(new URL('../assets/', import.meta.url))
 const userPython = 'Follow an explicit user or applicable AGENTS.md requirement for a Python environment. Otherwise use the project\'s or user\'s existing Python, such as `python3` or `python` on PATH. Before the first script, check that this Python can import the libraries the workflow needs. If Python or a library is missing, tell the user which packages to install; do not install packages into a global environment without the user\'s agreement.'
 const workspacePython = 'Follow an explicit user or applicable AGENTS.md requirement for a Python environment. Otherwise call `load_workspace_dependencies` and run scripts with its Python executable and bundled libraries. Do not install packages or search for a system Python for the default workflow. If the tool is unavailable, use an already configured environment and report a missing dependency only when it prevents the requested operation.'
-const names = ['office', 'office-docx', 'office-pptx', 'office-xlsx']
+const names = ['office']
+const references = ['docx.md', 'pptx.md', 'xlsx.md']
+const readReference = (file: string) => readFile(join(assets, 'office', file), 'utf8')
 
 describe('bundled Office skills', () => {
-  it('keeps routing and authoring within the progressive context budgets', async () => {
+  it('keeps routing and one format file within the progressive context budgets', async () => {
     const ctx = new Context()
     try {
       await ctx.plugin(SkillRegistry)
@@ -28,18 +31,34 @@ describe('bundled Office skills', () => {
       const catalog = await ctx.skills.list()
       expect(catalog.map(skill => skill.name)).toEqual(names)
       const route = (await ctx.skills.get('office'))!
-      expect(route.description).toBe('Create or edit Office files; inspect Office files and PDFs. Load before rendering, conversion, or recalculation to enable office_render, office_convert, and office_recalculate next step.')
+      expect(route.description).toBe('Create, read, edit, and validate Word, PowerPoint, and Excel files; render Office files and PDFs; convert or recalculate. Load first to enable office_render, office_convert, and office_recalculate.')
       expect(Math.ceil(route.description.length / 4)).toBeLessThanOrEqual(50)
-      expect(Math.ceil(route.content.length / 4)).toBeLessThanOrEqual(200)
-      for (const [name, previousTokens] of [['office-docx', 1688], ['office-pptx', 1879], ['office-xlsx', 2330]] as const) {
-        const skill = (await ctx.skills.get(name))!
-        expect(Math.ceil(skill.content.length / 4)).toBeLessThanOrEqual(Math.floor(previousTokens * 0.7))
-        expect(skill.content).not.toMatch(/read_image/)
-        expect(skill.content).not.toContain('dsoffice')
-        expect(skill.content).toContain('`office_render`')
-        expect(skill.content).toContain('"Content and structure checks passed; visual inspection was not completed." or "内容与结构检查通过；视觉检查未完成。"')
+      const routing = route.content.slice(0, route.content.indexOf('\n\n## Python environment\n\n'))
+      expect(Math.ceil(routing.length / 4)).toBeLessThanOrEqual(230)
+      for (const [file, previousTokens] of [['docx.md', 1688], ['pptx.md', 1879], ['xlsx.md', 2330]] as const) {
+        const reference = await readReference(file)
+        expect(Math.ceil((route.content.length + reference.length) / 4)).toBeLessThanOrEqual(230 + Math.floor(previousTokens * 0.7))
+        expect(reference).not.toMatch(/read_image/)
+        expect(reference).not.toContain('dsoffice')
+        expect(reference).toContain('`office_render`')
+        expect(reference).toContain('"Content and structure checks passed; visual inspection was not completed." or "内容与结构检查通过；视觉检查未完成。"')
       }
     } finally { await ctx.fiber.dispose() }
+  })
+
+  it('links each format file once from SKILL.md and keeps every line within one read', async () => {
+    const skill = await readReference('SKILL.md')
+    expect([...skill.matchAll(/`([a-z]+\.md)`/gu)].map(match => match[1])).toEqual(references)
+    expect(await readdir(assets)).toEqual(names)
+    expect((await readdir(join(assets, 'office'))).filter(file => file !== 'SKILL.md').sort()).toEqual(references)
+    for (const file of references) {
+      const reference = await readReference(file)
+      expect(Buffer.byteLength(reference)).toBeLessThan(READ_MAX_BYTES)
+      for (const line of reference.split(/\r?\n/u)) expect(line.length).toBeLessThan(READ_MAX_LINE_LENGTH)
+      expect(reference).not.toMatch(/`[a-z]+\.md`|\]\([^)]*\.md\)/u)
+      expect(reference).toContain('Run Python as described in the Python environment section of the `office` skill.')
+      expect(reference).not.toMatch(/load `office`|section below/u)
+    }
   })
 
   it('loads each packaged body and removes all candidates on disposal', async () => {
@@ -56,8 +75,7 @@ describe('bundled Office skills', () => {
         expect(loaded?.resourceBase).toEqual({ kind: 'directory', path: join(assets, skill.name).split(sep).join('/') })
         const raw = await readFile(join(assets, skill.name, 'SKILL.md'), 'utf8')
         const body = raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/u, '').trim()
-        const expected = skill.name === 'office' ? body : `${body}\n\n## Python environment\n\n${workspacePython}`
-        expect(loaded?.content).toBe(expected)
+        expect(loaded?.content).toBe(`${body}\n\n## Python environment\n\n${workspacePython}`)
       }
       await fiber.dispose()
       expect(await ctx.skills.list()).toEqual([])
@@ -102,9 +120,9 @@ describe('bundled Office skills', () => {
       await ctx.loader.create({ name: 'cordis:include', config: { path: pathToFileURL(configPath).href } })
       await ctx.loader.await()
       expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(names)
-      const loaded = await ctx.skills.get('office-xlsx')
-      expect(loaded?.resourceBase).toEqual({ kind: 'directory', path: join(external, 'office-xlsx').split(sep).join('/') })
-      const raw = await readFile(join(external, 'office-xlsx', 'SKILL.md'), 'utf8')
+      const loaded = await ctx.skills.get('office')
+      expect(loaded?.resourceBase).toEqual({ kind: 'directory', path: join(external, 'office').split(sep).join('/') })
+      const raw = await readFile(join(external, 'office', 'SKILL.md'), 'utf8')
       const body = raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/u, '').trim()
       expect(loaded?.content).toBe(`${body}\n\n## Python environment\n\n${workspacePython}`)
     } finally {
@@ -117,17 +135,14 @@ describe('bundled Office skills', () => {
     ['defaults to', undefined, workspacePython],
     ['accepts', 'user', userPython],
     ['accepts', 'workspace-dependencies', workspacePython],
-  ] as const)('%s the %s Python environment for Python workflows only', async (_verb, pythonEnvironment, section) => {
+  ] as const)('%s the %s Python environment at the end of the office skill', async (_verb, pythonEnvironment, section) => {
     const ctx = new Context()
     try {
       await ctx.plugin(SkillRegistry)
       await ctx.plugin(SkillOffice, pythonEnvironment === undefined ? {} : { pythonEnvironment })
-      for (const name of ['office-docx', 'office-pptx', 'office-xlsx']) {
-        const content = (await ctx.skills.get(name))!.content
-        expect(content).toContain(`\n\n## Python environment\n\n${section}`)
-        expect(content).not.toContain(section === userPython ? workspacePython : userPython)
-      }
-      expect((await ctx.skills.get('office'))!.content).not.toContain('## Python environment')
+      const content = (await ctx.skills.get('office'))!.content
+      expect(content.endsWith(`\n\n## Python environment\n\n${section}`)).toBe(true)
+      expect(content).not.toContain(section === userPython ? workspacePython : userPython)
     } finally { await ctx.fiber.dispose() }
   })
 
@@ -145,10 +160,10 @@ describe('bundled Office skills', () => {
     try {
       await cp(assets, root, { recursive: true })
       const body = '# Office instructions\n\ndescription: instruction text'
-      await writeFile(join(root, 'office-docx', 'SKILL.md'), `---\n${header}\n---\n\n${body}\n`.replaceAll('\n', newline))
+      await writeFile(join(root, 'office', 'SKILL.md'), `---\n${header}\n---\n\n${body}\n`.replaceAll('\n', newline))
       await ctx.plugin(SkillRegistry)
       await ctx.plugin(SkillOffice, { assetRoot: root })
-      const skill = await ctx.skills.get('office-docx')
+      const skill = await ctx.skills.get('office')
       expect(skill?.description).toBe(description)
       expect(skill?.content).toBe(`${body.replaceAll('\n', newline)}\n\n## Python environment\n\n${workspacePython}`)
     } finally {
@@ -176,42 +191,40 @@ describe('bundled Office skills', () => {
       ctx.logger.exporter({ levels: { default: 2 }, export: ({ type, args }) => { if (type === 'warn') warnings.push(String(args[0])) } })
       await ctx.plugin(SkillRegistry)
       await cp(assets, root, { recursive: true })
-      const docx = join(root, 'office-docx', 'SKILL.md')
-      const original = await readFile(docx, 'utf8')
-      const remaining = names.filter(name => name !== 'office-docx')
+      const skillFile = join(root, 'office', 'SKILL.md')
+      const original = await readFile(skillFile, 'utf8')
       const catalog = async () => {
         const snapshot = await ctx.skills.snapshot()
         return { complete: snapshot.complete, names: snapshot.skills.map(skill => skill.name) }
       }
-      await rm(docx)
+      await rm(skillFile)
       let fiber = await ctx.plugin(SkillOffice, { assetRoot: root })
-      expect(await catalog()).toEqual({ complete: true, names: remaining })
-      expect((await ctx.skills.get('office-xlsx'))?.content).toContain('openpyxl')
-      expect(warnings).toEqual([expect.stringMatching(/^skill-office: skill "office-docx" is unavailable: Error: ENOENT.*SKILL\.md/u)])
+      expect(await catalog()).toEqual({ complete: true, names: [] })
+      expect(warnings).toEqual([expect.stringMatching(/^skill-office: skill "office" is unavailable: Error: ENOENT.*SKILL\.md/u)])
       await fiber.dispose()
       const invalid: [content: string, failure: string][] = [
         ['# Missing frontmatter\ndescription: body text\n', 'has no YAML frontmatter'],
-        ...['', 'null', 'scalar', 'name: office-docx', 'description: 3', 'description: ""']
+        ...['', 'null', 'scalar', 'name: office', 'description: 3', 'description: ""']
           .map((header): [string, string] => [`---\n${header}\n---\n# Instructions\n`, 'has no description']),
         // YAML parse errors carry their own codes; they persist like other invalid metadata.
         ['---\ndescription: [unclosed\n---\n# Instructions\n', 'YAMLParseError'],
       ]
       for (const [content, failure] of invalid) {
-        await writeFile(docx, content)
+        await writeFile(skillFile, content)
         fiber = await ctx.plugin(SkillOffice, { assetRoot: root })
-        expect(await catalog()).toEqual({ complete: true, names: remaining })
+        expect(await catalog()).toEqual({ complete: true, names: [] })
         expect(warnings.at(-1)).toContain(failure)
         await fiber.dispose()
       }
-      await writeFile(docx, original)
+      await writeFile(skillFile, original)
       const registerProvider = vi.spyOn(ctx.skills, 'registerProvider')
       await ctx.plugin(SkillOffice, { assetRoot: root })
       expect(await catalog()).toEqual({ complete: true, names })
       const reported = warnings.length
-      await rm(docx)
-      expect(await ctx.skills.get('office-docx')).toBeUndefined()
+      await rm(skillFile)
+      expect(await ctx.skills.get('office')).toBeUndefined()
       expect(warnings).toHaveLength(reported + 1)
-      expect(await catalog()).toEqual({ complete: true, names: remaining })
+      expect(await catalog()).toEqual({ complete: true, names: [] })
       expect(warnings).toHaveLength(reported + 1)
       const provider = registerProvider.mock.calls[0]![0]({ signal: new AbortController().signal, invalidate: () => {} })
       await expect(provider.list({ signal: AbortSignal.abort() })).rejects.toMatchObject({ name: 'AbortError' })
@@ -230,11 +243,11 @@ describe('bundled Office skills', () => {
       await cp(assets, root, { recursive: true })
       await ctx.plugin(SkillOffice, { assetRoot: root })
       expect((await ctx.skills.snapshot()).complete).toBe(true)
-      await writeFile(join(root, 'office-docx', 'SKILL.md'), '---\ndescription: [unclosed\n---\n# Instructions\n')
-      expect(await ctx.skills.get('office-docx')).toBeUndefined()
+      await writeFile(join(root, 'office', 'SKILL.md'), '---\ndescription: [unclosed\n---\n# Instructions\n')
+      expect(await ctx.skills.get('office')).toBeUndefined()
       const snapshot = await ctx.skills.snapshot()
       expect({ complete: snapshot.complete, names: snapshot.skills.map(skill => skill.name) })
-        .toEqual({ complete: true, names: names.filter(name => name !== 'office-docx') })
+        .toEqual({ complete: true, names: [] })
     } finally {
       await ctx.fiber.dispose()
       await rm(root, { recursive: true, force: true })
@@ -250,28 +263,102 @@ describe('bundled Office skills', () => {
     try {
       await ctx.plugin(SkillRegistry)
       await cp(assets, root, { recursive: true })
-      const docx = join(root, 'office-docx', 'SKILL.md')
+      const skillFile = join(root, 'office', 'SKILL.md')
       const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
       const read = vi.mocked(readFile)
       let failRead = true
       try {
-        read.mockImplementation((path, options) => path === docx && failRead
+        read.mockImplementation((path, options) => path === skillFile && failRead
           // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- Exercise primitive read failures.
           ? Promise.reject(error) : actual.readFile(path, options))
         await ctx.plugin(SkillOffice, { assetRoot: root })
         const incomplete = await ctx.skills.snapshot()
         expect({ complete: incomplete.complete, names: incomplete.skills.map(skill => skill.name) })
-          .toEqual({ complete: false, names: names.filter(name => name !== 'office-docx') })
+          .toEqual({ complete: false, names: [] })
         failRead = false
         const recovered = await ctx.skills.snapshot()
         expect({ complete: recovered.complete, names: recovered.skills.map(skill => skill.name) })
           .toEqual({ complete: true, names })
         failRead = true
-        await expect(ctx.skills.get('office-docx')).rejects.toBe(error)
+        await expect(ctx.skills.get('office')).rejects.toBe(error)
       } finally {
         read.mockReset()
       }
-      expect((await ctx.skills.get('office-docx'))?.content).toContain('python-docx')
+      expect((await ctx.skills.get('office'))?.content).toContain('# Office tasks')
+    } finally {
+      await ctx.fiber.dispose()
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it.each([
+    ['missing', async (path: string) => { await rm(path) }, 'ENOENT'],
+    ['a directory', async (path: string) => { await rm(path); await mkdir(path) }, 'is not a regular file'],
+  ])('omits the skill and reports the path when a format file is %s', async (_label, damage, failure) => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-office-format-'))
+    const ctx = new Context()
+    const warnings: string[] = []
+    try {
+      ctx.logger.exporter({ levels: { default: 2 }, export: ({ type, args }) => { if (type === 'warn') warnings.push(String(args[0])) } })
+      await ctx.plugin(SkillRegistry)
+      await cp(assets, root, { recursive: true })
+      const docx = join(root, 'office', 'docx.md')
+      await damage(docx)
+      await ctx.plugin(SkillOffice, { assetRoot: root })
+      const snapshot = await ctx.skills.snapshot()
+      expect({ complete: snapshot.complete, names: snapshot.skills.map(skill => skill.name) }).toEqual({ complete: true, names: [] })
+      expect(warnings).toHaveLength(1)
+      expect(warnings[0]).toMatch(/^skill-office: skill "office" is unavailable: /u)
+      expect(warnings[0]).toContain(docx)
+      expect(warnings[0]).toContain(failure)
+    } finally {
+      await ctx.fiber.dispose()
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('omits the skill when a format file disappears after discovery', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-office-format-removed-'))
+    const ctx = new Context()
+    try {
+      await ctx.plugin(SkillRegistry)
+      await cp(assets, root, { recursive: true })
+      await ctx.plugin(SkillOffice, { assetRoot: root })
+      expect((await ctx.skills.snapshot()).skills.map(skill => skill.name)).toEqual(names)
+      await rm(join(root, 'office', 'xlsx.md'))
+      expect(await ctx.skills.get('office')).toBeUndefined()
+      const snapshot = await ctx.skills.snapshot()
+      expect({ complete: snapshot.complete, names: snapshot.skills.map(skill => skill.name) }).toEqual({ complete: true, names: [] })
+    } finally {
+      await ctx.fiber.dispose()
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('retries discovery when a format file check fails without a missing path', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-office-format-retry-'))
+    const ctx = new Context()
+    const error = new Error('temporary stat failure')
+    try {
+      await ctx.plugin(SkillRegistry)
+      await cp(assets, root, { recursive: true })
+      const pptx = join(root, 'office', 'pptx.md')
+      const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+      const check = vi.mocked(stat)
+      let fail = true
+      try {
+        check.mockImplementation((path, options) => path === pptx && fail ? Promise.reject(error) : actual.stat(path, options))
+        await ctx.plugin(SkillOffice, { assetRoot: root })
+        const incomplete = await ctx.skills.snapshot()
+        expect({ complete: incomplete.complete, names: incomplete.skills.map(skill => skill.name) }).toEqual({ complete: false, names: [] })
+        fail = false
+        const recovered = await ctx.skills.snapshot()
+        expect({ complete: recovered.complete, names: recovered.skills.map(skill => skill.name) }).toEqual({ complete: true, names })
+        fail = true
+        await expect(ctx.skills.get('office')).rejects.toBe(error)
+      } finally {
+        check.mockReset()
+      }
     } finally {
       await ctx.fiber.dispose()
       await rm(root, { recursive: true, force: true })
@@ -284,23 +371,23 @@ describe('bundled Office skills', () => {
     try {
       await ctx.plugin(SkillRegistry)
       await cp(assets, root, { recursive: true })
-      const docx = join(root, 'office-docx', 'SKILL.md')
-      const original = await readFile(docx, 'utf8')
+      const skillFile = join(root, 'office', 'SKILL.md')
+      const original = await readFile(skillFile, 'utf8')
       const catalog = async () => {
         const snapshot = await ctx.skills.snapshot()
         return { complete: snapshot.complete, names: snapshot.skills.map(skill => skill.name) }
       }
-      await rm(docx)
+      await rm(skillFile)
       // Reading a directory fails with EISDIR, standing in for a lock or permission error.
-      await mkdir(docx)
+      await mkdir(skillFile)
       await ctx.plugin(SkillOffice, { assetRoot: root })
-      expect(await catalog()).toEqual({ complete: false, names: names.filter(name => name !== 'office-docx') })
-      await rm(docx, { recursive: true })
-      await writeFile(docx, original)
+      expect(await catalog()).toEqual({ complete: false, names: [] })
+      await rm(skillFile, { recursive: true })
+      await writeFile(skillFile, original)
       expect(await catalog()).toEqual({ complete: true, names })
-      await rm(docx)
-      await mkdir(docx)
-      await expect(ctx.skills.get('office-docx')).rejects.toMatchObject({ code: 'EISDIR' })
+      await rm(skillFile)
+      await mkdir(skillFile)
+      await expect(ctx.skills.get('office')).rejects.toMatchObject({ code: 'EISDIR' })
     } finally {
       await ctx.fiber.dispose()
       await rm(root, { recursive: true, force: true })
@@ -313,18 +400,17 @@ it('directs Office operations to dedicated tools without executable paths', asyn
   try {
     await ctx.plugin(SkillRegistry)
     await ctx.plugin(SkillOffice)
-    for (const name of names) {
-      const content = (await ctx.skills.get(name))!.content
-      expect(content).toContain('If `office_render`, `office_convert`, or `office_recalculate` is not in your tools, load `office` with `skill`; they appear next step.')
+    const route = (await ctx.skills.get('office'))!.content
+    expect(route).toContain('If `office_render`, `office_convert`, or `office_recalculate` is not in your tools, load `office` with `skill`; they appear next step.')
+    for (const instruction of ['`office_render`', '`office_recalculate`', '`office_convert` with `format`', '`format: "xlsx"` or `"ods"`']) expect(route).toContain(instruction)
+    for (const content of [route, ...await Promise.all(references.map(readReference))]) {
       expect(content).not.toMatch(
         /operation:|`office` tool|office-render|office-recalculate|office-export-pdf|LibreOffice Kit CLI|--output-dir|"<node>"/u,
       )
     }
-    const route = (await ctx.skills.get('office'))!.content
-    for (const instruction of ['`office_render`', '`office_recalculate`', '`office_convert` with `format`', '`format: "xlsx"` or `"ods"`']) expect(route).toContain(instruction)
-    expect((await ctx.skills.get('office-xlsx'))!.content).toContain('`office_recalculate` with `format: "xlsx"`')
+    expect(await readReference('xlsx.md')).toContain('`office_recalculate` with `format: "xlsx"`')
     for (const [format, legacy, library] of [['docx', 'doc', 'python-docx'], ['xlsx', 'xls', 'openpyxl'], ['pptx', 'ppt', 'python-pptx']]) {
-      expect((await ctx.skills.get(`office-${format}`))!.content).toContain(`${library} cannot read legacy \`.${legacy}\` files. Use \`office_convert\` with \`format: "${format}"\`, copy the result into the workspace, then edit the copy.`)
+      expect(await readReference(`${format}.md`)).toContain(`${library} cannot read legacy \`.${legacy}\` files. Use \`office_convert\` with \`format: "${format}"\`, copy the result into the workspace, then edit the copy.`)
     }
   } finally { await ctx.fiber.dispose() }
 })

@@ -1,19 +1,12 @@
----
-name: office-docx
-description: Create, read, edit, and validate Word documents (.docx).
----
-
 # Word documents
 
-Use `python-docx` for DOCX creation and ordinary edits unless an explicit user or applicable AGENTS.md requirement names another library. Run Python as described in the Python environment section below.
+Use `python-docx` for DOCX creation and ordinary edits unless an explicit user or applicable AGENTS.md requirement names another library. Run Python as described in the Python environment section of the `office` skill.
 
 Keep scripts, intermediate files, and final documents in the workspace; runtime and skill resources are read-only. Use the requested language and preserve the document's design unless a redesign is requested.
 
 Name Python scripts for their task, such as `edit_docx.py`; avoid module names such as `inspect.py`, `docx.py`, or `zipfile.py` that shadow imported libraries.
 
 ## Create and edit
-
-If `office_render`, `office_convert`, or `office_recalculate` is not in your tools, load `office` with `skill`; they appear next step.
 
 python-docx cannot read legacy `.doc` files. Use `office_convert` with `format: "docx"`, copy the result into the workspace, then edit the copy.
 

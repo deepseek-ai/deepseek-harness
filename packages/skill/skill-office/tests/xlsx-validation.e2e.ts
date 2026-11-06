@@ -9,7 +9,8 @@ import { runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
 import { readImageFile } from '@deepseek-ai/dsh-attachment-local'
 import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
-import { expectNoRenderContext, officeCalls, officeImages, officeModelPatches, officeToolPatches } from './fixtures/real-office.ts'
+import { expectNoRenderContext, formatFileReads, officeCalls, officeImages,
+  officeModelPatches, officeToolPatches } from './fixtures/real-office.ts'
 
 const repo = fileURLToPath(new URL('../../../../', import.meta.url))
 const assetRoot = fileURLToPath(new URL('../assets/', import.meta.url))
@@ -155,7 +156,8 @@ else:
         .map(call => (JSON.parse(call.arguments) as { command: string }).command.slice(0, 600)),
       answer: answer?.type === 'assistant/message'
         ? answer.data.message.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n').slice(0, 800) : undefined })
-    expect(loaded, diagnostic).toContain('office-xlsx')
+    expect(loaded, diagnostic).toContain('office')
+    expect(formatFileReads(events), diagnostic).toContain('xlsx')
     expect(calls.some(call => call.name === 'load_workspace_dependencies'), diagnostic).toBe(true)
     if (kind === 'layout') {
       const office = officeCalls(events)

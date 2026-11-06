@@ -40,7 +40,7 @@ kind: "package-reference"
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
-| `activationSkills` | `[office, office-docx, office-xlsx, office-pptx]` | 非空 kebab-case 技能名列表；成功加载其中任一技能即激活三个工具 |
+| `activationSkills` | `[office]` | 非空 kebab-case 技能名列表；成功加载其中任一技能即激活三个工具 |
 | `maxImages` | `20` | 一次渲染返回的最大图片数，含工作表分片 |
 | `maxImagePixels` | `8388608` | 每张图片的最大像素数 |
 | `maxImageDimension` | `8192` | 每张图片的最大宽度和高度 |

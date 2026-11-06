@@ -1,19 +1,12 @@
----
-name: office-pptx
-description: Create, read, edit, and validate PowerPoint presentations (.pptx).
----
-
 # PowerPoint presentations
 
-Use `python-pptx` unless an explicit user or applicable AGENTS.md requirement names another library. Run Python as described in the Python environment section below. Do not install npm packages for the default workflow.
+Use `python-pptx` unless an explicit user or applicable AGENTS.md requirement names another library. Run Python as described in the Python environment section of the `office` skill. Do not install npm packages for the default workflow.
 
 Keep scripts and output files in the task workspace. The runtime and skill directory contain shared read-only resources. Match the requested slide language and the supplied presentation's design when editing it.
 
 Name Python scripts for their task, such as `edit_pptx.py`; avoid module names such as `inspect.py`, `pptx.py`, or `zipfile.py` that shadow imported libraries.
 
 ## Create and edit
-
-If `office_render`, `office_convert`, or `office_recalculate` is not in your tools, load `office` with `skill`; they appear next step.
 
 python-pptx cannot read legacy `.ppt` files. Use `office_convert` with `format: "pptx"`, copy the result into the workspace, then edit the copy.
 

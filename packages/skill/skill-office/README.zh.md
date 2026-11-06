@@ -1,5 +1,5 @@
 ---
-description: "渐进加载的 Office 路由与创作技能，将渲染、转换和重算交给专用工具。"
+description: "渐进加载的单个 Office 技能及按格式划分的创作文件，将渲染、转换和重算交给专用工具。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-目录列出 Office 路由及三个创作技能，完整说明按需加载。创作技能追加配置的 Python 环境说明；技能把操作交给 [`office_render`、`office_convert` 和 `office_recalculate`](../../document/tool-office/README.zh.md)，并用 shell 复制输出文件。Web 应用和 SDK profile 挂载该提供者；只有 Desktop 或带主运行时的 SDK 还挂载内置依赖查询。
+目录只列出一个 `office` 技能。其路由说明按需加载，末尾附有配置的 Python 环境说明；创作时，说明指引模型读取技能旁的 Word、PowerPoint 或 Excel 格式文件。说明把操作交给 [`office_render`、`office_convert` 和 `office_recalculate`](../../document/tool-office/README.zh.md)，并用 shell 复制输出文件。Web 应用和 SDK profile 挂载该提供者；只有 Desktop 或带主运行时的 SDK 还挂载内置依赖查询。
 
 ## 目录
 
@@ -26,7 +26,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在技能注册表和 `dsh-tool-skill` 旁挂载技能提供者。提供者负责技能说明；加载时，Python 技能追加 Python 环境说明。技能把操作交给 `office_render`、`office_convert` 和 `office_recalculate`，因此需在本提供者旁组合 [`tool-office`](../../document/tool-office/README.zh.md)。
+在技能注册表和 `dsh-tool-skill` 旁挂载技能提供者。提供者负责 `office` 说明，并追加 Python 环境说明。模型用文件 `read` 工具读取格式文件，因此需组合 [`tool-fs`](../../fs/tool-fs/README.zh.md) 等文件系统工具。说明把操作交给 `office_render`、`office_convert` 和 `office_recalculate`，因此需在本提供者旁组合 [`tool-office`](../../document/tool-office/README.zh.md)。
 
 ```yaml
 - name: '@deepseek-ai/dsh-skill-office'
@@ -35,25 +35,25 @@ kind: "package-reference"
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
-| `assetRoot` | 包内 `assets/` | 包含四个技能目录的绝对路径。 |
-| `pythonEnvironment` | `'workspace-dependencies'` | `office-docx`、`office-pptx` 和 `office-xlsx` 指引模型使用的 Python；见下文。 |
+| `assetRoot` | 包内 `assets/` | 包含 `office` 技能目录（内有 `SKILL.md`、`docx.md`、`pptx.md` 和 `xlsx.md`）的绝对路径。 |
+| `pythonEnvironment` | `'workspace-dependencies'` | `office` 技能及其格式文件指引模型使用的 Python；见下文。 |
 
-`pythonEnvironment` 选择追加到这三个技能末尾的一段固定说明。两个取值都先遵守用户或适用 AGENTS.md 明确要求的环境。`'workspace-dependencies'` 指引模型调用 `load_workspace_dependencies`，使用其返回的内置 Python 与库；仅在同时挂载 `dsh-tool-workspace-dependencies` 时使用。只挂载本包而不挂载 `dsh-tool-workspace-dependencies` 的自定义组合必须配置 `pythonEnvironment: user`。`'user'` 指引模型使用项目或用户已有的 PATH 上的 Python，先检查所需库能否 import，缺少时说明需要安装的包，未经用户同意不向全局环境安装。
+`pythonEnvironment` 选择追加到 `office` 技能末尾的一段固定说明，格式文件引用这段说明。两个取值都先遵守用户或适用 AGENTS.md 明确要求的环境。`'workspace-dependencies'` 指引模型调用 `load_workspace_dependencies`，使用其返回的内置 Python 与库；仅在同时挂载 `dsh-tool-workspace-dependencies` 时使用。只挂载本包而不挂载 `dsh-tool-workspace-dependencies` 的自定义组合必须配置 `pythonEnvironment: user`。`'user'` 指引模型使用项目或用户已有的 PATH 上的 Python，先检查所需库能否 import，缺少时说明需要安装的包，未经用户同意不向全局环境安装。
 
-相对路径的 `assetRoot` 会阻止注册。目录发现时读取每个 `SKILL.md`。缺失或无效的技能会从目录中省略并记录警告；发现之后文件消失的技能加载失败，并从目录中移除。其他读取错误（例如文件被锁）会使本次发现不完整，由注册表重试。加载说明时不解析任何可执行文件，也不准备引擎；调用 Office 工具时才会报告 LibreOffice Kit 不可用。把转换后的文件复制进工作区时，由 Bash 或 PowerShell 负责审批、沙箱和取消。
+相对路径的 `assetRoot` 会阻止注册。目录发现和加载时读取 `office/SKILL.md`，并检查其旁边的 `docx.md`、`pptx.md` 和 `xlsx.md` 都是普通文件。技能文件缺失或无效，或格式文件缺失或不是普通文件时，该技能从目录中省略，并记录给出该路径的警告；发现之后文件消失时，加载失败，技能从目录中移除。其他读取错误（例如文件被锁）会使本次发现不完整，由注册表重试。加载说明时不解析任何可执行文件，也不准备引擎；调用 Office 工具时才会报告 LibreOffice Kit 不可用。把转换后的文件复制进工作区时，由 Bash 或 PowerShell 负责审批、沙箱和取消。
 
 <a id="progressive-loading"></a>
 ### 渐进加载
 
-模型依据任务选择技能；宿主不会根据文件扩展名注入完整说明。资源完整时，四个技能均列入目录，可通过 `skill` 按名称加载或由用户显式调用。加载 Office 技能后，三个 Office 工具从下一步开始可用；工具不在列表中时（例如 PTC 模式 resume 或 fork 之后），技能会指示模型重新加载 `office`。python-docx、openpyxl 和 python-pptx 无法读取的旧格式 `.doc`、`.xls`、`.ppt` 文件，先用 `office_convert` 转换再编辑。用户要求的外观修改，包括电子表格单元格填充和文本对齐，即使没有明确要求视觉检查，也需要渲染，演示文稿中新增或修改的幻灯片内容同样需要渲染；用户明确要求跳过渲染时以该要求为准。单独的操作任务在路由后直接调用专用工具，不加载创作技能。单独的 PDF 导出在检查复制出的文件非空且以 `%PDF-` 开头后即结束。
+模型依据任务选择技能；宿主不会根据文件扩展名注入完整说明。资源完整时，`office` 技能列入目录，可通过 `skill` 加载或由用户以 `/office` 显式调用。加载结果给出技能的基础目录；创建、读取或编辑文档时，模型相对该目录读取 `docx.md`、`pptx.md` 或 `xlsx.md`，只读一层，且只读任务涉及的格式。加载 `office` 后，三个 Office 工具从下一步开始可用；工具不在列表中时（例如 PTC 模式 resume 或 fork 之后），说明会指示模型重新加载 `office`。python-docx、openpyxl 和 python-pptx 无法读取的旧格式 `.doc`、`.xls`、`.ppt` 文件，先用 `office_convert` 转换再编辑。用户要求的外观修改，包括电子表格单元格填充和文本对齐，即使没有明确要求视觉检查，也需要渲染，演示文稿中新增或修改的幻灯片内容同样需要渲染；用户明确要求跳过渲染时以该要求为准。单独的操作任务在路由后直接调用专用工具，不读取格式文件。单独的 PDF 导出在检查复制出的文件非空且以 `%PDF-` 开头后即结束。
 
 ```mermaid
 flowchart TD
-    A["Initial catalog: four Office summaries"]
+    A["Initial catalog: one Office summary"]
     A -->|Non-Office task| N["Continue without loading Office instructions"]
     A -->|Office task| B["skill(office): task routing"]
 
-    B -->|Create or edit| C["skill(office-docx / office-pptx / office-xlsx)"]
+    B -->|Create or edit| C["read(docx.md / pptx.md / xlsx.md)"]
     C --> D["Author and validate content, structure and data"]
     D -->|No additional operation needed| F["Deliver"]
 
@@ -83,7 +83,7 @@ flowchart TD
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-提供者在目录发现时读取摘要，按需读取正文。注册表优先级、作用域和调用权限适用于全部技能。加载结果包含用于解析相对引用的资源目录。卸载提供者会移除全部候选技能。
+提供者在目录发现时读取摘要，按需读取正文。注册表优先级、作用域和调用权限适用于该技能，因此优先级更高的同名 `office` 技能会替换内置说明及其格式文件路由。加载结果包含用于解析相对引用的资源目录；提供者检查格式文件，但不读取其内容。卸载提供者会移除该候选技能。
 
 提供者不注册工具或激活投影。通用技能加载器记录已加载技能的结果。PTC 程序需输出或返回完整的 `tools.skill(...)` 结果，使说明进入模型上下文。恢复和 fork 使用现有会话历史及工具声明更新机制。加载技能时不解析任何可执行文件。
 
@@ -91,7 +91,7 @@ flowchart TD
 |---|---|
 | [`src/index.ts`](src/index.ts) | 注册提供者、逐个读取技能资源，并追加 Python 环境说明。 |
 
-| [`assets/`](assets/) | 路由与三个创作技能。 |
+| [`assets/office/`](assets/office/) | `SKILL.md` 路由说明，以及 `docx.md`、`pptx.md` 和 `xlsx.md` 格式文件。 |
 
 </details>
 
@@ -110,11 +110,11 @@ flowchart TD
 <a id="model-experience"></a>
 ## 模型体验
 
-间接影响：`dsh-tool-skill` 渲染初始 Office 摘要，并返回 `skill(name)` 选择的路由或子技能说明。Python 技能末尾的 Python 环境说明按 `pythonEnvironment` 指向 `load_workspace_dependencies` 或用户已有的 Python。
+间接影响：`dsh-tool-skill` 在目录中渲染一行 `office` 摘要，并通过 `skill(office)` 返回路由说明；`read` 工具返回格式文件。路由说明末尾的 Python 环境说明按 `pythonEnvironment` 指向 `load_workspace_dependencies` 或用户已有的 Python，格式文件引用这段说明。
 
 #### KV Cache 影响
 
-技能结果追加到历史中，操作完成后已加载文本或图片仍保留在历史中。挂载 `tool-office` 时，首次成功加载 Office 技能会在下一步启用三个工具声明。因资源不可读而省略或移除的技能会改变目录，后续步骤会将其作为目录更新发布。字符估算采用 `ceil(字符数 / 4)`：摘要最多 50 token，路由正文最多 200 token；每个创作正文最多为其记录的早期估算的 70%：`office-docx` 为 1,688 token，`office-pptx` 为 1,879 token，`office-xlsx` 为 2,330 token。配置不变时，追加的 Python 环境说明保持不变，并计入各技能正文。技能包装、通用目录、shell 与 Office 工具声明和 `load_workspace_dependencies` 单独计费；这些估算不等同于服务端 usage。
+技能和 `read` 结果追加到历史中，操作完成后已加载文本或图片仍保留在历史中。挂载 `tool-office` 时，首次成功加载 `office` 会在下一步启用三个工具声明；读取格式文件不会。因技能文件不可读而省略或移除的技能会改变目录，后续步骤会将其作为目录更新发布。字符估算采用 `ceil(字符数 / 4)`：摘要最多 50 token，不含 Python 环境说明的路由正文最多 230 token；完整 `office` 正文加一个格式文件，最多比该格式技能记录的早期估算的 70% 多 230 token：Word 为 1,688 token，PowerPoint 为 1,879 token，Excel 为 2,330 token。配置不变时，追加的 Python 环境说明保持不变，并计入 `office` 正文。`read` 添加的行号前缀不在这些估算内。技能包装、通用目录、shell 与 Office 工具声明和 `load_workspace_dependencies` 单独计费；这些估算不等同于服务端 usage。
 
 ## 已知限制与后续工作
 
@@ -124,8 +124,8 @@ flowchart TD
 - LibreOffice 输出可能不同于原生 Office 应用。
 - 旧格式、加密和启用宏的文件需要适用的独立工作流。
 - 被省略的技能只通过 `ctx.logger` 报告；产品界面不会提示用户已安装资源缺失（跟踪 issue #7677）。
-- `office` 路由正文列出全部子技能，因此仍会指向因资源缺失而被省略的子技能；`skill` 工具会报告该子技能不可用。
-- 文件缺失或元数据无效的技能被判为持久失败，技能目录会在不含它的状态下被缓存；补回文件后，需要重启应用或重新加载插件，该技能才会出现。
+- 资源目录是 Host 路径，而模型的 `read` 经由 Session 当前的文件系统服务（`ctx.fs`）读取。使用 SSH 或其他无法访问 Host 文件的文件系统后端时，`read` 打不开格式文件，模型只能得到 `office` 正文中的指导。
+- 技能文件或格式文件缺失、或元数据无效的技能被判为持久失败，技能目录会在不含它的状态下被缓存；补回文件后，需要重启应用或重新加载插件，该技能才会出现。
 
 <a id="dev-note"></a>
 ### 开发备注

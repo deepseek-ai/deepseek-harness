@@ -1,19 +1,12 @@
----
-name: office-xlsx
-description: Read, create, edit, and validate Excel workbooks, data, and formulas (.xlsx).
----
-
 # Excel workbooks
 
-Use `openpyxl` and `pandas` unless an explicit user or applicable AGENTS.md requirement names another library. Run Python as described in the Python environment section below.
+Use `openpyxl` and `pandas` unless an explicit user or applicable AGENTS.md requirement names another library. Run Python as described in the Python environment section of the `office` skill.
 
 Keep scripts, working files, and outputs in the task workspace. The runtime and skill directory are shared read-only resources. Save to a new workbook unless the user requests an in-place edit.
 
 Name Python scripts for their task, such as `edit_xlsx.py`; avoid module names such as `inspect.py`, `openpyxl.py`, or `pandas.py` that shadow imported libraries.
 
 ## Read and modify
-
-If `office_render`, `office_convert`, or `office_recalculate` is not in your tools, load `office` with `skill`; they appear next step.
 
 openpyxl cannot read legacy `.xls` files. Use `office_convert` with `format: "xlsx"`, copy the result into the workspace, then edit the copy.
 
