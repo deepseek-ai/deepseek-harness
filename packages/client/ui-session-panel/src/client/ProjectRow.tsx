@@ -3,7 +3,6 @@ import type { ReactNode } from 'react'
 import { IconFolderCloseRegular, PanelRow, PathLabel } from '@deepseek-ai/dsh-client-ui-primitives'
 import { abbreviateHomePath } from '@deepseek-ai/dsh-util-workspace-path'
 import type { ProjectRowProps } from './slots.ts'
-import css from './ProjectRow.module.css'
 
 /**
  * Render the project directory: the Workspace that lists the Session, or the
@@ -25,11 +24,8 @@ export function ProjectRow({
   return (
     <PanelRow
       {...getTriggerProps(target)}
-      className={css.row}
       icon={<IconFolderCloseRegular size={16} />}
-      trailing={renderFactorySlot('contextMenu.button', {
-        target, label: t('project.actions'), className: css.more, size: 'sm',
-      })}
+      menu={renderFactorySlot('contextMenu.button', { target, label: t('project.actions'), size: 'sm' })}
       data-session-panel-project=""
     >
       <PathLabel path={abbreviateHomePath(path, home)} />
