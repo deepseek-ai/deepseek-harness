@@ -154,6 +154,7 @@ describe('multiple Session appends', () => {
   it('folds preceding single appends before admitting an array', () => {
     const session = Session.create(SessionId('mixed-append'))
     session.append('user/message', message('before'), { surfaceOp: 'append' })
+    expect(session.surface.contentGeneration).toBe(0)
     session.append([['user/message', message('after'), { surfaceOp: 'append' }]])
     expect(session.surface.nodes).toEqual([0, 1])
     expect(session.surface.replaceGeneration).toBe(0)

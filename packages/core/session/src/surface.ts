@@ -524,9 +524,10 @@ function planSurfaceEvent(
   assertDeveloperHeader(event, read)
   const projection = projections.find(item => item.type === event.type)
   if (projection !== undefined) {
+    let projectionEvents: readonly SessionEvent[] | undefined
     return { kind: 'project', projection, messages: projection.project(event, {
       nodes: state.nodes,
-      get events() { return candidates === undefined ? events : [...events, ...candidates] },
+      get events() { return candidates === undefined ? events : (projectionEvents ??= [...events, ...candidates]) },
       baseSeq,
       messages: state.projectedMessages,
     }) }
