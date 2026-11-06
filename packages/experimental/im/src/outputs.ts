@@ -81,15 +81,24 @@ export class ImOutputRegistry implements ImOutputs {
       })
     })
     this.ctx.on('interaction/select', (session) => {
-      void this.select(session).catch((error: unknown) => {
-        this.ctx.logger.warn('IM select was not handled: %s', String(error))
-      })
+      this.guarded('select', () => { this.select(session) })
     })
     this.ctx.on('interaction/check', (session) => {
-      void this.check(session).catch((error: unknown) => {
-        this.ctx.logger.warn('IM checkbox toggle was not handled: %s', String(error))
-      })
+      this.guarded('checkbox toggle', () => { this.check(session) })
     })
+  }
+
+  /**
+   * Run one synchronous interaction handler, reporting a thrown failure here instead of letting it escape the emit.
+   * @param label - what the handler does, for the log line.
+   * @param handle - the handler body.
+   */
+  private guarded(label: string, handle: () => void): void {
+    try {
+      handle()
+    } catch (error: unknown) {
+      this.ctx.logger.warn('IM %s was not handled: %s', label, String(error))
+    }
   }
 
   register(renderer: ImOutputRenderer): () => void {
@@ -138,7 +147,7 @@ export class ImOutputRegistry implements ImOutputs {
    * `interaction/select` listener body (exposed for tests).
    * @param session - the core interaction session whose control was picked.
    */
-  async select(session: Session): Promise<void> {
+  select(session: Session): void {
     const select = session.select
     if (select === undefined) return
     const context = this.interaction(select)
@@ -162,7 +171,7 @@ export class ImOutputRegistry implements ImOutputs {
    * `interaction/check` listener body (exposed for tests).
    * @param session - the core interaction session whose checkbox was toggled.
    */
-  async check(session: Session): Promise<void> {
+  check(session: Session): void {
     const check = session.check
     if (check === undefined) return
     const context = this.interaction(check)

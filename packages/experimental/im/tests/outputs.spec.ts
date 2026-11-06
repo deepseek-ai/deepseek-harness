@@ -376,11 +376,11 @@ describe('ImOutputRegistry selects', () => {
     const harness = booted()
     harness.host({ output: 'probe' })
     harness.sources.set('team', { id: 'team', bot: BOT.id, writable: true, store: 'all', users: ['another-user'] })
-    await harness.registry.select(pick('sel-size', ['l']))
+    harness.registry.select(pick('sel-size', ['l']))
     expect(harness.selects).toEqual([])
 
     harness.sources.set('team', { id: 'team', bot: BOT.id, writable: true, store: 'all', users: ['user-1'] })
-    await harness.registry.select(pick('sel-size', ['l'], { chat: 'elsewhere' }))
+    harness.registry.select(pick('sel-size', ['l'], { chat: 'elsewhere' }))
     expect(harness.selects).toEqual([])
 
     // An envelope without a select is not a pick.
@@ -388,7 +388,7 @@ describe('ImOutputRegistry selects', () => {
     await flush()
     expect(harness.selects).toEqual([])
 
-    await harness.registry.select(pick('sel-size', ['l']))
+    harness.registry.select(pick('sel-size', ['l']))
     expect(harness.selects).toHaveLength(1)
   })
 })
@@ -419,7 +419,7 @@ describe('ImOutputRegistry checks', () => {
     expect(harness.buttons).toEqual([])
     expect(harness.selects).toEqual([])
 
-    await harness.registry.check(toggle('chk-agree', false))
+    harness.registry.check(toggle('chk-agree', false))
     expect(harness.checks[1]?.checked).toBe(false)
     expect(harness.checks[1]?.message).toBeUndefined()
   })
@@ -428,14 +428,14 @@ describe('ImOutputRegistry checks', () => {
     const harness = booted()
     harness.host({ output: 'probe' })
     harness.sources.set('team', { id: 'team', bot: BOT.id, writable: true, store: 'all', users: ['another-user'] })
-    await harness.registry.check(toggle('chk-agree', true))
+    harness.registry.check(toggle('chk-agree', true))
     expect(harness.checks).toEqual([])
 
     harness.sources.set('team', { id: 'team', bot: BOT.id, writable: true, store: 'all', users: ['user-1'] })
-    await harness.registry.check(toggle('chk-agree', true, { chat: 'elsewhere' }))
+    harness.registry.check(toggle('chk-agree', true, { chat: 'elsewhere' }))
     expect(harness.checks).toEqual([])
     // An envelope without a checkbox is not a toggle.
-    await harness.registry.check(noClick())
+    harness.registry.check(noClick())
     expect(harness.checks).toEqual([])
   })
 })
