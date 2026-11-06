@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
+import type { ComponentProps } from 'react'
 import { EffortSlider, type EffortSliderProps } from '../src/client/EffortSlider.tsx'
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
-function setup(value: string | null = 'off', includeDefault = false, parentKey?: ReturnType<typeof vi.fn>) {
+function setup(value: string | null = 'off', includeDefault = false, parentKey?: ComponentProps<'div'>['onKeyDown']) {
   vi.stubGlobal('matchMedia', (query: string) => ({
     matches: query.includes('hover: hover'), media: query, onchange: null,
     addEventListener: vi.fn(), removeEventListener: vi.fn(), addListener: vi.fn(), removeListener: vi.fn(), dispatchEvent: () => true,

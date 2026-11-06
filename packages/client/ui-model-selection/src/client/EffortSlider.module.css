@@ -20,12 +20,15 @@
   grid-row: 2;
   container-type: inline-size;
   position: relative;
+  z-index: 1;
+  pointer-events: none;
   height: 28px;
   margin: 8px 8px 0;
 }
 
 .value {
   position: absolute;
+  pointer-events: auto;
   top: 0;
   left: 0;
   width: max-content;
@@ -33,15 +36,9 @@
   translate: clamp(0px, calc(var(--effort-thumb-size) / 2 + (100cqw - var(--effort-thumb-size)) * var(--dsh-effort-position) - 50%), calc(100cqw - 100%)) 0;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
   box-sizing: border-box;
   max-width: 100%;
   height: 28px;
-  padding: 1px 8px;
-  border: 1px solid color-mix(in srgb, var(--dsw-alias-state-business-primary) 45%, transparent);
-  border-radius: 999px;
-  corner-shape: round;
-  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 8%, var(--dsw-alias-bg-module-platform));
   color: var(--dsw-alias-state-business-primary);
   font-size: 13px;
   line-height: 18px;
@@ -53,20 +50,23 @@
   user-select: none;
 }
 
-.value:has(.infoButton) {
-  gap: 2px;
-  padding-inline-end: 1px;
+.value:has(.infoButton) .caption {
+  padding-inline-end: 27px;
 }
 
 .caption {
   display: flex;
   flex: 1 1 auto;
   align-items: center;
+  box-sizing: border-box;
   min-width: 0;
-  height: 24px;
-  padding: 0;
-  border: 0;
-  background: transparent;
+  width: 100%;
+  height: 28px;
+  padding: 1px 8px;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-state-business-primary) 45%, transparent);
+  border-radius: 999px;
+  corner-shape: round;
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 8%, var(--dsw-alias-bg-module-platform));
   color: inherit;
   font: inherit;
   white-space: inherit;
@@ -79,7 +79,6 @@
 .caption:focus-visible {
   outline: 2px solid currentColor;
   outline-offset: 1px;
-  border-radius: var(--dsw-radius-sm);
 }
 
 .caption[aria-disabled='true'] {
@@ -113,8 +112,11 @@
 }
 
 .infoButton {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  z-index: 1;
   display: inline-flex;
-  flex: 0 0 24px;
   align-items: center;
   justify-content: center;
   width: 24px;

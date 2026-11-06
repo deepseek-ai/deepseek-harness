@@ -245,6 +245,25 @@ describe.skipIf(MODE === 'record').each([
       const defaultHeight = await menu.evaluate(element => element.getBoundingClientRect().height)
       await menu.locator('[data-effort-label]').click()
       expect(await slider.inputValue()).toBe('0')
+      const tagHit = await menu.locator('[data-effort-tag]').evaluate((tag) => {
+        const caption = tag.querySelector<HTMLElement>('[data-effort-caption]')!
+        const bounds = tag.getBoundingClientRect()
+        const x = bounds.left + bounds.width / 2
+        const y = bounds.bottom - 1
+        return {
+          x, y, hitsCaption: document.elementFromPoint(x, y) === caption,
+          tagScrollWidth: tag.scrollWidth, tagClientWidth: tag.clientWidth,
+          captionScrollWidth: caption.scrollWidth, captionClientWidth: caption.clientWidth,
+        }
+      })
+      expect(tagHit.hitsCaption).toBe(true)
+      await trigger.focus()
+      await page.mouse.click(tagHit.x, tagHit.y)
+      expect(await slider.inputValue()).toBe('0')
+      expect(await slider.evaluate(element => element === document.activeElement)).toBe(true)
+      expect(requests).toBe(0)
+      expect(tagHit.tagScrollWidth).toBe(tagHit.tagClientWidth)
+      expect(tagHit.captionScrollWidth).toBe(tagHit.captionClientWidth)
       await info.click()
       const tooltip = page.getByRole('tooltip')
       await tooltip.waitFor()
