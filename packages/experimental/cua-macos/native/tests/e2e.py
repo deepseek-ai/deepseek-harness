@@ -20,7 +20,7 @@ from native_test_support import ROOT, NativeHelper, line, run_cleanup, stop
 def check_file_panel(call, owner, primary_params, primary, directory, wait_state, button_target):
     selected_file = Path(directory) / "sheet-target.txt"
     selected_file.write_text("Owned file picker fixture\n")
-    call("click", button_target(call("getState", primary_params), "Open fixture file"))
+    assert call("invoke", button_target(call("getState", primary_params), "Open fixture file"))["dispatched"]
 
     # A remote AX traversal can consume the helper's 15-second response budget.
     # Allow two completed observations rather than timing out after the first.
