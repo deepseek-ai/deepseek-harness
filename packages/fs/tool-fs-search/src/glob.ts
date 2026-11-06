@@ -333,6 +333,8 @@ export function applyGlobTool(ctx: Context, caps: GlobToolCaps): void {
       path: { type: 'string', description: 'Directory to search in. Defaults to the session workspace; a relative path resolves against it.' },
     },
     timeoutMs: caps.timeoutMs,
+    // Path listing records no file observation; over-cap spilling runs in model-ordered post-execute.
+    isConcurrencySafe: () => true,
     output: {
       schema: {
         type: 'object',

@@ -127,7 +127,7 @@ describe('list_subagent_models', () => {
     expect(schemas.find(schema => schema.name === 'discovery_subagent')!.parameters)
       .not.toHaveProperty('properties.model')
     await sibling.dispose()
-    expect(ctx.tools.get('list_subagent_models')).toBeDefined()
+    expect(ctx.tools.get('list_subagent_models')?.isConcurrencySafe?.({})).toBe(true)
     await owner.dispose()
     expect(ctx.tools.get('list_subagent_models')).toBeUndefined()
     expect(ctx.tools.get('subagent')).toBeDefined()

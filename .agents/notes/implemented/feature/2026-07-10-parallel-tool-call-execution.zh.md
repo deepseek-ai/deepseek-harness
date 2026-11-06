@@ -60,9 +60,9 @@ Status: implemented
 
 `maxParallelToolCalls` 是 AgentLoop 的正整数部署上限，由工厂创建的所有 agent（智能体）共享。默认值为 `10`；`1` 保持串行执行。字段和默认值的精确定义见生成的[配置目录](../../../../docs/config-catalog.zh.md)。
 
-当前实现中的声明保持保守。Web 搜索、Web 获取、文件系统读取、会话查询的 trace/read 工具和 subagent 委派选择并行；委派之所以并行，是因为子 agent 在自己的会话中工作，其运行绝不变更父会话，并列委派间的工作区协调由模型负责（[并行 subagent Agent Note](../../archived/feature/2026-08-09-parallel-subagent-delegations.md)）。文件系统写入与编辑、bash 工具、会话查询的 search 工具、工作流、用户交互、todo 变更、PTC mode 以及 Cordis 变更工具仍按独占方式执行。Bash 没有已证明的输入敏感分类器，因此仍按独占方式执行。
+当前实现中的声明保持保守。Web 搜索、Web 获取、文件系统读取、glob、grep、会话查询的 trace/read 工具和 subagent 委派选择并行；委派之所以并行，是因为子 agent 在自己的会话中工作，其运行绝不变更父会话，并列委派间的工作区协调由模型负责（[并行 subagent Agent Note](../../archived/feature/2026-08-09-parallel-subagent-delegations.md)）。只读查询也选择并行：后台任务列表、subagent 树与模型列表、定时任务与 Team 任务读取、Cordis Inspect 查询以及 MCP 资源读取。文件系统写入与编辑、bash 工具、`job_output`（因为它会消费读取游标）、会话查询的 search 工具、工作流、用户交互、todo 变更、PTC mode 以及 Cordis 变更工具仍按独占方式执行。Bash 没有已证明的输入敏感分类器，因此仍按独占方式执行。
 
-文件系统读取依赖一个范围很窄的记录器例外：其同步观察更新可以不按顺序结算，但写入和编辑在变更前会重新检查已观察的版本，因此陈旧状态只会导致 `FS_STALE_VERSION`。
+文件系统读取依赖一个范围很窄的记录器例外：其同步观察更新可以不按顺序结算，但写入和编辑在变更前会重新检查已观察的版本，因此陈旧状态只会导致 `FS_STALE_VERSION`。文件系统读取、glob 和 grep 还共享一个工作目录恢复例外：当会话记录的目录未设置或不存在时，工具主体中的 `ctx.workingDirectory.ensure()` 会追加 `working-directory/change`，而工作目录服务按会话串行化这些追加。
 
 ## 验证
 

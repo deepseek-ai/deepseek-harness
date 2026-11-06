@@ -577,6 +577,13 @@ describe('job_output', () => {
 })
 
 describe('job_list', () => {
+  it('is the only parallel-safe job tool', async () => {
+    const { ctx } = await setup()
+    expect(ctx.tools.get('job_list')?.isConcurrencySafe?.({})).toBe(true)
+    expect(ctx.tools.get('job_output')?.isConcurrencySafe).toBeUndefined()
+    expect(ctx.tools.get('job_kill')?.isConcurrencySafe).toBeUndefined()
+  })
+
   it('lists caller-visible jobs and renders the empty case', async () => {
     const { ctx } = await setup()
     expect(text(await call(ctx, 'job_list', {}))).toBe('(no background jobs)')

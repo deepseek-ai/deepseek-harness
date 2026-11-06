@@ -35,6 +35,8 @@ export function registerResourceTools(ctx: Context, request: RequestResource): (
       description: 'List resources available from an MCP server.',
       parameters: listParameters,
       output,
+      // Resource requests do not mutate parent-agent state; the MCP client matches concurrent responses by request id.
+      isConcurrencySafe: () => true,
       execute: (args, exec) => request(args.server, {
         method: 'resources/list', ...args.cursor === undefined ? {} : { cursor: args.cursor },
       }, exec),
@@ -44,6 +46,7 @@ export function registerResourceTools(ctx: Context, request: RequestResource): (
       description: 'List parameterized resource URI templates from an MCP server.',
       parameters: listParameters,
       output,
+      isConcurrencySafe: () => true,
       execute: (args, exec) => request(args.server, {
         method: 'resources/templates/list', ...args.cursor === undefined ? {} : { cursor: args.cursor },
       }, exec),
@@ -56,6 +59,7 @@ export function registerResourceTools(ctx: Context, request: RequestResource): (
         uri: { type: 'string', required: true, description: 'Resource URI to read.' },
       },
       output,
+      isConcurrencySafe: () => true,
       execute: (args, exec) => request(args.server, { method: 'resources/read', uri: args.uri }, exec),
     }))
   }, 'mcpResources.resourceTools')

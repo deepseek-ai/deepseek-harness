@@ -123,6 +123,11 @@ describe('Schedule model tools', () => {
   it('registers the four tools only in the mounting Agent scope', async () => {
     const test = await setup()
     expect(test.ctx.tools.schemas(test.agent).map(schema => schema.name).sort()).toEqual(TOOL_NAMES)
+    const parallel = (name: string, args: Record<string, unknown>) => test.ctx.tools.get(name, test.agent)?.isConcurrencySafe?.(args)
+    expect(parallel('schedule_list', {})).toBe(true)
+    expect(parallel('schedule_view', { id: 'task' })).toBe(true)
+    expect(test.ctx.tools.get('schedule_create', test.agent)?.isConcurrencySafe).toBeUndefined()
+    expect(test.ctx.tools.get('schedule_edit', test.agent)?.isConcurrencySafe).toBeUndefined()
     const unrelated = agentFor(test.ctx, 'unrelated')
     for (const name of TOOL_NAMES) {
       expect(test.ctx.tools.get(name)).toBeUndefined()
