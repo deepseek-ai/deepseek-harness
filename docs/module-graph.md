@@ -808,6 +808,10 @@ flowchart TD
   pkg_permission_presets --> pkg_shell
   pkg_permission_presets --> pkg_typert_protocol
   pkg_permission_presets --> pkg_user_approval
+  pkg_jobs_local --> pkg_agent
+  pkg_jobs_local --> pkg_jobs
+  pkg_jobs_local --> pkg_scope
+  pkg_jobs_local --> pkg_timeout
   pkg_ptc_runtime_node --> pkg_fs
   pkg_ptc_runtime_node --> pkg_ptc_runtime
   pkg_ptc_runtime_node --> pkg_sandbox
@@ -1023,11 +1027,6 @@ flowchart TD
   pkg_tool_ask_user --> pkg_agent
   pkg_tool_ask_user --> pkg_tools
   pkg_tool_ask_user --> pkg_user_questions
-  pkg_jobs_local --> pkg_agent
-  pkg_jobs_local --> pkg_jobs
-  pkg_jobs_local --> pkg_scope
-  pkg_jobs_local --> pkg_timeout
-  pkg_jobs_local --> pkg_tools
   pkg_tool_jobs --> pkg_agent
   pkg_tool_jobs --> pkg_jobs
   pkg_tool_jobs --> pkg_llm
@@ -1803,6 +1802,7 @@ flowchart TD
 | [`experimental-ptc-runtime-python`](../packages/experimental/ptc-runtime-python) | `experimental` | [`ptc-runtime`](../packages/ptc-runtime/ptc-runtime), [`sandbox`](../packages/sandbox/sandbox), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`timeout`](../packages/util/timeout), [`util-values`](../packages/util/values) |
 | [`command-feedback`](../packages/feedback/command-feedback) | `feedback` | [`anonymous-user-id`](../packages/identity/anonymous-user-id), [`commands`](../packages/interaction/commands), [`session`](../packages/core/session), [`typert-protocol`](../packages/typert/protocol) |
 | [`permission-presets`](../packages/interaction/permission-presets) | `interaction` | [`agent`](../packages/core/agent), [`commands`](../packages/interaction/commands), [`sandbox`](../packages/sandbox/sandbox), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`shell`](../packages/shell/shell), [`typert-protocol`](../packages/typert/protocol), [`user-approval`](../packages/interaction/user-approval) |
+| [`jobs-local`](../packages/jobs/jobs-local) | `jobs` | [`agent`](../packages/core/agent), [`jobs`](../packages/jobs/jobs), [`scope`](../packages/core/scope), [`timeout`](../packages/util/timeout) |
 | [`ptc-runtime-node`](../packages/ptc-runtime/ptc-runtime-node) | `ptc-runtime` | [`fs`](../packages/fs/fs), [`ptc-runtime`](../packages/ptc-runtime/ptc-runtime), [`sandbox`](../packages/sandbox/sandbox), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`session`](../packages/core/session), [`subprocess`](../packages/subprocess/subprocess), [`timeout`](../packages/util/timeout) |
 | [`session-title-llm`](../packages/session/session-title-llm) | `session` | [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-title`](../packages/session/session-title), [`timeout`](../packages/util/timeout) |
 | [`bash-sandbox`](../packages/shell/bash-sandbox) | `shell` | [`bash-local`](../packages/shell/bash-local), [`sandbox`](../packages/sandbox/sandbox), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`shell`](../packages/shell/shell) |
@@ -1845,7 +1845,6 @@ flowchart TD
 | [`repeat-tool-reminder`](../packages/guard/repeat-tool-reminder) | `guard` | [`agent`](../packages/core/agent), [`tools`](../packages/core/tools) |
 | [`tool-call-timeout-policy`](../packages/guard/timeout-policy) | `guard` | [`llm`](../packages/llm/llm), [`timeout`](../packages/util/timeout), [`tools`](../packages/core/tools) |
 | [`tool-ask-user`](../packages/interaction/tool-ask-user) | `interaction` | [`agent`](../packages/core/agent), [`tools`](../packages/core/tools), [`user-questions`](../packages/interaction/user-questions) |
-| [`jobs-local`](../packages/jobs/jobs-local) | `jobs` | [`agent`](../packages/core/agent), [`jobs`](../packages/jobs/jobs), [`scope`](../packages/core/scope), [`timeout`](../packages/util/timeout), [`tools`](../packages/core/tools) |
 | [`tool-jobs`](../packages/jobs/tool-jobs) | `jobs` | [`agent`](../packages/core/agent), [`jobs`](../packages/jobs/jobs), [`llm`](../packages/llm/llm), [`output-retention`](../packages/util/output-retention), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |
 | [`tool-lsp`](../packages/lsp/tool-lsp) | `lsp` | [`llm`](../packages/llm/llm), [`lsp`](../packages/lsp/lsp), [`system-prompt`](../packages/core/system-prompt), [`timeout`](../packages/util/timeout), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
 | [`mcp-resources`](../packages/mcp/mcp-resources) | `mcp` | [`llm`](../packages/llm/llm), [`scope`](../packages/core/scope), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |

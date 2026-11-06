@@ -1893,7 +1893,7 @@ export interface TlsConfig {
 
 ## `@deepseek-ai/dsh-jobs-local`
 
-- `source`: [`packages/jobs/jobs-local/src/index.ts:47`](../packages/jobs/jobs-local/src/index.ts)
+- `source`: [`packages/jobs/jobs-local/src/index.ts:46`](../packages/jobs/jobs-local/src/index.ts)
 
 ```ts config-catalog
 /** Configuration for the process-local job registry. */
@@ -4085,7 +4085,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-tool-bash`
 
 - `inject`: `tools` · `shell` · `systemPrompt` · `shellEnv` · `workingDirectory`
-- `source`: [`packages/shell/tool-bash/src/index.ts:39`](../packages/shell/tool-bash/src/index.ts)
+- `source`: [`packages/shell/tool-bash/src/index.ts:40`](../packages/shell/tool-bash/src/index.ts)
 
 ```ts config-catalog
 /** Configuration for the bash tool. */
@@ -4350,7 +4350,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-tool-pwsh`
 
 - `inject`: `tools` · `shell` · `systemPrompt` · `shellEnv` · `workingDirectory`
-- `source`: [`packages/shell/tool-pwsh/src/index.ts:56`](../packages/shell/tool-pwsh/src/index.ts)
+- `source`: [`packages/shell/tool-pwsh/src/index.ts:57`](../packages/shell/tool-pwsh/src/index.ts)
 
 ```ts config-catalog
 /** Configuration for the pwsh tool. */

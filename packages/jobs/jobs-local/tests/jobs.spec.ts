@@ -768,7 +768,7 @@ describe('LocalJobRegistry owner isolation', () => {
     expect(() => ctx.jobs.start({ ...producer().spec, owner: SessionId('a') }))
       .toThrow('background job ownership requires the agent registry')
     expect(() => ctx.jobs.start({ ...producer().spec, owner: SessionId('a') }))
-      .toThrow(expect.objectContaining({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' }))
+      .toThrow(expect.objectContaining(jobError('JOB_OWNER_REGISTRY_UNAVAILABLE')))
     // The failed registration mutated nothing: no stored job.
     expect(ctx.jobs.list()).toEqual([])
     expect(ctx.jobs.start(producer().spec)).toMatch(/^bash-[0-9a-f]{16}$/)

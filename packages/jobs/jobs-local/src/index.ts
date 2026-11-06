@@ -18,7 +18,6 @@ import { ScopedLayers, scopeOf } from '@deepseek-ai/dsh-scope'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
 import { JobError, JobRegistry, JobId } from '@deepseek-ai/dsh-jobs'
-import { ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 import type {
   JobAppendOptions, JobEvent, JobEvents, JobHandle, JobKind, JobOutcome, JobOutputRead, JobOutputSource,
   JobRead, JobRegisteredData, JobSettleCause, JobSettledData, JobSpec, JobStatus, JobToolCall, JobView,
@@ -374,7 +373,7 @@ export class LocalJobRegistry extends JobRegistry {
     if (session === undefined) return undefined
     const agents = this.selfCtx.get('agents')
     if (agents === undefined) {
-      throw new ToolContextUnavailableError('background job ownership requires the agent registry (load @deepseek-ai/dsh-agent)')
+      throw new JobError('background job ownership requires the agent registry (load @deepseek-ai/dsh-agent)', 'JOB_OWNER_REGISTRY_UNAVAILABLE')
     }
     const owner = agents.get(session)
     if (owner === undefined) {
