@@ -29,7 +29,7 @@ describe('dsh-im contracts', () => {
     const config = parse({ sources: [{ id: 'main', bot: 'qq:1' }] })
     expect(config.sources).toEqual([{ id: 'main', bot: 'qq:1', chats: [], users: [], writable: false, store: 'all' }])
     expect(config.media).toEqual({ download: true, maxBytes: 10485760, maxItems: 9 })
-    expect(config.send).toEqual({ maxBytes: 30000, maxMediaBytes: 10485760, operationTimeoutMs: 30000 })
+    expect(config.send).toEqual({ maxMediaBytes: 10485760, operationTimeoutMs: 30000 })
     expect(config.tools).toEqual({ readOnly: false, maxReadBytes: 65536, maxHistoryItems: 50, fileDir: '.dsh/im' })
     expect(config.retentionMs).toBe(30 * 86400000)
     expect(parse({}).sources).toEqual([])

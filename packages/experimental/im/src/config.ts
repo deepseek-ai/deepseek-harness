@@ -51,7 +51,6 @@ export const Config = z.object({
     maxItems: z.natural().min(1).max(50).default(9),
   }),
   send: z.object({
-    maxBytes: z.natural().min(1).default(30000),
     maxMediaBytes: z.natural().min(1).default(10485760),
     operationTimeoutMs: z.natural().min(1).default(30000),
   }),

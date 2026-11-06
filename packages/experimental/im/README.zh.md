@@ -57,7 +57,7 @@ kind: "package-reference"
 | `maxInputBytes` | 256 KiB | 单条入库消息或投递记录的最大 UTF-8 字节数 |
 | `retryIntervalMs` | 5 秒 | 重新派发待处理消息、重试待完成投递以及清理过期记录的定时间隔 |
 | `media.download` / `media.maxBytes` / `media.maxItems` | `true` / 10 MiB / 9 | 是否将入站图片与文件下载为附件，以及单条字节上限与单条消息下载数量上限 |
-| `send.maxBytes` / `send.maxMediaBytes` / `send.operationTimeoutMs` | 30 KB / 10 MiB / 30 秒 | 出站单段文本大小上限、媒体文件大小上限与单次发送超时时间 |
+| `send.maxMediaBytes` / `send.operationTimeoutMs` | 10 MiB / 30 秒 | 出站媒体文件大小上限与单次发送超时时间 |
 | `tools.readOnly` / `tools.maxReadBytes` / `tools.maxHistoryItems` / `tools.fileDir` | `false` / 64 KiB / 50 / `.dsh/im` | 是否仅注册只读工具、单次工具返回最大字节数、`im_history` 单页最大条数，以及 `im_read_file` 暂存下载文件的会话内相对目录 |
 | `defaultDispatch` | 不配置 | 可选[默认分派会话](#the-default-dispatcher)：必填 `agentPreset`、`provider`、`model` 与绝对路径 `cwd`，可选 `output`（`'none'`）、`delivery`（`'steer'`）、`restrict`（不限制工具）与 `prompt`（`im:dispatcher`，order 81） |
 

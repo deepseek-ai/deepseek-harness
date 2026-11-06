@@ -63,7 +63,6 @@ exports[`IM bundle rows > renders every configurable row through its own schema 
       "retentionMs": 2592000000,
       "retryIntervalMs": 5000,
       "send": {
-        "maxBytes": 30000,
         "maxMediaBytes": 10485760,
         "operationTimeoutMs": 30000,
       },

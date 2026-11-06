@@ -1894,7 +1894,7 @@ export interface TlsConfig {
 ## `@deepseek-ai/dsh-im`
 
 - `inject`: `satori` · `agents` · `sessions` · `sessionPersistence` · `storageDomain` · `attachments`
-- `source`: [`packages/experimental/im/src/api.ts:227`](../packages/experimental/im/src/api.ts)
+- `source`: [`packages/experimental/im/src/api.ts:279`](../packages/experimental/im/src/api.ts)
 
 ```ts config-catalog
 /**
@@ -1923,8 +1923,6 @@ export interface ImConfig {
   }
   /** Outbound publication limits. */
   send: {
-    /** Maximum UTF-8 bytes of one published text part (default 30 KB). */
-    maxBytes: number
     /** Maximum bytes of one referenced media file (default 10 MiB). */
     maxMediaBytes: number
     /** Deadline of one publication operation in milliseconds (default 30 s). */

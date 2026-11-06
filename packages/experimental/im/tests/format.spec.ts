@@ -59,7 +59,7 @@ function config(): ImConfig {
     maxInputBytes: 262144,
     retryIntervalMs: 5000,
     media: { download: true, maxBytes: 1048576, maxItems: 9 },
-    send: { maxBytes: 30000, maxMediaBytes: 1048576, operationTimeoutMs: 30000 },
+    send: { maxMediaBytes: 1048576, operationTimeoutMs: 30000 },
     tools: { readOnly: false, maxReadBytes: 65536, maxHistoryItems: 50, fileDir: '.dsh/im' },
   }
 }

@@ -346,7 +346,7 @@ describe('ImSender.send', () => {
   })
 
   it('marks a timed-out publication as uncertain', async () => {
-    const { sender, stub } = await boot({ config: { send: { maxBytes: 30000, maxMediaBytes: 1024, operationTimeoutMs: 10 } } })
+    const { sender, stub } = await boot({ config: { send: { maxMediaBytes: 1024, operationTimeoutMs: 10 } } })
     stub.answer = ({ options }) => new Promise((_resolve, reject) => {
       // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- the exact abort reason is the rejection.
       options.signal?.addEventListener('abort', () => { reject(options.signal?.reason) }, { once: true })

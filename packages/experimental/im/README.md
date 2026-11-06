@@ -57,7 +57,7 @@ Each entry in `sources` is an ordered admission rule. A rule specifies a unique 
 | `maxInputBytes` | 256 KiB | Maximum UTF-8 byte size of one stored inbound message or delivery record |
 | `retryIntervalMs` | 5 s | Interval for re-dispatching pending messages, retrying pending deliveries, and sweeping expired records |
 | `media.download` / `media.maxBytes` / `media.maxItems` | `true` / 10 MiB / 9 | Whether to download inbound images and files into attachments, and per-item / per-message limits |
-| `send.maxBytes` / `send.maxMediaBytes` / `send.operationTimeoutMs` | 30 KB / 10 MiB / 30 s | Outbound text size limit, file size limit, and per-send timeout |
+| `send.maxMediaBytes` / `send.operationTimeoutMs` | 10 MiB / 30 s | Outbound media file size limit and per-send timeout |
 | `tools.readOnly` / `tools.maxReadBytes` / `tools.maxHistoryItems` / `tools.fileDir` | `false` / 64 KiB / 50 / `.dsh/im` | Whether to register only read tools, maximum tool output bytes, maximum `im_history` page size, and the session-relative directory `im_read_file` stages a downloaded file in |
 | `defaultDispatch` | absent | Optional [default dispatcher](#the-default-dispatcher): `agentPreset`, `provider`, `model`, and absolute `cwd` (required), plus `output` (`'none'`), `delivery` (`'steer'`), `restrict` (no tool restriction), and `prompt` (`im:dispatcher` at order 81) |
 
