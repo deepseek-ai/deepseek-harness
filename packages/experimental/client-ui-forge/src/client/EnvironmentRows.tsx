@@ -109,26 +109,24 @@ export function CheckoutRow({
       trailing={(
         <>
           <span className={css.envNote}>{label.kind}</span>
-          {label.missing
-            ? (
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={state.worktree.restoration !== null}
-                icon={state.worktree.restoration === null ? undefined : <StateDot state="ongoing" size={14} />}
-                onClick={restore}
-              >
-                {t('checkout.restore')}
-              </Button>
-            )
-            : renderFactorySlot('contextMenu.button', {
-              target,
-              label: t(label.worktree ? 'checkout.worktreeActions' : 'checkout.projectActions'),
-              className: css.envMore,
-              size: 'sm',
-            })}
+          {label.missing && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={state.worktree.restoration !== null}
+              icon={state.worktree.restoration === null ? undefined : <StateDot state="ongoing" size={14} />}
+              onClick={restore}
+            >
+              {t('checkout.restore')}
+            </Button>
+          )}
         </>
       )}
+      menu={label.missing ? undefined : renderFactorySlot('contextMenu.button', {
+        target,
+        label: t(label.worktree ? 'checkout.worktreeActions' : 'checkout.projectActions'),
+        size: 'sm',
+      })}
     >
       <Tooltip label={label.tooltip} side="left">
         <span className={css.envName} tabIndex={0}>{name}</span>
@@ -170,39 +168,39 @@ export function LocalChangesRow({ usePanel, dismissOverlay, viewLocalChanges, cr
       actionLabel={t('changes.local.viewAria', { count, added: additions, deleted: deletions })}
       data-forge-local=""
       trailing={(
-        <>
-          <span className={css.diff}>
-            <span className={css.added}>{`+${String(additions)}`}</span>
-            <span className={css.deleted}>{`−${String(deletions)}`}</span>
-          </span>
-          <Menu
-            open={open}
-            onClose={() => { setOpen(false) }}
-            portal
-            align="end"
-            anchor={(
-              <button
-                type="button"
-                className={`${css.iconButton} ${css.envMore}`}
-                aria-label={t('changes.local.actions')}
-                aria-haspopup="menu"
-                aria-expanded={open}
-                onClick={() => { setOpen(!open) }}
-              >
-                <IconEllipsisOutlineRegular size={14} />
-              </button>
-            )}
-            items={[
-              { id: 'view', label: t('change.viewChanges') },
-              ...creatable ? [{ id: 'create', label: t('changes.local.create') }] : [],
-            ]}
-            onSelect={(id) => {
-              setOpen(false)
-              if (id === 'create') createChangeRequest()
-              else view()
-            }}
-          />
-        </>
+        <span className={css.diff}>
+          <span className={css.added}>{`+${String(additions)}`}</span>
+          <span className={css.deleted}>{`−${String(deletions)}`}</span>
+        </span>
+      )}
+      menu={(
+        <Menu
+          open={open}
+          onClose={() => { setOpen(false) }}
+          portal
+          align="end"
+          anchor={(
+            <button
+              type="button"
+              className={`${css.iconButton} ${css.envMore}`}
+              aria-label={t('changes.local.actions')}
+              aria-haspopup="menu"
+              aria-expanded={open}
+              onClick={() => { setOpen(!open) }}
+            >
+              <IconEllipsisOutlineRegular size={14} />
+            </button>
+          )}
+          items={[
+            { id: 'view', label: t('change.viewChanges') },
+            ...creatable ? [{ id: 'create', label: t('changes.local.create') }] : [],
+          ]}
+          onSelect={(id) => {
+            setOpen(false)
+            if (id === 'create') createChangeRequest()
+            else view()
+          }}
+        />
       )}
     >
       {t('changes.local.summary', { count })}

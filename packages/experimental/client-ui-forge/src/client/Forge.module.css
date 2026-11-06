@@ -470,8 +470,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Environment rows: the kind or size trails the name, and the More button
-   appears on row hover or focus; without hover it stays visible. */
+/* Environment rows: the kind or size trails the name; PanelRow reveals the More button. */
 .envName {
   display: block;
   overflow: hidden;
@@ -501,18 +500,6 @@
 .envRow .envMore {
   width: 24px;
   height: 24px;
-}
-
-@media (hover: hover) {
-  .envRow .envMore {
-    opacity: 0;
-  }
-
-  .envRow:hover .envMore,
-  .envRow:focus-within .envMore,
-  .envMore[aria-expanded='true'] {
-    opacity: 1;
-  }
 }
 
 /* Attention mark over the Session panel toggle; the toggle positions it. */
