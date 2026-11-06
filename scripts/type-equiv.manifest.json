@@ -853,6 +853,11 @@
     },
     {
       "doc": "docs/subsystems/tools.md",
+      "symbol": "ToolGuardDenial",
+      "source": "packages/core/tools/src/contracts.ts"
+    },
+    {
+      "doc": "docs/subsystems/tools.md",
       "symbol": "ToolErrorInfo",
       "source": "packages/core/tools/src/contracts.ts"
     },

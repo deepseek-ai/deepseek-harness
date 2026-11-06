@@ -207,7 +207,8 @@ export function useShareEdit({
       try {
         const listed = await shares.list()
         if (cancelled || !listed.ok) return
-        const existing = listed.value.shares.find(share => share.sessionId === sessionId)
+        const existing = listed.value.shares.find(share =>
+          share.sessionId === sessionId || share.sessionIds.includes(sessionId))
         if (existing !== undefined) {
           onLink(existing.link)
           setConfirmedAccess(readAccess(existing.access))

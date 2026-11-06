@@ -28,7 +28,7 @@ function ownerFixture() {
       : denied
     return Response.json({ type: 'server-response', rpcId: 'rpc', result })
   })
-  const read = createViewerReadService({ connection: readers.connection, sharedSessionId: () => 'shared-session' })
+  const read = createViewerReadService({ connection: readers.connection, sharedSessionIds: () => ['shared-session'] })
   onTestFinished(async () => {
     read.close()
     await readers.dispose()

@@ -36,6 +36,7 @@
           - option "OpenAI Chat Completions" [selected]
           - option "OpenAI Responses"
           - option "Anthropic Messages"
+          - option "Gemini API"
         - group "重试策略":
           - text: 重试策略
           - combobox "重试策略":

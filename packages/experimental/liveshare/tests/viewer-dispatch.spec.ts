@@ -72,7 +72,7 @@ type Mock = ReturnType<typeof vi.fn>
 interface DepsStub {
   connection?: { createSharedFetchHandler: Mock }
   gateway?: { wireStream: { open: Mock; failure: Mock } }
-  sharedSessionId: Mock
+  sharedSessionIds: Mock
   forks?: { allowsPrompt: Mock }
   prepareSource?: Mock
   prepareSourceForReader?: Mock
@@ -112,7 +112,7 @@ function harness(): Harness {
   const deps = {
     connection: { createSharedFetchHandler: vi.fn(() => handler) },
     gateway: { wireStream: { open: gateway.open, failure: gateway.failure } },
-    sharedSessionId: vi.fn(() => 'session-1'),
+    sharedSessionIds: vi.fn(() => ['session-1']),
     forks: { allowsPrompt: vi.fn(() => ({ ok: true as const })) },
     prepareSource: vi.fn(async () => {}),
     prepareSourceForReader: vi.fn(),
@@ -241,7 +241,7 @@ describe('ordinary viewer calls', () => {
 
   it('answers a share that no longer exists before dispatch', async () => {
     const h = harness()
-    h.deps.sharedSessionId.mockReturnValue(undefined)
+    h.deps.sharedSessionIds.mockReturnValue(undefined)
     await expect(h.dispatch.answer('share-1', call('/api/session/list'), viewer))
       .resolves.toEqual({ status: 404, body: { error: 'share-not-found' } })
     expect(h.handler.fetch).not.toHaveBeenCalled()
@@ -302,12 +302,12 @@ describe('source Session writes', () => {
       .resolves.toMatchObject({ status: 200 })
     expect(h.deps.prepareSource).not.toHaveBeenCalled()
 
-    // The share is read once to classify the request and again when the source path resolves it.
-    h.deps.sharedSessionId.mockReturnValueOnce('session-1').mockReturnValueOnce(undefined)
+    // A share this host no longer publishes is refused before any source path resolves it.
+    h.deps.sharedSessionIds.mockReturnValue(undefined)
     await expect(h.dispatch.answer('share-1', call('/api/session/prompt', envelope('session-1')), viewer))
       .resolves.toEqual({ status: 403, body: { error: 'share-not-found' } })
 
-    h.deps.sharedSessionId.mockReturnValue('session-1')
+    h.deps.sharedSessionIds.mockReturnValue(['session-1'])
     h.lifecycle.shareRefusal!.mockReturnValueOnce(refused)
     await expect(h.dispatch.answer('share-1', call('/api/session/prompt', envelope('session-1')), viewer))
       .resolves.toEqual(refused)
@@ -526,11 +526,11 @@ describe('viewer child writes', () => {
 describe('viewer streams', () => {
   it('refuses an open for a missing share, a refusing share, or no gateway', async () => {
     const h = harness()
-    h.deps.sharedSessionId.mockReturnValue(undefined)
+    h.deps.sharedSessionIds.mockReturnValue(undefined)
     await expect(h.dispatch.answer('share-1', { op: 'stream-open', id: 1, endpoint: 'session/follow', payload: {} }, viewer))
       .resolves.toEqual({ status: 404, body: { error: 'share-not-found' } })
 
-    h.deps.sharedSessionId.mockReturnValue('session-1')
+    h.deps.sharedSessionIds.mockReturnValue(['session-1'])
     h.lifecycle.shareRefusal!.mockReturnValueOnce(refused)
     await expect(h.dispatch.answer('share-1', { op: 'stream-open', id: 1, endpoint: 'session/follow', payload: {} }, viewer))
       .resolves.toEqual(refused)

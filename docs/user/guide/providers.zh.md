@@ -26,7 +26,7 @@
 
 ## 添加自定义模型 API
 
-对于中转站、公司网关、自建服务器或已安装目录中不存在的提供商，把卡片切换到**自定义模型 API**。提供小写 Provider ID、基础 URL、API 协议、凭据和至少一个模型。**API 协议**必须选网关实际使用的那一种，选择框提供三种：OpenAI Chat Completions、OpenAI Responses 和 Anthropic Messages，在当前 profile 的 `cordis.patch.yml` 中分别存为 `openai-completions`、`openai-responses` 和 `anthropic-messages`。一个提供商只使用一种协议，网关同时提供两种时需要建两个提供商。
+对于中转站、公司网关、自建服务器或已安装目录中不存在的提供商，把卡片切换到**自定义模型 API**。提供小写 Provider ID、基础 URL、API 协议、凭据和至少一个模型。**API 协议**必须选网关实际使用的那一种，选择框提供四种：OpenAI Chat Completions、OpenAI Responses、Anthropic Messages 和 Gemini API，在当前 profile 的 `cordis.patch.yml` 中分别存为 `openai-completions`、`openai-responses`、`anthropic-messages` 和 `google-generative-ai`。Gemini API 的基础 URL 包含 API 版本，例如 `https://gateway.example/v1beta`。一个提供商只使用一种协议，网关同时提供两种时需要建两个提供商。
 
 ![自定义模型 API 表单：Provider ID、显示名称、API 地址、API 协议、API 密钥](providers-custom-form.zh.png)
 

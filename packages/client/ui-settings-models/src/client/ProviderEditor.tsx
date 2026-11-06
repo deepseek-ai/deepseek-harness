@@ -37,6 +37,7 @@ import { validateReasoningEfforts } from './ModelReasoningEfforts.tsx'
 import type { ReasoningEffortsFailure } from './ModelReasoningEfforts.tsx'
 import { deriveKeyRef, protocolChoices, reasoningLevelChoices } from './store.ts'
 import { protocolLabel } from './protocol-label.ts'
+import { protocolNeedsKey, protocolReasoningLevels } from './protocol-rules.ts'
 import type { ModelsOperations } from './operations.ts'
 import type { SettingsSchemaOperations } from './schema-operations.ts'
 import type { en } from './locales.ts'
@@ -247,14 +248,22 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   // Only a hand-declared pi-ai route's rows edit reasoning levels — the one
   // model list with no installed catalog behind it — so only there are the
   // levels read and the declarations checked.
-  const reasoningLevels = useMemo(
+  const schemaReasoningLevels = useMemo(
     () => layout === 'pi-ai' && props.declared === true ? reasoningLevelChoices(namespace, schema) : [],
     [layout, props.declared, namespace, schema],
   )
-  const editsReasoning = reasoningLevels.length > 0
+  // What the form currently shows, which is what an interrogation must ask and
+  // what decides the protocol's own constraints: an edited-but-unsaved protocol.
+  const probeApi = stringAt(draft, 'api') ?? stringAt(fallback, 'api')
+  const reasoning = protocolReasoningLevels(probeApi, schemaReasoningLevels)
+  const editsReasoning = reasoning.levels.length > 0
   const validateModels = (value: unknown): DeepSeekModelsValidationFailure | ReasoningEffortsFailure | undefined =>
-    validateDeepSeekModels(value) ?? (editsReasoning ? validateReasoningEfforts(value) : undefined)
-  const modelFailure = validateModels(schema.getPath(draft, ['models']))
+    validateDeepSeekModels(value)
+    ?? (editsReasoning ? validateReasoningEfforts(value, reasoning.levelsOnly ? reasoning.levels : undefined) : undefined)
+  // Inherited models are checked too where the protocol narrows their levels:
+  // switching an inherited route's protocol must not write a route its own models break.
+  const modelFailure = validateModels(schema.getPath(draft, ['models'])
+    ?? (reasoning.levelsOnly ? schema.getPath(fallback, ['models']) : undefined))
   const retryNode = useMemo(
     () => layout === 'unknown' ? undefined : schema.nodeAtPath(root, [...settingsPath, 'retryPolicy']),
     [layout, root, schema, settingsPath],
@@ -271,14 +280,16 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   // as "no key supplied" rather than as a key — that is how a card whose
   // provider already has a stored key is edited without re-entering it.
   const keyValue = keyDraft.trim()
-  const credentialRequiredFailure = props.credentialRequired === true
-    && keyDraft.length > 0 && keyValue.length === 0
+  // A route whose protocol cannot authenticate without a key needs a key reference or a typed key.
+  const protocolNeedsKeyHere = layout === 'pi-ai' && protocolNeedsKey(probeApi)
+    && stringAt(draft, 'apiKeyEnv') === undefined && stringAt(fallback, 'apiKeyEnv') === undefined
+  const protocolKeyMissing = protocolNeedsKeyHere && keyValue.length === 0
+  const credentialRequiredFailure = (props.credentialRequired === true
+    && keyDraft.length > 0 && keyValue.length === 0) || protocolKeyMissing
     ? 'keyRequired' as const
     : undefined
   const shownKeyFailure = credentialRequiredFailure ?? keyFailure
-  // What the form currently shows, which is what an interrogation must ask:
-  // an edited-but-unsaved endpoint, and a key typed but not yet stored.
-  const probeApi = stringAt(draft, 'api') ?? stringAt(fallback, 'api')
+  // An edited-but-unsaved endpoint, and a key typed but not yet stored.
   const probeBaseURL = stringAt(draft, 'baseURL') ?? stringAt(fallback, 'baseURL')
   const probe = {
     settingsNs: namespace.ns,
@@ -457,15 +468,18 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
               value={keyDraft}
               placeholder={keyPlaceholder}
               aria-label={t('keyInput')}
-              aria-invalid={shownKeyFailure !== undefined}
+              aria-invalid={shownKeyFailure !== undefined && !protocolKeyMissing}
               aria-describedby={credentialHint === undefined ? undefined : `${props.provider}-credential-hint`}
-              required={props.credentialRequired === true}
+              required={props.credentialRequired === true || protocolNeedsKeyHere}
               autoFocus={props.autoFocusCredential === true}
               disabled={disabled}
               onChange={(event) => { setKeyDraft(event.target.value) }}
             />
             {credentialHint === undefined ? null : <p id={`${props.provider}-credential-hint`} className={styles[missingRefs ? 'notice' : detectedRef === undefined ? 'advancedHint' : 'savedNotice']}>{credentialHint}</p>}
-            {shownKeyFailure === undefined ? null : <p className={styles['error']}>{t(shownKeyFailure)}</p>}
+            {/* A key the protocol requires is a requirement still to meet, not a fault. */}
+            {shownKeyFailure === undefined
+              ? null
+              : <p className={styles[protocolKeyMissing ? 'advancedHint' : 'error']}>{t(shownKeyFailure)}</p>}
           </div>}
         {props.credentialOnly === true ? null : <details
           className={styles['customized']}
@@ -579,10 +593,11 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
                 <ModelListEditor
                   {...catalogProps}
                   catalogProvider={props.declared === true ? undefined : props.provider}
-                  reasoningLevels={reasoningLevels}
+                  reasoningLevels={reasoning.levels}
+                  reasoningLevelsOnly={reasoning.levelsOnly}
                   defaultInput={Array.isArray(defaultInput) ? defaultInput : undefined}
                   probe={probe}
-                  probeBlocked={keyFailure}
+                  probeBlocked={shownKeyFailure}
                   operations={operations}
                   onBusyChange={setListBusy}
                 />
