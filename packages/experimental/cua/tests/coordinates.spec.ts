@@ -1,4 +1,4 @@
-/** Pixel mappings follow the delivered screenshot and invalidate independently of AX indices. */
+/** Pixel mappings follow the delivered screenshot and invalidate independently of element ids. */
 import { expect, it } from 'vitest'
 import { CuaCoordinates } from '../src/coordinates.ts'
 import { Request } from '../src/protocol.ts'
@@ -6,7 +6,7 @@ import type { CuaAppHandle, CuaWindowInfo } from '../src/types.ts'
 
 const handle = 'app' as CuaAppHandle
 const window = (width = 640, height = 480, x = 100): CuaWindowInfo => ({
-  windowId: 7, pid: 17, appName: 'Fixture', title: 'Window', bounds: { x, y: 200, width, height }, isOnScreen: true, onCurrentSpace: true,
+  windowId: 7, appName: 'Fixture', title: 'Window', bounds: { x, y: 200, width, height }, isOnScreen: true, onCurrentSpace: true,
 })
 const call = (method: string, params: object) => Request.parse({ method, params: { appHandle: handle, windowId: 7, ...params } })
 
@@ -14,7 +14,7 @@ it('maps Retina and downscaled screenshot pixels to the same native point', () =
   const coordinates = new CuaCoordinates()
   for (const pixels of [{ width: 1280, height: 960 }, { width: 320, height: 240 }]) {
     coordinates.screenshot(handle, 7, window().bounds, pixels)
-    for (const method of ['click', 'hover', 'scroll']) {
+    for (const method of ['click', 'mouseMove', 'scroll']) {
       const request = call(method, { x: pixels.width / 2, y: pixels.height / 4,
         ...method === 'scroll' ? { deltaLinesX: 0, deltaLinesY: -1 } : {} })
       expect(coordinates.parameters(request)).toMatchObject({ x: 320, y: 120 })
@@ -22,7 +22,7 @@ it('maps Retina and downscaled screenshot pixels to the same native point', () =
   }
 })
 
-it.each(['click', 'hover', 'scroll'])('preserves thousandth scaling for %s across screenshot resolutions', (method) => {
+it.each(['click', 'mouseMove', 'scroll'])('preserves thousandth scaling for %s across screenshot resolutions', (method) => {
   const coordinates = new CuaCoordinates()
   const bounds = window(1200, 900).bounds
   coordinates.observe(handle, [window(1200, 900)])
@@ -72,11 +72,11 @@ it('preserves pixels after movement but requires a new image after resize or clo
 
 it('rejects unobserved, empty and out-of-image targets without native dispatch', () => {
   const coordinates = new CuaCoordinates()
-  expect(() => coordinates.parameters(call('hover', { x: 1, y: 1 }))).toThrow('STALE_SNAPSHOT')
+  expect(() => coordinates.parameters(call('mouseMove', { x: 1, y: 1 }))).toThrow('STALE_SNAPSHOT')
   coordinates.observe(handle, [window(0, 480)])
-  expect(() => coordinates.parameters(call('hover', { x: 0, y: 0, relative: true }))).toThrow('STALE_SNAPSHOT')
+  expect(() => coordinates.parameters(call('mouseMove', { x: 0, y: 0, relative: true }))).toThrow('STALE_SNAPSHOT')
   coordinates.observe(handle, [window(640, 0)])
-  expect(() => coordinates.parameters(call('hover', { x: 0, y: 0, relative: true }))).toThrow('STALE_SNAPSHOT')
+  expect(() => coordinates.parameters(call('mouseMove', { x: 0, y: 0, relative: true }))).toThrow('STALE_SNAPSHOT')
   coordinates.screenshot(handle, 7, window().bounds, { width: 320, height: 240 })
   for (const [x, y] of [[320, 0], [0, 240]]) expect(() => coordinates.parameters(call('click', { x, y }))).toThrow('INVALID_ARGUMENT')
 })
@@ -87,7 +87,7 @@ it('keeps different application/window mappings independent and leaves element a
   coordinates.screenshot(handle, 7, window().bounds, { width: 1280, height: 960 })
   coordinates.screenshot('other' as CuaAppHandle, 7, window(100, 100).bounds, { width: 100, height: 100 })
   expect(coordinates.parameters(call('click', { x: 640, y: 480 }))).toMatchObject({ x: 320, y: 240 })
-  const request = Request.parse({ method: 'hover', params: { appHandle: handle, snapshotId: 's', elementIndex: 2 } })
+  const request = Request.parse({ method: 'mouseMove', params: { appHandle: handle, snapshotId: 's', elementId: '2' } })
   expect(coordinates.parameters(request)).toEqual(request.params)
 })
 

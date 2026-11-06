@@ -22,7 +22,7 @@ vi.mock('../src/native-client.ts', async original => ({
   NativeClient: class {
     disposed = false
     request = vi.fn(async (method: string) => method === 'openPermissionSettings' ? { opened: true }
-      : method === 'applicationIcons' ? {} : { accessibility: false, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } })
+      : method === 'applicationIcons' ? {} : { platform: 'darwin' as const, accessibility: false, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } })
     invalidate() { this.disposed = true }
     dispose = vi.fn(async () => { this.disposed = true })
     constructor() { native.instances.push(this) }
@@ -160,8 +160,8 @@ it('checks native permissions without converting an OS request into a grant', as
   await f.access.select(f.agent, f.client, handle, identity, signal)
   const before = (await f.ctx.cuaAccess.applications())
   expect(before).toEqual({ allowedApps: [], blockedApps: [], persistentAvailable: true })
-  expect(await f.ctx.cuaAccess.systemStatus()).toMatchObject({ accessibility: false, screenRecording: false })
-  expect(await f.ctx.cuaAccess.requestPermission('accessibility', 'en')).toMatchObject({ accessibility: false })
+  expect(await f.ctx.cuaAccess.systemStatus()).toMatchObject({ platform: 'darwin' as const, accessibility: false, screenRecording: false })
+  expect(await f.ctx.cuaAccess.requestPermission('accessibility', 'en')).toMatchObject({ platform: 'darwin' as const, accessibility: false })
   await f.ctx.cuaAccess.openSettings('screenRecording', 'en')
   const transport = native.instances[1]!
   expect(transport.request).toHaveBeenCalledWith('requestPermission',
@@ -170,7 +170,7 @@ it('checks native permissions without converting an OS request into a grant', as
   transport.request.mockRejectedValueOnce(new Error('transport ended'))
   await expect(f.ctx.cuaAccess.systemStatus()).rejects.toThrow('transport ended')
   transport.disposed = true
-  expect((await f.ctx.cuaAccess.systemStatus()).screenRecording).toBe(false)
+  expect(await f.ctx.cuaAccess.systemStatus()).toMatchObject({ platform: 'darwin', screenRecording: false })
   expect(transport.dispose).toHaveBeenCalledOnce()
   await f.access.dispose()
   await expect(f.ctx.cuaAccess.systemStatus()).rejects.toThrow()
@@ -377,7 +377,7 @@ it('skips native icon work for an empty application list and propagates icon fai
   native.instances.at(-1)!.request.mockRejectedValueOnce(new Error('icons unavailable'))
   await expect(f.ctx.cuaAccess.applicationIcons()).rejects.toThrow('icons unavailable')
   expect((await f.ctx.cuaAccess.applications()).allowedApps).toHaveLength(1)
-  expect((await f.ctx.cuaAccess.systemStatus()).accessibility).toBe(false)
+  expect(await f.ctx.cuaAccess.systemStatus()).toMatchObject({ platform: 'darwin', accessibility: false })
 })
 
 it('keeps pathless grants manageable without requesting their icons', async () => {
@@ -396,7 +396,7 @@ it('preserves captured launch metadata separately from the current helper parent
   await f.ctx.cuaAccess.systemStatus()
   const control = native.instances.at(-1)!
   const launchApplication = { name: 'Visual Studio Code', path: '/Applications/Visual Studio Code.app', icon: 'data:image/png;base64,aWNvbg==' }
-  control.request.mockResolvedValueOnce({ accessibility: false, screenRecording: false,
+  control.request.mockResolvedValueOnce({ platform: 'darwin' as const, accessibility: false, screenRecording: false,
     helper: { pid: 9 }, parent: { pid: 1, path: '/sbin/launchd' }, launchApplication })
   expect(await f.ctx.cuaAccess.systemStatus()).toMatchObject({ parent: { pid: 1 }, launchApplication })
 })
@@ -464,6 +464,17 @@ it('does not reactivate old handles when stored permission was revoked and later
   expect(f.answer).toHaveBeenCalledOnce()
 })
 
+it('retires a control connection after reporting failed cleanup so later status can recover', async () => {
+  const f = await setup()
+  await f.ctx.cuaAccess.systemStatus()
+  const previous = native.instances.at(-1)!
+  previous.disposed = true
+  previous.dispose.mockRejectedValue(new Error('cleanup was not acknowledged'))
+  await expect(f.ctx.cuaAccess.systemStatus()).rejects.toThrow('cleanup was not acknowledged')
+  await expect(f.ctx.cuaAccess.systemStatus()).resolves.toMatchObject({ platform: 'darwin' })
+  expect(native.instances.at(-1)).not.toBe(previous)
+  expect(previous.dispose).toHaveBeenCalledOnce()
+})
 it.each([new NativeError('SETTINGS_UNAVAILABLE', '请手动打开系统设置'), new Error('transport ended'), new NativeError('NATIVE_EXIT', 'helper exited')])(
   'preserves provider and transport settings failures: %s', async (failure) => {
     const f = await setup()
