@@ -85,6 +85,15 @@ def check_file_panel(call, owner, primary_params, primary, directory, wait_state
         assert f"window {sheet_id}; select that window" in error["message"], error
     ready = call("getState", {**owner, "windowId": sheet_id, "maxElements": 2000, "maxDepth": 25})
     open_button = next(e for e in ready["elements"] if e["identifier"] == "OKButton" and e["enabled"])
+    image = call("screenshot", {**owner, "windowId": sheet_id})
+    png = Path(directory) / "open-sheet.png"
+    png.write_bytes(base64.b64decode(image["data"], validate=True))
+    x, y, width, height = open_button["bounds"]
+    frame = image["bounds"]
+    expected = ((x - frame["x"]) / frame["width"], (y - frame["y"]) / frame["height"],
+                width / frame["width"], height / frame["height"])
+    subprocess.run(["swift", str(ROOT / "tests/CheckScreenshotLabel.swift"), str(png),
+                    open_button["title"], *map(str, expected)], check=True)
     assert call("click", {**owner, "windowId": sheet_id, "snapshotId": ready["snapshotId"], "elementId": open_button["elementId"]})["dispatched"]
     wait_state(lambda state: bool(state["selectedFile"]) and Path(state["selectedFile"]).samefile(selected_file),
                "File picker did not return the intended file")
