@@ -12,6 +12,7 @@ export type LinuxExecve = (
   argv: string[],
   env: Record<string, string>,
   control?: 'pipe',
+  pipeFds?: readonly number[],
 ) => never
 
 type NativeExecve = (
@@ -59,7 +60,7 @@ export function loadLinuxExecve(): LinuxExecve {
   const nativeFcntl = libc.func(
     'int fcntl(int fd, int cmd, int arg)',
   ) as NativeFcntl
-  cachedExecve = (file, argv, env, control) => {
+  cachedExecve = (file, argv, env, control, pipeFds = []) => {
     const descriptors = control === 'pipe'
       ? [...STANDARD_FILE_DESCRIPTORS, SUBPROCESS_CONTROL_FD]
       : STANDARD_FILE_DESCRIPTORS
@@ -71,10 +72,9 @@ export function loadLinuxExecve(): LinuxExecve {
         throw systemError(koffi.errno(), 'fcntl')
       }
     }
-    // Node may mark inherited stdio nonblocking while bootstrapping. Native
-    // targets (including WSL interop) expect blocking streams; leaving this flag
-    // set can silently drop output when the parent cannot drain it immediately.
-    for (const fd of STANDARD_FILE_DESCRIPTORS) {
+    // F_SETFL changes the open file description in every process sharing it.
+    // Only pipes created for this child are safe to make blocking for native targets.
+    for (const fd of pipeFds) {
       const flags = nativeFcntl(fd, F_GETFL, 0)
       if (flags === -1) throw systemError(koffi.errno(), 'fcntl')
       if ((flags & O_NONBLOCK) !== 0 && nativeFcntl(fd, F_SETFL, flags & ~O_NONBLOCK) === -1) {

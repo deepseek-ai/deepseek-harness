@@ -17,6 +17,8 @@ import { basename, dirname, isAbsolute, join } from 'node:path'
 export interface LinuxLaunchRequest {
   cwd: string
   env: Record<string, string>
+  /** Only child-owned pipe endpoints may have their shared file status flags changed. */
+  pipeFds?: number[]
   control?: 'pipe'
 }
 
@@ -139,12 +141,14 @@ export function consumeLinuxLaunchRequest(requestPath: string): LinuxLaunchReque
   const text = readFileSync(requestPath, 'utf8')
   unlinkSync(requestPath)
   const value: unknown = JSON.parse(text)
-  if (!isRecord(value) || !hasExactKeys(value, ['cwd', 'env'], ['control'])
+  if (!isRecord(value) || !hasExactKeys(value, ['cwd', 'env'], ['control', 'pipeFds'])
+    || (value.pipeFds !== undefined && !(Array.isArray(value.pipeFds) && value.pipeFds.every(fd => fd === 0 || fd === 1 || fd === 2)))
     || typeof value.cwd !== 'string' || !isStringRecord(value.env)
     || (value.control !== undefined && value.control !== 'pipe')) {
     throw new Error('subprocess runner received an invalid Linux launch request')
   }
-  return { cwd: value.cwd, env: value.env, ...value.control === 'pipe' ? { control: 'pipe' as const } : {} }
+  return { cwd: value.cwd, env: value.env, ...value.pipeFds === undefined ? {} : { pipeFds: value.pipeFds },
+    ...value.control === 'pipe' ? { control: 'pipe' as const } : {} }
 }
 
 /**
