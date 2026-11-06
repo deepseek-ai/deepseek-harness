@@ -496,7 +496,7 @@ export function ModelSelect(
           ref={menuRef}
           tabIndex={typeof pane === 'object' ? -1 : undefined}
           id={`${id}-menu`}
-          className={css.menu}
+          className={clsx(css.menu, (pane === 'root' || typeof pane === 'object') && css.settingsMenu)}
           style={anchorStyle}
           role={pane === 'model' ? 'group' : 'menu'}
           aria-label={typeof pane === 'object' ? pane.title : t('menu.aria')}

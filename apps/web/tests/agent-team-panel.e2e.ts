@@ -30,7 +30,7 @@ const RECEIPT_LOCALES = [
   },
   {
     language: 'Chinese', code: 'zh', browserLocale: 'zh-CN', connect: connectFreshWorkspaceZh,
-    modelButton: /^选择模型/u, toggle: '启用智能体团队协作', title: '智能体团队协作',
+    modelButton: /^选择模型/u, toggle: '开启智能体团队协作', title: '智能体团队协作',
     enabled: '已开启', disabled: '已停用',
     suggestions: '触发候选建议', commandLabel: '智能体团队协作',
     failure: '执行失败：Use /team on or /team off.',
@@ -168,7 +168,7 @@ describe('web e2e: agent teamwork panel', () => {
     }
   })
 
-  it('keeps explanatory text noninteractive and the settings page inside wide and narrow viewports', async () => {
+  it('aligns settings with the root menu and keeps explanatory text noninteractive in wide and narrow viewports', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-team-settings-page'))
     const viewport = page.viewportSize()!
     try {
@@ -181,16 +181,37 @@ describe('web e2e: agent teamwork panel', () => {
       expect(await toggle.getAttribute('aria-checked')).toBe('false')
       for (const size of [viewport, { width: 390, height: 700 }]) {
         await page.setViewportSize(size)
+        await page.keyboard.press('Escape')
+        const summary = menu.getByRole('menuitem', { name: 'Agent teamwork Off', exact: true })
+        await summary.waitFor()
+        const rootBounds = await menu.evaluate((element) => {
+          const { width, left, right } = element.getBoundingClientRect()
+          return { width, left, right }
+        })
+        expect(rootBounds.width).toBe(240)
+        await summary.click()
+        await toggle.waitFor()
+        await expect.poll(() => menu.evaluate((element) => {
+          const { width, left, right } = element.getBoundingClientRect()
+          return { width, left, right }
+        })).toEqual(rootBounds)
         await expect.poll(() => menu.evaluate((element) => {
           const bounds = element.getBoundingClientRect()
           return bounds.left >= 12 && bounds.right <= innerWidth - 12
             && bounds.top >= 12 && bounds.bottom <= innerHeight - 12
             && element.scrollWidth <= element.clientWidth
         })).toBe(true)
+        expect(await description.evaluate((element) => {
+          const bounds = element.getBoundingClientRect()
+          const style = getComputedStyle(element)
+          return bounds.height > Number.parseFloat(style.lineHeight)
+            && element.scrollHeight <= element.clientHeight && style.textOverflow !== 'ellipsis'
+        })).toBe(true)
       }
       await toggle.click()
       await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
-      await page.keyboard.press('Escape')
+      await expect.poll(() => toggle.isEnabled()).toBe(true)
+      await toggle.press('Escape')
       await menu.getByRole('menuitem', { name: 'Agent teamwork On', exact: true }).click()
       await toggle.click()
       await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('false')
@@ -1028,22 +1049,27 @@ it('uses the Chinese collaboration name in the switch and disable confirmation',
     await connectFreshWorkspaceZh(page, scaffold.workspaceCwd)
     const agent = scaffold.ctx.agents.list()[0]
     if (agent === undefined) throw new Error('Chinese Team fixture has no Agent')
+    const trigger = page.getByRole('button', { name: /^选择模型/u })
+    await trigger.click()
+    await page.getByRole('menuitem', { name: '智能体团队协作 关闭', exact: true }).waitFor()
+    await closeModelMenu(page)
     await scaffold.ctx.agentTeams.setEnabled(agent, true)
     const selection = agent.model.current()
     if (selection === undefined) throw new Error('Chinese Team fixture has no model')
     agent.session.append('request/header', { header: { config: selection }, reason: 'initial' })
     await scaffold.ctx.sessions.flush(agent.session)
-    await openTeamSettings(page, true)
-    const toggle = page.getByRole('switch', { name: '启用智能体团队协作', exact: true })
+    await trigger.click()
+    await page.getByRole('menuitem', { name: '智能体团队协作 开启', exact: true }).click()
+    const toggle = page.getByRole('switch', { name: '开启智能体团队协作', exact: true })
     await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
     await page.getByText('通过共享任务板协调多个智能体的分工与进度，复杂任务表现更佳，token 开销也相应更高。', { exact: true }).waitFor()
     expect(await page.getByRole('tooltip').count()).toBe(0)
     expect(await toggle.evaluate(element => element.parentElement!.scrollWidth <= element.parentElement!.clientWidth)).toBe(true)
     const menu = await captureStableAria(page, '[role="menu"]', scaffold.workspaceCwd)
     await toggle.click()
-    const dialog = page.getByRole('dialog', { name: '确认停用智能体团队协作？', exact: true })
+    const dialog = page.getByRole('dialog', { name: '确认关闭智能体团队协作？', exact: true })
     await dialog.waitFor()
-    await dialog.getByText('对话过程中停用智能体团队协作，将停止共享任务工具和团队协调指令。', { exact: true }).waitFor()
+    await dialog.getByText('对话过程中关闭智能体团队协作，将停止共享任务工具和团队协调指令。', { exact: true }).waitFor()
     await assertWarningDialogLayout(dialog)
     const confirmation = await captureStableAria(page, '[aria-modal="true"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'collaboration.zh.expected.md'),

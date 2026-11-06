@@ -61,7 +61,7 @@ composer 菜单中的模型名称和推理等级均使用 400（regular）字重
 
 当会话被其他写句柄占用时，模型选择失败提示用户退出其他正在运行的 DSH 后重试。
 
-会话级列表 slot `conversation.input.model.options` 在模型与推理等级选项下方追加控件。Owner 提供 `locked`、`reportFailure(message)`、`dismiss()` 和 `openPage({ key, title })`。二级内容注册到会话级 keyed slot `conversation.input.model.page`；入口按钮的 `data-model-menu-page` 与注册键一致。菜单以 `title` 作为页面无障碍名称，进入时聚焦首个可用开关，Escape 返回入口行；Tab 关闭二级页而不激活开关。二级页收到 `locked`、`reportFailure` 和 `dismiss`，设置与确认逻辑仍由贡献插件负责。`locked` 包含模型或推理等级保存中状态。`dismiss()` 关闭菜单并同步聚焦触发按钮，供贡献方随后打开其他浮层。
+会话级列表 slot `conversation.input.model.options` 在模型与推理等级选项下方追加控件。Owner 提供 `locked`、`reportFailure(message)`、`dismiss()` 和 `openPage({ key, title })`。二级内容注册到会话级 keyed slot `conversation.input.model.page`；入口按钮的 `data-model-menu-page` 与注册键一致。一级菜单与二级页共用 240px 宽度，并保持视口两侧的 12px 边距；模型与推理等级列表仍按内容定宽。菜单以 `title` 作为页面无障碍名称，进入时聚焦首个可用开关，Escape 返回入口行；Tab 关闭二级页而不激活开关。二级页收到 `locked`、`reportFailure` 和 `dismiss`，设置与确认逻辑仍由贡献插件负责。`locked` 包含模型或推理等级保存中状态。`dismiss()` 关闭菜单并同步聚焦触发按钮，供贡献方随后打开其他浮层。
 
 -----
 

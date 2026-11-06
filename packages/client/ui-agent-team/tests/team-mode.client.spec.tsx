@@ -43,13 +43,24 @@ it.each(Object.entries({ zh, en, ja, es, fr, de, ru, pt }).flatMap(([locale, dic
   expect(input.dismiss).not.toHaveBeenCalled()
 })
 
+it.each([
+  { enabled: false, state: '关闭' },
+  { enabled: true, state: '开启' },
+])('shows the full Chinese saved state $state in the summary', ({ enabled, state }) => {
+  const input = props(enabled)
+  render(<TeamModeToggle {...input} />)
+  const summary = screen.getByRole('menuitem', { name: `智能体团队协作${state}` })
+  expect(summary.textContent).toBe(`智能体团队协作${state}`)
+  expect(input.selectTeamMode).not.toHaveBeenCalled()
+})
+
 it('keeps summary state projection-owned and blocks navigation while locked', () => {
   const input = props(false)
   const view = render(<TeamModeToggle {...input} />)
-  expect(screen.getByText('关')).toBeTruthy()
+  expect(screen.getByText('关闭')).toBeTruthy()
   const lockedInput = props(true)
   view.rerender(<TeamModeToggle {...lockedInput} locked />)
-  expect(screen.getByText('开')).toBeTruthy()
+  expect(screen.getByText('开启')).toBeTruthy()
   const summary = screen.getByRole('menuitem')
   expect(summary.hasAttribute('disabled')).toBe(true)
   fireEvent.click(summary)
@@ -69,7 +80,7 @@ it.each([false, true])('blocks repeated writes while waiting for persisted mode 
   onTestFinished(async () => { await act(async () => { pending.resolve(null) }) })
   const select = vi.fn(() => pending.promise)
   const view = render(<TeamModePage {...props(enabled, select)} />)
-  const toggle = screen.getByRole('switch', { name: '启用智能体团队协作' })
+  const toggle = screen.getByRole('switch', { name: '开启智能体团队协作' })
   toggle.focus()
   fireEvent.click(toggle)
   expect(select).toHaveBeenCalledExactlyOnceWith(!enabled)
