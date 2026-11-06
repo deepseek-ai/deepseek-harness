@@ -22,6 +22,34 @@
   white-space: pre-wrap;
 }
 
+.inlineBody {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.summaryTitle {
+  color: var(--dsw-alias-state-business-primary);
+  overflow-wrap: anywhere;
+}
+
+.summaryDetail {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.summaryBody {
+  color: var(--dsw-alias-label-primary);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
 .source {
   min-width: 0;
   padding: 0;

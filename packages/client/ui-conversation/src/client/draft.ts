@@ -22,6 +22,7 @@ const quoteSchema = z.object({
   offset: z.number().int().nonnegative(),
   length: z.number().int().positive(),
   text: z.string().refine(text => text.trim() !== ''),
+  summary: z.object({ label: z.string(), title: z.string(), detail: z.string().optional(), body: z.string() }).optional(),
 })
 
 const snapshotSchema = z.object({

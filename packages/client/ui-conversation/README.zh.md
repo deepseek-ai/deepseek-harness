@@ -61,7 +61,7 @@ Queue 预览启用空白折叠和文档边缘 trim，保留 emoji，并使用 CS
 
 [Message quotes](../../session/message-quotes/README.zh.md) 通过相同的 UserText 扩展点注册引用匹配与渲染。 每个用户文本容器和草稿编辑器各自拥有独立的悬停卡片分组，其中的 quote 原文弹层会立即互相替换。
 
-现有语义 `DraftSnapshot` 在 references 旁保留 quote 文本及 clipboard 坐标范围。存储接受较早的字符串和仅含 reference 的草稿；Session 切换和 Workspace 转移通过现有编辑器 runtime 保留原子 quote，发送失败时它们留在编辑器中。`inputActions.insertQuote(text)` 仅在输入框处于 plain 模式时插入非空选区。提交产出普通 Markdown 文本；待发送回显、队列行、steering 行和持久消息使用同一文本匹配器。
+现有语义 `DraftSnapshot` 在 references 旁保留 quote 文本及 clipboard 坐标范围。存储接受较早的字符串和仅含 reference 的草稿；Session 切换和 Workspace 转移通过现有编辑器 runtime 保留原子 quote，发送失败时它们留在编辑器中。`inputActions.insertQuote(text, summary?)` 仅在输入框处于 plain 模式时插入非空选区；可选的 `QuoteSummary` 在输入框中替代文本显示并随草稿保存，发送的消息仍携带该文本。提交产出普通 Markdown 文本；待发送回显、队列行、steering 行和持久消息使用同一文本匹配器。
 
 `UiConversation.interactions` 拥有插件对文本选择和右键手势的注册。每个注册项提供同步处理函数，其 ID 选择对应的 keyed Slot 组件；插件通过 Slot injection 机制渲染。处理函数调用 `open()` 展示，需要替代浏览器默认行为时单独调用 `preventDefault()`。Chat 提供 DOM 选区和区域内布局；机制不从 DOM 位置推断原始来源数据或 Markdown 偏移。
 
