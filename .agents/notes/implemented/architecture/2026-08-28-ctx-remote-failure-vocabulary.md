@@ -16,12 +16,12 @@ Fixed Host facts bypassed `ctx.remote` too: the Host home came from `(ctx.get('c
 
 ## Decision
 
-`@deepseek-ai/dsh-typert-protocol` exports one failure class, `RemoteError<Code>`: a real `Error` carrying readonly `code` and `details`, the structural marker `isDSHRemoteError`, and standard `ErrorOptions` (`cause` holds in-process only). The correspondence between codes and details lives in one merge-extensible `RemoteErrorDetailsMap`; `RemoteFailure` is the code-distributed union of instances, and `RemoteResult<T>` keeps its shape.
+`@deepseek-ai/dsh-typert-protocol` exports one failure class, `RemoteError<Code>`: a `HarnessError` from the dependency-free `@deepseek-ai/dsh-error` carrying readonly `code` and `details`, the structural marker `isDSHRemoteError`, and standard `ErrorOptions` (`cause` holds in-process only). The correspondence between codes and details lives in one merge-extensible `RemoteErrorDetailsMap`; `RemoteFailure` is the code-distributed union of instances, and `RemoteResult<T>` keeps its shape.
 
 ```text
-export class RemoteError<Code extends RemoteErrorCode = RemoteErrorCode> extends Error {
+export class RemoteError<Code extends RemoteErrorCode = RemoteErrorCode> extends HarnessError {
   readonly isDSHRemoteError: true = true
-  constructor(readonly code: Code, message: string,
+  constructor(override readonly code: Code, message: string,
     readonly details: RemoteErrorDetailsMap[Code], options?: ErrorOptions)
 }
 export type RemoteFailure = { [C in RemoteErrorCode]: RemoteError<C> }[RemoteErrorCode]

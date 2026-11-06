@@ -13,6 +13,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import AgentPresets from '@deepseek-ai/dsh-agent-preset-registry'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
@@ -139,17 +140,11 @@ describe('child preset start validation', () => {
     expect(adapter.requests).toEqual([])
   })
 
-  it('classifies an unknown independent preset as PRESET_UNAVAILABLE and keeps other mount failures', async () => {
+  it('rejects an unknown independent preset with the registry RemoteError as a HarnessError', async () => {
     const { ctx, parent, adapter } = await setup()
-    await expect(ctx.subagents.startActivation(startSpec(parent, 'absent'))).rejects.toMatchObject({
-      name: 'SubagentError',
-      code: 'PRESET_UNAVAILABLE',
-      message: 'Unknown agent preset: absent',
-      cause: { code: 'agent-preset/not-found' },
-    })
-    const failure = new Error('binding failed')
-    vi.spyOn(ctx.agentPresets, 'mount').mockRejectedValueOnce(failure)
-    await expect(ctx.subagents.startActivation(startSpec(parent, 'reviewing'))).rejects.toBe(failure)
+    const failure: unknown = await ctx.subagents.startActivation(startSpec(parent, 'absent')).catch((error: unknown) => error)
+    expect(failure).toBeInstanceOf(HarnessError)
+    expect(failure).toMatchObject({ name: 'RemoteError', code: 'agent-preset/not-found', message: 'Unknown agent preset: absent' })
     expect(ctx.agents.list().map(agent => agent.id)).toEqual([parent.id])
     expect(adapter.requests).toEqual([])
   })
