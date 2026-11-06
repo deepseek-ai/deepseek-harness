@@ -6,7 +6,7 @@ export const PLATFORM_GUIDANCE = 'macOS: accessibility tree operations are avail
 
 const methodDetails = new Map<string, string>([
   ['mouseMove', 'Default hover requires both AXShowAlternateUI and AXShowDefaultUI on an enabled element or ancestor. Without an AX route it returns HOVER_UNAVAILABLE before sending input. Prefer click on a visible control or performAction with an advertised action. For web content without an AX hover action, use browser tools. Only systemPointerHover: true permits moving the visible cursor. If this returns FOREGROUND_REQUIRED, activate the app and check that the point is unobscured.'],
-  ['click', 'Both target forms send mouse-down and mouse-up events: an ID targets the element center and coordinates target the given point. Prefer invoke(id) for a background control’s default action. For a mouse click, call app.activate() first and observe the target again. A background app can ignore a dispatched click.'],
+  ['click', 'Prefer invoke(id) for a background control’s default action. For a mouse click on a background app, call app.activate() first and re-read the target. Both target forms send mouse-down and mouse-up events. click(id) uses the center of the full element bounds. If that center is outside the window, take a fresh win.getScreenshot() and use click([x, y]) on a visible part of the control in screenshot pixels. A background app can ignore the events even when dispatched is true. Verify the expected effect, such as a changed selection, before typing or retrying.'],
 ])
 
 /** Complete model instructions for this provider. */

@@ -29,7 +29,8 @@ it('states the macOS accessibility, keyboard, and mouse levels', () => {
   expect(PLATFORM_GUIDANCE).toContain('Simulated mouse input is available at window level')
   const hover = GUIDANCE.split('\n').find(line => line.startsWith('- mouseMove('))
   for (const term of ['AXShowAlternateUI', 'AXShowDefaultUI', 'HOVER_UNAVAILABLE', 'systemPointerHover']) expect(hover).toContain(term)
-  expect(GUIDANCE.split('\n').find(line => line.startsWith('- click('))).toContain('call app.activate() first')
+  const click = GUIDANCE.split('\n').find(line => line.startsWith('- click('))
+  for (const step of ['call app.activate() first', 'outside the window', 'screenshot pixels', 'before typing or retrying']) expect(click).toContain(step)
   for (const platformDetail of ['macOS', 'AXShowAlternateUI', 'AXRaise', 'HOVER_UNAVAILABLE', 'systemPointerHover', 'mouse-down']) {
     expect(COMMON_GUIDANCE).not.toContain(platformDetail)
   }
