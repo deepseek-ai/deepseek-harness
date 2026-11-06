@@ -478,8 +478,12 @@ describe('GitHub provider commits', () => {
 
     await expect(provider(gh.run).compare(pull(7, enterprise), sha(1), sha(3), signal)).resolves.toBe('diff --git a/x b/x\n')
     expect(gh.calls).toEqual([[
-      'api', '--hostname', 'ghe.corp.example', '-H', 'Accept: application/vnd.github.diff', `repos/team/svc/compare/${sha(1)}...${sha(3)}`,
+      'api', '--hostname', 'ghe.corp.example', '--allow-escape-sequences', '-H', 'Accept: application/vnd.github.diff',
+      `repos/team/svc/compare/${sha(1)}...${sha(3)}`,
     ]])
+    const refused = 'gh: Sorry, this diff is taking too long to generate. (HTTP 406)'
+    await expect(provider(fakeGh(() => output({ message: 'Sorry, this diff is taking too long to generate.' }, 1, refused)).run)
+      .compare(pull(7), sha(1), sha(3), signal)).resolves.toEqual({ code: 'too-large', message: 'Sorry, this diff is taking too long to generate.' })
     await expect(provider(gh.run).compare(pull(7), 'main', sha(3), signal)).rejects.toThrow('forge-github: invalid commit "main"')
     await expect(provider(gh.run).compare(pull(7), sha(1), 'HEAD~1', signal)).rejects.toThrow('forge-github: invalid commit "HEAD~1"')
   })

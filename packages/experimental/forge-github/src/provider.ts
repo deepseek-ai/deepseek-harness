@@ -24,6 +24,9 @@ const HTTP_STATUS = /\(HTTP (\d{3})\)/
  */
 const TOO_LARGE = /\btoo_large\b/
 
+/** HTTP status GitHub answers when it refuses to render a diff over its limits. */
+const NOT_ACCEPTABLE = '406'
+
 /** A full SHA-1 or SHA-256 object name. */
 const COMMIT = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i
 
@@ -177,15 +180,9 @@ export class GitHubProvider implements ForgeProvider {
 
   /** Read the changes between two commits through the compare API in its diff form. */
   async compare(ref: ChangeRequestRef, base: string, head: string, signal: AbortSignal): Promise<string | ForgeFailure> {
-    const { host, owner, name } = checkedRepository(ref)
-    const failure = this.hostFailure(host)
+    const failure = this.hostFailure(checkedRepository(ref).host)
     if (failure !== undefined) return failure
-    for (const commit of [base, head]) {
-      if (!COMMIT.test(commit)) throw new Error(`forge-github: invalid commit ${JSON.stringify(commit)}`)
-    }
-    return await this.read([
-      'api', '--hostname', host, '-H', 'Accept: application/vnd.github.diff', `repos/${owner}/${name}/compare/${base}...${head}`,
-    ], signal)
+    return await readComparison(async (args, operation) => await this.read(args, operation), ref.repository, base, head, signal)
   }
 
   fileUrl(ref: ChangeRequestRef, commit: string, path: string): string {
@@ -223,7 +220,7 @@ export class GitHubProvider implements ForgeProvider {
     if (output.exitCode === 0) return output.stdout
     const { message, status } = refusal(output)
     if (AUTHENTICATION.test(output.stderr)) return { code: 'unauthenticated', message }
-    if (TOO_LARGE.test(output.stderr) || TOO_LARGE.test(output.stdout)) return { code: 'too-large', message }
+    if (status === NOT_ACCEPTABLE || TOO_LARGE.test(output.stderr) || TOO_LARGE.test(output.stdout)) return { code: 'too-large', message }
     return { code: status === '404' || /could not resolve to a pullrequest/i.test(output.stderr) ? 'not-found' : 'unavailable', message }
   }
 
@@ -342,4 +339,32 @@ function parseJson(text: string): unknown {
 
 function firstLine(text: string): string | undefined {
   return text.split('\n').map(line => line.trim()).find(line => line.length > 0)
+}
+
+/** Runs one reading `gh` command and maps a refusal to a failure, as the provider's reads do. */
+type GhTextReader = (args: readonly string[], signal: AbortSignal) => Promise<string | ForgeFailure>
+
+/**
+ * Read the unified patch from the merge base of `base` and `head` to `head` through the REST compare endpoint.
+ * Both ends are commit object names, so the answer never follows a moving branch. The patch keeps terminal escape
+ * sequences that file contents hold; `gh` 2.97 and newer refuses to print them without `--allow-escape-sequences`.
+ * @param read - runs `gh` with the provider's output limit and failure mapping.
+ * @param repository - repository that holds both commits, with an owner and name already checked for inlining.
+ * @param base - commit whose merge base with `head` starts the patch.
+ * @param head - commit the patch ends at.
+ * @param signal - cancellation of the read.
+ * @returns the patch with `a/` and `b/` path prefixes, or why GitHub did not provide it.
+ * @throws when `base` or `head` is not a full commit object name.
+ */
+async function readComparison(
+  read: GhTextReader, repository: ForgeRepository, base: string, head: string, signal: AbortSignal,
+): Promise<string | ForgeFailure> {
+  for (const commit of [base, head]) {
+    if (!COMMIT.test(commit)) throw new Error(`forge-github: invalid commit ${JSON.stringify(commit)}`)
+  }
+  const { host, owner, name } = repository
+  return await read([
+    'api', '--hostname', host, '--allow-escape-sequences', '-H', 'Accept: application/vnd.github.diff',
+    `repos/${owner}/${name}/compare/${base}...${head}`,
+  ], signal)
 }

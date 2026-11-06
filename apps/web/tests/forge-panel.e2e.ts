@@ -97,8 +97,8 @@ if (args[0] === 'pr' && args[1] === 'diff') {
   await new Promise(resolve => process.stdout.write(readFileSync(join(here, 'pr-' + args[2] + '.diff'), 'utf8'), resolve))
   process.exit(0)
 }
-if (args[0] === 'api' && args[3] === '-H' && args[4] === 'Accept: application/vnd.github.diff') {
-  const range = args[5].slice('repos/octo/demo/compare/'.length)
+if (args[0] === 'api' && args.includes('Accept: application/vnd.github.diff')) {
+  const range = args.at(-1).slice('repos/octo/demo/compare/'.length)
   const patch = existsSync(join(here, 'compare.json')) ? JSON.parse(readFileSync(join(here, 'compare.json'), 'utf8'))[range] : undefined
   if (patch === undefined) {
     process.stderr.write('gh: Not Found (HTTP 404)\\n')
@@ -1744,7 +1744,7 @@ it.skipIf(MODE === 'record')('reviews a change request by layer, hides test file
   await expect.poll(() => shownPaths(view), { timeout: 20_000 }).toEqual(['docs/schema.json', 'locale/zh.json', 'src/panel.spec.ts', 'package.json'])
   await expect.poll(() => lens.getByRole('radio').allTextContents()).toEqual(['全部4', '接口1', '实现0', '测试3'])
   const calls = (await readFile(join(root, 'calls.jsonl'), 'utf8')).split('\n').filter(line => line.length > 0).map(line => JSON.parse(line) as string[])
-  expect(calls.filter(args => args[0] === 'api' && args[4] === 'Accept: application/vnd.github.diff').map(args => args[5])).toEqual([
+  expect(calls.filter(args => args[0] === 'api' && args.includes('Accept: application/vnd.github.diff')).map(args => args.at(-1))).toEqual([
     `repos/octo/demo/compare/${'1'.repeat(40)}...${'2'.repeat(40)}`, `repos/octo/demo/compare/${'1'.repeat(40)}...${HEAD7}`,
   ])
   await view.getByRole('button', { name: `查看的提交：2222222…${HEAD7.slice(0, 7)}`, exact: true }).click()
