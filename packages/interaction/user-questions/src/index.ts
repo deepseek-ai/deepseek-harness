@@ -286,9 +286,10 @@ export class UserQuestionService extends TypertRemoteService {
    * @throws {UserQuestionError} code `ASK_ABORTED` when the supplied signal
    *   is already or becomes aborted, `CALLER_NOT_LIVE` when a supplied agent
    *   is not the registry's exact live instance, `DELEGATED_CALLER` when
-   *   that live agent has subagent origin, or `PROVIDER_ERROR` when an answerer
-   *   fails with a value that is not a `HarnessError`; a coded `HarnessError`
-   *   from an answerer keeps its `name` and `code`.
+   *   that live agent has subagent origin, or `PROVIDER_ERROR`, keeping the
+   *   original message, when an answerer fails with a value that is not a
+   *   `HarnessError`; a coded `HarnessError` from an answerer keeps its `name`
+   *   and `code`.
    */
   async ask(request: AskUserQuestionRequest): Promise<AskUserQuestionAnswer> {
     if (request.signal?.aborted) {
@@ -359,7 +360,8 @@ export class UserQuestionService extends TypertRemoteService {
         throw abortedQuestion(error)
       }
       if (restored instanceof HarnessError) throw restored
-      throw new UserQuestionError('the user-questions answerer failed before the user answered', 'PROVIDER_ERROR', { cause: error })
+      const message = error instanceof Error ? error.message : 'the user-questions answerer failed before the user answered'
+      throw new UserQuestionError(message, 'PROVIDER_ERROR', { cause: error })
     }
   }
 }

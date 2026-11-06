@@ -1177,7 +1177,7 @@ describe('exit_plan_mode', () => {
     registerQuestionAnswerer(ctx, { ask: () => { throw new Error('review aborted') } })
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
-    expect(result.content).toEqual([{ type: 'text', text: 'Error: the user-questions answerer failed before the user answered' }])
+    expect(result.content).toEqual([{ type: 'text', text: 'Error: review aborted' }])
     expect(result.error?.info).toEqual({ name: 'UserQuestionError', code: 'PROVIDER_ERROR' })
     expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
   })

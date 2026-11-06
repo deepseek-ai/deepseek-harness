@@ -174,12 +174,12 @@ describe('UserQuestionService', () => {
   })
 
   it.each([
-    ['an ordinary Error', new Error('provider failed')],
+    ['an ordinary Error', new Error('provider failed'), 'provider failed'],
     ['a namesake Error without a string code', Object.assign(new Error('provider failed'), {
       name: 'UserQuestionError',
-    })],
-    ['a non-Error rejection', { name: 'UserQuestionError', code: 'ASK_CANCELLED' }],
-  ])('classifies %s from the provider as PROVIDER_ERROR', async (_label, rejection) => {
+    }), 'provider failed'],
+    ['a non-Error rejection', { name: 'UserQuestionError', code: 'ASK_CANCELLED' }, 'the user-questions answerer failed before the user answered'],
+  ])('classifies %s from the provider as PROVIDER_ERROR', async (_label, rejection, message) => {
     const ctx = new Context()
     await ctx.plugin(UserQuestionService)
     registerAnswerer(ctx, { ask: vi.fn().mockRejectedValue(rejection) })
@@ -188,7 +188,7 @@ describe('UserQuestionService', () => {
       questions: [{ id: 'confirm', question: 'Proceed?' }],
     }).then(() => undefined, (error: unknown) => error)
     expect(failure).toBeInstanceOf(UserQuestionError)
-    expect(failure).toMatchObject({ name: 'UserQuestionError', code: 'PROVIDER_ERROR', cause: rejection })
+    expect(failure).toMatchObject({ name: 'UserQuestionError', code: 'PROVIDER_ERROR', message, cause: rejection })
   })
 
   it('rejects empty question batches before reaching the provider', async () => {
@@ -579,7 +579,7 @@ describe('askTimed', () => {
     registerAnswerer(ctx, { ask: () => Promise.reject(crash) })
 
     await expect(ctx.userQuestions.askTimed({ agent, questions: timedQuestions }, timedCallId, 120_000))
-      .rejects.toMatchObject({ name: 'UserQuestionError', code: 'PROVIDER_ERROR', cause: crash })
+      .rejects.toMatchObject({ name: 'UserQuestionError', code: 'PROVIDER_ERROR', message: 'provider crashed', cause: crash })
     await ctx.fiber.dispose()
   })
 
