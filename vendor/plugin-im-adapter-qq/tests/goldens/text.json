@@ -310,6 +310,15 @@
     ]
   },
   {
+    "name": "form",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "[Title]\n☑ I agree\n[Size: Small / Large]\n[选择: Alpha / Beta]\n[Send]"
+      }
+    ]
+  },
+  {
     "name": "title",
     "payloads": [
       {
@@ -386,7 +395,7 @@
     "payloads": [
       {
         "msg_type": 0,
-        "content": "Everything at once\n— subtitle text\nplain bolditalicunderstrikesecretinline-codelink-text@Alice@所有人@在线成员@Admins#general:party:green-text\nafter the break\nHeading one\nHeading two\nHeading three\nHeading four\nHeading five\nHeading six\n• first item\n☑ done task\n• parent item\n  ◦ child item\n3. third item\n4. fourth item\n> quoted line\n> > deeper quote\nconst answer = 42\n────────\nName: apple\nQty: 3\nsecond paragraph\n▸ More information\nhidden body text\n— fine print note\n[Stop] Open Compact /compact\nrun Status /status to check\n[Delete everything]\n[合并转发]\nraw fallback text\n[文件: report.pdf]"
+        "content": "Everything at once\n— subtitle text\nplain bolditalicunderstrikesecretinline-codelink-text@Alice@所有人@在线成员@Admins#general:party:green-text\nafter the break\nHeading one\nHeading two\nHeading three\nHeading four\nHeading five\nHeading six\n• first item\n☑ done task\n• parent item\n  ◦ child item\n3. third item\n4. fourth item\n> quoted line\n> > deeper quote\nconst answer = 42\n────────\nName: apple\nQty: 3\nsecond paragraph\n▸ More information\nhidden body text\n— fine print note\n[Stop] Open Compact /compact\nrun Status /status to check\n[Delete everything]\n[Title]\n☑ I agree\n[Size: Small / Large]\n[选择: Alpha / Beta]\n[Send]\n[合并转发]\nraw fallback text\n[文件: report.pdf]"
       },
       {
         "msg_type": 7,

@@ -465,6 +465,43 @@
     ]
   },
   {
+    "name": "form",
+    "payloads": [
+      {
+        "msg_type": 2,
+        "markdown": {
+          "content": "\\[Title\\]\n\n☑ I agree\n\n\\[Size: Small / Large\\]\n\n\\[选择: Alpha / Beta\\]"
+        },
+        "keyboard": {
+          "content": {
+            "rows": [
+              {
+                "buttons": [
+                  {
+                    "render_data": {
+                      "label": "Send",
+                      "visited_label": "Send",
+                      "style": 0
+                    },
+                    "action": {
+                      "type": 1,
+                      "permission": {
+                        "type": 2
+                      },
+                      "data": "btn-submit",
+                      "unsupport_tips": "Send（当前 QQ 版本不支持此按钮）"
+                    },
+                    "id": "btn-submit"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  {
     "name": "title",
     "payloads": [
       {
@@ -585,7 +622,7 @@
       {
         "msg_type": 2,
         "markdown": {
-          "content": "run  to check\n\n\\[合并转发\\]\n\nraw fallback text"
+          "content": "run  to check\n\n\\[Title\\]\n\n☑ I agree\n\n\\[Size: Small / Large\\]\n\n\\[选择: Alpha / Beta\\]\n\n\\[合并转发\\]\n\nraw fallback text"
         },
         "keyboard": {
           "content": {
@@ -674,6 +711,22 @@
                       "unsupport_tips": "Delete everything（当前 QQ 版本不支持此按钮）"
                     },
                     "id": "btn-danger"
+                  },
+                  {
+                    "render_data": {
+                      "label": "Send",
+                      "visited_label": "Send",
+                      "style": 0
+                    },
+                    "action": {
+                      "type": 1,
+                      "permission": {
+                        "type": 2
+                      },
+                      "data": "btn-submit",
+                      "unsupport_tips": "Send（当前 QQ 版本不支持此按钮）"
+                    },
+                    "id": "btn-submit"
                   }
                 ]
               }

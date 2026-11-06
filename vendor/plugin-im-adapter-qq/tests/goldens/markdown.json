@@ -356,6 +356,17 @@
     ]
   },
   {
+    "name": "form",
+    "payloads": [
+      {
+        "msg_type": 2,
+        "markdown": {
+          "content": "\\[Title\\]\n\n☑ I agree\n\n\\[Size: Small / Large\\]\n\n\\[选择: Alpha / Beta\\]\n\n\\[Send\\]"
+        }
+      }
+    ]
+  },
+  {
     "name": "title",
     "payloads": [
       {
@@ -476,7 +487,7 @@
       {
         "msg_type": 2,
         "markdown": {
-          "content": "\\[Stop\\] Open Compact `/compact`\n\nrun Status `/status` to check\n\n\\[Delete everything\\]\n\n\\[合并转发\\]\n\nraw fallback text"
+          "content": "\\[Stop\\] Open Compact `/compact`\n\nrun Status `/status` to check\n\n\\[Delete everything\\]\n\n\\[Title\\]\n\n☑ I agree\n\n\\[Size: Small / Large\\]\n\n\\[选择: Alpha / Beta\\]\n\n\\[Send\\]\n\n\\[合并转发\\]\n\nraw fallback text"
         }
       }
     ]
