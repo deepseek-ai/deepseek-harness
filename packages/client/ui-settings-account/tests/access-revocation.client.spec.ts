@@ -46,6 +46,7 @@ it('withdraws every account surface and the account stream on revocation, and re
   const streams: { readonly signal: AbortSignal; readonly accepted: Promise<undefined> }[] = []
   const lifetime: (() => void)[] = []
   const ctx = {
+    on: () => () => {}, provide: () => {}, emit: () => {}, parallel: async () => [],
     effect: (install: () => (() => void) | undefined) => { const dispose = install(); if (dispose) lifetime.push(dispose) },
     locale: { register: () => () => {}, bind: () => (key: string) => key, getSnapshot: () => ({ active: 'en' }) },
     configForms: {
@@ -77,7 +78,10 @@ it('withdraws every account surface and the account stream on revocation, and re
     remote: {
       $on: () => () => {},
       session: { initializeDefaultModel: async () => ({ ok: true, value: undefined }) },
-      account: { getProfile: async () => ({ ok: true, value: null }), getBalance: async () => ({ ok: true, value: null }) },
+      account: {
+        getProfile: async () => ({ ok: true, value: null }), getBalance: async () => ({ ok: true, value: null }),
+        getNotifications: async () => ({ ok: true, value: null }),
+      },
       $stream: () => {
         const abort = new AbortController()
         const accepted = Promise.withResolvers<undefined>()
@@ -86,7 +90,7 @@ it('withdraws every account surface and the account stream on revocation, and re
           signal: abort.signal,
           dispose: () => { abort.abort() },
           async *[Symbol.asyncIterator]() {
-            yield { value: signedIn, accept: () => { accepted.resolve(undefined) } }
+            yield { generation: 1, value: { type: 'snapshot', state: signedIn }, accept: () => { accepted.resolve(undefined) } }
             await new Promise((resolve) => { abort.signal.addEventListener('abort', resolve) })
           },
         }
@@ -127,6 +131,7 @@ it('drops reads a revoked grant started, and the next grant shows no account sec
   const firstFrames: { release: () => void; accepted: Promise<undefined> }[] = []
   const lifetime: (() => void)[] = []
   const ctx = {
+    on: () => () => {}, provide: () => {}, emit: () => {}, parallel: async () => [],
     effect: (install: () => (() => void) | undefined) => { const dispose = install(); if (dispose) lifetime.push(dispose) },
     locale: { register: () => () => {}, bind: () => (key: string) => key, getSnapshot: () => ({ active: 'en' }) },
     configForms: {
@@ -159,7 +164,10 @@ it('drops reads a revoked grant started, and the next grant shows no account sec
     remote: {
       $on: () => () => {},
       session: { initializeDefaultModel: async () => ({ ok: true, value: undefined }) },
-      account: { getProfile: async () => await profile.promise, getBalance: async () => ({ ok: true, value: null }) },
+      account: {
+        getProfile: async () => await profile.promise, getBalance: async () => ({ ok: true, value: null }),
+        getNotifications: async () => ({ ok: true, value: null }),
+      },
       $stream: () => {
         const abort = new AbortController()
         const gate = Promise.withResolvers<undefined>()
@@ -170,7 +178,7 @@ it('drops reads a revoked grant started, and the next grant shows no account sec
           dispose: () => { abort.abort() },
           async *[Symbol.asyncIterator]() {
             await gate.promise
-            yield { value: signedIn, accept: () => { accepted.resolve(undefined) } }
+            yield { generation: 1, value: { type: 'snapshot', state: signedIn }, accept: () => { accepted.resolve(undefined) } }
             await new Promise((resolve) => { abort.signal.addEventListener('abort', resolve) })
           },
         }
@@ -219,9 +227,10 @@ function revocationHarness(scripts: StreamScript[]) {
   const lifetime: (() => void)[] = []
   let operations: AccountSectionInjected | undefined
   const getProfile = vi.fn(async () => ({ ok: true, value: null }))
-  const getUnnotifiedBonuses = vi.fn(async () => ({ ok: true, value: null }))
+  const getNotifications = vi.fn(async () => ({ ok: true, value: null }))
   const startSignIn = vi.fn<() => Promise<{ ok: false }>>()
   const ctx = {
+    on: () => () => {}, provide: () => {}, emit: () => {}, parallel: async () => [],
     effect: (install: () => (() => void) | undefined) => { const dispose = install(); if (dispose) lifetime.push(dispose) },
     locale: { register: () => () => {}, bind: () => (key: string) => key, getSnapshot: () => ({ active: 'en' }) },
     configForms: {
@@ -256,7 +265,7 @@ function revocationHarness(scripts: StreamScript[]) {
       $on: () => () => {},
       session: { initializeDefaultModel: async () => ({ ok: true, value: undefined }) },
       account: {
-        getProfile, getBalance: async () => ({ ok: true, value: null }), getUnnotifiedBonuses, startSignIn,
+        getProfile, getBalance: async () => ({ ok: true, value: null }), getNotifications, startSignIn,
       },
       $stream: () => {
         const abort = new AbortController()
@@ -269,7 +278,7 @@ function revocationHarness(scripts: StreamScript[]) {
           async *[Symbol.asyncIterator]() {
             await Promise.resolve()
             script(() => {})
-            yield { value: signedIn, accept: () => { delivered.resolve(undefined) } }
+            yield { generation: 1, value: { type: 'snapshot', state: signedIn }, accept: () => { delivered.resolve(undefined) } }
             await new Promise((resolve) => { abort.signal.addEventListener('abort', resolve) })
           },
         }
@@ -278,7 +287,7 @@ function revocationHarness(scripts: StreamScript[]) {
   }
   apply(ctx as never)
   return {
-    guards, registered, accepted, getProfile, getUnnotifiedBonuses, startSignIn,
+    guards, registered, accepted, getProfile, getNotifications, startSignIn,
     operations: () => operations!,
     dispose: () => { revoke(guards); for (const dispose of lifetime.reverse()) dispose() },
   }
@@ -294,7 +303,7 @@ it('ignores a frame the stream delivered just before the revocation', async () =
     expect(b.operations().hooks.account.getSnapshot().view).toBeUndefined()
     expect(b.registered.get('settings.section') ?? 0).toBe(0)
     expect(b.getProfile).not.toHaveBeenCalled()
-    expect(b.getUnnotifiedBonuses).not.toHaveBeenCalled()
+    expect(b.getNotifications).not.toHaveBeenCalled()
   } finally {
     b.dispose()
   }

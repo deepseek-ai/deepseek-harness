@@ -31,7 +31,7 @@ export function apply(ctx: Context, config: Config): void {
     scope.effect(() => {
       const lifetime = new AbortController()
       const watching = (async () => {
-        for await (const view of scope.deepseekAccount.watch(lifetime.signal)) await readiness.account(view.status === 'credential-stored')
+        for await (const update of scope.deepseekAccount.watch(lifetime.signal)) await readiness.account(update.state.status === 'credential-stored')
       })().catch(async (error: unknown) => {
         if (lifetime.signal.aborted) return
         console.error(LOG_TAG, 'account observation failed:', error instanceof Error ? error.message : String(error))

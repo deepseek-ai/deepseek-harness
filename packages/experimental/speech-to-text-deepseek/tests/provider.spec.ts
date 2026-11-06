@@ -1,7 +1,7 @@
 /** Registration, account-driven readiness and authentication, retries, and disposal of the cloud recognizer. */
 import { Context } from '@deepseek-ai/cordis'
 import type { DeepSeekAccount } from '@deepseek-ai/dsh-deepseek-account'
-import type { AccountView } from '@deepseek-ai/dsh-deepseek-account/types'
+import type { AccountUpdate, AccountView } from '@deepseek-ai/dsh-deepseek-account/types'
 import SpeechToText, { SpeechTranscriptionError } from '@deepseek-ai/dsh-experimental-speech-to-text'
 import type { SpeechPreparationState, SpeechProviderId } from '@deepseek-ai/dsh-experimental-speech-to-text/types'
 import { expect, it, onTestFinished, vi } from 'vitest'
@@ -16,9 +16,9 @@ function account(initial: AccountView['status'], token: string | null = 'fixture
   const wake = new Set<() => void>()
   const rejected: string[] = []
   const service = {
-    async *watch(signal: AbortSignal): AsyncIterable<AccountView> {
+    async *watch(signal: AbortSignal): AsyncIterable<AccountUpdate> {
       while (!signal.aborted) {
-        yield { status, links: { usageUrl: '', topUpUrl: '' }, attempt: null }
+        yield { type: 'snapshot', state: { status, links: { usageUrl: '', topUpUrl: '' }, attempt: null } }
         await new Promise<void>((resolve) => { wake.add(resolve); signal.addEventListener('abort', () => { resolve() }, { once: true }) })
       }
     },
@@ -202,7 +202,7 @@ it('requires sign-in without an account service and recovers when one appears or
   let watched = 0
   const failing = (failure: unknown) => ({ watch: (signal: AbortSignal) => (watched++, { [Symbol.asyncIterator]: () => ({
     next: () => failure === undefined
-      ? new Promise<IteratorResult<AccountView>>((_resolve, reject) => { signal.addEventListener('abort', () => { reject(new Error('aborted')) }) })
+      ? new Promise<IteratorResult<AccountUpdate>>((_resolve, reject) => { signal.addEventListener('abort', () => { reject(new Error('aborted')) }) })
       // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- covers an account stream rejecting with a non-Error reason
       : Promise.reject(failure),
   }) }) }) as Partial<DeepSeekAccount> as DeepSeekAccount

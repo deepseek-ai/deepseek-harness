@@ -27,7 +27,7 @@ This provider registers `deepseek-asr` with `speech-to-text` and sends each comp
 
 The [voice input bundle](../voice-input-bundle/README.md) enables this row. `endpoint`, the complete transcription URL, defaults to `https://harness.deepseek.com/api/v0/asr/transcribe`. HTTPS is required; `allowLoopbackHttp: true` permits plain HTTP only to a loopback service double. The endpoint must not contain credentials, a query or a fragment. `timeoutMs` (30,000 ms), `maxRequestBytes` (3,932,160), `maxDurationSeconds` (120) and `maxResponseBytes` (65,536) bound one attempt.
 
-Each request sends the token that the DeepSeek account service releases for `endpoint` as `x-dsh-auth-token`, like the account model route. The account service releases a token only for the origins it allows, including `https://harness.deepseek.com` by default; a stored account that receives no token for the endpoint reports failed readiness instead of a sign-in request. A rejection (HTTP 401, code 40002 or 40003) invalidates exactly that token, so the account signs out and the failure asks the user to sign in again.
+Each request sends the token that the DeepSeek account service releases for `endpoint` as `x-dsh-auth-token`, like the account model route. The account service releases a token only for the origins it allows, including its `harnessOrigin`, `https://harness.deepseek.com` by default; a custom `endpoint` therefore needs a matching `harnessOrigin`; a stored account that receives no token for the endpoint reports failed readiness instead of a sign-in request. A rejection (HTTP 401, code 40002 or 40003) invalidates exactly that token, so the account signs out and the failure asks the user to sign in again.
 
 -----
 

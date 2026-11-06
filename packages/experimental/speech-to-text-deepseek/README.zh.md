@@ -27,7 +27,7 @@ kind: "package-reference"
 
 [语音输入 Bundle](../voice-input-bundle/README.zh.md) 启用这一行。`endpoint` 是完整的转写 URL，默认为 `https://harness.deepseek.com/api/v0/asr/transcribe`。必须使用 HTTPS；`allowLoopbackHttp: true` 只允许以明文 HTTP 访问本机回环地址上的服务替身。endpoint 不能包含凭据、query 或 fragment。`timeoutMs`（30,000 毫秒）、`maxRequestBytes`（3,932,160）、`maxDurationSeconds`（120）和 `maxResponseBytes`（65,536）限制单次请求。
 
-与账号模型路由相同，每次请求都把 DeepSeek 账号服务为 `endpoint` 发放的令牌作为 `x-dsh-auth-token` 发送。账号服务只为它允许的 origin 发放令牌，默认包含 `https://harness.deepseek.com`；已保存账号却拿不到该 endpoint 的令牌时，就绪状态报告失败，而不是要求登录。服务拒绝令牌（HTTP 401、code 40002 或 40003）时，只作废被拒绝的那个令牌，账号随之退出登录，失败提示用户重新登录。
+与账号模型路由相同，每次请求都把 DeepSeek 账号服务为 `endpoint` 发放的令牌作为 `x-dsh-auth-token` 发送。账号服务只为它允许的 origin 发放令牌，其中包括它的 `harnessOrigin`，默认是 `https://harness.deepseek.com`；因此自定义 `endpoint` 需要配置相应的 `harnessOrigin`；已保存账号却拿不到该 endpoint 的令牌时，就绪状态报告失败，而不是要求登录。服务拒绝令牌（HTTP 401、code 40002 或 40003）时，只作废被拒绝的那个令牌，账号随之退出登录，失败提示用户重新登录。
 
 -----
 

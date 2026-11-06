@@ -87,9 +87,9 @@ Messages sends text, thinking, tool calls, and tool results as content blocks, r
 <a id="account-credentials"></a>
 ### Account credentials
 
-`deepseek-official` resolves only its configured API-key reference. `deepseek-account` resolves only the stored grant from the [account provider](../../credentials/deepseek-account-platform/README.md), whose allowed `inferenceOrigin` defaults to `https://api.deepseek.com`. Neither route falls back to the other. Signing out removes the account grant and preserves API keys.
+`deepseek-official` resolves only its configured API-key reference. `deepseek-account` resolves only the stored grant from the [account service](../../credentials/deepseek-account/README.md), whose allowed `inferenceOrigin` defaults to `https://api.deepseek.com`. Neither route falls back to the other. Signing out removes the account grant and preserves API keys.
 
-Messages and Files requests send account tokens as `x-dsh-auth-token` without a Bearer prefix; API keys use `x-api-key`. Neither credential mode follows redirects. The account provider owns HTTP 401 classification and credential invalidation; the transport passes failures to its callback.
+Messages and Files requests send account tokens as `x-dsh-auth-token` without a Bearer prefix; API keys use `x-api-key`. Neither credential mode follows redirects. The account service owns HTTP 401 classification and credential invalidation; the transport passes failures to its callback.
 
 The [shared credential helpers](src/credential.ts) serve model routes and web providers without choosing request headers. `resolveDeepSeekApiKey(ctx, ref)` returns a normalized, validated key or `undefined`; an installed credentials service is authoritative, and only its absence enables launch-environment lookup. Store and key-format failures propagate. `deepSeekApiKeyConfigured(ctx, ref)` checks presence without reading stored key values. Account helpers delegate allowed-destination resolution and exact-token invalidation to the account service; invalidation contains storage failures so the original request error remains visible.
 
@@ -218,4 +218,4 @@ These limits define where the adapter stops and future work begins. They are cur
 
 None.
 
-`deepseek-official` uses only its configured API-key reference; `deepseek-account` uses only the stored DSH grant for the account provider’s allowed inference origin. Both routes share the Messages transport with independently configured model and file settings. Missing or ineligible account credentials reject the request with a sign-in prompt; neither route falls back to the other. Chat and Files requests reject redirects. The account provider owns sign-out cancellation using running Agents’ logged request contexts, including tool execution; the transport receives the existing request abort signal.
+`deepseek-official` uses only its configured API-key reference; `deepseek-account` uses only the stored DSH grant for the account provider’s allowed inference origin. Both routes share the Messages transport with independently configured model and file settings. Missing or ineligible account credentials reject the request with a sign-in prompt; neither route falls back to the other. Chat and Files requests reject redirects. The account service owns sign-out cancellation using running Agents’ logged request contexts, including tool execution; the transport receives the existing request abort signal.

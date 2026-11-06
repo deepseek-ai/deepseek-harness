@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-独立的 Provider 包 `speech-to-text-deepseek` 以 `location: 'cloud'` 注册 `deepseek-asr`，把完整录音以裸 PCM 发送到 One-Shot 接口，不使用流式 WebSocket 接口。它与账号模型路由使用相同的鉴权，发送账号服务为该 endpoint 发放的令牌；没有已保存的 DeepSeek 账号时拒绝录音。账号服务向默认 endpoint 的 origin `https://harness.deepseek.com` 发放令牌，但从不发放本机回环签发的授权。
+独立的 Provider 包 `speech-to-text-deepseek` 以 `location: 'cloud'` 注册 `deepseek-asr`，把完整录音以裸 PCM 发送到 One-Shot 接口，不使用流式 WebSocket 接口。它与账号模型路由使用相同的鉴权，发送账号服务为该 endpoint 发放的令牌；没有已保存的 DeepSeek 账号时拒绝录音。账号服务向它的 `harnessOrigin` 发放令牌，默认是默认 endpoint 的 origin `https://harness.deepseek.com`，但从不向这个官方 origin 发放本机回环签发的授权。
 
 `speech-to-text` 新增 `auto` 偏好和 `autoOrder`。选择在录音之前进行：第一个已注册且不是 `unavailable` 的 Provider 胜出，Client 随录音发送这个确切的 Provider id。识别失败绝不改投其他 Provider；录音期间退出登录时，该次录音失败，而不是换用其他 Provider。一份保存的语言适用于所有 Provider：未列出该语言的 Provider 收到 `auto`，因此菜单列出任一 Provider 支持的全部语言，并在当前 Provider 改为自动识别时给出提示。云端 Provider 按语音配置 RFC 的要求，把语言作为 `preferred_language`、把界面语言作为 `x-client-locale` 发送。
 

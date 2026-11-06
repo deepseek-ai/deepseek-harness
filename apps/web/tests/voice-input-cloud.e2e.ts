@@ -80,7 +80,7 @@ async function mockServices() {
         if (req.headers['x-dsh-auth-token'] !== TOKEN) { res.writeHead(401).end(); return }
         if (url.pathname === '/auth-api/v0/users/current') { reply({ id: 'cloud-user', email: '', id_profile: { name: 'Cloud User' } }); return }
         if (url.pathname === '/api/v0/users/get_user_summary') { reply({ normal_wallets: [{ currency: 'CNY', balance: '1.00' }], bonus_wallets: [] }); return }
-        if (url.pathname === '/api/v0/users/get_unnotified_bonuses') { reply([]); return }
+        if (url.pathname === '/api/v0/users/notifications/list') { reply({ notifications: [], next_poll_after: 600 }); return }
         res.writeHead(404).end()
       })()
     })
