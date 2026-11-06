@@ -872,7 +872,7 @@ describe.skipIf(MODE === 'record').each([
       const label = menu.locator('[data-effort-label]')
       const info = menu.getByRole('button', { name: 'Acerca del esfuerzo de razonamiento predeterminado', exact: true })
       await info.waitFor()
-      const layout = await info.evaluate((button) => {
+      const readLayout = () => info.evaluate((button) => {
         const tag = button.parentElement!
         const text = tag.querySelector<HTMLElement>('[data-effort-label]')!
         const name = text.querySelector<HTMLElement>('[data-effort-name]')!
@@ -889,8 +889,9 @@ describe.skipIf(MODE === 'record').each([
           contained: bounds.left >= tagBounds.left && bounds.right <= tagBounds.right,
           reachable: hit?.closest('button') === button }
       })
-      expect(layout).toMatchObject({ width: 24, height: 24, clipped: false, ellipsis: 'ellipsis',
+      await expect.poll(readLayout).toMatchObject({ width: 24, height: 24, clipped: false, ellipsis: 'ellipsis',
         nameText: 'Predeterminado', nameFits: true, nameVisible: true, contained: true, reachable: true })
+      const layout = await readLayout()
       expect(layout.textWidth).toBeGreaterThan(0)
       expect(layout.textGap).toBeCloseTo(2, 1)
       expect(layout.endInset).toBeCloseTo(2, 1)
