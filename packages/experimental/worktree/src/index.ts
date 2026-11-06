@@ -87,7 +87,7 @@ export class WorktreeService extends Service {
     namePrefix: z.string().default('dsh-'),
     gitCommand: z.string().default('git'),
     nodeCommand: z.string().default('node'),
-    timeoutMs: z.number().default(60_000),
+    timeoutMs: z.number().default(300_000),
     graceMs: z.number().default(3_000),
     maxOutputBytes: z.number().default(65_536),
   })
