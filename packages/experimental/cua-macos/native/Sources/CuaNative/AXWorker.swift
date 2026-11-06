@@ -350,29 +350,17 @@ actor AXWorker {
             let point: WindowPoint
             var hoverElement: AXUIElement?
             if params.contains("elementId") {
-                guard !params.contains("x"), !params.contains("y"), !params.contains("relative") else { throw RequestParameters.invalid("Element and coordinate targets cannot be combined") }
+                guard !params.contains("x"), !params.contains("y") else { throw RequestParameters.invalid("Element and coordinate targets cannot be combined") }
+                let requestedWindow = try params.optionalWindowID()
+                if let requestedWindow { try coordinateSnapshot(handle, params, requestedWindow) }
                 let selected = try element(handle, params)
-                let scopedWindow = try params.optionalWindowID().map { id in
-                    try coordinateSnapshot(handle, params, id)
-                    let enclosing = try ax().enclosingWindow(selected)
-                    guard enclosing.id == id else {
-                        throw NativeFailure(code: "STALE_SNAPSHOT", message: "Element belongs to another window; read the selected window again")
-                    }
-                    return enclosing
+                let enclosing = try ax().enclosingWindow(selected)
+                if let requestedWindow, enclosing.id != requestedWindow {
+                    throw NativeFailure(code: "STALE_SNAPSHOT", message: "Element belongs to window \(enclosing.id); select that window and read its tree")
                 }
+                if method == "click" { try ax().requireEnabled(selected) }
                 hoverElement = selected
-                if method == "click" {
-                    let names = try ax().actions(selected)
-                    let action: String? = holdMs != nil || !modifiers.isEmpty ? nil : button == "right" && names.contains("AXShowMenu") ? "AXShowMenu"
-                        : (button == "left" && count == 1 ? (names.contains("AXPress") ? "AXPress" : names.contains("AXPick") ? "AXPick" : nil) : nil)
-                    if let action {
-                        try ax().perform(selected, action)
-                        return .result(Self.actionResult)
-                    }
-                    try ax().requireEnabled(selected)
-                }
                 guard let bounds = try ax().bounds(selected), bounds.width > 0, bounds.height > 0 else { throw NativeFailure(code: "NATIVE_ERROR", message: "Element has no pointer bounds") }
-                let enclosing = try scopedWindow ?? ax().enclosingWindow(selected)
                 window = try WindowGeometry.resolve(owner: identity, windowID: enclosing.id) { try ax().bounds(enclosing.element) }
                 point = WindowPoint(x: bounds.x + bounds.width / 2 - window.bounds.x, y: bounds.y + bounds.height / 2 - window.bounds.y)
             } else {
