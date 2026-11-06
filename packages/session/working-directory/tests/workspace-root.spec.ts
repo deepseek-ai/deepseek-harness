@@ -5,10 +5,11 @@ import { dirname, join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
-import WorkingDirectory, { within } from '@deepseek-ai/dsh-working-directory'
+import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { renderContextSnapshot } from '@deepseek-ai/dsh-system-prompt'
+import { within } from '../src/within.ts'
 
 async function fixture() {
   const scratch = await realpath(await mkdtemp(join(tmpdir(), 'dsh-workspace-root-')))

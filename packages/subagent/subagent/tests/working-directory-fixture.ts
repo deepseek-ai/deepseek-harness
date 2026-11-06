@@ -1,9 +1,14 @@
 import { Context, Service } from '@deepseek-ai/cordis'
-import { resolve } from 'node:path'
+import { isAbsolute, relative, resolve, sep } from 'node:path'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { Session } from '@deepseek-ai/dsh-session'
-import { within } from '@deepseek-ai/dsh-working-directory'
 import type { RelocateOptions, RelocatedDirectories } from '@deepseek-ai/dsh-working-directory'
+
+/** Whether `path` is `root` or lies below it, lexically. */
+function within(root: string, path: string): boolean {
+  const rest = relative(root, path)
+  return rest === '' || (rest !== '..' && !rest.startsWith(`..${sep}`) && !isAbsolute(rest))
+}
 
 /** Directory selection for orchestration fixtures whose paths are symbolic and whose logs exclude context providers. */
 class FixtureWorkingDirectory extends Service {
