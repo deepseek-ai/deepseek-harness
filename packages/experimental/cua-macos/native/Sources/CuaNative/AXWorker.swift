@@ -327,7 +327,7 @@ actor AXWorker {
             try ax().performAction(element(handle, params), action: params.string("action"), argument: params.values["argument"])
         case "invoke":
             let target = try element(handle, params)
-            let advertised = try ax().actions(target)
+            let advertised = try ax().actions(target, requireKnown: true)
             guard let action = Self.defaultAction(advertised) else {
                 return .result(.object(["dispatched": .bool(false)]))
             }

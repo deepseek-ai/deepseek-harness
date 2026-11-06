@@ -17,6 +17,28 @@ import Testing
     }
 }
 
+@Test func unavailableActionMetadataDoesNotInterruptObservation() throws {
+    let access = AXAccess(timeout: 1, cancellation: CancellationLatch())
+    #expect(try access.actionNames(nil, error: .failure, requireKnown: false).isEmpty)
+    #expect(throws: NativeFailure.self) { try access.actionNames(nil, error: .failure, requireKnown: true) }
+    for strict in [false, true] {
+        #expect(try access.actionNames(nil, error: .actionUnsupported, requireKnown: strict).isEmpty)
+        for error in [AXError.apiDisabled, .cannotComplete, .invalidUIElement, .illegalArgument] {
+            #expect(throws: NativeFailure.self) { try access.actionNames(nil, error: error, requireKnown: strict) }
+        }
+    }
+}
+
+@Test func listingSkipsOnlyTheAttributeWhoseWritabilityIsUnknown() throws {
+    let access = AXAccess(timeout: 1, cancellation: CancellationLatch())
+    let writable = try AXAccess.writableAttributeNames(["AXValue", "AXFocused"]) { name in
+        try access.attributeWritability(true, error: name == "AXValue" ? .failure : .success, name: name, forDiscovery: true)
+    }
+    #expect(writable == ["AXFocused"])
+    #expect(throws: NativeFailure.self) { try access.attributeWritability(false, error: .failure, name: "AXValue", forDiscovery: false) }
+    #expect(throws: NativeFailure.self) { try access.attributeWritability(false, error: .apiDisabled, name: "AXValue", forDiscovery: true) }
+}
+
 private func wrappedAXError(_ code: AXError) throws -> AXValue {
     var error = code
     return try #require(AXValueCreate(.axError, &error))

@@ -157,11 +157,14 @@ final class AXAccess {
         let error = AXUIElementSetAttributeValue(element, name as CFString, kCFBooleanFalse)
         guard error == .success else { throw failure(error, "clear \(name)") }
     }
-    func actions(_ element: AXUIElement) throws -> [String] {
+    func actions(_ element: AXUIElement, requireKnown: Bool = false) throws -> [String] {
         try prepare(element)
         var names: CFArray?
         let error = AXUIElementCopyActionNames(element, &names)
-        if absent(error) || error == .actionUnsupported { return [] }
+        return try actionNames(names, error: error, requireKnown: requireKnown)
+    }
+    func actionNames(_ names: CFArray?, error: AXError, requireKnown: Bool) throws -> [String] {
+        if absent(error) || error == .actionUnsupported || (!requireKnown && error == .failure) { return [] }
         guard error == .success else { throw failure(error, "read actions") }
         guard let names else { return [] }
         guard let result = names as? [String] else { throw NativeFailure(code: "NATIVE_ERROR", message: "Accessibility actions are not strings") }
@@ -189,18 +192,21 @@ final class AXAccess {
         guard error == .success else { throw failure(error, "read attribute names") }
         guard let names else { return [] }
         guard let result = names as? [String] else { throw NativeFailure(code: "NATIVE_ERROR", message: "Accessibility attributes are not strings") }
-        return try Self.writableAttributeNames(result) { try writable(element, $0) }
+        return try Self.writableAttributeNames(result) { try writable(element, $0, forDiscovery: true) }
     }
     static func writableAttributeNames(_ names: [String], isWritable: (String) throws -> Bool?) rethrows -> [String] {
         try names.filter { try isWritable($0) == true }
     }
-    func writable(_ element: AXUIElement, _ name: String) throws -> Bool? {
+    func writable(_ element: AXUIElement, _ name: String, forDiscovery: Bool = false) throws -> Bool? {
         try prepare(element)
         var result: DarwinBoolean = false
         let error = AXUIElementIsAttributeSettable(element, name as CFString, &result)
-        if absent(error) { return nil }
-        guard error == .success else { throw failure(error, "read attribute writability") }
-        return result.boolValue
+        return try attributeWritability(result.boolValue, error: error, name: name, forDiscovery: forDiscovery)
+    }
+    func attributeWritability(_ value: Bool, error: AXError, name: String, forDiscovery: Bool) throws -> Bool? {
+        if absent(error) || (forDiscovery && error == .failure) { return nil }
+        guard error == .success else { throw failure(error, "read writability of \(name)") }
+        return value
     }
     func requireEnabled(_ element: AXUIElement) throws {
         if try boolean(element, "AXEnabled") == false { throw NativeFailure(code: "NATIVE_ERROR", message: "Accessibility element is disabled") }
