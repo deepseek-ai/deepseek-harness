@@ -5,6 +5,7 @@
   "type": "module",
   "files": [
     "lib/index.js",
+    "lib/testing.js",
     "lib/types/**/*.d.ts",
     "lib/types/**/*.d.ts.map",
     "src"
@@ -66,7 +67,7 @@
     },
     "./testing": {
       "types": "./lib/types/testing.d.ts",
-      "default": "./lib/types/testing.js"
+      "default": "./lib/testing.js"
     },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
