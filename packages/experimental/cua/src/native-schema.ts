@@ -13,10 +13,10 @@ function variants(schema: Schema): Schema[] { return schema.anyOf ?? schema.oneO
 
 /**
  * Derive native request schemas and admission fields from the shared operation definitions.
- * @param platformFields Platform-specific parameters added by the Host before native dispatch.
+ * @param platformFields Additional native protocol fields accepted by the provider.
  * @returns Native field and enum tables and the complete wire schema.
  */
-export function nativeProtocol(platformFields: Partial<Record<'mouseMove' | 'requestPermission' | 'openPermissionSettings', z.ZodObject>> = {}): {
+export function nativeProtocol(platformFields: Partial<Record<z.infer<typeof Request>['method'] | 'requestPermission' | 'openPermissionSettings', z.ZodObject>> = {}): {
   fields: Map<string, Set<string>>
   enums: Map<string, Map<string, Set<string>>>
   json: string

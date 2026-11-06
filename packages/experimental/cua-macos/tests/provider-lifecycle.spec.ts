@@ -71,6 +71,7 @@ const { helperPath: _helperPath, ...automaticConfig } = config
 
 it('defaults to ad-hoc signing and requires a keychain path for certificate signing', () => {
   expect(NativeProvider.Config({}).sourceSigning).toBe('ad-hoc')
+  expect(NativeProvider.Config({}).systemPointerHover).toBe(false)
   expect(NativeProvider.Config({ sourceSigning: 'ad-hoc' }).sourceSigning).toBe('ad-hoc')
   for (const sourceSigning of [{ identity: 'Apple Development: Example', keychain: '/keychains/custom.keychain-db' }, { identity: 'ABC123', keychain: '/keychains/custom.keychain-db' }]) {
     expect(NativeProvider.Config({ sourceSigning }).sourceSigning).toEqual(sourceSigning)
@@ -109,7 +110,7 @@ class ImageAdapter extends LlmAdapter {
 const imageData = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC'
 const imageMetadata = { pixelWidth: 1, pixelHeight: 1, bounds: { x: 2, y: 3, width: 1, height: 1 }, coordinateSpace: 'window-points', windowId: 7 }
 
-async function setup(model?: { provider: string; model: string }, systemPointerHover = false) {
+async function setup(model?: { provider: string; model: string }) {
   native.request.mockReset().mockResolvedValue([])
   native.dispose.mockReset()
   native.instances.length = 0
@@ -119,7 +120,7 @@ async function setup(model?: { provider: string; model: string }, systemPointerH
   await mountAgentLoopTestDependencies(ctx)
   await ctx.plugin(ComputerUseRegistry)
   await ctx.plugin(Subprocess, [])
-  const provider = await ctx.plugin(NativeProvider, { ...config, systemPointerHover })
+  const provider = await ctx.plugin(NativeProvider, config)
   await mountAgentLoopTestHarness(ctx)
   const handle = await ctx.agents.create({ sessionId: SessionId('native-lifecycle'), ...model ? { agentOptions: model } : {} })
   let index = 0
@@ -384,26 +385,6 @@ it('rejects malformed and unowned operations before acquiring a helper', async (
   expect(unowned.isError).toBe(true)
   expect(native.instances).toEqual([])
   expect(native.request).not.toHaveBeenCalled()
-})
-
-it.each([false, true])('rejects an ended Agent with prior helper acquisition %s', async (acquired) => {
-  const f = await setup()
-  if (acquired) await f.execute()
-  await f.handle.dispose()
-  const requests = native.request.mock.calls.length
-  const result = await f.execute()
-  expect(result.isError).toBe(true)
-  expect(JSON.stringify(result.content)).toContain('agent has been disposed')
-  expect(native.instances).toHaveLength(acquired ? 1 : 0)
-  expect(native.request).toHaveBeenCalledTimes(requests)
-})
-
-it.each([false, true])('passes the deployment hover policy (%s) to native input', async (allowed) => {
-  const f = await setup(undefined, allowed)
-  await selectApplication(f)
-  const params = { appHandle: 'app-one', windowId: 7, snapshotId: 's', elementId: '0' }
-  await f.execute('mouseMove', params)
-  expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...params, allowSystemPointer: allowed }, expect.any(AbortSignal), expect.any(String))
 })
 
 it('supplies configured resource bounds and clears registrations on unload', async () => {

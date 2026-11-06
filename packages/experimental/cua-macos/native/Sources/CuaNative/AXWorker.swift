@@ -78,6 +78,7 @@ actor AXWorker {
     private let axTimeout: Float
     private let textEventInterval: Double
     private let maxClickHoldMs: Int
+    private let systemPointerHover: Bool?
     private let sessionState: @Sendable () -> Bool?
     private var access: AXAccess?
     private var keyboard: KeyboardInput?
@@ -85,12 +86,13 @@ actor AXWorker {
     private var hovers: [String: AXHover] = [:]
     private var closed = false
 
-    init(cancellation: CancellationLatch, axTimeout: Float, textEventInterval: Double, maxClickHoldMs: Int,
+    init(cancellation: CancellationLatch, axTimeout: Float, textEventInterval: Double, maxClickHoldMs: Int, systemPointerHover: Bool? = nil,
          sessionState: @escaping @Sendable () -> Bool? = NativePlatform.sessionLocked) {
         self.cancellation = cancellation
         self.axTimeout = axTimeout
         self.textEventInterval = textEventInterval
         self.maxClickHoldMs = maxClickHoldMs
+        self.systemPointerHover = systemPointerHover
         self.sessionState = sessionState
     }
     private func identifier(_ kind: String) throws -> String {
@@ -105,7 +107,9 @@ actor AXWorker {
         return created
     }
     private func moveUsingAX(_ element: AXUIElement?, windowID: UInt32, handle: String, params: RequestParameters) throws -> Bool {
-        let allowSystemPointer = try params.optionalBoolean("allowSystemPointer") ?? false
+        let requestSetting = try params.optionalBoolean("allowSystemPointer")
+        // Diagnostic JSONL clients without a deployment setting may opt in per request.
+        let allowSystemPointer = systemPointerHover ?? requestSetting ?? false
         let hover = hovers[handle] ?? AXHover()
         hovers[handle] = hover
         if try hover.move(to: element, in: windowID, access: ax()) { return true }

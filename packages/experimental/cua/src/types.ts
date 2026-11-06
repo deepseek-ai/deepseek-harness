@@ -79,6 +79,7 @@ export type CuaMouseButton = NonNullable<CuaParameters<'click'>['mouseButton']>
 /**
  * Left clicks support one or two presses; right and middle clicks support one.
  * holdMs is a nonnegative integer in milliseconds, limited by maxClickHoldMs; zero releases immediately.
+ * Explicit holds use pointer input; omission preserves ordinary clicks.
  */
 export type CuaClickOptions = Pick<CuaParameters<'click'>, 'mouseButton' | 'clickCount' | 'modifiers' | 'holdMs'> & CuaCoordinateOptions
 /** One same-window drag; omitted button is left and omitted modifiers are empty. */
@@ -95,7 +96,7 @@ export type CuaScrollOptions = Pick<CuaParameters<'scroll'>, 'x' | 'y' | 'deltaL
  */
 export interface CuaSurface {
   /**
-   * Unhide the app and restore a minimized selected, focused, main or sole window without requesting activation.
+   * Request that the provider show the selected application or window.
    * @returns Dispatch evidence, the selected window when available, and sampled foreground change; read fresh state before input.
    */
   show(): Promise<CuaShowResult>
@@ -190,22 +191,17 @@ export interface CuaWindow extends CuaSurface {
    */
   getScreenshot(options?: CuaObservationOptions): Promise<CuaScreenshot>
   /**
-   * On macOS, prefer an available control's click or advertised accessibility action over hover.
-   * By default, mouseMove reveals or restores alternate UI on an enabled target or ancestor that advertises
-   * both AXShowAlternateUI and AXShowDefaultUI. Without an AX route it throws HOVER_UNAVAILABLE before sending input.
-   * Only the macOS provider's systemPointerHover setting permits moving the visible cursor as a fallback.
-   * That route requires a foreground app and an unobscured target and leaves the cursor at the destination.
+   * Request hover at an element or a point in this window. The provider reports the route used and whether
+   * the visible system pointer moved. Observe the resulting UI after its hover delay.
    * @param target - current element id or screenshot-local [x,y].
    * @param options - coordinate mode; applies only to [x,y].
    * @returns dispatch evidence and the selected route; observe the resulting UI after its hover delay.
    */
   mouseMove(target: CuaElementId | readonly [number, number], options?: CuaCoordinateOptions): Promise<CuaHoverResult>
   /**
-   * Click an element or a point in this window. On macOS both forms send mouse-down and mouse-up events.
-   * For a background control, prefer {@link CuaSurface.invoke} for its default action. When a mouse click is needed,
-   * call app.activate() first and observe the target again. Background apps can ignore dispatched mouse events.
+   * Click a current element id or screenshot-local point.
    * Cancellation or timeout releases the held button; received input cannot be undone. The operation deadline includes holdMs.
-   * @param target - On macOS, an id from the latest tree targets the element center. A coordinate pair targets the given point.
+   * @param target - element id or [x,y].
    * @param options - button, click count, modifiers, optional hold duration and coordinate mode.
    * @returns dispatch evidence.
    */
@@ -274,9 +270,9 @@ export interface CuaApi {
    */
   getState(options?: CuaObservationOptions): Promise<{ apps: CuaAppInfo[]; browsers: [] }>
   /**
-   * Select an app, obtain consent, launch it in the background if necessary, and silently retain initial AX state.
-   * @param selector - Exact name, bundle ID, absolute application path or running PID string; ambiguous names reject.
-   * @returns An application handle tied to this process lifetime; its initial tree read becomes the current snapshot.
+   * Select an app and obtain consent. Providers with app-level accessibility silently read the initial tree.
+   * @param selector - A selector accepted by the provider; ambiguous matches reject.
+   * @returns An application handle tied to this process lifetime.
    */
   getApp(selector: string): Promise<CuaApp>
 }
