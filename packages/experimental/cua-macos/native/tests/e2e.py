@@ -170,6 +170,8 @@ def main():
                 call(method, {**other_button, "windowId": primary["windowId"]}, "STALE_SNAPSHOT")
             call("click", target)
             wait_state(lambda state: state["count"] == 1, "primary click was not received exactly once")
+            call("click", {**target, "holdMs": 50})
+            wait_state(lambda state: state["count"] == 2, "element-center mouse click did not reach the primary button")
             call("click", button_target(second, "Increment secondary"))
             wait_state(lambda state: state["secondaryCount"] == 1, "second window snapshot was invalidated by primary action")
             first = call("getState", primary_params)
