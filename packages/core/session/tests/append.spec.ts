@@ -36,6 +36,16 @@ describe('multiple Session appends', () => {
     expect(events[0]).toMatchObject({ type: 'turn/start', seq: 0, data: { turn: 1 } })
   })
 
+  it('accepts both call forms through an append wrapper', () => {
+    const session = Session.create(SessionId('wrapped-append'))
+    const append = new Proxy(session.append, {
+      apply: (target, receiver, args) => Reflect.apply(target, receiver, args),
+    })
+    session.append = append
+    expect(session.append('turn/start', { turn: 1 }).seq).toBe(0)
+    expect(session.append([['step/start', { turn: 1, step: 1 }]])).toHaveLength(1)
+  })
+
   it('publishes each member after the complete log and surface are committed', async () => {
     const ctx = new Context()
     onTestFinished(async () => { await ctx.fiber.dispose() })
@@ -73,8 +83,48 @@ describe('multiple Session appends', () => {
     expect(() => session.append([
       ['turn/start', { turn: 1 }],
       ['turn/start', { turn: Number.NaN }],
-    ])).toThrow(/non-JSON/)
+    ])).toThrow('session batch member 1 ("turn/start") carries non-JSON-serializable data')
     expect(session.seq).toBe(0)
+  })
+
+  it('assigns consecutive sequences after a candidate getter appends an event', () => {
+    const session = Session.create(SessionId('getter-append'))
+    const events = session.append([
+      ['turn/start', {
+        get turn() {
+          session.append('request/context', { provider: 'mock', model: 'mock' })
+          return 1
+        },
+      }],
+      ['step/start', { turn: 1, step: 1 }],
+    ])
+    expect(events.map(event => event.seq)).toEqual([1, 2])
+    expect(session.snapshotEvents().map(event => event.type)).toEqual(['request/context', 'turn/start', 'step/start'])
+  })
+
+  it('contains a reentrant append while publishing the remaining members', async () => {
+    const ctx = new Context()
+    onTestFinished(async () => { await ctx.fiber.dispose() })
+    await ctx.plugin(SessionStore)
+    const session = ctx.sessions.create(SessionId('reentrant-batch'))
+    const observed: number[] = []
+    const warnings: string[] = []
+    ctx.logger.warn = (warning: unknown) => { warnings.push(String(warning)) }
+    ctx.on('session/event', (current, event) => {
+      if (current === session && event.seq === 0) {
+        session.append('request/context', { provider: 'mock', model: 'mock' })
+      }
+    })
+    ctx.on('session/event', (current, event) => {
+      if (current === session) observed.push(event.seq)
+    })
+    session.append([
+      ['turn/start', { turn: 1 }],
+      ['step/start', { turn: 1, step: 1 }],
+    ])
+    expect(session.seq).toBe(2)
+    expect(observed).toEqual([0, 1])
+    expect(warnings).toEqual([expect.stringContaining('session append cannot reenter')])
   })
 
   it('detaches only after every member has been observed', async () => {

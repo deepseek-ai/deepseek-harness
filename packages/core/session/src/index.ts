@@ -763,11 +763,12 @@ export class Session {
 
   /**
    * Append consecutive events together after validating every candidate and dispatch.
-   * Observers read the complete committed log and final message surface. An empty
-   * array appends nothing. Persistence listeners retain their own durability rules.
-   * @param inputs - event payloads and surface intents in commit order.
+   * Observers read the complete committed log and final message surface.
+   * Listener registration changes during publication take effect on the next append.
+   * Persistence listeners retain their own durability rules.
+   * @param inputs - event payloads and surface intents in commit order. An empty array records no events.
    * @returns immutable committed events in the same order.
-   * @throws before changing the log if any candidate or synchronous dispatch validation fails.
+   * @throws if the Session cannot accept writes, including an empty append, or any candidate or synchronous dispatch validation fails.
    */
   append(inputs: readonly SessionEventInput[]): readonly SessionEvent[]
 
@@ -861,8 +862,7 @@ export class Session {
   #appendEvents(inputs: readonly SessionEventInput[]): readonly SessionEvent[] {
     this.publicationEntry()
     if (inputs.length === 0) return []
-    const startSeq = this.log.length
-    const events = Array.from({ length: inputs.length }, (_, index) => {
+    const snapshots = Array.from({ length: inputs.length }, (_, index) => {
       const input = inputs.at(index)
       if (input === undefined) throw new Error(`session batch has an empty member at index ${index}`)
       const [type, data, surfaceOpts] = input
@@ -871,14 +871,19 @@ export class Session {
         ...surfaceOpts?.surfaceOp === undefined ? {} : { surfaceOp: surfaceOpts.surfaceOp },
         ...surfaceOpts?.sourceEventSeqs === undefined ? {} : { sourceEventSeqs: surfaceOpts.sourceEventSeqs },
       })
-      if (snapshot === undefined) throw new Error('session batch carries non-JSON-serializable data')
-      const event = {
-        ...snapshot, seq: SessionSeq(startSeq + index), time: Date.now(),
+      if (snapshot === undefined) {
+        throw new Error(`session batch member ${index} ("${type}") carries non-JSON-serializable data`)
       }
+      return snapshot
+    })
+    // Payload getters may append to or detach the Session.
+    const entry = this.publicationEntry()
+    const startSeq = this.log.length
+    const events = snapshots.map((snapshot, index) => {
+      const event = { ...snapshot, seq: SessionSeq(startSeq + index), time: Date.now() }
       assertSessionEventEnvelope(event, startSeq + index)
       return deepFreeze(event)
     })
-    const entry = this.publicationEntry()
     const acceptSurface = this.surfaceManager.prepareBatch(events)
     if (entry !== undefined) entry.appending = true
     try {

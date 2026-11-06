@@ -361,17 +361,6 @@ Required for `SurfaceEventType` events — every message-producing event must de
 
 `assistant/message` cannot carry `sourceEventSeqs`; its `stream` owns exact provider evidence. Other surface events omit the field when they cite no earlier event and use a complete non-empty list when they do.
 
-### `SessionEventInput` — one proposed event
-
-```ts type-equiv
-/** One positional event call proposed for append, without assigned sequence or time. */
-type SessionEventInput = {
-  [K in SessionEventType]: readonly [type: K, data: SessionEventMap[K], ...opts: K extends SurfaceEventType ? [opts: SurfaceIntent<K>] : []]
-}[SessionEventType]
-```
-
-Each array member keeps its event type paired with its payload and requires surface intent only for message-producing events.
-
 <a id="plugin-owned-message-projections"></a>
 ### Plugin-owned message projections
 
@@ -457,6 +446,17 @@ interface SurfaceFoldResult {
 ```
 
 ## `Session` public API
+
+### `SessionEventInput` — one proposed event
+
+```ts type-equiv
+/** One positional event call proposed for append, without assigned sequence or time. */
+type SessionEventInput = {
+  [K in SessionEventType]: readonly [type: K, data: SessionEventMap[K], ...opts: K extends SurfaceEventType ? [opts: SurfaceIntent<K>] : []]
+}[SessionEventType]
+```
+
+Each array member keeps its event type paired with its payload and requires surface intent only for message-producing events.
 
 The body-stripped declaration keeps the plain class's detached factory, state accessors, append method, and history projections synchronized with source. Store operations remain in the generated [`ctx.sessions` section](#ctxsessions--sessionstore).
 
@@ -586,11 +586,12 @@ declare class Session {
   get seq(): SessionLogOffset;
   /**
    * Append consecutive events together after validating every candidate and dispatch.
-   * Observers read the complete committed log and final message surface. An empty
-   * array appends nothing. Persistence listeners retain their own durability rules.
-   * @param inputs - event payloads and surface intents in commit order.
+   * Observers read the complete committed log and final message surface.
+   * Listener registration changes during publication take effect on the next append.
+   * Persistence listeners retain their own durability rules.
+   * @param inputs - event payloads and surface intents in commit order. An empty array records no events.
    * @returns immutable committed events in the same order.
-   * @throws before changing the log if any candidate or synchronous dispatch validation fails.
+   * @throws if the Session cannot accept writes, including an empty append, or any candidate or synchronous dispatch validation fails.
    */
   append(inputs: readonly SessionEventInput[]): readonly SessionEvent[];
   /**
