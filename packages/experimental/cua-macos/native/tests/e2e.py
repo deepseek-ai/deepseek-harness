@@ -43,12 +43,18 @@ def check_file_panel(call, owner, primary_params, primary, directory, wait_state
                 raise AssertionError(description + ": " + observed["tree"])
             time.sleep(0.025)
 
-    sheet = wait_observation(lambda observed: any(e["identifier"] == "open-panel" for e in observed["elements"]),
-                             "File panel did not appear")
-    sheet_id = sheet["focusedWindowId"]
-    assert sheet_id != primary["windowId"], sheet
+    document = wait_observation(lambda observed: any(e["identifier"] == "OKButton" for e in observed["elements"]),
+                                "File panel control did not appear in the document tree", primary_params)
+    sheet_id = document["focusedWindowId"]
+    assert sheet_id is not None and sheet_id != primary["windowId"], document
+    button = next(e for e in document["elements"] if e["identifier"] == "OKButton")
+    for method in ("click", "mouseMove"):
+        error = call(method, {**owner, "windowId": primary["windowId"], "snapshotId": document["snapshotId"],
+                              "elementId": button["elementId"]}, "STALE_SNAPSHOT")
+        assert f"window {sheet_id}; select that window" in error["message"], error
     scoped = call("getState", {**primary_params, "windowId": sheet_id})
     assert any(e["role"] == "AXSheet" for e in scoped["elements"]), scoped
+    assert any(e["identifier"] == "OKButton" for e in scoped["elements"]), scoped
     assert "Increment primary" not in scoped["tree"], scoped
     panel = next(e for e in scoped["elements"] if e["identifier"] == "open-panel")
     call("performAction", {**owner, "snapshotId": scoped["snapshotId"], "elementId": panel["elementId"], "action": "AXRaise"})
@@ -74,9 +80,9 @@ def check_file_panel(call, owner, primary_params, primary, directory, wait_state
     call("pressKey", {**owner, "key": "Return"})
     ready = wait_observation(lambda observed: not any(e["identifier"] == "PathTextField" for e in observed["elements"])
                              and any(e["identifier"] == "OKButton" and e["enabled"] for e in observed["elements"]),
-                             "Go to folder did not select the requested file")
+                             "Go to folder did not select the requested file", {**primary_params, "windowId": sheet_id})
     open_button = next(e for e in ready["elements"] if e["identifier"] == "OKButton")
-    assert call("invoke", {**owner, "snapshotId": ready["snapshotId"], "elementId": open_button["elementId"]})["dispatched"]
+    assert call("invoke", {**owner, "windowId": sheet_id, "snapshotId": ready["snapshotId"], "elementId": open_button["elementId"]})["dispatched"]
     wait_state(lambda state: bool(state["selectedFile"]) and Path(state["selectedFile"]).samefile(selected_file),
                "File picker did not return the intended file")
     # AppKit can retain the dismissed panel's hidden WindowServer window after
@@ -161,12 +167,18 @@ def main():
             target = {**button_target(first, "Increment primary"), "windowId": primary["windowId"]}
             app_state = call("getState", {**owner, "maxElements": 300, "maxDepth": 20})
             other_button = button_target(app_state, "Increment secondary")
+            menu_item = next(e for e in first["elements"] if e["role"] == "AXMenuBarItem")
             for method in ("click", "mouseMove"):
+                windowless = call(method, {**target, "elementId": menu_item["elementId"]}, "WINDOW_UNAVAILABLE")
+                assert "app.invoke(id)" in windowless["message"], windowless
                 unknown = call(method, {**target, "elementId": "9999"}, "INVALID_ARGUMENT")
                 assert "elementId is absent" in unknown["message"], unknown
-                call(method, {**target, "x": 0, "y": 0}, "INVALID_ARGUMENT")
-                call(method, {**target, "relative": True}, "INVALID_ARGUMENT")
-                call(method, {**target, "windowId": secondary["windowId"]}, "STALE_SNAPSHOT")
+                combined = call(method, {**target, "x": 0, "y": 0}, "INVALID_ARGUMENT")
+                assert combined["message"] == "Element and coordinate targets cannot be combined", combined
+                raw_relative = call(method, {**target, "relative": True}, "INVALID_ARGUMENT")
+                assert raw_relative["message"] == "Unknown operation parameter", raw_relative
+                stale = call(method, {**target, "windowId": secondary["windowId"]}, "STALE_SNAPSHOT")
+                assert f'read getAccessibilityTree on window {secondary["windowId"]}' in stale["message"], stale
                 call(method, {**other_button, "windowId": primary["windowId"]}, "STALE_SNAPSHOT")
             call("click", target)
             wait_state(lambda state: state["count"] == 1, "primary click was not received exactly once")

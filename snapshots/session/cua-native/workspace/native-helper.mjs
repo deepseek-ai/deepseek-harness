@@ -197,7 +197,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
         ? snapshots.get(params.windowId) ?? snapshots.get(null)
         : [...snapshots.values()].find(snapshot => snapshot.snapshotId === params.snapshotId)
       if (!observed) refuse('STALE_SNAPSHOT', 'Read fresh state before acting')
-      if (params.windowId !== undefined && observed.windowId !== null && observed.windowId !== params.windowId) refuse('STALE_SNAPSHOT', 'Snapshot belongs to another window')
+      if (params.windowId !== undefined && observed.windowId !== null && observed.windowId !== params.windowId) refuse('STALE_SNAPSHOT', `Snapshot belongs to window ${observed.windowId}; read getAccessibilityTree on window ${params.windowId}`)
       if (observed.axless && params.elementId !== undefined) refuse('INVALID_ARGUMENT', 'Element id is absent from the selected snapshot')
       if (method === 'mouseMove') application.hovering = params.elementId === '0' || (params.x >= 20 && params.x <= 40)
       else if (method === 'click' && params.windowId === 8) application.visualCount++

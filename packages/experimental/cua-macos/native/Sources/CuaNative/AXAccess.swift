@@ -652,7 +652,7 @@ final class AXAccess {
             }
             current = try self.element(node, "AXParent")
         }
-        throw NativeFailure(code: "WINDOW_UNAVAILABLE", message: "Element has no app-owned window or sheet; refresh getAccessibilityTree")
+        throw NativeFailure(code: "WINDOW_UNAVAILABLE", message: "Pointer input requires an enclosing window or sheet. For a menu item’s default action, use app.invoke(id)")
     }
     func keyboardRecipient(_ owner: ProcessIdentity, catalog: ApplicationCatalogSnapshot) throws -> ProcessIdentity {
         var current = try element(AXUIElementCreateApplication(owner.pid), "AXFocusedWindow")

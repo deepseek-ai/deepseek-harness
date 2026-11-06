@@ -95,7 +95,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 <a id="observation-and-input"></a>
 ## 观察与输入
 
-`getState` 可将 AX 遍历限定到应用所属窗口或嵌套 sheet 的 `windowId`。新的刷新或失败的刷新使同一应用/窗口范围的旧快照失效，其他窗口范围仍可使用。应用所属 CG 窗口没有匹配 AX 界面时，getState 返回空 tree/elements、truncated 为 false 的新快照，仍可截图和坐标输入。遍历后重新检查进程生命期、窗口归属、会话未锁定及辅助功能权限。窗口发现中的 APIDisabled 和通信错误仍会失败；不支持或缺失的可选 AX 属性可以产生空观察。不存在或属于其他应用的窗口不会返回空成功结果。遍历中 AX 元素失效会以 `STALE_SNAPSHOT` 拒绝整次读取，不发布部分树。应用变化后可以重新观察，但不重复输入。原始元素目标要求 `appHandle`、`snapshotId` 和不透明字符串 `elementId`；坐标动作要求 `windowId`，并可携带属于该窗口或应用级观察的快照 ID。原生引用不跨 JSON 传递。刷新窗口列表会释放已关闭窗口的快照。进程身份、快照代次和窗口归属检查不会锁住桌面，用户或应用仍可同时改变状态。
+`getState` 可将 AX 遍历限定到应用所属窗口或嵌套 sheet 的 `windowId`。新的刷新或失败的刷新使同一应用/窗口范围的旧快照失效，其他窗口范围仍可使用。应用所属 CG 窗口没有匹配 AX 界面时，getState 返回空 tree/elements、truncated 为 false 的新快照，仍可截图和坐标输入。遍历后重新检查进程生命期、窗口归属、会话未锁定及辅助功能权限。窗口发现中的 APIDisabled 和通信错误仍会失败；不支持或缺失的可选 AX 属性可以产生空观察。不存在或属于其他应用的窗口不会返回空成功结果。遍历中 AX 元素失效会以 `STALE_SNAPSHOT` 拒绝整次读取，不发布部分树。应用变化后可以重新观察，但不重复输入。原生元素目标需要 `appHandle`、`snapshotId` 和字符串 `elementId`。`click` 和 `mouseMove` 可附带 `windowId`。它必须与元素所属窗口或 sheet 一致，对窗口级快照还必须与快照的窗口一致，否则在发送输入前返回 `STALE_SNAPSHOT`。坐标目标使用 `windowId`、`x`、`y`，可以附带来自该窗口或应用的快照。混用元素 ID 和坐标会返回 `INVALID_ARGUMENT`。Host 在发送请求前换算相对坐标，原生 JSONL 协议会拒绝 `relative` 字段。原生引用不跨 JSON 传递。刷新窗口列表会释放已关闭窗口的快照。进程身份、快照代次和窗口归属检查不会锁住桌面，用户或应用仍可同时改变状态。
 
 点击在元素中心或给定坐标发送鼠标按下和抬起事件。执行默认 AX 动作用 `invoke`，执行指定动作用 `performAction`。点击、滚动和拖动核实窗口归属和边界后，使用后台 PID/窗口定向输入。事件优先使用 SkyLight，不可用时使用公开的 PID 定向 API；已发送的事件不通过另一 API 重发。坐标是整个窗口左上角起算的 macOS point，包含标题栏。`deltaLinesY` 为正时显示上方内容，为负时显示下方内容；`deltaLinesX` 为正时显示左侧内容，为负时显示右侧内容。每个轴接受 -10 到 10 的整数，至少一个轴非零。helper 直接发送按行计量的滚轮事件。点击和拖动支持左、右、中键及 command/control/option/shift/fn 修饰键，只有左键支持双击。拖动在一个窗口中完成一次按下、移动、抬起，调用方显式提供 durationMs（1..5000）和 steps（1..240）。移动延迟按小数精度分配到各段，按下和抬起的固定等待及调度延迟另计。不存在隐式改用全局桌面输入的后备路径。
 
@@ -147,7 +147,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 
 运行 `python3 packages/experimental/cua-macos/native/tests/observation_benchmark.py --reference-helper /absolute/reference --candidate-helper /absolute/candidate --artifacts /private/evidence`，对比同一自建 AppKit 窗口中 35 行和 400 行合成内容的完整观察。每个 helper 先预热一次，再交替测量三次。除 helper 生成的应用和快照 ID 外，结果字段必须一致。报告保留原始耗时、字节数、哈希和回复，不设置 CI 性能阈值，也不声称内存表现。fixture 启动可能激活应用。运行时避免其他桌面自动化或编译任务。
 
-使用 `--panels-only` 单独检查系统文件面板。fixture 窗口可加入应用集合，避免 Stage Manager 在后台输入时缩小它们。使用 `e2e.py` 或 `electron_e2e.py` 的 `--hover-only`，可独立于键盘和文件面板场景验证悬停。为 `e2e.py` 加上 `--alternate-hover` 可验证 AX 展开、进入子控件、点击和移出，并采样确认系统指针不变。`--input-overlays` 验证穿透鼠标的覆盖窗口允许悬停、拦截输入的覆盖窗口拒绝悬停且不移动指针。
+使用 `--panels-only` 验证通过文档窗口操作 sheet 控件时会返回该 sheet 的窗口 ID，并验证选择 sheet 后能读取该控件。fixture 窗口可加入应用集合，避免 Stage Manager 在后台输入时缩小它们。使用 `e2e.py` 或 `electron_e2e.py` 的 `--hover-only`，可独立于键盘和文件面板场景验证悬停。为 `e2e.py` 加上 `--alternate-hover` 可验证 AX 展开、进入子控件、点击和移出，并采样确认系统指针不变。`--input-overlays` 验证穿透鼠标的覆盖窗口允许悬停、拦截输入的覆盖窗口拒绝悬停且不移动指针。
 
 构建后运行 `python3 packages/experimental/cua-macos/native/tests/e2e.py`，操作一个隔离的双窗口 AppKit fixture。fixture 独立记录按钮计数、Unicode 文本、实际滚动位置、右键回调和拖动释放位置。滚动、右键按下/抬起和拖动按下/抬起计数每次手势必须恰好增加一次。检查还验证真实 NSOpenPanel sheet、路径输入的键盘路由和选中文件 URL，并覆盖范围内快照替换、截图尺寸、过期应用清理和 EOF 退出。`--artifacts DIRECTORY` 写出仅包含 fixture 的截图和私有协议记录；协议记录包含运行中应用清单，不用于公开发布。
 

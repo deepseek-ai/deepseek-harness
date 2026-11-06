@@ -155,8 +155,8 @@ actor AXWorker {
     private func coordinateSnapshot(_ handle: String, _ params: RequestParameters, _ windowID: UInt32) throws {
         guard let id = try params.optionalString("snapshotId") else { return }
         let value = try snapshot(handle, id)
-        guard value.scope.windowID == nil || value.scope.windowID == windowID else {
-            throw NativeFailure(code: "STALE_SNAPSHOT", message: "Snapshot belongs to another window")
+        if let source = value.scope.windowID, source != windowID {
+            throw NativeFailure(code: "STALE_SNAPSHOT", message: "Snapshot belongs to window \(source); read getAccessibilityTree on window \(windowID)")
         }
     }
     private func coordinateWindow(_ identity: ProcessIdentity, _ windowID: UInt32, trace: ScreenshotTrace? = nil) throws -> WindowInfo {
