@@ -101,12 +101,17 @@ function frozen(phase: InputState['phase']): boolean {
 }
 
 /** Whether two projections differ in content (selection and caret excluded). */
+function sameSummary(left: QuoteSummary | undefined, right: QuoteSummary | undefined): boolean {
+  return left === right || (left !== undefined && right !== undefined && left.label === right.label
+    && left.title === right.title && left.detail === right.detail && left.body === right.body)
+}
+
 function projectionContentChanged(prev: EditorProjection, next: EditorProjection): boolean {
   if (prev.clipboardText !== next.clipboardText || prev.detectText !== next.detectText) return true
   if (prev.command !== next.command) return true
   if (prev.quotes.length !== next.quotes.length || prev.quotes.some((quote, i) => {
     const old = next.quotes[i]
-    return old?.text !== quote.text || old.offset !== quote.offset
+    return old?.text !== quote.text || old.offset !== quote.offset || !sameSummary(old.summary, quote.summary)
   })) return true
   if (prev.occurrences.length !== next.occurrences.length) return true
   return next.occurrences.some((occ, i) => {

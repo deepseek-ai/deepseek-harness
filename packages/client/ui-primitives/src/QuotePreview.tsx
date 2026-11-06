@@ -27,9 +27,9 @@ export interface QuotePreviewRemoval {
 
 /** Owner-supplied readable form of a quote whose exact text is long structured content. */
 export interface QuoteSummary {
-  /** Short inline label shown before `body` in place of the exact text. */
+  /** Short inline label shown before `body` in place of the exact text; assistive technology reads `title` and `detail` instead. */
   readonly label: string
-  /** First popover line, such as a file path. */
+  /** First popover line, such as a file path; also the label's accessible text. */
   readonly title: string
   /** Secondary popover line, such as a line range. */
   readonly detail?: string | undefined
@@ -39,7 +39,7 @@ export interface QuoteSummary {
 
 /** Presentation inputs for one compact quote excerpt. */
 export interface QuotePreviewProps {
-  /** Exact selected text rendered inline and exposed in a popover while clipped. */
+  /** Exact selected text rendered inline and exposed in a popover while clipped, unless `summary` replaces it. */
   readonly text: string
   /** Readable replacement for `text`: its label renders inline and its popover opens on every hover. */
   readonly summary?: QuoteSummary | undefined
@@ -101,7 +101,13 @@ export function QuotePreview({ text, summary, removal }: QuotePreviewProps): JSX
           </button>
         )}
       <span ref={sourceRef} className={css.source} data-quote-preview-text="">
-        {summary === undefined ? text : <>{summary.label} <span className={css.inlineBody}>{summary.body}</span></>}
+        {summary === undefined ? text : (
+          <>
+            <span aria-hidden="true">{summary.label}</span>
+            <span className={css.visuallyHidden}>{summary.detail === undefined ? summary.title : `${summary.title} ${summary.detail}`}</span>
+            {' '}<span className={css.inlineBody}>{summary.body}</span>
+          </>
+        )}
       </span>
     </span>
   )

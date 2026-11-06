@@ -112,6 +112,20 @@ it('centers the selected file on each menu opening and then follows selection st
   expect(rows().scrollTop).toBe(0)
   select('c.ts')
   expect(rows().scrollTop).toBe(0)
+  select('h.ts')
+  expect(rows().scrollTop).toBe(150)
+  pane.rerender(<ChangedFiles {...props} state={{ query: 'ts', collapsed: {}, selected: 'h.ts' }} />)
+  expect(rows().scrollTop).toBe(0)
+  pane.unmount()
+
+  // A navigation selects its file before the diff arrives; the rows then reveal it once they exist.
+  const early = render(<ChangedFiles {...props} files={[]} state={{ query: '', collapsed: {}, selected: 'h.ts' }} />)
+  expect(rows().scrollTop).toBe(0)
+  early.rerender(<ChangedFiles {...props} state={{ query: '', collapsed: {}, selected: 'h.ts' }} />)
+  expect(rows().scrollTop).toBe(150)
+  rows().scrollTop = 0
+  early.rerender(<ChangedFiles {...props} files={[...files]} state={{ query: '', collapsed: {}, selected: 'h.ts' }} />)
+  expect(rows().scrollTop).toBe(0)
 })
 
 it('bounds pointer and keyboard resizing, retains hidden width, and stops cancelled drags', () => {
