@@ -3,7 +3,7 @@
 - status
 - switch "启用 @fixture/missing-bundle" [checked]
 - heading "@fixture/missing-bundle" [level=3]
-- text: 异常 未安装
+- text: 未运行 未安装
 - paragraph:
   - code: "@fixture/missing-bundle"
 - status: "原因: dsh: cannot resolve profile bundle \"@fixture/missing-bundle\" from the dsh installation or {{home}}/profiles/scaffold; run 'dsh plugin --profile scaffold install' if its dependency is not installed"
