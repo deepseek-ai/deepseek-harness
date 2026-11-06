@@ -129,7 +129,7 @@ async function readerHarness(creator: ShareRpcActor, target: 'fork' | 'source' =
   expect(agent.status).toBe('running')
 
   const admitted = new Set([identityKeyOf(alice), identityKeyOf(bob)])
-  const share: ForkShareState = { shareId: 'share', sessionId: sourceSession, sessionMode: 'view',
+  const share: ForkShareState = { shareId: 'share', sessionIds: [sourceSession], sessionMode: 'view',
     allowsFork: true, viewerAdmitted: true, stopped: false }
   const accessFacts: ViewerAccessFacts = {
     share: shareId => shareId === 'share' ? share : undefined,
@@ -184,7 +184,7 @@ async function readerHarness(creator: ShareRpcActor, target: 'fork' | 'source' =
         return peer
       },
     },
-    sharedSessionId: () => sourceSession,
+    sharedSessionIds: () => [sourceSession],
     forkStateOf: () => share,
     viewerStillAdmitted: (_shareId, actor) => admitted.has(identityKeyOf(actor)),
     forks,

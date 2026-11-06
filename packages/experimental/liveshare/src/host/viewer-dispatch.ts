@@ -138,7 +138,7 @@ export function createViewerDispatch(input: ViewerDispatchDeps): ViewerDispatch 
   const deps = input.deps
   const fork = input.fork
   const lifecycle = input.lifecycle
-  const sessionOf = (shareId: string): string | undefined => deps.sharedSessionId(shareId)
+  const sessionsOf = (shareId: string): readonly string[] | undefined => deps.sharedSessionIds(shareId)
 
 
   const dispatch = async (
@@ -195,10 +195,9 @@ export function createViewerDispatch(input: ViewerDispatchDeps): ViewerDispatch 
     path: string,
     body: unknown,
     actor: ShareRpcActor,
+    source: string,
     signal?: AbortSignal,
   ): Promise<ViewerAnswer> => {
-    const source = sessionOf(shareId)
-    if (source === undefined) return { status: 403, body: { error: 'share-not-found' } }
     const refusedBefore = lifecycle.shareRefusal(shareId, actor)
     if (refusedBefore !== undefined) return refusedBefore
     const before = lifecycle.accessRefusal(shareId, actor, action, source, true)
@@ -231,9 +230,9 @@ export function createViewerDispatch(input: ViewerDispatchDeps): ViewerDispatch 
             // field is a path or a credential.
             prepared,
             session: 'known',
-            ...(deps.sourceRefusal?.(shareId) === undefined
+            ...(deps.sourceRefusal?.(shareId, source) === undefined
               ? {}
-              : { reason: deps.sourceRefusal(shareId) }),
+              : { reason: deps.sourceRefusal(shareId, source) }),
           },
         }
       }
@@ -333,15 +332,17 @@ export function createViewerDispatch(input: ViewerDispatchDeps): ViewerDispatch 
     // boundary need state a synchronous policy does not read.
     if (endpoint === 'session/fork') return fork().answerFork(shareId, target, body, actor, signal)
     if (endpoint === 'session/prompt' || endpoint === 'session/cancel') {
-      // A request naming the share's own source Session is decided by the source path whatever the mode,
-      // so its refusal names the share's rule rather than the fork registry's "not a fork of a share".
-      const source = sessionOf(shareId)
-      if (source !== undefined && requestedSessionId(body) === source) {
-        return answerSourceWrite(shareId, endpoint, target, body, actor, signal)
+      // A request naming one of the share's own source Sessions is decided by the source path whatever the
+      // mode, so its refusal names the share's rule rather than the fork registry's "not a fork of a share".
+      const sources = sessionsOf(shareId)
+      if (sources === undefined) return { status: 403, body: { error: 'share-not-found' } }
+      const requested = requestedSessionId(body)
+      if (requested !== undefined && sources.includes(requested)) {
+        return answerSourceWrite(shareId, endpoint, target, body, actor, requested, signal)
       }
       return answerChildWrite(shareId, endpoint, target, body, actor, signal)
     }
-    if (sessionOf(shareId) === undefined) return { status: 404, body: { error: 'share-not-found' } }
+    if (sessionsOf(shareId) === undefined) return { status: 404, body: { error: 'share-not-found' } }
     // A share this host still holds is not the same as a share that may still serve: its deadline, a stop,
     // and a grant that ended are decided here, before the owner's gateway reads anything for this viewer.
     const refused = lifecycle.shareRefusal(shareId, actor)
@@ -366,7 +367,7 @@ export function createViewerDispatch(input: ViewerDispatchDeps): ViewerDispatch 
     actor: ShareRpcActor,
     signal?: AbortSignal,
   ): Promise<ViewerAnswer> => {
-    if (sessionOf(shareId) === undefined) return { status: 404, body: { error: 'share-not-found' } }
+    if (sessionsOf(shareId) === undefined) return { status: 404, body: { error: 'share-not-found' } }
     // Refused before the opener runs, so a share that may not serve this viewer costs no upstream
     // subscription — and a stream that can never be read is never opened in the first place.
     const refused = lifecycle.shareRefusal(shareId, actor)
