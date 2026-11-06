@@ -1,34 +1,91 @@
 /**
- * Harness error base with a stable machine-routable code and chained cause.
- * Package errors extend it so tool results and replay can retain failure class.
+ * LLM failure codes and helpers over the shared Harness error base. The base
+ * class lives in `@deepseek-ai/dsh-error` and is re-exported here, so both
+ * import paths name the same class.
  * @module @deepseek-ai/dsh-llm/error
  */
 
-/**
- * Base class for all harness errors. Carries a `code` (stable, programmatic —
- * e.g. `NO_ADAPTER`, `INVALID_ARGS`) distinct from the
- * human-readable `message`, and supports `cause` chaining via the standard
- * `ErrorOptions`. `name` defaults to the subclass constructor name.
- */
-export class HarnessError extends Error {
-  /** Stable machine-routable failure class (e.g. `RATE_LIMIT`); route on this, never by parsing `message`. */
-  readonly code: string
+import { HarnessError } from '@deepseek-ai/dsh-error'
 
-  constructor(message: string, code: string, options?: ErrorOptions) {
-    super(message, options)
-    this.code = code
-    this.name = new.target.name
-  }
-}
+export { HarnessError }
+
+/**
+ * Every failure code the built-in providers and the LLM runtime raise. An entry
+ * marked `retryChoice` is offered as a choice for a provider retry policy's
+ * `retryableCodes`; being a choice does not make a code retried by default.
+ */
+export const LLM_FAILURE_CODES = {
+  ABORTED: {},
+  ACCOUNT_QUOTA: {},
+  ACCOUNT_SIGN_IN_REQUIRED: {},
+  ACCOUNT_TOKEN_INVALID: {},
+  AUTH: {},
+  CLIENT_UPGRADE_REQUIRED: {},
+  CONTEXT_WINDOW_EXCEEDED: {},
+  DISCOVERY_FAILED: {},
+  DISCOVERY_UNSUPPORTED: {},
+  DUPLICATE_ADAPTER: {},
+  DUPLICATE_DIRECTORY: {},
+  DUPLICATE_DISCOVERY: {},
+  EMPTY_RESPONSE: { retryChoice: true },
+  FILES_API: {},
+  IMAGE_OFFLOAD_REQUIRED: {},
+  INVALID_ADAPTER: {},
+  INVALID_CATALOG: {},
+  INVALID_CONFIG: {},
+  INVALID_CREDENTIAL: {},
+  INVALID_DIRECTORY: {},
+  INVALID_DISCOVERY: {},
+  INVALID_MODEL_CONTEXT: {},
+  INVALID_MODEL_INFO: {},
+  INVALID_MODEL_MAX_TOKENS: {},
+  INVALID_MODEL_REASONING: {},
+  INVALID_PREPARED_CALL: {},
+  INVALID_REPLAY_STATE: {},
+  INVALID_REQUEST: {},
+  INVALID_RESPONSE: {},
+  MALFORMED_RESPONSE: { retryChoice: true },
+  MISSING_CREDENTIAL: {},
+  MODEL_SWITCH_COMPACTION_FAILED: {},
+  MODEL_UNSUPPORTED: {},
+  NO_ADAPTER: {},
+  NO_CREDENTIAL_STORE: {},
+  NO_DISCOVERY: {},
+  PI_AI_ERROR: {},
+  QUOTA: { retryChoice: true },
+  RATE_LIMIT: { retryChoice: true },
+  REGISTRATION_DISPOSED: {},
+  REQUEST_EXTENSION: {},
+  REQUEST_HEADERS: {},
+  SERVER: { retryChoice: true },
+  STREAM_CLOSED: { retryChoice: true },
+  TIMEOUT: { retryChoice: true },
+  TRANSPORT: { retryChoice: true },
+  UNKNOWN: {},
+  UNKNOWN_MODEL: {},
+  UNSTORABLE_PROVIDER_ID: {},
+  UNSUPPORTED_CONTENT: {},
+  UNSUPPORTED_OPTION: {},
+  UNSUPPORTED_REASONING_EFFORT: {},
+} as const satisfies Readonly<Record<string, { readonly retryChoice?: true }>>
+
+/** A failure code from {@link LLM_FAILURE_CODES}, or an unclassified provider HTTP status. */
+export type BuiltinLlmFailureCode = keyof typeof LLM_FAILURE_CODES | `HTTP_${number}`
+
+/** The {@link LLM_FAILURE_CODES} entries marked as retry-policy choices, in definition order. */
+export const RETRY_CODE_CHOICES: readonly BuiltinLlmFailureCode[] = Object.freeze(
+  (Object.keys(LLM_FAILURE_CODES) as (keyof typeof LLM_FAILURE_CODES)[])
+    .filter(code => 'retryChoice' in LLM_FAILURE_CODES[code]),
+)
 
 /** Canonical provider-neutral code for a model request rejected because its context window was exceeded. */
-export const CONTEXT_WINDOW_EXCEEDED_CODE = 'CONTEXT_WINDOW_EXCEEDED'
+export const CONTEXT_WINDOW_EXCEEDED_CODE = 'CONTEXT_WINDOW_EXCEEDED' satisfies BuiltinLlmFailureCode
 
 /** Canonical provider-neutral code for an exhausted account quota or balance. */
-export const QUOTA_EXCEEDED_CODE = 'QUOTA'
+export const QUOTA_EXCEEDED_CODE = 'QUOTA' satisfies BuiltinLlmFailureCode
 
 /** Account-token quota that can be replenished through the first-party billing page. */
-export const ACCOUNT_QUOTA_EXCEEDED_CODE = 'ACCOUNT_QUOTA'
+export const ACCOUNT_QUOTA_EXCEEDED_CODE = 'ACCOUNT_QUOTA' satisfies BuiltinLlmFailureCode
 
 /**
  * Canonical provider-neutral code for a response that completed normally but
@@ -39,7 +96,7 @@ export const ACCOUNT_QUOTA_EXCEEDED_CODE = 'ACCOUNT_QUOTA'
  * on. The attempt produced nothing durable, so retry policy treats it as safe
  * to repeat.
  */
-export const EMPTY_RESPONSE_CODE = 'EMPTY_RESPONSE'
+export const EMPTY_RESPONSE_CODE = 'EMPTY_RESPONSE' satisfies BuiltinLlmFailureCode
 
 /**
  * Canonical provider-neutral code for a credential that was supplied but
@@ -48,7 +105,7 @@ export const EMPTY_RESPONSE_CODE = 'EMPTY_RESPONSE'
  * rather than supply one. Deliberately outside the default retryable set —
  * a malformed credential fails identically on every attempt.
  */
-export const INVALID_CREDENTIAL_CODE = 'INVALID_CREDENTIAL'
+export const INVALID_CREDENTIAL_CODE = 'INVALID_CREDENTIAL' satisfies BuiltinLlmFailureCode
 
 /** Structured codes and plain phrases that explicitly name a context bound being exceeded. */
 const STRUCTURED_CONTEXT_OVERFLOW = new RegExp(
@@ -172,4 +229,4 @@ export function isHarnessError(value: unknown): value is HarnessError {
  * `dsh-compaction-image-offload` records an `image/offload` selection before
  * the agent or summarizer retries with freshly derived input.
  */
-export const IMAGE_OFFLOAD_REQUIRED_CODE = 'IMAGE_OFFLOAD_REQUIRED'
+export const IMAGE_OFFLOAD_REQUIRED_CODE = 'IMAGE_OFFLOAD_REQUIRED' satisfies BuiltinLlmFailureCode

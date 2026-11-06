@@ -1,6 +1,7 @@
 {
   "nsisLanguage": "GERMAN",
   "strings": {
+    "INSTALLER_UPDATE_WAIT": "Das Update wird installiert. Anschließend startet die App automatisch neu.",
     "INSTALLER_INSTALL": "Jetzt installieren",
     "INSTALLER_FINISH": "Fertigstellen",
     "INSTALLER_NATIVE_PROGRESS": "Installation wird vorbereitet… %d%%",

@@ -8,7 +8,7 @@ import type { GlobalStandardProps, PropsRenderFactories, PropsRenderSlots } from
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { useEffect, useMemo } from 'react'
-import { useMarkdownDelegate, type MarkdownMenuTarget } from '@deepseek-ai/dsh-client-ui-primitives'
+import { useMarkdownDelegate, type MarkdownDelegateFenceInfo, type MarkdownMenuTarget } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
   AssistantMessageNode, ChatFlowHookContext, ChatFlowOwnerProps, ChatFlowSlotProps,
   ChatNode, ChatNodeHookContext, ChatNodeOwnerProps, ChatSnapshot, UserBeforeOwnerProps,
@@ -478,9 +478,18 @@ function makeHarness(
     if (name !== 'conversation.chat.user.content') throw new Error(`Unexpected Chat Factory: ${name}`)
     return renderUserContent(owner as UserContentInput, renderImages, props.t)
   }
-  const renderSlot = (key: string, owner: ChatFlowOwnerProps, opts: Parameters<FlowRenderer>[2]) => {
+  const fenceCalls: { owner: MarkdownDelegateFenceInfo; entryKey: string | undefined }[] = []
+  const renderSlot = (
+    key: string,
+    owner: ChatFlowOwnerProps | MarkdownDelegateFenceInfo,
+    opts: Parameters<FlowRenderer>[2] & { entryKey?: string; children?: React.ReactNode },
+  ) => {
     if (key === 'conversation.chat.text-interaction') return null
-    if (key !== 'conversation.chat.flow') throw new Error(`Undeclared ChatView child: ${key}`)
+    if (key === 'conversation.chat.markdown.fence' && 'lang' in owner) {
+      fenceCalls.push({ owner, entryKey: opts.entryKey })
+      return opts.children ?? null
+    }
+    if (key !== 'conversation.chat.flow' || 'lang' in owner) throw new Error(`Undeclared ChatView child: ${key}`)
     if ('renderSlot' in owner || 'useStore' in owner || 'actions' in owner) {
       throw new Error('Flow owner data must not replace its rendering or store authority')
     }
@@ -577,7 +586,7 @@ function makeHarness(
     setConnection: (state: ConnectionState) => { connection.set(state) },
     openFile, openUserFile, loadOlder, loadThrough, openView,
     setOutline: (value: unknown) => { outlineValue = value },
-    chatScroll, forkAt, toolOwners,
+    chatScroll, forkAt, toolOwners, fenceCalls,
     setPerformanceUsage: (mode: 'compact' | 'detailed') => { performanceUsage.set(mode) },
     setGrouped: (value: ConversationGroupedView<ProcessGroupData> | undefined) => {
       grouped = value
@@ -3740,6 +3749,14 @@ describe('ChatView', () => {
     })
     expect(view.getByText('已停止')).toBeTruthy()
     expect(view.container.querySelectorAll('h1')).toHaveLength(2)
+  })
+
+  it('hands each final-language fence to the Chat fence slot', () => {
+    const markdown = '```TS\nconst a = 1\n```'
+    const h = makeHarness({ nodes: [user(1, markdown), assistant(2, markdown)] })
+    render(<h.ChatView {...h.props} />)
+    expect(h.fenceCalls).toContainEqual({ owner: { lang: 'ts', code: 'const a = 1', streaming: false }, entryKey: 'ts' })
+    expect(document.querySelector('.md-code-block pre')?.textContent).toBe('const a = 1')
   })
 
   it('streaming partial frames update the tail without replacing a sibling Tool row', () => {

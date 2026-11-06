@@ -39,6 +39,10 @@ kind: "package-reference"
 
 `ChatView` 通过节点列表外围既有的 `MarkdownDelegateProvider` 提供文件及 HTTP(S) 导航，直接传入 `requestOpenFile`、`openExternalLink` 和 `fileImages`。文件打开动作保留 Chat 的失败反馈与重试处理。Assistant Markdown 文件链接在消息落定后可于右侧栏打开，包括未修改文件的引用。相对路径基于当前查看的 Session 工作区解析；绝对路径仍使用同一 Session 的文件系统访问。[支持的 Markdown 行号引用](../ui-primitives/README.zh.md#rendering-agent-output)定位到指定起始行，并复用现有文件标签。文件缺失时显示预览错误状态。
 
+`ChatView` 还传入 `renderCode`，因此 Chat 消息流中带语言且有内容的每个 Markdown 围栏都经由 session 作用域的 `conversation.chat.markdown.fence` hoc slot 渲染。其 `entryKey` 为小写的围栏语言，owner props 携带该 `lang`、围栏 `code`、`streaming` 状态，以及存在时为 info string 其余部分的 `meta`。slot 内容是不带统一 diff 行的普通代码块，因此没有对应层的语言按代码渲染。Chat 自带 `math` 层，消息流式输出时显示源码，落定后显示行间 TeX；还自带 `diff` 与 `patch` 层，以统一 diff 行代替内容渲染。其他插件注册 `key` 为小写语言的层即可接入该语言：不渲染 `children` 的层替换代码块，渲染 `children` 的层装饰代码块，两者都可以自行从 `meta` 解析参数。
+
+围栏层的根元素不设外边距，因为围栏所在的[块级外框](../ui-primitives/README.zh.md#component-catalog)负责它与相邻块之间的间距。与内容相关的错误由层自己接住。层崩溃时错误照常上报，只有该围栏改为渲染崩溃层的 `children`，并在该围栏本次挂载内保持如此，props 变化也不恢复；同语言的其他围栏仍保留该层，重新挂载的围栏会再次使用它。因此，处理不了不完整内容的层在 `streaming` 为 true 时渲染 `children`。
+
 原生消息图片使用独立的用户与输出位置。`conversation.chat.user.content` Factory 声明 `conversation.chat.user.images`，由 `UserContent` 渲染；Assistant 节点注册声明 `conversation.chat.message.images`，由 `AssistantMarkdown` 渲染。两者通过显式 props 接收图片来源、授权 `loadImage` 和布局参数。官方 `MessageImages` 条目调用共享的 root 作用域 `conversation.images.content` Factory。每个位置均可独立替换，无需复制画廊实现。
 
 Session 作用域的 `conversation.chat.user.content` Factory 只渲染用户内容区域：文本、额外内容块、按输入顺序排列的图片／文件附件及引用摘要。[`UserContentInput`](src/client/contract/slots.ts) 携带预处理的 `content`、变换 `facts`、显示 props 和显式 `loadImage`；引用动作由节点自己的 Injection 提供。正文调用共享 `conversation.user.text` Factory，图片调用自身拥有的图片 Slot。直接调用需要 Session 绑定，行包装层由调用方提供。
@@ -131,7 +135,7 @@ Chat Builder 按节点发布 `bottomSource`：节点可见且属于已加载的�
 
 每个组拥有本地 `useDisclosure` 状态，组件保持挂载时，模式切换保留该状态。
 
-Session 作用域的 `conversation.chat.reasoning.body` single Slot 仅在思考正文展开时提供原始文本 `rawText`、显示文本 `text` 和流式状态。官方条目以优先级 100 注册，并调用 `conversation.chat.reasoning.content` Factory。替换项使用更小的优先级数值，可向同一个 Factory 传入原文或派生显示文本。root 作用域的 Factory 不要求 Session，并固定使用紧凑排版。其可选 `labels` 原样接受完整的 `MarkdownLabels`，省略时使用 Chat 的默认本地化文案。宿主不提供内联 fallback 或插件操作状态。显示扩展必须保留查看未翻译文本的能力，并在自己的 Body 包装内维护控件。扩展不替换思考预览或展开策略。哪些块生成思考行由[思考展示规则](src/client/conversation-nodes/README.zh.md#display-modes)定义。
+Session 作用域的 `conversation.chat.reasoning.body` single Slot 仅在思考正文展开时提供原始文本 `rawText`、显示文本 `text` 和流式状态。官方条目以优先级 100 注册，并调用 `conversation.chat.reasoning.content` Factory。替换项使用更小的优先级数值，可向同一个 Factory 传入原文或派生显示文本。root 作用域的 Factory 不要求 Session，并固定使用紧凑排版。其可选 `labels` 原样接受完整的 `MarkdownLabels`，省略时使用 Chat 的默认本地化文案。在 Chat 消息流中，带语言的围栏经由围栏 slot 渲染并使用 Chat 视图的代码块文案，因此这些 `labels` 在那里只作用于脚注和无语言围栏。宿主不提供内联 fallback 或插件操作状态。显示扩展必须保留查看未翻译文本的能力，并在自己的 Body 包装内维护控件。扩展不替换思考预览或展开策略。哪些块生成思考行由[思考展示规则](src/client/conversation-nodes/README.zh.md#display-modes)定义。
 
 Chat 节点 slot 为推理与工具注入绑定重置来源的 `useDisclosure` 钩子。中间 renderer 只透传、不订阅，每次调用拥有独立展开状态。来源回调保留接收对象及稳定引用。外层轮次实际隐藏过程成员时，所在节点重置这些开合状态，不替换组件 key，也不改变钩子引用。展示模式切换保留展开状态。
 

@@ -287,7 +287,7 @@ describe('prepared-route prompt admission', () => {
   })
 
   it.each([false, true])('reconciles compaction retries without replaying admission, older tail survives=%s', async (retainOlder) => {
-    const overflow = () => { throw new LlmError('context window exceeded', 'CONTEXT_LENGTH') }
+    const overflow = () => { throw LlmError.fromFailure({ message: 'context window exceeded', code: 'CONTEXT_LENGTH' }) }
     const adapter = new MockAdapter([textResponse('one'), textResponse('two'), overflow, overflow, textResponse('done')])
     const h = await harness(adapter)
     const resolve = vi.spyOn(adapter, 'resolveModel')

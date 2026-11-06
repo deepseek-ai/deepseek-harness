@@ -1,5 +1,6 @@
 /** Tool definitions and invocation data shared by registries and executors. @module */
 import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { TOOL_CONTEXT_UNAVAILABLE } from './error-codes.ts'
 import type { ToolCallId, ContentBlock, ToolSchema } from '@deepseek-ai/dsh-llm'
 import type { Agent, ModelSelection } from '@deepseek-ai/dsh-agent'
 import type { ScopeKey } from '@deepseek-ai/dsh-scope'
@@ -306,6 +307,23 @@ export class ToolNotFoundError extends HarnessError {
   }
 }
 
+/**
+ * Thrown by a tool body when its composition or call lacks context the tool
+ * requires, such as a calling Agent, an injected service, or an open turn.
+ * The failure is not an argument the model can correct; `message` names the
+ * missing context.
+ */
+export class ToolContextUnavailableError extends HarnessError {
+  /**
+   * @param message - names the tool and the missing context.
+   * @param options - standard `cause` chaining.
+   */
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, TOOL_CONTEXT_UNAVAILABLE, options)
+    this.name = 'ToolContextUnavailableError'
+  }
+}
+
 /** Thrown when a tool body or post-policy value violates its declared output. */
 export class ToolOutputError extends HarnessError {
   /** Schema/value violations in validation order. */
@@ -362,12 +380,13 @@ export type PreToolDecision =
 
 /**
  * Post-dispatch decision: accept, replace one projection, attach context for the
- * next request, or block by turning corrective feedback into an error result.
+ * next request, or block by turning corrective feedback into an error result
+ * whose optional `info` is its structured error identity.
  */
 export type PostToolDecision =
   | { kind: 'accept'; content?: ContentBlock[]; value?: never; additionalContexts?: UserMessage[] }
   | { kind: 'accept'; value: JsonValue; content?: never; additionalContexts?: UserMessage[] }
-  | { kind: 'block'; feedback: ContentBlock[]; additionalContexts?: UserMessage[] }
+  | { kind: 'block'; feedback: ContentBlock[]; info?: ToolErrorInfo; additionalContexts?: UserMessage[] }
 
 /**
  * Per-scope filter over global tools. Restrictions intersect and do not affect
@@ -386,6 +405,14 @@ export interface ToolRestriction {
  * returning `undefined` leaves it unchanged. Because guards have no allow
  * result, listener ordering cannot turn a denial back into permission.
  * @param execution - the identity-protected call after extensible pre-execute policy completed.
- * @returns a final denial reason, or `undefined` to leave the call allowed.
+ * @returns a final denial reason, a denial with structured error identity, or `undefined` to leave the call allowed.
  */
-export type ToolGuard = (execution: Readonly<ToolExecution>) => string | undefined
+export type ToolGuard = (execution: Readonly<ToolExecution>) => string | ToolGuardDenial | undefined
+
+/** A guard denial: the model-facing reason and optional structured error identity recorded on the result. */
+export interface ToolGuardDenial {
+  /** Model-facing reason rendered as the failed call's content. */
+  readonly reason: string
+  /** Structured error identity persisted beside the reason. */
+  readonly info?: ToolErrorInfo
+}

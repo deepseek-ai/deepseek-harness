@@ -22,7 +22,7 @@ Web 用户需要在 Session 旁使用交互式 shell 检查工作区和运行命
 
 调用者在创建之前保留终端 ID。相同 Session 和未关闭 ID 的重复 create 不再分配进程。创建结果不确定时，关闭仍使用该 ID，即使没有收到创建响应。Host 在等待分配完成前记录已关闭 ID，防止迟到的 create 复活已关闭终端。每次连接先接收一致、有界的 xterm 序列化屏幕，后续有序输出使用 Gateway 已有的复用 Remote stream。输出和屏幕快照共享操作队列。订阅者正常关闭时保留末尾输出，缓存超限时明确失败。浏览器在完成渲染后确认帧，避免 React 批处理丢失增量。
 
-最新连接控制输入和尺寸，其他连接保持只读。每条物理 `attach` 流拥有自己的输入和尺寸命令，传输自动恢复后亦如此。Host 按序执行命令并确认提供者已接受操作；Client 限制原始输入和完整编码帧，在公布的载体窗口满时排队，并在收到确认后继续发送。旧流不能借用新流写入，未确认输入绝不重放。终端输出不产生模型输入、Agent 工具结果或 Session 事件。[Agent 持久终端决策](2026-07-16-persistent-pty-sessions.zh.md)仍约束模型拥有的终端；此功能为[可移植 subprocess provider](../architecture/2026-07-28-portable-execution-world-consumers.zh.md)增加执行环境事实和 resize。 控制权转移和进程退出导致的拒绝只禁用输入，保留健康的输出视图。Client 自产错误标识由终端 UI 翻译，包括名额用满时关闭已保留的退出终端的提示。
+最新连接控制输入和尺寸，其他连接保持只读。每条物理 `attach` 流拥有自己的输入和尺寸命令，传输自动恢复后亦如此。Host 按序执行命令并确认提供者已接受操作；Client 限制原始输入和完整编码帧，在公布的载体窗口满时排队，并在收到确认后继续发送。旧流不能借用新流写入，未确认输入绝不重放。终端输出不产生模型输入、Agent 工具结果或 Session 事件；[Agent 终端面板决策](2026-10-12-agent-terminal-panel.zh.md)的实验工具是例外，它部分取代了这条规则。[Agent 持久终端决策](2026-07-16-persistent-pty-sessions.zh.md)仍约束模型拥有的终端；此功能为[可移植 subprocess provider](../architecture/2026-07-28-portable-execution-world-consumers.zh.md)增加执行环境事实和 resize。 控制权转移和进程退出导致的拒绝只禁用输入，保留健康的输出视图。Client 自产错误标识由终端 UI 翻译，包括名额用满时关闭已保留的退出终端的提示。
 
 ## 考虑过的替代方案
 

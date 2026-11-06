@@ -30,7 +30,10 @@
     "locale/*.json",
     "lib/index.js",
     "lib/worker.js",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ],
   "license": "MIT",
   "peerDependencies": {
@@ -41,12 +44,12 @@
     "@deepseek-ai/dsh-tools": "workspace:*"
   },
   "dependencies": {
-    "@browserbasehq/stagehand": "4.1.0",
+    "@browserbasehq/stagehand": "4.4.0",
     "@deepseek-ai/dsh-experimental-browser-use-runtime": "workspace:*",
     "@deepseek-ai/dsh-mcp-client": "workspace:*",
     "@deepseek-ai/dsh-util-values": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
-    "zod": "4.4.3",
+    "zod": "4.6.6",
     "@deepseek-ai/dsh-subprocess": "workspace:*",
     "@puppeteer/browsers": "3.2.2"
   },

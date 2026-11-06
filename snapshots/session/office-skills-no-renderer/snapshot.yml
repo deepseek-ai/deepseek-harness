@@ -6,7 +6,7 @@ recording: live
 header:
   class: office-skills-no-renderer
   pin: true
+  toolSchemasSource: workspace-dependencies
   systemPromptSource: office-skills
-  toolSchemasSource: office-skills
 workspace:
   setup: office-skills

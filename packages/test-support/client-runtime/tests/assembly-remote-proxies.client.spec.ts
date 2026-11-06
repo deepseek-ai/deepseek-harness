@@ -31,13 +31,13 @@ describe('remoteNamespacesOf', () => {
 describe('remote proxies over a booted client', () => {
   it('boots the Office Remote subset from source and routes calls through its mock', async () => {
     const name = '@deepseek-ai/dsh-api-remotes'
-    const mock = RemoteMock.create().load(remoteDefaultResponses).unary('officeToPdf/render', ok({ bytes: 3 }))
+    const mock = RemoteMock.create().load(remoteDefaultResponses).unary('officeKit/render', ok({ bytes: 3 }))
     const client = await TestClient.start({ roster: webApp.closure([name]) }, mock)
     onTestFinished(() => client.dispose())
     expect([...client.ctx.loader.entries()].map(entry => entry.options.name)).not.toContain(name)
     const remote = (client.ctx as unknown as { remote: RemoteFace }).remote
-    await expect(remote.officeToPdf!.render!({ path: 'report.docx' })).resolves.toEqual(ok({ bytes: 3 }))
-    expect(mock.log.calls('officeToPdf/render').map(call => call.args)).toEqual([[{ path: 'report.docx' }]])
+    await expect(remote.officeKit!.render!({ path: 'report.docx' })).resolves.toEqual(ok({ bytes: 3 }))
+    expect(mock.log.calls('officeKit/render').map(call => call.args)).toEqual([[{ path: 'report.docx' }]])
   })
 
   async function booted(configure: (mock: RemoteMock) => void = () => {}) {

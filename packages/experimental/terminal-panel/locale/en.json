@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Sidebar terminal backend",
+    "description": "Run the agent's persistent terminals as sidebar tabs the user can watch and take over, and let the agent read the user's own terminals."
+  }
+}

@@ -59,7 +59,7 @@ describe('owner LIVESHARE_DEBUG_READS switch', () => {
     const read = createViewerReadService({
       connection: readerConnection().connection,
       gateway: singleValueGateway(),
-      sharedSessionId: () => 'session-1',
+      sharedSessionIds: () => ['session-1'],
     })
     try {
       const opened = await read.answer(SHARE, {

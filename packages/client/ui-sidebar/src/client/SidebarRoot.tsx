@@ -331,7 +331,7 @@ export function SidebarRoot({
         {/* Expanded, the brand doubles as a New Session shortcut while the
             access snapshot allows `session/create` — except on
             macOS, where it stays part of the logo row's window-drag surface
-            (a button would subtract itself through the global no-drag rule);
+            (the drag-row controls rule would subtract a button);
             the collapsed rail's logo is the expand toggle below instead.
             Mouse clicks on the local-build fallbacks copy the version instead. */}
         {wide && (() => {

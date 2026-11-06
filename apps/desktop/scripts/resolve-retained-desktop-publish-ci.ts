@@ -10,13 +10,15 @@ import { resolveDesktopPublishRoute } from './desktop-publish-route.ts'
  * Verify a retained package against GitHub selection evidence, source history and required reviewers.
  * @param env Selected attempt and current runner context; no signing or upload credentials are needed.
  * @param api Read-only GitHub API used for source and Environment checks.
+ * @param readManifest Inventory verifier; metadata-only consumers supply the manifest reader.
  * @returns Complete route whose deployment environment comes from the retained manifest.
  */
-export async function resolveRetainedDesktopPublication(env: NodeJS.ProcessEnv, api: (path: string) => unknown) {
+export async function resolveRetainedDesktopPublication(env: NodeJS.ProcessEnv, api: (path: string) => unknown,
+  readManifest = verifyRetainedDesktopRelease) {
   const selection = z.object({ run: z.object({ id: z.number().int().positive(), run_attempt: z.number().int().positive() }).passthrough(),
     jobs: z.array(z.unknown()), routes: z.unknown(), runnerName: z.string() }).parse(JSON.parse(env.DESKTOP_PACKAGE_SELECTION || '{}'))
   if (!env.GITHUB_REPOSITORY || env.RUNNER_NAME !== selection.runnerName) throw new Error('desktop publish: task was dispatched to a different machine')
-  const manifest = await verifyRetainedDesktopRelease(desktopReleasesRoot(env), String(selection.run.id), String(selection.run.run_attempt))
+  const manifest = await readManifest(desktopReleasesRoot(env), String(selection.run.id), String(selection.run.run_attempt))
   const route = resolveDesktopPublishRoute(env.GITHUB_REPOSITORY, selection.run, manifest, selection.jobs, selection.routes)
   if (route.runnerName !== env.RUNNER_NAME) throw new Error('desktop publish: retained package belongs to another machine')
   const repository = env.GITHUB_REPOSITORY
@@ -37,16 +39,26 @@ export async function resolveRetainedDesktopPublication(env: NodeJS.ProcessEnv, 
   return route
 }
 
-if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.filename) {
-  const env = process.env
-  if (!env.GITHUB_OUTPUT || !env.GH_TOKEN) throw new Error('desktop publish: Actions output and API token required')
-  const route = await resolveRetainedDesktopPublication(env, async (path) => {
+/**
+ * Create the read-only GitHub verifier used on self-hosted publication machines.
+ * @param env Actions API origin and token; no gh installation is required.
+ * @returns A bounded JSON reader whose responses are validated by the route resolver.
+ */
+export function retainedDesktopPublishApi(env: NodeJS.ProcessEnv): (path: string) => Promise<unknown> {
+  if (!env.GH_TOKEN) throw new Error('desktop publish: API token required')
+  return async (path) => {
     const response = await fetch(`${env.GITHUB_API_URL || 'https://api.github.com'}/${path}`, {
       headers: { Authorization: `Bearer ${env.GH_TOKEN}`, Accept: 'application/vnd.github+json' },
       signal: AbortSignal.timeout(60_000),
     })
     if (!response.ok) throw new Error(`desktop publish: GitHub verification request failed (HTTP ${response.status})`)
     return response.json()
-  })
+  }
+}
+
+if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.filename) {
+  const env = process.env
+  if (!env.GITHUB_OUTPUT || !env.GH_TOKEN) throw new Error('desktop publish: Actions output and API token required')
+  const route = await resolveRetainedDesktopPublication(env, retainedDesktopPublishApi(env))
   await appendFile(env.GITHUB_OUTPUT, `route=${JSON.stringify(route)}\npreset=${route.preset}\n`)
 }

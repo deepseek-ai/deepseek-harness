@@ -186,7 +186,8 @@ export class ProgramWorker {
     if (spec.signal?.aborted) onAbort()
     else {
       try { evaluation.data.code = this.mode.stripTypes(spec.program) } catch (error: unknown) {
-        evaluation.finish({ kind: 'exception', message: messageOf(error) })
+        // A parse failure before startup has no process state or authority to retain.
+        evaluation.finish({ kind: 'exception', message: messageOf(error) }, undefined, !this.ready)
         return await result.promise
       }
       if (this.ready) this.dispatch(evaluation)
@@ -281,7 +282,7 @@ export class ProgramWorker {
     const packaged = this.config.launch.kind === 'embedded'
     const heapFlag = `--max-old-space-size=${this.config.maxOldGenerationSizeMb}`
     const argv = [executable, ...packaged ? [] : [heapFlag],
-      ...bootstrapArgs(this.ctx.fs, this.config.launch, this.config.maxMessageBytes, this.retainsState)]
+      ...bootstrapArgs(this.ctx.fs, this.config.launch, this.config.maxMessageBytes)]
     const policy = this.policy
     this.confined = policy.mode === 'danger-full-access' ? undefined : await this.ctx.sandbox.confine(argv, { ...policy, mode: policy.mode }, this.controller.signal)
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- Confinement may yield while disposal closes the process.

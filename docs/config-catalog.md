@@ -297,7 +297,7 @@ export interface SettingsControllerInternals {
 ## `@deepseek-ai/dsh-api-terminal-controller`
 
 - `inject`: `subprocess` · `sandboxPolicy` · `workingDirectory` · `typert`
-- `source`: [`packages/api/terminal-controller/src/index.ts:27`](../packages/api/terminal-controller/src/index.ts)
+- `source`: [`packages/api/terminal-controller/src/index.ts:32`](../packages/api/terminal-controller/src/index.ts)
 
 ```ts config-catalog
 /** Deployment limits and an optional shell profile. */
@@ -315,6 +315,11 @@ export interface Config {
   readonly shellCandidates: string[]
   /** Maximum retained terminals and pending allocations per Session. */
   readonly maxTerminals: number
+  /**
+   * Maximum running Agent-controlled terminals and pending Agent allocations per Session; `maxTerminals` still bounds
+   * every terminal, including exited ones and failed allocations awaiting cleanup.
+   */
+  readonly maxAgentTerminals: number
   /** Maximum terminal width in columns. */
   readonly maxCols: number
   /** Maximum terminal height in rows. */
@@ -961,8 +966,6 @@ export interface Config {
   mode: 'launch' | 'attach'
   /** CDP HTTP or WebSocket endpoint, required only for attach mode. */
   cdpEndpoint?: string
-  /** Optional Stagehand extension id for an existing browser. */
-  extensionId?: string
   /** Installed Chrome/Chromium executable used in launch mode. */
   executablePath?: string
   /** Hide an owned browser's window. */
@@ -1109,7 +1112,7 @@ export interface Config {
 
 - `inject`: `computerUse` · `tools` · `systemPrompt` · `subprocess` · `agents`
 - `refs`: [`CuaConfig`](../packages/experimental/cua/src/index.ts)
-- `source`: [`packages/experimental/cua-macos/src/index.ts:18`](../packages/experimental/cua-macos/src/index.ts)
+- `source`: [`packages/experimental/cua-macos/src/index.ts:32`](../packages/experimental/cua-macos/src/index.ts)
 
 ```ts config-catalog
 /** Native preparation, source-build signing, operation bounds, and profile-local application grants. */
@@ -1506,12 +1509,15 @@ export type PaidTranslationProvider = 'deepseek-account' | 'deepseek-official'
 
 ## `@deepseek-ai/dsh-experimental-worktree`
 
-- `inject`: `workingDirectory` · `fs` · `subprocess` · `sandbox` · `sandboxPolicy`
-- `source`: [`packages/experimental/worktree/src/index.ts:21`](../packages/experimental/worktree/src/index.ts)
+- `inject`: `workingDirectory` · `fs` · `subprocess` · `sandbox` · `sandboxPolicy` · `sessionProjections`
+- `refs`: `Volatile` (`@deepseek-ai/cordis`)
+- `source`: [`packages/experimental/worktree/src/index.ts:35`](../packages/experimental/worktree/src/index.ts)
 
 ```ts config-catalog
-/** Worktree location, generated names, executables, and subprocess resource limits. */
+/** Worktree location, generated names, executables, subprocess resource limits, and the archive cleanup switch. */
 export interface Config {
+  /** Keep every checkout when its Session is archived; editable live from the Plugins page. */
+  retainOnArchive: Volatile<boolean>
   /** Relative checkout pool inside the source repository. */
   directory?: string
   /** Prefix for automatically generated branch and checkout names. */
@@ -2530,12 +2536,12 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-message-feedback -->
 
-<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-office-to-pdf -->
-<a id="deepseek-aidsh-office-to-pdf"></a>
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-office-kit -->
+<a id="deepseek-aidsh-office-kit"></a>
 
-## `@deepseek-ai/dsh-office-to-pdf`
+## `@deepseek-ai/dsh-office-kit`
 
-- `source`: [`packages/document/office-to-pdf/src/index.ts:31`](../packages/document/office-to-pdf/src/index.ts)
+- `source`: [`packages/document/office-kit/src/index.ts:38`](../packages/document/office-kit/src/index.ts)
 
 ```ts config-catalog
 /** Provider concurrency and kit rendering/font configuration. */
@@ -2550,19 +2556,25 @@ export interface Config {
   maxSourceBytes: number
   /** Maximum concurrent background jobs; zero refuses speculative work. */
   maxBackgroundConversions: number
-  /** Maximum retained content-addressed PDFs. */
+  /** Maximum retained content-addressed outputs. */
   maxCachedEntries: number
-  /** Maximum retained PDF bytes. */
+  /** Maximum retained output bytes. */
   maxCachedBytes: number
   /** Maximum retained source-version aliases to cached content. */
   maxSourceEntries: number
+  /** Absolute directory for converted and recalculated files, with one subdirectory per Session. */
+  outputDirectory: string
+  /** Milliseconds a converted or recalculated file is kept. */
+  outputRetentionMs: number
+  /** Maximum bytes across retained converted and recalculated files; the oldest leave first. */
+  maxOutputStoreBytes: number
   /** Conversion deadline in milliseconds; excludes the DSH queue. */
   timeoutMs: number
   /** Maximum authorized source bytes. */
   maxInputBytes: number
-  /** Maximum complete PDF bytes. */
+  /** Maximum complete PDF, converted, or recalculated file bytes. */
   maxOutputBytes: number
-  /** Exported raster-image DPI. */
+  /** Image resolution in DPI of PDF exports; `renderImages()` takes its resolution from each request's `dpi`. */
   maxImageResolution: number
   /** Maximum OOXML ZIP entries. */
   maxArchiveEntries: number
@@ -2580,7 +2592,7 @@ export interface Config {
   maxLoadedFontBytes: number
 }
 ```
-<!-- END GENERATED config-catalog:@deepseek-ai/dsh-office-to-pdf -->
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-office-kit -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-permission-presets -->
 <a id="deepseek-aidsh-permission-presets"></a>
@@ -2962,7 +2974,7 @@ export interface Config {
 
 - `inject`: `sessionProjections`
 - `refs`: [`SandboxMode`](subsystems/sandbox.md)
-- `source`: [`packages/sandbox/sandbox-policy/src/index.ts:94`](../packages/sandbox/sandbox-policy/src/index.ts)
+- `source`: [`packages/sandbox/sandbox-policy/src/index.ts:95`](../packages/sandbox/sandbox-policy/src/index.ts)
 
 ```ts config-catalog
 /**
@@ -2986,7 +2998,7 @@ export interface Config {
    * automatic repository or gitfile discovery. Entries are execution-world
    * paths: this service validates absoluteness and detaches the list, while
    * the enforcing host rejects missing, non-directory, or symlinked paths. They grant nothing under
-   * `read-only`.
+   * `read-only`. Windows process confinement ignores them; harness file tools honor them.
    */
   additionalWritableRoots?: string[]
 }
@@ -3350,7 +3362,7 @@ export interface Config extends SessionTitleLlmConfig {
 
 ## `@deepseek-ai/dsh-shell-env`
 
-- `source`: [`packages/shell/shell-env/src/index.ts:30`](../packages/shell/shell-env/src/index.ts)
+- `source`: [`packages/shell/shell-env/src/index.ts:31`](../packages/shell/shell-env/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config (all optional — the built-in facts resolve without defaults). */
@@ -3422,18 +3434,28 @@ export interface Config {
 ## `@deepseek-ai/dsh-skill-office`
 
 - `inject`: `skills`
-- `source`: [`packages/skill/skill-office/src/index.ts:16`](../packages/skill/skill-office/src/index.ts)
+- `source`: [`packages/skill/skill-office/src/index.ts:34`](../packages/skill/skill-office/src/index.ts)
 
 ```ts config-catalog
-/** Office skill resource location. */
+/** Configuration after schema defaults apply. */
+export interface ResolvedConfig extends Config {
+  /** Python environment named in the Python authoring and verification skills. */
+  pythonEnvironment: PythonEnvironment
+}
+
+/** Office skill resources and Python environment. */
 export interface Config {
   /** Absolute assets directory containing skill folders; defaults to packaged assets. */
   assetRoot?: string
-  /** Standalone Node executable; defaults to the current executable outside Electron and SEA. */
-  node?: string
-  /** Absolute LibreOffice Kit CLI entry; false explicitly disables CLI access. */
-  cli?: string | false
+  /** Python environment named in the Python authoring and verification skills. @default 'workspace-dependencies' */
+  pythonEnvironment?: PythonEnvironment
 }
+
+/**
+ * Python source for Office scripts: `'workspace-dependencies'` directs the model to the bundled interpreter and libraries
+ * returned by `load_workspace_dependencies`; `'user'` directs it to an existing project or user Python.
+ */
+export type PythonEnvironment = 'workspace-dependencies' | 'user'
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-skill-office -->
 
@@ -3842,7 +3864,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-system-prompt`
 
-- `source`: [`packages/core/system-prompt/src/index.ts:264`](../packages/core/system-prompt/src/index.ts)
+- `source`: [`packages/core/system-prompt/src/index.ts:265`](../packages/core/system-prompt/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: the deployment-authored fragment of the system prompt (see {@link Config.personaPrefix} for its contract). */
@@ -3930,6 +3952,47 @@ export interface Config {
 export type ShellDialect = 'bash' | 'pwsh'
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-terminal-bash -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-terminal-panel -->
+<a id="deepseek-aidsh-terminal-panel"></a>
+
+## `@deepseek-ai/dsh-terminal-panel`
+
+- `inject`: `terminals` · `terminalController` · `sandboxPolicy` · `tools` · `systemPrompt`
+- `source`: [`packages/experimental/terminal-panel/src/config.ts:6`](../packages/experimental/terminal-panel/src/config.ts)
+
+```ts config-catalog
+/** Public plugin configuration. */
+export interface Config {
+  /** Terminal registry type served by sidebar terminals. */
+  backendType: string
+  /** Initial terminal width; an attached sidebar view resizes it to its panel. */
+  cols: number
+  /** Initial terminal height; an attached sidebar view resizes it to its panel. */
+  rows: number
+  /** Executable names tried among the discovered shells before the execution environment's default shell. */
+  preferredShells: string[]
+  /** Variables added to Agent terminal environments, such as pagers that would otherwise wait for input. */
+  environment: Record<string, string>
+  /** Output silence that ends shell startup once the shell owns the foreground. */
+  startupSilenceMs: number
+  /** Bound on shell startup, including the person's startup files. */
+  startupTimeoutMs: number
+  /** Output silence after which a send checks whether the shell or a reading program waits for input. */
+  promptSilenceMs: number
+  /** Minimum interval between foreground process inspections, each of which may start `ps` twice. */
+  probeIntervalMs: number
+  /** Output silence that ends a send as `inferred_idle`. */
+  idleSilenceMs: number
+  /** Bound on one send. */
+  timeoutMs: number
+  /** Maximum UTF-8 bytes in one screen read, send output or startup screen. */
+  maxReadBytes: number
+  /** Register `user_terminal_list` and `user_terminal_read`, whose screen text enters the Session log and model requests. */
+  readUserTerminals: boolean
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-terminal-panel -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-time-context -->
 <a id="deepseek-aidsh-time-context"></a>
@@ -4236,6 +4299,31 @@ export interface Config {
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-lsp -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-office -->
+<a id="deepseek-aidsh-tool-office"></a>
+
+## `@deepseek-ai/dsh-tool-office`
+
+- `inject`: `tools` · `fs` · `workingDirectory` · `agents`
+- `source`: [`packages/document/tool-office/src/index.ts:38`](../packages/document/tool-office/src/index.ts)
+
+```ts config-catalog
+/** Activation skills and render bounds; lower deployment attachment limits take precedence. */
+export interface Config {
+  /** Skill names whose successful loading admits all three tools from the following step. */
+  activationSkills: string[]
+  /** Maximum images one render returns, including worksheet fragments. */
+  maxImages: number
+  /** Maximum pixels of each image. */
+  maxImagePixels: number
+  /** Maximum width and height of each image in pixels. */
+  maxImageDimension: number
+  /** Maximum PNG bytes across all images of one render. */
+  maxImageBytes: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-office -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-present -->
 <a id="deepseek-aidsh-tool-present"></a>
@@ -4699,12 +4787,12 @@ export interface Config {
 
 - `inject`: `web`
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/web/web-deepseek-api/src/index.ts:58`](../packages/web/web-deepseek-api/src/index.ts)
+- `source`: [`packages/web/web-deepseek-api/src/index.ts:64`](../packages/web/web-deepseek-api/src/index.ts)
 
 ```ts config-catalog
 /**
  * Settings read by the next search or fetch without re-registering either provider. A non-empty `*BaseURL` or
- * `*ApiKeyEnv` gives that capability its own endpoint and key; with neither, it follows the conversation's DeepSeek
+ * `*ApiKeyEnv` gives that capability its own endpoint and key; with neither, its `*Billing` chooses its DeepSeek
  * credential. Stored fields of earlier settings (`baseURL`, `apiKeyEnv`, `apiKey`) are not schema fields: they load
  * without error and have no effect.
  */
@@ -4719,6 +4807,14 @@ export interface Config {
   searchRequestsPerSecond: Volatile<number>
   /** Send the triggering user question, bounded to 128 characters, as `ori_question`. Defaults to true. */
   sendOriginalQuestion: Volatile<boolean>
+  /**
+   * Credential Search sends without {@link searchBaseURL} and {@link searchApiKeyEnv}. `auto` uses the conversation's
+   * DeepSeek account or API key while it chats on a DeepSeek model route, and otherwise the API key, then the signed-in
+   * account; `account` uses only the signed-in account; `api-key` uses only the API key. Defaults to `auto`.
+   */
+  searchBilling: Volatile<'auto' | 'account' | 'api-key'>
+  /** Credential Fetch sends without {@link fetchBaseURL} and {@link fetchApiKeyEnv}, chosen as {@link searchBilling} is. */
+  fetchBilling: Volatile<'auto' | 'account' | 'api-key'>
   /**
    * Own Search API base including its path prefix; `/search` is appended. With only {@link searchApiKeyEnv} set, the
    * official base applies.
@@ -4846,7 +4942,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-working-directory`
 
 - `inject`: `fs` · `sessionProjections` · `systemPrompt`
-- `source`: [`packages/session/working-directory/src/index.ts:51`](../packages/session/working-directory/src/index.ts)
+- `source`: [`packages/session/working-directory/src/index.ts:67`](../packages/session/working-directory/src/index.ts)
 
 ```ts config-catalog
 /** Deployment default for Sessions without an original project directory. */
@@ -5061,6 +5157,7 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 | `@deepseek-ai/dsh-cmdline` | — | [`packages/boot/cmdline/src/index.ts`](../packages/boot/cmdline/src/index.ts) |
 | `@deepseek-ai/dsh-cua-bundle` | — | [`packages/experimental/cua-bundle/src/index.ts`](../packages/experimental/cua-bundle/src/index.ts) |
 | `@deepseek-ai/dsh-deque` | — | [`packages/util/deque/src/index.ts`](../packages/util/deque/src/index.ts) |
+| `@deepseek-ai/dsh-error` | — | [`packages/util/error/src/index.ts`](../packages/util/error/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-badge-skill-bundle` | — | [`packages/experimental/badge-skill-bundle/src/index.ts`](../packages/experimental/badge-skill-bundle/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-browser-use-runtime` | — | [`packages/experimental/browser-use-runtime/src/index.ts`](../packages/experimental/browser-use-runtime/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-cot-translation-bundle` | — | [`packages/experimental/cot-translation-bundle/src/index.ts`](../packages/experimental/cot-translation-bundle/src/index.ts) |

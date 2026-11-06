@@ -820,7 +820,18 @@ describe('forgePanel worktree requests', () => {
     await expect(opened.ctx.forgePanel.requestWorktree(opened.session, 'main', signal)).rejects.toMatchObject({ code: 'forgePanel/session-started' })
     await expect(opened.ctx.forgePanel.cancelWorktree(opened.session, signal)).rejects.toMatchObject({ code: 'forgePanel/session-started' })
     expect(worktreeState(opened)).toMatchObject({ request: { from: null }, locked: false, stepped: false, restoring: false })
-    expect(opened.records).toHaveLength(2)
+    expect(opened.records).toEqual([{ action: 'request', from: null }])
+    expect(opened.created).toHaveLength(1)
+  })
+
+  it('forwards the worktree service\'s cleanup state and answers null without the service', async () => {
+    const { repo } = await project()
+    const without = await open(repo)
+    expect(await without.ctx.forgePanel.worktreeCleanup(without.session, null)).toBeNull()
+    const opened = await open(repo, {}, { worktrees: true })
+    expect(await opened.ctx.forgePanel.worktreeCleanup(opened.session, null)).toBeNull()
+    vi.spyOn(opened.ctx.worktrees, 'cleanupOf').mockResolvedValue({ revision: 3, status: 'removed' })
+    expect(await opened.ctx.forgePanel.worktreeCleanup(opened.session, 3)).toEqual({ revision: 3, status: 'removed' })
   })
 
   it('refuses worktree requests and restoration without a worktree service, and keeps a waiting message for the withdrawal', async () => {
@@ -952,7 +963,10 @@ describe('forgePanel worktree creation while a message waits', () => {
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(created?.path)
     expect(opened.agent.inbox.nextStep).toEqual([notice(created?.path ?? '')])
     expect(queued(opened)).toEqual(['first'])
-    expect(opened.records).toEqual([{ action: 'request', from: null }, { action: 'created', worktree: created }])
+    expect(opened.records).toEqual([{ action: 'request', from: null }])
+    expect(opened.created).toEqual([
+      { path: created?.path, branch: created?.branch, baseCommit: created?.baseCommit, repositoryRoot: created?.repositoryRoot },
+    ])
   })
 
   it('keeps the message waiting with the failure the panel shows, and tries again with a new branch when asked', async () => {
@@ -980,7 +994,8 @@ describe('forgePanel worktree creation while a message waits', () => {
     expect(created?.branch).not.toBe(failed.worktree.failure?.branch)
     expect(opened.agent.wakes).toBe(1)
     expect(queued(opened)).toEqual(['first'])
-    expect(opened.records).toEqual([{ action: 'request', from: 'later' }, { action: 'created', worktree: created }])
+    expect(opened.records).toEqual([{ action: 'request', from: 'later' }])
+    expect(opened.created).toHaveLength(1)
   })
 
   it('keeps the message waiting when the request changes, and lets it go on in the current checkout once the request is withdrawn', async () => {
@@ -1124,7 +1139,8 @@ describe('forgePanel worktree creation while a message waits', () => {
 
     expect(opened.agent.wakes).toBe(1)
     expect(queued(opened)).toEqual(['first', 'second'])
-    expect(opened.records).toHaveLength(2)
+    expect(opened.records).toEqual([{ action: 'request', from: null }])
+    expect(opened.created).toHaveLength(1)
   })
 
   it('leaves a message that arrives while the Agent has other work to the first step', async () => {
@@ -1181,7 +1197,8 @@ describe('forgePanel worktree requests during a creation', () => {
     const created = worktreeState(opened)?.created ?? null
     expect(created).toMatchObject({ from: null, repositoryRoot: repo })
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(created?.path)
-    expect(opened.records).toEqual([{ action: 'request', from: null }, { action: 'created', worktree: created }])
+    expect(opened.records).toEqual([{ action: 'request', from: null }])
+    expect(opened.created).toHaveLength(1)
   })
 })
 

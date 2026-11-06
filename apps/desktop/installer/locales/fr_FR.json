@@ -1,6 +1,7 @@
 {
   "nsisLanguage": "FRENCH",
   "strings": {
+    "INSTALLER_UPDATE_WAIT": "Installation de la mise à jour en cours. L’application redémarrera automatiquement.",
     "INSTALLER_INSTALL": "Installer maintenant",
     "INSTALLER_FINISH": "Terminer",
     "INSTALLER_NATIVE_PROGRESS": "Préparation de l'installation… %d%%",

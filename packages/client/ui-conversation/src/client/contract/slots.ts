@@ -545,6 +545,8 @@ export interface ConversationSessionHeaderInjected {
 export interface ComposerBarOwnerProps {
   /** Hero uses centered placement; composer uses the active bottom placement. */
   variant: 'hero' | 'composer'
+  /** Conversation content occurrence rendering this composer; an unaddressed document paste reaches the main one. */
+  occurrence: ConversationContentInputProps['variant']
   /** A feature-owned reason that makes message input inert while leaving model selection live. */
   blocked?: { readonly reason: string }
   /** Lock all message actions while preserving the resident composer surface. */
@@ -558,8 +560,33 @@ export interface ComposerBarOwnerProps {
   accessory?: ReactNode
 }
 
+/** One composer's entry in the document-level paste route. */
+export interface ComposerFileIntakeTarget {
+  /** Composer card containing every control of this composer. */
+  readonly card: HTMLElement
+  /** Conversation content occurrence rendering the composer. */
+  readonly occurrence: ConversationContentInputProps['variant']
+  /** Whether a routed paste may enter now; a refusing composer is skipped, and when no composer accepts the browser keeps the event. */
+  readonly accepts: () => boolean
+  /**
+   * Add one routed paste through the composer's intake validation.
+   * @param files - pasted browser files in clipboard order.
+   * @param directories - members of `files` the clipboard entry API identified as directories.
+   */
+  readonly add: (files: readonly File[], directories?: ReadonlySet<File>) => void
+}
+
+/**
+ * Join the document-level paste route shared by every composer of the plugin instance.
+ * @param target - the registering composer.
+ * @returns the disposer leaving the route; the last disposer removes the route's document listeners.
+ */
+export type ComposerFileIntake = (target: ComposerFileIntakeTarget) => () => void
+
 /** Package-private operations injected into the resident composer bar. */
 export interface ComposerBarInjected {
+  /** Document paste routing across mounted composers. */
+  registerFileIntake: ComposerFileIntake
   keyboard: ComposerKeyboard | undefined
   /**
    * Register one picked batch; resolves to the rejection copy or null. Where

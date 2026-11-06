@@ -20,9 +20,6 @@
   "apps/cli/tests/web-auth.e2e.ts": {
     "a2b9a35fdf6552ba148d15436c9b3f98ed5763a2b91a95f579b951fd6613e75c": 1
   },
-  "apps/desktop-host/tests/office.spec.ts": {
-    "3f8653cd87f99ebd70765379dae51ab308ed9c280e831d39e1abd469bfcdc6e3": 1
-  },
   "apps/desktop/scripts/installed-update-qualification.ts": {
     "5a8270cf9b1e554ae0cff6eaf7086e44c22f61a08e5f91dc7e1397eccaa726a5": 2
   },
@@ -350,7 +347,7 @@
     "2e78263d16d54ccfd8d322bcdf1bf738bd8134e15c24063ece9a1d1b52f4ebd9": 1
   },
   "packages/bundle/web-app/tests/document-conversion.e2e.ts": {
-    "743a7488a765c578e607d08ba6bdcf6f2f2971f67b05a42d5097aad2458134a1": 1
+    "95057a87f4a7358284982d7c73febfe26aed9f37a4ceb5b8df724f2b6bc1084c": 1
   },
   "packages/bundle/web-app/tests/document-preview.spec.ts": {
     "154da39139a0074bad3d13a624e5fa62d1f7ce19dc8b9c28a73af3263cd7f10e": 1
@@ -964,7 +961,7 @@
   "packages/deliverables/workspace-changes/tests/loader-composition.spec.ts": {
     "59c63f734e8bba862325f776e3fcbebd78a84cfb4161f8df41c216950d9bf351": 1
   },
-  "packages/document/office-to-pdf/tests/queue.spec.ts": {
+  "packages/document/office-kit/tests/queue.spec.ts": {
     "bbe31b89b81048bb47c7158e78670deec5f2973286f9abc591290a8fdd851cf1": 1
   },
   "packages/experimental/browser-use-runtime/src/index.ts": {

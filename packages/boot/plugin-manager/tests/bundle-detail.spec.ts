@@ -159,7 +159,7 @@ it('reports a listed bundle whose directory is gone, and keeps failures other th
   const { manager, image } = await fixture()
   const list = manager.listBundles.bind(manager)
   const listing = vi.spyOn(manager, 'listBundles').mockImplementation(async () => [...await list(), {
-    name: 'vanished', official: false, availability: 'profile', enabled: false, installed: true, optional: false, removable: true, updatable: false, rows: [], overrides: [],
+    name: 'vanished', official: false, availability: 'profile', enabled: false, installed: true, optional: false, removable: true, rows: [], overrides: [],
   }])
   expect(await failureOf(manager.readBundleDetail('vanished', 'en'))).toMatchObject({ code: 'plugin-manager/unknown-bundle', details: { name: 'vanished' } })
   listing.mockRestore()

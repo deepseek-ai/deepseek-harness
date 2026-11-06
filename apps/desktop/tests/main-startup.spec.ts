@@ -156,7 +156,7 @@ const harness = await vi.hoisted(async () => {
     readonly updateTasks = vi.fn(async (_action: 'inspect' | 'lock' | 'unlock') => false)
     readonly inspectQuit = vi.fn(async () => ({ activeTasks: false, scheduledTasks: false }))
     url = 'http://127.0.0.1:3080/?token=test'
-    fetch = vi.fn(async () => Response.json({ hasApiKey: true, writable: true, localePreference: null }))
+    fetch = vi.fn(async () => Response.json({ hasApiKey: true, writable: true, localePreference: null, themePreference: 'system' }))
     readonly ready = deferred()
     readonly exited = deferred()
     readonly stopping = deferred()
@@ -204,7 +204,12 @@ const harness = await vi.hoisted(async () => {
   let analyticsEnabled = true
   let analyticsEnabledListener: ((enabled: boolean) => void) | undefined
   const analytics = vi.fn(async (_event: unknown) => {})
-  const nativeTheme = { themeSource: 'system', shouldUseDarkColors: false }
+  const nativeTheme = new class extends EventEmitter {
+    themeSource = 'system'
+    systemDark = false
+    get shouldUseDarkColors() { return this.themeSource === 'system' ? this.systemDark : this.themeSource === 'dark' }
+    set shouldUseDarkColors(value: boolean) { this.systemDark = value }
+  }()
   const trays: FakeTray[] = []
   class FakeTray extends EventEmitter {
     readonly setToolTip = vi.fn()
@@ -282,6 +287,7 @@ const harness = await vi.hoisted(async () => {
       loginShell.mockReset().mockImplementation(base => readLoginShell(base))
       updateDownload.mockReset().mockImplementation(async () => updateState)
       updateInstall.mockReset().mockImplementation(async () => updateState)
+      nativeTheme.removeAllListeners()
       nativeTheme.themeSource = 'system'; nativeTheme.shouldUseDarkColors = false
       preparing = deferred(); prepared = deferred(); hostStarted = deferred()
       navigated = deferred(); dialogShown = deferred(); quitCompleted = deferred()
@@ -725,6 +731,20 @@ describe('desktop main startup', () => {
     expect(await invoke(DESKTOP_IPC.updatesStatus, 'app')).toMatchObject({ configurationError: 'channel' })
   })
 
+  it('starts the Host without resolving Kit or writing a diagnostic file', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-main-office-'))
+    onTestFinished(() => { rmSync(root, { recursive: true, force: true }) })
+    writeFileSync(join(root, 'app.asar'), 'archive fixture')
+    harness.app.isPackaged = false
+    vi.stubEnv('DSH_DESKTOP_DSH_DIR', join(root, 'app.asar', 'dsh'))
+    const host = await readyForUpdate()
+    await vi.waitFor(() => { expect(harness.analytics.mock.calls.some(([event]) => (event as { eventName: string }).eventName === 'desktop_app_launch')).toBe(true) })
+    expect(host.primaryRuntime).toBe('test-primary-runtime')
+    expect(existsSync(harness.app.getPath('logs'))).toBe(false)
+    expect(writeCrashReport).not.toHaveBeenCalled()
+    expect(harness.dialog.showMessageBox).not.toHaveBeenCalledWith(expect.objectContaining({ title: en.startupFailed }))
+  })
+
   it('starts the Host with authentication popups disabled when local settings are invalid', async () => {
     configureTestAuthPopup(false)
     const path = join(harness.app.getPath('userData'), 'desktop', 'settings.json')
@@ -1144,10 +1164,75 @@ describe('desktop main startup', () => {
         { role: 'toggleDevTools', visible: false, accelerator: 'F12' },
       ])
     } else {
+      expect(window.options).not.toHaveProperty('backgroundColor')
       expect(window.options).not.toHaveProperty('titleBarStyle')
       expect(window.options).not.toHaveProperty('vibrancy')
     }
     expect(harness.hosts).toHaveLength(0)
+  })
+
+  it.each([[false, '#f9fafb'], [true, '#1b1b1c']] as const)('paints the Windows workspace in its startup palette (dark=%s)', async (dark, color) => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    harness.nativeTheme.shouldUseDarkColors = dark
+    await import('../src/main.ts')
+    await harness.preparing.promise
+    expect(harness.windows[0]!.options).toMatchObject({ backgroundColor: color })
+  })
+
+  describe.each(['win32', 'darwin'] as const)('Host theme on %s', (platform) => {
+    it.each([
+      ['light', true, '#f9fafb'], ['dark', false, '#1b1b1c'],
+      ['system', true, '#1b1b1c'], ['system', false, '#f9fafb'],
+    ] as const)('applies %s with system dark=%s before revealing the workspace', async (source, systemDark, color) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      harness.nativeTheme.systemDark = systemDark
+      await import('../src/main.ts')
+      await harness.preparing.promise
+      const window = harness.windows[0]!
+      expect(window.show).not.toHaveBeenCalled()
+      harness.prepared.resolve()
+      await harness.hostStarted.promise
+      const host = harness.hosts[0]!
+      host.fetch.mockResolvedValue(Response.json({ hasApiKey: true, localePreference: null, themePreference: source }))
+      window.show.mockImplementation(() => {
+        expect(harness.nativeTheme.themeSource).toBe(source)
+        if (platform === 'win32') expect(window.setBackgroundColor).toHaveBeenLastCalledWith(color)
+        else expect(window.options).toMatchObject({ backgroundColor: '#00000000', vibrancy: 'sidebar' })
+      })
+      host.ready.resolve()
+      await Promise.resolve(invoke(DESKTOP_IPC.boot))
+      await vi.waitFor(() => { expect(window.show).toHaveBeenCalledOnce() })
+      expect(host.fetch).toHaveBeenCalledOnce()
+    })
+  })
+
+  it('tracks effective appearance changes and removes the listener when closed', async () => {
+    await import('../src/main.ts')
+    await harness.preparing.promise
+    const window = harness.windows[0]!
+    for (const dark of [true, false]) {
+      harness.nativeTheme.systemDark = dark
+      harness.nativeTheme.emit('updated')
+      expect(window.setBackgroundColor).toHaveBeenLastCalledWith(dark ? '#1b1b1c' : '#f9fafb')
+    }
+    window.emit('closed')
+    expect(harness.nativeTheme.listenerCount('updated')).toBe(0)
+  })
+
+  it('accepts only theme sources from the owned application main frame', async () => {
+    await import('../src/main.ts')
+    await harness.preparing.promise
+    const window = harness.windows[0]!
+    const listener = harness.ipcOn.mock.calls.find(([channel]) => channel === DESKTOP_IPC.nativeThemeSet)![1]
+    const event = { sender: window.webContents, senderFrame: window.webContents.mainFrame }
+    listener({ ...event, senderFrame: { url: 'dsh-app://app/' } }, 'dark')
+    listener(event, 'invalid')
+    expect(harness.nativeTheme.themeSource).toBe('system')
+    listener(event, 'dark')
+    expect(harness.nativeTheme.themeSource).toBe('dark')
+    window.webContents.mainFrame.url = 'dsh-app://unowned/'
+    listener(event, 'light')
+    expect(harness.nativeTheme.themeSource).toBe('dark')
   })
 
   it('serves packaged shell documents instead of rejecting the shell origin', async () => {
@@ -2174,7 +2259,23 @@ describe('desktop main startup', () => {
     const action = invoke(DESKTOP_IPC.updatesOpen, 'app')
     await started.promise
     const repeated = invoke(DESKTOP_IPC.updatesOpen, 'app')
-    expect(harness.dialog.showMessageBox).not.toHaveBeenCalled()
+    await repeated
+    expect(harness.dialog.showMessageBox).toHaveBeenCalledWith(expect.objectContaining({
+      message: en.updateDownloadInProgress, detail: en.updateDownloadDetail,
+    }))
+    harness.dialog.showMessageBox.mockClear()
+    const checks = harness.updateCheck.mock.calls.length
+    const check = applicationMenuItems().find(item => item.label === en.checkUpdatesMenu)!.click as () => void
+    check()
+    await vi.waitFor(() => { expect(harness.dialog.showMessageBox).toHaveBeenCalledWith(expect.objectContaining({
+      message: en.updateDownloadInProgress, detail: en.updateDownloadDetail, buttons: [en.updateClose],
+    })) })
+    expect(harness.updateCheck).toHaveBeenCalledTimes(checks)
+    harness.shellDialog.isOpen = true
+    check()
+    expect(harness.shellDialog.focus).toHaveBeenCalled()
+    expect(harness.dialog.showMessageBox).toHaveBeenCalledOnce()
+    harness.shellDialog.isOpen = false
     expect(harness.updateDownload).toHaveBeenCalledExactlyOnceWith('1.0.1-nightly.1', 0)
     expect(harness.updateInstall).not.toHaveBeenCalled()
     downloading.resolve({ phase: 'ready', version: '1.0.1-nightly.1' })
@@ -2182,6 +2283,60 @@ describe('desktop main startup', () => {
     expect(harness.updateInstall).toHaveBeenCalledExactlyOnceWith('1.0.1-nightly.1', 0)
     await harness.updateCheck()
     expect(harness.updateInstall).toHaveBeenCalledOnce()
+  })
+
+  it.each(['downloading', 'verifying'] as const)('explains %s when checking from the menu without another update operation', async (phase) => {
+    await readyForUpdate()
+    harness.updateState = { phase, version: '1.0.1-nightly.1', percent: 21 }
+    const checks = harness.updateCheck.mock.calls.length
+    const check = applicationMenuItems().find(item => item.label === en.checkUpdatesMenu)!.click as () => void
+    check()
+    await vi.waitFor(() => { expect(harness.dialog.showMessageBox).toHaveBeenCalledWith(expect.objectContaining({
+      message: phase === 'downloading' ? en.updateDownloadInProgress : en.updateVerifying,
+      detail: phase === 'downloading' ? en.updateDownloadDetail : '', buttons: [en.updateClose], cancelId: 0,
+    })) })
+    expect(harness.updateCheck).toHaveBeenCalledTimes(checks)
+    expect(harness.updateDownload).not.toHaveBeenCalled()
+    expect(harness.updateInstall).not.toHaveBeenCalled()
+    expect(harness.updateState.phase).toBe(phase)
+    check()
+    await vi.waitFor(() => { expect(harness.dialog.showMessageBox).toHaveBeenCalledTimes(2) })
+    expect(harness.updateCheck).toHaveBeenCalledTimes(checks)
+    expect(harness.updateDownload).not.toHaveBeenCalled()
+    expect(harness.updateInstall).not.toHaveBeenCalled()
+    expect(harness.updateState.phase).toBe(phase)
+  })
+
+  it.each(['downloading', 'verifying'] as const)('falls back to native %s status without changing the message or restarting the update', async (phase) => {
+    await readyForUpdate()
+    harness.updateState = { phase, version: '1.0.1-nightly.1', percent: 21 }
+    const checks = harness.updateCheck.mock.calls.length
+    harness.dialog.showMessageBox.mockRejectedValueOnce(new Error('overlay unavailable'))
+    await invoke(DESKTOP_IPC.updatesOpen, 'app')
+    expect(harness.dialog.showMessageBox).toHaveBeenCalledTimes(2)
+    const first: unknown = harness.dialog.showMessageBox.mock.calls[0]!.at(-1)
+    expect(first).toEqual(expect.objectContaining(harness.dialog.showMessageBox.mock.calls[1]!.at(-1)))
+    expect(first).toEqual(expect.objectContaining({
+      type: 'info', message: phase === 'downloading' ? en.updateDownloadInProgress : en.updateVerifying,
+      detail: phase === 'downloading' ? en.updateDownloadDetail : '', buttons: [en.updateClose],
+    }))
+    expect(console.error).toHaveBeenCalledWith(expect.objectContaining({ message: 'overlay unavailable' }))
+    expect(harness.dialog.showErrorBox).not.toHaveBeenCalled()
+    expect(harness.updateCheck).toHaveBeenCalledTimes(checks)
+    expect(harness.updateDownload).not.toHaveBeenCalled()
+    expect(harness.updateInstall).not.toHaveBeenCalled()
+    expect(harness.updateState.phase).toBe(phase)
+  })
+
+  it('logs native status fallback failure without rejecting the user action', async () => {
+    await readyForUpdate()
+    harness.updateState = { phase: 'downloading', version: '1.0.1-nightly.1', percent: 21 }
+    harness.dialog.showMessageBox.mockRejectedValueOnce(new Error('overlay unavailable'))
+      .mockRejectedValueOnce(new Error('native unavailable'))
+    await expect(invoke(DESKTOP_IPC.updatesOpen, 'app')).resolves.toBeUndefined()
+    expect(console.error).toHaveBeenCalledWith(expect.objectContaining({ message: 'native unavailable' }))
+    expect(harness.dialog.showErrorBox).not.toHaveBeenCalled()
+    expect(harness.updateState.phase).toBe('downloading')
   })
 
   it('does not lock or stop tasks when restart confirmation is dismissed', async () => {

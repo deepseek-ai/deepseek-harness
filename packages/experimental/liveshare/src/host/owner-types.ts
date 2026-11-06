@@ -28,7 +28,14 @@ export interface ShareAccessSummary {
 /** One share this host keeps in its owner state, as the worker and the client both read it. */
 export interface OwnerShare {
   readonly shareId: string
-  readonly sessionId: string
+  /**
+   * Every source Session this share serves, primary first.
+   *
+   * The first entry is the Session the Relay registers and the viewer page opens first; read it through
+   * `primarySessionIdOf` rather than keeping a second id field. The share's tier, fork switch, lifetime,
+   * ACL, and exposed endpoints apply to all sources, and a viewer sees each source plus its own forks.
+   */
+  readonly sessionIds: readonly string[]
   readonly sessionTitle: string
   readonly accessMode: 'open' | 'selected'
   readonly link: string

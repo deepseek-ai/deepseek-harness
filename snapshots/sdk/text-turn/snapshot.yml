@@ -8,3 +8,4 @@ environment:
 header:
   class: sdk-upload
   pin: true
+  toolSchemasSource: session/text-turn

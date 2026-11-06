@@ -30,9 +30,9 @@ function harness(mode: 'view' | 'write' = 'view') {
     return Response.json({ result: { ok: true, value: { items: [] } } })
   })
   const read = createViewerReadService({
-    sharedSessionId: () => 'source',
+    sharedSessionIds: () => ['source'],
     sourceConfined: () => true,
-    forkStateOf: () => ({ shareId: 'share', sessionId: 'source', sessionMode: mode,
+    forkStateOf: () => ({ shareId: 'share', sessionId: 'source', sessionIds: ['source'], sessionMode: mode,
       allowsFork: mode === 'write', viewerAdmitted: true, stopped: false }),
     viewerStillAdmitted: (_shareId, actor) => allowed.has(identityKeyOf(actor)),
     refreshAdmission: (shareId, signal) => refresh(shareId, signal),

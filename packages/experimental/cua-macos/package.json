@@ -40,7 +40,10 @@
     "native/README.md",
     "native/README.zh.md",
     "native/protocol.schema.json",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ],
   "license": "MIT",
   "peerDependencies": {
@@ -54,11 +57,11 @@
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "workspace:~",
-    "zod": "^4.4.3",
-    "@deepseek-ai/dsh-atomic-write": "workspace:*",
+    "zod": "4.6.6",
     "@deepseek-ai/dsh-cua": "workspace:*"
   },
   "devDependencies": {
+    "ajv": "^8.20.0",
     "@deepseek-ai/dsh-working-directory": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/cordis-plugin-include": "workspace:~",
