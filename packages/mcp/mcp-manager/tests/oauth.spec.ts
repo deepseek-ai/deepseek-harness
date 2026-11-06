@@ -4,7 +4,8 @@ import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { Client, UnauthorizedError } from '@modelcontextprotocol/client'
 import { McpOAuthCredentials } from '@deepseek-ai/dsh-mcp-client/src/oauth-credentials.ts'
-import { callback, managerProfile, oauthWorld, phase } from '@deepseek-ai/dsh-mcp-testkit'
+import { callback, oauthWorld, phase } from '../../mcp-client/tests/oauth-fixture.ts'
+import { managerProfile } from './profile-fixture.ts'
 import type { McpManagedServerView } from '../src/types.ts'
 
 async function managed(layer: 'base' | 'user' = 'base') {

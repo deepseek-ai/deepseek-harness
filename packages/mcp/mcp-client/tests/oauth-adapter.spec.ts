@@ -2,7 +2,7 @@
 import { expect, it, onTestFinished, vi } from 'vitest'
 import type { auth } from '@modelcontextprotocol/client'
 import { McpOAuthAuthorization } from '../src/oauth.ts'
-import { callback, captureLogs, oauthWorld, phase } from '@deepseek-ai/dsh-mcp-testkit'
+import { callback, captureLogs, oauthWorld, phase } from './oauth-fixture.ts'
 
 const { sdkAuth } = vi.hoisted(() => ({ sdkAuth: vi.fn<typeof auth>() }))
 vi.mock('@modelcontextprotocol/client', async importOriginal => ({
