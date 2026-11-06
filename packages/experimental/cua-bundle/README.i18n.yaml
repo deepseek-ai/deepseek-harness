@@ -3,23 +3,23 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/cua-bundle/README.md
 /:
-  en: cc518dcd97629a96
-  zh: 465e999011282dc3
+  en: 0df5d6f2b9e2ac15
+  zh: d0a9bd1f4e172d25
 /deepseek-ai-dsh-cua-bundle:
   en: 9084fb48d0f6489c
   zh: ce692972d91cf663
 /deepseek-ai-dsh-cua-bundle/summary:
-  en: 0d93f44a8ce7404c
-  zh: 6a73ed42d0efc9ea
+  en: f9f318c0ddc27bff
+  zh: 8a0c5ec31a63eb05
 /deepseek-ai-dsh-cua-bundle/table-of-contents:
   en: b563e4ec4727d0de
   zh: d0228da978238e05
 /deepseek-ai-dsh-cua-bundle/use-this-package:
-  en: 5c025a58990bb2eb
-  zh: c3d1280ccbdfe214
+  en: f22a10946cefc2d8
+  zh: 430d5f0cfc244ef0
 /deepseek-ai-dsh-cua-bundle/understand-the-implementation:
-  en: b1011db52cfc17cd
-  zh: 6fa8798fedc5c0b6
+  en: acb42fb7b181194b
+  zh: 6961f4cb732560e9
 /deepseek-ai-dsh-cua-bundle/further-exploration:
   en: 9f15d56b5b16e1ca
   zh: 75eb08e8828c8877

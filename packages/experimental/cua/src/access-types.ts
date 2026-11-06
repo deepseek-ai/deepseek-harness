@@ -10,7 +10,7 @@ export interface CuaPermissionProcess {
   path?: string | undefined
   name?: string | undefined
 }
-/** Native access observations tagged with Node platform identifiers; distinct from model capability platform names. */
+/** Native access observations tagged with the provider's CUA platform; distinct from Node process.platform values. */
 export type CuaSystemPermissionState = {
   platform: 'darwin'
   accessibility: boolean
@@ -20,7 +20,7 @@ export type CuaSystemPermissionState = {
   /** Application macOS reports as responsible for the helper, captured at startup; absent when it cannot be identified. */
   launchApplication?: { name: string; path: string; icon?: string | undefined } | undefined
 } | {
-  platform: 'win32'
+  platform: 'windows'
   sessionLocked: boolean | null
   captureAvailable: boolean
   elevated: boolean

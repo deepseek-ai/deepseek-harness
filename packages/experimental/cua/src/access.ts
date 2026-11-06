@@ -24,7 +24,7 @@ const systemPermissions = z.discriminatedUnion('platform', [z.object({
   platform: z.literal('darwin'), accessibility: z.boolean(), screenRecording: z.boolean(), helper: permissionProcess, parent: permissionProcess,
   launchApplication: z.object({ name: z.string().min(1), path: z.string().min(1), icon: ApplicationIcon.optional() }).optional(),
 }), z.object({
-  platform: z.literal('win32'), sessionLocked: z.boolean().nullable(), captureAvailable: z.boolean(),
+  platform: z.literal('windows'), sessionLocked: z.boolean().nullable(), captureAvailable: z.boolean(),
   elevated: z.boolean(), helper: permissionProcess,
 })])
 

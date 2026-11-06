@@ -1,0 +1,178 @@
+// UI Automation and clipboard COM objects each stay on their owning apartment.
+using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
+using System.Text.Json;
+using DeepSeek.Cua.Protocol;
+using Forms = System.Windows.Forms;
+using Timer = System.Threading.Timer;
+
+namespace DeepSeek.Cua.Windows;
+
+internal sealed record NativeConfig(int MaxRequestBytes, int MaxResponseBytes, int AxTimeoutMs,
+    double TextEventIntervalMs, int ScreenshotTimeoutMs, int TimeoutMs, int GraceMs, int PollIntervalMs, int MaxClickHoldMs)
+{
+    internal static NativeConfig Parse(JsonElement value)
+    {
+        string[] fields = ["maxRequestBytes", "maxResponseBytes", "axTimeoutMs", "textEventIntervalMs", "screenshotTimeoutMs", "timeoutMs", "graceMs", "pollIntervalMs", "maxClickHoldMs"];
+        if (value.ValueKind != JsonValueKind.Object || value.EnumerateObject().Any(item => !fields.Contains(item.Name))
+            || fields.Any(field => !value.TryGetProperty(field, out _))) throw new NativeFailure("INVALID_CONFIG", "Expected explicit native resource limits");
+        int Positive(string field)
+        {
+            if (!value.GetProperty(field).TryGetInt32(out var number) || number <= 0) throw new NativeFailure("INVALID_CONFIG", field + " must be a positive Int32");
+            return number;
+        }
+        var interval = value.GetProperty("textEventIntervalMs").GetDouble();
+        if (!double.IsFinite(interval) || interval < 0 || interval > 1000) throw new NativeFailure("INVALID_CONFIG", "Invalid text event interval");
+        return new(Positive("maxRequestBytes"), Positive("maxResponseBytes"), Positive("axTimeoutMs"), interval,
+            Positive("screenshotTimeoutMs"), Positive("timeoutMs"), Positive("graceMs"), Positive("pollIntervalMs"), Positive("maxClickHoldMs"));
+    }
+}
+
+internal sealed class MtaDispatcher : IAsyncDisposable
+{
+    private readonly BlockingCollection<Action> queue = new();
+    private readonly TaskCompletionSource stopped = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly Thread thread;
+
+    internal MtaDispatcher()
+    {
+        thread = new Thread(() =>
+        {
+            var initialized = false;
+            try
+            {
+                Marshal.ThrowExceptionForHR(Win32.RoInitialize(1));
+                initialized = true;
+                Win32.SetThreadDpiAwarenessContext(-4);
+                ready.SetResult();
+                foreach (var work in queue.GetConsumingEnumerable()) work();
+            }
+            catch (Exception error) { ready.TrySetException(error); }
+            finally { if (initialized) Win32.RoUninitialize(); stopped.TrySetResult(); }
+        }) { IsBackground = true, Name = "dsh-cua-uia" };
+        thread.SetApartmentState(ApartmentState.MTA);
+        thread.Start();
+    }
+
+    internal async Task<T> Invoke<T>(Func<T> work, CancellationToken cancellation)
+    {
+        await ready.Task.WaitAsync(cancellation);
+        var result = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        queue.Add(() =>
+        {
+            try { cancellation.ThrowIfCancellationRequested(); var value = work(); cancellation.ThrowIfCancellationRequested(); result.TrySetResult(value); }
+            catch (OperationCanceledException) { result.TrySetCanceled(cancellation); }
+            catch (Exception error) { result.TrySetException(error); }
+        });
+        return await result.Task;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        queue.CompleteAdding();
+        await stopped.Task;
+        queue.Dispose();
+    }
+}
+
+internal sealed class ServiceControl : Forms.Control
+{
+    internal Func<int, nint, bool>? ClipboardMessage;
+    protected override Forms.CreateParams CreateParams
+    {
+        get { var value = base.CreateParams; value.Parent = -3; return value; }
+    }
+    protected override void WndProc(ref Forms.Message message)
+    {
+        if (ClipboardMessage?.Invoke(message.Msg, message.WParam) == true) return;
+        base.WndProc(ref message);
+    }
+}
+
+internal sealed class StaDispatcher : IAsyncDisposable
+{
+    private readonly TaskCompletionSource<ServiceControl> ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource stopped = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly ConcurrentDictionary<nint, long> epochs = new();
+    private readonly Thread thread;
+    private Win32.WinEvent? windowEvents;
+
+    internal StaDispatcher()
+    {
+        thread = new Thread(() =>
+        {
+            nint hook = 0;
+            try
+            {
+                Win32.SetThreadDpiAwarenessContext(-4);
+                using var control = new ServiceControl();
+                _ = control.Handle;
+                windowEvents = (_, eventType, window, objectId, childId, _, _) =>
+                {
+                    if (eventType == 0x8001 && objectId == 0 && childId == 0 && epochs.TryGetValue(window, out var epoch))
+                        epochs.TryUpdate(window, epoch + 1, epoch);
+                };
+                hook = Win32.SetWinEventHook(0x8001, 0x8001, 0, windowEvents, 0, 0, 0);
+                if (hook == 0) throw new NativeFailure("NATIVE_STARTUP", "Window lifecycle observation could not start");
+                ready.SetResult(control);
+                Forms.Application.Run();
+            }
+            catch (Exception error) { ready.TrySetException(error); }
+            finally
+            {
+                if (hook != 0) Win32.UnhookWinEvent(hook);
+                stopped.TrySetResult();
+            }
+        }) { IsBackground = true, Name = "dsh-cua-clipboard" };
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+    }
+
+    internal long WindowEpoch(nint window) => epochs.GetOrAdd(window, 0);
+
+    internal async Task<T> Invoke<T>(Func<ServiceControl, T> work, CancellationToken cancellation)
+    {
+        var control = await ready.Task.WaitAsync(cancellation);
+        var result = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        control.BeginInvoke(() =>
+        {
+            try { cancellation.ThrowIfCancellationRequested(); var value = work(control); result.TrySetResult(value); }
+            catch (OperationCanceledException) { result.TrySetCanceled(cancellation); }
+            catch (Exception error) { result.TrySetException(error); }
+        });
+        return await result.Task;
+    }
+
+    internal Task Invoke(Action work, CancellationToken cancellation) => Invoke(_ => { work(); return true; }, cancellation);
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await ready.Task; }
+        catch (Exception error) { _ = error; await stopped.Task; return; }
+        await Invoke(() => Forms.Application.ExitThread(), CancellationToken.None);
+        await stopped.Task;
+    }
+}
+
+internal sealed class RequestContext(NativeConfig config, CancellationToken cancellation, MtaDispatcher mta, StaDispatcher sta)
+{
+    internal NativeConfig Config { get; } = config;
+    internal CancellationToken Cancellation { get; } = cancellation;
+    internal MtaDispatcher Mta { get; } = mta;
+    internal StaDispatcher Sta { get; } = sta;
+    internal void Check() => Cancellation.ThrowIfCancellationRequested();
+
+    internal T Ax<T>(Func<T> call)
+    {
+        Check();
+        var completed = 0;
+        using var timer = new Timer(_ =>
+        {
+            if (Interlocked.Exchange(ref completed, 1) == 0)
+                NativeServer.Fatal("AX_TIMEOUT", "A Windows accessibility call did not return within its configured deadline");
+        }, null, Config.AxTimeoutMs, Timeout.Infinite);
+        try { var result = call(); Cancellation.ThrowIfCancellationRequested(); return result; }
+        finally { Interlocked.Exchange(ref completed, 1); }
+    }
+}

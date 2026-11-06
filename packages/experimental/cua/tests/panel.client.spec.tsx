@@ -439,7 +439,7 @@ it('retains a known read-only configuration and query failure throughout managem
 
 it.each([true, false, null] as const)('shows Windows desktop access for lock state %s without macOS permission actions', (sessionLocked) => {
   const f = fixture()
-  f.publish({ ...observe(value), system: { value: { platform: 'win32', sessionLocked, captureAvailable: true,
+  f.publish({ ...observe(value), system: { value: { platform: 'windows', sessionLocked, captureAvailable: true,
     elevated: false, helper: { pid: 9, path: 'C:\\helper.exe' } }, error: null, busy: false } })
   render(<PermissionPanel {...f.props} />)
   const desktop = screen.getByRole('group', { name: en.windowsDesktop })
@@ -451,7 +451,7 @@ it.each([true, false, null] as const)('shows Windows desktop access for lock sta
   expect(screen.queryByRole('button', { name: en.request })).toBeNull()
   expect(screen.queryByRole('button', { name: en.granted })).toBeNull()
   expect(screen.queryByText('C:\\helper.exe')).toBeNull()
-  f.publish({ system: { value: { platform: 'win32', sessionLocked: false, captureAvailable: false,
+  f.publish({ system: { value: { platform: 'windows', sessionLocked: false, captureAvailable: false,
     elevated: true, helper: { pid: 9 } }, error: null, busy: false } })
   expect(within(capture).getByText(en.unavailable)).toBeTruthy()
   expect(screen.getByText(en.elevated, { exact: false })).toBeTruthy()
@@ -461,7 +461,7 @@ it.each([true, false, null] as const)('shows Windows desktop access for lock sta
 
 it.each([[true, true], [false, true], [false, false], [null, true]] as const)('offers Windows setup for lock=%s and capture=%s', (sessionLocked, captureAvailable) => {
   const f = fixture(), onDismiss = vi.fn()
-  f.publish({ system: { value: { platform: 'win32', sessionLocked, captureAvailable,
+  f.publish({ system: { value: { platform: 'windows', sessionLocked, captureAvailable,
     elevated: false, helper: { pid: 9 } }, error: null, busy: false } })
   render(<PermissionSetup {...f.props} onDismiss={onDismiss} onOpenDetails={vi.fn()} />)
   const needsSetup = sessionLocked !== false || !captureAvailable
