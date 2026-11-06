@@ -63,16 +63,18 @@ function Rows({ nodes, depth, props }: {
 }
 
 /**
- * Scroll only the row container, by the least distance that shows the whole row.
+ * Scroll only the row container to show a row that is not wholly visible; a visible row stays where it is.
  * @param container - the scrolling rows.
  * @param row - the row to show.
+ * @param align - `center` places the row mid-view with its neighbors; `nearest` scrolls by the least distance.
  */
-function revealRow(container: HTMLElement, row: HTMLElement): void {
+function revealRow(container: HTMLElement, row: HTMLElement, align: 'center' | 'nearest'): void {
   const top = container.getBoundingClientRect().top + container.clientTop
   const bottom = top + container.clientHeight
   const box = row.getBoundingClientRect()
-  if (box.top < top) container.scrollTop -= top - box.top
-  else if (box.bottom > bottom) container.scrollTop += box.bottom - bottom
+  if (box.top >= top && box.bottom <= bottom) return
+  if (align === 'center') container.scrollTop += (box.top + box.bottom - top - bottom) / 2
+  else container.scrollTop += box.top < top ? box.top - top : box.bottom - bottom
 }
 
 /**
@@ -84,12 +86,16 @@ export function ChangedFiles(props: ChangedFilesProps): ReactNode {
   const tree = useMemo(() => changedFileTree(props.files), [props.files])
   const nodes = useMemo(() => filterFileTree(tree, props.state.query), [tree, props.state.query])
   const rows = useRef<HTMLDivElement>(null)
-  // The toolbar menu mounts these rows at the top on every opening, and file steps in the diff move the selection.
+  const mounted = useRef(false)
+  // The toolbar menu mounts these rows at the top on every opening, so mounting centers the selected file;
+  // later file steps in the diff move the selection by the least distance.
   useLayoutEffect(() => {
+    const align = mounted.current ? 'nearest' : 'center'
+    mounted.current = true
     const container = rows.current
     const row = container?.querySelector<HTMLElement>('[aria-current="true"]')
     if (container == null || row == null) return
-    revealRow(container, row)
+    revealRow(container, row, align)
   }, [props.state.selected])
   return <div className={css.root} data-forge-file-tree="">
     <div className={css.search}><Input className={clsx(css.searchInput)} aria-label={props.t('diff.filterFiles')} placeholder={props.t('diff.filterFiles')}

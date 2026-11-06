@@ -79,8 +79,8 @@ it('keeps text-caret navigation in the filter while other keys bubble to the men
   expect(view.getByRole('button').getAttribute('aria-current')).toBe('true')
 })
 
-it('scrolls only the rows to show the selected file on each menu opening and when the selection moves', () => {
-  const files = ['a.ts', 'b.ts', 'c.ts', 'd.ts', 'e.ts', 'f.ts'].map(path => file(path))
+it('centers the selected file on each menu opening and then follows selection steps by the least scroll', () => {
+  const files = ['a.ts', 'b.ts', 'c.ts', 'd.ts', 'e.ts', 'f.ts', 'g.ts', 'h.ts', 'i.ts', 'j.ts'].map(path => file(path))
   // Layout: the rows show three 30px files from y = 100; each file moves up by the rows' scroll offset.
   vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(90)
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
@@ -91,19 +91,23 @@ it('scrolls only the rows to show the selected file on each menu opening and whe
   const rows = (): HTMLElement => document.querySelector<HTMLElement>('[data-forge-file-tree] > :last-child')!
   const props = { files, t: makeTranslate(en), filter: vi.fn(), toggle: vi.fn(), jump: vi.fn() }
   const menu = render(<ChangedFilesMenu {...props} state={{ query: '', collapsed: {}, selected: 'f.ts' }} visible />)
-  const trigger = menu.getByRole('button', { name: 'All 6 files' })
+  const trigger = menu.getByRole('button', { name: 'All 10 files' })
   for (const opening of [1, 2]) {
     fireEvent.click(trigger)
-    expect(rows().scrollTop, `opening ${opening}`).toBe(90)
+    // f.ts spans 250–280 and the view 100–190, so its middle moves to the view's middle.
+    expect(rows().scrollTop, `opening ${opening}`).toBe(120)
     fireEvent.click(trigger)
     expect(document.querySelector('[data-forge-file-tree]')).toBeNull()
   }
+  menu.rerender(<ChangedFilesMenu {...props} state={{ query: '', collapsed: {}, selected: 'b.ts' }} visible />)
+  fireEvent.click(trigger)
+  expect(rows().scrollTop).toBe(0)
   menu.unmount()
   const pane = render(<ChangedFiles {...props} state={{ query: '', collapsed: {}, selected: null }} />)
   expect(rows().scrollTop).toBe(0)
   const select = (selected: string): void => { pane.rerender(<ChangedFiles {...props} state={{ query: '', collapsed: {}, selected }} />) }
-  select('e.ts')
-  expect(rows().scrollTop).toBe(60)
+  select('h.ts')
+  expect(rows().scrollTop).toBe(150)
   select('a.ts')
   expect(rows().scrollTop).toBe(0)
   select('c.ts')
