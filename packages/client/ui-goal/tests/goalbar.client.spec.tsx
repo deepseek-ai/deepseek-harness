@@ -154,6 +154,13 @@ describe('GoalBar', () => {
     expect(actions.onPause).toHaveBeenCalledTimes(1)
   })
 
+  it('active goal with unknown activation: keeps a disabled pause after edit and clear', () => {
+    const actions = makeActions()
+    render(<GoalBar goal={makeGoal()} {...actions} t={t} />)
+    expect(screen.getAllByRole('button').map(b => b.getAttribute('aria-label'))).toEqual(['编辑目标', '清除目标', '暂停目标'])
+    expect((screen.getByRole('button', { name: '暂停目标' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
   it('active disarmed goal: "待继续的目标" with a resume action instead of pause', () => {
     const actions = makeActions()
     render(<GoalBar goal={makeGoal()} activation="disarmed" {...actions} t={t} />)
