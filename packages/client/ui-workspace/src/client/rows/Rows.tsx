@@ -241,7 +241,7 @@ interface ProjectRowActions {
  * Project (workspace) header row: folder + title;
  * hover reveals the chevron and, on a real Workspace, the create button;
  * dwelling on a real Workspace shows its hover card. The ungrouped bucket
- * has neither: its Sessions share no directory to start a Session in.
+ * has neither, because it has no backing Workspace to start a Session in.
  * `containsCurrent` arrives on the node (derivation fact, no renderer scan).
  * Create and drag follow the Workspace access snapshot. Menu providers own
  * their access checks; the ungrouped bucket has no Workspace menu.
@@ -261,7 +261,7 @@ export function ProjectRowItem(props: ProjectRowItemProps) {
     : <WorkspaceProjectRow {...props} workspaceId={workspaceId} />
 }
 
-/** The ungrouped bucket's header: no directory to start a Session in and no Workspace to reorder. */
+/** The ungrouped bucket's header: no backing Workspace to start a Session in or reorder. */
 function UngroupedProjectRow(props: ProjectRowItemProps) {
   return <ProjectRow {...props} actions={{ reorder: false }} />
 }
