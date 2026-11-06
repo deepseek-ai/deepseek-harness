@@ -151,6 +151,14 @@ describe('empty catch inventory', () => {
     expect(() => verifyEmptyCatch(root)).toThrow(`${sourcePath}:1 (unnamed, unexplained)`)
   })
 
+  it('points a rejection at the repository guidance for discarding an error', () => {
+    const root = fixture()
+    write(root, sourcePath, broken)
+    const skillPath = '.agents/skills/dsh-error-handling/SKILL.md'
+    expect(() => verifyEmptyCatch(root)).toThrow(`(see ${skillPath}#catch-recover-or-stop)`)
+    expect(readFileSync(join(import.meta.dirname, '..', skillPath), 'utf8')).toMatch(/^## Catch, recover, or stop$/mu)
+  })
+
   it('requires pruning retired counts while preserving the remaining clause', () => {
     const root = fixture()
     write(root, sourcePath, `${broken}${broken}`)

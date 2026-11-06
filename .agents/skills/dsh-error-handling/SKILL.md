@@ -34,6 +34,8 @@ For each failure, define handling and reporting owners, containment, and guarant
 
 Catching limits exception propagation, not mutations. Only the affected state's owner can establish safe continuation. Otherwise stop dependent work, discard invalid state or instances, or escalate. Logging alone is not recovery. Retries require safe repetition, cancellation, and an explicit owner; finite operations need budgets, while continuing supervision needs lifecycle ownership and observable degradation.
 
+An empty `catch` discards every failure of its `try`, so it is acceptable only when each such failure leaves the owner's state valid and no caller can act on it, such as best-effort cleanup after a primary failure. Keep the `try` to one statement, bind the error to an underscore-prefixed name that states the expected failure, such as `_alreadyGone` (lint requires the prefix on an unused binding; a bare `_` counts as unnamed), and explain in the `catch` block why the state stays valid. When only some failures are acceptable, test `code` or `name` and rethrow the rest; an unconditional discard also reports defects as success. [`verify-empty-catch`](../../../scripts/verify-empty-catch.ts) enforces the form; review checks that the name and reason are true.
+
 ## Localized, actionable, visible reports
 
 Every final report needs a readable summary, affected operation, and safe next action. Localize through the receiving application's locale mechanism where one exists; other diagnostics use their existing output language. Keep sensitive internal details out of user-facing text.
