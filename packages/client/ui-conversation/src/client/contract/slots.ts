@@ -279,13 +279,6 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       scope: 'session'
       owner: ConversationHeaderCornerOwnerProps
     }
-    /**
-     * One floating panel over the main Conversation body's end gutter. It renders
-     * only for the main occurrence of a Session in its active phase, never for an
-     * embedded occurrence or the blank home; the occupant positions itself against
-     * the body and reads `ctx.uiConversation.layouts` to keep clear of the transcript.
-     */
-    'conversation.session.panel': { kind: 'single'; scope: 'session'; owner: ConversationSessionPanelOwnerProps }
     /** Rows of the View tab row's More menu; the header shows More only while this list has registrations. */
     'conversation.session.header.views.actions': { kind: 'list'; scope: 'root'; owner: ConversationViewActionsOwnerProps }
     /** Registered Conversation target Views, rendered one at a time. */
@@ -384,7 +377,6 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
         'conversation.hero.workspace': { kind: 'single'; scope: 'root' }
         'conversation.hero.agentPreset': { kind: 'single'; scope: 'session-maybe' }
         'conversation.hero.options': { kind: 'list'; scope: 'session' }
-        'conversation.session.panel': { kind: 'single'; scope: 'session' }
       }
       inject: ConversationInjected
       locale: 'conversation'
@@ -429,26 +421,6 @@ export interface HeroAgentPresetOwnerProps {
 export interface ConversationHeaderActionOwnerProps {
   /** Marker field: entries receive no owner-specific values. */
   children?: never
-}
-
-/** The Session panel's occupant derives its state from standard Session props. */
-export interface ConversationSessionPanelOwnerProps {
-  /** Marker field: the occupant receives no owner-specific values. */
-  children?: never
-}
-
-/** Geometry that floating chrome over the main Conversation body keeps clear of. */
-export interface ConversationLayout {
-  /**
-   * Inline space in CSS px between the transcript column's end edge and the
-   * body's end edge. Zero before the first measurement, while the main body
-   * shows another Session, and while the active View does not follow the
-   * transcript column. Only the shipped Chat View (`chat`) follows it; a View
-   * registered under another id, and any View that fills the body, reads zero.
-   */
-  readonly endGutter: number
-  /** Whether the main Conversation body currently shows the Session. */
-  readonly shown: boolean
 }
 
 /** The header corner's occupant derives its state from standard Session props. */
@@ -500,13 +472,6 @@ export interface ConversationInjected {
   selectWorkspace: (workspaceId: WorkspaceId) => Promise<void>
   /** Session-addressed composer block source, or the stable absent source. */
   hooks: { composerBlock: ObservableSnapshot<ComposerBlock | undefined> }
-  /**
-   * Record the end gutter the main body measured for this occurrence's Session;
-   * no effect without a Session.
-   * @param endGutter - space between the transcript column's end edge and the body's end edge, in CSS px;
-   * null when the body stops showing the Session.
-   */
-  reportEndGutter: (endGutter: number | null) => void
 }
 
 /** Business callbacks injected into the strict Session body. */
@@ -726,13 +691,6 @@ export interface ConversationWidthControlsInputProps {
   container: HTMLDivElement | null
   /** Current body phase; handles render only for an active transcript. */
   phase: ConversationContentInputProps['phase']
-  /**
-   * Receive the end gutter after each measurement and drag frame, and null when
-   * the controls unmount or a new callback replaces this one.
-   * @param endGutter - space between the transcript column's end edge and the body's end edge, in CSS px;
-   * null when the body stops showing the Session.
-   */
-  onEndGutter: (endGutter: number | null) => void
 }
 
 /** Full props of the reusable Conversation Factory definition. */

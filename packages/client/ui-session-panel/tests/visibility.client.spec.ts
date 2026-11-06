@@ -1,42 +1,31 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { ConversationLayout } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
-  DOCK_MIN_GUTTER, PINNED_STORAGE_KEY, SessionPanelState, fitsLayout, presentationOf,
+  DOCK_MIN_GUTTER, PINNED_STORAGE_KEY, SessionPanelState, fitsGutter, presentationOf,
 } from '../src/client/visibility.ts'
 
 const A = 'session-a' as SessionId
 const B = 'session-b' as SessionId
+const NARROW = 200
+const WIDE = DOCK_MIN_GUTTER
 
-/** Main body layout of each Session, as `ctx.uiConversation.layouts` publishes it. */
-let layouts: Map<SessionId, SnapshotStore<ConversationLayout>>
-
-function layoutOf(sessionId: SessionId): SnapshotStore<ConversationLayout> {
-  let store = layouts.get(sessionId)
-  if (store === undefined) {
-    store = createSnapshotStore<ConversationLayout>({ endGutter: 200, shown: true })
-    layouts.set(sessionId, store)
-  }
-  return store
-}
-
+/** A state whose Chat Views show `A` and `B` with narrow gutters. */
 function newState(): SessionPanelState {
-  return new SessionPanelState(layoutOf)
+  const state = new SessionPanelState()
+  state.measure(A, 'main', NARROW)
+  state.measure(B, 'main', NARROW)
+  return state
 }
 
-beforeEach(() => {
-  localStorage.clear()
-  layouts = new Map()
-})
+beforeEach(() => { localStorage.clear() })
 afterEach(() => { localStorage.clear() })
 
-describe('fitsLayout', () => {
+describe('fitsGutter', () => {
   it('docks only from the minimum gutter up', () => {
-    expect(fitsLayout({ endGutter: DOCK_MIN_GUTTER - 1, shown: true })).toBe(false)
-    expect(fitsLayout({ endGutter: DOCK_MIN_GUTTER, shown: true })).toBe(true)
-    expect(fitsLayout({ endGutter: 0, shown: false })).toBe(false)
+    expect(fitsGutter(DOCK_MIN_GUTTER - 1)).toBe(false)
+    expect(fitsGutter(DOCK_MIN_GUTTER)).toBe(true)
+    expect(fitsGutter(0)).toBe(false)
   })
 })
 
@@ -56,7 +45,41 @@ describe('presentationOf', () => {
   })
 })
 
-describe('SessionPanelState', () => {
+describe('SessionPanelState gutters', () => {
+  it('keeps the widest gutter of each Session and drops a Session once its last panel unmounts', () => {
+    const state = new SessionPanelState()
+    const empty = state.gutters.getSnapshot()
+    expect(empty.size).toBe(0)
+    state.measure(A, 'main', 420)
+    state.measure(A, 'embedded', 16)
+    expect(state.gutters.getSnapshot().get(A)).toBe(420)
+    state.measure(A, 'main', null)
+    expect(state.gutters.getSnapshot().get(A)).toBe(16)
+    state.measure(A, 'embedded', null)
+    expect(state.gutters.getSnapshot().has(A)).toBe(false)
+    // A withdrawal for a panel that never reported changes nothing.
+    const before = state.gutters.getSnapshot()
+    state.measure(B, 'main', null)
+    expect(state.gutters.getSnapshot()).toBe(before)
+  })
+
+  it('keeps the snapshot identity until a widest gutter changes', () => {
+    const state = new SessionPanelState()
+    state.measure(A, 'main', 420)
+    const first = state.gutters.getSnapshot()
+    let calls = 0
+    const off = state.gutters.subscribe(() => { calls += 1 })
+    state.measure(A, 'embedded', 16)
+    state.measure(A, 'main', 420)
+    expect(state.gutters.getSnapshot()).toBe(first)
+    expect(calls).toBe(0)
+    state.measure(A, 'main', 400)
+    expect(calls).toBe(1)
+    off()
+  })
+})
+
+describe('SessionPanelState visibility', () => {
   it('docks by default and keeps the snapshot identity until a member changes', () => {
     const state = newState()
     const first = state.visibility.getSnapshot()
@@ -66,28 +89,37 @@ describe('SessionPanelState', () => {
 
   it('flips and persists the docking preference when the gutter has room, closing any overlay', () => {
     const state = newState()
-    state.toggle(A, false)
+    state.toggle(A)
     expect(state.visibility.getSnapshot().overlay).toBe(A)
-    state.toggle(A, true)
+    state.measure(A, 'main', WIDE)
+    expect(state.visibility.getSnapshot().overlay).toBeNull()
+    state.toggle(A)
     expect(state.visibility.getSnapshot()).toEqual({ pinned: false, overlay: null })
     expect(localStorage.getItem(PINNED_STORAGE_KEY)).toBe('false')
-    expect(newState().visibility.getSnapshot().pinned).toBe(false)
-    state.toggle(A, true)
+    expect(new SessionPanelState().visibility.getSnapshot().pinned).toBe(false)
+    state.toggle(A)
     expect(state.visibility.getSnapshot().pinned).toBe(true)
   })
 
   it('opens and closes one Session overlay without touching the docking preference', () => {
     const state = newState()
-    state.toggle(A, false)
-    state.toggle(B, false)
+    state.toggle(A)
+    state.toggle(B)
     expect(state.visibility.getSnapshot()).toEqual({ pinned: true, overlay: B })
     state.closeOverlay(A)
     expect(state.visibility.getSnapshot().overlay).toBe(B)
-    state.toggle(B, false)
+    state.toggle(B)
     expect(state.visibility.getSnapshot().overlay).toBeNull()
-    state.toggle(A, false)
+    state.toggle(A)
     state.closeOverlay(A)
     expect(state.visibility.getSnapshot().overlay).toBeNull()
+  })
+
+  it('ignores the toggle of a Session that no Chat View shows', () => {
+    const state = new SessionPanelState()
+    const before = state.visibility.getSnapshot()
+    state.toggle(A)
+    expect(state.visibility.getSnapshot()).toBe(before)
   })
 
   it('treats a stored value other than false as the default', () => {
@@ -99,44 +131,45 @@ describe('SessionPanelState', () => {
     const state = newState()
     let calls = 0
     const off = state.visibility.subscribe(() => { calls += 1 })
-    state.toggle(A, false)
-    state.toggle(A, true)
+    state.toggle(A)
+    state.measure(A, 'main', WIDE)
+    state.toggle(A)
     const seen = calls
     expect(seen).toBeGreaterThanOrEqual(2)
     off()
-    state.toggle(A, true)
+    state.toggle(A)
     expect(calls).toBe(seen)
   })
 
   it('closes an overlay once its gutter can dock the panel, without reopening it when the gutter narrows again', () => {
     const state = newState()
-    state.toggle(A, false)
-    layoutOf(A).set({ endGutter: 300, shown: true })
+    state.toggle(A)
+    state.measure(A, 'main', 300)
     expect(state.visibility.getSnapshot().overlay).toBe(A)
-    layoutOf(A).set({ endGutter: DOCK_MIN_GUTTER, shown: true })
+    state.measure(A, 'main', WIDE)
     expect(state.visibility.getSnapshot()).toEqual({ pinned: true, overlay: null })
-    layoutOf(A).set({ endGutter: 200, shown: true })
+    state.measure(A, 'main', NARROW)
     expect(presentationOf(false, state.visibility.getSnapshot(), A)).toBe('hidden')
   })
 
-  it('closes an overlay once the main body stops showing its Session, so returning to it shows no overlay', () => {
+  it('closes an overlay once no Chat View shows its Session, so returning to it shows no overlay', () => {
     const state = newState()
-    state.toggle(A, false)
-    layoutOf(A).set({ endGutter: 0, shown: false })
+    state.toggle(A)
+    state.measure(A, 'main', null)
     expect(state.visibility.getSnapshot().overlay).toBeNull()
-    layoutOf(A).set({ endGutter: 200, shown: true })
+    state.measure(A, 'main', NARROW)
     expect(presentationOf(false, state.visibility.getSnapshot(), A)).toBe('hidden')
   })
 
   it('follows only the open overlay, and nothing after dispose', () => {
     const state = newState()
-    state.toggle(A, false)
-    state.toggle(B, false)
-    // A's layout no longer matters once B holds the overlay.
-    layoutOf(A).set({ endGutter: 0, shown: false })
+    state.toggle(A)
+    state.toggle(B)
+    // A's Chat View no longer matters once B holds the overlay.
+    state.measure(A, 'main', null)
     expect(state.visibility.getSnapshot().overlay).toBe(B)
     state.dispose()
-    layoutOf(B).set({ endGutter: 0, shown: false })
+    state.measure(B, 'main', null)
     expect(state.visibility.getSnapshot().overlay).toBe(B)
   })
 })

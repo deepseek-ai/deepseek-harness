@@ -4,14 +4,13 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useRef, type ReactNode } from 'react'
 import { useModalLayer } from '@deepseek-ai/dsh-client-ui-primitives'
 import { contextMenuHook, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import type { ConversationLayout } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { EnvironmentSection } from '../src/client/EnvironmentSection.tsx'
 import { ProjectRow } from '../src/client/ProjectRow.tsx'
 import { SessionPanel } from '../src/client/SessionPanel.tsx'
 import { SessionPanelToggle } from '../src/client/SessionPanelToggle.tsx'
 import type {
-  EnvironmentSectionProps, ProjectRowProps, SessionPanelProps, SessionPanelSectionEntry,
+  EnvironmentSectionProps, ProjectRowProps, SessionPanelGutters, SessionPanelProps, SessionPanelSectionEntry,
   SessionPanelSectionOwnerProps, SessionPanelToggleProps, SessionPanelVisibility,
 } from '../src/client/slots.ts'
 import { DOCK_MIN_GUTTER } from '../src/client/visibility.ts'
@@ -19,8 +18,8 @@ import { en, zh } from '../src/client/locales.ts'
 
 const SID = 'session-1' as SessionId
 const t = makeTranslate(zh) as SessionPanelToggleProps['t']
-const WIDE: ConversationLayout = { endGutter: DOCK_MIN_GUTTER, shown: true }
-const NARROW: ConversationLayout = { endGutter: DOCK_MIN_GUTTER - 1, shown: true }
+const WIDE = DOCK_MIN_GUTTER
+const NARROW = DOCK_MIN_GUTTER - 1
 const DOCKED: SessionPanelVisibility = { pinned: true, overlay: null }
 
 function selectorOf<T>(value: T) {
@@ -42,10 +41,11 @@ afterEach(() => {
 })
 
 describe('SessionPanelToggle', () => {
-  function toggleProps(layout: ConversationLayout, visibility: SessionPanelVisibility, toggle = vi.fn()) {
+  function toggleProps(gutter: number | undefined, visibility: SessionPanelVisibility, toggle = vi.fn()) {
     const renderSlot = vi.fn(() => <span>需要处理</span>)
+    const gutters: SessionPanelGutters = new Map(gutter === undefined ? [] : [[SID, gutter]])
     const props = {
-      sessionId: SID, useLayout: selectorOf(layout), useVisibility: selectorOf(visibility), toggle, renderSlot, t,
+      sessionId: SID, useGutters: selectorOf(gutters), useVisibility: selectorOf(visibility), toggle, renderSlot, t,
     } as SessionPanelToggleProps
     return { props, toggle, renderSlot }
   }
@@ -63,7 +63,7 @@ describe('SessionPanelToggle', () => {
     const wide = toggleProps(WIDE, DOCKED)
     render(<SessionPanelToggle {...wide.props} />)
     fireEvent.click(screen.getByRole('button'))
-    expect(wide.toggle).toHaveBeenCalledWith(SID, true)
+    expect(wide.toggle).toHaveBeenCalledWith(SID)
     cleanup()
     const narrow = toggleProps(NARROW, DOCKED)
     render(<SessionPanelToggle {...narrow.props} />)
@@ -71,13 +71,25 @@ describe('SessionPanelToggle', () => {
     expect(button.getAttribute('aria-expanded')).toBe('false')
     expect(button.hasAttribute('aria-controls')).toBe(false)
     fireEvent.click(button)
-    expect(narrow.toggle).toHaveBeenCalledWith(SID, false)
+    expect(narrow.toggle).toHaveBeenCalledWith(SID)
   })
 
   it('reports an open overlay as expanded', () => {
     const { props } = toggleProps(NARROW, { pinned: false, overlay: SID })
     render(<SessionPanelToggle {...props} />)
     expect(screen.getByRole('button').getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('is unavailable and says why while no Chat View shows the Session', () => {
+    const { props } = toggleProps(undefined, { pinned: true, overlay: SID })
+    render(<SessionPanelToggle {...props} />)
+    const button = screen.getByRole('button')
+    expect(button.getAttribute('aria-disabled')).toBe('true')
+    expect(button.getAttribute('aria-expanded')).toBe('false')
+    expect(button.hasAttribute('aria-controls')).toBe(false)
+    fireEvent.keyDown(document.body, { key: 'Tab' })
+    fireEvent.focus(button)
+    expect(screen.getByRole('tooltip', { hidden: true }).textContent).toBe('切换到「对话」视图后可显示会话面板')
   })
 })
 
@@ -87,7 +99,7 @@ describe('SessionPanel', () => {
     { id: 'change-requests', label: '变更请求' },
   ]
 
-  function panelProps(layout: ConversationLayout, visibility: SessionPanelVisibility, closeOverlay = vi.fn()) {
+  function panelProps(endGutter: number, visibility: SessionPanelVisibility, closeOverlay = vi.fn(), measure = vi.fn()) {
     const owners: SessionPanelSectionOwnerProps[] = []
     const renderSlot = ((key: string, owner: object, opts?: { only?: string; entryKey?: string }): ReactNode => {
       if (key === 'conversation.session.panel.section.actions') {
@@ -98,15 +110,32 @@ describe('SessionPanel', () => {
     }) as SessionPanelProps['renderSlot']
     const props = {
       sessionId: SID,
-      useLayout: selectorOf(layout),
+      endGutter,
       useVisibility: selectorOf(visibility),
       useSections: selectorOf(SECTIONS),
+      measure,
       closeOverlay,
       renderSlot,
       t,
     } as SessionPanelProps
-    return { props, owners, closeOverlay }
+    return { props, owners, closeOverlay, measure }
   }
+
+  it('reports its Chat View gutter while mounted, replacing it on change and withdrawing it on a Session change and unmount', () => {
+    const measure = vi.fn()
+    const view = render(<SessionPanel {...panelProps(420, DOCKED, vi.fn(), measure).props} />)
+    expect(measure.mock.calls).toEqual([[SID, expect.any(String), 420]])
+    const instance = measure.mock.calls[0]?.[1] as string
+    expect(screen.getByRole('complementary').style.getPropertyValue('--dsh-session-panel-gutter')).toBe('420px')
+    view.rerender(<SessionPanel {...panelProps(400, DOCKED, vi.fn(), measure).props} />)
+    expect(measure.mock.calls.at(-1)).toEqual([SID, instance, 400])
+    expect(measure.mock.calls.some(call => call[2] === null)).toBe(false)
+    const other = 'session-2' as SessionId
+    view.rerender(<SessionPanel {...{ ...panelProps(400, DOCKED, vi.fn(), measure).props, sessionId: other }} />)
+    expect(measure.mock.calls.slice(-2)).toEqual([[SID, instance, null], [other, instance, 400]])
+    view.unmount()
+    expect(measure.mock.calls.at(-1)).toEqual([other, instance, null])
+  })
 
   it('renders nothing while hidden', () => {
     const { props } = panelProps(WIDE, { pinned: false, overlay: null })

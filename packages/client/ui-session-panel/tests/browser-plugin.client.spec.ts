@@ -11,7 +11,6 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as applyLocale, inject as localeInject } from '@deepseek-ai/dsh-client-locale/client'
-import type { ConversationLayout } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { apply, inject } from '../src/client/index.ts'
 import type { ProjectRowInjected, SessionPanelInjected, SessionPanelToggleInjected } from '../src/client/slots.ts'
@@ -23,7 +22,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-/** Boot the browser half over a real slot tree that declares the header utilities and the panel seat. */
+/** Boot the browser half over a real slot tree that declares the header utilities and the Chat aside. */
 async function bench() {
   const ctx = new Context()
   await ctx.plugin(SlotRegistry).await()
@@ -31,19 +30,9 @@ async function bench() {
     name: 'root',
     children: {
       'conversation.session.header.utilities': { kind: 'list', scope: 'session' },
-      'conversation.session.panel': { kind: 'single', scope: 'session' },
+      'conversation.chat.aside': { kind: 'single', scope: 'session' },
     },
   } as never, () => null)
-  const layout = createSnapshotStore<ConversationLayout>({ endGutter: 400, shown: true })
-  const layoutSources: SessionId[] = []
-  ctx.provide('uiConversation', {
-    layouts: {
-      source: (sessionId: SessionId) => {
-        layoutSources.push(sessionId)
-        return layout
-      },
-    },
-  } as never)
   const host = { home: '/Users/me', isLoopback: true }
   ctx.provide('connection', { api: { settings: {} }, isLoopback: false } as never)
   ctx.provide('remote', { $on: () => () => {}, $host: host } as never)
@@ -52,7 +41,7 @@ async function bench() {
   ctx.locale.setLocale('zh')
   const fiber = ctx.plugin({ inject: [...inject], apply })
   await fiber.await()
-  return { ctx, fiber, layout, layoutSources, host }
+  return { ctx, fiber, host }
 }
 
 /** Inject face of one registration, called for the test Session. */
@@ -65,36 +54,40 @@ function faceOf(ctx: Context, slot: string, id: string | undefined): unknown {
 
 describe('ui-session-panel browser half', () => {
   it('declares the services it binds', () => {
-    expect(inject).toEqual(['slots', 'locale', 'uiConversation', 'remote'])
+    expect(inject).toEqual(['slots', 'locale', 'remote'])
   })
 
-  it('registers the toggle first among the header utilities, the panel, the Environment section, and the project row', async () => {
+  it('registers the toggle first among the header utilities, the panel in the Chat aside, the Environment section, and the project row', async () => {
     const { ctx } = await bench()
     const toggle = ctx.slots.entries('conversation.session.header.utilities').find(entry => entry.options.id === 'session-panel')
     expect(toggle?.options.order).toBe(-10)
-    expect(ctx.slots.entries('conversation.session.panel')).toHaveLength(1)
+    expect(ctx.slots.entries('conversation.chat.aside')).toHaveLength(1)
     const section = ctx.slots.entries('conversation.session.panel.section').find(entry => entry.options.id === 'environment')
     expect(section?.options.order).toBe(0)
     expect(ctx.slots.entries('conversation.session.panel.environment.row').map(entry => entry.options.id)).toEqual(['project'])
   })
 
-  it('hands the toggle and the panel the shared visibility and the Session layout source', async () => {
-    const { ctx, layout, layoutSources } = await bench()
+  it('hands the toggle the gutters the panel reports, and both the shared visibility', async () => {
+    const { ctx, fiber } = await bench()
     const toggle = faceOf(ctx, 'conversation.session.header.utilities', 'session-panel') as SessionPanelToggleInjected
-    const panel = faceOf(ctx, 'conversation.session.panel', undefined) as SessionPanelInjected
-    expect(toggle.hooks.layout).toBe(layout)
-    expect(panel.hooks.layout).toBe(layout)
-    expect(layoutSources).toEqual([SID, SID])
+    const panel = faceOf(ctx, 'conversation.chat.aside', undefined) as SessionPanelInjected
     expect(toggle.hooks.visibility).toBe(panel.hooks.visibility)
-    toggle.toggle(SID, false)
+    panel.measure(SID, 'main', 300)
+    expect(toggle.hooks.gutters.getSnapshot().get(SID)).toBe(300)
+    toggle.toggle(SID)
     expect(panel.hooks.visibility.getSnapshot()).toEqual({ pinned: true, overlay: SID })
     panel.closeOverlay(SID)
     expect(panel.hooks.visibility.getSnapshot().overlay).toBeNull()
+    toggle.toggle(SID)
+    // Disposing the plugin stops the open overlay from following the gutters.
+    await fiber.dispose()
+    panel.measure(SID, 'main', null)
+    expect(panel.hooks.visibility.getSnapshot().overlay).toBe(SID)
   })
 
   it('projects the section roster in the active locale and keeps it stable between changes', async () => {
     const { ctx } = await bench()
-    const panel = faceOf(ctx, 'conversation.session.panel', undefined) as SessionPanelInjected
+    const panel = faceOf(ctx, 'conversation.chat.aside', undefined) as SessionPanelInjected
     const roster = panel.hooks.sections
     const first = roster.getSnapshot()
     expect(first).toEqual([{ id: 'environment', label: '环境' }])
@@ -132,7 +125,7 @@ describe('ui-session-panel browser half', () => {
     const { ctx, fiber } = await bench()
     await fiber.dispose()
     expect(ctx.slots.entries('conversation.session.header.utilities')).toHaveLength(0)
-    expect(ctx.slots.entries('conversation.session.panel')).toHaveLength(0)
+    expect(ctx.slots.entries('conversation.chat.aside')).toHaveLength(0)
     expect(ctx.slots.entries('conversation.session.panel.section')).toHaveLength(0)
   })
 })

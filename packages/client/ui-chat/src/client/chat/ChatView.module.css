@@ -339,6 +339,25 @@
 
 /* Floating controls sit outside the clipped transcript. A standalone Chat
    anchors them to its frame; the shared host supplies the sticky scrollport. */
+/* The aside layer: zero height at the frame's top, sticky in a shared
+   scrollport so its occupant stays put while the transcript scrolls and
+   inherits the scrollport's --dsh-composer-height and
+   --dsh-conversation-viewport-height. Above the turn rail (7) and the
+   back-to-bottom control (8). */
+.asideSlot {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 9;
+  height: 0;
+  pointer-events: none;
+}
+
+:global([data-conversation-scroll]) .asideSlot {
+  position: sticky;
+}
+
 .toBottomSlot {
   position: absolute;
   right: 0;

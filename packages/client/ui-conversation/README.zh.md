@@ -120,8 +120,6 @@ Session 首次绑定或缓存的 Session 成为 current 时，shell 会在渲染
 
 宽度拖拽条的指示线只在已捕获指针的拖拽期间跟随指针，普通悬停不改变其位置。
 
-活跃 Session 的主 occurrence 还会在正文内渲染 `conversation.session.panel` 落位，与宽度拖拽条同层，位于滚动容器之外；嵌入式 occurrence 和空白首页不渲染它。占位组件相对正文定位，正文持有正文轴线与 composer 区域高度 `--dsh-composer-height`。`ctx.uiConversation.layouts.source(sessionId)` 发布该 Session 的 `ConversationLayout`：`endGutter` 是正文列末端边缘到正文末端边缘的距离，由主宽度控件在每次测量与拖拽帧后写入，正文接上第一个 Session 时也会写入一次，不再显示该 Session 时归零；`shown` 表示主正文当前是否显示该 Session。激活的是内置 Chat View（`chat`）以外的 View 时留白保持为零，因为这类 View 占满正文；以其他 id 注册的 View 同样读到零。Session 的绑定 scope 释放时，它的布局随之丢弃。
-
 常驻 composer 在无 Session 与有 Session 之间保持挂载。输入空白字符会隐藏占位提示；没有附件的纯空白草稿无法发送。无 Session 时，同一个编辑器表面保持 inert，Workspace picker 连接 blank Session。该表面是 shell 所有的 Lexical 编辑器：引用 chip 是携带 owner 序列化身份的原子 decorator 节点（提交时经 owner codec 展开），已认领的 slash command 是携带认领的行首原子 chip，文件夹文本引用以图标前缀携带文件夹图形，草稿文字和引用语义字段由逐 Session Conversation store 持久化。QueueDock 从 Session 的 `inbox` 投影读取 `next-turn`，包含从冷状态恢复的消息，仅排除仍由本地 transcript 提交承接的 requestId。其他排队行保留正常展示和操作。Queue 操作通过 scoped `ctx.conversation` service 寻址准确的 queue occurrence；queue 预览使用 [UserText Factory](#sent-user-text)（wire 会话形式折叠为其标签），并按原始附件顺序展示本地或持久化的图片和文件。图片使用缩略图，文件使用紧凑的名称与大小卡片。编辑态在 ui-primitives 的 `InlineEditor` 中展示字面发送文本，因此重新编辑不会丢失换行。持久化缩略图通过会话图片 URL 缓存解析。繁忙时 Enter 行为保存在 Host-backed `ui-conversation` settings namespace。 composer 键盘映射经斜杠流水线裁决触发菜单的按键——Tab 确认高亮补全项（可下钻项则下钻），Escape 与 Shift+Tab 离开菜单且不选定——其余按键交给编辑器自身。 接管键盘的浮层通过 `SessionInput.focus()` 把键盘还回来，该路径走 Lexical 自己的 focus，因此光标回到草稿原来的位置而不是开头。
 
 窄屏浏览器设置中，繁忙时 Enter 偏好的标签与控件间距缩小；Windows 和 macOS 桌面窗口保留标准间距。

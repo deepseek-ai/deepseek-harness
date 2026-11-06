@@ -163,6 +163,13 @@ Factory: conversation.content [ConversationContent]
 │     ├─ id=chat [ChatView]
 │     │  ├─ conversation.chat.text-interaction [list]
 │     │  ├─ conversation.chat.markdown.fence [hoc, keyed by fence language]
+│     │  ├─ conversation.chat.aside [SessionPanel]
+│     │  │  ├─ conversation.session.panel.section [list]
+│     │  │  │  ├─ id=environment [EnvironmentSection]
+│     │  │  │  │  └─ conversation.session.panel.environment.row [list]
+│     │  │  │  └─ id=subagents [SubagentsSection]
+│     │  │  │     └─ conversation.session.panel.subagents.footer [list]
+│     │  │  └─ conversation.session.panel.section.actions [keyed]
 │     │  └─ conversation.chat.flow [ChatFlow]
 │     │     └─ conversation.chat.node [ChatNodeSeat dispatch]
 │     │        ├─ key=user [UserMessageNodeView]
@@ -209,14 +216,7 @@ Factory: conversation.content [ConversationContent]
 ├─ conversation.hero.workspace
 │  └─ conversation.hero.workspace.directoryFlow
 ├─ conversation.hero.agentPreset
-├─ conversation.hero.options
-└─ conversation.session.panel [SessionPanel]
-   ├─ conversation.session.panel.section [list]
-   │  ├─ id=environment [EnvironmentSection]
-   │  │  └─ conversation.session.panel.environment.row [list]
-   │  └─ id=subagents [SubagentsSection]
-   │     └─ conversation.session.panel.subagents.footer [list]
-   └─ conversation.session.panel.section.actions [keyed]
+└─ conversation.hero.options
 
 Factory: conversation.chat.user.content [UserContent]
 ├─ conversation.chat.user.images [MessageImages]

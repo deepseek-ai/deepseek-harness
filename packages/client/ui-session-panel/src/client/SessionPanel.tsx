@@ -1,9 +1,11 @@
-/** Floating Session panel: section titles drawn from the section roster, bodies from the section slot. */
-import { useCallback, useEffect, useMemo, useRef, type FocusEvent, type ReactNode } from 'react'
+/** Floating Session panel in the Chat View's aside: section titles drawn from the section roster, bodies from the section slot. */
+import {
+  useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, type CSSProperties, type FocusEvent, type ReactNode,
+} from 'react'
 import { isBehindModal, observeComposition } from '@deepseek-ai/dsh-client-ui-primitives'
 import { panelElementId, toggleElementId } from './element-ids.ts'
 import type { SessionPanelProps, SessionPanelSectionOwnerProps } from './slots.ts'
-import { fitsLayout, presentationOf } from './visibility.ts'
+import { fitsGutter, presentationOf } from './visibility.ts'
 import css from './SessionPanel.module.css'
 
 /**
@@ -74,16 +76,32 @@ function useFocusReturn(hidden: boolean, toggleId: string): {
 }
 
 /**
+ * Report the Chat View's end gutter for this panel while it is mounted, and
+ * withdraw it when the panel unmounts or its Chat View moves to another
+ * Session. A changed gutter replaces the report without withdrawing it.
+ * @param measure - records one panel's gutter.
+ * @param sessionId - Session the Chat View shows.
+ * @param endGutter - the Chat View's end gutter in CSS px.
+ */
+function useGutterReport(measure: SessionPanelProps['measure'], sessionId: SessionPanelProps['sessionId'], endGutter: number): void {
+  const instance = useId()
+  useLayoutEffect(() => () => { measure(sessionId, instance, null) }, [measure, sessionId, instance])
+  useLayoutEffect(() => { measure(sessionId, instance, endGutter) }, [measure, sessionId, instance, endGutter])
+}
+
+/**
  * Render the panel while it docks or shows as an overlay. Each section keeps
  * its title row and body; CSS hides a section whose body rendered nothing.
- * The overlay closes on Escape and on an outside pointerdown.
- * @param props - Session values, the main body layout, shared visibility, sections, and copy.
+ * The overlay closes on Escape and on an outside pointerdown. The docked
+ * width follows the Chat View's end gutter.
+ * @param props - Session values, the Chat View's end gutter, shared visibility, sections, the gutter report, and copy.
  * @returns the panel, or null while it is hidden.
  */
 export function SessionPanel({
-  sessionId, useLayout, useVisibility, useSections, closeOverlay, renderSlot, t,
+  sessionId, endGutter, useVisibility, useSections, measure, closeOverlay, renderSlot, t,
 }: SessionPanelProps): ReactNode {
-  const fits = useLayout(fitsLayout)
+  useGutterReport(measure, sessionId, endGutter)
+  const fits = fitsGutter(endGutter)
   const presentation = useVisibility(visibility => presentationOf(fits, visibility, sessionId))
   const sections = useSections(entries => entries)
   const panel = useRef<HTMLElement>(null)
@@ -99,6 +117,7 @@ export function SessionPanel({
     <aside
       id={panelElementId(sessionId)}
       className={css.panel}
+      style={{ '--dsh-session-panel-gutter': `${endGutter}px` } as CSSProperties}
       aria-label={t('panel.name')}
       ref={panel}
       onFocus={focus.onFocus}

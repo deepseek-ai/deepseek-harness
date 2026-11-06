@@ -1,13 +1,13 @@
 /**
  * Session panel plugin, browser half: a Session header toggle and a floating
- * panel over the main Conversation body. The panel draws the titles of the
- * sections other plugins register and ships the Environment section with the
- * project directory row.
+ * panel in the Chat View's aside. The panel draws the titles of the sections
+ * other plugins register and ships the Environment section with the working
+ * folder row.
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-client-connection/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
@@ -29,13 +29,13 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 export type {
-  EnvironmentSectionProps, ProjectRowInjected, ProjectRowProps, SessionPanelInjected,
+  EnvironmentSectionProps, ProjectRowInjected, ProjectRowProps, SessionPanelGutters, SessionPanelInjected,
   SessionPanelPresentation, SessionPanelProps, SessionPanelSectionEntry, SessionPanelSectionOwnerProps,
   SessionPanelToggleInjected, SessionPanelToggleProps, SessionPanelVisibility,
 } from './slots.ts'
 
-/** Required services: the slot registry, dictionaries, Conversation layout, and the Host facts of the Remote carrier. */
-export const inject = ['slots', 'locale', 'uiConversation', 'remote']
+/** Required services: the slot registry, dictionaries, and the Host facts of the Remote carrier. */
+export const inject = ['slots', 'locale', 'remote']
 
 /**
  * Client plugin body: register the dictionaries, the header toggle, the panel,
@@ -45,8 +45,8 @@ export const inject = ['slots', 'locale', 'uiConversation', 'remote']
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'ui-session-panel: dictionaries')
   const t = ctx.locale.bind(NS)
-  const state = new SessionPanelState(sessionId => ctx.uiConversation.layouts.source(sessionId))
-  ctx.effect(() => () => { state.dispose() }, 'ui-session-panel: overlay layout')
+  const state = new SessionPanelState()
+  ctx.effect(() => () => { state.dispose() }, 'ui-session-panel: overlay gutter')
   const sections = sectionSource(ctx)
   const host: ObservableSnapshot<RemoteHostFacts> = {
     getSnapshot: () => ctx.remote.$host,
@@ -62,21 +62,22 @@ export function apply(ctx: ClientContext): void {
     children: {
       'conversation.session.panel.indicator': { kind: 'list', scope: 'session', inline: true },
     },
-    inject: (sessionId: SessionId): SessionPanelToggleInjected => ({
-      hooks: { visibility: state.visibility, layout: ctx.uiConversation.layouts.source(sessionId) },
-      toggle: (sessionId, fits) => { state.toggle(sessionId, fits) },
+    inject: (): SessionPanelToggleInjected => ({
+      hooks: { visibility: state.visibility, gutters: state.gutters },
+      toggle: (sessionId) => { state.toggle(sessionId) },
     }),
   }, SessionPanelToggle))
 
-  ctx.slots.inject('conversation.session.panel', () => ctx.slots.register({
-    name: 'conversation.session.panel',
+  ctx.slots.inject('conversation.chat.aside', () => ctx.slots.register({
+    name: 'conversation.chat.aside',
     locale: NS,
     children: {
       'conversation.session.panel.section': { kind: 'list', scope: 'session' },
       'conversation.session.panel.section.actions': { kind: 'keyed', scope: 'session' },
     },
-    inject: (sessionId: SessionId): SessionPanelInjected => ({
-      hooks: { visibility: state.visibility, layout: ctx.uiConversation.layouts.source(sessionId), sections },
+    inject: (): SessionPanelInjected => ({
+      hooks: { visibility: state.visibility, sections },
+      measure: (sessionId, instance, endGutter) => { state.measure(sessionId, instance, endGutter) },
       closeOverlay: (sessionId) => { state.closeOverlay(sessionId) },
     }),
   }, SessionPanel))
