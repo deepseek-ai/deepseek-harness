@@ -38,8 +38,8 @@ describe('multiple Session appends', () => {
 
   it('accepts both call forms through an append wrapper', () => {
     const session = Session.create(SessionId('wrapped-append'))
-    const append = new Proxy(session.append, {
-      apply: (target, receiver, args) => Reflect.apply(target, receiver, args),
+    const append = new Proxy(session.append.bind(session), {
+      apply: (target, receiver, args): unknown => Reflect.apply(target, receiver, args),
     })
     session.append = append
     expect(session.append('turn/start', { turn: 1 }).seq).toBe(0)
