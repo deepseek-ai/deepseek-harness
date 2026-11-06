@@ -4708,6 +4708,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the directory\'s children in the backend\'s stable name order, bounded by the entry cap.',
       },
       {
+        signature: '@Remote async search( workspaceFileScope: WorkspaceFileScope, request: WorkspaceFileSearchRequest, signal: AbortSignal, ): Promise<WorkspaceFileSearchResult>',
+        description: 'Search files and their inferred ancestor directories with packaged ripgrep. Native ignore rules apply unless disabled; VCS metadata, symlinks and empty directories are absent. Within the bounded set of listed files, matches sort by depth, then workspace-relative path.',
+        parameters: [{ name: 'workspaceFileScope', description: 'header-derived workspace root for the Session identity on the wire.' }, { name: 'request', description: 'the query, literal exclusions, and hidden/ignore switches.' }, { name: 'signal', description: 'caller cancellation, forwarded to the subprocess; rejection preserves its reason.' }],
+        returns: 'matches capped by search.maxResults; incomplete marks excess rg files or exit 2.',
+        throws: ['RemoteError `gateway/bad-request`: the query is blank.', 'RemoteError `workspace-file/not-found`: the workspace root does not exist.', 'RemoteError `workspace-file/not-directory`: the workspace root is not a directory.', 'RemoteError `workspace-file/search-failed`: subprocess is missing, rg cannot launch or execute, or the search times out.'],
+      },
+      {
         signature: '@Remote({ mode: \'stream\' }) changes(workspaceFileScope: WorkspaceFileScope, path: string, signal: AbortSignal): AsyncIterable<WorkspaceFileWatchFrame>',
         description: 'Watch one file or a directory\'s direct entries in the Session\'s filesystem. Files use the backend\'s read authority; directories remain workspace-scoped.',
         parameters: [{ name: 'workspaceFileScope', description: 'header-derived workspace root for the Session identity on the wire.' }, { name: 'path', description: 'target path; the Host determines its type and confines directories to the workspace.' }, { name: 'signal', description: 'generation cancellation.' }],
@@ -10485,6 +10492,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'WorkspaceFileScope',
     declaration: 'export interface WorkspaceFileScope {\n    readonly sessionId: SessionId;\n    readonly workspaceRoot: string;\n}',
+  },
+  {
+    name: 'WorkspaceFileSearchMatch',
+    declaration: 'export interface WorkspaceFileSearchMatch {\n    readonly path: string;\n    readonly type: WorkspaceDirectoryEntry[\'type\'];\n}',
+  },
+  {
+    name: 'WorkspaceFileSearchRequest',
+    declaration: 'export interface WorkspaceFileSearchRequest {\n    readonly query: string;\n    readonly excludedPaths: readonly string[];\n    readonly includeHidden: boolean;\n    readonly respectGitignore: boolean;\n}',
+  },
+  {
+    name: 'WorkspaceFileSearchResult',
+    declaration: 'export interface WorkspaceFileSearchResult {\n    readonly matches: readonly WorkspaceFileSearchMatch[];\n    readonly truncated: boolean;\n    readonly incomplete: boolean;\n}',
   },
   {
     name: 'WorkspaceFileStat',

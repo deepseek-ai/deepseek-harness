@@ -10,6 +10,9 @@
  *   same path.
  * - `list` speaks workspace paths — the same syntax its `path` argument accepts —
  *   because its consumer is a tree rooted at the workspace root.
+ * - `search` reports `/`-joined workspace-relative paths, and its query and
+ *   exclusions use the same relative syntax, because its consumer is the same
+ *   workspace tree.
  *
  * @module @deepseek-ai/dsh-api-workspace-files/types
  */
@@ -122,6 +125,56 @@ export interface WorkspaceDirectoryListing {
   readonly truncated: boolean
 }
 
+/** One workspace-wide search by entry name or workspace-relative path. */
+export interface WorkspaceFileSearchRequest {
+  /**
+   * Case-insensitive substring to find. Surrounding whitespace is trimmed, and
+   * an empty result is refused. Without `/` it matches entry names; with `/` it
+   * matches `/`-joined workspace-relative paths.
+   */
+  readonly query: string
+  /**
+   * Literal exclusions passed as escaped rg globs. A value without `/` excludes
+   * that name at any depth; a value with `/` excludes the exact path rooted at
+   * the workspace. Glob metacharacters in names are not interpreted as patterns.
+   */
+  readonly excludedPaths: readonly string[]
+  /** Whether rg includes hidden files and directories; VCS metadata remains excluded. */
+  readonly includeHidden: boolean
+  /**
+   * Whether native rg ignore rules apply, including repository detection,
+   * nested and parent `.gitignore`, `.git/info/exclude`, global Git excludes
+   * and `.ignore`. The service does not read `core.ignorecase`; false passes
+   * `--no-ignore`.
+   */
+  readonly respectGitignore: boolean
+}
+
+/** One entry a workspace search found. */
+export interface WorkspaceFileSearchMatch {
+  /** `/`-joined path relative to the workspace root, never empty. */
+  readonly path: string
+  /** What the entry resolves to, as {@link WorkspaceDirectoryEntry.type} reports it. */
+  readonly type: WorkspaceDirectoryEntry['type']
+}
+
+/** The outcome of one workspace search. */
+export interface WorkspaceFileSearchResult {
+  /**
+   * Matching files and inferred ancestor directories from the bounded set of
+   * listed files, sorted by depth then workspace-relative path and cut to the
+   * configured result cap.
+   */
+  readonly matches: readonly WorkspaceFileSearchMatch[]
+  /** Whether matches exceeded the result cap after scanning the bounded file set. */
+  readonly truncated: boolean
+  /**
+   * Whether rg listed more files than the file cap and was terminated early,
+   * or exited with code 2 to report partial discovery.
+   */
+  readonly incomplete: boolean
+}
+
 /**
  * Current target metadata after a filesystem invalidation. File consumers may
  * ignore an already known version; directory consumers relist on every frame
@@ -152,6 +205,8 @@ export type WorkspaceFileWatchFrame =
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
+    /** Search cannot run: missing subprocess, launch/execution failure, or configured timeout. */
+    'workspace-file/search-failed': Record<string, never>
     /** The filesystem provider cannot initialize a watch for this target. */
     'workspace-file/watch-unsupported': { readonly path: string }
     /** No entry exists at that path inside the workspace. */

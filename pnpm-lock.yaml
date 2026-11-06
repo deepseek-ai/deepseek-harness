@@ -1894,6 +1894,9 @@ importers:
       '@deepseek-ai/dsh-typert-protocol':
         specifier: workspace:*
         version: link:../../typert/protocol
+      '@deepseek-ai/dsh-util-ripgrep':
+        specifier: workspace:*
+        version: link:../../util/ripgrep
       '@deepseek-ai/schemastery':
         specifier: link:../../../vendor/schemastery
         version: link:../../../vendor/schemastery
@@ -1934,6 +1937,12 @@ importers:
       '@deepseek-ai/dsh-session-persistence':
         specifier: workspace:*
         version: link:../../session/session-persistence
+      '@deepseek-ai/dsh-subprocess':
+        specifier: workspace:*
+        version: link:../../subprocess/subprocess
+      '@deepseek-ai/dsh-subprocess-local':
+        specifier: workspace:*
+        version: link:../../subprocess/subprocess-local
       '@deepseek-ai/dsh-util-workspace-path':
         specifier: workspace:*
         version: link:../../util/workspace-path
@@ -12356,12 +12365,12 @@ importers:
 
   packages/fs/tool-fs-search:
     dependencies:
+      '@deepseek-ai/dsh-util-ripgrep':
+        specifier: workspace:*
+        version: link:../../util/ripgrep
       '@deepseek-ai/schemastery':
         specifier: link:../../../vendor/schemastery
         version: link:../../../vendor/schemastery
-      '@vscode/ripgrep':
-        specifier: ^1.18.0
-        version: 1.18.0
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:~
@@ -12411,6 +12420,9 @@ importers:
       '@deepseek-ai/dsh-working-directory':
         specifier: workspace:*
         version: link:../../session/working-directory
+      '@vscode/ripgrep':
+        specifier: ^1.18.0
+        version: 1.18.0
 
   packages/fs/tool-str-replace-editor:
     dependencies:
@@ -17870,6 +17882,19 @@ importers:
       '@types/semver':
         specifier: ^7.8.0
         version: 7.8.0
+
+  packages/util/ripgrep:
+    dependencies:
+      '@vscode/ripgrep':
+        specifier: ^1.18.0
+        version: 1.18.0
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-subprocess':
+        specifier: workspace:*
+        version: link:../../subprocess/subprocess
 
   packages/util/time:
     dependencies:

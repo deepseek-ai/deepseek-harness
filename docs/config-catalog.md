@@ -367,10 +367,10 @@ export interface Config {
 ## `@deepseek-ai/dsh-api-workspace-files`
 
 - `inject`: `fs` · `sandboxPolicy` · `sessions` · `typert`
-- `source`: [`packages/api/workspace-files/src/index.ts:70`](../packages/api/workspace-files/src/index.ts)
+- `source`: [`packages/api/workspace-files/src/index.ts:74`](../packages/api/workspace-files/src/index.ts)
 
 ```ts config-catalog
-/** Deployment caps on one page or one listing. */
+/** Deployment caps on one page, one listing, or one search. */
 export interface Config {
   /**
    * Inclusive byte cap on one page's text and on one byte window.
@@ -386,6 +386,22 @@ export interface Config {
   readonly maxLines: number
   /** Cap on returned directory entries; the rest is dropped and reported cut. */
   readonly maxEntries: number
+  /** Budgets on one search's matches, listed files, deadline and ripgrep process. */
+  readonly search: SearchLimits
+}
+
+/** Deployment budgets on one search's results, listed files and process. */
+export interface SearchLimits {
+  /** Cap on returned matches; additional matches report truncation after the bounded scan. */
+  readonly maxResults: number
+  /** Cap on files considered from rg output; an extra file terminates rg and reports the search incomplete. */
+  readonly maxEntries: number
+  /** Search process termination grace in milliseconds. */
+  readonly graceMs: number
+  /** Search deadline in milliseconds; expiry rejects rather than returning partial results. */
+  readonly timeoutMs: number
+  /** Byte cap on retained search-process stderr diagnostics. */
+  readonly stderrMaxBytes: number
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-api-workspace-files -->
@@ -5227,6 +5243,7 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 | `@deepseek-ai/dsh-util-code-language` | — | [`packages/util/code-language/src/index.ts`](../packages/util/code-language/src/index.ts) |
 | `@deepseek-ai/dsh-util-crypto` | — | [`packages/util/crypto/src/index.ts`](../packages/util/crypto/src/index.ts) |
 | `@deepseek-ai/dsh-util-file-drag` | — | [`packages/util/file-drag/src/index.ts`](../packages/util/file-drag/src/index.ts) |
+| `@deepseek-ai/dsh-util-ripgrep` | — | [`packages/util/ripgrep/src/index.ts`](../packages/util/ripgrep/src/index.ts) |
 | `@deepseek-ai/dsh-util-time` | — | [`packages/util/time/src/index.ts`](../packages/util/time/src/index.ts) |
 | `@deepseek-ai/dsh-util-values` | — | [`packages/util/values/src/index.ts`](../packages/util/values/src/index.ts) |
 | `@deepseek-ai/dsh-util-workspace-path` | — | [`packages/util/workspace-path/src/index.ts`](../packages/util/workspace-path/src/index.ts) |

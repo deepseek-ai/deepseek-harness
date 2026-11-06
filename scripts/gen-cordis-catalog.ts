@@ -1125,6 +1125,8 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   WorkspaceFileRange: 'Host workspace file endpoint contract is owned by packages/api/workspace-files/README.md',
   WorkspaceFileStat: 'Host workspace file endpoint contract is owned by packages/api/workspace-files/README.md',
   WorkspaceFileText: 'Host workspace file endpoint contract is owned by packages/api/workspace-files/README.md',
+  WorkspaceFileSearchRequest: 'Host workspace file endpoint contract is owned by packages/api/workspace-files/README.md',
+  WorkspaceFileSearchResult: 'Host workspace file endpoint contract is owned by packages/api/workspace-files/README.md',
   TerminalShell: 'Browser terminal shell profiles are owned by packages/api/terminal-controller/README.md',
   TerminalEnvironment: 'Browser terminal environment fields are owned by packages/api/terminal-controller/README.md',
   WebTerminalInfo: 'Browser terminal metadata is owned by packages/api/terminal-controller/README.md',
