@@ -5,7 +5,7 @@ import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ForgeDiffFile } from '../src/types.ts'
-import { ChangedFiles, type ChangedFilesState } from '../src/client/ChangedFiles.tsx'
+import { ChangedFiles, ChangedFilesMenu, type ChangedFilesState } from '../src/client/ChangedFiles.tsx'
 import { changedFileTree, filesInTreeOrder, filterFileTree } from '../src/client/file-tree.ts'
 import { en } from '../src/client/locales.ts'
 import { FileTreePane } from '../src/client/FileTreePane.tsx'
@@ -77,6 +77,37 @@ it('keeps text-caret navigation in the filter while other keys bubble to the men
   fireEvent.keyDown(view.getByRole('textbox'), { key: 'ArrowDown' })
   expect(key).toHaveBeenCalledOnce()
   expect(view.getByRole('button').getAttribute('aria-current')).toBe('true')
+})
+
+it('scrolls only the rows to show the selected file on each menu opening and when the selection moves', () => {
+  const files = ['a.ts', 'b.ts', 'c.ts', 'd.ts', 'e.ts', 'f.ts'].map(path => file(path))
+  // Layout: the rows show three 30px files from y = 100; each file moves up by the rows' scroll offset.
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(90)
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+    const index = files.findIndex(item => item.path === this.getAttribute('aria-label'))
+    const scrolled = this.parentElement?.parentElement?.scrollTop ?? 0
+    return index < 0 ? new DOMRect(0, 100, 200, 90) : new DOMRect(0, 100 + index * 30 - scrolled, 200, 30)
+  })
+  const rows = (): HTMLElement => document.querySelector<HTMLElement>('[data-forge-file-tree] > :last-child')!
+  const props = { files, t: makeTranslate(en), filter: vi.fn(), toggle: vi.fn(), jump: vi.fn() }
+  const menu = render(<ChangedFilesMenu {...props} state={{ query: '', collapsed: {}, selected: 'f.ts' }} visible />)
+  const trigger = menu.getByRole('button', { name: 'All 6 files' })
+  for (const opening of [1, 2]) {
+    fireEvent.click(trigger)
+    expect(rows().scrollTop, `opening ${opening}`).toBe(90)
+    fireEvent.click(trigger)
+    expect(document.querySelector('[data-forge-file-tree]')).toBeNull()
+  }
+  menu.unmount()
+  const pane = render(<ChangedFiles {...props} state={{ query: '', collapsed: {}, selected: null }} />)
+  expect(rows().scrollTop).toBe(0)
+  const select = (selected: string): void => { pane.rerender(<ChangedFiles {...props} state={{ query: '', collapsed: {}, selected }} />) }
+  select('e.ts')
+  expect(rows().scrollTop).toBe(60)
+  select('a.ts')
+  expect(rows().scrollTop).toBe(0)
+  select('c.ts')
+  expect(rows().scrollTop).toBe(0)
 })
 
 it('bounds pointer and keyboard resizing, retains hidden width, and stops cancelled drags', () => {

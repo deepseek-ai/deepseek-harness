@@ -1,5 +1,5 @@
 /** Changed-file navigation shared by the toolbar menu and wide diff pane, with a disclosure column on every row. */
-import { useMemo, useState, type ReactNode } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import { FileTypeIcon, IconChevronDownOutlineRegular, IconFolderCloseRegular, Input, Menu, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
@@ -63,6 +63,19 @@ function Rows({ nodes, depth, props }: {
 }
 
 /**
+ * Scroll only the row container, by the least distance that shows the whole row.
+ * @param container - the scrolling rows.
+ * @param row - the row to show.
+ */
+function revealRow(container: HTMLElement, row: HTMLElement): void {
+  const top = container.getBoundingClientRect().top + container.clientTop
+  const bottom = top + container.clientHeight
+  const box = row.getBoundingClientRect()
+  if (box.top < top) container.scrollTop -= top - box.top
+  else if (box.bottom > bottom) container.scrollTop += box.bottom - bottom
+}
+
+/**
  * Render searchable directory navigation without reading file contents.
  * @param props - changed files, per-tab choices, navigation actions, and localized copy.
  * @returns the search field and matching branches.
@@ -70,11 +83,19 @@ function Rows({ nodes, depth, props }: {
 export function ChangedFiles(props: ChangedFilesProps): ReactNode {
   const tree = useMemo(() => changedFileTree(props.files), [props.files])
   const nodes = useMemo(() => filterFileTree(tree, props.state.query), [tree, props.state.query])
+  const rows = useRef<HTMLDivElement>(null)
+  // The toolbar menu mounts these rows at the top on every opening, and file steps in the diff move the selection.
+  useLayoutEffect(() => {
+    const container = rows.current
+    const row = container?.querySelector<HTMLElement>('[aria-current="true"]')
+    if (container == null || row == null) return
+    revealRow(container, row)
+  }, [props.state.selected])
   return <div className={css.root} data-forge-file-tree="">
     <div className={css.search}><Input className={clsx(css.searchInput)} aria-label={props.t('diff.filterFiles')} placeholder={props.t('diff.filterFiles')}
       value={props.state.query} onChange={(event) => { props.filter(event.target.value) }}
       onKeyDown={(event) => { if (['Home', 'End', 'ArrowLeft', 'ArrowRight'].includes(event.key)) event.stopPropagation() }} /></div>
-    <div className={css.rows}>
+    <div ref={rows} className={css.rows}>
       {nodes.length === 0 ? <div className={css.empty}>{props.t('diff.noMatchingFiles')}</div> : <Rows nodes={nodes} depth={0} props={props} />}
     </div>
   </div>
