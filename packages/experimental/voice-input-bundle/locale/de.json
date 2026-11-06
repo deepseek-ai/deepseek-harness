@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Spracheingabe",
-    "description": "Transkribieren Sie Aufnahmen lokal mit SenseVoice; Für die erste Verwendung müssen Abhängigkeiten installiert werden.",
+    "description": "Diktieren Sie nach der Anmeldung mit der DeepSeek-Cloud-Erkennung oder laden Sie das lokale SenseVoice-Modell herunter.",
     "detail": "docs/DETAIL.md"
   }
 }

@@ -27,6 +27,8 @@ kind: "package-reference"
 
 与语音服务定义和 Typert 组合。`maxAudioBytes` 与 `maxDurationSeconds` 限制接收的录音。浏览器 UI 启用时挂载本包生成的 `/remote` 贡献。
 
+Provider 失败时返回 `speech/transcription-failed`；Provider 抛出 `SpeechTranscriptionError` 时，详情的 `code` 携带其 `SpeechFailureCode`，`reason` 保留 Host 诊断信息。可选的 `locale` 携带 Client 的界面语言；不是语言标签的值在识别前以 `gateway/bad-request` 失败。
+
 `prepare(providerId, { downloadSource })` 将公布的一个下载源转发给提供方，省略时保留其配置策略。目录通过 `downloadSources` 提供选择器选项。提供方拒绝不可用的源，以及对进行中任务的源变更。
 
 -----

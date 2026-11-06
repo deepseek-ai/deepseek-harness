@@ -8,6 +8,8 @@ Experimental speech recognition has three roles: the [Service Definition](../../
 
 `SpeechProviderId` brands the registration identity. `SpeechProviderInfo` carries a display name, accepted `languages` hints and `host-local` or `cloud` processing location. `SpeechRequest` contains WAV bytes and optional provider/language selection; `resolve()` produces `SpeechSpec` with one captured provider instance. A missing provider or unsupported language fails; replacement or withdrawal invalidates resolved work. Audio never falls back to a different provider.
 
+`defaultProvider: auto` selects, before recording, the first registered `autoOrder` provider whose state is not `unavailable`. The bundle orders the [DeepSeek cloud provider](../../packages/experimental/speech-to-text-deepseek/README.md) before SenseVoice, so a signed-in DeepSeek account uses cloud recognition. The cloud provider stays `unavailable` with `sign-in-required` until an account is stored, authenticates like the account model route, and sends the saved language and the UI language to the service. A provider that does not list the saved language receives `auto`. Expected failures carry a `SpeechFailureCode` through the Remote for localized recovery.
+
 `SpeechProvider.transcribe()` accepts one complete `SpeechInput` and an `AbortSignal`. `Transcript` returns plain `text`, `audioSeconds` and `inferenceSeconds`. Providers honor cancellation and settle their work before deregistration completes. The local provider serializes calls, bounds its queue and manages its worker lifetime independently of Sessions.
 
 ## Browser and Host ownership
@@ -124,8 +126,9 @@ async *follow(caller: AbortSignal): AsyncIterable<SpeechSnapshot>
 snapshot(): SpeechSnapshot
 
 /**
- * Persist changed selection fields into this plugin's profile entry; the resulting language must be accepted by the selected provider.
- * @param patch - explicit provider or language changes.
+ * Persist changed selection fields into this plugin's profile entry. The language must be listed by at least one
+ * registered provider; a provider that does not list it receives `auto` when it transcribes.
+ * @param patch - explicit provider, `auto`, or language changes.
  * @returns after the profile write and the live update it applies.
  */
 async configure(patch: SpeechSelectionPatch): Promise<void>
@@ -145,8 +148,9 @@ prepare(id: SpeechProviderId, options?: SpeechPreparationOptions): void
 async cancelPreparation(id: SpeechProviderId): Promise<void>
 
 /**
- * Apply composition defaults and capture the selected provider. Missing providers and unsupported languages fail explicitly.
- * @param request - complete recording and optional selection.
+ * Apply the saved selection and capture the provider. Missing providers and hints no registered provider lists fail
+ * explicitly; the captured provider receives the hint when it lists it and `auto` otherwise.
+ * @param request - complete recording, optional selection and the client's UI language.
  * @returns provider-pinned input for transcribe().
  */
 resolve(request: SpeechRequest): SpeechSpec

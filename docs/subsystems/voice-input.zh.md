@@ -8,6 +8,8 @@
 
 `SpeechProviderId` 为注册标识添加类型品牌。`SpeechProviderInfo` 携带显示名称、支持的 `languages` 语言提示及 `host-local` 或 `cloud` 处理位置。`SpeechRequest` 包含 WAV 字节和可选的 Provider、语言选择；`resolve()` 生成捕获一个 Provider 实例的 `SpeechSpec`。缺失的 Provider 或不支持的语言会报错；替换或撤销会使已解析的任务失效。音频不会回退到其他 Provider。
 
+`defaultProvider: auto` 在录音前选择 `autoOrder` 中第一个已注册且状态不是 `unavailable` 的 Provider。Bundle 把 [DeepSeek 云端 Provider](../../packages/experimental/speech-to-text-deepseek/README.zh.md) 排在 SenseVoice 之前，因此已登录 DeepSeek 账号时使用云端识别。云端 Provider 在保存账号之前处于带 `sign-in-required` 的 `unavailable`，鉴权方式与账号模型路由相同，并把保存的语言和界面语言发送给服务。未列出已保存语言的 Provider 收到 `auto`。可预期的失败通过 Remote 携带 `SpeechFailureCode`，供界面本地化恢复提示。
+
 `SpeechProvider.transcribe()` 接收完整的 `SpeechInput` 与 `AbortSignal`。`Transcript` 返回纯文本 `text`、`audioSeconds` 和 `inferenceSeconds`。Provider 响应取消，并在注销完成前结束其任务。本地 Provider 串行执行调用、限制队列，并独立于 Session 管理工作进程生命周期。
 
 ## 浏览器与 Host 所有权
@@ -124,8 +126,9 @@ async *follow(caller: AbortSignal): AsyncIterable<SpeechSnapshot>
 snapshot(): SpeechSnapshot
 
 /**
- * Persist changed selection fields into this plugin's profile entry; the resulting language must be accepted by the selected provider.
- * @param patch - explicit provider or language changes.
+ * Persist changed selection fields into this plugin's profile entry. The language must be listed by at least one
+ * registered provider; a provider that does not list it receives `auto` when it transcribes.
+ * @param patch - explicit provider, `auto`, or language changes.
  * @returns after the profile write and the live update it applies.
  */
 async configure(patch: SpeechSelectionPatch): Promise<void>
@@ -145,8 +148,9 @@ prepare(id: SpeechProviderId, options?: SpeechPreparationOptions): void
 async cancelPreparation(id: SpeechProviderId): Promise<void>
 
 /**
- * Apply composition defaults and capture the selected provider. Missing providers and unsupported languages fail explicitly.
- * @param request - complete recording and optional selection.
+ * Apply the saved selection and capture the provider. Missing providers and hints no registered provider lists fail
+ * explicitly; the captured provider receives the hint when it lists it and `auto` otherwise.
+ * @param request - complete recording, optional selection and the client's UI language.
  * @returns provider-pinned input for transcribe().
  */
 resolve(request: SpeechRequest): SpeechSpec

@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Saisie vocale",
-    "description": "Transcrivez les enregistrements localement avec SenseVoice ; la première utilisation nécessite l'installation de dépendances.",
+    "description": "Dictez avec la reconnaissance cloud DeepSeek après connexion, ou téléchargez le modèle local SenseVoice.",
     "detail": "docs/DETAIL.md"
   }
 }

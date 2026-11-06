@@ -1,0 +1,6 @@
+- dialog "Cloud recognition requires a DeepSeek account":
+  - heading "Cloud recognition requires a DeepSeek account" [level=2]
+  - button "Cancel"
+  - paragraph: DeepSeek cloud recognition is selected. Sign in to use it without downloading models.
+  - button "Later"
+  - button "Sign in to DeepSeek"

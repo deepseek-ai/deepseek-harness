@@ -338,7 +338,7 @@ abstract signOut(client: AccountClientMetadata): Promise<AccountView>
 abstract watch(signal: AbortSignal, includeIdentityChanges?: boolean): AsyncIterable<AccountView>
 
 /**
- * Resolve a credential only for the inference origin allowed by the provider.
+ * Resolve a credential only for an origin the provider allows, such as its inference and service origins.
  * @param url - actual request destination or API base URL.
  * @returns stored token, or undefined for other origins or a signed-out account.
  */

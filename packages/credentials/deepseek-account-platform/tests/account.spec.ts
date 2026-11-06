@@ -35,6 +35,7 @@ async function fixture(
   embeddedPageDist = '',
   desktopPlatform: 'darwin' | 'win32' | null = null,
   balanceTimeoutMs = 30_000,
+  serviceOrigins?: string[],
 ) {
   const home = await mkdtemp(join(tmpdir(), 'dsh-account-'))
   cleanups.push(() => rm(home, { recursive: true, force: true }))
@@ -160,7 +161,7 @@ async function fixture(
   const provider = ctx.plugin(PlatformAccount, {
     platformOrigin: origin, inferenceOrigin, embeddedPageDist, desktopPlatform,
     allowLoopbackHttp: true, requestHeaders, accountRequestHeaders,
-    rewriteBrowserOrigin, logoutRetryDelayMs: 1, balanceTimeoutMs,
+    rewriteBrowserOrigin, logoutRetryDelayMs: 1, balanceTimeoutMs, ...serviceOrigins === undefined ? {} : { serviceOrigins },
   })
   await provider
   cleanups.push(async () => { await provider.dispose(); await authorization.dispose(); await credentials.dispose(); await web.dispose() })
@@ -304,6 +305,39 @@ it('allows real account credentials only on the exact official HTTPS origin', as
   for (const url of ['http://api.deepseek.com', 'https://api.deepseek.com.evil.test', 'https://api.deepseek.com:8443', 'https://user@api.deepseek.com']) {
     expect(await f.account.resolveToken(url)).toBeUndefined()
   }
+})
+
+it('also releases a production grant to the exact official speech service origin', async () => {
+  const f = await fixture()
+  await f.ctx.credentials.modifyRecord(credentialKey('deepseek-account-platform', 'default'), () => Promise.resolve({
+    kind: 'grant', payload: { version: 1, issuer: 'https://platform.deepseek.com', token: 'test-account-token' },
+  }))
+  expect(await f.account.resolveToken('https://harness.deepseek.com/api/v0/asr/transcribe')).toBe('test-account-token')
+  for (const url of ['http://harness.deepseek.com/api', 'https://harness.deepseek.com.evil.test', 'https://harness.deepseek.com:8443',
+    'https://user@harness.deepseek.com', 'https://chat.deepseek.com/api']) {
+    expect(await f.account.resolveToken(url)).toBeUndefined()
+  }
+})
+
+it('sends service origins only grants allowed for them and supports removing the default', async () => {
+  const f = await fixture(undefined, {}, false, {}, 'https://api.deepseek.com', undefined, '', null, 30_000,
+    ['https://harness.deepseek.com', 'https://speech.private.example'])
+  await f.ctx.credentials.modifyRecord(credentialKey('deepseek-account-platform', 'default'), () => Promise.resolve({
+    kind: 'grant', payload: { version: 1, issuer: f.origin, token: 'loopback-token' },
+  }))
+  expect(await f.account.resolveToken('https://harness.deepseek.com/api')).toBeUndefined()
+  expect(await f.account.resolveToken('https://api.deepseek.com/v1')).toBeUndefined()
+  expect(await f.account.resolveToken('https://speech.private.example/asr')).toBe('loopback-token')
+  await f.ctx.credentials.modifyRecord(credentialKey('deepseek-account-platform', 'default'), () => Promise.resolve({
+    kind: 'grant', payload: { version: 1, issuer: 'https://platform.deepseek.com', token: 'production-token' },
+  }))
+  expect(await f.account.resolveToken('https://speech.private.example/asr')).toBeUndefined()
+  const none = await fixture(undefined, {}, false, {}, 'https://api.deepseek.com', undefined, '', null, 30_000, [])
+  await none.ctx.credentials.modifyRecord(credentialKey('deepseek-account-platform', 'default'), () => Promise.resolve({
+    kind: 'grant', payload: { version: 1, issuer: 'https://platform.deepseek.com', token: 'production-token' },
+  }))
+  expect(await none.account.resolveToken('https://harness.deepseek.com/api')).toBeUndefined()
+  expect(await none.account.resolveToken('https://api.deepseek.com/v1')).toBe('production-token')
 })
 
 it('restricts platform destinations to the configured origin and route', () => {
@@ -1154,6 +1188,8 @@ it.each([{ kind: 'api-key' as const, key: 'wrong-kind' }, { kind: 'grant' as con
 it.each(['ftp://api.example', 'https://user:password@api.example', 'https://api.example/path',
   'https://api.example/?query=1', 'https://api.example/#fragment'])('rejects invalid inference origin %s', async (inferenceOrigin) => {
   expect(() => new PlatformAccount(new Context(), { inferenceOrigin })).toThrow('account: inferenceOrigin')
+  expect(() => new PlatformAccount(new Context(), { serviceOrigins: ['https://harness.deepseek.com', inferenceOrigin] }))
+    .toThrow('account: serviceOrigins')
 })
 
 it('rejects authorization begun without a local account attempt', async () => {

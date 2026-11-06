@@ -17,6 +17,24 @@ import { AccountUnauthorizedError, PlatformAuthError, platformHeaders, platformO
 const KEY = credentialKey('deepseek-account-platform', 'default')
 const DEVICE = credentialKey('deepseek-account-platform', 'device')
 const grant = z.object({ version: z.literal(1), token: z.string().min(1), issuer: z.url() })
+/** Production DeepSeek origins; they never receive a grant issued by a loopback development platform. */
+const OFFICIAL_TOKEN_ORIGINS: ReadonlySet<string> = new Set(['https://api.deepseek.com', 'https://harness.deepseek.com'])
+const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(['localhost', '127.0.0.1', '[::1]'])
+
+/**
+ * Validate one exact token destination.
+ * @param value - configured origin.
+ * @param field - configuration field named in the error.
+ * @returns the normalized origin.
+ */
+function tokenOrigin(value: string, field: string): string {
+  const origin = new URL(value)
+  if (!['http:', 'https:'].includes(origin.protocol) || origin.username || origin.password
+    || origin.pathname !== '/' || origin.search || origin.hash) {
+    throw new Error(`account: ${field} must be an HTTP(S) origin without credentials, path, query or fragment`)
+  }
+  return origin.origin
+}
 const device = z.object({ id: z.uuid() })
 
 /** Deployment-specific platform and request deadlines. */
@@ -29,6 +47,8 @@ export interface Config {
   embeddedPageDist?: string
   /** Exact HTTP(S) origin allowed to receive account tokens for inference and files. */
   inferenceOrigin?: string
+  /** Further exact HTTP(S) origins of DeepSeek services, such as speech recognition, allowed to receive account tokens. */
+  serviceOrigins?: string[]
   /** Allow HTTP only on loopback for the development Mock. */
   allowLoopbackHttp?: boolean
   /** Map authorization and completion pages to platformOrigin for private development proxies. */
@@ -54,6 +74,7 @@ export const Config = Schema.object({
   desktopPlatform: Schema.union([Schema.const('darwin'), Schema.const('win32'), Schema.const(null)]).default(null),
   embeddedPageDist: Schema.string().default(''),
   inferenceOrigin: Schema.string().default('https://api.deepseek.com'),
+  serviceOrigins: Schema.array(Schema.string()).default(['https://harness.deepseek.com']),
   allowLoopbackHttp: Schema.boolean().default(false),
   rewriteBrowserOrigin: Schema.boolean().default(false),
   requestHeaders: Schema.dict(Schema.string().role('secret')).default({}),
@@ -86,7 +107,8 @@ export class PlatformAccount extends DeepSeekAccount {
   static Config = Config
   private readonly origin: string
   private readonly embeddedPageDist: string
-  private readonly inferenceOrigin: string
+  /** Exact origins that receive account tokens: the inference origin followed by the service origins. */
+  private readonly tokenOrigins: ReadonlySet<string>
   private readonly rewriteBrowserOrigin: boolean
   private readonly platform: 'darwin' | 'win32' | null
   private readonly requestHeaders: Record<string, string>
@@ -115,12 +137,8 @@ export class PlatformAccount extends DeepSeekAccount {
     const resolved = Config(config)
     this.embeddedPageDist = resolved.embeddedPageDist
     this.origin = platformOrigin(resolved.platformOrigin, resolved.allowLoopbackHttp)
-    const inference = new URL(resolved.inferenceOrigin)
-    if (!['http:', 'https:'].includes(inference.protocol) || inference.username || inference.password
-      || inference.pathname !== '/' || inference.search || inference.hash) {
-      throw new Error('account: inferenceOrigin must be an HTTP(S) origin without credentials, path, query or fragment')
-    }
-    this.inferenceOrigin = inference.origin
+    this.tokenOrigins = new Set([tokenOrigin(resolved.inferenceOrigin, 'inferenceOrigin'),
+      ...resolved.serviceOrigins.map(origin => tokenOrigin(origin, 'serviceOrigins'))])
     this.rewriteBrowserOrigin = resolved.rewriteBrowserOrigin
     this.platform = resolved.desktopPlatform
     this.requestHeaders = platformHeaders(resolved.requestHeaders)
@@ -384,17 +402,17 @@ export class PlatformAccount extends DeepSeekAccount {
   override async resolveToken(url: string): Promise<string | undefined> {
     if (this.closed || this.removing !== undefined) return undefined
     const destination = new URL(url)
-    if (destination.origin !== this.inferenceOrigin || destination.username || destination.password) return undefined
+    if (!this.tokenOrigins.has(destination.origin) || destination.username || destination.password) return undefined
     const record = await this.ctx.credentials.readRecord(KEY)
     if (record === undefined) return undefined
     if (record.kind !== 'grant') throw new PlatformAuthError('storage')
     const result = grant.safeParse(record.payload)
     if (!result.success) throw new PlatformAuthError('storage')
-    // Development grants cannot authenticate production model or file requests.
+    // Development grants cannot authenticate production requests; other origins accept only this platform's grants.
     const issuer = new URL(result.data.issuer)
     if (result.data.token.startsWith('dsh_mock_')) return undefined
-    if (this.inferenceOrigin === 'https://api.deepseek.com') {
-      if (['localhost', '127.0.0.1', '[::1]'].includes(issuer.hostname)) return undefined
+    if (OFFICIAL_TOKEN_ORIGINS.has(destination.origin)) {
+      if (LOOPBACK_HOSTS.has(issuer.hostname)) return undefined
     } else if (issuer.origin !== this.origin) return undefined
     return result.data.token
   }

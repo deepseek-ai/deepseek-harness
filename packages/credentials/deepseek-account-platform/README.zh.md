@@ -65,6 +65,8 @@ Host 诊断仅在请求、响应校验或登录失败时，通过 `console.error
 
 inferenceOrigin 默认为 `https://api.deepseek.com`。私有部署 patch 可将其替换为一个精确的 HTTP(S) 来源（含端口），让推理及文件请求通过 x-dsh-auth-token 认证。配置不得包含路径、URL 凭证、查询或片段。其他来源要求授权由配置的 platformOrigin 签发；仍拒绝 Mock token。本机授权不能认证官方生产 API。部署地址保存在私有 patch 中，不随默认配置发布。
 
+`serviceOrigins` 列出另外可以接收账号 token 的 DeepSeek 服务的精确来源，默认是用于语音识别的 `https://harness.deepseek.com`。每一项都按 `inferenceOrigin` 的规则校验。官方来源 `https://api.deepseek.com` 和 `https://harness.deepseek.com` 永远不会收到本机签发的授权；其他来源要求授权由配置的 platformOrigin 签发。设为 `serviceOrigins: []` 时只向 `inferenceOrigin` 发放 token。
+
 提供者初始化时，若有效的已存授权 issuer 与 platformOrigin 不同，会在使用方读取账号状态前删除该本地授权，以未登录态继续启动，不发送远端退登请求；API Key 和设备标识保留。存储错误仍明确报错，账号 HTTP 或响应校验失败不会删除来源匹配的授权。
 
 <a id="understand-the-implementation"></a>

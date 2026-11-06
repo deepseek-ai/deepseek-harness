@@ -31,6 +31,7 @@ function assertVoiceActions(value: Record<string, unknown>): asserts value is Re
   assert(typeof value.prepare === 'function')
   assert(typeof value.cancelPreparation === 'function')
   assert(typeof value.transcribe === 'function')
+  assert(typeof value.signIn === 'function')
   assert(typeof value.hooks === 'object' && value.hooks !== null)
 }
 
@@ -85,6 +86,28 @@ it('starts without the Plugins page navigation and follows its presence', async 
   }
 })
 
+it('follows the account sign-in entry and opens it only while present', async () => {
+  hostApply()
+  const b = await fixture()
+  try {
+    await b.ctx.plugin({ inject: [...inject], apply: ctx => mountVoiceInput(ctx, REMOTE) })
+    const actions = b.ctx.slots.entries('conversation.input.activity').find(item => item.component === VoiceInput)!.inject!()
+    assertVoiceActions(actions)
+    expect(actions.hooks.accountSignIn.getSnapshot()).toBe(false)
+    expect(() => { actions.signIn() }).not.toThrow()
+    const open = vi.fn()
+    const account = b.ctx.plugin({ apply: (ctx: Context) => { ctx.provide('accountSignIn', { open } as never) } })
+    await account
+    await vi.waitFor(() => { expect(actions.hooks.accountSignIn.getSnapshot()).toBe(true) })
+    actions.signIn()
+    expect(open).toHaveBeenCalledOnce()
+    await account.dispose()
+    expect(actions.hooks.accountSignIn.getSnapshot()).toBe(false)
+  } finally {
+    await b.ctx.fiber.dispose()
+  }
+})
+
 it('withdraws its Remote, localized slot and microphone captures on disposal', async () => {
   hostApply()
   const b = await fixture()
@@ -124,7 +147,7 @@ it('withdraws its Remote, localized slot and microphone captures on disposal', a
     const request = { providerId: 'local' as SpeechProviderId, audioBase64: '' }, signal = new AbortController().signal
     await actions.transcribe(request, signal)
     expect(b.configure).toHaveBeenCalledTimes(2)
-    expect(b.transcribe).toHaveBeenCalledWith(request, signal)
+    expect(b.transcribe).toHaveBeenCalledWith({ ...request, locale: b.ctx.locale.getSnapshot().active }, signal)
     await fiber.dispose()
     expect(dispose).toHaveBeenCalledOnce()
     expect(b.ctx.slots.entries('conversation.input.activity')).toHaveLength(0)

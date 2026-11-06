@@ -859,7 +859,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-deepseek-account-platform`
 
 - `inject`: `credentials` · `authorization`
-- `source`: [`packages/credentials/deepseek-account-platform/src/index.ts:23`](../packages/credentials/deepseek-account-platform/src/index.ts)
+- `source`: [`packages/credentials/deepseek-account-platform/src/index.ts:41`](../packages/credentials/deepseek-account-platform/src/index.ts)
 
 ```ts config-catalog
 /** Deployment-specific platform and request deadlines. */
@@ -872,6 +872,8 @@ export interface Config {
   embeddedPageDist?: string
   /** Exact HTTP(S) origin allowed to receive account tokens for inference and files. */
   inferenceOrigin?: string
+  /** Further exact HTTP(S) origins of DeepSeek services, such as speech recognition, allowed to receive account tokens. */
+  serviceOrigins?: string[]
   /** Allow HTTP only on loopback for the development Mock. */
   allowLoopbackHttp?: boolean
   /** Map authorization and completion pages to platformOrigin for private development proxies. */
@@ -900,7 +902,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-experimental-api-speech-to-text`
 
 - `inject`: `speechToText` · `typert`
-- `source`: [`packages/experimental/api-speech-to-text/src/index.ts:20`](../packages/experimental/api-speech-to-text/src/index.ts)
+- `source`: [`packages/experimental/api-speech-to-text/src/index.ts:23`](../packages/experimental/api-speech-to-text/src/index.ts)
 
 ```ts config-catalog
 /** Limits applied before decoding or calling a provider. */
@@ -1340,13 +1342,15 @@ export interface Config {
 ## `@deepseek-ai/dsh-experimental-speech-to-text`
 
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/experimental/speech-to-text/src/index.ts:20`](../packages/experimental/speech-to-text/src/index.ts)
+- `source`: [`packages/experimental/speech-to-text/src/index.ts:27`](../packages/experimental/speech-to-text/src/index.ts)
 
 ```ts config-catalog
 /** Live selection read before a transcription starts; `configure()` writes it through the profile. */
 export interface Config {
-  /** Registered provider selected when the caller omits an id. */
+  /** Registered provider selected when the caller omits an id, or `auto` to follow `autoOrder`. */
   defaultProvider: Volatile<string>
+  /** Provider ids considered by automatic selection, in preference order; required while `defaultProvider` is `auto`. */
+  autoOrder: string[]
   /** Provider language hint selected when the caller omits one. */
   language: Volatile<string>
 }
@@ -3436,6 +3440,37 @@ export interface Config {
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-skill-office -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-speech-to-text-deepseek -->
+<a id="deepseek-aidsh-speech-to-text-deepseek"></a>
+
+## `@deepseek-ai/dsh-speech-to-text-deepseek`
+
+- `inject`: `speechToText`
+- `source`: [`packages/experimental/speech-to-text-deepseek/src/config.ts:7`](../packages/experimental/speech-to-text-deepseek/src/config.ts)
+
+```ts config-catalog
+/** Endpoint and service limits; requests authenticate with the DeepSeek account token released for the endpoint. */
+export interface Config {
+  /** Unique registration id; `speech-to-text` selects this exact id. */
+  providerId: string
+  /** Complete One-Shot transcription URL. */
+  endpoint: string
+  /** Permit plain HTTP to a loopback endpoint, for local service doubles. */
+  allowLoopbackHttp: boolean
+  /** Deadline for one request attempt, including its response body. */
+  timeoutMs: number
+  /** Maximum multipart request bytes the service accepts. */
+  maxRequestBytes: number
+  /** Maximum recording duration the service accepts. */
+  maxDurationSeconds: number
+  /** Maximum response body bytes read from the service. */
+  maxResponseBytes: number
+  /** Language codes the service recognizes, sent as `preferred_language`; `auto` sends none and must be listed. */
+  languages: string[]
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-speech-to-text-deepseek -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-spill-local -->
 <a id="deepseek-aidsh-spill-local"></a>

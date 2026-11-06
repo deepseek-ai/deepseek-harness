@@ -65,6 +65,8 @@ Host diagnostics use `console.error` with the `[deepseek-account]` prefix on sta
 
 inferenceOrigin defaults to `https://api.deepseek.com`. A private deployment patch may replace it with one exact HTTP(S) origin, including its port, for inference and file authentication through x-dsh-auth-token. Paths, URL credentials, queries and fragments are invalid configuration. Alternate origins require a grant issued by the configured platformOrigin; mock tokens remain excluded. Loopback grants cannot authenticate the official production API. Deployment addresses belong in private patches, not shipped configuration.
 
+`serviceOrigins` lists further exact origins of DeepSeek services that receive the account token, and defaults to `https://harness.deepseek.com` for speech recognition. Each entry follows the `inferenceOrigin` validation. The official origins `https://api.deepseek.com` and `https://harness.deepseek.com` never receive a loopback-issued grant; any other origin requires a grant issued by the configured platformOrigin. Set `serviceOrigins: []` to release tokens only to `inferenceOrigin`.
+
 At provider initialization, a valid stored grant whose issuer differs from platformOrigin is deleted locally before consumers read account state. Startup continues signed out without a remote logout request; API keys and device identity remain stored. Storage failures remain explicit, and account HTTP or response-validation failures do not delete a matching grant.
 
 <a id="understand-the-implementation"></a>

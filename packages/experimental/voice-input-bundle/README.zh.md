@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-此可选 Bundle 组合语音服务定义、本地 SenseVoice Provider、带认证的 Remote 与浏览器麦克风控件。随包配置默认禁用。
+此可选 Bundle 组合语音服务定义、DeepSeek 云端与本地 SenseVoice Provider、带认证的 Remote 与浏览器麦克风控件。随包配置默认禁用。
 
 ## 目录
 
@@ -26,6 +26,8 @@ kind: "package-bundle"
 ## 使用此包
 
 打开 Web 侧栏的插件管理页并启用带蓝色声波图标的“语音输入”。模型需要准备时，弹窗提供“前往安装”和“稍后”选项；“前往安装”打开 Bundle 详情。缓存完整时不会提示安装。在详情中选择“下载并准备”；默认折叠的当前步骤摘要可展开为完整步骤列表。下载报告真实字节，校验和加载显示等待时间。就绪后点击模型选择器与发送按钮之间的麦克风，再点击停止以插入转写文字。Bundle 详情通过 Settings 服务保存识别器和语言。禁用 Bundle 会取消当前任务；缓存资源保留在磁盘上。
+
+识别服务默认为“自动”：已登录 DeepSeek 账号时使用 DeepSeek 云端 Provider，否则使用本地 SenseVoice Provider。云端 Provider 按其 [README](../speech-to-text-deepseek/README.zh.md) 所述把录音发送到 DeepSeek 服务。
 
 -----
 

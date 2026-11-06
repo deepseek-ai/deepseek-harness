@@ -2,12 +2,15 @@
 import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
-import type {} from '@deepseek-ai/dsh-experimental-speech-to-text'
+import { SpeechTranscriptionError } from '@deepseek-ai/dsh-experimental-speech-to-text'
 import type { SpeechPreparationOptions, SpeechProviderId, SpeechSelectionPatch, Transcript } from '@deepseek-ai/dsh-experimental-speech-to-text/types'
 import type { SpeechCatalog, TranscriptionRequest } from './types.ts'
 import { validateWave } from '@deepseek-ai/dsh-experimental-speech-to-text/wave'
 
 export type * from './types.ts'
+
+/** Language tag accepted from the Client; anything else could not be forwarded safely as a request header. */
+const LOCALE_TAG = /^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{1,8}){0,3}$/
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -88,6 +91,9 @@ export default class SpeechController extends TypertRemoteService {
   @Remote
   async transcribe(request: TranscriptionRequest, signal: AbortSignal): Promise<Transcript> {
     signal.throwIfAborted()
+    if (request.locale !== undefined && !LOCALE_TAG.test(request.locale)) {
+      throw new RemoteError('gateway/bad-request', 'The client locale is not a language tag', {})
+    }
     const encoded = request.audioBase64
     if (encoded.length > Math.ceil(this.config.maxAudioBytes / 3) * 4) {
       throw new RemoteError('speech/invalid-audio', 'Audio is invalid or exceeds the configured byte limit', { reason: 'encoding-or-size' })
@@ -100,12 +106,14 @@ export default class SpeechController extends TypertRemoteService {
       const spec = this.ctx.speechToText.resolve({ audio,
         ...request.providerId === undefined ? {} : { providerId: request.providerId },
         ...request.language === undefined ? {} : { language: request.language },
+        ...request.locale === undefined ? {} : { locale: request.locale },
       })
       return await this.ctx.speechToText.transcribe(spec, signal)
     } catch (error) {
       signal.throwIfAborted()
       const reason = error instanceof Error ? error.message : String(error)
-      throw new RemoteError('speech/transcription-failed', reason, { reason })
+      throw new RemoteError('speech/transcription-failed', reason,
+        error instanceof SpeechTranscriptionError ? { reason, code: error.code } : { reason })
     }
   }
 }

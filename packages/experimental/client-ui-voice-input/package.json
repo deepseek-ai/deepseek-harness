@@ -57,7 +57,8 @@
     "@testing-library/react": "^16.3.3",
     "@deepseek-ai/dsh-api-gateway": "workspace:*",
     "@deepseek-ai/dsh-client-store": "workspace:*",
-    "@deepseek-ai/dsh-client-ui-plugin-manager": "workspace:*"
+    "@deepseek-ai/dsh-client-ui-plugin-manager": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-settings-account": "workspace:*"
   },
   "dsh": {
     "client": {

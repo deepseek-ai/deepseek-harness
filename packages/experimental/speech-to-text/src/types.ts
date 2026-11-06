@@ -17,7 +17,7 @@ export interface SpeechProviderInfo {
   readonly id: SpeechProviderId
   readonly name: string
   readonly location: 'host-local' | 'cloud'
-  /** Accepted language hints, including automatic detection when supported. */
+  /** Accepted language hints; must include `auto`, which a provider receives for any other hint it does not list. */
   readonly languages: readonly string[]
   readonly setupEstimate?: SpeechSetupEstimate
   /** Origins offered for an explicit preparation download; omitted or empty when no choice applies. */
@@ -43,9 +43,13 @@ export interface SpeechDownloadFailure {
   readonly status?: number
 }
 
+/** Why a provider refuses recordings until the user acts; automatic selection skips it. `sign-in-required`: no stored DeepSeek account. */
+export type SpeechUnavailableReason = 'sign-in-required'
+
 /** Host-owned preparation state; byte totals describe downloads, never estimated installation percentages. */
 export type SpeechPreparationState = (
   | { readonly phase: 'unprepared' | 'ready' | 'standby' | 'cancelled' }
+  | { readonly phase: 'unavailable'; readonly reason: SpeechUnavailableReason }
   | { readonly phase: 'downloading'; readonly resource: string; readonly completedBytes: number; readonly totalBytes?: number }
   | { readonly phase: 'checking' | 'loading' | 'waking' | 'cancelling'; readonly startedAt: number }
   | { readonly phase: 'failed'; readonly message: string; readonly download?: SpeechDownloadFailure }
@@ -59,17 +63,33 @@ export interface SpeechProviderView extends SpeechProviderInfo {
   readonly preparation: SpeechPreparationState
 }
 
+/** Reserved preference value selecting the first available provider of the configured automatic order. */
+export type SpeechAutomaticChoice = 'auto'
+
 /** Host-persisted default selection captured when a recording starts. */
 export interface SpeechSelection {
+  /** `auto` follows the configured order; `explicit` keeps the user's exact provider. */
+  readonly mode: 'auto' | 'explicit'
+  /** Provider that a recording started now uses. */
   readonly providerId: SpeechProviderId
+  /** Saved language hint; a provider accepting only `auto` receives `auto` instead. */
   readonly language: string
 }
 
 /** User intent updates only the preference fields explicitly changed. */
 export interface SpeechSelectionPatch {
-  readonly providerId?: SpeechProviderId
+  readonly providerId?: SpeechProviderId | SpeechAutomaticChoice
   readonly language?: string
 }
+
+/**
+ * Stable recognition failure classes that Consumers localize.
+ * `sign-in-required` needs a new sign-in; `rate-limited`, `timeout` and `service-error` allow a later retry;
+ * `service-unavailable` and `quota-exceeded`, the exhausted daily allowance, need another provider until the service
+ * recovers or the allowance resets; `invalid-audio` needs a different recording.
+ */
+export type SpeechFailureCode = 'sign-in-required' | 'rate-limited' | 'quota-exceeded'
+  | 'service-unavailable' | 'invalid-audio' | 'timeout' | 'service-error'
 
 /** One consistent provider roster and default-selection observation. */
 export interface SpeechSnapshot {
@@ -101,7 +121,10 @@ export interface SpeechPreparation {
 /** Complete audio recording and an explicit language hint. */
 export interface SpeechInput {
   readonly audio: Uint8Array
+  /** A hint the provider lists in `languages`. */
   readonly language: string
+  /** UI language of the requesting client, such as `zh` or `pt-BR`; absent for clients that send none. */
+  readonly locale?: string | undefined
 }
 
 /** Final transcription; an empty string means no speech was recognized. */
@@ -129,6 +152,8 @@ export interface SpeechRequest {
   readonly audio: Uint8Array
   readonly providerId?: SpeechProviderId
   readonly language?: string
+  /** UI language of the requesting client, forwarded to the provider unchanged. */
+  readonly locale?: string | undefined
 }
 
 /** Resolved selection pins the exact registered provider, including its lifetime. */

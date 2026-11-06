@@ -1,5 +1,5 @@
 ---
-description: "Account consumers read stored login state, start or cancel a browser login, and sign out without editing API keys. Host model consumers resolve account credentials only for the provider-configured inference origin."
+description: "Account consumers read stored login state, start or cancel a browser login, and sign out without editing API keys. Host consumers resolve account credentials only for the origins the provider allows: its inference origin and its service origins."
 kind: "package-reference"
 ---
 
@@ -19,7 +19,7 @@ getUnnotifiedBonuses returns the granted bonuses Platform has not yet recorded a
 
 ## Summary
 
-Account consumers read stored login state, start or cancel a browser login, and sign out without editing API keys. Host model consumers resolve account credentials only for the provider-configured inference origin.
+Account consumers read stored login state, start or cancel a browser login, and sign out without editing API keys. Host consumers resolve account credentials only for the origins the provider allows: its inference origin and its service origins.
 
 `SignInErrorCode` distinguishes `no-response` (fetch returned no Response) from HTTP and response-validation failures so clients can offer network troubleshooting.
 
