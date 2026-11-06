@@ -4,12 +4,11 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { AgentClosedError } from '@deepseek-ai/dsh-agent'
 import { CommandDefinitionId } from '@deepseek-ai/dsh-commands/brand'
 import type { CommandInvocation, CommandResult } from '@deepseek-ai/dsh-commands'
 import { GoalError } from '@deepseek-ai/dsh-goal'
 import type { GoalPhase, GoalRef, GoalView } from '@deepseek-ai/dsh-goal'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { HarnessError, createUserMessage } from '@deepseek-ai/dsh-llm'
 
 export const name = 'command-goal'
 export const inject = ['commands', 'goals']
@@ -121,7 +120,7 @@ function finishObjective(invocation: CommandInvocation, title: string, goal: Goa
         source: { kind: 'user' },
       }))
     } catch (error: unknown) {
-      if (!(error instanceof AgentClosedError)) throw error
+      if (!(error instanceof HarnessError) || error.code !== 'AGENT_CLOSED') throw error
       return {
         kind: 'error',
         text: 'Goal saved. The agent is closing, so the attachments were not submitted.',
@@ -140,7 +139,6 @@ function executeGoalCommand(ctx: Context, invocation: CommandInvocation): Comman
       text: 'Attachments only accompany a goal objective: /goal <objective> or /goal edit <objective>.',
     }
   }
-  if (command.kind === 'create' || command.kind === 'edit') invocation.agent.assertOpen?.()
   try {
     const current = ctx.goals.get(invocation.agent)
     switch (command.kind) {

@@ -75,13 +75,6 @@ interface Agent {
   readonly ctx: Context
 
   /**
-   * Check the driver's admission before a compound operation writes state.
-   * Drivers without an admission check leave this method absent.
-   * @throws AgentClosedError once the driver stops accepting work.
-   */
-  assertOpen?(): void
-
-  /**
    * Clear queued and steering work — unless `keepInbox` — and abort the active
    * turn or between-turn task. The first cause wins for that activity. With no
    * active activity, cancellation is a no-op and does not arm later work.
