@@ -580,8 +580,10 @@ describe('job_list', () => {
   it('is the only parallel-safe job tool', async () => {
     const { ctx } = await setup()
     expect(ctx.tools.get('job_list')?.isConcurrencySafe?.({})).toBe(true)
-    expect(ctx.tools.get('job_output')?.isConcurrencySafe).toBeUndefined()
-    expect(ctx.tools.get('job_kill')?.isConcurrencySafe).toBeUndefined()
+    for (const name of ['job_output', 'job_kill']) {
+      expect(ctx.tools.get(name)).toBeDefined()
+      expect(ctx.tools.get(name)).not.toHaveProperty('isConcurrencySafe')
+    }
   })
 
   it('lists caller-visible jobs and renders the empty case', async () => {

@@ -126,8 +126,10 @@ describe('Schedule model tools', () => {
     const parallel = (name: string, args: Record<string, unknown>) => test.ctx.tools.get(name, test.agent)?.isConcurrencySafe?.(args)
     expect(parallel('schedule_list', {})).toBe(true)
     expect(parallel('schedule_view', { id: 'task' })).toBe(true)
-    expect(test.ctx.tools.get('schedule_create', test.agent)?.isConcurrencySafe).toBeUndefined()
-    expect(test.ctx.tools.get('schedule_edit', test.agent)?.isConcurrencySafe).toBeUndefined()
+    for (const name of ['schedule_create', 'schedule_edit']) {
+      expect(test.ctx.tools.get(name, test.agent)).toBeDefined()
+      expect(test.ctx.tools.get(name, test.agent)).not.toHaveProperty('isConcurrencySafe')
+    }
     const unrelated = agentFor(test.ctx, 'unrelated')
     for (const name of TOOL_NAMES) {
       expect(test.ctx.tools.get(name)).toBeUndefined()
