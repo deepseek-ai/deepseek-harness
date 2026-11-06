@@ -182,7 +182,16 @@ describe('the shipped dsh-doc skill', () => {
     }
   })
 
-  // The commands target bash; Windows Desktop is directed to the file-read tool instead.
+  it('locates checkout documentation from the shipped skill directory', () => {
+    const root = resolve(realpathSync(skill), '../../../../..')
+    expect(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))).toMatchObject({ name: '@deepseek-ai/dsh-root' })
+    expect(JSON.parse(readFileSync(join(root, 'apps/cli/package.json'), 'utf8'))).toMatchObject({ name: '@deepseek-ai/dsh' })
+    expect(statSync(join(root, 'pnpm-workspace.yaml')).isFile()).toBe(true)
+    expect(statSync(join(root, 'docs/user/index.md')).isFile()).toBe(true)
+    expect(statSync(join(root, 'packages/README.md')).isFile()).toBe(true)
+  })
+
+  // The POSIX example runs through bash; the PowerShell form has its own test below.
   it.skipIf(process.platform === 'win32')('documents shell commands that locate a package and list upgrade index sections', (test) => {
     const install = realpathSync(mkdtempSync(join(tmpdir(), 'dsh-doc-commands-')))
     test.onTestFinished(() => { rmSync(install, { recursive: true, force: true }) })
@@ -191,14 +200,24 @@ describe('the shipped dsh-doc skill', () => {
     writeFileSync(join(pkg, 'package.json'), '{"name":"@deepseek-ai/dsh-tool-bash"}\n')
     mkdirSync(join(install, 'docs', 'upgrade-guide'), { recursive: true })
     writeFileSync(join(install, 'docs', 'upgrade-guide', 'README.md'), '# Upgrade guides\r\n\r\n## v2.0.0\r\n\r\n| row |\n## v1.0.0\n')
+    const cwd = join(install, 'unrelated-workspace')
+    const decoy = join(cwd, 'node_modules', '@deepseek-ai', 'dsh-tool-bash')
+    mkdirSync(decoy, { recursive: true })
+    writeFileSync(join(decoy, 'package.json'), '{"name":"@deepseek-ai/dsh-tool-bash"}\n')
+    mkdirSync(join(pkg, 'src'))
+    writeFileSync(join(pkg, 'README.md'), '# Installed package\n')
+    writeFileSync(join(pkg, 'src', 'index.ts'), 'export const installed = true\n')
     const run = (file: string) => {
       const command = /```sh\n\s*(.+)\n\s*```/u.exec(readFileSync(join(skill, 'references', file), 'utf8'))?.[1]
       expect(command, file).toBeDefined()
       return execFileSync('bash', ['-c', command ?? ''], {
-        encoding: 'utf8', env: { ...process.env, DSH_INSTALL_DIR: install, DSH_NODE_EXECUTABLE: process.execPath },
+        cwd, encoding: 'utf8', env: { ...process.env, DSH_PROFILE: 'web', DSH_INSTALL_DIR: install, DSH_NODE_EXECUTABLE: process.execPath },
       })
     }
-    expect(run('locate-docs.md').trim()).toBe(pkg)
+    const located = run('locate-docs.md').trim()
+    expect(located).toBe(pkg)
+    expect(readFileSync(join(located, 'README.md'), 'utf8')).toBe('# Installed package\n')
+    expect(readFileSync(join(located, 'src/index.ts'), 'utf8')).toBe('export const installed = true\n')
     expect(run('upgrading.md')).toBe('3 ## v2.0.0\n6 ## v1.0.0\n')
   })
 
