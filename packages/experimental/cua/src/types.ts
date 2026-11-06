@@ -96,7 +96,7 @@ export type CuaScrollOptions = Pick<CuaParameters<'scroll'>, 'x' | 'y' | 'deltaL
  */
 export interface CuaSurface {
   /**
-   * Request that the provider show the selected application or window.
+   * Unhide the app and restore a minimized selected, focused, main or sole window without requesting activation.
    * @returns Dispatch evidence, the selected window when available, and sampled foreground change; read fresh state before input.
    */
   show(): Promise<CuaShowResult>
@@ -191,8 +191,9 @@ export interface CuaWindow extends CuaSurface {
    */
   getScreenshot(options?: CuaObservationOptions): Promise<CuaScreenshot>
   /**
-   * Request hover at an element or a point in this window. The provider reports the route used and whether
-   * the visible system pointer moved. Observe the resulting UI after its hover delay.
+   * Hover over an element or a point without pressing a button. The provider reports the route and whether the system pointer moved.
+   * Returning and subsequent observations do not restore the previous pointer position.
+   * Other input and application changes can interrupt hover; observe before continuing.
    * @param target - current element id or screenshot-local [x,y].
    * @param options - coordinate mode; applies only to [x,y].
    * @returns dispatch evidence and the selected route; observe the resulting UI after its hover delay.
@@ -270,9 +271,9 @@ export interface CuaApi {
    */
   getState(options?: CuaObservationOptions): Promise<{ apps: CuaAppInfo[]; browsers: [] }>
   /**
-   * Select an app and obtain consent. Providers with app-level accessibility silently read the initial tree.
-   * @param selector - A selector accepted by the provider; ambiguous matches reject.
-   * @returns An application handle tied to this process lifetime.
+   * Select an app, obtain consent, launch it in the background if necessary, and silently retain initial AX state.
+   * @param selector - Exact name, bundle ID, absolute application path or running PID string; ambiguous names reject.
+   * @returns An application handle tied to this process lifetime; its initial tree read becomes the current snapshot.
    */
   getApp(selector: string): Promise<CuaApp>
 }

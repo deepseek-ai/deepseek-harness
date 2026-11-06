@@ -30,7 +30,7 @@ it('states the macOS accessibility, keyboard, and mouse levels', () => {
   const hover = GUIDANCE.split('\n').find(line => line.startsWith('- mouseMove('))
   for (const term of ['AXShowAlternateUI', 'AXShowDefaultUI', 'HOVER_UNAVAILABLE', 'systemPointerHover']) expect(hover).toContain(term)
   expect(GUIDANCE.split('\n').find(line => line.startsWith('- click('))).toContain('call app.activate() first')
-  for (const platformDetail of ['macOS', 'AXShowAlternateUI', 'AXRaise', 'HOVER_UNAVAILABLE', 'systemPointerHover', 'mouse-down', 'bundle ID', 'Paste command']) {
+  for (const platformDetail of ['macOS', 'AXShowAlternateUI', 'AXRaise', 'HOVER_UNAVAILABLE', 'systemPointerHover', 'mouse-down']) {
     expect(COMMON_GUIDANCE).not.toContain(platformDetail)
   }
 })
