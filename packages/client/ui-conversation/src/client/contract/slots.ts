@@ -443,9 +443,12 @@ export interface ConversationLayout {
    * Inline space in CSS px between the transcript column's end edge and the
    * body's end edge. Zero before the first measurement, while the main body
    * shows another Session, and while the active View does not follow the
-   * transcript column (every View other than Chat).
+   * transcript column. Only the shipped Chat View (`chat`) follows it; a View
+   * registered under another id, and any View that fills the body, reads zero.
    */
   readonly endGutter: number
+  /** Whether the main Conversation body currently shows the Session. */
+  readonly shown: boolean
 }
 
 /** The header corner's occupant derives its state from standard Session props. */
@@ -500,9 +503,10 @@ export interface ConversationInjected {
   /**
    * Record the end gutter the main body measured for this occurrence's Session;
    * no effect without a Session.
-   * @param endGutter - space between the transcript column's end edge and the body's end edge, in CSS px.
+   * @param endGutter - space between the transcript column's end edge and the body's end edge, in CSS px;
+   * null when the body stops showing the Session.
    */
-  reportEndGutter: (endGutter: number) => void
+  reportEndGutter: (endGutter: number | null) => void
 }
 
 /** Business callbacks injected into the strict Session body. */
@@ -696,11 +700,12 @@ export interface ConversationWidthControlsInputProps {
   /** Current body phase; handles render only for an active transcript. */
   phase: ConversationContentInputProps['phase']
   /**
-   * Receive the end gutter after each measurement and drag frame, and zero when
-   * the controls unmount.
-   * @param endGutter - space between the transcript column's end edge and the body's end edge, in CSS px.
+   * Receive the end gutter after each measurement and drag frame, and null when
+   * the controls unmount or a new callback replaces this one.
+   * @param endGutter - space between the transcript column's end edge and the body's end edge, in CSS px;
+   * null when the body stops showing the Session.
    */
-  onEndGutter: (endGutter: number) => void
+  onEndGutter: (endGutter: number | null) => void
 }
 
 /** Full props of the reusable Conversation Factory definition. */

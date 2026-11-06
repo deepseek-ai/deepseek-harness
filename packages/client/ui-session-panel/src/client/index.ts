@@ -9,6 +9,7 @@ import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
+import type {} from '@deepseek-ai/dsh-client-connection/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { EnvironmentSection } from './EnvironmentSection.tsx'
@@ -44,7 +45,8 @@ export const inject = ['slots', 'locale', 'uiConversation', 'remote']
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'ui-session-panel: dictionaries')
   const t = ctx.locale.bind(NS)
-  const state = new SessionPanelState()
+  const state = new SessionPanelState(sessionId => ctx.uiConversation.layouts.source(sessionId))
+  ctx.effect(() => () => { state.dispose() }, 'ui-session-panel: overlay layout')
   const sections = sectionSource(ctx)
   const host: ObservableSnapshot<RemoteHostFacts> = {
     getSnapshot: () => ctx.remote.$host,

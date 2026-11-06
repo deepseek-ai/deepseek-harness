@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import type { ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
+import { useModalLayer } from '@deepseek-ai/dsh-client-ui-primitives'
 import { contextMenuHook, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ConversationLayout } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -18,8 +19,8 @@ import { en, zh } from '../src/client/locales.ts'
 
 const SID = 'session-1' as SessionId
 const t = makeTranslate(zh) as SessionPanelToggleProps['t']
-const WIDE: ConversationLayout = { endGutter: DOCK_MIN_GUTTER }
-const NARROW: ConversationLayout = { endGutter: DOCK_MIN_GUTTER - 1 }
+const WIDE: ConversationLayout = { endGutter: DOCK_MIN_GUTTER, shown: true }
+const NARROW: ConversationLayout = { endGutter: DOCK_MIN_GUTTER - 1, shown: true }
 const DOCKED: SessionPanelVisibility = { pinned: true, overlay: null }
 
 function selectorOf<T>(value: T) {
@@ -202,6 +203,62 @@ describe('SessionPanel', () => {
     event.preventDefault()
     document.dispatchEvent(event)
     expect(overlay.closeOverlay).not.toHaveBeenCalled()
+    // A modal opened over the overlay registers its Escape after the panel's, so the panel sees it first.
+    function Modal() {
+      const dialog = useRef<HTMLDivElement>(null)
+      useModalLayer(dialog, true, () => {})
+      return <div ref={dialog} role="dialog" aria-modal="true" />
+    }
+    const modal = render(<Modal />)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(overlay.closeOverlay).not.toHaveBeenCalled()
+    modal.unmount()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(overlay.closeOverlay).toHaveBeenCalledWith(SID)
+  })
+
+  it('leaves Escape to an input method composing text, including the key that ends the composition', () => {
+    const { props, closeOverlay } = panelProps(NARROW, { pinned: true, overlay: SID })
+    render(<SessionPanel {...props} />)
+    fireEvent(document, new Event('compositionstart'))
+    fireEvent.keyDown(document, { key: 'Escape', isComposing: true })
+    fireEvent(document, new Event('compositionend'))
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(closeOverlay).not.toHaveBeenCalled()
+    fireEvent.keyUp(document, { key: 'Escape' })
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(closeOverlay).toHaveBeenCalledWith(SID)
+  })
+
+  it('hands focus to the toggle when the panel hides with the keyboard inside it', () => {
+    const toggle = document.createElement('button')
+    toggle.id = `dsh-session-panel-toggle-${SID}`
+    const outside = document.createElement('button')
+    document.body.append(toggle, outside)
+    try {
+      const docked = panelProps(WIDE, DOCKED)
+      const view = render(<SessionPanel {...docked.props} />)
+      const control = screen.getByRole('button', { name: '刷新' })
+      control.focus()
+      // Moves within the panel, and blurs that name no next target, keep the keyboard inside.
+      fireEvent.focusOut(control, { relatedTarget: screen.getByRole('complementary') })
+      fireEvent.focusOut(control, { relatedTarget: null })
+      view.rerender(<SessionPanel {...panelProps(NARROW, DOCKED).props} />)
+      expect(document.activeElement).toBe(toggle)
+      // Focus that already left the panel stays where it went.
+      view.rerender(<SessionPanel {...docked.props} />)
+      screen.getByRole('button', { name: '刷新' }).focus()
+      outside.focus()
+      view.rerender(<SessionPanel {...panelProps(NARROW, DOCKED).props} />)
+      expect(document.activeElement).toBe(outside)
+      // A panel that hides without having held focus moves nothing.
+      view.rerender(<SessionPanel {...docked.props} />)
+      view.rerender(<SessionPanel {...panelProps(NARROW, DOCKED).props} />)
+      expect(document.activeElement).toBe(outside)
+    } finally {
+      toggle.remove()
+      outside.remove()
+    }
   })
 })
 

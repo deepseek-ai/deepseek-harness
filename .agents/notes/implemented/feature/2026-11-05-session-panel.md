@@ -18,7 +18,7 @@ The panel docks only while the gutter between the transcript column and the body
 
 The toggle and the panel read that source and one plugin-owned visibility state and decide the presentation with the same pure function. The toggle therefore reports `aria-expanded` truthfully and knows whether a press flips docking or opens the overlay, which a CSS-only container query cannot tell an element outside the body.
 
-Docking follows one persisted preference shared by every Session and defaults to on. Without room, a press opens a transient overlay for that Session above the transcript and the composer stack; it never changes the preference, and docking from a wide gutter closes it. Hiding automatically and overlaying on request keeps the transcript uncovered without making the facts unreachable on laptop widths.
+Docking follows one persisted preference shared by every Session and defaults to on. Without room, a press opens a transient overlay for that Session above the transcript and the composer stack; it never changes the preference, and it closes once its gutter can dock the panel or the main body shows another Session, so it never reappears on its own. The panel state follows the open overlay's layout source, which the Conversation shell marks as no longer shown when the main body leaves the Session, instead of a component cleanup that React's double mount would also run. Hiding automatically and overlaying on request keeps the transcript uncovered without making the facts unreachable on laptop widths.
 
 ### Sections are registrations; the panel draws titles
 
@@ -26,9 +26,9 @@ Each section is one list registration with `id`, `order`, and a required `label`
 
 Rows from every contributor use the `PanelRow` primitive so icon, text, and trailing areas align across packages; a feature package cannot share its own row component with another feature package.
 
-### The turn rail moves to the start edge
+### The turn rail sits at the start edge
 
-The turn rail used the end edge of the scrollport, which the docked panel now occupies. It moves to the start edge with its marks, focus ring, and preview mirrored; its existing 900px hiding rule still guarantees room beside the start-side width handle.
+The turn rail sits at the scrollport's start edge with its marks, focus ring, and preview mirrored, leaving the end gutter to the docked panel; its 900px hiding rule guarantees room beside the start-side width handle.
 
 ## Alternatives considered
 
