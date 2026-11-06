@@ -1051,7 +1051,7 @@ export interface CotTranslationPreferences {
 ## `@deepseek-ai/dsh-experimental-client-ui-forge`
 
 - `inject`: `forge` · `forgeSession` · `sessionProjections` · `workingDirectory` · `fs` · `subprocess` · `sandbox` · `sandboxPolicy` · `agents`
-- `source`: [`packages/experimental/client-ui-forge/src/types.ts:345`](../packages/experimental/client-ui-forge/src/types.ts)
+- `source`: [`packages/experimental/client-ui-forge/src/types.ts:373`](../packages/experimental/client-ui-forge/src/types.ts)
 
 ```ts config-catalog
 /** Host settings of the forge panel Remote. */
@@ -1079,6 +1079,15 @@ export interface Config {
   maxUntrackedFiles?: number
   /** Most UTF-8 bytes of change request diffs kept in memory for later reads at the same head commit and base branch. */
   maxCachedDiffBytes?: number
+  /** Most commits of the `branch` scope listed, oldest first. */
+  maxCommits?: number
+  /**
+   * Globs of tests, snapshots, locale dictionaries, and lockfiles, matched against repository-relative paths with
+   * dot files included; their files form the `test` layer, which the changes view can hide.
+   */
+  testPaths?: string[]
+  /** Globs of package manifests, configuration, and type declarations, matched like `testPaths`; their files form the `interface` layer. */
+  interfacePaths?: string[]
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-client-ui-forge -->
@@ -1144,7 +1153,7 @@ export type SourceSigning = 'ad-hoc' | {
 
 ## `@deepseek-ai/dsh-experimental-forge`
 
-- `source`: [`packages/experimental/forge/src/types.ts:232`](../packages/experimental/forge/src/types.ts)
+- `source`: [`packages/experimental/forge/src/types.ts:266`](../packages/experimental/forge/src/types.ts)
 
 ```ts config-catalog
 /** Poll cadence and fetch deadline for watched change requests. */
@@ -1180,6 +1189,8 @@ export interface Config {
   timeoutMs?: number
   /** Maximum captured bytes per `gh` output stream and combined JSON bytes of one complete check read. */
   maxOutputBytes?: number
+  /** Most commits one pull request commit listing returns; GitHub lists at most 250 commits of a pull request. */
+  maxCommits?: number
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-forge-github -->
