@@ -109,31 +109,46 @@ export function registerContextMenus(
         } },
     ]
   }
-  // The verified Host path of each open file menu. Association answers re-resolve the menu from it
-  // synchronously, so the registry keeps the other rows while the application row changes in place.
-  // This relies on the registry subscribing once per occurrence before its first resolution, and on a
-  // synchronous resolution replacing rows without clearing them first.
-  const verified = new WeakMap<ContextMenuTargetMap['file'], { readonly absolutePath: string | undefined } | null>()
+  // The Host path from each file target's latest successful stat, shared by menus open on one target object at once.
+  // A stat clears it while running; answers arriving meanwhile need no re-resolution, as that stat's resolution reads
+  // the newest answers.
+  const verified = new WeakMap<ContextMenuTargetMap['file'], string>()
+  // The target whose changed association answer is being applied; only that re-resolution reuses the verified path,
+  // so every opening runs its own stat. The in-place update relies on the registry re-resolving synchronously from
+  // the notification, without which the menu stats again, and on a synchronous resolution replacing rows without
+  // clearing them first, without which the rows flicker.
+  let answering: ContextMenuTargetMap['file'] | undefined
   ctx.effect(() => ctx.contextMenus.register({
     id: 'open-in-app.file', target: 'file', order: 100,
-    observe: (target) => {
-      verified.set(target, null)
-      // The first resolution reads the newest answers once verified; answers arriving earlier need no re-resolution.
-      return [{
-        getSnapshot: paths.associations.getSnapshot.bind(paths.associations),
-        subscribe: (listener: () => void) => paths.associations.subscribe(() => { if (verified.get(target)) listener() }),
-      }]
-    },
+    observe: target => [{
+      getSnapshot: paths.associations.getSnapshot.bind(paths.associations),
+      subscribe: (listener: () => void) => {
+        // Answers for other file types leave this menu unchanged.
+        let shown: ReturnType<typeof paths.cachedApplications>
+        return paths.associations.subscribe(() => {
+          const absolutePath = verified.get(target)
+          if (absolutePath === undefined) return
+          const applications = paths.cachedApplications(absolutePath)
+          if (applications === shown) return
+          shown = applications
+          answering = target
+          try { listener() } finally { answering = undefined }
+        })
+      },
+    }],
     resolve: (target, signal) => {
-      const settled = verified.get(target)
-      if (settled) return fileMenu(target, settled.absolutePath)
+      const verifiedPath = answering === target ? verified.get(target) : undefined
+      if (verifiedPath !== undefined) return fileMenu(target, verifiedPath)
+      verified.delete(target)
       return (async () => {
         await paths.load()
         const absolutePath = await resolvePath(target.sessionId, target.path, signal)
         signal.throwIfAborted()
-        verified.set(target, { absolutePath })
-        // A cached answer shows at once; every opening re-queries so a changed association reaches this menu.
-        if (absolutePath !== undefined && paths.desktop.getSnapshot() === true) paths.refreshApplications(absolutePath)
+        if (absolutePath !== undefined) {
+          verified.set(target, absolutePath)
+          // A cached answer shows at once; every opening re-queries so a changed association reaches this menu.
+          if (paths.desktop.getSnapshot() === true) paths.refreshApplications(absolutePath)
+        }
         return fileMenu(target, absolutePath)
       })()
     },

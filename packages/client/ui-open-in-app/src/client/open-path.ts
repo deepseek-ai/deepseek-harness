@@ -20,12 +20,16 @@ function associationKey(path: string): string {
   return dot > 0 && dot < name.length - 1 ? `extension:${name.slice(dot)}` : `path:${path}`
 }
 
+/** The compared application fields; a field added to the type fails to compile until it is listed here. */
+const APPLICATION_FIELDS = Object.keys({
+  id: true, name: true, default: true, icon: true,
+} satisfies Record<keyof SessionWorkspacePathApplication, true>) as readonly (keyof SessionWorkspacePathApplication)[]
+
 /** Equal answers keep the published snapshot, so observers re-resolve only when an answer changes. */
 function sameApplications(left: Applications, right: Applications): boolean {
   return left.length === right.length && left.every((app, index) => {
     const other = right[index]
-    return other !== undefined && app.id === other.id && app.name === other.name
-      && app.default === other.default && app.icon === other.icon
+    return other !== undefined && APPLICATION_FIELDS.every(field => app[field] === other[field])
   })
 }
 
@@ -58,7 +62,7 @@ export class OpenInAppPathController {
   readonly associations: ObservableSnapshot<ReadonlyMap<string, Applications>> = this.answers
   private loading: Promise<void> | undefined
   private readonly lifetime = new AbortController()
-  /** The background refresh in flight; a newer refresh cancels it. */
+  /** The latest background refresh; a newer refresh aborts it. */
   private refresh: AbortController | undefined
   /** Start order of the query whose answer each class holds; an earlier query never replaces a later one. */
   private readonly answeredBy = new Map<string, number>()

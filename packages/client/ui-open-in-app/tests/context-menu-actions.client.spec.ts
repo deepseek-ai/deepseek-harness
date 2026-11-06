@@ -209,6 +209,28 @@ it('verifies a file menu once when answers for other files arrive during verific
   menu.dispose()
 })
 
+it('verifies every opening of a file target, whatever order the registry observes and resolves in', async () => {
+  const register = vi.spyOn(MenuRegistry.prototype, 'register')
+  const h = await boot()
+  const contribution = register.mock.calls.map(([input]) => input).find(input => input.id === 'open-in-app.file')!
+  const target = { sessionId, path: 'notes.txt' }
+  // Resolving without observing first, as a registry that subscribes after its first resolution would.
+  await contribution.resolve(target, new AbortController().signal)
+  await contribution.resolve(target, new AbortController().signal)
+  expect(h.remote.workspaceFiles.stat).toHaveBeenCalledTimes(2)
+})
+
+it('re-resolves an open file menu only when its own file type answers differently', async () => {
+  const h = await boot()
+  const menu = await h.resolve({ kind: 'file', value: { sessionId, path: 'notes.txt' } })
+  await vi.waitFor(() => { expect(menu.source.getSnapshot().find(item => item.id === 'open-in-app.file/open')?.label).toBe('open.title') })
+  const shown = menu.source.getSnapshot()
+  await h.paths.applications('/workspace/other.md', new AbortController().signal)
+  expect(h.paths.cachedApplications('/workspace/other.md')).toHaveLength(1)
+  expect(menu.source.getSnapshot()).toBe(shown)
+  menu.dispose()
+})
+
 it('keeps copy-path available on failed metadata and reports native action failures', async () => {
   const h = await boot()
   const file = { kind: 'file', value: { sessionId, path: 'file.svg' } } as const
