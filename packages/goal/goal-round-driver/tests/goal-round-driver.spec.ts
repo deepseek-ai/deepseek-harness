@@ -738,7 +738,7 @@ describe('same-session goal driving', () => {
     await admission.promise
 
     expect(test.ctx.goals.get(test.agent)).toMatchObject({ phase: 'active', roundsStarted: 0 })
-    expect(test.agent.session.snapshotEvents().some(event => event.type === 'goal/blocked')).toBe(false)
+    expect(test.agent.session.snapshotEvents().some(event => event.type === 'goal/change' && event.data.operation === 'block')).toBe(false)
   })
 
   it('blocks the goal when a custom agent rejects the otherwise valid follow-up', async () => {
