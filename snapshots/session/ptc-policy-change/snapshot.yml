@@ -6,6 +6,7 @@ recording: authored
 header:
   class: ptc-policy-change
   pin: true
+  toolSchemasSource: ptc-turn
 replay:
   override: true
 permission: workspace-write
