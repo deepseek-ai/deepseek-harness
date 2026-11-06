@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url'
 import * as yaml from 'js-yaml'
 import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
 import { codePointLength } from '@deepseek-ai/dsh-compaction-tool-result-pruner'
-import { languageChain, localFiles, readPackageDocument } from '@deepseek-ai/dsh-plugin-detail'
+import { detailImage, languageChain, localFiles, readPackageDocument } from '@deepseek-ai/dsh-plugin-detail'
 import SkillRegistry, { renderSkillContent } from '@deepseek-ai/dsh-skill'
 import * as SkillFileSystem from '@deepseek-ai/dsh-skill-filesystem'
 import { describe, expect, it, type TestContext } from 'vitest'
@@ -162,13 +162,31 @@ describe('the shipped dsh-doc skill', () => {
     } finally { window.close() }
   })
 
-  it.for(readdirSync(join(skills, 'dsh-doc', 'templates')))('shows the %s template detail document on its bundle page', async (name) => {
+  it.for(readdirSync(join(skills, 'dsh-doc', 'templates')))('shows one packaged SVG in the %s template detail document', async (name, test) => {
     const dir = join(templates, name)
+    const files = localFiles(dir, '1.0.0')
     const locale = JSON.parse(readFileSync(join(dir, 'locale', 'en.json'), 'utf8')) as { meta: { detail: string } }
     for (const file of readdirSync(join(dir, 'locale'))) {
-      const document = await readPackageDocument(localFiles(dir, '1.0.0'), '', languageChain(file.replace(/\.json$/u, '')), TEST_DOCUMENT_MAX_BYTES, AbortSignal.timeout(10_000))
+      const document = await readPackageDocument(files, '', languageChain(file.replace(/\.json$/u, '')), TEST_DOCUMENT_MAX_BYTES, AbortSignal.timeout(10_000))
       expect(document, file).toMatchObject({ origin: 'locale', path: locale.meta.detail })
-      expect(document?.markdown, file).toMatch(/\n## How to use\n[\s\S]*\n## Good to know\n/u)
+      expect(document?.markdown, file).toMatch(/^!\[[^\]\r\n]+\]\(preview\.svg\)\n$/u)
+    }
+    const image = detailImage(locale.meta.detail, 'preview.svg')
+    expect(image).toEqual({ path: 'docs/preview.svg', mediaType: 'image/svg+xml' })
+    const bytes = await files.read(image!.path, TEST_DOCUMENT_MAX_BYTES, AbortSignal.timeout(10_000))
+    expect(bytes).toBeDefined()
+    const { window } = new JSDOM()
+    test.onTestFinished(() => { window.close() })
+    const document = new window.DOMParser().parseFromString(new TextDecoder().decode(bytes), 'image/svg+xml')
+    expect(document.querySelector('parsererror')).toBeNull()
+    const svg = document.documentElement
+    expect(svg.localName).toBe('svg')
+    expect(svg.getAttribute('width')).toBe('640')
+    expect(svg.getAttribute('height')).toBe('300')
+    expect(svg.getAttribute('viewBox')).toBe('0 0 640 300')
+    expect(svg.querySelector('script, style, text, foreignObject, image, animate, animateTransform')).toBeNull()
+    for (const node of [svg, ...svg.querySelectorAll('*')]) {
+      expect([...node.attributes].some(attribute => /^on|href$/iu.test(attribute.name))).toBe(false)
     }
   })
 
