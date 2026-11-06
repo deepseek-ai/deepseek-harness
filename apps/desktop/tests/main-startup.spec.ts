@@ -2259,12 +2259,16 @@ describe('desktop main startup', () => {
     const action = invoke(DESKTOP_IPC.updatesOpen, 'app')
     await started.promise
     const repeated = invoke(DESKTOP_IPC.updatesOpen, 'app')
-    expect(harness.dialog.showMessageBox).not.toHaveBeenCalled()
+    await repeated
+    expect(harness.dialog.showMessageBox).toHaveBeenCalledWith(expect.objectContaining({
+      message: en.updateDownloadInProgress, detail: en.updateDownloadDetail,
+    }))
+    harness.dialog.showMessageBox.mockClear()
     const checks = harness.updateCheck.mock.calls.length
     const check = applicationMenuItems().find(item => item.label === en.checkUpdatesMenu)!.click as () => void
     check()
     await vi.waitFor(() => { expect(harness.dialog.showMessageBox).toHaveBeenCalledWith(expect.objectContaining({
-      message: en.updateDownloadInProgress, detail: en.updateDetail, buttons: [en.updateClose],
+      message: en.updateDownloadInProgress, detail: en.updateDownloadDetail, buttons: [en.updateClose],
     })) })
     expect(harness.updateCheck).toHaveBeenCalledTimes(checks)
     harness.shellDialog.isOpen = true
@@ -2289,7 +2293,7 @@ describe('desktop main startup', () => {
     check()
     await vi.waitFor(() => { expect(harness.dialog.showMessageBox).toHaveBeenCalledWith(expect.objectContaining({
       message: phase === 'downloading' ? en.updateDownloadInProgress : en.updateVerifying,
-      detail: en.updateDetail, buttons: [en.updateClose], cancelId: 0,
+      detail: phase === 'downloading' ? en.updateDownloadDetail : en.updateDetail, buttons: [en.updateClose], cancelId: 0,
     })) })
     expect(harness.updateCheck).toHaveBeenCalledTimes(checks)
     expect(harness.updateDownload).not.toHaveBeenCalled()
