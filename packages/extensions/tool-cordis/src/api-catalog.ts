@@ -942,7 +942,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: '@Remote async systemStatus(): Promise<CuaSystemPermissionState>',
         description: 'Inspect system privileges independently of application decisions and icons.',
         parameters: [],
-        returns: 'Fresh native preflight and launch metadata.',
+        returns: 'Platform-tagged access observations and native process metadata.',
       },
       {
         signature: '@Remote async applicationIcons(): Promise<Record<string, string>>',
@@ -6332,7 +6332,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CuaSystemPermissionState',
-    declaration: 'export interface CuaSystemPermissionState {\n    accessibility: boolean;\n    screenRecording: boolean;\n    helper: CuaPermissionProcess;\n    parent: CuaPermissionProcess;\n    launchApplication?: {\n        name: string;\n        path: string;\n        icon?: string | undefined;\n    } | undefined;\n}',
+    declaration: 'export type CuaSystemPermissionState = {\n    platform: \'darwin\';\n    accessibility: boolean;\n    screenRecording: boolean;\n    helper: CuaPermissionProcess;\n    parent: CuaPermissionProcess;\n    launchApplication?: {\n        name: string;\n        path: string;\n        icon?: string | undefined;\n    } | undefined;\n} | {\n    platform: \'win32\';\n    sessionLocked: boolean | null;\n    captureAvailable: boolean;\n    elevated: boolean;\n    helper: CuaPermissionProcess;\n};',
   },
   {
     name: 'DailyInput',

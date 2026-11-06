@@ -16,8 +16,9 @@ import { NativeClient, NativeError, type NativeClientConfig, type NativeChannelF
 import { CuaPermissionStore } from './permission-store.ts'
 import { ApplicationAuthorizationResult, installCuaAccess } from './access.ts'
 import type { CuaApplicationGrant, CuaApplicationId, CuaSystemPermission } from './access-types.ts'
-import type { CuaAppHandle, CuaOperation } from './types.ts'
+import type { CuaAppHandle, CuaOperation, CuaStartupCapabilities } from './types.ts'
 import { ApplicationIcon, AppResult, NativeScreenshotResult, Request, ScreenshotResult, StateResult, WindowsResult } from './protocol.ts'
+import { CuaConfigFields } from './config.ts'
 import { CuaCoordinates } from './coordinates.ts'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
@@ -29,6 +30,7 @@ import type {} from '@deepseek-ai/dsh-ptc-runtime'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 
 export { CuaAccess } from './access.ts'
+export type { CuaStartupCapabilities } from './types.ts'
 
 /** Native executable and per-operation resource bounds. */
 export interface CuaConfig {
@@ -77,32 +79,8 @@ export interface CuaConfig {
   maxDepth: number
 }
 
-/** Validated host configuration; no driver is downloaded at runtime. */
-export const CuaConfig = Schema.object({
-  agentPreset: Schema.union([Schema.string().min(1), Schema.const(false)]).default('ptc'),
-  allowedApps: Schema.array(Schema.object({
-    id: Schema.string().pattern(/^[a-f0-9]{64}$/).required(),
-    name: Schema.string().required(), executablePath: Schema.string().min(1),
-  })).default([]),
-  helperPath: Schema.string(),
-  buildTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(300_000),
-  timeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(30_000),
-  connectTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(5000),
-  screenshotTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(5000),
-  axTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(3000),
-  maxAppMatches: Schema.number().step(1).min(1).max(1000).default(20),
-  maxClipboardBytes: Schema.number().step(1).min(1024).default(32 * 1024 * 1024),
-  pasteReadTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(1000),
-  maxRequestBytes: Schema.number().step(1).min(1024).default(1024 * 1024),
-  dragDurationMs: Schema.number().step(1).min(1).max(5000).default(400),
-  maxClickHoldMs: Schema.number().step(1).min(0).max(2 ** 31 - 1).default(5000),
-  dragSteps: Schema.number().step(1).min(1).max(240).default(20),
-  maxResponseBytes: Schema.number().step(1).min(1024).default(32 * 1024 * 1024),
-  textEventIntervalMs: Schema.number().min(0).max(1000).default(0.25),
-  graceMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(3000),
-  maxElements: Schema.number().step(1).min(1).max(10000).default(2000),
-  maxDepth: Schema.number().step(1).min(1).max(100).default(25),
-}) satisfies Schema<Record<string, unknown>, CuaConfig>
+/** Validate shared configuration for native providers. */
+export const CuaConfig = Schema.object(CuaConfigFields) satisfies Schema<Record<string, unknown>, CuaConfig>
 
 
 function executionAgent(execution: Readonly<ToolExecution>): Agent {
@@ -142,12 +120,12 @@ async function screenshotStore(ctx: Context, execution: Readonly<CuaExecution>) 
   return { attachments, target: (image: ImageAttachmentRef) => llm.imageRequestTarget(provider, model, image) }
 }
 
-/** Prepared platform executable, transport, and platform-specific operating instructions. */
+/** Prepared platform executable, transport, platform-specific instructions and startup capabilities. */
 export interface CuaBackend {
   helperPath: string
   createChannel: NativeChannelFactory
   guidance: string
-  description: string
+  capabilities: CuaStartupCapabilities
   /**
    * Build native permission parameters for the selected action and Client language.
    * @param method Native permission action.
@@ -246,15 +224,27 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       if (method === 'screenshot') {
         const { attachments, target } = await screenshotStore(ctx, execution)
         const screenshot = NativeScreenshotResult.parse(await requestNative())
+        if (screenshot.windowId !== parsedParams.windowId) throw new NativeError('NATIVE_PROTOCOL', 'Native screenshot belongs to another window')
         signal.throwIfAborted()
-        const refs = await admitEncodedImages(attachments, [{ data: screenshot.data, mediaType: screenshot.mimeType }])
+        const stage = async <T>(name: string, operation: () => Promise<T>): Promise<T> => {
+          try { return await operation() } catch (error) {
+            signal.throwIfAborted()
+            const code = attachments.isAttachmentError(error) ? error.code : 'SCREENSHOT_IMAGE_FAILED'
+            const summary = error instanceof Error ? error.message.slice(0, 300) : 'Image processing failed'
+            const cause = error instanceof Error && error.cause instanceof Error ? ` Cause: ${error.cause.message.slice(0, 300)}` : ''
+            throw new NativeError(code, `Screenshot ${name} failed for window ${screenshot.windowId} `
+              + `(${screenshot.pixelWidth}x${screenshot.pixelHeight}, ${screenshot.data.length} encoded bytes): `
+              + `${summary}${cause} No screenshot was delivered; capture fresh state before using image coordinates.`, { cause: error })
+          }
+        }
+        const refs = await stage('image admission', () => admitEncodedImages(attachments, [{ data: screenshot.data, mediaType: screenshot.mimeType }]))
         signal.throwIfAborted()
         const attachment = refs[0] as ImageAttachmentRef
         const original = attachment.originalDimensions ?? attachment
         if (original.width !== screenshot.pixelWidth || original.height !== screenshot.pixelHeight) {
           throw new NativeError('NATIVE_PROTOCOL', 'Native screenshot dimensions disagree with its decoded image')
         }
-        const image = await attachments.readImageRequest(attachment, target(attachment), signal)
+        const image = await stage('model image preparation', () => attachments.readImageRequest(attachment, target(attachment), signal))
         signal.throwIfAborted()
         execution.coordinates.screenshot(parsedParams.appHandle as CuaAppHandle, screenshot.windowId, screenshot.bounds, image)
         return { ...screenshot, mimeType: image.mediaType, data: Buffer.from(image.data).toString('base64'),
@@ -264,23 +254,38 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         ? await withFileLock(join(tmpdir(), 'dsh-cua-system-clipboard'), requestNative, { waitMs: config.timeoutMs, signal })
         : await requestNative()
       if (method === 'getApp') {
-        const prepared = AppResult.extend({ pid: AppResult.shape.pid.nullable() }).parse(result)
+        const prepared = AppResult.parse(result)
         const { authorization, applicationIcon } = z.object({ authorization: ApplicationAuthorizationResult,
           applicationIcon: ApplicationIcon.optional(),
         }).parse(result)
         await access.select(agent, client, prepared.appHandle, authorization, signal, applicationIcon)
         signal.throwIfAborted()
-        const selected = prepared.pid === null
-          ? AppResult.parse(await access.run(client, prepared.appHandle, signal,
+        const selected = prepared.running
+          ? prepared
+          : AppResult.parse(await access.run(client, prepared.appHandle, signal,
             signal => client.request('launchApp', { appHandle: prepared.appHandle }, signal, execution.callId)))
-          : AppResult.parse(prepared)
         if (selected.appHandle !== prepared.appHandle) throw new NativeError('NATIVE_PROTOCOL', 'Launched application has another handle')
         return selected
       }
       signal.throwIfAborted()
-      if (method === 'getCapabilities') return { ...z.record(z.string(), z.json()).parse(result), coordinateSpace: 'screenshot-pixels' }
+      if (method === 'getCapabilities') {
+        const runtime = z.record(z.string(), z.json()).parse(result)
+        const capabilities = backend.capabilities
+        return {
+          ...runtime,
+          platform: capabilities.platform,
+          methods: [...capabilities.methods],
+          appLevelAccessibility: capabilities.appLevelAccessibility,
+          keyboard: [...capabilities.keyboard],
+          browser: capabilities.browser,
+          coordinateSpace: capabilities.coordinateSpace,
+        }
+      }
       if (method === 'getState') {
         const state = StateResult.parse(result)
+        if (state.appHandle !== parsedParams.appHandle || state.windowId !== (parsedParams.windowId ?? null)) {
+          throw new NativeError('NATIVE_PROTOCOL', 'Native observation belongs to another application or window')
+        }
         execution.coordinates.observe(state.appHandle, state.windows, state.windowId ?? undefined)
         return state
       }
@@ -288,7 +293,8 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       return result
     }
     const tool: ToolDefinition = {
-      name: 'cua', description: backend.description,
+      name: 'cua',
+      description: 'Inspect desktop access, select an application and window, read AX state, capture screenshots or dispatch input. Use appHandle from getApp; verify actions by reading fresh state.',
       parameters: { ...z.record(z.string(), z.json()).parse(z.toJSONSchema(Request)), type: 'object' },
       output: { schema: {}, render: renderResult },
       async execute(args, execution) {
@@ -301,7 +307,19 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         signal.throwIfAborted()
         const operation = (async () => {
           const previous = clients.get(agent)
-          if (previous?.disposed) await previous.dispose()
+          if (previous?.disposed) {
+            try { await previous.dispose() } catch (error) {
+              // Retire the settled failed connection even when native cleanup could
+              // not be acknowledged. This call reports failure; a later selection
+              // may connect afresh, but must never reuse its handles or coordinates.
+              if (clients.get(agent) === previous) {
+                clients.delete(agent)
+                access.forget(agent)
+                owner.coordinates = new CuaCoordinates()
+              }
+              throw error
+            }
+          }
           signal.throwIfAborted()
           let client = clients.get(agent)
           if ('appHandle' in request.params && !client) {
@@ -315,7 +333,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
           const nativeClient = client
           const dispatch = async (signal: AbortSignal) => {
             const scoped = { ...execution, agent, signal, nativeClient, coordinates: owner.coordinates }
-            const result = await callNative(request, scoped)
+            const result = await callNative(Request.parse(request), scoped)
             signal.throwIfAborted()
             return result
           }

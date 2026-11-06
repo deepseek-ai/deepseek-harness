@@ -51,7 +51,7 @@ def check_file_panel(call, owner, primary_params, primary, directory, wait_state
     assert any(e["role"] == "AXSheet" for e in scoped["elements"]), scoped
     assert "Increment primary" not in scoped["tree"], scoped
     panel = next(e for e in scoped["elements"] if e["identifier"] == "open-panel")
-    call("performSecondaryAction", {**owner, "snapshotId": scoped["snapshotId"], "elementIndex": panel["index"], "action": "raise"})
+    call("performAction", {**owner, "snapshotId": scoped["snapshotId"], "elementId": panel["elementId"], "action": "AXRaise"})
     deadline = time.monotonic() + 30
     while True:
         try:
@@ -66,7 +66,7 @@ def check_file_panel(call, owner, primary_params, primary, directory, wait_state
     goto = wait_observation(lambda observed: any(e["identifier"] == "PathTextField" for e in observed["elements"]),
                             "Command+Shift+G did not reach the system panel")
     path_field = next(e for e in goto["elements"] if e["identifier"] == "PathTextField")
-    call("click", {**owner, "snapshotId": goto["snapshotId"], "elementIndex": path_field["index"]})
+    call("click", {**owner, "snapshotId": goto["snapshotId"], "elementId": path_field["elementId"]})
     call("pressKey", {**owner, "key": "a", "modifiers": ["command"]})
     call("typeText", {**owner, "text": str(selected_file)})
     wait_observation(lambda observed: any(e["identifier"] == "PathTextField" and e["value"] == str(selected_file)
@@ -76,7 +76,7 @@ def check_file_panel(call, owner, primary_params, primary, directory, wait_state
                              and any(e["identifier"] == "OKButton" and e["enabled"] for e in observed["elements"]),
                              "Go to folder did not select the requested file")
     open_button = next(e for e in ready["elements"] if e["identifier"] == "OKButton")
-    call("click", {**owner, "snapshotId": ready["snapshotId"], "elementIndex": open_button["index"]})
+    call("click", {**owner, "snapshotId": ready["snapshotId"], "elementId": open_button["elementId"]})
     wait_state(lambda state: bool(state["selectedFile"]) and Path(state["selectedFile"]).samefile(selected_file),
                "File picker did not return the intended file")
     # AppKit can retain the dismissed panel's hidden WindowServer window after
@@ -126,7 +126,6 @@ def main():
                     time.sleep(0.025)
 
             capabilities = call("getCapabilities", {})
-            assert capabilities["platform"] == "macos", capabilities
             assert capabilities["permissions"] == {"accessibility": True, "screenRecording": True}, capabilities
             apps = call("listApps", {})
             assert any(app["pid"] == fixture.pid for app in apps), apps
@@ -157,7 +156,7 @@ def main():
             def button_target(state, title):
                 matches = [element for element in state["elements"] if element["role"] == "AXButton" and element["title"] == title]
                 assert len(matches) == 1, state
-                return {**owner, "snapshotId": state["snapshotId"], "elementIndex": matches[0]["index"]}
+                return {**owner, "snapshotId": state["snapshotId"], "elementId": matches[0]["elementId"]}
 
             target = button_target(first, "Increment primary")
             call("click", target)
@@ -189,26 +188,26 @@ def main():
                     call("activate", owner)
                     current = call("getState", primary_params)
                     window_element = next(element for element in current["elements"] if element["role"] == "AXWindow")
-                    call("performSecondaryAction", {**owner, "snapshotId": current["snapshotId"],
-                                                     "elementIndex": window_element["index"], "action": "raise"})
+                    call("performAction", {**owner, "snapshotId": current["snapshotId"],
+                                                     "elementId": window_element["elementId"], "action": "AXRaise"})
                 call("getState", primary_params)
-                def hover(target):
-                    result = call("hover", target)
+                def mouse_move(target):
+                    result = call("mouseMove", target)
                     if args.alternate_hover:
                         assert result["hoverRoute"] == "accessibility" and result["systemPointerMoved"] is False, result
                     return result
                 x, y, width, height = json.loads(state_path.read_text())["dragBounds"]
-                hover({**owner, "windowId": primary["windowId"], "x": x + 20, "y": y + 20})
+                mouse_move({**owner, "windowId": primary["windowId"], "x": x + 20, "y": y + 20})
                 wait_state(lambda actual: actual["hoverVisible"], "AppKit tracking area did not reveal hover controls")
                 time.sleep(0.25)
                 hover_state = call("getState", primary_params)
                 capture(primary, "02-native-hover.png")
                 assert json.loads(state_path.read_text())["hoverVisible"], "Observation dismissed native hover controls"
                 hover_target = button_target(hover_state, "Use native hover details")
-                hover(hover_target)
+                mouse_move(hover_target)
                 call("click", hover_target)
                 wait_state(lambda actual: actual["hoverClicks"] == 1, "Native hover control did not activate")
-                hover({**owner, "windowId": primary["windowId"], "x": 10, "y": 40})
+                mouse_move({**owner, "windowId": primary["windowId"], "x": 10, "y": 40})
                 wait_state(lambda actual: not actual["hoverVisible"], "AppKit tracking area did not exit")
                 if args.alternate_hover:
                     actual = json.loads(state_path.read_text())
@@ -223,15 +222,15 @@ def main():
                                           "Overlay input routing did not settle")
                     cycle_overlay(1)
                     target = {**owner, "windowId": primary["windowId"], "x": x + 20, "y": y + 20}
-                    hover(target)
+                    mouse_move(target)
                     wait_state(lambda actual: actual["hoverVisible"], "Input-transparent overlay blocked hover")
                     before = cycle_overlay(2)
-                    call("hover", target, "FOREGROUND_REQUIRED")
+                    call("mouseMove", target, "FOREGROUND_REQUIRED")
                     after = wait_state(lambda actual: actual["cursorSamples"] >= before["cursorSamples"] + 2,
                                        "Pointer observation did not advance")
                     assert after["cursorChanges"] == before["cursorChanges"], "Rejected hover moved the system pointer"
                     cycle_overlay(0)
-                    hover({**owner, "windowId": primary["windowId"], "x": 10, "y": 40})
+                    mouse_move({**owner, "windowId": primary["windowId"], "x": 10, "y": 40})
                     wait_state(lambda actual: not actual["hoverVisible"], "Hover did not exit after removing the overlay")
 
             if args.hover_only:

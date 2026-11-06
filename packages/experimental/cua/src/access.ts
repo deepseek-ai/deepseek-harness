@@ -20,10 +20,13 @@ interface ControlOptions extends AccessOptions {
 }
 type Control = (method: string, params: Record<string, JsonValue>) => Promise<JsonValue>
 const permissionProcess = z.object({ pid: z.number().int().positive(), path: z.string().optional(), name: z.string().optional() })
-const systemPermissions = z.object({
-  accessibility: z.boolean(), screenRecording: z.boolean(), helper: permissionProcess, parent: permissionProcess,
+const systemPermissions = z.discriminatedUnion('platform', [z.object({
+  platform: z.literal('darwin'), accessibility: z.boolean(), screenRecording: z.boolean(), helper: permissionProcess, parent: permissionProcess,
   launchApplication: z.object({ name: z.string().min(1), path: z.string().min(1), icon: ApplicationIcon.optional() }).optional(),
-})
+}), z.object({
+  platform: z.literal('win32'), sessionLocked: z.boolean().nullable(), captureAvailable: z.boolean(),
+  elevated: z.boolean(), helper: permissionProcess,
+})])
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -78,7 +81,7 @@ export class CuaAccess extends TypertRemoteService {
 
   /**
    * Inspect system privileges independently of application decisions and icons.
-   * @returns Fresh native preflight and launch metadata.
+   * @returns Platform-tagged access observations and native process metadata.
    */
   @Remote
   async systemStatus(): Promise<CuaSystemPermissionState> {
@@ -153,7 +156,10 @@ export function installCuaAccess(ctx: Context, options: ControlOptions): Pick<Ap
     lifetime.signal.throwIfAborted()
     const perform = async () => {
       lifetime.signal.throwIfAborted()
-      if (client?.disposed) await client.dispose()
+      if (client?.disposed) {
+        const previous = client
+        try { await previous.dispose() } finally { client = undefined }
+      }
       lifetime.signal.throwIfAborted()
       if (!client || client.disposed) client = new NativeClient(ctx, options.native, options.createChannel)
       return client.request(method, params, lifetime.signal)

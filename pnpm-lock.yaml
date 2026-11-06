@@ -1996,6 +1996,9 @@ importers:
       '@deepseek-ai/dsh-atomic-write':
         specifier: workspace:*
         version: link:../../util/atomic-write
+      '@deepseek-ai/dsh-native-command':
+        specifier: workspace:*
+        version: link:../../util/native-command
       '@deepseek-ai/dsh-official-bundles':
         specifier: workspace:*
         version: link:../../util/official-bundles
@@ -9968,9 +9971,6 @@ importers:
 
   packages/experimental/cua-macos:
     dependencies:
-      '@deepseek-ai/dsh-atomic-write':
-        specifier: workspace:*
-        version: link:../../util/atomic-write
       '@deepseek-ai/dsh-cua':
         specifier: workspace:*
         version: link:../cua
@@ -10086,6 +10086,9 @@ importers:
       '@deepseek-ai/dsh-working-directory':
         specifier: workspace:*
         version: link:../../session/working-directory
+      ajv:
+        specifier: ^8.20.0
+        version: 8.20.0
       sharp:
         specifier: ^0.35.3
         version: 0.35.5(@types/node@22.20.1)

@@ -3,12 +3,26 @@ import { isAbsolute, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
-import { CuaConfig, installCua } from '@deepseek-ai/dsh-cua'
+import { installCua, type CuaConfig, type CuaStartupCapabilities } from '@deepseek-ai/dsh-cua'
+import { CuaConfigFields } from '@deepseek-ai/dsh-cua/config'
 import { createPermissionParameters } from './permission-guide.ts'
 import { nativeHostArchitecture, prepareNativeExecutable, type SourceSigning } from './native-build.ts'
 import { createSharedNativeChannel } from './shared-native.ts'
 import { GUIDANCE } from './guidance.ts'
 export { GUIDANCE } from './guidance.ts'
+
+const CAPABILITIES: CuaStartupCapabilities = {
+  platform: 'macos',
+  methods: [
+    'activate', 'click', 'drag', 'findApps', 'getApp', 'getCapabilities', 'getState', 'invoke',
+    'listActions', 'listApps', 'listWindows', 'mouseMove', 'paste', 'performAction', 'pressKey', 'screenshot', 'scroll',
+    'selectText', 'setValue', 'show', 'typeText',
+  ],
+  appLevelAccessibility: true,
+  keyboard: ['app'],
+  browser: false,
+  coordinateSpace: 'screenshot-pixels',
+}
 
 /** Loader plugin identity. */
 export const name = 'experimental-cua-macos'
@@ -27,8 +41,7 @@ export interface Config extends CuaConfig {
 }
 /** Validate shared operation bounds and macOS source signing before preparing the helper. */
 export const Config = Schema.object({
-  // Schemastery erases object field types on dict; the shared Config declares their output types.
-  ...CuaConfig.dict as { [Key in keyof CuaConfig]: Schema<unknown, CuaConfig[Key]> },
+  ...CuaConfigFields,
   permissionPollIntervalMs: Schema.number().step(1).min(100).max(2 ** 31 - 1).default(1000),
   sourceSigning: Schema.union([
     Schema.const('ad-hoc'),
@@ -39,7 +52,6 @@ export const Config = Schema.object({
   ]).default('ad-hoc'),
 }) satisfies Schema<Record<string, unknown>, Config>
 
-const description = 'Inspect macOS permissions, select an application and window, read AX state, capture screenshots or dispatch input. Use appHandle from getApp; verify actions by reading fresh state.'
 
 /**
  * Mount logged native operations with separate Agent connections to the shared helper.
@@ -48,7 +60,7 @@ const description = 'Inspect macOS permissions, select an application and window
  * @returns Completion after native preparation and tool registration.
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
-  const backend = { createChannel: createSharedNativeChannel, guidance: GUIDANCE, description,
+  const backend = { createChannel: createSharedNativeChannel, guidance: GUIDANCE, capabilities: CAPABILITIES,
     permissionParameters: createPermissionParameters(config.permissionPollIntervalMs) }
   if (config.helperPath !== undefined) {
     if (!isAbsolute(config.helperPath)) throw new Error('dsh-cua helperPath must be absolute')
