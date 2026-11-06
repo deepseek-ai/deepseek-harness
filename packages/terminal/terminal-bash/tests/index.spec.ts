@@ -162,7 +162,7 @@ describe('BashTerminalBackend startup rollback', () => {
       spawnError: startupFailure,
       cleanupError: cleanupFailure,
       errors: [startupFailure, cleanupFailure],
-      cause: startupFailure,
+      cause: expect.objectContaining({ errors: [startupFailure, cleanupFailure] }) as AggregateError,
     } satisfies Partial<TerminalBackendCleanupError>))
   })
 

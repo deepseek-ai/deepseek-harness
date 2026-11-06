@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.1/terminal-backend-cleanup-error/guide.md
+/:
+  en: 91597636f5a71894
+  zh: 02d2517952d86cfd
+/terminalbackendcleanuperror-extends-terminalerror:
+  en: cb11df977825904b
+  zh: 080f157e78942a9d
+/terminalbackendcleanuperror-extends-terminalerror/change:
+  en: bf3bd46faf910ff0
+  zh: fd47d6e58f467a1e
+/terminalbackendcleanuperror-extends-terminalerror/migration:
+  en: 85fe7dd354cf8657
+  zh: e39dc4ce137aeb13
