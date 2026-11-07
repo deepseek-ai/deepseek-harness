@@ -1781,7 +1781,9 @@ describe('SubagentHeaderLineage', () => {
 
     const switcher = screen.getByRole('button', { name: '切换子智能体：worker' })
     hoverCatalog(switcher)
-    expect(screen.getByText('正在加载子智能体…')).toBeTruthy()
+    expect(input.prepareCatalog).not.toHaveBeenCalled()
+    expect(screen.getByText('尚未加载子智能体')).toBeTruthy()
+    expect(screen.queryByText('正在加载子智能体…')).toBeNull()
     expect(screen.queryAllByRole('treeitem')).toEqual([])
     expect(input.refreshProjection).not.toHaveBeenCalled()
   })
@@ -1887,9 +1889,28 @@ describe('SubagentHeaderLineage', () => {
     const switcher = screen.getByRole('button', { name: '切换子智能体：正在扫描项目文件' })
     expect(input.refreshProjection).not.toHaveBeenCalled()
     hoverCatalog(switcher)
-    expect(screen.getByText('正在加载子智能体…')).toBeTruthy()
+    expect(input.prepareCatalog).not.toHaveBeenCalled()
+    expect(screen.getByText('尚未加载子智能体')).toBeTruthy()
+    expect(screen.queryByText('正在加载子智能体…')).toBeNull()
     expect(screen.queryAllByRole('treeitem')).toEqual([])
     expect(input.refreshProjection).not.toHaveBeenCalled()
+  })
+
+  it.each(['idle', 'loading'] as const)('shows the actual %s state of an empty title menu', (state) => {
+    const input = {
+      ...props(undefined, {}, {}, { parentSessionId: PARENT, childSessionId: CHILD, mode: 'continuable' }),
+      lineageSessionId: CHILD,
+      displayTitle: 'worker',
+    }
+    const initial = input.useSessions(value => value)
+    render(<HeaderCatalog {...input} useSessions={select => select({
+      ...initial,
+      projectionsBySession: { [PARENT]: { state, error: null, values: {} } },
+    })} />)
+    hoverCatalog(screen.getByRole('button', { name: '切换子智能体：worker' }))
+    expect(screen.getByText(state === 'idle' ? zh['load.idle'] : zh['loading.label'])).toBeTruthy()
+    expect(screen.queryByText(state === 'idle' ? zh['loading.label'] : zh['load.idle'])).toBeNull()
+    expect(input.prepareCatalog).not.toHaveBeenCalled()
   })
 
   it('keeps a nested title switcher scoped to its direct-parent catalog', () => {

@@ -405,14 +405,12 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       await grandchild.waitFor()
       expect(await grandchild.getAttribute('aria-expanded')).toBeNull()
       await compareOrRefreshGolden(
-        fileURLToPath(new URL('./expected/subagent-conversation/unread-catalog.expected.md', import.meta.url)),
+        TREE_EXPECTED,
         await captureStableAria(page, '[role="tree"][aria-label="Subagent sessions"]', scaffold.workspaceCwd), MODE,
       )
       expect(page.url()).toBe(parentUrl)
       expect(scaffold.ctx.agents.get(childId)).toBeUndefined()
       expect(scaffold.ctx.agents.get(grandchildId)).toBeUndefined()
-      await mkdir('.playwright-mcp/catalog-expand', { recursive: true })
-      await page.screenshot({ path: '.playwright-mcp/catalog-expand/discovery.png' })
       await page.keyboard.press('Escape')
       await page.locator('[data-subagent-panel]').waitFor({ state: 'detached' })
     } finally {
@@ -481,7 +479,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
         }
         expect(await row.getAttribute('aria-label')).toContain(`${LABEL} ${CHILD_NAME} `)
         expect(await row.getByRole('button', { name: /description/u }).count()).toBe(0)
-        expect(await row.getByRole('button', { name: `Expand ${LABEL} descendants`, exact: true }).count()).toBe(1)
+        await row.getByRole('button', { name: `Expand ${LABEL} descendants`, exact: true }).waitFor()
         expect(await row.getByRole('button', { name: `Open ${LABEL} in sidebar`, exact: true }).count()).toBe(1)
         expect(page.url()).toBe(originalUrl)
         expect(await page.getByRole('tooltip').count()).toBe(0)
@@ -497,8 +495,32 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
 
   it('expands locally available cold catalogs without requesting or activating either level', async () => {
     onTestFailed(() => saveFailureShot(page, 'screenshots/non-migrating-session-reads/web-e2e-subagent-tree'))
+    const warningStart = tripwire.warnings.length
+    await page.reload({ waitUntil: 'load' })
+    const trigger = page.getByRole('button', { name: '2 subagents', exact: true })
+    await trigger.waitFor()
+    acknowledgeReloadConnectionLoss(tripwire, warningStart)
+    const siblingsRead = page.waitForResponse((response) => {
+      if (!response.url().endsWith('/api/session/projections')) return false
+      const body = response.request().postDataJSON() as { payload: { args: { request: { sessionId: SessionId } } } }
+      return body.payload.args.request.sessionId === oneShotId
+    })
+    await trigger.click()
+    await (await siblingsRead).finished()
+    const expand = page.getByRole('button', { name: `Expand ${LABEL} descendants`, exact: true })
+    await expand.waitFor()
+    const descendantsRead = page.waitForResponse((response) => {
+      if (!response.url().endsWith('/api/session/projections')) return false
+      const body = response.request().postDataJSON() as { payload: { args: { request: { sessionId: SessionId } } } }
+      return body.payload.args.request.sessionId === grandchildId
+    })
+    await expand.click()
+    await (await descendantsRead).finished()
+    await page.keyboard.press('Escape')
+    await page.locator('[data-subagent-panel]').waitFor({ state: 'detached' })
     const catalogReads = apiCalls.filter(path => path === '/api/session/projections').length
-    await page.getByRole('button', { name: '2 subagents' }).hover()
+    await page.locator('[data-composer-input]').first().hover()
+    await trigger.hover()
     const catalogTree = page.getByRole('tree', { name: 'Subagent sessions' })
     expect(await catalogTree.evaluate((element) => {
       const rect = element.getBoundingClientRect()

@@ -255,10 +255,13 @@ function CatalogRows({
     const timer = setInterval(() => { setNow(Date.now()) }, 1_000)
     return () => { clearInterval(timer) }
   }, [running])
-  const emptyLoading = (catalog.state === 'loading' || catalog.state === 'idle') && catalog.entries.length === 0
+  const emptyLoading = catalog.state === 'loading' && catalog.entries.length === 0
   const reserveDisclosure = catalog.entries.some(entry => canExpandCatalog(entry, catalogs, summaries))
   return (
     <>
+      {catalog.state === 'idle' && catalog.entries.length === 0 && (
+        <div className={css.notice}>{t('load.idle')}</div>
+      )}
       {emptyLoading && (
         <CatalogLoadingRows t={t} />
       )}
@@ -552,7 +555,7 @@ function CatalogDropdown(props: CatalogDropdownProps) {
   const totalCountKey = directCount === 1 ? 'count.total.one' : 'count.total.other'
   const runningCountKey = runningCount === 1 ? 'count.running.one' : 'count.running.other'
   const presentedCatalog: SubagentCatalogSnapshot | undefined = catalog ?? (variant === 'switcher' || props.hasBoardContent
-    ? { entries: [], state: 'loading', error: null }
+    ? { entries: [], state: 'idle', error: null }
     : undefined)
 
   const cancelHoverClose = (): void => {

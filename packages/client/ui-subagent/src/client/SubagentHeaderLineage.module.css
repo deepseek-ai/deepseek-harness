@@ -450,10 +450,6 @@
   height: 23px;
 }
 
-.children[aria-busy='true']::before {
-  content: none;
-}
-
 .children > .node::before {
   top: 0;
   bottom: 0;
