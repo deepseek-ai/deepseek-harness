@@ -27,7 +27,9 @@ import type {
   ForgeBaseBranch, ForgeBaseBranches, ForgeChangeRequestDiff, ForgeCommitRange, ForgeDiffFile, ForgeLocalCommits, ForgeLocalDiff,
   ForgeLocalScope, ForgePanelChangeRequest, ForgePanelState,
 } from '../types.ts'
-import type { ForgeCommitList, ForgeReviewRequest, ForgeReviewResult } from '@deepseek-ai/dsh-experimental-forge/types'
+import type {
+  ForgeCommitList, ForgeReviewData, ForgeReviewRequest, ForgeReviewResult, ForgeReviewThread,
+} from '@deepseek-ai/dsh-experimental-forge/types'
 import { sameReviewSource, type ReviewQueue } from './review-queue.ts'
 import { ReviewThread, useFileReview } from './ReviewThread.tsx'
 import type { ReviewActions } from './ReviewComposer.tsx'
@@ -47,6 +49,10 @@ import { drawnLines, matchesHunks, textLines } from './diff-rows.ts'
 import { ChangeRequestGlyph } from './glyphs.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
 import { RefreshGlyph } from './RefreshGlyph.tsx'
+import type { FileThreads, ThreadActions, ThreadFocus } from './ReviewThreads.tsx'
+import type { ThreadFilter } from './review-threads.ts'
+import { usePlacedThreads, useThreadRead, type PlacedThread } from './thread-state.ts'
+import { ThreadList } from './ThreadList.tsx'
 import type { PanelSnapshot } from './source.ts'
 import { numberOf, openChangeRequestOf, TONE_LABEL, toneOf } from './status.ts'
 import css from './ChangesTab.module.css'
@@ -86,6 +92,10 @@ export interface ChangesTabInjected {
   readonly viewedFiles: ViewedFiles
   /** Read one file of a change request at a commit. */
   readonly changeRequestText: (url: string, commit: string, path: string) => Promise<RemoteResult<string>>
+  /** Read the review threads of a change request at the head of its latest status; `signal` aborts the read. */
+  readonly changeRequestReview: (url: string, headSha: string, signal: AbortSignal) => Promise<RemoteResult<ForgeReviewData>>
+  /** Quote a whole review thread of the change request at `url` in the main input without submitting it. */
+  readonly addThreadToInput: (thread: ForgeReviewThread, url: string, range: string | null) => boolean
   /** Open a URL outside the app. */
   readonly openLink: (url: string) => void
   /** Copy a path to the clipboard and report the outcome. */
@@ -423,8 +433,8 @@ function OrphanReviews({ path, actions, t }: PropsLocale<typeof NS> & {
  */
 export function ChangesTab({
   useTabInfo, sessionId, useStore, actions, usePanel, reconnect, localDiff, diffBases, localText, localCommits, changeRequestDiff,
-  changeRequestText, changeRequestCommits, viewedFiles,
-  openLink, copyPath, createChangeRequest, addReviewToInput, reviewQueue, submitReview, report, t,
+  changeRequestText, changeRequestCommits, changeRequestReview, viewedFiles,
+  openLink, copyPath, createChangeRequest, addReviewToInput, addThreadToInput, reviewQueue, submitReview, report, t,
 }: ChangesTabProps): ReactNode {
   const { tab } = useTabInfo()
   const { navigation, signal } = tab
@@ -560,6 +570,22 @@ export function ChangesTab({
     return () => { controller.abort() }
   }, [tab.visible, read, refused, waiting, source, localScope, changeCommits, dataKey, localDiff, changeRequestDiff])
   const data = loaded !== null && loaded.key === dataKey ? loaded.data : null
+  // Threads show only while they were read at the head of the latest status and, for the whole change request, at
+  // the head the shown diff was read at, so their positions number the shown files.
+  const prHead = entry?.snapshot?.headSha ?? null
+  const prAuthor = entry?.snapshot?.author ?? null
+  const threadRead = useThreadRead({ visible: tab.visible, url: source.kind === 'change' ? source.url : null, head: prHead,
+    updatedAt: entry?.snapshot?.updatedAt ?? null, statusAt, attempt, read: changeRequestReview })
+  const review = data?.kind === 'change' && threadRead.review !== null && threadRead.review.headSha === prHead
+    && (data.commits !== null || data.headSha === prHead) ? threadRead.review : null
+  const placed = usePlacedThreads(review, data?.kind === 'change' ? { head: prHead ?? '', end: data.headSha, commits: data.commits } : null)
+  const [threadList, setThreadList] = useState<{
+    readonly open: boolean
+    readonly filter: ThreadFilter | null
+    /** File whose group the list scrolls to, or null. */
+    readonly file: string | null
+  }>({ open: false, filter: 'unresolved', file: null })
+  const [focus, setFocus] = useState<ThreadFocus | null>(null)
   const allFiles = useMemo(() => filesInTreeOrder(changedFileTree(data?.files ?? [])), [data])
   const files = useMemo(() => allFiles.filter(file => shownBy(file, lens, hideTests)), [allFiles, lens, hideTests])
   const lensCounts = useMemo(() => Object.fromEntries(LENSES.map(item => [item,
@@ -594,10 +620,16 @@ export function ChangesTab({
       if (hideTests && hidden.layer === 'test') actions.toggledTests(tab.id)
       return
     }
-    sections.current.get(wanted)?.scrollIntoView({ block: 'start' })
+    const section = sections.current.get(wanted)
+    section?.scrollIntoView({ block: 'start' })
+    // A thread the reader opened from the thread list centers inside its file, which the jump expanded and revealed.
+    /* v8 ignore next 2 -- a focused thread's file is drawn and its card unfolded, so both are found. */
+    const card = focus === null ? undefined : [...section?.querySelectorAll<HTMLElement>('[data-forge-thread]') ?? []]
+      .find(element => element.dataset.forgeThread === focus.id)
+    card?.scrollIntoView({ block: 'center' })
     if (scrollport.current !== null) jumpPosition.current = { data, top: scrollport.current.scrollTop }
     setWanted(null)
-  }, [tab.visible, wanted, data, allFiles, lens, hideTests, actions, tab.id])
+  }, [tab.visible, wanted, data, allFiles, lens, hideTests, actions, tab.id, focus])
   const refresh = (): void => { setAttempt(value => value + 1) }
   const root = state !== null && state.checkout.state === 'ready' ? state.checkout.checkout.root : null
   // A chosen base branch that is gone or shares no history with HEAD offers the automatic fork point instead.
@@ -676,6 +708,32 @@ export function ChangesTab({
     .filter(path => !data?.files.some(file => file.path === path))
   const orphanRecords = absentPaths.map(path => <OrphanReviews key={path} path={path} actions={recordActions} t={t} />)
 
+  const threadActions: ThreadActions | null = review === null || data?.kind !== 'change' ? null : {
+    viewer: review.viewer,
+    author: prAuthor,
+    addToInput: (thread, range) => addThreadToInput(thread, data.url, range),
+    openLink,
+    readText: (commit, path) => changeRequestText(data.url, commit, path),
+    inputFailed: () => { report('thread.inputFailed') },
+    focused: focus,
+  }
+  const threadsOf = (path: string): FileThreads | undefined => {
+    const group = placed.files.get(path)
+    return threadActions === null || group === undefined ? undefined
+      : { ...group, actions: threadActions, openList: () => { setThreadList(value => ({ ...value, open: true, file: path })) } }
+  }
+  /** Show a thread from the list: all commits for a thread the chosen ones do not hold, then its file, unfolded and centered. */
+  const openThread = ({ thread, place }: PlacedThread): void => {
+    const url = thread.comments[0]?.url ?? null
+    if (!allFiles.some(file => file.path === thread.path)) {
+      if (url !== null) openLink(url)
+      return
+    }
+    if (place.kind === 'elsewhere') actions.committed(tab.id, null)
+    setFocus(value => ({ id: thread.id, revision: (value?.revision ?? 0) + 1 }))
+    setRevealed(value => new Set([...value, thread.path]))
+    jump(thread.path)
+  }
   const jump = (path: string): void => {
     setTreeState(value => ({ ...value, selected: path }))
     setChosen(value => ({ ...value, [path]: true }))
@@ -820,6 +878,7 @@ export function ChangesTab({
               badge={badgeOf(file, data, t)}
               tooltip={pathTooltipOf(file, t)}
               actions={fileActions(data, file)}
+              threads={threadsOf(path)}
               viewed={viewedStateOf(marks, path, file.digest)}
               onViewed={(viewed) => { markViewed(data, file, viewed) }}
               sectionRef={(element) => {
@@ -839,6 +898,7 @@ export function ChangesTab({
     filter: (query) => { setTreeState(value => ({ ...value, query })) },
     toggle: (path) => { setTreeState(value => ({ ...value, collapsed: { ...value.collapsed, [path]: value.collapsed[path] !== true } })) },
     jump,
+    ...review === null ? {} : { threadCounts: placed.unresolved },
   }
   // The toolbar collapses every file while any is expanded, as the files on screen show, and expands every file otherwise.
   const anyExpanded = files.some(isExpanded)
@@ -887,6 +947,13 @@ export function ChangesTab({
             <HideTestsSwitch hidden={hideTests} toggle={() => { actions.toggledTests(tab.id) }} t={t} />
           </span>}
           <span className={css.spacer} />
+          {review !== null && (
+            <button type="button" className={css.threadsToggle} aria-pressed={threadList.open} data-forge-threads-toggle=""
+              aria-label={t('thread.listAria', { count: review.threads.length })}
+              onClick={() => { setThreadList(value => ({ ...value, open: !value.open, file: null })) }}>
+              {t('thread.list')}<span className={css.threadsTotal}>{review.threads.length}</span>
+            </button>
+          )}
           <span className={clsx(css.progressSlot, css.reviewRow)}><ViewedProgress viewed={viewedCount} total={files.length} t={t} /></span>
           {files.length > 0 && <span className={css.totals}><Counts file={{ additions, deletions, binary: false }} t={t} /></span>}
           <span className={css.tools}>
@@ -938,10 +1005,21 @@ export function ChangesTab({
         <Notice>{t('diff.stale', { count: data.localAhead })}</Notice>
       )}
       {data?.kind === 'local' && data.omitted > 0 && <Notice>{t('diff.omitted', { count: data.omitted })}</Notice>}
+      {data?.kind === 'change' && threadRead.failure !== null && (
+        <Notice action={<Button size="sm" variant="outline" className={css.noticeAction} onClick={refresh}>{t('retry')}</Button>}>
+          {t('thread.loadFailed', { message: threadRead.failure })}
+        </Notice>
+      )}
       {reviewForm}
       <div className={css.body}>
         {body}
         {allFiles.length > 0 && <FileTreePane {...navigator} id={treeId} position={treePosition} onWidth={setTreeWidth} />}
+        {review !== null && data?.kind === 'change' && threadList.open && (
+          <ThreadList entries={placed.entries} order={allFiles.map(file => file.path)} viewer={review.viewer}
+            truncated={review.truncated} host={new URL(data.url).host} url={data.url}
+            filter={threadList.filter} choose={(filter) => { setThreadList(value => ({ ...value, filter })) }} file={threadList.file}
+            open={openThread} openLink={openLink} close={() => { setThreadList(value => ({ ...value, open: false })) }} t={t} />
+        )}
       </div>
     </div>
   )

@@ -18,6 +18,8 @@ import { segmentsOf, splitRows, type DiffRow, type SplitCell, type SplitRow } fr
 import { codeSideAt, readCodeSelection } from './code-selection.ts'
 import { reviewMatches, selectReviewLines, type ReviewSelection } from './review.ts'
 import { ReviewThread, useFileReview } from './ReviewThread.tsx'
+import { OutdatedThreads, ThreadCard, type FileThreads, type LineThread, type ThreadActions } from './ReviewThreads.tsx'
+import { gapOf } from './review-threads.ts'
 import type { FileReviewState } from './review-queue.ts'
 import { ReviewComposer, type ReviewActions } from './ReviewComposer.tsx'
 import reviewCss from './ReviewComposer.module.css'
@@ -77,6 +79,8 @@ export interface DiffFileProps {
   readonly viewed: ViewedState
   /** Mark the file viewed, which also collapses it, or clear the mark. */
   readonly onViewed: (viewed: boolean) => void
+  /** Review threads of the file from the code host, or undefined while none are read. */
+  readonly threads?: FileThreads | undefined
   /** Receives the section element, which scrolling to the file targets. */
   readonly sectionRef: (element: HTMLElement | null) => void
   /** Forge panel copy. */
@@ -144,8 +148,8 @@ function pairKind(pair: SplitRow): 'context' | 'change' {
 }
 
 /** The hunks of one file with their collapsed and expanded unchanged lines. */
-function Lines({ file, text, open, onExpand, split, wrap, review, visible, comments, t }: Pick<DiffFileProps,
-  'file' | 'text' | 'open' | 'onExpand' | 'split' | 'wrap' | 'review' | 'visible' | 't'> & { readonly comments: FileReviewState }): ReactNode {
+function Lines({ file, text, open, onExpand, split, wrap, review, visible, comments, threads, t }: Pick<DiffFileProps,
+  'file' | 'text' | 'open' | 'onExpand' | 'split' | 'wrap' | 'review' | 'visible' | 'threads' | 't'> & { readonly comments: FileReviewState }): ReactNode {
   const lines = typeof text === 'object' ? text : undefined
   const columns = split && file.additions > 0 && file.deletions > 0
   const singleSide = file.status === 'added' ? 'R' : file.status === 'deleted' ? 'L' : null
@@ -313,6 +317,17 @@ function Lines({ file, text, open, onExpand, split, wrap, review, visible, comme
       remaining.delete(thread)
     }
   }
+  // A host thread follows the row of its last line, or the collapsed unchanged lines that hold it.
+  const unplaced = new Set(threads === undefined ? [] : threads.lines.map(item => ({ ...item, actions: threads.actions })))
+  const threadCard = (item: LineThread & { readonly actions: ThreadActions }, columns: boolean): ReactNode =>
+    <ThreadCard key={`thread-${item.thread.id}`} thread={item.thread} place={item.place} actions={item.actions} split={columns} t={t} />
+  const appendThreads = (old: number | null, next: number | null): void => {
+    for (const item of unplaced) {
+      if ((item.place.side === 'L' ? old : next) !== item.place.endLine) continue
+      rows.push(threadCard(item, columns))
+      unplaced.delete(item)
+    }
+  }
   const endsAt = (old: number | null, next: number | null): boolean => selection !== null
     && (selection.comment.side === 'L' ? old : next) === selection.comment.endLine
   for (const [at, segment] of prepared.entries()) {
@@ -322,6 +337,11 @@ function Lines({ file, text, open, onExpand, split, wrap, review, visible, comme
         <IconChevronsUpDownOutlineRegular size={12} />
         {segment.count === null ? t('diff.unchangedRest') : t('diff.unchanged', { count: segment.count.toLocaleString('en-US') })}
       </button>)
+      for (const item of unplaced) {
+        if (gapOf(file, item.place.side, item.place.endLine) !== segment.index) continue
+        rows.push(threadCard(item, columns))
+        unplaced.delete(item)
+      }
     } else if (columns) {
       for (const [index, pair] of splitRows(segment.rows).entries()) {
         rows.push(<div key={`${at}-${index}`} className={css.pair} data-diff-pair={pairKind(pair)}
@@ -333,6 +353,7 @@ function Lines({ file, text, open, onExpand, split, wrap, review, visible, comme
           inserted = true
         }
         appendComments(pair.left?.no ?? null, pair.right?.no ?? null)
+        appendThreads(pair.left?.no ?? null, pair.right?.no ?? null)
       }
     } else {
       for (const [index, row] of segment.rows.entries()) {
@@ -348,12 +369,14 @@ function Lines({ file, text, open, onExpand, split, wrap, review, visible, comme
           inserted = true
         }
         appendComments(row.old, row.new)
+        appendThreads(row.old, row.new)
       }
     }
   }
   if (review !== undefined) for (const thread of remaining) {
     rows.push(<ReviewThread key={`record-${thread.key}`} thread={thread} actions={review} locked={comments.locked} outdated split={false} t={t} />)
   }
+  for (const item of unplaced) rows.push(threadCard(item, false))
   if (!inserted) rows.push(editor)
   return <div ref={root} className={css.code} style={style} data-single-side={singleSide ?? undefined} data-split={columns ? '' : undefined} data-wrap={wrap ? '' : undefined}
     data-review={review === undefined ? undefined : ''}
@@ -374,24 +397,37 @@ function Lines({ file, text, open, onExpand, split, wrap, review, visible, comme
     }}>{rows}</div>
 }
 
-function Body(props: DiffFileProps): ReactNode {
-  const { file, large, revealed, onReveal, review, t } = props
+/** The file's lines or the note that replaces them, with its saved comments; host threads on lines follow when no lines show. */
+function Content(props: DiffFileProps): ReactNode {
+  const { file, large, revealed, onReveal, review, threads, t } = props
   const comments = useFileReview(review, file.path)
   const records = review === undefined ? null : comments.threads.map(thread => <ReviewThread key={thread.key} thread={thread}
     actions={review} locked={comments.locked} outdated={!reviewMatches(thread.selection, review.source, file)} split={false} t={t} />)
-  if (file.binary) return <><p className={css.fileNote}>{t('diff.binary')}</p>{records}</>
-  if (file.oversized) return <><p className={css.fileNote}>{t('diff.fileTooLarge')}</p>{records}</>
-  if (file.hunks.length === 0) return records
+  const lineThreads = threads?.lines.map(item => <ThreadCard key={item.thread.id} thread={item.thread} place={item.place}
+    actions={threads.actions} t={t} />)
+  if (file.binary) return <><p className={css.fileNote}>{t('diff.binary')}</p>{records}{lineThreads}</>
+  if (file.oversized) return <><p className={css.fileNote}>{t('diff.fileTooLarge')}</p>{records}{lineThreads}</>
+  if (file.hunks.length === 0) return <>{records}{lineThreads}</>
   if (large && !revealed) {
     // A large file starts as one collapsed strip, drawn and opened like the collapsed unchanged lines.
     return (
       <><button type="button" className={css.gap} onClick={onReveal}>
         <IconChevronsUpDownOutlineRegular size={12} />
         {t('diff.largeCollapsed', { count: (file.additions + file.deletions).toLocaleString('en-US') })}
-      </button>{records}</>
+      </button>{records}{lineThreads}</>
     )
   }
   return <Lines {...props} comments={comments} />
+}
+
+/** Host threads on the whole file, the lines, then the host threads that later commits made outdated. */
+function Body(props: DiffFileProps): ReactNode {
+  const { threads, t } = props
+  return <>
+    {threads?.file.map(thread => <ThreadCard key={thread.id} thread={thread} place={{ kind: 'file' }} actions={threads.actions} t={t} />)}
+    <Content {...props} />
+    {threads !== undefined && <OutdatedThreads threads={threads.outdated} actions={threads.actions} t={t} />}
+  </>
 }
 
 /** File actions live only while their owning tab is visible. */
@@ -443,7 +479,7 @@ function FileMenu({ name, actions, t }: {
  * @returns the file section.
  */
 export function DiffFile(props: DiffFileProps): ReactNode {
-  const { file, expanded, onToggle, badge, tooltip, actions, viewed, onViewed, sectionRef, t } = props
+  const { file, expanded, onToggle, badge, tooltip, actions, viewed, onViewed, threads, sectionRef, t } = props
   const name = file.path.slice(file.path.lastIndexOf('/') + 1)
   return (
     <section ref={sectionRef} className={css.file} data-forge-diff-file={file.path} data-expanded={expanded ? '' : undefined}
@@ -463,6 +499,10 @@ export function DiffFile(props: DiffFileProps): ReactNode {
           <FileLabel path={file.path} tooltip={tooltip} />
         </span>
         {viewed === 'changed' && <Tag tone="warning" className={css.changedTag}>{t('viewed.changed')}</Tag>}
+        {threads !== undefined && threads.unresolved > 0 && (
+          <button type="button" className={css.threadCount} aria-label={t('thread.unresolvedAria', { name, count: threads.unresolved })}
+            onClick={threads.openList}>{t('thread.unresolvedCount', { count: threads.unresolved })}</button>
+        )}
         <span className={css.fileSpacer} data-forge-path-spacer="" />
         {badge !== '' && <span className={css.badge}>{badge}</span>}
         {!file.binary && <Counts file={file} t={t} />}
