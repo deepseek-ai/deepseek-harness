@@ -137,8 +137,8 @@ export interface ConnectorAccountSource<View extends AnyConnectorAccountView> {
   observe(listener: () => void): () => void
   /** Start a check unless an operation runs; a source whose view is always current does nothing. */
   refresh(): void
-  /** @returns the started operation's identity. */
-  start(kind: ConnectorOperationKindOf<View>): ConnectorOperationId
+  /** @returns the started operation's identity, at once or after the source has started the operation. */
+  start(kind: ConnectorOperationKindOf<View>): ConnectorOperationId | Promise<ConnectorOperationId>
   /** @returns after the named operation settles, or at once when it is not cancellable. */
   cancel(id: ConnectorOperationId): Promise<void>
 }

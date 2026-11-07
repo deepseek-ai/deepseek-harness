@@ -831,10 +831,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the current accounts, then each changed set, coalescing changes that arrive before the next read.',
       },
       {
-        signature: '@Remote start(key: string, operation: string): ConnectorOperationId',
+        signature: '@Remote async start(key: string, operation: string): Promise<ConnectorOperationId>',
         description: 'Start one of the operations the account registered as page actions.',
         parameters: [{ name: 'key', description: 'the account key.' }, { name: 'operation', description: 'the operation kind.' }],
-        returns: 'the operation identity.',
+        returns: 'the operation identity once the account\'s source has started it.',
         throws: ['for an unknown account or operation, or whatever the account\'s source refuses, such as a second operation.'],
       },
       {
@@ -6262,7 +6262,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ConnectorAccountSource',
-    declaration: 'export interface ConnectorAccountSource<View extends AnyConnectorAccountView> {\n    snapshot(): View;\n    observe(listener: () => void): () => void;\n    refresh(): void;\n    start(kind: ConnectorOperationKindOf<View>): ConnectorOperationId;\n    cancel(id: ConnectorOperationId): Promise<void>;\n}',
+    declaration: 'export interface ConnectorAccountSource<View extends AnyConnectorAccountView> {\n    snapshot(): View;\n    observe(listener: () => void): () => void;\n    refresh(): void;\n    start(kind: ConnectorOperationKindOf<View>): ConnectorOperationId | Promise<ConnectorOperationId>;\n    cancel(id: ConnectorOperationId): Promise<void>;\n}',
   },
   {
     name: 'ConnectorAccountsView',

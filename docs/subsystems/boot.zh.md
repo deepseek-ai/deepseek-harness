@@ -170,10 +170,10 @@ register<View extends AnyConnectorAccountView>(registration: ConnectorAccountReg
  * Start one of the operations the account registered as page actions.
  * @param key - the account key.
  * @param operation - the operation kind.
- * @returns the operation identity.
+ * @returns the operation identity once the account's source has started it.
  * @throws for an unknown account or operation, or whatever the account's source refuses, such as a second operation.
  */
-@Remote start(key: string, operation: string): ConnectorOperationId
+@Remote async start(key: string, operation: string): Promise<ConnectorOperationId>
 
 /**
  * Cancel one operation while its phase is cancellable, and wait for it to settle.

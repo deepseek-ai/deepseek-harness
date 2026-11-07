@@ -24,7 +24,7 @@ interface Registered {
   readonly packageName: string | undefined
   readonly entry: () => ConnectorAccountEntry
   readonly refresh: () => void
-  readonly start: (operation: string) => ConnectorOperationId
+  readonly start: (operation: string) => ConnectorOperationId | Promise<ConnectorOperationId>
   readonly cancel: (id: ConnectorOperationId) => Promise<void>
 }
 
@@ -131,12 +131,12 @@ export default class ConnectorAccounts extends TypertRemoteService {
    * Start one of the operations the account registered as page actions.
    * @param key - the account key.
    * @param operation - the operation kind.
-   * @returns the operation identity.
+   * @returns the operation identity once the account's source has started it.
    * @throws for an unknown account or operation, or whatever the account's source refuses, such as a second operation.
    */
   @Remote
-  start(key: string, operation: string): ConnectorOperationId {
-    return this.account(key).start(operation)
+  async start(key: string, operation: string): Promise<ConnectorOperationId> {
+    return await this.account(key).start(operation)
   }
 
   /**

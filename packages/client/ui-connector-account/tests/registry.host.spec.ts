@@ -10,6 +10,7 @@ import type {
 type View = ConnectorAccountView<{ readonly state: 'out' | 'in' }, 'check' | 'connect', 'authorizing'>
 
 const OP = 'op-1' as ConnectorOperationId
+const NEXT = 'op-2' as ConnectorOperationId
 const COPY = {
   title: { en: 'Fixture account', zh: '演示账号' },
   hint: 'Shared with the terminal.',
@@ -23,7 +24,7 @@ function source(initial: View = { account: { state: 'out' } }) {
     snapshot: () => view,
     observe: vi.fn((listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener) } }),
     refresh: vi.fn(),
-    start: vi.fn((_kind: 'check' | 'connect') => OP),
+    start: vi.fn((_kind: 'check' | 'connect'): ConnectorOperationId | Promise<ConnectorOperationId> => OP),
     cancel: vi.fn(async (_id: ConnectorOperationId) => {}),
   } satisfies ConnectorAccountSource<View>
   return { fake, listeners, publish: (next: View) => { view = next; for (const listener of listeners) listener() } }
@@ -135,10 +136,13 @@ it('starts only the operations an account registered and cancels through its sou
   const ctx = await registry()
   const account = source()
   ctx.connectorAccounts.register(registration('@acme/fixture', account))
-  expect(ctx.connectorAccounts.start('@acme/fixture', 'connect')).toBe(OP)
+  await expect(ctx.connectorAccounts.start('@acme/fixture', 'connect')).resolves.toBe(OP)
   expect(account.fake.start).toHaveBeenCalledWith('connect')
-  expect(() => ctx.connectorAccounts.start('@acme/fixture', 'sign-out')).toThrow('@acme/fixture has no page operation sign-out')
-  expect(() => ctx.connectorAccounts.start('@acme/other', 'connect')).toThrow('@acme/other is not registered')
+  // A source that starts its operation asynchronously answers once it has the identity.
+  account.fake.start.mockImplementationOnce(async () => NEXT)
+  await expect(ctx.connectorAccounts.start('@acme/fixture', 'connect')).resolves.toBe(NEXT)
+  await expect(ctx.connectorAccounts.start('@acme/fixture', 'sign-out')).rejects.toThrow('@acme/fixture has no page operation sign-out')
+  await expect(ctx.connectorAccounts.start('@acme/other', 'connect')).rejects.toThrow('@acme/other is not registered')
   await ctx.connectorAccounts.cancel('@acme/fixture', OP)
   expect(account.fake.cancel).toHaveBeenCalledWith(OP)
   expect(() => ctx.connectorAccounts.cancel('@acme/other', OP)).toThrow('@acme/other is not registered')
