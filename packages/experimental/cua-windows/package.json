@@ -73,20 +73,15 @@
   "files": [
     "lib/index.js",
     "native/bin",
-    "native/CuaWindows.csproj",
-    "native/Directory.Build.props",
-    "native/app.manifest",
-    "native/src",
-    "native/protocol",
-    "native/protocol.schema.json",
-    "native/packages.lock.json",
     "lib/types/**/*.d.ts",
     "lib/types/**/*.d.ts.map",
     "lib/**/*.js.map",
     "src"
   ],
   "scripts": {
-    "build:native": "dotnet build native/CuaWindows.csproj --configuration Release --framework net48"
+    "build:native": "dotnet publish native/entry/CuaWindows.csproj --configuration Release --self-contained false --output native/bin/local -p:EnableWindowsTargeting=true",
+    "build:native:x64": "dotnet publish native/entry/CuaWindows.csproj --configuration Release --runtime win-x64 --self-contained true --output native/bin/win-x64 -p:EnableWindowsTargeting=true",
+    "build:native:arm64": "dotnet publish native/entry/CuaWindows.csproj --configuration Release --runtime win-arm64 --self-contained true --output native/bin/win-arm64 -p:EnableWindowsTargeting=true"
   },
   "os": [
     "win32",

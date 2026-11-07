@@ -1,7 +1,7 @@
 /** Source compilation and installed Windows C# helper resolution. */
 import { constants } from 'node:fs'
 import { access } from 'node:fs/promises'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import { buildNativeExecutable as compileExecutable, sourceNativePackage } from '@deepseek-ai/dsh-cua/native-build'
 
@@ -42,20 +42,22 @@ export function nativeExecutablePath(packageRoot: string, architecture: NativeAr
 }
 
 /**
- * Publish a self-contained C# executable; the build can run on macOS with Windows targeting enabled.
+ * Publish the self-contained C# application directly into the package payload directory.
  * @param spec - SDK command, target, compiler ownership, and deadlines.
- * @returns Immutable content-addressed executable after compiler cleanup.
+ * @returns Package executable path after compiler cleanup; existing output files can be overwritten.
  */
 export function buildNativeExecutable(spec: NativeBuildSpec): Promise<string> {
   const native = join(spec.packageRoot, 'native')
-  const output = join(native, '.build', `win-${spec.architecture}`)
+  const executable = nativeExecutablePath(spec.packageRoot, spec.architecture)
   return compileExecutable({ ...spec,
-    argv: [spec.dotnetPath, 'publish', join(native, 'CuaWindows.csproj'), '--configuration', 'Release',
-      '--runtime', `win-${spec.architecture}`, '--self-contained', 'true', '--output', output,
+    argv: [spec.dotnetPath, 'publish', join(native, 'entry', 'CuaWindows.csproj'), '--configuration', 'Release',
+      '--runtime', `win-${spec.architecture}`, '--self-contained', 'true', '--output', dirname(executable),
       '-p:EnableWindowsTargeting=true'],
-    outputPath: join(output, 'dsh-cua-windows.exe'), executablePath: nativeExecutablePath(spec.packageRoot, spec.architecture),
     lockPath: join(native, '.build', 'publish'),
-    retainedDirectory: join(native, '.build', 'prepared', spec.architecture), binaryName: 'dsh-cua-windows.exe',
+    resolveExecutable: async () => {
+      await access(executable, constants.X_OK)
+      return executable
+    },
   })
 }
 

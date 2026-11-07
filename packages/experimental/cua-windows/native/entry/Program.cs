@@ -5,12 +5,10 @@ using DeepSeek.Cua.Windows;
 
 try
 {
-#if NETFRAMEWORK
-    if (Environment.OSVersion.Version.Build < 19041)
+    if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))
     {
         throw new NativeFailure("UNSUPPORTED", "Windows CUA requires Windows 10 build 19041 or later");
     }
-#endif
 
     var serve = new Option<bool>("--serve") { Arity = ArgumentArity.Zero };
     var sharedServer = new Option<bool>("--shared-server") { Arity = ArgumentArity.Zero };

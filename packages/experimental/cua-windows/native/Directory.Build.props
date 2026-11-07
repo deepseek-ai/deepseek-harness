@@ -1,4 +1,5 @@
 <Project>
+
   <PropertyGroup>
     <LangVersion>14.0</LangVersion>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
@@ -6,9 +7,9 @@
     <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory).build/$(MSBuildProjectName)/obj/</BaseIntermediateOutputPath>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
+
   <ItemGroup>
-    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
     <PackageReference Include="PolySharp" Version="1.15.0" PrivateAssets="all" />
-    <PackageReference Include="System.Text.Json" Version="[10.0.14]" />
   </ItemGroup>
+
 </Project>
