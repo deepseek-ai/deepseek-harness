@@ -9,7 +9,7 @@ import clsx from 'clsx'
 import { flushSync } from 'react-dom'
 import {
   FileTypeIcon, IconChevronDownOutlineRegular, IconChevronsUpDownOutlineRegular, IconEllipsisOutlineRegular, IconPlusOutlineRegular,
-  Tooltip,
+  Tag, Tooltip,
   languageForPath, Menu, MenuItemButton, useCodeHighlighter, type CodeHighlighter, type HighlightSpan,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
@@ -23,6 +23,7 @@ import { ReviewComposer, type ReviewActions } from './ReviewComposer.tsx'
 import reviewCss from './ReviewComposer.module.css'
 import { FileLabel } from './FileLabel.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
+import type { ViewedState } from './viewed-files.ts'
 import css from './ChangesTab.module.css'
 
 type Translate = PropsLocale<typeof NS>['t']
@@ -72,6 +73,10 @@ export interface DiffFileProps {
   readonly tooltip: string
   /** Rows of the file's menu. */
   readonly actions: readonly DiffFileAction[]
+  /** Whether the reader marked this change viewed, or marked an earlier change of the file. */
+  readonly viewed: ViewedState
+  /** Mark the file viewed, which also collapses it, or clear the mark. */
+  readonly onViewed: (viewed: boolean) => void
   /** Receives the section element, which scrolling to the file targets. */
   readonly sectionRef: (element: HTMLElement | null) => void
   /** Forge panel copy. */
@@ -438,10 +443,11 @@ function FileMenu({ name, actions, t }: {
  * @returns the file section.
  */
 export function DiffFile(props: DiffFileProps): ReactNode {
-  const { file, expanded, onToggle, badge, tooltip, actions, sectionRef, t } = props
+  const { file, expanded, onToggle, badge, tooltip, actions, viewed, onViewed, sectionRef, t } = props
   const name = file.path.slice(file.path.lastIndexOf('/') + 1)
   return (
-    <section ref={sectionRef} className={css.file} data-forge-diff-file={file.path} data-expanded={expanded ? '' : undefined}>
+    <section ref={sectionRef} className={css.file} data-forge-diff-file={file.path} data-expanded={expanded ? '' : undefined}
+      data-viewed={viewed}>
       <div className={css.fileHeader}>
         <button
           type="button"
@@ -456,9 +462,15 @@ export function DiffFile(props: DiffFileProps): ReactNode {
         <span className={css.filePath}>
           <FileLabel path={file.path} tooltip={tooltip} />
         </span>
+        {viewed === 'changed' && <Tag tone="warning" className={css.changedTag}>{t('viewed.changed')}</Tag>}
         <span className={css.fileSpacer} data-forge-path-spacer="" />
         {badge !== '' && <span className={css.badge}>{badge}</span>}
         {!file.binary && <Counts file={file} t={t} />}
+        <label className={css.viewed} title={t('viewed.hint')}>
+          <input type="checkbox" checked={viewed === 'viewed'} aria-label={t('viewed.aria', { name })}
+            onChange={(event) => { onViewed(event.target.checked) }} />
+          <span className={css.viewedLabel} aria-hidden="true">{t('viewed.label')}</span>
+        </label>
         {props.visible && <FileMenu name={name} actions={actions} t={t} />}
       </div>
       {expanded && <Body {...props} />}

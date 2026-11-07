@@ -5,10 +5,13 @@ import type { ForgeReviewRequest } from '@deepseek-ai/dsh-experimental-forge/typ
 import type { ReviewSelection, ReviewSource } from './review.ts'
 
 const line = z.object({ path: z.string(), side: z.enum(['L', 'R']), startLine: z.number().int().positive(), endLine: z.number().int().positive(), body: z.string() })
-const selection = z.object({ source: z.object({ kind: z.literal('change'), url: z.string(), headSha: z.string() }), comment: line.extend({ hunk: z.string() }) })
+const commits = z.object({ from: z.string(), to: z.string() }).nullable().default(null)
+const selection = z.object({
+  source: z.object({ kind: z.literal('change'), url: z.string(), headSha: z.string(), commits }), comment: line.extend({ hunk: z.string() }),
+})
 const recordedSelection = selection.extend({ source: z.discriminatedUnion('kind', [
   selection.shape.source,
-  z.object({ kind: z.literal('local'), scope: z.string(), base: z.string().nullable().default(null), baseRef: z.string().nullable().default(null) }),
+  z.object({ kind: z.literal('local'), scope: z.string(), base: z.string().nullable().default(null), baseRef: z.string().nullable().default(null), commits }),
 ]) })
 const record = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('agent'), selection: recordedSelection }),
@@ -109,7 +112,7 @@ export class ReviewQueue {
       ...this.state.records.filter(item => matches(item.selection)).map(item => ({ ...item, key: this.keyOf(item.selection) })),
       ...this.state.comments.filter(matches).map(item => ({ kind: 'pending' as const, selection: item, key: this.keyOf(item) })),
     ]
-    const key = JSON.stringify([path, source.kind, source.kind === 'local' ? [source.scope, source.baseRef] : source.url])
+    const key = JSON.stringify([path, source.kind, source.kind === 'local' ? [source.scope, source.baseRef] : source.url, source.commits])
     const previous = this.files.get(key)
     const locked = this.state.uncertain !== null
     if (previous !== undefined && previous.locked === locked && previous.error === this.state.error
@@ -152,12 +155,12 @@ export class ReviewQueue {
   }
 
   /**
-   * Save a frozen PR comment unless a write needs reconciliation.
+   * Save a frozen PR comment on the whole change request unless a write needs reconciliation.
    * @param selection - frozen PR comment.
-   * @returns whether it was saved.
+   * @returns whether it was saved; a comment on chosen commits is refused.
    */
   add(selection: ReviewSelection): boolean {
-    if (selection.source.kind !== 'change' || this.state.uncertain !== null) return false
+    if (selection.source.kind !== 'change' || selection.source.commits !== null || this.state.uncertain !== null) return false
     return this.save({ ...this.state, comments: [...this.state.comments, selection] })
   }
 
@@ -251,9 +254,10 @@ export class ReviewQueue {
  * Compare review identity while allowing records from an older PR head to remain visible.
  * @param left - recorded source.
  * @param right - displayed source.
- * @returns whether the sources name the same PR, or the same local scope and base ref.
+ * @returns whether the sources name the same PR, or the same local scope and base ref, with the same chosen commits.
  */
 export function sameReviewSource(left: ReviewSource, right: ReviewSource): boolean {
+  if (left.commits?.from !== right.commits?.from || left.commits?.to !== right.commits?.to) return false
   return left.kind === 'local' ? right.kind === 'local' && left.scope === right.scope && left.baseRef === right.baseRef
     : right.kind === 'change' && left.url === right.url
 }

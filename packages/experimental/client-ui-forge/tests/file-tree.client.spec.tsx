@@ -13,7 +13,7 @@ import { FileTreePane } from '../src/client/FileTreePane.tsx'
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
 function file(path: string, previousPath: string | null = null): ForgeDiffFile {
-  return { path, previousPath, status: previousPath === null ? 'modified' : 'renamed', binary: false, oversized: false, untracked: false, additions: 1, deletions: 0, hunks: [] }
+  return { path, previousPath, status: previousPath === null ? 'modified' : 'renamed', binary: false, oversized: false, untracked: false, layer: 'implementation', digest: 'digest', additions: 1, deletions: 0, hunks: [] }
 }
 
 it('compacts directory chains, sorts directories before files, and keeps identical basenames distinct', () => {
@@ -140,7 +140,7 @@ it('bounds pointer and keyboard resizing, retains hidden width, and stops cancel
     override observe() {}
   })
   try {
-    const props = { files: [file('a.ts')], state: { query: '', collapsed: {}, selected: null }, t: makeTranslate(en), filter: vi.fn(), toggle: vi.fn(), jump: vi.fn(), id: 'tree' }
+    const props = { files: [file('a.ts')], state: { query: '', collapsed: {}, selected: null }, t: makeTranslate(en), filter: vi.fn(), toggle: vi.fn(), jump: vi.fn(), id: 'tree', onWidth: vi.fn() }
     const view = render(<FileTreePane {...props} position="right" />)
     const handle = view.getByRole('separator')
     const capture = vi.fn(), release = vi.fn()
@@ -202,7 +202,7 @@ it('bounds pointer and keyboard resizing, retains hidden width, and stops cancel
 it('can mount into a detached fragment without measuring a nonexistent parent element', () => {
   const observe = vi.spyOn(ResizeObserver.prototype, 'observe')
   const view = render(<FileTreePane files={[]} state={{ query: '', collapsed: {}, selected: null }} t={makeTranslate(en)}
-    filter={vi.fn()} toggle={vi.fn()} jump={vi.fn()} id="detached-tree" position="right" />, { container: document.createDocumentFragment() })
+    filter={vi.fn()} toggle={vi.fn()} jump={vi.fn()} id="detached-tree" position="right" onWidth={vi.fn()} />, { container: document.createDocumentFragment() })
   expect(observe).not.toHaveBeenCalled()
   view.unmount()
 })
