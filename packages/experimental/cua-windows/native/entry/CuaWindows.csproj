@@ -12,7 +12,12 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
+	<RootNamespace>DeepSeek.Cua.Windows</RootNamespace>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" Version="2.0.14" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../protocol/CuaProtocol.csproj" />
