@@ -79,7 +79,9 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 
 [配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-cua-macos)列出全部字段。原生工具调用使用 `{method, params}`，模型可以看到每个方法的完整参数定义。`getApp` 返回每个面向应用的操作所需的 `appHandle`，`app.getWindow(windowId)` 返回负责截图和指针输入的对象。
 
-`pressKey(key, modifiers?)` 按下并释放一个键。修饰键名称单独传入，例如 `pressKey('Tab', ['shift'])` 或 `pressKey('+')`；省略修饰键数组表示不按修饰键。macOS helper 接受 `command`/`cmd`、`shift`、`option`/`alt`、`control`/`ctrl` 和 `fn`，并映射到对应物理键。按键名由平台定义；数字键盘名称（`KP_0` 到 `KP_9`、`KP_Enter` 和数字键盘运算键）保留独立的物理键码。`typeText` 发送字面文本，包括其中的换行和制表符。在 macOS 上，通过 App 对象调用 `pressKey`。调用共享接口 `sendKeyEvent` 会收到 `NOT_IMPLEMENTED`。
+`pressKey(key, modifiers?)` 按下并松开一个键。使用快捷键时单独传入修饰键，例如 `pressKey('a', ['command'])`。单独调用 `pressKey('shift')` 时，按下事件带有 Shift 标志，释放事件清除该标志。`+` 和 `plus` 都会发送 Shift 和等号。macOS helper 接受 `command`/`cmd`、`shift`、`option`/`alt`、`control`/`ctrl` 和 `fn`，并映射到对应物理键。按键名由平台定义；数字键盘名称（`KP_0` 到 `KP_9`、`KP_Enter` 和数字键盘运算键）保留独立的物理键码。`typeText` 发送字面文本，包括其中的换行和制表符。短按使用 App 对象上的 `pressKey`。
+
+长按时，在 `run_code` 中调用 `app.sendKeyEvent('w', 'down')`。首次按下后，该键在同一次执行的后续工具调用中保持按下。对自己已按住的普通键再发一次 `down`，原接收进程会收到一次带重复标志的按下事件。调用方决定是否重复和间隔多久。控件可能过滤模拟的重复事件，可通过控件的实际变化确认效果。松键只需一次 `up`。每个键可分别松开。例如先按 W，再按 D，松开 D 后 W 仍按着。程序正常返回、出错退出或用户暂停时，helper 为本次执行仍按着的键逐一发送松开事件，每个事件都发回原接收进程。后续执行不能释放前一次执行的键。
 
 Agent 销毁和插件卸载会取消并等待完整工具调用，包括图像接入检查和附件存储。已经开始的图像写入必须结束后，销毁才会返回；已取消的调用不会返回成功截图。
 
@@ -222,6 +224,7 @@ Available at app or window level depending on the platform.
 - typeText(text: string) -> ActionResult — type literal text at the app's current focus; line endings send Return and tabs send Tab.
 - paste(text: string, options?: { format?: 'text' | 'html' }) -> ActionResult — deliver text or HTML through the app's Paste command, restoring prior clipboard contents unless another writer changes them; a Paste failure is surfaced without substituting typeText, and PASTE_NOT_CONSUMED means inspect before any retry.
 - pressKey(key: string, modifiers?: string[]) -> ActionResult — press and release one complete keystroke. For example pressKey('Tab', ['shift']) or pressKey('+'). Key and modifier names are platform-defined strings. Pass key and modifiers separately; do not pack them into a chord string.
+- sendKeyEvent(key: string, direction: 'down' | 'up') -> ActionResult — send 'down' to hold a key across tool calls in one run_code, for example W down, D down, D up, W up. Holding a key on a physical keyboard can produce repeated key-down events after a delay. To send one such repeat for a non-modifier key this run already holds, send 'down' again. Each call posts one event. A control can filter repeats. Use the app's response to decide whether and when to repeat or release the key. When this run_code returns, throws, or the user pauses it, macOS releases only its remaining keys at their original recipients.
 
 Raw tools use { method, params }: include appHandle for app calls and windowId for window calls, and use snapshotId with elementId for element routes. The emit option is facade-only: emit is local output control, so raw callers must follow the raw operation schema for admitted params. getAccessibilityTree and getWindow read through raw getState; getWindows maps to listWindows; getScreenshot maps to screenshot; cua.getState maps to listApps; every other named operation uses the same method name.
 ```

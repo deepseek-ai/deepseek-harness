@@ -14,6 +14,8 @@ const methodDetails = new Map<string, string>([
 export const GUIDANCE = `${PLATFORM_GUIDANCE}
 
 ${COMMON_GUIDANCE.replace(/^- ([\w.]+)\(.*$/gm, (entry, method: string) => {
+  if (method === 'pressKey') return `${entry}
+- sendKeyEvent(key: string, direction: 'down' | 'up') -> ActionResult — send 'down' to hold a key across tool calls in one run_code, for example W down, D down, D up, W up. Holding a key on a physical keyboard can produce repeated key-down events after a delay. To send one such repeat for a non-modifier key this run already holds, send 'down' again. Each call posts one event. A control can filter repeats. Use the app's response to decide whether and when to repeat or release the key. When this run_code returns, throws, or the user pauses it, macOS releases only its remaining keys at their original recipients.`
   const detail = methodDetails.get(method)
   return detail ? `${entry} ${detail}` : entry
 })}`

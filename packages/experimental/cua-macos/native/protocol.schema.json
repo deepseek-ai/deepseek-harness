@@ -1049,12 +1049,17 @@
                 "down",
                 "up"
               ]
+            },
+            "runId": {
+              "type": "string",
+              "minLength": 1
             }
           },
           "required": [
             "appHandle",
             "key",
-            "direction"
+            "direction",
+            "runId"
           ],
           "additionalProperties": false
         }
@@ -1441,6 +1446,37 @@
           "required": [
             "permission",
             "settingsMessage"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string",
+          "const": "releaseHeldKeys"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "runId": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "runId"
           ],
           "additionalProperties": false
         }
