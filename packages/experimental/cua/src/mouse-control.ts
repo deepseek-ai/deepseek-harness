@@ -21,14 +21,17 @@ export class MouseControl {
   }
 
   /**
-   * Ask once for the Session. Simultaneous requests cannot open additional questions.
+   * Ask the main task for a Session decision. Simultaneous requests cannot open additional questions.
    * @param agent Live Agent that owns the Session.
    * @param signal Tool lifetime. An aborted tool cannot grant permission.
    * @returns True only when the user chose the offered approval.
    */
   async request(agent: Agent, signal: AbortSignal): Promise<boolean> {
+    if (agent.session.header.origin === 'subagent') {
+      throw new NativeError('MOUSE_CONTROL_UNAVAILABLE', "Delegated tasks cannot move the user's pointer. Use AX hover, click, or performAction. If the task requires a physical hover, report that step in your final result for the main task.")
+    }
     const decision = this.decisions.get(agent.id)
-    if (decision === 'asking') throw new NativeError('MOUSE_CONTROL_PENDING', 'A mouse control request is already awaiting an answer in this session')
+    if (decision === 'asking') throw new NativeError('MOUSE_CONTROL_PENDING', 'Wait for the pending mouse control request in this session before continuing')
     if (decision !== undefined) return decision
     const questions = this.ctx.get('userQuestions')
     if (!questions) throw new NativeError('MOUSE_APPROVAL_UNAVAILABLE', 'No human answerer is available for mouse control')
@@ -49,11 +52,10 @@ export class MouseControl {
       this.decisions.set(agent.id, granted)
       return granted
     } catch (error) {
-      if (error instanceof UserQuestionError && error.code === 'ASK_CANCELLED') {
-        this.decisions.set(agent.id, false)
-        return false
-      }
       this.decisions.delete(agent.id)
+      if (error instanceof UserQuestionError && error.code === 'ASK_CANCELLED') {
+        throw new NativeError('MOUSE_APPROVAL_CANCELLED', 'The mouse control request was dismissed. Continue without mouse control unless the user asks to reconsider', { cause: error })
+      }
       throw error
     }
   }

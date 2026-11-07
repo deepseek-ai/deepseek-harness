@@ -884,8 +884,9 @@ it('moves only for the consenting session, without granting application access o
   const ask = vi.fn((id: string) => ({ answers: [{ id, selected: ['Allow for this session'] }] }))
   f.ctx.on('user-questions/request', async ({ questions }) => ask(questions[0]!.id))
   const target = { appHandle: 'app-one', snapshotId: 'snapshot', elementId: '0' }
-  native.request.mockResolvedValueOnce({ appHandle: 'app-one', name: 'Fixture', running: true,
-    authorization: { id: 'a'.repeat(64), name: 'Fixture', persistable: false } })
+  const application = { appHandle: 'app-one', name: 'Fixture', running: true,
+    authorization: { id: 'a'.repeat(64), name: 'Fixture', persistable: false } }
+  native.request.mockResolvedValueOnce(application)
   expect((await f.execute('getApp', { selector: 'Fixture' })).isError).toBe(false)
   const move = async (useSystemPointer: boolean) => {
     expect((await f.execute('mouseMove', target)).isError).toBe(false)
@@ -899,19 +900,24 @@ it('moves only for the consenting session, without granting application access o
   const otherCall = (method: string, params: Record<string, unknown>) => executeToolFixture(f.ctx, {
     agent: other.agent, signal: new AbortController().signal, callId: ToolCallId(method), name: 'cua', arguments: { method, params },
   })
-  expect((await otherCall('requestMouseControl', {})).value).toBe(true)
-  expect((await otherCall('mouseMove', target)).isError).toBe(true)
+  expect(JSON.stringify((await otherCall('mouseMove', target)).content)).toContain('APP_ACCESS_REQUIRED')
+  native.request.mockResolvedValueOnce(application)
+  expect((await otherCall('getApp', { selector: 'Fixture' })).isError).toBe(false)
+  ask.mockImplementationOnce(id => ({ answers: [{ id, selected: ['Deny'] }] }))
+  expect((await otherCall('requestMouseControl', {})).value).toBe(false)
+  expect((await otherCall('mouseMove', target)).isError).toBe(false)
+  expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...target, useSystemPointer: false }, expect.any(AbortSignal), expect.any(String))
+  await move(true)
   await f.provider.dispose()
   await f.ctx.plugin(NativeProvider, config)
   expect((await f.execute('requestMouseControl')).value).toBe(true)
-  expect(ask.mock.calls.map(([id]) => id)).toEqual(['cua-app-access', 'cua-mouse-control', 'cua-mouse-control', 'cua-mouse-control'])
+  expect(ask.mock.calls.map(([id]) => id)).toEqual(['cua-app-access', 'cua-mouse-control', 'cua-app-access', 'cua-mouse-control', 'cua-mouse-control'])
 })
 
-it.each(['Deny', 'custom', 'cancel'] as const)('remembers a %s answer without moving the pointer or asking again', async (answer) => {
+it.each(['Deny', 'custom'] as const)('remembers a %s answer without moving the pointer or asking again', async (answer) => {
   const f = await setup()
   await f.ctx.plugin(UserQuestions)
   const ask = vi.fn(() => {
-    if (answer === 'cancel') throw new UserQuestionError('User dismissed the request', 'ASK_CANCELLED')
     return { answers: [{ id: 'cua-mouse-control', selected: [answer === 'custom' ? 'Allow for this session' : answer],
       ...(answer === 'custom' ? { custom: 'maybe later' } : {}) }] }
   })
@@ -919,6 +925,39 @@ it.each(['Deny', 'custom', 'cancel'] as const)('remembers a %s answer without mo
   expect((await f.execute('requestMouseControl')).value).toBe(false)
   expect((await f.execute('requestMouseControl')).value).toBe(false)
   expect(ask).toHaveBeenCalledTimes(1)
+  expect(native.request).not.toHaveBeenCalled()
+})
+
+it('allows a fresh request after dismissal without authorizing the first one', async () => {
+  const f = await setup()
+  await f.ctx.plugin(UserQuestions)
+  const ask = vi.spyOn(f.ctx.userQuestions, 'ask')
+    .mockRejectedValueOnce(new UserQuestionError('User dismissed the request', 'ASK_CANCELLED'))
+    .mockResolvedValueOnce({ answers: [{ id: 'cua-mouse-control', selected: ['Allow for this session'] }] })
+  const dismissed = await f.execute('requestMouseControl')
+  expect(dismissed.isError).toBe(true)
+  expect(JSON.stringify(dismissed.content)).toContain('MOUSE_APPROVAL_CANCELLED')
+  expect((await f.execute('requestMouseControl')).value).toBe(true)
+  expect(ask).toHaveBeenCalledTimes(2)
+  expect(native.request).not.toHaveBeenCalled()
+})
+
+it('refuses delegated mouse control before asking the user even when the parent has approval', async () => {
+  const f = await setup()
+  await f.ctx.plugin(UserQuestions)
+  const ask = vi.spyOn(f.ctx.userQuestions, 'ask').mockResolvedValue({
+    answers: [{ id: 'cua-mouse-control', selected: ['Allow for this session'] }],
+  })
+  expect((await f.execute('requestMouseControl')).value).toBe(true)
+  ask.mockClear()
+  const { agent } = await f.ctx.agents.create({ sessionId: SessionId('delegated-mouse-session'),
+    meta: { origin: 'subagent', parentSession: f.handle.agent.id } })
+  const refused = await executeToolFixture(f.ctx, { agent, signal: new AbortController().signal,
+    callId: ToolCallId('delegated-mouse-control'), name: 'cua', arguments: { method: 'requestMouseControl', params: {} } })
+  expect(refused.isError).toBe(true)
+  expect(JSON.stringify(refused.content)).toContain('MOUSE_CONTROL_UNAVAILABLE')
+  expect(JSON.stringify(refused.content)).toContain('report that step in your final result for the main task')
+  expect(ask).not.toHaveBeenCalled()
   expect(native.request).not.toHaveBeenCalled()
 })
 
@@ -938,7 +977,7 @@ it('drops late approval after cancellation and admits only one pending question'
   const controller = new AbortController()
   const first = f.execute('requestMouseControl', {}, controller.signal)
   await entered.promise
-  expect((await f.execute('requestMouseControl')).isError).toBe(true)
+  expect(JSON.stringify((await f.execute('requestMouseControl')).content)).toContain('MOUSE_CONTROL_PENDING')
   controller.abort()
   release.resolve(undefined)
   await Promise.allSettled([first])
@@ -958,7 +997,7 @@ it('keeps provider-specific pointer flags and questions off providers without mo
         keyboard: ['app'], coordinateSpace: 'screenshot-pixels', browser: false },
     })
   } })
-  expect((await f.execute('requestMouseControl')).isError).toBe(true)
+  expect(JSON.stringify((await f.execute('requestMouseControl')).content)).toContain('UNSUPPORTED_OPERATION')
   await selectApplication(f)
   const target = { appHandle: 'app-one', snapshotId: 'snapshot', elementId: '0' }
   expect((await f.execute('mouseMove', target)).isError).toBe(false)

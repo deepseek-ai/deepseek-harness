@@ -391,10 +391,6 @@ actor AXWorker {
                     if let target = hit, try ax().windowID(target) != window.windowID { hit = nil }
                     return try moveUsingAX(hit, windowID: window.windowID, handle: handle)
                 }
-                if let hover = hovers[handle] {
-                    _ = try hover.move(to: nil, in: window.windowID, access: ax())
-                    hovers.removeValue(forKey: handle)
-                }
                 return .mouseMove(route, point)
             }
             var clickRoute = route

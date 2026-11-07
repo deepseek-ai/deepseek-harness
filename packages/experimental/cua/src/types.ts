@@ -247,8 +247,9 @@ export interface CuaApp extends CuaSurface {
 /** Native app API; its caller owns global bindings and variable persistence. */
 export interface CuaApi {
   /**
-   * Ask to move the user's pointer with mouseMove for this session until restart.
-   * @returns True only after explicit approval. A refusal is remembered for the session.
+   * Ask to move the user's pointer with mouseMove for this session until restart. Only the main task can ask.
+   * @returns True on approval, false on refusal. Both decisions last until restart for this session.
+   * @throws If the user dismisses the question without deciding or another request is pending.
    */
   requestMouseControl(): Promise<boolean>
   /**
