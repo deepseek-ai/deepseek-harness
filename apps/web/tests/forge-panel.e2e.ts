@@ -547,10 +547,14 @@ it.skipIf(MODE === 'record')('automatically shows a numbered PR when gh JSON omi
   await change.getByText('等待评审 · 1 条未解决讨论', { exact: true }).waitFor()
   await compareOrRefreshGolden(join(EXPECTED, 'reference.expected.md'),
     await captureStableAria(page, `[data-forge-change="${PULL}"]`, scaffold.workspaceCwd), MODE)
-  expect(events.flatMap((event) => {
-    const record = pluginRecordOf(event)
-    return record?.type === 'plugin:forge-session/binding' ? [record.data] : []
-  })).toEqual([{ action: 'reference', url: PULL }])
+  await expect.poll(async () => {
+    await scaffold.ctx.sessionPersistence.flush()
+    const boundEvents = await readPersistedEvents(scaffold, sessionId)
+    return boundEvents.flatMap((event) => {
+      const record = pluginRecordOf(event)
+      return record?.type === 'plugin:forge-session/binding' ? [record.data] : []
+    })
+  }).toEqual([{ action: 'reference', url: PULL }])
   const calls = (await readFile(join(project, '.fixture-bin', 'calls.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string[])
   expect(calls).toContainEqual(['pr', 'view', '7', '--repo', 'octo/demo', '--json', 'url'])
   expect(tripwire.pageErrors).toEqual([])
