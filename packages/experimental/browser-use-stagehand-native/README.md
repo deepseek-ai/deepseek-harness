@@ -50,7 +50,6 @@ Install a Chrome or Chromium executable that supports the pinned Stagehand SDK. 
 |---|---|---|
 | `mode` | `launch` | Start a fresh browser or `attach` to an existing browser. |
 | `cdpEndpoint` | Required for `attach` | HTTP or WebSocket debugging endpoint selected by the profile. |
-| `extensionId` | Load bundled extension | Installed Stagehand extension to use in an existing browser. |
 | `executablePath` | Installed stable Chrome | Chrome or Chromium executable, for `launch` only. |
 | `headless` | `true` | Hide a launched browser's window. |
 | `operationTimeoutMs` | `30000` | Deadline for Chromium startup, navigation, and natural-language actions. |

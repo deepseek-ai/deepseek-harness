@@ -8,25 +8,23 @@
   "files": [
     "src/client/CopyToast.tsx",
     "src/client/Dialog.tsx",
-    "src/client/HeaderAction.tsx",
     "src/client/controller.ts",
     "src/client/copy-controller.ts",
     "src/client/index.ts",
     "src/client/locales.ts",
-    "src/routes.ts",
-    "src/css-modules.d.ts"
+    "src/routes.ts"
   ],
   "references": [
     { "path": "../../../vendor/cordis" },
     { "path": "../../client/locale/tsconfig.client.json" },
     { "path": "../../client/store" },
     { "path": "../../client/ui-commands" },
+    { "path": "../../client/ui-context-menu" },
     { "path": "../../client/ui-conversation/tsconfig.client.json" },
     { "path": "../../client/ui-layout" },
     { "path": "../../client/ui-message-feedback" },
     { "path": "../../client/ui-primitives" },
     { "path": "../../client/ui-renderer" },
-    { "path": "../../client/ui-session" },
     { "path": "../../client/ui-slots" },
     { "path": "../../core/session" }
   ]

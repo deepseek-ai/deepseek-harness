@@ -66,7 +66,7 @@ function sectionOperations(account: AccountSnapshot, pages: PlatformPages): Acco
     openPlatformPage: pages.open,
     refreshAccount: async () => {},
     avatarFailed: () => {},
-    bonusNoticeShown: () => {}, bonusNoticeDismissed: () => {},
+
     hasRunningAccountTasks: async () => false,
     contactUs: () => {}, showLogin: () => {}, setOnboarding: () => {},
     start: async () => {}, cancel: async () => {}, signOut: async () => {},

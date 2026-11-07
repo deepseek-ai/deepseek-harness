@@ -17,7 +17,7 @@
               "type": "tool-call",
               "id": "root-resume-leaf",
               "name": "send_message",
-              "arguments": "{\"agent_id\":\"{{fromRequest:([a-f0-9-]+) .inactive. parent=[^ ]+ depth=2}}\",\"message\":\"Continue once with LEAF_RESUMED.\"}"
+              "arguments": "{\"agent\":\"agent-1/agent-1\",\"message\":\"Continue once with LEAF_RESUMED.\"}"
             }
           },
           {

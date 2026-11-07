@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-05-cua-scoped-surfaces-and-input.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-05-cua-scoped-surfaces-and-input.md
+/agent-note-cua-scoped-surfaces-and-separated-input-capabilities:
+  en: a0a2e9d0651e212f
+  zh: b7a2ab4092c2595b
+/agent-note-cua-scoped-surfaces-and-separated-input-capabilities/problem:
+  en: f72db0b79aa02fb5
+  zh: b91c1f177dc93ab4
+/agent-note-cua-scoped-surfaces-and-separated-input-capabilities/decision:
+  en: ec115e11f96ffe60
+  zh: c1fe9eb2866196d0
+/agent-note-cua-scoped-surfaces-and-separated-input-capabilities/alternatives-considered:
+  en: 32c970ae153e0f6c
+  zh: 8431be0a10ffed15
+/agent-note-cua-scoped-surfaces-and-separated-input-capabilities/consequences:
+  en: 5c6ec60b77f1bff0
+  zh: e1ae568ef3501b7b

@@ -18,7 +18,10 @@ import { ChangesTab, type ChangesTabInjected, type ChangesTabProps } from '../sr
 import { en, zh } from '../src/client/locales.ts'
 import type { PanelSnapshot } from '../src/client/source.ts'
 import css from '../src/client/ChangesTab.module.css'
-import type { ForgeChangeRequestDiff, ForgeDiffFile, ForgeLocalDiff, ForgePanelState } from '../src/types.ts'
+import baseCss from '../src/client/BaseMenu.module.css'
+import type {
+  ForgeBaseBranch, ForgeBaseBranches, ForgeChangeRequestDiff, ForgeDiffFile, ForgeLocalDiff, ForgePanelState,
+} from '../src/types.ts'
 import { entry, ready, snapshot } from './client-fixtures.client.ts'
 
 const t = makeTranslate(en)
@@ -96,6 +99,14 @@ const CHANGE: ForgeChangeRequestDiff = {
   fileUrls: { 'src/app.ts': `https://github.com/octo/demo/blob/${HEAD}/src/app.ts`, 'docs/gone.txt': `https://github.com/octo/demo/blob/${HEAD}/docs/gone.txt` },
 }
 
+const TOPIC: ForgeBaseBranch = { ref: 'refs/heads/topic', name: 'topic' }
+/** Branches the `branch` scope can compare with: `origin/main` automatically, a release branch, and `topic`. */
+const BASES: ForgeBaseBranches = {
+  automatic: { name: BASE, worktree: false },
+  remote: [{ ref: 'refs/remotes/origin/main', name: BASE }, { ref: 'refs/remotes/origin/release/2.4', name: 'origin/release/2.4' }],
+  local: [TOPIC],
+}
+
 /** Panel state of `/work/repo` on `main` whose `branch` scope changes `src/app.ts` against `origin/main`. */
 const LOCAL_STATE = ready({ local: { base: BASE, files: [{ path: 'src/app.ts', additions: 2, deletions: 2, binary: false }] } })
 /** Panel state with change request #7 from `feat`. */
@@ -108,6 +119,7 @@ function ok<T>(value: T): RemoteResult<T> {
 /** Refused Remote reads, by what the Host said. */
 const REFUSED = {
   noForkPoint: { ok: false, error: new RemoteError('forgePanel/no-fork-point', 'no fork point', {}) },
+  baseMissing: { ok: false, error: new RemoteError('forgePanel/base-missing', 'no base branch', {}) },
   notCheckout: { ok: false, error: new RemoteError('forgePanel/not-a-checkout', 'not a checkout', {}) },
   tooLarge: { ok: false, error: new RemoteError('forgePanel/diff-too-large', 'too large', {}) },
   filterConfig: { ok: false, error: new RemoteError('forgePanel/filter-config-failed', 'filter configuration unavailable', {}) },
@@ -202,6 +214,7 @@ function mount(options: MountOptions = {}) {
   const faces: Faces = {
     reconnect: vi.fn<ChangesTabInjected['reconnect']>(),
     localDiff: vi.fn<ChangesTabInjected['localDiff']>(async () => ok(LOCAL)),
+    diffBases: vi.fn<ChangesTabInjected['diffBases']>(async () => ok(BASES)),
     localText: vi.fn<ChangesTabInjected['localText']>(async () => ok(APP_TEXT)),
     changeRequestDiff: vi.fn<ChangesTabInjected['changeRequestDiff']>(async () => ok(CHANGE)),
     changeRequestText: vi.fn<ChangesTabInjected['changeRequestText']>(async () => ok(APP_TEXT)),
@@ -393,14 +406,17 @@ describe('ChangesTab local reads', () => {
     const m = mount({ state: null })
     expect(m.view.container.querySelector('[data-state="ongoing"]')).not.toBeNull()
     expect(m.view.queryByRole('button', { name: en['changes.local.create'] })).toBeNull()
+    expect(m.view.container.querySelector('[data-forge-head]')?.textContent).toBe('HEAD')
     expect(m.faces.localDiff).not.toHaveBeenCalled()
 
     act(() => { m.panel.set({ state: LOCAL_STATE, disconnected: false }) })
-    expect(m.faces.localDiff).toHaveBeenCalledWith({ kind: 'branch' }, expect.any(AbortSignal))
+    expect(m.faces.localDiff).toHaveBeenCalledWith({ kind: 'branch', base: null }, expect.any(AbortSignal))
     await settle()
 
     expect(m.paths()).toEqual(['assets/logo.png', 'docs/gone.txt', 'lib/b.txt', 'logs/big.log', 'src/app.ts', 'src/new.ts'])
-    expect(m.view.getByText('Compared with origin/main, including uncommitted changes')).toBeTruthy()
+    expect(m.view.container.querySelector('[data-forge-head]')?.textContent).toBe('main')
+    expect(m.view.getByRole('button', { name: 'Base branch: origin/main' })).toBeTruthy()
+    expect(m.view.getByText(en['diff.base.uncommitted'])).toBeTruthy()
     expect(m.view.getByRole('status').textContent).toBe('2 more untracked files are not listed')
     expect(m.view.getByRole('button', { name: 'All 6 files' })).toBeTruthy()
     expect(m.view.container.querySelector(`.${css.totals}`)?.textContent).toBe('+4−3')
@@ -453,10 +469,11 @@ describe('ChangesTab local reads', () => {
     expect(m.faces.localDiff.mock.calls.map(([scope]) => scope.kind)).toEqual(['branch', 'staged', 'unstaged', 'uncommitted'])
   })
 
-  it('names no base while the panel has no fork point', async () => {
-    const m = mount({ state: ready() })
+  it('names a detached HEAD by its commit, and the automatic choice while the panel has no fork point', async () => {
+    const m = mount({ state: ready({}, { branch: null, commit: 'abc1234' }) })
     await settle()
-    expect(m.view.container.querySelector(`.${css.headerNote}`)?.textContent).toBe('')
+    expect(m.view.container.querySelector('[data-forge-head]')?.textContent).toBe('abc1234')
+    expect(m.view.getByRole('button', { name: 'Base branch: Default' })).toBeTruthy()
   })
 
   it.each([
@@ -644,6 +661,106 @@ describe('ChangesTab local reads', () => {
   })
 })
 
+describe('ChangesTab base branch', () => {
+  const CLEAN: ForgeLocalDiff = { ...LOCAL, omitted: 0 }
+
+  it('compares the branch scope with a chosen branch, and again with the automatic fork point', async () => {
+    const m = mount()
+    await settle()
+    fireEvent.click(m.view.getByRole('button', { name: 'Base branch: origin/main' }))
+    await settle()
+    expect(m.faces.diffBases).toHaveBeenCalledWith('', expect.any(AbortSignal))
+    fireEvent.click(m.view.getByRole('menuitem', { name: 'topic' }))
+    expect(m.store.getSnapshot().byTab[TAB]?.base).toEqual(TOPIC)
+    expect(m.faces.localDiff).toHaveBeenLastCalledWith({ kind: 'branch', base: TOPIC.ref }, expect.any(AbortSignal))
+    expect(m.view.container.querySelector('[data-state="ongoing"]')).not.toBeNull()
+    await settle()
+    expect(m.paths()).toHaveLength(6)
+
+    fireEvent.click(m.view.getByRole('button', { name: 'Base branch: topic' }))
+    await settle()
+    fireEvent.click(m.view.getByRole('menuitem', { name: /^origin\/main/ }))
+    expect(m.store.getSnapshot().byTab[TAB]?.base).toBeNull()
+    expect(m.faces.localDiff).toHaveBeenLastCalledWith({ kind: 'branch', base: null }, expect.any(AbortSignal))
+  })
+
+  it('records review comments under the compared ref and names the base the Host reports', async () => {
+    const renderDiff = DiffFileModule.DiffFile
+    let source: ReviewActions['source'] | undefined
+    vi.spyOn(DiffFileModule, 'DiffFile').mockImplementation((props) => {
+      source = props.review?.source
+      return renderDiff(props)
+    })
+    const m = mount({
+      setup: (faces) => {
+        faces.localDiff.mockImplementation(async scope => ok({ ...CLEAN, base: scope.kind !== 'branch' ? null : scope.base === null ? BASE : 'topic' }))
+      },
+    })
+    await settle()
+    expect(source).toEqual({ kind: 'local', scope: 'branch', base: BASE, baseRef: null })
+
+    act(() => { m.store.actions.based(TAB, TOPIC) })
+    await settle()
+    expect(source).toEqual({ kind: 'local', scope: 'branch', base: 'topic', baseRef: TOPIC.ref })
+
+    act(() => { m.store.actions.scoped(TAB, 'staged') })
+    await settle()
+    expect(source).toEqual({ kind: 'local', scope: 'staged', base: null, baseRef: null })
+  })
+
+  it('keeps the chosen branch while another scope shows, and reads that scope without it', async () => {
+    const m = mount()
+    await settle()
+    act(() => { m.store.actions.based(TAB, TOPIC) })
+    act(() => { m.store.actions.scoped(TAB, 'staged') })
+    await settle()
+    expect(m.faces.localDiff).toHaveBeenLastCalledWith({ kind: 'staged' }, expect.any(AbortSignal))
+    expect(m.view.queryByRole('button', { name: 'Base branch: topic' })).toBeNull()
+    act(() => { m.store.actions.scoped(TAB, 'branch') })
+    expect(m.view.getByRole('button', { name: 'Base branch: topic' })).toBeTruthy()
+  })
+
+  it.each([
+    ['is gone', REFUSED.baseMissing, 'The base branch topic was not found; it may have been deleted', true],
+    ['shares no history with HEAD', REFUSED.noForkPoint, 'topic shares no history with HEAD', false],
+  ])('offers the automatic fork point instead of a retry when the chosen branch %s', async (_label, refused, message, missing) => {
+    const m = mount({
+      setup: (faces) => { faces.localDiff.mockImplementation(async scope => scope.kind === 'branch' && scope.base !== null ? refused : ok(CLEAN)) },
+    })
+    await settle()
+    act(() => { m.store.actions.based(TAB, TOPIC) })
+    await settle()
+    expect(m.view.getByRole('status').textContent).toBe(`${message}${en['diff.useAutomaticBase']}`)
+    expect(m.view.queryByRole('button', { name: en.retry })).toBeNull()
+    expect(m.view.getByRole('button', { name: 'Base branch: topic' }).classList.contains(baseCss.missing ?? '')).toBe(missing)
+
+    fireEvent.click(m.view.getByRole('button', { name: en['diff.useAutomaticBase'] }))
+    expect(m.store.getSnapshot().byTab[TAB]?.base).toBeNull()
+    await settle()
+    expect(m.paths()).toHaveLength(6)
+  })
+
+  it('names a later failure of the chosen branch beside its changes, and keeps a retry for other failures', async () => {
+    const m = mount({ setup: (faces) => { faces.localDiff.mockResolvedValue(ok(CLEAN)) } })
+    await settle()
+    act(() => { m.store.actions.based(TAB, TOPIC) })
+    await settle()
+    m.faces.localDiff.mockResolvedValueOnce(REFUSED.failed)
+    fireEvent.click(m.view.getByRole('button', { name: en['diff.refresh'] }))
+    await settle()
+    expect(m.view.getByRole('status').textContent).toBe(`${en['diff.error']}${en.retry}`)
+
+    m.faces.localDiff.mockResolvedValueOnce(REFUSED.baseMissing)
+    fireEvent.click(m.view.getByRole('button', { name: en.retry }))
+    await settle()
+    expect(m.paths()).toHaveLength(6)
+    const notice = m.view.getByRole('status')
+    expect(notice.textContent).toBe(`The base branch topic was not found; it may have been deleted${en['diff.useAutomaticBase']}`)
+    fireEvent.click(within(notice).getByRole('button', { name: en['diff.useAutomaticBase'] }))
+    expect(m.store.getSnapshot().byTab[TAB]?.base).toBeNull()
+  })
+})
+
 describe('ChangesTab layout', () => {
   it('draws lines side by side, then in one column, and wraps them by choice', async () => {
     const m = mount()
@@ -779,7 +896,7 @@ describe('ChangesTab unchanged lines', () => {
     expect(gaps()).toEqual(['2 unchanged lines', '4 unchanged lines', en['diff.unchangedRest']])
 
     fireEvent.click(within(app).getByRole('button', { name: '2 unchanged lines' }))
-    expect(m.faces.localText).toHaveBeenCalledWith({ kind: 'branch' }, 'src/app.ts')
+    expect(m.faces.localText).toHaveBeenCalledWith({ kind: 'branch', base: null }, 'src/app.ts')
     expect([...app.querySelectorAll('[data-forge-diff-gap]')].every(gap => gap.hasAttribute('disabled'))).toBe(true)
     await settle()
     expect(gaps()).toEqual(['4 unchanged lines', '2 unchanged lines'])
@@ -1129,7 +1246,7 @@ describe('line review actions', () => {
     const m = mount({ source: { kind: 'change', url: URL7 } })
     await settle()
     expect(publish).toBeDefined()
-    expect(await publish!({ source: { kind: 'local', scope: 'branch' }, comment: {
+    expect(await publish!({ source: { kind: 'local', scope: 'branch', base: 'origin/main', baseRef: null }, comment: {
       path: 'src/app.ts', side: 'R', startLine: 4, endLine: 4, hunk: '', body: 'Local reference',
     } })).toBe(en['review.stale'])
     expect(m.faces.submitReview).not.toHaveBeenCalled()
@@ -1145,7 +1262,7 @@ describe('line review actions', () => {
     fireEvent.change(section.getByRole('textbox'), { target: { value: 'Explain these lines' } })
     expect(section.getByRole('textbox')).toHaveProperty('value', 'Explain these lines')
     fireEvent.click(within(m.section('src/app.ts').querySelector('[data-forge-comment]')!).getByRole('button', { name: 'Add to input' }))
-    expect(m.faces.addReviewToInput.mock.lastCall?.[0]).toMatchObject({ source: { kind: 'local', scope: 'branch' },
+    expect(m.faces.addReviewToInput.mock.lastCall?.[0]).toMatchObject({ source: { kind: 'local', scope: 'branch', base: 'origin/main', baseRef: null },
       comment: { path: 'src/app.ts', side: 'R', startLine: 4, endLine: 5, body: 'Explain these lines' } })
     fireEvent.click(section.getByRole('button', { name: 'Select line L4' }))
     fireEvent.click(section.getByRole('button', { name: 'Add comment' }))

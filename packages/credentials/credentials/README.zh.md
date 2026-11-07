@@ -53,12 +53,12 @@ declare const ctx: Context
 
 const ref = credentialRef('DEEPSEEK_API_KEY')          // POSIX shell identifier, branded
 const hit = await ctx.credentials.resolve(ref)         // { value, source } | undefined
-const info = await ctx.credentials.describe(ref)       // { configured, source?, writable } — never the value
+const info = await ctx.credentials.describe(ref)       // { configured, source?, writable, masked? } — never the value
 await ctx.credentials.set(ref, 'sk-…')                 // the stored value outranks environment fallbacks
 await ctx.credentials.unset(ref)                       // no-op when absent; an environment fallback then applies again
 ```
 
-用 `set` 存储密钥、用 `unset` 移除、用 `describe` 检查状态、在操作需要时用 `resolve` 读取当前值。`describe` 报告密钥是否已设置、来自哪里、能否写入——它绝不返回值。
+用 `set` 存储密钥、用 `unset` 移除、用 `describe` 检查状态、在操作需要时用 `resolve` 读取当前值。`describe` 报告密钥是否已设置、来自哪里、能否写入——它绝不返回值。提供方可通过可选的 `masked` 字段报告已保存值的脱敏预览；完整值留在 Host。
 
 ### 存储、更新与移除记录
 

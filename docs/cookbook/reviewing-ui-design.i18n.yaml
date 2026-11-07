@@ -1,0 +1,55 @@
+# Bilingual-pair consistency record for reviewing-ui-design.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/cookbook/reviewing-ui-design.md
+/:
+  en: 7a1a3135b7683184
+  zh: b518133afc663a6e
+/cookbook-review-a-ui-design:
+  en: d42b121ca63177aa
+  zh: 68b637fae3252c7b
+/cookbook-review-a-ui-design/summary:
+  en: 8a1ff691b28a2533
+  zh: 8c54ae85df6f6e12
+/cookbook-review-a-ui-design/table-of-contents:
+  en: 84af073b2a7eca95
+  zh: 750633fa3c458d5b
+/cookbook-review-a-ui-design/1-define-the-page-or-modal-in-scope:
+  en: c9ee94acd903d809
+  zh: c8d07c75ba94531b
+/cookbook-review-a-ui-design/1-define-the-page-or-modal-in-scope/select-scope-by-visual-impact:
+  en: ef9ad1428375f1d9
+  zh: 8f59cd04947c16dd
+/cookbook-review-a-ui-design/2-inspect-the-task-and-its-implementation:
+  en: 86301e7487e9cd74
+  zh: f13bc3da0b2ac2d3
+/cookbook-review-a-ui-design/2-inspect-the-task-and-its-implementation/reconcile-the-baseline-across-the-whole-interface:
+  en: 76d008d0bac44f1f
+  zh: 2357d78f350b5540
+/cookbook-review-a-ui-design/2-inspect-the-task-and-its-implementation/make-the-relationships-explicit:
+  en: 4d26eca838abeb7a
+  zh: 30f2046b2dc70ed6
+/cookbook-review-a-ui-design/2-inspect-the-task-and-its-implementation/keep-a-coverage-record:
+  en: 61b9e821e98b042a
+  zh: 9b67719f013e7c3c
+/cookbook-review-a-ui-design/3-preserve-the-starting-point:
+  en: a0f8e8d720097515
+  zh: 4ff54f0c03bfdb48
+/cookbook-review-a-ui-design/4-change-the-smallest-responsible-component:
+  en: 8bcdb909b6825a5e
+  zh: e140ca3873b302b9
+/cookbook-review-a-ui-design/5-verify-behavior-and-comparable-images:
+  en: 437f3a735dbfa486
+  zh: 7d6ccfd8da698c49
+/cookbook-review-a-ui-design/6-deliver-the-complete-evidence:
+  en: cea04ecd81785ca2
+  zh: b321ae244f050b1c
+/cookbook-review-a-ui-design/6-deliver-the-complete-evidence/comparison-delivery-and-cumulative-changes:
+  en: c81cdec4ac3decca
+  zh: 9dcb16b292414fda
+/cookbook-review-a-ui-design/further-exploration:
+  en: 98ac3512211d94ae
+  zh: 055418a72f29a15b
+/cookbook-review-a-ui-design/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

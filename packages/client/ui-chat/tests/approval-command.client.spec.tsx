@@ -18,12 +18,19 @@ function props(
 }
 
 describe('commandOf', () => {
-  it('accepts only a string command from valid JSON arguments', () => {
+  it('accepts only a non-empty string command from valid JSON arguments', () => {
     expect(commandOf(undefined)).toBeUndefined()
-    expect(commandOf({ callId: 'c1', argsRaw: '{' })).toBeUndefined()
-    expect(commandOf({ callId: 'c1', argsRaw: '{}' })).toBeUndefined()
-    expect(commandOf({ callId: 'c1', argsRaw: '{"command":42}' })).toBeUndefined()
-    expect(commandOf({ callId: 'c1', argsRaw: '{"command":"pnpm test"}' })).toBe('pnpm test')
+    expect(commandOf({ callId: 'c1', name: 'bash', argsRaw: '{' })).toBeUndefined()
+    expect(commandOf({ callId: 'c1', name: 'bash', argsRaw: '{}' })).toBeUndefined()
+    expect(commandOf({ callId: 'c1', name: 'bash', argsRaw: '{"command":42}' })).toBeUndefined()
+    expect(commandOf({ callId: 'c1', name: 'bash', argsRaw: '{"command":""}' })).toBeUndefined()
+    expect(commandOf({ callId: 'c1', name: 'bash', argsRaw: '{"command":"pnpm test"}' })).toBe('pnpm test')
+  })
+
+  it('reads the text typed into a terminal as its command', () => {
+    expect(commandOf({ callId: 'c1', name: 'terminal_send', argsRaw: '{"sessionId":"pty-1","text":"pnpm run dev"}' })).toBe('pnpm run dev')
+    expect(commandOf({ callId: 'c1', name: 'terminal_send', argsRaw: '{"sessionId":"pty-1","text":"","submit":true}' })).toBeUndefined()
+    expect(commandOf({ callId: 'c1', name: 'write', argsRaw: '{"path":"notes.md","text":"draft"}' })).toBeUndefined()
   })
 })
 
@@ -31,8 +38,8 @@ describe('ApprovalCommand', () => {
   it('renders the running correlated Tool command', () => {
     render(<ApprovalCommand {...props([
       { kind: 'assistant-step', data: {} },
-      { kind: 'tool-call', data: { root: { phase: 'start', args: PartialArguments.fromText('{"command":"wrong"}'), callId: 'other', argsRaw: '{"command":"wrong"}' } } },
-      { kind: 'tool-call', data: { root: { phase: 'start', args: PartialArguments.fromText('{"command":"pnpm test"}'), callId: 'call-1', argsRaw: '{"command":"pnpm test"}' } } },
+      { kind: 'tool-call', data: { root: { phase: 'start', args: PartialArguments.fromText('{"command":"wrong"}'), callId: 'other', name: 'bash', argsRaw: '{"command":"wrong"}' } } },
+      { kind: 'tool-call', data: { root: { phase: 'start', args: PartialArguments.fromText('{"command":"pnpm test"}'), callId: 'call-1', name: 'bash', argsRaw: '{"command":"pnpm test"}' } } },
     ] as never)} />)
 
     expect(screen.getByText('pnpm test')).toBeTruthy()

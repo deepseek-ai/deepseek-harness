@@ -6,5 +6,6 @@ recording: authored
 header:
   class: sdk-team-session-mode
   pin: true
+  toolSchemasSource: session/team-session-mode
   changes: 2
   promptChanges: 2

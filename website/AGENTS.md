@@ -1,6 +1,6 @@
 # AGENTS.md — Documentation website adapter
 
-Follow the [root instructions](../AGENTS.md), the [documentation standard](../docs/AGENTS.md), and the [documentation workflow](../.agents/skills/dsh-doc/SKILL.md).
+Follow the [root instructions](../AGENTS.md), the [documentation standard](../docs/AGENTS.md), and the [documentation workflow](../.agents/skills/dsh-doc-writing/SKILL.md).
 
 ## Keep documentation content out of this tree
 

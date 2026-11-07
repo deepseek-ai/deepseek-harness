@@ -1254,18 +1254,18 @@ describe('headless stream-json snapshots', () => {
         "checkedAgents": true,
         "deliveredMessages": 0,
         "identities": [
-          "You are a subagent delegated by agent "<lead>".
-      Your agent id is "<self>".
-      The root agent of your collaboration tree is "<lead>".
+          "You are a subagent delegated by agent "lead".
+      Your name is "agent-2".
+      The root agent of your collaboration tree is "lead".
 
-      To message other agents, use send_message({ agent_id: "<agent-id>", message: "..." }).
-      Use list_agents({}) to find your collaborator agents and their ids.",
-          "You are a subagent delegated by agent "<lead>".
-      Your agent id is "<self>".
-      The root agent of your collaboration tree is "<lead>".
+      To message other agents, use send_message({ agent: "<agent-name>", message: "..." }).
+      Use list_agents({}) to find your collaborator agents and their names.",
+          "You are a subagent delegated by agent "lead".
+      Your name is "agent-3".
+      The root agent of your collaboration tree is "lead".
 
-      To message other agents, use send_message({ agent_id: "<agent-id>", message: "..." }).
-      Use list_agents({}) to find your collaborator agents and their ids.",
+      To message other agents, use send_message({ agent: "<agent-name>", message: "..." }).
+      Use list_agents({}) to find your collaborator agents and their names.",
         ],
         "queuedMessages": 0,
         "sessions": 4,

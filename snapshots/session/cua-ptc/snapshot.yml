@@ -6,6 +6,7 @@ recording: authored
 header:
   class: cua-ptc
   pin: true
+  toolSchemasSource: ptc-turn
 replay:
   override: true
 platform: posix

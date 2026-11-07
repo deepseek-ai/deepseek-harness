@@ -1,0 +1,9 @@
+- id: ptc-runtime
+  config:
+    executionMode: vm-script
+    scriptPersistence: true
+- id: tool-executor-ptc
+  disabled: true
+- insert:
+    - id: ptc-host-reset-fixture
+      name: './host-reset.mjs'

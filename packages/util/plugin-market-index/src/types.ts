@@ -26,9 +26,10 @@ export interface MarketIndexMetadata {
 /** Market-defined values of one plugin; category, label, and sort-key ids require index declarations. */
 export interface MarketPluginMetadata {
   readonly category?: string
-  /** Free-form strings, conventionally from package keywords; absent input becomes an empty array. */
+  /** Free-form strings, conventionally from package keywords; absent or null input becomes an empty array. */
   readonly keywords: readonly string[]
   readonly labels: readonly string[]
+  /** Unavailable values (absent or null in JSON) are omitted; zero remains a measured value. */
   readonly sortKeys: Readonly<Record<string, number>>
 }
 

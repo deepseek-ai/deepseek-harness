@@ -21,7 +21,7 @@
   - text: GitHub event received
   - time: {{clock}}
 - status: Completed
-- button "Completed in {{duration}}" [disabled]
+- button "Completed in {{duration}}"
 - paragraph: "Review complete: no actionable findings."
 - button "Copy"
 - button "Good response"

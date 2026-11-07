@@ -108,19 +108,19 @@ describe('SessionRowForge', () => {
     expect(screen.getByRole('img', { name: en['list.worktree'] }).getAttribute('data-forge-row-worktree')).toBe('')
     const change = screen.getByRole('img', { name: 'Change request state: Open · Checks running' })
     expect(change.getAttribute('data-forge-row-change')).toBe('open')
-    expect(change.querySelector(`.${css.dot}`)?.getAttribute('data-checks')).toBe('pending')
+    expect(change.querySelector('[data-checks]')?.getAttribute('data-checks')).toBe('pending')
   })
 
   it('names only the state of a finished or unpolled change request, without a checks dot', () => {
     const merged = renderRow({ forgeChangeRequests: [binding(1)] }, statesOf(state(1, { state: 'merged', checksRollup: 'failure' })))
     const glyph = screen.getByRole('img', { name: 'Change request state: Merged' })
     expect(glyph.getAttribute('data-forge-row-change')).toBe('merged')
-    expect(glyph.querySelector(`.${css.dot}`)).toBeNull()
+    expect(glyph.querySelector('[data-checks]')).toBeNull()
     expect(screen.queryByRole('img', { name: en['list.worktree'] })).toBeNull()
     merged.view.unmount()
 
     renderRow({ forgeChangeRequests: [binding(2)] })
-    expect(screen.getByRole('img', { name: 'Change request state: Unknown' }).querySelector(`.${css.dot}`)).toBeNull()
+    expect(screen.getByRole('img', { name: 'Change request state: Unknown' }).querySelector('[data-checks]')).toBeNull()
   })
 
   it('follows the listed values and the polled states as they change', () => {

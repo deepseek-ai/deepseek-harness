@@ -8,7 +8,7 @@ import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
   IconChevronRightOutlineRegular, IconRefreshOutlineRegular, IconUsersOutlineRegular,
-  IconCheckOutlineRegular, MenuSurface, StateDot, Tooltip, useAnchoredPosition,
+  IconCheckOutlineRegular, MenuSurface, StateDot, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { NS } from './locales.ts'
@@ -208,6 +208,11 @@ function isKnownLeaf(catalog: SubagentCatalogSnapshot | undefined): boolean {
   return catalog?.state === 'ready' && catalog.entries.length === 0
 }
 
+/** The agent name unique among the row's siblings, or the Session ID for entries recorded without one. */
+function entryName(entry: SubagentCatalogSnapshot['entries'][number]): string {
+  return entry.mode === 'continuable' || entry.mode === 'external' ? entry.name ?? entry.id : entry.id
+}
+
 /** Only a local child's last closed, normally completed turn receives the completed marker. */
 function completedEntry(entry: SubagentCatalogSnapshot['entries'][number], summary: SessionSummary | undefined): boolean {
   return entry.mode !== 'external' && entry.activity === 'inactive'
@@ -282,8 +287,9 @@ function CatalogRows({
           || (childCatalog.state === 'loading' && childCatalog.entries.length === 0)
         const summary = summaries[entry.id]
         const description = entry.label || summary?.title
-        const primaryLabel = description || entry.id
-        const secondaryLabel = description ? entry.id : undefined
+        const name = entryName(entry)
+        const primaryLabel = description || name
+        const secondaryLabel = description ? name : undefined
         const mode = external ? t('mode.external') : entry.mode === 'unknown' ? t('mode.unknown')
           : entry.mode === 'one-shot' ? t('mode.oneShot') : t('mode.continuable')
         const completed = completedEntry(entry, summary)
@@ -522,9 +528,7 @@ function CatalogDropdown(props: CatalogDropdownProps) {
   const countRef = useRef<HTMLSpanElement>(null)
   const activityId = useId()
   const menuRef = useRef<HTMLDivElement>(null)
-  const menuPosition = useAnchoredPosition({
-    open, anchorRef: triggerRef, panelRef: menuRef, gap: 5, margin: 16,
-  })
+  const anchorName = `--dsh-subagents-${activityId.replaceAll(':', '')}`
   const hoverOpenTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const hoverCloseTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   // A click-opened (pinned) menu ignores hover-out; only explicit dismissal closes it.
@@ -533,7 +537,7 @@ function CatalogDropdown(props: CatalogDropdownProps) {
     ? undefined
     : catalog?.entries.find(entry => entry.id === currentSessionId)
   const switcherDisplayTitle = currentEntry !== undefined
-    ? currentEntry.label || currentEntry.id
+    ? currentEntry.label || entryName(currentEntry)
     : displayTitle
   const directChildren = catalog?.entries ?? []
   const directCount = directChildren.length
@@ -708,6 +712,7 @@ function CatalogDropdown(props: CatalogDropdownProps) {
       >
         <button
           ref={triggerRef}
+          style={{ anchorName }}
           onPointerEnter={(event) => {
             if (event.pointerType !== 'touch') scheduleHoverOpen()
           }}
@@ -767,7 +772,7 @@ function CatalogDropdown(props: CatalogDropdownProps) {
         <MenuSurface
           ref={menuRef}
           className={css.menu}
-          style={menuPosition ?? { visibility: 'hidden' }}
+          style={{ positionAnchor: anchorName }}
           role="dialog"
           tabIndex={-1}
           aria-label={t('tree.aria')}
