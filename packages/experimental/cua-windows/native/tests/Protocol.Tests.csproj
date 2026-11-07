@@ -1,10 +1,14 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net48</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
-  <ItemGroup><ProjectReference Include="../protocol/CuaProtocol.csproj" /></ItemGroup>
+
+  <ItemGroup>
+	<ProjectReference Include="../protocol/CuaProtocol.csproj" />
+  </ItemGroup>
+
 </Project>

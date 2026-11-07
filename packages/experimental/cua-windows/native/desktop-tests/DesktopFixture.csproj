@@ -1,4 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net48</TargetFramework>
@@ -7,4 +8,5 @@
     <Nullable>enable</Nullable>
     <AssemblyName>dsh-cua-desktop-fixture</AssemblyName>
   </PropertyGroup>
+
 </Project>

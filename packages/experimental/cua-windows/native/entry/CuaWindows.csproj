@@ -1,21 +1,21 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net48</TargetFramework>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
-    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AssemblyName>dsh-cua-windows</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
   </PropertyGroup>
+
   <ItemGroup>
-    <Compile Include="src/**/*.cs" />
-    <ProjectReference Include="protocol/CuaProtocol.csproj" GlobalPropertiesToRemove="RuntimeIdentifier;SelfContained" />
+    <ProjectReference Include="../protocol/CuaProtocol.csproj" />
   </ItemGroup>
+
 </Project>
