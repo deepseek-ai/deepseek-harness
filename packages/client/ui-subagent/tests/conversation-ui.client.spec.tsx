@@ -29,9 +29,7 @@ const CHILD = 'child' as SessionId
 const GRANDCHILD = 'grandchild' as SessionId
 const t: SubagentHeaderLineageProps['t'] = makeTranslate(zh)
 
-type HeaderCatalogProps = SubagentHeaderLineageProps
-  & Pick<SubagentsSectionProps, 'useFooterAvailable' | 'renderSlot'>
-  & { dismissOverlay?: () => void }
+type HeaderCatalogProps = SubagentHeaderLineageProps & { dismissOverlay?: () => void }
 
 type CatalogFixtureEntry<Entry = SubagentCatalogEntry> = Entry extends SubagentCatalogEntry
   ? Omit<Entry, 'createdAt'> & { activity: 'running' | 'inactive' }
@@ -134,7 +132,6 @@ function props(
     openChild: vi.fn(),
     openChildAside: vi.fn(),
     refreshProjection: vi.fn(),
-    renderSlot: vi.fn(() => null),
     lineageSessionId: PARENT,
     displayTitle: 'Parent title',
     t,
