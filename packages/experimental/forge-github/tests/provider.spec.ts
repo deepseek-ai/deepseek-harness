@@ -2,8 +2,10 @@ import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import { describe, expect, it } from 'vitest'
 import { GhOutputLimitError, GhTimeoutError, GhUnavailableError } from '../src/gh.ts'
 import type { GhOutput, GhRunner } from '../src/gh.ts'
+import { PULL_REQUEST_COMMITS_QUERY, THREADS_QUERY } from '../src/graphql.ts'
 import { GitHubProvider } from '../src/provider.ts'
-import { checkRun, demo, pull, pullRequestNode } from './fixtures.ts'
+import type { GitHubLimits } from '../src/provider.ts'
+import { checkRun, demo, pull, pullRequestNode, threadPage } from './fixtures.ts'
 
 const enterprise = { forge: 'github', host: 'ghe.corp.example', owner: 'team', name: 'svc' }
 const signal = new AbortController().signal
@@ -23,8 +25,10 @@ function output(stdout: unknown, exitCode = 0, stderr = ''): GhOutput {
   return { exitCode, stdout: typeof stdout === 'string' ? stdout : JSON.stringify(stdout), stderr }
 }
 
+const limits: GitHubLimits = { maxOutputBytes: 8_388_608, maxReviewThreads: 1_000 }
+
 function provider(run: GhRunner): GitHubProvider {
-  return new GitHubProvider(run, ['github.com', 'GHE.corp.example'], 8_388_608)
+  return new GitHubProvider(run, ['github.com', 'GHE.corp.example'], limits)
 }
 
 describe('GitHub provider addressing', () => {
@@ -46,7 +50,7 @@ describe('GitHub provider addressing', () => {
 
   it('uses a configured HTTP port for URL mapping and GitHub queries', async () => {
     const gh = fakeGh(() => output({ data: { r0: { p0: pullRequestNode(1) } } }))
-    const subject = new GitHubProvider(gh.run, ['ghe.example.com:8443'], 8_388_608)
+    const subject = new GitHubProvider(gh.run, ['ghe.example.com:8443'], limits)
     const repository = subject.repositoryFromRemote('https://ghe.example.com:8443/team/repo.git')!
     const ref = { repository, number: 1 }
     expect(subject.changeRequestFromUrl(subject.changeRequestUrl(ref))).toEqual(ref)
@@ -67,6 +71,47 @@ describe('GitHub provider fetch', () => {
     expect(results.get(changeRequestKey(pull(1)))).toMatchObject({ checksTruncated: true, checksRollup: 'success', checks: [{ state: 'failure' }] })
     expect(results.get(changeRequestKey(pull(2)))).toMatchObject({ title: 'Change 2', checksTruncated: false })
     expect(gh.calls).toHaveLength(1)
+  })
+
+  it('counts review threads past the first page while polling, bounded by maxReviewThreads', async () => {
+    const many = pullRequestNode(1, { reviewThreads: threadPage(Array.from({ length: 100 }, () => true), 'threads-1') })
+    const gh = fakeGh(args => args.includes(`query=${THREADS_QUERY}`)
+      ? output({ data: { node: { reviewThreads: threadPage([false, false], 'threads-2') } } })
+      : output({ data: { r0: { p0: many, p1: pullRequestNode(2) } } }))
+
+    const results = await new GitHubProvider(gh.run, ['github.com'], { ...limits, maxReviewThreads: 102 }).fetch([pull(1), pull(2)], signal)
+
+    expect(results.get(changeRequestKey(pull(1)))).toMatchObject({ unresolvedThreads: 2, threadsTruncated: true })
+    expect(results.get(changeRequestKey(pull(2)))).toMatchObject({ unresolvedThreads: 2, threadsTruncated: false })
+    expect(gh.calls).toHaveLength(2)
+    expect(gh.calls[1]).toEqual(['api', 'graphql', '--hostname', 'github.com',
+      '-f', `query=${THREADS_QUERY}`, '-f', 'id=pull-1', '-f', 'cursor=threads-1', '-F', 'first=2'])
+  })
+
+  it.each([
+    [new GhTimeoutError('timed out'), 'unavailable'],
+    [new GhOutputLimitError('too much output'), 'too-large'],
+    [new GhUnavailableError('gh missing'), 'unavailable'],
+  ] as const)('fails only the pull request whose review thread page cannot be read', async (error, code) => {
+    const many = pullRequestNode(1, { reviewThreads: threadPage([true], 'threads-1') })
+    const gh = fakeGh((args) => {
+      if (args.includes(`query=${THREADS_QUERY}`)) throw error
+      return output({ data: { r0: { p0: many, p1: pullRequestNode(2) } } })
+    })
+
+    const results = await provider(gh.run).fetch([pull(1), pull(2)], signal)
+
+    expect(results.get(changeRequestKey(pull(1)))).toEqual({ code, message: error.message })
+    expect(results.get(changeRequestKey(pull(2)))).toMatchObject({ title: 'Change 2' })
+  })
+
+  it('reports a review thread page that GitHub refuses', async () => {
+    const gh = fakeGh(args => args.includes(`query=${THREADS_QUERY}`)
+      ? output({ message: 'API rate limit exceeded' }, 1, 'gh: API rate limit exceeded (HTTP 403)')
+      : output({ data: { r0: { p0: pullRequestNode(1, { reviewThreads: threadPage([true], 'threads-1') }) } } }))
+
+    await expect(provider(gh.run).fetchChecks(pull(1), signal))
+      .resolves.toEqual({ code: 'unavailable', message: 'gh: API rate limit exceeded (HTTP 403)' })
   })
 
   it.each([
@@ -92,10 +137,24 @@ describe('GitHub provider fetch', () => {
     const total = Buffer.byteLength(first.stdout) + Buffer.byteLength(last.stdout)
     for (const limit of [total, total - 1, Buffer.byteLength(first.stdout) - 1]) {
       const gh = fakeGh(args => args.includes('id=fixed-rollup') ? last : first)
-      const result = await new GitHubProvider(gh.run, ['github.com'], limit).fetchChecks(pull(1), signal)
+      const result = await new GitHubProvider(gh.run, ['github.com'], { ...limits, maxOutputBytes: limit }).fetchChecks(pull(1), signal)
       if (limit === total) expect(result).toMatchObject({ checksTruncated: false })
       else expect(result).toMatchObject({ code: 'too-large' })
       expect(gh.calls).toHaveLength(limit < Buffer.byteLength(first.stdout) ? 1 : 2)
+    }
+  })
+
+  it('counts review thread pages toward the byte budget of a complete detail read, but not of polling', async () => {
+    const first = output({ data: { r0: { p0: pullRequestNode(1, { reviewThreads: threadPage([true], 'threads-1') }) } } })
+    const page = output({ data: { node: { reviewThreads: threadPage([false, false]) } } })
+    const total = Buffer.byteLength(first.stdout) + Buffer.byteLength(page.stdout)
+    for (const limit of [total, total - 1]) {
+      const gh = fakeGh(args => args.includes(`query=${THREADS_QUERY}`) ? page : first)
+      const subject = new GitHubProvider(gh.run, ['github.com'], { ...limits, maxOutputBytes: limit })
+      const result = await subject.fetchChecks(pull(1), signal)
+      if (limit === total) expect(result).toMatchObject({ unresolvedThreads: 2, threadsTruncated: false })
+      else expect(result).toEqual({ code: 'too-large', message: 'GitHub check details exceed the output size limit' })
+      expect((await subject.fetch([pull(1)], signal)).get(changeRequestKey(pull(1)))).toMatchObject({ unresolvedThreads: 2 })
     }
   })
 
@@ -192,7 +251,7 @@ describe('GitHub provider fetch', () => {
   it('rejects references retained after their host was removed from configuration', async () => {
     const gh = fakeGh(() => output(''))
     const retained = provider(gh.run).changeRequestFromUrl('https://ghe.corp.example/team/svc/pull/2')!
-    const replacement = new GitHubProvider(gh.run, ['github.com'], 8_388_608)
+    const replacement = new GitHubProvider(gh.run, ['github.com'], limits)
     const results = await replacement.fetch([retained], signal)
     await expect(replacement.findByHead(retained.repository, 'topic', signal)).rejects.toThrow('is not configured')
     expect(results.get(changeRequestKey(retained))).toMatchObject({ code: 'unavailable' })
@@ -354,12 +413,78 @@ describe('GitHub provider actions', () => {
 
 describe('GitHub provider reads', () => {
   const head = 'c'.repeat(40)
+  const pushed = 'd'.repeat(40)
+  const base = 'b'.repeat(40)
 
-  it('reads the pull request diff through gh pr diff on its host', async () => {
-    const gh = fakeGh(() => output('diff --git a/x b/x\n'))
+  /** Answer the pull request commit read with `commits`, and every other command, the compare read among them, with `other`. */
+  function pinned(
+    commits: { readonly head: string; readonly base: string } | GhOutput = { head, base },
+    other: (args: readonly string[]) => GhOutput = () => output('diff --git a/x b/x\n'),
+  ) {
+    return fakeGh((args) => {
+      if (!args.includes(`query=${PULL_REQUEST_COMMITS_QUERY}`)) return other(args)
+      return 'exitCode' in commits ? commits : output({ data: { repository: { pullRequest: { headRefOid: commits.head, baseRefOid: commits.base } } } })
+    })
+  }
 
-    await expect(provider(gh.run).diff(pull(7, enterprise), signal)).resolves.toBe('diff --git a/x b/x\n')
-    expect(gh.calls).toEqual([['pr', 'diff', '7', '--repo', 'ghe.corp.example/team/svc', '--color', 'never']])
+  it('reads the diff between the recorded base and the requested head through the compare API after one commit read', async () => {
+    const gh = pinned()
+
+    await expect(provider(gh.run).diff(pull(7, enterprise), head, signal)).resolves.toBe('diff --git a/x b/x\n')
+    expect(gh.calls).toEqual([
+      ['api', 'graphql', '--hostname', 'ghe.corp.example',
+        '-f', `query=${PULL_REQUEST_COMMITS_QUERY}`, '-f', 'owner=team', '-f', 'name=svc', '-F', 'number=7'],
+      ['api', '--hostname', 'ghe.corp.example', '--allow-escape-sequences', '-H', 'Accept: application/vnd.github.diff',
+        `repos/team/svc/compare/${base}...${head}`],
+    ])
+  })
+
+  it('compares the head commit without regard to case and addresses the requested spelling', async () => {
+    const gh = pinned()
+
+    await expect(provider(gh.run).diff(pull(7), head.toUpperCase(), signal)).resolves.toBe('diff --git a/x b/x\n')
+    expect(gh.calls[1]?.at(-1)).toBe(`repos/octo/demo/compare/${base}...${head.toUpperCase()}`)
+  })
+
+  it('reports a head that moved past the requested commit as stale without reading the diff', async () => {
+    const gh = pinned({ head: pushed, base })
+
+    await expect(provider(gh.run).diff(pull(7), head, signal))
+      .resolves.toEqual({ code: 'stale', message: `the pull request head moved from ${head} to ${pushed}` })
+    expect(gh.calls).toHaveLength(1)
+  })
+
+  it.each([
+    ['a missing pull request', output({ data: { repository: { pullRequest: null } }, errors: [{ type: 'NOT_FOUND', message: 'Could not resolve' }] }, 1,
+      'gh: Could not resolve to a PullRequest with the number of 7.'),
+    { code: 'not-found', message: 'gh: Could not resolve to a PullRequest with the number of 7.' }],
+    ['a refusal', output({ message: 'Server Error' }, 1, 'gh: Server Error (HTTP 502)'), { code: 'unavailable', message: 'Server Error' }],
+    ['an answer without commits', output({ data: { repository: {} } }),
+      { code: 'unavailable', message: 'unexpected GitHub response to the pull request commit read' }],
+    ['a base that is not a commit object name', output({ data: { repository: { pullRequest: { headRefOid: head, baseRefOid: 'main' } } } }),
+      { code: 'unavailable', message: 'unexpected GitHub response to the pull request commit read' }],
+  ] as const)('reports a commit read that fails with %s without reading the diff', async (_label, answer, failure) => {
+    const gh = pinned(answer)
+
+    await expect(provider(gh.run).diff(pull(7), head, signal)).resolves.toEqual(failure)
+    expect(gh.calls).toHaveLength(1)
+  })
+
+  it('reads the diff with a gh older than 2.97, which rejects the escape option, by repeating the read without it', async () => {
+    // What gh 2.96.0 prints for an option it does not know.
+    const gh = pinned(undefined, args => args.includes('--allow-escape-sequences')
+      ? output('', 1, 'unknown flag: --allow-escape-sequences\n\nUsage:  gh api <endpoint> [flags]\n')
+      : output('diff --git a/x b/x\n'))
+
+    await expect(provider(gh.run).diff(pull(7), head, signal)).resolves.toBe('diff --git a/x b/x\n')
+    expect(gh.calls.map(call => call.includes('--allow-escape-sequences'))).toEqual([false, true, false])
+  })
+
+  it('refuses a head that is not a full commit object name before starting gh', async () => {
+    const gh = pinned()
+
+    await expect(provider(gh.run).diff(pull(7), 'HEAD', signal)).rejects.toThrow('forge-github: invalid head commit "HEAD"')
+    expect(gh.calls).toEqual([])
   })
 
   it('reads a file at a commit through the raw contents API, encoding each path segment', async () => {
@@ -380,16 +505,20 @@ describe('GitHub provider reads', () => {
     ['a missing pull request', '', 'GraphQL: Could not resolve to a PullRequest with the number of 7. (repository.pullRequest)',
       { code: 'not-found', message: 'GraphQL: Could not resolve to a PullRequest with the number of 7. (repository.pullRequest)' }],
     ['a missing file', { message: 'Not Found' }, 'gh: Not Found (HTTP 404)', { code: 'not-found', message: 'Not Found' }],
-    // What gh 2.100 prints for a pull request over 300 files.
-    ['a diff over GitHub\'s size limit', '', [
-      'could not find pull request diff: HTTP 406: Sorry, the diff exceeded the maximum number of files (300). Consider using \'List pull '
-      + 'requests files\' API or locally cloning the repository instead. (https://api.github.com/repos/octo/demo/pulls/7)',
-      'PullRequest.diff too_large',
-    ].join('\n'), {
+    // What gh 2.100 prints when GitHub refuses a diff over its size limit, as the pull request diff endpoint does past 300 files.
+    ['a diff over GitHub\'s size limit', {
+      message: 'Sorry, the diff exceeded the maximum number of files (300). Consider using \'List pull requests files\' API or locally '
+        + 'cloning the repository instead.',
+      errors: [{ resource: 'PullRequest', field: 'diff', code: 'too_large' }],
+      status: '406',
+    }, 'gh: Sorry, the diff exceeded the maximum number of files (300). Consider using \'List pull requests files\' API or locally '
+      + 'cloning the repository instead. (HTTP 406)', {
       code: 'too-large',
-      message: 'could not find pull request diff: HTTP 406: Sorry, the diff exceeded the maximum number of files (300). Consider using '
-        + '\'List pull requests files\' API or locally cloning the repository instead. (https://api.github.com/repos/octo/demo/pulls/7)',
+      message: 'Sorry, the diff exceeded the maximum number of files (300). Consider using \'List pull requests files\' API or locally '
+        + 'cloning the repository instead.',
     }],
+    ['a diff GitHub refuses to render without an error code', { message: 'Not Acceptable' }, 'gh: Not Acceptable (HTTP 406)',
+      { code: 'too-large', message: 'Not Acceptable' }],
     ['a file over the contents API limit', {
       message: 'This API returns blobs up to 1 MB in size. The requested blob is too large to fetch via the API.',
       errors: [{ resource: 'Blob', field: 'data', code: 'too_large' }],
@@ -401,19 +530,21 @@ describe('GitHub provider reads', () => {
       { code: 'unauthenticated', message: 'To get started with GitHub CLI, please run:  gh auth login' }],
     ['no output', '', '', { code: 'unavailable', message: 'gh exited with 1' }],
   ])('reports a read refused for %s', async (_label, body, stderr, failure) => {
-    await expect(provider(fakeGh(() => output(body, 1, stderr)).run).diff(pull(7), signal)).resolves.toEqual(failure)
+    await expect(provider(pinned(undefined, () => output(body, 1, stderr)).run).diff(pull(7), head, signal)).resolves.toEqual(failure)
   })
 
   it('reports a read as unavailable when gh cannot start, rethrows other failures, and refuses an invalid commit', async () => {
-    await expect(provider(() => Promise.reject(new GhUnavailableError('gh could not start: spawn gh ENOENT'))).diff(pull(7), signal))
+    await expect(provider(() => Promise.reject(new GhUnavailableError('gh could not start: spawn gh ENOENT'))).diff(pull(7), head, signal))
       .resolves.toEqual({ code: 'unavailable', message: 'gh could not start: spawn gh ENOENT' })
     await expect(provider(() => Promise.reject(new Error('aborted'))).fileText(pull(7), head, 'a', signal)).rejects.toThrow('aborted')
     await expect(provider(fakeGh(() => output('')).run).fileText(pull(7), 'main', 'a', signal)).rejects.toThrow('forge-github: invalid commit "main"')
   })
 
   it('reports output over maxOutputBytes as too large and a run past timeoutMs as unavailable', async () => {
-    await expect(provider(() => Promise.reject(new GhOutputLimitError('gh pr output exceeds maxOutputBytes'))).diff(pull(7), signal))
-      .resolves.toEqual({ code: 'too-large', message: 'gh pr output exceeds maxOutputBytes' })
+    const overLimit = pinned(undefined, () => { throw new GhOutputLimitError('gh api output exceeds maxOutputBytes') })
+    await expect(provider(overLimit.run).diff(pull(7), head, signal))
+      .resolves.toEqual({ code: 'too-large', message: 'gh api output exceeds maxOutputBytes' })
+    expect(overLimit.calls).toHaveLength(2)
     await expect(provider(() => Promise.reject(new GhTimeoutError('gh api timed out after 30000ms'))).fileText(pull(7), head, 'a', signal))
       .resolves.toEqual({ code: 'unavailable', message: 'gh api timed out after 30000ms' })
   })
@@ -427,7 +558,7 @@ it('rejects readiness, actions, and content reads for an unconfigured host witho
   await expect(subject.readiness(target.repository.host, signal)).resolves.toEqual({ state: 'unavailable', message })
   await expect(subject.markReady(target, signal)).resolves.toEqual({ code: 'failed', message })
   await expect(subject.merge(target, { method: 'squash', headSha: 'a'.repeat(40) }, signal)).resolves.toEqual({ code: 'failed', message })
-  await expect(subject.diff(target, signal)).resolves.toEqual({ code: 'unavailable', message })
+  await expect(subject.diff(target, 'a'.repeat(40), signal)).resolves.toEqual({ code: 'unavailable', message })
   await expect(subject.fileText(target, 'a'.repeat(40), 'file.txt', signal)).resolves.toEqual({ code: 'unavailable', message })
   expect(gh.calls).toEqual([])
 })

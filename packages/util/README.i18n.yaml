@@ -3,20 +3,20 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/util/README.md
 /:
-  en: 2994957e73b4e3e2
-  zh: 3bf7bbfc3efeab31
+  en: 4e92398c76bf480f
+  zh: 18840c65a44a8c38
 /util-shared-utilities:
   en: 7283f2afb343d150
   zh: 32c56bd67c0314c6
 /util-shared-utilities/summary:
-  en: ed8863365a68c0ef
-  zh: 4bcff265d4d5694e
+  en: e1aa918f27dccf20
+  zh: 7d415fdc8c0248ed
 /util-shared-utilities/table-of-contents:
   en: 1eb35b015a6c423f
   zh: a8a3dceee2c9e943
 /util-shared-utilities/packages:
-  en: e345b399695a4e93
-  zh: 179fee3e2c4d90cc
+  en: 461990a6f0e944bd
+  zh: 788c91b2b1cf0426
 /util-shared-utilities/related-documentation:
   en: 432ae81110914571
   zh: c5bf4efc007311f3

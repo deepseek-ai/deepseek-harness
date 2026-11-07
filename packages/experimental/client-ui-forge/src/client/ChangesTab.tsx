@@ -462,11 +462,24 @@ export function ChangesTab({
   // Names the read the inputs ask for; it is in flight until `finished` matches it.
   const read = version === null ? null : `${dataKey}\n${navigation.revision}\n${attempt}\n${version}`
   const [finished, setFinished] = useState<string | null>(null)
+  // A change request read refused because the head moved past its status stays in flight until a status later than
+  // the one the read started with arrives; one that arrived during the read starts the next read at once.
+  const statusAt = entry?.update?.fetchedAt ?? null
+  const latestStatusAt = useRef(statusAt)
+  useEffect(() => { latestStatusAt.current = statusAt }, [statusAt])
+  const [refused, setRefused] = useState<{ readonly read: string; readonly statusAt: number | null } | null>(null)
+  const waiting = refused !== null && refused.read === read && refused.statusAt === statusAt
   useEffect(() => {
-    if (!tab.visible || read === null || read === finished) return
+    if (!tab.visible || read === null || read === finished || waiting) return
     const controller = new AbortController()
+    const readAt = latestStatusAt.current
     void readChanges(source, localScope, { localDiff, changeRequestDiff }, controller.signal).then((result) => {
       if (controller.signal.aborted) return
+      if (!result.ok && result.error.code === 'forgePanel/stale-head') {
+        setRefused({ read, statusAt: readAt })
+        setFailure(null)
+        return
+      }
       setFinished(read)
       if (result.ok) {
         setLoaded({ key: dataKey, data: result.value })
@@ -476,7 +489,7 @@ export function ChangesTab({
       }
     })
     return () => { controller.abort() }
-  }, [tab.visible, read, source, localScope, dataKey, localDiff, changeRequestDiff])
+  }, [tab.visible, read, refused, waiting, source, localScope, dataKey, localDiff, changeRequestDiff])
   const data = loaded !== null && loaded.key === dataKey ? loaded.data : null
   const files = useMemo(() => filesInTreeOrder(changedFileTree(data?.files ?? [])), [data])
   // The centered loader marks a first read; the toolbar's glyph turns only while shown changes are read again.

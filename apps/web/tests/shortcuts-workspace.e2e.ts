@@ -182,6 +182,10 @@ describe.skipIf(mode === 'record')('web e2e: workspace shortcuts', () => {
     await files.locator('[data-files-row="empty"]').waitFor()
     // The directory opener sits in the files page's header, above the tree.
     const opener = files.locator('[data-open-target="directory"]')
+    const tools = files.locator('[data-files-reload], [data-files-search-toggle], [data-open-target="directory"] button')
+    expect((await tools.evaluateAll(elements => elements.map(element => element.hasAttribute('data-files-reload')
+      ? 'reload' : element.hasAttribute('data-files-search-toggle') ? 'search' : 'open'))).slice(0, 3))
+      .toEqual(['reload', 'search', 'open'])
     await opener.getByRole('button', { name: 'Open in VS Code', exact: true }).click()
     await expect.poll(() => launched).toEqual([
       { app: 'vscode', path: workspace.path }, { app: 'vscode', path: workspace.path },

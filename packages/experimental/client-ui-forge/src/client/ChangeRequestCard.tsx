@@ -75,6 +75,7 @@ const FAILURE: Record<ForgeFailure['code'], ForgePanelKey> = {
   'not-found': 'change.failure.notFound',
   'unauthenticated': 'change.failure.unauthenticated',
   'too-large': 'change.failure.unavailable',
+  'stale': 'change.failure.unavailable',
   'unavailable': 'change.failure.unavailable',
 }
 
@@ -87,6 +88,12 @@ const ROLLUP: Record<ChecksRollup, CheckState> = {
 
 const CHECK_RANK: Record<CheckState, number> = {
   failure: 0, pending: 1, success: 2, neutral: 3, skipped: 3, cancelled: 3,
+}
+
+/** The unresolved thread count, with `+` when the provider counted only some threads. */
+function threadCount(snapshot: ChangeRequestSnapshot, locale: string): string {
+  const count = snapshot.unresolvedThreads.toLocaleString(locale)
+  return snapshot.threadsTruncated ? `${count}+` : count
 }
 
 function failureOf(entry: ForgePanelChangeRequest): ForgeFailure | undefined {
@@ -434,7 +441,8 @@ function Details({ entry, snapshot, name, now, actions, locale, t }: {
         <span className={css.rowIcon}><IconUserOutlineRegular size={16} /></span>
         <span className={css.rowLabel}>{t('change.row.review')}</span>
         <span className={css.rowValue} data-tone={reviewTone}>
-          {snapshot.unresolvedThreads > 0 ? t('change.review.threads', { review, count: snapshot.unresolvedThreads }) : review}
+          {snapshot.unresolvedThreads > 0 || snapshot.threadsTruncated
+            ? t('change.review.threads', { review, count: threadCount(snapshot, locale) }) : review}
         </span>
       </div>
       <div className={css.row}>

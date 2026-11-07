@@ -78,6 +78,7 @@ actor AXWorker {
     private let axTimeout: Float
     private let textEventInterval: Double
     private let maxClickHoldMs: Int
+    private let systemPointerHover: Bool?
     private let sessionState: @Sendable () -> Bool?
     private var access: AXAccess?
     private var keyboard: KeyboardInput?
@@ -85,12 +86,13 @@ actor AXWorker {
     private var hovers: [String: AXHover] = [:]
     private var closed = false
 
-    init(cancellation: CancellationLatch, axTimeout: Float, textEventInterval: Double, maxClickHoldMs: Int,
+    init(cancellation: CancellationLatch, axTimeout: Float, textEventInterval: Double, maxClickHoldMs: Int, systemPointerHover: Bool? = nil,
          sessionState: @escaping @Sendable () -> Bool? = NativePlatform.sessionLocked) {
         self.cancellation = cancellation
         self.axTimeout = axTimeout
         self.textEventInterval = textEventInterval
         self.maxClickHoldMs = maxClickHoldMs
+        self.systemPointerHover = systemPointerHover
         self.sessionState = sessionState
     }
     private func identifier(_ kind: String) throws -> String {
@@ -103,6 +105,14 @@ actor AXWorker {
         let created = AXAccess(timeout: axTimeout, cancellation: cancellation)
         access = created
         return created
+    }
+    private func moveUsingAX(_ element: AXUIElement?, windowID: UInt32, handle: String, params: RequestParameters) throws -> Bool {
+        let requestSetting = try params.optionalBoolean("allowSystemPointer")
+        let hover = hovers[handle] ?? AXHover()
+        hovers[handle] = hover
+        if try hover.move(to: element, in: windowID, access: ax()) { return true }
+        try AXHover.requireSystemPointer(connectionSetting: systemPointerHover, requestSetting: requestSetting)
+        return false
     }
     private func inputs() -> (KeyboardInput, WindowPointerInput) {
         if let keyboard, let pointer { return (keyboard, pointer) }
@@ -155,8 +165,8 @@ actor AXWorker {
     private func coordinateSnapshot(_ handle: String, _ params: RequestParameters, _ windowID: UInt32) throws {
         guard let id = try params.optionalString("snapshotId") else { return }
         let value = try snapshot(handle, id)
-        guard value.scope.windowID == nil || value.scope.windowID == windowID else {
-            throw NativeFailure(code: "STALE_SNAPSHOT", message: "Snapshot belongs to another window")
+        if let source = value.scope.windowID, source != windowID {
+            throw NativeFailure(code: "STALE_SNAPSHOT", message: "Snapshot belongs to window \(source); read getAccessibilityTree on window \(windowID)")
         }
     }
     private func coordinateWindow(_ identity: ProcessIdentity, _ windowID: UInt32, trace: ScreenshotTrace? = nil) throws -> WindowInfo {
@@ -348,23 +358,27 @@ actor AXWorker {
             let modifiers = try params.modifiers()
             let window: WindowInfo
             let point: WindowPoint
-            var hoverElement: AXUIElement?
+            var elementWindow: AXUIElement?
             if params.contains("elementId") {
-                guard !params.contains("x"), !params.contains("y"), !params.contains("windowId") else { throw RequestParameters.invalid("Element and coordinate targets cannot be combined") }
+                guard !params.contains("x"), !params.contains("y") else { throw RequestParameters.invalid("Element and coordinate targets cannot be combined") }
+                let requestedWindow = try params.optionalWindowID()
+                if let requestedWindow { try coordinateSnapshot(handle, params, requestedWindow) }
                 let selected = try element(handle, params)
-                hoverElement = selected
-                if method == "click" {
-                    let names = try ax().actions(selected)
-                    let action: String? = holdMs != nil || !modifiers.isEmpty ? nil : button == "right" && names.contains("AXShowMenu") ? "AXShowMenu"
-                        : (button == "left" && count == 1 ? (names.contains("AXPress") ? "AXPress" : names.contains("AXPick") ? "AXPick" : nil) : nil)
-                    if let action {
-                        try ax().perform(selected, action)
-                        return .result(Self.actionResult)
+                let enclosing = try ax().enclosingWindow(selected)
+                if let requestedWindow, enclosing.id != requestedWindow {
+                    throw NativeFailure(code: "STALE_SNAPSHOT", message: "Element belongs to window \(enclosing.id); select that window and read its tree")
+                }
+                if method == "mouseMove" {
+                    _ = try NativePlatform.ownedWindow(identity.pid, enclosing.id)
+                    if try moveUsingAX(selected, windowID: enclosing.id, handle: handle, params: params) {
+                        return .result(Self.mouseMoveResult(route: "accessibility", pointerMoved: false))
                     }
+                } else {
                     try ax().requireEnabled(selected)
                 }
+                elementWindow = enclosing.element
                 guard let bounds = try ax().bounds(selected), bounds.width > 0, bounds.height > 0 else { throw NativeFailure(code: "NATIVE_ERROR", message: "Element has no pointer bounds") }
-                window = try ax().enclosingWindow(selected, owner: identity)
+                window = try WindowGeometry.resolve(owner: identity, windowID: enclosing.id) { try ax().bounds(enclosing.element) }
                 point = WindowPoint(x: bounds.x + bounds.width / 2 - window.bounds.x, y: bounds.y + bounds.height / 2 - window.bounds.y)
             } else {
                 let id = try params.windowID()
@@ -375,18 +389,27 @@ actor AXWorker {
             let route = WindowRoute(owner: identity, windowID: window.windowID, bounds: window.bounds)
             if method == "mouseMove" {
                 try WindowPointerInput.validate(point, in: route)
-                if hoverElement == nil {
-                    hoverElement = try ax().element(at: CGPoint(x: window.bounds.x + point.x, y: window.bounds.y + point.y), owner: identity)
-                    if let hit = hoverElement, try ax().windowID(hit) != window.windowID { hoverElement = nil }
-                }
-                let hover = hovers[handle] ?? AXHover()
-                hovers[handle] = hover
-                if try hover.move(to: hoverElement, in: route, access: ax()) {
-                    return .result(Self.mouseMoveResult(route: "accessibility", pointerMoved: false))
+                if elementWindow == nil {
+                    var hit = try ax().element(at: CGPoint(x: window.bounds.x + point.x, y: window.bounds.y + point.y), owner: identity)
+                    if let target = hit, try ax().windowID(target) != window.windowID { hit = nil }
+                    if try moveUsingAX(hit, windowID: window.windowID, handle: handle, params: params) {
+                        return .result(Self.mouseMoveResult(route: "accessibility", pointerMoved: false))
+                    }
                 }
                 return .mouseMove(route, point)
             }
-            try await inputs().1.click(in: route, at: point, button: button, count: count, modifiers: modifiers, holdMs: holdMs)
+            var clickRoute = route
+            if AXIsProcessTrusted(), let node = try elementWindow ?? ax().windowElement(window.windowID, owner: identity),
+               let panel = try ax().filePanelRecipient(node, owner: identity, catalog: catalog) {
+                let serviceWindow = try NativePlatform.ownedWindow(panel.process.pid, panel.windowID)
+                guard serviceWindow.bounds == window.bounds else {
+                    throw NativeFailure(code: "WINDOW_CHANGED", message: "File panel and its input window have different frames; read fresh window state")
+                }
+                try NativePlatform.verify(identity)
+                try NativePlatform.verify(panel.process)
+                clickRoute = WindowRoute(owner: panel.process, windowID: panel.windowID, bounds: serviceWindow.bounds)
+            }
+            try await inputs().1.click(in: clickRoute, at: point, button: button, count: count, modifiers: modifiers, holdMs: holdMs)
         case "scroll", "drag":
             let id = try params.windowID()
             try coordinateSnapshot(handle, params, id)

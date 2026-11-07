@@ -1,5 +1,6 @@
 /** Generate macOS admission artifacts from the shared CUA operation definitions. */
 import { readFile, writeFile } from 'node:fs/promises'
+import { z } from 'zod'
 import { nativeProtocol } from '@deepseek-ai/dsh-cua/native-schema'
 import { PermissionGuideParameters, PermissionSettingsParameters } from '../src/permission-guide.ts'
 
@@ -9,6 +10,7 @@ import { PermissionGuideParameters, PermissionSettingsParameters } from '../src/
  */
 export function renderNativeProtocol(): { json: string; swift: string } {
   const { fields, enums, json } = nativeProtocol({
+    mouseMove: z.object({ allowSystemPointer: z.boolean().optional() }),
     requestPermission: PermissionGuideParameters, openPermissionSettings: PermissionSettingsParameters,
   })
   const quoted = (values: Iterable<string>) => [...values].sort().map(value => JSON.stringify(value)).join(', ')

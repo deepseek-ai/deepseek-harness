@@ -411,6 +411,7 @@
       // so these aliases stay hand-written like dsh-util-crypto above.
       "@deepseek-ai/dsh-util-time": ["./packages/util/time/src"],
       "@deepseek-ai/dsh-util-file-drag": ["./packages/util/file-drag/src"],
+      "@deepseek-ai/dsh-util-ripgrep": ["./packages/util/ripgrep/src"],
       // session-log-export lives under session-query/, so the generated aliases map only its
       // bare name; the browser half needs this explicit subpath for source-mode dynamic imports.
       "@deepseek-ai/dsh-session-log-export/client": ["./packages/session-query/session-log-export/src/client"],

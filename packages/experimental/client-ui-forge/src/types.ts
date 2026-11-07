@@ -388,7 +388,11 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'forgePanel/restore-failed': Record<string, never>
     /** The URL is not a visible binding of the Session that a provider serves, so the panel does not act on it. */
     'forgePanel/not-bound': Record<string, never>
-    /** The change request has new commits since the head the user confirmed, so it was not merged. */
+    /**
+     * The change request's head is no longer the commit the request named: the head the user confirmed for a merge,
+     * the head displayed for complete checks, or the head of the latest status for a diff. A diff read polls the change
+     * request again at once, so a later status names the current head.
+     */
     'forgePanel/stale-head': Record<string, never>
     /** The code host refused the change or could not be reached; the message gives the host's reason. */
     'forgePanel/action-failed': Record<string, never>
