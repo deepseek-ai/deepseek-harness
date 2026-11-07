@@ -346,9 +346,12 @@
 }
 
 .files {
+  --forge-files-inset: 10px;
   flex: 1;
+  box-sizing: border-box;
   min-width: 0;
   min-height: 0;
+  padding: var(--forge-files-inset);
   overflow: auto;
 }
 
@@ -377,14 +380,34 @@
   text-align: center;
 }
 
+/* Each file is one card, so a file's last collapsed-context strip and the next file's header no longer read as adjacent
+   rows. Diffs share R16; clip, unlike hidden, keeps the card from becoming the sticky header's scroll container. */
 .file {
-  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+  overflow: clip;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-lg);
+  background: var(--forge-changes-bg);
 }
 
-/* Above the comment plus (z-index 1) of rows scrolled beneath it. */
+.file + .file {
+  margin-top: 12px;
+}
+
+@container forge-changes (max-width: 380px) {
+  .files {
+    --forge-files-inset: 6px;
+  }
+
+  .file + .file {
+    margin-top: 8px;
+  }
+}
+
+/* Above the comment plus (z-index 1) of rows scrolled beneath it. Sticky offsets start inside the list's padding,
+   so the negative inset keeps a stuck header flush with the scroll area's top edge. */
 .fileHeader {
   position: sticky;
-  top: 0;
+  top: calc(-1 * var(--forge-files-inset, 0px));
   z-index: 2;
   display: flex;
   align-items: center;
@@ -393,7 +416,8 @@
   min-height: 36px;
   padding: 0 4px 0 8px;
   border-bottom: 0.5px solid var(--dsw-alias-border-l3);
-  background: var(--forge-changes-bg);
+  /* The hover tint over the view background stays opaque while code scrolls beneath the sticky header. */
+  background: linear-gradient(var(--dsw-alias-interactive-bg-hover), var(--dsw-alias-interactive-bg-hover)), var(--forge-changes-bg);
 }
 
 /* A bare chevron: its rotation shows whether the file is expanded, so it takes no fill in any state. */
@@ -422,10 +446,23 @@
   border-bottom: 0;
 }
 
+/* The file's own information gives way inside this box, so the counts, the viewed mark, and the menu after it stay
+   whole at any width. */
+.fileTitle {
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .fileIcon {
   flex: none;
 }
 
+/* The path shares the shortage with the badge in proportion to their widths, so the longer path keeps the larger part
+   and stays under the pointer for its full-path tooltip. */
 .filePath {
   display: flex;
   flex: 0 1 auto;
@@ -445,8 +482,16 @@
   transform: rotate(-90deg);
 }
 
+/* Capped rather than shrunk, so a long path never truncates the tag; a longer translation ends in an ellipsis. */
 .changedTag {
   flex: none;
+  max-width: 30%;
+}
+
+.changedText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* The viewed mark: a native checkbox with its label as one bordered chip, peer to the file menu button. */
@@ -502,7 +547,8 @@
 }
 
 .badge {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
   max-width: 50%;
   overflow: hidden;
   padding: 0 6px;

@@ -22,7 +22,7 @@ Setup and discovery:
 Available at app or window level depending on the platform.
 
 Element ids are opaque strings from the latest successful tree; the object facade keeps one current snapshot per app across its repeated app and window objects, a new read replaces it, and a failed read invalidates the previous one. Repeated strings can appear for different elements, so do not reuse an old id blindly, and element operations do not fall back to pointer input or typing.
-- getAccessibilityTree(options?: { emit?: boolean, includeMenus?: boolean, details?: boolean }) -> string — read the full tree text; includeMenus expands menu contents and details adds identifiers, native bounds, and complete action names.
+- getAccessibilityTree(options?: { emit?: boolean, includeMenus?: boolean, details?: boolean }) -> string — read the tree within the provider limits; includeMenus expands menu contents and details adds identifiers, native bounds, and complete action names.
 - listActions(elementId: string) -> string[] — list the actions an element advertises.
 - invoke(elementId: string) -> ActionResult — invoke the element's default action; dispatched is false when it has none.
 - performAction(elementId: string, action: string, argument?: JsonValue) -> ActionResult — perform an observed action with an optional direct JSON argument.
