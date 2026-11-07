@@ -2466,14 +2466,14 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.session.panel.environment.row\', () => ctx.slots.register(\n      { name: \'conversation.session.panel.environment.row\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-session-panel/src/client/slots.ts:36',
+    source: 'packages/client/ui-session-panel/src/client/slots.ts:44',
   },
   {
     key: 'conversation.session.panel.indicator',
     kind: 'list',
     scope: 'session',
     summary: 'Marks over the panel toggle, such as an attention dot.',
-    doc: 'Marks over the panel toggle, such as an attention dot. They stay visible\nwhile the panel is hidden; each occupant includes text that names it for\nassistive technology, which becomes part of the toggle\'s name.',
+    doc: 'Marks over the panel toggle, such as an attention dot. Each occupant is\none element: the toggle sizes it to a 6px dot at the glyph\'s corner, and\nthe occupant sets its `background` and includes text that names it for\nassistive technology, which becomes part of the toggle\'s name. Occupants\noverlap, and a higher `order` paints above a lower one. An occupant that\nonly repeats what the panel shows renders nothing while `panelShown`.',
     registerOptions: [
       {
         name: 'id',
@@ -2494,7 +2494,9 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
         doc: 'Display text where the owner projects one (nav rows, tabs). A thunk is re-read on every projection, so localized text follows the active locale without re-registering.',
       },
     ],
-    ownerProps: [],
+    ownerProps: [
+      '/** Values every toggle indicator receives from the toggle. */\nexport interface SessionPanelIndicatorOwnerProps {\n  /** Whether the panel shows, docked or as an overlay. */\n  readonly panelShown: boolean\n}',
+    ],
     ownerPropsReferences: [],
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
@@ -2524,7 +2526,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     occupants: [],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.session.panel.indicator\', () => ctx.slots.register(\n      { name: \'conversation.session.panel.indicator\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-session-panel/src/client/slots.ts:34',
+    source: 'packages/client/ui-session-panel/src/client/slots.ts:37',
   },
   {
     key: 'conversation.session.panel.section',
