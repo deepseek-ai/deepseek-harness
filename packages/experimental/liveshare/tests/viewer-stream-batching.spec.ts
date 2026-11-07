@@ -30,7 +30,7 @@ function burstGateway(count: number): NonNullable<ViewerReadDeps['gateway']> {
 describe('Liveshare viewer stream batching', () => {
   it('[P0] answers a queued burst in bounded batches, in order and without losing a value', async () => {
     const read = createViewerReadService({
-      connection: readerConnection().connection, gateway: burstGateway(BURST), sharedSessionId: () => 'session-1',
+      connection: readerConnection().connection, gateway: burstGateway(BURST), sharedSessionIds: () => ['session-1'],
     })
     expect((await read.answer('share-1', { op: 'stream-open', id: 1, endpoint: 'session/follow',
       payload: { args: { request: { address: { kind: 'session', sessionId: 'session-1' } } } } }, READER)).status).toBe(200)
@@ -74,7 +74,7 @@ describe('Liveshare viewer stream batching', () => {
         },
       },
     }
-    const read = createViewerReadService({ connection: readerConnection().connection, gateway, sharedSessionId: () => 'session-1' })
+    const read = createViewerReadService({ connection: readerConnection().connection, gateway, sharedSessionIds: () => ['session-1'] })
     expect((await read.answer('share-1', { op: 'stream-open', id: 1, endpoint: 'session/follow',
       payload: { args: { request: { address: { kind: 'session', sessionId: 'session-1' } } } } }, READER)).status).toBe(200)
 

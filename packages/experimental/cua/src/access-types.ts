@@ -10,14 +10,21 @@ export interface CuaPermissionProcess {
   path?: string | undefined
   name?: string | undefined
 }
-/** Fresh permission observations and startup metadata from the shared native helper. */
-export interface CuaSystemPermissionState {
+/** Native access observations tagged with Node platform identifiers; distinct from model capability platform names. */
+export type CuaSystemPermissionState = {
+  platform: 'darwin'
   accessibility: boolean
   screenRecording: boolean
   helper: CuaPermissionProcess
   parent: CuaPermissionProcess
   /** Application macOS reports as responsible for the helper, captured at startup; absent when it cannot be identified. */
   launchApplication?: { name: string; path: string; icon?: string | undefined } | undefined
+} | {
+  platform: 'win32'
+  sessionLocked: boolean | null
+  captureAvailable: boolean
+  elevated: boolean
+  helper: CuaPermissionProcess
 }
 /** Saved grants and refused applications, independent of native permission checks and icons. */
 export interface CuaApplicationState {

@@ -141,7 +141,7 @@ struct WindowInfo: Sendable {
 
     var json: JSONValue {
         .object([
-            "windowId": .number(Double(windowID)), "pid": .number(Double(pid)),
+            "windowId": .number(Double(windowID)),
             "appName": .string(appName), "title": .string(title), "bounds": bounds.json,
             "isOnScreen": .bool(isOnScreen), "onCurrentSpace": onCurrentSpace.map(JSONValue.bool) ?? .null,
         ])

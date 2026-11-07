@@ -121,12 +121,17 @@ export function draftTarget(draft: TaskEditorDraft, original?: ScheduleCatalogEn
   return { kind: draft.target, create }
 }
 
-/** Render manual creation and inline edits with the existing task rule controls. */
-export function TaskEditorFields({ draft, onChange, projects, disabled, original, t }: {
+/**
+ * Render manual creation and inline edits with the existing task rule controls.
+ * @param props.disabled - whether the fields reject input.
+ * @param props.held - whether a disabled state keeps the enabled look because it lasts only one brief request.
+ */
+export function TaskEditorFields({ draft, onChange, projects, disabled, held, original, t }: {
   readonly draft: TaskEditorDraft
   readonly onChange: (draft: TaskEditorDraft) => void
   readonly projects: ProjectChoices
   readonly disabled: boolean
+  readonly held: boolean
   readonly original?: ScheduleCatalogEntry | undefined
   readonly t: PropsLocale<'schedule.manager'>['t']
 }): ReactNode {
@@ -157,7 +162,7 @@ export function TaskEditorFields({ draft, onChange, projects, disabled, original
     id: choice.value, label: <span className={css.workspaceMenuItem}><span>{choice.label}</span>
       <PathLabel path={choice.value} className={css.workspaceMenuPath} /></span>,
   }))
-  return <fieldset disabled={disabled} className={css.taskEditor} onKeyDownCapture={(event) => {
+  return <fieldset disabled={disabled} className={held ? `${css.taskEditor} ${css.editorHeld}` : css.taskEditor} onKeyDownCapture={(event) => {
     if (event.key !== 'Escape' || event.defaultPrevented || !dateOpen && !clockOpen) return
     event.preventDefault(); event.stopPropagation()
     if (dateOpen) { setDateOpen(false); dateAnchor.current?.focus() }

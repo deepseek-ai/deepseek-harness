@@ -27,6 +27,8 @@ kind: "package-library"
 
 当宿主侧集成需要执行一条原生命令、并需要它的输出或失败信息（或两者兼要）、且绝不能涉及 shell 时，使用本运行器。
 
+`isWsl()` 根据 WSL 环境或内核标记区分 WSL 中的 Linux 进程、普通 Linux 和原生 Windows 进程。Windows 互操作被禁用时仍识别为 WSL；调用方必须另行检查所需的 Windows 能力。
+
 ### 运行一条命令
 
 ```ts

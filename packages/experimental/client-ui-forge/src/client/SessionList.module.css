@@ -1,36 +1,11 @@
 /* One icon in the Session row's resting seat, sized to the row's 20px line. */
 .icon {
-  position: relative;
   display: inline-flex;
   flex: none;
   align-items: center;
   justify-content: center;
   height: 20px;
   color: var(--dsw-alias-label-tertiary);
-}
-
-/* Checks outcome at the glyph's lower right, ringed in the sidebar fill so it parts from the strokes. */
-.dot {
-  position: absolute;
-  right: -2px;
-  bottom: 3px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  corner-shape: round;
-  box-shadow: 0 0 0 1.5px var(--dsw-specific-sidebar-fill);
-}
-
-.dot[data-checks='failure'] {
-  background: var(--dsw-alias-state-error-primary);
-}
-
-.dot[data-checks='pending'] {
-  background: var(--dsw-alias-state-warn-primary);
-}
-
-.dot[data-checks='success'] {
-  background: var(--dsw-alias-state-success-primary);
 }
 
 /* Hover card section: the card keeps one dark surface in both themes, so it

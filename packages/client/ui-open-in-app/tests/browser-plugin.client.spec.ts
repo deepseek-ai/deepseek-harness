@@ -49,9 +49,12 @@ afterEach(() => {
 /** The Session Remote slice the path controls call; answers a desktop and acknowledges every gesture. */
 const remote = {
   session: {
-    workspacePathApplications: vi.fn(async () => ({ ok: true as const, value: [] })),
+    workspacePathApplications: vi.fn(async (_request: { path: string }, _signal?: AbortSignal) => ({ ok: true as const, value: [] })),
     canOpenWorkspacePath: vi.fn(async () => ({ ok: true as const, value: true })),
     openWorkspacePath: vi.fn(async () => ({ ok: true as const, value: { opened: true as const } })),
+  },
+  workspaceFiles: {
+    stat: vi.fn(async (_sessionId: SessionId, path: string) => ({ ok: true as const, value: { absolutePath: `/w/${path}` } })),
   },
 }
 
@@ -333,6 +336,24 @@ describe('open-in-app browser half', () => {
     expect(ctx.slots.entries('sidebar.right.tab.document.actions').map(entry => entry.options.id)).not.toContain('open-in-app')
     expect(ctx.slots.entries('sidebar.right.tab.document.unpreviewable').map(entry => entry.options.id)).not.toContain('open-in-app')
     expect(ctx.slots.entries('deliverables.file.actions')).toHaveLength(0)
+  })
+
+  it('lets a file-menu association refresh outlive the menu and cancels it with the plugin', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ apps: [] }), { status: 200 })))
+    const { ctx, fiber } = await bench()
+    let refresh: AbortSignal | undefined
+    remote.session.workspacePathApplications.mockImplementationOnce((_request, signal) => {
+      refresh = signal
+      return new Promise<never>(() => {})
+    })
+    const menu = ctx.contextMenus.resolve({ kind: 'file', value: { sessionId: 'files' as SessionId, path: 'notes.txt' } })
+    await menu.ready
+    expect(remote.workspaceFiles.stat).toHaveBeenCalledWith('files', 'notes.txt', expect.any(AbortSignal))
+    expect(remote.session.workspacePathApplications).toHaveBeenCalledWith({ path: '/w/notes.txt' }, refresh)
+    menu.dispose()
+    expect(refresh?.aborted).toBe(false)
+    await fiber.dispose()
+    expect(refresh?.aborted).toBe(true)
   })
 
   it('injects the announcement seat into the delivery entries and releases every entry with the fiber', async () => {

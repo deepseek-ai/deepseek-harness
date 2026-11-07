@@ -7,8 +7,7 @@ import { expect, it, onTestFinished, vi } from 'vitest'
 import type { CuaApplicationId, CuaApplicationState, CuaSystemPermissionState } from '../src/access-types.ts'
 import { PermissionController } from '../src/client/controller.ts'
 
-const value: CuaSystemPermissionState = {
-  accessibility: true, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } }
+const value: CuaSystemPermissionState = { platform: 'darwin' as const, accessibility: true, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } }
 const applications: CuaApplicationState = {
   allowedApps: [], blockedApps: [], persistentAvailable: true }
 type CuaRemote = Context['remote']['cuaAccess']
@@ -40,11 +39,11 @@ it('refreshes after a request and then waits for an explicit refresh', async () 
     f.actions.systemStatus.mockResolvedValue({ ok: true, value: { ...value, screenRecording: true } })
     await vi.advanceTimersByTimeAsync(120000)
     expect(f.actions.systemStatus).toHaveBeenCalledOnce()
-    expect(f.controller.state.getSnapshot().system.value?.screenRecording).toBe(false)
+    expect(f.controller.state.getSnapshot().system.value).toMatchObject({ platform: 'darwin', screenRecording: false })
     f.face.refresh()
     await vi.advanceTimersByTimeAsync(0)
     expect(f.actions.systemStatus).toHaveBeenCalledTimes(2)
-    expect(f.controller.state.getSnapshot().system.value?.screenRecording).toBe(true)
+    expect(f.controller.state.getSnapshot().system.value).toMatchObject({ platform: 'darwin', screenRecording: true })
   } finally { await f.controller.dispose(); vi.useRealTimers() }
 })
 
@@ -53,7 +52,7 @@ it('refreshes after a user request without treating the request itself as a gran
   f.face.request('screenRecording')
   await vi.waitFor(() => { expect(f.controller.state.getSnapshot().busy).toBe(false) })
   expect(f.actions.requestPermission).toHaveBeenCalledWith('screenRecording', 'zh')
-  expect(f.controller.state.getSnapshot().system.value?.screenRecording).toBe(false)
+  expect(f.controller.state.getSnapshot().system.value).toMatchObject({ platform: 'darwin', screenRecording: false })
   expect(f.controller.state.getSnapshot().toast?.kind).toBe('requested')
   f.face.dismissToast()
   expect(f.controller.state.getSnapshot().toast).toBeNull()

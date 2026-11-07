@@ -15,6 +15,7 @@ import type {} from '@deepseek-ai/dsh-session-projection-cache'
 import type {} from '@deepseek-ai/dsh-session-query'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { gitIn, inspectCheckout, listBranches } from './git.ts'
 import type { Inspection } from './git.ts'
 import { parseDiff } from './diff.ts'
@@ -334,6 +335,7 @@ export class ForgePanelController extends TypertRemoteService {
    * @param signal - request cancellation.
    * @returns the files, the head commit, each file's web page, and the commits the checkout has beyond the head.
    * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+   * `forgePanel/stale-head` when the head moved past the latest status, which is then polled again;
    * `forgePanel/diff-too-large` when the host or its provider refuses the diff over a size limit;
    * `forgePanel/diff-failed` before its status was read and when the host does not provide the diff otherwise.
    */
@@ -349,7 +351,7 @@ export class ForgePanelController extends TypertRemoteService {
     const version = JSON.stringify([headSha, baseBranch])
     let patch = this.patches.get(key, version)
     if (patch === undefined) {
-      const read = await this.home.forge.diff(ref, signal)
+      const read = await this.home.forge.diff(ref, headSha, signal)
       if (typeof read !== 'string') throw readError(read)
       this.patches.set(key, version, read)
       patch = read
@@ -719,10 +721,19 @@ export class ForgePanelController extends TypertRemoteService {
 /**
  * Report why the code host did not provide a diff or file.
  * @param failure - the provider's failure.
- * @returns `forgePanel/diff-too-large` for an answer over a size limit, else `forgePanel/diff-failed`, with the provider's message.
+ * @returns `forgePanel/diff-too-large` for an answer over a size limit, `forgePanel/stale-head` for a head that moved,
+ * else `forgePanel/diff-failed`, with the provider's message.
  */
 function readError(failure: ForgeFailure): RemoteError {
-  return new RemoteError(failure.code === 'too-large' ? 'forgePanel/diff-too-large' : 'forgePanel/diff-failed', failure.message, {})
+  switch (failure.code) {
+    case 'too-large': return new RemoteError('forgePanel/diff-too-large', failure.message, {})
+    case 'stale': return new RemoteError('forgePanel/stale-head', failure.message, {})
+    case 'not-found':
+    case 'unauthenticated':
+    case 'unavailable': return new RemoteError('forgePanel/diff-failed', failure.message, {})
+    /* v8 ignore next -- closed ForgeFailure code union exhaustiveness guard */
+    default: return assertNever(failure.code, 'ForgeFailure.code')
+  }
 }
 
 /**
