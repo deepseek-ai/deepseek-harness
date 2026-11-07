@@ -27,6 +27,10 @@ it('states the macOS accessibility, keyboard, and mouse levels', () => {
   expect(PLATFORM_GUIDANCE).toContain('accessibility tree operations are available at app or window level')
   expect(PLATFORM_GUIDANCE).toContain('Simulated keyboard input is available at app level')
   expect(PLATFORM_GUIDANCE).toContain('Simulated mouse input is available at window level')
+  const pressKey = GUIDANCE.split('\n').find(line => line.startsWith('- pressKey('))
+  expect(pressKey).toContain('key: string | string[]')
+  expect(pressKey).toContain("pressKey(['w', 'd']) presses W then D and releases D then W")
+  expect(pressKey).toContain("Packed strings such as 'w+d'")
   const hover = GUIDANCE.split('\n').find(line => line.startsWith('- mouseMove('))
   for (const term of ['AXShowAlternateUI', 'AXShowDefaultUI', 'HOVER_UNAVAILABLE', 'systemPointerHover']) expect(hover).toContain(term)
   const click = GUIDANCE.split('\n').find(line => line.startsWith('- click('))
@@ -89,7 +93,7 @@ it('preserves image formats and pointer modifier enums without restricting keybo
   for (const name of ['click', 'drag']) {
     expect(lines.find(line => line.startsWith(`- ${name}(`))).toContain("modifiers?: ('command' | 'control' | 'option' | 'shift' | 'fn')[]")
   }
-  expect(COMMON_GUIDANCE).toContain('pressKey(key: string | string[], modifiers?: string[])')
+  expect(COMMON_GUIDANCE).toContain('pressKey(key: string, modifiers?: string[])')
   expect(COMMON_GUIDANCE).toContain('Key and modifier names are platform-defined strings')
 })
 
@@ -130,7 +134,7 @@ it('documents facade initialization, emitted observations, and separate key argu
   expect(COMMON_GUIDANCE).toContain('host-provided bridge initialization once')
   expect(COMMON_GUIDANCE).toContain('not a preinstalled global')
   expect(COMMON_GUIDANCE).toContain('void await')
-  expect(COMMON_GUIDANCE).toContain("pressKey(['w', 'd']) presses W then D and releases D then W")
+  expect(COMMON_GUIDANCE).toContain('do not pack them into a chord string')
   expect(COMMON_GUIDANCE).toContain('perform a left-button double-click')
 })
 

@@ -22,23 +22,32 @@ final class KeyboardInput {
     /// Prepare every event before dispatch. On cancellation, release only the keys this call pressed.
     func pressKey(_ keys: [String], modifiers: [String], to pid: Int32) throws {
         try checkCancellation()
-        var modifierNames = modifiers
-        let mainKeys = try keys.map { name -> Key in
+        var chord = try modifiers.map(Self.modifier)
+        var namesByCode: [CGKeyCode: String] = [:]
+        for name in keys {
+            let key: Key
             if name == "+" || name.lowercased() == "plus" {
-                modifierNames.append("shift")
-                return Key(keyCode: try Self.keyCode("="), flag: [])
+                guard keys.count == 1 else {
+                    throw RequestParameters.invalid("For a multi-key chord, use = with an explicit shift modifier instead of \(name)")
+                }
+                chord.append(try Self.modifier("shift"))
+                key = Key(keyCode: try Self.keyCode("="), flag: [])
+            } else if let modifier = Self.namedModifier(name) {
+                key = modifier
+            } else {
+                key = Key(keyCode: try Self.keyCode(name), flag: [])
             }
-            if let modifier = Self.namedModifier(name) { return modifier }
-            return Key(keyCode: try Self.keyCode(name), flag: [])
-        }
-        guard Set(mainKeys.map(\.keyCode)).count == mainKeys.count else {
-            throw RequestParameters.invalid("A chord must contain distinct physical keys")
+            if let previous = namesByCode.updateValue(name, forKey: key.keyCode) {
+                throw RequestParameters.invalid("Keys '\(previous)' and '\(name)' name the same physical key")
+            }
+            chord.append(key)
         }
         var selected = Set<CGKeyCode>()
         var flags: CGEventFlags = []
         var events: [(down: CGEvent, up: CGEvent)] = []
         let source = try Self.source()
-        for key in try modifierNames.map(Self.modifier) + mainKeys where selected.insert(key.keyCode).inserted {
+        for key in chord {
+            guard selected.insert(key.keyCode).inserted else { continue }
             let releasedFlags = flags
             flags.formUnion(key.flag)
             events.append((
@@ -243,7 +252,7 @@ final class KeyboardInput {
         case "m": return 46
         case ".": return 47
         case "`": return 50
-        default: throw NativeFailure(code: "NATIVE_ERROR", message: "Unknown key name: \(key)")
+        default: throw RequestParameters.invalid("Unknown key name: \(key)")
         }
     }
 }

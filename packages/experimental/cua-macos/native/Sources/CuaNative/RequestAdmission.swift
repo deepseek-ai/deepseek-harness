@@ -37,13 +37,11 @@ struct RequestParameters: Sendable {
         }
     }
     func pressKeys() throws -> [String] {
-        if let name = values["key"]?.string {
-            guard !name.isEmpty else { throw Self.invalid("key must not be empty") }
-            return [name]
+        switch values["key"] {
+        case .string(let name) where !name.isEmpty: return [name]
+        case .array(let items) where !items.isEmpty: return try strings("key")
+        default: throw Self.invalid("key must be a nonempty string or a nonempty array of key names")
         }
-        let names = try strings("key")
-        guard !names.isEmpty else { throw Self.invalid("key must name at least one key") }
-        return names
     }
     func optionalString(_ key: String) throws -> String? { contains(key) ? try string(key) : nil }
     func optionalBoolean(_ key: String) throws -> Bool? {

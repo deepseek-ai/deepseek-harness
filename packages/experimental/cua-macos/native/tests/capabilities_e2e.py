@@ -188,15 +188,14 @@ def main():
             if not args.click_only:
                 call("click", {**window, **point, "mouseButton": "middle", "modifiers": ["shift"]})
                 state = wait_for_state(state_file, lambda value: any(event["type"] == 26 and event.get("button") == 2 and event["shift"] for event in value["events"]))
+                count = len(state["events"])
+                call("pressKey", {**owner, "key": ["w", "d"]})
+                state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 4)
+                chord = [(event["type"], event.get("keyCode")) for event in state["events"][count:]]
+                assert chord == [(10, 13), (10, 2), (11, 2), (11, 13)], chord
                 call("drag", {**window, "fromX": point["x"], "fromY": point["y"], "toX": point["x"] + 80,
                               "toY": point["y"] + 20, "durationMs": 200, "steps": 10, "mouseButton": "middle", "modifiers": ["shift"]})
                 state = wait_for_state(state_file, lambda value: any(event["type"] == 27 and event.get("button") == 2 and event["shift"] for event in value["events"]))
-                call("pressKey", {**owner, "key": ["w", "d"]})
-                expected_chord = [(10, 13), (10, 2), (11, 2), (11, 13)]
-                state = wait_for_state(state_file, lambda value: any(
-                    event["type"] == 11 and event.get("keyCode") == 13 for event in value["events"]))
-                assert [(event["type"], event["keyCode"]) for event in state["events"]
-                        if event.get("keyCode") in (13, 2)] == expected_chord, state["events"]
                 call("pressKey", {**owner, "key": "KP_0"})
                 call("pressKey", {**owner, "key": "KP_Enter"})
                 state = wait_for_state(state_file, lambda value: {82, 76}.issubset({event.get("keyCode") for event in value["events"]}))
@@ -207,7 +206,7 @@ def main():
                 (args.artifacts / "capabilities.png").write_bytes(base64.b64decode(shot["data"]))
                 (args.artifacts / "state.json").write_text(json.dumps(state, ensure_ascii=False, indent=2))
             print("PASS: click holds and cancellation/timeout/disconnect release" if args.click_only else
-                  "PASS: stopped-app launch, Unicode selection, plain/HTML paste, middle/modifier drag, keypad identity and click holds")
+                  "PASS: stopped-app launch, Unicode selection, plain/HTML paste, middle/modifier drag, overlapping W+D events, keypad identity and click holds")
         finally:
             if pid is None and state_file.exists():
                 pid = json.loads(state_file.read_text())["pid"]

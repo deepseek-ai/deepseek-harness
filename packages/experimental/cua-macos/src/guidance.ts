@@ -13,6 +13,7 @@ const methodDetails = new Map<string, string>([
 export const GUIDANCE = `${PLATFORM_GUIDANCE}
 
 ${COMMON_GUIDANCE.replace(/^- ([\w.]+)\(.*$/gm, (entry, method: string) => {
+  if (method === 'pressKey') return "- pressKey(key: string | string[], modifiers?: string[]) -> ActionResult — pressKey(['w', 'd']) presses W then D and releases D then W. Each name identifies one physical key. Packed strings such as 'w+d', unknown names and duplicate physical keys are rejected before input. Pass held modifiers separately, as in pressKey('Tab', ['shift']). '+' and 'plus' mean Shift+= when used alone. In a multi-key chord use '=' and pass 'shift' explicitly if needed."
   const detail = methodDetails.get(method)
   return detail ? `${entry} ${detail}` : entry
 })}`

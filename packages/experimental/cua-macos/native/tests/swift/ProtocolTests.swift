@@ -138,3 +138,15 @@ func rejectsMalformedApplicationIconPaths(_ value: String) throws {
     let request = try NativeRequest(data: Data("{\"id\":\"icons\",\"method\":\"applicationIcons\",\"params\":{\"paths\":\(value)}}".utf8))
     #expect(throws: NativeFailure.self) { try RequestParameters(request).strings("paths") }
 }
+
+@Test func invalidPressKeyTypeNamesBothAcceptedForms() throws {
+    let request = try NativeRequest(data: Data(#"{"id":"call","method":"pressKey","params":{"key":7}}"#.utf8))
+    let params = try RequestParameters(request)
+    do {
+        _ = try params.pressKeys()
+        Issue.record("Numeric key was admitted")
+    } catch let error as NativeFailure {
+        #expect(error.code == "INVALID_ARGUMENT")
+        #expect(error.message == "key must be a nonempty string or a nonempty array of key names")
+    }
+}

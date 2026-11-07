@@ -1006,7 +1006,8 @@
                     "minLength": 1
                   }
                 }
-              ]
+              ],
+              "description": "One key name or distinct physical keys to press in order and release in reverse."
             },
             "modifiers": {
               "type": "array",

@@ -162,7 +162,7 @@ export interface CuaSurface {
   /**
    * Press the keys in order at the current focus, then release them in reverse order.
    * Rejects when the provider does not support keyboard input at this scope.
-   * @param key - One provider-defined key name or a nonempty array of distinct keys to hold together.
+   * @param key - One provider-defined key name or a nonempty array of distinct physical keys to hold together.
    * @param modifiers - Platform- or provider-defined modifier names held for this keystroke; omitted means none.
    * @returns Whether the provider successfully executed the requested operation.
    */
