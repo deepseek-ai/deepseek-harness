@@ -141,7 +141,7 @@ if (args[0] === 'api' && args[1] === 'graphql') {
   const pulls = {
     7: {
       id: 'pull-7', number: 7, url: 'https://github.com/octo/demo/pull/7', title: 'Add the pull request panel', state: 'OPEN', isDraft: false,
-      updatedAt: '2026-10-09T00:00:00Z', closedAt: null, author: { login: 'octo' }, headRefName: 'feat', headRefOid: 'a'.repeat(40),
+      updatedAt: '2026-10-09T00:00:00Z', closedAt: null, author: { login: 'octo' }, headRefName: 'feat', headRefOid: 'a'.repeat(40), baseRefOid: BASE,
       baseRefName: 'main', additions: 128, deletions: 14, mergeable: 'MERGEABLE', mergeStateStatus: 'BLOCKED', reviewDecision: 'REVIEW_REQUIRED',
       reviewThreads: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [{ isResolved: false }] },
       commits: { nodes: [{ commit: { statusCheckRollup: { id: 'rollup-7', state: 'FAILURE', contexts: {
@@ -152,7 +152,7 @@ if (args[0] === 'api' && args[1] === 'graphql') {
     9: {
       id: 'pull-9', number: 9, url: 'https://github.com/octo/demo/pull/9', title: 'Add the merge button', state: state.mergedAt === null ? 'OPEN' : 'MERGED',
       isDraft: !state.ready, updatedAt: '2026-10-09T00:00:00Z', closedAt: state.mergedAt, author: { login: 'octo' },
-      headRefName: 'feat/merge', headRefOid: heads()[9], baseRefName: 'main', additions: 30, deletions: 2, mergeable: 'MERGEABLE',
+      headRefName: 'feat/merge', headRefOid: heads()[9], baseRefName: 'main', baseRefOid: BASE, additions: 30, deletions: 2, mergeable: 'MERGEABLE',
       mergeStateStatus: state.ready ? 'CLEAN' : 'BLOCKED', reviewDecision: 'APPROVED',
       reviewThreads: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] },
       commits: { nodes: [{ commit: { statusCheckRollup: { id: 'rollup-9', state: 'SUCCESS', contexts: {

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /** The changes tab: reading each source and scope, the toolbar, file sections, unchanged lines, notices, and failures. */
 import { useSyncExternalStore } from 'react'
-import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PaneId, SidebarRightTabActions, SidebarRightTabInfo, TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -713,9 +713,10 @@ describe('ChangesTab base branch', () => {
   })
 
   it('records review comments under the compared ref and names the base the Host reports', async () => {
-    const renderDiff = DiffFileModule.DiffFile
+    // The memoized section draws through its inner component, which the spy observes.
+    const renderDiff = DiffFileModule.DiffFile.type
     let source: ReviewActions['source'] | undefined
-    vi.spyOn(DiffFileModule, 'DiffFile').mockImplementation((props) => {
+    vi.spyOn(DiffFileModule.DiffFile, 'type').mockImplementation((props) => {
       source = props.review?.source
       return renderDiff(props)
     })
@@ -789,6 +790,72 @@ describe('ChangesTab base branch', () => {
   })
 })
 
+describe('ChangesTab drawing work', () => {
+  it('draws the lines of an expanded file once its section comes within reach of the scrollport', async () => {
+    const watched = new Map<Element, IntersectionObserverCallback>()
+    let root: Element | Document | null | undefined
+    vi.stubGlobal('IntersectionObserver', class {
+      constructor(readonly report: IntersectionObserverCallback, options?: IntersectionObserverInit) { root = options?.root }
+      observe(element: Element): void { watched.set(element, this.report) }
+      unobserve(element: Element): void { watched.delete(element) }
+      disconnect(): void { watched.clear() }
+    })
+    try {
+      const m = mount()
+      await settle()
+      const app = m.section('src/app.ts')
+      expect(root).toBe(m.view.container.querySelector('[data-forge-changes-scroll]'))
+      expect(app.querySelector('[data-forge-diff-unreached]')).not.toBeNull()
+      expect(rowTexts(app)).toEqual([])
+
+      act(() => {
+        // The double reports only the entries, which is all the view reads.
+        Reflect.apply(watched.get(app)!, undefined, [[{ target: app, isIntersecting: true }], undefined])
+      })
+      expect(app.querySelector('[data-forge-diff-unreached]')).toBeNull()
+      expect(rowTexts(app).length).toBeGreaterThan(0)
+      expect(watched.has(app)).toBe(false)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('highlights a file in idle periods, as many fragments as each period allows, then draws the tokens at once', async () => {
+    // Idle periods with this much time left, in turn; afterwards each period has none.
+    const remaining = [5]
+    const periods: number[] = []
+    vi.stubGlobal('requestIdleCallback', (task: IdleRequestCallback) => setTimeout(() => {
+      const left = remaining.shift() ?? 0
+      periods.push(left)
+      task({ didTimeout: false, timeRemaining: () => left })
+    }, 0))
+    vi.stubGlobal('cancelIdleCallback', (id: number) => { clearTimeout(id) })
+    try {
+      const m = mount()
+      await settle()
+      const app = m.section('src/app.ts')
+      await waitFor(() => { expect(app.querySelectorAll('[data-diff-code]').length).toBeGreaterThan(0) })
+      // The first period highlights both sides of the file's one run and still has time; the second finds nothing left.
+      expect(periods.slice(0, 2)).toEqual([5, 0])
+    } finally {
+      // Unmounting cancels pending passes through the stubbed canceller.
+      cleanup()
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('leaves file sections undrawn while the reader filters the file list', async () => {
+    // The memoized section draws through its inner component, which the spy counts.
+    const draw = vi.spyOn(DiffFileModule.DiffFile, 'type')
+    const m = mount()
+    await settle()
+    const drawn = draw.mock.calls.length
+    fireEvent.change(m.view.getAllByRole('textbox', { name: 'Filter files…' })[0]!, { target: { value: 'app' } })
+    await settle()
+    expect(draw.mock.calls.length).toBe(drawn)
+  })
+})
+
 describe('ChangesTab layout', () => {
   it('draws lines side by side, then in one column, and wraps them by choice', async () => {
     const m = mount()
@@ -800,7 +867,8 @@ describe('ChangesTab layout', () => {
     expect([...app.querySelectorAll('[data-diff-pair]')].map(pair => pair.getAttribute('data-diff-pair'))).toEqual([
       'context', 'change', 'change', 'context', 'context', 'change',
     ])
-    expect(app.querySelectorAll('[data-diff-code]').length).toBeGreaterThan(0)
+    // Highlighting waits for the page to be idle.
+    await waitFor(() => { expect(app.querySelectorAll('[data-diff-code]').length).toBeGreaterThan(0) })
     expect(m.section('docs/gone.txt').querySelector('[data-diff-code]')).toBeNull()
     expect(rowTexts(m.section('docs/gone.txt'))).toEqual(['bye'])
     expect(rowTexts(m.section('src/new.ts'))).toEqual(['export const added = 1', ''])
@@ -885,6 +953,53 @@ describe('ChangesTab layout', () => {
     expect(scrolled).toHaveBeenCalledOnce()
     expect(scrolled.mock.contexts[0]).toBe(m.section('docs/gone.txt'))
     expect(scrolled).toHaveBeenCalledWith({ block: 'start' })
+  })
+
+  it('keeps a jumped-to file at the top while sections around it draw, until the reader scrolls or a second passes', async () => {
+    const m = mount()
+    await settle()
+    const { viewport } = fileViewport(m)
+    Object.defineProperty(viewport, 'scrollHeight', { configurable: true, value: 1200 })
+    Object.defineProperty(viewport, 'clientHeight', { configurable: true, value: 300 })
+    const target = m.section('src/new.ts')
+    // Sections above the target draw after the jump and push it down by this much until it scrolls again.
+    let shift = 0
+    vi.spyOn(target, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, shift, 600, 200))
+    scrolled.mockImplementation(() => { shift = 0 })
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
+    try {
+      const jump = (): void => {
+        fireEvent.click(m.view.getByRole('button', { name: 'All 6 files' }))
+        fireEvent.click(m.view.getByRole('menuitem', { name: 'src/new.ts' }))
+      }
+      jump()
+      expect(scrolled).toHaveBeenCalledOnce()
+      shift = 80
+      act(() => { vi.advanceTimersToNextFrame() })
+      expect(scrolled).toHaveBeenCalledTimes(2)
+      act(() => { vi.advanceTimersToNextFrame() })
+      expect(scrolled).toHaveBeenCalledTimes(2)
+
+      // At the bottom of the list nothing can move the file higher.
+      viewport.scrollTop = 900
+      shift = 40
+      act(() => { vi.advanceTimersToNextFrame() })
+      expect(scrolled).toHaveBeenCalledTimes(2)
+      viewport.scrollTop = 0
+
+      fireEvent.wheel(viewport)
+      act(() => { vi.advanceTimersToNextFrame() })
+      expect(scrolled).toHaveBeenCalledTimes(2)
+
+      jump()
+      expect(scrolled).toHaveBeenCalledTimes(3)
+      act(() => { vi.advanceTimersByTime(1100) })
+      shift = 80
+      act(() => { vi.advanceTimersToNextFrame() })
+      expect(scrolled).toHaveBeenCalledTimes(3)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('scrolls once to the file each navigation names when its changes arrive', async () => {
@@ -1323,9 +1438,10 @@ describe('line review actions', () => {
     expect(tree.getByRole('button', { name: 'src/app.ts' })).toBeTruthy()
   })
   it('refuses a local reference passed to the PR publication callback', async () => {
-    const renderDiff = DiffFileModule.DiffFile
+    // The memoized section draws through its inner component, which the spy observes.
+    const renderDiff = DiffFileModule.DiffFile.type
     let publish: ReviewActions['publish']
-    vi.spyOn(DiffFileModule, 'DiffFile').mockImplementation((props) => {
+    vi.spyOn(DiffFileModule.DiffFile, 'type').mockImplementation((props) => {
       publish = props.review?.publish
       return renderDiff(props)
     })

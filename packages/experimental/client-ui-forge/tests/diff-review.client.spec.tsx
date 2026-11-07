@@ -20,9 +20,10 @@ function mount(overrides: Partial<DiffFileProps> = {}) {
   const addToInput = vi.fn().mockReturnValue(true)
   const records = new ReviewQueue('diff-review')
   const review: ReviewActions = { source, addToInput, records, onQuoted: (item) => { records.recordAgent(item) } }
-  const props: DiffFileProps = { file, visible: true, expanded: true, onToggle: vi.fn(), large: false, revealed: false, onReveal: vi.fn(),
-    text: undefined, open: new Set(), onExpand: vi.fn(), split: true, wrap: true, badge: '', tooltip: 'a.txt', actions: [],
-    viewed: 'unviewed', onViewed: vi.fn(), sectionRef: vi.fn(), review, t, ...overrides }
+  const handlers = { toggle: vi.fn(), reveal: vi.fn(), expand: vi.fn(), view: vi.fn(), actions: () => [], section: vi.fn() }
+  const props: DiffFileProps = { file, expanded: true, large: false, revealed: false,
+    text: undefined, open: new Set(), split: true, wrap: true, badge: '', tooltip: 'a.txt',
+    viewed: 'unviewed', handlers, review, t, ...overrides }
   const view = render(<DiffFile {...props} />)
   const line = (name: string) => view.getByRole('button', { name: `Select line ${name}` })
   const code = (side: 'L' | 'R', no: number): HTMLElement => {
