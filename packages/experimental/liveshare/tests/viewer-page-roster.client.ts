@@ -3,8 +3,8 @@
  *
  * A served viewer page is the owner's own Web shell with the owner's client plugins; this roster is the
  * subset the viewer page specs need: the wire plugin, the Gateway, remote access, the Session/Workspace controllers,
- * the menu service, presentation plugins, and the Liveshare `./client` face, which mounts the viewer surfaces when the
- * carrier names a share. Every row is the package's own `/client` face registered as a module-table
+ * Session status, the menu service, presentation plugins, and the Liveshare `./client` face, which mounts the viewer
+ * surfaces when the carrier names a share. Every row is the package's own `/client` face registered as a module-table
  * factory. It must be imported only after {@link prepareViewerRemoteFaces} answered the generated
  * `/remote` faces these plugins import.
  *
@@ -15,6 +15,7 @@ import * as apiGateway from '@deepseek-ai/dsh-api-gateway/client'
 import * as apiRemoteAccess from '@deepseek-ai/dsh-api-remote-access/client'
 import * as apiRemotes from '@deepseek-ai/dsh-api-remotes/client'
 import * as apiSessionController from '@deepseek-ai/dsh-api-session-controller/client'
+import * as apiSessionStatus from '@deepseek-ai/dsh-api-session-status/client'
 import * as apiWorkspaceController from '@deepseek-ai/dsh-api-workspace-controller/client'
 import * as clientConnection from '@deepseek-ai/dsh-client-connection/client'
 import * as clientFileUpload from '@deepseek-ai/dsh-client-file-upload/client'
@@ -60,6 +61,7 @@ export const VIEWER_PAGE_ROSTER: readonly ViewerPageRosterRow[] = [
   { id: '@deepseek-ai/dsh-api-remote-access', exports: apiRemoteAccess },
   { id: '@deepseek-ai/dsh-api-remotes', exports: apiRemotes },
   { id: '@deepseek-ai/dsh-api-session-controller', exports: apiSessionController },
+  { id: '@deepseek-ai/dsh-api-session-status', exports: apiSessionStatus },
   { id: '@deepseek-ai/dsh-api-workspace-controller', exports: apiWorkspaceController },
   { id: '@deepseek-ai/dsh-client-file-upload', exports: clientFileUpload },
   { id: '@deepseek-ai/dsh-client-locale', exports: clientLocale },

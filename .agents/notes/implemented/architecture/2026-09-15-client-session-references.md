@@ -21,7 +21,8 @@ Client Session objects, Agent-scoped Client Contexts, references, consumer-sourc
 | Owner | Responsibility |
 | --- | --- |
 | Client Session Controller | Catalog, live generations, references, source counts, bindings, history windows, and existing Session control state |
-| `ui-session` | Explicit Session Provider integration and the unified UI status source |
+| `ui-session` | Explicit Session Provider integration and the effective pending-interaction source |
+| `api-session-status` | The unified UI status source |
 | View or operation | Its own reference, target, source identifier, and release point |
 | Workspace UI | Main-area target and reference, navigation, persisted target, and creation flow |
 | UI composition boundary | Supplies an owner-provided reference to one explicit `SessionProvider` |
@@ -89,7 +90,7 @@ Window-level consumers may inspect source markers. Session business operations s
 
 ### Unified UI Session status
 
-`ui-session` owns a React-free `sessionStatus` source and exposes it through the standard `useSessionStatus` hook. The snapshot is indexed by Session identity and supplies one UI status record per known Session. It combines these independent facts rather than reducing them to one mutually exclusive phase:
+`api-session-status` owns the React-free `uiSession.sessionStatus` service, read as `ctx.uiSession.sessionStatus`, and exposes it through the standard `useSessionStatus` hook. The snapshot is indexed by Session identity and supplies one UI status record per known Session. It combines these independent facts rather than reducing them to one mutually exclusive phase:
 
 | Field | Value | Meaning and owner |
 | --- | --- | --- |
@@ -99,7 +100,7 @@ Window-level consumers may inspect source markers. Session business operations s
 
 Source counts remain authoritative in `SessionListState.byId[id].retainedBy`; UI status reads them for acknowledgement policy without owning another reference registry. Titles, Workspace associations, history, queues, and projection data remain with their existing owners.
 
-Pending domains retain `SessionPendingInteractionMap`, request identities, precedence, publication disposers, and teardown delegation. The unified status includes the same effective request object; it does not copy requests or create a second pending registry. Workspace status indicators and Conversation composer selection read `useSessionStatus` instead of separate `useSessionPendingInteraction` and `useCompletedSessionIds` hooks.
+Pending domains retain `SessionPendingInteractionMap`, request identities, precedence, publication disposers, and teardown delegation in `ui-session`, which publishes each Session's effective request read-only as `ctx.uiSession.pendingInteractions`. The unified status includes the same effective request object; it does not copy requests or create a second pending registry. Workspace status indicators and Conversation composer selection read `useSessionStatus` instead of separate `useSessionPendingInteraction` and `useCompletedSessionIds` hooks.
 
 Completion tracking subscribes to the existing `api-session/status` events so a running-to-idle transition is not lost in batched catalog snapshots. Host-list rows (`ids`) establish initial and reconnect running baselines; synthetic catalog and retained rows preserve independently observed status. A pending empty catalog is not evidence that Sessions disappeared. The update rules are:
 

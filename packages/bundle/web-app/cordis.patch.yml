@@ -276,6 +276,10 @@
     - id: ui-session
       name: '@deepseek-ai/dsh-client-ui-session'
 
+    # Session status table behind ctx.uiSession.sessionStatus and useSessionStatus.
+    - id: session-status
+      name: '@deepseek-ai/dsh-api-session-status'
+
     # Unified resource model: protocol providers behind the useResource hook.
     - id: resources
       name: '@deepseek-ai/dsh-client-resources'

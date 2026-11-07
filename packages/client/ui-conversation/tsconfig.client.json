@@ -19,6 +19,9 @@
       "path": "../../api/session-controller/tsconfig.client.json"
     },
     {
+      "path": "../../api/session-status"
+    },
+    {
       "path": "../../api/workspace-controller/tsconfig.client.json"
     },
     {

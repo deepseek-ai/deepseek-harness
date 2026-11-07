@@ -30,6 +30,7 @@
     "client": {
       "inject": [
         "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-api-session-status",
         "@deepseek-ai/dsh-client-locale",
         "@deepseek-ai/dsh-client-resources",
         "@deepseek-ai/dsh-client-ui-chat",
@@ -65,6 +66,7 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "@deepseek-ai/dsh-api-session-controller": "workspace:*",
+    "@deepseek-ai/dsh-api-session-status": "workspace:*",
     "@deepseek-ai/dsh-client-connection": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/dsh-client-ui-renderer": "workspace:*",

@@ -150,6 +150,8 @@
       "@deepseek-ai/dsh-api-session-controller/client": ["./packages/api/session-controller/src/client/index.ts"],
       "@deepseek-ai/dsh-api-session-controller/types": ["./packages/api/session-controller/src/types.ts"],
       "@deepseek-ai/dsh-api-session-controller/remote-events": ["./packages/api/session-controller/src/remote-events.ts"],
+      "@deepseek-ai/dsh-api-session-status": ["./packages/api/session-status/src/index.ts"],
+      "@deepseek-ai/dsh-api-session-status/client": ["./packages/api/session-status/src/client/index.ts"],
       "@deepseek-ai/dsh-api-settings-controller": ["./packages/api/settings-controller/src/index.ts"],
       "@deepseek-ai/dsh-api-settings-controller/types": ["./packages/api/settings-controller/src/types.ts"],
       "@deepseek-ai/dsh-api-remote-access": ["./packages/api/remote-access/src/index.ts"],
