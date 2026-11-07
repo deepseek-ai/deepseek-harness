@@ -108,7 +108,7 @@ describe('ThreadCard', () => {
     let answer: (value: RemoteResult<string>) => void = () => {}
     const shared = actions({ readText: vi.fn(() => new Promise<RemoteResult<string>>((resolve) => { answer = resolve })) })
     const view = render(<ThreadCard thread={outdated()} place={{ kind: 'outdated' }} actions={shared} t={t} />)
-    const card = view.getByRole('region', { name: en['thread.fileLevel'] })
+    const card = view.getByRole('region', { name: 'Originally R2–3' })
     expect(card.textContent).toContain(`Originally R2–3 · on ${OLD.slice(0, 7)}`)
     expect([...card.querySelectorAll('[class*="excerptLine"]')].map(line => line.textContent)).toEqual(['@@ -1 +1,3 @@', ' a', '+b', '+c'])
     fireEvent.click(view.getByRole('button', { name: en['thread.viewOriginal'] }))

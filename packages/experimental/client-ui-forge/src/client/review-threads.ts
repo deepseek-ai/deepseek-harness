@@ -164,8 +164,10 @@ export function formatThreadQuote(thread: ForgeReviewThread, url: string, index:
   const state = [thread.resolved ? 'resolved' : 'unresolved', ...thread.subject === 'line' && thread.current === null ? ['outdated'] : []].join(', ')
   const fence = thread.diffHunk === null ? '' : '`'.repeat(Math.max(3, ...Array.from(thread.diffHunk.matchAll(/`+/g), match => match[0].length + 1)))
   const hunk = thread.diffHunk === null ? '' : `Diff hunk:\n${fence}diff\n${thread.diffHunk}\n${fence}\n`
+  // A blank comment line becomes a bare `>` and comments follow one another without blank lines, since the composer
+  // quotes every line of the reference again.
   const comments = thread.comments.map(comment => `${comment.author === null ? 'Unknown author' : `@${comment.author.login}`} (${comment.createdAt}):\n`
-    + comment.body.split('\n').map(line => `> ${line}`).join('\n')).join('\n\n')
+    + comment.body.split('\n').map(line => line.trim() === '' ? '>' : `> ${line}`).join('\n')).join('\n')
   const link = thread.comments[0]?.url ?? url
   return `## Review Thread ${index}\nFile: ${thread.path}\n${where}\nState: ${state}\nSource: ${link}\n${hunk}Comments:\n${comments}`
 }

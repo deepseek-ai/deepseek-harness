@@ -109,13 +109,13 @@ describe('thread quotes', () => {
   it('formats a line thread with its hunk, state, and every comment quoted line by line', () => {
     const thread: ForgeReviewThread = reviewThread({
       current: { commit: HEAD, startLine: 3, endLine: 5 }, diffHunk: '@@ -1 +1 @@\n-```\n+````',
-      comments: [reviewComment({ body: '# Heading\nsecond line', url: 'https://github.com/octo/demo/pull/7#discussion_r1' }),
+      comments: [reviewComment({ body: '# Heading\n\nsecond line', url: 'https://github.com/octo/demo/pull/7#discussion_r1' }),
         reviewComment({ author: null, body: 'reply' })],
     })
     expect(formatThreadQuote(thread, 'https://github.com/octo/demo/pull/7', 2)).toBe([
       '## Review Thread 2', 'File: src/a.ts', 'Side: R', 'Lines: 3-5', `Commit: ${HEAD}`, 'State: unresolved',
       'Source: https://github.com/octo/demo/pull/7#discussion_r1', 'Diff hunk:', '`````diff', '@@ -1 +1 @@\n-```\n+````', '`````',
-      'Comments:', '@reviewer (2026-11-05T08:00:00Z):', '> # Heading', '> second line', '', 'Unknown author (2026-11-05T08:00:00Z):', '> reply',
+      'Comments:', '@reviewer (2026-11-05T08:00:00Z):', '> # Heading', '>', '> second line', 'Unknown author (2026-11-05T08:00:00Z):', '> reply',
     ].join('\n'))
   })
 

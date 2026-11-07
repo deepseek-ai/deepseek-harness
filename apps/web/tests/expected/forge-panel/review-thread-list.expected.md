@@ -1,0 +1,17 @@
+- complementary "讨论列表，共 5 个":
+  - text: 讨论 5
+  - button "关闭讨论列表"
+  - group "筛选讨论":
+    - button "未解决 4"
+    - button "已过期 1"
+    - button "已解决 1"
+    - button "需要我回复 0"
+  - heading "panel.md" [level=3]
+  - button "文件级讨论 Add a screenshot."
+  - heading "panel.ts" [level=3]
+  - button "R2 · 1 条回复 Why two?"
+  - button "L15 The old fifteen was a number."
+  - button "R15 Settled. 已解决"
+  - button "原在 R9 · 在 fffffff 上 This line moved. 已过期"
+  - text: github.com 上共 5 个讨论 ·
+  - button "在 GitHub 中查看"

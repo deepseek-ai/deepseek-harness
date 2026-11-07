@@ -947,7 +947,7 @@ export function ChangesTab({
             <HideTestsSwitch hidden={hideTests} toggle={() => { actions.toggledTests(tab.id) }} t={t} />
           </span>}
           <span className={css.spacer} />
-          {review !== null && (
+          {review !== null && review.threads.length > 0 && (
             <button type="button" className={css.threadsToggle} aria-pressed={threadList.open} data-forge-threads-toggle=""
               aria-label={t('thread.listAria', { count: review.threads.length })}
               onClick={() => { setThreadList(value => ({ ...value, open: !value.open, file: null })) }}>

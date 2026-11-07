@@ -56,15 +56,20 @@ function nextPage(threads: Record<string, unknown>, headRefOid = head): Record<s
   return { data: { node: { headRefOid, reviewThreads: threads } } }
 }
 
+/** Whether a scripted answer is `gh` output as printed rather than a JSON body. */
+function isRaw(answer: Record<string, unknown> | { readonly raw: GhOutput }): answer is { readonly raw: GhOutput } {
+  return 'raw' in answer
+}
+
 /** Answer the first thread page with `first`, later thread pages from `later` by cursor, and comment pages from `comments` by cursor. */
 function review(
-  first: Record<string, unknown> | GhOutput,
+  first: Record<string, unknown> | { readonly raw: GhOutput },
   later: Readonly<Record<string, Record<string, unknown>>> = {},
   comments: Readonly<Record<string, Record<string, unknown>>> = {},
 ): ReturnType<typeof fakeGh> {
   return fakeGh((args) => {
     const cursor = args.find(arg => arg.startsWith('cursor='))?.slice('cursor='.length) ?? ''
-    if (args.includes(`query=${REVIEW_QUERY}`)) return 'exitCode' in first ? first : output(first)
+    if (args.includes(`query=${REVIEW_QUERY}`)) return isRaw(first) ? first.raw : output(first)
     if (args.includes(`query=${REVIEW_THREADS_QUERY}`)) return output(later[cursor] ?? { data: { node: null } })
     if (args.includes(`query=${THREAD_COMMENTS_QUERY}`)) return output(comments[cursor] ?? { data: { node: null } })
     throw new Error(`unexpected gh ${args.join(' ')}`)
@@ -221,14 +226,14 @@ describe('GitHub provider review threads', () => {
   })
 
   it('passes on the failure of any page read and of a response that is not JSON', async () => {
-    const missing = review(output('', 1, 'gh: Could not resolve to a PullRequest with the number of 7.'))
+    const missing = review({ raw: output('', 1, 'gh: Could not resolve to a PullRequest with the number of 7.') })
     await expect(provider(missing.run).readReview(pull(7), head, signal))
       .resolves.toEqual({ code: 'not-found', message: 'gh: Could not resolve to a PullRequest with the number of 7.' })
 
-    const garbled = review(output('not json'))
+    const garbled = review({ raw: output('not json') })
     await expect(provider(garbled.run).readReview(pull(7), head, signal)).resolves.toEqual({ code: 'unavailable', message: 'unexpected GitHub response' })
 
-    const refused = review(output({ data: null, errors: [{ type: 'FORBIDDEN', message: 'Resource not accessible by integration' }] }))
+    const refused = review({ raw: output({ data: null, errors: [{ type: 'FORBIDDEN', message: 'Resource not accessible by integration' }] }) })
     await expect(provider(refused.run).readReview(pull(7), head, signal))
       .resolves.toEqual({ code: 'unavailable', message: 'Resource not accessible by integration' })
 

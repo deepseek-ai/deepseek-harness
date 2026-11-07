@@ -154,12 +154,12 @@ export function ThreadCard({ thread, place, actions, split = false, t }: PropsLo
     </div>
   }
   const original = place.kind === 'outdated' && thread.original !== null ? thread.original : null
+  const label = original !== null ? t('thread.originally', { range: anchorRange(thread.side, original) }) : range ?? t('thread.fileLevel')
   return <section className={css.card} data-forge-thread={thread.id} data-side={side} data-split={split ? '' : undefined}
-    data-resolved={thread.resolved ? '' : undefined} aria-label={range ?? t('thread.fileLevel')}>
+    data-resolved={thread.resolved ? '' : undefined} aria-label={label}>
     <div className={css.header}>
       <span className={css.place}>
-        {original !== null ? t('thread.originally', { range: anchorRange(thread.side, original) })
-          : range ?? t('thread.fileLevel')}
+        {label}
         {commit !== null && <> · {t('thread.onCommit', { commit })}</>}
       </span>
       {place.kind === 'outdated' && <Tag tone="warning">{t('thread.outdatedTag')}</Tag>}

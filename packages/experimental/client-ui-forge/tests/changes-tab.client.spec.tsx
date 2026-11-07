@@ -1786,6 +1786,13 @@ describe('ChangesTab review threads', () => {
     expect(card(m, 'on-row')).toBeNull()
   })
 
+  it('offers no thread list for a change request without threads', async () => {
+    const m = mount({ source, setup: reviewed({ ...REVIEW, threads: [] }) })
+    await settle()
+    expect(m.faces.changeRequestReview).toHaveBeenCalledOnce()
+    expect(m.view.queryByRole('button', { name: /^Review threads/ })).toBeNull()
+  })
+
   it('names no author when the host hides the change request\'s author', async () => {
     const m = mount({ source, state: ready({ changeRequests: [entry(7, snapshot(7, { author: null }))] }), setup: reviewed({ ...REVIEW,
       threads: [line('on-row', 'src/app.ts', 'R', 4, { comments: [reviewComment({ author: { login: 'octo', avatarUrl: null, bot: false } })] })] }) })
