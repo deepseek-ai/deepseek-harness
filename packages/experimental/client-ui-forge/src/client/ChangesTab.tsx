@@ -429,7 +429,8 @@ export function ChangesTab({
   useEffect(() => {
     if (choices?.navigated === navigation.revision) return
     actions.navigated(tab.id, navigation.revision)
-    const path = navigation.params?.path
+    const params = navigation.params
+    const path = params !== undefined && 'path' in params ? params.path : undefined
     if (path === undefined) return
     setTreeState(value => ({ ...value, selected: path }))
     setChosen(value => ({ ...value, [path]: true }))
