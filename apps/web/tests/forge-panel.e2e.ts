@@ -1052,7 +1052,7 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   scaffold.ctx.forge.refresh({ repository: { forge: 'github', host: 'github.com', owner: 'octo', name: 'demo' }, number: 9 })
   await expect.poll(() => scaffold.ctx.forge.latest({ repository: { forge: 'github', host: 'github.com', owner: 'octo', name: 'demo' }, number: 9 }),
     { timeout: 20_000 }).toMatchObject({ snapshot: { headSha: 'd'.repeat(40) } })
-  if (await header.getAttribute('aria-pressed') !== 'true') await header.click()
+  await showSessionPanel(page)
   const expand = draft.getByRole('button', { name: '展开 #9', exact: true })
   if (await expand.count() > 0) await expand.click()
   await draft.getByRole('button', { name: '查看 #9 的变更：新增 30 行，删除 2 行', exact: true }).click({ timeout: 20_000 })

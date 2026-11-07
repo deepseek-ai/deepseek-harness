@@ -23,6 +23,7 @@ const PANEL_EXPECTED = join(SNAPSHOT_DIR, 'task.expected.md')
 const RESIZE_EXPECTED = join(SNAPSHOT_DIR, 'resize.expected.md')
 const MODE = webSnapshotMode()
 const SUBAGENTS_SECTION = '[data-session-panel-section="subagents"]'
+const SHARED_TASKS_SECTION = '[data-session-panel-section="shared-tasks"]'
 const RESEARCHER_DESCRIPTION = 'Researcher: investigate the construction and verify every bound before reporting the result. '.repeat(8).trim()
 const RECEIPT_LOCALES = [
   {
@@ -51,6 +52,16 @@ type ReceiptLocale = typeof RECEIPT_LOCALES[number]
  */
 async function showSubagentsSection(page: Page): Promise<Locator> {
   return (await showSessionPanel(page)).locator(SUBAGENTS_SECTION)
+}
+
+/**
+ * Show the Session panel and return its Shared tasks section once the panel's
+ * entrance animation has ended.
+ * @param page - the page under test.
+ * @returns the section, hidden while it has nothing to show.
+ */
+async function showSharedTasksSection(page: Page): Promise<Locator> {
+  return (await showSessionPanel(page)).locator(SHARED_TASKS_SECTION)
 }
 
 async function seedTeamConversation(page: Page, scaffold: WebScaffold): Promise<void> {
@@ -251,37 +262,32 @@ describe('web e2e: agent teamwork panel', () => {
     expect(tripwire.pageErrors).toEqual([])
   })
 
-  it('shows tasks without children or a divider and hides the section after the last task is deleted', async () => {
+  it('shows tasks in their own section without subagents and hides it after the last task is deleted', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-team-task-only'))
     const agent = scaffold.ctx.agents.list()[0]!
-    const section = await showSubagentsSection(page)
-    expect(await section.locator('[data-subagents-section]').count()).toBe(0)
+    const section = await showSharedTasksSection(page)
+    expect(await section.locator('[data-team-panel]').count()).toBe(0)
     expect(await section.isVisible()).toBe(false)
     const task = await scaffold.ctx.agentTeams.createTask(agent, {
       subject: 'Plan before delegation', description: 'Prepare shared work before creating subagents',
     })
     const board = section.locator('[data-team-panel]')
     await board.getByText(task.subject, { exact: true }).waitFor()
-    expect(await section.getByRole('treeitem').count()).toBe(0)
-    await section.getByText('No subagents', { exact: true }).waitFor()
-    expect(await section.getByRole('heading', { level: 2 }).locator('..').textContent()).toBe('Subagents')
+    expect(await page.locator(SUBAGENTS_SECTION).isVisible()).toBe(false)
+    expect(await section.getByRole('heading', { level: 2 }).locator('..').textContent()).toBe('Shared tasks1 pending')
     expect(await section.locator('h2 button, h3 button').count()).toBe(0)
     expect(await board.locator('[data-team-task-details]').count()).toBe(0)
     expect(await board.getByRole('button', { expanded: false }).count()).toBe(1)
-    expect(await board.evaluate((element) => {
-      const style = getComputedStyle(element)
-      return { border: style.borderTopWidth, margin: style.marginTop }
-    })).toEqual({ border: '0px', margin: '0px' })
     await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'task-only.expected.md'),
-      await captureStableAria(page, SUBAGENTS_SECTION, scaffold.workspaceCwd), MODE)
+      await captureStableAria(page, SHARED_TASKS_SECTION, scaffold.workspaceCwd), MODE)
     await scaffold.ctx.agentTeams.updateTask(agent, { taskId: task.id, expectedRevision: task.revision, action: 'delete' })
-    await section.locator('[data-subagents-section]').waitFor({ state: 'detached' })
+    await board.waitFor({ state: 'detached' })
     await section.waitFor({ state: 'hidden' })
     await dismissSessionPanel(page)
     expect(tripwire.pageErrors).toEqual([])
   })
 
-  it('opens the member tree and live read-only tasks in one section', async () => {
+  it('opens the member tree and live read-only tasks in their own sections', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-agent-team-panel'))
     const projectionReads = vi.spyOn(scaffold.ctx.sessionController, 'projections')
     onTestFinished(() => { projectionReads.mockRestore() })
@@ -298,8 +304,8 @@ describe('web e2e: agent teamwork panel', () => {
     expect(await toggle.evaluate(element => element === document.activeElement)).toBe(true)
     const action = await showSubagentsSection(page)
     await action.getByRole('treeitem', { name: /Researcher/u }).waitFor()
-    expect(await action.locator('[data-team-panel]').count()).toBe(0)
-    expect(await action.getByText('No shared tasks yet. Create them through the conversation.').count()).toBe(0)
+    expect(await page.locator('[data-team-panel]').count()).toBe(0)
+    expect(await page.getByText('No shared tasks yet. Create them through the conversation.').count()).toBe(0)
     expect(await action.locator('h2 button, h3 button').count()).toBe(0)
     expect(await action.getByRole('heading', { name: 'Members', exact: true }).count()).toBe(0)
     expect(projectionReads).not.toHaveBeenCalled()
@@ -313,38 +319,27 @@ describe('web e2e: agent teamwork panel', () => {
     const task = await scaffold.ctx.agentTeams.createTask(agent, {
       subject: 'Agent task', description: 'Created by the root agent', writeScopes: ['src/web'],
     })
-    const row = action.locator(`[data-team-task="${task.id}"]`)
+    const tasks = page.locator(SHARED_TASKS_SECTION)
+    const row = tasks.locator(`[data-team-task="${task.id}"]`)
     await row.getByRole('button', { name: 'Pending Agent task', exact: true, expanded: false }).waitFor()
     const head = action.getByRole('heading', { level: 2 }).locator('..')
     expect(await head.textContent()).toBe('Subagents1 external')
     expect(await action.locator('h2 button, h3 button').count()).toBe(0)
-    expect(await action.locator('[data-team-panel]').evaluate((element) => {
-      const style = getComputedStyle(element)
-      return { border: style.borderTopWidth, margin: style.marginTop }
-    })).toEqual({ border: '0px', margin: '4px' })
-    expect(await action.evaluate((element) => {
-      const tree = element.querySelector('[role="tree"]')!
-      const board = element.querySelector('[data-team-panel]')!
-      return Boolean(tree.compareDocumentPosition(board) & Node.DOCUMENT_POSITION_FOLLOWING)
-    })).toBe(true)
+    expect(await action.evaluate((element, selector) => Boolean(
+      element.compareDocumentPosition(document.querySelector(selector)!) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ), SHARED_TASKS_SECTION)).toBe(true)
     expect(await row.evaluate(element => ({ tag: element.tagName, parent: element.parentElement?.tagName })))
       .toEqual({ tag: 'LI', parent: 'UL' })
-    expect(await action.locator('[data-team-task-details], article').count()).toBe(0)
-    await action.getByRole('heading', { name: 'Shared tasks 1 pending', exact: true }).waitFor()
-    expect(await action.locator('[data-team-panel]').getByRole('heading')
-      .evaluate(element => getComputedStyle(element).columnGap)).toBe('7px')
-    const boardTitle = action.locator('[data-team-panel]').getByText('Shared tasks', { exact: true })
-    const boardProgress = action.getByText('1 pending', { exact: true })
-    expect(await boardProgress.evaluate(element => getComputedStyle(element).marginInlineStart)).toBe('4px')
-    const boardTitleRight = await boardTitle.evaluate(element => element.getBoundingClientRect().right)
-    const boardProgressLeft = await boardProgress.evaluate(element => element.getBoundingClientRect().left)
-    expect(Math.abs(boardProgressLeft - boardTitleRight - 11)).toBeLessThanOrEqual(1)
+    expect(await tasks.locator('[data-team-task-details], article').count()).toBe(0)
+    const tasksHead = tasks.getByRole('heading', { level: 2 }).locator('..')
+    expect(await tasksHead.textContent()).toBe('Shared tasks1 pending')
+    expect(await tasks.getByRole('heading', { level: 2 }).evaluate(element => getComputedStyle(element).font))
+      .toBe(await action.getByRole('heading', { level: 2 }).evaluate(element => getComputedStyle(element).font))
     const member = action.getByRole('treeitem', { name: /Researcher/u })
     const memberTitle = member.getByText(RESEARCHER_DESCRIPTION, { exact: true })
     const taskTitle = row.getByText('Agent task', { exact: true })
     const titleLefts = await Promise.all([
       memberTitle,
-      boardTitle,
       taskTitle,
     ].map(locator => locator.evaluate(element => element.getBoundingClientRect().left)))
     expect(Math.max(...titleLefts) - Math.min(...titleLefts)).toBeLessThanOrEqual(1)
@@ -367,23 +362,29 @@ describe('web e2e: agent teamwork panel', () => {
     expect(await member.evaluate((element) => {
       const style = getComputedStyle(element)
       return { left: style.paddingLeft, right: style.paddingRight, gap: style.gap }
-    })).toEqual({ left: '9px', right: '6px', gap: '7px' })
+    })).toEqual({ left: '6px', right: '6px', gap: '8px' })
     expect(await memberHover.evaluate((element) => {
       const style = getComputedStyle(element)
       return { left: style.paddingLeft, right: style.paddingRight, gap: style.gap, margin: style.margin }
-    })).toEqual({ left: '6px', right: '6px', gap: '7px', margin: '-4px -6px' })
+    })).toEqual({ left: '6px', right: '6px', gap: '8px', margin: '-4px -6px' })
     const taskHover = row.getByRole('button')
     expect(await taskHover.evaluate((element) => {
       const style = getComputedStyle(element)
       return [style.paddingTop, style.paddingBottom]
-    })).toEqual(['7px', '7px'])
-    expect(await taskHover.evaluate(element => element.getBoundingClientRect().height)).toBe(31)
+    })).toEqual(['5px', '5px'])
+    expect(await taskHover.evaluate(element => element.getBoundingClientRect().height)).toBe(30)
     expect(await taskHover.evaluate((element) => {
       const style = getComputedStyle(element)
       return { left: style.paddingLeft, right: style.paddingRight, gap: style.gap, margin: style.margin }
-    })).toEqual({ left: '6px', right: '6px', gap: '7px', margin: '0px -6px' })
-    expect(await taskHover.evaluate(element => element.getBoundingClientRect().width
-      - element.parentElement!.getBoundingClientRect().width)).toBe(12)
+    })).toEqual({ left: '6px', right: '6px', gap: '8px', margin: '0px' })
+    // Status glyphs and trailing chevrons of both rows share their columns.
+    const columns = await Promise.all([
+      member.locator('[data-state]').first(), row.locator('[data-state]').first(),
+    ].map(locator => locator.evaluate((element) => {
+      const bounds = element.getBoundingClientRect()
+      return bounds.left + bounds.width / 2
+    })))
+    expect(Math.abs(columns[0]! - columns[1]!)).toBeLessThanOrEqual(0.5)
     const hoverStyles = []
     for (const target of [memberHover, taskHover]) {
       await target.hover()
@@ -404,7 +405,7 @@ describe('web e2e: agent teamwork panel', () => {
     expect(await row.locator('[data-team-task-details]').evaluate((element) => {
       const style = getComputedStyle(element)
       return { fontSize: style.fontSize, indent: style.paddingLeft }
-    })).toEqual({ fontSize: '12px', indent: '21px' })
+    })).toEqual({ fontSize: '12px', indent: '30px' })
     expect(await row.locator('[data-team-task-details] p, [data-team-task-owner]')
       .evaluateAll(elements => elements.every(element => getComputedStyle(element).fontSize === '12px'))).toBe(true)
     expect(await row.getByRole('button').getAttribute('aria-expanded')).toBe('true')
@@ -413,11 +414,11 @@ describe('web e2e: agent teamwork panel', () => {
     })
     await row.getByRole('img', { name: 'In progress', exact: true }).waitFor()
     await row.locator('[data-team-task-owner]').filter({ hasText: 'Owner: lead' }).waitFor()
-    await action.getByRole('heading', { name: 'Shared tasks 1 in progress', exact: true }).waitFor()
-    expect(await action.getByRole('button', { name: /^(New task|Edit|Complete|Reopen|Delete)$/u }).count()).toBe(0)
-    expect(await action.locator('input, select, textarea').count()).toBe(0)
+    await tasks.getByText('1 in progress', { exact: true }).waitFor()
+    expect(await tasks.getByRole('button', { name: /^(New task|Edit|Complete|Reopen|Delete)$/u }).count()).toBe(0)
+    expect(await tasks.locator('input, select, textarea').count()).toBe(0)
 
-    const snapshot = await captureStableAria(page, SUBAGENTS_SECTION, scaffold.workspaceCwd)
+    const snapshot = await captureStableAria(page, '[data-session-panel]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(PANEL_EXPECTED, snapshot, MODE)
     expect(projectionReads).not.toHaveBeenCalled()
     expect(tripwire.pageErrors).toEqual([])
@@ -440,7 +441,7 @@ describe('web e2e: agent teamwork panel', () => {
     await toggle.click()
     await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
     await page.keyboard.press('Escape')
-    await (await showSubagentsSection(page)).getByText('Agent task', { exact: true }).waitFor()
+    await (await showSharedTasksSection(page)).getByText('Agent task', { exact: true }).waitFor()
     await dismissSessionPanel(page)
   })
 
@@ -466,7 +467,7 @@ describe('web e2e: agent teamwork panel', () => {
       expect(await trigger.getAttribute('aria-expanded')).toBe('true')
       const section = panel.locator(SUBAGENTS_SECTION)
       await section.getByRole('treeitem', { name: /Researcher/u }).waitFor()
-      await section.locator('[data-team-task]').getByRole('button', { expanded: false }).waitFor()
+      await panel.locator('[data-team-task]').getByRole('button', { expanded: false }).waitFor()
       await trigger.click()
       await panel.waitFor({ state: 'detached' })
       expect(await trigger.getAttribute('aria-expanded')).toBe('false')
@@ -480,13 +481,14 @@ describe('web e2e: agent teamwork panel', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-agent-team-panel-keyboard'))
     const panel = page.locator('[data-session-panel]')
     const section = panel.locator(SUBAGENTS_SECTION)
+    const tasksHeading = panel.locator(SHARED_TASKS_SECTION).getByRole('heading', { name: 'Shared tasks', exact: true })
     const trigger = sessionPanelToggle(page)
     const viewport = page.viewportSize()!
     try {
       for (const size of [{ width: 760, height: 540 }, { width: 600, height: 420 }, { width: 390, height: 700 }]) {
         await page.setViewportSize(size)
         await showSessionPanel(page)
-        await section.getByRole('heading', { name: /Shared tasks/u }).waitFor()
+        await tasksHeading.waitFor()
         await expect.poll(() => panel.evaluate((element) => {
           const rect = element.getBoundingClientRect()
           return element.getAttribute('data-session-panel') === 'overlay'
@@ -520,15 +522,15 @@ describe('web e2e: agent teamwork panel', () => {
       expect(await secondary.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
       await secondary.hover()
       expect(await page.getByRole('tooltip').count()).toBe(0)
-      await section.getByRole('heading', { name: /Shared tasks/u }).click()
+      await tasksHeading.click()
       expect(await panel.count()).toBe(1)
       await page.mouse.click(2, 2)
       await panel.waitFor({ state: 'detached' })
       await page.setViewportSize(viewport)
       await trigger.focus()
       await page.keyboard.press('Enter')
-      await section.getByRole('heading', { name: /Shared tasks/u }).waitFor()
-      await section.locator('[data-team-task]').getByRole('button').focus()
+      await tasksHeading.waitFor()
+      await panel.locator('[data-team-task]').getByRole('button').focus()
       await page.keyboard.press('Escape')
       await panel.waitFor({ state: 'detached' })
       expect(await trigger.evaluate(element => element === document.activeElement)).toBe(true)
@@ -567,20 +569,20 @@ describe('web e2e: agent teamwork panel', () => {
     })
     const viewport = page.viewportSize()!
     const panel = page.locator('[data-session-panel]')
-    const section = panel.locator(SUBAGENTS_SECTION)
+    const section = panel.locator(SHARED_TASKS_SECTION)
     const board = section.locator('[data-team-panel]')
     const row = board.locator(`[data-team-task="${task.id}"]`)
     const emptyRow = board.locator(`[data-team-task="${completed.id}"]`)
     onTestFinished(() => page.setViewportSize(viewport))
     // Constrain the panel so closed and expanded task rows both exercise its scrollbar.
     await page.setViewportSize({ width: viewport.width, height: 540 })
-    await showSubagentsSection(page)
+    await showSharedTasksSection(page)
     await row.waitFor()
     expect(await board.locator('[data-team-task-details], article').count()).toBe(0)
     expect(await board.getByRole('button', { expanded: false }).count()).toBe(4)
     expect(await board.locator('[data-team-task]').evaluateAll(elements => elements.map(element => element.getAttribute('data-status'))))
       .toEqual(['in_progress', 'completed', 'pending', 'pending'])
-    const counts = board.getByText('1 completed\u2002·\u20021 in progress\u2002·\u20022 pending', { exact: true })
+    const counts = section.getByText('1 completed\u2002·\u20021 in progress\u2002·\u20022 pending', { exact: true })
     await counts.waitFor()
     expect(await counts.textContent()).toBe('1 completed\u2002·\u20021 in progress\u2002·\u20022 pending')
     expect(await section.locator('h2 button, h3 button').count()).toBe(0)
@@ -659,13 +661,17 @@ describe('web e2e: agent teamwork panel', () => {
       expect(await details.locator('[data-team-task-owner], [data-team-task-owner] span')
         .evaluateAll(elements => elements.map(element => getComputedStyle(element).color)))
         .toEqual([detailColor, detailColor, detailColor])
-      expect(await counts.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
-      const titleBounds = await board.getByText('Shared tasks', { exact: true }).boundingBox()
+      // Long progress clips on the title's line; the title itself keeps its full width.
+      const title = section.getByRole('heading', { name: 'Shared tasks', exact: true })
+      expect(await title.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+      const titleBounds = await title.boundingBox()
       const countBounds = await counts.boundingBox()
+      const sectionBounds = await section.boundingBox()
       expect(titleBounds).not.toBeNull()
       expect(countBounds).not.toBeNull()
-      expect(countBounds!.y).toBeGreaterThanOrEqual(titleBounds!.y + titleBounds!.height)
-      await compareOrRefreshGolden(RESIZE_EXPECTED, await captureStableAria(page, SUBAGENTS_SECTION, scaffold.workspaceCwd), MODE)
+      expect(Math.abs((countBounds!.y + countBounds!.height / 2) - (titleBounds!.y + titleBounds!.height / 2))).toBeLessThanOrEqual(1)
+      expect(countBounds!.x + countBounds!.width).toBeLessThanOrEqual(sectionBounds!.x + sectionBounds!.width)
+      await compareOrRefreshGolden(RESIZE_EXPECTED, await captureStableAria(page, SHARED_TASKS_SECTION, scaffold.workspaceCwd), MODE)
       await emptyRow.getByRole('button').click()
       expect(await row.getAttribute('data-expanded')).toBe('false')
       expect(await row.locator('[data-team-task-details]').count()).toBe(0)
@@ -726,20 +732,20 @@ describe('web e2e: agent teamwork panel', () => {
     expect(tripwire.pageErrors).toEqual([])
   })
 
-  it('removes the shared-task heading and the board divider when the last shared task is deleted', async () => {
+  it('hides the Shared tasks section when the last shared task is deleted', async () => {
     const agent = scaffold.ctx.agents.list()[0]!
-    const panel = await showSubagentsSection(page)
-    await panel.locator('[data-team-panel]').waitFor()
+    const tasks = await showSharedTasksSection(page)
+    await tasks.locator('[data-team-panel]').waitFor()
     for (const task of scaffold.ctx.agentTeams.listTasks(agent).toReversed()) {
       if (task.status === 'deleted') continue
       await scaffold.ctx.agentTeams.updateTask(agent, {
         taskId: task.id, expectedRevision: task.revision, action: 'delete',
       })
     }
-    await panel.locator('[data-team-panel]').waitFor({ state: 'detached' })
-    expect(await panel.getByRole('heading').allTextContents()).toEqual(['Subagents'])
-    expect(await panel.getByText('No shared tasks yet. Create them through the conversation.').count()).toBe(0)
-    expect(await panel.getByRole('treeitem', { name: /Researcher/u }).count()).toBe(1)
+    await tasks.locator('[data-team-panel]').waitFor({ state: 'detached' })
+    await tasks.waitFor({ state: 'hidden' })
+    expect(await page.getByText('No shared tasks yet. Create them through the conversation.').count()).toBe(0)
+    expect(await page.locator(SUBAGENTS_SECTION).getByRole('treeitem', { name: /Researcher/u }).count()).toBe(1)
     await dismissSessionPanel(page)
   })
 
@@ -873,19 +879,19 @@ it.each(RECEIPT_LOCALES)('renders historical Team failures in $language without 
   })
 })
 
-it('shows the Chinese empty subagent section above compact shared tasks', async () => {
+it('shows the Chinese Shared tasks section without subagents', async () => {
   await withTeamReceiptPage(RECEIPT_LOCALES[1], async (page, scaffold) => {
     const agent = scaffold.ctx.agents.list()[0]!
     await scaffold.ctx.agentTeams.setEnabled(agent, true)
     await scaffold.ctx.agentTeams.createTask(agent, {
       subject: '准备协作', description: '先准备共享任务，再创建子智能体。',
     })
-    const panel = await showSubagentsSection(page)
-    await panel.getByText('暂无子智能体', { exact: true }).waitFor()
-    expect(await panel.getByRole('heading', { level: 2 }).locator('..').textContent()).toBe('子智能体')
-    expect(await panel.locator('h2 button, h3 button').count()).toBe(0)
-    await panel.getByRole('heading', { name: '共享任务 1 待处理', exact: true }).waitFor()
-    expect(await panel.locator('[data-team-task-details]').count()).toBe(0)
+    const section = await showSharedTasksSection(page)
+    await section.getByText('准备协作', { exact: true }).waitFor()
+    expect(await section.getByRole('heading', { level: 2 }).locator('..').textContent()).toBe('共享任务1 待处理')
+    expect(await section.locator('h2 button, h3 button').count()).toBe(0)
+    expect(await section.locator('[data-team-task-details]').count()).toBe(0)
+    expect(await page.locator(SUBAGENTS_SECTION).isVisible()).toBe(false)
   })
 })
 

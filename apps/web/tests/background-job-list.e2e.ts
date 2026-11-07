@@ -112,12 +112,19 @@ describe.skipIf(MODE === 'record')('web e2e: background job list', () => {
     await expect.poll(() => row.textContent()).toContain(COMMAND)
     expect(await section.getByRole('heading', { name: 'Background jobs', level: 2 }).isVisible()).toBe(true)
     expect(await row.locator('[data-state="ongoing"]').count()).toBe(1)
-    // Hiding the panel unmounts the section; showing it again lists the live job.
+    expect(await page.locator('[data-jobs-running]').count()).toBe(0)
+    // Hiding the panel unmounts the section, and a blue dot on the toggle reports the running job.
     await toggle.click()
     await list.waitFor({ state: 'detached' })
+    const dot = page.locator('[data-jobs-running]')
+    await dot.waitFor()
+    await page.getByRole('button', { name: 'Session panel Background jobs running: 1', exact: true }).waitFor()
+    expect(await dot.evaluate(element => getComputedStyle(element).width)).toBe('6px')
+    // Showing it again lists the live job, and the dot goes away.
     await showSessionPanel(page)
     await row.waitFor({ timeout: 10_000 })
     expect(await toggle.getAttribute('aria-expanded')).toBe('true')
+    await dot.waitFor({ state: 'detached' })
 
     const running = await captureStableAria(page, SECTION, scaffold.workspaceCwd)
     await compareOrRefreshGolden(RUNNING_EXPECTED, running, MODE)
@@ -221,6 +228,21 @@ describe.skipIf(MODE === 'record')('web e2e: background job list', () => {
       await page.setViewportSize(viewport)
       await original.dispose()
     }
+  })
+
+  it('marks a job that finished with a nonzero exit code with the warning dot', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-background-job-nonzero-exit'))
+    await executeToolFixture(scaffold.ctx, {
+      signal: new AbortController().signal,
+      callId: ToolCallId('background-job-list-nonzero-e2e'),
+      name: 'bash',
+      arguments: { command: 'exit 3', description: 'Exit with a failure', run_in_background: true },
+      agent: scaffold.ctx.agents.list()[0]!,
+    })
+    const panel = await showSessionPanel(page)
+    const row = panel.locator(SECTION).getByRole('listitem').filter({ hasText: 'exit 3' })
+    await row.getByText('bash · exit code: 3', { exact: true }).waitFor({ timeout: 15_000 })
+    expect(await row.locator('[data-state]').getAttribute('data-state')).toBe('warning')
   })
 
   it('keeps its snapshot inventory closed', async () => {

@@ -750,8 +750,8 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     expect([
       Math.round(clickAreaBox!.x - panelBox!.x),
       Math.round(panelBox!.x + panelBox!.width - clickAreaBox!.x - clickAreaBox!.width),
-    // Panel padding plus the branchless row's one-pixel leading inset.
-    ]).toEqual([9, 8])
+    // The panel's padding on both sides: the row spans the section body.
+    ]).toEqual([8, 8])
     await compareOrRefreshGolden(
       BRANCHLESS_EXPECTED,
       await captureStableAria(page, '[role="tree"][aria-label="Subagent sessions"]', scaffold.workspaceCwd),
@@ -873,7 +873,8 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     await page.getByRole('tree', { name: 'Sessions' })
       .getByRole('treeitem', { name: /Ask a research subagent to/ }).click()
     const rootSection = await showSubagentsSection(page)
-    await rootSection.locator('[data-team-panel]').getByText('Root-only shared task', { exact: true }).waitFor()
+    await page.locator('[data-session-panel-section="shared-tasks"] [data-team-panel]')
+      .getByText('Root-only shared task', { exact: true }).waitFor()
     const rootHeader = rootSection.getByRole('heading', { level: 2 }).locator('..')
     expect(await rootHeader.textContent()).toBe('Subagents1 completed\u2002·\u20021 not running')
     expect(await rootHeader.getByRole('button').count()).toBe(0)
