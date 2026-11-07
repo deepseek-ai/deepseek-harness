@@ -840,6 +840,14 @@
   .threadCount:hover { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 20%, transparent); }
 }
 
+/* A view narrower than 480px shows the count alone. */
+.threadCountNumber { display: none; }
+
+@container forge-changes (max-width: 479px) {
+  .threadCountText { display: none; }
+  .threadCountNumber { display: inline; }
+}
+
 /* Opens the thread list; pressed while the list shows. */
 .threadsToggle {
   display: inline-flex;

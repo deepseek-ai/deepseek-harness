@@ -157,18 +157,18 @@ describe('OutdatedThreads', () => {
 describe('ThreadList', () => {
   function list(overrides: Partial<ThreadListProps> = {}) {
     const props: ThreadListProps = {
-      entries: [], order: [], viewer: 'octo', truncated: false, host: 'github.com', url: 'https://github.com/octo/demo/pull/7', filter: null,
-      file: null, choose: vi.fn(), open: vi.fn(), openLink: vi.fn(), close: vi.fn(), t, ...overrides,
+      entries: [], order: [], truncated: false, url: 'https://github.com/octo/demo/pull/7', filter: 'all', file: null, claim: false,
+      claimed: vi.fn(), choose: vi.fn(), open: vi.fn(), openLink: vi.fn(), close: vi.fn(), t, ...overrides,
     }
     return { props, view: render(<ThreadList {...props} />) }
   }
 
-  it('says when there are no threads, when none pass the filter, and how many the host has', () => {
+  it('says when there are no threads and when none pass the filter, with only the host link below them', () => {
     expect(list().view.getByText(en['thread.empty'])).toBeDefined()
     cleanup()
     const { view } = list({ entries: [{ thread: reviewThread(), place: { kind: 'line', side: 'R', startLine: 3, endLine: 3 } }], filter: 'resolved' })
     expect(view.getByText(en['thread.none'])).toBeDefined()
-    expect(view.getByText(/^1 threads on github\.com/)).toBeDefined()
+    expect(view.getByRole('button', { name: en['thread.openAll'] }).parentElement?.textContent).toBe(en['thread.openAll'])
   })
 
   it('orders each file\'s threads from file threads to lines to outdated ones and describes each', () => {
@@ -192,14 +192,14 @@ describe('ThreadList', () => {
     expect(items[3]?.textContent).toContain(en['thread.outdatedTag'])
     expect(items[4]?.textContent).toContain(en['thread.elsewhereTag'])
     fireEvent.click(items[3]!)
-    expect(props.open).toHaveBeenCalledWith(entries[0])
-    fireEvent.click(view.getByRole('button', { name: 'Outdated 2' }))
-    expect(props.choose).toHaveBeenCalledWith('outdated')
+    expect(props.open).toHaveBeenCalledWith(entries[0], false)
+    fireEvent.click(view.getByRole('radio', { name: /^Unresolved/ }))
+    expect(props.choose).toHaveBeenCalledWith('unresolved')
     fireEvent.click(view.getByRole('button', { name: en['thread.close'] }))
     expect(props.close).toHaveBeenCalledOnce()
   })
 
-  it('clears the active filter when it is chosen again and scrolls to a file\'s group', () => {
+  it('groups threads by file in file order, scrolls to a file\'s group, and moves the filter with arrow keys', () => {
     const entry = { thread: reviewThread({ path: 'b.ts' }), place: { kind: 'line', side: 'R', startLine: 3, endLine: 3 } as const }
     const other = { thread: reviewThread({ path: 'a.ts' }), place: { kind: 'line', side: 'R', startLine: 3, endLine: 3 } as const }
     const empty = { thread: reviewThread({ path: 'c.ts', comments: [] }), place: { kind: 'file' } as const }
@@ -208,7 +208,7 @@ describe('ThreadList', () => {
       .toEqual(['b.ts', 'a.ts', 'c.ts'])
     expect(view.container.querySelector('[data-forge-thread-group="c.ts"] [class*="excerpt"]')?.textContent).toBe('')
     expect(scrolled.mock.contexts).toEqual([view.container.querySelector('[data-forge-thread-group="a.ts"]')])
-    fireEvent.click(view.getByRole('button', { name: 'Unresolved 3' }))
-    expect(props.choose).toHaveBeenCalledWith(null)
+    fireEvent.keyDown(view.getByRole('radio', { name: /^Unresolved/ }), { key: 'ArrowRight' })
+    expect(props.choose).toHaveBeenCalledWith('resolved')
   })
 })

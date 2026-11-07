@@ -217,3 +217,15 @@
   font: var(--dsw-font-xs-13);
   font-family: Inter, var(--dsw-font-family);
 }
+
+/* A changes view narrower than 480px gives the code more width; the query names no container, since CSS Modules rename
+   a container name per file, and the nearest inline-size container is the changes view. */
+@container (max-width: 479px) {
+  .card,
+  .folded,
+  .card[data-split][data-side="R"],
+  .folded[data-split][data-side="R"] {
+    width: calc(100% - 12px);
+    margin: 6px;
+  }
+}

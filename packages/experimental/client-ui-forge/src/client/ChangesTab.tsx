@@ -581,10 +581,13 @@ export function ChangesTab({
   const placed = usePlacedThreads(review, data?.kind === 'change' ? { head: prHead ?? '', end: data.headSha, commits: data.commits } : null)
   const [threadList, setThreadList] = useState<{
     readonly open: boolean
-    readonly filter: ThreadFilter | null
+    readonly filter: ThreadFilter
     /** File whose group the list scrolls to, or null. */
     readonly file: string | null
-  }>({ open: false, filter: 'unresolved', file: null })
+    /** Whether the reader just opened the list and it has not taken the focus yet. */
+    readonly claim: boolean
+  }>({ open: false, filter: 'unresolved', file: null, claim: false })
+  const threadsToggle = useRef<HTMLButtonElement>(null)
   const [focus, setFocus] = useState<ThreadFocus | null>(null)
   const allFiles = useMemo(() => filesInTreeOrder(changedFileTree(data?.files ?? [])), [data])
   const files = useMemo(() => allFiles.filter(file => shownBy(file, lens, hideTests)), [allFiles, lens, hideTests])
@@ -720,7 +723,13 @@ export function ChangesTab({
   const threadsOf = (path: string): FileThreads | undefined => {
     const group = placed.files.get(path)
     return threadActions === null || group === undefined ? undefined
-      : { ...group, actions: threadActions, openList: () => { setThreadList(value => ({ ...value, open: true, file: path })) } }
+      : { ...group, actions: threadActions,
+        openList: () => { setThreadList(value => ({ ...value, open: true, file: path, claim: true })) } }
+  }
+  /** Close the thread list at the reader's request and return the focus to its toggle. */
+  const closeThreadList = (): void => {
+    setThreadList(value => ({ ...value, open: false }))
+    threadsToggle.current?.focus()
   }
   /** Show a thread from the list: all commits for a thread the chosen ones do not hold, then its file, unfolded and centered. */
   const openThread = ({ thread, place }: PlacedThread): void => {
@@ -948,9 +957,9 @@ export function ChangesTab({
           </span>}
           <span className={css.spacer} />
           {review !== null && review.threads.length > 0 && (
-            <button type="button" className={css.threadsToggle} aria-pressed={threadList.open} data-forge-threads-toggle=""
+            <button ref={threadsToggle} type="button" className={css.threadsToggle} aria-pressed={threadList.open} data-forge-threads-toggle=""
               aria-label={t('thread.listAria', { count: review.threads.length })}
-              onClick={() => { setThreadList(value => ({ ...value, open: !value.open, file: null })) }}>
+              onClick={() => { setThreadList(value => ({ ...value, open: !value.open, file: null, claim: !value.open })) }}>
               {t('thread.list')}<span className={css.threadsTotal}>{review.threads.length}</span>
             </button>
           )}
@@ -1015,10 +1024,14 @@ export function ChangesTab({
         {body}
         {allFiles.length > 0 && <FileTreePane {...navigator} id={treeId} position={treePosition} onWidth={setTreeWidth} />}
         {review !== null && data?.kind === 'change' && threadList.open && (
-          <ThreadList entries={placed.entries} order={allFiles.map(file => file.path)} viewer={review.viewer}
-            truncated={review.truncated} host={new URL(data.url).host} url={data.url}
+          <ThreadList entries={placed.entries} order={allFiles.map(file => file.path)} truncated={review.truncated} url={data.url}
             filter={threadList.filter} choose={(filter) => { setThreadList(value => ({ ...value, filter })) }} file={threadList.file}
-            open={openThread} openLink={openLink} close={() => { setThreadList(value => ({ ...value, open: false })) }} t={t} />
+            claim={threadList.claim} claimed={() => { setThreadList(value => ({ ...value, claim: false })) }}
+            open={(entry, covering) => {
+              if (covering) setThreadList(value => ({ ...value, open: false }))
+              openThread(entry)
+            }}
+            openLink={openLink} close={closeThreadList} t={t} />
         )}
       </div>
     </div>

@@ -28,11 +28,11 @@ export type ThreadPlace =
   | { readonly kind: 'outdated' }
   | { readonly kind: 'elsewhere' }
 
-/** One filter of the thread list. */
-export type ThreadFilter = 'unresolved' | 'outdated' | 'resolved' | 'mine'
+/** One filter of the thread list: the threads by whether they are resolved. */
+export type ThreadFilter = 'unresolved' | 'resolved' | 'all'
 
 /** Filters of the thread list in display order. */
-export const THREAD_FILTERS: readonly ThreadFilter[] = ['unresolved', 'outdated', 'resolved', 'mine']
+export const THREAD_FILTERS: readonly ThreadFilter[] = ['unresolved', 'resolved', 'all']
 
 /**
  * Place a thread in a view. The whole change request shows a thread at its position on the head. Chosen commits show
@@ -83,31 +83,16 @@ export function gapOf(file: ForgeDiffFile, side: 'L' | 'R', line: number): numbe
 }
 
 /**
- * Whether the signed-in user should answer a thread: it is not resolved, the user wrote in it, and someone else wrote last.
+ * Whether a thread passes a filter of the thread list.
  * @param thread - the thread.
- * @param viewer - login of the signed-in user, or null when the host names none.
- * @returns whether the thread awaits the user's reply.
- */
-export function awaitsViewer(thread: ForgeReviewThread, viewer: string | null): boolean {
-  if (viewer === null || thread.resolved) return false
-  const last = thread.comments.at(-1)?.author?.login
-  return last !== viewer && thread.comments.some(comment => comment.author?.login === viewer)
-}
-
-/**
- * Whether a thread passes a filter of the thread list; `outdated` keeps a line thread without a position on the head.
- * @param thread - the thread.
- * @param filter - the filter, or null for every thread.
- * @param viewer - login of the signed-in user.
+ * @param filter - the filter.
  * @returns whether the list shows the thread.
  */
-export function passesFilter(thread: ForgeReviewThread, filter: ThreadFilter | null, viewer: string | null): boolean {
+export function passesFilter(thread: ForgeReviewThread, filter: ThreadFilter): boolean {
   switch (filter) {
-    case null: return true
     case 'unresolved': return !thread.resolved
-    case 'outdated': return thread.subject === 'line' && thread.current === null
     case 'resolved': return thread.resolved
-    case 'mine': return awaitsViewer(thread, viewer)
+    case 'all': return true
     /* v8 ignore next -- closed ThreadFilter union exhaustiveness guard */
     default: return assertNever(filter, 'ThreadFilter')
   }

@@ -1901,17 +1901,24 @@ it.skipIf(MODE === 'record')('overlays the review threads of a change request an
 
   await view.getByRole('button', { name: '讨论列表，共 5 个', exact: true }).click()
   const list = view.getByRole('complementary', { name: '讨论列表，共 5 个' })
-  await expect.poll(() => list.getByRole('button', { pressed: true }).allTextContents()).toEqual(['未解决 4'])
+  await expect.poll(() => list.getByRole('radio', { checked: true }).allTextContents()).toEqual(['未解决4'])
   await expect.poll(() => list.locator('[data-forge-thread-item]').evaluateAll(items => items.map(item => item.getAttribute('data-forge-thread-item'))))
     .toEqual(['whole-file', 'on-line', 'old-side', 'outdated'])
-  await list.getByRole('button', { name: '已解决 1', exact: true }).click()
+  await list.getByRole('radio', { name: /^已解决/ }).click()
   await list.locator('[data-forge-thread-item="resolved"]').click()
-  // Opening a resolved thread unfolds it inside its file.
+  // Opening a resolved thread unfolds it inside its file, and the docked list stays.
   await panel.locator('[data-forge-thread="resolved"]').getByText('Settled.', { exact: true }).waitFor()
-  await list.getByRole('button', { name: '已解决 1', exact: true }).click()
-  await list.getByRole('button', { name: '需要我回复 0', exact: true }).waitFor()
+  await list.getByRole('radio', { name: /^全部/ }).click()
+  await expect.poll(() => list.locator('[data-forge-thread-item]').count()).toBe(5)
   await compareOrRefreshGolden(join(EXPECTED, 'review-thread-list.expected.md'),
     await captureStableAria(page, '[data-forge-thread-list]', scaffold.workspaceCwd), MODE)
+  // A view narrower than 480px gives the list the files' whole width and closes it before opening a thread.
+  await view.evaluate((element) => { element.style.width = '420px'; element.style.flex = 'none' })
+  await expect.poll(() => list.evaluate(element => [getComputedStyle(element).position, element.getBoundingClientRect().width]))
+    .toEqual(['absolute', 420])
+  await list.locator('[data-forge-thread-item="on-line"]').click()
+  await list.waitFor({ state: 'detached' })
+  await view.evaluate((element) => { element.style.width = ''; element.style.flex = '' })
 
   await onLine.getByRole('button', { name: '添加到输入框', exact: true }).click()
   await page.locator('[data-composer-input]').first().getByText('panel.ts R2', { exact: true }).first().waitFor()

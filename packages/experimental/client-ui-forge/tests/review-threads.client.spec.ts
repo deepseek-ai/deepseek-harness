@@ -1,8 +1,8 @@
 /** Placement, filters, excerpts, and composer quotes of host review threads. */
 import { describe, expect, it } from 'vitest'
-import type { ForgeReviewComment, ForgeReviewThread } from '@deepseek-ai/dsh-experimental-forge/types'
+import type { ForgeReviewThread } from '@deepseek-ai/dsh-experimental-forge/types'
 import {
-  anchorRange, awaitsViewer, formatThreadQuote, gapOf, hunkExcerpt, passesFilter, placeThread, threadQuoteSummary, THREAD_FILTERS,
+  anchorRange, formatThreadQuote, gapOf, hunkExcerpt, passesFilter, placeThread, threadQuoteSummary, THREAD_FILTERS,
 } from '../src/client/review-threads.ts'
 import type { ForgeDiffFile } from '../src/types.ts'
 import { reviewComment, reviewThread } from './thread-fixtures.client.ts'
@@ -61,29 +61,14 @@ it('finds the collapsed unchanged lines that hold a line on either side', () => 
 })
 
 describe('thread filters', () => {
-  const by = (login: string | null): ForgeReviewComment =>
-    reviewComment({ author: login === null ? null : { login, avatarUrl: null, bot: false } })
-
-  it('awaits the viewer only on an unresolved thread the viewer wrote in and someone else wrote last', () => {
-    expect(awaitsViewer(reviewThread({ comments: [by('octo'), by('lin')] }), 'octo')).toBe(true)
-    expect(awaitsViewer(reviewThread({ comments: [by('lin'), by('octo')] }), 'octo')).toBe(false)
-    expect(awaitsViewer(reviewThread({ comments: [by('lin'), by(null)] }), 'octo')).toBe(false)
-    expect(awaitsViewer(reviewThread({ comments: [by('octo'), by(null)] }), 'octo')).toBe(true)
-    expect(awaitsViewer(reviewThread({ comments: [by('octo'), by('lin')], resolved: true }), 'octo')).toBe(false)
-    expect(awaitsViewer(reviewThread({ comments: [by('octo'), by('lin')] }), null)).toBe(false)
-    expect(awaitsViewer(reviewThread({ comments: [] }), 'octo')).toBe(false)
-  })
-
   it('keeps the threads each filter names', () => {
     const outdated = reviewThread({ current: null })
     const resolved = reviewThread({ resolved: true })
     const file = reviewThread({ subject: 'file', current: null, original: null })
-    expect(THREAD_FILTERS).toEqual(['unresolved', 'outdated', 'resolved', 'mine'])
-    expect([outdated, resolved, file].map(thread => passesFilter(thread, null, null))).toEqual([true, true, true])
-    expect([outdated, resolved, file].map(thread => passesFilter(thread, 'unresolved', null))).toEqual([true, false, true])
-    expect([outdated, resolved, file].map(thread => passesFilter(thread, 'outdated', null))).toEqual([true, false, false])
-    expect([outdated, resolved, file].map(thread => passesFilter(thread, 'resolved', null))).toEqual([false, true, false])
-    expect(passesFilter(reviewThread({ comments: [by('octo'), by('lin')] }), 'mine', 'octo')).toBe(true)
+    expect(THREAD_FILTERS).toEqual(['unresolved', 'resolved', 'all'])
+    expect([outdated, resolved, file].map(thread => passesFilter(thread, 'unresolved'))).toEqual([true, false, true])
+    expect([outdated, resolved, file].map(thread => passesFilter(thread, 'resolved'))).toEqual([false, true, false])
+    expect([outdated, resolved, file].map(thread => passesFilter(thread, 'all'))).toEqual([true, true, true])
   })
 })
 
