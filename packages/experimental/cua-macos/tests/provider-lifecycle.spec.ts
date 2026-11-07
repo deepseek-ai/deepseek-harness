@@ -17,7 +17,7 @@ import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
 import Hmr from '@deepseek-ai/dsh-hmr'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
-import { CuaConfig } from '@deepseek-ai/dsh-cua'
+import { CuaConfig, installCua } from '@deepseek-ai/dsh-cua'
 import { createConfigProjector } from '@deepseek-ai/dsh-app-boot/src/config-schema/projector.ts'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import FileSystem from '@deepseek-ai/dsh-fs-local'
@@ -927,8 +927,10 @@ it('drops late approval after cancellation and admits only one pending question'
   expect((await f.execute('requestMouseControl')).isError).toBe(true)
   await f.ctx.plugin(UserQuestions)
   const entered = Promise.withResolvers<undefined>()
+  let count = 0
   const release = Promise.withResolvers<undefined>()
   f.ctx.on('user-questions/request', async () => {
+    count++
     entered.resolve(undefined)
     await release.promise
     return { answers: [{ id: 'cua-mouse-control', selected: ['Allow for this session'] }] }
@@ -941,5 +943,24 @@ it('drops late approval after cancellation and admits only one pending question'
   release.resolve(undefined)
   await Promise.allSettled([first])
   expect((await f.execute('requestMouseControl')).value).toBe(true)
+  expect(count).toBe(2)
   expect(native.request).not.toHaveBeenCalled()
+})
+
+it('keeps provider-specific pointer flags and questions off providers without mouse control', async () => {
+  const f = await setup()
+  await f.provider.dispose()
+  await f.ctx.plugin({ name: 'fixture-window-provider', inject: NativeProvider.inject, apply(ctx: Context) {
+    installCua(ctx, CuaConfig(config), {
+      helperPath: config.helperPath, createChannel() { throw new Error('Unexpected native channel') },
+      guidance: '', permissionParameters: () => ({}),
+      capabilities: { platform: 'fixture', methods: ['getApp', 'mouseMove'], appLevelAccessibility: true,
+        keyboard: ['app'], coordinateSpace: 'screenshot-pixels', browser: false },
+    })
+  } })
+  expect((await f.execute('requestMouseControl')).isError).toBe(true)
+  await selectApplication(f)
+  const target = { appHandle: 'app-one', snapshotId: 'snapshot', elementId: '0' }
+  expect((await f.execute('mouseMove', target)).isError).toBe(false)
+  expect(native.request).toHaveBeenLastCalledWith('mouseMove', target, expect.any(AbortSignal), expect.any(String))
 })
