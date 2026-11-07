@@ -458,13 +458,17 @@ export function DiffFile(props: DiffFileProps): ReactNode {
         >
           <IconChevronDownOutlineRegular size={14} className={css.chevron} />
         </button>
-        <FileTypeIcon path={file.path} size={16} className={css.fileIcon} />
-        <span className={css.filePath}>
-          <FileLabel path={file.path} tooltip={tooltip} />
+        <span className={css.fileTitle}>
+          <FileTypeIcon path={file.path} size={16} className={css.fileIcon} />
+          <span className={css.filePath}>
+            <FileLabel path={file.path} tooltip={tooltip} />
+          </span>
+          {viewed === 'changed' && (
+            <Tag tone="warning" className={css.changedTag}><span className={css.changedText}>{t('viewed.changed')}</span></Tag>
+          )}
+          <span className={css.fileSpacer} data-forge-path-spacer="" />
+          {badge !== '' && <span className={css.badge}>{badge}</span>}
         </span>
-        {viewed === 'changed' && <Tag tone="warning" className={css.changedTag}>{t('viewed.changed')}</Tag>}
-        <span className={css.fileSpacer} data-forge-path-spacer="" />
-        {badge !== '' && <span className={css.badge}>{badge}</span>}
         {!file.binary && <Counts file={file} t={t} />}
         <label className={css.viewed} title={t('viewed.hint')}>
           <input type="checkbox" checked={viewed === 'viewed'} aria-label={t('viewed.aria', { name })}

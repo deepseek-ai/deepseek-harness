@@ -1848,3 +1848,51 @@ it.skipIf(MODE === 'record')('keeps local viewed marks across reloads, clears a 
   await page.keyboard.press('Escape')
   expect(tripwire.pageErrors).toEqual([])
 })
+
+it.skipIf(MODE === 'record')('keeps a narrow file header\'s viewed mark and menu inside its card and its name under the pointer', async () => {
+  const { scaffold, page, project, tripwire } = await launchPanel('web-e2e-forge-narrow-header', 'normal', { branch: 'feat' })
+  const from = 'src/original-review-module-with-a-long-name.ts'
+  const to = 'src/renamed-review-module-with-an-even-longer-name.ts'
+  const body = Array.from({ length: 20 }, (_, index) => `export const value${index} = ${index}\n`).join('')
+  await mkdir(join(project, 'src'))
+  await writeFile(join(project, from), body)
+  await git(project, 'add', from)
+  await git(project, 'commit', '--quiet', '-m', 'Add the module')
+  // The base holds the old path, so the branch shows a rename.
+  await git(project, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
+  await git(project, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
+  await git(project, 'mv', from, to)
+  await writeFile(join(project, to), `${body}export const extra = 1\n`)
+  await git(project, 'commit', '--quiet', '-am', 'Rename the module')
+  const { settled } = await sendPrompt(page, scaffold)
+  await settled
+  await page.getByRole('button', { name: '打开右侧边栏', exact: true }).click()
+  await page.locator('[data-sidebar-right-guide]').getByRole('button', { name: /^代码审查和变更/ }).click()
+  await page.locator('[data-forge-panel]').getByRole('button', { name: '刷新状态', exact: true }).click()
+  await page.locator('[data-forge-local]').getByRole('button', { name: /^查看本会话的变更/ }).click({ timeout: 20_000 })
+  const local = page.locator('[data-forge-changes="local"]')
+  const name = 'renamed-review-module-with-an-even-longer-name.ts'
+  const file = local.locator(`[data-forge-diff-file="${to}"]`)
+  const viewed = file.getByRole('checkbox', { name: `将 ${name} 标记为已审阅`, exact: true })
+  await viewed.check({ timeout: 20_000 })
+  await writeFile(join(project, to), `${body}export const extra = 2\n`)
+  await local.getByRole('button', { name: '刷新变更', exact: true }).click()
+  await expect.poll(() => file.getAttribute('data-viewed'), { timeout: 20_000 }).toBe('changed')
+  await file.getByText('由 original-review-module-with-a-long-name.ts 重命名', { exact: true }).waitFor()
+
+  // The changed tag, the rename badge, and the long path compete for one narrow header with the counts and actions.
+  await page.setViewportSize({ width: 390, height: 780 })
+  const label = file.locator('[data-forge-file-label]')
+  const [card, mark, menu, labelBox] = await Promise.all([
+    file.boundingBox(), viewed.boundingBox(), file.getByRole('button', { name: `${name} 的更多操作`, exact: true }).boundingBox(), label.boundingBox(),
+  ])
+  if (card === null || mark === null || menu === null || labelBox === null) throw new Error('The header controls must be rendered')
+  expect(mark.x + mark.width).toBeLessThanOrEqual(card.x + card.width)
+  expect(menu.x + menu.width).toBeLessThanOrEqual(card.x + card.width)
+  expect(labelBox.width).toBeGreaterThan(40)
+  await label.hover()
+  await page.getByRole('tooltip').filter({ hasText: `${from} → ${to}` }).waitFor()
+  await viewed.check()
+  await expect.poll(() => file.getAttribute('data-viewed')).toBe('viewed')
+  expect(tripwire.pageErrors).toEqual([])
+})
