@@ -446,10 +446,23 @@
   border-bottom: 0;
 }
 
+/* The file's own information gives way inside this box, so the counts, the viewed mark, and the menu after it stay
+   whole at any width. */
+.fileTitle {
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .fileIcon {
   flex: none;
 }
 
+/* The path shares the shortage with the badge in proportion to their widths, so the longer path keeps the larger part
+   and stays under the pointer for its full-path tooltip. */
 .filePath {
   display: flex;
   flex: 0 1 auto;
@@ -469,8 +482,16 @@
   transform: rotate(-90deg);
 }
 
+/* Capped rather than shrunk, so a long path never truncates the tag; a longer translation ends in an ellipsis. */
 .changedTag {
   flex: none;
+  max-width: 30%;
+}
+
+.changedText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* The viewed mark: a native checkbox with its label as one bordered chip, peer to the file menu button. */
@@ -526,7 +547,8 @@
 }
 
 .badge {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
   max-width: 50%;
   overflow: hidden;
   padding: 0 6px;
