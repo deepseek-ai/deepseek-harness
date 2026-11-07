@@ -236,14 +236,6 @@ class GrepOutputMatches(TypedDict):
 class GrepOutput(TypedDict):
     matches: list[GrepOutputMatches]
 
-class InterruptAgentArgs(TypedDict):
-    # The name of an agent created under you: your direct child or a deeper descendant.
-    agent: str
-    # Additional keys beyond those declared are allowed.
-
-class InterruptAgentOutput(TypedDict):
-    accepted: bool
-
 class JobKillArgs(TypedDict):
     # Job id returned by the tool that started the background work.
     job_id: str
@@ -551,8 +543,6 @@ class Tools(Protocol):
         """Find files, not directories, whose paths match a glob pattern, including hidden and ignored files. Returns up to 100 paths in modification-time order; a larger result keeps the first paths and reports where the complete list was saved."""
     async def grep(self, args: GrepArgs) -> GrepOutput:
         """Search file contents with a ripgrep regular expression. Returns matching lines with line numbers, grouped by file. Returns up to 250 matches; a larger result reports where the complete match list was saved."""
-    async def interrupt_agent(self, args: InterruptAgentArgs) -> InterruptAgentOutput:
-        """Ask a subagent to stop its current work. This call returns without waiting for it to stop. You can continue a local subagent's conversation later with send_message. External executions stop permanently and cannot receive follow-ups. Subagents it started will keep running."""
     async def job_kill(self, args: JobKillArgs) -> JobKillOutput:
         """Request cancellation of a running background job."""
     async def job_list(self, args: dict[str, Any]) -> list[JobListOutput]:

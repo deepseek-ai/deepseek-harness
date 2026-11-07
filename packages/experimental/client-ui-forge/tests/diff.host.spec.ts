@@ -1,6 +1,6 @@
 /** Patch parsing into the panel's diff model, untracked files as added in full, and numstat records. */
 import { describe, expect, it } from 'vitest'
-import { decodeText, parseDiff, parseNumstat, untrackedFile } from '../src/diff.ts'
+import { decodeText, oversizedUntrackedFile, parseDiff, parseNumstat, untrackedFile } from '../src/diff.ts'
 
 /**
  * A `git diff` patch with a binary change, a pure rename, a quoted path, a path
@@ -82,6 +82,38 @@ describe('parseDiff', () => {
     expect(files[7]?.hunks).toEqual([{ oldStart: 1, oldLines: 2, newStart: 1, newLines: 0, lines: ['-q', '-z'] }])
   })
 
+  it('digests each change by its paths, status, and hunks, and a binary change by its blob names', () => {
+    const files = parseDiff(PATCH)
+    const digests = files.map(file => file.digest)
+    expect(new Set(digests).size).toBe(files.length)
+    expect(digests.every(digest => /^[0-9a-f]{32}$/.test(digest))).toBe(true)
+    expect(parseDiff(PATCH).map(file => file.digest)).toEqual(digests)
+    const edited = parseDiff(PATCH.replace('+B', '+C')).map(file => file.digest)
+    expect(edited.filter((digest, index) => digest !== digests[index])).toHaveLength(1)
+    expect(edited[3]).not.toBe(digests[3])
+    expect(parseDiff(PATCH.replace('index bdc955b..8352675', 'index bdc955b..0000001'))[0]?.digest).not.toBe(digests[0])
+  })
+
+  it('digests a mode change, which adds no hunk, apart from the same text change without it', () => {
+    const text = ['diff --git a/run.sh b/run.sh', 'index 1111111..2222222 100644', '--- a/run.sh', '+++ b/run.sh', '@@ -1 +1 @@', '-a', '+b', ''].join('\n')
+    const executable = text.replace('index 1111111..2222222 100644', 'old mode 100644\nnew mode 100755\nindex 1111111..2222222')
+    const [plain] = parseDiff(text)
+    const [moved] = parseDiff(executable)
+    expect(moved?.hunks).toEqual(plain?.hunks)
+    expect(moved?.digest).not.toBe(plain?.digest)
+    expect(parseDiff(executable)[0]?.digest).toBe(moved?.digest)
+    const modeOnly = ['diff --git a/run.sh b/run.sh', 'old mode 100644', 'new mode 100755', ''].join('\n')
+    expect(parseDiff(modeOnly)[0]?.digest).not.toBe(parseDiff(modeOnly.replace('100755', '100700'))[0]?.digest)
+  })
+
+  it('digests a binary change without its blob names when a section does not start with a Git header', () => {
+    const binary = 'diff --git a/x.png b/x.png\nindex 1111111..2222222 100644\nBinary files a/x.png and b/x.png differ\n'
+    const withLeader = `--- a/y\n+++ b/y\n@@ -1 +1 @@\n-a\n+b\n${binary}`
+    const other = withLeader.replace('2222222', '3333333')
+    expect(parseDiff(withLeader)[1]?.digest).toBe(parseDiff(other)[1]?.digest)
+    expect(parseDiff(binary)[0]?.digest).not.toBe(parseDiff(binary.replace('2222222', '3333333'))[0]?.digest)
+  })
+
   it('takes paths without a prefix as they are and skips a section without a path', () => {
     expect(parseDiff('--- old\n+++ new\n@@ -1 +1 @@\n-a\n+b\n').map(file => [file.path, file.status])).toEqual([['new', 'modified']])
     expect(parseDiff('')).toEqual([])
@@ -94,10 +126,20 @@ describe('untrackedFile', () => {
     ['no final newline', 'one\ntwo', ['+one', '+two', '\\ No newline at end of file']],
     ['carriage returns', 'one\r\ntwo\r\n', ['+one\r', '+two\r']],
   ])('adds every line of a text file with %s', (_label, text, lines) => {
-    expect(untrackedFile('notes/new.md', new TextEncoder().encode(text))).toEqual({
+    const { digest, ...added } = untrackedFile('notes/new.md', new TextEncoder().encode(text))
+    expect(added).toEqual({
       path: 'notes/new.md', previousPath: null, status: 'added', binary: false, oversized: false, untracked: true, additions: 2, deletions: 0,
       hunks: [{ oldStart: 1, oldLines: 0, newStart: 1, newLines: 2, lines }],
     })
+    expect(digest).toMatch(/^[0-9a-f]{32}$/)
+  })
+
+  it('digests binary content by its bytes and an oversized file by its path alone', () => {
+    const digest = (bytes: number[]): string => untrackedFile('blob', Uint8Array.from(bytes)).digest
+    expect(digest([0, 1])).toBe(digest([0, 1]))
+    expect(digest([0, 1])).not.toBe(digest([0, 2]))
+    expect(oversizedUntrackedFile('big.log')).toMatchObject({ oversized: true, binary: false, hunks: [], untracked: true })
+    expect(oversizedUntrackedFile('big.log').digest).not.toBe(untrackedFile('big.log', new Uint8Array()).digest)
   })
 
   it('describes an empty file without a hunk', () => {

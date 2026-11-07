@@ -115,6 +115,8 @@ final class WindowCapture: @unchecked Sendable {
             configuration.width = pixelsWide
             configuration.height = pixelsHigh
             configuration.showsCursor = false
+            // Attached sheets can otherwise capture the entire document window scaled to the sheet's dimensions.
+            if #available(macOS 14.2, *) { configuration.includeChildWindows = false }
             configuration.ignoreShadowsSingleWindow = true
             configuration.ignoreGlobalClipSingleWindow = true
             trace?.mark("capture-config.end")

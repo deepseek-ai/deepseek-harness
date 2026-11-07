@@ -183,7 +183,8 @@ describe.skipIf(process.platform === 'win32')('Web sidebar shortcuts', () => {
       expect(await paneAppearance()).toEqual([plainPane])
       await page.keyboard.press(`${primary}+Shift+,`)
       expect(await panel.locator('[data-dockkit-tab]').filter({ hasText: 'Files' }).count()).toBe(1)
-      expect(await panel.locator('[data-dockkit-pane]').evaluate(pane => document.activeElement === pane)).toBe(true)
+      await expect.poll(() => panel.locator('[data-files-search-toggle]').getAttribute('aria-expanded')).toBe('true')
+      await expect.poll(() => panel.locator('[data-files-search]').evaluate(input => document.activeElement === input)).toBe(true)
       // Once the reveal's glow has ended, the focused pane draws nothing of its own. file-browser.e2e.ts and the
       // seat spec own the glow itself, so this waits for no marker rather than requiring the transient one.
       await expect.poll(() => panel.locator('[data-dockkit-pane][data-sidebar-right-flash]').count()).toBe(0)

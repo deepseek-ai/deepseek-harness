@@ -12,8 +12,8 @@ import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { createInboxStub, unsupportedModel } from '@deepseek-ai/dsh-agent-loop-testkit'
 import ForgeService, { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
-  ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeFailure, ForgeProvider, ForgeReadiness,
-  ForgeRepository, MergeRequest,
+  ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeCommitList, ForgeFailure, ForgeProvider,
+  ForgeReadiness, ForgeRepository, MergeRequest,
 } from '@deepseek-ai/dsh-experimental-forge'
 import ForgeSessionService from '@deepseek-ai/dsh-experimental-forge-session'
 import WorktreeService from '@deepseek-ai/dsh-experimental-worktree'
@@ -262,6 +262,7 @@ export function snapshot(ref: ChangeRequestRef): ChangeRequestSnapshot {
     checksRollup: 'success',
     checksTruncated: false,
     unresolvedThreads: 0,
+    threadsTruncated: false,
     updatedAt: '2026-10-09T00:00:00Z',
     closedAt: null,
   }
@@ -285,12 +286,25 @@ export class FakeProvider implements ForgeProvider {
   readonly patches = new Map<number, string | ForgeFailure>()
   /** Change request numbers in the order their diffs were read. */
   readonly diffs: number[] = []
+  /** Head commits the diff reads named, in the same order. */
+  readonly diffHeads: string[] = []
   /** File texts or failures by `<commit>:<path>`; others return a not-found failure. */
   readonly texts = new Map<string, string | ForgeFailure>()
   /** Open change request numbers that a head lookup returns, by head branch. */
   readonly heads = new Map<string, readonly number[]>()
   /** Head lookups in call order, as `<owner>/<name> <branch>`. */
   readonly lookups: string[] = []
+  /** Commit lists or failures by change request number; others return a not-found failure. */
+  readonly commitLists = new Map<number, ForgeCommitList | ForgeFailure>()
+  /** Patches or failures between two commits by `<base>..<head>`; others return a not-found failure. */
+  readonly comparisons = new Map<string, string | ForgeFailure>()
+  /** Commit listing; a test deletes it to stand for a provider that does not read commits. */
+  commits?: (ref: ChangeRequestRef, signal: AbortSignal) => Promise<ForgeCommitList | ForgeFailure> = (ref: ChangeRequestRef) =>
+    Promise.resolve(this.commitLists.get(ref.number) ?? { code: 'not-found', message: `no commits of #${ref.number}` })
+  /** Comparison of two commits. */
+  compare?: (ref: ChangeRequestRef, base: string, head: string, signal: AbortSignal) => Promise<string | ForgeFailure> =
+    (_ref: ChangeRequestRef, base: string, head: string) =>
+      Promise.resolve(this.comparisons.get(`${base}..${head}`) ?? { code: 'not-found', message: `no comparison ${base}..${head}` })
 
   repositoryFromRemote(url: string): ForgeRepository | undefined {
     const [, host = '', owner = '', name = ''] = /^https:\/\/([a-z.]+\.test)\/([^/]+)\/([^/]+?)\.git$/.exec(url) ?? []
@@ -333,8 +347,9 @@ export class FakeProvider implements ForgeProvider {
     return Promise.resolve(this.actionResult)
   }
 
-  diff(ref: ChangeRequestRef): Promise<string | ForgeFailure> {
+  diff(ref: ChangeRequestRef, headSha: string): Promise<string | ForgeFailure> {
     this.diffs.push(ref.number)
+    this.diffHeads.push(headSha)
     return Promise.resolve(this.patches.get(ref.number) ?? { code: 'not-found', message: `no diff of #${ref.number}` })
   }
 
