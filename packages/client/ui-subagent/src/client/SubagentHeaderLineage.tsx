@@ -29,7 +29,7 @@ export type SubagentCatalogInjected = {
   openChild: (address: SubagentAddress) => void
   openChildAside: (address: SubagentAddress) => void
   refreshProjection: (parentSessionId: SessionId) => void
-  /** Read this catalog and its direct children after explicit activation. */
+  /** Read this catalog and its direct children after explicit activation or retry. */
   prepareCatalog: (parentSessionId: SessionId) => Promise<void>
 }
 
@@ -498,7 +498,7 @@ type CatalogDropdownProps = CatalogDropdownSharedProps & (
 function CatalogDropdown(props: CatalogDropdownProps) {
   const {
     rootSessionId, currentSessionId, displayTitle, openTitle, variant,
-    useSessions, useSessionStatus, openChild, openChildAside, refreshProjection, prepareCatalog, t, hasSharedTasks = false,
+    useSessions, useSessionStatus, openChild, openChildAside, prepareCatalog, t, hasSharedTasks = false,
   } = props
   const ancestorSwitcher = variant === 'switcher' && openTitle !== undefined
   const projections = useSessions(state => state.projectionsBySession)
@@ -812,7 +812,7 @@ function CatalogDropdown(props: CatalogDropdownProps) {
                 level={1}
                 openChild={openChild}
                 openChildAside={openChildAside}
-                refreshProjection={refreshProjection}
+                refreshProjection={prepareLevel}
                 toggleBranch={toggleBranch}
                 closeCatalog={() => { changeOpen(false) }}
                 t={t}

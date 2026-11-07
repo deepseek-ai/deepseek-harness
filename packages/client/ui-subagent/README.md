@@ -65,7 +65,7 @@ The header lineage renderer reads `subagentCatalog` only from `projectionsBySess
 
 Each header entry declares a footer slot below its tree. Optional UI contributes there within the same scroll container; the catalog owns opening and dismissal. CSS anchors keep the panel attached to its trigger within layout-viewport size limits. Browser zoom and panning move it with the page, so it may extend beyond the visual viewport. Internal scrolling, hover behavior, pinned opening, and focus restoration remain independent.
 
-Explicit menu activation and branch expansion call `prepareCatalog` to read the current catalog and its direct children. Ancestor-title clicks navigate to that Session. Failed-read retry buttons call `refreshProjection`; the Session object layer deduplicates reads and refreshes previously requested projections after reconnect.
+Explicit menu activation, branch expansion, and failed-read retries call `prepareCatalog` to read the current catalog and its direct children. Ancestor-title clicks navigate to that Session. The Session object layer deduplicates reads and refreshes previously requested projections after reconnect.
 
 Breadcrumb addresses derive from the Provider-bound Session address, loaded parent catalogs, or already-listed subagent lineage, including never-selected ancestors.
 

@@ -365,7 +365,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     if (failures.length > 1) throw new AggregateError(failures, 'subagent Web teardown failed')
   })
 
-  it('discovers cold descendants one level at a time without leaving the parent conversation', async () => {
+  it('retries a failed cold catalog and discovers descendants without reopening the menu', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-subagent-unread-catalog'))
     const reads = apiCalls.filter(path => path === '/api/session/projections').length
     const observe = vi.spyOn(scaffold.ctx.sessionQuery, 'observeSession')
@@ -383,7 +383,15 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       expect(apiCalls.filter(path => path === '/api/session/projections')).toHaveLength(reads)
       expect(observe).not.toHaveBeenCalled()
       const parentUrl = page.url()
+      await page.route('**/api/session/projections', route => route.abort('failed'), { times: 1 })
       await trigger.click()
+      const retry = tree.getByRole('button', { name: 'Retry', exact: true })
+      await retry.waitFor()
+      expect(await tree.getByRole('button', { name: /^(Expand|Collapse) /u }).count()).toBe(0)
+      expect(apiCalls.filter(path => path === '/api/session/projections')).toHaveLength(reads + 1)
+      expect(projections).not.toHaveBeenCalled()
+      await retry.click()
+      await retry.waitFor({ state: 'detached' })
       const expand = page.getByRole('button', { name: `Expand ${LABEL} descendants`, exact: true })
       await expand.waitFor()
       await expect.poll(() => projections.mock.calls.map(([request]) => request.sessionId)).toEqual([parentId, childId, oneShotId])
@@ -408,6 +416,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       await page.keyboard.press('Escape')
       await page.locator('[data-subagent-panel]').waitFor({ state: 'detached' })
     } finally {
+      await page.unroute('**/api/session/projections')
       observe.mockRestore()
       projections.mockRestore()
     }

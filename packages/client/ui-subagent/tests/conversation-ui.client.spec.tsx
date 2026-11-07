@@ -1297,7 +1297,8 @@ describe('SubagentHeaderLineage', () => {
     expect(screen.queryByRole('status')).toBeNull()
     expect(input.refreshProjection).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: '重试' }))
-    expect(input.refreshProjection).toHaveBeenCalledExactlyOnceWith(CHILD)
+    expect(input.prepareCatalog.mock.calls).toEqual([[PARENT], [CHILD]])
+    expect(input.refreshProjection).not.toHaveBeenCalled()
     expect(input.openChild).not.toHaveBeenCalled()
     state = { ...state, projectionsBySession: {
       ...state.projectionsBySession, [CHILD]: { state: 'ready', values: { subagentCatalog: [] }, error: null },
@@ -1638,7 +1639,8 @@ describe('SubagentHeaderLineage', () => {
     hoverCatalog(screen.getByRole('button', { name: /0 个子智能体/ }))
     expect(screen.getByText('index down')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /重试/ }))
-    expect(failed.refreshProjection).toHaveBeenCalledWith(PARENT)
+    expect(failed.prepareCatalog).toHaveBeenCalledExactlyOnceWith(PARENT)
+    expect(failed.refreshProjection).not.toHaveBeenCalled()
   })
 
   it.each(['absent', 'idle', 'loading', 'ready'] as const)('does not expose header-only descendants when the projection read is %s', (state) => {
