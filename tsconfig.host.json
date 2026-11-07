@@ -352,6 +352,7 @@
     { "path": "./packages/util/launch-environment" },
     { "path": "./packages/util/lazy-require" },
     { "path": "./packages/util/native-command" },
+    { "path": "./packages/util/ripgrep" },
     { "path": "./packages/util/home-paths" },
     { "path": "./packages/client/ui-plugin-manager/tsconfig.host.json" },
     { "path": "./packages/client/ui-trajectory/tsconfig.host.json" },

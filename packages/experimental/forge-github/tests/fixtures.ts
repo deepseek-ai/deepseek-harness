@@ -42,6 +42,7 @@ export function repositorySettings(overrides: Record<string, unknown> = {}): Rec
 /** A pull request node with the fields the snapshot query selects. */
 export function pullRequestNode(number: number, overrides: Record<string, unknown> = {}, contexts: unknown[] = [], rollupState: string | null = 'SUCCESS'): Record<string, unknown> {
   return {
+    id: `pull-${number}`,
     number,
     url: `https://github.com/octo/demo/pull/${number}`,
     title: `Change ${number}`,
@@ -58,7 +59,7 @@ export function pullRequestNode(number: number, overrides: Record<string, unknow
     mergeable: 'MERGEABLE',
     mergeStateStatus: 'CLEAN',
     reviewDecision: null,
-    reviewThreads: { nodes: [{ isResolved: true }, { isResolved: false }, { isResolved: false }] },
+    reviewThreads: threadPage([true, false, false]),
     commits: {
       nodes: [{
         commit: {
@@ -71,4 +72,15 @@ export function pullRequestNode(number: number, overrides: Record<string, unknow
     },
     ...overrides,
   }
+}
+
+/** A review thread connection page as GitHub returns it. */
+export interface ThreadPage {
+  readonly pageInfo: { readonly hasNextPage: boolean; readonly endCursor: string | null }
+  readonly nodes: { readonly isResolved: boolean }[]
+}
+
+/** One review thread connection page with the threads' resolution, followed by the page after `next` when it is a cursor. */
+export function threadPage(resolved: readonly boolean[], next: string | null = null): ThreadPage {
+  return { pageInfo: { hasNextPage: next !== null, endCursor: next }, nodes: resolved.map(isResolved => ({ isResolved })) }
 }

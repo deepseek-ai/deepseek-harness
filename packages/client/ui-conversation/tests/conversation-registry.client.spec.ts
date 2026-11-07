@@ -39,7 +39,7 @@ function sessionSnapshot(): SessionSnapshot {
     openState: 'open',
     openError: null,
     hasMore: false,
-    loadingOlder: false,
+    loadingOlder: false, historyLoadStatus: 'idle', historyWasPartial: false,
     promptError: null,
     blank: true,
     lastAgentError: null,
@@ -62,6 +62,7 @@ function fakeSession(): SessionFace {
     cancel: () => Promise.reject(new Error('unused fake Session operation')),
     rename: () => Promise.reject(new Error('unused fake Session operation')),
     loadOlder: () => Promise.reject(new Error('unused fake Session operation')),
+    consumeOlder: () => { throw new Error('unused fake Session operation') },
     loadThrough: () => Promise.reject(new Error('unused fake Session operation')),
     command: () => Promise.reject(new Error('unused fake Session operation')),
   }

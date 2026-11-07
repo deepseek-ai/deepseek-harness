@@ -43,8 +43,10 @@ const run = promisify(execFile)
  * 7 with one failed and one passed check run, one unresolved thread, and a
  * required review, and pull request 9, an approved draft whose checks passed.
  * `gh pr ready 9` and the REST merge of pull request 9 change what later
- * queries report, through `state.json`. `gh pr diff N` prints `pr-N.diff`, or
- * fails with `pr-N.refused` on standard error when that file exists, and the raw
+ * queries report, through `state.json`, which can also move the head of pull
+ * request 9. The compare API between a pull request's recorded base and its
+ * head prints `pr-N.diff`, or, when `pr-N.refused` exists, fails with that JSON
+ * error body and the matching diagnostic as GitHub's HTTP 406 refusal. The raw
  * contents API serves `contents.json`, keyed by `path@commit`. Every invocation
  * is appended to `calls.jsonl`.
  */
@@ -87,13 +89,24 @@ if (args[0] === 'api' && args[4] === 'POST' && ['repos/octo/demo/pulls/7/comment
   process.stdout.write(JSON.stringify({ html_url: 'https://github.com/octo/demo/pull/7#pullrequestreview-1' }))
   process.exit(0)
 }
-if (args[0] === 'pr' && args[1] === 'diff') {
-  const refused = join(here, 'pr-' + args[2] + '.refused')
-  if (existsSync(refused)) {
-    process.stderr.write(readFileSync(refused, 'utf8'))
+const BASE = 'e'.repeat(40)
+const heads = () => ({ 7: 'a'.repeat(40), 9: state.head ?? 'b'.repeat(40) })
+if (args[0] === 'api' && args.includes('Accept: application/vnd.github.diff')) {
+  const [, range] = args.at(-1).split('/compare/')
+  const [base, head] = range.split('...')
+  const number = Object.entries(heads()).find(([, oid]) => oid === head)?.[0]
+  if (base !== BASE || number === undefined) {
+    process.stderr.write('gh: Not Found (HTTP 404)\\n')
     process.exit(1)
   }
-  await new Promise(resolve => process.stdout.write(readFileSync(join(here, 'pr-' + args[2] + '.diff'), 'utf8'), resolve))
+  const refused = join(here, 'pr-' + number + '.refused')
+  if (existsSync(refused)) {
+    const message = readFileSync(refused, 'utf8')
+    process.stdout.write(JSON.stringify({ message, errors: [{ resource: 'PullRequest', field: 'diff', code: 'too_large' }], status: '406' }))
+    process.stderr.write('gh: ' + message + ' (HTTP 406)\\n')
+    process.exit(1)
+  }
+  await new Promise(resolve => process.stdout.write(readFileSync(join(here, 'pr-' + number + '.diff'), 'utf8'), resolve))
   process.exit(0)
 }
 if (args[0] === 'api' && args[3] === '-H' && args[4] === 'Accept: application/vnd.github.raw+json') {
@@ -120,24 +133,30 @@ if (args[0] === 'api' && args[1] === 'graphql') {
   })
   const pulls = {
     7: {
-      number: 7, url: 'https://github.com/octo/demo/pull/7', title: 'Add the pull request panel', state: 'OPEN', isDraft: false,
+      id: 'pull-7', number: 7, url: 'https://github.com/octo/demo/pull/7', title: 'Add the pull request panel', state: 'OPEN', isDraft: false,
       updatedAt: '2026-10-09T00:00:00Z', closedAt: null, author: { login: 'octo' }, headRefName: 'feat', headRefOid: 'a'.repeat(40),
       baseRefName: 'main', additions: 128, deletions: 14, mergeable: 'MERGEABLE', mergeStateStatus: 'BLOCKED', reviewDecision: 'REVIEW_REQUIRED',
-      reviewThreads: { nodes: [{ isResolved: false }] },
+      reviewThreads: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [{ isResolved: false }] },
       commits: { nodes: [{ commit: { statusCheckRollup: { id: 'rollup-7', state: 'FAILURE', contexts: {
         pageInfo: { hasNextPage: true, endCursor: 'checks-100' },
         nodes: Array.from({ length: 100 }, (_, i) => check('lint', 'FAILURE', '2026-10-08T00:00:42Z', i + 1)),
       } } } }] },
     },
     9: {
-      number: 9, url: 'https://github.com/octo/demo/pull/9', title: 'Add the merge button', state: state.mergedAt === null ? 'OPEN' : 'MERGED',
+      id: 'pull-9', number: 9, url: 'https://github.com/octo/demo/pull/9', title: 'Add the merge button', state: state.mergedAt === null ? 'OPEN' : 'MERGED',
       isDraft: !state.ready, updatedAt: '2026-10-09T00:00:00Z', closedAt: state.mergedAt, author: { login: 'octo' },
-      headRefName: 'feat/merge', headRefOid: state.head ?? 'b'.repeat(40), baseRefName: 'main', additions: 30, deletions: 2, mergeable: 'MERGEABLE',
-      mergeStateStatus: state.ready ? 'CLEAN' : 'BLOCKED', reviewDecision: 'APPROVED', reviewThreads: { nodes: [] },
+      headRefName: 'feat/merge', headRefOid: heads()[9], baseRefName: 'main', additions: 30, deletions: 2, mergeable: 'MERGEABLE',
+      mergeStateStatus: state.ready ? 'CLEAN' : 'BLOCKED', reviewDecision: 'APPROVED',
+      reviewThreads: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] },
       commits: { nodes: [{ commit: { statusCheckRollup: { id: 'rollup-9', state: 'SUCCESS', contexts: {
         pageInfo: { hasNextPage: false, endCursor: null }, nodes: [check('lint', 'SUCCESS', '2026-10-09T00:00:42Z')],
       } } } }] },
     },
+  }
+  if (query.includes('pullRequest(number: $number)')) {
+    const number = Number(args.find(arg => arg.startsWith('number=')).slice('number='.length))
+    process.stdout.write(JSON.stringify({ data: { repository: { pullRequest: { headRefOid: pulls[number].headRefOid, baseRefOid: BASE } } } }))
+    process.exit(0)
   }
   if (query.includes('node(id: $id)')) {
     process.stdout.write(JSON.stringify({ data: { node: { contexts: {
@@ -165,13 +184,14 @@ process.exit(1)
 /** Head commit of pull request 7 in the GitHub CLI double. */
 const HEAD7 = 'a'.repeat(40)
 
-/** What gh 2.100 prints for the diff of pull request 9 when GitHub refuses it for having over 300 files. */
-const PR9_REFUSAL = [
-  'could not find pull request diff: HTTP 406: Sorry, the diff exceeded the maximum number of files (300). Consider using \'List pull '
-  + 'requests files\' API or locally cloning the repository instead. (https://api.github.com/repos/octo/demo/pulls/9)',
-  'PullRequest.diff too_large',
-  '',
-].join('\n')
+/** Patch of pull request 9: one line added to each of 301 files, more than the pull request diff endpoint accepts. */
+const PR9_DIFF = Array.from({ length: 301 }, (_, index) => [
+  `diff --git a/merge/m${index}.ts b/merge/m${index}.ts`, 'index 1111111..2222222 100644', `--- a/merge/m${index}.ts`, `+++ b/merge/m${index}.ts`,
+  '@@ -1 +1,2 @@', ' export {}', `+export const m${index} = ${index}`, '',
+].join('\n')).join('')
+
+/** Message of the double's HTTP 406 refusal, which it sends in the error body format GitHub uses for a diff over its size limit. */
+const PR9_REFUSAL = 'Sorry, the diff exceeded the size limit.'
 
 /** Line `n` of `src/panel.ts` before (`old`) or after (`new`) pull request 7, which changes lines 2 and 15 of its 20. */
 function panelLine(n: number, side: 'old' | 'new'): string {
@@ -243,7 +263,7 @@ async function launchPanel(failureShot: string, scenario: 'normal' | 'follow-up'
   await writeFile(gh, GH)
   await chmod(gh, 0o755)
   await writeFile(join(root, 'pr-7.diff'), PR7_DIFF)
-  await writeFile(join(root, 'pr-9.refused'), PR9_REFUSAL)
+  await writeFile(join(root, 'pr-9.diff'), PR9_DIFF)
   const panelText = `${Array.from({ length: 20 }, (_, index) => panelLine(index + 1, 'new')).join('\n')}\n`
   await writeFile(join(root, 'contents.json'), JSON.stringify({ [`src/panel.ts@${HEAD7}`]: panelText }))
   const overlay = join(root, 'forge.patch.yml')
@@ -1005,21 +1025,43 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   expect(await reviewDialog.getByRole('radio', { name: '评论', exact: true }).isChecked()).toBe(true)
   await page.keyboard.press('Escape')
 
-  // GitHub refuses the diff of pull request 9 as too large, so its view offers the web page instead of a retry.
+  // Pull request 9 changes 301 files, more than the pull request diff endpoint accepts; the compare read shows every file.
   scaffold.ctx.forgeSession.track(session, DRAFT)
   await expect.poll(() => header.getAttribute('aria-pressed'), { timeout: 20_000 }).toBe('false')
   await header.click()
   const draft = page.locator(`[data-forge-change="${DRAFT}"]`)
   await draft.getByRole('button', { name: '展开 #9', exact: true }).click()
   await draft.getByRole('button', { name: '查看 #9 的变更：新增 30 行，删除 2 行', exact: true }).click({ timeout: 20_000 })
-  const refused = page.locator('[data-forge-changes="change"]').filter({ hasText: 'Add the merge button' })
-  await refused.getByRole('status').filter({ hasText: '变更太大，无法在这里显示' }).waitFor({ timeout: 20_000 })
-  await refused.getByRole('button', { name: '在浏览器中查看', exact: true }).waitFor()
-  expect(await refused.getByRole('button', { name: '重试', exact: true }).count()).toBe(0)
+  const wide = page.locator('[data-forge-changes="change"]').filter({ hasText: 'Add the merge button' })
+  await wide.getByRole('region', { name: '全部 301 个文件', exact: true }).waitFor({ timeout: 20_000 })
+  expect(await wide.locator('[data-forge-diff-file]').count()).toBe(301)
+
+  // A push moves the head to a commit whose diff GitHub refuses over its size limit, so a newly opened view offers the web page
+  // instead of a retry.
+  await page.locator('[data-dockkit-tab]').filter({ hasText: '#9 的变更' }).locator('[data-dockkit-tab-close]').click()
+  await expect.poll(() => wide.count()).toBe(0)
+  await writeFile(join(root, 'state.json'), JSON.stringify({ ready: false, mergedAt: null, head: 'd'.repeat(40) }))
+  await writeFile(join(root, 'pr-9.refused'), PR9_REFUSAL)
+  scaffold.ctx.forge.refresh({ repository: { forge: 'github', host: 'github.com', owner: 'octo', name: 'demo' }, number: 9 })
+  await expect.poll(() => scaffold.ctx.forge.latest({ repository: { forge: 'github', host: 'github.com', owner: 'octo', name: 'demo' }, number: 9 }),
+    { timeout: 20_000 }).toMatchObject({ snapshot: { headSha: 'd'.repeat(40) } })
+  if (await header.getAttribute('aria-pressed') !== 'true') await header.click()
+  const expand = draft.getByRole('button', { name: '展开 #9', exact: true })
+  if (await expand.count() > 0) await expand.click()
+  await draft.getByRole('button', { name: '查看 #9 的变更：新增 30 行，删除 2 行', exact: true }).click({ timeout: 20_000 })
+  await wide.getByRole('status').filter({ hasText: '变更太大，无法在这里显示' }).waitFor({ timeout: 20_000 })
+  await wide.getByRole('button', { name: '在浏览器中查看', exact: true }).waitFor()
+  expect(await wide.getByRole('button', { name: '重试', exact: true }).count()).toBe(0)
 
   const calls = (await readFile(join(root, 'calls.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string[])
-  expect(calls).toContainEqual(['pr', 'diff', '7', '--repo', 'github.com/octo/demo', '--color', 'never'])
-  expect(calls).toContainEqual(['pr', 'diff', '9', '--repo', 'github.com/octo/demo', '--color', 'never'])
+  const compared = (head: string) => [
+    'api', '--hostname', 'github.com', '--allow-escape-sequences', '-H', 'Accept: application/vnd.github.diff',
+    `repos/octo/demo/compare/${'e'.repeat(40)}...${head}`,
+  ]
+  expect(calls).toContainEqual(compared(HEAD7))
+  expect(calls).toContainEqual(compared('b'.repeat(40)))
+  expect(calls).toContainEqual(compared('d'.repeat(40)))
+  expect(calls.some(call => call[0] === 'pr' && call[1] === 'diff')).toBe(false)
   expect(calls).toContainEqual([
     'api', '--hostname', 'github.com', '-H', 'Accept: application/vnd.github.raw+json', `repos/octo/demo/contents/src/panel.ts?ref=${HEAD7}`,
   ])

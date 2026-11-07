@@ -68,6 +68,7 @@ if ('branch' in fields) {
   reply({ repository: { defaultBranchRef: { name: 'main' }, pullRequests: { nodes: fields.branch === 'feat' ? [{ number: 7, isCrossRepository: false }] : [] } } })
 }
 const node = (number) => ({
+  id: 'pull-' + number,
   number,
   url: 'https://github.com/octo/demo/pull/' + number,
   title: 'Change ' + number,
@@ -84,7 +85,7 @@ const node = (number) => ({
   mergeable: 'MERGEABLE',
   mergeStateStatus: number === 7 ? 'BLOCKED' : 'CLEAN',
   reviewDecision: null,
-  reviewThreads: { nodes: [] },
+  reviewThreads: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] },
   commits: { nodes: [{ commit: { statusCheckRollup: {
     id: 'rollup-' + number, state: number === 7 ? 'PENDING' : 'SUCCESS',
     contexts: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [{

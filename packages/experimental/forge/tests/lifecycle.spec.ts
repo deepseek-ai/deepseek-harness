@@ -137,7 +137,7 @@ it.each(['readiness', 'markReady', 'merge', 'diff', 'fileText', 'submitReview', 
     })
     vi.spyOn(provider, 'markReady').mockImplementation(async (_ref, signal) => { await hold(signal); return undefined })
     vi.spyOn(provider, 'merge').mockImplementation(async (_ref, _request, signal) => { await hold(signal); return undefined })
-    vi.spyOn(provider, 'diff').mockImplementation(async (_ref, signal) => { await hold(signal); return 'diff' })
+    vi.spyOn(provider, 'diff').mockImplementation(async (_ref, _headSha, signal) => { await hold(signal); return 'diff' })
     vi.spyOn(provider, 'fileText').mockImplementation(async (_ref, _commit, _path, signal) => { await hold(signal); return 'file' })
     provider.submitReview = async (_ref, _request, signal) => { await hold(signal); return { ok: true, url: 'https://fake.test/review' } }
     provider.fetchChecks = async (target, signal) => { await hold(signal); return snapshot(target) }
@@ -150,7 +150,7 @@ it.each(['readiness', 'markReady', 'merge', 'diff', 'fileText', 'submitReview', 
       readiness: () => service.readiness(demo, signal),
       markReady: () => service.markReady(ref(1), signal),
       merge: () => service.merge(ref(1), { method: 'squash', headSha: 'a'.repeat(40) }, signal),
-      diff: () => service.diff(ref(1), signal),
+      diff: () => service.diff(ref(1), 'a'.repeat(40), signal),
       fileText: () => service.fileText(ref(1), 'a'.repeat(40), 'file.txt', signal),
     }
     const rejected = expect(calls[method]()).rejects.toThrow('was unregistered')

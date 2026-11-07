@@ -7,6 +7,8 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { MenuRegistry } from '@deepseek-ai/dsh-client-ui-context-menu/src/client/registry.ts'
 import type { ContextMenus, ContextMenuTarget } from '@deepseek-ai/dsh-client-ui-context-menu/client'
+import type { RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
+import type { SessionWorkspacePathApplication } from '@deepseek-ai/dsh-api-session-controller/types'
 import type { FileActionSource, FileSaveResult } from '@deepseek-ai/dsh-client-ui-file-actions/client'
 import { OpenInAppPathController } from '../src/client/open-path.ts'
 import { OpenInAppController } from '../src/client/controller.ts'
@@ -15,6 +17,9 @@ import { registerContextMenus } from '../src/client/context-menus.tsx'
 import type { OpenInAppToastSource } from '../src/client/open-toast.tsx'
 
 const sessionId = SessionId('menu-actions')
+type Applications = readonly SessionWorkspacePathApplication[]
+/** Let settled Remote answers finish their queued continuations. */
+const settle = () => new Promise<void>((resolve) => { setTimeout(resolve, 0) })
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 async function boot() {
@@ -27,13 +32,13 @@ async function boot() {
   const remote = {
     session: {
       canOpenWorkspacePath: vi.fn(async () => ({ ok: true as const, value: true })),
-      workspacePathApplications: vi.fn(async () => ({ ok: true as const, value: [
-        { id: 'preview', name: 'Preview', default: true, icon: 'data:image/png;base64,a' },
-      ] })),
+      workspacePathApplications: vi.fn(async (_request: { path: string }, _signal?: AbortSignal): Promise<RemoteResult<Applications>> => ({
+        ok: true, value: [{ id: 'preview', name: 'Preview', default: true, icon: 'data:image/png;base64,a' }],
+      })),
       openWorkspacePath: vi.fn(async () => ({ ok: true as const, value: undefined })),
     },
     workspaceFiles: {
-      stat: vi.fn(async () => ({ ok: true as const, value: { absolutePath: '/workspace/file.svg' } })),
+      stat: vi.fn(async (_sessionId: SessionId, path: string) => ({ ok: true as const, value: { absolutePath: path.startsWith('/') ? path : `/workspace/${path}` } })),
       readBytes: vi.fn(async () => ({ ok: true as const, value: { data: [...new TextEncoder().encode('<svg/>')] } })),
     },
   }
@@ -82,14 +87,17 @@ it('routes file actions through an explicit host, the line, native association a
   const h = await boot()
   // A menu raised inside a floating panel names that panel; the open names a host instead, never a pane.
   const file = { kind: 'file', value: { sessionId, path: 'file.svg', paneId: 'float7' as never, line: 24 } } as const
-  const items = (await h.resolve(file)).source.getSnapshot().filter(item => item.id.startsWith('open-in-app.file/'))
-  expect(items.map(item => [item.id, item.label, item.icon?.key])).toEqual([
+  const first = await h.resolve(file)
+  const items = () => first.source.getSnapshot().filter(item => item.id.startsWith('open-in-app.file/'))
+  await vi.waitFor(() => { expect(items().find(item => item.id === 'open-in-app.file/open')?.label).toBe('open.title') })
+  expect(items().map(item => [item.id, item.label, item.icon?.key])).toEqual([
     ['open-in-app.file/sidebar', 'menu.openInSidebar', 'open-in-app.sidebar'],
     ['open-in-app.file/float', 'menu.openInFloat', 'open-in-app.float'],
     ['open-in-app.file/reveal', 'menu.reveal', 'open-in-app.reveal'],
     ['open-in-app.file/open', 'open.title', 'open-in-app.application'],
     ['open-in-app.file/copyPath', 'menu.copyPath', 'open-in-app.copy'],
   ])
+  first.dispose()
   await h.choose(file, 'open-in-app.file/sidebar')
   expect(h.sidebar.openResourceIn).toHaveBeenLastCalledWith(sessionId, expect.stringContaining('file.svg'),
     { destination: 'sidebar', params: { line: 24 } })
@@ -114,7 +122,8 @@ it('routes file actions through an explicit host, the line, native association a
   const simple = { kind: 'file', value: { sessionId: SessionId('absent'), path: '/file.unknown' } } as const
   h.remote.session.workspacePathApplications.mockResolvedValueOnce({ ok: true, value: [] })
   const menu = await h.resolve(simple)
-  expect(menu.source.getSnapshot().find(item => item.id.endsWith('/open'))?.disabled).toBe(true)
+  // The Host's empty answer arrives within the first-answer wait, so the row opens disabled.
+  await vi.waitFor(() => { expect(menu.source.getSnapshot().find(item => item.id.endsWith('/open'))?.disabled).toBe(true) })
   expect(menu.source.getSnapshot().some(item => item.id.endsWith('/copyImage'))).toBe(false)
   expect(menu.source.getSnapshot().filter(item => item.id.startsWith('file-actions.')).map(item => item.id))
     .toEqual(['file-actions.file/saveAs'])
@@ -122,8 +131,151 @@ it('routes file actions through an explicit host, the line, native association a
   expect(h.sidebar.openResourceIn).toHaveBeenLastCalledWith(SessionId('absent'), expect.any(String), { destination: 'sidebar' })
   h.remote.session.workspacePathApplications.mockResolvedValueOnce({ ok: true, value: [] })
   const floating = await h.resolve(simple)
+  expect(floating.source.getSnapshot().find(item => item.id.endsWith('/open'))?.disabled).toBe(true)
   floating.select('open-in-app.file/float')
   expect(h.sidebar.openResourceIn).toHaveBeenLastCalledWith(SessionId('absent'), expect.any(String), { destination: 'float' })
+})
+
+it('names the application when the first answer of a file type arrives within the wait', async () => {
+  const h = await boot()
+  // The answer arrives a macrotask later, after a resolution that did not wait would have published its rows.
+  h.remote.session.workspacePathApplications.mockImplementationOnce(() => new Promise((answer) => {
+    setTimeout(() => { answer({ ok: true, value: [{ id: 'preview', name: 'Preview', default: true, icon: null }] }) }, 10)
+  }))
+  const menu = h.registry.resolve({ kind: 'file', value: { sessionId, path: 'notes.txt' } })
+  const labels: (string | undefined)[] = []
+  const stop = menu.source.subscribe(() => {
+    labels.push(menu.source.getSnapshot().find(item => item.id === 'open-in-app.file/open')?.label)
+  })
+  await menu.ready
+  stop()
+  expect(labels.filter(label => label !== undefined)).toEqual(['open.title'])
+  menu.dispose()
+})
+
+it('waits for the first answer of a file type at most 300 ms, and a dismissal ends the wait', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  onTestFinished(() => { vi.useRealTimers() })
+  const h = await boot()
+  h.remote.session.workspacePathApplications.mockImplementation(() => new Promise(() => {}))
+  const menu = h.registry.resolve({ kind: 'file', value: { sessionId, path: 'notes.txt' } })
+  let ready = false
+  void menu.ready.then(() => { ready = true })
+  await vi.advanceTimersByTimeAsync(299)
+  expect(ready).toBe(false)
+  await vi.advanceTimersByTimeAsync(1)
+  expect(ready).toBe(true)
+  expect(menu.source.getSnapshot().find(item => item.id === 'open-in-app.file/open')).toMatchObject({ label: 'menu.defaultApp', disabled: false })
+  menu.dispose()
+  const dismissed = h.registry.resolve({ kind: 'file', value: { sessionId, path: 'todo.md' } })
+  await vi.advanceTimersByTimeAsync(100)
+  expect(vi.getTimerCount()).toBe(1)
+  dismissed.dispose()
+  await dismissed.ready
+  expect(vi.getTimerCount()).toBe(0)
+  expect(h.failure).not.toHaveBeenCalled()
+})
+
+it('opens file menus after the first-answer wait and changes only the application row in place', async () => {
+  const h = await boot()
+  const answers: ((answer: RemoteResult<Applications>) => void)[] = []
+  h.remote.session.workspacePathApplications.mockImplementation(() => new Promise((answer) => { answers.push(answer) }))
+  const file = { kind: 'file', value: { sessionId, path: 'notes.txt' } } as const
+  const menu = await h.resolve(file)
+  const rows = () => menu.source.getSnapshot().filter(item => item.id.startsWith('open-in-app.file/'))
+  const application = () => rows().find(item => item.id === 'open-in-app.file/open')
+  expect(answers).toHaveLength(1)
+  expect(application()).toMatchObject({ label: 'menu.defaultApp', disabled: false })
+  expect(application()?.icon).toEqual({ key: 'open-in-app.application' })
+  const published: number[] = []
+  const stop = menu.source.subscribe(() => { published.push(rows().length) })
+  answers[0]!({ ok: true, value: [
+    { id: '/Applications/TextEdit.app', name: 'TextEdit', default: false, icon: null },
+    { id: '/Applications/Sublime Text.app', name: 'Sublime Text', default: true, icon: 'data:image/png;base64,c3Vi' },
+  ] })
+  await vi.waitFor(() => { expect(application()).toMatchObject({ label: 'open.title', icon: { src: 'data:image/png;base64,c3Vi' } }) })
+  stop()
+  expect(published.length).toBeGreaterThan(0)
+  expect(published.every(count => count === 5)).toBe(true)
+  menu.select('open-in-app.file/open')
+  await vi.waitFor(() => {
+    expect(h.remote.session.openWorkspacePath).toHaveBeenLastCalledWith({ path: '/workspace/notes.txt', application: '/Applications/Sublime Text.app' })
+  })
+  // Another file of the same type shows the recorded answer at once and asks the Host again.
+  const other = await h.resolve({ kind: 'file', value: { sessionId, path: 'todo.txt' } })
+  const otherApplication = () => other.source.getSnapshot().find(item => item.id === 'open-in-app.file/open')
+  expect(otherApplication()?.label).toBe('open.title')
+  expect(answers).toHaveLength(2)
+  answers[1]!({ ok: true, value: [] })
+  await vi.waitFor(() => { expect(otherApplication()).toMatchObject({ label: 'menu.defaultApp', disabled: true }) })
+  other.dispose()
+  expect(h.failure).not.toHaveBeenCalled()
+})
+
+it('opens through the OS association until the Host first answers, including after failed queries', async () => {
+  const h = await boot()
+  let refuse = () => {}
+  h.remote.session.workspacePathApplications.mockImplementationOnce(() => new Promise((answer) => {
+    refuse = () => { answer({ ok: false } as never) }
+  }))
+  const menu = await h.resolve({ kind: 'file', value: { sessionId, path: 'notes.md' } })
+  const application = () => menu.source.getSnapshot().find(item => item.id === 'open-in-app.file/open')
+  expect(application()).toMatchObject({ label: 'menu.defaultApp', disabled: false })
+  refuse()
+  await settle()
+  expect(h.paths.cachedApplications('/workspace/notes.md')).toBeUndefined()
+  expect(application()).toMatchObject({ label: 'menu.defaultApp', disabled: false })
+  menu.select('open-in-app.file/open')
+  await vi.waitFor(() => { expect(h.remote.session.openWorkspacePath).toHaveBeenLastCalledWith({ path: '/workspace/notes.md' }) })
+  await vi.waitFor(() => { expect(h.report).toHaveBeenLastCalledWith({ kind: 'opened' }) })
+})
+
+it('verifies a file menu once when answers for other files arrive during verification', async () => {
+  const h = await boot()
+  let release = () => {}
+  const verifying = new Promise<void>((resolve) => { release = resolve })
+  h.remote.workspaceFiles.stat.mockImplementation(async (_sessionId: SessionId, path: string) => {
+    await verifying
+    return { ok: true as const, value: { absolutePath: `/workspace/${path}` } }
+  })
+  const menu = h.registry.resolve({ kind: 'file', value: { sessionId, path: 'notes.txt' } })
+  await h.paths.applications('/workspace/other.md', new AbortController().signal)
+  expect(h.paths.cachedApplications('/workspace/other.md')).toHaveLength(1)
+  release()
+  await menu.ready
+  expect(h.remote.workspaceFiles.stat).toHaveBeenCalledTimes(2)
+  await vi.waitFor(() => { expect(menu.source.getSnapshot().find(item => item.id === 'open-in-app.file/open')?.label).toBe('open.title') })
+  expect(h.remote.workspaceFiles.stat).toHaveBeenCalledTimes(2)
+  menu.dispose()
+})
+
+it('verifies every opening of a file target, whatever order the registry observes and resolves in', async () => {
+  const register = vi.spyOn(MenuRegistry.prototype, 'register')
+  const h = await boot()
+  const contribution = register.mock.calls.map(([input]) => input).find(input => input.id === 'open-in-app.file')!
+  const target = { sessionId, path: 'notes.txt' }
+  // Resolving without observing first, as a registry that subscribes after its first resolution would.
+  await contribution.resolve(target, new AbortController().signal)
+  await contribution.resolve(target, new AbortController().signal)
+  expect(h.remote.workspaceFiles.stat).toHaveBeenCalledTimes(2)
+})
+
+it('re-resolves an open file menu only when its own file type answers differently', async () => {
+  const h = await boot()
+  const menu = await h.resolve({ kind: 'file', value: { sessionId, path: 'notes.txt' } })
+  await vi.waitFor(() => { expect(menu.source.getSnapshot().find(item => item.id === 'open-in-app.file/open')?.label).toBe('open.title') })
+  const shown = menu.source.getSnapshot()
+  await h.paths.applications('/workspace/other.md', new AbortController().signal)
+  expect(h.paths.cachedApplications('/workspace/other.md')).toHaveLength(1)
+  expect(menu.source.getSnapshot()).toBe(shown)
+  h.remote.session.workspacePathApplications.mockResolvedValueOnce({ ok: true, value: [] })
+  await h.paths.applications('/workspace/todo.txt', new AbortController().signal)
+  const changed = menu.source.getSnapshot()
+  expect(changed.find(item => item.id === 'open-in-app.file/open')).toMatchObject({ label: 'menu.defaultApp', disabled: true })
+  h.remote.session.workspacePathApplications.mockResolvedValueOnce({ ok: true, value: [] })
+  await h.paths.applications('/workspace/other.md', new AbortController().signal)
+  expect(menu.source.getSnapshot()).toBe(changed)
+  menu.dispose()
 })
 
 it('keeps copy-path available on failed metadata and reports native action failures', async () => {
@@ -139,14 +291,25 @@ it('keeps copy-path available on failed metadata and reports native action failu
   h.remote.session.openWorkspacePath.mockResolvedValueOnce({ ok: false } as never)
   await h.choose(file, 'open-in-app.file/reveal')
   await vi.waitFor(() => { expect(h.report).toHaveBeenLastCalledWith({ kind: 'failed', failure: 'revealError' }) })
+  await vi.waitFor(() => { expect(h.paths.cachedApplications('/workspace/file.svg')).toHaveLength(1) })
+  // A failed query keeps the recorded answer.
   h.remote.session.workspacePathApplications.mockResolvedValueOnce({ ok: false } as never)
-  expect((await h.resolve(file)).source.getSnapshot().find(item => item.id.endsWith('/open'))?.disabled).toBe(true)
+  const kept = await h.resolve(file)
+  await vi.waitFor(() => {
+    expect(h.remote.session.workspacePathApplications.mock.settledResults.every(result => result.type !== 'incomplete')).toBe(true)
+  })
+  await settle()
+  expect(h.paths.cachedApplications('/workspace/file.svg')).toHaveLength(1)
+  expect(kept.source.getSnapshot().find(item => item.id.endsWith('/open'))).toMatchObject({ label: 'open.title', disabled: false })
+  kept.dispose()
   h.paths.desktop.set(false)
   h.fileActions.canSaveAs = false
+  const queried = h.remote.session.workspacePathApplications.mock.calls.length
   const web = await h.resolve(file)
   expect(web.source.getSnapshot().some(item => item.id.endsWith('/saveAs'))).toBe(false)
   expect(web.source.getSnapshot().filter(item => ['/open', '/reveal'].some(suffix => item.id.endsWith(suffix)))
     .every(item => item.disabled)).toBe(true)
+  expect(h.remote.session.workspacePathApplications).toHaveBeenCalledTimes(queried)
 })
 
 it('opens links in the registered browser, externally, and on the clipboard', async () => {
