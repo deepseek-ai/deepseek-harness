@@ -89,7 +89,10 @@ function openList(): void {}
 
 describe('JobsRunningIndicator', () => {
   function indicator(jobs: readonly JobView[], panelShown: boolean, watchRows: JobsSectionProps['watchRows'] = () => () => {}) {
-    const dotProps = { ...props(jobs, undefined, {}, undefined, watchRows), panelShown } as unknown as JobsRunningIndicatorProps
+    const section = props(jobs, undefined, {}, undefined, watchRows)
+    const dotProps = {
+      sessionId: section.sessionId, useJobs: section.useJobs, watchRows: section.watchRows, t: section.t, panelShown,
+    } as Pick<JobsRunningIndicatorProps, 'sessionId' | 'useJobs' | 'watchRows' | 't' | 'panelShown'> as JobsRunningIndicatorProps
     return render(<JobsRunningIndicator {...dotProps} />)
   }
 

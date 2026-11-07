@@ -110,7 +110,8 @@ function enableTooltips(): void {
 
 /** The text the progress beside the section title renders for these props. */
 function progressText(props: TeamBoardProps): string {
-  const view = render(<TeamProgress {...props as unknown as TeamProgressProps} />)
+  const progress: Pick<TeamProgressProps, 'useProjection' | 't'> = { useProjection: props.useProjection, t: props.t }
+  const view = render(<TeamProgress {...progress as TeamProgressProps} />)
   const text = view.container.textContent
   view.unmount()
   return text
