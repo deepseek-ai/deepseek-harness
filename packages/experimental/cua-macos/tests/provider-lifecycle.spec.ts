@@ -161,6 +161,20 @@ it('requires an enclosing run_code before sending a directional key', async () =
   expect(native.request).not.toHaveBeenCalled()
 })
 
+it('finishes a shortcut-only run_code without requesting held-key cleanup', async () => {
+  const f = await setup(undefined, true)
+  await selectApplication(f)
+  native.request.mockClear().mockResolvedValue({ dispatched: true })
+  const result = await executeModelToolFixture(f.ctx, { agent: f.handle.agent, callId: ToolCallId('shortcut-run'),
+    name: 'run_code', signal: new AbortController().signal, arguments: {
+      code: "return await tools.cua({ method: 'pressKey', params: { appHandle: 'app-one', key: 'a', modifiers: ['command'] } });",
+      description: 'Press Command+A',
+    } })
+  expect(result.isError).toBe(false)
+  expect(native.request.mock.calls.map(([method]) => method)).toEqual(['pressKey'])
+  expect(native.cleanup).not.toHaveBeenCalled()
+})
+
 it.each(['return', 'throw', 'pause', 'pause with cleanup error'])('cleans up only the held W when run_code ends by %s', async (ending) => {
   const f = await setup(undefined, true)
   await selectApplication(f)
