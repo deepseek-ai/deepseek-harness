@@ -19,7 +19,7 @@ it('keeps exactly three ordered operation headings', () => {
 })
 
 it('prefixes concise platform guidance before the shared catalog', () => {
-  expect(GUIDANCE).toBe(`${PLATFORM_GUIDANCE}\n\n${COMMON_GUIDANCE}`)
+  expect(GUIDANCE.startsWith(`${PLATFORM_GUIDANCE}\n\nUse cua`)).toBe(true)
   expect(PLATFORM_GUIDANCE).not.toContain('##')
 })
 
@@ -27,6 +27,15 @@ it('states the macOS accessibility, keyboard, and mouse levels', () => {
   expect(PLATFORM_GUIDANCE).toContain('accessibility tree operations are available at app or window level')
   expect(PLATFORM_GUIDANCE).toContain('Simulated keyboard input is available at app level')
   expect(PLATFORM_GUIDANCE).toContain('Simulated mouse input is available at window level')
+  const hover = GUIDANCE.split('\n').find(line => line.startsWith('- mouseMove('))
+  for (const term of ['AXShowAlternateUI', 'AXShowDefaultUI', 'HOVER_UNAVAILABLE', 'systemPointerHover']) expect(hover).toContain(term)
+  const click = GUIDANCE.split('\n').find(line => line.startsWith('- click('))
+  expect(click).toContain('await app.getWindow(windowId), then call win.click(target)')
+  expect(click).toContain('use app.invoke(id)')
+  for (const step of ['call app.activate() first', 'outside the window', 'screenshot pixels', 'before typing or retrying']) expect(click).toContain(step)
+  for (const platformDetail of ['macOS', 'AXShowAlternateUI', 'AXRaise', 'HOVER_UNAVAILABLE', 'systemPointerHover', 'mouse-down']) {
+    expect(COMMON_GUIDANCE).not.toContain(platformDetail)
+  }
 })
 
 it('enumerates every available method once in its catalog entry', () => {
@@ -38,7 +47,9 @@ it('enumerates every available method once in its catalog entry', () => {
     ...windowNames.filter(name => name !== 'windowId').map(name => `${name}(`),
     ...['typeText', 'paste', 'pressKey'].map(name => `${name}(`),
   ]
-  for (const signature of signatures) expect(COMMON_GUIDANCE.split('\n').filter(line => line.startsWith(`- ${signature}`))).toHaveLength(1)
+  for (const catalog of [COMMON_GUIDANCE, GUIDANCE]) {
+    for (const signature of signatures) expect(catalog.split('\n').filter(line => line.startsWith(`- ${signature}`))).toHaveLength(1)
+  }
   expect(signatures).toHaveLength(24)
   expect(new Set(signatures.map(signature => signature.slice(signature.indexOf('.') + 1, -1))).size).toBe(23)
   expect(COMMON_GUIDANCE).toContain('app.appHandle')

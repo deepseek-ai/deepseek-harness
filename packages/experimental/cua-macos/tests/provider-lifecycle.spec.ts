@@ -61,7 +61,7 @@ vi.mock('@deepseek-ai/dsh-cua/native-client', async importOriginal => ({
 }))
 
 const config = {
-  permissionPollIntervalMs: 1000,
+  permissionPollIntervalMs: 1000, systemPointerHover: false,
   agentPreset: false,
   helperPath: resolve('fixture-helper'), sourceSigning: 'ad-hoc', buildTimeoutMs: 300_000, timeoutMs: 10_000, connectTimeoutMs: 5000, screenshotTimeoutMs: 5000, axTimeoutMs: 3000, maxRequestBytes: 1024, maxResponseBytes: 4096, maxClipboardBytes: 8192, pasteReadTimeoutMs: 1000, maxAppMatches: 20,
   graceMs: 10, textEventIntervalMs: 8, maxClickHoldMs: 7000, maxElements: 64, maxDepth: 8, dragDurationMs: 200, dragSteps: 10,
@@ -71,6 +71,7 @@ const { helperPath: _helperPath, ...automaticConfig } = config
 
 it('defaults to ad-hoc signing and requires a keychain path for certificate signing', () => {
   expect(NativeProvider.Config({}).sourceSigning).toBe('ad-hoc')
+  expect(NativeProvider.Config({}).systemPointerHover).toBe(false)
   expect(NativeProvider.Config({ sourceSigning: 'ad-hoc' }).sourceSigning).toBe('ad-hoc')
   for (const sourceSigning of [{ identity: 'Apple Development: Example', keychain: '/keychains/custom.keychain-db' }, { identity: 'ABC123', keychain: '/keychains/custom.keychain-db' }]) {
     expect(NativeProvider.Config({ sourceSigning }).sourceSigning).toEqual(sourceSigning)

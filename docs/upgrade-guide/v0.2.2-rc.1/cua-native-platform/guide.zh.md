@@ -15,7 +15,7 @@ CUA 脚本在指定窗口上截图和操作鼠标。App 和 Window 对象共享�
 
 ## 迁移
 
-1. 调用 `cua.getApp(selector)` 后，从 `app.getWindows()` 返回的列表选定目标，再调用 `app.getWindow(windowId)`。在窗口上调用 `getScreenshot()`、`click()`、`scroll()` 和 `drag()`，将原有的 `hover` 调用改为 `window.mouseMove()`。
+1. 调用 `cua.getApp(selector)` 后，从 `app.getWindows()` 返回的列表选定目标，再调用 `app.getWindow(windowId)`。在窗口上调用 `getScreenshot()`、`click()`、`scroll()` 和 `drag()`，将原有的 `hover` 调用改为 `window.mouseMove()`。在 macOS 上，`window.click(id)` 在元素中心发送鼠标事件。需要执行默认辅助功能动作时，改用 `invoke(id)`。需要打开控件菜单且控件声明了 `AXShowMenu` 时，调用 `performAction(id, "AXShowMenu")`。
 2. 将 `getAXState()` 改为 `getAccessibilityTree()`，将 `getAXStateAndScreenshot()` 拆成读取树和截图两次调用。选择窗口时会静默读取初始树。选择应用时，只有 `appLevelAccessibility` 为真才读取。要显示树，请显式读取。
 3. 将数字元素索引改为从最新树中取得的字符串 ID。直接发送请求时使用 `elementId` 和 `snapshotId`。原先调用 `performSecondaryAction` 的地方，先用 `listActions(id)` 取得完整动作名，再调用 `performAction(id, exactName, argument?)`。要执行默认动作，可调用 `invoke(id)`。`setValue` 接受提供方支持的 JSON 值。 在 macOS 上，`performAction(id, 'AXRaise')` 只执行元素声明的抬起窗口动作。需要把应用切到前台时先调用 `app.activate()`。
 4. 将 `pressKey('shift+Tab')` 之类的组合键写法改为 `pressKey('Tab', ['shift'])`。调用 `sendKeyEvent` 前检查 `(await cua.getCapabilities()).methods`。macOS 支持完整按键，单独发送按下或松开事件会返回 `NOT_IMPLEMENTED`。

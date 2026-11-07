@@ -64,6 +64,7 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 | `buildTimeoutMs` | `300000` | 原生组件准备的最长时间。 |
 | `timeoutMs` | `30000` | 单次操作截止时间，取消后可能已发生部分输入。 |
 | `connectTimeoutMs` | `5000` | 连接或启动共享 helper 的截止时间。 |
+| `systemPointerHover` | `false` | AX 悬停不可用时，允许 `mouseMove` 移动可见光标。 |
 | `permissionPollIntervalMs` | `1000` | 原生引导打开期间检查权限和窗口位置的间隔，单位为毫秒。 |
 | `screenshotTimeoutMs` | `5000` | 截图总期限，包含排队时间，且不超过 `timeoutMs`。 |
 | `axTimeoutMs` | `3000` | 每次 Accessibility 系统调用的截止时间，与完整操作截止独立配置。 |
@@ -114,7 +115,7 @@ void await window.getScreenshot()
 
 `getWindow` 静默读取初始树。已确认归属但没有 AX 界面的窗口返回空快照，仍可截图和发送坐标输入。在单个 API 实例内，门面按应用句柄保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享它，包括重复选择。读取任一窗口都会替换该快照；元素操作使用最新快照 ID，因此应使用最新树中的元素 ID，不应假定旧 ID 仍指向同一控件。读取失败不会发布部分快照；可以重新读取，但不要重复此前的输入。窗口对象负责截图和指针输入。键盘方法保留在 `app` 上，因为输入跟随应用的当前焦点。
 
-`mouseMove(target)` 优先通过控件声明的 AX 动作展开替代界面，不移动系统鼠标。进入展开区域的子控件时保持父控件展开，离开后恢复默认界面。没有这条路径时，该方法将可见系统鼠标移到 AX 元素中心或窗口内坐标，不按鼠标按钮，也可用于禁用控件。所选应用必须在前台，且目标点未被遮挡，否则返回 `FOREGROUND_REQUIRED`，调用方需显式激活或抬起窗口并重新观察。调用结束、AX 读取和截图不恢复先前的位置。等待应用的悬停延迟后，观察出现的内容，再移入并点击；连续调用可经过中间位置。其他输入或应用自身变化可能中断交互。[连续交互的设计理由](../../../.agents/notes/implemented/architecture/2026-10-13-cua-continuous-hover.zh.md)。
+`mouseMove(target)` 默认通过 AX 悬停。目标或其祖先必须已启用，并同时声明 `AXShowAlternateUI` 和 `AXShowDefaultUI`。进入子控件会保持展开，离开后恢复默认界面。如果没有可用的 AX 路径，helper 返回 `HOVER_UNAVAILABLE`，不发送输入。可点击已经可见的控件，或用 `performAction` 执行控件声明的动作。浏览器内容缺少这些 AX 动作时，请使用浏览器工具。只有允许移动用户可见光标时才开启 `systemPointerHover`。这条路径要求目标在前台且未被遮挡，操作后光标停在目标位置。
 
 `paste(text, { format: "text" | "html" })` 临时提供指定格式的剪贴板内容，并调用应用已启用的标准 Paste 菜单命令。临时格式保留到剪贴板读取方请求其数据，然后只在仍持有剪贴板时恢复保存的全部原格式，保留期间产生的新复制内容。粘贴操作共用跨进程锁，取消会等待辅助进程清理。强制终止进程可能阻止恢复。应用不支持 Paste 命令时明确失败，不自动改成逐字输入；`typeText` 仍单独提供按键事件输入。
 
@@ -122,13 +123,15 @@ void await window.getScreenshot()
 
 截图要求附件服务可用，并确认当前模型支持图片输入。共享附件接入校验规范 Base64、图像数据及配置容量，然后保存一次图片。程序调用方仍可取得原生数据，模型内容包含坐标元数据和持久图片引用。响应字节上限在解析前执行。
 
+`win.click(id)` 向元素中心发送鼠标事件，`win.click([x, y])` 向给定位置发送鼠标事件。`click(id)` 和 `mouseMove(id)` 使用的元素须属于所选窗口。后台控件优先用 `invoke(id)` 执行默认动作。需要鼠标输入时，先激活应用并重新观察目标。系统打开或保存面板的鼠标点击投递给已核实的文件面板服务窗口。在 macOS 14.2 及以上版本，截图只包含所选窗口，图像按该窗口的边界对齐。
+
 `mouseMove`、`click` 和 `drag` 的绝对坐标使用 `[x, y]` 元组；`scroll` 使用命名的 `x` 和 `y`。它们都使用最近返回截图中的像素。传入 `relative: true` 时使用 0～999 的千分比整数；省略或传入 `false` 时使用像素。相对坐标可基于成功的 AX 读取或截图，绝对坐标必须先截图。Host 根据实际送入模型的图片尺寸换算原生 point，包含附件归一化和模型请求阶段的缩放。999 映射到窗口边缘以内。坐标选项不适用于元素 ID。窗口宽高与最近一次观察不同时，在输入前返回 `WINDOW_CHANGED`，即使原始坐标调用不传快照 ID 也会检查；重新读取 AX 或截图后再操作。单纯移动窗口不使窗口内坐标失效。截图和鼠标输入会核对所选窗口的辅助功能框与显示边界；已知两者不一致时，在发送任何鼠标事件前返回 `WINDOW_CHANGED`。当 AX 保留完整窗口框时，这也会拦住 Stage Manager 变换后的窗口。需要重新读取状态；激活应用或抬起窗口仍须显式调用。元素声明的 AX 动作保持可用。缺少 AX 几何时保留无 AX 路径，不代表变换后的窗口一定可以操作。
 
 保留的对象会在每次调用时获取当前工具绑定。外部运行时负责持久化、导入、取消和最终表达式值的序列化。截图返回编码字节及其 MIME 类型、像素尺寸和窗口 ID，标准工具链负责将图片作为附件传递一次。`emit: false` 只控制对象层的输出。使用其他分派器的宿主可以通过 `./api` 的 `createCuaApi` 创建对象。
 
-AppKit sheet 可以通过其窗口 ID 单独选择，也会出现在所属文档窗口的控件树中。只有应用当前获得焦点的 sheet 指向唯一的 Apple 面板服务窗口，且该服务仍聚焦于同一面板时，键盘输入才转交系统打开或保存面板。无法确认或存在歧义的远端接收方会在输入前报错。
+AppKit 的 sheet 可以出现在文档窗口的树里，并有独立的窗口 ID。对 sheet 发送鼠标输入时，先用 `app.getWindow(sheetId)` 选择它，再使用该窗口树中的元素 ID。只有应用当前获得焦点的 sheet 指向唯一的 Apple 面板服务窗口，且该服务仍聚焦于同一面板时，键盘输入才转交系统打开或保存面板。无法确认或存在歧义的远端接收方会在输入前报错。
 
-元素点击使用当前快照中的不透明元素 ID。左键支持单击或双击；右键和中键支持单击。点击和拖动选项可指定按键与修饰键名称；带修饰键的点击使用指针输入。拖动期间保持指定按键，并在移动和释放事件中携带修饰键。AX 文本标明禁用控件、`valueWritable=true` 和可读取的 `selected` 状态。不带修饰键的点击优先使用元素声明的辅助功能动作；需要发送鼠标事件时，会重新读取元素位置并核实所属窗口。动作返回只表示输入已分派。可视指针或点击标记可以独立绘制；AX 动作无需移动系统指针。窗口定向鼠标输入仍可能改变应用焦点、选区或对话框。输入后需要读取状态确认结果。`STALE_APP` 需要重新获取应用，`STALE_SNAPSHOT` 需要重新读取 AX。请求超时或取消会等待原生停止确认，保留仍可用的句柄；无法确认清理完成时关闭该 Agent 的连接。未返回系统回调的截图 RPC 占用唯一捕获槽位，新截图立即返回 `CAPTURE_BUSY`，AX 和输入仍可使用。迟到图片被丢弃，真实回调结束后释放槽位。只有操作无法停止或清理失败时，才可能使共享进程及所有旧句柄失效。不能自动重试结果不确定的输入。关闭 Agent 会释放其连接和 AX 引用，但不会撤销应用中的修改。
+元素点击使用当前快照中的不透明元素 ID。左键支持单击或双击；右键和中键支持单击。点击和拖动选项可指定按键与修饰键名称。拖动期间保持指定按键，并在移动和释放事件中携带修饰键。AX 文本标明禁用控件、`valueWritable=true` 和可读取的 `selected` 状态。动作返回只表示输入已分派。可视指针或点击标记可以独立绘制；AX 动作无需移动系统指针。窗口定向鼠标输入仍可能改变应用焦点、选区或对话框。输入后需要读取状态确认结果。`STALE_APP` 需要重新获取应用，`STALE_SNAPSHOT` 需要重新读取 AX。请求超时或取消会等待原生停止确认，保留仍可用的句柄；无法确认清理完成时关闭该 Agent 的连接。未返回系统回调的截图 RPC 占用唯一捕获槽位，新截图立即返回 `CAPTURE_BUSY`，AX 和输入仍可使用。迟到图片被丢弃，真实回调结束后释放槽位。只有操作无法停止或清理失败时，才可能使共享进程及所有旧句柄失效。不能自动重试结果不确定的输入。关闭 Agent 会释放其连接和 AX 引用，但不会撤销应用中的修改。
 
 -----
 
@@ -173,7 +176,7 @@ AppKit sheet 可以通过其窗口 ID 单独选择，也会出现在所属文档
 ##### 操作指导文本（原文）
 
 ```markdown
-macOS: accessibility tree operations are available at app or window level. Simulated keyboard input is available at app level. Simulated mouse input is available at window level. Use window coordinates for click and mouseMove on macOS. The helper rejects element-targeted pointer requests carrying the window ID supplied by these object methods. For an element’s default action, use invoke with its latest ID. getApp also accepts bundle IDs and .app paths, and findApps searches /Applications, /System/Applications, and ~/Applications. Use the Computer Use permission page to grant the helper application Accessibility and Screen Recording permissions in System Settings. Native window and AX bounds use macOS points, while delivered screenshots carry their own pixel dimensions. show does not switch Spaces, and Stage Manager can present reduced window geometry; explain any required foreground step before calling app.activate() or performing an advertised AXRaise action.
+macOS: accessibility tree operations are available at app or window level. Simulated keyboard input is available at app level. Simulated mouse input is available at window level. For pointer input on a sheet, select its window ID with app.getWindow(id). For menu items outside a window, use app.invoke(id). findApps searches /Applications, /System/Applications, and ~/Applications. Use the Computer Use permission page to grant the helper application Accessibility and Screen Recording permissions in System Settings. Native window and AX bounds use macOS points, while delivered screenshots carry their own pixel dimensions. show does not switch Spaces, and Stage Manager can present reduced window geometry; explain any required foreground step before calling app.activate() or performing an advertised AXRaise action.
 
 Use cua to observe and operate native applications. Always use cua.getCapabilities() to confirm whether a specific API is available on the current platform; its reported capabilities take precedence over availability statements in these instructions. All methods are async; observation options default to { emit: true }, and emit: false suppresses sink output only, leaving returned values unchanged. Actions report dispatch evidence, not verified completion. If sessionLocked is true or an operation reports SESSION_LOCKED, stop UI actions and ask the user to unlock the desktop session; null or unknown means verify a usable unlocked desktop session first. cua.getApp requests user consent; if access is denied or revoked, stop using that application until the user explicitly permits another request, and never bypass a refusal or switch tools to avoid it. Never replay uncertain input without a fresh observation.
 
@@ -207,12 +210,12 @@ Element ids are opaque strings from the latest successful tree; the object facad
 ## Simulated mouse
 Use an explicit window for screenshots and pointer input.
 - getScreenshot(options?: { emit?: boolean }) -> { bytes: Uint8Array, mimeType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif', pixelWidth: number, pixelHeight: number, windowId: number } — capture the selected window as one encoded image; bytes is a JavaScript byte array, and mimeType identifies its encoding, so do not assume PNG.
-- mouseMove(target: string | [number, number], options?: { relative?: boolean }) -> { dispatched: boolean, foregroundChanged?: boolean | null, hoverRoute: 'accessibility' | 'system-pointer', systemPointerMoved: boolean } — reveal AX alternate UI or move the system pointer without pressing; inspect hoverRoute and systemPointerMoved, and expect no automatic pointer restoration.
-- click(target: string | [number, number], options?: { mouseButton?: 'left' | 'right' | 'middle', clickCount?: 1 | 2, modifiers?: ('command' | 'control' | 'option' | 'shift' | 'fn')[], holdMs?: number, relative?: boolean }) -> ActionResult — click an element id or point, or perform a left-button double-click; holdMs controls the press duration of each press.
+- mouseMove(target: string | [number, number], options?: { relative?: boolean }) -> { dispatched: boolean, foregroundChanged?: boolean | null, hoverRoute: 'accessibility' | 'system-pointer', systemPointerMoved: boolean } — request a mouse move to the target without pressing a button; inspect hoverRoute and systemPointerMoved, and expect no automatic pointer restoration. Default hover requires both AXShowAlternateUI and AXShowDefaultUI on an enabled element or ancestor. Without an AX route it returns HOVER_UNAVAILABLE before sending input. Prefer click on a visible control or performAction with an advertised action. For web content without an AX hover action, use browser tools. Only systemPointerHover: true permits moving the visible cursor. If this returns FOREGROUND_REQUIRED, activate the app and check that the point is unobscured.
+- click(target: string | [number, number], options?: { mouseButton?: 'left' | 'right' | 'middle', clickCount?: 1 | 2, modifiers?: ('command' | 'control' | 'option' | 'shift' | 'fn')[], holdMs?: number, relative?: boolean }) -> ActionResult — click an element id or point, or perform a left-button double-click; holdMs controls the press duration of each press. click is a Window method: select a window with const win = await app.getWindow(windowId), then call win.click(target). For a background control’s default action, use app.invoke(id). For a mouse click on a background app, call app.activate() first and re-read the target. Both target forms send mouse-down and mouse-up events. click(id) uses the center of the full element bounds. If that center is outside the window, take a fresh win.getScreenshot() and use click([x, y]) on a visible part of the control in screenshot pixels. A background app can ignore the events even when dispatched is true. Verify the expected effect, such as a changed selection, before typing or retrying.
 - scroll(options: { x: number, y: number, deltaLinesX: number, deltaLinesY: number, relative?: boolean }) -> ActionResult — scroll at a point; deltas are integers from -10 to 10 with at least one nonzero, and positive values reveal content above or left.
 - drag(from: [number, number], to: [number, number], options?: { mouseButton?: 'left' | 'right' | 'middle', modifiers?: ('command' | 'control' | 'option' | 'shift' | 'fn')[], relative?: boolean }) -> ActionResult — drag between two points of one window.
 
-A string target is an element id; coordinate targets are [x, y] and are pixels in the latest returned screenshot by default. With relative: true they are integer thousandths of the window width and height from 0 to 999, based on the current AX observation or screenshot. Left clicks support one or two presses; right and middle clicks support one. FOREGROUND_REQUIRED means explain the need, then call app.activate() and observe again; activation is never automatic. Read fresh state after actions, and treat WINDOW_CHANGED, STALE_SNAPSHOT, and SCREENSHOT_REQUIRED as requiring the stated fresh observation or capture before any retry.
+A string target is an element id; coordinate targets are [x, y] and are pixels in the latest returned screenshot by default. With relative: true they are integer thousandths of the window width and height from 0 to 999, based on the current AX observation or screenshot. Left clicks support one or two presses; right and middle clicks support one. FOREGROUND_REQUIRED means explain the need, then explicitly activate the target and observe again; activation is never automatic. Read fresh state after actions, and treat WINDOW_CHANGED, STALE_SNAPSHOT, and SCREENSHOT_REQUIRED as requiring the stated fresh observation or capture before any retry.
 
 ## Simulated keyboard
 Available at app or window level depending on the platform.
@@ -241,7 +244,6 @@ Raw tools use { method, params }: include appHandle for app calls and windowId f
 - 所选设置窗口离开可见窗口列表时，引导框会关闭，包括切换桌面空间或最小化导致窗口不再可见的情况。返回后再次申请权限可重新打开引导。
 - 只提供 macOS 原生实现，Windows 支持正在开发中。本包暂放在 `experimental`，待 Windows 支持完成后迁回 `computer-use` 组。不支持浏览器标签、启动应用、AX 差分、无法确认应用归属的系统面板，以及仅后台辅助类型的应用。
 - 元素 ID 只对应用当前的辅助功能快照有效；之后的读取会替换它们。截图和指针输入都要求显式的窗口对象。
-- 在 macOS 上，窗口对象调用 `click(elementId)` 或 `mouseMove(elementId)` 时会附带窗口 ID，helper 会以 `INVALID_ARGUMENT` 拒绝该组合。鼠标操作可传窗口坐标，执行控件的默认动作可调用 `invoke(elementId)`。
 - 坐标使用包含标题栏的返回截图像素；`relative: true` 使用 0～999 的整数，由 Host 换算原生 point。窗口移动、应用变化及其他桌面使用者的操作可能与观察和输入交错。
 - macOS 台前调度可能将后台窗口的尺寸与截图变为缩略图，当前无法保证这种状态下的完整画面与坐标输入；模型指引要求说明前台需求并避免反复抢回焦点。
 - 后台输入依赖私有 SkyLight 符号，macOS 升级可能使其不可用，需在目标系统版本验证。
