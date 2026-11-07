@@ -3889,7 +3889,7 @@ SHA-256: `e3056e0dda3a379e895386e368c3ce42131460ea65e410e1d091cca98a347305`
 
 SHA-256: `750a2b129d67704df675c06823c20c80b65cbae89d5aaa914fd5a72e3df395b5`
 
-来源：[`packages/jobs/jobs/src/types.ts:247`](../packages/jobs/jobs/src/types.ts)
+来源：[`packages/jobs/jobs/src/types.ts:253`](../packages/jobs/jobs/src/types.ts)
 
 以下类型之一：
 

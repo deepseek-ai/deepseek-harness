@@ -182,6 +182,12 @@ interface JobOutcome {
    */
   detail?: string
   /**
+   * Exit code of the process the job ran, for a producer that runs one. A
+   * nonzero code on a `completed` job means the command reported failure while
+   * the job itself finished.
+   */
+  exitCode?: number
+  /**
    * Return value for jobs whose result is a value rather than a stream (a
    * workflow's rendered result, a subagent's report). The output ring carries
    * the stream; this is handed out once by the model's next {@link JobRegistry.read}.
@@ -295,6 +301,8 @@ interface JobView {
   readonly progress?: string
   /** Terminal reason (`exit code: 3`); a recorded kill reason is merged in. */
   readonly detail?: string
+  /** Exit code of the process the job ran, once settled, for a producer that reports one. */
+  readonly exitCode?: number
   /** Epoch ms when the job was registered. */
   readonly startedAt: number
   /** Epoch ms when the job settled; absent while live. */
