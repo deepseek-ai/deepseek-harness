@@ -6,7 +6,7 @@ import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { Browser, Page } from 'playwright'
+import type { Browser, Page, Route } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
@@ -367,13 +367,71 @@ async function flingTranscript(page: Page, deltaY: number): Promise<void> {
   await nextPaint(page)
 }
 
-async function wheelToHistoryStart(page: Page): Promise<void> {
-  for (let attempt = 0; attempt < 12; attempt += 1) {
-    if ((await scrollGeometry(page)).scrollTop <= 1) break
-    await wheelTranscript(page, -2_400)
+/**
+ * Hold paging responses so auto-prefetch cannot publish a page mid-gesture.
+ * @param page - Chat page under test.
+ * @returns an idempotent release that resumes held responses and awaits them.
+ */
+async function holdHistoryPages(page: Page): Promise<() => Promise<void>> {
+  const gate = Promise.withResolvers<undefined>()
+  const pending = new Set<Promise<void>>()
+  const hold = (route: Route): Promise<void> => {
+    const work = gate.promise.then(() => route.continue())
+    pending.add(work)
+    return work.finally(() => { pending.delete(work) })
   }
-  await expect.poll(async () => (await scrollGeometry(page)).scrollTop, { timeout: 10_000 })
-    .toBeLessThanOrEqual(1)
+  await page.route('**/api/session/page', hold)
+  let released = false
+  return async () => {
+    if (released) return
+    released = true
+    gate.resolve(undefined)
+    // Resume held requests before removing the handler: unregistering with a
+    // hold still pending lets Playwright handle that route itself, after which
+    // the delayed continue() fails with "Route is already handled".
+    while (pending.size > 0) await Promise.all([...pending])
+    await page.unroute('**/api/session/page', hold)
+  }
+}
+
+/**
+ * Wait until a released page has landed and the history control stopped changing.
+ * @param page - Chat page under test.
+ * @returns the settled rendered row count.
+ */
+async function settleHistoryPaging(page: Page): Promise<number> {
+  let rows = -1
+  await expect.poll(async () => {
+    if (await page.locator('[data-chat-history]').getAttribute('data-chat-history') === 'loading') return false
+    const current = await loadedFlowRows(page)
+    const stable = current === rows
+    rows = current
+    return stable
+  }, { timeout: 30_000 }).toBe(true)
+  await nextPaint(page)
+  return rows
+}
+
+/**
+ * Wheel back to the start of the loaded window.
+ * @param page - Chat page under test.
+ * @param options - holdPaging keeps auto-prefetch from publishing a page that re-anchors the viewport mid-scroll.
+ */
+async function wheelToHistoryStart(page: Page, options: { holdPaging?: boolean } = {}): Promise<void> {
+  const release = options.holdPaging === true ? await holdHistoryPages(page) : undefined
+  try {
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      if ((await scrollGeometry(page)).scrollTop <= 1) break
+      await wheelTranscript(page, -2_400)
+    }
+    await expect.poll(async () => (await scrollGeometry(page)).scrollTop, { timeout: 10_000 })
+      .toBeLessThanOrEqual(1)
+  } finally {
+    await release?.()
+  }
+  // A held page is released at the history edge, where the client publishes it
+  // as soon as it arrives; settle that prepend before the caller measures.
+  if (options.holdPaging === true) await settleHistoryPaging(page)
 }
 
 async function wheelUntilMounted(page: Page, selector: string, deltaY: number): Promise<void> {
@@ -476,23 +534,32 @@ async function expectMarkerAboveComposer(page: Page, marker: string): Promise<vo
   expect(geometry.rowBottom).toBeLessThanOrEqual(geometry.composerTop + GEOMETRY_TOLERANCE)
 }
 
-async function loadEarlierWithAnchor(page: Page): Promise<void> {
-  await wheelToHistoryStart(page)
-  const older = page.getByRole('button', { name: 'Load earlier', exact: true })
-  const loading = page.getByRole('button', { name: 'Loading…', exact: true })
-  await older.waitFor({ timeout: 10_000 })
-  const anchor = await visibleFlowAnchor(page)
-  const before = await loadedFlowRows(page)
-  await older.click()
-  await expect.poll(async () => (
-    await loadedFlowRows(page) > before && await loading.count() === 0
-  ), { timeout: 30_000 }).toBe(true)
-  await nextPaint(page)
-  if (await page.getByRole('button', { name: 'Load earlier', exact: true }).count() === 0) {
-    expect(await page.locator('[data-turn-process][aria-expanded="false"]').count()).toBeGreaterThan(0)
-    return
+async function loadEarlierWithAnchor(page: Page): Promise<boolean> {
+  // Auto-prefetch may start while scrolling to the button. Hold its response until the reading anchor is captured.
+  const release = await holdHistoryPages(page)
+  try {
+    await wheelToHistoryStart(page)
+    const history = page.locator('[data-chat-history]')
+    const older = history.getByRole('button')
+    await older.waitFor({ timeout: 10_000 })
+    if (await older.isDisabled()) return false
+    const anchor = await visibleFlowAnchor(page)
+    const before = await loadedFlowRows(page)
+    await older.click()
+    await release()
+    await expect.poll(async () => (
+      await loadedFlowRows(page) > before && await history.getAttribute('data-chat-history') === 'idle'
+    ), { timeout: 30_000 }).toBe(true)
+    await nextPaint(page)
+    if (await older.isDisabled()) {
+      expect(await page.locator('[data-turn-process][aria-expanded="false"]').count()).toBeGreaterThan(0)
+      return true
+    }
+    await expectSameFlowTop(page, anchor)
+    return true
+  } finally {
+    await release()
   }
-  await expectSameFlowTop(page, anchor)
 }
 
 async function fileExists(path: string): Promise<boolean> {
@@ -1300,6 +1367,8 @@ describe('web e2e: long Chat scroll contract', () => {
 
       let releaseHistory = (): void => {}
       let held = false
+      let historyRequests = 0
+      const heldContinued = Promise.withResolvers<undefined>()
       let releaseGate: (() => void) | undefined
       const gate = new Promise<void>((resolve) => { releaseGate = resolve })
       releaseHistory = () => { releaseGate?.() }
@@ -1308,12 +1377,17 @@ describe('web e2e: long Chat scroll contract', () => {
           method?: string
           payload?: { args?: { request?: { beforeSeq?: number } } }
         }
-        if (!held && request.method === 'session/page'
-          && request.payload?.args?.request?.beforeSeq !== undefined) {
+        const historyRequest = request.method === 'session/page' && request.payload?.args?.request?.beforeSeq !== undefined
+        if (historyRequest) historyRequests += 1
+        if (!held && historyRequest) {
           held = true
           await gate
-        }
-        await route.continue()
+          try {
+            await route.continue()
+          } finally {
+            heldContinued.resolve(undefined)
+          }
+        } else await route.continue()
       })
 
       const settled = world.scaffold.whenTurnSettled(60_000)
@@ -1325,8 +1399,12 @@ describe('web e2e: long Chat scroll contract', () => {
         await world.page.getByText(LIVE_TEXT_FIRST, { exact: false }).last().waitFor({ timeout: 15_000 })
         await wheelToHistoryStart(world.page)
         const beforeRows = await loadedFlowRows(world.page)
-        await world.page.getByRole('button', { name: 'Load earlier', exact: true }).click()
         await expect.poll(() => held, { timeout: 10_000 }).toBe(true)
+        const history = world.page.locator('[data-chat-history]')
+        await expect.poll(() => history.getAttribute('data-chat-history')).toBe('loading')
+        // The upward gesture already requested the page. A click joins that request even though its label is loading.
+        await history.getByRole('button').click()
+        expect(historyRequests).toBe(1)
 
         await wheelTranscript(world.page, 420)
         const readerAnchor = await visibleFlowAnchor(world.page)
@@ -1344,6 +1422,9 @@ describe('web e2e: long Chat scroll contract', () => {
       } finally {
         releaseText()
         releaseHistory()
+        if (held) await heldContinued.promise
+        // Release both producers before disposing the Session even if an assertion above fails.
+        await settled
       }
 
       await settled
@@ -1353,10 +1434,10 @@ describe('web e2e: long Chat scroll contract', () => {
 
       let additionalPages = 0
       while (additionalPages < 8) {
-        await wheelToHistoryStart(world.page)
-        if (await world.page.getByRole('button', { name: 'Load earlier', exact: true }).count() === 0) break
-        await loadEarlierWithAnchor(world.page)
-        additionalPages += 1
+        const before = await loadedFlowRows(world.page)
+        const consumed = await loadEarlierWithAnchor(world.page)
+        if (consumed || await loadedFlowRows(world.page) > before) additionalPages += 1
+        if (await world.page.locator('[data-chat-history]').getByRole('button').isDisabled()) break
       }
       expect(additionalPages).toBeGreaterThan(0)
       // The whole log is loaded: turn 1's unique marker renders in the
@@ -1364,7 +1445,9 @@ describe('web e2e: long Chat scroll contract', () => {
       // page remains.
       expect(await world.page.locator('[data-conversation-scroll]')
         .getByText(HISTORY_FIXTURE.markers.user(1), { exact: false }).count()).toBe(1)
-      expect(await world.page.getByRole('button', { name: 'Load earlier', exact: true }).count()).toBe(0)
+      const history = world.page.locator('[data-chat-history]')
+      expect(await history.getAttribute('data-chat-history')).toBe('idle')
+      expect(await history.getByRole('button', { name: 'Start of conversation', exact: true }).isDisabled()).toBe(true)
       assertClean(world)
     })
   }, 180_000)
@@ -1669,9 +1752,33 @@ describe('web e2e: long Chat scroll contract', () => {
       await liveRow.click()
       await expect.poll(() => liveRow.getAttribute('aria-expanded'), { timeout: 10_000 }).toBe('true')
       await expectSameFlowTop(world.page, toolAnchor)
-      await wheelToHistoryStart(world.page)
-      await world.page.getByRole('button', { name: 'Back to bottom', exact: true }).click()
-      await expectBottom(world.page)
+      // This cycle tests disclosure retention, not pagination: keep auto-prefetch from moving its scroll-away endpoint.
+      const historyGate = Promise.withResolvers<undefined>()
+      const pendingHistory = new Set<Promise<void>>()
+      let historyHeld = false
+      const holdHistory = (route: Route): Promise<void> => {
+        historyHeld = true
+        const work = historyGate.promise.then(() => route.continue())
+        pendingHistory.add(work)
+        return work.finally(() => { pendingHistory.delete(work) })
+      }
+      await world.page.route('**/api/session/page', holdHistory, { times: 1 })
+      try {
+        const beforeRows = await loadedFlowRows(world.page)
+        await wheelToHistoryStart(world.page)
+        await expect.poll(() => historyHeld, { timeout: 10_000 }).toBe(true)
+        expect(await loadedFlowRows(world.page)).toBe(beforeRows)
+        await world.page.getByRole('button', { name: 'Back to bottom', exact: true }).click()
+        await expectBottom(world.page)
+      } finally {
+        historyGate.resolve(undefined)
+        await Promise.all([...pendingHistory])
+        await world.page.unroute('**/api/session/page', holdHistory)
+      }
+      await expect.poll(async () => {
+        const state = await world.page.locator('[data-chat-history]').getAttribute('data-chat-history')
+        return state === 'pendingConsumption' || state === 'idle'
+      }, { timeout: 10_000 }).toBe(true)
       await wheelUntilMounted(world.page, liveRowSelector, -1_100)
       const restoredRow = world.page.locator(liveRowSelector)
       await restoredRow.waitFor({ timeout: 10_000 })
@@ -1696,7 +1803,7 @@ describe('web e2e: long Chat scroll contract', () => {
       )
       await loadEarlierWithAnchor(world.page)
       await loadEarlierWithAnchor(world.page)
-      await wheelToHistoryStart(world.page)
+      await wheelToHistoryStart(world.page, { holdPaging: true })
       await wheelTranscript(world.page, 1_300)
       const sessionAnchor = await visibleFlowAnchor(world.page)
 

@@ -1028,6 +1028,72 @@ describe('Host task actions', () => {
   })
 
   it.each([
+    { name: 'a running execution', entry: { ...task, executionActive: true as const }, filter: undefined, label: en['host.pause'] },
+    { name: 'an ended task', entry: { ...task, status: 'ended' as const }, filter: en['status.ended'], label: en['host.resume'] },
+  ])('keeps the toggle natively disabled for $name', ({ entry, filter, label }) => {
+    mount([entry])
+    if (filter !== undefined) fireEvent.click(screen.getByRole('button', { name: filter }))
+    fireEvent.click(screen.getByRole('button', { name: task.title }))
+    const toggle = screen.getByRole('button', { name: label })
+    expect(toggle.hasAttribute('disabled')).toBe(true)
+    expect(toggle.hasAttribute('aria-disabled')).toBe(false)
+  })
+
+  it('holds Pause without native disabling while the Host answers', async () => {
+    const answer = Promise.withResolvers<'saved'>()
+    const h = mount([task], { hostActions: hostActions({ edit: vi.fn<HostTaskActions['edit']>(() => answer.promise) }) })
+    fireEvent.click(screen.getByRole('button', { name: task.title }))
+    const pause = screen.getByRole('button', { name: en['host.pause'] })
+    fireEvent.click(pause)
+    expect(pause.hasAttribute('disabled')).toBe(false)
+    expect(pause.getAttribute('aria-disabled')).toBe('true')
+    const fields = screen.getByRole('textbox', { name: en['detail.name'] }).closest('fieldset')!
+    expect(fields.disabled).toBe(true)
+    fireEvent.click(pause)
+    expect(h.props.hostActions.edit).toHaveBeenCalledTimes(1)
+    await act(async () => { answer.resolve('saved'); await answer.promise })
+    expect(pause.hasAttribute('aria-disabled')).toBe(false)
+    expect(fields.disabled).toBe(false)
+  })
+
+  it('holds Close without native disabling while a run is queued', async () => {
+    const answer = Promise.withResolvers<'queued'>()
+    mount([task], { hostActions: hostActions({ run: vi.fn<HostTaskActions['run']>(() => answer.promise) }) })
+    fireEvent.click(screen.getByRole('button', { name: task.title }))
+    fireEvent.click(screen.getByRole('button', { name: en['detail.more'] }))
+    fireEvent.click(screen.getByRole('menuitem', { name: en['host.run'] }))
+    const detail = screen.getByRole('complementary')
+    const close = within(detail).getByRole('button', { name: en['detail.close'] })
+    expect(close.hasAttribute('disabled')).toBe(false)
+    expect(close.getAttribute('aria-disabled')).toBe('true')
+    fireEvent.click(close)
+    expect(screen.getByRole('complementary')).toBe(detail)
+    await act(async () => { answer.resolve('queued'); await answer.promise })
+    expect(close.hasAttribute('aria-disabled')).toBe(false)
+  })
+
+  it('holds Close and Discard without native disabling while the Host answers', async () => {
+    const answer = Promise.withResolvers<'saved'>()
+    const edit = vi.fn<HostTaskActions['edit']>()
+      .mockResolvedValueOnce({ failed: 'host.saveError' }).mockImplementationOnce(() => answer.promise)
+    mount([task], { hostActions: hostActions({ edit }) })
+    fireEvent.click(screen.getByRole('button', { name: task.title }))
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: en['host.pause'] })) })
+    fireEvent.click(screen.getByRole('button', { name: en['host.pause'] }))
+    const detail = screen.getByRole('complementary')
+    for (const label of [en['detail.close'], en['rule.cancel']]) {
+      const button = within(detail).getByRole('button', { name: label })
+      expect(button.hasAttribute('disabled')).toBe(false)
+      expect(button.getAttribute('aria-disabled')).toBe('true')
+      fireEvent.click(button)
+    }
+    expect(screen.getByRole('complementary')).toBe(detail)
+    expect(screen.getByRole('alert').textContent).toBe(en['host.saveError'])
+    await act(async () => { answer.resolve('saved'); await answer.promise })
+    expect(within(detail).getByRole('button', { name: en['detail.close'] }).hasAttribute('aria-disabled')).toBe(false)
+  })
+
+  it.each([
     { name: 'queues a run now', outcome: 'queued' as const, alert: null, notice: null },
     { name: 'states a refused run as a wait instead of an error', outcome: { failed: 'host.executionPending' as const },
       alert: null, notice: en['host.executionPending'] },

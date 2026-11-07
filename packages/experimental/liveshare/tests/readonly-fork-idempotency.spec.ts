@@ -38,7 +38,7 @@ afterEach(() => {
 
 const share: ForkShareState = {
   shareId: 'share-1',
-  sessionId: 'session-shared',
+  sessionIds: ['session-shared'],
   allowsFork: true,
   viewerAdmitted: true,
   stopped: false,
@@ -102,7 +102,7 @@ function service(options: {
   )
   const read = createViewerReadService({
     connection: spawned.owner.connection,
-    sharedSessionId: () => 'session-shared',
+    sharedSessionIds: () => ['session-shared'],
     forkStateOf: options.state ?? (() => share),
     forks,
     // A host that installs the child's limit by default, as the share host does; a test overrides it to

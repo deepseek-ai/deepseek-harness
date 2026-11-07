@@ -5,7 +5,7 @@ import { Profiler } from 'react'
 import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ForgeDiffFile } from '../src/types.ts'
-import { formatReviewComment, selectReviewLines, reviewMatches, type ReviewSelection } from '../src/client/review.ts'
+import { formatReviewComment, reviewQuoteSummary, selectReviewLines, reviewMatches, type ReviewSelection } from '../src/client/review.ts'
 import { ReviewQueue } from '../src/client/review-queue.ts'
 import { ReviewThread } from '../src/client/ReviewThread.tsx'
 import { SubmitReview } from '../src/client/SubmitReview.tsx'
@@ -108,6 +108,11 @@ describe('review references', () => {
       .toContain('Lines: 4\nSource: Local (staged)\nDiff hunk:\n````diff\n```\n````')
     expect(formatReviewComment({ source: { kind: 'local', scope: 'branch', base: 'origin/release/2.4', baseRef: 'refs/remotes/origin/release/2.4' }, comment: selection.comment }, 3))
       .toContain('Lines: 3-4\nSource: Local (branch)\nBase: origin/release/2.4\nDiff hunk:\n')
+  })
+  it('summarizes a composer quote by file name, side and lines, and comment', () => {
+    expect(reviewQuoteSummary({ ...selection.comment, path: 'src/client/a.ts' }))
+      .toEqual({ label: 'a.ts R3–4', title: 'src/client/a.ts', detail: 'R3–4', body: '为什么新增这两行？' })
+    expect(reviewQuoteSummary({ ...selection.comment, side: 'L', endLine: 3 })).toEqual({ label: 'a.ts L3', title: 'a.ts', detail: 'L3', body: '为什么新增这两行？' })
   })
   it('adds a quote without posting or closing when the input refuses it', () => {
     const addToInput = vi.fn<(selection: ReviewSelection) => boolean>().mockReturnValue(false)

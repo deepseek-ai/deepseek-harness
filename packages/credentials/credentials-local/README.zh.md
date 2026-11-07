@@ -60,11 +60,11 @@ declare const ctx: Context
 
 const ref = credentialRef('DEEPSEEK_API_KEY')
 await ctx.credentials.set(ref, 'sk-…')          // save
-await ctx.credentials.describe(ref)             // { configured, source?, writable } — never the value
+await ctx.credentials.describe(ref)             // { configured, source?, writable, masked? } — never the value
 await ctx.credentials.unset(ref)                // remove
 ```
 
-你保存的密钥会被下一个按名引用它的请求使用；`describe` 报告它是否已设置、来自哪里、能否写入——绝不返回值本身。记录也持久化在同一文件中：插件按 `<owner>/<id>` 寻址一条记录，并用 seam 的记录操作（`readRecord`、`describeRecord`、`listRecords`、`modifyRecord`、`deleteRecord`）管理它。
+你保存的密钥会被下一个按名引用它的请求使用；`describe` 报告它是否已设置、来自哪里、能否写入——绝不返回值本身。文件中已保存的值还会报告 `masked` 脱敏预览；环境后备值不包含此字段。预览在第一个连字符或下划线之后划分提供商标识；没有分隔符时不划分标识。只有密钥部分至少保留八个隐藏码点时，才显示标识及密钥的前五、后四个码点；否则遮住整串，包括标识。计数和切片使用 `Array.from` 的 Unicode 码点，组合序列不按单个字素处理。标识会有意显示，不能仅因它位于分隔符前就认定其不含机密。记录也持久化在同一文件中：插件按 `<owner>/<id>` 寻址一条记录，并用 seam 的记录操作（`readRecord`、`describeRecord`、`listRecords`、`modifyRecord`、`deleteRecord`）管理它。
 
 ### 密钥从哪里来
 

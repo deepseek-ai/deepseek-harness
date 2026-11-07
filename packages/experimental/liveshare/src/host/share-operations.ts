@@ -9,6 +9,7 @@
  */
 
 import type {
+  AddShareSessionsRequest,
   CreateShareRequest,
   CreatedShare,
   OwnerIdentityRequest,
@@ -24,6 +25,7 @@ import type {
   ShareCapabilities,
   ShareCapabilityOffers,
   SharePermissions,
+  ShareSessions,
   StopShareRequest,
   StopShareResult,
   TestPublishRequest,
@@ -43,6 +45,13 @@ export interface OwnerShareOperations {
    * @returns The created share's link and stored values.
    */
   create(request: CreateShareRequest): Promise<CreatedShare>
+
+  /**
+   * Add source Sessions to one share this host publishes.
+   * @param request - Share and the Sessions to add.
+   * @returns The source Sessions the share now serves.
+   */
+  addSessions(request: AddShareSessionsRequest): Promise<ShareSessions>
 
   /**
    * Refresh titles and Relay authority, then list this host's shares.

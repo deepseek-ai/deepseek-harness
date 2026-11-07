@@ -20,7 +20,7 @@ import type { PanelSnapshot } from '../src/client/source.ts'
 import css from '../src/client/ChangesTab.module.css'
 import baseCss from '../src/client/BaseMenu.module.css'
 import type {
-  ForgeBaseBranch, ForgeBaseBranches, ForgeChangeRequestDiff, ForgeDiffFile, ForgeLocalDiff, ForgePanelState,
+  ForgeBaseBranch, ForgeBaseBranches, ForgeChangeRequestDiff, ForgeDiffFile, ForgeLocalDiff, ForgePanelChangeRequest, ForgePanelState,
 } from '../src/types.ts'
 import { entry, ready, snapshot } from './client-fixtures.client.ts'
 
@@ -124,6 +124,7 @@ const REFUSED = {
   tooLarge: { ok: false, error: new RemoteError('forgePanel/diff-too-large', 'too large', {}) },
   filterConfig: { ok: false, error: new RemoteError('forgePanel/filter-config-failed', 'filter configuration unavailable', {}) },
   gone: { ok: false, error: new RemoteError('forgePanel/diff-failed', 'gone', {}) },
+  staleHead: { ok: false, error: new RemoteError('forgePanel/stale-head', 'the head moved', {}) },
   hostRefused: { ok: false, error: new RemoteError('forgePanel/diff-failed', 'diff too large', {}) },
   failed: { ok: false, error: new RemoteError('gateway/bad-request', 'failed', {}) },
 } satisfies Record<string, RemoteResult<never>>
@@ -1092,6 +1093,64 @@ describe('ChangesTab change requests', () => {
     act(() => { m.panel.set({ state: ready({ changeRequests: [entry(7, snapshot(7, { headSha: 'b'.repeat(40) }))] }), disconnected: false }) })
     await settle()
     expect(m.faces.changeRequestDiff).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps loading after the head moved past its status and reads again once a later status arrives', async () => {
+    const m = mount({ source, setup: (faces) => { faces.changeRequestDiff.mockResolvedValueOnce(REFUSED.staleHead) } })
+    await settle()
+    expect(m.faces.changeRequestDiff).toHaveBeenCalledOnce()
+    expect(m.view.queryByRole('status')).toBeNull()
+    expect(m.paths()).toEqual([])
+
+    // A later status with the same head reads again, as when the host's answers disagreed for a moment.
+    const later = (fetchedAt: number, headSha: string) => {
+      const polled = entry(7, snapshot(7, { headSha }))
+      return ready({ changeRequests: [{ ...polled, update: { ...polled.update!, fetchedAt } }] })
+    }
+    m.faces.changeRequestDiff.mockResolvedValueOnce(REFUSED.staleHead)
+    act(() => { m.panel.set({ state: later(2, HEAD), disconnected: false }) })
+    await settle()
+    expect(m.faces.changeRequestDiff).toHaveBeenCalledTimes(2)
+    expect(m.view.queryByRole('status')).toBeNull()
+
+    act(() => { m.panel.set({ state: later(3, 'b'.repeat(40)), disconnected: false }) })
+    await settle()
+    expect(m.faces.changeRequestDiff).toHaveBeenCalledTimes(3)
+    expect(m.paths()).toEqual(['docs/gone.txt', 'docs/notes.txt', 'src/app.ts'])
+  })
+
+  it.each([
+    ['a later poll with the same head', (polled: ForgePanelChangeRequest) => polled],
+    ['a failed poll that keeps the earlier status', (polled: ForgePanelChangeRequest) => ({
+      ...polled, update: { key: polled.update!.key, fetchedAt: 2, failure: { code: 'unavailable', message: 'down' } },
+    } as const)],
+  ] as const)('reads again at once when %s arrived while a read the host refused as stale was in flight', async (_label, arrive) => {
+    const refused = Promise.withResolvers<typeof REFUSED.staleHead>()
+    const m = mount({ source, setup: (faces) => { faces.changeRequestDiff.mockReturnValueOnce(refused.promise) } })
+    await settle()
+    expect(m.faces.changeRequestDiff).toHaveBeenCalledOnce()
+
+    const polled = entry(7, snapshot(7))
+    const later = arrive({ ...polled, update: { ...polled.update!, fetchedAt: 2 } })
+    act(() => { m.panel.set({ state: ready({ changeRequests: [later] }), disconnected: false }) })
+    await settle()
+    expect(m.faces.changeRequestDiff).toHaveBeenCalledOnce()
+    refused.resolve(REFUSED.staleHead)
+    await settle()
+
+    expect(m.faces.changeRequestDiff).toHaveBeenCalledTimes(2)
+    expect(m.paths()).toEqual(['docs/gone.txt', 'docs/notes.txt', 'src/app.ts'])
+  })
+
+  it('keeps shown changes while a read waits for a later status, turning the refresh glyph', async () => {
+    const m = mount({ source })
+    await settle()
+    m.faces.changeRequestDiff.mockResolvedValueOnce(REFUSED.staleHead)
+    fireEvent.click(m.view.getByRole('button', { name: en['diff.refresh'] }))
+    await settle()
+    expect(m.paths()).toEqual(['docs/gone.txt', 'docs/notes.txt', 'src/app.ts'])
+    expect(m.view.queryByText(en['diff.error'])).toBeNull()
+    expect(m.view.getByRole('button', { name: en['diff.refresh'] }).querySelector('[data-turning]')).not.toBeNull()
   })
 
   it.each([

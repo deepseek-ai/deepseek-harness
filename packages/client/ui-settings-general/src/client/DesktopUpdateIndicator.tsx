@@ -73,14 +73,15 @@ export function DesktopUpdateIndicator({ wide, hidden, t, view, onOpen }: {
   const label = failed ? retryLabel : copy.label
   const error = failed || state?.phase === 'error' || state?.configurationError !== undefined
   const busy = opening || (state !== undefined && state.configurationError === undefined && BUSY_PHASES.has(state.phase))
+  const disabled = opening || (busy && state?.phase !== 'downloading')
   return <Tooltip label={failed ? retryLabel : copy.detail} side="top">
     <button type="button" className={css.indicator}
-      aria-label={label} aria-disabled={busy} onClick={() => { if (!busy) onOpen() }}>
+      aria-label={label} aria-disabled={disabled} onClick={() => { if (!disabled) onOpen() }}>
       <span className={css.icon} aria-hidden="true">
         {error ? <span className={css.errorDot} />
           : busy ? <IconLoadingOutlineRegular className={css.spinner} size={14} /> : <IconDownloadOutlineRegular size={14} />}
       </span>
-      <span>{label}</span>
+      <span className={!error && state?.phase === 'downloading' ? css.progress : undefined}>{label}</span>
     </button>
   </Tooltip>
 }

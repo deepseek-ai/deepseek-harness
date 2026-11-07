@@ -561,14 +561,18 @@ export class PluginManager extends TypertRemoteService {
         }
         version = info.version
         const listedByDefault = info.dsh?.bundle?.listedByDefault
-        if (listedByDefault !== undefined) {
-          if (typeof listedByDefault !== 'boolean') throw new Error('dsh.bundle.listedByDefault must be a boolean')
-          listing = { listedByDefault }
-        }
+        // The launcher ignores this display field, so an invalid value is a metadata diagnostic, not a load error.
+        const listingDiagnostic = listedByDefault === undefined || typeof listedByDefault === 'boolean'
+          ? undefined
+          : 'dsh.bundle.listedByDefault must be a boolean'
+        if (typeof listedByDefault === 'boolean') listing = { listedByDefault }
         const compatibility = evaluatePluginCompatibility(info, exemptions)
         if (compatibility !== undefined && !compatibility.exempted) throw new ManagementFailure('incompatible-version', [incompatiblePlugin(compatibility)])
         const dir = resolveBundleDir('dsh', name, this.profile.installAnchor, this.profile.dir)
-        const meta = offered?.meta ?? readPluginMeta(info.name ?? name, pathToFileURL(join(dir, 'package.json')).href)
+        const read: BundleInfo['meta'] = offered?.meta ?? readPluginMeta(info.name ?? name, pathToFileURL(join(dir, 'package.json')).href)
+        const meta = listingDiagnostic === undefined
+          ? read
+          : { ...read, error: read?.error === undefined ? listingDiagnostic : `${read.error}; ${listingDiagnostic}` }
         let platformError: ManagementError | undefined
         try { assertBundlePlatform(info.dsh?.bundle?.platforms, process.platform) }
         catch (error) { platformError = managementError(error) }

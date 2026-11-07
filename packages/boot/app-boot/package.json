@@ -42,7 +42,8 @@
     "ajv": "^8.20.0",
     "node-addon-require-builtin": "^0.1.9",
     "resolve.exports": "^2.0.3",
-    "semver": "^7.8.5"
+    "semver": "^7.8.5",
+    "@deepseek-ai/dsh-native-command": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis-plugin-group": "workspace:~",

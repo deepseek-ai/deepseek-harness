@@ -14,7 +14,11 @@ const click = { ...pointer, clickCount: z.union([z.literal(1), z.literal(2)]).op
   holdMs: z.number().int().nonnegative().optional()
     .describe('Milliseconds between each mouse press and release; omitted for an ordinary click.') }
 const window = { ...app, windowId: id }
-const snapshot = { ...app, snapshotId: z.string().min(1), elementIndex: z.number().int().nonnegative() }
+const jsonValue = z.json()
+/** Provider-issued element reference from an accessibility observation. */
+export const elementId = z.string().min(1)
+  .describe('Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot.')
+const snapshot = { ...app, windowId: id.optional(), snapshotId: z.string().min(1), elementId }
 const coordinate = { ...window, snapshotId: z.string().min(1).optional(), x: point, y: point }
 const absoluteCoordinate = { ...coordinate, relative: z.literal(false).optional().describe('Omitted or false uses pixels in the latest screenshot returned by this tool.') }
 const relativeCoordinate = { ...coordinate, relative: z.literal(true).describe('Use integer thousandths of the window width and height, from 0 to 999.'), x: relativePoint, y: relativePoint }
@@ -40,9 +44,12 @@ export const Request = z.discriminatedUnion('method', [
   operation('listWindows', app),
   operation('getState', { ...app, windowId: id.optional(),
     includeMenus: z.boolean().optional().describe('Expand menu contents; omitted or false shows menu-bar entries only.'),
-    details: z.boolean().optional().describe('Include identifiers, global-point bounds and complete action names.'),
+    details: z.boolean().optional().describe('Include identifiers, global native bounds and complete action names.'),
   }),
-  z.object({ method: z.literal('hover'), params: z.union([
+  operation('listActions', snapshot),
+  operation('performAction', { ...snapshot, action: z.string().min(1), argument: jsonValue.optional() }),
+  operation('invoke', snapshot),
+  z.object({ method: z.literal('mouseMove'), params: z.union([
     z.object(snapshot).strict(), z.object(absoluteCoordinate).strict(), z.object(relativeCoordinate).strict(),
   ]) }).strict(),
   z.object({ method: z.literal('click'), params: z.union([
@@ -50,13 +57,13 @@ export const Request = z.discriminatedUnion('method', [
     z.object({ ...absoluteCoordinate, ...click }).strict(),
     z.object({ ...relativeCoordinate, ...click }).strict(),
   ]) }).strict(),
-  operation('setValue', { ...snapshot, value: z.string() }),
+  operation('setValue', { ...snapshot, value: jsonValue }),
   operation('selectText', { ...snapshot, text: z.string().min(1), prefix: z.string().optional(), suffix: z.string().optional(),
     selectionType: z.enum(['text', 'cursor_before', 'cursor_after']).optional() }),
-  operation('performSecondaryAction', { ...snapshot, action: z.string().min(1) }),
-  operation('typeText', { ...app, text: z.string() }),
-  operation('paste', { ...app, text: z.string(), format: z.enum(['text', 'html']).optional() }),
-  operation('pressKey', { ...app, key: z.string().min(1), modifiers: z.array(z.enum(['command', 'control', 'option', 'shift', 'fn'])).optional() }),
+  operation('typeText', { ...app, windowId: id.optional(), text: z.string() }),
+  operation('paste', { ...app, windowId: id.optional(), text: z.string(), format: z.enum(['text', 'html']).optional() }),
+  operation('pressKey', { ...app, windowId: id.optional(), key: z.string().min(1), modifiers: z.array(z.string()).optional() }),
+  operation('sendKeyEvent', { ...app, windowId: id.optional(), key: z.string().min(1), direction: z.enum(['down', 'up']) }),
   z.object({ method: z.literal('scroll'), params: z.union([
     z.object({ ...absoluteCoordinate,
       deltaLinesX: z.number().int().min(-10).max(10), deltaLinesY: z.number().int().min(-10).max(10) }).strict(),
@@ -89,32 +96,36 @@ export const NativeOnlyOperations = [
   operation('openPermissionSettings', { permission: z.enum(['accessibility', 'screenRecording']) }),
 ] as const
 
-/** Process identity returned only after a successful app selection. */
+/** Application selection returned only after a successful app selection. */
 export const AppResult = z.object({
-  appHandle: z.string().min(1).transform(value => value as CuaAppHandle), pid, name: z.string(), bundleId: z.string().optional(),
+  appHandle: z.string().min(1).transform(value => value as CuaAppHandle),
+  name: z.string(), bundleId: z.string().optional(), running: z.boolean(),
 })
 /** Running application records from the helper. */
 export const AppsResult = z.array(z.object({ pid, name: z.string(), bundleId: z.string().optional() }))
 /** Installed application matches keep running and stopped records distinct. */
 export const FoundAppsResult = z.array(z.intersection(z.object({ id: z.string().min(1), displayName: z.string(), path: z.string().min(1) }),
   z.discriminatedUnion('isRunning', [z.object({ isRunning: z.literal(true), pid }), z.object({ isRunning: z.literal(false) })])))
-/** Current windows and their global point bounds. */
+/** Current windows and their global native bounds. */
 export const WindowsResult = z.array(z.object({
-  windowId: id, pid, appName: z.string(), title: z.string(), bounds,
+  windowId: id, appName: z.string(), title: z.string(), bounds,
   isOnScreen: z.boolean(), onCurrentSpace: z.boolean().nullable(),
 }))
-/** Observed state with window and process identity for stale-target rejection. */
+/** Observed state for the selected application or window. */
 export const StateResult = z.object({
   appHandle: z.string().min(1).transform(value => value as CuaAppHandle),
-  pid, windowId: id.nullable(),
+  windowId: id.nullable(),
   focusedWindowId: id.nullable().optional(),
   snapshotId: z.string().min(1).transform(value => value as CuaSnapshotId),
   tree: z.string(), windows: WindowsResult, truncated: z.boolean(),
 })
-/** Original native PNG and window-point geometry before Host image preparation. */
+/** Provider-defined action names for one element, including attribute-setting operations; an element may advertise none. */
+export const ActionNamesResult = z.array(z.string())
+/** Original native PNG and platform window geometry before Host image preparation. */
 export const NativeScreenshotResult = z.object({
   mimeType: z.literal('image/png'), data: imageBase64, pixelWidth: id, pixelHeight: id, windowId: id,
-  bounds: bounds.extend({ width: z.number().positive(), height: z.number().positive() }), coordinateSpace: z.literal('window-points'),
+  bounds: bounds.extend({ width: z.number().positive(), height: z.number().positive() }),
+  coordinateSpace: z.enum(['window-points', 'window-pixels']),
 })
 /** Encoded model-request image; default input coordinates use these pixel dimensions. */
 export const ScreenshotResult = NativeScreenshotResult.extend({
@@ -123,11 +134,20 @@ export const ScreenshotResult = NativeScreenshotResult.extend({
 /** Permissions are reported without opening system permission dialogs. */
 export const CapabilitiesResult = z.object({
   platform: z.string(), permissions: z.object({ accessibility: z.boolean(), screenRecording: z.boolean() }),
+  /** Whether the provider supports application-level accessibility observations. */
+  appLevelAccessibility: z.boolean(),
+  /** Scopes that support keyboard input. */
+  keyboard: z.array(z.enum(['app', 'window'])),
   sessionLocked: z.boolean().nullable(),
   methods: z.array(z.string()), coordinateSpace: z.literal('screenshot-pixels'), browser: z.literal(false),
 })
-/** An action has reached native dispatch; application state was not verified. */
-export const ActionResult = z.object({ dispatched: z.literal(true), verified: z.literal(false) })
+/** Reports whether the provider successfully executed the requested operation. */
+export const ActionResult = z.object({
+  /** True when the provider successfully executed the operation; false when no applicable operation was found. */
+  dispatched: z.boolean(),
+  /** Sampled foreground change; omitted when the provider does not sample this action, null when a requested sample was unavailable. */
+  foregroundChanged: z.boolean().nullable().optional(),
+})
 /** Hover reports whether the selected route moved the user's system pointer. */
 export const HoverResult = ActionResult.extend({ hoverRoute: z.enum(['accessibility', 'system-pointer']), systemPointerMoved: z.boolean() })
 /** Background restoration dispatch and sampled foreground changes; null means the observation was unavailable. */

@@ -46,19 +46,24 @@ def stop_application(pid):
     raise AssertionError("fixture did not exit after SIGTERM")
 
 
-def check_click_holds(helper, owner, window, point, state_file):
-    observed = helper.call("getState", {**owner, "maxElements": 2000, "maxDepth": 25})
+def check_clicks(helper, window, point, state_file):
+    observed = helper.call("getState", {**window, "maxElements": 2000, "maxDepth": 25})
     pad = next(item for item in observed["elements"] if item["role"] == "AXButton" and item["title"] == "Input receiver")
-    target = {**owner, "snapshotId": observed["snapshotId"], "elementIndex": pad["index"]}
+    target = {**window, "snapshotId": observed["snapshotId"], "elementId": pad["elementId"]}
     state = json.loads(state_file.read_text())
-    presses = state["axPresses"]
-    helper.call("click", target)
-    state = wait_for_state(state_file, lambda value: value["axPresses"] == presses + 1)
     count = len(state["events"])
+    presses, menus = state["axPresses"], state["axMenus"]
+    assert {"AXPress", "AXShowMenu"}.issubset(helper.call("listActions", target))
+    helper.call("invoke", target)
+    state = wait_for_state(state_file, lambda value: value["axPresses"] == presses + 1)
+    helper.call("performAction", {**target, "action": "AXShowMenu"})
+    state = wait_for_state(state_file, lambda value: value["axMenus"] == menus + 1)
+    assert len(state["events"]) == count, state
     for invalid in [-1, 1.5, 5001, "800", None]:
         helper.call("click", {**target, "holdMs": invalid}, "INVALID_ARGUMENT")
-    assert json.loads(state_file.read_text())["axPresses"] == presses + 1
-    for params, types in [({**target, "holdMs": 0}, [1, 2]),
+    for params, types in [(target, [1, 2]), ({**target, "mouseButton": "right"}, [3, 4]),
+                          ({**window, **point}, [1, 2]),
+                          ({**target, "holdMs": 0}, [1, 2]),
                           ({**target, "holdMs": 150}, [1, 2]),
                           ({**window, **point, "holdMs": 150, "mouseButton": "right"}, [3, 4]),
                           ({**window, **point, "holdMs": 150, "mouseButton": "middle"}, [25, 26]),
@@ -68,8 +73,8 @@ def check_click_holds(helper, owner, window, point, state_file):
         events = state["events"][count:]
         assert [event["type"] for event in events] == types, events
         for index in range(0, len(events), 2):
-            assert events[index + 1]["timestamp"] - events[index]["timestamp"] >= params["holdMs"] / 1000, events
-        assert state["axPresses"] == presses + 1, state
+            assert events[index + 1]["timestamp"] - events[index]["timestamp"] >= params.get("holdMs", 0) / 1000, events
+        assert (state["axPresses"], state["axMenus"]) == (presses + 1, menus + 1), state
         count += len(types)
     # Production cancellation travels directly over the socket; the diagnostic stdio proxy exchanges whole requests.
     key = hashlib.sha256(Path(helper.process.args[0]).read_bytes()).hexdigest()
@@ -77,7 +82,7 @@ def check_click_holds(helper, owner, window, point, state_file):
     for ending in ["cancel", "timeout", "disconnect"]:
         connection = Connection(socket_path, key, maxClickHoldMs=7000, timeoutMs=2000 if ending == "timeout" else 30000)
         try:
-            app = connection.call("getApp", {"selector": str(observed["pid"])})
+            app = connection.call("getApp", {"selector": str(state["pid"])})
             connection.call("getState", {"appHandle": app["appHandle"], "windowId": window["windowId"],
                                          "maxElements": 2000, "maxDepth": 25})
             params = {**window, **point, "appHandle": app["appHandle"], "holdMs": 6000}
@@ -104,7 +109,7 @@ def check_click_holds(helper, owner, window, point, state_file):
             connection.close()
     connection = Connection(socket_path, key, maxClickHoldMs=0)
     try:
-        app = connection.call("getApp", {"selector": str(observed["pid"])})
+        app = connection.call("getApp", {"selector": str(state["pid"])})
         connection.call("getState", {"appHandle": app["appHandle"], "windowId": window["windowId"],
                                      "maxElements": 2000, "maxDepth": 25})
         count = len(state["events"])
@@ -144,16 +149,15 @@ def main():
             call = helper.call
             capabilities = call("getCapabilities", {})
             assert capabilities["permissions"] == {"accessibility": True, "screenRecording": True}, capabilities
-            assert "launchApp" not in capabilities["methods"], capabilities
             matches = call("findApps", {"query": str(application), "maxAppMatches": 20})
             assert len(matches) == 1 and matches[0]["isRunning"] is False, matches
             pending = call("getApp", {"selector": str(application)})
-            assert pending["pid"] is None and not state_file.exists(), pending
+            assert pending["running"] is False and not state_file.exists(), pending
             owner = {"appHandle": pending["appHandle"]}
             # The Host consent barrier is separately exercised by provider-lifecycle.spec.ts.
             app = call("launchApp", owner)
-            pid = app["pid"]
-            wait_for_state(state_file, lambda value: value["pid"] == pid and value["windowId"] > 0)
+            assert app["running"] is True, app
+            pid = wait_for_state(state_file, lambda value: value["windowId"] > 0)["pid"]
             if not args.click_only:
                 call("activate", owner)
                 state = wait_for_state(state_file, lambda value: value["pid"] == pid and value["active"] and value["keyWindow"])
@@ -161,7 +165,7 @@ def main():
                 observed = call("getState", {**owner, "maxElements": 2000, "maxDepth": 25})
                 field = next(item for item in observed["elements"] if item["role"] == "AXTextArea")
                 assert "valueWritable=true" in observed["tree"] and "selectionWritable=true" in observed["tree"], observed["tree"]
-                target = {**owner, "snapshotId": observed["snapshotId"], "elementIndex": field["index"]}
+                target = {**owner, "snapshotId": observed["snapshotId"], "elementId": field["elementId"]}
                 call("selectText", {**target, "text": "target"}, "AMBIGUOUS_TEXT")
                 call("selectText", {**target, "text": "target", "prefix": "第二😀 "})
                 selected = wait_for_state(state_file, lambda value: value["selection"] == [17, 6])
@@ -171,7 +175,7 @@ def main():
                 assert state["pasteAttempts"] == [True], state
                 observed = call("getState", {**owner, "maxElements": 2000, "maxDepth": 25})
                 field = next(item for item in observed["elements"] if item["role"] == "AXTextArea")
-                target = {**owner, "snapshotId": observed["snapshotId"], "elementIndex": field["index"]}
+                target = {**owner, "snapshotId": observed["snapshotId"], "elementId": field["elementId"]}
                 call("selectText", {**target, "text": state["text"]})
                 html = '<h1>Heading</h1><p><b>Bold</b> and <a href="https://example.com/">link</a></p>'
                 call("paste", {**owner, "text": html, "format": "html", "maxClipboardBytes": 33554432, "pasteReadTimeoutMs": 1000, "maxElements": 2000, "maxDepth": 25})
@@ -190,7 +194,7 @@ def main():
                 call("pressKey", {**owner, "key": "KP_0"})
                 call("pressKey", {**owner, "key": "KP_Enter"})
                 state = wait_for_state(state_file, lambda value: {82, 76}.issubset({event.get("keyCode") for event in value["events"]}))
-            state = check_click_holds(helper, owner, window, point, state_file)
+            state = check_clicks(helper, window, point, state_file)
             if args.artifacts:
                 args.artifacts.mkdir(parents=True, exist_ok=True)
                 shot = call("screenshot", window)

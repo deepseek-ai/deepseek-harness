@@ -14,13 +14,13 @@ import tempfile
 import uuid
 
 from capabilities_e2e import stop_application, wait_for_state
-from native_test_support import BINARY, ROOT, NativeHelper, stop
+from native_test_support import ROOT, NativeHelper, stop
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--helper", type=Path, default=BINARY)
-    parser.add_argument("--desktop", action="store_true", help="Read, click and capture owned fixture windows; requires existing system grants")
+    parser.add_argument("--helper", type=Path)
+    parser.add_argument("--desktop", action="store_true", help="Read owned fixture windows, invoke their buttons and capture them; requires existing system grants")
     args = parser.parse_args()
     transcript = []
     with tempfile.TemporaryDirectory(prefix="dsh-cua-consent-") as temporary, ExitStack() as cleanup:
@@ -36,15 +36,15 @@ def main():
             assert helper.call("getCapabilities", {})["permissions"] == {"accessibility": True, "screenRecording": True}
 
         checked_windows = 0
-        def check_window(app, state_path):
+        def check_window(app, state_path, pid):
             nonlocal checked_windows
             if not args.desktop:
                 return
-            state = wait_for_state(state_path, lambda value: value["pid"] == app["pid"] and value["windowId"] > 0)
+            state = wait_for_state(state_path, lambda value: value["pid"] == pid and value["windowId"] > 0)
             owner = {"appHandle": app["appHandle"], "windowId": state["windowId"]}
             observed = helper.call("getState", {**owner, "maxElements": 2000, "maxDepth": 25})
             pad = next(item for item in observed["elements"] if item["role"] == "AXButton" and item["title"] == "Input receiver")
-            helper.call("click", {"appHandle": app["appHandle"], "snapshotId": observed["snapshotId"], "elementIndex": pad["index"]})
+            helper.call("invoke", {**owner, "snapshotId": observed["snapshotId"], "elementId": pad["elementId"]})
             wait_for_state(state_path, lambda value: value["axPresses"] == state["axPresses"] + 1)
             captured = helper.call("screenshot", owner)
             assert base64.b64decode(captured["data"], validate=True).startswith(b"\x89PNG\r\n\x1a\n")
@@ -100,11 +100,11 @@ def main():
         for name, bundle_id in [("Version One", identifier), ("Version Two", identifier), ("Other", identifier + ".other"), ("No identifier", None), ("Mixed case", mixed_case_identifier)]:
             app, executable, state, info = fixture(name, bundle_id)
             pending = helper.call("getApp", {"selector": str(app)})
-            assert pending["pid"] is None and not state.exists(), pending
+            assert pending["running"] is False and not state.exists(), pending
             assert pending["authorization"]["persistable"] is True, pending
             launched = helper.call("launchApp", {"appHandle": pending["appHandle"]})
-            pid = launched["pid"]
-            wait_for_state(state, lambda value: value["pid"] == pid)
+            assert launched["running"] is True, launched
+            pid = wait_for_state(state, lambda value: value["pid"] > 0)["pid"]
             running = helper.call("getApp", {"selector": str(pid)})
             assert running["authorization"]["id"] == pending["authorization"]["id"], (pending, running)
             assert running["authorization"]["persistable"] is True, running
@@ -116,7 +116,7 @@ def main():
                 authorization = running["authorization"]
                 expected_path = hashlib.sha256(("macos:executable-path:" + authorization["executablePath"]).encode()).hexdigest()
                 assert authorization["id"] == expected_path, authorization
-            check_window(running, state)
+            check_window(running, state, pid)
         assert identities[0] == identities[1] == expected, identities
         assert identities[2] != expected, identities
         assert identities[4] == hashlib.sha256(("macos:bundle-id:" + mixed_case_identifier).encode()).hexdigest(), identities
@@ -128,7 +128,7 @@ def main():
         wait_for_state(state, lambda value: value["pid"] == process.pid and value["windowId"] > 0)
         running = helper.call("getApp", {"selector": str(process.pid)})
         assert running["authorization"]["id"] == pending["authorization"]["id"] == expected, running["authorization"]
-        check_window(running, state)
+        check_window(running, state, process.pid)
 
         standalone_ids = []
         for index in range(2):
@@ -142,7 +142,7 @@ def main():
                 assert running.get("bundleId") is None and authorization["persistable"] is True, authorization
                 assert Path(authorization["executablePath"]).samefile(binary), authorization
                 standalone_ids.append(authorization["id"])
-                check_window(running, state)
+                check_window(running, state, process.pid)
             finally:
                 stop(process)
         assert standalone_ids[0] == standalone_ids[1], standalone_ids
@@ -154,8 +154,8 @@ def main():
             app, executable, state, _ = fixture(name, bundle_id)
             pending = helper.call("getApp", {"selector": str(app)})
             launched = helper.call("launchApp", {"appHandle": pending["appHandle"]})
-            pid = launched["pid"]
-            wait_for_state(state, lambda value: value["pid"] == pid and value["windowId"] > 0)
+            assert launched["running"] is True, launched
+            pid = wait_for_state(state, lambda value: value["windowId"] > 0)["pid"]
             executable.unlink()
             buffer = ctypes.create_string_buffer(4096)
             ctypes.set_errno(0)
@@ -184,7 +184,7 @@ def main():
             os.kill(pid, 0)
             print(f"Deleted executable: bundle_id={bundle_id is not None}, proc_pidpath_bytes={copied}, errno={path_error}")
         print("PASS: changed bundles cannot launch; cold/running and direct-bundle identities agree; copies share consent; other IDs stay separate; missing IDs and standalone GUIs use persistent paths across restarts"
-              + (f"; {checked_windows} GUI instances expose controls, receive an AX click and produce a PNG" if args.desktop else ""))
+              + (f"; {checked_windows} GUI instances expose controls, receive a default AX action and produce a PNG" if args.desktop else ""))
 
 
 if __name__ == "__main__":

@@ -6,5 +6,7 @@ recording: authored
 header:
   class: session-resume
   pin: true
+  systemPromptSource: session/model-switch-notice
+  toolSchemasSource: session/agent-instructions
   changes: 1
   promptChanges: 1
