@@ -12,19 +12,19 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import { createUserMessage, HarnessError } from '@deepseek-ai/dsh-llm'
 
 import type { ContentBlock, ToolCallId, ToolSchema } from '@deepseek-ai/dsh-llm'
-import type { PtcBindingFunction, PtcRunResult, PtcRunSandbox, PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
+import type { PtcBindingFunction, PtcRunFailure, PtcRunResult, PtcRunSandbox, PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
 import { approveEscalation, ESCALATION_TARGETS, validateEscalationArgs } from '@deepseek-ai/dsh-sandbox'
 import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
 import type {} from '@deepseek-ai/dsh-user-approval'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
-import { deepFreeze, snapshotJsonValue, type JsonValue } from '@deepseek-ai/dsh-util-values'
+import { assertNever, deepFreeze, snapshotJsonValue, type JsonValue } from '@deepseek-ai/dsh-util-values'
 import { defineTool, parameterSchemaSpecToJsonSchema, RUN_CODE_NAME, TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import type { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
 import { toolErrorMessage } from '@deepseek-ai/dsh-tools/pipeline'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import type { PtcCalls } from './ptc-calls.ts'
-import { CodeRunFailedError, ToolCallLimitExceededError } from './errors.ts'
+import { CodeRunFailedError, ToolCallLimitExceededError, type CodeRunFailureCode } from './errors.ts'
 import type { Config } from './config.ts'
 import type { ToolDefinition, ToolExecutionResult, ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type {} from './types.ts'
@@ -118,6 +118,31 @@ function controlParameters(runtime: PtcRuntime) {
       sandbox_permissions: RUN_CODE_CONTROLS.sandbox_permissions,
       justification: RUN_CODE_CONTROLS.justification,
     },
+  }
+}
+
+const OUTPUT_RECOVERY = ' Earlier actions are not rolled back. Inspect current state before any retry. Do not repeat actions just to repair output.'
+
+/**
+ * Classify a runtime failure for the model.
+ * @param kind - Runtime failure classification.
+ * @returns Structured error code and recovery guidance appended to the diagnostic, empty for execution failures.
+ */
+function classifyRunFailure(kind: PtcRunFailure['kind']): { code: CodeRunFailureCode; guidance: string } {
+  switch (kind) {
+    case 'invalid-output':
+      return { code: 'CODE_OUTPUT_INVALID', guidance: `\nProgram reached completion, but its completion value could not be delivered as lossless JSON. Return a JSON value or no value.${OUTPUT_RECOVERY}` }
+    case 'output-limit':
+      return { code: 'CODE_OUTPUT_LIMIT', guidance: `\nOutput exceeded its limit. Program completion is not confirmed; execution may be partial.${OUTPUT_RECOVERY}` }
+    case 'exception':
+    case 'timeout':
+    case 'abort':
+    case 'worker-exit':
+    case 'protocol':
+    case 'sandbox-unavailable':
+      return { code: 'CODE_RUN_FAILED', guidance: '' }
+    /* v8 ignore next -- PtcRunFailure['kind'] is closed; this retains compile-time exhaustiveness. */
+    default: return assertNever(kind, 'PtcRunFailure kind')
   }
 }
 
@@ -720,7 +745,8 @@ export function createRunCodeTool(
               : `\nFile sandbox: ${result.sandbox.mode}${result.sandbox.enforcement === undefined ? '' : `; enforcement: ${result.sandbox.enforcement}`}${result.sandbox.denied ? '; operation denied' : ''}.`
             const failureText = limitError === undefined || limitError.message === result.error.message
               ? result.error.message : `${limitError.message}\n${result.error.message}`
-            throw new CodeRunFailedError(`code run failed (${result.error.kind}): ${failureText}${logsText}${sandboxText}${result.sandbox?.denied ? escalationGuidance(runtime.sandboxMode) : ''}`, result.error.kind)
+            const { code, guidance } = classifyRunFailure(result.error.kind)
+            throw new CodeRunFailedError(`code run failed (${result.error.kind}): ${failureText}${logsText}${sandboxText}${result.sandbox?.denied ? escalationGuidance(runtime.sandboxMode) : ''}${guidance}`, code)
           }
           return {
             logs: result.logs,

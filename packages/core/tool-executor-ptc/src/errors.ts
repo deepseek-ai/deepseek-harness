@@ -1,5 +1,4 @@
 /** Program execution failures reported by PTC. @module */
-import type { PtcRunFailure } from '@deepseek-ai/dsh-ptc-runtime'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 
 /**
@@ -22,22 +21,23 @@ export class ToolCallLimitExceededError extends Error {
 }
 
 /**
- * Failed program execution or output delivery. Output failures use
- * CODE_OUTPUT_INVALID or CODE_OUTPUT_LIMIT; all other kinds use CODE_RUN_FAILED.
- * Earlier effects are not rolled back. Caller cancellation uses AbortError / ABORTED.
+ * Structured error codes carried by {@link CodeRunFailedError}: output delivery
+ * failures use CODE_OUTPUT_INVALID or CODE_OUTPUT_LIMIT; every other execution
+ * failure uses CODE_RUN_FAILED.
+ */
+export type CodeRunFailureCode = 'CODE_RUN_FAILED' | 'CODE_OUTPUT_INVALID' | 'CODE_OUTPUT_LIMIT'
+
+/**
+ * Failed program execution or output delivery. Earlier effects are not rolled
+ * back. Caller cancellation uses AbortError / ABORTED instead.
  */
 export class CodeRunFailedError extends HarnessError {
   /**
-   * @param message - Runtime diagnostic, captured logs, and sandbox details.
-   * @param kind - Runtime failure classification; omitted for host-owned execution failures.
+   * @param message - Model-facing diagnostic, including captured logs and recovery guidance.
+   * @param code - Failure classification; defaults to CODE_RUN_FAILED.
    */
-  constructor(message: string, kind?: PtcRunFailure['kind']) {
-    const code = kind === 'invalid-output' ? 'CODE_OUTPUT_INVALID'
-      : kind === 'output-limit' ? 'CODE_OUTPUT_LIMIT' : 'CODE_RUN_FAILED'
-    const output = kind === 'invalid-output'
-      ? 'Program reached completion, but its completion value could not be delivered as lossless JSON. Return a JSON value or no value.'
-      : kind === 'output-limit' ? 'Output exceeded its limit. Program completion is not confirmed; execution may be partial.' : ''
-    super(output === '' ? message : `${message}\n${output} Earlier actions are not rolled back. Inspect current state before any retry. Do not repeat actions just to repair output.`, code)
+  constructor(message: string, code: CodeRunFailureCode = 'CODE_RUN_FAILED') {
+    super(message, code)
     this.name = 'CodeRunFailedError'
   }
 }
