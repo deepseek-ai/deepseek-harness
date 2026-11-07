@@ -90,9 +90,15 @@ describe('ChangeRequestsSection', () => {
   it.each([
     ['open', snapshot(1)],
     ['draft', snapshot(1, { draft: true })],
-  ])('expands the only %s change request by default', (_label, only) => {
-    const b = section(ready({ changeRequests: [entry(1, only), entry(2, snapshot(2, { state: 'merged' })), entry(3, null)] }))
-    expect(expansion(b.view)).toEqual([true, false, false])
+    ['merged', snapshot(1, { state: 'merged' })],
+  ])('expands the card of the only bound change request while it is %s', (_label, only) => {
+    const b = section(ready({ changeRequests: [entry(1, only)] }))
+    expect(expansion(b.view)).toEqual([true])
+  })
+
+  it('collapses every card while the Session binds several, even when only one of them is open', () => {
+    const b = section(ready({ changeRequests: [entry(1, snapshot(1)), entry(2, snapshot(2, { state: 'merged' })), entry(3, null)] }))
+    expect(expansion(b.view)).toEqual([false, false, false])
   })
 
   it('collapses every card while several are open and keeps the user choice across updates', () => {
@@ -113,6 +119,7 @@ describe('ChangeRequestsSection', () => {
     chooseAction(card, '#7', en['change.copy'])
     chooseAction(card, '#7', en['change.viewChanges'])
     chooseAction(card, '#7', en['change.remove'])
+    fireEvent.click(within(card).getByRole('button', { name: 'Expand #7' }))
     fireEvent.click(within(card).getByRole('button', { name: 'View the changes of #7: 12 lines added, 3 lines deleted' }))
     fireEvent.click(b.view.getByRole('button', { name: en.retry }))
     expect(b.openLink).toHaveBeenCalledWith('https://github.com/octo/demo/pull/7')
