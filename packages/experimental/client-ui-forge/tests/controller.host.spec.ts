@@ -1,7 +1,7 @@
 import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ForgeReadiness } from '@deepseek-ai/dsh-experimental-forge'
+import type { ForgeFailure, ForgeReadiness } from '@deepseek-ai/dsh-experimental-forge'
 import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import { appendPluginRecord, SessionId } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
@@ -655,6 +655,37 @@ describe('forgePanel change request diffs', () => {
     opened.provider.patches.set(7, PATCH)
     await expect(paths()).resolves.toEqual(['src/a.ts'])
     expect(opened.provider.diffs).toEqual([7, 7, 7, 7])
+  })
+
+  it('never labels a diff read after a push with the head of the earlier status', async () => {
+    const { repo } = await project()
+    const opened = await open(repo)
+    const [polledHead, pushedHead] = ['a'.repeat(40), 'b'.repeat(40)]
+    const patches = new Map([[polledHead, PATCH], [pushedHead, PATCH.replaceAll('src/a.ts', 'src/b.ts')]])
+    // The host serves the head of the moment it answers, as GitHub's pull request diff does.
+    let hostHead = polledHead
+    const reads: string[] = []
+    Object.assign(opened.provider, {
+      diff: async (_ref: unknown, headSha: string): Promise<string | ForgeFailure> => {
+        reads.push(headSha)
+        return headSha === hostHead ? patches.get(hostHead)! : { code: 'stale', message: `head moved to ${hostHead}` }
+      },
+    })
+    shellTurn(opened.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
+    const follower = reader(opened)
+    await follower.until(state => polled(state, pullUrl(7)))
+    hostHead = pushedHead
+    opened.provider.overrides.set(7, { headSha: pushedHead })
+    const fetches = opened.provider.fetches.length
+
+    await expect(opened.ctx.forgePanel.changeRequestDiff(opened.session, pullUrl(7), signal))
+      .rejects.toMatchObject({ code: 'forgePanel/stale-head', message: `head moved to ${pushedHead}` })
+    // The refused read polls again at once, without waiting for the idle interval.
+    await follower.until(state => state.changeRequests[0]?.snapshot?.headSha === pushedHead)
+    expect(opened.provider.fetches.length).toBe(fetches + 1)
+    const diff = await opened.ctx.forgePanel.changeRequestDiff(opened.session, pullUrl(7), signal)
+    expect([diff.headSha, diff.files.map(file => file.path)]).toEqual([pushedHead, ['src/b.ts']])
+    expect(reads).toEqual([polledHead, pushedHead])
   })
 
   it('reports a diff or file over a size limit as too large', async () => {

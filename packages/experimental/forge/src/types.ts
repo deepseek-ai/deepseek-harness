@@ -100,8 +100,10 @@ export interface ChangeRequestSnapshot {
   readonly checksRollup: ChecksRollup
   /** Whether the host reported more checks than `checks` contains. */
   readonly checksTruncated: boolean
-  /** Number of review threads that are not resolved. */
+  /** Number of counted review threads that are not resolved. */
   readonly unresolvedThreads: number
+  /** Whether the change request has more review threads than the provider counted, so `unresolvedThreads` is a lower bound. */
+  readonly threadsTruncated: boolean
   /** ISO 8601 time of the host's last update to the change request. */
   readonly updatedAt: string
   /** ISO 8601 time the change request was merged or closed, or null while it is open. */
@@ -113,9 +115,10 @@ export interface ForgeFailure {
   /**
    * `not-found`: the host does not expose it; `unauthenticated`: credentials are missing or rejected;
    * `too-large`: the host or the provider refuses an answer over its size limit, so reading again fails
-   * the same way; `unavailable`: any other failure.
+   * the same way; `stale`: the head is no longer the commit the read named, so reading again at the head of
+   * a later status can succeed; `unavailable`: any other failure.
    */
-  readonly code: 'not-found' | 'unauthenticated' | 'too-large' | 'unavailable'
+  readonly code: 'not-found' | 'unauthenticated' | 'too-large' | 'stale' | 'unavailable'
   /** Human-readable cause. */
   readonly message: string
 }
@@ -214,8 +217,12 @@ export interface ForgeProvider {
   markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
   /** Merge a change request while its head is still `request.headSha`, resolving to undefined once merged. */
   merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
-  /** Read the changes of a change request as the host computes them, as one unified patch with `a/` and `b/` path prefixes. */
-  diff(ref: ChangeRequestRef, signal: AbortSignal): Promise<string | ForgeFailure>
+  /**
+   * Read the changes of a change request at head commit `headSha` as the host computes them, as one unified
+   * patch with `a/` and `b/` path prefixes. A patch is returned only when it describes `headSha`; once the
+   * head is another commit, the read resolves to a `stale` failure.
+   */
+  diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<string | ForgeFailure>
   /** Read the text of `path` at `commit` in the change request's repository. */
   fileText(ref: ChangeRequestRef, commit: string, path: string, signal: AbortSignal): Promise<string | ForgeFailure>
   /** Build the web page of `path` at `commit` in the change request's repository. */
