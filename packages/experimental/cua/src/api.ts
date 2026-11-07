@@ -1,6 +1,5 @@
 /** Object facade over logged native operations; its caller owns evaluator persistence. */
 import { Buffer } from 'node:buffer'
-import { HarnessError } from '@deepseek-ai/dsh-error'
 import type { z } from 'zod'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { ActionNamesResult, ActionResult, AppResult, AppsResult, CapabilitiesResult, FoundAppsResult, HoverResult, Request, ScreenshotResult, ShowResult, StateResult, WindowsResult } from './protocol.ts'
@@ -257,14 +256,11 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>, sink: CuaObser
         await emit(sink, windows, options)
         return windows
       },
-      async getWindow(windowId): Promise<CuaWindow> {
-        const parsed = WindowsResult.element.shape.windowId.safeParse(windowId)
-        if (!parsed.success) throw new HarnessError(`getWindow ${requestIssueMessage(parsed.error.issues, ['params', 'windowId'])}`, 'INVALID_ARGS')
-        const windows = WindowsResult.parse(await base.call('listWindows', {}))
-        if (!windows.some(window => window.windowId === windowId)) {
-          throw new HarnessError('Selected window is unavailable for this application; read getWindows again', 'CUA_WINDOW_UNAVAILABLE')
-        }
-        return createCuaWindow(appHandle, windowId, capabilities)
+      getWindow(windowId): Promise<CuaWindow> {
+        // Native window operations reject closed and foreign windows; selection only admits the ID they accept.
+        const request = Request.safeParse({ method: 'screenshot', params: { appHandle, windowId } })
+        if (!request.success) return Promise.reject(new Error(`getWindow ${requestIssueMessage(request.error.issues)}`))
+        return Promise.resolve(createCuaWindow(appHandle, windowId, capabilities))
       },
     }
   }

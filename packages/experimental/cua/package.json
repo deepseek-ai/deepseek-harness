@@ -99,8 +99,7 @@
     "@deepseek-ai/dsh-user-questions": "workspace:*",
     "@deepseek-ai/dsh-attachment": "workspace:*",
     "@deepseek-ai/dsh-scope": "workspace:*",
-    "@deepseek-ai/dsh-ptc-runtime-node": "workspace:*",
-    "@deepseek-ai/dsh-error": "workspace:*"
+    "@deepseek-ai/dsh-ptc-runtime-node": "workspace:*"
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "workspace:~",
@@ -162,8 +161,7 @@
     "@deepseek-ai/dsh-storage-json": "workspace:*",
     "@deepseek-ai/dsh-client-ui-user-questions": "workspace:*",
     "@deepseek-ai/dsh-client-ui-approval": "workspace:*",
-    "@deepseek-ai/dsh-client-ui-conversation": "workspace:*",
-    "@deepseek-ai/dsh-error": "workspace:*"
+    "@deepseek-ai/dsh-client-ui-conversation": "workspace:*"
   },
   "dsh": {
     "client": {

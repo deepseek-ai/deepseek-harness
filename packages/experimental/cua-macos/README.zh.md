@@ -113,7 +113,7 @@ void await window.getScreenshot()
 
 使用 `cua` API 发现并选择应用（`listApps`、`getState`、`findApps`、`getApp`）；使用选定的应用来激活它、枚举其窗口并选择窗口。截图和指针输入都要求选择窗口，不只在存在多个窗口时才需要。`getApp` 和 `app.getWindow(windowId)` 返回时不读取 AX；根据 `getWindows()` 中的标题与位置选择窗口。
 
-`getWindow` 根据当前应用窗口清单验证 ID。元素操作前须显式读取 `getAccessibilityTree()`。截图和坐标输入不要求 AX 读取成功；绝对像素坐标要求已交付的截图。已确认归属但没有 AX 界面的窗口在显式观察时返回空快照。在单个 API 实例内，门面按应用句柄保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享它，包括重复选择。读取任一窗口都会替换该快照；元素操作使用最新快照 ID，因此应使用最新树中的元素 ID，不应假定旧 ID 仍指向同一控件。读取失败不会发布部分快照；可以重新读取，但不要重复此前的输入。窗口对象负责截图和指针输入。键盘方法保留在 `app` 上，因为输入跟随应用的当前焦点。
+`getWindow` 不发送原生请求；截图和指针输入会拒绝已关闭或属于其他应用的窗口。元素操作前须显式读取 `getAccessibilityTree()`。截图和坐标输入不要求 AX 读取成功；绝对像素坐标要求已交付的截图。已确认归属但没有 AX 界面的窗口在显式观察时返回空快照。在单个 API 实例内，门面按应用句柄保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享它，包括重复选择。读取任一窗口都会替换该快照；元素操作使用最新快照 ID，因此应使用最新树中的元素 ID，不应假定旧 ID 仍指向同一控件。读取失败不会发布部分快照；可以重新读取，但不要重复此前的输入。窗口对象负责截图和指针输入。键盘方法保留在 `app` 上，因为输入跟随应用的当前焦点。
 
 `mouseMove(target)` 默认通过 AX 悬停。目标或其祖先必须已启用，并同时声明 `AXShowAlternateUI` 和 `AXShowDefaultUI`。进入子控件会保持展开，离开后恢复默认界面。如果没有可用的 AX 路径，helper 返回 `HOVER_UNAVAILABLE`，不发送输入。可点击已经可见的控件，或用 `performAction` 执行控件声明的动作。浏览器内容缺少这些 AX 动作时，请使用浏览器工具。只有允许移动用户可见光标时才开启 `systemPointerHover`。这条路径要求目标在前台且未被遮挡，操作后光标停在目标位置。
 
@@ -191,7 +191,7 @@ Setup and discovery:
 - cua.getState(options?: { emit?: boolean }) -> { apps: { id: string, displayName: string, isRunning: true, pid: number }[], browsers: [] } — summarize running applications; this is not an accessibility observation.
 - cua.getApp(selector: string) -> App — select an application by name, bundle ID, absolute path, or running PID string, obtain consent, launch in the background if needed, and return without reading AX or activating the app.
 - app.getWindows(options?: { emit?: boolean }) -> { windowId: number, appName: string, title: string, bounds: { x: number, y: number, width: number, height: number }, isOnScreen: boolean, onCurrentSpace: boolean | null }[] — enumerate windows with global native bounds; null onCurrentSpace means unknown Space membership.
-- app.getWindow(windowId: number) -> Window — select a window from the application’s current window list without reading AX; do this before any window screenshot or coordinate input.
+- app.getWindow(windowId: number) -> Window — select a window by an ID from getWindows without reading AX; do this before any window screenshot or coordinate input, which rejects a closed or foreign window.
 - app.activate() -> ActionResult — request explicit foreground activation; use only when foreground access is required.
 - app.show() -> { dispatched: boolean, windowId: number | null, foregroundChanged: boolean | null } — unhide the app and restore its selected, focused, main, or sole window without activation.
 - window.show() -> { dispatched: boolean, windowId: number | null, foregroundChanged: boolean | null } — unhide and restore that explicit window without activation.
@@ -223,7 +223,7 @@ Available at app or window level depending on the platform.
 - paste(text: string, options?: { format?: 'text' | 'html' }) -> ActionResult — deliver text or HTML through the app's Paste command, restoring prior clipboard contents unless another writer changes them; a Paste failure is surfaced without substituting typeText, and PASTE_NOT_CONSUMED means inspect before any retry.
 - pressKey(key: string, modifiers?: string[]) -> ActionResult — press and release one complete keystroke. For example pressKey('Tab', ['shift']) or pressKey('+'). Key and modifier names are platform-defined strings. Pass key and modifiers separately; do not pack them into a chord string.
 
-Raw tools use { method, params }: include appHandle for app calls and windowId for window calls, and use snapshotId with elementId for element routes. The emit option is facade-only: emit is local output control, so raw callers must follow the raw operation schema for admitted params. getAccessibilityTree maps to getState; getWindow validates against listWindows; getWindows maps to listWindows; getScreenshot maps to screenshot; cua.getState maps to listApps; every other named operation uses the same method name.
+Raw tools use { method, params }: include appHandle for app calls and windowId for window calls, and use snapshotId with elementId for element routes. The emit option is facade-only: emit is local output control, so raw callers must follow the raw operation schema for admitted params. getAccessibilityTree maps to getState; getWindow has no raw method; getWindows maps to listWindows; getScreenshot maps to screenshot; cua.getState maps to listApps; every other named operation uses the same method name.
 ```
 
 #### Token 影响

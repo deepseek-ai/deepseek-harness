@@ -27,7 +27,6 @@ it('uses the current tool binding when a retained app is called by another execu
   const first = vi.fn(async (operation: CuaOperation): Promise<JsonValue> => {
     if (operation.method === 'getCapabilities') return capabilities
     if (operation.method === 'getApp') return selected
-    if (operation.method === 'listWindows') return snapshot.windows
     if (operation.method === 'getState') return { ...snapshot, windowId: operation.params.windowId ?? null }
     return snapshot
   })
@@ -41,7 +40,7 @@ it('uses the current tool binding when a retained app is called by another execu
   current = second
 
   await expect(window.click(element('0'))).resolves.toEqual({ dispatched: true })
-  expect(first).toHaveBeenCalledTimes(4)
+  expect(first).toHaveBeenCalledTimes(3)
   expect(second).toHaveBeenCalledWith({ method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-1', elementId: '0', windowId: 23 } })
   expect(text).not.toHaveBeenCalled()
   current = first
@@ -71,7 +70,6 @@ it('returns screenshot bytes and metadata with one image-bearing tool call and n
   const tool = vi.fn(async (operation: CuaOperation): Promise<JsonValue> => {
     if (operation.method === 'getCapabilities') return capabilities
     if (operation.method === 'getApp') return selected
-    if (operation.method === 'listWindows') return snapshot.windows
     if (operation.method === 'getState') return { ...snapshot, windowId: operation.params.windowId ?? null }
     return {
       mimeType: 'image/png', data: PNG, pixelWidth: 1, pixelHeight: 1, windowId: 23, bounds, coordinateSpace: 'screenshot-pixels',
@@ -83,6 +81,6 @@ it('returns screenshot bytes and metadata with one image-bearing tool call and n
   text.mockClear()
 
   expect(await window.getScreenshot()).toEqual({ bytes: Uint8Array.from(Buffer.from(PNG, 'base64')), mimeType: 'image/png', pixelWidth: 1, pixelHeight: 1, windowId: 23 })
-  expect(tool.mock.calls.map(([operation]) => operation.method)).toEqual(['getCapabilities', 'getApp', 'listWindows', 'screenshot'])
+  expect(tool.mock.calls.map(([operation]) => operation.method)).toEqual(['getCapabilities', 'getApp', 'screenshot'])
   expect(text).not.toHaveBeenCalled()
 })

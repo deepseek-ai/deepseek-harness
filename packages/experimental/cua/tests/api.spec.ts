@@ -83,7 +83,7 @@ describe('application discovery', () => {
     const window = await app.getWindow(23)
     expect(await window.getScreenshot()).toEqual({ bytes: Uint8Array.from(Buffer.from(PNG, 'base64')), mimeType: 'image/png', pixelWidth: 1, pixelHeight: 1, windowId: 23 })
     expect(f.dispatch.mock.calls.map(([operation]) => operation.method)).toEqual([
-      'getCapabilities', 'listApps', 'getApp', 'listWindows', 'screenshot',
+      'getCapabilities', 'listApps', 'getApp', 'screenshot',
     ])
     expect(await app.getWindows()).toEqual([windowInfo(23)])
     expect(f.sink.text).not.toHaveBeenCalled()
@@ -186,7 +186,7 @@ describe('mouseMove across observations', () => {
     } })
     f.dispatch.mockRejectedValueOnce(new Error('WINDOW_CHANGED'))
     await expect(other.mouseMove([5, 6])).rejects.toThrow('WINDOW_CHANGED')
-    expect(f.dispatch).toHaveBeenCalledTimes(8)
+    expect(f.dispatch).toHaveBeenCalledTimes(7)
   })
 })
 
@@ -452,15 +452,15 @@ describe('application and window observations', () => {
     }
   })
 
-  it.each(['WINDOW_UNAVAILABLE', 'PERMISSION_DENIED', 'STALE_APP', 'SESSION_LOCKED'])('propagates %s while selecting a window without attempting image or input fallback', async (code) => {
+  it.each(['WINDOW_UNAVAILABLE', 'PERMISSION_DENIED', 'STALE_APP', 'SESSION_LOCKED'])('propagates %s from coordinate input on a selected window without image or input fallback', async (code) => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
-    await app.getAccessibilityTree({ emit: false })
+    const window = await app.getWindow(23)
     const failure = new Error(code)
     f.dispatch.mockRejectedValueOnce(failure)
     const calls = f.dispatch.mock.calls.length
-    await expect(app.getWindow(23)).rejects.toBe(failure)
-    expect(f.dispatch.mock.calls.slice(calls).map(([operation]) => operation.method)).toEqual(['listWindows'])
+    await expect(window.click([1, 2])).rejects.toBe(failure)
+    expect(f.dispatch.mock.calls.slice(calls).map(([operation]) => operation.method)).toEqual(['click'])
   })
 
   it('captures and clicks the explicitly selected window among several', async () => {
@@ -629,15 +629,12 @@ describe('application and window observations', () => {
 })
 
 describe('screenshots', () => {
-  it('rejects a missing or foreign window without reading AX or taking a screenshot', async () => {
+  it('selects windows without a native request and rejects invalid IDs locally', async () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
-    await expect(app.getWindow(24)).rejects.toMatchObject({ name: 'HarnessError', code: 'CUA_WINDOW_UNAVAILABLE' })
-    f.setWindows([])
-    await expect(app.getWindow(23)).rejects.toMatchObject({ name: 'HarnessError', code: 'CUA_WINDOW_UNAVAILABLE' })
-    expect(f.dispatch.mock.calls.map(([request]) => request.method)).toEqual(['getCapabilities', 'getApp', 'listWindows', 'listWindows'])
-    await expect(app.getWindow(0)).rejects.toMatchObject({ name: 'HarnessError', code: 'INVALID_ARGS', message: 'getWindow windowId: Too small: expected number to be >0' })
-    expect(f.dispatch).toHaveBeenCalledTimes(4)
+    expect((await app.getWindow(24)).windowId).toBe(24)
+    await expect(app.getWindow(0)).rejects.toThrow('getWindow windowId: Too small: expected number to be >0')
+    expect(f.dispatch.mock.calls.map(([request]) => request.method)).toEqual(['getCapabilities', 'getApp'])
   })
 
   it.each(['APP_ACCESS_REVOKED', 'WINDOW_UNAVAILABLE', 'STALE_APP'])('preserves %s when capturing a previously selected window', async (code) => {
@@ -989,10 +986,10 @@ describe('input actions', () => {
     const failure = new Error('Application was restarted; select it again')
     f.dispatch.mockRejectedValueOnce(failure)
     await expect(app.typeText('hello')).rejects.toBe(failure)
-    expect(f.dispatch).toHaveBeenCalledTimes(6)
+    expect(f.dispatch).toHaveBeenCalledTimes(5)
     f.dispatch.mockResolvedValueOnce({ dispatched: 'yes' })
     await expect(window.click(element('0'))).rejects.toThrow()
-    expect(f.dispatch).toHaveBeenCalledTimes(7)
+    expect(f.dispatch).toHaveBeenCalledTimes(6)
   })
 
   it('rejects invalid selection inputs before dispatch', async () => {

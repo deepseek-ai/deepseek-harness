@@ -240,7 +240,8 @@ export interface CuaApp extends CuaSurface {
   /**
    * Select a specific window.
    * @param windowId - ID obtained from getWindows.
-   * @returns A window object from the app’s current window list, without reading or replacing its accessibility snapshot.
+   * @returns A window object without a native request; selection leaves the accessibility snapshot unchanged.
+   * Window operations reject a closed or foreign window.
    */
   getWindow(windowId: number): Promise<CuaWindow>
 }
