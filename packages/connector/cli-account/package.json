@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-cli-account",
-  "description": "Shared Host mechanism of CLI app plugins: run a third-party CLI by its absolute path and stream one account operation at a time over Remote",
-  "version": "0.2.2-alpha.2",
+  "description": "Shared Host mechanism of CLI app plugins: run a third-party CLI by its absolute path and run one account operation at a time for the Plugins page",
+  "version": "0.2.2-rc.1",
   "publishConfig": {
     "access": "public"
   },
@@ -26,7 +26,10 @@
   },
   "files": [
     "lib/index.js",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ],
   "license": "MIT",
   "dependencies": {
@@ -41,6 +44,7 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-client-ui-connector-account": "workspace:*",
     "@deepseek-ai/dsh-package-manifest": "workspace:*",
     "@deepseek-ai/dsh-subprocess": "workspace:*",
     "@deepseek-ai/dsh-system-prompt": "workspace:*"

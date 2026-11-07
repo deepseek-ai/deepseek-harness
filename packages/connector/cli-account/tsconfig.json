@@ -28,6 +28,9 @@
     },
     {
       "path": "../../util/package-manifest"
+    },
+    {
+      "path": "../../client/ui-connector-account/tsconfig.host.json"
     }
   ]
 }

@@ -116,49 +116,6 @@ Types: [Agent](core.zh.md) · [Session](session.zh.md) · [ToolCallId](core.zh.m
 
 Source: [`packages/experimental/action-cards/src/index.ts`](../../packages/experimental/action-cards/src/index.ts)
 
-<a id="ctxcliaccounts--cliaccounts"></a>
-
-### `ctx.cliAccounts` — `CliAccounts`
-
-Holds the registered accounts and serves them to the Plugins page.
-
-```ts cordis-catalog
-/**
- * Show one account on the Plugins page for as long as the returned disposer has not run.
- * @param registration - the bundle package, the account source, the page operations, and the presentation.
- * @returns an idempotent disposer that withdraws the account.
- * @throws when another account already uses the package.
- */
-register<View extends AnyCliAccountView>(registration: CliAccountRegistration<View>): () => void
-
-/**
- * Follow every registered account; each new subscriber starts a check of each account that runs no operation.
- * @param signal - the Client's observation lifetime; disposal also ends the stream.
- * @returns the current accounts, then each changed set, coalescing changes that arrive before the next read.
- */
-@Remote({ mode: 'stream' }) async *watch(signal: AbortSignal): AsyncIterable<CliAccountsView>
-
-/**
- * Start one of the operations the account registered as page actions.
- * @param packageName - the account's bundle package.
- * @param operation - the operation kind.
- * @returns the operation identity.
- * @throws for an unknown package or operation, while another operation runs, or after the account's disposal.
- */
-@Remote start(packageName: string, operation: string): CliOperationId
-
-/**
- * Cancel one operation while its phase is cancellable, and wait for it to settle.
- * @param packageName - the account's bundle package.
- * @param id - the operation to cancel; a finished one or a phase that is not cancellable is ignored.
- * @returns after the operation settles, or at once when nothing is cancelled.
- * @throws for an unknown package.
- */
-@Remote cancel(packageName: string, id: CliOperationId): Promise<void>
-```
-
-Source: [`packages/client/ui-cli-account/src/index.ts`](../../packages/client/ui-cli-account/src/index.ts)
-
 <a id="ctxconfigeditor--configeditor"></a>
 
 ### `ctx.configEditor` — `ConfigEditor`
