@@ -4,7 +4,7 @@ import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { createCuaApi } from '../src/api.ts'
-import type { CuaApp, CuaCapabilities, CuaElementId, CuaOperation, CuaScreenshot, CuaWindow } from '../src/types.ts'
+import type { CuaApp, CuaCapabilities, CuaCoordinateOptions, CuaElementId, CuaOperation, CuaScreenshot, CuaWindow } from '../src/types.ts'
 
 /** Element ids are opaque strings; these fixtures use the macOS decimal form. */
 const element = (id: string): CuaElementId => brandString<CuaElementId>(id)
@@ -891,15 +891,24 @@ it('expands menu contents and details only for the requested observation', async
   expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'getState', params: { appHandle: selected.appHandle, includeMenus: false, details: false } })
 })
 
-it('passes explicit system-pointer intent for both mouseMove target forms', async () => {
+it('forwards provider options while retaining the selected target and coordinate mode', async () => {
   const f = fixture()
   const win = await (await f.api.getApp('Editor')).getWindow(23)
-  await win.mouseMove(element('0'), { useSystemPointer: true })
+  const defaultCoordinates: CuaCoordinateOptions = {}
+  const elementOptions = { ...defaultCoordinates, trackingMode: 'precise', appHandle: 'another-app', windowId: 99, unused: undefined }
+  await win.mouseMove(element('0'), elementOptions)
   expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'mouseMove', params: {
-    appHandle: 'app-17', windowId: 23, snapshotId: 'snapshot-2', elementId: '0', useSystemPointer: true,
+    appHandle: 'app-17', windowId: 23, snapshotId: 'snapshot-2', elementId: '0', trackingMode: 'precise',
   } })
-  await win.mouseMove([250, 750], { relative: true, useSystemPointer: false })
+  await win.getScreenshot({ emit: false })
+  const pixelOptions = { relative: false, trackingMode: 'precise', x: 222 }
+  await win.mouseMove([30, 40], pixelOptions)
   expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'mouseMove', params: {
-    appHandle: 'app-17', windowId: 23, snapshotId: 'snapshot-2', x: 250, y: 750, relative: true, useSystemPointer: false,
+    appHandle: 'app-17', snapshotId: 'snapshot-2', windowId: 23, x: 30, y: 40, relative: false, trackingMode: 'precise',
+  } })
+  const relativeOptions = { relative: true, trackingMode: 'coarse' }
+  await win.mouseMove([250, 750], relativeOptions)
+  expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'mouseMove', params: {
+    appHandle: 'app-17', snapshotId: 'snapshot-2', windowId: 23, x: 250, y: 750, relative: true, trackingMode: 'coarse',
   } })
 })

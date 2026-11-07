@@ -4,13 +4,28 @@ import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 import { installCua, type CuaConfig, type CuaStartupCapabilities } from '@deepseek-ai/dsh-cua'
+import type { CuaCoordinateOptions, CuaElementId, CuaHoverResult } from '@deepseek-ai/dsh-cua/api'
 import { CuaConfigFields } from '@deepseek-ai/dsh-cua/config'
 import { createPermissionParameters } from './permission-guide.ts'
 import { nativeHostArchitecture, prepareNativeExecutable, type SourceSigning } from './native-build.ts'
 import { createSharedNativeChannel } from './shared-native.ts'
+import { mouseMovePreparation, MacRequest } from './mouse-control.ts'
 import { installHeldKeys } from './held-keys.ts'
 import { GUIDANCE } from './guidance.ts'
 export { GUIDANCE } from './guidance.ts'
+
+declare module '@deepseek-ai/dsh-cua/api' {
+  interface CuaWindow {
+    /**
+     * Request the macOS system pointer or explicitly select accessibility hover for this move.
+     * @param target Current element id or screenshot-local point.
+     * @param options Coordinate mode and requested macOS pointer behavior.
+     * @returns Dispatch evidence and the selected hover route.
+     */
+    mouseMove(target: CuaElementId | readonly [number, number],
+      options: CuaCoordinateOptions & { useSystemPointer: boolean }): Promise<CuaHoverResult>
+  }
+}
 
 const CAPABILITIES: CuaStartupCapabilities = {
   platform: 'macos',
@@ -65,7 +80,8 @@ export const Config = Schema.object({
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
   const backend = { createChannel: createSharedNativeChannel, sendKeyEvent: installHeldKeys(ctx),
-    guidance: GUIDANCE, capabilities: CAPABILITIES, requireSystemPointerApproval: config.requireSystemPointerApproval,
+    guidance: GUIDANCE, capabilities: CAPABILITIES, requestSchema: MacRequest,
+    prepareMouseMove: mouseMovePreparation(ctx, config.requireSystemPointerApproval),
     permissionParameters: createPermissionParameters(config.permissionPollIntervalMs) }
   if (config.helperPath !== undefined) {
     if (!isAbsolute(config.helperPath)) throw new Error('dsh-cua helperPath must be absolute')

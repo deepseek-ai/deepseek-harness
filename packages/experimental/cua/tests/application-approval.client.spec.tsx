@@ -91,7 +91,7 @@ it('shows the mouse interruption and expiry with only session approval and refus
     detail: { en: 'Until restart', zh: '重启后失效' },
     approve: { en: 'Allow for this session', zh: '本会话允许' },
   }
-  const pending = new PendingQuestion('s1' as SessionId, [{ id: 'cua-mouse-control', question: display.question.en,
+  const pending = new PendingQuestion('s1' as SessionId, [{ id: 'cua-session-permission:example', question: display.question.en,
     detail: display.detail.en, intent: { kind: 'approval', approve: display.approve.en, reject: 'Deny', display } }])
   const factory = vi.fn((_name: string, _input: ApprovalCardInput) => null)
   render(<ApplicationApproval {...{ matched: selectApplicationApproval(pending)!, renderFactorySlot: factory,

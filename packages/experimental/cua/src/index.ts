@@ -19,7 +19,6 @@ import type { CuaApplicationGrant, CuaApplicationId, CuaSystemPermission } from 
 import type { CuaAppHandle, CuaOperation, CuaStartupCapabilities } from './types.ts'
 import { ApplicationIcon, AppResult, NativeScreenshotResult, Request, ScreenshotResult, StateResult, WindowsResult } from './protocol.ts'
 import { CuaConfigFields } from './config.ts'
-import { MouseControl } from './mouse-control.ts'
 import { CuaCoordinates } from './coordinates.ts'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
@@ -30,6 +29,7 @@ import type {} from '@deepseek-ai/dsh-computer-use'
 import type {} from '@deepseek-ai/dsh-ptc-runtime'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 
+export { CuaSessionPermissions } from './session-permissions.ts'
 export { CuaAccess } from './access.ts'
 export type { CuaStartupCapabilities } from './types.ts'
 
@@ -127,8 +127,10 @@ export interface CuaBackend {
   createChannel: NativeChannelFactory
   guidance: string
   capabilities: CuaStartupCapabilities
-  /** Whether explicit system-pointer moves require consent. Omit for providers without this route. */
-  requireSystemPointerApproval?: boolean
+  /** Model request schema including this provider's operation options. Defaults to the shared schema. */
+  requestSchema?: z.ZodType<CuaOperation>
+  /** Resolve provider options on the parsed copy. An optional interactive step runs before authorized dispatch. */
+  prepareMouseMove?: (agent: Agent, params: Record<string, JsonValue>) => ((signal: AbortSignal) => Promise<void>) | undefined
   /** Dispatch a directional key through the provider's execution-scoped input owner, after application authorization. */
   sendKeyEvent?: (client: NativeClient, params: Record<string, JsonValue>,
     execution: Readonly<ToolExecution>) => Promise<JsonValue>
@@ -162,8 +164,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
     permissionParameters: backend.permissionParameters,
     store: new CuaPermissionStore(ctx, config.allowedApps.map(grant => ({ ...grant, id: grant.id as CuaApplicationId })), config.timeoutMs),
   })
-  const mouseControl = backend.requireSystemPointerApproval === undefined
-    ? undefined : new MouseControl(ctx, backend.requireSystemPointerApproval)
+  const requestSchema = backend.requestSchema ?? Request
   const clients = new Map<Agent, NativeClient>()
   const lifetime = new AbortController()
   const pending = new Map<Promise<unknown>, Agent>()
@@ -212,7 +213,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       for (const result of [...await permissions, ...results, ...releases]) if (result.status === 'rejected') errors.push(result.reason)
       if (errors.length > 0) throw new AggregateError(errors, 'dsh-cua helper cleanup failed')
     }
-    const callNative = async (request: CuaOperation, execution: Readonly<CuaExecution>, pointerRoute?: boolean) => {
+    const callNative = async (request: CuaOperation, execution: Readonly<CuaExecution>) => {
       const { method, params: parsedParams } = request
       const params = execution.coordinates.parameters(request)
       const agent = execution.agent
@@ -229,10 +230,6 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
             ? { ...params, maxElements: config.maxElements, maxDepth: config.maxDepth }
             : method === 'drag' ? { ...params, durationMs: config.dragDurationMs, steps: config.dragSteps }
               : params
-      if (method === 'mouseMove') {
-        delete nativeParams.useSystemPointer
-        if (mouseControl) nativeParams.useSystemPointer = pointerRoute ?? mouseControl.allowed(agent)
-      }
       const requestNative = () => client.request(method, nativeParams, signal, execution.callId)
       if (method === 'screenshot') {
         const { attachments, target } = await screenshotStore(ctx, execution)
@@ -308,10 +305,10 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
     const tool: ToolDefinition = {
       name: 'cua',
       description: 'Inspect desktop access, select an application and window, read AX state, capture screenshots or dispatch input. Use appHandle from getApp; verify actions by reading fresh state.',
-      parameters: { ...z.record(z.string(), z.json()).parse(z.toJSONSchema(Request)), type: 'object' },
+      parameters: { ...z.record(z.string(), z.json()).parse(z.toJSONSchema(requestSchema)), type: 'object' },
       output: { schema: {}, render: renderResult },
       async execute(args, execution) {
-        const request = Request.parse(args)
+        const request = requestSchema.parse(args)
         const agent = executionAgent(execution)
         execution.signal.throwIfAborted()
         lifetime.signal.throwIfAborted()
@@ -344,23 +341,11 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
             owner.coordinates = new CuaCoordinates()
           }
           const nativeClient = client
-          let pointerRoute: boolean | undefined
-          let prepare: ((signal: AbortSignal) => Promise<void>) | undefined
-          if (request.method === 'mouseMove') {
-            if (request.params.useSystemPointer === true) {
-              prepare = async (signal) => {
-                if (!mouseControl) throw new NativeError('UNSUPPORTED_OPERATION', 'This provider does not support system mouse control')
-                owner.coordinates.parameters(request)
-                if (!await mouseControl.request(agent, signal)) {
-                  throw new NativeError('MOUSE_CONTROL_DENIED', 'The user declined system-pointer movement for this session. No input was sent. Use pointer-free actions.')
-                }
-                pointerRoute = true
-              }
-            } else pointerRoute = request.params.useSystemPointer
-          }
+          const prepare = request.method === 'mouseMove' ? backend.prepareMouseMove?.(agent, request.params) : undefined
+          if (prepare) owner.coordinates.parameters(request)
           const dispatch = async (signal: AbortSignal) => {
             const scoped = { ...execution, agent, signal, nativeClient, coordinates: owner.coordinates }
-            const result = await callNative(request, scoped, pointerRoute)
+            const result = await callNative(request, scoped)
             signal.throwIfAborted()
             return result
           }

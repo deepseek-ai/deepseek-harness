@@ -17,7 +17,7 @@ import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
 import Hmr from '@deepseek-ai/dsh-hmr'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
-import { CuaConfig, installCua } from '@deepseek-ai/dsh-cua'
+import { CuaConfig, CuaSessionPermissions, installCua } from '@deepseek-ai/dsh-cua'
 import { createConfigProjector } from '@deepseek-ai/dsh-app-boot/src/config-schema/projector.ts'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import FileSystem from '@deepseek-ai/dsh-fs-local'
@@ -981,7 +981,7 @@ async function hoverFixture(requireApproval = true) {
     await f.ctx.plugin(NativeProvider, { ...config, requireSystemPointerApproval: false })
   }
   const questions = await f.ctx.plugin(UserQuestions)
-  const questionId = 'cua-mouse-control'
+  const questionId = 'cua-session-permission:system-pointer'
   const approved = { answers: [{ id: questionId, selected: ['Allow for this session'] }] }
   const ask = vi.fn(async () => approved)
   f.ctx.on('user-questions/request', async ({ questions }) => questions[0]!.id === questionId ? ask()
@@ -1031,7 +1031,7 @@ it('keeps refusals and grants separate and forgets a closed session on reopen', 
   const { agent } = await f.ctx.agents.create({ sessionId: SessionId('other-mouse-session') })
   expect(JSON.stringify((await f.call(agent, 'mouseMove', physicalHover)).content)).toContain('APP_ACCESS_REQUIRED')
   await f.select(agent)
-  f.ask.mockResolvedValueOnce({ answers: [{ id: 'cua-mouse-control', selected: ['Deny'] }] })
+  f.ask.mockResolvedValueOnce({ answers: [{ id: 'cua-session-permission:system-pointer', selected: ['Deny'] }] })
   native.request.mockClear()
   for (let i = 0; i < 2; i++) expect(JSON.stringify((await f.call(agent, 'mouseMove', physicalHover)).content)).toContain('MOUSE_CONTROL_DENIED')
   expect(native.request).not.toHaveBeenCalled()
@@ -1129,8 +1129,29 @@ it('keeps provider-specific pointer flags and questions off providers without mo
     })
   } })
   await selectApplication(f)
-  expect(JSON.stringify((await f.execute('mouseMove', physicalHover)).content)).toContain('UNSUPPORTED_OPERATION')
+  expect(JSON.stringify((await f.execute('mouseMove', physicalHover)).content)).toContain('useSystemPointer')
   const target = { appHandle: 'app-one', snapshotId: 'snapshot', elementId: '0' }
   expect((await f.execute('mouseMove', target)).isError).toBe(false)
   expect(native.request).toHaveBeenLastCalledWith('mouseMove', target, expect.any(AbortSignal), expect.any(String))
+})
+
+it('separates a provider’s permission decisions and presents its question for each capability', async () => {
+  const f = await setup()
+  await f.ctx.plugin(UserQuestions)
+  const permissions = new CuaSessionPermissions(f.ctx)
+  const signal = new AbortController().signal
+  const ask = vi.spyOn(f.ctx.userQuestions, 'ask').mockImplementation(async ({ questions }) => {
+    const q = questions[0]!
+    return { answers: [{ id: q.id, selected: [q.question === 'Read status?' ? 'Allow for this session' : 'Deny'] }] }
+  })
+  const read = { question: { en: 'Read status?' }, detail: { en: 'Only for this session' } }
+  const write = { question: { en: 'Change status?' }, detail: { en: 'Sets the current status' } }
+  const agent = f.handle.agent
+  await expect(permissions.request(agent, 'read-status', read, signal)).resolves.toBe(true)
+  await expect(permissions.request(agent, 'write-status', write, signal)).resolves.toBe(false)
+  expect(permissions.allowed(agent, 'read-status')).toBe(true)
+  expect(permissions.allowed(agent, 'write-status')).toBe(false)
+  await expect(permissions.request(agent, 'write-status', write, signal)).resolves.toBe(false)
+  await expect(permissions.request(agent, 'read-status', read, signal)).resolves.toBe(true)
+  expect(ask.mock.calls.map(([request]) => request.questions[0]!.detail)).toEqual([read.detail.en, write.detail.en])
 })

@@ -34,9 +34,12 @@ const imageBase64 = z.string().min(1).refine(value => Buffer.from(value, 'base64
   message: 'Expected canonical base64 image data',
 })
 
-const mouseMove = { useSystemPointer: z.boolean().optional().describe('Request use of the system pointer. The Host checks permission before dispatch.') }
+/** Shared hover target variants. Providers may add options without replacing a target or its coordinate mode. */
+export const MouseMoveTargets = [
+  z.object(snapshot).strict(), z.object(absoluteCoordinate).strict(), z.object(relativeCoordinate).strict(),
+] as const
 
-/** Model-submittable operations, before the Host applies permission decisions and resource limits. */
+/** Model-submittable operation parameters; Host resource fields and private continuations are separate. */
 export const Request = z.discriminatedUnion('method', [
   operation('getCapabilities', {}), operation('listApps', {}),
   operation('findApps', { query: z.string().min(1, 'Expected a non-empty search string').regex(/\S/, 'Expected a non-empty search string') }),
@@ -51,10 +54,7 @@ export const Request = z.discriminatedUnion('method', [
   operation('listActions', snapshot),
   operation('performAction', { ...snapshot, action: z.string().min(1), argument: jsonValue.optional() }),
   operation('invoke', snapshot),
-  z.object({ method: z.literal('mouseMove'), params: z.union([
-    z.object({ ...snapshot, ...mouseMove }).strict(), z.object({ ...absoluteCoordinate, ...mouseMove }).strict(),
-    z.object({ ...relativeCoordinate, ...mouseMove }).strict(),
-  ]) }).strict(),
+  z.object({ method: z.literal('mouseMove'), params: z.union(MouseMoveTargets) }).strict(),
   z.object({ method: z.literal('click'), params: z.union([
     z.object({ ...snapshot, ...click }).strict(),
     z.object({ ...absoluteCoordinate, ...click }).strict(),
