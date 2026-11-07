@@ -103,3 +103,28 @@ export const launchAccessQuestion = {
   ru: 'Разрешить запуск? Доступ к окнам запрашивается отдельно.',
   pt: 'Permitir iniciar esta entrada? O acesso às janelas é solicitado separadamente.',
 }
+
+/** Scope and interruption shown before the user grants mouse control. */
+export const mouseControlDisplay = {
+  question: {
+    en: 'Allow the agent to move your mouse pointer?',
+    zh: '允许智能体移动你的鼠标指针吗？',
+    ja: 'エージェントがマウスポインタを動かすことを許可しますか？',
+    es: '¿Permitir que el agente mueva el puntero del ratón?',
+    fr: 'Autoriser l’agent à déplacer le pointeur de la souris ?',
+    de: 'Darf der Agent den Mauszeiger bewegen?',
+    ru: 'Разрешить агенту перемещать указатель мыши?',
+    pt: 'Permitir que o agente mova o ponteiro do mouse?',
+  },
+  detail: {
+    en: 'Hovering will move your pointer and leave it at the target, even while you are using the mouse. This permission applies only to this session and expires when DSH restarts.',
+    zh: '智能体悬停时会移动你的鼠标指针，并将它留在目标位置，即使你正在使用鼠标。授权仅限当前会话，重启 DSH 后失效。',
+    ja: 'ホバーすると、マウスを使用中でもポインタが移動し、移動先に残ります。許可はこのセッションに限り、DSH を再起動すると失効します。',
+    es: 'Al pasar sobre un elemento, el puntero se moverá y quedará allí aunque estés usando el ratón. El permiso solo se aplica a esta sesión y caduca al reiniciar DSH.',
+    fr: 'Lors d’un survol, le pointeur se déplace et reste sur la cible, même si vous utilisez la souris. Cette autorisation vaut pour cette session et expire au redémarrage de DSH.',
+    de: 'Beim Überfahren eines Ziels bewegt sich der Zeiger und bleibt dort, auch wenn Sie die Maus verwenden. Die Erlaubnis gilt nur für diese Sitzung und erlischt beim Neustart von DSH.',
+    ru: 'При наведении указатель переместится и останется на цели, даже если вы пользуетесь мышью. Разрешение действует только в этом сеансе до перезапуска DSH.',
+    pt: 'Ao passar sobre um elemento, o ponteiro se moverá e ficará no destino, mesmo enquanto você usa o mouse. A permissão vale apenas para esta sessão e expira ao reiniciar o DSH.',
+  },
+  approve: applicationAccessDisplay.approve,
+}

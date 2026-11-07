@@ -6,6 +6,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import type { ApprovalCardInput } from '@deepseek-ai/dsh-client-ui-approval/client'
 import { PendingQuestion, createWaterfallRequest } from '@deepseek-ai/dsh-client-ui-user-questions/src/client/contract/slots.ts'
 import { ApplicationApproval, selectApplicationApproval, type ApplicationApprovalProps } from '../src/client/ApplicationApproval.tsx'
+import { mouseControlDisplay } from '../src/locales.ts'
 import { en, zh } from '../src/client/locales.ts'
 
 type AskUserQuestionItem = PendingQuestion['questions'][number]
@@ -83,4 +84,17 @@ it('uses the original question cancellation and refuses late approval', async ()
   await rejected
   expect(card.canAnswer()).toBe(false)
   await expect(card.onAllow()).rejects.toThrow('no channel accepts an answer yet')
+})
+
+it('shows the mouse interruption and expiry with only session approval and refusal', () => {
+  const display = mouseControlDisplay
+  const pending = new PendingQuestion('s1' as SessionId, [{ id: 'cua-mouse-control', question: display.question.en,
+    detail: display.detail.en, intent: { kind: 'approval', approve: display.approve.en, reject: 'Deny', display } }])
+  const factory = vi.fn((_name: string, _input: ApprovalCardInput) => null)
+  render(<ApplicationApproval {...{ matched: selectApplicationApproval(pending)!, renderFactorySlot: factory,
+    t: makeTranslate(zh), resolveText: text => text.zh } as ApplicationApprovalProps} />)
+  const card = factory.mock.calls[0]![1]
+  expect(card).toMatchObject({ title: display.question.zh, description: display.detail.zh, allowLabel: display.approve.zh })
+  expect(card.onAlways).toBeUndefined()
+  expect(card.warning).toBeUndefined()
 })

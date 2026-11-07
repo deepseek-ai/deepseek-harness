@@ -14,7 +14,7 @@ enum NativeProtocol {
         "listActions": ["appHandle", "elementId", "snapshotId", "windowId"],
         "listApps": [],
         "listWindows": ["appHandle"],
-        "mouseMove": ["allowSystemPointer", "appHandle", "elementId", "snapshotId", "windowId", "x", "y"],
+        "mouseMove": ["appHandle", "elementId", "snapshotId", "useSystemPointer", "windowId", "x", "y"],
         "openPermissionSettings": ["permission", "settingsMessage"],
         "paste": ["appHandle", "format", "maxClipboardBytes", "maxDepth", "maxElements", "pasteReadTimeoutMs", "text", "windowId"],
         "performAction": ["action", "appHandle", "argument", "elementId", "snapshotId", "windowId"],

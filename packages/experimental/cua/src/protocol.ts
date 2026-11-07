@@ -34,8 +34,8 @@ const imageBase64 = z.string().min(1).refine(value => Buffer.from(value, 'base64
   message: 'Expected canonical base64 image data',
 })
 
-/** Model-submittable operation parameters; Host resource fields and private continuations are separate. */
-export const Request = z.discriminatedUnion('method', [
+/** Operations shared by the model and native helper, before Host parameters are added. */
+export const NativeToolOperations = [
   operation('getCapabilities', {}), operation('listApps', {}),
   operation('findApps', { query: z.string().min(1, 'Expected a non-empty search string').regex(/\S/, 'Expected a non-empty search string') }),
   operation('getApp', { selector: z.string().min(1) }),
@@ -77,7 +77,10 @@ export const Request = z.discriminatedUnion('method', [
       fromX: relativePoint, fromY: relativePoint, toX: relativePoint, toY: relativePoint }).strict(),
   ]) }).strict(),
   operation('screenshot', window),
-])
+] as const
+
+/** Model-submittable operations. The Host answers mouse-control requests without dispatching native input. */
+export const Request = z.discriminatedUnion('method', [...NativeToolOperations, operation('requestMouseControl', {})])
 
 /** Resource parameters supplied by the Host, never accepted from model tool arguments. */
 export const NativeResourceParameters = {

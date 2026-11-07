@@ -1,6 +1,6 @@
 /** Object facade over logged native operations; its caller owns evaluator persistence. */
 import { Buffer } from 'node:buffer'
-import type { z } from 'zod'
+import { z } from 'zod'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { ActionNamesResult, ActionResult, AppResult, AppsResult, CapabilitiesResult, FoundAppsResult, HoverResult, Request, ScreenshotResult, ShowResult, StateResult, WindowsResult } from './protocol.ts'
 import type { CuaApi, CuaApp, CuaAppHandle, CuaCapabilities, CuaDispatch, CuaObservationOptions, CuaObservationSink, CuaOperation, CuaScreenshot, CuaSurface, CuaWindow } from './types.ts'
@@ -51,6 +51,9 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
   const objects = createCuaObjects(call, sink)
 
   const api: CuaApi = {
+    async requestMouseControl() {
+      return z.boolean().parse(await call('requestMouseControl', {}))
+    },
     async getCapabilities(options) {
       const result = CapabilitiesResult.parse(await call('getCapabilities', {}))
       capabilities = result

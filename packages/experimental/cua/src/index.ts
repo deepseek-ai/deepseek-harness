@@ -19,6 +19,7 @@ import type { CuaApplicationGrant, CuaApplicationId, CuaSystemPermission } from 
 import type { CuaAppHandle, CuaOperation, CuaStartupCapabilities } from './types.ts'
 import { ApplicationIcon, AppResult, NativeScreenshotResult, Request, ScreenshotResult, StateResult, WindowsResult } from './protocol.ts'
 import { CuaConfigFields } from './config.ts'
+import { MouseControl } from './mouse-control.ts'
 import { CuaCoordinates } from './coordinates.ts'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
@@ -156,6 +157,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
     permissionParameters: backend.permissionParameters,
     store: new CuaPermissionStore(ctx, config.allowedApps.map(grant => ({ ...grant, id: grant.id as CuaApplicationId })), config.timeoutMs),
   })
+  const mouseControl = new MouseControl(ctx)
   const clients = new Map<Agent, NativeClient>()
   const lifetime = new AbortController()
   const pending = new Map<Promise<unknown>, Agent>()
@@ -220,6 +222,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
             ? { ...params, maxElements: config.maxElements, maxDepth: config.maxDepth }
             : method === 'drag' ? { ...params, durationMs: config.dragDurationMs, steps: config.dragSteps }
               : params
+      if (method === 'mouseMove') nativeParams.useSystemPointer = mouseControl.allowed(agent)
       const requestNative = () => client.request(method, nativeParams, signal, execution.callId)
       if (method === 'screenshot') {
         const { attachments, target } = await screenshotStore(ctx, execution)
@@ -306,6 +309,10 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         const signal = AbortSignal.any([execution.signal, lifetime.signal, owner.signal])
         signal.throwIfAborted()
         const operation = (async () => {
+          if (request.method === 'requestMouseControl') {
+            if (!backend.capabilities.methods.includes(request.method)) throw new NativeError('UNSUPPORTED_OPERATION', 'This provider does not support system mouse control')
+            return mouseControl.request(agent, signal)
+          }
           const previous = clients.get(agent)
           if (previous?.disposed) {
             try { await previous.dispose() } catch (error) {
@@ -333,7 +340,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
           const nativeClient = client
           const dispatch = async (signal: AbortSignal) => {
             const scoped = { ...execution, agent, signal, nativeClient, coordinates: owner.coordinates }
-            const result = await callNative(Request.parse(request), scoped)
+            const result = await callNative(request, scoped)
             signal.throwIfAborted()
             return result
           }

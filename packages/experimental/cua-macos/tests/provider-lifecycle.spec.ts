@@ -21,7 +21,7 @@ import { CuaConfig } from '@deepseek-ai/dsh-cua'
 import { createConfigProjector } from '@deepseek-ai/dsh-app-boot/src/config-schema/projector.ts'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import FileSystem from '@deepseek-ai/dsh-fs-local'
-import UserQuestions from '@deepseek-ai/dsh-user-questions'
+import UserQuestions, { UserQuestionError } from '@deepseek-ai/dsh-user-questions'
 import NodeRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
 import Sandbox from '@deepseek-ai/dsh-sandbox-local'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
@@ -61,7 +61,7 @@ vi.mock('@deepseek-ai/dsh-cua/native-client', async importOriginal => ({
 }))
 
 const config = {
-  permissionPollIntervalMs: 1000, systemPointerHover: false,
+  permissionPollIntervalMs: 1000,
   agentPreset: false,
   helperPath: resolve('fixture-helper'), sourceSigning: 'ad-hoc', buildTimeoutMs: 300_000, timeoutMs: 10_000, connectTimeoutMs: 5000, screenshotTimeoutMs: 5000, axTimeoutMs: 3000, maxRequestBytes: 1024, maxResponseBytes: 4096, maxClipboardBytes: 8192, pasteReadTimeoutMs: 1000, maxAppMatches: 20,
   graceMs: 10, textEventIntervalMs: 8, maxClickHoldMs: 7000, maxElements: 64, maxDepth: 8, dragDurationMs: 200, dragSteps: 10,
@@ -71,7 +71,6 @@ const { helperPath: _helperPath, ...automaticConfig } = config
 
 it('defaults to ad-hoc signing and requires a keychain path for certificate signing', () => {
   expect(NativeProvider.Config({}).sourceSigning).toBe('ad-hoc')
-  expect(NativeProvider.Config({}).systemPointerHover).toBe(false)
   expect(NativeProvider.Config({ sourceSigning: 'ad-hoc' }).sourceSigning).toBe('ad-hoc')
   for (const sourceSigning of [{ identity: 'Apple Development: Example', keychain: '/keychains/custom.keychain-db' }, { identity: 'ABC123', keychain: '/keychains/custom.keychain-db' }]) {
     expect(NativeProvider.Config({ sourceSigning }).sourceSigning).toEqual(sourceSigning)
@@ -199,7 +198,7 @@ it('merges startup capabilities into runtime native fields', async () => {
   expect(result.value).toEqual({ ...runtime, platform: 'macos', appLevelAccessibility: true, keyboard: ['app'], browser: false,
     coordinateSpace: 'screenshot-pixels', methods: [
       'activate', 'click', 'drag', 'findApps', 'getApp', 'getCapabilities', 'getState', 'invoke',
-      'listActions', 'listApps', 'listWindows', 'mouseMove', 'paste', 'performAction', 'pressKey', 'screenshot', 'scroll',
+      'listActions', 'listApps', 'listWindows', 'mouseMove', 'paste', 'performAction', 'pressKey', 'requestMouseControl', 'screenshot', 'scroll',
       'selectText', 'setValue', 'show', 'typeText',
     ] })
   expect(native.request).toHaveBeenCalledExactlyOnceWith('getCapabilities', {}, expect.any(AbortSignal), ToolCallId('lifecycle-1'))
@@ -877,4 +876,70 @@ it('routes permission actions through the macOS provider with the Client languag
   expect(native.request).toHaveBeenLastCalledWith('openPermissionSettings', {
     permission: 'screenRecording', settingsMessage: 'Open System Settings > Privacy & Security > Screen Recording manually.',
   }, expect.any(AbortSignal))
+})
+
+it('moves only for the consenting session, without granting application access or retaining consent after reload', async () => {
+  const f = await setup()
+  await f.ctx.plugin(UserQuestions)
+  const ask = vi.fn((id: string) => ({ answers: [{ id, selected: ['Allow for this session'] }] }))
+  f.ctx.on('user-questions/request', async ({ questions }) => ask(questions[0]!.id))
+  const target = { appHandle: 'app-one', snapshotId: 'snapshot', elementId: '0' }
+  native.request.mockResolvedValueOnce({ appHandle: 'app-one', name: 'Fixture', running: true,
+    authorization: { id: 'a'.repeat(64), name: 'Fixture', persistable: false } })
+  expect((await f.execute('getApp', { selector: 'Fixture' })).isError).toBe(false)
+  const move = async (useSystemPointer: boolean) => {
+    expect((await f.execute('mouseMove', target)).isError).toBe(false)
+    expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...target, useSystemPointer }, expect.any(AbortSignal), expect.any(String))
+  }
+  await move(false)
+  expect((await f.execute('mouseMove', { ...target, useSystemPointer: true })).isError).toBe(true)
+  for (let i = 0; i < 2; i++) expect((await f.execute('requestMouseControl')).value).toBe(true)
+  await move(true)
+  const other = await f.ctx.agents.create({ sessionId: SessionId('other-mouse-session') })
+  const otherCall = (method: string, params: Record<string, unknown>) => executeToolFixture(f.ctx, {
+    agent: other.agent, signal: new AbortController().signal, callId: ToolCallId(method), name: 'cua', arguments: { method, params },
+  })
+  expect((await otherCall('requestMouseControl', {})).value).toBe(true)
+  expect((await otherCall('mouseMove', target)).isError).toBe(true)
+  await f.provider.dispose()
+  await f.ctx.plugin(NativeProvider, config)
+  expect((await f.execute('requestMouseControl')).value).toBe(true)
+  expect(ask.mock.calls.map(([id]) => id)).toEqual(['cua-app-access', 'cua-mouse-control', 'cua-mouse-control', 'cua-mouse-control'])
+})
+
+it.each(['Deny', 'custom', 'cancel'] as const)('remembers a %s answer without moving the pointer or asking again', async (answer) => {
+  const f = await setup()
+  await f.ctx.plugin(UserQuestions)
+  const ask = vi.fn(() => {
+    if (answer === 'cancel') throw new UserQuestionError('User dismissed the request', 'ASK_CANCELLED')
+    return { answers: [{ id: 'cua-mouse-control', selected: [answer === 'custom' ? 'Allow for this session' : answer],
+      ...(answer === 'custom' ? { custom: 'maybe later' } : {}) }] }
+  })
+  f.ctx.on('user-questions/request', async () => ask())
+  expect((await f.execute('requestMouseControl')).value).toBe(false)
+  expect((await f.execute('requestMouseControl')).value).toBe(false)
+  expect(ask).toHaveBeenCalledTimes(1)
+  expect(native.request).not.toHaveBeenCalled()
+})
+
+it('drops late approval after cancellation and admits only one pending question', async () => {
+  const f = await setup()
+  expect((await f.execute('requestMouseControl')).isError).toBe(true)
+  await f.ctx.plugin(UserQuestions)
+  const entered = Promise.withResolvers<undefined>()
+  const release = Promise.withResolvers<undefined>()
+  f.ctx.on('user-questions/request', async () => {
+    entered.resolve(undefined)
+    await release.promise
+    return { answers: [{ id: 'cua-mouse-control', selected: ['Allow for this session'] }] }
+  })
+  const controller = new AbortController()
+  const first = f.execute('requestMouseControl', {}, controller.signal)
+  await entered.promise
+  expect((await f.execute('requestMouseControl')).isError).toBe(true)
+  controller.abort()
+  release.resolve(undefined)
+  await Promise.allSettled([first])
+  expect((await f.execute('requestMouseControl')).value).toBe(true)
+  expect(native.request).not.toHaveBeenCalled()
 })

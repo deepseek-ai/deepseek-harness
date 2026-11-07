@@ -890,3 +890,11 @@ it('expands menu contents and details only for the requested observation', async
   await app.getAccessibilityTree({ includeMenus: false, details: false })
   expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'getState', params: { appHandle: selected.appHandle, includeMenus: false, details: false } })
 })
+
+it('requests mouse control without dispatching a move and returns the decision', async () => {
+  const dispatch = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true)
+  const cua = createCuaApi(dispatch)
+  expect(await cua.requestMouseControl()).toBe(false)
+  expect(await cua.requestMouseControl()).toBe(true)
+  expect(dispatch.mock.calls).toEqual(Array(2).fill([{ method: 'requestMouseControl', params: {} }]))
+})

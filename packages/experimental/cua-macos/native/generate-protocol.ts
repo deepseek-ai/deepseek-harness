@@ -10,7 +10,7 @@ import { PermissionGuideParameters, PermissionSettingsParameters } from '../src/
  */
 export function renderNativeProtocol(): { json: string; swift: string } {
   const { fields, enums, json } = nativeProtocol({
-    mouseMove: z.object({ allowSystemPointer: z.boolean().optional() }),
+    mouseMove: z.object({ useSystemPointer: z.boolean().optional() }),
     requestPermission: PermissionGuideParameters, openPermissionSettings: PermissionSettingsParameters,
   })
   const quoted = (values: Iterable<string>) => [...values].sort().map(value => JSON.stringify(value)).join(', ')

@@ -1,7 +1,7 @@
 /** Build-time native admission metadata derived from the shared operation definitions. */
 import { z } from 'zod'
 import type { JSONSchema } from 'zod/v4/core'
-import { NativeOnlyOperations, NativeResourceParameters, Request } from './protocol.ts'
+import { NativeOnlyOperations, NativeResourceParameters, NativeToolOperations, type Request } from './protocol.ts'
 
 type Schema = JSONSchema.JSONSchema
 
@@ -22,7 +22,7 @@ export function nativeProtocol(platformFields: Partial<Record<z.infer<typeof Req
   json: string
 } {
   const resources = new Map(Object.entries({ ...NativeResourceParameters, ...platformFields }))
-  const schemas = [...Request.options, ...NativeOnlyOperations]
+  const schemas = [...NativeToolOperations, ...NativeOnlyOperations]
     .map(schema => z.toJSONSchema(schema))
   const fields = new Map<string, Set<string>>()
   const enums = new Map<string, Map<string, Set<string>>>()

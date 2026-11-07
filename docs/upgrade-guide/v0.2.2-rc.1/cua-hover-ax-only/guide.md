@@ -14,5 +14,5 @@ On macOS, `win.mouseMove(target)` uses an enabled element or ancestor that adver
 ## Migration
 
 1. For an available control, use its advertised action or click it directly. Use browser tools for web content that requires page hover.
-2. To restore visible pointer movement, set `systemPointerHover: true` in the `config` of the macOS provider entry (`id: cua`) in your profile's `cordis.patch.yml`. Preserve the entry's other settings. If you set `helperPath`, rebuild the custom helper so it accepts `systemPointerHover` in the connection handshake. Restart the profile.
-3. Call `win.mouseMove` on a foreground, unobscured control without AX alternate UI. The opt-in result reports `hoverRoute: "system-pointer"` and `systemPointerMoved: true`. Keep the default to avoid disturbing the user's cursor.
+2. Remove `systemPointerHover` from the macOS provider entry in your profile’s `cordis.patch.yml`. If you set `helperPath`, rebuild that helper to support the per-request `useSystemPointer` field. Restart the profile.
+3. When the task requires a physical hover, call `cua.requestMouseControl()`. After the user approves, `win.mouseMove` on an unobscured foreground target returns `hoverRoute: "system-pointer"` and `systemPointerMoved: true`. This grant expires when DSH restarts.

@@ -247,6 +247,11 @@ export interface CuaApp extends CuaSurface {
 /** Native app API; its caller owns global bindings and variable persistence. */
 export interface CuaApi {
   /**
+   * Ask to move the user's pointer with mouseMove for this session until restart.
+   * @returns True only after explicit approval. A refusal is remembered for the session.
+   */
+  requestMouseControl(): Promise<boolean>
+  /**
    * Inspect permissions without requesting them.
    * @param options - output options.
    * @returns reported native capabilities.

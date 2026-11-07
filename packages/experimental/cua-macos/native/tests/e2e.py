@@ -236,7 +236,7 @@ def main():
                     assert (after["cursorChanges"], after["hoverVisible"]) == (before["cursorChanges"], before["hoverVisible"]), after
 
                 def mouse_move(target):
-                    result = call("mouseMove", target if args.alternate_hover else {**target, "allowSystemPointer": True})
+                    result = call("mouseMove", target if args.alternate_hover else {**target, "useSystemPointer": True})
                     if not args.alternate_hover:
                         assert result["hoverRoute"] == "system-pointer" and result["systemPointerMoved"] is True, result
                     if args.alternate_hover:
@@ -271,7 +271,7 @@ def main():
                     mouse_move(target)
                     wait_state(lambda actual: actual["hoverVisible"], "Input-transparent overlay blocked hover")
                     before = cycle_overlay(2)
-                    call("mouseMove", {**target, "allowSystemPointer": True}, "FOREGROUND_REQUIRED")
+                    call("mouseMove", {**target, "useSystemPointer": True}, "FOREGROUND_REQUIRED")
                     after = wait_state(lambda actual: actual["cursorSamples"] >= before["cursorSamples"] + 2,
                                        "Pointer observation did not advance")
                     assert after["cursorChanges"] == before["cursorChanges"], "Rejected hover moved the system pointer"
