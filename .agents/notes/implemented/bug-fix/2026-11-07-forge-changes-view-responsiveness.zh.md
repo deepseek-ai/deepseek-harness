@@ -18,6 +18,8 @@ Status: implemented
 
 **减少串行读取。** 与已发布状态相同的面板状态不会通知任何关注方。`changeRequestDiff` 同时读取补丁和 `.gitattributes`。快照把基准提交作为 `baseSha` 携带；`ForgeService.diff` 把它传给提供方，forge-github 在 GraphQL 读取确认 head 的同时就开始 compare 读取。
 
+**像素测量。** 有两处需要按像素测量布局，CSS 无法替代。文件段是否接近滚动区域，决定 React 是否渲染它的各行；`content-visibility` 只能跳过已有节点的布局与绘制。让跳转后的文件段保持在顶部，需要在之后每次布局变化后读取它的偏移，没有哪个 CSS 属性能让容器跟随某个子元素滚动。客户端包没有可注入的测量 hook，所以这两处像视图已有的文件导航一样直接读取 DOM：接近判断用一个 `IntersectionObserver`，在主线程之外测量；对齐每帧读取两个矩形，最多持续一秒。
+
 ## Alternatives considered
 
 **只用 `content-visibility: auto`** 减少的样式工作与限定规则相当，但打开时仍要对每个展开文件做 React 渲染和 Shiki 分词，约 3 秒脚本时间，而且每个折叠和展开的段都需要估计占位尺寸。

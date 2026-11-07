@@ -18,6 +18,8 @@ The forge changes view of a large change request froze the browser. Opening #798
 
 **Fewer serial reads.** A panel state equal to the published one reaches no follower. `changeRequestDiff` reads the patch and `.gitattributes` together. Snapshots carry the base commit as `baseSha`; `ForgeService.diff` passes it to the provider, and forge-github starts the compare read while its GraphQL read confirms the head.
 
+**Pixel measurement.** Two parts measure layout in pixels, which CSS cannot replace. Whether a section is near the scrollport decides whether React renders its lines at all; `content-visibility` only skips layout and paint of nodes that already exist. Keeping a jumped-to section at the top needs its offset after each later layout change, since no CSS property scrolls a container to follow one child. The client packages offer no injected measurement hook, so both read the DOM directly, as the view's file navigation already does: the reach uses one `IntersectionObserver`, which measures off the main thread, and the pin reads two rectangles per frame for at most one second.
+
 ## Alternatives considered
 
 **`content-visibility: auto` alone** cut style work as much as scoping the rules did, but kept the React render and Shiki tokenization of every expanded file at open, about 3 s of script, and its placeholder sizes would need estimates for every collapsed and expanded section.
