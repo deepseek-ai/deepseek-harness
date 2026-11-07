@@ -116,6 +116,9 @@ describe('fetching through a proxy', () => {
 
     const failure = new HttpFetchProvider(limits).fetch({ url: proxyTarget })
 
-    await expect(failure).rejects.toThrow(expect.objectContaining({ code: 'WEB_PROVIDER_ERROR', message: 'web fetch failed: other side closed' }))
+    await expect(failure).rejects.toThrow(expect.objectContaining({
+      code: 'WEB_FETCH_CONNECTION_INTERRUPTED',
+      message: 'web fetch failed: the connection was interrupted (UND_ERR_SOCKET): other side closed',
+    }))
   })
 })

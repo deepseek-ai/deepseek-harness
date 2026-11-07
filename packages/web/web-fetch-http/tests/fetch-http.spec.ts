@@ -452,15 +452,15 @@ describe('HttpFetchProvider invalid URLs and abort', () => {
       .rejects.toThrow(expect.objectContaining({ code: 'WEB_FETCH_TIMEOUT' }))
   })
 
-  it('maps a connection failure to WEB_PROVIDER_ERROR naming the transport error', async () => {
+  it('classifies a closed connection and names the transport error', async () => {
     // The test owns this listener throughout; it closes each connection once the request arrives.
     const closing = createNetServer(socket => socket.once('data', () => socket.end()))
     await new Promise<void>(resolve => closing.listen(0, '127.0.0.1', resolve))
     const { port } = closing.address() as AddressInfo
     try {
       await expect(provider().fetch({ url: `http://127.0.0.1:${port}/` })).rejects.toThrow(expect.objectContaining({
-        code: 'WEB_PROVIDER_ERROR',
-        message: 'web fetch failed: other side closed',
+        code: 'WEB_FETCH_CONNECTION_INTERRUPTED',
+        message: 'web fetch failed: the connection was interrupted (UND_ERR_SOCKET): other side closed',
       }))
     } finally {
       await new Promise<void>(resolve => closing.close(() => { resolve() }))
