@@ -13,7 +13,14 @@
   max-height: calc(var(--dsh-conversation-viewport-height, 100dvh) - 24px);
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 6px 8px;
+  /* The bar has a place of its own: the content keeps its width whether or not
+     the panel scrolls, and the end inset stays 8px. The track margin keeps the
+     thumb out of the rounded corners. */
+  scrollbar-gutter: stable;
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+  --dsh-scrollbar-track-margin: 12px;
+  padding: 6px calc(8px - var(--dsh-scrollbar-width)) 6px 8px;
   border: 0;
   /* The standard menu tier: a compact summary surface, not an enclosing panel. */
   border-radius: var(--dsw-radius-lg);
