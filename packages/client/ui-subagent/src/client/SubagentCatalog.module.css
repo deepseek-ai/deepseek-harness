@@ -169,6 +169,26 @@
   height: 18px;
 }
 
+.sectionBody .disclosure,
+.sectionBody .disclosureSpace {
+  width: 16px;
+  height: 18px;
+}
+
+/* The tree's spine sits on the status column's center. */
+.sectionBody .children {
+  --branch-anchor-y: 13px;
+  margin-left: 14px;
+}
+
+.sectionBody .children > .node > .row::before {
+  width: 9px;
+}
+
+.sectionBody .children > .node > .row:has(> .disclosureSpace)::before {
+  width: 33px;
+}
+
 .sectionBody .label {
   line-height: 18px;
 }
