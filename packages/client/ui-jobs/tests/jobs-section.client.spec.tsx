@@ -158,7 +158,7 @@ describe('JobsSection rows', () => {
     openList()
     const list = screen.getByRole('list', { name: zh['list.aria'] })
     expect(within(list).getByText('pnpm run build')).toBeDefined()
-    expect(within(list).getByText('winding down')).toBeDefined()
+    expect(within(list).getByText('bash · winding down')).toBeDefined()
   })
 
   it('folds the settled tail behind its count while live work exists, and clears on demand', () => {
@@ -276,7 +276,7 @@ describe('JobsSection rows', () => {
     expect(labels).toEqual([
       'live-2', 'live-1', 'settled-d', 'settled-a', 'settled-c', 'settled-b', 'settled-e',
     ])
-    expect(screen.getAllByText(zh['status.completed']).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(`bash · ${zh['status.completed']}`).length).toBeGreaterThan(0)
   })
 
   it('breaks a settled tie on start order so map iteration never decides it', () => {
@@ -294,7 +294,7 @@ describe('JobsSection rows', () => {
       job({ status: 'killed', detail: 'signal: SIGTERM', finishedAt: 1_700_000_000_000 + 2_000 }),
     ])} />)
     openList()
-    expect(within(screen.getByRole('list')).getByText('signal: SIGTERM')).toBeDefined()
+    expect(within(screen.getByRole('list')).getByText('bash · signal: SIGTERM')).toBeDefined()
   })
 
   it('renders settled status words and every lifecycle indicator', () => {
@@ -308,10 +308,36 @@ describe('JobsSection rows', () => {
     openList()
     fireEvent.click(screen.getByRole('button', { name: zh['section.settledCount'].replace('{count}', '3') }))
     for (const word of ['已完成', '已取消', '已失败']) {
-      expect(within(screen.getByRole('list')).getByText(word)).toBeDefined()
+      expect(within(screen.getByRole('list')).getByText(`bash · ${word}`)).toBeDefined()
     }
     expect([...screen.getByRole('list').querySelectorAll('li [data-state]')].map(node => node.getAttribute('data-state')))
       .toEqual(['ongoing', 'warning', 'done', 'warning', 'error'])
+  })
+
+  it('marks a job that finished with a nonzero exit code with the warning dot', () => {
+    render(<JobsSection {...props([
+      job({ id: 'bash-1' as JobView['id'], label: 'a', status: 'completed', exitCode: 71, detail: 'exit code: 71', finishedAt: 1_700_000_000_003 }),
+      job({ id: 'bash-2' as JobView['id'], label: 'b', status: 'completed', exitCode: 0, detail: 'exit code: 0', finishedAt: 1_700_000_000_002 }),
+      job({ id: 'bash-3' as JobView['id'], label: 'c', status: 'completed', finishedAt: 1_700_000_000_001 }),
+    ])} />)
+    expect([...screen.getByRole('list').querySelectorAll('li [data-state]')].map(node => node.getAttribute('data-state')))
+      .toEqual(['warning', 'done', 'done'])
+    expect(screen.getByText('bash · exit code: 71')).toBeDefined()
+  })
+
+  it('keeps the trailing column on a row without output, with no chevron and no row button', () => {
+    const view = render(<JobsSection {...props([job({ status: 'completed', finishedAt: 1_700_000_000_001 })])} />)
+    const line = view.container.querySelector('li > div') as HTMLElement
+    expect(within(line).queryByRole('button')).toBeNull()
+    expect(line.lastElementChild?.getAttribute('aria-hidden')).toBe('true')
+    expect(line.lastElementChild?.childElementCount).toBe(0)
+  })
+
+  it('places the fold chevron after the settled count', () => {
+    render(<JobsSection {...props([job({ status: 'completed', finishedAt: 1_700_000_000_001 })])} />)
+    const toggle = screen.getByRole('button', { name: zh['section.settledCount'].replace('{count}', '1') })
+    expect(toggle.lastElementChild?.tagName.toLowerCase()).toBe('svg')
+    expect(toggle.firstChild?.nodeType).toBe(Node.TEXT_NODE)
   })
 })
 
@@ -332,7 +358,7 @@ describe('JobsSection observation', () => {
       { 'bash-1': view },
     )} />)
     openList()
-    expect(screen.getByText(zh['status.killed'])).toBeDefined()
+    expect(screen.getByText(`bash · ${zh['status.killed']}`)).toBeDefined()
     fireEvent.click(screen.getByRole('button', { name: zh['row.expandAria'].replace('{label}', 'pnpm run build') }))
     // The panel scrolls instead of folding: every line renders, no fold control.
     expect(screen.getByText('line 1')).toBeDefined()

@@ -90,16 +90,18 @@ function assertNever(value: never): never {
 /**
  * Status marker semantics. `stopping` and `killed` share the attention color:
  * both mean the work ended (or is ending) on request rather than on its own.
+ * So does a job that finished with a nonzero exit code: the command reported a
+ * failure, while `failed` means the job itself broke.
  */
-function dotState(status: JobView['status']): StateDotState {
-  switch (status) {
+function dotState(job: JobView): StateDotState {
+  switch (job.status) {
     case 'running': return 'ongoing'
     case 'stopping': return 'warning'
-    case 'completed': return 'done'
+    case 'completed': return job.exitCode === undefined || job.exitCode === 0 ? 'done' : 'warning'
     case 'killed': return 'warning'
     case 'failed': return 'error'
     /* v8 ignore next -- closed wire status union */
-    default: return assertNever(status)
+    default: return assertNever(job.status)
   }
 }
 
@@ -201,50 +203,21 @@ function JobItem({ job, view, expanded, now, onToggle, kill, t }: {
   const labels = useMemo(() => terminalLabels(t), [t])
   const elapsed = live ? now - job.startedAt : (job.finishedAt ?? job.startedAt) - job.startedAt
   const duration = formatDuration(elapsed, t)
-  const durationCell = (
-    <span
-      className={css.duration}
-      title={t(live ? 'duration.title.live' : 'duration.title.done', { duration })}
-    >
-      {duration}
-    </span>
-  )
-  const body = live
-    ? (
-      <>
-        <StateDot state={dotState(job.status)} className={css.rowDot} />
-        <span className={css.main}>
-          <span className={css.primary}>
-            <span className={css.label} title={job.label}>{job.label}</span>
-          </span>
-          <span className={css.secondary} title={detail ?? status}>
-            <span className={css.kind}>{job.kind}</span>
-            {detail !== undefined ? <span className={css.status}>{detail}</span> : null}
-            {durationCell}
-          </span>
-        </span>
-        {/* A live row is always observable: its output may still arrive. */}
-        <span className={css.chevronBox}>
-          <IconChevronDownOutlineRegular size={12} className={expanded ? `${css.chevron} ${css.chevronOpen}` : css.chevron} />
-        </span>
-      </>
-    )
-    : (
-      <>
-        <StateDot state={dotState(job.status)} className={css.rowDot} />
-        <span className={css.kind}>{job.kind}</span>
+  const body = (
+    <>
+      <span className={css.glyph}><StateDot state={dotState(job)} /></span>
+      <span className={css.main}>
         <span className={css.label} title={job.label}>{job.label}</span>
-        <span className={css.status} title={detail ?? status}>{detail ?? status}</span>
-        {durationCell}
-        {observable
-          ? (
-            <span className={css.chevronBox}>
-              <IconChevronDownOutlineRegular size={12} className={expanded ? `${css.chevron} ${css.chevronOpen}` : css.chevron} />
-            </span>
-          )
-          : null}
-      </>
-    )
+        <span className={css.secondary} title={detail ?? status}>{`${job.kind} · ${detail ?? status}`}</span>
+      </span>
+      <span
+        className={css.duration}
+        title={t(live ? 'duration.title.live' : 'duration.title.done', { duration })}
+      >
+        {duration}
+      </span>
+    </>
+  )
   const killTitle = kill === undefined
     ? undefined
     : kill.state === 'armed'
@@ -252,12 +225,12 @@ function JobItem({ job, view, expanded, now, onToggle, kill, t }: {
       : kill.state === 'failed' ? t('kill.failed') : t('kill.stop', { label: job.label })
   return (
     <li className={css.item}>
-      <div className={live ? `${css.rowLine} ${css.rowLineLive}` : css.rowLine}>
+      <div className={observable ? `${css.rowLine} ${css.rowInteractive}` : css.rowLine}>
         {observable
           ? (
             <button
               type="button"
-              className={live ? css.row : `${css.row} ${css.rowSettled}`}
+              className={css.row}
               aria-expanded={expanded}
               aria-label={t(expanded ? 'row.collapseAria' : 'row.expandAria', { label: job.label })}
               onClick={onToggle}
@@ -265,11 +238,7 @@ function JobItem({ job, view, expanded, now, onToggle, kill, t }: {
               {body}
             </button>
           )
-          : (
-            <span className={`${css.row} ${css.rowSettled} ${css.rowStatic}`}>
-              {body}
-            </span>
-          )}
+          : <span className={css.row}>{body}</span>}
         {kill !== undefined
           ? (
             <button
@@ -285,13 +254,17 @@ function JobItem({ job, view, expanded, now, onToggle, kill, t }: {
               title={killTitle}
               onClick={kill.onPress}
             >
-              <IconStopFillRegular size={10} />
+              <IconStopFillRegular size={12} />
               {/* The armed press must be legible without hover: the button
                   widens into a labeled confirm pill instead of a tint only. */}
               {kill.state === 'armed' ? <span className={css.stopLabel}>{t('kill.confirmAction')}</span> : null}
             </button>
           )
           : null}
+        {/* The row button's overlay takes presses here too; a row without output keeps the column empty. */}
+        <span className={css.chevron} aria-hidden="true">
+          {observable ? <IconChevronDownOutlineRegular size={14} className={expanded ? css.chevronOpen : undefined} /> : null}
+        </span>
       </div>
       {expanded && view !== undefined
         ? (
@@ -455,8 +428,8 @@ export function JobsSection({ sessionId, useJobs, watchRows, observe, killJob, u
               aria-expanded={settledExpanded}
               onClick={() => { setSettledOpen(!settledExpanded) }}
             >
-              <IconChevronDownOutlineRegular size={12} className={settledExpanded ? `${css.sectionChevron} ${css.sectionChevronOpen}` : css.sectionChevron} />
               {t('section.settledCount', { count: settledRows.length })}
+              <IconChevronDownOutlineRegular size={14} className={settledExpanded ? `${css.sectionChevron} ${css.sectionChevronOpen}` : css.sectionChevron} />
             </button>
             <button type="button" className={css.sectionClear} onClick={clearSettled}>
               {t('section.clear')}
