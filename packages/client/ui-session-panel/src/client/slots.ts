@@ -27,11 +27,19 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     /** Trailing controls of one section title, keyed by the section's `id`. */
     'conversation.session.panel.section.actions': { kind: 'keyed'; scope: 'session' }
     /**
-     * Marks over the panel toggle, such as an attention dot. They stay visible
-     * while the panel is hidden; each occupant includes text that names it for
-     * assistive technology, which becomes part of the toggle's name.
+     * Marks over the panel toggle, such as an attention dot. Each occupant is
+     * one element: the toggle sizes it to a 6px dot at the glyph's corner, and
+     * the occupant sets its `background` and includes text that names it for
+     * assistive technology, which becomes part of the toggle's name. Occupants
+     * overlap, and a higher `order` paints above a lower one. An occupant that
+     * only repeats what the panel shows renders nothing while `panelShown`.
      */
-    'conversation.session.panel.indicator': { kind: 'list'; scope: 'session'; inline: true }
+    'conversation.session.panel.indicator': {
+      kind: 'list'
+      scope: 'session'
+      inline: true
+      owner: SessionPanelIndicatorOwnerProps
+    }
     /** Rows of the built-in Environment section in ascending `order`; they receive the section's owner values. */
     'conversation.session.panel.environment.row': { kind: 'list'; scope: 'session'; owner: SessionPanelSectionOwnerProps }
   }
@@ -50,6 +58,12 @@ export interface SessionPanelSectionOwnerProps {
   readonly presentation: SessionPanelPresentation
   /** Close the overlay, for example after a row opened another surface; no effect while docked. */
   readonly dismissOverlay: () => void
+}
+
+/** Values every toggle indicator receives from the toggle. */
+export interface SessionPanelIndicatorOwnerProps {
+  /** Whether the panel shows, docked or as an overlay. */
+  readonly panelShown: boolean
 }
 
 /** One section the panel draws, projected from the section list's registrations. */

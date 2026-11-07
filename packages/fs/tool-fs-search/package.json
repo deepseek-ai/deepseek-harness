@@ -32,8 +32,8 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@vscode/ripgrep": "^1.18.0",
-    "@deepseek-ai/schemastery": "workspace:~"
+    "@deepseek-ai/schemastery": "workspace:~",
+    "@deepseek-ai/dsh-util-ripgrep": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-llm": "workspace:*",
@@ -63,6 +63,7 @@
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-scope": "workspace:*",
     "@deepseek-ai/dsh-working-directory": "workspace:*",
-    "@deepseek-ai/dsh-agent-loop-testkit": "workspace:*"
+    "@deepseek-ai/dsh-agent-loop-testkit": "workspace:*",
+    "@vscode/ripgrep": "^1.18.0"
   }
 }

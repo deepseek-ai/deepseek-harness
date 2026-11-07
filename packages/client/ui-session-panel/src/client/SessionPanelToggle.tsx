@@ -39,7 +39,7 @@ export function SessionPanelToggle({
         <span className={css.name}>{t('panel.name')}</span>
         {/* Separates the name from indicator text in the accessible name. */}
         {' '}
-        {renderSlot('conversation.session.panel.indicator', {})}
+        {renderSlot('conversation.session.panel.indicator', { panelShown: open })}
       </Button>
     </Tooltip>
   )

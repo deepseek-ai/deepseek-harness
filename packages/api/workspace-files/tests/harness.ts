@@ -24,6 +24,9 @@ function fileScope(workspaceRoot: string): WorkspaceFileScope {
 
 export const signal = (): AbortSignal => new AbortController().signal
 
+/** Per-test service caps; omitted read, list and search fields keep the suite defaults. */
+export type Caps = Partial<Omit<Config, 'search'>> & { readonly search?: Partial<Config['search']> }
+
 /** One temp workspace and the context serving it. */
 export interface Harness {
   readonly workspace: string
@@ -34,7 +37,7 @@ export interface Harness {
    * The service under test, at the given caps. One per test: the service key is
    * global to the Context, so a second call with caps is a defect in the test.
    */
-  endpoint(caps?: Partial<Config>): WorkspaceFiles
+  endpoint(caps?: Caps): WorkspaceFiles
   dispose(): Promise<void>
 }
 
@@ -72,6 +75,13 @@ export async function openWorkspace(prefix: string): Promise<Harness> {
         maxFileBytes: caps?.maxFileBytes ?? 1024 * 1024,
         maxLines: caps?.maxLines ?? 5000,
         maxEntries: caps?.maxEntries ?? 2000,
+        search: {
+          maxResults: caps?.search?.maxResults ?? 512,
+          maxEntries: caps?.search?.maxEntries ?? 100000,
+          graceMs: caps?.search?.graceMs ?? 3000,
+          timeoutMs: caps?.search?.timeoutMs ?? 30000,
+          stderrMaxBytes: caps?.search?.stderrMaxBytes ?? 65536,
+        },
       })
       return service
     },

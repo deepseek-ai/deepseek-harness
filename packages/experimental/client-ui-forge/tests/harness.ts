@@ -262,6 +262,7 @@ export function snapshot(ref: ChangeRequestRef): ChangeRequestSnapshot {
     checksRollup: 'success',
     checksTruncated: false,
     unresolvedThreads: 0,
+    threadsTruncated: false,
     updatedAt: '2026-10-09T00:00:00Z',
     closedAt: null,
   }
@@ -285,6 +286,8 @@ export class FakeProvider implements ForgeProvider {
   readonly patches = new Map<number, string | ForgeFailure>()
   /** Change request numbers in the order their diffs were read. */
   readonly diffs: number[] = []
+  /** Head commits the diff reads named, in the same order. */
+  readonly diffHeads: string[] = []
   /** File texts or failures by `<commit>:<path>`; others return a not-found failure. */
   readonly texts = new Map<string, string | ForgeFailure>()
   /** Open change request numbers that a head lookup returns, by head branch. */
@@ -333,8 +336,9 @@ export class FakeProvider implements ForgeProvider {
     return Promise.resolve(this.actionResult)
   }
 
-  diff(ref: ChangeRequestRef): Promise<string | ForgeFailure> {
+  diff(ref: ChangeRequestRef, headSha: string): Promise<string | ForgeFailure> {
     this.diffs.push(ref.number)
+    this.diffHeads.push(headSha)
     return Promise.resolve(this.patches.get(ref.number) ?? { code: 'not-found', message: `no diff of #${ref.number}` })
   }
 

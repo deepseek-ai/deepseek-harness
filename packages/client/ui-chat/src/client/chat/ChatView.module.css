@@ -37,6 +37,11 @@
   container-type: inline-size;
 }
 
+.scroll,
+:global([data-conversation-scroll]):has(.root) {
+  overscroll-behavior-y: none;
+}
+
 .root[data-chat-following-tail] .scroll,
 :global([data-conversation-scroll]):has(.root[data-chat-following-tail]) {
   overflow-anchor: none;
@@ -318,11 +323,15 @@
 }
 
 .older {
+  overflow-anchor: none;
   display: flex;
   justify-content: center;
 }
 
 .older button {
+  display: grid;
+  line-height: 18px;
+  white-space: nowrap;
   border: none;
   border-radius: var(--dsw-radius-sm);
   padding: 4px 12px;
@@ -330,6 +339,14 @@
   color: var(--dsw-alias-label-secondary);
   background: var(--dsw-alias-interactive-bg-hover-solid);
   cursor: pointer;
+}
+
+.older button > span {
+  grid-area: 1 / 1;
+}
+
+.historyHidden {
+  visibility: hidden;
 }
 
 .older button:disabled {

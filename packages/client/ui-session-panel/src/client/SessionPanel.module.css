@@ -13,7 +13,14 @@
   max-height: calc(var(--dsh-conversation-viewport-height, 100dvh) - 24px);
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 6px 8px;
+  /* The bar has a place of its own: the content keeps its width whether or not
+     the panel scrolls, and the end inset stays 8px. The track margin keeps the
+     thumb out of the rounded corners. */
+  scrollbar-gutter: stable;
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+  --dsh-scrollbar-track-margin: 12px;
+  padding: 6px calc(8px - var(--dsh-scrollbar-width)) 6px 8px;
   border: 0;
   /* The standard menu tier: a compact summary surface, not an enclosing panel. */
   border-radius: var(--dsw-radius-lg);
@@ -54,14 +61,14 @@
 .head {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   min-height: 24px;
   padding: 0 6px;
 }
 
 /* Secondary ink at medium weight: apart from the primary rows below and the tertiary counts beside it. */
 .title {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
   margin: 0;
   overflow: hidden;
@@ -72,11 +79,15 @@
   white-space: nowrap;
 }
 
+/* Takes what the title leaves and clips first, so long progress never squeezes the title. */
 .actions {
   display: inline-flex;
-  flex: none;
+  flex: 1 1000 0;
   align-items: center;
+  justify-content: flex-end;
   gap: 2px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .actions:has(> [data-slot]:empty) {

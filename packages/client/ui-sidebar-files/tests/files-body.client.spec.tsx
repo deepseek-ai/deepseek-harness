@@ -6,9 +6,11 @@ import { makeTranslate, RemoteError } from '@deepseek-ai/dsh-client-test-runtime
 import type { RemoteFailure } from '@deepseek-ai/dsh-api-remotes/client'
 import { fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
 import { failureLine } from '../src/client/workspace-tree.ts'
+import type { PaneId, TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
 import type { DirLevel } from '../src/client/store.ts'
 import { zh } from '../src/client/locales.ts'
-import { mountBody, PANE, ROOT, SESSION } from './mount.client.tsx'
+import { mountBody, PANE, ROOT, SESSION, TAB } from './mount.client.tsx'
+import { answer, searchesSettled } from './search-fixture.client.ts'
 
 const ROOT_LEVEL: DirLevel = {
   entries: [
@@ -52,7 +54,7 @@ describe('FilesBody', () => {
     const header = page.firstElementChild!
     expect(header.querySelector('[data-files-path]')?.getAttribute('title')).toBe(ROOT)
     expect([...header.querySelectorAll('button:not([data-files-auto-refresh])')].map(button => button.getAttribute('aria-label')))
-      .toEqual([zh.reload])
+      .toEqual([zh.reload, zh['search.placeholder']])
     const content = page.querySelector('[data-files-content]')!
     expect(content.children).toHaveLength(1)
     const navigator = content.firstElementChild!
@@ -71,7 +73,122 @@ describe('FilesBody', () => {
     expect(typeof bound?.refresh).toBe('function')
   })
 
-  it('lists the root on mount, heads it with its path split at the last segment, and draws directories first with dotfiles kept', async () => {
+  it('defers a files-page focus request until its pane attaches without changing the preview-tree choice', () => {
+    const h = mountBody()
+    const paneId = 'pane-before-attach' as PaneId
+    const navigator = document.createElement('aside')
+    h.view.container.append(navigator)
+    const controller = new AbortController()
+    onTestFinished(() => { controller.abort() })
+    h.face.navigatorDrawn(paneId, navigator, false)
+    h.face.focus(paneId)
+    expect(h.instance.getSnapshot().byPane[paneId]).toBeUndefined()
+    h.face.attach(paneId, 'tab-before-attach' as TabId, controller.signal)
+    expect(h.instance.getSnapshot().byPane[paneId]).toMatchObject({ open: undefined, searchBarOpen: true })
+    h.face.navigatorDrawn(paneId, null, false)
+    navigator.remove()
+  })
+
+  it('starts with the search bar collapsed and retains the query and results through collapse and remount', async () => {
+    const h = mountBody()
+    await act(() => h.script.watches.ready(ROOT))
+    await act(() => h.script.settle({ ok: true, value: ROOT_LEVEL }))
+    const toggle = h.view.getByRole('button', { name: zh['search.placeholder'] })
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(h.view.queryByRole('searchbox')).toBeNull()
+    expect(h.beside(TAB)).toBe(true)
+    await act(async () => { fireEvent.click(toggle) })
+    const input = h.view.container.querySelector<HTMLInputElement>('[data-files-search]')!
+    expect(document.activeElement).toBe(input)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(h.instance.getSnapshot().byPane[PANE]?.open).toBeUndefined()
+    h.searches.answerWith(answer(['src/target.ts']))
+    await act(async () => {
+      fireEvent.change(input, { target: { value: 'target' } })
+      await searchesSettled()
+    })
+    const search = h.instance.getSnapshot().byPane[PANE]!.search
+    const body = h.view.container.querySelector('[data-files-body]')!
+    expect(body.getAttribute('data-files-view')).toBe('search')
+    expect(names(h.view.container)).toContain(`${ROOT}/src/target.ts`)
+    fireEvent.click(toggle)
+    expect(document.activeElement).toBe(toggle)
+    expect(h.view.queryByRole('searchbox')).toBeNull()
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(h.instance.getSnapshot().byPane[PANE]!.query).toBe('target')
+    expect(h.instance.getSnapshot().byPane[PANE]!.search).toBe(search)
+    expect(h.view.container.querySelector('[data-files-body]')).toBe(body)
+    h.view.unmount()
+    const back = h.remount()
+    expect(back.queryByRole('searchbox')).toBeNull()
+    expect(names(back.container)).toContain(`${ROOT}/src/target.ts`)
+    await act(async () => { fireEvent.click(back.getByRole('button', { name: zh['search.placeholder'] })) })
+    expect(back.container.querySelector<HTMLInputElement>('[data-files-search]')?.value).toBe('target')
+    expect(h.search).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps focus in the tree when Escape clears results while the search bar is collapsed', async () => {
+    const h = mountBody()
+    await act(() => h.script.watches.ready(ROOT))
+    await act(() => h.script.settle({ ok: true, value: ROOT_LEVEL }))
+    const toggle = h.view.getByRole('button', { name: zh['search.placeholder'] })
+    await act(async () => { fireEvent.click(toggle) })
+    h.searches.answerWith(answer(['src/target.ts']))
+    await act(async () => {
+      fireEvent.change(h.view.getByRole('searchbox'), { target: { value: 'target' } })
+      await searchesSettled()
+    })
+    fireEvent.click(toggle)
+    const result = h.view.container.querySelector<HTMLElement>(`[data-files-path="${ROOT}/src/target.ts"] button`)!
+    result.focus()
+    await act(async () => { fireEvent.keyDown(result, { key: 'Escape' }) })
+    const body = h.view.container.querySelector('[data-files-body]')!
+    expect(body.getAttribute('data-files-view')).toBe('tree')
+    expect(h.instance.getSnapshot().byPane[PANE]!.query).toBe('')
+    expect(h.view.queryByRole('searchbox')).toBeNull()
+    expect(document.activeElement).toBe(body)
+  })
+
+  it('keeps a search running and draws its answer while the search bar is collapsed', async () => {
+    const h = mountBody()
+    await act(() => h.script.watches.ready(ROOT))
+    await act(() => h.script.settle({ ok: true, value: ROOT_LEVEL }))
+    const toggle = h.view.getByRole('button', { name: zh['search.placeholder'] })
+    await act(async () => { fireEvent.click(toggle) })
+    h.searches.answerWith(undefined)
+    fireEvent.change(h.view.getByRole('searchbox'), { target: { value: 'target' } })
+    const running = h.searches.started[0]!
+    fireEvent.click(toggle)
+    expect(running.signal.aborted).toBe(false)
+    expect(h.view.container.querySelector('[data-files-body]')?.getAttribute('aria-busy')).toBe('true')
+    await act(async () => {
+      running.settle(answer(['src/target.ts']))
+      await searchesSettled()
+    })
+    expect(h.view.queryByRole('searchbox')).toBeNull()
+    expect(names(h.view.container)).toContain(`${ROOT}/src/target.ts`)
+    expect(h.view.container.querySelector('[data-files-body]')?.getAttribute('aria-busy')).toBe('false')
+    await act(async () => { h.face.focus(PANE) })
+    expect(h.view.container.querySelector<HTMLInputElement>('[data-files-search]')?.value).toBe('target')
+    expect(document.activeElement).toBe(h.view.getByRole('searchbox'))
+    expect(h.search).toHaveBeenCalledTimes(1)
+  })
+
+  it('closes search settings when the toolbar collapses the search bar', async () => {
+    const h = mountBody()
+    await act(() => h.script.watches.ready(ROOT))
+    await act(() => h.script.settle({ ok: true, value: ROOT_LEVEL }))
+    const toggle = h.view.getByRole('button', { name: zh['search.placeholder'] })
+    await act(async () => { fireEvent.click(toggle) })
+    fireEvent.click(h.view.getByRole('button', { name: zh['search.settings'] }))
+    expect(h.view.queryByRole('dialog')).not.toBeNull()
+    fireEvent.click(toggle)
+    expect(h.view.queryByRole('dialog')).toBeNull()
+    await act(async () => { fireEvent.click(toggle) })
+    expect(h.view.queryByRole('dialog')).toBeNull()
+  })
+
+  it('lists the root on mount, heads it with its path split at the last segment, and draws directories first with dotfiles shown once the reader asks', async () => {
     const { view, script } = mountBody()
     expect(script.list).not.toHaveBeenCalled()
     await act(() => script.watches.ready(ROOT))
@@ -82,6 +199,9 @@ describe('FilesBody', () => {
     const path = view.container.querySelector('[data-files-path]')
     expect(path?.getAttribute('title')).toBe(ROOT)
     expect([...path?.firstElementChild?.children ?? []].map(span => span.textContent)).toEqual(['/work/', 'app'])
+    expect(names(view.container)).toEqual([`${ROOT}/src`, `${ROOT}/pipe`, `${ROOT}/README.md`])
+    await act(async () => { fireEvent.click(view.getByRole('button', { name: zh['search.placeholder'] })) })
+    act(() => { fireEvent.click(view.getByRole('button', { name: zh['search.showHidden'] })) })
     expect(names(view.container)).toEqual([`${ROOT}/src`, `${ROOT}/.env`, `${ROOT}/pipe`, `${ROOT}/README.md`])
     const envIcon = view.container.querySelector(`[data-files-path="${ROOT}/.env"] svg`)?.innerHTML
     const readmeIcon = view.container.querySelector(`[data-files-path="${ROOT}/README.md"] svg`)?.innerHTML
@@ -94,7 +214,7 @@ describe('FilesBody', () => {
     await act(() => script.settle({ ok: true, value: ROOT_LEVEL }))
     const path = view.container.querySelector('[data-files-path]')
     expect([...path?.firstElementChild?.children ?? []].map(span => span.textContent)).toEqual(['/'])
-    expect(names(view.container)).toEqual(['/src', '/.env', '/pipe', '/README.md'])
+    expect(names(view.container)).toEqual(['/src', '/pipe', '/README.md'])
   })
 
   it('marks the root path clipped while its text is wider than its box, re-reading on resize', async () => {

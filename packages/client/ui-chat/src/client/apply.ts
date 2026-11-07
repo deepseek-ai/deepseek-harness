@@ -288,7 +288,8 @@ export function apply(ctx: Context): void {
               window.open(url, '_blank', 'noopener,noreferrer')
             }
           },
-          loadOlder: () => { void session.loadOlder() },
+          loadOlder: () => { void session.loadOlder({ deferConsumption: true }) },
+          consumeOlder: () => session.consumeOlder(),
           loadThrough: seq => session.loadThrough(seq),
           loadImage: Object.assign(
             (attachment: ImageAttachmentRef) => ctx.uiConversation.imageUrl(sessionId, attachment),

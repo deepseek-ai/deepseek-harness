@@ -36,7 +36,7 @@ kind: "package-reference"
 
 `markReady(ref, signal)` 把草稿标记为可评审；`merge(ref, { method, headSha }, signal)` 只在 head 仍是 `headSha` 时合并变更请求。两者都委托给引用所属 forge 的提供方，没有注册提供方时抛错；主机接受时 resolve 为 undefined，否则为 `ForgeActionFailure`：`unauthenticated`、head 已越过 `headSha` 时的 `stale`，或带主机原因的 `failed`。两者结束后，被监听的变更请求会立即重新轮询。快照带有 `mergeReady`（主机现在是否会为已登录用户合并该变更请求）与 `mergeMethods`（仓库接受的合并方式，该用户常用的方式排在最前）。
 
-`diff(ref, signal)` 读取托管平台计算出的变更请求统一补丁，路径带 `a/` 与 `b/` 前缀；`fileText(ref, commit, path, signal)` 读取其仓库中某个提交下的一个文件。两者都委托给引用所属 forge 的提供方，没有注册提供方时抛错，resolve 为文本或 `ForgeFailure`；托管平台或提供方因结果超过其大小上限而拒绝时，失败为 `too-large`。`fileUrl(ref, commit, path)` 返回该文件在该提交下的网页地址。
+`diff(ref, headSha, signal)` 读取托管平台计算出的变更请求在 head 提交 `headSha` 处的统一补丁，路径带 `a/` 与 `b/` 前缀；`fileText(ref, commit, path, signal)` 读取其仓库中某个提交下的一个文件。两者都委托给引用所属 forge 的提供方，没有注册提供方时抛错，resolve 为文本或 `ForgeFailure`；托管平台或提供方因结果超过其大小上限而拒绝时，失败为 `too-large`。提供方只在补丁描述 `headSha` 时返回补丁；head 已是其他提交时，`diff` resolve 为 `stale`。同一 head 提交的第一次 stale 读取会让被 watch 的变更请求立即重新轮询，使下一次状态给出当前 head；之后在该提交上的 stale 读取等待常规轮询，从而在托管平台的应答短暂不一致时限制读取次数。快照携带 `unresolvedThreads` 与 `threadsTruncated`；提供方只统计了部分评审讨论时，后者表示该计数只是下限。`fileUrl(ref, commit, path)` 返回该文件在该提交下的网页地址。
 
 `fetchChecks(ref, signal)` 按需读取单个变更请求的完整检查，使用独立的 `fetchTimeoutMs` 时限，不占用轮询批次，也不向其监听方发布结果。读取失败时保留已有轮询快照。提供方未实现 `fetchChecks` 时返回 `unavailable`。调用方取消、提供方或服务销毁都会中止读取；销毁会等待读取结束。
 
