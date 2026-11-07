@@ -123,11 +123,55 @@ def check_clicks(helper, window, point, state_file):
     return state
 
 
+def check_keyboard(call, owner, state_file, state):
+    count = len(state["events"])
+    call("pressKey", {**owner, "key": ["w", "d"]}, "INVALID_ARGUMENT")
+    call("pressKey", {**owner, "key": "d", "modifiers": ["w"]}, "INVALID_ARGUMENT")
+    call("pressKey", {**owner, "key": "d", "modifiers": ["shift"]})
+    state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 2)
+    shortcut = [(event["type"], event.get("keyCode"), event["shift"]) for event in state["events"][count:]]
+    assert shortcut == [(10, 2, True), (11, 2, True)], shortcut
+    count = len(state["events"])
+
+    def key(name, direction):
+        call("sendKeyEvent", {**owner, "runId": "held-input", "key": name, "direction": direction})
+
+    key("w", "down")
+    key("d", "down")
+    state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 2)
+    call("getState", {**owner, "maxElements": 2000, "maxDepth": 25})
+    time.sleep(2)
+    key("d", "up")
+    state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 3)
+    held = state["events"][count:]
+    assert [(event["type"], event["keyCode"]) for event in held] == [(10, 13), (10, 2), (11, 2)], held
+    assert held[2]["timestamp"] - held[1]["timestamp"] >= 2, held
+    call("releaseHeldKeys", {"runId": "held-input"})
+    state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 4)
+    assert [(e["type"], e["keyCode"]) for e in state["events"][count:]] == [(10, 13), (10, 2), (11, 2), (11, 13)]
+
+    for explicit_up in (True, False):
+        count = len(state["events"])
+        key("w", "down")
+        key("w", "down")
+        if explicit_up:
+            key("w", "up")
+        call("releaseHeldKeys", {"runId": "held-input"})
+        state = wait_for_state(state_file, lambda value: any(
+            e["type"] == 11 and e.get("keyCode") == 13 for e in value["events"][count:]))
+        view_events = [(e["type"], e["keyCode"], e["repeat"]) for e in state["events"][count:]]
+        # AppKit can filter a synthetic repeat before NSView.keyDown receives it.
+        down, repeat, up = (10, 13, False), (10, 13, True), (11, 13, False)
+        assert view_events in ([down, up], [down, repeat, up]), view_events
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--helper", type=Path, required=True)
     parser.add_argument("--artifacts", type=Path)
-    parser.add_argument("--click-only", action="store_true")
+    only = parser.add_mutually_exclusive_group()
+    only.add_argument("--click-only", action="store_true")
+    only.add_argument("--keyboard-only", action="store_true")
     args = parser.parse_args()
     transcript = []
     helper = None
@@ -141,7 +185,8 @@ def main():
         info = {"CFBundleName": "Capabilities Fixture", "CFBundleDisplayName": "Capabilities Fixture",
                 "CFBundleIdentifier": "test.dsh.cua." + uuid.uuid4().hex,
                 "CFBundleExecutable": "CapabilitiesFixture", "CFBundlePackageType": "APPL",
-                "DSHFixtureStatePath": str(state_file), "DSHFixtureBackground": args.click_only}
+                "DSHFixtureStatePath": str(state_file), "DSHFixtureBackground": args.click_only or args.keyboard_only,
+                "DSHFixtureKeyboard": args.keyboard_only}
         (application / "Contents/Info.plist").write_bytes(plistlib.dumps(info))
         subprocess.run(["swiftc", str(ROOT / "tests/CapabilitiesFixture.swift"), "-o", str(executable)], check=True)
         try:
@@ -158,6 +203,10 @@ def main():
             app = call("launchApp", owner)
             assert app["running"] is True, app
             pid = wait_for_state(state_file, lambda value: value["windowId"] > 0)["pid"]
+            if args.keyboard_only:
+                check_keyboard(call, owner, state_file, json.loads(state_file.read_text()))
+                print("PASS: Shift+D shortcut, two-second W+D hold, independent D up, explicit W repeat and one final up")
+                return
             if not args.click_only:
                 call("activate", owner)
                 state = wait_for_state(state_file, lambda value: value["pid"] == pid and value["active"] and value["keyWindow"])
@@ -188,6 +237,7 @@ def main():
             if not args.click_only:
                 call("click", {**window, **point, "mouseButton": "middle", "modifiers": ["shift"]})
                 state = wait_for_state(state_file, lambda value: any(event["type"] == 26 and event.get("button") == 2 and event["shift"] for event in value["events"]))
+                check_keyboard(call, owner, state_file, state)
                 call("drag", {**window, "fromX": point["x"], "fromY": point["y"], "toX": point["x"] + 80,
                               "toY": point["y"] + 20, "durationMs": 200, "steps": 10, "mouseButton": "middle", "modifiers": ["shift"]})
                 state = wait_for_state(state_file, lambda value: any(event["type"] == 27 and event.get("button") == 2 and event["shift"] for event in value["events"]))
@@ -201,7 +251,7 @@ def main():
                 (args.artifacts / "capabilities.png").write_bytes(base64.b64decode(shot["data"]))
                 (args.artifacts / "state.json").write_text(json.dumps(state, ensure_ascii=False, indent=2))
             print("PASS: click holds and cancellation/timeout/disconnect release" if args.click_only else
-                  "PASS: stopped-app launch, Unicode selection, plain/HTML paste, middle/modifier drag, keypad identity and click holds")
+                  "PASS: stopped-app launch, Unicode selection, plain/HTML paste, middle/modifier drag, overlapping W+D events, keypad identity and click holds")
         finally:
             if pid is None and state_file.exists():
                 pid = json.loads(state_file.read_text())["pid"]

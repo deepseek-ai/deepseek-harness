@@ -8,6 +8,7 @@ import { CuaConfigFields } from '@deepseek-ai/dsh-cua/config'
 import { createPermissionParameters } from './permission-guide.ts'
 import { nativeHostArchitecture, prepareNativeExecutable, type SourceSigning } from './native-build.ts'
 import { createSharedNativeChannel } from './shared-native.ts'
+import { installHeldKeys } from './held-keys.ts'
 import { GUIDANCE } from './guidance.ts'
 export { GUIDANCE } from './guidance.ts'
 
@@ -16,7 +17,7 @@ const CAPABILITIES: CuaStartupCapabilities = {
   methods: [
     'activate', 'click', 'drag', 'findApps', 'getApp', 'getCapabilities', 'getState', 'invoke',
     'listActions', 'listApps', 'listWindows', 'mouseMove', 'paste', 'performAction', 'pressKey', 'requestMouseControl', 'screenshot', 'scroll',
-    'selectText', 'setValue', 'show', 'typeText',
+    'selectText', 'sendKeyEvent', 'setValue', 'show', 'typeText',
   ],
   appLevelAccessibility: true,
   keyboard: ['app'],
@@ -60,7 +61,8 @@ export const Config = Schema.object({
  * @returns Completion after native preparation and tool registration.
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
-  const backend = { createChannel: createSharedNativeChannel, guidance: GUIDANCE, capabilities: CAPABILITIES,
+  const backend = { createChannel: createSharedNativeChannel, sendKeyEvent: installHeldKeys(ctx),
+    guidance: GUIDANCE, capabilities: CAPABILITIES,
     permissionParameters: createPermissionParameters(config.permissionPollIntervalMs) }
   if (config.helperPath !== undefined) {
     if (!isAbsolute(config.helperPath)) throw new Error('dsh-cua helperPath must be absolute')
