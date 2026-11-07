@@ -682,8 +682,9 @@ export function ChangesTab({
     setWanted(path)
   }
   /**
-   * The file being read: the file last jumped to while the scroll stays there, else the last file whose section starts
-   * above the viewport top.
+   * The file being read: the file last jumped to while the scroll stays there, else the first file whose section still
+   * reaches below the viewport top, so the gap between two cards at the top belongs to the file after it; past the last
+   * section, the last file.
    */
   const currentIndex = (viewport: HTMLElement): number => {
     const remembered = jumpPosition.current
@@ -691,10 +692,11 @@ export function ChangesTab({
       ? files.findIndex(file => file.path === treeState.selected) : -1
     if (index >= 0) return index
     const top = viewport.getBoundingClientRect().top
-    return Math.max(0, files.findLastIndex((file) => {
+    const reading = files.findIndex((file) => {
       const section = sections.current.get(file.path)
-      return section !== undefined && section.getBoundingClientRect().top <= top + 1
-    }))
+      return section !== undefined && section.getBoundingClientRect().bottom > top + 1
+    })
+    return reading >= 0 ? reading : Math.max(0, files.length - 1)
   }
   /** Whether a key press belongs to a field, a comment, a menu, or a text selection rather than to the file list. */
   const typing = (container: HTMLElement, origin: EventTarget): boolean => {
