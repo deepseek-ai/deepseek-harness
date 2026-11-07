@@ -34,8 +34,10 @@ const imageBase64 = z.string().min(1).refine(value => Buffer.from(value, 'base64
   message: 'Expected canonical base64 image data',
 })
 
-/** Operations shared by the model and native helper, before Host parameters are added. */
-export const NativeToolOperations = [
+const mouseMove = { useSystemPointer: z.boolean().optional().describe('Request use of the system pointer. The Host checks permission before dispatch.') }
+
+/** Model-submittable operations, before the Host applies permission decisions and resource limits. */
+export const Request = z.discriminatedUnion('method', [
   operation('getCapabilities', {}), operation('listApps', {}),
   operation('findApps', { query: z.string().min(1, 'Expected a non-empty search string').regex(/\S/, 'Expected a non-empty search string') }),
   operation('getApp', { selector: z.string().min(1) }),
@@ -50,7 +52,8 @@ export const NativeToolOperations = [
   operation('performAction', { ...snapshot, action: z.string().min(1), argument: jsonValue.optional() }),
   operation('invoke', snapshot),
   z.object({ method: z.literal('mouseMove'), params: z.union([
-    z.object(snapshot).strict(), z.object(absoluteCoordinate).strict(), z.object(relativeCoordinate).strict(),
+    z.object({ ...snapshot, ...mouseMove }).strict(), z.object({ ...absoluteCoordinate, ...mouseMove }).strict(),
+    z.object({ ...relativeCoordinate, ...mouseMove }).strict(),
   ]) }).strict(),
   z.object({ method: z.literal('click'), params: z.union([
     z.object({ ...snapshot, ...click }).strict(),
@@ -77,10 +80,7 @@ export const NativeToolOperations = [
       fromX: relativePoint, fromY: relativePoint, toX: relativePoint, toY: relativePoint }).strict(),
   ]) }).strict(),
   operation('screenshot', window),
-] as const
-
-/** Model-submittable operations. The Host answers mouse-control requests without dispatching native input. */
-export const Request = z.discriminatedUnion('method', [...NativeToolOperations, operation('requestMouseControl', {})])
+])
 
 /** Resource parameters supplied by the Host, never accepted from model tool arguments. */
 export const NativeResourceParameters = {

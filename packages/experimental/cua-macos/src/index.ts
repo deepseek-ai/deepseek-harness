@@ -16,7 +16,7 @@ const CAPABILITIES: CuaStartupCapabilities = {
   platform: 'macos',
   methods: [
     'activate', 'click', 'drag', 'findApps', 'getApp', 'getCapabilities', 'getState', 'invoke',
-    'listActions', 'listApps', 'listWindows', 'mouseMove', 'paste', 'performAction', 'pressKey', 'requestMouseControl', 'screenshot', 'scroll',
+    'listActions', 'listApps', 'listWindows', 'mouseMove', 'paste', 'performAction', 'pressKey', 'screenshot', 'scroll',
     'selectText', 'sendKeyEvent', 'setValue', 'show', 'typeText',
   ],
   appLevelAccessibility: true,
@@ -33,6 +33,8 @@ export const inject = ['computerUse', 'tools', 'systemPrompt', 'subprocess', 'ag
 export interface Config extends CuaConfig {
   /** Interval in milliseconds between permission and position checks while the native guide is open. */
   permissionPollIntervalMs: number
+  /** Ask before a main task may move the system pointer. When false only explicitly requested moves use it. */
+  requireSystemPointerApproval: boolean
   /**
    * Source-build signing: `ad-hoc` (default) binds grants to the code hash;
    * an object selects an existing certificate in an explicitly configured keychain.
@@ -43,6 +45,7 @@ export interface Config extends CuaConfig {
 /** Validate shared operation bounds and macOS source signing before preparing the helper. */
 export const Config = Schema.object({
   ...CuaConfigFields,
+  requireSystemPointerApproval: Schema.boolean().default(true),
   permissionPollIntervalMs: Schema.number().step(1).min(100).max(2 ** 31 - 1).default(1000),
   sourceSigning: Schema.union([
     Schema.const('ad-hoc'),
@@ -62,7 +65,7 @@ export const Config = Schema.object({
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
   const backend = { createChannel: createSharedNativeChannel, sendKeyEvent: installHeldKeys(ctx),
-    guidance: GUIDANCE, capabilities: CAPABILITIES,
+    guidance: GUIDANCE, capabilities: CAPABILITIES, requireSystemPointerApproval: config.requireSystemPointerApproval,
     permissionParameters: createPermissionParameters(config.permissionPollIntervalMs) }
   if (config.helperPath !== undefined) {
     if (!isAbsolute(config.helperPath)) throw new Error('dsh-cua helperPath must be absolute')

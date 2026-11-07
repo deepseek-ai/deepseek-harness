@@ -7,9 +7,9 @@ import { NativeError } from './native-client.ts'
 
 /** Mouse control applies only to mouseMove and never grants access to an application. */
 export class MouseControl {
-  private readonly decisions = new Map<Agent['id'], boolean | 'asking'>()
+  private readonly decisions = new WeakMap<Agent, boolean | 'asking'>()
 
-  constructor(private readonly ctx: Context) {}
+  constructor(private readonly ctx: Context, private readonly requireApproval: boolean) {}
 
   /**
    * Select the native route without prompting the user.
@@ -17,7 +17,7 @@ export class MouseControl {
    * @returns Whether this Session explicitly approved moving the system pointer.
    */
   allowed(agent: Agent): boolean {
-    return this.decisions.get(agent.id) === true
+    return this.decisions.get(agent) === true
   }
 
   /**
@@ -30,12 +30,13 @@ export class MouseControl {
     if (agent.session.header.origin === 'subagent') {
       throw new NativeError('MOUSE_CONTROL_UNAVAILABLE', "Delegated tasks cannot move the user's pointer. Use AX hover, click, or performAction. If the task requires a physical hover, report that step in your final result for the main task.")
     }
-    const decision = this.decisions.get(agent.id)
+    if (!this.requireApproval) return true
+    const decision = this.decisions.get(agent)
     if (decision === 'asking') throw new NativeError('MOUSE_CONTROL_PENDING', 'Wait for the pending mouse control request in this session before continuing')
     if (decision !== undefined) return decision
     const questions = this.ctx.get('userQuestions')
     if (!questions) throw new NativeError('MOUSE_APPROVAL_UNAVAILABLE', 'No human answerer is available for mouse control')
-    this.decisions.set(agent.id, 'asking')
+    this.decisions.set(agent, 'asking')
     const id = 'cua-mouse-control'
     const approve = mouseControlDisplay.approve.en
     const reject = 'Deny'
@@ -49,10 +50,10 @@ export class MouseControl {
       const [answer] = result.answers
       const granted = result.answers.length === 1 && answer?.id === id && !answer.custom?.trim()
         && answer.selected.length === 1 && answer.selected[0] === approve
-      this.decisions.set(agent.id, granted)
+      this.decisions.set(agent, granted)
       return granted
     } catch (error) {
-      this.decisions.delete(agent.id)
+      this.decisions.delete(agent)
       if (error instanceof UserQuestionError && error.code === 'ASK_CANCELLED') {
         throw new NativeError('MOUSE_APPROVAL_CANCELLED', 'The mouse control request was dismissed. Continue without mouse control unless the user asks to reconsider', { cause: error })
       }

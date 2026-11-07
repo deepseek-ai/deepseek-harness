@@ -127,6 +127,8 @@ export interface CuaBackend {
   createChannel: NativeChannelFactory
   guidance: string
   capabilities: CuaStartupCapabilities
+  /** Whether explicit system-pointer moves require consent. Omit for providers without this route. */
+  requireSystemPointerApproval?: boolean
   /** Dispatch a directional key through the provider's execution-scoped input owner, after application authorization. */
   sendKeyEvent?: (client: NativeClient, params: Record<string, JsonValue>,
     execution: Readonly<ToolExecution>) => Promise<JsonValue>
@@ -160,7 +162,8 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
     permissionParameters: backend.permissionParameters,
     store: new CuaPermissionStore(ctx, config.allowedApps.map(grant => ({ ...grant, id: grant.id as CuaApplicationId })), config.timeoutMs),
   })
-  const mouseControl = backend.capabilities.methods.includes('requestMouseControl') ? new MouseControl(ctx) : undefined
+  const mouseControl = backend.requireSystemPointerApproval === undefined
+    ? undefined : new MouseControl(ctx, backend.requireSystemPointerApproval)
   const clients = new Map<Agent, NativeClient>()
   const lifetime = new AbortController()
   const pending = new Map<Promise<unknown>, Agent>()
@@ -209,7 +212,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       for (const result of [...await permissions, ...results, ...releases]) if (result.status === 'rejected') errors.push(result.reason)
       if (errors.length > 0) throw new AggregateError(errors, 'dsh-cua helper cleanup failed')
     }
-    const callNative = async (request: CuaOperation, execution: Readonly<CuaExecution>) => {
+    const callNative = async (request: CuaOperation, execution: Readonly<CuaExecution>, pointerRoute?: boolean) => {
       const { method, params: parsedParams } = request
       const params = execution.coordinates.parameters(request)
       const agent = execution.agent
@@ -226,7 +229,10 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
             ? { ...params, maxElements: config.maxElements, maxDepth: config.maxDepth }
             : method === 'drag' ? { ...params, durationMs: config.dragDurationMs, steps: config.dragSteps }
               : params
-      if (method === 'mouseMove' && mouseControl) nativeParams.useSystemPointer = mouseControl.allowed(agent)
+      if (method === 'mouseMove') {
+        delete nativeParams.useSystemPointer
+        if (mouseControl) nativeParams.useSystemPointer = pointerRoute ?? mouseControl.allowed(agent)
+      }
       const requestNative = () => client.request(method, nativeParams, signal, execution.callId)
       if (method === 'screenshot') {
         const { attachments, target } = await screenshotStore(ctx, execution)
@@ -313,10 +319,6 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         const signal = AbortSignal.any([execution.signal, lifetime.signal, owner.signal])
         signal.throwIfAborted()
         const operation = (async () => {
-          if (request.method === 'requestMouseControl') {
-            if (!mouseControl) throw new NativeError('UNSUPPORTED_OPERATION', 'This provider does not support system mouse control')
-            return mouseControl.request(agent, signal)
-          }
           const previous = clients.get(agent)
           if (previous?.disposed) {
             try { await previous.dispose() } catch (error) {
@@ -342,14 +344,28 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
             owner.coordinates = new CuaCoordinates()
           }
           const nativeClient = client
+          let pointerRoute: boolean | undefined
+          let prepare: ((signal: AbortSignal) => Promise<void>) | undefined
+          if (request.method === 'mouseMove') {
+            if (request.params.useSystemPointer === true) {
+              prepare = async (signal) => {
+                if (!mouseControl) throw new NativeError('UNSUPPORTED_OPERATION', 'This provider does not support system mouse control')
+                owner.coordinates.parameters(request)
+                if (!await mouseControl.request(agent, signal)) {
+                  throw new NativeError('MOUSE_CONTROL_DENIED', 'The user declined system-pointer movement for this session. No input was sent. Use pointer-free actions.')
+                }
+                pointerRoute = true
+              }
+            } else pointerRoute = request.params.useSystemPointer
+          }
           const dispatch = async (signal: AbortSignal) => {
             const scoped = { ...execution, agent, signal, nativeClient, coordinates: owner.coordinates }
-            const result = await callNative(request, scoped)
+            const result = await callNative(request, scoped, pointerRoute)
             signal.throwIfAborted()
             return result
           }
           return 'appHandle' in request.params
-            ? access.run(nativeClient, request.params.appHandle as CuaAppHandle, signal, dispatch)
+            ? access.run(nativeClient, request.params.appHandle as CuaAppHandle, signal, dispatch, prepare)
             : dispatch(signal)
         })()
         pending.set(operation, agent)

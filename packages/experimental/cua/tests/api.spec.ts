@@ -891,10 +891,15 @@ it('expands menu contents and details only for the requested observation', async
   expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'getState', params: { appHandle: selected.appHandle, includeMenus: false, details: false } })
 })
 
-it('requests mouse control without dispatching a move and returns the decision', async () => {
-  const dispatch = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true)
-  const cua = createCuaApi(dispatch)
-  expect(await cua.requestMouseControl()).toBe(false)
-  expect(await cua.requestMouseControl()).toBe(true)
-  expect(dispatch.mock.calls).toEqual(Array(2).fill([{ method: 'requestMouseControl', params: {} }]))
+it('passes explicit system-pointer intent for both mouseMove target forms', async () => {
+  const f = fixture()
+  const win = await (await f.api.getApp('Editor')).getWindow(23)
+  await win.mouseMove(element('0'), { useSystemPointer: true })
+  expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'mouseMove', params: {
+    appHandle: 'app-17', windowId: 23, snapshotId: 'snapshot-2', elementId: '0', useSystemPointer: true,
+  } })
+  await win.mouseMove([250, 750], { relative: true, useSystemPointer: false })
+  expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'mouseMove', params: {
+    appHandle: 'app-17', windowId: 23, snapshotId: 'snapshot-2', x: 250, y: 750, relative: true, useSystemPointer: false,
+  } })
 })

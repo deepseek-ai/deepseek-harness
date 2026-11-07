@@ -4,7 +4,7 @@ import type { CuaApi, CuaApp, CuaSurface, CuaWindow } from '@deepseek-ai/dsh-cua
 import { COMMON_GUIDANCE } from '@deepseek-ai/dsh-cua/guidance'
 import { GUIDANCE, PLATFORM_GUIDANCE } from '../src/guidance.ts'
 
-const apiNames: Array<keyof CuaApi> = ['getCapabilities', 'requestMouseControl', 'listApps', 'findApps', 'getState', 'getApp']
+const apiNames: Array<keyof CuaApi> = ['getCapabilities', 'listApps', 'findApps', 'getState', 'getApp']
 const accessibilityNames: Array<Exclude<keyof CuaSurface, 'sendKeyEvent'>> = [
   'getAccessibilityTree', 'listActions', 'invoke', 'performAction', 'setValue', 'selectText',
 ]
@@ -56,8 +56,8 @@ it('enumerates every available method once in its catalog entry', () => {
   for (const catalog of [COMMON_GUIDANCE, GUIDANCE]) {
     for (const signature of signatures) expect(catalog.split('\n').filter(line => line.startsWith(`- ${signature}`))).toHaveLength(1)
   }
-  expect(signatures).toHaveLength(25)
-  expect(new Set(signatures.map(signature => signature.slice(signature.indexOf('.') + 1, -1))).size).toBe(24)
+  expect(signatures).toHaveLength(24)
+  expect(new Set(signatures.map(signature => signature.slice(signature.indexOf('.') + 1, -1))).size).toBe(23)
   expect(COMMON_GUIDANCE).toContain('app.appHandle')
   expect(COMMON_GUIDANCE).toContain('window.windowId')
 })

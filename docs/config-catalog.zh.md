@@ -1165,6 +1165,8 @@ export interface Config {
 export interface Config extends CuaConfig {
   /** Interval in milliseconds between permission and position checks while the native guide is open. */
   permissionPollIntervalMs: number
+  /** Ask before a main task may move the system pointer. When false only explicitly requested moves use it. */
+  requireSystemPointerApproval: boolean
   /**
    * Source-build signing: `ad-hoc` (default) binds grants to the code hash;
    * an object selects an existing certificate in an explicitly configured keychain.

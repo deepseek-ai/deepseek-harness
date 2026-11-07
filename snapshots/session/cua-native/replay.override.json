@@ -1431,9 +1431,9 @@
         "index": 0,
         "block": {
           "type": "tool-call",
-          "id": "cua-pointer-request",
+          "id": "cua-explicit-pointer-move",
           "name": "cua",
-          "arguments": "{\"method\":\"requestMouseControl\",\"params\":{}}"
+          "arguments": "{\"method\":\"mouseMove\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7,\"x\":100,\"y\":200,\"relative\":true,\"useSystemPointer\":true}}"
         }
       },
       {

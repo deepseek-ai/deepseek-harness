@@ -196,10 +196,11 @@ export interface CuaWindow extends CuaSurface {
    * Returning and subsequent observations do not restore the previous pointer position.
    * Other input and application changes can interrupt the interaction; observe before continuing.
    * @param target - current element id or screenshot-local [x,y].
-   * @param options - coordinate mode; applies only to [x,y].
+   * @param options - Coordinate mode for points and optional system-pointer request. False explicitly selects pointer-free hover.
    * @returns dispatch evidence and the selected route; observe the resulting UI after any UI delay.
    */
-  mouseMove(target: CuaElementId | readonly [number, number], options?: CuaCoordinateOptions): Promise<CuaHoverResult>
+  mouseMove(target: CuaElementId | readonly [number, number],
+    options?: CuaCoordinateOptions & { useSystemPointer?: boolean }): Promise<CuaHoverResult>
   /**
    * Click a current element id or screenshot-local point.
    * Cancellation or timeout releases the held button; received input cannot be undone. The operation deadline includes holdMs.
@@ -246,12 +247,6 @@ export interface CuaApp extends CuaSurface {
 }
 /** Native app API; its caller owns global bindings and variable persistence. */
 export interface CuaApi {
-  /**
-   * Ask to move the user's pointer with mouseMove for this session until restart. Only the main task can ask.
-   * @returns True on approval, false on refusal. Both decisions last until restart for this session.
-   * @throws If the user dismisses the question without deciding or another request is pending.
-   */
-  requestMouseControl(): Promise<boolean>
   /**
    * Inspect permissions without requesting them.
    * @param options - output options.

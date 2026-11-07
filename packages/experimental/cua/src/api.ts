@@ -1,6 +1,6 @@
 /** Object facade over logged native operations; its caller owns evaluator persistence. */
 import { Buffer } from 'node:buffer'
-import { z } from 'zod'
+import type { z } from 'zod'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { ActionNamesResult, ActionResult, AppResult, AppsResult, CapabilitiesResult, FoundAppsResult, HoverResult, Request, ScreenshotResult, ShowResult, StateResult, WindowsResult } from './protocol.ts'
 import type { CuaApi, CuaApp, CuaAppHandle, CuaCapabilities, CuaDispatch, CuaObservationOptions, CuaObservationSink, CuaOperation, CuaScreenshot, CuaSurface, CuaWindow } from './types.ts'
@@ -51,9 +51,6 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
   const objects = createCuaObjects(call, sink)
 
   const api: CuaApi = {
-    async requestMouseControl() {
-      return z.boolean().parse(await call('requestMouseControl', {}))
-    },
     async getCapabilities(options) {
       const result = CapabilitiesResult.parse(await call('getCapabilities', {}))
       capabilities = result
@@ -203,12 +200,15 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>, sink: CuaObser
         return screenshot
       },
       async mouseMove(targetPoint, options) {
-        const relative = options?.relative === undefined ? {} : { relative: options.relative }
+        const movement = {
+          ...options?.relative === undefined ? {} : { relative: options.relative },
+          ...options?.useSystemPointer === undefined ? {} : { useSystemPointer: options.useSystemPointer },
+        }
         if (typeof targetPoint === 'string') {
-          return HoverResult.parse(await base.call('mouseMove', { ...base.elementParams(), elementId: targetPoint, ...relative }))
+          return HoverResult.parse(await base.call('mouseMove', { ...base.elementParams(), elementId: targetPoint, ...movement }))
         }
         const [x, y] = targetPoint
-        return HoverResult.parse(await base.call('mouseMove', { ...coordinateParams(appHandle, windowId), x, y, ...relative }))
+        return HoverResult.parse(await base.call('mouseMove', { ...coordinateParams(appHandle, windowId), x, y, ...movement }))
       },
       async click(targetPoint, options) {
         const mouseButton = options?.mouseButton ?? 'left'
