@@ -199,7 +199,12 @@ it.each(['wrong-runtime', 'wrong-instance', 'extra', 'malformed', 'oversized', '
   },
 )
 
-it.each(['wrong-instance', 'wrong-pid', 'extra', 'malformed', 'oversized'] as const)(
+it.each(['wrong-pid', 'extra'] as const)('ignores unused %s handshake metadata', async (handshake) => {
+  const f = await fixture({ handshake })
+  await expect(f.client().request('input', {}, new AbortController().signal)).resolves.toMatchObject({ connection: 1 })
+})
+
+it.each(['wrong-instance', 'malformed', 'oversized'] as const)(
   'rejects a %s Agent handshake before dispatch', async (handshake) => {
     const f = await fixture({ handshake })
     await expect(f.client().request('input', {}, new AbortController().signal)).rejects.toThrow()

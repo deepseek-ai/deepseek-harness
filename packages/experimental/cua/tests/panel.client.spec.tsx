@@ -12,7 +12,7 @@ import { en, zh } from '../src/client/locales.ts'
 
 afterEach(() => { cleanup(); vi.useRealTimers() })
 const value: CuaApplicationState & { system: Extract<CuaSystemPermissionState, { platform: 'darwin' }> } = { system: { platform: 'darwin' as const, accessibility: false, screenRecording: true,
-  helper: { pid: 9, path: '/native/helper' }, parent: { pid: 8, path: '/host/node' } },
+  helper: { path: '/native/helper' }, parent: { path: '/host/node' } },
 allowedApps: [], blockedApps: [], persistentAvailable: true }
 
 function observe(value: CuaApplicationState & { system: CuaSystemPermissionState }) {
@@ -232,7 +232,7 @@ it.each([en, zh])('shows four requirements with the target application beside ea
   const f = fixture()
   render(<PermissionPanel {...f.props} t={makeTranslate(dictionary)} />)
   const application = { name: 'Visual Studio Code.app', path: '/Applications/Visual Studio Code.app', icon: 'data:image/png;base64,aWNvbg==' }
-  f.publish({ ...observe({ ...value, system: { ...value.system, parent: { pid: 1, path: '/sbin/launchd' }, launchApplication: application } }) })
+  f.publish({ ...observe({ ...value, system: { ...value.system, parent: { path: '/sbin/launchd' }, launchApplication: application } }) })
   const requirements = screen.getByRole('region', { name: dictionary.title })
   expect(within(requirements).getAllByRole('group')).toHaveLength(4)
   expect(screen.getByRole('region', { name: dictionary.applicationsTitle })).toBeTruthy()
@@ -440,7 +440,7 @@ it('retains a known read-only configuration and query failure throughout managem
 it.each([true, false, null] as const)('shows Windows desktop access for lock state %s without macOS permission actions', (sessionLocked) => {
   const f = fixture()
   f.publish({ ...observe(value), system: { value: { platform: 'windows', sessionLocked, captureAvailable: true,
-    elevated: false, helper: { pid: 9, path: 'C:\\helper.exe' } }, error: null, busy: false } })
+    elevated: false, helper: { path: 'C:\\helper.exe' } }, error: null, busy: false } })
   render(<PermissionPanel {...f.props} />)
   const desktop = screen.getByRole('group', { name: en.windowsDesktop })
   const capture = screen.getByRole('group', { name: en.windowsCapture })
@@ -452,7 +452,7 @@ it.each([true, false, null] as const)('shows Windows desktop access for lock sta
   expect(screen.queryByRole('button', { name: en.granted })).toBeNull()
   expect(screen.queryByText('C:\\helper.exe')).toBeNull()
   f.publish({ system: { value: { platform: 'windows', sessionLocked: false, captureAvailable: false,
-    elevated: true, helper: { pid: 9 } }, error: null, busy: false } })
+    elevated: true, helper: {} }, error: null, busy: false } })
   expect(within(capture).getByText(en.unavailable)).toBeTruthy()
   expect(screen.getByText(en.elevated, { exact: false })).toBeTruthy()
   f.publish({ system: { ...f.state.getSnapshot().system, error: 'offline' } })
@@ -462,7 +462,7 @@ it.each([true, false, null] as const)('shows Windows desktop access for lock sta
 it.each([[true, true], [false, true], [false, false], [null, true]] as const)('offers Windows setup for lock=%s and capture=%s', (sessionLocked, captureAvailable) => {
   const f = fixture(), onDismiss = vi.fn()
   f.publish({ system: { value: { platform: 'windows', sessionLocked, captureAvailable,
-    elevated: false, helper: { pid: 9 } }, error: null, busy: false } })
+    elevated: false, helper: {} }, error: null, busy: false } })
   render(<PermissionSetup {...f.props} onDismiss={onDismiss} onOpenDetails={vi.fn()} />)
   const needsSetup = sessionLocked !== false || !captureAvailable
   expect(screen.queryByRole('dialog') !== null).toBe(needsSetup)

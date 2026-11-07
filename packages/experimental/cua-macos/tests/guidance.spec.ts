@@ -56,8 +56,8 @@ it('inlines discovery, restoration, screenshot, and mouse-move return records', 
     expect(lines.find(line => line.startsWith(`- ${name}(`))).toMatch(/ -> \(?\{ /)
   }
   expect(COMMON_GUIDANCE).toContain("{ platform: string, permissions: { accessibility: boolean, screenRecording: boolean }, appLevelAccessibility: boolean, keyboard: ('app' | 'window')[], sessionLocked: boolean | null, methods: string[], coordinateSpace: 'screenshot-pixels', browser: false }")
-  expect(COMMON_GUIDANCE).toContain('{ id: string, displayName: string, isRunning: true, pid: number }[]')
-  expect(COMMON_GUIDANCE).toContain('({ id: string, displayName: string, path: string } & ({ isRunning: true, pid: number } | { isRunning: false }))[]')
+  expect(COMMON_GUIDANCE).toContain('{ id: string, displayName: string, isRunning: true }[]')
+  expect(COMMON_GUIDANCE).toContain('{ id: string, displayName: string, path: string, isRunning: boolean }[]')
   expect(COMMON_GUIDANCE).toContain('bounds: { x: number, y: number, width: number, height: number }, isOnScreen: boolean, onCurrentSpace: boolean | null')
 })
 

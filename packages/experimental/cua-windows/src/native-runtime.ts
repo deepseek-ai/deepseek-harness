@@ -11,9 +11,9 @@ import { z } from 'zod'
 import { connectWindowsPipe, type WindowsConnection, type WindowsTransport } from './native-transport.ts'
 
 const Ready = z.object({
-  type: z.literal('ready'), protocol: z.literal(1), runtimeKey: z.string(), instanceId: z.string().min(1),
-}).strict()
-const Started = Ready.extend({ endpoint: z.string().min(1), launcherId: z.string().min(1) }).strict()
+  type: z.literal('ready'), protocol: z.literal(1), runtimeKey: z.string().min(1), instanceId: z.string().min(1),
+})
+const Started = Ready.extend({ endpoint: z.string().min(1), launcherId: z.string().min(1) })
 // Private transport control frames have fixed encoding; operation replies pass through unchanged.
 const closedFrame = Buffer.from('{"type":"closed"}\n')
 type Owner = { subprocess: Pick<SubprocessRuntime, 'spawn'> }
@@ -238,7 +238,7 @@ class WindowsChannel implements NativeChannel {
         }
         const response = await frame
         const accepted = Ready.parse(response.value)
-        if (accepted.runtimeKey !== ready.runtimeKey || accepted.instanceId !== ready.instanceId || accepted.pid !== ready.pid)
+        if (accepted.runtimeKey !== ready.runtimeKey || accepted.instanceId !== ready.instanceId)
           throw new NativeError('NATIVE_PROTOCOL', 'Windows pipe belongs to another helper instance')
         this.startup.signal.throwIfAborted()
         admitted = true

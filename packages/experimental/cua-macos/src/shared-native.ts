@@ -13,8 +13,8 @@ export type { NativeChannel } from '@deepseek-ai/dsh-cua/native-client'
 
 const Ready = z.object({
   type: z.literal('ready'), protocol: z.literal(1), runtimeKey: z.string(),
-  pid: z.number().int().positive(), instanceId: z.string().min(1),
-}).strict()
+  instanceId: z.string().min(1),
+})
 const Refusal = z.object({ type: z.literal('error'), code: z.string().min(1), message: z.string() }).strict()
 const handshakeByteLimit = 8192
 type LauncherExit = [PromiseSettledResult<SubprocessOutcome>, PromiseSettledResult<boolean>]

@@ -27,7 +27,7 @@ function fixture(withSink = true) {
   const dispatch = vi.fn(async ({ method, params }: CuaOperation): Promise<JsonValue> => {
     switch (method) {
       case 'getCapabilities': return currentCapabilities
-      case 'listApps': return [selected, { pid: 18, name: 'Utility' }]
+      case 'listApps': return [selected, { id: 'utility-selector', pid: 4, name: 'Utility' }]
       case 'getApp': return selected
       case 'listWindows': return windows
       case 'mouseMove': return { ...delivered, hoverRoute: 'accessibility', systemPointerMoved: false }
@@ -59,17 +59,30 @@ function screenshot(overrides: Record<string, JsonValue> = {}): JsonValue {
 }
 
 describe('application discovery', () => {
-  it('reports permissions and discovers both bundle and PID selectors without activating an app', async () => {
+  it('reports permissions and discovers provider-issued selectors without activating an app', async () => {
     const f = fixture()
     expect(await f.api.getCapabilities()).toEqual(capabilities)
     expect(await f.api.getState()).toEqual({ apps: [
-      { id: 'test.editor', displayName: 'Editor', isRunning: true, pid: 17 },
-      { id: '18', displayName: 'Utility', isRunning: true, pid: 18 },
+      { id: 'test.editor', displayName: 'Editor', isRunning: true },
+      { id: 'utility-selector', displayName: 'Utility', isRunning: true },
     ], browsers: [] })
     expect(f.dispatch.mock.calls.map(([operation]) => operation.method)).toEqual(['getCapabilities', 'listApps'])
     const emitted = f.sink.text.mock.calls.map(([text]): unknown => JSON.parse(text))
     expect(emitted).toEqual([capabilities, await f.api.getState({ emit: false })])
     expect(f.sink.text).toHaveBeenCalledTimes(2)
+  })
+
+  it('passes a discovered selector unchanged to application selection', async () => {
+    const f = fixture()
+    const apps = await f.api.listApps({ emit: false })
+    await f.api.getApp(apps[1]!.id)
+    expect(f.dispatch).toHaveBeenCalledWith({ method: 'getApp', params: { selector: 'utility-selector' } })
+  })
+
+  it('uses the application name when discovery has no identifier', async () => {
+    const f = fixture()
+    f.dispatch.mockResolvedValueOnce([{ pid: 18, name: 'Utility' }])
+    expect(await f.api.listApps({ emit: false })).toEqual([{ id: 'Utility', displayName: 'Utility', isRunning: true }])
   })
 
   it('returns observations without requiring an output sink', async () => {
@@ -94,9 +107,9 @@ describe('application discovery', () => {
     const f = fixture()
     const matches = [
       { id: 'test.stopped', displayName: 'Stopped', path: '/Applications/Stopped.app', isRunning: false },
-      { id: 'test.running', displayName: 'Running', path: '/Applications/Running.app', isRunning: true, pid: 17 },
+      { id: 'test.running', displayName: 'Running', path: '/Applications/Running.app', isRunning: true },
     ]
-    f.dispatch.mockResolvedValueOnce(matches)
+    f.dispatch.mockResolvedValueOnce([matches[0]!, { ...matches[1]!, pid: 17 }])
     expect(await f.api.findApps('Editor')).toEqual(matches)
     expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'findApps', params: { query: 'Editor' } })
     expect(f.sink.text).toHaveBeenLastCalledWith(JSON.stringify(matches))
@@ -113,7 +126,7 @@ describe('application discovery', () => {
     const f = fixture()
     f.dispatch.mockResolvedValueOnce({ platform: 'macos' })
     await expect(f.api.getCapabilities()).rejects.toThrow()
-    f.dispatch.mockResolvedValueOnce([{ pid: 0, name: 'Invalid' }])
+    f.dispatch.mockResolvedValueOnce([{ id: '', name: 'Invalid' }])
     await expect(f.api.listApps()).rejects.toThrow()
     f.dispatch.mockResolvedValueOnce({ ...selected, appHandle: '' })
     await expect(f.api.getApp('Editor')).rejects.toThrow()

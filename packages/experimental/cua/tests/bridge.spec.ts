@@ -16,7 +16,7 @@ const capabilities: CuaCapabilities = {
   keyboard: ['app'], sessionLocked: false, methods: ['getCapabilities', 'getApp', 'getState', 'screenshot'],
   coordinateSpace: 'screenshot-pixels', browser: false,
 }
-const selected = { appHandle: 'app-17', pid: 17, name: 'Editor', running: true }
+const selected = { appHandle: 'app-17', name: 'Editor', running: true }
 const bounds = { x: 0, y: 0, width: 640, height: 480 }
 const snapshot = {
   appHandle: 'app-17', windowId: null, snapshotId: 'snapshot-1', tree: '0 button', truncated: false,
@@ -56,8 +56,8 @@ it('propagates a denied action without retrying it', async () => {
 })
 
 it('supports callers that retain observations without a text callback', async () => {
-  const cua = connectCua(() => async () => [{ pid: 17, name: 'Editor' }])
-  await expect(cua.listApps()).resolves.toEqual([{ id: '17', displayName: 'Editor', isRunning: true, pid: 17 }])
+  const cua = connectCua(() => async () => [{ id: 'editor-selector', name: 'Editor' }])
+  await expect(cua.listApps()).resolves.toEqual([{ id: 'editor-selector', displayName: 'Editor', isRunning: true }])
 })
 
 it.each([null, 'text only', { content: [{ type: 'text', text: '{}' }] }])('rejects an unusable tool result %j', async (result) => {

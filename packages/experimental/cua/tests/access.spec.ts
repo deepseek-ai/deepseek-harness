@@ -398,7 +398,8 @@ it('preserves captured launch metadata separately from the current helper parent
   const launchApplication = { name: 'Visual Studio Code', path: '/Applications/Visual Studio Code.app', icon: 'data:image/png;base64,aWNvbg==' }
   control.request.mockResolvedValueOnce({ platform: 'darwin' as const, accessibility: false, screenRecording: false,
     helper: { pid: 9 }, parent: { pid: 1, path: '/sbin/launchd' }, launchApplication })
-  expect(await f.ctx.cuaAccess.systemStatus()).toMatchObject({ parent: { pid: 1 }, launchApplication })
+  expect(await f.ctx.cuaAccess.systemStatus()).toEqual({ platform: 'darwin', accessibility: false, screenRecording: false,
+    helper: {}, parent: { path: '/sbin/launchd' }, launchApplication })
 })
 
 

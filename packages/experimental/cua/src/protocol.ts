@@ -4,7 +4,6 @@ import { z } from 'zod'
 import type { CuaAppHandle, CuaSnapshotId } from './types.ts'
 
 const id = z.number().int().positive().max(2 ** 32 - 1)
-const pid = z.number().int().positive().max(2 ** 31 - 1)
 const point = z.number().nonnegative()
 const relativePoint = z.number().int().min(0).max(999)
 const app = { appHandle: z.string().min(1) }
@@ -101,11 +100,12 @@ export const AppResult = z.object({
   appHandle: z.string().min(1).transform(value => value as CuaAppHandle),
   name: z.string(), bundleId: z.string().optional(), running: z.boolean(),
 })
-/** Running application records from the helper. */
-export const AppsResult = z.array(z.object({ pid, name: z.string(), bundleId: z.string().optional() }))
-/** Installed application matches keep running and stopped records distinct. */
-export const FoundAppsResult = z.array(z.intersection(z.object({ id: z.string().min(1), displayName: z.string(), path: z.string().min(1) }),
-  z.discriminatedUnion('isRunning', [z.object({ isRunning: z.literal(true), pid }), z.object({ isRunning: z.literal(false) })])))
+/** Running application metadata used for selection; other native fields are ignored. */
+export const AppsResult = z.array(z.object({ id: z.string().min(1).optional(), name: z.string(), bundleId: z.string().optional() }))
+/** Installed application matches and their current running state. */
+export const FoundAppsResult = z.array(z.object({
+  id: z.string().min(1), displayName: z.string(), path: z.string().min(1), isRunning: z.boolean(),
+}))
 /** Current windows and their global native bounds. */
 export const WindowsResult = z.array(z.object({
   windowId: id, appName: z.string(), title: z.string(), bounds,

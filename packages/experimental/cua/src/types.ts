@@ -51,8 +51,8 @@ export type CuaStartupCapabilities = Pick<
   'platform' | 'methods' | 'appLevelAccessibility' | 'keyboard' | 'browser' | 'coordinateSpace'
 >
 /** App discovery result accepted by getApp. */
-export type CuaAppInfo = Pick<Extract<CuaFoundAppInfo, { isRunning: true }>, 'id' | 'displayName' | 'isRunning' | 'pid'>
-/** An installed application match; running matches include a process identifier. */
+export type CuaAppInfo = Pick<CuaFoundAppInfo, 'id' | 'displayName'> & { isRunning: true }
+/** An installed application match with its current running state. */
 export type CuaFoundAppInfo = z.output<typeof FoundAppsResult>[number]
 /** Window bounds in the provider's global native units. Local operations use an origin of [0,0]. */
 export type CuaBounds = CuaWindowInfo['bounds']
@@ -273,7 +273,7 @@ export interface CuaApi {
   getState(options?: CuaObservationOptions): Promise<{ apps: CuaAppInfo[]; browsers: [] }>
   /**
    * Select an app, obtain consent, launch it in the background if necessary, and silently retain initial AX state.
-   * @param selector - Exact name, bundle ID, absolute application path or running PID string; ambiguous names reject.
+   * @param selector - Provider-issued identifier, exact name, bundle ID or absolute application path; ambiguous selectors reject.
    * @returns An application handle tied to this process lifetime; its initial tree read becomes the current snapshot.
    */
   getApp(selector: string): Promise<CuaApp>
