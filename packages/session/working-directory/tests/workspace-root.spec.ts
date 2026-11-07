@@ -239,6 +239,66 @@ describe('Session workspace roots', () => {
     expect(f.ctx.workingDirectory.rootOf(agent.session)).toBe(f.worktree)
   })
 
+  it('passes the checkout a source works in on to a Session starting inside it, and only the directory otherwise', async () => {
+    await using f = await fixture()
+    const src = join(f.worktree, 'src')
+    await f.ctx.workingDirectory.relocate(f.agent, f.worktree, { cwd: src })
+    // Starting inside the source's checkout registers it; the child header still records the original project.
+    const inside = await f.harness.create(SessionId('inherits-checkout'), {}, { cwd: f.root })
+    await expect(f.ctx.workingDirectory.inherit(inside, f.agent.session, { cwd: src }))
+      .resolves.toEqual({ root: f.worktree, cwd: src })
+    expect(f.ctx.workingDirectory.anchorsOf(inside.session)).toEqual([f.root, f.worktree])
+    expect(inside.session.snapshotEvents().filter(event => event.type === 'working-directory/change'))
+      .toEqual([expect.objectContaining({ data: { cwd: src, anchor: f.worktree } })])
+    // Starting outside the source's checkout sets the directory and keeps the original project as the root.
+    const outside = await f.harness.create(SessionId('starts-outside'), {}, { cwd: f.root })
+    const packages = join(f.root, 'packages')
+    await expect(f.ctx.workingDirectory.inherit(outside, f.agent.session, { cwd: packages }))
+      .resolves.toEqual({ root: f.root, cwd: packages })
+    expect(f.ctx.workingDirectory.anchorsOf(outside.session)).toEqual([f.root])
+    expect(outside.session.snapshotEvents().filter(event => event.type === 'working-directory/change'))
+      .toEqual([expect.objectContaining({ data: { cwd: packages } })])
+    // The source's other anchors are not passed on: a later change into one leaves the child's root alone.
+    await f.ctx.workingDirectory.set(inside, f.root)
+    await f.ctx.workingDirectory.relocate(f.agent, f.nested)
+    await f.ctx.workingDirectory.set(inside, join(f.nested, 'src'))
+    expect(f.ctx.workingDirectory.rootOf(inside.session)).toBe(f.root)
+    // A missing directory is refused before anything is committed.
+    await expect(f.ctx.workingDirectory.inherit(outside, f.agent.session, { cwd: join(f.root, 'missing') })).rejects.toThrow('directory does not exist')
+  })
+
+  it('passes no root on from a source whose root is its original project or the deployment fallback', async () => {
+    await using f = await fixture()
+    // The source works in its original project: the child's own header already registers it.
+    const child = await f.harness.create(SessionId('same-project'), {}, { cwd: f.root })
+    const foo = join(f.root, 'packages', 'foo')
+    await expect(f.ctx.workingDirectory.inherit(child, f.agent.session, { cwd: foo })).resolves.toEqual({ root: f.root, cwd: foo })
+    expect(child.session.snapshotEvents().filter(event => event.type === 'working-directory/change'))
+      .toEqual([expect.objectContaining({ data: { cwd: foo } })])
+    // A source without a recorded project reports the deployment fallback, which is no anchor to pass on:
+    // the started Session only sets its directory and registers nothing.
+    const bare = await f.harness.create(SessionId('bare-source'))
+    const started = await f.harness.create(SessionId('bare-child'))
+    await expect(f.ctx.workingDirectory.inherit(started, bare.session, { cwd: f.outside }))
+      .resolves.toEqual({ root: f.ctx.workingDirectory.defaultDirectory, cwd: f.outside })
+    expect(f.ctx.workingDirectory.anchorsOf(started.session)).toEqual([])
+    expect(started.session.snapshotEvents().filter(event => event.type === 'working-directory/change'))
+      .toEqual([expect.objectContaining({ data: { cwd: f.outside } })])
+  })
+
+  it('keeps the original project as the root when it is more specific than the inherited checkout', async () => {
+    await using f = await fixture()
+    const packages = join(f.root, 'packages')
+    // The source relocated into a checkout enclosing the project the child's header records.
+    const source = await f.harness.create(SessionId('enclosing-source'), {}, { cwd: packages })
+    await f.ctx.workingDirectory.relocate(source, f.root)
+    const child = await f.harness.create(SessionId('enclosed-child'), {}, { cwd: packages })
+    const foo = join(packages, 'foo')
+    await expect(f.ctx.workingDirectory.inherit(child, source.session, { cwd: foo })).resolves.toEqual({ root: packages, cwd: foo })
+    expect(f.ctx.workingDirectory.anchorsOf(child.session)).toEqual([packages, f.root])
+    expect(f.ctx.workingDirectory.rootOf(child.session)).toBe(packages)
+  })
+
   it('tests containment lexically on canonical absolute paths', () => {
     expect(within('/repo', '/repo')).toBe(true)
     expect(within('/repo', '/repo/src')).toBe(true)

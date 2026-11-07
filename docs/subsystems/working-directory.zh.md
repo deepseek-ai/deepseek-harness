@@ -18,7 +18,7 @@ Session 的当前目录由 [`dsh-working-directory`](../../packages/session/work
 
 ## 迁移
 
-`relocate` 接收新的根与以下选项，并解析为它提交的目录。
+`relocate` 接收新的根与以下选项，并解析为它提交的目录。`inherit(agent, source, { cwd, signal? })` 让一个 Session 的目录从另一个 Session 出发：来源在其原始项目之外的已登记检出目录中工作、且规范化的 `cwd` 位于其中时，通过 `relocate` 登记该检出目录；否则只设置目录。来源的其他锚不传递，它之后的变化也不影响已启动的 Session。
 
 ```ts type-equiv
 /** Options of {@link WorkingDirectoryService.relocate}. */
@@ -31,7 +31,17 @@ interface RelocateOptions {
 ```
 
 ```ts type-equiv
-/** The committed outcome of {@link WorkingDirectoryService.relocate}. */
+/** Options of {@link WorkingDirectoryService.inherit}. */
+interface InheritOptions {
+  /** Canonical absolute directory the Session starts in, spelled as the service records directories. */
+  cwd: string
+  /** Cancellation before the durable change. */
+  signal?: AbortSignal
+}
+```
+
+```ts type-equiv
+/** The committed outcome of {@link WorkingDirectoryService.relocate} and {@link WorkingDirectoryService.inherit}. */
 interface RelocatedDirectories {
   /**
    * Canonical absolute workspace root the commit selected: the longest registered anchor containing
@@ -121,6 +131,20 @@ set(agent: Agent, path: string, signal?: AbortSignal): Promise<string>
  * @throws when either path is not an existing directory or the directory lies outside the root.
  */
 relocate(agent: Agent, root: string, options: RelocateOptions = {}): Promise<RelocatedDirectories>
+
+/**
+ * Start a Session's directories from another Session's. When `source` works in a registered checkout
+ * other than the starting Session's own original project and `options.cwd` lies inside that checkout,
+ * the checkout is registered as the starting Session's anchor and `cwd` entered through {@link relocate};
+ * otherwise only the current directory is set through {@link set}. Only the source's current root is
+ * passed on, never its other anchors, and later changes to `source` do not reach the starting Session.
+ * @param agent - live or unpublished Agent owning the Session that starts.
+ * @param source - Session whose current root may be passed on; the call leaves it unchanged.
+ * @param options - canonical absolute directory to start in and cancellation before the durable change.
+ * @returns the committed current directory and the workspace root selected after the commit.
+ * @throws when `options.cwd` is not an existing directory, or when a `working-directory/access` listener rejects.
+ */
+async inherit(agent: Agent, source: Session, options: InheritOptions): Promise<RelocatedDirectories>
 ```
 
 Types: [Agent](core.zh.md) · [Session](session.zh.md)

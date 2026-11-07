@@ -7,7 +7,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { isAbsolute, relative, resolve, sep } from 'node:path'
+import { isAbsolute, resolve } from 'node:path'
 import type {} from '@deepseek-ai/dsh-fs'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import type { Context } from '@deepseek-ai/cordis'
@@ -48,12 +48,6 @@ import type { StructuredAttachment } from './structured.ts'
 import type { SubagentDelivery } from './control-types.ts'
 import { ActivationPool, ChildLock, activationAgent, captureLocalResult, observeLocalFailure, requireLocalActivation } from './activation.ts'
 import type { Activation, ActivationResource, LocalActivation } from './activation.ts'
-
-/** Whether `path` is `root` or lies below it: a lexical test of two canonical absolute paths of one execution world. */
-function within(root: string, path: string): boolean {
-  const rest = relative(root, path)
-  return rest === '' || (rest !== '..' && !rest.startsWith(`..${sep}`) && !isAbsolute(rest))
-}
 
 /** Inputs shared by model steering and human prompt delivery. */
 type ChildDeliveryOptions = {
@@ -844,16 +838,9 @@ export class SubagentManager {
           appendDelegatedPolicyOverrides(child.session, create.delegatedPolicies)
           const workingDirectory = childCtx.get('workingDirectory')
           if (workingDirectory === undefined) throw new Error('local subagents require the working-directory service')
-          // The child header records the parent's original project; a parent working in another
-          // registered checkout passes that checkout on as the child's root when the child starts inside
-          // it. A parent without a recorded project reports the deployment fallback, which is no anchor.
-          const parentRoot = workingDirectory.rootOf(create.parent.session)
-          if (workingDirectory.anchorsOf(create.parent.session).includes(parentRoot)
-            && parentRoot !== child.session.header.cwd && within(parentRoot, create.cwd)) {
-            await workingDirectory.relocate(child, parentRoot, { cwd: create.cwd, signal: inputs.signal })
-          } else {
-            await workingDirectory.set(child, create.cwd, inputs.signal)
-          }
+          // The child header records the parent's original project; the directory service decides whether
+          // the checkout the parent works in becomes the child's root as well.
+          await workingDirectory.inherit(child, create.parent.session, { cwd: create.cwd, signal: inputs.signal })
         }
         if (inputs.composition.agentPreset === undefined) await applyChildComposition(childCtx, create?.parent, inputs.composition)
         if (inputs.outputSchema !== undefined) {

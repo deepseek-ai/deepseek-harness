@@ -2,7 +2,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { Session } from '@deepseek-ai/dsh-session'
-import type { RelocateOptions, RelocatedDirectories } from '@deepseek-ai/dsh-working-directory'
+import type { InheritOptions, RelocateOptions, RelocatedDirectories } from '@deepseek-ai/dsh-working-directory'
 
 /** Whether `path` is `root` or lies below it, lexically. */
 function within(root: string, path: string): boolean {
@@ -54,6 +54,15 @@ class FixtureWorkingDirectory extends Service {
     this.anchors.set(agent.session, anchors)
     this.directories.set(agent.session, cwd)
     return { root: anchor, cwd }
+  }
+
+  async inherit(agent: Agent, source: Session, options: InheritOptions): Promise<RelocatedDirectories> {
+    const root = this.rootOf(source)
+    if (this.anchorsOf(source).includes(root) && root !== agent.session.header.cwd && within(root, options.cwd)) {
+      return this.relocate(agent, root, options)
+    }
+    const cwd = await this.set(agent, options.cwd, options.signal)
+    return { root: this.rootOf(agent.session), cwd }
   }
 }
 

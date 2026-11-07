@@ -18,7 +18,7 @@ The initial value and subsequent current values reach the model as required user
 
 ## Relocation
 
-`relocate` takes the new root and these options, and resolves to the directories it committed.
+`relocate` takes the new root and these options, and resolves to the directories it committed. `inherit(agent, source, { cwd, signal? })` starts one Session's directories from another's: when the source works in a registered checkout other than the starting Session's original project and the canonical `cwd` lies inside it, the checkout is registered through `relocate`; otherwise only the directory is set. The source's other anchors are not passed on, and its later changes do not reach the started Session.
 
 ```ts type-equiv
 /** Options of {@link WorkingDirectoryService.relocate}. */
@@ -31,7 +31,17 @@ interface RelocateOptions {
 ```
 
 ```ts type-equiv
-/** The committed outcome of {@link WorkingDirectoryService.relocate}. */
+/** Options of {@link WorkingDirectoryService.inherit}. */
+interface InheritOptions {
+  /** Canonical absolute directory the Session starts in, spelled as the service records directories. */
+  cwd: string
+  /** Cancellation before the durable change. */
+  signal?: AbortSignal
+}
+```
+
+```ts type-equiv
+/** The committed outcome of {@link WorkingDirectoryService.relocate} and {@link WorkingDirectoryService.inherit}. */
 interface RelocatedDirectories {
   /**
    * Canonical absolute workspace root the commit selected: the longest registered anchor containing
@@ -121,6 +131,20 @@ set(agent: Agent, path: string, signal?: AbortSignal): Promise<string>
  * @throws when either path is not an existing directory or the directory lies outside the root.
  */
 relocate(agent: Agent, root: string, options: RelocateOptions = {}): Promise<RelocatedDirectories>
+
+/**
+ * Start a Session's directories from another Session's. When `source` works in a registered checkout
+ * other than the starting Session's own original project and `options.cwd` lies inside that checkout,
+ * the checkout is registered as the starting Session's anchor and `cwd` entered through {@link relocate};
+ * otherwise only the current directory is set through {@link set}. Only the source's current root is
+ * passed on, never its other anchors, and later changes to `source` do not reach the starting Session.
+ * @param agent - live or unpublished Agent owning the Session that starts.
+ * @param source - Session whose current root may be passed on; the call leaves it unchanged.
+ * @param options - canonical absolute directory to start in and cancellation before the durable change.
+ * @returns the committed current directory and the workspace root selected after the commit.
+ * @throws when `options.cwd` is not an existing directory, or when a `working-directory/access` listener rejects.
+ */
+async inherit(agent: Agent, source: Session, options: InheritOptions): Promise<RelocatedDirectories>
 ```
 
 Types: [Agent](core.md) · [Session](session.md)
