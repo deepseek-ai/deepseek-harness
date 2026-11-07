@@ -611,7 +611,7 @@ export function ChangesTab({
     const release = (): void => {
       cancelAnimationFrame(frame)
       for (const type of READER_SCROLL) port.removeEventListener(type, release)
-      if (releasePin.current === release) releasePin.current = null
+      releasePin.current = null
     }
     const keep = (now: number): void => {
       if (now > until) {
@@ -880,6 +880,7 @@ export function ChangesTab({
       <div ref={attachScrollport} className={css.files} data-forge-changes-scroll="" role="region"
         aria-label={t('diff.allFiles', { count: files.length })} aria-keyshortcuts="ArrowLeft ArrowRight V" tabIndex={0}
         onKeyDown={navigateFiles} onScroll={(event) => {
+          reach.scrolled()
           if (jumpPosition.current?.top !== event.currentTarget.scrollTop) jumpPosition.current = null
         }}>
         {files.map((file) => {

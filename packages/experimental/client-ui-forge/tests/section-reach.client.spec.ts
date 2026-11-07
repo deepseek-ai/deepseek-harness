@@ -81,6 +81,42 @@ describe('SectionReach', () => {
   })
 })
 
+describe('SectionReach.whenSettled', () => {
+  it('waits for the scrollport to stay still before running deferred work, and can be cancelled while it waits', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+    try {
+      vi.stubGlobal('requestIdleCallback', undefined)
+      const reach = new SectionReach()
+      const settled = vi.fn()
+      reach.whenSettled(settled)
+      vi.advanceTimersByTime(0)
+      expect(settled).toHaveBeenCalledOnce()
+
+      reach.scrolled()
+      const held = vi.fn()
+      reach.whenSettled(held)
+      vi.advanceTimersByTime(0)
+      expect(held).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(100)
+      reach.scrolled()
+      vi.advanceTimersByTime(100)
+      expect(held).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(200)
+      expect(held).toHaveBeenCalledOnce()
+
+      reach.scrolled()
+      const cancelled = vi.fn()
+      const stop = reach.whenSettled(cancelled)
+      vi.advanceTimersByTime(0)
+      stop()
+      vi.advanceTimersByTime(500)
+      expect(cancelled).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
 describe('whenIdle', () => {
   it('waits for an idle period, at most the timeout, and can be cancelled', () => {
     const request = vi.fn<(task: () => void, options: { timeout: number }) => number>(() => 7)

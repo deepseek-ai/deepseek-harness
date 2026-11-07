@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /** Diff gestures, browser clipboard output, and retained comments at their captured lines. */
-import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { DiffFile, type DiffFileProps } from '../src/client/DiffFile.tsx'
@@ -248,4 +248,10 @@ it('places left and right records in unified rows and retains outdated records f
   m.rerender(<DiffFile {...m.props} large />)
   expect(m.container.querySelectorAll('[data-forge-review-thread]')).toHaveLength(3)
   expect(within(m.container).getByRole('button', { name: /changed lines/ })).toBeTruthy()
+})
+
+it('highlights a section drawn outside a changes view once the page is idle', async () => {
+  const m = mount({ file: { ...file, path: 'a.ts' } })
+  expect(m.container.querySelector('[data-diff-code]')).toBeNull()
+  await waitFor(() => { expect(m.container.querySelectorAll('[data-diff-code]').length).toBeGreaterThan(0) })
 })

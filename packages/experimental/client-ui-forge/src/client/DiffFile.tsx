@@ -160,12 +160,13 @@ function addChunkSpans(spans: FileSpans, chunk: HighlightChunk, highlighter: Cod
 }
 
 /**
- * Highlight a file's drawn lines in idle time, once its language's grammar is ready: each idle period highlights
- * fragments while it lasts, at least one, and the lines take their tokens when the last fragment is done. Until
- * then, the lines keep the tokens of the previous pass, by line number, and new lines draw as plain text. A grammar
- * that loads for another language starts no pass.
+ * Highlight a file's drawn lines in idle time while the scrollport is still, once its language's grammar is ready:
+ * each idle period highlights fragments while it lasts, at least one, and the lines take their tokens when the last
+ * fragment is done. Until then, the lines keep the tokens of the previous pass, by line number, and new lines draw as
+ * plain text. A grammar that loads for another language starts no pass.
  */
 function useFileSpans(path: string, segments: readonly DiffSegment[]): FileSpans | undefined {
+  const reach = useContext(SectionReachContext)
   const highlighter = useCodeHighlighter(languageForPath(path))
   // The highlighter changes whenever any grammar loads; the empty fragment tells whether this language's is ready.
   const ready = highlighter('') !== undefined
@@ -188,11 +189,13 @@ function useFileSpans(path: string, segments: readonly DiffSegment[]): FileSpans
         next++
         if ((deadline?.timeRemaining() ?? 0) <= 0) break
       }
-      cancel = whenIdle(step)
+      cancel = later(step)
     }
-    let cancel = whenIdle(step)
+    // Outside a changes view nothing scrolls the sections, so idle time alone gates the pass.
+    const later = reach === null ? whenIdle : (task: (deadline: IdleDeadline | undefined) => void) => reach.whenSettled(task)
+    let cancel = later(step)
     return () => { cancel() }
-  }, [segments, ready])
+  }, [segments, ready, reach])
   return spans
 }
 
