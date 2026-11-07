@@ -901,10 +901,10 @@ it('forwards provider options while retaining the selected target and coordinate
     appHandle: 'app-17', windowId: 23, snapshotId: 'snapshot-2', elementId: '0', trackingMode: 'precise',
   } })
   await win.getScreenshot({ emit: false })
-  const pixelOptions = { relative: false, trackingMode: 'precise', x: 222 }
+  const pixelOptions = { relative: false, useSystemPointer: true, trackingMode: 'precise', x: 222 }
   await win.mouseMove([30, 40], pixelOptions)
   expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'mouseMove', params: {
-    appHandle: 'app-17', snapshotId: 'snapshot-2', windowId: 23, x: 30, y: 40, relative: false, trackingMode: 'precise',
+    appHandle: 'app-17', snapshotId: 'snapshot-2', windowId: 23, x: 30, y: 40, relative: false, useSystemPointer: true, trackingMode: 'precise',
   } })
   const relativeOptions = { relative: true, trackingMode: 'coarse' }
   await win.mouseMove([250, 750], relativeOptions)

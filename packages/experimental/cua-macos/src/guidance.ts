@@ -10,7 +10,7 @@ const methodDetails = new Map<string, string>([
   ['click', 'click is a Window method: select a window with const win = await app.getWindow(windowId), then call win.click(target). For a background control’s default action, use app.invoke(id). For a mouse click on a background app, call app.activate() first and re-read the target. Both target forms send mouse-down and mouse-up events. click(id) uses the center of the full element bounds. If that center is outside the window, take a fresh win.getScreenshot() and use click([x, y]) on a visible part of the control in screenshot pixels. A background app can ignore the events even when dispatched is true. Verify the expected effect, such as a changed selection, before typing or retrying.'],
 ])
 
-/** Complete model instructions for this provider. */
+/** Native operation instructions; the shared Host adds guidance for declared capabilities. */
 export const GUIDANCE = `${PLATFORM_GUIDANCE}
 
 ${COMMON_GUIDANCE.replace(/^- ([\w.]+)\(.*$/gm, (entry, method: string) => {

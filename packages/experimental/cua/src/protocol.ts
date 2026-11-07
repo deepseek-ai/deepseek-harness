@@ -83,7 +83,7 @@ function requestSchema<T extends z.ZodType>(hover: T) {
   ])
 }
 
-/** Portable model operations, including auxiliary hover without a system-pointer option. */
+/** Portable model operations, including standard hover without a system-pointer option. */
 export const Request = requestSchema(z.union(MouseMoveTargets))
 
 /** Model operations for providers that can move the user's system pointer. */

@@ -1135,7 +1135,7 @@ it.each([true, false])('uses the declared systemPointer capability for a non-mac
   expect((await f.execute('getCapabilities')).value).toMatchObject({ platform: 'fixture', systemPointer })
   const sections = (await f.ctx.systemPrompt.assemble({ scope: f.handle.agent })).sections
   const guidance = sections.find(section => section.name === 'computer-use:dsh-cua')!.text
-  expect(guidance.includes('useSystemPointer')).toBe(systemPointer)
+  expect(guidance.includes('relative?: boolean, useSystemPointer?: boolean')).toBe(systemPointer)
   expect(guidance.includes('The question interrupts the user')).toBe(systemPointer)
   expect(JSON.stringify(f.ctx.tools.get('cua', f.handle.agent)!.parameters).includes('useSystemPointer')).toBe(systemPointer)
   await selectApplication(f)
