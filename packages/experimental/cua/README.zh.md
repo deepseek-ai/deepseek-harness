@@ -68,7 +68,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-提供方通过 `CuaSessionPermissions.request(agent, permission, prompt, signal)` 申请指定权限，并传入本地化的问题和说明。每个会话分别记录各项权限的决定。提供方通过请求 schema 声明额外字段，可在派发前处理悬停请求。
+提供方从 `@deepseek-ai/dsh-cua/session-permissions` 导入 `CuaSessionPermissions`，通过 `request(agent, permission, prompt, signal)` 申请指定权限，并传入本地化的问题和说明。每个会话分别记录各项权限的决定。提供方通过请求 schema 声明额外字段，可在派发前处理悬停请求。
 
 权限响应标识所属平台，并且只报告该平台能够观察到的状态。共享页面显示这些观察结果支持的控件。平台尚未确认时显示通用观察和输入项，不提供系统操作。原生提供方共用编译锁和编译进程清理逻辑。独立可执行文件按内容摘要保存。macOS 提供方在锁内等待编译完成，再读取签名应用的构建回执。
 

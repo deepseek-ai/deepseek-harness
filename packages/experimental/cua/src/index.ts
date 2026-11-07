@@ -29,7 +29,6 @@ import type {} from '@deepseek-ai/dsh-computer-use'
 import type {} from '@deepseek-ai/dsh-ptc-runtime'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 
-export { CuaSessionPermissions } from './session-permissions.ts'
 export { CuaAccess } from './access.ts'
 export type { CuaStartupCapabilities } from './types.ts'
 

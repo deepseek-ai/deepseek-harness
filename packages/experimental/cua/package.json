@@ -53,6 +53,10 @@
       "types": "./lib/types/client/index.d.ts",
       "default": "./lib/client.js"
     },
+    "./session-permissions": {
+      "types": "./lib/types/session-permissions.d.ts",
+      "default": "./lib/session-permissions.js"
+    },
     "./config": {
       "types": "./lib/types/config.d.ts",
       "default": "./lib/config.js"
@@ -78,6 +82,7 @@
     "lib/api.js",
     "lib/bridge.js",
     "lib/native-client.js",
+    "lib/session-permissions.js",
     "lib/protocol.js",
     "lib/config.js",
     "lib/native-schema.js",

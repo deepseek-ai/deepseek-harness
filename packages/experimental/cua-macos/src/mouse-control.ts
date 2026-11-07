@@ -1,6 +1,7 @@
 /** macOS system-pointer options and session approval for physical hover. */
 import type { Context } from '@deepseek-ai/cordis'
-import { CuaSessionPermissions, type CuaBackend } from '@deepseek-ai/dsh-cua'
+import type { CuaBackend } from '@deepseek-ai/dsh-cua'
+import { CuaSessionPermissions } from '@deepseek-ai/dsh-cua/session-permissions'
 import { NativeError } from '@deepseek-ai/dsh-cua/native-client'
 import { MouseMoveTargets, Request } from '@deepseek-ai/dsh-cua/protocol'
 import { UserQuestionError } from '@deepseek-ai/dsh-user-questions'

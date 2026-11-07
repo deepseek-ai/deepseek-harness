@@ -68,7 +68,7 @@ The Host marker has no configurable fields; platform providers own native config
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
-`CuaSessionPermissions.request(agent, permission, prompt, signal)` asks for one named permission using the provider’s localized question and detail. A live Session caches each permission separately. Providers declare additional tool fields with their request schema and can prepare a move before dispatch.
+Import `CuaSessionPermissions` from `@deepseek-ai/dsh-cua/session-permissions`. Its `request(agent, permission, prompt, signal)` method asks for one named permission using the provider’s localized question and detail. A live Session caches each permission separately. Providers declare additional tool fields with their request schema and can prepare a move before dispatch.
 
 Permission responses identify their platform and report only the state that platform can observe. The shared page renders the controls those observations support. Before platform identification, it shows neutral observation and input rows without system actions. Native providers use the shared build lock and compiler cleanup. Standalone executables are retained by digest. The macOS provider reads its signed application receipt after compilation completes under the same lock.
 
