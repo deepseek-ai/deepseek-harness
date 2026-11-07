@@ -29,7 +29,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 export type {
-  EnvironmentSectionProps, ProjectRowInjected, ProjectRowProps, SessionPanelGutters, SessionPanelInjected,
+  EnvironmentSectionProps, ProjectRowInjected, ProjectRowProps, SessionPanelGutters, SessionPanelIndicatorOwnerProps, SessionPanelInjected,
   SessionPanelPresentation, SessionPanelProps, SessionPanelSectionEntry, SessionPanelSectionOwnerProps,
   SessionPanelToggleInjected, SessionPanelToggleProps, SessionPanelVisibility,
 } from './slots.ts'

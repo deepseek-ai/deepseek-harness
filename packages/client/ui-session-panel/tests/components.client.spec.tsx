@@ -56,7 +56,7 @@ describe('SessionPanelToggle', () => {
     const button = screen.getByRole('button', { name: '会话面板 需要处理' })
     expect(button.getAttribute('aria-expanded')).toBe('true')
     expect(button.getAttribute('aria-controls')).toBe(`dsh-session-panel-${SID}`)
-    expect(renderSlot).toHaveBeenCalledWith('conversation.session.panel.indicator', {})
+    expect(renderSlot).toHaveBeenCalledWith('conversation.session.panel.indicator', { panelShown: true })
   })
 
   it('flips docking with room to dock and opens the overlay without it', () => {
@@ -78,6 +78,12 @@ describe('SessionPanelToggle', () => {
     const { props } = toggleProps(NARROW, { pinned: false, overlay: SID })
     render(<SessionPanelToggle {...props} />)
     expect(screen.getByRole('button').getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('tells its indicators whether the panel shows', () => {
+    const { props, renderSlot } = toggleProps(NARROW, DOCKED)
+    render(<SessionPanelToggle {...props} />)
+    expect(renderSlot).toHaveBeenCalledWith('conversation.session.panel.indicator', { panelShown: false })
   })
 
   it('is unavailable and says why while no Chat View shows the Session', () => {

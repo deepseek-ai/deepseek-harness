@@ -42,8 +42,14 @@
   white-space: nowrap;
 }
 
+/* One 6px dot at the glyph's corner; the ring separates it from the glyph, and the occupant colors it. */
 .trigger > :global([data-slot='conversation.session.panel.indicator']) > * {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  corner-shape: round;
+  box-shadow: 0 0 0 1.5px var(--dsw-alias-bg-base);
 }
