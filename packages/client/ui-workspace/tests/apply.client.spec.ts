@@ -371,6 +371,8 @@ describe('ui-workspace apply', () => {
       if (!accepted) throw new Error('clipboard denied')
     })
     vi.stubGlobal('navigator', { clipboard: { writeText } })
+    // This spec has no DOM; give the fallback a document without execCommand so a refused write stays refused.
+    vi.stubGlobal('document', {})
     onTestFinished(() => { vi.unstubAllGlobals() })
     await action.copySessionId(sid('cold-session'))
     expect(writeText).toHaveBeenCalledExactlyOnceWith('cold-session')
