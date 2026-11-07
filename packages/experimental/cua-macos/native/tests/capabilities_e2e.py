@@ -191,6 +191,12 @@ def main():
                 call("drag", {**window, "fromX": point["x"], "fromY": point["y"], "toX": point["x"] + 80,
                               "toY": point["y"] + 20, "durationMs": 200, "steps": 10, "mouseButton": "middle", "modifiers": ["shift"]})
                 state = wait_for_state(state_file, lambda value: any(event["type"] == 27 and event.get("button") == 2 and event["shift"] for event in value["events"]))
+                call("pressKey", {**owner, "key": ["w", "d"]})
+                expected_chord = [(10, 13), (10, 2), (11, 2), (11, 13)]
+                state = wait_for_state(state_file, lambda value: any(
+                    event["type"] == 11 and event.get("keyCode") == 13 for event in value["events"]))
+                assert [(event["type"], event["keyCode"]) for event in state["events"]
+                        if event.get("keyCode") in (13, 2)] == expected_chord, state["events"]
                 call("pressKey", {**owner, "key": "KP_0"})
                 call("pressKey", {**owner, "key": "KP_Enter"})
                 state = wait_for_state(state_file, lambda value: {82, 76}.issubset({event.get("keyCode") for event in value["events"]}))

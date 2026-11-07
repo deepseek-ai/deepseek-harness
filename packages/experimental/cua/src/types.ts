@@ -160,13 +160,13 @@ export interface CuaSurface {
    */
   paste(text: string, options?: CuaPasteOptions): Promise<CuaActionResult>
   /**
-   * Press and release one key at the current input focus.
+   * Press the keys in order at the current focus, then release them in reverse order.
    * Rejects when the provider does not support keyboard input at this scope.
-   * @param key - Provider-defined key name to press and release; not a chord.
+   * @param key - One provider-defined key name or a nonempty array of distinct keys to hold together.
    * @param modifiers - Platform- or provider-defined modifier names held for this keystroke; omitted means none.
    * @returns Whether the provider successfully executed the requested operation.
    */
-  pressKey(key: string, modifiers?: string[]): Promise<CuaActionResult>
+  pressKey(key: string | string[], modifiers?: string[]): Promise<CuaActionResult>
   /**
    * Send one key-down or key-up event at the current input focus.
    * Does not send the opposite event.

@@ -79,7 +79,7 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 
 [配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-cua-macos)列出全部字段。原生工具调用使用 `{method, params}`，模型可以看到每个方法的完整参数定义。`getApp` 返回每个面向应用的操作所需的 `appHandle`，`app.getWindow(windowId)` 返回负责截图和指针输入的对象。
 
-`pressKey(key, modifiers?)` 按下并释放一个键。修饰键名称单独传入，例如 `pressKey('Tab', ['shift'])` 或 `pressKey('+')`；省略修饰键数组表示不按修饰键。macOS helper 接受 `command`/`cmd`、`shift`、`option`/`alt`、`control`/`ctrl` 和 `fn`，并映射到对应物理键。按键名由平台定义；数字键盘名称（`KP_0` 到 `KP_9`、`KP_Enter` 和数字键盘运算键）保留独立的物理键码。`typeText` 发送字面文本，包括其中的换行和制表符。在 macOS 上，通过 App 对象调用 `pressKey`。调用共享接口 `sendKeyEvent` 会收到 `NOT_IMPLEMENTED`。
+`pressKey(key, modifiers?)` 接受单个键名或由不同键名组成的非空数组。例如，`pressKey(['w', 'd'])` 依次按下 W、D，再依次松开 D、W。修饰键名称单独传入，例如 `pressKey('Tab', ['shift'])` 或 `pressKey('+')`；省略修饰键数组表示不按修饰键。macOS helper 接受 `command`/`cmd`、`shift`、`option`/`alt`、`control`/`ctrl` 和 `fn`，并映射到对应物理键。按键名由平台定义；数字键盘名称（`KP_0` 到 `KP_9`、`KP_Enter` 和数字键盘运算键）保留独立的物理键码。`typeText` 发送字面文本，包括其中的换行和制表符。在 macOS 上，通过 App 对象调用 `pressKey`。调用共享接口 `sendKeyEvent` 会收到 `NOT_IMPLEMENTED`。
 
 Agent 销毁和插件卸载会取消并等待完整工具调用，包括图像接入检查和附件存储。已经开始的图像写入必须结束后，销毁才会返回；已取消的调用不会返回成功截图。
 
@@ -221,7 +221,7 @@ A string target is an element id; coordinate targets are [x, y] and are pixels i
 Available at app or window level depending on the platform.
 - typeText(text: string) -> ActionResult — type literal text at the app's current focus; line endings send Return and tabs send Tab.
 - paste(text: string, options?: { format?: 'text' | 'html' }) -> ActionResult — deliver text or HTML through the app's Paste command, restoring prior clipboard contents unless another writer changes them; a Paste failure is surfaced without substituting typeText, and PASTE_NOT_CONSUMED means inspect before any retry.
-- pressKey(key: string, modifiers?: string[]) -> ActionResult — press and release one complete keystroke. For example pressKey('Tab', ['shift']) or pressKey('+'). Key and modifier names are platform-defined strings. Pass key and modifiers separately; do not pack them into a chord string.
+- pressKey(key: string | string[], modifiers?: string[]) -> ActionResult — press one key or hold distinct keys together. pressKey(['w', 'd']) presses W then D and releases D then W. Pass modifiers separately, as in pressKey('Tab', ['shift']). Key and modifier names are platform-defined strings.
 
 Raw tools use { method, params }: include appHandle for app calls and windowId for window calls, and use snapshotId with elementId for element routes. The emit option is facade-only: emit is local output control, so raw callers must follow the raw operation schema for admitted params. getAccessibilityTree and getWindow read through raw getState; getWindows maps to listWindows; getScreenshot maps to screenshot; cua.getState maps to listApps; every other named operation uses the same method name.
 ```

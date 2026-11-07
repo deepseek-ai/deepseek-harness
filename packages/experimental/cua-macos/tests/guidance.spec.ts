@@ -89,7 +89,7 @@ it('preserves image formats and pointer modifier enums without restricting keybo
   for (const name of ['click', 'drag']) {
     expect(lines.find(line => line.startsWith(`- ${name}(`))).toContain("modifiers?: ('command' | 'control' | 'option' | 'shift' | 'fn')[]")
   }
-  expect(COMMON_GUIDANCE).toContain('pressKey(key: string, modifiers?: string[])')
+  expect(COMMON_GUIDANCE).toContain('pressKey(key: string | string[], modifiers?: string[])')
   expect(COMMON_GUIDANCE).toContain('Key and modifier names are platform-defined strings')
 })
 
@@ -130,7 +130,7 @@ it('documents facade initialization, emitted observations, and separate key argu
   expect(COMMON_GUIDANCE).toContain('host-provided bridge initialization once')
   expect(COMMON_GUIDANCE).toContain('not a preinstalled global')
   expect(COMMON_GUIDANCE).toContain('void await')
-  expect(COMMON_GUIDANCE).toContain('do not pack them into a chord string')
+  expect(COMMON_GUIDANCE).toContain("pressKey(['w', 'd']) presses W then D and releases D then W")
   expect(COMMON_GUIDANCE).toContain('perform a left-button double-click')
 })
 
