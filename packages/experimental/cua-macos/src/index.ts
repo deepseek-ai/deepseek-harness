@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 import { installCua, type CuaConfig, type CuaStartupCapabilities } from '@deepseek-ai/dsh-cua'
+import type { NativeChannelFactory } from '@deepseek-ai/dsh-cua/native-client'
 import { CuaConfigFields } from '@deepseek-ai/dsh-cua/config'
 import { createPermissionParameters } from './permission-guide.ts'
 import { nativeHostArchitecture, prepareNativeExecutable, type SourceSigning } from './native-build.ts'
@@ -32,6 +33,8 @@ export const inject = ['computerUse', 'tools', 'systemPrompt', 'subprocess', 'ag
 export interface Config extends CuaConfig {
   /** Interval in milliseconds between permission and position checks while the native guide is open. */
   permissionPollIntervalMs: number
+  /** Allow mouseMove to move the visible system pointer when AX hover is unavailable. Off by default to avoid interrupting the user. */
+  systemPointerHover: boolean
   /**
    * Source-build signing: `ad-hoc` (default) binds grants to the code hash;
    * an object selects an existing certificate in an explicitly configured keychain.
@@ -42,6 +45,7 @@ export interface Config extends CuaConfig {
 /** Validate shared operation bounds and macOS source signing before preparing the helper. */
 export const Config = Schema.object({
   ...CuaConfigFields,
+  systemPointerHover: Schema.boolean().default(false),
   permissionPollIntervalMs: Schema.number().step(1).min(100).max(2 ** 31 - 1).default(1000),
   sourceSigning: Schema.union([
     Schema.const('ad-hoc'),
@@ -60,7 +64,8 @@ export const Config = Schema.object({
  * @returns Completion after native preparation and tool registration.
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
-  const backend = { createChannel: createSharedNativeChannel, guidance: GUIDANCE, capabilities: CAPABILITIES,
+  const createChannel: NativeChannelFactory = (owner, native) => createSharedNativeChannel(owner, native, config.systemPointerHover)
+  const backend = { createChannel, guidance: GUIDANCE, capabilities: CAPABILITIES,
     permissionParameters: createPermissionParameters(config.permissionPollIntervalMs) }
   if (config.helperPath !== undefined) {
     if (!isAbsolute(config.helperPath)) throw new Error('dsh-cua helperPath must be absolute')

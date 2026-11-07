@@ -107,6 +107,7 @@ const PACKAGE_LIBRARIES: Readonly<Record<string, string>> = {
   'packages/util/package-manifest': 'Shared package manifest declarations with type-only exports.',
   'packages/util/plugin-detail': 'Plugin detail document library.',
   'packages/util/plugin-market-index': 'Plugin market index validation library.',
+  'packages/util/ripgrep': 'Packaged executable resolution and caller-owned subprocess streaming without a plugin entry.',
   'packages/util/time': 'Zero-dependency time-zone canonicalization utility.',
   'packages/util/timeout': 'Zero-dependency timeout utility.',
   'packages/util/values': 'Stateless lossless-JSON and immutable-value helpers.',

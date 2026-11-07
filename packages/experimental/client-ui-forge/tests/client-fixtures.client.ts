@@ -39,6 +39,7 @@ export function snapshot(number: number, overrides: Partial<ChangeRequestSnapsho
     checksRollup: 'success',
     checksTruncated: false,
     unresolvedThreads: 0,
+    threadsTruncated: false,
     updatedAt: '2026-10-09T00:00:00Z',
     closedAt: null,
     ...overrides,

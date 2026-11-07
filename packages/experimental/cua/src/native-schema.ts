@@ -13,15 +13,15 @@ function variants(schema: Schema): Schema[] { return schema.anyOf ?? schema.oneO
 
 /**
  * Derive native request schemas and admission fields from the shared operation definitions.
- * @param permissionFields Platform-specific parameters for user-facing permission controls.
+ * @param platformFields Additional native protocol fields accepted by the provider.
  * @returns Native field and enum tables and the complete wire schema.
  */
-export function nativeProtocol(permissionFields: Partial<Record<'requestPermission' | 'openPermissionSettings', z.ZodObject>> = {}): {
+export function nativeProtocol(platformFields: Partial<Record<z.infer<typeof Request>['method'] | 'requestPermission' | 'openPermissionSettings', z.ZodObject>> = {}): {
   fields: Map<string, Set<string>>
   enums: Map<string, Map<string, Set<string>>>
   json: string
 } {
-  const resources = new Map(Object.entries({ ...NativeResourceParameters, ...permissionFields }))
+  const resources = new Map(Object.entries({ ...NativeResourceParameters, ...platformFields }))
   const schemas = [...Request.options, ...NativeOnlyOperations]
     .map(schema => z.toJSONSchema(schema))
   const fields = new Map<string, Set<string>>()

@@ -47,6 +47,7 @@ function serve() {
   const server = createServer({ allowHalfOpen: true }, socket => {
     sockets.add(socket)
     let connected = false
+    let systemPointerHover
     const connectionId = ++connection
     const input = createInterface({ input: socket })
     const scopedRecord = (event, data = {}) => record(event, { connection: connectionId, ...data })
@@ -58,6 +59,7 @@ function serve() {
           socket.destroy()
           return
         }
+        systemPointerHover = request.config.systemPointerHover
         connected = true
         hadClient = true
         clearTimeout(startupDeadline)
@@ -71,7 +73,7 @@ function serve() {
       }
       let response
       try {
-        const result = call(request.id, request.method, request.params)
+        const result = call(request.id, request.method, request.params, systemPointerHover)
         if (result === undefined) return
         response = { id: request.id, result }
       } catch (error) {
@@ -122,7 +124,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
   let observationChanged = false
   let malformedScreenshot = false
   function refuse(code, message) { throw Object.assign(new Error(message), { code }) }
-  function call(requestId, method, params) {
+  function call(requestId, method, params, systemPointerHover) {
     record('call', { requestId, method, params })
     if (method === 'applicationIcons') return Object.fromEntries(params.paths.map(path => [path, `data:image/png;base64,${png}`]))
     if (method === 'openPermissionSettings') return { opened: true }
@@ -197,14 +199,22 @@ function createApplicationState(socket, record, application, captureBroker, conn
         ? snapshots.get(params.windowId) ?? snapshots.get(null)
         : [...snapshots.values()].find(snapshot => snapshot.snapshotId === params.snapshotId)
       if (!observed) refuse('STALE_SNAPSHOT', 'Read fresh state before acting')
-      if (params.windowId !== undefined && observed.windowId !== null && observed.windowId !== params.windowId) refuse('STALE_SNAPSHOT', 'Snapshot belongs to another window')
+      if (params.windowId !== undefined && observed.windowId !== null && observed.windowId !== params.windowId) refuse('STALE_SNAPSHOT', `Snapshot belongs to window ${observed.windowId}; read getAccessibilityTree on window ${params.windowId}`)
       if (observed.axless && params.elementId !== undefined) refuse('INVALID_ARGUMENT', 'Element id is absent from the selected snapshot')
-      if (method === 'mouseMove') application.hovering = params.elementId === '0' || (params.x >= 20 && params.x <= 40)
+      let systemPointerMoved = false
+      if (method === 'mouseMove') {
+        const alternate = params.elementId === '0' || (params.x >= 20 && params.x <= 40)
+        if (!alternate && !application.hovering) {
+          if (!(systemPointerHover ?? params.allowSystemPointer)) refuse('HOVER_UNAVAILABLE', 'No AX alternate UI at this target. No input was sent and the pointer did not move.')
+          systemPointerMoved = true
+        }
+        application.hovering = alternate
+      }
       else if (method === 'click' && params.windowId === 8) application.visualCount++
       else if (method === 'click') application.count++
       else application.value = params.value
       record('state', { count: application.count, value: application.value, visualCount: application.visualCount })
-      return { dispatched: true, ...method === 'mouseMove' ? { hoverRoute: 'accessibility', systemPointerMoved: false } : {} }
+      return { dispatched: true, ...method === 'mouseMove' ? { hoverRoute: systemPointerMoved ? 'system-pointer' : 'accessibility', systemPointerMoved } : {} }
     }
     if (method === 'pressKey' && params.key === 'Return') observationChanged = true
     // Fixture-only keys simulate a pending system callback and its eventual completion.

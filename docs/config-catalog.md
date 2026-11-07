@@ -367,10 +367,10 @@ export interface Config {
 ## `@deepseek-ai/dsh-api-workspace-files`
 
 - `inject`: `fs` · `sandboxPolicy` · `sessions` · `typert`
-- `source`: [`packages/api/workspace-files/src/index.ts:70`](../packages/api/workspace-files/src/index.ts)
+- `source`: [`packages/api/workspace-files/src/index.ts:74`](../packages/api/workspace-files/src/index.ts)
 
 ```ts config-catalog
-/** Deployment caps on one page or one listing. */
+/** Deployment caps on one page, one listing, or one search. */
 export interface Config {
   /**
    * Inclusive byte cap on one page's text and on one byte window.
@@ -386,6 +386,22 @@ export interface Config {
   readonly maxLines: number
   /** Cap on returned directory entries; the rest is dropped and reported cut. */
   readonly maxEntries: number
+  /** Budgets on one search's matches, listed files, deadline and ripgrep process. */
+  readonly search: SearchLimits
+}
+
+/** Deployment budgets on one search's results, listed files and process. */
+export interface SearchLimits {
+  /** Cap on returned matches; additional matches report truncation after the bounded scan. */
+  readonly maxResults: number
+  /** Cap on files considered from rg output; an extra file terminates rg and reports the search incomplete. */
+  readonly maxEntries: number
+  /** Search process termination grace in milliseconds. */
+  readonly graceMs: number
+  /** Search deadline in milliseconds; expiry rejects rather than returning partial results. */
+  readonly timeoutMs: number
+  /** Byte cap on retained search-process stderr diagnostics. */
+  readonly stderrMaxBytes: number
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-api-workspace-files -->
@@ -1140,13 +1156,15 @@ export interface Config {
 
 - `inject`: `computerUse` · `tools` · `systemPrompt` · `subprocess` · `agents`
 - `refs`: [`CuaConfig`](../packages/experimental/cua/src/index.ts)
-- `source`: [`packages/experimental/cua-macos/src/index.ts:32`](../packages/experimental/cua-macos/src/index.ts)
+- `source`: [`packages/experimental/cua-macos/src/index.ts:33`](../packages/experimental/cua-macos/src/index.ts)
 
 ```ts config-catalog
 /** Native preparation, source-build signing, operation bounds, and profile-local application grants. */
 export interface Config extends CuaConfig {
   /** Interval in milliseconds between permission and position checks while the native guide is open. */
   permissionPollIntervalMs: number
+  /** Allow mouseMove to move the visible system pointer when AX hover is unavailable. Off by default to avoid interrupting the user. */
+  systemPointerHover: boolean
   /**
    * Source-build signing: `ad-hoc` (default) binds grants to the code hash;
    * an object selects an existing certificate in an explicitly configured keychain.
@@ -1170,7 +1188,7 @@ export type SourceSigning = 'ad-hoc' | {
 
 ## `@deepseek-ai/dsh-experimental-forge`
 
-- `source`: [`packages/experimental/forge/src/types.ts:266`](../packages/experimental/forge/src/types.ts)
+- `source`: [`packages/experimental/forge/src/types.ts:273`](../packages/experimental/forge/src/types.ts)
 
 ```ts config-catalog
 /** Poll cadence and fetch deadline for watched change requests. */
@@ -1206,6 +1224,8 @@ export interface Config {
   timeoutMs?: number
   /** Maximum captured bytes per `gh` output stream and combined JSON bytes of one complete check read. */
   maxOutputBytes?: number
+  /** Most review threads counted per pull request in one status read; a pull request with more reports a lower bound. */
+  maxReviewThreads?: number
   /** Most commits one pull request commit listing returns; GitHub lists at most 250 commits of a pull request. */
   maxCommits?: number
 }
@@ -5241,6 +5261,7 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 | `@deepseek-ai/dsh-util-code-language` | — | [`packages/util/code-language/src/index.ts`](../packages/util/code-language/src/index.ts) |
 | `@deepseek-ai/dsh-util-crypto` | — | [`packages/util/crypto/src/index.ts`](../packages/util/crypto/src/index.ts) |
 | `@deepseek-ai/dsh-util-file-drag` | — | [`packages/util/file-drag/src/index.ts`](../packages/util/file-drag/src/index.ts) |
+| `@deepseek-ai/dsh-util-ripgrep` | — | [`packages/util/ripgrep/src/index.ts`](../packages/util/ripgrep/src/index.ts) |
 | `@deepseek-ai/dsh-util-time` | — | [`packages/util/time/src/index.ts`](../packages/util/time/src/index.ts) |
 | `@deepseek-ai/dsh-util-values` | — | [`packages/util/values/src/index.ts`](../packages/util/values/src/index.ts) |
 | `@deepseek-ai/dsh-util-workspace-path` | — | [`packages/util/workspace-path/src/index.ts`](../packages/util/workspace-path/src/index.ts) |

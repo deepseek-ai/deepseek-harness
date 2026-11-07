@@ -9,8 +9,13 @@ import { listCommits } from './commits.ts'
 import type { GraphqlReader } from './commits.ts'
 import { GhOutputLimitError, GhTimeoutError, GhUnavailableError } from './gh.ts'
 import type { GhOutput, GhRunner } from './gh.ts'
-import { CHECKS_QUERY, hasGraphqlFields, HEAD_QUERY, mapCheckPageResponse, mapHeadResponse, mapSnapshotResponse, snapshotQuery } from './graphql.ts'
-import { checkedRepository, parsePullRequestUrl, parseRemoteUrl } from './urls.ts'
+import { readComparison } from './compare.ts'
+import {
+  CHECKS_QUERY, hasGraphqlFields, HEAD_QUERY, mapCheckPageResponse, mapHeadResponse, mapPullRequestCommitsResponse,
+  mapSnapshotResponse, mapThreadPageResponse, PULL_REQUEST_COMMITS_QUERY, snapshotQuery, THREADS_QUERY,
+} from './graphql.ts'
+import type { PageResult, SnapshotPages } from './graphql.ts'
+import { checkedRepository, isCommit, parsePullRequestUrl, parseRemoteUrl } from './urls.ts'
 import { submitGitHubReview } from './review.ts'
 
 const AUTHENTICATION = /gh auth login|authentication|bad credentials|HTTP 401/i
@@ -19,16 +24,23 @@ const AUTHENTICATION = /gh auth login|authentication|bad credentials|HTTP 401/i
 const HTTP_STATUS = /\(HTTP (\d{3})\)/
 
 /**
- * GitHub's error code for an answer over its size limits, such as a diff over
- * 300 files: `gh pr diff` prints it after the field, and `gh api` returns it in the JSON error body.
+ * GitHub's error code for an answer over its size limits, such as a file over
+ * the contents API limit: `gh api` returns it in the JSON error body.
  */
 const TOO_LARGE = /\btoo_large\b/
 
 /** HTTP status GitHub answers when it refuses to render a diff over its limits. */
 const NOT_ACCEPTABLE = '406'
 
-/** A full SHA-1 or SHA-256 object name. */
-const COMMIT = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i
+/** Bounds on what one read retains or counts. */
+export interface GitHubLimits {
+  /** Maximum combined JSON bytes retained by an explicit check read. */
+  readonly maxOutputBytes: number
+  /** Most review threads counted per pull request in one status read. */
+  readonly maxReviewThreads: number
+  /** Most commits one commit listing returns. */
+  readonly maxCommits: number
+}
 
 /** Reads GitHub and GitHub Enterprise pull requests through a `gh` runner. */
 export class GitHubProvider implements ForgeProvider {
@@ -44,15 +56,9 @@ export class GitHubProvider implements ForgeProvider {
   /**
    * @param gh - runner that executes `gh` on the host.
    * @param hosts - host names this provider serves, such as `github.com` and Enterprise hosts.
-   * @param maxOutputBytes - maximum combined JSON bytes retained by an explicit check read.
-   * @param maxCommits - most commits one commit listing returns.
+   * @param limits - bounds on retained check bytes, counted review threads, and listed commits.
    */
-  constructor(
-    private readonly gh: GhRunner,
-    hosts: readonly string[],
-    private readonly maxOutputBytes: number,
-    private readonly maxCommits: number,
-  ) {
+  constructor(private readonly gh: GhRunner, hosts: readonly string[], private readonly limits: GitHubLimits) {
     this.hosts = new Set(hosts.map(host => host.toLowerCase()))
   }
 
@@ -104,10 +110,7 @@ export class GitHubProvider implements ForgeProvider {
       return results.get(changeRequestKey(ref))!
     } catch (error) {
       if (signal.aborted) throw signal.reason
-      if (error instanceof GhUnavailableError || error instanceof GhTimeoutError || error instanceof GhOutputLimitError) {
-        return { code: error instanceof GhOutputLimitError ? 'too-large' : 'unavailable', message: error.message }
-      }
-      throw error
+      return processFailure(error)
     }
   }
 
@@ -144,19 +147,36 @@ export class GitHubProvider implements ForgeProvider {
     const { host, owner, name } = checkedRepository(ref)
     const failure = this.hostFailure(host)
     if (failure !== undefined) return { code: 'failed', message: failure.message }
-    if (!COMMIT.test(request.headSha)) throw new Error(`forge-github: invalid head commit ${JSON.stringify(request.headSha)}`)
+    if (!isCommit(request.headSha)) throw new Error(`forge-github: invalid head commit ${JSON.stringify(request.headSha)}`)
     return await this.act([
       'api', '--hostname', host, '--method', 'PUT', `repos/${owner}/${name}/pulls/${ref.number}/merge`,
       '-f', `merge_method=${request.method}`, '-f', `sha=${request.headSha}`,
     ], signal)
   }
 
-  /** Read the pull request's diff with `gh pr diff`, which GitHub computes against the merge base. */
-  async diff(ref: ChangeRequestRef, signal: AbortSignal): Promise<string | ForgeFailure> {
+  /**
+   * Read the pull request's diff at `headSha`. One GraphQL read names the
+   * current head and the base commit GitHub recorded with it; a head other
+   * than `headSha` returns `stale`. Otherwise the compare endpoint reads the
+   * patch from the merge base of that base commit and `headSha`, as the pull
+   * request's own diff does, with both ends fixed.
+   */
+  async diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<string | ForgeFailure> {
     const { host, owner, name } = checkedRepository(ref)
     const failure = this.hostFailure(host)
     if (failure !== undefined) return failure
-    return await this.read(['pr', 'diff', String(ref.number), '--repo', `${host}/${owner}/${name}`, '--color', 'never'], signal)
+    if (!isCommit(headSha)) throw new Error(`forge-github: invalid head commit ${JSON.stringify(headSha)}`)
+    const output = await this.read([
+      'api', 'graphql', '--hostname', host,
+      '-f', `query=${PULL_REQUEST_COMMITS_QUERY}`, '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `number=${ref.number}`,
+    ], signal)
+    if (typeof output !== 'string') return output
+    const commits = mapPullRequestCommitsResponse(parseJson(output))
+    if (commits === undefined) return { code: 'unavailable', message: 'unexpected GitHub response to the pull request commit read' }
+    if (commits.head.toLowerCase() !== headSha.toLowerCase()) {
+      return { code: 'stale', message: `the pull request head moved from ${headSha} to ${commits.head}` }
+    }
+    return await readComparison(async (args, operation) => await this.read(args, operation), ref.repository, commits.base, headSha, signal)
   }
 
   /** Read one file at a commit through the contents API in its raw form. */
@@ -164,7 +184,7 @@ export class GitHubProvider implements ForgeProvider {
     const { host, owner, name } = checkedRepository(ref)
     const failure = this.hostFailure(host)
     if (failure !== undefined) return failure
-    if (!COMMIT.test(commit)) throw new Error(`forge-github: invalid commit ${JSON.stringify(commit)}`)
+    if (!isCommit(commit)) throw new Error(`forge-github: invalid commit ${JSON.stringify(commit)}`)
     return await this.read([
       'api', '--hostname', host, '-H', 'Accept: application/vnd.github.raw+json',
       `repos/${owner}/${name}/contents/${encodedPath(path)}?ref=${commit}`,
@@ -175,7 +195,7 @@ export class GitHubProvider implements ForgeProvider {
   async commits(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeCommitList | ForgeFailure> {
     const failure = this.hostFailure(ref.repository.host)
     if (failure !== undefined) return failure
-    return await listCommits(this.graphql, ref, this.maxCommits, signal)
+    return await listCommits(this.graphql, ref, this.limits.maxCommits, signal)
   }
 
   /** Read the changes between two commits through the compare API in its diff form. */
@@ -268,34 +288,67 @@ export class GitHubProvider implements ForgeProvider {
     signal: AbortSignal,
     completeChecks = false,
   ): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>> {
-    const query = snapshotQuery(refs)
+    const query = snapshotQuery(refs, this.limits.maxReviewThreads)
     const output = await this.gh(['api', 'graphql', '--hostname', host, '-f', `query=${query.document}`], signal)
     const body = parseJson(output.stdout)
-    if (!completeChecks && hasGraphqlFields(body)) return await mapSnapshotResponse(body, query)
+    // A complete check read retains every response it reads, so all of them share one byte budget.
     let bytes = Buffer.byteLength(output.stdout)
     const tooLarge: ForgeFailure = { code: 'too-large', message: 'GitHub check details exceed the output size limit' }
-    if (bytes > this.maxOutputBytes) return new Map([...query.targets.values()].map(ref => [changeRequestKey(ref), tooLarge]))
-    if (hasGraphqlFields(body)) return await mapSnapshotResponse(body, query, async (id, cursor) => {
-      signal.throwIfAborted()
-      let page: GhOutput
-      try {
-        page = await this.gh(['api', 'graphql', '--hostname', host,
-          '-f', `query=${CHECKS_QUERY}`, '-f', `id=${id}`, '-f', `cursor=${cursor}`], signal)
-      } catch (error) {
-        if (signal.aborted) throw signal.reason
-        if (error instanceof GhUnavailableError || error instanceof GhTimeoutError || error instanceof GhOutputLimitError) {
-          return { ok: false, failure: { code: error instanceof GhOutputLimitError ? 'too-large' : 'unavailable', message: error.message } }
-        }
-        throw error
-      }
+    const overBudget = (page: GhOutput): boolean => {
+      if (!completeChecks) return false
       bytes += Buffer.byteLength(page.stdout)
-      if (bytes > this.maxOutputBytes) return { ok: false, failure: tooLarge }
+      return bytes > this.limits.maxOutputBytes
+    }
+    const continuation = async <T>(
+      variables: readonly string[], map: (value: unknown) => PageResult<T>,
+    ): Promise<PageResult<T>> => {
+      const page = await this.continuation(host, variables, signal)
+      if (!('stdout' in page)) return { ok: false, failure: page }
+      if (overBudget(page)) return { ok: false, failure: tooLarge }
       const value = parseJson(page.stdout)
-      return hasGraphqlFields(value) ? mapCheckPageResponse(value) : { ok: false, failure: responseFailure(page, value) }
-    })
+      return hasGraphqlFields(value) ? map(value) : { ok: false, failure: responseFailure(page, value) }
+    }
+    const threads: SnapshotPages['threads'] = async (id, cursor, first) => await continuation(
+      ['-f', `query=${THREADS_QUERY}`, '-f', `id=${id}`, '-f', `cursor=${cursor}`, '-F', `first=${first}`], mapThreadPageResponse)
+    if (!completeChecks && hasGraphqlFields(body)) return await mapSnapshotResponse(body, query, { threads })
+    if (bytes > this.limits.maxOutputBytes) return new Map([...query.targets.values()].map(ref => [changeRequestKey(ref), tooLarge]))
+    if (hasGraphqlFields(body)) {
+      return await mapSnapshotResponse(body, query, { threads, checks: async (id, cursor) => await continuation(
+        ['-f', `query=${CHECKS_QUERY}`, '-f', `id=${id}`, '-f', `cursor=${cursor}`], mapCheckPageResponse) })
+    }
     const failure = responseFailure(output, body)
     return new Map([...query.targets.values()].map(ref => [changeRequestKey(ref), failure] as const))
   }
+
+  /**
+   * Run one continuation query of a snapshot read.
+   * @param host - host the snapshot was read from.
+   * @param variables - `gh api graphql` field flags, the query first.
+   * @param signal - cancellation of the snapshot read.
+   * @returns the output, or the failure of a `gh` that cannot start, times out, or prints over its limit.
+   * @throws with `signal.reason` when the read is cancelled.
+   */
+  private async continuation(host: string, variables: readonly string[], signal: AbortSignal): Promise<GhOutput | ForgeFailure> {
+    signal.throwIfAborted()
+    try {
+      return await this.gh(['api', 'graphql', '--hostname', host, ...variables], signal)
+    } catch (error) {
+      if (signal.aborted) throw signal.reason
+      return processFailure(error)
+    }
+  }
+}
+
+/**
+ * Report a `gh` invocation that did not run to an exit code.
+ * @param error - what the runner threw.
+ * @returns `too-large` for output over its limit, `unavailable` for a `gh` that cannot start or times out.
+ * @throws `error` when it is any other failure.
+ */
+function processFailure(error: unknown): ForgeFailure {
+  if (error instanceof GhOutputLimitError) return { code: 'too-large', message: error.message }
+  if (error instanceof GhUnavailableError || error instanceof GhTimeoutError) return { code: 'unavailable', message: error.message }
+  throw error
 }
 
 /** Why `gh` refused: GitHub's message, else its first diagnostic line, with the HTTP status it names. */
@@ -339,32 +392,4 @@ function parseJson(text: string): unknown {
 
 function firstLine(text: string): string | undefined {
   return text.split('\n').map(line => line.trim()).find(line => line.length > 0)
-}
-
-/** Runs one reading `gh` command and maps a refusal to a failure, as the provider's reads do. */
-type GhTextReader = (args: readonly string[], signal: AbortSignal) => Promise<string | ForgeFailure>
-
-/**
- * Read the unified patch from the merge base of `base` and `head` to `head` through the REST compare endpoint.
- * Both ends are commit object names, so the answer never follows a moving branch. The patch keeps terminal escape
- * sequences that file contents hold; `gh` 2.97 and newer refuses to print them without `--allow-escape-sequences`.
- * @param read - runs `gh` with the provider's output limit and failure mapping.
- * @param repository - repository that holds both commits, with an owner and name already checked for inlining.
- * @param base - commit whose merge base with `head` starts the patch.
- * @param head - commit the patch ends at.
- * @param signal - cancellation of the read.
- * @returns the patch with `a/` and `b/` path prefixes, or why GitHub did not provide it.
- * @throws when `base` or `head` is not a full commit object name.
- */
-async function readComparison(
-  read: GhTextReader, repository: ForgeRepository, base: string, head: string, signal: AbortSignal,
-): Promise<string | ForgeFailure> {
-  for (const commit of [base, head]) {
-    if (!COMMIT.test(commit)) throw new Error(`forge-github: invalid commit ${JSON.stringify(commit)}`)
-  }
-  const { host, owner, name } = repository
-  return await read([
-    'api', '--hostname', host, '--allow-escape-sequences', '-H', 'Accept: application/vnd.github.diff',
-    `repos/${owner}/${name}/compare/${base}...${head}`,
-  ], signal)
 }

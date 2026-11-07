@@ -94,3 +94,91 @@ it('distinguishes failed association queries from an empty application list', as
   const rejecting = new OpenInAppPathController(remoteOf({ workspacePathApplications: async () => { throw new Error('disconnected') } }))
   expect(await rejecting.applications('/file.mp3', new AbortController().signal)).toBeNull()
 })
+
+describe('OpenInAppPathController association answers', () => {
+  type Answer = Awaited<ReturnType<SessionRemote['workspacePathApplications']>>
+  const app = (name: string, icon: string | null = null) => ({ id: `/Applications/${name}.app`, name, default: true, icon })
+  const answered = (...apps: ReturnType<typeof app>[]): Answer => ({ ok: true, value: apps })
+  /** A Remote whose association queries settle when the test answers them, and reject once cancelled. */
+  function deferredRemote() {
+    const queries: { path: string; signal: AbortSignal | undefined; answer: (result: Answer) => void }[] = []
+    const workspacePathApplications = vi.fn((request: { path: string }, signal?: AbortSignal) => new Promise<Answer>((answer, reject) => {
+      queries.push({ path: request.path, signal, answer })
+      signal?.addEventListener('abort', () => { reject(new Error('cancelled')) }, { once: true })
+    }))
+    return { queries, controller: new OpenInAppPathController(remoteOf({ workspacePathApplications })) }
+  }
+
+  it('shares an answer across files with the same final extension and keeps extensionless names apart', async () => {
+    const answers: Record<string, Answer> = {
+      '/w/notes.txt': answered(app('TextEdit')), '/w/Makefile': answered(app('Xcode')), '/w/.env': answered(app('Zed')),
+    }
+    const controller = new OpenInAppPathController(remoteOf({ workspacePathApplications: async ({ path }) => answers[path]! }))
+    const signal = new AbortController().signal
+    expect(controller.cachedApplications('/w/notes.txt')).toBeUndefined()
+    for (const path of Object.keys(answers)) await controller.applications(path, signal)
+    expect(controller.cachedApplications('/elsewhere/todo.txt')).toEqual([app('TextEdit')])
+    expect(controller.cachedApplications('C:\\work\\archive.tar.txt')).toEqual([app('TextEdit')])
+    expect(controller.cachedApplications('/w/NOTES.TXT')).toBeUndefined()
+    expect(controller.cachedApplications('/w/Makefile')).toEqual([app('Xcode')])
+    expect(controller.cachedApplications('/other/Makefile')).toBeUndefined()
+    expect(controller.cachedApplications('/w/.env')).toEqual([app('Zed')])
+    expect(controller.cachedApplications('/w/draft.')).toBeUndefined()
+  })
+
+  it('publishes changed answers only, and an earlier query never replaces a later answer', async () => {
+    const { queries, controller } = deferredRemote()
+    const signal = new AbortController().signal
+    const earlier = controller.applications('/w/a.txt', signal)
+    const later = controller.applications('/w/b.txt', signal)
+    queries[1]!.answer(answered(app('Sublime Text', 'data:image/png;base64,c3Vi')))
+    expect(await later).toEqual([app('Sublime Text', 'data:image/png;base64,c3Vi')])
+    const published = controller.associations.getSnapshot()
+    queries[0]!.answer(answered(app('TextEdit')))
+    expect(await earlier).toEqual([app('TextEdit')])
+    expect(controller.associations.getSnapshot()).toBe(published)
+    expect(controller.cachedApplications('/w/a.txt')).toEqual([app('Sublime Text', 'data:image/png;base64,c3Vi')])
+    const unchanged = controller.applications('/w/c.txt', signal)
+    queries[2]!.answer(answered(app('Sublime Text', 'data:image/png;base64,c3Vi')))
+    await unchanged
+    expect(controller.associations.getSnapshot()).toBe(published)
+    const changed = controller.applications('/w/c.txt', signal)
+    queries[3]!.answer(answered(app('Sublime Text', 'data:image/png;base64,bmV3'), app('TextEdit')))
+    await changed
+    expect(controller.associations.getSnapshot()).not.toBe(published)
+    expect(controller.cachedApplications('/w/a.txt')).toEqual([app('Sublime Text', 'data:image/png;base64,bmV3'), app('TextEdit')])
+    const other = controller.applications('/w/d.md', signal)
+    queries[4]!.answer(answered(app('Sublime Text', 'data:image/png;base64,bmV3')))
+    await other
+    expect(controller.cachedApplications('/w/e.md')).toEqual([app('Sublime Text', 'data:image/png;base64,bmV3')])
+    expect(controller.cachedApplications('/w/e.txt')).toHaveLength(2)
+  })
+
+  it('keeps the recorded answer through refused and rejected queries', async () => {
+    const workspacePathApplications = vi.fn<SessionRemote['workspacePathApplications']>()
+      .mockResolvedValueOnce(answered(app('Preview')))
+      .mockResolvedValueOnce({ ok: false, error: new RemoteError('gateway/internal', 'boom', {}) })
+      .mockRejectedValueOnce(new Error('down'))
+    const controller = new OpenInAppPathController(remoteOf({ workspacePathApplications }))
+    const signal = new AbortController().signal
+    await controller.applications('/w/a.png', signal)
+    expect(await controller.applications('/w/a.png', signal)).toBeNull()
+    expect(await controller.applications('/w/a.png', signal)).toBeNull()
+    expect(controller.cachedApplications('/w/b.png')).toEqual([app('Preview')])
+  })
+
+  it('runs one background refresh at a time, cancelling the older for the newer file, and disposal cancels it', async () => {
+    const { queries, controller } = deferredRemote()
+    void controller.refreshApplications('/w/a.txt')
+    void controller.refreshApplications('/w/b.txt')
+    expect(queries.map(query => [query.path, query.signal?.aborted])).toEqual([['/w/a.txt', true], ['/w/b.txt', false]])
+    queries[1]!.answer(answered(app('TextEdit')))
+    await vi.waitFor(() => { expect(controller.cachedApplications('/w/c.txt')).toEqual([app('TextEdit')]) })
+    void controller.refreshApplications('/w/d.md')
+    controller.dispose()
+    expect(queries[2]).toMatchObject({ path: '/w/d.md', signal: { aborted: true } })
+    void controller.refreshApplications('/w/e.json')
+    expect(queries).toHaveLength(3)
+    expect(controller.cachedApplications('/w/a.txt')).toEqual([app('TextEdit')])
+  })
+})

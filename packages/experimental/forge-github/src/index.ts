@@ -20,6 +20,8 @@ export interface Config {
   timeoutMs?: number
   /** Maximum captured bytes per `gh` output stream and combined JSON bytes of one complete check read. */
   maxOutputBytes?: number
+  /** Most review threads counted per pull request in one status read; a pull request with more reports a lower bound. */
+  maxReviewThreads?: number
   /** Most commits one pull request commit listing returns; GitHub lists at most 250 commits of a pull request. */
   maxCommits?: number
 }
@@ -29,6 +31,7 @@ export const Config: z<Config> = z.object({
   hosts: z.array(z.string()).default(['github.com']),
   timeoutMs: z.number().default(30_000),
   maxOutputBytes: z.number().default(8_388_608),
+  maxReviewThreads: z.number().default(1_000),
   maxCommits: z.number().default(250),
 })
 
@@ -44,8 +47,8 @@ export function apply(ctx: Context, config: Config): void {
   if (!Number.isSafeInteger(resolved.timeoutMs) || resolved.timeoutMs <= 0 || resolved.timeoutMs > MAX_TIMER_DELAY_MS) {
     throw new Error(`forge-github: timeoutMs must be a positive integer no greater than ${MAX_TIMER_DELAY_MS}`)
   }
-  for (const key of ['maxOutputBytes', 'maxCommits'] as const) {
+  for (const key of ['maxOutputBytes', 'maxReviewThreads', 'maxCommits'] as const) {
     if (!Number.isSafeInteger(resolved[key]) || resolved[key] <= 0) throw new Error(`forge-github: ${key} must be a positive safe integer`)
   }
-  ctx.forge.register(new GitHubProvider(ghRunner(resolved), resolved.hosts, resolved.maxOutputBytes, resolved.maxCommits))
+  ctx.forge.register(new GitHubProvider(ghRunner(resolved), resolved.hosts, resolved))
 }

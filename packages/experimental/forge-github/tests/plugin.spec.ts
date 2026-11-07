@@ -58,6 +58,8 @@ describe('forge-github plugin', () => {
     [{ maxOutputBytes: Number.MAX_SAFE_INTEGER + 1 }, 'forge-github: maxOutputBytes must be a positive safe integer'],
     [{ maxCommits: 0 }, 'forge-github: maxCommits must be a positive safe integer'],
     [{ maxCommits: 2.5 }, 'forge-github: maxCommits must be a positive safe integer'],
+    [{ maxReviewThreads: 0 }, 'forge-github: maxReviewThreads must be a positive safe integer'],
+    [{ maxReviewThreads: 2.5 }, 'forge-github: maxReviewThreads must be a positive safe integer'],
   ])('rejects %j at load', async (config, message) => {
     const context = await forge()
 
