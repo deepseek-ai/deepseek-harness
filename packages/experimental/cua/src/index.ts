@@ -130,7 +130,7 @@ export interface CuaBackend {
   /** Model request schema including this provider's operation options. Defaults to the shared schema. */
   requestSchema?: z.ZodType<CuaOperation>
   /** Resolve provider options on the parsed copy. An optional interactive step runs before authorized dispatch. */
-  prepareMouseMove?: (agent: Agent, params: Record<string, JsonValue>) => ((signal: AbortSignal) => Promise<void>) | undefined
+  prepareMouseMove?: (agent: Agent, params: Record<string, JsonValue | undefined>) => ((signal: AbortSignal) => Promise<void>) | undefined
   /** Dispatch a directional key through the provider's execution-scoped input owner, after application authorization. */
   sendKeyEvent?: (client: NativeClient, params: Record<string, JsonValue>,
     execution: Readonly<ToolExecution>) => Promise<JsonValue>

@@ -9,8 +9,6 @@ English | [中文](README.zh.md)
 
 Providers install the app/window object API with `installCua`; callers connect through `connectCua`. The `cua` API discovers applications, and `CuaApp` objects activate the selected application and enumerate its windows. `CuaApp` and `CuaWindow` both extend `CuaSurface`; explicit window objects own screenshots and pointer input. The macOS provider supplies native execution for this interface.
 
-`CuaSessionPermissions.request(agent, permission, prompt, signal)` asks for one named permission using the provider’s localized question and detail. A live Session caches each permission separately. Providers declare additional tool fields with their request schema and can prepare a move before dispatch.
-
 ## Summary
 
 Inspect and operate applications through retained objects: select an application, read its accessibility tree, capture explicit windows, and dispatch authorized input. Platform providers supply native execution; this library owns the object API, request validation, application consent, and image admission. The external PTC runtime owns variable persistence.
@@ -69,6 +67,8 @@ The Host marker has no configurable fields; platform providers own native config
 
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
+
+`CuaSessionPermissions.request(agent, permission, prompt, signal)` asks for one named permission using the provider’s localized question and detail. A live Session caches each permission separately. Providers declare additional tool fields with their request schema and can prepare a move before dispatch.
 
 Permission responses identify their platform and report only the state that platform can observe. The shared page renders the controls those observations support. Before platform identification, it shows neutral observation and input rows without system actions. Native providers use the shared build lock and compiler cleanup. Standalone executables are retained by digest. The macOS provider reads its signed application receipt after compilation completes under the same lock.
 

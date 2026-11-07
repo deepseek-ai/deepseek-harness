@@ -10,8 +10,11 @@ import { mouseControlPrompt } from './mouse-control-locales.ts'
 const pointerOptions = { useSystemPointer: z.boolean().optional().describe('Request use of the system pointer. The Host checks permission before dispatch.') }
 const mouseMove = z.strictObject({ method: z.literal('mouseMove'), params: z.union(MouseMoveTargets.map(target => target.extend(pointerOptions))) })
 
+const [first, ...rest] = Request.options
+const macOperation = (op: typeof Request.options[number]) => op.shape.method.value === 'mouseMove' ? mouseMove : op
+
 /** macOS advertises and validates its additional option for element and coordinate moves. */
-export const MacRequest = z.discriminatedUnion('method', Request.options.map(op => op.shape.method.value === 'mouseMove' ? mouseMove : op))
+export const MacRequest = z.discriminatedUnion('method', [macOperation(first), ...rest.map(macOperation)])
 
 /**
  * Select the native route on the provider's parsed request, before coordinates are rechecked and dispatched.
