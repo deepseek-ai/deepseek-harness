@@ -2429,6 +2429,11 @@
     },
     {
       "doc": "docs/subsystems/working-directory.md",
+      "symbol": "InheritOptions",
+      "source": "packages/session/working-directory/src/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/working-directory.md",
       "symbol": "RelocatedDirectories",
       "source": "packages/session/working-directory/src/index.ts"
     },

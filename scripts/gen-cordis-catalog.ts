@@ -416,6 +416,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   WorktreeCreation: 'worktrees.md',
   RestoredWorktree: 'worktrees.md',
   RelocateOptions: 'working-directory.md',
+  InheritOptions: 'working-directory.md',
   RelocatedDirectories: 'working-directory.md',
   ChangeRequestListener: 'forge.md',
   ChangeRequestRef: 'forge.md',

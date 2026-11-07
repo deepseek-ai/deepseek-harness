@@ -4614,6 +4614,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the committed current directory and the workspace root selected after the commit; the registered root is that root unless a more specific anchor already contains the directory. A notice failure is warned; the next request still receives the committed directories.',
         throws: ['when either path is not an existing directory or the directory lies outside the root.'],
       },
+      {
+        signature: 'async inherit(agent: Agent, source: Session, options: InheritOptions): Promise<RelocatedDirectories>',
+        description: 'Start a Session\'s directories from another Session\'s. When `source` works in a registered checkout other than the starting Session\'s own original project and `options.cwd` lies inside that checkout, the checkout is registered as the starting Session\'s anchor and `cwd` entered through relocate; otherwise only the current directory is set through set. Only the source\'s current root is passed on, never its other anchors, and later changes to `source` do not reach the starting Session.',
+        parameters: [{ name: 'agent', description: 'live or unpublished Agent owning the Session that starts.' }, { name: 'source', description: 'Session whose current root may be passed on; the call leaves it unchanged.' }, { name: 'options', description: 'canonical absolute directory to start in and cancellation before the durable change.' }],
+        returns: 'the committed current directory and the workspace root selected after the commit.',
+        throws: ['when `options.cwd` is not an existing directory, or when a `working-directory/access` listener rejects.'],
+      },
     ],
   },
   {
@@ -6953,6 +6960,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'IndexInjectionPlacement',
     declaration: 'export type IndexInjectionPlacement = \'head\' | \'body\';',
+  },
+  {
+    name: 'InheritOptions',
+    declaration: 'export interface InheritOptions {\n    cwd: string;\n    signal?: AbortSignal;\n}',
   },
   {
     name: 'InspectOptions',

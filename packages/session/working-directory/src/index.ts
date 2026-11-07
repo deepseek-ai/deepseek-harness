@@ -85,7 +85,15 @@ export interface RelocateOptions {
   signal?: AbortSignal
 }
 
-/** The committed outcome of {@link WorkingDirectoryService.relocate}. */
+/** Options of {@link WorkingDirectoryService.inherit}. */
+export interface InheritOptions {
+  /** Canonical absolute directory the Session starts in, spelled as the service records directories. */
+  cwd: string
+  /** Cancellation before the durable change. */
+  signal?: AbortSignal
+}
+
+/** The committed outcome of {@link WorkingDirectoryService.relocate} and {@link WorkingDirectoryService.inherit}. */
 export interface RelocatedDirectories {
   /**
    * Canonical absolute workspace root the commit selected: the longest registered anchor containing
@@ -322,6 +330,28 @@ export class WorkingDirectoryService extends Service {
       this.commit(agent, cwd, false, control, anchor)
       return { root: this.rootOf(agent.session), cwd }
     })
+  }
+
+  /**
+   * Start a Session's directories from another Session's. When `source` works in a registered checkout
+   * other than the starting Session's own original project and `options.cwd` lies inside that checkout,
+   * the checkout is registered as the starting Session's anchor and `cwd` entered through {@link relocate};
+   * otherwise only the current directory is set through {@link set}. Only the source's current root is
+   * passed on, never its other anchors, and later changes to `source` do not reach the starting Session.
+   * @param agent - live or unpublished Agent owning the Session that starts.
+   * @param source - Session whose current root may be passed on; the call leaves it unchanged.
+   * @param options - canonical absolute directory to start in and cancellation before the durable change.
+   * @returns the committed current directory and the workspace root selected after the commit.
+   * @throws when `options.cwd` is not an existing directory, or when a `working-directory/access` listener rejects.
+   */
+  async inherit(agent: Agent, source: Session, options: InheritOptions): Promise<RelocatedDirectories> {
+    const root = this.rootOf(source)
+    // The deployment fallback a source without a recorded project reports is no anchor, and the starting
+    // Session's own original project is registered already.
+    const checkout = this.anchorsOf(source).includes(root) && root !== agent.session.header.cwd && within(root, options.cwd)
+    if (checkout) return this.relocate(agent, root, options)
+    const cwd = await this.set(agent, options.cwd, options.signal)
+    return { root: this.rootOf(agent.session), cwd }
   }
 
   private contextText(session: Session): string {
