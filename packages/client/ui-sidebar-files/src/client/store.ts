@@ -86,7 +86,7 @@ export type LevelState =
 /**
  * One pane's tree: its root, the levels it has asked for, and what is open.
  *
- * Every path here is absolute: the root is the session's working directory as
+ * Every path here is absolute: the root is the Session's workspace root as
  * the Host reports it, and a child is the parent joined with the entry name.
  */
 export interface FilesTreeState {

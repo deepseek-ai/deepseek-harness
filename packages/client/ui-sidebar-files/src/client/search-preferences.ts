@@ -32,7 +32,7 @@ export const SEARCH_PREFERENCES_KEY = 'dsh.sidebar-files.workspace-search.v1'
  * trailing `/` and `\` removed except the one that makes a filesystem root
  * (`/`, `C:\`, `C:/`). Case and separators are otherwise kept, so two
  * spellings of one directory keep separate preferences.
- * @param cwd - the Session's working directory.
+ * @param cwd - the workspace root as the Host reports it.
  * @returns the key its preferences are stored under.
  */
 export function workspaceKey(cwd: string): string {
