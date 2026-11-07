@@ -113,9 +113,6 @@
       "path": "../../document/office-kit"
     },
     {
-      "path": "../account-controller"
-    },
-    {
       "path": "../../credentials/deepseek-account"
     },
     {

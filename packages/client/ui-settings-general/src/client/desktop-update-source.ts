@@ -8,6 +8,7 @@ export class DesktopUpdateSource {
   readonly store = createSnapshotStore<DesktopUpdateView>({ failed: false, opening: false })
   private live = true
   private received = false
+  private openingOperation: symbol | undefined
   private readonly unsubscribe: (() => void) | undefined
 
   /** @param bridge - Optional isolated Electron API, absent in ordinary browsers. */
@@ -15,7 +16,10 @@ export class DesktopUpdateSource {
     this.unsubscribe = bridge?.subscribe((presentation) => {
       if (!this.live) return
       this.received = true
-      this.store.set({ ...this.store.getSnapshot(), presentation, failed: false })
+      const previous = this.store.getSnapshot()
+      const startedDownload = presentation.phase === 'downloading' && previous.presentation?.phase !== 'downloading'
+      if (startedDownload) this.openingOperation = undefined
+      this.store.set({ ...previous, presentation, failed: false, opening: startedDownload ? false : previous.opening })
     })
     void bridge?.status().then((presentation) => {
       if (this.live && !this.received) this.store.set({ ...this.store.getSnapshot(), presentation })
@@ -29,12 +33,17 @@ export class DesktopUpdateSource {
     if (!this.live || this.bridge === undefined) return
     const state = this.store.getSnapshot()
     if (state.opening || (state.presentation !== undefined && state.presentation.configurationError === undefined
-      && ['checking', 'downloading', 'verifying', 'installing'].includes(state.presentation.phase))) return
+      && ['checking', 'verifying', 'installing'].includes(state.presentation.phase))) return
+    const operation = Symbol()
+    this.openingOperation = operation
     this.store.set({ ...state, opening: true })
     void this.bridge.open().catch(() => {
-      if (this.live) this.store.set({ ...this.store.getSnapshot(), failed: true })
+      if (this.live && this.openingOperation === operation) this.store.set({ ...this.store.getSnapshot(), failed: true })
     }).finally(() => {
-      if (this.live) this.store.set({ ...this.store.getSnapshot(), opening: false })
+      if (this.live && this.openingOperation === operation) {
+        this.openingOperation = undefined
+        this.store.set({ ...this.store.getSnapshot(), opening: false })
+      }
     })
   }
 

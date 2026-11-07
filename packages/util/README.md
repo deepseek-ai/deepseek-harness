@@ -27,6 +27,7 @@ Each package provides one primitive or one data set; open a package page for how
 | Package | Role |
 |---|---|
 | [`brand/`](brand/README.md) | Nominal string types and their stateless constructor |
+| [`error/`](error/README.md) | The dependency-free `HarnessError` base class with a stable machine-routable code |
 | [`package-manifest/`](package-manifest/README.md) | Shared TypeScript declarations for package manifests |
 | [`plugin-detail/`](plugin-detail/README.md) | Selects plugin detail documents and reads them from local packages and npm file CDNs |
 | [`plugin-market-index/`](plugin-market-index/README.md) | Validates plugin market index format 1 and builds pinned install arguments |

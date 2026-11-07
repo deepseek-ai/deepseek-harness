@@ -82,12 +82,13 @@ export const VIEWER_ENDPOINT_CLASSES = {
   // No reader role names these, so the conservative class is owner-only. A share's method policy
   // decides whether one installed plugin's method reaches its viewers; this table only decides what
   // the core share roles grant.
-  'account/ackBonusNotified': 'owner-only', // owner account and sign-in; the served page never reads it
   'account/cancelSignIn': 'owner-only', // owner account and sign-in; the served page never reads it
   'account/getBalance': 'owner-only', // owner account and sign-in; the served page never reads it
   'account/getProfile': 'owner-only', // owner account and sign-in; the served page never reads it
   'account/getState': 'owner-only', // owner account and sign-in; the served page never reads it
-  'account/getUnnotifiedBonuses': 'owner-only', // owner account and sign-in; the served page never reads it
+  'account/getNotificationContent': 'owner-only', // owner account and sign-in; the served page never reads it
+  'account/getNotifications': 'owner-only', // owner account and sign-in; the served page never reads it
+  'account/reportNotificationEvent': 'owner-only', // owner account and sign-in; the served page never reads it
   'account/hasRunningAccountTasks': 'owner-only', // owner account and sign-in; the served page never reads it
   'account/signOut': 'owner-only', // owner account and sign-in; the served page never reads it
   'account/startSignIn': 'owner-only', // owner account and sign-in; the served page never reads it
@@ -162,6 +163,9 @@ export const VIEWER_ENDPOINT_CLASSES = {
   'productAnalytics/report': 'owner-only', // owner product analytics
   'productAnalytics/watchPolicy': 'owner-only', // owner product analytics
   'pluginRegistryProbe/fastest': 'owner-only', // owner plugin registry probe
+  'connectorAccounts/cancel': 'owner-only', // owner connector accounts on the Plugins page
+  'connectorAccounts/start': 'owner-only', // owner connector accounts on the Plugins page
+  'connectorAccounts/watch': 'owner-only', // owner connector accounts on the Plugins page
   'sessionReferenceResolver/candidates': 'owner-only', // owner composer reference resolution
   'officeKit/generation': 'owner-only', // owner document export
   'officeKit/render': 'owner-only', // owner document export

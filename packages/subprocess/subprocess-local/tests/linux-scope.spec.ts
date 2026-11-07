@@ -424,9 +424,9 @@ describe('Linux scope establishment and quiescence', () => {
     const states = [activeUnit(), unloadedUnit()]
     const controlOptions = control === undefined ? {} : { control }
     const { child, result, requestPath } = launch(async () => states.shift() ?? missingUnit(), {}, {
-      ...spec(), stdio: { ...spec().stdio, ...controlOptions },
+      ...spec(), stdio: { ...spec().stdio, stdout: 'inherit', ...controlOptions },
     })
-    expect(consumeLinuxLaunchRequest(requestPath)).toEqual({ cwd: '/target', env: { TARGET: 'yes' }, ...controlOptions })
+    expect(consumeLinuxLaunchRequest(requestPath)).toEqual({ cwd: '/target', env: { TARGET: 'yes' }, pipeFds: [0, 2], ...controlOptions })
     expect(result.control).toBe(control === undefined ? undefined : child.control)
     const waiting = result.owner.waitForExit()
     child.exit(0, null)
@@ -1176,7 +1176,7 @@ describe('Linux ordinary launch adapters', () => {
     expect((call?.[1] as string[] | undefined)?.slice(0, 5)).toEqual([
       '--user', '--scope', '--quiet', '--collect', '--expand-environment=no',
     ])
-    expect(consumeLinuxLaunchRequest(requestPath)).toEqual({ cwd: '/target', env: { TARGET: 'yes' } })
+    expect(consumeLinuxLaunchRequest(requestPath)).toEqual({ cwd: '/target', env: { TARGET: 'yes' }, pipeFds: [0, 1, 2] })
     child.exit(0, null)
     await expect(result.direct).resolves.toEqual({ exitCode: 0, signal: null })
     result.owner.cleanup?.()

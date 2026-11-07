@@ -1,0 +1,34 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/util/error/README.md
+/:
+  en: 765d60b0cc7f8cf1
+  zh: 66b731f7143ccc5c
+/deepseek-ai-dsh-error:
+  en: 78fc89983568c13f
+  zh: 12bb37d45b49562b
+/deepseek-ai-dsh-error/summary:
+  en: eefb4278f326243a
+  zh: 681e25fc7d65865e
+/deepseek-ai-dsh-error/table-of-contents:
+  en: c992e0cd2e7042d6
+  zh: 2e8cd826664632d1
+/deepseek-ai-dsh-error/use-this-package:
+  en: 1b8c9b68ec9b48fc
+  zh: 4b0b54d3330b288b
+/deepseek-ai-dsh-error/understand-the-implementation:
+  en: 42b15ac6321706aa
+  zh: 4ed0861911abaf5d
+/deepseek-ai-dsh-error/understand-the-implementation/source-map:
+  en: a2e80abfe169f97f
+  zh: eb37e22c32f66add
+/deepseek-ai-dsh-error/understand-the-implementation/why-it-stays-dependency-free:
+  en: 79564181c4c59db6
+  zh: 845856fa121b3ff7
+/deepseek-ai-dsh-error/further-exploration:
+  en: 530bc3a0690a4012
+  zh: 192682c5a8571dfe
+/deepseek-ai-dsh-error/dev-note:
+  en: 5de1d6304e00c58f
+  zh: 0087361e6f535488

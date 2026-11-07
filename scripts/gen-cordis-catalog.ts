@@ -63,6 +63,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   actionCards: 'boot.md',
   pluginRecommendations: 'boot.md',
   pluginMarket: 'boot.md',
+  connectorAccounts: 'boot.md',
   pluginRegistryProbe: 'boot.md',
   mcpAccounts: 'boot.md',
   configEditor: 'boot.md',
@@ -207,6 +208,7 @@ export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
   commandUi: 'client-side interface-typed browser service — packages/client/ui-commands/README.md owns the API',
   fileDrag: 'client-side file preparation and transfer service — packages/client/ui-file-drag/README.md owns the API',
   feedbackUi: 'client-side feedback dialog service — packages/client/ui-message-feedback/README.md owns the API',
+  accountUi: 'client-side shared account state — packages/client/ui-settings-account/README.md owns the API',
   conversation: 'client-side interface-typed browser service — packages/client/ui-conversation/README.md owns the API',
   layout: 'client-side interface-typed browser service — packages/client/ui-layout/README.md owns the API',
   pluginNavigation: 'client-side bundle navigation — packages/client/ui-plugin-manager/README.md owns the API',
@@ -287,6 +289,8 @@ export const EVENT_SCOPE_PAGE: Record<string, string> = {
  * exemption cannot mask another declaration in that scope.
  */
 export const EVENT_WALK_EXEMPTIONS: Record<string, string> = {
+  'account-ui/change': 'client-side account lifecycle signal — packages/client/ui-settings-account/README.md owns the API',
+  'account-ui/refresh': 'client-side account refresh signal — packages/client/ui-settings-account/README.md owns the API',
   'workspace/archive-notice': 'client-face archive follow-up copy — packages/client/ui-workspace/README.md owns the API',
   'workspace/archive-followup-failed': 'client-face archive follow-up failure — packages/client/ui-workspace/README.md owns the API',
   'workspace/archive-followup-settled': 'client-face archive follow-up settlement — packages/client/ui-workspace/README.md owns the API',
@@ -845,6 +849,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   ToolExecutionResult: 'tools.md',
   ToolExecutionToken: 'tools.md',
   ToolGuard: 'tools.md',
+  ToolGuardDenial: 'tools.md',
   ToolRuntime: 'tools.md',
   ToolsService: 'tools.md',
   ToolExecutor: 'tools.md',
@@ -877,10 +882,14 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   AuthorizationNotice: 'credentials.md',
   AuthorizationOutcome: 'credentials.md',
   AccountView: 'credentials.md',
+  AccountUpdate: 'credentials.md',
   AccountDetails: 'credentials.md',
   AccountClientMetadata: 'credentials.md',
-  AccountBonusBatch: 'credentials.md',
-  AccountBonusOrderId: 'credentials.md',
+  AccountNotificationBatch: 'credentials.md',
+  AccountNotificationId: 'credentials.md',
+  AccountNotification: 'credentials.md',
+  AccountNotificationAction: 'credentials.md',
+  AccountNotificationEvent: 'credentials.md',
   AccountUserId: 'credentials.md',
   PlatformSession: 'credentials.md',
   SignInAttemptId: 'credentials.md',
@@ -1003,6 +1012,10 @@ export const FOUNDATION_TYPE_NAMES: ReadonlySet<string> = new Set([
 
 /** Project types deliberately documented outside the subsystems catalog. */
 export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
+  AnyConnectorAccountView: 'generic connector account view is owned by packages/client/ui-connector-account/README.md',
+  ConnectorAccountRegistration: 'Plugins page account registration is owned by packages/client/ui-connector-account/README.md',
+  ConnectorAccountsView: 'registered account stream item is owned by packages/client/ui-connector-account/README.md',
+  ConnectorOperationId: 'account operation id is owned by packages/client/ui-connector-account/README.md',
   ActionCardDecision: 'packages/experimental/action-cards/README.md',
   ActionCardKind: 'packages/experimental/action-cards/README.md',
   ActionCardResult: 'packages/experimental/action-cards/README.md',

@@ -12,6 +12,10 @@
   --plugin-page-top-inset: 28px;
   --bundle-progress-size: 14px;
   --bundle-toggle-gap: 8px;
+  /* A card head's inset, icon size, and gap after the icon; a card's reason lines align under its title from these. */
+  --card-head-inset: 8px;
+  --card-icon-size: 48px;
+  --card-head-gap: 14px;
 
   display: flex;
   flex-direction: column;
@@ -387,8 +391,8 @@
 .cardHead {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 8px;
+  gap: var(--card-head-gap);
+  padding: var(--card-head-inset);
 }
 
 .cardIcon {
@@ -396,12 +400,17 @@
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 48px;
+  width: var(--card-icon-size);
+  height: var(--card-icon-size);
   /* The same hairline frame as the component rows below. */
   border: 0.5px solid var(--dsw-alias-border-l3);
   border-radius: var(--dsw-radius-lg);
   color: var(--dsw-alias-label-secondary);
+}
+
+/* A card's reason lines start under its title. */
+.card > .reason {
+  padding: 0 var(--card-head-inset) var(--card-head-inset) calc(var(--card-head-inset) + var(--card-icon-size) + var(--card-head-gap));
 }
 
 .packageImage {

@@ -171,6 +171,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Shares profile package operations with the CLI and reports persisted and running state to Web and agent callers.',
   },
   {
+    key: 'connectorAccounts',
+    pkg: 'client-ui-connector-account',
+    title: 'Connector accounts on the Plugins page',
+    mode: 'service',
+    note: 'Holds the accounts CLI app plugins and MCP connectors register and serves their Host-computed displays to the Plugins page through one Remote; authorization pages and notices stay in the browser that started the operation.',
+  },
+  {
     key: 'pluginMarket',
     pkg: 'plugin-market',
     title: 'Plugin market index reader',
@@ -493,9 +500,9 @@ const SERVICE_ROLES: ServiceRole[] = [
     key: 'deepseekAccount',
     pkg: 'deepseek-account',
     title: 'DeepSeek account',
-    mode: 'seam',
-    implementations: ['deepseek-account-platform'],
-    consumers: ['api-account-controller', 'llm-deepseek'],
+    mode: 'service',
+    implementations: [],
+    consumers: ['llm-deepseek'],
     note: 'The Host owns browser authorization and local credentials; UI consumers receive state without tokens.',
   },
   {

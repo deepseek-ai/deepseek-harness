@@ -92,6 +92,10 @@ dsh --profile web --no-open --host "$(hostname -i | awk '{print $1}')" --public-
 
 每个浏览器会话选择一个随发行版交付的 preset（默认 `standard`）。Agent 预设设置页可更改默认项并编辑预设的子插件；保存结果持久化到 `$DSH_HOME/profiles/web/cordis.patch.yml`。只有 Host 提供可编辑的 profile 时，标准模式和 Creator 才会启用插件管理工具。
 
+标准模式和创造模式包含 `dsh-doc` skill，用于 DSH 相关问题以及你要求的插件或预设工作。该 skill 引导 agent 查阅已安装版本的文档和源码。加载方式及其对上下文的影响参见[模型体验](#model-experience)。
+
+打包的 skill 使用自定义 skill 根目录：同名的项目 skill 会覆盖打包的 skill，打包的 skill 又会覆盖同名的用户 skill。skill 目录中只保留优先级最高的一个条目，不会报错；参见 [skill 根目录优先级](../../skill/skill-filesystem/README.zh.md)。
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -149,6 +153,34 @@ URL 行与浏览器交接都是就绪信号：监督方一观察到该行就发�
 
 <a id="model-experience"></a>
 ## 模型体验
+
+### DSH 文档 skill
+
+#### 模型看到什么
+
+标准模式和创造模式的 skill 目录都列出 `dsh-doc`。`skill` 工具加载其指令，并引导 agent 查阅当前任务所需的参考资料。其他 preset 保留各自的 skill 来源。加载该 skill 不会修改工作区文件或 profile 设置。
+
+#### Token 影响
+
+preset 提供一条目录项。没有其他 skill 的会话还会收到目录的通用调用说明。skill 正文和参考文件仅在加载时进入上下文。
+
+#### KV Cache 影响
+
+目录在第一个步骤写入日志，在条目改变前保持不变。加载 skill 会追加工具输出，不改变工具 schema。
+
+### 创造模式角色设定
+
+#### 模型看到什么
+
+创造模式预设在共享的编码 Agent 描述句之后添加“You help the user customize DeepSeek Harness itself.”。插件实现和授权规则仍保留在按需加载的 `dsh-doc` skill 中。
+
+#### Token 影响
+
+创造模式请求增加一句固定文本。标准模式请求不变。
+
+#### KV Cache 影响
+
+该句在创造模式预设内保持稳定；切换到其他预设会改变角色设定前缀。
 
 ### Web 运行时变量
 
