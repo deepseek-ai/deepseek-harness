@@ -76,6 +76,12 @@ export interface JobOutcome {
    */
   detail?: string
   /**
+   * Exit code of the process the job ran, for a producer that runs one. A
+   * nonzero code on a `completed` job means the command reported failure while
+   * the job itself finished.
+   */
+  exitCode?: number
+  /**
    * Return value for jobs whose result is a value rather than a stream (a
    * workflow's rendered result, a subagent's report). The output ring carries
    * the stream; this is handed out once by the model's next {@link JobRegistry.read}.

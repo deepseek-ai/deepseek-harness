@@ -82,6 +82,8 @@ export interface JobView {
   readonly progress?: string
   /** Terminal reason (`exit code: 3`); a recorded kill reason is merged in. */
   readonly detail?: string
+  /** Exit code of the process the job ran, once settled, for a producer that reports one. */
+  readonly exitCode?: number
   /** Epoch ms when the job was registered. */
   readonly startedAt: number
   /** Epoch ms when the job settled; absent while live. */
