@@ -1175,6 +1175,8 @@ it.skipIf(MODE === 'record')('retains a wrapped code line and tree width across 
     return { path: element.getAttribute('data-forge-diff-file'), line: line.dataset.newLine,
       offset: line.getBoundingClientRect().top - top, scrollTop: viewport.scrollTop }
   })
+  // An expanded file draws its lines once the reader scrolls near it.
+  await file.scrollIntoViewIfNeeded()
   await code.waitFor()
   for (const width of [240, 320]) {
     if (width === 320) {
@@ -1252,6 +1254,8 @@ it.skipIf(MODE === 'record')('uses horizontal arrows to navigate files while pre
   expect(await scroll.evaluate(element => document.activeElement === element)).toBe(true)
   await page.keyboard.press('ArrowRight')
   await expect.poll(() => tree.getByRole('button', { name: 'README.md', exact: true }).getAttribute('aria-current')).toBe('true')
+  // The last file cannot reach the top, so the jump settles at the end of the list once the file has drawn its lines.
+  await expect.poll(() => scroll.evaluate(element => element.scrollHeight - element.clientHeight - element.scrollTop)).toBeLessThan(1)
   const lastPosition = await scroll.evaluate(element => element.scrollTop)
   const lastBox = await c.boundingBox(), viewport = await scroll.boundingBox()
   if (lastBox === null || viewport === null) throw new Error('The last file and scroll viewport must be rendered')
