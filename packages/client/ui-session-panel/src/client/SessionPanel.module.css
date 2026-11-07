@@ -10,7 +10,8 @@
   box-sizing: border-box;
   /* The docked width keeps 48px clear of the transcript column and its width handle. */
   width: clamp(280px, calc(var(--dsh-session-panel-gutter, 0px) - 64px), 340px);
-  max-height: calc(var(--dsh-conversation-viewport-height, 100dvh) - 24px);
+  /* Stops above the composer stack, whose seat fades and takes presses across the body's full width. */
+  max-height: calc(var(--dsh-conversation-viewport-height, 100dvh) - var(--dsh-composer-height, 152px) - 24px);
   overflow-y: auto;
   overscroll-behavior: contain;
   /* The bar has a place of its own: the content keeps its width whether or not
@@ -31,12 +32,10 @@
   animation: dsh-session-panel-enter 120ms ease-out;
 }
 
-/* Over the transcript the panel takes the prominent elevation and stops above
-   the composer stack, whose card it would otherwise cover. */
+/* Over the transcript the panel takes the prominent elevation. */
 .panel[data-session-panel='overlay'] {
   right: 12px;
   width: min(340px, calc(100% - 24px));
-  max-height: calc(var(--dsh-conversation-viewport-height, 100dvh) - var(--dsh-composer-height, 152px) - 24px);
   box-shadow: var(--dsw-elevation-prominent);
 }
 
