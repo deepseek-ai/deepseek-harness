@@ -38,7 +38,7 @@ final class HeldKeys: @unchecked Sendable {
     func repeatIfHeld(owner: Owner, name: String, code: CGKeyCode, down: CGEvent, post: (CGEvent, Int32) -> Void) throws -> Bool {
         try lock.withLock {
             guard let key = pressed.first(where: { $0.owner == owner && $0.code == code }) else { return false }
-            guard down.type == .keyDown else {
+            guard key.flag.isEmpty, down.type == .keyDown else {
                 throw RequestParameters.invalid("Modifier '\(name)' is already held. Send 'up' to release it.")
             }
             try NativePlatform.verify(key.recipient)
