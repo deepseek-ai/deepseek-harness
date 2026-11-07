@@ -60,3 +60,7 @@
 - insert:
     - id: cua-consent-fixture
       name: './consent-fixture.mjs'
+
+- id: ptc-runtime
+  config:
+    maxOutputBytes: 4096

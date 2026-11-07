@@ -38,6 +38,204 @@
       {
         "type": "block-start",
         "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-output-invalid",
+          "name": "run_code",
+          "arguments": "{\"code\":\"const app = await tools.cua({ method: 'getApp', params: { selector: 'test.fixture' } });\\nconst state = await tools.cua({ method: 'getState', params: { appHandle: app.appHandle, windowId: 7 } });\\nawait tools.cua({ method: 'click', params: { appHandle: app.appHandle, windowId: 7, snapshotId: state.snapshotId, elementId: '0' } });\\nconst shot = await tools.cua({ method: 'screenshot', params: { appHandle: app.appHandle, windowId: 7 } });\\nreturn { bytes: Uint8Array.from(Buffer.from(shot.data, 'base64')), windowId: shot.windowId };\",\"description\":\"Click once, capture the window, and return screenshot bytes\"}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-output-observe",
+          "name": "run_code",
+          "arguments": "{\"code\":\"const app = await tools.cua({ method: 'getApp', params: { selector: 'test.fixture' } });\\nconst state = await tools.cua({ method: 'getState', params: { appHandle: app.appHandle, windowId: 7 } });\\nif (!state.tree.includes('Count: 1')) throw new Error('Click was lost or repeated');\\nreturn { count: 1, repeated: false };\",\"description\":\"Observe the completed click without repeating it\"}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-action-refused",
+          "name": "run_code",
+          "arguments": "{\"code\":\"const app = await tools.cua({ method: 'getApp', params: { selector: 'test.fixture' } });\\nconst state = await tools.cua({ method: 'getState', params: { appHandle: app.appHandle, windowId: 7 } });\\ntry { await tools.cua({ method: 'mouseMove', params: { appHandle: app.appHandle, windowId: 7, x: 999, y: 999, relative: true } }); } catch (error) { throw error.message; }\",\"description\":\"Request an unavailable hover route\"}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-output-limit",
+          "name": "run_code",
+          "arguments": "{\"code\":\"const app = await tools.cua({ method: 'getApp', params: { selector: 'test.fixture' } });\\nconst state = await tools.cua({ method: 'getState', params: { appHandle: app.appHandle, windowId: 7 } });\\nawait tools.cua({ method: 'click', params: { appHandle: app.appHandle, windowId: 7, snapshotId: state.snapshotId, elementId: '0' } });\\nreturn 'x'.repeat(8192);\",\"description\":\"Click once and exceed the completion output budget\"}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-worker-exit",
+          "name": "run_code",
+          "arguments": "{\"code\":\"const app = await tools.cua({ method: 'getApp', params: { selector: 'test.fixture' } });\\nconst state = await tools.cua({ method: 'getState', params: { appHandle: app.appHandle, windowId: 7 } });\\nawait tools.cua({ method: 'click', params: { appHandle: app.appHandle, windowId: 7, snapshotId: state.snapshotId, elementId: '0' } });\\nprocess.exit(7);\",\"description\":\"Simulate runtime exit after a dispatched click\"}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-output-final-observe",
+          "name": "run_code",
+          "arguments": "{\"code\":\"const app = await tools.cua({ method: 'getApp', params: { selector: 'test.fixture' } });\\nconst state = await tools.cua({ method: 'getState', params: { appHandle: app.appHandle, windowId: 7 } });\\nif (!state.tree.includes('Count: 3')) throw new Error('Unexpected action count');\\nreturn { count: 3, repeated: false };\",\"description\":\"Observe effects after output overflow and runtime exit\"}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
         "blockType": "text"
       },
       {
@@ -45,7 +243,7 @@
         "index": 0,
         "block": {
           "type": "text",
-          "text": "Received native CUA values and one PNG screenshot through PTC. The PNG is 90 bytes with signature 89504e470d0a1a0a."
+          "text": "Observed exactly three clicks. The unavailable hover failed; invalid completion, output overflow, and runtime exit did not replay earlier actions. Screenshot attachments and subcall evidence remain recorded."
         }
       },
       {

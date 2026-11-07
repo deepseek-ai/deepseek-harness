@@ -1,4 +1,5 @@
 /** Program execution failures reported by PTC. @module */
+import type { PtcRunFailure } from '@deepseek-ai/dsh-ptc-runtime'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 
 /**
@@ -21,16 +22,22 @@ export class ToolCallLimitExceededError extends Error {
 }
 
 /**
- * Thrown by `run_code` when the program run itself failed — a program
- * exception, a budget expiry, a runtime-local abort, or substrate death. Caller
- * cancellation uses the shared `AbortError` / `ABORTED` tool outcome. Extends
- * {@link HarnessError} (`code: 'CODE_RUN_FAILED'`); the registry's execution
- * pipeline converts it into a structured `isError` result whose text carries
- * the failure kind plus the captured logs, so the model can self-correct.
+ * Failed program execution or output delivery. Output failures use
+ * CODE_OUTPUT_INVALID or CODE_OUTPUT_LIMIT; all other kinds use CODE_RUN_FAILED.
+ * Earlier effects are not rolled back. Caller cancellation uses AbortError / ABORTED.
  */
 export class CodeRunFailedError extends HarnessError {
-  constructor(message: string) {
-    super(message, 'CODE_RUN_FAILED')
+  /**
+   * @param message - Runtime diagnostic, captured logs, and sandbox details.
+   * @param kind - Runtime failure classification; omitted for host-owned execution failures.
+   */
+  constructor(message: string, kind?: PtcRunFailure['kind']) {
+    const code = kind === 'invalid-output' ? 'CODE_OUTPUT_INVALID'
+      : kind === 'output-limit' ? 'CODE_OUTPUT_LIMIT' : 'CODE_RUN_FAILED'
+    const output = kind === 'invalid-output'
+      ? 'Program reached completion, but its completion value could not be delivered as lossless JSON. Return a JSON value or no value.'
+      : kind === 'output-limit' ? 'Output exceeded its limit. Program completion is not confirmed; execution may be partial.' : ''
+    super(output === '' ? message : `${message}\n${output} Earlier actions are not rolled back. Inspect current state before any retry. Do not repeat actions just to repair output.`, code)
     this.name = 'CodeRunFailedError'
   }
 }

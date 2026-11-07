@@ -89,6 +89,8 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 
 对象门面（[src/api.ts](src/api.ts)）构建共享的 `CuaSurface`，并从它派生 `CuaApp` 和 `CuaWindow`。派生工厂注入作用域参数以及该作用域的辅助功能和键盘检查；共享基类不为仅属于应用的能力分支。在单个 API 实例内，门面按 `appHandle` 保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享它。`getWindow` 静默读取初始树；当 provider 报告应用级辅助功能时，`getApp` 也静默读取。之后每次 `getAccessibilityTree()` 在分派前使上一份快照失效，元素操作使用最新快照 ID。只有 `CuaWindow` 可以截图或发送指针输入。
 
+PTC 输出失败不会撤销此前的 CUA 动作。保留动作和截图子调用记录作为证据，再观察当前状态，判断还需执行什么。截图字节是 `Uint8Array`，不能作为无损 JSON 完成值；图片已经输出时使用 `void await window.getScreenshot()`。错误码和恢复方式见 [PTC 输出失败](../../core/tool-executor-ptc/README.zh.md#ptc-mode)。
+
 提供方启动能力在安装时固定：平台、方法、应用级辅助功能、键盘作用域、浏览器支持和坐标空间。原生 `getCapabilities` RPC 只报告运行时权限和会话锁定状态；`installCua` 为模型可见结果合并两层。原生 RPC 仍是通用操作表示，而不是能力清单，因此 provider 指引说明其平台支持的动作。
 
 通过 `await cua.getCapabilities()` 返回的 `methods` 和 `keyboard` 确认支持的操作和输入范围。`pressKey(key, modifiers?)` 在按住所列修饰键时按下并释放一个键；`sendKeyEvent(key, direction)` 只发送一次按下或抬起。`typeText` 和 `paste` 在 provider 声明的键盘作用域内传送字面文本。键盘修饰键名称是 provider 解释的普通字符串。

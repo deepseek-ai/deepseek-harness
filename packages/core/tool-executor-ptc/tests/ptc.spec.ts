@@ -1767,6 +1767,42 @@ describe('the run_code dispatch bridge', () => {
     expect(text).toBe(`Error: code run failed (timeout): execution timed out ${phase} (300ms); retained variables were cleared${logs.length > 0 ? '\nCaptured output:\ngot this far' : ''}`)
   })
 
+  it.each([
+    ['invalid-output', 'CODE_OUTPUT_INVALID', 'Program reached completion'],
+    ['output-limit', 'CODE_OUTPUT_LIMIT', 'Program completion is not confirmed'],
+    ['exception', 'CODE_RUN_FAILED', 'code run failed (exception)'],
+    ['timeout', 'CODE_RUN_FAILED', 'code run failed (timeout)'],
+    ['worker-exit', 'CODE_RUN_FAILED', 'code run failed (worker-exit)'],
+  ] as const)('preserves completed subcalls when the runtime reports %s', async (kind, code, diagnostic) => {
+    const { ctx, runtime } = await setup({ mode: 'ptc' })
+    onTestFinished(async () => { await ctx.fiber.dispose() })
+    const { agent, events } = fakeAgent()
+    const calls = registerEcho(ctx)
+    runtime.behavior = async (request) => {
+      await request.bindings[0]!.functions.echo!({ value: 'action dispatched' })
+      return { logs: ['before failure'], error: { kind, message: 'fixture failure' } }
+    }
+
+    const result = await runCode(ctx, 'program', { agent })
+
+    expect(result.isError).toBe(true)
+    expect(result.error).toMatchObject({ info: { name: 'CodeRunFailedError', code } })
+    const first = result.content[0]
+    if (first?.type !== 'text') throw new Error('Missing failure diagnostic')
+    expect(first.text).toContain(diagnostic)
+    expect(first.text).toContain('Captured output:\nbefore failure')
+    expect(events.filter(event => event.type === 'tool/ptc-dispatch')).toHaveLength(1)
+    expect(events.find(event => event.type === 'tool/ptc-dispatch')?.data).toMatchObject({
+      isError: false, content: [{ type: 'text', text: 'echo:action dispatched' }],
+    })
+    expect(calls).toEqual([{ value: 'action dispatched' }])
+    if (kind !== 'invalid-output') expect(first.text).not.toContain('Program reached completion')
+    if (kind === 'invalid-output' || kind === 'output-limit') {
+      expect(first.text).toContain('Earlier actions are not rolled back')
+      expect(first.text).toContain('Do not repeat actions just to repair output')
+    }
+  })
+
   it('CodeRunFailedError is a HarnessError with the CODE_RUN_FAILED code', () => {
     const error = new CodeRunFailedError('boom')
     expect(error.code).toBe('CODE_RUN_FAILED')
@@ -1965,7 +2001,7 @@ describe('the run_code dispatch bridge', () => {
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{
       type: 'text',
-      text: 'Error: code run failed (output-limit): outer output exceeded 8 bytes\nCaptured output:\ncaptured before failure',
+      text: 'Error: code run failed (output-limit): outer output exceeded 8 bytes\nCaptured output:\ncaptured before failure\nOutput exceeded its limit. Program completion is not confirmed; execution may be partial. Earlier actions are not rolled back. Inspect current state before any retry. Do not repeat actions just to repair output.',
     }])
     expect('presentResult' in tool).toBe(false)
   })
