@@ -62,7 +62,7 @@
 
 - banner:
   - navigation "Session hierarchy": {{workspace}}
-  - button "Session panel"
+  - button "Session panel" [disabled]
   - button "More actions"
   - button "Open right sidebar"
   - tablist:
