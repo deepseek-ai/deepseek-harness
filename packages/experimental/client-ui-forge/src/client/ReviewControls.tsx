@@ -82,11 +82,15 @@ export function LensControl({ lens, counts, hideTests, choose, t }: LensProps): 
  */
 export function LensMenu({ lens, counts, hideTests, choose, visible, t }: LensProps & { readonly visible: boolean }): ReactNode {
   const [open, setOpen] = useState(false)
-  const items: MenuEntry[] = LENSES.map(item => ({
-    id: item,
-    disabled: item === 'test' && hideTests,
-    label: <span className={css.menuRow}><span>{t(LENS_LABEL[item])}</span><span className={css.count}>{counts[item]}</span></span>,
-  }))
+  const items: MenuEntry[] = LENSES.map((item) => {
+    // Like the segment, a disabled lens shows no count, since hidden test files are not counted.
+    const disabled = item === 'test' && hideTests
+    return {
+      id: item,
+      disabled,
+      label: <span className={css.menuRow}><span>{t(LENS_LABEL[item])}</span><span className={css.count}>{disabled ? '' : counts[item]}</span></span>,
+    }
+  })
   return (
     <Menu open={visible && open} portal dense align="start" autoFocus selectedId={lens} items={items}
       onClose={() => { setOpen(false) }}

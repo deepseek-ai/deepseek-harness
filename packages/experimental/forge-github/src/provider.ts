@@ -193,7 +193,8 @@ export class GitHubProvider implements ForgeProvider {
 
   /** List the pull request's commits through GraphQL, at most `maxCommits`, all read at one head. */
   async commits(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeCommitList | ForgeFailure> {
-    const failure = this.hostFailure(ref.repository.host)
+    const { host } = checkedRepository(ref)
+    const failure = this.hostFailure(host)
     if (failure !== undefined) return failure
     return await listCommits(this.graphql, ref, this.limits.maxCommits, signal)
   }

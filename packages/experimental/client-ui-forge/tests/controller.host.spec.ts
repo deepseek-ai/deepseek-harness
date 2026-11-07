@@ -549,19 +549,31 @@ describe('forgePanel local changes', () => {
 
     const listed = await opened.ctx.forgePanel.localCommits(opened.session, null, signal)
     expect(listed).toMatchObject({ truncated: true, headSha: await git(repo, 'rev-parse', 'HEAD') })
-    expect(listed.commits.map(commit => commit.title)).toEqual(['one', 'two'])
+    expect(listed.commits.map(commit => commit.title)).toEqual(['two', 'three'])
     await expect(opened.ctx.forgePanel.localCommits(opened.session, 'refs/heads/topic', signal))
       .resolves.toMatchObject({ truncated: false, commits: [{ title: 'three' }] })
-    const [one, two] = listed.commits.map(commit => commit.sha)
+    const [two, three] = listed.commits.map(commit => commit.sha)
     const chosen = await opened.ctx.forgePanel.localDiff(opened.session,
-      { kind: 'branch', base: null, commits: { from: one ?? '', to: two ?? '' } }, signal)
-    expect(chosen.files.map(file => file.path)).toEqual(['one.txt', 'two.txt'])
+      { kind: 'branch', base: null, commits: { from: two ?? '', to: three ?? '' } }, signal)
+    expect(chosen.files.map(file => file.path)).toEqual(['three.txt', 'two.txt'])
     await expect(opened.ctx.forgePanel.localText(opened.session,
-      { kind: 'branch', base: null, commits: { from: one ?? '', to: one ?? '' } }, 'one.txt', signal)).resolves.toBe('one\n')
+      { kind: 'branch', base: null, commits: { from: two ?? '', to: two ?? '' } }, 'two.txt', signal)).resolves.toBe('two\n')
     await expect(opened.ctx.forgePanel.localDiff(opened.session,
-      { kind: 'branch', base: 'refs/heads/topic', commits: { from: one ?? '', to: two ?? '' } }, signal))
+      { kind: 'branch', base: 'refs/heads/topic', commits: { from: two ?? '', to: three ?? '' } }, signal))
       .rejects.toMatchObject({ code: 'forgePanel/commits-missing' })
     await expect(opened.ctx.forgePanel.localCommits(opened.session, 'refs/heads/gone', signal)).rejects.toMatchObject({ code: 'forgePanel/base-missing' })
+    // A merged side branch lists its commit beside the branch's own, so a run across them is refused.
+    await git(repo, 'checkout', '--quiet', '-b', 'side', 'origin/main')
+    await writeFile(join(repo, 'side.txt'), 'side\n')
+    await git(repo, 'add', 'side.txt')
+    await git(repo, 'commit', '--quiet', '-m', 'side')
+    await git(repo, 'checkout', '--quiet', '-')
+    await git(repo, 'merge', '--quiet', '--no-ff', '--no-edit', 'side')
+    const order = (await git(repo, 'log', '--topo-order', '--reverse', '--format=%H %P', 'origin/main..HEAD')).split('\n').map(line => line.split(' '))
+    const leaving = order.findIndex(([, parent], index) => index > 0 && parent !== order[index - 1]?.[0])
+    await expect(opened.ctx.forgePanel.localDiff(opened.session,
+      { kind: 'branch', base: null, commits: { from: order[leaving - 1]?.[0] ?? '', to: order[leaving]?.[0] ?? '' } }, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/commits-not-linear' })
 
     const unrelated = await project()
     const lonely = await open(unrelated.repo)
@@ -737,6 +749,10 @@ describe('forgePanel change request diffs', () => {
     await expect(read(1, 1)).rejects.toMatchObject({ code: 'forgePanel/diff-failed', message: 'The first chosen commit has no parent to compare with' })
     await expect(read(3, 2)).rejects.toMatchObject({ code: 'forgePanel/commits-missing' })
     await expect(read(4, 3)).rejects.toMatchObject({ code: 'forgePanel/commits-missing' })
+    // A commit of another branch listed between two others leaves the run of first parents.
+    opened.provider.commitLists.set(7, { ...list, commits: [commit(1, null), commit(2, sha(1)), commit(5, sha(1)), commit(3, sha(2))] })
+    await expect(read(2, 5)).rejects.toMatchObject({ code: 'forgePanel/commits-not-linear' })
+    opened.provider.commitLists.set(7, list)
     await expect(read(3, 3)).rejects.toMatchObject({ code: 'forgePanel/diff-failed', message: `no comparison ${sha(2)}..${sha(3)}` })
     opened.provider.comparisons.set(`${sha(2)}..${sha(3)}`, { code: 'too-large', message: 'too many files' })
     await expect(read(3, 3)).rejects.toMatchObject({ code: 'forgePanel/diff-too-large' })

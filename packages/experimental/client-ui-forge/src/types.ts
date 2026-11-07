@@ -1,7 +1,7 @@
 /** Browser-safe panel state, the worktree request record, Remote error codes, and Host configuration of the forge panel. */
 
 import type {} from '@deepseek-ai/dsh-typert-protocol'
-import type { ChangeRequestSnapshot, ForgeCommitList, ForgeReadiness, ForgeRepository } from '@deepseek-ai/dsh-experimental-forge/types'
+import type { ChangeRequestSnapshot, ForgeCommit, ForgeReadiness, ForgeRepository } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { SessionChangeRequest } from '@deepseek-ai/dsh-experimental-forge-session/types'
 
 /** Git facts for the checkout that contains the Session's current directory. */
@@ -347,8 +347,15 @@ export interface ForgeChangeRequestDiff {
   readonly fileUrls: Readonly<Record<string, string>>
 }
 
-/** Commits of the `branch` scope, which the changes view can show one or several of. */
-export type ForgeLocalCommits = ForgeCommitList
+/** Commits of the `branch` scope at one HEAD commit, which the changes view can show one or several of. */
+export interface ForgeLocalCommits {
+  /** HEAD commit the list was read at. */
+  readonly headSha: string
+  /** Commits oldest first, ending with HEAD's commit. */
+  readonly commits: readonly ForgeCommit[]
+  /** Whether the branch has more commits than `maxCommits`; the listed ones are the newest. */
+  readonly truncated: boolean
+}
 
 /** One file the `branch` scope changes, without its hunks. */
 export interface ForgeChangedFile {
@@ -395,7 +402,7 @@ export interface Config {
   maxUntrackedFiles?: number
   /** Most UTF-8 bytes of change request diffs kept in memory for later reads at the same head commit and base branch. */
   maxCachedDiffBytes?: number
-  /** Most commits of the `branch` scope listed, oldest first. */
+  /** Most commits of the `branch` scope listed; a longer branch lists its newest ones. */
   maxCommits?: number
   /**
    * Globs of files in the `test` layer, which the changes view can hide, beside the built-in rules and checked before
@@ -459,6 +466,8 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'forgePanel/diff-failed': Record<string, never>
     /** A chosen commit is no longer among the listed commits of the branch or change request, or the commits are out of order. */
     'forgePanel/commits-missing': Record<string, never>
+    /** A chosen commit after the first lacks the commit listed before it as its first parent, so two ends cannot name the run. */
+    'forgePanel/commits-not-linear': Record<string, never>
   }
 }
 

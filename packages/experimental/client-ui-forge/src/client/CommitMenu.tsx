@@ -1,6 +1,7 @@
 /**
  * Commit picker of the changes header: every commit, or one commit, or with Shift a run of consecutive commits of a
- * change request or of the local `branch` scope, listed oldest first like the code host's commit list.
+ * change request or of the local `branch` scope, listed oldest first like the code host's commit list. A run is
+ * accepted only when each of its commits has the one listed before it as its first parent.
  */
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
@@ -11,7 +12,8 @@ import {
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ForgeCommitList } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
-import type { ForgeCommitRange } from '../types.ts'
+import { rangeStart } from '../commit-range.ts'
+import type { ForgeCommitRange, ForgeLocalCommits } from '../types.ts'
 import { formatAgo } from './format.ts'
 import type { NS } from './locales.ts'
 import css from './CommitMenu.module.css'
@@ -26,8 +28,10 @@ export interface CommitMenuProps extends PropsLocale<typeof NS> {
   /** Whether the owning tab is visible; a hidden tab keeps the menu closed. */
   readonly visible: boolean
   /** Read the commits; null means the source cannot show single commits. `signal` aborts the read. */
-  readonly list: (signal: AbortSignal) => Promise<RemoteResult<ForgeCommitList | null>>
-  /** Changes when the commits may have changed, such as a new head commit; the next opening reads them again. */
+  readonly list: (signal: AbortSignal) => Promise<RemoteResult<ForgeCommitList | ForgeLocalCommits | null>>
+  /** Which commits a truncated list keeps: a change request lists its oldest ones, the local branch its newest ones. */
+  readonly kept: 'oldest' | 'newest'
+  /** Changes when the commits may have changed, such as a new head commit or a refresh; the commits are read once per value. */
   readonly version: string
   /** Show consecutive commits, or every commit for null. */
   readonly choose: (commits: ForgeCommitRange | null) => void
@@ -51,39 +55,54 @@ export function commitsLabel(chosen: ForgeCommitRange | null, t: PropsLocale<typ
  * @param props - the shown commits, the listing read, the choose action, and copy.
  * @returns the trigger with its portalled menu, or nothing when the source cannot show single commits.
  */
-export function CommitMenu({ chosen, visible, list, version, choose, t }: CommitMenuProps): ReactNode {
+export function CommitMenu({ chosen, visible, list, kept, version, choose, t }: CommitMenuProps): ReactNode {
   const [open, setOpen] = useState(false)
   const [attempt, setAttempt] = useState(0)
-  const [listing, setListing] = useState<{ readonly version: string; readonly result: RemoteResult<ForgeCommitList | null> } | null>(null)
+  const [rejected, setRejected] = useState(false)
+  const [listing, setListing] = useState<{
+    readonly key: string
+    readonly result: RemoteResult<ForgeCommitList | ForgeLocalCommits | null>
+  } | null>(null)
   const shift = useRef(false)
   const anchor = useRef<string | null>(chosen?.from ?? null)
   const loaded = useRef<string | null>(null)
   const shown = visible && open
-  const current = listing?.version === version ? listing.result : null
-  // The list is read once per version, which tells whether the source has commits to pick, and again on each opening.
+  const key = `${version}\n${String(attempt)}`
+  const current = listing?.key === key ? listing.result : null
+  // The list is read once per version, which also tells whether the source has commits to pick, and again on a retry.
   useEffect(() => {
-    if (!visible || (!shown && loaded.current === version)) return
+    if (!visible || loaded.current === key) return
     const controller = new AbortController()
     void list(controller.signal).then((result) => {
       if (controller.signal.aborted) return
-      loaded.current = version
-      setListing({ version, result })
+      loaded.current = key
+      setListing({ key, result })
     })
     return () => { controller.abort() }
-  }, [visible, shown, version, attempt, list])
+  }, [visible, key, list])
   if (current?.ok === true && current.value === null) return null
   const commits = current?.ok === true && current.value !== null ? current.value : null
-  const pick = (sha: string | null): void => {
+  const close = (): void => {
     setOpen(false)
+    setRejected(false)
+  }
+  const pick = (sha: string | null): void => {
     if (sha === null || commits === null) {
+      close()
       anchor.current = null
       if (chosen !== null) choose(null)
       return
     }
     const order = commits.commits.map(commit => commit.sha)
     const start = shift.current && anchor.current !== null && order.includes(anchor.current) ? anchor.current : sha
-    if (!shift.current || start === sha) anchor.current = sha
     const [from, to] = order.indexOf(start) <= order.indexOf(sha) ? [start, sha] : [sha, start]
+    // Two ends cannot name a run that leaves the first-parent line, so the menu stays open and says why.
+    if (rangeStart(commits.commits, { from, to }) === 'not-linear') {
+      setRejected(true)
+      return
+    }
+    close()
+    if (!shift.current || start === sha) anchor.current = sha
     if (from !== chosen?.from || to !== chosen.to) choose({ from, to })
   }
   const inChosen = (index: number): boolean => {
@@ -126,7 +145,11 @@ export function CommitMenu({ chosen, visible, list, version, choose, t }: Commit
           </MenuItemButton>
         )
       })}
-      {commits.truncated && <div className={css.note}>{t('commits.truncated', { count: commits.commits.length })}</div>}
+      {commits.truncated && (
+        <div className={css.note}>
+          {t(kept === 'oldest' ? 'commits.truncatedOldest' : 'commits.truncatedNewest', { count: commits.commits.length })}
+        </div>
+      )}
     </>
   }
 
@@ -139,12 +162,12 @@ export function CommitMenu({ chosen, visible, list, version, choose, t }: Commit
       align="end"
       className={css.anchor}
       listClassName={css.menu}
-      onClose={() => { setOpen(false) }}
+      onClose={close}
       anchor={(
         <Tooltip label={t('commits.aria', { commits: label })} side="bottom" portal delayMs={500}>
           <button type="button" className={clsx(css.trigger, chosen !== null && css.chosen)} aria-haspopup="menu" aria-expanded={shown}
             aria-label={t('commits.aria', { commits: label })} data-forge-commits={chosen === null ? '' : `${chosen.from}..${chosen.to}`}
-            onClick={() => { setOpen(value => !value) }}>
+            onClick={() => { setOpen(value => !value); setRejected(false) }}>
             <span className={css.triggerName}>{label}</span>
             <IconChevronDownOutlineRegular size={12} />
           </button>
@@ -157,6 +180,7 @@ export function CommitMenu({ chosen, visible, list, version, choose, t }: Commit
         onKeyDownCapture={(event) => { shift.current = event.shiftKey }}>
         {body}
       </div>
+      {rejected && <div className={css.rejected} role="status">{t('commits.notLinear')}</div>}
     </Menu>
   )
 }

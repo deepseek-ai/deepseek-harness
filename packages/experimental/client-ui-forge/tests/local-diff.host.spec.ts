@@ -7,8 +7,8 @@ import { FsError } from '@deepseek-ai/dsh-fs'
 import { gitIn, inspectCheckout } from '../src/git.ts'
 import type { Inspection } from '../src/git.ts'
 import {
-  aheadOf, BaseMissing, baseBranches, chosenForkPoint, CommitsMissing, DiffTooLarge, forkPoint, localChanges, localCommits, localDiff,
-  localText, NoForkPoint,
+  aheadOf, BaseMissing, baseBranches, chosenForkPoint, CommitsMissing, CommitsNotLinear, DiffTooLarge, forkPoint, localChanges,
+  localCommits, localDiff, localText, NoForkPoint,
 } from '../src/local-diff.ts'
 import type { DiffConfig, ForkPoint } from '../src/local-diff.ts'
 import { FileLayers } from '../src/layers.ts'
@@ -351,7 +351,7 @@ describe('commits of the branch scope', () => {
     return { repo, point: { commit: fork, label: 'origin/main', worktree: false }, shas }
   }
 
-  it('lists the commits between the fork point and HEAD oldest first, bounded by the limit', async () => {
+  it('lists the commits between the fork point and HEAD oldest first, keeping the newest ones over the limit', async () => {
     const { repo, point, shas } = await committed()
     const ctx = await context(repo)
     const runner = gitIn(ctx, CONFIG, plainSession(repo), repo, signal)
@@ -364,7 +364,31 @@ describe('commits of the branch scope', () => {
     expect(listed.commits.map(commit => commit.sha)).toEqual(shas)
     expect(listed.commits.map(commit => commit.parent)).toEqual([point.commit, ...shas.slice(0, -1)])
     expect(Date.parse(listed.commits[0]?.authoredAt ?? '')).not.toBeNaN()
-    await expect(localCommits(runner, point, 2)).resolves.toMatchObject({ truncated: true, commits: [{ title: 'committed' }, { title: 'staged' }] })
+    await expect(localCommits(runner, point, 2)).resolves.toMatchObject({ truncated: true, commits: [{ title: 'second' }, { title: 'third' }] })
+    await expect(localCommits(runner, point, 4)).resolves.toMatchObject({ truncated: false, commits: { length: 4 } })
+  })
+
+  it('lists signed commits while the repository asks Git to show signatures', async () => {
+    const { repo, point, shas } = await committed()
+    const head = shas.at(-1) ?? ''
+    // A signature Git cannot verify still makes `log.showSignature` print verification text before each signed commit.
+    const tree = await git(repo, 'rev-parse', 'HEAD^{tree}')
+    const signed = join(repo, '.git', 'signed-commit')
+    await writeFile(signed, [
+      `tree ${tree}`, `parent ${head}`, 'author Forge fixture <forge@example.invalid> 1700000000 +0000',
+      'committer Forge fixture <forge@example.invalid> 1700000000 +0000',
+      'gpgsig -----BEGIN SSH SIGNATURE-----', ' AAAA', ' -----END SSH SIGNATURE-----', '', 'signed', '',
+    ].join('\n'))
+    const sha = await git(repo, 'hash-object', '-t', 'commit', '-w', signed)
+    await git(repo, 'reset', '--quiet', '--soft', sha)
+    await git(repo, 'config', 'log.showSignature', 'true')
+    await git(repo, 'config', 'gpg.ssh.program', join(repo, 'missing-ssh-keygen'))
+    const ctx = await context(repo)
+
+    const listed = await localCommits(gitIn(ctx, CONFIG, plainSession(repo), repo, signal), point, 10)
+    expect(listed.commits.map(commit => [commit.sha, commit.title])).toEqual([
+      ...shas.map((commit, index) => [commit, ['committed', 'staged', 'second', 'third'][index]]), [sha, 'signed'],
+    ])
   })
 
   it('reads the committed changes of consecutive commits with the attributes of the last one, without working tree changes', async () => {
@@ -400,6 +424,33 @@ describe('commits of the branch scope', () => {
     const diff = await localDiff(ctx, CONFIG, plainSession(repo), repo, point,
       { kind: 'branch', base: null, commits: { from: orphan, to: orphan } }, LAYERS, signal)
     expect(diff.files.map(file => [file.path, file.status])).toEqual([['orphan.txt', 'added']])
+  })
+
+  it('refuses a run of commits whose first parents leave it, and reads one that follows them', async () => {
+    const { repo, fork } = await forked(await directory())
+    await git(repo, 'commit', '--quiet', '-m', 'staged')
+    await git(repo, 'checkout', '--quiet', '-b', 'side', fork)
+    for (const name of ['side-one', 'side-two']) {
+      await writeFile(join(repo, `${name}.txt`), `${name}\n`)
+      await git(repo, 'add', `${name}.txt`)
+      await git(repo, 'commit', '--quiet', '-m', name)
+    }
+    await git(repo, 'checkout', '--quiet', 'feat')
+    await git(repo, 'merge', '--quiet', '--no-ff', '--no-edit', 'side')
+    const point: ForkPoint = { commit: fork, label: 'origin/main', worktree: false }
+    const ctx = await context(repo)
+    const listed = (await localCommits(gitIn(ctx, CONFIG, plainSession(repo), repo, signal), point, 10)).commits
+    const read = (from: string, to: string): Promise<{ readonly files: readonly { readonly path: string }[] }> =>
+      localDiff(ctx, CONFIG, plainSession(repo), repo, point, { kind: 'branch', base: null, commits: { from, to } }, LAYERS, signal)
+    // Two branches from the fork point list their commits one after the other, so one pair of neighbours is unrelated.
+    const leaving = listed.findIndex((commit, index) => index > 0 && commit.parent !== listed[index - 1]?.sha)
+    const before = listed[leaving - 1]?.sha ?? ''
+    const after = listed[leaving]?.sha ?? ''
+
+    expect(leaving).toBeGreaterThan(0)
+    await expect(read(before, after)).rejects.toBeInstanceOf(CommitsNotLinear)
+    const side = listed.filter(commit => commit.title.startsWith('side-'))
+    expect((await read(side[0]?.sha ?? '', side[1]?.sha ?? '')).files.map(file => file.path)).toEqual(['side-one.txt', 'side-two.txt'])
   })
 
   it('refuses commits that are not full object names, not on the branch, or out of order', async () => {

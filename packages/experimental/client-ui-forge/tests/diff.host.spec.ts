@@ -94,6 +94,18 @@ describe('parseDiff', () => {
     expect(parseDiff(PATCH.replace('index bdc955b..8352675', 'index bdc955b..0000001'))[0]?.digest).not.toBe(digests[0])
   })
 
+  it('digests a mode change, which adds no hunk, apart from the same text change without it', () => {
+    const text = ['diff --git a/run.sh b/run.sh', 'index 1111111..2222222 100644', '--- a/run.sh', '+++ b/run.sh', '@@ -1 +1 @@', '-a', '+b', ''].join('\n')
+    const executable = text.replace('index 1111111..2222222 100644', 'old mode 100644\nnew mode 100755\nindex 1111111..2222222')
+    const [plain] = parseDiff(text)
+    const [moved] = parseDiff(executable)
+    expect(moved?.hunks).toEqual(plain?.hunks)
+    expect(moved?.digest).not.toBe(plain?.digest)
+    expect(parseDiff(executable)[0]?.digest).toBe(moved?.digest)
+    const modeOnly = ['diff --git a/run.sh b/run.sh', 'old mode 100644', 'new mode 100755', ''].join('\n')
+    expect(parseDiff(modeOnly)[0]?.digest).not.toBe(parseDiff(modeOnly.replace('100755', '100700'))[0]?.digest)
+  })
+
   it('digests a binary change without its blob names when a section does not start with a Git header', () => {
     const binary = 'diff --git a/x.png b/x.png\nindex 1111111..2222222 100644\nBinary files a/x.png and b/x.png differ\n'
     const withLeader = `--- a/y\n+++ b/y\n@@ -1 +1 @@\n-a\n+b\n${binary}`

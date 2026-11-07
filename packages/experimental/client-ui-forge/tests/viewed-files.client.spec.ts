@@ -37,6 +37,48 @@ describe('ViewedFiles', () => {
     expect(listener).toHaveBeenCalledTimes(2)
   })
 
+  it('keeps the marks another tab of the Session saved, and shows them as that tab saves them', () => {
+    const first = new ViewedFiles('s1')
+    const second = new ViewedFiles('s1')
+    expect(first.mark('pr', FILES, 'a.ts', true)).toBe(true)
+    expect(second.mark('pr', FILES, 'b.ts', true)).toBe(true)
+    expect([...new ViewedFiles('s1').marksOf('pr').keys()].sort()).toEqual(['a.ts', 'b.ts'])
+
+    // The first subscriber reads what the other tab saved while nothing listened.
+    const listener = vi.fn()
+    const unsubscribe = first.subscribe(listener)
+    expect([...first.marksOf('pr').keys()].sort()).toEqual(['a.ts', 'b.ts'])
+    const stored = (key: string | null): void => { window.dispatchEvent(new StorageEvent('storage', { key })) }
+    second.mark('pr', FILES, 'a.ts', false)
+    stored('dsh.forge-viewed.v1."s2"')
+    expect(listener).not.toHaveBeenCalled()
+    stored('dsh.forge-viewed.v1."s1"')
+    expect(listener).toHaveBeenCalledTimes(1)
+    expect([...first.marksOf('pr').keys()]).toEqual(['b.ts'])
+    stored('dsh.forge-viewed.v1."s1"')
+    expect(listener).toHaveBeenCalledTimes(1)
+    localStorage.clear()
+    stored(null)
+    expect(first.marksOf('pr').size).toBe(0)
+    expect(listener).toHaveBeenCalledTimes(2)
+
+    // The listener on storage stays while another subscriber remains.
+    const other = vi.fn()
+    const unsubscribeOther = first.subscribe(other)
+    unsubscribe()
+    second.mark('pr', FILES, 'a.ts', true)
+    stored('dsh.forge-viewed.v1."s1"')
+    expect(other).toHaveBeenCalledTimes(1)
+    localStorage.setItem('dsh.forge-viewed.v1."s1"', '{')
+    stored('dsh.forge-viewed.v1."s1"')
+    expect(first.marksOf('pr').size).toBe(0)
+    unsubscribeOther()
+    second.mark('pr', FILES, 'b.ts', true)
+    stored('dsh.forge-viewed.v1."s1"')
+    expect(other).toHaveBeenCalledTimes(2)
+    expect(listener).toHaveBeenCalledTimes(2)
+  })
+
   it('drops the marks of paths the diff no longer has and refuses a path it does not have', () => {
     const viewed = new ViewedFiles('s1')
     viewed.mark('pr', FILES, 'a.ts', true)

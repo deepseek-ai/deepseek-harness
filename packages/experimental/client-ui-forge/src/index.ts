@@ -23,9 +23,10 @@ import { gitIn, inspectCheckout, listBranches } from './git.ts'
 import type { Inspection } from './git.ts'
 import { parseDiff } from './diff.ts'
 import {
-  aheadOf, BaseMissing, baseBranches, chosenForkPoint, CommitsMissing, DiffTooLarge, FilterConfigError, forkPoint, localCommits, localDiff,
-  localText, NoForkPoint,
+  aheadOf, BaseMissing, baseBranches, chosenForkPoint, CommitsMissing, CommitsNotLinear, DiffTooLarge, FilterConfigError, forkPoint,
+  localCommits, localDiff, localText, NoForkPoint,
 } from './local-diff.ts'
+import { rangeStart } from './commit-range.ts'
 import { ATTRIBUTES_PATH, FileLayers } from './layers.ts'
 import { missingWorktree, SessionPanel } from './panel.ts'
 import { PatchCache } from './patch-cache.ts'
@@ -286,6 +287,7 @@ export class ForgePanelController extends TypertRemoteService {
    * @throws `forgePanel/not-a-checkout` outside a checkout; `forgePanel/base-missing` when the base branch
    * chosen for the `branch` scope does not exist; `forgePanel/no-fork-point` for the `branch` scope without
    * a fork point; `forgePanel/commits-missing` when chosen commits are not between the fork point and HEAD in order;
+   * `forgePanel/commits-not-linear` when a chosen commit's first parent is not the commit listed before it;
    * `forgePanel/filter-config-failed` when filter configuration cannot be read completely, before
    * any comparison; `forgePanel/diff-too-large` over `maxDiffBytes`; the Git error when Git fails.
    */
@@ -307,7 +309,7 @@ export class ForgePanelController extends TypertRemoteService {
    * @param session - Session whose checkout is read.
    * @param base - the base ref of the `branch` scope, or null for its automatic fork point.
    * @param signal - request cancellation.
-   * @returns at most `maxCommits` commits between the fork point and HEAD, oldest first, and HEAD's commit.
+   * @returns the newest `maxCommits` commits between the fork point and HEAD, oldest first, and HEAD's commit.
    * @throws `forgePanel/not-a-checkout` outside a checkout; `forgePanel/base-missing` when the base branch does not
    * exist; `forgePanel/no-fork-point` without a fork point; the Git error when Git fails or the listing exceeds `maxDiffBytes`.
    */
@@ -395,6 +397,7 @@ export class ForgePanelController extends TypertRemoteService {
    * @returns the files, the commit they end at, each file's web page, and the commits the checkout has beyond the head.
    * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
    * `forgePanel/commits-missing` when chosen commits are not among the change request's commits in order;
+   * `forgePanel/commits-not-linear` when a chosen commit's first parent is not the commit listed before it;
    * `forgePanel/stale-head` without `commits` when the head moved past the latest status, which is then polled again;
    * `forgePanel/diff-too-large` when the host or its provider refuses the diff over a size limit;
    * `forgePanel/diff-failed` before its status was read, for a first chosen commit without a parent, and when the host
@@ -675,12 +678,10 @@ export class ForgePanelController extends TypertRemoteService {
     const list = await this.home.forge.commits(ref, signal)
     if (list === undefined) throw new RemoteError('forgePanel/diff-failed', 'The code host provider does not read commits', {})
     if ('code' in list) throw readError(list)
-    const first = list.commits.findIndex(commit => commit.sha === commits.from)
-    const last = list.commits.findIndex(commit => commit.sha === commits.to)
-    if (first === -1 || last < first) {
-      throw new RemoteError('forgePanel/commits-missing', 'The chosen commits are no longer in the change request', {})
-    }
-    const parent = list.commits[first]?.parent ?? null
+    const start = rangeStart(list.commits, commits)
+    if (start === 'missing') throw new RemoteError('forgePanel/commits-missing', 'The chosen commits are no longer in the change request', {})
+    if (start === 'not-linear') throw new RemoteError('forgePanel/commits-not-linear', 'The chosen commits are not one run of first parents', {})
+    const parent = start.parent
     if (parent === null) throw new RemoteError('forgePanel/diff-failed', 'The first chosen commit has no parent to compare with', {})
     const patch = await this.home.forge.compare(ref, parent, commits.to, signal)
     if (typeof patch !== 'string') throw readError(patch)
@@ -842,6 +843,7 @@ async function diffing<T>(reading: Promise<T>): Promise<T> {
     if (error instanceof NoForkPoint) throw new RemoteError('forgePanel/no-fork-point', error.message, {}, { cause: error })
     if (error instanceof BaseMissing) throw new RemoteError('forgePanel/base-missing', error.message, {}, { cause: error })
     if (error instanceof CommitsMissing) throw new RemoteError('forgePanel/commits-missing', error.message, {}, { cause: error })
+    if (error instanceof CommitsNotLinear) throw new RemoteError('forgePanel/commits-not-linear', error.message, {}, { cause: error })
     throw error
   }
 }

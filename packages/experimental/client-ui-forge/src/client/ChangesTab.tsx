@@ -165,6 +165,7 @@ const FAILURE: Partial<Record<string, ForgePanelKey>> = {
   'forgePanel/diff-too-large': 'diff.tooLarge',
   'forgePanel/filter-config-failed': 'diff.filterConfigFailed',
   'forgePanel/commits-missing': 'commits.missing',
+  'forgePanel/commits-not-linear': 'commits.notLinear',
 }
 
 /** Failures of a chosen base branch, which offer the automatic fork point instead of a retry. */
@@ -520,8 +521,10 @@ export function ChangesTab({
   const pending = entry !== undefined && entry.ref !== null && entry.update === null
   const head = entry?.snapshot?.headSha ?? (pending ? null : '')
   const version = state === null ? null : source.kind === 'local' ? `${scope}\n${JSON.stringify(state.local)}` : head
-  // The commits change with the head of a change request, and with the local branch or its base.
-  const commitsVersion = source.kind === 'local' ? `${baseRef ?? ''}\n${JSON.stringify(state?.local ?? null)}` : head ?? ''
+  const headCommit = state !== null && state.checkout.state === 'ready' ? state.checkout.checkout.commit : null
+  // The commits change with the head of a change request, with the local HEAD, branch, or base, and on a refresh.
+  const commitsVersion = `${attempt}\n${source.kind === 'local'
+    ? `${baseRef ?? ''}\n${headCommit ?? ''}\n${JSON.stringify(state?.local ?? null)}` : head ?? ''}`
   const dataKey = source.kind === 'local' ? JSON.stringify(localScope) : `change\n${JSON.stringify(changeCommits)}`
   const [loaded, setLoaded] = useState<{ readonly key: string; readonly data: ChangesData } | null>(null)
   const [failure, setFailure] = useState<{ readonly key: string; readonly code: string } | null>(null)
@@ -606,7 +609,7 @@ export function ChangesTab({
   const retry = baseFailure === undefined && (message === undefined || failed === 'forgePanel/filter-config-failed')
   const automaticBase = baseFailure !== undefined ? (
     <Button size="sm" variant="outline" onClick={() => { actions.based(tab.id, null) }}>{t('diff.useAutomaticBase')}</Button>
-  ) : failed === 'forgePanel/commits-missing' && (
+  ) : (failed === 'forgePanel/commits-missing' || failed === 'forgePanel/commits-not-linear') && (
     <Button size="sm" variant="outline" onClick={() => { actions.committed(tab.id, null) }}>{t('commits.showAll')}</Button>
   )
 
@@ -851,7 +854,8 @@ export function ChangesTab({
   const treeShown = allFiles.length > 0 && treePosition !== 'hidden'
   const lensProps = { lens, counts: lensCounts, hideTests, choose: (next: ChangesLens) => { actions.lensed(tab.id, next) }, t }
   const commitMenu = source.kind === 'local' && scope !== 'branch' ? null : <CommitMenu chosen={chosenCommits} visible={tab.visible}
-    list={source.kind === 'local' ? listLocalCommits : listChangeCommits} version={commitsVersion}
+    list={source.kind === 'local' ? listLocalCommits : listChangeCommits} kept={source.kind === 'local' ? 'newest' : 'oldest'}
+    version={commitsVersion}
     choose={(next) => { actions.committed(tab.id, next) }} t={t} />
   const toolbarStyle: CSSProperties & { '--forge-tree-width': string } = { '--forge-tree-width': `${treeWidth}px` }
   return (

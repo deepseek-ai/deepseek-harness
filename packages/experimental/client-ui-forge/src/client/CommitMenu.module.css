@@ -128,3 +128,12 @@
   font-size: 11px;
   line-height: 16px;
 }
+
+/* Why a Shift click left the shown commits unchanged; outside the scrolled rows so it stays in view. */
+.rejected {
+  padding: 8px 12px;
+  border-top: 0.5px solid var(--dsw-alias-border-l3);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 16px;
+}

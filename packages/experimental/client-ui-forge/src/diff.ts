@@ -50,18 +50,20 @@ export function parseDiff(patch: string): ParsedDiffFile[] {
     // Each header matches its parsed section only when every section starts with a Git header.
     const header = binary && headers.length === parsed.length ? String(headers[index]) : ''
     const blobs = INDEX_LINE.exec(header)?.[1] ?? ''
+    // A mode change, such as `chmod +x`, shows only in the `old mode` and `new mode` header lines.
+    const modes = `${section.oldMode ?? ''}..${section.newMode ?? ''}`
     return [{
       path, previousPath, status, binary, oversized: false, untracked: false, additions, deletions, hunks,
-      digest: changeDigest(path, previousPath, status, hunks, blobs),
+      digest: changeDigest(path, previousPath, status, hunks, blobs, modes),
     }]
   })
 }
 
-/** Digest of one change: its paths, status, hunks, and the identity of content that hunks do not show. */
+/** Digest of one change: its paths, status, hunks, file modes, and the identity of content that hunks do not show. */
 function changeDigest(
-  path: string, previousPath: string | null, status: ForgeDiffStatus, hunks: readonly ForgeDiffHunk[], content: string,
+  path: string, previousPath: string | null, status: ForgeDiffStatus, hunks: readonly ForgeDiffHunk[], content: string, modes: string,
 ): string {
-  return createHash('sha256').update(JSON.stringify([path, previousPath, status, hunks, content])).digest('hex').slice(0, 32)
+  return createHash('sha256').update(JSON.stringify([path, previousPath, status, hunks, content, modes])).digest('hex').slice(0, 32)
 }
 
 /**
@@ -103,7 +105,7 @@ function addedFile(path: string, hunks: readonly ForgeDiffHunk[], { binary, over
 }): ParsedDiffFile {
   return {
     path, previousPath: null, status: 'added', binary, oversized, untracked: true,
-    additions: hunks[0]?.newLines ?? 0, deletions: 0, hunks, digest: changeDigest(path, null, 'added', hunks, content),
+    additions: hunks[0]?.newLines ?? 0, deletions: 0, hunks, digest: changeDigest(path, null, 'added', hunks, content, ''),
   }
 }
 

@@ -10,6 +10,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { FsError } from '@deepseek-ai/dsh-fs'
 import type { Session } from '@deepseek-ai/dsh-session'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
+import { rangeStart } from './commit-range.ts'
 import { decodeText, oversizedUntrackedFile, parseDiff, parseNumstat, untrackedFile } from './diff.ts'
 import type { ParsedDiffFile } from './diff.ts'
 import { gitIn, GitOutputTooLarge } from './git.ts'
@@ -63,6 +64,11 @@ export class BaseMissing extends Error {
 /** Thrown when chosen commits are not among the commits of the `branch` scope, or are out of order. */
 export class CommitsMissing extends Error {
   override name = 'CommitsMissing'
+}
+
+/** Thrown when chosen commits of the `branch` scope are not a run in which each commit's first parent is the one before it. */
+export class CommitsNotLinear extends Error {
+  override name = 'CommitsNotLinear'
 }
 
 /** A full SHA-1 or SHA-256 object name, the only form of a chosen commit Git receives. */
@@ -325,18 +331,23 @@ export async function aheadOf(git: Git, branch: string, commit: string): Promise
  * @param git - runner bound to the checkout, whose output limit bounds the listing.
  * @param fork - fork point of the `branch` scope.
  * @param limit - most commits listed.
- * @returns the oldest `limit` commits and HEAD's commit.
+ * @returns the newest `limit` commits, ending with HEAD's commit, and HEAD's commit.
  * @throws an Error when Git fails or prints more than the runner's output limit.
  */
 export async function localCommits(git: Git, fork: ForkPoint, limit: number): Promise<ForgeLocalCommits> {
   const head = (await git('head', ['rev-parse', '--verify', 'HEAD'])).stdout.trim()
-  const all = await branchCommits(git, fork)
-  return { headSha: head, commits: all.slice(0, limit), truncated: all.length > limit }
+  const listed = await branchCommits(git, fork, limit + 1)
+  return { headSha: head, commits: listed.slice(-limit), truncated: listed.length > limit }
 }
 
-/** Every commit between the fork point and HEAD, parents before children. */
-async function branchCommits(git: Git, fork: ForkPoint): Promise<ForgeCommit[]> {
-  const output = await git('log', ['log', '--topo-order', '--reverse', LOG_FORMAT, `${fork.commit}..HEAD`, '--'])
+/**
+ * Commits between the fork point and HEAD, parents before children.
+ * @param limit - when given, only the newest `limit` commits in topological order.
+ */
+async function branchCommits(git: Git, fork: ForkPoint, limit?: number): Promise<ForgeCommit[]> {
+  // A configured `log.showSignature` would print verification text before the fields and run the verifying program.
+  const count = limit === undefined ? [] : [`--max-count=${String(limit)}`]
+  const output = await git('log', ['log', '--no-show-signature', '--topo-order', '--reverse', ...count, LOG_FORMAT, `${fork.commit}..HEAD`, '--'])
   return output.stdout.split('\x1e').flatMap((record): ForgeCommit[] => {
     const fields = record.replace(/^\n/, '').split('\0')
     // The text after the last record holds no fields.
@@ -349,12 +360,9 @@ async function branchCommits(git: Git, fork: ForkPoint): Promise<ForgeCommit[]> 
 /** The committed changes of consecutive commits of the `branch` scope, from the first commit's first parent to the last. */
 async function commitsDiff(git: Git, fork: ForkPoint, chosen: ForgeCommitRange, layers: FileLayers): Promise<ForgeLocalDiff> {
   if (!COMMIT.test(chosen.from) || !COMMIT.test(chosen.to)) throw new CommitsMissing('The chosen commits are not full object names')
-  const commits = await branchCommits(git, fork)
-  const first = commits.findIndex(commit => commit.sha === chosen.from)
-  const start = commits[first]
-  if (start === undefined || commits.findIndex(commit => commit.sha === chosen.to) < first) {
-    throw new CommitsMissing('The chosen commits are no longer on the branch')
-  }
+  const start = rangeStart(await branchCommits(git, fork), chosen)
+  if (start === 'missing') throw new CommitsMissing('The chosen commits are no longer on the branch')
+  if (start === 'not-linear') throw new CommitsNotLinear('The chosen commits are not one run of first parents')
   // A first commit without a parent starts an unrelated history that HEAD merged; it adds every file.
   const parent = start.parent ?? await emptyTree(git)
   const overrides = await diffFilterOverrides(git)

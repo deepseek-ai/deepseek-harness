@@ -8,6 +8,7 @@
 import picomatch from 'picomatch'
 import type { ParsedDiffFile } from './diff.ts'
 import type { ForgeDiffFile, ForgeFileLayer } from './types.ts'
+import { wildmatch } from './wildmatch.ts'
 
 /** Path of the attributes file read beside each diff, relative to the repository root. */
 export const ATTRIBUTES_PATH = '.gitattributes'
@@ -81,9 +82,10 @@ function matcherOf(globs: readonly string[]): Matcher {
  * an earlier one. `dsh-review-layer=<layer>` names `test`, `interface`, or `implementation`; another value,
  * `-dsh-review-layer`, and `!dsh-review-layer` leave the layer unspecified. `linguist-generated` and `=true` set
  * the generated attribute, `-linguist-generated` and `=false` unset it, and `!linguist-generated` returns it to
- * unspecified. A pattern without `/` matches a file name at any depth, and one with `/` matches from the repository
- * root. Macro definitions, quoted patterns, and patterns ending in `/`, which name directories and so never match a
- * file, are skipped.
+ * unspecified. Patterns follow Git's wildmatch rules, as {@link wildmatch} describes: a pattern without `/` matches a
+ * file name at any depth, and one with `/` matches the path from the repository root. Macro definitions, quoted
+ * patterns, negated patterns, which Git ignores in attributes, and patterns ending in `/`, which name directories and
+ * so never match a file, are skipped.
  * @param attributes - the text of the root `.gitattributes`, empty without one.
  * @returns the attributes of a repository-relative path.
  */
@@ -97,7 +99,7 @@ export function attributesOf(attributes: string): (path: string) => PathAttribut
   for (const raw of attributes.split(/\r?\n/)) {
     const [pattern, ...fields] = raw.trim().split(/\s+/)
     if (pattern === undefined || pattern === '' || pattern.startsWith('#') || pattern.startsWith('[attr]')
-      || pattern.startsWith('"') || pattern.endsWith('/')) continue
+      || pattern.startsWith('"') || pattern.startsWith('!') || pattern.endsWith('/')) continue
     let layer: ForgeFileLayer | null | undefined
     let generated: boolean | null | undefined
     for (const field of fields) {
@@ -109,9 +111,10 @@ export function attributesOf(attributes: string): (path: string) => PathAttribut
         layer = isLayer(value) ? value : null
       } else if (field === `-${LAYER_ATTRIBUTE}` || field === `!${LAYER_ATTRIBUTE}`) layer = null
     }
-    if (layer === undefined && generated === undefined) continue
-    const anchored = pattern.replace(/^\//, '')
-    rules.push({ match: picomatch(anchored, { dot: true, basename: !pattern.includes('/') }), layer, generated })
+    const test = wildmatch(pattern.replace(/^\//, ''))
+    if (test === undefined || (layer === undefined && generated === undefined)) continue
+    const match: Matcher = pattern.includes('/') ? test : path => test(path.slice(path.lastIndexOf('/') + 1))
+    rules.push({ match, layer, generated })
   }
   return (path) => {
     let layer: ForgeFileLayer | null | undefined

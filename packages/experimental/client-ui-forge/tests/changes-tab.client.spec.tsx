@@ -557,24 +557,34 @@ describe('ChangesTab local reads', () => {
     expect(m.faces.localDiff).toHaveBeenCalledTimes(3)
   })
 
-  it('reads again on refresh, on the page refresh command, and when the branch summary moves', async () => {
+  it('reads changes and commits again on refresh, on the page refresh command, and when the branch summary moves', async () => {
     const m = mount()
     await settle()
     expect(m.faces.localDiff).toHaveBeenCalledTimes(1)
+    expect(m.faces.localCommits).toHaveBeenCalledTimes(1)
     fireEvent.click(m.view.getByRole('button', { name: en['diff.refresh'] }))
     await settle()
     expect(m.faces.localDiff).toHaveBeenCalledTimes(2)
+    expect(m.faces.localCommits).toHaveBeenCalledTimes(2)
     const commands = m.tabActions.bindCommands.mock.calls[0]?.[0]
     act(() => { commands?.refresh?.() })
     await settle()
     expect(m.faces.localDiff).toHaveBeenCalledTimes(3)
+    expect(m.faces.localCommits).toHaveBeenCalledTimes(3)
 
     act(() => { m.panel.set({ state: { ...LOCAL_STATE, readiness: null }, disconnected: false }) })
     await settle()
     expect(m.faces.localDiff).toHaveBeenCalledTimes(3)
+    expect(m.faces.localCommits).toHaveBeenCalledTimes(3)
     act(() => { m.panel.set({ state: { ...LOCAL_STATE, local: { base: BASE, files: [] } }, disconnected: false }) })
     await settle()
     expect(m.faces.localDiff).toHaveBeenCalledTimes(4)
+    expect(m.faces.localCommits).toHaveBeenCalledTimes(4)
+    // A commit of the staged changes moves HEAD without changing the summary against the fork point.
+    act(() => { m.panel.set({ state: ready({ local: { base: BASE, files: [] } }, { commit: 'f'.repeat(40) }), disconnected: false }) })
+    await settle()
+    expect(m.faces.localDiff).toHaveBeenCalledTimes(4)
+    expect(m.faces.localCommits).toHaveBeenCalledTimes(5)
 
     m.view.unmount()
     expect(m.unbind).toHaveBeenCalledOnce()
@@ -1590,10 +1600,13 @@ describe('ChangesTab commits', () => {
     expect((m.view.getByRole('button', { name: en['review.submit'] }) as HTMLButtonElement).disabled).toBe(true)
   })
 
-  it('lists the commits of the branch scope only, and offers every commit when chosen ones are gone', async () => {
+  it('lists the commits of the branch scope only, and offers every commit when chosen ones are gone or not one run', async () => {
     const m = mount({ setup: (faces) => {
-      faces.localDiff.mockImplementation(async scope => scope.kind === 'branch' && scope.commits !== null
-        ? { ok: false, error: new RemoteError('forgePanel/commits-missing', 'gone', {}) } : ok(LOCAL))
+      faces.localDiff.mockImplementation(async (scope) => {
+        if (scope.kind !== 'branch' || scope.commits === null) return ok(LOCAL)
+        const code = scope.commits.from === one.from ? 'forgePanel/commits-missing' : 'forgePanel/commits-not-linear'
+        return { ok: false, error: new RemoteError(code, 'refused', {}) }
+      })
     } })
     await settle()
     expect(m.faces.localCommits).toHaveBeenCalledWith(null, expect.any(AbortSignal))
@@ -1603,6 +1616,14 @@ describe('ChangesTab commits', () => {
     expect(m.faces.localDiff).toHaveBeenLastCalledWith({ kind: 'branch', base: null, commits: one }, expect.any(AbortSignal))
     await settle()
     expect(m.view.getByText(en['commits.missing'])).toBeDefined()
+    fireEvent.click(m.view.getByRole('button', { name: en['commits.showAll'] }))
+    expect(m.store.getSnapshot().byTab[TAB]?.commits).toBeNull()
+    await settle()
+    fireEvent.click(m.view.getByRole('button', { name: 'Commits shown: All commits' }))
+    await settle()
+    fireEvent.click(within(document.body).getByRole('menuitem', { name: /^3333333/ }))
+    await settle()
+    expect(m.view.getByText(en['commits.notLinear'])).toBeDefined()
     fireEvent.click(m.view.getByRole('button', { name: en['commits.showAll'] }))
     expect(m.store.getSnapshot().byTab[TAB]?.commits).toBeNull()
 

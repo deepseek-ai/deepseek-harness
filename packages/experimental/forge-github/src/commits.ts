@@ -50,7 +50,8 @@ export type GraphqlReader = (args: readonly string[], signal: AbortSignal) => Pr
 
 /**
  * List a pull request's commits oldest first, at most `limit`, reading pages until the limit or the last commit.
- * Every page must report the head of the first page, so the list never mixes two pushes.
+ * Every page must report the head and commit count of the first page, so the list never mixes two pushes, and a cursor
+ * no earlier page returned, so the listing ends.
  * @param read - runs one GraphQL request.
  * @param ref - validated pull request address.
  * @param limit - most commits listed.
@@ -65,7 +66,8 @@ export async function listCommits(
 ): Promise<ForgeCommitList | ForgeFailure> {
   const { host, owner, name } = checkedRepository(ref)
   const commits: ForgeCommit[] = []
-  let head: string | undefined
+  const cursors = new Set<string>()
+  let first: { readonly head: string; readonly total: number } | undefined
   let cursor: string | null = null
   for (;;) {
     const body = await read([
@@ -78,10 +80,11 @@ export async function listCommits(
     if (!parsed.success) return { code: 'unavailable', message: 'unexpected GitHub response to the commit listing' }
     const pull = parsed.data.data.repository?.pullRequest
     if (pull == null) return { code: 'not-found', message: `pull request ${ref.number} was not found` }
-    if (head !== undefined && pull.headRefOid !== head) {
+    const { headRefOid: head, commits: { totalCount: total, pageInfo: { hasNextPage, endCursor } } } = pull
+    first ??= { head, total }
+    if (head !== first.head || total !== first.total) {
       return { code: 'unavailable', message: 'The pull request head changed while its commits were read' }
     }
-    head = pull.headRefOid
     for (const { commit } of pull.commits.nodes) {
       commits.push({
         sha: commit.oid,
@@ -91,10 +94,9 @@ export async function listCommits(
         authoredAt: commit.authoredDate,
       })
     }
-    const { hasNextPage, endCursor } = pull.commits.pageInfo
-    if (!hasNextPage || endCursor === null || commits.length >= limit) {
-      return { headSha: head, commits, truncated: pull.commits.totalCount > commits.length }
-    }
+    if (!hasNextPage || commits.length >= limit) return { headSha: head, commits, truncated: total > commits.length }
+    if (endCursor === null || cursors.has(endCursor)) return { code: 'unavailable', message: 'GitHub commit pagination did not advance' }
+    cursors.add(endCursor)
     cursor = endCursor
   }
 }

@@ -2,7 +2,8 @@
  * Browser-persisted viewed marks of changed files. Each Session keeps one storage entry that maps a diff source,
  * such as a change request or a local scope with its base ref and chosen commits, to the digest of each file's
  * change when the reader marked it viewed. A mark whose digest differs from the file's current change reports the
- * file as changed since it was viewed.
+ * file as changed since it was viewed. Several browser tabs of one Session share the entry: each mark rewrites the
+ * entry as storage holds it, and marks saved by another tab reach this one through the `storage` event.
  */
 
 import { z } from 'zod'
@@ -19,6 +20,8 @@ const MAX_SOURCES = 20
 const source = z.object({ at: z.number(), files: z.record(z.string(), z.string()) })
 const saved = z.record(z.string(), source)
 const index = z.array(z.string())
+
+type Sources = Readonly<Record<string, z.infer<typeof source>>>
 
 /** Viewed state of one file in the diff a reader sees. */
 export type ViewedState = 'viewed' | 'changed' | 'unviewed'
@@ -40,13 +43,15 @@ export function viewedStateOf(marks: ViewedMarks, path: string, digest: string):
   return marked === undefined ? 'unviewed' : marked === digest ? 'viewed' : 'changed'
 }
 
-/** One Session's viewed marks; unreadable storage leaves the marks empty and refuses later writes. */
+/**
+ * One Session's viewed marks. Unreadable storage shows no marks and refuses writes while it stays unreadable. While
+ * anything subscribes, marks another tab saves replace the ones shown.
+ */
 export class ViewedFiles {
-  private sources: Record<string, z.infer<typeof source>> = {}
+  private sources: Sources
   private readonly listeners = new Set<() => void>()
   private readonly snapshots = new Map<string, ViewedMarks>()
   private readonly key: string
-  private readonly readable: boolean
 
   /**
    * @param session - storage identity of the Session, such as its id.
@@ -54,14 +59,7 @@ export class ViewedFiles {
    */
   constructor(private readonly session: string, private readonly now: () => number = Date.now) {
     this.key = `${PREFIX}.${JSON.stringify(session)}`
-    let readable = true
-    try {
-      const raw = localStorage.getItem(this.key)
-      if (raw !== null) this.sources = saved.parse(JSON.parse(raw))
-    } catch (_error) {
-      readable = false
-    }
-    this.readable = readable
+    this.sources = this.load() ?? {}
   }
 
   /**
@@ -85,8 +83,16 @@ export class ViewedFiles {
    * @returns unsubscribe.
    */
   readonly subscribe = (listener: () => void): (() => void) => {
+    // Storage events that arrived while nothing listened are lost, so the first subscriber reads storage again.
+    if (this.listeners.size === 0) {
+      window.addEventListener('storage', this.stored)
+      this.reload()
+    }
     this.listeners.add(listener)
-    return () => { this.listeners.delete(listener) }
+    return () => {
+      this.listeners.delete(listener)
+      if (this.listeners.size === 0) window.removeEventListener('storage', this.stored)
+    }
   }
 
   /**
@@ -99,11 +105,13 @@ export class ViewedFiles {
    */
   mark(key: string, files: readonly { readonly path: string; readonly digest: string }[], path: string, viewed: boolean): boolean {
     const file = files.find(item => item.path === path)
-    if (!this.readable || file === undefined) return false
+    // Another tab of the Session may have saved marks since this one last read them; the write keeps theirs.
+    const current = this.load()
+    if (current === undefined || file === undefined) return false
     const present = new Set(files.map(item => item.path))
-    const kept = Object.entries(this.sources[key]?.files ?? {}).filter(([marked]) => marked !== path && present.has(marked))
+    const kept = Object.entries(current[key]?.files ?? {}).filter(([marked]) => marked !== path && present.has(marked))
     const sources = {
-      ...this.sources,
+      ...current,
       [key]: { at: this.now(), files: Object.fromEntries(viewed ? [...kept, [path, file.digest]] : kept) },
     }
     const recent = Object.entries(sources).sort(([, left], [, right]) => right.at - left.at).slice(0, MAX_SOURCES)
@@ -113,11 +121,36 @@ export class ViewedFiles {
     } catch (_error) {
       return false
     }
-    this.sources = next
-    this.snapshots.clear()
+    this.replace(next)
     this.remember()
-    for (const listener of this.listeners) listener()
     return true
+  }
+
+  /** The saved marks of this Session, or undefined when storage cannot be read or holds an entry it cannot parse. */
+  private load(): Sources | undefined {
+    try {
+      const raw = localStorage.getItem(this.key)
+      return raw === null ? {} : saved.parse(JSON.parse(raw))
+    } catch (_error) {
+      return undefined
+    }
+  }
+
+  /** Show the saved marks when they differ from the shown ones. */
+  private reload(): void {
+    const sources = this.load() ?? {}
+    if (JSON.stringify(sources) !== JSON.stringify(this.sources)) this.replace(sources)
+  }
+
+  private replace(sources: Sources): void {
+    this.sources = sources
+    this.snapshots.clear()
+    for (const listener of this.listeners) listener()
+  }
+
+  /** Another document changed this Session's entry, or with a null key cleared the whole storage. */
+  private readonly stored = (event: StorageEvent): void => {
+    if (event.key === this.key || event.key === null) this.reload()
   }
 
   /** Move this Session to the front of the index and drop the marks of Sessions beyond {@link MAX_SESSIONS}. */

@@ -583,10 +583,26 @@ describe('GitHub provider commits', () => {
     expect(bounded.calls[0]).toEqual(expect.arrayContaining(['first=2']))
   })
 
-  it('refuses a listing whose head moves between pages, a missing pull request, and an unexpected response', async () => {
+  it('refuses a listing whose head or count moves between pages, or whose pages do not advance', async () => {
     const moved = fakeGh(args => args.includes('cursor=page-1') ? page([node(3)], null, sha(4)) : page([node(1)], 'page-1'))
     await expect(provider(moved.run).commits(pull(7), signal))
       .resolves.toEqual({ code: 'unavailable', message: 'The pull request head changed while its commits were read' })
+    const recounted = fakeGh(args => args.includes('cursor=page-1') ? page([node(3)], null, sha(3), 4) : page([node(1)], 'page-1'))
+    await expect(provider(recounted.run).commits(pull(7), signal))
+      .resolves.toEqual({ code: 'unavailable', message: 'The pull request head changed while its commits were read' })
+    // A page that repeats the cursor it was read after would be requested again forever.
+    const stuck = fakeGh(args => page(args.includes('cursor=page-1') ? [] : [node(1)], 'page-1'))
+    await expect(provider(stuck.run).commits(pull(7), signal))
+      .resolves.toEqual({ code: 'unavailable', message: 'GitHub commit pagination did not advance' })
+    expect(stuck.calls).toHaveLength(2)
+    const endless = fakeGh(() => output({ data: { repository: { pullRequest: {
+      headRefOid: sha(3), commits: { totalCount: 3, pageInfo: { hasNextPage: true, endCursor: null }, nodes: [node(1)] },
+    } } } }))
+    await expect(provider(endless.run).commits(pull(7), signal))
+      .resolves.toEqual({ code: 'unavailable', message: 'GitHub commit pagination did not advance' })
+  })
+
+  it('refuses a missing pull request and an unexpected response', async () => {
     await expect(provider(fakeGh(() => output({ data: { repository: { pullRequest: null } } })).run).commits(pull(7), signal))
       .resolves.toEqual({ code: 'not-found', message: 'pull request 7 was not found' })
     await expect(provider(fakeGh(() => output({ data: { repository: null } })).run).commits(pull(7), signal))
@@ -632,5 +648,12 @@ it('rejects readiness, actions, and content reads for an unconfigured host witho
   await expect(subject.fileText(target, 'a'.repeat(40), 'file.txt', signal)).resolves.toEqual({ code: 'unavailable', message })
   await expect(subject.commits(target, signal)).resolves.toEqual({ code: 'unavailable', message })
   await expect(subject.compare(target, 'a'.repeat(40), 'b'.repeat(40), signal)).resolves.toEqual({ code: 'unavailable', message })
+  // A repository that cannot name a request is refused before its host, as every read refuses it.
+  const unsafe = pull(7, { ...demo, host: 'unconfigured.example', owner: 'oc/to' })
+  const invalid = 'forge-github: invalid repository "oc/to/demo"'
+  await expect(subject.diff(unsafe, 'a'.repeat(40), signal)).rejects.toThrow(invalid)
+  await expect(subject.fileText(unsafe, 'a'.repeat(40), 'file.txt', signal)).rejects.toThrow(invalid)
+  await expect(subject.commits(unsafe, signal)).rejects.toThrow(invalid)
+  await expect(subject.compare(unsafe, 'a'.repeat(40), 'b'.repeat(40), signal)).rejects.toThrow(invalid)
   expect(gh.calls).toEqual([])
 })

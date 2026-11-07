@@ -86,6 +86,14 @@ describe('LensMenu', () => {
     expect(within(document.body).queryByRole('menu')).toBeNull()
   })
 
+  it('disables the test lens without its count while test files hide, as the segments do', () => {
+    const view = render(<LensMenu {...lensProps({ hideTests: true, counts: { ...COUNTS, test: 0 } })} visible />)
+    fireEvent.click(view.getByRole('button', { name: 'Review layer: All' }))
+    const tests = within(document.body).getByRole('menuitem', { name: 'Tests' })
+    expect(tests.textContent).toBe('Tests')
+    expect((tests as HTMLButtonElement).disabled).toBe(true)
+  })
+
   it('keeps its menu closed while the tab is hidden', () => {
     const view = render(<LensMenu {...lensProps()} visible={false} />)
     fireEvent.click(view.getByRole('button', { name: 'Review layer: All' }))
@@ -116,7 +124,7 @@ describe('CommitMenu', () => {
   function mount(props: Partial<CommitMenuProps> = {}) {
     const list = props.list ?? vi.fn<CommitMenuProps['list']>(async () => ({ ok: true, value: COMMITS }))
     const choose = vi.fn<CommitMenuProps['choose']>()
-    const all: CommitMenuProps = { chosen: null, visible: true, version: 'v1', t, ...props, list, choose }
+    const all: CommitMenuProps = { chosen: null, visible: true, kept: 'oldest', version: 'v1', t, ...props, list, choose }
     const view = render(<CommitMenu {...all} />)
     const rerender = (next: Partial<CommitMenuProps>): void => { view.rerender(<CommitMenu {...all} {...next} />) }
     const rows = (): string[] => within(document.body).queryAllByRole('menuitem').map(row => row.textContent ?? '')
@@ -130,7 +138,7 @@ describe('CommitMenu', () => {
     expect(commitsLabel({ from: sha(1), to: sha(2) }, t)).toBe('1111111…2222222')
   })
 
-  it('reads the commits once per version, again on each opening, and chooses one or a Shift run of them', async () => {
+  it('reads the commits once per version, keeps them across openings, and chooses one or a Shift run of them', async () => {
     const m = mount()
     await settle()
     expect(m.list).toHaveBeenCalledTimes(1)
@@ -140,7 +148,7 @@ describe('CommitMenu', () => {
     const trigger = m.view.getByRole('button', { name: 'Commits shown: All commits' })
     fireEvent.click(trigger)
     await settle()
-    expect(m.list).toHaveBeenCalledTimes(2)
+    expect(m.list).toHaveBeenCalledTimes(1)
     const rows = m.rows()
     expect(rows[0]).toBe('All commits3 commits')
     expect(rows.slice(1).map((row, index) => row.startsWith(`${sha(index + 1).slice(0, 7)}commit ${index + 1}`) && row.endsWith(' d ago'))).toEqual([true, true, true])
@@ -173,9 +181,31 @@ describe('CommitMenu', () => {
     fireEvent.click(within(document.body).getByRole('menuitem', { name: /^All commits/ }))
     expect(m.choose).toHaveBeenLastCalledWith(null)
 
+    expect(m.list).toHaveBeenCalledTimes(1)
     m.rerender({ chosen: null, version: 'v2' })
     await settle()
-    expect(m.list).toHaveBeenCalledTimes(7)
+    expect(m.list).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps its menu open and says why for a Shift run that leaves the first-parent line', async () => {
+    // The third commit sits on another branch from the first one, after the second in the list.
+    const commits = COMMITS.commits.map(commit => commit.sha === sha(3) ? { ...commit, parent: sha(1) } : commit)
+    const m = mount({ list: async () => ({ ok: true, value: { ...COMMITS, commits } }) })
+    fireEvent.click(m.view.getByRole('button', { name: 'Commits shown: All commits' }))
+    await settle()
+    fireEvent.click(m.row(2))
+    expect(m.choose).toHaveBeenLastCalledWith({ from: sha(2), to: sha(2) })
+    m.rerender({ chosen: { from: sha(2), to: sha(2) } })
+    fireEvent.click(m.view.getByRole('button', { name: 'Commits shown: 2222222' }))
+    await settle()
+
+    fireEvent.click(m.row(3), { shiftKey: true })
+    expect(m.choose).toHaveBeenCalledTimes(1)
+    expect(within(document.body).getByRole('menu')).toBeDefined()
+    expect(within(document.body).getByRole('status').textContent).toBe(en['commits.notLinear'])
+    fireEvent.click(m.row(1), { shiftKey: true })
+    expect(m.choose).toHaveBeenLastCalledWith({ from: sha(1), to: sha(2) })
+    expect(within(document.body).queryByRole('status')).toBeNull()
   })
 
   it('starts a Shift run at the clicked commit without an earlier choice, and ignores choosing every commit again', async () => {
@@ -205,6 +235,8 @@ describe('CommitMenu', () => {
     expect(m.rows()).toEqual(['All commits0 commits'])
     expect(within(document.body).queryByText(en['commits.shiftHint'])).toBeNull()
     expect(within(document.body).getByText('Only the earliest 0 commits are listed')).toBeDefined()
+    m.rerender({ kept: 'newest' })
+    expect(within(document.body).getByText('Only the latest 0 commits are listed')).toBeDefined()
     fireEvent.keyDown(within(document.body).getByRole('menu'), { key: 'Escape' })
 
     result = { ok: true, value: null }
