@@ -6,8 +6,8 @@
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { JobId } from '@deepseek-ai/dsh-jobs/brand'
-import { JobsSection } from './JobsSection.tsx'
-import type { JobsSectionInjected } from './JobsSection.tsx'
+import { JobsRunningIndicator, JobsSection } from './JobsSection.tsx'
+import type { JobsRunningIndicatorInjected, JobsSectionInjected } from './JobsSection.tsx'
 import { createJobsSectionStore } from './jobs-store.ts'
 import type {} from '@deepseek-ai/dsh-api-job-controller/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
@@ -23,13 +23,13 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-export type { JobsSectionProps, JobsSectionInjected } from './JobsSection.tsx'
+export type { JobsRunningIndicatorInjected, JobsRunningIndicatorProps, JobsSectionProps, JobsSectionInjected } from './JobsSection.tsx'
 
 /** Required services: the jobs rosters, observations, and kill, the slot registry, and dictionaries. */
 export const inject = ['jobs', 'slots', 'locale']
 
 /**
- * Client plugin body: register the dictionaries and the Session panel section.
+ * Client plugin body: register the dictionaries, the Session panel section, and its running dot on the panel toggle.
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
@@ -55,4 +55,15 @@ export function apply(ctx: ClientContext): void {
       }),
     }, JobsSection),
   )
+  ctx.slots.inject('conversation.session.panel.indicator', () => ctx.slots.register({
+    name: 'conversation.session.panel.indicator',
+    id: 'background-jobs.running',
+    // Below an attention mark, which paints above running dots.
+    order: 20,
+    locale: NS,
+    inject: (): JobsRunningIndicatorInjected => ({
+      hooks: { jobs: ctx.jobs.state },
+      watchRows: sessionId => ctx.jobs.watchRows(sessionId),
+    }),
+  }, JobsRunningIndicator))
 }

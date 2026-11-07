@@ -5,7 +5,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { JobsSnapshot, JobView, ObservedJob } from '@deepseek-ai/dsh-api-job-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import { JobsSection, type JobsSectionProps } from '../src/client/JobsSection.tsx'
+import { JobsRunningIndicator, JobsSection, type JobsRunningIndicatorProps, type JobsSectionProps } from '../src/client/JobsSection.tsx'
 import { createJobsSectionStore } from '../src/client/jobs-store.ts'
 import { zh, ru } from '../src/client/locales.ts'
 
@@ -86,6 +86,38 @@ function props(
 
 /** The section renders its rows inline; there is no trigger to open. */
 function openList(): void {}
+
+describe('JobsRunningIndicator', () => {
+  function indicator(jobs: readonly JobView[], panelShown: boolean, watchRows: JobsSectionProps['watchRows'] = () => () => {}) {
+    const dotProps = { ...props(jobs, undefined, {}, undefined, watchRows), panelShown } as unknown as JobsRunningIndicatorProps
+    return render(<JobsRunningIndicator {...dotProps} />)
+  }
+
+  it('shows a named dot while jobs run and the panel does not show them, counting stopping jobs', () => {
+    const view = indicator([
+      job(), job({ id: 'bash-2' as JobView['id'], status: 'stopping' }), job({ id: 'bash-3' as JobView['id'], status: 'completed' }),
+    ], false)
+    expect(view.container.querySelector('[data-jobs-running]')?.textContent).toBe(zh['indicator.running'].replace('{count}', '2'))
+  })
+
+  it('renders nothing while the panel shows, without jobs, and after they settle', () => {
+    expect(indicator([job()], true).container.innerHTML).toBe('')
+    cleanup()
+    expect(indicator([], false).container.innerHTML).toBe('')
+    cleanup()
+    expect(indicator([job({ status: 'completed' })], false).container.innerHTML).toBe('')
+  })
+
+  it('keeps the roster stream open while the toggle is mounted, even while the panel shows', () => {
+    const stop = vi.fn()
+    const watchRows = vi.fn(() => stop)
+    const view = indicator([], true, watchRows)
+    expect(watchRows).toHaveBeenCalledWith(SESSION)
+    expect(stop).not.toHaveBeenCalled()
+    view.unmount()
+    expect(stop).toHaveBeenCalledOnce()
+  })
+})
 
 describe('JobsSection visibility', () => {
   it('renders nothing while the session sees no jobs', () => {

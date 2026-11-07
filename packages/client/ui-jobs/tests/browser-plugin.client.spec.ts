@@ -13,7 +13,7 @@ import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 import { stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as applyLocale, inject as localeInject } from '@deepseek-ai/dsh-client-locale/client'
 import { apply, inject } from '../src/client/index.ts'
-import type { JobsSectionInjected } from '../src/client/JobsSection.tsx'
+import type { JobsRunningIndicatorInjected, JobsSectionInjected } from '../src/client/JobsSection.tsx'
 import { apply as applyNode } from '../src/index.ts'
 import { en, NS, zh } from '../src/client/locales.ts'
 
@@ -41,6 +41,7 @@ async function bench(): Promise<{ ctx: Context; fiber: ReturnType<Context['plugi
     name: 'root',
     children: {
       'conversation.session.panel.section': { kind: 'list', scope: 'session' },
+      'conversation.session.panel.indicator': { kind: 'list', scope: 'session' },
     },
   } as never, () => null)
   ctx.provide('jobs', {
@@ -109,8 +110,14 @@ describe('ui-jobs browser half', () => {
     const entry = ctx.slots.entries('conversation.session.panel.section').find(candidate => candidate.options.id === 'background-jobs')
     expect(entry?.options.order).toBe(300)
     expect(resolveSlotLabel(entry?.options.label)).toBe(zh['list.aria'])
+    const dot = ctx.slots.entries('conversation.session.panel.indicator')[0]
+    expect(dot).toMatchObject({ options: { id: 'background-jobs.running', order: 20 } })
+    const face = dot?.inject as (() => JobsRunningIndicatorInjected) | undefined
+    face?.().watchRows('dot-session' as SessionId)()
+    expect(watched).toContain('dot-session')
     await fiber.dispose()
     expect(sectionEntryIds(ctx)).not.toContain('background-jobs')
+    expect(ctx.slots.entries('conversation.session.panel.indicator')).toHaveLength(0)
   })
 
   it('registers both dictionaries under its own namespace and releases them with the fiber', async () => {

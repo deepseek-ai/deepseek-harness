@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Load the plugin through the web-app manifest. It registers the [Session panel](../ui-session-panel/README.md#contribute-a-section) section `background-jobs` at order 300, after Subagents, titled “Background jobs”. The section renders nothing until the session can see at least one job, so the panel hides it together with its title and an ordinary conversation shows no section for a capability it is not using.
+Load the plugin through the web-app manifest. It registers the [Session panel](../ui-session-panel/README.md#contribute-a-section) section `background-jobs` at order 300, after Subagents, titled “Background jobs”. While jobs run and the panel does not show, a blue dot on the panel toggle (`conversation.session.panel.indicator`) says so and names their number for assistive technology; it keeps the Session's roster stream open while the toggle is mounted. The section renders nothing until the session can see at least one job, so the panel hides it together with its title and an ordinary conversation shows no section for a capability it is not using.
 
 Live rows come first in start order on filled cards; settled rows follow newest-first under a “Finished {count}” toggle with a “Clear” action. The settled list folds while any job is live and opens when only settled jobs remain; pressing the toggle overrides that default. Clear hides the current settled rows in this client while the Session stays open, also after the panel is hidden and shown again; the registry keeps their records, a job that settles later appears normally, and the section hides when no rows remain.
 

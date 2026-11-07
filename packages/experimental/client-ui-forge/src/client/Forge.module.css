@@ -515,9 +515,9 @@
   height: 24px;
 }
 
-/* Attention mark over the Session panel toggle; the toggle positions it. */
+/* Attention mark over the Session panel toggle; the toggle sizes and places it. */
 .attention {
-  display: inline-flex;
+  background: var(--dsw-alias-state-error-primary);
 }
 
 .visuallyHidden {

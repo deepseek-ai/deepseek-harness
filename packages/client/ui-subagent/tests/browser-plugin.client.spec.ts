@@ -67,6 +67,7 @@ async function provideSlotFaces(ctx: Context): Promise<void> {
       'conversation.session.header.lineage': { kind: 'single', scope: 'session' },
       'conversation.session.panel.section': { kind: 'list', scope: 'session' },
       'conversation.session.panel.section.actions': { kind: 'keyed', scope: 'session' },
+      'conversation.session.panel.indicator': { kind: 'list', scope: 'session' },
       'conversation.composer': { kind: 'chain', scope: 'session' },
     },
   } as never, () => null)
@@ -155,6 +156,7 @@ describe('apply', () => {
     expect(sectionEntry.options.order).toBe(200)
     expect(resolveSlotLabel(sectionEntry.options.label)).toBe(en['section.title'])
     expect(ctx.slots.entries('conversation.session.panel.section.actions').map(entry => entry.options.key)).toEqual(['subagents'])
+    expect(ctx.slots.entries('conversation.session.panel.indicator')[0]).toMatchObject({ options: { id: 'subagents.running', order: 10 } })
     const sectionActions = (sectionEntry.inject as (id: SessionId) => SubagentCatalogInjected)(sid('parent'))
     expect(Object.keys(sectionActions).sort()).toEqual(['openChild', 'openChildAside', 'refreshProjection'])
 

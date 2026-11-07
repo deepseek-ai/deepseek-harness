@@ -10,7 +10,10 @@ import type { SubagentAddress, SubagentCatalogEntry } from '@deepseek-ai/dsh-sub
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import { SubagentHeaderLineage, type SubagentHeaderLineageProps } from '../src/client/SubagentHeaderLineage.tsx'
-import { SubagentsProgress, SubagentsSection, type SubagentsProgressProps, type SubagentsSectionProps } from '../src/client/SubagentsSection.tsx'
+import {
+  SubagentsProgress, SubagentsRunningIndicator, SubagentsSection,
+  type SubagentsProgressProps, type SubagentsRunningIndicatorProps, type SubagentsSectionProps,
+} from '../src/client/SubagentsSection.tsx'
 import { SubagentReadOnlyComposer } from '../src/client/SubagentReadOnlyComposer.tsx'
 import { en, zh } from '../src/client/locales.ts'
 
@@ -1130,6 +1133,34 @@ describe('SubagentsSection', () => {
     absent.unmount()
     render(<HeaderCatalog {...props(catalog({ entries: [], state: 'error', error: new RemoteError('gateway/internal', 'read failed', {}) }))} />)
     expect(document.querySelector('[data-subagents-section]')).not.toBeNull()
+  })
+
+  it('shows a named running dot while direct subagents run and the panel does not show them', () => {
+    const indicator = (over: Parameters<typeof catalog>[0], panelShown: boolean, summaries?: Record<SessionId, SessionSummary>) => {
+      const input = props(catalog(over), {}, summaries)
+      const dotProps = { ...input, sessionId: PARENT, panelShown } as SubagentsRunningIndicatorProps
+      return render(<SubagentsRunningIndicator {...dotProps} />)
+    }
+    const external = 'external' as SessionId
+    const running = {
+      entries: [
+        { id: CHILD, mode: 'continuable', label: 'worker', activity: 'running' },
+        { id: external, mode: 'external', label: 'external', activity: 'running' },
+      ],
+    } satisfies Parameters<typeof catalog>[0]
+    const summaries = { [CHILD]: { ...summary(CHILD, 1), running: true }, [external]: { ...summary(external, 1), running: true } }
+    const shown = indicator(running, false, summaries)
+    // External tasks never count as running.
+    expect(shown.container.querySelector('[data-subagents-running]')?.textContent).toBe(zh['indicator.running'].replace('{count}', '1'))
+    shown.unmount()
+    expect(indicator(running, true, summaries).container.innerHTML).toBe('')
+    cleanup()
+    const idle = { entries: [{ id: CHILD, mode: 'continuable', label: 'worker', activity: 'inactive' }] } satisfies Parameters<typeof catalog>[0]
+    expect(indicator(idle, false).container.innerHTML).toBe('')
+    cleanup()
+    const noCatalog = props(undefined)
+    const absent = { ...noCatalog, sessionId: PARENT, panelShown: false } as SubagentsRunningIndicatorProps
+    expect(render(<SubagentsRunningIndicator {...absent} />).container.innerHTML).toBe('')
   })
 
   it('shows direct-member progress beside the section title and omits zero counts', () => {

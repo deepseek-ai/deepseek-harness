@@ -1,3 +1,17 @@
+/* The panel toggle sizes and places this dot; it names the state for assistive technology. */
+.runningIndicator {
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* Rows sit inside the Session panel section body, which supplies the inset and scrolling. */
 .list {
   display: flex;

@@ -68,7 +68,6 @@ describe('AttentionIndicator', () => {
   it('marks change requests that need attention and names the mark', () => {
     const b = indicator(ready({ changeRequests: [entry(1, snapshot(1)), entry(2, snapshot(2, { checksRollup: 'failure' }))] }))
     const mark = b.view.container.querySelector('[data-forge-attention]')
-    expect(mark?.querySelector('[data-state="error"]')).not.toBeNull()
     expect(mark?.textContent).toBe(en['header.attention'])
     act(() => { b.panel.set({ state: ready({ changeRequests: [entry(1, snapshot(1))] }), disconnected: false }) })
     expect(b.view.container.innerHTML).toBe('')

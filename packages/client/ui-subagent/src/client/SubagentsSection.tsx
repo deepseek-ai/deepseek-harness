@@ -16,6 +16,10 @@ export type SubagentsSectionProps =
 export type SubagentsProgressProps =
   PropsRuntime<'conversation.session.panel.section.actions'> & PropsLocale<typeof NS>
 
+/** Full props of the running dot on the Session panel toggle. */
+export type SubagentsRunningIndicatorProps =
+  PropsRuntime<'conversation.session.panel.indicator'> & PropsLocale<typeof NS>
+
 function deriveSummaries(state: Parameters<Parameters<SubagentsSectionProps['useSessions']>[0]>[0]) {
   return state.byId
 }
@@ -77,4 +81,21 @@ export function SubagentsProgress({ sessionId, useSessions, useSessionStatus, t 
   const progress = catalog === undefined ? '' : progressOf(catalog, summaries, t)
   if (progress === '') return null
   return <span className={css.sectionProgress}>{progress}</span>
+}
+
+/**
+ * Show on the panel toggle that direct subagents run while the panel does not
+ * show them. External tasks do not count, as in the section's progress.
+ * @param props - Session hooks, whether the panel shows, and copy.
+ * @returns the dot with its name for assistive technology, or null with nothing to report.
+ */
+export function SubagentsRunningIndicator({ sessionId, panelShown, useSessions, useSessionStatus, t }: SubagentsRunningIndicatorProps) {
+  const { catalogs } = useCatalogs({ useSessions, useSessionStatus })
+  const running = catalogs[sessionId]?.entries.filter(entry => entry.mode !== 'external' && entry.activity === 'running').length ?? 0
+  if (panelShown || running === 0) return null
+  return (
+    <span className={css.runningIndicator} data-subagents-running="">
+      <span className={css.visuallyHidden}>{t('indicator.running', { count: running })}</span>
+    </span>
+  )
 }

@@ -5,7 +5,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ComposerChainProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { SubagentHeaderLineage } from './SubagentHeaderLineage.tsx'
 import type { SubagentCatalogInjected } from './SubagentCatalog.tsx'
-import { SubagentsProgress, SubagentsSection } from './SubagentsSection.tsx'
+import { SubagentsProgress, SubagentsRunningIndicator, SubagentsSection } from './SubagentsSection.tsx'
 import {
   SubagentReadOnlyComposer, type SubagentReadOnlyMatch,
 } from './SubagentReadOnlyComposer.tsx'
@@ -28,7 +28,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 export type { SubagentCatalogInjected } from './SubagentCatalog.tsx'
 export type { SubagentHeaderLineageProps } from './SubagentHeaderLineage.tsx'
-export type { SubagentsProgressProps, SubagentsSectionProps } from './SubagentsSection.tsx'
+export type { SubagentsProgressProps, SubagentsRunningIndicatorProps, SubagentsSectionProps } from './SubagentsSection.tsx'
 export type {
   SubagentReadOnlyComposerProps, SubagentReadOnlyMatch,
 } from './SubagentReadOnlyComposer.tsx'
@@ -94,6 +94,13 @@ export function apply(ctx: ClientContext): void {
       locale: NS,
     }, SubagentsProgress)
   })
+  ctx.slots.inject('conversation.session.panel.indicator', () => ctx.slots.register({
+    name: 'conversation.session.panel.indicator',
+    id: 'subagents.running',
+    // Below an attention mark, which paints above running dots.
+    order: 10,
+    locale: NS,
+  }, SubagentsRunningIndicator))
   ctx.slots.inject(
     'conversation.composer',
     () => ctx.slots.register({

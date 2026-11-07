@@ -2467,6 +2467,8 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     slotInject: '',
     declaredBy: 'an entry in \'conversation.session.header.utilities\' (client-ui-session-panel), so it exists while that entry is mounted',
     occupants: [
+      'client-ui-jobs JobsRunningIndicator id \'background-jobs.running\'',
+      'client-ui-subagent SubagentsRunningIndicator id \'subagents.running\'',
       'experimental-client-ui-forge AttentionIndicator id \'forge.attention\'',
     ],
     replaceRisk: 'none',

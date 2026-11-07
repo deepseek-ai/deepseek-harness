@@ -1,7 +1,6 @@
 /** Mark over the Session panel toggle while a bound change request needs attention. */
 
 import type { ReactNode } from 'react'
-import { StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-session-panel/client'
 import type { NS } from './locales.ts'
@@ -32,7 +31,6 @@ export function AttentionIndicator({ usePanel, t }: AttentionIndicatorProps): Re
   if (!attention) return null
   return (
     <span className={css.attention} data-forge-attention="">
-      <StateDot state="error" size={6} />
       <span className={css.visuallyHidden}>{t('header.attention')}</span>
     </span>
   )

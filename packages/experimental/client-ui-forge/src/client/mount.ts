@@ -346,7 +346,12 @@ function registerUi(ctx: Context): void {
     }, LocalChangesRow)
   })
   ctx.slots.inject('conversation.session.panel.indicator', () => ctx.slots.register({
-    name: 'conversation.session.panel.indicator', id: 'forge.attention', locale: NS, inject: attentionFace,
+    name: 'conversation.session.panel.indicator',
+    id: 'forge.attention',
+    // Paints above running dots: what needs attention outranks what merely runs.
+    order: 100,
+    locale: NS,
+    inject: attentionFace,
   }, AttentionIndicator))
   ctx.effect(() => ctx.sidebarRightTabs.register(changesDefinition(t)), 'forge-panel: changes tab')
   ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({

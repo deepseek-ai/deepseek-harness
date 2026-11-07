@@ -45,6 +45,15 @@ export type JobsSectionProps =
   & InjectFace<JobsSectionInjected>
   & PropsStore<ReturnType<typeof createJobsSectionStore>>
 
+/** Business face of the running dot on the Session panel toggle. */
+export type JobsRunningIndicatorInjected = Pick<JobsSectionInjected, 'hooks' | 'watchRows'>
+
+/** Full props of the running dot on the Session panel toggle. */
+export type JobsRunningIndicatorProps =
+  PropsRuntime<'conversation.session.panel.indicator'>
+  & PropsLocale<typeof NS>
+  & InjectFace<JobsRunningIndicatorInjected>
+
 /** Stable empty list so a session with no jobs keeps one array identity. */
 const NO_JOBS: readonly JobView[] = []
 
@@ -457,5 +466,24 @@ export function JobsSection({ sessionId, useJobs, watchRows, observe, killJob, u
         : null}
       {settledExpanded ? settledRows.map(item) : null}
     </ul>
+  )
+}
+
+/**
+ * Show on the panel toggle that the Session's background jobs run while the
+ * panel does not show them. The toggle stays mounted while the section does
+ * not, so this keeps the Session's roster stream open itself; the client
+ * service counts its watchers.
+ * @param props - Session values, the jobs snapshot hook, the roster control, whether the panel shows, and copy.
+ * @returns the dot with its name for assistive technology, or null with nothing to report.
+ */
+export function JobsRunningIndicator({ sessionId, panelShown, useJobs, watchRows, t }: JobsRunningIndicatorProps) {
+  const running = useJobs(state => (state.rows[sessionId] ?? NO_JOBS).filter(isLive).length)
+  useEffect(() => watchRows(sessionId), [sessionId, watchRows])
+  if (panelShown || running === 0) return null
+  return (
+    <span className={css.runningIndicator} data-jobs-running="">
+      <span className={css.visuallyHidden}>{t('indicator.running', { count: running })}</span>
+    </span>
   )
 }

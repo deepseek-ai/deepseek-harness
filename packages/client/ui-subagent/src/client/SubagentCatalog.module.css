@@ -131,6 +131,20 @@
   white-space: nowrap;
 }
 
+/* The panel toggle sizes and places this dot; it names the state for assistive technology. */
+.runningIndicator {
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* The Session panel section supplies the inset and scrolling. Rows share the
    panel's columns: the status glyph's center 14px from the row start, text at
    30px, and the chevron's center 14px from the row end. */

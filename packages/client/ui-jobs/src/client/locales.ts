@@ -6,6 +6,7 @@ export const NS = 'job'
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
   'list.aria': '后台任务',
+  'indicator.running': '{count} 个后台任务运行中',
   'section.settledCount': '已结束 {count}',
   'section.clear': '清空',
   'row.expandAria': '展开 {label} 的实时输出',
@@ -45,6 +46,7 @@ export const zh = {
 /** English dictionary, key-identical to the Chinese source of truth. */
 export const en: Record<JobKey, string> = {
   'list.aria': 'Background jobs',
+  'indicator.running': 'Background jobs running: {count}',
   'section.settledCount': 'Finished {count}',
   'section.clear': 'Clear',
   'row.expandAria': 'Show live output of {label}',
@@ -87,6 +89,7 @@ export type JobKey = keyof typeof zh
 /** Japanese copy, checked against the English keys. */
 export const ja = {
   'list.aria': 'バックグラウンドジョブ',
+  'indicator.running': '実行中のバックグラウンドジョブ: {count}',
   'section.settledCount': '完了 {count} 件',
   'section.clear': 'クリア',
   'row.expandAria': '{label} のライブ出力を表示',
@@ -126,6 +129,7 @@ export const ja = {
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
   'list.aria': 'Trabajos en segundo plano',
+  'indicator.running': 'Trabajos en segundo plano en ejecución: {count}',
   'section.settledCount': 'Terminado {count}',
   'section.clear': 'Borrar',
   'row.expandAria': 'Mostrar salida en vivo de {label}',
@@ -165,6 +169,7 @@ export const es = {
 /** French dictionary, checked against the English keys. */
 export const fr = {
   'list.aria': 'Travaux en arrière-plan',
+  'indicator.running': 'Travaux en arrière-plan en cours : {count}',
   'section.settledCount': 'Terminé {count}',
   'section.clear': 'Effacer',
   'row.expandAria': 'Afficher la sortie en direct de {label}',
@@ -204,6 +209,7 @@ export const fr = {
 /** German dictionary, checked against the English keys. */
 export const de = {
   'list.aria': 'Hintergrundjobs',
+  'indicator.running': 'Laufende Hintergrundjobs: {count}',
   'section.settledCount': 'Fertig {count}',
   'section.clear': 'Klar',
   'row.expandAria': 'Live-Ausgabe von {label} anzeigen',
@@ -243,6 +249,7 @@ export const de = {
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
   'list.aria': 'Фоновые задания',
+  'indicator.running': 'Выполняется фоновых заданий: {count}',
   'section.settledCount': 'Закончено {count}',
   'section.clear': 'Очистить',
   'row.expandAria': 'Показать живой вывод {label}',
@@ -282,6 +289,7 @@ export const ru = {
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
   'list.aria': 'Trabalhos em segundo plano',
+  'indicator.running': 'Trabalhos em segundo plano em execução: {count}',
   'section.settledCount': 'Concluído {count}',
   'section.clear': 'Limpar',
   'row.expandAria': 'Mostrar saída ao vivo de {label}',
