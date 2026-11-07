@@ -728,26 +728,43 @@ describe('forgePanel change request diffs', () => {
       .rejects.toMatchObject({ code: 'forgePanel/diff-failed', message: 'down' })
   })
 
-  it('reads the patch and the .gitattributes together and cancels the other read when one fails', async () => {
+  it('reads the patch and the .gitattributes together, and reports the patch\'s failure before the attributes failure', async () => {
     const { repo } = await project()
     const opened = await open(repo)
     shellTurn(opened.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
     await reader(opened).until(state => polled(state, pullUrl(7)))
     const read = async (): Promise<unknown> => await opened.ctx.forgePanel.changeRequestDiff(opened.session, pullUrl(7), null, signal)
     const cancelled: string[] = []
-    const held = (name: string) => async (operation: AbortSignal): Promise<never> => {
-      await new Promise((resolve) => { operation.addEventListener('abort', resolve, { once: true }) })
-      cancelled.push(name)
-      throw operation.reason
+    // The patch read ends only after the attributes read has failed, so the attributes failure always comes first.
+    let attributesFailed = Promise.withResolvers<undefined>()
+    const later = <T>(value: T) => async (): Promise<T> => {
+      await attributesFailed.promise
+      return value
     }
 
     // Failed reads are not kept, so each case reads again.
-    const diff = vi.spyOn(opened.provider, 'diff').mockImplementation(async (_ref, _head, operation) => await held('patch')(operation))
-    const text = vi.spyOn(opened.provider, 'fileText').mockResolvedValue({ code: 'unavailable', message: 'attributes down' })
+    const diff = vi.spyOn(opened.provider, 'diff').mockImplementation(later<string | ForgeFailure>({ code: 'too-large', message: 'diff over 300 files' }))
+    const text = vi.spyOn(opened.provider, 'fileText').mockImplementation(async () => {
+      attributesFailed.resolve(undefined)
+      return { code: 'unavailable', message: 'attributes down' }
+    })
+    await expect(read()).rejects.toMatchObject({ code: 'forgePanel/diff-too-large', message: 'diff over 300 files' })
+    attributesFailed = Promise.withResolvers()
+    diff.mockImplementation(later<string | ForgeFailure>({ code: 'stale', message: 'head moved' }))
+    await expect(read()).rejects.toMatchObject({ code: 'forgePanel/stale-head', message: 'head moved' })
+    attributesFailed = Promise.withResolvers()
+    diff.mockImplementation(later<string | ForgeFailure>(PATCH))
     await expect(read()).rejects.toMatchObject({ code: 'forgePanel/diff-failed', message: 'attributes down' })
+
+    // A failed patch read cancels the attributes read it no longer needs.
     diff.mockResolvedValue({ code: 'unavailable', message: 'patch down' })
-    text.mockImplementation(async (_ref, _commit, _path, operation) => await held('attributes')(operation))
+    text.mockImplementation(async (_ref, _commit, _path, operation) => {
+      await new Promise((resolve) => { operation.addEventListener('abort', resolve, { once: true }) })
+      cancelled.push('attributes')
+      throw operation.reason
+    })
     await expect(read()).rejects.toMatchObject({ code: 'forgePanel/diff-failed', message: 'patch down' })
+    expect(cancelled).toEqual(['attributes'])
 
     // The patch read finishes only once the attributes read has started, so reading them one after the other never ends.
     const attributesStarted = Promise.withResolvers<undefined>()
@@ -760,7 +777,6 @@ describe('forgePanel change request diffs', () => {
       return 'src/** linguist-generated\n'
     })
     await expect(read()).resolves.toMatchObject({ files: [{ path: 'src/a.ts', layer: 'test' }] })
-    expect(cancelled).toEqual(['patch', 'attributes'])
   })
 
   it('lists the commits of a change request and reads consecutive ones from the first one\'s parent', async () => {

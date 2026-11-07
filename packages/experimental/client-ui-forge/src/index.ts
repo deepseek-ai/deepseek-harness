@@ -690,8 +690,9 @@ export class ForgePanelController extends TypertRemoteService {
   }
 
   /**
-   * Read a patch that ends at `commit` together with the root `.gitattributes` at that commit. The first failure
-   * cancels the other read and waits for it to end before it passes on.
+   * Read a patch that ends at `commit` together with the root `.gitattributes` at that commit. A failed patch read
+   * cancels the attributes read. Both reads end before the result: the patch's failure passes on first, and the
+   * attributes failure only after the patch was read, so the outcome does not depend on which read ends first.
    * @param ref - change request whose repository holds the commit.
    * @param commit - commit the patch ends at.
    * @param readPatch - reads the patch under the given cancellation.
@@ -702,21 +703,17 @@ export class ForgePanelController extends TypertRemoteService {
   private async patchAt(
     ref: ChangeRequestRef, commit: string, readPatch: (signal: AbortSignal) => Promise<string | ForgeFailure>, signal: AbortSignal,
   ): Promise<{ readonly patch: string; readonly attributes: string }> {
-    const sibling = new AbortController()
-    const operation = AbortSignal.any([signal, sibling.signal])
-    const patch = readPatch(operation).then((result) => {
+    const unneeded = new AbortController()
+    const patch = readPatch(signal).then((result) => {
       if (typeof result !== 'string') throw readError(result)
       return result
     })
-    const attributes = this.attributesAt(ref, commit, operation)
-    try {
-      const [text, rules] = await Promise.all([patch, attributes])
-      return { patch: text, attributes: rules }
-    } catch (error) {
-      sibling.abort()
-      await Promise.allSettled([patch, attributes])
-      throw error
-    }
+    const attributes = this.attributesAt(ref, commit, AbortSignal.any([signal, unneeded.signal]))
+    void patch.then(undefined, () => { unneeded.abort() })
+    const [text, rules] = await Promise.allSettled([patch, attributes])
+    if (text.status === 'rejected') throw text.reason
+    if (rules.status === 'rejected') throw rules.reason
+    return { patch: text.value, attributes: rules.value }
   }
 
   /** The root `.gitattributes` of a change request's repository at a commit, empty when the commit has none. */
