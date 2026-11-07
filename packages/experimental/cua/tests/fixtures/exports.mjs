@@ -12,8 +12,6 @@ const guard = registerHooks({
 })
 const { Context } = await import('@deepseek-ai/cordis')
 const host = await import('@deepseek-ai/dsh-cua')
-const { CuaSessionPermissions } = await import('@deepseek-ai/dsh-cua/session-permissions')
-assert.equal(typeof CuaSessionPermissions.prototype.request, 'function')
 const { createCuaApi } = await import('@deepseek-ai/dsh-cua/api')
 const { CuaConfigFields } = await import('@deepseek-ai/dsh-cua/config')
 assert.equal(typeof CuaConfigFields.connectTimeoutMs.default, 'function')

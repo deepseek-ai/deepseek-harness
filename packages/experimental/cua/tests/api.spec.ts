@@ -13,7 +13,7 @@ const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG
 const bounds = { x: -640, y: 100, width: 640, height: 480 }
 const selected = { appHandle: 'app-17', pid: 17, name: 'Editor', bundleId: 'test.editor', running: true }
 const delivered = { dispatched: true }
-const capabilities: CuaCapabilities = { platform: 'macos', sessionLocked: false, permissions: { accessibility: true, screenRecording: false }, appLevelAccessibility: true, keyboard: ['app'], methods: ['getState', 'click'], coordinateSpace: 'screenshot-pixels', browser: false }
+const capabilities: CuaCapabilities = { platform: 'macos', systemPointer: true, sessionLocked: false, permissions: { accessibility: true, screenRecording: false }, appLevelAccessibility: true, keyboard: ['app'], methods: ['getState', 'click'], coordinateSpace: 'screenshot-pixels', browser: false }
 
 function windowInfo(windowId: number) {
   return { windowId, appName: 'Editor', title: `Document ${windowId}`, bounds, isOnScreen: true, onCurrentSpace: null }

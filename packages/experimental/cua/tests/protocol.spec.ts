@@ -179,7 +179,7 @@ it.each([true, false])('requires the reported application-level accessibility ca
     platform: 'macos', permissions: { accessibility: true, screenRecording: false }, appLevelAccessibility,
     keyboard: ['app'], sessionLocked: false, methods: [], coordinateSpace: 'screenshot-pixels', browser: false,
   }
-  expect(CapabilitiesResult.parse(capabilities)).toEqual(capabilities)
+  expect(CapabilitiesResult.parse(capabilities)).toEqual({ ...capabilities, systemPointer: false })
   const { appLevelAccessibility: _omitted, ...missing } = capabilities
   expect(CapabilitiesResult.safeParse(missing).success).toBe(false)
 })
@@ -195,7 +195,7 @@ it.each([
     platform: 'windows', permissions: { accessibility: true, screenRecording: true }, appLevelAccessibility: false,
     keyboard, sessionLocked: false, methods: [], coordinateSpace: 'screenshot-pixels', browser: false,
   }
-  expect(CapabilitiesResult.parse(capabilities)).toEqual(capabilities)
+  expect(CapabilitiesResult.parse(capabilities)).toEqual({ ...capabilities, systemPointer: false })
 })
 
 it.each([

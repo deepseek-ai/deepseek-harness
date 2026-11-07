@@ -3,8 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { Ajv2020 } from 'ajv/dist/2020.js'
 import { describe, expect, it } from 'vitest'
 import { renderNativeProtocol } from '../native/generate-protocol.ts'
-import { Request } from '@deepseek-ai/dsh-cua/protocol'
-import { MacRequest } from '../src/mouse-control.ts'
+import { Request, SystemPointerRequest } from '@deepseek-ai/dsh-cua/protocol'
 
 describe('native protocol generation', () => {
   it('keeps native JSON Schema and Swift admission tables current', async () => {
@@ -29,13 +28,13 @@ describe('native protocol generation', () => {
     expect(validate({ id: 'shortcut', ...request })).toBe(false)
   })
 
-  it('admits the pointer option only in the macOS model schema and only as a boolean', () => {
+  it('admits the pointer option only in the system-pointer model schema and only as a boolean', () => {
     const target = { appHandle: 'app', windowId: 1, x: 0, y: 0 }
     const request = { method: 'mouseMove', params: { ...target, useSystemPointer: true } }
     expect(Request.safeParse(request).success).toBe(false)
-    expect(MacRequest.safeParse(request).success).toBe(true)
-    expect(MacRequest.safeParse({ ...request, params: { ...target, useSystemPointer: 'true' } }).success).toBe(false)
-    expect(MacRequest.safeParse({ ...request, params: { ...target, arbitraryField: true } }).success).toBe(false)
+    expect(SystemPointerRequest.safeParse(request).success).toBe(true)
+    expect(SystemPointerRequest.safeParse({ ...request, params: { ...target, useSystemPointer: 'true' } }).success).toBe(false)
+    expect(SystemPointerRequest.safeParse({ ...request, params: { ...target, arbitraryField: true } }).success).toBe(false)
   })
 
   it.each([
