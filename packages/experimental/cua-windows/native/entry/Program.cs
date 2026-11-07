@@ -5,7 +5,7 @@ using DeepSeek.Cua.Windows;
 
 try
 {
-    if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))
+    if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))
     {
         throw new NativeFailure("UNSUPPORTED", "Windows CUA requires Windows 10 build 19041 or later");
     }
