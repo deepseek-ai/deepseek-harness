@@ -6,7 +6,6 @@ import { afterEach, expect, it, vi } from 'vitest'
 import type { ApprovalCardInput } from '@deepseek-ai/dsh-client-ui-approval/client'
 import { PendingQuestion, createWaterfallRequest } from '@deepseek-ai/dsh-client-ui-user-questions/src/client/contract/slots.ts'
 import { ApplicationApproval, selectApplicationApproval, type ApplicationApprovalProps } from '../src/client/ApplicationApproval.tsx'
-import { mouseControlDisplay } from '../src/locales.ts'
 import { en, zh } from '../src/client/locales.ts'
 
 type AskUserQuestionItem = PendingQuestion['questions'][number]
@@ -87,7 +86,11 @@ it('uses the original question cancellation and refuses late approval', async ()
 })
 
 it('shows the mouse interruption and expiry with only session approval and refusal', () => {
-  const display = mouseControlDisplay
+  const display = {
+    question: { en: 'Move pointer?', zh: '允许移动鼠标指针吗？' },
+    detail: { en: 'Until restart', zh: '重启后失效' },
+    approve: { en: 'Allow for this session', zh: '本会话允许' },
+  }
   const pending = new PendingQuestion('s1' as SessionId, [{ id: 'cua-mouse-control', question: display.question.en,
     detail: display.detail.en, intent: { kind: 'approval', approve: display.approve.en, reject: 'Deny', display } }])
   const factory = vi.fn((_name: string, _input: ApprovalCardInput) => null)

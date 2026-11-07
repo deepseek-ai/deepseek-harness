@@ -11,7 +11,11 @@ export class MouseControl {
 
   constructor(private readonly ctx: Context) {}
 
-  /** @param agent Calling Agent. @returns Whether this Session explicitly approved moving the system pointer. */
+  /**
+   * Select the native route without prompting the user.
+   * @param agent Calling Agent.
+   * @returns Whether this Session explicitly approved moving the system pointer.
+   */
   allowed(agent: Agent): boolean {
     return this.decisions.get(agent.id) === true
   }
