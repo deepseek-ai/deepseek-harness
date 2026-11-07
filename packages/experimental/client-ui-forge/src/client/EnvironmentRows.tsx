@@ -125,7 +125,6 @@ export function CheckoutRow({
       menu={label.missing ? undefined : renderFactorySlot('contextMenu.button', {
         target,
         label: t(label.worktree ? 'checkout.worktreeActions' : 'checkout.projectActions'),
-        size: 'sm',
       })}
     >
       <Tooltip label={label.tooltip} side="left">
@@ -182,13 +181,12 @@ export function LocalChangesRow({ usePanel, dismissOverlay, viewLocalChanges, cr
           anchor={(
             <button
               type="button"
-              className={`${css.iconButton} ${css.envMore}`}
               aria-label={t('changes.local.actions')}
               aria-haspopup="menu"
               aria-expanded={open}
               onClick={() => { setOpen(!open) }}
             >
-              <IconEllipsisOutlineRegular size={14} />
+              <IconEllipsisOutlineRegular />
             </button>
           )}
           items={[

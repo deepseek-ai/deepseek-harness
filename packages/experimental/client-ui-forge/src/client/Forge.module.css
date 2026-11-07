@@ -45,6 +45,17 @@
   }
 }
 
+/* A More button shares its surface: the glyph darkens without a fill, as on Session panel rows. */
+.iconButton.moreButton:focus-visible {
+  background: transparent;
+}
+
+@media (hover: hover) {
+  .iconButton.moreButton:hover {
+    background: transparent;
+  }
+}
+
 .banner {
   display: flex;
   flex-direction: column;
@@ -508,11 +519,6 @@
 .envRow[data-missing] .envNote,
 .envRow[data-failed] .envName {
   color: var(--dsw-alias-state-warn-primary);
-}
-
-.envRow .envMore {
-  width: 24px;
-  height: 24px;
 }
 
 /* Attention mark over the Session panel toggle; the toggle sizes and places it. */

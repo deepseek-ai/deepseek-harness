@@ -285,7 +285,6 @@ describe('CheckoutRow', () => {
     expect(b.view.getByRole('tooltip').textContent).toBe('Project directory: ~/repo')
     expect(b.renderFactorySlot).toHaveBeenCalledWith('contextMenu.button', expect.objectContaining({
       target: { kind: 'directory', value: { sessionId: SESSION, path: '/work/repo' } },
-      size: 'sm',
     }))
     fireEvent.contextMenu(element)
     expect(b.opened).toEqual([{ kind: 'directory', value: { sessionId: SESSION, path: '/work/repo' } }])

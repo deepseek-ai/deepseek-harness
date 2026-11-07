@@ -12,7 +12,7 @@ import {
   Button, IconCheckCircleOutlineRegular, IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconCloseOutlineRegular,
   IconCopyOutlineRegular,
   IconEllipsisOutlineRegular, IconListPenOutlineRegular, IconRightUpOutlineRegular, IconTriangleRightFillRegular, IconUserOutlineRegular,
-  Menu, MenuItemButton, StateDot, Tooltip,
+  Menu, MenuItemButton, StateDot,
   type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
@@ -449,18 +449,16 @@ function CardMenu({ entry, snapshot, name, url, actions, t }: {
       portal
       align="end"
       anchor={(
-        <Tooltip label={t('change.actions', { name })} side="top" disabled={open}>
-          <button
-            type="button"
-            className={css.iconButton}
-            aria-label={t('change.actions', { name })}
-            aria-haspopup="menu"
-            aria-expanded={open}
-            onClick={() => { setOpen(!open) }}
-          >
-            <IconEllipsisOutlineRegular size={14} />
-          </button>
-        </Tooltip>
+        <button
+          type="button"
+          className={`${css.iconButton} ${css.moreButton}`}
+          aria-label={t('change.actions', { name })}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          onClick={() => { setOpen(!open) }}
+        >
+          <IconEllipsisOutlineRegular size={14} />
+        </button>
       )}
       items={items}
       onSelect={select}
