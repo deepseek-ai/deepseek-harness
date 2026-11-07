@@ -11,7 +11,7 @@ import clsx from 'clsx'
 import {
   Button, IconCheckCircleOutlineRegular, IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconCloseOutlineRegular,
   IconCopyOutlineRegular,
-  IconEllipsisOutlineRegular, IconListPenOutlineRegular, IconRightUpOutlineRegular, IconTriangleRightFillRegular, IconUserOutlineRegular,
+  IconEllipsisOutlineRegular, IconFilesDiffOutlineRegular, IconRightUpOutlineRegular, IconTriangleRightFillRegular, IconUserOutlineRegular,
   Menu, MenuItemButton, StateDot,
   type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -134,7 +134,7 @@ function ChangesRow({ entry, snapshot, name, actions, locale, t }: {
   const { viewChanges } = actions
   const parts = (
     <>
-      <span className={css.rowIcon}><IconListPenOutlineRegular size={16} /></span>
+      <span className={css.rowIcon}><IconFilesDiffOutlineRegular size={16} /></span>
       <span className={css.rowLabel}>{t('change.row.changes')}</span>
       <span className={css.rowValue}><DiffSize snapshot={snapshot} locale={locale} /></span>
     </>
@@ -426,7 +426,7 @@ function CardMenu({ entry, snapshot, name, url, actions, t }: {
     { id: 'open', label: t('change.view'), icon: <IconRightUpOutlineRegular size={14} /> },
     { id: 'copy', label: t('change.copy'), icon: <IconCopyOutlineRegular size={14} /> },
     ...viewChanges !== undefined && snapshot !== null && entry.ref !== null
-      ? [{ id: 'changes', label: t('change.viewChanges'), icon: <IconListPenOutlineRegular size={14} /> }]
+      ? [{ id: 'changes', label: t('change.viewChanges'), icon: <IconFilesDiffOutlineRegular size={14} /> }]
       : [],
     ...ready === undefined ? [] : [{ id: 'ready', label: t('change.markReady'), icon: <IconCheckCircleOutlineRegular size={14} />, disabled: busy }],
     ...remove === undefined ? [] : [

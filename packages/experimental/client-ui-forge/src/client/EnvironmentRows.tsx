@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react'
 import {
-  Button, IconBranchOutlineRegular, IconEllipsisOutlineRegular, IconListPenOutlineRegular, IconWarningTriangleOutlineRegular,
+  Button, IconBranchOutlineRegular, IconEllipsisOutlineRegular, IconFilesDiffOutlineRegular, IconWarningTriangleOutlineRegular,
   Menu, PanelRow, StateDot, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { HostObservable, InjectFace, PropsLocale, PropsRenderFactories, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -162,7 +162,7 @@ export function LocalChangesRow({ usePanel, dismissOverlay, viewLocalChanges, cr
   return (
     <PanelRow
       className={css.envRow}
-      icon={<IconListPenOutlineRegular size={16} />}
+      icon={<IconFilesDiffOutlineRegular size={16} />}
       onActivate={view}
       actionLabel={t('changes.local.viewAria', { count, added: additions, deleted: deletions })}
       data-forge-local=""

@@ -1,7 +1,7 @@
 /** Chip title of a changes tab: the changes icon and the view's name in the current language. */
 
 import type { ReactNode } from 'react'
-import { IconListPenOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconFilesDiffOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { changesTitle, parseChangesAddress } from './changes-address.ts'
@@ -21,7 +21,7 @@ export function ChangesTabTitle({ useTabInfo, t }: ChangesTabTitleProps): ReactN
   const target = parseChangesAddress(tab.contentId)
   return (
     <>
-      <span className={css.titleIcon}><IconListPenOutlineRegular size={16} /></span>
+      <span className={css.titleIcon}><IconFilesDiffOutlineRegular size={16} /></span>
       <span className={css.titleText}>{target === undefined ? tab.title : changesTitle(target.source, t)}</span>
     </>
   )

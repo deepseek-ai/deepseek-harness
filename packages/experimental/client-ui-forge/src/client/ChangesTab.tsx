@@ -11,7 +11,7 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncEx
 import clsx from 'clsx'
 import {
   Button, IconBranchOutlineRegular, IconChevronDownOutlineRegular, IconChevronsUpDownOutlineRegular, IconCompareSplitOutlineRegular,
-  IconInfoOutlineRegular, IconListPenOutlineRegular, IconNowrapFillRegular, IconRightUpOutlineRegular, IconWorkspaceTreeOutlineRegular,
+  IconInfoOutlineRegular, IconFilesDiffOutlineRegular, IconNowrapFillRegular, IconRightUpOutlineRegular, IconWorkspaceTreeOutlineRegular,
   IconWrapFillRegular,
   Menu, StateDot, Tooltip,
   type MenuEntry,
@@ -292,7 +292,7 @@ function LocalHeader({ state, scope, base, missing, visible, diffBases, choose, 
           visible={visible} list={diffBases} choose={choose} t={t} />
         <span className={clsx(css.headerNote, css.headerSuffix)}>{t('diff.base.uncommitted')}</span>
       </> : <>
-        <span className={css.headerIcon}><IconListPenOutlineRegular size={15} /></span>
+        <span className={css.headerIcon}><IconFilesDiffOutlineRegular size={15} /></span>
         <span className={css.headerNote}>{t(SCOPE_NOTE[scope])}</span>
       </>}
       {creatable && (
