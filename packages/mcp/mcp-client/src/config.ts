@@ -1,6 +1,6 @@
 /**
- * Schemas of the three configuration shapes. The entry composes them into its `Config`, and the host resolves a server
- * configuration through its transport's schema, so a failure names the offending field instead of the whole union.
+ * Schemas of the two server configuration shapes. The entry composes them into its `Config`, and the host resolves a
+ * server configuration through its transport's schema, so a failure names the offending field instead of the whole union.
  *
  * @module
  */
@@ -11,7 +11,7 @@ import { DEFAULT_MAX_INSTRUCTION_BYTES, RECONNECT_DEFAULTS } from './connection.
 import type { ReconnectConfig } from './connection.ts'
 import { OAuthSchema } from './oauth-options.ts'
 import type { McpOAuthConfigInput } from './oauth-options.ts'
-import type { HostConfig, ServerConfig, StdioConfig, StreamableHttpConfig } from './index.ts'
+import type { Config, StdioConfig, StreamableHttpConfig } from './index.ts'
 
 /** Default timeout for individual MCP tool calls and resource requests (ms). */
 const DEFAULT_TOOL_CALL_TIMEOUT_MS = 60_000
@@ -32,7 +32,7 @@ type StreamableHttpConfigInput = Omit<StreamableHttpConfig, 'oauth' | 'headers' 
   & { oauth?: McpOAuthConfigInput }
 
 /** One server's configuration before defaults. */
-export type ServerConfigInput = StdioConfigInput | StreamableHttpConfigInput
+export type ConfigInput = StdioConfigInput | StreamableHttpConfigInput
 
 /** Reconnect-policy section schema shared by both transports. */
 export const ReconnectSchema: z<ReconnectConfig> = z.object({
@@ -80,17 +80,12 @@ export const StreamableHttpSchema = z.object({
 }) as z<StreamableHttpConfigInput, StreamableHttpConfig>
 /* jscpd:ignore-end */
 
-/** Schema of {@link HostConfig}. */
-export const HostSchema = z.object({
-  host: z.const(true).required(),
-}) as z<HostConfig>
-
 /**
  * Whether a server configures OAuth beside its own Authorization header, which an instance refuses.
  * @param config - resolved server configuration.
  * @returns true for an OAuth server whose headers include `Authorization` in any letter case.
  */
-export function hasOAuthWithAuthorizationHeader(config: ServerConfig): boolean {
+export function hasOAuthWithAuthorizationHeader(config: Config): boolean {
   return config.transport === 'streamable-http' && config.oauth !== undefined
     && Object.keys(config.headers).some(name => name.toLowerCase() === 'authorization')
 }

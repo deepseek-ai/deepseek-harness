@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import type { McpServer } from '@agentclientprotocol/sdk'
-import type { ServerConfig as McpClientConfig } from '@deepseek-ai/dsh-mcp-client'
+import type { Config as McpClientConfig } from '@deepseek-ai/dsh-mcp-client'
 import { mountAcpMcpServers } from '../src/mcp.ts'
 
 /** Context stand-in that captures validated MCP configs without opening transports. */

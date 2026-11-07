@@ -1,12 +1,8 @@
-/** Locale-owned copy every connector's account surfaces share; each connector's own text arrives from the Host. */
-import type {} from '@deepseek-ai/dsh-client-ui-slots'
-
-/** Dictionary namespace of the shared account copy. */
-export const NS = 'mcpAccount'
+/** The copy every connector's account section shares; each connector's own text comes with its registration. */
+import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 
 /** Chinese dictionary and key source. */
-export const zh = {
-  close: '关闭',
+const zh = {
   'status.checking': '正在检查连接',
   'status.disconnected': '未连接',
   'status.waiting-browser': '等待你在浏览器中确认',
@@ -30,16 +26,13 @@ export const zh = {
   'badge.reconnect': '需要重新连接',
   'badge.unavailable': '暂时无法连接',
   'badge.connecting': '连接中',
-  'activation.later': '稍后',
-  'notice.action-failed': '操作未完成，请重试',
 }
 
-/** Every key the shared account surfaces translate. */
+/** Every key of the shared copy. */
 export type McpAccountKey = keyof typeof zh
 
 /** English dictionary. */
-export const en: Record<McpAccountKey, string> = {
-  close: 'Close',
+const en: Record<McpAccountKey, string> = {
   'status.checking': 'Checking connection',
   'status.disconnected': 'Not connected',
   'status.waiting-browser': 'Waiting for you to confirm in the browser',
@@ -63,13 +56,10 @@ export const en: Record<McpAccountKey, string> = {
   'badge.reconnect': 'Reconnect',
   'badge.unavailable': 'Unavailable',
   'badge.connecting': 'Connecting',
-  'activation.later': 'Later',
-  'notice.action-failed': 'The action did not finish. Try again.',
 }
 
 /** Japanese dictionary. */
-export const ja: Record<McpAccountKey, string> = {
-  close: '閉じる',
+const ja: Record<McpAccountKey, string> = {
   'status.checking': '接続を確認中',
   'status.disconnected': '未接続',
   'status.waiting-browser': 'ブラウザーでの確認を待っています',
@@ -93,13 +83,10 @@ export const ja: Record<McpAccountKey, string> = {
   'badge.reconnect': '要再接続',
   'badge.unavailable': '利用不可',
   'badge.connecting': '接続中',
-  'activation.later': '後で',
-  'notice.action-failed': '操作が完了しませんでした。もう一度お試しください。',
 }
 
 /** Spanish dictionary. */
-export const es: Record<McpAccountKey, string> = {
-  close: 'Cerrar',
+const es: Record<McpAccountKey, string> = {
   'status.checking': 'Comprobando la conexión',
   'status.disconnected': 'No conectado',
   'status.waiting-browser': 'Esperando su confirmación en el navegador',
@@ -123,13 +110,10 @@ export const es: Record<McpAccountKey, string> = {
   'badge.reconnect': 'Reconectar',
   'badge.unavailable': 'No disponible',
   'badge.connecting': 'Conectando',
-  'activation.later': 'Más tarde',
-  'notice.action-failed': 'La acción no se completó. Inténtelo de nuevo.',
 }
 
 /** French dictionary. */
-export const fr: Record<McpAccountKey, string> = {
-  close: 'Fermer',
+const fr: Record<McpAccountKey, string> = {
   'status.checking': 'Vérification de la connexion',
   'status.disconnected': 'Non connecté',
   'status.waiting-browser': 'En attente de votre confirmation dans le navigateur',
@@ -153,13 +137,10 @@ export const fr: Record<McpAccountKey, string> = {
   'badge.reconnect': 'À reconnecter',
   'badge.unavailable': 'Indisponible',
   'badge.connecting': 'Connexion en cours',
-  'activation.later': 'Plus tard',
-  'notice.action-failed': 'L’action n’a pas abouti. Réessayez.',
 }
 
 /** German dictionary. */
-export const de: Record<McpAccountKey, string> = {
-  close: 'Schließen',
+const de: Record<McpAccountKey, string> = {
   'status.checking': 'Verbindung wird geprüft',
   'status.disconnected': 'Nicht verbunden',
   'status.waiting-browser': 'Warten auf Ihre Bestätigung im Browser',
@@ -183,13 +164,10 @@ export const de: Record<McpAccountKey, string> = {
   'badge.reconnect': 'Neu verbinden',
   'badge.unavailable': 'Nicht verfügbar',
   'badge.connecting': 'Wird verbunden',
-  'activation.later': 'Später',
-  'notice.action-failed': 'Die Aktion wurde nicht abgeschlossen. Versuchen Sie es erneut.',
 }
 
 /** Russian dictionary. */
-export const ru: Record<McpAccountKey, string> = {
-  close: 'Закрыть',
+const ru: Record<McpAccountKey, string> = {
   'status.checking': 'Проверка подключения',
   'status.disconnected': 'Не подключено',
   'status.waiting-browser': 'Ожидание вашего подтверждения в браузере',
@@ -213,13 +191,10 @@ export const ru: Record<McpAccountKey, string> = {
   'badge.reconnect': 'Переподключить',
   'badge.unavailable': 'Недоступно',
   'badge.connecting': 'Подключение',
-  'activation.later': 'Позже',
-  'notice.action-failed': 'Действие не завершено. Повторите попытку.',
 }
 
 /** Portuguese dictionary. */
-export const pt: Record<McpAccountKey, string> = {
-  close: 'Fechar',
+const pt: Record<McpAccountKey, string> = {
   'status.checking': 'Verificando a conexão',
   'status.disconnected': 'Não conectado',
   'status.waiting-browser': 'Aguardando sua confirmação no navegador',
@@ -243,12 +218,13 @@ export const pt: Record<McpAccountKey, string> = {
   'badge.reconnect': 'Reconectar',
   'badge.unavailable': 'Indisponível',
   'badge.connecting': 'Conectando',
-  'activation.later': 'Mais tarde',
-  'notice.action-failed': 'A ação não foi concluída. Tente novamente.',
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
-  interface LocaleNamespaceMap {
-    mcpAccount: McpAccountKey
-  }
+/**
+ * The shared copy of one key in every shipped language.
+ * @param key - the dictionary key.
+ * @returns the text each browser resolves in its active language.
+ */
+export function text(key: McpAccountKey): LocalizedText {
+  return { en: en[key], zh: zh[key], ja: ja[key], es: es[key], fr: fr[key], de: de[key], ru: ru[key], pt: pt[key] }
 }

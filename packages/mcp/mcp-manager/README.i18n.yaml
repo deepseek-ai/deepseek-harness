@@ -15,14 +15,14 @@
   en: d152484eb41ac6b4
   zh: f14f34fce35a8d90
 /deepseek-ai-dsh-mcp-manager/use-this-package:
-  en: 2d9e13bf109334e8
-  zh: 8073adde1e768227
+  en: 1127dc36b3fca712
+  zh: 09349d9f4d6233c4
 /deepseek-ai-dsh-mcp-manager/use-this-package/when-to-choose-it:
   en: 5a005b1ef5f53881
   zh: d8bae243d10b2da5
 /deepseek-ai-dsh-mcp-manager/use-this-package/minimal-configuration:
-  en: 24bafdfd1ec4ecdb
-  zh: d4b2b91cfce7be72
+  en: 3d76f37b955a2b1f
+  zh: 995e71d500fa074b
 /deepseek-ai-dsh-mcp-manager/use-this-package/managing-configured-servers:
   en: 765209b5639c4be2
   zh: 48211813d2d25afc
@@ -36,14 +36,14 @@
   en: 86ad23ffe9337ec1
   zh: 33671e9bacf7eb6e
 /deepseek-ai-dsh-mcp-manager/use-this-package/remote-operations:
-  en: 58f0cabe8be997de
-  zh: e9770c6211c72ad8
+  en: e892aedf3ab29b12
+  zh: 6c469e621b8f95ca
 /deepseek-ai-dsh-mcp-manager/understand-the-implementation:
   en: 8a74186fa5bfe79d
   zh: c7c952876ca2992b
 /deepseek-ai-dsh-mcp-manager/understand-the-implementation/design-philosophy:
-  en: b0dd8d70cf925a47
-  zh: 6beba7ba5b1cbede
+  en: 8140d6676c500bda
+  zh: def13c78fd7949db
 /deepseek-ai-dsh-mcp-manager/understand-the-implementation/source-map:
   en: 874fe61698123da8
   zh: 85f9cb1eb4881cbc
@@ -60,8 +60,8 @@
   en: 7a8d0bf11425040b
   zh: b39181f89ba4fbe8
 /deepseek-ai-dsh-mcp-manager/known-limitations-and-deferred-work:
-  en: 22099e3ff8184922
-  zh: bc341ee2562e6394
+  en: c26f7e40e621bc2d
+  zh: 49ce0f2ec6b89dab
 /deepseek-ai-dsh-mcp-manager/known-limitations-and-deferred-work/dev-note:
   en: 22b977acde90c5b7
   zh: 756afde34c9bcd99

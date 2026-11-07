@@ -10,7 +10,7 @@ import type { AuthProvider, FetchLike, Transport } from '@modelcontextprotocol/c
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { scrubbedParentEnv } from '@deepseek-ai/dsh-subprocess'
-import type { ServerConfig } from './index.ts'
+import type { Config } from './index.ts'
 
 /**
  * The subprocess seam's scrubbed parent env (credential-shaped and stale
@@ -30,7 +30,7 @@ function buildChildEnv(extra: Record<string, string>): Record<string, string> {
  * @param authProvider - optional passive OAuth token and refresh callbacks.
  * @returns an unstarted MCP transport (stdio or Streamable HTTP).
  */
-export function createTransport(config: ServerConfig, fetch?: FetchLike, authProvider?: AuthProvider): Transport {
+export function createTransport(config: Config, fetch?: FetchLike, authProvider?: AuthProvider): Transport {
   switch (config.transport) {
     case 'stdio':
       return new StdioClientTransport({

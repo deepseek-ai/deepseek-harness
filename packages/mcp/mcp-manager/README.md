@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the manager once per Host, after an `mcp-client` entry loaded with `host: true`: that entry provides `ctx.mcpClientHost`, the only way the manager validates, mounts, probes, and authorizes servers, and the manager waits for it. The Web and Desktop profiles mount the two as the `mcp-client-host` and `mcp-manager` rows of [`dsh-web-app`](../../bundle/web-app/README.md). Its volatile `config.servers` holds configured entries; Settings uses the owning entry id as its namespace (`mcp` in the examples below). Credential templates and OAuth grants resolve through the credentials provider, so compose the row with `inject: [credentials]` wherever entries may use them.
+Mount the manager once per Host. It creates its own MCP client host, the only way it validates, mounts, probes, and authorizes servers. The Web and Desktop profiles mount it as the `mcp-manager` row of [`dsh-web-app`](../../bundle/web-app/README.md). Its volatile `config.servers` holds configured entries; Settings uses the owning entry id as its namespace (`mcp` in the examples below). Credential templates and OAuth grants resolve through the credentials provider, so compose the row with `inject: [credentials]` wherever entries may use them.
 
 ### When to choose it
 
@@ -33,14 +33,9 @@ Choose the manager when the server set changes at runtime: a settings edit or a 
 
 ### Minimal configuration
 
-Two `cordis.yml` rows mount the host and the manager; `servers` in the manager's config is optional and becomes the composition base layer:
+One `cordis.yml` row mounts the manager; `servers` in its config is optional and becomes the composition base layer:
 
 ```yaml
-- id: mcp-client-host
-  name: '@deepseek-ai/dsh-mcp-client'
-  config:
-    host: true
-
 - id: mcp
   name: '@deepseek-ai/dsh-mcp-manager'
   inject: [credentials]
@@ -125,7 +120,7 @@ With credentials, Authorization, and WebServer services loaded, `startAuthorizat
 
 ### Remote operations
 
-Browser clients reach the manager as `ctx.remote.mcpManager` through [`dsh-api-remotes`](../../api/remotes/README.md). `watch(signal)` yields the complete server list on subscription and again after every status or entry change, coalescing changes the subscriber has not read yet; aborting the signal ends that stream, and manager disposal ends every stream. `restart(name)`, `probe(name, signal)`, `startAuthorization(name)`, `cancelAuthorization(name, id)`, and `signOut(name)` run the operations above; none of them returns a token or client secret. Configuration writes stay on the Settings Remote; the manager adds no write method, so a browser cannot define a server command.
+Browser clients reach the manager as `ctx.remote.mcpManager` through [`dsh-api-remotes`](../../api/remotes/README.md). `watch(signal)` yields the complete server list on subscription and again after every status or entry change, coalescing changes the subscriber has not read yet; aborting the signal ends that stream, and manager disposal ends every stream. `restart(name)` and `probe(name, signal)` run the operations above. Authorization, cancellation, and sign-out stay on the Host: the Plugins page reaches them through [`dsh-mcp-account`](../mcp-account/README.md), so a browser never names a server to authorize. Configuration writes stay on the Settings Remote; the manager adds no write method, so a browser cannot define a server command.
 
 -----
 
@@ -145,7 +140,7 @@ This section explains the design decisions and points at the code; the observabl
 - **Whole-entry identity.** Any field change except `enabled` rebuilds the instance — instance config is captured at mcp-client load, so an in-place update cannot exist. `enabled` alone toggles mounting.
 - **A flat entry schema, validated cross-field.** Write-time validation enforces the per-transport rules a union would have expressed and rejects them at the write, naming the offending field where a union's shape error would not. The MCP client host validates the fields mcp-client owns — the entry key as `serverName`, template tokens, `reconnect`, and `oauth` — through each transport's own schema, so those refusals name the field too; the manager's schema passes `reconnect` and `oauth` through unresolved.
 - **Connection handling stays in mcp-client.** Children are ordinary mcp-client instances that the host mounts below its own Fiber: `serverName` reservations collide correctly with statically composed instances, teardown unwinds tools, and the manager reads each instance's status through the handle the host returns rather than duplicating supervision.
-- **The host is the manager's only reach into mcp-client.** The manager imports mcp-client types and no values, and injects `ctx.mcpClientHost`. A reload of mcp-client replaces the host entry together with every instance it mounted, and Cordis restarts the manager against the replacement, so the manager never keeps a replaced module's functions, classes, or instances.
+- **The host is the manager's only reach into mcp-client.** Besides mcp-client types, the manager imports only the `McpClientHost` class and creates the host at construction, so the host and every instance it mounts run below the manager's fiber and end with it.
 
 ### Source map
 
@@ -190,7 +185,7 @@ No direct invalidation; mounting, rebuilding, and unmounting instances changes t
 
 These limits describe what you cannot do with this manager today. They are current package constraints, not a task backlog.
 
-- **OAuth sign-in ships only for plugin accounts** — [`ui-mcp-account`](../../client/ui-mcp-account/README.md) shows the **Plugins** page account for servers that plugins register with it; for any other server, a Remote client presents the authorization URL from `startAuthorization` and calls cancellation or sign-out itself.
+- **OAuth sign-in ships only for plugin accounts** — [`dsh-mcp-account`](../mcp-account/README.md) shows the **Plugins** page account for servers that plugins register with it; no browser surface authorizes any other server, because authorization runs only through Host callers.
 - **Global plane only** — instances mounted by agent presets or static `cordis.yml` rows are neither listed nor governed; a static instance shows up only as a `serverName` collision when a managed entry tries to reuse its name.
 - **A rebuild has a tool gap** — a changed entry is disposed and remounted, so its tools disappear from the model's set until the new instance finishes its initial sync; there is no keep-serving-until-replacement handover.
 - **Registered entries are fixed by their plugin** — Settings cannot override a registered entry's budgets; the registering plugin exposes any tunable it needs in its own configuration.

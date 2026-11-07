@@ -75,14 +75,7 @@ kind: "package-reference"
 
 ### 为服务器管理器提供宿主
 
-当某个插件在运行时管理服务器（例如 [MCP 管理器](../mcp-manager/README.zh.md)），再加载一个以 `host: true` 代替服务器配置的条目。该条目不连接任何服务器，而是提供 `ctx.mcpClientHost`，这是此类插件使用本包的唯一途径：它校验服务器配置、挂载服务器实例、探测服务器，并创建显式 OAuth 授权所有者。宿主挂载的实例运行在宿主条目之下，因此本包重载时这些实例与宿主一起被替换，注入宿主的插件也在替换后的宿主上重启。
-
-```yaml
-- id: mcp-client-host
-  name: '@deepseek-ai/dsh-mcp-client'
-  config:
-    host: true
-```
+在运行时管理服务器的插件（例如 [MCP 管理器](../mcp-manager/README.zh.md)）用 `new McpClientHost(ctx)` 创建自己的 `McpClientHost`。宿主提供 `ctx.mcpClientHost`，这是此类插件使用本包的唯一途径：它校验服务器配置、挂载服务器实例、探测服务器，并创建显式 OAuth 授权所有者。宿主挂载的实例运行在该插件的 Fiber 下，随它结束。
 
 `validate` 用各传输自己的 schema 解析服务器配置，并拒绝无效的模板 token、重连策略，以及与 `Authorization` 请求头同时配置的 OAuth，因此每条拒绝都会在调用方传入的配置路径后点名字段。
 

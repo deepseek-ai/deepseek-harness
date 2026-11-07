@@ -94,6 +94,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
 
   'packages/attachment/attachment': { kind: 'indirect', reason: 'The storage seam delegates model request rendering to provider adapters.' },
   'packages/attachment/attachment-local': { kind: 'indirect', reason: 'The local backend delegates model request rendering to provider adapters.' },
+  'packages/mcp/mcp-account': { kind: 'none', reason: 'Plugins page account presentation and operations over the MCP manager; the connector and the MCP client document the tools a grant exposes.' },
   'packages/mcp/mcp-manager': { kind: 'indirect', reason: 'The manager only mounts and disposes dsh-mcp-client instances; those instances own every model-facing tool and schema.' },
   'packages/client/ui-jobs': { kind: 'none', reason: 'Browser-side presentation of host-observed output; touches no prompt, message, schema, stream, or tool result.' },
   'packages/shell/shell': { kind: 'indirect', reason: 'The service interface delegates all model rendering to dsh-tool-bash.' },
@@ -150,7 +151,6 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/client/ui-brand-official': { kind: 'none', reason: 'Browser-side presentation occupants; registers nothing model-facing.' },
   'packages/client/ui-approval': { kind: 'none', reason: 'Browser-side approval presentation; registers nothing model-facing.' },
   'packages/client/ui-chat': { kind: 'none', reason: 'Browser-side Chat presentation; registers nothing model-facing.' },
-  'packages/client/ui-mcp-account': { kind: 'none', reason: 'Plugins page account registry and controls over the MCP manager; the connector and the MCP client document the tools a grant exposes.' },
   'packages/client/ui-connector-account': { kind: 'none', reason: 'Plugins page account surfaces over Host-registered accounts; each registrant documents the tools and skills its account enables.' },
   'packages/client/ui-message-feedback': { kind: 'none', reason: 'Browser-side controls over log-only message feedback; ratings and notes never enter model context or change model-input tokens.' },
   'packages/client/ui-tool': { kind: 'none', reason: 'Browser-side Tool presentation layer; renders logged calls without changing model context.' },

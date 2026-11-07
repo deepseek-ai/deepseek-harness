@@ -1,9 +1,8 @@
-/** The Plugins page account a connector registers for its MCP server, and what the page receives about it. */
-import type { McpManagedServerView } from '@deepseek-ai/dsh-mcp-manager/types'
+/** The Plugins page account a connector registers for its MCP server. */
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 
 /**
- * The text that names the connector's service; every other string comes from this package's dictionary.
+ * The text that names the connector's service; every other string comes from this package's shared copy.
  * @typeParam Text - each string's type; a connector narrows it to require every language it ships.
  */
 export interface McpAccountCopy<Text extends LocalizedText = LocalizedText> {
@@ -33,19 +32,9 @@ export interface McpAccountCopy<Text extends LocalizedText = LocalizedText> {
 
 /** One connector's account, registered with the Host's `ctx.mcpAccounts`. */
 export interface McpAccountRegistration {
-  /** The name the connector registers its server under with the MCP manager. */
+  /** The name the connector registers its server under with the MCP manager; it also keys the account. */
   readonly server: string
   /** npm package whose bundle page carries the section and tag. */
   readonly packageName: string
   readonly copy: McpAccountCopy
-}
-
-/** One registered account as the Plugins page receives it, with the manager's view of its server once the manager lists it. */
-export interface McpAccountEntry extends McpAccountRegistration {
-  readonly view?: McpManagedServerView
-}
-
-/** Every registered account, as each change publishes it. */
-export interface McpAccountsView {
-  readonly accounts: readonly McpAccountEntry[]
 }

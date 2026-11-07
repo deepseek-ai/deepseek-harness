@@ -2111,22 +2111,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'mcpAccounts',
-    summary: 'Holds the registered accounts and serves them, with their servers\' manager views, to the Plugins page.',
-    description: 'Holds the registered accounts and serves them, with their servers\' manager views, to the Plugins page.',
+    summary: 'Shows each connector\'s MCP server account in the connector account registry.',
+    description: 'Shows each connector\'s MCP server account in the connector account registry.',
     methods: [
       {
         signature: 'register(registration: McpAccountRegistration): () => void',
-        description: 'Show one account on the Plugins page for as long as the returned disposer has not run.',
+        description: 'Show one connector\'s server account on its bundle page for as long as the returned disposer has not run. The account\'s key is `mcp:<server>`.',
         parameters: [{ name: 'registration', description: 'the server name, the bundle package, and the connector\'s text.' }],
-        returns: 'an idempotent disposer that withdraws the account.',
-        throws: ['when another account already uses the package or the server.'],
-      },
-      {
-        signature: '@Remote({ mode: \'stream\' }) async *watch(signal: AbortSignal): AsyncIterable<McpAccountsView>',
-        description: 'Follow every registered account with the manager\'s view of its server.',
-        parameters: [{ name: 'signal', description: 'the Client\'s observation lifetime; disposal also ends the stream.' }],
-        returns: 'the accounts once the manager lists its servers, then after each change of either, coalescing changes that arrive before the next read; ends with the manager\'s stream.',
-        throws: ['what the manager\'s stream throws.'],
+        returns: 'the registry\'s idempotent disposer, which withdraws the account.',
+        throws: ['when another account already uses the server or the package.'],
       },
     ],
   },
@@ -2136,20 +2129,20 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Validates, mounts, probes, and authorizes MCP servers for the plugin that manages them.',
     methods: [
       {
-        signature: 'validate(input: ServerConfigInput, path: readonly string[]): ServerConfig',
+        signature: 'validate(input: ConfigInput, path: readonly string[]): Config',
         description: 'Resolve a server configuration and refuse what an instance would refuse when it starts.',
         parameters: [{ name: 'input', description: 'server configuration before defaults.' }, { name: 'path', description: 'configuration path naming the server; every failure message starts with it.' }],
         returns: 'the resolved configuration.',
         throws: ['when the server name, a field, a template token, the reconnect policy, or OAuth beside an Authorization header is invalid.'],
       },
       {
-        signature: 'mount(config: ServerConfig): McpServerInstance',
+        signature: 'mount(config: Config): McpServerInstance',
         description: 'Mount one server instance below the host. The instance registers its tools and holds its `serverName` until disposed.',
         parameters: [{ name: 'config', description: 'resolved server configuration, usually from {@link McpClientHost.validate}.' }],
         returns: 'the instance\'s activation and disposal.',
       },
       {
-        signature: 'probe(config: ServerConfig, options?: McpProbeOptions): Promise<McpProbeResult>',
+        signature: 'probe(config: Config, options?: McpProbeOptions): Promise<McpProbeResult>',
         description: 'Probe a server without mounting it: resolve its templates, connect, list its tools, and close.',
         parameters: [{ name: 'config', description: 'resolved server configuration; its startup budget does not bound the probe.' }, { name: 'options', description: 'whole-probe budget, listing caps, and cancellation signal.' }],
         returns: 'the connect and list outcome with the cleanup result.',
@@ -2207,18 +2200,18 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when the manager is disposed, the entry is absent or changing, cleanup is incomplete, options are invalid, or a required credentials provider is missing.'],
       },
       {
-        signature: '@Remote async startAuthorization(name: string): Promise<McpOAuthAttemptView>',
+        signature: 'async startAuthorization(name: string): Promise<McpOAuthAttemptView>',
         description: 'Start explicit OAuth authorization, retaining the active grant until a successful commit.',
         parameters: [{ name: 'name', description: 'configured or registered OAuth entry, including disabled entries.' }],
         returns: 'current attempt progress; absent services, changing entries, or failed cleanup reject.',
       },
       {
-        signature: '@Remote async cancelAuthorization(name: string, id: McpOAuthAttemptId): Promise<void>',
+        signature: 'async cancelAuthorization(name: string, id: McpOAuthAttemptId): Promise<void>',
         description: 'Cancel the selected attempt and drain its work; an admitted credential commit completes.',
         parameters: [{ name: 'name', description: 'managed entry.' }, { name: 'id', description: 'selected attempt; stale or absent attempts are ignored.' }],
       },
       {
-        signature: '@Remote async signOut(name: string): Promise<void>',
+        signature: 'async signOut(name: string): Promise<void>',
         description: 'Drain authorization, probes, and connections before deleting the local grant; retain client registration. A configuration change before deletion preserves the grant and rejects.',
         parameters: [{ name: 'name', description: 'configured or registered OAuth entry; cleanup failure preserves the grant and blocks replacement.' }],
       },
@@ -6215,6 +6208,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ComputerUseProviderName = Branded<\'ComputerUseProviderName\'>;',
   },
   {
+    name: 'ConfigInput',
+    declaration: 'export type ConfigInput = StdioConfigInput | StreamableHttpConfigInput;',
+  },
+  {
     name: 'ConfigureCall',
     declaration: 'export type ConfigureCall = (controls: Readonly<LlmCallControls>, model: Readonly<LlmResolvedModelInfo>) => LlmCallControls;',
   },
@@ -7523,16 +7520,8 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface McpAccountCopy<Text extends LocalizedText = LocalizedText> {\n    readonly title: Text;\n    readonly connect: Text;\n    readonly activation: {\n        readonly title: Text;\n        readonly body: Text;\n    };\n    readonly detail: {\n        readonly disconnected: Text;\n        readonly waitingBrowser: Text;\n        readonly authorizing: Text;\n        readonly connecting: Text;\n        readonly connected: Text;\n        readonly rejected: Text;\n        readonly scope: Text;\n    };\n    readonly signOut: {\n        readonly title: Text;\n        readonly body: Text;\n    };\n    readonly notice: {\n        readonly connected: Text;\n        readonly signedOut: Text;\n    };\n}',
   },
   {
-    name: 'McpAccountEntry',
-    declaration: 'export interface McpAccountEntry extends McpAccountRegistration {\n    readonly view?: McpManagedServerView;\n}',
-  },
-  {
     name: 'McpAccountRegistration',
     declaration: 'export interface McpAccountRegistration {\n    readonly server: string;\n    readonly packageName: string;\n    readonly copy: McpAccountCopy;\n}',
-  },
-  {
-    name: 'McpAccountsView',
-    declaration: 'export interface McpAccountsView {\n    readonly accounts: readonly McpAccountEntry[];\n}',
   },
   {
     name: 'McpAuthorizationReason',
@@ -8707,14 +8696,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type SerializedNode = SerializedElement | string;',
   },
   {
-    name: 'ServerConfig',
-    declaration: 'export type ServerConfig = StdioConfig | StreamableHttpConfig;',
-  },
-  {
-    name: 'ServerConfigInput',
-    declaration: 'export type ServerConfigInput = StdioConfigInput | StreamableHttpConfigInput;',
-  },
-  {
     name: 'ServerResponse',
     declaration: 'export interface ServerResponse {\n    readonly type: \'server-response\';\n    readonly rpcId: RpcId;\n    readonly result: ConnectionRpcResult<unknown>;\n}',
   },
@@ -9649,10 +9630,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'StagedAttachment',
     declaration: 'export type StagedAttachment = {\n    readonly type: \'file\';\n    readonly attachment: FileAttachmentRef;\n} | {\n    readonly type: \'image\';\n    readonly attachment: ImageAttachmentRef;\n    readonly encodedBytes: number;\n};',
-  },
-  {
-    name: 'StdioConfig',
-    declaration: 'export interface StdioConfig {\n    transport: \'stdio\';\n    serverName: string;\n    command: string;\n    args: string[];\n    env: Record<string, string>;\n    cwd: string;\n    toolCallTimeoutMs: number;\n    startupTimeoutMs?: number;\n    closeTimeoutMs: number;\n    expandTemplates: boolean;\n    failOnStartupError: boolean;\n    maxInstructionBytes?: number;\n    reconnect?: ReconnectConfig;\n}',
   },
   {
     name: 'StopShareRequest',
