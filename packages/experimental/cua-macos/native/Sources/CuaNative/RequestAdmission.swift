@@ -36,13 +36,6 @@ struct RequestParameters: Sendable {
             return path
         }
     }
-    func pressKeys() throws -> [String] {
-        switch values["key"] {
-        case .string(let name) where !name.isEmpty: return [name]
-        case .array(let items) where !items.isEmpty: return try strings("key")
-        default: throw Self.invalid("key must be a nonempty string or a nonempty array of key names")
-        }
-    }
     func optionalString(_ key: String) throws -> String? { contains(key) ? try string(key) : nil }
     func optionalBoolean(_ key: String) throws -> Bool? {
         guard let raw = values[key] else { return nil }

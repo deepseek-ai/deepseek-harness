@@ -993,21 +993,8 @@
               "maximum": 4294967295
             },
             "key": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "minLength": 1
-                },
-                {
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "string",
-                    "minLength": 1
-                  }
-                }
-              ],
-              "description": "One key name or distinct physical keys to press in order and release in reverse."
+              "type": "string",
+              "minLength": 1
             },
             "modifiers": {
               "type": "array",
@@ -1317,37 +1304,6 @@
         },
         "method": {
           "type": "string",
-          "const": "releaseHeldKeys"
-        },
-        "params": {
-          "type": "object",
-          "properties": {
-            "runId": {
-              "type": "string",
-              "minLength": 1
-            }
-          },
-          "required": [
-            "runId"
-          ],
-          "additionalProperties": false
-        }
-      },
-      "required": [
-        "id",
-        "method",
-        "params"
-      ],
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "method": {
-          "type": "string",
           "const": "permissionStatus"
         },
         "params": {
@@ -1490,6 +1446,37 @@
           "required": [
             "permission",
             "settingsMessage"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string",
+          "const": "releaseHeldKeys"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "runId": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "runId"
           ],
           "additionalProperties": false
         }

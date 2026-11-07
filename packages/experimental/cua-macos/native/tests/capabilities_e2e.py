@@ -125,10 +125,12 @@ def check_clicks(helper, window, point, state_file):
 
 def check_keyboard(call, owner, state_file, state):
     count = len(state["events"])
-    call("pressKey", {**owner, "key": ["w", "d"]})
-    state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 4)
-    chord = [(event["type"], event.get("keyCode")) for event in state["events"][count:]]
-    assert chord == [(10, 13), (10, 2), (11, 2), (11, 13)], chord
+    call("pressKey", {**owner, "key": ["w", "d"]}, "INVALID_ARGUMENT")
+    call("pressKey", {**owner, "key": "d", "modifiers": ["w"]}, "INVALID_ARGUMENT")
+    call("pressKey", {**owner, "key": "d", "modifiers": ["shift"]})
+    state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 2)
+    shortcut = [(event["type"], event.get("keyCode"), event["shift"]) for event in state["events"][count:]]
+    assert shortcut == [(10, 2, True), (11, 2, True)], shortcut
     count = len(state["events"])
 
     def key(name, direction):
@@ -189,7 +191,7 @@ def main():
             pid = wait_for_state(state_file, lambda value: value["windowId"] > 0)["pid"]
             if args.keyboard_only:
                 check_keyboard(call, owner, state_file, json.loads(state_file.read_text()))
-                print("PASS: W+D short press, two-second hold, independent D up and remaining W cleanup")
+                print("PASS: Shift+D shortcut, two-second W+D hold, independent D up and remaining W cleanup")
                 return
             if not args.click_only:
                 call("activate", owner)

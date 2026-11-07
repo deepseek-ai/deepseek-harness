@@ -13,8 +13,8 @@ const methodDetails = new Map<string, string>([
 export const GUIDANCE = `${PLATFORM_GUIDANCE}
 
 ${COMMON_GUIDANCE.replace(/^- ([\w.]+)\(.*$/gm, (entry, method: string) => {
-  if (method === 'pressKey') return `- pressKey(key: string | string[], modifiers?: string[]) -> ActionResult — use for a short press. pressKey(['w', 'd']) presses W then D and releases D then W. Each name identifies one physical key. Packed strings such as 'w+d', unknown names and duplicate physical keys are rejected before input. Pass held modifiers separately, as in pressKey('Tab', ['shift']). '+' and 'plus' mean Shift+= when used alone. In a multi-key chord use '=' and pass 'shift' explicitly if needed.
-- sendKeyEvent(key: string, direction: 'down' | 'up') -> ActionResult — send 'down' once to hold a key across tool calls within one run_code. Holding a physical key on a keyboard can produce repeated key-down events after a delay. This method posts one event per call and rejects a second 'down' for a held key. Use the app's response to decide what to do while holding the key and when to send 'up'. When this run_code returns, throws, or the user pauses it, macOS releases only its remaining keys at their original recipients.`
+  if (method === 'pressKey') return `${entry}
+- sendKeyEvent(key: string, direction: 'down' | 'up') -> ActionResult — send 'down' once per key to hold one or more keys across tool calls within one run_code, for example W down, D down, D up, W up. Holding a physical key on a keyboard can produce repeated key-down events after a delay. This method posts one event per call and rejects a second 'down' for a held key. Use the app's response to decide what to do while holding the key and when to send 'up'. When this run_code returns, throws, or the user pauses it, macOS releases only its remaining keys at their original recipients.`
   const detail = methodDetails.get(method)
   return detail ? `${entry} ${detail}` : entry
 })}`

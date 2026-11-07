@@ -91,7 +91,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 
 提供方启动能力在安装时固定：平台、方法、应用级辅助功能、键盘作用域、浏览器支持和坐标空间。原生 `getCapabilities` RPC 只报告运行时权限和会话锁定状态；`installCua` 为模型可见结果合并两层。原生 RPC 仍是通用操作表示，而不是能力清单，因此 provider 指引说明其平台支持的动作。
 
-通过 `await cua.getCapabilities()` 返回的 `methods` 和 `keyboard` 确认支持的操作和输入范围。`pressKey(key, modifiers?)` 按住所列修饰键，依次按下指定的键，再逆序释放。例如，`pressKey(['w', 'd'])` 在按下和松开 D 期间持续按住 W。`sendKeyEvent(key, direction)` 只发送一次按下或抬起。`typeText` 和 `paste` 在 provider 声明的键盘作用域内传送字面文本。键盘修饰键名称是 provider 解释的普通字符串。
+通过 `await cua.getCapabilities()` 返回的 `methods` 和 `keyboard` 确认支持的操作和输入范围。`pressKey(key, modifiers?)` 在按住所列修饰键时按下并释放一个键；`sendKeyEvent(key, direction)` 只发送一次按下或抬起。`typeText` 和 `paste` 在 provider 声明的键盘作用域内传送字面文本。键盘修饰键名称是 provider 解释的普通字符串。
 
 
 平台提供方从 `@deepseek-ai/dsh-cua/config` 导入 `CuaConfigFields` 来扩展共享配置。根 Host 入口导出 `installCua`、`CuaConfig` 和供 Typert 发现的 `CuaAccess` 服务，`apply()` 只标记可选 Client 贡献。`/client` 通过现有模块加载器加载权限界面。Host 和 Client 使用独立编译项目，headless 导入不会加载 React、CSS 或浏览器注册。`/api` 提供应用、窗口 API 及其类型；`/bridge`、`/native-client` 和 `/protocol` 保留运行时和平台消费者。`/types` 仅导出生成 Remote 声明所需的命名类型，Client 使用包内类型。`/typert` 提供 Host 反射，`/remote` 提供浏览器描述和编解码，权限判断仍由 Host 执行。

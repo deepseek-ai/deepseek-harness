@@ -43,30 +43,15 @@ final class KeyboardInput {
     }
 
     /// Prepare every event before dispatch. On cancellation, release only the keys this call pressed.
-    func pressKey(_ keys: [String], modifiers: [String], to pid: Int32) throws {
+    func pressKey(_ name: String, modifiers: [String], to pid: Int32) throws {
         try checkCancellation()
         var chord = try modifiers.map(Self.modifier)
-        var namesByCode: [CGKeyCode: String] = [:]
-        for name in keys {
-            let key: Key
-            if name == "+" || name.lowercased() == "plus" {
-                guard keys.count == 1 else {
-                    throw RequestParameters.invalid("For a multi-key chord, use = with an explicit shift modifier instead of \(name)")
-                }
-                chord.append(try Self.modifier("shift"))
-                key = Key(keyCode: try Self.keyCode("="), flag: [])
-            } else if let modifier = Self.namedModifier(name) {
-                key = modifier
-            } else {
-                key = Key(keyCode: try Self.keyCode(name), flag: [])
-            }
-            if let previous = namesByCode.updateValue(name, forKey: key.keyCode) {
-                throw RequestParameters.invalid("Keys '\(previous)' and '\(name)' name the same physical key")
-            }
-            chord.append(key)
-        }
+        let isPlus = name == "+" || name.lowercased() == "plus"
+        if isPlus { chord.append(try Self.modifier("shift")) }
+        let code = try Self.keyCode(isPlus ? "=" : name)
+        chord.append(Key(keyCode: code, flag: Self.namedModifier(name)?.flag ?? []))
         let alreadyHeld = held.snapshot(pid: pid)
-        guard namesByCode.keys.allSatisfy({ alreadyHeld[$0] == nil }) else {
+        guard alreadyHeld[code] == nil else {
             throw RequestParameters.invalid("Release the held key before using it in pressKey")
         }
         var selected = Set(alreadyHeld.keys)

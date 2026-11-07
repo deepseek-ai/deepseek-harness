@@ -345,7 +345,7 @@ actor AXWorker {
             let recipient = try ax().keyboardRecipient(identity, catalog: catalog)
             try NativePlatform.verify(recipient)
             if method == "typeText" { try inputs().0.typeText(params.string("text"), to: recipient.pid) }
-            else { try inputs().0.pressKey(params.pressKeys(), modifiers: params.modifiers(), to: recipient.pid) }
+            else { try inputs().0.pressKey(params.string("key"), modifiers: params.modifiers(), to: recipient.pid) }
         case "setValue": try ax().setAttribute(element(handle, params), "AXValue", params.values["value"])
         case "performAction":
             try ax().performAction(element(handle, params), action: params.string("action"), argument: params.values["argument"])

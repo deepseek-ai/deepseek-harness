@@ -683,8 +683,6 @@ describe('input actions', () => {
     ['fractional scroll', ({ window }) => window.scroll({ x: 0, y: 0, deltaLinesX: 0.5, deltaLinesY: 0 })],
     ['negative drag point', ({ window }) => window.drag([0, 0], [-1, 3])],
     ['empty key', ({ app }) => app.pressKey('')],
-    ['empty chord', ({ app }) => app.pressKey([])],
-    ['empty chord member', ({ app }) => app.pressKey(['w', ''])],
   ]
   it.each<[string, (surfaces: Surfaces) => Promise<unknown>]>([
     ['getState windowId: Too small: expected number to be >0', ({ app }) => app.getWindow(0)],
@@ -710,8 +708,7 @@ describe('input actions', () => {
     expect(f.dispatch).toHaveBeenCalledTimes(calls)
   })
 
-  it.each<[string | string[], string[] | undefined, string[]]>([
-    [['w', 'd'], undefined, []],
+  it.each<[string, string[] | undefined, string[]]>([
     ['+', undefined, []],
     ['plus', [], []],
     ['+', ['command'], ['command']],

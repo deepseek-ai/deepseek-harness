@@ -12,8 +12,6 @@ const rejectedRequests: Array<{ reason: string; request: JsonValue }> = [
   { reason: 'numeric element id', request: { method: 'click', params: { appHandle: 'app', snapshotId: 'snapshot', elementId: 0 } } },
   { reason: 'coordinate click without a window', request: { method: 'click', params: { appHandle: 'app', x: 1, y: 2 } } },
   { reason: 'mixed element and coordinate click', request: { method: 'click', params: { appHandle: 'app', snapshotId: 'snapshot', elementId: '0', windowId: 23, x: 1, y: 2 } } },
-  { reason: 'empty pressKey chord', request: { method: 'pressKey', params: { appHandle: 'app', key: [] } } },
-  { reason: 'non-string pressKey chord member', request: { method: 'pressKey', params: { appHandle: 'app', key: ['w', 7] } } },
   { reason: 'non-string pressKey modifier', request: { method: 'pressKey', params: { appHandle: 'app', key: 'a', modifiers: ['command', 7] } } },
   { reason: 'sendKeyEvent modifiers', request: { method: 'sendKeyEvent', params: { appHandle: 'app', key: 'a', direction: 'down', modifiers: [] } } },
   { reason: 'sendKeyEvent without direction', request: { method: 'sendKeyEvent', params: { appHandle: 'app', key: 'a' } } },
@@ -23,11 +21,6 @@ const rejectedRequests: Array<{ reason: string; request: JsonValue }> = [
 
 it.each(rejectedRequests)('rejects $reason at operation admission', ({ request }) => {
   expect(Request.safeParse(request).success).toBe(false)
-})
-
-it('admits an ordered chord in a raw pressKey request', () => {
-  const request = { method: 'pressKey', params: { appHandle: 'app', key: ['w', 'd'] } }
-  expect(Request.parse(request)).toEqual(request)
 })
 
 it('admits arbitrary provider-defined pressKey modifier names', () => {
