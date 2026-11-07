@@ -123,11 +123,39 @@ def check_clicks(helper, window, point, state_file):
     return state
 
 
+def check_keyboard(call, owner, state_file, state):
+    count = len(state["events"])
+    call("pressKey", {**owner, "key": ["w", "d"]})
+    state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 4)
+    chord = [(event["type"], event.get("keyCode")) for event in state["events"][count:]]
+    assert chord == [(10, 13), (10, 2), (11, 2), (11, 13)], chord
+    count = len(state["events"])
+
+    def key(name, direction):
+        call("sendKeyEvent", {**owner, "runId": "held-input", "key": name, "direction": direction})
+
+    key("w", "down")
+    key("d", "down")
+    state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 2)
+    call("getState", {**owner, "maxElements": 2000, "maxDepth": 25})
+    time.sleep(2)
+    key("d", "up")
+    state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 3)
+    held = state["events"][count:]
+    assert [(event["type"], event["keyCode"]) for event in held] == [(10, 13), (10, 2), (11, 2)], held
+    assert held[2]["timestamp"] - held[1]["timestamp"] >= 2, held
+    call("releaseHeldKeys", {"runId": "held-input"})
+    state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 4)
+    assert [(e["type"], e["keyCode"]) for e in state["events"][count:]] == [(10, 13), (10, 2), (11, 2), (11, 13)]
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--helper", type=Path, required=True)
     parser.add_argument("--artifacts", type=Path)
-    parser.add_argument("--click-only", action="store_true")
+    only = parser.add_mutually_exclusive_group()
+    only.add_argument("--click-only", action="store_true")
+    only.add_argument("--keyboard-only", action="store_true")
     args = parser.parse_args()
     transcript = []
     helper = None
@@ -141,7 +169,8 @@ def main():
         info = {"CFBundleName": "Capabilities Fixture", "CFBundleDisplayName": "Capabilities Fixture",
                 "CFBundleIdentifier": "test.dsh.cua." + uuid.uuid4().hex,
                 "CFBundleExecutable": "CapabilitiesFixture", "CFBundlePackageType": "APPL",
-                "DSHFixtureStatePath": str(state_file), "DSHFixtureBackground": args.click_only}
+                "DSHFixtureStatePath": str(state_file), "DSHFixtureBackground": args.click_only or args.keyboard_only,
+                "DSHFixtureKeyboard": args.keyboard_only}
         (application / "Contents/Info.plist").write_bytes(plistlib.dumps(info))
         subprocess.run(["swiftc", str(ROOT / "tests/CapabilitiesFixture.swift"), "-o", str(executable)], check=True)
         try:
@@ -158,6 +187,10 @@ def main():
             app = call("launchApp", owner)
             assert app["running"] is True, app
             pid = wait_for_state(state_file, lambda value: value["windowId"] > 0)["pid"]
+            if args.keyboard_only:
+                check_keyboard(call, owner, state_file, json.loads(state_file.read_text()))
+                print("PASS: W+D short press, two-second hold, independent D up and remaining W cleanup")
+                return
             if not args.click_only:
                 call("activate", owner)
                 state = wait_for_state(state_file, lambda value: value["pid"] == pid and value["active"] and value["keyWindow"])
@@ -188,27 +221,7 @@ def main():
             if not args.click_only:
                 call("click", {**window, **point, "mouseButton": "middle", "modifiers": ["shift"]})
                 state = wait_for_state(state_file, lambda value: any(event["type"] == 26 and event.get("button") == 2 and event["shift"] for event in value["events"]))
-                count = len(state["events"])
-                call("pressKey", {**owner, "key": ["w", "d"]})
-                state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 4)
-                chord = [(event["type"], event.get("keyCode")) for event in state["events"][count:]]
-                assert chord == [(10, 13), (10, 2), (11, 2), (11, 13)], chord
-                count = len(state["events"])
-                def key(name, direction):
-                    call("sendKeyEvent", {**owner, "runId": "held-input", "key": name, "direction": direction})
-                key("w", "down")
-                key("d", "down")
-                state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 2)
-                call("getState", {**owner, "maxElements": 2000, "maxDepth": 25})
-                time.sleep(2)
-                key("d", "up")
-                state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 3)
-                held = state["events"][count:]
-                assert [(event["type"], event["keyCode"]) for event in held] == [(10, 13), (10, 2), (11, 2)], held
-                assert held[2]["timestamp"] - held[1]["timestamp"] >= 2, held
-                call("releaseHeldKeys", {"runId": "held-input"})
-                state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 4)
-                assert [(e["type"], e["keyCode"]) for e in state["events"][count:]] == [(10, 13), (10, 2), (11, 2), (11, 13)]
+                check_keyboard(call, owner, state_file, state)
                 call("drag", {**window, "fromX": point["x"], "fromY": point["y"], "toX": point["x"] + 80,
                               "toY": point["y"] + 20, "durationMs": 200, "steps": 10, "mouseButton": "middle", "modifiers": ["shift"]})
                 state = wait_for_state(state_file, lambda value: any(event["type"] == 27 and event.get("button") == 2 and event["shift"] for event in value["events"]))

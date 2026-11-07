@@ -92,7 +92,10 @@ final class CapabilitiesFixture: NSObject, NSApplicationDelegate, NSWindowDelega
         }
         window.contentView!.addSubview(pad)
         if Bundle.main.object(forInfoDictionaryKey: "DSHFixtureBackground") as? Bool == true || CommandLine.arguments.contains("--background") {
-            window.orderFront(nil)
+            if Bundle.main.object(forInfoDictionaryKey: "DSHFixtureKeyboard") as? Bool == true {
+                window.makeFirstResponder(pad)
+                window.orderBack(nil)
+            } else { window.orderFront(nil) }
         } else {
             window.makeKeyAndOrderFront(nil)
             window.makeFirstResponder(text)

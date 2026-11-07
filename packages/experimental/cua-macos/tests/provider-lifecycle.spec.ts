@@ -37,12 +37,14 @@ import type { NativeClient } from '@deepseek-ai/dsh-cua/native-client'
 import type { NativeBuildSpec } from '../src/native-build.ts'
 
 const native = vi.hoisted(() => ({
+  connect: vi.fn<typeof import('../src/shared-native.ts')['createSharedNativeChannel']>(),
   prepare: vi.fn<(spec: NativeBuildSpec) => Promise<string>>(),
   architecture: vi.fn(() => 'arm64' as const),
   cleanup: vi.fn<NativeClient['requestCleanup']>(),
   request: vi.fn<NativeClient['request']>(), dispose: vi.fn(), instances: [] as Array<{ disposed: boolean }>,
   reportDiagnostic: undefined as ((message: string) => void) | undefined,
 }))
+vi.mock('../src/shared-native.ts', () => ({ createSharedNativeChannel: native.connect }))
 vi.mock('../src/native-build.ts', async importOriginal => ({
   ...await importOriginal<typeof import('../src/native-build.ts')>(),
   nativeHostArchitecture: native.architecture,
@@ -53,6 +55,7 @@ vi.mock('@deepseek-ai/dsh-cua/native-client', async importOriginal => ({
   NativeClient: class {
     disposed = false
     constructor(...args: ConstructorParameters<typeof NativeClient>) {
+      args[2](args[0], args[1])
       native.reportDiagnostic = args[3]
       native.instances.push(this)
     }
@@ -114,6 +117,7 @@ const imageData = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoA
 const imageMetadata = { pixelWidth: 1, pixelHeight: 1, bounds: { x: 2, y: 3, width: 1, height: 1 }, coordinateSpace: 'window-points', windowId: 7 }
 
 async function setup(model?: { provider: string; model: string }, ptc = false) {
+  native.connect.mockClear()
   native.cleanup.mockReset().mockResolvedValue({ dispatched: true })
   native.request.mockReset().mockResolvedValue([])
   native.dispose.mockReset()
@@ -157,7 +161,7 @@ it('requires an enclosing run_code before sending a directional key', async () =
   expect(native.request).not.toHaveBeenCalled()
 })
 
-it.each(['return', 'throw', 'pause'])('cleans up only the held W when run_code ends by %s', async (ending) => {
+it.each(['return', 'throw', 'pause', 'pause with cleanup error'])('cleans up only the held W when run_code ends by %s', async (ending) => {
   const f = await setup(undefined, true)
   await selectApplication(f)
   const held = new Set<string>()
@@ -176,6 +180,7 @@ it.each(['return', 'throw', 'pause'])('cleans up only the held W when run_code e
   native.cleanup.mockImplementation(async (method, params) => {
     expect(method).toBe('releaseHeldKeys')
     expect(runIds).toEqual(new Set([params.runId]))
+    if (ending === 'pause with cleanup error') throw new Error('release acknowledgement failed')
     for (const key of held) events.push(`${key}:up`)
     held.clear()
     return { dispatched: true }
@@ -186,10 +191,10 @@ it.each(['return', 'throw', 'pause'])('cleans up only the held W when run_code e
     output: { schema: {}, render: () => [] },
     async execute() {
       const keys = [...held]
-      if (ending === 'pause' && keys.length === 1) {
+      if (ending.startsWith('pause') && keys.length === 1) {
         controller.abort()
         await setImmediate()
-        expect(held.size).toBe(0)
+        expect(held.size).toBe(ending === 'pause' ? 0 : 1)
       }
       return keys
     },
@@ -204,7 +209,7 @@ it.each(['return', 'throw', 'pause'])('cleans up only the held W when run_code e
   ].join('\n')
   const result = await executeModelToolFixture(f.ctx, { agent: f.handle.agent, callId: ToolCallId('keyboard-run'),
     name: 'run_code', arguments: { code, description: 'Exercise held keys' }, signal: controller.signal })
-  expect(events, JSON.stringify(result.content)).toEqual(['w:down', 'd:down', 'd:up', 'w:up'])
+  expect(events, JSON.stringify(result.content)).toEqual(['w:down', 'd:down', 'd:up', ...ending === 'pause with cleanup error' ? [] : ['w:up']])
   expect(native.cleanup).toHaveBeenCalledTimes(1)
   expect(result.isError).toBe(ending !== 'return')
   if (ending === 'throw') expect(JSON.stringify(result.content)).toContain('program failed')

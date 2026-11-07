@@ -35,7 +35,6 @@ export function installHeldKeys(ctx: Context): NonNullable<CuaBackend['sendKeyEv
   return (client, params, execution) => {
     const run = execution.parent && runs.get(execution.parent)
     if (!run) throw new NativeError('INVALID_ARGUMENT', 'Use sendKeyEvent inside an active run_code execution')
-    if (run.client && run.client !== client) throw new NativeError('NATIVE_CLOSED', 'The keyboard connection changed; start a new run_code')
     run.client = client
     return client.request('sendKeyEvent', { ...params, runId: run.id }, execution.signal, execution.callId)
   }

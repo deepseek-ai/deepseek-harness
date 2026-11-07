@@ -159,7 +159,7 @@ Blender 键盘检查使用 `python3 packages/experimental/cua-macos/native/tests
 
 隔离的 Electron/Chromium 检查使用 `python3 packages/experimental/cua-macos/native/tests/electron_e2e.py --electron /absolute/path/to/Electron.app/Contents/MacOS/Electron`。省略 `--electron` 时使用桌面工作区已安装的运行时，检查不下载 Electron。渲染器禁用 Node 集成，启用上下文隔离和 Chromium 沙箱，使用独立 userData/sessionData/log 目录及本地 fixture 页面。渲染器的点击/输入事件通过主进程写出独立观察，测试动作仍通过原生 helper 执行。AX 轮询等待 Chromium 辅助功能启用后的真实控件。原生和 Electron 子进程组由测试持有，在删除临时文件前停止。可选产物包含仅有 fixture 的截图和私有请求记录。
 
-运行 `python3 packages/experimental/cua-macos/native/tests/capabilities_e2e.py --helper /absolute/helper --artifacts /private/evidence`，通过隔离的 AppKit 接收方验证未运行应用的发现和启动、Unicode 选区、多行纯文本/HTML 粘贴、带修饰键的中键手势、W 和 D 同时按住时的事件顺序及数字键盘键码。需要已有辅助功能/屏幕录制权限，接收方实际状态与分派结果分开记录。 添加 `--click-only` 可在后台测试窗口中验证按住时长、AX 路由和取消、超时后的松开事件，不发送键盘或剪贴板输入。
+运行 `python3 packages/experimental/cua-macos/native/tests/capabilities_e2e.py --helper /absolute/helper --artifacts /private/evidence`，通过隔离的 AppKit 接收方验证未运行应用的发现和启动、Unicode 选区、多行纯文本/HTML 粘贴、带修饰键的中键手势、W 和 D 同时按住时的事件顺序及数字键盘键码。需要已有辅助功能/屏幕录制权限，接收方实际状态与分派结果分开记录。添加 `--keyboard-only` 可用后台窗口验证 W、D 同时按住两秒、单独释放 D 和收尾时释放 W。添加 `--click-only` 可在后台测试窗口中验证按住时长、AX 路由和取消、超时后的松开事件，不发送键盘或剪贴板输入。
 
 
 运行 `python3 packages/experimental/cua-macos/native/tests/paste_e2e.py --artifacts /private/evidence`，验证自有 AppKit 应用在后台接收 Paste 动作但不读取数据时返回 `PASTE_NOT_CONSUMED`，以及前台读取同一次粘贴后成功。测试要求 Mac 已解锁并已授予辅助功能权限，只激活自有的两个应用，并独立记录收到的动作和文本以核对 helper 回复。

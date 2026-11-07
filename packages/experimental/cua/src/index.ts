@@ -127,7 +127,7 @@ export interface CuaBackend {
   guidance: string
   capabilities: CuaStartupCapabilities
   /** Dispatch a directional key through the provider's execution-scoped input owner, after application authorization. */
-  sendKeyEvent?: (client: NativeClient, params: Extract<CuaOperation, { method: 'sendKeyEvent' }>['params'],
+  sendKeyEvent?: (client: NativeClient, params: Record<string, JsonValue>,
     execution: Readonly<ToolExecution>) => Promise<JsonValue>
   /**
    * Build native permission parameters for the selected action and Client language.
@@ -214,7 +214,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       const signal = execution.signal
       signal.throwIfAborted()
       const client = execution.nativeClient
-      if (method === 'sendKeyEvent' && backend.sendKeyEvent) return backend.sendKeyEvent(client, parsedParams, execution)
+      if (method === 'sendKeyEvent' && backend.sendKeyEvent) return backend.sendKeyEvent(client, params, execution)
       const nativeParams = method === 'findApps'
         ? { ...params, maxAppMatches: config.maxAppMatches }
         : method === 'paste'
