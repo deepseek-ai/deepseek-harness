@@ -38,6 +38,39 @@
       {
         "type": "block-start",
         "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-ptc-ax-failure",
+          "name": "run_code",
+          "arguments": "{\"code\":\"const { writeFile, unlink } = await import('node:fs/promises');\\nconst { resolve } = await import('node:path');\\nconst { pathToFileURL } = await import('node:url');\\nconst { connectCua } = await import(pathToFileURL(resolve('cua-bridge.mjs')).href);\\nawait writeFile('fixture-ax-failure', '');\\ntry {\\n  const cua = connectCua(() => tools.cua);\\n  const app = await cua.getApp('test.fixture');\\n  const windows = await app.getWindows({ emit: false });\\n  const window = await app.getWindow(windows[0].windowId);\\n  const failures = [];\\n  for (const surface of [app, window]) {\\n    try { await surface.getAccessibilityTree(); throw new Error('Expected AX failure'); }\\n    catch (error) { if (!error.message.includes('Fixture accessibility read failed')) throw error; failures.push(error.message); }\\n  }\\n  const shot = await window.getScreenshot();\\n  let elementRefused = false;\\n  try { await window.invoke('0'); }\\n  catch (error) { if (!error.message.includes('Read getAccessibilityTree')) throw error; elementRefused = true; }\\n  if (!elementRefused) throw new Error('Element input accepted without an AX snapshot');\\n  return { axFailures: failures.length, screenshotWindow: shot.windowId, pngBytes: shot.bytes.length, elementRefused };\\n} finally { await unlink('fixture-ax-failure'); }\",\"description\":\"Capture through the object API despite application and window AX failures\"}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
         "blockType": "text"
       },
       {
@@ -45,7 +78,7 @@
         "index": 0,
         "block": {
           "type": "text",
-          "text": "Received native CUA values and one PNG screenshot through PTC. The PNG is 90 bytes with signature 89504e470d0a1a0a."
+          "text": "Received native CUA values and PNG screenshots through PTC. The object API captured a 90-byte PNG after two AX read failures and refused element input without an accessibility snapshot."
         }
       },
       {

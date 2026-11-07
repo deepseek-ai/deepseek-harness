@@ -74,6 +74,9 @@
     },
     {
       "path": "../../boot/config-editor"
+    },
+    {
+      "path": "../../util/error"
     }
   ],
   "exclude": [

@@ -1,5 +1,6 @@
 /** Object facade over logged native operations; its caller owns evaluator persistence. */
 import { Buffer } from 'node:buffer'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import type { z } from 'zod'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { ActionNamesResult, ActionResult, AppResult, AppsResult, CapabilitiesResult, FoundAppsResult, HoverResult, Request, ScreenshotResult, ShowResult, StateResult, WindowsResult } from './protocol.ts'
@@ -79,9 +80,7 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
       if (!request.success) throw new Error(`getApp ${requestIssueMessage(request.error.issues)}`)
       const capabilities = await currentCapabilities()
       const { appHandle } = AppResult.parse(await call('getApp', { selector }))
-      const app = objects.createCuaApp(appHandle, capabilities)
-      if (capabilities.appLevelAccessibility) await app.getAccessibilityTree({ emit: false })
-      return app
+      return objects.createCuaApp(appHandle, capabilities)
     },
   }
   return api
@@ -259,9 +258,13 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>, sink: CuaObser
         return windows
       },
       async getWindow(windowId): Promise<CuaWindow> {
-        const window = createCuaWindow(appHandle, windowId, capabilities)
-        await window.getAccessibilityTree({ emit: false })
-        return window
+        const parsed = WindowsResult.element.shape.windowId.safeParse(windowId)
+        if (!parsed.success) throw new HarnessError(`getWindow ${requestIssueMessage(parsed.error.issues, ['params', 'windowId'])}`, 'INVALID_ARGS')
+        const windows = WindowsResult.parse(await base.call('listWindows', {}))
+        if (!windows.some(window => window.windowId === windowId)) {
+          throw new HarnessError('Selected window is unavailable for this application; read getWindows again', 'CUA_WINDOW_UNAVAILABLE')
+        }
+        return createCuaWindow(appHandle, windowId, capabilities)
       },
     }
   }

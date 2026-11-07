@@ -238,9 +238,9 @@ export interface CuaApp extends CuaSurface {
    */
   getWindows(options?: CuaObservationOptions): Promise<CuaWindowInfo[]>
   /**
-   * Observe a specific window.
+   * Select a specific window.
    * @param windowId - ID obtained from getWindows.
-   * @returns A window object with its initial accessibility tree read silently; this updates the application's current snapshot.
+   * @returns A window object from the app’s current window list, without reading or replacing its accessibility snapshot.
    */
   getWindow(windowId: number): Promise<CuaWindow>
 }
@@ -272,9 +272,9 @@ export interface CuaApi {
    */
   getState(options?: CuaObservationOptions): Promise<{ apps: CuaAppInfo[]; browsers: [] }>
   /**
-   * Select an app, obtain consent, launch it in the background if necessary, and silently retain initial AX state.
+   * Select an app, obtain consent, and launch it in the background if necessary, without reading AX.
    * @param selector - Exact name, bundle ID, absolute application path or running PID string; ambiguous names reject.
-   * @returns An application handle tied to this process lifetime; its initial tree read becomes the current snapshot.
+   * @returns An application handle tied to this process lifetime; call getAccessibilityTree explicitly before element operations.
    */
   getApp(selector: string): Promise<CuaApp>
 }

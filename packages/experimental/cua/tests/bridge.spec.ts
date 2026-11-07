@@ -27,6 +27,7 @@ it('uses the current tool binding when a retained app is called by another execu
   const first = vi.fn(async (operation: CuaOperation): Promise<JsonValue> => {
     if (operation.method === 'getCapabilities') return capabilities
     if (operation.method === 'getApp') return selected
+    if (operation.method === 'listWindows') return snapshot.windows
     if (operation.method === 'getState') return { ...snapshot, windowId: operation.params.windowId ?? null }
     return snapshot
   })
@@ -35,6 +36,7 @@ it('uses the current tool binding when a retained app is called by another execu
   const cua = connectCua(() => current, text)
   const app = await cua.getApp('Editor')
   const window = await app.getWindow(23)
+  await window.getAccessibilityTree({ emit: false })
   const second = vi.fn(async (): Promise<JsonValue> => ({ dispatched: true }))
   current = second
 
@@ -69,6 +71,7 @@ it('returns screenshot bytes and metadata with one image-bearing tool call and n
   const tool = vi.fn(async (operation: CuaOperation): Promise<JsonValue> => {
     if (operation.method === 'getCapabilities') return capabilities
     if (operation.method === 'getApp') return selected
+    if (operation.method === 'listWindows') return snapshot.windows
     if (operation.method === 'getState') return { ...snapshot, windowId: operation.params.windowId ?? null }
     return {
       mimeType: 'image/png', data: PNG, pixelWidth: 1, pixelHeight: 1, windowId: 23, bounds, coordinateSpace: 'screenshot-pixels',
@@ -80,6 +83,6 @@ it('returns screenshot bytes and metadata with one image-bearing tool call and n
   text.mockClear()
 
   expect(await window.getScreenshot()).toEqual({ bytes: Uint8Array.from(Buffer.from(PNG, 'base64')), mimeType: 'image/png', pixelWidth: 1, pixelHeight: 1, windowId: 23 })
-  expect(tool.mock.calls.map(([operation]) => operation.method)).toEqual(['getCapabilities', 'getApp', 'getState', 'getState', 'screenshot'])
+  expect(tool.mock.calls.map(([operation]) => operation.method)).toEqual(['getCapabilities', 'getApp', 'listWindows', 'screenshot'])
   expect(text).not.toHaveBeenCalled()
 })

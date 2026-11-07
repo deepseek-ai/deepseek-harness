@@ -162,6 +162,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
     if (method === 'listWindows') return [window, axlessWindow]
     if (method === 'getState') {
       snapshots.delete(params.windowId ?? null)
+      if (existsSync(new URL('./fixture-ax-failure', import.meta.url))) refuse('NATIVE_ERROR', 'Fixture accessibility read failed')
       if (observationChanged) {
         observationChanged = false
         refuse('STALE_SNAPSHOT', 'Accessibility tree changed during observation; read fresh getAccessibilityTree')
