@@ -479,7 +479,6 @@ const EXPECTED_TOOLS = [
   'edit',
   'exit_plan_mode',
   'get_goal',
-  'interrupt_agent',
   'job_kill',
   'job_list',
   'job_output',
