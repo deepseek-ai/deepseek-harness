@@ -6,7 +6,6 @@ export const NS = 'subagent'
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
   'section.title': '子智能体',
-  'section.empty': '暂无子智能体',
   'progress.completed': '{count} 已完成',
   'progress.active': '{count} 进行中',
   'progress.inactive': '{count} 未运行',
@@ -53,7 +52,6 @@ export const zh = {
 /** English dictionary, key-identical to the Chinese source of truth. */
 export const en: Record<SubagentKey, string> = {
   'section.title': 'Subagents',
-  'section.empty': 'No subagents',
   'progress.completed': '{count} completed',
   'progress.active': '{count} in progress',
   'progress.inactive': '{count} not running',
@@ -103,7 +101,6 @@ export type SubagentKey = keyof typeof zh
 /** Japanese copy, checked against the English keys. */
 export const ja = {
   'section.title': 'サブエージェント',
-  'section.empty': 'サブエージェントはありません',
   'progress.completed': '{count}件完了',
   'progress.active': '{count}件進行中',
   'progress.inactive': '{count}件停止中',
@@ -150,7 +147,6 @@ export const ja = {
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
   'section.title': 'Subagentes',
-  'section.empty': 'No hay subagentes',
   'progress.completed': '{count} completado',
   'progress.active': '{count} en progreso',
   'progress.inactive': '{count} sin ejecutar',
@@ -197,7 +193,6 @@ export const es = {
 /** French dictionary, checked against the English keys. */
 export const fr = {
   'section.title': 'Sous-agents',
-  'section.empty': 'Aucun sous-agent',
   'progress.completed': '{count} terminé',
   'progress.active': '{count} en cours',
   'progress.inactive': '{count} à l’arrêt',
@@ -244,7 +239,6 @@ export const fr = {
 /** German dictionary, checked against the English keys. */
 export const de = {
   'section.title': 'Subagenten',
-  'section.empty': 'Keine Subagenten',
   'progress.completed': '{count} abgeschlossen',
   'progress.active': '{count} in Bearbeitung',
   'progress.inactive': '{count} nicht aktiv',
@@ -291,7 +285,6 @@ export const de = {
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
   'section.title': 'Субагенты',
-  'section.empty': 'Нет субагентов',
   'progress.completed': '{count} завершено',
   'progress.active': '{count} в процессе',
   'progress.inactive': '{count} не выполняются',
@@ -338,7 +331,6 @@ export const ru = {
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
   'section.title': 'Subagentes',
-  'section.empty': 'Nenhum subagente',
   'progress.completed': '{count} concluído',
   'progress.active': '{count} em andamento',
   'progress.inactive': '{count} sem execução',

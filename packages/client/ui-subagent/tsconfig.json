@@ -24,9 +24,6 @@
       "path": "../../subagent/subagent"
     },
     {
-      "path": "../../team/agent-team"
-    },
-    {
       "path": "../connection/tsconfig.client.json"
     },
     {

@@ -7,7 +7,6 @@ import type {
   SessionListState, SessionSummary, SessionSnapshot,
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SubagentAddress, SubagentCatalogEntry } from '@deepseek-ai/dsh-subagent/client'
-import type { TeamProjection, TeamTaskId, TeamTaskView } from '@deepseek-ai/dsh-agent-team/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import { SubagentHeaderLineage, type SubagentHeaderLineageProps } from '../src/client/SubagentHeaderLineage.tsx'
@@ -36,17 +35,10 @@ type CatalogFixtureEntry<Entry = SubagentCatalogEntry> = Entry extends SubagentC
   : never
 
 type CatalogFixture = {
-  team?: TeamProjection
   entries: readonly CatalogFixtureEntry[]
   state: SessionListState['projectionsBySession'][SessionId]['state']
   error: SessionListState['projectionsBySession'][SessionId]['error']
 }
-
-const sharedTask: TeamTaskView = {
-  id: 'shared-task' as TeamTaskId, revision: 1, subject: 'Plan shared work', description: 'Prepare the implementation',
-  status: 'pending', blockedBy: [], writeScopes: [], ready: true, writeScopeWarnings: [],
-}
-const sharedTeam: TeamProjection = { enabled: true, tasks: [sharedTask] }
 
 function catalog(over: Partial<CatalogFixture> = {}): CatalogFixture {
   return {
@@ -94,7 +86,6 @@ function props(
     projectionsBySession: Object.fromEntries(Object.entries(catalogs).map(([id, catalog]) => [id, {
       state: catalog.state, error: catalog.error,
       values: {
-        ...catalog.team === undefined ? {} : { agentTeam: catalog.team },
         subagentCatalog: catalog.entries.map(({ activity: _activity, ...entry }) => ({ ...entry, createdAt: 1 })),
       },
     }])) ,
@@ -135,7 +126,6 @@ function props(
     ...standard,
     sessionId: PARENT,
     useSessions,
-    useFooterAvailable: <T,>(select: (available: boolean) => T): T => select(true),
     useSessionStatus: <T,>(select: (snapshot: SessionStatusSnapshot) => T): T => select(statuses),
     useSession: <T,>(select: (snapshot: SessionSnapshot) => T): T => select(snapshot),
     openChild: vi.fn(),
@@ -189,8 +179,6 @@ function enableTooltips(): void {
 function HeaderCatalog(props: HeaderCatalogProps) {
   const sectionProps: SubagentsSectionProps = {
     ...props, sessionId: props.lineageSessionId, presentation: 'docked', dismissOverlay: props.dismissOverlay ?? vi.fn(),
-    useProjection: ((_key: 'agentTeam', selector: (value: TeamProjection | undefined) => boolean) =>
-      props.useSessions(state => selector(state.projectionsBySession[props.lineageSessionId]?.values.agentTeam))) as SubagentsSectionProps['useProjection'],
   }
   return (
     <>
@@ -202,23 +190,12 @@ function HeaderCatalog(props: HeaderCatalogProps) {
 
 describe('SubagentHeaderLineage', () => {
 
-  it.each([
-    { name: 'absent Team projection', team: undefined, footer: true },
-    { name: 'disabled Team mode', team: { ...sharedTeam, enabled: false }, footer: true },
-    { name: 'empty tasks', team: { enabled: true, tasks: [] }, footer: true },
-    { name: 'deleted-only tasks', team: { enabled: true, tasks: [{ ...sharedTask, status: 'deleted' }] }, footer: true },
-    { name: 'failure without tasks', team: { enabled: true, tasks: [], failure: 'Invalid task record' }, footer: true },
-    { name: 'unavailable task footer', team: sharedTeam, footer: false },
-  ] satisfies { name: string; team: TeamProjection | undefined; footer: boolean }[])(
-    'omits section headings from a members-only catalog with $name', ({ team, footer }) => {
-      const input = props(catalog({ ...team === undefined ? {} : { team } }))
-      render(<HeaderCatalog {...input} useFooterAvailable={select => select(footer)} />)
-      expect(screen.getByRole('tree')).toBeTruthy()
-      expect(screen.queryByRole('heading')).toBeNull()
-      expect(document.querySelector('[data-subagent-section-header]')).toBeNull()
-      expect(screen.queryByText(zh['section.empty'])).toBeNull()
-    },
-  )
+  it('omits section headings from a catalog of members', () => {
+    render(<HeaderCatalog {...props(catalog())} />)
+    expect(screen.getByRole('tree')).toBeTruthy()
+    expect(screen.queryByRole('heading')).toBeNull()
+    expect(document.querySelector('[data-subagent-section-header]')).toBeNull()
+  })
 
   it.each([undefined, ''])('keeps a single ID line when the creation description is %s', (label) => {
     const input = props(catalog({
@@ -252,15 +229,9 @@ describe('SubagentHeaderLineage', () => {
     expect(input.openChild).toHaveBeenCalledExactlyOnceWith({ parentSessionId: PARENT, childSessionId: CHILD, mode: 'continuable' })
   })
 
-  it('leaves task-board keys alone and dismisses the shared panel from outside focus', () => {
+  it('leaves Escape from outside focus alone', () => {
     const input = props(catalog())
-    render(<><textarea aria-label="Composer" /><HeaderCatalog {...input}
-      renderSlot={() => <button type="button">Expand task</button>}
-    /></>)
-    const expand = screen.getByRole('button', { name: 'Expand task' })
-    expand.focus()
-    fireEvent.keyDown(expand, { key: 'ArrowDown' })
-    expect(document.activeElement).toBe(expand)
+    render(<><textarea aria-label="Composer" /><HeaderCatalog {...input} /></>)
     const composer = screen.getByRole('textbox')
     composer.focus()
     fireEvent.keyDown(composer, { key: 'Escape' })
@@ -598,7 +569,6 @@ describe('SubagentHeaderLineage', () => {
 
   it.each([undefined, ''])('uses the Session id in the breadcrumb when the creation description is %s', (label) => {
     const input = props(catalog({
-      team: sharedTeam,
       entries: [{ id: CHILD, mode: 'one-shot', activity: 'inactive', ...label === undefined ? {} : { label } }],
     }), {}, { [CHILD]: { ...summary(CHILD, 1), parentId: PARENT, origin: 'subagent' } })
     render(<HeaderCatalog {...input} sessionId={CHILD} lineageSessionId={CHILD} />)
@@ -606,7 +576,6 @@ describe('SubagentHeaderLineage', () => {
     fireEvent.click(switcher)
     expect(screen.getByRole('treeitem', { name: new RegExp(CHILD) })).toBeTruthy()
     expect(screen.queryByRole('heading')).toBeNull()
-    expect(screen.queryByText(zh['section.empty'])).toBeNull()
   })
 
   it('falls back to the catalog session id when the selected row has no label', () => {
@@ -1152,31 +1121,15 @@ describe('SubagentsSection', () => {
     expect(screen.queryByRole('treeitem', { name: /great/ })).toBeNull()
   })
 
-  it('keeps shared tasks and failures reachable without subagents, and hides an unavailable footer', () => {
-    const input = props(catalog({ entries: [] }))
-    const initial = input.useSessions(state => state)
-    const mode: { enabled: boolean; tasks: TeamTaskView[]; failure?: string } = { enabled: true, tasks: [] }
-    const current = {
-      ...input,
-      useSessions: <T,>(select: (snapshot: SessionListState) => T): T => select({
-        ...initial,
-        projectionsBySession: { [PARENT]: { state: 'ready', error: null, values: { subagentCatalog: [], agentTeam: mode } } },
-      }),
-      renderSlot: () => <section aria-label="Shared tasks">Tasks</section>,
-    }
-    const view = render(<HeaderCatalog {...current} />)
+  it('renders nothing without subagents or a failed read, and keeps a failed read reachable', () => {
+    const empty = render(<HeaderCatalog {...props(catalog({ entries: [] }))} />)
     expect(document.querySelector('[data-subagents-section]')).toBeNull()
-    mode.tasks = [sharedTask]
-    view.rerender(<HeaderCatalog {...current} />)
-    expect(screen.getByText(zh['section.empty'])).toBeTruthy()
-    expect(screen.queryByRole('tree')).toBeNull()
-    expect(screen.getByRole('region', { name: 'Shared tasks' })).toBeTruthy()
-    mode.tasks = [{ ...sharedTask, status: 'deleted' }]
-    mode.failure = 'Invalid task record'
-    view.rerender(<HeaderCatalog {...current} />)
+    empty.unmount()
+    const absent = render(<SubagentsSection {...{ ...props(undefined), presentation: 'docked', dismissOverlay: vi.fn() } as SubagentsSectionProps} />)
+    expect(absent.container.innerHTML).toBe('')
+    absent.unmount()
+    render(<HeaderCatalog {...props(catalog({ entries: [], state: 'error', error: new RemoteError('gateway/internal', 'read failed', {}) }))} />)
     expect(document.querySelector('[data-subagents-section]')).not.toBeNull()
-    view.rerender(<HeaderCatalog {...current} useFooterAvailable={select => select(false)} />)
-    expect(document.querySelector('[data-subagents-section]')).toBeNull()
   })
 
   it('shows direct-member progress beside the section title and omits zero counts', () => {
@@ -1210,19 +1163,6 @@ describe('SubagentsSection', () => {
     const none = props(undefined)
     view.rerender(<SubagentsProgress {...none} sessionId={PARENT} />)
     expect(view.container.innerHTML).toBe('')
-  })
-
-  it('shows shared tasks before the Session list holds its catalog', () => {
-    const input = props(undefined)
-    const sectionProps: SubagentsSectionProps = {
-      ...input, presentation: 'docked', dismissOverlay: vi.fn(),
-      useProjection: ((_key: 'agentTeam', selector: (value: TeamProjection | undefined) => boolean) =>
-        selector(sharedTeam)) as SubagentsSectionProps['useProjection'],
-      renderSlot: (() => <section aria-label="Shared tasks">Tasks</section>) as SubagentsSectionProps['renderSlot'],
-    }
-    render(<SubagentsSection {...sectionProps} />)
-    expect(screen.getByRole('region', { name: 'Shared tasks' })).toBeTruthy()
-    expect(screen.getByText('正在加载子智能体…')).toBeTruthy()
   })
 })
 

@@ -1,5 +1,5 @@
 ---
-description: "Inspect the shared task board in the Web Session panel's Subagents section."
+description: "Inspect the shared task board in the Web Session panel's Shared tasks section."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package displays shared tasks below the subagent tree in the Session panel's Subagents section. Host projection frames keep task state current without a refresh control. Ordinary subagent navigation owns the member list and teammate conversations. The Web bundle loads this package; it adds no model-facing input.
+This package adds the Shared tasks section to the Session panel, between Subagents and Background jobs. Host projection frames keep task state current without a refresh control. Ordinary subagent navigation owns the member list and teammate conversations. The Web bundle loads this package; it adds no model-facing input.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ This package displays shared tasks below the subagent tree in the Session panel'
 <a id="use-this-package"></a>
 ## Use this package
 
-In the root conversation’s model and reasoning menu, turn on **Enable agent teamwork**. New Sessions default to off. While enabled, open the root conversation’s Session panel to see members in the Subagents section above shared tasks. Child conversations keep subagent navigation without a Team switch, including before their subagent address is discovered. The board reads the current Session’s `agentTeam` projection, so it appears only in a Session whose own projection is enabled. The Subagents section is hidden when both the subagent catalog and shared tasks are empty; catalog and task-record errors remain visible. When the catalog loaded empty, a section shown for shared tasks or a task-record error shows “No subagents” above them. Without shared tasks or a task-record error, the section shows only subagent navigation, without a shared-task module or empty-state copy. Turning it off retains tasks and subagents. The entire Team row highlights on hover and toggles the selection when clicked, except for its independent information button. The switch calls `remote.agentTeams.setEnabled`, waits for the saved projection and reports failures through the menu host; the row cannot toggle while locked or saving. The adjacent information button explains shared-task coordination and additional token use on hover, keyboard focus, or click/tap without changing the selection. Escape or an outside press dismisses the explanation.
+In the root conversation’s model and reasoning menu, turn on **Enable agent teamwork**. New Sessions default to off. While enabled, open the root conversation’s Session panel to see members in the Subagents section and tasks in the Shared tasks section below it. Child conversations keep subagent navigation without a Team switch, including before their subagent address is discovered. The board reads the current Session’s `agentTeam` projection, so it appears only in a Session whose own projection is enabled. The Shared tasks section is hidden while the Session has no shared tasks and no task-record error, independently of the Subagents section. Turning it off retains tasks and subagents. The entire Team row highlights on hover and toggles the selection when clicked, except for its independent information button. The switch calls `remote.agentTeams.setEnabled`, waits for the saved projection and reports failures through the menu host; the row cannot toggle while locked or saving. The adjacent information button explains shared-task coordination and additional token use on hover, keyboard focus, or click/tap without changing the selection. Escape or an outside press dismisses the explanation.
 
 Turning off the menu switch requires confirmation after the Session records a model request; a model choice alone does not require it. The switch waits while request history is unavailable. The dialog explains the tool, coordination, and possible cache effects without deleting task records. Cancel, Escape, or closing the dialog leaves Team mode unchanged. Dismissing the dialog returns focus to the model selector. Confirmation targets the originating Session, waits for the save, and keeps failures visible for retry; it does not depend on the model menu remaining open. Team mode has no slash command; menu changes create no `command/run` or `command/done` records.
 
@@ -37,7 +37,7 @@ The [Web bundle](../../bundle/web-app/README.md) loads this package by default. 
 
 Ready pending tasks use idle, blocked pending tasks use warning, in-progress tasks use ongoing, and completed tasks use done.
 
-The noncollapsible Shared tasks header uses a Checklist icon and completed, in-progress, and pending counts, with zero counts omitted and wording and separators matching the input task list. Compact read-only rows show the subject, status, and a chevron, with 13px primary titles and hover geometry aligned to subagent rows; expanded details use 12px text. Task rows use 7px vertical padding, 6px horizontal padding, and 7px gaps to align their clickable content with subagent rows. All task details start closed; opening one closes the previous task. Details show only the full description when present, followed by a single-line owner label and owner name in the same color with a 4px gap. Long owner names are ellipsized and reveal their full text in a tooltip only when clipped. Task-text and owner tooltips appear after 500ms of hover. Owners display the task's saved `ownerName`, such as `lead` or `reviewer/checker`, independently of loaded subagent catalogs. A task without `ownerName` displays its `ownerId`; a task without either field displays the localized unowned label. Below a nonempty subagent tree, the board has a 4px top margin rather than a divider. The Shared tasks header keeps a 7px icon/title gap and an additional 4px before its counts. The Session panel scrolls the board; task lists and details have no nested scrolling. Agents mutate tasks through tools; the panel provides no mutation controls. A projection failure appears separately above any retained tasks and remains visible when no tasks exist.
+The panel draws the section title, and the title control (`conversation.session.panel.section.actions`, key `shared-tasks`) shows completed, in-progress, and pending counts, with zero counts omitted and wording and separators matching the input task list. Compact read-only rows show the subject, status, and a chevron, with 13px primary titles; expanded details use 12px text and start at the title's edge. Task rows follow the panel's columns, like subagent rows: the status glyph's center 14px from the row start, titles at 30px, and the chevron's center 14px from the row end. All task details start closed; opening one closes the previous task. Details show only the full description when present, followed by a single-line owner label and owner name in the same color with a 4px gap. Long owner names are ellipsized and reveal their full text in a tooltip only when clipped. Task-text and owner tooltips appear after 500ms of hover. Owners display the task's saved `ownerName`, such as `lead` or `reviewer/checker`, independently of loaded subagent catalogs. A task without `ownerName` displays its `ownerId`; a task without either field displays the localized unowned label. The Session panel scrolls the board; task lists and details have no nested scrolling. Agents mutate tasks through tools; the panel provides no mutation controls. A projection failure appears separately above any retained tasks and remains visible when no tasks exist.
 
 -----
 
@@ -47,15 +47,15 @@ The noncollapsible Shared tasks header uses a Checklist icon and completed, in-p
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The Client export registers its locale dictionaries, its Subagents section footer, and its model-menu slots through Cordis effects; it mounts no Remote namespace. Disposing the plugin fiber removes its registrations.
+The Client export registers its locale dictionaries, its Session panel section with the title control, and its model-menu slots through Cordis effects; it mounts no Remote namespace. Disposing the plugin fiber removes its registrations.
 
-The Session panel owns showing, scrolling, and dismissing the Subagents section, and `dsh-client-ui-subagent` owns its tree. This package contributes the task board to the section’s `conversation.session.panel.subagents.footer` slot below the tree. The board reads the current Session’s mode and tasks through `useProjection('agentTeam')`. An available, enabled projection supplies the task section only when it contains nondeleted tasks; a projection failure can render independently without a task section. Task IDs, dependencies, readiness, write scopes, and write scope warnings remain in task data but are not displayed as detail fields; blocked pending tasks still use the warning glyph.
+The Session panel owns showing, scrolling, and dismissing the section, which registers as `shared-tasks` at `order: 250`. The board reads the current Session’s mode and tasks through `useProjection('agentTeam')`. An available, enabled projection supplies the task section only when it contains nondeleted tasks; a projection failure can render independently without a task section. Task IDs, dependencies, readiness, write scopes, and write scope warnings remain in task data but are not displayed as detail fields; blocked pending tasks still use the warning glyph.
 
 The [Chat visibility policy](../ui-chat/src/client/contract/chat-visibility.ts) hides only historical commands named `team` whose trimmed recorded arguments are exactly `on` or `off` and whose outcome is pending or successful. The remaining receipts use a localized running summary or preserve raw successful output, with a localized completed fallback when that text is empty. Rendering neither reads the current Team projection nor parses English outcome text. Filtering and localization affect only Chat presentation: command records, logs, trajectory, and raw errors remain unchanged.
 
 | File | Role |
 |---|---|
-| [`src/client/mount.ts`](src/client/mount.ts) | Locale, Subagents section footer, and model-menu registrations |
+| [`src/client/mount.ts`](src/client/mount.ts) | Locale, Session panel section, and model-menu registrations |
 | [`src/client/TeamBoard.tsx`](src/client/TeamBoard.tsx) | Projection-derived task section |
 | [`src/client/locales.ts`](src/client/locales.ts) | Panel and command copy in eight languages |
 | [`src/index.ts`](src/index.ts) | Inert Host entry |
@@ -69,7 +69,7 @@ The [Chat visibility policy](../ui-chat/src/client/contract/chat-visibility.ts) 
 
 - [Web bundle](../../bundle/web-app/README.md) — mounts the Client plugin by default.
 - [Agent Teams service](../../team/agent-team/README.md) — authoritative task and projection behavior.
-- [Subagent UI](../ui-subagent/README.md) — the Session panel’s Subagents section, whose footer slot hosts the task board.
+- [Session panel](../ui-session-panel/README.md) — hosts the Shared tasks section and draws its title.
 
 -----
 

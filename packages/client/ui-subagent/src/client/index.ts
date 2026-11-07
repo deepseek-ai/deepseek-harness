@@ -5,7 +5,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ComposerChainProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { SubagentHeaderLineage } from './SubagentHeaderLineage.tsx'
 import type { SubagentCatalogInjected } from './SubagentCatalog.tsx'
-import { SubagentsProgress, SubagentsSection, type SubagentsSectionInjected } from './SubagentsSection.tsx'
+import { SubagentsProgress, SubagentsSection } from './SubagentsSection.tsx'
 import {
   SubagentReadOnlyComposer, type SubagentReadOnlyMatch,
 } from './SubagentReadOnlyComposer.tsx'
@@ -18,7 +18,6 @@ import type {} from '@deepseek-ai/dsh-client-ui-session-panel/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { en, ja, es, fr, de, ru, pt, NS, zh, type SubagentKey } from './locales.ts'
-export type * from './slots.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -29,7 +28,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 export type { SubagentCatalogInjected } from './SubagentCatalog.tsx'
 export type { SubagentHeaderLineageProps } from './SubagentHeaderLineage.tsx'
-export type { SubagentsProgressProps, SubagentsSectionInjected, SubagentsSectionProps } from './SubagentsSection.tsx'
+export type { SubagentsProgressProps, SubagentsSectionProps } from './SubagentsSection.tsx'
 export type {
   SubagentReadOnlyComposerProps, SubagentReadOnlyMatch,
 } from './SubagentReadOnlyComposer.tsx'
@@ -71,10 +70,6 @@ export function apply(ctx: ClientContext): void {
       void ctx.sessions.refreshProjections(parentSessionId)
     },
   })
-  const footerAvailable = {
-    getSnapshot: () => ctx.slots.entries('conversation.session.panel.subagents.footer').length > 0,
-    subscribe: (listener: () => void) => ctx.slots.subscribe('conversation.session.panel.subagents.footer', listener),
-  }
   ctx.slots.inject(
     'conversation.session.header.lineage',
     () => ctx.slots.register({
@@ -87,14 +82,11 @@ export function apply(ctx: ClientContext): void {
     yield ctx.slots.register({
       name: 'conversation.session.panel.section',
       id: 'subagents',
-      // After change requests (100), before background jobs (300).
+      // After change requests (100), before shared tasks (250).
       order: 200,
       label: () => t('section.title'),
       locale: NS,
-      inject: (sessionId): SubagentsSectionInjected => ({
-        ...catalogActions(sessionId), hooks: { footerAvailable },
-      }),
-      children: { 'conversation.session.panel.subagents.footer': { kind: 'list', scope: 'session' } },
+      inject: catalogActions,
     }, SubagentsSection)
     yield ctx.slots.register({
       name: 'conversation.session.panel.section.actions',

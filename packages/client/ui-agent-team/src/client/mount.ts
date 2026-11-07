@@ -2,7 +2,7 @@
 
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
-import type {} from '@deepseek-ai/dsh-client-ui-subagent/client'
+import type {} from '@deepseek-ai/dsh-client-ui-session-panel/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
@@ -12,7 +12,7 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { TeamDisableConfirmation, type TeamDisableConfirmationInjected, type TeamDisableRequest } from './TeamDisableConfirmation.tsx'
 import { TeamModeToggle, type TeamModeToggleInjected } from './TeamModeToggle.tsx'
-import { TeamBoard } from './TeamBoard.tsx'
+import { TeamBoard, TeamProgress } from './TeamBoard.tsx'
 import { TeamCommandRow } from './TeamCommandRow.tsx'
 import { en, ja, es, fr, de, ru, pt, NS, zh, type TeamKey } from './locales.ts'
 
@@ -27,12 +27,13 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 export const inject = ['slots', 'locale']
 
 /**
- * Register the task-board dictionaries and subagent catalog sections.
- * The panel reads the root Session’s `agentTeam` projection through standard Session hooks.
+ * Register the task-board dictionaries and the Session panel's shared tasks section.
+ * The section reads the root Session’s `agentTeam` projection through standard Session hooks.
  * @param ctx - Client Context carrying the injected locale and slot services.
  */
 export function registerAgentTeamUi(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'client-ui-agent-team: dictionaries')
+  const t = ctx.locale.bind(NS)
   ctx.slots.inject('conversation.chat.commandview', () => ctx.slots.register({
     name: 'conversation.chat.commandview', key: 'team', locale: NS,
   }, TeamCommandRow))
@@ -65,7 +66,19 @@ export function registerAgentTeamUi(ctx: ClientContext): void {
       }, TeamModeToggle))
     })
   })
-  ctx.slots.inject('conversation.session.panel.subagents.footer', () => ctx.slots.register({
-    name: 'conversation.session.panel.subagents.footer', id: 'agent-team', locale: NS,
-  }, TeamBoard))
+  ctx.slots.inject('conversation.session.panel.section', function* () {
+    yield ctx.slots.register({
+      name: 'conversation.session.panel.section',
+      id: 'shared-tasks',
+      // After subagents (200), before background jobs (300).
+      order: 250,
+      label: () => t('tasks'),
+      locale: NS,
+    }, TeamBoard)
+    yield ctx.slots.register({
+      name: 'conversation.session.panel.section.actions',
+      key: 'shared-tasks',
+      locale: NS,
+    }, TeamProgress)
+  })
 }

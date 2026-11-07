@@ -8,7 +8,7 @@ import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-sess
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
-import { TeamBoard, type TeamBoardProps } from '../src/client/TeamBoard.tsx'
+import { TeamBoard, TeamProgress, type TeamBoardProps, type TeamProgressProps } from '../src/client/TeamBoard.tsx'
 import { en, zh } from '../src/client/locales.ts'
 
 afterEach(() => {
@@ -108,14 +108,19 @@ function enableTooltips(): void {
   vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
 }
 
+/** The text the progress beside the section title renders for these props. */
+function progressText(props: TeamBoardProps): string {
+  const view = render(<TeamProgress {...props as unknown as TeamProgressProps} />)
+  const text = view.container.textContent
+  view.unmount()
+  return text
+}
+
 describe('TeamBoard', () => {
-  it('shows a nonclickable Checklist header and compact initially closed rows', () => {
+  it('leaves the title to the panel and shows compact initially closed rows', () => {
     const b = bench()
     render(<TeamBoard {...b.props} />)
-    const heading = screen.getByRole('heading')
-    expect(heading.textContent).toBe(`${zh.tasks}${b.props.t('progress.active', { count: 1 })}`)
-    expect(heading.querySelector('button')).toBeNull()
-    expect(heading.querySelector('[data-icon="dsw-icon-checklist-outline-regular"]')).toBeTruthy()
+    expect(screen.queryByRole('heading')).toBeNull()
     expect(screen.getAllByRole('button')).toEqual([row()])
     expect(row().getAttribute('aria-expanded')).toBe('false')
     expect(row().textContent).toBe(task.subject)
@@ -172,9 +177,9 @@ describe('TeamBoard', () => {
     ] } })
     render(<TeamBoard {...b.props} />)
     expect(screen.getAllByRole('button').map(button => button.textContent)).toEqual(['Pending first', 'Completed second', 'Active third'])
-    expect(screen.getByRole('heading').textContent).toBe(`${zh.tasks}${[
+    expect(progressText(b.props)).toBe([
       b.props.t('progress.completed', { count: 1 }), b.props.t('progress.active', { count: 1 }), b.props.t('progress.pending', { count: 1 }),
-    ].join('\u2002·\u2002')}`)
+    ].join('\u2002·\u2002'))
     expect(screen.queryByText('Deleted task')).toBeNull()
     expect(row('Pending first').querySelector('[data-state="idle"]')).toBeTruthy()
     expect(row('Completed second').querySelector('[data-state="done"]')).toBeTruthy()
@@ -244,6 +249,7 @@ describe('TeamBoard', () => {
     const b = bench()
     render(<TeamBoard {...b.props} />)
     setProjection(b.sessions, SESSION, { ...team, enabled: false })
+    expect(progressText(b.props)).toBe('')
     expect(screen.queryByRole('region')).toBeNull()
     expect(screen.queryByText(task.subject)).toBeNull()
     setProjection(b.sessions, SESSION, team)
@@ -283,7 +289,6 @@ describe('TeamBoard', () => {
     const view = render(<TeamBoard {...b.props} />)
     expect(screen.getByRole('alert').textContent).toBe('任务记录无效：revision is not contiguous')
     expect(row()).toBeTruthy()
-    expect(screen.getByRole('heading')).toBeTruthy()
     for (const tasks of [[], [{ ...task, status: 'deleted' as const }]]) {
       setProjectionSnapshot(b.sessions, SESSION, { state: 'ready', error: null, values: {
         agentTeam: { enabled: true, tasks, failure: 'invalid task' },
@@ -293,11 +298,8 @@ describe('TeamBoard', () => {
       expect(alert.textContent).toBe('任务记录无效：invalid task')
       expect(screen.getAllByRole('alert')).toHaveLength(1)
       expect(view.container.textContent).toBe(alert.textContent)
-      expect(view.container.querySelector('[data-with-members="true"]')).toBeNull()
-      expect(screen.queryByRole('heading')).toBeNull()
-      expect(screen.queryByRole('region')).toBeNull()
       expect(screen.queryByText(zh.empty)).toBeNull()
-      expect(document.querySelector('[data-team-panel]')).toBeNull()
+      expect(progressText(b.props)).toBe('')
     }
     setProjection(b.sessions, SESSION, { enabled: false, tasks: [], failure: 'invalid task' })
     expect(view.container.childElementCount).toBe(0)
@@ -334,7 +336,7 @@ describe('TeamBoard', () => {
   it('uses translated English progress and details without Show more or Show less controls', () => {
     const b = bench()
     render(<TeamBoard {...b.props} t={makeTranslate(en)} />)
-    expect(screen.getByRole('heading').textContent).toBe(`${en.tasks}${makeTranslate(en)('progress.active', { count: 1 })}`)
+    expect(progressText({ ...b.props, t: makeTranslate(en) })).toBe(makeTranslate(en)('progress.active', { count: 1 }))
     fireEvent.click(row())
     expect(ownerValue()).toBe('lead')
     expect(document.querySelector('[data-team-task-owner]')?.textContent).toBe(`${en.owner}: lead`)

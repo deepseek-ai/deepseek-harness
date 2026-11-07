@@ -120,35 +120,83 @@
   }
 }
 
-/* Progress beside the Session panel section title, one line. */
+/* Progress beside the Session panel section title, one line that clips before the title does. */
 .sectionProgress {
+  min-width: 0;
   overflow: hidden;
   color: var(--dsw-alias-label-tertiary);
   font: var(--dsw-font-xxs-12);
+  font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* The Session panel section supplies the inset and scrolling. */
+/* The Session panel section supplies the inset and scrolling. Rows share the
+   panel's columns: the status glyph's center 14px from the row start, text at
+   30px, and the chevron's center 14px from the row end. */
 .sectionBody {
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
 
-.sectionEmpty {
-  margin: 0;
-  padding: 0 7px 8px 28px;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 12px;
+.sectionBody .row {
+  gap: 8px;
+  padding: 4px 6px;
+}
+
+.sectionBody .clickarea {
+  gap: 8px;
+  border-radius: var(--dsw-radius-sm);
+}
+
+.sectionBody .rowActivitySlot {
+  width: 16px;
+  height: 18px;
+}
+
+.sectionBody .label {
+  line-height: 18px;
+}
+
+.sectionBody .metrics {
+  grid-template-rows: 18px 17px;
+}
+
+.sectionBody .metricToken {
+  line-height: 18px;
+}
+
+.sectionBody .metricDuration {
+  line-height: 17px;
+}
+
+/* The chevron shares the row's highlight: its glyph darkens without a fill. */
+.sectionBody .sidebarButton,
+.sectionBody .sidebarSpace {
+  align-self: center;
+  width: 24px;
+  height: 24px;
+  margin: 0 -4px;
+  padding: 0;
+  border-radius: var(--dsw-radius-xs);
+}
+
+.sectionBody .sidebarButton:focus-visible {
+  background: transparent;
+}
+
+@media (hover: hover) {
+  .sectionBody .sidebarButton:hover {
+    background: transparent;
+  }
 }
 
 .node {
   position: relative;
   min-width: 0;
 }
-.menuBody > [role="tree"] > .node,
-.sectionBody > [role="tree"] > .node {
+.menuBody > [role="tree"] > .node {
   margin-left: -2px;
 }
 

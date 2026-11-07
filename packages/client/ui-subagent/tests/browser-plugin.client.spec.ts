@@ -13,7 +13,6 @@ import type { ComposerChainProps } from '@deepseek-ai/dsh-client-ui-conversation
 import { apply as applyLocale, inject as localeInject } from '@deepseek-ai/dsh-client-locale/client'
 import { SubagentHeaderLineage } from '../src/client/SubagentHeaderLineage.tsx'
 import type { SubagentCatalogInjected } from '../src/client/SubagentCatalog.tsx'
-import type { SubagentsSectionInjected } from '../src/client/SubagentsSection.tsx'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 import { en } from '../src/client/locales.ts'
 import {
@@ -114,14 +113,13 @@ describe('apply', () => {
   it('keeps the root catalog extension available when optional Sidebar services arrive', async () => {
     const { ctx } = await fullBench(FAMILY)
     onTestFinished(() => ctx.fiber.dispose())
-    ctx.slots.register({ name: 'conversation.session.panel.subagents.footer', id: 'test-content' }, () => null)
     const registerResource = vi.fn(() => () => {})
     const registerTab = vi.fn(() => () => {})
     ctx.provide('resources', { register: registerResource } as never)
     ctx.provide('sidebarRightTabs', { register: registerTab } as never)
     await vi.waitFor(() => { expect(registerResource).toHaveBeenCalledOnce() })
     expect(registerTab).toHaveBeenCalledOnce()
-    expect(ctx.slots.entries('conversation.session.panel.subagents.footer')).toHaveLength(1)
+    expect(ctx.slots.entries('conversation.session.panel.section').map(entry => entry.options.id)).toEqual(['subagents'])
   })
 
   it('registers catalog actions and selects read-only subagent composers from session facts', async () => {
@@ -157,20 +155,8 @@ describe('apply', () => {
     expect(sectionEntry.options.order).toBe(200)
     expect(resolveSlotLabel(sectionEntry.options.label)).toBe(en['section.title'])
     expect(ctx.slots.entries('conversation.session.panel.section.actions').map(entry => entry.options.key)).toEqual(['subagents'])
-    const sectionProps = (sectionEntry.inject as (id: SessionId) => SubagentsSectionInjected)(sid('parent'))
-    const source = sectionProps.hooks.footerAvailable
-    const changed = vi.fn()
-    const unsubscribe = source.subscribe(changed)
-    expect(source.getSnapshot()).toBe(false)
-    const remove = ctx.slots.register({
-      name: 'conversation.session.panel.subagents.footer', id: 'test-footer',
-    }, () => null)
-    expect(source.getSnapshot()).toBe(true)
-    await vi.waitFor(() => { expect(changed).toHaveBeenCalledOnce() })
-    remove()
-    expect(source.getSnapshot()).toBe(false)
-    await vi.waitFor(() => { expect(changed).toHaveBeenCalledTimes(2) })
-    unsubscribe()
+    const sectionActions = (sectionEntry.inject as (id: SessionId) => SubagentCatalogInjected)(sid('parent'))
+    expect(Object.keys(sectionActions).sort()).toEqual(['openChild', 'openChildAside', 'refreshProjection'])
 
     const composerEntry = ctx.slots.entries('conversation.composer')
       .find(entry => entry.component === SubagentReadOnlyComposer)!
