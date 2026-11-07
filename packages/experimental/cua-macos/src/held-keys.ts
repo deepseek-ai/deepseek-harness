@@ -24,11 +24,12 @@ export function installHeldKeys(ctx: Context): NonNullable<CuaBackend['sendKeyEv
     }
     // Pause may arrive while an unrelated subtool is still settling.
     const onAbort = () => { void release()?.catch(() => undefined) }
-    execution.signal.addEventListener('abort', onAbort, { once: true })
+    const signal = execution.signal
+    signal.addEventListener('abort', onAbort, { once: true })
     try {
       return await next()
     } finally {
-      execution.signal.removeEventListener('abort', onAbort)
+      signal.removeEventListener('abort', onAbort)
       await release()
     }
   })

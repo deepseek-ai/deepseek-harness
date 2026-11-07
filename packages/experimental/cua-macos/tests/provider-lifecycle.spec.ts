@@ -171,10 +171,11 @@ it.each(['return', 'throw', 'pause', 'pause with cleanup error'])('cleans up onl
   native.request.mockImplementation(async (method, params) => {
     expect(method).toBe('sendKeyEvent')
     runIds.add(params.runId)
-    const key = String(params.key)
-    if (params.direction === 'down') held.add(key)
+    const { key, direction } = params
+    if (typeof key !== 'string' || (direction !== 'down' && direction !== 'up')) throw new Error('Invalid directional event')
+    if (direction === 'down') held.add(key)
     else held.delete(key)
-    events.push(`${key}:${params.direction}`)
+    events.push(`${key}:${direction}`)
     return { dispatched: true }
   })
   native.cleanup.mockImplementation(async (method, params) => {
