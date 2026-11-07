@@ -277,16 +277,17 @@ function rowTexts(section: HTMLElement): string[] {
   return [...section.querySelectorAll(`.${css.text}`)].map(element => element.textContent ?? '')
 }
 
-/** Section geometry with a short final page whose scroll position is clamped by the viewport. */
-function fileViewport(m: ReturnType<typeof mount>) {
+/** Geometry of 200px sections `gap` pixels apart, with a short final page whose scroll position is clamped by the viewport. */
+function fileViewport(m: ReturnType<typeof mount>, gap = 0) {
   const nodes = [...m.view.container.querySelectorAll<HTMLElement>('[data-forge-diff-file]')]
   const viewport = m.view.getByRole('region', { name: `All ${nodes.length} files` })
+  const step = 200 + gap
   vi.spyOn(viewport, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 600, 300))
   nodes.forEach((node, index) => {
-    vi.spyOn(node, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, index * 200 - viewport.scrollTop, 600, 200))
+    vi.spyOn(node, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, index * step - viewport.scrollTop, 600, 200))
   })
   scrolled.mockImplementation(function (this: HTMLElement) {
-    viewport.scrollTop = Math.min(nodes.indexOf(this) * 200, nodes.length * 200 - 300)
+    viewport.scrollTop = Math.min(nodes.indexOf(this) * step, nodes.length * step - gap - 300)
   })
   return { viewport, nodes }
 }
@@ -364,6 +365,21 @@ describe('ChangesTab keyboard file navigation', () => {
     fireEvent.scroll(viewport)
     fireEvent.keyDown(viewport, { key: 'ArrowRight' })
     expect(scrolled.mock.contexts.at(-1)).toBe(nodes[2])
+  })
+
+  it('reads the card below a gap at the viewport top, and the last file once every card is above it', async () => {
+    const m = mount()
+    await settle()
+    const { viewport, nodes } = fileViewport(m, 12)
+    // The first card ends 5px above the viewport, and the second starts 7px below it.
+    viewport.scrollTop = 205
+    fireEvent.scroll(viewport)
+    fireEvent.keyDown(viewport, { key: 'ArrowRight' })
+    expect(scrolled.mock.contexts.at(-1)).toBe(nodes[2])
+    viewport.scrollTop = nodes.length * 212
+    fireEvent.scroll(viewport)
+    fireEvent.keyDown(viewport, { key: 'ArrowLeft' })
+    expect(scrolled.mock.contexts.at(-1)).toBe(nodes.at(-2))
   })
 
   it('leaves vertical arrows, modifiers, composition and handled keys to their owners', async () => {
