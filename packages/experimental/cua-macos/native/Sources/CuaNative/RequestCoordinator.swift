@@ -43,7 +43,7 @@ import Darwin
         self.onFatal = onFatal
         worker = AXWorker(cancellation: cancellation, axTimeout: configuration.axTimeoutSeconds,
                           textEventInterval: configuration.textEventIntervalSeconds, maxClickHoldMs: configuration.maxClickHoldMs,
-                          systemPointerHover: configuration.systemPointerHover)
+                          systemPointerHover: configuration.systemPointerHover, heldKeys: scheduler.heldKeys)
         input = JSONLInput(limit: configuration.maxRequestBytes, cancellation: cancellation, channel: channel)
         self.writer = writer
     }
@@ -166,7 +166,7 @@ import Darwin
         let params = try RequestParameters(request)
         try cancellation.check()
         if request.method == "screenshot" { try capture.requireAvailable() }
-        let requiresCatalog = ["getApp", "listApps", "findApps", "typeText", "pressKey", "click"].contains(request.method)
+        let requiresCatalog = ["getApp", "listApps", "findApps", "typeText", "pressKey", "sendKeyEvent", "click"].contains(request.method)
         let catalog = requiresCatalog ? ApplicationCatalog.snapshot() : ApplicationCatalogSnapshot(applications: [], frontPID: nil)
         let result: JSONValue
         if request.method == "permissionStatus" {

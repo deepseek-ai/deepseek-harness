@@ -93,7 +93,7 @@ export const NativeResourceParameters = {
 }
 /** Host-only launch continuation and user-facing system permission controls; absent from model arguments. */
 export const NativeOnlyOperations = [
-  operation('launchApp', app), operation('permissionStatus', {}),
+  operation('launchApp', app), operation('releaseHeldKeys', { runId: z.string().min(1) }), operation('permissionStatus', {}),
   operation('applicationIcons', { paths: z.array(z.string().min(1)) }),
   operation('requestPermission', { permission: z.enum(['accessibility', 'screenRecording']) }),
   operation('openPermissionSettings', { permission: z.enum(['accessibility', 'screenRecording']) }),

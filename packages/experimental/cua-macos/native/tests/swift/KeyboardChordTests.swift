@@ -1,5 +1,6 @@
 // Observe the actual CoreGraphics events without sending keyboard input to the desktop.
 import CoreGraphics
+import Darwin
 import Testing
 @testable import CuaNative
 
@@ -67,4 +68,25 @@ func plusAlonePressesShiftEquals(_ alias: String) throws {
     try input.pressKey(["shift"], modifiers: [], to: 42)
     #expect(events.map(\.type) == [.flagsChanged, .flagsChanged])
     #expect(events.map { $0.flags.contains(.maskShift) } == [true, false])
+}
+
+@Test func directionalReleaseUsesOriginalRecipientAndPreservesOtherRuns() throws {
+    let target = try NativePlatform.identity(getpid())
+    let held = HeldKeys()
+    var events: [CGEvent] = []
+    let input = KeyboardInput(post: { event, pid in
+        #expect(pid == target.pid)
+        events.append(event)
+    }, textEventInterval: 0, held: held)
+    try input.keyDown("shift", app: "editor", run: "one", recipient: target)
+    try input.keyDown("w", app: "editor", run: "two", recipient: target)
+    #expect(throws: NativeFailure.self) { try input.keyDown("W", app: "editor", run: "one", recipient: target) }
+    #expect(throws: NativeFailure.self) { try input.keyUp("w", app: "other", run: "two") }
+    #expect(throws: NativeFailure.self) { try input.pressKey(["w"], modifiers: [], to: target.pid) }
+    try input.pressKey(["d"], modifiers: ["shift"], to: target.pid)
+    try input.releaseHeldKeys(run: "one")
+    #expect(try input.keyUp("w", app: "editor", run: "two"))
+    try input.releaseHeldKeys(run: "two")
+    #expect(events.map { $0.getIntegerValueField(.keyboardEventKeycode) } == [56, 13, 2, 2, 56, 13])
+    #expect(events.map { $0.flags.contains(.maskShift) } == [true, true, true, true, false, false])
 }

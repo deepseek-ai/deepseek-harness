@@ -78,7 +78,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 | `getState` | `{appHandle, windowId, focusedWindowId, snapshotId, tree, elements, windows, truncated}`。应用级观察的 `windowId` 为 null。元素包含不透明字符串 `elementId`、role、title、value、description、identifier、bounds、actions 和 enabled 状态。元素边界为 null 或屏幕 point 单位的 [x, y, width, height]，窗口输入使用局部 point。这些结构化元素诊断供原生检查保留，模型工具投影会移除它们。不可用的可选描述属性为 null，无法取得的动作列表为空；权限、通信和窗口发现失败仍会拒绝观察。 |
 | `listActions` | 一个元素由 provider 定义的动作名数组；元素可以不声明任何动作。 |
 | `show` | `{dispatched: boolean, windowId, foregroundChanged}` 记录恢复分派。未选中窗口时 `windowId` 为 null；无法取得采样观察时 `foregroundChanged` 为 null。 |
-| `invoke`, `performAction`, `mouseMove`, `click`, `setValue`, `selectText`, `typeText`, `paste`, `pressKey`, `scroll`, `drag` | `{dispatched: boolean}` 记录原生分派；`invoke` 在没有可用的默认动作时返回 false。`mouseMove` 还报告 `hoverRoute` 和 `systemPointerMoved`。需要读取新状态以核实预期的应用变化。 |
+| `invoke`, `performAction`, `mouseMove`, `click`, `setValue`, `selectText`, `typeText`, `paste`, `pressKey`, `sendKeyEvent`, `scroll`, `drag` | `{dispatched: boolean}` 记录原生分派；`invoke` 在没有可用的默认动作时返回 false。`mouseMove` 还报告 `hoverRoute` 和 `systemPointerMoved`。需要读取新状态以核实预期的应用变化。 |
 | `screenshot` | `{mimeType: "image/png", data, pixelWidth, pixelHeight, bounds, coordinateSpace: "window-points", windowId}`。Retina 显示器上 PNG 像素尺寸可能不同于窗口 point 尺寸。 |
 
 每个面向应用的操作都要求使用同一 helper 的 `getApp` 返回的 `appHandle`。helper 固定 PID 和内核进程启动时间，进程退出或 PID 被复用后使句柄及其全部快照失效。再次调用 `getApp` 可取得替代进程，不会重新激活旧句柄。随机的 helper 命名空间防止已终止 helper 的句柄与替代实例重合。重复获取同一存活进程会共享句柄。启动后检查失败会使待启动句柄失效，并保留原错误；已经启动的进程不会被终止，launchApp 也不能复用失败的句柄。
@@ -104,6 +104,8 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 截图和鼠标输入在精确窗口的 AX 边界查询前后读取 CG 边界，查询期间移动会返回 WINDOW_CHANGED。有效的 AX/CG 边界向外取整后必须一致；已知不一致会在移动、预备事件或按键发送前返回 WINDOW_CHANGED。helper 保留两个坐标来源，不用 AX 几何替换 CG 几何。缺失或无效的 AX 几何仍表示未知，AX 通信、权限和无效元素错误继续传递。无辅助功能权限的截图保留 CG/SCK 检查。声明的 AX 动作不经过鼠标预检，AX 动作失败也不改用鼠标输入。这些读取不会锁住窗口以阻止后续移动，几何检查不激活或抬起窗口。
 
 `typeText` 和 `pressKey` 面向所选进程当前获得焦点的控件，不指定窗口。`pressKey` 向目标 PID 依次发送修饰键和指定按键的按下事件，再逆序释放。操作中途取消也会逆序释放已按下的键。键盘事件直接发给目标进程，绕过全局 HID 队列。按键名由平台定义；KP_0 和 KP_Enter 等数字键盘名称保留物理键码。后台鼠标操作可能改变键盘焦点。文本逐个 Unicode 字符输入，不使用剪贴板。LF、CR 和 CRLF 发送一次 Return，制表符发送 Tab。应用保留缩进和焦点导航等正常编辑行为。`typeText` 的每次按下和抬起后等待配置的文本事件间隔；`pressKey` 使用自己的按下与释放节奏，分派完成不证明应用已消费全部事件。取消可能中断部分文本或手势，无法撤销已接收事件。很长的文本可能超过 Host 操作期限。继续输入前应核实应用状态。
+
+宿主为每次 `run_code` 的 `sendKeyEvent` 附上执行标识。按下时，helper 保存已选应用、接收进程的 PID 与启动时间、物理键码及对应的松开事件。显式松键或执行结束时会核对原进程身份。正常返回、异常退出或用户暂停时，宿主等待在途原生请求结束，再通知 helper 释放该执行持有的其余按键。连接断开时，helper 也会清理该连接持有的按键。
 
 所选 helper 应用需要 macOS 辅助功能权限以读取 AX 和输入，需要屏幕录制权限以截图。能力预检和权限错误不授予权限。截图会拒绝在读取图片期间移动或缩放的窗口。无法确认归属的系统面板及仅后台辅助类型的应用不可选择。
 

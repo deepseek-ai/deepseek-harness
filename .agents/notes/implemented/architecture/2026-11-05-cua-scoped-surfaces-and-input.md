@@ -34,6 +34,6 @@ Within one API instance, the object facade keeps one current accessibility snaps
 
 Element IDs belong to the application's current accessibility snapshot. Reading one window replaces the facade’s current snapshot for that application, so callers observe again and confirm the IDs they use. The new read does not guarantee that an old string is rejected or that an ID changes; callers must not assume an older ID still identifies the same control. Pointer input and screenshots require an explicit window object; callers enumerate windows first.
 
-Keyboard behavior follows the provider's supported scopes. A caller that uses `sendKeyEvent` owns the down/up pairing, because the API never sends the opposite event. Keyboard modifier names are provider-defined, so the same string may have different support across providers.
+Keyboard behavior follows the provider's supported scopes. A caller that uses `sendKeyEvent` owns the down/up pairing, during execution. macOS releases that run’s remaining keys when the program ends or the user pauses it. Keyboard modifier names are provider-defined, so the same string may have different support across providers.
 
 Provider guidance owns the list of supported actions. Adding a method to the shared schema does not claim that every provider implements it, and the merged `getCapabilities` result remains the runtime source for permissions and session lock.

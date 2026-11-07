@@ -9,14 +9,37 @@ final class KeyboardInput {
         let flag: CGEventFlags
     }
 
+    private let connection = UUID()
+    private let held: HeldKeys
     private let post: (CGEvent, Int32) -> Void
     private let textEventInterval: Double
     private let checkCancellation: @Sendable () throws -> Void
 
-    init(post: @escaping (CGEvent, Int32) -> Void, textEventInterval: Double, checkCancellation: @escaping @Sendable () throws -> Void = {}) {
+    init(post: @escaping (CGEvent, Int32) -> Void, textEventInterval: Double, held: HeldKeys = HeldKeys(), checkCancellation: @escaping @Sendable () throws -> Void = {}) {
+        self.held = held
         self.post = post
         self.textEventInterval = textEventInterval
         self.checkCancellation = checkCancellation
+    }
+
+    func keyDown(_ name: String, app: String, run: String, recipient: ProcessIdentity) throws {
+        let modifier = Self.namedModifier(name)
+        let code = try Self.keyCode(name)
+        let source = try Self.source()
+        let down = try Self.keyEvent(source: source, code: code, down: true, flags: [])
+        let up = try Self.keyEvent(source: source, code: code, down: false, flags: [])
+        try checkCancellation()
+        try NativePlatform.verify(recipient)
+        try held.down(owner: .init(connection: connection, run: run, app: app), recipient: recipient,
+                      code: code, flag: modifier?.flag ?? [], down: down, up: up, post: post)
+    }
+
+    func keyUp(_ name: String, app: String, run: String) throws -> Bool {
+        try held.up(owner: .init(connection: connection, run: run, app: app), code: Self.keyCode(name), post: post)
+    }
+
+    func releaseHeldKeys(run: String? = nil) throws {
+        try held.release(connection: connection, run: run, post: post)
     }
 
     /// Prepare every event before dispatch. On cancellation, release only the keys this call pressed.
@@ -42,8 +65,12 @@ final class KeyboardInput {
             }
             chord.append(key)
         }
-        var selected = Set<CGKeyCode>()
-        var flags: CGEventFlags = []
+        let alreadyHeld = held.snapshot(pid: pid)
+        guard namesByCode.keys.allSatisfy({ alreadyHeld[$0] == nil }) else {
+            throw RequestParameters.invalid("Release the held key before using it in pressKey")
+        }
+        var selected = Set(alreadyHeld.keys)
+        var flags = alreadyHeld.values.reduce(CGEventFlags()) { $0.union($1) }
         var events: [(down: CGEvent, up: CGEvent)] = []
         let source = try Self.source()
         for key in chord {
@@ -77,6 +104,8 @@ final class KeyboardInput {
     func typeText(_ text: String, to pid: Int32) throws {
         try checkCancellation()
         let source = try Self.source()
+        let alreadyHeld = held.snapshot(pid: pid)
+        let flags = alreadyHeld.values.reduce(CGEventFlags()) { $0.union($1) }
         for scalar in text.replacingOccurrences(of: "\r\n", with: "\n").unicodeScalars {
             try checkCancellation()
             let code: CGKeyCode
@@ -85,8 +114,11 @@ final class KeyboardInput {
             case 9: code = try Self.keyCode("Tab")
             default: code = 0
             }
-            let down = try Self.keyEvent(source: source, code: code, down: true, flags: [])
-            let up = try Self.keyEvent(source: source, code: code, down: false, flags: [])
+            guard alreadyHeld[code] == nil else {
+                throw RequestParameters.invalid("Release the held physical key before typing text with its key code")
+            }
+            let down = try Self.keyEvent(source: source, code: code, down: true, flags: flags)
+            let up = try Self.keyEvent(source: source, code: code, down: false, flags: flags)
             if code == 0 {
                 let units = Array(String(scalar).utf16)
                 units.withUnsafeBufferPointer { buffer in

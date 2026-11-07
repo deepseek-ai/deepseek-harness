@@ -81,7 +81,12 @@ export class NativeClient {
   private diagnostics: string[] = []
   private diagnosticBytes = 0
   private discardedDiagnostics = false
-  private active: { id: string; resolve: (value: JsonValue) => void; reject: (error: NativeError) => void } | undefined
+  private active: {
+    id: string
+    outcome: Promise<JsonValue>
+    resolve: (value: JsonValue) => void
+    reject: (error: NativeError) => void
+  } | undefined
 
   /**
    * @param owner - Managed subprocess provider.
@@ -133,7 +138,10 @@ export class NativeClient {
       throw new NativeError('NATIVE_REQUEST_LIMIT', 'Request exceeded the configured byte limit before dispatch')
     }
     const outcome = Promise.withResolvers<JsonValue>()
-    this.active = { id, resolve: outcome.resolve, reject: (error) => { nativeFailure = error; outcome.reject(error) } }
+    this.active = {
+      id, outcome: outcome.promise, resolve: outcome.resolve,
+      reject: (error) => { nativeFailure = error; outcome.reject(error) },
+    }
     if (capture) this.diagnostic(screenshotPrefix + JSON.stringify({ requestId: id, stage: 'host.dispatch', elapsedMs: 0 }))
     const interrupt = (error: NativeError): void => {
       if (interruption || this.active?.id !== id) return
@@ -191,6 +199,17 @@ export class NativeClient {
         }
       }
     }
+  }
+
+  /**
+   * Dispatch cleanup after any active request acknowledges completion or cancellation.
+   * @param method - Host-only helper cleanup operation.
+   * @param params - Resources owned by the enclosing execution.
+   * @returns The native cleanup acknowledgement, bounded by the connection's request deadline.
+   */
+  async requestCleanup(method: string, params: Record<string, JsonValue>): Promise<JsonValue> {
+    while (this.active) await this.active.outcome.catch(() => undefined)
+    return this.request(method, params, new AbortController().signal)
   }
 
   private screenshotDiagnostics(): string {

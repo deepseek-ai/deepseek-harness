@@ -169,7 +169,7 @@ export interface CuaSurface {
   pressKey(key: string | string[], modifiers?: string[]): Promise<CuaActionResult>
   /**
    * Send one key-down or key-up event at the current input focus.
-   * Does not send the opposite event.
+   * On macOS, down persists within one run_code until explicit up, program completion (including errors), or user pause.
    * Rejects when the provider does not support keyboard input at this scope.
    * @param key - Platform-defined key name; modifier keys may themselves be targets.
    * @param direction - Explicit event direction; the opposite event is never sent implicitly.

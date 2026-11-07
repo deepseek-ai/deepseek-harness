@@ -1,5 +1,5 @@
 /** Native helper replacement is synchronized with Agent and provider disposal. */
-import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import { executeModelToolFixture, executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -28,6 +28,7 @@ import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
 import { LlmAdapter, ToolCallId, type LlmResolvedModelInfo, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import Subprocess from '@deepseek-ai/dsh-subprocess'
+import SubprocessLocal from '@deepseek-ai/dsh-subprocess-local'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import sharp from 'sharp'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
@@ -38,6 +39,7 @@ import type { NativeBuildSpec } from '../src/native-build.ts'
 const native = vi.hoisted(() => ({
   prepare: vi.fn<(spec: NativeBuildSpec) => Promise<string>>(),
   architecture: vi.fn(() => 'arm64' as const),
+  cleanup: vi.fn<NativeClient['requestCleanup']>(),
   request: vi.fn<NativeClient['request']>(), dispose: vi.fn(), instances: [] as Array<{ disposed: boolean }>,
   reportDiagnostic: undefined as ((message: string) => void) | undefined,
 }))
@@ -54,6 +56,7 @@ vi.mock('@deepseek-ai/dsh-cua/native-client', async importOriginal => ({
       native.reportDiagnostic = args[3]
       native.instances.push(this)
     }
+    requestCleanup = native.cleanup
     request = native.request
     invalidate() { this.disposed = true }
     async dispose() { this.disposed = true; await native.dispose() }
@@ -110,19 +113,25 @@ class ImageAdapter extends LlmAdapter {
 const imageData = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC'
 const imageMetadata = { pixelWidth: 1, pixelHeight: 1, bounds: { x: 2, y: 3, width: 1, height: 1 }, coordinateSpace: 'window-points', windowId: 7 }
 
-async function setup(model?: { provider: string; model: string }) {
+async function setup(model?: { provider: string; model: string }, ptc = false) {
+  native.cleanup.mockReset().mockResolvedValue({ dispatched: true })
   native.request.mockReset().mockResolvedValue([])
   native.dispose.mockReset()
   native.instances.length = 0
   native.reportDiagnostic = undefined
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
-  await mountAgentLoopTestDependencies(ctx)
+  await mountAgentLoopTestDependencies(ctx, ptc ? { workingDirectory: true, tools: { mode: 'ptc' } } : {})
   await ctx.plugin(ComputerUseRegistry)
-  await ctx.plugin(Subprocess, [])
+  if (ptc) {
+    await ctx.plugin(SubprocessLocal)
+    await ctx.plugin(Sandbox)
+    await ctx.plugin(SandboxPolicy, { mode: 'danger-full-access' })
+    await ctx.plugin(NodeRuntime)
+  } else await ctx.plugin(Subprocess, [])
   const provider = await ctx.plugin(NativeProvider, config)
   await mountAgentLoopTestHarness(ctx)
-  const handle = await ctx.agents.create({ sessionId: SessionId('native-lifecycle'), ...model ? { agentOptions: model } : {} })
+  const handle = await ctx.agents.create({ sessionId: SessionId('native-lifecycle'), meta: { cwd: process.cwd() }, ...model ? { agentOptions: model } : {} })
   let index = 0
   const execute = (method = 'listApps', params: Record<string, unknown> = {}, signal = new AbortController().signal) => executeToolFixture(ctx, {
     agent: handle.agent, signal, callId: ToolCallId(`lifecycle-${++index}`), name: 'cua', arguments: { method, params },
@@ -137,6 +146,69 @@ async function selectApplication(f: Awaited<ReturnType<typeof setup>>) {
     authorization: { id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app', persistable: false } })
   expect((await f.execute('getApp', { selector: 'Fixture' })).isError).toBe(false)
 }
+
+it('requires an enclosing run_code before sending a directional key', async () => {
+  const f = await setup()
+  await selectApplication(f)
+  native.request.mockClear()
+  const result = await f.execute('sendKeyEvent', { appHandle: 'app-one', key: 'w', direction: 'down' })
+  expect(result.isError).toBe(true)
+  expect(JSON.stringify(result.content)).toContain('active run_code')
+  expect(native.request).not.toHaveBeenCalled()
+})
+
+it.each(['return', 'throw', 'pause'])('cleans up only the held W when run_code ends by %s', async (ending) => {
+  const f = await setup(undefined, true)
+  await selectApplication(f)
+  const held = new Set<string>()
+  const events: string[] = []
+  const controller = new AbortController()
+  const runIds = new Set<unknown>()
+  native.request.mockImplementation(async (method, params) => {
+    expect(method).toBe('sendKeyEvent')
+    runIds.add(params.runId)
+    const key = String(params.key)
+    if (params.direction === 'down') held.add(key)
+    else held.delete(key)
+    events.push(`${key}:${params.direction}`)
+    return { dispatched: true }
+  })
+  native.cleanup.mockImplementation(async (method, params) => {
+    expect(method).toBe('releaseHeldKeys')
+    expect(runIds).toEqual(new Set([params.runId]))
+    for (const key of held) events.push(`${key}:up`)
+    held.clear()
+    return { dispatched: true }
+  })
+  f.ctx.tools.register({
+    name: 'check_held_keys', description: 'Observe the keys held by the test receiver.',
+    parameters: { type: 'object', properties: {} },
+    output: { schema: {}, render: () => [] },
+    async execute() {
+      const keys = [...held]
+      if (ending === 'pause' && keys.length === 1) {
+        controller.abort()
+        await setImmediate()
+        expect(held.size).toBe(0)
+      }
+      return keys
+    },
+  })
+  const code = [
+    "const key = (key, direction) => tools.cua({ method: 'sendKeyEvent', params: { appHandle: 'app-one', key, direction } });",
+    "await key('w', 'down'); await key('d', 'down');",
+    "if ((await tools.check_held_keys({})).join(',') !== 'w,d') throw Error('lost held keys');",
+    "await key('d', 'up');",
+    "if ((await tools.check_held_keys({})).join(',') !== 'w') throw Error('lost W');",
+    ending === 'throw' ? "throw Error('program failed');" : "return 'done';",
+  ].join('\n')
+  const result = await executeModelToolFixture(f.ctx, { agent: f.handle.agent, callId: ToolCallId('keyboard-run'),
+    name: 'run_code', arguments: { code, description: 'Exercise held keys' }, signal: controller.signal })
+  expect(events, JSON.stringify(result.content)).toEqual(['w:down', 'd:down', 'd:up', 'w:up'])
+  expect(native.cleanup).toHaveBeenCalledTimes(1)
+  expect(result.isError).toBe(ending !== 'return')
+  if (ending === 'throw') expect(JSON.stringify(result.content)).toContain('program failed')
+})
 
 it('rejects a relative helper path before publishing computer-use operations', async () => {
   const ctx = new Context()
@@ -200,7 +272,7 @@ it('merges startup capabilities into runtime native fields', async () => {
     coordinateSpace: 'screenshot-pixels', methods: [
       'activate', 'click', 'drag', 'findApps', 'getApp', 'getCapabilities', 'getState', 'invoke',
       'listActions', 'listApps', 'listWindows', 'mouseMove', 'paste', 'performAction', 'pressKey', 'screenshot', 'scroll',
-      'selectText', 'setValue', 'show', 'typeText',
+      'selectText', 'sendKeyEvent', 'setValue', 'show', 'typeText',
     ] })
   expect(native.request).toHaveBeenCalledExactlyOnceWith('getCapabilities', {}, expect.any(AbortSignal), ToolCallId('lifecycle-1'))
 })

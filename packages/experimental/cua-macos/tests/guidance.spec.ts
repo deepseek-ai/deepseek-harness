@@ -28,6 +28,9 @@ it('states the macOS accessibility, keyboard, and mouse levels', () => {
   expect(PLATFORM_GUIDANCE).toContain('Simulated keyboard input is available at app level')
   expect(PLATFORM_GUIDANCE).toContain('Simulated mouse input is available at window level')
   const pressKey = GUIDANCE.split('\n').find(line => line.startsWith('- pressKey('))
+  expect(GUIDANCE).toContain("sendKeyEvent(key: string, direction: 'down' | 'up')")
+  expect(GUIDANCE).toContain('returns, throws, or the user pauses')
+  expect(COMMON_GUIDANCE).not.toContain('sendKeyEvent(')
   expect(pressKey).toContain('key: string | string[]')
   expect(pressKey).toContain("pressKey(['w', 'd']) presses W then D and releases D then W")
   expect(pressKey).toContain("Packed strings such as 'w+d'")
@@ -139,5 +142,5 @@ it('documents facade initialization, emitted observations, and separate key argu
 })
 
 it('omits stale names and unavailable platform operations', () => {
-  for (const stale of ['getAXState', 'disableDiffing', 'performSecondaryAction', 'hover(', 'keyChord', 'sendKeyEvent', 'window.typeText', 'window.pressKey', 'elementIndex', 'verified: false', 'browser tabs', 'not implemented']) expect(GUIDANCE).not.toContain(stale)
+  for (const stale of ['getAXState', 'disableDiffing', 'performSecondaryAction', 'hover(', 'keyChord', 'window.typeText', 'window.pressKey', 'elementIndex', 'verified: false', 'browser tabs', 'not implemented']) expect(GUIDANCE).not.toContain(stale)
 })

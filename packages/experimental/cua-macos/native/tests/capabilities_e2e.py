@@ -193,6 +193,22 @@ def main():
                 state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 4)
                 chord = [(event["type"], event.get("keyCode")) for event in state["events"][count:]]
                 assert chord == [(10, 13), (10, 2), (11, 2), (11, 13)], chord
+                count = len(state["events"])
+                def key(name, direction):
+                    call("sendKeyEvent", {**owner, "runId": "held-input", "key": name, "direction": direction})
+                key("w", "down")
+                key("d", "down")
+                state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 2)
+                call("getState", {**owner, "maxElements": 2000, "maxDepth": 25})
+                time.sleep(2)
+                key("d", "up")
+                state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 3)
+                held = state["events"][count:]
+                assert [(event["type"], event["keyCode"]) for event in held] == [(10, 13), (10, 2), (11, 2)], held
+                assert held[2]["timestamp"] - held[1]["timestamp"] >= 2, held
+                call("releaseHeldKeys", {"runId": "held-input"})
+                state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 4)
+                assert [(e["type"], e["keyCode"]) for e in state["events"][count:]] == [(10, 13), (10, 2), (11, 2), (11, 13)]
                 call("drag", {**window, "fromX": point["x"], "fromY": point["y"], "toX": point["x"] + 80,
                               "toY": point["y"] + 20, "durationMs": 200, "steps": 10, "mouseButton": "middle", "modifiers": ["shift"]})
                 state = wait_for_state(state_file, lambda value: any(event["type"] == 27 and event.get("button") == 2 and event["shift"] for event in value["events"]))
