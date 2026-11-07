@@ -7,14 +7,17 @@
   },
   "files": [
     "src/index.ts",
+    "src/commit-range.ts",
     "src/diff.ts",
     "src/git.ts",
     "src/local-diff.ts",
+    "src/layers.ts",
     "src/panel.ts",
     "src/parse.ts",
     "src/patch-cache.ts",
     "src/states.ts",
     "src/types.ts",
+    "src/wildmatch.ts",
     "src/worktree.ts"
   ],
   "references": [

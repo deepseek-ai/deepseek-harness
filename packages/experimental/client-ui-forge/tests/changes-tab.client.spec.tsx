@@ -13,6 +13,7 @@ import { CHANGES_KIND, changesAddress, type ChangesParams, type ChangesSource } 
 import * as DiffFileModule from '../src/client/DiffFile.tsx'
 import type { ReviewActions } from '../src/client/ReviewComposer.tsx'
 import { ReviewQueue } from '../src/client/review-queue.ts'
+import { ViewedFiles } from '../src/client/viewed-files.ts'
 import { createChangesStore } from '../src/client/changes-store.ts'
 import { ChangesTab, type ChangesTabInjected, type ChangesTabProps } from '../src/client/ChangesTab.tsx'
 import { en, zh } from '../src/client/locales.ts'
@@ -22,6 +23,7 @@ import baseCss from '../src/client/BaseMenu.module.css'
 import type {
   ForgeBaseBranch, ForgeBaseBranches, ForgeChangeRequestDiff, ForgeDiffFile, ForgeLocalDiff, ForgePanelChangeRequest, ForgePanelState,
 } from '../src/types.ts'
+import type { ForgeCommitList } from '@deepseek-ai/dsh-experimental-forge/types'
 import { entry, ready, snapshot } from './client-fixtures.client.ts'
 
 const t = makeTranslate(en)
@@ -62,7 +64,7 @@ function hoverPath(section: HTMLElement): string | null {
 
 function file(path: string, overrides: Partial<ForgeDiffFile> = {}): ForgeDiffFile {
   return {
-    path, previousPath: null, status: 'modified', binary: false, oversized: false, untracked: false, additions: 0, deletions: 0, hunks: [],
+    path, previousPath: null, status: 'modified', binary: false, oversized: false, untracked: false, layer: 'implementation', digest: 'digest', additions: 0, deletions: 0, hunks: [],
     ...overrides,
   }
 }
@@ -97,6 +99,15 @@ const CHANGE: ForgeChangeRequestDiff = {
   files: [APP, NOTES, GONE],
   localAhead: 1,
   fileUrls: { 'src/app.ts': `https://github.com/octo/demo/blob/${HEAD}/src/app.ts`, 'docs/gone.txt': `https://github.com/octo/demo/blob/${HEAD}/docs/gone.txt` },
+}
+
+/** Three commits, oldest first. */
+const COMMITS: ForgeCommitList = {
+  headSha: HEAD,
+  truncated: false,
+  commits: ['1', '2', '3'].map((n, index) => ({
+    sha: n.repeat(40), parent: index === 0 ? null : String(index).repeat(40), title: `commit ${n}`, author: 'octo', authoredAt: '2026-10-09T00:00:00Z',
+  })),
 }
 
 const TOPIC: ForgeBaseBranch = { ref: 'refs/heads/topic', name: 'topic' }
@@ -157,7 +168,7 @@ async function settle(): Promise<void> {
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
 }
 
-type Faces = { -readonly [K in Exclude<keyof ChangesTabInjected, 'keyedHooks'>]: ReturnType<typeof vi.fn<ChangesTabInjected[K]>> }
+type Faces = { -readonly [K in Exclude<keyof ChangesTabInjected, 'keyedHooks' | 'viewedFiles'>]: ReturnType<typeof vi.fn<ChangesTabInjected[K]>> }
 
 interface MountOptions {
   readonly translate?: typeof t
@@ -168,6 +179,8 @@ interface MountOptions {
   readonly contentId?: string
   /** Configure the reads and actions before the first render. */
   readonly setup?: (faces: Faces) => void
+  /** Viewed marks; each mount otherwise reads the Session's marks from browser storage. */
+  readonly viewedFiles?: ViewedFiles
 }
 
 function mount(options: MountOptions = {}) {
@@ -219,6 +232,8 @@ function mount(options: MountOptions = {}) {
     localText: vi.fn<ChangesTabInjected['localText']>(async () => ok(APP_TEXT)),
     changeRequestDiff: vi.fn<ChangesTabInjected['changeRequestDiff']>(async () => ok(CHANGE)),
     changeRequestText: vi.fn<ChangesTabInjected['changeRequestText']>(async () => ok(APP_TEXT)),
+    localCommits: vi.fn<ChangesTabInjected['localCommits']>(async () => ok(COMMITS)),
+    changeRequestCommits: vi.fn<ChangesTabInjected['changeRequestCommits']>(async () => ok(COMMITS)),
     openLink: vi.fn<ChangesTabInjected['openLink']>(),
     copyPath: vi.fn<ChangesTabInjected['copyPath']>(),
     reviewQueue: vi.fn<ChangesTabInjected['reviewQueue']>().mockReturnValue(new ReviewQueue('test-review')),
@@ -228,6 +243,7 @@ function mount(options: MountOptions = {}) {
     report: vi.fn<ChangesTabInjected['report']>(),
   }
   options.setup?.(faces)
+  const viewedFiles = options.viewedFiles ?? new ViewedFiles(SESSION)
   const props: ChangesTabProps = {
     useTabInfo: () => ({
       sidebar: { expanded: true, fullscreen: false },
@@ -242,6 +258,7 @@ function mount(options: MountOptions = {}) {
     actions: store.actions,
     usePanel,
     ...faces,
+    viewedFiles,
     t: options.translate ?? t,
   }
   const view = render(<ChangesTab {...props} />)
@@ -252,7 +269,7 @@ function mount(options: MountOptions = {}) {
     return element
   }
   const paths = (): (string | null)[] => [...view.container.querySelectorAll('[data-forge-diff-file]')].map(element => element.getAttribute('data-forge-diff-file'))
-  return { view, panel, visibility, stops, navigation, store, aborter, tabActions, unbind, faces, section, paths }
+  return { view, panel, visibility, stops, navigation, store, aborter, tabActions, unbind, faces, viewedFiles, section, paths }
 }
 
 /** Visible texts of the rows a section draws, in order. */
@@ -411,7 +428,7 @@ describe('ChangesTab local reads', () => {
     expect(m.faces.localDiff).not.toHaveBeenCalled()
 
     act(() => { m.panel.set({ state: LOCAL_STATE, disconnected: false }) })
-    expect(m.faces.localDiff).toHaveBeenCalledWith({ kind: 'branch', base: null }, expect.any(AbortSignal))
+    expect(m.faces.localDiff).toHaveBeenCalledWith({ kind: 'branch', base: null, commits: null }, expect.any(AbortSignal))
     await settle()
 
     expect(m.paths()).toEqual(['assets/logo.png', 'docs/gone.txt', 'lib/b.txt', 'logs/big.log', 'src/app.ts', 'src/new.ts'])
@@ -540,24 +557,34 @@ describe('ChangesTab local reads', () => {
     expect(m.faces.localDiff).toHaveBeenCalledTimes(3)
   })
 
-  it('reads again on refresh, on the page refresh command, and when the branch summary moves', async () => {
+  it('reads changes and commits again on refresh, on the page refresh command, and when the branch summary moves', async () => {
     const m = mount()
     await settle()
     expect(m.faces.localDiff).toHaveBeenCalledTimes(1)
+    expect(m.faces.localCommits).toHaveBeenCalledTimes(1)
     fireEvent.click(m.view.getByRole('button', { name: en['diff.refresh'] }))
     await settle()
     expect(m.faces.localDiff).toHaveBeenCalledTimes(2)
+    expect(m.faces.localCommits).toHaveBeenCalledTimes(2)
     const commands = m.tabActions.bindCommands.mock.calls[0]?.[0]
     act(() => { commands?.refresh?.() })
     await settle()
     expect(m.faces.localDiff).toHaveBeenCalledTimes(3)
+    expect(m.faces.localCommits).toHaveBeenCalledTimes(3)
 
     act(() => { m.panel.set({ state: { ...LOCAL_STATE, readiness: null }, disconnected: false }) })
     await settle()
     expect(m.faces.localDiff).toHaveBeenCalledTimes(3)
+    expect(m.faces.localCommits).toHaveBeenCalledTimes(3)
     act(() => { m.panel.set({ state: { ...LOCAL_STATE, local: { base: BASE, files: [] } }, disconnected: false }) })
     await settle()
     expect(m.faces.localDiff).toHaveBeenCalledTimes(4)
+    expect(m.faces.localCommits).toHaveBeenCalledTimes(4)
+    // A commit of the staged changes moves HEAD without changing the summary against the fork point.
+    act(() => { m.panel.set({ state: ready({ local: { base: BASE, files: [] } }, { commit: 'f'.repeat(40) }), disconnected: false }) })
+    await settle()
+    expect(m.faces.localDiff).toHaveBeenCalledTimes(4)
+    expect(m.faces.localCommits).toHaveBeenCalledTimes(5)
 
     m.view.unmount()
     expect(m.unbind).toHaveBeenCalledOnce()
@@ -673,7 +700,7 @@ describe('ChangesTab base branch', () => {
     expect(m.faces.diffBases).toHaveBeenCalledWith('', expect.any(AbortSignal))
     fireEvent.click(m.view.getByRole('menuitem', { name: 'topic' }))
     expect(m.store.getSnapshot().byTab[TAB]?.base).toEqual(TOPIC)
-    expect(m.faces.localDiff).toHaveBeenLastCalledWith({ kind: 'branch', base: TOPIC.ref }, expect.any(AbortSignal))
+    expect(m.faces.localDiff).toHaveBeenLastCalledWith({ kind: 'branch', base: TOPIC.ref, commits: null }, expect.any(AbortSignal))
     expect(m.view.container.querySelector('[data-state="ongoing"]')).not.toBeNull()
     await settle()
     expect(m.paths()).toHaveLength(6)
@@ -682,7 +709,7 @@ describe('ChangesTab base branch', () => {
     await settle()
     fireEvent.click(m.view.getByRole('menuitem', { name: /^origin\/main/ }))
     expect(m.store.getSnapshot().byTab[TAB]?.base).toBeNull()
-    expect(m.faces.localDiff).toHaveBeenLastCalledWith({ kind: 'branch', base: null }, expect.any(AbortSignal))
+    expect(m.faces.localDiff).toHaveBeenLastCalledWith({ kind: 'branch', base: null, commits: null }, expect.any(AbortSignal))
   })
 
   it('records review comments under the compared ref and names the base the Host reports', async () => {
@@ -698,15 +725,15 @@ describe('ChangesTab base branch', () => {
       },
     })
     await settle()
-    expect(source).toEqual({ kind: 'local', scope: 'branch', base: BASE, baseRef: null })
+    expect(source).toEqual({ kind: 'local', scope: 'branch', base: BASE, baseRef: null, commits: null })
 
     act(() => { m.store.actions.based(TAB, TOPIC) })
     await settle()
-    expect(source).toEqual({ kind: 'local', scope: 'branch', base: 'topic', baseRef: TOPIC.ref })
+    expect(source).toEqual({ kind: 'local', scope: 'branch', base: 'topic', baseRef: TOPIC.ref, commits: null })
 
     act(() => { m.store.actions.scoped(TAB, 'staged') })
     await settle()
-    expect(source).toEqual({ kind: 'local', scope: 'staged', base: null, baseRef: null })
+    expect(source).toEqual({ kind: 'local', scope: 'staged', base: null, baseRef: null, commits: null })
   })
 
   it('keeps the chosen branch while another scope shows, and reads that scope without it', async () => {
@@ -897,7 +924,7 @@ describe('ChangesTab unchanged lines', () => {
     expect(gaps()).toEqual(['2 unchanged lines', '4 unchanged lines', en['diff.unchangedRest']])
 
     fireEvent.click(within(app).getByRole('button', { name: '2 unchanged lines' }))
-    expect(m.faces.localText).toHaveBeenCalledWith({ kind: 'branch', base: null }, 'src/app.ts')
+    expect(m.faces.localText).toHaveBeenCalledWith({ kind: 'branch', base: null, commits: null }, 'src/app.ts')
     expect([...app.querySelectorAll('[data-forge-diff-gap]')].every(gap => gap.hasAttribute('disabled'))).toBe(true)
     await settle()
     expect(gaps()).toEqual(['4 unchanged lines', '2 unchanged lines'])
@@ -1031,7 +1058,7 @@ describe('ChangesTab change requests', () => {
 
   it('reads the change request at its head and heads the view with its state, title, and number', async () => {
     const m = mount({ source })
-    expect(m.faces.changeRequestDiff).toHaveBeenCalledWith(URL7, expect.any(AbortSignal))
+    expect(m.faces.changeRequestDiff).toHaveBeenCalledWith(URL7, null, expect.any(AbortSignal))
     expect(m.view.queryByRole('button', { name: 'Branch' })).toBeNull()
     expect(m.view.getByRole('img', { name: 'Change request state: Open' })).toBeTruthy()
     expect(m.view.getByText('Change 7')).toBeTruthy()
@@ -1305,7 +1332,7 @@ describe('line review actions', () => {
     const m = mount({ source: { kind: 'change', url: URL7 } })
     await settle()
     expect(publish).toBeDefined()
-    expect(await publish!({ source: { kind: 'local', scope: 'branch', base: 'origin/main', baseRef: null }, comment: {
+    expect(await publish!({ source: { kind: 'local', scope: 'branch', base: 'origin/main', baseRef: null, commits: null }, comment: {
       path: 'src/app.ts', side: 'R', startLine: 4, endLine: 4, hunk: '', body: 'Local reference',
     } })).toBe(en['review.stale'])
     expect(m.faces.submitReview).not.toHaveBeenCalled()
@@ -1321,7 +1348,7 @@ describe('line review actions', () => {
     fireEvent.change(section.getByRole('textbox'), { target: { value: 'Explain these lines' } })
     expect(section.getByRole('textbox')).toHaveProperty('value', 'Explain these lines')
     fireEvent.click(within(m.section('src/app.ts').querySelector('[data-forge-comment]')!).getByRole('button', { name: 'Add to input' }))
-    expect(m.faces.addReviewToInput.mock.lastCall?.[0]).toMatchObject({ source: { kind: 'local', scope: 'branch', base: 'origin/main', baseRef: null },
+    expect(m.faces.addReviewToInput.mock.lastCall?.[0]).toMatchObject({ source: { kind: 'local', scope: 'branch', base: 'origin/main', baseRef: null, commits: null },
       comment: { path: 'src/app.ts', side: 'R', startLine: 4, endLine: 5, body: 'Explain these lines' } })
     fireEvent.click(section.getByRole('button', { name: 'Select line L4' }))
     fireEvent.click(section.getByRole('button', { name: 'Add comment' }))
@@ -1393,5 +1420,215 @@ describe('line review actions', () => {
     expect(m.faces.submitReview).toHaveBeenCalledTimes(1)
     fireEvent.click(m.view.getByRole('button', { name: 'Checked; allow resubmission' }))
     expect(m.faces.reviewQueue({ id: TAB, signal: m.aborter.signal }).getSnapshot().uncertain).toBeNull()
+  })
+})
+
+describe('ChangesTab review layers', () => {
+  const SPEC = file('src/app.spec.ts', { layer: 'test', digest: 'spec-1' })
+  const MANIFEST = file('package.json', { layer: 'interface', digest: 'manifest-1' })
+  const LAYERED: ForgeLocalDiff = { base: BASE, files: [APP, SPEC, MANIFEST], omitted: 0 }
+
+  it('counts each lens, keeps the files of the chosen layer in the tree and the diff, and hides test files', async () => {
+    const m = mount({ setup: (faces) => { faces.localDiff.mockResolvedValue(ok(LAYERED)) } })
+    await settle()
+    const lens = m.view.getByRole('radiogroup', { name: en['lens.aria'] })
+    expect(within(lens).getAllByRole('radio').map(radio => radio.textContent)).toEqual(['All3', 'Interface1', 'Implementation1', 'Tests1'])
+    expect(m.paths()).toEqual(['src/app.spec.ts', 'src/app.ts', 'package.json'])
+
+    fireEvent.click(within(lens).getByRole('radio', { name: /^Interface/ }))
+    expect(m.paths()).toEqual(['package.json'])
+    expect(within(m.view.getByRole('navigation')).getAllByRole('button').map(button => button.getAttribute('aria-label'))).toEqual(['package.json'])
+    fireEvent.click(within(lens).getByRole('radio', { name: /^Tests/ }))
+    expect(m.paths()).toEqual(['src/app.spec.ts'])
+
+    fireEvent.click(m.view.getByRole('switch', { name: en['tests.hide'] }))
+    expect(m.store.getSnapshot().byTab[TAB]).toMatchObject({ lens: 'all', hideTests: true })
+    expect(m.paths()).toEqual(['src/app.ts', 'package.json'])
+    expect(within(lens).getAllByRole('radio').map(radio => radio.textContent)).toEqual(['All2', 'Interface1', 'Implementation1', 'Tests'])
+    fireEvent.click(within(lens).getByRole('radio', { name: /^Implementation/ }))
+    expect(m.paths()).toEqual(['src/app.ts'])
+    expect(m.view.getByRole('button', { name: 'All 1 files' })).toBeDefined()
+    fireEvent.click(m.view.getByRole('button', { name: 'Review layer: Implementation' }))
+    fireEvent.click(within(document.body).getByRole('menuitem', { name: 'Interface1' }))
+    expect(m.paths()).toEqual(['package.json'])
+  })
+
+  it('says when no file shows and shows a file a navigation names even when the lens or the switch hides it', async () => {
+    const m = mount({ setup: (faces) => { faces.localDiff.mockResolvedValue(ok({ ...LAYERED, files: [SPEC, MANIFEST] })) } })
+    await settle()
+    fireEvent.click(m.view.getByRole('radio', { name: /^Implementation/ }))
+    expect(m.view.getByText(en['lens.empty'])).toBeDefined()
+    expect(m.paths()).toEqual([])
+    fireEvent.click(m.view.getByRole('switch', { name: en['tests.hide'] }))
+
+    act(() => { m.navigation.set({ ...m.navigation.getSnapshot(), params: navigationParams({ path: 'src/app.spec.ts' }), revision: 2 }) })
+    expect(m.store.getSnapshot().byTab[TAB]).toMatchObject({ lens: 'all', hideTests: false })
+    expect(m.paths()).toEqual(['src/app.spec.ts', 'package.json'])
+    expect(scrolled.mock.contexts.at(-1)).toBe(m.section('src/app.spec.ts'))
+
+    fireEvent.click(m.view.getByRole('switch', { name: en['tests.hide'] }))
+    act(() => { m.navigation.set({ ...m.navigation.getSnapshot(), params: navigationParams({ path: 'src/app.spec.ts' }), revision: 3 }) })
+    expect(m.store.getSnapshot().byTab[TAB]).toMatchObject({ lens: 'all', hideTests: false })
+    fireEvent.click(m.view.getByRole('radio', { name: /^Tests/ }))
+    act(() => { m.navigation.set({ ...m.navigation.getSnapshot(), params: navigationParams({ path: 'package.json' }), revision: 4 }) })
+    expect(m.store.getSnapshot().byTab[TAB]).toMatchObject({ lens: 'all', hideTests: false })
+    expect(scrolled.mock.contexts.at(-1)).toBe(m.section('package.json'))
+  })
+
+  it('aligns the lens with the file tree it stands above and moves it into the toolbar without one', async () => {
+    const m = mount()
+    await settle()
+    const toolbar = m.view.container.querySelector<HTMLElement>(`.${css.toolbar}`)!
+    expect(toolbar.getAttribute('data-tree')).toBe('left')
+    expect(toolbar.style.getPropertyValue('--forge-tree-width')).toBe('240px')
+    expect(m.view.queryByRole('radiogroup')).not.toBeNull()
+    const treeAction = (): HTMLElement => m.view.getByRole('button', { name: /^(Move file tree to the right|Hide file tree|Show file tree on the left)$/ })
+    fireEvent.click(treeAction())
+    expect(toolbar.getAttribute('data-tree')).toBe('right')
+    fireEvent.click(treeAction())
+    expect(toolbar.getAttribute('data-tree')).toBe('hidden')
+    expect(m.view.queryByRole('radiogroup')).toBeNull()
+    expect(m.view.getByRole('button', { name: 'Review layer: All' })).toBeDefined()
+  })
+})
+
+describe('ChangesTab viewed files', () => {
+  const marks = (m: ReturnType<typeof mount>): (string | null)[][] => [...m.view.container.querySelectorAll('[data-forge-diff-file]')]
+    .map(element => [element.getAttribute('data-forge-diff-file'), element.getAttribute('data-viewed'), element.hasAttribute('data-expanded') ? 'open' : 'closed'])
+
+  it('marks a file viewed from its header, collapsing it and counting it, and clears the mark, expanding it', async () => {
+    const m = mount({ source: { kind: 'change', url: URL7 } })
+    await settle()
+    const progress = (): string | null => m.view.getByRole('progressbar').getAttribute('aria-valuetext')
+    expect(progress()).toBe('0 / 3 viewed')
+    fireEvent.click(within(m.section('src/app.ts')).getByRole('checkbox', { name: 'Mark app.ts as viewed' }))
+    expect(marks(m)[2]).toEqual(['src/app.ts', 'viewed', 'closed'])
+    expect(progress()).toBe('1 / 3 viewed')
+    fireEvent.click(within(m.section('src/app.ts')).getByRole('checkbox', { name: 'Mark app.ts as viewed' }))
+    expect(marks(m)[2]).toEqual(['src/app.ts', 'unviewed', 'open'])
+    fireEvent.click(within(m.section('src/app.ts')).getByRole('checkbox', { name: 'Mark app.ts as viewed' }))
+
+    // A later mount reads the marks; a file whose change moved shows the change and expands again.
+    cleanup()
+    const again = mount({ source: { kind: 'change', url: URL7 }, viewedFiles: m.viewedFiles, setup: (faces) => {
+      faces.changeRequestDiff.mockResolvedValue(ok({ ...CHANGE, files: [{ ...APP, digest: 'moved' }, NOTES, GONE] }))
+    } })
+    expect(marks(again)).toEqual([])
+    await settle()
+    expect(marks(again)[2]).toEqual(['src/app.ts', 'changed', 'open'])
+    expect(within(again.section('src/app.ts')).getByText(en['viewed.changed'])).toBeDefined()
+    cleanup()
+    const same = mount({ source: { kind: 'change', url: URL7 }, viewedFiles: m.viewedFiles })
+    await settle()
+    expect(marks(same)[2]).toEqual(['src/app.ts', 'viewed', 'closed'])
+    fireEvent.click(within(same.section('src/app.ts')).getByRole('button', { name: 'Expand app.ts' }))
+    expect(marks(same)[2]).toEqual(['src/app.ts', 'viewed', 'open'])
+  })
+
+  it('toggles the file being read with V, keeps the header of a collapsed file in view, and leaves fields and modifiers alone', async () => {
+    const m = mount()
+    await settle()
+    const { viewport, nodes } = fileViewport(m)
+    viewport.scrollTop = 250
+    fireEvent.scroll(viewport)
+    fireEvent.keyDown(viewport, { key: 'V' })
+    expect(nodes[1]?.getAttribute('data-viewed')).toBe('viewed')
+    expect(scrolled.mock.contexts.at(-1)).toBe(nodes[1])
+    fireEvent.keyDown(viewport, { key: 'v' })
+    expect(nodes[1]?.getAttribute('data-viewed')).toBe('unviewed')
+    for (const init of [{ key: 'v', ctrlKey: true }, { key: 'v', metaKey: true }, { key: 'v', altKey: true }, { key: 'x' }, { key: 'v', isComposing: true }]) {
+      fireEvent.keyDown(viewport, init)
+    }
+    fireEvent.keyDown(m.view.getByRole('textbox', { name: en['diff.filterFiles'] }), { key: 'v' })
+    expect(nodes.map(node => node.getAttribute('data-viewed'))).not.toContain('viewed')
+
+    act(() => { m.visibility.set(false) })
+    fireEvent.keyDown(viewport, { key: 'v' })
+    expect(nodes.map(node => node.getAttribute('data-viewed'))).not.toContain('viewed')
+  })
+
+  it('toggles with V the file holding the focus, else the file holding the text cursor', async () => {
+    const m = mount()
+    await settle()
+    const { viewport, nodes } = fileViewport(m)
+    fireEvent.keyDown(within(nodes[2]!).getByRole('button', { name: /^Collapse / }), { key: 'v' })
+    expect(nodes.map(node => node.getAttribute('data-viewed'))).toEqual(['unviewed', 'unviewed', 'viewed', 'unviewed', 'unviewed', 'unviewed'])
+    const code = document.createTreeWalker(m.section('src/app.ts').querySelector('[data-review-code]')!, NodeFilter.SHOW_TEXT).nextNode()
+    expect(code?.nodeType).toBe(Node.TEXT_NODE)
+    window.getSelection()?.collapse(code, 0)
+    fireEvent.keyDown(viewport, { key: 'v' })
+    expect(m.section('src/app.ts').getAttribute('data-viewed')).toBe('viewed')
+    window.getSelection()?.collapse(nodes[3]!, 0)
+    fireEvent.keyDown(viewport, { key: 'v' })
+    expect(nodes[3]?.getAttribute('data-viewed')).toBe('viewed')
+    // Without a cursor, the file at the top of the view toggles.
+    window.getSelection()?.removeAllRanges()
+    fireEvent.keyDown(viewport, { key: 'v' })
+    expect(nodes[0]?.getAttribute('data-viewed')).toBe('viewed')
+  })
+
+  it('reports a mark the browser refuses and ignores V without files', async () => {
+    const viewedFiles = new ViewedFiles(SESSION)
+    vi.spyOn(viewedFiles, 'mark').mockReturnValue(false)
+    const m = mount({ viewedFiles })
+    await settle()
+    fireEvent.click(within(m.section('src/app.ts')).getByRole('checkbox', { name: 'Mark app.ts as viewed' }))
+    expect(m.faces.report).toHaveBeenCalledWith('viewed.saveFailed')
+    expect(m.section('src/app.ts').getAttribute('data-viewed')).toBe('unviewed')
+
+    cleanup()
+    const empty = mount({ setup: (faces) => { faces.localDiff.mockResolvedValue(ok({ ...LOCAL, files: [] })) } })
+    await settle()
+    fireEvent.keyDown(empty.view.container.firstElementChild!, { key: 'v' })
+    expect(empty.faces.report).not.toHaveBeenCalled()
+  })
+})
+
+describe('ChangesTab commits', () => {
+  const one = { from: '2'.repeat(40), to: '2'.repeat(40) }
+
+  it('reads the chosen commits of a change request and submits no review from them', async () => {
+    const m = mount({ source: { kind: 'change', url: URL7 } })
+    await settle()
+    expect(m.faces.changeRequestCommits).toHaveBeenCalledWith(URL7, expect.any(AbortSignal))
+    fireEvent.click(m.view.getByRole('button', { name: 'Commits shown: All commits' }))
+    await settle()
+    fireEvent.click(within(document.body).getByRole('menuitem', { name: /^2222222/ }))
+    expect(m.store.getSnapshot().byTab[TAB]?.commits).toEqual(one)
+    expect(m.faces.changeRequestDiff).toHaveBeenLastCalledWith(URL7, one, expect.any(AbortSignal))
+    await settle()
+    expect((m.view.getByRole('button', { name: en['review.submit'] }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('lists the commits of the branch scope only, and offers every commit when chosen ones are gone or not one run', async () => {
+    const m = mount({ setup: (faces) => {
+      faces.localDiff.mockImplementation(async (scope) => {
+        if (scope.kind !== 'branch' || scope.commits === null) return ok(LOCAL)
+        const code = scope.commits.from === one.from ? 'forgePanel/commits-missing' : 'forgePanel/commits-not-linear'
+        return { ok: false, error: new RemoteError(code, 'refused', {}) }
+      })
+    } })
+    await settle()
+    expect(m.faces.localCommits).toHaveBeenCalledWith(null, expect.any(AbortSignal))
+    fireEvent.click(m.view.getByRole('button', { name: 'Commits shown: All commits' }))
+    await settle()
+    fireEvent.click(within(document.body).getByRole('menuitem', { name: /^2222222/ }))
+    expect(m.faces.localDiff).toHaveBeenLastCalledWith({ kind: 'branch', base: null, commits: one }, expect.any(AbortSignal))
+    await settle()
+    expect(m.view.getByText(en['commits.missing'])).toBeDefined()
+    fireEvent.click(m.view.getByRole('button', { name: en['commits.showAll'] }))
+    expect(m.store.getSnapshot().byTab[TAB]?.commits).toBeNull()
+    await settle()
+    fireEvent.click(m.view.getByRole('button', { name: 'Commits shown: All commits' }))
+    await settle()
+    fireEvent.click(within(document.body).getByRole('menuitem', { name: /^3333333/ }))
+    await settle()
+    expect(m.view.getByText(en['commits.notLinear'])).toBeDefined()
+    fireEvent.click(m.view.getByRole('button', { name: en['commits.showAll'] }))
+    expect(m.store.getSnapshot().byTab[TAB]?.commits).toBeNull()
+
+    fireEvent.click(m.view.getByRole('button', { name: 'Branch' }))
+    fireEvent.click(within(document.body).getByRole('menuitem', { name: en['diff.scope.staged'] }))
+    expect(m.view.queryByRole('button', { name: /^Commits shown/ })).toBeNull()
   })
 })

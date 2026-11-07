@@ -38,6 +38,8 @@ kind: "package-reference"
 
 `diff(ref, headSha, signal)` 读取托管平台计算出的变更请求在 head 提交 `headSha` 处的统一补丁，路径带 `a/` 与 `b/` 前缀；`fileText(ref, commit, path, signal)` 读取其仓库中某个提交下的一个文件。两者都委托给引用所属 forge 的提供方，没有注册提供方时抛错，resolve 为文本或 `ForgeFailure`；托管平台或提供方因结果超过其大小上限而拒绝时，失败为 `too-large`。提供方只在补丁描述 `headSha` 时返回补丁；head 已是其他提交时，`diff` resolve 为 `stale`。同一 head 提交的第一次 stale 读取会让被 watch 的变更请求立即重新轮询，使下一次状态给出当前 head；之后在该提交上的 stale 读取等待常规轮询，从而在托管平台的应答短暂不一致时限制读取次数。快照携带 `unresolvedThreads` 与 `threadsTruncated`；提供方只统计了部分评审讨论时，后者表示该计数只是下限。`fileUrl(ref, commit, path)` 返回该文件在该提交下的网页地址。
 
+提供方可以同时实现 `commits` 与 `compare`。`commits(ref, signal)` 在一个 head 提交上按从旧到新列出变更请求的提交，每个提交带完整对象名、第一个父提交、标题、作者与作者时间，并带 `truncated` 标志；`compare(ref, base, head, signal)` 读取从提交 `base` 到提交 `head` 的统一补丁。提供方缺少其中任一方法时，注册表的 `commits` 返回 undefined，`compare` 返回 `unavailable` 失败，因此使用方只在两者都存在时提供按提交查看。
+
 `fetchChecks(ref, signal)` 按需读取单个变更请求的完整检查，使用独立的 `fetchTimeoutMs` 时限，不占用轮询批次，也不向其监听方发布结果。读取失败时保留已有轮询快照。提供方未实现 `fetchChecks` 时返回 `unavailable`。调用方取消、提供方或服务销毁都会中止读取；销毁会等待读取结束。
 
 `ctx.forge.watch(ref, listener)` 同样是 effect。变更请求的第一个监听方会立即触发轮询；`latest(ref)` 返回最近一次结果。每个 forge 同时最多只有一次轮询读取在进行，这次读取包含该 forge 所有到期的变更请求。打开状态的变更请求在检查未完成或可合并性未知时每 `activeIntervalMs` 轮询一次，否则每 `idleIntervalMs` 轮询一次。已关闭的变更请求按 `idleIntervalMs` 轮询以检测重新打开；已合并的停止自动轮询。`refresh(ref)` 立即轮询一个被监听的变更请求，已结束的也包括在内；该 forge 已有读取在进行时，等待其结束后立即再读一次。读取失败后，重试间隔为 `activeIntervalMs` 按连续失败次数翻倍，最长 `maxBackoffMs`；该值必须大于或等于 `activeIntervalMs`。注销提供方会让其被监听的变更请求以 `unavailable` 结束。最后一个监听方离开后轮询停止。默认值见[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-forge)。

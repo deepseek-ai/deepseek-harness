@@ -91,19 +91,94 @@
 }
 
 .headerEnd {
-  flex: none;
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
   margin-left: auto;
 }
+
 
 .toolbar {
   display: flex;
   flex: none;
-  align-items: center;
-  gap: 4px;
+  align-items: stretch;
   box-sizing: border-box;
-  min-height: 38px;
-  padding: 0 8px;
   border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+/* Spans the file tree's width with the tree's search inset, and its divider continues the tree's border. */
+.lensCell {
+  display: none;
+  flex: none;
+  align-items: center;
+  box-sizing: border-box;
+  width: var(--forge-tree-width);
+  padding: 0 8px;
+  border-inline-end: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.toolbar[data-tree='right'] .lensCell {
+  order: 1;
+  border-inline-start: 0.5px solid var(--dsw-alias-border-l3);
+  border-inline-end: 0;
+}
+
+.toolbarMain {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 4px;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 38px;
+  padding: 5px 8px;
+}
+
+.lensMenu {
+  display: inline-flex;
+}
+
+@container forge-changes (min-width: 760px) {
+  .toolbar:not([data-tree='hidden']) .lensCell {
+    display: flex;
+  }
+
+  .toolbar:not([data-tree='hidden']) .lensMenu {
+    display: none;
+  }
+}
+
+.spacer {
+  flex: 1;
+}
+
+.progressSlot {
+  display: inline-flex;
+}
+
+/* Breaks the toolbar's review controls onto a second row where one row is too narrow for them. */
+.rowBreak {
+  display: none;
+}
+
+@container forge-changes (max-width: 640px) {
+  .reviewRow {
+    order: 2;
+  }
+
+  .rowBreak {
+    display: block;
+    flex-basis: 100%;
+    order: 1;
+    height: 4px;
+  }
+
+  .progressSlot {
+    margin-left: auto;
+  }
 }
 
 .select {
@@ -173,7 +248,6 @@
   flex: none;
   align-items: center;
   gap: 2px;
-  margin-left: auto;
 }
 
 .tool {
@@ -369,6 +443,62 @@
 
 .file:not([data-expanded]) .chevron {
   transform: rotate(-90deg);
+}
+
+.changedTag {
+  flex: none;
+}
+
+/* The viewed mark: a native checkbox with its label as one bordered chip, peer to the file menu button. */
+.viewed {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  height: 24px;
+  padding: 0 8px 0 6px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.viewed input {
+  margin: 0;
+  accent-color: var(--dsw-alias-state-business-primary);
+  cursor: pointer;
+}
+
+.viewed:has(input:checked) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .viewed:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.viewed:has(input:focus-visible) {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -1px;
+}
+
+.viewed input:focus-visible {
+  outline: none;
+}
+
+@container forge-changes (max-width: 520px) {
+  .viewed {
+    padding: 0 6px;
+  }
+
+  .viewedLabel {
+    display: none;
+  }
 }
 
 .badge {
