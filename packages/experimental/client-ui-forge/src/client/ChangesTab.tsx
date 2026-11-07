@@ -602,7 +602,9 @@ export function ChangesTab({
   const releasePin = useRef<(() => void) | null>(null)
   /**
    * Keep a jumped-to section at the top of the scrollport for {@link JUMP_PIN_MS}: the sections around it draw their
-   * lines after the jump, which moves it. Scrolling input from the reader, another jump, or unmounting ends the pin.
+   * lines after the jump, which moves it. Scrolling input from the reader, another jump, hiding the tab, or unmounting
+   * ends the pin. Each frame measures the section once, which covers every cause of movement, such as a section
+   * drawing its lines, deferred highlighting, or a review card opening, without each one reporting it.
    */
   const pinJump = (port: HTMLElement, section: HTMLElement, owner: ChangesData): void => {
     releasePin.current?.()
@@ -644,6 +646,8 @@ export function ChangesTab({
     if (section !== undefined && scrollport.current !== null) pinJump(scrollport.current, section, data)
     setWanted(null)
   }, [tab.visible, wanted, data, allFiles, lens, hideTests, actions, tab.id])
+  // A hidden tab has nothing to keep in place, and its scrollport measures as empty.
+  useEffect(() => { if (!tab.visible) releasePin.current?.() }, [tab.visible])
   useEffect(() => () => { releasePin.current?.() }, [])
   const refresh = (): void => { setAttempt(value => value + 1) }
   const root = state !== null && state.checkout.state === 'ready' ? state.checkout.checkout.root : null
@@ -798,7 +802,10 @@ export function ChangesTab({
     markViewed(data, file, viewedStateOf(marks, file.path, file.digest) !== 'viewed')
   }
 
-  // What the section handlers and comment actions read when they run; replaced on every render.
+  // What the section handlers and comment actions read when they run, replaced on every render. The assignment happens
+  // during render rather than in an effect because the file menus read their actions while this same render draws them;
+  // an effect would hand them the previous diff's links. A render React discards leaves values derived from the same
+  // props and state, which the retried render assigns again.
   const live = useRef({ data, expandedByDefault, expand, markViewed, fileActions, publishReview, report, t })
   live.current = { data, expandedByDefault, expand, markViewed, fileActions, publishReview, report, t }
   const handlers = useMemo((): DiffFileHandlers => ({

@@ -971,7 +971,7 @@ describe('ChangesTab layout', () => {
     expect(scrolled).toHaveBeenCalledWith({ block: 'start' })
   })
 
-  it('keeps a jumped-to file at the top while sections around it draw, until the reader scrolls or a second passes', async () => {
+  it('keeps a jumped-to file at the top while sections around it draw, until the reader scrolls, the tab hides, or a second passes', async () => {
     const m = mount()
     await settle()
     const { viewport } = fileViewport(m)
@@ -1013,6 +1013,15 @@ describe('ChangesTab layout', () => {
       shift = 80
       act(() => { vi.advanceTimersToNextFrame() })
       expect(scrolled).toHaveBeenCalledTimes(3)
+
+      // Hiding the tab ends the pin at once.
+      shift = 0
+      jump()
+      expect(scrolled).toHaveBeenCalledTimes(4)
+      act(() => { m.visibility.set(false) })
+      shift = 80
+      act(() => { vi.advanceTimersToNextFrame() })
+      expect(scrolled).toHaveBeenCalledTimes(4)
     } finally {
       vi.useRealTimers()
     }
