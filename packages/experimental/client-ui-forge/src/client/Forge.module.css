@@ -523,7 +523,7 @@
 
 /* Attention mark over the Session panel toggle; the toggle sizes and places it. */
 .attention {
-  background: var(--dsw-alias-state-error-primary);
+  background: var(--dsw-alias-state-warn-primary);
 }
 
 .visuallyHidden {
