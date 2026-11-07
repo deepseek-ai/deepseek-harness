@@ -344,8 +344,8 @@ describe('ProjectRow', () => {
     expect(renderFactorySlot).toHaveBeenCalledWith('contextMenu.button', expect.objectContaining({
       target: { kind: 'directory', value: { sessionId: SID, path: '/Users/me/projects/app/.worktrees/fix' } },
       label: '工作目录操作',
-      size: 'sm',
     }))
+    expect(renderFactorySlot.mock.calls[0]?.[1]).not.toHaveProperty('size')
     expect(screen.getByRole('button', { name: '工作目录操作' })).toBeTruthy()
   })
 

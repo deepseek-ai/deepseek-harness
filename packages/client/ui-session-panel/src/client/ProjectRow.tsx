@@ -36,7 +36,7 @@ export function ProjectRow({
     <PanelRow
       {...getTriggerProps(target)}
       icon={<IconFolderCloseRegular size={16} />}
-      menu={renderFactorySlot('contextMenu.button', { target, label: t('project.actions'), size: 'sm' })}
+      menu={renderFactorySlot('contextMenu.button', { target, label: t('project.actions') })}
       data-session-panel-project=""
     >
       <Tooltip label={`${t('project.label')}\n${shown}`} side="left">
