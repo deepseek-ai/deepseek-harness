@@ -42,6 +42,8 @@ it('uses an absolute fixture without compiling and disposes the Host runtime', a
   expect(native.prepare).not.toHaveBeenCalled()
   expect(native.construct).toHaveBeenCalledWith(ctx, 13, 'pipe')
   const backend = native.install.mock.calls[0]![2]
+  expect(backend.helperPath).toBe(config.helperPath)
+  expect(native.architecture).not.toHaveBeenCalled()
   expect(backend.guidance).toBe(GUIDANCE)
   expect(backend.capabilities).toMatchObject({ platform: 'windows', appLevelAccessibility: false, keyboard: ['window'] })
   const channel = { marker: 'native stream' }
@@ -55,7 +57,11 @@ it('uses an absolute fixture without compiling and disposes the Host runtime', a
 it('prepares before installation and aborts the completed preparation scope on unload', async () => {
   const ctx = owner(), prepared = Promise.withResolvers<string>()
   native.prepare.mockReturnValueOnce(prepared.promise)
-  const pending = apply(ctx, Config({}))
+  const config = Config({ buildTimeoutMs: 90_000, graceMs: 250 })
+  const pending = apply(ctx, config)
+  expect(native.prepare.mock.calls[0]![0]).toMatchObject({
+    subprocess: ctx.subprocess, timeoutMs: config.buildTimeoutMs, graceMs: config.graceMs,
+  })
   expect(native.install).not.toHaveBeenCalled()
   prepared.resolve(resolve('compiled.exe'))
   await pending
@@ -63,10 +69,10 @@ it('prepares before installation and aborts the completed preparation scope on u
   await ctx.fiber.dispose()
   expect(native.prepare.mock.calls[0]![0].signal.aborted).toBe(true)
 })
-it('reports compiler failure without installing tool registrations', async () => {
-  native.prepare.mockRejectedValueOnce(new Error('compiler unavailable'))
+it('reports a missing helper without installing tool registrations', async () => {
+  native.prepare.mockRejectedValueOnce(new Error('helper unavailable'))
   const ctx = owner()
-  await expect(apply(ctx, Config({}))).rejects.toThrow('compiler unavailable')
+  await expect(apply(ctx, Config({}))).rejects.toThrow('helper unavailable')
   await ctx.fiber.dispose()
   expect(native.install).not.toHaveBeenCalled()
 })

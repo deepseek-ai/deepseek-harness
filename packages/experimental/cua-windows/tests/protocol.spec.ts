@@ -19,12 +19,11 @@ it('preserves Windows physical capture units and observed foreground changes', (
   })
 })
 
-it('resolves Windows compiler and input defaults while rejecting unsupported numeric limits', () => {
+it('resolves Windows input defaults without a compiler path setting', () => {
   const resolved = Config({})
-  expect(resolved.dotnetPath).toBe('dotnet')
+  expect(resolved).not.toHaveProperty('dotnetPath')
   expect(resolved.pollIntervalMs).toBe(25)
   expect(resolved.textEventIntervalMs).toBe(0)
-  expect(() => Config({ dotnetPath: '' })).toThrow()
   expect(() => Config({ pollIntervalMs: 0 })).toThrow()
   expect(() => Config({ maxResponseBytes: 2 ** 31 })).toThrow()
 })

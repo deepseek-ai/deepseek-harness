@@ -28,21 +28,18 @@ export const name = 'cua-windows'
 /** Services required by shared CUA execution and managed native preparation. */
 export const inject = ['computerUse', 'tools', 'systemPrompt', 'subprocess', 'agents']
 
-/** Windows compiler and native waiting policy, alongside shared CUA resource limits. */
+/** Windows native waiting policy, alongside shared CUA resource limits. */
 export interface Config extends CuaConfig {
-  /** .NET SDK executable used for source preparation; installed payloads do not require it. */
-  dotnetPath: string
   /** Windows PowerShell executable used to query WSL interoperation and the Windows architecture. */
   windowsPowerShellPath: string
   /** Milliseconds between application-readiness and clipboard-release observations. */
   pollIntervalMs: number
 }
 
-/** Validate platform configuration before launching the compiler or helper. */
+/** Validate platform configuration before locating and launching the helper. */
 export const Config = Schema.object({
   ...CuaConfigFields,
   connectTimeoutMs: CuaConfigFields.connectTimeoutMs.default(30_000),
-  dotnetPath: Schema.string().min(1).default('dotnet'),
   windowsPowerShellPath: Schema.string().min(1).default('powershell.exe'),
   pollIntervalMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(25),
   textEventIntervalMs: CuaConfigFields.textEventIntervalMs.default(0),
@@ -54,7 +51,7 @@ export const Config = Schema.object({
 /**
  * Prepare the Windows payload and install the shared authorized operation pipeline.
  * @param ctx - Owning provider context.
- * @param config - Validated compiler, operation bounds, and application grants.
+ * @param config - Validated helper override, operation bounds, and application grants.
  * @returns Completion after preparation and reversible registrations.
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
@@ -68,8 +65,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     if (helperPath === undefined) {
       const architecture = wsl?.architecture ?? nativeHostArchitecture(process.platform, process.arch)
       helperPath = await prepareNativeExecutable({
-        packageRoot: resolve(fileURLToPath(new URL('..', import.meta.url))), architecture, dotnetPath: config.dotnetPath,
-        subprocess: ctx.subprocess, signal: controller.signal, timeoutMs: config.buildTimeoutMs, graceMs: config.graceMs,
+        packageRoot: resolve(fileURLToPath(new URL('..', import.meta.url))), architecture,
+        subprocess: ctx.subprocess, timeoutMs: config.buildTimeoutMs, graceMs: config.graceMs, signal: controller.signal,
       })
     }
     return wsl ? retainWslHelper(helperPath, wsl.cacheDirectory, controller.signal) : helperPath

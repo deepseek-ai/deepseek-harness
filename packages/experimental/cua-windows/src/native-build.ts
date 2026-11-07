@@ -1,28 +1,27 @@
-/** Source compilation and installed Windows C# helper resolution. */
+/** Source-checkout compilation and installed Windows helper resolution. */
 import { constants } from 'node:fs'
 import { access } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
-import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
+import { join } from 'node:path'
 import { buildNativeExecutable as compileExecutable, sourceNativePackage } from '@deepseek-ai/dsh-cua/native-build'
+import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 
 /** Architectures supported by the Windows helper payload. */
 export type NativeArchitecture = 'arm64' | 'x64'
 
-/** Compiler invocation and resource ownership for one Windows payload. */
+/** Package location, architecture and managed source-build lifetime. */
 export interface NativeBuildSpec {
   packageRoot: string
   architecture: NativeArchitecture
-  dotnetPath: string
   subprocess: Pick<SubprocessRuntime, 'spawn'>
-  signal: AbortSignal
   timeoutMs: number
   graceMs: number
+  signal: AbortSignal
 }
 
 /**
- * Validate the runtime host before preparing Windows native code.
- * @param platform - Node host platform.
- * @param architecture - Node process architecture.
+ * Validate the native Windows runtime host.
+ * @param platform Node host platform.
+ * @param architecture Node process architecture.
  * @returns Supported Windows architecture.
  */
 export function nativeHostArchitecture(platform: string, architecture: string): NativeArchitecture {
@@ -32,44 +31,49 @@ export function nativeHostArchitecture(platform: string, architecture: string): 
 }
 
 /**
- * Locate the package-owned Windows executable.
- * @param packageRoot - Directory containing the Windows provider manifest.
- * @param architecture - Architecture of the process running the helper.
+ * Locate an installed package's helper, using Electron's unpacked payload when applicable.
+ * @param packageRoot Directory containing the Windows provider manifest.
+ * @param architecture Architecture of the process running the helper.
  * @returns Absolute payload path.
  */
 export function nativeExecutablePath(packageRoot: string, architecture: NativeArchitecture): string {
-  return join(packageRoot, 'native', 'bin', `win-${architecture}`, 'dsh-cua-windows.exe')
+  // TODO: Installed-package paths are placeholders until the Windows package layout is finalized.
+  const root = packageRoot.replace(/([\\/])app\.asar(?=[\\/])/u, '$1app.asar.unpacked')
+  return join(root, 'native', 'bin', `win-${architecture}`, 'dsh-cua-windows.exe')
+}
+
+async function checkedExecutable(executable: string, signal: AbortSignal): Promise<string> {
+  await access(executable, constants.X_OK)
+  signal.throwIfAborted()
+  return executable
 }
 
 /**
- * Publish the self-contained C# application directly into the package payload directory.
- * @param spec - SDK command, target, compiler ownership, and deadlines.
- * @returns Package executable path after compiler cleanup; existing output files can be overwritten.
+ * Publish the source helper with dotnet from PATH under the shared compiler lock.
+ * @param spec Checkout, target architecture and managed process limits.
+ * @returns Published executable after compiler cleanup; build or output validation failures reject.
  */
-export function buildNativeExecutable(spec: NativeBuildSpec): Promise<string> {
-  const native = join(spec.packageRoot, 'native')
-  const executable = nativeExecutablePath(spec.packageRoot, spec.architecture)
-  return compileExecutable({ ...spec,
-    argv: [spec.dotnetPath, 'publish', join(native, 'entry', 'CuaWindows.csproj'), '--configuration', 'Release',
-      '--runtime', `win-${spec.architecture}`, '--self-contained', 'true', '--output', dirname(executable),
-      '-p:EnableWindowsTargeting=true'],
-    lockPath: join(native, '.build', 'publish'),
-    resolveExecutable: async () => {
-      await access(executable, constants.X_OK)
-      return executable
-    },
+export async function buildNativeExecutable(spec: NativeBuildSpec): Promise<string> {
+  const nativeRoot = join(spec.packageRoot, 'native')
+  const runtime = `win-${spec.architecture}`
+  const directory = join(nativeRoot, 'bin', runtime)
+  return compileExecutable({
+    ...spec,
+    lockPath: join(nativeRoot, '.build', 'compiler'),
+    argv: ['dotnet', 'publish', join(nativeRoot, 'entry', 'CuaWindows.csproj'),
+      '--configuration', 'Release', '--runtime', runtime, '--self-contained', 'true',
+      '--output', directory, '-p:EnableWindowsTargeting=true'],
+    resolveExecutable: () => checkedExecutable(join(directory, 'dsh-cua-windows.exe'), spec.signal),
   })
 }
 
 /**
- * Compile only source checkouts; installed packages require their packaged native payload.
- * @param spec - Source build and runtime target inputs.
- * @returns The ready executable path.
+ * Build source helpers on activation; installed packages only resolve their payload.
+ * @param spec Package location, architecture and cancellation/deadline limits.
+ * @returns Existing executable after preparation; failures reject without fallback to another payload.
  */
 export async function prepareNativeExecutable(spec: NativeBuildSpec): Promise<string> {
-  if (await sourceNativePackage(spec.packageRoot, 'packages/experimental/cua-windows')) return buildNativeExecutable(spec)
-  const executable = nativeExecutablePath(spec.packageRoot, spec.architecture)
-  await access(executable, constants.X_OK)
   spec.signal.throwIfAborted()
-  return executable
+  if (await sourceNativePackage(spec.packageRoot, 'packages/experimental/cua-windows')) return buildNativeExecutable(spec)
+  return checkedExecutable(nativeExecutablePath(spec.packageRoot, spec.architecture), spec.signal)
 }
