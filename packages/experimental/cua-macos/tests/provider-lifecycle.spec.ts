@@ -1083,7 +1083,7 @@ it('keeps provider-specific pointer flags and questions off providers without mo
   await f.provider.dispose()
   await f.ctx.plugin({ name: 'fixture-window-provider', inject: NativeProvider.inject, apply(ctx: Context) {
     installCua(ctx, CuaConfig(config), {
-      helperPath: config.helperPath, createChannel() { throw new Error('Unexpected native channel') },
+      helperPath: config.helperPath, createChannel: native.connect,
       guidance: '', permissionParameters: () => ({}),
       capabilities: { platform: 'fixture', methods: ['getApp', 'mouseMove'], appLevelAccessibility: true,
         keyboard: ['app'], coordinateSpace: 'screenshot-pixels', browser: false },
