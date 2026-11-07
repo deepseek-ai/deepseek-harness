@@ -31,8 +31,8 @@ internal sealed record NativeConfig(int MaxRequestBytes, int MaxResponseBytes, i
 internal sealed class MtaDispatcher : IAsyncDisposable
 {
     private readonly BlockingCollection<Action> queue = new();
-    private readonly TaskCompletionSource stopped = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private readonly TaskCompletionSource ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource<object?> stopped = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource<object?> ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly Thread thread;
 
     internal MtaDispatcher()
@@ -45,11 +45,11 @@ internal sealed class MtaDispatcher : IAsyncDisposable
                 Marshal.ThrowExceptionForHR(Win32.RoInitialize(1));
                 initialized = true;
                 Win32.SetThreadDpiAwarenessContext(-4);
-                ready.SetResult();
+                ready.SetResult(null);
                 foreach (var work in queue.GetConsumingEnumerable()) work();
             }
             catch (Exception error) { ready.TrySetException(error); }
-            finally { if (initialized) Win32.RoUninitialize(); stopped.TrySetResult(); }
+            finally { if (initialized) Win32.RoUninitialize(); stopped.TrySetResult(null); }
         }) { IsBackground = true, Name = "dsh-cua-uia" };
         thread.SetApartmentState(ApartmentState.MTA);
         thread.Start();
@@ -93,7 +93,7 @@ internal sealed class ServiceControl : Forms.Control
 internal sealed class StaDispatcher : IAsyncDisposable
 {
     private readonly TaskCompletionSource<ServiceControl> ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private readonly TaskCompletionSource stopped = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource<object?> stopped = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly ConcurrentDictionary<nint, long> epochs = new();
     private readonly Thread thread;
     private Win32.WinEvent? windowEvents;
@@ -122,7 +122,7 @@ internal sealed class StaDispatcher : IAsyncDisposable
             finally
             {
                 if (hook != 0) Win32.UnhookWinEvent(hook);
-                stopped.TrySetResult();
+                stopped.TrySetResult(null);
             }
         }) { IsBackground = true, Name = "dsh-cua-clipboard" };
         thread.SetApartmentState(ApartmentState.STA);

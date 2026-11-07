@@ -80,7 +80,7 @@ public sealed class FrameReader(Stream stream)
         {
             if (start == end)
             {
-                end = await stream.ReadAsync(buffer, cancellation);
+                end = await stream.ReadAsync(buffer, 0, buffer.Length, cancellation);
                 start = 0;
                 if (end == 0)
                 {

@@ -1,7 +1,6 @@
 // Portable checks exercise admission, framing, text offsets, and model-visible formatting.
 using System.Text;
 using DeepSeek.Cua.Protocol;
-using DeepSeek.Cua.Windows;
 
 var checks = 0;
 void Check(bool condition, string message)
@@ -75,22 +74,4 @@ Check(!AccessibilityText.Retain(new() { Role = "AXGroup" }), "Empty structural c
 Check(AccessibilityText.Retain(new() { Role = "AXGroup", Actions = ["Copy"] }), "Actionable containers retain their row");
 Check(AccessibilityText.Format(new() { Role = "AXTextArea", Value = "abc", HasValue = true, HasSelection = true, Selection = new(2, 5) }, 0, false)
     .Contains("selection=unavailable"), "Out-of-range selections do not describe valid text");
-var captures = new CaptureAdmission();
-var cleanup = new TaskCompletionSource<byte[]>(TaskCreationOptions.RunContinuationsAsynchronously);
-var ownedCapture = captures.Start(() => cleanup.Task);
-using var cancelled = new CancellationTokenSource();
-cancelled.Cancel();
-try { await ownedCapture.WaitAsync(cancelled.Token); throw new Exception("Cancelled capture caller remained attached"); }
-catch (OperationCanceledException) { checks++; }
-Refuses(() => captures.Start(() => Task.FromResult(new byte[] { 2 })), "CAPTURE_BUSY");
-var joined = captures.Join();
-Check(!joined.IsCompleted, "Native cleanup retains ownership after its caller stops waiting");
-cleanup.SetResult([1]);
-await joined;
-Check((await captures.Start(() => Task.FromResult(new byte[] { 2 })))[0] == 2, "Completed cleanup admits a fresh capture");
-var failed = captures.Start(() => Task.FromException<byte[]>(new NativeFailure("CAPTURE_FAILED", "device lost")));
-try { await failed; throw new Exception("Capture error disappeared"); }
-catch (NativeFailure failure) { Check(failure.Code == "CAPTURE_FAILED", "Capture failure remains attached to its requesting connection"); }
-await captures.Join();
-Check((await captures.Start(() => Task.FromResult(new byte[] { 3 })))[0] == 3, "A settled capture failure does not reserve a permanent slot");
 Console.WriteLine($"{checks} portable CUA checks passed");

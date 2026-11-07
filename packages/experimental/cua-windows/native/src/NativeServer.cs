@@ -33,7 +33,7 @@ internal static class NativeServer
         await using var sta = new StaDispatcher();
         await sta.Invoke(() => { }, lifetime.Token);
         await mta.Invoke(() => true, lifetime.Token);
-        await using var executor = new DesktopExecutor(mta, sta, graceMs);
+        await using var executor = new DesktopExecutor(mta, sta);
         var clients = new ConcurrentDictionary<Task, byte>();
         NamedPipeServerStream? listener = NewPipe(pipeName);
         var membership = new object();
@@ -162,6 +162,7 @@ internal static class NativeServer
         try { response = new { id = request.Id, result = await operation }; }
         catch (OperationCanceledException) { response = Failure(request.Id, "NATIVE_CANCELLED", "Native operation cancelled; observe before deciding on further input"); }
         catch (NativeFailure error) { response = Failure(request.Id, error.Code, error.Message); }
+        catch (NotImplementedException error) { response = Failure(request.Id, "NOT_IMPLEMENTED", error.Message); }
         catch (ElementNotAvailableException) { response = Failure(request.Id, "STALE_SNAPSHOT", "An accessibility element disappeared; read fresh state"); }
         catch (ElementNotEnabledException) { response = Failure(request.Id, "ELEMENT_DISABLED", "The selected control is disabled"); }
         catch (UnauthorizedAccessException) { response = Failure(request.Id, "PERMISSION_DENIED", "Windows refused access to the selected application"); }

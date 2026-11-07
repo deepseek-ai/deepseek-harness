@@ -86,7 +86,7 @@
     "src"
   ],
   "scripts": {
-    "build:native": "dotnet publish native/CuaWindows.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableWindowsTargeting=true"
+    "build:native": "dotnet build native/CuaWindows.csproj --configuration Release --framework net48"
   },
   "os": [
     "win32",

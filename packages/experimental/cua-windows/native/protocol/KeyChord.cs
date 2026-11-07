@@ -6,10 +6,10 @@ public sealed record KeyChord(string Key, string[] Modifiers)
     {
         if (text.Length == 0) throw new NativeFailure("INVALID_ARGUMENT", "A key name is required");
         var plus = text == "+" || text.EndsWith("++", StringComparison.Ordinal);
-        var parts = plus ? text[..^1].TrimEnd('+').Split('+', StringSplitOptions.RemoveEmptyEntries) : text.Split('+');
+        var parts = plus ? text[..^1].TrimEnd('+').Split(new[] { '+' }, StringSplitOptions.RemoveEmptyEntries) : text.Split('+');
         var key = plus ? "+" : parts[^1];
         if (key.Length == 0) throw new NativeFailure("INVALID_ARGUMENT", "A key chord must end with a key");
-        var modifiers = (plus ? parts : parts[..^1]).Concat(extra).Select(NormalizeModifier).Distinct().ToArray();
+        var modifiers = (plus ? parts : parts.Take(parts.Length - 1)).Concat(extra).Select(NormalizeModifier).Distinct().ToArray();
         return new(key, modifiers);
     }
 

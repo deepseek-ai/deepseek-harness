@@ -14,7 +14,7 @@ internal sealed class ClientState
     internal void Clear() { foreach (var app in Apps.Values) app.Dispose(); Apps.Clear(); Launches.Clear(); }
 }
 
-internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta, int graceMs) : IAsyncDisposable
+internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IAsyncDisposable
 {
     private readonly WindowCapture capture = new();
     private readonly ClipboardPaste clipboard = new();
@@ -75,13 +75,13 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta, int 
             var context = new RequestContext(config, cancellation, mta, sta);
             context.Check();
             var parameters = request.Params;
-            if (request.Method == "permissionStatus") return DesktopSession.Status(await capture.IsSupported(cancellation));
+            if (request.Method == "permissionStatus") return DesktopSession.Status(false);
             if (request.Method == "applicationIcons") return await sta.Invoke(_ => Applications.Icons(parameters, context), cancellation);
             if (request.Method == "getCapabilities")
             {
                 var locked = DesktopSession.Locked();
                 return new { permissions = new { accessibility = locked == false,
-                    screenRecording = locked == false && await capture.IsSupported(cancellation) },
+                    screenRecording = false },
                     sessionLocked = locked };
             }
             if (request.Method is "requestPermission" or "openPermissionSettings")
@@ -255,10 +255,9 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta, int 
         finally { queue.Release(); }
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        try { await capture.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromMilliseconds(graceMs)); }
-        catch (TimeoutException) { NativeServer.Fatal("NATIVE_CLEANUP", "The idle desktop service could not release capture resources"); }
         queue.Dispose();
+        return default;
     }
 }

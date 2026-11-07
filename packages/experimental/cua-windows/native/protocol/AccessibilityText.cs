@@ -64,9 +64,9 @@ public static class AccessibilityText
         if (actions.Length != 0) text.Append(" actions=[").Append(string.Join(", ", actions.Select(Quote))).Append(']');
         if (details)
         {
-            if (!string.IsNullOrEmpty(node.Identifier)) text.Append(" id=").Append(Quote(node.Identifier));
+            if (node.Identifier is { Length: > 0 } identifier) text.Append(" id=").Append(Quote(identifier));
             if (index.HasValue && node.Bounds is { } bounds)
-                text.Append(" bounds=[").Append(string.Join(',', new[] { bounds.X, bounds.Y, bounds.Width, bounds.Height }
+                text.Append(" bounds=[").Append(string.Join(",", new[] { bounds.X, bounds.Y, bounds.Width, bounds.Height }
                     .Select(number => number.ToString("G", CultureInfo.InvariantCulture)))).Append(']');
         }
         return text.ToString();

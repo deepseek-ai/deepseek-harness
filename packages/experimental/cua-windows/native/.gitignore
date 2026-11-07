@@ -1,3 +1,4 @@
 **/bin/
 **/obj/
 .build/
+**/.vs

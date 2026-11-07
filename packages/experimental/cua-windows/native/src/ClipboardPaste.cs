@@ -10,7 +10,7 @@ internal sealed class ClipboardPaste
 {
     private sealed class Transaction(ServiceControl control, int targetPid, uint format, byte[] payload, List<(uint Format, byte[] Data)> previous, uint originalSequence)
     {
-        internal readonly TaskCompletionSource Consumed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal readonly TaskCompletionSource<object?> Consumed = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private uint sequence = originalSequence;
         private bool replaced;
         private bool restoring;
@@ -68,7 +68,7 @@ internal sealed class ClipboardPaste
                 rendered = true;
                 sequence = Win32.GetClipboardSequenceNumber();
                 if (changed) Consumed.TrySetException(new NativeFailure("CLIPBOARD_CHANGED", "Another writer changed the clipboard during paste"));
-                else if (message == 0x0305) Consumed.TrySetResult();
+                else if (message == 0x0305) Consumed.TrySetResult(null);
             }
             catch (Exception error) { Consumed.TrySetException(error); }
             finally { if (opened) Win32.CloseClipboard(); }

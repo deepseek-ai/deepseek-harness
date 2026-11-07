@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/desktop-tests/">
+    <Project Path="desktop-tests/DesktopFixture.csproj" />
+  </Folder>
+  <Folder Name="/protocol/">
+    <Project Path="protocol/CuaProtocol.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Protocol.Tests.csproj" />
+  </Folder>
+  <Project Path="CuaWindows.csproj" />
+</Solution>
