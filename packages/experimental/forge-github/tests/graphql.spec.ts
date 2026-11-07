@@ -56,6 +56,7 @@ describe('snapshot mapping', () => {
       headBranch: 'topic-1',
       headSha: 'f'.repeat(40),
       baseBranch: 'master',
+      baseSha: 'b'.repeat(40),
       additions: 128,
       deletions: 14,
       mergeability: 'mergeable',

@@ -71,9 +71,10 @@ interface ForgeProvider {
   /**
    * Read the changes of a change request at head commit `headSha` as the host computes them, as one unified
    * patch with `a/` and `b/` path prefixes. A patch is returned only when it describes `headSha`; once the
-   * head is another commit, the read resolves to a `stale` failure.
+   * head is another commit, the read resolves to a `stale` failure. `base`, when given, is the `baseSha` the
+   * latest status recorded with `headSha`; a provider may start reading from it before it confirms the head.
    */
-  diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<string | ForgeFailure>
+  diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal, base?: string): Promise<string | ForgeFailure>
   /** Read the text of `path` at `commit` in the change request's repository. */
   fileText(ref: ChangeRequestRef, commit: string, path: string, signal: AbortSignal): Promise<string | ForgeFailure>
   /** Build the web page of `path` at `commit` in the change request's repository. */
@@ -199,6 +200,11 @@ interface ChangeRequestSnapshot {
   readonly headSha: string
   /** Branch the change request merges into. */
   readonly baseBranch: string
+  /**
+   * Base commit the host recorded with `headSha`, whose merge base with the head starts the change request's diff;
+   * omitted when the provider does not report it.
+   */
+  readonly baseSha?: string
   /** Lines the change request adds. */
   readonly additions: number
   /** Lines the change request deletes. */
@@ -907,7 +913,8 @@ async fetchChecks(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeReq
  * computes them. The first `stale` failure at a head commit polls a watched
  * change request again at once, so its next status names the current head;
  * later stale reads at the same commit wait for the regular poll, which
- * bounds the reads while the host's answers disagree.
+ * bounds the reads while the host's answers disagree. When the latest status of a watched change request names
+ * `headSha`, its `baseSha` goes to the provider, which may then read the patch while it confirms the head.
  * @param ref - change request served by a registered provider.
  * @param headSha - head commit the patch must describe, usually the head of the latest status.
  * @param signal - cancellation of the read.

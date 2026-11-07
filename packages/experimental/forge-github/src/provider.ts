@@ -159,24 +159,44 @@ export class GitHubProvider implements ForgeProvider {
    * current head and the base commit GitHub recorded with it; a head other
    * than `headSha` returns `stale`. Otherwise the compare endpoint reads the
    * patch from the merge base of that base commit and `headSha`, as the pull
-   * request's own diff does, with both ends fixed.
+   * request's own diff does, with both ends fixed. Given the `base` the latest
+   * status recorded with `headSha`, the comparison from it runs while the
+   * GraphQL read confirms the head; a stale head or another base commit
+   * cancels that comparison and waits for it to end before the read returns.
    */
-  async diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<string | ForgeFailure> {
+  async diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal, base?: string): Promise<string | ForgeFailure> {
     const { host, owner, name } = checkedRepository(ref)
     const failure = this.hostFailure(host)
     if (failure !== undefined) return failure
     if (!isCommit(headSha)) throw new Error(`forge-github: invalid head commit ${JSON.stringify(headSha)}`)
-    const output = await this.read([
-      'api', 'graphql', '--hostname', host,
-      '-f', `query=${PULL_REQUEST_COMMITS_QUERY}`, '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `number=${ref.number}`,
-    ], signal)
-    if (typeof output !== 'string') return output
-    const commits = mapPullRequestCommitsResponse(parseJson(output))
-    if (commits === undefined) return { code: 'unavailable', message: 'unexpected GitHub response to the pull request commit read' }
-    if (commits.head.toLowerCase() !== headSha.toLowerCase()) {
-      return { code: 'stale', message: `the pull request head moved from ${headSha} to ${commits.head}` }
+    if (base !== undefined && !isCommit(base)) throw new Error(`forge-github: invalid base commit ${JSON.stringify(base)}`)
+    const compare = async (from: string, operation: AbortSignal): Promise<string | ForgeFailure> =>
+      await readComparison(async (args, inner) => await this.read(args, inner), ref.repository, from, headSha, operation)
+    const speculation = new AbortController()
+    const early = base === undefined ? undefined : { base, patch: compare(base, AbortSignal.any([signal, speculation.signal])) }
+    // The early comparison is observed here, so a cancelled or unused one never rejects unhandled.
+    const settled = early?.patch.then(() => undefined, () => undefined)
+    const discard = async (): Promise<void> => {
+      speculation.abort()
+      await settled
     }
-    return await readComparison(async (args, operation) => await this.read(args, operation), ref.repository, commits.base, headSha, signal)
+    try {
+      const output = await this.read([
+        'api', 'graphql', '--hostname', host,
+        '-f', `query=${PULL_REQUEST_COMMITS_QUERY}`, '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `number=${ref.number}`,
+      ], signal)
+      if (typeof output !== 'string') return output
+      const commits = mapPullRequestCommitsResponse(parseJson(output))
+      if (commits === undefined) return { code: 'unavailable', message: 'unexpected GitHub response to the pull request commit read' }
+      if (commits.head.toLowerCase() !== headSha.toLowerCase()) {
+        return { code: 'stale', message: `the pull request head moved from ${headSha} to ${commits.head}` }
+      }
+      if (early?.base.toLowerCase() === commits.base.toLowerCase()) return await early.patch
+      await discard()
+      return await compare(commits.base, signal)
+    } finally {
+      await discard()
+    }
   }
 
   /** Read one file at a commit through the contents API in its raw form. */

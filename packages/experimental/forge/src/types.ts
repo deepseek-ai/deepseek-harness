@@ -79,6 +79,11 @@ export interface ChangeRequestSnapshot {
   readonly headSha: string
   /** Branch the change request merges into. */
   readonly baseBranch: string
+  /**
+   * Base commit the host recorded with `headSha`, whose merge base with the head starts the change request's diff;
+   * omitted when the provider does not report it.
+   */
+  readonly baseSha?: string
   /** Lines the change request adds. */
   readonly additions: number
   /** Lines the change request deletes. */
@@ -244,9 +249,10 @@ export interface ForgeProvider {
   /**
    * Read the changes of a change request at head commit `headSha` as the host computes them, as one unified
    * patch with `a/` and `b/` path prefixes. A patch is returned only when it describes `headSha`; once the
-   * head is another commit, the read resolves to a `stale` failure.
+   * head is another commit, the read resolves to a `stale` failure. `base`, when given, is the `baseSha` the
+   * latest status recorded with `headSha`; a provider may start reading from it before it confirms the head.
    */
-  diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<string | ForgeFailure>
+  diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal, base?: string): Promise<string | ForgeFailure>
   /** Read the text of `path` at `commit` in the change request's repository. */
   fileText(ref: ChangeRequestRef, commit: string, path: string, signal: AbortSignal): Promise<string | ForgeFailure>
   /** Build the web page of `path` at `commit` in the change request's repository. */
