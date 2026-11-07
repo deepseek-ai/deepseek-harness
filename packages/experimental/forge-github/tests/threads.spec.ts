@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { GhOutput, GhRunner } from '../src/gh.ts'
+import { GhOutputLimitError, type GhOutput, type GhRunner } from '../src/gh.ts'
 import { GitHubProvider } from '../src/provider.ts'
 import type { GitHubLimits } from '../src/provider.ts'
 import { REVIEW_QUERY, REVIEW_THREADS_QUERY, THREAD_COMMENTS_QUERY } from '../src/threads.ts'
@@ -204,6 +204,12 @@ describe('GitHub provider review threads', () => {
     const byThreads = review(first, threads, comments)
     await expect(provider(byThreads.run, { maxOutputBytes: size + commentBytes + 10 }).readReview(pull(7), head, signal))
       .resolves.toMatchObject({ threads: [{ id: 't1' }], truncated: true })
+  })
+
+  it('fails a read whose first page alone passes maxOutputBytes as too-large', async () => {
+    const run: GhRunner = async () => { throw new GhOutputLimitError('gh output exceeds maxOutputBytes') }
+
+    await expect(provider(run).readReview(pull(7), head, signal)).resolves.toEqual({ code: 'too-large', message: 'gh output exceeds maxOutputBytes' })
   })
 
   it.each([

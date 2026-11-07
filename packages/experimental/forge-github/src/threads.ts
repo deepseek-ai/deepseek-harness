@@ -45,7 +45,10 @@ export const THREAD_COMMENTS_QUERY = `query($id: ID!, $cursor: String!) {
 export interface ReviewLimits {
   /** Most threads read. */
   readonly maxReviewThreads: number
-  /** Most JSON bytes of all pages together; a page that would pass it ends the read as truncated. */
+  /**
+   * Most JSON bytes of all pages together: a later page that would pass it ends the read as truncated, and a first
+   * page whose output alone passes it fails the read as `too-large`.
+   */
   readonly maxOutputBytes: number
 }
 
@@ -97,8 +100,9 @@ type CommentNode = z.infer<typeof commentSchema>
 /**
  * Read the review threads of a pull request while its head is `headSha`. The first page also names the head and the
  * signed-in user; every following thread page names the head again, so a head that moves during the read returns
- * `stale`. Threads are read up to `maxReviewThreads`, each with all of its comments. A page that would bring the
- * pages read, measured as JSON, past `maxOutputBytes` is dropped with the threads after it, and the result is marked truncated.
+ * `stale`, while a thread's comment pages do not. Threads are read up to `maxReviewThreads`, each with all of its
+ * comments. A later page that would bring the pages read, measured as JSON, past `maxOutputBytes` is dropped with the
+ * threads after it, and the result is marked truncated; `read` fails a first page whose output alone passes the limit.
  * @param read - runs one GraphQL request.
  * @param ref - pull request, with an owner and name already checked for inlining.
  * @param headSha - head commit the threads must be read at.
