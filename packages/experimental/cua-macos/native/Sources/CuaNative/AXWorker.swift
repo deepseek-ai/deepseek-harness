@@ -215,7 +215,12 @@ actor AXWorker {
             return .result(Self.actionResult)
         }
         if method == "sendKeyEvent", try params.string("direction") == "up" {
-            let dispatched = try inputs().0.keyUp(params.string("key"), app: params.string("appHandle"), run: params.string("runId"))
+            let handle = try params.string("appHandle")
+            let dispatched = try inputs().0.keyUp(params.string("key"), app: handle, run: params.string("runId")) {
+                try NativePlatform.requireUnlocked(observeSession())
+                try NativePlatform.requireAccessibility()
+                return try ax().keyboardRecipient(validateIdentity(handle), catalog: catalog)
+            }
             return .result(.object(["dispatched": .bool(dispatched)]))
         }
         let locked = observeSession()
@@ -339,8 +344,9 @@ actor AXWorker {
                                    readTimeout: .milliseconds(try params.integer("pasteReadTimeoutMs", in: 1...2147483647)),
                                    maxElements: try params.integer("maxElements", in: 1...10000), maxDepth: try params.integer("maxDepth", in: 1...100)))
         case "sendKeyEvent":
-            let recipient = try ax().keyboardRecipient(identity, catalog: catalog)
-            try inputs().0.keyDown(params.string("key"), app: handle, run: params.string("runId"), recipient: recipient)
+            try inputs().0.keyDown(params.string("key"), app: handle, run: params.string("runId")) {
+                try ax().keyboardRecipient(identity, catalog: catalog)
+            }
         case "typeText", "pressKey":
             let recipient = try ax().keyboardRecipient(identity, catalog: catalog)
             try NativePlatform.verify(recipient)

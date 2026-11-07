@@ -85,8 +85,11 @@ final class CapabilitiesFixture: NSObject, NSApplicationDelegate, NSWindowDelega
             guard let self else { return }
             var value: [String: Any] = ["type": event.type.rawValue, "timestamp": event.timestamp, "flags": event.modifierFlags.rawValue,
                                        "shift": event.modifierFlags.contains(.shift), "command": event.modifierFlags.contains(.command)]
-            if [.keyDown, .keyUp].contains(event.type) { value["keyCode"] = event.keyCode; value["characters"] = event.characters ?? "" }
-            else { value["button"] = event.buttonNumber }
+            if [.keyDown, .keyUp].contains(event.type) {
+                value["keyCode"] = event.keyCode
+                value["characters"] = event.characters ?? ""
+                value["repeat"] = event.isARepeat
+            } else { value["button"] = event.buttonNumber }
             self.events.append(value)
             self.persist()
         }

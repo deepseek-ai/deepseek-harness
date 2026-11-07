@@ -26,11 +26,34 @@ final class HeldKeys: @unchecked Sendable {
         lock.withLock { Dictionary(uniqueKeysWithValues: pressed.filter { $0.recipient.pid == pid }.map { ($0.code, $0.flag) }) }
     }
 
-    func down(owner: Owner, recipient: ProcessIdentity, code: CGKeyCode, flag: CGEventFlags,
+    private func conflict(_ name: String, holder: Owner, caller: Owner) -> NativeFailure {
+        let source: String
+        if holder.connection != caller.connection { source = "another session" }
+        else if holder.run != caller.run { source = "another run_code execution" }
+        else { source = "a different application handle in this run_code" }
+        return RequestParameters.invalid("Key '\(name)' is held for this target by \(source). No event was sent. Wait for the holder to release it or for its run_code to end.")
+    }
+
+    /// Repeats use the saved recipient even when the selected application's focused panel has changed.
+    func repeatIfHeld(owner: Owner, name: String, code: CGKeyCode, down: CGEvent, post: (CGEvent, Int32) -> Void) throws -> Bool {
+        try lock.withLock {
+            guard let key = pressed.first(where: { $0.owner == owner && $0.code == code }) else { return false }
+            guard down.type == .keyDown else {
+                throw RequestParameters.invalid("Modifier '\(name)' is already held. Send 'up' to release it.")
+            }
+            try NativePlatform.verify(key.recipient)
+            down.flags = flags(for: key.recipient)
+            down.setIntegerValueField(.keyboardEventAutorepeat, value: 1)
+            post(down, key.recipient.pid)
+            return true
+        }
+    }
+
+    func down(owner: Owner, recipient: ProcessIdentity, name: String, code: CGKeyCode, flag: CGEventFlags,
               down: CGEvent, up: CGEvent, post: (CGEvent, Int32) -> Void) throws {
         try lock.withLock {
-            guard !pressed.contains(where: { $0.code == code && ($0.owner == owner || $0.recipient.pid == recipient.pid) }) else {
-                throw RequestParameters.invalid("Key is already held for this target")
+            if let key = pressed.first(where: { $0.code == code && $0.recipient.pid == recipient.pid }) {
+                throw conflict(name, holder: key.owner, caller: owner)
             }
             pressed.append(Press(owner: owner, recipient: recipient, code: code, flag: flag, up: up))
             down.flags = flags(for: recipient)
@@ -56,12 +79,19 @@ final class HeldKeys: @unchecked Sendable {
         return true
     }
 
-    func up(owner: Owner, code: CGKeyCode, post: (CGEvent, Int32) -> Void) throws -> Bool {
-        try lock.withLock {
-            guard let index = pressed.firstIndex(where: { $0.owner == owner && $0.code == code }) else {
-                throw RequestParameters.invalid("This run has not pressed that key for this application")
-            }
+    func up(owner: Owner, name: String, code: CGKeyCode, recipientIfUnheld: () throws -> ProcessIdentity,
+            post: (CGEvent, Int32) -> Void) throws -> Bool {
+        let dispatched = try lock.withLock { () throws -> Bool? in
+            guard let index = pressed.firstIndex(where: { $0.owner == owner && $0.code == code }) else { return nil }
             return try release(at: index, post: post)
+        }
+        if let dispatched { return dispatched }
+        let recipient = try recipientIfUnheld()
+        throw lock.withLock {
+            if let key = pressed.first(where: { $0.code == code && $0.recipient == recipient }) {
+                return conflict(name, holder: key.owner, caller: owner)
+            }
+            return RequestParameters.invalid("Key '\(name)' is not held for this target. Send 'down' in this run_code before 'up'.")
         }
     }
 

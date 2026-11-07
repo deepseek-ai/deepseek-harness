@@ -150,6 +150,17 @@ def check_keyboard(call, owner, state_file, state):
     state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 4)
     assert [(e["type"], e["keyCode"]) for e in state["events"][count:]] == [(10, 13), (10, 2), (11, 2), (11, 13)]
 
+    for explicit_up in (True, False):
+        count = len(state["events"])
+        key("w", "down")
+        key("w", "down")
+        if explicit_up:
+            key("w", "up")
+        call("releaseHeldKeys", {"runId": "held-input"})
+        state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 3)
+        repeat = [(e["type"], e["keyCode"], e["repeat"]) for e in state["events"][count:]]
+        assert repeat == [(10, 13, False), (10, 13, True), (11, 13, False)], repeat
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -191,7 +202,7 @@ def main():
             pid = wait_for_state(state_file, lambda value: value["windowId"] > 0)["pid"]
             if args.keyboard_only:
                 check_keyboard(call, owner, state_file, json.loads(state_file.read_text()))
-                print("PASS: Shift+D shortcut, two-second W+D hold, independent D up and remaining W cleanup")
+                print("PASS: Shift+D shortcut, two-second W+D hold, independent D up, explicit W repeat and one final up")
                 return
             if not args.click_only:
                 call("activate", owner)
