@@ -110,12 +110,14 @@ it('explains a stopped stream with the shared copy and reopens it even while off
   expect(onRetry).toHaveBeenCalledOnce()
 })
 
-it('prompts to connect only while disconnected and steps aside once the phase settles elsewhere', () => {
+it('prompts to connect only while disconnected, waits while checking or connecting, and steps aside once settled', () => {
   const onDismiss = vi.fn()
   const onConnect = vi.fn()
-  const prompt = (phase: 'checking' | 'disconnected' | 'connected') =>
+  const prompt = (phase: 'checking' | 'connecting' | 'disconnected' | 'connected' | 'unavailable' | 'stopped') =>
     <ConnectorAccountActivation t={t} phase={phase} title="连接演示" body="插件已开启。" connect="立即连接" onDismiss={onDismiss} onConnect={onConnect} />
   const { rerender } = render(prompt('checking'))
+  // An account still connecting after the bundle is switched on may end disconnected.
+  rerender(prompt('connecting'))
   expect(screen.queryByRole('dialog')).toBeNull()
   expect(onDismiss).not.toHaveBeenCalled()
   rerender(prompt('disconnected'))
@@ -127,6 +129,9 @@ it('prompts to connect only while disconnected and steps aside once the phase se
   expect(onDismiss).toHaveBeenCalledOnce()
   rerender(prompt('connected'))
   expect(onDismiss).toHaveBeenCalledTimes(2)
+  rerender(prompt('unavailable'))
+  rerender(prompt('stopped'))
+  expect(onDismiss).toHaveBeenCalledTimes(4)
 })
 
 it('shows the latest notice with the registrant text or the shared failure copy', () => {

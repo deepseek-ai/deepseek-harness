@@ -194,14 +194,15 @@ export interface ConnectorAccountActivationProps {
 /**
  * Guidance after the user switches a bundle on while its account is not connected.
  * @param props - the phase, the registrant's text, the dismiss and connect callbacks, and the translator.
- * @returns a prompt shown while disconnected; it dismisses itself once the phase settles elsewhere.
+ * @returns a prompt shown while disconnected; it waits while the account is checking or connecting, which may still end
+ *   disconnected, and dismisses itself once the account is connected or unavailable.
  */
 export function ConnectorAccountActivation(props: ConnectorAccountActivationProps): ReactNode {
   const { t, phase, title, body, connect, onDismiss, onConnect } = props
   const needed = phase === 'disconnected'
   useEffect(() => {
-    if (phase !== 'checking' && !needed) onDismiss()
-  }, [phase, needed, onDismiss])
+    if (phase === 'connected' || phase === 'unavailable' || phase === 'stopped') onDismiss()
+  }, [phase, onDismiss])
   return (
     <Modal open={needed} title={title} closeLabel={t('close')} onClose={onDismiss}
       footer={<>

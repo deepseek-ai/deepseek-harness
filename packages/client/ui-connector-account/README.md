@@ -63,7 +63,7 @@ The registrant imports the registry's types with `import type` from the package 
 |---|---|
 | Section | Title, status, buttons, detail, notes, failure, and hint. Buttons are disabled while a call the section made is pending or the Host stream is down. A failure shows the registrant's text, then its diagnostic items |
 | Title tag | The display's `badge`, shown only on the enabled bundle's page or one of its row pages, and only while the display has one |
-| Activation prompt | Open while the phase is `disconnected` after the bundle is switched on; Connect opens the bundle page and starts the display's `connect` operation, if it names one. It dismisses itself once the phase settles elsewhere |
+| Activation prompt | Open while the phase is `disconnected` after the bundle is switched on; Connect opens the bundle page and starts the display's `connect` operation, if it names one. It waits while the account is checking or connecting and dismisses itself once the account is connected, unavailable, or not running |
 | Notice | The latest outcome in this browser, outside the Plugins panel's lifetime: the operation's success text, or the shared failure copy with a warning icon |
 
 ### Following operations
