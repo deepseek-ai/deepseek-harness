@@ -67,6 +67,16 @@ interface PendingHistory {
   readonly pages: (readonly SessionEventLikeEntry[])[]
 }
 
+interface OlderHistoryRequest {
+  readonly generation: number
+  readonly beforeSeq: SessionLogOffset
+  page: { readonly entries: readonly SessionEventLikeEntry[]; readonly hasMore: boolean } | null
+  invalidated: boolean
+  recovering: boolean
+  consuming: boolean
+  promise?: Promise<void>
+}
+
 /** Manager-owned observers of a Session object's local state edges. */
 export interface SessionOptions {
   /** Catalog-discovered address selecting non-activating subagent transport. */
@@ -95,13 +105,16 @@ export class Session implements SessionFace {
   // ---- Window and derived state (all private; the snapshot is the only read API) ----
   private baseSeq = SessionLogOffset(0)
   private hasMore = false
+  private historyWasPartial = false
   private openState: OpenState = 'cold'
   private openError: RemoteFailure | null = null
   private openPromise: Promise<void> | null = null
   /** Bumped by stream replacement to invalidate an in-flight doOpen. Stale
    *  passes drop all writes once the generation moves on. */
   private openGeneration = 0
-  private loadingOlder = false
+  private get loadingOlder(): boolean { return this.historyLoadStatus === 'loading' }
+  private historyLoadStatus: SessionSnapshot['historyLoadStatus'] = 'idle'
+  private olderRequest: OlderHistoryRequest | null = null
   /** Shared low-water target of the running jump loop; null when no jump is paging. */
   private jumpTargetSeq: SessionSeq | null = null
   /** The running jump loop's completion, shared by retargeting callers. */
@@ -415,30 +428,95 @@ export class Session implements SessionFace {
     return promise
   }
 
-  /** Prepend one Turn-aligned page: at least 50 messages and two Turn starts, capped at 500 messages. */
-  async loadOlder(): Promise<void> {
-    if (this.openState !== 'open' || !this.hasMore || this.loadingOlder) return
+  /** @inheritdoc */
+  async loadOlder(options?: { deferConsumption?: boolean }): Promise<void> {
+    const request = this.prepareOlder()
+    await request?.promise
+    if (request !== null && this.olderRequest === request
+      && (!options?.deferConsumption || request.page?.entries.length === 0)) this.consumeOlder()
+  }
+
+  private prepareOlder(): OlderHistoryRequest | null {
+    if (this.olderRequest !== null) return this.olderRequest
     const events = this.events
-    if (events === undefined) return
-    this.loadingOlder = true
+    if (this.openState !== 'open' || !this.hasMore || this.loadingOlder || events === undefined) return null
+    const request: OlderHistoryRequest = {
+      generation: this.openGeneration,
+      beforeSeq: this.baseSeq,
+      page: null,
+      invalidated: false,
+      recovering: false,
+      consuming: false,
+    }
+    this.olderRequest = request
+    this.historyLoadStatus = 'loading'
     this.notifier.markDirty()
-    try {
-      await events.prepend({
-        beforeSeq: this.baseSeq,
-        ...HISTORY_PAGE_OPTIONS,
-      })
-    } catch (error) {
-      if (!isRemoteFailure(error)) {
-        console.error('[session-controller] loadOlder failed:', error)
+    request.promise = (async () => {
+      try {
+        await events.prepend({ beforeSeq: request.beforeSeq, ...HISTORY_PAGE_OPTIONS })
+        if (this.olderRequest !== request) return
+        if (request.invalidated || request.generation !== this.openGeneration || request.beforeSeq !== this.baseSeq) return
+        const page = request.page
+        const first = page?.entries[0]
+        this.historyLoadStatus = page === null || (first === undefined ? page.hasMore : first.event.seq >= request.beforeSeq)
+          ? 'error' : 'pendingConsumption'
+      } catch (error) {
+        if (this.olderRequest !== request) return
+        request.page = null
+        this.historyLoadStatus = 'error'
+        if (!isRemoteFailure(error)) console.error('[session-controller] loadOlder failed:', error)
+      } finally {
+        if (this.olderRequest === request) {
+          if (request.invalidated && this.events === events) {
+            // A replacement restores the transport cursor before another page uses the visible window.
+            request.recovering = true
+            this.historyLoadStatus = 'loading'
+            events.restart()
+          } else if (this.historyLoadStatus === 'error') this.olderRequest = null
+          this.notifier.markDirty()
+        }
       }
+    })()
+    return request
+  }
+
+  /** @inheritdoc */
+  consumeOlder(): boolean {
+    const request = this.olderRequest
+    if (request === null || request.consuming || this.historyLoadStatus !== 'pendingConsumption' || request.page === null) return false
+    if (this.openState !== 'open' || request.invalidated || request.generation !== this.openGeneration
+      || request.beforeSeq !== this.baseSeq) {
+      this.clearOlderHistory()
+      return false
+    }
+    const page = request.page
+    // Retain the request through synchronous feed notification so subscribers cannot reenter consumption.
+    request.consuming = true
+    try {
+      this.prependWindow(page.entries, page.hasMore)
+      return true
+    } catch (error) {
+      if (this.olderRequest === request) this.historyLoadStatus = 'error'
+      throw error
     } finally {
-      this.loadingOlder = false
+      if (this.olderRequest === request) {
+        this.olderRequest = null
+        if (this.historyLoadStatus !== 'error') this.historyLoadStatus = 'idle'
+      }
       this.notifier.markDirty()
     }
   }
 
+  private clearOlderHistory(): void {
+    this.olderRequest = null
+    this.historyLoadStatus = this.pendingHistory === null ? 'idle' : 'loading'
+    this.notifier.markDirty()
+  }
+
   /** Jump loader: page backwards until the window covers seq (see ISession.loadThrough). */
   loadThrough(seq: SessionSeq): Promise<void> {
+    this.consumeOlder()
+    if (this.olderRequest !== null) return Promise.resolve()
     if (this.openState !== 'open' || !this.hasMore || this.baseSeq <= seq) return Promise.resolve()
     if (this.jumpPromise !== null) {
       // Retarget the running loop to the lowest requested seq.
@@ -459,7 +537,7 @@ export class Session implements SessionFace {
     }
     this.pendingHistory = pending
     this.jumpTargetSeq = seq
-    this.loadingOlder = true
+    this.historyLoadStatus = 'loading'
     this.notifier.markDirty()
     // Stale-pass guard (the doOpen pattern): a resync mid-loop replaces the
     // stream generation; this pass then stops instead of paging the new
@@ -467,27 +545,35 @@ export class Session implements SessionFace {
     const generation = this.openGeneration
     this.jumpPromise = (async () => {
       try {
-        while (pending.hasMore && this.jumpTargetSeq !== null && pending.beforeSeq > this.jumpTargetSeq) {
+        while (this.jumpTargetSeq !== null && pending.beforeSeq > this.jumpTargetSeq) {
           if (generation !== this.openGeneration) return
           const before = pending.beforeSeq
           await events.prepend({ beforeSeq: before, ...JUMP_PAGE_OPTIONS })
+          if (generation !== this.openGeneration || this.pendingHistory !== pending) return
           // No-progress guard: an empty or dropped page that still claims more
           // history must end the loop, not spin it.
-          if (pending.beforeSeq >= before) return
+          if (pending.beforeSeq >= before) {
+            if (pending.hasMore) this.historyLoadStatus = 'error'
+            return
+          }
+          if (!pending.hasMore) return
         }
       } catch (error) {
+        if (generation === this.openGeneration && this.pendingHistory === pending) this.historyLoadStatus = 'error'
         if (!isRemoteFailure(error)) {
           console.error('[session-controller] loadThrough failed:', error)
         }
       } finally {
-        this.jumpTargetSeq = null
-        this.jumpPromise = null
-        this.pendingHistory = null
-        this.loadingOlder = false
-        if (generation === this.openGeneration && pending.pages.length > 0) {
-          this.prependWindow(pending.pages.reverse().flat(), pending.hasMore)
+        if (this.pendingHistory === pending) {
+          this.jumpTargetSeq = null
+          this.jumpPromise = null
+          this.pendingHistory = null
+          if (this.historyLoadStatus === 'loading') this.historyLoadStatus = 'idle'
+          if (generation === this.openGeneration && pending.pages.length > 0) {
+            this.prependWindow(pending.pages.reverse().flat(), pending.hasMore)
+          }
+          this.notifier.markDirty()
         }
-        this.notifier.markDirty()
       }
     })()
     return this.jumpPromise
@@ -499,6 +585,7 @@ export class Session implements SessionFace {
   async resync(): Promise<void> {
     if (this.openState === 'cold') return // never opened: no window to rebuild (doOpen flips to 'loading' synchronously, so cold implies no in-flight open)
     this.openGeneration++
+    this.clearOlderHistory()
     const events = this.events
     this.events = undefined
     await events?.dispose()
@@ -606,6 +693,7 @@ export class Session implements SessionFace {
       else this.retireFailedSubmission(requestId)
     }
     this.openGeneration++
+    this.clearOlderHistory()
     const events = this.events
     this.events = undefined
     await events?.dispose()
@@ -655,7 +743,9 @@ export class Session implements SessionFace {
         )
         return
       case 'prepend':
-        this.prependWindow(change.entries, change.hasMore)
+        if (this.olderRequest !== null) {
+          this.olderRequest.page = { entries: change.entries, hasMore: change.hasMore }
+        } else this.prependWindow(change.entries, change.hasMore)
         return
       case 'append':
         this.publishAssistantEntry(this.assistantStream.acceptDurable(change.entry))
@@ -676,8 +766,13 @@ export class Session implements SessionFace {
     // attempts makes a held notification reopen follow once for an atomic
     // page/baseline pair instead of applying it to an unrelated repair cut.
     const visible = this.assistantStream.replace(entries, assistantStream)
+    if (this.olderRequest !== null && this.loadingOlder && !this.olderRequest.recovering) {
+      this.olderRequest.invalidated = true
+      this.olderRequest.page = null
+    } else this.clearOlderHistory()
     this.baseSeq = SessionLogOffset(entries[0]?.event.seq ?? 0)
     this.hasMore = hasMore
+    this.historyWasPartial ||= hasMore
     if (this.pendingHistory !== null) {
       this.pendingHistory.beforeSeq = this.baseSeq
       this.pendingHistory.hasMore = hasMore
@@ -745,6 +840,7 @@ export class Session implements SessionFace {
     }
     this.baseSeq = entries[0] === undefined ? this.baseSeq : SessionLogOffset(entries[0].event.seq)
     this.hasMore = hasMore
+    this.historyWasPartial ||= hasMore
     this.eventSource.prepend(entries, hasMore)
   }
 
@@ -892,6 +988,7 @@ export class Session implements SessionFace {
     if (generation !== this.openGeneration || this.events !== events) return
     if (!isRemoteFailure(error)) throw error
     this.openGeneration++
+    this.clearOlderHistory()
     this.events = undefined
     this.openPromise = null
     this.openState = 'error'
@@ -917,7 +1014,9 @@ export class Session implements SessionFace {
       openState: this.openState,
       openError: this.openError,
       hasMore: this.hasMore,
+      historyWasPartial: this.historyWasPartial,
       loadingOlder: this.loadingOlder,
+      historyLoadStatus: this.historyLoadStatus,
       promptError: this.promptError,
       blank: this.blankBit,
       lastAgentError: this.lastAgentError,

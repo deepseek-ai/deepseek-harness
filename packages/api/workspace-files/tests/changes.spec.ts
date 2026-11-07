@@ -72,7 +72,13 @@ async function ready(stream: ReturnType<typeof open>): Promise<void> {
 async function ownedEndpoint() {
   let service: WorkspaceFiles | undefined
   const fiber = await harness.ctx.plugin(Object.assign((ctx: Context) => {
-    service = new WorkspaceFiles(ctx, { maxBytes: 1024, maxFileBytes: 1024, maxLines: 10, maxEntries: 10 })
+    service = new WorkspaceFiles(ctx, {
+      maxBytes: 1024,
+      maxFileBytes: 1024,
+      maxLines: 10,
+      maxEntries: 10,
+      search: { maxResults: 100, maxEntries: 1000, graceMs: 3000, timeoutMs: 30000, stderrMaxBytes: 65536 },
+    })
   }, { inject: ['fs', 'sandboxPolicy'] }))
   cleanups.push(() => fiber.dispose())
   if (service === undefined) throw new Error('plugin body did not run')

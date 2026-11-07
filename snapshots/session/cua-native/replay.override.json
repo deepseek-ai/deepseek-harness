@@ -1398,6 +1398,39 @@
         "index": 0,
         "block": {
           "type": "tool-call",
+          "id": "cua-hover-unavailable",
+          "name": "cua",
+          "arguments": "{\"method\":\"mouseMove\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7,\"x\":0,\"y\":200,\"relative\":true}}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
           "id": "cua-hover-verify",
           "name": "cua",
           "arguments": "{\"method\":\"getState\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7}}"

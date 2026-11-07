@@ -551,7 +551,14 @@ async function bootPreview(site: Site, manifest: ImageManifest, browser: Browser
     await catalog.getByRole('treeitem', { name: /Continue preview verification/ }).waitFor()
     await catalog.press('Escape')
 
-    await page.getByRole('button', { name: 'Load earlier', exact: true }).click()
+    // Auto-prefetch may already have published the page, and a pointer click can
+    // land on whatever moved under it; activate the control only while it still
+    // offers a page, then wait for the oldest seeded row.
+    const historyEdge = page.locator('[data-chat-history]')
+    await historyEdge.getByRole('button').evaluate((button) => {
+      if (!(button instanceof HTMLButtonElement)) throw new Error('history control is not a button')
+      if (!button.disabled) button.click()
+    })
     await page.getByText(SHOWCASE_OLDEST, { exact: true }).waitFor({ timeout: 15_000 })
 
     await requestLazyChunk(page, site, manifest)

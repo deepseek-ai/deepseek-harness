@@ -68,8 +68,12 @@ interface ForgeProvider {
   markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
   /** Merge a change request while its head is still `request.headSha`, resolving to undefined once merged. */
   merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
-  /** Read the changes of a change request as the host computes them, as one unified patch with `a/` and `b/` path prefixes. */
-  diff(ref: ChangeRequestRef, signal: AbortSignal): Promise<string | ForgeFailure>
+  /**
+   * Read the changes of a change request at head commit `headSha` as the host computes them, as one unified
+   * patch with `a/` and `b/` path prefixes. A patch is returned only when it describes `headSha`; once the
+   * head is another commit, the read resolves to a `stale` failure.
+   */
+  diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<string | ForgeFailure>
   /** Read the text of `path` at `commit` in the change request's repository. */
   fileText(ref: ChangeRequestRef, commit: string, path: string, signal: AbortSignal): Promise<string | ForgeFailure>
   /** Build the web page of `path` at `commit` in the change request's repository. */
@@ -176,8 +180,10 @@ interface ChangeRequestSnapshot {
   readonly checksRollup: ChecksRollup
   /** Whether the host reported more checks than `checks` contains. */
   readonly checksTruncated: boolean
-  /** Number of review threads that are not resolved. */
+  /** Number of counted review threads that are not resolved. */
   readonly unresolvedThreads: number
+  /** Whether the change request has more review threads than the provider counted, so `unresolvedThreads` is a lower bound. */
+  readonly threadsTruncated: boolean
   /** ISO 8601 time of the host's last update to the change request. */
   readonly updatedAt: string
   /** ISO 8601 time the change request was merged or closed, or null while it is open. */
@@ -191,9 +197,10 @@ interface ForgeFailure {
   /**
    * `not-found`: the host does not expose it; `unauthenticated`: credentials are missing or rejected;
    * `too-large`: the host or the provider refuses an answer over its size limit, so reading again fails
-   * the same way; `unavailable`: any other failure.
+   * the same way; `stale`: the head is no longer the commit the read named, so reading again at the head of
+   * a later status can succeed; `unavailable`: any other failure.
    */
-  readonly code: 'not-found' | 'unauthenticated' | 'too-large' | 'unavailable'
+  readonly code: 'not-found' | 'unauthenticated' | 'too-large' | 'stale' | 'unavailable'
   /** Human-readable cause. */
   readonly message: string
 }
@@ -568,7 +575,7 @@ type ForgeChangeRequestStatesFrame =
   | { readonly type: 'changed'; readonly states: readonly ForgeChangeRequestListState[] }
 ```
 
-The changes view reads through the same Remote. `localDiff` reads one `ForgeLocalScope` of the Session's checkout, and `changeRequestDiff` reads a bound change request at the head of its latest status through the provider's `diff`; both return files that the Host parsed into `ForgeDiffFile` hunks. `localText` and `changeRequestText` read the new side of one file, which supplies the unchanged lines between hunks. Each inspection also sizes the `branch` scope as `ForgePanelState.local` for the panel's local changes card, always against the automatic fork point. A `branch` scope whose `base` names a ref compares with the merge base of HEAD and that branch instead; `diffBases` lists the branches the view offers, with the automatic fork point.
+The changes view reads through the same Remote. `localDiff` reads one `ForgeLocalScope` of the Session's checkout, and `changeRequestDiff` reads a bound change request at the head of its latest status through the provider's `diff`, which returns a patch only for that head commit; both return files that the Host parsed into `ForgeDiffFile` hunks. `localText` and `changeRequestText` read the new side of one file, which supplies the unchanged lines between hunks. Each inspection also sizes the `branch` scope as `ForgePanelState.local` for the panel's local changes card, always against the automatic fork point. A `branch` scope whose `base` names a ref compares with the merge base of HEAD and that branch instead; `diffBases` lists the branches the view offers, with the automatic fork point. When the head moved past the latest status, the provider returns `stale` and `ctx.forge.diff` polls the change request at once, once per head commit; `changeRequestDiff` rejects with `forgePanel/stale-head` and caches nothing, and the changes view keeps loading until a later status arrives, then reads again at that status's head. Review comments therefore always address the commit whose lines the view shows.
 
 ```ts type-equiv
 /** Which local changes a diff covers; each reads the Session's checkout through Git. */
@@ -814,13 +821,18 @@ async merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): 
 async fetchChecks(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestSnapshot | ForgeFailure>
 
 /**
- * Read the changes of a change request as its host computes them.
+ * Read the changes of a change request at one head commit as its host
+ * computes them. The first `stale` failure at a head commit polls a watched
+ * change request again at once, so its next status names the current head;
+ * later stale reads at the same commit wait for the regular poll, which
+ * bounds the reads while the host's answers disagree.
  * @param ref - change request served by a registered provider.
+ * @param headSha - head commit the patch must describe, usually the head of the latest status.
  * @param signal - cancellation of the read.
- * @returns one unified patch with `a/` and `b/` path prefixes, or why the host did not provide it.
+ * @returns one unified patch with `a/` and `b/` path prefixes, or why the host did not provide it at `headSha`.
  * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
  */
-async diff(ref: ChangeRequestRef, signal: AbortSignal): Promise<string | ForgeFailure>
+async diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<string | ForgeFailure>
 
 /**
  * Publish one comment or a completed review, then refresh the watched status.
@@ -1015,6 +1027,7 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * @param signal - request cancellation.
  * @returns the files, the head commit, each file's web page, and the commits the checkout has beyond the head.
  * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+ * `forgePanel/stale-head` when the head moved past the latest status, which is then polled again;
  * `forgePanel/diff-too-large` when the host or its provider refuses the diff over a size limit;
  * `forgePanel/diff-failed` before its status was read and when the host does not provide the diff otherwise.
  */
