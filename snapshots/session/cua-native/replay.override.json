@@ -1464,7 +1464,7 @@
         "index": 0,
         "block": {
           "type": "tool-call",
-          "id": "cua-system-hover",
+          "id": "cua-ax-hover-after-approval",
           "name": "cua",
           "arguments": "{\"method\":\"mouseMove\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7,\"x\":100,\"y\":200,\"relative\":true}}"
         }

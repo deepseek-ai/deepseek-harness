@@ -1001,7 +1001,7 @@ async function hoverFixture(requireApproval = true) {
   return { ...f, ask, approved, call, select, questions }
 }
 
-it('asks only on an explicit move and dispatches that same move after approval', async () => {
+it('requires an explicit system-pointer request on every move and asks only once per session', async () => {
   const f = await hoverFixture()
   native.request.mockRejectedValueOnce(new Error('HOVER_UNAVAILABLE'))
   expect(JSON.stringify((await f.execute('mouseMove', hoverTarget)).content)).toContain('HOVER_UNAVAILABLE')
@@ -1017,7 +1017,7 @@ it('asks only on an explicit move and dispatches that same move after approval',
   answer.resolve(f.approved)
   expect((await pending).isError).toBe(false)
   for (const [params, physical] of [
-    [hoverTarget, true], [{ ...hoverTarget, useSystemPointer: false }, false], [physicalHover, true],
+    [hoverTarget, false], [{ ...hoverTarget, useSystemPointer: false }, false], [physicalHover, true],
   ] as const) {
     expect((await f.execute('mouseMove', params)).isError).toBe(false)
     expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemPointer: physical }, expect.any(AbortSignal), expect.any(String))
@@ -1038,7 +1038,7 @@ it('keeps refusals and grants separate and forgets a closed session on reopen', 
   expect(native.request).not.toHaveBeenCalled()
   expect((await f.call(agent, 'mouseMove', hoverTarget)).isError).toBe(false)
   expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemPointer: false }, expect.any(AbortSignal), expect.any(String))
-  expect((await f.execute('mouseMove', hoverTarget)).isError).toBe(false)
+  expect((await f.execute('mouseMove', physicalHover)).isError).toBe(false)
   expect(native.request).toHaveBeenLastCalledWith('mouseMove', physicalHover, expect.any(AbortSignal), expect.any(String))
   const sessionId = f.handle.agent.id
   await f.handle.dispose()
@@ -1152,8 +1152,6 @@ it('separates a provider’s permission decisions and presents its question for 
   const agent = f.handle.agent
   await expect(permissions.request(agent, 'read-status', read, signal)).resolves.toBe(true)
   await expect(permissions.request(agent, 'write-status', write, signal)).resolves.toBe(false)
-  expect(permissions.allowed(agent, 'read-status')).toBe(true)
-  expect(permissions.allowed(agent, 'write-status')).toBe(false)
   await expect(permissions.request(agent, 'write-status', write, signal)).resolves.toBe(false)
   await expect(permissions.request(agent, 'read-status', read, signal)).resolves.toBe(true)
   expect(ask.mock.calls.map(([request]) => request.questions[0]!.detail)).toEqual([read.detail.en, write.detail.en])

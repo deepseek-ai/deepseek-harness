@@ -13,16 +13,6 @@ export class CuaSessionPermissions {
   constructor(private readonly ctx: Context) {}
 
   /**
-   * Read a permission without asking the user.
-   * @param agent Live Session owner.
-   * @param permission Provider-defined permission name.
-   * @returns Whether the user approved this permission in this Session.
-   */
-  allowed(agent: Agent, permission: string): boolean {
-    return this.decisions.get(agent)?.get(permission) === true
-  }
-
-  /**
    * Remember the user's choice only for this permission in this live Session.
    * @param agent Live Session owner.
    * @param permission Provider-defined permission name shared by calls requesting the same access.

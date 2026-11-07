@@ -28,7 +28,7 @@ export function mouseMovePreparation(ctx: Context, requireApproval: boolean): No
   const permission = 'system-pointer'
   return (agent, params) => {
     if (params.useSystemPointer !== true) {
-      params.useSystemPointer = params.useSystemPointer === false ? false : permissions.allowed(agent, permission)
+      params.useSystemPointer = false
       return undefined
     }
     if (agent.session.header.origin === 'subagent') {

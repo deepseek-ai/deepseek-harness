@@ -15,4 +15,4 @@ description: "macOS 的 mouseMove 默认要求控件支持 AX 备用界面，否
 
 1. 对已经可用的控件，可执行它声明的动作或直接点击。需要网页悬停时可用浏览器工具。
 2. 如果 profile 设置了 `helperPath`，请重新构建该 helper，使其支持按请求读取 `useSystemPointer` 字段，然后重启 profile。
-3. 任务确实需要移动鼠标时，在前台未受遮挡的目标上调用 `win.mouseMove(target, { useSystemPointer: true })`。用户同意后，本次移动返回 `systemPointerMoved: true`。关闭会话或重启 DSH 后需要重新授权。
+3. 任务确实需要移动鼠标时，在前台未受遮挡的目标上调用 `win.mouseMove(target, { useSystemPointer: true })`。用户同意后，本次移动返回 `systemPointerMoved: true`。之后每次移动系统鼠标仍需显式传 `useSystemPointer: true`。关闭会话或重启 DSH 后需要重新授权。
