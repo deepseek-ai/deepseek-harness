@@ -1255,6 +1255,7 @@ it.skipIf(MODE === 'record')('uses horizontal arrows to navigate files while pre
   await page.keyboard.press('ArrowRight')
   await expect.poll(() => tree.getByRole('button', { name: 'README.md', exact: true }).getAttribute('aria-current')).toBe('true')
   // The last file cannot reach the top, so the jump settles at the end of the list once the file has drawn its lines.
+  await c.locator('[data-review-code]').first().waitFor()
   await expect.poll(() => scroll.evaluate(element => element.scrollHeight - element.clientHeight - element.scrollTop)).toBeLessThan(1)
   const lastPosition = await scroll.evaluate(element => element.scrollTop)
   const lastBox = await c.boundingBox(), viewport = await scroll.boundingBox()
