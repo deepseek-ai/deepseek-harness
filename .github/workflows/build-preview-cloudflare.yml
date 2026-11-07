@@ -111,7 +111,7 @@ jobs:
         continue-on-error: true
         run: >-
           pnpm exec tsx scripts/snapshot-diff-page.ts --base HEAD^1 --head HEAD
-          --out apps/web/dist/snapshot-diff/index.html
+          --out apps/web/dist/snapshot-diff
           --preview-manifest apps/web/dist/preview/fixtures.json
 
       - name: Upload to Cloudflare Pages

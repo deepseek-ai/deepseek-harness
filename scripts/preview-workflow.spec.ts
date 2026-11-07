@@ -91,7 +91,7 @@ describe('PR preview workflow', () => {
     const steps = preview.steps.map(step => step.name)
     const page = preview.steps.find(step => step.name === 'Render the snapshot diff page')!
     expect(page.run).toBe('pnpm exec tsx scripts/snapshot-diff-page.ts --base HEAD^1 --head HEAD'
-      + ' --out apps/web/dist/snapshot-diff/index.html --preview-manifest apps/web/dist/preview/fixtures.json')
+      + ' --out apps/web/dist/snapshot-diff --preview-manifest apps/web/dist/preview/fixtures.json')
     expect(steps.indexOf('Render the snapshot diff page')).toBeGreaterThan(steps.indexOf('Shape the upload'))
     expect(steps.indexOf('Render the snapshot diff page')).toBeLessThan(steps.indexOf('Upload to Cloudflare Pages'))
   })
