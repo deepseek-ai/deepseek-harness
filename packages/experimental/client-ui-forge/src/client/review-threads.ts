@@ -1,12 +1,13 @@
 /**
- * Where the changes view shows each review thread of a change request, which threads each filter of the thread list
- * keeps, and the composer quote of a whole thread.
+ * Where the changes view shows each review thread of a change request, the order a file shows them in, which threads
+ * each filter of the thread list keeps, and the composer quote of a whole thread.
  */
 
 import type { QuoteSummary } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ForgeAnchor, ForgeReviewThread } from '@deepseek-ai/dsh-experimental-forge/types'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
-import type { ForgeCommitRange, ForgeDiffFile } from '../types.ts'
+import type { ForgeCommitRange, ForgeDiffFile, ForgeDiffHunk } from '../types.ts'
+import { hunkRows } from './diff-rows.ts'
 
 /** The changes a view shows, which decides where a thread can sit. */
 export interface ThreadView {
@@ -65,6 +66,19 @@ export function anchorRange(side: 'L' | 'R', anchor: Pick<ForgeAnchor, 'startLin
   return `${side}${anchor.startLine}${anchor.endLine === anchor.startLine ? '' : `–${anchor.endLine}`}`
 }
 
+/** Where a line of a diff file is: in the collapsed lines before a hunk or after the last one, or in a hunk. */
+type LineSpot = { readonly kind: 'gap'; readonly index: number } | { readonly kind: 'hunk'; readonly index: number; readonly hunk: ForgeDiffHunk }
+
+function spotOf(file: ForgeDiffFile, side: 'L' | 'R', line: number): LineSpot {
+  for (const [index, hunk] of file.hunks.entries()) {
+    const start = side === 'L' ? hunk.oldStart : hunk.newStart
+    const count = side === 'L' ? hunk.oldLines : hunk.newLines
+    if (line < start) return { kind: 'gap', index }
+    if (line < start + count) return { kind: 'hunk', index, hunk }
+  }
+  return { kind: 'gap', index: file.hunks.length }
+}
+
 /**
  * Find the collapsed unchanged lines that hold a line: the index of the hunk they precede, or the hunk count after the last hunk.
  * @param file - the diff file.
@@ -73,13 +87,42 @@ export function anchorRange(side: 'L' | 'R', anchor: Pick<ForgeAnchor, 'startLin
  * @returns the gap index, or undefined when a hunk shows the line.
  */
 export function gapOf(file: ForgeDiffFile, side: 'L' | 'R', line: number): number | undefined {
-  for (const [index, hunk] of file.hunks.entries()) {
-    const start = side === 'L' ? hunk.oldStart : hunk.newStart
-    const count = side === 'L' ? hunk.oldLines : hunk.newLines
-    if (line < start) return index
-    if (line < start + count) return undefined
+  const spot = spotOf(file, side, line)
+  return spot.kind === 'gap' ? spot.index : undefined
+}
+
+/**
+ * Order a file's threads as its section shows them: threads on the whole file, then threads on lines by the row of their
+ * last line, then outdated threads, then threads the chosen commits do not show. Threads on unchanged lines sort
+ * by the collapsed lines that hold them.
+ * @param items - threads of one file with their places.
+ * @param file - the file's diff, or undefined when the shown changes lack the file.
+ * @returns the threads in display order.
+ */
+export function inFileOrder<Item extends { readonly place: ThreadPlace }>(items: readonly Item[], file: ForgeDiffFile | undefined): Item[] {
+  const rank = ({ place }: Item): readonly [number, number, number] => {
+    switch (place.kind) {
+      case 'file': return [0, 0, 0]
+      case 'line': return [1, ...rowOf(file, place.side, place.endLine)]
+      case 'outdated': return [2, 0, 0]
+      case 'elsewhere': return [3, 0, 0]
+      /* v8 ignore next -- closed ThreadPlace union exhaustiveness guard */
+      default: return assertNever(place, 'ThreadPlace')
+    }
   }
-  return file.hunks.length
+  const keyed = items.map(item => [rank(item), item] as const)
+  return keyed.toSorted(([a], [b]) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]).map(([, item]) => item)
+}
+
+/**
+ * Where a line draws: twice the index of the collapsed lines that hold it, or twice a hunk's index plus one with the
+ * line's row in that hunk, so rows of one hunk keep their patch order across both sides.
+ */
+function rowOf(file: ForgeDiffFile | undefined, side: 'L' | 'R', line: number): readonly [number, number] {
+  if (file === undefined) return [0, line]
+  const spot = spotOf(file, side, line)
+  if (spot.kind === 'gap') return [2 * spot.index, line]
+  return [2 * spot.index + 1, hunkRows(spot.hunk).findIndex(row => (side === 'L' ? row.old : row.new) === line)]
 }
 
 /**

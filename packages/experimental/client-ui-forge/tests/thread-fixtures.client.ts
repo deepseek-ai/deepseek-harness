@@ -1,6 +1,7 @@
-/** Host review threads and comments shared by the browser-side thread tests. */
+/** Host review threads, comments, and diff files shared by the browser-side thread tests. */
 
 import type { ForgeCommentId, ForgeReviewComment, ForgeReviewThread, ForgeThreadId } from '@deepseek-ai/dsh-experimental-forge/types'
+import type { ForgeDiffFile, ForgeDiffHunk } from '../src/types.ts'
 
 let comments = 0
 
@@ -40,4 +41,15 @@ export function reviewThread(overrides: Partial<ForgeReviewThread> = {}): ForgeR
     comments: [reviewComment()],
     ...overrides,
   }
+}
+
+/**
+ * Build a modified text file with hunks.
+ * @param path - the file's path.
+ * @param hunks - its hunks.
+ * @returns the diff file.
+ */
+export function diffFile(path: string, hunks: readonly ForgeDiffHunk[]): ForgeDiffFile {
+  return { path, previousPath: null, status: 'modified', binary: false, oversized: false, untracked: false, additions: 1, deletions: 1,
+    digest: 'digest', layer: 'implementation', hunks }
 }

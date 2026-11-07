@@ -500,11 +500,13 @@ export function DiffFile(props: DiffFileProps): ReactNode {
         </span>
         {viewed === 'changed' && <Tag tone="warning" className={css.changedTag}>{t('viewed.changed')}</Tag>}
         {threads !== undefined && threads.unresolved > 0 && (
-          <button type="button" className={css.threadCount} aria-label={t('thread.unresolvedAria', { name, count: threads.unresolved })}
-            onClick={threads.openList}>
-            <span className={css.threadCountText}>{t('thread.unresolvedCount', { count: threads.unresolved })}</span>
-            <span className={css.threadCountNumber}>{threads.unresolved}</span>
-          </button>
+          <Tooltip label={t('thread.next')} side="bottom">
+            <button type="button" className={css.threadCount} aria-label={t('thread.unresolvedAria', { name, count: threads.unresolved })}
+              onClick={threads.next}>
+              <span className={css.threadCountText}>{t('thread.unresolvedCount', { count: threads.unresolved })}</span>
+              <span className={css.threadCountNumber}>{threads.unresolved}</span>
+            </button>
+          </Tooltip>
         )}
         <span className={css.fileSpacer} data-forge-path-spacer="" />
         {badge !== '' && <span className={css.badge}>{badge}</span>}

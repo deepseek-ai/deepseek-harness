@@ -2,10 +2,9 @@
 import { describe, expect, it } from 'vitest'
 import type { ForgeReviewThread } from '@deepseek-ai/dsh-experimental-forge/types'
 import {
-  anchorRange, formatThreadQuote, gapOf, hunkExcerpt, passesFilter, placeThread, threadQuoteSummary, THREAD_FILTERS,
+  anchorRange, formatThreadQuote, gapOf, inFileOrder, hunkExcerpt, passesFilter, placeThread, threadQuoteSummary, THREAD_FILTERS,
 } from '../src/client/review-threads.ts'
-import type { ForgeDiffFile } from '../src/types.ts'
-import { reviewComment, reviewThread } from './thread-fixtures.client.ts'
+import { diffFile, reviewComment, reviewThread } from './thread-fixtures.client.ts'
 
 const HEAD = 'a'.repeat(40)
 const OLD = 'b'.repeat(40)
@@ -44,20 +43,33 @@ it('names a side and its lines', () => {
 })
 
 it('finds the collapsed unchanged lines that hold a line on either side', () => {
-  const file: ForgeDiffFile = {
-    path: 'a.ts', previousPath: null, status: 'modified', binary: false, oversized: false, untracked: false, additions: 2, deletions: 2,
-    digest: 'digest', layer: 'implementation',
-    hunks: [
-      { oldStart: 5, oldLines: 3, newStart: 5, newLines: 3, lines: [' a', '-b', '+b', ' c'] },
-      { oldStart: 20, oldLines: 2, newStart: 22, newLines: 2, lines: ['-x', '+x', ' y'] },
-    ],
-  }
+  const file = diffFile('a.ts', [
+    { oldStart: 5, oldLines: 3, newStart: 5, newLines: 3, lines: [' a', '-b', '+b', ' c'] },
+    { oldStart: 20, oldLines: 2, newStart: 22, newLines: 2, lines: ['-x', '+x', ' y'] },
+  ])
   expect(gapOf(file, 'R', 2)).toBe(0)
   expect(gapOf(file, 'R', 6)).toBeUndefined()
   expect(gapOf(file, 'R', 10)).toBe(1)
   expect(gapOf(file, 'L', 21)).toBeUndefined()
   expect(gapOf(file, 'R', 21)).toBe(1)
   expect(gapOf(file, 'R', 40)).toBe(2)
+})
+
+it('orders a file\'s threads as its section shows them', () => {
+  const file = diffFile('a.ts', [
+    { oldStart: 5, oldLines: 3, newStart: 5, newLines: 3, lines: [' a', '-b', '+b', ' c'] },
+    { oldStart: 20, oldLines: 2, newStart: 22, newLines: 2, lines: ['-x', '+x', ' y'] },
+  ])
+  const line = (id: string, side: 'L' | 'R', at: number) => ({ id, place: { kind: 'line', side, startLine: at, endLine: at } as const })
+  const items = [
+    { id: 'away', place: { kind: 'elsewhere' } as const }, { id: 'gone', place: { kind: 'outdated' } as const },
+    line('tail', 'R', 40), line('added', 'R', 6), line('second-hunk', 'L', 20), line('before', 'R', 2), line('deleted', 'L', 6),
+    { id: 'whole', place: { kind: 'file' } as const }, line('between', 'L', 10),
+  ]
+  expect(inFileOrder(items, file).map(item => item.id))
+    .toEqual(['whole', 'before', 'deleted', 'added', 'between', 'second-hunk', 'tail', 'gone', 'away'])
+  // Without the file's diff, lines sort by their number.
+  expect(inFileOrder([line('b', 'R', 9), line('a', 'L', 2)], undefined).map(item => item.id)).toEqual(['a', 'b'])
 })
 
 describe('thread filters', () => {

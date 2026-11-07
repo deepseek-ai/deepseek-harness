@@ -1,6 +1,6 @@
 - button "收起 panel.ts" [expanded]
 - text: src/panel.ts
-- button "panel.ts 有 3 条未解决的讨论，打开讨论列表": 3 条未解决
+- button "panel.ts 有 3 条未解决的讨论，跳到下一条": 3 条未解决
 - text: +2 −2
 - checkbox "将 panel.ts 标记为已审阅"
 - button "panel.ts 的更多操作"

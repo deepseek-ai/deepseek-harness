@@ -50,7 +50,7 @@ import { ChangeRequestGlyph } from './glyphs.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
 import { RefreshGlyph } from './RefreshGlyph.tsx'
 import type { FileThreads, ThreadActions, ThreadFocus } from './ReviewThreads.tsx'
-import type { ThreadFilter } from './review-threads.ts'
+import { inFileOrder, type ThreadFilter } from './review-threads.ts'
 import { usePlacedThreads, useThreadRead, type PlacedThread } from './thread-state.ts'
 import { ThreadList } from './ThreadList.tsx'
 import type { PanelSnapshot } from './source.ts'
@@ -582,11 +582,9 @@ export function ChangesTab({
   const [threadList, setThreadList] = useState<{
     readonly open: boolean
     readonly filter: ThreadFilter
-    /** File whose group the list scrolls to, or null. */
-    readonly file: string | null
     /** Whether the reader just opened the list and it has not taken the focus yet. */
     readonly claim: boolean
-  }>({ open: false, filter: 'unresolved', file: null, claim: false })
+  }>({ open: false, filter: 'unresolved', claim: false })
   const threadsToggle = useRef<HTMLButtonElement>(null)
   const [focus, setFocus] = useState<ThreadFocus | null>(null)
   const allFiles = useMemo(() => filesInTreeOrder(changedFileTree(data?.files ?? [])), [data])
@@ -625,7 +623,8 @@ export function ChangesTab({
     }
     const section = sections.current.get(wanted)
     section?.scrollIntoView({ block: 'start' })
-    // A thread the reader opened from the thread list centers inside its file, which the jump expanded and revealed.
+    // A thread the reader opened from the thread list or a file's unresolved count centers inside its file, which the jump
+    // expanded and revealed.
     /* v8 ignore next 2 -- a focused thread's file is drawn and its card unfolded, so both are found. */
     const card = focus === null ? undefined : [...section?.querySelectorAll<HTMLElement>('[data-forge-thread]') ?? []]
       .find(element => element.dataset.forgeThread === focus.id)
@@ -723,8 +722,15 @@ export function ChangesTab({
   const threadsOf = (path: string): FileThreads | undefined => {
     const group = placed.files.get(path)
     return threadActions === null || group === undefined ? undefined
-      : { ...group, actions: threadActions,
-        openList: () => { setThreadList(value => ({ ...value, open: true, file: path, claim: true })) } }
+      : { ...group, actions: threadActions, next: () => { nextThread(path) } }
+  }
+  /** Show a file's next unresolved thread in display order after the one last shown, or its first. */
+  const nextThread = (path: string): void => {
+    const order = inFileOrder(placed.entries.filter(({ thread }) => thread.path === path && !thread.resolved),
+      allFiles.find(file => file.path === path))
+    const next = order[(order.findIndex(({ thread }) => thread.id === focus?.id) + 1) % order.length]
+    /* v8 ignore next -- the count that calls this shows only while the file has an unresolved thread. */
+    if (next !== undefined) openThread(next)
   }
   /** Close the thread list at the reader's request and return the focus to its toggle. */
   const closeThreadList = (): void => {
@@ -959,7 +965,7 @@ export function ChangesTab({
           {review !== null && review.threads.length > 0 && (
             <button ref={threadsToggle} type="button" className={css.threadsToggle} aria-pressed={threadList.open} data-forge-threads-toggle=""
               aria-label={t('thread.listAria', { count: review.threads.length })}
-              onClick={() => { setThreadList(value => ({ ...value, open: !value.open, file: null, claim: !value.open })) }}>
+              onClick={() => { setThreadList(value => ({ ...value, open: !value.open, claim: !value.open })) }}>
               {t('thread.list')}<span className={css.threadsTotal}>{review.threads.length}</span>
             </button>
           )}
@@ -1024,8 +1030,8 @@ export function ChangesTab({
         {body}
         {allFiles.length > 0 && <FileTreePane {...navigator} id={treeId} position={treePosition} onWidth={setTreeWidth} />}
         {review !== null && data?.kind === 'change' && threadList.open && (
-          <ThreadList entries={placed.entries} order={allFiles.map(file => file.path)} truncated={review.truncated} url={data.url}
-            filter={threadList.filter} choose={(filter) => { setThreadList(value => ({ ...value, filter })) }} file={threadList.file}
+          <ThreadList entries={placed.entries} files={allFiles} truncated={review.truncated} url={data.url}
+            filter={threadList.filter} choose={(filter) => { setThreadList(value => ({ ...value, filter })) }}
             claim={threadList.claim} claimed={() => { setThreadList(value => ({ ...value, claim: false })) }}
             open={(entry, covering) => {
               if (covering) setThreadList(value => ({ ...value, open: false }))

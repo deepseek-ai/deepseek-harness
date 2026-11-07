@@ -1693,7 +1693,7 @@ describe('ChangesTab review threads', () => {
     expect(card(m, 'in-gap')?.previousElementSibling?.getAttribute('data-forge-diff-gap')).toBe('1')
     expect(card(m, 'resolved')?.textContent).toContain('Resolved thread · reviewer')
     // The count alone shows below 480px.
-    expect([...within(app).getByRole('button', { name: 'app.ts has 4 unresolved threads; open the thread list' }).children]
+    expect([...within(app).getByRole('button', { name: 'app.ts has 4 unresolved threads; go to the next one' }).children]
       .map(text => text.textContent)).toEqual(['4 unresolved', '4'])
     expect(app.querySelector('[data-forge-outdated-threads]')?.textContent).toContain('1 outdated threads')
     fireEvent.click(within(card(m, 'outdated')!).getByRole('button', { name: en['thread.viewOriginal'] }))
@@ -1746,9 +1746,7 @@ describe('ChangesTab review threads', () => {
     fireEvent.keyDown(list, { key: 'Escape' })
     expect(m.view.queryByRole('complementary')).toBeNull()
     expect(document.activeElement).toBe(toggle)
-    scrolled.mockClear()
-    fireEvent.click(within(m.section('src/app.ts')).getByRole('button', { name: /^app\.ts has 4 unresolved threads/ }))
-    expect(scrolled.mock.contexts).toContain(m.view.container.querySelector('[data-forge-thread-group="src/app.ts"]'))
+    fireEvent.click(toggle)
     fireEvent.click(within(m.view.getByRole('complementary')).getByRole('button', { name: en['thread.close'] }))
     expect(m.view.queryByRole('complementary')).toBeNull()
     fireEvent.click(toggle)
@@ -1756,6 +1754,21 @@ describe('ChangesTab review threads', () => {
     expect(m.view.queryByRole('complementary')).toBeNull()
     fireEvent.click(toggle)
     fireEvent.click(m.view.getByRole('complementary').previousElementSibling!)
+    expect(m.view.queryByRole('complementary')).toBeNull()
+  })
+
+  it('steps through a file\'s unresolved threads in display order from the count in its header', async () => {
+    const m = mount({ source, setup: reviewed() })
+    await settle()
+    const shown: (string | undefined)[] = []
+    for (let step = 0; step < 5; step += 1) {
+      scrolled.mockClear()
+      fireEvent.click(within(m.section('src/app.ts')).getByRole('button', { name: 'app.ts has 4 unresolved threads; go to the next one' }))
+      await settle()
+      shown.push((scrolled.mock.contexts as HTMLElement[]).find(element => element.dataset.forgeThread !== undefined)?.dataset.forgeThread)
+    }
+    // R4 in the first hunk, R8 in the unchanged lines after it, L11 in the second hunk, then the outdated thread, then R4 again.
+    expect(shown).toEqual(['on-row', 'in-gap', 'old-side', 'outdated', 'on-row'])
     expect(m.view.queryByRole('complementary')).toBeNull()
   })
 

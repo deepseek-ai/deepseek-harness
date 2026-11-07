@@ -8,7 +8,7 @@ import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol
 import { en } from '../src/client/locales.ts'
 import { Avatar, OutdatedThreads, ThreadCard, type ThreadActions } from '../src/client/ReviewThreads.tsx'
 import { ThreadList, type ThreadListProps } from '../src/client/ThreadList.tsx'
-import { reviewComment, reviewThread } from './thread-fixtures.client.ts'
+import { diffFile, reviewComment, reviewThread } from './thread-fixtures.client.ts'
 
 const t = makeTranslate(en)
 const OLD = 'b'.repeat(40)
@@ -157,7 +157,7 @@ describe('OutdatedThreads', () => {
 describe('ThreadList', () => {
   function list(overrides: Partial<ThreadListProps> = {}) {
     const props: ThreadListProps = {
-      entries: [], order: [], truncated: false, url: 'https://github.com/octo/demo/pull/7', filter: 'all', file: null, claim: false,
+      entries: [], files: [], truncated: false, url: 'https://github.com/octo/demo/pull/7', filter: 'all', claim: false,
       claimed: vi.fn(), choose: vi.fn(), open: vi.fn(), openLink: vi.fn(), close: vi.fn(), t, ...overrides,
     }
     return { props, view: render(<ThreadList {...props} />) }
@@ -199,15 +199,19 @@ describe('ThreadList', () => {
     expect(props.close).toHaveBeenCalledOnce()
   })
 
-  it('groups threads by file in file order, scrolls to a file\'s group, and moves the filter with arrow keys', () => {
-    const entry = { thread: reviewThread({ path: 'b.ts' }), place: { kind: 'line', side: 'R', startLine: 3, endLine: 3 } as const }
-    const other = { thread: reviewThread({ path: 'a.ts' }), place: { kind: 'line', side: 'R', startLine: 3, endLine: 3 } as const }
+  it('groups threads by file in file order, orders them by row, and moves the filter with arrow keys', () => {
+    const at = (id: string, path: string, side: 'L' | 'R', line: number) => ({ thread: reviewThread({ id: id as ForgeThreadId, path }),
+      place: { kind: 'line', side, startLine: line, endLine: line } as const })
     const empty = { thread: reviewThread({ path: 'c.ts', comments: [] }), place: { kind: 'file' } as const }
-    const { view, props } = list({ entries: [empty, entry, other], order: ['b.ts'], filter: 'unresolved', file: 'a.ts' })
+    // In b.ts the added R2 row follows the deleted L2 row, and L9 sits in the unchanged lines after the hunk.
+    const files = [diffFile('b.ts', [{ oldStart: 1, oldLines: 2, newStart: 1, newLines: 2, lines: [' a', '-b', '+B'] }])]
+    const { view, props } = list({ entries: [empty, at('late', 'b.ts', 'L', 9), at('added', 'b.ts', 'R', 2), at('other', 'a.ts', 'R', 3),
+      at('deleted', 'b.ts', 'L', 2)], files, filter: 'unresolved' })
     expect([...view.container.querySelectorAll('[data-forge-thread-group]')].map(group => group.getAttribute('data-forge-thread-group')))
       .toEqual(['b.ts', 'a.ts', 'c.ts'])
+    expect([...view.container.querySelectorAll('[data-forge-thread-group="b.ts"] [data-forge-thread-item]')].map(item => item.getAttribute('data-forge-thread-item')))
+      .toEqual(['deleted', 'added', 'late'])
     expect(view.container.querySelector('[data-forge-thread-group="c.ts"] [class*="excerpt"]')?.textContent).toBe('')
-    expect(scrolled.mock.contexts).toEqual([view.container.querySelector('[data-forge-thread-group="a.ts"]')])
     fireEvent.keyDown(view.getByRole('radio', { name: /^Unresolved/ }), { key: 'ArrowRight' })
     expect(props.choose).toHaveBeenCalledWith('resolved')
   })

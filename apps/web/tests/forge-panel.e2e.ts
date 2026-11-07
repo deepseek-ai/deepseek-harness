@@ -1894,10 +1894,23 @@ it.skipIf(MODE === 'record')('overlays the review threads of a change request an
   await panel.locator('[data-forge-thread="resolved"]').getByText('已解决的讨论 · lin', { exact: true }).waitFor()
   await panel.locator('[data-forge-outdated-threads]').getByText('1 条讨论已过期：所在代码已被后续提交修改', { exact: true }).waitFor()
   await view.locator('[data-forge-diff-file="docs/panel.md"] [data-forge-thread="whole-file"]').getByText('文件级讨论', { exact: true }).waitFor()
-  await panel.getByRole('button', { name: 'panel.ts 有 3 条未解决的讨论，打开讨论列表', exact: true }).waitFor()
+  const count = panel.getByRole('button', { name: 'panel.ts 有 3 条未解决的讨论，跳到下一条', exact: true })
+  await count.waitFor()
   await view.getByRole('navigation').getByTitle('3 条未解决的讨论', { exact: true }).waitFor()
   await compareOrRefreshGolden(join(EXPECTED, 'review-threads.expected.md'),
     await captureStableAria(page, '[data-forge-diff-file="src/panel.ts"]', scaffold.workspaceCwd), MODE)
+
+  // The count steps through the file's unresolved threads in display order: R2, L15, then the outdated one.
+  const centered = async (id: string): Promise<boolean> => await panel.locator(`[data-forge-thread="${id}"]`).evaluate((card) => {
+    const viewport = card.closest('[data-forge-changes-scroll]')!.getBoundingClientRect()
+    const box = card.getBoundingClientRect()
+    return box.top + box.height / 2 > viewport.top && box.top + box.height / 2 < viewport.bottom
+  })
+  for (const id of ['on-line', 'old-side', 'outdated']) {
+    await count.click()
+    await expect.poll(() => centered(id)).toBe(true)
+  }
+  expect(await view.locator('[data-forge-thread-list]').count()).toBe(0)
 
   await view.getByRole('button', { name: '讨论列表，共 5 个', exact: true }).click()
   const list = view.getByRole('complementary', { name: '讨论列表，共 5 个' })

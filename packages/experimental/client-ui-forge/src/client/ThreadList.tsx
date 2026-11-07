@@ -8,11 +8,11 @@ import { useLayoutEffect, useMemo, useRef, type KeyboardEvent, type ReactNode } 
 import { IconChevronLeftOutlineRegular, IconCloseOutlineRegular, IconRightUpOutlineRegular, Tag, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ForgeReviewThread } from '@deepseek-ai/dsh-experimental-forge/types'
-import { assertNever } from '@deepseek-ai/dsh-util-values'
+import type { ForgeDiffFile } from '../types.ts'
 import { FileLabel } from './FileLabel.tsx'
 import { SegmentedChoice } from './ReviewControls.tsx'
 import { Avatar } from './ReviewThreads.tsx'
-import { anchorRange, passesFilter, THREAD_FILTERS, type ThreadFilter, type ThreadPlace } from './review-threads.ts'
+import { anchorRange, inFileOrder, passesFilter, THREAD_FILTERS, type ThreadFilter, type ThreadPlace } from './review-threads.ts'
 import type { NS } from './locales.ts'
 import type { PlacedThread } from './thread-state.ts'
 import css from './ThreadList.module.css'
@@ -23,8 +23,8 @@ type Translate = PropsLocale<typeof NS>['t']
 export interface ThreadListProps extends PropsLocale<typeof NS> {
   /** Every thread read, in host order, with where the current changes show it. */
   readonly entries: readonly PlacedThread[]
-  /** Changed file paths in file tree order; threads on other paths follow them. */
-  readonly order: readonly string[]
+  /** Changed files in file tree order; threads on other paths follow them. */
+  readonly files: readonly ForgeDiffFile[]
   /** Whether the host has more threads than were read. */
   readonly truncated: boolean
   /** Web page of the change request. */
@@ -33,8 +33,6 @@ export interface ThreadListProps extends PropsLocale<typeof NS> {
   readonly filter: ThreadFilter
   /** Choose a filter. */
   readonly choose: (filter: ThreadFilter) => void
-  /** File whose group the list scrolls to when it changes, or null. */
-  readonly file: string | null
   /** Whether the reader just opened the list, so a list that covers the files takes the focus. */
   readonly claim: boolean
   /** Report that the list handled `claim`. */
@@ -45,18 +43,6 @@ export interface ThreadListProps extends PropsLocale<typeof NS> {
   readonly openLink: (url: string) => void
   /** Close the list at the reader's request. */
   readonly close: () => void
-}
-
-/** Sort key of a thread inside its file: file threads first, then by first line, outdated and elsewhere last. */
-function rank(place: ThreadPlace): number {
-  switch (place.kind) {
-    case 'file': return -1
-    case 'line': return place.startLine
-    case 'outdated':
-    case 'elsewhere': return Number.MAX_SAFE_INTEGER
-    /* v8 ignore next -- closed ThreadPlace union exhaustiveness guard */
-    default: return assertNever(place, 'ThreadPlace')
-  }
 }
 
 function meta(thread: ForgeReviewThread, place: ThreadPlace, t: Translate): string {
@@ -113,12 +99,12 @@ function Item({ entry, open, t }: {
  * @returns the list pane and the scrim behind it where it floats over the files.
  */
 export function ThreadList(props: ThreadListProps): ReactNode {
-  const { entries, order, filter, t } = props
+  const { entries, files, filter, t } = props
   const threads = useMemo(() => entries.map(entry => entry.thread), [entries])
   const counts = useMemo(() => Object.fromEntries(THREAD_FILTERS.map(item => [item,
     threads.filter(thread => passesFilter(thread, item)).length])) as Record<ThreadFilter, number>, [threads])
   const groups = useMemo(() => {
-    const position = new Map(order.map((path, index) => [path, index]))
+    const known = new Map(files.map((file, index) => [file.path, { file, index }]))
     const byPath = new Map<string, PlacedThread[]>()
     for (const entry of entries) {
       if (!passesFilter(entry.thread, filter)) continue
@@ -126,19 +112,11 @@ export function ThreadList(props: ThreadListProps): ReactNode {
       if (list === undefined) byPath.set(entry.thread.path, [entry])
       else list.push(entry)
     }
-    return [...byPath].sort(([a], [b]) => (position.get(a) ?? order.length) - (position.get(b) ?? order.length) || a.localeCompare(b))
-      .map(([path, list]) => [path, list.toSorted((a, b) => rank(a.place) - rank(b.place))] as const)
-  }, [entries, order, filter])
+    const position = (path: string): number => known.get(path)?.index ?? files.length
+    return [...byPath].sort(([a], [b]) => position(a) - position(b) || a.localeCompare(b))
+      .map(([path, list]) => [path, inFileOrder(list, known.get(path)?.file)] as const)
+  }, [entries, files, filter])
   const pane = useRef<HTMLElement>(null)
-  const rows = useRef<HTMLDivElement>(null)
-  useLayoutEffect(() => {
-    const container = rows.current
-    /* v8 ignore next -- the ref is attached before layout effects run. */
-    if (props.file === null || container === null) return
-    for (const group of container.querySelectorAll<HTMLElement>('[data-forge-thread-group]')) {
-      if (group.dataset.forgeThreadGroup === props.file) group.scrollIntoView({ block: 'start' })
-    }
-  }, [props.file])
   useLayoutEffect(() => {
     if (!props.claim) return
     props.claimed()
@@ -168,7 +146,7 @@ export function ThreadList(props: ThreadListProps): ReactNode {
         <SegmentedChoice label={t('thread.filterAria')} value={filter} choose={props.choose}
           segments={THREAD_FILTERS.map(item => ({ value: item, label: t(`thread.filter.${item}`), count: counts[item], disabledTip: null }))} />
       </div>
-      <div ref={rows} className={css.rows}>
+      <div className={css.rows}>
         {threads.length === 0 ? <div className={css.note}>{t('thread.empty')}</div>
           : groups.length === 0 ? <div className={css.note}>{t('thread.none')}</div>
             : groups.map(([path, list]) => <section key={path} className={css.group} data-forge-thread-group={path}>

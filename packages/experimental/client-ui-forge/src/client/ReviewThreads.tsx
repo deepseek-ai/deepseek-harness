@@ -60,8 +60,8 @@ export interface FileThreads {
   readonly unresolved: number
   /** Reads, actions, and identities shared by the cards. */
   readonly actions: ThreadActions
-  /** Open the thread list at this file. */
-  readonly openList: () => void
+  /** Show the file's next unresolved thread in display order after the last one shown, or its first. */
+  readonly next: () => void
 }
 
 /** The commit a thread was written on, abbreviated, or null for a file thread. */
