@@ -7636,14 +7636,14 @@ importers:
         version: 1.0.97
       zod:
         specifier: ^4.4.3
-        version: 4.4.3
+        version: 4.6.6
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
-      '@deepseek-ai/dsh-client-ui-cli-account':
+      '@deepseek-ai/dsh-client-ui-connector-account':
         specifier: workspace:*
-        version: link:../../client/ui-cli-account
+        version: link:../../client/ui-connector-account
       '@deepseek-ai/dsh-skill':
         specifier: workspace:*
         version: link:../../skill/skill

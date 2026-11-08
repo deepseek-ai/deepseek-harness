@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包是[飞书插件](../feishu/README.zh.md)的 Host 行。它安装固定版本的 `@larksuite/cli`，在运行时上下文中把其 `lark-cli` 可执行文件的绝对路径告诉模型，并注册一个 `feishu` skill，为该 CLI 内嵌的子指南提供索引。它把账号注册到 [CLI 账号注册表](../../client/ui-cli-account/README.zh.md)，其插件页区块负责检查默认账号、通过 CLI 的浏览器流程关联应用并登录、退出登录以及取消操作。CLI 把凭据保存在默认配置中，用户自己的终端也共用这份配置。仅支持 macOS。
+本包是[飞书插件](../feishu/README.zh.md)的 Host 行。它安装固定版本的 `@larksuite/cli`，在运行时上下文中把其 `lark-cli` 可执行文件的绝对路径告诉模型，并注册一个 `feishu` skill，为该 CLI 内嵌的子指南提供索引。它把账号注册到 [连接器账号注册表](../../client/ui-connector-account/README.zh.md)，其插件页区块负责检查默认账号、通过 CLI 的浏览器流程关联应用并登录、退出登录以及取消操作。CLI 把凭据保存在默认配置中，用户自己的终端也共用这份配置。仅支持 macOS。
 
 ## 目录
 
@@ -38,7 +38,7 @@ kind: "package-reference"
 <a id="account-operations"></a>
 ### 账号操作
 
-插件页通过 CLI 账号注册表发起这些操作，注册表由 Web 应用加载；headless profile 加载插件时没有它。Host 同一时间最多运行一个账号操作并持有它，因此离开页面不会取消操作。关联应用和登录是两个独立操作，页面分别由各自的一次点击发起。
+插件页通过 连接器账号注册表发起这些操作，注册表由 Web 应用加载；headless profile 加载插件时没有它。Host 同一时间最多运行一个账号操作并持有它，因此离开页面不会取消操作。关联应用和登录是两个独立操作，页面分别由各自的一次点击发起。
 
 | 操作 | 作用 |
 |---|---|
@@ -84,7 +84,7 @@ kind: "package-reference"
 - [CLI 账号库](../cli-account/README.zh.md)——CLI 应用插件共用的命令执行、CLI 路径上下文与账号操作。
 - [Skills](../../../docs/subsystems/skills.zh.md)——目录发布、加载与优先级。
 - [飞书插件](../feishu/README.zh.md)——插入本行与页面行的 bundle。
-- [CLI 账号界面](../../client/ui-cli-account/README.zh.md)——发起账号操作的注册表和插件页区块。
+- [连接器账号界面](../../client/ui-connector-account/README.zh.md)——发起账号操作的注册表和插件页区块。
 - [Plugin Manager](../../boot/plugin-manager/README.zh.md)——安装、构建脚本审批与启用。
 
 -----

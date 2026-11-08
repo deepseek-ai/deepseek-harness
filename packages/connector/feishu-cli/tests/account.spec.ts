@@ -2,8 +2,8 @@
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import { CliCommandExecutor, type CliOperationId } from '@deepseek-ai/dsh-cli-account'
-import type { CliAccountRegistration, CliAccountSource } from '@deepseek-ai/dsh-cli-account/types'
+import { CliCommandExecutor } from '@deepseek-ai/dsh-cli-account'
+import type { ConnectorAccountRegistration, ConnectorOperationId } from '@deepseek-ai/dsh-client-ui-connector-account/types'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -63,7 +63,7 @@ describe('FeishuAccount', () => {
 
   afterEach(() => account.dispose())
 
-  const settled = async (id: CliOperationId): Promise<FeishuState> => {
+  const settled = async (id: ConnectorOperationId): Promise<FeishuState> => {
     await vi.waitFor(() => { expect(account.snapshot().result?.id).toBe(id) })
     return account.snapshot()
   }
@@ -190,11 +190,12 @@ describe('FeishuAccount', () => {
 })
 
 describe('Feishu on the Plugins page', () => {
-  let account!: CliAccountSource<FeishuState>
+  let account!: FeishuAccount
 
   beforeEach(async () => {
-    ctx.provide('cliAccounts', {
-      register: (registration: CliAccountRegistration<FeishuState>) => {
+    ctx.provide('connectorAccounts', {
+      register: (registration: ConnectorAccountRegistration<FeishuState>) => {
+        if (!(registration.source instanceof FeishuAccount)) throw new Error('the plugin registers its account runtime')
         account = registration.source
         return () => {}
       },
@@ -202,7 +203,7 @@ describe('Feishu on the Plugins page', () => {
     await ctx.plugin(Feishu, { commandTimeoutMs: 5_000, binDir })
   })
 
-  const finished = async (id: CliOperationId): Promise<FeishuState['result']> => {
+  const finished = async (id: ConnectorOperationId): Promise<FeishuState['result']> => {
     await vi.waitFor(() => { expect(account.snapshot().result?.id).toBe(id) })
     return account.snapshot().result
   }

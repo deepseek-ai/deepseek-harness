@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-feishu-cli",
   "description": "Feishu through the official lark-cli: the CLI by its absolute path, its embedded skills, and account operations over Remote",
-  "version": "0.2.2-alpha.2",
+  "version": "0.2.2-rc.1",
   "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"
@@ -27,7 +27,10 @@
     "icon.svg",
     "locale/*.json",
     "lib/index.js",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ],
   "license": "MIT",
   "dependencies": {
@@ -46,7 +49,7 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
-    "@deepseek-ai/dsh-client-ui-cli-account": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-connector-account": "workspace:*",
     "@deepseek-ai/dsh-skill": "workspace:*",
     "@deepseek-ai/dsh-subprocess": "workspace:*",
     "@deepseek-ai/dsh-system-prompt": "workspace:*"

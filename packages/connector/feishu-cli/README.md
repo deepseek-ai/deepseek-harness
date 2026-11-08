@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package is the Host row of the [Feishu plugin](../feishu/README.md). It installs a pinned `@larksuite/cli`, gives the model the absolute path of its `lark-cli` executable in runtime context, and registers one `feishu` skill that indexes the guides embedded in that CLI. It registers the account with the [CLI account registry](../../client/ui-cli-account/README.md), whose Plugins page section checks the default account, links an app and signs in through the CLI's browser flows, signs out, and cancels. The CLI keeps credentials in its default configuration, which the user's own terminal shares. Only macOS is supported.
+This package is the Host row of the [Feishu plugin](../feishu/README.md). It installs a pinned `@larksuite/cli`, gives the model the absolute path of its `lark-cli` executable in runtime context, and registers one `feishu` skill that indexes the guides embedded in that CLI. It registers the account with the [connector account registry](../../client/ui-connector-account/README.md), whose Plugins page section checks the default account, links an app and signs in through the CLI's browser flows, signs out, and cancels. The CLI keeps credentials in its default configuration, which the user's own terminal shares. Only macOS is supported.
 
 ## Table of Contents
 
@@ -38,7 +38,7 @@ Turning the row off in Plugin Manager withdraws the `feishu` skill and the path 
 <a id="account-operations"></a>
 ### Account operations
 
-The Plugins page drives these operations through the CLI account registry, which the Web app loads; a headless profile loads the plugin without it. The Host runs at most one account operation at a time and owns it, so leaving the page does not cancel it. Linking an app and signing in are separate operations, so the page starts each one from its own click.
+The Plugins page drives these operations through the connector account registry, which the Web app loads; a headless profile loads the plugin without it. The Host runs at most one account operation at a time and owns it, so leaving the page does not cancel it. Linking an app and signing in are separate operations, so the page starts each one from its own click.
 
 | Operation | Effect |
 |---|---|
@@ -84,7 +84,7 @@ The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-fe
 - [CLI account library](../cli-account/README.md) — command execution, the CLI path context, and account operations shared by CLI app plugins.
 - [Skills](../../../docs/subsystems/skills.md) — catalog publication, loading, and precedence.
 - [Feishu plugin](../feishu/README.md) — the bundle that inserts this row and the page row.
-- [CLI account surfaces](../../client/ui-cli-account/README.md) — the registry and the Plugins page section that drive the account operations.
+- [Connector account surfaces](../../client/ui-connector-account/README.md) — the registry and the Plugins page section that drive the account operations.
 - [Plugin Manager](../../boot/plugin-manager/README.md) — installation, build-script approval, and enablement.
 
 -----

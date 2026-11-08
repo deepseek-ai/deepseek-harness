@@ -40,7 +40,7 @@ pnpm 会拦截 `@larksuite/cli` 的安装脚本，该脚本负责下载并校验
 
 | 行 | 包 | 行为 |
 |---|---|---|
-| `feishu` | [`@deepseek-ai/dsh-feishu-cli`](../feishu-cli/README.zh.md) | 把 `lark-cli` 的绝对路径告诉模型，注册其内嵌技能，在 Host 上执行账号检查、连接和退出登录，并通过 [CLI 账号注册表](../../client/ui-cli-account/README.zh.md)在插件页显示账号区块、连接标签、开启后的连接引导和连接提示 |
+| `feishu` | [`@deepseek-ai/dsh-feishu-cli`](../feishu-cli/README.zh.md) | 把 `lark-cli` 的绝对路径告诉模型，注册其内嵌技能，在 Host 上执行账号检查、连接和退出登录，并通过 [连接器账号注册表](../../client/ui-connector-account/README.zh.md)在插件页显示账号区块、连接标签、开启后的连接引导和连接提示 |
 
 关闭 bundle 会撤下技能、运行时上下文中的路径和页面。CLI 的配置与登录保持不变。
 
@@ -63,7 +63,7 @@ pnpm 会拦截 `@larksuite/cli` 的安装脚本，该脚本负责下载并校验
 
 - [Connector 包](../README.zh.md)——这个应用插件所属的分组。
 - [飞书 CLI 与技能](../feishu-cli/README.zh.md)——Host 行、账号操作与模型指引。
-- [CLI 账号界面](../../client/ui-cli-account/README.zh.md)——在插件页显示账号的注册表。
+- [连接器账号界面](../../client/ui-connector-account/README.zh.md)——在插件页显示账号的注册表。
 - [Plugin Manager](../../boot/plugin-manager/README.zh.md)——安装、构建脚本批准与启用。
 
 -----

@@ -5,7 +5,7 @@ import SkillRegistry, { renderSkillContent } from '@deepseek-ai/dsh-skill'
 import SystemPrompt, { renderContextSections } from '@deepseek-ai/dsh-system-prompt'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { executableFileName } from '@deepseek-ai/dsh-cli-account'
-import type { CliAccountRegistration } from '@deepseek-ai/dsh-cli-account/types'
+import type { ConnectorAccountRegistration } from '@deepseek-ai/dsh-client-ui-connector-account/types'
 import { cliPathContextText } from '@deepseek-ai/dsh-cli-account/src/context.ts'
 import * as Feishu from '../src/index.ts'
 import { COPY, FEISHU_PACKAGE, OPERATIONS, presentAccount } from '../src/presentation.ts'
@@ -141,10 +141,10 @@ describe('Feishu plugin', () => {
   })
 
   it('shows the account on the Plugins page while the registry runs, and withdraws it with the plugin', async () => {
-    const registered: CliAccountRegistration<FeishuState>[] = []
+    const registered: ConnectorAccountRegistration<FeishuState>[] = []
     const withdrawn = vi.fn()
-    ctx.provide('cliAccounts', {
-      register: (registration: CliAccountRegistration<FeishuState>) => {
+    ctx.provide('connectorAccounts', {
+      register: (registration: ConnectorAccountRegistration<FeishuState>) => {
         registered.push(registration)
         return withdrawn
       },

@@ -1,6 +1,6 @@
 /**
  * Feishu plugin: tells the model the managed lark-cli's absolute path, registers
- * its embedded skills, and shows the account on the Plugins page through the CLI
+ * its embedded skills, and shows the account on the Plugins page through the connector
  * account registry. The CLI's default account is shared with the user's own terminal.
  * @module @deepseek-ai/dsh-feishu
  */
@@ -8,7 +8,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type z from '@deepseek-ai/schemastery'
 import { CliAccountConfig, CliCommandExecutor, registerCliPathContext } from '@deepseek-ai/dsh-cli-account'
-import type {} from '@deepseek-ai/dsh-client-ui-cli-account'
+import type {} from '@deepseek-ai/dsh-client-ui-connector-account'
 import type {} from '@deepseek-ai/dsh-skill'
 import type {} from '@deepseek-ai/dsh-subprocess'
 import type {} from '@deepseek-ai/dsh-system-prompt'
@@ -32,7 +32,7 @@ export type Config = CliAccountConfig
 export const Config: z<Config> = CliAccountConfig
 
 /**
- * Register the CLI and its skills, and show the account on the Plugins page while the CLI account registry runs.
+ * Register the CLI and its skills, and show the account on the Plugins page while the connector account registry runs.
  * @param ctx - Context carrying the skill registry, subprocess runtime, and system prompt.
  * @param config - CLI location and command deadline.
  * @throws when `lark-cli` is not executable.
@@ -44,9 +44,9 @@ export function apply(ctx: Context, config: Config): void {
   const account = new FeishuAccount(cli, ctx.logger)
   ctx.effect(() => () => account.dispose(), 'feishu: account')
   ctx.skills.registerProvider(control => new FeishuSkillProvider(cli, control))
-  ctx.inject(['cliAccounts'], (scope) => {
-    scope.effect(() => scope.cliAccounts.register({
-      packageName: FEISHU_PACKAGE, source: account, operations: OPERATIONS, copy: COPY, present: presentAccount,
+  ctx.inject(['connectorAccounts'], (scope) => {
+    scope.effect(() => scope.connectorAccounts.register({
+      key: FEISHU_PACKAGE, packageName: FEISHU_PACKAGE, source: account, operations: OPERATIONS, copy: COPY, present: presentAccount,
     }), 'feishu: Plugins page account')
   })
 }

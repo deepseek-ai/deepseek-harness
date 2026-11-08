@@ -1,8 +1,9 @@
 /** The Feishu account section the Plugins page shows for each Host view. */
 import { failureDetails } from '@deepseek-ai/dsh-cli-account'
 import type {
-  CliAccountButton, CliAccountCopy, CliAccountDisplay, CliAccountFailure, CliAccountNote, CliAccountOperation,
-} from '@deepseek-ai/dsh-cli-account/types'
+  ConnectorAccountButton, ConnectorAccountCopy, ConnectorAccountDisplay, ConnectorAccountFailure, ConnectorAccountNote,
+  ConnectorAccountOperation,
+} from '@deepseek-ai/dsh-client-ui-connector-account/types'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { text } from './locales.ts'
 import type { FeishuAppId, FeishuOperationKind, FeishuState } from './types.ts'
@@ -12,7 +13,7 @@ export const FEISHU_PACKAGE = '@deepseek-ai/dsh-feishu'
 
 /* jscpd:ignore-start -- CLI app plugins declare page operations, copy, and commands alike, each with its own text. */
 /** The operations the section's buttons start; each but a check reports a notice in the browser that started it. */
-export const OPERATIONS: readonly CliAccountOperation<FeishuOperationKind>[] = [
+export const OPERATIONS: readonly ConnectorAccountOperation<FeishuOperationKind>[] = [
   { kind: 'check' },
   { kind: 'link-app', notice: text('notice.app-linked') },
   { kind: 'sign-in', notice: text('notice.connected') },
@@ -20,7 +21,7 @@ export const OPERATIONS: readonly CliAccountOperation<FeishuOperationKind>[] = [
 ]
 
 /** The section's title and hint, and the prompt after the bundle is switched on while disconnected. */
-export const COPY: CliAccountCopy = {
+export const COPY: ConnectorAccountCopy = {
   title: text('section.title'),
   hint: text('hint'),
   activation: { title: text('activation.title'), body: text('activation.body'), connect: text('action.connect') },
@@ -50,9 +51,9 @@ function step(operation: Operation): Step {
 }
 
 /** The section while an operation runs: its step, the Feishu page and its guidance while waiting there, and cancel. */
-function presentOperation(operation: Operation): CliAccountDisplay {
+function presentOperation(operation: Operation): ConnectorAccountDisplay {
   const current = step(operation)
-  const buttons: CliAccountButton[] = []
+  const buttons: ConnectorAccountButton[] = []
   if (operation.authorizationUrl !== undefined) buttons.push({ label: text('action.open'), command: { kind: 'open' }, variant: 'primary' })
   if (operation.cancellable) buttons.push({ label: text('action.cancel'), command: { kind: 'cancel' }, variant: 'ghost' })
   const guidance = operation.authorizationUrl === undefined ? undefined
@@ -65,7 +66,7 @@ function presentOperation(operation: Operation): CliAccountDisplay {
 }
 
 /** The row that names the linked app and replaces it after a confirmation. */
-function appNotes(appId: FeishuAppId): CliAccountNote[] {
+function appNotes(appId: FeishuAppId): ConnectorAccountNote[] {
   return [{
     text: text('app.linked', { id: appId }),
     button: {
@@ -76,7 +77,7 @@ function appNotes(appId: FeishuAppId): CliAccountNote[] {
 }
 
 /** The last failed operation's guidance, with its command, exit code, and the CLI's classified error. */
-function failureOf(result: FeishuState['result']): { failure?: CliAccountFailure } {
+function failureOf(result: FeishuState['result']): { failure?: ConnectorAccountFailure } {
   if (result?.outcome !== 'failed') return {}
   const failure = result.failure
   const classified = failure === undefined ? [] : [failure.type, failure.subtype].filter(item => item !== undefined)
@@ -89,7 +90,7 @@ function failureOf(result: FeishuState['result']): { failure?: CliAccountFailure
  * @param view - the CLI's default account, the operation in progress, and the last result.
  * @returns the phase, status, tag, buttons, detail, linked-app row, and failure.
  */
-export function presentAccount(view: FeishuState): CliAccountDisplay {
+export function presentAccount(view: FeishuState): ConnectorAccountDisplay {
   const { account, operation } = view
   if (operation?.kind === 'check') return { phase: 'checking', status: text('status.checking'), buttons: [], notes: [] }
   if (operation !== undefined) return presentOperation(operation)

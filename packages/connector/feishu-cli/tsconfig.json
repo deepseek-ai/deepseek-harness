@@ -33,7 +33,7 @@
       "path": "../../core/system-prompt"
     },
     {
-      "path": "../../client/ui-cli-account/tsconfig.host.json"
+      "path": "../../client/ui-connector-account/tsconfig.host.json"
     }
   ]
 }

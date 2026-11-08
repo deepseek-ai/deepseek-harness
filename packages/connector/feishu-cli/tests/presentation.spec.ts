@@ -1,12 +1,12 @@
 /** The Feishu section offers each state's next step, the linked app, confirmations, and failure guidance, in every shipped language. */
-import type { CliAccountDisplay, CliOperationId } from '@deepseek-ai/dsh-cli-account/types'
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
+import type { ConnectorAccountDisplay, ConnectorOperationId } from '@deepseek-ai/dsh-client-ui-connector-account/types'
 import { expect, it } from 'vitest'
 import { en, zh, type FeishuTextKey } from '../src/locales.ts'
 import { COPY, OPERATIONS, presentAccount } from '../src/presentation.ts'
 import type { FeishuAppId, FeishuState } from '../src/types.ts'
 
-const OP = 'op' as CliOperationId
+const OP = 'op' as ConnectorOperationId
 const APP = 'cli_a' as FeishuAppId
 const LINK = 'https://x.feishu.cn'
 const CHECK = { kind: 'start', operation: 'check' } as const
@@ -17,7 +17,7 @@ const SIGN_OUT = { kind: 'start', operation: 'sign-out' } as const
 /** The key's text as the Chinese and English browsers resolve it. */
 const say = (key: FeishuTextKey): Partial<Record<string, string>> => ({ zh: zh[key], en: en[key] })
 const zhOf = (text: LocalizedText | undefined): string | undefined => typeof text === 'object' ? text.zh : text
-const labels = (display: CliAccountDisplay): (string | undefined)[] => display.buttons.map(button => zhOf(button.label))
+const labels = (display: ConnectorAccountDisplay): (string | undefined)[] => display.buttons.map(button => zhOf(button.label))
 
 const UNCONFIGURED: FeishuState = { account: { state: 'unconfigured' } }
 const SIGNED_OUT: FeishuState = { account: { state: 'signed-out', appId: APP } }
