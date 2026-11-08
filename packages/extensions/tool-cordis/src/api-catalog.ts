@@ -813,6 +813,40 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'connectorAccounts',
+    summary: 'Holds the registered accounts and serves them to the Plugins page.',
+    description: 'Holds the registered accounts and serves them to the Plugins page.',
+    methods: [
+      {
+        signature: 'register<View extends AnyConnectorAccountView>(registration: ConnectorAccountRegistration<View>): () => void',
+        description: 'Show one account on the Plugins page for as long as the returned disposer has not run.',
+        parameters: [{ name: 'registration', description: 'the account key, its bundle package, the account source, the page operations, and the presentation.' }],
+        returns: 'an idempotent disposer that withdraws the account.',
+        throws: ['when another account already uses the key or the package.'],
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *watch(signal: AbortSignal): AsyncIterable<ConnectorAccountsView>',
+        description: 'Follow every registered account; each new subscriber starts a check of each account that runs no operation.',
+        parameters: [{ name: 'signal', description: 'the Client\'s observation lifetime; disposal also ends the stream.' }],
+        returns: 'the current accounts, then each changed set, coalescing changes that arrive before the next read.',
+      },
+      {
+        signature: '@Remote async start(key: string, operation: string): Promise<ConnectorOperationId>',
+        description: 'Start one of the operations the account registered as page actions.',
+        parameters: [{ name: 'key', description: 'the account key.' }, { name: 'operation', description: 'the operation kind.' }],
+        returns: 'the operation identity once the account\'s source has started it.',
+        throws: ['for an unknown account or operation, or whatever the account\'s source refuses, such as a second operation.'],
+      },
+      {
+        signature: '@Remote cancel(key: string, id: ConnectorOperationId): Promise<void>',
+        description: 'Cancel one operation while its phase is cancellable, and wait for it to settle.',
+        parameters: [{ name: 'key', description: 'the account key.' }, { name: 'id', description: 'the operation to cancel; a finished one or a phase that is not cancellable is ignored.' }],
+        returns: 'after the operation settles, or at once when nothing is cancelled.',
+        throws: ['for an unknown account.'],
+      },
+    ],
+  },
+  {
     key: 'cotTranslation',
     summary: 'Optional reasoning translation delegates Session-bound storage to the translator.',
     description: 'Optional reasoning translation delegates Session-bound storage to the translator.',
@@ -844,9 +878,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'abstract describe(ref: CredentialRef): Promise<CredentialInfo>',
-        description: 'Describe one reference for configuration surfaces without exposing the value.',
+        description: 'Describe one reference for configuration surfaces without exposing the full value.',
         parameters: [{ name: 'ref', description: 'the reference to describe.' }],
-        returns: 'configured state, supplying source, and writability.',
+        returns: 'configured state, supplying source, writability, and optional masked preview.',
       },
       {
         signature: 'abstract set(ref: CredentialRef, value: string): Promise<void>',
@@ -892,7 +926,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'credentialsController',
     summary: 'Host service backing the generated `ctx.remote.credentials` namespace.',
-    description: 'Host service backing the generated `ctx.remote.credentials` namespace. It carries every wire obligation the credential seam itself does not: the batch fan-out bound, the field-by-field view projection, the reference-grammar guard, and the refusal mapping. Secret values cross in one direction only — no method here returns one.',
+    description: 'Host service backing the generated `ctx.remote.credentials` namespace. It carries every wire obligation the credential seam itself does not: the batch fan-out bound, the field-by-field view projection, the reference-grammar guard, and the refusal mapping. Full secret values cross in one direction only — no method here returns one.',
     methods: [
       {
         signature: '@Remote async describe(refs: string[]): Promise<Record<string, CredentialInfo>>',
@@ -942,7 +976,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: '@Remote async systemStatus(): Promise<CuaSystemPermissionState>',
         description: 'Inspect system privileges independently of application decisions and icons.',
         parameters: [],
-        returns: 'Fresh native preflight and launch metadata.',
+        returns: 'Platform-tagged access observations and native process metadata.',
       },
       {
         signature: '@Remote async applicationIcons(): Promise<Record<string, string>>',
@@ -978,86 +1012,110 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'deepseekAccount',
-    summary: 'Account operations; only Host consumers can obtain a request credential.',
-    description: 'Account operations; only Host consumers can obtain a request credential.',
+    summary: 'Account login, credentials, and client-safe Remote operations.',
+    description: 'Account login, credentials, and client-safe Remote operations.',
     methods: [
       {
-        signature: 'abstract getState(): Promise<AccountView>',
+        signature: '@Remote async getState(): Promise<AccountView>',
         description: 'Read stored-account presence and the latest login attempt.',
         parameters: [],
         returns: 'a snapshot without credentials or PKCE secrets.',
       },
       {
-        signature: 'abstract getProfile(client: AccountClientMetadata): Promise<AccountDetails[\'profile\'] | null>',
+        signature: '@Remote async getProfile(client: AccountClientMetadata): Promise<AccountDetails[\'profile\'] | null>',
         description: 'Query Platform profile independently of wallet balances. A ready result whose stable profile ID first becomes available or changes notifies identity-enabled watch consumers, so they re-read getPlatformSession; repeated IDs stay silent.',
         parameters: [{ name: 'client', description: 'identity of the requesting UI for this call.' }],
         returns: 'profile outcome, or null if signed out or the grant changed during the query.',
       },
       {
-        signature: 'abstract getBalance(client: AccountClientMetadata): Promise<AccountDetails[\'balance\'] | null>',
+        signature: '@Remote getBalance(client: AccountClientMetadata): Promise<AccountDetails[\'balance\'] | null>',
         description: 'Query Platform recharge and bonus wallet balances independently of profile data.',
         parameters: [{ name: 'client', description: 'identity of the requesting UI for this call.' }],
         returns: 'balance outcome, or null if signed out or the grant changed during the query.',
       },
       {
-        signature: 'abstract getUnnotifiedBonuses(client: AccountClientMetadata): Promise<AccountBonusBatch | null>',
-        description: 'Query the granted bonuses Platform has not yet recorded as displayed.',
+        signature: '@Remote async getNotifications(client: AccountClientMetadata): Promise<AccountNotificationBatch | null>',
+        description: 'Query unconsumed account notifications in server order without reading profile data.',
         parameters: [{ name: 'client', description: 'identity of the requesting UI for this call; its language selects the server-authored message.' }],
-        returns: 'bonuses with their account, or null if signed out or the grant changed during the query.',
+        returns: 'notifications with their next query delay, or null if signed out or the grant changed during the query.',
       },
       {
-        signature: 'abstract ackBonusNotified(accountId: AccountUserId, orderId: AccountBonusOrderId, client: AccountClientMetadata): Promise<boolean>',
-        description: 'Record one displayed bonus as notified for the account it belongs to.',
-        parameters: [{ name: 'accountId', description: 'account the notification was read for; a different current account is never acknowledged.' }, { name: 'orderId', description: 'granted bonus order the user saw.' }, { name: 'client', description: 'identity of the requesting UI for this call.' }],
-        returns: 'true once Platform records the acknowledgement; false if signed out or the account changed.',
+        signature: '@Remote async getNotificationContent(id: AccountNotificationId, client: AccountClientMetadata): Promise<AccountNotification | null>',
+        description: 'Query localized content of a notification, including one already consumed.',
+        parameters: [{ name: 'id', description: 'notification whose content is requested.' }, { name: 'client', description: 'identity of the requesting UI; its language selects the localized content.' }],
+        returns: 'content without changing consumption, or null if signed out or the grant changed.',
       },
       {
-        signature: 'abstract startSignIn(client: AccountClientMetadata, callbackOrigin: string, loginSource: \'web\' | \'desktop\'): Promise<AccountView>',
-        description: 'Join an active attempt or start browser authorization.',
-        parameters: [{ name: 'client', description: 'identity of the requesting UI; a new attempt captures it, and joining retains the original attempt\'s identity.' }, { name: 'callbackOrigin', description: 'browser-accessible loopback HTTP origin, including any SSH local port.' }, { name: 'loginSource', description: 'initiating UI, used to return from a failed exchange.' }],
-        returns: 'the initial snapshot without waiting for browser approval.',
+        signature: '@Remote async reportNotificationEvent(id: AccountNotificationId, event: AccountNotificationEvent, client: AccountClientMetadata): Promise<boolean>',
+        description: 'Report a notification interaction; the backend decides consumption.',
+        parameters: [{ name: 'id', description: 'notification the user interacted with.' }, { name: 'event', description: 'displayed frame, non-dismiss action click, or explicit dismissal.' }, { name: 'client', description: 'identity of the requesting UI for this call.' }],
+        returns: 'true once the server accepts the event; false if signed out or credentials changed during the call.',
       },
       {
-        signature: 'abstract cancelSignIn(id: SignInAttemptId): Promise<AccountView>',
-        description: 'Cancel only the named attempt; committing attempts settle before returning.',
-        parameters: [{ name: 'id', description: 'attempt identity from this Host.' }],
-        returns: 'state after cancellation or an already-started commit.',
-      },
-      {
-        signature: 'abstract signOut(client: AccountClientMetadata): Promise<AccountView>',
-        description: 'Remove the local grant while retaining API keys; the provider revokes it in the background.',
-        parameters: [{ name: 'client', description: 'identity of the requesting UI, captured for the background revocation retries.' }],
-        returns: 'the signed-out state after local removal; remote failures never restore the grant.',
-      },
-      {
-        signature: 'abstract watch(signal: AbortSignal, includeIdentityChanges?: boolean): AsyncIterable<AccountView>',
-        description: 'Subscribe to snapshots including a complete initial state.',
-        parameters: [{ name: 'signal', description: 'subscription lifetime; ending it never cancels login.' }, { name: 'includeIdentityChanges', description: 'also notify when cached Platform identity changes; defaults to false.' }],
-        returns: 'complete snapshots as account state changes.',
-      },
-      {
-        signature: 'abstract resolveToken(url: string): Promise<string | undefined>',
-        description: 'Resolve a credential only for the inference origin allowed by the provider.',
-        parameters: [{ name: 'url', description: 'actual request destination or API base URL.' }],
-        returns: 'stored token, or undefined for other origins or a signed-out account.',
-      },
-      {
-        signature: 'abstract rejectToken(token: string): Promise<void>',
+        signature: 'async rejectToken(token: string): Promise<void>',
         description: 'Remove an inference-rejected token only while it still matches the stored login.',
         parameters: [{ name: 'token', description: 'token captured by the rejected inference request.' }],
         returns: 'after matching credentials are removed and the expiry notification is emitted.',
       },
       {
-        signature: 'abstract getPlatformSession(): Promise<PlatformSession | null>',
-        description: 'Read credentials for the configured Platform origin, bound to their issuing environment, and pair them with the account ID from the last successful profile read; no profile request is made.',
+        signature: 'async getDeviceIdentity(): Promise<{ deviceId?: string; userId?: AccountUserId; osVersion: string }>',
+        description: 'Read existing login identity without creating a device or returning credentials.',
+        parameters: [],
+        returns: 'optional device/account identifiers and the provider\'s OS version string.',
+      },
+      {
+        signature: 'async getPlatformSession(): Promise<PlatformSession | null>',
+        description: 'Read credentials for the configured embedded-page origin, bound to their account environment, and pair them with the account ID from the last successful profile read; no profile request is made.',
         parameters: [],
         returns: 'a Host-only snapshot, or null while signed out or when the credential changed during the read.',
       },
       {
-        signature: 'abstract getDeviceIdentity(): Promise<{ deviceId?: string; userId?: AccountUserId; osVersion: string }>',
-        description: 'Read existing login identity without creating a device or returning credentials.',
+        signature: 'async resolveToken(url: string): Promise<string | undefined>',
+        description: 'Resolve a credential only for the inference origin allowed by the provider.',
+        parameters: [{ name: 'url', description: 'actual request destination or API base URL.' }],
+        returns: 'stored token, or undefined for other origins or a signed-out account.',
+      },
+      {
+        signature: '@Remote async startSignIn(client: AccountClientMetadata, callbackOrigin: string, loginSource: \'web\' | \'desktop\'): Promise<AccountView>',
+        description: 'Join an active attempt or start browser authorization.',
+        parameters: [{ name: 'client', description: 'identity of the requesting UI; a new attempt captures it, and joining retains the original attempt\'s identity.' }, { name: 'callbackOrigin', description: 'browser-accessible loopback HTTP origin, including any SSH local port.' }, { name: 'loginSource', description: 'initiating UI, used to return from a failed exchange.' }],
+        returns: 'the initial snapshot without waiting for browser approval.',
+      },
+      {
+        signature: '@Remote async cancelSignIn(attemptId: SignInAttemptId): Promise<AccountView>',
+        description: 'Cancel only the named attempt; committing attempts settle before returning.',
+        parameters: [{ name: 'attemptId', description: 'attempt identity from this Host.' }],
+        returns: 'state after cancellation or an already-started commit.',
+      },
+      {
+        signature: '@Remote signOut(client: AccountClientMetadata): Promise<AccountView>',
+        description: 'Remove the local grant while retaining API keys; the provider revokes it in the background.',
+        parameters: [{ name: 'client', description: 'identity of the requesting UI, captured for the background revocation retries.' }],
+        returns: 'the signed-out state after local removal; remote failures never restore the grant.',
+      },
+      {
+        signature: '@Remote hasRunningAccountTasks(): boolean',
+        description: 'Inspect running work before sign-out.',
         parameters: [],
-        returns: 'optional device/account identifiers and the provider\'s OS version string.',
+        returns: 'whether a running task\'s latest request uses the account route; false when the optional agents service is absent.',
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *watchExpiry(signal: AbortSignal): AsyncIterable<\'session-expired\'>',
+        description: 'Subscribe to live credential expiry without replay.',
+        parameters: [{ name: 'signal', description: 'subscription lifetime; provider disposal also ends it.' }],
+        returns: 'expiry notifications emitted during the subscription.',
+      },
+      {
+        signature: 'watch(signal: AbortSignal, includeIdentityChanges: boolean = false): AsyncIterable<AccountUpdate>',
+        description: 'Subscribe to ordered updates including a complete initial snapshot.',
+        parameters: [{ name: 'signal', description: 'subscription lifetime; ending it never cancels login.' }, { name: 'includeIdentityChanges', description: 'also notify when cached Platform identity changes; defaults to false.' }],
+        returns: 'complete state with snapshot or credentials-changed event type; credential changes take priority when updates coalesce.',
+      },
+      {
+        signature: '@Remote({ name: \'watch\', mode: \'stream\' }) watchState(signal: AbortSignal): AsyncIterable<AccountUpdate>',
+        description: 'Stream account state without the Host-only identity subscription option.',
+        parameters: [{ name: 'signal', description: 'subscription lifetime.' }],
+        returns: 'initial state, login progress, and credential-change updates.',
       },
     ],
   },
@@ -2053,22 +2111,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'mcpAccounts',
-    summary: 'Holds the registered accounts and serves them, with their servers\' manager views, to the Plugins page.',
-    description: 'Holds the registered accounts and serves them, with their servers\' manager views, to the Plugins page.',
+    summary: 'Shows each connector\'s MCP server account in the connector account registry.',
+    description: 'Shows each connector\'s MCP server account in the connector account registry.',
     methods: [
       {
         signature: 'register(registration: McpAccountRegistration): () => void',
-        description: 'Show one account on the Plugins page for as long as the returned disposer has not run.',
+        description: 'Show one connector\'s server account on its bundle page for as long as the returned disposer has not run. The account\'s key is `mcp:<server>`.',
         parameters: [{ name: 'registration', description: 'the server name, the bundle package, and the connector\'s text.' }],
-        returns: 'an idempotent disposer that withdraws the account.',
-        throws: ['when another account already uses the package or the server.'],
-      },
-      {
-        signature: '@Remote({ mode: \'stream\' }) async *watch(signal: AbortSignal): AsyncIterable<McpAccountsView>',
-        description: 'Follow every registered account with the manager\'s view of its server.',
-        parameters: [{ name: 'signal', description: 'the Client\'s observation lifetime; disposal also ends the stream.' }],
-        returns: 'the accounts once the manager lists its servers, then after each change of either, coalescing changes that arrive before the next read; ends with the manager\'s stream.',
-        throws: ['what the manager\'s stream throws.'],
+        returns: 'the registry\'s idempotent disposer, which withdraws the account.',
+        throws: ['when another account already uses the server or the package.'],
       },
     ],
   },
@@ -2078,20 +2129,20 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Validates, mounts, probes, and authorizes MCP servers for the plugin that manages them.',
     methods: [
       {
-        signature: 'validate(input: ServerConfigInput, path: readonly string[]): ServerConfig',
+        signature: 'validate(input: ConfigInput, path: readonly string[]): Config',
         description: 'Resolve a server configuration and refuse what an instance would refuse when it starts.',
         parameters: [{ name: 'input', description: 'server configuration before defaults.' }, { name: 'path', description: 'configuration path naming the server; every failure message starts with it.' }],
         returns: 'the resolved configuration.',
         throws: ['when the server name, a field, a template token, the reconnect policy, or OAuth beside an Authorization header is invalid.'],
       },
       {
-        signature: 'mount(config: ServerConfig): McpServerInstance',
+        signature: 'mount(config: Config): McpServerInstance',
         description: 'Mount one server instance below the host. The instance registers its tools and holds its `serverName` until disposed.',
         parameters: [{ name: 'config', description: 'resolved server configuration, usually from {@link McpClientHost.validate}.' }],
         returns: 'the instance\'s activation and disposal.',
       },
       {
-        signature: 'probe(config: ServerConfig, options?: McpProbeOptions): Promise<McpProbeResult>',
+        signature: 'probe(config: Config, options?: McpProbeOptions): Promise<McpProbeResult>',
         description: 'Probe a server without mounting it: resolve its templates, connect, list its tools, and close.',
         parameters: [{ name: 'config', description: 'resolved server configuration; its startup budget does not bound the probe.' }, { name: 'options', description: 'whole-probe budget, listing caps, and cancellation signal.' }],
         returns: 'the connect and list outcome with the cleanup result.',
@@ -2149,18 +2200,18 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when the manager is disposed, the entry is absent or changing, cleanup is incomplete, options are invalid, or a required credentials provider is missing.'],
       },
       {
-        signature: '@Remote async startAuthorization(name: string): Promise<McpOAuthAttemptView>',
+        signature: 'async startAuthorization(name: string): Promise<McpOAuthAttemptView>',
         description: 'Start explicit OAuth authorization, retaining the active grant until a successful commit.',
         parameters: [{ name: 'name', description: 'configured or registered OAuth entry, including disabled entries.' }],
         returns: 'current attempt progress; absent services, changing entries, or failed cleanup reject.',
       },
       {
-        signature: '@Remote async cancelAuthorization(name: string, id: McpOAuthAttemptId): Promise<void>',
+        signature: 'async cancelAuthorization(name: string, id: McpOAuthAttemptId): Promise<void>',
         description: 'Cancel the selected attempt and drain its work; an admitted credential commit completes.',
         parameters: [{ name: 'name', description: 'managed entry.' }, { name: 'id', description: 'selected attempt; stale or absent attempts are ignored.' }],
       },
       {
-        signature: '@Remote async signOut(name: string): Promise<void>',
+        signature: 'async signOut(name: string): Promise<void>',
         description: 'Drain authorization, probes, and connections before deleting the local grant; retain client registration. A configuration change before deletion preserves the grant and rejects.',
         parameters: [{ name: 'name', description: 'configured or registered OAuth entry; cleanup failure preserves the grant and blocks replacement.' }],
       },
@@ -4284,10 +4335,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the effect disposer that removes this guard.',
       },
       {
-        signature: 'checkGuards(exec: ToolExecution): string | undefined',
+        signature: 'checkGuards(exec: ToolExecution): ToolGuardDenial | undefined',
         description: 'Check global and inherited guards after pre-execute policy and approval resolve.',
         parameters: [{ name: 'exec', description: 'invocation whose guards are checked before dispatch.' }],
-        returns: 'the first denial reason, or undefined when no guard denies.',
+        returns: 'the first denial with its optional structured identity, or undefined when no guard denies.',
       },
     ],
   },
@@ -5621,18 +5672,6 @@ export const EVENT_API: readonly EventApiEntry[] = [
 /** Shapes of every exported type the Service and Event signatures reference (transitively), sorted by name. */
 export const TYPE_API: readonly TypeApiEntry[] = [
   {
-    name: 'AccountBonusBatch',
-    declaration: 'export interface AccountBonusBatch {\n    readonly accountId: AccountUserId;\n    readonly bonuses: readonly AccountBonusNotification[];\n}',
-  },
-  {
-    name: 'AccountBonusNotification',
-    declaration: 'export interface AccountBonusNotification {\n    readonly title?: string;\n    readonly orderId: AccountBonusOrderId;\n    readonly campaign?: JsonValue;\n    readonly amount?: JsonValue;\n    readonly currency?: JsonValue;\n    readonly grantedAt?: JsonValue;\n    readonly expiresAt: string;\n    readonly message: string;\n}',
-  },
-  {
-    name: 'AccountBonusOrderId',
-    declaration: 'export type AccountBonusOrderId = Branded<\'AccountBonusOrderId\'>;',
-  },
-  {
     name: 'AccountClientMetadata',
     declaration: 'export interface AccountClientMetadata {\n    readonly version: string;\n    readonly locale: string;\n    readonly timezoneOffsetSeconds: number;\n}',
   },
@@ -5645,8 +5684,32 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface AccountLinks {\n    readonly usageUrl: string;\n    readonly topUpUrl: string;\n}',
   },
   {
+    name: 'AccountNotification',
+    declaration: 'export interface AccountNotification {\n    readonly id: AccountNotificationId;\n    readonly createdAt: string;\n    readonly displayUntil: string | null;\n    readonly title: string;\n    readonly body: string;\n    readonly actions: readonly AccountNotificationAction[];\n    readonly data?: JsonValue;\n}',
+  },
+  {
+    name: 'AccountNotificationAction',
+    declaration: 'export interface AccountNotificationAction {\n    readonly label: string;\n    readonly style: \'primary\' | \'secondary\';\n    readonly target: {\n        readonly type: \'app_route\';\n        readonly name: \'account\';\n    } | {\n        readonly type: \'dismiss\';\n    };\n}',
+  },
+  {
+    name: 'AccountNotificationBatch',
+    declaration: 'export interface AccountNotificationBatch {\n    readonly nextPollAfterSeconds: number;\n    readonly notifications: readonly AccountNotification[];\n}',
+  },
+  {
+    name: 'AccountNotificationEvent',
+    declaration: 'export type AccountNotificationEvent = \'displayed\' | \'cta_clicked\' | \'dismissed\';',
+  },
+  {
+    name: 'AccountNotificationId',
+    declaration: 'export type AccountNotificationId = Branded<\'AccountNotificationId\'>;',
+  },
+  {
     name: 'AccountProfile',
     declaration: 'export interface AccountProfile {\n    readonly id: AccountUserId | null;\n    readonly name: string | null;\n    readonly contact: string | null;\n    readonly avatarUrl?: string | null;\n}',
+  },
+  {
+    name: 'AccountUpdate',
+    declaration: 'export interface AccountUpdate {\n    readonly type: \'snapshot\' | \'credentials-changed\';\n    readonly state: AccountView;\n}',
   },
   {
     name: 'AccountUserId',
@@ -5787,6 +5850,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'AnonymousTranslationSpec',
     declaration: 'export interface AnonymousTranslationSpec extends TranslationSpecFields {\n    readonly provider: AnonymousTranslationProvider;\n}',
+  },
+  {
+    name: 'AnyConnectorAccountView',
+    declaration: 'export type AnyConnectorAccountView = ConnectorAccountView<unknown, string, string>;',
   },
   {
     name: 'AnyHook',
@@ -6141,6 +6208,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ComputerUseProviderName = Branded<\'ComputerUseProviderName\'>;',
   },
   {
+    name: 'ConfigInput',
+    declaration: 'export type ConfigInput = StdioConfigInput | StreamableHttpConfigInput;',
+  },
+  {
     name: 'ConfigureCall',
     declaration: 'export type ConfigureCall = (controls: Readonly<LlmCallControls>, model: Readonly<LlmResolvedModelInfo>) => LlmCallControls;',
   },
@@ -6211,6 +6282,78 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ConnectionTrustRequest',
     declaration: 'export interface ConnectionTrustRequest {\n    readonly headers: Headers | Readonly<Record<string, string | readonly string[] | undefined>>;\n}',
+  },
+  {
+    name: 'ConnectorAccountButton',
+    declaration: 'export interface ConnectorAccountButton {\n    readonly label: LocalizedText;\n    readonly command: ConnectorAccountCommand;\n    readonly variant?: \'primary\' | \'ghost\';\n    readonly confirm?: ConnectorAccountConfirmation;\n}',
+  },
+  {
+    name: 'ConnectorAccountCommand',
+    declaration: 'export type ConnectorAccountCommand = {\n    readonly kind: \'start\';\n    readonly operation: string;\n} | {\n    readonly kind: \'cancel\';\n} | {\n    readonly kind: \'open\';\n};',
+  },
+  {
+    name: 'ConnectorAccountConfirmation',
+    declaration: 'export interface ConnectorAccountConfirmation {\n    readonly title: LocalizedText;\n    readonly body: LocalizedText;\n    readonly label: LocalizedText;\n}',
+  },
+  {
+    name: 'ConnectorAccountCopy',
+    declaration: 'export interface ConnectorAccountCopy {\n    readonly title: LocalizedText;\n    readonly hint: LocalizedText;\n    readonly activation: {\n        readonly title: LocalizedText;\n        readonly body: LocalizedText;\n        readonly connect: LocalizedText;\n    };\n}',
+  },
+  {
+    name: 'ConnectorAccountDisplay',
+    declaration: 'export interface ConnectorAccountDisplay {\n    readonly phase: ConnectorAccountPhase;\n    readonly status: LocalizedText;\n    readonly badge?: LocalizedText;\n    readonly buttons: readonly ConnectorAccountButton[];\n    readonly connect?: Extract<ConnectorAccountCommand, {\n        readonly kind: \'start\';\n    }>;\n    readonly detail?: LocalizedText;\n    readonly notes: readonly ConnectorAccountNote[];\n    readonly failure?: ConnectorAccountFailure;\n}',
+  },
+  {
+    name: 'ConnectorAccountEntry',
+    declaration: 'export interface ConnectorAccountEntry {\n    readonly key: string;\n    readonly packageName?: string;\n    readonly copy: ConnectorAccountCopy;\n    readonly display: ConnectorAccountDisplay;\n    readonly operation?: {\n        readonly id: ConnectorOperationId;\n        readonly authorizationUrl?: string;\n    };\n    readonly result?: {\n        readonly id: ConnectorOperationId;\n        readonly notice?: LocalizedText;\n    };\n}',
+  },
+  {
+    name: 'ConnectorAccountFailure',
+    declaration: 'export interface ConnectorAccountFailure {\n    readonly text: LocalizedText;\n    readonly details?: readonly string[];\n}',
+  },
+  {
+    name: 'ConnectorAccountNote',
+    declaration: 'export interface ConnectorAccountNote {\n    readonly text: LocalizedText;\n    readonly button?: ConnectorAccountButton;\n}',
+  },
+  {
+    name: 'ConnectorAccountOperation',
+    declaration: 'export interface ConnectorAccountOperation<Kind extends string> {\n    readonly kind: Kind;\n    readonly notice?: LocalizedText;\n}',
+  },
+  {
+    name: 'ConnectorAccountPhase',
+    declaration: 'export type ConnectorAccountPhase = \'checking\' | \'connecting\' | \'connected\' | \'disconnected\' | \'unavailable\';',
+  },
+  {
+    name: 'ConnectorAccountRegistration',
+    declaration: 'export interface ConnectorAccountRegistration<View extends AnyConnectorAccountView> {\n    readonly key: string;\n    readonly packageName?: string;\n    readonly source: ConnectorAccountSource<View>;\n    readonly operations: readonly ConnectorAccountOperation<ConnectorOperationKindOf<View>>[];\n    readonly copy: ConnectorAccountCopy;\n    readonly present: (view: View) => ConnectorAccountDisplay;\n}',
+  },
+  {
+    name: 'ConnectorAccountSource',
+    declaration: 'export interface ConnectorAccountSource<View extends AnyConnectorAccountView> {\n    snapshot(): View;\n    observe(listener: () => void): () => void;\n    refresh(): void;\n    start(kind: ConnectorOperationKindOf<View>): ConnectorOperationId | Promise<ConnectorOperationId>;\n    cancel(id: ConnectorOperationId): Promise<void>;\n}',
+  },
+  {
+    name: 'ConnectorAccountsView',
+    declaration: 'export interface ConnectorAccountsView {\n    readonly accounts: readonly ConnectorAccountEntry[];\n}',
+  },
+  {
+    name: 'ConnectorAccountView',
+    declaration: 'export interface ConnectorAccountView<Account, Kind extends string, Phase extends string, Failure = unknown> {\n    readonly account: Account;\n    readonly operation?: ConnectorOperation<Kind, Phase>;\n    readonly result?: ConnectorOperationResult<Kind, Failure>;\n}',
+  },
+  {
+    name: 'ConnectorOperation',
+    declaration: 'export interface ConnectorOperation<Kind extends string, Phase extends string> {\n    readonly id: ConnectorOperationId;\n    readonly kind: Kind;\n    readonly phase: Phase;\n    readonly cancellable: boolean;\n    readonly authorizationUrl?: string;\n}',
+  },
+  {
+    name: 'ConnectorOperationId',
+    declaration: 'export type ConnectorOperationId = Branded<\'ConnectorOperationId\'>;',
+  },
+  {
+    name: 'ConnectorOperationKindOf',
+    declaration: 'export type ConnectorOperationKindOf<View extends AnyConnectorAccountView> = NonNullable<View[\'result\']>[\'kind\'];',
+  },
+  {
+    name: 'ConnectorOperationResult',
+    declaration: 'export interface ConnectorOperationResult<Kind extends string, Failure = unknown> {\n    readonly id: ConnectorOperationId;\n    readonly kind: Kind;\n    readonly outcome: \'succeeded\' | \'cancelled\' | \'failed\';\n    readonly failure?: Failure;\n}',
   },
   {
     name: 'ContentBlockMap',
@@ -6350,7 +6493,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CredentialInfo',
-    declaration: 'export interface CredentialInfo {\n    configured: boolean;\n    source?: string;\n    writable: boolean;\n}',
+    declaration: 'export interface CredentialInfo {\n    configured: boolean;\n    source?: string;\n    writable: boolean;\n    masked?: string;\n}',
   },
   {
     name: 'CredentialKey',
@@ -6402,7 +6545,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CuaSystemPermissionState',
-    declaration: 'export interface CuaSystemPermissionState {\n    accessibility: boolean;\n    screenRecording: boolean;\n    helper: CuaPermissionProcess;\n    parent: CuaPermissionProcess;\n    launchApplication?: {\n        name: string;\n        path: string;\n        icon?: string | undefined;\n    } | undefined;\n}',
+    declaration: 'export type CuaSystemPermissionState = {\n    platform: \'darwin\';\n    accessibility: boolean;\n    screenRecording: boolean;\n    helper: CuaPermissionProcess;\n    parent: CuaPermissionProcess;\n    launchApplication?: {\n        name: string;\n        path: string;\n        icon?: string | undefined;\n    } | undefined;\n} | {\n    platform: \'win32\';\n    sessionLocked: boolean | null;\n    captureAvailable: boolean;\n    elevated: boolean;\n    helper: CuaPermissionProcess;\n};',
   },
   {
     name: 'DailyInput',
@@ -7377,16 +7520,8 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface McpAccountCopy<Text extends LocalizedText = LocalizedText> {\n    readonly title: Text;\n    readonly connect: Text;\n    readonly activation: {\n        readonly title: Text;\n        readonly body: Text;\n    };\n    readonly detail: {\n        readonly disconnected: Text;\n        readonly waitingBrowser: Text;\n        readonly authorizing: Text;\n        readonly connecting: Text;\n        readonly connected: Text;\n        readonly rejected: Text;\n        readonly scope: Text;\n    };\n    readonly signOut: {\n        readonly title: Text;\n        readonly body: Text;\n    };\n    readonly notice: {\n        readonly connected: Text;\n        readonly signedOut: Text;\n    };\n}',
   },
   {
-    name: 'McpAccountEntry',
-    declaration: 'export interface McpAccountEntry extends McpAccountRegistration {\n    readonly view?: McpManagedServerView;\n}',
-  },
-  {
     name: 'McpAccountRegistration',
     declaration: 'export interface McpAccountRegistration {\n    readonly server: string;\n    readonly packageName: string;\n    readonly copy: McpAccountCopy;\n}',
-  },
-  {
-    name: 'McpAccountsView',
-    declaration: 'export interface McpAccountsView {\n    readonly accounts: readonly McpAccountEntry[];\n}',
   },
   {
     name: 'McpAuthorizationReason',
@@ -7930,7 +8065,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'PostToolDecision',
-    declaration: 'export type PostToolDecision = {\n    kind: \'accept\';\n    content?: ContentBlock[];\n    value?: never;\n    additionalContexts?: UserMessage[];\n} | {\n    kind: \'accept\';\n    value: JsonValue;\n    content?: never;\n    additionalContexts?: UserMessage[];\n} | {\n    kind: \'block\';\n    feedback: ContentBlock[];\n    additionalContexts?: UserMessage[];\n};',
+    declaration: 'export type PostToolDecision = {\n    kind: \'accept\';\n    content?: ContentBlock[];\n    value?: never;\n    additionalContexts?: UserMessage[];\n} | {\n    kind: \'accept\';\n    value: JsonValue;\n    content?: never;\n    additionalContexts?: UserMessage[];\n} | {\n    kind: \'block\';\n    feedback: ContentBlock[];\n    info?: ToolErrorInfo;\n    additionalContexts?: UserMessage[];\n};',
   },
   {
     name: 'PreparedAdapterCall',
@@ -8559,14 +8694,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SerializedNode',
     declaration: 'export type SerializedNode = SerializedElement | string;',
-  },
-  {
-    name: 'ServerConfig',
-    declaration: 'export type ServerConfig = StdioConfig | StreamableHttpConfig;',
-  },
-  {
-    name: 'ServerConfigInput',
-    declaration: 'export type ServerConfigInput = StdioConfigInput | StreamableHttpConfigInput;',
   },
   {
     name: 'ServerResponse',
@@ -9505,10 +9632,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type StagedAttachment = {\n    readonly type: \'file\';\n    readonly attachment: FileAttachmentRef;\n} | {\n    readonly type: \'image\';\n    readonly attachment: ImageAttachmentRef;\n    readonly encodedBytes: number;\n};',
   },
   {
-    name: 'StdioConfig',
-    declaration: 'export interface StdioConfig {\n    transport: \'stdio\';\n    serverName: string;\n    command: string;\n    args: string[];\n    env: Record<string, string>;\n    cwd: string;\n    toolCallTimeoutMs: number;\n    startupTimeoutMs?: number;\n    closeTimeoutMs: number;\n    expandTemplates: boolean;\n    failOnStartupError: boolean;\n    maxInstructionBytes?: number;\n    reconnect?: ReconnectConfig;\n    toolLoading: \'eager\' | \'on-demand\';\n    catalogDescriptionMaxLength: number;\n}',
-  },
-  {
     name: 'StopShareRequest',
     declaration: 'export interface StopShareRequest {\n    readonly shareId: string;\n}',
   },
@@ -9994,7 +10117,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ToolGuard',
-    declaration: 'export type ToolGuard = (execution: Readonly<ToolExecution>) => string | undefined;',
+    declaration: 'export type ToolGuard = (execution: Readonly<ToolExecution>) => string | ToolGuardDenial | undefined;',
+  },
+  {
+    name: 'ToolGuardDenial',
+    declaration: 'export interface ToolGuardDenial {\n    readonly reason: string;\n    readonly info?: ToolErrorInfo;\n}',
   },
   {
     name: 'ToolHistory',
@@ -10062,7 +10189,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ToolsService',
-    declaration: 'export class ToolsService extends Service {\n    static inject;\n    static Config;\n    constructor(ctx: Context);\n    register(definition: ToolDefinition, options: ToolRegistrationOptions = {}): () => void;\n    restrict(filter: ToolRestriction): () => void;\n    get(name: string, scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolDefinition | undefined;\n    executable(name: string, scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolDefinition | undefined;\n    async resolve(context: ToolActivationContext): Promise<ResolvedToolSet>;\n    definitions(scope?: ScopeKey, toolSet?: ResolvedToolSet): readonly ToolDefinition[];\n    schemas(scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolSchema[];\n    setExecutor(executor: ToolExecutor): () => void;\n    async execute(input: ToolBatchInput): Promise<ToolBatchResult>;\n    guard(guard: ToolGuard): () => void;\n    checkGuards(exec: ToolExecution): string | undefined;\n}',
+    declaration: 'export class ToolsService extends Service {\n    static inject;\n    static Config;\n    constructor(ctx: Context);\n    register(definition: ToolDefinition, options: ToolRegistrationOptions = {}): () => void;\n    restrict(filter: ToolRestriction): () => void;\n    get(name: string, scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolDefinition | undefined;\n    executable(name: string, scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolDefinition | undefined;\n    async resolve(context: ToolActivationContext): Promise<ResolvedToolSet>;\n    definitions(scope?: ScopeKey, toolSet?: ResolvedToolSet): readonly ToolDefinition[];\n    schemas(scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolSchema[];\n    setExecutor(executor: ToolExecutor): () => void;\n    async execute(input: ToolBatchInput): Promise<ToolBatchResult>;\n    guard(guard: ToolGuard): () => void;\n    checkGuards(exec: ToolExecution): ToolGuardDenial | undefined;\n}',
   },
   {
     name: 'ToolUpdate',

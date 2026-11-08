@@ -12,7 +12,7 @@ const installAnchor = fileURLToPath(new URL('../package.json', import.meta.url))
 const resourcePackage = '@deepseek-ai/dsh-mcp-resources'
 
 describe('shipped MCP resource composition', () => {
-  it.each(Object.keys(PROFILE_TEMPLATES))('%s carries one shared resource consumer and no MCP server instance', (name) => {
+  it.each(Object.keys(PROFILE_TEMPLATES))('%s carries one shared resource consumer without a server', (name) => {
     const home = mkdtempSync(join(tmpdir(), 'dsh-profile-mcp-'))
     try {
       const profile = loadProfile('dsh', name, installAnchor, home)
@@ -25,9 +25,7 @@ describe('shipped MCP resource composition', () => {
       expect(rows.filter(row => row.name === resourcePackage)).toEqual([
         { id: 'mcp-resources', name: resourcePackage },
       ])
-      expect(rows.filter(row => row.name === '@deepseek-ai/dsh-mcp-client')).toEqual(name === 'web'
-        ? [{ id: 'mcp-client-host', name: '@deepseek-ai/dsh-mcp-client', config: { host: true } }]
-        : [])
+      expect(rows.filter(row => row.name === '@deepseek-ai/dsh-mcp-client')).toEqual([])
       expect(warnings).toEqual([])
 
       const owners = profile.layers.filter((layer) => {

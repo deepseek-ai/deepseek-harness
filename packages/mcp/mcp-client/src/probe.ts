@@ -17,7 +17,7 @@ import { McpGeneration } from './generation.ts'
 import { oauthFailure } from './diagnostic.ts'
 import type { McpAuthorizationRequired } from './diagnostic.ts'
 import { McpOAuthCredentials } from './oauth-credentials.ts'
-import type { ServerConfig } from './index.ts'
+import type { Config } from './index.ts'
 
 /** Options for one {@link probeServer} call. */
 export interface McpProbeOptions {
@@ -61,7 +61,7 @@ function resolveProbeOptions(options: McpProbeOptions) {
  * @returns the connect/list outcome and independent cleanup result after bounded closure.
  * @throws for invalid options, malformed templates, or a missing required credentials provider.
  */
-export async function probeServer(ctx: Context, config: ServerConfig, options: McpProbeOptions = {}): Promise<McpProbeResult> {
+export async function probeServer(ctx: Context, config: Config, options: McpProbeOptions = {}): Promise<McpProbeResult> {
   const spec = resolveProbeOptions(options)
   const startedAt = Date.now()
   const remaining = (): number => spec.timeoutMs - (Date.now() - startedAt)

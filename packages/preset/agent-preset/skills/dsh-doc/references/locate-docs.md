@@ -1,28 +1,40 @@
 # Locate documentation and sources
 
-Answer for the running version, and name the files that support each answer. Read files with the file-read tool, which also opens files inside Desktop's `app.asar`, and use its offset and limit for long files such as `references/packages.md`.
+Answer for the running installation, not an unrelated checkout in the current working directory. Keep lookups read-only and cite the files and version used. The Host file-read tool can read Desktop's `app.asar`; use offset and limit for long files.
 
-## Version
+## Identify the installation
 
-The `version` in `package.json` under `DSH_INSTALL_DIR`, described below, is the running DSH version. Without that variable, use the source checkout's version, or `../../package.json` relative to this skill's base directory, which is the version of the `@deepseek-ai/dsh-agent-preset` package that ships this skill, and state which file the answer used.
+These runtime facts are not necessarily in model context. Print only the needed variables: in bash, `printf '%s\n' "$DSH_PROFILE" "$DSH_INSTALL_DIR" "$DSH_NODE_EXECUTABLE"`; in PowerShell, `$env:DSH_PROFILE; $env:DSH_INSTALL_DIR; $env:DSH_NODE_EXECUTABLE`. Keep the loaded skill's reported Base directory. `DSH_PROFILE=desktop` identifies the Desktop profile, including development launches; `web` can run from npm or source. Profile and distribution are not one-to-one: verify ASAR or checkout markers below. `DSH_PROFILE_DIR` holds the user's profile and added plugins, not the DSH installation root. Standard and Creator are agent modes, not installation layouts.
 
-## Documentation
+Verify that `DSH_INSTALL_DIR/package.json` names `@deepseek-ai/dsh`; its `version` identifies the running CLI package. Resolve symlinks before comparing directories. Missing variables alone do not establish that there is no profile or no source. Use the loaded skill's location or an inspected package directory to verify a candidate; if none is verifiable, report what remains unlocated. Do not change the profile to obtain tools.
 
-Every shell call of a profile-launched DSH receives `DSH_INSTALL_DIR`, the directory of the `@deepseek-ai/dsh` package; in Desktop it lies inside `app.asar`. Print it with `echo "$DSH_INSTALL_DIR"` in bash or `$env:DSH_INSTALL_DIR` in PowerShell. Its `docs/` holds this version's documentation and the upgrade guides with their index, `docs/upgrade-guide/README.md`.
+## Source checkout
 
-In a source checkout, `DSH_INSTALL_DIR` is the checkout's `apps/cli` and has no `docs/`. A base directory ending in `packages/preset/agent-preset/skills/dsh-doc` with `pnpm-workspace.yaml` five levels up identifies the checkout root; read its `docs/user/index.md`, `packages/README.md`, `packages/<group>/<name>/`, and `docs/upgrade-guide/` directly. The command below resolves only packages that the installation's `node_modules` can reach.
+A source launch normally points `DSH_INSTALL_DIR` at `<root>/apps/cli`. Verify `<root>/pnpm-workspace.yaml`, `<root>/package.json` with name `@deepseek-ai/dsh-root`, and `<root>/apps/cli/package.json` with name `@deepseek-ai/dsh`. The loaded skill may instead locate the candidate root: its real directory is `<root>/packages/preset/agent-preset/skills/dsh-doc`, five parents below the root. Verify the same markers; a matching working-directory name is not evidence of the running installation.
 
-When `DSH_INSTALL_DIR` is unset and the base directory does not identify a source checkout, DSH was started without a profile and its documentation cannot be located; say so.
+Read `<root>/docs/user/index.md` for user documentation and `<root>/docs/upgrade-guide/` for migration guides. The checkout's `apps/cli/docs` need not exist. Use `<root>/packages/README.md` to find the owning group, then `<root>/packages/<group>/<directory>/package.json` to verify the package name. Read that package's `README.md` and the owning file under `src/`; do not assume every package resolves from `apps/cli/node_modules`. Use the verified CLI manifest's version and identify the checkout used.
 
-## Package directories
+## npm installation
 
-With inspection tools, `cordis_inspect_query` `Config.listConfigs` filtered by `name` lists a mounted package's entries, and querying one `entry` returns its `packageDir`. Otherwise, resolve a package that the installation ships from `DSH_INSTALL_DIR` with the runtime in `DSH_NODE_EXECUTABLE`, the executable running DSH. In Desktop that is the Electron executable, which runs as Node only with `ELECTRON_RUN_AS_NODE=1`; plain Node ignores the setting. In bash:
+For an installed package layout outside an ASAR, verify the CLI manifest at `DSH_INSTALL_DIR` and its packaged `docs/`; do not infer npm installation merely because checkout markers are absent. Read `DSH_INSTALL_DIR/docs/user/index.md` and `DSH_INSTALL_DIR/docs/upgrade-guide/README.md`, the generated index for this installed version's guides.
+
+Resolve a shipped package's exported `package.json` from this installation anchor with the runtime command below. Read its `README.md`, then the owning file under `src/` when present; `lib/` contains built code. A configuration-only bundle may instead expose its patch files. Do not resolve from the shell's cwd or assume a global npm prefix. A package unavailable from this anchor may be a user-added plugin: use Inspect's package directory when available rather than guessing another installation's files.
+
+## Desktop
+
+For the packaged Desktop app, confirm that the installation or loaded skill path lies inside `app.asar` and the indicated runtime reports `process.versions.electron`. A Desktop development launch with verified checkout markers uses the source route above. Inside the archive, `DSH_INSTALL_DIR` still names the CLI package directory. Read its manifest, `docs/user/index.md`, and `docs/upgrade-guide/README.md` through the Host file-read tool. Resolve other packages from the same anchor and read their README and `src/` through that tool.
+
+Native grep/glob, `ls`, `cat`, and a Node executable chosen from `PATH` cannot traverse ASAR files. Do not unpack the app to answer a question. For directory listing or bounded search, use `DSH_NODE_EXECUTABLE`, the running Electron executable, with `ELECTRON_RUN_AS_NODE=1` as below. It supplies ASAR-aware filesystem reads; an ordinary Node runtime ignores that environment setting.
+
+## Resolve a package with the running runtime
+
+With Inspect available, `Config.listConfigs` filtered by `name` lists mounted entries; querying an `entry` supplies `packageDir`. Otherwise use the installation anchor and executable verified above. In bash:
 
 ```sh
 ELECTRON_RUN_AS_NODE=1 "$DSH_NODE_EXECUTABLE" -e "console.log(require('node:path').dirname(require.resolve(process.argv[1] + '/package.json', { paths: [process.env.DSH_INSTALL_DIR] })))" @deepseek-ai/dsh-tool-bash
 ```
 
-In PowerShell, start the runtime as a process with redirected output: Desktop's Electron executable on Windows is a GUI program that the `&` operator does not wait for. Replace `$script` and `$arguments` for other reads:
+In PowerShell, use redirected process output and wait for the exit code. Windows Desktop's Electron is a GUI-subsystem executable, for which `&` does not reliably wait. Replace `$script` and `$arguments` for other reads:
 
 ```powershell
 $script = @'
@@ -47,10 +59,8 @@ $process.WaitForExit()
 exit $process.ExitCode
 ```
 
-When `DSH_NODE_EXECUTABLE` is unset, DSH runs as a single executable whose packages are not on disk; do not substitute a `node` from `PATH`, and report package behavior as unverified. When neither inspection nor these variables locate a package, report its behavior as unverified instead of guessing a path.
+If the executable or anchor is absent, do not substitute an unrelated Node from PATH. Inspect or directly read verified files. A checkout found only from the skill locates source but does not prove the running CLI version. Verify that `../../package.json` relative to the skill's base names `@deepseek-ai/dsh-agent-preset` before using its version as the shipping skill package's version. For a custom or single-executable layout, report only locations and versions actually verified.
 
-A package directory holds `README.md`, `src/`, and built `lib/`. Read the README first, then the `src/` file that owns the behavior.
+## Bounded lookup
 
-## Bounded reads
-
-Read one file at a time. Native utilities such as `ls`, `cat`, glob, and search cannot open `app.asar`; there, list a directory by running the same runtime through the shell with `require('node:fs').readdirSync(dir).slice(0, 200)`. Elsewhere, search only a narrow directory with a specific pattern. Do not list or read whole package trees. When a needed file is missing in the installed version, say so instead of answering from another version.
+Read one file at a time. Outside ASAR, search only a narrow known directory. Inside ASAR, run `require('node:fs').readdirSync(dir).slice(0, 200)` through the runtime above to list one directory. For search, use that runtime's `fs.statSync(file).size` to reject files above a chosen bound (for example 1 MiB) before `fs.readFileSync(file, 'utf8')`; split into lines, match a literal term, and print the path once and at most 20 matching lines of 200 characters each with line numbers and a truncation notice. Do not scan or dump whole package trees. Use the file-read tool's offsets for larger files. Read the installed upgrade index before selecting guides as `references/upgrading.md` describes. If a file is missing, state that limitation rather than substituting another version's documentation or source.

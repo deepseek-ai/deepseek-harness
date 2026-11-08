@@ -470,8 +470,16 @@ it('projects each bundle\'s default GUI listing without changing its selection, 
   }
   manifest.dsh.bundle.listedByDefault = 'hidden'
   writeFileSync(path, JSON.stringify(manifest))
-  expect((await manager.listBundles()).find(row => row.name === 'extra')).toMatchObject({ enabled: true,
-    error: { diagnostic: 'dsh.bundle.listedByDefault must be a boolean' } })
+  // The launcher ignores the field, so an invalid value is a metadata diagnostic beside the running layer's live row.
+  const invalid = (await manager.listBundles()).find(row => row.name === 'extra')
+  expect(invalid).toMatchObject({ enabled: true, meta: { error: 'dsh.bundle.listedByDefault must be a boolean' },
+    rows: [{ rowId: 'managed', entryId: 'include:managed' }] })
+  expect(invalid?.error).toBeUndefined()
+  expect(invalid?.listedByDefault).toBeUndefined()
+  // An unreadable icon keeps its own diagnostic beside the listing one.
+  writeFileSync(path, JSON.stringify({ ...manifest, icon: 'missing.svg' }))
+  expect((await manager.listBundles()).find(row => row.name === 'extra')?.meta?.error)
+    .toMatch(/^Plugin metadata for extra: .+; dsh\.bundle\.listedByDefault must be a boolean$/)
 })
 
 it('names where each installed bundle comes from as a spec pnpm installs', async () => {

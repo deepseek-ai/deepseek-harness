@@ -49,7 +49,7 @@ def stop_application(pid):
 def check_click_holds(helper, owner, window, point, state_file):
     observed = helper.call("getState", {**owner, "maxElements": 2000, "maxDepth": 25})
     pad = next(item for item in observed["elements"] if item["role"] == "AXButton" and item["title"] == "Input receiver")
-    target = {**owner, "snapshotId": observed["snapshotId"], "elementIndex": pad["index"]}
+    target = {**owner, "snapshotId": observed["snapshotId"], "elementId": pad["elementId"]}
     state = json.loads(state_file.read_text())
     presses = state["axPresses"]
     helper.call("click", target)
@@ -144,16 +144,15 @@ def main():
             call = helper.call
             capabilities = call("getCapabilities", {})
             assert capabilities["permissions"] == {"accessibility": True, "screenRecording": True}, capabilities
-            assert "launchApp" not in capabilities["methods"], capabilities
             matches = call("findApps", {"query": str(application), "maxAppMatches": 20})
             assert len(matches) == 1 and matches[0]["isRunning"] is False, matches
             pending = call("getApp", {"selector": str(application)})
-            assert pending["pid"] is None and not state_file.exists(), pending
+            assert pending["running"] is False and not state_file.exists(), pending
             owner = {"appHandle": pending["appHandle"]}
             # The Host consent barrier is separately exercised by provider-lifecycle.spec.ts.
             app = call("launchApp", owner)
-            pid = app["pid"]
-            wait_for_state(state_file, lambda value: value["pid"] == pid and value["windowId"] > 0)
+            assert app["running"] is True, app
+            pid = wait_for_state(state_file, lambda value: value["windowId"] > 0)["pid"]
             if not args.click_only:
                 call("activate", owner)
                 state = wait_for_state(state_file, lambda value: value["pid"] == pid and value["active"] and value["keyWindow"])
@@ -161,7 +160,7 @@ def main():
                 observed = call("getState", {**owner, "maxElements": 2000, "maxDepth": 25})
                 field = next(item for item in observed["elements"] if item["role"] == "AXTextArea")
                 assert "valueWritable=true" in observed["tree"] and "selectionWritable=true" in observed["tree"], observed["tree"]
-                target = {**owner, "snapshotId": observed["snapshotId"], "elementIndex": field["index"]}
+                target = {**owner, "snapshotId": observed["snapshotId"], "elementId": field["elementId"]}
                 call("selectText", {**target, "text": "target"}, "AMBIGUOUS_TEXT")
                 call("selectText", {**target, "text": "target", "prefix": "第二😀 "})
                 selected = wait_for_state(state_file, lambda value: value["selection"] == [17, 6])
@@ -171,7 +170,7 @@ def main():
                 assert state["pasteAttempts"] == [True], state
                 observed = call("getState", {**owner, "maxElements": 2000, "maxDepth": 25})
                 field = next(item for item in observed["elements"] if item["role"] == "AXTextArea")
-                target = {**owner, "snapshotId": observed["snapshotId"], "elementIndex": field["index"]}
+                target = {**owner, "snapshotId": observed["snapshotId"], "elementId": field["elementId"]}
                 call("selectText", {**target, "text": state["text"]})
                 html = '<h1>Heading</h1><p><b>Bold</b> and <a href="https://example.com/">link</a></p>'
                 call("paste", {**owner, "text": html, "format": "html", "maxClipboardBytes": 33554432, "pasteReadTimeoutMs": 1000, "maxElements": 2000, "maxDepth": 25})

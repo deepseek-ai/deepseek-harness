@@ -13,6 +13,8 @@ const guard = registerHooks({
 const { Context } = await import('@deepseek-ai/cordis')
 const host = await import('@deepseek-ai/dsh-cua')
 const { createCuaApi } = await import('@deepseek-ai/dsh-cua/api')
+const { CuaConfigFields } = await import('@deepseek-ai/dsh-cua/config')
+assert.equal(typeof CuaConfigFields.connectTimeoutMs.default, 'function')
 const { connectCua } = await import('@deepseek-ai/dsh-cua/bridge')
 const { NativeClient } = await import('@deepseek-ai/dsh-cua/native-client')
 const { Request } = await import('@deepseek-ai/dsh-cua/protocol')

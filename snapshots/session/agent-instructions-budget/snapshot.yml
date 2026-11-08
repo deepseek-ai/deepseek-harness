@@ -6,5 +6,5 @@ recording: authored
 header:
   class: agent-instructions
   pin: true
-  systemPromptSource: agent-instructions
+  systemPromptSource: cordis-inspect-jsdoc
   toolSchemasSource: text-turn

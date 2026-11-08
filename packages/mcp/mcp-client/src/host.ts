@@ -1,17 +1,16 @@
 /**
  * The MCP client host, `ctx.mcpClientHost`: the operations a plugin that manages MCP servers needs from this package.
- * The entry provides it when loaded with `host: true`. Server instances it mounts run below the host's Fiber, so a
- * reload of this package replaces them together with the host, and a plugin that injects the host restarts against
- * the replacement instead of holding this module's previous functions, classes, or instances.
+ * The managing plugin creates it, so the host and the server instances it mounts run below that plugin's Fiber and end
+ * with it.
  *
  * @module
  */
 
 import { Service, type Context } from '@deepseek-ai/cordis'
 import * as McpClient from './index.ts'
-import type { ServerConfig, StreamableHttpConfig } from './index.ts'
+import type { Config, StreamableHttpConfig } from './index.ts'
 import { hasOAuthWithAuthorizationHeader, SERVER_NAME_PATTERN, StdioSchema, StreamableHttpSchema } from './config.ts'
-import type { ServerConfigInput } from './config.ts'
+import type { ConfigInput } from './config.ts'
 import { resolveReconnectPolicy } from './connection.ts'
 import { templatedFields } from './credentials.ts'
 import { McpOAuthAuthorization } from './oauth.ts'
@@ -50,8 +49,8 @@ export class McpClientHost extends Service {
   private readonly ownerContext: Context
 
   /**
-   * Provide `ctx.mcpClientHost` for the lifetime of the host entry.
-   * @param ctx - the host's context; mounted instances, probes, and authorization owners use its services.
+   * Provide `ctx.mcpClientHost` for the lifetime of the managing plugin.
+   * @param ctx - the managing plugin's context; mounted instances, probes, and authorization owners use its services.
    */
   constructor(ctx: Context) {
     super(ctx, 'mcpClientHost')
@@ -66,13 +65,13 @@ export class McpClientHost extends Service {
    * @throws when the server name, a field, a template token, the reconnect policy, or OAuth beside an Authorization
    *   header is invalid.
    */
-  validate(input: ServerConfigInput, path: readonly string[]): ServerConfig {
+  validate(input: ConfigInput, path: readonly string[]): Config {
     const where = path.join('.')
     if (!SERVER_NAME_PATTERN.test(input.serverName)) {
       throw new Error(`${where}: server name must match ${String(SERVER_NAME_PATTERN)}`)
     }
     const options = { path: [...path] }
-    const config: ServerConfig = input.transport === 'stdio' ? StdioSchema(input, options) : StreamableHttpSchema(input, options)
+    const config: Config = input.transport === 'stdio' ? StdioSchema(input, options) : StreamableHttpSchema(input, options)
     if (hasOAuthWithAuthorizationHeader(config)) {
       throw new Error(`${where}: OAuth and an Authorization header cannot be configured together`)
     }
@@ -88,7 +87,7 @@ export class McpClientHost extends Service {
    * @param config - resolved server configuration, usually from {@link McpClientHost.validate}.
    * @returns the instance's activation and disposal.
    */
-  mount(config: ServerConfig): McpServerInstance {
+  mount(config: Config): McpServerInstance {
     // The host mounts this package's own entry, so every server instance is one plugin runtime: a reload of this
     // package replaces the host's instances together with the entries that load the same module.
     const fiber = this.ownerContext.plugin(McpClient, config)
@@ -113,7 +112,7 @@ export class McpClientHost extends Service {
    * @returns the connect and list outcome with the cleanup result.
    * @throws for invalid options, malformed templates, or a missing required credentials provider.
    */
-  probe(config: ServerConfig, options?: McpProbeOptions): Promise<McpProbeResult> {
+  probe(config: Config, options?: McpProbeOptions): Promise<McpProbeResult> {
     return probeServer(this.ownerContext, config, options)
   }
 

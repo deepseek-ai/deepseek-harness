@@ -891,9 +891,10 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     doc: 'Resident composer body, including the no-Session inert state; fixed overlays must portal to\nthe document body because the docked composer contains them.',
     registerOptions: [],
     ownerProps: [
-      '/** Owner share of the resident composer bar. */\nexport interface ComposerBarOwnerProps {\n  /** Hero uses centered placement; composer uses the active bottom placement. */\n  variant: \'hero\' | \'composer\'\n  /** A feature-owned reason that makes message input inert while leaving model selection live. */\n  blocked?: { readonly reason: string }\n  /** Lock all message actions while preserving the resident composer surface. */\n  disabled?: boolean\n  /** Whether the shared Workspace picker is expanded. */\n  workspacePickerOpen?: boolean\n  /** Open the Workspace picker from the inert composer surface. */\n  onRequestWorkspace?: () => void\n  placeholder?: string\n  /** Optional content rendered above the composer surface. */\n  accessory?: ReactNode\n}',
+      '/** Owner share of the resident composer bar. */\nexport interface ComposerBarOwnerProps {\n  /** Hero uses centered placement; composer uses the active bottom placement. */\n  variant: \'hero\' | \'composer\'\n  /** Conversation content occurrence rendering this composer; an unaddressed document paste reaches the main one. */\n  occurrence: ConversationContentInputProps[\'variant\']\n  /** A feature-owned reason that makes message input inert while leaving model selection live. */\n  blocked?: { readonly reason: string }\n  /** Lock all message actions while preserving the resident composer surface. */\n  disabled?: boolean\n  /** Whether the shared Workspace picker is expanded. */\n  workspacePickerOpen?: boolean\n  /** Open the Workspace picker from the inert composer surface. */\n  onRequestWorkspace?: () => void\n  placeholder?: string\n  /** Optional content rendered above the composer surface. */\n  accessory?: ReactNode\n}',
     ],
     ownerPropsReferences: [
+      'ConversationContentInputProps',
       'Workspace',
     ],
     standardProps: [
@@ -2830,7 +2831,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     slotInject: '',
     declaredBy: 'an entry in \'main\' (client-ui-plugin-manager), so it exists while that entry is mounted',
     occupants: [
-      'client-ui-mcp-account McpAccountActivation',
+      'client-ui-connector-account ConnectorAccountActivationEntry',
       'experimental-client-ui-voice-input VoiceSetupPrompt key \'@deepseek-ai/dsh-experimental-voice-input-bundle\'',
       'cua PermissionSetup key \'@deepseek-ai/dsh-cua-bundle\'',
     ],
@@ -2875,7 +2876,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     slotInject: '',
     declaredBy: 'an entry in \'main\' (client-ui-plugin-manager), so it exists while that entry is mounted',
     occupants: [
-      'client-ui-mcp-account McpAccountSection',
+      'client-ui-connector-account ConnectorAccountSectionEntry',
       'experimental-client-ui-cot-translation TranslationSettings key \'@deepseek-ai/dsh-experimental-cot-translation-bundle\'',
       'experimental-client-ui-voice-input VoicePreparation key \'@deepseek-ai/dsh-experimental-voice-input-bundle\'',
       'cua PermissionPanel key \'@deepseek-ai/dsh-cua-bundle\'',
@@ -2986,7 +2987,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     slotInject: '',
     declaredBy: 'an entry in \'main\' (client-ui-plugin-manager), so it exists while that entry is mounted',
     occupants: [
-      'client-ui-mcp-account McpAccountBadge',
+      'client-ui-connector-account ConnectorAccountBadgeEntry id \'connector-account.badge\'',
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'plugins.detail.badge\', () => ctx.slots.register(\n      { name: \'plugins.detail.badge\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
@@ -3511,7 +3512,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     doc: 'Optional sidebar account launcher; opens the shell-owned settings panel.',
     registerOptions: [],
     ownerProps: [
-      '/** Sidebar launcher geometry and settings navigation. */\nexport interface SettingsLauncherOwnerProps {\n  /** Whether the sidebar shows labels. */\n  wide: boolean\n  /** Whether the settings dialog covers the sidebar; a launcher may treat a false-to-true edge as one Settings entry. */\n  settingsOpen: boolean\n  /** Effective Settings key labels and accessible combination; omitted when unbound. */\n  settingsShortcut?: { readonly keys: readonly string[]; readonly aria?: string | undefined }\n  /** Open the settings panel. */\n  openSettings: () => void\n  /** @param id - registered onboarding editor to open explicitly. */\n  openOnboarding: (id: string) => void\n}',
+      '/** Sidebar launcher geometry and settings navigation. */\nexport interface SettingsLauncherOwnerProps {\n  /** Whether the sidebar shows labels. */\n  wide: boolean\n  /** Whether the settings dialog covers the sidebar; a launcher may treat a false-to-true edge as one Settings entry. */\n  settingsOpen: boolean\n  /** Effective Settings key labels and accessible combination; omitted when unbound. */\n  settingsShortcut?: { readonly keys: readonly string[]; readonly aria?: string | undefined }\n  /** @param sectionId - section to open; absent uses the shell\'s default section. */\n  openSettings: (sectionId?: string) => void\n  /** @param id - registered onboarding editor to open explicitly. */\n  openOnboarding: (id: string) => void\n}',
     ],
     ownerPropsReferences: [],
     standardProps: [
@@ -3536,6 +3537,40 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'settings.launcher\', () => ctx.slots.register(\n      { name: \'settings.launcher\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
     source: 'packages/client/ui-settings/src/client/contract/slots.ts:17',
+  },
+  {
+    key: 'settings.launcher.notifications',
+    kind: 'single',
+    scope: 'root',
+    summary: 'Notifications anchored at the account menu; the contribution owns its markup and lifecycle.',
+    doc: 'Notifications anchored at the account menu; the contribution owns its markup and lifecycle.',
+    registerOptions: [],
+    ownerProps: [
+      '/** Account-menu presentation facts supplied to its notification extension. */\nexport interface AccountNotificationsOwnerProps {\n  /** Whether the account menu can display notifications outside onboarding. */\n  active: boolean\n  /** Open the account section in the existing settings shell. */\n  openAccount: () => void\n}',
+    ],
+    ownerPropsReferences: [],
+    standardProps: [
+      'useRemoteAccess: (action: RemoteEndpoint) => boolean',
+      'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
+      'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
+      'usePanelInfo: UsePanelInfo',
+      'useSessions: UseSessions',
+      'useSessionStatus: UseSessionStatus',
+      'useSessionRetainInfo: UseSessionRetainInfo',
+      'useSessionAccess: (sessionId: SessionId, action: RemoteEndpoint) => boolean',
+      'useWorkspaceAccess: (workspaceId: WorkspaceId, action: RemoteEndpoint) => boolean',
+    ],
+    keyDomain: '',
+    hookContext: '',
+    slotInject: '',
+    declaredBy: 'an entry in \'settings.launcher\' (client-ui-settings-account), so it exists while that entry is mounted',
+    occupants: [
+      'client-ui-account-notifications AccountNotifications',
+    ],
+    replaceRisk: 'shadows-shipped-ui',
+    example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'settings.launcher.notifications\', () => ctx.slots.register(\n      { name: \'settings.launcher.notifications\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
+    source: 'packages/client/ui-settings-account/src/client/account-ui.ts:47',
   },
   {
     key: 'settings.models.footer',
@@ -4021,9 +4056,9 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     occupants: [
       'client-ui-agent-team TeamDisableConfirmation id \'agent-team.disable\'',
       'client-ui-chat QuotaNoticeHost id \'chat.quota-notice\'',
+      'client-ui-connector-account ConnectorAccountToastEntry id \'connector-account.notice\'',
       'client-ui-context-menu MenuOverlay id \'context-menu\'',
       'client-ui-file-drag FileDragFeedback id \'file-drag.feedback\'',
-      'client-ui-mcp-account McpAccountToast',
       'client-ui-open-in-app OpenInAppToast id \'open-in-app.toast\'',
       'client-ui-plugin-manager PluginRefreshToast id \'plugin-manager.refresh-toast\'',
       'client-ui-schedule ScheduleDeleteToast id \'schedule.delete-toast\'',

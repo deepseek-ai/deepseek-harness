@@ -113,7 +113,7 @@
           "type": "tool-call",
           "id": "cua-unauthorized-click",
           "name": "cua",
-          "arguments": "{\"method\":\"click\",\"params\":{\"appHandle\":\"fixture-app\",\"snapshotId\":\"fixture-snapshot-1\",\"elementIndex\":0}}"
+          "arguments": "{\"method\":\"click\",\"params\":{\"appHandle\":\"fixture-app\",\"snapshotId\":\"fixture-snapshot-1\",\"elementId\":\"0\"}}"
         }
       },
       {
@@ -212,7 +212,7 @@
           "type": "tool-call",
           "id": "cua-native-4",
           "name": "cua",
-          "arguments": "{\"method\":\"click\",\"params\":{\"appHandle\":\"fixture-app\",\"snapshotId\":\"fixture-snapshot-1\",\"elementIndex\":0,\"holdMs\":800}}"
+          "arguments": "{\"method\":\"click\",\"params\":{\"appHandle\":\"fixture-app\",\"snapshotId\":\"fixture-snapshot-1\",\"elementId\":\"0\",\"holdMs\":800}}"
         }
       },
       {
@@ -641,7 +641,7 @@
           "type": "tool-call",
           "id": "cua-native-stale-index",
           "name": "cua",
-          "arguments": "{\"method\":\"click\",\"params\":{\"appHandle\":\"fixture-app\",\"snapshotId\":\"fixture-snapshot-2\",\"elementIndex\":0}}"
+          "arguments": "{\"method\":\"click\",\"params\":{\"appHandle\":\"fixture-app\",\"snapshotId\":\"fixture-snapshot-2\",\"elementId\":\"0\"}}"
         }
       },
       {
@@ -740,7 +740,7 @@
           "type": "tool-call",
           "id": "cua-native-fresh-click",
           "name": "cua",
-          "arguments": "{\"method\":\"click\",\"params\":{\"appHandle\":\"fixture-app\",\"snapshotId\":\"fixture-snapshot-5\",\"elementIndex\":0}}"
+          "arguments": "{\"method\":\"click\",\"params\":{\"appHandle\":\"fixture-app\",\"snapshotId\":\"fixture-snapshot-5\",\"elementId\":\"0\"}}"
         }
       },
       {
@@ -971,7 +971,7 @@
           "type": "tool-call",
           "id": "cua-native-geometry-ax",
           "name": "cua",
-          "arguments": "{\"method\":\"click\",\"params\":{\"appHandle\":\"fixture-app\",\"snapshotId\":\"fixture-snapshot-7\",\"elementIndex\":0}}"
+          "arguments": "{\"method\":\"click\",\"params\":{\"appHandle\":\"fixture-app\",\"snapshotId\":\"fixture-snapshot-7\",\"elementId\":\"0\"}}"
         }
       },
       {
@@ -1202,7 +1202,7 @@
           "type": "tool-call",
           "id": "cua-hover-enter",
           "name": "cua",
-          "arguments": "{\"method\":\"hover\",\"params\":{\"appHandle\":\"fixture-app\",\"snapshotId\":\"fixture-snapshot-9\",\"elementIndex\":0}}"
+          "arguments": "{\"method\":\"mouseMove\",\"params\":{\"appHandle\":\"fixture-app\",\"snapshotId\":\"fixture-snapshot-9\",\"elementId\":\"0\"}}"
         }
       },
       {
@@ -1301,7 +1301,7 @@
           "type": "tool-call",
           "id": "cua-hover-popup",
           "name": "cua",
-          "arguments": "{\"method\":\"hover\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7,\"x\":100,\"y\":200,\"relative\":true}}"
+          "arguments": "{\"method\":\"mouseMove\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7,\"x\":100,\"y\":200,\"relative\":true}}"
         }
       },
       {
@@ -1367,7 +1367,7 @@
           "type": "tool-call",
           "id": "cua-hover-exit",
           "name": "cua",
-          "arguments": "{\"method\":\"hover\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7,\"x\":0,\"y\":200,\"relative\":true}}"
+          "arguments": "{\"method\":\"mouseMove\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":7,\"x\":0,\"y\":200,\"relative\":true}}"
         }
       },
       {
