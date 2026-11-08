@@ -98,7 +98,7 @@ async function bench() {
 it('shows one tag and one notice entry for the page and each bundle\'s section and prompt under the shared dictionary', async () => {
   const b = await bench()
   await b.mount()
-  expect(b.locale.bind(NS)('action.retry')).toBe('Retry')
+  expect(b.locale.bind(NS)('action.cancel')).toBe('Cancel')
   expect(b.ctx.slots.entries('plugins.detail.badge').map(item => [item.options.id, item.component])).toEqual([
     ['connector-account.badge', ConnectorAccountBadgeEntry],
   ])
@@ -130,7 +130,6 @@ it('shows one tag and one notice entry for the page and each bundle\'s section a
   face.failed()
   expect(face.hooks.connectorAccounts.getSnapshot().notice).toEqual({ seq: 1, kind: 'action-failed' })
   face.dismissNotice()
-  face.retry()
   expect(face.hooks.connectorAccounts.getSnapshot().notice).toBeUndefined()
 
   // A dropped account withdraws its bundle's surfaces, and a bundle whose account changed key shows the new one.
@@ -151,6 +150,6 @@ it('withdraws every surface, the dictionaries, and the stream when the plugin un
   for (const slot of ['plugins.bundle.config', 'plugins.bundle.activation', 'plugins.detail.badge', 'shell.overlay'] as const) {
     expect(b.ctx.slots.entries(slot)).toEqual([])
   }
-  expect(b.locale.bind(NS)('action.retry')).toBe('action.retry')
+  expect(b.locale.bind(NS)('action.cancel')).toBe('action.cancel')
   expect(b.closeStream).toHaveBeenCalledOnce()
 })

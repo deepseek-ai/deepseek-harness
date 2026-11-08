@@ -53,7 +53,6 @@ export function apply(ctx: Context): void {
     resolveText: text => ctx.locale.resolveText(text),
     follow: (key, id) => { browser.follow(key, id) },
     failed: () => { browser.failed() },
-    retry: () => { browser.retry() },
     dismissNotice: () => { browser.dismissNotice() },
   }
   ctx.effect(function* () {
