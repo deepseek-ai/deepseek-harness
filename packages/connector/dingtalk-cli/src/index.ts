@@ -1,7 +1,7 @@
 /**
  * DingTalk plugin: installs dws and its upstream skills from the pinned release into the DSH cache, tells the model
  * dws's absolute path once both are installed, registers the `dingtalk` skill once its root is published, and shows the
- * account on the Plugins page through the CLI account registry. The CLI's sign-in is shared with the user's own terminal.
+ * account on the Plugins page through the connector account registry. The CLI's sign-in is shared with the user's own terminal.
  * @module @deepseek-ai/dsh-dingtalk-cli
  */
 
@@ -11,7 +11,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { CliAccountConfig, CliCommandExecutor, executableFileName, registerCliPathContext } from '@deepseek-ai/dsh-cli-account'
 import * as SkillFilesystem from '@deepseek-ai/dsh-skill-filesystem'
-import type {} from '@deepseek-ai/dsh-client-ui-cli-account'
+import type {} from '@deepseek-ai/dsh-client-ui-connector-account'
 import type {} from '@deepseek-ai/dsh-skill'
 import type {} from '@deepseek-ai/dsh-subprocess'
 import type {} from '@deepseek-ai/dsh-system-prompt'
@@ -49,7 +49,7 @@ export const Config: z<Config> = z.intersect([
 ])
 
 /**
- * Prepare dws and its skill, and show the account on the Plugins page while the CLI account registry runs.
+ * Prepare dws and its skill, and show the account on the Plugins page while the connector account registry runs.
  * @param ctx - Context carrying the skill registry, subprocess runtime, and system prompt.
  * @param config - dws and skills locations, download prefixes, and command deadline.
  * @throws when `binDir` holds no executable `dws`, `skillsDir` is not a directory, the pinned release has no archive for
@@ -73,9 +73,9 @@ export function apply(ctx: Context, config: Config): void {
   })
   // Prepare dws and its skills without waiting for the Plugins page, so a session without a browser finds them.
   account.refresh()
-  ctx.inject(['cliAccounts'], (scope) => {
-    scope.effect(() => scope.cliAccounts.register({
-      packageName: DINGTALK_PACKAGE, source: account, operations: OPERATIONS, copy: COPY, present: presentAccount,
+  ctx.inject(['connectorAccounts'], (scope) => {
+    scope.effect(() => scope.connectorAccounts.register({
+      key: DINGTALK_PACKAGE, packageName: DINGTALK_PACKAGE, source: account, operations: OPERATIONS, copy: COPY, present: presentAccount,
     }), 'dingtalk: Plugins page account')
   })
 }

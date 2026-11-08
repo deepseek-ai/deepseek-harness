@@ -2,14 +2,14 @@
  * The DingTalk section offers each state's next step, the signed-in user, a sign-out confirmation, and failure guidance,
  * in every shipped language.
  */
-import type { CliAccountDisplay, CliOperationId } from '@deepseek-ai/dsh-cli-account/types'
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
+import type { ConnectorAccountDisplay, ConnectorOperationId } from '@deepseek-ai/dsh-client-ui-connector-account/types'
 import { expect, it } from 'vitest'
 import { en, zh, type DingtalkTextKey } from '../src/locales.ts'
 import { COPY, OPERATIONS, presentAccount } from '../src/presentation.ts'
 import type { DingtalkState } from '../src/types.ts'
 
-const OP = 'op' as CliOperationId
+const OP = 'op' as ConnectorOperationId
 const LINK = 'https://login.dingtalk.com/oauth2/auth'
 const CHECK = { kind: 'start', operation: 'check' } as const
 const SIGN_IN = { kind: 'start', operation: 'sign-in' } as const
@@ -18,7 +18,7 @@ const SIGN_OUT = { kind: 'start', operation: 'sign-out' } as const
 /** The key's text as the Chinese and English browsers resolve it. */
 const say = (key: DingtalkTextKey): Partial<Record<string, string>> => ({ zh: zh[key], en: en[key] })
 const zhOf = (text: LocalizedText | undefined): string | undefined => typeof text === 'object' ? text.zh : text
-const labels = (display: CliAccountDisplay): (string | undefined)[] => display.buttons.map(button => zhOf(button.label))
+const labels = (display: ConnectorAccountDisplay): (string | undefined)[] => display.buttons.map(button => zhOf(button.label))
 
 const SIGNED_OUT: DingtalkState = { account: { state: 'signed-out' } }
 const CONNECTED: DingtalkState = { account: { state: 'connected', userName: '测试用户', corpName: '测试组织' } }

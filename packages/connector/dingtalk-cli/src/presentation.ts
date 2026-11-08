@@ -1,6 +1,9 @@
 /** The DingTalk account section the Plugins page shows for each Host view. */
 import { failureDetails } from '@deepseek-ai/dsh-cli-account'
-import type { CliAccountButton, CliAccountCopy, CliAccountDisplay, CliAccountFailure, CliAccountOperation } from '@deepseek-ai/dsh-cli-account/types'
+import type {
+  ConnectorAccountButton, ConnectorAccountCopy, ConnectorAccountDisplay, ConnectorAccountFailure,
+  ConnectorAccountOperation,
+} from '@deepseek-ai/dsh-client-ui-connector-account/types'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { text } from './locales.ts'
 import type { DingtalkOperationKind, DingtalkState } from './types.ts'
@@ -10,14 +13,14 @@ export const DINGTALK_PACKAGE = '@deepseek-ai/dsh-dingtalk'
 
 /* jscpd:ignore-start -- CLI app plugins declare page operations, copy, and commands alike, each with its own text. */
 /** The operations the section's buttons start; signing in and out report a notice in the browser that started them. */
-export const OPERATIONS: readonly CliAccountOperation<DingtalkOperationKind>[] = [
+export const OPERATIONS: readonly ConnectorAccountOperation<DingtalkOperationKind>[] = [
   { kind: 'check' },
   { kind: 'sign-in', notice: text('notice.connected') },
   { kind: 'sign-out', notice: text('notice.signed-out') },
 ]
 
 /** The section's title and hint, and the prompt after the bundle is switched on while signed out. */
-export const COPY: CliAccountCopy = {
+export const COPY: ConnectorAccountCopy = {
   title: text('section.title'),
   hint: text('hint'),
   activation: { title: text('activation.title'), body: text('activation.body'), connect: text('action.connect') },
@@ -38,9 +41,9 @@ function step(operation: Operation): 'step.authorizing' | 'step.connecting' | 's
 
 /* jscpd:ignore-start -- CLI app plugin pages map a sign-in or sign-out in progress to the same open-link and cancel buttons. */
 /** The section while a sign-in or sign-out runs: its step, the authorization page while waiting there, and cancel. */
-function presentOperation(operation: Operation): CliAccountDisplay {
+function presentOperation(operation: Operation): ConnectorAccountDisplay {
   const authorizing = step(operation) === 'step.authorizing' && operation.authorizationUrl !== undefined
-  const buttons: CliAccountButton[] = []
+  const buttons: ConnectorAccountButton[] = []
   if (authorizing) buttons.push({ label: text('action.open'), command: { kind: 'open' }, variant: 'primary' })
   if (operation.cancellable) buttons.push({ label: text('action.cancel'), command: { kind: 'cancel' }, variant: 'ghost' })
   return {
@@ -51,7 +54,7 @@ function presentOperation(operation: Operation): CliAccountDisplay {
 /* jscpd:ignore-end */
 
 /** The signed-in user and organization as far as `auth status` reported them. */
-function connectedDetail(account: Extract<Account, { readonly state: 'connected' }>): NonNullable<CliAccountDisplay['detail']> {
+function connectedDetail(account: Extract<Account, { readonly state: 'connected' }>): NonNullable<ConnectorAccountDisplay['detail']> {
   if (account.userName === undefined) return text('detail.connected')
   if (account.corpName === undefined) return text('detail.connectedAs', { name: account.userName })
   return text('detail.connectedIn', { name: account.userName, org: account.corpName })
@@ -62,20 +65,20 @@ function connectedDetail(account: Extract<Account, { readonly state: 'connected'
  * @param view - the current dws account, the operation in progress, and the last result.
  * @returns the phase, status, tag, buttons, detail, and failure.
  */
-export function presentAccount(view: DingtalkState): CliAccountDisplay {
+export function presentAccount(view: DingtalkState): ConnectorAccountDisplay {
   const { account, operation } = view
   if (operation?.kind === 'check') {
     return { phase: 'checking', status: text(operation.phase === 'downloading' ? 'step.downloading' : 'status.checking'), buttons: [], notes: [] }
   }
   if (operation !== undefined) return presentOperation(operation)
   const failed = view.result?.outcome === 'failed' ? view.result : undefined
-  const failure: { failure?: CliAccountFailure } = failed === undefined ? {} : {
+  const failure: { failure?: ConnectorAccountFailure } = failed === undefined ? {} : {
     failure: {
       text: text(failed.kind === 'sign-in' ? 'failed.signIn' : 'failed'),
       ...failed.failure === undefined ? {} : { details: failureDetails(failed.failure) },
     },
   }
-  const unavailable = (missing: boolean): CliAccountDisplay => ({
+  const unavailable = (missing: boolean): ConnectorAccountDisplay => ({
     phase: 'unavailable', status: text('status.unavailable'), badge: text('badge.unavailable'),
     buttons: [{ label: text('action.retry'), command: CHECK }], detail: text(missing ? 'detail.missing' : 'detail.unavailable'), notes: [], ...failure,
   })

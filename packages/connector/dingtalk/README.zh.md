@@ -40,7 +40,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-dingtalk
 
 | 行 | 包 | 行为 |
 |---|---|---|
-| `dingtalk` | [`@deepseek-ai/dsh-dingtalk-cli`](../dingtalk-cli/README.zh.md) | 下载 `dws` 及其技能，把 `dws` 的绝对路径告诉模型，注册其技能，在 Host 上执行账号检查、登录和退出登录，并通过 [CLI 账号注册表](../../client/ui-cli-account/README.zh.md)在插件页显示账号区块、连接标签、开启 bundle 后的引导和提示 |
+| `dingtalk` | [`@deepseek-ai/dsh-dingtalk-cli`](../dingtalk-cli/README.zh.md) | 下载 `dws` 及其技能，把 `dws` 的绝对路径告诉模型，注册其技能，在 Host 上执行账号检查、登录和退出登录，并通过 [连接器账号注册表](../../client/ui-connector-account/README.zh.md)在插件页显示账号区块、连接标签、开启 bundle 后的引导和提示 |
 
 关闭 bundle 会撤下技能、运行时上下文中的路径和页面。CLI 的登录和已下载的资产会保留。
 
@@ -63,7 +63,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-dingtalk
 
 - [Connector 包](../README.zh.md) — 本应用插件所属的分组。
 - [钉钉 CLI 与技能](../dingtalk-cli/README.zh.md) — Host 行、它的下载、账号操作和模型指引。
-- [CLI 账号界面](../../client/ui-cli-account/README.zh.md) — 在插件页显示账号的注册表。
+- [连接器账号界面](../../client/ui-connector-account/README.zh.md) — 在插件页显示账号的注册表。
 - [Plugin Manager](../../boot/plugin-manager/README.zh.md) — 安装与启用。
 
 -----

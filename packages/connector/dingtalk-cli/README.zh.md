@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包是[钉钉插件](../dingtalk/README.zh.md)的 Host 行。它从同一个固定版本的 release 下载钉钉官方 CLI（DingTalk Workspace CLI，命令 `dws`）和钉钉官方技能到 DSH 缓存目录，在运行时上下文中把 `dws` 的绝对路径告诉模型，并注册一个 `dingtalk` skill，其子指南就是这些技能。它把账号注册到 [CLI 账号注册表](../../client/ui-cli-account/README.zh.md)，其插件页区块负责检查登录、通过浏览器授权页面登录、退出登录和取消操作。CLI 把登录保存在 `~/.dws` 和系统钥匙串中，与用户自己的终端共用。仅支持 macOS。
+本包是[钉钉插件](../dingtalk/README.zh.md)的 Host 行。它从同一个固定版本的 release 下载钉钉官方 CLI（DingTalk Workspace CLI，命令 `dws`）和钉钉官方技能到 DSH 缓存目录，在运行时上下文中把 `dws` 的绝对路径告诉模型，并注册一个 `dingtalk` skill，其子指南就是这些技能。它把账号注册到 [连接器账号注册表](../../client/ui-connector-account/README.zh.md)，其插件页区块负责检查登录、通过浏览器授权页面登录、退出登录和取消操作。CLI 把登录保存在 `~/.dws` 和系统钥匙串中，与用户自己的终端共用。仅支持 macOS。
 
 ## 目录
 
@@ -40,7 +40,7 @@ kind: "package-reference"
 <a id="account-operations"></a>
 ### 账号操作
 
-插件页通过 CLI 账号注册表发起这些操作，注册表由 Web 应用加载；headless profile 加载插件时没有它。Host 同一时间最多执行一个操作并持有它，因此离开页面不会取消它。该行加载时会启动一次检查，dws 或其技能缺失时这次检查也会下载。
+插件页通过 连接器账号注册表发起这些操作，注册表由 Web 应用加载；headless profile 加载插件时没有它。Host 同一时间最多执行一个操作并持有它，因此离开页面不会取消它。该行加载时会启动一次检查，dws 或其技能缺失时这次检查也会下载。
 
 | 操作 | 效果 |
 |---|---|
@@ -91,7 +91,7 @@ kind: "package-reference"
 - [CLI 账号库](../cli-account/README.zh.md) — CLI 应用插件共用的命令执行与账号操作。
 - [Skills](../../../docs/subsystems/skills.zh.md) — 目录发布、加载与优先级。
 - [钉钉插件](../dingtalk/README.zh.md) — 插入本行和页面行的 bundle。
-- [CLI 账号界面](../../client/ui-cli-account/README.zh.md) — 发起账号操作的注册表和插件页区块。
+- [连接器账号界面](../../client/ui-connector-account/README.zh.md) — 发起账号操作的注册表和插件页区块。
 
 -----
 

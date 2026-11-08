@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package is the Host row of the [DingTalk plugin](../dingtalk/README.md). It downloads the official DingTalk Workspace CLI, `dws`, and the official DingTalk skills from one pinned release into the DSH cache, gives the model the absolute path of `dws` in runtime context, and registers one `dingtalk` skill whose guides are those skills. It registers the account with the [CLI account registry](../../client/ui-cli-account/README.md), whose Plugins page section checks the sign-in, signs in through the browser authorization page, signs out, and cancels. The CLI keeps the sign-in in `~/.dws` and the system keychain, which the user's own terminal shares. Only macOS is supported.
+This package is the Host row of the [DingTalk plugin](../dingtalk/README.md). It downloads the official DingTalk Workspace CLI, `dws`, and the official DingTalk skills from one pinned release into the DSH cache, gives the model the absolute path of `dws` in runtime context, and registers one `dingtalk` skill whose guides are those skills. It registers the account with the [connector account registry](../../client/ui-connector-account/README.md), whose Plugins page section checks the sign-in, signs in through the browser authorization page, signs out, and cancels. The CLI keeps the sign-in in `~/.dws` and the system keychain, which the user's own terminal shares. Only macOS is supported.
 
 ## Table of Contents
 
@@ -40,7 +40,7 @@ Turning the row off in Plugin Manager withdraws the skill and the path from runt
 <a id="account-operations"></a>
 ### Account operations
 
-The Plugins page drives these operations through the CLI account registry, which the Web app loads; a headless profile loads the plugin without it. The Host runs at most one operation at a time and owns it, so leaving the page does not cancel it. Loading the row starts one check, which also downloads dws and its skills while either is missing.
+The Plugins page drives these operations through the connector account registry, which the Web app loads; a headless profile loads the plugin without it. The Host runs at most one operation at a time and owns it, so leaving the page does not cancel it. Loading the row starts one check, which also downloads dws and its skills while either is missing.
 
 | Operation | Effect |
 |---|---|
@@ -91,7 +91,7 @@ The [CLI account library](../cli-account/README.md) registers that runtime conte
 - [CLI account library](../cli-account/README.md) — command execution and account operations shared by CLI app plugins.
 - [Skills](../../../docs/subsystems/skills.md) — catalog publication, loading, and precedence.
 - [DingTalk plugin](../dingtalk/README.md) — the bundle that inserts this row and the page row.
-- [CLI account surfaces](../../client/ui-cli-account/README.md) — the registry and the Plugins page section that drive the account operations.
+- [Connector account surfaces](../../client/ui-connector-account/README.md) — the registry and the Plugins page section that drive the account operations.
 
 -----
 
