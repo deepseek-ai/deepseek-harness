@@ -13,6 +13,6 @@ description: "ProfileContext 以 overlay 文件路径取代已解析的 overlay�
 
 ## 迁移
 
-1. 将对 `ctx.profileContext.overlays` 的读取替换为 `readProfilePatches(binName, ctx.profileContext)`；只需要 overlay 层时，对 `overlayPaths` 的每一项调用 `loadOverlayPatches(binName, path)`。
+1. 将对 `ctx.profileContext.overlays` 的读取替换为 `ctx.profileContext.overlayPaths.flatMap(path => loadOverlayPatches(binName, path))`，它返回相同的 overlay 层。只有需要 bundle、profile、home 与 overlay 各层的完整组合结果时，才调用 `readProfilePatches(binName, ctx.profileContext)`。
 2. 在构造 `ProfileContext` 的代码中，将 `overlays: [...]` 替换为 `overlayPaths: [...]`。内存中的 overlay 行需先写入 patch 文件，再传入该文件的绝对路径。
 3. 运行类型检查确认迁移完成：`ProfileContext` 值上不再存在 `overlays` 属性。

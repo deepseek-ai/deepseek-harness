@@ -13,6 +13,6 @@ English | [中文](guide.zh.md)
 
 ## Migration
 
-1. Replace reads of `ctx.profileContext.overlays` with `readProfilePatches(binName, ctx.profileContext)`, or call `loadOverlayPatches(binName, path)` for each entry of `overlayPaths` when only the overlay layer is needed.
+1. Replace reads of `ctx.profileContext.overlays` with `ctx.profileContext.overlayPaths.flatMap(path => loadOverlayPatches(binName, path))`, which returns the same overlay layer. Call `readProfilePatches(binName, ctx.profileContext)` only when you need the full composition of bundle, profile, home, and overlay layers.
 2. Where code constructs a `ProfileContext`, replace `overlays: [...]` with `overlayPaths: [...]`. Write any in-memory overlay rows to a patch file first and pass its absolute path.
 3. Confirm the migration by running your type checker: no `overlays` property remains on `ProfileContext` values.
