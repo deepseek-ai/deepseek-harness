@@ -37,7 +37,7 @@ describe('viewer forwarded interactions', () => {
     }
     ctx.remoteAccess.registerPolicy('share-viewer', createViewerAccessPolicy({
       share: shareId => shareId === 'share'
-        ? { shareId, sessionId: 'source', allowsFork: true, viewerAdmitted: true, stopped: false, sessionMode: 'view' }
+        ? { shareId, sessionId: 'source', sessionIds: ['source'], allowsFork: true, viewerAdmitted: true, stopped: false, sessionMode: 'view' }
         : undefined,
       viewerAdmitted: () => true,
       sourceConfined: () => false,
@@ -47,7 +47,7 @@ describe('viewer forwarded interactions', () => {
         allowsPrompt: () => ({ ok: false, code: 'fork-ceiling-uninstalled', message: 'no ceiling' }),
       },
       workspaces: () => [],
-      declaredCapabilities: () => [],
+      offeredPlugins: () => [],
     }))
     const emits = [
       { event: 'api-session/status', args: ['private', true], resources: sessionArg },
@@ -68,7 +68,7 @@ describe('viewer forwarded interactions', () => {
     onTestFinished(stop)
     const readers = readerConnection()
     const read = createViewerReadService({
-      gateway: ctx.typertGateway, sharedSessionId: () => 'source', connection: readers.connection,
+      gateway: ctx.typertGateway, sharedSessionIds: () => ['source'], connection: readers.connection,
     })
     onTestFinished(async () => {
       read.close()
@@ -139,7 +139,7 @@ describe('viewer forwarded interactions', () => {
       return Response.json({ result: await gatewayRpc('$events/result', body.payload, request.signal, peer) })
     })
     const read = createViewerReadService({
-      gateway: ctx.typertGateway, sharedSessionId: () => 'source', connection: readers.connection,
+      gateway: ctx.typertGateway, sharedSessionIds: () => ['source'], connection: readers.connection,
     })
     onTestFinished(async () => {
       read.close()

@@ -305,22 +305,17 @@
   margin-left: 4px;
 }
 
-/* macOS desktop: an embedder may pin this surface at the window's top edge (the
-   right sidebar does, in both presentations). The strip row is marked
-   `data-window-drag` in markup (TabPanel), so ui-web base.css's single darwin
-   rule drags it over its own box; the chip run, the strip-end chrome, the pane
-   body, and the split divider subtract their whole boxes so tabs, controls,
-   content, and the resize grab stay usable wherever they overlap that row. The
-   divider must be named here: it is a plain div, so ui-web base.css's
-   interactive-element subtraction never matches it. A floating pane subtracts its
-   own box the same way, so the strip row never drags the window over it. Hidden
-   surfaces contribute nothing: Blink skips non-visible boxes when it collects
-   draggable regions. */
-:global(html[data-platform='darwin']) .stripTabs,
-:global(html[data-platform='darwin']) .stripChrome,
-:global(html[data-platform='darwin']) .paneBody,
-:global(html[data-platform='darwin']) .float,
-:global(html[data-platform='darwin']) .divider {
+/* macOS desktop: an embedder may pin this surface at the window's top edge.
+   Panes always subtract their whole boxes; a marked strip adds its row back
+   unless floating panes disable that mark. Strip-end chrome, floats, and
+   dividers also exclude their boxes. The divider is a plain div
+   outside a drag row, so ui-web's scoped controls rule cannot exclude it.
+   Keep these selectors at (0,1,0): ui-web's inert reset at (0,2,1) must win
+   when an overlay makes the retained panes inactive. */
+:global(:where(html[data-platform='darwin'])) .pane,
+:global(:where(html[data-platform='darwin'])) .stripChrome,
+:global(:where(html[data-platform='darwin'])) .float,
+:global(:where(html[data-platform='darwin'])) .divider {
   -webkit-app-region: no-drag;
 }
 

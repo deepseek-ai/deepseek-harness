@@ -14,10 +14,11 @@ import { publishDesktopRelease } from './desktop-publish.ts'
 import { desktopPublicationFailure } from './desktop-publication-failure.ts'
 import { desktopPublicationSummary } from './desktop-publication-summary.ts'
 import { publishDesktopTag } from './desktop-publish-tag.ts'
+import { websiteApproval } from './publish-website-ci.ts'
 import { desktopPublishQualificationError } from './desktop-publish-qualification.mjs'
 
 const routeSchema = z.object({ runId: z.string(), attempt: z.string(), commit: z.string(), runnerName: z.string(),
-  sourceRef: z.string(), channel: z.enum(['nightly', 'latest']),
+  sourceRef: z.string(), channel: z.enum(['nightly', 'stable']),
   target: z.enum(['mac-arm64', 'mac-x64', 'win-x64']), preset: z.enum(['test', 'production']) })
 
 /**
@@ -27,6 +28,11 @@ const routeSchema = z.object({ runId: z.string(), attempt: z.string(), commit: z
  * @returns Validated local publication context; no network operation is performed.
  */
 export async function prepareDesktopPublication(env: NodeJS.ProcessEnv, verifySignatures = verifyRetainedDesktopSignatures) {
+  const percentage = env.DESKTOP_STAGING_PERCENTAGE?.trim() || ''
+  if (percentage !== '' && (!/^\d+$/u.test(percentage) || Number(percentage) > 100)) {
+    throw new Error('desktop publish: staging percentage must be an integer from 0 to 100')
+  }
+  const stagingPercentage = percentage === '' ? undefined : Number(percentage)
   const route = routeSchema.parse(JSON.parse(env.DESKTOP_PUBLISH_ROUTE || '{}'))
   if (route.runnerName !== env.RUNNER_NAME) throw new Error('desktop publish: task was dispatched to a different machine')
   const root = desktopReleasesRoot(env)
@@ -47,12 +53,13 @@ export async function prepareDesktopPublication(env: NodeJS.ProcessEnv, verifySi
       DOWNLOAD_TEST_RELEASE_ID: source.testReleaseId ?? '', DOWNLOAD_TEST_COS_BUCKET: config.bucket }
     : { DSH_DESKTOP_AUTO_UPDATE_ENV: 'production', DOWNLOAD_PROD_COS_BUCKET: config.bucket }
   const plan = await createDesktopUploadPlan(source.target, { artifactsRoot: directory,
+    stagingPercentage,
     packagedProductVersion: source.productVersion, environment: { ...environment, DSH_DESKTOP_UPDATE_CHANNEL: source.channel } })
   if (plan.version !== source.version || plan.commit !== source.commit || plan.dirty !== false) throw new Error('desktop publish: completion record differs from retained source or has uncommitted changes')
   await verifySignatures(directory, manifest, config)
   const approval = createHash('sha256').update(JSON.stringify({ manifest, plan })).digest('hex')
   if (env.DESKTOP_APPROVED_PACKAGE && env.DESKTOP_APPROVED_PACKAGE !== approval) throw new Error('desktop publish: package or destination changed after approval')
-  return { route, manifest, config, plan, root, approval }
+  return { route, manifest, config, plan, root, approval, stagingPercentage }
 }
 
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.filename) {
@@ -61,12 +68,16 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
     const mode = process.argv[2]
     if (process.argv.length !== 3 || (mode !== '--check' && mode !== '--publish')) throw new Error('Usage: publish-desktop-ci.ts --check|--publish')
     const env = process.env
-    const { route, manifest, config, plan, root, approval } = await prepareDesktopPublication(env)
+    const { route, manifest, config, plan, root, approval, stagingPercentage } = await prepareDesktopPublication(env)
     if (mode === '--publish' && !env.DESKTOP_APPROVED_PACKAGE) throw new Error('desktop publish: approved package digest is required')
+    if (env.DESKTOP_UPLOAD_WEBSITE === 'true' && route.preset === 'production'
+      && !/^zone-[a-z0-9]+$/u.test(env.DOWNLOAD_PROD_EO_ZONE_ID || '')) {
+      throw new Error('desktop publish: configure DOWNLOAD_PROD_EO_ZONE_ID before approving website upload')
+    }
     if (mode === '--check') {
-      if (env.GITHUB_OUTPUT) await appendFile(env.GITHUB_OUTPUT, `approval=${approval}\nlabel=${plan.version} → ${manifest.source.channel} / ${plan.target} / ${plan.environment}\n`)
+      if (env.GITHUB_OUTPUT) await appendFile(env.GITHUB_OUTPUT, `website-destination=${createHash('sha256').update(`${config.bucket}/${plan.target}`).digest('hex')}\nwebsite-approval=${websiteApproval(manifest, config.bucket)}\napproval=${approval}\nlabel=${plan.version} → ${manifest.source.channel} / ${plan.target} / ${plan.environment}\n`)
       if (env.GITHUB_STEP_SUMMARY && !env.DESKTOP_APPROVED_PACKAGE) await appendFile(env.GITHUB_STEP_SUMMARY,
-        await desktopPublicationSummary(manifest.source, plan, approval))
+        await desktopPublicationSummary(manifest.source, plan, approval, env.DESKTOP_UPLOAD_WEBSITE === 'true'))
       if (env.GITHUB_OUTPUT && config.githubApp) await appendFile(env.GITHUB_OUTPUT,
         `app-client-id=${config.githubApp.clientId}\napp-key-file=${config.githubApp.privateKeyFile}\n`)
       process.stdout.write(`desktop publish: verified ${plan.target} ${plan.version}; no credentials read or COS requests made\n`)
@@ -79,11 +90,11 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
       phase = 'channel lock and publication journal acquisition'
       await withDesktopChannelLock(join(dirname(root), 'publish-locks'), destination, async () => {
         const published = await wasDesktopAttemptPublished(recordsRoot,
-          { repository: manifest.source.repository, runId: route.runId, attempt: route.attempt, destination })
+          { repository: manifest.source.repository, runId: route.runId, attempt: route.attempt, destination, stagingPercentage })
         const journal = await createDesktopPublicationRecord(recordsRoot, {
           repository: manifest.source.repository, runId: route.runId, attempt: route.attempt,
           actor: env.GITHUB_TRIGGERING_ACTOR || env.GITHUB_ACTOR || 'unknown',
-          destination, operation: 'publish', reason: 'Actions publication',
+          destination, stagingPercentage, operation: 'publish', reason: 'Actions publication',
         })
         if (env.GITHUB_OUTPUT) await appendFile(env.GITHUB_OUTPUT, `record=${journal.directory}\n`)
         let status: 'complete' | 'failed' | 'published-tag-pending' = 'failed'

@@ -2,9 +2,14 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { generate, type GenerateOptions } from '../src/generate.ts'
 import { scratch, setEnv } from './support.ts'
+
+vi.mock('../src/metrics.ts', async original => ({
+  ...await original<typeof import('../src/metrics.ts')>(),
+  metricReader: () => async (entry: import('../src/generate.ts').GeneratedEntry) => entry,
+}))
 
 const REPOSITORY = 'https://git.example/team/plugins'
 

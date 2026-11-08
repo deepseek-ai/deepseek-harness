@@ -1,5 +1,6 @@
 /** Frozen line selections shared by the diff UI, composer references, and review submission. */
 
+import type { QuoteSummary } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ForgeDiffFile } from '../types.ts'
 
 /** A comment on consecutive lines of one side of one displayed hunk. */
@@ -20,7 +21,11 @@ export interface ReviewComment {
 
 /** The immutable source from which a comment was selected. */
 export type ReviewSource =
-  | { readonly kind: 'local'; readonly scope: string }
+  /**
+   * Local changes in a scope. `base` names what the `branch` scope compared with for the reader, and is null for
+   * other scopes; `baseRef` identifies the comparison: the chosen ref, or null for the automatic fork point and other scopes.
+   */
+  | { readonly kind: 'local'; readonly scope: string; readonly base: string | null; readonly baseRef: string | null }
   | { readonly kind: 'change'; readonly url: string; readonly headSha: string }
 
 /** One selected range and the source the user saw. */
@@ -55,6 +60,25 @@ export function selectReviewLines(file: ForgeDiffFile, side: 'L' | 'R', from: nu
 }
 
 /**
+ * Name a comment's side and lines, such as `R12` or `L3–5`.
+ * @param comment - the commented range.
+ * @returns the range label shown beside comments and in composer quotes.
+ */
+export function reviewRange(comment: ReviewComment): string {
+  return `${comment.side}${comment.startLine}${comment.endLine === comment.startLine ? '' : `–${comment.endLine}`}`
+}
+
+/**
+ * Describe a composer quote of a comment by its file, range, and text instead of the whole message reference.
+ * @param comment - the quoted comment.
+ * @returns the composer's display of the quote.
+ */
+export function reviewQuoteSummary(comment: ReviewComment): QuoteSummary {
+  const range = reviewRange(comment)
+  return { label: `${comment.path.slice(comment.path.lastIndexOf('/') + 1)} ${range}`, title: comment.path, detail: range, body: comment.body }
+}
+
+/**
  * Format a frozen reference for the ordinary, logged user message.
  * @param selection - source, range, displayed patch, and user comment.
  * @param index - one-based reference number in the composer.
@@ -65,7 +89,8 @@ export function formatReviewComment(selection: ReviewSelection, index: number): 
   const range = comment.startLine === comment.endLine ? String(comment.startLine) : `${comment.startLine}-${comment.endLine}`
   // A longer fence keeps code containing Markdown fences inside the quoted hunk.
   const fence = '`'.repeat(Math.max(3, ...Array.from(comment.hunk.matchAll(/`+/g), match => match[0].length + 1)))
-  const origin = source.kind === 'local' ? `Source: Local (${source.scope})` : `Source: ${source.url}\nCommit: ${source.headSha}`
+  const origin = source.kind === 'change' ? `Source: ${source.url}\nCommit: ${source.headSha}`
+    : `Source: Local (${source.scope})${source.base === null ? '' : `\nBase: ${source.base}`}`
   return `## User Comment ${index}\nFile: ${comment.path}\nSide: ${comment.side}\nLines: ${range}\n${origin}\nDiff hunk:\n${fence}diff\n${comment.hunk}\n${fence}\nComment:\n${comment.body}`
 }
 

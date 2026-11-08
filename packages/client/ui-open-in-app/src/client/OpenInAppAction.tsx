@@ -7,7 +7,7 @@ import type { ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/cli
 import { NS } from './locales.ts'
 import { OpenTargetButton, type OpenTargetReporter } from './OpenTargetButton.tsx'
 
-/** Browser operations and state shared by the Session header and file tree contributions. */
+/** Directory operations and state shared with Session application submenus. */
 export interface OpenInAppActionInjected extends OpenTargetReporter {
   hooks: {
     openInAppApps: ObservableSnapshot<readonly string[] | null>

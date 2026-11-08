@@ -108,6 +108,17 @@ SectionEnd
   const compiler = await getMakeNsisPath()
   await execute(compiler.path, ['/V2', payloadSource], { ...childOptions, env: { ...childOptions.env, ...compiler.env } })
   if (sign) await sign({ path: join(payload, `${productName}.exe`), hash: 'sha256', isNest: false })
+  if (!uninstallOnly && !process.argv.includes('--compile-only')) {
+    const owner = join(output, 'restart-status-owner.exe')
+    await execute(compiler.path, ['/V2', `/DOWNER_EXE=${owner}`,
+      `/DBANNER_INCLUDE=${join(appRoot, 'scripts', 'restart-banner.nsh')}`,
+      `/DSTATUS_DLL=${join(output, 'ui', 'window-frame.dll')}`,
+      join(appRoot, 'tests', 'fixtures', 'restart-status-owner.nsi')],
+    { ...childOptions, env: { ...childOptions.env, ...compiler.env } })
+    if (sign) await sign({ path: owner, hash: 'sha256', isNest: false })
+    await execute('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
+      join(appRoot, 'tests', 'windows-restart-status.ps1'), '-OwnerExe', owner], childOptions)
+  }
   for (const locale of readInstallerLocales()) {
     const language = locale.id
     const config = createElectronBuilderConfig()

@@ -80,25 +80,17 @@ export function registerToasts(
         }),
       }),
     }, ToastEntry<PropsRuntime<'workspace.toast', 'forkRequiresOpen'>>)
-    yield ctx.slots.register({
-      name: 'workspace.toast', key: 'archived', locale: 'workspace', store: viewStore,
-      inject: (): ArchiveToastInjected => ({
-        display: (notice, t, dismiss) => ({
-          text: t('toast.archived'), tone: 'success', holdMs: 6000,
-          actions: [{ label: t('toast.archivedUndo'), onClick: () => { dismiss(); actions.undoArchive(notice.sessionId) } }],
+    for (const key of ['archived', 'stoppedAndArchived'] as const) {
+      yield ctx.slots.register({
+        name: 'workspace.toast', key, locale: 'workspace', store: viewStore,
+        inject: (): ArchiveToastInjected => ({
+          display: (notice, t, dismiss) => ({
+            text: notice.message ?? t(`toast.${notice.kind}`), tone: notice.tone ?? 'success', holdMs: 6000,
+            actions: [{ label: t('toast.archivedUndo'), onClick: () => { dismiss(); actions.undoArchive(notice.sessionId) } }],
+          }),
+          filterAction: archiveFilterAction,
         }),
-        filterAction: archiveFilterAction,
-      }),
-    }, ArchiveToastEntry)
-    yield ctx.slots.register({
-      name: 'workspace.toast', key: 'stoppedAndArchived', locale: 'workspace', store: viewStore,
-      inject: (): ArchiveToastInjected => ({
-        display: (notice, t, dismiss) => ({
-          text: t('toast.stoppedAndArchived'), tone: 'success', holdMs: 6000,
-          actions: [{ label: t('toast.archivedUndo'), onClick: () => { dismiss(); actions.undoArchive(notice.sessionId) } }],
-        }),
-        filterAction: archiveFilterAction,
-      }),
-    }, ArchiveToastEntry)
+      }, ArchiveToastEntry)
+    }
   })
 }

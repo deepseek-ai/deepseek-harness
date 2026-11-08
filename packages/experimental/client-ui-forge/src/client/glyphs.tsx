@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react'
 import clsx from 'clsx'
 import { IconCheckCircleFillRegular, IconCloseCircleFillRegular } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { CheckState } from '@deepseek-ai/dsh-experimental-forge/types'
+import type { CheckState, ChecksRollup } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { ChangeRequestTone } from './status.ts'
 import css from './ForgeTab.module.css'
 
@@ -65,6 +65,16 @@ const SHAPES: Record<ChangeRequestTone, ReactNode> = {
   ),
 }
 
+/** Center of each shape's head branch end, which a checks mark covers. */
+const HEAD: Record<ChangeRequestTone, readonly [number, number]> = {
+  open: [12, 12.5],
+  unknown: [12, 12.5],
+  blocked: [12, 12.5],
+  draft: [12, 12.5],
+  merged: [11.5, 8],
+  closed: [12, 12.5],
+}
+
 /**
  * Draw a change request in its lifecycle shape: open, open with a cross for
  * one that needs its author, draft, merged, closed, or the open shape for an
@@ -73,13 +83,15 @@ const SHAPES: Record<ChangeRequestTone, ReactNode> = {
  * @param props.tinted - whether the state picks the color; otherwise the glyph uses the current text color.
  * @param props.size - width and height in pixels, 15 by default.
  * @param props.label - accessible name; omit it for a decorative glyph.
+ * @param props.checks - checks outcome drawn as a filled head branch end in its state color; omit it for the plain end.
  * @returns the SVG glyph.
  */
-export function ChangeRequestGlyph({ tone, tinted = true, size = 15, label }: {
+export function ChangeRequestGlyph({ tone, tinted = true, size = 15, label, checks }: {
   readonly tone: ChangeRequestTone
   readonly tinted?: boolean | undefined
   readonly size?: number | undefined
   readonly label?: string | undefined
+  readonly checks?: Exclude<ChecksRollup, 'none'> | undefined
 }): ReactNode {
   return (
     <svg
@@ -97,6 +109,8 @@ export function ChangeRequestGlyph({ tone, tinted = true, size = 15, label }: {
       {...label === undefined ? { 'aria-hidden': true } : { role: 'img', 'aria-label': label }}
     >
       {SHAPES[tone]}
+      {/* Concentric with the stroked end and larger than its outer edge, so it covers that end completely. */}
+      {checks !== undefined && <circle cx={HEAD[tone][0]} cy={HEAD[tone][1]} r="2.3" stroke="none" className={css.checksMark} data-checks={checks} />}
     </svg>
   )
 }

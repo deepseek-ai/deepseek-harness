@@ -2,6 +2,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { MessageId, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 
@@ -13,18 +14,30 @@ class AgentWaitError extends HarnessError {
   }
 }
 
-/** Wait without consuming input; every settlement removes its live resources. */
+/** Pending input ids that the latest successful wait of one model tool call reported. */
+type ReportedInput = WeakMap<Agent, { readonly rootCallId: ToolCallId; readonly ids: ReadonlySet<MessageId> }>
+
+/**
+ * Wait without consuming input; every settlement removes its live resources.
+ * Within one model tool call, such as a `run_code` program, pending input that
+ * an earlier wait already reported does not end this wait: that input reaches
+ * the model only after the call finishes, so a waiting loop cannot spin on it.
+ */
 function waitForInput(
   ctx: Context,
   agent: Agent,
   timeoutMs: number,
   signal: AbortSignal,
   lifetime: AbortSignal,
+  reported: ReportedInput,
+  rootCallId: ToolCallId,
 ): Promise<{ timedOut: boolean }> {
   lifetime.throwIfAborted()
   if (ctx.agents.get(agent.id) !== agent) {
     throw new AgentWaitError('wait_agent requires the exact live calling agent', 'WAIT_UNAVAILABLE')
   }
+  const previous = reported.get(agent)
+  const seen = previous?.rootCallId === rootCallId ? previous.ids : undefined
   return new Promise((resolve, reject) => {
     const finish = (settle: () => void): void => {
       clearTimeout(timer)
@@ -35,7 +48,11 @@ function waitForInput(
       settle()
     }
     const onInput = (): void => {
-      if (agent.inbox.nextStep.length > 0) finish(() => { resolve({ timedOut: false }) })
+      const pending = agent.inbox.nextStep
+      if (pending.some(message => seen?.has(message.id) !== true)) {
+        reported.set(agent, { rootCallId, ids: new Set(pending.map(message => message.id)) })
+        finish(() => { resolve({ timedOut: false }) })
+      }
     }
     // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- Cancellation preserves the caller's exact AbortSignal reason.
     const onAbort = (): void => { finish(() => { reject(signal.reason) }) }
@@ -66,12 +83,13 @@ function waitForInput(
  */
 export function registerWaitAgent(ctx: Context): void {
   const lifetime = new AbortController()
+  const reported: ReportedInput = new WeakMap()
   ctx.effect(() => () => {
     lifetime.abort(new AgentWaitError('wait_agent ended because its plugin was unloaded', 'WAIT_UNAVAILABLE'))
   }, 'subagent-control.waits()')
   ctx.tools.register(defineTool({
     name: 'wait_agent',
-    description: 'Wait for input at your next step, including agent messages, completion notifications, and user steering. Returns immediately when that input is already pending.',
+    description: 'Wait for input at your next step, including agent messages, completion notifications, and user steering. Returns immediately if new input is pending. `timedOut: false` means new input is pending. Pending input is delivered to the model after code execution finishes.',
     parameters: {
       timeout_ms: {
         type: 'integer',
@@ -94,7 +112,7 @@ export function registerWaitAgent(ctx: Context): void {
       if (exec.agent === undefined) {
         throw new AgentWaitError('wait_agent requires a calling agent', 'WAIT_UNAVAILABLE')
       }
-      return await waitForInput(ctx, exec.agent, timeoutMs, exec.signal, lifetime.signal)
+      return await waitForInput(ctx, exec.agent, timeoutMs, exec.signal, lifetime.signal, reported, exec.rootCallId)
     },
   }))
 }

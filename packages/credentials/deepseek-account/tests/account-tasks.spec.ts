@@ -29,7 +29,7 @@ it('cancels running account tasks with their inboxes retained and detaches with 
     ctx.on('deepseek-account/model-sign-in-required', notice)
     const report = (error: unknown) => { ctx.emit('agent/error', { agent: {} as never, turn: 0, step: 0, error }) }
     report(new Error('offline'))
-    report(new LlmError('API key invalid', 'INVALID_API_KEY'))
+    report(LlmError.fromFailure({ message: 'API key invalid', code: 'INVALID_API_KEY' }))
     expect(notice).not.toHaveBeenCalled()
     report(new LlmError('Sign in required', 'ACCOUNT_SIGN_IN_REQUIRED'))
     expect(notice).toHaveBeenCalledTimes(1)

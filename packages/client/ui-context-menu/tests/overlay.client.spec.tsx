@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import { bindSnapshotSelector, SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { MenuItemButton } from '@deepseek-ai/dsh-client-ui-primitives'
 import { ShortcutRegistry } from '../../shortcuts/src/client/registry.ts'
@@ -21,7 +22,7 @@ it('renders legacy Session actions before data contributions and restores More f
   const useStore = bindSnapshotSelector(store)
   const view = render(<>
     <button onClick={() => { store.actions.open({ kind: 'session', value: { sessionId: SessionId('clicked'), displayTitle: 'Clicked' } }, { x: 20, y: 30 }) }}>More</button>
-    <MenuOverlay useCatalog={select => select([])} useStore={useStore} actions={store.actions} close={close} select={run}
+    <MenuOverlay t={key => key === 'back' ? 'Back' : 'Failed'} useCatalog={select => select([])} useStore={useStore} actions={store.actions} close={close} select={run}
       renderSlot={(_key, owner: object) => {
         const { target, dismiss } = owner as { target: ContextMenuTarget; dismiss: () => void }
         return <MenuItemButton onSelect={() => {
@@ -55,7 +56,7 @@ it('renders disabled, grouped and nested data actions and keeps feedback after m
     { id: 'parent', label: 'Export', children: [{ id: 'child', label: 'Original' }, { id: 'other', label: 'Other', separatorBefore: true }] },
     { id: 'footer', label: 'Folder', afterContent: true },
   ])
-  const view = render(<MenuOverlay useCatalog={select => select([])} useStore={bindSnapshotSelector(store)} actions={store.actions}
+  const view = render(<MenuOverlay t={key => key === 'back' ? 'Back' : 'Failed'} useCatalog={select => select([])} useStore={bindSnapshotSelector(store)} actions={store.actions}
     close={() => { store.actions.close() }} select={select} renderSlot={() => null} />)
   expect(view.getByRole('menuitem', { name: 'Unavailable' }).hasAttribute('disabled')).toBe(true)
   fireEvent.click(view.getByRole('menuitem', { name: 'Open' }))
@@ -90,7 +91,9 @@ it('dispatches captured icon keys in rows, submenus and footers and retires rend
   const runtime = await SlotTestRuntime.create()
   onTestFinished(() => runtime.dispose())
   runtime.ctx.provide('shortcuts', { catalog: createSnapshotStore([]) } as never)
-  runtime.ctx.provide('locale', { register: () => () => {}, bind: () => (key: string) => key } as never)
+  const locale = new LocaleRuntime(runtime.ctx)
+  runtime.ctx.provide('locale', locale)
+  runtime.slots.installLocale(locale)
   await runtime.root.declare({ 'shell.overlay': { kind: 'list', scope: 'root' } }, ({ renderSlot }) =>
     <>{renderSlot('shell.overlay', {})}</>)
   const menuPlugin = await runtime.mount({ inject, apply })
@@ -143,7 +146,7 @@ it('tracks configured shortcuts for nested and footer actions without invoking c
     { id: 'footer', label: 'Footer', commandId, afterContent: true },
   ])
   const select = vi.fn()
-  const view = render(<MenuOverlay useStore={bindSnapshotSelector(store)} actions={store.actions}
+  const view = render(<MenuOverlay t={key => key === 'back' ? 'Back' : 'Failed'} useStore={bindSnapshotSelector(store)} actions={store.actions}
     useCatalog={bindSnapshotSelector(shortcuts.catalog)} close={vi.fn()} select={select} renderSlot={() => null} />)
   const item = view.getByRole('menuitem', { name: 'Rename' })
   expect(item.getAttribute('aria-keyshortcuts')).toBe('Alt+Meta+G')

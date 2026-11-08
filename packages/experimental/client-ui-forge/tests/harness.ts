@@ -32,6 +32,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import WorkingDirectoryService from '@deepseek-ai/dsh-working-directory'
 import ForgePanelController from '../src/index.ts'
 import type { Config, ForgePanelState, ForgeWorktreeState } from '../src/index.ts'
+import { CREATED_RECORD } from '@deepseek-ai/dsh-experimental-worktree'
 import { forgeWorktreeProjection, WORKTREE_RECORD } from '../src/worktree.ts'
 
 const execute = promisify(execFile)
@@ -498,6 +499,8 @@ export interface Runtime {
   readonly agent: TestAgent
   /** Data of the Session's worktree records in log order. */
   readonly records: unknown[]
+  /** Data of the worktree service's creation records for the Session, in log order. */
+  readonly created: unknown[]
   /** Fiber of the worktree service, or undefined when it is not mounted. */
   readonly worktrees: ReturnType<Context['plugin']> | undefined
 }
@@ -543,13 +546,16 @@ export async function runtime(cwd: string, options: BenchOptions = {}): Promise<
     if (worktrees !== undefined) await worktrees
     const session = ctx.sessions.create(SessionId(`forge-panel-${Math.random().toString(36).slice(2)}`), { meta: { cwd } })
     const records: unknown[] = []
+    const created: unknown[] = []
     ctx.on('session/event', (target: Session, event: SessionEvent) => {
       const record = pluginRecordOf(event)
-      if (target === session && record?.type === WORKTREE_RECORD) records.push(record.data)
+      if (target !== session) return
+      if (record?.type === WORKTREE_RECORD) records.push(record.data)
+      if (record?.type === CREATED_RECORD) created.push(record.data)
     })
     const agent = testAgent(ctx, session)
     await ctx.agents.register(agent)
-    return { ctx, provider, sandbox, session, agent, records, worktrees }
+    return { ctx, provider, sandbox, session, agent, records, created, worktrees }
   } catch (error) {
     await ctx.fiber.dispose()
     throw error

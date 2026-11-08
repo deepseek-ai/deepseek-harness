@@ -52,7 +52,7 @@ describe('Liveshare browser plugin', () => {
     expect(browser.mounted).toHaveLength(1)
     const entry = browser.slots.entries('conversation.session.header.utilities')[0]
     expect(entry?.component).toBe(LiveshareShareAction)
-    expect(entry?.options).toMatchObject({ id: 'liveshare-share' })
+    expect(entry?.options).toMatchObject({ id: 'liveshare-share', order: -7 })
     // The action's injected props carry the owner Remote namespace it addresses every call through.
     expect((entry?.inject as (() => unknown) | undefined)?.()).toEqual({ shares: browser.shares })
 

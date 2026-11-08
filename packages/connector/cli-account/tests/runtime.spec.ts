@@ -1,8 +1,9 @@
 import { Context } from '@deepseek-ai/cordis'
+import type { ConnectorOperationId } from '@deepseek-ai/dsh-client-ui-connector-account/types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CliCommandExecutor } from '../src/executor.ts'
 import { CliAccountRuntime, exitFailure, failureDetails, type CliOperationControl } from '../src/runtime.ts'
-import type { CliAccountView, CliCommandFailure, CliOperationId } from '../src/types.ts'
+import type { CliAccountView, CliCommandFailure } from '../src/types.ts'
 import { EXECUTABLE, PROGRAM, ScriptedSubprocess, type ScriptedProcess } from './harness.ts'
 
 interface Account { readonly state: 'unchecked' | 'signed-out' | 'signed-in' }
@@ -50,7 +51,7 @@ afterEach(async () => {
 
 const errors = (): unknown[] => ctx.logger.buffer.filter(message => message.type === 'error').map((message): unknown => message.args)
 
-async function settled(id: CliOperationId): Promise<View> {
+async function settled(id: ConnectorOperationId): Promise<View> {
   await vi.waitFor(() => { expect(account.snapshot().result?.id).toBe(id) })
   return account.snapshot()
 }
@@ -136,7 +137,7 @@ describe('CliAccountRuntime', () => {
     const id = account.start('connect')
     await vi.waitFor(() => { expect(account.snapshot().operation?.authorizationUrl).toBe('https://example.com/device') })
 
-    await account.cancel('other' as CliOperationId)
+    await account.cancel('other' as ConnectorOperationId)
     expect(account.snapshot().operation?.phase).toBe('authorizing')
     const cancelling = account.cancel(id)
     expect(account.snapshot().operation).toEqual({ id, kind: 'connect', phase: 'cancelling', cancellable: false })

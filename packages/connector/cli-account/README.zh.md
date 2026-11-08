@@ -27,7 +27,7 @@ kind: "package-library"
 
 ### 何时使用
 
-在厂商 CLI 负责让用户登录并保管凭据的插件的 Host 行中使用它，DSH 只负责启动命令、展示结果和持有进程。插件把运行时注册到 [`@deepseek-ai/dsh-client-ui-cli-account`](../../client/ui-cli-account/README.zh.md)，在插件页显示账号。通过 MCP 接入托管服务的插件改用 MCP 管理器，由它自己负责 OAuth。
+在厂商 CLI 负责让用户登录并保管凭据的插件的 Host 行中使用它，DSH 只负责启动命令、展示结果和持有进程。插件把运行时作为账号来源注册到 [`@deepseek-ai/dsh-client-ui-connector-account`](../../client/ui-connector-account/README.zh.md) 的 `ctx.connectorAccounts`，在插件页显示账号。通过 MCP 接入托管服务的插件改用 MCP 管理器，由它自己负责 OAuth。
 
 ### 入口
 
@@ -97,7 +97,7 @@ const account = new Account({
 | [`src/runtime.ts`](src/runtime.ts) | 一次一个操作、取消、链接过滤、失败分类与观察者 |
 | [`src/context.ts`](src/context.ts) | 给出可执行文件路径的运行时上下文 |
 | [`src/text.ts`](src/text.ts) | 插件展示函数根据字典生成的 `LocalizedText` |
-| [`src/types.ts`](src/types.ts) | 泛型账号视图类型，以及插件页的注册和显示类型 |
+| [`src/types.ts`](src/types.ts) | 账号视图、命令失败分类和字典类型 |
 | [`src/index.ts`](src/index.ts) | 入口模块与共用配置字段 |
 
 </details>
@@ -108,7 +108,7 @@ const account = new Account({
 ## 延伸阅读
 
 - [Connector 包](../README.zh.md)——这个库和 CLI 应用插件所属的分组。
-- [CLI 账号界面](../../client/ui-cli-account/README.zh.md)——运行时所注册的插件页注册表。
+- [连接器账号界面](../../client/ui-connector-account/README.zh.md)——运行时所注册的插件页注册表。
 - [System prompt](../../core/system-prompt/README.zh.md)——排序并渲染运行时上下文的注册表。
 - [Subprocess](../../subprocess/subprocess/README.zh.md)——查找并启动 CLI 的运行时。
 

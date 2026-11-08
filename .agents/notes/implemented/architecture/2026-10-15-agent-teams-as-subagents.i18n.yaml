@@ -3,8 +3,8 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-15-agent-teams-as-subagents.md
 /agent-note-agent-teams-teammates-are-subagents:
-  en: 51e2fc51a6e1622a
-  zh: 7e09ea6292e5921d
+  en: f49f9e7ef588e612
+  zh: 7da804056221af51
 /agent-note-agent-teams-teammates-are-subagents/problem:
   en: ca2848e3bbc3a009
   zh: 0551e32ff6d187d0

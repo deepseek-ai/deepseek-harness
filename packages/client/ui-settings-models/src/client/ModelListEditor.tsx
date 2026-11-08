@@ -79,6 +79,8 @@ export interface ModelListEditorProps {
    * reasoning control, leaving a catalog model's levels to the catalog.
    */
   reasoningLevels?: readonly string[] | undefined
+  /** Whether the route's protocol accepts only {@link reasoningLevels}, each sent under its own name. */
+  reasoningLevelsOnly?: boolean | undefined
   /** Route input types for models absent from the installed catalog. */
   defaultInput?: readonly string[] | undefined
   /** Whether the user layer currently owns the whole array; absent on a create. */
@@ -356,6 +358,7 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
             inputFallback={inputDefaults.get(textOf(model, 'id')) ?? props.defaultInput}
             inputLoading={catalogProvider !== undefined && catalog === undefined}
             reasoningLevels={props.reasoningLevels}
+            reasoningLevelsOnly={props.reasoningLevelsOnly}
             expanded={expanded}
             disabled={disabled}
             t={t}

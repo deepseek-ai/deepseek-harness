@@ -175,6 +175,23 @@ function whenWritten(ctx: Context, id: SessionId): Promise<void> {
   })
 }
 
+/** Register the secondary unit on its own fiber, so a test can release it before a Session detaches. */
+function releasableSecondaryUnit(ctx: Context) {
+  return ctx.plugin(Object.assign(async (inner: Context) => {
+    await inner.sessionProjections.register(secondaryMarksUnit)
+  }, { inject: ['sessionProjections'] }))
+}
+
+/** Create a Session owned by its own fiber; disposing `owner` detaches it. */
+async function ownedSession(ctx: Context, id: SessionId) {
+  let session: Session | undefined
+  const owner = await ctx.plugin(Object.assign((inner: Context) => {
+    session = inner.sessions.create(id)
+  }, { inject: ['sessions'] }))
+  if (session === undefined) throw new Error('session was not created')
+  return { session, owner }
+}
+
 /** The stored record for one session id (undefined = absent or unreadable). */
 async function storedRecord(root: string, id: Session['id']): Promise<CheckpointRecord | undefined> {
   try {
@@ -264,6 +281,95 @@ describe('SessionProjectionCache write policy', () => {
     await owner.dispose()
     await written
     expect((await storedRows(root, id))?.['cache-test/marks']?.val).toEqual({ marks: ['live'] })
+  })
+
+  it('writes the last state of a unit released before the detach write', async () => {
+    const { ctx, root } = await harness()
+    const unitOwner = await releasableSecondaryUnit(ctx)
+    const id = SessionId('released-exact')
+    const created = whenWritten(ctx, id)
+    const { session, owner } = await ownedSession(ctx, id)
+    await created
+    mark(session, ['a'])
+    const ended = whenWritten(ctx, id)
+    const end = endTurn(session)
+    await ended
+    // A plugin unloading ahead of the Sessions it describes releases its unit first.
+    await unitOwner.dispose()
+    const detached = whenWritten(ctx, id)
+    await owner.dispose()
+    await detached
+    expect(await storedRows(root, id)).toEqual({
+      'cache-test/marks': { ver: 1, seq: end.seq, val: { marks: ['a'] } },
+      'cache-test/secondary-marks': { ver: 1, seq: end.seq, val: { marks: ['a'] } },
+    })
+  })
+
+  it('keeps a released unit at the event it reached while later events advance the live units', async () => {
+    const { ctx, root } = await harness()
+    const unitOwner = await releasableSecondaryUnit(ctx)
+    const id = SessionId('released-behind')
+    const created = whenWritten(ctx, id)
+    const { session, owner } = await ownedSession(ctx, id)
+    await created
+    mark(session, ['a'])
+    const ended = whenWritten(ctx, id)
+    const end = endTurn(session)
+    await ended
+    await unitOwner.dispose()
+    const later = mark(session, ['b'])
+    const detached = whenWritten(ctx, id)
+    await owner.dispose()
+    await detached
+    expect(await storedRows(root, id)).toEqual({
+      'cache-test/marks': { ver: 1, seq: later.seq, val: { marks: ['b'] } },
+      'cache-test/secondary-marks': { ver: 1, seq: end.seq, val: { marks: ['a'] } },
+    })
+  })
+
+  it('drops a stored row whose unit this process never registered', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-projcache-'))
+    roots.push(root)
+    const meta = headerOf(SessionId('carried'), 9)
+    await seedRecord(root, meta.id, {
+      'cache-test/marks': { ver: 1, seq: -1, val: null },
+      'cache-test/secret': { ver: 1, seq: -1, val: 'written by another composition' },
+    }, {
+      formatVersion: SESSION_FORMAT_VERSION,
+      createdAt: 9,
+      isSeeded: false,
+      inheritedEventCount: SessionLogOffset(0),
+    })
+    const { ctx } = await harness({ root })
+    const events: SessionEvent[] = [{ type: 'cache-test/mark', seq: SessionSeq(0), time: 0, data: { marks: ['cold'] } }]
+    const written = whenWritten(ctx, meta.id)
+    ctx.sessionProjectionCache.coldSnapshot(meta, SessionLogOffset(0), events)
+    await written
+    expect(await storedRows(root, meta.id)).toEqual({
+      'cache-test/marks': { ver: 1, seq: 0, val: { marks: ['cold'] } },
+    })
+  })
+
+  it('never keeps a stored row of another lifecycle under the same Session id', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-projcache-'))
+    roots.push(root)
+    const id = SessionId('recreated')
+    // Same id and cut as the Session created below, but another creation time.
+    await seedRecord(root, id, {
+      'cache-test/secondary-marks': { ver: 1, seq: -1, val: { marks: ['foreign'] } },
+    }, {
+      formatVersion: SESSION_FORMAT_VERSION,
+      createdAt: 1,
+      isSeeded: false,
+      inheritedEventCount: SessionLogOffset(0),
+    })
+    const { ctx } = await harness({ root })
+    const created = whenWritten(ctx, id)
+    ctx.sessions.create(id)
+    await created
+    expect(await storedRows(root, id)).toEqual({
+      'cache-test/marks': { ver: 1, seq: -1, val: null },
+    })
   })
 
   it('flushes when the in-turn event count reaches the configured threshold', async () => {
