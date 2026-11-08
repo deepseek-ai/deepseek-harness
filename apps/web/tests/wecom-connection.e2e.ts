@@ -89,8 +89,8 @@ describe.skipIf(process.platform === 'win32')('web e2e: WeCom plugin authorizati
     await page.getByRole('navigation', { name: '全局面板' }).getByRole('button', { name: '插件', exact: true }).click()
     const panel = page.locator('[data-plugin-panel]')
     await panel.getByRole('button', { name: '查看 企业微信插件', exact: true }).click({ timeout: 20_000 })
-    const section = panel.locator('[data-cli-account-package="@deepseek-ai/dsh-wecom"]')
-    await expect.poll(() => section.getAttribute('data-cli-account'), { timeout: 20_000 }).toBe('disconnected')
+    const section = panel.locator('[data-connector-account-key="@deepseek-ai/dsh-wecom"]')
+    await expect.poll(() => section.getAttribute('data-connector-account'), { timeout: 20_000 }).toBe('disconnected')
     expect(await panel.locator('[data-plugin-detail]').getByText('未授权', { exact: true }).count()).toBe(2)
 
     const opened: Page[] = []
@@ -98,14 +98,14 @@ describe.skipIf(process.platform === 'win32')('web e2e: WeCom plugin authorizati
     await writeFile(join(binDir, 'init-fails'), '')
     await section.getByRole('button', { name: '连接企业微信', exact: true }).click()
     await section.getByRole('alert').waitFor({ timeout: 20_000 })
-    expect(await section.getAttribute('data-cli-account')).toBe('disconnected')
+    expect(await section.getAttribute('data-connector-account')).toBe('disconnected')
     expect(await section.getByRole('alert').innerText()).toContain('auth-init · exit 4')
     expect(await section.innerText()).not.toContain('fixture-scode')
 
     await rm(join(binDir, 'init-fails'))
     await rm(join(binDir, 'qr-visited'))
     await section.getByRole('button', { name: '连接企业微信', exact: true }).click()
-    await expect.poll(() => section.getAttribute('data-cli-account'), { timeout: 20_000 }).toBe('connected')
+    await expect.poll(() => section.getAttribute('data-connector-account'), { timeout: 20_000 }).toBe('connected')
     expect(opened.map(popup => popup.url())).toEqual([qrUrl(1), qrUrl(2)])
     await section.getByText('可以在对话中直接请 Agent 使用企业微信。', { exact: true }).waitFor({ timeout: 10_000 })
     await page.getByText('企业微信已授权', { exact: true }).waitFor({ timeout: 10_000 })

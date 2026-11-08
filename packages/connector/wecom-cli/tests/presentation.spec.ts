@@ -1,12 +1,12 @@
 /** The WeCom section offers each state's next step, the guide download rows, and failure guidance, in every shipped language. */
-import type { CliAccountDisplay, CliOperationId } from '@deepseek-ai/dsh-cli-account/types'
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
+import type { ConnectorAccountDisplay, ConnectorOperationId } from '@deepseek-ai/dsh-client-ui-connector-account/types'
 import { expect, it } from 'vitest'
 import { en, zh, type WecomTextKey } from '../src/locales.ts'
 import { COPY, OPERATIONS, presentAccount } from '../src/presentation.ts'
 import type { WecomState } from '../src/types.ts'
 
-const OP = 'op' as CliOperationId
+const OP = 'op' as ConnectorOperationId
 const QR = 'https://work.weixin.qq.com/qr'
 const CHECK = { kind: 'start', operation: 'check' } as const
 const CONNECT = { kind: 'start', operation: 'connect' } as const
@@ -14,7 +14,7 @@ const CONNECT = { kind: 'start', operation: 'connect' } as const
 /** The key's text as the Chinese and English browsers resolve it. */
 const say = (key: WecomTextKey): Partial<Record<string, string>> => ({ zh: zh[key], en: en[key] })
 const zhOf = (text: LocalizedText | undefined): string | undefined => typeof text === 'object' ? text.zh : text
-const labels = (display: CliAccountDisplay): (string | undefined)[] => display.buttons.map(button => zhOf(button.label))
+const labels = (display: ConnectorAccountDisplay): (string | undefined)[] => display.buttons.map(button => zhOf(button.label))
 
 const unauthorized = { state: 'unauthorized', skills: 'installed' } as const
 

@@ -40,7 +40,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-wecom
 
 | 行 | 包 | 行为 |
 |---|---|---|
-| `wecom` | [`@deepseek-ai/dsh-wecom-cli`](../wecom-cli/README.zh.md) | 把 `wecom-cli` 的绝对路径告诉模型，注册其技能，在 Host 上执行授权检查和扫码连接，并通过 [CLI 账号注册表](../../client/ui-cli-account/README.zh.md)在插件页显示授权区块、授权标签、开启后的引导和提示 |
+| `wecom` | [`@deepseek-ai/dsh-wecom-cli`](../wecom-cli/README.zh.md) | 把 `wecom-cli` 的绝对路径告诉模型，注册其技能，在 Host 上执行授权检查和扫码连接，并通过 [连接器账号注册表](../../client/ui-connector-account/README.zh.md)在插件页显示授权区块、授权标签、开启后的引导和提示 |
 
 关闭 bundle 会撤下技能、运行时上下文中的路径和页面。CLI 的授权保持不变。
 
@@ -63,7 +63,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-wecom
 
 - [Connector 包](../README.zh.md)——这个应用插件所属的分组。
 - [企业微信 CLI 与技能](../wecom-cli/README.zh.md)——Host 行、授权操作与模型指引。
-- [CLI 账号界面](../../client/ui-cli-account/README.zh.md)——在插件页显示授权的注册表。
+- [连接器账号界面](../../client/ui-connector-account/README.zh.md)——在插件页显示授权的注册表。
 - [Plugin Manager](../../boot/plugin-manager/README.zh.md)——安装与启用。
 
 -----

@@ -1,8 +1,9 @@
 /** The WeCom authorization section the Plugins page shows for each Host view. */
 import { failureDetails } from '@deepseek-ai/dsh-cli-account'
 import type {
-  CliAccountButton, CliAccountCopy, CliAccountDisplay, CliAccountFailure, CliAccountNote, CliAccountOperation,
-} from '@deepseek-ai/dsh-cli-account/types'
+  ConnectorAccountButton, ConnectorAccountCopy, ConnectorAccountDisplay, ConnectorAccountFailure, ConnectorAccountNote,
+  ConnectorAccountOperation,
+} from '@deepseek-ai/dsh-client-ui-connector-account/types'
 import type { UpstreamSkillsState } from '@deepseek-ai/dsh-upstream-skills/types'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { text } from './locales.ts'
@@ -13,13 +14,13 @@ export const WECOM_PACKAGE = '@deepseek-ai/dsh-wecom'
 
 /* jscpd:ignore-start -- CLI app plugins declare page operations, copy, and commands alike, each with its own text. */
 /** The operations the section's buttons start; binding a bot reports a notice in the browser that started it. */
-export const OPERATIONS: readonly CliAccountOperation<WecomOperationKind>[] = [
+export const OPERATIONS: readonly ConnectorAccountOperation<WecomOperationKind>[] = [
   { kind: 'check' },
   { kind: 'connect', notice: text('notice.connected') },
 ]
 
 /** The section's title and hint, and the prompt after the bundle is switched on while unauthorized. */
-export const COPY: CliAccountCopy = {
+export const COPY: ConnectorAccountCopy = {
   title: text('section.title'),
   hint: text('hint'),
   activation: { title: text('activation.title'), body: text('activation.body'), connect: text('action.connect') },
@@ -31,7 +32,7 @@ const CONNECT = { kind: 'start', operation: 'connect' } as const
 
 /* jscpd:ignore-start -- CLI app plugins whose guides download report the same states, each in its own text. */
 /** The row that reports guides that are not in place yet; a failed download offers a check, which restarts it. */
-function skillsNotes(skills: UpstreamSkillsState): CliAccountNote[] {
+function skillsNotes(skills: UpstreamSkillsState): ConnectorAccountNote[] {
   switch (skills) {
     case 'installed': return []
     case 'downloading': return [{ text: text('skills.downloading') }]
@@ -43,8 +44,8 @@ function skillsNotes(skills: UpstreamSkillsState): CliAccountNote[] {
 /* jscpd:ignore-end */
 
 /** The bound bot's QR-code page and the operation's cancel, while an authorization runs. */
-function connectingButtons(operation: NonNullable<WecomState['operation']>): CliAccountButton[] {
-  const buttons: CliAccountButton[] = []
+function connectingButtons(operation: NonNullable<WecomState['operation']>): ConnectorAccountButton[] {
+  const buttons: ConnectorAccountButton[] = []
   if (operation.authorizationUrl !== undefined) buttons.push({ label: text('action.open'), command: { kind: 'open' }, variant: 'primary' })
   if (operation.cancellable) buttons.push({ label: text('action.cancel'), command: { kind: 'cancel' }, variant: 'ghost' })
   return buttons
@@ -55,7 +56,7 @@ function connectingButtons(operation: NonNullable<WecomState['operation']>): Cli
  * @param view - the authorization, the operation in progress, and the last result.
  * @returns the phase, status, tag, buttons, detail, guide download row, and failure.
  */
-export function presentAccount(view: WecomState): CliAccountDisplay {
+export function presentAccount(view: WecomState): ConnectorAccountDisplay {
   const notes = skillsNotes(view.account.skills)
   const { operation } = view
   if (operation?.kind === 'check') return { phase: 'checking', status: text('status.checking'), buttons: [], notes }
@@ -67,7 +68,7 @@ export function presentAccount(view: WecomState): CliAccountDisplay {
     }
   }
   const failed = view.result?.outcome === 'failed' ? view.result : undefined
-  const failure: { failure?: CliAccountFailure } = failed === undefined ? {} : {
+  const failure: { failure?: ConnectorAccountFailure } = failed === undefined ? {} : {
     failure: { text: text('failed'), ...failed.failure === undefined ? {} : { details: failureDetails(failed.failure) } },
   }
   switch (view.account.state) {

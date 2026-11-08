@@ -3,8 +3,8 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import { CliCommandExecutor, executableFileName, type CliOperationId } from '@deepseek-ai/dsh-cli-account'
-import type { CliAccountRegistration, CliAccountSource } from '@deepseek-ai/dsh-cli-account/types'
+import { CliCommandExecutor, executableFileName } from '@deepseek-ai/dsh-cli-account'
+import type { ConnectorAccountRegistration, ConnectorOperationId } from '@deepseek-ai/dsh-client-ui-connector-account/types'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import type { UpstreamSkillsState } from '@deepseek-ai/dsh-upstream-skills'
@@ -68,7 +68,7 @@ describe('WecomAccount', () => {
 
   afterEach(() => account.dispose())
 
-  const settled = async (id: CliOperationId): Promise<WecomState> => {
+  const settled = async (id: ConnectorOperationId): Promise<WecomState> => {
     await vi.waitFor(() => { expect(account.snapshot().result?.id).toBe(id) })
     return account.snapshot()
   }
@@ -153,7 +153,7 @@ describe('WecomAccount', () => {
     script[INIT] = (process) => { process.write('stdout', `${QR_LINK}\n`) }
     const id = account.start('connect')
     await vi.waitFor(() => { expect(account.snapshot().operation?.authorizationUrl).toBe(QR_LINK) })
-    await account.cancel('other' as CliOperationId)
+    await account.cancel('other' as ConnectorOperationId)
     expect(account.snapshot().operation?.phase).toBe('authorizing')
 
     const cancelling = account.cancel(id)
@@ -178,11 +178,12 @@ describe('WecomAccount', () => {
 })
 
 describe('WeCom on the Plugins page', () => {
-  let account!: CliAccountSource<WecomState>
+  let account!: WecomAccount
 
   beforeEach(async () => {
-    ctx.provide('cliAccounts', {
-      register: (registration: CliAccountRegistration<WecomState>) => {
+    ctx.provide('connectorAccounts', {
+      register: (registration: ConnectorAccountRegistration<WecomState>) => {
+        if (!(registration.source instanceof WecomAccount)) throw new Error('the plugin registers its account runtime')
         account = registration.source
         return () => {}
       },
@@ -190,7 +191,7 @@ describe('WeCom on the Plugins page', () => {
     await ctx.plugin(Wecom, { commandTimeoutMs: 5_000, binDir, skillsDir, skillsUrls: ['https://codeload.github.com'], skillsTimeoutMs: 120_000 })
   })
 
-  const finished = async (id: CliOperationId): Promise<WecomState['result']> => {
+  const finished = async (id: ConnectorOperationId): Promise<WecomState['result']> => {
     await vi.waitFor(() => { expect(account.snapshot().result?.id).toBe(id) })
     return account.snapshot().result
   }

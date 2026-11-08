@@ -4936,7 +4936,7 @@ export interface Config {
 
 - `inject`: `skills` · `subprocess` · `systemPrompt`
 - `refs`: [`CliAccountConfig`](../packages/connector/cli-account/src/index.ts) · [`UpstreamSkillsConfig`](../packages/connector/upstream-skills/src/index.ts)
-- `source`: [`packages/connector/wecom-cli/src/index.ts:31`](../packages/connector/wecom-cli/src/index.ts)
+- `source`: [`packages/connector/wecom-cli/src/index.ts:32`](../packages/connector/wecom-cli/src/index.ts)
 
 ```ts config-catalog
 /** Where wecom-cli and the upstream guides come from, a command's deadline, and a download's time limit. */

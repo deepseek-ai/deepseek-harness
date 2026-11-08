@@ -40,7 +40,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-wecom
 
 | Row | Package | Behavior |
 |---|---|---|
-| `wecom` | [`@deepseek-ai/dsh-wecom-cli`](../wecom-cli/README.md) | Gives the model the absolute path of `wecom-cli`, registers its skills, runs authorization checks and QR-code connection on the Host, and shows the authorization section, an authorization tag, guidance after the bundle is switched on, and notices on the Plugins page through the [CLI account registry](../../client/ui-cli-account/README.md) |
+| `wecom` | [`@deepseek-ai/dsh-wecom-cli`](../wecom-cli/README.md) | Gives the model the absolute path of `wecom-cli`, registers its skills, runs authorization checks and QR-code connection on the Host, and shows the authorization section, an authorization tag, guidance after the bundle is switched on, and notices on the Plugins page through the [connector account registry](../../client/ui-connector-account/README.md) |
 
 Switching the bundle off withdraws the skills, the path in runtime context, and the page. The CLI authorization stays in place.
 
@@ -63,7 +63,7 @@ Switching the bundle off withdraws the skills, the path in runtime context, and 
 
 - [Connector packages](../README.md) — the group this application plugin belongs to.
 - [WeCom CLI and skills](../wecom-cli/README.md) — the Host row, its authorization operations, and its model guidance.
-- [CLI account surfaces](../../client/ui-cli-account/README.md) — the registry that shows the authorization on the Plugins page.
+- [Connector account surfaces](../../client/ui-connector-account/README.md) — the registry that shows the authorization on the Plugins page.
 - [Plugin Manager](../../boot/plugin-manager/README.md) — installation and enablement.
 
 -----

@@ -6,7 +6,7 @@ import SkillRegistry from '@deepseek-ai/dsh-skill'
 import SystemPrompt, { renderContextSections } from '@deepseek-ai/dsh-system-prompt'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { executableFileName } from '@deepseek-ai/dsh-cli-account'
-import type { CliAccountRegistration } from '@deepseek-ai/dsh-cli-account/types'
+import type { ConnectorAccountRegistration } from '@deepseek-ai/dsh-client-ui-connector-account/types'
 import { cliPathContextText } from '@deepseek-ai/dsh-cli-account/src/context.ts'
 import * as Wecom from '../src/index.ts'
 import { COPY, OPERATIONS, presentAccount, WECOM_PACKAGE } from '../src/presentation.ts'
@@ -41,12 +41,12 @@ describe('WeCom plugin', () => {
 
   const runtimeContext = async () => renderContextSections(await ctx.systemPrompt.assemble())
 
-  /** Stand in for the CLI account registry the Web app provides, and keep what the plugin registers with it. */
+  /** Stand in for the connector account registry the Web app provides, and keep what the plugin registers with it. */
   function provideRegistry() {
-    const registered: CliAccountRegistration<WecomState>[] = []
+    const registered: ConnectorAccountRegistration<WecomState>[] = []
     const withdrawn = vi.fn()
-    ctx.provide('cliAccounts', {
-      register: (registration: CliAccountRegistration<WecomState>) => {
+    ctx.provide('connectorAccounts', {
+      register: (registration: ConnectorAccountRegistration<WecomState>) => {
         registered.push(registration)
         return withdrawn
       },
