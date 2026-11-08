@@ -1,7 +1,7 @@
 /**
  * jsdom slot test runtime: a real small runtime — Cordis `Context`, the
  * renderer-owned `SlotRegistry`, the `ui-session` adapter, the
- * `session-status` table, and the UI renderer — assembled around
+ * `ui-session-status` table, and the UI renderer — assembled around
  * test-owned session/workspace doubles and a fail-loud file-upload stub, so feature specs exercise
  * declaration, registration, scope, store, inject, rendering, updates, and
  * disposal without hand-building the machinery per suite.
@@ -31,7 +31,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-session/client'
 import {
   apply as applySessionStatus, inject as sessionStatusInject,
-} from '@deepseek-ai/dsh-api-session-status/client'
+} from '@deepseek-ai/dsh-client-ui-session-status/client'
 import type { SessionReference } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'

@@ -790,7 +790,7 @@ describe('fixture session face', () => {
     await runtime.dispose()
   })
 
-  it('publishes running status through the real session-status root hook', async () => {
+  it('publishes running status through the real ui-session-status root hook', async () => {
     const reference = createSnapshotStore<SessionReference | undefined>(undefined)
     const runtime = await runtimeWithFrame(reference)
     runtime.slots.register({ name: 'trt.chat' }, (props: SessionStandardProps & GlobalStandardProps) => (

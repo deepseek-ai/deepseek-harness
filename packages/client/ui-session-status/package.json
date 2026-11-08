@@ -1,5 +1,5 @@
 {
-  "name": "@deepseek-ai/dsh-api-session-status",
+  "name": "@deepseek-ai/dsh-client-ui-session-status",
   "description": "Client Session status table: running state, the effective pending interaction, and completion reminders",
   "version": "0.2.2-rc.1",
   "publishConfig": {
@@ -8,7 +8,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
-    "directory": "packages/api/session-status"
+    "directory": "packages/client/ui-session-status"
   },
   "type": "module",
   "main": "lib/index.js",

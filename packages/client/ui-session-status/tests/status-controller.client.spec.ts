@@ -7,7 +7,7 @@ import type { SessionFollowFrame } from '@deepseek-ai/dsh-api-session-controller
 import type { SessionPendingInteractionBase } from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '../src/client/index.ts'
 
-const it = createClientTest({ roster: webApp.closure(['@deepseek-ai/dsh-api-session-status']) })
+const it = createClientTest({ roster: webApp.closure(['@deepseek-ai/dsh-client-ui-session-status']) })
 const parentId = 'status-parent' as SessionId
 const childId = 'status-child' as SessionId
 

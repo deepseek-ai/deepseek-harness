@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.1/session-status-package/guide.md
 /:
-  en: 3a46514fb8b48f60
-  zh: 4b78cd97d86b286f
-/session-status-moves-to-deepseek-ai-dsh-api-session-status:
-  en: 1418d25b0baaf621
-  zh: df25933b935ecbd7
-/session-status-moves-to-deepseek-ai-dsh-api-session-status/change:
-  en: 12cf933ed98d7f68
-  zh: 949056997b819906
-/session-status-moves-to-deepseek-ai-dsh-api-session-status/migration:
-  en: 8d962ec919ff8bb5
-  zh: 8be187dc3ca178b0
+  en: 34a382f0eacc70b6
+  zh: 251d8ba446d1b358
+/session-status-moves-to-deepseek-ai-dsh-client-ui-session-status:
+  en: d1a4f763d5bfaf0c
+  zh: 27bc599ebc1508e8
+/session-status-moves-to-deepseek-ai-dsh-client-ui-session-status/change:
+  en: b89b0ded9216f2e1
+  zh: ed97e162ecb1a49a
+/session-status-moves-to-deepseek-ai-dsh-client-ui-session-status/migration:
+  en: 4c2e491015fd4380
+  zh: 54db10e9b497bc7f

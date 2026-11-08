@@ -10,7 +10,7 @@ kind: "package-reference"
 
 使用本包可通过标准 Slot 钩子公开 Session catalog 与 retain 信息。它按 `SessionBinding` 物化钩子和 prop，而 `SessionProvider` 可以继承外围 binding 或绑定显式 `SessionReference`。它拥有进程本地的 pending-interaction 策略，但不拥有 Controller transport、历史或 reference。
 
-领域插件通过 `ctx.uiSession.registerPendingInteraction(precedence)` 发布等待用户处理的请求，`ctx.uiSession.pendingInteractions` 以只读方式提供每个 Session 优先级最高的请求。会话状态表与 `useSessionStatus` 归 [`dsh-api-session-status`](../../api/session-status/README.zh.md) 所有。
+领域插件通过 `ctx.uiSession.registerPendingInteraction(precedence)` 发布等待用户处理的请求，`ctx.uiSession.pendingInteractions` 以只读方式提供每个 Session 优先级最高的请求。会话状态表与 `useSessionStatus` 归 [`dsh-client-ui-session-status`](../ui-session-status/README.zh.md) 所有。
 
 ## 目录
 
@@ -30,7 +30,7 @@ kind: "package-reference"
 <a id="sub-services"></a>
 ## 子服务
 
-`ctx.uiSession` 的类型是 `UiSessionService`。以 Cordis 服务 `uiSession.x` 提供子服务 `x`、并以 `ctx.uiSession.x` 读取的包，把成员 `x` 声明合并进该接口；[`dsh-api-session-status`](../../api/session-status/README.zh.md) 就以这种方式提供 `ctx.uiSession.sessionStatus`。
+`ctx.uiSession` 的类型是 `UiSessionService`。以 Cordis 服务 `uiSession.x` 提供子服务 `x`、并以 `ctx.uiSession.x` 读取的包，把成员 `x` 声明合并进该接口；[`dsh-client-ui-session-status`](../ui-session-status/README.zh.md) 就以这种方式提供 `ctx.uiSession.sessionStatus`。
 
 <a id="model-experience"></a>
 ## 模型体验

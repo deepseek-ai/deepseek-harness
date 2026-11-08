@@ -31,7 +31,6 @@ The packages below provide the Remote layer; the package READMEs own the exhaust
 | [`remote-access/`](remote-access/README.md) | Decides which Remote methods non-owner Peers may call, filters list results, and streams each Peer's access snapshot. | `ctx.remoteAccess` / `ctx.remote.remoteAccess` |
 | [`job-controller/`](job-controller/README.md) | Streams one background job's observation record to the Client. | `ctx.jobController` / `ctx.remote.job` |
 | [`session-controller/`](session-controller/README.md) | Owns Session commands, history streams, live control state, and Agent/Session identity policy. | `ctx.sessionController` / `ctx.remote.session` |
-| [`session-status/`](session-status/README.md) | Combines running state, the effective pending interaction, and completion reminders into the Client Session status table behind `useSessionStatus`. | `ctx.uiSession.sessionStatus` |
 | [`settings-controller/`](settings-controller/README.md) | Owns the configuration-surface reads and writes over the settings-domain seams. | `ctx.settingsController`, `ctx.credentialsController` / `ctx.remote.settings`, `ctx.remote.credentials` |
 | [`workspace-controller/`](workspace-controller/README.md) | Owns Workspace mutations and the complete Client Workspace projection. | `ctx.workspaceController` / `ctx.remote.workspace` |
 | [`terminal-controller/`](terminal-controller/README.md) | Session-owned interactive shells, screen recovery and browser terminal control. | `ctx.terminalController` / `ctx.remote.terminal` |

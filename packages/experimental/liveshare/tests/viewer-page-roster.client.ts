@@ -15,7 +15,6 @@ import * as apiGateway from '@deepseek-ai/dsh-api-gateway/client'
 import * as apiRemoteAccess from '@deepseek-ai/dsh-api-remote-access/client'
 import * as apiRemotes from '@deepseek-ai/dsh-api-remotes/client'
 import * as apiSessionController from '@deepseek-ai/dsh-api-session-controller/client'
-import * as apiSessionStatus from '@deepseek-ai/dsh-api-session-status/client'
 import * as apiWorkspaceController from '@deepseek-ai/dsh-api-workspace-controller/client'
 import * as clientConnection from '@deepseek-ai/dsh-client-connection/client'
 import * as clientFileUpload from '@deepseek-ai/dsh-client-file-upload/client'
@@ -32,6 +31,7 @@ import * as uiFileDrag from '@deepseek-ai/dsh-client-ui-file-drag/client'
 import * as uiLayout from '@deepseek-ai/dsh-client-ui-layout/client'
 import * as uiRenderer from '@deepseek-ai/dsh-client-ui-renderer/client'
 import * as uiSession from '@deepseek-ai/dsh-client-ui-session/client'
+import * as uiSessionStatus from '@deepseek-ai/dsh-client-ui-session-status/client'
 import * as uiSettings from '@deepseek-ai/dsh-client-ui-settings/client'
 import * as uiSidebar from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import * as uiSidebarRight from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
@@ -61,7 +61,6 @@ export const VIEWER_PAGE_ROSTER: readonly ViewerPageRosterRow[] = [
   { id: '@deepseek-ai/dsh-api-remote-access', exports: apiRemoteAccess },
   { id: '@deepseek-ai/dsh-api-remotes', exports: apiRemotes },
   { id: '@deepseek-ai/dsh-api-session-controller', exports: apiSessionController },
-  { id: '@deepseek-ai/dsh-api-session-status', exports: apiSessionStatus },
   { id: '@deepseek-ai/dsh-api-workspace-controller', exports: apiWorkspaceController },
   { id: '@deepseek-ai/dsh-client-file-upload', exports: clientFileUpload },
   { id: '@deepseek-ai/dsh-client-locale', exports: clientLocale },
@@ -72,6 +71,7 @@ export const VIEWER_PAGE_ROSTER: readonly ViewerPageRosterRow[] = [
   { id: '@deepseek-ai/dsh-client-ui-settings', exports: uiSettings },
   { id: '@deepseek-ai/dsh-client-ui-layout', exports: uiLayout },
   { id: '@deepseek-ai/dsh-client-ui-session', exports: uiSession },
+  { id: '@deepseek-ai/dsh-client-ui-session-status', exports: uiSessionStatus },
   { id: '@deepseek-ai/dsh-client-ui-sidebar', exports: uiSidebar },
   { id: '@deepseek-ai/dsh-client-ui-conversation', exports: uiConversation },
   { id: '@deepseek-ai/dsh-client-ui-chat', exports: uiChat },

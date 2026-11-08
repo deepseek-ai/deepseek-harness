@@ -9,7 +9,7 @@ import type {
 import type { SubagentAddress, SubagentCatalogEntry } from '@deepseek-ai/dsh-subagent/client'
 import type { TeamProjection, TeamTaskId, TeamTaskView } from '@deepseek-ai/dsh-agent-team/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-api-session-status/client'
+import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session-status/client'
 import {
   SubagentCatalogAction, SubagentHeaderLineage,
   type SubagentCatalogActionProps, type SubagentHeaderLineageProps,

@@ -12,7 +12,7 @@
       "path": "../../api/session-controller/tsconfig.client.json"
     },
     {
-      "path": "../../api/session-status"
+      "path": "../ui-session-status"
     },
     {
       "path": "../../preset/agent-preset-registry"

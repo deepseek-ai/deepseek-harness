@@ -20,7 +20,7 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import {
   allowAllAccess, bindSnapshotSelector, conversationSnapshot, makeTranslate,
 } from '@deepseek-ai/dsh-client-test-runtime'
-import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-api-session-status/client'
+import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session-status/client'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type { InputState } from '../src/client/contract/input.ts'
 import { zh } from '../src/client/locales.ts'

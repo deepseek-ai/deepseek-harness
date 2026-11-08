@@ -18,17 +18,17 @@
   en: 821989170ad76994
   zh: 0ed142bea166fc3a
 /agent-note-client-session-conversation-and-ui-ownership-layers/layering-principles/ui-adapters-own-react-integration:
-  en: 4a789544b8a79c6e
-  zh: b6dfcf0e893963d0
+  en: 4caab5487c8545f8
+  zh: 77fa93f76b6fb65f
 /agent-note-client-session-conversation-and-ui-ownership-layers/layering-principles/slot-scopes-and-standard-props-are-separate:
   en: b6f585ca87e1fc6f
   zh: 53fd58c3e93cf17c
 /agent-note-client-session-conversation-and-ui-ownership-layers/package-ownership:
-  en: 9a379c4cb3942966
-  zh: 9a1fa081443643a1
+  en: 89f75f7cc2fe0e6c
+  zh: e50974fad3baf69c
 /agent-note-client-session-conversation-and-ui-ownership-layers/overall-data-flow:
-  en: cfc080a506e2a4cf
-  zh: 5deb5638fb165512
+  en: 002d9f406580684b
+  zh: a86742c6c943ac85
 /agent-note-client-session-conversation-and-ui-ownership-layers/session-controller-client:
   en: b88f651b1bfb8b5e
   zh: b88f651b1bfb8b5e
@@ -48,8 +48,8 @@
   en: 860315b96703371d
   zh: 860315b96703371d
 /agent-note-client-session-conversation-and-ui-ownership-layers/ui-session/service-responsibilities:
-  en: f9c9ee379b61362b
-  zh: 6d2bd619b3a963ba
+  en: 40e598676f2d7f46
+  zh: acc8e028978a5419
 /agent-note-client-session-conversation-and-ui-ownership-layers/ui-session/standard-source-registration:
   en: e4be6d4b1d79b342
   zh: 7cb0e8c0f6358b50

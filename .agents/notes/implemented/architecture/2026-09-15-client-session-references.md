@@ -22,7 +22,7 @@ Client Session objects, Agent-scoped Client Contexts, references, consumer-sourc
 | --- | --- |
 | Client Session Controller | Catalog, live generations, references, source counts, bindings, history windows, and existing Session control state |
 | `ui-session` | Explicit Session Provider integration and the effective pending-interaction source |
-| `api-session-status` | The unified UI status source |
+| `ui-session-status` | The unified UI status source |
 | View or operation | Its own reference, target, source identifier, and release point |
 | Workspace UI | Main-area target and reference, navigation, persisted target, and creation flow |
 | UI composition boundary | Supplies an owner-provided reference to one explicit `SessionProvider` |
@@ -90,7 +90,7 @@ Window-level consumers may inspect source markers. Session business operations s
 
 ### Unified UI Session status
 
-`api-session-status` owns the React-free `uiSession.sessionStatus` service, read as `ctx.uiSession.sessionStatus`, and exposes it through the standard `useSessionStatus` hook. The snapshot is indexed by Session identity and supplies one UI status record per known Session. It combines these independent facts rather than reducing them to one mutually exclusive phase:
+`ui-session-status` owns the React-free `uiSession.sessionStatus` service, read as `ctx.uiSession.sessionStatus`, and exposes it through the standard `useSessionStatus` hook. The snapshot is indexed by Session identity and supplies one UI status record per known Session. It combines these independent facts rather than reducing them to one mutually exclusive phase:
 
 | Field | Value | Meaning and owner |
 | --- | --- | --- |

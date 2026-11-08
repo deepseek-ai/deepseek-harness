@@ -22,7 +22,7 @@ Client Session 对象、Agent 作用域的 Client Context、引用、使用方�
 | --- | --- |
 | Client Session Controller | 目录、活跃代、引用、来源计数、binding、历史窗口与既有 Session 控制状态 |
 | `ui-session` | 显式 Session Provider 集成与有效待处理交互来源 |
-| `api-session-status` | 统一 UI 状态来源 |
+| `ui-session-status` | 统一 UI 状态来源 |
 | 视图或操作 | 自己的引用、目标、来源标识与释放时机 |
 | Workspace UI | 主区域目标与引用、导航、持久目标及创建流程 |
 | UI 组合边界 | 将所有者提供的引用交给一个明确的 `SessionProvider` |
@@ -90,7 +90,7 @@ Controller 将来源计数与每个活跃代的引用共同管理。每个来源
 
 ### 统一的 UI Session 状态
 
-`api-session-status` 拥有不依赖 React 的 `uiSession.sessionStatus` 服务，以 `ctx.uiSession.sessionStatus` 读取，并通过标准 `useSessionStatus` 钩子公开。快照按 Session 身份索引，为每个已知 Session 提供一条 UI 状态记录。它组合下列独立事实，不将它们压缩成互斥的单一阶段：
+`ui-session-status` 拥有不依赖 React 的 `uiSession.sessionStatus` 服务，以 `ctx.uiSession.sessionStatus` 读取，并通过标准 `useSessionStatus` 钩子公开。快照按 Session 身份索引，为每个已知 Session 提供一条 UI 状态记录。它组合下列独立事实，不将它们压缩成互斥的单一阶段：
 
 | 字段 | 取值 | 含义与所有者 |
 | --- | --- | --- |

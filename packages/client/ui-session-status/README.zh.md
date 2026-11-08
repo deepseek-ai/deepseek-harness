@@ -2,7 +2,7 @@
 description: "Client 会话状态表与 useSessionStatus hook：按会话提供运行状态、生效的待交互请求和完成提醒。"
 kind: "package-reference"
 ---
-# @deepseek-ai/dsh-api-session-status
+# @deepseek-ai/dsh-client-ui-session-status
 
 [English](README.md) | 中文
 
@@ -22,7 +22,7 @@ kind: "package-reference"
 <a id="status-table"></a>
 ## 状态表
 
-Web bundle 在 [`dsh-client-ui-session`](../../client/ui-session/README.zh.md) 之后加载本包的 Client 部分；只加载 ui-session、不加载本包的组合没有状态表，也没有 `useSessionStatus` hook。读取 `ctx.uiSession.sessionStatus` 的插件需要在 `inject` 列表中加入 `'uiSession.sessionStatus'`；否则 Cordis 会拒绝该属性读取。该成员声明在 ui-session 的 `UiSessionService`（`ctx.uiSession` 的类型）上；标注为 `UiSession` class 的值看不到它。
+Web bundle 在 [`dsh-client-ui-session`](../ui-session/README.zh.md) 之后加载本插件，并把它列为启动必需入口；只加载 ui-session、不加载本包的组合没有状态表，也没有 `useSessionStatus` hook。读取 `ctx.uiSession.sessionStatus` 的插件需要在 `inject` 列表中加入 `'uiSession.sessionStatus'`；否则 Cordis 会拒绝该属性读取。该成员声明在 ui-session 的 `UiSessionService`（`ctx.uiSession` 的类型）上；标注为 `UiSession` class 的值看不到它。
 
 | 成员 | 用途 |
 |---|---|
