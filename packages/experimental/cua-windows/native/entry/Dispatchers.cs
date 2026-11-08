@@ -94,42 +94,26 @@ internal sealed class StaDispatcher : IAsyncDisposable
 {
     private readonly TaskCompletionSource<ServiceControl> ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource<object?> stopped = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private readonly ConcurrentDictionary<nint, long> epochs = new();
     private readonly Thread thread;
-    private Win32.WinEvent? windowEvents;
 
     internal StaDispatcher()
     {
         thread = new Thread(() =>
         {
-            nint hook = 0;
             try
             {
                 Win32.SetThreadDpiAwarenessContext(-4);
                 using var control = new ServiceControl();
                 _ = control.Handle;
-                windowEvents = (_, eventType, window, objectId, childId, _, _) =>
-                {
-                    if (eventType == 0x8001 && objectId == 0 && childId == 0 && epochs.TryGetValue(window, out var epoch))
-                        epochs.TryUpdate(window, epoch + 1, epoch);
-                };
-                hook = Win32.SetWinEventHook(0x8001, 0x8001, 0, windowEvents, 0, 0, 0);
-                if (hook == 0) throw new NativeFailure("NATIVE_STARTUP", "Window lifecycle observation could not start");
                 ready.SetResult(control);
                 Forms.Application.Run();
             }
             catch (Exception error) { ready.TrySetException(error); }
-            finally
-            {
-                if (hook != 0) Win32.UnhookWinEvent(hook);
-                stopped.TrySetResult(null);
-            }
+            finally { stopped.TrySetResult(null); }
         }) { IsBackground = true, Name = "dsh-cua-clipboard" };
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
     }
-
-    internal long WindowEpoch(nint window) => epochs.GetOrAdd(window, 0);
 
     internal async Task<T> Invoke<T>(Func<ServiceControl, T> work, CancellationToken cancellation)
     {

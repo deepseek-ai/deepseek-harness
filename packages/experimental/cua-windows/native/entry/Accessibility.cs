@@ -8,7 +8,7 @@ using DeepSeek.Cua.Protocol;
 namespace DeepSeek.Cua.Windows;
 
 internal sealed record ElementReference(AutomationElement Element, WindowState Window);
-internal sealed record Snapshot(string Id, uint Scope, WindowState[] Windows, IReadOnlyDictionary<int, ElementReference> Elements);
+internal sealed record Snapshot(string Id, nint Scope, WindowState[] Windows, IReadOnlyDictionary<int, ElementReference> Elements);
 
 internal static class Accessibility
 {
@@ -25,7 +25,7 @@ internal static class Accessibility
         TogglePattern.ToggleStateProperty, ExpandCollapsePattern.ExpandCollapseStateProperty,
     ];
 
-    internal static object State(AppState app, uint selected, int maximumElements, int maximumDepth,
+    internal static object State(AppState app, nint selected, int maximumElements, int maximumDepth,
         bool includeMenus, bool details, RequestContext context)
     {
         var all = Windows.Refresh(app, context);
@@ -68,8 +68,8 @@ internal static class Accessibility
         var snapshot = new Snapshot(Guid.NewGuid().ToString("N"), scope, targets, elements);
         var result = new
         {
-            appHandle = app.Handle, pid = 4, windowId = selected,
-            focusedWindowId = (uint?)Windows.Focused(app, all)?.Id,
+            appHandle = app.Handle, pid = 4, windowId = selected.ToString(CultureInfo.InvariantCulture),
+            focusedWindowId = Windows.Focused(app, all)?.Id.ToString(CultureInfo.InvariantCulture),
             snapshotId = snapshot.Id, tree = string.Join('\n', rows), windows = all.Select(window => window.Describe(app, context)).ToArray(), truncated,
         };
         context.Check();
@@ -234,7 +234,7 @@ internal static class Accessibility
         return element;
     }
 
-    internal static void RequireSnapshot(AppState app, string snapshotId, uint windowId)
+    internal static void RequireSnapshot(AppState app, string snapshotId, nint windowId)
     {
         var selected = app.SelectedWindow;
         var snapshot = app.Snapshots.Values.SingleOrDefault(value => value.Id == snapshotId);

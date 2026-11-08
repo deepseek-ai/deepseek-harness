@@ -21,14 +21,8 @@ internal sealed class AppState(string handle, ApplicationIdentity authorization,
     internal string Digest { get; } = digest;
     internal RunningApplication? Process { get; set; } = process;
     internal Dictionary<nint, WindowState> Windows { get; } = [];
-    internal Dictionary<uint, Snapshot> Snapshots { get; } = [];
-    private uint nextWindowId;
+    internal Dictionary<nint, Snapshot> Snapshots { get; } = [];
     private System.Diagnostics.Process? owner;
-    internal uint AllocateWindowId()
-    {
-        if (nextWindowId == uint.MaxValue) throw new NativeFailure("NATIVE_LIMIT", "Select the application again to allocate new window identifiers");
-        return ++nextWindowId;
-    }
     internal RunningApplication RequireProcess()
     {
         var selected = Process ?? throw new NativeFailure("APP_ACCESS_REQUIRED", "Application launch requires Host authorization");

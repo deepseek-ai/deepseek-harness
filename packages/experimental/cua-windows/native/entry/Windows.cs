@@ -1,4 +1,5 @@
-// Public window IDs never expose or revive a reused HWND.
+// Window state retains HWND values; JSON exposes them as invariant decimal strings.
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 using DeepSeek.Cua.Protocol;
@@ -11,20 +12,18 @@ internal readonly record struct WindowGeometry(Win32.Rect Pixels, uint Dpi)
     internal Bounds Bounds => new(Pixels.Left, Pixels.Top, Pixels.Width, Pixels.Height);
 }
 
-internal sealed class WindowState(uint id, nint handle, long epoch)
+internal sealed class WindowState(nint handle)
 {
-    internal uint Id { get; } = id;
+    internal nint Id => Handle;
     internal nint Handle { get; } = handle;
-    internal long Epoch { get; } = epoch;
     private WindowGeometry? observation;
 
     internal WindowGeometry Geometry(AppState app, RequestContext context)
     {
         context.Check();
-        var process = app.RequireProcess();
-        Win32.GetWindowThreadProcessId(Handle, out var pid);
-        if (!Win32.IsWindow(Handle) || pid != process.Pid || context.Sta.WindowEpoch(Handle) != Epoch)
-            throw new NativeFailure("WINDOW_CHANGED", "The selected window was destroyed or replaced; read fresh application state");
+        app.RequireProcess();
+        if (!Win32.IsWindow(Handle))
+            throw new NativeFailure("WINDOW_CHANGED", "The selected window is no longer available; read fresh application state");
         if (Win32.DwmGetWindowAttribute(Handle, 9, out Win32.Rect rectangle, Marshal.SizeOf<Win32.Rect>()) != 0
             && !Win32.GetWindowRect(Handle, out rectangle)) throw new NativeFailure("WINDOW_CHANGED", "The selected window geometry is unavailable");
         var dpi = Win32.GetDpiForWindow(Handle);
@@ -64,7 +63,7 @@ internal sealed class WindowState(uint id, nint handle, long epoch)
         Win32.GetWindowText(Handle, title, title.Capacity);
         return new
         {
-            windowId = Id, pid = 4, appName = app.RequireProcess().Name,
+            windowId = Id.ToString(CultureInfo.InvariantCulture), pid = 4, appName = app.RequireProcess().Name,
             title = title.ToString(), bounds = geometry.Bounds, isOnScreen = IsOnScreen(), onCurrentSpace = (bool?)null,
         };
     }
@@ -92,7 +91,7 @@ internal static class Windows
         }, 0);
         foreach (var pair in app.Windows.ToArray())
         {
-            if (handles.Contains(pair.Key) && pair.Value.Epoch == context.Sta.WindowEpoch(pair.Key)) continue;
+            if (handles.Contains(pair.Key)) continue;
             app.Windows.Remove(pair.Key);
             foreach (var scope in app.Snapshots.Where(item => item.Value.Windows.Any(window => window.Id == pair.Value.Id)).Select(item => item.Key).ToArray())
                 app.Snapshots.Remove(scope);
@@ -101,13 +100,13 @@ internal static class Windows
         {
             if (!app.Windows.ContainsKey(handle))
             {
-                app.Windows.Add(handle, new(app.AllocateWindowId(), handle, context.Sta.WindowEpoch(handle)));
+                app.Windows.Add(handle, new(handle));
             }
         }
         return handles.Select(handle => app.Windows[handle]).ToArray();
     }
 
-    internal static WindowState Resolve(AppState app, uint id, RequestContext context) => Refresh(app, context)
+    internal static WindowState Resolve(AppState app, nint id, RequestContext context) => Refresh(app, context)
         .SingleOrDefault(window => window.Id == id) ?? throw new NativeFailure("WINDOW_CHANGED", "Select a current window from getWindows");
 
     internal static WindowState? Focused(AppState app, WindowState[] windows)
@@ -139,7 +138,7 @@ internal static class Windows
         throw new NativeFailure("AMBIGUOUS_WINDOW", "Select a window explicitly from getWindows");
     }
 
-    internal static object Show(AppState app, uint? id, RequestContext context)
+    internal static object Show(AppState app, nint? id, RequestContext context)
     {
         var target = id is { } selected ? Resolve(app, selected, context) : Default(app, Refresh(app, context));
         var before = Win32.GetForegroundWindow();
@@ -149,7 +148,7 @@ internal static class Windows
             if (!Win32.ShowWindowAsync(target.Handle, 4)) throw new NativeFailure("UNSUPPORTED", "Windows refused background restoration; explicitly activate the application if needed");
         }
         var after = Win32.GetForegroundWindow();
-        return new { dispatched = true, windowId = (uint?)target?.Id,
+        return new { dispatched = true, windowId = target?.Id.ToString(CultureInfo.InvariantCulture),
             foregroundChanged = before == 0 || after == 0 ? (bool?)null : before != after };
     }
 

@@ -16,7 +16,7 @@ void Refuses(Action action, string code)
 
 var request = NativeRequest.Parse(WireJson.Parse("""{"id":"one","method":"getState","params":{"appHandle":"app","maxElements":20,"maxDepth":5}}"""));
 Check(request.Method == "getState" && request.Id == "one", "Valid requests retain correlation and method");
-Refuses(() => NativeRequest.Parse(WireJson.Parse("""{"id":"one","method":"click","params":{"appHandle":"app","windowId":1,"x":-1,"y":2}}""")), "INVALID_ARGUMENT");
+Refuses(() => NativeRequest.Parse(WireJson.Parse("""{"id":"one","method":"click","params":{"appHandle":"app","windowId":"1","x":-1,"y":2}}""")), "INVALID_ARGUMENT");
 Refuses(() => NativeRequest.Parse(WireJson.Parse("""{"id":"one","method":"getState","params":{"appHandle":"app","maxElements":0,"maxDepth":5}}""")), "INVALID_ARGUMENT");
 Refuses(() => NativeRequest.Parse(WireJson.Parse("""{"id":"one","method":"typeText","params":{"appHandle":"app","text":"hello","unowned":1}}""")), "INVALID_ARGUMENT");
 Refuses(() => WireJson.Parse("""{"id":"one","id":"two"}"""), "INVALID_REQUEST");

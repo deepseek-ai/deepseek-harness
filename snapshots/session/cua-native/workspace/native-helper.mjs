@@ -38,7 +38,7 @@ function serve() {
   }
   const instanceId = randomUUID()
   const sockets = new Set()
-  const application = { count: 0, value: '', visualCount: 0, hovering: false, frontPid: 42, frontWindowId: 99 }
+  const application = { count: 0, value: '', visualCount: 0, hovering: false, frontPid: 42, frontWindowId: '99' }
   const captureBroker = { pendingCapture: false }
   let started = false
   let hadClient = false
@@ -111,9 +111,9 @@ function createApplicationState(socket, record, application, captureBroker, conn
   const scope = connectionId === 1 ? 'fixture' : `fixture-${connectionId}`
   const app = { appHandle: `${scope}-app`, pid: 9, name: 'Fixture', bundleId: 'test.fixture', running: true }
   const bounds = { x: 40, y: 60, width: 320, height: 200 }
-  const window = { windowId: 7, appName: 'Fixture', title: 'CUA fixture', bounds, isOnScreen: true, onCurrentSpace: true }
-  const axlessWindow = { ...window, windowId: 8, title: 'AXless canvas' }
-  const transformedWindow = { ...window, windowId: 9, title: 'Transformed window', bounds: { x: 16, y: 512, width: 131, height: 145 } }
+  const window = { windowId: '7', appName: 'Fixture', title: 'CUA fixture', bounds, isOnScreen: true, onCurrentSpace: true }
+  const axlessWindow = { ...window, windowId: '8', title: 'AXless canvas' }
+  const transformedWindow = { ...window, windowId: '9', title: 'Transformed window', bounds: { x: 16, y: 512, width: 131, height: 145 } }
   const screenshotConfig = new URL('./fixture-screenshot.json', import.meta.url)
   const customScreenshot = existsSync(screenshotConfig) ? JSON.parse(readFileSync(screenshotConfig, 'utf8')) : undefined
   const snapshots = new Map()
@@ -165,18 +165,18 @@ function createApplicationState(socket, record, application, captureBroker, conn
         refuse('STALE_SNAPSHOT', 'Accessibility tree changed during observation; read fresh getAccessibilityTree')
       }
       generation++
-      const axless = params.windowId === 8
+      const axless = params.windowId === '8'
       const snapshotId = `${scope}-snapshot-${generation}`
       snapshots.set(params.windowId ?? null, { snapshotId, windowId: params.windowId ?? null, axless })
-      if (axless) return { appHandle: app.appHandle, windowId: 8, snapshotId,
+      if (axless) return { appHandle: app.appHandle, windowId: '8', snapshotId,
         tree: '', elements: [], windows: [axlessWindow], truncated: false }
       return { appHandle: app.appHandle, windowId: params.windowId ?? null,
         snapshotId: `${scope}-snapshot-${generation}`, tree: `AX scope=${params.windowId === undefined ? 'application' : 'window'} offsets=UTF-16${params.details ? ' bounds=global-points' : ''}\n- [0] AXButton "Increment"${params.details ? ' id="increment" actions=["AXPress"] bounds=[60,80,100,20]' : ''}\n- [1] AXTextField valueWritable=true selectionWritable=true value=${JSON.stringify(application.value)} placeholder="Fixture text"\n- AXStaticText "Count: ${application.count}"${application.hovering ? '\n- AXStaticText "Hover information"' : ''}\n- [2] AXMenuBarItem "File"${params.includeMenus ? '\n  - [3] AXMenuItem "Fixture command"' : '\nMenu contents omitted; request includeMenus=true to expand.'}`,
         elements: [{ elementId: '0', role: 'AXButton', title: 'Increment', value: null, description: null,
           identifier: null, bounds: [60, 80, 100, 20], actions: ['AXPress'], enabled: true }],
-        windows: [params.windowId === 9 ? transformedWindow : window], truncated: false }
+        windows: [params.windowId === '9' ? transformedWindow : window], truncated: false }
     }
-    if (params.windowId === 9 && ['screenshot', 'mouseMove', 'click', 'scroll', 'drag'].includes(method) && params.elementId === undefined) {
+    if (params.windowId === '9' && ['screenshot', 'mouseMove', 'click', 'scroll', 'drag'].includes(method) && params.elementId === undefined) {
       refuse('WINDOW_CHANGED', 'Window display and accessibility bounds disagree. Read fresh state; if unchanged, use AX actions or explicitly restore the window before capture or coordinate input')
     }
     if (method === 'screenshot' && captureBroker.pendingCapture) {
@@ -200,7 +200,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
       if (params.windowId !== undefined && observed.windowId !== null && observed.windowId !== params.windowId) refuse('STALE_SNAPSHOT', 'Snapshot belongs to another window')
       if (observed.axless && params.elementId !== undefined) refuse('INVALID_ARGUMENT', 'Element id is absent from the selected snapshot')
       if (method === 'mouseMove') application.hovering = params.elementId === '0' || (params.x >= 20 && params.x <= 40)
-      else if (method === 'click' && params.windowId === 8) application.visualCount++
+      else if (method === 'click' && params.windowId === '8') application.visualCount++
       else if (method === 'click') application.count++
       else application.value = params.value
       record('state', { count: application.count, value: application.value, visualCount: application.visualCount })
@@ -211,7 +211,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
     if (method === 'pressKey' && params.key === 'F11') captureBroker.pendingCapture = true
     if (method === 'pressKey' && params.key === 'F10') captureBroker.pendingCapture = false
     if (method === 'pressKey' && params.key === 'F12') malformedScreenshot = true
-    if (method === 'pressKey' && params.key === 'F9') { application.frontPid = 42; application.frontWindowId = 99 }
+    if (method === 'pressKey' && params.key === 'F9') { application.frontPid = 42; application.frontWindowId = '99' }
     if (method === 'paste') {
       if (application.frontPid !== app.pid) refuse('PASTE_NOT_CONSUMED', 'Paste command was dispatched, but clipboard data was not requested within the read deadline. Bring the target app to the foreground and focus its text input. Inspect the contents before deciding whether to retry; a delayed paste may still run.')
       application.value += params.text

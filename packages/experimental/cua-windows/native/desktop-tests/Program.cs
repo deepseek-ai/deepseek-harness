@@ -1,4 +1,5 @@
 // Private desktop fixture: commands inspect or arrange only the windows owned by this process.
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Security.Cryptography;
@@ -26,7 +27,7 @@ internal sealed class FixtureForm : Form
 
     internal object Inspect() => new
     {
-        text = Editor.Text, clicks, window = Handle.ToInt64(), foreground = GetForegroundWindow().ToInt64(),
+        text = Editor.Text, clicks, window = Handle.ToString(CultureInfo.InvariantCulture), foreground = GetForegroundWindow().ToString(CultureInfo.InvariantCulture),
         cursor = new { x = Cursor.Position.X, y = Cursor.Position.Y },
         button = new { x = button.Left + button.Width / 2, y = button.Top + button.Height / 2 },
         selection = new { start = Editor.SelectionStart, length = Editor.SelectionLength },

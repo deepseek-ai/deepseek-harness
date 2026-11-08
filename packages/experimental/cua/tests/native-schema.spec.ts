@@ -32,6 +32,17 @@ it('retains optional resource fields and tuple-valued parameters without inventi
   expect(generated.enums.get('getState')?.get('choice')).toEqual(new Set(['one']))
 })
 
+it('generates opaque string admission for native window targets', () => {
+  expect(JSON.parse(nativeProtocol().json)).toMatchObject({ oneOf: expect.arrayContaining([
+    expect.objectContaining({ properties: expect.objectContaining({
+      method: { const: 'screenshot', type: 'string' },
+      params: expect.objectContaining({ properties: expect.objectContaining({
+        windowId: { type: 'string' },
+      }) }),
+    }) }),
+  ]) })
+})
+
 it('admits only locator fields for default invocation', () => {
   expect(nativeProtocol().fields.get('invoke')).toEqual(new Set(['appHandle', 'snapshotId', 'elementId', 'windowId']))
 })

@@ -152,7 +152,7 @@ def main():
             # The Host consent barrier is separately exercised by provider-lifecycle.spec.ts.
             app = call("launchApp", owner)
             assert app["running"] is True, app
-            pid = wait_for_state(state_file, lambda value: value["windowId"] > 0)["pid"]
+            pid = wait_for_state(state_file, lambda value: bool(value["windowId"]))["pid"]
             if not args.click_only:
                 call("activate", owner)
                 state = wait_for_state(state_file, lambda value: value["pid"] == pid and value["active"] and value["keyWindow"])

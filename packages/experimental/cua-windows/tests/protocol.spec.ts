@@ -10,7 +10,7 @@ it('keeps the C# admission schema identical to the shared generated schema', asy
 })
 
 it('preserves Windows physical capture units and observed foreground changes', () => {
-  const image = { mimeType: 'image/png', data: 'AAAA', pixelWidth: 1200, pixelHeight: 800, windowId: 1,
+  const image = { mimeType: 'image/png', data: 'AAAA', pixelWidth: 1200, pixelHeight: 800, windowId: '1',
     bounds: { x: -1200, y: 0, width: 1200, height: 800 }, coordinateSpace: 'window-pixels' }
   expect(NativeScreenshotResult.parse(image).coordinateSpace).toBe('window-pixels')
   expect(() => NativeScreenshotResult.parse({ ...image, coordinateSpace: 'screen-pixels' })).toThrow()

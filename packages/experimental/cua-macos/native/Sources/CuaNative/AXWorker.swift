@@ -41,8 +41,8 @@ struct ForegroundObservation: Sendable {
     }
     var json: JSONValue {
         .object(["frontPid": frontPID.map { .number(Double($0)) } ?? .null,
-                 "focusedWindowId": focusedWindowID.map { .number(Double($0)) } ?? .null,
-                 "frontWindowId": frontWindowID.map { .number(Double($0)) } ?? .null,
+                 "focusedWindowId": focusedWindowID.map { .string(String($0)) } ?? .null,
+                 "frontWindowId": frontWindowID.map { .string(String($0)) } ?? .null,
                  "frontWindowPid": frontWindowPID.map { .number(Double($0)) } ?? .null])
     }
 }
@@ -275,7 +275,7 @@ actor AXWorker {
             let changed = ForegroundObservation.change(beforePID: beforePID, beforeWindow: beforeWindow,
                                                        afterPID: afterPID, afterWindow: afterWindow)
             return .result(.object(["dispatched": .bool(true),
-                "windowId": restored.map { .number(Double($0)) } ?? .null, "foregroundChanged": changed]))
+                "windowId": restored.map { .string(String($0)) } ?? .null, "foregroundChanged": changed]))
         case "activate":
             return .foreground(ForegroundPlan(appHandle: handle, identity: identity))
         case "getState":
@@ -302,8 +302,8 @@ actor AXWorker {
                 observedWindowBounds[handle, default: [:]][observed.windowID] = observed.bounds
             }
             return .result(.object(["appHandle": .string(handle),
-                "windowId": window.map { .number(Double($0)) } ?? .null,
-                "focusedWindowId": projection.focusedWindowID.map { .number(Double($0)) } ?? .null,
+                "windowId": window.map { .string(String($0)) } ?? .null,
+                "focusedWindowId": projection.focusedWindowID.map { .string(String($0)) } ?? .null,
                 "snapshotId": .string(id), "tree": .string(projection.tree), "elements": .array(projection.elements),
                 "windows": .array(observedWindows.map(\.json)), "truncated": .bool(projection.truncated)]))
         case "screenshot":
@@ -468,7 +468,7 @@ actor AXWorker {
         trace?.mark("postflight.end")
         return .object(["mimeType": .string("image/png"), "data": .string(encoded),
             "pixelWidth": .number(Double(image.width)), "pixelHeight": .number(Double(image.height)), "bounds": after.bounds.json,
-            "coordinateSpace": .string("window-points"), "windowId": .number(Double(after.windowID))])
+            "coordinateSpace": .string("window-points"), "windowId": .string(String(after.windowID))])
     }
     static func mouseMoveResult(route: String, pointerMoved: Bool) -> JSONValue {
         .object(["dispatched": .bool(true), "hoverRoute": .string(route), "systemPointerMoved": .bool(pointerMoved)])

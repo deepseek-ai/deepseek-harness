@@ -1,4 +1,5 @@
 // The shared Host policy authorizes handles before these platform operations execute.
+using System.Globalization;
 using System.Text.Json;
 using DeepSeek.Cua.Protocol;
 
@@ -6,7 +7,6 @@ namespace DeepSeek.Cua.Windows;
 
 internal sealed class ClientState
 {
-    internal DesktopWindows Desktop { get; } = new();
     internal Dictionary<string, PreparedLaunch> Launches { get; } = new(StringComparer.Ordinal);
     internal Dictionary<string, AppState> Apps { get; } = new(StringComparer.Ordinal);
     internal AppState App(string handle) => Apps.GetValueOrDefault(handle)
@@ -28,7 +28,9 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
     private static string String(JsonElement value, string key) => value.GetProperty(key).GetString()!;
     private static string? OptionalString(JsonElement value, string key) => value.TryGetProperty(key, out var item) ? item.GetString() : null;
     private static bool Flag(JsonElement value, string key) => value.TryGetProperty(key, out var item) && item.GetBoolean();
-    private static uint? WindowId(JsonElement value) => value.TryGetProperty("windowId", out var id) ? id.GetUInt32() : null;
+    private static nint ParseWindowId(JsonElement value) => nint.TryParse(value.GetString(), CultureInfo.InvariantCulture, out var id)
+        ? id : throw new NativeFailure("INVALID_ARGUMENT", "windowId is outside the native handle range");
+    private static nint? WindowId(JsonElement value) => value.TryGetProperty("windowId", out var id) ? ParseWindowId(id) : null;
     private static string[] Modifiers(JsonElement value) => value.TryGetProperty("modifiers", out var items) ? items.EnumerateArray().Select(item => item.GetString()!).ToArray() : [];
 
     // Window-scoped operations act only on the window authorized at getApp; the request must name it.
@@ -36,8 +38,7 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
     {
         if (!parameters.TryGetProperty("windowId", out var raw))
             throw new NativeFailure("UNSUPPORTED", "This operation requires a window target; select a window with getApp and pass its windowId");
-        if (!raw.TryGetUInt32(out var id))
-            throw new NativeFailure("INVALID_ARGUMENT", "windowId must be a non-negative 32-bit identifier");
+        var id = ParseWindowId(raw);
         var selected = app.SelectedWindow ?? throw new NativeFailure("APP_ACCESS_REQUIRED", "Select a window with getApp before this operation");
         if (selected.Id != id)
             throw new NativeFailure("WINDOW_CHANGED", "The request targets another window; select that window with getApp");
@@ -87,12 +88,12 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
             if (request.Method is "requestPermission" or "openPermissionSettings")
                 throw new NativeFailure("UNSUPPORTED", "Windows desktop access has no macOS permission switches; inspect the Windows session status");
             DesktopSession.RequireInteractive();
-            if (request.Method == "listApps") return state.Desktop.ListApps(context);
+            if (request.Method == "listApps") return DesktopWindows.ListApps(context);
             if (request.Method == "findApps")
                 throw new NativeFailure("UNSUPPORTED", "Windows discovers selectable windows with listApps; installed launch entries are not part of this selection");
             if (request.Method == "getApp")
             {
-                var selected = state.Desktop.Select(String(parameters, "selector"), context);
+                var selected = DesktopWindows.Select(String(parameters, "selector"), context);
                 state.Apps[selected.Handle] = selected;
                 return new { appHandle = selected.Handle, pid = 4, name = selected.Authorization.Name,
                     running = true, authorization = selected.Authorization };

@@ -33,10 +33,10 @@ const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG
 const calls = [
   { method: 'getCapabilities', params: {} },
   { method: 'getApp', params: { selector: 'test.fixture' } },
-  { method: 'getState', params: { appHandle: 'fixture-app', windowId: 7 } },
+  { method: 'getState', params: { appHandle: 'fixture-app', windowId: '7' } },
   { method: 'click', params: { appHandle: 'fixture-app', snapshotId: 'fixture-snapshot-1', elementId: '0', holdMs: 800 } },
-  { method: 'getState', params: { appHandle: 'fixture-app', windowId: 7 } },
-  { method: 'screenshot', params: { appHandle: 'fixture-app', windowId: 7 } },
+  { method: 'getState', params: { appHandle: 'fixture-app', windowId: '7' } },
+  { method: 'screenshot', params: { appHandle: 'fixture-app', windowId: '7' } },
 ]
 
 class VisualModel extends LlmAdapter {
@@ -139,13 +139,13 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
   expect(toolCalls[3]?.data.arguments).toBe(JSON.stringify(calls[3]))
 
   const direct = await executeToolFixture(context, { agent, signal: new AbortController().signal,
-    callId: ToolCallId('programmatic-window'), name: 'cua', arguments: { method: 'screenshot', params: { appHandle: 'fixture-app', windowId: 7 } },
+    callId: ToolCallId('programmatic-window'), name: 'cua', arguments: { method: 'screenshot', params: { appHandle: 'fixture-app', windowId: '7' } },
   })
   expect(direct.isError).toBe(false)
   expect(direct.value).toMatchObject({ mimeType: 'image/png', data: png })
   expect(context.computerUse.providerName).toBe('dsh-cua')
   for (const [callId, activationRequested, beforePid, beforeWindowId] of [
-    ['activate-first', true, 42, 99], ['activate-repeat', false, 9, 7],
+    ['activate-first', true, 42, '99'], ['activate-repeat', false, 9, '7'],
   ] as const) {
     const activated = await executeToolFixture(context, {
       agent, signal: new AbortController().signal, callId: ToolCallId(callId), name: 'cua',
@@ -155,8 +155,8 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
     expect(activated.value).toEqual({
       dispatched: true, foregroundChanged: beforePid !== 9, foreground: {
         requestId: callId, targetPid: 9, activationRequested,
-        before: { frontPid: beforePid, focusedWindowId: 7, frontWindowId: beforeWindowId, frontWindowPid: beforePid },
-        after: { frontPid: 9, focusedWindowId: 7, frontWindowId: 7, frontWindowPid: 9 },
+        before: { frontPid: beforePid, focusedWindowId: '7', frontWindowId: beforeWindowId, frontWindowPid: beforePid },
+        after: { frontPid: 9, focusedWindowId: '7', frontWindowId: '7', frontWindowPid: 9 },
       },
     })
     expect(JSON.stringify(activated.content)).toContain(callId)
@@ -172,14 +172,14 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
     return z.json().parse(result.value)
   })
   const retainedApp = await objectApi(agent).getApp('test.fixture')
-  const retainedWindow = await retainedApp.getWindow(7)
+  const retainedWindow = await retainedApp.getWindow('7')
   expect(await retainedWindow.getAccessibilityTree({ emit: false })).toContain('Count: 1')
   const peer = await context.agents.create({ sessionId: SessionId('native-loader-peer'), agentOptions: { provider: 'native-fixture', model: 'vision' } })
   const peerApp = await objectApi(peer.agent).getApp('test.fixture')
-  const peerWindow = await peerApp.getWindow(7)
+  const peerWindow = await peerApp.getWindow('7')
   expect(peerApp.appHandle).not.toBe(retainedApp.appHandle)
   const screenshot = await peerWindow.getScreenshot({ emit: false })
-  expect(screenshot).toMatchObject({ mimeType: 'image/png', pixelWidth: 1, pixelHeight: 1, windowId: 7 })
+  expect(screenshot).toMatchObject({ mimeType: 'image/png', pixelWidth: 1, pixelHeight: 1, windowId: '7' })
   expect(Buffer.from(screenshot.bytes).toString('base64')).toBe(png)
   await peerWindow.click(element('0'))
   expect(await retainedWindow.getAccessibilityTree({ emit: false })).toContain('Count: 2')
@@ -197,7 +197,7 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
 
   const next = await context.agents.create({ sessionId: SessionId('native-loader-next'), agentOptions: { provider: 'native-fixture', model: 'vision' } })
   const stale = await executeToolFixture(context, { agent: next.agent, signal: new AbortController().signal,
-    callId: ToolCallId('stale-window'), name: 'cua', arguments: { method: 'screenshot', params: { appHandle: 'fixture-app', windowId: 7 } },
+    callId: ToolCallId('stale-window'), name: 'cua', arguments: { method: 'screenshot', params: { appHandle: 'fixture-app', windowId: '7' } },
   })
   expect(stale.isError).toBe(true)
   expect(JSON.stringify(stale.content)).toContain('APP_ACCESS_REQUIRED')

@@ -183,7 +183,8 @@ export interface CuaSurface {
  * Coordinate input also rejects resizing since the latest successful AX read or screenshot.
  */
 export interface CuaWindow extends CuaSurface {
-  readonly windowId: number
+  /** Opaque window identifier issued by the platform provider. */
+  readonly windowId: string
   /**
    * Capture the selected window.
    * @param options - emission options.
@@ -239,10 +240,10 @@ export interface CuaApp extends CuaSurface {
   getWindows(options?: CuaObservationOptions): Promise<CuaWindowInfo[]>
   /**
    * Observe a specific window.
-   * @param windowId - ID obtained from getWindows.
+   * @param windowId - Decimal-string ID obtained from getWindows, passed unchanged.
    * @returns A window object with its initial accessibility tree read silently; this updates the application's current snapshot.
    */
-  getWindow(windowId: number): Promise<CuaWindow>
+  getWindow(windowId: string): Promise<CuaWindow>
 }
 /** Native app API; its caller owns global bindings and variable persistence. */
 export interface CuaApi {

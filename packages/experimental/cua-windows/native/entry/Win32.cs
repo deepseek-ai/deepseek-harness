@@ -11,7 +11,6 @@ internal static class Win32
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] internal static extern nint GetWindowLongPtr(nint window, int index);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool GetCursorPos(out Point point);
     internal delegate bool WindowVisitor(nint window, nint parameter);
-    internal delegate void WinEvent(nint hook, uint eventType, nint window, int objectId, int childId, uint threadId, uint time);
 
     [StructLayout(LayoutKind.Sequential)] internal struct Point { internal int X, Y; }
     [StructLayout(LayoutKind.Sequential)] internal struct Rect
@@ -74,8 +73,6 @@ internal static class Win32
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool GetUserObjectInformation(nint handle, int index, StringBuilder value, int length, out int needed);
     [DllImport("wtsapi32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool WTSQuerySessionInformation(nint server, int session, int information, out nint buffer, out int bytes);
     [DllImport("wtsapi32.dll")] internal static extern void WTSFreeMemory(nint memory);
-    [DllImport("user32.dll", SetLastError = true)] internal static extern nint SetWinEventHook(uint minimum, uint maximum, nint module, WinEvent callback, uint process, uint thread, uint flags);
-    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool UnhookWinEvent(nint hook);
 
     [DllImport("user32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool OpenClipboard(nint owner);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool CloseClipboard();

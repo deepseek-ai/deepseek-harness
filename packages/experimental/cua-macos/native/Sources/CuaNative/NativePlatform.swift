@@ -140,7 +140,7 @@ enum NativePlatform {
         return rows.compactMap { row in
             let layer = (row[kCGWindowLayer as String] as? NSNumber)?.intValue ?? 0
             guard allLayers || layer == 0,
-                  let id = (row[kCGWindowNumber as String] as? NSNumber)?.uint32Value,
+                  let id = (row[kCGWindowNumber as String] as? NSNumber)?.uint32Value, id != 0,
                   let pid = (row[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value else { return nil }
             let raw = row[kCGWindowBounds as String] as? [String: NSNumber] ?? [:]
             let bounds = WindowBounds(x: raw["X"]?.doubleValue ?? 0, y: raw["Y"]?.doubleValue ?? 0,

@@ -58,6 +58,7 @@ it.skipIf(!helperPath || !selector)('admits real application screenshots through
   const target = (await app.getWindows({ emit: false })).find(window =>
     window.isOnScreen && window.bounds.width > 0 && window.bounds.height > 0)
   expect(target).toBeDefined()
+  expect(target!.windowId).toBe(discovered!.id)
   const window = await app.getWindow(target!.windowId)
   expect(emitted).toEqual([])
   await window.getAccessibilityTree()

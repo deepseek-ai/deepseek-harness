@@ -1,18 +1,19 @@
-// Discovery IDs are connection-owned and never reused for another HWND lifetime.
+// Desktop discovery selects windows by their invariant decimal HWND strings.
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using DeepSeek.Cua.Protocol;
 
 namespace DeepSeek.Cua.Windows;
 
-internal sealed record DiscoveredWindow(WindowState Window, RunningApplication Process, string Selector);
-
-internal sealed class DesktopWindows
+internal sealed record DiscoveredWindow(WindowState Window, RunningApplication Process)
 {
-    private readonly Dictionary<nint, DiscoveredWindow> windows = [];
-    private uint nextId;
+    internal string Selector => Window.Id.ToString(CultureInfo.InvariantCulture);
+}
 
-    internal object[] ListApps(RequestContext context)
+internal static class DesktopWindows
+{
+    internal static object[] ListApps(RequestContext context)
     {
         var result = new List<object>();
         foreach (var entry in Discover(context))
@@ -26,25 +27,23 @@ internal sealed class DesktopWindows
             }
             catch (NativeFailure error) when (error.Code is "STALE_APP" or "PERMISSION_DENIED" or "APP_IDENTITY_UNAVAILABLE" or "UNSUPPORTED_SESSION" or "WINDOW_CHANGED")
             {
-                // A disappearing window cannot remain selectable from this connection.
-                windows.Remove(entry.Window.Handle);
+                // A disappearing or inaccessible window is omitted from discovery.
             }
         }
         return result.ToArray();
     }
 
-    internal AppState Select(string selector, RequestContext context)
+    internal static AppState Select(string selector, RequestContext context)
     {
         if (string.IsNullOrEmpty(selector)) throw new NativeFailure("INVALID_ARGUMENT", "A window selector from listApps is required");
-        Discover(context);
-        var entry = windows.Values.SingleOrDefault(value => string.Equals(value.Selector, selector, StringComparison.Ordinal))
-            ?? throw new NativeFailure("WINDOW_CHANGED", "Discover applications again; this window selector belongs to another connection or an expired window");
+        var entry = Discover(context).SingleOrDefault(value => string.Equals(value.Selector, selector, StringComparison.Ordinal))
+            ?? throw new NativeFailure("WINDOW_CHANGED", "Discover applications again; this window is no longer available");
         var app = Owner(entry, true, context);
         try { entry.Window.Geometry(app, context); return app; }
         catch { app.Dispose(); throw; }
     }
 
-    private List<DiscoveredWindow> Discover(RequestContext context)
+    private static List<DiscoveredWindow> Discover(RequestContext context)
     {
         var current = new List<nint>();
         Win32.EnumWindows((handle, _) =>
@@ -63,25 +62,16 @@ internal sealed class DesktopWindows
             {
                 Win32.GetWindowThreadProcessId(handle, out var pid);
                 var process = Applications.Running(checked((int)pid));
-                var epoch = context.Sta.WindowEpoch(handle);
-                if (!windows.TryGetValue(handle, out var entry) || entry.Process.Pid != process.Pid
-                    || entry.Process.Started != process.Started || entry.Window.Epoch != epoch)
-                {
-                    if (nextId == uint.MaxValue) throw new NativeFailure("NATIVE_LIMIT", "Reconnect before discovering more windows");
-                    entry = new(new(++nextId, handle, epoch), process, Guid.NewGuid().ToString("N"));
-                    windows[handle] = entry;
-                }
+                var entry = new DiscoveredWindow(new(handle), process);
                 using var owner = Owner(entry, false, context);
                 entry.Window.Geometry(owner, context);
                 result.Add(entry);
             }
             catch (NativeFailure error) when (error.Code is "STALE_APP" or "PERMISSION_DENIED" or "APP_IDENTITY_UNAVAILABLE" or "UNSUPPORTED_SESSION" or "WINDOW_CHANGED")
             {
-                // A disappearing or inaccessible window cannot be selected from this discovery.
-                windows.Remove(handle);
+                // A disappearing or inaccessible window is omitted from discovery.
             }
         }
-        foreach (var handle in windows.Keys.Where(handle => !current.Contains(handle)).ToArray()) windows.Remove(handle);
         return result;
     }
 
@@ -94,15 +84,14 @@ internal sealed class DesktopWindows
         var title = new StringBuilder(length + 1);
         Win32.GetWindowText(window.Handle, title, title.Capacity);
         var name = $"Window: {title} ({process.Name})";
-        var id = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(
-            $"window\0{process.Pid}\0{process.Started}\0{window.Handle}\0{window.Epoch}")));
+        // Shared consent IDs require a SHA-256 string, including non-persistable window grants.
+        var id = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes($"window\0{entry.Selector}")));
         var identity = new ApplicationIdentity(id, name, process.Path, false);
         var app = new AppState(Guid.NewGuid().ToString("N"), identity, "", process);
         if (authorize)
         {
-            var selected = new WindowState(window.Id, window.Handle, window.Epoch);
-            app.SelectedWindow = selected;
-            app.Windows.Add(window.Handle, selected);
+            app.SelectedWindow = window;
+            app.Windows.Add(window.Handle, window);
         }
         return app;
     }
