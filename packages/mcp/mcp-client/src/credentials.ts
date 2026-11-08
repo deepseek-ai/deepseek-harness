@@ -4,14 +4,14 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
 import { assertTemplateSyntax, credentialRefsIn, resolveTemplateString } from './templates.ts'
 import { describeError, McpLocalError, redactSecrets } from './diagnostic.ts'
-import type { ServerConfig } from './index.ts'
+import type { Config } from './index.ts'
 
 /**
  * The transport strings that may carry `${credential:…}` tokens, with their configuration paths.
  * @param config - server configuration.
  * @returns each templated value with its path relative to the configuration.
  */
-export function templatedFields(config: ServerConfig): Array<[value: string, field: string]> {
+export function templatedFields(config: Config): Array<[value: string, field: string]> {
   if (config.transport === 'stdio') {
     return [
       [config.command, 'command'],
@@ -27,7 +27,7 @@ export function templatedFields(config: ServerConfig): Array<[value: string, fie
 }
 
 /** Resolves raw configuration through the current credential provider and redacts every secret the instance sent. */
-export class McpTemplateBinding<T extends ServerConfig = ServerConfig> {
+export class McpTemplateBinding<T extends Config = Config> {
   /** Enabled credential references from raw configuration, including currently unconfigured references. */
   readonly refs: ReadonlySet<string>
   /** Resolved values and their URL-encoded forms, retained for the instance lifetime. */

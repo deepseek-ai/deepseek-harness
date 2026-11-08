@@ -221,13 +221,7 @@ export function apply(ctx: Context, config: Config): void {
     const reminder = observe(exec)
     const downstream = await next()
     if (!reminder) return downstream
-    if (downstream.kind === 'block') {
-      return { kind: 'block', feedback: downstream.feedback, additionalContexts: prependContext(reminder, downstream.additionalContexts) }
-    }
-    return {
-      ...downstream,
-      additionalContexts: prependContext(reminder, downstream.additionalContexts),
-    }
+    return { ...downstream, additionalContexts: prependContext(reminder, downstream.additionalContexts) }
   })
 
   // A user interjection changes the context; repetition across it is not a

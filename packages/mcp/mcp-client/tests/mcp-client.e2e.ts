@@ -28,7 +28,7 @@ import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepse
 import { apply } from '@deepseek-ai/dsh-mcp-client/src/index.ts'
 import { probeServer } from '@deepseek-ai/dsh-mcp-client/src/probe.ts'
 import { publicToolName } from '@deepseek-ai/dsh-mcp-client/src/tools.ts'
-import { Config, type ServerConfig } from '@deepseek-ai/dsh-mcp-client'
+import { Config } from '@deepseek-ai/dsh-mcp-client'
 
 const testToolSignal = new AbortController().signal
 
@@ -100,7 +100,7 @@ describe('fixture server — controlled scenarios', () => {
   let ctx: Context
   let home: string
 
-  const fixtureConfig: ServerConfig = Config({
+  const fixtureConfig: Config = Config({
     transport: 'stdio',
     serverName: 'fixture',
     command: process.execPath,
@@ -200,7 +200,7 @@ describe('fixture server — controlled scenarios', () => {
 describe('fixture server — duplicate serverName', () => {
   it('rejects a second instance with the same serverName on one root', async () => {
     const ctx = await mountRegistry()
-    const config: ServerConfig = Config({
+    const config: Config = Config({
       transport: 'stdio',
       serverName: 'dup',
       command: process.execPath,
@@ -246,7 +246,7 @@ describe('fixture server — disposal', () => {
 })
 
 describe('fixture server — crash recovery', () => {
-  function crashConfig(serverName: string, reconnect: NonNullable<ServerConfig['reconnect']>): ServerConfig {
+  function crashConfig(serverName: string, reconnect: NonNullable<Config['reconnect']>): Config {
     return Config({
       transport: 'stdio',
       serverName,
@@ -332,7 +332,7 @@ describe('fixture server — crash recovery', () => {
 describe('server-everything — official test server', () => {
   let ctx: Context
 
-  const config: ServerConfig = Config({
+  const config: Config = Config({
     transport: 'stdio',
     serverName: 'everything',
     command: join(localBin, 'mcp-server-everything'),
@@ -402,7 +402,7 @@ describe('server-filesystem — real filesystem operations', () => {
     tempDir = await mkdtemp(join(tmpdir(), 'mcp-fs-e2e-'))
 
     ctx = await mountRegistry()
-    const config: ServerConfig = Config({
+    const config: Config = Config({
       transport: 'stdio',
       serverName: 'filesystem',
       command: join(localBin, 'mcp-server-filesystem'),
@@ -515,7 +515,7 @@ describe('streamable-http — in-process MCP server', () => {
     baseUrl = `http://127.0.0.1:${address.port}/mcp`
 
     ctx = await mountRegistry()
-    const config: ServerConfig = Config({
+    const config: Config = Config({
       transport: 'streamable-http',
       serverName: 'web',
       url: baseUrl,

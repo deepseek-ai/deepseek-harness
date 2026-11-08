@@ -7,14 +7,14 @@
  * reconciles the live instance set: new entries mount, removed or disabled
  * entries unmount, and a changed entry is rebuilt. Connection handling stays
  * entirely in mcp-client, which the manager reaches only through the
- * `ctx.mcpClientHost` it injects: the host validates entries' client fields and
+ * `McpClientHost` it creates: the host validates entries' client fields and
  * mounts, probes, and authorizes servers. The manager owns entry validation of
  * its own fields, instance lifecycle, the aggregated status registry, and the
  * `restart`, `probe`, and `watch` operations a management surface calls through Remote.
  *
- * Service package (default-exports the service class). Instances run below the
- * host; disposing the manager unmounts every instance it mounted, and replacing
- * the host restarts the manager.
+ * Service package (default-exports the service class). All child instances
+ * mount under the manager's fiber, so disposing the manager unwinds every
+ * instance and its registered tools.
  *
  * @module @deepseek-ai/dsh-mcp-manager
  */
@@ -25,11 +25,13 @@ import type { Volatile, VolatileSnapshot } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { parseCredentialKey } from '@deepseek-ai/dsh-credentials'
+import { McpClientHost } from '@deepseek-ai/dsh-mcp-client'
 import type { McpCloseResult, McpOAuthAuthorization, McpProbeOptions, McpProbeResult, McpServerInstance, ReconnectConfig } from '@deepseek-ai/dsh-mcp-client'
-import type { McpOAuthAttemptId, McpOAuthAttemptView, McpOAuthConfigInput, ServerConfig } from '@deepseek-ai/dsh-mcp-client'
+import type { Config as McpClientConfig, McpOAuthAttemptId, McpOAuthAttemptView, McpOAuthConfigInput } from '@deepseek-ai/dsh-mcp-client'
 import { deepEqualJson } from '@deepseek-ai/dsh-util-values'
 import type { McpManagedServerStatus, McpManagedServerView } from './types.ts'
-// Side-effect type import: declares Loader's volatile events.
+// Side-effect type imports: declare the tool service and Loader's volatile events.
+import type {} from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 
 export type { McpManagedServerStatus, McpManagedServerView } from './types.ts'
@@ -142,9 +144,11 @@ export default class McpServerManager extends TypertRemoteService {
     servers: z.dict(ServerEntrySchema).default({}).volatile(),
   }) as z<ConfigInput, Config>
 
-  static inject = ['mcpClientHost']
+  static inject = ['tools']
 
   private readonly ownerContext: Context
+  /** Validates, mounts, probes, and authorizes the servers below the manager's fiber. */
+  private readonly host: McpClientHost
   private readonly instances = new Map<string, ManagedRecord>()
   private readonly statuses = new Map<string, McpManagedServerStatus>()
   /** Plugin-contributed entries, each owned by its registering plugin's effect. */
@@ -166,6 +170,7 @@ export default class McpServerManager extends TypertRemoteService {
   constructor(ctx: Context, public config: Config) {
     super(ctx, 'mcpManager')
     this.ownerContext = ctx
+    this.host = new McpClientHost(ctx)
     this.validateEntries(config.servers.get())
   }
 
@@ -331,7 +336,7 @@ export default class McpServerManager extends TypertRemoteService {
     const lifetime = new AbortController()
     const owner = record
     const signal = options?.signal === undefined ? lifetime.signal : AbortSignal.any([lifetime.signal, options.signal])
-    const done = this.ownerContext.mcpClientHost.probe(this.clientConfig(name, entry), { ...options, signal }).then((result) => {
+    const done = this.host.probe(this.clientConfig(name, entry), { ...options, signal }).then((result) => {
       const closure = { closeConfirmed: result.closeConfirmed,
         ...result.cleanupError === undefined ? {} : { cleanupError: result.cleanupError } }
       if (!closure.closeConfirmed || closure.cleanupError !== undefined) {
@@ -348,7 +353,6 @@ export default class McpServerManager extends TypertRemoteService {
    * @param name - configured or registered OAuth entry, including disabled entries.
    * @returns current attempt progress; absent services, changing entries, or failed cleanup reject.
    */
-  @Remote
   async startAuthorization(name: string): Promise<McpOAuthAttemptView> {
     return this.authorizationFor(name).start()
   }
@@ -358,7 +362,6 @@ export default class McpServerManager extends TypertRemoteService {
    * @param name - managed entry.
    * @param id - selected attempt; stale or absent attempts are ignored.
    */
-  @Remote
   async cancelAuthorization(name: string, id: McpOAuthAttemptId): Promise<void> {
     await this.instances.get(name)?.oauth?.cancel(id)
   }
@@ -368,7 +371,6 @@ export default class McpServerManager extends TypertRemoteService {
    * A configuration change before deletion preserves the grant and rejects.
    * @param name - configured or registered OAuth entry; cleanup failure preserves the grant and blocks replacement.
    */
-  @Remote
   async signOut(name: string): Promise<void> {
     const record = this.recordFor(name)
     const oauth = record.entrySnapshot.oauth
@@ -402,7 +404,7 @@ export default class McpServerManager extends TypertRemoteService {
     const record = this.recordFor(name)
     const config = this.clientConfig(name, record.entrySnapshot)
     if (config.transport !== 'streamable-http' || config.oauth === undefined) throw new Error('mcp-manager: OAuth is not configured for this server')
-    return record.oauth ??= this.ownerContext.mcpClientHost.authorization({ ...config, oauth: config.oauth }, () => {
+    return record.oauth ??= this.host.authorization({ ...config, oauth: config.oauth }, () => {
       this.notifyStatus(name, this.currentStatus(name))
     })
   }
@@ -521,7 +523,7 @@ export default class McpServerManager extends TypertRemoteService {
     const record: ManagedRecord = existing ?? { entrySnapshot: entry, probes: new Map() }
     this.instances.set(name, record)
     this.setStatus(name, { state: 'connecting', attempt: 0 })
-    const instance = record.instance = this.ownerContext.mcpClientHost.mount(this.clientConfig(name, entry))
+    const instance = record.instance = this.host.mount(this.clientConfig(name, entry))
     void instance.ready.then((cell) => {
       if (record.retired) return
       const publish = (): void => {
@@ -665,7 +667,7 @@ export default class McpServerManager extends TypertRemoteService {
    * retaining template strings for runtime expansion. Non-strict startup exposes
    * connection failures through status; the manager schema supplies its startup budget.
    */
-  private clientConfig(name: string, entry: ResolvedEntry): ServerConfig {
+  private clientConfig(name: string, entry: ResolvedEntry): McpClientConfig {
     const shared = {
       serverName: name,
       failOnStartupError: false as const,
@@ -678,7 +680,7 @@ export default class McpServerManager extends TypertRemoteService {
     }
     const path = ['servers', name]
     if (entry.transport === 'stdio') {
-      return this.ownerContext.mcpClientHost.validate({
+      return this.host.validate({
         transport: 'stdio',
         command: entry.command,
         args: [...entry.args],
@@ -687,7 +689,7 @@ export default class McpServerManager extends TypertRemoteService {
         ...shared,
       }, path)
     }
-    return this.ownerContext.mcpClientHost.validate({
+    return this.host.validate({
       transport: 'streamable-http',
       ...entry.oauth === undefined ? {} : { oauth: { ...entry.oauth } },
       url: entry.url,

@@ -14,7 +14,7 @@ import ToolRuntime from '@deepseek-ai/dsh-tools'
 import McpResources from '@deepseek-ai/dsh-mcp-resources'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { TestCredentials } from './credential-fixture.ts'
-import type { ServerConfig } from '@deepseek-ai/dsh-mcp-client'
+import type { Config } from '@deepseek-ai/dsh-mcp-client'
 
 // ---- Mock MCP SDK ----
 
@@ -124,7 +124,7 @@ function captureLogs(ctx: Context): { warns: string[]; errors: string[]; infos: 
   return { warns, errors, infos }
 }
 
-function stdioConfig(reconnect?: ServerConfig['reconnect']): ServerConfig {
+function stdioConfig(reconnect?: Config['reconnect']): Config {
   return ConfigSchema({
     transport: 'stdio',
     serverName: 'srv',

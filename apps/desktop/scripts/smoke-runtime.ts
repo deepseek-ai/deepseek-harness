@@ -12,6 +12,19 @@ import { DesktopHostProcess } from '../src/host-process.ts'
 import { createPluginProfile } from '../src/project-manager.ts'
 import type { DesktopRuntimeDescriptor } from '../src/runtime-tree.ts'
 
+const OFFICE_SKILLS = ['office', 'office-docx', 'office-pptx', 'office-xlsx']
+
+/**
+ * Require each bundled Office skill to be listed and loaded with a nonempty body.
+ * @param results - Host probe results; `bytes` is the loaded body length, 0 when unlisted or not loaded.
+ * @throws Error listing every result when a bundled Office skill is missing or empty.
+ */
+export function assertOfficeSkillsLoadable(results: ReadonlyArray<{ readonly name: string; readonly bytes: number }>): void {
+  if (!OFFICE_SKILLS.every(name => results.some(skill => skill.name === name && skill.bytes > 0))) {
+    throw new Error(`desktop runtime: packaged Office skills are not loadable: ${JSON.stringify(results)}`)
+  }
+}
+
 /**
  * Check CLI package operations, Host startup, its frontend, external plugins, packaged Office skill loading,
  * and real Office rendering, conversion, and recalculation.
@@ -104,11 +117,11 @@ export function apply(ctx) {
   ctx.effect(() => ctx.webServer.register({ kind: 'exact', path: '/desktop-smoke-skills',
     async handler(_request, response) {
       try {
-        const names = ['office', 'office-docx', 'office-pptx', 'office-xlsx']
+        const names = ${JSON.stringify(OFFICE_SKILLS)}
         const listed = new Set((await ctx.skills.list()).map(skill => skill.name))
         const loaded = await Promise.all(names.map(async name => {
           const skill = listed.has(name) ? await ctx.skills.get(name) : undefined
-          return { name, path: skill?.path ?? null, bytes: skill?.content.length ?? 0 }
+          return { name, bytes: skill?.content.length ?? 0 }
         }))
         response.end(JSON.stringify(loaded))
       } catch (error) {
@@ -190,10 +203,8 @@ export function apply(ctx) {
     }
     const skills = await fetch(new URL('/desktop-smoke-skills', ready.url), { headers: { cookie }, signal: AbortSignal.timeout(120_000) })
     if (!skills.ok) throw new Error(`desktop runtime: Office skill loading failed: ${await skills.text()}`)
-    const loadedSkills = await skills.json() as Array<{ name: string; path: string | null; bytes: number }>
-    if (loadedSkills.some(skill => skill.path === null || skill.bytes === 0)) {
-      throw new Error(`desktop runtime: packaged Office skills are not loadable: ${JSON.stringify(loadedSkills)}`)
-    }
+    const loadedSkills = await skills.json() as { name: string; bytes: number }[]
+    assertOfficeSkillsLoadable(loadedSkills)
     console.log('desktop runtime: packaged Office skills listed and loaded')
     for (const { extension } of inputs) {
       const converted = await fetch(new URL(`/desktop-smoke-office/${extension}`, ready.url), {

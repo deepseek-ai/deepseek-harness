@@ -24,7 +24,7 @@ Draw an icon that is recognizable at row size and belongs beside the icons of in
 
 ## Feature image
 
-A detail document may start with one feature image when a picture shows the result better than text. Draw it only when the user asks for one or the result cannot be shown in text, after the plugin works. Save one SVG per document language, such as `docs/preview.svg` and `docs/preview.zh.svg`, with `width="640" height="300" viewBox="0 0 640 300"`, and reference it from the first line of that document as `![Short description](preview.svg)`, and `preview.zh.svg` from `DETAIL.zh.md`. Images must fit `pluginManager.detailImageMaxBytes` (5 MiB by default). Show one main example of the real interface or result, optionally with one close-up, using the plugin's exact UI labels; keep important content about 32 units from the edges. The export rules above apply, so outline every word into paths. Check that it stays readable at its displayed width in light and dark themes.
+For an optional feature image, follow `references/plugin-details.md`: the document contains only that image, while `meta.description` explains functionality and usage. That reference owns preview composition, language variants, export rules, and verification; the icon rules above remain specific to small icons. Draw the feature image after the plugin works. Each image must fit `pluginManager.detailImageMaxBytes` (5 MiB by default).
 
 ## Review
 

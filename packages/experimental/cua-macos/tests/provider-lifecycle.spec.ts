@@ -132,7 +132,7 @@ async function setup(model?: { provider: string; model: string }) {
 async function selectApplication(f: Awaited<ReturnType<typeof setup>>) {
   await f.ctx.plugin(UserQuestions)
   f.ctx.on('user-questions/request', async () => ({ answers: [{ id: 'cua-app-access', selected: ['Allow for this session'] }] }))
-  native.request.mockResolvedValueOnce({ appHandle: 'app-one', pid: 17, name: 'Fixture',
+  native.request.mockResolvedValueOnce({ appHandle: 'app-one', name: 'Fixture', running: true,
     authorization: { id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app', persistable: false } })
   expect((await f.execute('getApp', { selector: 'Fixture' })).isError).toBe(false)
 }
@@ -151,10 +151,10 @@ it.each(['Allow for this session', 'Deny'])('obtains %s before a stopped applica
   onTestFinished(() => { answer.resolve({ answers: [{ id: 'cua-app-access', selected: ['Deny'] }] }) })
   f.ctx.on('user-questions/request', async () => { asked.resolve(); return answer.promise })
   native.request.mockImplementation(async (method: string) => method === 'getApp'
-    ? { appHandle: 'pending-app', pid: null, name: 'Fixture', authorization: {
+    ? { appHandle: 'pending-app', name: 'Fixture', running: false, authorization: {
       id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app', persistable: false,
     } }
-    : { appHandle: 'pending-app', pid: 17, name: 'Fixture' })
+    : { appHandle: 'pending-app', name: 'Fixture', running: true })
   const pending = f.execute('getApp', { selector: 'Fixture' })
   await asked.promise
   expect(native.request.mock.calls.map(call => call[0])).toEqual(['getApp'])
@@ -162,16 +162,16 @@ it.each(['Allow for this session', 'Deny'])('obtains %s before a stopped applica
   const result = await pending
   expect(result.isError).toBe(choice === 'Deny')
   expect(native.request.mock.calls.map(call => call[0])).toEqual(choice === 'Deny' ? ['getApp'] : ['getApp', 'launchApp'])
-  if (choice !== 'Deny') expect(result.value).toMatchObject({ appHandle: 'pending-app', pid: 17 })
+  if (choice !== 'Deny') expect(result.value).toMatchObject({ appHandle: 'pending-app', running: true })
 })
 
 it('rejects a launch result that changes the approved handle', async () => {
   const f = await setup()
   await f.ctx.plugin(UserQuestions)
   f.ctx.on('user-questions/request', async () => ({ answers: [{ id: 'cua-app-access', selected: ['Allow for this session'] }] }))
-  native.request.mockResolvedValueOnce({ appHandle: 'pending-app', pid: null, name: 'Fixture', authorization: {
+  native.request.mockResolvedValueOnce({ appHandle: 'pending-app', name: 'Fixture', running: false, authorization: {
     id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app', persistable: false,
-  } }).mockResolvedValueOnce({ appHandle: 'another-app', pid: 17, name: 'Fixture' })
+  } }).mockResolvedValueOnce({ appHandle: 'another-app', name: 'Fixture', running: true })
   const result = await f.execute('getApp', { selector: 'Fixture' })
   expect(result.isError).toBe(true)
   expect(JSON.stringify(result.content)).toContain('another handle')
@@ -189,13 +189,18 @@ it('correlates a native request with its logged tool invocation', async () => {
   expect(native.request).toHaveBeenCalledExactlyOnceWith('listApps', {}, expect.any(AbortSignal), ToolCallId('lifecycle-1'))
 })
 
-it('reports screenshot pixel coordinates while preserving native capabilities', async () => {
+it('merges startup capabilities into runtime native fields', async () => {
   const f = await setup()
-  const capabilities = { platform: 'macos', coordinateSpace: 'window-points', permissions: { accessibility: true, screenCapture: false } }
-  native.request.mockResolvedValueOnce(capabilities)
+  const runtime = { permissions: { accessibility: true, screenRecording: false }, sessionLocked: false }
+  native.request.mockResolvedValueOnce(runtime)
   const result = await f.execute('getCapabilities')
   expect(result.isError).toBe(false)
-  expect(result.value).toEqual({ ...capabilities, coordinateSpace: 'screenshot-pixels' })
+  expect(result.value).toEqual({ ...runtime, platform: 'macos', appLevelAccessibility: true, keyboard: ['app'], browser: false,
+    coordinateSpace: 'screenshot-pixels', methods: [
+      'activate', 'click', 'drag', 'findApps', 'getApp', 'getCapabilities', 'getState', 'invoke',
+      'listActions', 'listApps', 'listWindows', 'mouseMove', 'paste', 'performAction', 'pressKey', 'screenshot', 'scroll',
+      'selectText', 'setValue', 'show', 'typeText',
+    ] })
   expect(native.request).toHaveBeenCalledExactlyOnceWith('getCapabilities', {}, expect.any(AbortSignal), ToolCallId('lifecycle-1'))
 })
 
@@ -297,8 +302,7 @@ it('keeps Agent disposal pending until its helper cleanup completes', async () =
 
 it('retains the computer-use registration until permission helper cleanup settles', async () => {
   const f = await setup()
-  native.request.mockResolvedValue({ accessibility: false, screenRecording: false,
-    helper: { pid: 9 }, parent: { pid: 8 } })
+  native.request.mockResolvedValue({ platform: 'darwin' as const, accessibility: false, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } })
   await f.ctx.cuaAccess.systemStatus()
   const entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
   native.dispose.mockImplementation(async () => { entered.resolve(undefined); await release.promise })
@@ -397,8 +401,8 @@ it.each([false, true])('rejects an ended Agent with prior helper acquisition %s'
 it('supplies configured resource bounds and clears registrations on unload', async () => {
   const f = await setup()
   await selectApplication(f)
-  native.request.mockResolvedValueOnce({ appHandle: 'app-one', pid: 17, windowId: null, snapshotId: 's', tree: 'Window', truncated: false,
-    windows: [{ windowId: 7, pid: 17, appName: 'Fixture', title: 'Window', bounds: imageMetadata.bounds, isOnScreen: true, onCurrentSpace: true }] })
+  native.request.mockResolvedValueOnce({ appHandle: 'app-one', windowId: null, snapshotId: 's', tree: 'Window', truncated: false,
+    windows: [{ windowId: 7, appName: 'Fixture', title: 'Window', bounds: imageMetadata.bounds, isOnScreen: true, onCurrentSpace: true }] })
   await f.execute('getState', { appHandle: 'app-one' })
   expect(native.request).toHaveBeenLastCalledWith('getState', { appHandle: 'app-one', maxElements: 64, maxDepth: 8 }, expect.any(AbortSignal), ToolCallId('lifecycle-2'))
   await f.execute('drag', { appHandle: 'app-one', windowId: 7, fromX: 1, fromY: 2, toX: 3, toY: 4, relative: true })
@@ -415,9 +419,9 @@ it('supplies configured resource bounds and clears registrations on unload', asy
 it('keeps native element diagnostics out of model-visible state and structured tool values', async () => {
   const f = await setup()
   await selectApplication(f)
-  const visible = { appHandle: 'app-one', pid: 17, windowId: null, focusedWindowId: null,
+  const visible = { appHandle: 'app-one', windowId: null, focusedWindowId: null,
     snapshotId: 'state-one', tree: '- [0] AXButton "Save"', windows: [], truncated: false }
-  native.request.mockResolvedValue({ ...visible, elements: [{ index: 0, role: 'AXButton', bounds: [10, 20, 30, 40] }] })
+  native.request.mockResolvedValue({ ...visible, elements: [{ elementId: '0', role: 'AXButton', bounds: [10, 20, 30, 40] }] })
   const result = await f.execute('getState', { appHandle: 'app-one' })
   expect(result.isError).toBe(false)
   expect(result.value).toMatchObject(visible)
@@ -447,7 +451,7 @@ it('preserves screenshot attachments and invalidates pixel coordinates when wind
   const stored = await f.ctx.attachments.readImage(image.attachment)
   expect(Buffer.from(stored.data).toString('base64')).toBe(data)
   expect(result.value).toMatchObject({ ...metadata, coordinateSpace: 'screenshot-pixels', mimeType: 'image/png', data })
-  const windows = [{ windowId: 7, pid: 17, appName: 'Fixture', title: 'Window',
+  const windows = [{ windowId: 7, appName: 'Fixture', title: 'Window',
     bounds: { ...metadata.bounds, width: 2 }, isOnScreen: true, onCurrentSpace: true }]
   native.request.mockResolvedValueOnce(windows)
   const listed = await f.execute('listWindows', { appHandle: 'app-one' })
@@ -482,11 +486,38 @@ it('maps the actual model-request image pixels back to native points without sto
   const value = result.value as { data: string }
   expect(await sharp(Buffer.from(value.data, 'base64')).metadata()).toMatchObject({ width: 10, height: 5 })
   expect(save).toHaveBeenCalledTimes(1)
-  native.request.mockResolvedValue({ dispatched: true, verified: false })
+  native.request.mockResolvedValue({ dispatched: true })
   expect((await f.execute('click', { appHandle: 'app-one', windowId: 7, x: 5, y: 2.5 })).isError).toBe(false)
   expect(native.request).toHaveBeenLastCalledWith('click', { appHandle: 'app-one', windowId: 7, x: 200, y: 100 }, expect.any(AbortSignal), expect.any(String))
   expect((await f.execute('click', { appHandle: 'app-one', windowId: 7, x: 999, y: 999, relative: true })).isError).toBe(false)
   expect(native.request).toHaveBeenLastCalledWith('click', { appHandle: 'app-one', windowId: 7, x: 399, y: 199 }, expect.any(AbortSignal), expect.any(String))
+})
+
+it.each([{ appHandle: 'foreign', windowId: 7 }, { appHandle: 'app-one', windowId: null }])(
+  'rejects a helper observation for the wrong target before releasing its contents: %j', async (identity) => {
+    const f = await setup()
+    await selectApplication(f)
+    native.request.mockResolvedValueOnce({ ...identity, snapshotId: 'other', tree: 'foreign content', truncated: false, windows: [] })
+    const result = await f.execute('getState', { appHandle: 'app-one', windowId: 7 })
+    expect(result.isError).toBe(true)
+    expect(JSON.stringify(result.content)).toContain('NATIVE_PROTOCOL')
+    expect(JSON.stringify(result.content)).not.toContain('foreign content')
+  },
+)
+
+it('rejects a screenshot from another window before attachment admission', async () => {
+  const f = await setup({ provider: 'image-fixture', model: 'vision' })
+  await selectApplication(f)
+  f.ctx.llm.registerAdapter(['image-fixture'], new ImageAdapter())
+  const root = await mkdtemp(join(tmpdir(), 'dsh-cua-wrong-window-'))
+  onTestFinished(async () => { try { await f.ctx.fiber.dispose() } finally { await rm(root, { recursive: true, force: true }) } })
+  await f.ctx.plugin(LocalAttachmentStore, { dshHome: root })
+  const save = vi.spyOn(f.ctx.attachments, 'saveImages')
+  native.request.mockResolvedValueOnce({ ...imageMetadata, windowId: 8, mimeType: 'image/png', data: imageData })
+  const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: 7 })
+  expect(result.isError).toBe(true)
+  expect(JSON.stringify(result.content)).toContain('NATIVE_PROTOCOL')
+  expect(save).not.toHaveBeenCalled()
 })
 
 it.each([{ pixelWidth: 2 }, { pixelHeight: 2 }])('rejects native screenshot dimensions that disagree with decoded bytes: %j', async (invalid) => {
@@ -536,6 +567,26 @@ it.each(['unresolved', 'unknown', 'text-only', 'provider-error'] as const)(
   },
 )
 
+it.each([
+  { failure: 'opaque failure', summary: 'Image processing failed' },
+  { failure: new Error('image target unavailable'), summary: 'image target unavailable' },
+])('reports an unclassified model image preparation failure: $summary', async ({ failure, summary }) => {
+  const f = await setup({ provider: 'image-fixture', model: 'vision' })
+  await selectApplication(f)
+  f.ctx.llm.registerAdapter(['image-fixture'], new ImageAdapter())
+  const root = await mkdtemp(join(tmpdir(), 'dsh-cua-image-preparation-'))
+  onTestFinished(async () => { try { await f.ctx.fiber.dispose() } finally { await rm(root, { recursive: true, force: true }) } })
+  await f.ctx.plugin(LocalAttachmentStore, { dshHome: root })
+  vi.spyOn(f.ctx.attachments, 'readImageRequest').mockRejectedValue(failure)
+  native.request.mockResolvedValue({ ...imageMetadata, mimeType: 'image/png', data: imageData })
+  const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: 7 })
+  const content = JSON.stringify(result.content)
+  expect(result.isError).toBe(true)
+  expect(content).toContain('SCREENSHOT_IMAGE_FAILED: Screenshot model image preparation failed for window 7')
+  expect(content).toContain(summary)
+  expect(content).not.toContain(imageData)
+})
+
 it('returns an image-admission failure without emitting a successful screenshot', async () => {
   const f = await setup({ provider: 'image-fixture', model: 'vision' })
   await selectApplication(f)
@@ -547,6 +598,7 @@ it('returns an image-admission failure without emitting a successful screenshot'
   const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: 7 })
   expect(result.isError).toBe(true)
   expect(result.content.some(block => block.type === 'image')).toBe(false)
+  expect(JSON.stringify(result.content)).toContain('INVALID_IMAGE: Screenshot image admission failed for window 7')
 })
 
 it.each([
@@ -714,7 +766,7 @@ async function permissionProfile(allowedApps: Array<{ id: string; name: string; 
   await mountRootInclude(f.ctx, join(dir, 'cordis.yml'), readProfilePatches('test', profile))
   await f.ctx.loader.await()
   native.request.mockImplementation(async (method: string) => method === 'applicationIcons' ? {}
-    : { accessibility: true, screenRecording: true, helper: { pid: 2 }, parent: { pid: 1 } })
+    : { platform: 'darwin' as const, accessibility: true, screenRecording: true, helper: { pid: 2 }, parent: { pid: 1 } })
   expect((await f.ctx.cuaAccess.applications()).persistentAvailable).toBe(true)
   await f.ctx.plugin(Settings)
   await f.ctx.plugin(Timer)
@@ -744,14 +796,14 @@ it.each([true, false])('stores persistable application consent separately from c
   await f.ctx.plugin(UserQuestions)
   f.ctx.on('user-questions/request', async () => ({ answers: [{ id: 'cua-app-access', selected: ['Always allow'] }] }))
   const authorization = { id: 'a'.repeat(64), name: 'Fixture', ...(hasPath ? { executablePath: '/fixture/app' } : {}), persistable: true }
-  native.request.mockResolvedValue({ appHandle: 'signed-app', pid: 17, name: 'Fixture', authorization })
+  native.request.mockResolvedValue({ appHandle: 'signed-app', running: true, name: 'Fixture', authorization })
   expect((await f.execute('getApp', { selector: 'Fixture' })).isError).toBe(false)
   expect(await readFile(profile.patchPath, 'utf8')).not.toContain(authorization.id)
   const files = await readdir(join(profile.home, 'storages'))
   const stored = files.find(file => file.startsWith('cua_permissions_'))!
   expect(await readFile(join(profile.home, 'storages', stored), 'utf8')).toContain(authorization.id)
   native.request.mockImplementation(async (method: string) => method === 'applicationIcons' ? {}
-    : { accessibility: true, screenRecording: true, helper: { pid: 2 }, parent: { pid: 1 } })
+    : { platform: 'darwin' as const, accessibility: true, screenRecording: true, helper: { pid: 2 }, parent: { pid: 1 } })
   const permission = await f.ctx.cuaAccess.applications()
   expect(permission.allowedApps).toHaveLength(1)
   await f.ctx.cuaAccess.revoke(permission.allowedApps[0]!.id)
@@ -774,17 +826,44 @@ it.each([true, false])('uses configured grants without requesting a human answer
   await f.provider.dispose()
   const grant = { id: 'a'.repeat(64), name: 'Fixture', ...(hasPath ? { executablePath: '/fixture/app' } : {}) }
   await f.ctx.plugin(NativeProvider, { ...config, allowedApps: [grant] })
-  native.request.mockResolvedValueOnce({ appHandle: 'saved-app', pid: 17, name: 'Fixture', authorization: { ...grant, persistable: true } })
+  native.request.mockResolvedValueOnce({ appHandle: 'saved-app', name: 'Fixture', running: true, authorization: { ...grant, persistable: true } })
   expect((await f.execute('getApp', { selector: 'Fixture' })).isError).toBe(false)
-  native.request.mockResolvedValue({ dispatched: true, verified: false })
+  native.request.mockResolvedValue({ dispatched: true })
   expect((await f.execute('activate', { appHandle: 'saved-app' })).isError).toBe(false)
   expect(native.instances).toHaveLength(1)
   expect(native.request).toHaveBeenCalledTimes(2)
 })
 
+it('retires failed cleanup without replaying an operation or retaining old handles', async () => {
+  const f = await setup()
+  await selectApplication(f)
+  const previous = native.instances[0]!
+  previous.disposed = true
+  const bothWaiting: PromiseWithResolvers<void> = Promise.withResolvers()
+  const cleanup: PromiseWithResolvers<void> = Promise.withResolvers()
+  let waiters = 0
+  native.dispose.mockImplementation(() => {
+    if (++waiters === 2) bothWaiting.resolve()
+    return cleanup.promise
+  })
+  const requests = Promise.all([f.execute('listApps'), f.execute('listApps')])
+  try { await bothWaiting.promise } finally { cleanup.reject(new Error('cleanup acknowledgement missing')) }
+  for (const failed of await requests) {
+    expect(failed.isError).toBe(true)
+    expect(JSON.stringify(failed.content)).toContain('cleanup acknowledgement missing')
+  }
+  native.dispose.mockReset()
+  expect(native.instances).toHaveLength(1)
+  expect((await f.execute('getState', { appHandle: 'app-one' })).isError).toBe(true)
+  expect(native.instances).toHaveLength(1)
+  native.request.mockResolvedValueOnce([])
+  expect((await f.execute()).isError).toBe(false)
+  expect(native.instances).toHaveLength(2)
+})
+
 it('routes permission actions through the macOS provider with the Client language and configured interval', async () => {
   const f = await setup()
-  native.request.mockResolvedValueOnce({ accessibility: false, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } })
+  native.request.mockResolvedValueOnce({ platform: 'darwin', accessibility: false, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } })
   await f.ctx.cuaAccess.requestPermission('accessibility', 'zh')
   expect(native.request).toHaveBeenLastCalledWith('requestPermission', {
     permission: 'accessibility', pollIntervalMs: 1000,

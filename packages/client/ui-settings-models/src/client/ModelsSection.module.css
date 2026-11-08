@@ -844,6 +844,11 @@ select.input {
   position: relative;
 }
 
+.savedKeyInput .input::placeholder {
+  color: var(--dsw-alias-label-primary);
+  opacity: 1;
+}
+
 .keyInputFilled {
   padding-right: 40px;
 }

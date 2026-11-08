@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { assertOfficeSkillsLoadable } from '../scripts/smoke-runtime.ts'
 import { DesktopHostProcess } from '../src/host-process.ts'
 import { builtHost, prepareDesktopHome } from './harness.ts'
 
@@ -24,9 +25,14 @@ export function apply(ctx) {
   ctx.effect(() => ctx.webServer.register({ kind: 'exact', path: '/${SKILL_PROBE}', async handler(_request, response) {
     try {
       const names = (await ctx.skills.list()).map(skill => skill.name).filter(name => name.startsWith('office'))
+      const listed = new Set(names)
+      const loaded = await Promise.all(${JSON.stringify(OFFICE_SKILLS)}.map(async name => {
+        const skill = listed.has(name) ? await ctx.skills.get(name) : undefined
+        return { name, bytes: skill?.content.length ?? 0 }
+      }))
       const content = {}
       for (const name of ['office', 'office-docx']) content[name] = (await ctx.skills.get(name))?.content ?? null
-      response.end(JSON.stringify({ names, content, officeKit: ctx.get('officeKit') !== undefined, tools: ctx.tools.schemas().map(tool => tool.name).filter(name => name.startsWith('office_')) }))
+      response.end(JSON.stringify({ names, content, loaded, officeKit: ctx.get('officeKit') !== undefined, tools: ctx.tools.schemas().map(tool => tool.name).filter(name => name.startsWith('office_')) }))
     } catch (error) {
       response.statusCode = 500
       response.end(String(error?.stack ?? error))
@@ -70,7 +76,14 @@ describe.skipIf(!existsSync(builtHost))('built Desktop Host Office resources', (
       const probe = await fetch(new URL(`/${SKILL_PROBE}`, url), { headers: { cookie } })
       const body = await probe.text()
       expect(probe.status, body).toBe(200)
-      const skills = JSON.parse(body) as { names: string[]; content: Record<string, string | null>; officeKit: boolean; tools: string[] }
+      const skills = JSON.parse(body) as {
+        names: string[]
+        content: Record<string, string | null>
+        loaded: { name: string; bytes: number }[]
+        officeKit: boolean
+        tools: string[]
+      }
+      assertOfficeSkillsLoadable(skills.loaded)
       expect(skills.officeKit).toBe(true)
       // Agent presets, not the Host root, mount the Office tools.
       expect(skills.tools).toEqual([])
