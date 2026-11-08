@@ -223,7 +223,7 @@
     {"digest":"3bec87f9e6ab3da03346f49923d3c51621debc0159df68605e543c3b2a026f90","names":[],"sources":["packages/llm/llm/src/types.ts:497"]},
     {"digest":"3bfeb47b58606f4661904bc723da612782214c463d01e6d61cd6d6193d7374e1","names":[],"sources":[]},
     {"digest":"3c2535ca0a2062f172f15344f8040755002b5ac506cf94fc4ebaa822b15feb8c","names":[],"sources":[]},
-    {"digest":"3cfc3a56502da1f8c6153c2c56657bab4b749056968634dd0991d325ec1c919f","names":["packages/core/tools/src/contracts.ts#ToolRestriction"],"sources":["packages/core/tools/src/contracts.ts:376"]},
+    {"digest":"3cfc3a56502da1f8c6153c2c56657bab4b749056968634dd0991d325ec1c919f","names":["packages/core/tools/src/contracts.ts#ToolRestriction"],"sources":["packages/core/tools/src/contracts.ts:395"]},
     {"digest":"3d7d07060a7be77984feb651ea2bf1925d3e0477911d9d3ed86330d1e8ca6182","names":["packages/feedback/message-feedback/src/types.ts#MessageFeedbackItem"],"sources":["packages/feedback/message-feedback/src/types.ts:20"]},
     {"digest":"3e0eff5946255ff05d88a10839c60305135801f97794ea48d409f8503303317e","names":[],"sources":[]},
     {"digest":"3e2ece4967cfebe95f450a93f45523dff99d6749f6269f2f60f84dfecfcf3693","names":[],"sources":[]},

@@ -18,6 +18,9 @@
       "path": "../../core/agent"
     },
     {
+      "path": "../../util/error"
+    },
+    {
       "path": "../../util/brand"
     }
   ]

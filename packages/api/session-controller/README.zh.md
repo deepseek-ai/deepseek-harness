@@ -70,7 +70,7 @@ Fork 将 `atSeq` 选定的含边界事件前缀（包括开放轮次内的截点
 
 恢复会话时若已有写句柄占用，返回 `session/writer-held`，并携带会话 id；其他恢复失败仍返回 `gateway/internal`。
 
-`loadThrough(seq)` 在共享目标被覆盖或加载结束前私下保留较早页面，随后把成功取得的页面按顺序作为一次前插发布。历史加载期间实时事件仍然可见。后续页面失败时保留已成功取得的部分；历史窗口被替换时丢弃被替换窗口的暂存页面。普通 `loadOlder()` 直接发布 Host 选取的一页结果。
+`loadThrough(seq)` 在共享目标被覆盖或加载结束前私下保留较早页面，随后把成功取得的页面按顺序作为一次前插发布。历史加载期间实时事件仍然可见。后续页面失败时保留已成功取得的部分；历史窗口被替换时丢弃被替换窗口的暂存页面。普通 `loadOlder()` 准备并消费 Host 选取的一页；传入 `{ deferConsumption: true }` 时保留这一页，直到 `consumeOlder()` 同步发布。暂存页阻止重复普通请求，但不阻止实时事件。`historyLoadStatus` 区分 `idle`、`loading`、`pendingConsumption` 和 `error`；`loadingOlder` 从 `loading` 派生，包含 Turn 跳转。失败和无进展页面允许明确重试，不伪装成历史耗尽。`historyWasPartial` 在客户端 Session 生命周期内记住可见窗口曾不完整，重连保留，但不持久化呈现状态。
 
 Client 的首次 `follow`、重连首屏与 `loadOlder()` 至少请求 50 条以 append 方式追加的 `user/message` 和 `assistant/message` 事件，并向前跨过至少两个 `turn/start`，其中包含已加载窗口开头尚未补齐的轮次。Host 在首次同时满足两个下限的轮次开头停止；若先达到 500 条计数消息或历史已耗尽，则立即返回。Steering 不增加轮次分界。区间内的其他事件随页返回，但不计入消息预算。分页和 follow 请求可选的 `turnWindow` 在 `maxMessages` 上限内指定这两个下限。`loadThrough()` 复用相同规则，仅将每页消息数下限设为 200；500 条上限不限制整次跳转。不带 `turnWindow` 的请求保留按消息对齐的分页方式。
 

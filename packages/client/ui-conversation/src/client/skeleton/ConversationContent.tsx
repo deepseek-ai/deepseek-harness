@@ -146,6 +146,7 @@ export function ConversationContent(props: ConversationContentProps) {
   const blocked = !inert && composerBlock !== undefined
   const inputBar = renderSlot('conversation.composer.bar', {
     variant: hero ? 'hero' : 'composer',
+    occurrence: props.variant,
     ...(inert
       ? {
         disabled: true,

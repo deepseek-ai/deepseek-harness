@@ -111,3 +111,9 @@
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
 }
+
+/* The occurrences of the highlighted text in a name. */
+.match {
+  color: var(--dsw-alias-state-business-primary);
+  background: transparent;
+}

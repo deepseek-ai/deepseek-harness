@@ -36,6 +36,8 @@
   height: 100%;
   min-width: 0;
   min-height: 0;
+  /* The search bar's height, which also places the settings panel below it. */
+  --files-search-bar-height: 42px;
   color: var(--dsw-alias-label-primary);
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: 1.5;
@@ -198,6 +200,23 @@
   font-size: 12px;
 }
 
+/* "No matches" with the information button whose tooltip names the filters. */
+.emptyNote {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* The information button keeps the note's line height. */
+.infoButton {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-block: -2px;
+  padding: 0;
+  color: var(--dsw-alias-label-caption);
+}
+
 .status {
   display: flex;
   flex-direction: column;
@@ -251,4 +270,263 @@
    on the text's line and spaces it. */
 .titleIcon {
   flex: none;
+}
+
+/* The navigator's search bar above the tree: the settings control, the
+   field, the hidden-entry control, and the clear control in one bordered box,
+   drawn like the shared `Input` atom. */
+.searchBar {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  height: var(--files-search-bar-height);
+  padding: 8px 8px 4px;
+}
+
+.searchField {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  box-sizing: border-box;
+  height: 100%;
+  padding: 0 2px;
+  background: var(--dsw-alias-bg-layer-1);
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-md);
+}
+
+.searchField:focus-within {
+  border-color: var(--dsw-alias-state-business-primary);
+}
+
+/* The bar's icon controls: the header tool at a size that fits inside the field. */
+.searchTool {
+  width: 24px;
+  height: 24px;
+  padding: 4px;
+}
+
+.searchTool svg {
+  width: 14px;
+  height: 14px;
+}
+
+.searchInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0 4px;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  background: transparent;
+  border: none;
+  outline: none;
+}
+
+.searchInput::placeholder {
+  color: var(--dsw-alias-label-dimmed);
+}
+
+/* The bar's own clear control replaces the browser's. */
+.searchInput::-webkit-search-cancel-button {
+  display: none;
+}
+
+/* The results status between the bar and the results: the count, and a spinner while a search is under way. */
+.searchStatus {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  align-items: center;
+  min-height: 18px;
+  margin: 0;
+  padding: 2px 18px 0;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+}
+
+/* One sentence of the results status: the count. */
+.searchStatusLine {
+  display: block;
+  min-width: 0;
+}
+
+.searchSpinner {
+  flex: none;
+}
+
+/* A failed search in the results' place: the reason, and the retry control below it on the note's inset. */
+.searchFailure {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+  padding-bottom: 6px;
+}
+
+.searchRetry {
+  margin-left: 10px;
+}
+
+/* The `.gitignore` choice above the add field, at a rule's height. */
+.settingsOption {
+  border-top: none;
+}
+
+/* The live region stays mounted while the query is blank, without taking room. */
+.searchStatusIdle {
+  min-height: 0;
+  padding: 0;
+}
+
+/* The settings panel floats over the tree below the search bar, inside the navigator. */
+.settings {
+  position: absolute;
+  top: var(--files-search-bar-height);
+  right: 8px;
+  bottom: 8px;
+  left: 8px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 6px 4px 6px 10px;
+  background: var(--dsw-alias-bg-base);
+  border-radius: var(--dsw-radius-lg);
+  outline: none;
+  box-shadow: var(--dsw-elevation-prominent);
+}
+
+.settingsHeader {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 2px;
+  align-items: center;
+}
+
+.settingsTitle {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 500;
+}
+
+.settingsDescription {
+  flex: 0 0 auto;
+  margin: 0 0 4px;
+  padding-right: 6px;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+}
+
+/* One rule, and the add field above them at the same height. */
+.rule {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 32px;
+  margin: 0;
+  padding: 0 0 0 2px;
+  border-top: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.addRule {
+  padding-right: 6px;
+}
+
+/* The add row's plus glyph rides the tertiary ink, as the tree's folder glyph does. */
+.addRule .icon {
+  flex: 0 0 auto;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* The add field draws no box of its own, so its row's rule marks where typing goes. */
+.addRule:focus-within {
+  border-top-color: var(--dsw-alias-state-business-primary);
+}
+
+.ruleInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  background: transparent;
+  border: none;
+  outline: none;
+}
+
+.ruleInput::placeholder {
+  color: var(--dsw-alias-label-dimmed);
+}
+
+.settingsError {
+  flex: 0 0 auto;
+  margin: 0 0 4px;
+  color: var(--dsw-alias-state-error-primary);
+  font: var(--dsw-font-xxs-12);
+}
+
+/* Only the list scrolls; the header and the add field stay put. */
+.rules {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  overscroll-behavior: contain;
+}
+
+.ruleLabel {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.ruleCheck {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  margin: 0 1px;
+  accent-color: var(--dsw-alias-state-business-primary);
+}
+
+.ruleCheck:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 2px;
+}
+
+.ruleName {
+  min-width: 0;
+  padding: 6px 0;
+  overflow-wrap: anywhere;
+}
+
+/* A rule the reader turned off stays listed, in the tertiary ink. */
+.ruleOff .ruleName {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+@media (pointer: coarse) {
+  .searchTool {
+    width: 32px;
+    height: 32px;
+  }
+
+  .navigator {
+    --files-search-bar-height: 50px;
+  }
+
+  .rule {
+    min-height: 44px;
+  }
+
+  /* Below 16px, mobile browsers zoom the page when a field takes focus. */
+  .searchInput,
+  .ruleInput {
+    font-size: 16px;
+  }
 }

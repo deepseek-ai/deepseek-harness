@@ -853,6 +853,11 @@
     },
     {
       "doc": "docs/subsystems/tools.md",
+      "symbol": "ToolGuardDenial",
+      "source": "packages/core/tools/src/contracts.ts"
+    },
+    {
+      "doc": "docs/subsystems/tools.md",
       "symbol": "ToolErrorInfo",
       "source": "packages/core/tools/src/contracts.ts"
     },
@@ -2434,6 +2439,16 @@
     },
     {
       "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeCommit",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeCommitList",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
       "symbol": "ChangeRequestKey",
       "source": "packages/experimental/forge/src/types.ts"
     },
@@ -2739,6 +2754,11 @@
     },
     {
       "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeCommitRange",
+      "source": "packages/experimental/client-ui-forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
       "symbol": "ForgeLocalScope",
       "source": "packages/experimental/client-ui-forge/src/types.ts"
     },
@@ -2754,12 +2774,22 @@
     },
     {
       "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeFileLayer",
+      "source": "packages/experimental/client-ui-forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
       "symbol": "ForgeDiffFile",
       "source": "packages/experimental/client-ui-forge/src/types.ts"
     },
     {
       "doc": "docs/subsystems/forge.md",
       "symbol": "ForgeLocalDiff",
+      "source": "packages/experimental/client-ui-forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeLocalCommits",
       "source": "packages/experimental/client-ui-forge/src/types.ts"
     },
     {
@@ -2791,6 +2821,11 @@
       "doc": "docs/subsystems/forge.md",
       "symbol": "ForgeReviewResult",
       "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/session.md",
+      "symbol": "SessionEventInput",
+      "source": "packages/core/session/src/types.ts"
     }
   ]
 }

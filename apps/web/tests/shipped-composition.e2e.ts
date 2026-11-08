@@ -479,7 +479,6 @@ const EXPECTED_TOOLS = [
   'edit',
   'exit_plan_mode',
   'get_goal',
-  'interrupt_agent',
   'job_kill',
   'job_list',
   'job_output',
@@ -823,7 +822,7 @@ it('routes one browser-authored Auto request through the same model and asks the
     event.type === 'tool/result'
       && event.data.message.toolCallId === AUTO_CALL_ID
   ))
-  expect(result?.data.error).toBeUndefined()
+  expect(result?.data.error).toEqual({ name: 'ApprovalError', code: 'APPROVAL_REJECTED' })
   const durableModelResult = JSON.stringify(result?.data.message)
   expect(durableModelResult).toContain('the user rejected tool \\"bash\\"')
   expect(durableModelResult).not.toContain('direct user authorized inspection only')

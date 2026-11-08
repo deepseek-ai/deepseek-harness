@@ -15,6 +15,17 @@ describe('quote draft spans', () => {
     expect(parseStoredDraft({ ...draft, quotes: [quote, quote] })).toBeUndefined()
   })
 
+  it('restores a stored quote summary and leaves summary-less drafts without one', () => {
+    const summary = { label: 'a.ts R1', title: 'src/a.ts', detail: 'R1', body: 'why' }
+    const draft = { text: '> quote', references: [], quotes: [{ offset: 0, length: 7, text: 'quote', summary }] }
+    expect(parseStoredDraft(JSON.parse(JSON.stringify(draft)))).toEqual(draft)
+    const { detail: _detail, ...withoutDetail } = summary
+    const brief = { ...draft, quotes: [{ offset: 0, length: 7, text: 'quote', summary: withoutDetail }] }
+    expect(parseStoredDraft(JSON.parse(JSON.stringify(brief)))).toEqual(brief)
+    expect(parseStoredDraft({ text: '> quote', references: [], quotes: [{ offset: 0, length: 7, text: 'quote' }] })?.quotes?.[0]?.summary).toBeUndefined()
+    expect(parseStoredDraft({ ...draft, quotes: [{ offset: 0, length: 7, text: 'quote', summary: { label: 'a.ts' } }] })).toBeUndefined()
+  })
+
   it('serializes reference owners outside quotes into ordinary Markdown text', async () => {
     const serialize = vi.fn(() => Promise.resolve('@[Session](dsh-session:id)'))
     const quote = '/review @literal'

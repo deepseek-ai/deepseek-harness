@@ -1,6 +1,7 @@
 /** Semantic draft snapshots shared by storage, programmatic input, and editor restoration. */
 import { z } from 'zod'
 import { formatQuoteText } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { QuoteSummary } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { DraftInput, DraftQuote, DraftReference, DraftSnapshot, Occurrence } from './contract/draft-editor.ts'
 
 const referenceSchema = z.object({
@@ -18,10 +19,16 @@ const commandSchema = z.object({
   token: z.string(),
 })
 
+// Lists every QuoteSummary field: parsing strips unknown keys, so a field missing here is dropped from restored drafts.
+const quoteSummarySchema: z.ZodType<QuoteSummary> = z.object({
+  label: z.string(), title: z.string(), detail: z.string().optional(), body: z.string(),
+})
+
 const quoteSchema = z.object({
   offset: z.number().int().nonnegative(),
   length: z.number().int().positive(),
   text: z.string().refine(text => text.trim() !== ''),
+  summary: quoteSummarySchema.optional(),
 })
 
 const snapshotSchema = z.object({

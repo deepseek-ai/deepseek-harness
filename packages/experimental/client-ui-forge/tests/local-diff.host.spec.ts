@@ -7,15 +7,20 @@ import { FsError } from '@deepseek-ai/dsh-fs'
 import { gitIn, inspectCheckout } from '../src/git.ts'
 import type { Inspection } from '../src/git.ts'
 import {
-  aheadOf, BaseMissing, baseBranches, chosenForkPoint, DiffTooLarge, forkPoint, localChanges, localDiff, localText, NoForkPoint,
+  aheadOf, BaseMissing, baseBranches, chosenForkPoint, CommitsMissing, CommitsNotLinear, DiffTooLarge, forkPoint, localChanges,
+  localCommits, localDiff, localText, NoForkPoint,
 } from '../src/local-diff.ts'
-import type { DiffConfig } from '../src/local-diff.ts'
+import type { DiffConfig, ForkPoint } from '../src/local-diff.ts'
+import { FileLayers } from '../src/layers.ts'
 import type { ForgeLocalScope, ForgeSessionWorktree } from '../src/types.ts'
 import { git, gitContext, plainSession, repository, sandboxRecord, scratch } from './harness.ts'
 
 const CONFIG: DiffConfig = {
   gitCommand: 'git', gitTimeoutMs: 10_000, graceMs: 500, maxOutputBytes: 1_048_576, maxDiffBytes: 1_048_576, maxUntrackedFiles: 100,
 }
+
+/** Text files form the `test` layer and JSON files the `interface` layer. */
+const LAYERS = new FileLayers(['**/untracked.txt'], ['**/*.json'])
 
 const cleanups: (() => Promise<void>)[] = []
 
@@ -203,14 +208,14 @@ describe('baseBranches', () => {
 
 describe('localDiff', () => {
   it.each([
-    [{ kind: 'branch', base: null }, 'origin/main', ['committed.txt added', 'staged.txt added', 'tracked.txt modified', 'untracked.txt added untracked']],
+    [{ kind: 'branch', base: null, commits: null }, 'origin/main', ['committed.txt added', 'staged.txt added', 'tracked.txt modified', 'untracked.txt added untracked']],
     [{ kind: 'uncommitted' }, null, ['staged.txt added', 'tracked.txt modified', 'untracked.txt added untracked']],
     [{ kind: 'unstaged' }, null, ['tracked.txt modified', 'untracked.txt added untracked']],
     [{ kind: 'staged' }, null, ['staged.txt added']],
   ] as const)('reads the %o scope with untracked files last, leaving out ignored files and nested repositories', async (scope, base, files) => {
     const { repo, fork } = await forked(await directory())
     const ctx = await context(repo)
-    const diff = await localDiff(ctx, CONFIG, plainSession(repo), repo, { commit: fork, label: 'origin/main', worktree: false }, scope, signal)
+    const diff = await localDiff(ctx, CONFIG, plainSession(repo), repo, { commit: fork, label: 'origin/main', worktree: false }, scope, LAYERS, signal)
 
     expect(diff.base).toBe(base)
     expect(diff.omitted).toBe(0)
@@ -219,7 +224,7 @@ describe('localDiff', () => {
 
   it('carries the hunks of tracked and untracked files', async () => {
     const { repo, fork } = await forked(await directory())
-    const diff = await localDiff(await context(repo), CONFIG, plainSession(repo), repo, { commit: fork, label: 'origin/main', worktree: false }, { kind: 'unstaged' }, signal)
+    const diff = await localDiff(await context(repo), CONFIG, plainSession(repo), repo, { commit: fork, label: 'origin/main', worktree: false }, { kind: 'unstaged' }, LAYERS, signal)
 
     expect(diff.files.map(file => [file.additions, file.deletions, file.hunks.flatMap(hunk => hunk.lines)])).toEqual([
       [1, 0, [' initial', '+changed']],
@@ -230,7 +235,7 @@ describe('localDiff', () => {
   it('refuses the branch scope without a fork point', async () => {
     const { repo } = await forked(await directory())
 
-    await expect(localDiff(await context(repo), CONFIG, plainSession(repo), repo, null, { kind: 'branch', base: null }, signal)).rejects.toBeInstanceOf(NoForkPoint)
+    await expect(localDiff(await context(repo), CONFIG, plainSession(repo), repo, null, { kind: 'branch', base: null, commits: null }, LAYERS, signal)).rejects.toBeInstanceOf(NoForkPoint)
   })
 
   it('compares a branch without commits with the empty tree', async () => {
@@ -242,7 +247,7 @@ describe('localDiff', () => {
     const ctx = await context(repo)
 
     for (const kind of ['staged', 'uncommitted'] as const) {
-      const diff = await localDiff(ctx, CONFIG, plainSession(repo), repo, null, { kind }, signal)
+      const diff = await localDiff(ctx, CONFIG, plainSession(repo), repo, null, { kind }, LAYERS, signal)
       expect(diff.files.map(file => [file.path, file.status])).toEqual([['first.txt', 'added']])
     }
   })
@@ -251,7 +256,7 @@ describe('localDiff', () => {
     const { repo, fork } = await forked(await directory())
     await writeFile(join(repo, 'tracked.txt'), 'line\n'.repeat(400))
 
-    await expect(localDiff(await context(repo), { ...CONFIG, maxDiffBytes: 512 }, plainSession(repo), repo, { commit: fork, label: 'x', worktree: false }, { kind: 'unstaged' }, signal))
+    await expect(localDiff(await context(repo), { ...CONFIG, maxDiffBytes: 512 }, plainSession(repo), repo, { commit: fork, label: 'x', worktree: false }, { kind: 'unstaged' }, LAYERS, signal))
       .rejects.toBeInstanceOf(DiffTooLarge)
   })
 
@@ -269,7 +274,7 @@ describe('localDiff', () => {
       return await read(target, readSignal, maxBytes)
     })
     const config = { ...CONFIG, maxDiffBytes: 2048, maxUntrackedFiles: 4 }
-    const diff = await localDiff(ctx, config, plainSession(repo), repo, { commit: fork, label: 'x', worktree: false }, { kind: 'unstaged' }, signal)
+    const diff = await localDiff(ctx, config, plainSession(repo), repo, { commit: fork, label: 'x', worktree: false }, { kind: 'unstaged' }, LAYERS, signal)
 
     expect(diff.files.filter(file => file.untracked).map(file => [file.path, file.binary, file.oversized, file.additions])).toEqual([
       ['more/big.txt', false, true, 0],
@@ -284,13 +289,188 @@ describe('localDiff', () => {
     const ctx = await context(repo)
     vi.spyOn(ctx.fs, 'readBytes').mockRejectedValue(new Error('disk on fire'))
 
-    await expect(localDiff(ctx, CONFIG, plainSession(repo), repo, { commit: fork, label: 'x', worktree: false }, { kind: 'unstaged' }, signal))
+    await expect(localDiff(ctx, CONFIG, plainSession(repo), repo, { commit: fork, label: 'x', worktree: false }, { kind: 'unstaged' }, LAYERS, signal))
       .rejects.toThrow('disk on fire')
   })
 })
 
+describe('review layers', () => {
+  it('classifies files by the globs and the root .gitattributes of the working tree, or of the index for the staged scope', async () => {
+    const { repo, fork } = await forked(await directory())
+    const point = { commit: fork, label: 'origin/main', worktree: false }
+    await writeFile(join(repo, 'config.json'), '{}\n')
+    await writeFile(join(repo, '.gitattributes'), 'tracked.txt linguist-generated\n')
+    const ctx = await context(repo)
+    const layers = async (scope: ForgeLocalScope): Promise<string[]> =>
+      (await localDiff(ctx, CONFIG, plainSession(repo), repo, point, scope, LAYERS, signal)).files.map(file => `${file.path} ${file.layer}`)
+
+    expect(await layers({ kind: 'unstaged' })).toEqual([
+      'tracked.txt test', '.gitattributes implementation', 'config.json interface', 'untracked.txt test',
+    ])
+    await writeFile(join(repo, '.gitattributes'), 'staged.txt linguist-generated\n')
+    await git(repo, 'add', '.gitattributes')
+    await writeFile(join(repo, '.gitattributes'), '')
+    expect(await layers({ kind: 'staged' })).toEqual(['.gitattributes implementation', 'staged.txt test'])
+    expect(await layers({ kind: 'uncommitted' })).toEqual([
+      '.gitattributes implementation', 'staged.txt implementation', 'tracked.txt implementation', 'config.json interface', 'untracked.txt test',
+    ])
+  })
+
+  it('reads no attributes for a staged scope without .gitattributes and stops at an unreadable working tree file', async () => {
+    const { repo, fork } = await forked(await directory())
+    const ctx = await context(repo)
+    const point = { commit: fork, label: 'origin/main', worktree: false }
+
+    await expect(localDiff(ctx, CONFIG, plainSession(repo), repo, point, { kind: 'staged' }, LAYERS, signal))
+      .resolves.toMatchObject({ files: [{ path: 'staged.txt', layer: 'implementation' }] })
+    await writeFile(join(repo, '.gitattributes'), Uint8Array.from([0x74, 0, 0x74]))
+    await expect(localDiff(ctx, CONFIG, plainSession(repo), repo, point, { kind: 'unstaged' }, LAYERS, signal))
+      .resolves.toMatchObject({ files: [{ path: 'tracked.txt', layer: 'implementation' }, { path: '.gitattributes' }, { path: 'untracked.txt' }] })
+    const read = ctx.fs.readBytes.bind(ctx.fs)
+    vi.spyOn(ctx.fs, 'readBytes').mockImplementation(async (target, readSignal, maxBytes) => {
+      if (ctx.fs.processPath(target).endsWith('.gitattributes')) throw new FsError('denied', 'FS_PERMISSION_DENIED')
+      return await read(target, readSignal, maxBytes)
+    })
+    await expect(localDiff(ctx, CONFIG, plainSession(repo), repo, point, { kind: 'unstaged' }, LAYERS, signal)).rejects.toThrow('denied')
+  })
+})
+
+describe('commits of the branch scope', () => {
+  /** {@link forked} with two more commits on `feat`, `second.txt` and then `.gitattributes` with a generated `third.json`. */
+  async function committed(): Promise<{ readonly repo: string; readonly point: ForkPoint; readonly shas: readonly string[] }> {
+    const { repo, fork } = await forked(await directory())
+    await git(repo, 'commit', '--quiet', '-m', 'staged')
+    await writeFile(join(repo, 'second.txt'), 'two\n')
+    await git(repo, 'add', 'second.txt')
+    await git(repo, 'commit', '--quiet', '-m', 'second')
+    await writeFile(join(repo, '.gitattributes'), 'third.json linguist-generated\n')
+    await writeFile(join(repo, 'third.json'), '{}\n')
+    await git(repo, 'add', '.gitattributes', 'third.json')
+    await git(repo, 'commit', '--quiet', '-m', 'third')
+    const shas = (await git(repo, 'rev-list', '--reverse', `${fork}..HEAD`)).split('\n')
+    return { repo, point: { commit: fork, label: 'origin/main', worktree: false }, shas }
+  }
+
+  it('lists the commits between the fork point and HEAD oldest first, keeping the newest ones over the limit', async () => {
+    const { repo, point, shas } = await committed()
+    const ctx = await context(repo)
+    const runner = gitIn(ctx, CONFIG, plainSession(repo), repo, signal)
+
+    const listed = await localCommits(runner, point, 10)
+    expect(listed).toMatchObject({ headSha: shas.at(-1), truncated: false })
+    expect(listed.commits.map(commit => [commit.title, commit.author])).toEqual([
+      ['committed', 'Forge fixture'], ['staged', 'Forge fixture'], ['second', 'Forge fixture'], ['third', 'Forge fixture'],
+    ])
+    expect(listed.commits.map(commit => commit.sha)).toEqual(shas)
+    expect(listed.commits.map(commit => commit.parent)).toEqual([point.commit, ...shas.slice(0, -1)])
+    expect(Date.parse(listed.commits[0]?.authoredAt ?? '')).not.toBeNaN()
+    await expect(localCommits(runner, point, 2)).resolves.toMatchObject({ truncated: true, commits: [{ title: 'second' }, { title: 'third' }] })
+    await expect(localCommits(runner, point, 4)).resolves.toMatchObject({ truncated: false, commits: { length: 4 } })
+  })
+
+  it('lists signed commits while the repository asks Git to show signatures', async () => {
+    const { repo, point, shas } = await committed()
+    const head = shas.at(-1) ?? ''
+    // A signature Git cannot verify still makes `log.showSignature` print verification text before each signed commit.
+    const tree = await git(repo, 'rev-parse', 'HEAD^{tree}')
+    const signed = join(repo, '.git', 'signed-commit')
+    await writeFile(signed, [
+      `tree ${tree}`, `parent ${head}`, 'author Forge fixture <forge@example.invalid> 1700000000 +0000',
+      'committer Forge fixture <forge@example.invalid> 1700000000 +0000',
+      'gpgsig -----BEGIN SSH SIGNATURE-----', ' AAAA', ' -----END SSH SIGNATURE-----', '', 'signed', '',
+    ].join('\n'))
+    const sha = await git(repo, 'hash-object', '-t', 'commit', '-w', signed)
+    await git(repo, 'reset', '--quiet', '--soft', sha)
+    await git(repo, 'config', 'log.showSignature', 'true')
+    await git(repo, 'config', 'gpg.ssh.program', join(repo, 'missing-ssh-keygen'))
+    const ctx = await context(repo)
+
+    const listed = await localCommits(gitIn(ctx, CONFIG, plainSession(repo), repo, signal), point, 10)
+    expect(listed.commits.map(commit => [commit.sha, commit.title])).toEqual([
+      ...shas.map((commit, index) => [commit, ['committed', 'staged', 'second', 'third'][index]]), [sha, 'signed'],
+    ])
+  })
+
+  it('reads the committed changes of consecutive commits with the attributes of the last one, without working tree changes', async () => {
+    const { repo, point, shas } = await committed()
+    const ctx = await context(repo)
+    const range = async (from: number, to: number): Promise<string[]> => {
+      const diff = await localDiff(ctx, CONFIG, plainSession(repo), repo, point,
+        { kind: 'branch', base: null, commits: { from: shas[from] ?? '', to: shas[to] ?? '' } }, LAYERS, signal)
+      expect(diff).toMatchObject({ base: 'origin/main', omitted: 0 })
+      return diff.files.map(file => `${file.path} ${file.layer}`)
+    }
+
+    expect(await range(2, 2)).toEqual(['second.txt implementation'])
+    expect(await range(1, 3)).toEqual(['.gitattributes implementation', 'second.txt implementation', 'staged.txt implementation', 'third.json test'])
+    await expect(localText(ctx, CONFIG, plainSession(repo), repo,
+      { kind: 'branch', base: null, commits: { from: shas[2] ?? '', to: shas[2] ?? '' } }, 'second.txt', signal)).resolves.toBe('two\n')
+  })
+
+  it('compares a first commit without a parent with the empty tree', async () => {
+    const { repo, point } = await committed()
+    await git(repo, 'checkout', '--quiet', '--orphan', 'other')
+    await git(repo, 'rm', '--quiet', '-r', '-f', '--cached', '.')
+    await writeFile(join(repo, 'orphan.txt'), 'root\n')
+    await git(repo, 'add', 'orphan.txt')
+    await git(repo, 'commit', '--quiet', '-m', 'orphan')
+    const orphan = await git(repo, 'rev-parse', 'HEAD')
+    await git(repo, 'checkout', '--quiet', '--force', 'feat')
+    await git(repo, 'merge', '--quiet', '--allow-unrelated-histories', '--no-edit', 'other')
+    const ctx = await context(repo)
+
+    const listed = await localCommits(gitIn(ctx, CONFIG, plainSession(repo), repo, signal), point, 10)
+    expect(listed.commits.find(commit => commit.sha === orphan)?.parent).toBeNull()
+    const diff = await localDiff(ctx, CONFIG, plainSession(repo), repo, point,
+      { kind: 'branch', base: null, commits: { from: orphan, to: orphan } }, LAYERS, signal)
+    expect(diff.files.map(file => [file.path, file.status])).toEqual([['orphan.txt', 'added']])
+  })
+
+  it('refuses a run of commits whose first parents leave it, and reads one that follows them', async () => {
+    const { repo, fork } = await forked(await directory())
+    await git(repo, 'commit', '--quiet', '-m', 'staged')
+    await git(repo, 'checkout', '--quiet', '-b', 'side', fork)
+    for (const name of ['side-one', 'side-two']) {
+      await writeFile(join(repo, `${name}.txt`), `${name}\n`)
+      await git(repo, 'add', `${name}.txt`)
+      await git(repo, 'commit', '--quiet', '-m', name)
+    }
+    await git(repo, 'checkout', '--quiet', 'feat')
+    await git(repo, 'merge', '--quiet', '--no-ff', '--no-edit', 'side')
+    const point: ForkPoint = { commit: fork, label: 'origin/main', worktree: false }
+    const ctx = await context(repo)
+    const listed = (await localCommits(gitIn(ctx, CONFIG, plainSession(repo), repo, signal), point, 10)).commits
+    const read = (from: string, to: string): Promise<{ readonly files: readonly { readonly path: string }[] }> =>
+      localDiff(ctx, CONFIG, plainSession(repo), repo, point, { kind: 'branch', base: null, commits: { from, to } }, LAYERS, signal)
+    // Two branches from the fork point list their commits one after the other, so one pair of neighbours is unrelated.
+    const leaving = listed.findIndex((commit, index) => index > 0 && commit.parent !== listed[index - 1]?.sha)
+    const before = listed[leaving - 1]?.sha ?? ''
+    const after = listed[leaving]?.sha ?? ''
+
+    expect(leaving).toBeGreaterThan(0)
+    await expect(read(before, after)).rejects.toBeInstanceOf(CommitsNotLinear)
+    const side = listed.filter(commit => commit.title.startsWith('side-'))
+    expect((await read(side[0]?.sha ?? '', side[1]?.sha ?? '')).files.map(file => file.path)).toEqual(['side-one.txt', 'side-two.txt'])
+  })
+
+  it('refuses commits that are not full object names, not on the branch, or out of order', async () => {
+    const { repo, point, shas } = await committed()
+    const ctx = await context(repo)
+    const read = (from: string, to: string): Promise<unknown> =>
+      localDiff(ctx, CONFIG, plainSession(repo), repo, point, { kind: 'branch', base: null, commits: { from, to } }, LAYERS, signal)
+    const [first = '', second = ''] = shas
+
+    await expect(read('HEAD', second)).rejects.toBeInstanceOf(CommitsMissing)
+    await expect(read(first, '--output=x')).rejects.toBeInstanceOf(CommitsMissing)
+    await expect(read(point.commit, second)).rejects.toThrow('The chosen commits are no longer on the branch')
+    await expect(read(second, first)).rejects.toThrow('The chosen commits are no longer on the branch')
+    await expect(localText(ctx, CONFIG, plainSession(repo), repo,
+      { kind: 'branch', base: null, commits: { from: first, to: 'HEAD' } }, 'second.txt', signal)).rejects.toBeInstanceOf(CommitsMissing)
+  })
+})
+
 describe('localText', () => {
-  const branch: ForgeLocalScope = { kind: 'branch', base: null }
+  const branch: ForgeLocalScope = { kind: 'branch', base: null, commits: null }
 
   it('reads the working tree, or the index for the staged scope', async () => {
     const { repo } = await forked(await directory())

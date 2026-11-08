@@ -736,7 +736,7 @@ describe('PluginManagerPage', () => {
         pkg({ name: '@deepseek-ai/dsh-web-app', installed: false, removable: false }),
         pkg({ name: 'dsh-protected', readOnlyReason: 'management-required' }),
         pkg({ name: '@acme/dsh-tool', enabled: false }),
-        // Selected by the profile but not a bundle: a problem the person can switch off, in the profile's own group.
+        // Selected by the profile but not a bundle: its layer is skipped, so it reads as not running.
         pkg({ name: 'dsh-selected', installed: false, error: { code: 'not-bundle' } }),
         pkg({ name: '@deepseek-ai/dsh-experimental-voice-input-bundle', installed: false, optional: true, removable: false, enabled: false }),
       ],
@@ -747,7 +747,7 @@ describe('PluginManagerPage', () => {
     expect(cards.map(card => card.getAttribute('data-plugin-package'))).toEqual([
       '@deepseek-ai/dsh-experimental-voice-input-bundle', 'dsh-better-sidebar', 'dsh-broken', 'dsh-protected', '@acme/dsh-tool', 'dsh-selected',
     ])
-    expect(cards.map(card => card.getAttribute('data-plugin-status'))).toEqual(['disabled', 'running', 'problem', 'running', 'disabled', 'problem'])
+    expect(cards.map(card => card.getAttribute('data-plugin-status'))).toEqual(['disabled', 'running', 'problem', 'running', 'disabled', 'not-running'])
     // Group titles have no counts; the official bundle retains its experimental marker.
     expect(screen.getByRole('heading', { name: en.bundlesTitle })).toBeTruthy()
     expect(screen.getByRole('heading', { name: en.extensionsTitle })).toBeTruthy()
@@ -755,7 +755,8 @@ describe('PluginManagerPage', () => {
     expect(screen.getAllByText(en.statusBeta)).toHaveLength(1)
     expect(screen.getByRole('switch', { name: en.enableToggle.replace('{name}', '@acme/dsh-tool') })).toHaveProperty('disabled', false)
     expect(screen.getByText('A sidebar.')).toBeTruthy()
-    expect(screen.getAllByText(en.statusProblem)).toHaveLength(2)
+    expect(screen.getAllByText(en.statusProblem)).toHaveLength(1)
+    expect(screen.getAllByText(en.statusNotRunning)).toHaveLength(1)
     // The switch acts on the bundle; a bundle the Host cannot read stays off, a protected one stays as it is.
     fireEvent.click(screen.getByRole('switch', { name: en.enableToggle.replace('{name}', 'dsh-better-sidebar') }))
     expect(actions.setEnabled).toHaveBeenCalledWith('dsh-better-sidebar', false)
@@ -902,6 +903,51 @@ describe('PluginManagerPage', () => {
     expect(screen.getByRole('switch', { name: en.enableToggle.replace('{name}', 'cua') }).getAttribute('aria-checked')).toBe('true')
     fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', 'cua') }))
     expect(screen.getByText(`${en.reasonLabel}: native preparation unavailable`)).toBeTruthy()
+  })
+
+  it.each([en, zh])('marks a selected bundle the Host skipped as not running with its reason, keeping its switch on', (dict) => {
+    const name = 'dsh-late'
+    const { actions, setLanguage } = renderTab({ packages: [pkg({ name, error: { code: 'incompatible-version', incompatible: [INCOMPATIBLE] } })] })
+    setLanguage(dict)
+    const card = document.querySelector(`[data-plugin-package="${name}"]`) as HTMLElement
+    expect(card.getAttribute('data-plugin-status')).toBe('not-running')
+    expect(within(card).getByText(dict.statusNotRunning)).toBeTruthy()
+    expect(within(card).queryByText(dict.statusProblem)).toBeNull()
+    // The card names the incompatibility without the requirement list the page carries.
+    expect(within(card).getByText(`${dict.reasonIncompatibleVersionUnnamed}${dict.sentenceSeparator}${dict.reasonIncompatibleInstalled}`)).toBeTruthy()
+    const toggle = within(card).getByRole('switch', { name: dict.enableToggle.replace('{name}', name) })
+    expect(toggle.getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(toggle)
+    expect(actions.setEnabled).toHaveBeenCalledExactlyOnceWith(name, false)
+  })
+
+  it('keeps a selected bundle whose rows run as a problem when the Host reports an error beside them', () => {
+    renderTab({ packages: [pkg({ error: { code: 'unsupported-platform' }, rows: [row()] })] })
+    const card = document.querySelector('[data-plugin-package="dsh-better-sidebar"]') as HTMLElement
+    expect(card.getAttribute('data-plugin-status')).toBe('problem')
+    expect(within(card).getByText(en.statusProblem)).toBeTruthy()
+  })
+
+  it('keeps a selected bundle running when only its metadata carries a diagnostic', () => {
+    const name = 'dsh-better-sidebar'
+    const error = 'dsh.bundle.listedByDefault must be a boolean'
+    renderTab({ packages: [pkg({ meta: { error }, rows: [row()] })] })
+    const card = document.querySelector(`[data-plugin-package="${name}"]`) as HTMLElement
+    expect(card.getAttribute('data-plugin-status')).toBe('running')
+    expect(within(card).queryByText(en.statusNotRunning)).toBeNull()
+    expect(within(card).getByText(en.metadataError.replace('{error}', error))).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', name) }))
+    const detail = document.querySelector(`[data-plugin-detail="${name}"]`) as HTMLElement
+    expect(detail.querySelector('[data-plugin-rows]')).not.toBeNull()
+  })
+
+  it('lists the rows of a skipped layer whose patch the Host read, none of them live', () => {
+    const name = 'dsh-late'
+    renderTab({ packages: [pkg({ name, error: { code: 'unsupported-platform' }, rows: [{ rowId: 'late', moduleName: name, enabled: false, phase: null }] })] })
+    fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', name) }))
+    const detail = document.querySelector(`[data-plugin-detail="${name}"]`) as HTMLElement
+    expect(within(detail).getByText(en.statusNotRunning)).toBeTruthy()
+    expect(within(detail).getAllByRole('listitem').filter(item => item.hasAttribute('data-plugin-row'))).toHaveLength(1)
   })
 
   it('shows Computer Use permission guidance on the experimental plugins page', () => {
@@ -1617,14 +1663,20 @@ describe('PluginManagerPage', () => {
     expect(actions.uninstall).toHaveBeenCalledWith('dsh-better-sidebar')
     fireEvent.click(within(detail).getByRole('switch', { name: en.enableToggle.replace('{name}', 'dsh-better-sidebar') }))
     expect(actions.setEnabled).toHaveBeenCalledWith('dsh-better-sidebar', false)
+    // A bundle without rows says so.
+    set({ packages: [pkg()] })
+    expect(within(detail).getByText(en.partsEmpty)).toBeTruthy()
     // A problem and a protection the Host reports read on the page in the dictionary's words; the page leaves with the crumb.
     set({ packages: [pkg({ error: { code: 'operation-error', diagnostic: 'unreadable' }, readOnlyReason: 'management-required' })] })
     expect(within(detail).getByText(`${en.reasonLabel}: unreadable`)).toBeTruthy()
     expect(within(detail).getByText(en.reasonManagementRequired)).toBeTruthy()
     expect(within(detail).getByRole('button', { name: en.uninstallLabel.replace('{name}', 'dsh-better-sidebar') })).toHaveProperty('disabled', true)
-    expect(within(detail).getByText(en.partsEmpty)).toBeTruthy()
     set({ packages: [pkg({ error: { code: 'not-bundle' } })] })
     expect(within(detail).getByText(`${en.reasonLabel}: ${en.reasonNotBundle}`)).toBeTruthy()
+    // The Host skipped this selected bundle's layer without reading its patch: it is not running, and its rows are unknown.
+    expect(within(detail).getByText(en.statusNotRunning)).toBeTruthy()
+    expect(within(detail).queryByText(en.statusProblem)).toBeNull()
+    expect(detail.querySelector('[data-plugin-rows]')).toBeNull()
     set({ packages: [pkg({ error: { code: 'operation-error' } })] })
     expect(within(detail).getByText(`${en.reasonLabel}: ${en.reasonOperationError}`)).toBeTruthy()
     // An incompatibility reads from its structured packages in the dictionary's words, one sentence per package.
