@@ -19,9 +19,6 @@
     },
     {
       "path": "../../subprocess/subprocess"
-    },
-    {
-      "path": "../../util/atomic-write"
     }
   ]
 }

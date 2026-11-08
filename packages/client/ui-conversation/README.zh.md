@@ -61,7 +61,7 @@ Queue 预览启用空白折叠和文档边缘 trim，保留 emoji，并使用 CS
 
 [Message quotes](../../session/message-quotes/README.zh.md) 通过相同的 UserText 扩展点注册引用匹配与渲染。 每个用户文本容器和草稿编辑器各自拥有独立的悬停卡片分组，其中的 quote 原文弹层会立即互相替换。
 
-现有语义 `DraftSnapshot` 在 references 旁保留 quote 文本及 clipboard 坐标范围。存储接受较早的字符串和仅含 reference 的草稿；Session 切换和 Workspace 转移通过现有编辑器 runtime 保留原子 quote，发送失败时它们留在编辑器中。`inputActions.insertQuote(text)` 仅在输入框处于 plain 模式时插入非空选区。提交产出普通 Markdown 文本；待发送回显、队列行、steering 行和持久消息使用同一文本匹配器。
+现有语义 `DraftSnapshot` 在 references 旁保留 quote 文本及 clipboard 坐标范围。存储接受较早的字符串和仅含 reference 的草稿；Session 切换和 Workspace 转移通过现有编辑器 runtime 保留原子 quote，发送失败时它们留在编辑器中。`inputActions.insertQuote(text, summary?)` 仅在输入框处于 plain 模式时插入非空选区；可选的 `QuoteSummary` 在输入框中替代文本显示并随草稿保存，发送的消息仍携带该文本。提交产出普通 Markdown 文本；待发送回显、队列行、steering 行和持久消息使用同一文本匹配器。
 
 `UiConversation.interactions` 拥有插件对文本选择和右键手势的注册。每个注册项提供同步处理函数，其 ID 选择对应的 keyed Slot 组件；插件通过 Slot injection 机制渲染。处理函数调用 `open()` 展示，需要替代浏览器默认行为时单独调用 `preventDefault()`。Chat 提供 DOM 选区和区域内布局；机制不从 DOM 位置推断原始来源数据或 Markdown 偏移。
 
@@ -131,6 +131,8 @@ Session 首次绑定或缓存的 Session 成为 current 时，shell 会在渲染
 每次输入框提交都携带原始发生时间、操作来源、投递意图以及会话模型和运行状态快照，贯穿异步命令裁决。快照还记录会话是否仍为空白，以及会话记录的 Agent preset id。普通消息通知在引用序列化前发出一次，纯附件提交也遵循这一规则；已处理或认领的命令不发出通知。快照读取与通知消费异常不能阻断发送。在桌面端，该通知报告 `send_button_click`，携带 `is_new_session`（会话为空白时为 true）和表示 preset 类别的 `agent_preset`：`cordis` 记为 `creator`；`ptc`、`minimal` 与 `standard` 沿用各自的 id；其他 preset 记为 `other`。会话未记录 preset 时省略 `agent_preset`。不发送自定义 preset 的 id。
 
 默认发送等待 Host 接收：Enter 把草稿文字、引用胶囊和附件一起记入本次 attempt，composer 进入 `sending`，编辑器和附件栏只读，Send 显示发送中，直到 Host 接收该提示词（以回执或带有该请求 id 的 Inbox 行为准，先到者生效）。之后才在回显渲染之前、在同一事务里清空草稿、其附件、occurrence 表和撤销历史；被拒绝或失败时 composer 回到 `plain`，草稿和附件保持不变，因此同一时刻只有一条消息在途。只读输入阶段结束时，如果焦点停在页面 body 上，桌面端将焦点恢复到编辑器，移动端则将焦点移到输入卡片，避免重新弹出键盘。用户在此期间聚焦的其他控件会保留焦点。`sendSession` 在序列化之前用投递模式注册 Session 提交回显（`session.beginSubmission`），保留图片与文件的选择顺序；Host 接收提示词后，Session 才在 `pendingSubmissions` 中公开它，并按注册时的模式与运行状态推导位置，因此空闲发送进入 transcript（文本记录），繁忙时 Queue 进入 QueueDock，繁忙时 Steer 进入 pending-steering 区域。随后让出一帧，文件和已上传的图片引用已暂存凭证；没有上传的图片（例如 continuable 子代理草稿里的图片）经浏览器原生 `FileReader` data-URL 路径编码。命令提交也用同一凭证表示通用文件，因此发送 `/goal` 或 `/plan` 时不会再次读取这些浏览器文件。提示词复用提交 `requestId`；Session 按同一 `rpcId` 关联展示接管，并仅退休回显一次。命令提交保持冻结的 `submitting` 阶段。回显以 observed 退休时，durable 图片缓存立即公开每个预览 URL，读取 admitted 附件后用规范化 URL 替换预览，并在各 URL 停止使用后撤销，同时释放文件卡；已被接收但回显未被观察到就退休的提示词会释放其附件，Session scope 销毁时会释放尚未被 Host 接收的消息的附件。选中的通用文件以及普通 Session 草稿里的图片在加入时就进入同一个先进先出的后台上传队列，发送会等到每一项都取得凭证；`maxConcurrentFileUploads` 默认允许两个 Worker transport 同时运行，Conversation 服务在切换 Session 时继续持有排队和运行中的传输操作及字节进度，移除草稿会跳过排队中的传输或中止正在运行的传输。浏览器 shell 暴露 `__DSH_HOST_PATHS__` 时（桌面应用），拖入或粘贴的文件夹以及拖入、选择或粘贴的带真实路径的非图片文件会成为 `@路径` chip；图片仍然上传。拖放和粘贴通过浏览器 entry API 识别目录；该 API 不可用或没有返回 entry 时，粘贴项沿用普通文件处理。文件选择器不能选择目录。引用需要启用 `ui-reference` 插件，原路径也必须仍可由模型的文件工具读取。工作区内的路径使用相对形式，其他路径保留绝对形式。整批文件先校验再插入，保留来源顺序和已选中的文字，引用之间有空白分隔，含空格的路径使用闭合引号。没有该桥的浏览器会拒绝拖入或粘贴的文件夹，桌面端无法获取文件夹路径时单独报错。continuable 子代理允许粘贴和拖入 PNG、JPEG、WebP、GIF 图片，沿用相同的投影限制并以内联方式发送，因为 Host 只为普通 Session 暂存上传；包含通用文件、不支持的图片格式或目录的批次会在进入草稿前整批拒绝。它们的发送同样注册本地回显；continuation 请求携带回显的 `requestId`，Host 把它记录为子会话消息的 `rpcId`。
+
+每个已挂载的 composer（包括在右侧栏打开的子代理对话）都加入同一条文档级粘贴路由。焦点不在任何输入框、文本区域或可编辑元素内时，剪贴板带有文件的粘贴会进入最近一次获得焦点的 composer；在其他 composer 获得焦点之前，或最近聚焦的 composer 当前无法接收文件时，则进入主 Conversation 的 composer。已聚焦编辑器内的粘贴仍由该编辑器处理，不含文件的剪贴板文字不会经此插入。位于隐藏或 inert 子树中的 composer（例如折叠的侧栏或未选中的标签页）不会成为目标；打开模态对话框或菜单时，只有其中的 composer 可以成为目标。没有可作为目标的 composer 能接收文件时，粘贴保留浏览器的默认处理。
 
 排队提交的本地回显在禁用的编辑、删除、插话按钮旁显示“发送中…”；折叠后的队列在标题栏保留发送状态。匹配的 Host 队列行替换回显后，各操作按原有的纯文本内容和运行状态要求启用。仅收到提示词确认不会启用队列操作。被拒绝或失败的提交不会公开回显，草稿留在 composer 中并显示错误提示。Agent 接纳阶段的拒绝（`session/prompt-rejected`）显示它自带的文字；若 `presented` 表明拒绝它的插件会在自己的界面里说明，composer 不再提示。
 
@@ -221,6 +223,7 @@ selector 必须是 owner currency 的纯函数。非 null 返回值作为 `match
 - **Factory occurrence 继承渲染位置的 Session**——`conversation.content` 不接受独立寻址的 Session；该能力需要单独的 Session provider。
 - **手动继续使用固定产品白名单**——支持的失败码独立于提供方可配置的 `retryableCodes`；修改自动重试策略不会扩展或缩小此操作的范围。即使默认策略不重试 `STREAM_CLOSED`，用户仍可明确发起新轮次。该错误码也可能表示协议违规，因此再次请求不保证能够恢复。
 - **composer 内的毛玻璃只在 Chromium 中验证过**——docked composer 设置 `will-change: transform` 后，Chromium 中后代的 `backdrop-filter` 仍会采样背后的 transcript；WebKit 中的表现尚未验证。
+- **文档级文件拖放未经路由**——每个已挂载的附件视图都会处理文档级文件拖放，因此在右侧栏打开可继续的子代理对话时，一次拖放会把文件同时加入两个 composer；只有窗口级粘贴经过单一的粘贴路由。
 - **出错的 Definition 让每次发布都完整回放**——增量 flush 失败后，assembler 回放已加载的完整窗口，以保持视图正确。若某个 Definition 在每次更新中都失败，在其 owner 修复前，每次发布都会回放整个窗口（[Window 更新路径](../../../docs/subsystems/conversation.zh.md#window-update-paths)）。
 
 

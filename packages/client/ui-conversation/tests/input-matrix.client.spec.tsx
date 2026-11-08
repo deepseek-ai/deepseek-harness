@@ -26,6 +26,7 @@ import { SessionInputShell } from '../src/client/input/facade.ts'
 import { InputBar } from '../src/client/skeleton/InputBar.tsx'
 import type { InputBarProps } from '../src/client/skeleton/InputBar.tsx'
 import { zh } from '../src/client/locales.ts'
+import { createComposerFileIntake } from '../src/client/input/file-intake.ts'
 
 // Every fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
 const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined })) as GlobalStandardProps['useResource']
@@ -77,6 +78,7 @@ function mountBar(shell: SessionInputShell, over?: { running?: boolean; disabled
     addFiles: () => null,
     useFileUploads: bindSnapshotSelector(createSnapshotStore({})),
     retryFileUpload: undefined,
+    registerFileIntake: createComposerFileIntake(),
     removeAttachment: () => {},
     // Every id resolves so the bar's registry prune never drops a test image.
     resolveDraftAttachments: ids => ids.map(id => ({
@@ -95,6 +97,7 @@ function mountBar(shell: SessionInputShell, over?: { running?: boolean; disabled
     stop: vi.fn(),
     t: makeTranslate(zh, commonZh),
     variant: 'composer',
+    occurrence: 'main',
   }
   return render(<InputBar {...props} />)
 }

@@ -23,7 +23,7 @@
 
 MCP 服务器需要主动配置。在目标 Cordis 作用域中，为每台服务器配置一个 `@deepseek-ai/dsh-mcp-client` 条目。每个随附 profile 都提供[工具注册表](tools.zh.md)，并统一挂载共享资源服务一次；用户只需配置客户端条目。调用方没有可见的已配置服务器时，在 native 或 PTC 模式下都不会获得 MCP 提示词文本或工具。
 
-Web 与 Desktop profile 还统一挂载一次 [MCP 服务器管理器](../../packages/mcp/mcp-manager/README.zh.md)。它运行通过 Settings 配置的服务器，以及已安装插件在自身生命周期内注册的服务器，并向 Remote 客户端提供它们的状态、重启与探测操作。注册 OAuth 服务器的插件通过 [`ui-mcp-account`](../../packages/client/ui-mcp-account/README.zh.md) 的 `ctx.mcpAccounts` 注册账号，使其显示在**插件**页面上。
+Web 与 Desktop profile 还统一挂载一次 [MCP 服务器管理器](../../packages/mcp/mcp-manager/README.zh.md)。它运行通过 Settings 配置的服务器，以及已安装插件在自身生命周期内注册的服务器，并向 Remote 客户端提供它们的状态、重启与探测操作。注册 OAuth 服务器的插件通过 [`dsh-mcp-account`](../../packages/mcp/mcp-account/README.zh.md) 的 `ctx.mcpAccounts` 注册账号，使其显示在**插件**页面上。
 
 | 选择 | 配置维护位置 |
 |---|---|
@@ -122,6 +122,25 @@ interface McpResourceProvider {
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxmcpaccounts--mcpaccounts"></a>
+
+### `ctx.mcpAccounts` — `McpAccounts`
+
+Shows each connector's MCP server account in the connector account registry.
+
+```ts cordis-catalog
+/**
+ * Show one connector's server account on its bundle page for as long as the returned disposer has not run. The
+ * account's key is `mcp:<server>`.
+ * @param registration - the server name, the bundle package, and the connector's text.
+ * @returns the registry's idempotent disposer, which withdraws the account.
+ * @throws when another account already uses the server or the package.
+ */
+register(registration: McpAccountRegistration): () => void
+```
+
+Source: [`packages/mcp/mcp-account/src/index.ts`](../../packages/mcp/mcp-account/src/index.ts)
+
 <a id="ctxmcpclienthost--mcpclienthost"></a>
 
 ### `ctx.mcpClientHost` — `McpClientHost`
@@ -137,14 +156,14 @@ Validates, mounts, probes, and authorizes MCP servers for the plugin that manage
  * @throws when the server name, a field, a template token, the reconnect policy, or OAuth beside an Authorization
  *   header is invalid.
  */
-validate(input: ServerConfigInput, path: readonly string[]): ServerConfig
+validate(input: ConfigInput, path: readonly string[]): Config
 
 /**
  * Mount one server instance below the host. The instance registers its tools and holds its `serverName` until disposed.
  * @param config - resolved server configuration, usually from {@link McpClientHost.validate}.
  * @returns the instance's activation and disposal.
  */
-mount(config: ServerConfig): McpServerInstance
+mount(config: Config): McpServerInstance
 
 /**
  * Probe a server without mounting it: resolve its templates, connect, list its tools, and close.
@@ -153,7 +172,7 @@ mount(config: ServerConfig): McpServerInstance
  * @returns the connect and list outcome with the cleanup result.
  * @throws for invalid options, malformed templates, or a missing required credentials provider.
  */
-probe(config: ServerConfig, options?: McpProbeOptions): Promise<McpProbeResult>
+probe(config: Config, options?: McpProbeOptions): Promise<McpProbeResult>
 
 /**
  * Create the explicit OAuth authorization owner of one server.
@@ -233,21 +252,21 @@ async probe(name: string, options?: McpProbeOptions): Promise<McpProbeResult>
  * @param name - configured or registered OAuth entry, including disabled entries.
  * @returns current attempt progress; absent services, changing entries, or failed cleanup reject.
  */
-@Remote async startAuthorization(name: string): Promise<McpOAuthAttemptView>
+async startAuthorization(name: string): Promise<McpOAuthAttemptView>
 
 /**
  * Cancel the selected attempt and drain its work; an admitted credential commit completes.
  * @param name - managed entry.
  * @param id - selected attempt; stale or absent attempts are ignored.
  */
-@Remote async cancelAuthorization(name: string, id: McpOAuthAttemptId): Promise<void>
+async cancelAuthorization(name: string, id: McpOAuthAttemptId): Promise<void>
 
 /**
  * Drain authorization, probes, and connections before deleting the local grant; retain client registration.
  * A configuration change before deletion preserves the grant and rejects.
  * @param name - configured or registered OAuth entry; cleanup failure preserves the grant and blocks replacement.
  */
-@Remote async signOut(name: string): Promise<void>
+async signOut(name: string): Promise<void>
 ```
 
 Source: [`packages/mcp/mcp-manager/src/index.ts`](../../packages/mcp/mcp-manager/src/index.ts)

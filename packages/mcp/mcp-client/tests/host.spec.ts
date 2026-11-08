@@ -4,8 +4,7 @@ import { expect, it, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import Tools from '@deepseek-ai/dsh-tools'
-import * as McpClient from '@deepseek-ai/dsh-mcp-client'
-import { Config, type ServerConfigInput } from '@deepseek-ai/dsh-mcp-client'
+import { McpClientHost, type ConfigInput } from '@deepseek-ai/dsh-mcp-client'
 import { authorize, oauthWorld } from './oauth-fixture.ts'
 import { startHttpMcpFixture } from './http-fixture.ts'
 
@@ -14,7 +13,7 @@ async function hosted() {
   onTestFinished(async () => { await ctx.fiber.dispose() })
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(Tools)
-  const entry = ctx.plugin(McpClient, Config({ host: true }))
+  const entry = ctx.plugin(McpClientHost)
   await entry
   const server = await startHttpMcpFixture()
   onTestFinished(server.close)
@@ -39,7 +38,7 @@ it('resolves server defaults and names every refused field after the server path
 
 it('checks template tokens by field only when expansion is enabled', async () => {
   const { host } = await hosted()
-  const stdio: ServerConfigInput = { transport: 'stdio', serverName: 'local', command: 'echo', args: ['${credential:A}', '${env:B}'] }
+  const stdio: ConfigInput = { transport: 'stdio', serverName: 'local', command: 'echo', args: ['${credential:A}', '${env:B}'] }
   expect(() => host.validate({ ...stdio, expandTemplates: true }, ['servers', 'local'])).toThrow('servers.local.args[1]')
   expect(host.validate(stdio, ['servers', 'local'])).toMatchObject({ args: ['${credential:A}', '${env:B}'] })
   expect(() => host.validate({
@@ -76,7 +75,7 @@ it('probes without registering tools', async () => {
 
 it('creates authorization owners that commit a grant through the host context', async () => {
   const world = await oauthWorld()
-  await world.ctx.plugin(McpClient, Config({ host: true }))
+  await world.ctx.plugin(McpClientHost)
   const owner = world.ctx.get('mcpClientHost')!.authorization(world.config, () => undefined)
   expect(owner.current()).toBeUndefined()
   await authorize(owner)
@@ -84,7 +83,7 @@ it('creates authorization owners that commit a grant through the host context', 
   expect(await owner.dispose()).toEqual({ closeConfirmed: true })
 })
 
-it('withdraws the host and every instance it mounted when the host entry is disposed', async () => {
+it('withdraws the host and every instance it mounted when its owner is disposed', async () => {
   const { ctx, entry, host, url } = await hosted()
   await host.mount(host.validate({ transport: 'streamable-http', serverName: 'fixture', url }, ['fixture'])).ready
   expect(ctx.tools.get('mcp__fixture__ping')).toBeDefined()

@@ -6,3 +6,4 @@ recording: authored
 header:
   class: workspace-dependencies
   pin: true
+  systemPromptSource: office-skills

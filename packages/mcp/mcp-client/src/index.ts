@@ -2,10 +2,9 @@
  * MCP client bridge plugin: connects to an external MCP server and registers
  * its tools on `ctx.tools` under server-qualified public names
  * (`mcp__<serverName>__<rawName>`). Each plugin instance connects to one MCP
- * server; load multiple instances in `cordis.yml` for multiple servers.
- * Loaded with `host: true` instead, an instance connects no server and provides
- * `ctx.mcpClientHost`, through which a plugin that manages servers, such as the
- * MCP manager, validates, mounts, probes, and authorizes them.
+ * server; load multiple instances in `cordis.yml` for multiple servers. A
+ * plugin that manages servers, such as the MCP manager, creates its own
+ * `McpClientHost` to validate, mount, probe, and authorize them.
  *
  * Namespace plugin (named exports, no default export). Lifecycle is
  * effect-scoped: disposal disconnects from the server, unregisters all tools,
@@ -21,9 +20,8 @@ import z from '@deepseek-ai/schemastery'
 import { scopeOf } from '@deepseek-ai/dsh-scope'
 import { resolveReconnectPolicy, startConnection } from './connection.ts'
 import type { ReconnectConfig } from './connection.ts'
-import { hasOAuthWithAuthorizationHeader, HostSchema, StdioSchema, StreamableHttpSchema } from './config.ts'
-import type { ServerConfigInput } from './config.ts'
-import { McpClientHost } from './host.ts'
+import { hasOAuthWithAuthorizationHeader, StdioSchema, StreamableHttpSchema } from './config.ts'
+import type { ConfigInput } from './config.ts'
 import { registerServerContext } from './server-context.ts'
 import { registerStatusCell } from './status.ts'
 import { McpOAuthCredentials } from './oauth-credentials.ts'
@@ -34,8 +32,9 @@ import type {} from '@deepseek-ai/dsh-tools'
 export { createMcpToolDefinition } from './tools.ts'
 export type { McpResult, McpToolDefinitionOptions } from './tools.ts'
 export type { ReconnectConfig, ResolvedReconnectPolicy } from './connection.ts'
-export type { ServerConfigInput } from './config.ts'
-export type { McpClientHost, McpServerInstance } from './host.ts'
+export type { ConfigInput } from './config.ts'
+export { McpClientHost } from './host.ts'
+export type { McpServerInstance } from './host.ts'
 export type { McpConnectionStatusHandle } from './status.ts'
 export type * from './types.ts'
 export type { McpOAuthAuthorization } from './oauth.ts'
@@ -132,45 +131,22 @@ export interface StreamableHttpConfig {
 }
 
 /** Configuration for one stdio or Streamable HTTP MCP server. */
-export type ServerConfig = StdioConfig | StreamableHttpConfig
+export type Config = StdioConfig | StreamableHttpConfig
 
-/** Config of an instance that provides `ctx.mcpClientHost` instead of connecting a server. */
-export interface HostConfig {
-  /** Provide the MCP client host. */
-  host: true
-}
-
-/** Configuration of one mcp-client instance: a server, or the host. */
-export type Config = ServerConfig | HostConfig
-
-/**
- * The `Config` schema. A server input resolves to its server configuration and the host input to the host
- * configuration, while the plugin as a whole accepts either.
- */
-export interface ConfigSchema extends z<ServerConfigInput | HostConfig, Config> {
-  (input: ServerConfigInput): ServerConfig
-  (input: HostConfig): HostConfig
-}
-
-/** Validate one instance's configuration and resolve its defaults. */
-export const Config = z.union([StdioSchema, StreamableHttpSchema, HostSchema]) as ConfigSchema
+/** Validate one server's configuration and resolve its defaults. */
+export const Config = z.union([StdioSchema, StreamableHttpSchema]) as z<ConfigInput, Config>
 
 // ---- Plugin apply ----
 
 /**
- * Connect one MCP server and publish its initial tool generation before activation,
- * or provide `ctx.mcpClientHost` for a host configuration.
+ * Connect one MCP server and publish its initial tool generation before activation.
  * This entry remains explicitly `async`: Cordis treats a prototype-bearing
  * ordinary function as a constructor, whose returned Promise is not startup work.
  * @param ctx - plugin context carrying the tool registry.
- * @param config - resolved server or host configuration.
- * @returns startup readiness after connection and initial tool discovery settle, or after the host is provided.
+ * @param config - resolved transport and server namespace configuration.
+ * @returns startup readiness after connection and initial tool discovery settle.
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
-  if ('host' in config) {
-    await ctx.plugin(McpClientHost)
-    return
-  }
   if (hasOAuthWithAuthorizationHeader(config)) {
     throw new Error('MCP OAuth and an Authorization header cannot be configured together')
   }

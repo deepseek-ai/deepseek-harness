@@ -26,4 +26,11 @@
 @media (hover: hover) { .line:hover { color: var(--dsw-alias-state-business-primary); } }
 @media (pointer: coarse) { .input { font-size: 16px; } .line { min-height: 28px; } }
 
-.add { position: absolute; inset-inline-start: 2px; top: 50%; transform: translateY(-50%); display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: var(--dsw-radius-xs); background: var(--dsw-alias-button-primary-fill); color: var(--dsw-alias-label-primary-foreground); cursor: pointer; user-select: none; }
+/* The plus starts just inside the number's padding and covers the sign column, or the empty lane side-by-side cells keep instead, so the line number and the code stay clickable. */
+.add, .hoverAdd { position: absolute; z-index: 1; inset-inline-start: calc(100% - 4px); top: 50%; transform: translateY(-50%); display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: var(--dsw-radius-xs); background: var(--dsw-alias-button-primary-fill); color: var(--dsw-alias-label-primary-foreground); font: inherit; cursor: pointer; user-select: none; }
+/* Unified rows that show both numbers move the left plus past the right number too; it paints over that number's padding. The plus inherits the code font because the number width is measured in `ch`. */
+[data-review]:not([data-split]):not([data-single-side]) [data-review-side="L"] .add,
+[data-review]:not([data-split]):not([data-single-side]) [data-review-side="L"] .hoverAdd { inset-inline-start: calc(100% + var(--forge-number-width, 3.5em) - 4px); }
+/* The mouse shortcut appears only for the hovered side of a row: a split cell or a unified line. */
+.hoverAdd { display: none; }
+@media (hover: hover) { [data-diff-side]:hover .hoverAdd, [data-diff-line]:hover .hoverAdd { display: inline-flex; } }

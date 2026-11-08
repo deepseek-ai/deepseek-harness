@@ -87,9 +87,9 @@ Messages 以内容块发送文本、思考、工具调用和工具结果，以 `
 <a id="account-credentials"></a>
 ### 账号凭据
 
-`deepseek-official` 仅解析配置的 API Key 引用。`deepseek-account` 仅解析[账号提供者](../../credentials/deepseek-account-platform/README.zh.md)保存的授权，其允许的 `inferenceOrigin` 默认为 `https://api.deepseek.com`。两条路由均不回退到另一凭证。退出登录删除账号授权，保留 API Key。
+`deepseek-official` 仅解析配置的 API Key 引用。`deepseek-account` 仅解析[账号服务](../../credentials/deepseek-account/README.zh.md)保存的授权，其允许的 `inferenceOrigin` 默认为 `https://api.deepseek.com`。两条路由均不回退到另一凭证。退出登录删除账号授权，保留 API Key。
 
-Messages 和 Files 请求通过 `x-dsh-auth-token` 发送账号 token，不加 Bearer 前缀；API Key 使用 `x-api-key`。两种凭据模式均拒绝重定向。账号 provider 负责 HTTP 401 分类和凭据失效处理；传输层将错误交给其回调。
+Messages 和 Files 请求通过 `x-dsh-auth-token` 发送账号 token，不加 Bearer 前缀；API Key 使用 `x-api-key`。两种凭据模式均拒绝重定向。账号服务负责 HTTP 401 分类和凭据失效处理；传输层将错误交给其回调。
 
 [共享凭据函数](src/credential.ts)为模型路由和 Web 提供方获取凭据，不决定请求头。`resolveDeepSeekApiKey(ctx, ref)` 返回规范化并校验后的密钥或 `undefined`；已安装的凭据服务具有权威性，仅在该服务缺席时读取启动环境。存储与密钥格式错误向上传播。`deepSeekApiKeyConfigured(ctx, ref)` 检查是否存在，不读取已存密钥值。账号函数将目标地址许可检查和精确 token 作废交给账号服务；作废时隔离存储失败，保留原请求错误。
 

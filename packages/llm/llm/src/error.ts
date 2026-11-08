@@ -1,25 +1,13 @@
 /**
- * Harness error base with a stable machine-routable code and chained cause.
- * Package errors extend it so tool results and replay can retain failure class.
+ * LLM failure codes and helpers over the shared Harness error base. The base
+ * class lives in `@deepseek-ai/dsh-error` and is re-exported here, so both
+ * import paths name the same class.
  * @module @deepseek-ai/dsh-llm/error
  */
 
-/**
- * Base class for all harness errors. Carries a `code` (stable, programmatic —
- * e.g. `NO_ADAPTER`, `INVALID_ARGS`) distinct from the
- * human-readable `message`, and supports `cause` chaining via the standard
- * `ErrorOptions`. `name` defaults to the subclass constructor name.
- */
-export class HarnessError extends Error {
-  /** Stable machine-routable failure class (e.g. `RATE_LIMIT`); route on this, never by parsing `message`. */
-  readonly code: string
+import { HarnessError } from '@deepseek-ai/dsh-error'
 
-  constructor(message: string, code: string, options?: ErrorOptions) {
-    super(message, options)
-    this.code = code
-    this.name = new.target.name
-  }
-}
+export { HarnessError }
 
 /**
  * Every failure code the built-in providers and the LLM runtime raise. An entry
