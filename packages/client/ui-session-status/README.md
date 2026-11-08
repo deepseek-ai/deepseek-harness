@@ -22,7 +22,7 @@ Use this package to read each Session's running state, highest-precedence pendin
 <a id="status-table"></a>
 ## Status table
 
-The Web bundle loads this plugin after [`dsh-client-ui-session`](../ui-session/README.md) and requires it at startup; a composition that loads ui-session without this package has no status table and no `useSessionStatus` hook. A plugin that reads `ctx.uiSession.sessionStatus` adds `'uiSession.sessionStatus'` to its `inject` list; without it, Cordis rejects the property read. The member is declared on ui-session's `UiSessionService`, the type of `ctx.uiSession`; a value annotated as the `UiSession` class does not show it.
+The Web bundle loads this plugin after [`dsh-client-ui-session`](../ui-session/README.md) and requires it at startup; a composition that loads ui-session without this package has no status table and no `useSessionStatus` hook. A plugin that reads `ctx.uiSession.sessionStatus` adds `'uiSession.sessionStatus'` to its `inject` list; without it, Cordis rejects the property read. A plugin whose components call `useSessionStatus` injects it as well, so the plugin unloads and reloads with the hook. The member is declared on ui-session's `UiSessionService`, the type of `ctx.uiSession`; a value annotated as the `UiSession` class does not show it.
 
 | Member | Use |
 |---|---|

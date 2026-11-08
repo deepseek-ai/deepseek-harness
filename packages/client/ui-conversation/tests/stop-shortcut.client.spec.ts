@@ -137,7 +137,7 @@ describe('fixed stop routing', () => {
     expect(b.cancel).toHaveBeenCalledOnce()
   })
 
-  it('keeps the sequence when another Session gains a pending interaction between presses', async () => {
+  it("keeps this Session's double-Escape sequence when another Session gains a pending interaction", async () => {
     const b = await bench()
     const publish = b.runtime.ctx.uiSession.registerPendingInteraction<SessionPendingInteractionBase>(() => 0)
     b.press()

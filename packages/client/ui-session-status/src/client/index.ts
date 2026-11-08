@@ -2,6 +2,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 // Type-only: declares the `sessions` Controller service.
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
+// Type-only service merge for ctx.slots.
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { UiSessionStatus } from './status.ts'
 
 export type { SessionStatus, SessionStatusSnapshot, UiSessionStatus, UseSessionStatus } from './status.ts'

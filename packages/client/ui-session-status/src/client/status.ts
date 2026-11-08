@@ -4,8 +4,6 @@ import type { ISessions, SessionSummary } from '@deepseek-ai/dsh-api-session-con
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import { notifySubscribers } from '@deepseek-ai/dsh-client-store'
 import type { HostObservable, SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
-// Type-only service merge for ctx.slots.
-import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { SessionPendingInteraction } from '@deepseek-ai/dsh-client-ui-session/client'
 // Retains ui-session's Context and Slot prop declarations for every consumer of this face.
 export type {} from '@deepseek-ai/dsh-client-ui-session/client'
@@ -41,8 +39,8 @@ declare module '@deepseek-ai/dsh-client-ui-session/client' {
 
 /**
  * Session status table provided as the `uiSession.sessionStatus` service and read as `ctx.uiSession.sessionStatus`.
- * Completion reminders live only in this Client: a stop observed outside the main view stays unread until the main
- * view retains the Session, the Session runs again, or a ready catalog no longer lists it.
+ * Completion reminders live only in this Client; the [status table reference](../../README.md#status-table) states
+ * when each field is set and cleared.
  */
 export class UiSessionStatus extends Service implements HostObservable<SessionStatusSnapshot> {
   private readonly running = new Map<SessionId, boolean>()

@@ -20,8 +20,11 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-/** Required services for Definition, keyed renderer, navigation, and copy. */
-export const inject = ['uiConversation', 'uiWorkspace', 'slots', 'sessions', 'locale']
+/**
+ * Required services for Definition, keyed renderer, navigation, and copy. `uiSession.sessionStatus` provides the
+ * `useSessionStatus` hook the run panel renders with, so the plugin unloads and reloads with it.
+ */
+export const inject = ['uiConversation', 'uiWorkspace', 'slots', 'sessions', 'locale', 'uiSession.sessionStatus']
 
 /** Register the workflow Definition, dictionary, and keyed Chat renderer. */
 export function apply(ctx: ClientContext): void {

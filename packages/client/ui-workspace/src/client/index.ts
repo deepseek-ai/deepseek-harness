@@ -132,9 +132,12 @@ const NS = 'workspace'
  * (loading/prefetch metadata, never apply sequencing) and neither owner
  * provides a waitable service. apply therefore depends on each slot
  * declaration through `slots.inject()` instead of assuming order.
+ * `uiSession.sessionStatus` provides the `useSessionStatus` hook the browser rows render with, so the plugin unloads
+ * and reloads with it.
  */
 export const inject = ['contextMenus',
   'slots', 'sessions', 'workspaces', 'locale', 'remote', 'remote.directoryPicker', 'layout', 'shortcuts', 'remoteAccess',
+  'uiSession.sessionStatus',
 ]
 
 /**
