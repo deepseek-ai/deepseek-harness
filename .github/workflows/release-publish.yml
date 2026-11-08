@@ -9,12 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       cua_run_id:
-        description: '已有 CUA 打包 run ID：留空重新打包；填写时复用同一源码和版本的已验证产物'
-        type: string
-        required: false
-        default: ''
-      cua_run_attempt:
-        description: 'CUA 打包 attempt：仅与 run ID 一起使用；留空选择最新一次，不回退到更早的成功构建'
+        description: 'CUA helper run ID，留空复用源码逐字节一致的产物，无匹配则构建'
         type: string
         required: false
         default: ''
@@ -26,6 +21,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 env:
   PRIMARY_NODE_VERSION: '24'
@@ -33,18 +29,16 @@ env:
 
 jobs:
   cua-helper:
-    if: (startsWith(github.ref, 'refs/tags/dsh-v') || inputs.skip-tag-check) && inputs.cua_run_id == '' && inputs.cua_run_attempt == ''
+    if: startsWith(github.ref, 'refs/tags/dsh-v') || inputs.skip-tag-check
     uses: ./.github/workflows/cua-helper-package.yml
     with:
-      source_ref: ${{ github.ref }}
+      reuse: true
       preset: production
+      cua_run_id: ${{ inputs.cua_run_id }}
 
   pack:
     name: Pack npm tarballs
     needs: cua-helper
-    if: >-
-      ${{ !cancelled() && (needs.cua-helper.result == 'success'
-        || (needs.cua-helper.result == 'skipped' && (inputs.cua_run_id != '' || inputs.cua_run_attempt != ''))) }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -87,33 +81,20 @@ jobs:
           RELEASE_PUBLISH: 'true'
         run: pnpm run release:verify --family dsh ${{ inputs.skip-tag-check && '--skip-tag-check' || '' }}
 
-      - name: Select retained CUA helper
-        if: inputs.cua_run_id != '' || inputs.cua_run_attempt != ''
-        id: retained-cua
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: pnpm exec tsx scripts/cua-helper/select-artifact.ts
-
-      - name: Download retained CUA helper
-        if: inputs.cua_run_id != '' || inputs.cua_run_attempt != ''
+      - name: Download selected CUA helper
         uses: actions/download-artifact@v8.0.1
         with:
-          artifact-ids: ${{ steps.retained-cua.outputs.artifact-id }}
-          run-id: ${{ inputs.cua_run_id }}
+          artifact-ids: ${{ needs.cua-helper.outputs.artifact-id }}
+          run-id: ${{ needs.cua-helper.outputs.run-id }}
           github-token: ${{ github.token }}
           path: dist/cua-helper
 
       - name: Build
         run: pnpm run build:official --serial
 
-      - name: Download freshly built CUA helper
-        if: inputs.cua_run_id == '' && inputs.cua_run_attempt == ''
-        uses: actions/download-artifact@v8.0.1
-        with:
-          name: ${{ needs.cua-helper.outputs.artifact }}
-          path: dist/cua-helper
-
       - name: Stage verified native helper applications
+        env:
+          CUA_EXPECTED_BUILD_KEY: ${{ needs.cua-helper.outputs.build-key }}
         run: |
           mkdir dist/cua-helper/extracted
           tar -xzf dist/cua-helper/cua-helper.tgz -C dist/cua-helper/extracted
@@ -121,13 +102,13 @@ jobs:
 
       - name: Record CUA source and publication retry instructions
         env:
-          CUA_RUN_ID: ${{ inputs.cua_run_id || github.run_id }}
-          CUA_RUN_ATTEMPT: ${{ steps.retained-cua.outputs.attempt || github.run_attempt }}
+          CUA_RUN_ID: ${{ needs.cua-helper.outputs.run-id }}
+          CUA_ARTIFACT_ID: ${{ needs.cua-helper.outputs.artifact-id }}
         run: |
           {
-            printf 'CUA helper: run `%s`, attempt `%s`.\n\n' "$CUA_RUN_ID" "$CUA_RUN_ATTEMPT"
+            printf '采用 CUA helper 构建 run ID `%s`，artifact ID `%s`。\n\n' "$CUA_RUN_ID" "$CUA_ARTIFACT_ID"
             printf '%s\n\n' 'npm 部分发布失败时，只重跑 Publish to npm job，复用原 dsh-npm-tarballs；不要重跑全部 job。'
-            printf '若需新建发布运行，填写 `cua_run_id=%s`、`cua_run_attempt=%s`，并使用相同源码 commit 和版本。\n' "$CUA_RUN_ID" "$CUA_RUN_ATTEMPT"
+            printf '需要重新打包时，可留空自动查找，或填写 `cua_run_id=%s` 指定该 helper；源码和构建配置必须匹配。\n' "$CUA_RUN_ID"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Pack release tarballs

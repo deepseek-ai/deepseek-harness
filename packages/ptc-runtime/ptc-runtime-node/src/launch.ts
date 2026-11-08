@@ -38,15 +38,13 @@ export function resolveLaunch(config?: LaunchConfig): LaunchConfig {
  * @param fs - Filesystem mapping host bootstrap assets into the process world.
  * @param config - resolved worker invocation.
  * @param maxMessageBytes - Validated frame and queued-write limit.
- * @param persistent - Whether the selected mode requires retained-process launch support.
  * @returns Arguments following the resolved Node executable.
  */
-export function bootstrapArgs(fs: Pick<FileSystem, 'processPathFromHostPath'>, config: LaunchConfig, maxMessageBytes: number, persistent = false): string[] {
+export function bootstrapArgs(fs: Pick<FileSystem, 'processPathFromHostPath'>, config: LaunchConfig, maxMessageBytes: number): string[] {
   switch (config.kind) {
     case 'embedded':
-      if (persistent) throw new Error('Persistent PTC requires a node-script launch')
       return [String(maxMessageBytes)]
-    case 'node-script': return scriptBootstrapArgs(fs, config.bootstrapPath, maxMessageBytes)
+    case 'node-script': return ['--experimental-vm-modules', ...scriptBootstrapArgs(fs, config.bootstrapPath, maxMessageBytes)]
     /* v8 ignore next -- Callers supply the resolved, closed LaunchConfig union. */
     default: return assertNever(config)
   }

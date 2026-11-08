@@ -143,7 +143,7 @@
 }
 
 /* Keep list-nested code-block vertical margins (design: +4px vs other last children). */
-.markdown li > *:last-child:not(:global(.md-code-block)) {
+.markdown li > *:last-child:not(:global(.md-code-block), .fenceSeat) {
   margin-bottom: 0;
 }
 
@@ -489,4 +489,23 @@
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
   line-height: 18px;
+}
+
+/* A fence that a delegate renders sits in this box, which takes a code
+   block's spacing among its siblings; the blocks inside it carry none, so
+   wrappers between the box and a block do not change the document rhythm. */
+.fenceSeat {
+  margin: 16px 0;
+}
+
+.fenceSeat:not(:last-child) {
+  margin-bottom: 11px;
+}
+
+.markdown.compact .fenceSeat {
+  margin: 4px 0;
+}
+
+.markdown .fenceSeat :is(:global(.md-code-block), :global(.katex-display)) {
+  margin-block: 0;
 }

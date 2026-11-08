@@ -52,7 +52,7 @@ describe('Chat Node keyed sources', () => {
     expect(input.order).toBe(next.order)
     expect(input.changedTurns).toEqual([7])
     expect(input.changedTurnOrders).toEqual([])
-    expect(input.readPosition(context.key as typeof input.order[number])).toBeUndefined()
+    expect(input.readPosition(context.key as typeof input.order[number])).toEqual({ turn: undefined, previous: user.key, next: undefined })
     expect(input.readPosition('missing' as typeof input.order[number])).toBeUndefined()
     expect(input.changes.find(change => change.current.key === user.key)).toEqual({
       previous: user, current: next.nodes.get(user.key),

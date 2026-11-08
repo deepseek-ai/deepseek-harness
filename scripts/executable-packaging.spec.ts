@@ -2,7 +2,7 @@ import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, onTestFinished } from 'vitest'
-import { restoreLegacyHoists } from './executable-packaging.ts'
+import { restoreLegacyHoists, verifyStagedDependencies } from './executable-packaging.ts'
 import { materializeStagedLinks } from './build-exe-for-python-sdk-staging.ts'
 
 async function fixture() {
@@ -44,4 +44,21 @@ it('materializes a package junction without deleting its source and drops linked
   expect(await readFile(join(test.modules, 'peer/index.js'), 'utf8')).toBe('intact')
   expect(await readFile(join(test.source, 'peer/index.js'), 'utf8')).toBe('intact')
   await expect(lstat(join(test.modules, '.bin'))).rejects.toThrow('ENOENT')
+})
+
+it('accepts complete direct dependency directories without requiring optional dependencies', async () => {
+  const test = await fixture()
+  await writeFile(join(test.staging, 'package.json'), JSON.stringify({
+    dependencies: { '@scope/present': '1.0.0' }, optionalDependencies: { optional: '1.0.0' },
+  }))
+  await mkdir(join(test.modules, '@scope/present'), { recursive: true })
+  await expect(verifyStagedDependencies(test.staging)).resolves.toBeUndefined()
+})
+
+it.each(['absent', 'file'])('rejects a direct dependency that is %s instead of a directory', async (kind) => {
+  const test = await fixture()
+  await writeFile(join(test.staging, 'package.json'), JSON.stringify({ dependencies: { missing: '1.0.0' } }))
+  if (kind === 'file') await writeFile(join(test.modules, 'missing'), '')
+  await expect(verifyStagedDependencies(test.staging))
+    .rejects.toThrow('staged dependencies remain missing: missing.')
 })

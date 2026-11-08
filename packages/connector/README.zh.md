@@ -34,7 +34,7 @@ kind: "package-group"
 
 - [Skill 子系统参考](../../docs/subsystems/skills.zh.md)——connector skill 使用的注册表与提供方契约。
 - [System prompt](../core/system-prompt/README.zh.md)——排序并渲染运行时上下文的注册表。
-- [CLI 账号界面](../client/ui-cli-account/README.zh.md)——CLI 应用插件在插件页显示账号的注册表。
+- [连接器账号界面](../client/ui-connector-account/README.zh.md)——CLI 应用插件在插件页显示账号的注册表。
 
 -----
 

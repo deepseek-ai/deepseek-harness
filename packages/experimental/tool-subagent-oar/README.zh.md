@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-使用一个 `subagent_oar` 工具，为每个独立文本任务选择已配置的外部智能体。配置固定可用的运行时别名及其提供方；模型选择别名，不能更改原生参数或权限。每个任务使用独立上下文并返回子任务 id，完成通知稍后送达父智能体。
+使用一个 `subagent_oar` 工具，为每个独立文本任务选择已配置的外部智能体。配置固定可用的运行时别名及其提供方；模型选择别名，不能更改原生参数或权限。每个任务使用独立上下文并返回子任务的名称，完成通知稍后送达父智能体。
 
 ## 目录
 
@@ -48,7 +48,7 @@ kind: "package-reference"
 | `providers` | 必填 | 从模型可见运行时别名映射到已注册提供方名称的非空映射 |
 | `toolName` | `subagent_oar` | 工具名称；每个挂载实例需要不同名称 |
 
-[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-tool-subagent-oar)定义接受的字段和校验规则。调用要求提供 `runtime`、`description` 和 `prompt`；可选的 `cwd` 选择子任务目录，相对路径从父智能体的当前目录解析。提示必须包含子任务需要的上下文。原生安装、认证、模型设置和权限由所选提供方负责。
+[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-tool-subagent-oar)定义接受的字段和校验规则。调用要求提供 `runtime`、`description` 和 `prompt`。可选的 `name` 为子任务命名，在调用方的子级之间唯一，且不能为 `lead`；省略时按[子智能体运行时的名称规则](../../subagent/subagent/README.zh.md#agent-names)依次选择 `agent-1`、`agent-2` 等。可选的 `cwd` 选择子任务目录，相对路径从父智能体的当前目录解析。提示必须包含子任务需要的上下文。原生安装、认证、模型设置和权限由所选提供方负责。
 
 -----
 
@@ -58,7 +58,7 @@ kind: "package-reference"
 <details>
 <summary>实现内部细节 — 点击展开</summary>
 
-[`src/index.ts`](src/index.ts)根据配置的别名构建运行时枚举，并注册一个工具。每次调用解析其提供方，并通过共享子智能体服务启动激活；该服务负责容量、父智能体生命周期、取消、最终记录和完成通知交付。工具调用卡片使用任务描述和提交的参数。释放插件会移除其工具注册；激活管理器继续负责已接受的子任务。
+[`src/index.ts`](src/index.ts)根据配置的别名构建运行时枚举，并注册一个工具。每次调用解析其提供方，并通过共享子智能体服务启动激活；该服务负责容量、父智能体生命周期、取消、最终记录和完成通知交付。工具调用卡片使用任务描述和提交的参数。结果以展示元数据记录 `{ kind: 'activation', name }`。释放插件会移除其工具注册；激活管理器继续负责已接受的子任务。
 
 </details>
 
@@ -80,11 +80,11 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-[工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-experimental-tool-subagent-oar)定义描述和参数 schema。`runtime` 枚举包含配置的别名。接受任务后，工具返回 `started subagent <id>`，其中 `<id>` 标识子任务。共享子智能体服务稍后提供子任务的答复或失败通知。
+[工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-experimental-tool-subagent-oar)定义描述和参数 schema。`runtime` 枚举包含配置的别名。接受任务后，工具返回 `started subagent <name>`，其中 `<name>` 是子任务从根开始的完整名称，例如 `reviewer`。共享子智能体服务稍后提供子任务的答复或失败通知。
 
 #### Token 影响
 
-每个挂载实例添加一个工具 schema。确认和完成通知追加到父上下文；提供方负责子任务的独立上下文和 token 使用。
+每个挂载实例添加一个工具 schema，其中包括可选的 `name` 字段。确认和完成通知追加到父上下文；提供方负责子任务的独立上下文和 token 使用。
 
 #### KV Cache 影响
 

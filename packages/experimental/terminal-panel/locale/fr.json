@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Backend des terminaux de la barre latérale",
+    "description": "Exécute les terminaux persistants de l’agent dans des onglets de la barre latérale que l’utilisateur peut observer et reprendre, et permet à l’agent de lire les terminaux de l’utilisateur."
+  }
+}

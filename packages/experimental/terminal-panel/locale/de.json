@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Seitenleisten-Terminal-Backend",
+    "description": "Führt die persistenten Terminals des Agenten als Seitenleisten-Tabs aus, die der Benutzer beobachten und übernehmen kann, und lässt den Agenten die eigenen Terminals des Benutzers lesen."
+  }
+}

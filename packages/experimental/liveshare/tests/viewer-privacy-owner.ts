@@ -20,7 +20,7 @@ import { readerConnection } from './viewer-read-peers.ts'
 export function createPrivacyOwnerReader(dispatch: (request: Request) => Promise<Response>): PrivacyOwnerReader {
   const actor = { providerId: 'oidc', tenantId: 'fixture-tenant', subjectId: 'reader' }
   const share: ForkShareState = {
-    shareId: 'share-1', sessionId: 'fx-alpha', viewerAdmitted: true,
+    shareId: 'share-1', sessionIds: ['fx-alpha'], viewerAdmitted: true,
     stopped: false, allowsFork: true, sessionMode: 'write',
   }
   const owner = new Context()
@@ -37,7 +37,7 @@ export function createPrivacyOwnerReader(dispatch: (request: Request) => Promise
         allowsPrompt: () => ({ ok: false, code: 'fork-unknown-child', message: 'the fixture Owner holds no forks' }),
       },
       workspaces: () => [],
-      declaredCapabilities: () => [],
+      offeredPlugins: () => [],
     }))
     return owner.remoteAccess
   })()
@@ -69,7 +69,7 @@ export function createPrivacyOwnerReader(dispatch: (request: Request) => Promise
     })
   })
   const reader = createViewerReadService({
-    sharedSessionId: () => 'fx-alpha',
+    sharedSessionIds: () => ['fx-alpha'],
     viewerStillAdmitted: () => true,
     forkStateOf: () => share,
     connection: readers.connection,

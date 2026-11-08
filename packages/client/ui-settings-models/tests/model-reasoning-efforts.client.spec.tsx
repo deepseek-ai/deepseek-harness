@@ -18,13 +18,14 @@ const DEFAULTS = { off: null, low: 'low', medium: 'medium', high: 'high' }
 const LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
 
 /** Render the controlled group over local state, reporting every write. */
-function renderGroup(initial: DeepSeekModelDraft, options: { disabled?: boolean; levels?: readonly string[] } = {}) {
+function renderGroup(initial: DeepSeekModelDraft, options: { disabled?: boolean; levels?: readonly string[]; levelsOnly?: boolean } = {}) {
   const writes: DeepSeekModelDraft[] = []
   function Harness() {
     const [model, setModel] = useState(initial)
     return (
       <ModelReasoningEfforts
-        model={model} levels={options.levels ?? LEVELS} position={1} disabled={options.disabled ?? false} t={t}
+        model={model} levels={options.levels ?? LEVELS} levelsOnly={options.levelsOnly ?? false}
+        position={1} disabled={options.disabled ?? false} t={t}
         onChange={(next) => { writes.push(next); setModel(next) }}
       />
     )
@@ -202,6 +203,44 @@ describe('ModelReasoningEfforts', () => {
     remove('high').click()
     add().click()
     expect(writes).toEqual([])
+  })
+})
+
+describe('levels a protocol fixes', () => {
+  const GEMINI = ['minimal', 'low', 'medium', 'high']
+
+  it('starts without off, offers only its levels, and fixes each value to the level name', () => {
+    const { efforts } = renderGroup({ id: 'gemini' }, { levels: GEMINI, levelsOnly: true })
+    fireEvent.click(toggle())
+    expect(efforts()).toEqual({ low: 'low', medium: 'medium', high: 'high' })
+    expect([...select(1).options].map(option => option.value)).toEqual(['minimal', 'low'])
+    expect(value('low').disabled).toBe(true)
+    expect(screen.queryByText(en.modelReasoningLevelsOnly)).toBeNull()
+  })
+
+  it('resets a custom value to the new level name when a row changes level', () => {
+    const { efforts } = renderGroup({ id: 'gemini', reasoningEfforts: { high: 'ultra' } }, { levels: GEMINI, levelsOnly: true })
+    fireEvent.change(select(1), { target: { value: 'medium' } })
+    expect(efforts()).toEqual({ medium: 'medium' })
+  })
+
+  it('names a stored level or value outside the fixed levels', () => {
+    renderGroup({ id: 'gemini', reasoningEfforts: { off: null, high: 'ultra' } }, { levels: GEMINI, levelsOnly: true })
+    expect(screen.getByText(en.modelReasoningLevelsOnly)).toBeTruthy()
+  })
+
+  it.each([
+    [{ off: null, high: 'high' }],
+    [{ high: 'ultra' }],
+    [{ xhigh: 'xhigh' }],
+  ])('refuses %j on a protocol accepting only its own level names', (stored) => {
+    expect(validateReasoningEfforts([{ id: 'ok' }, { id: 'gemini', reasoningEfforts: stored }], GEMINI))
+      .toEqual({ index: 1, key: 'modelReasoningLevelsOnly' })
+  })
+
+  it('accepts its own level names', () => {
+    expect(validateReasoningEfforts([{ id: 'gemini', reasoningEfforts: { minimal: 'minimal', high: 'high' } }], GEMINI))
+      .toBeUndefined()
   })
 })
 

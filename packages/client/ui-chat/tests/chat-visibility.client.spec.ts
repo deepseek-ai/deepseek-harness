@@ -51,7 +51,7 @@ describe('Chat-only command visibility', () => {
   })
 })
 
-it('keeps ordinary prompt/context hidden but retains tool changes', () => {
+it('hides system prompts but shows context injections', () => {
   const prompt: ChatNode<'system-prompt'> = { ...placement, kind: 'system-prompt', data: { text: 'system instructions' } }
   const context: ChatNode<'context'> = {
     ...placement, kind: 'context',
@@ -61,8 +61,5 @@ it('keeps ordinary prompt/context hidden but retains tool changes', () => {
     },
   }
   expect(isVisibleChatNode(prompt)).toBe(false)
-  expect(isVisibleChatNode(context)).toBe(false)
-  for (const type of ['tool-addition', 'tool-removal'] as const) {
-    expect(isVisibleChatNode({ ...context, data: { ...context.data, content: [{ type, toolName: 'example' }] } })).toBe(true)
-  }
+  expect(isVisibleChatNode(context)).toBe(true)
 })

@@ -296,6 +296,7 @@ final class SharedSocket: @unchecked Sendable {
             throw NativeFailure(code: "NATIVE_APPLICATION_REQUIRED",
                                 message: "Computer Use requires its signed application bundle; set helperPath to DSH Computer Use.app/Contents/MacOS/dsh-cua-native")
         }
+        let applicationURL = try StandaloneApplication.prepare(bundle.bundleURL, runtimeKey: options.runtimeKey, deadline: deadline)
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = false
         configuration.addsToRecentItems = false
@@ -310,12 +311,12 @@ final class SharedSocket: @unchecked Sendable {
         guard DispatchTime.now().uptimeNanoseconds < deadline else {
             throw NativeFailure(code: "NATIVE_STARTUP_TIMEOUT", message: "Computer Use launch lock exhausted the startup deadline")
         }
-        // LaunchServices gives the application its own TCC identity; direct spawning inherits the terminal's.
+        // LaunchServices and a standalone bundle keep both permission services attributed to this helper.
         let application: NSRunningApplication
-        do { application = try await NSWorkspace.shared.openApplication(at: bundle.bundleURL, configuration: configuration) }
+        do { application = try await NSWorkspace.shared.openApplication(at: applicationURL, configuration: configuration) }
         catch {
             if let failure = try SharedHelperOptions.startupFailure(at: failurePath) { throw failure }
-            throw NativeFailure(code: "NATIVE_STARTUP", message: "macOS could not launch Computer Use at \(bundle.bundleURL.path): \(error.localizedDescription)")
+            throw NativeFailure(code: "NATIVE_STARTUP", message: "macOS could not launch Computer Use at \(applicationURL.path): \(error.localizedDescription)")
         }
         let pid = application.processIdentifier
         guard pid > 0 else {

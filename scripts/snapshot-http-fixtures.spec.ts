@@ -12,7 +12,7 @@ import * as searchFixtureModule from '../snapshots/session/web-search-endpoint-g
 // @ts-expect-error The fixture intentionally has no declaration artifact.
 import * as loopbackFixtureModule from '../snapshots/session/loopback-fixture-server.mjs'
 
-const RECORDED_ENDPOINT = 'http://127.0.0.1:43118/anthropic/v1/messages'
+const RECORDED_ENDPOINT = 'http://127.0.0.1:43118/api/v1/tools/search'
 
 interface FixturePlugin {
   readonly name: string
@@ -152,17 +152,17 @@ describe('snapshot HTTP fixture lifecycle', () => {
 
     try {
       await globalThis.fetch(RECORDED_ENDPOINT)
-      expect(fetchMock.mock.calls.at(-1)?.[0]).toBe('http://127.0.0.1:54322/anthropic/v1/messages')
+      expect(fetchMock.mock.calls.at(-1)?.[0]).toBe('http://127.0.0.1:54322/api/v1/tools/search')
 
       await globalThis.fetch(new URL(RECORDED_ENDPOINT))
-      expect(fetchMock.mock.calls.at(-1)?.[0]).toBe('http://127.0.0.1:54322/anthropic/v1/messages')
+      expect(fetchMock.mock.calls.at(-1)?.[0]).toBe('http://127.0.0.1:54322/api/v1/tools/search')
 
       const request = new Request(RECORDED_ENDPOINT, { method: 'POST', headers: { 'x-fixture': 'request' } })
       await globalThis.fetch(request)
       const mappedRequest = fetchMock.mock.calls.at(-1)?.[0]
       expect(mappedRequest).toBeInstanceOf(Request)
       if (!(mappedRequest instanceof Request)) throw new TypeError('mapped fetch input must be a Request')
-      expect(mappedRequest.url).toBe('http://127.0.0.1:54322/anthropic/v1/messages')
+      expect(mappedRequest.url).toBe('http://127.0.0.1:54322/api/v1/tools/search')
       expect(mappedRequest.method).toBe('POST')
       expect(mappedRequest.headers.get('x-fixture')).toBe('request')
 

@@ -73,6 +73,12 @@ jobs:
       - name: Run blocking Windows builds
         shell: pwsh
         run: pnpm run check:ci:windows-blocking
+      - name: Verify Desktop updater dependency versions
+        shell: pwsh
+        run: |
+          node --test apps/desktop/tests/updates/electron-updater/versions.test.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node apps/desktop/tests/updates/electron-updater/check-versions.mjs
       - name: Parse Windows runner supervision scripts
         shell: pwsh
         run: |

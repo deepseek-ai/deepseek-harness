@@ -530,7 +530,10 @@ _NEVER_POLICY = "Approval prompts are disabled in this session"
 
 
 def _assert_request_permission(request: dict, sandbox: str, approval: str) -> None:
-    contexts = [text for text in _request_texts(request) if text.startswith("Current runtime context.")]
+    contexts = [
+        text for text in _request_texts(request)
+        if text.startswith("<system-reminder>\nThe following information describes your current session")
+    ]
     assert contexts, "model request has no runtime-context snapshot"
     assert f"Current DSH file policy: {sandbox}." in contexts[-1]
     assert (_ASK_POLICY if approval == "ask" else _NEVER_POLICY) in contexts[-1]

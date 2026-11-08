@@ -1,4 +1,4 @@
-/** Discover: search one plugin market index, read an entry's page, and install a version. */
+/** Discover: search one plugin market index, read an entry's page, and install or update a version. */
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   Button, IconChevronDownOutlineRegular, IconPlusOutlineRegular, IconRefreshOutlineRegular, IconSearchOutlineRegular,
@@ -75,19 +75,46 @@ function installable(compatibility: MarketCompatibility): boolean {
   return compatibility.compatible || compatibility.exempted
 }
 
+/** Whether a version carries a SemVer prerelease suffix. */
+function prerelease(version: string): boolean {
+  return version.split('+')[0]?.includes('-') === true
+}
+
+/** The version Update offers for an entry: the presented one when it updates the installed copy, else the newest stable update. */
+function updateTarget(entry: MarketListingEntry): MarketListingVersion | undefined {
+  const updates = (version: MarketListingVersion): boolean => version.update && installable(version.compatibility)
+  const presented = presentedVersion(entry)
+  return updates(presented) ? presented : entry.versions.find(version => updates(version) && !prerelease(version.version))
+}
+
 function formatDate(timestamp: number, language: string, style: 'medium' | 'long'): string {
   return new Intl.DateTimeFormat(language, { dateStyle: style }).format(new Date(timestamp * 1000))
 }
 
-/** The one action an entry offers in its current state; Install chooses its default version. */
-function EntryAction({ entry, title, t, onInstall, onOpenInstalled }: {
+/** What an entry's card and page do for its actions: install or update a version, or open the installed bundle. */
+interface EntryCallbacks {
+  readonly onInstall: (version: MarketListingVersion) => void
+  readonly onUpdate: (version: MarketListingVersion) => void
+  readonly onOpenInstalled: () => void
+}
+
+/** The one action an entry offers in its current state; Install chooses its default version, and Update its update target. */
+function EntryAction({ entry, title, t, onInstall, onUpdate, onOpenInstalled }: {
   readonly entry: MarketListingEntry
   readonly title: string
   readonly t: Translate
-  readonly onInstall: (version: MarketListingVersion) => void
-  readonly onOpenInstalled: () => void
-}): ReactNode {
+} & EntryCallbacks): ReactNode {
   const { status } = entry.installation
+  const target = updateTarget(entry)
+  if (target !== undefined) {
+    return (
+      <Button variant="outline" size="sm" aria-label={t('updateTitle', { name: title, version: target.version })}
+        onClick={() => { onUpdate(target) }}>
+        {t('update')}
+      </Button>
+    )
+  }
+  const version = presentedVersion(entry)
   if (status !== 'not-installed') {
     return (
       <Button variant="ghost" size="sm" aria-label={t('openInstalled', { name: title })} onClick={onOpenInstalled}>
@@ -95,7 +122,6 @@ function EntryAction({ entry, title, t, onInstall, onOpenInstalled }: {
       </Button>
     )
   }
-  const version = presentedVersion(entry)
   if (!version.compatibility.compatible && !version.compatibility.exempted) {
     return (
       <Tooltip label={t('noCompatibleVersion', { runtime: version.compatibility.runtimeVersion })} side="bottom" portal delayMs={300}>
@@ -108,16 +134,14 @@ function EntryAction({ entry, title, t, onInstall, onOpenInstalled }: {
   return <Button variant="outline" size="sm" aria-label={t('installTitle', { name: title })} onClick={() => { onInstall(version) }}>{t('install')}</Button>
 }
 
-function EntryCard({ entry, t, face, language, labels, onOpen, onInstall, onOpenInstalled }: {
+function EntryCard({ entry, t, face, language, labels, onOpen, onInstall, onUpdate, onOpenInstalled }: {
   readonly entry: MarketListingEntry
   readonly t: Translate
   readonly face: DiscoverActions
   readonly language: string
   readonly labels: readonly DisplayDeclaration<unknown>[]
   readonly onOpen: () => void
-  readonly onInstall: (version: MarketListingVersion) => void
-  readonly onOpenInstalled: () => void
-}): ReactNode {
+} & EntryCallbacks): ReactNode {
   const title = entryTitle(entry, face)
   const version = presentedVersion(entry)
   const date = formatDate(version.publishTimestamp, language, 'medium')
@@ -137,32 +161,32 @@ function EntryCard({ entry, t, face, language, labels, onOpen, onInstall, onOpen
         </span>
       </div>
       <div className={css.cardEnd}>
-        <EntryAction entry={entry} title={title} t={t} onInstall={onInstall} onOpenInstalled={onOpenInstalled} />
+        <EntryAction entry={entry} title={title} t={t} onInstall={onInstall} onUpdate={onUpdate} onOpenInstalled={onOpenInstalled} />
       </div>
     </li>
   )
 }
 
-/** One row of the version list: its state tags and an Install button when installation accepts it. */
-function VersionRow({ entry, version, title, t, language, onInstall }: {
+/** One row of the version list: its state tags, and Update for a newer Git version of a Git copy or Install while nothing is installed. */
+function VersionRow({ entry, version, title, t, language, onInstall, onUpdate }: {
   readonly entry: MarketListingEntry
   readonly version: MarketListingVersion
   readonly title: string
   readonly t: Translate
   readonly language: string
   readonly onInstall: (version: MarketListingVersion) => void
+  readonly onUpdate: (version: MarketListingVersion) => void
 }): ReactNode {
   const current = entry.installation.installedVersion === version.version
-  // DSH ships a provided bundle; the market cannot replace it.
-  const offered = !current && entry.installation.status !== 'provided' && installable(version.compatibility)
   const { compatibility } = version
+  const accepted = installable(compatibility)
   return (
     <li className={css.versionRow} data-market-version={version.version}>
       <div className={css.main}>
         <div className={css.titleRow}>
           <span className={css.strong}>{version.version}</span>
           {version.version === entry.defaultVersion ? <Tag tone="info">{t('versionDefault')}</Tag> : null}
-          {version.version.split('+')[0]?.includes('-') === true ? <Tag tone="neutral">{t('versionPrerelease')}</Tag> : null}
+          {prerelease(version.version) ? <Tag tone="neutral">{t('versionPrerelease')}</Tag> : null}
           {current ? <Tag tone="success">{t('versionInstalled')}</Tag> : null}
           {compatibility.compatible ? null : <Tag tone="warning">{t(compatibility.exempted ? 'versionExempted' : 'versionIncompatible')}</Tag>}
         </div>
@@ -174,17 +198,24 @@ function VersionRow({ entry, version, title, t, language, onInstall }: {
               : t('incompatible', { runtime: compatibility.runtimeVersion, range: Object.values(compatibility.requirements).join(' ') })}
         </span>
       </div>
-      {!offered ? null : (
+      {accepted && version.update ? (
+        <Button variant="ghost" size="sm" aria-label={t('updateTitle', { name: title, version: version.version })}
+          onClick={() => { onUpdate(version) }}>
+          {t('update')}
+        </Button>
+      ) : null}
+      {/* Installation never goes over an installed copy; only an update replaces it. */}
+      {accepted && entry.installation.status === 'not-installed' ? (
         <Button variant="ghost" size="sm" aria-label={t('installVersionTitle', { name: title, version: version.version })}
           onClick={() => { onInstall(version) }}>
           {t('install')}
         </Button>
-      )}
+      ) : null}
     </li>
   )
 }
 
-function EntryDetail({ entry, listing, t, face, hooks, language, onBack, onInstall, onOpenInstalled }: {
+function EntryDetail({ entry, listing, t, face, hooks, language, onBack, onInstall, onUpdate, onOpenInstalled }: {
   readonly entry: MarketListingEntry
   readonly listing: MarketSearchResult
   readonly t: Translate
@@ -193,9 +224,7 @@ function EntryDetail({ entry, listing, t, face, hooks, language, onBack, onInsta
   readonly hooks: Pick<DiscoverSectionProps, 'useDetails' | 'useLocale'>
   readonly language: string
   readonly onBack: () => void
-  readonly onInstall: (version: MarketListingVersion) => void
-  readonly onOpenInstalled: () => void
-}): ReactNode {
+} & EntryCallbacks): ReactNode {
   const title = entryTitle(entry, face)
   const version = presentedVersion(entry)
   const date = formatDate(version.publishTimestamp, language, 'long')
@@ -219,7 +248,7 @@ function EntryDetail({ entry, listing, t, face, hooks, language, onBack, onInsta
           </div>
           {title === entry.name ? null : <span className={css.meta}>{entry.name}</span>}
         </div>
-        <EntryAction entry={entry} title={title} t={t} onInstall={onInstall} onOpenInstalled={onOpenInstalled} />
+        <EntryAction entry={entry} title={title} t={t} onInstall={onInstall} onUpdate={onUpdate} onOpenInstalled={onOpenInstalled} />
       </div>
       {entry.description === undefined ? null : <p className={css.detailDescription}>{face.resolveText(entry.description)}</p>}
       {compatibility.compatible ? null : (
@@ -241,7 +270,8 @@ function EntryDetail({ entry, listing, t, face, hooks, language, onBack, onInsta
         <h4 className={css.sectionTitle}>{t('versionsTitle')}</h4>
         <ul className={css.versions} aria-label={t('versionsLabel', { name: title })}>
           {entry.versions.map(item => (
-            <VersionRow key={item.version} entry={entry} version={item} title={title} t={t} language={language} onInstall={onInstall} />
+            <VersionRow key={item.version} entry={entry} version={item} title={title} t={t} language={language}
+              onInstall={onInstall} onUpdate={onUpdate} />
           ))}
         </ul>
       </section>
@@ -394,7 +424,7 @@ function unfiltered(query: DiscoverQuery): boolean {
   return query.text.trim() === '' && query.category === null && query.labels.length === 0
 }
 
-function Browser({ state, listing, t, face, hooks, language, onInstall, openPackage }: {
+function Browser({ state, listing, t, face, hooks, language, onInstall, onUpdate, openPackage }: {
   readonly state: DiscoverState
   readonly listing: ListingState
   readonly t: Translate
@@ -402,6 +432,7 @@ function Browser({ state, listing, t, face, hooks, language, onInstall, openPack
   readonly hooks: Pick<DiscoverSectionProps, 'useDetails' | 'useLocale'>
   readonly language: string
   readonly onInstall: (choice: InstallChoice) => void
+  readonly onUpdate: (choice: InstallChoice) => void
   readonly openPackage: (name: string) => void
 }): ReactNode {
   const { query, value } = listing
@@ -423,7 +454,9 @@ function Browser({ state, listing, t, face, hooks, language, onInstall, openPack
   if (openEntry !== undefined && value !== null) {
     return (
       <EntryDetail entry={openEntry} listing={value} t={t} face={face} hooks={hooks} language={language} onBack={() => { setOpened(null) }}
-        onInstall={(version) => { onInstall({ entry: openEntry, version }) }} onOpenInstalled={() => { openPackage(openEntry.name) }} />
+        onInstall={(version) => { onInstall({ entry: openEntry, version }) }}
+        onUpdate={(version) => { onUpdate({ entry: openEntry, version }) }}
+        onOpenInstalled={() => { openPackage(openEntry.name) }} />
     )
   }
   const selected = state.indexes.find(index => index.url === listing.url) ?? { url: listing.url }
@@ -542,7 +575,7 @@ function Browser({ state, listing, t, face, hooks, language, onInstall, openPack
                 {value.entries.map(entry => (
                   <EntryCard key={entry.name} entry={entry} t={t} face={face} language={language} labels={declarations.labels}
                     onOpen={() => { setOpened(entry) }} onInstall={(version) => { onInstall({ entry, version }) }}
-                    onOpenInstalled={() => { openPackage(entry.name) }} />
+                    onUpdate={(version) => { onUpdate({ entry, version }) }} onOpenInstalled={() => { openPackage(entry.name) }} />
                 ))}
               </ul>
               {value.nextOffset === null
@@ -560,7 +593,7 @@ function Browser({ state, listing, t, face, hooks, language, onInstall, openPack
 
 /** Render the Discover tab of the Plugins page. */
 export function DiscoverSection(props: DiscoverSectionProps): ReactNode {
-  const { t, install, openPackage } = props
+  const { t, install, update, openPackage } = props
   const face: DiscoverActions = props
   const state = props.useDiscover(snapshot => snapshot)
   const language = props.useLocale(snapshot => snapshot.active)
@@ -591,7 +624,10 @@ export function DiscoverSection(props: DiscoverSectionProps): ReactNode {
     body = (
       <Browser key={state.listing.url} state={state} listing={state.listing} t={t} face={face}
         hooks={{ useDetails: props.useDetails, useLocale: props.useLocale }} language={language}
-        onInstall={(choice) => { setConfirming(choice) }} openPackage={openPackage} />
+        onInstall={(choice) => { setConfirming(choice) }}
+        /* The Plugins page confirms an update in its own dialog, which names both versions. */
+        onUpdate={({ entry, version }) => { update({ packageName: entry.name, version: version.version, spec: version.install.spec }) }}
+        openPackage={openPackage} />
     )
   }
   return (

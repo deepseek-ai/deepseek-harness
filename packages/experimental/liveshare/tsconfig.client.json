@@ -36,6 +36,7 @@
     "src/client/owner-shares.ts",
     "src/client/viewer-capabilities.ts",
     "src/client/viewer-context.ts",
+    "src/client/viewer-plugin-warning.ts",
     "src/client/viewer-session-plugin.ts",
     "src/client/viewer-session-row.tsx",
     "src/client/viewer-share-path.tsx",

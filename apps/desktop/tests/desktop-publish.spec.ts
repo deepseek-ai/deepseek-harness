@@ -81,6 +81,21 @@ it.each(['binary', 'same-version-feed', 'newer-feed'] as const)('stops on %s con
   expect(f.writes).toHaveLength(0)
 })
 
+it.each(['1.0.0-rc.1', '1.0.0-test.20261104.1.1'])('rejects %s before writing when stable already serves its release version', async (version) => {
+  const f = fixture('production')
+  const plan: DesktopUploadPlan = {
+    ...f.plan,
+    version,
+    artifacts: f.plan.artifacts.map(artifact => artifact.channelMetadata
+      ? { ...artifact, filename: 'stable.yml', key: 'feed/stable.yml', contents: `version: ${version}\n` }
+      : artifact),
+  }
+  f.objects.set('feed/stable.yml', observed('version: 1.0.0\n'))
+  await expect(publishDesktopRelease(plan, f.operations)).rejects.toMatchObject({ code: 'superseded' })
+  expect(f.writes).toEqual([])
+  expect(f.tags()).toBe(0)
+})
+
 it('rejects a files-only plan and a production build without clean commit evidence', async () => {
   const f = fixture('production')
   await expect(publishDesktopRelease({ ...f.plan, artifacts: f.plan.artifacts.slice(0, 2) }, f.operations)).rejects.toMatchObject({ code: 'invalid-plan' })

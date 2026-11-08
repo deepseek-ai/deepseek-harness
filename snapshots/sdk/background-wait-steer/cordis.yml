@@ -37,3 +37,8 @@
 - insert:
     - id: background-wait-steer-fixture
       name: './wait-fixture.mjs'
+
+# The recorded tool catalog includes the optional patch tool.
+- id: tool-fs
+  config:
+    applyPatch: true

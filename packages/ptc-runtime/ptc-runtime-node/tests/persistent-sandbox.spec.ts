@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
+import { realpathSync } from 'node:fs'
 import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -8,14 +9,15 @@ import { Context } from '@deepseek-ai/cordis'
 import { SandboxUnavailableError } from '@deepseek-ai/dsh-sandbox'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { mountRuntime } from './setup.ts'
+import type { Config } from '../src/index.ts'
 
-async function setup(mode: 'read-only' | 'workspace-write' = 'read-only', executionMode: 'per-call' | 'persistent-in-memory' = 'persistent-in-memory') {
-  const root = await mkdtemp(join(homedir(), '.dsh-persistent-sandbox-'))
+async function setup(mode: 'read-only' | 'workspace-write' = 'read-only', executionMode: NonNullable<Config['executionMode']> = 'persistent-in-memory') {
+  const root = realpathSync.native(await mkdtemp(join(homedir(), '.dsh-persistent-sandbox-')))
   const cwd = join(root, 'workspace')
   await mkdir(cwd)
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
-  const { runtime } = await mountRuntime(ctx, { executionMode }, { mode, workspaceRoot: cwd })
+  const { runtime } = await mountRuntime(ctx, { executionMode, scriptPersistence: executionMode === 'vm-script' }, { mode, workspaceRoot: cwd })
   const owner = {}
   const run = (program: string) => runtime.run(runtime.resolve({ program, bindings: [], stateOwner: owner }))
   return { root, cwd, ctx, runtime, owner, run }
@@ -50,25 +52,70 @@ it('refuses reuse under another policy until the owner has been released', async
 })
 
 // Windows ACL rejects additional roots; its refusal is covered by sandbox-local's runner tests.
-it.skipIf(process.platform === 'win32')('requires release before changing a retained environment\'s additional writable roots', async () => {
-  const { root, cwd, runtime, owner, run } = await setup('workspace-write')
+it.skipIf(process.platform === 'win32').each(['persistent-in-memory', 'vm-script'] as const)('keeps %s directory grants until the retained process is released', async (executionMode) => {
+  const { root, cwd, runtime, owner } = await setup('workspace-write', executionMode)
   const extra = join(root, 'extra')
   await mkdir(extra)
-  expect((await run('var retained = 7; retained')).value).toBe(7)
-  const spec = runtime.resolve({
-    program: 'typeof retained',
+  const target = join(extra, 'memory.txt')
+  const roots = [extra]
+  const policy = { mode: 'workspace-write' as const, workspaceRoot: cwd, additionalWritableRoots: roots }
+  const write = (content: string, additionalWritableRoots: readonly string[] = []) => runtime.run(runtime.resolve({
+    program: `await (await import("node:fs/promises")).writeFile(${JSON.stringify(target)}, ${JSON.stringify(content)})`,
     bindings: [],
     stateOwner: owner,
-    sandboxPolicy: { mode: 'workspace-write', workspaceRoot: cwd, additionalWritableRoots: [extra] },
-  })
-  await expect(runtime.run(spec)).rejects.toThrow('release the retained environment')
-  expect((await run('retained')).value).toBe(7)
+    sandboxPolicy: { ...policy, additionalWritableRoots },
+  }))
+
+  expect((await write('initial', roots)).error).toBeUndefined()
+  roots[0] = cwd
+  expect((await write('retained')).error).toBeUndefined()
+  expect(await readFile(target, 'utf8')).toBe('retained')
+
   await runtime.release(owner)
-  expect((await runtime.run(spec)).value).toBe('undefined')
-  const sameRoots = runtime.resolve({ ...spec, program: 'var second = 8; second', sandboxPolicy: { mode: 'workspace-write', workspaceRoot: cwd, additionalWritableRoots: [extra, extra] } })
-  expect((await runtime.run(sameRoots)).value).toBe(8)
-  const changed = runtime.resolve({ ...spec, sandboxPolicy: { mode: 'workspace-write', workspaceRoot: cwd, additionalWritableRoots: [cwd] } })
-  await expect(runtime.run(changed)).rejects.toThrow('release the retained environment')
+  expect((await write('denied')).sandbox).toMatchObject({ mode: 'workspace-write', denied: true })
+  expect((await write('still denied', [extra])).sandbox).toMatchObject({ mode: 'workspace-write', denied: true })
+  expect(await readFile(target, 'utf8')).toBe('retained')
+
+  await runtime.release(owner)
+  expect((await write('renewed', [extra])).error).toBeUndefined()
+  expect(await readFile(target, 'utf8')).toBe('renewed')
+})
+
+// Windows ACL rejects additional roots before launching a process.
+it.skipIf(process.platform === 'win32').each([
+  { executionMode: 'persistent-in-memory', change: 'add' },
+  { executionMode: 'persistent-in-memory', change: 'remove' },
+  { executionMode: 'vm-script', change: 'add' },
+  { executionMode: 'vm-script', change: 'remove' },
+] as const)('uses current grants for the first $executionMode process after a syntax error and grant $change', async ({ executionMode, change }) => {
+  const { root, cwd, ctx, runtime, owner } = await setup('workspace-write', executionMode)
+  const extra = join(root, 'extra')
+  await mkdir(extra)
+  const target = join(extra, 'memory.txt')
+  const session = ctx.sessions.create(SessionId('first-launch-grants'), { meta: { cwd } })
+  const request = { bindings: [], stateOwner: owner }
+  const remove = change === 'remove' ? ctx.sandboxPolicy.registerWritableRoot(session, extra) : undefined
+  const spawn = vi.spyOn(ctx.subprocess, 'spawn')
+  onTestFinished(() => { spawn.mockRestore() })
+  expect((await runtime.run(runtime.resolve({
+    ...request, program: 'const =', sandboxPolicy: ctx.sandboxPolicy.resolve({ session }),
+  }))).error?.kind).toBe('exception')
+  expect(spawn).not.toHaveBeenCalled()
+  if (change === 'add') ctx.sandboxPolicy.registerWritableRoot(session, extra)
+  else remove?.()
+
+  const result = await runtime.run(runtime.resolve({
+    ...request, sandboxPolicy: ctx.sandboxPolicy.resolve({ session }),
+    program: `await (await import("node:fs/promises")).writeFile(${JSON.stringify(target)}, "memory")`,
+  }))
+  expect(spawn).toHaveBeenCalledTimes(1)
+  if (change === 'add') {
+    expect(result.error).toBeUndefined()
+    expect(await readFile(target, 'utf8')).toBe('memory')
+  } else {
+    expect(result.sandbox).toMatchObject({ mode: 'workspace-write', denied: true })
+    await expect(readFile(target)).rejects.toMatchObject({ code: 'ENOENT' })
+  }
 })
 
 it('fails closed when confinement is unavailable without spawning Node', async () => {

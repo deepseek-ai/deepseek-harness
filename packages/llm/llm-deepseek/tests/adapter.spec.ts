@@ -1,6 +1,7 @@
 /** HTTP lifecycle, routing and optional Cordis services under real composition. */
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
-import { installAccountTaskCancellation, type DeepSeekAccount } from '@deepseek-ai/dsh-deepseek-account'
+import type { DeepSeekAccount } from '@deepseek-ai/dsh-deepseek-account'
+import { installAccountTaskCancellation } from '@deepseek-ai/dsh-deepseek-account/src/account-tasks.ts'
 import type { AnonymousUserId } from '@deepseek-ai/dsh-anonymous-user-id'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -124,6 +125,21 @@ describe('direct Messages HTTP', () => {
     })
     await assemble(llm.stream(options({ tools })))
     expect(http.requests[1]?.headers).not.toHaveProperty('anthropic-beta')
+  })
+
+  it('surfaces provider rejection of an all-deferred request without adding tools', async () => {
+    const message = 'At least one tool must not be deferred'
+    const http = await endpoint((response) => {
+      response.statusCode = 400
+      response.end(JSON.stringify({ error: { type: 'invalid_request_error', message } }))
+    })
+    const tools = [{ name: 'search', description: 'Search', parameters: {}, deferLoading: true as const }]
+    await expect(chunks(adapter({ baseURL: http.url }).stream(options({ tools }))))
+      .rejects.toMatchObject({ code: 'INVALID_REQUEST', message, failure: { status: 400 } })
+    expect(http.requests).toHaveLength(1)
+    expect(http.requests[0]?.body.tools).toEqual([
+      { name: 'search', description: 'Search', input_schema: {}, defer_loading: true },
+    ])
   })
 
   it('uses the Messages endpoint, authentication, attribution and final usage', async () => {
@@ -276,6 +292,28 @@ describe('direct Messages HTTP', () => {
 })
 
 describe('Cordis provider composition', () => {
+  it('declares the replacement immediately after the last baseline tool is removed', async () => {
+    const { ctx, http } = await boot()
+    const baseline = { name: 'old_tool', description: 'Old tool', parameters: {} }
+    const added = { name: 'new_tool', description: 'New tool', parameters: {} }
+    const update = createDeveloperMessage({ source: { kind: 'tool-registry' }, content: [
+      { type: 'tool-removal', toolName: baseline.name }, { type: 'tool-addition', toolName: added.name },
+    ] })
+    const request = options({ model: 'deepseek-flash', messages: [user(), update], tools: [added],
+      toolHistory: { tools: [baseline], updates: [{ messageId: update.id, additions: [added] }] },
+    })
+    const saved = JSON.stringify(request)
+    const response = await assemble(ctx.llm.stream(request), 'deepseek-flash')
+    expect(response.assembler.finish.kind).toBe('stop')
+    expect(http.requests[0]?.body.tools).toEqual([
+      { name: added.name, description: added.description, input_schema: {} },
+    ])
+    expect(http.requests[0]?.body.messages).toEqual([
+      { role: 'user', content: [{ type: 'text', text: 'hello' }] },
+    ])
+    expect(JSON.stringify(request)).toBe(saved)
+  })
+
   it('resolves an attachment service loaded after the adapter and maps its read-only path', async () => {
     const http = await endpoint()
     const { ctx, home } = await context()

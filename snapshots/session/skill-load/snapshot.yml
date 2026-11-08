@@ -8,5 +8,3 @@ header:
   pin: true
   systemPromptSource: text-turn
   toolSchemasSource: text-turn
-workspace:
-  setup: editing-cordis-skill

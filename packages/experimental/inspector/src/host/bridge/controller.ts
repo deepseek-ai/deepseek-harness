@@ -4,6 +4,7 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { MessageChannel, Worker, type MessagePort, type WorkerOptions } from 'node:worker_threads'
 import type { InspectorClientBootstrap, InspectorWorkerBoot, InspectorWorkerConfig } from '../../shared/bridge/messages/control.ts'
+import { maxStatePayloadBytes } from '../../shared/bridge/buffer.ts'
 import { INSPECTOR_PROTOCOL_VERSION } from '../../shared/bridge/version.ts'
 import type { InspectorConnection } from '../../shared/bridge/publisher.ts'
 import { installFetchObserver, NETWORK_TOPICS, type FetchObserver } from '../inspection/network.ts'
@@ -51,7 +52,7 @@ export interface InspectorOptions {
   readonly maxJournalBytes?: number
   /** Maximum active and completed fetch requests retained by the Worker. */
   readonly maxRetainedRequests?: number
-  /** Maximum encoded bytes accepted in one source transport frame. */
+  /** Maximum encoded bytes accepted in one source transport frame; values below 5121 leave no Cordis snapshot budget and fail. */
   readonly maxSourceFrameBytes?: number
   /** Maximum observation records accepted in one source batch. */
   readonly maxSourceRecordsPerFrame?: number
@@ -167,6 +168,9 @@ export function resolveInspectorOptions(options: InspectorOptions = {}): Inspect
   const largestEncodedChunk = Math.ceil(spec.maxBodyChunkBytes / 3) * 4 + 4_096
   if (largestEncodedChunk > spec.maxSourceFrameBytes) {
     throw new Error('inspector: maxSourceFrameBytes cannot carry one base64 body chunk')
+  }
+  if (maxStatePayloadBytes(spec.maxSourceFrameBytes) <= 0) {
+    throw new Error('inspector: maxSourceFrameBytes cannot carry a Cordis tree snapshot')
   }
   if (spec.clientReconnectMaxMs < spec.clientReconnectBaseMs) {
     throw new Error('inspector: clientReconnectMaxMs must be at least clientReconnectBaseMs')

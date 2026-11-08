@@ -10,7 +10,7 @@ Slots 是 Web Client 的类型化 React 组合系统。[`dsh-client-ui-slots`](.
 
 插件目录声明 `plugins.add.actions`，它是 root 作用域的 list，在添加插件菜单的安装项之后提供 `MenuItemButton` 行。owner 提供 `onDismiss()`，用于开始动作前关闭菜单。该 slot 遵循所属插件页面声明的生命周期。
 
-root 作用域的 list `sidebar.panellist.actions`、`conversation.session.header.views.actions` 和 `sidebar.right.tab.guide.actions` 提供面板行、View 标签和右侧栏引导卡片之后“更多”菜单的菜单行。区域只在其 list 有注册项时画“更多”按钮与菜单，并传入可自定义的入口及其 Pin 状态、`onOpen`、`onPinnedChange` 与 `onDismiss`。面板和 View 入口还通过可选的 `active` 状态标识当前选中项，该状态独立于 Pin 状态。各区域在内存中维护已收起的入口 id；[`ui-entry-customization`](../../packages/client/ui-entry-customization/README.zh.md) 注册随产品提供的菜单行。
+root 作用域的 list `sidebar.panellist.actions`、`conversation.session.header.views.actions` 和 `sidebar.right.tab.guide.actions` 提供面板行、View 标签和右侧栏引导卡片之后“更多”菜单的菜单行。区域只在其 list 有注册项时画“更多”按钮与菜单，并传入可自定义的入口及其 Pin 状态、`onOpen`、`onPinnedChange` 与 `onDismiss`。面板和 View 入口还通过可选的 `active` 状态标识当前选中项，该状态独立于 Pin 状态。root 作用域的 `sidebar.panel.icon` factory 拥有 `sidebar.panellist` list，按 `id`、`size` 与 `active` 为侧栏行和更多菜单入口渲染已注册图标。各区域在内存中维护已收起的入口 id；[`ui-entry-customization`](../../packages/client/ui-entry-customization/README.zh.md) 注册随产品提供的菜单行。
 
 [ui-workspace](../../packages/client/ui-workspace/README.zh.md#understand-the-implementation) 记录 Session 行的扩展位置、显示条件和键盘行为。
 
@@ -61,11 +61,24 @@ Slot 声明固定两个相互独立的维度。
 | cardinality | `list` | cell 由必填 `id` 定址，先按 `order`、再按注册顺序排列。 |
 | cardinality | `keyed` | owner 传入 `entryKey`；匹配 cell 以该 key 对应的 props 渲染。 |
 | cardinality | `chain` | 每个 entry 提供纯 `select(owner)` 函数；按 priority 顺序遇到的第一个非 null 结果获选，并以 `matched` 传给组件；全部拒绝时渲染 owner fallback。 |
+| cardinality | `hoc` | entry 层层包裹 owner 经 `renderSlot(key, owner, { children })` 传入的内容，最小者在最外层；可选的 `key` 按 owner 的 `entryKey` 选层。见 [Hoc 层](#hoc-layers)。 |
 | scope | `root` | 一个 root 作用域组件和 store 实例。 |
 | scope | `session-maybe` | 继承外围 Provider binding，但没有 binding 时仍可渲染；Session 值是可选的。 |
 | scope | `session` | 要求可解析的外围 Provider binding，并收到确定存在的 Session 值。 |
 
-对于 `single`、`list` 和 `keyed` cell，`priority` 是遮蔽优先级；对于 `chain`，它是选举顺序。数值越小越先运行或渲染。普通增量贡献应选用新的 list `id` 或 keyed `key`；复用已有 cell 表示有意替换其展示。
+对于 `single`、`list`、`keyed` 和 `hoc` cell，`priority` 是遮蔽优先级；对于 `chain`，它是选举顺序。数值越小越先运行或渲染。普通增量贡献应选用新的 list 或 hoc `id`，或 keyed `key`；复用已有 cell 表示有意替换其展示。
+
+<a id="hoc-layers"></a>
+
+### Hoc 层
+
+hoc entry 是以必填 `id` 和可选 `key` 寻址的一层。不带 `key` 的层是通配层，作用于每次分派；带 `key` 的层只在 owner 向 `renderSlot` 传入相同 `entryKey` 时生效，省略 `entryKey` 的 owner 只得到通配层。每个 `(key, id)` 组合（通配视为单独的 key）是一个遮蔽 cell；同一 `id` 下，精确 key 的层替换该 key 的通配层。
+
+各层依次按 `order`、`priority`、注册顺序升序嵌套，最小者在最外层。每层收到同一份 owner props，并以 `children` 收到内一层（最内层是 owner 的内容），且至多渲染一次；不渲染 `children` 的层替换其内部的全部内容。owner props 不得使用 `children` 这个名字。省略 `children` 时各层包裹空内容；没有适用的层时原样渲染内容。
+
+- 重新挂载：增减一个适用于本次分派的层会让其内部内容重新挂载；`session` 或 `session-maybe` 作用域的层在 Session binding 变化时也会让内部内容重新挂载。分派同一 key 的 outlet 共享一条编译好的层链，因此为其他 key 注册的层不会让它们的内容重新挂载；outlet 切换 `entryKey` 时会换到另一条层链，即使生效的层相同，内容也会重新挂载。
+- 错误：崩溃的层照常上报错误，并在出错的那一处渲染它的 `children`，直到该处本次挂载结束，owner props 变化也不恢复。该层保持注册，因此其他出现处（包括分派同一 key 的出现处）仍保留它，重新挂载的出现处会再次渲染它。被包裹内容抛出的错误穿过所有层，不记到任何层名下；层如果自己在 `children` 外包错误边界，捕获到的是内部包装错误而不是原始错误。
+- 布局：outlet 会在 owner 与内容之间插入一个 `display: contents` 的 `[data-slot]` 元素，所以 owner 侧的选择器不能假定内容是直接子元素。包裹 `children` 的层自身不得产生盒子（其 slot 另有说明的除外）——例如应使用 `display: contents`——否则内容会脱离父元素的布局。
 
 <a id="component-inputs"></a>
 
@@ -83,6 +96,7 @@ Slot 声明固定两个相互独立的维度。
 | 私有数据、callback 与 observable hook | 注册项的 `inject` factory | `InjectFace<I>` |
 | 本地化 `t` 函数 | 注册项的 `locale` namespace | `PropsLocale<N>` |
 | chain 选中的值 | 注册项的 `select` 结果 | 通过 `ComposedProps` 提供的 `matched` |
+| 被包裹的 owner 内容 | `SlotMap` 条目的 `hoc` kind | 通过 `ComposedProps` 提供的 `children` |
 
 当 entry 声明 `session` 或 `session-maybe` child 时，`PropsRenderSlots` 还会提供 `SessionProvider`。不传 `session` prop 时，它继承外围 binding；显式传入 `SessionReference` 或 `undefined` 时，只覆盖该子树。Provider 不为整个 body 设置 key。严格 `session` entry 在 binding generation 改变时重新挂载。空白 `session-maybe` entry 接受首个 binding 时不重新挂载，后续 generation 变化或回到缺失状态时才重新挂载。
 
@@ -144,6 +158,7 @@ Factory: conversation.content [ConversationContent]
 │  └─ conversation.view
 │     ├─ id=chat [ChatView]
 │     │  ├─ conversation.chat.text-interaction [list]
+│     │  ├─ conversation.chat.markdown.fence [hoc, keyed by fence language]
 │     │  └─ conversation.chat.flow [ChatFlow]
 │     │     └─ conversation.chat.node [ChatNodeSeat dispatch]
 │     │        ├─ key=user [UserMessageNodeView]
@@ -184,6 +199,8 @@ Factory: conversation.content [ConversationContent]
 ├─ conversation.input.dock
 │  └─ id=queue [QueueDock]
 │     └─ calls Factory: conversation.user.text
+├─ conversation.hero.frame [hoc]
+│  └─ id=pixel-whale [PixelWhale]
 ├─ conversation.hero.brand.mark
 ├─ conversation.hero.workspace
 │  └─ conversation.hero.workspace.directoryFlow
@@ -214,4 +231,4 @@ Factory: conversation.chat.reasoning.content [ReasoningContent / MarkdownText]
 - 业务与传输状态留在所属 Cordis service 或 Client model 中。Slot store 只承载共享的视图与交互状态。
 - 可观测 source 及其 snapshot identity 在值变化前保持稳定；值变化时通过同一个 source 发布。
 - UI domain 之间只传 JSON 兼容数据和 callback。`hooks` compartment 是裸 observable 的唯一例外；React 内容通过 slot 传递。
-- 将 `single` 和已有 occupant 的 keyed cell 视为替换点。增量扩展使用 list id 或尚未占用的 key。
+- 将 `single` 和已有 occupant 的 keyed cell 视为替换点。增量扩展使用新的 list 或 hoc id，或尚未占用的 key。

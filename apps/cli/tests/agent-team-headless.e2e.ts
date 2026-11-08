@@ -102,11 +102,11 @@ describe('dsh run with Agent Teams enabled', () => {
       expect(eventTypes).not.toContain('team/member')
       const catalog = root!.filter(record => record.type === 'subagent/catalog').map(record => record.data)
       expect(catalog).toEqual(expect.arrayContaining([
-        expect.objectContaining({ version: 0, childId: workflowChild![0]?.id }),
-        expect.objectContaining({ version: 0, label: 'Own deterministic implementation.' }),
-        expect.objectContaining({ version: 0, label: 'Own deterministic research.' }),
+        expect.objectContaining({ version: 3, childId: workflowChild![0]?.id, name: 'agent-1' }),
+        expect.objectContaining({ version: 3, label: 'Own deterministic implementation.', name: 'agent-2' }),
+        expect.objectContaining({ version: 3, label: 'Own deterministic research.', name: 'agent-3' }),
       ]))
-      for (const entry of catalog) expect(entry).not.toHaveProperty('name')
+      for (const entry of catalog) expect(entry).toHaveProperty('name')
       expect(eventTypes).not.toContain('subagent-name/bound')
       expect(eventTypes).not.toContain('team/message/queued')
       expect(eventTypes).not.toContain('team/message/delivered')
