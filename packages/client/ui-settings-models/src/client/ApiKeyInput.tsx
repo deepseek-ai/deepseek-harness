@@ -1,4 +1,4 @@
-/** Write-only credential input with the same reveal behavior as masked conversation text. */
+/** Credential drafts can be revealed; saved keys are represented by a protected mask. */
 import { useState } from 'react'
 import type { InputHTMLAttributes, ReactNode } from 'react'
 import type { en } from './locales.ts'
@@ -12,37 +12,51 @@ const EYE_OFF_PATH = `${EYE_CONTOUR}M2.5 2.5L13.5 13.5`
 interface ApiKeyInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'type' | 'className' | 'autoComplete'> {
   /** Unsaved input; stored credentials are never read into this field. */
   readonly value: string
+  /** Server-masked preview and actions; the full stored credential stays on the Host. */
+  readonly saved?: {
+    readonly masked: string
+    readonly clear?: () => void
+  }
   /** Section copy, including the same reveal labels as SecretText. */
   readonly t: (key: keyof typeof en) => string
 }
 
 /**
- * Reveal only a nonempty draft; a different value starts masked, as in SecretText.
+ * Reveal only a nonempty draft. Saved keys allow whole replacement or deletion.
  * @param props - current draft, input attributes, and translated control labels.
  * @returns a password input with an optional reveal button.
  */
-export function ApiKeyInput({ value, t, ...props }: ApiKeyInputProps): ReactNode {
+export function ApiKeyInput({ value, saved, t, ...props }: ApiKeyInputProps): ReactNode {
   const [revealedValue, setRevealedValue] = useState<string | undefined>()
-  const revealed = value.length > 0 && revealedValue === value
+  const canReveal = saved === undefined && value.length > 0 && props.disabled !== true
+  const revealed = canReveal && revealedValue === value
   return (
-    <div className={styles['keyInput']}>
+    <div className={`${styles['keyInput']} ${saved === undefined ? '' : styles['savedKeyInput']}`}>
       <input
         {...props}
-        className={`${styles['input']} ${value.length > 0 ? styles['keyInputFilled'] : ''}`}
+        className={`${styles['input']} ${canReveal ? styles['keyInputFilled'] : ''}`}
         type={revealed ? 'text' : 'password'}
         autoComplete="new-password"
         value={value}
+        placeholder={saved === undefined ? props.placeholder : saved.masked}
+        onCopy={(event) => { if (saved !== undefined) event.preventDefault() }}
+        onCut={(event) => { if (saved !== undefined) event.preventDefault() }}
+        onKeyDown={(event) => {
+          if (saved !== undefined && (event.key === 'Backspace' || event.key === 'Delete')) {
+            event.preventDefault()
+            saved.clear?.()
+          }
+        }}
         onChange={(event) => {
           setRevealedValue(undefined)
           props.onChange?.(event)
         }}
       />
-      {value.length === 0 ? null : <button
+      {!canReveal ? null : <button
         type="button"
         className={styles['keyToggle']}
         aria-label={t(revealed ? 'keyHide' : 'keyReveal')}
         aria-pressed={revealed}
-        disabled={props.disabled}
         onClick={() => { setRevealedValue(revealed ? undefined : value) }}
       >
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" aria-hidden="true">

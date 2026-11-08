@@ -18,7 +18,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { RemoteResult, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import type { ForgeChangeRequestListState, ForgeChangeRequestStatesFrame, ForgePanelChangeRequest } from '../types.ts'
 import { ReviewQueue } from './review-queue.ts'
-import { formatReviewComment, type ReviewSelection } from './review.ts'
+import { formatReviewComment, reviewQuoteSummary, type ReviewSelection } from './review.ts'
 import { ActionToast } from './ActionToast.tsx'
 import { CHANGES_ID, changesDefinition } from './changes-address.ts'
 import { createChangesStore } from './changes-store.ts'
@@ -148,7 +148,7 @@ function registerUi(ctx: Context): void {
     if (scope === undefined || conversation === undefined) return false
     const input = conversation.input.for(scope)
     const numbers = Array.from(input.state.getSnapshot().draft.matchAll(/(?:^|\n)(?:> )?## User Comment (\d+)/g), match => Number(match[1]))
-    if (!input.insertQuote(formatReviewComment(selection, Math.max(0, ...numbers) + 1))) return false
+    if (!input.insertQuote(formatReviewComment(selection, Math.max(0, ...numbers) + 1), reviewQuoteSummary(selection.comment))) return false
     input.focus()
     return true
   }

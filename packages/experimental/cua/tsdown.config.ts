@@ -4,6 +4,7 @@ import { clientBundle } from '../../client/tsdown.client.ts'
 const runtime: UserConfig[] = Object.entries({
   'remote-types': 'lib/types/remote-types.js', api: 'lib/types/api.js', bridge: 'lib/types/bridge.js',
   'native-client': 'lib/types/native-client.js', protocol: 'lib/types/protocol.js',
+  config: 'lib/types/config.js', 'native-schema': 'lib/types/native-schema.js', 'native-build': 'lib/types/native-build.js', guidance: 'lib/types/guidance.js',
 }).map(([name, path]) => ({
   entry: { [name]: path },
   outDir: 'lib', format: ['esm'], platform: 'node', target: 'es2024',

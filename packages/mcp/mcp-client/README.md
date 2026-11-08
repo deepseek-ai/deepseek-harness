@@ -77,14 +77,7 @@ After startup, the server's tools appear as `mcp__<serverName>__<tool>` — try 
 
 ### Host for a server manager
 
-When a plugin manages servers at runtime, such as the [MCP manager](../mcp-manager/README.md), load one more entry with `host: true` instead of a server configuration. That entry connects no server and provides `ctx.mcpClientHost`, the only way such a plugin uses this package: it validates a server configuration, mounts server instances, probes servers, and creates explicit OAuth authorization owners. Instances the host mounts run below the host entry, so a reload of this package replaces them together with the host, and a plugin that injects the host restarts against the replacement.
-
-```yaml
-- id: mcp-client-host
-  name: '@deepseek-ai/dsh-mcp-client'
-  config:
-    host: true
-```
+A plugin that manages servers at runtime, such as the [MCP manager](../mcp-manager/README.md), creates its own `McpClientHost` with `new McpClientHost(ctx)`. The host provides `ctx.mcpClientHost`, the only way such a plugin uses this package: it validates a server configuration, mounts server instances, probes servers, and creates explicit OAuth authorization owners. Instances the host mounts run below the managing plugin's fiber and end with it.
 
 `validate` resolves a server configuration through its transport's own schema and also refuses an invalid template token, reconnect policy, or OAuth beside an `Authorization` header, so each refusal names the field after the configuration path the caller passes.
 

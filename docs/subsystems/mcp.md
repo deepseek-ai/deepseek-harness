@@ -23,7 +23,7 @@ Model Context Protocol (MCP) connects the model to tools supplied by external se
 
 MCP servers are opt-in. Configure one `@deepseek-ai/dsh-mcp-client` entry per server in the intended Cordis scope. Every shipped profile supplies the [tool registry](tools.md) and mounts the shared resource service once; users configure only client entries. Callers with no visible configured server receive no MCP prompt text or tools in native or PTC mode.
 
-The Web and Desktop profiles also mount the [MCP server manager](../../packages/mcp/mcp-manager/README.md) once. It runs servers configured through Settings and servers that installed plugins register for their own lifetime, and serves their status, restart, and probe operations to Remote clients. A plugin that registers an OAuth server registers its account with `ctx.mcpAccounts` from [`ui-mcp-account`](../../packages/client/ui-mcp-account/README.md) to show it on the **Plugins** page.
+The Web and Desktop profiles also mount the [MCP server manager](../../packages/mcp/mcp-manager/README.md) once. It runs servers configured through Settings and servers that installed plugins register for their own lifetime, and serves their status, restart, and probe operations to Remote clients. A plugin that registers an OAuth server registers its account with `ctx.mcpAccounts` from [`dsh-mcp-account`](../../packages/mcp/mcp-account/README.md) to show it on the **Plugins** page.
 
 | Choice | Configuration owner |
 |---|---|
@@ -122,6 +122,25 @@ MCP prompt templates, human-input elicitation, task-based execution, and resourc
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxmcpaccounts--mcpaccounts"></a>
+
+### `ctx.mcpAccounts` — `McpAccounts`
+
+Shows each connector's MCP server account in the connector account registry.
+
+```ts cordis-catalog
+/**
+ * Show one connector's server account on its bundle page for as long as the returned disposer has not run. The
+ * account's key is `mcp:<server>`.
+ * @param registration - the server name, the bundle package, and the connector's text.
+ * @returns the registry's idempotent disposer, which withdraws the account.
+ * @throws when another account already uses the server or the package.
+ */
+register(registration: McpAccountRegistration): () => void
+```
+
+Source: [`packages/mcp/mcp-account/src/index.ts`](../../packages/mcp/mcp-account/src/index.ts)
+
 <a id="ctxmcpclienthost--mcpclienthost"></a>
 
 ### `ctx.mcpClientHost` — `McpClientHost`
@@ -137,14 +156,14 @@ Validates, mounts, probes, and authorizes MCP servers for the plugin that manage
  * @throws when the server name, a field, a template token, the reconnect policy, or OAuth beside an Authorization
  *   header is invalid.
  */
-validate(input: ServerConfigInput, path: readonly string[]): ServerConfig
+validate(input: ConfigInput, path: readonly string[]): Config
 
 /**
  * Mount one server instance below the host. The instance registers its tools and holds its `serverName` until disposed.
  * @param config - resolved server configuration, usually from {@link McpClientHost.validate}.
  * @returns the instance's activation and disposal.
  */
-mount(config: ServerConfig): McpServerInstance
+mount(config: Config): McpServerInstance
 
 /**
  * Probe a server without mounting it: resolve its templates, connect, list its tools, and close.
@@ -153,7 +172,7 @@ mount(config: ServerConfig): McpServerInstance
  * @returns the connect and list outcome with the cleanup result.
  * @throws for invalid options, malformed templates, or a missing required credentials provider.
  */
-probe(config: ServerConfig, options?: McpProbeOptions): Promise<McpProbeResult>
+probe(config: Config, options?: McpProbeOptions): Promise<McpProbeResult>
 
 /**
  * Create the explicit OAuth authorization owner of one server.
@@ -233,21 +252,21 @@ async probe(name: string, options?: McpProbeOptions): Promise<McpProbeResult>
  * @param name - configured or registered OAuth entry, including disabled entries.
  * @returns current attempt progress; absent services, changing entries, or failed cleanup reject.
  */
-@Remote async startAuthorization(name: string): Promise<McpOAuthAttemptView>
+async startAuthorization(name: string): Promise<McpOAuthAttemptView>
 
 /**
  * Cancel the selected attempt and drain its work; an admitted credential commit completes.
  * @param name - managed entry.
  * @param id - selected attempt; stale or absent attempts are ignored.
  */
-@Remote async cancelAuthorization(name: string, id: McpOAuthAttemptId): Promise<void>
+async cancelAuthorization(name: string, id: McpOAuthAttemptId): Promise<void>
 
 /**
  * Drain authorization, probes, and connections before deleting the local grant; retain client registration.
  * A configuration change before deletion preserves the grant and rejects.
  * @param name - configured or registered OAuth entry; cleanup failure preserves the grant and blocks replacement.
  */
-@Remote async signOut(name: string): Promise<void>
+async signOut(name: string): Promise<void>
 ```
 
 Source: [`packages/mcp/mcp-manager/src/index.ts`](../../packages/mcp/mcp-manager/src/index.ts)

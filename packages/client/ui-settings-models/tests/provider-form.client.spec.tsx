@@ -22,7 +22,7 @@ afterEach(cleanup)
 
 const t: ModelsSectionInjected['t'] = key => en[key]
 
-const PROTOCOLS = ['openai-completions', 'openai-responses', 'anthropic-messages']
+const PROTOCOLS = ['openai-completions', 'openai-responses', 'anthropic-messages', 'google-generative-ai']
 const LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
 
 /** The pi-ai profile shape as the host serializes it, including the layer-1 fields. */
@@ -1056,6 +1056,50 @@ describe('hand-declared providers', () => {
     expect(fields()).toEqual([en.keyInput, en.customDisplayName, en.baseUrl, en.customApi])
   })
 
+  it('requires a key before a keyless declared route switches to the Gemini protocol', async () => {
+    const { mutate, set } = await mountSection({
+      providers: { 'acme-gateway': { api: 'openai-completions', baseURL: 'https://acme.test/v1beta' } },
+      declaredRoutes: ['acme-gateway'],
+    })
+    openEditor('acme-gateway')
+    fireEvent.change(screen.getByLabelText(en.customApi), { target: { value: 'google-generative-ai' } })
+
+    expect(screen.getByText(en.keyRequired)).toBeTruthy()
+    expect(screen.getByLabelText<HTMLInputElement>(en.keyInput).required).toBe(true)
+    expect(buttonNamed(en.apply).disabled).toBe(true)
+    fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: 'gemini-key' } })
+    expect(screen.queryByText(en.keyRequired)).toBeNull()
+    fireEvent.click(screen.getByText(en.apply))
+    await waitFor(() => { expect(set).toHaveBeenCalledOnce() })
+    expect(firstMutate(mutate).ops).toContainEqual(
+      { op: 'set', path: ['providers', 'acme-gateway', 'apiKeyEnv'], value: 'ACME_GATEWAY_API_KEY' })
+  })
+
+  it('needs no typed key on a Gemini route that names its key reference', async () => {
+    await mountSection({
+      providers: { 'acme-gateway': { apiKeyEnv: 'ACME_KEY', api: 'google-generative-ai', baseURL: 'https://acme.test/v1beta' } },
+      declaredRoutes: ['acme-gateway'],
+    })
+    openEditor('acme-gateway')
+    expect(screen.queryByText(en.keyRequired)).toBeNull()
+    expect(screen.getByLabelText<HTMLInputElement>(en.keyInput).required).toBe(false)
+  })
+
+  it('blocks a protocol switch that the route\'s inherited reasoning levels would break', async () => {
+    await mountSection({
+      providers: { 'acme-gateway': {
+        apiKeyEnv: 'ACME_KEY', api: 'openai-completions', baseURL: 'https://acme.test/v1',
+        models: [{ id: 'm', reasoningEfforts: { off: null, high: 'high' } }],
+      } },
+      userProviders: { 'acme-gateway': { apiKeyEnv: 'ACME_KEY', api: 'openai-completions', baseURL: 'https://acme.test/v1' } },
+      baseProviders: { 'acme-gateway': { models: [{ id: 'm', reasoningEfforts: { off: null, high: 'high' } }] } },
+      declaredRoutes: ['acme-gateway'],
+    })
+    openEditor('acme-gateway')
+    fireEvent.change(screen.getByLabelText(en.customApi), { target: { value: 'google-generative-ai' } })
+    expect(buttonNamed(en.apply).disabled).toBe(true)
+  })
+
   it('renames a declared route and falls back to its id when the name is cleared', async () => {
     const { mutate } = await mountSection({
       providers: {
@@ -1545,6 +1589,8 @@ describe('hand-declared providers', () => {
     expect(baseUrl.placeholder).toBe('https://gateway.example/v1')
     fireEvent.change(protocol, { target: { value: 'openai-responses' } })
     expect(baseUrl.placeholder).toBe('https://gateway.example/v1')
+    fireEvent.change(protocol, { target: { value: 'google-generative-ai' } })
+    expect(baseUrl.placeholder).toBe('https://gateway.example/v1beta')
 
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
     fireEvent.change(baseUrl, { target: { value: 'https://acme.test/anthropic' } })
@@ -1609,15 +1655,55 @@ describe('hand-declared providers', () => {
   })
 
   it('names each protocol by its product name and falls back to the identifier of an unknown one', () => {
-    mountCard({ protocols: [...PROTOCOLS, 'google-generative-ai'] })
+    mountCard({ protocols: [...PROTOCOLS, 'future-protocol'] })
     const protocol = screen.getByLabelText<HTMLSelectElement>(en.customApi)
     const labels = [...protocol.options].map(option => [option.value, option.textContent])
     expect(labels).toEqual([
       ['openai-completions', en.protocolOpenAiCompletions],
       ['openai-responses', en.protocolOpenAiResponses],
       ['anthropic-messages', en.protocolAnthropicMessages],
-      ['google-generative-ai', 'google-generative-ai'],
+      ['google-generative-ai', en.protocolGemini],
+      ['future-protocol', 'future-protocol'],
     ])
+  })
+
+  it('requires a key for the Gemini protocol, which cannot authenticate without one', async () => {
+    const { mutate, set, onClose } = mountCard()
+    fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'gemini-gateway' } })
+    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://gateway.example/v1beta' } })
+    fireEvent.change(screen.getByLabelText(en.customApi), { target: { value: 'google-generative-ai' } })
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'gemini-pro' } })
+
+    expect(screen.getByText(en.keyRequired)).toBeTruthy()
+    expect(buttonNamed(en.create).disabled).toBe(true)
+    fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: 'gemini-key' } })
+    fireEvent.click(screen.getByText(en.create))
+
+    await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
+    expect(firstMutate(mutate).ops[0]?.value).toMatchObject({ api: 'google-generative-ai', apiKeyEnv: 'GEMINI_GATEWAY_API_KEY' })
+    expect(set).toHaveBeenCalledOnce()
+  })
+
+  it('treats a whitespace key as missing on the Gemini protocol', () => {
+    mountCard()
+    fireEvent.change(screen.getByLabelText(en.customApi), { target: { value: 'google-generative-ai' } })
+    fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: '   ' } })
+    expect(screen.getByText(en.keyRequired)).toBeTruthy()
+    expect(screen.queryByText(en.keyBlankNew)).toBeNull()
+  })
+
+  it('offers a Gemini model only the levels the protocol accepts', () => {
+    mountCard()
+    fireEvent.change(screen.getByLabelText(en.customApi), { target: { value: 'google-generative-ai' } })
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    fireEvent.click(screen.getByRole('button', { name: `${en.modelAdvanced} 1` }))
+    fireEvent.click(screen.getByRole('switch', { name: `${en.modelReasoning} 1` }))
+
+    const level = screen.getByRole<HTMLSelectElement>('combobox', { name: `${en.modelReasoningLevel} 1` })
+    expect(level.value).toBe('low')
+    expect([...level.options].map(option => option.value)).toEqual(['minimal', 'low'])
+    expect(screen.getByRole<HTMLInputElement>('textbox', { name: `low ${en.modelReasoningValue}` }).disabled).toBe(true)
   })
 
   it('refuses an unusable key on the field and blocks creation', () => {

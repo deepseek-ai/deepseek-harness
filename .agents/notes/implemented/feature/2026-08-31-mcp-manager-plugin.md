@@ -20,9 +20,9 @@ Installed application plugins also bring their own servers. Each must add its se
 
 **A flat entry schema, validated cross-field.** The entry is flat with a `transport` discriminant, and write-time validation enforces the per-transport requirements and rejections (missing `command`/`url`, cross-transport fields, malformed templates) at the write — a schema-valid-but-unserviceable entry is never stored, and refusals name the offending field where a union's shape error would not.
 
-**Children are plugin instances, not library calls.** Each enabled entry is a `dsh-mcp-client` instance that the MCP client host mounts below its own fiber via `ctx.plugin()`. That reuses the tested activation/disposal semantics, makes `serverName` reservations collide correctly with statically composed instances (surfaced as a `failed`/`load` status with the actionable message), and lets the manager unmount every instance it mounted when it stops.
+**Children are plugin instances, not library calls.** Each enabled entry is a `dsh-mcp-client` instance that the MCP client host mounts under the manager's fiber via `ctx.plugin()`. That reuses the tested activation/disposal semantics, makes `serverName` reservations collide correctly with statically composed instances (surfaced as a `failed`/`load` status with the actionable message), and lets manager disposal unwind every instance and its tools through ordinary fiber teardown.
 
-**The MCP client host is the manager's only reach into mcp-client.** An mcp-client entry loaded with `host: true` provides `ctx.mcpClientHost`, and the manager injects it and imports only mcp-client types. The host validates an entry's client fields through each transport's own schema, so refusals still name the field; mounts instances below itself; probes; and creates authorization owners from its own context. Plugin entries export only what the Loader loads, and HMR reloads mcp-client as its own unit: replacing the host disposes the instances below it, and Cordis restarts the manager against the replacement, so the manager never keeps a replaced module's code or instances.
+**The MCP client host is the manager's only reach into mcp-client.** The manager creates an `McpClientHost` at construction and imports only that class and mcp-client types. The host validates an entry's client fields through each transport's own schema, so refusals still name the field; mounts instances under the manager's fiber; probes; and creates authorization owners from the manager's context. A plugin entry exports what the Loader loads and its Service and error classes, so the host is a Service class rather than a set of functions.
 
 **Whole-entry identity; `enabled` controls mounting.** A changed entry rebuilds the child instance; disabling or deleting it disposes the child. Reconciliation and `restart` serialize on one operation tail. Probes run independently, and configuration changes cancel affected probes before queued cleanup waits for them. The manager retains a failed cleanup record and refuses a replacement until the Host restarts, preventing overlapping server lifetimes.
 
@@ -50,9 +50,9 @@ Installed application plugins also bring their own servers. Each must add its se
 
 **Poll status from the management surface.** Rejected: the Remote plane already forwards Host events; peers that shipped polling (Reasonix) or lacked a status event (OpenCode v1) treat it as a defect to fix.
 
-**Export validation, probe, status, and authorization values from the mcp-client entry.** Rejected: plugin entries export only what the Loader loads. A manager that imports another plugin's values keeps the module it loaded first; when mcp-client also has its own Loader entry, a reload replaces only mcp-client, and HMR also replaces the instances the manager mounted through that plugin without the manager knowing, which leaves stale status and an instance the manager cannot stop.
+**Export validation, probe, status, and authorization values from the mcp-client entry.** Rejected: plugin entries export what the Loader loads and their Service and error classes, not helper values.
 
-**A Service Definition in mcp-client that the manager extends to inherit probe and authorization.** Rejected: the subclass extends the base it imported, so after a reload it still runs the replaced code, and instances it mounts through its own import are replaced behind it as above.
+**Load the host as its own mcp-client entry with `host: true` that the manager injects.** Rejected: every composition that loads the manager would need a second row, and the client's configuration would carry a shape that connects no server. Its only gain, a manager that restarts when mcp-client reloads during development, does not justify either.
 
 **Move the connection machinery into a separate service package.** Rejected: per-server mcp-client instances use the same machinery, so every composition that loads mcp-client would also have to load the new service.
 
@@ -68,5 +68,5 @@ mcp-client unit tests cover status transitions, independent startup and probe bu
 - Liveness relies on transport closure and request failures; a Streamable HTTP server that stalls without closing is noticed when a request fails.
 - A rebuilt server’s tools remain unavailable until the replacement completes its initial sync. Replacement waits for confirmed transport closure and successful local cleanup.
 - The manager governs the global plane only; preset-scoped and static instances stay outside its list.
-- A composition that loads the manager also loads an mcp-client entry with `host: true`; without it the manager stays pending. A reload of mcp-client restarts the manager, which remounts its servers.
+- The manager keeps the mcp-client code it loaded until the manager itself reloads; a development reload of mcp-client alone does not restart it.
 - `startupTimeoutMs` bounds startup attempts, while notification-driven re-sync requests still ride the SDK's request default — recorded as an mcp-client limitation.
