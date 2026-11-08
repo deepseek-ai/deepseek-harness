@@ -76,13 +76,13 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
             var context = new RequestContext(config, cancellation, mta, sta);
             context.Check();
             var parameters = request.Params;
-            if (request.Method == "permissionStatus") return DesktopSession.Status(false);
+            if (request.Method == "permissionStatus") return DesktopSession.Status(WindowCapture.IsSupported);
             if (request.Method == "applicationIcons") return await sta.Invoke(_ => Applications.Icons(parameters, context), cancellation);
             if (request.Method == "getCapabilities")
             {
                 var locked = DesktopSession.Locked();
                 return new { permissions = new { accessibility = locked == false,
-                    screenRecording = false },
+                    screenRecording = locked == false && WindowCapture.IsSupported },
                     sessionLocked = locked };
             }
             if (request.Method is "requestPermission" or "openPermissionSettings")
