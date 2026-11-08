@@ -3,7 +3,9 @@
 import { expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import McpAccounts, { type McpAccountsView } from '@deepseek-ai/dsh-client-ui-mcp-account'
+import ConnectorAccounts from '@deepseek-ai/dsh-client-ui-connector-account'
+import type { ConnectorAccountsView } from '@deepseek-ai/dsh-client-ui-connector-account/types'
+import McpAccounts from '@deepseek-ai/dsh-mcp-account'
 import { parseCredentialKey } from '@deepseek-ai/dsh-credentials'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
@@ -103,7 +105,9 @@ it('keeps Tencent Docs tools hidden from an agent until it loads them, unless lo
 })
 
 /** Read the account stream until a view satisfies the predicate. */
-async function until(stream: AsyncIterator<McpAccountsView>, predicate: (view: McpAccountsView) => boolean): Promise<McpAccountsView> {
+async function until(
+  stream: AsyncIterator<ConnectorAccountsView>, predicate: (view: ConnectorAccountsView) => boolean,
+): Promise<ConnectorAccountsView> {
   for (;;) {
     const next = await stream.next()
     if (next.done === true) throw new Error('account stream ended')
@@ -113,13 +117,17 @@ async function until(stream: AsyncIterator<McpAccountsView>, predicate: (view: M
 
 it('shows the Tencent Docs account on the Plugins page while the account registry runs, and withdraws it with the plugin', async () => {
   const b = await fixture()
+  await b.ctx.plugin(ConnectorAccounts)
   await b.ctx.plugin(McpAccounts)
-  const stream = b.ctx.mcpAccounts.watch(new AbortController().signal)[Symbol.asyncIterator]()
+  const stream = b.ctx.connectorAccounts.watch(new AbortController().signal)[Symbol.asyncIterator]()
   const plugin = b.mount()
   await plugin.await()
-  const shown = await until(stream, view => view.accounts[0]?.view !== undefined)
+  const shown = await until(stream, view => view.accounts[0]?.display.phase === 'disconnected')
   expect(shown.accounts).toHaveLength(1)
-  expect(shown.accounts[0]).toMatchObject({ server: 'tencent-docs', packageName: '@deepseek-ai/dsh-tencent-docs', copy: COPY, view: { name: 'tencent-docs' } })
+  expect(shown.accounts[0]).toMatchObject({
+    key: 'mcp:tencent-docs', packageName: '@deepseek-ai/dsh-tencent-docs',
+    copy: { title: COPY.title, activation: { connect: COPY.connect } }, display: { phase: 'disconnected' },
+  })
   await plugin.dispose()
   await until(stream, view => view.accounts.length === 0)
 })

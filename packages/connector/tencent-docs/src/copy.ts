@@ -1,5 +1,5 @@
 /** The Plugins page text that names Tencent Docs; the shared account copy comes from the account surfaces' dictionary. */
-import type { McpAccountCopy } from '@deepseek-ai/dsh-client-ui-mcp-account'
+import type { McpAccountCopy } from '@deepseek-ai/dsh-mcp-account'
 
 /** Every language the Web app ships. */
 type ShippedText = Readonly<Record<'zh' | 'en' | 'ja' | 'es' | 'fr' | 'de' | 'ru' | 'pt', string>>

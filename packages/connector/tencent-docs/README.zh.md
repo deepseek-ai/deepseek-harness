@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-腾讯文档插件在加载期间把腾讯文档托管的 MCP 服务器 `https://docs.qq.com/openapi/mcp` 注册到 Host 共用的 [MCP 管理器](../../mcp/mcp-manager/README.zh.md)。用户在 Web 侧栏**插件**页面的插件详情页中连接腾讯文档账号，之后该 Host 上的所有对话都能使用这个服务器的工具，模型也会被告知把它称为腾讯文档插件。连接、OAuth 授权、已保存的 grant 和退出登录都由管理器负责，并由共用的 [MCP 账号界面](../../client/ui-mcp-account/README.zh.md)显示在插件页面上。插件运行在 Web 与 Desktop 组合中。
+腾讯文档插件在加载期间把腾讯文档托管的 MCP 服务器 `https://docs.qq.com/openapi/mcp` 注册到 Host 共用的 [MCP 管理器](../../mcp/mcp-manager/README.zh.md)。用户在 Web 侧栏**插件**页面的插件详情页中连接腾讯文档账号，之后该 Host 上的所有对话都能使用这个服务器的工具，模型也会被告知把它称为腾讯文档插件。连接、OAuth 授权、已保存的 grant 和退出登录都由管理器负责，并由共用的 [MCP 账号服务](../../mcp/mcp-account/README.zh.md)显示在插件页面上。插件运行在 Web 与 Desktop 组合中。
 
 ## 目录
 
@@ -50,7 +50,7 @@ bundle patch 在 profile 其他层之后插入 `tencent-docs` 行。插件需要
 
 授权必须在 Host 所在机器的浏览器中完成。用户在腾讯文档中同意授权后，回调页面说明 DSH 已收到授权，区块随后显示结果。离开页面不会取消授权尝试，尝试由 Host 持有。授权失败时显示**授权未完成，请重试**；页面操作失败时显示 toast。退出登录保留客户端注册，不会撤销腾讯文档签发的 token。
 
-页面通过 `mcpAccounts` Remote 跟随账号，该 Remote 报告管理器的条目；页面通过 Remote 调用管理器的 [OAuth 操作](../../mcp/mcp-manager/README.zh.md#oauth-authorization)：`startAuthorization('tencent-docs')` 返回一次授权尝试，其 `authorizationUrl` 由流报告，`cancelAuthorization('tencent-docs', id)` 取消它，`signOut('tencent-docs')` 删除 grant，`restart('tencent-docs')` 重试。其他 Remote 客户端可以使用同样的操作。
+页面通过 [`connectorAccounts` Remote](../../client/ui-connector-account/README.zh.md) 以 key `mcp:tencent-docs` 跟随账号，其按钮在该 Remote 上发起 `connect`、`sign-out` 或 `retry`，或取消授权尝试。在 Host 上，[`dsh-mcp-account`](../../mcp/mcp-account/README.zh.md) 通过管理器的 [OAuth 操作](../../mcp/mcp-manager/README.zh.md#oauth-authorization)执行它们：`startAuthorization('tencent-docs')` 返回一次授权尝试，其 `authorizationUrl` 由流报告，`cancelAuthorization('tencent-docs', id)` 取消它，`signOut('tencent-docs')` 删除 grant，`restart('tencent-docs')` 重试。其他 Remote 客户端可以使用同样的操作。
 
 ### 停用与卸载
 
@@ -75,7 +75,7 @@ bundle patch 在 profile 其他层之后插入 `tencent-docs` 行。插件需要
 
 [`cordis.patch.yml`](cordis.patch.yml) 插入一行 id 为 `tencent-docs` 的条目，指向本包，因此本包既是 bundle，也是其唯一的一行；`config` 覆盖以该 id 为目标。Host 侧的 [`src/index.ts`](src/index.ts) 进行两项注册，二者都是插件 fiber 的 effect：`ctx.mcpManager.register('tencent-docs', …)` 以配置的 `url` 和 OAuth 凭据 key 添加一个 Streamable HTTP 条目，`ctx.systemPrompt.section()` 在 `MCP_SERVERS` 排序位置添加称呼指引。服务器名固定了 `mcp__tencent-docs__` 工具命名空间，凭据 key 固定了 grant 地址，因此重新加载或重新安装的插件会得到同样的工具和 grant。管理器在注册时校验条目；如果已配置或已注册的服务器占用了该名称或 key，插件会在添加指引之前加载失败。条目未设置 `scope`，因此授权请求腾讯文档 401 challenge 所指资源元数据中列出的 `docs:read docs:write docs:manage` scope，授权页面保留腾讯文档授权端点自带的 `authType=2` 查询参数。
 
-账号注册表运行时，插件还调用 `ctx.mcpAccounts.register({ server: 'tencent-docs', packageName: '@deepseek-ai/dsh-tencent-docs', copy })`，其中 [`src/copy.ts`](src/copy.ts) 以每种已发布语言保存指明腾讯文档的文案；随后由 [`ui-mcp-account`](../../client/ui-mcp-account/README.zh.md) 提供 `tencent-docs` 条目，并渲染上文所述的区块、引导、标签与 toast。没有注册表的组合（如 headless profile）加载插件时不带账号区块。
+账号注册表运行时，插件还调用 `ctx.mcpAccounts.register({ server: 'tencent-docs', packageName: '@deepseek-ai/dsh-tencent-docs', copy })`，其中 [`src/copy.ts`](src/copy.ts) 以每种已发布语言保存指明腾讯文档的文案；随后由 [`dsh-mcp-account`](../../mcp/mcp-account/README.zh.md) 把账号登记到连接器账号注册表，由注册表渲染上文所述的区块、引导、标签与 toast。没有注册表的组合（如 headless profile）加载插件时不带账号区块。
 
 </details>
 
@@ -89,7 +89,8 @@ bundle patch 在 profile 其他层之后插入 `tencent-docs` 行。插件需要
 - [MCP 客户端](../../mcp/mcp-client/README.zh.md)——连接、工具命名、OAuth grant 刷新与脱敏。
 - [MCP 子系统](../../../docs/subsystems/mcp.zh.md)——各 MCP 包如何协同。
 - [Plugin Manager](../../boot/plugin-manager/README.zh.md)——安装与启用。
-- [MCP 账号界面](../../client/ui-mcp-account/README.zh.md)——账号注册后显示的区块、标签、引导与提示。
+- [MCP 账号服务](../../mcp/mcp-account/README.zh.md)——管理器的状态与授权如何映射到账号区块。
+- [连接器账号界面](../../client/ui-connector-account/README.zh.md)——账号注册后显示的区块、标签、引导与提示。
 - [插件页面](../../client/ui-plugin-manager/README.zh.md#use-this-package)——这些界面所在的 bundle 详情页。
 
 -----
