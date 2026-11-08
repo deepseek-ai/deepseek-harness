@@ -10,7 +10,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import type {} from '@deepseek-ai/dsh-client-ui-mcp-account'
+import type {} from '@deepseek-ai/dsh-mcp-account'
 import type {} from '@deepseek-ai/dsh-mcp-manager'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import { COPY } from './copy.ts'

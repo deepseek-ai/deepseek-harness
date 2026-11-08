@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The Notion plugin registers Notion's hosted MCP server, `https://mcp.notion.com/mcp`, with the Host's shared [MCP manager](../../mcp/mcp-manager/README.md) for as long as the plugin is loaded. The user connects a Notion account from the plugin's page on the Web sidebar's **Plugins** page; afterwards every conversation on that Host can use the server's tools, and the model is told to call the integration the Notion plugin. The manager owns the connection, OAuth authorization, the saved grant, and sign-out, which the shared [MCP account surfaces](../../client/ui-mcp-account/README.md) show on the Plugins page. It runs in the Web and Desktop compositions.
+The Notion plugin registers Notion's hosted MCP server, `https://mcp.notion.com/mcp`, with the Host's shared [MCP manager](../../mcp/mcp-manager/README.md) for as long as the plugin is loaded. The user connects a Notion account from the plugin's page on the Web sidebar's **Plugins** page; afterwards every conversation on that Host can use the server's tools, and the model is told to call the integration the Notion plugin. The manager owns the connection, OAuth authorization, the saved grant, and sign-out, which the shared [MCP account service](../../mcp/mcp-account/README.md) shows on the Plugins page. It runs in the Web and Desktop compositions.
 
 ## Table of Contents
 
@@ -50,7 +50,7 @@ While the plugin is on, its page on the **Plugins** page shows a **Notion accoun
 
 Authorization must be completed in a browser on the Host machine. After the user approves access in Notion, the callback page says DSH received the authorization; the section then shows the result. Leaving the page does not cancel an attempt, which the Host owns. A failed attempt shows **Authorization was not completed. Try again.**; a failed page action shows a toast. Sign-out keeps the client registration and does not revoke the connection on Notion's side.
 
-The page follows the account through the `mcpAccounts` Remote, which reports the manager's entry, and calls the manager's [OAuth operations](../../mcp/mcp-manager/README.md#oauth-authorization) through Remote: `startAuthorization('notion')` returns an attempt whose `authorizationUrl` the stream reports, `cancelAuthorization('notion', id)` cancels it, `signOut('notion')` deletes the grant, and `restart('notion')` retries. Other Remote clients can use the same operations.
+The page follows the account through the [`connectorAccounts` Remote](../../client/ui-connector-account/README.md) under the key `mcp:notion`, and its buttons start `connect`, `sign-out`, or `retry` or cancel the attempt there. On the Host, [`dsh-mcp-account`](../../mcp/mcp-account/README.md) runs them through the manager's [OAuth operations](../../mcp/mcp-manager/README.md#oauth-authorization): `startAuthorization('notion')` returns an attempt whose `authorizationUrl` the stream reports, `cancelAuthorization('notion', id)` cancels it, `signOut('notion')` deletes the grant, and `restart('notion')` retries. Other Remote clients can use the same operations.
 
 ### Turn off and uninstall
 
@@ -75,7 +75,7 @@ The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-no
 
 [`cordis.patch.yml`](cordis.patch.yml) inserts one row with id `notion` naming this package, so the package is both the bundle and its only row; `config` overrides target that id. The Host half, [`src/index.ts`](src/index.ts), makes two registrations, both effects of the plugin's fiber: `ctx.mcpManager.register('notion', …)` adds a Streamable HTTP entry with the configured `url` and OAuth credential key, and `ctx.systemPrompt.section()` adds the naming guidance at the `MCP_SERVERS` order. The server name fixes the `mcp__notion__` tool namespace, and the credential key fixes the grant address, so a reloaded or reinstalled plugin reaches the same tools and grant. The manager validates the entry when it is registered; a configured or registered server that already uses the name or key makes the plugin fail to load before the guidance is added.
 
-While the account registry runs, the plugin also calls `ctx.mcpAccounts.register({ server: 'notion', packageName: '@deepseek-ai/dsh-notion', copy })`, where [`src/copy.ts`](src/copy.ts) holds the text that names Notion in every shipped language; [`ui-mcp-account`](../../client/ui-mcp-account/README.md) then serves the `notion` entry and renders the section, guidance, tag, and toast described above. A composition without the registry, such as a headless profile, loads the plugin without the account section.
+While the account registry runs, the plugin also calls `ctx.mcpAccounts.register({ server: 'notion', packageName: '@deepseek-ai/dsh-notion', copy })`, where [`src/copy.ts`](src/copy.ts) holds the text that names Notion in every shipped language; [`dsh-mcp-account`](../../mcp/mcp-account/README.md) then registers the account with the connector account registry, which renders the section, guidance, tag, and toast described above. A composition without the registry, such as a headless profile, loads the plugin without the account section.
 
 </details>
 
@@ -89,7 +89,8 @@ While the account registry runs, the plugin also calls `ctx.mcpAccounts.register
 - [MCP client](../../mcp/mcp-client/README.md) — connection, tool naming, OAuth grant refresh, and redaction.
 - [MCP subsystem](../../../docs/subsystems/mcp.md) — how the MCP packages fit together.
 - [Plugin Manager](../../boot/plugin-manager/README.md) — installation and enablement.
-- [MCP account surfaces](../../client/ui-mcp-account/README.md) — the section, tag, guidance, and notices the account registration shows.
+- [MCP account service](../../mcp/mcp-account/README.md) — how the manager's status and authorization map to the account section.
+- [Connector account surfaces](../../client/ui-connector-account/README.md) — the section, tag, guidance, and notices the account registration shows.
 - [Plugins page](../../client/ui-plugin-manager/README.md#use-this-package) — the bundle page those surfaces occupy.
 
 -----
