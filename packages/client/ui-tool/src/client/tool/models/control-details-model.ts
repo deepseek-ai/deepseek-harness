@@ -29,7 +29,14 @@ function teamTaskItems(value: unknown, t: DetailTranslate): DetailItem[] {
 }
 
 function agentList(text: string, json: unknown, t: DetailTranslate): ToolDetailsModel | null {
-  if (Array.isArray(json)) return detailList(inspectionItems(json, t), t('detail.agents.count', { count: json.length }), t)
+  if (Array.isArray(json)) {
+    const items = inspectionItems(json, t).map((item) => {
+      if (item.title === undefined || item.description === undefined) return item
+      const { title, description, ...rest } = item
+      return { ...rest, title: description, subtitle: title }
+    })
+    return { ...detailList(items, t('detail.agents.count', { count: json.length }), t), compact: true }
+  }
   if (text === '(no subagents)') return detailList([], t('detail.agents.count', { count: 0 }), t)
   const items: DetailItem[] = []
   for (const line of text.split('\n')) {
@@ -39,7 +46,7 @@ function agentList(text: string, json: unknown, t: DetailTranslate): ToolDetails
     const [, agent, state, title] = match
     if (agent === undefined || state === undefined) return null
     items.push({
-      title: agent, ...(title === undefined ? {} : { subtitle: title }),
+      title: title || agent, ...(title ? { subtitle: agent } : {}),
       badge: detailBadge(state, t),
       fields: [],
     })

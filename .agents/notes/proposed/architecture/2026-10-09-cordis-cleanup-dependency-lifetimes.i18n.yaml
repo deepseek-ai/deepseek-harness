@@ -21,8 +21,8 @@
   en: 8a9578bbc700c0bf
   zh: 8ee46e5ef1cf3972
 /agent-note-keep-cleanup-dependencies-usable-until-consumers-finish/p0-findings/authorization-loses-required-observation-or-an-accepted-credential-write:
-  en: 33312dc2b9813ef9
-  zh: ba2fb5fac770e698
+  en: c6b0d746185d0d3b
+  zh: a228633ecdf42800
 /agent-note-keep-cleanup-dependencies-usable-until-consumers-finish/p0-findings/ssh-disables-cleanup-requests-before-dependent-process-cleanup-finishes:
   en: 85fb2b564bc40230
   zh: 97c3e794124f8044

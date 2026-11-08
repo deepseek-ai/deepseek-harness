@@ -4,6 +4,7 @@
 - id: deepseek-account
   config:
     platformOrigin: "{{origin}}"
+    harnessOrigin: "{{origin}}"
     allowLoopbackHttp: true
 # The scenario signs in from the account menu after initial setup.
 - id: ui-settings-account

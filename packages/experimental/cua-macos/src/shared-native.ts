@@ -56,7 +56,8 @@ class SharedNativeChannel implements NativeChannel {
   private cleanupTimer: ReturnType<typeof setTimeout> | undefined
   private cleanupFailure: Error | undefined
 
-  constructor(private readonly owner: { subprocess: Pick<SubprocessRuntime, 'spawn'> }, private readonly config: NativeClientConfig) {
+  constructor(private readonly owner: { subprocess: Pick<SubprocessRuntime, 'spawn'> }, private readonly config: NativeClientConfig,
+    private readonly systemPointerHover: boolean) {
     this.stdin = new Writable({
       write: (chunk: Buffer, encoding, callback) => {
         void this.ready.promise.then((socket) => {
@@ -214,7 +215,8 @@ class SharedNativeChannel implements NativeChannel {
       const { maxRequestBytes, maxResponseBytes, axTimeoutMs, textEventIntervalMs, maxClickHoldMs,
         screenshotTimeoutMs, timeoutMs, graceMs } = this.config
       socket.write(JSON.stringify({ type: 'hello', protocol: 1, runtimeKey,
-        config: { maxRequestBytes, maxResponseBytes, axTimeoutMs, textEventIntervalMs, maxClickHoldMs, screenshotTimeoutMs, timeoutMs, graceMs } }) + '\n')
+        config: { maxRequestBytes, maxResponseBytes, axTimeoutMs, textEventIntervalMs, maxClickHoldMs,
+          screenshotTimeoutMs, timeoutMs, graceMs, systemPointerHover: this.systemPointerHover } }) + '\n')
     })
     const receive = (chunk: Buffer): void => {
       const newline = chunk.indexOf(10)
@@ -286,8 +288,9 @@ class SharedNativeChannel implements NativeChannel {
  * Prepare or join the native process; writes wait for identity-checked readiness.
  * @param owner - Provider owning the short-lived native startup command.
  * @param config - Native runtime identity, operation limits and connection deadlines.
+ * @param systemPointerHover - Whether this connection may move the visible pointer when AX hover is unavailable.
  * @returns One independently disposable Agent connection, without operation replay.
  */
-export function createSharedNativeChannel(owner: { subprocess: Pick<SubprocessRuntime, 'spawn'> }, config: NativeClientConfig): NativeChannel {
-  return new SharedNativeChannel(owner, config)
+export function createSharedNativeChannel(owner: { subprocess: Pick<SubprocessRuntime, 'spawn'> }, config: NativeClientConfig, systemPointerHover: boolean): NativeChannel {
+  return new SharedNativeChannel(owner, config, systemPointerHover)
 }

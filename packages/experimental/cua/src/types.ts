@@ -191,13 +191,13 @@ export interface CuaWindow extends CuaSurface {
    */
   getScreenshot(options?: CuaObservationOptions): Promise<CuaScreenshot>
   /**
-   * Reveal advertised AX alternate UI, otherwise move the system cursor without pressing a button.
-   * The system-pointer route requires the app to be foreground and the point unobscured; never activates or raises it.
+   * Request a mouse move to an element or a point without pressing a button.
+   * The provider reports the route and whether the system pointer moved.
    * Returning and subsequent observations do not restore the previous pointer position.
-   * Other input and application changes can interrupt hover; observe before continuing.
+   * Other input and application changes can interrupt the interaction; observe before continuing.
    * @param target - current element id or screenshot-local [x,y].
    * @param options - coordinate mode; applies only to [x,y].
-   * @returns dispatch evidence and the selected route; observe the resulting UI after its hover delay.
+   * @returns dispatch evidence and the selected route; observe the resulting UI after any UI delay.
    */
   mouseMove(target: CuaElementId | readonly [number, number], options?: CuaCoordinateOptions): Promise<CuaHoverResult>
   /**

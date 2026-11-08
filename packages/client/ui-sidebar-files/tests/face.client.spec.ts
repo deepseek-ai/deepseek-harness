@@ -10,6 +10,7 @@ import { childPath } from '../src/client/store.ts'
 import { createFilesStore } from '../src/client/store.ts'
 import type { DirLevel } from '../src/client/store.ts'
 import { DirectoryNode } from '../src/client/directory-node.ts'
+import { memoryBook, scriptedSearch } from './search-fixture.client.ts'
 import { scriptedList } from './scripted-list.client.ts'
 import { sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
 import type { PaneId, TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
@@ -29,7 +30,7 @@ function mount() {
   const script = scriptedList()
   /** The tabs the face placed itself beside, with each placement's release. */
   const placed: { readonly tabId: TabId; readonly face: FilesInjected; readonly release: Mock<() => void> }[] = []
-  const face = filesFace(script.list, script.watch, CAN_OPEN, () => ({ getSnapshot: () => ({ address: '', params: undefined, revision: 0 }), subscribe: () => () => {} }))(SESSION, instance, (tabId, bound) => {
+  const face = filesFace(script.list, script.watch, CAN_OPEN, () => ({ getSnapshot: () => ({ address: '', params: undefined, revision: 0 }), subscribe: () => () => {} }), scriptedSearch().search, memoryBook())(SESSION, instance, (tabId, bound) => {
     const release = vi.fn<() => void>()
     placed.push({ tabId, face: bound, release })
     return release
@@ -228,11 +229,15 @@ describe('filesFace', () => {
     onTestFinished(() => { tab.abort() })
     face.attach(moved, 'tab-moved' as TabId, tab.signal)
     expect(instance.getSnapshot().byPane[moved]?.open).toBe(true)
-    // The tree drawn there next takes the keyboard.
+    expect(instance.getSnapshot().byPane[moved]?.searchBarOpen).toBe(false)
+    // The search field drawn there next takes the keyboard, not the tree.
     const body = { scrollTop: 0, focus: vi.fn() }
     face.bodyDrawn(moved, `${ROOT}/a.ts`, body as Partial<HTMLElement> as HTMLElement)
+    const input = { focus: vi.fn() }
+    face.searchDrawn(moved, input as Partial<HTMLInputElement> as HTMLInputElement)
     await Promise.resolve()
-    expect(body.focus).toHaveBeenCalledTimes(1)
+    expect(body.focus).not.toHaveBeenCalled()
+    expect(input.focus).toHaveBeenCalledTimes(1)
     face.hide('pane-never' as PaneId)
     expect(instance.getSnapshot().byPane['pane-never' as PaneId]).toBeUndefined()
   })

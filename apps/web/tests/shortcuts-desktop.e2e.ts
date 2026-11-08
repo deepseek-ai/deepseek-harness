@@ -120,8 +120,9 @@ it.each([
         await selectDraft()
         await deliverPrimary('KeyP')
         expect(await files.count()).toBe(1)
-        expect(await panel.locator('[data-dockkit-pane]').evaluate(pane => document.activeElement === pane)).toBe(true)
-        expect(await page.evaluate(() => document.getSelection()?.toString())).toBe('Desktop')
+        // Once the files page is shown, the shortcut opens its search bar and the search field takes the keyboard.
+        await expect.poll(() => panel.locator('[data-files-search-toggle]').getAttribute('aria-expanded')).toBe('true')
+        await expect.poll(() => panel.locator('[data-files-search]').evaluate(input => document.activeElement === input)).toBe(true)
         await composer.click()
         const pane = panel.locator('[data-dockkit-pane]')
         await pane.click({ position: { x: 20, y: 2 } })

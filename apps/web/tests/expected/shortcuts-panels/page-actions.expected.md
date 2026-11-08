@@ -18,7 +18,12 @@
   - button "Split" [disabled]
 - text: {{cwd}}/workspace
 - button "Reload"
+- button "Search files" [expanded]
 - complementary "Workspace files":
+  - button "Search settings"
+  - searchbox "Search files"
+  - button "Show hidden entries"
+  - paragraph
   - list:
     - listitem:
       - button "t6-refresh.txt"
