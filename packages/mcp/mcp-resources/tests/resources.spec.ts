@@ -95,6 +95,8 @@ describe('MCP resource tools', () => {
       inner.mcpResources.register('second', { request })
     } })
     expect(visibleResourceTools(ctx)).toEqual([...resourceToolNames].sort())
+    expect(resourceToolNames.map(name => ctx.tools.get(name)?.isConcurrencySafe?.({ server: 'first', uri: 'docs://text' })))
+      .toEqual(resourceToolNames.map(() => true))
     await first.dispose()
     expect(visibleResourceTools(ctx)).toEqual([...resourceToolNames].sort())
     expect((await call(ctx, 'list_mcp_resources', { server: 'second' })).isError).toBe(false)

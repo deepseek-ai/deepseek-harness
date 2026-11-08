@@ -541,6 +541,8 @@ export function apply(ctx: Context, config: Config): void {
     name: 'job_list',
     description: 'List your background jobs (running and finished) with their ids, kinds, and statuses.',
     parameters: {},
+    // Listing reads a status snapshot and consumes no output cursor or completion notice.
+    isConcurrencySafe: () => true,
     output: {
       schema: { type: 'array', items: PUBLIC_JOB_SCHEMA },
       render: (_args, jobs) => [{
