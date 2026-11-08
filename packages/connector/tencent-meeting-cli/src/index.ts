@@ -1,6 +1,6 @@
 /**
  * Tencent Meeting plugin: tells the model the managed tmeet's absolute path, registers its skill over the upstream guide
- * it downloads, and shows the account on the Plugins page through the CLI account registry. The CLI's default sign-in is
+ * it downloads, and shows the account on the Plugins page through the connector account registry. The CLI's default sign-in is
  * shared with the user's own terminal.
  * @module @deepseek-ai/dsh-tencent-meeting-cli
  */
@@ -10,7 +10,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { CliAccountConfig, CliCommandExecutor, registerCliPathContext } from '@deepseek-ai/dsh-cli-account'
 import { registerUpstreamSkills, UpstreamSkillsConfig } from '@deepseek-ai/dsh-upstream-skills'
-import type {} from '@deepseek-ai/dsh-client-ui-cli-account'
+import type {} from '@deepseek-ai/dsh-client-ui-connector-account'
 import type {} from '@deepseek-ai/dsh-skill'
 import type {} from '@deepseek-ai/dsh-subprocess'
 import type {} from '@deepseek-ai/dsh-system-prompt'
@@ -36,7 +36,7 @@ export type Config = CliAccountConfig & UpstreamSkillsConfig
 export const Config: z<Config> = z.intersect([CliAccountConfig, UpstreamSkillsConfig])
 
 /**
- * Register the CLI and its skill, and show the account on the Plugins page while the CLI account registry runs.
+ * Register the CLI and its skill, and show the account on the Plugins page while the connector account registry runs.
  * @param ctx - Context carrying the skill registry, subprocess runtime, and system prompt.
  * @param config - CLI location, command deadline, and where the upstream guide comes from.
  * @throws when this platform has no packaged `tmeet`, `tmeet` is not executable, or `skillsDir` is not a directory.
@@ -49,9 +49,10 @@ export function apply(ctx: Context, config: Config): void {
   const account = new TencentMeetingAccount(cli, ctx.logger, skills)
   ctx.effect(() => () => account.dispose(), 'tencent-meeting: account')
   ctx.effect(() => skills.watch((state) => { account.showSkills(state) }), 'tencent-meeting: guide')
-  ctx.inject(['cliAccounts'], (scope) => {
-    scope.effect(() => scope.cliAccounts.register({
-      packageName: TENCENT_MEETING_PACKAGE, source: account, operations: OPERATIONS, copy: COPY, present: presentAccount,
+  ctx.inject(['connectorAccounts'], (scope) => {
+    scope.effect(() => scope.connectorAccounts.register({
+      key: TENCENT_MEETING_PACKAGE, packageName: TENCENT_MEETING_PACKAGE,
+      source: account, operations: OPERATIONS, copy: COPY, present: presentAccount,
     }), 'tencent-meeting: Plugins page account')
   })
 }

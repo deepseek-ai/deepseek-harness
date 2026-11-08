@@ -40,7 +40,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-tencent-meeting
 
 | 行 | 包 | 行为 |
 |---|---|---|
-| `tencent-meeting` | [`@deepseek-ai/dsh-tencent-meeting-cli`](../tencent-meeting-cli/README.zh.md) | 把 `tmeet` 的绝对路径告诉模型，注册其技能，在 Host 上运行账号检查、登录和退出登录，并通过 [CLI 账号注册表](../../client/ui-cli-account/README.zh.md)在插件页显示账号区块、连接标签、开启 bundle 后的引导以及提示 |
+| `tencent-meeting` | [`@deepseek-ai/dsh-tencent-meeting-cli`](../tencent-meeting-cli/README.zh.md) | 把 `tmeet` 的绝对路径告诉模型，注册其技能，在 Host 上运行账号检查、登录和退出登录，并通过 [连接器账号注册表](../../client/ui-connector-account/README.zh.md)在插件页显示账号区块、连接标签、开启 bundle 后的引导以及提示 |
 
 关闭本 bundle 会撤回技能、运行时上下文中的路径和页面。CLI 的登录会保留。
 
@@ -63,7 +63,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-tencent-meeting
 
 - [Connector 包](../README.zh.md) — 本应用插件所属的分组。
 - [腾讯会议 CLI 与技能](../tencent-meeting-cli/README.zh.md) — Host 行、它的账号操作和模型指引。
-- [CLI 账号界面](../../client/ui-cli-account/README.zh.md) — 在插件页显示账号的注册表。
+- [连接器账号界面](../../client/ui-connector-account/README.zh.md) — 在插件页显示账号的注册表。
 - [Plugin Manager](../../boot/plugin-manager/README.zh.md) — 安装、构建脚本审批与启用。
 
 -----

@@ -40,7 +40,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-tencent-meeting
 
 | Row | Package | Behavior |
 |---|---|---|
-| `tencent-meeting` | [`@deepseek-ai/dsh-tencent-meeting-cli`](../tencent-meeting-cli/README.md) | Gives the model the absolute path of `tmeet`, registers its skill, runs account checks, sign-in, and sign-out on the Host, and shows the account section, a connection tag, guidance after the bundle is switched on, and notices on the Plugins page through the [CLI account registry](../../client/ui-cli-account/README.md) |
+| `tencent-meeting` | [`@deepseek-ai/dsh-tencent-meeting-cli`](../tencent-meeting-cli/README.md) | Gives the model the absolute path of `tmeet`, registers its skill, runs account checks, sign-in, and sign-out on the Host, and shows the account section, a connection tag, guidance after the bundle is switched on, and notices on the Plugins page through the [connector account registry](../../client/ui-connector-account/README.md) |
 
 Switching the bundle off withdraws the skill, the path in runtime context, and the page. The CLI sign-in stays in place.
 
@@ -63,7 +63,7 @@ Switching the bundle off withdraws the skill, the path in runtime context, and t
 
 - [Connector packages](../README.md) — the group this application plugin belongs to.
 - [Tencent Meeting CLI and skills](../tencent-meeting-cli/README.md) — the Host row, its account operations, and its model guidance.
-- [CLI account surfaces](../../client/ui-cli-account/README.md) — the registry that shows the account on the Plugins page.
+- [Connector account surfaces](../../client/ui-connector-account/README.md) — the registry that shows the account on the Plugins page.
 - [Plugin Manager](../../boot/plugin-manager/README.md) — installation, build-script approval, and enablement.
 
 -----

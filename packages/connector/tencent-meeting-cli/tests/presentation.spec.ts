@@ -1,12 +1,12 @@
 /** The Tencent Meeting section offers each state's next step, the guide download row, and failure guidance, in every shipped language. */
-import type { CliAccountDisplay, CliOperationId } from '@deepseek-ai/dsh-cli-account/types'
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
+import type { ConnectorAccountDisplay, ConnectorOperationId } from '@deepseek-ai/dsh-client-ui-connector-account/types'
 import { expect, it } from 'vitest'
 import { en, zh, type TencentMeetingTextKey } from '../src/locales.ts'
 import { COPY, OPERATIONS, presentAccount } from '../src/presentation.ts'
 import type { TencentMeetingState } from '../src/types.ts'
 
-const OP = 'op' as CliOperationId
+const OP = 'op' as ConnectorOperationId
 const LINK = 'https://meeting.tencent.com/authorize'
 const CHECK = { kind: 'start', operation: 'check' } as const
 const SIGN_IN = { kind: 'start', operation: 'sign-in' } as const
@@ -15,7 +15,7 @@ const SIGN_OUT = { kind: 'start', operation: 'sign-out' } as const
 /** The key's text as the Chinese and English browsers resolve it. */
 const say = (key: TencentMeetingTextKey): Partial<Record<string, string>> => ({ zh: zh[key], en: en[key] })
 const zhOf = (text: LocalizedText | undefined): string | undefined => typeof text === 'object' ? text.zh : text
-const labels = (display: CliAccountDisplay): (string | undefined)[] => display.buttons.map(button => zhOf(button.label))
+const labels = (display: ConnectorAccountDisplay): (string | undefined)[] => display.buttons.map(button => zhOf(button.label))
 
 const SIGNED_OUT: TencentMeetingState = { account: { state: 'signed-out', skills: 'installed' } }
 const CONNECTED: TencentMeetingState = { account: { state: 'connected', userName: '测试用户', skills: 'installed' } }
