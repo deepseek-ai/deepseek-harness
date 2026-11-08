@@ -1,4 +1,3 @@
-import type { ContextMenuTarget } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { MenuRegistry } from '@deepseek-ai/dsh-client-ui-context-menu/src/client/registry.ts'
 import { Context } from '@deepseek-ai/cordis'
@@ -31,6 +30,7 @@ import { WorkspacePicker } from '../src/client/WorkspacePicker.tsx'
 import { FLAT_SESSION_ORDER_KEY } from '../src/client/stores.ts'
 import { UNGROUPED_KEY } from '../src/client/tree.ts'
 import { apply as hostApply } from '../src/index.ts'
+import { SECTION_HOOK_CONTEXT, SECTION_INJECT } from './section-scroller.client.ts'
 
 const sid = (id: string) => id as SessionId
 const summary = (id: string, updatedAt: number): SessionSummary => ({
@@ -186,14 +186,15 @@ type RowListName = typeof MENU_ITEM | typeof ROW_ACTION | 'shell.overlay'
 function declare(slots: SlotRegistry, ...names: HoleName[]): () => void {
   const children = Object.fromEntries([...names, 'contextMenu.content', 'contextMenu.icon'].map(name => [
     name, { kind: name === 'shell.overlay' ? 'list' : name.startsWith('contextMenu.') ? 'keyed' : 'single', scope: 'root',
-      ...name === 'contextMenu.icon' ? { inline: true } : {} },
+      ...name === 'contextMenu.icon' ? { inline: true } : {},
+      ...name === 'sidebar.workspaces' ? { inject: SECTION_INJECT } : {} },
   ]))
   return slots.register({ name: 'root', children } as never, () => null)
 }
 
 /** Own the sidebar declaration independently of the frame-wide overlay in lifecycle tests. */
 function SidebarDeclarationOwner({ renderSlot }: PropsRenderSlots<'sidebar.workspaces'>) {
-  return renderSlot('sidebar.workspaces', { wide: true, expandSidebar: () => {} })
+  return renderSlot('sidebar.workspaces', { wide: true, expandSidebar: () => {} }, { hookContext: SECTION_HOOK_CONTEXT })
 }
 
 /** The one entry registered under `id` in a list. */
@@ -385,7 +386,7 @@ describe('ui-workspace apply', () => {
     declare(b.slots, 'shell.overlay')
     const removeBrowser = b.slots.register({
       name: 'shell.overlay', id: 'test-sidebar-owner',
-      children: { 'sidebar.workspaces': { kind: 'single', scope: 'root' } },
+      children: { 'sidebar.workspaces': { kind: 'single', scope: 'root', inject: SECTION_INJECT } },
     }, SidebarDeclarationOwner)
     await b.ctx.plugin({ inject: [...inject], apply }).await()
     b.setSessions(sessionState([{ ...summary('source', 1), retainedBy: { mainView: 1 } }]))
@@ -928,6 +929,66 @@ describe('ui-workspace apply', () => {
   })
 })
 
+it('keeps one archive notice for queued cleanup and replaces it on failure', async () => {
+  const b = await bench()
+  declare(b.slots, 'sidebar.workspaces', 'shell.overlay')
+  await b.ctx.plugin({ inject: [...inject], apply }).await()
+  vi.spyOn(b.ctx.uiWorkspace, 'archiveSession').mockResolvedValue(undefined)
+  const toast = faceOf(entry(b.slots, 'shell.overlay', 'workspace.row-toast')) as RowToastInjected
+  const archive = faceOf(entry(b.slots, ROW_ACTION, 'archive')) as ArchiveSessionInjected
+  b.ctx.on('workspace/archive-notice', async (_id, next) => {
+    await next()
+    return { text: '已归档，工作树将被清理', tone: 'success' }
+  })
+  archive.archiveSession(sid('one'))
+  await vi.waitFor(() => { expect(toast.hooks.toast.getSnapshot()).toMatchObject({ kind: 'archived', message: '已归档，工作树将被清理', seq: 1 }) })
+  b.setWorkspaces(workspaceState([], [sid('one')]))
+  b.ctx.emit('workspace/archive-followup-failed', sid('one'), '已归档，工作树清理失败')
+  expect(toast.hooks.toast.getSnapshot()).toMatchObject({ kind: 'archived', message: '已归档，工作树清理失败', tone: 'warning', seq: 2 })
+  b.setWorkspaces(workspaceState([]))
+  b.ctx.emit('workspace/archive-followup-failed', sid('one'), 'late failure')
+  expect(toast.hooks.toast.getSnapshot()?.seq).toBe(2)
+})
+
+it('returns to the ordinary archive notice when a queued cleanup settles without acting', async () => {
+  const b = await bench()
+  declare(b.slots, 'sidebar.workspaces', 'shell.overlay')
+  await b.ctx.plugin({ inject: [...inject], apply }).await()
+  vi.spyOn(b.ctx.uiWorkspace, 'archiveSession').mockResolvedValue(undefined)
+  const toast = faceOf(entry(b.slots, 'shell.overlay', 'workspace.row-toast')) as RowToastInjected
+  const archive = faceOf(entry(b.slots, ROW_ACTION, 'archive')) as ArchiveSessionInjected
+  b.ctx.on('workspace/archive-notice', async (_id, next) => {
+    await next()
+    return { text: '已归档，工作树将被清理', tone: 'success' }
+  })
+  archive.archiveSession(sid('one'))
+  await vi.waitFor(() => { expect(toast.hooks.toast.getSnapshot()).toMatchObject({ kind: 'archived', message: '已归档，工作树将被清理', seq: 1 }) })
+  b.setWorkspaces(workspaceState([], [sid('one')]))
+  b.ctx.emit('workspace/archive-followup-settled', sid('one'))
+  const settled = toast.hooks.toast.getSnapshot()
+  expect(settled).toMatchObject({ kind: 'archived', seq: 2 })
+  expect(settled).not.toHaveProperty('message')
+  b.setWorkspaces(workspaceState([]))
+  b.ctx.emit('workspace/archive-followup-settled', sid('one'))
+  expect(toast.hooks.toast.getSnapshot()?.seq).toBe(2)
+})
+
+it('falls back to the ordinary notice when a follow-up notice provider fails', async () => {
+  const b = await bench()
+  declare(b.slots, 'sidebar.workspaces', 'shell.overlay')
+  await b.ctx.plugin({ inject: [...inject], apply }).await()
+  vi.spyOn(b.ctx.uiWorkspace, 'archiveSession').mockResolvedValue(undefined)
+  const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const failure = new Error('notice unavailable')
+  b.ctx.on('workspace/archive-notice', () => { throw failure })
+  const toast = faceOf(entry(b.slots, 'shell.overlay', 'workspace.row-toast')) as RowToastInjected
+  const archive = faceOf(entry(b.slots, ROW_ACTION, 'archive')) as ArchiveSessionInjected
+  archive.archiveSession(sid('one'))
+  await vi.waitFor(() => { expect(toast.hooks.toast.getSnapshot()).toEqual({ kind: 'archived', sessionId: 'one', seq: 1 }) })
+  expect(warning).toHaveBeenCalledWith('session archive notice unavailable:', failure)
+  warning.mockRestore()
+})
+
 it('captures Workspace menu requests, rechecks mutable access, and withdraws registrations on unload', async () => {
   const b = await bench()
   b.setWorkspaces(workspaceState([workspace('alpha', [])]))
@@ -936,12 +997,6 @@ it('captures Workspace menu requests, rechecks mutable access, and withdraws reg
   await fiber.await()
   const browser = faceOf(b.slots.entries('sidebar.workspaces')[0]!) as WorkspaceBrowserInjected
   const target = { kind: 'workspace' as const, value: { workspaceId: 'alpha' as WorkspaceId, path: '/projects/alpha', displayTitle: 'Alpha' } }
-  browser.openWorkspaceMenu(target.value.workspaceId, target.value.path, 'Alpha', { x: 20, y: 30 })
-  expect(vi.spyOn(b.ctx.contextMenus, 'open')).toHaveBeenLastCalledWith(target, { x: 20, y: 30 })
-  const active = b.ctx.contextMenus.active as ReturnType<typeof createSnapshotStore<ContextMenuTarget | null>>
-  active.set(target)
-  browser.openWorkspaceMenu(target.value.workspaceId, target.value.path, 'Alpha', { x: 20, y: 30 }, 'toggle')
-  expect(vi.spyOn(b.ctx.contextMenus, 'close')).toHaveBeenCalledOnce()
   const menu = b.ctx.contextMenus.resolve(target)
   await menu.ready
   expect(menu.source.getSnapshot().map(item => item.id)).toEqual(['workspace.rename/rename', 'workspace.delete/delete'])

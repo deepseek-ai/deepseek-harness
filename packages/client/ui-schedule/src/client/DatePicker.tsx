@@ -100,6 +100,8 @@ export interface DatePickerProps {
   readonly open: boolean
   /** The row's trigger button, which anchors the panel. */
   readonly anchorRef: RefObject<HTMLButtonElement | null>
+  /** CSS anchor name assigned to the row trigger. */
+  readonly anchorName: string
   /** The staged ISO date. */
   readonly value: string
   /** Stage one picked ISO date. */
@@ -115,7 +117,7 @@ export interface DatePickerProps {
  * @param props - open state, the trigger, the staged date, the pick and close callbacks, and row copy.
  * @returns the anchored panel while open, and nothing while closed.
  */
-export function DatePicker({ open, anchorRef, value, onPick, onClose, t }: DatePickerProps): ReactNode {
+export function DatePicker({ open, anchorRef, anchorName, value, onPick, onClose, t }: DatePickerProps): ReactNode {
   const refs = useRef(new Map<string, HTMLDivElement>())
   const valueRef = useRef(value)
   valueRef.current = value
@@ -174,6 +176,7 @@ export function DatePicker({ open, anchorRef, value, onPick, onClose, t }: DateP
   return <PickerPopover
     open={open}
     anchorRef={anchorRef}
+    anchorName={anchorName}
     label={t('timing.date')}
     className={css.calendar}
     onClose={onClose}

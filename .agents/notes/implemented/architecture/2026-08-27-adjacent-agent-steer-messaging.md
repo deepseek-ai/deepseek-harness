@@ -40,7 +40,7 @@ The globally registered model tool is direction-neutral and has one fixed schema
 
 ```ts
 interface SendMessageInput {
-  readonly agent_id: string
+  readonly agent: string
   readonly message: string
 }
 ```
@@ -53,7 +53,7 @@ Human browser prompts are not model-authored Agent messages. The remote prompt p
 
 ### Complete removal and reintroduction condition
 
-The standalone `@deepseek-ai/dsh-tool-subagent-report` package, `report` schema, `tool:report` prompt section, `reportDelivery` configuration, report-specific message source, catalog entries, composition rows, and supported-behavior snapshots are absent. The unified tool gives up the recipient-free child shortcut and the old ability for a structural return tool to survive an explicit child allow-list. Those capabilities return only if a concrete use case requires semantics that a tree member’s `agent_id` and fixed Steer cannot express; reintroducing them requires a distinct model operation and prefix-cost evidence, not an alias over `sendMessage()`.
+The standalone `@deepseek-ai/dsh-tool-subagent-report` package, `report` schema, `tool:report` prompt section, `reportDelivery` configuration, report-specific message source, catalog entries, composition rows, and supported-behavior snapshots are absent. The unified tool gives up the recipient-free child shortcut and the old ability for a structural return tool to survive an explicit child allow-list. Those capabilities return only if a concrete use case requires semantics that a tree member’s `agent` reference and fixed Steer cannot express; reintroducing them requires a distinct model operation and prefix-cost evidence, not an alias over `sendMessage()`.
 
 ## Alternatives considered
 
@@ -71,7 +71,7 @@ The standalone `@deepseek-ai/dsh-tool-subagent-report` package, `report` schema,
 
 ## Consequences
 
-- Model consumers expose one `send_message({ agent_id, message })` definition to parents and children, with no model-selected Queue versus Steer parameter.
+- Model consumers expose one `send_message({ agent, message })` definition to parents and children, with no model-selected Queue versus Steer parameter.
 - The continuation manager remains the sole owner of tree authorization, residency, cold resume, waking admission, and teardown races.
 - Accepted messages may extend a running target's current turn; messages waiting together share next-step FIFO ordering.
 - Caller cancellation owns work only until inbox acceptance and does not retract an accepted message or dispose the target.

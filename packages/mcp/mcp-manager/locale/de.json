@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "MCP-Serververwaltung",
+    "description": "Verwaltet die MCP-Server, die in den Einstellungen konfiguriert oder von Plugins registriert wurden, und meldet ihren Verbindungsstatus."
+  }
+}

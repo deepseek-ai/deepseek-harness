@@ -141,8 +141,8 @@ describe('viewer page resources', () => {
     let stopped = false
     const read = createViewerReadService({
       connection: readerConnection,
-      sharedSessionId: () => 'source',
-      forkStateOf: () => ({ shareId: 'share', sessionId: 'source', sessionMode: 'view',
+      sharedSessionIds: () => ['source'],
+      forkStateOf: () => ({ shareId: 'share', sessionId: 'source', sessionIds: ['source'], sessionMode: 'view',
         allowsFork: false, viewerAdmitted: true, stopped }),
       readAsset: async (path, peer) => {
         expect(peer).toBe(readerPeer)
@@ -156,7 +156,7 @@ describe('viewer page resources', () => {
     expect((await read.answer('share', { op: 'asset', path: '' }, alice)).status).toBe(403)
     expect(asked).toEqual(['assets/a.js'])
     read.close()
-    const pageless = createViewerReadService({ sharedSessionId: () => 'source' })
+    const pageless = createViewerReadService({ sharedSessionIds: () => ['source'] })
     expect((await pageless.answer('share', { op: 'asset', path: '' }, alice)).status).toBe(503)
     pageless.close()
   })
@@ -170,8 +170,8 @@ function recordingService() {
   const asked: string[] = []
   const read = createViewerReadService({
     connection: readerConnection,
-    sharedSessionId: () => 'source',
-    forkStateOf: () => ({ shareId: 'share', sessionId: 'source', sessionMode: 'view',
+    sharedSessionIds: () => ['source'],
+    forkStateOf: () => ({ shareId: 'share', sessionId: 'source', sessionIds: ['source'], sessionMode: 'view',
       allowsFork: false, viewerAdmitted: true, stopped: false }),
     readAsset: async (path) => {
       asked.push(path)
@@ -226,8 +226,8 @@ describe('viewer page top-level files', () => {
     const ctx = ownerContext({ webServer: indexed })
     const read = createViewerReadService({
       connection: readerConnection,
-      sharedSessionId: () => 'source',
-      forkStateOf: () => ({ shareId: 'share', sessionId: 'source', sessionMode: 'view',
+      sharedSessionIds: () => ['source'],
+      forkStateOf: () => ({ shareId: 'share', sessionId: 'source', sessionIds: ['source'], sessionMode: 'view',
         allowsFork: false, viewerAdmitted: true, stopped: false }),
       readAsset: (path, peer) => readViewerAsset(ctx, path, peer),
     })
@@ -300,8 +300,8 @@ describe('viewer page resource diagnostics', () => {
    */
   const service = (debug: boolean | undefined) => createViewerReadService({
     connection: readerConnection,
-    sharedSessionId: () => 'source',
-    forkStateOf: () => ({ shareId: 'share', sessionId: 'source', sessionMode: 'view',
+    sharedSessionIds: () => ['source'],
+    forkStateOf: () => ({ shareId: 'share', sessionId: 'source', sessionIds: ['source'], sessionMode: 'view',
       allowsFork: false, viewerAdmitted: true, stopped: false }),
     ...(debug === undefined ? {} : { debug }),
     readAsset: async () => ({

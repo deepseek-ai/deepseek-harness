@@ -11,8 +11,8 @@
     - button "查看 子智能体": 子智能体
     - text: 设置子智能体的递归层级、数量和模型。
   - listitem:
-    - button "查看 网页搜索": 网页搜索
-    - text: 设置 DeepSeek 的搜索提供方。
+    - button "查看 网页搜索与获取": 网页搜索与获取
+    - text: 选择网页搜索与网页获取使用的提供方。
   - listitem:
     - button "查看 Agent 循环": Agent 循环
     - text: 控制 Agent 派发工具调用的方式。
@@ -39,7 +39,7 @@
     - switch "启用 自动授权审查"
   - listitem:
     - button "查看 变更请求与工作树": 变更请求与工作树
-    - text: 实验性 跟踪每个会话的变更请求及其检查与评审，新会话也可以在 Git 工作树中开始；GitHub 通过 gh 命令行访问。
+    - text: 实验性 在会话侧栏集中跟踪关联的 GitHub PR：查看检查状态、评审意见与代码差异，并把修改建议交给智能体继续处理。也可查看本地改动，用独立工作树隔离任务。GitHub 功能需要本机安装 gh 并登录。
     - status
     - switch "启用 变更请求与工作树"
 - heading "已安装插件" [level=3]

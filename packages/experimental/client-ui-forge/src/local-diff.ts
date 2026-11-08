@@ -13,8 +13,10 @@ import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { decodeText, parseDiff, parseNumstat, untrackedFile } from './diff.ts'
 import { gitIn, GitOutputTooLarge } from './git.ts'
 import type { Git, GitConfig, GitOutput, Inspection } from './git.ts'
-import { parseName, remoteOrder } from './parse.ts'
-import type { ForgeDiffFile, ForgeLocalChanges, ForgeLocalDiff, ForgeLocalScope, ForgeSessionWorktree } from './types.ts'
+import { BASE_REF_PREFIXES, parseBaseBranches, parseName, remoteOrder } from './parse.ts'
+import type {
+  ForgeBaseBranches, ForgeDiffFile, ForgeLocalChanges, ForgeLocalDiff, ForgeLocalScope, ForgeSessionWorktree,
+} from './types.ts'
 
 /** Git limits plus the size limits of local diffs. */
 export interface DiffConfig extends GitConfig {
@@ -28,8 +30,10 @@ export interface DiffConfig extends GitConfig {
 export interface ForkPoint {
   /** Full commit object name. */
   readonly commit: string
-  /** Remote branch such as `origin/master`, the created worktree's base branch, or an abbreviated commit. */
+  /** Branch such as `origin/master`, the created worktree's base branch, or an abbreviated commit. */
   readonly label: string
+  /** Whether `commit` is the base commit of the worktree the Session created rather than a merge base. */
+  readonly worktree: boolean
 }
 
 /** Thrown when a patch, a file list, or a file exceeds `maxDiffBytes`. */
@@ -45,6 +49,11 @@ export class FilterConfigError extends Error {
 /** Thrown for the `branch` scope of a checkout without a fork point. */
 export class NoForkPoint extends Error {
   override name = 'NoForkPoint'
+}
+
+/** Thrown when the base branch chosen for the `branch` scope does not exist. */
+export class BaseMissing extends Error {
+  override name = 'BaseMissing'
 }
 
 /** No executable diff helpers or submodule working-tree inspection; preserve recorded submodule commit changes. */
@@ -73,7 +82,7 @@ async function diffFilterOverrides(git: Git): Promise<Readonly<Record<string, st
 const BINARY_PROBE = 8000
 
 /**
- * Find where the `branch` scope forks: the base commit of the worktree the
+ * Find where the `branch` scope forks while no base branch is chosen: the base commit of the worktree the
  * Session created while the checkout is that worktree, else the merge base of
  * HEAD with the default branch of the first remote that names one, in the
  * order the panel recognizes code hosts.
@@ -84,7 +93,7 @@ const BINARY_PROBE = 8000
  */
 export async function forkPoint(git: Git, inspection: Inspection, created: ForgeSessionWorktree | null): Promise<ForkPoint | null> {
   if (created !== null && created.path === inspection.checkout.root) {
-    return { commit: created.baseCommit, label: created.from ?? created.baseCommit.slice(0, 7) }
+    return { commit: created.baseCommit, label: created.from ?? created.baseCommit.slice(0, 7), worktree: true }
   }
   for (const remote of remoteOrder(inspection.upstream, inspection.remotes)) {
     const head = await git('remote-head', ['symbolic-ref', '--quiet', '--short', `refs/remotes/${remote.name}/HEAD`], [0, 1, 128])
@@ -92,9 +101,55 @@ export async function forkPoint(git: Git, inspection: Inspection, created: Forge
     if (base === null) continue
     const merge = await git('merge-base', ['merge-base', 'HEAD', base], [0, 1, 128])
     const commit = merge.exitCode === 0 ? parseName(merge.stdout) : null
-    return commit === null ? null : { commit, label: base }
+    return commit === null ? null : { commit, label: base, worktree: false }
   }
   return null
+}
+
+/**
+ * Find where the `branch` scope forks from a chosen base branch: the merge base of HEAD with it.
+ * @param git - runner bound to the checkout.
+ * @param ref - full ref name under `refs/heads/` or `refs/remotes/`.
+ * @returns the fork point, or null when HEAD shares no history with the branch or has no commit.
+ * @throws BaseMissing when the ref does not exist; an Error for another ref name or when Git fails.
+ */
+export async function chosenForkPoint(git: Git, ref: string): Promise<ForkPoint | null> {
+  const prefix = BASE_REF_PREFIXES.find(candidate => ref.startsWith(candidate) && ref.length > candidate.length)
+  if (prefix === undefined) throw new Error(`forge-panel: ${JSON.stringify(ref)} is not a branch ref`)
+  const name = ref.slice(prefix.length)
+  // `--verify` accepts only an exact ref path, so revision syntax such as `@{1}` never resolves.
+  const present = await git('show-ref', ['show-ref', '--verify', '--quiet', ref], [0, 1])
+  if (present.exitCode !== 0) throw new BaseMissing(`The base branch ${name} does not exist`)
+  const merge = await git('merge-base', ['merge-base', 'HEAD', ref], [0, 1, 128])
+  const commit = merge.exitCode === 0 ? parseName(merge.stdout) : null
+  return commit === null ? null : { commit, label: name, worktree: false }
+}
+
+/**
+ * List the branches the `branch` scope can compare with.
+ * @param git - runner bound to the checkout.
+ * @param inspection - the checkout and its remotes.
+ * @param created - worktree the Session created, or null.
+ * @param query - text the branch names must contain, ignoring case; empty for every branch.
+ * @param limit - most branches in each group.
+ * @returns the automatic fork point, then remote-tracking and local branches, most recently committed first.
+ * @throws an Error when Git fails or prints more than the runner's output limit.
+ */
+export async function baseBranches(
+  git: Git,
+  inspection: Inspection,
+  created: ForgeSessionWorktree | null,
+  query: string,
+  limit: number,
+): Promise<ForgeBaseBranches> {
+  const fork = await forkPoint(git, inspection, created)
+  const refs = await git('base-branches', [
+    'for-each-ref', '--sort=-committerdate', '--format=%(refname)%00%(symref)', ...BASE_REF_PREFIXES,
+  ])
+  return {
+    automatic: fork === null ? null : { name: fork.label, worktree: fork.worktree },
+    ...parseBaseBranches(refs.stdout, inspection.checkout.branch, query, limit),
+  }
 }
 
 /**

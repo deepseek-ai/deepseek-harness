@@ -7,9 +7,9 @@ import { expect, it, onTestFinished, vi } from 'vitest'
 import type { SubprocessHandle, SubprocessOutcome, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import { buildNativeExecutable, isSourcePackage, nativeExecutablePath, nativeHostArchitecture, prepareNativeExecutable } from '../src/native-build.ts'
 
-async function publish(directory: string, bytes: Buffer): Promise<string> {
+async function publish(directory: string, bytes: Buffer, variant: 'release' | 'dev'): Promise<string> {
   const bundle = createHash('sha256').update(bytes).digest('hex')
-  const executable = join(directory, bundle, 'DSH Computer Use.app', 'Contents/MacOS/dsh-cua-native')
+  const executable = join(directory, bundle, variant === 'dev' ? 'DSH Computer Use Dev.app' : 'DSH Computer Use.app', 'Contents/MacOS/dsh-cua-native')
   await mkdir(dirname(executable), { recursive: true })
   await writeFile(executable, bytes, { mode: 0o755 })
   await writeFile(join(directory, 'current.json'), JSON.stringify({ bundle }))
@@ -36,12 +36,12 @@ async function fixture(diagnostics = true) {
     done: (async () => {
       await beforeExit()
       if (outcome.exitCode === 0 && !request.signal?.aborted) {
-        await publish(request.argv[request.argv.indexOf('--output-directory') + 1]!, output)
+        await publish(request.argv[request.argv.indexOf('--output-directory') + 1]!, output, 'dev')
       }
       return outcome
     })(), terminate, waitForExit,
   }))
-  const spec = { packageRoot, architecture: 'arm64' as const, subprocess: { spawn }, signal: controller.signal, timeoutMs: 60_000, graceMs: 100 }
+  const spec = { packageRoot, architecture: 'arm64' as const, sourceSigning: 'ad-hoc' as const, subprocess: { spawn }, signal: controller.signal, timeoutMs: 60_000, graceMs: 100 }
   const directory = join(packageRoot, 'native/.build/prepared/arm64')
   return { root, spec, directory, spawn, output, controller, terminate, waitForExit,
     setOutput: (value: Buffer) => { output = value },
@@ -69,15 +69,15 @@ it.each([['linux', 'arm64'], ['win32', 'x64'], ['darwin', 'ia32']])('refuses uns
   expect(() => nativeHostArchitecture(platform, architecture)).toThrow('requires macOS')
 })
 
-it('returns a bundled executable only after the managed builder exits', async () => {
+it('builds the development variant and returns its executable only after the managed builder exits', async () => {
   const f = await fixture()
   const path = await buildNativeExecutable(f.spec)
   expect(await readFile(path)).toEqual(f.output)
-  expect(path).toContain(join('DSH Computer Use.app', 'Contents', 'MacOS'))
+  expect(path).toContain(join('DSH Computer Use Dev.app', 'Contents', 'MacOS'))
   expect(f.spawn.mock.calls[0]![0].argv).toEqual([
     '/usr/bin/xcrun', 'python3', join(f.spec.packageRoot, 'native/build_app.py'),
     '--scratch-path', join(f.spec.packageRoot, 'native/.build/runtime-arm64'),
-    '--output-directory', f.directory, '--arch', 'arm64',
+    '--output-directory', f.directory, '--arch', 'arm64', '--variant', 'dev', '--identity', '-',
   ])
   expect(f.terminate).toHaveBeenCalledTimes(1)
   expect(f.waitForExit).toHaveBeenCalledTimes(1)
@@ -88,30 +88,68 @@ it('checks source builds on activation and maps Intel architecture to the compil
   await writeFile(join(f.root, 'package.json'), '{"name":"@deepseek-ai/dsh-root"}')
   const path = await prepareNativeExecutable({ ...f.spec, architecture: 'x64' })
   expect(f.spawn.mock.calls[0]![0].argv).toContain('x86_64')
+  expect(f.spawn.mock.calls[0]![0].argv.slice(-2)).toEqual(['--identity', '-'])
   expect(path).toContain(join('native', '.build', 'prepared', 'x64'))
 })
 
-it('uses an installed application without compiling or re-signing it', async () => {
+it('uses a configured certificate in the specified keychain', async () => {
+  const keychain = '/keychains/custom.keychain-db'
   const f = await fixture()
-  const path = await publish(join(f.spec.packageRoot, 'native/bin/darwin-arm64'), f.output)
-  expect(await prepareNativeExecutable(f.spec)).toBe(path)
+  await buildNativeExecutable({ ...f.spec, sourceSigning: { identity: 'Apple Development: Example', keychain } })
+  const argv = f.spawn.mock.calls[0]![0].argv
+  expect(argv.slice(argv.indexOf('--identity'))).toEqual([
+    '--identity', 'Apple Development: Example', '--keychain', keychain,
+  ])
+  expect(argv).not.toContain('--dsh-home')
+  expect(argv).not.toContain('--signing')
+})
+
+it.each(['ad-hoc', { identity: 'Apple Development: Example', keychain: '/keychains/custom.keychain-db' }] as const)('ignores signing choice %j for an installed application', async (sourceSigning) => {
+  const f = await fixture()
+  const path = await publish(join(f.spec.packageRoot, 'native/bin/darwin-arm64'), f.output, 'release')
+  expect(await prepareNativeExecutable({ ...f.spec, sourceSigning })).toBe(path)
   expect(f.spawn).not.toHaveBeenCalled()
   f.controller.abort()
   await expect(prepareNativeExecutable(f.spec)).rejects.toThrow()
+})
+
+it('reads an application that an Electron archive installation keeps beside app.asar', async () => {
+  const f = await fixture()
+  const archived = join(f.root, 'Resources/app.asar/dsh/node_modules/@deepseek-ai/dsh-experimental-cua-macos')
+  const path = await publish(join(f.root, 'Resources/app.asar.unpacked/dsh/node_modules/@deepseek-ai/dsh-experimental-cua-macos/native/bin/darwin-arm64'), f.output, 'release')
+  expect(await prepareNativeExecutable({ ...f.spec, packageRoot: archived })).toBe(path)
+  expect(f.spawn).not.toHaveBeenCalled()
+})
+
+it('names the expected directory when an installed package carries no helper application', async () => {
+  const f = await fixture()
+  const installed = join(f.root, 'node_modules/@deepseek-ai/dsh-experimental-cua-macos.asar/package')
+  const directory = join(installed, 'native/bin/darwin-arm64')
+  await expect(prepareNativeExecutable({ ...f.spec, packageRoot: installed })).rejects.toThrow(
+    `Computer use helper application is missing from ${directory}; this installation does not include the signed helper`)
+  await mkdir(directory, { recursive: true })
+  await writeFile(join(directory, 'current.json'), '{')
+  await expect(prepareNativeExecutable({ ...f.spec, packageRoot: installed })).rejects.toThrow(SyntaxError)
 })
 
 it.each(['../outside', '/absolute', '', 'a'.repeat(63), 'A'.repeat(64)])('rejects an invalid installed generation %s', async (bundle) => {
   const f = await fixture()
   await mkdir(f.directory, { recursive: true })
   await writeFile(join(f.directory, 'current.json'), JSON.stringify({ bundle }))
-  await expect(nativeExecutablePath(f.directory)).rejects.toThrow()
+  await expect(nativeExecutablePath(f.directory, 'dev')).rejects.toThrow()
 })
 
 it('refuses a missing executable selected by an otherwise valid receipt', async () => {
   const f = await fixture()
-  const path = await publish(f.directory, f.output)
+  const path = await publish(f.directory, f.output, 'dev')
   await rm(path)
-  await expect(nativeExecutablePath(f.directory)).rejects.toMatchObject({ code: 'ENOENT' })
+  await expect(nativeExecutablePath(f.directory, 'dev')).rejects.toMatchObject({ code: 'ENOENT' })
+})
+
+it('refuses a release-named application selected by a development receipt', async () => {
+  const f = await fixture()
+  await publish(f.directory, f.output, 'release')
+  await expect(nativeExecutablePath(f.directory, 'dev')).rejects.toMatchObject({ code: 'ENOENT' })
 })
 
 it('preserves the previous generation when preparation fails and reports diagnostics', async () => {
@@ -119,7 +157,7 @@ it('preserves the previous generation when preparation fails and reports diagnos
   const path = await buildNativeExecutable(f.spec)
   f.setOutcome({ exitCode: 1, signal: null })
   await expect(buildNativeExecutable(f.spec)).rejects.toThrow('compiler diagnostic')
-  expect(await nativeExecutablePath(f.directory)).toBe(path)
+  expect(await nativeExecutablePath(f.directory, 'dev')).toBe(path)
   f.setOutcome({ exitCode: null, signal: 'SIGTERM' })
   await expect(buildNativeExecutable(f.spec)).rejects.toThrow('SIGTERM')
 })

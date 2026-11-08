@@ -28,9 +28,9 @@ function harness() {
     return Response.json({ result: { ok: true, value: { accepted: true } } })
   })
   const read = createViewerReadService({
-    sharedSessionId: () => 'source',
+    sharedSessionIds: () => ['source'],
     viewerStillAdmitted: () => true,
-    forkStateOf: () => ({ shareId: 'share', sessionId: 'source', sessionMode: 'write',
+    forkStateOf: () => ({ shareId: 'share', sessionId: 'source', sessionIds: ['source'], sessionMode: 'write',
       allowsFork: true, viewerAdmitted: true, stopped: false }),
     connection: readers.connection,
     refreshAdmission: async () => {

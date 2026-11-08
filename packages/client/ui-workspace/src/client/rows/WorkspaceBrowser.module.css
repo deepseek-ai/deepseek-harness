@@ -1,17 +1,28 @@
 .root {
-  --dsh-session-list-edge-inset: var(--dsh-sidebar-inline-padding);
-  --dsh-session-list-scrollbar-width: 5px;
-  --dsh-session-list-scrollbar-offset: 2px;
+  --workspace-toolbar-height: 36px;
+  --workspace-toolbar-gap: 0px;
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  padding-right: var(--dsh-session-list-edge-inset);
 }
 
-.root.rail {
-  padding-right: 0;
+/* The expanded section is at most one shell viewport tall: once the shell has
+   scrolled the navigation away, the toolbar sits at the top and the list below
+   it scrolls on its own. A section that fits leaves the shell nothing to scroll.
+   `flex: none` keeps the size; the parent column has no definite height, so a
+   percentage flex basis would size it to content. */
+.root:not(.rail) {
+  flex: none;
+  max-height: 100cqh;
+}
+
+/* Search keeps the full viewport height, so few or no results do not shorten the
+   section and pull the navigation back under a toolbar already at the top. */
+.root:not(.rail):has(.searchExpanded) {
+  height: 100cqh;
 }
 
 .iconButton {
@@ -58,18 +69,13 @@
   align-items: center;
   justify-content: flex-end;
   gap: 4px;
-  height: 36px;
+  height: var(--workspace-toolbar-height);
   padding-left: var(--dsh-sidebar-row-padding);
-  margin-bottom: 4px;
+  margin-bottom: var(--workspace-toolbar-gap);
   box-sizing: border-box;
   border-radius: var(--dsw-radius-md);
   overflow: hidden;
   color: var(--dsw-alias-label-tertiary);
-}
-
-.root:not(.rail) .sectionHeader {
-  margin-top: 2px;
-  margin-right: -4px;
 }
 
 .root:not(.rail) .sectionHeader.searchSpacingMotion {
@@ -80,6 +86,7 @@
 }
 
 .root:not(.rail) .sectionHeader:not(:has(.searchExpanded)) {
+  margin-right: -4px;
   padding-right: 1px;
 }
 
@@ -332,45 +339,40 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  margin-left: -4px;
-  margin-right: calc(-1 * var(--dsh-session-list-edge-inset));
-  padding-left: 4px;
-  /* The list remains the scroll clip. This seat stays visible so the
-     absolutely positioned first-boundary marker can occupy the header gap. */
   overflow: visible;
 }
 
-.rail .listArea {
-  margin-left: 0;
-  margin-right: 0;
-  padding-left: 0;
+/* Expanded, the seat is the section's own vertical scroller below the toolbar;
+   its rows keep their natural height. The left margin and padding keep 4px of
+   unclipped room for insertion markers. On the right, the seat reaches 2px from
+   the sidebar edge, where its scrollbar sits, and its padding returns rows to the
+   sidebar's inline padding. */
+.root:not(.rail) .listArea {
+  display: block;
+  margin-left: -4px;
+  margin-right: calc(2px - var(--dsh-sidebar-inline-padding));
+  padding-left: 4px;
+  padding-right: calc(var(--dsh-sidebar-inline-padding) - var(--dsh-scrollbar-width) - 2px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
-/* Relative for the bottom fade overlay. */
+/* While the sidebar viewport can still scroll down, the seat does not take user
+   scrolling, so touch and native scrolling move the navigation away first. */
+@container scroll-state(scrollable: bottom) {
+  .root:not(.rail) .listArea {
+    overflow-y: hidden;
+  }
+}
+
+/* Positions the top insertion marker and the exit overlay of animated rows. */
 .treeBody {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   position: relative;
-}
-
-/* Bottom fade: compact overlay pinned to the visible bottom,
-   transparent -> sidebar fill so it tracks the theme. */
-.fade {
-  position: absolute;
-  left: 0;
-  right: var(--dsh-session-list-edge-inset);
-  bottom: 0;
-  height: 24px;
-  background: linear-gradient(to bottom, transparent, var(--dsw-specific-sidebar-fill));
-  pointer-events: none;
-}
-
-/* macOS desktop: the sidebar is translucent over window vibrancy, so the
-   opaque fill gradient would paint a solid smear instead of a fade. */
-:global([data-platform='darwin']) .fade {
-  display: none;
 }
 
 /* Wide-only content fades back in on expand remount (mirrors the shell). */
@@ -382,26 +384,13 @@
   from { opacity: 0; }
 }
 
-/* List: the only scrolling region. Block children keep their design heights
-   under content overflow. The 2px edge offset, stable 5px themed scrollbar,
-   and remaining padding equal the shell's right inset, with or without
-   overflow, so moving the bar does not move the rows. */
+/* Rows keep their natural height inside the list seat's scroller. */
 .list {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
-  margin-left: -4px;
-  margin-right: var(--dsh-session-list-scrollbar-offset);
-  padding-left: 4px;
-  padding-right: calc(
-    var(--dsh-session-list-edge-inset)
-    - var(--dsh-session-list-scrollbar-width)
-    - var(--dsh-session-list-scrollbar-offset)
-  );
-  /* Clears the compact bottom fade overlay: at scroll end the last row sits
-     above the gradient instead of under it. */
+  overflow: visible;
+  /* Clears the shell's bottom fade at the end of the list. */
   padding-bottom: 16px;
-  scrollbar-gutter: stable;
 }
 
 .flatList > * + *,
@@ -511,8 +500,6 @@
    Workspace boundary, but lives outside the scrolling clip. */
 .listTopDropIndicator {
   top: -8px;
-  left: 0;
-  right: var(--dsh-session-list-edge-inset);
 }
 
 .listTopDropActive > .workspaceDropBefore:first-child::before {

@@ -12,23 +12,26 @@
   en: 470bdf1487a739f9
   zh: cd80330eaa8f730c
 /desktop-ci-publication/table-of-contents:
-  en: 34283bf8397f6836
-  zh: 1798bd921c3adf6c
+  en: 37d76f8473b967b7
+  zh: d211cc54af96672d
 /desktop-ci-publication/setup-sequence:
   en: 2be541ef35a092a4
   zh: 77d87c00deb45758
 /desktop-ci-publication/runner-labels-and-queue-diagnosis:
-  en: 0478d8e35f9a3d55
-  zh: 0aa3fd828bc02691
+  en: d2195ee7581b74ec
+  zh: 0b9847afe9a2a373
 /desktop-ci-publication/machine-setup:
   en: 0f43f2e193e95043
   zh: 1c1efb062c06f7b8
 /desktop-ci-publication/package-and-publish:
-  en: f7c12d343891e547
-  zh: da596ee1366c2046
+  en: 6325c71df74a9915
+  zh: edaa8a4502ed80a1
+/desktop-ci-publication/rollout-and-website-publication:
+  en: ee7a9ab8c66df979
+  zh: c355668bc9bdb635
 /desktop-ci-publication/recovery-and-records:
-  en: b62a7484929f9941
-  zh: c9dd06c77098e6ef
+  en: d6eb9cbac5b819a0
+  zh: 0de1ec24055d1007
 /desktop-ci-publication/restore-a-channel:
   en: d82e2ccf70cce397
   zh: d93dcb77cc4b463e

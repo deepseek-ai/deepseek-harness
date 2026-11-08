@@ -1,6 +1,6 @@
 /**
- * The session permission, fork switch, and plugin-endpoint tier shared by the create form and the
- * stored-share editor.
+ * The session permission, fork switch, and per-plugin endpoint selection shared by the create form
+ * and the stored-share editor.
  *
  * @module @deepseek-ai/dsh-experimental-liveshare/src/client/SharePermissionFields
  */
@@ -9,9 +9,9 @@ import type { ReactNode } from 'react'
 import { SegmentedControl, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { NS } from './locales.ts'
-import { ShareCapabilitiesPicker, type CapabilityTier } from './ShareCapabilitiesPicker.tsx'
+import { ShareCapabilitiesPicker, type PluginAccess } from './ShareCapabilitiesPicker.tsx'
 import { sessionModeOptions } from './share-options.ts'
-import type { ViewerCapabilityGroup } from './share-types.ts'
+import type { OfferedPlugin, ViewerPluginPolicy } from './share-types.ts'
 import type { ViewerSessionMode } from './viewer-capabilities.ts'
 import css from './ShareDialog.module.css'
 
@@ -24,23 +24,25 @@ export interface SharePermissionFieldsProps extends PropsLocale<typeof NS> {
   /** The share's own fork switch. */
   readonly allowsFork: boolean
   /** Plugin endpoints the mounted plugins offer. */
-  readonly offered: readonly ViewerCapabilityGroup[]
-  /** Endpoint tier on hand. */
-  readonly tier: CapabilityTier
-  /** Whether the stored endpoints match no tier, so the picker states an unmatched selection. */
-  readonly stale?: boolean
+  readonly offered: readonly OfferedPlugin[]
+  /** Global switch over every installed plugin's methods. */
+  readonly pluginAccess: PluginAccess
+  /** Endpoints this share currently selects. */
+  readonly capabilities: readonly ViewerPluginPolicy[]
   /** Whether every control is unavailable. */
   readonly disabled: boolean
   /** Base id the session permission tabs derive from. */
   readonly sessionModeControlId: string
-  /** Base id the endpoint tabs derive from. */
+  /** Base id the per-plugin endpoint controls derive from. */
   readonly capabilityControlId: string
   /** Record a session permission pick. */
   readonly onSessionMode: (mode: ViewerSessionMode) => void
   /** Record a fork-switch pick. */
   readonly onAllowsFork: (value: boolean) => void
-  /** Record an endpoint tier pick. */
-  readonly onTier: (tier: CapabilityTier) => void
+  /** Record the global plugin switch. */
+  readonly onPluginAccess: (access: PluginAccess) => void
+  /** Record an endpoint selection. */
+  readonly onCapabilities: (capabilities: readonly ViewerPluginPolicy[]) => void
 }
 
 /**
@@ -49,63 +51,61 @@ export interface SharePermissionFieldsProps extends PropsLocale<typeof NS> {
  * @returns The shared permission rows.
  */
 export function SharePermissionFields({
-  sessionMode, modeUnsupported = false, allowsFork, offered, tier, stale = false, disabled,
-  sessionModeControlId, capabilityControlId, onSessionMode, onAllowsFork, onTier, t,
+  sessionMode, modeUnsupported = false, allowsFork, offered, pluginAccess, capabilities, disabled,
+  sessionModeControlId, capabilityControlId, onSessionMode, onAllowsFork, onPluginAccess, onCapabilities, t,
 }: SharePermissionFieldsProps): ReactNode {
   return (
-    <>
-      <div className={css.row}>
-        <span className={css.rowLabel}>{t('dialog.sessionMode')}</span>
-        {sessionMode === undefined ? (
-          <span className={css.testWarn}>{t('dialog.permissions.modeUnsupported')}</span>
-        ) : (
-          <SegmentedControl
-            id={sessionModeControlId}
-            label={t('dialog.sessionMode')}
-            value={sessionMode}
-            disabled={disabled}
-            options={sessionModeOptions(t)}
-            onChange={onSessionMode}
-          />
+    <div className={css.permissionSections}>
+      <div className={css.permissionBlock}>
+        <div className={css.row}>
+          <span className={css.rowLabel}>{t('dialog.sessionMode')}</span>
+          {sessionMode === undefined ? (
+            <span className={css.testWarn}>{t('dialog.permissions.modeUnsupported')}</span>
+          ) : (
+            <SegmentedControl
+              id={sessionModeControlId}
+              label={t('dialog.sessionMode')}
+              value={sessionMode}
+              disabled={disabled}
+              options={sessionModeOptions(t)}
+              onChange={onSessionMode}
+            />
+          )}
+        </div>
+        {modeUnsupported || sessionMode === undefined ? null : (
+          <p className={css.hint}>{t(`dialog.sessionMode.hint.${sessionMode}` as const)}</p>
         )}
+        {/* The share sandbox bounds a viewer's tools, not the PTC program a viewer starts. */}
+        <p className={css.warning} role="note">{t('dialog.ptcSandboxWarning')}</p>
       </div>
-      {modeUnsupported || sessionMode === undefined ? null : (
-        <p className={css.hint}>{t(`dialog.sessionMode.hint.${sessionMode}` as const)}</p>
-      )}
-      <div className={css.row}>
-        <span className={css.rowLabel}>{t('dialog.allowsFork')}</span>
-        <Switch
-          checked={allowsFork}
-          disabled={disabled}
-          label={t('dialog.allowsFork')}
-          onChange={onAllowsFork}
-        />
-      </div>
-      <p className={css.hint}>{t('dialog.allowsForkHint')}</p>
-      <div className={css.row}>
-        <span className={css.rowLabel}>{t('dialog.capabilities')}</span>
-        <Switch
-          checked={tier !== 'none'}
-          disabled={disabled || offered.length === 0}
-          label={t('dialog.capabilities')}
-          onChange={(enabled) => {
-            onTier(enabled ? (offered.some(group => group.readable.length > 0) ? 'read' : 'write') : 'none')
-          }}
-        />
-      </div>
-      {offered.length === 0
-        ? <p className={css.hint}>{t('dialog.capabilities.empty')}</p>
-        : (
-          <ShareCapabilitiesPicker
-            offered={offered}
-            tier={tier}
-            stale={stale}
+      <div className={css.permissionBlock}>
+        <div className={css.row}>
+          <span className={css.rowLabel}>{t('dialog.allowsFork')}</span>
+          <Switch
+            checked={allowsFork}
             disabled={disabled}
-            controlId={capabilityControlId}
-            onPick={onTier}
-            t={t}
+            label={t('dialog.allowsFork')}
+            onChange={onAllowsFork}
           />
-        )}
-    </>
+        </div>
+        <p className={css.hint}>{t('dialog.allowsForkHint')}</p>
+      </div>
+      <div className={css.permissionBlock}>
+        {offered.length === 0
+          ? <p className={css.hint}>{t('dialog.capabilities.empty')}</p>
+          : (
+            <ShareCapabilitiesPicker
+              offered={offered}
+              access={pluginAccess}
+              selection={capabilities}
+              disabled={disabled}
+              controlId={capabilityControlId}
+              onAccessChange={onPluginAccess}
+              onChange={onCapabilities}
+              t={t}
+            />
+          )}
+      </div>
+    </div>
   )
 }

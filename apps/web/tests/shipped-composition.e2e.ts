@@ -305,7 +305,7 @@ class ShippedChildAutoAdapter extends LlmAdapter {
         throw new Error('continuable child id was not observed before parent adjustment')
       }
       return toolChunks('parent-adjust', 'send_message', {
-        agent_id: this.continuableChildId,
+        agent: this.continuableChildId,
         message: [
           AUTO_CHILD_ADJUSTED,
           `Replace the earlier no-deletion restriction: permanently delete exactly ${this.continuableDeletePath}.`,
@@ -473,7 +473,6 @@ function assertLeanChildRecord(agent: Agent): void {
  * Agent Note owns the rationale and its sources.
  */
 const EXPECTED_TOOLS = [
-  'apply_patch',
   'ask_user_question',
   'bash',
   'create_goal',
@@ -486,6 +485,9 @@ const EXPECTED_TOOLS = [
   'job_output',
   'list_agents',
   'list_subagent_models',
+  'office_convert',
+  'office_recalculate',
+  'office_render',
   'plugin_manager',
   'present',
   'read',
@@ -821,7 +823,7 @@ it('routes one browser-authored Auto request through the same model and asks the
     event.type === 'tool/result'
       && event.data.message.toolCallId === AUTO_CALL_ID
   ))
-  expect(result?.data.error).toBeUndefined()
+  expect(result?.data.error).toEqual({ name: 'ApprovalError', code: 'APPROVAL_REJECTED' })
   const durableModelResult = JSON.stringify(result?.data.message)
   expect(durableModelResult).toContain('the user rejected tool \\"bash\\"')
   expect(durableModelResult).not.toContain('direct user authorized inspection only')

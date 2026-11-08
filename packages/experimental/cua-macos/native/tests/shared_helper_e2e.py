@@ -186,12 +186,12 @@ def main():
                     time.sleep(0.025)
                 window = primary["windowId"]
                 observed = a.call("getState", {"appHandle": app_a, "windowId": window, "maxElements": 300, "maxDepth": 20})
-                b.call("click", {"appHandle": app_b, "snapshotId": observed["snapshotId"], "elementIndex": 0}, error="STALE_SNAPSHOT")
+                b.call("click", {"appHandle": app_b, "snapshotId": observed["snapshotId"], "elementId": '0'}, error="STALE_SNAPSHOT")
                 own_observation = b.call("getState", {"appHandle": app_b, "windowId": window, "maxElements": 300, "maxDepth": 20})
                 button = next(element for element in own_observation["elements"]
                               if element["role"] == "AXButton" and element["title"] == "Increment primary")
                 before = json.loads(state.read_text())["count"]
-                b.call("click", {"appHandle": app_b, "snapshotId": own_observation["snapshotId"], "elementIndex": button["index"]})
+                b.call("click", {"appHandle": app_b, "snapshotId": own_observation["snapshotId"], "elementId": button["elementId"]})
                 changed_until = time.monotonic() + 5
                 while json.loads(state.read_text())["count"] != before + 1:
                     assert time.monotonic() < changed_until, "B input did not update the fixture exactly once"

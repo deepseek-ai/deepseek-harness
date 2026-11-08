@@ -6,6 +6,8 @@ recording: authored
 header:
   class: ptc-node-read-only
   pin: true
+  systemPromptSource: ptc-turn
+  toolSchemasSource: ptc-turn
 replay:
   override: true
 platform: posix

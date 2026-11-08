@@ -29,7 +29,8 @@ export async function checkExtraWrites(provider: LocalSandboxProvider, directory
   const workspaceRoot = realpathSync.native(await directory(homedir()))
   const extra = realpathSync.native(await directory(homedir()))
   const outside = realpathSync.native(await directory(homedir()))
-  const policy: SandboxPolicy = { mode: 'workspace-write', workspaceRoot, additionalWritableRoots: [extra] }
+  const policy: SandboxPolicy = { mode: 'workspace-write', workspaceRoot,
+    additionalWritableRoots: [extra] }
   const allowed = join(extra, 'allowed.txt')
   const result = await run(provider, `printf allowed > ${quote(allowed)}`, policy)
   expect(result.status, result.stderr).toBe(0)

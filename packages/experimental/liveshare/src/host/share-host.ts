@@ -27,7 +27,9 @@ import {
   type ViewerReadService,
 } from './viewer-read.ts'
 import { createViewerAccessPolicy, readerWriteRefusal, type ViewerAccessFacts } from './viewer-access-policy.ts'
-import { ViewerDeclarations, viewerDeclarationsOf, type ViewerDeclarationsSurface } from './viewer-declarations.ts'
+import { bundleTitlesOf, type BundleTitleEntry, type BundleTitleSource } from './bundle-titles.ts'
+import { createRelayTransport, processRelayEnvironment } from './relay-fetch.ts'
+import { readPluginMetadata, shareableViewerCatalog } from './shareable-catalog.ts'
 import { shareViewerOf } from './viewer-principal.ts'
 import { loadOwnerCredential } from './owner-credential-file.ts'
 import { ForkRegistry } from './fork-registry.ts'
@@ -107,12 +109,13 @@ export interface Config {
 export function publishedShareState(share: OwnerShare): ForkShareState {
   return {
     shareId: share.shareId,
-    sessionId: share.sessionId,
+    sessionIds: share.sessionIds,
     allowsFork: share.allowsFork,
     viewerAdmitted: true,
     stopped: false,
     sessionMode: share.sessionMode,
-    ...(share.viewerCapabilities === undefined ? {} : { viewerCapabilities: share.viewerCapabilities }),
+    ...(share.viewerPlugins === undefined ? {} : { viewerPlugins: share.viewerPlugins }),
+    ...(share.viewerPluginAccess === undefined ? {} : { viewerPluginAccess: share.viewerPluginAccess }),
     ...(share.expiresAt === undefined ? {} : { expiresAt: share.expiresAt }),
   }
 }
@@ -125,6 +128,20 @@ export function publishedShareState(share: OwnerShare): ForkShareState {
  * @returns Async disposer that stops the tunnel worker and releases share access.
  */
 export async function apply(ctx: Context, config: Config): Promise<() => Promise<void>> {
+  // Configuration failures reject rather than throw, so every caller awaits one failure mode.
+  await Promise.resolve()
+  /** The launcher fills this slot before the share host mounts; compositions may omit it. */
+  const relayEnvironment = ctx.reflect.get('launchEnvironment') as {
+    get(name: string): { readonly value: string } | undefined
+  } | undefined
+  /* v8 ignore start -- the slot is optional in composition fixtures; the adapter itself is unit-tested. */
+  const relayTransport = createRelayTransport(relayEnvironment === undefined
+    ? processRelayEnvironment
+    : (name) => {
+      const entry = relayEnvironment.get(name)
+      return entry === undefined ? undefined : { value: entry.value }
+    })
+  /* v8 ignore stop */
   const connection = ctx.connection
   // Optional service: read through ctx.get so profiles without the api gateway still load. The
   // base gateway's own stream contract is the narrow view the reader opens viewer streams through.
@@ -174,6 +191,7 @@ export async function apply(ctx: Context, config: Config): Promise<() => Promise
   let disposed = false
   const relay = createRelayAuthority({
     ownerShares,
+    relayFetch: relayTransport.fetch,
     disposed: () => disposed,
     forks,
     ownerIdentity,
@@ -187,6 +205,7 @@ export async function apply(ctx: Context, config: Config): Promise<() => Promise
   })
   const tunnel = createTunnelSupervision({
     ctx,
+    relayFetch: relayTransport.fetch,
     ownerShares,
     pendingRemovals,
     instanceId: ownerState.instanceId,
@@ -214,20 +233,27 @@ export async function apply(ctx: Context, config: Config): Promise<() => Promise
   function accessChanged(): void {
     ctx.get('remoteAccess')?.invalidate()
   }
-  /**
-   * Share state the `share-viewer` policy and the reader's pre-dispatch write checks read.
-   *
-   * The declaration surface is the one the bundle provided before this host started, which plugins may
-   * already have offered endpoints through; mounting this module on its own provides one here instead.
-   * Either way this host is its only consumer, so it subscribes to recompute open access snapshots.
-   */
-  // A live bundle activation can start this host before the declaration entry's service is visible.
-  // Give that entry one task turn before providing a host-owned fallback, so the two never register
-  // the same service and the entry remains the surface declaration plugins already resolved.
-  const viewerDeclarations = viewerDeclarationsOf(ctx) ?? await new Promise<ViewerDeclarationsSurface>((resolve) => {
-    setTimeout(() => { resolve(viewerDeclarationsOf(ctx) ?? new ViewerDeclarations(ctx)) }, 0)
-  })
-  ctx.effect(() => viewerDeclarations.onChanged(accessChanged), 'liveshare.viewerDeclarations.changed')
+  /** Bundle titles preferred over a component package's own title; filled after the plugin manager answers. */
+  let bundleTitles: ReadonlyMap<string, BundleTitleEntry> = new Map()
+  const pluginManager = ctx.reflect.get('pluginManager') as BundleTitleSource | undefined
+  if (pluginManager !== undefined) {
+    void bundleTitlesOf(pluginManager).then((titles) => { bundleTitles = titles })
+  }
+  /** The platform catalog, narrowed to endpoints this Host actually registers. */
+  const offeredCapabilities = () => shareableViewerCatalog(
+    ctx.get('typert')?.local,
+    (packageName) => {
+      const entry = bundleTitles.get(packageName)
+      if (entry === undefined) return readPluginMetadata(packageName)
+      return {
+        package: packageName,
+        ...(entry.titles === undefined ? {} : { titles: entry.titles }),
+        bundle: entry.name,
+        ...(entry.core ? { core: true } : {}),
+      }
+    },
+  )
+
   /**
    * The share facts the access snapshot and the fork decision both read.
    *
@@ -248,8 +274,8 @@ export async function apply(ctx: Context, config: Config): Promise<() => Promise
   }
 
   /** @see SourceAccess.confined */
-  function sourceConfined(shareId: string): boolean {
-    return sourceAccess.confined(shareId)
+  function sourceConfined(shareId: string, sessionId: string): boolean {
+    return sourceAccess.confined(shareId, sessionId)
   }
 
   const accessFacts: ViewerAccessFacts = {
@@ -258,7 +284,7 @@ export async function apply(ctx: Context, config: Config): Promise<() => Promise
     sourceConfined,
     forks,
     workspaces: () => ctx.get('workspaceRegistry')?.list() ?? [],
-    declaredCapabilities: () => viewerDeclarations.declaredCapabilities(),
+    offeredPlugins: offeredCapabilities,
   }
   ctx.inject(['remoteAccess'], (scope) => {
     scope.remoteAccess.registerPolicy('share-viewer', createViewerAccessPolicy(accessFacts))
@@ -338,7 +364,7 @@ export async function apply(ctx: Context, config: Config): Promise<() => Promise
   const viewerRead: ViewerReadService = createViewerReadService({
     connection,
     ...(gateway === undefined ? {} : { gateway }),
-    sharedSessionId: shareId => ownerShares.get(shareId)?.sessionId,
+    sharedSessionIds: shareId => ownerShares.get(shareId)?.sessionIds,
     forks,
     // The Relay admitted this viewer before the request reached this host, so admission is a fact
     // here; the share's own switch, session, and expiry are what the fork decision reads.
@@ -357,11 +383,11 @@ export async function apply(ctx: Context, config: Config): Promise<() => Promise
     writeRefusal: (viewer, action, sessionId, concrete) => readerWriteRefusal(accessFacts, viewer, action, sessionId, concrete),
     accessChanged,
     // The same record the confinement answer reads, so a refusal can say why the layer is missing.
-    sourceRefusal: (shareId) => {
+    sourceRefusal: (shareId, sessionId) => {
       const share = ownerShares.get(shareId)
       /* v8 ignore next -- the refusal is only read for a share this host still publishes. */
       if (share === undefined) return undefined
-      return sourceAccess.refusalOf(shareId)
+      return sourceAccess.refusalOf(shareId, sessionId)
     },
     prepareSource: sessionId => sourceAccess.prepareSourceSession(sessionId, 'prompt'),
     prepareSourceForReader: (shareId) => { sourceAccess.prepareSourceForReader(shareId) },
@@ -413,10 +439,10 @@ export async function apply(ctx: Context, config: Config): Promise<() => Promise
     // A shared Session is the other case this listener covers: it must carry the layer that confines an
     // externally driven turn before it is published, and a resumed one reaches this listener with its own
     // scope. A Session no published share names installs nothing here.
-    const published = [...ownerShares.values()].find(candidate => candidate.sessionId === childSessionId)
+    const published = [...ownerShares.values()].find(candidate => candidate.sessionIds.includes(childSessionId))
     const arriving = agent.session
     if (published !== undefined) {
-      await sourceAccess.apply(published, { context: agent.ctx, session: arriving }, 'publish')
+      await sourceAccess.apply(published, childSessionId, { context: agent.ctx, session: arriving }, 'publish')
     }
     const record = forks.find(childSessionId)
     if (record === undefined) return
@@ -442,7 +468,7 @@ export async function apply(ctx: Context, config: Config): Promise<() => Promise
     if (share === undefined || !relay.viewerAdmitted(origin.shareId, origin.actor)) return false
     // Both tiers drive the shared Session; what the tier permits is decided per tool by the confined
     // layer, which refuses the write name for a view-tier turn.
-    if (sessionId === share.sessionId) return relay.drivableModeOf(origin.shareId) !== undefined
+    if (share.sessionIds.includes(sessionId)) return relay.drivableModeOf(origin.shareId) !== undefined
     const child = forks.find(sessionId)
     return child !== undefined && child.shareId === origin.shareId
       && identityKeyOf(child.creator) === identityKeyOf(origin.actor)
@@ -494,7 +520,8 @@ export async function apply(ctx: Context, config: Config): Promise<() => Promise
   for (const share of ownerShares.values()) tunnel.scheduleShareExpiry(share)
   // A host that starts with write-mode shares installs their access layers before serving any request for
   // them, so a restored share is never briefly writable without the layer that judges its turns.
-  void Promise.all([...ownerShares.values()].map(share => sourceAccess.apply(share, undefined, 'restore')))
+  void Promise.all([...ownerShares.values()].flatMap(share =>
+    share.sessionIds.map(sessionId => sourceAccess.apply(share, sessionId, undefined, 'restore'))))
   // Reconnecting a share, refreshing its title, and probing or claiming at the Relay all need an address
   // the owner saved. A host that has none still serves the sharing surfaces and stops its shares' turns
   // on their deadlines, but contacts no Relay: there is no address to ask, and the dialog states that.
@@ -537,12 +564,15 @@ export async function apply(ctx: Context, config: Config): Promise<() => Promise
     effectiveRelay = override
   }
   const operations = createOwnerShareOperations({
+    relayFetch: relayTransport.fetch,
     ownerShares,
     pendingRemovals,
     allowedSubjectIds,
     forks,
     viewerRead,
-    viewerDeclarations,
+    offeredCapabilities,
+    /* v8 ignore next -- the Host reads the registry lazily; the consuming operation is covered in owner-share-operations. */
+    workspaces: () => ctx.get('workspaceRegistry')?.list(),
     relay,
     tunnel,
     effectiveRelay: () => effectiveRelay,
@@ -551,7 +581,7 @@ export async function apply(ctx: Context, config: Config): Promise<() => Promise
     bumpRelayRevision: () => { relayRevision += 1 },
     storedCredential: () => storedCredential,
     persistOwnerState,
-    applySourceAccess: (share, ready, trigger) => sourceAccess.apply(share, ready, trigger),
+    applySourceAccess: (share, sessionId, ready, trigger) => sourceAccess.apply(share, sessionId, ready, trigger),
     sourceConfined,
     accessChanged,
     cancelShareTurn: (shareId) => { sourceAccess.cancelShareTurn(shareId) },
@@ -561,6 +591,7 @@ export async function apply(ctx: Context, config: Config): Promise<() => Promise
   new LiveshareShares(ctx, operations)
   registerOwnerHttpRoutes({
     connection,
+    relayFetch: relayTransport.fetch,
     tunnel,
     captureOwnerOperation,
     ownerOperationCurrent,
@@ -581,6 +612,7 @@ export async function apply(ctx: Context, config: Config): Promise<() => Promise
     }
     disposed = true
     await tunnel.dispose(() => { viewerRead.close() })
+    await relayTransport.close()
   }
 }
 

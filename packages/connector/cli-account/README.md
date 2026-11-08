@@ -27,7 +27,7 @@ CLI app plugins such as Feishu and WeCom use this library to run their vendor CL
 
 ### When to use it
 
-Use it in the Host row of a plugin whose vendor CLI signs the user in and keeps the credentials, so DSH only starts commands, shows their results, and owns their processes. The plugin shows the account on the Plugins page by registering the runtime with [`@deepseek-ai/dsh-client-ui-cli-account`](../../client/ui-cli-account/README.md). A plugin that connects a hosted service over MCP uses the MCP manager instead, which owns OAuth itself.
+Use it in the Host row of a plugin whose vendor CLI signs the user in and keeps the credentials, so DSH only starts commands, shows their results, and owns their processes. The plugin shows the account on the Plugins page by registering the runtime as the account source with `ctx.connectorAccounts` from [`@deepseek-ai/dsh-client-ui-connector-account`](../../client/ui-connector-account/README.md). A plugin that connects a hosted service over MCP uses the MCP manager instead, which owns OAuth itself.
 
 ### Entry point
 
@@ -97,7 +97,7 @@ The runtime owns the operation lifecycle and the plugin owns the meaning of each
 | [`src/runtime.ts`](src/runtime.ts) | One-at-a-time operations, cancellation, link filtering, failure classification, and observers |
 | [`src/context.ts`](src/context.ts) | The runtime-context entry that names the executable path |
 | [`src/text.ts`](src/text.ts) | The `LocalizedText` a plugin's presenter writes from its dictionaries |
-| [`src/types.ts`](src/types.ts) | The generic account view types and the Plugins page registration and display types |
+| [`src/types.ts`](src/types.ts) | The account view, command failure, and dictionary types |
 | [`src/index.ts`](src/index.ts) | The entry module and the shared config fields |
 
 </details>
@@ -108,7 +108,7 @@ The runtime owns the operation lifecycle and the plugin owns the meaning of each
 ## Further Exploration
 
 - [Connector packages](../README.md) — the group this library and the CLI app plugins belong to.
-- [CLI account surfaces](../../client/ui-cli-account/README.md) — the Plugins page registry the runtime registers with.
+- [Connector account surfaces](../../client/ui-connector-account/README.md) — the Plugins page registry the runtime registers with.
 - [System prompt](../../core/system-prompt/README.md) — the registry that orders and renders runtime context.
 - [Subprocess](../../subprocess/subprocess/README.md) — the runtime that resolves and spawns the CLI.
 

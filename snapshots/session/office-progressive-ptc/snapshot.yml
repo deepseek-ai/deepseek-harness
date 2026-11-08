@@ -7,5 +7,7 @@ recording: authored
 header:
   class: office-render-tools-ptc
   pin: true
+  changes: 1
+  promptChanges: 1
 workspace:
   setup: office-retired-ptc

@@ -72,7 +72,7 @@ Bundle 将 `tool-subagent-claude-code` 作为 Host 条目插入，因此 `subage
         maxDepth: provider-managed
 ```
 
-工具接受任务后返回 child id；任务完成后向父 agent 发送结果通知。外部 activation 只执行一次，不支持追加输入或恢复对话。
+工具接受任务后返回子任务名称；任务完成后向父 agent 发送结果通知。外部 activation 只执行一次，不支持追加输入或恢复对话。
 
 ### 你会得到什么
 
@@ -149,7 +149,7 @@ Claude Code 子级会在一个全新的 SDK query 中接收独立文本任务。
 
 #### 模型看到什么
 
-通过 `dsh-tool-subagent`，父模型先收到 child id，随后收到 Claude Code 最终答案或带停止原因与安全诊断的失败通知。诊断只包含固定的阶段、类别和已观测的协议或进程事实。产品推理、中间消息、工具活动、stderr、用量、产品标识符、命令、路径与原始协议载荷不会复制到父 Session。
+通过 `dsh-tool-subagent`，父模型先收到子任务名称，随后收到 Claude Code 最终答案或带停止原因与安全诊断的失败通知。诊断只包含固定的阶段、类别和已观测的协议或进程事实。产品推理、中间消息、工具活动、stderr、用量、产品标识符、命令、路径与原始协议载荷不会复制到父 Session。
 
 #### Token 影响
 

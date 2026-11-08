@@ -42,8 +42,14 @@
     mode: !!js process.env.DSH_PERMISSION_MODE ?? 'workspace-write'
     workspaceRoot: !!js process.cwd()
 
-# A search key reference no runner sets: the turn runs as a deployment without
-# web search credentials, whatever the launching environment exports.
+# Own key references no runner sets on the DeepSeek Search and Fetch APIs: the
+# turn runs as a deployment without web search credentials, whatever
+# DEEPSEEK_API_KEY the launching environment exports.
+- id: web-deepseek-api
+  config:
+    searchApiKeyEnv: DSH_KEYLESS_SMOKE_SEARCH_KEY
+    fetchApiKeyEnv: DSH_KEYLESS_SMOKE_FETCH_KEY
+
 - id: web-search-deepseek
   config:
     apiKeyEnv: DSH_KEYLESS_SMOKE_SEARCH_KEY

@@ -1,0 +1,14 @@
+{
+  "initial": [
+    {
+      "name": "snapshot_pending",
+      "description": "Wait for activation.",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "deferLoading": true
+    }
+  ],
+  "changes": []
+}

@@ -11,7 +11,7 @@ const viewer: ShareRpcActor = { providerId: 'p', tenantId: 't', subjectId: 'alic
 const other: ShareRpcActor = { providerId: 'p', tenantId: 't', subjectId: 'bob' }
 
 const SHARE: ForkShareState = {
-  shareId: 'share-1', sessionId: 'session-1', allowsFork: true, viewerAdmitted: true, stopped: false,
+  shareId: 'share-1', sessionIds: ['session-1'], allowsFork: true, viewerAdmitted: true, stopped: false,
 }
 
 const forkAnswer = (sessionId = 'child-1', rpcId = 'rpc-1'): ViewerAnswer => ({

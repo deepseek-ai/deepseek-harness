@@ -6,6 +6,7 @@ recording: authored
 header:
   class: ptc-script-retained
   pin: true
+  toolSchemasSource: ptc-reset
 permission: workspace-write
 workspace:
   setup: cua-script-guidance

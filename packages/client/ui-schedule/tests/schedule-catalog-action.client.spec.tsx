@@ -268,11 +268,11 @@ describe('ScheduleCatalogAction visibility', () => {
 })
 
 describe('ScheduleCatalogAction positioning', () => {
-  it('portals the catalog to the body and left-aligns it when space is available', () => {
+  it('portals the catalog to the body and binds it to the trigger CSS anchor', () => {
     const active = [entry('active', START + 60_000), entry('next', START + 120_000)]
     const view = render(<ScheduleCatalogAction {...props(active)} />)
     const trigger = screen.getByRole('button', { name: '2 automation tasks' })
-    vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({
+    const measure = vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({
       x: 240,
       y: 20,
       left: 240,
@@ -289,8 +289,11 @@ describe('ScheduleCatalogAction positioning', () => {
     const catalog = screen.getByRole('list', { name: en['list.aria'] })
     expect(view.container.contains(catalog)).toBe(false)
     expect(catalog.parentElement).toBe(document.body)
-    expect(catalog.style.left).toBe('240px')
-    expect(catalog.style.top).toBe('53px')
+    expect(trigger.style.anchorName).not.toBe('')
+    expect(catalog.style.positionAnchor).toBe(trigger.style.anchorName)
+    expect(catalog.style.left).toBe('')
+    expect(catalog.style.top).toBe('')
+    expect(measure).not.toHaveBeenCalled()
     expect(catalog.style.visibility).toBe('')
   })
 })

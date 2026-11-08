@@ -3,8 +3,11 @@
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
+import type {
+  ConnectorAccountSource, ConnectorOperation, ConnectorOperationId, ConnectorOperationResult,
+} from '@deepseek-ai/dsh-client-ui-connector-account/types'
 import type { CliCommandExecutor, CliCommandResult, CliRunOptions } from './executor.ts'
-import type { CliAccountView, CliCommandFailure, CliOperation, CliOperationId, CliOperationResult } from './types.ts'
+import type { CliAccountView, CliCommandFailure } from './types.ts'
 
 /** What a plugin's operation may do while it runs. */
 export interface CliOperationControl<Phase extends string, Command extends string> {
@@ -77,7 +80,7 @@ export function failureDetails(failure: CliCommandFailure): string[] {
 }
 
 class Operation<Kind extends string, Phase extends string, Failure extends CliCommandFailure> {
-  readonly id = brandString<CliOperationId>(randomUUID())
+  readonly id = brandString<ConnectorOperationId>(randomUUID())
   readonly controller = new AbortController()
   phase: Phase | 'checking' | 'cancelling' = 'checking'
   authorizationUrl: string | undefined
@@ -90,22 +93,23 @@ class Operation<Kind extends string, Phase extends string, Failure extends CliCo
     return this.cancellable.has(this.phase)
   }
 
-  view(): CliOperation<Kind, Phase> {
+  view(): ConnectorOperation<Kind, Phase | 'checking' | 'cancelling'> {
     const link = this.authorizationUrl === undefined ? {} : { authorizationUrl: this.authorizationUrl }
     return { id: this.id, kind: this.kind, phase: this.phase, cancellable: this.canCancel, ...link }
   }
 }
 
 /**
- * Runs at most one account operation at a time; observers see it without owning it. A failed operation logs and
- * returns only its last command's classification, because exceptions and native output may contain credentials.
+ * Runs at most one account operation at a time; observers see it without owning it, and the plugin registers it as its
+ * Plugins page account source. A failed operation logs and returns only its last command's classification, because
+ * exceptions and native output may contain credentials.
  */
 export abstract class CliAccountRuntime<
   Account, Kind extends string, Phase extends string, Failure extends CliCommandFailure = CliCommandFailure,
-> {
+> implements ConnectorAccountSource<CliAccountView<Account, Kind, Phase, Failure>> {
   private account: Account
   private active: Operation<Kind, Phase, Failure> | undefined
-  private result: CliOperationResult<Kind, Failure> | undefined
+  private result: ConnectorOperationResult<Kind, Failure> | undefined
   private readonly cancellable: ReadonlySet<string>
   private readonly listeners = new Set<() => void>()
   private readonly lifetime = new AbortController()
@@ -152,7 +156,7 @@ export abstract class CliAccountRuntime<
    * @returns the operation identity.
    * @throws while another operation runs, or after disposal.
    */
-  start(kind: Kind): CliOperationId {
+  start(kind: Kind): ConnectorOperationId {
     this.lifetime.signal.throwIfAborted()
     if (this.active !== undefined) throw new Error(`${this.options.name}: another account operation is in progress`)
     const operation = new Operation<Kind, Phase, Failure>(kind, this.cancellable)
@@ -173,7 +177,7 @@ export abstract class CliAccountRuntime<
    * @param id - the operation to cancel; a finished operation or a phase that is not cancellable is ignored.
    * @returns after the operation settles, or at once when nothing is cancelled.
    */
-  async cancel(id: CliOperationId): Promise<void> {
+  async cancel(id: ConnectorOperationId): Promise<void> {
     const operation = this.active
     if (operation?.id !== id || !operation.canCancel) return
     this.interrupt(operation)
@@ -219,7 +223,7 @@ export abstract class CliAccountRuntime<
   }
 
   private async execute(operation: Operation<Kind, Phase, Failure>): Promise<void> {
-    let outcome: CliOperationResult<Kind, Failure>['outcome'] = 'succeeded'
+    let outcome: ConnectorOperationResult<Kind, Failure>['outcome'] = 'succeeded'
     let failure: Failure | undefined
     const control: CliOperationControl<Phase, Failure['command']> = {
       stage: (phase) => { this.stage(operation, phase) },

@@ -12,7 +12,7 @@ const OWNER = { providerId: 'owner-p', tenantId: 'owner-t', subjectId: 'owner', 
 
 function storedShare(overrides: Partial<OwnerShare> = {}): OwnerShare {
   return {
-    shareId: 'share-1', sessionId: 'session-1', sessionTitle: 'Session', accessMode: 'open',
+    shareId: 'share-1', sessionIds: ['session-1'], sessionTitle: 'Session', accessMode: 'open',
     link: `${RELAY}/?shareId=share-1`, relay: RELAY, gatewayToken: 'gateway-token',
     allowedSubjectIds: [], revision: 1, createdAt: '2026-01-01T00:00:00.000Z',
     allowsFork: false, sessionMode: 'view', online: true, ...overrides,
@@ -152,7 +152,7 @@ describe('relay access adoption', () => {
     const h = harness()
     const admitted = { providerId: 'p', tenantId: 't', subjectId: 'alice' }
     const revoked = { providerId: 'p', tenantId: 't', subjectId: 'bob' }
-    h.ownerShares.set('share-1', storedShare({ sessionMode: 'write', allowsFork: true, sessionId: 'session-1' }))
+    h.ownerShares.set('share-1', storedShare({ sessionMode: 'write', allowsFork: true }))
     h.authority.applyRelayAccess('share-1', frame({
       version: 1, sessionMode: 'write', allowsFork: true, allowedSubjectIds: ['alice', 'bob'],
     }))

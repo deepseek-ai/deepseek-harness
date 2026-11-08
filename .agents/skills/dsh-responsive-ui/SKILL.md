@@ -5,6 +5,8 @@ description: Use when designing, implementing, or reviewing responsive client la
 
 # Responsive client UI
 
+For visual reviews, select the [impact scope](../../../docs/cookbook/reviewing-ui-design.md#review-scope), then apply these behavioral requirements and the [UI review baseline](../../../docs/ui-design-review-cases.md#review-baseline). Compare affected wrapping and layout relationships in the whole page or modal's context while preserving drafts, focus and action access. Inspect all regions for an explicit full-interface review. Examples do not define coverage; fitting the viewport alone is insufficient.
+
 ## 1. Minimum viewport
 
 Use a viewport width of 390 CSS px as the primary acceptance minimum. There must be no unintended overlap, clipping, page-wide horizontal scrolling, or inaccessible primary actions. Below 390px, layout requirements may be relaxed.

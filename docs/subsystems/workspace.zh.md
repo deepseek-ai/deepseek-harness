@@ -268,6 +268,44 @@ Typed Remote control of transient Session-owned terminal processes.
 @Remote async create(agent: Agent, request: TerminalCreateRequest, signal: AbortSignal): Promise<WebTerminalInfo>
 
 /**
+ * Open a terminal for the Session's Agent under a caller-resolved sandbox policy; it appears in every
+ * window that watches the Session and passes to the person on the person's first typed input.
+ * @param agent - Session owner whose Agent requests the terminal.
+ * @param request - title, directory, dimensions, sandbox policy and shell preference.
+ * @param signal - allocation cancellation; a committed terminal outlives it.
+ * @returns the Agent's handle for the committed terminal.
+ * @throws RemoteError `terminal/limit-reached` when the Session or Agent terminal limit is reached.
+ * @throws Error when the title is blank or longer than 120 characters.
+ */
+async openForAgent(agent: Agent, request: AgentTerminalRequest, signal: AbortSignal): Promise<AgentTerminal>
+
+/**
+ * Render a page of any terminal in the Agent's Session, including terminals the person opened.
+ * @param agent - Session owner.
+ * @param id - terminal identity.
+ * @param request - page position and byte bound.
+ * @returns rendered screen text, including output received before the call.
+ * @throws RemoteError `terminal/unavailable` when the terminal is missing or closes before the screen is read.
+ */
+readScreen(agent: Agent, id: WebTerminalId, request: TerminalScreenRequest): Promise<TerminalScreenPage>
+
+/**
+ * Observe whether a Session terminal's shell is running a command.
+ * @param agent - Session owner.
+ * @param id - terminal identity.
+ * @returns idle, busy, or unknown for unsupported shells and sandboxed launches.
+ */
+inspectActivity(agent: Agent, id: WebTerminalId): Promise<'idle' | 'busy' | 'unknown'>
+
+/**
+ * Stream the Session's retained terminals as whole sets, without resolving or activating an Agent.
+ * @param sessionId - watched Session identity.
+ * @param signal - stream cancellation.
+ * @returns the current set, then a new set after creation, removal or any published state change.
+ */
+@Remote({ mode: 'stream' }) async *watch(sessionId: SessionId, signal: AbortSignal): AsyncIterable<WebTerminalInfo[]>
+
+/**
  * Retain an existing terminal for a window without activating its Agent or taking input control.
  * @param sessionId - owning Session identity, including an inactive saved layout.
  * @param id - retained Host terminal identity.
@@ -544,7 +582,7 @@ insertBefore(id: WorkspaceId, beforeId?: WorkspaceId): Promise<readonly Workspac
  * resolves without writing, asking, or stopping.
  * @param sessionId - The session to archive.
  * @param options - Whether running work is stopped instead of refusing.
- * @returns resolution after durability and, with `stopActivity`, after every stop request was issued.
+ * @returns resolution after durability, any stop requests, and follow-up admission.
  */
 archiveSession(sessionId: SessionId, options: ArchiveSessionOptions = {}): Promise<void>
 
@@ -619,6 +657,26 @@ Ask the composed providers what still runs for a session before it is archived. 
 
 Source: [`packages/workspace/workspace/src/index.ts`](../../packages/workspace/workspace/src/index.ts)
 
+<a id="workspacesession-archived--parallel"></a>
+
+#### `workspace/session-archived` — parallel
+
+Admit optional follow-up work after durable archival and any stop requests. Dispatched inside the registry's write queue: a listener registers its work and returns, and runs the work and any unbounded I/O afterwards. Listener failures are logged without undoing archival. Listeners own and drain their background work.
+
+```ts cordis-catalog
+/**
+ * Admit optional follow-up work after durable archival and any stop requests.
+ * Dispatched inside the registry's write queue: a listener registers its work
+ * and returns, and runs the work and any unbounded I/O afterwards. Listener
+ * failures are logged without undoing archival. Listeners own and drain their background work.
+ * @param request - newly archived Session; repeated archive requests do not dispatch.
+ * @mode parallel
+ */
+'workspace/session-archived'(request: SessionActivityRequest): Promise<void> | void
+```
+
+Source: [`packages/workspace/workspace/src/index.ts`](../../packages/workspace/workspace/src/index.ts)
+
 <a id="workspacesession-stop--parallel"></a>
 
 #### `workspace/session-stop` — parallel
@@ -641,6 +699,24 @@ Stop a session's running work because the caller archived it with `stopActivity`
  * @mode parallel
  */
 'workspace/session-stop'(request: SessionActivityRequest): Promise<void> | void
+```
+
+Source: [`packages/workspace/workspace/src/index.ts`](../../packages/workspace/workspace/src/index.ts)
+
+<a id="workspacesession-unarchiving--parallel"></a>
+
+#### `workspace/session-unarchiving` — parallel
+
+Cancel or settle archive follow-up work before making a Session available again. A rejection retains the archived state.
+
+```ts cordis-catalog
+/**
+ * Cancel or settle archive follow-up work before making a Session available again.
+ * A rejection retains the archived state.
+ * @param request - Session about to leave the archive set.
+ * @mode parallel
+ */
+'workspace/session-unarchiving'(request: SessionActivityRequest): Promise<void> | void
 ```
 
 Source: [`packages/workspace/workspace/src/index.ts`](../../packages/workspace/workspace/src/index.ts)
