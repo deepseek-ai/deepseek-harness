@@ -63,16 +63,16 @@ export function apply(ctx: Context): void {
 |---|---|
 | 区块 | 标题、状态、按钮、说明、附加行、失败信息和提示。区块发起的调用未返回，或 Host 流中断时，按钮不可用。失败时先显示注册方的文案，再显示其诊断项 |
 | 标题旁标签 | 显示 display 的 `badge`，只出现在已启用插件包的页面或其某一行的页面上，且只在 display 带有标签时显示 |
-| 开启引导 | 插件包开启后，阶段为 `disconnected` 时打开；“连接”会打开插件包页面，并在 display 给出 `connect` 时启动该操作。阶段确定为其他值后自动关闭 |
+| 开启引导 | 插件包开启后，阶段为 `disconnected` 时打开；“连接”会打开插件包页面，并在 display 给出 `connect` 时启动该操作。账号检查中或连接中时继续等待，已连接或不可用时自动关闭 |
 | 提示 | 本浏览器的最新结果，不受插件面板生命周期限制：操作成功的文本，或带警告图标的共用失败文案 |
 
 ### 跟随操作
 
-每个浏览器在 Web 应用加载时打开一条流，Host 为每条新流检查每个没有在运行操作的账号；流打开期间注册的账号会立即检查。浏览器跟随其最近一次启动返回的操作，从返回时起，直到流推送该操作的结果。被跟随的操作提供的每个页面只在新标签页中打开一次，只打开 HTTPS 页面或回环地址上的 HTTP 页面；其他浏览器显示同样的区块，但不打开页面，也不报告提示。第一次调用返回前的第二次点击不会启动任何操作。流永久失败时，区块显示账号服务未运行，并提供“重试”；无论按多少次，都只重新打开流一次。卸载浏览器一半会关闭流；Host 持有的操作继续运行。
+每个浏览器在 Web 应用加载时打开一条流，Host 为每条新流检查每个没有在运行操作的账号；流打开期间注册的账号会立即检查。浏览器跟随其最近一次启动返回的操作，从返回时起，直到流推送该操作的结果。被跟随的操作提供的每个页面只在新标签页中打开一次，只打开 HTTPS 页面或回环地址上的 HTTP 页面；其他浏览器显示同样的区块，但不打开页面，也不报告提示。第一次调用返回前的第二次点击不会启动任何操作。连接断开后流会自动重连；流永久失败时，区块保留最后的账号，按钮不可用，直到页面重新加载。卸载浏览器一半会关闭流；Host 持有的操作继续运行。
 
 ### 共用文案
 
-`connectorAccount` 字典包含所有账号共用的文案：关闭、取消、重试、稍后、排障信息标签、失败提示，以及未运行时的状态、标签和说明。其余文案都来自注册方。
+`connectorAccount` 字典包含所有账号共用的文案：关闭、取消、稍后、排障信息标签和失败提示。其余文案都来自注册方。
 
 -----
 
@@ -84,7 +84,7 @@ export function apply(ctx: Context): void {
 
 Host 一半 `ConnectorAccounts` 是一个 Remote 服务。`register()` 观察账号来源，每条 `watch` 流在每次变化后读取每个账号的条目，并合并在下一次读取前到达的变化：键和包、文案、`present(view)`、进行中的操作，以及带成功文本的最新结果。`start` 和 `cancel` 按键路由到该账号的来源。
 
-[`dsh-api-remotes`](../../api/remotes/README.zh.md) 挂载生成的 `connectorAccounts` Remote。浏览器一半通过 `BrowserAccounts` 打开一条 `watch` 流；它的一个 store 保存按键索引的 Host 账号、流是否在推送或已停止，以及最新提示，同时记住本浏览器发起的操作。它为页面注册一个 `plugins.detail.badge` 条目和一个 `shell.overlay` 提示，并为每个带包名的账号注册以包名为键的 `plugins.bundle.config` 和 `plugins.bundle.activation`，全部使用 `connectorAccount` 命名空间。按钮自己调用 Remote 的 `start` 和 `cancel`，并把启动的操作报告给 `BrowserAccounts`。Host 撤下的账号会失去其插件包条目；卸载时撤下所有条目和流。
+[`dsh-api-remotes`](../../api/remotes/README.zh.md) 挂载生成的 `connectorAccounts` Remote。浏览器一半通过 `BrowserAccounts` 打开一条 `watch` 流；它的一个 store 保存按键索引的 Host 账号、流是否在推送，以及最新提示，同时记住本浏览器发起的操作。它为页面注册一个 `plugins.detail.badge` 条目和一个 `shell.overlay` 提示，并为每个带包名的账号注册以包名为键的 `plugins.bundle.config` 和 `plugins.bundle.activation`，全部使用 `connectorAccount` 命名空间。按钮自己调用 Remote 的 `start` 和 `cancel`，并把启动的操作报告给 `BrowserAccounts`。Host 撤下的账号会失去其插件包条目；卸载时撤下所有条目和流。
 
 | 文件 | 职责 |
 |---|---|
@@ -92,7 +92,7 @@ Host 一半 `ConnectorAccounts` 是一个 Remote 服务。`register()` 观察账
 | [`src/types.ts`](src/types.ts) | 注册、来源、视图、display 和条目类型 |
 | [`src/client/index.ts`](src/client/index.ts) | 浏览器入口：字典和插槽注册 |
 | [`src/client/state.ts`](src/client/state.ts) | 流的 store、本浏览器发起的操作，以及它们的页面和提示 |
-| [`src/client/components.tsx`](src/client/components.tsx) | 各界面、插槽条目，以及按钮的 Remote 调用 |
+| [`src/client/components.tsx`](src/client/components.tsx) | 各界面的插槽条目，以及按钮的 Remote 调用 |
 | [`src/client/locales.ts`](src/client/locales.ts) | 共用字典 |
 | [`src/client/types.ts`](src/client/types.ts) | 浏览器状态、提示、Remote 和 face 类型 |
 

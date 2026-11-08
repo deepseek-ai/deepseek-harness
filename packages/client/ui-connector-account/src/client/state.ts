@@ -28,7 +28,7 @@ export function openAuthorizationPage(url: string | undefined): void {
 export class BrowserAccounts {
   /** The accounts, stream state, and notice every surface on the page reads. */
   readonly state: SnapshotStore<ConnectorAccountsState> = createSnapshotStore<ConnectorAccountsState>({
-    accounts: new Map(), linked: true, stopped: false, notice: undefined,
+    accounts: new Map(), linked: true, notice: undefined,
   })
 
   /**
@@ -38,15 +38,20 @@ export class BrowserAccounts {
   private readonly followed = new Map<string, { readonly id: ConnectorOperationId; readonly opened: Set<string> }>()
   private seq = 0
   private disposed = false
-  private stream!: RemoteStream<ConnectorAccountsView>
-  private observing!: Promise<void>
+  private readonly stream: RemoteStream<ConnectorAccountsView>
+  private readonly observing: Promise<void>
 
   /**
    * @param ctx - the browser context carrying the Remote client.
    * @param remote - the `connectorAccounts` Remote.
    */
-  constructor(private readonly ctx: Context, private readonly remote: Pick<ConnectorAccountsRemote, 'watch'>) {
-    this.subscribe()
+  constructor(private readonly ctx: Context, remote: Pick<ConnectorAccountsRemote, 'watch'>) {
+    this.stream = ctx.remote.$stream<ConnectorAccountsView>({
+      name: 'Connector accounts', open: signal => remote.watch(signal),
+      ended: () => new Error('Connector accounts stream ended'),
+      carrierFailed: () => { this.patch({ linked: false }) },
+    })
+    this.observing = this.observe()
   }
 
   /**
@@ -72,17 +77,9 @@ export class BrowserAccounts {
     this.patch({ notice: undefined })
   }
 
-  /** Reopen the Host stream after it stopped; ignored while it runs, while a reopen is pending, or after disposal. */
-  retry(): void {
-    if (this.disposed || !this.state.getSnapshot().stopped) return
-    // Clearing `stopped` before the reopen awaits claims it, so a second retry finds nothing to reopen.
-    this.patch({ stopped: false })
-    void this.reopen()
-  }
-
   /**
-   * Stop observing the Host; afterwards the page opens no page, reports nothing more, and a pending retry opens no stream.
-   * Host-owned operations keep running.
+   * Stop observing the Host; afterwards the page opens no page and reports nothing more. Host-owned operations keep
+   * running.
    * @returns after the stream closes.
    */
   async dispose(): Promise<void> {
@@ -91,39 +88,26 @@ export class BrowserAccounts {
     await this.observing
   }
 
-  private subscribe(): void {
-    this.stream = this.ctx.remote.$stream<ConnectorAccountsView>({
-      name: 'Connector accounts', open: signal => this.remote.watch(signal),
-      ended: () => new Error('Connector accounts stream ended'),
-      carrierFailed: () => { this.patch({ linked: false }) },
-    })
-    this.observing = this.observe(this.stream)
-  }
-
-  private async observe(stream: RemoteStream<ConnectorAccountsView>): Promise<void> {
+  private async observe(): Promise<void> {
     try {
-      for await (const item of stream) {
+      for await (const item of this.stream) {
         // An item the stream yielded just before disposal must not reach the disposed page.
         if (this.disposed) return
         this.show(item.value.accounts)
         item.accept()
       }
-    } catch {
-      // A terminal failure, such as a Host without the registry, ends the stream; a disposed page shows nothing.
-      if (!this.disposed) this.patch({ linked: false, stopped: true })
+    } catch (error) {
+      // A terminal failure, such as a Host without the registry, leaves the buttons disabled until the page reloads.
+      if (this.disposed) return
+      this.patch({ linked: false })
+      this.ctx.logger.warn('connector accounts stream failed; reload the page to reconnect: %s', error)
     }
-  }
-
-  private async reopen(): Promise<void> {
-    await this.stream.dispose()
-    await this.observing
-    if (!this.disposed) this.subscribe()
   }
 
   private show(entries: readonly ConnectorAccountEntry[]): void {
     const accounts = new Map(entries.map(entry => [entry.key, entry]))
     for (const key of [...this.followed.keys()]) if (!accounts.has(key)) this.followed.delete(key)
-    this.patch({ accounts, linked: true, stopped: false })
+    this.patch({ accounts, linked: true })
     for (const entry of entries) this.track(entry)
   }
 

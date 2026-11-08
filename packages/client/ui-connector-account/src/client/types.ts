@@ -15,8 +15,6 @@ export interface ConnectorAccountsState {
   readonly accounts: ReadonlyMap<string, ConnectorAccountEntry>
   /** Whether the Host stream is delivering. */
   readonly linked: boolean
-  /** Whether the Host stream failed for good; `retry` reopens it. */
-  readonly stopped: boolean
   readonly notice: ConnectorAccountNotice | undefined
 }
 
@@ -38,8 +36,6 @@ export interface ConnectorAccountFace {
   readonly follow: (key: string, id: ConnectorOperationId) => void
   /** Report that a Remote call this browser made did not finish. */
   readonly failed: () => void
-  /** Reopen the Host stream after it stopped. */
-  readonly retry: () => void
   readonly dismissNotice: () => void
 }
 

@@ -52,7 +52,7 @@ function fixture() {
   const browser = new BrowserAccounts(ctx, remote)
   onTestFinished(async () => { await browser.dispose(); windowOpen.mockRestore(); await ctx.fiber.dispose() })
   return {
-    browser, remote, open: windowOpen, streams, options: () => options,
+    ctx, browser, remote, open: windowOpen, streams, options: () => options,
     state: () => browser.state.getSnapshot(),
     deliver(view: ConnectorAccountsView) { queue.push(view); wake?.() },
     async publish(...entries: ConnectorAccountEntry[]) {
@@ -64,12 +64,9 @@ function fixture() {
   }
 }
 
-// Every fixture step settles through microtasks, so one macrotask lets a pending reopen finish.
-const drain = () => new Promise<void>((resolve) => { setTimeout(resolve, 0) })
-
 it('mirrors the Host accounts by key and reports carrier loss until the next item', async () => {
   const b = fixture()
-  expect(b.state()).toEqual({ accounts: new Map(), linked: true, stopped: false, notice: undefined })
+  expect(b.state()).toEqual({ accounts: new Map(), linked: true, notice: undefined })
   const open = b.options().open(new AbortController().signal)
   expect(b.remote.watch).toHaveBeenCalledOnce()
   expect(open).toBe(b.remote.watch.mock.results[0]?.value)
@@ -78,7 +75,7 @@ it('mirrors the Host accounts by key and reports carrier loss until the next ite
   b.options().carrierFailed?.(new RemoteStreamCarrierError('offline'))
   expect(b.state().linked).toBe(false)
   await b.publish(entry(FIXTURE))
-  expect(b.state()).toMatchObject({ linked: true, stopped: false })
+  expect(b.state().linked).toBe(true)
   expect([...b.state().accounts.keys()]).toEqual([FIXTURE])
   expect(b.options().ended(true).message).toBe('Connector accounts stream ended')
 })
@@ -135,34 +132,22 @@ it('reports a call that did not finish with a fresh notice each time', () => {
   expect(b.state().notice).toEqual({ seq: 2, kind: 'action-failed' })
 })
 
-it('stops after a terminal stream failure and reopens on retry', async () => {
+it('keeps the buttons disabled and logs a terminal stream failure, opening no second stream', async () => {
   const b = fixture()
+  const warn = vi.spyOn(b.ctx.logger, 'warn').mockImplementation(() => {})
   await b.publish(entry(FIXTURE))
-  b.browser.retry()
-  expect(b.streams).toHaveLength(1)
   b.fail(new Error('Host without the registry'))
-  await vi.waitFor(() => { expect(b.state().stopped).toBe(true) })
-  expect(b.state().linked).toBe(false)
-  b.browser.retry()
-  b.browser.retry()
-  await drain()
-  expect(b.streams).toHaveLength(2)
-  expect(b.streams[0]?.dispose).toHaveBeenCalledOnce()
-  await b.publish(entry(FIXTURE))
-  expect(b.state()).toMatchObject({ linked: true, stopped: false })
+  await vi.waitFor(() => { expect(b.state().linked).toBe(false) })
+  expect(warn).toHaveBeenCalledWith(expect.stringContaining('connector accounts stream failed'), expect.any(Error))
+  expect(b.streams).toHaveLength(1)
+  expect([...b.state().accounts.keys()]).toEqual([FIXTURE])
 })
 
-it('opens nothing and reports nothing after disposal, and a retry pending at disposal opens no stream', async () => {
+it('opens nothing and reports nothing after disposal', async () => {
   const b = fixture()
-  b.fail(new Error('Host without the registry'))
-  await vi.waitFor(() => { expect(b.state().stopped).toBe(true) })
-  b.browser.retry()
   await b.browser.dispose()
-  await drain()
-  expect(b.streams).toHaveLength(1)
   b.browser.follow(FIXTURE, OP)
   b.browser.failed()
-  b.browser.retry()
   expect(b.state().notice).toBeUndefined()
 })
 
@@ -171,7 +156,7 @@ it('shows nothing for a stream that fails while the page disposes it', async () 
   const disposing = b.browser.dispose()
   b.fail(new Error('carrier lost'))
   await disposing
-  expect(b.state()).toMatchObject({ linked: true, stopped: false })
+  expect(b.state().linked).toBe(true)
 })
 
 it('ignores an item the stream yielded just before disposal', async () => {

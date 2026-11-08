@@ -63,16 +63,16 @@ The registrant imports the registry's types with `import type` from the package 
 |---|---|
 | Section | Title, status, buttons, detail, notes, failure, and hint. Buttons are disabled while a call the section made is pending or the Host stream is down. A failure shows the registrant's text, then its diagnostic items |
 | Title tag | The display's `badge`, shown only on the enabled bundle's page or one of its row pages, and only while the display has one |
-| Activation prompt | Open while the phase is `disconnected` after the bundle is switched on; Connect opens the bundle page and starts the display's `connect` operation, if it names one. It dismisses itself once the phase settles elsewhere |
+| Activation prompt | Open while the phase is `disconnected` after the bundle is switched on; Connect opens the bundle page and starts the display's `connect` operation, if it names one. It waits while the account is checking or connecting and dismisses itself once the account is connected or unavailable |
 | Notice | The latest outcome in this browser, outside the Plugins panel's lifetime: the operation's success text, or the shared failure copy with a warning icon |
 
 ### Following operations
 
-Each browser opens one stream when the Web app loads, and the Host checks every account that runs no operation for each new stream; an account registered while a stream is open is checked at once. A browser follows the operation its latest start returned, from that answer until the stream delivers the operation's result. Each page the followed operation offers opens once in a new tab, over HTTPS or over HTTP on a loopback address; other browsers show the same section but open no page and report no notice. A second click before the first call answers starts nothing. A stream that fails for good shows the account service as not running with Retry, which reopens the stream once however often it is pressed. Unloading the browser half closes the stream; Host-owned operations keep running.
+Each browser opens one stream when the Web app loads, and the Host checks every account that runs no operation for each new stream; an account registered while a stream is open is checked at once. A browser follows the operation its latest start returned, from that answer until the stream delivers the operation's result. Each page the followed operation offers opens once in a new tab, over HTTPS or over HTTP on a loopback address; other browsers show the same section but open no page and report no notice. A second click before the first call answers starts nothing. The stream reconnects after a lost connection; when it fails for good, the sections keep the last accounts with their buttons disabled until the page reloads. Unloading the browser half closes the stream; Host-owned operations keep running.
 
 ### Shared copy
 
-The `connectorAccount` dictionary holds the copy every account shares: Close, Cancel, Retry, Later, the diagnostic label, the failure notice, and the not-running status, tag, and detail. Every other string comes from the registrant.
+The `connectorAccount` dictionary holds the copy every account shares: Close, Cancel, Later, the diagnostic label, and the failure notice. Every other string comes from the registrant.
 
 -----
 
@@ -84,7 +84,7 @@ The `connectorAccount` dictionary holds the copy every account shares: Close, Ca
 
 The Host half, `ConnectorAccounts`, is a Remote service. `register()` observes the account's source, and each `watch` stream reads every account's entry after each change, coalescing changes that arrive before the next read: the key and package, the copy, `present(view)`, the operation in progress, and the latest result with its success text. `start` and `cancel` route by key to the account's source.
 
-[`dsh-api-remotes`](../../api/remotes/README.md) mounts the generated `connectorAccounts` Remote. The browser half opens one `watch` stream through `BrowserAccounts`, whose one store holds the Host's accounts by key, whether the stream is delivering or has stopped, and the latest notice; it also remembers the operations this browser started. It registers one `plugins.detail.badge` entry and one `shell.overlay` notice for the page, and for each account with a package, `plugins.bundle.config` and `plugins.bundle.activation` keyed by the package name, all under the `connectorAccount` namespace. The buttons call `start` and `cancel` on the Remote themselves and report the started operation to `BrowserAccounts`. An account the Host drops loses its bundle entries, and unloading withdraws every entry and the stream.
+[`dsh-api-remotes`](../../api/remotes/README.md) mounts the generated `connectorAccounts` Remote. The browser half opens one `watch` stream through `BrowserAccounts`, whose one store holds the Host's accounts by key, whether the stream is delivering, and the latest notice; it also remembers the operations this browser started. It registers one `plugins.detail.badge` entry and one `shell.overlay` notice for the page, and for each account with a package, `plugins.bundle.config` and `plugins.bundle.activation` keyed by the package name, all under the `connectorAccount` namespace. The buttons call `start` and `cancel` on the Remote themselves and report the started operation to `BrowserAccounts`. An account the Host drops loses its bundle entries, and unloading withdraws every entry and the stream.
 
 | File | Role |
 |---|---|
@@ -92,7 +92,7 @@ The Host half, `ConnectorAccounts`, is a Remote service. `register()` observes t
 | [`src/types.ts`](src/types.ts) | Registration, source, view, display, and entry types |
 | [`src/client/index.ts`](src/client/index.ts) | The browser entry: the dictionary and the slot registrations |
 | [`src/client/state.ts`](src/client/state.ts) | The stream store, the operations this browser started, and their pages and notices |
-| [`src/client/components.tsx`](src/client/components.tsx) | The surfaces, the slot entries, and the buttons' Remote calls |
+| [`src/client/components.tsx`](src/client/components.tsx) | The slot entries of each surface and the buttons' Remote calls |
 | [`src/client/locales.ts`](src/client/locales.ts) | The shared dictionary |
 | [`src/client/types.ts`](src/client/types.ts) | Browser state, notice, Remote, and face types |
 
