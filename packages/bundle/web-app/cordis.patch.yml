@@ -67,9 +67,9 @@
     - id: session-log-download
       name: '@deepseek-ai/dsh-session-log-export'
 
-    # Session-header "Open In..." split button over the host application
-    # resolution (macOS/Windows/Linux; a host with no resolved application
-    # renders no button). Two halves: the host routes and the browser surface.
+    # Session-menu application choices over Host resolution on macOS, Windows,
+    # and Linux. An empty catalog hides the action. The Host routes and browser
+    # controls also serve the file-tree directory opener.
     - id: open-in-app
       name: '@deepseek-ai/dsh-host-open-in-app'
       config:
@@ -140,11 +140,19 @@
     - id: ui-settings-account
       name: '@deepseek-ai/dsh-client-ui-settings-account'
 
-    - id: account-controller
-      name: '@deepseek-ai/dsh-api-account-controller'
+    - id: ui-account-notifications
+      name: '@deepseek-ai/dsh-client-ui-account-notifications'
 
     - id: settings-controller
       name: '@deepseek-ai/dsh-api-settings-controller'
+
+    # One shared MCP server fleet: Settings-configured servers plus servers
+    # that installed plugins register, with status and recovery over Remote.
+    # Credential templates and OAuth grants resolve through the credentials
+    # provider, so the manager starts after it.
+    - id: mcp-manager
+      name: '@deepseek-ai/dsh-mcp-manager'
+      inject: [credentials]
 
     # Workspace commands and reconnect-safe projection over Typert Remote.
     - id: workspace-controller
@@ -280,8 +288,27 @@
       name: '@deepseek-ai/dsh-client-ui-sidebar-right'
 
 
-    - id: office-to-pdf
-      name: '@deepseek-ai/dsh-office-to-pdf'
+    - id: office-kit
+      name: '@deepseek-ai/dsh-office-kit'
+      config:
+        outputDirectory: !!js dshHomePath('office-kit', 'outputs')
+
+    # Every profile uses the packaged Office skills. Desktop supplies their Python
+    # environment through the primary runtime named by DSH_PRIMARY_RUNTIME and
+    # selects `workspace-dependencies`. A Desktop profile launched without a
+    # nonempty value disables workspace-dependencies and, like the other
+    # profiles, selects `user` to direct the model to the user's Python.
+    - id: workspace-dependencies
+      name: '@deepseek-ai/dsh-tool-workspace-dependencies'
+      disabled: !!js "ctx.get('profileContext')?.name !== 'desktop' || !process.env.DSH_PRIMARY_RUNTIME"
+      config:
+        source: !!js process.env.DSH_PRIMARY_RUNTIME
+        root: !!js dshHomePath('dsh-runtimes', 'dsh-primary-runtime')
+
+    - id: skill-office
+      name: '@deepseek-ai/dsh-skill-office'
+      config:
+        pythonEnvironment: !!js "ctx.get('profileContext')?.name === 'desktop' && process.env.DSH_PRIMARY_RUNTIME ? 'workspace-dependencies' : 'user'"
 
     # The right Sidebar's document tab: bounded file reads with selectable
     # Markdown, code, HTML, PDF, Office, and plain-text renderers.
@@ -314,11 +341,10 @@
     - id: ui-plugin-manager
       name: '@deepseek-ai/dsh-client-ui-plugin-manager'
 
-    # CLI app plugins register their accounts with the `cliAccounts` registry;
-    # the Plugins page shows each account's section, title tag, activation
-    # prompt, and notices through the `cliAccounts` Remote.
-    - id: ui-cli-account
-      name: '@deepseek-ai/dsh-client-ui-cli-account'
+    # Connector account sections on the Plugins page; CLI app plugins and MCP
+    # connectors register their accounts with `ctx.connectorAccounts`.
+    - id: ui-connector-account
+      name: '@deepseek-ai/dsh-client-ui-connector-account'
 
     # Read-only Plugin list tab in the Settings Plugins section; the built-in
     # bundles the sidebar page leaves out are inspected here.
@@ -337,7 +363,7 @@
     - id: ui-chat
       name: '@deepseek-ai/dsh-client-ui-chat'
 
-    # Official occupants for the generic sidebar and conversation brand slots.
+    # Official occupants for the sidebar brand slots and the home whale frame layer.
     - id: ui-brand-official
       name: '@deepseek-ai/dsh-client-ui-brand-official'
 

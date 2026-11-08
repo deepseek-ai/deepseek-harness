@@ -513,6 +513,20 @@ function sameJsonValue(left: unknown, right: unknown): boolean {
     && sameJsonValue((left as Record<string, unknown>)[key], (right as Record<string, unknown>)[key]))
 }
 
+/**
+ * Keep the provider identifier and five leading/four trailing key code points
+ * only when at least eight key code points stay hidden; otherwise mask all.
+ * @param value - stored credential, with an optional identifier ending at the first hyphen or underscore.
+ * @returns a same-length code-point preview without the full credential.
+ */
+function maskCredential(value: string): string {
+  const chars = Array.from(value)
+  const providerEnd = chars.findIndex(char => char === '-' || char === '_') + 1
+  const hidden = chars.length - providerEnd - 5 - 4
+  return hidden < 8 ? '•'.repeat(chars.length)
+    : `${chars.slice(0, providerEnd + 5).join('')}${'•'.repeat(hidden)}${chars.slice(-4).join('')}`
+}
+
 /** File-backed credentials provider (`$DSH_HOME/.credentials.yaml`). */
 export class LocalCredentialProvider extends CredentialProvider {
   static Config: z<Config> = z.object({
@@ -633,7 +647,7 @@ export class LocalCredentialProvider extends CredentialProvider {
 
   override describe(ref: CredentialRef): Promise<CredentialInfo> {
     const stored = this.values.get(ref)
-    if (stored !== undefined) return Promise.resolve({ configured: true, source: 'file', writable: true })
+    if (stored !== undefined) return Promise.resolve({ configured: true, source: 'file', writable: true, masked: maskCredential(stored) })
     // Every reference is writable: a set writes the managed file, which
     // outranks every fallback, and an unset exposes the fallback again.
     if (this.inherited(ref) !== undefined) return Promise.resolve({ configured: true, source: 'env', writable: true })

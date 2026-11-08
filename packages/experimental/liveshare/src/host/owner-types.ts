@@ -6,9 +6,9 @@
  * @module @deepseek-ai/dsh-experimental-liveshare/src/host/owner-types
  */
 
-import type { ShareAccessSelection } from '../share-api-types.ts'
+import type { ShareAccessSelection, ViewerPluginAccess } from '../share-api-types.ts'
 import type { ViewerSessionMode } from './fork-policy.ts'
-import type { ViewerCapabilityGroup } from './viewer-declarations.ts'
+import type { ViewerPluginPolicy } from './viewer-capability-types.ts'
 
 /** The ACL one share carried when it was stored, as both the loader and the owner view read it. */
 export interface ShareAccessSummary {
@@ -28,7 +28,14 @@ export interface ShareAccessSummary {
 /** One share this host keeps in its owner state, as the worker and the client both read it. */
 export interface OwnerShare {
   readonly shareId: string
-  readonly sessionId: string
+  /**
+   * Every source Session this share serves, primary first.
+   *
+   * The first entry is the Session the Relay registers and the viewer page opens first; read it through
+   * `primarySessionIdOf` rather than keeping a second id field. The share's tier, fork switch, lifetime,
+   * ACL, and exposed endpoints apply to all sources, and a viewer sees each source plus its own forks.
+   */
+  readonly sessionIds: readonly string[]
   readonly sessionTitle: string
   readonly accessMode: 'open' | 'selected'
   readonly link: string
@@ -61,6 +68,8 @@ export interface OwnerShare {
    * Absent means the owner exposed none: the endpoints plugins offer stay refused. A selection grants
    * nothing on its own — the `share-viewer` policy intersects it with the plugin's live declaration.
    */
-  readonly viewerCapabilities?: readonly ViewerCapabilityGroup[]
+  readonly viewerPlugins?: readonly ViewerPluginPolicy[]
+  /** Whether every installed plugin's methods are open; absent reads as none. */
+  readonly viewerPluginAccess?: ViewerPluginAccess
   online: boolean
 }

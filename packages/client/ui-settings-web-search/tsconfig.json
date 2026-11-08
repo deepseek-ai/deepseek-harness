@@ -37,6 +37,9 @@
     },
     {
       "path": "../ui-slots"
+    },
+    {
+      "path": "../../web/web"
     }
   ]
 }

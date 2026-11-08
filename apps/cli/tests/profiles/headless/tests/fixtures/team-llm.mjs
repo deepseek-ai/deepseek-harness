@@ -87,7 +87,7 @@ function researcher(messages) {
   if (!names.includes('send_message')) {
     return toolChunks([
       { name: 'team_task_update', args: { task_id: 'task-1', expected_revision: 2, action: 'complete' } },
-      { name: 'send_message', args: { agent_id: sibling, message: 'Research complete: use the deterministic finding.' } },
+      { name: 'send_message', args: { agent: sibling, message: 'Research complete: use the deterministic finding.' } },
     ])
   }
   return textChunks('Research teammate complete.')
@@ -134,7 +134,7 @@ function implementer(messages, parentId) {
   if (!names.includes('send_message')) {
     return toolChunks([
       { name: 'team_task_update', args: { task_id: 'task-2', expected_revision: 2, action: 'complete' } },
-      { name: 'send_message', args: { agent_id: parentId, message: 'Implementation complete and verified.' } },
+      { name: 'send_message', args: { agent: parentId, message: 'Implementation complete and verified.' } },
     ])
   }
   return textChunks('Implementation teammate complete.')
@@ -203,7 +203,7 @@ class TeamFixtureAdapter extends LlmAdapter {
     if (workflowChild) chunks = textChunks('Fresh workflow child complete.')
     else if (task?.startsWith('RESEARCHER_MARK:')) chunks = researcher(options.messages)
     else if (task?.startsWith('IMPLEMENTER_MARK:')) chunks = implementer(options.messages, parentId)
-    else if (role?.startsWith('You are the root agent. Your agent id is')) chunks = lead(options.messages)
+    else if (role?.startsWith('You are the root agent. Your name is')) chunks = lead(options.messages)
     else throw new Error('Team runtime context is missing a recognized identity')
     for (const chunk of chunks) {
       options.signal?.throwIfAborted()

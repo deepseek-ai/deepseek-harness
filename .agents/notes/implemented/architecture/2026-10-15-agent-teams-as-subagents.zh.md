@@ -4,7 +4,7 @@ Status: implemented
 
 [English](2026-10-15-agent-teams-as-subagents.md) | 中文
 
-邻接和父级生命周期限制由[整树通信](2026-10-16-tree-wide-agent-communication.zh.md)取代。[任务板收件箱协调](2026-10-19-team-task-board-inbox.zh.md)取代独立名册和 Team 所有的等待；单一 subagent 身份决策仍有效。
+邻接和父级生命周期限制由[整树通信](2026-10-16-tree-wide-agent-communication.zh.md)取代。[任务板收件箱协调](2026-10-19-team-task-board-inbox.zh.md)取代独立名册和 Team 所有的等待；单一 subagent 身份决策仍有效。[目录名称](2026-11-02-subagent-catalog-names.zh.md)取代下文“创建不接收成员名称”的表述及对唯一名称的否决。
 
 ## Problem
 

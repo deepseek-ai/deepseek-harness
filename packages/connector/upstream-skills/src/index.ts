@@ -31,11 +31,19 @@ export interface UpstreamSkillsConfig {
   skillsTimeoutMs: number
 }
 
+/** Accept a download prefix that parses as an HTTPS URL without credentials, a query, or a fragment. */
+function skillsUrl(value: string): string {
+  if (!/^https:\/\/[^\s?#@]+$/u.test(value) || !URL.canParse(value)) {
+    throw new Error(`skillsUrls: ${value} is not an HTTPS URL without credentials, a query, or a fragment`)
+  }
+  return value
+}
+
 /** The shared fields' schema; `skillsUrls` defaults to GitHub's archive host. */
 export const UpstreamSkillsConfig: z<Partial<UpstreamSkillsConfig>, UpstreamSkillsConfig> = z.object({
   skillsDir: z.string().min(1),
-  skillsUrls: z.array(z.string().pattern(/^https:\/\/[^\s?#@]+$/)).min(1).default(['https://codeload.github.com']),
-  skillsTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(120_000),
+  skillsUrls: z.array(z.transform(z.string(), skillsUrl)).min(1).default(['https://codeload.github.com']),
+  skillsTimeoutMs: z.natural().min(1).max(MAX_TIMER_DELAY_MS).default(120_000),
 })
 
 /** One plugin's packaged entry skill and the upstream files it indexes. */
@@ -134,7 +142,12 @@ class UpstreamSkillProvider implements SkillProvider, UpstreamSkills {
     this.notify()
     void this.install(signal).then(
       () => { this.control.invalidate() },
-      (error: unknown) => { if (!signal.aborted) this.logger.warn(`${this.name}: the upstream skills are not available`, error) },
+      (error: unknown) => {
+        if (signal.aborted) return
+        // Another process may have published the directory while this download failed.
+        if (this.installed()) this.control.invalidate()
+        else this.logger.warn(`${this.name}: the upstream skills are not available`, error)
+      },
     ).finally(() => {
       this.running = false
       if (!signal.aborted) this.notify()

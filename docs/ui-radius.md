@@ -18,7 +18,7 @@ Choose consistent corner radii by component role and size, and align nested regi
 <a id="scope"></a>
 ## Scope and authority
 
-This reference defines the DSH Web and Desktop radius scale and its component rules. A local visual adjustment stays scoped to the named component or family and does not automatically change the global scale.
+This reference defines the DSH Web and Desktop radius scale, curve rules and component exceptions. Use the [UI design skill's geometry decisions](../.agents/skills/dsh-client-ui-ux/SKILL.md#component-geometry) to select and review their application. A local visual adjustment stays scoped to the named component or family and does not automatically change the global scale.
 
 The [Web UI style reference](web-styling.md) defines general styling ownership. Shared values live in [`base.css`](../packages/client/ui-theme/src/styles/base.css), and curve behavior lives in [`corner-shape.css`](../packages/client/ui-theme/src/styles/corner-shape.css). Update the theme implementation and both language versions of this standard together when changing a rule.
 
@@ -106,6 +106,8 @@ Account profile, balance, model-provider, preset, and plugin cards share this de
 The theme resolves the card fill to `--dsw-alias-bg-layer-2` and the stroke to `--dsw-alias-border-l4` on `body`, where palette aliases exist. Feature styles consume these aliases in both palettes. Nested editors use R16 and the existing module fill. Account usage/top-up links follow H36/R12 Button geometry; authorization buttons use the shared Button.
 
 Flat neutral borders use the shared 0.5px hairline. Elevated menus, popovers, dialogs, and panels use `border: 0` with the existing `--dsw-elevation-*` material, whose shadow includes the hairline. Do not add a second neutral border over that stroke or add a shadow to an ordinary settings card merely to distinguish its tab. Preserve semantic state-colored borders and the existing translucent-menu backdrop behavior.
+
+A page-level radius review compares roles and silhouettes together, including native small selection controls. Token compliance only establishes membership in the scale; it does not establish that adjacent roles or nested contours look coherent. Use the [geometry cases](ui-design-review-cases.md#geometry) for the comparison method, while this document remains the owner of values and curve rules.
 
 <a id="verification"></a>
 ## Apply and verify

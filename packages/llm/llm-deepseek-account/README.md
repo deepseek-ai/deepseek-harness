@@ -63,7 +63,7 @@ The settings namespace is the Cordis entry id, or the plugin name without an ent
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
-Registrations and listeners dispose with the plugin, and disposal aborts an in-flight listing request. Shared Host wiring supplies attachments, request extensions, anonymous identity, and atomic retry-policy updates; this plugin registers only its own route and uses the transport's `connect` and `admit` hooks for the catalog and the gate. The listing request, its cache, and catalog resolution come from the shared transport, which the API-key route also uses; the cache lives in memory and is keyed by endpoint and a SHA-256 of the token.
+Account-token lookup and invalidation use the [shared credential helpers](../llm-deepseek/src/credential.ts); this plugin retains HTTP error classification. Registrations and listeners dispose with the plugin, and disposal aborts an in-flight listing request. Shared Host wiring supplies attachments, request extensions, anonymous identity, and atomic retry-policy updates; this plugin registers only its own route and uses the transport's `connect` and `admit` hooks for the catalog and the gate. The listing request, its cache, and catalog resolution come from the shared transport, which the API-key route also uses; the cache lives in memory and is keyed by endpoint and a SHA-256 of the token.
 
 A failed request the shared transport classifies as `QUOTA` is rewritten to `ACCOUNT_QUOTA` before it leaves this provider, covering an HTTP 402 response and an in-band SSE error alike. The shared transport and the `deepseek-official` route keep `QUOTA`, so the account route's top-up action never appears for an API-key or third-party failure.
 

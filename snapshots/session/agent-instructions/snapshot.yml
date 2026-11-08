@@ -6,6 +6,7 @@ recording: authored
 header:
   class: agent-instructions
   pin: true
+  systemPromptSource: cordis-inspect-jsdoc
   changes: 1
 replay:
   override: true

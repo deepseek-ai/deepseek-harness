@@ -4,7 +4,7 @@ import { MenuRegistry } from '../src/client/registry.ts'
 import type { MenuAction } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 
 declare module '@deepseek-ai/dsh-client-ui-context-menu/client' {
-  interface ContextMenuTargetMap { extension: { readonly id: string } }
+  interface ContextMenuTargetMap { extension: { readonly id: string }; registryHeader: { readonly id: string } }
 }
 const target = { kind: 'extension' as const, value: { id: 'clicked' } }
 
@@ -16,6 +16,35 @@ function deferred<T>() {
 }
 
 describe('menu contribution lifecycle', () => {
+  it('publishes registered kinds immediately through one stable source without resolving actions', () => {
+    const registry = new MenuRegistry(vi.fn()), resolve = vi.fn(() => [])
+    const source = registry.registeredKinds
+    const changed = vi.fn()
+    const detach = source.subscribe(changed)
+    expect(source.getSnapshot()).toEqual([])
+    const first = registry.register({ id: 'first', target: 'registryHeader', order: 0, resolve })
+    expect(source.getSnapshot()).toEqual(['registryHeader'])
+    const snapshot = source.getSnapshot()
+    const second = registry.register({ id: 'second', target: 'registryHeader', order: 0, resolve })
+    expect(source.getSnapshot()).toBe(snapshot)
+    first(); first()
+    expect(source.getSnapshot()).toBe(snapshot)
+    const other = registry.register({ id: 'other', target: 'session', order: 0, resolve })
+    expect(source.getSnapshot()).toEqual(['registryHeader', 'session'])
+    second()
+    expect(source.getSnapshot()).toEqual(['session'])
+    other()
+    expect(source.getSnapshot()).toEqual([])
+    registry.register({ id: 'replacement', target: 'registryHeader', order: 0, resolve })
+    expect(registry.registeredKinds).toBe(source)
+    expect(source.getSnapshot()).toEqual(['registryHeader'])
+    registry.dispose()
+    expect(source.getSnapshot()).toEqual([])
+    expect(changed).toHaveBeenCalledTimes(6)
+    expect(resolve).not.toHaveBeenCalled()
+    detach()
+  })
+
   it('orders independently resolved contributions and executes the captured target once', async () => {
     const failure = vi.fn(), run = vi.fn()
     const registry = new MenuRegistry(failure)
@@ -65,6 +94,21 @@ describe('menu contribution lifecycle', () => {
     expect(next.source.getSnapshot()[0]?.id).toBe('new/b')
     first.dispose(); next.dispose(); registry.dispose()
     expect(() => registry.resolve(target)).toThrow('disposed')
+  })
+
+  it('replaces synchronous observed actions and retires their previous callbacks', () => {
+    const source = createSnapshotStore('first'), run = vi.fn()
+    const registry = new MenuRegistry(vi.fn())
+    registry.register({ id: 'changing', target: 'extension', order: 0, observe: () => [source],
+      resolve: () => [{ id: source.getSnapshot(), label: source.getSnapshot(), run }] })
+    const menu = registry.resolve(target)
+    source.set('second')
+    expect(menu.source.getSnapshot().map(action => action.id)).toEqual(['changing/second'])
+    menu.select('changing/first')
+    expect(run).not.toHaveBeenCalled()
+    menu.select('changing/second')
+    expect(run).toHaveBeenCalledOnce()
+    registry.dispose()
   })
 
   it('contains provider failure and rejects duplicate contributions without corrupting other actions', async () => {

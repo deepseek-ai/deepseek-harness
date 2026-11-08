@@ -12,12 +12,15 @@ import { base64Url } from './base64-url.ts'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { isJsonValue, type JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { ShareRpcActor } from '@deepseek-ai/dsh-experimental-liveshare-protocol'
+import type { Workspace } from '@deepseek-ai/dsh-workspace/types'
 import type {
+  AddShareSessionsRequest,
   OwnerRelayState,
   OwnerShareView,
   ShareAccess,
   ShareAudit,
   ShareAuditEntryView,
+  ShareSessions,
 } from '../share-api-types.ts'
 import type { ForkRegistry } from './fork-registry.ts'
 import type { StoredOwnerCredential } from './owner-credential-file.ts'
@@ -27,12 +30,14 @@ import { normalizeRelayUrl } from './relay-url.ts'
 import type { RelayAuthority } from './relay-authority.ts'
 import type { OwnerShare } from './owner-types.ts'
 import type { SourceAccessApplier } from './source-access.ts'
+import { primarySessionIdOf } from './source-sessions.ts'
 import type { OwnerShareOperations } from './share-operations.ts'
 import type { TunnelSupervision } from './tunnel-supervision.ts'
-import { readViewerCapabilitySelection } from './viewer-capability-selection.ts'
-import type { ViewerDeclarationsSurface } from './viewer-declarations.ts'
+import { readViewerPluginPolicies } from './viewer-capability-selection.ts'
+import type { ShareablePluginCatalog } from './viewer-capability-types.ts'
 import type { ViewerReadService } from './viewer-read.ts'
 import { isRecord } from './wire-json.ts'
+import { relayFetch, type RelayFetch } from './relay-fetch.ts'
 
 /** Longest share lifetime an owner may set from the dialog; longer links need a fresh decision. */
 const MAX_SHARE_TTL_MINUTES = 7 * 24 * 60
@@ -54,11 +59,11 @@ interface RelayRead {
  * @param relayPath - Relay path to read, relative to the share's Relay.
  * @returns The Relay's answer, or the unavailable answer when it cannot be reached.
  */
-async function relayReadThroughShare(share: OwnerShare, relayPath: string): Promise<RelayRead> {
+async function relayReadThroughShare(share: OwnerShare, relayPath: string, fetchRelay: RelayFetch): Promise<RelayRead> {
   const relayUrl = new URL(`${share.relay}/${relayPath}`)
   relayUrl.searchParams.set('shareId', share.shareId)
   try {
-    const response = await fetch(relayUrl, {
+    const response = await fetchRelay(relayUrl, {
       headers: { authorization: `Bearer ${share.gatewayToken}` },
     })
     return {
@@ -106,6 +111,46 @@ function readShareAudit(body: string): ShareAudit | undefined {
 }
 
 /**
+ * Refuse source Sessions the Host cannot place in the share's one workspace.
+ *
+ * A share's readers run file tools against each source Session's granted workspace, so sources from
+ * different workspaces would widen the reach beyond one root. The check runs before the record changes:
+ * a refused addition leaves the stored share and its layers untouched.
+ * @param share - Share the additions are about to join.
+ * @param additions - Sessions not yet served by the share.
+ * @param workspaces - Workspaces this host holds, or undefined when none are resolvable.
+ */
+function assertOneWorkspace(
+  share: OwnerShare,
+  additions: readonly string[],
+  workspaces: readonly Pick<Workspace, 'id' | 'sessionIds'>[] | undefined,
+): void {
+  if (workspaces === undefined) {
+    throw new RemoteError('liveshareShares/workspace-unavailable',
+      'this host cannot resolve workspaces, so it cannot add source Sessions', {})
+  }
+  const workspaceOf = (sessionId: string): string | undefined =>
+    workspaces.find(workspace => workspace.sessionIds.some(id => String(id) === sessionId))?.id
+  const primary = share.sessionIds[0]
+  const required = primary === undefined ? undefined : workspaceOf(primary)
+  if (primary === undefined || required === undefined) {
+    throw new RemoteError('liveshareShares/session-workspace-unknown',
+      'the share has no workspace to place added Sessions in', { sessionId: primary ?? '' })
+  }
+  for (const sessionId of [...share.sessionIds, ...additions]) {
+    const actual = workspaceOf(sessionId)
+    if (actual === undefined) {
+      throw new RemoteError('liveshareShares/session-workspace-unknown',
+        `session ${sessionId} is not in a workspace`, { sessionId })
+    }
+    if (actual !== required) {
+      throw new RemoteError('liveshareShares/session-workspace-mismatch',
+        `session ${sessionId} is not in the share's workspace`, { sessionId, workspaceId: required })
+    }
+  }
+}
+
+/**
  * Project one stored share onto the owner list's wire record.
  *
  * The stored ACL keeps the retired `approval` spelling for old files; the wire maps it to
@@ -116,14 +161,16 @@ function readShareAudit(body: string): ShareAudit | undefined {
 function ownerShareView(share: OwnerShare): OwnerShareView {
   return {
     shareId: share.shareId,
-    sessionId: share.sessionId,
+    sessionId: primarySessionIdOf(share),
+    sessionIds: share.sessionIds,
     sessionTitle: share.sessionTitle,
     link: share.link,
     createdAt: share.createdAt,
     ...(share.expiresAt === undefined ? {} : { expiresAt: share.expiresAt }),
     allowsFork: share.allowsFork,
     sessionMode: share.sessionMode,
-    viewerCapabilities: share.viewerCapabilities ?? [],
+    viewerPlugins: share.viewerPlugins ?? [],
+    ...(share.viewerPluginAccess === undefined ? {} : { viewerPluginAccess: share.viewerPluginAccess }),
     online: share.online,
     ...(share.access === undefined ? {} : { access: { ...share.access, mode: storedAccessMode(share.access.mode) } }),
   }
@@ -147,6 +194,8 @@ function isRelayAddress(value: string): boolean {
 export interface OwnerShareOperationDeps {
   /** Shares this host publishes. */
   readonly ownerShares: Map<string, OwnerShare>
+  /** Relay transport owned by this share host; absent callers use the module transport. */
+  readonly relayFetch?: RelayFetch
   /** Relay rows this host stopped but has not deleted. */
   readonly pendingRemovals: Map<string, PendingRelayRemoval>
   /** Subjects this deployment admits to every share. */
@@ -155,8 +204,10 @@ export interface OwnerShareOperationDeps {
   readonly forks: ForkRegistry
   /** The viewer reader, closed and re-checked by lifecycle changes. */
   readonly viewerRead: ViewerReadService
-  /** The declaration surface whose live offers a capability selection is accepted against. */
-  readonly viewerDeclarations: ViewerDeclarationsSurface
+  /** The platform catalog a plugin policy is accepted against. */
+  readonly offeredCapabilities: () => readonly ShareablePluginCatalog[]
+  /** Workspaces this host holds, or undefined when the composition mounts no Workspace registry. */
+  readonly workspaces: () => readonly Pick<Workspace, 'id' | 'sessionIds'>[] | undefined
   /** Reads and adopted states of the Relay's authority over this host's shares. */
   readonly relay: RelayAuthority
   /** Worker registration, expiry timers, and persistence channels. */
@@ -176,7 +227,7 @@ export interface OwnerShareOperationDeps {
   /** Install the access layer one share's source Session needs. */
   readonly applySourceAccess: SourceAccessApplier
   /** Whether one share's source Session carries a usable confined layer. */
-  readonly sourceConfined: (shareId: string) => boolean
+  readonly sourceConfined: (shareId: string, sessionId: string) => boolean
   /** Tell remote access that reader answers may have changed. */
   readonly accessChanged: () => void
   /** Stop whatever turn one share's Session is running. */
@@ -193,12 +244,13 @@ export interface OwnerShareOperationDeps {
  * @returns The operations the Remote service calls.
  */
 export function createOwnerShareOperations(deps: OwnerShareOperationDeps): OwnerShareOperations {
+  const fetchRelay = deps.relayFetch ?? relayFetch
   const ownerShares = deps.ownerShares
   const pendingRemovals = deps.pendingRemovals
   const allowedSubjectIds = deps.allowedSubjectIds
   const forks = deps.forks
   const viewerRead = deps.viewerRead
-  const viewerDeclarations = deps.viewerDeclarations
+  const offeredCapabilities = deps.offeredCapabilities
   const relay = deps.relay
   const tunnel = deps.tunnel
   const currentCredential = deps.storedCredential
@@ -278,7 +330,7 @@ export function createOwnerShareOperations(deps: OwnerShareOperationDeps): Owner
       const gatewayToken = base64Url(randomBytes(32))
       const share = {
         shareId,
-        sessionId: request.sessionId,
+        sessionIds: [request.sessionId],
         sessionTitle,
         accessMode,
         relay,
@@ -311,7 +363,7 @@ export function createOwnerShareOperations(deps: OwnerShareOperationDeps): Owner
       const link = `${relay}/?shareId=${encodeURIComponent(shareId)}`
       ownerShares.set(shareId, {
         shareId,
-        sessionId: request.sessionId,
+        sessionIds: [request.sessionId],
         sessionTitle,
         accessMode,
         link,
@@ -339,8 +391,61 @@ export function createOwnerShareOperations(deps: OwnerShareOperationDeps): Owner
       tunnel.scheduleShareExpiry(ownerShares.get(shareId) as OwnerShare)
       // A share created in write mode installs its access layer before the owner is told the share exists:
       // a request admitted on the strength of this answer must never arrive ahead of the layer judging it.
-      await applySourceAccess(ownerShares.get(shareId) as OwnerShare, undefined, 'publish')
-      return { link, shareId, sessionId: request.sessionId, sessionMode, access }
+      await applySourceAccess(ownerShares.get(shareId) as OwnerShare, request.sessionId, undefined, 'publish')
+      return {
+        link, shareId, sessionId: request.sessionId, sessionIds: [request.sessionId], sessionMode, access,
+      }
+    },
+
+    /**
+     * Order: validate -> resolve the share -> add each new source -> persist (failure restores the
+     * previous record) -> install each added source's layer -> accessChanged.
+     *
+     * The Relay registration carries the primary source only and does not change, so no Relay call is
+     * made: every added Session is served through the same registration, ACL, tier, lifetime, and fork
+     * switch. A Session the share already serves is ignored, so a repeated call is idempotent. Adding a
+     * source never removes one; stopping the share ends all of them.
+     */
+    async addSessions(request: AddShareSessionsRequest): Promise<ShareSessions> {
+      if (request.shareId === '') {
+        throw new RemoteError('liveshareShares/missing-share-id', 'addSessions requires a shareId', {})
+      }
+      const requested = [...new Set(request.sessionIds)]
+      if (requested.length === 0) {
+        throw new RemoteError('liveshareShares/missing-session-ids',
+          'addSessions requires at least one non-empty sessionId', {})
+      }
+      if (requested.some(sessionId => sessionId === '')) {
+        throw new RemoteError('liveshareShares/missing-session-ids',
+          'addSessions requires at least one non-empty sessionId', {})
+      }
+      const current = ownerShares.get(request.shareId)
+      if (current === undefined) {
+        throw new RemoteError('liveshareShares/share-not-found', `share ${request.shareId} is not published`, {
+          shareId: request.shareId,
+        })
+      }
+      const additions = requested.filter(sessionId => !current.sessionIds.includes(sessionId))
+      if (additions.length === 0) return { shareId: current.shareId, sessionIds: current.sessionIds }
+      assertOneWorkspace(current, additions, deps.workspaces())
+      const next: OwnerShare = {
+        ...current,
+        sessionIds: [...current.sessionIds, ...additions],
+        revision: current.revision + 1,
+      }
+      ownerShares.set(current.shareId, next)
+      try {
+        await persistOwnerState()
+      } catch {
+        ownerShares.set(current.shareId, current)
+        throw new RemoteError('liveshareShares/owner-state-unavailable',
+          'the owner state file could not be written', {})
+      }
+      // An answer that admits a reader must not arrive before the layer that confines what it drives.
+      // A source that is not live yet gets its layer when the reader opens it, as the primary does.
+      for (const sessionId of additions) await applySourceAccess(next, sessionId, undefined, 'publish')
+      accessChanged()
+      return { shareId: next.shareId, sessionIds: next.sessionIds }
     },
 
     /**
@@ -408,7 +513,7 @@ export function createOwnerShareOperations(deps: OwnerShareOperationDeps): Owner
       await forks.revokeShare(shareId, new Date().toISOString())
       ownerShares.delete(shareId)
       // A Session no share names any more loses its sandbox, which restores its own tools.
-      reconcileSourceAccess(share.sessionId)
+      for (const sessionId of share.sessionIds) reconcileSourceAccess(sessionId)
       accessChanged()
       tunnel.clearShareExpiry(shareId)
       try {
@@ -478,7 +583,9 @@ export function createOwnerShareOperations(deps: OwnerShareOperationDeps): Owner
         // A share that already names this state may still have no usable layer: its Session was not
         // live when it was set, or this host restarted before one could be installed. Asking again
         // installs it rather than answering as if the capability were already in place.
-        if (!sourceConfined(shareId)) await applySourceAccess(current, undefined, 'mode')
+        for (const sessionId of current.sessionIds) {
+          if (!sourceConfined(shareId, sessionId)) await applySourceAccess(current, sessionId, undefined, 'mode')
+        }
         return {
           shareId, sessionMode: current.sessionMode, allowsFork: current.allowsFork,
           ...(current.expiresAt === undefined ? {} : { expiresAt: current.expiresAt }),
@@ -517,7 +624,7 @@ export function createOwnerShareOperations(deps: OwnerShareOperationDeps): Owner
       // in force: a request admitted on the strength of the owner's answer must never arrive before the
       // layer that judges it exists, and a narrowed tier must stop the writes the wider one allowed
       // without ending the turn itself.
-      await applySourceAccess(next, undefined, 'mode')
+      for (const sessionId of next.sessionIds) await applySourceAccess(next, sessionId, undefined, 'mode')
       return {
         shareId, sessionMode: next.sessionMode, allowsFork: next.allowsFork,
         ...(next.expiresAt === undefined ? {} : { expiresAt: next.expiresAt }),
@@ -542,26 +649,45 @@ export function createOwnerShareOperations(deps: OwnerShareOperationDeps): Owner
           shareId: request.shareId,
         })
       }
-      // The live offers are the authority: a name no plugin currently offers is refused by name here
-      // rather than stored as a selection no decision could ever expose.
-      const accepted = readViewerCapabilitySelection(viewerDeclarations.declaredCapabilities(), request.capabilities)
-      if (!accepted.ok) {
-        const refusal = accepted.refusal
-        if (refusal.code === 'invalid-capabilities') {
-          throw new RemoteError('liveshareShares/invalid-capabilities', 'capabilities is not a plugin selection', {})
+      // The live Typert catalog is the authority: a method it does not offer is refused here rather
+      // than stored as a selection no decision could ever expose.
+      let selection = current.viewerPlugins
+      if (request.viewerPlugins !== undefined) {
+        const accepted = readViewerPluginPolicies(offeredCapabilities(), request.viewerPlugins)
+        if (!accepted.ok) {
+          const refusal = accepted.refusal
+          if (refusal.code === 'invalid-capabilities') {
+            throw new RemoteError('liveshareShares/invalid-capabilities', 'viewerPlugins is not a plugin policy list', {})
+          }
+          if (refusal.code === 'unknown-plugin') {
+            throw new RemoteError('liveshareShares/unknown-plugin',
+              `no installed plugin offers viewer methods under ${refusal.plugin}`, { plugin: refusal.plugin })
+          }
+          throw new RemoteError('liveshareShares/endpoint-not-offered',
+            `${refusal.plugin} does not offer ${refusal.endpoint}`,
+            { plugin: refusal.plugin, endpoint: refusal.endpoint })
         }
-        if (refusal.code === 'unknown-plugin') {
-          throw new RemoteError('liveshareShares/unknown-plugin',
-            `no plugin offers viewer endpoints under ${refusal.plugin}`, { plugin: refusal.plugin })
-        }
-        throw new RemoteError('liveshareShares/endpoint-not-offered',
-          `${refusal.plugin} does not offer ${refusal.endpoint} as ${refusal.kind}`,
-          { plugin: refusal.plugin, kind: refusal.kind, endpoint: refusal.endpoint })
+        selection = accepted.selection
       }
-      const { viewerCapabilities: _replaced, ...retained } = current
+      const requestedAccess: unknown = request.viewerPluginAccess
+      if (requestedAccess !== undefined && requestedAccess !== 'all' && requestedAccess !== 'none'
+        && requestedAccess !== 'custom') {
+        throw new RemoteError('liveshareShares/invalid-capabilities',
+          'viewerPluginAccess must be all, none, or custom', {})
+      }
+      const access = requestedAccess !== undefined
+        ? requestedAccess
+        : request.viewerPlugins !== undefined
+          ? ((selection?.length ?? 0) > 0 ? 'custom' : 'none')
+          : current.viewerPluginAccess
+            ?? ((current.viewerPlugins?.length ?? 0) > 0 ? 'custom' : 'none')
+      // Only the custom switch follows per-plugin policies; all/none override and clear them.
+      const effectiveSelection = access === 'custom' ? selection ?? [] : []
+      const { viewerPlugins: _replacedPlugins, viewerPluginAccess: _replacedAccess, ...retained } = current
       const next: OwnerShare = {
         ...retained,
-        ...(accepted.selection === undefined ? {} : { viewerCapabilities: accepted.selection }),
+        ...(effectiveSelection.length === 0 ? {} : { viewerPlugins: effectiveSelection }),
+        viewerPluginAccess: access,
         revision: current.revision + 1,
       }
       ownerShares.set(request.shareId, next)
@@ -575,15 +701,19 @@ export function createOwnerShareOperations(deps: OwnerShareOperationDeps): Owner
       // Every open reader snapshot recomputes the policy's bindings, which read this selection and the
       // plugins' offers per decision, so exposure ends or begins at the next call.
       accessChanged()
-      return { shareId: request.shareId, viewerCapabilities: next.viewerCapabilities ?? [] }
+      return {
+        shareId: request.shareId,
+        viewerPluginAccess: access,
+        viewerPlugins: next.viewerPlugins ?? [],
+      }
     },
 
     /**
-     * Read the live offers. A declaration is an offer, not a grant: nothing here exposes anything.
-     * @returns The endpoints plugins currently offer.
+     * Read the installed-plugin catalog. The catalog is an offer, not a grant: nothing here exposes anything.
+     * @returns The Remote methods the installed plugins currently offer to share viewers.
      */
     capabilities() {
-      return { capabilities: viewerDeclarations.declaredCapabilities() }
+      return { capabilities: offeredCapabilities() }
     },
 
     /**
@@ -665,7 +795,7 @@ export function createOwnerShareOperations(deps: OwnerShareOperationDeps): Owner
           shareId: request.shareId,
         })
       }
-      const response = await relayReadThroughShare(share, '__liveshare/audit')
+      const response = await relayReadThroughShare(share, '__liveshare/audit', fetchRelay)
       const audit = response.ok ? readShareAudit(response.text) : undefined
       if (audit !== undefined) return audit
       throw new RemoteError('liveshareShares/audit-unavailable', `audit is unavailable for ${share.relay}`, {
@@ -724,7 +854,7 @@ export function createOwnerShareOperations(deps: OwnerShareOperationDeps): Owner
       const share = tunnel.shareSpec({
         // The probe assigns the throwaway id it waits on; every other field is the real one.
         shareId: '',
-        sessionId: request.sessionId,
+        sessionIds: [request.sessionId],
         sessionTitle: request.sessionId,
         accessMode: 'open',
         relay,

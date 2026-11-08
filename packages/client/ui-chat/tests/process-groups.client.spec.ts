@@ -88,6 +88,20 @@ describe('Definition-owned Chat process groups', () => {
     expect(processActivity([{ ...node, data: { root } }]).runningDetail).toBe(expected)
   })
 
+  it('names a group by its Context only when no tool or Assistant evidence exists', () => {
+    const context: ChatNode<'context'> = {
+      key: 'context', id: 'context', kind: 'context', target: 'chat', anchorSeq: 1,
+      location: { kind: 'turn', turn }, visibility: 'visible',
+      data: {
+        kind: 'context', seq: 1, time: 1, content: [{ type: 'text', text: 'context' }], source: null,
+        producer: { role: 'inject', label: null }, form: null,
+      },
+    }
+    expect(processActivity([context, { ...context, key: 'second' }]).counts).toEqual([{ kind: 'context', count: 2 }])
+    expect(processActivity([context, tool('call', 2)]).counts).toEqual([{ kind: 'commands', count: 1 }])
+    expect(processActivity([context, assistant('thinking')]).counts).toEqual([])
+  })
+
   it('keeps 160 graphemes when the bounded prefix splits a surrogate pair', () => {
     const command = '👩‍💻'.repeat(87) + '☀️' + 'a'.repeat(71) + '👩‍💻'
     expect(command).toHaveLength(513)

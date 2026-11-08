@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import { Context } from '@deepseek-ai/cordis'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionLogOffset, SessionSeq, SESSION_FORMAT_VERSION, SessionId } from '@deepseek-ai/dsh-session'
@@ -787,5 +788,72 @@ describe('SessionObservationReader cold projections', () => {
       message: expect.stringContaining('failed to project') as string,
     })
     await ctx.fiber.dispose()
+  })
+})
+
+describe('domain inspection', () => {
+  it('reads a cold Session through its projection without attaching it', async () => {
+    const ctx = await readerContext()
+    try {
+      await ctx.plugin(SessionProjectionRegistry)
+      const count = await ctx.sessionProjections.register({
+        key: 'testInspectMessages', stateVersion: 1, stateSchema: z.number(), init: () => 0,
+        apply: (state, event) => event.type === 'user/message' ? state + 1 : state,
+      })
+      const meta = header('inspect-cold')
+      const store = new Map([[meta.id, { header: meta, events: [messageEvent(0, 'first')], revision: 'r1' }]])
+      const counters = { stat: 0, open: 0, read: 0 }
+      ctx.provide('sessionPersistence', stubPersistence(store, counters))
+      const reader = new SessionObservationReader(ctx, 1)
+      expect(await reader.inspect(meta.id, session => ({ id: session.id, count: count.stateOf(session) })))
+        .toEqual({ id: meta.id, count: 1 })
+      expect(ctx.sessions.get(meta.id)).toBeUndefined()
+      await expect(reader.inspect(meta.id, () => { throw new Error('getter failed') })).rejects.toThrow('getter failed')
+      store.set(meta.id, { header: meta, events: [messageEvent(0, 'first'), messageEvent(1, 'second')], revision: 'r2' })
+      expect(await reader.inspect(meta.id, session => count.stateOf(session))).toBe(2)
+      expect(ctx.sessions.get(meta.id)).toBeUndefined()
+      const abort = new AbortController()
+      abort.abort(new Error('cancelled inspection'))
+      await expect(reader.inspect(meta.id, session => session.id, abort.signal)).rejects.toMatchObject({ code: 'SESSION_QUERY_ABORTED' })
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it.each(['return', 'throw'] as const)('releases a cold inspection after the getter completes with %s', async (outcome) => {
+    const ctx = await readerContext()
+    try {
+      const first = header('inspect-first')
+      const second = header('inspect-second')
+      const store = new Map([first, second].map(meta => [meta.id, { header: meta, events: [], revision: 'r1' }]))
+      const counters = { stat: 0, open: 0, read: 0 }
+      ctx.provide('sessionPersistence', stubPersistence(store, counters))
+      const reader = new SessionObservationReader(ctx, 1)
+      const result = reader.inspect(first.id, (session) => {
+        if (outcome === 'throw') throw new Error('getter failed')
+        return session.id
+      })
+      if (outcome === 'throw') await expect(result).rejects.toThrow('getter failed')
+      else expect(await result).toBe(first.id)
+
+      // With capacity one, an inspection that releases its lease can be evicted by the next read.
+      {
+        using observation = await reader.read(second.id, { projectionMode: 'none' })
+        expect(observation.header.id).toBe(second.id)
+      }
+      {
+        using observation = await reader.read(first.id, { projectionMode: 'none' })
+        expect(observation.header.id).toBe(first.id)
+      }
+      expect(counters.read).toBe(3)
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('reads current live state without copying the event log', async () => {
+    const ctx = await readerContext()
+    try {
+      const session = ctx.sessions.create(SessionId('inspect-live'))
+      const reader = new SessionObservationReader(ctx)
+      expect(await reader.inspect(session.id, current => current.id)).toBe(session.id)
+      expect(await reader.inspect(session.id, current => current.seq)).toBe(0)
+    } finally { await ctx.fiber.dispose() }
   })
 })

@@ -14,8 +14,10 @@ CUA provider 通过 `ctx.cuaAccess` 提供系统权限状态、用户主动申�
 |---|---|
 | `CuaApplicationId`、`CuaApplicationGrant` | 平台提供的应用身份，以及显示给用户的已保存决定。 |
 | `CuaSystemPermission` | 用户选择申请的辅助功能或屏幕录制权限。 |
-| `CuaPermissionProcess`、`CuaSystemPermissionState` | 观测到的 helper、父进程和原生权限状态，以及 helper 启动时由 macOS 责任进程记录识别出的应用。系统归属信息不可用时，独立 helper 使用自身 bundle；两者都无法识别时才省略应用信息。 |
+| `CuaPermissionProcess`、`CuaSystemPermissionState` | 以 `darwin` 或 `win32` 标记的原生访问状态和 helper 进程身份。macOS 包含权限检查、父进程身份和责任应用信息（系统无法识别时使用 helper 自身的应用包）；Windows 包含桌面锁定、截图可用性和提权状态。 |
 | `CuaApplicationState` | 持久授权、拒绝记录，以及能否持久保存。会话授权只保留在 provider 内部。系统权限和应用图标分别查询，页面在各项结果返回后分别显示。 |
+
+调用[共享对象 API](../../packages/experimental/cua/README.zh.md) 时，通过 `connectCua` 连接，选择应用后用 `app.getWindows()` 和 `app.getWindow(windowId)` 选择要截图或进行鼠标操作的窗口。辅助功能操作使用该应用句柄最近一次读取的树中的元素 ID。提供方通过 `getCapabilities()` 声明键盘输入支持的范围，以及是否支持应用级辅助功能。
 
 ## 选择提供方
 
@@ -92,7 +94,7 @@ Browser controls for provider-owned native permission and application decisions.
 
 /**
  * Inspect system privileges independently of application decisions and icons.
- * @returns Fresh native preflight and launch metadata.
+ * @returns Platform-tagged access observations and native process metadata.
  */
 @Remote async systemStatus(): Promise<CuaSystemPermissionState>
 

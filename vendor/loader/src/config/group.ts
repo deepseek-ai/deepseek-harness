@@ -36,12 +36,13 @@ export class EntryGroup {
 
   remove(id: string, isDispose = false) {
     const entry = this.tree.store[id]
-    if (!entry) return
+    if (!entry || entry.parent !== this) return
+    // Unregister before disposal so Loader can distinguish removal from self-disposal.
+    delete this.tree.store[id]
     entry.fiber?.dispose()
     if (!isDispose) {
       this.unlink(entry.options)
     }
-    delete this.tree.store[id]
     this.context.emit('loader/partial-dispose', entry, entry.options, false)
   }
 

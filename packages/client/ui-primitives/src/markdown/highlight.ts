@@ -74,6 +74,47 @@ export function patchGoGrammar(grammars: LangModule['default']): LangModule['def
   return grammars.map(grammar => grammar === go ? { ...go, repository } : grammar)
 }
 
+/** The Perl grammar's bare `/…/` rule begins a match only after these characters or at line start. */
+const PERL_FIND_BEGIN = '(?<=[\\&({|~]|if|unless|^)\\s*((/))'
+
+/**
+ * Words after which a Perl `/` starts a match rather than a division. A word
+ * counts only when no identifier character, sigil, `>`, `:` or `-` precedes it,
+ * so `$split / 2` and `$obj->return / 2` stay divisions. Each word is a
+ * separate fixed-length lookbehind alternative because the JavaScript engine's
+ * Oniguruma translator rejects nested lookbehinds.
+ */
+const PERL_FIND_WORDS = ['if', 'unless', 'split', 'grep', 'and', 'or', 'not', 'return', 'while', 'until']
+
+/**
+ * Widen the vendored Perl grammar's bare `/…/` match rule, which begins only
+ * after `&`, `(`, `{`, `|`, `~`, `if`, `unless` or at line start. Elsewhere,
+ * such as `split /^---\s*$/m, $text`, the pattern body tokenizes as code: its
+ * `m,` opens an `m` match delimited by commas that runs to the end of the
+ * source. The patched rule also begins after `,`, `!`, `=` and `=>`, and after
+ * the list operators `split` and `grep`, the low-precedence operators `and`,
+ * `or` and `not`, and `return`, `while`, `until`, `if` and `unless` when no
+ * identifier character, sigil, `>`, `:` or `-` precedes the word. The upstream
+ * textmate/perl.tmbundle grammar, which `@shikijs/langs` 4.4.3 ships through
+ * VS Code, has the same rule.
+ * @param grammars - the `@shikijs/langs/perl` default export, left unmodified.
+ * @returns copies of `grammars` with that rule's begin replaced in the `perl` grammar.
+ * @throws When the module has no `perl` grammar or that grammar has no or several
+ * top-level rules with the vendored begin pattern. The lazy load then rejects
+ * unhandled and Perl code renders as plain text.
+ */
+export function patchPerlGrammar(grammars: LangModule['default']): LangModule['default'] {
+  const perl = grammars.find(grammar => grammar.name === 'perl')
+  const rules = perl?.patterns.filter(rule => rule.begin === PERL_FIND_BEGIN) ?? []
+  if (perl === undefined || rules.length !== 1) {
+    throw new Error(`ui-primitives: expected exactly one Perl match rule to patch, found ${rules.length}; update or delete the patch`)
+  }
+  const words = PERL_FIND_WORDS.flatMap(word => [`[^\\w$@%&>:-]${word}`, `^${word}`]).join('|')
+  const begin = `(?<=[\\&({|~,!=]|=>|^|${words})\\s*((/))`
+  const patterns = perl.patterns.map(rule => rule === rules[0] ? { ...rule, begin } : rule)
+  return grammars.map(grammar => grammar === perl ? { ...perl, patterns } : grammar)
+}
+
 /**
  * The non-boot extension grammars, each behind a dynamic import so its module
  * stays out of the boot chunk until a code surface renders that language.
@@ -129,7 +170,7 @@ const LAZY_GRAMMARS = new Map<string, () => Promise<LangModule>>([
   ['haskell', () => import('@shikijs/langs/haskell')],
   ['fsharp', () => import('@shikijs/langs/fsharp')],
   ['vb', () => import('@shikijs/langs/vb')],
-  ['perl', () => import('@shikijs/langs/perl')],
+  ['perl', async () => ({ default: patchPerlGrammar((await import('@shikijs/langs/perl')).default) })],
   ['verilog', () => import('@shikijs/langs/verilog')],
   ['system-verilog', () => import('@shikijs/langs/system-verilog')],
   ['graphql', () => import('@shikijs/langs/graphql')],

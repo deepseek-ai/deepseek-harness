@@ -17,10 +17,10 @@ import { EXTERNAL_WEB_CONTENT_NOTICE } from './trust.ts'
  * Default upper bound on returned sources (the `searchMaxResults` config).
  * The consumer owns the returned-context limit; providers and models do not.
  */
-export const WEB_SEARCH_MAX_RESULTS = 8
+export const WEB_SEARCH_MAX_RESULTS = 10
 
 /** Default upper bound on concurrent searches in one tool call. */
-export const WEB_SEARCH_MAX_QUERIES = 4
+export const WEB_SEARCH_MAX_QUERIES = 10
 
 /**
  * Default cap on one source summary, in characters: the upper end of the

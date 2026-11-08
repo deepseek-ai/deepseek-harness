@@ -102,16 +102,20 @@ const listed = (directory: string) => [{
 }]
 
 describe('UpstreamSkillsConfig', () => {
-  it('defaults to GitHub with a two-minute limit and accepts only HTTPS prefixes without a query, fragment, or credentials', () => {
+  it('defaults to GitHub with a two-minute limit and accepts only HTTPS URL prefixes without a query, fragment, or credentials', () => {
     expect(UpstreamSkillsConfig({})).toEqual({ skillsUrls: ['https://codeload.github.com'], skillsTimeoutMs: 120_000 })
     expect(UpstreamSkillsConfig({ skillsDir: '/opt/skills', skillsUrls: ['https://mirror.example/github'], skillsTimeoutMs: 1 }))
       .toEqual({ skillsDir: '/opt/skills', skillsUrls: ['https://mirror.example/github'], skillsTimeoutMs: 1 })
-    for (const url of ['http://codeload.github.com', 'https://mirror.example/?a=1', 'https://mirror.example/#a', 'https://user@mirror.example']) {
+    for (const url of [
+      'http://codeload.github.com', 'https://mirror.example/?a=1', 'https://mirror.example/#a', 'https://user@mirror.example',
+      'https://mirror.example:bad', 'https://[', 'https://:',
+    ]) {
       expect(() => UpstreamSkillsConfig({ skillsUrls: [url] })).toThrow()
     }
     expect(() => UpstreamSkillsConfig({ skillsUrls: [] })).toThrow()
     expect(() => UpstreamSkillsConfig({ skillsDir: '' })).toThrow()
     expect(() => UpstreamSkillsConfig({ skillsTimeoutMs: 0 })).toThrow()
+    expect(() => UpstreamSkillsConfig({ skillsTimeoutMs: 1500.5 })).toThrow()
   })
 })
 
@@ -173,21 +177,21 @@ describe('registerUpstreamSkills', () => {
     expect(host.requests).toEqual([archivePath(set)])
   })
 
-  it('tries the next skills URL after one fails and logs the failed origin', async () => {
+  it('tries the next skills URL after one fails and logs the failed prefix', async () => {
     host.routes[archivePath(set, '/mirror')] = serve(repository())
     const skills = register({ skillsUrls: [`${host.base}/missing`, `${host.base}/mirror/`] })
     expect(await settled(skills)).toBe('installed')
     expect(await ctx.skills.list()).toEqual(listed(published()))
-    expect(warnings()).toEqual([`vendor: downloading the upstream skills from ${host.base} failed`])
+    expect(warnings()).toEqual([`vendor: downloading the upstream skills from ${host.base}/missing failed`])
   })
 
   it('moves on from a skills URL that does not deliver the whole archive within the time limit', async () => {
     host.routes[archivePath(set, '/slow')] = (response) => { response.writeHead(200).write(repository().subarray(0, 64)) }
     host.routes[archivePath(set, '/mirror')] = serve(repository())
     // The limit applies to each URL, so it also bounds the mirror on a loaded machine.
-    const skills = register({ skillsUrls: [`${host.base}/slow`, `${host.base}/mirror`], skillsTimeoutMs: 1_000 })
+    const skills = register({ skillsUrls: [`${host.base}/slow`, `${host.base}/mirror`], skillsTimeoutMs: 3_000 })
     expect(await settled(skills)).toBe('installed')
-    expect(warnings()).toEqual([`vendor: downloading the upstream skills from ${host.base} failed`])
+    expect(warnings()).toEqual([`vendor: downloading the upstream skills from ${host.base}/slow failed`])
     // Depending on which stream observes the abort first, the time limit arrives as the TimeoutError or as its cause.
     const timedOut = (error: unknown) => error instanceof Error && [error.name, error.cause instanceof Error ? error.cause.name : ''].includes('TimeoutError')
     expect(logged()[0]?.error).toSatisfy(timedOut)
@@ -199,8 +203,8 @@ describe('registerUpstreamSkills', () => {
     const skills = register({ skillsUrls: [`${host.base}/empty`, `${host.base}/changed`] })
     expect(await settled(skills)).toBe('failed')
     expect(warnings()).toEqual([
-      `vendor: downloading the upstream skills from ${host.base} failed`,
-      `vendor: downloading the upstream skills from ${host.base} failed`,
+      `vendor: downloading the upstream skills from ${host.base}/empty failed`,
+      `vendor: downloading the upstream skills from ${host.base}/changed failed`,
       'vendor: the upstream skills are not available',
     ])
     expect(logged()[2]?.error).toMatchObject({
@@ -248,6 +252,21 @@ describe('registerUpstreamSkills', () => {
     expect(await settled(skills)).toBe('installed')
     expect(await readdir(published())).toEqual(['other'])
     expect(await readdir(cache())).toEqual([`skills-${set.sha256.slice(0, 16)}`])
+  })
+
+  it('lists the entry when another process publishes the directory while this download fails', async () => {
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    host.routes[archivePath(set)] = async (response) => {
+      await gate
+      response.writeHead(500).end()
+    }
+    const skills = register()
+    expect(await ctx.skills.list()).toEqual([])
+    await mkdir(published(), { recursive: true })
+    release()
+    expect(await settled(skills)).toBe('installed')
+    expect(await ctx.skills.list()).toEqual(listed(published()))
+    expect(warnings()).toEqual([`vendor: downloading the upstream skills from ${host.base} failed`])
   })
 
   it('reports a publish that fails without another process publishing', async () => {

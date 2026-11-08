@@ -99,12 +99,12 @@ pnpm --filter @deepseek-ai/dsh-plugin-market-generator start --input plugins.txt
 
 For an npm package, the index lists every version that is neither deprecated nor private and declares `dsh.bundle`. For a Git repository, it finds the bundle packages on the default branch whose `package.json` does not set `"private": true` and lists their versions at `vX.Y.Z`, `X.Y.Z`, and `<name>@X.Y.Z` tags, plus each package's version on the default branch. Titles, descriptions, icons, authors, and homepages come from each plugin's highest version. Paths are relative to the directory where you run pnpm.
 
-The generator only downloads and reads files; it never installs packages or runs their code. It keeps a cache in `.plugin-market-cache` next to the list, so a repeated run downloads only new versions and commits. Publish the output directory, `index.json` together with its `icons/` directory, as described above.
+The generator only downloads and reads files; it never installs packages or runs their code. It keeps package data in `.plugin-market-cache` next to the list and reuses unchanged versions and commits. Each run still reads source documents or Git refs and refreshes enabled metrics; unavailable metric values are omitted. Set `GITHUB_TOKEN` to collect GitHub stars; without a nonblank token, GitHub metric requests and `github_stars` are omitted while npm weekly downloads remain enabled. Publish the output directory, `index.json` together with its `icons/` directory, as described above.
 
 <a id="index-format"></a>
 ## Index format reference
 
-Text fields marked `LocalizedText` are a string or an object of strings keyed by lowercase language ids, such as `{ "en": "Foo", "zh": "甲" }`; an object must contain `en`. Members DSH does not know are ignored.
+Text fields marked `LocalizedText` are a string or an object of strings keyed by lowercase language ids, such as `{ "en": "Foo", "zh": "甲" }`; an object must contain `en`. DSH ignores unknown object fields at every level. Known fields and `source.type` still require valid values; keys inside declaration, localized-text, and plugin sort-value maps are validated as data.
 
 | Index field | Required | Meaning |
 |---|---|---|
@@ -112,7 +112,7 @@ Text fields marked `LocalizedText` are a string or an object of strings keyed by
 | `title`, `description` | `title` only | Index name and description, `LocalizedText`. |
 | `metadata.categories`, `metadata.labels` | no | Objects mapping an id to `{ "title": LocalizedText }`. |
 | `metadata.sortKeys` | no | Object mapping an id to `{ "title": LocalizedText, "order": "asc" \| "desc" }`; `order` is the initial direction. |
-| `plugins` | yes | Plugins in the index's default order. |
+| `plugins` | yes | Plugins in the publisher's default order; clients must preserve this array order on initial display and when filtering, unless the user chooses another sort or text search ranks by relevance. |
 
 | Plugin field | Required | Meaning |
 |---|---|---|
@@ -124,8 +124,10 @@ Text fields marked `LocalizedText` are a string or an object of strings keyed by
 | `repository` | no | `{ "url": string, "directory"?: string }`: the source repository's web page, and the package directory inside it. The plugin page links it as **Source code**. |
 | `metadata.category` | no | One declared category id. |
 | `metadata.labels` | no | Declared label ids. |
-| `metadata.sortKeys` | no | Object mapping declared sort-key ids to numbers, such as downloads or ratings. |
+| `metadata.sortKeys` | no | Object mapping declared sort-key ids to finite numbers, or `null` when unavailable. |
 | `versions` | yes | At least one version, in any order. |
+
+A plugin may omit `metadata`, any of its fields, or individual sort values, or use `null` for unavailable data. Missing values sort last in both directions; a real zero is a value, not missing data. The recommended definitions standardize `github_stars` as a repository's GitHub star count and `npm_weekly_downloads` as a public npm package's download count over npm's `last-week` window. Both are non-negative integers; weekly downloads are not a monthly count. Publishers using these keys declare them under root `metadata.sortKeys` and populate available values under each plugin's `metadata.sortKeys`. Other declared numeric keys remain supported.
 
 | Version field | Required | Meaning |
 |---|---|---|

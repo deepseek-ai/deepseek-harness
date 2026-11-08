@@ -1,5 +1,5 @@
 /** Session-authorized, version-checked Office bytes shared by concurrent preview reads. */
-import type { OfficeToPdfPriority, OfficeToPdfGeneration } from '@deepseek-ai/dsh-office-to-pdf/types'
+import type { OfficeKitPriority, OfficeKitGeneration } from '@deepseek-ai/dsh-office-kit/types'
 import type { RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
 import type { WorkspaceFileStat } from '@deepseek-ai/dsh-api-workspace-files/types'
 import type { DocumentFileBytes, SessionFile } from '../rpc.ts'
@@ -7,7 +7,7 @@ import type { DocumentFileBytes, SessionFile } from '../rpc.ts'
 /** PDF bytes and conversion metadata owned by Office preview. */
 export type OfficeFileBytes = DocumentFileBytes & {
   readonly missingFonts: readonly string[]
-  readonly generation: OfficeToPdfGeneration
+  readonly generation: OfficeKitGeneration
 }
 
 /**
@@ -19,7 +19,7 @@ export type OfficeFileBytes = DocumentFileBytes & {
 export type ReadOfficeDocument = (file: SessionFile, signal: AbortSignal) => Promise<RemoteResult<OfficeFileBytes>>
 
 /** Authorized cached reads carry explicit scheduling intent to the Host. */
-export type ReadOfficeBytes = (file: SessionFile, signal: AbortSignal, priority: OfficeToPdfPriority) => ReturnType<ReadOfficeDocument>
+export type ReadOfficeBytes = (file: SessionFile, signal: AbortSignal, priority: OfficeKitPriority) => ReturnType<ReadOfficeDocument>
 
 type Result = Awaited<ReturnType<ReadOfficeDocument>>
 type Success = Extract<Result, { ok: true }>
@@ -36,7 +36,7 @@ export class OfficePreviewCache {
   private readonly pending = new Map<string, Pending>()
   private bytes = 0
   private readers = 0
-  private generation: OfficeToPdfGeneration | undefined
+  private generation: OfficeKitGeneration | undefined
   private generationQuery = 0
   private acceptedQuery = 0
   private readonly superseded = new Error()
@@ -57,7 +57,7 @@ export class OfficePreviewCache {
   constructor(private readonly stat: Stat, private readonly convert: ReadOfficeBytes,
     private readonly maxEntries: number, private readonly maxBytes: number,
     private readonly maxPending: number, private readonly maxReaders: number,
-    private readonly currentGeneration: (signal: AbortSignal) => Promise<RemoteResult<OfficeToPdfGeneration>>,
+    private readonly currentGeneration: (signal: AbortSignal) => Promise<RemoteResult<OfficeKitGeneration>>,
     private readonly busy: () => Error) {}
 
   /**
@@ -68,7 +68,7 @@ export class OfficePreviewCache {
    * @param priority - foreground preview or speculative read.
    * @returns current PDF bytes borrowed read-only, or a declared source-read failure; cancellation rejects.
    */
-  async read(file: SessionFile, signal: AbortSignal, priority: OfficeToPdfPriority = 'foreground'): Promise<Result> {
+  async read(file: SessionFile, signal: AbortSignal, priority: OfficeKitPriority = 'foreground'): Promise<Result> {
     signal.throwIfAborted()
     this.lifetime.signal.throwIfAborted()
     const readerLimit = priority === 'background' ? this.maxReaders - 1 : this.maxReaders
@@ -79,7 +79,7 @@ export class OfficePreviewCache {
     try { return await operation } finally { this.readers--; this.reads.delete(operation) }
   }
 
-  private async lookup(file: SessionFile, signal: AbortSignal, priority: OfficeToPdfPriority): Promise<Result> {
+  private async lookup(file: SessionFile, signal: AbortSignal, priority: OfficeKitPriority): Promise<Result> {
     for (let attempt = 0; attempt < 2; attempt++) {
       try { return await this.lookupGeneration(file, signal, priority) }
       catch (error) { if (error !== this.superseded) throw error }
@@ -87,7 +87,7 @@ export class OfficePreviewCache {
     throw this.busy()
   }
 
-  private async lookupGeneration(file: SessionFile, signal: AbortSignal, priority: OfficeToPdfPriority): Promise<Result> {
+  private async lookupGeneration(file: SessionFile, signal: AbortSignal, priority: OfficeKitPriority): Promise<Result> {
     signal = AbortSignal.any([signal, this.lifetime.signal])
     signal.throwIfAborted()
     const query = ++this.generationQuery

@@ -7,7 +7,10 @@
  * `sidebar.settings` registrant's (ui-settings), followed by optional footer
  * actions in `sidebar.footer.action`.
  */
-import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { RefCallback } from 'react'
+import type {
+  InjectFace, PropsLocale, PropsRenderFactories, PropsRenderSlots, PropsRuntime, SlotHookFactory,
+} from '@deepseek-ai/dsh-client-ui-slots'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/client'
@@ -15,6 +18,14 @@ import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { ProductEventMap } from '@deepseek-ai/dsh-client-product-analytics/client'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface SlotFactoryMap {
+    /** Reuse a registered panel icon in navigation rows and menus. */
+    'sidebar.panel.icon': {
+      scope: 'root'
+      props: SidebarPanelIconOwnerProps & { readonly id: string }
+      children: { 'sidebar.panellist': { kind: 'list'; scope: 'root' } }
+    }
+  }
   interface SlotMap {
     /** Non-interactive notification inside the collapsed sidebar expand button. */
     'sidebar.toggle.badge': { kind: 'single'; scope: 'root'; owner: Record<never, never> }
@@ -40,9 +51,17 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * The workspace/session browsing region: section header, search, the
      * grouped/flat session list, and every workspace dialog. Declared by this
      * package's 'sidebar' entry (declaring is claiming); ui-workspace
-     * registers the browser.
+     * registers the browser. The section renders inside the sidebar viewport,
+     * which is a size container one viewport tall and a scroll-state container,
+     * and binds its own vertical scroller through `useSectionScroller`.
      */
-    'sidebar.workspaces': { kind: 'single'; scope: 'root'; owner: SidebarSectionOwnerProps }
+    'sidebar.workspaces': {
+      kind: 'single'
+      scope: 'root'
+      owner: SidebarSectionOwnerProps
+      hookContext: SidebarSectionHookContext
+      inject: SidebarSectionInjected
+    }
     /**
      * The settings seat at the sidebar foot. Declared by this package's
      * 'sidebar' entry; ui-settings registers its trigger row + modal panel.
@@ -129,6 +148,32 @@ export interface SidebarSectionOwnerProps {
   expandSidebar: () => void
 }
 
+/** Sidebar viewport capability handed to the `sidebar.workspaces` occupant. */
+export interface SectionScroller {
+  /**
+   * Ref callback for the occupant's own vertical scroller. While bound, wheel scrolling over
+   * the sidebar viewport moves the navigation away first and then continues into this element;
+   * scrolling up returns this element to its top before the navigation reappears.
+   */
+  readonly bindScrollerRef: RefCallback<HTMLElement>
+}
+
+/**
+ * Bind the occupant to the sidebar viewport it renders in.
+ * @returns The same object on every call for one sidebar.
+ */
+export type UseSectionScroller = () => SectionScroller
+
+/** Viewport capability supplied with each `sidebar.workspaces` render. */
+export interface SidebarSectionHookContext {
+  readonly useSectionScroller: UseSectionScroller
+}
+
+/** Slot-level Hook factory for the `sidebar.workspaces` occupant. */
+export interface SidebarSectionInjected {
+  hooks: { sectionScroller: SlotHookFactory<'sidebar.workspaces', UseSectionScroller> }
+}
+
 /**
  * Owner share of the sidebar settings seat: the column display state the
  * occupant's trigger row must render against (wide row vs rail icon).
@@ -189,10 +234,9 @@ export type SidebarRootComponentProps =
     | 'sidebar.brand.mark'
     | 'sidebar.brand.name'
     | 'sidebar.toggle.badge'
-    | 'sidebar.panellist'
     | 'sidebar.panellist.actions'
     | 'sidebar.workspaces'
     | 'sidebar.settings'
     | 'sidebar.footer.action'
   >
-  & InjectFace<SidebarRootInjected> & PropsLocale<'sidebar'>
+  & PropsRenderFactories & InjectFace<SidebarRootInjected> & PropsLocale<'sidebar'>

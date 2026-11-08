@@ -13,15 +13,16 @@ import { StdioClientTransport } from '@modelcontextprotocol/client/stdio'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { startConnection, resolveReconnectPolicy } from '../src/connection.ts'
-import type { Config } from '../src/index.ts'
+import { McpStatusCell } from '../src/status.ts'
+import { Config } from '../src/index.ts'
 
 const { mockTransport } = vi.hoisted(() => ({ mockTransport: vi.fn<() => Transport>() }))
 vi.mock('../src/transport.ts', () => ({ createTransport: mockTransport }))
 
-const config: Config = {
+const config = Config({
   transport: 'stdio', serverName: 'fixture', command: 'fixture', args: [], env: {}, cwd: '',
-  toolCallTimeoutMs: 60_000, failOnStartupError: false,
-}
+  toolCallTimeoutMs: 60_000, startupTimeoutMs: 30_000, failOnStartupError: false,
+})
 const fixture = fileURLToPath(new URL('./fixtures/negotiation-lifecycle.mjs', import.meta.url))
 
 async function connection(factory: () => Transport, retry: boolean) {
@@ -40,14 +41,14 @@ async function connection(factory: () => Transport, retry: boolean) {
     transports.push(transport)
     return transport
   })
+  const status = new McpStatusCell(() => {})
   const handle = startConnection(ctx, config, resolveReconnectPolicy({
     enabled: retry, initialDelayMs: 1, maxDelayMs: 1, maxAttempts: 3,
-  }, 'fixture'))
+  }, 'fixture'), status)
   onTestFinished(async () => {
-    for (const transport of transports) await transport.close()
     await handle.dispose()
   })
-  return { ...handle, errors, warns, transports }
+  return { ...handle, errors, warns, transports, status }
 }
 
 async function stdioFixture() {
@@ -132,20 +133,26 @@ describe('SDK negotiation lifecycle', () => {
   })
 
   it('stops retries when a failed probe cannot confirm transport cleanup', async () => {
-    const close = vi.fn()
-      .mockRejectedValueOnce(new Error('SDK shutdown failed'))
-      .mockRejectedValueOnce(new Error('supervisor shutdown failed'))
-      .mockResolvedValue(undefined)
-    const handle = await connection(() => ({
-      start: () => Promise.reject(new Error('probe failed')),
-      send: () => Promise.resolve(),
-      close,
-    }), true)
-    expect((await handle.ready).error).toBeDefined()
-    expect(handle.errors).toEqual([
-      'mcp-client(fixture): failed generation could not confirm transport closure — reconnect stopped to avoid overlapping server processes; reload the plugin or restart the Host to retry',
-    ])
-    expect(handle.warns.some(line => line.includes('connection failed; retrying'))).toBe(false)
-    expect(handle.transports).toHaveLength(1)
+    vi.useFakeTimers()
+    try {
+      const close = vi.fn<() => Promise<void>>().mockRejectedValue(new Error('SDK shutdown failed'))
+      const handle = await connection(() => ({
+        start: () => Promise.reject(new Error('probe failed')),
+        send: () => Promise.resolve(),
+        close,
+      }), true)
+      await vi.advanceTimersByTimeAsync(config.closeTimeoutMs)
+      expect((await handle.ready).error).toBeDefined()
+      expect(handle.status.current()).toEqual({
+        state: 'failed', reason: 'unclosed-generation', lastError: 'Error: SDK shutdown failed',
+      })
+      expect(handle.status.closure()).toEqual({ closeConfirmed: false, cleanupError: 'Error: SDK shutdown failed' })
+      expect(handle.warns.some(line => line.includes('connection failed; retrying'))).toBe(false)
+      expect(handle.transports).toHaveLength(1)
+      expect(close).toHaveBeenCalledTimes(1)
+      await handle.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

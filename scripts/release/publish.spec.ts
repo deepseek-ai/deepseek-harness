@@ -3,11 +3,13 @@
 import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { attempt, attemptEchoed, type CommandResult } from './process.ts'
 import { publishRelease } from './publish.ts'
+import { cuaHelperSourceDigest } from '../cua-helper/build-inputs.ts'
+import { verifyCuaHelperTarball } from '../cua-helper/verify-tarball.ts'
 import { packedIdentity, readPublishOrder } from './tarball.ts'
 
 vi.mock('./process.ts', async importOriginal => ({
@@ -22,6 +24,8 @@ vi.mock('./tarball.ts', async importOriginal => ({
   packedIdentity: vi.fn(),
   readPublishOrder: vi.fn(),
 }))
+
+vi.mock('../cua-helper/verify-tarball.ts', () => ({ verifyCuaHelperTarball: vi.fn() }))
 
 vi.mock('node:timers/promises', async importOriginal => ({
   ...await importOriginal<typeof import('node:timers/promises')>(),
@@ -309,4 +313,19 @@ describe('release publication channels', () => {
 
     expect(attemptEchoed).not.toHaveBeenCalled()
   })
+})
+
+it('verifies helper sources from the repository root when publication is invoked from a subdirectory', async () => {
+  const fixture = packedRelease(['1.0.0'])
+  vi.mocked(packedIdentity).mockReturnValue({ name: '@deepseek-ai/dsh-experimental-cua-macos', version: '1.0.0' })
+  vi.mocked(verifyCuaHelperTarball).mockResolvedValue(undefined)
+  registry()
+  const root = resolve(import.meta.dirname, '../..')
+  const sourceDigest = cuaHelperSourceDigest(root)
+  const cwd = vi.spyOn(process, 'cwd').mockReturnValue(join(root, 'scripts'))
+  try {
+    await publishRelease('dsh', fixture.directory)
+    expect(verifyCuaHelperTarball).toHaveBeenCalledExactlyOnceWith(fixture.packages[0]!.path, { sourceDigest })
+    expect(attemptEchoed).toHaveBeenCalledOnce()
+  } finally { cwd.mockRestore() }
 })

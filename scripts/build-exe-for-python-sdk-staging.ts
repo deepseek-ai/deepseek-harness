@@ -14,9 +14,9 @@ function isHoistedLocations(value: unknown): value is Record<string, string[]> {
  * Different peer resolutions and third-party packages keep their installed locations.
  * All metadata paths are checked before deletion; the caller first materializes links.
  * @param staging - Symlink-free deployed payload root.
- * @param workspace - Workspace root relative to which pnpm records hoisted locations.
+ * @param metadataRoot - Base for pnpm hoistedLocations: the workspace for legacy deploy, the deployment for default deploy.
  */
-export async function deduplicateStagedWorkspacePackages(staging: string, workspace: string): Promise<void> {
+export async function deduplicateStagedWorkspacePackages(staging: string, metadataRoot: string): Promise<void> {
   const modules = resolve(staging, 'node_modules')
   const file = join(modules, '.modules.yaml')
   const manifest: unknown = load(await readFile(file, 'utf8'))
@@ -27,7 +27,7 @@ export async function deduplicateStagedWorkspacePackages(staging: string, worksp
   const duplicates: string[] = []
   for (const [identity, locations] of Object.entries(manifest.hoistedLocations)) {
     const paths = locations.map((location) => {
-      const path = resolve(workspace, location)
+      const path = resolve(metadataRoot, location)
       const local = relative(modules, path)
       if (local === '' || local === '..' || local.startsWith(`..${sep}`) || isAbsolute(local)) {
         throw new Error(`${file}: hoistedLocations path is outside deployed node_modules: ${location}`)
@@ -62,7 +62,7 @@ async function findSymlink(directory: string): Promise<string | undefined> {
 /**
  * Replace every deploy-time package link below the staged payload with real files.
  *
- * Legacy deploy links workspace packages into the target's `node_modules`, and
+ * pnpm deploy can link workspace packages into the target's `node_modules`, and
  * those links must survive packaging as files. One link is not a package: when
  * the deploy target sits inside the deployed project, pnpm links that project
  * into its own `node_modules`. Dereferencing it would copy the payload into

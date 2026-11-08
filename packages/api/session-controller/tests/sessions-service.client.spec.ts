@@ -1010,6 +1010,29 @@ describe('fork', () => {
     })
   })
 
+  it('gives repeated forks distinct titles past numbers listed sessions use', async ({ bench }) => {
+    const b = bench()
+    for (const [id, value] of [['source', 'Roadmap'], ['sibling', 'Roadmap (2)']] as const) {
+      b.svc.handleControlFrame({ type: 'projection', sessionId: sid(id), changes: [{ key: 'title', val: value }], seq: 2 })
+    }
+    await feedList(b, [{ id: 'source' }, { id: 'sibling' }])
+    b.mock.remote.session.rename.mockImplementation((payload) => {
+      const { title } = payload as { title: string }
+      return Promise.resolve(ok({ title, seq: 3 }))
+    })
+
+    for (const child of ['child-1', 'child-2']) {
+      b.mock.remote.session.fork.mockResolvedValueOnce(ok({ sessionId: sid(child) }))
+      await b.svc.fork({ sessionId: sid('source'), increaseTitle: true })
+    }
+
+    expect(b.mock.remote.session.rename.mock.calls).toEqual([
+      [{ sessionId: 'child-1', title: 'Roadmap (1)' }],
+      [{ sessionId: 'child-2', title: 'Roadmap (3)' }],
+    ])
+    expect(b.svc.list.getSnapshot().byId[sid('child-2')]?.title).toBe('Roadmap (3)')
+  })
+
   it('sends the exact boundary seq verbatim: callers pass real event seqs', async ({ bench }) => {
     const b = bench()
     await feedList(b, [{ id: 'source', cwd: '/work' }])

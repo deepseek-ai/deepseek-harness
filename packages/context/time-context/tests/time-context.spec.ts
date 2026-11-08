@@ -455,7 +455,7 @@ describe('time-context projection fold edges', () => {
     expect(contextTexts(cold).at(-1)).toContain('mixed ["America/New_York","Asia/Shanghai"]')
   })
 
-  it('rebuilds an old checkpoint from the full journal and removes the unit on unload', async () => {
+  it('rebuilds an old checkpoint from the full journal and freezes the unit on unload', async () => {
     const { ctx, fiber } = await mount()
     onTestFinished(() => ctx.fiber.dispose())
     const session = Session.create(SessionId('browser-old-row'))
@@ -474,8 +474,12 @@ describe('time-context projection fold edges', () => {
     expect(ctx.sessionProjections.checkpoint(cold).timeContext).toEqual({
       ver: 3, seq: cold.seq - 1, val: rows.timeContext!.val,
     })
+    const row = ctx.sessionProjections.checkpoint(cold).timeContext
     await fiber.dispose()
-    expect(ctx.sessionProjections.checkpoint(cold).timeContext).toBeUndefined()
+    openMessageTurn(cold, 2, 'UTC')
+    // The released unit keeps the hydrated row and folds no event after the unload.
+    expect(ctx.sessionProjections.checkpoint(cold)).toHaveProperty('timeContext', row)
+    expect(ctx.sessionProjections.checkpoint(Session.create(SessionId('browser-after-unload')))).not.toHaveProperty('timeContext')
   })
 
   it('retains reported invalid zones without validating rejected or throttled requests', async () => {

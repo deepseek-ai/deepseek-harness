@@ -9,8 +9,8 @@
  * Electron composes app-regions from window geometry in DOM order, ignoring
  * stacking: a drag rule on a content container overrides the no-drag of any
  * overlay mounted earlier, so its text and labels drag the window instead of
- * receiving clicks. Everything interactive opts out through ui-web base.css; a
- * box that selector cannot cover subtracts itself in its own sheet. Composed
+ * receiving clicks. Controls inside chrome rows opt out through ui-web base.css;
+ * covering boxes outside those rows subtract themselves explicitly. Composed
  * geometry itself is the browser lane's claim — ui-theme cannot see layout.
  */
 import { readFileSync } from 'node:fs'

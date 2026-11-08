@@ -33,7 +33,7 @@ afterEach(() => {
 function ownerShare(mode: OwnerShare['sessionMode']): OwnerShare {
   return {
     shareId: 'share-1',
-    sessionId: source,
+    sessionIds: [source],
     sessionTitle: 'Shared',
     accessMode: 'open',
     link: 'https://relay.example.test/liveshare/s/share-1',
@@ -111,11 +111,11 @@ function service(mode: OwnerShare['sessionMode'], options: {
     sourceConfined,
     forks,
     workspaces: () => [],
-    declaredCapabilities: () => [],
+    offeredPlugins: () => [],
   }
   const read = createViewerReadService({
     connection: owner.connection,
-    sharedSessionId: () => source,
+    sharedSessionIds: () => [source],
     forkStateOf: shareState,
     sourceConfined,
     viewerStillAdmitted: (_shareId, actor) => admitted(actor),
@@ -134,7 +134,7 @@ describe('the share state one request is decided against', () => {
   it('carries the mode the owner set', () => {
     expect(publishedShareState(ownerShare('write'))).toMatchObject({
       shareId: 'share-1',
-      sessionId: source,
+      sessionIds: [source],
       allowsFork: true,
       viewerAdmitted: true,
       stopped: false,
