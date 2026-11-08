@@ -811,6 +811,9 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
       bundles.push(SCAFFOLD_DEFAULTS_BUNDLE)
       dependencies[SCAFFOLD_DEFAULTS_BUNDLE] = `file:${fixtureDir}`
       initProfile(profileDir, bundles)
+      // Process-specific rows load like a `--patch` file, so profile reads see the launcher's overlay layer.
+      const overlayPath = join(profileDir, 'scaffold.overlay.yml')
+      await writeFile(overlayPath, yaml.dump(processOverlays, { schema: entryListSchema, skipInvalid: true }))
       const manifest = readProfileManifest('dsh', profileDir)
       manifest.dependencies = dependencies
       await writeFile(join(profileDir, 'package.json'), JSON.stringify(manifest, null, 2) + '\n')
@@ -819,7 +822,7 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
         ...options.profile?.packageManager === undefined ? {} : { packageManager: options.profile.packageManager },
         cwd: workspaceCwd, home: harnessHome,
         startedBundles: loadProfileDirectory('dsh', profileDir, INSTALL_ANCHOR).layers.map(layer => layer.packageName),
-        overlays: processOverlays, telemetryDisabledEnv: undefined,
+        overlayPaths: [overlayPath], telemetryDisabledEnv: undefined,
       }
       // HMR gates file-driven reloads on application readiness, which the
       // launcher commits after boot; this direct harness is ready at once.

@@ -92,7 +92,7 @@ it('addresses every row through its own id and switches the shared card service 
   const profile: ProfileContext = {
     name: 'test', dir, home, cwd: home, patchPath: join(dir, 'cordis.patch.yml'), installAnchor: anchor,
     startedBundles: loadProfileDirectory('test', dir, anchor).layers.map(layer => layer.packageName),
-    overlays: [], telemetryDisabledEnv: undefined,
+    overlayPaths: [], telemetryDisabledEnv: undefined,
   }
   const ctx = await boot('test', join(dir, 'cordis.yml'), readProfilePatches('test', profile), (ctx) => {
     owner = ctx

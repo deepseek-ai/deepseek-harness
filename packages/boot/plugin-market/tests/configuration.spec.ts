@@ -30,7 +30,7 @@ it('saves index sources without remounting, announces them, and restores them at
     writeFileSync(join(dir, 'cordis.yml'), '[]\n')
     const profile: ProfileContext = {
       name: 'test', startedBundles: ['test-bundle'], dir, patchPath: join(dir, 'cordis.patch.yml'),
-      installAnchor: join(home, 'package.json'), cwd: home, home, overlays: [], telemetryDisabledEnv: undefined,
+      installAnchor: join(home, 'package.json'), cwd: home, home, overlayPaths: [], telemetryDisabledEnv: undefined,
     }
     const start = () => boot('test', join(dir, 'cordis.yml'), readProfilePatches('test', profile), (root) => {
       root.provide('profileContext', profile)
@@ -98,7 +98,7 @@ it('reads a market entry detail document and serves its images through the compo
     writeFileSync(join(dir, 'cordis.yml'), '- name: cordis:connection\n')
     const profile: ProfileContext = {
       name: 'test', startedBundles: ['test-bundle'], dir, patchPath: join(dir, 'cordis.patch.yml'),
-      installAnchor: join(home, 'package.json'), cwd: home, home, overlays: [], telemetryDisabledEnv: undefined,
+      installAnchor: join(home, 'package.json'), cwd: home, home, overlayPaths: [], telemetryDisabledEnv: undefined,
     }
     ctx = await boot('test', join(dir, 'cordis.yml'), readProfilePatches('test', profile), (root) => {
       root.provide('profileContext', profile)

@@ -220,7 +220,7 @@ async function bootWeb(
     bootCtx.provide('profileContext', { name: surface, dir: profileDir, patchPath: profile.patchPath,
       installAnchor: INSTALL_ANCHOR, home, cwd: home,
       startedBundles: profileBundles ?? ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'],
-      overlays: [], telemetryDisabledEnv: '1' })
+      overlayPaths: [], telemetryDisabledEnv: '1' })
     await bootCtx.plugin(PluginPackages, { resolution })
     bootCtx.provide('connection', {
       fetch: { register: () => () => {} },

@@ -123,7 +123,7 @@ export function apply(ctx) {
   const loaded = loadProfileDirectory('test', dir, installAnchor)
   const profile: ProfileContext = {
     name: 'test', dir, patchPath: join(dir, 'cordis.patch.yml'), installAnchor, cwd: home, home,
-    startedBundles: loaded.layers.map(layer => layer.packageName), overlays: [], telemetryDisabledEnv: undefined,
+    startedBundles: loaded.layers.map(layer => layer.packageName), overlayPaths: [], telemetryDisabledEnv: undefined,
   }
   const resolution = await createRuntimeResolution({ installAnchor, profile: loaded, home })
   const trace: string[] = []

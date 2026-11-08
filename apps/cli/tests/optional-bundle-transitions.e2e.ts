@@ -94,7 +94,7 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
     const profile = app.loadProfileDirectory('bundle-test', directory, installAnchor)
     const profileContext: ProfileContext = {
       name: 'web', dir: directory, patchPath: profile.patchPath, installAnchor, cwd: workspace, home,
-      startedBundles: profile.layers.map(layer => layer.packageName), overlays: [], telemetryDisabledEnv: '1',
+      startedBundles: profile.layers.map(layer => layer.packageName), overlayPaths: [], telemetryDisabledEnv: '1',
     }
     const resolution = await app.createRuntimeResolution({ installAnchor, home, profile })
     const listeners = new Set<() => void>()

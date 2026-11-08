@@ -382,7 +382,8 @@ class Hmr extends Service {
       })
       yield () => { unsubscribe(); started.resolve(false); return Promise.resolve() }
       const manifestPath = join(profile.dir, 'package.json')
-      const patchFiles = [profile.patchPath, join(profile.home, PROFILE_PATCH_FILENAME)]
+      // A file named by several layers or repeated `--patch` options is read once per comparison and watched once.
+      const patchFiles = [...new Set([profile.patchPath, join(profile.home, PROFILE_PATCH_FILENAME), ...profile.overlayPaths])]
       let lastInputs: string | undefined
       let lastBundles = JSON.stringify(profile.startedBundles)
       const refresh = async (manifestOnly: boolean): Promise<void> => {
