@@ -382,8 +382,14 @@ class Hmr extends Service {
       })
       yield () => { unsubscribe(); started.resolve(false); return Promise.resolve() }
       const manifestPath = join(profile.dir, 'package.json')
-      // A file named by several layers or repeated `--patch` options is read once per comparison and watched once.
-      const patchFiles = [...new Set([profile.patchPath, join(profile.home, PROFILE_PATCH_FILENAME), ...profile.overlayPaths])]
+      // A file named by several layers or repeated `--patch` options, under any spelling, is read and watched once.
+      const canonicalFiles = new Set<string>()
+      const patchFiles = [profile.patchPath, join(profile.home, PROFILE_PATCH_FILENAME), ...profile.overlayPaths].filter((filename) => {
+        const canonical = canonicalPath(filename)
+        if (canonicalFiles.has(canonical)) return false
+        canonicalFiles.add(canonical)
+        return true
+      })
       let lastInputs: string | undefined
       let lastBundles = JSON.stringify(profile.startedBundles)
       const refresh = async (manifestOnly: boolean): Promise<void> => {

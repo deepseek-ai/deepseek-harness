@@ -2,7 +2,7 @@
 import { lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { createLaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import {
@@ -137,7 +137,7 @@ describe('runProfile with an application-owned profile', () => {
     try {
       const { shutdown } = await runProfile({
         environment, profile: 'desktop', resolvedProfile: runtime,
-        patchFiles: [overlay], args: ['--port', '0', '--no-open'],
+        patchFiles: [relative(process.cwd(), overlay)], args: ['--port', '0', '--no-open'],
       })
       expect(installProxyFromEnvironment).toHaveBeenCalledWith(environment, expect.any(Function))
       const resolution = vi.mocked(createRuntimeResolution).mock.settledResults
@@ -163,7 +163,9 @@ describe('runProfile with an application-owned profile', () => {
       ])
       expect(rows.find(row => row.id === 'target')?.config).toEqual({ overlay: true, priority: 'overlay' })
       expect(rows.find(row => row.id === 'session-telemetry-otel')?.disabled).toBe(true)
-      expect(ctx.profileContext).toMatchObject({ dir: home, patchPath: profilePatch, installAnchor: runtime.installAnchor })
+      expect(ctx.profileContext).toMatchObject({
+        dir: home, patchPath: profilePatch, installAnchor: runtime.installAnchor, overlayPaths: [overlay],
+      })
       await shutdown.shutdown(0)
       expect(dispose).toHaveBeenCalledOnce()
       expect(disposeProxy).toHaveBeenCalledOnce()

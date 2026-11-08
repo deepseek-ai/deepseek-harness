@@ -737,6 +737,15 @@ it('reports an overlay overriding a saved plugin toggle', async () => {
   expect(await manager.setPluginEnabled(id, true)).toMatchObject({ changed: false, application: 'overridden' })
 })
 
+it('lists plugins from current overlay files in a startup-only profile', async () => {
+  const { manager, overlayPath } = await fixture('startup')
+  const id = (await manager.listPlugins()).find(row => row.patchId === 'managed')!.entryId
+  rmSync(overlayPath)
+  await expect(manager.listPlugins()).rejects.toThrow(`failed to read overlay ${overlayPath}`)
+  writeFileSync(overlayPath, '[]\n')
+  expect((await manager.listPlugins()).some(row => row.entryId === id)).toBe(true)
+})
+
 it('saves startup-only toggles and refuses removal of currently used packages', async () => {
   const { manager } = await fixture('startup')
   const id = (await manager.listPlugins()).find(row => row.patchId === 'managed')!.entryId
