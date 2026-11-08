@@ -38,7 +38,7 @@ async function setup(limit = 4096, namespaces: ProgramBootData['namespaces'] = [
   await ready.promise
   const run = (code: string, maxOutputBytes = 1024, programFormat?: PtcProgramFormat) => peer.run('/', {
     code, ...programFormat === undefined ? {} : { programFormat },
-    retainsState: false, namespaces, maxOutputBytes,
+    namespaces, maxOutputBytes, retainsState: false,
   })
   return { child, host, state, nativeEnvironment, methods, peer, main, logs, run }
 }
@@ -61,12 +61,12 @@ it('clears the environment and returns a binding result after captured output', 
   expect(h.state.exitCode).toBeUndefined()
 })
 
-it('keeps unfinished calls pending and suppresses later logs while awaiting host shutdown', async () => {
+it('keeps unfinished temporary calls pending and suppresses later logs while awaiting host shutdown', async () => {
   const h = await setup()
   const release = Promise.withResolvers<ReturnType<typeof encodePtcJsonWire>>()
   h.methods.invoke = () => release.promise
   try {
-    expect(decodePtcJsonWire((await h.run('void tools.echo({}); void tools.echo({}).catch(() => console.log("late rejection")); setImmediate(() => console.log("late timer")); return 42;')).value)).toBe(42)
+    expect(decodePtcJsonWire((await h.run('void tools.echo({}).catch(() => {}); void tools.echo({}).catch(() => console.log("late rejection")); setImmediate(() => console.log("late timer")); return 42;')).value)).toBe(42)
     await nextTurn()
     expect(h.child.destroyed).toBe(false)
     release.resolve(encodePtcJsonWire(42))
@@ -82,12 +82,12 @@ it('rejects a binding call that the host fails during the run', async () => {
   expect(decodePtcJsonWire(result.value)).toBe('denied by host')
 })
 
-it.each(['function-body', 'repl', 'script'] as const)('keeps an unawaited call pending when a temporary %s process closes after the result', async (format) => {
+it.each(['function-body', 'repl', 'script'] as const)('leaves an unawaited call pending when a temporary %s process closes after the result', async (format) => {
   const h = await setup()
   const pending = Promise.withResolvers<ReturnType<typeof encodePtcJsonWire>>()
   onTestFinished(() => { pending.resolve(encodePtcJsonWire(null)) })
   h.methods.invoke = () => pending.promise
-  const code = format === 'function-body' ? 'void tools.echo({}); return 42' : 'void tools.echo({}); 42'
+  const code = format === 'function-body' ? 'void tools.echo({}).catch(() => {}); return 42' : 'void tools.echo({}).catch(() => {}); 42'
   expect(decodePtcJsonWire((await h.run(code, 1024, format)).value)).toBe(42)
   h.peer.$close()
   await h.main

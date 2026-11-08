@@ -27,7 +27,7 @@ describe('readArchive', () => {
     ['an absolute path', '/etc/passwd'],
     // On Windows node-tar turns backslashes into slashes before the library reads the path.
     ...process.platform === 'win32' ? [] : [['a backslash', `${ROOT}/skills/alpha\\SKILL.md`]],
-  ])('refuses %s anywhere in the archive and reads no entry after it', async (_case, path) => {
+  ])('refuses %s anywhere in the archive and names the first unsafe entry', async (_case, path) => {
     const after = { path: `${ROOT}/skills/alpha/../../after`, content: 'x' }
     await expect(read(withLicense([{ path, content: 'x' }, after]))).rejects.toThrow(`the archive holds the unsafe path ${path}`)
   })

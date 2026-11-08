@@ -7,6 +7,7 @@ import {
   checkDeclaredPluginRecordWrites,
   checkPluginRecordCallers,
   DEPENDENCY_POLICY_FILE,
+  ENTRY_EXPORT_LIST_FILE,
   findPluginRecordReferences,
   isAdmittedCaller,
   OWNER_FILE,
@@ -133,11 +134,12 @@ describe('verify-plugin-record-callers', () => {
     expect(checkPluginRecordCallers(corpus(source))).toEqual([])
   })
 
-  it('admits experimental source, the owner, tests, this gate, and the dependency policy', () => {
+  it('admits experimental source, the owner, tests, this gate, the dependency policy, and the entry export list', () => {
     for (const file of [
       EXPERIMENTAL,
       OWNER_FILE,
       DEPENDENCY_POLICY_FILE,
+      ENTRY_EXPORT_LIST_FILE,
       'packages/session/session-persistence/tests/live-write-contract.ts',
       'apps/web/tests/session.e2e.ts',
       'examples/demo/tests/demo.spec.ts',

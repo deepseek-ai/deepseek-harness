@@ -31,6 +31,12 @@ export interface SubagentActivationSpec extends Omit<SubagentStartRequest, 'labe
   readonly provider: string
   /** Short task label retained in cataloged child membership. */
   readonly label: string
+  /**
+   * Requested name, unique among the parent's children: 1–32 lower-case
+   * letters, digits, or hyphens starting with a letter, other than `lead`.
+   * Omission selects the first free `agent-N`.
+   */
+  readonly name?: string
   /** Optional reserved identity for a local child; external backends allocate their own ids. */
   readonly childId?: SessionId
   /** Cancellation before publication; callers own later cancellation through dispose. */
@@ -43,6 +49,11 @@ export interface SubagentActivationSpec extends Omit<SubagentStartRequest, 'labe
 export interface SubagentActivation {
   /** Stable identity of the child. */
   readonly childId: SessionId
+  /**
+   * Model-facing name: slash-separated names from the root when every creator
+   * below the root is named, otherwise the child Session id.
+   */
+  readonly name: string
   /** Accepted inbox message, when the backend has a local inbox. */
   readonly messageId?: MessageId
   /**
@@ -52,6 +63,14 @@ export interface SubagentActivation {
   readonly result: Promise<SubagentResult>
   /** Stop and release only this activation; rejects on teardown failure. */
   dispose(): Promise<void>
+}
+
+/** Model-facing names of one live tree member and its direct creator. */
+export interface SubagentMemberNames {
+  /** `lead` for the root, the slash-separated path for a named descendant, otherwise the Session id. */
+  readonly self: string
+  /** The direct creator's name by the same rule; absent for the root. */
+  readonly parent?: string
 }
 
 /**

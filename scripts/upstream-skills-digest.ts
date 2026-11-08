@@ -2,7 +2,8 @@
  * Print the pinned upstream skill set of a GitHub commit for a plugin's constant: download the commit archive, keep the
  * selected files the way `@deepseek-ai/dsh-upstream-skills` keeps them, and report their total size, digest, and
  * `SKILL.md` paths. Run it with `pnpm exec tsx scripts/upstream-skills-digest.ts --repository <owner>/<repository>
- * --commit <full id> --directory <path> [--exclude <path>]... [--license LICENSE]`.
+ * --commit <full id> --directory <path> [--exclude <path>]... [--license LICENSE] [--url <prefix>]`; `--url` defaults to
+ * `https://codeload.github.com`.
  */
 
 import { parseArgs } from 'node:util'

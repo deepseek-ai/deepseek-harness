@@ -104,9 +104,11 @@ DSH 只能从用户已知的 spec 安装第三方组合包（bundle）：npm 包
 | `metadata.categories` | 否 | 对象，将分类 id 映射为 `{ title: LocalizedText }`。 |
 | `metadata.labels` | 否 | 对象，将标签 id 映射为 `{ title: LocalizedText }`。 |
 | `metadata.sortKeys` | 否 | 对象，将排序键 id 映射为 `{ title: LocalizedText, order: "asc" \| "desc" }`；`order` 是初始排序方向。 |
-| `plugins` | 是 | 插件数组，可以为空；数组顺序即索引的默认排序。 |
+| `plugins` | 是 | 插件数组，可以为空；客户端必须在初始的未筛选视图中使用此数组顺序。 |
 
 分类、标签和排序键的 id 均为非空字符串。读取器按自有属性查找 id，因此 `constructor` 等 id 没有特殊含义。
+
+客户端必须保留发布者的 `plugins` 数组顺序，除非用户选择其他排序方式，或文本搜索按相关性排序。仅进行筛选时，匹配的插件仍保持它们在数组中的相对顺序。声明排序键或发布指标值并不允许客户端自行选择按热度、下载量或发布时间进行默认排序。
 
 ### 插件字段
 
@@ -123,11 +125,15 @@ DSH 只能从用户已知的 spec 安装第三方组合包（bundle）：npm 包
 | `metadata.category` | 否 | 一个已声明的分类 id。 |
 | `metadata.labels` | 否 | 由互不相同的已声明标签 id 组成的数组。 |
 | `metadata.keywords` | 否 | 自由字符串数组；无需在根部声明。 |
-| `metadata.sortKeys` | 否 | 对象，将已声明的排序键 id 映射为有限数值。 |
+| `metadata.sortKeys` | 否 | 对象，将已声明的排序键 id 映射为有限数值，或以 `null` 表示数据不可用。 |
 | `dist-tags` | 否 | 将 npm 发布标签名称映射为已列出的精确版本字符串的对象；缺省表示未记录发布渠道。 |
 | `versions` | 是 | 非空的版本数组；见下文。数组顺序不选择安装版本。 |
 
 `metadata.keywords` 按约定来自 npm `package.json` 的 `keywords`，但生成器可以使用其他来源、添加字符串或调整值。不要求提供此字段，也不要求它与包 manifest 一致。读取器保留字符串及其顺序；允许空数组。
+
+插件的 `metadata`、其中的 `category`、`keywords`、`labels` 和 `sortKeys` 成员，以及单个已声明排序键的值，在不可用时均可缺省或为 `null`。读取器将它们归一化为缺省的分类、空数组或空映射，并省略对应数值。读取器绝不以零代替缺失值；实际测得的零是有效值。`"n/a"` 等字符串占位值无效。
+
+建议对可选元数据键采用以下统一定义：`github_stars` 表示仓库的 GitHub star 数，`npm_weekly_downloads` 表示公共 npm 包在 npm `last-week` 端点返回的时间窗口内的下载量。两者均为非负整数计数。发布者使用这些键时，在根级 `metadata.sortKeys` 中声明本地化标题和自行选择的 `order`，并在各插件的 `metadata.sortKeys` 中发布可用值。这些定义统一名称、含义、值类型和统计周期。其他已声明的有限数值键仍然有效。生成器省略不可用的计数，包括获取失败的计数，绝不把上游月下载量标为周下载量。参考生成器使用 npm 包作者声明的仓库获取 `github_stars`，不验证仓库归属或与包源码的对应关系；该计数不代表可信度或质量。
 
 ### 版本字段
 
@@ -175,7 +181,7 @@ DSH 只能从用户已知的 spec 安装第三方组合包（bundle）：npm 包
 
 文档违反根字段、插件字段、版本字段或 `source` 形式中的任何规则时，读取器拒绝整个索引，包括引用了未声明的分类、标签或排序键，发布标签指向未列出的目标，`name` 或精确的 `version` 字符串重复，以及 `format` 不是 `1`。每个此类缺陷都是生成器 bug，静默丢弃条目会掩盖它。读取器可以限制文档大小。
 
-读取器在每一层都忽略本 Agent Note 未定义的成员；未知的 `source.type` 值会被拒绝。这样格式 1 可以增加可选成员而不破坏现有读取器；现有读取器会误解的变更使用新的 `format` 值。
+读取器在每一层都忽略本 Agent Note 未定义的成员；未知的 `source.type` 值会被拒绝。声明映射、本地化文本映射和插件排序值映射中的键是数据，仍遵循各自的校验规则。
 
 标签名称必须能被 npm 维护的 `npm-package-arg` 解析为 registry 标签 spec；目标是已列出的精确版本字符串。npm 来源使用规范发布标识（`node-semver.valid(version) === version`）；Git 来源保留版本编译信息并用提交固定精确来源。
 

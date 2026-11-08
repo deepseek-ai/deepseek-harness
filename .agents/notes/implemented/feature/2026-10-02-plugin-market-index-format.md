@@ -104,9 +104,11 @@ The market reuses npm's package names, versions, ranges, distribution tags, and 
 | `metadata.categories` | no | Object mapping category id → `{ title: LocalizedText }`. |
 | `metadata.labels` | no | Object mapping label id → `{ title: LocalizedText }`. |
 | `metadata.sortKeys` | no | Object mapping sort-key id → `{ title: LocalizedText, order: "asc" \| "desc" }`; `order` is the initial sort direction. |
-| `plugins` | yes | Array of plugins, possibly empty; its order is the index's default ordering. |
+| `plugins` | yes | Array of plugins, possibly empty; clients must use this array order for the initial unfiltered view. |
 
 Category, label, and sort-key ids are non-empty strings. Readers look ids up as own properties, so ids such as `constructor` have no special meaning.
+
+Clients must preserve the publisher's `plugins` array order unless the user selects another sort or text search uses relevance ranking. Filtering alone preserves the relative array order of matching plugins. Declaring sort keys or publishing metric values does not authorize clients to choose a default order by popularity, downloads, or publish time.
 
 ### Plugin fields
 
@@ -123,11 +125,15 @@ Category, label, and sort-key ids are non-empty strings. Readers look ids up as 
 | `metadata.category` | no | One declared category id. |
 | `metadata.labels` | no | Array of distinct declared label ids. |
 | `metadata.keywords` | no | Array of free-form strings; no root declaration required. |
-| `metadata.sortKeys` | no | Object mapping a declared sort-key id → finite number. |
+| `metadata.sortKeys` | no | Object mapping a declared sort-key id → finite number or `null` for unavailable data. |
 | `dist-tags` | no | Object mapping npm distribution-tag names to exact listed version strings; absent means no recorded channels. |
 | `versions` | yes | Non-empty array of versions; see below. Array order does not select the installation version. |
 
 `metadata.keywords` conventionally comes from npm `package.json` `keywords`, but generators may use another source, add strings, or adjust values. Neither presence nor equality with the package manifest is required. Readers preserve the strings and their order; an empty array is valid.
+
+A plugin's `metadata`, its `category`, `keywords`, `labels`, and `sortKeys` members, and individual declared sort-key values may be absent or `null` when unavailable. Readers normalize these to absent category, empty arrays/maps, and omitted numeric values. They never substitute zero; a measured zero is valid. String placeholders such as `"n/a"` are invalid.
+
+Recommended standardized definitions for optional metadata keys are `github_stars` for a repository's GitHub star count and `npm_weekly_downloads` for the public npm package's download count over the window returned by npm's `last-week` endpoint. Both values are non-negative integer counts. Publishers using these keys declare them under root `metadata.sortKeys` with a localized title and their chosen `order`, and publish available values under each plugin's `metadata.sortKeys`. These definitions standardize names, meanings, value types, and measurement periods. Other declared finite numeric keys remain valid. Generators omit unavailable counts, including fetch failures, and never relabel an upstream monthly count as weekly downloads. The reference generator uses an npm package's author-declared repository for `github_stars` without verifying ownership or source correspondence; that count is not a trust or quality signal.
 
 ### Version fields
 
@@ -175,7 +181,7 @@ A reader cannot verify these rules; a generator that violates them publishes a m
 
 A reader rejects the whole index when the document violates any rule in Root fields, Plugin fields, Version fields, or the `source` forms, including an undeclared category, label, or sort-key reference, an unlisted distribution-tag target, a duplicate `name` or exact `version` string, or a `format` other than `1`. Each such defect is a generator bug, and dropping entries silently would hide it. Readers may bound the document size.
 
-A reader ignores members that this note does not define, at every level; an unknown `source.type` value is rejected. Format 1 can then gain optional members without breaking existing readers; a change that existing readers would misinterpret uses a new `format` value.
+A reader ignores members that this note does not define, at every level; an unknown `source.type` value is rejected. Keys inside declaration maps, localized-text maps, and plugin sort-value maps are data and still follow their respective validation rules.
 
 Tag names must parse as registry tag specs under npm's maintained `npm-package-arg`; targets are exact listed version strings. npm sources use canonical published identifiers (`node-semver.valid(version) === version`); Git sources retain build metadata and pin their exact source by commit.
 

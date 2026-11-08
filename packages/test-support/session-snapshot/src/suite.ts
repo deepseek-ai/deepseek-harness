@@ -419,6 +419,7 @@ function toolSchemasFrom(headers: readonly unknown[]): unknown[][] {
   return headers.flatMap((header) => {
     if (header === null || typeof header !== 'object') return []
     const tools = (header as { tools?: unknown }).tools
+    if (tools === undefined) return [[]]
     return Array.isArray(tools) ? [tools] : []
   })
 }
@@ -473,8 +474,8 @@ export function systemPromptPrecedesRequests(rawLog: string): boolean {
 
 /**
  * The normalized tool-schema arrays carried by request headers in a session
- * JSONL, in log order. Headers without an array-valued tools field are omitted
- * so callers can assert one schema set per header explicitly.
+ * JSONL, in log order. An absent tools field yields an empty schema set;
+ * invalid non-array fields are omitted.
  *
  * @param rawLog The session `.jsonl` content to inspect.
  * @param ctx The volatile values of the run that produced it.
@@ -524,15 +525,16 @@ export function parseToolSchemasSnapshot(snapshot: string): ToolSchemasSnapshot 
 /**
  * Restore one sidecar schema set into a tokenized pinned header.
  *
- * @param header The parsed request header carrying a tools token or ordered tool names matching the sidecar.
+ * @param header The parsed header with a tools token, matching ordered names, or no tools for an empty sidecar.
  * @param schemas The complete schemas for this full header snapshot.
- * @returns A copy of the header with its complete schemas restored.
+ * @returns A copy with complete schemas restored, or the original header when tools are absent.
  */
 export function restorePinnedToolSchemas(header: unknown, schemas: readonly unknown[]): unknown {
   if (header === null || typeof header !== 'object' || Array.isArray(header)) {
     throw new Error('acp-snapshot: pinned request header must be an object')
   }
   const tools = (header as { tools?: unknown }).tools
+  if (tools === undefined && schemas.length === 0) return header
   const namesMatch = Array.isArray(tools) && tools.length === schemas.length
     && tools.every((name, index) => {
       const schema = schemas[index]

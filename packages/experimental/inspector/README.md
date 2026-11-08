@@ -78,7 +78,7 @@ The Host plugin injects `webServer` and `connection` and accepts these fields:
 | `maxBodyChunkBytes` | 48 KiB | Raw bytes carried by one body record before base64 encoding |
 | `maxJournalBytes` | 256 MiB | Worker-retained request and response body bytes |
 | `maxRetainedRequests` | `2000` | Active and completed requests retained by the Worker |
-| `maxSourceFrameBytes` | 128 KiB | Encoded source-frame limit |
+| `maxSourceFrameBytes` | 128 KiB | Encoded source-frame limit; values below 5121 bytes fail at load because they leave no room for the Cordis tree snapshot |
 | `maxSourceRecordsPerFrame` | `128` | Records in one source batch |
 | `maxQueuedRecords` | `2048` | Per-producer records waiting for transport |
 | `maxQueuedBytes` | 16 MiB | Per-producer queued encoded bytes |

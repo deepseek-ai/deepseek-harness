@@ -63,7 +63,7 @@ kind: "package-reference"
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-注册和监听随插件生命周期释放，释放时会中止进行中的列表请求。共享 Host 绑定提供附件访问、请求扩展、匿名标识和重试策略的原子更新；本包只注册自己的路由，并通过传输层的 `connect` 与 `admit` 钩子接入目录和门控。列表请求、缓存和目录解析来自共享传输包，API key 路由也使用它们；缓存只在内存中，以端点和 token 的 SHA-256 为键。
+账号 token 读取与作废使用[共享凭据函数](../llm-deepseek/src/credential.ts)；本插件保留 HTTP 错误分类。注册和监听随插件生命周期释放，释放时会中止进行中的列表请求。共享 Host 绑定提供附件访问、请求扩展、匿名标识和重试策略的原子更新；本包只注册自己的路由，并通过传输层的 `connect` 与 `admit` 钩子接入目录和门控。列表请求、缓存和目录解析来自共享传输包，API key 路由也使用它们；缓存只在内存中，以端点和 token 的 SHA-256 为键。
 
 共享传输判定为 `QUOTA` 的失败请求离开本提供方前会被改写为 `ACCOUNT_QUOTA`，HTTP 402 响应与流内 SSE 错误都适用。共享传输与 `deepseek-official` 路由保留 `QUOTA`，因此账号路由的充值操作不会出现在 API Key 或第三方失败上。
 

@@ -5,6 +5,7 @@ import { Button, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ReviewActions } from './ReviewComposer.tsx'
 import { EMPTY_FILE_REVIEW, type FileReviewState, type ReviewThread as Thread } from './review-queue.ts'
+import { reviewRange } from './review.ts'
 import type { NS } from './locales.ts'
 import css from './ReviewComposer.module.css'
 
@@ -39,7 +40,7 @@ export function ReviewThread({ thread, actions, locked, outdated, split, t }: Pr
   const [error, setError] = useState<string | null>(null)
   const comment = thread.selection.comment
   const quoted = editing && thread.kind === 'pending' ? { ...thread.selection, comment: { ...comment, body } } : thread.selection
-  const range = `${comment.side}${comment.startLine}${comment.endLine === comment.startLine ? '' : `–${comment.endLine}`}`
+  const range = reviewRange(comment)
   const status = thread.kind === 'pending' ? 'review.pending' : thread.kind === 'published' ? 'review.published' : 'review.quoted'
   const save = (): boolean => actions.records?.editThread(thread.key, body) === true
   return <section className={css.thread} data-forge-review-thread={thread.kind} data-side={comment.side}

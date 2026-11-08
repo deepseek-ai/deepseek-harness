@@ -64,19 +64,19 @@ const skills = registerUpstreamSkills(ctx, {
 
 ### 保留的文件与校验
 
-库按顺序从每个 `skillsUrls` 前缀下载 `<前缀>/<owner>/<repository>/tar.gz/<commit>`。某个前缀返回错误状态或空响应体、没有在 `skillsTimeoutMs` 内送达完整归档、发来损坏的归档，或发来的文件与固定信息不符时，记录它的来源并尝试下一个；卸载插件则立即停止。库保留 `directory` 下除 `exclude` 列出的路径之外的所有普通文件，以及 `license`，并保持它们的仓库路径。以下归档会被拒绝：任一条目的路径含空段、`.`、`..` 或反斜杠；条目不在唯一的顶层目录下；保留的路径是链接或出现两次；保留的文件超过 `bytes`；没有许可证文件。Windows 上 node-tar 在库读取路径之前已把反斜杠转成 `/`，因此改为检查它分开的各段。摘要按路径顺序对每个保留文件的路径、字节长度和内容做哈希，因为 GitHub 保证提交归档里的文件不变，但不保证压缩后的字节不变。校验通过的文件先写入同级的暂存目录，再改名为 `skills.directory`；另一个进程（例如与 Web 同时运行的桌面端）先发布的目录会被保留。
+库按顺序从每个 `skillsUrls` 前缀下载 `<前缀>/<owner>/<repository>/tar.gz/<commit>`。某个前缀返回错误状态或空响应体、没有在 `skillsTimeoutMs` 内送达完整归档、发来损坏的归档，或发来的文件与固定信息不符时，记录该前缀并尝试下一个；卸载插件则立即停止。库保留 `directory` 下除 `exclude` 列出的路径之外的所有普通文件，以及 `license`，并保持它们的仓库路径。以下归档会被拒绝：任一条目的路径含空段、`.`、`..` 或反斜杠；条目不在唯一的顶层目录下；保留的路径是链接或出现两次；保留的文件超过 `bytes`；没有许可证文件。Windows 上 node-tar 在库读取路径之前已把反斜杠转成 `/`，因此改为检查它分开的各段。摘要按路径顺序对每个保留文件的路径、字节长度和内容做哈希，因为 GitHub 保证提交归档里的文件不变，但不保证压缩后的字节不变。校验通过的文件先写入同级的暂存目录，再改名为 `skills.directory`；另一个进程（例如与 Web 同时运行的桌面端）先发布的目录会被保留。
 
 ### 固定提交
 
-`pnpm exec tsx scripts/upstream-skills-digest.ts --repository <owner>/<repository> --commit <完整提交号> --directory <路径> [--exclude <路径>]... [--license LICENSE]` 从 GitHub 下载归档，按同样规则保留文件，以 JSON 输出固定信息，并在 stderr 列出保留的 `SKILL.md` 路径。
+`pnpm exec tsx scripts/upstream-skills-digest.ts --repository <owner>/<repository> --commit <完整提交号> --directory <路径> [--exclude <路径>]... [--license LICENSE] [--url <前缀>]` 从 `--url` 前缀下载归档（默认是 `https://codeload.github.com`），按同样规则保留文件，以 JSON 输出固定信息，并在 stderr 列出保留的 `SKILL.md` 路径。
 
 ### 共用配置
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
 | `skillsDir` | 无 | 按仓库路径存放保留文件的目录；设置后不下载，路径不是目录时加载失败 |
-| `skillsUrls` | `['https://codeload.github.com']` | 按顺序尝试的 HTTPS 归档下载前缀，不含查询串、片段或凭据 |
-| `skillsTimeoutMs` | `120000` | 一个前缀送达完整归档的时限，超时后尝试下一个 |
+| `skillsUrls` | `['https://codeload.github.com']` | 按顺序尝试的 HTTPS 归档下载前缀，不含查询串、片段或凭据；无法解析为 URL 的值使配置校验失败 |
+| `skillsTimeoutMs` | `120000` | 一个前缀送达完整归档的时限（整数毫秒），超时后尝试下一个 |
 
 -----
 
@@ -86,7 +86,7 @@ const skills = registerUpstreamSkills(ctx, {
 <details>
 <summary>实现内部细节——点击展开</summary>
 
-提供方只在 `skills.directory` 存在时列出入口技能，来源为 `bundled`、使用内置技能的优先级，因此同名的项目或用户技能优先。发布前它返回完整的空列表，因为不完整的结果会让整个技能目录变成不完整；发布后改为使目录失效。同一时间只运行一次下载，卸载插件时，提供方注册的信号会中止它。保留文件在与摘要一致之前只存在内存中，总量受 `bytes` 限制，因此未经校验的文件不会写入磁盘；选择范围之外的文件读取后即丢弃，花在它们上面的时间受 `skillsTimeoutMs` 限制。
+提供方只在 `skills.directory` 存在时列出入口技能，来源为 `bundled`、使用内置技能的优先级，因此同名的项目或用户技能优先。发布前它返回完整的空列表，因为不完整的结果会让整个技能目录变成不完整；发布后改为使目录失效；下载失败但发现另一个进程已发布目录时也使目录失效。同一时间只运行一次下载，卸载插件时，提供方注册的信号会中止它。保留文件在与摘要一致之前只存在内存中，总量受 `bytes` 限制，因此未经校验的文件不会写入磁盘；选择范围之外的文件读取后即丢弃，花在它们上面的时间受 `skillsTimeoutMs` 限制。
 
 | 文件 | 职责 |
 |---|---|
@@ -122,7 +122,8 @@ const skills = registerUpstreamSkills(ctx, {
 <a id="known-limitations-and-deferred-work"></a>
 
 - 换用新的固定提交后，首次加载需要能访问 GitHub 或配置的镜像；下载成功之前，入口技能不会列出，插件显示 `failed` 状态。
-- 插件改为固定其他提交后，以及插件卸载后，已发布的目录仍留在 `$DSH_HOME/cache/<name>` 中，没有任何清理。
+- 插件改为固定其他提交后，以及插件卸载后，已发布的目录仍留在 `$DSH_HOME/cache/<name>` 中，没有任何清理。进程在写入下载内容时退出，也会在那里留下它的暂存目录 `.skills-<摘要>-<uuid>`。
+- 只检查已发布的目录是否存在。目录里的文件被删除或改动后，入口技能仍会基于这些文件列出；删除该目录后，下一次检查或加载会重新下载固定的提交。
 - 不保留文件权限，上游脚本不可直接执行；目前的上游子指南都通过 `python3` 运行脚本。
 
 <a id="dev-note"></a>

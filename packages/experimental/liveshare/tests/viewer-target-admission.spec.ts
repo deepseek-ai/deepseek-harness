@@ -84,7 +84,7 @@ async function harness(mode: ViewerSessionMode = 'write') {
   await forks.record({ shareId: 'share', sourceSessionId: source, childSessionId: child,
     creator: actor, boundary: 0, createdAt: '2026-10-12T00:00:00Z' })
   forks.installEnforcement(child, READ_ONLY_FORK_CEILING)
-  const share: ForkShareState = { shareId: 'share', sessionId: source, sessionMode: mode,
+  const share: ForkShareState = { shareId: 'share', sessionIds: [source], sessionMode: mode,
     allowsFork: mode !== 'view', viewerAdmitted: true, stopped: false }
   const accessFacts: ViewerAccessFacts = {
     share: shareId => shareId === 'share' ? share : undefined,
@@ -92,14 +92,14 @@ async function harness(mode: ViewerSessionMode = 'write') {
     sourceConfined: () => true,
     forks,
     workspaces: () => [],
-    declaredCapabilities: () => [],
+    offeredPlugins: () => [],
   }
   ctx.remoteAccess.registerPolicy('share-viewer', createViewerAccessPolicy(accessFacts))
   const shared = ctx.connection.createSharedFetchHandler('/api')
   const dispatch = vi.fn((request: Request, peer: PeerScope) => shared.fetch(request, peer))
   const peers: PeerScope[] = []
   const reader = createViewerReadService({
-    sharedSessionId: () => source, forks,
+    sharedSessionIds: () => [source], forks,
     forkStateOf: () => share,
     sourceConfined: () => true, viewerStillAdmitted: () => true,
     connection: {

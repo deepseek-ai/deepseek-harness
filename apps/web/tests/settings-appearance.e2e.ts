@@ -149,7 +149,7 @@ it('shares settings card materials and control sizes in both palettes', async ()
       bonusWallets: [{ currency: 'CNY', balance: '12.00' }],
     }),
     vi.spyOn(account, 'watch').mockImplementation(async function* (signal) {
-      yield state
+      yield { type: 'snapshot', state }
       if (signal.aborted) return
       await new Promise<void>((resolve) => { signal.addEventListener('abort', () => { resolve() }, { once: true }) })
     }),

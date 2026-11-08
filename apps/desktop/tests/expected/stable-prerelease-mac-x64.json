@@ -1,0 +1,42 @@
+[
+  {
+    "environment": "test",
+    "version": "1.2.3-alpha.1",
+    "keys": [
+      "dsh-desk/0123456789abcdef0123456789abcdef/bin/mac-x64/stable/deepseek-harness-1.2.3-alpha.1-mac-x64.dmg",
+      "dsh-desk/0123456789abcdef0123456789abcdef/bin/mac-x64/stable/deepseek-harness-1.2.3-alpha.1-mac-x64.zip",
+      "dsh-desk/0123456789abcdef0123456789abcdef/bin/mac-x64/stable/deepseek-harness-1.2.3-alpha.1-mac-x64.zip.blockmap",
+      "dsh-desk/0123456789abcdef0123456789abcdef/feeds/mac-x64/stable-mac.yml"
+    ]
+  },
+  {
+    "environment": "test",
+    "version": "1.2.3-rc.1",
+    "keys": [
+      "dsh-desk/0123456789abcdef0123456789abcdef/bin/mac-x64/stable/deepseek-harness-1.2.3-rc.1-mac-x64.dmg",
+      "dsh-desk/0123456789abcdef0123456789abcdef/bin/mac-x64/stable/deepseek-harness-1.2.3-rc.1-mac-x64.zip",
+      "dsh-desk/0123456789abcdef0123456789abcdef/bin/mac-x64/stable/deepseek-harness-1.2.3-rc.1-mac-x64.zip.blockmap",
+      "dsh-desk/0123456789abcdef0123456789abcdef/feeds/mac-x64/stable-mac.yml"
+    ]
+  },
+  {
+    "environment": "production",
+    "version": "1.2.3-alpha.1",
+    "keys": [
+      "dsh-desk/bin/mac-x64/stable/deepseek-harness-1.2.3-alpha.1-mac-x64.dmg",
+      "dsh-desk/bin/mac-x64/stable/deepseek-harness-1.2.3-alpha.1-mac-x64.zip",
+      "dsh-desk/bin/mac-x64/stable/deepseek-harness-1.2.3-alpha.1-mac-x64.zip.blockmap",
+      "dsh-desk/feeds/mac-x64/stable-mac.yml"
+    ]
+  },
+  {
+    "environment": "production",
+    "version": "1.2.3-rc.1",
+    "keys": [
+      "dsh-desk/bin/mac-x64/stable/deepseek-harness-1.2.3-rc.1-mac-x64.dmg",
+      "dsh-desk/bin/mac-x64/stable/deepseek-harness-1.2.3-rc.1-mac-x64.zip",
+      "dsh-desk/bin/mac-x64/stable/deepseek-harness-1.2.3-rc.1-mac-x64.zip.blockmap",
+      "dsh-desk/feeds/mac-x64/stable-mac.yml"
+    ]
+  }
+]

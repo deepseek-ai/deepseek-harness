@@ -6,6 +6,8 @@ recording: authored
 header:
   class: background-confinement-failure
   pin: true
+  systemPromptSource: text-turn
+  toolSchemasSource: text-turn
 replay:
   override: true
 platform: posix

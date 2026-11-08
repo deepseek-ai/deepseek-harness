@@ -59,3 +59,37 @@ it.each(languages)('selects %s from the browser, localizes metadata and persists
   expect(tripwire.warnings).toEqual([])
   expect(tripwire.pageErrors).toEqual([])
 })
+
+const forgePreviews = [
+  ['de', 'de-DE', 'Plugins', 'Eine Unterhaltung mit verknüpftem GitHub-Pull-Request, Prüfungen, Reviews, Codeunterschieden und einem separaten Arbeitsbaum'],
+  ['es', 'es-MX', 'Complementos', 'Una conversación vinculada a un pull request de GitHub, con comprobaciones, revisiones, diferencias de código y un árbol de trabajo aislado'],
+  ['fr', 'fr-CA', 'Plugins', 'Une conversation liée à une pull request GitHub, avec vérifications, revues, différences de code et un arbre de travail isolé'],
+  ['ja', 'ja-JP', 'プラグイン', 'GitHub のプルリクエストに関連付けられた会話、チェックとレビューの状況、コードの差分、独立したワークツリー'],
+  ['pt', 'pt-BR', 'Plug-ins', 'Uma conversa vinculada a um pull request do GitHub, com verificações, revisões, diferenças de código e uma árvore de trabalho isolada'],
+  ['ru', 'ru-RU', 'Плагины', 'Беседа, связанная с pull request GitHub: проверки, рецензии, различия в коде и отдельное рабочее дерево'],
+] as const
+
+it.each(forgePreviews)('reads the Forge preview in %s before activation', async (id, tag, plugins, alt) => {
+  const resources: { scaffold?: WebScaffold; browser?: Browser } = {}
+  onTestFinished(async () => {
+    try { await resources.browser?.close() } finally { await resources.scaffold?.close() }
+  })
+  const scaffold = await launchWebScaffold()
+  resources.scaffold = scaffold
+  const browser = await chromium.launch()
+  resources.browser = browser
+  const page = await browser.newPage({ locale: tag, viewport: { width: 1440, height: 960 } })
+  const tripwire = watchConsole(page)
+  onTestFailed(() => saveFailureShot(page, `forge-preview-${id}`))
+  await page.goto(scaffold.authenticatedUrl)
+  await expect.poll(() => page.locator('html').getAttribute('lang')).toBe(id)
+  await page.getByRole('button', { name: plugins, exact: true }).click()
+  const card = page.locator('[data-plugin-package="@deepseek-ai/dsh-experimental-forge-bundle"]')
+  expect(await card.getByRole('switch').getAttribute('aria-checked')).toBe('false')
+  await card.getByRole('button').click()
+  const image = page.locator('[data-detail-document]').getByRole('img', { name: alt, exact: true })
+  await image.waitFor()
+  await image.evaluate(async (node: HTMLImageElement) => { await node.decode() })
+  expect(await image.evaluate((node: HTMLImageElement) => [node.naturalWidth, node.naturalHeight])).toEqual([640, 300])
+  expect(tripwire.pageErrors).toEqual([])
+})

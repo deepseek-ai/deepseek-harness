@@ -276,6 +276,20 @@ describe('confined fork tools', () => {
       .toContain('may only read inside the workspace')
   })
 
+  it('admits the PTC transport for a fork child while nested calls stay separately judged', () => {
+    const h = harness()
+    expect(installForkEnforcement(h.target as never, h.failure)).toBeDefined()
+    h.forks.enforcedCeiling.mockReturnValue(READ_ONLY_FORK_CEILING)
+    h.describe.mockReturnValue({ paths: [], noFileEffect: true })
+    const guard = h.guard() as (execution: Record<string, unknown>) => string | undefined
+    // The transport's program runs under the owner's standing policy; the name alone widens no tool.
+    expect(guard({ name: 'run_code', arguments: { code: 'return 1', description: 'run' }, agent: { id: 'child-1' } }))
+      .toBeUndefined()
+    // A nested shell call is a separate execution this same guard refuses.
+    expect(guard({ name: 'bash', arguments: { command: 'ls' }, agent: { id: 'child-1' } }))
+      .toContain('may not use bash')
+  })
+
   it('refuses a no-effect tool whose visible definition changed after the limit was installed', () => {
     const read = deploymentTool('read')
     const h = harness({ read })
@@ -530,6 +544,17 @@ describe('source-session sandbox', () => {
       expect(guard({ name })).toContain('may not use')
       expect(h.installed.has(name)).toBe(false)
     }
+  })
+
+  it('admits the PTC transport at both tiers and still refuses every unlisted name', () => {
+    const h = sourceHarness({ tools: sharedToolNames('view'), writeGate: { mayWrite: () => true } })
+    const installed = installSourceSessionAccess(h.target as never)
+    expect(installed.readConfined).toBe(true)
+    const guard = h.guardFunction() as (execution: { readonly name: string; readonly arguments?: unknown }) => string | undefined
+    // The program itself declares no path; each nested call re-enters this pipeline as its own execution.
+    expect(guard({ name: 'run_code', arguments: { code: 'return 1', description: 'run' } })).toBeUndefined()
+    expect(guard({ name: 'bash', arguments: { command: 'ls' } })).toContain('may not use bash')
+    expect(guard({ name: 'ghost', arguments: {} })).toContain('may not use ghost')
   })
 
   it('resolves each tool’s declared paths and delegates with their canonical form', async () => {

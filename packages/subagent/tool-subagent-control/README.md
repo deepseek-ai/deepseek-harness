@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-tool-subagent-control` lets agents discover and message their subagent tree by Session id, interrupt descendants, and wait for their own next-step inbox. By default, one plugin instance registers all four tools; members inherit the same definitions and ordering.
+`dsh-tool-subagent-control` lets agents discover and message their subagent tree by name, interrupt descendants, and wait for their own next-step inbox. By default, one plugin instance registers all four tools; members inherit the same definitions and ordering.
 
 ## Table of Contents
 
@@ -44,20 +44,20 @@ Set `config.interrupt: false` to omit `interrupt_agent`. The default is `true`. 
 
 ### send_message
 
-Sends a message to another agent in the same subagent tree by `agent_id`. The caller must be the live root or a resident continuable subagent. A working target receives Steer input at its next step; an inactive target starts or resumes a turn. Only the target resumes; its creation ancestors stay offline. Success returns inbox acceptance (`messageId`), never a reply. Self, unrelated trees, unsupported targets, unknown ids, unavailable history, and rejected admission return errors.
+Sends a message to another agent in the same subagent tree. `agent` takes a name from `list_agents`: `lead` for the root or a full name such as `reviewer/checker`. Text that is not a name in the tree is treated as a Session id, so Session ids also work, including for members listed by Session id. The caller must be the live root or a resident continuable subagent. A working target receives Steer input at its next step; an inactive target starts or resumes a turn. Only the target resumes; its creation ancestors stay offline. Success returns inbox acceptance (`messageId`), never a reply. Self, unrelated trees, unsupported targets, unknown names or ids, unavailable history, and rejected admission return errors.
 
 ### interrupt_agent
 
-`agent_id` identifies a descendant by Session id. External executions stop permanently and cannot receive follow-ups. Local targets stop only their current turn: queued messages stay parked until a later `send_message`, descendants keep running, and the child stays available for follow-ups. The call returns when the stop request is accepted, not when the target is quiet; interrupting an already-finished agent is an accepted no-op, and self, sibling, stale, and non-ancestor callers get errored results.
+`agent` names a descendant the same way `send_message` names its target. External executions stop permanently and cannot receive follow-ups. Local targets stop only their current turn: queued messages stay parked until a later `send_message`, descendants keep running, and the child stays available for follow-ups. The call returns when the stop request is accepted, not when the target is quiet; interrupting an already-finished agent is an accepted no-op, and self, sibling, stale, and non-ancestor callers get errored results.
 
 <a id="wait_agent"></a>
 ### wait_agent
 
-Waits for the exact caller’s next-step inbox. Pending input returns immediately; later input, including messages, completion notifications, and user steering, ends the wait. Queued next-turn messages, unrelated inboxes, and Agent status changes do not end it. Task changes do not end the wait. The tool neither consumes input nor starts an Agent. `timeout_ms` defaults to 30000 and must be an integer from 10000 through 3600000. Results contain only `timedOut`; cancellation, caller disposal, or plugin unload rejects the wait.
+Waits for the exact caller’s next-step inbox. Pending input returns immediately unless an earlier wait in the same model tool call already reported it, so repeated waits from one `run_code` program block until new input or timeout; later input, including messages, completion notifications, and user steering, ends the wait. Queued next-turn messages, unrelated inboxes, and Agent status changes do not end it. Task changes do not end the wait. The tool neither consumes input nor starts an Agent. `timedOut: false` means new input is pending. Pending input is delivered to the model after code execution finishes. `timeout_ms` defaults to 30000 and must be an integer from 10000 through 3600000. Results contain only `timedOut`; cancellation, caller disposal, or plugin unload rejects the wait.
 
 ### list_agents
 
-Lists the root and all reachable continuable descendants, including the caller, in stable pre-order. Descendant rows carry their direct parent id and depth from the root. Live status is `running` or `inactive`. External entries are omitted without reading child Sessions; readable one-shot children remain traversal nodes. Unknown modes and unreadable catalogs produce diagnostics. Ordinary Session forks lead separate subagent trees.
+Lists the root and all reachable continuable descendants, including the caller, in stable pre-order. Each row carries a `name`, a `status`, and, for the root and continuable descendants, a `description`. The root is `lead` with the description `root agent`; a descendant's name is its full path from the root and its description is its creation label. A child whose catalog entry has no name, and every descendant below it, is listed by Session id. Live status is `running` or `inactive`. External entries are omitted without reading child Sessions; readable one-shot children remain traversal nodes. Unknown modes and unreadable catalogs produce rows whose status is `unsupported`, `corrupt`, or `unavailable`; the status reports that the row's own descendants could not be read, while the row itself stays an addressable member. Ordinary Session forks lead separate subagent trees.
 
 -----
 
@@ -71,15 +71,15 @@ This section explains what the tools delegate to the subagent service; the obser
 
 ### Design concept
 
-Messaging, interruption, and discovery delegate to `ctx.subagents`; residency, cold resume, and authorization belong to that service. The wait tool subscribes to the exact caller’s inbox events before starting the timer and checking pending next-step input, and removes its listeners and timer on every settlement.
+Messaging, interruption, and discovery delegate to `ctx.subagents`; residency, cold resume, and authorization belong to that service. Messaging and interruption first map `agent` to a Session id through `ctx.subagents.resolveName()`, which grants no authority; the service then authorizes that Session id. The wait tool subscribes to the exact caller’s inbox events before starting the timer and checking pending next-step input, and removes its listeners and timer on every settlement. Each successful wait records, per Agent, the pending ids it reported and its root tool call; a later wait from the same root call ignores those ids.
 
 ### Delivery and signal ownership
 
-The execution signal owns work only until inbox acceptance. Accepted messages cannot be cancelled through this tool. Every message is framed as `Agent <sender-id> sent a message:` and recorded with `{ kind: 'agent-message', form: 'relay', senderSessionId: sender.id }`. Tree membership authorizes communication; the subagent tree root owns runtime instances and capacity.
+The execution signal owns work only until inbox acceptance. Accepted messages cannot be cancelled through this tool. Every message is framed as `Agent <sender-name> sent a message:` and recorded with `{ kind: 'agent-message', form: 'relay', senderSessionId: sender.id }`. Tree membership authorizes communication; the subagent tree root owns runtime instances and capacity.
 
 ### Listing projection
 
-`list_agents` resolves the caller’s live root and traverses its catalogs without a cursor, refining activity through the live Agent registry. Unknown modes remain traversable with diagnostics; unreadable catalogs stop that branch. Sessions absent from reachable catalogs cannot be discovered.
+`list_agents` resolves the caller’s live root and traverses its catalogs without a cursor, refining activity through the live Agent registry. Names come from the `path` of each `listDescendants()` row. Unknown modes remain traversable with diagnostics; unreadable catalogs stop that branch. Sessions absent from reachable catalogs cannot be discovered.
 
 ### Source map
 
@@ -111,7 +111,7 @@ Read these pages when the package-level contract is not enough; they move from t
 
 #### What the model sees
 
-The generated [schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent-control) define id-addressed messaging and interruption, whole-tree discovery, and inbox waiting with `timeout_ms`. `wait_agent` returns `{ "timedOut": false }` for available input, and `{ "timedOut": true }` on timeout. It returns no message body or peer-activity diagnosis.
+The generated [schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent-control) define name-addressed messaging and interruption, whole-tree discovery, and inbox waiting with `timeout_ms`. `wait_agent` returns `{ "timedOut": false }` for available input, and `{ "timedOut": true }` on timeout. It returns no message body or peer-activity diagnosis.
 
 #### Token effect
 
@@ -125,21 +125,32 @@ Prefix-stable; the schemas do not change at runtime, and a parent and its contin
 
 #### What the model sees
 
-Required `subagent:identity` runtime context identifies each agent by its Session id. Delegated children are identified as subagents and receive their direct parent and root ids. It is independent of Team mode and tool filtering; a missing live root is reported without preventing independent work. When the live root is available, identity context includes messaging and discovery instructions independently for each admitted standard tool. Automatic result delivery remains owned by the subagent service.
+Required `subagent:identity` runtime context identifies each agent by name. It is independent of Team mode and tool filtering. When the live root is available, identity context includes messaging and discovery instructions independently for each admitted standard tool. The root sees `You are the root agent. Your name is "lead".` followed by the same guidance. A missing live root is reported with the agent's Session id, without preventing independent work. Automatic result delivery remains owned by the subagent service. A child of the root named `reviewer`, with both tools admitted, sees:
+
+##### Subagent identity
+
+```markdown
+You are a subagent delegated by agent "lead".
+Your name is "reviewer".
+The root agent of your collaboration tree is "lead".
+
+To message other agents, use send_message({ agent: "<agent-name>", message: "..." }).
+Use list_agents({}) to find your collaborator agents and their names.
+```
 
 #### Token effect
 
-One short context entry per agent, independent of tree size.
+One short context entry per agent, independent of tree size; full names lengthen with nesting depth.
 
 #### KV Cache effect
 
-Identity and communication guidance follow inherited history as logged runtime context, leaving the shared system prompt and tool definitions unchanged. This required context remains available with `includeRuntimeContext: false` and is restored after compaction. Team mode does not change it.
+Identity and communication guidance follow inherited history as logged runtime context, leaving the shared system prompt and tool definitions unchanged. When a retained snapshot's identity text differs from the current text, one current runtime-context snapshot is appended. This required context remains available with `includeRuntimeContext: false` and is restored after compaction. Team mode does not change it.
 
 ### Interrupt result
 
 #### What the model sees
 
-`interrupt requested for agent <agent_id>` on acceptance. An unauthorized caller — self, sibling, stale, or non-ancestor — is an errored result naming the rejection; an absent or settled target still renders the acceptance line.
+`interrupt requested for agent <agent>` on acceptance, echoing the `agent` argument. An unauthorized caller — self, sibling, stale, or non-ancestor — is an errored result naming the rejection; an absent or settled target still renders the acceptance line.
 
 #### Token effect
 
@@ -153,11 +164,11 @@ Append-only; each result follows the reusable request prefix.
 
 #### What the model sees
 
-`message delivered to agent <id>` on acceptance; canonical output carries the accepted `messageId`. A target outside the caller’s subagent tree or rejected admission produces an errored result.
+`message delivered to agent <agent>` on acceptance, echoing the `agent` argument; canonical output carries the accepted `messageId`. A target outside the caller’s subagent tree or rejected admission produces an errored result.
 
 #### Token effect
 
-One short acknowledgement per call; replies arrive as separately addressed messages. Use ids from `list_agents` for follow-ups across the subagent tree.
+One short acknowledgement per call; replies arrive as separately addressed messages. Use names from `list_agents` for follow-ups across the subagent tree.
 
 #### KV Cache effect
 
@@ -167,11 +178,11 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 #### What the model sees
 
-The first row is `<id> [<status>] — root agent`. Each continuable descendant follows as `<id> [<status>] parent=<id> depth=<n> — <label>`. The root has `kind: root`; descendants have `kind: child` relative to that root. Diagnostics render `<id> [diagnostic: <reason>] parent=<id> depth=<n>`. Status describes turn activity, not task completion, success, or failure.
+Each row renders as `<name> [<status>] — <description>`, or `<name> [<status>]` without a description. The first row is `lead [<status>] — root agent`; continuable descendants follow, such as `reviewer/checker [inactive] — Check the diff`. Unreadable branches render as `<name> [corrupt]`, `<name> [unsupported]`, or `<name> [unavailable]`. The canonical value is an array of `{ name, status, description? }`. Status describes turn activity, not task completion, success, or failure.
 
 #### Token effect
 
-Grows linearly with the whole subagent tree’s listed rows. There is no cursor or cap.
+Grows linearly with the whole subagent tree’s listed rows. There is no cursor or cap. Rows carry no parent ids or depth; a full name encodes both.
 
 #### KV Cache effect
 
@@ -187,6 +198,7 @@ These limits define what the control tools cannot observe or steer; they are cur
 - **A delivered message has no independent result** — acceptance returns only its inbox `messageId`; later target work lands in that target's durable Session and is never collected through this tool. A reply is another explicitly addressed `send_message`, not this call's result.
 - **Messaging requires a live subagent tree root** — intermediate creators may be offline. Only the target resumes, consuming one shared capacity slot. Unrelated trees and external or one-shot targets cannot receive messages.
 - **Listing is a snapshot, not a delivery promise** — it may race publication, disposal, or a later message, and another process may activate a child this process reports as `inactive`; cross-process accuracy requires a shared lease. `interrupt_agent` performs the authoritative live-lineage check itself, so discovery staleness cannot grant authority.
+- **Edits to reported input do not end a wait** — replacing a pending message keeps its id, so within the same model tool call a wait that already reported it stays pending; the edited content still reaches the model at the next step.
 - **No pagination or deletion** — the complete stably ordered set is returned, and persisted children remain listed for as long as their sessions remain in persistence; a service-level bound or delete operation is a later product decision.
 
 <a id="dev-note"></a>

@@ -57,7 +57,7 @@ def main():
             helper.call("activate", owner)
             wait_state(root / "target.json", lambda state: state["active"] and state["textFocused"])
             result = helper.call("paste", params)
-            assert result == {"dispatched": True, "verified": False}, result
+            assert result == {"dispatched": True}, result
             foreground = wait_state(root / "target.json", lambda state: state["text"] == "test")
             assert foreground["pasteCalls"] == [False, True] and foreground["active"], foreground
             if args.artifacts:

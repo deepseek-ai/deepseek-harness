@@ -64,19 +64,19 @@ const skills = registerUpstreamSkills(ctx, {
 
 ### Kept files and verification
 
-The library downloads `<prefix>/<owner>/<repository>/tar.gz/<commit>` from each `skillsUrls` prefix in order. A prefix that answers with an error status or no body, does not deliver the whole archive within `skillsTimeoutMs`, sends a malformed archive, or sends files that differ from the pin is logged with its origin, and the next prefix is tried; disposing the plugin stops at once. The library keeps every regular file under `directory` except the paths in `exclude`, plus `license`, at their repository paths. It refuses an archive with an empty, `.`, or `..` path segment or a backslash in any entry, entries outside its one top-level directory, a kept path that is a link or appears twice, kept files above `bytes`, or no license file. On Windows, node-tar turns backslashes into slashes before the library reads a path, so the segments they separate are checked instead. The digest hashes each kept file's path, byte length, and content in path order, because GitHub keeps the files of a commit archive stable but not its compressed bytes. Verified files are written to a sibling staging directory, which is then renamed to `skills.directory`; a directory that another process, such as Desktop beside Web, published first is kept.
+The library downloads `<prefix>/<owner>/<repository>/tar.gz/<commit>` from each `skillsUrls` prefix in order. A prefix that answers with an error status or no body, does not deliver the whole archive within `skillsTimeoutMs`, sends a malformed archive, or sends files that differ from the pin is logged with the prefix, and the next prefix is tried; disposing the plugin stops at once. The library keeps every regular file under `directory` except the paths in `exclude`, plus `license`, at their repository paths. It refuses an archive with an empty, `.`, or `..` path segment or a backslash in any entry, entries outside its one top-level directory, a kept path that is a link or appears twice, kept files above `bytes`, or no license file. On Windows, node-tar turns backslashes into slashes before the library reads a path, so the segments they separate are checked instead. The digest hashes each kept file's path, byte length, and content in path order, because GitHub keeps the files of a commit archive stable but not its compressed bytes. Verified files are written to a sibling staging directory, which is then renamed to `skills.directory`; a directory that another process, such as Desktop beside Web, published first is kept.
 
 ### Pinning a commit
 
-`pnpm exec tsx scripts/upstream-skills-digest.ts --repository <owner>/<repository> --commit <full id> --directory <path> [--exclude <path>]... [--license LICENSE]` downloads the archive from GitHub, keeps the same files, prints the pin as JSON, and lists the kept `SKILL.md` paths on stderr.
+`pnpm exec tsx scripts/upstream-skills-digest.ts --repository <owner>/<repository> --commit <full id> --directory <path> [--exclude <path>]... [--license LICENSE] [--url <prefix>]` downloads the archive from the `--url` prefix, `https://codeload.github.com` by default, keeps the same files, prints the pin as JSON, and lists the kept `SKILL.md` paths on stderr.
 
 ### Shared config
 
 | Field | Default | Meaning |
 |---|---|---|
 | `skillsDir` | none | Directory holding the kept files at their repository paths; when set, nothing is downloaded, and a path that is not a directory fails the load |
-| `skillsUrls` | `['https://codeload.github.com']` | HTTPS archive download prefixes, without a query, fragment, or credentials, tried in order |
-| `skillsTimeoutMs` | `120000` | How long one prefix may take to deliver the whole archive before the next is tried |
+| `skillsUrls` | `['https://codeload.github.com']` | HTTPS archive download prefixes, without a query, fragment, or credentials, tried in order; a value that does not parse as a URL fails the configuration |
+| `skillsTimeoutMs` | `120000` | Whole milliseconds one prefix may take to deliver the whole archive before the next is tried |
 
 -----
 
@@ -86,7 +86,7 @@ The library downloads `<prefix>/<owner>/<repository>/tar.gz/<commit>` from each 
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The provider lists the entry only while `skills.directory` exists, with source `bundled` at the bundled rank, so a project or user skill of the same name wins. It returns a complete, empty list before publishing, because an incomplete observation would make the whole skill catalog incomplete; publishing invalidates the catalog instead. One download runs at a time, and the provider registration's signal aborts it when the plugin is disposed. Kept files are held in memory, bounded by `bytes`, until they match the digest, so no unverified file reaches the disk; files outside the selection are read and dropped, so `skillsTimeoutMs` bounds the time spent on them.
+The provider lists the entry only while `skills.directory` exists, with source `bundled` at the bundled rank, so a project or user skill of the same name wins. It returns a complete, empty list before publishing, because an incomplete observation would make the whole skill catalog incomplete; publishing invalidates the catalog instead, as does a failed download that finds a directory another process published. One download runs at a time, and the provider registration's signal aborts it when the plugin is disposed. Kept files are held in memory, bounded by `bytes`, until they match the digest, so no unverified file reaches the disk; files outside the selection are read and dropped, so `skillsTimeoutMs` bounds the time spent on them.
 
 | File | Role |
 |---|---|
@@ -122,7 +122,8 @@ A load that finds the files in place lists the entry in the session's first cata
 <a id="known-limitations-and-deferred-work"></a>
 
 - The first load after a new pin needs GitHub or a configured mirror; until a download succeeds, the entry skill is not listed and the plugin shows the `failed` state.
-- Published directories stay in `$DSH_HOME/cache/<name>` after a plugin pins another commit and after the plugin is removed; nothing prunes them.
+- Published directories stay in `$DSH_HOME/cache/<name>` after a plugin pins another commit and after the plugin is removed; nothing prunes them. A process that exits while it writes a download leaves its `.skills-<digest>-<uuid>` staging directory there too.
+- Only the published directory's existence is checked. When files inside it are deleted or changed, the entry skill stays listed over them; deleting the directory makes the next check or load download the pin again.
 - File modes are not kept, so an upstream script is not executable; the current upstream guides run their scripts through `python3`.
 
 <a id="dev-note"></a>

@@ -1,68 +1,34 @@
 /**
- * Reading one share's owner-submitted plugin endpoint selection against the live offers.
+ * Reading one share's owner-submitted plugin policy against the platform catalog.
  *
- * The owner panel submits what the owner ticked; the plugins' own declarations decide what may be
- * ticked at all. A submission is therefore accepted only where the plugin still offers every named
- * endpoint under the kind it was named with, and a name nothing offers is refused by name instead of
- * being stored as a selection no decision can ever expose.
- *
- * The result is the value the share record carries: absent when the owner exposed nothing, so a share
- * written before the selection existed keeps meaning "none", and an explicit empty submission clears
- * the field rather than storing an empty list.
- *
+ * A submission is accepted only where the plugin and every named endpoint are still offered. The
+ * result is what the share record carries: absent when nothing is exposed, so an old record without
+ * the field keeps meaning "none".
  * @module @deepseek-ai/dsh-experimental-liveshare/src/host/viewer-capability-selection
  */
 
 import type { RemoteAccessEndpoint } from '@deepseek-ai/dsh-api-remote-access/types'
-import type { ViewerCapabilityGroup } from './viewer-declarations.ts'
+import type { ShareablePluginCatalog, ViewerPluginPolicy } from './viewer-capability-types.ts'
 import { isRecord } from './wire-json.ts'
 
-/** One endpoint kind a submission may name. */
-type CapabilityKind = 'readable' | 'writable'
-
-/** The endpoints one plugin's accepted submission names, by kind. */
-interface ChosenEndpoints {
-  readonly readable: Set<RemoteAccessEndpoint>
-  readonly writable: Set<RemoteAccessEndpoint>
-}
-
-/**
- * Why one submission was refused, as the owner panel and the tests read it.
- *
- * The codes are stable and narrow: a malformed body, a plugin the live offers do not name, or an
- * endpoint that plugin does not offer under the kind it was submitted with. The last two carry what
- * they refused, so a refusal names the offending plugin or endpoint instead of only that one is.
- */
-export type ViewerCapabilityRefusal =
+/** Why one submission was refused. */
+export type ViewerPluginPolicyRefusal =
   | { readonly code: 'invalid-capabilities' }
   | { readonly code: 'unknown-plugin'; readonly plugin: string }
-  | {
-    readonly code: 'endpoint-not-offered'
-    readonly plugin: string
-    readonly kind: CapabilityKind
-    readonly endpoint: string
-  }
+  | { readonly code: 'endpoint-not-offered'; readonly plugin: string; readonly endpoint: string }
 
-/** The accepted selection, or the refusal that replaces it. */
-export type ViewerCapabilitySelection =
+/** The accepted policies, or the refusal that replaces them. */
+export type ViewerPluginPolicySelection =
   | {
     readonly ok: true
-    /**
-     * The endpoints this share exposes, grouped by plugin in offer order, or undefined when the
-     * submission exposed none. Undefined is what the share record omits: no field means no exposure.
-     */
-    readonly selection: readonly ViewerCapabilityGroup[] | undefined
+    /** Policies that expose at least one endpoint, or undefined when the share exposes none. */
+    readonly selection: readonly ViewerPluginPolicy[] | undefined
   }
-  | { readonly ok: false; readonly refusal: ViewerCapabilityRefusal }
+  | { readonly ok: false; readonly refusal: ViewerPluginPolicyRefusal }
 
 /**
- * Whether one submitted value is a JSON object.
- * @param value - Candidate value.
- * @returns True for a JSON object.
- */
-/**
- * Read one submitted endpoint list, keeping the shape rule in one place.
- * @param value - Submitted value for `readable` or `writable`.
+ * Read one submitted endpoint list.
+ * @param value - Submitted value.
  * @returns The names, or undefined when the value is not an array of non-empty strings.
  */
 function endpointNames(value: unknown): readonly string[] | undefined {
@@ -76,53 +42,52 @@ function endpointNames(value: unknown): readonly string[] | undefined {
 }
 
 /**
- * Accept one submission against the endpoints plugins currently offer.
- *
- * A plugin group that names no endpoint is dropped, because it exposes nothing; a submission that
- * names nothing at all resolves to an absent selection, which is the field the share record omits.
- * @param offered - Endpoints plugins currently offer, grouped by declaring plugin.
- * @param input - Submitted `capabilities` value, of any type.
- * @returns The selection to store, or the refusal that replaces it.
+ * Accept one submission against the endpoints the platform catalog offers.
+ * @param offered - Catalog grouped by plugin.
+ * @param input - Submitted `viewerPlugins` value, of any type.
+ * @returns The policies to store, or the refusal that replaces them.
  */
-export function readViewerCapabilitySelection(
-  offered: readonly ViewerCapabilityGroup[],
+export function readViewerPluginPolicies(
+  offered: readonly ShareablePluginCatalog[],
   input: unknown,
-): ViewerCapabilitySelection {
+): ViewerPluginPolicySelection {
   if (!Array.isArray(input)) return { ok: false, refusal: { code: 'invalid-capabilities' } }
-  const offeredByPlugin = new Map(offered.map(group => [group.plugin, group]))
-  const chosen = new Map<string, ChosenEndpoints>()
+  const offeredByPlugin = new Map(offered.map(group => [group.plugin, group.endpoints]))
+  const accepted = new Map<string, ViewerPluginPolicy>()
   for (const entry of input) {
     if (!isRecord(entry)) return { ok: false, refusal: { code: 'invalid-capabilities' } }
     const plugin = entry.plugin
     if (typeof plugin !== 'string' || plugin === '') {
       return { ok: false, refusal: { code: 'invalid-capabilities' } }
     }
-    const readable = endpointNames(entry.readable)
-    const writable = endpointNames(entry.writable)
-    if (readable === undefined || writable === undefined) {
+    const endpoints = offeredByPlugin.get(plugin)
+    if (endpoints === undefined) return { ok: false, refusal: { code: 'unknown-plugin', plugin } }
+    const mode = entry.mode
+    if (mode !== 'all' && mode !== 'none' && mode !== 'selected') {
       return { ok: false, refusal: { code: 'invalid-capabilities' } }
     }
-    const group = offeredByPlugin.get(plugin)
-    if (group === undefined) return { ok: false, refusal: { code: 'unknown-plugin', plugin } }
-    const selected = chosen.get(plugin)
-      ?? { readable: new Set<RemoteAccessEndpoint>(), writable: new Set<RemoteAccessEndpoint>() }
-    for (const [kind, endpoints] of [['readable', readable], ['writable', writable]] as const) {
-      for (const endpoint of endpoints) {
-        const accepted = group[kind].find(candidate => candidate === endpoint)
-        if (accepted === undefined) {
-          return { ok: false, refusal: { code: 'endpoint-not-offered', plugin, kind, endpoint } }
-        }
-        selected[kind].add(accepted)
-      }
+    if (mode === 'all') {
+      accepted.set(plugin, { plugin, mode: 'all' })
+      continue
     }
-    chosen.set(plugin, selected)
+    if (mode === 'none') continue
+    const named = endpointNames(entry.endpoints)
+    if (named === undefined) return { ok: false, refusal: { code: 'invalid-capabilities' } }
+    const selected = new Set<RemoteAccessEndpoint>()
+    for (const endpoint of named) {
+      const match = endpoints.find(candidate => candidate === endpoint) as RemoteAccessEndpoint | undefined
+      if (match === undefined) {
+        return { ok: false, refusal: { code: 'endpoint-not-offered', plugin, endpoint } }
+      }
+      selected.add(match)
+    }
+    if (selected.size > 0) {
+      accepted.set(plugin, { plugin, mode: 'selected', endpoints: [...selected].sort() })
+    }
   }
-  const selection = offered.flatMap((group): readonly ViewerCapabilityGroup[] => {
-    const selected = chosen.get(group.plugin)
-    if (selected === undefined) return []
-    const readable = [...selected.readable].sort()
-    const writable = [...selected.writable].sort()
-    return readable.length === 0 && writable.length === 0 ? [] : [{ plugin: group.plugin, readable, writable }]
+  const selection = offered.flatMap((group) => {
+    const policy = accepted.get(group.plugin)
+    return policy === undefined ? [] : [policy]
   })
   return { ok: true, selection: selection.length === 0 ? undefined : selection }
 }

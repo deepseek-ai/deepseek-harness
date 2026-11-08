@@ -30,6 +30,7 @@ const task: TeamTask = {
   description: 'Build the Team runtime',
   status: 'in_progress',
   ownerId: SESSION,
+  ownerName: 'lead',
   blockedBy: [],
   writeScopes: ['src'],
   ready: false,
@@ -131,7 +132,7 @@ describe('TeamBoard', () => {
     const description = 'First line\n'.repeat(30) + 'Final description line'
     const b = bench({ value: { ...team, tasks: [
       { ...task, subject: longSubject, description },
-      { ...task, id: TASK_2, subject: 'Review implementation', ownerId: WORKER },
+      { ...task, id: TASK_2, subject: 'Review implementation', ownerId: WORKER, ownerName: 'worker' },
     ] } })
     render(<TeamBoard {...b.props} />)
     const first = row(longSubject)
@@ -141,8 +142,8 @@ describe('TeamBoard', () => {
     const details = document.getElementById(first.getAttribute('aria-controls')!)!
     const owner = details.querySelector('[data-team-task-owner]')!
     expect(owner.tagName).toBe('P')
-    expect(owner.textContent).toBe(`${zh.owner}: ${SESSION}`)
-    expect(ownerValue()).toBe(SESSION)
+    expect(owner.textContent).toBe(`${zh.owner}: lead`)
+    expect(ownerValue()).toBe('lead')
     const paragraphs = details.querySelectorAll('p')
     expect(paragraphs).toHaveLength(2)
     expect(paragraphs[0]?.textContent).toBe(description)
@@ -154,7 +155,7 @@ describe('TeamBoard', () => {
     expect(screen.getAllByRole('button')).toHaveLength(2)
     fireEvent.click(row('Review implementation'))
     expect(first.getAttribute('aria-expanded')).toBe('false')
-    expect(ownerValue()).toBe(WORKER)
+    expect(ownerValue()).toBe('worker')
     expect(document.querySelectorAll('[data-team-task-details]')).toHaveLength(1)
     expect(screen.queryByText(description)).toBeNull()
     fireEvent.click(row('Review implementation'))
@@ -179,12 +180,12 @@ describe('TeamBoard', () => {
     expect(row('Completed second').querySelector('[data-state="done"]')).toBeTruthy()
     fireEvent.click(row('Completed second'))
     expect(row('Completed second').getAttribute('aria-expanded')).toBe('true')
-    expect(ownerValue()).toBe(SESSION)
+    expect(ownerValue()).toBe('lead')
     expect(screen.getByText(task.description)).toBeTruthy()
   })
 
   it('announces blocked status without displaying readiness, dependencies, scopes, warnings, or task ids', () => {
-    const { ownerId: _ownerId, ...unowned } = task
+    const { ownerId: _ownerId, ownerName: _ownerName, ...unowned } = task
     const b = bench({ value: { ...team, tasks: [
       { ...unowned, status: 'pending', blockedBy: [TASK_2, 'missing' as TeamTaskId] },
       { ...task, id: TASK_2, subject: 'Prepare shared types', status: 'completed' },
@@ -212,40 +213,31 @@ describe('TeamBoard', () => {
     fireEvent.click(row())
     expect(within(row()).getByRole('img', { name: zh['status.pending'] })).toBeTruthy()
     expect(row().querySelector('[data-state="idle"]')).toBeTruthy()
-    expect(ownerValue()).toBe(SESSION)
+    expect(ownerValue()).toBe('lead')
     expect(document.querySelector('[data-team-task-details]')?.children).toHaveLength(1)
     expect(document.querySelector('[data-team-task-details] p:not([data-team-task-owner])')).toBeNull()
   })
 
-  it('uses the owner id independently of catalog descriptions and Session titles', () => {
-    const b = bench({
-      byId: { [SESSION]: summary(SESSION), [NESTED]: { ...summary(NESTED, 'Session title'), parentId: WORKER } },
-      projections: {
-        [SESSION]: { state: 'ready', error: null, values: {
-          agentTeam: { ...team, tasks: [{ ...task, ownerId: NESTED }] },
-        } },
-        [WORKER]: { state: 'ready', error: null, values: {
-          subagentCatalog: [{ id: NESTED, createdAt: 0, mode: 'continuable', label: 'Catalog responsibility' }],
-        } },
-      },
-    })
+  it('renders a saved owner path without loading its parent catalog', () => {
+    const b = bench({ value: { ...team, tasks: [{ ...task, ownerId: NESTED, ownerName: 'worker/checker' }] } })
     render(<TeamBoard {...b.props} />)
     fireEvent.click(row())
-    expect(ownerValue()).toBe(NESTED)
-    setProjectionSnapshot(b.sessions, WORKER, { state: 'ready', error: null, values: {} })
+    expect(ownerValue()).toBe('worker/checker')
     act(() => { b.sessions.update((draft) => { draft.byId[NESTED] = { ...summary(NESTED), displayTitle: 'Display title' } }) })
-    expect(ownerValue()).toBe(NESTED)
-    setProjection(b.sessions, SESSION, { ...team, tasks: [{ ...task, ownerId: WORKER }] })
-    expect(ownerValue()).toBe(WORKER)
+    expect(ownerValue()).toBe('worker/checker')
   })
 
-  it('uses owner id when neither root nor parent projections exist', () => {
-    const b = bench({ value: { ...team, tasks: [{ ...task, ownerId: NESTED }] }, byId: {
-      [NESTED]: { ...summary(NESTED), parentId: WORKER },
+  it('uses the owner Session ID when the saved task has no name', () => {
+    const { ownerName: _ownerName, ...historical } = task
+    const b = bench({ value: { ...team, tasks: [{ ...historical, ownerId: WORKER }] }, projections: {
+      [SESSION]: { state: 'ready', error: null, values: {
+        agentTeam: { ...team, tasks: [{ ...historical, ownerId: WORKER }] },
+        subagentCatalog: [{ id: WORKER, createdAt: 0, mode: 'continuable', label: 'Worker', name: 'worker' }],
+      } },
     } })
     render(<TeamBoard {...b.props} />)
     fireEvent.click(row())
-    expect(ownerValue()).toBe(NESTED)
+    expect(ownerValue()).toBe(WORKER)
   })
 
   it('hides retained tasks while Team is disabled and shows them when enabled', () => {
@@ -344,8 +336,8 @@ describe('TeamBoard', () => {
     render(<TeamBoard {...b.props} t={makeTranslate(en)} />)
     expect(screen.getByRole('heading').textContent).toBe(`${en.tasks}${makeTranslate(en)('progress.active', { count: 1 })}`)
     fireEvent.click(row())
-    expect(ownerValue()).toBe(SESSION)
-    expect(document.querySelector('[data-team-task-owner]')?.textContent).toBe(`${en.owner}: ${SESSION}`)
+    expect(ownerValue()).toBe('lead')
+    expect(document.querySelector('[data-team-task-owner]')?.textContent).toBe(`${en.owner}: lead`)
     expect(screen.queryByText(TASK_1)).toBeNull()
     expect(screen.queryByText('Show more')).toBeNull()
     expect(screen.queryByText('Show less')).toBeNull()
@@ -355,8 +347,9 @@ describe('TeamBoard', () => {
     vi.useFakeTimers()
     enableTooltips()
     const ownerId = '8c0404a0-4c67-48ab-9513-50b4a755d6de' as SessionId
+    const { ownerName: _ownerName, ...historical } = task
     const b = bench({
-      value: { ...team, tasks: [{ ...task, ownerId }] },
+      value: { ...team, tasks: [{ ...historical, ownerId }] },
     })
     const view = render(<TeamBoard {...b.props} />)
     fireEvent.click(row())

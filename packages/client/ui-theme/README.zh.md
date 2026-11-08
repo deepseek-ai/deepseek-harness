@@ -45,7 +45,7 @@ Desktop 的固定快捷键 `Cmd`/`Ctrl` + `+`（或 `=`）和 `Cmd`/`Ctrl` + `-`
 
 ### 插件前调色板
 
-当主机组合包含 HTTP 服务器时，宿主侧会把已注册的 `ui-theme` 设置或 schema 默认值嵌入每份 index 响应。head CSS 会在任何脚本运行前选择文档画布的配色方案，其中 `system` 偏好使用 `prefers-color-scheme` 查询；随后，body 脚本会在加载页面和应用脚本之前设置 `body[data-ds-dark-theme]`、`--dsh-content-font-size`、`--dsh-code-font-size`、`--dsh-terminal-font-size` 以及每个非空的 `--dsh-font-family-<role>` 列表，因此首帧绘制就采用所选调色板与正文、代码字号，`ThemeRuntime` 也从已保存的字号与字体开始，不会先渲染默认值。
+当主机组合包含 HTTP 服务器时，宿主侧会把已注册的 `ui-theme` 设置或 schema 默认值嵌入每份 index 响应。head CSS 会在任何脚本运行前选择文档画布的配色方案，其中 `system` 偏好使用 `prefers-color-scheme` 查询；随后，body 脚本会在加载页面和应用脚本之前设置 `body[data-ds-dark-theme]`、`--dsh-content-font-size`、`--dsh-code-font-size`、`--dsh-terminal-font-size` 以及每个非空的 `--dsh-font-family-<role>` 列表，因此首帧绘制就采用所选调色板与正文、代码字号，`ThemeRuntime` 也从已保存的主题偏好、字号与字体开始，不会先渲染默认值。
 
 -----
 
@@ -77,7 +77,7 @@ Desktop 的固定快捷键 `Cmd`/`Ctrl` + `+`（或 `=`）和 `Cmd`/`Ctrl` + `-`
 
 `base.css` 仅抑制[基础控件焦点工具](../ui-primitives/README.zh.md)通过 `data-dsh-automatic-focus` 标记的聚焦元素外轮廓线；正常键盘焦点样式、边框、阴影及错误状态保持不变。
 
-系统提示使用 `--dsw-alias-toast-bg` 和 `--dsw-alias-toast-label`，在各调用方之间统一背景与文字颜色。文档预览配对使用 `--dsw-alias-bg-document-preview` 与 `--dsw-alias-label-document-preview`，使底色与状态文字遵循相同主题。Tooltip 键帽使用 `--dsw-alias-tooltip-key-bg`，由各主题的 tooltip 背景派生稍浅的填充。开关滑块读取 `--dsw-alias-switch-thumb`：浅色模式为纯白，深色模式为 neutral-bluish 400，使关闭态滑块比轨道更亮，同时避免纯白在暗色下过亮。
+系统提示使用 `--dsw-alias-toast-bg`、`--dsw-alias-toast-label` 和 `--dsw-alias-toast-action`，在各调用方之间统一背景、文字与操作颜色。悬停卡片使用 `--dsw-alias-hovercard-bg`、三档 `--dsw-alias-hovercard-label-*`，以及 `--dsw-alias-hovercard-state-done` 和 `--dsw-alias-hovercard-state-error` 状态颜色；该表面在两套配色中均保持深色。`--dsw-alias-label-on-color` 是饱和填充（如发送按钮）上的白色文字。计划、日程和交付物卡片共用 `--dsw-alias-card-fill`、`--dsw-alias-card-fill-hover` 和 `--dsw-alias-card-tile-fill`；`--dsw-alias-json-tree-*` 为 JSON 树语法着色，`--dsw-alias-chart-*` 为上下文占用各类别着色，`--dsw-alias-border-selected` 用于选中的选项卡片，`--dsw-alias-trajectory-accent` 用于轨迹轮次高亮。组件专属值使用 `--dsw-specific-*`：引导页主视觉文字、文件上传进度轨道、右侧边栏显现闪烁颜色，以及 macOS 上侧边栏的玻璃控件、底色层和色调。文档预览配对使用 `--dsw-alias-bg-document-preview` 与 `--dsw-alias-label-document-preview`，使底色与状态文字遵循相同主题。Tooltip 键帽使用 `--dsw-alias-tooltip-key-bg`，由各主题的 tooltip 背景派生稍浅的填充。开关滑块读取 `--dsw-alias-switch-thumb`：浅色模式为纯白，深色模式为 neutral-bluish 400，使关闭态滑块比轨道更亮，同时避免纯白在暗色下过亮。
 
 `--dsw-alias-label-shimmer` 为共享文字扫光提供叠加色：浅色配色使用 30% alpha 的黑色，深色配色使用 45% alpha 的白色。`--dsw-alias-label-deep-diving` 和 `--dsw-alias-label-deep-diving-shimmer` 提供蓝色活动文本和扫光颜色；深色主题使用更亮、饱和度更低的文字，并以更亮的蓝色扫光。
 

@@ -28,6 +28,8 @@ kind: "package-library"
 
 先把获取到的文档解析为 JSON，再把该值和读取它的 URL 传给 `parseMarketIndex`。遇到第一条被违反的规则时，它抛出 `MarketIndexError`，并附带违规值的 JSON 路径。成功的结果会丢弃格式未定义的成员，用空值填充缺失的 `metadata` 分组、`keywords`、`labels`、`sortKeys` 和 `engines`，按 SemVer 优先级降序排列每个插件的 `versions`，并把每个相对 `icon` 引用替换为其绝对 URL。
 
+在插件元数据中，`null` 表示不可用：元数据对象及其字段按缺省输入归一化，值为 null 的排序值会被省略。数值零会被保留。生成器省略不可用的元数据和值。未知的对象字段会被忽略，但已声明的映射条目、已知字段和来源判别字段仍会校验。
+
 使用 `marketInstallTarget(name, version)` 安装一个版本：它返回精确的 pnpm spec（npm 为 `name@version`，Git 为固定到提交、可带 `path:` 参数的 `git+https` URL），该版本指定了 registry 时还返回首先询问的 registry。
 
 -----

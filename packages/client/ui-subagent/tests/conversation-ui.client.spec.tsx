@@ -316,6 +316,29 @@ describe('SubagentHeaderLineage', () => {
     expect(row.getAttribute('aria-label')).toMatch(new RegExp(`^${CHILD}`))
   })
 
+  it('shows agent names in place of Session ids while navigation keeps the Session id', () => {
+    const external = 'external-id' as SessionId
+    const input = props(catalog({
+      entries: [
+        { id: CHILD, mode: 'continuable', label: 'Review the diff', name: 'reviewer', activity: 'running' },
+        { id: GRANDCHILD, mode: 'continuable', label: '', name: 'checker', activity: 'inactive' },
+        { id: external, mode: 'external', name: 'outside', activity: 'inactive' },
+      ],
+    }), {}, { [CHILD]: { ...summary(CHILD, 1), running: true } })
+    render(<HeaderCatalog {...input} />)
+    fireEvent.click(screen.getByRole('button', { name: /\d+ 个子智能体$/ }))
+    const named = screen.getByRole('treeitem', { name: /^Review the diff reviewer/ })
+    expect(within(named).getByText('Review the diff').compareDocumentPosition(within(named).getByText('reviewer'))
+      & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(within(named).queryByText(CHILD)).toBeNull()
+    const undescribed = screen.getByRole('treeitem', { name: /^checker/ })
+    expect(within(undescribed).getAllByText('checker')).toHaveLength(1)
+    expect(within(undescribed).queryByText(GRANDCHILD)).toBeNull()
+    expect(screen.getByRole('treeitem', { name: /^outside/ }).getAttribute('aria-disabled')).toBe('true')
+    fireEvent.click(named)
+    expect(input.openChild).toHaveBeenCalledExactlyOnceWith({ parentSessionId: PARENT, childSessionId: CHILD, mode: 'continuable' })
+  })
+
   it('hides an empty Team entry but keeps shared tasks and errors reachable without children', () => {
     const input = props(catalog({ entries: [] }))
     const initial = input.useSessions(state => state)
@@ -782,12 +805,12 @@ describe('SubagentHeaderLineage', () => {
     expect(screen.queryByRole('tree')).toBeNull()
     await advance(1)
     const menu = screen.getByRole('dialog')
-    expect(menu.style.top).toBe('45px')
-    expect(menu.style.left).toBe('50px')
+    expect(menu.style.positionAnchor).toBe(trigger.style.anchorName)
+    expect(trigger.style.anchorName).not.toBe('')
     triggerRect.mockReturnValue({ bottom: 60, left: 70 } as DOMRect)
     fireEvent.resize(window)
-    expect(menu.style.top).toBe('65px')
-    expect(menu.style.left).toBe('70px')
+    expect(menu.style.positionAnchor).toBe(trigger.style.anchorName)
+    expect(triggerRect).not.toHaveBeenCalled()
     fireEvent.pointerLeave(trigger.parentElement!)
     fireEvent.pointerEnter(menu)
     await advance(120)
@@ -870,50 +893,42 @@ describe('SubagentHeaderLineage', () => {
     expect(screen.getByRole('tree')).toBeTruthy()
   })
 
-  it('repositions an open catalog after viewport resize and document scroll', () => {
+  it('keeps the open catalog linked to its CSS anchor without layout reads', () => {
     const view = render(<HeaderCatalog {...props(catalog())} />)
     const trigger = screen.getByRole('button', { name: /\d+ 个子智能体$/ })
     const bounds = vi.spyOn(trigger, 'getBoundingClientRect')
-    bounds.mockReturnValue({ bottom: 20, left: 30 } as DOMRect)
     hoverCatalog(trigger)
     const menu = screen.getByRole('dialog')
-    expect(menu.style.top).toBe('25px')
-    expect(menu.style.left).toBe('30px')
-
-    bounds.mockReturnValue({ bottom: 70, left: 80 } as DOMRect)
-    act(() => { window.dispatchEvent(new Event('resize')) })
-    expect(menu.style.top).toBe('75px')
-    expect(menu.style.left).toBe('80px')
-
-    bounds.mockReturnValue({ bottom: 90, left: 100 } as DOMRect)
-    act(() => { document.dispatchEvent(new Event('scroll')) })
-    expect(menu.style.top).toBe('95px')
-    expect(menu.style.left).toBe('100px')
+    expect(trigger.style.anchorName).not.toBe('')
+    expect(menu.style.positionAnchor).toBe(trigger.style.anchorName)
+    act(() => { window.dispatchEvent(new Event('resize')); document.dispatchEvent(new Event('scroll')) })
+    expect(menu.style.positionAnchor).toBe(trigger.style.anchorName)
+    expect(menu.style.left).toBe('')
+    expect(menu.style.top).toBe('')
+    expect(bounds).not.toHaveBeenCalled()
     view.unmount()
   })
 
-  it('keeps the catalog inside a resized visual viewport', () => {
+  it('does not shrink the catalog through visual viewport inline overrides', () => {
     const viewport = Object.assign(new EventTarget(), { width: 500, height: 400, offsetLeft: 0, offsetTop: 0 })
     vi.stubGlobal('visualViewport', viewport)
-    vi.spyOn(HTMLDivElement.prototype, 'offsetWidth', 'get').mockReturnValue(336)
-    vi.spyOn(HTMLDivElement.prototype, 'offsetHeight', 'get').mockReturnValue(160)
+    const listen = vi.spyOn(viewport, 'addEventListener')
     render(<HeaderCatalog {...props(catalog())} />)
     const trigger = screen.getByRole('button', { name: /\d+ 个子智能体$/ })
-    vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue(new DOMRect(300, 200, 70, 20))
     fireEvent.click(trigger)
     const menu = screen.getByRole('dialog')
-    expect(menu.style.left).toBe('148px')
-    expect(menu.style.top).toBe('224px')
-
+    const placement = menu.style.positionAnchor
     act(() => {
       viewport.width = 400
       viewport.height = 300
       viewport.dispatchEvent(new Event('resize'))
     })
-    expect(menu.style.left).toBe('48px')
-    expect(menu.style.top).toBe('124px')
-    expect(menu.style.getPropertyValue('--dsh-anchored-max-width')).toBe('368px')
-    expect(menu.style.getPropertyValue('--dsh-anchored-max-height')).toBe('268px')
+    expect(menu.style.positionAnchor).toBe(placement)
+    expect(menu.style.left).toBe('')
+    expect(menu.style.top).toBe('')
+    expect(menu.style.getPropertyValue('--dsh-anchored-max-width')).toBe('')
+    expect(menu.style.getPropertyValue('--dsh-anchored-max-height')).toBe('')
+    expect(listen).not.toHaveBeenCalled()
   })
 
   it('cancels a pending hover when the trigger becomes hidden', async () => {
@@ -1604,6 +1619,19 @@ describe('SubagentHeaderLineage', () => {
     render(<HeaderCatalog {...input} />)
 
     expect(screen.getByRole('button', { name: `切换子智能体：${CHILD}` })).toBeTruthy()
+  })
+
+  it('names the breadcrumb by the agent name when the selected row has an empty description', () => {
+    const input = {
+      ...props(catalog({ entries: [{ id: CHILD, mode: 'continuable', label: '', name: 'reviewer', activity: 'inactive' }] }), {}, {
+        [CHILD]: { ...summary(CHILD, 1), parentId: PARENT, origin: 'subagent' as const },
+      }),
+      sessionId: CHILD,
+      lineageSessionId: CHILD,
+      displayTitle: 'summary title',
+    }
+    render(<HeaderCatalog {...input} />)
+    expect(screen.getByRole('button', { name: '切换子智能体：reviewer' }).textContent).toBe('reviewer')
   })
 
   it('keeps an ancestor switcher muted and omits its descendant count and section heading', () => {

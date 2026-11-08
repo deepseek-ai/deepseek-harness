@@ -66,20 +66,45 @@ export interface ShareAccess {
   readonly identityKeyAcl: true
 }
 
-/** One plugin's endpoints offered to or selected for a share's viewers. */
+/** One plugin's Remote methods, as the share panel and the share record both use. */
 export interface ShareCapabilityGroup {
-  /** Declaring plugin's package name. */
+  /** Plugin namespace the methods belong to. */
   readonly plugin: string
-  /** Readable endpoints that plugin offers. */
-  readonly readable: readonly string[]
-  /** Writable endpoints that plugin offers. */
-  readonly writable: readonly string[]
+  /** npm package that registered the namespace, when the Host could resolve it. */
+  readonly package?: string
+  /** Localized plugin titles from the package's locale files, keyed by language. */
+  readonly titles?: Readonly<Record<string, string>>
+  /** Remote endpoint names of that plugin, sorted. */
+  readonly endpoints: readonly string[]
+  /** One-line method descriptions keyed by endpoint, when the Host registers one. */
+  readonly descriptions?: Readonly<Record<string, string>>
+}
+
+/**
+ * Global switch over installed-plugin methods.
+ *
+ * `all` exposes every offered method; `none` exposes none; `custom` follows the share's per-plugin
+ * policies. A record with per-plugin policies therefore reads as `custom`.
+ */
+export type ViewerPluginAccess = 'all' | 'none' | 'custom'
+
+/** One share's exposure for one plugin: all of its offered methods, none, or an explicit subset. */
+export interface ViewerPluginPolicy {
+  /** Plugin namespace this policy applies to. */
+  readonly plugin: string
+  /** Whether the share exposes every offered endpoint, none, or the explicit subset. */
+  readonly mode: 'all' | 'none' | 'selected'
+  /** Subset for `selected`; absent or empty exposes nothing. */
+  readonly endpoints?: readonly string[]
 }
 
 /** One owner-created share as the management panel lists it. */
 export interface OwnerShareView {
   readonly shareId: string
+  /** Primary source Session, for callers that predate `sessionIds`; derived from its first entry. */
   readonly sessionId: string
+  /** Every source Session this share serves, primary first; the authoritative list. */
+  readonly sessionIds: readonly string[]
   readonly sessionTitle: string
   readonly link: string
   readonly createdAt: string
@@ -87,8 +112,10 @@ export interface OwnerShareView {
   readonly expiresAt?: string
   readonly allowsFork: boolean
   readonly sessionMode: 'view' | 'write'
-  /** Plugin endpoints this share exposes; an empty list means none. */
-  readonly viewerCapabilities: readonly ShareCapabilityGroup[]
+  /** Global switch over every installed plugin's methods; absent reads as none. */
+  readonly viewerPluginAccess?: ViewerPluginAccess
+  /** Per-plugin endpoint policies this share carries; an empty list means none. */
+  readonly viewerPlugins: readonly ViewerPluginPolicy[]
   readonly online: boolean
   /** Confirmed ACL scope, absent on records written before it was recorded. */
   readonly access?: ShareAccess
@@ -125,9 +152,25 @@ export interface CreateShareRequest {
 export interface CreatedShare {
   readonly link: string
   readonly shareId: string
+  /** Primary source Session, for callers that predate `sessionIds`; derived from its first entry. */
   readonly sessionId: string
+  /** Every source Session this share serves, primary first; the authoritative list. */
+  readonly sessionIds: readonly string[]
   readonly sessionMode: 'view' | 'write'
   readonly access: ShareAccess
+}
+
+/** One request to add source Sessions to an existing share. */
+export interface AddShareSessionsRequest {
+  readonly shareId: string
+  /** Sessions to add; ids already served by the share are ignored. */
+  readonly sessionIds: readonly string[]
+}
+
+/** The source Sessions one share serves after an addition. */
+export interface ShareSessions {
+  readonly shareId: string
+  readonly sessionIds: readonly string[]
 }
 
 /** One stop request. */
@@ -159,19 +202,23 @@ export interface SharePermissions {
   readonly expiresAt?: string
 }
 
-/** One share capability update; absent capabilities clear the selection. */
+/** One share policy update; absent policies clear the selection. */
 export interface SetShareCapabilitiesRequest {
   readonly shareId: string
-  readonly capabilities?: readonly ShareCapabilityGroup[]
+  /** Global switch; absent keeps the stored value. */
+  readonly viewerPluginAccess?: ViewerPluginAccess
+  /** Per-plugin policies; absent keeps the stored value. */
+  readonly viewerPlugins?: readonly ViewerPluginPolicy[]
 }
 
-/** One share's stored capability selection. */
+/** One share's stored policies. */
 export interface ShareCapabilities {
   readonly shareId: string
-  readonly viewerCapabilities: readonly ShareCapabilityGroup[]
+  readonly viewerPluginAccess: ViewerPluginAccess
+  readonly viewerPlugins: readonly ViewerPluginPolicy[]
 }
 
-/** The endpoints plugins currently offer to share viewers. */
+/** The installed plugins whose Remote methods the Host currently offers to share viewers. */
 export interface ShareCapabilityOffers {
   readonly capabilities: readonly ShareCapabilityGroup[]
 }
@@ -252,6 +299,17 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'liveshareShares/share-not-found': { readonly shareId: string }
     /** A share-writing request named no share. */
     'liveshareShares/missing-share-id': Record<string, never>
+    /** An addition named no usable Session id. */
+    'liveshareShares/missing-session-ids': Record<string, never>
+    /** The composition mounts no Workspace registry, so source placement cannot be checked. */
+    'liveshareShares/workspace-unavailable': Record<string, never>
+    /** A source Session belongs to no Workspace. */
+    'liveshareShares/session-workspace-unknown': { readonly sessionId: string }
+    /** A source Session belongs to a different Workspace than the share's other sources. */
+    'liveshareShares/session-workspace-mismatch': {
+      readonly sessionId: string
+      readonly workspaceId: string
+    }
     /** A creation or publish check named no Session. */
     'liveshareShares/missing-session-id': Record<string, never>
     /** A permission update named neither the tier nor the fork switch. */
@@ -282,10 +340,9 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'liveshareShares/owner-state-unavailable': Record<string, never>
     /** A submitted capability names a plugin that offers no viewer endpoints. */
     'liveshareShares/unknown-plugin': { readonly plugin: string }
-    /** A submitted capability names an endpoint the plugin does not offer under that kind. */
+    /** A submitted policy names an endpoint the platform catalog does not offer. */
     'liveshareShares/endpoint-not-offered': {
       readonly plugin: string
-      readonly kind: 'readable' | 'writable'
       readonly endpoint: string
     }
     /** The Relay's audit trail could not be read; `body` carries a relay answer unchanged. */

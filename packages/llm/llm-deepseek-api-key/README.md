@@ -55,7 +55,7 @@ The settings namespace is the Cordis entry id, or the plugin name without an ent
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
-Registrations and listeners dispose with the plugin, and disposal aborts an in-flight listing request. Shared Host wiring supplies attachments, request extensions, anonymous identity, and atomic retry-policy updates; this plugin registers only its own route and uses the transport's `connect` and `admit` hooks for the listed catalog and the gate. The listing request, its cache, and catalog resolution come from the shared transport; the cache lives in memory and is keyed by endpoint and a SHA-256 of the key, so another key loads its own listing. A `loader/volatile-update` listener discards the cached listing whenever the route starts or stops following it.
+API-key lookup calls `resolveDeepSeekApiKey` from the [shared credential module](../llm-deepseek/src/credential.ts). Registrations and listeners dispose with the plugin, and disposal aborts an in-flight listing request. Shared Host wiring supplies attachments, request extensions, anonymous identity, and atomic retry-policy updates; this plugin registers only its own route and uses the transport's `connect` and `admit` hooks for the listed catalog and the gate. The listing request, its cache, and catalog resolution come from the shared transport; the cache lives in memory and is keyed by endpoint and a SHA-256 of the key, so another key loads its own listing. A `loader/volatile-update` listener discards the cached listing whenever the route starts or stops following it.
 
 <a id="further-exploration"></a>
 ## Further Exploration

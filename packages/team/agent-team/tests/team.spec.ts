@@ -103,6 +103,75 @@ async function waitRunning(ctx: Context, id: SessionId): Promise<Agent> {
 }
 
 describe('Tree-owned task boards', () => {
+  it.each(['spawn', 'fork'])('shares the configured root mode with real %s children', async (provider) => {
+    const { ctx, lead } = await setup(['hang', 'hang'], { defaultEnabled: true }, false)
+    expect(durable(lead).enabled).toBe(true)
+    const task = await ctx.agentTeams.createTask(lead, { subject: 'configured', description: 'shared board' })
+    const started = await spawn(ctx, lead, 'configured child', provider)
+    const child = await waitRunning(ctx, started.childId)
+    expect(ctx.agentTeams.isEnabled(child)).toBe(true)
+    expect(ctx.agentTeams.listTasks(child)).toEqual([task])
+    expect(child.session.ownEvents().filter(event => event.type === 'team/mode')).toEqual([])
+    await ctx.agentTeams.setEnabled(lead, false)
+    expect(ctx.agentTeams.isEnabled(child)).toBe(false)
+    const later = await spawn(ctx, lead, 'disabled child', provider)
+    const laterChild = await waitRunning(ctx, later.childId)
+    expect(ctx.agentTeams.isEnabled(laterChild)).toBe(false)
+    await later.dispose()
+    await started.dispose()
+  })
+
+  it.each([undefined, false])('leaves new roots off with defaultEnabled=%s', async (defaultEnabled) => {
+    const { lead } = await setup([], defaultEnabled === undefined ? {} : { defaultEnabled }, false)
+    expect(durable(lead).enabled).toBeUndefined()
+    expect(lead.session.ownEvents().filter(event => event.type === 'team/mode')).toEqual([])
+  })
+
+  it.each([false, true])('preserves a selection saved during setup: %s', async (enabled) => {
+    const { ctx } = await setup([], { defaultEnabled: true }, false)
+    const handle = await ctx.agents.create({
+      sessionId: SessionId('selected-root'),
+      setup: (_ctx, agent) => { agent.session.append('team/mode', { enabled }) },
+    })
+    expect(durable(handle.agent).enabled).toBe(enabled)
+    expect(handle.agent.session.ownEvents().filter(event => event.type === 'team/mode')).toHaveLength(1)
+    await handle.dispose()
+  })
+
+  it('initializes an ordinary fork independently of its inherited mode and tasks', async () => {
+    const { ctx, lead } = await setup([], { defaultEnabled: true }, false)
+    await ctx.agentTeams.createTask(lead, { subject: 'source', description: 'belongs to source' })
+    await ctx.agentTeams.setEnabled(lead, false)
+    const handle = await ctx.agents.create({
+      sessionId: SessionId('configured-fork'),
+      seed: lead.session.snapshotEvents(),
+      meta: { parentSession: lead.id, isSeeded: true },
+      inheritedEventCount: SessionLogOffset(lead.session.seq),
+    })
+    expect(ctx.agentTeams.isEnabled(handle.agent)).toBe(true)
+    expect(ctx.agentTeams.listTasks(handle.agent)).toEqual([])
+    expect(handle.agent.session.ownEvents().filter(event => event.type === 'team/mode')).toHaveLength(1)
+    await handle.dispose()
+  })
+
+  it('unregisters default initialization when the Team service unloads', async () => {
+    const { ctx, teamFiber } = await setup([], { defaultEnabled: true }, false)
+    await teamFiber.dispose()
+    const handle = await ctx.agents.create({ sessionId: SessionId('without-team') })
+    expect(handle.agent.session.ownEvents().filter(event => event.type === 'team/mode')).toEqual([])
+    await handle.dispose()
+  })
+
+  it('rejects Agent creation if saving the configured mode fails', async () => {
+    const { ctx } = await setup([], { defaultEnabled: true }, false)
+    const failure = new Error('mode save failed')
+    const id = SessionId('failed-mode-save')
+    vi.spyOn(ctx.sessions, 'flush').mockRejectedValueOnce(failure)
+    await expect(ctx.agents.create({ sessionId: id })).rejects.toBe(failure)
+    expect(ctx.agents.get(id)).toBeUndefined()
+    expect(ctx.sessions.get(id)).toBeUndefined()
+  })
+
   it('does not register a Team slash command', async () => {
     const { ctx, lead } = await setup([], {}, false)
     await ctx.plugin(Commands)
@@ -285,6 +354,25 @@ describe('Tree-owned task boards', () => {
     await handle.dispose()
   })
 
+  it('clears a prior owner name when reassigning to an unnamed historical member', async () => {
+    const { ctx, lead } = await setup([])
+    const legacy = await resident(ctx, lead, 'legacy-worker')
+    lead.session.append('subagent/catalog', {
+      version: 0, childId: legacy.id, childCreatedAt: legacy.session.header.createdAt,
+      mode: 'continuable', label: 'Historical worker',
+    })
+    const created = await ctx.agentTeams.createTask(lead, { subject: 'Review', description: 'Historical assignment' })
+    const claimed = await ctx.agentTeams.updateTask(lead, {
+      taskId: created.id, expectedRevision: created.revision, action: 'claim',
+    })
+    expect(claimed.ownerName).toBe('lead')
+    const reassigned = await ctx.agentTeams.updateTask(lead, {
+      taskId: created.id, expectedRevision: claimed.revision, action: 'reassign', owner: legacy.id,
+    })
+    expect(reassigned.ownerId).toBe(legacy.id)
+    expect(reassigned).not.toHaveProperty('ownerName')
+  })
+
   it('assigns deep descendants by id and rejects historical roster authority', async () => {
     const { ctx, lead } = await setup(['hang', 'hang'])
     const child = await waitRunning(ctx, (await spawn(ctx, lead, 'parent')).childId)
@@ -293,7 +381,7 @@ describe('Tree-owned task boards', () => {
     const assigned = await ctx.agentTeams.updateTask(lead, {
       taskId: task.id, expectedRevision: task.revision, action: 'reassign', owner: grandchild.id,
     })
-    expect(assigned.ownerId).toBe(grandchild.id)
+    expect(assigned).toMatchObject({ ownerId: grandchild.id, ownerName: 'agent-1/agent-1' })
     for (const phase of ['provisioning', 'active'] as const) {
       lead.session.append('team/member', {
         version: 2, teamId: TeamId(lead.id),
@@ -512,6 +600,7 @@ describe('Team shared task DAG', () => {
     })
     expect(released).toMatchObject({ status: 'pending', ready: true })
     expect('ownerId' in released).toBe(false)
+    expect('ownerName' in released).toBe(false)
 
     await Promise.all([firstMember.dispose(), secondMember.dispose()])
     await Promise.all([waitNoAgent(ctx, alpha.id), waitNoAgent(ctx, beta.id)])
@@ -622,6 +711,8 @@ describe('Team shared task DAG', () => {
       expectedRevision: complete.revision,
       action: 'reopen',
     })
+    expect(reopened).not.toHaveProperty('ownerId')
+    expect(reopened).not.toHaveProperty('ownerName')
     const claimed = await ctx.agentTeams.updateTask(owner, {
       taskId: task.id,
       expectedRevision: reopened.revision,
@@ -664,7 +755,7 @@ describe('Team shared task DAG', () => {
     const leadClaim = await ctx.agentTeams.updateTask(lead, {
       taskId: blocker.id, expectedRevision: blocker.revision, action: 'claim',
     })
-    expect(leadClaim.ownerId).toBe(lead.id)
+    expect(leadClaim).toMatchObject({ ownerId: lead.id, ownerName: 'lead' })
     const completedBlocker = await ctx.agentTeams.updateTask(lead, {
       taskId: blocker.id, expectedRevision: leadClaim.revision, action: 'complete',
     })
@@ -697,6 +788,7 @@ describe('Team shared task DAG', () => {
     })
     expect(unassigned).toMatchObject({ status: 'pending' })
     expect('ownerId' in unassigned).toBe(false)
+    expect('ownerName' in unassigned).toBe(false)
 
     const broad = await ctx.agentTeams.createTask(lead, {
       subject: 'broad scope', description: 'broad scope', writeScopes: ['src'],
@@ -722,7 +814,7 @@ describe('Team shared task DAG', () => {
     const rootAssigned = await ctx.agentTeams.updateTask(lead, {
       taskId: task.id, expectedRevision: unassigned.revision, action: 'reassign', owner: lead.id,
     })
-    expect(rootAssigned).toMatchObject({ status: 'in_progress', ownerId: lead.id })
+    expect(rootAssigned).toMatchObject({ status: 'in_progress', ownerId: lead.id, ownerName: 'lead' })
 
     await started.dispose()
     await waitNoAgent(ctx, editor.id)

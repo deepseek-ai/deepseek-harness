@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Composer decoration",
+    "description": "Displays a blue circle below the message composer.",
+    "detail": "docs/DETAIL.md"
+  }
+}
