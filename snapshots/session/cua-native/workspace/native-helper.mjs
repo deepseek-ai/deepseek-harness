@@ -38,7 +38,7 @@ function serve() {
   }
   const instanceId = randomUUID()
   const sockets = new Set()
-  const application = { count: 0, value: '', visualCount: 0, hovering: false, frontPid: 42, frontWindowId: 99 }
+  const application = { count: 0, value: '', visualCount: 0, panelVisibility: 'closed', panelCount: 0, hovering: false, frontPid: 42, frontWindowId: 99 }
   const captureBroker = { pendingCapture: false }
   let started = false
   let hadClient = false
@@ -114,6 +114,9 @@ function createApplicationState(socket, record, application, captureBroker, conn
   const window = { windowId: 7, appName: 'Fixture', title: 'CUA fixture', bounds, isOnScreen: true, onCurrentSpace: true }
   const axlessWindow = { ...window, windowId: 8, title: 'AXless canvas' }
   const transformedWindow = { ...window, windowId: 9, title: 'Transformed window', bounds: { x: 16, y: 512, width: 131, height: 145 } }
+  const panel = { ...window, windowId: 10, title: 'Floating panel', bounds: { x: 100, y: 120, width: 240, height: 140 } }
+  const windows = () => [window, axlessWindow, transformedWindow, ...(application.panelVisibility === 'closed' ? [] :
+    [application.panelVisibility === 'hidden' ? { ...panel, isOnScreen: false, cacheOnly: true } : panel])]
   const screenshotConfig = new URL('./fixture-screenshot.json', import.meta.url)
   const customScreenshot = existsSync(screenshotConfig) ? JSON.parse(readFileSync(screenshotConfig, 'utf8')) : undefined
   const snapshots = new Map()
@@ -157,7 +160,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
         requestId, targetPid: app.pid, before, after, activationRequested,
       } }
     }
-    if (method === 'listWindows') return [window, axlessWindow]
+    if (method === 'listWindows') return windows()
     if (method === 'getState') {
       snapshots.delete(params.windowId ?? null)
       if (observationChanged) {
@@ -168,16 +171,21 @@ function createApplicationState(socket, record, application, captureBroker, conn
       const axless = params.windowId === 8
       const snapshotId = `${scope}-snapshot-${generation}`
       snapshots.set(params.windowId ?? null, { snapshotId, windowId: params.windowId ?? null, axless })
+      if (params.windowId === panel.windowId && application.panelVisibility !== 'closed') return {
+        appHandle: app.appHandle, windowId: panel.windowId, snapshotId, focusedWindowId: window.windowId,
+        tree: `AX scope=window offsets=UTF-16\n- AXWindow "Floating panel"\n  - AXStaticText "Floating count: ${application.panelCount}"`,
+        elements: [], windows: windows(), truncated: false,
+      }
       if (axless) return { appHandle: app.appHandle, windowId: 8, snapshotId,
-        tree: '', elements: [], windows: [axlessWindow], truncated: false }
+        tree: '', elements: [], windows: windows(), truncated: false }
       if (params.maxElements === 1) return { appHandle: app.appHandle, windowId: params.windowId ?? null, snapshotId,
         tree: `AX scope=${params.windowId === undefined ? 'application' : 'window'} offsets=UTF-16\n- [0] AXButton "Increment"\nAccessibility tree truncated (maxElements=1).`,
-        elements: [], windows: [window], truncated: true }
+        elements: [], windows: windows(), truncated: true }
       return { appHandle: app.appHandle, windowId: params.windowId ?? null,
         snapshotId: `${scope}-snapshot-${generation}`, tree: `AX scope=${params.windowId === undefined ? 'application' : 'window'} offsets=UTF-16${params.details ? ' bounds=global-points' : ''}\n- [0] AXButton "Increment"${params.details ? ' id="increment" actions=["AXPress"] bounds=[60,80,100,20]' : ''}\n- [1] AXTextField valueWritable=true selectionWritable=true value=${JSON.stringify(application.value)} placeholder="Fixture text"\n- AXStaticText "Count: ${application.count}"${application.hovering ? '\n- AXStaticText "Hover information"' : ''}\n- [2] AXMenuBarItem "File"${params.includeMenus ? '\n  - [3] AXMenuItem "Fixture command"' : '\nMenu contents omitted; request includeMenus=true to expand.'}`,
         elements: [{ elementId: '0', role: 'AXButton', title: 'Increment', value: null, description: null,
           identifier: null, bounds: [60, 80, 100, 20], actions: ['AXPress'], enabled: true }],
-        windows: [params.windowId === 9 ? transformedWindow : window], truncated: false }
+        focusedWindowId: window.windowId, windows: windows(), truncated: false }
     }
     if (params.windowId === 9 && ['screenshot', 'mouseMove', 'click', 'scroll', 'drag'].includes(method) && params.elementId === undefined) {
       refuse('WINDOW_CHANGED', 'Window display and accessibility bounds disagree. Read fresh state; if unchanged, use AX actions or explicitly restore the window before capture or coordinate input')
@@ -194,7 +202,8 @@ function createApplicationState(socket, record, application, captureBroker, conn
       ? { pixelWidth: customScreenshot.pixelWidth, pixelHeight: customScreenshot.pixelHeight, bounds: customScreenshot.bounds,
         windowId: params.windowId, mimeType: 'image/png', coordinateSpace: 'window-points',
         data: readFileSync(new URL(customScreenshot.file, import.meta.url)).toString('base64') }
-      : { windowId: params.windowId, mimeType: 'image/png', data: png, pixelWidth: 1, pixelHeight: 1, bounds, coordinateSpace: 'window-points' }
+      : { windowId: params.windowId, mimeType: 'image/png', data: png, pixelWidth: 1, pixelHeight: 1,
+        bounds: params.windowId === panel.windowId ? panel.bounds : bounds, coordinateSpace: 'window-points' }
     if (method === 'click' || method === 'setValue' || method === 'mouseMove') {
       const observed = params.snapshotId === undefined && params.elementId === undefined
         ? snapshots.get(params.windowId) ?? snapshots.get(null)
@@ -209,6 +218,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
         if (!systemPointerMoved && !alternate && !application.hovering) refuse('HOVER_UNAVAILABLE', 'No AX alternate UI at this target. No input was sent and the pointer did not move.')
         application.hovering = !systemPointerMoved && alternate
       }
+      else if (method === 'click' && params.windowId === panel.windowId) application.panelCount++
       else if (method === 'click' && params.windowId === 8) application.visualCount++
       else if (method === 'click') application.count++
       else application.value = params.value
@@ -217,6 +227,8 @@ function createApplicationState(socket, record, application, captureBroker, conn
     }
     if (method === 'pressKey' && params.key === 'Return') observationChanged = true
     // Fixture-only keys simulate a pending system callback and its eventual completion.
+    if (method === 'pressKey' && params.key === 'F8') application.panelVisibility = 'visible'
+    if (method === 'pressKey' && params.key === 'F7' && application.panelVisibility !== 'closed') application.panelVisibility = 'hidden'
     if (method === 'pressKey' && params.key === 'F11') captureBroker.pendingCapture = true
     if (method === 'pressKey' && params.key === 'F10') captureBroker.pendingCapture = false
     if (method === 'pressKey' && params.key === 'F12') malformedScreenshot = true

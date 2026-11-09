@@ -267,7 +267,7 @@ actor AXWorker {
         }
         let identity = try validateIdentity(handle)
         if method == "listWindows" {
-            let windows = NativePlatform.windows().filter { $0.pid == identity.pid }
+            let windows = NativePlatform.applicationWindows(identity.pid)
             // Remove closed window scopes using the current WindowServer identity set.
             let ids = Set(windows.map(\.windowID))
             snapshots = snapshots.filter { key, _ in key.appHandle != handle || (key.windowID.map { ids.contains($0) } ?? true) }
@@ -314,7 +314,7 @@ actor AXWorker {
             try NativePlatform.requireAccessibility()
             if let window { _ = try NativePlatform.ownedWindow(identity.pid, window) }
             try cancellation.check()
-            let observedWindows = NativePlatform.windows().filter { $0.pid == identity.pid }
+            let observedWindows = NativePlatform.applicationWindows(identity.pid)
             let id = try identifier("snapshot")
             let scope = SnapshotScope(appHandle: handle, windowID: window)
             snapshots[scope] = NativeSnapshot(id: id, scope: scope, elements: projection.indexed)

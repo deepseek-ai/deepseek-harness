@@ -62,9 +62,8 @@ export function SplitAction({ disabled, label, run, menuLabel, menu, other }: {
  * @param props - frozen selection, actions, cancellation, and localized copy.
  * @returns the inline comment form.
  */
-export function ReviewComposer({ selection, actions, close, visible = true, split = false, t }: PropsLocale<typeof NS> & {
+export function ReviewComposer({ selection, actions, close, visible = true, t }: PropsLocale<typeof NS> & {
   readonly visible?: boolean
-  readonly split?: boolean
   readonly selection: ReviewSelection
   readonly actions: ReviewActions
   readonly close: () => void
@@ -97,7 +96,8 @@ export function ReviewComposer({ selection, actions, close, visible = true, spli
     }
   }
   return (
-    <section className={css.root} data-side={selection.comment.side} data-split={split ? '' : undefined} aria-label={t('review.range', { range })} data-forge-comment="">
+    <section className={css.root} aria-label={t('review.range', { range })}
+      data-forge-comment={`${selection.comment.side}${selection.comment.startLine}-${selection.comment.endLine}`}>
       <div className={css.title}>{t('review.range', { range })}</div>
       <textarea ref={input} className={css.input} rows={3} defaultValue={selection.comment.body} disabled={busy}
         aria-label={t('review.comment')} placeholder={t('review.comment')}
