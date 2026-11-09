@@ -24,9 +24,12 @@
   outline-offset: -1px;
 }
 
-.card[data-split][data-side="R"],
-.folded[data-split][data-side="R"] {
-  margin-inline-start: clamp(10px, calc(100% - 740px), calc(50% + 10px));
+/* Side by side, a card fills its side's cell under the code instead of the row's width. */
+[data-forge-comments] > .card,
+[data-forge-comments] > .folded {
+  width: auto;
+  max-width: none;
+  margin: 0;
 }
 
 .card[data-resolved] {
@@ -316,9 +319,7 @@
    a container name per file, and the nearest inline-size container is the changes view. */
 @container (max-width: 479px) {
   .card,
-  .folded,
-  .card[data-split][data-side="R"],
-  .folded[data-split][data-side="R"] {
+  .folded {
     width: calc(100% - 12px);
     margin: 6px;
   }
