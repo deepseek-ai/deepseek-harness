@@ -60,7 +60,7 @@ The PTC executor exposes the reserved `run_code` transport and a deterministic S
 
 New sub-calls use `<parent>:ptc:<n>` ids. Consumers treat these ids as opaque and correlate events by exact equality; restored historical ids retain their original bytes. The [PTC mode decision](../../../.agents/notes/implemented/feature/2026-06-15-ptc.md) owns durable naming and restoration rules.
 
-TypeScript bindings for `read_image` and CUA screenshot operations return an `Image` with a readable `path`, `width`, and `height`. Passing it to `inspect` places its durable attachment among the captured text in the `run_code` result. Images nested in arrays and objects are displayed with their containing value. On program failure, inspected output accompanies the original diagnostic; outer result replacements remain authoritative. Additional contexts retain their producing tool’s attribution.
+TypeScript bindings for `read_image` and CUA screenshot operations return an `Image` with a readable `path`, `width`, and `height`. Passing it to `inspect` places its durable attachment among the captured text in the `run_code` result. Images nested in arrays and objects are displayed with their containing value. On program failure, inspected output accompanies the original diagnostic; outer result replacements remain authoritative. If an output policy removes a screenshot or read_image image, the binding rejects with ToolCallError and includes the retained text notice. Additional contexts retain their producing tool’s attribution.
 
 When the caller cancels and the runtime reports `abort`, `run_code` waits for cleanup and returns the native tool cancellation result: `AbortError` / `ABORTED`, with `Error: tool call aborted` as its content. Retained runtimes append their cancellation diagnostic, including whether variables were preserved or cleared. The Agent records the specific cancellation cause in `turn/end`, including a hook's reason. Other runtime failures retain `CODE_RUN_FAILED` and their diagnostics, even if the caller also cancels. Cancellation can discard retained runtime state and does not undo completed tool effects.
 
@@ -104,7 +104,7 @@ PTC mode exposes the generated [`run_code` schema](../../../docs/tool-catalog.md
 
 Inside the program:
 
-- Call tools as `await tools.name(args)` — quoted access for exotic names: `tools["my-tool"](args)`. Every call resolves to its declared value; image-producing calls return an Image. Tool arguments must be lossless JSON.
+- Call tools as `await tools.name(args)` — quoted access for exotic names: `tools["my-tool"](args)`. Every call resolves to its declared value, which may be an Image. Tool arguments must be lossless JSON.
 - A FAILED tool call rejects with `ToolCallError`, whose `toolName` identifies the failed tool and whose `message` is human-readable — `try/catch` it to handle and continue.
 - Independent read-only calls MAY overlap under `Promise.all` (safe calls run concurrently; mutating calls run alone, in submission order). Sequence dependent work with `await`.
 - Show selected results with `inspect(...values)`. Each call accepts text, objects, and Images, including Images nested in arrays and objects. Images expose a readable file path and its pixel dimensions. Select the values you need to display.
@@ -131,6 +131,9 @@ Prefix-stable while the PTC mode selection, generated SDK, transport schema, and
 <a id="known-limitations-and-deferred-work"></a>
 
 These constraints apply to the host integration and accepted calls.
+
+- **Program Images cover read_image and CUA screenshots** — other image-producing tools keep their declared values, but TypeScript PTC does not automatically forward their pictures.
+- **Program Images require attachment path mapping** — the filesystem must map stored host attachments to readable program paths. `fs-ssh` has no such mapping, so image adaptation rejects in that composition.
 
 - **No built-in reset control** — the shipped Loader plugin does not expose its executor instance through a service, GUI control or SDK endpoint. Hosts needing reset must mount and retain `PtcExecutor` in their own composition; that integration owns retries after a failed reset.
 - **PTC mode's SDK language follows the one loaded runtime, and a presentation is per agent rather than per tool** — PTC execution rejects prompt assembly unless `ctx.ptcRuntime.language` has a registered SDK renderer; within one agent no tool can be native-only while another is ptc-only.

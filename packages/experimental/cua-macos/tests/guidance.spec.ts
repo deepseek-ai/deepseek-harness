@@ -115,7 +115,7 @@ it('keeps consent, lock, emission, observation, and no-replay rules', () => {
   expect(COMMON_GUIDANCE).toContain('consent')
   expect(COMMON_GUIDANCE).toContain('SESSION_LOCKED')
   expect(COMMON_GUIDANCE).toContain('Never replay uncertain input')
-  expect(COMMON_GUIDANCE).toContain('emit: false suppresses sink output only')
+  expect(COMMON_GUIDANCE).toContain('emit: false suppresses inspect output only')
   expect(COMMON_GUIDANCE).toContain('Read fresh state after actions')
   expect(COMMON_GUIDANCE).toMatch(/element ids are opaque strings/i)
   expect(COMMON_GUIDANCE).toContain('snapshotId')

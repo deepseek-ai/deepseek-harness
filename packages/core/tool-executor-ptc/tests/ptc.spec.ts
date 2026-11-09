@@ -1728,6 +1728,35 @@ describe('the run_code dispatch bridge', () => {
     expect(result.content).toEqual([{ type: 'text', text: JSON.stringify([{ type: 'text', text: 'Window selected' }], null, 2) }])
   })
 
+  it.each(['read_image', 'cua'])('reports the policy notice when %s image output is removed', async (name) => {
+    const { ctx, runtime } = await setup({ mode: 'ptc' })
+    ctx.tools.register(defineContentToolFixture({
+      name, description: 'Return image content.', parameters: {},
+      execute: () => Promise.resolve([{
+        type: 'image', attachment: {
+          attachmentId: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' as never,
+          mediaType: 'image/png', bytes: 1, width: 1, height: 1,
+        },
+      }]),
+    }))
+    ctx.on('tools/post-execute', async (exec, _result, next): Promise<PostToolDecision> => {
+      const decision = await next()
+      return exec.name === name && decision.kind === 'accept'
+        ? { kind: 'accept', content: [{ type: 'text', text: 'image omitted; read the saved result' }] }
+        : decision
+    })
+    runtime.behavior = async (request) => {
+      await expect(request.bindings[0]!.functions[name]!({})).rejects.toThrow(
+        'Image output was removed by a tool output policy.\nimage omitted; read the saved result',
+      )
+      return printed('recovered')
+    }
+    const result = await runCode(ctx, 'program')
+    expect(result.isError).toBe(false)
+    expect(result.content).toEqual([{ type: 'text', text: 'recovered' }])
+    expect(result.additionalContexts).toBeUndefined()
+  })
+
   it('does not defer images removed by a nested post-execute decision', async () => {
     for (const decision of ['block', 'replace'] as const) {
       const { ctx, runtime } = await setup({ mode: 'ptc' })

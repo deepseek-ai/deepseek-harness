@@ -562,13 +562,14 @@ export function createRunCodeTool(
             parent: exec.token,
             signal: runController.signal,
           }
-          type DispatchOutcome = { isError: true; message: string } | { isError: false; value: JsonValue; content: ContentBlock[] }
+          type DispatchOutcome = { isError: true; message: string }
+            | { isError: false; value: JsonValue; content: ContentBlock[]; imageRemoved: boolean }
           const outcome = await new Promise<DispatchOutcome>((resolve, reject) => {
             // Set by the dispatch stage (or start() for a pre-settled result): what commit() finalizes in submission order.
             let parked:
               | { kind: 'post-result' | 'final-result'; exec: ToolRunContext; result: ToolExecutionResult }
               | undefined
-            const settle = (result: ToolExecutionResult): void => {
+            const settle = (result: ToolExecutionResult, imageRemoved: boolean): void => {
               // The program gets its value NOW: the log-content listener (for
               // example, a spill backend) must never delay the binding or occupy
               // a dispatch slot. The event append is tracked side work; the run's
@@ -577,7 +578,7 @@ export function createRunCodeTool(
               // chain cannot reject).
               resolve(result.isError
                 ? { isError: true, message: result.error.message }
-                : { isError: false, value: result.value, content: result.content })
+                : { isError: false, value: result.value, content: result.content, imageRemoved })
               const agent = exec.agent
               if (agent === undefined) return
               const task: Promise<void> = (async () => {
@@ -658,7 +659,8 @@ export function createRunCodeTool(
                 // (ToolExecutionFailure types it never), so a policy-converted
                 // failure cannot stop the turn through a recovering program.
                 if (result.concludesTurn) exec.concludeTurn()
-                settle(result)
+                settle(result, parked.result.content.some(block => block.type === 'image')
+                  && !result.content.some(block => block.type === 'image'))
                 // Backpressure on pending event-append tasks: each task retains
                 // a full result while a slow backend stores it, so the pool cap
                 // bounds their count. Beyond the cap, the
@@ -685,6 +687,10 @@ export function createRunCodeTool(
             const images = outcome.content.filter(block => block.type === 'image')
             const first = images[0]
             if (first !== undefined && images.length === 1) return programImage(first.attachment)
+            if (outcome.imageRemoved) {
+              throw new Error('Image output was removed by a tool output policy.\n'
+                + outcome.content.filter(block => block.type === 'text').map(block => block.text).join('\n'))
+            }
             if (name === 'read_image' || images.length > 1) throw new Error('Image-producing tools must return exactly one image')
           }
           return outcome.value
