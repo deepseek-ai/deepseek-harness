@@ -19,9 +19,10 @@ import { CuaPermissionStore } from './permission-store.ts'
 import { ApplicationAuthorizationResult, installCuaAccess } from './access.ts'
 import type { CuaApplicationGrant, CuaApplicationId, CuaSystemPermission } from './access-types.ts'
 import type { CuaAppHandle, CuaOperation, CuaStartupCapabilities } from './types.ts'
-import { ApplicationIcon, AppResult, NativeScreenshotResult, Request, SystemPointerRequest, ScreenshotResult, StateResult, WindowsResult } from './protocol.ts'
+import { ApplicationIcon, AppResult, NativeScreenshotResult, Request, SystemPointerRequest, ScreenshotResult } from './protocol.ts'
 import { CuaConfigFields } from './config.ts'
 import { CuaCoordinates } from './coordinates.ts'
+import { observeNativeWindows } from './native-observation.ts'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import type { PromptSection } from '@deepseek-ai/dsh-system-prompt'
@@ -294,15 +295,9 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
           coordinateSpace: capabilities.coordinateSpace,
         }
       }
-      if (method === 'getState') {
-        const state = StateResult.parse(result)
-        if (state.appHandle !== parsedParams.appHandle || state.windowId !== (parsedParams.windowId ?? null)) {
-          throw new NativeError('NATIVE_PROTOCOL', 'Native observation belongs to another application or window')
-        }
-        execution.coordinates.observe(state.appHandle, state.windows, state.windowId ?? undefined)
-        return state
+      if (request.method === 'getState' || request.method === 'listWindows') {
+        return observeNativeWindows(request, result, execution.coordinates)
       }
-      if (method === 'listWindows') execution.coordinates.observe(parsedParams.appHandle as CuaAppHandle, WindowsResult.parse(result))
       return result
     }
     const tool: ToolDefinition = {
