@@ -2195,6 +2195,36 @@ describe('ToolRuntime', () => {
     })
   })
 
+  it.each([
+    ['the caller reason after the body ran', true, (signal: AbortSignal): never => { throw signal.reason as Error }, { name: 'AbortError', code: TOOL_ABORTED }],
+    ['the caller reason before the body ran', false, (signal: AbortSignal): never => { throw signal.reason as Error }, { name: 'AbortError', code: TOOL_ABORTED_BEFORE_DISPATCH }],
+    ['an AbortError after the body ran', true, (): never => { throw new DOMException('wrapper stopped', 'AbortError') }, { name: 'AbortError', code: TOOL_ABORTED }],
+    ['a HarnessError after the body ran', true, (): never => { throw new HarnessError('wrapper failed', 'WRAPPER_FAILED') }, { name: 'HarnessError', code: 'WRAPPER_FAILED' }],
+    ['a plain failure after the body ran', true, (): never => { throw new Error('wrapper broke') }, undefined],
+  ])('classifies %s thrown by a tools/execute listener after cancellation', async (_label, delegate, fail, info) => {
+    const ctx = await setup()
+    ctx.tools.register(echoTool)
+    const controller = new AbortController()
+    ctx.on('tools/execute', async (exec, next) => {
+      if (delegate) await next()
+      controller.abort(new Error('caller stopped'))
+      return fail(exec.signal)
+    })
+
+    const result = await executeToolFixture(ctx, { signal: controller.signal, callId: ToolCallId('c1'), name: 'echo', arguments: { text: 'hi' } })
+    expect(result.isError).toBe(true)
+    expect(result.error?.info).toEqual(info)
+  })
+
+  it('keeps a plain tools/execute listener failure without info when the caller did not cancel', async () => {
+    const ctx = await setup()
+    ctx.tools.register(echoTool)
+    ctx.on('tools/execute', async () => { throw new DOMException('wrapper stopped', 'AbortError') })
+
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'echo', arguments: { text: 'hi' } })
+    expect(result.error).toEqual({ message: 'wrapper stopped' })
+  })
+
   it('returns an isError result when a tools/pre-execute listener throws', async () => {
     const ctx = await setup()
     ctx.tools.register(echoTool)

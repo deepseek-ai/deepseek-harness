@@ -248,7 +248,9 @@ it.each(['cancel', 'dispose'] as const)('drains native inference before completi
   } finally {
     release.resolve()
     await disposal
-    expect((await operation).isError).toBe(true)
+    const settled = await operation
+    expect(settled.isError).toBe(true)
+    if (reason === 'cancel') expect(settled.error?.info).toEqual({ name: 'AbortError', code: 'ABORTED' })
   }
   expect(fixture.browsers[0]?.stagehandClosed).toBe(true)
   expect(fixture.browsers[0]?.closed).toBe(false)
@@ -419,7 +421,7 @@ it('blocks reconnection and another owner after canceled native work fails to dr
   } finally {
     release.resolve()
   }
-  expect((await operation).isError).toBe(true)
+  expect((await operation).error?.info).toEqual({ name: 'AbortError', code: 'ABORTED' })
   expect((await execute(first, 'tabs', { action: 'list' })).error?.info).toEqual({ name: 'StagehandError', code: 'STAGEHAND_WORKER_FAILED' })
   expect((await execute(second, 'tabs', { action: 'list' })).error?.info).toEqual({ name: 'BrowserSessionError', code: 'BROWSER_LOCKED' })
   expect(fixture.browsers).toHaveLength(1)
