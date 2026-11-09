@@ -13,7 +13,7 @@ TypeScript `run_code` 程序通过 `inspect(...values)` 展示选定的值。此
 
 只有 CUA 截图与 `read_image` 在 TypeScript 程序中返回普通 `Image`，其 `path` 指向执行环境可读取的附件文件，`width` 与 `height` 为该文件的像素尺寸。使用 `inspect` 将选中的图片与说明一起展示；图片可嵌入数组或对象。CUA 窗口 ID 从窗口对象的 `windowId` 读取。
 
-其他图片工具保留其声明的程序返回值；TypeScript PTC 不自动附加它们的图片。图片适配要求附件在程序文件系统中有可读路径。`fs-ssh` 未提供这项映射，因此该组合中的 `read_image` 与 CUA 截图绑定会失败。需要程序 Image 时，使用本地文件系统组合。
+其他图片工具保留其声明的程序返回值，并将图片自动附加到模型上下文。图片适配要求附件在程序文件系统中有可读路径。`fs-ssh` 未提供这项映射，因此该组合中的 `read_image` 与 CUA 截图绑定会失败。需要程序 Image 时，使用本地文件系统组合。
 
 ## 迁移
 

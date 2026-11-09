@@ -132,7 +132,7 @@ Error: code run failed (abort): run_code exceeded its limit of 2048 tool calls (
 
 以下约束适用于宿主集成及已开始的调用。
 
-- **程序 Image 仅覆盖 read_image 与 CUA 截图**：其他图片工具保留其声明的返回值，但 TypeScript PTC 不自动转发它们的图片。
+- **程序 Image 仅覆盖 read_image 与 CUA 截图**：其他图片工具保留其声明的返回值，并将图片自动附加到模型的额外上下文。
 - **程序 Image 要求附件路径映射**：文件系统必须将宿主存储的附件映射为程序可读的路径。`fs-ssh` 没有这项映射，因此该组合中的图片适配会拒绝。
 
 - **没有内置重置控件**：自带的 Loader 插件不通过服务、GUI 控件或 SDK 端点暴露执行器实例。需要重置的宿主必须在自己的组合中挂载并保留 `PtcExecutor`，该集成负责失败后的重试。

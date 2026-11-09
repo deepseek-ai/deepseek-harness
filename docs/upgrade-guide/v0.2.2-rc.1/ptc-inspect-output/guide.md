@@ -13,7 +13,7 @@ TypeScript `run_code` programs display selected values through `inspect(...value
 
 Only CUA screenshots and `read_image` return ordinary `Image` values in TypeScript programs. Their `path` points to an attachment file readable in the execution environment; `width` and `height` describe its stored pixels. Pass selected images to `inspect` alongside explanatory text, including images nested in arrays or objects. Read CUA window IDs from the window object’s `windowId`.
 
-Other image-producing tools retain their declared program values; their pictures are not automatically attached in TypeScript PTC. Image adaptation requires a readable attachment path in the program filesystem. `fs-ssh` does not provide this mapping, so `read_image` and CUA screenshot bindings fail in that composition. Use a local filesystem composition for program Images.
+Other image-producing tools retain their declared program values and automatically attach their pictures to the model context. Image adaptation requires a readable attachment path in the program filesystem. `fs-ssh` does not provide this mapping, so `read_image` and CUA screenshot bindings fail in that composition. Use a local filesystem composition for program Images.
 
 ## Migration
 

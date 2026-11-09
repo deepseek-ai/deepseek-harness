@@ -1675,8 +1675,7 @@ describe('the run_code dispatch bridge', () => {
 
     const result = await runCode(ctx, 'program')
 
-    if (language === 'typescript') expect(result.additionalContexts).toBeUndefined()
-    else expect(result.additionalContexts).toMatchObject([{
+    expect(result.additionalContexts).toMatchObject([{
       source: { kind: 'ptc-mode' },
       content: [
         { type: 'text', text: 'image result' },

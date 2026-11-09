@@ -132,7 +132,7 @@ Prefix-stable while the PTC mode selection, generated SDK, transport schema, and
 
 These constraints apply to the host integration and accepted calls.
 
-- **Program Images cover read_image and CUA screenshots** — other image-producing tools keep their declared values, but TypeScript PTC does not automatically forward their pictures.
+- **Program Images cover read_image and CUA screenshots** — other image-producing tools keep their declared values and automatically attach their pictures as additional model context.
 - **Program Images require attachment path mapping** — the filesystem must map stored host attachments to readable program paths. `fs-ssh` has no such mapping, so image adaptation rejects in that composition.
 
 - **No built-in reset control** — the shipped Loader plugin does not expose its executor instance through a service, GUI control or SDK endpoint. Hosts needing reset must mount and retain `PtcExecutor` in their own composition; that integration owns retries after a failed reset.

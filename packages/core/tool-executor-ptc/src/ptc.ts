@@ -539,6 +539,8 @@ export function createRunCodeTool(
 
         const binding = (schema: ToolSchema): PtcBindingFunction => async (rawArgs: unknown): Promise<JsonValue> => {
           const { name } = schema
+          // FIXME: Let image-producing tools declare their program result adaptation.
+          const usesProgramImage = runtime.language === 'typescript' && (name === 'read_image' || name === 'cua')
           if (runOver()) {
             throw new Error(`run_code run is over (${String(runController.signal.reason)}); ${name} not dispatched`)
           }
@@ -644,7 +646,7 @@ export function createRunCodeTool(
                 /* v8 ignore next -- commit() runs only after `settled` flipped, which set parked. */
                 if (parked === undefined) return
                 const result = await executor.complete(parked.exec, parked)
-                if (runtime.language !== 'typescript' && !result.isError && result.content.some(block => block.type === 'image')) {
+                if (!usesProgramImage && !result.isError && result.content.some(block => block.type === 'image')) {
                   exec.deferContext(createUserMessage({
                     content: result.content,
                     source: { kind: 'ptc-mode' },
@@ -682,8 +684,7 @@ export function createRunCodeTool(
           // only the binding name. Native content and internal error metadata
           // stay outside the program-facing failure contract.
           if (outcome.isError) throw new Error(outcome.message)
-          // FIXME: Let image-producing tools declare their program result adaptation.
-          if (runtime.language === 'typescript' && (name === 'read_image' || name === 'cua')) {
+          if (usesProgramImage) {
             const images = outcome.content.filter(block => block.type === 'image')
             const first = images[0]
             if (first !== undefined && images.length === 1) return programImage(first.attachment)

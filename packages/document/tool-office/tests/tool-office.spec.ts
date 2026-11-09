@@ -668,7 +668,10 @@ describe('PTC dispatch', () => {
     const dispatch = agent.session.snapshotEvents().find(event => event.type === 'tool/ptc-dispatch')
     expect(dispatch?.data.content.some(block => block.type === 'image')).toBe(true)
     expect(result.content.some(block => block.type === 'image')).toBe(false)
-    expect(result.additionalContexts).toBeUndefined()
+    expect(result.additionalContexts).toHaveLength(1)
+    expect(result.additionalContexts?.[0]).toMatchObject({
+      source: { kind: 'ptc-mode' }, content: dispatch?.data.content,
+    })
 
     const denied: string[] = []
     ctx.on('tools/pre-execute', (exec, next) => {
