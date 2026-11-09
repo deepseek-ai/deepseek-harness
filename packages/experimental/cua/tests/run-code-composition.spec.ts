@@ -39,11 +39,14 @@ const programs = [
 
 class ProgramModel extends LlmAdapter {
   readonly requests: GenerateOptions[] = []
+  /** Requests a test holds back until it has finished acting between two model steps. */
+  readonly gates = new Map<number, Promise<void>>()
   constructor(private readonly programs: readonly string[]) { super() }
   override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
     return Promise.resolve({ provider, id: model, name: model, inputModalities: ['text', 'image'] })
   }
   async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+    await this.gates.get(this.requests.length)
     const code = this.programs[this.requests.length]
     this.requests.push(options)
     if (code !== undefined) {
@@ -181,6 +184,38 @@ it('retains CUA objects, guards and logs hidden subcalls, forwards screenshots, 
   expect(native.state).toEqual({ count: 2, openedChannels: 1, closedChannels: 1 })
   expect(() => process.kill(first.pid, 0)).toThrow()
   expect(ctx.ptcRuntime.retainsState).toBe(false)
+})
+
+it('resets one Agent program environment through ctx.cuaPrograms while keeping its application access', async () => {
+  const { ctx, native, model, agent, run } = await setup([
+    'globalThis.visits = 1; var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); process.pid',
+    'typeof win === "undefined" ? ({ reset: true, visits: globalThis.visits ?? null, pid: process.pid }) : ({ reset: false, pid: process.pid })',
+  ])
+  const programs = ctx.get('cuaPrograms')
+  if (programs === undefined) throw new Error('CUA provider did not publish ctx.cuaPrograms')
+  // Hold the second model request until the host reset between the two programs has settled.
+  const firstSettled: PromiseWithResolvers<void> = Promise.withResolvers()
+  const resetDone: PromiseWithResolvers<void> = Promise.withResolvers()
+  model.gates.set(1, resetDone.promise)
+  ctx.on('session/event', (session, event) => {
+    if (session === agent.session && event.type === 'tool/result' && event.data.message.toolCallId === 'cua-program-1') firstSettled.resolve()
+  })
+  const completed = run()
+  await firstSettled.promise
+  await programs.reset(agent)
+  resetDone.resolve()
+  await completed
+  const results = agent.session.deriveMessages().filter(message => message.role === 'tool')
+  expect(results.map(result => result.isError)).toEqual([false, false])
+  const text = (index: number) => JSON.parse(results[index]!.content.filter(block => block.type === 'text').map(block => block.text).join('\n')) as Record<string, unknown>
+  const firstPid = z.number().int().positive().parse(text(0))
+  const second = text(1)
+  expect(second).toMatchObject({ reset: true, visits: null })
+  expect(second.pid).not.toBe(firstPid)
+  expect(() => process.kill(firstPid, 0)).toThrow()
+  // The native connection and its application grant survive; only the program process was replaced.
+  expect(native.state).toMatchObject({ openedChannels: 1, closedChannels: 0 })
+  await expect(programs.reset(agent)).resolves.toBeUndefined()
 })
 
 it('settles an in-flight native call before releasing the provider connection and program process', async () => {

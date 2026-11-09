@@ -19,6 +19,10 @@ The CUA provider owns `ctx.cuaAccess` for system-permission status, explicit sys
 
 The [shared object API](../../packages/experimental/cua/README.md) uses `connectCua` to select an application, then `app.getWindows()` and `app.getWindow(windowId)` to select a window for screenshots and pointer input. Accessibility operations use element IDs from the latest tree for that application handle. Providers declare keyboard scopes and application-level accessibility in `getCapabilities()`.
 
+## Serve Computer Use to another harness
+
+[Computer use MCP server](../../packages/experimental/cua-mcp/README.md) is a shipped optional bundle for the `cua-mcp` profile. `dsh --profile cua-mcp` serves `cua_run_code` and `cua_reset` to one MCP client such as Codex or Claude Code; each connection owns one Agent whose programs retain application and window objects, and consent is granted unattended or forwarded to the client as an elicitation. `dsh --profile cua-mcp --print-client-config codex|claude-code|json` prints the client configuration. The profile runs no model turn and records no root tool calls in its Session.
+
 ## Choose a provider
 
 Mount [`dsh-computer-use`](../../packages/computer-use/computer-use/README.md) and one provider in the same composition. Both Cua Driver providers are experimental public npm packages and require explicit activation.
@@ -136,4 +140,36 @@ Browser controls for provider-owned native permission and application decisions.
 ```
 
 Source: [`packages/experimental/cua/src/access.ts`](../../packages/experimental/cua/src/access.ts)
+
+<a id="ctxcuaprograms--cuaprograms"></a>
+
+### `ctx.cuaPrograms` — `CuaPrograms`
+
+Host control over the dedicated `cua_run_code` environments; registered as `ctx.cuaPrograms`.
+
+```ts cordis-catalog
+/**
+ * Release one Agent's retained program environment. Active programs of that Agent are cancelled, new
+ * programs wait for cleanup, and the next `cua_run_code` call starts a fresh process that re-creates the
+ * `cua` global; application grants, native connections, and the desktop applications themselves are
+ * unaffected. Resolves when no environment exists.
+ * @param agent - Agent whose `cua_run_code` state owner is released.
+ * @returns Completion after the process and its nested-call cleanup settle.
+ * @throws CodeResetFailedError when cleanup fails; programs stay blocked until a later reset succeeds.
+ */
+reset(agent: Agent): Promise<void>
+
+/**
+ * Request-image target the provider delivered for a stored screenshot when `screenshotTarget` is configured.
+ * A host that forwards screenshots outside a model request reads the same request version with it, so the
+ * image a caller sees matches the coordinate space the provider mapped.
+ * @param image - Durable screenshot attachment from a `cua` result.
+ * @returns The fixed target, or undefined when the Agent's model route selects the delivered version.
+ */
+screenshotRequestTarget(image: ImageAttachmentRef): ImageRequestTarget | undefined
+```
+
+Types: [Agent](core.md) · [ImageAttachmentRef](attachment.md) · [ImageRequestTarget](attachment.md)
+
+Source: [`packages/experimental/cua/src/tool-registration.ts`](../../packages/experimental/cua/src/tool-registration.ts)
 <!-- END GENERATED cordis-surface -->

@@ -977,6 +977,26 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'cuaPrograms',
+    summary: 'Host control over the dedicated `cua_run_code` environments; registered as `ctx.cuaPrograms`.',
+    description: 'Host control over the dedicated `cua_run_code` environments; registered as `ctx.cuaPrograms`.',
+    methods: [
+      {
+        signature: 'reset(agent: Agent): Promise<void>',
+        description: 'Release one Agent\'s retained program environment. Active programs of that Agent are cancelled, new programs wait for cleanup, and the next `cua_run_code` call starts a fresh process that re-creates the `cua` global; application grants, native connections, and the desktop applications themselves are unaffected. Resolves when no environment exists.',
+        parameters: [{ name: 'agent', description: 'Agent whose `cua_run_code` state owner is released.' }],
+        returns: 'Completion after the process and its nested-call cleanup settle.',
+        throws: ['CodeResetFailedError when cleanup fails; programs stay blocked until a later reset succeeds.'],
+      },
+      {
+        signature: 'screenshotRequestTarget(image: ImageAttachmentRef): ImageRequestTarget | undefined',
+        description: 'Request-image target the provider delivered for a stored screenshot when `screenshotTarget` is configured. A host that forwards screenshots outside a model request reads the same request version with it, so the image a caller sees matches the coordinate space the provider mapped.',
+        parameters: [{ name: 'image', description: 'Durable screenshot attachment from a `cua` result.' }],
+        returns: 'The fixed target, or undefined when the Agent\'s model route selects the delivered version.',
+      },
+    ],
+  },
+  {
     key: 'deepseekAccount',
     summary: 'Account login, credentials, and client-safe Remote operations.',
     description: 'Account login, credentials, and client-safe Remote operations.',

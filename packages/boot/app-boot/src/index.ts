@@ -974,6 +974,7 @@ const requiredStartupEntryIds = new Set<string>([
   'headless-runner',
   'acp',
   'sdk-jsonrpc-server',
+  'cua-mcp',
 ])
 
 /** Render plugin stacks, nested causes, and aggregate member failures once per error. */

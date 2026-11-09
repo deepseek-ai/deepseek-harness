@@ -269,6 +269,11 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'The native provider owns application consent and cancellation; the optional Client page queries and changes those decisions through its Remote.',
   },
   {
+    key: 'cuaPrograms', pkg: 'cua', title: 'Computer Use program environments',
+    mode: 'core', consumers: ['cua-mcp'],
+    note: 'The provider owns the retained cua_run_code runtime; a host without a model resets one Agent environment and reads the configured screenshot request target through it.',
+  },
+  {
     key: 'officeKit', pkg: 'office-kit', title: 'Office rendering, conversion, and recalculation',
     mode: 'core', consumers: ['client-ui-sidebar-documentpreview', 'tool-office'],
     note: 'Authorized Office bytes are rendered as PDFs or images, converted, or recalculated on the Host using the declared native target engine, or Node WASM when no native target is declared.',

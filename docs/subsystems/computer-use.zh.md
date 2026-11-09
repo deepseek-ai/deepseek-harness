@@ -19,6 +19,10 @@ CUA provider 通过 `ctx.cuaAccess` 提供系统权限状态、用户主动申�
 
 调用[共享对象 API](../../packages/experimental/cua/README.zh.md) 时，通过 `connectCua` 连接，选择应用后用 `app.getWindows()` 和 `app.getWindow(windowId)` 选择要截图或进行鼠标操作的窗口。辅助功能操作使用该应用句柄最近一次读取的树中的元素 ID。提供方通过 `getCapabilities()` 声明键盘输入支持的范围，以及是否支持应用级辅助功能。
 
+## 向其他 harness 提供 Computer Use
+
+[Computer Use MCP 服务器](../../packages/experimental/cua-mcp/README.zh.md)是随安装提供的可选组合包，服务于 `cua-mcp` profile。`dsh --profile cua-mcp` 向一个 MCP 客户端（如 Codex 或 Claude Code）提供 `cua_run_code` 和 `cua_reset`；每个连接拥有一个 Agent，其程序保留应用与窗口对象，授权可无人值守放行或作为 elicitation 转发给客户端。`dsh --profile cua-mcp --print-client-config codex|claude-code|json` 打印客户端配置。该 profile 不运行模型回合，其 Session 中不记录根工具调用。
+
 ## 选择提供方
 
 在同一组合中挂载 [`dsh-computer-use`](../../packages/computer-use/computer-use/README.zh.md) 和一个提供方。两个 Cua Driver 提供方都是公开发布到 npm 的实验性包，均需显式启用。
@@ -136,4 +140,36 @@ Browser controls for provider-owned native permission and application decisions.
 ```
 
 Source: [`packages/experimental/cua/src/access.ts`](../../packages/experimental/cua/src/access.ts)
+
+<a id="ctxcuaprograms--cuaprograms"></a>
+
+### `ctx.cuaPrograms` — `CuaPrograms`
+
+Host control over the dedicated `cua_run_code` environments; registered as `ctx.cuaPrograms`.
+
+```ts cordis-catalog
+/**
+ * Release one Agent's retained program environment. Active programs of that Agent are cancelled, new
+ * programs wait for cleanup, and the next `cua_run_code` call starts a fresh process that re-creates the
+ * `cua` global; application grants, native connections, and the desktop applications themselves are
+ * unaffected. Resolves when no environment exists.
+ * @param agent - Agent whose `cua_run_code` state owner is released.
+ * @returns Completion after the process and its nested-call cleanup settle.
+ * @throws CodeResetFailedError when cleanup fails; programs stay blocked until a later reset succeeds.
+ */
+reset(agent: Agent): Promise<void>
+
+/**
+ * Request-image target the provider delivered for a stored screenshot when `screenshotTarget` is configured.
+ * A host that forwards screenshots outside a model request reads the same request version with it, so the
+ * image a caller sees matches the coordinate space the provider mapped.
+ * @param image - Durable screenshot attachment from a `cua` result.
+ * @returns The fixed target, or undefined when the Agent's model route selects the delivered version.
+ */
+screenshotRequestTarget(image: ImageAttachmentRef): ImageRequestTarget | undefined
+```
+
+Types: [Agent](core.zh.md) · [ImageAttachmentRef](attachment.zh.md) · [ImageRequestTarget](attachment.zh.md)
+
+Source: [`packages/experimental/cua/src/tool-registration.ts`](../../packages/experimental/cua/src/tool-registration.ts)
 <!-- END GENERATED cordis-surface -->

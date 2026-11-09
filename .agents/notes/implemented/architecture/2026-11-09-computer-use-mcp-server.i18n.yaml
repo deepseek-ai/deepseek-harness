@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-09-computer-use-mcp-server.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-09-computer-use-mcp-server.md
+/agent-note-serve-computer-use-to-other-harnesses-as-an-mcp-server:
+  en: 1e4562a8dd533e1f
+  zh: 4e41a369a3a88f02
+/agent-note-serve-computer-use-to-other-harnesses-as-an-mcp-server/problem:
+  en: 6050884223e0e491
+  zh: eb808c298c9fb652
+/agent-note-serve-computer-use-to-other-harnesses-as-an-mcp-server/decision:
+  en: 7087ecc0b83d2759
+  zh: 9008903182bb7e13
+/agent-note-serve-computer-use-to-other-harnesses-as-an-mcp-server/alternatives-considered:
+  en: cad5bdefc9bfe720
+  zh: 8564660068c66fc1
+/agent-note-serve-computer-use-to-other-harnesses-as-an-mcp-server/consequences:
+  en: cb25b3b611178f0a
+  zh: 6234bf3e87e0e14c

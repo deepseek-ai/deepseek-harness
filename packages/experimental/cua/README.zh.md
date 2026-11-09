@@ -41,7 +41,7 @@ kind: "package-reference"
 
 观察方法会输出并返回结果。使用 `void await app.getAccessibilityTree()` 只展示一份内容，或使用 `emit:false` 后打印一次返回文本。`window.getScreenshot()` 返回包含 `bytes`、`mimeType`、`pixelWidth`、`pixelHeight` 和 `windowId` 的 `CuaScreenshot`，图片输出回调接收同一个对象。选择文件后缀或声明图片时使用其中的 MIME 类型；格式可能是 PNG、JPEG、WebP 或 GIF。每张截图只进入一次附件处理链；`emit:false` 只抑制对象层的输出。
 
-`tools.cua` 直接返回操作结果。截图结果保留图片 Base64，并增加供工具渲染使用的持久 `attachment` 引用；模型内容只包含坐标元数据和一张图片，不包含编码字节。截图前要求附件服务可用，并确认当前模型支持图片输入。图片接入或保存失败会拒绝调用。对象桥接保留截图字节和已校验的元数据，不重复上传或输出同一张图片。
+`tools.cua` 直接返回操作结果。截图结果保留图片 Base64，并增加供工具渲染使用的持久 `attachment` 引用；模型内容只包含坐标元数据和一张图片，不包含编码字节。截图前要求附件服务可用，且已配置 `screenshotTarget` 或当前模型路由声明图片输入。图片接入或保存失败会拒绝调用。对象桥接保留截图字节和已校验的元数据，不重复上传或输出同一张图片。
 
 应用授权发生在启动、观察、截图和输入之前。会话许可按对话和应用身份持久化，重启 DSH 或关闭 Computer Use 后仍可复用，其他对话需要单独授权。长期许可要求平台提供可复用的应用身份。拒绝或撤销会关闭受影响的 Agent 连接，因此旧对象必须重新选择目标。取消、超时或重新连接后均不重放输入。
 
@@ -93,7 +93,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 
 `agentPreset` 默认为 `ptc`：匹配的 Agent 获得原始 `cua` 工具和 PTC 指引，其他已组合的 preset 只获得 `cua_run_code` 及其指引，包括标准、创造、极简和自定义 preset。注册使用 `agent/created`、`agent-preset/selected` 事件和 Agent 拥有的作用域，也处理提供方加载前已存在的 Agent。Agent 销毁会移除其注册并释放保留环境，提供方卸载还会释放专用 CUA 运行时。未组合 preset 的 Agent 不获得这两个工具。在独立组合中设置 `agentPreset: false` 可全局注册原始 `cua` 工具。Host 负责权限、本机连接和取消；preset 定义保持不变。
 
-`cua_run_code` 复用 PTC 程序工具工厂，由 CUA 提供方持有一个隔离的 Node 运行时。每个 Agent 通过自己的 `stateOwner` 选择独立的保留进程。独立的初始化程序在同一环境中先安装 `cua`，再执行模型代码；单次提权执行也遵守此顺序。工厂只绑定私有 `cua` 操作工具，保留嵌套策略检查、guard、日志、取消和截图交付。私有工具不会出现在模型可直接调用的工具列表中。
+`cua_run_code` 复用 PTC 程序工具工厂，由 CUA 提供方持有一个隔离的 Node 运行时。每个 Agent 通过自己的 `stateOwner` 选择独立的保留进程。独立的初始化程序在同一环境中先安装 `cua`，再执行模型代码；单次提权执行也遵守此顺序。工厂只绑定私有 `cua` 操作工具，保留嵌套策略检查、guard、日志、取消和截图交付。私有工具不会出现在模型可直接调用的工具列表中。该运行时存在期间，提供方发布 `ctx.cuaPrograms`：`reset(agent)` 取消该 Agent 正在运行的程序，在不执行程序代码的情况下释放其保留环境，并保留应用授权和本机连接，下一次程序在新进程中重新创建 `cua`；`screenshotRequestTarget(image)` 返回已配置的 `screenshotTarget` 为某张已存储截图选定的请求图片目标，使在模型请求之外转发截图的宿主交付程序观察到的那一版。
 
 [操作 schema](src/protocol.ts) 定义模型参数，并单独声明 Host 专用字段。原生实现在执行时检查目标身份、窗口几何、资源上限和操作系统访问条件。授权存储独立于原生协议保存持久许可。
 

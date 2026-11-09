@@ -1,0 +1,105 @@
+/** The shipped cua-mcp bundle: enabled through the real CLI, serving Computer Use programs over stdio to an MCP client. */
+import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
+import { describe, expect, it, onTestFinished } from 'vitest'
+import { clearAmbientProxyEnv } from '../../../../../scripts/test-proxy-environment.ts'
+import { startProbe, type McpProbe } from './probe.ts'
+
+const root = fileURLToPath(new URL('../../../../../', import.meta.url))
+const bin = join(root, 'apps/cli/lib/bin.js')
+const fixturePatch = fileURLToPath(new URL('./fixture.patch.yml', import.meta.url))
+const execFileAsync = promisify(execFile)
+
+interface CallResult {
+  content: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }>
+  isError?: boolean
+}
+
+function textOf(block: CallResult['content'][number] | undefined): string {
+  if (block?.type !== 'text') throw new Error(`expected a text block, got ${JSON.stringify(block)}`)
+  return block.text
+}
+
+describe.skipIf(!existsSync(bin))('cua-mcp profile', { retry: 0 }, () => {
+  it('enables the shipped bundle, prints client configuration, serves programs over stdio, and exits on EOF', async () => {
+    const temporary = await mkdtemp(join(tmpdir(), 'dsh-cua-mcp-profile-'))
+    const home = join(temporary, 'home')
+    const workspace = join(temporary, 'workspace')
+    const owned: { probe?: McpProbe } = {}
+    onTestFinished(async () => {
+      try { await owned.probe?.terminate() } finally { await rm(temporary, { recursive: true, force: true }) }
+    })
+    const env: NodeJS.ProcessEnv = {
+      ...process.env, DSH_HOME: home, DSH_TELEMETRY_DISABLED: '1', DSH_PERMISSION_MODE: 'danger-full-access', DSH_CUA_CONSENT: 'allow',
+    }
+    clearAmbientProxyEnv(env)
+    await execFileAsync(process.execPath, ['-e', 'require("node:fs").mkdirSync(process.argv[1], { recursive: true })', workspace])
+    const options = { cwd: workspace, env, timeout: 120_000, maxBuffer: 4_000_000 }
+
+    // One command selects the installation-owned bundle without pnpm or network access.
+    const enabled = await execFileAsync(process.execPath, [bin, 'plugin', '--profile', 'cua-mcp', 'enable', '@deepseek-ai/dsh-cua-mcp'], options)
+    expect(enabled.stdout).toBe('dsh: enabled @deepseek-ai/dsh-cua-mcp in profile cua-mcp; restart the profile to apply\n')
+    const manifest = JSON.parse(await readFile(join(home, 'profiles', 'cua-mcp', 'package.json'), 'utf8')) as { dsh: { profile: { bundles: string[] } } }
+    expect(manifest.dsh.profile.bundles).toEqual(['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-cua-mcp'])
+
+    const printed = await execFileAsync(process.execPath, [bin, '--profile', 'cua-mcp', '--print-client-config', 'codex'], options)
+    const normalized = printed.stdout
+      .split(JSON.stringify(process.execPath).slice(1, -1)).join('{{node}}')
+      .split(JSON.stringify(bin).slice(1, -1)).join('{{bin}}')
+      .split(JSON.stringify(home).slice(1, -1)).join('{{home}}')
+    await expect(normalized).toMatchFileSnapshot('./expected/codex.toml')
+
+    const probe = owned.probe = startProbe({ args: [bin, '--profile', 'cua-mcp', '--patch', fixturePatch], cwd: workspace, env })
+    const initialized = await probe.request('initialize', {
+      protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'cua-mcp-e2e', version: '1' },
+    }) as { serverInfo: { name: string; version: string }; instructions: string; capabilities: object }
+    probe.notify('notifications/initialized')
+    expect(initialized.serverInfo.name).toBe('dsh_cua')
+    expect(initialized.capabilities).toMatchObject({ tools: { listChanged: false } })
+    await expect(`${initialized.instructions}\n`).toMatchFileSnapshot('./expected/instructions.txt')
+    const listed = await probe.request('tools/list') as { tools: { name: string }[] }
+    await expect(`${JSON.stringify(listed.tools, null, 2)}\n`).toMatchFileSnapshot('./expected/tools.json')
+
+    const first = await probe.request('tools/call', { name: 'cua_run_code', arguments: {
+      code: 'globalThis.visits = 1; var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); '
+        + 'await win.click("0"); await win.getScreenshot(); ({ visits, window: win.windowId, pid: process.pid })',
+    } }) as CallResult
+    expect(first.isError).toBeUndefined()
+    expect(first.content.map(block => block.type)).toEqual(['text', 'text', 'text', 'image'])
+    await expect(`${textOf(first.content[0])}\n`).toMatchFileSnapshot('./expected/reference.md')
+    const state = JSON.parse(textOf(first.content[1])) as { visits: number; window: number; pid: number }
+    expect(state).toMatchObject({ visits: 1, window: 7 })
+    expect(JSON.parse(textOf(first.content[2]))).toMatchObject({ windowId: 7, coordinateSpace: 'screenshot-pixels', pixelWidth: 1, pixelHeight: 1 })
+    const image = first.content[3]
+    if (image?.type !== 'image') throw new Error('expected an image block')
+    expect(image.mimeType).toMatch(/^image\//)
+    expect(Buffer.from(image.data, 'base64').length).toBeGreaterThan(0)
+
+    const second = await probe.request('tools/call', { name: 'cua_run_code', arguments: {
+      code: 'globalThis.visits++; ({ visits, sameWindow: win.windowId === 7, pid: process.pid })', description: 'Count another visit',
+    } }) as CallResult
+    expect(second.content).toHaveLength(1)
+    expect(JSON.parse(textOf(second.content[0]))).toEqual({ visits: 2, sameWindow: true, pid: state.pid })
+
+    const reset = await probe.request('tools/call', { name: 'cua_reset', arguments: {} }) as CallResult
+    expect(reset.isError).toBeUndefined()
+    expect(textOf(reset.content[0])).toContain('Program environment cleared')
+    const third = await probe.request('tools/call', { name: 'cua_run_code', arguments: {
+      code: '({ visits: globalThis.visits ?? null, hasWindow: typeof win !== "undefined", pid: process.pid })',
+    } }) as CallResult
+    expect(third.content).toHaveLength(2)
+    expect(textOf(third.content[0])).toContain('## cua API reference')
+    const afterReset = JSON.parse(textOf(third.content[1])) as { visits: null; hasWindow: boolean; pid: number }
+    expect(afterReset).toMatchObject({ visits: null, hasWindow: false })
+    expect(afterReset.pid).not.toBe(state.pid)
+
+    expect(await probe.close()).toEqual({ code: 0, signal: null })
+    expect(probe.stderr()).not.toContain('MCP startup failed')
+    expect(() => process.kill(afterReset.pid, 0)).toThrow()
+  })
+})

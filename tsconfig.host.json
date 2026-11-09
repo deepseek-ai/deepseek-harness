@@ -327,6 +327,7 @@
     { "path": "./packages/experimental/cua/tsconfig.host.json" },
     { "path": "./packages/experimental/cua-bundle" },
     { "path": "./packages/experimental/cua-macos" },
+    { "path": "./packages/experimental/cua-mcp" },
     { "path": "./packages/client/ui-sidebar-documentpreview/tsconfig.host.json" },
     { "path": "./packages/client/ui-sidebar-browser/tsconfig.host.json" },
     { "path": "./packages/client/ui-settings-general/tsconfig.host.json" },

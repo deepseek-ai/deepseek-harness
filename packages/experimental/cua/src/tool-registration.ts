@@ -3,17 +3,49 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import NodePtcRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
-import { createRunCodeTool } from '@deepseek-ai/dsh-tool-executor-ptc/run-code'
+import { createRunCodeToolHandle } from '@deepseek-ai/dsh-tool-executor-ptc/run-code'
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
+import type { ImageAttachmentRef, ImageRequestTarget } from '@deepseek-ai/dsh-attachment'
 import type { PromptSection } from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import type { CuaConfig } from './index.ts'
+import { fixedScreenshotTarget } from './config.ts'
+import { CUA_PROMPT_SECTION_NAME } from './guidance.ts'
 
 const programDescription = 'Run a TypeScript program to observe and operate desktop applications. '
   + 'The global cua object is ready to use; retain application and window objects across calls. '
   + 'Only tools.cua is available inside the program. Call other session tools directly. '
   + 'Print the values you need or leave a final expression; screenshots are attached after the program finishes.'
+
+/** Host control over the dedicated `cua_run_code` environments; registered as `ctx.cuaPrograms`. */
+export interface CuaPrograms {
+  /**
+   * Release one Agent's retained program environment. Active programs of that Agent are cancelled, new
+   * programs wait for cleanup, and the next `cua_run_code` call starts a fresh process that re-creates the
+   * `cua` global; application grants, native connections, and the desktop applications themselves are
+   * unaffected. Resolves when no environment exists.
+   * @param agent - Agent whose `cua_run_code` state owner is released.
+   * @returns Completion after the process and its nested-call cleanup settle.
+   * @throws CodeResetFailedError when cleanup fails; programs stay blocked until a later reset succeeds.
+   */
+  reset(agent: Agent): Promise<void>
+  /**
+   * Request-image target the provider delivered for a stored screenshot when `screenshotTarget` is configured.
+   * A host that forwards screenshots outside a model request reads the same request version with it, so the
+   * image a caller sees matches the coordinate space the provider mapped.
+   * @param image - Durable screenshot attachment from a `cua` result.
+   * @returns The fixed target, or undefined when the Agent's model route selects the delivered version.
+   */
+  screenshotRequestTarget(image: ImageAttachmentRef): ImageRequestTarget | undefined
+}
+
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    /** Present while the CUA provider owns a dedicated program runtime. */
+    cuaPrograms: CuaPrograms
+  }
+}
 
 /**
  * Register raw CUA for its configured PTC preset and a persistent program tool for other presets.
@@ -25,7 +57,7 @@ const programDescription = 'Run a TypeScript program to observe and operate desk
  */
 export function installCuaTools(ctx: Context, config: CuaConfig, tool: ToolDefinition, guidance: string): () => void | Promise<void> {
   const bridgeUrl = JSON.stringify(new URL('../lib/bridge.js', import.meta.url).href)
-  const prompt = { name: 'computer-use:dsh-cua', order: ctx.systemPrompt.getSectionOrder('TOOL_COMPUTER_USE') }
+  const prompt = { name: CUA_PROMPT_SECTION_NAME, order: ctx.systemPrompt.getSectionOrder('TOOL_COMPUTER_USE') }
   const rawPrompt: PromptSection = { ...prompt, text: () => {
     const runtime = ctx.get('ptcRuntime')
     return !runtime?.retainsState ? guidance : `${guidance}
@@ -52,11 +84,17 @@ var cua = connectCua(() => tools.cua, text => console.log(text));
     const programs = runtimeCtx.plugin({
       name: 'cua-program-tools', inject: ['ptcRuntime', 'tools', 'workingDirectory', 'agentPresets', 'agents', 'systemPrompt'],
       apply(consumer: Context) {
-        const program = createRunCodeTool(consumer, {
+        const program = createRunCodeToolHandle(consumer, {
           name: 'cua_run_code', description: programDescription, runtime: consumer.ptcRuntime,
           tools: [tool], limits: config.runCode.executor,
           initialization: `globalThis.cua ??= (await import(${bridgeUrl})).connectCua(() => tools.cua, text => console.log(text));`,
         })
+        // Hosts without a model (MCP frontends) reset through this service; the factory owns call coordination.
+        consumer.provide('cuaPrograms', {
+          reset: (agent: Agent) => program.reset(agent),
+          screenshotRequestTarget: image => config.screenshotTarget === undefined
+            ? undefined : fixedScreenshotTarget(config.screenshotTarget, image),
+        } satisfies CuaPrograms)
         const scopes = new Map<Agent, { scope: Scope; current?: { kind: 'raw' | 'program'; remove: () => void } }>()
         consumer.effect(() => async () => {
           await Promise.all([...scopes.values()].map(({ scope }) => scope.dispose()))
@@ -74,7 +112,7 @@ var cua = connectCua(() => tools.cua, text => console.log(text));
             scopes.set(agent, entry)
             scope.ctx.effect(() => () => { scopes.delete(agent) }, 'cua.agent-tools')
           }
-          const remove = register(entry.scope.ctx, kind === 'raw' ? tool : program,
+          const remove = register(entry.scope.ctx, kind === 'raw' ? tool : program.definition,
             kind === 'raw' ? rawPrompt : { ...prompt, text: guidance })
           entry.current = { kind, remove }
         }

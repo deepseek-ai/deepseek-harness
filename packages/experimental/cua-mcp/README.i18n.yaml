@@ -1,0 +1,58 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/cua-mcp/README.md
+/:
+  en: 837f60ce18bd6470
+  zh: cb329560601b38a4
+/deepseek-ai-dsh-cua-mcp:
+  en: c0bca87ff2983e2e
+  zh: da83dd66b8feafab
+/deepseek-ai-dsh-cua-mcp/summary:
+  en: cc170382fc781faf
+  zh: 846bb765f348d365
+/deepseek-ai-dsh-cua-mcp/table-of-contents:
+  en: dcb583a860af8206
+  zh: 0a0d02b6e7e4e0b6
+/deepseek-ai-dsh-cua-mcp/use-this-package:
+  en: bbff250eba0f1b89
+  zh: 0a618f05cc88ee2b
+/deepseek-ai-dsh-cua-mcp/use-this-package/install-into-a-profile:
+  en: c41e73c449ec4e64
+  zh: 9e4ff33e1d97f1f3
+/deepseek-ai-dsh-cua-mcp/use-this-package/connect-a-client:
+  en: d1c0e8f54a1a9eca
+  zh: 86a0f883c2f7edce
+/deepseek-ai-dsh-cua-mcp/use-this-package/what-you-get:
+  en: 2c9cae657eb4af9d
+  zh: f8cb92292bf0ebf3
+/deepseek-ai-dsh-cua-mcp/configuration:
+  en: 8996e07a265596a5
+  zh: 8cf79827c51f2a2d
+/deepseek-ai-dsh-cua-mcp/understand-the-implementation:
+  en: 65cefb2a0a5be892
+  zh: 09e22959474eda6a
+/deepseek-ai-dsh-cua-mcp/further-exploration:
+  en: 0328a9b46caad949
+  zh: a20731d490d5412a
+/deepseek-ai-dsh-cua-mcp/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-cua-mcp/model-experience/external-harness-model:
+  en: 75ba5b40dac5fdbc
+  zh: 690d784248b15542
+/deepseek-ai-dsh-cua-mcp/model-experience/external-harness-model/what-the-model-sees:
+  en: 9dd9bcd00366b601
+  zh: 7214d47c915dc601
+/deepseek-ai-dsh-cua-mcp/model-experience/external-harness-model/token-effect:
+  en: c84f22846abe33ed
+  zh: 78c261ffea81a653
+/deepseek-ai-dsh-cua-mcp/model-experience/external-harness-model/kv-cache-effect:
+  en: 2c22520787915229
+  zh: 21dafc45d1a4bc0d
+/deepseek-ai-dsh-cua-mcp/known-limitations-and-deferred-work:
+  en: 56925d9b123a6b2f
+  zh: 1c613a37f6c89d6a
+/deepseek-ai-dsh-cua-mcp/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 8ec3e73528ddb1a6

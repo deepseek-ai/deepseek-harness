@@ -1,0 +1,54 @@
+[
+  {
+    "name": "cua_run_code",
+    "title": "Computer use program",
+    "description": "Run a TypeScript program that observes and operates desktop applications through the global `cua` object: select an application, read its accessibility tree, capture window screenshots, click, and type. The program is a sequence of TypeScript REPL statements: top-level `await` works, top-level `return` does not. Only `console.log(...)` output and the value of the final expression come back, followed by every screenshot the program captured as an image. Variables, imported modules, and application or window objects stay in memory for this connection across calls until cua_reset. The first result of a connection starts with the complete `cua` API reference.",
+    "inputSchema": {
+      "type": "object",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "description": "TypeScript REPL statements that use the global cua object; the final expression is returned."
+        },
+        "description": {
+          "description": "Short label of what the program does; omitted records \"CUA program\".",
+          "type": "string",
+          "minLength": 1
+        },
+        "timeoutMs": {
+          "description": "Elapsed-time budget in milliseconds for this program, including nested cua calls; omitted uses the profile default.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "code"
+      ]
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "cua_reset",
+    "title": "Reset computer use program state",
+    "description": "Discard the program environment of this connection: every variable, import, and application or window object held by earlier cua_run_code calls. Application access grants and the desktop applications themselves are unaffected; the next cua_run_code call starts a fresh environment and its result repeats the `cua` API reference. Use it when a declaration conflicts with an earlier call or the environment has become unusable.",
+    "inputSchema": {
+      "type": "object",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {}
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  }
+]

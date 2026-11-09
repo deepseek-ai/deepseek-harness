@@ -119,7 +119,9 @@ class ImageAdapter extends LlmAdapter {
 const imageData = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC'
 const imageMetadata = { pixelWidth: 1, pixelHeight: 1, bounds: { x: 2, y: 3, width: 1, height: 1 }, coordinateSpace: 'window-points', windowId: 7 }
 
-async function setup(model?: { provider: string; model: string }, ptc = false) {
+async function setup(
+  model?: { provider: string; model: string }, ptc = false, overrides: Parameters<typeof NativeProvider.Config>[0] = {},
+) {
   native.connect.mockClear()
   native.cleanup.mockReset().mockResolvedValue({ dispatched: true })
   native.request.mockReset().mockResolvedValue([])
@@ -136,7 +138,7 @@ async function setup(model?: { provider: string; model: string }, ptc = false) {
     await ctx.plugin(SandboxPolicy, { mode: 'danger-full-access' })
     await ctx.plugin(NodeRuntime)
   } else await ctx.plugin(Subprocess, [])
-  const provider = await ctx.plugin(NativeProvider, config)
+  const provider = await ctx.plugin(NativeProvider, { ...config, ...overrides })
   await mountAgentLoopTestHarness(ctx)
   const handle = await ctx.agents.create({ sessionId: SessionId('native-lifecycle'), meta: { cwd: process.cwd() }, ...model ? { agentOptions: model } : {} })
   let index = 0
@@ -741,6 +743,40 @@ it('refuses screenshot capture when no attachment store is mounted', async () =>
   expect(result.isError).toBe(true)
   expect(JSON.stringify(result.content)).toContain('require an attachment store')
   expect(native.request).not.toHaveBeenCalled()
+})
+
+it('captures screenshots through a configured target without resolving a model route', async () => {
+  const f = await setup(undefined, false, { screenshotTarget: { longEdge: 10, maxBytes: 100_000 } })
+  await selectApplication(f)
+  const root = await mkdtemp(join(tmpdir(), 'dsh-cua-fixed-target-'))
+  onTestFinished(async () => { await f.ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
+  await f.ctx.plugin(LocalAttachmentStore, { dshHome: root })
+  const resolve = vi.spyOn(f.ctx.llm, 'resolveModelInfo')
+  const image = await sharp({ create: { width: 40, height: 20, channels: 3, background: '#4488cc' } }).png().toBuffer()
+  native.request.mockResolvedValue({ ...imageMetadata, bounds: { x: 10, y: 20, width: 400, height: 200 },
+    pixelWidth: 40, pixelHeight: 20, mimeType: 'image/png', data: image.toString('base64') })
+  const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: 7 })
+  expect(result.isError, JSON.stringify(result.content)).toBe(false)
+  expect(resolve).not.toHaveBeenCalled()
+  // The long edge of 40x20 scales to 10, so the short edge rounds to 5 and coordinates map back to native points.
+  expect(result.value).toMatchObject({ pixelWidth: 10, pixelHeight: 5, coordinateSpace: 'screenshot-pixels' })
+  expect(result.content.filter(block => block.type === 'image')).toHaveLength(1)
+  native.request.mockResolvedValue({ dispatched: true })
+  expect((await f.execute('click', { appHandle: 'app-one', windowId: 7, x: 5, y: 2.5 })).isError).toBe(false)
+  expect(native.request).toHaveBeenLastCalledWith('click', { appHandle: 'app-one', windowId: 7, x: 200, y: 100 }, expect.any(AbortSignal), expect.any(String))
+})
+
+it('validates the configured screenshot target as a complete integer pair', () => {
+  expect(NativeProvider.Config({})).not.toHaveProperty('screenshotTarget')
+  expect(NativeProvider.Config({ screenshotTarget: { longEdge: 2048, maxBytes: 2_097_152 } }).screenshotTarget)
+    .toEqual({ longEdge: 2048, maxBytes: 2_097_152 })
+  const invalid = [
+    { longEdge: 2048 }, { maxBytes: 4096 }, { longEdge: 0, maxBytes: 4096 },
+    { longEdge: 1.5, maxBytes: 4096 }, { longEdge: 1024, maxBytes: 512 },
+  ]
+  for (const screenshotTarget of invalid) {
+    expect(() => NativeProvider.Config({ screenshotTarget } as never)).toThrow()
+  }
 })
 
 it.each(['unresolved', 'unknown', 'text-only', 'provider-error'] as const)(

@@ -1,0 +1,13 @@
+# ~/.codex/config.toml — run once first: dsh plugin --profile cua-mcp enable @deepseek-ai/dsh-cua-mcp
+[mcp_servers.dsh_cua]
+command = "{{node}}"
+args = ["{{bin}}", "--profile", "cua-mcp"]
+env = { DSH_HOME = "{{home}}", DSH_CUA_CONSENT = "allow" }
+startup_timeout_sec = 120
+tool_timeout_sec = 600
+enabled_tools = ["cua_run_code", "cua_reset"]
+omit_tools_from = ["code_mode", "deferred"]
+# default_tools_approval_mode = "auto"
+
+[mcp_servers.dsh_cua.tools.cua_run_code]
+output_token_limit = 25000

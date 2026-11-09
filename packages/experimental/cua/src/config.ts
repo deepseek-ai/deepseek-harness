@@ -1,5 +1,6 @@
 /** Schemastery fields for platform-specific native CUA configuration. */
 import Schema from '@deepseek-ai/schemastery'
+import { longEdgeDimensions, type ImageAttachmentRef, type ImageRequestTarget } from '@deepseek-ai/dsh-attachment'
 import NodePtcRuntime, { type Config as NodeRuntimeConfig } from '@deepseek-ai/dsh-ptc-runtime-node'
 import { RunCodeConfig } from '@deepseek-ai/dsh-tool-executor-ptc/run-code'
 
@@ -21,11 +22,36 @@ export const CuaRunCodeConfig: Schema<Partial<CuaRunCodeConfig>, CuaRunCodeConfi
   executor: RunCodeConfig.default({}),
 })
 
+/** Fixed request-image target for screenshots when no model route selects one. */
+export interface CuaScreenshotTargetConfig {
+  /** Exact long-edge pixel target; a source at or below it keeps its size. */
+  longEdge: number
+  /** Encoded-byte target before Base64 expansion; the smallest quality-ladder output is kept when no quality fits. */
+  maxBytes: number
+}
+
+/** Validate an explicit screenshot target; omission resolves the target from the Agent's model route. */
+export const CuaScreenshotTargetConfig: Schema<CuaScreenshotTargetConfig> = Schema.object({
+  longEdge: Schema.number().step(1).min(1).max(16_384).required(),
+  maxBytes: Schema.number().step(1).min(1024).required(),
+})
+
+/**
+ * Project a configured screenshot target onto one stored image.
+ * @param configured - Validated `screenshotTarget`.
+ * @param image - Durable normalized screenshot.
+ * @returns The request target for that image: the long edge capped at the configured value, the configured byte budget.
+ */
+export function fixedScreenshotTarget(configured: CuaScreenshotTargetConfig, image: ImageAttachmentRef): ImageRequestTarget {
+  return { ...longEdgeDimensions(image.width, image.height, configured.longEdge), maxBytes: configured.maxBytes }
+}
+
 /** Shared configuration fields extended by native platform providers. */
 export const CuaConfigFields = {
   requireSystemPointerApproval: Schema.boolean().default(true),
   agentPreset: Schema.union([Schema.string().min(1), Schema.const(false)]).default('ptc'),
   runCode: CuaRunCodeConfig.default({}),
+  screenshotTarget: Schema.union([CuaScreenshotTargetConfig, Schema.const(undefined)]),
   allowedApps: Schema.array(Schema.object({
     id: Schema.string().pattern(/^[a-f0-9]{64}$/).required(),
     name: Schema.string().required(), executablePath: Schema.string().min(1),

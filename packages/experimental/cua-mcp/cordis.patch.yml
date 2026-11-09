@@ -1,0 +1,54 @@
+# The Computer Use MCP application over dsh-base. Stdout belongs exclusively to
+# MCP JSON-RPC; one stdio connection owns one Agent whose cua_run_code programs
+# retain state until the client disconnects or calls cua_reset.
+
+# No model turn ever runs in this profile: titles, credentials, and the account
+# provider have no consumer, and configuration applies at startup only.
+- id: session-title-llm
+  disabled: true
+
+- id: hmr
+  disabled: true
+
+- id: credentials
+  disabled: true
+
+- id: authorization
+  disabled: true
+
+- id: deepseek-account
+  disabled: true
+
+- insert:
+    # A composed preset selects cua_run_code for the connection's Agent; the
+    # empty preset keeps every model-facing row out of this profile.
+    - id: cua-mcp-presets
+      name: '@deepseek-ai/dsh-agent-preset-registry'
+      config:
+        default: cua-mcp
+
+    - id: cua-mcp-preset
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: cua-mcp
+        plugins: []
+
+    - id: cua-mcp-computer-use
+      name: '@deepseek-ai/dsh-computer-use'
+
+    # Screenshots target a fixed request image because no model route exists here.
+    - id: cua-mcp-provider
+      name: '@deepseek-ai/dsh-experimental-cua-macos'
+      disabled: !!js process.platform !== 'darwin'
+      config:
+        agentPreset: ptc
+        screenshotTarget:
+          longEdge: 2048
+          maxBytes: 2097152
+
+    # DSH_CUA_CONSENT=allow grants application and pointer access without a human;
+    # the default forwards each request to the MCP client as an elicitation.
+    - id: cua-mcp
+      name: '@deepseek-ai/dsh-cua-mcp'
+      config:
+        consent: !!js process.env.DSH_CUA_CONSENT ?? 'elicit'

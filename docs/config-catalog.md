@@ -886,6 +886,29 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-credentials-local -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-cua-mcp -->
+<a id="deepseek-aidsh-cua-mcp"></a>
+
+## `@deepseek-ai/dsh-cua-mcp`
+
+- `inject`: `cmdlineArgs` · `appReady` · `appExit` · `profileContext` · `agents` · `agentPresets` · `tools` · `systemPrompt` · `attachments`
+- `source`: [`packages/experimental/cua-mcp/src/index.ts:24`](../packages/experimental/cua-mcp/src/index.ts)
+
+```ts config-catalog
+/** Connection policy configurable from the profile patch. */
+export interface Config {
+  /**
+   * Who grants application and pointer consent for the connection's Agent: `allow` grants every request for
+   * this session without a human; `elicit` forwards each request to the MCP client as a form elicitation.
+   */
+  consent: ConsentMode
+}
+
+/** Who decides application and pointer consent for the connection's Agent. */
+export type ConsentMode = 'allow' | 'elicit'
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-cua-mcp -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-deepseek-account -->
 <a id="deepseek-aidsh-deepseek-account"></a>
 
