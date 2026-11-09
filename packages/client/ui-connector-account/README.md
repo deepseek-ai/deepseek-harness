@@ -61,9 +61,9 @@ The registrant imports the registry's types with `import type` from the package 
 
 | Surface | Behavior |
 |---|---|
-| Section | Title, status, buttons, detail, notes, failure, and hint. Buttons are disabled while a call the section made is pending or the Host stream is down. A failure shows the registrant's text, then its diagnostic items |
+| Section | Title, status, buttons, detail, notes, failure, and hint. Buttons, including a confirmation's, are disabled while a call the section made is pending or the Host stream is down. A failure shows the registrant's text, then its diagnostic items |
 | Title tag | The display's `badge`, shown only on the enabled bundle's page or one of its row pages, and only while the display has one |
-| Activation prompt | Open while the phase is `disconnected` after the bundle is switched on; Connect opens the bundle page and starts the display's `connect` operation, if it names one. It waits while the account is checking or connecting and dismisses itself once the account is connected or unavailable |
+| Activation prompt | Open while the phase is `disconnected` after the bundle is switched on; Connect opens the bundle page and starts the display's `connect` operation, if it names one, and is disabled while the Host stream is down. It waits while the account is checking or connecting and dismisses itself once the account is connected or unavailable |
 | Notice | The latest outcome in this browser, outside the Plugins panel's lifetime: the operation's success text, or the shared failure copy with a warning icon |
 
 ### Following operations
@@ -84,7 +84,7 @@ The `connectorAccount` dictionary holds the copy every account shares: Close, Ca
 
 The Host half, `ConnectorAccounts`, is a Remote service. `register()` observes the account's source, and each `watch` stream reads every account's entry after each change, coalescing changes that arrive before the next read: the key and package, the copy, `present(view)`, the operation in progress, and the latest result with its success text. `start` and `cancel` route by key to the account's source.
 
-[`dsh-api-remotes`](../../api/remotes/README.md) mounts the generated `connectorAccounts` Remote. The browser half opens one `watch` stream through `BrowserAccounts`, whose one store holds the Host's accounts by key, whether the stream is delivering, and the latest notice; it also remembers the operations this browser started. It registers one `plugins.detail.badge` entry and one `shell.overlay` notice for the page, and for each account with a package, `plugins.bundle.config` and `plugins.bundle.activation` keyed by the package name, all under the `connectorAccount` namespace. The buttons call `start` and `cancel` on the Remote themselves and report the started operation to `BrowserAccounts`. An account the Host drops loses its bundle entries, and unloading withdraws every entry and the stream.
+[`dsh-api-remotes`](../../api/remotes/README.md) mounts the generated `connectorAccounts` Remote. The browser half opens one `watch` stream through `BrowserAccounts`, whose one store holds the Host's accounts by key, whether the stream is delivering, and the latest notice; it also remembers the operations this browser started. It registers one `plugins.detail.badge` entry and one `shell.overlay` notice for the page, and for each account with a package, `plugins.bundle.config` and `plugins.bundle.activation` keyed by the package name, all under the `connectorAccount` namespace. The surfaces receive `start` and `cancel` callbacks that call the Remote and reject when the Host refuses or the call does not answer; the buttons await them and report the started operation to `BrowserAccounts`. An account the Host drops loses its bundle entries, and unloading withdraws every entry and the stream.
 
 | File | Role |
 |---|---|

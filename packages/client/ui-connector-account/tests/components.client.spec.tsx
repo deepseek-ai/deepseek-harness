@@ -1,10 +1,9 @@
 // @vitest-environment jsdom
-/** The slot entries render each registrant's display from the Host with the shared copy, and buttons call the Remote directly. */
+/** The slot entries render each registrant's display from the Host with the shared copy, and buttons call the Host callbacks. */
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { PluginsSubject } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
-import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import {
   ConnectorAccountActivationEntry, ConnectorAccountBadgeEntry, ConnectorAccountSectionEntry, ConnectorAccountToastEntry,
@@ -36,19 +35,14 @@ function entry(display: ConnectorAccountDisplay = DISCONNECTED, extra: Partial<C
   }
 }
 
-const ok = <T,>(value: T): RemoteResult<T> => ({ ok: true, value })
-const refused = (): RemoteResult<never> => ({ ok: false, error: new RemoteError('gateway/internal', 'offline', {}) }) as never
-
 function face(change: Partial<ConnectorAccountsState> = {}, accounts: readonly ConnectorAccountEntry[] = [entry()]) {
   const current: ConnectorAccountsState = {
     accounts: new Map(accounts.map(item => [item.key, item])), linked: true, notice: undefined, ...change,
   }
   return {
     useConnectorAccounts: <R,>(selector: (value: ConnectorAccountsState) => R): R => selector(current),
-    remote: {
-      start: vi.fn(async (_key: string, _operation: string) => ok(OP)),
-      cancel: vi.fn(async (_key: string, _id: ConnectorOperationId): Promise<RemoteResult<void>> => ok(undefined)),
-    },
+    start: vi.fn(async (_key: string, _operation: string) => OP),
+    cancel: vi.fn(async (_key: string, _id: ConnectorOperationId) => {}),
     account: KEY, resolveText, follow: vi.fn(), failed: vi.fn(), dismissNotice: vi.fn(), t,
   }
 }
@@ -57,7 +51,7 @@ const sectionOf = (display: ConnectorAccountDisplay, change: Partial<ConnectorAc
 const prompt = (props: ReturnType<typeof face>, onDismiss = vi.fn(), onOpenDetails = vi.fn()) =>
   <ConnectorAccountActivationEntry {...props} onDismiss={onDismiss} onOpenDetails={onOpenDetails} />
 
-it('shows the registrant title, status, detail, notes, and hint, and starts each button\'s operation through the Remote', async () => {
+it('shows the registrant title, status, detail, notes, and hint, and starts each button\'s operation on the Host', async () => {
   const props = sectionOf({
     ...DISCONNECTED, detail: '先关联一个应用。',
     notes: [{ text: '应用：cli_a', button: { label: '更换', command: { kind: 'start', operation: 'link-app' }, variant: 'ghost' } }, { text: '普通说明' }],
@@ -67,18 +61,18 @@ it('shows the registrant title, status, detail, notes, and hint, and starts each
   expect(container.querySelector('[data-connector-account="disconnected"][data-connector-account-key="@acme/fixture"]')).toBeTruthy()
   await click('连接演示')
   await click('更换')
-  expect(props.remote.start.mock.calls).toEqual([[KEY, 'connect'], [KEY, 'link-app']])
+  expect(props.start.mock.calls).toEqual([[KEY, 'connect'], [KEY, 'link-app']])
   expect(props.follow.mock.calls).toEqual([[KEY, OP], [KEY, OP]])
 })
 
 it('disables the buttons while a call is pending or the Host stream is down', async () => {
   const props = face()
-  const answer = Promise.withResolvers<RemoteResult<ConnectorOperationId>>()
-  props.remote.start.mockReturnValueOnce(answer.promise)
+  const answer = Promise.withResolvers<ConnectorOperationId>()
+  props.start.mockReturnValueOnce(answer.promise)
   render(<ConnectorAccountSectionEntry {...props} />)
   fireEvent.click(button('连接演示'))
   expect(disabled()).toEqual([true])
-  await act(async () => { answer.resolve(ok(OP)) })
+  await act(async () => { answer.resolve(OP) })
   expect(disabled()).toEqual([false])
   expect(props.failed).not.toHaveBeenCalled()
   cleanup()
@@ -100,7 +94,28 @@ it('asks before a button that changes the account outside DSH and starts it only
   fireEvent.click(button('退出登录'))
   await click('确认退出')
   expect(screen.queryByRole('dialog')).toBeNull()
-  expect(props.remote.start.mock.calls).toEqual([[KEY, 'sign-out']])
+  expect(props.start.mock.calls).toEqual([[KEY, 'sign-out']])
+})
+
+it('disables an open confirmation and the activation prompt\'s Connect while the Host stream is down', () => {
+  const display: ConnectorAccountDisplay = {
+    phase: 'connected', status: '已连接', notes: [],
+    buttons: [{ label: '退出登录', command: { kind: 'start', operation: 'sign-out' }, confirm: { title: '退出演示？', body: '终端也会退出。', label: '确认退出' } }],
+  }
+  const { rerender } = render(<ConnectorAccountSectionEntry {...sectionOf(display)} />)
+  fireEvent.click(button('退出登录'))
+  // The stream drops while the confirmation is open.
+  const down = sectionOf(display, { linked: false })
+  rerender(<ConnectorAccountSectionEntry {...down} />)
+  fireEvent.click(button('确认退出'))
+  expect((button('确认退出') as HTMLButtonElement).disabled).toBe(true)
+  expect(down.start).not.toHaveBeenCalled()
+  cleanup()
+  const offline = sectionOf({ ...DISCONNECTED, connect: { kind: 'start', operation: 'connect' } }, { linked: false })
+  render(prompt(offline))
+  fireEvent.click(button('连接演示'))
+  expect((button('连接演示') as HTMLButtonElement).disabled).toBe(true)
+  expect(offline.start).not.toHaveBeenCalled()
 })
 
 it.each<[string, ConnectorAccountDisplay['failure'], string]>([
@@ -112,9 +127,9 @@ it.each<[string, ConnectorAccountDisplay['failure'], string]>([
   expect(screen.getByRole('alert').textContent).toBe(expected)
 })
 
-it('reports a start the Host refused or that never answered, without following it', async () => {
+it('reports a start that the Host refused or that never answered, without following it', async () => {
   const props = face()
-  props.remote.start.mockResolvedValueOnce(refused()).mockRejectedValueOnce(new Error('carrier lost'))
+  props.start.mockRejectedValueOnce(new Error('offline')).mockRejectedValueOnce(new Error('carrier lost'))
   render(<ConnectorAccountSectionEntry {...props} />)
   await click('连接演示')
   await click('连接演示')
@@ -134,13 +149,13 @@ it('cancels the operation in progress and opens its authorization page again on 
   fireEvent.click(button('打开授权页'))
   expect(windowOpen).toHaveBeenCalledWith('https://example.com/a', '_blank', 'noopener,noreferrer')
   await click('取消')
-  expect(props.remote.cancel).toHaveBeenCalledWith(KEY, OP)
+  expect(props.cancel).toHaveBeenCalledWith(KEY, OP)
   // A cancel button with no operation in progress calls nothing.
   cleanup()
   const idle = sectionOf(display)
   render(<ConnectorAccountSectionEntry {...idle} />)
   await click('取消')
-  expect(idle.remote.cancel).not.toHaveBeenCalled()
+  expect(idle.cancel).not.toHaveBeenCalled()
 })
 
 it('renders nothing for a bundle whose account the Host has not listed', () => {
@@ -191,23 +206,23 @@ it('connects from the prompt through the operation the display names, or only op
   const { rerender } = render(prompt(named, vi.fn(), onOpenDetails))
   await click('连接演示')
   expect(onOpenDetails).toHaveBeenCalledOnce()
-  expect(named.remote.start).toHaveBeenCalledWith(KEY, 'link-app')
+  expect(named.start).toHaveBeenCalledWith(KEY, 'link-app')
   const bare = face()
   rerender(prompt(bare, vi.fn(), onOpenDetails))
   fireEvent.click(button('连接演示'))
   expect(onOpenDetails).toHaveBeenCalledTimes(2)
-  expect(bare.remote.start).not.toHaveBeenCalled()
+  expect(bare.start).not.toHaveBeenCalled()
 })
 
 it('starts once for a second click before the first call answers', async () => {
   const props = sectionOf({ ...DISCONNECTED, connect: { kind: 'start', operation: 'connect' } })
-  const answer = Promise.withResolvers<RemoteResult<ConnectorOperationId>>()
-  props.remote.start.mockReturnValueOnce(answer.promise)
+  const answer = Promise.withResolvers<ConnectorOperationId>()
+  props.start.mockReturnValueOnce(answer.promise)
   render(prompt(props))
   fireEvent.click(button('连接演示'))
   fireEvent.click(button('连接演示'))
-  await act(async () => { answer.resolve(ok(OP)) })
-  expect(props.remote.start).toHaveBeenCalledOnce()
+  await act(async () => { answer.resolve(OP) })
+  expect(props.start).toHaveBeenCalledOnce()
   expect(props.follow).toHaveBeenCalledOnce()
 })
 
