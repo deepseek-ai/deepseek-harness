@@ -3,7 +3,7 @@ import type { PtcProgramFormat, PtcJsonValue, PtcRunFailure } from '@deepseek-ai
 import { decodePtcJsonWire, type PtcJsonWire } from './json-wire.ts'
 
 /** Wire revision required before the host dispatches program code. */
-export const PROGRAM_PROTOCOL_VERSION = 3
+export const PROGRAM_PROTOCOL_VERSION = 4
 
 /** Inputs for one program; host functions remain in the parent process. */
 export interface ProgramBootData {
@@ -53,6 +53,11 @@ export interface HostMethods {
    * @param text - Captured text.
    */
   log(text: string): void
+  /**
+   * Emit one registered image at the current output position.
+   * @param id - Image identity issued by this process’s host.
+   */
+  image(id: string): void
   /** Report exhausted program-side output accounting. */
   outputLimit(): void
 }

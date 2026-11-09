@@ -187,7 +187,7 @@ describe('PTC mode typed values: keyless real-process contracts', () => {
           exposesInfo: 'info' in error,
         };
       }
-      Harness.inspect(JSON.stringify({ length: large.length, failure }));
+      inspect(JSON.stringify({ length: large.length, failure }));
     `))
 
     expect(value).toEqual({
@@ -214,12 +214,12 @@ describe('PTC mode typed values: keyless real-process contracts', () => {
         description: 'Run completion marker in background',
         run_in_background: true,
       });
-      Harness.inspect(JSON.stringify(started.jobId));
+      inspect(JSON.stringify(started.jobId));
     `))
     expect(jobId).toMatch(/^bash-[0-9a-f]{16}$/)
 
     const polled = completion(await runCode(ctx, `
-      Harness.inspect(JSON.stringify(await tools.job_output({ job_id: ${JSON.stringify(jobId)}, wait: true, timeout_ms: 5000 })));
+      inspect(JSON.stringify(await tools.job_output({ job_id: ${JSON.stringify(jobId)}, wait: true, timeout_ms: 5000 })));
     `))
     if (typeof polled !== 'object' || polled === null || Array.isArray(polled)) throw new Error('invalid job_output completion')
     const taskOutput = polled as Record<string, unknown>
@@ -234,7 +234,7 @@ describe('PTC mode typed values: keyless real-process contracts', () => {
     const pre = new AbortController()
     pre.abort('pre-aborted')
     const preResult = await runCode(ctx, `
-      Harness.inspect(JSON.stringify(await tools.bash({ command: 'sleep 10', description: 'Must never start', run_in_background: true })));
+      inspect(JSON.stringify(await tools.bash({ command: 'sleep 10', description: 'Must never start', run_in_background: true })));
     `, pre.signal)
     expect(preResult.isError).toBe(true)
     expect(ctx.jobs.list()).toEqual([])
@@ -249,7 +249,7 @@ describe('PTC mode typed values: keyless real-process contracts', () => {
     const afterPublication = new AbortController()
     const running = runCode(ctx, `
       const started = await tools.bash({ command: 'sleep 10', description: 'Wait for explicit task kill', run_in_background: true });
-      Harness.inspect(started.jobId);
+      inspect(started.jobId);
       await new Promise(() => {});
     `, afterPublication.signal)
     await Promise.race([
@@ -268,11 +268,11 @@ describe('PTC mode typed values: keyless real-process contracts', () => {
     expect(ctx.jobs.list()[0]).toMatchObject({ id: job!.id, status: 'running' })
 
     const killed = completion(await runCode(ctx, `
-      Harness.inspect(JSON.stringify(await tools.job_kill({ job_id: ${JSON.stringify(job!.id)}, reason: 'test owns cancellation' })));
+      inspect(JSON.stringify(await tools.job_kill({ job_id: ${JSON.stringify(job!.id)}, reason: 'test owns cancellation' })));
     `))
     expect(killed).toMatchObject({ outcome: 'cancellation-requested', job: { id: job!.id } })
     const settled = completion(await runCode(ctx, `
-      Harness.inspect(JSON.stringify(await tools.job_output({ job_id: ${JSON.stringify(job!.id)}, wait: true, timeout_ms: 5000 })));
+      inspect(JSON.stringify(await tools.job_output({ job_id: ${JSON.stringify(job!.id)}, wait: true, timeout_ms: 5000 })));
     `))
     expect(settled).toMatchObject({ job: { id: job!.id, status: 'killed' } })
   })
@@ -283,7 +283,7 @@ describe('PTC mode typed values: keyless real-process contracts', () => {
     const controller = new AbortController()
     const startedAt = Date.now()
     const pending = runCode(ctx, `
-      Harness.inspect(JSON.stringify(await tools.bash({ command: 'sleep 10', description: 'Run cancellable foreground command' })));
+      inspect(JSON.stringify(await tools.bash({ command: 'sleep 10', description: 'Run cancellable foreground command' })));
     `, controller.signal)
     setTimeout(() => { controller.abort('stop-foreground') }, 200)
     const result = await pending
@@ -309,7 +309,7 @@ describe('PTC mode typed values: keyless real-process contracts', () => {
       const inspected = await tools.cordis_inspect_query({
         platform: provider.platform, provider: provider.id, method: provider.methods[0].name,
       });
-      Harness.inspect(JSON.stringify({ provider: provider.id, names: inspected.data.tools.map(tool => tool.name) }));
+      inspect(JSON.stringify({ provider: provider.id, names: inspected.data.tools.map(tool => tool.name) }));
     `, testToolSignal, agent))
 
     expect(value).toEqual({ provider: 'Tool', names: ['cordis_inspect_list', 'cordis_inspect_query'] })

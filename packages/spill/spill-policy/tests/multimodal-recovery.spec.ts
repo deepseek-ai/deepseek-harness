@@ -198,7 +198,7 @@ describe('multimodal recovery through real providers', () => {
       ? 'await Promise.all([tools.ends({}), tools.middle({}), tools.small({})])'
       : '[await tools.ends({}), await tools.middle({}), await tools.small({})]'
     const result = await execute('run_code', {
-      code: `const [ends, middle, small] = ${calls}; Harness.inspect(JSON.stringify({ ends: ends.content[2].text.length, middle: middle.content[0].text.length, small: small.content[0].text.length }));`,
+      code: `const [ends, middle, small] = ${calls}; inspect(JSON.stringify({ ends: ends.content[2].text.length, middle: middle.content[0].text.length, small: small.content[0].text.length }));`,
       description: 'Inspect independent image result budgets',
     })
     expect(result.isError).toBe(false)

@@ -131,7 +131,7 @@ const RETAINED_STATE_INSTRUCTIONS = 'Timeout and cancellation results say whethe
 
 function resolveMode(config: ResolvedConfig): ExecutionMode {
   const outputInstructions = (config.enableConsole ? '' : 'Console is unavailable. ')
-    + 'Use Harness.inspect(...values) for output.'
+    + 'Use inspect(...values) for output.'
   switch (config.executionMode) {
     case 'per-call': return {
       format: 'function-body',

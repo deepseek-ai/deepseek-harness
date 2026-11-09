@@ -100,6 +100,8 @@ interface PtcRunResult {
    * the outer result.
    */
   logs: string[]
+  /** Images explicitly inspected by the program, ordered among captured text entries. */
+  images?: PtcImageOutput[]
   /** Present iff the run failed; see {@link PtcRunFailure} for the taxonomy. */
   error?: PtcRunFailure
 }
@@ -152,7 +154,7 @@ interface PtcBindingNamespace {
    * words, so the same namespace list works against every backend regardless
    * of `language` — a JS-only spelling like `$tools` is rejected by design,
    * not just by the Python backend. Names that satisfy the identifier rule but
-   * name a backend-owned slot (`RESERVED_BINDING_GLOBALS`, e.g. `Harness`, `console`,
+   * name a backend-owned slot (`RESERVED_BINDING_GLOBALS`, e.g. `inspect`, `console`,
    * `__dsh_main__`) are also refused everywhere; see its declaration for the
    * exact set and why each entry is reserved.
    */
@@ -173,7 +175,7 @@ type PtcJsonValue = null | boolean | number | string | PtcJsonValue[] | { [key: 
 /**
  * One host-side function exposed to the program as an async callable. The
  * runtime bridges calls to it (possibly across a serialization boundary), so
- * `args` and the resolution value MUST be lossless JSON. A runtime rejects a
+ * `args` must be lossless JSON; resolutions also support host-issued PtcImage values. A runtime rejects a
  * lossy or non-cloneable value with a descriptive error rather than corrupting
  * the run. No seam-level byte cap applies to a binding resolution. A rejection
  * of this function surfaces inside the program as a rejection of the
@@ -184,7 +186,7 @@ type PtcBindingFunction = (args: unknown) => Promise<PtcJsonValue>
 
 ## 捕获的输出与失败分类体系
 
-日志是纯字符串。每个来源通道保留自身的发出顺序；由于通道元数据不属于 seam，相互独立的通道如何交错由后端决定。运行时捕获程序的 console 与流输出，Consumer 只渲染文本。实现会对序列化后的外层日志数组，以及完成值或失败消息的组合载荷设置上限；固定的结果封装语法与 Consumer 展示空白不计入这份可变载荷计量。超限会显式失败，而不会在值中插入替代内容。
+日志是普通字符串。每个输出通道保留发出顺序；独立通道之间的交错取决于后端。Node 提供方还将显式展示的图片记录为 `PtcImageOutput`，通过 `afterLog` 将图片定位在文本条目之间。宿主创建的每个 `PtcImage` 提供执行环境可读取的 `path` 和已存储图片的像素尺寸。Node 提供方对序列化日志、图片描述以及完成值或诊断信息统一计算预算，超限会明确失败。
 
 失败类型是**正交的结果，独立报告**（见 [defensive-patterns](../defensive-patterns/general.zh.md)）：预算耗尽不是异常，中止不是超时，基底崩溃（如 OOM）也不是二者中的任何一个：
 

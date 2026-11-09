@@ -1,15 +1,20 @@
 /** Node child evaluation over typed RPC; the host owns process lifetime. */
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { Duplex } from 'node:stream'
-import type { PtcProgramFormat } from '@deepseek-ai/dsh-ptc-runtime'
+import type { PtcProgramFormat, PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
 import { createProcessRpc } from './rpc.ts'
 import { captureStreamWrites, LogBuffer, makeConsoleShim, makeBindingErrorClass, makeNamespaces, prepareCompletion, prepareException } from './bootstrap.ts'
 import type { BindingErrorConstructor, PatchableStream } from './bootstrap.ts'
+import type { PtcImageWire } from './json-wire.ts'
 import { clearProgramEnvironment } from './environment.ts'
 import { createProgramEvaluator } from './evaluators/index.ts'
 import { ImportEvaluationEndedError } from './imports/evaluation-ended.ts'
 import type { ProgramEvaluator, ProgramImportHandler, ProgramImportResult } from './evaluators/types.ts'
 import { PROGRAM_PROTOCOL_VERSION, type ProgramResult, type HostMethods, type ProgramMethods } from './protocol.ts'
+
+const capturedObjectCreate = Object.create
+const capturedObjectDefineProperties = Object.defineProperties
+const capturedObjectFreeze = Object.freeze
 
 /** Process-owned environment, output and directory control consumed by the child. */
 export interface ProgramProcess {
@@ -68,6 +73,29 @@ export async function runNodeMain(
       return value
     },
   }
+  const images = new WeakMap<object, string>()
+  class Image {
+    readonly [key: string]: PtcJsonValue
+    declare readonly path: string
+    declare readonly width: number
+    declare readonly height: number
+    private constructor() { throw new Error('Images are created by image-producing tools') }
+  }
+  const decodeImage = (wire: PtcImageWire): PtcJsonValue => {
+    const image = capturedObjectCreate(Image.prototype) as Image
+    capturedObjectDefineProperties(image, {
+      path: { enumerable: true, value: wire.path },
+      width: { enumerable: true, value: wire.width },
+      height: { enumerable: true, value: wire.height },
+    })
+    capturedObjectFreeze(image)
+    images.set(image, wire.id)
+    return image
+  }
+  const imageSink = (id: string): void => {
+    const evaluation = context.getStore()
+    if (evaluation && acceptsCalls(evaluation)) void connection.image(id)
+  }
   const logSink = { push(text: string): void {
     const evaluation = context.getStore()
     if (evaluation && acceptsCalls(evaluation)) evaluation.logs.push(text)
@@ -114,10 +142,11 @@ export async function runNodeMain(
             })
             // Context access must not reserve a function-body parameter named process.
             Object.defineProperty(evaluator.globals, 'process', { configurable: true, writable: true, value: processState })
-            const console = makeConsoleShim(logSink)
-            Object.defineProperty(evaluator.globals, 'Harness', {
-              configurable: true, enumerable: true, value: Object.freeze({ inspect: console.log }),
+            const console = makeConsoleShim(logSink, images, imageSink)
+            Object.defineProperty(evaluator.globals, 'inspect', {
+              configurable: true, enumerable: true, value: console.log,
             })
+            Object.defineProperty(evaluator.globals, 'Image', { configurable: true, enumerable: true, value: Image })
             const programGlobals = processState === process && format === 'function-body' ? [evaluator.globals, globalThis] : [evaluator.globals]
             for (const globals of programGlobals) {
               if (data.enableConsole) Object.defineProperty(globals, 'console', {
@@ -134,7 +163,7 @@ export async function runNodeMain(
             const constructor = makeBindingErrorClass(descriptor)
             errors.set(namespace.global, { name: descriptor.name, memberNameProperty: descriptor.memberNameProperty, constructor })
           }
-          const namespaces = makeNamespaces(data, host, errorLookup)
+          const namespaces = makeNamespaces(data, host, errorLookup, decodeImage)
           for (const [index, namespace] of data.namespaces.entries()) {
             Object.defineProperty(evaluator.globals, namespace.global, { configurable: true, enumerable: true, value: namespaces[index] })
             if (namespace.errorClass) {
@@ -162,7 +191,7 @@ export async function runNodeMain(
       evaluation.revoked = true
       void connection.$rejectPendingCalls(({ reject }) => { reject(new Error('PTC evaluation canceled')) })
     },
-  }, ['ready', 'log', 'outputLimit'], (_error, kind) => {
+  }, ['ready', 'log', 'image', 'outputLimit'], (_error, kind) => {
     if (current?.active || kind === 'protocol') processState.exitCode = 1
     if (current) current.active = false
     closed.resolve()

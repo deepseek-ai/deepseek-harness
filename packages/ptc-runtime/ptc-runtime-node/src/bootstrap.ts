@@ -4,14 +4,17 @@
  */
 
 import { inspect, types } from 'node:util'
+import type { PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
 import type { HostMethods, ProgramResult, ProgramBootData } from './protocol.ts'
 import { jsonStringBytesUpTo, jsonValueBytesUpTo, truncateJsonStringBytes } from './output-json.ts'
-import { decodePtcJsonWire, encodePtcJsonWire, snapshotPtcJsonValue } from './json-wire.ts'
+import { decodePtcJsonWire, encodePtcJsonWire, snapshotPtcJsonValue, type PtcImageWire } from './json-wire.ts'
 
 const CapturedError = Error
 const isNativeError = types.isNativeError
 const capturedObjectCreate = Object.create
 const capturedObjectDefineProperty = Object.defineProperty
+const capturedObjectKeys = Object.keys
+const capturedObjectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor
 
 /** Define one public binding-error field without consulting mutable globals or descriptor prototypes. */
 function defineBindingErrorField(error: Error, key: string, value: string): void {
@@ -100,11 +103,47 @@ const CONSOLE_LEVELS = ['log', 'info', 'warn', 'error', 'debug'] as const
  * exist — the program gets a deliberately small console, not Node's full
  * console API.
  * @param logs - the buffer every rendered line is pushed into.
+ * @param images - Image identities owned by the execution process.
+ * @param emitImage - Emits a registered image in the current evaluation.
  * @returns the five-method console object handed to the program.
  */
-export function makeConsoleShim(logs: Pick<LogBuffer, 'push'>): Record<(typeof CONSOLE_LEVELS)[number], (...args: unknown[]) => void> {
+export function makeConsoleShim(
+  logs: Pick<LogBuffer, 'push'>, images?: Pick<WeakMap<object, string>, 'get'>, emitImage?: (id: string) => void,
+): Record<(typeof CONSOLE_LEVELS)[number], (...args: unknown[]) => void> {
   const output = (...args: unknown[]): void => {
-    logs.push(args.map(arg => typeof arg === 'string' ? arg : inspect(arg, INSPECT_OPTIONS)).join(' '))
+    const pending: string[] = []
+    const flush = (): void => {
+      if (pending.length === 0) return
+      logs.push(pending.join(' '))
+      pending.length = 0
+    }
+    for (const arg of args) {
+      const direct = arg !== null && typeof arg === 'object' ? images?.get(arg) : undefined
+      if (direct !== undefined && emitImage !== undefined) { flush(); emitImage(direct); continue }
+      pending.push(typeof arg === 'string' ? arg : inspect(arg, INSPECT_OPTIONS))
+      if (images === undefined || emitImage === undefined) continue
+      const nested: string[] = []
+      const seen = new Set<object>()
+      const visit: unknown[] = [arg]
+      while (visit.length > 0) {
+        const current = visit.pop()
+        if (current === null || typeof current !== 'object') continue
+        const id = images.get(current)
+        if (id !== undefined) { nested.push(id); continue }
+        if (seen.has(current)) continue
+        seen.add(current)
+        for (const key of capturedObjectKeys(current).reverse()) {
+          const property = capturedObjectGetOwnPropertyDescriptor(current, key)
+          if (property !== undefined && 'value' in property) visit.push(property.value)
+        }
+      }
+      if (nested.length > 0) {
+        flush()
+        for (const id of nested) emitImage(id)
+      }
+    }
+    flush()
+    if (args.length === 0) logs.push('')
   }
   const shim = Object.create(null) as Record<(typeof CONSOLE_LEVELS)[number], (...args: unknown[]) => void>
   for (const level of CONSOLE_LEVELS) {
@@ -252,12 +291,14 @@ function bindingFailure(errorClass: BindingErrorConstructor | undefined, memberN
  * @param data - Namespace declarations injected into the program.
  * @param host - Evaluation-scoped remote binding calls.
  * @param errorClasses - Constructors shared with program globals, resolved per invocation.
- * @returns One namespace object per declaration; arguments and results must be lossless JSON.
+ * @param decodeImage - Optional decoder for host-issued images.
+ * @returns One namespace object per declaration.
  */
 export function makeNamespaces(
   data: Pick<ProgramBootData, 'namespaces'>,
   host: Pick<HostMethods, 'invoke'>,
   errorClasses: Pick<ReadonlyMap<string, BindingErrorConstructor>, 'get'>,
+  decodeImage?: (wire: PtcImageWire) => PtcJsonValue,
 ): Record<string, unknown>[] {
   return data.namespaces.map(({ global, names }) => {
     const namespace = Object.create(null) as Record<string, unknown>
@@ -273,7 +314,10 @@ export function makeNamespaces(
               detached = undefined
             }
             if (detached === undefined) throw new CapturedError('binding arguments must be lossless JSON')
-            const result = decodePtcJsonWire(await host.invoke(global, name, encodePtcJsonWire(detached)))
+            const result = decodePtcJsonWire(
+              await host.invoke(global, name, encodePtcJsonWire(detached)),
+              decodeImage,
+            )
             if (result === undefined) throw new CapturedError('binding resolution must be lossless JSON')
             return result
           } catch (error: unknown) {

@@ -15,6 +15,8 @@ export type CuaOperation = z.output<typeof Request>
 type CuaParameters<M extends CuaOperation['method']> = Extract<CuaOperation, { method: M }>['params']
 /** Dispatch exactly once; a failed action must not be retried implicitly. */
 export type CuaDispatch = (operation: CuaOperation) => Promise<JsonValue>
+/** Stored screenshot returned to a program for explicit inspection. */
+export type CuaProgramImage = { readonly path: string; readonly width: number; readonly height: number }
 /** Encoded model-request image with the format, pixel dimensions and window reported by the Host. */
 export type CuaScreenshot = Pick<z.output<typeof ScreenshotResult>, 'mimeType' | 'pixelWidth' | 'pixelHeight' | 'windowId'> & {
   bytes: Uint8Array
@@ -182,14 +184,14 @@ export interface CuaSurface {
  * Capture and pointer delivery reject known AX/display frame conflicts with WINDOW_CHANGED.
  * Coordinate input also rejects resizing since the latest successful AX read or screenshot.
  */
-export interface CuaWindow extends CuaSurface {
+export interface CuaWindow<TImage = CuaScreenshot> extends CuaSurface {
   readonly windowId: number
   /**
    * Capture the selected window.
    * @param options - emission options.
    * @returns encoded model-request image with its format, pixel dimensions and window; use mimeType when saving or declaring the image.
    */
-  getScreenshot(options?: CuaObservationOptions): Promise<CuaScreenshot>
+  getScreenshot(options?: CuaObservationOptions): Promise<TImage>
   /**
    * Request a mouse move to an element or a point without pressing a button.
    * The provider reports the route and whether the system pointer moved.
@@ -224,7 +226,7 @@ export interface CuaWindow extends CuaSurface {
   drag(from: readonly [number, number], to: readonly [number, number], options?: CuaDragOptions): Promise<CuaActionResult>
 }
 /** Application-level accessibility, window discovery and scope-dependent input operations. */
-export interface CuaApp extends CuaSurface {
+export interface CuaApp<TImage = CuaScreenshot> extends CuaSurface {
   readonly appHandle: CuaAppHandle
   /**
    * Activate this application explicitly, potentially changing the user's focused app and Space.
@@ -242,10 +244,10 @@ export interface CuaApp extends CuaSurface {
    * @param windowId - ID obtained from getWindows.
    * @returns A window object with its initial accessibility tree read silently; this updates the application's current snapshot.
    */
-  getWindow(windowId: number): Promise<CuaWindow>
+  getWindow(windowId: number): Promise<CuaWindow<TImage>>
 }
 /** Native app API; its caller owns global bindings and variable persistence. */
-export interface CuaApi {
+export interface CuaApi<TImage = CuaScreenshot> {
   /**
    * Inspect permissions without requesting them.
    * @param options - output options.
@@ -276,5 +278,5 @@ export interface CuaApi {
    * @param selector - Exact name, bundle ID, absolute application path or running PID string; ambiguous names reject.
    * @returns An application handle tied to this process lifetime; its initial tree read becomes the current snapshot.
    */
-  getApp(selector: string): Promise<CuaApp>
+  getApp(selector: string): Promise<CuaApp<TImage>>
 }

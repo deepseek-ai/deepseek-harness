@@ -145,9 +145,10 @@ type SnapshotTask =
  * Its iterative traversal adds no JavaScript call-stack depth limit.
  *
  * @param value - the candidate completion value.
+ * @param isImage - Optional recognition of host-issued binding images.
  * @returns a detached lossless-JSON snapshot, or `undefined` when invalid.
  */
-export function snapshotPtcJsonValue(value: unknown): PtcJsonValue | undefined {
+export function snapshotPtcJsonValue(value: unknown, isImage?: (value: object) => boolean): PtcJsonValue | undefined {
   const active = new IntrinsicSet<object>()
   let root: PtcJsonValue | undefined
   const assign = (destination: SnapshotDestination, item: PtcJsonValue): void => {
@@ -199,6 +200,10 @@ export function snapshotPtcJsonValue(value: unknown): PtcJsonValue | undefined {
       continue
     }
     if (typeof candidate !== 'object') return undefined
+    if (isImage?.(candidate)) {
+      assign(task.destination, candidate as PtcJsonValue)
+      continue
+    }
     if (setHas(active, candidate)) return undefined
 
     if (intrinsicArrayIsArray(candidate)) {
@@ -242,7 +247,16 @@ interface ObjectWireToken {
   keys: string[]
 }
 
-type PtcJsonToken = null | boolean | number | string | ArrayWireToken | ObjectWireToken
+/** One registered image crossing the program control channel. */
+export interface PtcImageWire {
+  kind: 'image'
+  id: string
+  path: string
+  width: number
+  height: number
+}
+
+type PtcJsonToken = null | boolean | number | string | ArrayWireToken | ObjectWireToken | PtcImageWire
 
 /**
  * A pre-order, bounded-depth transport for one lossless JSON value. Container
@@ -254,12 +268,18 @@ export type PtcJsonWire = PtcJsonToken[]
 /**
  * Flatten one validated JSON value for the process control channel.
  * @param value - the lossless JSON value to transport.
+ * @param image - Optional encoder for registered binding images.
  * @returns a pre-order token stream whose own nesting is bounded.
  */
-export function encodePtcJsonWire(value: PtcJsonValue): PtcJsonWire {
+export function encodePtcJsonWire(value: PtcJsonValue, image?: (value: object) => PtcImageWire | undefined): PtcJsonWire {
   const wire: PtcJsonWire = []
   const pending: PtcJsonValue[] = [value]
   for (let current = takeLast(pending); current !== undefined; current = takeLast(pending)) {
+    const imageToken = current !== null && typeof current === 'object' ? image?.(current) : undefined
+    if (imageToken !== undefined) {
+      append(wire, imageToken)
+      continue
+    }
     if (current === null || typeof current === 'boolean' || typeof current === 'number' || typeof current === 'string') {
       append(wire, current)
       continue
@@ -285,6 +305,21 @@ export function encodePtcJsonWire(value: PtcJsonValue): PtcJsonWire {
     }
   }
   return wire
+}
+
+/** Decode an exact image descriptor without admitting other object tokens. */
+function imageWireToken(value: object): PtcImageWire | undefined {
+  if (intrinsicArrayIsArray(value) || !hasPlainObjectPrototype(value)) return undefined
+  const keys = enumerableStringKeys(value)
+  if (keys === undefined || keys.length !== 5
+    || !keysContain(keys, 'kind') || !keysContain(keys, 'id') || !keysContain(keys, 'path')
+    || !keysContain(keys, 'width') || !keysContain(keys, 'height')) return undefined
+  const token = value as Record<string, unknown>
+  if (token.kind !== 'image' || typeof token.id !== 'string' || token.id.length === 0
+    || typeof token.path !== 'string' || token.path.length === 0
+    || typeof token.width !== 'number' || !intrinsicNumberIsSafeInteger(token.width) || token.width <= 0
+    || typeof token.height !== 'number' || !intrinsicNumberIsSafeInteger(token.height) || token.height <= 0) return undefined
+  return { kind: 'image', id: token.id, path: token.path, width: token.width, height: token.height }
 }
 
 type DecodeFrame =
@@ -344,9 +379,10 @@ function containerToken(value: object): ArrayWireToken | ObjectWireToken | undef
  * Malformed or incomplete traffic returns `undefined`; traversal is iterative
  * and therefore independent of the transported value's application depth.
  * @param input - untrusted message-port payload.
+ * @param image - Optional decoder for registered binding images.
  * @returns the detached JSON value, or `undefined` when the wire is invalid.
  */
-export function decodePtcJsonWire(input: unknown): PtcJsonValue | undefined {
+export function decodePtcJsonWire(input: unknown, image?: (value: PtcImageWire) => PtcJsonValue): PtcJsonValue | undefined {
   try {
     if (!intrinsicArrayIsArray(input) || !isDenseArray(input) || input.length === 0) return undefined
     const wire = input as unknown[]
@@ -387,19 +423,24 @@ export function decodePtcJsonWire(input: unknown): PtcJsonValue | undefined {
         value = token
       } else {
         if (typeof token !== 'object') return undefined
-        const marker = containerToken(token)
-        if (!marker) return undefined
-        const remainingTokens = wire.length - tokenIndex - 1
-        if (marker.kind === 'array') {
-          if (marker.length > remainingTokens) return undefined
-          const target: PtcJsonValue[] = []
-          value = target
-          if (marker.length > 0) frame = { kind: 'array', target, length: marker.length, index: 0 }
+        const imageToken = image === undefined ? undefined : imageWireToken(token)
+        if (imageToken !== undefined && image !== undefined) {
+          value = image(imageToken)
         } else {
-          if (marker.keys.length > remainingTokens) return undefined
-          const target: Record<string, PtcJsonValue> = {}
-          value = target
-          if (marker.keys.length > 0) frame = { kind: 'object', target, keys: marker.keys, index: 0 }
+          const marker = containerToken(token)
+          if (!marker) return undefined
+          const remainingTokens = wire.length - tokenIndex - 1
+          if (marker.kind === 'array') {
+            if (marker.length > remainingTokens) return undefined
+            const target: PtcJsonValue[] = []
+            value = target
+            if (marker.length > 0) frame = { kind: 'array', target, length: marker.length, index: 0 }
+          } else {
+            if (marker.keys.length > remainingTokens) return undefined
+            const target: Record<string, PtcJsonValue> = {}
+            value = target
+            if (marker.keys.length > 0) frame = { kind: 'object', target, keys: marker.keys, index: 0 }
+          }
         }
       }
       if (!attach(value)) return undefined

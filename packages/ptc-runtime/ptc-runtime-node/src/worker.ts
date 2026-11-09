@@ -1,4 +1,7 @@
 /** Managed Node process shared by temporary and owner-retained evaluations. */
+import { randomUUID } from 'node:crypto'
+import { PtcImage } from '@deepseek-ai/dsh-ptc-runtime'
+import type { PtcImageOutput } from '@deepseek-ai/dsh-ptc-runtime'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { Context } from '@deepseek-ai/cordis'
 import type { PtcRunSpec, PtcRunResult, PtcRunSandbox, PtcRunFailure, PtcBindingNamespace, PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
@@ -13,7 +16,7 @@ import type { BirpcReturn } from 'birpc'
 import { createProcessRpc } from './rpc.ts'
 import { bootstrapArgs } from './launch.ts'
 import { STARTUP_ENVIRONMENT_NAMES } from './environment.ts'
-import { decodePtcJsonWire } from './json-wire.ts'
+import { decodePtcJsonWire, type PtcImageWire } from './json-wire.ts'
 import { OutputLedger } from './output-ledger.ts'
 import { drainOutput, terminateProcess } from './output-stream.ts'
 import { readProgramResult, PROGRAM_PROTOCOL_VERSION, type ProgramBootData, type ProgramMethods, type HostMethods } from './protocol.ts'
@@ -30,6 +33,7 @@ interface Evaluation {
   pending: number
   pendingBytes: number
   admit(text: string): void
+  image(image: PtcImage): void
   finish(error?: PtcRunFailure, value?: PtcJsonValue, discard?: boolean): void
 }
 
@@ -49,6 +53,8 @@ export class ProgramWorker {
   private termination: Promise<boolean> | undefined
   private starting?: Promise<void>
   private exitOutcome?: SubprocessOutcome
+  private readonly images = new Map<string, PtcImage>()
+  private readonly imageIds = new WeakMap<PtcImage, string>()
   private readonly controller = new AbortController()
   closed = false
 
@@ -122,6 +128,7 @@ export class ProgramWorker {
     const output = this.output()
     const logs: string[] = []
     let overflowed = false
+    const images: PtcImageOutput[] = []
     const result = Promise.withResolvers<PtcRunResult>()
     const timer = spec.timeoutMs === null ? undefined : setTimeout(() => {
       const phase = evaluation.completion !== undefined ? 'during execution' : 'before code started'
@@ -143,7 +150,8 @@ export class ProgramWorker {
           global: binding.global, names: Object.keys(binding.functions), ...binding.errorClass ? { errorClass: binding.errorClass } : {},
         })),
       },
-      spec, bindings, invoke: AsyncLocalStorage.bind(invokeBinding), pending: 0, pendingBytes: 0,
+      spec, bindings, pending: 0, pendingBytes: 0,
+      invoke: AsyncLocalStorage.bind((binding, args) => invokeBinding(binding, args, image => this.registerImage(image))),
       admit: (text) => {
         if (overflowed) return
         if (!output.admit(text, logs)) {
@@ -151,6 +159,15 @@ export class ProgramWorker {
           logs.push(text)
           evaluation.finish({ kind: 'output-limit', message: 'output limit exceeded' }, undefined, true)
         }
+      },
+      image: (image) => {
+        if (overflowed || evaluation.settled) return
+        if (!output.admitImage({ afterLog: logs.length, image })) {
+          overflowed = true
+          evaluation.finish({ kind: 'output-limit', message: 'output limit exceeded' }, undefined, true)
+          return
+        }
+        images.push({ afterLog: logs.length, image })
       },
       finish: (error, value, discard = false) => {
         if (evaluation.settled) return
@@ -176,7 +193,7 @@ export class ProgramWorker {
         }
         void cleanup().then((completed) => {
           this.active = undefined
-          result.resolve(completed)
+          result.resolve(images.length > 0 && completed.error?.kind !== 'output-limit' ? { ...completed, images } : completed)
         }, (failure: unknown) => {
           this.active = undefined
           result.resolve(output.failure(logs, { kind: 'worker-exit', message: `managed process cleanup failed: ${messageOf(failure)}` }))
@@ -232,6 +249,7 @@ export class ProgramWorker {
   private terminate(): Promise<boolean> {
     if (this.termination) return this.termination
     this.closed = true
+    this.images.clear()
     this.cleanupPending = true
     this.controller.abort()
     this.channel?.$close()
@@ -278,6 +296,16 @@ export class ProgramWorker {
     return this.withControlFailure(`Node process exited (${String(outcome.exitCode)}, signal ${String(outcome.signal)})${this.stderr ? `: ${this.stderr}` : ''}`)
   }
 
+  private registerImage(image: PtcImage): PtcImageWire {
+    let id = this.imageIds.get(image)
+    if (id === undefined) {
+      id = randomUUID()
+      this.imageIds.set(image, id)
+      this.images.set(id, image)
+    }
+    return { kind: 'image', id, path: image.path, width: image.width, height: image.height }
+  }
+
   private async start(cwd: string): Promise<void> {
     const executable = await this.ctx.subprocess.resolveExecutable(this.config.launch.executable, undefined, this.controller.signal)
     if (this.closed) return
@@ -322,6 +350,11 @@ export class ProgramWorker {
       log: (text: unknown) => {
         if (!this.ready || !this.active || typeof text !== 'string') { this.fail('protocol', 'invalid program log'); return }
         if (!this.active.settled) this.active.admit(text)
+      },
+      image: (id: unknown) => {
+        const image = typeof id === 'string' ? this.images.get(id) : undefined
+        if (!this.ready || !this.active || image === undefined) { this.fail('protocol', 'invalid program image'); return }
+        this.active.image(image)
       },
       outputLimit: () => {
         if (!this.ready || !this.active) { this.fail('protocol', 'idle PTC output limit'); return }

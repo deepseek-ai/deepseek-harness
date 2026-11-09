@@ -1651,7 +1651,7 @@ describe('the run_code dispatch bridge', () => {
     ])
   })
 
-  it('defers image-bearing final sub-call content onto the outer run_code result', async () => {
+  it('keeps image-bearing sub-call results out of the conversation until inspected', async () => {
     const { ctx, runtime } = await setup({ mode: 'ptc' })
     ctx.tools.register(defineContentToolFixture({
       name: 'image_result',
@@ -1675,14 +1675,8 @@ describe('the run_code dispatch bridge', () => {
 
     const result = await runCode(ctx, 'program')
 
-    expect(result.additionalContexts).toMatchObject([{
-      role: 'user',
-      source: { kind: 'ptc-mode' },
-      content: [
-        { type: 'text', text: 'image result' },
-        { type: 'image', attachment: { mediaType: 'image/png', bytes: 1, width: 1, height: 1 } },
-      ],
-    }])
+    expect(result.additionalContexts).toBeUndefined()
+    expect(result.content).toEqual([{ type: 'text', text: 'done' }])
   })
 
   it('does not defer images removed by a nested post-execute decision', async () => {

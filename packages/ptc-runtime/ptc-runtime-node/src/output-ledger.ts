@@ -1,11 +1,12 @@
 /** Combined byte accounting for retained program output. */
-import type { PtcJsonValue, PtcRunFailure, PtcRunResult } from '@deepseek-ai/dsh-ptc-runtime'
+import type { PtcImageOutput, PtcJsonValue, PtcRunFailure, PtcRunResult } from '@deepseek-ai/dsh-ptc-runtime'
 import { jsonStringBytesUpTo, jsonValueBytesUpTo, truncateJsonStringBytes } from './output-json.ts'
 
 /** One run's combined outer-output ledger; binding values never enter it. */
 export class OutputLedger {
   private bytes = 2 // JSON serialization of the empty logs array: []
   private entries = 0
+  private imageEntries = 0
 
   constructor(private readonly maxBytes: number, private readonly overflowMessage?: string) {}
 
@@ -17,6 +18,16 @@ export class OutputLedger {
     this.bytes += stringBytes + separatorBytes
     this.entries += 1
     sink.push(text)
+    return true
+  }
+
+  /** Admit an image descriptor against the same outer-output budget as text. */
+  admitImage(output: PtcImageOutput): boolean {
+    const overhead = this.imageEntries === 0 ? 2 : 1
+    const bytes = jsonValueBytesUpTo({ afterLog: output.afterLog, image: output.image }, this.maxBytes - this.bytes - overhead)
+    if (bytes === undefined) return false
+    this.bytes += bytes + overhead
+    this.imageEntries += 1
     return true
   }
 

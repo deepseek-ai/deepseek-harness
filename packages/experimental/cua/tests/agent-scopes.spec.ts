@@ -123,5 +123,5 @@ it.each([
   const prompt = (await ctx.systemPrompt.assemble({ scope: owner.agent })).sections.find(section => section.name === 'computer-use:dsh-cua')?.text
   expect(prompt).toBeDefined()
   expect(prompt?.includes('Persistent PTC initialization:')).toBe(runtime.retainsState)
-  expect(prompt?.includes('var cua = connectCua(() => tools.cua, text => Harness.inspect(text));')).toBe(runtime.retainsState)
+  expect(prompt?.includes('var cua = connectCua(() => tools.cua, text => inspect(text));')).toBe(runtime.retainsState)
 })

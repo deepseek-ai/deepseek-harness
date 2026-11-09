@@ -14,7 +14,7 @@
           "type": "tool-call",
           "id": "cua-ptc-native-result",
           "name": "run_code",
-          "arguments": "{\"code\":\"const { Buffer } = await import('node:buffer');\\nconst app = await tools.cua({ method: 'getApp', params: { selector: 'test.fixture' } });\\nconst state = await tools.cua({ method: 'getState', params: { appHandle: app.appHandle, windowId: 7 } });\\nconst shot = await tools.cua({ method: 'screenshot', params: { appHandle: app.appHandle, windowId: 7 } });\\nconst bytes = Buffer.from(shot.data, 'base64');\\nHarness.inspect({ appHandle: app.appHandle, hasIncrement: state.tree.includes('Increment'), pngBytes: bytes.length, signature: bytes.subarray(0, 8).toString('hex'), imageWidth: shot.attachment.width, imageHeight: shot.attachment.height }); return;\",\"description\":\"Read native CUA values and receive one screenshot\"}"
+          "arguments": "{\"code\":\"const { readFile } = await import('node:fs/promises');\\nconst app = await tools.cua({ method: 'getApp', params: { selector: 'test.fixture' } });\\nconst state = await tools.cua({ method: 'getState', params: { appHandle: app.appHandle, windowId: 7 } });\\nconst shot = await tools.cua({ method: 'screenshot', params: { appHandle: app.appHandle, windowId: 7 } });\\nconst bytes = await readFile(shot.path);\\ninspect({ appHandle: app.appHandle, hasIncrement: state.tree.includes('Increment'), pngBytes: bytes.length, signature: bytes.subarray(0, 8).toString('hex'), imageWidth: shot.width, imageHeight: shot.height }, shot); return;\",\"description\":\"Read native CUA values and receive one screenshot\"}"
         }
       },
       {

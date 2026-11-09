@@ -255,3 +255,28 @@ describe('flat worker JSON wire', () => {
     expect(() => encodePtcJsonWire({ value: undefined } as never)).toThrow(/undefined JSON object property/)
   })
 })
+
+
+it('transports registered images as leaves inside arrays and objects', () => {
+  const image = { path: '/images/selected.png', width: 8, height: 4 }
+  const encoded = encodePtcJsonWire({ selected: [image, 7] }, value => value === image
+    ? { kind: 'image', id: 'image-1', ...image } : undefined)
+  expect(decodePtcJsonWire(encoded)).toBeUndefined()
+  const decoded = decodePtcJsonWire(encoded, (wire) => {
+    expect(wire).toEqual({ kind: 'image', id: 'image-1', ...image })
+    return image
+  })
+  expect(decoded).toEqual({ selected: [image, 7] })
+  expect(decoded && typeof decoded === 'object' && !Array.isArray(decoded) && decoded.selected).toEqual([image, 7])
+})
+
+it.each([
+  [], new Date(0),
+  { kind: 'image', id: '', path: '/image.png', width: 8, height: 4 },
+  { kind: 'image', id: '1', path: '', width: 8, height: 4 },
+  { kind: 'image', id: '1', path: '/image.png', width: 0, height: 4 },
+  { kind: 'image', id: '1', path: '/image.png', width: 8, height: 1.5 },
+  { kind: 'image', id: '1', path: '/image.png', width: 8, height: 4, extra: true },
+])('rejects malformed image tokens %j', (token) => {
+  expect(decodePtcJsonWire([token], () => null)).toBeUndefined()
+})

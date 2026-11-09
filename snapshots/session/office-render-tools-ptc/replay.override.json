@@ -3,7 +3,7 @@
     "kind": "chunks",
     "chunks": [
       {"type":"block-start","index":0,"blockType":"tool-call"},
-      {"type":"block-end","index":0,"block":{"type":"tool-call","id":"call_office_skill","name":"run_code","arguments":"{\"code\":\"Harness.inspect(await tools.skill({\\\"name\\\":\\\"office-xlsx\\\"}));\",\"description\":\"Use the Office workflow\"}"}},
+      {"type":"block-end","index":0,"block":{"type":"tool-call","id":"call_office_skill","name":"run_code","arguments":"{\"code\":\"inspect(await tools.skill({\\\"name\\\":\\\"office-xlsx\\\"}));\",\"description\":\"Use the Office workflow\"}"}},
       {"type":"finish","reason":{"kind":"tool-calls"}}
     ]
   },
@@ -11,7 +11,7 @@
     "kind": "chunks",
     "chunks": [
       {"type":"block-start","index":0,"blockType":"tool-call"},
-      {"type":"block-end","index":0,"block":{"type":"tool-call","id":"call_office_2","name":"run_code","arguments":"{\"code\":\"Harness.inspect(await tools.office_tools({\\\"action\\\":\\\"load\\\"}));\",\"description\":\"Use the Office workflow\"}"}},
+      {"type":"block-end","index":0,"block":{"type":"tool-call","id":"call_office_2","name":"run_code","arguments":"{\"code\":\"inspect(await tools.office_tools({\\\"action\\\":\\\"load\\\"}));\",\"description\":\"Use the Office workflow\"}"}},
       {"type":"finish","reason":{"kind":"tool-calls"}}
     ]
   },
@@ -19,7 +19,7 @@
     "kind": "chunks",
     "chunks": [
       {"type":"block-start","index":0,"blockType":"tool-call"},
-      {"type":"block-end","index":0,"block":{"type":"tool-call","id":"call_office_3","name":"run_code","arguments":"{\"code\":\"Harness.inspect(await tools.render_document({\\\"input\\\":\\\"report.docx\\\",\\\"outputDirectory\\\":\\\"preview\\\",\\\"pages\\\":[1]}));\",\"description\":\"Use the Office workflow\"}"}},
+      {"type":"block-end","index":0,"block":{"type":"tool-call","id":"call_office_3","name":"run_code","arguments":"{\"code\":\"inspect(await tools.render_document({\\\"input\\\":\\\"report.docx\\\",\\\"outputDirectory\\\":\\\"preview\\\",\\\"pages\\\":[1]}));\",\"description\":\"Use the Office workflow\"}"}},
       {"type":"finish","reason":{"kind":"tool-calls"}}
     ]
   },
@@ -27,7 +27,7 @@
     "kind": "chunks",
     "chunks": [
       {"type":"block-start","index":0,"blockType":"tool-call"},
-      {"type":"block-end","index":0,"block":{"type":"tool-call","id":"call_office_4","name":"run_code","arguments":"{\"code\":\"Harness.inspect(await tools.office_tools({\\\"action\\\":\\\"remove\\\"}));\",\"description\":\"Use the Office workflow\"}"}},
+      {"type":"block-end","index":0,"block":{"type":"tool-call","id":"call_office_4","name":"run_code","arguments":"{\"code\":\"inspect(await tools.office_tools({\\\"action\\\":\\\"remove\\\"}));\",\"description\":\"Use the Office workflow\"}"}},
       {"type":"finish","reason":{"kind":"tool-calls"}}
     ]
   },

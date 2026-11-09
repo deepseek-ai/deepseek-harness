@@ -1,3 +1,4 @@
+import { PtcImage } from '@deepseek-ai/dsh-ptc-runtime'
 import { expect, it } from 'vitest'
 import { OutputLedger } from '../src/output-ledger.ts'
 
@@ -23,4 +24,19 @@ it('retains a bounded prefix when logs or a failure diagnostic exceed the limit'
   const ledger = new OutputLedger(80)
   expect(ledger.failure([], { kind: 'exception', message: 'short' })).toEqual({ logs: [], error: { kind: 'exception', message: 'short' } })
   expect(ledger.failure([], { kind: 'exception', message: 'x'.repeat(100) }).error?.kind).toBe('output-limit')
+})
+
+
+it('charges ordered image descriptors and text against one budget', () => {
+  const image = new PtcImage('/image.png', 8, 4)
+  const entry = { afterLog: 0, image }
+  const bytes = Buffer.byteLength(JSON.stringify([entry]))
+  const ledger = new OutputLedger(bytes + 2)
+  expect(ledger.admitImage(entry)).toBe(true)
+  expect(ledger.admitImage(entry)).toBe(false)
+  expect(ledger.admit('text', [])).toBe(false)
+  expect(ledger.success([])).toEqual({ logs: [] })
+  const multiple = new OutputLedger(bytes * 2 + 2)
+  expect(multiple.admitImage(entry)).toBe(true)
+  expect(multiple.admitImage(entry)).toBe(true)
 })

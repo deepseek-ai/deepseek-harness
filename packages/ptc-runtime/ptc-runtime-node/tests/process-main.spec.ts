@@ -30,6 +30,7 @@ async function setup(limit = 4096, namespaces: ProgramBootData['namespaces'] = [
     ready: () => { ready.resolve(undefined) },
     invoke: async () => encodePtcJsonWire(42),
     log: (text) => { logs.push(text) },
+    image: () => {},
     outputLimit: () => {},
   }
   const peer = createProcessRpc<ProgramMethods, HostMethods>(host, limit, methods, [], () => {})
@@ -49,7 +50,7 @@ it('clears the environment and returns a binding result after captured output', 
     const args = decodePtcJsonWire(wire) as { n: number }
     return encodePtcJsonWire(args.n * 2)
   }
-  const result = await h.run('const doubled = await tools.echo({ n: 21 }); Harness.inspect("got", doubled); return { doubled };')
+  const result = await h.run('const doubled = await tools.echo({ n: 21 }); inspect("got", doubled); return { doubled };')
   expect(decodePtcJsonWire(result.value)).toEqual({ doubled: 42 })
   expect(h.logs).toEqual(['got 42'])
   expect(h.state.env).toEqual({})
@@ -75,7 +76,7 @@ it.each(['function-body', 'repl', 'script'] as const)('installs output in the ow
   Object.assign(h.state, { cwd: () => cwd })
   vi.stubGlobal('process', h.state)
   try {
-    result = await h.run('console.log("%s", 42); Harness.inspect(console.log === Harness.inspect);', 1024, format,
+    result = await h.run('console.log("%s", 42); inspect(console.log === inspect);', 1024, format,
       { enableConsole: true, discardCompletion: true })
     installed = globalThis.console
   } finally { restore() }
@@ -89,7 +90,7 @@ it('keeps unfinished temporary calls pending and suppresses later logs while awa
   const release = Promise.withResolvers<ReturnType<typeof encodePtcJsonWire>>()
   h.methods.invoke = () => release.promise
   try {
-    expect(decodePtcJsonWire((await h.run('void tools.echo({}).catch(() => {}); void tools.echo({}).catch(() => Harness.inspect("late rejection")); setImmediate(() => Harness.inspect("late timer")); return 42;')).value)).toBe(42)
+    expect(decodePtcJsonWire((await h.run('void tools.echo({}).catch(() => {}); void tools.echo({}).catch(() => inspect("late rejection")); setImmediate(() => inspect("late timer")); return 42;')).value)).toBe(42)
     await nextTurn()
     expect(h.child.destroyed).toBe(false)
     release.resolve(encodePtcJsonWire(42))
@@ -122,7 +123,7 @@ it.each([4, 64])('reports exhausted output accounting during the run with a %s-b
   const h = await setup()
   const limited = vi.fn()
   h.methods.outputLimit = limited
-  expect(await h.run('Harness.inspect("x".repeat(100)); return null', maxOutputBytes))
+  expect(await h.run('inspect("x".repeat(100)); return null', maxOutputBytes))
     .toEqual({ error: { kind: 'output-limit', message: `outer output exceeded ${maxOutputBytes} bytes` } })
   if (maxOutputBytes === 4) expect(h.logs).toEqual([])
   await vi.waitFor(() => { expect(limited).toHaveBeenCalledOnce() })
@@ -161,7 +162,7 @@ it('sends no binding calls or output notifications after returning its result', 
   const limited = vi.fn()
   h.methods.invoke = invoked
   h.methods.outputLimit = limited
-  const result = await h.run('setImmediate(() => { void tools.echo({}).catch(() => {}); Harness.inspect("x".repeat(2000)) }); return 1', 64)
+  const result = await h.run('setImmediate(() => { void tools.echo({}).catch(() => {}); inspect("x".repeat(2000)) }); return 1', 64)
   expect(decodePtcJsonWire(result.value)).toBe(1)
   await nextTurn()
   await nextTurn()
@@ -190,7 +191,7 @@ it('accepts host shutdown before the first evaluation', async () => {
 })
 
 it.each([
-  'Harness.inspect("x".repeat(2000));',
+  'inspect("x".repeat(2000));',
   'return "x".repeat(2000)',
 ])('closes on control output overflow: %s', async (code) => {
   const h = await setup(1024)
@@ -205,4 +206,31 @@ it('records malformed host traffic after completion', async () => {
   h.host.write(Buffer.from([0xff, 10]))
   await h.main
   expect(h.state.exitCode).toBe(1)
+})
+
+
+it('captures image selection during execution and revokes it for late or external calls', async () => {
+  const h = await setup()
+  h.methods.invoke = async () => [{ kind: 'image', id: 'one', path: '/image.png', width: 8, height: 4 }]
+  const selected = vi.fn()
+  h.methods.image = selected
+  const done = Promise.withResolvers<undefined>()
+  const state = h.state as ProgramProcess & { savedInspect?: (value: unknown) => void; image?: unknown; done?: () => void }
+  state.done = () => { done.resolve(undefined) }
+  const result = await h.run(`
+    process.image = await tools.echo({});
+    if (!Object.isFrozen(process.image)) throw new Error("Image must be immutable");
+    if (Reflect.ownKeys(process.image).join() !== "path,width,height") throw new Error("Unexpected Image fields");
+    let constructorError;
+    try { new Image() } catch (error) { constructorError = error.message }
+    if (constructorError !== "Images are created by image-producing tools") throw new Error("Image construction succeeded");
+    process.savedInspect = inspect;
+    inspect(process.image);
+    setImmediate(() => { inspect(process.image); process.done(); });
+  `, 1024, 'script', { discardCompletion: true })
+  expect(result.error).toBeUndefined()
+  await done.promise
+  if (state.savedInspect === undefined) throw new Error('The program did not retain its output function')
+  state.savedInspect(state.image)
+  expect(selected).toHaveBeenCalledExactlyOnceWith('one')
 })

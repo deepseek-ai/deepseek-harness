@@ -41,16 +41,40 @@ async function emit(sink: CuaObservationSink | undefined, value: object, options
  * @param sink - Optional text/image output; emit false suppresses this sink only.
  * @returns Objects independent of variable storage and evaluator lifecycle.
  */
-export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): CuaApi {
+export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): CuaApi
+/**
+ * Create app/window objects whose screenshot values are decoded by the caller.
+ * @param dispatch - Current authorized tool dispatcher.
+ * @param sink - Optional text output.
+ * @param readImage - Decodes each screenshot result; the caller owns image output.
+ * @returns App and window objects using the supplied image type.
+ */
+export function createCuaApi<TImage>(
+  dispatch: CuaDispatch, sink: CuaObservationSink | undefined, readImage: (value: JsonValue, windowId: number) => TImage,
+): CuaApi<TImage>
+export function createCuaApi(
+  dispatch: CuaDispatch, sink?: CuaObservationSink, readImage?: (value: JsonValue, windowId: number) => unknown,
+): CuaApi<unknown> {
   const call = validatedCall(dispatch)
   let capabilities: CuaCapabilities | undefined
   async function currentCapabilities(): Promise<CuaCapabilities> {
     if (capabilities === undefined) capabilities = CapabilitiesResult.parse(await call('getCapabilities', {}))
     return capabilities
   }
-  const objects = createCuaObjects(call, sink)
+  const screenshot = async (value: JsonValue, windowId: number, options?: CuaObservationOptions): Promise<unknown> => {
+    if (readImage !== undefined) return readImage(value, windowId)
+    const image = ScreenshotResult.parse(value)
+    if (image.windowId !== windowId) throw new Error('Native screenshot belongs to another window')
+    const screenshot: CuaScreenshot = {
+      bytes: Uint8Array.from(Buffer.from(image.data, 'base64')),
+      mimeType: image.mimeType, pixelWidth: image.pixelWidth, pixelHeight: image.pixelHeight, windowId: image.windowId,
+    }
+    if (options?.emit !== false) await sink?.image(screenshot)
+    return screenshot
+  }
+  const objects = createCuaObjects(call, sink, screenshot)
 
-  const api: CuaApi = {
+  const api: CuaApi<unknown> = {
     async getCapabilities(options) {
       const result = CapabilitiesResult.parse(await call('getCapabilities', {}))
       capabilities = result
@@ -89,8 +113,9 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
 
 type CuaScopeParams = (params: Record<string, JsonValue>) => Record<string, JsonValue>
 
-function createCuaObjects(call: ReturnType<typeof validatedCall>, sink: CuaObservationSink | undefined): {
-  createCuaApp(appHandle: CuaAppHandle, capabilities: CuaCapabilities): CuaApp
+function createCuaObjects<TImage>(call: ReturnType<typeof validatedCall>, sink: CuaObservationSink | undefined,
+  readImage: (value: JsonValue, windowId: number, options?: CuaObservationOptions) => Promise<TImage>): {
+  createCuaApp(appHandle: CuaAppHandle, capabilities: CuaCapabilities): CuaApp<TImage>
 } {
   const observed = new Map<CuaAppHandle, { snapshotId: string; windowId: number | undefined }>()
   function currentSnapshot(appHandle: CuaAppHandle): string {
@@ -177,7 +202,7 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>, sink: CuaObser
     }
     return { surface, call: scopedCall, action, elementParams }
   }
-  function createCuaWindow(appHandle: CuaAppHandle, windowId: number, capabilities: CuaCapabilities): CuaWindow {
+  function createCuaWindow(appHandle: CuaAppHandle, windowId: number, capabilities: CuaCapabilities): CuaWindow<TImage> {
     const base = createCuaSurface({ appHandle, windowId },
       params => ({ ...params, appHandle, windowId }), () => undefined, () => {
         if (!capabilities.keyboard.includes('window')) {
@@ -187,17 +212,7 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>, sink: CuaObser
     return {
       ...base.surface, windowId,
       async getScreenshot(options) {
-        const image = ScreenshotResult.parse(await base.call('screenshot', {}))
-        if (image.windowId !== windowId) throw new Error('Native screenshot belongs to another window')
-        const screenshot: CuaScreenshot = {
-          bytes: Uint8Array.from(Buffer.from(image.data, 'base64')),
-          mimeType: image.mimeType,
-          pixelWidth: image.pixelWidth,
-          pixelHeight: image.pixelHeight,
-          windowId: image.windowId,
-        }
-        if (options?.emit !== false) await sink?.image(screenshot)
-        return screenshot
+        return readImage(await base.call('screenshot', {}), windowId, options)
       },
       async mouseMove(targetPoint, options) {
         const relative = options?.relative === undefined ? {} : { relative: options.relative }
@@ -240,7 +255,7 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>, sink: CuaObser
       },
     }
   }
-  function createCuaApp(appHandle: CuaAppHandle, capabilities: CuaCapabilities): CuaApp {
+  function createCuaApp(appHandle: CuaAppHandle, capabilities: CuaCapabilities): CuaApp<TImage> {
     const base = createCuaSurface({ appHandle }, params => ({ ...params, appHandle }), () => {
       if (!capabilities.appLevelAccessibility) {
         throw new Error('Application-level accessibility is not supported on current platform; observe a window instead.')
@@ -258,7 +273,7 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>, sink: CuaObser
         await emit(sink, windows, options)
         return windows
       },
-      async getWindow(windowId): Promise<CuaWindow> {
+      async getWindow(windowId): Promise<CuaWindow<TImage>> {
         const window = createCuaWindow(appHandle, windowId, capabilities)
         await window.getAccessibilityTree({ emit: false })
         return window

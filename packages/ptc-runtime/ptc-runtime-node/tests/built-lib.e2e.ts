@@ -34,7 +34,7 @@ describe.skipIf(!built)('built lib real load path (plain node)', () => {
   })
 
   it.each(['per-call', 'vm-script'] as const)('runs TypeScript and bindings through published exports in %s mode', async (executionMode) => {
-    const program = 'const doubled: number = await tools.double({ n: 21 }); Harness.inspect("halfway", doubled); let failure; try { await tools.fail({}) } catch (error) { failure = { typed: error instanceof ToolCallError, name: error.name, toolName: error.toolName, message: error.message } }; const env = Object.keys((await import("node:process")).env); ' + (executionMode === 'per-call' ? 'return { doubled, failure, env };' : '({ doubled, failure, env })')
+    const program = 'const doubled: number = await tools.double({ n: 21 }); inspect("halfway", doubled); let failure; try { await tools.fail({}) } catch (error) { failure = { typed: error instanceof ToolCallError, name: error.name, toolName: error.toolName, message: error.message } }; const env = Object.keys((await import("node:process")).env); ' + (executionMode === 'per-call' ? 'return { doubled, failure, env };' : '({ doubled, failure, env })')
     const script = `
       const { Context } = await import('@deepseek-ai/cordis')
       const { NodePtcRuntime } = await import('@deepseek-ai/dsh-ptc-runtime-node')

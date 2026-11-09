@@ -8086,6 +8086,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface PtcDispatchLog {\n    readonly exec: ToolExecution;\n    readonly agent?: Agent;\n    readonly subCallId: ToolCallId;\n    readonly name: string;\n    readonly isError: boolean;\n    readonly content: ContentBlock[];\n}',
   },
   {
+    name: 'PtcImage',
+    declaration: 'export class PtcImage {\n    readonly [key: string]: PtcJsonValue;\n    readonly path: string;\n    readonly width: number;\n    readonly height: number;\n    constructor(path: string, width: number, height: number);\n}',
+  },
+  {
+    name: 'PtcImageOutput',
+    declaration: 'export interface PtcImageOutput {\n    afterLog: number;\n    image: PtcImage;\n}',
+  },
+  {
     name: 'PtcJsonValue',
     declaration: 'export type PtcJsonValue = null | boolean | number | string | PtcJsonValue[] | {\n    [key: string]: PtcJsonValue;\n};',
   },
@@ -8099,7 +8107,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'PtcRunResult',
-    declaration: 'export interface PtcRunResult {\n    sandbox?: PtcRunSandbox;\n    value?: PtcJsonValue;\n    logs: string[];\n    error?: PtcRunFailure;\n}',
+    declaration: 'export interface PtcRunResult {\n    sandbox?: PtcRunSandbox;\n    value?: PtcJsonValue;\n    logs: string[];\n    images?: PtcImageOutput[];\n    error?: PtcRunFailure;\n}',
   },
   {
     name: 'PtcRunSandbox',

@@ -135,7 +135,7 @@ it('separates facade options from raw RPC parameters', () => {
 it('documents facade initialization, emitted observations, and separate key arguments', () => {
   expect(COMMON_GUIDANCE).toContain('host-provided bridge initialization once')
   expect(COMMON_GUIDANCE).toContain('not a preinstalled global')
-  expect(COMMON_GUIDANCE).toContain('Observations emit through Harness.inspect')
+  expect(COMMON_GUIDANCE).toContain('Observations emit through inspect')
   expect(COMMON_GUIDANCE).toContain('do not pack them into a chord string')
   expect(COMMON_GUIDANCE).toContain('perform a left-button double-click')
 })

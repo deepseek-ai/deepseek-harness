@@ -240,7 +240,7 @@ describe('outer PTC mode failure capture', () => {
       callId: ToolCallId('code-output-limit'),
       name: 'run_code',
       arguments: {
-        code: 'Harness.inspect("HEAD-" + "x".repeat(300)); Harness.inspect("TAIL-" + "y".repeat(300)); return "unreachable";',
+        code: 'inspect("HEAD-" + "x".repeat(300)); inspect("TAIL-" + "y".repeat(300)); return "unreachable";',
         description: 'Print oversized head and tail lines',
       },
       agent: agent as never,
@@ -294,7 +294,7 @@ describe('the durable dispatch-log arm', () => {
 
   it('bounds the tool/ptc-dispatch copy of an oversized sub-result while the program value stays whole', async () => {
     const { result, events, spill } = await runCodeWith(
-      'const blocks = await tools.huge_read({});\nHarness.inspect(blocks[0].text.length)', 200)
+      'const blocks = await tools.huge_read({});\ninspect(blocks[0].text.length)', 200)
     expect(result.isError).toBe(false)
     if (result.isError) throw new Error('expected success')
     // The program received the COMPLETE text (length 2000), untouched by spill.
@@ -370,7 +370,7 @@ describe('the durable dispatch-log arm', () => {
       name: 'run_code',
       arguments: {
         // Both program values remain available while the durable spill is blocked.
-        code: 'const big = await tools.huge_read({});\nconst small = await tools.small_read({});\nHarness.inspect(big[0].text.length + small[0].text.length)',
+        code: 'const big = await tools.huge_read({});\nconst small = await tools.small_read({});\ninspect(big[0].text.length + small[0].text.length)',
         description: 'Prove log shaping is off the program path',
       },
       agent: agent as never,

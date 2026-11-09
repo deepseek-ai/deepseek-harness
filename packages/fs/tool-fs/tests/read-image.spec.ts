@@ -12,11 +12,11 @@ import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished } from 'vitest'
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
+import { PtcImage, PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcRunRequest, PtcRunResult } from '@deepseek-ai/dsh-ptc-runtime'
 import { ToolCallId, LlmAdapter, LlmRuntime } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmModelInfo, LlmResolvedModelInfo, Message, StreamChunk } from '@deepseek-ai/dsh-llm'
@@ -296,31 +296,31 @@ describe('read_image happy path', () => {
     expect(result.isError).toBe(false)
   })
 
-  it('forwards a nested PTC mode image through the outer run_code context', async () => {
+  it('displays the selected program image among captured text', async () => {
     await writeFile(join(dir, 'red.png'), PNG_1X1)
     const ctx = await setup({ toolMode: 'ptc' })
     const runtime = ctx.ptcRuntime as FakeRuntime
     runtime.behavior = async (request) => {
       const value = await request.bindings[0]!.functions.read_image!({ file_path: 'red.png' })
-      return { logs: [], value }
+      expect(value).toBeInstanceOf(PtcImage)
+      if (!(value instanceof PtcImage)) throw new Error('read_image must return an Image')
+      expect(await readFile(value.path)).toEqual(PNG_1X1)
+      expect([value.width, value.height]).toEqual([1, 1])
+      return { logs: ['before', 'after'], images: [{ afterLog: 1, image: value }] }
     }
 
     const result = await call(ctx, RUN_CODE_NAME, {
-      code: 'return await tools.read_image({ file_path: "red.png" })',
+      code: 'inspect("before", await tools.read_image({ file_path: "red.png" }), "after")',
       description: 'Read the image through PTC mode',
     }, { ...agentOn('vision-model'), ctx })
 
     expect(result.isError).toBe(false)
-    expect(result.content.every(block => block.type === 'text')).toBe(true)
-    expect(result.additionalContexts).toHaveLength(1)
-    const forwarded = result.additionalContexts?.[0]?.content
-    expect(forwarded).toHaveLength(2)
-    expect(forwarded?.[0]?.type).toBe('text')
-    expect(forwarded?.[0]?.type === 'text' ? forwarded[0].text : '').toContain('<type>image</type>')
-    expect(forwarded?.[1]).toMatchObject({
-      type: 'image',
-      attachment: { mediaType: 'image/png', width: 1, height: 1 },
-    })
+    expect(result.additionalContexts).toBeUndefined()
+    expect(result.content).toMatchObject([
+      { type: 'text', text: 'before' },
+      { type: 'image', attachment: { mediaType: 'image/png', width: 1, height: 1 } },
+      { type: 'text', text: 'after' },
+    ])
   })
 })
 

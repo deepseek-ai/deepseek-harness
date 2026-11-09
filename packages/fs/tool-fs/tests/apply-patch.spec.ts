@@ -179,7 +179,7 @@ it('dispatches native and PTC patch calls with identical values', async () => {
   await t.file('a', 'old\n')
   const ptc = await executeModelToolFixture(p.ctx, {
     signal: p.exec.signal, callId: p.exec.callId, agent: { ctx: p.ctx, session: { header: { cwd: t.workspace }, append() {} } } as never,
-    name: 'run_code', arguments: { code: 'Harness.inspect(JSON.stringify(await tools.apply_patch({patch})))', description: 'Apply the fixture patch' },
+    name: 'run_code', arguments: { code: 'inspect(JSON.stringify(await tools.apply_patch({patch})))', description: 'Apply the fixture patch' },
   })
   if (ptc.isError) throw new Error(JSON.stringify(ptc))
   expect(ptc.value).toEqual({ logs: [JSON.stringify(native.value)] })

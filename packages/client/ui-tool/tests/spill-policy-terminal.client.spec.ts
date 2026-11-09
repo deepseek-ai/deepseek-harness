@@ -86,7 +86,7 @@ async function executeShell(text: string, nested: boolean, name = 'bash', maxInl
       signal: new AbortController().signal,
       name: nested ? 'run_code' : name,
       arguments: nested ? {
-        code: `const blocks = await tools.${name}(${JSON.stringify(shellArgs)}); Harness.inspect(blocks[0].text === ${JSON.stringify(text)});`,
+        code: `const blocks = await tools.${name}(${JSON.stringify(shellArgs)}); inspect(blocks[0].text === ${JSON.stringify(text)});`,
         description: 'Dispatch shell fixture through the tool pipeline',
       } : shellArgs,
     })

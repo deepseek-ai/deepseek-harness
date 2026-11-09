@@ -42,6 +42,28 @@ describe('makeConsoleShim', () => {
     shim.debug('d')
     expect(seen).toEqual(['plain { a: 1 }', 'i', 'w', 'e', 'd'])
   })
+
+  it('emits registered images in argument order, including nested images and cyclic containers', () => {
+    const one = Object.freeze({ path: '/one.png', width: 8, height: 4 })
+    const two = Object.freeze({ path: '/two.png', width: 4, height: 8 })
+    const images = new WeakMap<object, string>([[one, 'one'], [two, 'two']])
+    const value: Record<string, unknown> = { first: [one, { second: two }], get unread() { throw new Error('getter') } }
+    value.cycle = value
+    const text: string[] = []
+    const selected: string[] = []
+    const shim = makeConsoleShim({ push: line => text.push(line) }, images, id => selected.push(id))
+    shim.log('before', value, 'after', one)
+    expect(selected).toEqual(['one', 'two', 'one'])
+    expect(text[0]).toContain('before')
+    expect(text[0]).toContain('[Getter]')
+    expect(text[1]).toBe('after')
+    shim.log({ path: '/fake.png', width: 1, height: 1 }, null)
+    shim.log()
+    expect(selected).toEqual(['one', 'two', 'one'])
+    expect(text.slice(2)).toEqual(["{ path: '/fake.png', width: 1, height: 1 } null", ''])
+    makeConsoleShim({ push: line => text.push(line) }, images).log(one)
+    expect(text.at(-1)).toBe("{ path: '/one.png', width: 8, height: 4 }")
+  })
 })
 
 describe('captureStreamWrites', () => {
