@@ -1,5 +1,6 @@
 /** Node REPL evaluation with declarations retained in its context. */
 import { start } from 'node:repl'
+import { Script } from 'node:vm'
 import { resolve } from 'node:path'
 import { PassThrough, Writable } from 'node:stream'
 import { ModuleHooksImportLoader } from '../imports/module-hooks.ts'
@@ -24,7 +25,7 @@ export function createReplEvaluator(options: ProgramEvaluatorOptions): ProgramEv
     Object.defineProperty(repl.context, name, { configurable: true, enumerable: true, writable: true, value: undefined })
   }
   return {
-    globals: repl.context,
+    globals: new Script('globalThis').runInContext(repl.context) as Record<string, unknown>,
     evaluate(code, finish) {
       // Node's REPL treats a leading brace as an object expression before transforming await.
       const program = code.trimStart().startsWith('{') ? `;${code}` : code

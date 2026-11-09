@@ -118,7 +118,7 @@ export async function runNodeMain(
             Object.defineProperty(evaluator.globals, 'Harness', {
               configurable: true, enumerable: true, value: Object.freeze({ inspect: console.log }),
             })
-            const programGlobals = processState === process ? [evaluator.globals, globalThis] : [evaluator.globals]
+            const programGlobals = processState === process && format === 'function-body' ? [evaluator.globals, globalThis] : [evaluator.globals]
             for (const globals of programGlobals) {
               if (data.enableConsole) Object.defineProperty(globals, 'console', {
                 configurable: true, enumerable: true, writable: true, value: console,

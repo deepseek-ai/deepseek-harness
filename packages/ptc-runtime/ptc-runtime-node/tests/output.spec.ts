@@ -80,6 +80,20 @@ describe.each(modes)('program output in $executionMode with retention $scriptPer
     expect(runtime.executionInstructions).not.toContain('console')
   })
 
+  it.each([false, true])('keeps imported modules in the native realm with console enabled %s', async (enabled) => {
+    const { run } = await setup(enabled)
+    const source = 'console.warn("module warning"); console.dir({ dependency: true });'
+    const result = await run(`await import(${JSON.stringify(`data:text/javascript,${encodeURIComponent(source)}`)})`)
+    if (mode.executionMode === 'per-call') {
+      expect(result.error?.kind).toBe('exception')
+      expect(result.error?.message).toContain(enabled ? 'console.dir is not a function' : 'console is not defined')
+    } else {
+      expect(result.error).toBeUndefined()
+      expect(result.logs.join('\n')).toContain('module warning')
+      expect(result.logs.join('\n')).toContain('dependency: true')
+    }
+  })
+
   it('preserves completion values for direct runtime consumers that request them', async () => {
     const { run, completion } = await setup()
     expect((await run(completion('42'), false)).value).toBe(42)
