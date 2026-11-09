@@ -25,12 +25,18 @@ CUA screenshots and `read_image` return ordinary `Image` values in TypeScript pr
    ```
 
 2. Update CUA bridge callbacks to `text => inspect(text)`. Direct `createCuaApi(dispatch, onText?)` callers supply a dispatcher that returns program Images for screenshots and pass the text callback as the second argument. Call `window.getScreenshot()` and pass its returned Image to `inspect`.
+
+   ```js
+   const { connectCua } = await import("<host-provided bridge file URL>")
+   const cua = connectCua(() => tools.cua, text => inspect(text))
+   const app = await cua.getApp("TextEdit")
+   const windows = await app.getWindows({ emit: false })
+   const win = await app.getWindow(windows[0].windowId)
+   const before = await win.getScreenshot()
+   await app.pressKey("Tab")
+   const after = await win.getScreenshot()
+   inspect("before", { windowId: win.windowId }, before, "after", after)
+   ```
+
 3. For integrations that require console methods, set `enableConsole: true` on the `@deepseek-ai/dsh-ptc-runtime-node` provider row. Direct runtime consumers can set `discardCompletion: true` to select the same explicit-output behavior.
 4. Run an updated program and verify that inspected values appear once and its final expression adds no output.
-
-```js
-const before = await win.getScreenshot()
-await app.pressKey("Tab")
-const after = await win.getScreenshot()
-inspect("before", { windowId: win.windowId }, before, "after", after)
-```

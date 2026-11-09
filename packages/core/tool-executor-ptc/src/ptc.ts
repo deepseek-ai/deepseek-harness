@@ -322,7 +322,7 @@ export function createRunCodeTool(
   }
 
   type ImageRef = Extract<ContentBlock, { type: 'image' }>['attachment']
-  const inspections = new WeakMap<ToolExecution, { value?: RunCodeOutput; images: PtcImageOutput[] }>()
+  const inspections = new WeakMap<ToolExecution, { value?: RunCodeOutput; images: PtcImageOutput[]; logs: string[] }>()
   const programImage = (ref: ImageRef): PtcImage => {
     const attachments = ctx.get('attachments')
     const fs = ctx.get('fs')
@@ -743,7 +743,7 @@ export function createRunCodeTool(
           }
 
           if (result.images !== undefined && result.images.length > 0) {
-            inspections.set(exec, { images: result.images })
+            inspections.set(exec, { images: result.images, logs: result.logs })
           }
           if (result.error) {
             const limitError = runController.signal.reason instanceof ToolCallLimitExceededError
@@ -754,7 +754,8 @@ export function createRunCodeTool(
               error.name = 'AbortError'
               throw error
             }
-            const logsText = result.logs.length > 0 ? `\nCaptured output:\n${result.logs.join('\n')}` : ''
+            const logsText = result.logs.length > 0 && (result.images?.length ?? 0) === 0
+              ? `\nCaptured output:\n${result.logs.join('\n')}` : ''
             const sandboxText = result.sandbox === undefined ? ''
               : `\nFile sandbox: ${result.sandbox.mode}${result.sandbox.enforcement === undefined ? '' : `; enforcement: ${result.sandbox.enforcement}`}${result.sandbox.denied ? '; operation denied' : ''}.`
             const failureText = limitError === undefined || limitError.message === result.error.message
@@ -766,7 +767,9 @@ export function createRunCodeTool(
             ...result.sandbox === undefined ? {} : { sandbox: result.sandbox },
             ...runtime.language !== 'typescript' && result.value !== undefined ? { result: result.value } : {},
           }
-          if (result.images !== undefined && result.images.length > 0) inspections.set(exec, { value, images: result.images })
+          if (result.images !== undefined && result.images.length > 0) {
+            inspections.set(exec, { value, images: result.images, logs: result.logs })
+          }
           return value
         } finally {
           callSignal.removeEventListener('abort', onOuterAbort)
@@ -782,7 +785,7 @@ export function createRunCodeTool(
       if (selected === undefined) return undefined
       if (result.isError) {
         if (selected.value !== undefined) return undefined
-        return [...result.content, ...selected.images.map(output => ({ type: 'image' as const, attachment: output.attachment }))]
+        return [...result.content, ...renderRunOutput({ logs: selected.logs }, '', selected.images)]
       }
       if (selected.value === undefined || !isDeepStrictEqual(selected.value, result.value)) return undefined
       return renderRunOutput(selected.value, escalationGuidance(ctx.get('ptcRuntime')?.sandboxMode), selected.images)

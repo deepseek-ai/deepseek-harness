@@ -11,6 +11,7 @@ import { decodePtcJsonWire, encodePtcJsonWire, snapshotPtcJsonValue, type PtcIma
 
 const CapturedError = Error
 const isNativeError = types.isNativeError
+const isArrayBufferView = types.isArrayBufferView
 const capturedObjectCreate = Object.create
 const capturedObjectDefineProperty = Object.defineProperty
 const capturedObjectKeys = Object.keys
@@ -130,6 +131,7 @@ export function makeConsoleShim(
         if (current === null || typeof current !== 'object') continue
         const id = images.get(current)
         if (id !== undefined) { nested.push(id); continue }
+        if (isArrayBufferView(current)) continue
         if (seen.has(current)) continue
         seen.add(current)
         for (const key of capturedObjectKeys(current).reverse()) {

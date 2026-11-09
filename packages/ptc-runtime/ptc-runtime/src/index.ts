@@ -26,7 +26,8 @@ export type {
 
 /**
  * Binding globals EVERY backend refuses because SOME backend owns the slot in
- * the program's namespace: `console` and `inspect` (Node's output bindings), and
+ * the program's namespace: `console` and `inspect` (Node's output bindings),
+ * `Image` (Node's program image class), and
  * `__dsh_main__`/`__builtins__`/`__name__` (the Python backend's bootstrap
  * wrapper and seeded module globals),
  * and `__debug__`. One shared set — rather than each backend refusing only its

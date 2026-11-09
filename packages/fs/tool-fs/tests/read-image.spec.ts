@@ -323,6 +323,32 @@ describe('read_image happy path', () => {
       { type: 'text', text: 'after' },
     ])
   })
+
+  it.each(['exception', 'timeout'] as const)('preserves inspected text and image order after an %s', async (kind) => {
+    await writeFile(join(dir, 'red.png'), PNG_1X1)
+    const ctx = await setup({ toolMode: 'ptc' })
+    const runtime = ctx.ptcRuntime as FakeRuntime
+    runtime.behavior = async (request) => {
+      const image = await request.bindings[0]!.functions.read_image!({ file_path: 'red.png' })
+      if (!(image instanceof PtcImage)) throw new Error('read_image must return an Image')
+      return {
+        logs: ['before', 'after'], images: [{ afterLog: 1, attachment: image.attachment }],
+        error: { kind, message: 'program stopped' },
+      }
+    }
+    const result = await call(ctx, RUN_CODE_NAME, { code: 'program', description: 'Inspect before stopping' }, {
+      ...agentOn('vision-model'), ctx,
+    })
+    expect(result.isError).toBe(true)
+    const diagnostic = result.content[0]
+    if (diagnostic?.type !== 'text') throw new Error('Expected a separate failure diagnostic')
+    expect(diagnostic.text).toContain(`code run failed (${kind}): program stopped`)
+    expect(result.content.slice(1)).toMatchObject([
+      { type: 'text', text: 'before' },
+      { type: 'image', attachment: { mediaType: 'image/png', width: 1, height: 1 } },
+      { type: 'text', text: 'after' },
+    ])
+  })
 })
 
 /** The mounted attachment service, asserted present for direct store calls. */

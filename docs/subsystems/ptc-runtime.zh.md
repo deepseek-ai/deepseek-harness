@@ -154,7 +154,7 @@ interface PtcBindingNamespace {
    * words, so the same namespace list works against every backend regardless
    * of `language` — a JS-only spelling like `$tools` is rejected by design,
    * not just by the Python backend. Names that satisfy the identifier rule but
-   * name a backend-owned slot (`RESERVED_BINDING_GLOBALS`, e.g. `inspect`, `console`,
+   * name a backend-owned slot (`RESERVED_BINDING_GLOBALS`, e.g. `inspect`, `console`, `Image`,
    * `__dsh_main__`) are also refused everywhere; see its declaration for the
    * exact set and why each entry is reserved.
    */
@@ -187,6 +187,33 @@ type PtcBindingFunction = (args: unknown) => Promise<PtcJsonValue>
 ## 捕获的输出与失败分类体系
 
 日志是普通字符串。每个输出通道保留发出顺序；独立通道之间的交错取决于后端。Node 提供方还将显式展示的图片记录为 `PtcImageOutput`，通过 `afterLog` 将附件引用定位在文本条目之间。宿主绑定返回包含附件引用及执行环境可读取的 `path` 的 `PtcImage` 描述；程序接收包含该路径和已存储图片像素尺寸的 `Image`。Node 提供方对序列化日志、图片附件引用以及完成值或诊断信息统一计算预算，超限会明确失败。
+
+```ts public-api
+/** A stored image readable from the program's execution environment. */
+declare class PtcImage {
+  readonly [key: string]: PtcJsonValue;
+  /** Absolute attachment file path readable in the execution world. */
+  readonly path: string;
+  /** Stored image selected when the program inspects this value. */
+  readonly attachment: Readonly<ImageAttachmentRef>;
+  /**
+   * Describe one immutable image file in the execution world.
+   * @param path - Absolute path to the stored image.
+   * @param attachment - Reference to the immutable stored image.
+   */
+  constructor(path: string, attachment: ImageAttachmentRef);
+}
+```
+
+```ts type-equiv
+/** One inspected image positioned among captured text entries. */
+interface PtcImageOutput {
+  /** Number of text entries emitted before this image. */
+  afterLog: number
+  /** Stored image selected by the program. */
+  attachment: ImageAttachmentRef
+}
+```
 
 失败类型是**正交的结果，独立报告**（见 [defensive-patterns](../defensive-patterns/general.zh.md)）：预算耗尽不是异常，中止不是超时，基底崩溃（如 OOM）也不是二者中的任何一个：
 

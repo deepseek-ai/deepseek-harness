@@ -154,7 +154,7 @@ interface PtcBindingNamespace {
    * words, so the same namespace list works against every backend regardless
    * of `language` — a JS-only spelling like `$tools` is rejected by design,
    * not just by the Python backend. Names that satisfy the identifier rule but
-   * name a backend-owned slot (`RESERVED_BINDING_GLOBALS`, e.g. `inspect`, `console`,
+   * name a backend-owned slot (`RESERVED_BINDING_GLOBALS`, e.g. `inspect`, `console`, `Image`,
    * `__dsh_main__`) are also refused everywhere; see its declaration for the
    * exact set and why each entry is reserved.
    */
@@ -187,6 +187,33 @@ type PtcBindingFunction = (args: unknown) => Promise<PtcJsonValue>
 ## Captured output and the failure taxonomy
 
 Logs are plain strings. Each source channel preserves emission order; interleaving across independent channels is backend-dependent. The Node provider also captures explicitly inspected images as `PtcImageOutput` entries, whose `afterLog` positions place their attachment references among text entries. Host bindings return `PtcImage` descriptors containing the attachment reference and a readable execution-world `path`; the program receives an `Image` with that path and the stored pixel dimensions. The Node provider caps serialized logs, image attachment references, and completion or diagnostic payloads together; overflow is an explicit failure.
+
+```ts public-api
+/** A stored image readable from the program's execution environment. */
+declare class PtcImage {
+  readonly [key: string]: PtcJsonValue;
+  /** Absolute attachment file path readable in the execution world. */
+  readonly path: string;
+  /** Stored image selected when the program inspects this value. */
+  readonly attachment: Readonly<ImageAttachmentRef>;
+  /**
+   * Describe one immutable image file in the execution world.
+   * @param path - Absolute path to the stored image.
+   * @param attachment - Reference to the immutable stored image.
+   */
+  constructor(path: string, attachment: ImageAttachmentRef);
+}
+```
+
+```ts type-equiv
+/** One inspected image positioned among captured text entries. */
+interface PtcImageOutput {
+  /** Number of text entries emitted before this image. */
+  afterLog: number
+  /** Stored image selected by the program. */
+  attachment: ImageAttachmentRef
+}
+```
 
 Failure kinds are **orthogonal outcomes reported independently** (per [defensive-patterns](../defensive-patterns/general.md)): a budget expiry is not an exception, an abort is not a timeout, and a substrate death (e.g. OOM) is neither:
 

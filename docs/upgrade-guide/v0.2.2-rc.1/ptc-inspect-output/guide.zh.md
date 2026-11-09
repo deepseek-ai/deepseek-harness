@@ -25,12 +25,18 @@ CUA 截图与 `read_image` 在 TypeScript 程序中返回普通 `Image`，其 `p
    ```
 
 2. 将 CUA 桥接回调更新为 `text => inspect(text)`。直接调用 `createCuaApi(dispatch, onText?)` 时，提供截图返回程序 `Image` 的分派器，并将文本回调作为第二个参数。调用 `window.getScreenshot()`，再将返回的 `Image` 传给 `inspect`。
+
+   ```js
+   const { connectCua } = await import("<host-provided bridge file URL>")
+   const cua = connectCua(() => tools.cua, text => inspect(text))
+   const app = await cua.getApp("TextEdit")
+   const windows = await app.getWindows({ emit: false })
+   const win = await app.getWindow(windows[0].windowId)
+   const before = await win.getScreenshot()
+   await app.pressKey("Tab")
+   const after = await win.getScreenshot()
+   inspect("before", { windowId: win.windowId }, before, "after", after)
+   ```
+
 3. 对于需要 console 方法的集成，在 `@deepseek-ai/dsh-ptc-runtime-node` 提供方配置行中设置 `enableConsole: true`。直接调用运行时的消费方可设置 `discardCompletion: true`，选择相同的显式输出行为。
 4. 运行更新后的程序，确认 inspect 的值只出现一次，且末尾表达式不额外输出。
-
-```js
-const before = await win.getScreenshot()
-await app.pressKey("Tab")
-const after = await win.getScreenshot()
-inspect("before", { windowId: win.windowId }, before, "after", after)
-```

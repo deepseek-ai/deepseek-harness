@@ -30,6 +30,19 @@ describe.each(modes)('program output in $executionMode with retention $scriptPer
     expect(result.value).toBeUndefined()
   })
 
+  it('inspects large binary views with a bounded text preview', async () => {
+    const { run } = await setup()
+    const result = await run(`
+      const { Buffer } = await import('node:buffer');
+      inspect(Buffer.alloc(16 * 1024 * 1024), new Uint8Array(16 * 1024 * 1024));
+    `)
+    expect(result.error).toBeUndefined()
+    expect(result.logs).toHaveLength(1)
+    expect(result.logs[0]).toContain('<Buffer')
+    expect(result.logs[0]).toContain('Uint8Array(')
+    expect(result.logs[0]!.length).toBeLessThan(2_000)
+  })
+
   it('emits selected images among text and objects and preserves immutable image properties', async () => {
     const { runtime } = await setup()
     const before = new PtcImage('/images/before.png', { attachmentId: AttachmentId('sha256:before'), mediaType: 'image/png', bytes: 64, width: 8, height: 4 })

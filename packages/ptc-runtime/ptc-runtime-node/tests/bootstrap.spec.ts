@@ -43,6 +43,19 @@ describe('makeConsoleShim', () => {
     expect(seen).toEqual(['plain { a: 1 }', 'i', 'w', 'e', 'd'])
   })
 
+  it('renders binary views alongside selected sibling images', () => {
+    const image = Object.freeze({ path: '/image.png', width: 8, height: 4 })
+    const images = new WeakMap<object, string>([[image, 'image']])
+    const bytes = new Uint8Array([1, 2, 3])
+    const text: string[] = []
+    const selected: string[] = []
+    const shim = makeConsoleShim({ push: line => text.push(line) }, images, id => selected.push(id))
+    shim.log({ bytes, view: new DataView(bytes.buffer), image })
+    expect(text[0]).toContain('Uint8Array(3)')
+    expect(text[0]).toContain('DataView')
+    expect(selected).toEqual(['image'])
+  })
+
   it('emits registered images in argument order, including nested images and cyclic containers', () => {
     const one = Object.freeze({ path: '/one.png', width: 8, height: 4 })
     const two = Object.freeze({ path: '/two.png', width: 4, height: 8 })

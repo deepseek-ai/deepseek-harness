@@ -3,7 +3,7 @@ import type { PtcProgramFormat, PtcJsonValue, PtcRunFailure } from '@deepseek-ai
 import { decodePtcJsonWire, type PtcJsonWire } from './json-wire.ts'
 
 /** Wire revision required before the host dispatches program code. */
-export const PROGRAM_PROTOCOL_VERSION = 4
+export const PROGRAM_PROTOCOL_VERSION = 3
 
 /** Inputs for one program; host functions remain in the parent process. */
 export interface ProgramBootData {

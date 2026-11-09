@@ -236,6 +236,8 @@ AsyncFunction 和 Node REPL 共用同步 `registerHooks` 和以 symbol 为键的
 - **预装 bootstrap 需要兼容的协议版本**——就绪握手会在派发代码前拒绝缺失或不匹配的版本。请将 `launch.bootstrapPath` 与宿主一同升级；运行时不会安装远端 bootstrap 更新。
 - **console 按求值 realm 配置**——per-call 程序及其原生导入模块共用所配置的 console；REPL／Script 程序使用各自 realm，原生加载的依赖使用 Node console。
 - **启用后的 console shim 有五个方法**——`log`、`info`、`warn`、`error` 与 `debug`。
+- **图片引用随进程保留**——每张已获取图片的宿主元数据保留到进程终止或所有者释放，包括程序尚未展示的图片。保留环境中的长截图循环会累积这些引用。
+- **图片查找范围超出文本预览**——对象文本最多展示四层深度、100 个数组条目及每个字符串的 10,000 个字符。二进制视图按文本预览展示。图片查找沿其他容器的可枚举数据属性遍历，包括文本预览省略的位置。需要明确对应关系时，将所选图片直接与说明文字一起传入。
 
 <a id="dev-note"></a>
 ### 开发备注

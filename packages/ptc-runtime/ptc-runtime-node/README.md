@@ -236,6 +236,8 @@ These limits qualify the execution guarantees and retained output.
 - **Preinstalled bootstraps require a compatible protocol revision** — readiness rejects a missing or mismatched revision before dispatching code. Upgrade `launch.bootstrapPath` with the host; the runtime does not install remote bootstrap updates.
 - **Console configuration follows the evaluation realm** — per-call programs and their native imports share the configured console; REPL/Script programs use their own realm, while native-loaded dependencies use Node console.
 - **The enabled console shim has five methods** — `log`, `info`, `warn`, `error` and `debug`.
+- **Image references live with the process** — every acquired image retains host metadata until the process terminates or its owner is released, including images that the program never displays. Long capture loops in retained environments accumulate these references.
+- **Image discovery traverses beyond the text preview** — object text uses depth 4, at most 100 array entries and 10,000 characters per string. Binary views render as text previews. Image discovery follows enumerable data properties through other containers, including positions omitted from the text preview. Pass selected images directly with labels when their association must be explicit.
 
 <a id="dev-note"></a>
 ### Dev Note
