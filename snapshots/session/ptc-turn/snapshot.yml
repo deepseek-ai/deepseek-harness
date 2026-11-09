@@ -2,9 +2,7 @@ version: 1
 scenario: ptc-turn
 profile: headless
 composition: ptc
-recording: live
+recording: authored
 header:
   class: ptc
   pin: true
-replay:
-  override: true

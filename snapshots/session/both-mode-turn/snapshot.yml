@@ -2,10 +2,8 @@ version: 1
 scenario: both-mode-turn
 profile: headless
 composition: ptc-shell
-recording: live
+recording: authored
 header:
   class: ptc-shell
   pin: true
   toolSchemasSource: ptc-turn
-replay:
-  override: true

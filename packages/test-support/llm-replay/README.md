@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-llm-replay` lets snapshot tests run the real agent without an API key by replaying model streams from recorded Session JSONL fixtures. Each parent and subagent session receives its recorded script in first-call order, while calls within a session advance independently. A `replay.override.json` sidecar represents pre-chunk failures, cancellation, hangs, and injected retries that durable settlements cannot reconstruct. Use it for deterministic ACP, headless, and Web browser scenarios that need real loop behavior with fixed model output.
+`dsh-llm-replay` lets snapshot tests run the real agent without an API key by replaying model streams from recorded Session JSONL fixtures. Each parent and subagent session receives its recorded script in first-call order, while calls within a session advance independently. A `replay.override.json` sidecar supplies scenario behavior absent from the selected fixture, including failures, cancellation, hangs, retries, and authored adaptations of retained programs. Use it for deterministic ACP, headless, and Web browser scenarios that need real loop behavior with fixed model output.
 
 ## Table of Contents
 
@@ -78,6 +78,8 @@ A scenario where a parent agent delegates to in-process subagents records one ro
 When replay serves `deepseek-official` with `ctx.deepseekLlmApiExtensions`, it prepares and accepts those fields after selecting a valid script entry and before yielding the first chunk. This mirrors the live adapter's post-2xx commit point, so durable acceptance watermarks and SDK event notifications behave the same in recording and replay. Replay supplies a synthetic `{ messages: [] }` base body: it proves acceptance side effects, not prepared field bytes.
 
 Two failure modes are not reconstructable from a durable Assistant settlement alone: a pure throw before any chunk has no exception-bearing stream member, and a cancel/hang requires nontermination rather than a replayed finite prefix. A scenario that needs those supplies an optional sidecar (`<scenario>/replay.override.json`) that either replaces the derived script with a bare `ReplayEntry[]` or augments it with `{ patches: [{ at, entry }] }`, which keeps every derived call and swaps the named 0-based call indexes; `at` equal to the derived length appends the retry attempt after an injected transient throw. A `throw` entry accepts DeepSeek request extensions when it has prefix chunks; a zero-chunk throw defaults to pre-2xx non-acceptance and may set `accepted: true` for a post-2xx failure. A `hang` entry may name `readyFile`, which replay writes before waiting for cancellation so an external driver can cancel deterministically.
+
+A scenario pinned to a historical or retired-tool recording may use an authored override to adapt its program to current execution instructions while preserving the retained Session. Mark the adapted scenario as `recording: authored`. Ordinary successful scripts derive from their selected Session.
 
 ### What can go wrong
 

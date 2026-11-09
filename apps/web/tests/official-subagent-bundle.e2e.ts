@@ -97,7 +97,7 @@ describe.skipIf(MODE === 'record')('web snapshot: Official native subagent bundl
     scaffold = await launchWebScaffold({
       developerTools: true, profile: { packages: [{ dir: PACKAGE }] },
       extraOverlayPath: [fileURLToPath(new URL('./pin-browse-picker.overlay.yml', import.meta.url)), overlay],
-      replayFixture: FIXTURE, replayOverride: join(DIR, 'replay.override.json'), compareReplaySession: true,
+      replayFixture: FIXTURE, compareReplaySession: true,
     })
     expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === BUNDLE))
       .toMatchObject({ official: true, availability: 'profile', enabled: false })
@@ -179,7 +179,7 @@ describe.skipIf(MODE === 'record')('web snapshot: Official native subagent bundl
 
   it.skipIf(MODE !== 'replay')('keeps the owned fixture artifacts closed', async () => {
     await assertFixtureInventory(DIR, [
-      'session.v4.jsonl', 'system-prompt.expected.md', 'tool-schemas.expected.json', 'ui.expected.md', 'workspace.expected', 'replay.override.json',
+      'session.v4.jsonl', 'system-prompt.expected.md', 'tool-schemas.expected.json', 'ui.expected.md', 'workspace.expected',
     ])
   })
 })

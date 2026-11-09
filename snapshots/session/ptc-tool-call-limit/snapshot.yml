@@ -7,5 +7,3 @@ header:
   class: ptc
 workspace:
   final: true
-replay:
-  override: true

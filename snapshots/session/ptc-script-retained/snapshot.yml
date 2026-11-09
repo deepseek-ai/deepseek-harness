@@ -10,5 +10,3 @@ header:
 permission: workspace-write
 workspace:
   setup: cua-script-guidance
-replay:
-  override: true

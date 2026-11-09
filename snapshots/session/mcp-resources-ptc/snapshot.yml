@@ -2,10 +2,8 @@ version: 1
 scenario: mcp-resources-ptc
 profile: headless
 composition: mcp-resources-ptc
-recording: live
+recording: authored
 header:
   class: mcp-resources-ptc
   pin: true
   toolSchemasSource: ptc-turn
-replay:
-  override: true

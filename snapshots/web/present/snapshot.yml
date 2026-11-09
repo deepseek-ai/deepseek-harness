@@ -2,10 +2,8 @@ version: 1
 scenario: present
 profile: web
 composition: web-ptc
-recording: live
+recording: authored
 header:
   class: web-ptc
 workspace:
   final: true
-replay:
-  override: true

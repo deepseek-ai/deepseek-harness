@@ -10,5 +10,3 @@ header:
 platform: posix
 workspace:
   final: true
-replay:
-  override: true

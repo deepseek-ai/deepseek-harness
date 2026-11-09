@@ -8,5 +8,3 @@ header:
   pin: true
   changes: 1
   promptChanges: 1
-replay:
-  override: true
