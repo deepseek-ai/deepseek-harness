@@ -28,7 +28,6 @@ import {
   type SubagentRun,
   type SubagentStopReason,
 } from '@deepseek-ai/dsh-subagent'
-import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { oarEnvironment } from './environment.ts'
 
@@ -150,10 +149,8 @@ function isAborted(signal: AbortSignal): boolean {
 }
 
 /** The caller cancelled delegation before the run was published. */
-function cancellationFailure(): HarnessError {
-  const error = new HarnessError('OAR subagent startup was cancelled', TOOL_ABORTED)
-  error.name = 'AbortError'
-  return error
+function cancellationFailure(): DOMException {
+  return new DOMException('OAR subagent startup was cancelled', 'AbortError')
 }
 
 async function disposeSession(session: Session, spec: OarRunSpec): Promise<void> {

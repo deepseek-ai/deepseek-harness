@@ -40,9 +40,6 @@
     },
     {
       "path": "../../session/working-directory"
-    },
-    {
-      "path": "../../util/error"
     }
   ]
 }

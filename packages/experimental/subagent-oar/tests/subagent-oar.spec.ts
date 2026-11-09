@@ -261,7 +261,7 @@ describe('OAR one-shot execution', () => {
     }
     const controller = new AbortController()
     const opening = startOarRun(await request(controller.signal), spec(runtime))
-    const rejected = expect(opening).rejects.toMatchObject({ name: 'AbortError', code: 'ABORTED' })
+    const rejected = expect(opening).rejects.toMatchObject({ name: 'AbortError' })
     await probed.promise
     controller.abort()
     release.resolve(undefined)
@@ -283,7 +283,7 @@ describe('OAR one-shot execution', () => {
     }
     const controller = new AbortController()
     const opening = startOarRun(await request(controller.signal), spec(runtime))
-    const rejected = expect(opening).rejects.toMatchObject({ name: 'AbortError', code: 'ABORTED' })
+    const rejected = expect(opening).rejects.toMatchObject({ name: 'AbortError' })
     await entered.promise
     controller.abort()
     release.resolve(undefined)
@@ -297,7 +297,7 @@ describe('OAR one-shot execution', () => {
     const controller = new AbortController()
     controller.abort()
     await expect(startOarRun(await request(controller.signal), spec({ ...observed.runtime, installation: probe }))).rejects.toMatchObject({
-      name: 'AbortError', code: 'ABORTED',
+      name: 'AbortError',
     })
     expect(probe).not.toHaveBeenCalled()
   })
@@ -450,7 +450,7 @@ describe('OAR one-shot execution', () => {
       throw new Error('PRIVATE_START_DETAIL')
     } }
     await expect(startOarRun(await request(controller.signal), spec(canceled))).rejects.toMatchObject({
-      name: 'AbortError', code: 'ABORTED',
+      name: 'AbortError',
     })
   })
 
@@ -526,7 +526,7 @@ describe('OAR one-shot execution', () => {
       } }
     } }
     await expect(startOarRun(await request(controller.signal), spec(runtime))).rejects.toMatchObject({
-      name: 'AbortError', code: 'ABORTED',
+      name: 'AbortError',
     })
     expect(observed.dispose).toHaveBeenCalledOnce()
   })

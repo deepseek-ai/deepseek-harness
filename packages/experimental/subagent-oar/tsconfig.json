@@ -39,9 +39,6 @@
       "path": "../../subprocess/subprocess"
     },
     {
-      "path": "../../core/tools"
-    },
-    {
       "path": "../../util/error"
     }
   ]

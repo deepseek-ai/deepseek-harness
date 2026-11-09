@@ -9,7 +9,6 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { ComputerUseProviderName } from '@deepseek-ai/dsh-computer-use/brand'
 import { admitEncodedImages } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import { HarnessError } from '@deepseek-ai/dsh-error'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { z } from 'zod'
@@ -26,7 +25,7 @@ import { CuaCoordinates } from './coordinates.ts'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import type { PromptSection } from '@deepseek-ai/dsh-system-prompt'
-import { TOOL_ABORTED, ToolArgsError, ToolContextUnavailableError, type ToolDefinition, type ToolExecution } from '@deepseek-ai/dsh-tools'
+import { ToolArgsError, ToolContextUnavailableError, type ToolDefinition, type ToolExecution } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-subprocess'
 import type {} from '@deepseek-ai/dsh-computer-use'
 import type {} from '@deepseek-ai/dsh-ptc-runtime'
@@ -96,13 +95,13 @@ function executionAgent(execution: Readonly<ToolExecution>): Agent {
 /** Parse the tool request; refinements the parameter schema cannot express fail as argument errors. */
 function parseRequest<T>(schema: z.ZodType<T>, args: unknown): T {
   const parsed = schema.safeParse(args)
-  if (!parsed.success) throw new ToolArgsError([z.prettifyError(parsed.error)])
+  if (!parsed.success) throw new ToolArgsError(parsed.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`))
   return parsed.data
 }
 
-/** Native cancellation after the caller cancelled keeps its diagnostic under the registry's cancellation identity. */
-function callerCancelled(error: NativeError): HarnessError {
-  const cancelled = new HarnessError(error.message, TOOL_ABORTED, { cause: error })
+/** Native cancellation after the caller cancelled keeps its diagnostic; the tool registry records it as `ABORTED`. */
+function callerCancelled(error: NativeError): Error {
+  const cancelled = new Error(error.message, { cause: error })
   cancelled.name = 'AbortError'
   return cancelled
 }

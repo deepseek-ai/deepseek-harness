@@ -6,8 +6,6 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { HarnessError } from '@deepseek-ai/dsh-error'
-import { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import { BrowserSessionError } from './error.ts'
 
 export { BROWSER_SESSION_ERROR_CODES, BrowserSessionError, type BrowserSessionErrorCode } from './error.ts'
@@ -42,9 +40,9 @@ interface Entry<T> {
   closing?: Promise<void>
 }
 
-/** The cancellation thrown for a non-`Error` abort reason, classified like the registry's own cancellation. */
-function operationCanceled(reason: unknown): HarnessError {
-  const error = new HarnessError('browser operation canceled', TOOL_ABORTED, { cause: reason })
+/** The cancellation thrown for a non-`Error` abort reason; the tool registry records it as `ABORTED`. */
+function operationCanceled(reason: unknown): Error {
+  const error = new Error('browser operation canceled', { cause: reason })
   error.name = 'AbortError'
   return error
 }

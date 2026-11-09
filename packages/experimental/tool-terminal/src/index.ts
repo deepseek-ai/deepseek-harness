@@ -9,12 +9,11 @@ import { resolve } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { HarnessError } from '@deepseek-ai/dsh-error'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { TerminalSessionId } from '@deepseek-ai/dsh-terminal'
 import type { TerminalSendOperation, TerminalSendResult, TerminalSessionId as TerminalSessionIdType, TerminalSignal } from '@deepseek-ai/dsh-terminal'
 import { JobError } from '@deepseek-ai/dsh-jobs'
-import { defineTool, TOOL_ABORTED, ToolArgsError, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
+import { defineTool, ToolArgsError, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { sendSource } from './background.ts'
 import { boundTerminalText, renderList, renderRead, renderSend, renderSpawn } from './render.ts'
@@ -123,11 +122,9 @@ function requireAgent(agent: Agent | undefined): Agent {
   return agent
 }
 
-/** The structured cancellation for a foreground send the caller cancelled. */
-function sendAborted(): HarnessError {
-  const error = new HarnessError('terminal send aborted', TOOL_ABORTED)
-  error.name = 'AbortError'
-  return error
+/** The cancellation for a foreground send the caller cancelled; the tool registry records it as `ABORTED`. */
+function sendAborted(): DOMException {
+  return new DOMException('terminal send aborted', 'AbortError')
 }
 
 function sessionId(args: SessionArgs): TerminalSessionIdType {

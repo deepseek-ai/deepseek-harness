@@ -7,14 +7,13 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { HarnessError } from '@deepseek-ai/dsh-error'
-import { RalphError } from './error.ts'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { SubagentProvider } from '@deepseek-ai/dsh-subagent'
-import { defineTool, TOOL_ABORTED, ToolArgsError, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
+import { defineTool, ToolArgsError, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 import type { ToolCallView, ToolResultView } from '@deepseek-ai/dsh-tools'
 import type { WorkflowResult, WorkflowRun } from '@deepseek-ai/dsh-workflow'
+import { RalphError } from './error.ts'
 
 export const name = 'tool-ralph'
 export const inject = ['tools', 'workflowEngine', 'subagents', 'systemPrompt']
@@ -350,11 +349,9 @@ function stopReasonError(result: WorkflowResult): string | undefined {
   }
 }
 
-/** The structured cancellation for a workflow the caller cancelled. */
-function ralphAborted(message: string): HarnessError {
-  const error = new HarnessError(message, TOOL_ABORTED)
-  error.name = 'AbortError'
-  return error
+/** The cancellation for a workflow the caller cancelled; the tool registry records it as `ABORTED`. */
+function ralphAborted(message: string): DOMException {
+  return new DOMException(message, 'AbortError')
 }
 
 const TRUNCATION_NOTICE = '\n… [truncated]'

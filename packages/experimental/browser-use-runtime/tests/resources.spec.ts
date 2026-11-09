@@ -264,7 +264,7 @@ describe('Session browser resource ownership', () => {
     const resources = new SessionResources<number>(ctx, { label: 'test', exclusive: false, open })
     const controller = new AbortController()
     const waiting = resources.get(a.agent, controller.signal)
-    const canceled = expect(waiting).rejects.toMatchObject({ name: 'AbortError', code: 'ABORTED', message: 'browser operation canceled', cause: 'stop' })
+    const canceled = expect(waiting).rejects.toMatchObject({ name: 'AbortError', message: 'browser operation canceled', cause: 'stop' })
     await entered.promise
     controller.abort('stop')
     await canceled
