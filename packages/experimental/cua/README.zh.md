@@ -41,7 +41,7 @@ kind: "package-reference"
 
 使用 `cua.getApp(selector)` 选择应用；它会获取授权、按需在后台启动已停止的应用，并在 provider 支持应用级辅助功能时静默读取初始辅助功能树。`cua.listApps` 和 `cua.getState` 列出运行中的应用；`cua.findApps(query)` 搜索已安装应用，包括未运行的应用。`app.activate()`、`app.getWindows()` 和 `app.getWindow(windowId)` 操作选定的应用；`getWindow` 返回用于截图和指针输入的对象。进行任何截图或指针输入前，必须选择应用及其一个窗口。调用 `app.getAccessibilityTree()` 输出树。读取应用或窗口时，可以单独传入 `maxElements` 或 `maxDepth`。省略的参数使用当前平台配置。在单个 API 实例内，门面按应用句柄保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享它，包括重复选择；每次新读取都会使上一份快照失效。元素操作使用最新快照 ID，因此调用方应使用最新树中的元素 ID，不应假定旧 ID 仍指向同一控件。元素 ID 是不透明字符串。
 
-键盘方法可在 provider 声明的作用域中使用；每个作用域内的输入投递由 provider 负责。连接丢失会使其句柄和坐标失效。清理失败会先报告，再释放该连接；应重新选择应用并读取新状态，因为先前的输入可能已部分执行。截图图像错误会保留失败阶段和附件错误码。请求参数校验失败时，在分派前返回包含方法、参数和要求的可读消息。
+键盘方法可在 provider 声明的作用域中使用；每个作用域内的输入投递由 provider 负责。连接丢失会使其句柄和坐标失效。清理失败会被报告，该连接不再复用；应重新选择应用并读取新状态，因为先前的输入可能已部分执行。截图图像错误会保留失败阶段和附件错误码。请求参数校验失败时，在分派前返回包含方法、参数和要求的可读消息。
 
 观察方法会输出并返回结果。使用 `void await app.getAccessibilityTree()` 只展示一份内容，或使用 `emit:false` 后打印一次返回文本。`window.getScreenshot()` 返回包含 `bytes`、`mimeType`、`pixelWidth`、`pixelHeight` 和 `windowId` 的 `CuaScreenshot`，图片输出回调接收同一个对象。选择文件后缀或声明图片时使用其中的 MIME 类型；格式可能是 PNG、JPEG、WebP 或 GIF。每张截图只进入一次附件处理链；`emit:false` 只抑制对象层的输出。
 
@@ -91,9 +91,13 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 
 权限 Remote 还通过 `ptcConfiguration()` 和 `enablePersistentPtc()` 支持详情页的执行方式设置。查询读取现有执行器和可编辑的 profile 条目。显式写入从 Node 提供方的 `resolvePersistentExecution` 辅助函数获取执行设置，再用 `configEditor.edit()` 保留其他字段并按正常 Loader 规则重载；已是持久化模式的执行器保持不变。CUA 将 Node 提供方声明为 peer 依赖，使这些设置与已安装的提供方版本一致。此设置独立于系统权限和应用授权。
 
-提供方将准备好的 helper、连接工厂、指引和启动能力传给 [installCua](src/index.ts)。[NativeClient](src/native-client.ts) 负责请求关联、字节上限、取消确认和失败处理。平台连接器负责启动和连接清理。其带类型的启动失败在请求写入和连接关闭时保留错误码及诊断。共享执行器为每个 Agent 保留一个连接，并在销毁时等待进行中的图像写入。
+提供方将准备好的 helper、连接工厂、指引回调和启动能力传给 [installCua](src/index.ts)。[NativeClient](src/native-client.ts) 负责请求关联、字节上限、取消确认和失败处理。平台连接器负责启动和连接清理。其带类型的启动失败在请求写入和连接关闭时保留错误码及诊断。共享执行器为每个 Agent 保留一个连接，并在销毁时等待进行中的图像写入。
 
-提供方卸载时，先等待自己持有的 CUA 程序及原生输入清理结束，再关闭连接。输入清理失败会被报告，连接释放仍会执行。使用原始 `cua` 绑定的 PTC 程序在释放其持有的输入后，可以继续执行其他工作。
+提供方实现 `CuaBackend.getGuidance(kind)`，其中 `kind: 'raw' | 'standalone'`，分别返回原始 `cua` 调用和 `cua_run_code` 程序的操作指引；两种形态可以返回相同文本。共享 CUA 为两份结果统一补充对应能力的权限指引、配置的 AX 读取默认值和最大点击按住时长。
+
+提供方通过 `NativeClient.registerCleanup(cleanup)` 注册归连接所有的资源清理；返回的 disposer 用于注销回调。连接仍可发送请求时，回调收到 `canRequest: true`，通过 `requestCleanup()` 执行原生清理，并等待确认后返回。连接被强制关闭后，`canRequest: false` 只允许清理本地状态。程序结束和连接关闭都触发清理时，每项资源复用同一个已缓存的清理 Promise。
+
+正常关闭连接会等待已注册的清理结束。原生清理被拒绝或超时会使连接及其句柄失效；连接释放仍会继续，清理失败也会被报告。普通原生请求超时仍然请求取消，并在 `graceMs` 内等待确认。提供方卸载会等待自己持有的 CUA 程序结束；使用原始 `cua` 的 PTC 程序可在释放其持有的输入后继续其他工作。
 
 `agentPreset` 默认为 `ptc`：匹配的 Agent 获得原始 `cua` 工具和 PTC 指引，其他已组合的 preset 只获得 `cua_run_code` 及其指引，包括标准、创造、极简和自定义 preset。注册使用 `agent/created`、`agent-preset/selected` 事件和 Agent 拥有的作用域，也处理提供方加载前已存在的 Agent。Agent 销毁会移除其注册并释放保留环境，提供方卸载还会释放专用 CUA 运行时。未组合 preset 的 Agent 不获得这两个工具。在独立组合中设置 `agentPreset: false` 可全局注册原始 `cua` 工具。Host 负责权限、本机连接和取消；preset 定义保持不变。
 

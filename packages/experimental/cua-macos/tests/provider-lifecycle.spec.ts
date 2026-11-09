@@ -61,10 +61,27 @@ vi.mock('@deepseek-ai/dsh-cua/native-client', async importOriginal => ({
       native.reportDiagnostic = args[3]
       native.instances.push(this)
     }
+    private readonly cleanups = new Set<Parameters<NativeClient['registerCleanup']>[0]>()
+    private cleaning?: Promise<void>
     requestCleanup = native.cleanup
     request = native.request
+    registerCleanup(cleanup: Parameters<NativeClient['registerCleanup']>[0]) {
+      if (this.disposed) throw new Error('The fixture connection is closing')
+      this.cleanups.add(cleanup)
+      return () => { this.cleanups.delete(cleanup) }
+    }
     invalidate() { this.disposed = true }
-    async dispose() { this.disposed = true; await native.dispose() }
+    async dispose() {
+      const canRequest = !this.disposed
+      this.disposed = true
+      this.cleaning ??= Promise.resolve().then(async () => {
+        const results = await Promise.allSettled([...this.cleanups].map(cleanup => Promise.resolve().then(() => cleanup(canRequest))))
+        this.cleanups.clear()
+        const failed = results.find(result => result.status === 'rejected')
+        if (failed?.status === 'rejected') throw failed.reason
+      })
+      try { await this.cleaning } finally { await native.dispose() }
+    }
   },
 }))
 
@@ -266,7 +283,7 @@ it.each(['running', 'settling'] as const)('awaits held-key cleanup before unload
     events.push('release entered')
     cleanupEntered.resolve()
     await cleanupRelease.promise
-    expect(native.instances[0]?.disposed).toBe(false)
+    expect(native.dispose).not.toHaveBeenCalled()
     events.push('release finished')
     return { dispatched: true }
   })
@@ -333,7 +350,7 @@ it('closes the native connection after a held-key cleanup failure and reuses tha
     expect(native.dispose).toHaveBeenCalledTimes(1)
     expect(native.cleanup).toHaveBeenCalledTimes(1)
     const aggregate = reported.find(error => error instanceof AggregateError)
-    expect(aggregate?.errors).toContainEqual(expect.objectContaining({ errors: [failure] }))
+    expect(aggregate?.errors).toContain(failure)
     programRelease.resolve()
     const result = await running
     expect(result.isError).toBe(true)
@@ -1253,7 +1270,7 @@ it.each([true, false])('uses the declared systemPointer capability for a non-mac
   await f.provider.dispose()
   await f.ctx.plugin({ name: 'fixture-window-provider', inject: NativeProvider.inject, apply(ctx: Context) {
     installCua(ctx, CuaConfig(config), {
-      helperPath: config.helperPath, createChannel: native.connect, guidance: COMMON_GUIDANCE,
+      helperPath: config.helperPath, createChannel: native.connect, getGuidance: () => COMMON_GUIDANCE,
       permissionParameters: () => ({}),
       capabilities: { platform: 'fixture', methods: ['getApp', 'getCapabilities', 'mouseMove'], systemPointer,
         appLevelAccessibility: true, keyboard: ['app'], coordinateSpace: 'screenshot-pixels', browser: false },
