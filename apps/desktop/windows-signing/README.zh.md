@@ -48,16 +48,16 @@ description: "配置和维护 Windows 打包 runner、签名凭据、EV Token �
 
 ### Windows 无人值守启动
 
-runner 需要在桌面登录前接单时使用 `Boot` 模式。由原 runner 账户准备文件，该账户可保持标准用户；仅注册步骤使用独立的管理员提权会话。管理员从可信 checkout 执行命令；该步骤读取已准备的配置，不执行 runner 所属的启动器或预检。任务授予运行账户管理权限，始终以受限权限和优先级 4 运行。管理使用 Task Scheduler COM 和原生进程快照，不要求 CIM 命名空间访问权限。
+runner 需要在桌面登录前接单时使用 `Boot` 模式。由原 runner 账户准备文件，该账户可保持标准用户；仅注册步骤使用独立的管理员提权会话。管理员必须从已核验、归管理员所有且 runner 账户无法写入脚本及其父目录的 checkout 执行命令，不得提权执行 runner checkout 中的脚本；该步骤读取已准备的配置，不执行 runner 所属的启动器或预检。任务授予运行账户管理权限，始终以受限权限和优先级 4 运行。管理使用 Task Scheduler COM 和原生进程快照，不要求 CIM 命名空间访问权限。
 
 1. 暂停 workflow 触发，等待空闲并停止现有启动器。已有任务由所属账户先执行 `stop` 再执行 `uninstall`，保留配置、缓存及签名互锁。安装会拒绝活跃或路径不可读的 runner 进程，以及原生 runner 的 `.service` 注册。
 2. 以 runner 账户运行 `pwsh -NoProfile -File apps/desktop/scripts/windows-runner-task.ps1 -Action install -StartupMode Boot -RunnerRoot <registered-runner-directory> -ConfigRoot <machine-root>/packaging`，保留原有 `-NetworkRoot` 和重试选项。此步骤检查工具和网络、编译启动器并准备启动快照，不注册任务。
-3. 在管理员提权 PowerShell 中运行 `pwsh -NoProfile -File apps/desktop/scripts/windows-runner-task.ps1 -Action register-boot -RunnerRoot <registered-runner-directory> -RunAs <machine-or-domain\runner-account>`。账户必须与准备阶段一致。在本机提示中输入该账户的 Windows 密码，不是 Hello PIN 或签名 PIN。注册只提交一次凭据，创建初始禁用的 Password/AtStartup 任务。失败后先检查计划任务再重试，因为注册可能已经完成；不会自动重试认证。
+3. 在管理员提权 PowerShell 中运行 `pwsh -NoProfile -File <administrator-owned-checkout>/apps/desktop/scripts/windows-runner-task.ps1 -Action register-boot -RunnerRoot <registered-runner-directory> -RunAs <machine-or-domain\runner-account>`。账户必须与准备阶段一致。在本机提示中输入该账户的 Windows 密码，不是 Hello PIN 或签名 PIN。注册只提交一次凭据，创建初始禁用的 Password/AtStartup 任务。失败后先检查计划任务再重试，因为注册可能已经完成；不会自动重试认证。
 4. 以 runner 账户运行同一管理脚本，传入 `-Action start -RunnerRoot <registered-runner-directory>`，再执行 `-Action status`。核对账户、`LogonType=Password`、`BootTrigger=True`、剩余启动次数和监听日志。恢复登录后启动时，停止并卸载任务，再不带 `-StartupMode Boot` 安装并启动。
 
-管理员须确保批处理登录权限、没有覆盖它的拒绝策略，以及 runner 对工具、私有配置、缓存和日志的访问权限。账户密码变更后需重新注册。网络依赖、磁盘和签名硬件须在登录前可用，服务时段应避免睡眠。脚本不配置桌面自动登录。恢复不能清除签名互锁或重试失败的硬件签名。
+管理员须确保批处理登录权限、没有覆盖它的拒绝策略，以及 runner 对工具、私有配置、缓存和日志的访问权限。账户密码变更后，暂停触发并等待空闲，由 runner 账户执行 `stop`、`uninstall`，管理员重新执行 `register-boot`，再由 runner 账户执行 `start`；保留准备文件，无需再次 `install`。网络依赖、磁盘和签名硬件须在登录前可用，服务时段应避免睡眠。脚本不配置桌面自动登录。正常重启也消耗持久启动预算，没有健康运行后自动重置或耗尽告警；维护时检查 `status` 的 `RemainingLaunches`，空闲时执行 `stop` 再 `start` 可重置预算。恢复不能清除签名互锁或重试失败的硬件签名。
 
-Windows CI 使用隔离替身检查任务 XML、准备阶段、无效配置、凭据取消和单次注册，不注册真实 Boot 任务。部署操作者须在每台新机器验证独立管理员与标准账户的注册、任务管理权限，以及不登录桌面的重启、实际接单和签名打包。旧机器结果不能替代新启动快照的验收。
+Windows CI 使用隔离替身检查任务 XML、准备阶段、无效配置、凭据缺失／不匹配及提示抛错和单次注册，不注册真实 Boot 任务。交互式取消可能由 PowerShell 宿主直接终止，凭据替身测试不代表该宿主行为已经验收。部署操作者须在每台新机器验证独立管理员与标准账户的注册、任务管理权限，以及不登录桌面的重启、实际接单和签名打包。旧机器结果不能替代新启动快照的验收。
 
 ### 可选网络依赖
 

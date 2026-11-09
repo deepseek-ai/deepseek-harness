@@ -46,3 +46,4 @@ function New-Object {
 } finally {
     if ([IO.Path]::GetFullPath($root).StartsWith([IO.Path]::GetTempPath(),[StringComparison]::OrdinalIgnoreCase)) { Remove-Item -LiteralPath $root -Recurse -Force }
 }
+exit 0

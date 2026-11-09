@@ -7,12 +7,13 @@ $scheduler.Connect()
 $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 $root = Join-Path ([IO.Path]::GetTempPath()) ('dsh-boot-definition-' + [guid]::NewGuid().ToString('N'))
 $null = New-Item -ItemType Directory -Path $root
+try {
 $runner = Join-Path $root 'runner with spaces'
 $null = New-Item -ItemType Directory -Path $runner
 Set-Content -LiteralPath (Join-Path $runner '.runner') -Value '{}'
 $pwsh = Join-Path $PSHOME 'pwsh.exe'
 foreach ($minutes in @(1, 7, 1440)) {
-    $definition = New-WindowsRunnerTaskDefinition $scheduler $sid $runner $pwsh $minutes
+    $definition = New-WindowsRunnerTaskDefinition $scheduler $sid $runner $pwsh $minutes 'Boot'
     [xml]$xml = $definition.XmlText
     $ns = [Xml.XmlNamespaceManager]::new($xml.NameTable)
     $ns.AddNamespace('t', 'http://schemas.microsoft.com/windows/2004/02/mit/task')
@@ -38,7 +39,7 @@ foreach ($minutes in @(1, 7, 1440)) {
     $parsedSid = ([Security.Principal.NTAccount]::new($parsed.Principal.UserId)).Translate([Security.Principal.SecurityIdentifier]).Value
     if ($parsedSid -ne $sid -or $parsed.Settings.Enabled) { throw 'Definition did not round-trip.' }
 }
-$interactive = New-WindowsRunnerTaskDefinition $scheduler $sid $runner $pwsh 1 'Interactive'
+$interactive = New-WindowsRunnerTaskDefinition $scheduler $sid $runner $pwsh 1
 [xml]$interactiveXml = $interactive.XmlText
 $interactiveNs = [Xml.XmlNamespaceManager]::new($interactiveXml.NameTable)
 $interactiveNs.AddNamespace('t', 'http://schemas.microsoft.com/windows/2004/02/mit/task')
@@ -63,16 +64,21 @@ Reject-Options @('-Action','install','-RunAs','unused') 'RunAs applies only to r
 Reject-Options @('-Action','start','-StartupMode','Boot') 'apply only to install'
 $processProbe = Join-Path $root 'process-probe.ps1'
 @'
-param([string]$Manager, [string]$Runner, [switch]$Unreadable)
+param([string]$Manager, [string]$Runner, [switch]$Unreadable, [switch]$ThrowPath)
 $ErrorActionPreference = 'Stop'
 function Get-Process {
     param($Name,$ErrorAction)
+    if ($ThrowPath) {
+        $process = [pscustomobject]@{ ProcessName = 'Runner.Worker' }
+        $process | Add-Member ScriptProperty Path { throw [ComponentModel.Win32Exception]::new(5) }
+        return $process
+    }
     [pscustomobject]@{ ProcessName = 'Runner.Worker'; Path = if ($Unreadable) { $null } else { Join-Path $Runner 'bin/Runner.Worker.exe' } }
 }
 & $Manager -Action install -RunnerRoot $Runner
 '@ | Set-Content -LiteralPath $processProbe
-foreach ($unreadable in @($false, $true)) {
-    $probeOptions = if ($unreadable) { @('-Unreadable') } else { @() }
+foreach ($mode in @('readable','missing','throwing')) {
+    $probeOptions = switch ($mode) { 'missing' { @('-Unreadable') }; 'throwing' { @('-ThrowPath') }; default { @() } }
     $output = & $pwsh -NoProfile -NonInteractive -File $processProbe -Manager $manager -Runner $runner @probeOptions 2>&1 | Out-String
     if ($LASTEXITCODE -eq 0 -or -not $output.Contains('A runner process is active or its location is unreadable')) { throw "Live-process installation guard failed: $output" }
     if (Test-Path -LiteralPath (Join-Path $runner 'dsh-task')) { throw 'Live-process rejection wrote a startup snapshot.' }
@@ -151,8 +157,9 @@ $registrationOutput = & $pwsh -NoProfile -NonInteractive -File $registrationProb
 if ($elevated -and -not $sid.EndsWith('-500')) {
     if ($LASTEXITCODE -ne 0) { throw "Boot registration entry failed: $registrationOutput" }
     $submitted = Get-Content -LiteralPath $registrationResult -Raw | ConvertFrom-Json
-    if ($submitted.User -ne $sid -or $submitted.Name -ne $config.TaskName -or $submitted.Sddl -notlike "*(A;;GA;;;$sid)*") { throw 'Registration lost prepared account or management access.' }
+    if ($submitted.User -ne $account -or $submitted.Name -ne $config.TaskName -or $submitted.Sddl -notlike "*(A;;GA;;;$sid)*") { throw 'Registration lost prepared account or management access.' }
 } else {
+    Write-Output 'SKIP: elevated registration entry with substitute transport; unsupported installer context. Real cross-account registration is not tested.'
     if ($LASTEXITCODE -eq 0 -or (Test-Path -LiteralPath $registrationResult)) { throw 'Boot registration accepted an unsupported installer context.' }
 }
 if (Get-WindowsRunnerTask $scheduler $config.TaskName) { throw 'Isolated registration created a real task.' }
@@ -165,7 +172,7 @@ $ErrorActionPreference = 'Stop'
 $native = New-Object -ComObject 'Schedule.Service'
 $native.Connect()
 $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-$definition = New-WindowsRunnerTaskDefinition $native $sid $Runner (Join-Path $PSHOME 'pwsh.exe') 1
+$definition = New-WindowsRunnerTaskDefinition $native $sid $Runner (Join-Path $PSHOME 'pwsh.exe') 1 'Boot'
 $script:enabled = $Operation -ne 'uninstall'
 $task = [pscustomobject]@{ Definition=$definition; State=$(if ($script:enabled) { 3 } else { 1 }); LastRunTime=[DateTime]::MinValue; LastTaskResult=0 }
 $task | Add-Member ScriptProperty Enabled { return $script:enabled } {
@@ -207,18 +214,19 @@ if (-not $failure) { throw 'Missing launcher was accepted.' }
 
 # Only the credential dialog and registration transport are replaced; no account authentication occurs.
 $script:credentialResult = $null
+$script:credentialThrows = $false
 $script:registrationCalls = 0
 $script:registrationFails = $false
 $script:registrationMismatch = $false
-function Get-Credential { param($UserName, $Message); return $script:credentialResult }
+function Get-Credential { param($UserName, $Message); if ($script:credentialThrows) { throw 'Prompt unavailable' }; return $script:credentialResult }
 $fakeFolder = [pscustomobject]@{}
 $fakeFolder | Add-Member ScriptMethod RegisterTaskDefinition {
     param($Name, $Definition, $Flags, $User, $Password, $Logon, $Sddl)
     $script:registrationCalls++
-    if ($Name -ne 'fixture' -or $Flags -ne 2 -or $User -ne $sid -or $Logon -ne 1 -or $Sddl -ne "D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GA;;;$sid)" -or $Password -ne 'fake-only-never-authenticated') {
+    if ($Name -ne 'fixture' -or $Flags -ne 2 -or $User -ne 'fixture-user' -or $Logon -ne 1 -or $Sddl -ne "D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GA;;;$sid)" -or $Password -ne 'fake-only-never-authenticated') {
         $script:registrationMismatch = $true; throw 'Unexpected registration request.'
     }
-    if ($script:registrationFails) { throw 'fake-only-never-authenticated' }
+    if ($script:registrationFails) { throw [Runtime.InteropServices.COMException]::new('fake-only-never-authenticated', -2147023570) }
 }
 $fakeScheduler = [pscustomobject]@{ Folder = $fakeFolder }
 $fakeScheduler | Add-Member ScriptMethod GetFolder { param($Path); if ($Path -ne '\') { throw 'Unexpected task folder.' }; return $this.Folder }
@@ -230,6 +238,9 @@ function Reject-Registration([string]$Message) {
     }
 }
 try {
+    $script:credentialThrows = $true
+    Reject-Registration 'Prompt unavailable'
+    $script:credentialThrows = $false
     Reject-Registration 'Credential entry cancelled'
     $script:credentialResult = [Management.Automation.PSCredential]::new('other-user', (ConvertTo-SecureString 'fake-only-never-authenticated' -AsPlainText -Force))
     Reject-Registration 'Credential entry cancelled'
@@ -240,13 +251,15 @@ try {
     Register-WindowsRunnerBootTask $fakeScheduler 'fixture' $definition $sid 'fixture-user'
     if ($script:registrationCalls -ne 1) { throw 'Registration was not submitted once.' }
     $script:registrationFails = $true
-    Reject-Registration 'registration outcome is unconfirmed'
+    Reject-Registration '0x8007052E'
     if ($script:registrationMismatch) { throw 'Unexpected registration request.' }
     if ($script:registrationCalls -ne 2) { throw 'Failed registration retried authentication.' }
 } finally {
     Remove-Item Function:Get-Credential
     $script:credentialResult = $null
 }
-Remove-Item -LiteralPath $root -Recurse -Force
-Write-Output "PASS: boot/password/least-privilege definition, recovery settings, duplicate policy, launcher reuse, XML round-trip, invalid options, credential cancellation and single-attempt registration failure containment. No task registered."
+} finally {
+    Remove-Item -LiteralPath $root -Recurse -Force
+}
+Write-Output "PASS: boot/password/least-privilege definition, recovery settings, duplicate policy, launcher reuse, XML round-trip, invalid options, credential substitutes and single-attempt registration failure containment. No task registered."
 exit 0

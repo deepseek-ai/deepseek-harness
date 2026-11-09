@@ -1,5 +1,5 @@
 # Build an unregistered runner task. Credentials are supplied only to the scheduler at installation.
-function New-WindowsRunnerTaskDefinition($Scheduler, [string]$Sid, [string]$RunnerRoot, [string]$PowerShell, [int]$RestartMinutes, [ValidateSet('Interactive','Boot')][string]$StartupMode = 'Boot') {
+function New-WindowsRunnerTaskDefinition($Scheduler, [string]$Sid, [string]$RunnerRoot, [string]$PowerShell, [int]$RestartMinutes, [ValidateSet('Interactive','Boot')][string]$StartupMode = 'Interactive') {
     $definition = $Scheduler.NewTask(0)
     $definition.RegistrationInfo.Description = "DSH packaging runner: $RunnerRoot; owner: $Sid"
     $definition.Principal.UserId = $Sid
@@ -35,10 +35,11 @@ function Register-WindowsRunnerBootTask($Scheduler, [string]$TaskName, $Definiti
     }
     try {
         # COM avoids putting a plaintext password in command arguments or cmdlet parameter logging.
-        $null = $Scheduler.GetFolder('\').RegisterTaskDefinition($TaskName, $Definition, 2, $Sid, $credential.GetNetworkCredential().Password, 1, "D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GA;;;$Sid)")
+        $null = $Scheduler.GetFolder('\').RegisterTaskDefinition($TaskName, $Definition, 2, $RunAs, $credential.GetNetworkCredential().Password, 1, "D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GA;;;$Sid)")
     } catch {
         # Registration may have committed before an error reached this caller.
-        throw 'Boot task registration failed; registration outcome is unconfirmed. Inspect Task Scheduler, batch-logon policy and account credentials locally before retrying.'
+        $code = '0x{0:X8}' -f $_.Exception.GetBaseException().HResult
+        throw "Boot task registration failed ($code); registration outcome is unconfirmed. Inspect Task Scheduler, batch-logon policy and account credentials locally before retrying."
     } finally {
         $credential = $null
     }
@@ -59,5 +60,13 @@ function Get-WindowsRunnerTask($Scheduler, [string]$TaskName) {
     try { return $Scheduler.GetFolder('\').GetTask($TaskName) } catch {
         if ($_.Exception.GetBaseException().HResult -eq -2147024894) { return $null }
         throw
+    }
+}
+
+# Unreadable process locations must reject maintenance just like missing locations.
+function Get-WindowsRunnerProcessPath($Process) {
+    try { return $Process.Path } catch {
+        # Access-denied and exited-process errors cannot establish an unrelated location.
+        return $null
     }
 }

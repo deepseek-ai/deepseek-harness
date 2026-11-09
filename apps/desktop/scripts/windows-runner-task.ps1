@@ -1,4 +1,4 @@
-# Prepare runner-owned startup files; an administrator registers Boot tasks for that account.
+# Prepare startup files and manage runner tasks; Boot registration requires an administrator.
 [CmdletBinding()]
 param(
     [Parameter(Mandatory=$true)][ValidateSet('install','register-boot','start','stop','status','uninstall')][string]$Action,
@@ -45,7 +45,8 @@ if ($Action -in @('install','register-boot')) {
     if ($task) { throw 'Task already installed; stop and uninstall before reinstalling.' }
     # Pause dispatch before migration; never overwrite a live startup snapshot.
     foreach ($process in @(Get-Process | Where-Object { $_.ProcessName -in @('Runner.Listener','Runner.Worker') })) {
-        if (-not $process.Path -or $process.Path.StartsWith($RunnerRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
+        $path = Get-WindowsRunnerProcessPath $process
+        if (-not $path -or $path.StartsWith($RunnerRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
             throw 'A runner process is active or its location is unreadable. Pause dispatch and stop its supervisor before installing.'
         }
     }
@@ -58,7 +59,7 @@ if ($Action -eq 'register-boot') {
     if ((Get-Item -LiteralPath $configFile).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Task configuration cannot be a link.' }
     $config = Get-Content -LiteralPath $configFile -Raw | ConvertFrom-Json
     Assert-WindowsRunnerBootConfiguration $config $sid $RunnerRoot $taskName
-    $definition = New-WindowsRunnerTaskDefinition $scheduler $sid $RunnerRoot $config.PowerShell $config.RestartMinutes
+    $definition = New-WindowsRunnerTaskDefinition $scheduler $sid $RunnerRoot $config.PowerShell $config.RestartMinutes 'Boot'
     Register-WindowsRunnerBootTask $scheduler $taskName $definition $sid $RunAs
     Write-Output "Registered disabled Boot task $taskName. Run start as the runner account. Logs: $serviceDir"
     exit 0
@@ -126,7 +127,8 @@ switch ($Action) {
         # Operators pause workflow dispatch first; this local check cannot reserve an idle GitHub runner.
         $workers = Get-Process | Where-Object ProcessName -eq 'Runner.Worker'
         foreach ($worker in $workers) {
-            if (-not $worker.Path -or $worker.Path.StartsWith($RunnerRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
+            $path = Get-WindowsRunnerProcessPath $worker
+            if (-not $path -or $path.StartsWith($RunnerRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
                 throw 'A runner job is active or its location is unreadable. Wait for completion before stopping.'
             }
         }
