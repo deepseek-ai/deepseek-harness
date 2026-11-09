@@ -55,7 +55,8 @@ function requestSchema<T extends z.ZodType>(hover: T) {
     operation('getState', { ...app, windowId: id.optional(),
       includeMenus: z.boolean().optional().describe('Expand menu contents; omitted or false shows menu-bar entries only.'),
       details: z.boolean().optional().describe('Include identifiers, global native bounds and complete action names.'),
-      maxElements: traversalLimit.optional(), maxDepth: traversalLimit.optional(),
+      maxElements: traversalLimit.optional().describe('Maximum nodes to visit on this read. Omission uses the provider setting.'),
+      maxDepth: traversalLimit.optional().describe('Maximum depth to traverse on this read. Omission uses the provider setting.'),
     }),
     operation('listActions', snapshot),
     operation('performAction', { ...snapshot, action: z.string().min(1), argument: jsonValue.optional() }),
@@ -97,7 +98,7 @@ export const SystemPointerRequest = requestSchema(z.union(MouseMoveTargets.map(t
   useSystemPointer: z.boolean().optional().describe('Request use of the system pointer. The Host checks permission before dispatch.'),
 }))))
 
-/** Native resource fields. The Host fills omitted observation limits from the provider configuration. */
+/** Native resource fields supplied or completed by the Host before dispatch. */
 export const NativeResourceParameters = {
   getState: nativeTraversalLimits,
   drag: z.object({ durationMs: z.number().int().min(1).max(5000), steps: z.number().int().min(1).max(240) }).strict(),

@@ -919,9 +919,8 @@ it('forwards bounded traversal limits on a window-only provider', async () => {
   const app = await f.api.getApp('Editor')
   const win = await app.getWindow(23)
   const before = f.dispatch.mock.calls.length
-  for (const limits of [{ maxDepth: 0 }, { maxElements: 1.5 }]) {
-    await expect(win.getAccessibilityTree(limits)).rejects.toThrow(/maxDepth|maxElements/)
-  }
+  await expect(win.getAccessibilityTree({ maxDepth: 0 })).rejects.toThrow('maxDepth')
+  await expect(win.getAccessibilityTree({ maxElements: 1.5 })).rejects.toThrow('maxElements')
   expect(f.dispatch).toHaveBeenCalledTimes(before)
   await win.getAccessibilityTree({ maxDepth: 1, maxElements: 1 })
   expect(f.dispatch).toHaveBeenLastCalledWith({

@@ -77,9 +77,9 @@ export interface CuaConfig {
   textEventIntervalMs: number
   /** Native connection cleanup, socket-write and launcher termination budget in milliseconds. */
   graceMs: number
-  /** Default node limit for accessibility reads and fixed node limit for Paste menu discovery. */
+  /** Default node limit when an accessibility read omits maxElements. */
   maxElements: number
-  /** Default depth limit for accessibility reads and fixed depth limit for Paste menu discovery. */
+  /** Default depth limit when an accessibility read omits maxDepth. */
   maxDepth: number
 }
 
@@ -155,7 +155,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
   const mouseControl = systemPointer ? new MouseControl(ctx, config.requireSystemPointerApproval) : undefined
   const requestSchema = systemPointer ? SystemPointerRequest : Request
   const instructions = systemPointer ? withSystemPointerGuidance(backend.guidance) : backend.guidance
-  const guidance = `${instructions}\n\nMaximum click holdMs: ${config.maxClickHoldMs} ms.`
+  const guidance = `${instructions}\n\nAX read defaults: maxElements=${config.maxElements}, maxDepth=${config.maxDepth}.\nMaximum click holdMs: ${config.maxClickHoldMs} ms.`
   const native: NativeClientConfig = {
     helperPath, cwd: process.cwd(), timeoutMs: config.timeoutMs, axTimeoutMs: config.axTimeoutMs,
     connectTimeoutMs: config.connectTimeoutMs, screenshotTimeoutMs: config.screenshotTimeoutMs,

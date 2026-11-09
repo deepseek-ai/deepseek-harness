@@ -38,14 +38,14 @@ export interface CuaObservationOptions { emit?: boolean }
 export interface CuaAxOptions extends CuaObservationOptions {
   /** Reserved compatibility option; observations are never diffs. */
   disableDiffing?: boolean
-  /** Maximum nodes visited for this read. Omission uses the provider setting. */
-  maxElements?: number
-  /** Maximum traversal depth for this read. Omission uses the provider setting. */
-  maxDepth?: number
   /** Expand menu contents. The default shows menu-bar entries only. */
   includeMenus?: boolean
   /** Include identifiers, global native bounds and complete action names. */
   details?: boolean
+  /** Maximum nodes visited for this read. Omission uses the provider setting. */
+  maxElements?: number
+  /** Maximum traversal depth for this read. Omission uses the provider setting. */
+  maxDepth?: number
 }
 /** Reported permissions and operations; null sessionLocked means no usable console session was verified. */
 export type CuaCapabilities = z.output<typeof CapabilitiesResult>
