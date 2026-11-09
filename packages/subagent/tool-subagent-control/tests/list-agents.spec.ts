@@ -150,6 +150,7 @@ describe('list_agents', () => {
     expect(Object.keys(parameters.properties ?? {})).toEqual([])
     expect(parameters.required ?? []).toEqual([])
     expect(schemas[0]?.description).toContain('You can message any other agent in the subagent tree')
+    expect(ctx.tools.get('list_agents')?.isConcurrencySafe?.({})).toBe(true)
   })
 
   it('renders the Lead when the tree has no children', async () => {

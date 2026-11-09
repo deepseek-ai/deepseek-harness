@@ -80,7 +80,7 @@ kind: "package-reference"
 
 标准 `wait_agent` 工具等待当前调用者的下一步收件箱，无需 Team 模式即可使用；参见 [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md#wait_agent)。任务变化和 Team 模式切换不会结束等待、添加收件箱输入或启动空闲 Agent。需要 Agent 处理更新时使用 `send_message`。
 
-祖先通过标准 `interrupt_agent` 工具停止后代的当前轮次。中断保留尚未认领的排队消息，也不改变任务归属。
+当 [subagent 控制插件](../../subagent/tool-subagent-control/README.zh.md#use-this-package)启用 `config.interrupt` 时，祖先可通过 `interrupt_agent` 停止后代的当前轮次。内置配置默认关闭此工具。中断保留尚未认领的排队消息，也不改变任务归属。
 
 ### 成功与失败的表现
 

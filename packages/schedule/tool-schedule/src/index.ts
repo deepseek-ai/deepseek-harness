@@ -402,6 +402,8 @@ function registerScheduleTools(ctx: Context): void {
       offset: { type: 'integer', description: 'Number of tasks to skip; defaults to 0.' },
     },
     output: { schema: LIST_OUTPUT_SCHEMA, render: renderValue },
+    // Host task reads activate no target Session.
+    isConcurrencySafe: () => true,
     execute({ active, limit, offset }, exec) {
       // The open parameter root admits unknown keys; only the declared page fields select the Host-wide list.
       return runForCaller(exec, LIST_ERRORS, () => ctx.schedule.list({
@@ -420,6 +422,8 @@ function registerScheduleTools(ctx: Context): void {
       id: { type: 'string', required: true, description: 'Task id.' },
     },
     output: { schema: VIEW_OUTPUT_SCHEMA, render: renderValue },
+    // Host task reads activate no target Session.
+    isConcurrencySafe: () => true,
     execute(args, exec) {
       return runForCaller(exec, CALLER_ERRORS, () => ctx.schedule.view({ id: ScheduleId(args.id) })
         .then(result => 'kind' in result ? modelTask(result) : result))

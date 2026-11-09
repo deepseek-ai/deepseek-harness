@@ -7,7 +7,7 @@ import type {
   Mergeability, MergeMethod, ReviewDecision,
 } from '@deepseek-ai/dsh-experimental-forge'
 import { z } from 'zod'
-import { checkedRepository } from './urls.ts'
+import { checkedRepository, isCommit } from './urls.ts'
 
 const CHECK_FIELDS = `pageInfo { hasNextPage endCursor }
   nodes {
@@ -19,17 +19,34 @@ const CHECK_FIELDS = `pageInfo { hasNextPage endCursor }
     ... on StatusContext { context state targetUrl createdAt }
   }`
 
-const PULL_REQUEST_FIELDS = `number url title state isDraft updatedAt closedAt
+/** Most nodes GitHub returns in one connection page. */
+const PAGE_SIZE = 100
+
+const THREAD_FIELDS = 'pageInfo { hasNextPage endCursor } nodes { isResolved }'
+
+/**
+ * Pull request fields of one snapshot.
+ * @param threads - review threads the first page holds, at most {@link PAGE_SIZE}.
+ * @returns the selection of the snapshot fragment.
+ */
+function pullRequestFields(threads: number): string {
+  return `id number url title state isDraft updatedAt closedAt
   author { login }
   headRefName headRefOid baseRefName additions deletions mergeable mergeStateStatus reviewDecision
-  reviewThreads(first: 100) { nodes { isResolved } }
-  commits(last: 1) { nodes { commit { statusCheckRollup { id state contexts(first: 100) {
+  reviewThreads(first: ${threads}) { ${THREAD_FIELDS} }
+  commits(last: 1) { nodes { commit { statusCheckRollup { id state contexts(first: ${PAGE_SIZE}) {
     ${CHECK_FIELDS}
   } } } } }`
+}
 
 /** Continue reading the same commit's rollup even if the pull request head moves. */
 export const CHECKS_QUERY = `query($id: ID!, $cursor: String!) {
-  node(id: $id) { ... on StatusCheckRollup { contexts(first: 100, after: $cursor) { ${CHECK_FIELDS} } } }
+  node(id: $id) { ... on StatusCheckRollup { contexts(first: ${PAGE_SIZE}, after: $cursor) { ${CHECK_FIELDS} } } }
+}`
+
+/** Continue counting a pull request's review threads; variables `id`, `cursor`, and the integer `first`. */
+export const THREADS_QUERY = `query($id: ID!, $cursor: String!, $first: Int!) {
+  node(id: $id) { ... on PullRequest { reviewThreads(first: $first, after: $cursor) { ${THREAD_FIELDS} } } }
 }`
 
 const REPOSITORY_FIELDS = 'squashMergeAllowed mergeCommitAllowed rebaseMergeAllowed viewerPermission viewerDefaultMergeMethod'
@@ -40,6 +57,11 @@ export const HEAD_QUERY = `query($owner: String!, $name: String!, $branch: Strin
     defaultBranchRef { name }
     pullRequests(headRefName: $branch, states: OPEN, first: 20, orderBy: { field: CREATED_AT, direction: DESC }) { nodes { number isCrossRepository } }
   }
+}`
+
+/** Head and base commits of one pull request; variables `owner` and `name` are strings, `number` is an integer. */
+export const PULL_REQUEST_COMMITS_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) { pullRequest(number: $number) { headRefOid baseRefOid } }
 }`
 
 const checkRunSchema = z.object({
@@ -66,19 +88,40 @@ const statusContextSchema = z.object({
   targetUrl: z.string().nullable(),
 })
 
-const checkPageSchema = z.object({
-  pageInfo: z.object({ hasNextPage: z.boolean(), endCursor: z.string().nullable() }),
-  nodes: z.array(z.unknown()),
-})
+const pageInfoSchema = z.object({ hasNextPage: z.boolean(), endCursor: z.string().nullable() })
+
+/** Position of a connection page within its connection. */
+type PageInfo = z.infer<typeof pageInfoSchema>
+
+const checkPageSchema = z.object({ pageInfo: pageInfoSchema, nodes: z.array(z.unknown()) })
+
+const threadPageSchema = z.object({ pageInfo: pageInfoSchema, nodes: z.array(z.object({ isResolved: z.boolean() })) })
+
+/** One validated connection page or a failure that prevents publishing a partial count. */
+export type PageResult<T> = { readonly ok: true; readonly page: T } | { readonly ok: false; readonly failure: ForgeFailure }
 
 /** One validated page of check contexts or a failure that prevents publishing a partial count. */
-export type CheckPageResult = { readonly ok: true; readonly page: z.infer<typeof checkPageSchema> }
-  | { readonly ok: false; readonly failure: ForgeFailure }
+export type CheckPageResult = PageResult<z.infer<typeof checkPageSchema>>
+
+/** One validated page of review threads or a failure that prevents publishing a partial count. */
+export type ThreadPageResult = PageResult<z.infer<typeof threadPageSchema>>
 
 /** Opaque GitHub node id that pins check pagination to one commit's rollup. */
 type RollupId = Branded<'GitHubStatusCheckRollupId'>
 
+/** Opaque GitHub node id of a pull request. */
+type PullRequestId = Branded<'GitHubPullRequestId'>
+
+/** Continuation reads that complete one snapshot response. */
+export interface SnapshotPages {
+  /** Read the next page of a pull request's review threads, holding at most `first` threads. */
+  readonly threads: (id: PullRequestId, cursor: string, first: number) => Promise<ThreadPageResult>
+  /** Read the next check page of a rollup; omission keeps the first check page with its truncation flag. */
+  readonly checks?: (id: RollupId, cursor: string) => Promise<CheckPageResult>
+}
+
 const pullRequestSchema = z.object({
+  id: z.string().transform(value => value as PullRequestId),
   url: z.string(),
   title: z.string(),
   state: z.enum(['OPEN', 'CLOSED', 'MERGED']),
@@ -94,7 +137,7 @@ const pullRequestSchema = z.object({
   mergeable: z.string(),
   mergeStateStatus: z.string(),
   reviewDecision: z.string().nullable(),
-  reviewThreads: z.object({ nodes: z.array(z.object({ isResolved: z.boolean() })) }),
+  reviewThreads: threadPageSchema,
   commits: z.object({
     nodes: z.array(z.object({
       commit: z.object({
@@ -143,6 +186,11 @@ const headSchema = z.object({
   }),
 })
 
+const pullRequestCommitsSchema = z.object({ data: z.object({ repository: z.object({ pullRequest: z.object({
+  headRefOid: z.string().refine(isCommit),
+  baseRefOid: z.string().refine(isCommit),
+}) }) }) })
+
 type PullRequestNode = z.infer<typeof pullRequestSchema>
 type RepositoryNode = z.infer<typeof repositorySchema>
 
@@ -169,16 +217,19 @@ export interface SnapshotQuery {
   readonly document: string
   /** Change requests keyed by alias path `r<i>.p<j>`. */
   readonly targets: ReadonlyMap<string, ChangeRequestRef>
+  /** Most review threads counted per change request. */
+  readonly maxReviewThreads: number
 }
 
 /**
  * Build one query that reads every change request in `refs`, grouping them by
  * repository. Owners, names, and numbers are validated before they are inlined.
  * @param refs - change requests on one host.
+ * @param maxReviewThreads - positive integer bound on the review threads counted per change request.
  * @returns the document and its alias targets.
  * @throws when an owner, name, or number cannot be inlined safely.
  */
-export function snapshotQuery(refs: readonly ChangeRequestRef[]): SnapshotQuery {
+export function snapshotQuery(refs: readonly ChangeRequestRef[], maxReviewThreads: number): SnapshotQuery {
   const repositories = new Map<string, { repository: ForgeRepository; numbers: Map<number, ChangeRequestRef> }>()
   for (const ref of refs) {
     const { owner, name } = checkedRepository(ref)
@@ -201,22 +252,26 @@ export function snapshotQuery(refs: readonly ChangeRequestRef[]): SnapshotQuery 
     const owner = JSON.stringify(repository.owner)
     fields.push(`r${r}: repository(owner: ${owner}, name: ${JSON.stringify(repository.name)}) { ${REPOSITORY_FIELDS} ${pulls.join(' ')} }`)
   }
-  return { document: `query { ${fields.join(' ')} }\nfragment ChangeRequestFields on PullRequest { ${PULL_REQUEST_FIELDS} }`, targets }
+  const document = `query { ${fields.join(' ')} }
+fragment ChangeRequestFields on PullRequest { ${pullRequestFields(Math.min(PAGE_SIZE, maxReviewThreads))} }`
+  return { document, targets, maxReviewThreads }
 }
 
 /**
  * Map a snapshot response, including GitHub's partial-error form, into one
  * result per alias target. Path-scoped errors apply to their repository or
  * pull request; errors without a path apply to every unresolved target. A
- * repository without readable merge settings offers no merge. Polling returns
+ * repository without readable merge settings offers no merge. Review threads
+ * are counted across pages up to `query.maxReviewThreads`. Polling returns
  * the first check page; an explicit detail read can complete its pagination.
+ * A continuation page that fails or does not advance fails its target.
  * @param body - parsed JSON printed by `gh api graphql`.
  * @param query - the query that produced the response.
- * @param readChecks - optional detail reader for the same commit; omission returns the first page with its truncation flag.
- * @returns a snapshot with its check truncation flag, or a failure, for every target.
+ * @param pages - continuation reads of review threads and, for a detail read, of checks on the same commit.
+ * @returns a snapshot with its check and thread truncation flags, or a failure, for every target.
  */
 export async function mapSnapshotResponse(
-  body: unknown, query: SnapshotQuery, readChecks?: (id: RollupId, cursor: string) => Promise<CheckPageResult>,
+  body: unknown, query: SnapshotQuery, pages: SnapshotPages,
 ): Promise<Map<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>> {
   const results = new Map<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>()
   const parsed = responseSchema.safeParse(body)
@@ -235,23 +290,14 @@ export async function mapSnapshotResponse(
     const node = pullRequestSchema.safeParse(raw)
     const settings = repositorySchema.safeParse(parsed.data.data?.[repositoryAlias])
     if (node.success) {
+      const { id, reviewThreads } = node.data
       const rollup = node.data.commits.nodes[0]?.commit.statusCheckRollup
-      if (rollup !== undefined && rollup !== null) {
-        const cursors = new Set<string>()
-        while (readChecks !== undefined && rollup.contexts.pageInfo.hasNextPage) {
-          const cursor = rollup.contexts.pageInfo.endCursor
-          if (cursor === null || cursors.has(cursor)) {
-            results.set(key, { code: 'unavailable', message: 'GitHub check pagination did not advance' })
-            break
-          }
-          cursors.add(cursor)
-          const next = await readChecks(rollup.id, cursor)
-          if (!next.ok) { results.set(key, next.failure); break }
-          rollup.contexts.nodes.push(...next.page.nodes)
-          rollup.contexts.pageInfo = next.page.pageInfo
-        }
-      }
-      if (!results.has(key)) results.set(key, toSnapshot(ref, node.data, settings.success ? settings.data : undefined))
+      const { checks } = pages
+      const failure = await readPages(reviewThreads, query.maxReviewThreads, 'review thread',
+        async (cursor, first) => await pages.threads(id, cursor, first))
+        ?? (rollup === undefined || rollup === null || checks === undefined ? undefined
+          : await readPages(rollup.contexts, Number.POSITIVE_INFINITY, 'check', async cursor => await checks(rollup.id, cursor)))
+      results.set(key, failure ?? toSnapshot(ref, node.data, settings.success ? settings.data : undefined))
     } else if (error !== undefined) results.set(key, { code: error.type === 'NOT_FOUND' ? 'not-found' : 'unavailable', message: error.message })
     else if (raw === null || raw === undefined) results.set(key, { code: 'not-found', message: 'pull request not found' })
     else results.set(key, { code: 'unavailable', message: 'unexpected pull request fields' })
@@ -260,20 +306,85 @@ export async function mapSnapshotResponse(
 }
 
 /**
+ * Append the following pages of a connection until it ends or holds `limit` nodes.
+ * @param connection - first page, extended in place.
+ * @param limit - most nodes to hold.
+ * @param label - what the connection lists, for failure messages.
+ * @param read - reads the page after `cursor`, holding at most `first` nodes.
+ * @returns a failure that prevents publishing the partial connection, or undefined once it ended or is full.
+ */
+async function readPages<T>(
+  connection: { nodes: T[]; pageInfo: PageInfo },
+  limit: number,
+  label: string,
+  read: (cursor: string, first: number) => Promise<PageResult<{ readonly nodes: readonly T[]; readonly pageInfo: PageInfo }>>,
+): Promise<ForgeFailure | undefined> {
+  const cursors = new Set<string>()
+  while (connection.pageInfo.hasNextPage && connection.nodes.length < limit) {
+    const cursor = connection.pageInfo.endCursor
+    if (cursor === null || cursors.has(cursor)) return { code: 'unavailable', message: `GitHub ${label} pagination did not advance` }
+    cursors.add(cursor)
+    const next = await read(cursor, Math.min(PAGE_SIZE, limit - connection.nodes.length))
+    if (!next.ok) return next.failure
+    connection.nodes.push(...next.page.nodes)
+    connection.pageInfo = next.page.pageInfo
+  }
+  return undefined
+}
+
+/**
  * Validate a continuation response before adding its checks to the snapshot.
  * @param body - parsed GraphQL response for a rollup node.
  * @returns the complete page or a failure; partial-error pages are not accepted.
  */
 export function mapCheckPageResponse(body: unknown): CheckPageResult {
+  return mapPageResponse(body, z.object({ contexts: checkPageSchema }).transform(node => node.contexts), 'check')
+}
+
+/**
+ * Validate a continuation response of {@link THREADS_QUERY} before counting its review threads.
+ * @param body - parsed GraphQL response for a pull request node.
+ * @returns the complete page or a failure; partial-error pages are not accepted.
+ */
+export function mapThreadPageResponse(body: unknown): ThreadPageResult {
+  return mapPageResponse(body, z.object({ reviewThreads: threadPageSchema }).transform(node => node.reviewThreads), 'review thread')
+}
+
+/**
+ * Validate one continuation response of a `node(id:)` query.
+ * @param body - parsed GraphQL response.
+ * @param page - schema that maps the node to its connection page.
+ * @param label - what the connection lists, for failure messages.
+ * @returns the page, or a failure for an error, a missing node, or unexpected fields.
+ */
+function mapPageResponse<T>(body: unknown, page: z.ZodType<T>, label: string): PageResult<T> {
   const parsed = z.object({
-    data: z.object({ node: z.object({ contexts: checkPageSchema }).nullable() }).nullable().optional(),
+    data: z.object({ node: page.nullable() }).nullable().optional(),
     errors: z.array(z.object({ message: z.string() })).optional(),
   }).safeParse(body)
-  if (parsed.success && !parsed.data.errors?.length && parsed.data.data?.node != null) {
-    return { ok: true, page: parsed.data.data.node.contexts }
-  }
+  if (parsed.success && !parsed.data.errors?.length && parsed.data.data?.node != null) return { ok: true, page: parsed.data.data.node }
   return { ok: false, failure: { code: 'unavailable',
-    message: parsed.success ? parsed.data.errors?.[0]?.message ?? 'GitHub check page is unavailable' : 'unexpected GitHub check page' } }
+    message: parsed.success ? parsed.data.errors?.[0]?.message ?? `GitHub ${label} page is unavailable` : `unexpected GitHub ${label} page` } }
+}
+
+/** Head and base commits of a pull request as one read of {@link PULL_REQUEST_COMMITS_QUERY} named them. */
+export interface PullRequestCommits {
+  /** Commit at the head of the pull request. */
+  readonly head: string
+  /** Commit of the base branch GitHub recorded with that head, whose merge base with it starts the pull request's diff. */
+  readonly base: string
+}
+
+/**
+ * Map a read of {@link PULL_REQUEST_COMMITS_QUERY}.
+ * @param body - parsed JSON printed by `gh api graphql`.
+ * @returns both commits, or undefined when the response does not name them as full commit object names.
+ */
+export function mapPullRequestCommitsResponse(body: unknown): PullRequestCommits | undefined {
+  const parsed = pullRequestCommitsSchema.safeParse(body)
+  if (!parsed.success) return undefined
+  const { headRefOid, baseRefOid } = parsed.data.data.repository.pullRequest
+  return { head: headRefOid, base: baseRefOid }
 }
 
 /**
@@ -366,6 +477,7 @@ function toSnapshot(
     checksRollup: summary,
     checksTruncated: rollup?.contexts.pageInfo.hasNextPage ?? false,
     unresolvedThreads: node.reviewThreads.nodes.filter(thread => !thread.isResolved).length,
+    threadsTruncated: node.reviewThreads.pageInfo.hasNextPage,
     updatedAt: node.updatedAt,
     closedAt: node.closedAt,
   }

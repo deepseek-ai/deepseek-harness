@@ -15,12 +15,14 @@ export type FileTreePosition = 'right' | 'left' | 'hidden'
 
 /**
  * Render a keyboard- and pointer-resizable tree beside the diff.
- * @param props - tree rows, pane position, and the toggle's controlled element id.
+ * @param props - tree rows, pane position, the toggle's controlled element id, and the receiver of the shown width.
  * @returns the bounded pane and its resize separator.
  */
-export function FileTreePane({ position, id, ...props }: ChangedFilesProps & {
+export function FileTreePane({ position, id, onWidth, ...props }: ChangedFilesProps & {
   readonly position: FileTreePosition
   readonly id: string
+  /** Receives the pane's width in pixels whenever it changes, so the toolbar can align a cell with it. */
+  readonly onWidth: (width: number) => void
 }): ReactNode {
   const pane = useRef<HTMLDivElement>(null)
   const drag = useRef<{ pointer: number; x: number; width: number } | null>(null)
@@ -41,6 +43,7 @@ export function FileTreePane({ position, id, ...props }: ChangedFilesProps & {
     return () => { observer.disconnect() }
   }, [])
   const shown = Math.min(width, maximum)
+  useLayoutEffect(() => { onWidth(shown) }, [shown, onWidth])
   const direction = position === 'left' ? 1 : -1
   const resize = (next: number): void => { setWidth(Math.round(Math.max(MIN_WIDTH, Math.min(maximum, next)))) }
   return <div ref={pane} className={clsx(css.pane, changesCss.treePane)} data-position={position} hidden={position === 'hidden'} style={{ width: shown }}>

@@ -1,17 +1,25 @@
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type { ChangeRequestSnapshot } from '@deepseek-ai/dsh-experimental-forge'
 import { describe, expect, it } from 'vitest'
-import { mapCheckPageResponse, mapHeadResponse, mapSnapshotResponse, snapshotQuery, type CheckPageResult } from '../src/graphql.ts'
-import { checkRun, demo, pull, pullRequestNode, repositorySettings, statusContext } from './fixtures.ts'
+import {
+  mapCheckPageResponse, mapHeadResponse, mapPullRequestCommitsResponse, mapSnapshotResponse, mapThreadPageResponse, snapshotQuery,
+} from '../src/graphql.ts'
+import type { SnapshotPages, ThreadPageResult } from '../src/graphql.ts'
+import { checkRun, demo, pull, pullRequestNode, repositorySettings, statusContext, threadPage } from './fixtures.ts'
 
-const noMoreChecks = async (): Promise<CheckPageResult> => { throw new Error('Unexpected check page') }
+const MAX_THREADS = 1_000
+
+const noMorePages: SnapshotPages = {
+  threads: async () => { throw new Error('Unexpected review thread page') },
+  checks: async () => { throw new Error('Unexpected check page') },
+}
 
 const other = { ...demo, name: 'other' }
 
 /** Map one pull request node of a repository with `settings`, or without readable merge settings when it is null. */
 async function single(node: unknown, settings: Record<string, unknown> | null = repositorySettings()): Promise<ChangeRequestSnapshot> {
-  const query = snapshotQuery([pull(1)])
-  const results = await mapSnapshotResponse({ data: { r0: { ...settings, p0: node } } }, query, noMoreChecks)
+  const query = snapshotQuery([pull(1)], MAX_THREADS)
+  const results = await mapSnapshotResponse({ data: { r0: { ...settings, p0: node } } }, query, noMorePages)
   const result = results.get(changeRequestKey(pull(1)))
   if (result === undefined || 'code' in result) throw new Error(`expected a snapshot, received ${JSON.stringify(result)}`)
   return result
@@ -20,7 +28,7 @@ async function single(node: unknown, settings: Record<string, unknown> | null = 
 describe('snapshot query', () => {
   it('groups change requests by repository and aliases each one', () => {
     const upper = { ...demo, owner: 'Octo', name: 'Demo' }
-    const query = snapshotQuery([pull(1), pull(2, upper), pull(1, upper), pull(7, other)])
+    const query = snapshotQuery([pull(1), pull(2, upper), pull(1, upper), pull(7, other)], MAX_THREADS)
 
     expect([...query.targets]).toEqual([['r0.p0', pull(1)], ['r0.p1', pull(2, upper)], ['r1.p0', pull(7, other)]])
     const settings = 'squashMergeAllowed mergeCommitAllowed rebaseMergeAllowed viewerPermission viewerDefaultMergeMethod'
@@ -30,9 +38,9 @@ describe('snapshot query', () => {
   })
 
   it('refuses owners, names, and numbers that cannot be inlined', () => {
-    expect(() => snapshotQuery([pull(1, { ...demo, owner: 'oc"to' })])).toThrow('forge-github: invalid repository "oc\\"to/demo"')
-    expect(() => snapshotQuery([pull(1.5)])).toThrow('forge-github: invalid pull request number 1.5')
-    expect(() => snapshotQuery([pull(0)])).toThrow('forge-github: invalid pull request number 0')
+    expect(() => snapshotQuery([pull(1, { ...demo, owner: 'oc"to' })], MAX_THREADS)).toThrow('forge-github: invalid repository "oc\\"to/demo"')
+    expect(() => snapshotQuery([pull(1.5)], MAX_THREADS)).toThrow('forge-github: invalid pull request number 1.5')
+    expect(() => snapshotQuery([pull(0)], MAX_THREADS)).toThrow('forge-github: invalid pull request number 0')
   })
 })
 
@@ -65,6 +73,7 @@ describe('snapshot mapping', () => {
       checksRollup: 'success',
       checksTruncated: false,
       unresolvedThreads: 2,
+      threadsTruncated: false,
       updatedAt: '2026-10-09T01:02:03Z',
       closedAt: null,
     })
@@ -260,7 +269,7 @@ describe('snapshot mapping', () => {
   })
 
   it('maps path-scoped and global errors from the partial-error response', async () => {
-    const query = snapshotQuery([pull(1), pull(2), pull(7, other)])
+    const query = snapshotQuery([pull(1), pull(2), pull(7, other)], MAX_THREADS)
     const body = {
       data: { r0: { p0: pullRequestNode(1), p1: null }, r1: null },
       errors: [
@@ -269,7 +278,7 @@ describe('snapshot mapping', () => {
       ],
     }
 
-    const results = await mapSnapshotResponse(body, query, noMoreChecks)
+    const results = await mapSnapshotResponse(body, query, noMorePages)
 
     expect(results.get(changeRequestKey(pull(1)))).toMatchObject({ state: 'open' })
     expect(results.get(changeRequestKey(pull(2)))).toEqual({ code: 'not-found', message: 'Could not resolve to a PullRequest with the number of 2.' })
@@ -277,8 +286,8 @@ describe('snapshot mapping', () => {
   })
 
   it('applies an error without a path to every unresolved change request', async () => {
-    const query = snapshotQuery([pull(1), pull(2)])
-    const results = (await mapSnapshotResponse({ data: null, errors: [{ message: 'API rate limit exceeded' }] }, query, noMoreChecks))
+    const query = snapshotQuery([pull(1), pull(2)], MAX_THREADS)
+    const results = (await mapSnapshotResponse({ data: null, errors: [{ message: 'API rate limit exceeded' }] }, query, noMorePages))
 
     expect([...results.values()]).toEqual([
       { code: 'unavailable', message: 'API rate limit exceeded' },
@@ -287,27 +296,90 @@ describe('snapshot mapping', () => {
   })
 
   it('reports a query validation error whose path names a fragment instead of a response alias', async () => {
-    const query = snapshotQuery([pull(1)])
+    const query = snapshotQuery([pull(1)], MAX_THREADS)
     const results = await mapSnapshotResponse({ errors: [{ path: ['fragment ChangeRequestFields', 'invalidField'],
-      message: 'Field invalidField does not exist' }] }, query, noMoreChecks)
+      message: 'Field invalidField does not exist' }] }, query, noMorePages)
     expect([...results.values()]).toEqual([{ code: 'unavailable', message: 'Field invalidField does not exist' }])
   })
 
   it('reports missing nodes, malformed nodes, and malformed bodies', async () => {
-    const query = snapshotQuery([pull(1), pull(2)])
+    const query = snapshotQuery([pull(1), pull(2)], MAX_THREADS)
 
-    expect([...(await mapSnapshotResponse({ data: { r0: { p0: null, p1: { title: 7 } } } }, query, noMoreChecks)).values()]).toEqual([
+    expect([...(await mapSnapshotResponse({ data: { r0: { p0: null, p1: { title: 7 } } } }, query, noMorePages)).values()]).toEqual([
       { code: 'not-found', message: 'pull request not found' },
       { code: 'unavailable', message: 'unexpected pull request fields' },
     ])
-    expect([...(await mapSnapshotResponse({}, query, noMoreChecks)).values()]).toEqual([
+    expect([...(await mapSnapshotResponse({}, query, noMorePages)).values()]).toEqual([
       { code: 'unavailable', message: 'unexpected GitHub response' },
       { code: 'unavailable', message: 'unexpected GitHub response' },
     ])
-    expect([...(await mapSnapshotResponse('not json', query, noMoreChecks)).values()]).toEqual([
+    expect([...(await mapSnapshotResponse('not json', query, noMorePages)).values()]).toEqual([
       { code: 'unavailable', message: 'unexpected GitHub response' },
       { code: 'unavailable', message: 'unexpected GitHub response' },
     ])
+  })
+})
+
+describe('review thread counting', () => {
+  /** Map pull request 1, whose first page holds `first` and whose following pages hold `rest`, counting at most `max` threads. */
+  async function counted(max: number, first: readonly boolean[], rest: readonly (readonly boolean[])[]) {
+    const reads: [string, string, number][] = []
+    const threads: SnapshotPages['threads'] = async (id, cursor, size) => {
+      reads.push([id, cursor, size])
+      const index = Number(cursor.slice('page-'.length))
+      const resolved = rest[index - 1]
+      if (resolved === undefined) throw new Error(`Unexpected review thread page ${cursor}`)
+      const more = index < rest.length || size < resolved.length
+      return { ok: true, page: threadPage(resolved.slice(0, size), more ? `page-${index + 1}` : null) }
+    }
+    const query = snapshotQuery([pull(1)], max)
+    const node = pullRequestNode(1, { reviewThreads: threadPage(first, rest.length > 0 ? 'page-1' : null) })
+    const results = await mapSnapshotResponse({ data: { r0: { ...repositorySettings(), p0: node } } }, query, { threads })
+    const result = results.get(changeRequestKey(pull(1)))
+    return { result, reads, document: query.document }
+  }
+  const hundred = (unresolved: number): boolean[] => Array.from({ length: 100 }, (_, index) => index >= unresolved)
+
+  it('counts unresolved threads across every page of a pull request with more than 100 threads', async () => {
+    const { result, reads } = await counted(MAX_THREADS, hundred(1), [hundred(2), [false, true, false]])
+
+    expect(result).toMatchObject({ unresolvedThreads: 5, threadsTruncated: false })
+    expect(reads).toEqual([['pull-1', 'page-1', 100], ['pull-1', 'page-2', 100]])
+  })
+
+  it.each([
+    ['exactly the bound', 203, 5, false, [100, 3]],
+    ['one thread below the total', 202, 4, true, [100, 2]],
+    ['a bound inside the second page', 150, 3, true, [50]],
+  ] as const)('stops counting at %s and marks the count as a lower bound past it', async (_label, max, unresolved, truncated, sizes) => {
+    const { result, reads } = await counted(max, hundred(1), [hundred(2), [false, true, false]])
+
+    expect(result).toMatchObject({ unresolvedThreads: unresolved, threadsTruncated: truncated })
+    expect(reads.map(([, , size]) => size)).toEqual(sizes)
+  })
+
+  it('reads a first page no larger than a bound below 100', async () => {
+    const { result, reads, document } = await counted(2, [false, false], [[false]])
+
+    expect(document).toContain('reviewThreads(first: 2)')
+    expect(result).toMatchObject({ unresolvedThreads: 2, threadsTruncated: true })
+    expect(reads).toEqual([])
+    expect((await counted(MAX_THREADS, [false], [])).document).toContain('reviewThreads(first: 100)')
+  })
+
+  it.each([
+    ['a failed page', { ok: false, failure: { code: 'unavailable', message: 'Rate limited' } }, 'Rate limited'],
+    ['a page that repeats its cursor', { ok: true, page: threadPage([false], 'page-1') }, 'GitHub review thread pagination did not advance'],
+    ['a page without a cursor', { ok: true, page: { pageInfo: { hasNextPage: true, endCursor: null }, nodes: [] } },
+      'GitHub review thread pagination did not advance'],
+  ] satisfies [string, ThreadPageResult, string][])('fails the pull request for %s without losing another one', async (_label, page, message) => {
+    const query = snapshotQuery([pull(1), pull(2)], MAX_THREADS)
+    const body = { data: { r0: { ...repositorySettings(), p0: pullRequestNode(1, { reviewThreads: threadPage(hundred(0), 'page-1') }), p1: pullRequestNode(2) } } }
+
+    const results = await mapSnapshotResponse(body, query, { threads: async () => page })
+
+    expect(results.get(changeRequestKey(pull(1)))).toEqual({ code: 'unavailable', message })
+    expect(results.get(changeRequestKey(pull(2)))).toMatchObject({ unresolvedThreads: 2, threadsTruncated: false })
   })
 })
 
@@ -323,6 +395,33 @@ describe('check page mapping', () => {
     [{ data: { node: { contexts: {} } } }, 'unexpected GitHub check page'],
   ])('rejects unavailable or malformed pages', (body, message) => {
     expect(mapCheckPageResponse(body)).toEqual({ ok: false, failure: { code: 'unavailable', message } })
+  })
+})
+
+describe('review thread page mapping', () => {
+  it('validates the next page', () => {
+    const page = threadPage([true, false], 'next')
+    expect(mapThreadPageResponse({ data: { node: { reviewThreads: page } } })).toEqual({ ok: true, page })
+  })
+
+  it.each([
+    [{ data: { node: null } }, 'GitHub review thread page is unavailable'],
+    [{ data: { node: { reviewThreads: threadPage([true]) } }, errors: [{ message: 'Rate limited' }] }, 'Rate limited'],
+    [{ data: { node: { reviewThreads: { nodes: [] } } } }, 'unexpected GitHub review thread page'],
+  ])('rejects unavailable, partial, or malformed pages', (body, message) => {
+    expect(mapThreadPageResponse(body)).toEqual({ ok: false, failure: { code: 'unavailable', message } })
+  })
+})
+
+describe('pull request commit mapping', () => {
+  const answer = (headRefOid: string, baseRefOid: string) => ({ data: { repository: { pullRequest: { headRefOid, baseRefOid } } } })
+
+  it('returns the head and base commits, or nothing for a response that does not name both as commit object names', () => {
+    expect(mapPullRequestCommitsResponse(answer('a'.repeat(40), 'b'.repeat(64)))).toEqual({ head: 'a'.repeat(40), base: 'b'.repeat(64) })
+    expect(mapPullRequestCommitsResponse(answer('a'.repeat(40), 'main'))).toBeUndefined()
+    expect(mapPullRequestCommitsResponse(answer('HEAD', 'b'.repeat(40)))).toBeUndefined()
+    expect(mapPullRequestCommitsResponse({ data: { repository: { pullRequest: null } } })).toBeUndefined()
+    expect(mapPullRequestCommitsResponse('not json')).toBeUndefined()
   })
 })
 

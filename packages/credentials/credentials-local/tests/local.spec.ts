@@ -59,6 +59,32 @@ describe('resolveSpec', () => {
 })
 
 describe('layering and reads', () => {
+  it.each([
+    ['plain', '•'.repeat(5)],
+    ['abcdefghijklmnop', '•'.repeat(16)],
+    ['abcdefghijklmnopq', `abcde${'•'.repeat(8)}nopq`],
+    ['sk-abcdefghijklmn', '•'.repeat(17)],
+    ['sk-abcdefghijklmnop', '•'.repeat(19)],
+    ['sk-abcdefghijklmnopq', `sk-abcde${'•'.repeat(8)}nopq`],
+    ['vendor_abcdefghijklmnopq', `vendor_abcde${'•'.repeat(8)}nopq`],
+    ['sk-proj-abcdefghijklmnopq', `sk-proj-${'•'.repeat(13)}nopq`],
+    ['abc-def_abcdefghijklmnopq', `abc-def_a${'•'.repeat(12)}nopq`],
+    ['abcdefghijklmnop-', '•'.repeat(17)],
+    ['😀'.repeat(16), '•'.repeat(16)],
+    ['😀'.repeat(17), `${'😀'.repeat(5)}${'•'.repeat(8)}${'😀'.repeat(4)}`],
+    [`sk-${'😀'.repeat(17)}`, `sk-${'😀'.repeat(5)}${'•'.repeat(8)}${'😀'.repeat(4)}`],
+    ['😀_abcdefghijklmno😀😀', `😀_abcde${'•'.repeat(8)}no😀😀`],
+  ])('describes only the masked preview for %s', async (value, masked) => {
+    const dir = await tempDir()
+    const ctx = await boot({ path: join(dir, '.credentials.yaml'), watch: false })
+    await ctx.credentials.set(KEY, value)
+    const info = await ctx.credentials.describe(KEY)
+    expect(info).toEqual({ configured: true, source: 'file', writable: true, masked })
+    expect(Array.from(masked)).toHaveLength(Array.from(value).length)
+    expect(JSON.stringify(info)).not.toContain(value)
+    expect(await ctx.credentials.resolve(KEY)).toEqual({ value, source: 'file' })
+  })
+
   it('treats an absent file as an empty writable store', async () => {
     const dir = await tempDir()
     const ctx = await boot({ path: join(dir, '.credentials.yaml'), watch: false })
@@ -73,7 +99,7 @@ describe('layering and reads', () => {
     const ctx = await boot({ path, watch: false })
     expect(await ctx.credentials.resolve(KEY)).toEqual({ value: 'plain', source: 'file' })
     expect(await ctx.credentials.resolve(OTHER)).toEqual({ value: 'with space', source: 'file' })
-    expect(await ctx.credentials.describe(KEY)).toEqual({ configured: true, source: 'file', writable: true })
+    expect(await ctx.credentials.describe(KEY)).toEqual({ configured: true, source: 'file', writable: true, masked: '•'.repeat(5) })
   })
 
   it('lets the managed file win over a non-empty process environment', async () => {
@@ -83,7 +109,7 @@ describe('layering and reads', () => {
     const ctx = await boot({ path, watch: false })
     vi.stubEnv('DSH_CRED_TEST', 'from-env')
     expect(await ctx.credentials.resolve(KEY)).toEqual({ value: 'from-file', source: 'file' })
-    expect(await ctx.credentials.describe(KEY)).toEqual({ configured: true, source: 'file', writable: true })
+    expect(await ctx.credentials.describe(KEY)).toEqual({ configured: true, source: 'file', writable: true, masked: '•'.repeat(9) })
   })
 
   it('treats an empty environment value as absent, falling through to the file', async () => {
@@ -93,7 +119,7 @@ describe('layering and reads', () => {
     const ctx = await boot({ path, watch: false })
     vi.stubEnv('DSH_CRED_TEST', '')
     expect(await ctx.credentials.resolve(KEY)).toEqual({ value: 'stored', source: 'file' })
-    expect(await ctx.credentials.describe(KEY)).toEqual({ configured: true, source: 'file', writable: true })
+    expect(await ctx.credentials.describe(KEY)).toEqual({ configured: true, source: 'file', writable: true, masked: '•'.repeat(6) })
   })
 
   it('fails boot loud when the document exists but cannot be read', async () => {
@@ -131,7 +157,7 @@ describe('layer ladder', () => {
     expect(await ctx.credentials.resolve(KEY)).toEqual({ value: 'stored', source: 'file' })
     // A key sitting in the user's .env does not make the stored one
     // unwritable.
-    expect(await ctx.credentials.describe(KEY)).toEqual({ configured: true, source: 'file', writable: true })
+    expect(await ctx.credentials.describe(KEY)).toEqual({ configured: true, source: 'file', writable: true, masked: '•'.repeat(6) })
     await expect(ctx.credentials.set(KEY, 'rotated')).resolves.toBeUndefined()
     expect(await ctx.credentials.resolve(KEY)).toEqual({ value: 'rotated', source: 'file' })
   })
@@ -145,8 +171,10 @@ describe('layer ladder', () => {
     expect(await ctx.credentials.describe(KEY)).toEqual({ configured: true, source: 'env', writable: true })
     await ctx.credentials.set(KEY, 'stored')
     expect(await ctx.credentials.resolve(KEY)).toEqual({ value: 'stored', source: 'file' })
+    expect(await ctx.credentials.describe(KEY)).toEqual({ configured: true, source: 'file', writable: true, masked: '•'.repeat(6) })
     await ctx.credentials.unset(KEY)
     expect(await ctx.credentials.resolve(KEY)).toEqual({ value: 'from-launch', source: 'env' })
+    expect(await ctx.credentials.describe(KEY)).toEqual({ configured: true, source: 'env', writable: true })
   })
 
   it('serves the user .env only when nothing is stored', async () => {
@@ -230,9 +258,10 @@ describe('layer ladder', () => {
       { source: 'user-env', path: '/home/.dsh/.env', values: { DSH_CRED_TEST: 'from-user-env' } },
     ])
     expect(await ctx.credentials.resolve(KEY)).toEqual({ value: 'stored', source: 'file' })
-    expect(await ctx.credentials.describe(KEY)).toEqual({ configured: true, source: 'file', writable: true })
+    expect(await ctx.credentials.describe(KEY)).toEqual({ configured: true, source: 'file', writable: true, masked: '•'.repeat(6) })
     await expect(ctx.credentials.set(KEY, 'next')).resolves.toBeUndefined()
     expect(await ctx.credentials.resolve(KEY)).toEqual({ value: 'next', source: 'file' })
+    expect(await ctx.credentials.describe(KEY)).toEqual({ configured: true, source: 'file', writable: true, masked: '•'.repeat(4) })
   })
 })
 
@@ -382,7 +411,7 @@ describe('document writes', () => {
     const reread = await boot({ path, watch: false })
     expect(await reread.credentials.resolve(KEY)).toEqual({ value: multiLine, source: 'file' })
     expect(await reread.credentials.resolve(OTHER)).toEqual({ value: mixedQuotes, source: 'file' })
-    expect(await reread.credentials.describe(KEY)).toEqual({ configured: true, source: 'file', writable: true })
+    expect(await reread.credentials.describe(KEY)).toEqual({ configured: true, source: 'file', writable: true, masked: `line ${'•'.repeat(8)} two` })
   })
 
   it('unsets only the owning entry, with its own annotation, and keeps an absent unset silent', async () => {
