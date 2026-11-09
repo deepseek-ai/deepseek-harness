@@ -972,12 +972,13 @@ export class PythonPtcRuntime extends PtcRuntime {
 
   /**
    * Resolve authority, directory, and the configured wall deadline.
-   * @param request - Program inputs and optional resolved sandbox authority; timeout overrides are unsupported.
+   * @param request - Program inputs and optional resolved sandbox authority.
    * @returns Complete inputs for the provider's run method.
-   * @throws When a requested timeout is unsupported, cwd is relative, or the provider is disposed.
+   * @throws When initialization or a timeout override is supplied, cwd is relative, or the provider is disposed.
    */
   resolve(request: PtcRunRequest): PtcRunSpec {
     if (this.disposed) throw new Error('dsh-ptc-runtime-python: resolve() after disposal')
+    if (request.initialization !== undefined) throw new Error('dsh-ptc-runtime-python: initialization is unsupported')
     if (request.timeoutMs !== undefined) throw new Error('dsh-ptc-runtime-python: per-call timeout is unsupported')
     const sandboxPolicy = request.sandboxPolicy ?? this.ctx.sandboxPolicy.resolve()
     const cwd = request.cwd ?? sandboxPolicy.workspaceRoot
@@ -991,6 +992,7 @@ export class PythonPtcRuntime extends PtcRuntime {
    * @returns Captured output, confinement facts, and the program outcome.
    */
   async run(request: PtcRunSpec): Promise<PtcRunResult> {
+    if (request.initialization !== undefined) throw new Error('dsh-ptc-runtime-python: initialization is unsupported')
     if (request.sandboxPolicy === undefined) throw new Error('dsh-ptc-runtime-python: run requires a resolved sandbox policy')
     if (request.timeoutMs !== this.config.maxWallMs) throw new Error('dsh-ptc-runtime-python: unsupported execution timeout')
     if (!isAbsolute(request.cwd)) throw new Error('dsh-ptc-runtime-python: cwd must be absolute')

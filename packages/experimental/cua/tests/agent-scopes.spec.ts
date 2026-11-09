@@ -6,6 +6,9 @@ import AgentPresets from '@deepseek-ai/dsh-agent-preset-registry'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
 import Subprocess from '@deepseek-ai/dsh-subprocess'
+import Sandbox from '@deepseek-ai/dsh-sandbox-local'
+import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
+import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { CuaConfig, installCua } from '../src/index.ts'
@@ -33,7 +36,9 @@ async function setup(presetIds = ['standard', 'ptc']) {
   onTestFinished(() => ctx.fiber.dispose())
   ctx.baseUrl = import.meta.url
   await ctx.plugin(Loader)
-  await mountAgentLoopTestDependencies(ctx)
+  await mountAgentLoopTestDependencies(ctx, { workingDirectory: true })
+  await ctx.plugin(Sandbox)
+  await ctx.plugin(SandboxPolicy, { mode: 'danger-full-access' })
   await mountAgentLoopTestHarness(ctx)
   await ctx.plugin(ComputerUseRegistry)
   await ctx.plugin(Subprocess, [])
@@ -49,7 +54,37 @@ async function setup(presetIds = ['standard', 'ptc']) {
   return { ctx, create }
 }
 
-it('adds and removes CUA for existing and new PTC Agents without changing other presets', async () => {
+it('gives every other composed preset a program tool without changing the shared runtime', async () => {
+  const { ctx, create } = await setup(['standard', 'ptc', 'cordis', 'minimal', 'custom'])
+  const shared = { programFormat: 'function-body', retainsState: false }
+  ctx.provide('ptcRuntime', shared)
+  const mounted = await ctx.plugin(provider, {})
+  for (const preset of ['standard', 'cordis', 'minimal', 'custom']) {
+    const handle = await create(`cua-${preset}`, preset)
+    expect(ctx.tools.schemas(handle.agent).map(tool => tool.name)).toContain('cua_run_code')
+    expect(ctx.tools.get('cua', handle.agent)).toBeUndefined()
+    expect(ctx.tools.get('cua_run_code', handle.agent)?.description).toContain('global cua object is ready')
+    await handle.dispose()
+    expect(ctx.tools.get('cua_run_code', handle.agent)).toBeUndefined()
+  }
+  const uncomposed = await ctx.agents.create({ sessionId: SessionId('cua-uncomposed') })
+  expect(ctx.tools.get('cua_run_code', uncomposed.agent)).toBeUndefined()
+  expect(ctx.tools.get('cua', uncomposed.agent)).toBeUndefined()
+  expect(ctx.get('ptcRuntime')).toMatchObject(shared)
+  await mounted.dispose()
+})
+
+it('keeps explicitly configured global raw-tool registration', async () => {
+  const { ctx, create } = await setup()
+  const mounted = await ctx.plugin(provider, { agentPreset: false })
+  const handle = await create('cua-global', 'standard')
+  expect(ctx.tools.get('cua', handle.agent)).toBeDefined()
+  expect(ctx.tools.get('cua_run_code', handle.agent)).toBeUndefined()
+  await mounted.dispose()
+  expect(ctx.tools.get('cua', handle.agent)).toBeUndefined()
+})
+
+it('selects one CUA transport for existing and new Agents and removes both on unload', async () => {
   const { ctx, create } = await setup()
   const existing = await create('existing', 'ptc')
   const standard = await create('standard', 'standard')
@@ -57,6 +92,9 @@ it('adds and removes CUA for existing and new PTC Agents without changing other 
   const mounted = await ctx.plugin(provider, {})
   await expect.poll(() => ctx.tools.get('cua', existing.agent)).toBeDefined()
   expect(ctx.tools.get('cua', standard.agent)).toBeUndefined()
+  await expect.poll(() => ctx.tools.get('cua_run_code', standard.agent)).toBeDefined()
+  expect(ctx.tools.get('cua_run_code', existing.agent)).toBeUndefined()
+  expect(ctx.get('ptcRuntime')).toBeUndefined()
   expect((await ctx.systemPrompt.assemble({ scope: existing.agent })).sections)
     .toContainEqual(expect.objectContaining({ name: 'computer-use:dsh-cua', text: 'Fixture CUA guidance\n\nMaximum click holdMs: 5000 ms.' }))
   await ctx.agentPresets.select(existing.agent, 'ptc')
@@ -65,13 +103,15 @@ it('adds and removes CUA for existing and new PTC Agents without changing other 
   expect(ctx.tools.get('cua', fresh.agent)).toBeDefined()
   await ctx.agentPresets.select(existing.agent, 'standard')
   await expect.poll(() => ctx.tools.get('cua', existing.agent)).toBeUndefined()
+  await expect.poll(() => ctx.tools.get('cua_run_code', existing.agent)).toBeDefined()
   expect((await ctx.systemPrompt.assemble({ scope: existing.agent })).sections)
-    .not.toContainEqual(expect.objectContaining({ name: 'computer-use:dsh-cua' }))
+    .toContainEqual(expect.objectContaining({ name: 'computer-use:dsh-cua', text: 'Fixture CUA guidance\n\nMaximum click holdMs: 5000 ms.' }))
   await ctx.agentPresets.select(existing.agent, 'ptc')
   await expect.poll(() => ctx.tools.get('cua', existing.agent)).toBeDefined()
   await fresh.dispose()
   expect(ctx.tools.get('cua', fresh.agent)).toBeUndefined()
   await mounted.dispose()
+  expect(ctx.tools.get('cua_run_code', standard.agent)).toBeUndefined()
   expect(ctx.tools.get('cua', existing.agent)).toBeUndefined()
   expect((await ctx.systemPrompt.assemble({ scope: existing.agent })).sections)
     .not.toContainEqual(expect.objectContaining({ name: 'computer-use:dsh-cua' }))
@@ -79,6 +119,30 @@ it('adds and removes CUA for existing and new PTC Agents without changing other 
   await expect.poll(() => ctx.tools.get('cua', existing.agent)).toBeDefined()
   expect(ctx.tools.get('cua', standard.agent)).toBeUndefined()
   await reloaded.dispose()
+})
+
+it('withdraws tools when a runtime dependency unloads and rebinds live Agents after reload', async () => {
+  const { ctx, create } = await setup()
+  await ctx.plugin(provider, {})
+  const standard = await create('cua-dependency-standard', 'standard')
+  const ptc = await create('cua-dependency-ptc', 'ptc')
+  const previous = ctx.tools.get('cua_run_code', standard.agent)
+  expect(previous).toBeDefined()
+  const directoryProvider = [...ctx.registry.get(WorkingDirectory)?.fibers ?? []][0]
+  expect(directoryProvider).toBeDefined()
+  await directoryProvider?.dispose()
+  expect(ctx.tools.get('cua_run_code', standard.agent)).toBeUndefined()
+  expect(ctx.tools.get('cua', ptc.agent)).toBeUndefined()
+  await ctx.plugin(WorkingDirectory)
+  await expect.poll(() => ctx.tools.get('cua_run_code', standard.agent)).toBeDefined()
+  expect(ctx.tools.get('cua_run_code', standard.agent)).not.toBe(previous)
+  expect(ctx.tools.get('cua', ptc.agent)).toBeDefined()
+  await ctx.agentPresets.select(standard.agent, 'ptc')
+  expect(ctx.tools.get('cua_run_code', standard.agent)).toBeUndefined()
+  expect(ctx.tools.get('cua', standard.agent)).toBeDefined()
+  await ctx.agentPresets.select(standard.agent, 'standard')
+  expect(ctx.tools.get('cua_run_code', standard.agent)).toBeDefined()
+  expect(ctx.tools.get('cua', standard.agent)).toBeUndefined()
 })
 
 it('ignores unloaded Session selections and reports a failed live scope update', async () => {

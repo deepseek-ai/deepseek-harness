@@ -132,9 +132,8 @@ it('separates facade options from raw RPC parameters', () => {
   expect(COMMON_GUIDANCE).toContain('raw operation schema')
 })
 
-it('documents facade initialization, emitted observations, and separate key arguments', () => {
-  expect(COMMON_GUIDANCE).toContain('host-provided bridge initialization once')
-  expect(COMMON_GUIDANCE).toContain('not a preinstalled global')
+it('documents emitted observations and key arguments without assuming a transport', () => {
+  expect(COMMON_GUIDANCE).not.toContain('not a preinstalled global')
   expect(COMMON_GUIDANCE).toContain('void await')
   expect(COMMON_GUIDANCE).toContain('do not pack them into a chord string')
   expect(COMMON_GUIDANCE).toContain('perform a left-button double-click')

@@ -11,7 +11,7 @@ Providers install the app/window object API with `installCua`; callers connect t
 
 ## Summary
 
-Inspect and operate applications through retained objects: select an application, read its accessibility tree, capture explicit windows, and dispatch authorized input. Platform providers supply native execution; this library owns the object API, request validation, application consent, and image admission. The external PTC runtime owns variable persistence.
+Inspect and operate applications through retained objects: select an application, read its accessibility tree, capture explicit windows, and dispatch authorized input. Standard, Creator, and other non-PTC presets use `cua_run_code` with an automatically available `cua` object. Persistent PTC uses explicit bridge initialization. Platform providers supply native execution; CUA owns consent and image admission.
 
 ## Table of Contents
 
@@ -30,6 +30,10 @@ Application consent supplies English, Chinese, and Japanese display text from `s
 ## Use this package
 
 Mount the [macOS provider](../cua-macos/README.md) to enable native operations on macOS. External PTC hosts import `connectCua` from `@deepseek-ai/dsh-cua/bridge` and supply the current `tools.cua` binding. Source compositions and native preparation belong to the provider.
+
+`cua_run_code` runs TypeScript in a separate persistent Node environment for each Agent. The global `cua` object is available before the program starts; `tools` contains only `cua`. Call ordinary tools directly outside the program. Use top-level `await` and a final expression for the result; top-level `return` is invalid. The tool accepts the same timeout and sandbox controls as `run_code`. A restarted runtime automatically recreates `cua`, but other variables and selected application objects must be created again.
+
+Configure runtime resources and launch settings through the provider's `runCode.runtime` and program call limits through `runCode.executor`. Runtime execution is fixed to `persistent-in-memory`; `executionMode` and `scriptPersistence` cannot be overridden there. These settings do not change the profile's shared PTC runtime.
 
 Use `cua.getApp(selector)` to select an application; it obtains consent, optionally launches a stopped application in the background, and reads its initial accessibility tree silently when the provider supports application-level accessibility. `cua.listApps` and `cua.getState` list running applications; `cua.findApps(query)` searches installed applications, including stopped ones. `app.activate()`, `app.getWindows()`, and `app.getWindow(windowId)` operate on the selected application; `getWindow` returns the object for screenshots and pointer input. Select an application and one of its windows before any capture or pointer input. Call `app.getAccessibilityTree()` to emit the tree. Within one API instance, the facade keeps one current accessibility snapshot per application handle across app and window objects, including repeated selections; each new read invalidates the previous snapshot. Element operations use the latest snapshot ID, so callers use IDs from the latest tree and do not assume an older ID still identifies the same control. Element IDs are opaque strings.
 
@@ -57,7 +61,7 @@ The page refreshes on entry, window focus, and completed actions. Query failures
 
 System-permission operations affect the computer running DSH. When accessing DSH remotely, complete authorization on that computer.
 
-Enabling from the plugin list or detail page shows setup guidance when system permissions need attention, with **Later** and **Open settings** actions. The detail page provides **Set to PTC** under **Default mode for new sessions**; only this action saves the default. Existing sessions keep their preset. **Use persistent mode** in the **PTC execution mode** row separately enables `ptc-runtime.scriptPersistence` when Script mode is selected; otherwise it saves `ptc-runtime.executionMode: persistent-in-memory`. Switching reloads the shared PTC runtime and may interrupt an active call; subsequent calls retain variables and application objects in memory. Already-persistent runtimes show a disabled **Persistent mode enabled** button.
+Enabling from the plugin list or detail page shows setup guidance when system permissions need attention, with **Later** and **Open settings** actions. Computer Use works in Standard, Creator, and PTC modes. The detail page provides **Set to PTC** under **Default mode for new sessions**; only this action saves the default. Existing sessions keep their preset. **Use persistent mode** in the **PTC execution mode** row separately enables `ptc-runtime.scriptPersistence` when Script mode is selected; otherwise it saves `ptc-runtime.executionMode: persistent-in-memory`. Switching reloads the shared PTC runtime and may interrupt an active call; subsequent calls retain variables and application objects in memory. Already-persistent runtimes show a disabled **Persistent mode enabled** button. Other presets retain their CUA program state separately and do not depend on this setting.
 
 The page lists always-allowed applications and refusals from any session. A refusal in one session does not cancel another session’s grant or prevent a new session from asking. Session-only grants remain effective within their sessions and are omitted from this page. **Revoke** removes the selected application's access and cancels affected work. Input already delivered to an application cannot be undone; observe the application before any further action. **Allow asking again** clears that application’s refusal records across all sessions; the next application selection still requires a new decision.
 
@@ -85,7 +89,11 @@ The permission Remote also exposes `ptcConfiguration()` and `enablePersistentPtc
 
 The provider calls [installCua](src/index.ts) with its prepared helper, connection factory, guidance, and startup capabilities. [NativeClient](src/native-client.ts) owns request correlation, byte limits, cancellation acknowledgement, and failure settlement. The platform connector owns startup and connection cleanup. Its typed startup failures preserve their code and diagnostic through request writes and connection shutdown. The shared executor retains one connection per Agent and joins in-flight image writes during disposal.
 
-`agentPreset` defaults to `ptc`, restricting tools and guidance to Agents bound to that preset. The provider uses the existing `agent/created` and `agent-preset/selected` events and Agent-owned scopes, including Agents already present when it loads. Provider unload and Agent disposal release those registrations. Preset definitions may register after the provider; a preset name filters bound Agents and supplies no tools until a matching Agent exists. Set `agentPreset: false` for global registration in standalone compositions without presets. The Host continues to own permissions, native connections and cancellation; preset definitions remain unchanged.
+Provider unload waits for its CUA programs and native input cleanup to settle before closing connections. Input cleanup failures are reported, and connection disposal still runs. PTC programs using the raw `cua` binding may continue unrelated work after their held input is released.
+
+`agentPreset` defaults to `ptc`: matching Agents receive the raw `cua` tool and PTC guidance; every other composed preset receives only `cua_run_code` and its guidance. This includes Standard, Creator, Minimal, and custom presets. Registration uses `agent/created`, `agent-preset/selected`, and Agent-owned scopes, including Agents already present when the provider loads. Agent disposal removes its registrations and releases its retained environment. Provider unload also disposes the dedicated CUA runtime. Agents without a composed preset receive neither tool. Set `agentPreset: false` to register the raw `cua` tool globally in standalone compositions. The Host owns permissions, native connections, and cancellation; preset definitions remain unchanged.
+
+`cua_run_code` reuses the PTC program-tool factory with one isolated Node runtime owned by the CUA provider. Each Agent has a separate retained process selected by its `stateOwner`. A separate initialization program installs `cua` before model code executes in the same environment, including one-shot escalated runs. The factory binds only the private `cua` operation tool and preserves nested policy checks, guards, logs, cancellation, and screenshot delivery. The private tool is absent from the model's direct tool list.
 
 [The operation schema](src/protocol.ts) is the authority for model parameters and separately declared Host-only fields. Native implementations enforce target identity, window geometry, resource limits, and operating-system access at execution. The permission store owns durable consent separately from the native protocol.
 
@@ -122,11 +130,11 @@ The detail page reads the effective default (`selectedDefault ?? default`) from 
 
 #### What the model sees
 
-Platform providers mount the shared `cua` tool and supply operating instructions. Calls and observations use the same app/window interface and enter normal Session history. Platform guidance is documented by the [macOS provider](../cua-macos/README.md#model-experience).
+With the default preset selection, PTC receives `cua` through its existing `run_code` tool and other composed presets receive `cua_run_code`. Its description states: “The global cua object is ready to use; retain application and window objects across calls.” The program binds only `tools.cua`; ordinary tools remain directly callable. Calls and observations use the same app/window interface and enter normal Session history. The Web card shows the program, nested calls, and screenshots. Platform guidance is documented by the [macOS provider](../cua-macos/README.md#model-experience).
 
 #### Token effect
 
-Operation results and admitted images add model input. Retained JavaScript objects are not serialized into prompts. Duplicate caller printing can repeat observation text.
+The selected tool schema and CUA guidance add model input. Program output, operation results, and admitted images add history; only the CUA binding is described inside the program. Retained JavaScript objects are not serialized into prompts. Duplicate caller printing can repeat observation text.
 
 #### KV Cache effect
 
@@ -138,6 +146,8 @@ Results append to history. Retaining objects does not rewrite previous messages;
 
 - Conversation decisions have no automatic retention limit or deletion when a conversation is removed. Revocation removes permission, while its generation remains to reject older handles and pending approvals.
 - Native behavior and desktop validation are platform-owned; consult each provider for supported applications, input restrictions and measured coverage.
+- `agentPreset` identifies PTC by preset ID, not by executor detection. A custom PTC preset must match that setting to receive the raw `cua` binding.
+- `cua_run_code` state is in memory only and is separate from PTC state. Process loss, Agent disposal, or provider unload discards it; application consent remains independently stored.
 - Persistent variables do not reserve an application across a sequence of operations. Other Agents and the user can change its state. Pointer movement and observations do not restore the previous pointer position; [continuous interaction](../../../.agents/notes/implemented/architecture/2026-10-13-cua-continuous-hover.md) uses no cross-call ownership.
 - Element IDs are opaque strings from the application's current accessibility snapshot. A later read on any window of the same application replaces the current snapshot, so callers must use IDs from the latest tree; an old string may be reused for a different control. Screenshots or pointer input require an explicitly selected window.
 

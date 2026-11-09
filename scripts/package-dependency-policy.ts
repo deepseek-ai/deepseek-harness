@@ -79,6 +79,9 @@ const SAFE_HOST_DEPENDENCY_EXPORTS = {
 const PEER_REQUIRED_HOST_EXPORTS = {
   // Profile settings must match the installed Node provider's configuration schema.
   '@deepseek-ai/dsh-ptc-runtime-node/configuration': ['resolvePersistentExecution'],
+  // CUA mounts the installed provider and shares executor error classes with PTC.
+  '@deepseek-ai/dsh-ptc-runtime-node': ['default'],
+  '@deepseek-ai/dsh-tool-executor-ptc/run-code': ['RunCodeConfig', 'createRunCodeTool'],
   // CUA checks UserQuestionError and preserves AttachmentError from image admission.
   '@deepseek-ai/dsh-attachment': ['admitEncodedImages'],
   '@deepseek-ai/dsh-user-questions': ['UserQuestionError'],

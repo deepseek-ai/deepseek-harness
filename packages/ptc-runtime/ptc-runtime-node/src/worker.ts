@@ -185,7 +185,10 @@ export class ProgramWorker {
     spec.signal?.addEventListener('abort', onAbort, { once: true })
     if (spec.signal?.aborted) onAbort()
     else {
-      try { evaluation.data.code = this.mode.stripTypes(spec.program) } catch (error: unknown) {
+      try {
+        if (spec.initialization !== undefined) evaluation.data.initialization = this.mode.stripTypes(spec.initialization)
+        evaluation.data.code = this.mode.stripTypes(spec.program)
+      } catch (error: unknown) {
         // A parse failure before startup has no process state or authority to retain.
         evaluation.finish({ kind: 'exception', message: messageOf(error) }, undefined, !this.ready)
         return await result.promise

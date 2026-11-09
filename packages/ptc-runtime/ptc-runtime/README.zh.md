@@ -46,6 +46,8 @@ const result = await ctx.ptcRuntime.run(spec)
 
 使用可选的[Node 内存保留模式](../ptc-runtime-node/README.zh.md#persistent-repl)时，跨调用传入同一个 `stateOwner` 对象，并在所有者结束时等待 `release(owner)`。不同对象不会共享环境；省略所有者时使用临时环境。无状态提供方忽略所有权。同一保留环境的调用不能重叠。
 
+可选 `initialization` 在每次程序执行前，使用本次绑定准备同一个环境，包括新建环境。其完成值会被丢弃；日志、截止时间、取消和输出预算与程序共享。失败会阻止程序执行，但不回滚此前产生的效果。调用方必须保证重复初始化安全。不支持的提供方模式在解析时拒绝此选项；支持的语法见 [Node 提供方](../ptc-runtime-node/README.zh.md#persistent-repl)。
+
 ### 可移植地命名绑定
 
 binding-global 与 error-class 名称是语言可移植的：必须匹配 `[A-Za-z_][A-Za-z0-9_]*`，避开每个可移植目标语言的保留字，并避开后端拥有的槽位，因此同一份命名空间列表对每个后端都有效。`$tools`、`lambda` 或 `console` 之类的名称会在运行开始前失败；确切的排除集是 seam 约定的一部分。

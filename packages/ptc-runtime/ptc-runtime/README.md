@@ -46,6 +46,8 @@ Backends expose `language` and `isolation` as diagnostic descriptors; neither gr
 
 For the optional [Node in-memory mode](../ptc-runtime-node/README.md#persistent-repl), pass the same `stateOwner` object across runs and await `release(owner)` at the owner's end. Different object identities never share an environment; omitted owners use a temporary environment. Stateless providers ignore ownership. Calls for one retained owner must not overlap.
 
+Optional `initialization` prepares the same environment before each program with current bindings, including fresh environments. Its completion value is discarded; its logs, deadline, cancellation and output budget are shared with the program. Failure prevents program execution without rolling back earlier effects. Callers make repeated initialization safe. Unsupported provider modes reject this choice during resolution; see the [Node provider](../ptc-runtime-node/README.md#persistent-repl) for supported syntax.
+
 ### Name your bindings portably
 
 Binding-global and error-class names are language-portable: they must match `[A-Za-z_][A-Za-z0-9_]*`, avoid every portable target language's reserved words, and avoid backend-owned slots, so one namespace list is valid against every backend. A name like `$tools`, `lambda`, or `console` fails the run before it starts; the exact exclusion sets are part of the seam contract.

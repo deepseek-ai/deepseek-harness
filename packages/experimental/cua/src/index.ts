@@ -20,11 +20,9 @@ import { ApplicationAuthorizationResult, installCuaAccess } from './access.ts'
 import type { CuaApplicationGrant, CuaApplicationId, CuaSystemPermission } from './access-types.ts'
 import type { CuaAppHandle, CuaOperation, CuaStartupCapabilities } from './types.ts'
 import { ApplicationIcon, AppResult, NativeScreenshotResult, Request, SystemPointerRequest, ScreenshotResult, StateResult, WindowsResult } from './protocol.ts'
-import { CuaConfigFields } from './config.ts'
+import { CuaConfigFields, type CuaRunCodeConfig } from './config.ts'
+import { installCuaTools } from './tool-registration.ts'
 import { CuaCoordinates } from './coordinates.ts'
-import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
-import type {} from '@deepseek-ai/dsh-agent-preset-registry'
-import type { PromptSection } from '@deepseek-ai/dsh-system-prompt'
 import type { ToolDefinition, ToolExecution } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-subprocess'
 import type {} from '@deepseek-ai/dsh-computer-use'
@@ -38,8 +36,10 @@ export type { CuaStartupCapabilities } from './types.ts'
 export interface CuaConfig {
   /** Ask once per live Session before an explicitly requested system-pointer move. */
   requireSystemPointerApproval: boolean
-  /** Register tools for Agents using this preset; defaults to ptc. False enables global registration. */
+  /** Preset receiving raw cua; other composed presets receive cua_run_code. False registers raw cua globally. */
   agentPreset: string | false
+  /** Dedicated persistent program limits, independent of the profile's PTC runtime. */
+  runCode: CuaRunCodeConfig
   /** Legacy grants imported once into profile-scoped storage; later edits are ignored. */
   allowedApps: Array<Omit<CuaApplicationGrant, 'id'> & {
     /** Unbranded digest at the profile configuration boundary; admitted by the Config schema. */
@@ -134,6 +134,13 @@ export interface CuaBackend {
   sendKeyEvent?: (client: NativeClient, params: Record<string, JsonValue>,
     execution: Readonly<ToolExecution>) => Promise<JsonValue>
   /**
+   * Stop this Agent's held input and await native cleanup before its connection closes.
+   * Omit when no input survives individual operations. Unrelated program execution need not settle.
+   * @param agent Agent whose native calls have been cancelled.
+   * @returns Cleanup completion; a rejection is reported while connection disposal still proceeds.
+   */
+  releaseInput?: (agent: Agent) => Promise<void>
+  /**
    * Build native permission parameters for the selected action and Client language.
    * @param method Native permission action.
    * @param permission System privilege selected by the user.
@@ -188,7 +195,8 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       controller.abort()
       return closing ??= Promise.resolve().then(async () => {
         try {
-          await clients.get(agent)?.dispose()
+          try { await backend.releaseInput?.(agent) }
+          finally { await clients.get(agent)?.dispose() }
         } finally {
           await Promise.allSettled([...pending].filter(([, owner]) => owner === agent).map(([task]) => task))
           clients.delete(agent)
@@ -366,53 +374,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         }
       },
     }
-    const prompt: PromptSection = {
-      name: 'computer-use:dsh-cua', order: ctx.systemPrompt.getSectionOrder('TOOL_COMPUTER_USE'),
-      text: () => {
-        const runtime = ctx.get('ptcRuntime')
-        return !runtime?.retainsState ? guidance : `${guidance}
-
-Persistent PTC initialization:
-
-\`\`\`ts
-var { connectCua } = await import(${JSON.stringify(new URL('../lib/bridge.js', import.meta.url).href)});
-var cua = connectCua(() => tools.cua, text => console.log(text));
-\`\`\``
-      },
-    }
-    const register = (scope: Context): void => {
-      scope.tools.register(tool)
-      scope.systemPrompt.section(prompt)
-    }
-    if (config.agentPreset === false) register(ctx)
-    else {
-      const consumer = ctx.inject(['agentPresets'], async (presetCtx) => {
-        const scopes = new Map<Agent, Scope>()
-        const sync = async (agent: Agent): Promise<void> => {
-          const previous = scopes.get(agent)
-          if (presetCtx.agentPresets.composedPreset(agent.ctx) !== config.agentPreset) {
-            scopes.delete(agent)
-            await previous?.dispose()
-            return
-          }
-          if (previous !== undefined) return
-          const scope = createScope(agent.ctx, agent)
-          scopes.set(agent, scope)
-          scope.ctx.effect(() => () => {
-            if (scopes.get(agent) === scope) scopes.delete(agent)
-          }, 'cua.agent-tools')
-          register(scope.ctx)
-        }
-        presetCtx.effect(() => async () => { await Promise.all([...scopes.values()].map(scope => scope.dispose())) }, 'cua.agent-tools')
-        presetCtx.on('agent/created', async ({ agent }) => { await sync(agent) })
-        presetCtx.on('agent-preset/selected', (id) => {
-          const agent = presetCtx.agents.get(id)
-          if (agent !== undefined) void sync(agent).catch((error: unknown) => { presetCtx.logger.warn(`CUA tool scope update failed: ${String(error)}`) })
-        })
-        await Promise.all(presetCtx.agents.list().map(sync))
-      })
-      yield () => consumer.dispose()
-    }
+    yield installCuaTools(ctx, config, tool, guidance)
   }, 'dsh-cua.runtime')
 }
 

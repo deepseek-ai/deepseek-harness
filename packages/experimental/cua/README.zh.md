@@ -11,7 +11,7 @@ kind: "package-reference"
 
 ## 概述
 
-通过保留对象检查并操作应用：选择应用、读取辅助功能树、截取显式窗口并派发已授权输入。平台提供方负责原生执行；本库负责对象 API、请求校验、应用授权和图像接纳。变量持久性由外部 PTC 运行时负责。
+通过保留对象检查并操作应用：选择应用、读取辅助功能树、截取显式窗口并派发已授权输入。标准、创造及其他非 PTC preset 使用 `cua_run_code`，其中自动提供 `cua` 对象。持久 PTC 使用显式 bridge 初始化。平台提供方负责原生执行；CUA 负责授权与图像接纳。
 
 ## 目录
 
@@ -30,6 +30,10 @@ kind: "package-reference"
 ## 使用本包
 
 挂载 [macOS 提供方](../cua-macos/README.zh.md)以在 macOS 上启用原生操作。外部 PTC 宿主从 `@deepseek-ai/dsh-cua/bridge` 导入 `connectCua`，并提供当前 `tools.cua` 绑定。源码组合与原生组件准备由提供方负责。
+
+`cua_run_code` 为每个 agent（智能体）在独立的持久 Node 环境中运行 TypeScript。程序开始前即可使用全局 `cua` 对象；`tools` 中只有 `cua`。其他普通工具在程序外直接调用。使用顶层 `await`，以最后一个表达式作为结果；顶层 `return` 无效。工具接受与 `run_code` 相同的超时和沙箱控制参数。运行时重启会自动重建 `cua`，但其他变量和已选择的应用对象需要重新创建。
+
+通过提供方的 `runCode.runtime` 配置运行时资源和启动设置，通过 `runCode.executor` 配置程序调用上限。运行时固定使用 `persistent-in-memory`，不能在其中覆盖 `executionMode` 和 `scriptPersistence`。这些设置不改变 profile 的共享 PTC 运行时。
 
 使用 `cua.getApp(selector)` 选择应用；它会获取授权、按需在后台启动已停止的应用，并在 provider 支持应用级辅助功能时静默读取初始辅助功能树。`cua.listApps` 和 `cua.getState` 列出运行中的应用；`cua.findApps(query)` 搜索已安装应用，包括未运行的应用。`app.activate()`、`app.getWindows()` 和 `app.getWindow(windowId)` 操作选定的应用；`getWindow` 返回用于截图和指针输入的对象。进行任何截图或指针输入前，必须选择应用及其一个窗口。调用 `app.getAccessibilityTree()` 输出树。在单个 API 实例内，门面按应用句柄保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享它，包括重复选择；每次新读取都会使上一份快照失效。元素操作使用最新快照 ID，因此调用方应使用最新树中的元素 ID，不应假定旧 ID 仍指向同一控件。元素 ID 是不透明字符串。
 
@@ -57,7 +61,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 
 系统权限操作作用于运行 DSH 的电脑。远程访问时，请在该电脑上完成授权。
 
-从插件列表或详情页启用后，系统权限尚未就绪时会显示设置引导，提供“稍后”和“前往设置”。详情页的“新会话默认模式”提供“设为 PTC”按钮，仅点击此按钮才保存默认值。已有会话保留原 preset。“PTC 执行方式”一行的“设为持久化”在选用 Script 模式时单独启用 `ptc-runtime.scriptPersistence`；其他模式下保存 `ptc-runtime.executionMode: persistent-in-memory`。切换会重载共享 PTC 执行器，可能打断当前调用；后续调用在内存中保留变量和应用对象。已经使用持久化模式时，按钮显示“已设为持久化”并禁用。
+从插件列表或详情页启用后，系统权限尚未就绪时会显示设置引导，提供“稍后”和“前往设置”。标准、创造和 PTC 模式均可使用 Computer Use。详情页的“新会话默认模式”提供“设为 PTC”按钮，仅点击此按钮才保存默认值。已有会话保留原 preset。“PTC 执行方式”一行的“设为持久化”在选用 Script 模式时单独启用 `ptc-runtime.scriptPersistence`；其他模式下保存 `ptc-runtime.executionMode: persistent-in-memory`。切换会重载共享 PTC 执行器，可能打断当前调用；后续调用在内存中保留变量和应用对象。已经使用持久化模式时，按钮显示“已设为持久化”并禁用。其他 preset 单独保留自己的 CUA 程序状态，不依赖此设置。
 
 页面展示“始终允许的应用”和“不允许访问的应用”。后者汇总任一会话的拒绝记录，不取消其他会话已有的授权，也不阻止新会话询问授权。会话授权仍在对应会话中生效，详情页不展示这类应用。“撤销”会移除对应应用的访问许可并取消相关操作。已发送到应用的输入无法撤回，继续操作前需重新观察应用。“允许再次询问”清除该应用在所有会话中的拒绝记录；下次选择应用时仍需用户重新决定。
 
@@ -85,7 +89,11 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 
 提供方将准备好的 helper、连接工厂、指引和启动能力传给 [installCua](src/index.ts)。[NativeClient](src/native-client.ts) 负责请求关联、字节上限、取消确认和失败处理。平台连接器负责启动和连接清理。其带类型的启动失败在请求写入和连接关闭时保留错误码及诊断。共享执行器为每个 Agent 保留一个连接，并在销毁时等待进行中的图像写入。
 
-`agentPreset` 默认为 `ptc`，将工具和指引限制到绑定该 preset 的 Agent。提供方使用现有 `agent/created`、`agent-preset/selected` 事件及 Agent 拥有的作用域，也处理启用前已存在的 Agent。提供方卸载和 Agent 销毁都会释放这些注册。preset 定义可以晚于提供方注册；名称用于筛选已绑定的 Agent，在匹配的 Agent 出现前不提供工具。不使用 preset 的独立组合可设置 `agentPreset: false` 来全局注册。Host 仍拥有权限、本机连接和取消操作，preset 定义保持不变。
+提供方卸载时，先等待自己持有的 CUA 程序及原生输入清理结束，再关闭连接。输入清理失败会被报告，连接释放仍会执行。使用原始 `cua` 绑定的 PTC 程序在释放其持有的输入后，可以继续执行其他工作。
+
+`agentPreset` 默认为 `ptc`：匹配的 Agent 获得原始 `cua` 工具和 PTC 指引，其他已组合的 preset 只获得 `cua_run_code` 及其指引，包括标准、创造、极简和自定义 preset。注册使用 `agent/created`、`agent-preset/selected` 事件和 Agent 拥有的作用域，也处理提供方加载前已存在的 Agent。Agent 销毁会移除其注册并释放保留环境，提供方卸载还会释放专用 CUA 运行时。未组合 preset 的 Agent 不获得这两个工具。在独立组合中设置 `agentPreset: false` 可全局注册原始 `cua` 工具。Host 负责权限、本机连接和取消；preset 定义保持不变。
+
+`cua_run_code` 复用 PTC 程序工具工厂，由 CUA 提供方持有一个隔离的 Node 运行时。每个 Agent 通过自己的 `stateOwner` 选择独立的保留进程。独立的初始化程序在同一环境中先安装 `cua`，再执行模型代码；单次提权执行也遵守此顺序。工厂只绑定私有 `cua` 操作工具，保留嵌套策略检查、guard、日志、取消和截图交付。私有工具不会出现在模型可直接调用的工具列表中。
 
 [操作 schema](src/protocol.ts) 定义模型参数，并单独声明 Host 专用字段。原生实现在执行时检查目标身份、窗口几何、资源上限和操作系统访问条件。授权存储独立于原生协议保存持久许可。
 
@@ -122,11 +130,11 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 
 #### 模型可见内容
 
-平台提供方挂载共享的 `cua` 工具并提供操作指引。调用和观察使用同一套应用与窗口接口，进入正常 Session 历史。平台指引见 [macOS 提供方](../cua-macos/README.zh.md#model-experience)。
+默认 preset 配置下，PTC 通过已有 `run_code` 工具获得 `cua`，其他已组合的 preset 获得 `cua_run_code`。其描述说明：“The global cua object is ready to use; retain application and window objects across calls.” 程序只绑定 `tools.cua`，普通工具仍可直接调用。调用和观察使用同一套应用与窗口接口，进入正常 Session 历史。Web 卡片显示程序、嵌套调用和截图。平台指引见 [macOS 提供方](../cua-macos/README.zh.md#model-experience)。
 
 #### Token 影响
 
-操作结果和接纳的图像增加模型输入。保留的 JavaScript 对象不会序列化进提示词。调用方重复打印会重复观察文本。
+选用的工具 schema 和 CUA 指引增加模型输入。程序输出、操作结果和接纳的图像增加历史；程序内只描述 CUA 绑定。保留的 JavaScript 对象不会序列化进提示词。调用方重复打印会重复观察文本。
 
 #### KV Cache 影响
 
@@ -138,6 +146,8 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 
 - 会话决定没有自动保留期限，也不会随对话删除而自动清理。撤销会移除许可，但保留撤销代次，用于拒绝旧句柄和先前尚未完成的审批。
 - 原生行为和桌面验证由各平台负责；支持的应用、输入限制和实测覆盖范围见对应提供方文档。
+- `agentPreset` 按 preset ID 识别 PTC，不检测执行器。自定义 PTC preset 必须与该设置匹配，才能获得原始 `cua` 绑定。
+- `cua_run_code` 状态仅保存在内存中，且独立于 PTC 状态。进程丢失、Agent 销毁或提供方卸载都会丢弃它；应用授权仍独立保存。
 - 持久变量不会在一组连续操作期间独占应用。其他 Agent 和用户可能改变其状态。指针移动和观察不恢复先前的鼠标位置；[连续交互](../../../.agents/notes/implemented/architecture/2026-10-13-cua-continuous-hover.zh.md)不分配跨调用所有权。
 - 元素 ID 是应用当前辅助功能快照中的不透明字符串。之后读取同一应用的任一窗口会替换当前快照，因此调用方必须使用最新树中的 ID；旧字符串可能被复用于另一个控件。截图或指针输入要求显式选择窗口。
 

@@ -70,6 +70,9 @@ class NodeExecution {
    * @returns Resolved inputs with the selected file policy.
    */
   resolve(request: PtcRunRequest): PtcRunSpec {
+    if (request.initialization !== undefined && this.config.executionMode !== 'persistent-in-memory') {
+      throw new Error('ptc-runtime-node: initialization requires persistent-in-memory execution')
+    }
     const sandboxPolicy = request.sandboxPolicy ?? this.ctx.sandboxPolicy.resolve()
     const cwd = request.cwd ?? sandboxPolicy.workspaceRoot
     if (!isAbsolute(cwd)) throw new Error(`${this.mode.retainsState ? 'persistent PTC' : 'ptc-runtime-node'}: cwd must be absolute`)
@@ -82,6 +85,9 @@ class NodeExecution {
    * @returns Captured logs, JSON completion, or a structured execution failure.
    */
   async run(spec: PtcRunSpec): Promise<PtcRunResult> {
+    if (spec.initialization !== undefined && this.config.executionMode !== 'persistent-in-memory') {
+      throw new Error('ptc-runtime-node: initialization requires persistent-in-memory execution')
+    }
     if (spec.sandboxPolicy === undefined) throw new Error('ptc-runtime-node: run requires a resolved sandbox policy')
     if (!isAbsolute(spec.cwd) || (spec.timeoutMs !== null && (!Number.isFinite(spec.timeoutMs) || spec.timeoutMs <= 0 || spec.timeoutMs > this.config.maxTimeoutMs))) throw new Error('ptc-runtime-node: run requires resolved cwd and timeout')
     const bindings = validateBindings(spec)

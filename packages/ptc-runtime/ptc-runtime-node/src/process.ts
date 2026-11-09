@@ -133,11 +133,24 @@ export async function runNodeMain(
               })
             }
           }
-          evaluator.evaluate(data.code, (result) => {
+          const programEvaluator = evaluator
+          const finish: Parameters<ProgramEvaluator['evaluate']>[1] = (result) => {
             if (!evaluation.active) return
             if (evaluation.revoked) { evaluation.finish({}); return }
             evaluation.finish(result.ok ? prepareCompletion(result.value, logs.remainingOutputBytes(), data.maxOutputBytes)
               : prepareException(result.error, logs.remainingOutputBytes(), data.maxOutputBytes))
+          }
+          const runProgram = (): void => {
+            try { programEvaluator.evaluate(data.code, finish) } catch (error: unknown) { finish({ ok: false, error }) }
+          }
+          if (data.initialization === undefined) runProgram()
+          else programEvaluator.evaluate(data.initialization, (result) => {
+            if (!result.ok || !acceptsCalls(evaluation)) { finish(result); return }
+            if (logs.overflowed) {
+              evaluation.finish({ error: { kind: 'output-limit', message: `outer output exceeded ${data.maxOutputBytes} bytes` } })
+              return
+            }
+            runProgram()
           })
         } catch (error: unknown) {
           evaluation.finish(prepareException(error, logs.remainingOutputBytes(), data.maxOutputBytes))

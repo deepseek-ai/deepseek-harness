@@ -84,6 +84,9 @@ export class LogBuffer {
     this.sink(text)
   }
 
+  /** Whether captured text has exceeded the shared output budget. */
+  get overflowed(): boolean { return this.truncated }
+
   /** Remaining exact JSON-byte budget for the completion value or failure message. */
   remainingOutputBytes(): number {
     return this.maxBytes - this.bytes

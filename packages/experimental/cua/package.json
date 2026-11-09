@@ -99,7 +99,8 @@
     "@deepseek-ai/dsh-user-questions": "workspace:*",
     "@deepseek-ai/dsh-attachment": "workspace:*",
     "@deepseek-ai/dsh-scope": "workspace:*",
-    "@deepseek-ai/dsh-ptc-runtime-node": "workspace:*"
+    "@deepseek-ai/dsh-ptc-runtime-node": "workspace:*",
+    "@deepseek-ai/dsh-tool-executor-ptc": "workspace:*"
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "workspace:~",
@@ -111,6 +112,8 @@
   },
   "devDependencies": {
     "@deepseek-ai/dsh-working-directory": "workspace:*",
+    "@deepseek-ai/dsh-tool-executor-native": "workspace:*",
+    "@deepseek-ai/dsh-tool-executor-ptc": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/cordis-plugin-include": "workspace:~",
     "@deepseek-ai/cordis-plugin-loader": "workspace:~",

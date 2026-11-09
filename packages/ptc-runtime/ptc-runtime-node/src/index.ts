@@ -59,8 +59,9 @@ export class NodePtcRuntime extends PtcRuntime {
 
   /**
    * Resolve directory, deadline and file policy for the selected execution mode.
-   * @param request - Program, bindings, optional cwd/deadline, and resolved authority.
+   * @param request - Program, optional initialization, bindings, cwd/deadline, and resolved authority.
    * @returns Complete execution inputs with a capped numeric budget or an explicit null deadline.
+   * @throws When initialization is supplied outside persistent-in-memory mode, or an execution choice is invalid.
    */
   resolve(request: PtcRunRequest): PtcRunSpec {
     if (this.disposed) {

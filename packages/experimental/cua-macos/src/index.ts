@@ -61,7 +61,7 @@ export const Config = Schema.object({
  * @returns Completion after native preparation and tool registration.
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
-  const backend = { createChannel: createSharedNativeChannel, sendKeyEvent: installHeldKeys(ctx),
+  const backend = { createChannel: createSharedNativeChannel, ...installHeldKeys(ctx),
     guidance: GUIDANCE, capabilities: CAPABILITIES,
     permissionParameters: createPermissionParameters(config.permissionPollIntervalMs) }
   if (config.helperPath !== undefined) {
