@@ -34,7 +34,7 @@ export class OutputLedger {
     return { output, error }
   }
 
-  /** Build the explicit output-limit failure while retaining a fitting prefix of the final log. */
+  /** Build the explicit output-limit failure while retaining a fitting ordered output prefix. */
   limit(output: PtcOutput[]): PtcRunResult {
     const fullMessage = this.overflowMessage ?? `outer output exceeded ${this.maxBytes} bytes`
     // The fixed diagnostic is ASCII, so every character is one byte plus the quotes.
@@ -43,17 +43,17 @@ export class OutputLedger {
     let retainedBytes = 2
     const logBudget = this.maxBytes - messageBytes
     for (const entry of output) {
-      if (entry.type === 'image') continue
-      const text = entry.text
       const separatorBytes = retained.length > 0 ? 1 : 0
       const availableBytes = logBudget - retainedBytes - separatorBytes
-      const stringBytes = jsonStringBytesUpTo(text, availableBytes)
-      if (stringBytes !== undefined) {
-        retained.push({ type: 'text', text })
-        retainedBytes += stringBytes + separatorBytes
+      const bytes = entry.type === 'text' ? jsonStringBytesUpTo(entry.text, availableBytes)
+        : jsonValueBytesUpTo({ ...entry, attachment: { ...entry.attachment } }, availableBytes)
+      if (bytes !== undefined) {
+        retained.push(entry)
+        retainedBytes += bytes + separatorBytes
         continue
       }
-      const prefix = truncateJsonStringBytes(text, availableBytes)
+      if (entry.type === 'image') break
+      const prefix = truncateJsonStringBytes(entry.text, availableBytes)
       if (prefix.length > 0) {
         const prefixBytes = jsonStringBytesUpTo(prefix, availableBytes)
         /* v8 ignore next -- truncateJsonStringBytes guarantees its returned prefix fits the same budget. */

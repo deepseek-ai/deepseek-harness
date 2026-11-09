@@ -42,3 +42,29 @@ it('charges ordered image descriptors and text against one budget', () => {
   expect(multiple.admit(entry, [])).toBe(true)
   expect(multiple.admit(entry, [])).toBe(true)
 })
+
+it('retains a fitting ordered image prefix with the overflow diagnostic', () => {
+  const image: PtcOutput = { type: 'image', attachment: {
+    attachmentId: AttachmentId('sha256:image'), mediaType: 'image/png', bytes: 64, width: 8, height: 4,
+  } }
+  const before: PtcOutput = { type: 'text', text: 'before' }
+  const after: PtcOutput = { type: 'text', text: 'after' }
+  const maxBytes = Buffer.byteLength(JSON.stringify(['before', image])) + Buffer.byteLength(JSON.stringify('limit'))
+  const ledger = new OutputLedger(maxBytes, 'limit')
+  const output: PtcOutput[] = []
+  expect(ledger.admit(before, output)).toBe(true)
+  expect(ledger.admit(image, output)).toBe(true)
+  for (const result of [
+    ledger.limit([...output, after]),
+    ledger.success(output, 'x'.repeat(maxBytes)),
+    ledger.failure(output, { kind: 'exception', message: 'x'.repeat(maxBytes) }),
+  ]) {
+    expect(result).toEqual({ output: [before, image], error: { kind: 'output-limit', message: 'limit' } })
+    const bytes = Buffer.byteLength(JSON.stringify(result.output.map(block => block.type === 'text' ? block.text : block)))
+      + Buffer.byteLength(JSON.stringify(result.error!.message))
+    expect(bytes).toBe(maxBytes)
+  }
+  expect(new OutputLedger(maxBytes - 1, 'limit').limit([before, image, after])).toEqual({
+    output: [before], error: { kind: 'output-limit', message: 'limit' },
+  })
+})

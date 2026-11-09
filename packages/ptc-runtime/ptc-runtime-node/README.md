@@ -115,7 +115,7 @@ Omitting `timeoutMs` uses the configured elapsed default; numeric requests are v
 
 ### Failures
 
-Program parse errors and thrown exceptions are `exception`; deadline expiry is `timeout`; cancellation is `abort`; unparsable or oversized control traffic and invalid program messages are `protocol`; unavailable confinement is `sandbox-unavailable`; early process exit, lost control transport or failed managed cleanup is `worker-exit`. Control I/O failures retain the transport diagnostic alongside the observed process exit status. The substrate-independent failure name remains `worker-exit` for process providers. When completion capture is enabled, lossy values are `invalid-output`, and an oversized outer result is `output-limit`, retaining the fitting log prefix. Invalid or unsupported options and calls after disposal reject as caller misuse.
+Program parse errors and thrown exceptions are `exception`; deadline expiry is `timeout`; cancellation is `abort`; unparsable or oversized control traffic and invalid program messages are `protocol`; unavailable confinement is `sandbox-unavailable`; early process exit, lost control transport or failed managed cleanup is `worker-exit`. Control I/O failures retain the transport diagnostic alongside the observed process exit status. The substrate-independent failure name remains `worker-exit` for process providers. When completion capture is enabled, lossy values are `invalid-output`, and an oversized outer result is `output-limit`, retaining a fitting ordered text and image prefix alongside the diagnostic. Invalid or unsupported options and calls after disposal reject as caller misuse.
 
 -----
 
@@ -233,7 +233,7 @@ These limits qualify the execution guarantees and retained output.
 - **Bindings are bounded at transport admission** — control limits do not bound the memory a host binding allocates while producing its result.
 - **Preinstalled bootstraps require a compatible protocol revision** — readiness rejects a missing or mismatched revision before dispatching code. Upgrade `launch.bootstrapPath` with the host; the runtime does not install remote bootstrap updates.
 - **Image references live with the process** — every acquired image retains host metadata until the process terminates or its owner is released, including images that the program never displays. Long capture loops in retained environments accumulate these references.
-- **Image discovery traverses beyond the text preview** — object text uses depth 4, at most 100 array entries and 10,000 characters per string. Binary views render as text previews. Image discovery follows enumerable data properties through other containers, including positions omitted from the text preview. Pass selected images directly with labels when their association must be explicit.
+- **Image discovery traverses beyond the text preview** — object text uses depth 4, at most 100 array entries and 10,000 characters per string. Binary views and Proxies render as text previews without image discovery. Image discovery follows enumerable data properties through other containers, including positions omitted from the text preview. Pass selected images directly with labels when their association must be explicit.
 
 <a id="dev-note"></a>
 ### Dev Note

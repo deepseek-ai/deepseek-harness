@@ -12,6 +12,7 @@ import { decodePtcJsonWire, encodePtcJsonWire, snapshotPtcJsonValue, type PtcIma
 const CapturedError = Error
 const isNativeError = types.isNativeError
 const isArrayBufferView = types.isArrayBufferView
+const isProxy = types.isProxy
 const capturedObjectCreate = Object.create
 const capturedObjectDefineProperty = Object.defineProperty
 const capturedObjectKeys = Object.keys
@@ -124,7 +125,7 @@ export function makeInspect(
         if (current === null || typeof current !== 'object') continue
         const id = images.get(current)
         if (id !== undefined) { nested.push(id); continue }
-        if (isArrayBufferView(current)) continue
+        if (isArrayBufferView(current) || isProxy(current)) continue
         if (seen.has(current)) continue
         seen.add(current)
         for (const key of capturedObjectKeys(current).reverse()) {

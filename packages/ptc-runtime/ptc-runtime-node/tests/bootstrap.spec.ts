@@ -52,6 +52,25 @@ describe('makeInspect', () => {
     expect(selected).toEqual(['image'])
   })
 
+  it('previews proxies without invoking their enumeration traps', () => {
+    const image = Object.freeze({ path: '/image.png', width: 8, height: 4 })
+    const images = new WeakMap<object, string>([[image, 'image']])
+    const revoked = Proxy.revocable({}, {})
+    revoked.revoke()
+    const ownKeys = vi.fn(() => { throw new Error('enumeration trap') })
+    const getOwnPropertyDescriptor = vi.fn(() => { throw new Error('descriptor trap') })
+    const proxy = new Proxy({ image }, { ownKeys, getOwnPropertyDescriptor })
+    const text: string[] = []
+    const selected: string[] = []
+    const inspect = makeInspect({ push: line => text.push(line) }, images, id => selected.push(id))
+    inspect('before', { revoked: revoked.proxy, proxy, image }, 'after')
+    expect(text[0]).toContain('<Revoked Proxy>')
+    expect(text.at(-1)).toBe('after')
+    expect(selected).toEqual(['image'])
+    expect(ownKeys).not.toHaveBeenCalled()
+    expect(getOwnPropertyDescriptor).not.toHaveBeenCalled()
+  })
+
   it('emits registered images in argument order, including nested images and cyclic containers', () => {
     const one = Object.freeze({ path: '/one.png', width: 8, height: 4 })
     const two = Object.freeze({ path: '/two.png', width: 4, height: 8 })

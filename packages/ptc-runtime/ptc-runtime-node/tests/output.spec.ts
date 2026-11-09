@@ -43,6 +43,27 @@ describe.each(modes)('program output in $executionMode with retention $scriptPer
     expect(result.output.filter(block => block.type === 'text').map(block => block.text)[0]!.length).toBeLessThan(2_000)
   })
 
+  it('previews revoked and throwing proxies without interrupting the program', async () => {
+    const { run } = await setup()
+    const result = await run(`
+      const revoked = Proxy.revocable({}, {});
+      revoked.revoke();
+      const proxy = new Proxy({ value: 42 }, {
+        ownKeys() { throw new Error('enumeration trap'); },
+        getOwnPropertyDescriptor() { throw new Error('descriptor trap'); },
+      });
+      inspect('before', revoked.proxy, proxy);
+      inspect('after');
+    `)
+    expect(result.error).toBeUndefined()
+    expect(result.output).toHaveLength(2)
+    const preview = result.output[0]
+    if (preview?.type !== 'text') throw new Error('Expected the proxy preview')
+    expect(preview.text).toContain('before <Revoked Proxy>')
+    expect(preview.text).toContain('value: 42')
+    expect(result.output[1]).toEqual({ type: 'text', text: 'after' })
+  })
+
   it('emits selected images among text and objects and preserves immutable image properties', async () => {
     const { runtime } = await setup()
     const before = new PtcImage('/images/before.png', { attachmentId: AttachmentId('sha256:before'), mediaType: 'image/png', bytes: 64, width: 8, height: 4 })
@@ -108,7 +129,7 @@ describe.each(modes)('program output in $executionMode with retention $scriptPer
     await runtime.release(stateOwner)
   })
 
-  it('retains a text prefix when output overflows after an image', async () => {
+  it('retains an ordered text and image prefix when output overflows', async () => {
     const { runtime } = await mountRuntime(new Context(), { ...mode, maxOutputBytes: 256 })
     const image = new PtcImage('/images/selected.png', { attachmentId: AttachmentId('sha256:selected'), mediaType: 'image/png', bytes: 64, width: 8, height: 4 })
     const result = await runtime.run(runtime.resolve({
@@ -118,7 +139,8 @@ describe.each(modes)('program output in $executionMode with retention $scriptPer
     }))
     expect(result.error?.kind).toBe('output-limit')
     expect(result.output[0]).toEqual({ type: 'text', text: 'before' })
-    expect(result.output.every(block => block.type === 'text')).toBe(true)
+    expect(result.output[1]).toEqual({ type: 'image', attachment: image.attachment })
+    expect(result.output[2]).toEqual({ type: 'text', text: expect.stringMatching(/^x+$/) as string })
   })
 
   it('bounds explicitly inspected image descriptors while allowing uninspected images', async () => {
