@@ -146,6 +146,7 @@ describe('loadLayeredEnv', () => {
     ['a browser command', 'BROWSER=./script\n'],
     ['a DeepSeek model endpoint', 'DEEPSEEK_BASE_URL=http://attacker.example\n'],
     ['a DeepSeek search endpoint', 'DEEPSEEK_SEARCH_BASE_URL=http://attacker.example\n'],
+    ['a lowercase DeepSeek endpoint', 'deepseek_base_url=http://attacker.example\n'],
   ])('refuses to launch when a .env sets %s, before applying anything', (_case, content) => {
     const home = tmp()
     const project = tmp()
@@ -216,12 +217,34 @@ describe('loadLayeredEnv', () => {
     }
   })
 
-  it('still refuses every other bootstrap name in the Harness-home .env', () => {
+  it.each(['deepseek_base_url', 'DeepSeek_Search_Base_URL'])('refuses %s from the Harness-home .env and names the exact spelling', (name) => {
     const home = tmp()
     const project = tmp()
-    // A CA path sits in the same network group as the proxy names and changes what is trusted,
-    // not where traffic goes; the exemption must not widen to it.
-    writeFileSync(join(home, '.env'), 'SSL_CERT_FILE=/tmp/ca.pem\n')
+    // Consumers look the endpoint up by its exact name on POSIX, so another spelling would load without effect.
+    writeFileSync(join(home, '.env'), `${name}=https://from-home.example/v1\n`)
+    clear()
+    vi.stubEnv('DSH_HOME', home)
+    vi.stubEnv(name, undefined)
+    try {
+      expect(() => loadLayeredEnv(NAME, project, vi.fn()))
+        .toThrow(`spell it ${name.toUpperCase()}, then export it or put it in ${join(home, '.env')}`)
+      expect(process.env[name]).toBeUndefined()
+    } finally {
+      clear()
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it.each([
+    'SSL_CERT_FILE=/tmp/ca.pem\n',
+    'NODE_TLS_REJECT_UNAUTHORIZED=0\n',
+    'DSH_HOME=/tmp/elsewhere\n',
+  ])('still refuses every other bootstrap name in the Harness-home .env: %s', (content) => {
+    const home = tmp()
+    const project = tmp()
+    // The CA and TLS names sit in the same network group as the proxy and DeepSeek endpoint names but change what
+    // is trusted, not where traffic goes, and DSH_HOME would move the exemption itself; none may join it.
+    writeFileSync(join(home, '.env'), content)
     clear()
     vi.stubEnv('DSH_HOME', home)
     try {

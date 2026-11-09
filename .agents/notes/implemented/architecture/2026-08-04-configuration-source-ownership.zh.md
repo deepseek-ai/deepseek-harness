@@ -43,7 +43,7 @@ inherited process environment      (read-only, wins)
 
 继承环境优先，因为 `DEEPSEEK_API_KEY=… dsh`、CI 机密与容器 `-e` 是运维必须能按次施加、且无需改动机器状态的那一种覆盖；而它无法从进程内部修改，就必须*可见地*只读。配置本应只携带*引用*——解析哪个名字——该名字本身遵循上面的非机密顺序。
 
-**harness 被启动于其中的项目默认可信，且不做询问。** 一个 checkout 可以携带自己的 endpoint、自己的普通变量和自己的密钥；密钥排在受管存储之下，因此通过 Models 页存下的密钥绝不会被 checkout 中恰好带有的那一个顶掉。`LaunchEnvironmentSnapshot.getFrom(name, sources)` 仍然只搜索调用方点名的层，省略某层仍是拒绝而不是降级——该机制供要求某一层不可达的决策使用；本决策包含项目层。
+**harness 被启动于其中的项目默认可信，且不做询问。** 一个 checkout 可以携带自己的普通变量和自己的密钥，但不能设置下一段列出的启动专用变量名，其中包括 DeepSeek 端点；密钥排在受管存储之下，因此通过 Models 页存下的密钥绝不会被 checkout 中恰好带有的那一个顶掉。`LaunchEnvironmentSnapshot.getFrom(name, sources)` 仍然只搜索调用方点名的层，省略某层仍是拒绝而不是降级——该机制供要求某一层不可达的决策使用；本决策包含项目层。
 
 **信任不延伸到改变 harness 本身。** `loadLayeredEnv` 会在加载时、且在物化任何内容之前，拒绝任何设置了下列变量的 `.env`：决定进程如何启动的（`PATH`、`SHELL`、`NODE_OPTIONS`、`LD_PRELOAD`）、决定由哪个环境程序处理一项操作的（`EDITOR`、`PAGER`、`BROWSER`）、决定运行时在执行被要求运行的程序之前先执行哪些代码的（`BASH_ENV`、`PERL5OPT`、`PYTHONSTARTUP`、`RUBYOPT`、`JAVA_TOOL_OPTIONS`、Git 的钩子命令）、决定模型可见指令从哪里加载的（整个 `DSH_*` 命名空间、`HOME`、`XDG_*`），以及决定网络如何访问以及如何建立信任的（proxy、CA 与 DeepSeek 端点变量）。匹配不区分大小写，因此 `https_proxy` 不是绕过手段。有两项豁免从 `$DSH_HOME/.env` 接受变量名——没有任何 `.env` 能挪动该文件——但仍拒绝来自调用目录文件的同名变量：四个代理名，记录在[代理策略笔记](2026-08-27-outbound-proxy-policy.zh.md)中；以及 `DEEPSEEK_BASE_URL` 与 `DEEPSEEK_SEARCH_BASE_URL`。这两个端点变量名决定携带用户 DeepSeek 凭据的模型请求与搜索请求发往何处。同一 home 中的 profile patch 本就能以插件 `baseURL` 字段设置这些端点，因此从 home 文件接受它们，不会给能写入该目录的一方任何它原本没有的能力。
 
