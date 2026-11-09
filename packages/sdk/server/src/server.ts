@@ -18,6 +18,7 @@ import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
 import { admitEncodedImages, type EncodedImageAttachment, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { createUserMessage, type ReasoningEffortId, type ContentBlock, type LlmRuntime } from '@deepseek-ai/dsh-llm'
 import type { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import { canonicalClientTimeZone } from '@deepseek-ai/dsh-util-time'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import type {} from '@deepseek-ai/dsh-user-approval'
 import type {} from '@deepseek-ai/dsh-permission-presets'
@@ -47,6 +48,13 @@ import type {
   SubagentStartedNotification,
 } from '@deepseek-ai/dsh-sdk-protocol'
 
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    /** SDK prompt with its canonical user time zone, when one was reported or sampled. */
+    'sdk-user': { kind: 'user'; clientTimeZone?: string }
+  }
+}
+
 interface SessionRecord {
   handle: AgentHandle
   /** Latest live failure not superseded by a subsequently committed terminal. */
@@ -71,6 +79,26 @@ async function durablePromptContent(ctx: Context, blocks: SessionPromptParams['c
   return blocks.map(block => encodedImage(block)
     ? { type: 'image', attachment: refs[next++] as ImageAttachmentRef }
     : block)
+}
+
+/**
+ * Resolve the canonical zone recorded on one SDK prompt.
+ * An explicit zone must canonicalize; an omitted zone samples this process at call time.
+ * @param requested - caller-reported zone, or undefined to sample the process zone.
+ * @returns the canonical zone, or undefined when the sampled process zone is absent or unusable.
+ * @throws TypeError naming the rejected explicit value and the accepted formats.
+ */
+function promptTimeZone(requested: string | undefined): string | undefined {
+  if (requested !== undefined) {
+    const canonical = canonicalClientTimeZone(requested)
+    if (canonical === undefined) {
+      throw new TypeError(`timeZone must be UTC or a valid IANA Area/Location name: ${JSON.stringify(requested)}`)
+    }
+    return canonical
+  }
+  // ICU reports an unknown TZ as undefined, Etc/Unknown, or an offset such as +00:00 for TZ=GMT.
+  const sampled = new Intl.DateTimeFormat().resolvedOptions().timeZone as string | undefined
+  return sampled === undefined ? undefined : canonicalClientTimeZone(sampled)
 }
 
 /** Deployment-specific status mapping for SDK turn and subagent outcomes. */
@@ -270,11 +298,14 @@ export class HarnessSdkJsonRpcServer {
 
   /**
    * Queue one identified prompt without assigning later activity to it.
-   * @param params - target session and user content.
+   * The message records the explicit or sampled canonical zone; an unusable sampled zone records none.
+   * @param params - target session, user content, and optional user time zone.
    * @returns the durable message identity.
+   * @throws TypeError before Session creation when an explicit time zone is not UTC or IANA Area/Location.
    */
   async prompt(params: SessionPromptParams): Promise<SessionPromptResult> {
     if (!this.initialized) throw new Error('SDK server is not initialized')
+    const clientTimeZone = promptTimeZone(params.timeZone)
     const rec = await this.getOrCreateSession(params.sessionId)
     this.lifetime.signal.throwIfAborted()
     // An agent-loop-only reload disposes the loop's agents while this record
@@ -288,7 +319,7 @@ export class HarnessSdkJsonRpcServer {
     this.assertLiveAgent(rec, params.sessionId)
     const message = createUserMessage({
       content,
-      source: { kind: 'user' },
+      source: clientTimeZone === undefined ? { kind: 'user' } : { kind: 'user', clientTimeZone },
     })
     rec.handle.agent.followup(message)
     return { messageId: message.id }
@@ -296,13 +327,16 @@ export class HarnessSdkJsonRpcServer {
 
   /**
    * Dispatch text as a Desktop-style input; native commands own Session state changes.
-   * @param params - ordered content blocks and receiving Session.
+   * Only the prompt branch records the time zone; native commands do not, matching Desktop command input.
+   * @param params - ordered content blocks, receiving Session, and optional prompt time zone.
    * @returns a prompt receipt or native command acknowledgment; command activity completes by notification.
+   * @throws TypeError before routing when an explicit time zone is not UTC or IANA Area/Location.
    * @throws on runtime failure; a recognized command failure never falls back to a prompt.
    */
   async query(params: SessionQueryParams): Promise<SessionQueryResult> {
     if (!this.initialized) throw new Error('SDK server is not initialized')
     if (this.shuttingDown) throw new Error('SDK server is shutting down')
+    if (params.timeZone !== undefined) promptTimeZone(params.timeZone)
     const text = params.contentBlocks.find(block => block.type === 'text')
     if (text?.text.trim().startsWith('/')) {
       const commands = this.ctx.get('commands')
@@ -341,6 +375,7 @@ export class HarnessSdkJsonRpcServer {
     const receipt = await this.prompt({
       sessionId: params.sessionId,
       contentBlocks: params.contentBlocks,
+      ...params.timeZone === undefined ? {} : { timeZone: params.timeZone },
     })
     return { kind: 'prompt', ...receipt }
   }
@@ -524,14 +559,21 @@ export class HarnessSdkJsonRpcServer {
       case 'initialize':
         return this.initialize(params as unknown as InitializeParams)
       case 'session/prompt':
+        if (params?.timeZone !== undefined && typeof params.timeZone !== 'string') {
+          throw new TypeError('session/prompt timeZone must be a string')
+        }
         return this.prompt(params as unknown as SessionPromptParams)
       case 'session/query': {
         if (typeof params?.sessionId !== 'string' || params.sessionId.length === 0
-          || Object.keys(params).some(key => key !== 'sessionId' && key !== 'contentBlocks')) {
-          throw new TypeError('session/query requires only a non-empty sessionId and contentBlocks')
+          || Object.keys(params).some(key => key !== 'sessionId' && key !== 'contentBlocks' && key !== 'timeZone')) {
+          throw new TypeError('session/query requires a non-empty sessionId and contentBlocks, with an optional timeZone')
+        }
+        if (params.timeZone !== undefined && typeof params.timeZone !== 'string') {
+          throw new TypeError('session/query timeZone must be a string')
         }
         return this.query({
           sessionId: brandString<SessionId>(params.sessionId), contentBlocks: queryContent(params.contentBlocks),
+          ...params.timeZone === undefined ? {} : { timeZone: params.timeZone },
         })
       }
       case 'session/resume': {

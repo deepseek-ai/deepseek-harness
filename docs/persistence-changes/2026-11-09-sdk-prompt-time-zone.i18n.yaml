@@ -1,0 +1,28 @@
+# Bilingual-pair consistency record for 2026-11-09-sdk-prompt-time-zone.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/persistence-changes/2026-11-09-sdk-prompt-time-zone.md
+/:
+  en: 3d5a424ae7d7e46b
+  zh: c22a8e4a62d8cc1a
+/2026-11-09-sdk-prompt-time-zone:
+  en: 7b78b8897cdcad45
+  zh: f150e11551183b79
+/2026-11-09-sdk-prompt-time-zone/summary:
+  en: efd312eda323fcd6
+  zh: 58a84a6bb4f0927b
+/2026-11-09-sdk-prompt-time-zone/table-of-contents:
+  en: 6cf314a069ceb451
+  zh: 9adff678e9ecab3b
+/2026-11-09-sdk-prompt-time-zone/declaration:
+  en: 6907136f28e48c90
+  zh: 02f8298485f3d8e7
+/2026-11-09-sdk-prompt-time-zone/compatibility:
+  en: 2cf2990bac782470
+  zh: c289f1f4e165868b
+/2026-11-09-sdk-prompt-time-zone/verification:
+  en: 0cb1608608505f3e
+  zh: 4a3bdc35a048de66
+/2026-11-09-sdk-prompt-time-zone/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269
