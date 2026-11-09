@@ -3,7 +3,7 @@
  * @module @deepseek-ai/dsh-ptc-runtime-node/src/bootstrap
  */
 
-import { inspect, types } from 'node:util'
+import { types } from 'node:util'
 import type { PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
 import type { HostMethods, ProgramResult, ProgramBootData } from './protocol.ts'
 import { jsonStringBytesUpTo, jsonValueBytesUpTo, truncateJsonStringBytes } from './output-json.ts'
@@ -11,8 +11,7 @@ import { decodePtcJsonWire, encodePtcJsonWire, snapshotPtcJsonValue, type PtcIma
 
 const CapturedError = Error
 const isNativeError = types.isNativeError
-const isArrayBufferView = types.isArrayBufferView
-const isProxy = types.isProxy
+const capturedJsonStringify = JSON.stringify
 const capturedObjectCreate = Object.create
 const capturedObjectDefineProperty = Object.defineProperty
 const capturedObjectKeys = Object.keys
@@ -96,11 +95,12 @@ export class LogBuffer {
 }
 
 /**
- * Render each argument independently and emit registered images in order.
+ * Render lossless JSON arguments independently and emit registered images in order.
  * @param logs - the buffer every rendered line is pushed into.
  * @param images - Image identities owned by the execution process.
  * @param emitImage - Emits a registered image in the current evaluation.
  * @returns The program's inspect function.
+ * @throws If a defined argument is not lossless JSON with optional registered Images.
  */
 export function makeInspect(
   logs: Pick<LogBuffer, 'push'>, images?: Pick<WeakMap<object, string>, 'get'>, emitImage?: (id: string) => void,
@@ -115,19 +115,27 @@ export function makeInspect(
     for (const arg of args) {
       const direct = arg !== null && typeof arg === 'object' ? images?.get(arg) : undefined
       if (direct !== undefined && emitImage !== undefined) { flush(); emitImage(direct); continue }
-      pending.push(typeof arg === 'string' ? arg : inspect(arg, INSPECT_OPTIONS))
+      if (arg === undefined) continue
+      let value: PtcJsonValue | undefined
+      try {
+        value = snapshotPtcJsonValue(arg, current => images?.get(current) !== undefined)
+      } catch (_error: unknown) {
+        // Accessors and proxy traps can prevent a lossless JSON snapshot.
+        value = undefined
+      }
+      if (value === undefined) {
+        flush()
+        throw new CapturedError('inspect values must be lossless JSON or Images')
+      }
+      pending.push(typeof value === 'string' ? value : capturedJsonStringify(value, undefined, 2))
       if (images === undefined || emitImage === undefined) continue
       const nested: string[] = []
-      const seen = new Set<object>()
-      const visit: unknown[] = [arg]
+      const visit: unknown[] = [value]
       while (visit.length > 0) {
         const current = visit.pop()
         if (current === null || typeof current !== 'object') continue
         const id = images.get(current)
         if (id !== undefined) { nested.push(id); continue }
-        if (isArrayBufferView(current) || isProxy(current)) continue
-        if (seen.has(current)) continue
-        seen.add(current)
         for (const key of capturedObjectKeys(current).reverse()) {
           const property = capturedObjectGetOwnPropertyDescriptor(current, key)
           if (property !== undefined && 'value' in property) visit.push(property.value)
@@ -172,9 +180,6 @@ export function captureStreamWrites(logs: Pick<LogBuffer, 'push'>, stream: Patch
   }
   return () => { stream.write = original }
 }
-
-/** Bounded inspect options: deep enough to be useful, bounded so a pathological value cannot explode the rendering. */
-const INSPECT_OPTIONS = { depth: 4, maxArrayLength: 100, maxStringLength: 10_000 } as const
 
 /**
  * Prepare the program's completion value for the run result. Only lossless
