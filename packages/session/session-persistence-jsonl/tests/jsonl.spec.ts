@@ -2641,11 +2641,18 @@ describe('JsonlSessionPersistence: edge cases', () => {
     const kept = meta('memo-kept', '/memo')
     const changed = meta('memo-changed', '/memo')
     const removed = meta('memo-removed', '/memo')
+    const corrupt = meta('memo-corrupt', '/memo')
     for (const m of [kept, changed, removed]) await writeLog(ctx.sessionPersistence, m, oneTurnLog())
+    const corruptPath = rawLogPath(root, corrupt.cwd, corrupt.id)
+    await mkdir(dirname(corruptPath), { recursive: true })
+    await writeFile(corruptPath, 'not json\n')
     const created = (ids: readonly { header: SessionHeader }[]) =>
       Object.fromEntries(ids.map(({ header }) => [header.id, header.createdAt]))
-    expect(created(await ctx.sessionPersistence.list()))
+    const first = await ctx.sessionPersistence.list()
+    expect(created(first))
       .toEqual({ [kept.id]: kept.createdAt, [changed.id]: changed.createdAt, [removed.id]: removed.createdAt })
+    // A caller's copy is detached from the headers later listings reuse.
+    mutableHeader(first.find(({ header }) => header.id === kept.id)!.header).createdAt = 0
 
     const path = rawLogPath(root, changed.cwd, changed.id)
     const probe = await open(path, 'r')
@@ -2656,17 +2663,24 @@ describe('JsonlSessionPersistence: edge cases', () => {
       .toEqual({ [kept.id]: kept.createdAt, [changed.id]: changed.createdAt, [removed.id]: removed.createdAt })
     expect(reads).not.toHaveBeenCalled()
 
+    // An explicit mtime keeps each revision distinct on coarse-timestamp filesystems.
+    const later = new Date(Date.now() + 60_000)
     await writeFile(path, [
       JSON.stringify(toHeaderLine({ ...changed, createdAt: changed.createdAt + 1 })),
       ...oneTurnLog().map(event => JSON.stringify(event)),
       '',
     ].join('\n'))
-    // An explicit mtime keeps the revision distinct on coarse-timestamp filesystems.
-    await utimes(path, new Date(), new Date(Date.now() + 60_000))
+    await utimes(path, later, later)
+    await writeFile(corruptPath, [
+      JSON.stringify(toHeaderLine(corrupt)),
+      ...oneTurnLog().map(event => JSON.stringify(event)),
+      '',
+    ].join('\n'))
+    await utimes(corruptPath, later, later)
     await rm(sessionDir(root, removed.cwd, removed.id), { recursive: true })
     expect(created(await ctx.sessionPersistence.list()))
-      .toEqual({ [kept.id]: kept.createdAt, [changed.id]: changed.createdAt + 1 })
-    expect(reads).toHaveBeenCalled()
+      .toEqual({ [kept.id]: kept.createdAt, [changed.id]: changed.createdAt + 1, [corrupt.id]: corrupt.createdAt })
+    expect(reads).toHaveBeenCalledTimes(2)
     reads.mockRestore()
   })
 

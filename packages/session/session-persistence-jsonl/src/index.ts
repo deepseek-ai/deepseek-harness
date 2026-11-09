@@ -336,6 +336,12 @@ class JsonlSessionPersistence extends SessionPersistence {
    * source path and guarded by the stat-derived revision, so a listing reads
    * only the first frame of logs whose file changed. Each complete listing
    * replaces the map, which drops deleted paths.
+   *
+   * Reuse relies on this backend never rewriting a generation's header line
+   * in place: publication creates a new file, append grows it, and repair
+   * truncates its tail, so every content change moves the revision. The
+   * revision is file metadata, not a byte checksum. A reused entry also
+   * reuses the path-identity check its first read passed.
    */
   private listedHeaders = new Map<string, ListedHeader>()
   /** One joinable decode/migration operation per selected historical Session file revision. */
@@ -562,7 +568,8 @@ class JsonlSessionPersistence extends SessionPersistence {
       const { identity } = artifact
       listed.add(artifact.header.id)
       snapshots.push({
-        header: artifact.header,
+        // Detached from the header the listing cache retains.
+        header: { ...artifact.header },
         formatStatus: artifact.formatStatus,
         revision: artifact.sourceVersion < SESSION_FORMAT_VERSION
           ? SessionPersistenceRevision(`${fileRevision(identity)}:${corpusRevision}`)
