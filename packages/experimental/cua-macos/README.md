@@ -113,6 +113,8 @@ const window = await app.getWindow(windows[0].windowId)
 void await window.getScreenshot()
 ```
 
+An independent floating panel has its own window ID. Select it from `app.getWindows()` to capture or click the panel.
+
 Use the `cua` API to discover and select the application (`listApps`, `getState`, `findApps`, `getApp`); use the selected app to activate it, enumerate its windows, and select one. Window selection is required for screenshots and pointer input, not only when several windows exist. `getApp` and `app.getWindow(windowId)` read their initial trees silently; choose the window by its observed title and bounds.
 
 `getWindow` reads its initial tree silently. An owned window without an AX surface returns an empty snapshot and remains available for screenshots and coordinate input. Within one API instance, the facade keeps one current accessibility snapshot per application handle, shared by every app and window object for that handle, including repeated selections. Reading any window replaces that snapshot; element operations use the latest snapshot ID, so use IDs from the latest tree and do not assume an older ID still identifies the same control. A failed read publishes no partial snapshot; read again without repeating the preceding input. Window objects own screenshots and pointer input. Keyboard methods stay on `app` because input follows the app’s current focus.
@@ -233,7 +235,7 @@ Only if the task cannot be completed without moving the user’s pointer, call a
 
 #### Token effect
 
-Enabling the plugin adds a fixed schema and guidance. AX observations, operation results and admitted images add model input. Retained objects are not serialized into prompts by this package. A higher default or per-read override can include more AX text in model input when the window has more nodes to visit.
+Enabling the plugin adds a fixed schema and guidance. AX observations, operation results and admitted images add model input. Retained objects are not serialized into prompts by this package. A higher default or per-read override can include more AX text in model input when the window has more nodes to visit. Each visible auxiliary window, such as a status item, menu or tooltip, adds one window record to `getWindows()` and raw `getState` output; it does not automatically add a screenshot.
 
 #### KV Cache effect
 

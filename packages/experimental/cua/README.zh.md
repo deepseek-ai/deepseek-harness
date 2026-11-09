@@ -87,7 +87,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 
 `agentPreset` 默认为 `ptc`，将工具和指引限制到绑定该 preset 的 Agent。提供方使用现有 `agent/created`、`agent-preset/selected` 事件及 Agent 拥有的作用域，也处理启用前已存在的 Agent。提供方卸载和 Agent 销毁都会释放这些注册。preset 定义可以晚于提供方注册；名称用于筛选已绑定的 Agent，在匹配的 Agent 出现前不提供工具。不使用 preset 的独立组合可设置 `agentPreset: false` 来全局注册。Host 仍拥有权限、本机连接和取消操作，preset 定义保持不变。
 
-[操作 schema](src/protocol.ts) 定义模型参数，并单独声明 Host 专用字段。原生实现在执行时检查目标身份、窗口几何、资源上限和操作系统访问条件。授权存储独立于原生协议保存持久许可。
+[操作 schema](src/protocol.ts) 定义模型参数，以及 Host 补充的请求字段。[原生观察](src/native-observation.ts) 解析窗口回复的私有字段，更新坐标记录后返回公开结果。原生实现在执行时检查目标身份、窗口几何、资源上限和操作系统访问条件。授权存储独立于原生协议保存持久许可。
 
 对象门面（[src/api.ts](src/api.ts)）构建共享的 `CuaSurface`，并从它派生 `CuaApp` 和 `CuaWindow`。派生工厂注入作用域参数以及该作用域的辅助功能和键盘检查；共享基类不为仅属于应用的能力分支。在单个 API 实例内，门面按 `appHandle` 保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享它。`getWindow` 静默读取初始树；当 provider 报告应用级辅助功能时，`getApp` 也静默读取。之后每次 `getAccessibilityTree()` 在分派前使上一份快照失效，元素操作使用最新快照 ID。只有 `CuaWindow` 可以截图或发送指针输入。
 
