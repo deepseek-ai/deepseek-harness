@@ -173,7 +173,7 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
     if (image !== undefined) {
       const path = context.attachments.imageHostPath(image.attachment)
       if (path === undefined) throw new Error('Fixture image path is unavailable')
-      return { path, width: image.attachment.width, height: image.attachment.height }
+      return { attachmentId: image.attachment.attachmentId, path, width: image.attachment.width, height: image.attachment.height }
     }
     return z.json().parse(result.value)
   })

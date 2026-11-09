@@ -231,16 +231,17 @@ export class ApplicationAccess {
    * @param handle Selected application.
    * @param signal Calling tool lifetime.
    * @param dispatch One native operation, with revocation cancellation.
+   * @param prepare Optional interactive preparation outside the application lock. Dispatch rechecks access after it settles.
    * @returns The native result, with no implicit retry after consent or cancellation.
    */
   async run<T>(client: NativeClient, handle: CuaAppHandle, signal: AbortSignal,
-    dispatch: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    dispatch: (signal: AbortSignal) => Promise<T>, prepare?: (signal: AbortSignal) => Promise<void>): Promise<T> {
     const state = this.clients.get(client)
     const selected = state?.handles.get(handle)
     if (!state || !selected) throw new NativeError('APP_ACCESS_REQUIRED', 'Select the application with getApp and obtain user consent before reading or controlling it')
     if (selected.lifetime.signal.aborted) throw new NativeError('APP_ACCESS_REVOKED', 'Application access was revoked; stop using this application')
     const lifetime = AbortSignal.any([signal, this.lifetime.signal, selected.lifetime.signal])
-    return this.options.store.withApplication(selected.identity.id, lifetime, async () => {
+    const requireAccess = async () => {
       const permitted = await this.options.store.withState(lifetime, ({ state: permissions }) =>
         this.permitted(selected, permissions.applications[selected.identity.id] ?? this.empty()))
       if (!permitted) {
@@ -248,6 +249,14 @@ export class ApplicationAccess {
         throw new NativeError('APP_ACCESS_REVOKED', 'Application access was revoked; stop using this application')
       }
       if (client.disposed) throw new NativeError('NATIVE_CLOSED', 'Helper is closed; acquire fresh application handles')
+    }
+    if (prepare) {
+      await requireAccess()
+      await prepare(lifetime)
+      lifetime.throwIfAborted()
+    }
+    return this.options.store.withApplication(selected.identity.id, lifetime, async () => {
+      await requireAccess()
       return this.withOperation(state.agent, client, selected.identity, lifetime, dispatch)
     })
   }

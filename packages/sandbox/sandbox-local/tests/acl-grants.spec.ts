@@ -5,7 +5,7 @@
  * is mocked; native access checks live in sandbox-windows-acl's runner suite.
  */
 
-import { existsSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -21,6 +21,7 @@ const mockState = vi.hoisted(() => ({
   /** Restrict an add failure to standing (workspace) or revocable (temp). */
   addFailureStanding: undefined as boolean | undefined,
   createTempFailure: undefined as Error | undefined,
+  createWorkspaceFailure: undefined as Error | undefined,
   disposeFailure: undefined as Error | undefined,
 }))
 
@@ -35,6 +36,7 @@ vi.mock('@deepseek-ai/dsh-sandbox-windows-acl', () => {
     }
     static create(writeSid: string): MockAclWriteGrant {
       if (writeSid.startsWith('TEMP:') && mockState.createTempFailure !== undefined) throw mockState.createTempFailure
+      if (!writeSid.startsWith('TEMP:') && mockState.createWorkspaceFailure !== undefined) throw mockState.createWorkspaceFailure
       return new MockAclWriteGrant(writeSid)
     }
     add(path: string, standing = false): void {
@@ -52,12 +54,10 @@ vi.mock('@deepseek-ai/dsh-sandbox-windows-acl', () => {
   return {
     registerAclDiagnosisSkill: vi.fn(),
     AclWriteGrant: MockAclWriteGrant,
-    assertTempRootOutsideWorkspace: (workspaceRoot: string, tempRoot: string) => {
+    isTempRootInsideWorkspace: (workspaceRoot: string, tempRoot: string) => {
       const workspace = realpathSync.native(workspaceRoot)
       const temp = realpathSync.native(tempRoot)
-      if (temp === workspace || temp.startsWith(`${workspace}${process.platform === 'win32' ? '\\' : '/'}`)) {
-        throw new Error(`Windows ACL temp root must be outside the workspace: workspace=${workspaceRoot}; temp=${tempRoot}`)
-      }
+      return temp === workspace || temp.startsWith(`${workspace}${process.platform === 'win32' ? '\\' : '/'}`)
     },
     workspaceWriteSid: () => 'S-1-4-42-42',
     tempWriteSid: (path: string) => `TEMP:${path}`,
@@ -91,6 +91,7 @@ describe('windows-acl write grants (LocalSandboxProvider)', () => {
     mockState.addFailure = undefined
     mockState.addFailureStanding = undefined
     mockState.createTempFailure = undefined
+    mockState.createWorkspaceFailure = undefined
     mockState.disposeFailure = undefined
   })
 
@@ -250,16 +251,74 @@ describe('windows-acl write grants (LocalSandboxProvider)', () => {
       mockState.addFailure = new Error('workspace grant exploded')
       await expect(sandbox.confine(['true'], {
         mode: 'workspace-write', workspaceRoot: ws, sessionId: SessionId('workspace-fail'),
-      })).rejects.toThrow('workspace grant exploded')
+      })).rejects.toMatchObject({
+        name: 'SandboxPreparationError',
+        code: 'SANDBOX_PREPARATION_FAILED',
+        cause: mockState.addFailure,
+        message: expect.stringContaining('workspace grant failed: Error: workspace grant exploded') as string,
+      })
       expect(mockState.grants).toHaveLength(1)
       expect(mockState.grants[0]!.disposed).toBe(true)
 
       mockState.disposeFailure = new Error('workspace cleanup exploded')
       await expect(sandbox.confine(['true'], {
         mode: 'workspace-write', workspaceRoot: ws, sessionId: SessionId('workspace-cleanup-fail'),
-      })).rejects.toThrow(/workspace grant failed and its cleanup also failed/u)
+      })).rejects.toMatchObject({
+        name: 'SandboxPreparationError',
+        code: 'SANDBOX_PREPARATION_FAILED',
+        message: expect.stringMatching(/workspace grant failed and its cleanup also failed/u) as string,
+        cause: { errors: [mockState.addFailure, mockState.disposeFailure] },
+      })
       expect(mockState.grants).toHaveLength(2)
     } finally {
+      cleanup()
+    }
+  })
+
+  it('codes a workspace SID allocation failure and an unresolvable workspace before any grant', async () => {
+    const { sandbox } = await setup()
+    try {
+      const ws = workspaceRoot()
+      scratch.push(ws)
+      mockState.createWorkspaceFailure = new Error('ConvertStringSidToSidW failed (Win32 1337)')
+      await expect(sandbox.confine(['true'], {
+        mode: 'workspace-write', workspaceRoot: ws, sessionId: SessionId('sid-fail'),
+      })).rejects.toMatchObject({ name: 'SandboxPreparationError', code: 'SANDBOX_PREPARATION_FAILED', cause: mockState.createWorkspaceFailure })
+      await expect(sandbox.confine(['true'], {
+        mode: 'workspace-write', workspaceRoot: join(ws, 'missing'), sessionId: SessionId('missing'),
+      })).rejects.toMatchObject({
+        name: 'SandboxPreparationError',
+        code: 'SANDBOX_PREPARATION_FAILED',
+        message: expect.stringContaining('workspace and temp directory resolution failed') as string,
+        cause: { code: 'ENOENT' },
+      })
+      expect(mockState.grants).toHaveLength(0)
+    } finally {
+      cleanup()
+    }
+  })
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('codes a private temp directory that cannot be created', async () => {
+    const { sandbox } = await setup()
+    const ws = workspaceRoot()
+    const lockedTemp = realpathSync(mkdtempSync(join(tmpdir(), 'dsh-acl-locked-temp-')))
+    scratch.push(ws, lockedTemp)
+    const previous = process.env.TMPDIR
+    chmodSync(lockedTemp, 0o500)
+    process.env.TMPDIR = lockedTemp
+    try {
+      await expect(sandbox.confine(['true'], {
+        mode: 'workspace-write', workspaceRoot: ws, sessionId: SessionId('mkdtemp-fail'),
+      })).rejects.toMatchObject({
+        name: 'SandboxPreparationError',
+        code: 'SANDBOX_PREPARATION_FAILED',
+        message: expect.stringContaining('private temp directory creation failed') as string,
+        cause: { code: 'EACCES' },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.TMPDIR
+      else process.env.TMPDIR = previous
+      chmodSync(lockedTemp, 0o700)
       cleanup()
     }
   })
@@ -268,7 +327,11 @@ describe('windows-acl write grants (LocalSandboxProvider)', () => {
     const { sandbox } = await setup()
     await expect(sandbox.confine(['true'], {
       mode: 'workspace-write', workspaceRoot: realpathSync.native(tmpdir()), sessionId: SessionId('overlap'),
-    })).rejects.toThrow(/temp root must be outside the workspace/u)
+    })).rejects.toMatchObject({
+      name: 'SandboxPreparationError',
+      code: 'SANDBOX_INVALID_TEMP_ROOT',
+      message: expect.stringMatching(/temp root must be outside the workspace/u) as string,
+    })
     expect(mockState.grants).toHaveLength(0)
   })
 
@@ -281,7 +344,7 @@ describe('windows-acl write grants (LocalSandboxProvider)', () => {
       mockState.createTempFailure = new Error('temp SID creation exploded')
       await expect(sandbox.confine(['true'], {
         mode: 'workspace-write', workspaceRoot: ws, sessionId: SessionId('create-fail'),
-      })).rejects.toThrow('temp SID creation exploded')
+      })).rejects.toMatchObject({ code: 'SANDBOX_PREPARATION_FAILED', cause: mockState.createTempFailure })
       expect(mockState.grants).toHaveLength(1) // workspace only; random temp was removed
 
       mockState.createTempFailure = undefined
@@ -289,7 +352,7 @@ describe('windows-acl write grants (LocalSandboxProvider)', () => {
       mockState.addFailure = new Error('temp add exploded')
       await expect(sandbox.confine(['true'], {
         mode: 'workspace-write', workspaceRoot: ws, sessionId: SessionId('add-fail'),
-      })).rejects.toThrow('temp add exploded')
+      })).rejects.toMatchObject({ name: 'SandboxPreparationError', code: 'SANDBOX_PREPARATION_FAILED', cause: mockState.addFailure })
       const failedTempGrant = mockState.grants.at(-1)
       expect(failedTempGrant?.disposed).toBe(true)
       expect(failedTempGrant?.added).toHaveLength(1)

@@ -10,5 +10,6 @@
   - text: 批准
   - radio "请求更改" [checked]
   - text: 请求更改
+  - button "丢弃评审"
   - button "取消"
   - button "提交评审"

@@ -1,5 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import AttachmentStore, {
   AttachmentError,
   AttachmentId,
@@ -215,6 +216,15 @@ describe('isImageAdmissionError', () => {
     expect(isImageAdmissionError(new AttachmentError('corrupt object', 'ATTACHMENT_CORRUPT'))).toBe(false)
     expect(isImageAdmissionError(new AttachmentError('disk failed', 'ATTACHMENT_WRITE_FAILED'))).toBe(false)
     expect(isImageAdmissionError(new Error('unknown failure'))).toBe(false)
+  })
+})
+
+describe('AttachmentError', () => {
+  it('is a HarnessError that keeps its literal name and attachment code', () => {
+    const cause = new Error('disk full')
+    const error = new AttachmentError('disk failed', 'ATTACHMENT_WRITE_FAILED', { cause })
+    expect(error).toBeInstanceOf(HarnessError)
+    expect(error).toMatchObject({ name: 'AttachmentError', code: 'ATTACHMENT_WRITE_FAILED', message: 'disk failed', cause })
   })
 })
 

@@ -1,6 +1,7 @@
-/* Review controls of the changes toolbar. The lens draws the segmented track and raised indicator of the shared
-   segmented control at the toolbar's 28px control height and 12px text, with each segment's file count after its label. */
-.lens {
+/* Review controls of the changes toolbar. The segmented radio group of the lens and the thread list's filter draws the
+   track and raised indicator of the shared segmented control at the toolbar's 28px control height and 12px text, with
+   each segment's count after its label. */
+.segmented {
   box-sizing: border-box;
   display: grid;
   grid-auto-columns: minmax(0, 1fr);

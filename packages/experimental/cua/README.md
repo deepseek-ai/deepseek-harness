@@ -68,6 +68,8 @@ The Host marker has no configurable fields; platform providers own native config
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
+Providers declare `systemPointer: true` to support explicit physical pointer movement. CUA exposes the option in the tool schema and model instructions only for those providers. CUA owns the approval card, live-session decision and delegated-task restriction. A provider receives the per-call pointer mode after CUA checks application access and any required consent.
+
 Permission responses identify their platform and report only the state that platform can observe. The shared page renders the controls those observations support. Before platform identification, it shows neutral observation and input rows without system actions. Native providers use the shared build lock and compiler cleanup. Standalone executables are retained by digest. The macOS provider reads its signed application receipt after compilation completes under the same lock.
 
 <details>

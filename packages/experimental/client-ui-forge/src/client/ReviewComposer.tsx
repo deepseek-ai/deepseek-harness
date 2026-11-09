@@ -15,7 +15,7 @@ export interface ReviewActions {
   readonly source: ReviewSource
   /** Browser records shared by the changes tab. */
   readonly records?: ReviewQueue
-  /** Whether another comment already started a pending review. */
+  /** Whether the signed-in user has a pending review on the code host that the next comment joins. */
   readonly reviewStarted?: boolean
   /** Open the confirmed publication URL. */
   readonly openLink?: (url: string) => void
@@ -27,26 +27,32 @@ export interface ReviewActions {
   readonly onQuoted?: (selection: ReviewSelection) => void
   /** Publish one comment; an error string preserves the editor. */
   readonly publish?: (selection: ReviewSelection) => Promise<string | undefined>
-  /** Keep one comment for the final review; false preserves the editor. */
-  readonly queue?: (selection: ReviewSelection) => boolean
+  /** Add one comment to the pending review on the code host, starting one when needed; an error string preserves the editor. */
+  readonly queue?: (selection: ReviewSelection) => Promise<string | undefined>
 }
 
-function GitHubAction({ disabled, busy, started, queue, publish, t }: PropsLocale<typeof NS> & {
+/**
+ * Render a primary action with an optional second action in its menu.
+ * @param props - the main action, the optional menu action, the menu's name, and availability.
+ * @returns the split button.
+ */
+export function SplitAction({ disabled, label, run, menuLabel, menu, other }: {
   readonly disabled: boolean
-  readonly busy: boolean
-  readonly started: boolean
-  readonly queue: () => void
-  readonly publish: (() => void) | undefined
+  readonly label: string
+  readonly run: () => void
+  /** Accessible name of the menu button. */
+  readonly menuLabel: string
+  /** Label of the action in the menu, or undefined without one. */
+  readonly other: string | undefined
+  readonly menu: () => void
 }): ReactNode {
   const [open, setOpen] = useState(false)
   return <div className={css.gitAction}>
-    <Button size="sm" variant="primary" className={clsx(css.gitMain)} disabled={disabled} onClick={queue}>
-      {t(busy ? 'review.publishing' : started ? 'review.queue' : 'review.startReview')}
-    </Button>
-    {publish !== undefined && <Menu open={open && !disabled} portal dense align="end" autoFocus onClose={() => { setOpen(false) }}
+    <Button size="sm" variant="primary" className={clsx(other !== undefined && css.gitMain)} disabled={disabled} onClick={run}>{label}</Button>
+    {other !== undefined && <Menu open={open && !disabled} portal dense align="end" autoFocus onClose={() => { setOpen(false) }}
       anchor={<Button size="sm" variant="primary" className={clsx(css.gitArrow)} disabled={disabled} aria-haspopup="menu" aria-expanded={open && !disabled}
-        aria-label={t('review.githubActions')} onClick={() => { setOpen(value => !value) }}><IconChevronDownOutlineRegular size={14} /></Button>}>
-      <MenuItemButton onSelect={() => { setOpen(false); publish() }}>{t('review.publish')}</MenuItemButton>
+        aria-label={menuLabel} onClick={() => { setOpen(value => !value) }}><IconChevronDownOutlineRegular size={14} /></Button>}>
+      <MenuItemButton onSelect={() => { setOpen(false); menu() }}>{other}</MenuItemButton>
     </Menu>}
   </div>
 }
@@ -73,13 +79,14 @@ export function ReviewComposer({ selection, actions, close, visible = true, spli
   useEffect(() => { input.current?.focus() }, [])
   const comment = (): ReviewSelection => ({ ...selection, comment: { ...selection.comment, body: body.current } })
   const range = reviewRange(selection.comment)
-  const publish = async (): Promise<void> => {
-    if (running.current || actions.publish === undefined) return
+  /** Send the comment to the code host, closing the form once it is taken and keeping its text otherwise. */
+  const send = async (destination: ((selection: ReviewSelection) => Promise<string | undefined>) | undefined): Promise<void> => {
+    if (running.current || destination === undefined) return
     running.current = true
     setBusy(true)
     setError(null)
     try {
-      const failure = await actions.publish(comment())
+      const failure = await destination(comment())
       if (failure === undefined) close()
       else setError(failure)
     } catch (_error) {
@@ -108,14 +115,12 @@ export function ReviewComposer({ selection, actions, close, visible = true, spli
           if (actions.addToInput(selected)) { actions.onQuoted?.(selected); close() }
           else setError(t('review.inputFailed'))
         }}>{t('review.addToInput')}</Button>
-        {visible && actions.queue !== undefined && <GitHubAction
-          disabled={busy || actions.publishingBlocked === true || empty} busy={busy} started={actions.reviewStarted === true}
-          queue={() => {
-            if (actions.queue?.(comment()) === true) close()
-            else setError(t('review.saveFailed'))
-          }} publish={actions.publish === undefined ? undefined : () => { void publish() }} t={t} />}
+        {visible && actions.queue !== undefined && <SplitAction disabled={busy || actions.publishingBlocked === true || empty}
+          label={t(busy ? 'review.publishing' : actions.reviewStarted === true ? 'review.queue' : 'review.startReview')}
+          run={() => { void send(actions.queue) }} menuLabel={t('review.githubActions')}
+          other={actions.publish === undefined ? undefined : t('review.publish')} menu={() => { void send(actions.publish) }} />}
         {actions.queue === undefined && actions.publish !== undefined && <Button size="sm" variant="primary"
-          disabled={busy || actions.publishingBlocked === true || empty} onClick={() => { void publish() }}>{t('review.publish')}</Button>}
+          disabled={busy || actions.publishingBlocked === true || empty} onClick={() => { void send(actions.publish) }}>{t('review.publish')}</Button>}
 
       </div>
     </section>

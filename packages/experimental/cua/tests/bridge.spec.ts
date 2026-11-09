@@ -10,7 +10,7 @@ import type { CuaCapabilities, CuaElementId, CuaOperation } from '../src/types.t
 const element = (id: string): CuaElementId => brandString<CuaElementId>(id)
 
 const capabilities: CuaCapabilities = {
-  platform: 'macos', permissions: { accessibility: true, screenRecording: true }, appLevelAccessibility: true,
+  platform: 'macos', systemPointer: true, permissions: { accessibility: true, screenRecording: true }, appLevelAccessibility: true,
   keyboard: ['app'], sessionLocked: false, methods: ['getCapabilities', 'getApp', 'getState', 'screenshot'],
   coordinateSpace: 'screenshot-pixels', browser: false,
 }

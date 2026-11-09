@@ -18,8 +18,9 @@ import { abortable, abortError } from './abort.ts'
 import { LspConnection } from './connection.ts'
 import type { ConnectionSpawner, ConnectionSpec, ConnectionWriter } from './connection.ts'
 import type { HostSource } from './host.ts'
-import type { WireInitializeResult, WireServerCapabilities } from './protocol.ts'
+import type { WireServerCapabilities } from './protocol.ts'
 import {
+  initializeCapabilities,
   negotiatePositionEncoding,
   normalizeHover,
   normalizeLocations,
@@ -44,7 +45,6 @@ export interface InstanceSpec extends ConnectionSpec {
  */
 export class LspInstance {
   private readonly connection: LspConnection
-  private capabilities: WireServerCapabilities | undefined
   /** The serialization tail: each query awaits the prior one, so lifecycles never interleave. */
   private queue: Promise<unknown> = Promise.resolve()
   private disposed = false
@@ -52,8 +52,8 @@ export class LspInstance {
   private teardownPromise: Promise<void> | undefined
   /** Set once the process closes, so the pool can synchronously skip a dead instance. */
   private processClosed = false
-  /** Populated once `initialize` succeeds; a failed handshake rejects every query. */
-  private readonly ready: Promise<void>
+  /** The server's negotiated capabilities once `initialize` succeeds; a failed handshake rejects every query. */
+  private readonly ready: Promise<WireServerCapabilities>
 
   /**
    * @param spec - the launch, initialize, and teardown parameters.
@@ -97,8 +97,9 @@ export class LspInstance {
     const run = abortable(this.queue, signal)
       .then(() => this.runQuery(request, source, signal))
       .catch(async (error: unknown) => {
-        if (this.isTransportFailure(error)) await this.awaitTeardownAttempt()
-        throw error
+        if (!this.isTransportFailure(error)) throw error
+        await this.awaitTeardownAttempt()
+        throw this.connection.settledFailure(error)
       })
     // Keep the tail alive regardless of this query's outcome so the next caller still serializes. The
     // tail follows the ACTUAL prior work (this.queue), not the abortable view, so a caller giving up
@@ -107,7 +108,7 @@ export class LspInstance {
     return run
   }
 
-  private async initialize(): Promise<void> {
+  private async initialize(): Promise<WireServerCapabilities> {
     const initializeResult = await this.connection.request('initialize', {
       // A subprocess provider may run in another PID namespace or machine;
       // the host PID would let the server monitor an unrelated process.
@@ -116,12 +117,12 @@ export class LspInstance {
       workspaceFolders: [{ uri: this.spec.workspaceUri, name: 'workspace' }],
       capabilities: CLIENT_CAPABILITIES,
       initializationOptions: this.spec.initializationOptions,
-    }) as WireInitializeResult
-    const capabilities = initializeResult.capabilities
+    })
+    const capabilities = initializeCapabilities(initializeResult)
     // An omitted encoding defaults to utf-16; any other value is a protocol error we reject here.
     negotiatePositionEncoding(capabilities.positionEncoding)
-    this.capabilities = capabilities
     await this.connection.notify('initialized', {})
+    return capabilities
   }
 
   private async runQuery(request: LspProviderQuery, source: HostSource, signal?: AbortSignal): Promise<LspQueryResult> {
@@ -132,17 +133,15 @@ export class LspInstance {
     // in failure — an abort on a still-pending handshake, OR `initialize` rejecting (utf-8
     // negotiation, malformed result) without the process exiting — tear the instance down so a
     // permanently-rejecting/pending `ready` can't make every later query for this workspace fail.
+    let capabilities: WireServerCapabilities
     try {
-      await abortable(this.ready, signal)
+      capabilities = await abortable(this.ready, signal)
     } catch (error) {
       if (!this.dead) {
         await this.awaitTeardownAttempt()
       }
       throw error
     }
-    const capabilities = this.capabilities
-    /* v8 ignore next -- `ready` resolves only after capabilities are set, else it rejects above; defensive. */
-    if (capabilities === undefined) throw new Error('LSP instance is not initialized')
     if (!supportsOperation(capabilities, request.operation)) {
       throw new LspError(`server does not support ${request.operation}`, 'LSP_UNSUPPORTED_OPERATION')
     }
