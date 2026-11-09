@@ -1,7 +1,8 @@
 import { MessageId, createMessage } from '@deepseek-ai/dsh-llm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { appendFile, mkdtemp, mkdir, rm, readFile, writeFile, readdir, stat, symlink } from 'node:fs/promises'
+import { appendFile, mkdtemp, mkdir, open, rm, readFile, writeFile, readdir, stat, symlink, utimes } from 'node:fs/promises'
+import type { FileHandle } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative, resolve } from 'node:path'
 import { scheduler } from 'node:timers/promises'
@@ -2066,13 +2067,13 @@ describe('JsonlSessionPersistence: durability and crash semantics', () => {
     const m = meta('vanishing-snapshot')
     await writeLog(ctx.sessionPersistence, m, oneTurnLog())
     const persistence = ctx.sessionPersistence as unknown as {
-      listArtifacts(): Promise<Array<{ header: SessionHeader; path: string }>>
+      listGenerations(): Promise<Array<{ sourcePath: string }>>
     }
-    const listArtifacts = persistence.listArtifacts.bind(persistence)
-    const discovery = vi.spyOn(persistence, 'listArtifacts').mockImplementation(async () => {
-      const artifacts = await listArtifacts()
-      await rm(artifacts[0]!.path)
-      return artifacts
+    const listGenerations = persistence.listGenerations.bind(persistence)
+    const discovery = vi.spyOn(persistence, 'listGenerations').mockImplementation(async () => {
+      const generations = await listGenerations()
+      await rm(generations[0]!.sourcePath)
+      return generations
     })
 
     await expect(ctx.sessionPersistence.list()).resolves.toEqual([])
@@ -2081,11 +2082,13 @@ describe('JsonlSessionPersistence: durability and crash semantics', () => {
 
   it('surfaces non-ENOENT stat failures during listing', async () => {
     const persistence = ctx.sessionPersistence as unknown as {
-      listArtifacts(): Promise<Array<{ header: SessionHeader; path: string }>>
+      listGenerations(): Promise<Array<{ sourcePath: string; sourceVersion: number; currentPath: string }>>
     }
-    const discovery = vi.spyOn(persistence, 'listArtifacts').mockResolvedValue([{
-      header: meta('snapshot-stat-failure'),
-      path: `${root}\0snapshot-stat-failure`,
+    const path = `${root}\0snapshot-stat-failure`
+    const discovery = vi.spyOn(persistence, 'listGenerations').mockResolvedValue([{
+      sourcePath: path,
+      sourceVersion: SESSION_FORMAT_VERSION,
+      currentPath: path,
     }])
 
     await expect(ctx.sessionPersistence.list()).rejects.toThrow(/null bytes/)
@@ -2094,7 +2097,7 @@ describe('JsonlSessionPersistence: durability and crash semantics', () => {
 
   it('forwards list cancellation and awaits in-flight discovery cleanup', async () => {
     const persistence = ctx.sessionPersistence as unknown as {
-      listArtifacts(signal?: AbortSignal): Promise<Array<{ header: SessionHeader; path: string }>>
+      listArtifacts(signal?: AbortSignal): Promise<{ artifacts: never[]; revisions: never[] }>
     }
     const started = Promise.withResolvers<AbortSignal>()
     const cleanup = Promise.withResolvers<undefined>()
@@ -2102,7 +2105,7 @@ describe('JsonlSessionPersistence: durability and crash semantics', () => {
       if (signal === undefined) throw new Error('expected list signal')
       started.resolve(signal)
       await cleanup.promise
-      return []
+      return { artifacts: [], revisions: [] }
     })
     const reason = new Error('JSONL list discovery cancelled')
     const controller = new AbortController()
@@ -2126,11 +2129,13 @@ describe('JsonlSessionPersistence: durability and crash semantics', () => {
     const m = meta('snapshot-stat-cancellation')
     await writeLog(ctx.sessionPersistence, m, oneTurnLog())
     const persistence = ctx.sessionPersistence as unknown as {
-      listArtifacts(signal?: AbortSignal): Promise<Array<{ header: SessionHeader; path: string }>>
+      listGenerations(signal?: AbortSignal): Promise<Array<{ sourcePath: string; sourceVersion: number; currentPath: string }>>
     }
-    const discovery = vi.spyOn(persistence, 'listArtifacts').mockResolvedValue([{
-      header: m,
-      path: rawLogPath(root, m.cwd, m.id),
+    const path = rawLogPath(root, m.cwd, m.id)
+    const discovery = vi.spyOn(persistence, 'listGenerations').mockResolvedValue([{
+      sourcePath: path,
+      sourceVersion: SESSION_FORMAT_VERSION,
+      currentPath: path,
     }])
     const reason = new Error('JSONL list stat cancelled')
     const controller = new AbortController()
@@ -2630,6 +2635,39 @@ describe('JsonlSessionPersistence: edge cases', () => {
 
   it('list on an empty root returns nothing', async () => {
     expect(await ctx.sessionPersistence.list()).toEqual([])
+  })
+
+  it('list re-reads only the headers of logs whose file changed', async () => {
+    const kept = meta('memo-kept', '/memo')
+    const changed = meta('memo-changed', '/memo')
+    const removed = meta('memo-removed', '/memo')
+    for (const m of [kept, changed, removed]) await writeLog(ctx.sessionPersistence, m, oneTurnLog())
+    const created = (ids: readonly { header: SessionHeader }[]) =>
+      Object.fromEntries(ids.map(({ header }) => [header.id, header.createdAt]))
+    expect(created(await ctx.sessionPersistence.list()))
+      .toEqual({ [kept.id]: kept.createdAt, [changed.id]: changed.createdAt, [removed.id]: removed.createdAt })
+
+    const path = rawLogPath(root, changed.cwd, changed.id)
+    const probe = await open(path, 'r')
+    const handles = Object.getPrototypeOf(probe) as Pick<FileHandle, 'read'>
+    await probe.close()
+    const reads = vi.spyOn(handles, 'read')
+    expect(created(await ctx.sessionPersistence.list()))
+      .toEqual({ [kept.id]: kept.createdAt, [changed.id]: changed.createdAt, [removed.id]: removed.createdAt })
+    expect(reads).not.toHaveBeenCalled()
+
+    await writeFile(path, [
+      JSON.stringify(toHeaderLine({ ...changed, createdAt: changed.createdAt + 1 })),
+      ...oneTurnLog().map(event => JSON.stringify(event)),
+      '',
+    ].join('\n'))
+    // An explicit mtime keeps the revision distinct on coarse-timestamp filesystems.
+    await utimes(path, new Date(), new Date(Date.now() + 60_000))
+    await rm(sessionDir(root, removed.cwd, removed.id), { recursive: true })
+    expect(created(await ctx.sessionPersistence.list()))
+      .toEqual({ [kept.id]: kept.createdAt, [changed.id]: changed.createdAt + 1 })
+    expect(reads).toHaveBeenCalled()
+    reads.mockRestore()
   })
 
   it('keeps the transcript in an extensible session-owned directory', async () => {

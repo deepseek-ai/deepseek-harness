@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { appendFile, mkdir, mkdtemp, open, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, mkdtemp, open, readFile, readdir, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -570,6 +570,8 @@ describe('JsonlSessionPersistence: default Zstandard encoding', () => {
       await writeLog(ctx.sessionPersistence, header, oneTurnLog())
       await ctx.sessionPersistence.list()
       const path = logPath(root, header.cwd, header.id, compression)
+      // A changed revision makes the next listing read the header again.
+      await utimes(path, new Date(), new Date(Date.now() + 60_000))
       const probe = await open(path, 'r')
       const prototype = Object.getPrototypeOf(probe) as { read: HeaderRead }
       const originalRead = prototype.read
