@@ -1,6 +1,8 @@
 import koffi from 'koffi'
 import { describe, expect, it, vi } from 'vitest'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import {
+  WIN32_ERROR,
   Win32Error,
   allocPtrSlot,
   decodePtr,
@@ -35,6 +37,9 @@ describe('shared Win32 process ABI', () => {
     expect(errorText(api, 5)).toBe('access denied')
     expect(() => throwLastError(api, 'Probe')).toThrow(Win32Error)
     expect(new Win32Error('CloseHandle', 6).message).toBe('CloseHandle failed (Win32 6)')
+    const error = new Win32Error('CloseHandle', 6)
+    expect(error).toBeInstanceOf(HarnessError)
+    expect(error).toMatchObject({ name: 'Win32Error', code: WIN32_ERROR, api: 'CloseHandle', win32Code: 6 })
   })
 
   it('decodes a pointer stored by Koffi', () => {

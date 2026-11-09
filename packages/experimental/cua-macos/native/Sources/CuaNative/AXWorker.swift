@@ -78,21 +78,21 @@ actor AXWorker {
     private let axTimeout: Float
     private let textEventInterval: Double
     private let maxClickHoldMs: Int
-    private let systemPointerHover: Bool?
     private let sessionState: @Sendable () -> Bool?
     private var access: AXAccess?
+    private let heldKeys: HeldKeys
     private var keyboard: KeyboardInput?
     private var pointer: WindowPointerInput?
     private var hovers: [String: AXHover] = [:]
     private var closed = false
 
-    init(cancellation: CancellationLatch, axTimeout: Float, textEventInterval: Double, maxClickHoldMs: Int, systemPointerHover: Bool? = nil,
+    init(cancellation: CancellationLatch, axTimeout: Float, textEventInterval: Double, maxClickHoldMs: Int, heldKeys: HeldKeys = HeldKeys(),
          sessionState: @escaping @Sendable () -> Bool? = NativePlatform.sessionLocked) {
+        self.heldKeys = heldKeys
         self.cancellation = cancellation
         self.axTimeout = axTimeout
         self.textEventInterval = textEventInterval
         self.maxClickHoldMs = maxClickHoldMs
-        self.systemPointerHover = systemPointerHover
         self.sessionState = sessionState
     }
     private func identifier(_ kind: String) throws -> String {
@@ -106,19 +106,19 @@ actor AXWorker {
         access = created
         return created
     }
-    private func moveUsingAX(_ element: AXUIElement?, windowID: UInt32, handle: String, params: RequestParameters) throws -> Bool {
-        let requestSetting = try params.optionalBoolean("allowSystemPointer")
+    private func moveUsingAX(_ element: AXUIElement?, windowID: UInt32, handle: String) throws -> DriverOutcome {
         let hover = hovers[handle] ?? AXHover()
         hovers[handle] = hover
-        if try hover.move(to: element, in: windowID, access: ax()) { return true }
-        try AXHover.requireSystemPointer(connectionSetting: systemPointerHover, requestSetting: requestSetting)
-        return false
+        guard try hover.move(to: element, in: windowID, access: ax()) else {
+            throw NativeFailure(code: "HOVER_UNAVAILABLE", message: "No enabled element at this target or in its ancestors offers both AXShowAlternateUI and AXShowDefaultUI. No input was sent and the pointer did not move. Use click on an available control or performAction with an action from listActions.")
+        }
+        return .result(Self.mouseMoveResult(route: "accessibility", pointerMoved: false))
     }
     private func inputs() -> (KeyboardInput, WindowPointerInput) {
         if let keyboard, let pointer { return (keyboard, pointer) }
         let poster = PIDEventPoster()
         let latch = cancellation
-        let key = KeyboardInput(poster: poster, textEventInterval: textEventInterval, checkCancellation: { try latch.check() })
+        let key = KeyboardInput(post: poster.post, textEventInterval: textEventInterval, held: heldKeys, checkCancellation: { try latch.check() })
         let mouse = WindowPointerInput(poster: poster, checkCancellation: { try latch.check() })
         keyboard = key; pointer = mouse
         return (key, mouse)
@@ -157,6 +157,9 @@ actor AXWorker {
         return result
     }
     private func element(_ handle: String, _ params: RequestParameters) throws -> AXUIElement {
+        if let windowID = try params.optionalWindowID() {
+            _ = try NativePlatform.ownedWindow(validateIdentity(handle).pid, windowID)
+        }
         let value = try snapshot(handle, params.string("snapshotId"))
         let index = try params.elementIdIndex()
         guard let element = value.elements[index] else { throw RequestParameters.invalid("elementId is absent from the selected snapshot") }
@@ -208,8 +211,18 @@ actor AXWorker {
                  trace: ScreenshotTrace? = nil) async throws -> DriverOutcome {
         try cancellation.check()
         guard !closed else { throw NativeFailure(code: "NATIVE_CLOSED", message: "Helper is closing") }
-        if method == "sendKeyEvent" {
-            throw NativeFailure(code: "NOT_IMPLEMENTED", message: "sendKeyEvent is not implemented on current platform.")
+        if method == "releaseHeldKeys" {
+            try keyboard?.releaseHeldKeys(run: params.string("runId"))
+            return .result(Self.actionResult)
+        }
+        if method == "sendKeyEvent", try params.string("direction") == "up" {
+            let handle = try params.string("appHandle")
+            let dispatched = try inputs().0.keyUp(params.string("key"), app: handle, run: params.string("runId")) {
+                try NativePlatform.requireUnlocked(observeSession())
+                try NativePlatform.requireAccessibility()
+                return try ax().keyboardRecipient(validateIdentity(handle), catalog: catalog)
+            }
+            return .result(.object(["dispatched": .bool(dispatched)]))
         }
         let locked = observeSession()
         if method == "getCapabilities" {
@@ -331,6 +344,10 @@ actor AXWorker {
                                    maxBytes: try params.integer("maxClipboardBytes", in: 1024...Int.max),
                                    readTimeout: .milliseconds(try params.integer("pasteReadTimeoutMs", in: 1...2147483647)),
                                    maxElements: try params.integer("maxElements", in: 1...10000), maxDepth: try params.integer("maxDepth", in: 1...100)))
+        case "sendKeyEvent":
+            try inputs().0.keyDown(params.string("key"), app: handle, run: params.string("runId")) {
+                try ax().keyboardRecipient(identity, catalog: catalog)
+            }
         case "typeText", "pressKey":
             let recipient = try ax().keyboardRecipient(identity, catalog: catalog)
             try NativePlatform.verify(recipient)
@@ -351,6 +368,7 @@ actor AXWorker {
             try ax().selectText(element(handle, params), text: params.string("text"), prefix: params.optionalString("prefix"),
                                 suffix: params.optionalString("suffix"), mode: params.optionalString("selectionType") ?? "text")
         case "click", "mouseMove":
+            let useSystemPointer = try params.optionalBoolean("useSystemPointer") ?? false
             let holdMs = params.contains("holdMs") ? try params.integer("holdMs", in: 0...maxClickHoldMs) : nil
             let button = try params.optionalString("mouseButton") ?? "left"
             let count = params.contains("clickCount") ? try params.integer("clickCount", in: 1...2) : 1
@@ -370,9 +388,7 @@ actor AXWorker {
                 }
                 if method == "mouseMove" {
                     _ = try NativePlatform.ownedWindow(identity.pid, enclosing.id)
-                    if try moveUsingAX(selected, windowID: enclosing.id, handle: handle, params: params) {
-                        return .result(Self.mouseMoveResult(route: "accessibility", pointerMoved: false))
-                    }
+                    if !useSystemPointer { return try moveUsingAX(selected, windowID: enclosing.id, handle: handle) }
                 } else {
                     try ax().requireEnabled(selected)
                 }
@@ -389,12 +405,10 @@ actor AXWorker {
             let route = WindowRoute(owner: identity, windowID: window.windowID, bounds: window.bounds)
             if method == "mouseMove" {
                 try WindowPointerInput.validate(point, in: route)
-                if elementWindow == nil {
+                if !useSystemPointer {
                     var hit = try ax().element(at: CGPoint(x: window.bounds.x + point.x, y: window.bounds.y + point.y), owner: identity)
                     if let target = hit, try ax().windowID(target) != window.windowID { hit = nil }
-                    if try moveUsingAX(hit, windowID: window.windowID, handle: handle, params: params) {
-                        return .result(Self.mouseMoveResult(route: "accessibility", pointerMoved: false))
-                    }
+                    return try moveUsingAX(hit, windowID: window.windowID, handle: handle)
                 }
                 return .mouseMove(route, point)
             }
@@ -496,5 +510,10 @@ actor AXWorker {
     static func mouseMoveResult(route: String, pointerMoved: Bool) -> JSONValue {
         .object(["dispatched": .bool(true), "hoverRoute": .string(route), "systemPointerMoved": .bool(pointerMoved)])
     }
-    func shutdown() { closed = true; snapshots.removeAll(); observedWindowBounds.removeAll(); targets.removeAll(); hovers.removeAll(); access = nil; keyboard = nil; pointer = nil }
+    func shutdown() {
+        do { try keyboard?.releaseHeldKeys() }
+        catch { fputs("Could not release held keys on disconnect: \(error)\n", stderr) }
+        closed = true; snapshots.removeAll(); observedWindowBounds.removeAll(); targets.removeAll(); hovers.removeAll()
+        access = nil; keyboard = nil; pointer = nil
+    }
 }

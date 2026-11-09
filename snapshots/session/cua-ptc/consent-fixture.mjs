@@ -1,4 +1,4 @@
-/** Own a private native substitute for the PTC result replay. */
+/** Own the bridge module and private native substitute; the replay owns its AX-failure marker through finally. */
 import { chmod, copyFile, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { startFixtureHost } from '../cua-native/fixture-host.mjs'
@@ -8,7 +8,7 @@ export const inject = ['userQuestions']
 /** Prepare the helper and retire its service before removing the private executable. */
 export async function apply(ctx) {
   const bridge = join(process.cwd(), 'cua-bridge.mjs')
-  const face = process.env.DSH_EXAMPLE_MODE === 'src' ? 'src/bridge.ts' : 'lib/bridge.js'
+  const face = process.env.DSH_EXAMPLE_MODE === 'lib' ? 'lib/bridge.js' : 'src/bridge.ts'
   await writeFile(bridge, `export { connectCua } from ${JSON.stringify(new URL('../../../packages/experimental/cua/' + face, import.meta.url).href)}\n`)
   ctx.effect(() => () => unlink(bridge))
   const helper = join(process.cwd(), 'native-helper.mjs')

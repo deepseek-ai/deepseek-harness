@@ -1,28 +1,34 @@
 /**
  * One file of the changes view: a sticky header with the path, badges, line
  * counts, and file actions, then its hunks unified or side by side with the
- * unchanged lines between them collapsed into rows that expand them.
+ * unchanged lines between them collapsed into rows that expand them. A section
+ * draws and highlights its lines once it comes within reach of the scrollport;
+ * it redraws only when its own props change.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import clsx from 'clsx'
 import { flushSync } from 'react-dom'
 import {
   FileTypeIcon, IconChevronDownOutlineRegular, IconChevronsUpDownOutlineRegular, IconEllipsisOutlineRegular, IconPlusOutlineRegular,
-  Tooltip,
+  Tag, Tooltip,
   languageForPath, Menu, MenuItemButton, useCodeHighlighter, type CodeHighlighter, type HighlightSpan,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ForgeDiffFile } from '../types.ts'
-import { segmentsOf, splitRows, type DiffRow, type SplitCell, type SplitRow } from './diff-rows.ts'
+import { drawnLines, segmentsOf, splitRows, type DiffRow, type SplitCell, type SplitRow } from './diff-rows.ts'
 import { codeSideAt, readCodeSelection } from './code-selection.ts'
 import { reviewMatches, selectReviewLines, type ReviewSelection } from './review.ts'
 import { ReviewThread, useFileReview } from './ReviewThread.tsx'
+import { OutdatedThreads, ThreadCard, type FileThreads, type LineThread, type ThreadActions } from './ReviewThreads.tsx'
+import { gapOf } from './review-threads.ts'
 import type { FileReviewState } from './review-queue.ts'
 import { ReviewComposer, type ReviewActions } from './ReviewComposer.tsx'
 import reviewCss from './ReviewComposer.module.css'
 import { FileLabel } from './FileLabel.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
+import type { ViewedState } from './viewed-files.ts'
+import type { SectionReach } from './section-reach.ts'
 import css from './ChangesTab.module.css'
 
 type Translate = PropsLocale<typeof NS>['t']
@@ -38,30 +44,47 @@ export interface DiffFileAction {
 /** New side of a file: its lines once read, `loading` while a read runs, or undefined before any. */
 export type DiffFileText = readonly string[] | 'loading' | undefined
 
+/**
+ * What every file section of one changes view calls. The view passes the same
+ * object on every render, so a section redraws only when its own values change.
+ */
+export interface DiffFileHandlers {
+  /** Expand or collapse a file. */
+  readonly toggle: (file: ForgeDiffFile) => void
+  /** Show a large file anyway. */
+  readonly reveal: (path: string) => void
+  /** Expand one gap of a file. */
+  readonly expand: (file: ForgeDiffFile, index: number) => void
+  /** Mark a file viewed, which also collapses it, or clear the mark. */
+  readonly view: (file: ForgeDiffFile, viewed: boolean) => void
+  /** Rows of a file's menu, read whenever the menu draws. */
+  readonly actions: (file: ForgeDiffFile) => readonly DiffFileAction[]
+  /** Receive a file's section element, which scrolling to the file targets, or null once it unmounts. */
+  readonly section: (path: string, element: HTMLElement | null) => void
+  /** Show a file's next unresolved host thread in display order after the last one shown, or its first. */
+  readonly nextThread: (path: string) => void
+  /** Tells each expanded section when it comes within reach of the scrollport, which draws its lines. */
+  readonly reach: SectionReach
+}
+
 /** Props of one file section. */
 export interface DiffFileProps {
   /** Whether the owning tab is visible and may show temporary menus. */
   readonly visible: boolean
   /** Comment destinations and the source being reviewed. */
-  readonly review?: ReviewActions
+  readonly review?: ReviewActions | undefined
   /** The file and its hunks. */
   readonly file: ForgeDiffFile
   /** Whether the section shows its lines. */
   readonly expanded: boolean
-  /** Expand or collapse the section. */
-  readonly onToggle: () => void
   /** Whether the file shows the large-file notice instead of its lines until revealed. */
   readonly large: boolean
   /** Whether the user revealed a large file. */
   readonly revealed: boolean
-  /** Show a large file anyway. */
-  readonly onReveal: () => void
   /** The file's new side, which supplies collapsed unchanged lines. */
   readonly text: DiffFileText
   /** Indexes of the expanded gaps. */
   readonly open: ReadonlySet<number>
-  /** Expand one gap. */
-  readonly onExpand: (index: number) => void
   /** Whether deletions and additions show in two columns; a file with only additions or only deletions keeps one. */
   readonly split: boolean
   /** Whether long lines wrap. */
@@ -70,10 +93,14 @@ export interface DiffFileProps {
   readonly badge: string
   /** Hover text of the path: both paths of a renamed file, else the path. */
   readonly tooltip: string
-  /** Rows of the file's menu. */
-  readonly actions: readonly DiffFileAction[]
-  /** Receives the section element, which scrolling to the file targets. */
-  readonly sectionRef: (element: HTMLElement | null) => void
+  /** Whether the reader marked this change viewed, or marked an earlier change of the file. */
+  readonly viewed: ViewedState
+  /** Review threads of the file from the code host, or undefined while none are read; the view keeps their identity. */
+  readonly threads?: FileThreads | undefined
+  /** Whether the section draws its lines at once, as the target of a thread jump, whose card must exist to be centered. */
+  readonly drawNow?: boolean | undefined
+  /** Actions shared by every section of the view. */
+  readonly handlers: DiffFileHandlers
   /** Forge panel copy. */
   readonly t: Translate
 }
@@ -139,8 +166,8 @@ function pairKind(pair: SplitRow): 'context' | 'change' {
 }
 
 /** The hunks of one file with their collapsed and expanded unchanged lines. */
-function Lines({ file, text, open, onExpand, split, wrap, review, visible, comments, t }: Pick<DiffFileProps,
-  'file' | 'text' | 'open' | 'onExpand' | 'split' | 'wrap' | 'review' | 'visible' | 't'> & { readonly comments: FileReviewState }): ReactNode {
+function Lines({ file, text, open, handlers, split, wrap, review, visible, comments, threads, t }: Pick<DiffFileProps,
+  'file' | 'text' | 'open' | 'handlers' | 'split' | 'wrap' | 'review' | 'visible' | 'threads' | 't'> & { readonly comments: FileReviewState }): ReactNode {
   const lines = typeof text === 'object' ? text : undefined
   const columns = split && file.additions > 0 && file.deletions > 0
   const singleSide = file.status === 'added' ? 'R' : file.status === 'deleted' ? 'L' : null
@@ -308,15 +335,31 @@ function Lines({ file, text, open, onExpand, split, wrap, review, visible, comme
       remaining.delete(thread)
     }
   }
+  // A host thread follows the row of its last line, or the collapsed unchanged lines that hold it.
+  const unplaced = new Set(threads === undefined ? [] : threads.lines.map(item => ({ ...item, actions: threads.actions })))
+  const threadCard = (item: LineThread & { readonly actions: ThreadActions }, columns: boolean): ReactNode =>
+    <ThreadCard key={`thread-${item.thread.id}`} thread={item.thread} place={item.place} actions={item.actions} split={columns} t={t} />
+  const appendThreads = (old: number | null, next: number | null): void => {
+    for (const item of unplaced) {
+      if ((item.place.side === 'L' ? old : next) !== item.place.endLine) continue
+      rows.push(threadCard(item, columns))
+      unplaced.delete(item)
+    }
+  }
   const endsAt = (old: number | null, next: number | null): boolean => selection !== null
     && (selection.comment.side === 'L' ? old : next) === selection.comment.endLine
   for (const [at, segment] of prepared.entries()) {
     if (segment.kind === 'gap') {
       rows.push(<button key={`gap-${segment.index}`} type="button" className={css.gap} disabled={text === 'loading'}
-        data-forge-diff-gap={segment.index} onClick={() => { onExpand(segment.index) }}>
+        data-forge-diff-gap={segment.index} onClick={() => { handlers.expand(file, segment.index) }}>
         <IconChevronsUpDownOutlineRegular size={12} />
         {segment.count === null ? t('diff.unchangedRest') : t('diff.unchanged', { count: segment.count.toLocaleString('en-US') })}
       </button>)
+      for (const item of unplaced) {
+        if (gapOf(file, item.place.side, item.place.endLine) !== segment.index) continue
+        rows.push(threadCard(item, columns))
+        unplaced.delete(item)
+      }
     } else if (columns) {
       for (const [index, pair] of splitRows(segment.rows).entries()) {
         rows.push(<div key={`${at}-${index}`} className={css.pair} data-diff-pair={pairKind(pair)}
@@ -328,6 +371,7 @@ function Lines({ file, text, open, onExpand, split, wrap, review, visible, comme
           inserted = true
         }
         appendComments(pair.left?.no ?? null, pair.right?.no ?? null)
+        appendThreads(pair.left?.no ?? null, pair.right?.no ?? null)
       }
     } else {
       for (const [index, row] of segment.rows.entries()) {
@@ -343,12 +387,14 @@ function Lines({ file, text, open, onExpand, split, wrap, review, visible, comme
           inserted = true
         }
         appendComments(row.old, row.new)
+        appendThreads(row.old, row.new)
       }
     }
   }
   if (review !== undefined) for (const thread of remaining) {
     rows.push(<ReviewThread key={`record-${thread.key}`} thread={thread} actions={review} locked={comments.locked} outdated split={false} t={t} />)
   }
+  for (const item of unplaced) rows.push(threadCard(item, false))
   if (!inserted) rows.push(editor)
   return <div ref={root} className={css.code} style={style} data-single-side={singleSide ?? undefined} data-split={columns ? '' : undefined} data-wrap={wrap ? '' : undefined}
     data-review={review === undefined ? undefined : ''}
@@ -369,30 +415,49 @@ function Lines({ file, text, open, onExpand, split, wrap, review, visible, comme
     }}>{rows}</div>
 }
 
-function Body(props: DiffFileProps): ReactNode {
-  const { file, large, revealed, onReveal, review, t } = props
+/** Whether a file's body draws its hunks line by line rather than a note or a collapsed strip. */
+function drawsLines(file: ForgeDiffFile, large: boolean, revealed: boolean): boolean {
+  return !file.binary && !file.oversized && file.hunks.length > 0 && (!large || revealed)
+}
+
+/** The file's lines or the note that replaces them, with its saved comments; host threads on lines follow when no lines show. */
+function Content(props: DiffFileProps): ReactNode {
+  const { file, large, revealed, handlers, review, threads, t } = props
   const comments = useFileReview(review, file.path)
   const records = review === undefined ? null : comments.threads.map(thread => <ReviewThread key={thread.key} thread={thread}
     actions={review} locked={comments.locked} outdated={!reviewMatches(thread.selection, review.source, file)} split={false} t={t} />)
-  if (file.binary) return <><p className={css.fileNote}>{t('diff.binary')}</p>{records}</>
-  if (file.oversized) return <><p className={css.fileNote}>{t('diff.fileTooLarge')}</p>{records}</>
-  if (file.hunks.length === 0) return records
+  const lineThreads = threads?.lines.map(item => <ThreadCard key={item.thread.id} thread={item.thread} place={item.place}
+    actions={threads.actions} t={t} />)
+  if (file.binary) return <><p className={css.fileNote}>{t('diff.binary')}</p>{records}{lineThreads}</>
+  if (file.oversized) return <><p className={css.fileNote}>{t('diff.fileTooLarge')}</p>{records}{lineThreads}</>
+  if (file.hunks.length === 0) return <>{records}{lineThreads}</>
   if (large && !revealed) {
     // A large file starts as one collapsed strip, drawn and opened like the collapsed unchanged lines.
     return (
-      <><button type="button" className={css.gap} onClick={onReveal}>
+      <><button type="button" className={css.gap} onClick={() => { handlers.reveal(file.path) }}>
         <IconChevronsUpDownOutlineRegular size={12} />
         {t('diff.largeCollapsed', { count: (file.additions + file.deletions).toLocaleString('en-US') })}
-      </button>{records}</>
+      </button>{records}{lineThreads}</>
     )
   }
   return <Lines {...props} comments={comments} />
 }
 
+/** Host threads on the whole file, the lines, then the host threads that later commits made outdated. */
+function Body(props: DiffFileProps): ReactNode {
+  const { threads, t } = props
+  return <>
+    {threads?.file.map(thread => <ThreadCard key={thread.id} thread={thread} place={{ kind: 'file' }} actions={threads.actions} t={t} />)}
+    <Content {...props} />
+    {threads !== undefined && <OutdatedThreads threads={threads.outdated} actions={threads.actions} t={t} />}
+  </>
+}
+
 /** File actions live only while their owning tab is visible. */
-function FileMenu({ name, actions, t }: {
+function FileMenu({ name, file, handlers, t }: {
   readonly name: string
-  readonly actions: readonly DiffFileAction[]
+  readonly file: ForgeDiffFile
+  readonly handlers: DiffFileHandlers
   readonly t: Translate
 }): ReactNode {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -417,7 +482,7 @@ function FileMenu({ name, actions, t }: {
         </button>
       )}
     >
-      {actions.map(action => (
+      {handlers.actions(file).map(action => (
         <MenuItemButton
           key={action.label}
           onSelect={() => {
@@ -433,35 +498,74 @@ function FileMenu({ name, actions, t }: {
 }
 
 /**
- * Render one file of a diff.
- * @param props - the file, its section and gap state, layout choices, menu actions, and copy.
+ * Render one file of a diff. Until the section first comes within reach of the scrollport or a thread jump targets it,
+ * an expanded file that draws lines shows a box of about their height instead.
+ * @param props - the file, its section and gap state, layout choices, shared actions, and copy.
  * @returns the file section.
  */
-export function DiffFile(props: DiffFileProps): ReactNode {
-  const { file, expanded, onToggle, badge, tooltip, actions, sectionRef, t } = props
+function DiffFileSection(props: DiffFileProps): ReactNode {
+  const { file, expanded, large, revealed, badge, tooltip, viewed, threads, handlers, t } = props
   const name = file.path.slice(file.path.lastIndexOf('/') + 1)
+  const element = useRef<HTMLElement | null>(null)
+  const [reached, setReached] = useState(false)
+  // A thread jump draws the section for good, so it does not fall back to the box once the jump ends.
+  if (props.drawNow === true && !reached) setReached(true)
+  const waiting = expanded && !reached && props.drawNow !== true && drawsLines(file, large, revealed)
+  useEffect(() => {
+    /* v8 ignore next -- React attaches the section before it runs effects */
+    if (!waiting || element.current === null) return
+    return handlers.reach.observe(element.current, () => { setReached(true) })
+  }, [waiting, handlers.reach])
+  const sectionRef = useCallback((node: HTMLElement | null) => {
+    element.current = node
+    handlers.section(file.path, node)
+  }, [handlers, file.path])
+  const placeholder: CSSProperties & { '--forge-rows': number } = { '--forge-rows': drawnLines(file) }
   return (
-    <section ref={sectionRef} className={css.file} data-forge-diff-file={file.path} data-expanded={expanded ? '' : undefined}>
+    <section ref={sectionRef} className={css.file} data-forge-diff-file={file.path} data-expanded={expanded ? '' : undefined}
+      data-viewed={viewed}>
       <div className={css.fileHeader}>
         <button
           type="button"
           className={css.fileToggle}
           aria-expanded={expanded}
           aria-label={t(expanded ? 'change.collapse' : 'change.expand', { name })}
-          onClick={onToggle}
+          onClick={() => { handlers.toggle(file) }}
         >
           <IconChevronDownOutlineRegular size={14} className={css.chevron} />
         </button>
-        <FileTypeIcon path={file.path} size={16} className={css.fileIcon} />
-        <span className={css.filePath}>
-          <FileLabel path={file.path} tooltip={tooltip} />
+        <span className={css.fileTitle}>
+          <FileTypeIcon path={file.path} size={16} className={css.fileIcon} />
+          <span className={css.filePath}>
+            <FileLabel path={file.path} tooltip={tooltip} />
+          </span>
+          {viewed === 'changed' && (
+            <Tag tone="warning" className={css.changedTag}><span className={css.changedText}>{t('viewed.changed')}</span></Tag>
+          )}
+          {threads !== undefined && threads.unresolved > 0 && (
+            <Tooltip label={t('thread.next')} side="bottom">
+              <button type="button" className={css.threadCount} aria-label={t('thread.unresolvedAria', { name, count: threads.unresolved })}
+                onClick={() => { handlers.nextThread(file.path) }}>
+                <span className={css.threadCountText}>{t('thread.unresolvedCount', { count: threads.unresolved })}</span>
+                <span className={css.threadCountNumber}>{threads.unresolved}</span>
+              </button>
+            </Tooltip>
+          )}
+          <span className={css.fileSpacer} data-forge-path-spacer="" />
+          {badge !== '' && <span className={css.badge}>{badge}</span>}
         </span>
-        <span className={css.fileSpacer} data-forge-path-spacer="" />
-        {badge !== '' && <span className={css.badge}>{badge}</span>}
         {!file.binary && <Counts file={file} t={t} />}
-        {props.visible && <FileMenu name={name} actions={actions} t={t} />}
+        <label className={css.viewed} title={t('viewed.hint')}>
+          <input type="checkbox" checked={viewed === 'viewed'} aria-label={t('viewed.aria', { name })}
+            onChange={(event) => { handlers.view(file, event.target.checked) }} />
+          <span className={css.viewedLabel} aria-hidden="true">{t('viewed.label')}</span>
+        </label>
+        {props.visible && <FileMenu name={name} file={file} handlers={handlers} t={t} />}
       </div>
-      {expanded && <Body {...props} />}
+      {expanded && (waiting ? <div className={css.unreached} style={placeholder} data-forge-diff-unreached="" /> : <Body {...props} />)}
     </section>
   )
 }
+
+/** One file of a diff, redrawn only when its props change. */
+export const DiffFile = memo(DiffFileSection)

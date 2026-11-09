@@ -160,22 +160,6 @@
       }
     },
     {
-      "name": "interrupt_agent",
-      "description": "Ask a subagent to stop its current work. This call returns without waiting for it to stop. You can continue a local subagent's conversation later with send_message. External executions stop permanently and cannot receive follow-ups. Subagents it started will keep running.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "agent": {
-            "type": "string",
-            "description": "The name of an agent created under you: your direct child or a deeper descendant."
-          }
-        },
-        "required": [
-          "agent"
-        ]
-      }
-    },
-    {
       "name": "list_agents",
       "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry names, descriptions, and status. A descendant's name is its path from the root, such as reviewer/checker. You can message any other agent in the subagent tree. running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. corrupt, unsupported, or unavailable means this row's own descendants could not be read; the row itself is still a member you can message. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
       "parameters": {

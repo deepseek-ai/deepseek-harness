@@ -1,5 +1,5 @@
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { GhOutputLimitError, GhTimeoutError, GhUnavailableError } from '../src/gh.ts'
 import type { GhOutput, GhRunner } from '../src/gh.ts'
 import { PULL_REQUEST_COMMITS_QUERY, THREADS_QUERY } from '../src/graphql.ts'
@@ -25,7 +25,7 @@ function output(stdout: unknown, exitCode = 0, stderr = ''): GhOutput {
   return { exitCode, stdout: typeof stdout === 'string' ? stdout : JSON.stringify(stdout), stderr }
 }
 
-const limits: GitHubLimits = { maxOutputBytes: 8_388_608, maxReviewThreads: 1_000 }
+const limits: GitHubLimits = { maxOutputBytes: 8_388_608, maxReviewThreads: 1_000, maxCommits: 250 }
 
 function provider(run: GhRunner): GitHubProvider {
   return new GitHubProvider(run, ['github.com', 'GHE.corp.example'], limits)
@@ -446,6 +446,55 @@ describe('GitHub provider reads', () => {
     expect(gh.calls[1]?.at(-1)).toBe(`repos/octo/demo/compare/${base}...${head.toUpperCase()}`)
   })
 
+  it('starts the comparison from the base the status recorded while it confirms the head', async () => {
+    const confirmed = Promise.withResolvers<GhOutput>()
+    const gh = fakeGh(args => args.includes(`query=${PULL_REQUEST_COMMITS_QUERY}`)
+      ? confirmed.promise : output('diff --git a/x b/x\n'))
+
+    const read = provider(gh.run).diff(pull(7), head, signal, base)
+    await vi.waitFor(() => { expect(gh.calls).toHaveLength(2) })
+    expect(gh.calls.map(call => call.at(-1))).toContain(`repos/octo/demo/compare/${base}...${head}`)
+    confirmed.resolve(output({ data: { repository: { pullRequest: { headRefOid: head, baseRefOid: base.toUpperCase() } } } }))
+
+    await expect(read).resolves.toBe('diff --git a/x b/x\n')
+    expect(gh.calls).toHaveLength(2)
+  })
+
+  it('cancels the early comparison and waits for it when the head moved, the base differs, or the head read fails', async () => {
+    const moved = 'e'.repeat(40)
+    for (const [answer, expected, compares] of [
+      [output({ data: { repository: { pullRequest: { headRefOid: pushed, baseRefOid: base } } } }),
+        { code: 'stale', message: `the pull request head moved from ${head} to ${pushed}` }, [base]],
+      [output({ data: { repository: { pullRequest: { headRefOid: head, baseRefOid: moved } } } }), 'diff --git a/y b/y\n', [base, moved]],
+      [output('', 1, 'gh: Something went wrong (HTTP 502)'), { code: 'unavailable', message: 'gh: Something went wrong (HTTP 502)' }, [base]],
+    ] as const) {
+      const calls: string[][] = []
+      const cancelled: string[] = []
+      const run: GhRunner = async (args, operation) => {
+        calls.push([...args])
+        if (args.includes(`query=${PULL_REQUEST_COMMITS_QUERY}`)) return answer
+        const range = String(args.at(-1))
+        if (range.includes(`${moved}...`)) return output('diff --git a/y b/y\n')
+        // The early comparison runs until the provider cancels it.
+        await new Promise((resolve) => { operation.addEventListener('abort', resolve, { once: true }) })
+        cancelled.push(range)
+        throw operation.reason
+      }
+
+      await expect(provider(run).diff(pull(7), head, signal, base)).resolves.toEqual(expected)
+      expect(calls.map(call => String(call.at(-1))).filter(target => target.includes('/compare/'))
+        .map(target => target.split('/compare/')[1]?.split('...')[0])).toEqual(compares)
+      expect(cancelled).toEqual([`repos/octo/demo/compare/${base}...${head}`])
+    }
+  })
+
+  it('refuses a base that is not a full commit object name before starting gh', async () => {
+    const gh = pinned()
+
+    await expect(provider(gh.run).diff(pull(7), head, signal, 'HEAD~1')).rejects.toThrow('forge-github: invalid base commit "HEAD~1"')
+    expect(gh.calls).toEqual([])
+  })
+
   it('reports a head that moved past the requested commit as stale without reading the diff', async () => {
     const gh = pinned({ head: pushed, base })
 
@@ -550,6 +599,92 @@ describe('GitHub provider reads', () => {
   })
 })
 
+describe('GitHub provider commits', () => {
+  const sha = (n: number): string => String(n).repeat(40).slice(0, 40)
+  const node = (n: number, author: unknown = { name: 'Octo Cat', user: { login: 'octo' } }) => ({ commit: {
+    oid: sha(n), messageHeadline: `commit ${n}`, authoredDate: `2026-10-0${n}T00:00:00Z`, author,
+    parents: { nodes: n === 1 ? [] : [{ oid: sha(n - 1) }] },
+  } })
+  const page = (nodes: unknown[], next: string | null, head = sha(3), total = 3) => output({ data: { repository: { pullRequest: {
+    headRefOid: head, commits: { totalCount: total, pageInfo: { hasNextPage: next !== null, endCursor: next }, nodes },
+  } } } })
+
+  it('lists the commits oldest first across pages pinned to one head, bounded by maxCommits', async () => {
+    const gh = fakeGh(args => args.includes('cursor=page-1') ? page([node(3, { name: 'Ann', user: null })], null) : page([node(1), node(2, null)], 'page-1'))
+
+    await expect(provider(gh.run).commits(pull(7), signal)).resolves.toEqual({
+      headSha: sha(3),
+      truncated: false,
+      commits: [
+        { sha: sha(1), parent: null, title: 'commit 1', author: 'octo', authoredAt: '2026-10-01T00:00:00Z' },
+        { sha: sha(2), parent: sha(1), title: 'commit 2', author: null, authoredAt: '2026-10-02T00:00:00Z' },
+        { sha: sha(3), parent: sha(2), title: 'commit 3', author: 'Ann', authoredAt: '2026-10-03T00:00:00Z' },
+      ],
+    })
+    expect(gh.calls[0]).toEqual(expect.arrayContaining(['--hostname', 'github.com', 'owner=octo', 'name=demo', 'number=7', 'first=100']))
+    expect(gh.calls[0]?.some(arg => arg.startsWith('cursor='))).toBe(false)
+    expect(gh.calls[1]).toEqual(expect.arrayContaining(['cursor=page-1']))
+
+    const bounded = fakeGh(() => page([node(1), node(2)], 'page-1'))
+    await expect(new GitHubProvider(bounded.run, ['github.com'], { ...limits, maxCommits: 2 }).commits(pull(7), signal))
+      .resolves.toMatchObject({ truncated: true, commits: [{ sha: sha(1) }, { sha: sha(2) }] })
+    expect(bounded.calls).toHaveLength(1)
+    expect(bounded.calls[0]).toEqual(expect.arrayContaining(['first=2']))
+  })
+
+  it('refuses a listing whose head or count moves between pages, or whose pages do not advance', async () => {
+    const moved = fakeGh(args => args.includes('cursor=page-1') ? page([node(3)], null, sha(4)) : page([node(1)], 'page-1'))
+    await expect(provider(moved.run).commits(pull(7), signal))
+      .resolves.toEqual({ code: 'unavailable', message: 'The pull request head changed while its commits were read' })
+    const recounted = fakeGh(args => args.includes('cursor=page-1') ? page([node(3)], null, sha(3), 4) : page([node(1)], 'page-1'))
+    await expect(provider(recounted.run).commits(pull(7), signal))
+      .resolves.toEqual({ code: 'unavailable', message: 'The pull request head changed while its commits were read' })
+    // A page that repeats the cursor it was read after would be requested again forever.
+    const stuck = fakeGh(args => page(args.includes('cursor=page-1') ? [] : [node(1)], 'page-1'))
+    await expect(provider(stuck.run).commits(pull(7), signal))
+      .resolves.toEqual({ code: 'unavailable', message: 'GitHub commit pagination did not advance' })
+    expect(stuck.calls).toHaveLength(2)
+    const endless = fakeGh(() => output({ data: { repository: { pullRequest: {
+      headRefOid: sha(3), commits: { totalCount: 3, pageInfo: { hasNextPage: true, endCursor: null }, nodes: [node(1)] },
+    } } } }))
+    await expect(provider(endless.run).commits(pull(7), signal))
+      .resolves.toEqual({ code: 'unavailable', message: 'GitHub commit pagination did not advance' })
+  })
+
+  it('refuses a missing pull request and an unexpected response', async () => {
+    await expect(provider(fakeGh(() => output({ data: { repository: { pullRequest: null } } })).run).commits(pull(7), signal))
+      .resolves.toEqual({ code: 'not-found', message: 'pull request 7 was not found' })
+    await expect(provider(fakeGh(() => output({ data: { repository: null } })).run).commits(pull(7), signal))
+      .resolves.toEqual({ code: 'not-found', message: 'pull request 7 was not found' })
+    await expect(provider(fakeGh(() => output({ data: { repository: { pullRequest: { headRefOid: 1 } } } })).run).commits(pull(7), signal))
+      .resolves.toEqual({ code: 'unavailable', message: 'unexpected GitHub response to the commit listing' })
+  })
+
+  it('reports GraphQL errors, a body that is not GraphQL, and a refused request as failures', async () => {
+    await expect(provider(fakeGh(() => output({ errors: [{ type: 'FORBIDDEN', message: 'Resource not accessible' }] })).run).commits(pull(7), signal))
+      .resolves.toEqual({ code: 'unavailable', message: 'Resource not accessible' })
+    await expect(provider(fakeGh(() => output('not json')).run).commits(pull(7), signal))
+      .resolves.toEqual({ code: 'unavailable', message: 'unexpected GitHub response' })
+    await expect(provider(fakeGh(() => output('', 1, 'To get started with GitHub CLI, please run:  gh auth login')).run).commits(pull(7), signal))
+      .resolves.toEqual({ code: 'unauthenticated', message: 'To get started with GitHub CLI, please run:  gh auth login' })
+  })
+
+  it('reads the changes between two commits through the compare API in its diff form', async () => {
+    const gh = fakeGh(() => output('diff --git a/x b/x\n'))
+
+    await expect(provider(gh.run).compare(pull(7, enterprise), sha(1), sha(3), signal)).resolves.toBe('diff --git a/x b/x\n')
+    expect(gh.calls).toEqual([[
+      'api', '--hostname', 'ghe.corp.example', '--allow-escape-sequences', '-H', 'Accept: application/vnd.github.diff',
+      `repos/team/svc/compare/${sha(1)}...${sha(3)}`,
+    ]])
+    const refused = 'gh: Sorry, this diff is taking too long to generate. (HTTP 406)'
+    await expect(provider(fakeGh(() => output({ message: 'Sorry, this diff is taking too long to generate.' }, 1, refused)).run)
+      .compare(pull(7), sha(1), sha(3), signal)).resolves.toEqual({ code: 'too-large', message: 'Sorry, this diff is taking too long to generate.' })
+    await expect(provider(gh.run).compare(pull(7), 'main', sha(3), signal)).rejects.toThrow('forge-github: invalid commit "main"')
+    await expect(provider(gh.run).compare(pull(7), sha(1), 'HEAD~1', signal)).rejects.toThrow('forge-github: invalid commit "HEAD~1"')
+  })
+})
+
 it('rejects readiness, actions, and content reads for an unconfigured host without starting gh', async () => {
   const gh = fakeGh(() => output('unexpected'))
   const subject = provider(gh.run)
@@ -560,5 +695,14 @@ it('rejects readiness, actions, and content reads for an unconfigured host witho
   await expect(subject.merge(target, { method: 'squash', headSha: 'a'.repeat(40) }, signal)).resolves.toEqual({ code: 'failed', message })
   await expect(subject.diff(target, 'a'.repeat(40), signal)).resolves.toEqual({ code: 'unavailable', message })
   await expect(subject.fileText(target, 'a'.repeat(40), 'file.txt', signal)).resolves.toEqual({ code: 'unavailable', message })
+  await expect(subject.commits(target, signal)).resolves.toEqual({ code: 'unavailable', message })
+  await expect(subject.compare(target, 'a'.repeat(40), 'b'.repeat(40), signal)).resolves.toEqual({ code: 'unavailable', message })
+  // A repository that cannot name a request is refused before its host, as every read refuses it.
+  const unsafe = pull(7, { ...demo, host: 'unconfigured.example', owner: 'oc/to' })
+  const invalid = 'forge-github: invalid repository "oc/to/demo"'
+  await expect(subject.diff(unsafe, 'a'.repeat(40), signal)).rejects.toThrow(invalid)
+  await expect(subject.fileText(unsafe, 'a'.repeat(40), 'file.txt', signal)).rejects.toThrow(invalid)
+  await expect(subject.commits(unsafe, signal)).rejects.toThrow(invalid)
+  await expect(subject.compare(unsafe, 'a'.repeat(40), 'b'.repeat(40), signal)).rejects.toThrow(invalid)
   expect(gh.calls).toEqual([])
 })

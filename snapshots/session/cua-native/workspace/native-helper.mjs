@@ -47,7 +47,6 @@ function serve() {
   const server = createServer({ allowHalfOpen: true }, socket => {
     sockets.add(socket)
     let connected = false
-    let systemPointerHover
     const connectionId = ++connection
     const input = createInterface({ input: socket })
     const scopedRecord = (event, data = {}) => record(event, { connection: connectionId, ...data })
@@ -59,7 +58,6 @@ function serve() {
           socket.destroy()
           return
         }
-        systemPointerHover = request.config.systemPointerHover
         connected = true
         hadClient = true
         clearTimeout(startupDeadline)
@@ -73,7 +71,7 @@ function serve() {
       }
       let response
       try {
-        const result = call(request.id, request.method, request.params, systemPointerHover)
+        const result = call(request.id, request.method, request.params)
         if (result === undefined) return
         response = { id: request.id, result }
       } catch (error) {
@@ -119,12 +117,13 @@ function createApplicationState(socket, record, application, captureBroker, conn
   const screenshotConfig = new URL('./fixture-screenshot.json', import.meta.url)
   const customScreenshot = existsSync(screenshotConfig) ? JSON.parse(readFileSync(screenshotConfig, 'utf8')) : undefined
   const snapshots = new Map()
+  const observedWindows = new Set()
   let acquired = false
   let generation = 0
   let observationChanged = false
   let malformedScreenshot = false
   function refuse(code, message) { throw Object.assign(new Error(message), { code }) }
-  function call(requestId, method, params, systemPointerHover) {
+  function call(requestId, method, params) {
     record('call', { requestId, method, params })
     if (method === 'applicationIcons') return Object.fromEntries(params.paths.map(path => [path, `data:image/png;base64,${png}`]))
     if (method === 'openPermissionSettings') return { opened: true }
@@ -160,13 +159,17 @@ function createApplicationState(socket, record, application, captureBroker, conn
       } }
     }
     if (method === 'listWindows') return [window, axlessWindow]
+    if (params.windowId !== undefined && ![7, 8, 9].includes(params.windowId)) refuse('WINDOW_UNAVAILABLE', 'Window is closed or belongs to another application')
     if (method === 'getState') {
       snapshots.delete(params.windowId ?? null)
+      if (params.windowId === undefined) observedWindows.clear()
+      else observedWindows.delete(params.windowId)
       if (existsSync(new URL('./fixture-ax-failure', import.meta.url))) refuse('NATIVE_ERROR', 'Fixture accessibility read failed')
       if (observationChanged) {
         observationChanged = false
         refuse('STALE_SNAPSHOT', 'Accessibility tree changed during observation; read fresh getAccessibilityTree')
       }
+      for (const id of params.windowId === undefined ? [7, 8] : [params.windowId]) observedWindows.add(id)
       generation++
       const axless = params.windowId === 8
       const snapshotId = `${scope}-snapshot-${generation}`
@@ -190,26 +193,29 @@ function createApplicationState(socket, record, application, captureBroker, conn
       socket.write(JSON.stringify({ type: 'diagnostic', requestId, stage: 'capture-image.begin', elapsedMs: 1 }) + '\ninvalid screenshot response\n')
       return
     }
-    if (method === 'screenshot') return customScreenshot
-      ? { pixelWidth: customScreenshot.pixelWidth, pixelHeight: customScreenshot.pixelHeight, bounds: customScreenshot.bounds,
+    if (method === 'screenshot') {
+      observedWindows.add(params.windowId)
+      return customScreenshot
+        ? { pixelWidth: customScreenshot.pixelWidth, pixelHeight: customScreenshot.pixelHeight, bounds: customScreenshot.bounds,
         windowId: params.windowId, mimeType: 'image/png', coordinateSpace: 'window-points',
         data: readFileSync(new URL(customScreenshot.file, import.meta.url)).toString('base64') }
-      : { windowId: params.windowId, mimeType: 'image/png', data: png, pixelWidth: 1, pixelHeight: 1, bounds, coordinateSpace: 'window-points' }
+        : { windowId: params.windowId, mimeType: 'image/png', data: png, pixelWidth: 1, pixelHeight: 1, bounds, coordinateSpace: 'window-points' }
+    }
+    if (['click', 'mouseMove', 'scroll', 'drag'].includes(method) && params.elementId === undefined
+      && !observedWindows.has(params.windowId)) refuse('STALE_SNAPSHOT', 'Window has no observation; read getAccessibilityTree or take a screenshot before coordinate input')
     if (method === 'click' || method === 'setValue' || method === 'mouseMove') {
       const observed = params.snapshotId === undefined && params.elementId === undefined
         ? snapshots.get(params.windowId) ?? snapshots.get(null)
         : [...snapshots.values()].find(snapshot => snapshot.snapshotId === params.snapshotId)
-      if (!observed) refuse('STALE_SNAPSHOT', 'Read fresh state before acting')
-      if (params.windowId !== undefined && observed.windowId !== null && observed.windowId !== params.windowId) refuse('STALE_SNAPSHOT', `Snapshot belongs to window ${observed.windowId}; read getAccessibilityTree on window ${params.windowId}`)
-      if (observed.axless && params.elementId !== undefined) refuse('INVALID_ARGUMENT', 'Element id is absent from the selected snapshot')
+      if (!observed && (params.snapshotId !== undefined || params.elementId !== undefined)) refuse('STALE_SNAPSHOT', 'Read fresh state before acting')
+      if (params.windowId !== undefined && observed?.windowId != null && observed.windowId !== params.windowId) refuse('STALE_SNAPSHOT', `Snapshot belongs to window ${observed.windowId}; read getAccessibilityTree on window ${params.windowId}`)
+      if (observed?.axless && params.elementId !== undefined) refuse('INVALID_ARGUMENT', 'Element id is absent from the selected snapshot')
       let systemPointerMoved = false
       if (method === 'mouseMove') {
         const alternate = params.elementId === '0' || (params.x >= 20 && params.x <= 40)
-        if (!alternate && !application.hovering) {
-          if (!(systemPointerHover ?? params.allowSystemPointer)) refuse('HOVER_UNAVAILABLE', 'No AX alternate UI at this target. No input was sent and the pointer did not move.')
-          systemPointerMoved = true
-        }
-        application.hovering = alternate
+        systemPointerMoved = params.useSystemPointer === true
+        if (!systemPointerMoved && !alternate && !application.hovering) refuse('HOVER_UNAVAILABLE', 'No AX alternate UI at this target. No input was sent and the pointer did not move.')
+        application.hovering = !systemPointerMoved && alternate
       }
       else if (method === 'click' && params.windowId === 8) application.visualCount++
       else if (method === 'click') application.count++

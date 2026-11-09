@@ -60,11 +60,11 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 | `agentPreset` | `ptc` | 仅为绑定该 preset 的 Agent 注册工具和指引；`false` 表示全局注册。 |
 | `allowedApps` | `[]` | 旧路径和签名许可，只导入 profile 存储一次供撤销，不授予新 Bundle ID 身份访问权限。 |
 | `helperPath` | 包内可执行文件 | 已签名 helper `.app` 内可执行文件的绝对路径；裸二进制会触发 `NATIVE_APPLICATION_REQUIRED`。 |
+| `requireSystemPointerApproval` | `true` | 主任务首次显式请求移动系统指针时询问用户。设为 `false` 时仅本次显式移动免询问。 |
 | `sourceSigning` | `ad-hoc` | 源码签名：`ad-hoc` 临时签名，或 `{ identity, keychain }` 指定已有证书及钥匙串路径。安装版和 `helperPath` 忽略此项。 |
 | `buildTimeoutMs` | `300000` | 原生组件准备的最长时间。 |
 | `timeoutMs` | `30000` | 单次操作截止时间，取消后可能已发生部分输入。 |
 | `connectTimeoutMs` | `5000` | 连接或启动共享 helper 的截止时间。 |
-| `systemPointerHover` | `false` | AX 悬停不可用时，允许 `mouseMove` 移动可见光标。 |
 | `permissionPollIntervalMs` | `1000` | 原生引导打开期间检查权限和窗口位置的间隔，单位为毫秒。 |
 | `screenshotTimeoutMs` | `5000` | 截图总期限，包含排队时间，且不超过 `timeoutMs`。 |
 | `axTimeoutMs` | `3000` | 每次 Accessibility 系统调用的截止时间，与完整操作截止独立配置。 |
@@ -79,7 +79,9 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 
 [配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-cua-macos)列出全部字段。原生工具调用使用 `{method, params}`，模型可以看到每个方法的完整参数定义。`getApp` 返回每个面向应用的操作所需的 `appHandle`，`app.getWindow(windowId)` 返回负责截图和指针输入的对象。
 
-`pressKey(key, modifiers?)` 按下并释放一个键。修饰键名称单独传入，例如 `pressKey('Tab', ['shift'])` 或 `pressKey('+')`；省略修饰键数组表示不按修饰键。macOS helper 接受 `command`/`cmd`、`shift`、`option`/`alt`、`control`/`ctrl` 和 `fn`，并映射到对应物理键。按键名由平台定义；数字键盘名称（`KP_0` 到 `KP_9`、`KP_Enter` 和数字键盘运算键）保留独立的物理键码。`typeText` 发送字面文本，包括其中的换行和制表符。在 macOS 上，通过 App 对象调用 `pressKey`。调用共享接口 `sendKeyEvent` 会收到 `NOT_IMPLEMENTED`。
+`pressKey(key, modifiers?)` 按下并松开一个键。使用快捷键时单独传入修饰键，例如 `pressKey('a', ['command'])`。单独调用 `pressKey('shift')` 时，按下事件带有 Shift 标志，释放事件清除该标志。`+` 和 `plus` 都会发送 Shift 和等号。macOS helper 接受 `command`/`cmd`、`shift`、`option`/`alt`、`control`/`ctrl` 和 `fn`，并映射到对应物理键。按键名由平台定义；数字键盘名称（`KP_0` 到 `KP_9`、`KP_Enter` 和数字键盘运算键）保留独立的物理键码。`typeText` 发送字面文本，包括其中的换行和制表符。短按使用 App 对象上的 `pressKey`。
+
+长按时，在 `run_code` 中调用 `app.sendKeyEvent('w', 'down')`。首次按下后，该键在同一次执行的后续工具调用中保持按下。对自己已按住的普通键再发一次 `down`，原接收进程会收到一次带重复标志的按下事件。调用方决定是否重复和间隔多久。控件可能过滤模拟的重复事件，可通过控件的实际变化确认效果。松键只需一次 `up`。每个键可分别松开。例如先按 W，再按 D，松开 D 后 W 仍按着。程序正常返回、出错退出或用户暂停时，helper 为本次执行仍按着的键逐一发送松开事件，每个事件都发回原接收进程。后续执行不能释放前一次执行的键。
 
 Agent 销毁和插件卸载会取消并等待完整工具调用，包括图像接入检查和附件存储。已经开始的图像写入必须结束后，销毁才会返回；已取消的调用不会返回成功截图。
 
@@ -113,9 +115,9 @@ void await window.getScreenshot()
 
 使用 `cua` API 发现并选择应用（`listApps`、`getState`、`findApps`、`getApp`）；使用选定的应用来激活它、枚举其窗口并选择窗口。截图和指针输入都要求选择窗口，不只在存在多个窗口时才需要。`getApp` 和 `app.getWindow(windowId)` 返回时不读取 AX；根据 `getWindows()` 中的标题与位置选择窗口。
 
-`getWindow` 不发送原生请求；截图和指针输入会拒绝已关闭或属于其他应用的窗口。元素操作前须显式读取 `getAccessibilityTree()`。截图和坐标输入不要求 AX 读取成功；绝对像素坐标要求已交付的截图。已确认归属但没有 AX 界面的窗口在显式观察时返回空快照。在单个 API 实例内，门面按应用句柄保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享它，包括重复选择。读取任一窗口都会替换该快照；元素操作使用最新快照 ID，因此应使用最新树中的元素 ID，不应假定旧 ID 仍指向同一控件。读取失败不会发布部分快照；可以重新读取，但不要重复此前的输入。窗口对象负责截图和指针输入。键盘方法保留在 `app` 上，因为输入跟随应用的当前焦点。
+`getWindow` 不发送原生请求；截图和指针输入会拒绝已关闭或属于其他应用的窗口。元素操作前须显式读取 `getAccessibilityTree()`。截图不要求 AX 读取成功。所有坐标输入（包括相对坐标）都要求先成功读取覆盖该窗口的 AX 或取得截图；绝对像素坐标要求已交付的截图。已确认归属但没有 AX 界面的窗口在显式观察时返回空快照。在单个 API 实例内，门面按应用句柄保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享它，包括重复选择。读取任一窗口都会替换该快照；元素操作使用最新快照 ID，因此应使用最新树中的元素 ID，不应假定旧 ID 仍指向同一控件。读取失败不会发布部分快照；可以重新读取，但不要重复此前的输入。窗口对象负责截图和指针输入。键盘方法保留在 `app` 上，因为输入跟随应用的当前焦点。
 
-`mouseMove(target)` 默认通过 AX 悬停。目标或其祖先必须已启用，并同时声明 `AXShowAlternateUI` 和 `AXShowDefaultUI`。进入子控件会保持展开，离开后恢复默认界面。如果没有可用的 AX 路径，helper 返回 `HOVER_UNAVAILABLE`，不发送输入。可点击已经可见的控件，或用 `performAction` 执行控件声明的动作。浏览器内容缺少这些 AX 动作时，请使用浏览器工具。只有允许移动用户可见光标时才开启 `systemPointerHover`。这条路径要求目标在前台且未被遮挡，操作后光标停在目标位置。
+普通 `mouseMove(target)` 默认通过辅助功能悬停。如果目标或其祖先没有同时声明 `AXShowAlternateUI` 和 `AXShowDefaultUI`，则返回 `HOVER_UNAVAILABLE`，不会弹窗。只有任务确实需要移动用户的鼠标时，主任务才调用 `win.mouseMove(target, { useSystemPointer: true })`。用户允许后，Host 重新检查窗口和目标位置，再执行本次移动。每次移动系统指针都要显式传 `useSystemPointer: true`。省略参数或传 `false` 时使用辅助功能悬停。拒绝时不派发输入。会话记住此次选择，直到关闭会话或重启 DSH。
 
 `paste(text, { format: "text" | "html" })` 临时提供指定格式的剪贴板内容，并调用应用已启用的标准 Paste 菜单命令。临时格式保留到剪贴板读取方请求其数据，然后只在仍持有剪贴板时恢复保存的全部原格式，保留期间产生的新复制内容。粘贴操作共用跨进程锁，取消会等待辅助进程清理。强制终止进程可能阻止恢复。应用不支持 Paste 命令时明确失败，不自动改成逐字输入；`typeText` 仍单独提供按键事件输入。
 
@@ -185,13 +187,13 @@ In persistent PTC, use the host-provided bridge initialization once and retain t
 Signatures show resolved return values after await. ActionResult = { dispatched: boolean, foregroundChanged?: boolean | null }; foregroundChanged is omitted when not sampled and null when the sample is unavailable. JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }; numbers must be finite. App is the application object with readonly app.appHandle: string (opaque) and the methods listed below for app level. Window is the window object with readonly window.windowId: number and the methods listed below for window level. Neither object carries pid.
 
 Setup and discovery:
-- cua.getCapabilities(options?: { emit?: boolean }) -> { platform: string, permissions: { accessibility: boolean, screenRecording: boolean }, appLevelAccessibility: boolean, keyboard: ('app' | 'window')[], sessionLocked: boolean | null, methods: string[], coordinateSpace: 'screenshot-pixels', browser: false } — inspect reported permissions, sessionLocked, methods, and keyboard scopes without requesting permissions.
+- cua.getCapabilities(options?: { emit?: boolean }) -> { platform: string, permissions: { accessibility: boolean, screenRecording: boolean }, appLevelAccessibility: boolean, systemPointer: boolean, keyboard: ('app' | 'window')[], sessionLocked: boolean | null, methods: string[], coordinateSpace: 'screenshot-pixels', browser: false } — inspect reported permissions, sessionLocked, methods, and keyboard scopes without requesting permissions.
 - cua.listApps(options?: { emit?: boolean }) -> { id: string, displayName: string, isRunning: true, pid: number }[] — enumerate running applications.
 - cua.findApps(query: string, options?: { emit?: boolean }) -> ({ id: string, displayName: string, path: string } & ({ isRunning: true, pid: number } | { isRunning: false }))[] — search installed applications, including stopped matches; only running matches carry pid.
 - cua.getState(options?: { emit?: boolean }) -> { apps: { id: string, displayName: string, isRunning: true, pid: number }[], browsers: [] } — summarize running applications; this is not an accessibility observation.
 - cua.getApp(selector: string) -> App — select an application by name, bundle ID, absolute path, or running PID string, obtain consent, launch in the background if needed, and return without reading AX or activating the app.
 - app.getWindows(options?: { emit?: boolean }) -> { windowId: number, appName: string, title: string, bounds: { x: number, y: number, width: number, height: number }, isOnScreen: boolean, onCurrentSpace: boolean | null }[] — enumerate windows with global native bounds; null onCurrentSpace means unknown Space membership.
-- app.getWindow(windowId: number) -> Window — select a window by an ID from getWindows without reading AX; do this before any window screenshot or coordinate input, which rejects a closed or foreign window.
+- app.getWindow(windowId: number) -> Window — select a window by an ID from getWindows without reading AX. Providers reject closed or foreign windows when operating on them.
 - app.activate() -> ActionResult — request explicit foreground activation; use only when foreground access is required.
 - app.show() -> { dispatched: boolean, windowId: number | null, foregroundChanged: boolean | null } — unhide the app and restore its selected, focused, main, or sole window without activation.
 - window.show() -> { dispatched: boolean, windowId: number | null, foregroundChanged: boolean | null } — unhide and restore that explicit window without activation.
@@ -200,7 +202,7 @@ Setup and discovery:
 Available at app or window level depending on the platform.
 
 Read getAccessibilityTree explicitly before using element ids. Selection and screenshots do not read or replace the current AX snapshot. Element ids are opaque strings from the latest successful tree; the object facade keeps one current snapshot per app across its repeated app and window objects, a new read replaces it, and a failed read invalidates the previous one. Repeated strings can appear for different elements, so do not reuse an old id blindly, and element operations do not fall back to pointer input or typing.
-- getAccessibilityTree(options?: { emit?: boolean, includeMenus?: boolean, details?: boolean }) -> string — read the full tree text; includeMenus expands menu contents and details adds identifiers, native bounds, and complete action names.
+- getAccessibilityTree(options?: { emit?: boolean, includeMenus?: boolean, details?: boolean }) -> string — read the tree within the provider limits; includeMenus expands menu contents and details adds identifiers, native bounds, and complete action names. If the tree reports maxElements or maxDepth truncation, select a narrower window or ask the user to raise the named macOS provider setting and read again. In persistent PTC, capture a large tree with const tree = await win.getAccessibilityTree({ emit: false }). Filter its lines in memory, or save it with await tools.write({ file_path: path, content: tree }) to a new workspace file. Search its contents with tools.grep({ path, pattern }) and use tools.read around a matching line. Print only the matches you need. Use element ids from the file only while that observation is current.
 - listActions(elementId: string) -> string[] — list the actions an element advertises.
 - invoke(elementId: string) -> ActionResult — invoke the element's default action; dispatched is false when it has none.
 - performAction(elementId: string, action: string, argument?: JsonValue) -> ActionResult — perform an observed action with an optional direct JSON argument.
@@ -208,9 +210,9 @@ Read getAccessibilityTree explicitly before using element ids. Selection and scr
 - selectText(elementId: string, text: string, options?: { prefix?: string, suffix?: string, selectionType?: 'text' | 'cursor_before' | 'cursor_after' }) -> ActionResult — select one literal occurrence or place the cursor beside it, using adjacent context to disambiguate.
 
 ## Simulated mouse
-Use an explicit window for screenshots and pointer input.
+Use an explicit window for screenshots and pointer input. Before coordinate input, including relative coordinates, obtain a successful getAccessibilityTree observation covering that window or take its screenshot. Absolute pixel coordinates require a returned screenshot.
 - getScreenshot(options?: { emit?: boolean }) -> { bytes: Uint8Array, mimeType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif', pixelWidth: number, pixelHeight: number, windowId: number } — capture the selected window as one encoded image; bytes is a JavaScript byte array, and mimeType identifies its encoding, so do not assume PNG.
-- mouseMove(target: string | [number, number], options?: { relative?: boolean }) -> { dispatched: boolean, foregroundChanged?: boolean | null, hoverRoute: 'accessibility' | 'system-pointer', systemPointerMoved: boolean } — request a mouse move to the target without pressing a button; inspect hoverRoute and systemPointerMoved, and expect no automatic pointer restoration. Default hover requires both AXShowAlternateUI and AXShowDefaultUI on an enabled element or ancestor. Without an AX route it returns HOVER_UNAVAILABLE before sending input. Prefer click on a visible control or performAction with an advertised action. For web content without an AX hover action, use browser tools. Only systemPointerHover: true permits moving the visible cursor. If this returns FOREGROUND_REQUIRED, activate the app and check that the point is unobscured.
+- mouseMove(target: string | [number, number], options?: { relative?: boolean, useSystemPointer?: boolean }) -> { dispatched: boolean, foregroundChanged?: boolean | null, hoverRoute: 'accessibility' | 'system-pointer', systemPointerMoved: boolean } — request a mouse move to the target without pressing a button; inspect hoverRoute and systemPointerMoved, and expect no automatic pointer restoration. Default hover requires both AXShowAlternateUI and AXShowDefaultUI on an enabled element or ancestor. Without that route, HOVER_UNAVAILABLE is returned before sending input. Physical movement requires an unobscured foreground target. Explain any necessary activation and observe the target again.
 - click(target: string | [number, number], options?: { mouseButton?: 'left' | 'right' | 'middle', clickCount?: 1 | 2, modifiers?: ('command' | 'control' | 'option' | 'shift' | 'fn')[], holdMs?: number, relative?: boolean }) -> ActionResult — click an element id or point, or perform a left-button double-click; holdMs controls the press duration of each press. click is a Window method: select a window with const win = await app.getWindow(windowId), then call win.click(target). For a background control’s default action, use app.invoke(id). For a mouse click on a background app, call app.activate() first and re-read the target. Both target forms send mouse-down and mouse-up events. click(id) uses the center of the full element bounds. If that center is outside the window, take a fresh win.getScreenshot() and use click([x, y]) on a visible part of the control in screenshot pixels. A background app can ignore the events even when dispatched is true. Verify the expected effect, such as a changed selection, before typing or retrying.
 - scroll(options: { x: number, y: number, deltaLinesX: number, deltaLinesY: number, relative?: boolean }) -> ActionResult — scroll at a point; deltas are integers from -10 to 10 with at least one nonzero, and positive values reveal content above or left.
 - drag(from: [number, number], to: [number, number], options?: { mouseButton?: 'left' | 'right' | 'middle', modifiers?: ('command' | 'control' | 'option' | 'shift' | 'fn')[], relative?: boolean }) -> ActionResult — drag between two points of one window.
@@ -222,8 +224,11 @@ Available at app or window level depending on the platform.
 - typeText(text: string) -> ActionResult — type literal text at the app's current focus; line endings send Return and tabs send Tab.
 - paste(text: string, options?: { format?: 'text' | 'html' }) -> ActionResult — deliver text or HTML through the app's Paste command, restoring prior clipboard contents unless another writer changes them; a Paste failure is surfaced without substituting typeText, and PASTE_NOT_CONSUMED means inspect before any retry.
 - pressKey(key: string, modifiers?: string[]) -> ActionResult — press and release one complete keystroke. For example pressKey('Tab', ['shift']) or pressKey('+'). Key and modifier names are platform-defined strings. Pass key and modifiers separately; do not pack them into a chord string.
+- sendKeyEvent(key: string, direction: 'down' | 'up') -> ActionResult — send 'down' to hold a key across tool calls in one run_code, for example W down, D down, D up, W up. Holding a key on a physical keyboard can produce repeated key-down events after a delay. To send one such repeat for a non-modifier key this run already holds, send 'down' again. Each call posts one event. A control can filter repeats. Use the app's response to decide whether and when to repeat or release the key. When this run_code returns, throws, or the user pauses it, macOS releases only its remaining keys at their original recipients.
 
 Raw tools use { method, params }: include appHandle for app calls and windowId for window calls, and use snapshotId with elementId for element routes. The emit option is facade-only: emit is local output control, so raw callers must follow the raw operation schema for admitted params. getAccessibilityTree maps to getState; getWindow has no raw method; getWindows maps to listWindows; getScreenshot maps to screenshot; cua.getState maps to listApps; every other named operation uses the same method name.
+
+Only if the task cannot be completed without moving the user’s pointer, call await win.mouseMove(target, { useSystemPointer: true }). Prefer an advertised accessibility action, a click on a visible control, or browser tools when possible. The question interrupts the user. When approval is disabled an explicit move can act immediately. Pass true on every physical move, even after approval. Omitting the option or passing false uses the default hover route without prompting. Approval or refusal lasts until this session closes or DSH restarts. A refusal sends no input. If the user dismisses the request, ask again only if they request it. Wait for an outstanding request to finish. Subagents cannot request physical movement.
 ```
 
 #### Token 影响

@@ -12,8 +12,8 @@ import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { createInboxStub, unsupportedModel } from '@deepseek-ai/dsh-agent-loop-testkit'
 import ForgeService, { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
-  ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeFailure, ForgeProvider, ForgeReadiness,
-  ForgeRepository, MergeRequest,
+  ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeCommitList, ForgeFailure, ForgeProvider,
+  ForgeReadiness, ForgeRepository, MergeRequest,
 } from '@deepseek-ai/dsh-experimental-forge'
 import ForgeSessionService from '@deepseek-ai/dsh-experimental-forge-session'
 import WorktreeService from '@deepseek-ai/dsh-experimental-worktree'
@@ -294,6 +294,17 @@ export class FakeProvider implements ForgeProvider {
   readonly heads = new Map<string, readonly number[]>()
   /** Head lookups in call order, as `<owner>/<name> <branch>`. */
   readonly lookups: string[] = []
+  /** Commit lists or failures by change request number; others return a not-found failure. */
+  readonly commitLists = new Map<number, ForgeCommitList | ForgeFailure>()
+  /** Patches or failures between two commits by `<base>..<head>`; others return a not-found failure. */
+  readonly comparisons = new Map<string, string | ForgeFailure>()
+  /** Commit listing; a test deletes it to stand for a provider that does not read commits. */
+  commits?: (ref: ChangeRequestRef, signal: AbortSignal) => Promise<ForgeCommitList | ForgeFailure> = (ref: ChangeRequestRef) =>
+    Promise.resolve(this.commitLists.get(ref.number) ?? { code: 'not-found', message: `no commits of #${ref.number}` })
+  /** Comparison of two commits. */
+  compare?: (ref: ChangeRequestRef, base: string, head: string, signal: AbortSignal) => Promise<string | ForgeFailure> =
+    (_ref: ChangeRequestRef, base: string, head: string) =>
+      Promise.resolve(this.comparisons.get(`${base}..${head}`) ?? { code: 'not-found', message: `no comparison ${base}..${head}` })
 
   repositoryFromRemote(url: string): ForgeRepository | undefined {
     const [, host = '', owner = '', name = ''] = /^https:\/\/([a-z.]+\.test)\/([^/]+)\/([^/]+?)\.git$/.exec(url) ?? []
@@ -336,13 +347,13 @@ export class FakeProvider implements ForgeProvider {
     return Promise.resolve(this.actionResult)
   }
 
-  diff(ref: ChangeRequestRef, headSha: string): Promise<string | ForgeFailure> {
+  diff(ref: ChangeRequestRef, headSha: string, _signal: AbortSignal): Promise<string | ForgeFailure> {
     this.diffs.push(ref.number)
     this.diffHeads.push(headSha)
     return Promise.resolve(this.patches.get(ref.number) ?? { code: 'not-found', message: `no diff of #${ref.number}` })
   }
 
-  fileText(_ref: ChangeRequestRef, commit: string, path: string): Promise<string | ForgeFailure> {
+  fileText(_ref: ChangeRequestRef, commit: string, path: string, _signal: AbortSignal): Promise<string | ForgeFailure> {
     return Promise.resolve(this.texts.get(`${commit}:${path}`) ?? { code: 'not-found', message: `no ${path} at ${commit}` })
   }
 

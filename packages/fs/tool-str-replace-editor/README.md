@@ -52,7 +52,7 @@ A backend, optionally the policy plugin, then the tool; the editor composes with
 
 ### Failures and recovery
 
-A metadata miss from `view`, `str_replace`, or `insert` records confirmed absence before returning `FS_NOT_FOUND`, so a later `create` can recover an externally deleted path through the mounted policy's guarded-create flow; absence never authorizes `str_replace` or `insert`. Guarded mutations inherit the policy plugin's codes and remedies — `FS_NOT_OBSERVED` (read the file, then retry), `FS_STALE_VERSION` (re-read, then retry) — and sandbox denials surface as the `[sandbox: file access denied under <mode> mode]` marker. Paths must be absolute; a relative path is refused with a hint.
+A metadata miss from `view`, `str_replace`, or `insert` records confirmed absence before returning `FS_NOT_FOUND`, so a later `create` can recover an externally deleted path through the mounted policy's guarded-create flow; absence never authorizes `str_replace` or `insert`. Guarded mutations inherit the policy plugin's codes and remedies — `FS_NOT_OBSERVED` (read the file, then retry), `FS_STALE_VERSION` (re-read, then retry) — and sandbox denials surface as the `[sandbox: file access denied under <mode> mode]` marker. Paths must be absolute; a relative path is refused with a hint. Argument mistakes the schema cannot express, such as a relative path, a missing command parameter, or an out-of-range `view_range` or `insert_line`, throw `ToolArgsError` with `INVALID_ARGS`; `create` on an existing path reports `FS_ALREADY_EXISTS`.
 
 -----
 

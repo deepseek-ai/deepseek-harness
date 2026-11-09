@@ -49,6 +49,9 @@
     },
     {
       "path": "../../session/working-directory"
+    },
+    {
+      "path": "../../subprocess/subprocess"
     }
   ]
 }
