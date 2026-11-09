@@ -11,6 +11,8 @@ export interface Config {
   executionMode?: 'per-call' | 'persistent-in-memory' | 'vm-script'
   /** Retain a Script process and context per stateOwner; only supported with executionMode: vm-script. */
   scriptPersistence?: boolean
+  /** Expose console with log, info, warn, error and debug using Harness.inspect output; otherwise omit the global. */
+  enableConsole?: boolean
   /** Default elapsed deadline, including nested tool and approval waits. */
   timeoutMs?: number
   /** Maximum numeric elapsed budget accepted by resolve. */
@@ -35,6 +37,7 @@ export type ResolvedConfig = Required<Config>
 export const NodeConfig: z<Config> = z.object({
   executionMode: z.union([z.const('per-call'), z.const('persistent-in-memory'), z.const('vm-script')]).default('per-call'),
   scriptPersistence: z.boolean().default(false),
+  enableConsole: z.boolean().default(false),
   timeoutMs: z.number().default(120_000),
   maxTimeoutMs: z.number().default(600_000),
   maxOutputBytes: z.number().default(67_108_864),

@@ -37,7 +37,7 @@ describe('web e2e: PTC mode round renders nested sub-calls', () => {
     scaffold = await launchWebScaffold({
       agentPresets: { default: 'ptc' },
       compareReplaySession: true,
-      ...(MODE === 'record' ? {} : { replayFixture: FIXTURE, paceMs: 15 }),
+      ...(MODE === 'record' ? {} : { replayFixture: FIXTURE, replayOverride: fileURLToPath(new URL('../../../snapshots/web/ptc-round/replay.override.json', import.meta.url)), paceMs: 15 }),
     })
     scaffold.ctx.on('session/event', (_session, event: SessionEvent) => { sessionEvents.push(event) })
     browser = await chromium.launch()

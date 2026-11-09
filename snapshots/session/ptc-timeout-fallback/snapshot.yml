@@ -8,3 +8,5 @@ header:
   pin: true
   systemPromptSource: ptc-persistent
 permission: workspace-write
+replay:
+  override: true

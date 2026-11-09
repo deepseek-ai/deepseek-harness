@@ -112,9 +112,19 @@ export async function runNodeMain(
                 throw error
               }) : checkActive(result)
             })
-            evaluator.globals.console = makeConsoleShim(logSink)
             // Context access must not reserve a function-body parameter named process.
             Object.defineProperty(evaluator.globals, 'process', { configurable: true, writable: true, value: processState })
+            const console = makeConsoleShim(logSink)
+            Object.defineProperty(evaluator.globals, 'Harness', {
+              configurable: true, enumerable: true, value: Object.freeze({ inspect: console.log }),
+            })
+            const programGlobals = processState === process ? [evaluator.globals, globalThis] : [evaluator.globals]
+            for (const globals of programGlobals) {
+              if (data.enableConsole) Object.defineProperty(globals, 'console', {
+                configurable: true, enumerable: true, writable: true, value: console,
+              })
+              else Reflect.deleteProperty(globals, 'console')
+            }
           }
           for (const namespace of data.namespaces) {
             const descriptor = namespace.errorClass
@@ -136,7 +146,8 @@ export async function runNodeMain(
           evaluator.evaluate(data.code, (result) => {
             if (!evaluation.active) return
             if (evaluation.revoked) { evaluation.finish({}); return }
-            evaluation.finish(result.ok ? prepareCompletion(result.value, logs.remainingOutputBytes(), data.maxOutputBytes)
+            evaluation.finish(result.ok
+              ? data.discardCompletion ? {} : prepareCompletion(result.value, logs.remainingOutputBytes(), data.maxOutputBytes)
               : prepareException(result.error, logs.remainingOutputBytes(), data.maxOutputBytes))
           })
         } catch (error: unknown) {

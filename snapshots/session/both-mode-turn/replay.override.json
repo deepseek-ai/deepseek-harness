@@ -1,0 +1,24 @@
+[
+  {
+    "kind": "chunks",
+    "chunks": [
+      {"type":"block-start","index":0,"blockType":"reasoning"},
+      {"type":"block-start","index":1,"blockType":"tool-call"},
+      {"type":"block-end","index":0,"block":{"type":"reasoning","text":"The user wants me to call the run_code tool with a TypeScript program that runs `echo BOTH_OK` via `tools.bash` and returns its output."}},
+      {"type":"block-end","index":1,"block":{"type":"tool-call","id":"call_00_Era4M5eh79bvNOIey5q90401","name":"run_code","arguments":"{\"code\":\"const result = await tools.bash({ command: \\\"echo BOTH_OK\\\", description: \\\"Print BOTH_OK\\\" });\\nHarness.inspect(result.stdout.text); return;\",\"description\":\"Run echo BOTH_OK via tools.bash\"}"}},
+      {"type":"usage","usage":{"inputTokens":10400,"outputTokens":130,"cacheReadTokens":0,"reasoningTokens":34}},
+      {"type":"finish","reason":{"kind":"tool-calls"}}
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {"type":"block-start","index":0,"blockType":"reasoning"},
+      {"type":"block-start","index":1,"blockType":"text"},
+      {"type":"block-end","index":0,"block":{"type":"reasoning","text":"The output is \"BOTH_OK\" (with a trailing newline, but that's fine). The user asked me to reply with that output only."}},
+      {"type":"block-end","index":1,"block":{"type":"text","text":"BOTH_OK"}},
+      {"type":"usage","usage":{"inputTokens":50,"outputTokens":35,"cacheReadTokens":10496,"reasoningTokens":31}},
+      {"type":"finish","reason":{"kind":"stop"}}
+    ]
+  }
+]

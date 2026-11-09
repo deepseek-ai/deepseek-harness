@@ -75,7 +75,7 @@ describe.each([
   it('retains declarations, closures, object identity, and imports across evaluations', async () => {
     const { run, cwd } = await setup()
     expect((await run('const box: { count: number } = { count: 1 }; let alias = box; function increment() { return ++box.count }; const path = await import("node:path");')).error).toBeUndefined()
-    expect(await run('console.log("second call"); ({ count: increment(), same: box === alias, dir: path.basename(process.cwd()), env: Object.keys(process.env) })')).toMatchObject({ logs: ['second call'], value: { count: 2, same: true, dir: cwd.split(/[\\/]/).at(-1), env: [] } })
+    expect(await run('Harness.inspect("second call"); ({ count: increment(), same: box === alias, dir: path.basename(process.cwd()), env: Object.keys(process.env) })')).toMatchObject({ logs: ['second call'], value: { count: 2, same: true, dir: cwd.split(/[\\/]/).at(-1), env: [] } })
   })
 
 
@@ -87,14 +87,14 @@ describe.each([
     expect((await run('await query()', { bindings: bindings(second) })).value).toBe('new')
     expect(first).toHaveBeenCalledTimes(1)
     expect(second).toHaveBeenCalledTimes(1)
-    expect((await run('let failure; try { await query() } catch (error) { console.log(error.toolName); failure = "unavailable" }; failure')).value).toBe('unavailable')
+    expect((await run('let failure; try { await query() } catch (error) { Harness.inspect(error.toolName); failure = "unavailable" }; failure')).value).toBe('unavailable')
     expect(second).toHaveBeenCalledTimes(1)
   })
 
   it('runs top-level await blocks with reusable local declarations and keeps outer state', async () => {
     const { run } = await setup()
     await run('let total = 0;')
-    const code = '{ const amount = await tools.value({}); total += amount; console.log(amount); }'
+    const code = '{ const amount = await tools.value({}); total += amount; Harness.inspect(amount); }'
     expect(await run(code, { bindings: bindings(async () => 2) })).toMatchObject({ logs: ['2'] })
     expect(await run(code, { bindings: bindings(async () => 3) })).toMatchObject({ logs: ['3'] })
     expect(await run('({ total, local: typeof amount })')).toMatchObject({ logs: [], value: { total: 5, local: 'undefined' } })
@@ -229,7 +229,7 @@ describe.each([
     const controller = new AbortController()
     const entered = Promise.withResolvers<undefined>()
     await run('var kept = { count: 1 }; var alias = kept; var effects = [];')
-    const pending = run('kept.count++; console.log("before stop"); await tools.value({})', {
+    const pending = run('kept.count++; Harness.inspect("before stop"); await tools.value({})', {
       timeoutMs: action === 'timeout' ? 200 : null, signal: controller.signal,
       bindings: bindings(() => { entered.resolve(undefined); return new Promise(() => {}) }),
     })
@@ -252,7 +252,7 @@ describe.each([
     const { run, cwd } = await setup({ stopGraceMs: 50 })
     await run('var kept = 42; var fs = await import("node:fs");')
     const controller = new AbortController()
-    const pending = run(`${prefix} console.log("before stop"); fs.writeFileSync("entered-loop", "ready"); while (true) {}`, {
+    const pending = run(`${prefix} Harness.inspect("before stop"); fs.writeFileSync("entered-loop", "ready"); while (true) {}`, {
       timeoutMs: action === 'timeout' ? 1000 : null, signal: controller.signal,
     })
     try {
@@ -388,7 +388,7 @@ describe.each([
 
   it('bounds output and clears state after an overflow', async () => {
     const { run } = await setup({ maxOutputBytes: 100 })
-    expect((await run('let retained = true; console.log("x".repeat(1000))')).error?.kind).toBe('output-limit')
+    expect((await run('let retained = true; Harness.inspect("x".repeat(1000))')).error?.kind).toBe('output-limit')
     expect((await run('typeof retained')).value).toBe('undefined')
   })
 })

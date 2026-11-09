@@ -1,0 +1,74 @@
+[
+  {
+    "kind": "chunks",
+    "chunks": [
+      {"type":"block-start","index":0,"blockType":"tool-call"},
+      {"type":"block-end","index":0,"block":{"type":"tool-call","id":"script_declare","name":"run_code","arguments":"{\"code\":\"let counter: number = 1; const alias = { value: counter }; function increment() { return ++counter }; class Box { [await Promise.resolve(\\\"read\\\")]() { return counter } };\",\"description\":\"Declare Script state with computed await\"}"}},
+      {"type":"usage","usage":{"inputTokens":10,"outputTokens":5}},
+      {"type":"finish","reason":{"kind":"tool-calls"}}
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {"type":"block-start","index":0,"blockType":"tool-call"},
+      {"type":"block-end","index":0,"block":{"type":"tool-call","id":"script_reuse","name":"run_code","arguments":"{\"code\":\"counter++; Harness.inspect(\\\"retained\\\", new Box().read()); Harness.inspect(JSON.stringify(({ count: increment(), alias: alias.value, answer: await(Promise.resolve(42)) }), null, 2))\",\"description\":\"Reuse retained Script declarations\"}"}},
+      {"type":"usage","usage":{"inputTokens":10,"outputTokens":5}},
+      {"type":"finish","reason":{"kind":"tool-calls"}}
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {"type":"block-start","index":0,"blockType":"tool-call"},
+      {"type":"block-end","index":0,"block":{"type":"tool-call","id":"script_binding","name":"run_code","arguments":"{\"code\":\"const cwdResult = await tools.bash({command:\\\"pwd\\\",description:\\\"Read working directory\\\"}); Harness.inspect(JSON.stringify(({ sameDirectory: cwdResult.stdout.text.trim() === process.cwd(), count: counter }), null, 2))\",\"description\":\"Call a host binding from Script\"}"}},
+      {"type":"usage","usage":{"inputTokens":10,"outputTokens":5}},
+      {"type":"finish","reason":{"kind":"tool-calls"}}
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {"type":"block-start","index":0,"blockType":"tool-call"},
+      {"type":"block-end","index":0,"block":{"type":"tool-call","id":"script_temporary_exit","name":"run_code","arguments":"{\"code\":\"process.exit(7)\",\"description\":\"End a separate temporary Script process\",\"sandbox_permissions\":\"danger-full-access\",\"justification\":\"Approve a separate temporary process to check that its exit leaves retained variables intact.\"}"}},
+      {"type":"usage","usage":{"inputTokens":10,"outputTokens":5}},
+      {"type":"finish","reason":{"kind":"tool-calls"}}
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {"type":"block-start","index":0,"blockType":"tool-call"},
+      {"type":"block-end","index":0,"block":{"type":"tool-call","id":"script_after_temporary","name":"run_code","arguments":"{\"code\":\"Harness.inspect(JSON.stringify(({ count: counter, fromClass: new Box().read() }), null, 2))\",\"description\":\"Verify retained Script state after temporary exit\"}"}},
+      {"type":"usage","usage":{"inputTokens":10,"outputTokens":5}},
+      {"type":"finish","reason":{"kind":"tool-calls"}}
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {"type":"block-start","index":0,"blockType":"tool-call"},
+      {"type":"block-end","index":0,"block":{"type":"tool-call","id":"script_exit","name":"run_code","arguments":"{\"code\":\"process.exit(7)\",\"description\":\"End the Script process\"}"}},
+      {"type":"usage","usage":{"inputTokens":10,"outputTokens":5}},
+      {"type":"finish","reason":{"kind":"tool-calls"}}
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {"type":"block-start","index":0,"blockType":"tool-call"},
+      {"type":"block-end","index":0,"block":{"type":"tool-call","id":"script_recover","name":"run_code","arguments":"{\"code\":\"Harness.inspect(JSON.stringify(({ previous: typeof counter, recreated: await Promise.resolve(4) }), null, 2))\",\"description\":\"Verify Script state was cleared\"}"}},
+      {"type":"usage","usage":{"inputTokens":10,"outputTokens":5}},
+      {"type":"finish","reason":{"kind":"tool-calls"}}
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {"type":"block-start","index":0,"blockType":"text"},
+      {"type":"block-end","index":0,"block":{"type":"text","text":"Verified Script completion, host bindings, and state retention and recovery."}},
+      {"type":"usage","usage":{"inputTokens":10,"outputTokens":2}},
+      {"type":"finish","reason":{"kind":"stop"}}
+    ]
+  }
+]

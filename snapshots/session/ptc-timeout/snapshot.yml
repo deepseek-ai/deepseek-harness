@@ -9,3 +9,5 @@ header:
   systemPromptSource: ptc-persistent
   toolSchemasSource: ptc-timeout-fallback
 permission: workspace-write
+replay:
+  override: true

@@ -1,0 +1,26 @@
+[
+  {
+    "kind": "chunks",
+    "chunks": [
+      {"type":"block-start","index":0,"blockType":"tool-call"},
+      {"type":"block-end","index":0,"block":{"type":"tool-call","id":"denied-native","name":"bash","arguments":"{\"command\":\"echo AUTO_DENIED\"}"}},
+      {"type":"finish","reason":{"kind":"tool-calls"}}
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {"type":"block-start","index":0,"blockType":"tool-call"},
+      {"type":"block-end","index":0,"block":{"type":"tool-call","id":"denied-code","name":"run_code","arguments":"{\"code\":\"try { await tools.bash({command: \\\"echo AUTO_DENIED\\\"}) } catch (error) { Harness.inspect(error.message); return; }\",\"description\":\"Catch one denied inner call\"}"}},
+      {"type":"finish","reason":{"kind":"tool-calls"}}
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {"type":"block-start","index":0,"blockType":"text"},
+      {"type":"block-end","index":0,"block":{"type":"text","text":"ERROR_DETAILS_OK"}},
+      {"type":"finish","reason":{"kind":"stop"}}
+    ]
+  }
+]

@@ -49,7 +49,7 @@ it('clears the environment and returns a binding result after captured output', 
     const args = decodePtcJsonWire(wire) as { n: number }
     return encodePtcJsonWire(args.n * 2)
   }
-  const result = await h.run('const doubled = await tools.echo({ n: 21 }); console.log("got", doubled); return { doubled };')
+  const result = await h.run('const doubled = await tools.echo({ n: 21 }); Harness.inspect("got", doubled); return { doubled };')
   expect(decodePtcJsonWire(result.value)).toEqual({ doubled: 42 })
   expect(h.logs).toEqual(['got 42'])
   expect(h.state.env).toEqual({})
@@ -66,7 +66,7 @@ it('keeps unfinished temporary calls pending and suppresses later logs while awa
   const release = Promise.withResolvers<ReturnType<typeof encodePtcJsonWire>>()
   h.methods.invoke = () => release.promise
   try {
-    expect(decodePtcJsonWire((await h.run('void tools.echo({}).catch(() => {}); void tools.echo({}).catch(() => console.log("late rejection")); setImmediate(() => console.log("late timer")); return 42;')).value)).toBe(42)
+    expect(decodePtcJsonWire((await h.run('void tools.echo({}).catch(() => {}); void tools.echo({}).catch(() => Harness.inspect("late rejection")); setImmediate(() => Harness.inspect("late timer")); return 42;')).value)).toBe(42)
     await nextTurn()
     expect(h.child.destroyed).toBe(false)
     release.resolve(encodePtcJsonWire(42))
@@ -99,7 +99,7 @@ it.each([4, 64])('reports exhausted output accounting during the run with a %s-b
   const h = await setup()
   const limited = vi.fn()
   h.methods.outputLimit = limited
-  expect(await h.run('console.log("x".repeat(100)); return null', maxOutputBytes))
+  expect(await h.run('Harness.inspect("x".repeat(100)); return null', maxOutputBytes))
     .toEqual({ error: { kind: 'output-limit', message: `outer output exceeded ${maxOutputBytes} bytes` } })
   if (maxOutputBytes === 4) expect(h.logs).toEqual([])
   await vi.waitFor(() => { expect(limited).toHaveBeenCalledOnce() })
@@ -138,7 +138,7 @@ it('sends no binding calls or output notifications after returning its result', 
   const limited = vi.fn()
   h.methods.invoke = invoked
   h.methods.outputLimit = limited
-  const result = await h.run('setImmediate(() => { void tools.echo({}).catch(() => {}); console.log("x".repeat(2000)) }); return 1', 64)
+  const result = await h.run('setImmediate(() => { void tools.echo({}).catch(() => {}); Harness.inspect("x".repeat(2000)) }); return 1', 64)
   expect(decodePtcJsonWire(result.value)).toBe(1)
   await nextTurn()
   await nextTurn()
@@ -167,7 +167,7 @@ it('accepts host shutdown before the first evaluation', async () => {
 })
 
 it.each([
-  'console.log("x".repeat(2000));',
+  'Harness.inspect("x".repeat(2000));',
   'return "x".repeat(2000)',
 ])('closes on control output overflow: %s', async (code) => {
   const h = await setup(1024)

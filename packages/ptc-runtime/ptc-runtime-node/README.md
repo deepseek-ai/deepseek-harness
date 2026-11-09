@@ -35,6 +35,7 @@ Configure the provider row after its required services are available:
 - name: '@deepseek-ai/dsh-ptc-runtime-node'
   config:
     executionMode: per-call
+    enableConsole: false
     timeoutMs: 120000
     maxTimeoutMs: 600000
     maxOutputBytes: 67108864
@@ -49,6 +50,7 @@ Configure the provider row after its required services are available:
 |---|---|---|
 | `executionMode` | `per-call` | `per-call` runs async function bodies in fresh processes; `vm-script` evaluates Scripts; `persistent-in-memory` retains a confined REPL per owner |
 | `scriptPersistence` | `false` | With `executionMode: vm-script`, reuse a process and context per owner; `true` with another mode rejects at load |
+| `enableConsole` | `false` | Expose `console.log`, `info`, `warn`, `error` and `debug` through `Harness.inspect`; otherwise omit the console global |
 | `timeoutMs` | `120,000` | Default elapsed execution deadline, including nested tool and approval waits |
 | `maxTimeoutMs` | `600,000` | Elapsed deadline ceiling applied by the resolver |
 | `maxOutputBytes` | `67,108,864` | Combined serialized logs and completion or diagnostic budget |
@@ -67,9 +69,13 @@ Profile editors can import `resolvePersistentExecution` from `@deepseek-ai/dsh-p
 
 In `per-call` mode, programs are async function bodies: top-level `await` and `return` work, and only erasable TypeScript is accepted. Node globals remain available, and a function body may declare a local `process`, including `const process = await import("node:process")`. A successful call returns its lossless-JSON value as `result.value` and captured text as `result.logs`. `result.sandbox` reports the selected mode, observed denial and the backend's full or partial enforcement independently of the program outcome.
 
+`Harness.inspect(...values)` renders each argument independently, joins them with spaces, and appends one captured log entry. Strings remain literal, including `%s` and `%d`. The console global is absent by default: direct access raises `ReferenceError`, while `typeof console` returns `"undefined"`. Set `enableConsole: true` to expose its five methods through the same inspection function. Programs may declare their own console variables.
+
+`run_code` sets `discardCompletion: true`: function return values and final expression values are omitted without JSON serialization, while inspected output remains visible. Direct runtime consumers receive the usual lossless-JSON completion unless they set this option.
+
 Direct filesystem, network and subprocess operations remain Node operations, subject to the selected OS sandbox. Nested host bindings cross the control channel; PTC tool calls retain the registry's visibility, ordering, logging and approval rules. Running a program does not change the Session's standing policy or automatically replay it after a denial.
 
-Set `executionMode: vm-script` to evaluate erasable TypeScript through `node:vm` Script. Top-level declarations and `await` work, for example `var fs = await import("node:fs/promises"); await fs.readdir(".")`. Top-level `return` and static `import`/`export` are not supported. The runtime awaits the final expression and returns its lossless JSON value; `console.log(...)` also emits output. Relative dynamic imports resolve from the supplied working directory. Script syntax is non-strict unless the program opts into strict mode; the context is not a security boundary, and Node access remains subject to the process sandbox.
+Set `executionMode: vm-script` to evaluate erasable TypeScript through `node:vm` Script. Top-level declarations and `await` work, for example `var fs = await import("node:fs/promises"); Harness.inspect(await fs.readdir("."))`. Top-level `return` and static `import`/`export` are not supported. The runtime awaits the final expression; its lossless JSON value is returned unless `discardCompletion` is enabled. Relative dynamic imports resolve from the supplied working directory. Script syntax is non-strict unless the program opts into strict mode; the context is not a security boundary, and Node access remains subject to the process sandbox.
 
 `scriptPersistence: false` is the default: every call uses a fresh process and context, ignoring `stateOwner`. Set it to `true` to retain a context per owner under the lifecycle rules below. Top-level declarations, functions and object identities survive subsequent calls, including values initialized through top-level `await`. Function locals remain local. This option requires `executionMode: vm-script`; both settings accept the same syntax.
 
@@ -93,7 +99,7 @@ The `persistent-in-memory` mode and Script mode with `scriptPersistence: true` r
 
 Save the patch and pass its path to `dsh headless --patch <path>` in a composition with PTC tool presentation. The `per-call` mode and Script mode with `scriptPersistence: false` retain no program memory between calls. Changing the configuration reloads the provider and releases its execution resources. Packaged single-executable hosts use their embedded carrier by default; the host sends the selected program format and retention flag with each evaluation, so the embedded `process.js` bootstrap serves both per-call and retained execution. Remote script deployments use a `node-script` launch with `launch.bootstrapPath` pointing to this package's built `persistent-process.js`.
 
-In REPL mode, each live Agent keeps its own process and top-level variables, functions, and imported modules across `run_code` calls and turns. Use `await import(...)`, `console.log(...)`, and a final JSON expression; top-level `return` is not supported. Assignments to undeclared names create retained globals under Node REPL’s non-strict evaluation. `_` and `_error` are ordinary retained globals, without interactive REPL result setters. Node REPL declaration rules apply, including errors on redeclaring existing `let`, `const`, or `class` names; assign to a mutable binding or choose a new name. A leading `{ ... }` is a statement block and can contain top-level await and temporary declarations; parenthesize an object expression to return it. Retained functions and saved tool methods call the current evaluation's bindings. All tool calls must be awaited; callbacks from a completed evaluation cannot invoke tools in a later evaluation.
+In REPL mode, each live Agent keeps its own process and top-level variables, functions, and imported modules across `run_code` calls and turns. Use `await import(...)` and `Harness.inspect(...)`; top-level `return` is not supported. Assignments to undeclared names create retained globals under Node REPL’s non-strict evaluation. `_` and `_error` are ordinary retained globals, without interactive REPL result setters. Node REPL declaration rules apply, including errors on redeclaring existing `let`, `const`, or `class` names; assign to a mutable binding or choose a new name. A leading `{ ... }` is a statement block and can contain top-level await and temporary declarations; parenthesize an object expression to return it. Retained functions and saved tool methods call the current evaluation's bindings. All tool calls must be awaited; callbacks from a completed evaluation cannot invoke tools in a later evaluation.
 
 Memory is best-effort and never saved to disk. Restart, Agent disposal, provider unload, protocol failure, output overflow, or process exit clears it. Missing variables raise normal reference errors; reacquire handles and recreate declarations. Exceptions in the active evaluation settle once and preserve earlier mutations. In REPL mode, exceptions from callbacks belonging to a completed evaluation are not reported in a later result. In Script mode, uncaught callback exceptions can terminate the retained process; await asynchronous work before completing an evaluation. The Session still records programs, tool dispatches and visible results; restoring a Session or forking an Agent starts with empty memory. Each evaluation resets the process working directory to its resolved cwd; program calls to `process.chdir()` do not persist across evaluations. Direct Node access follows the process launch policy. A retained owner cannot change mode, workspace root, or Session identity until its environment is released. Additional writable directories are fixed when the process starts: later grants and revocations apply only after release and recreation.
 
@@ -109,7 +115,7 @@ Omitting `timeoutMs` uses the configured elapsed default; numeric requests are v
 
 ### Failures
 
-Program parse errors and thrown exceptions are `exception`; deadline expiry is `timeout`; cancellation is `abort`; unparsable or oversized control traffic and invalid program messages are `protocol`; unavailable confinement is `sandbox-unavailable`; early process exit, lost control transport or failed managed cleanup is `worker-exit`. Control I/O failures retain the transport diagnostic alongside the observed process exit status. The substrate-independent failure name remains `worker-exit` for process providers. Lossy completions are `invalid-output`, and an oversized outer result is `output-limit`, retaining the fitting log prefix. Invalid or unsupported options and calls after disposal reject as caller misuse.
+Program parse errors and thrown exceptions are `exception`; deadline expiry is `timeout`; cancellation is `abort`; unparsable or oversized control traffic and invalid program messages are `protocol`; unavailable confinement is `sandbox-unavailable`; early process exit, lost control transport or failed managed cleanup is `worker-exit`. Control I/O failures retain the transport diagnostic alongside the observed process exit status. The substrate-independent failure name remains `worker-exit` for process providers. When completion capture is enabled, lossy values are `invalid-output`, and an oversized outer result is `output-limit`, retaining the fitting log prefix. Invalid or unsupported options and calls after disposal reject as caller misuse.
 
 -----
 
@@ -226,7 +232,7 @@ These limits qualify the execution guarantees and retained output.
 - **Output caps reject rather than retain every byte** — spill can preserve only the bounded result delivered by this provider.
 - **Bindings are bounded at transport admission** — control limits do not bound the memory a host binding allocates while producing its result.
 - **Preinstalled bootstraps require a compatible protocol revision** — readiness rejects a missing or mismatched revision before dispatching code. Upgrade `launch.bootstrapPath` with the host; the runtime does not install remote bootstrap updates.
-- **The console shim has five methods** — `log`, `info`, `warn`, `error` and `debug`.
+- **The enabled console shim has five methods** — `log`, `info`, `warn`, `error` and `debug`.
 
 <a id="dev-note"></a>
 ### Dev Note

@@ -58,7 +58,7 @@ function runCodeFlavor(language: string, execution = {
 const TYPESCRIPT_FLAVOR = runCodeFlavor('TypeScript')
 const TYPESCRIPT_FUNCTION_FLAVOR = runCodeFlavor('TypeScript', {
   programDescription: 'the BODY of an async function (erasable syntax only; top-level `await` and `return` work)',
-  outputInstruction: 'Only what you print or return is program output — curate it.',
+  outputInstruction: 'Show selected results with Harness.inspect(...values). Return values are not displayed.',
   codeDescription: 'The program: the body of an async TypeScript function.',
 })
 const PYTHON_FLAVOR = runCodeFlavor('Python')
@@ -684,6 +684,7 @@ export function createRunCodeTool(
             }
             const spec = runtime.resolve({
               program: args.code,
+              ...runtime.language === 'typescript' ? { discardCompletion: true } : {},
               ...exec.agent === undefined || policy?.mode !== standingPolicy?.mode ? {} : { stateOwner: exec.agent },
               bindings: [{
                 global: 'tools',
@@ -725,7 +726,7 @@ export function createRunCodeTool(
           return {
             logs: result.logs,
             ...result.sandbox === undefined ? {} : { sandbox: result.sandbox },
-            ...result.value !== undefined ? { result: result.value } : {},
+            ...runtime.language !== 'typescript' && result.value !== undefined ? { result: result.value } : {},
           }
         } finally {
           callSignal.removeEventListener('abort', onOuterAbort)

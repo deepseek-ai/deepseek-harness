@@ -30,7 +30,7 @@ describe('web snapshot: standalone string editor through PTC', () => {
       ],
       profile: { packages: [] },
       compareReplaySession: true,
-      ...(MODE === 'record' ? {} : { replayFixture: FIXTURE }),
+      ...(MODE === 'record' ? {} : { replayFixture: FIXTURE, replayOverride: join(DIR, 'replay.override.json') }),
     })
     expect(scaffold.ctx.tools.schemas().some(tool => tool.name === 'str_replace_editor')).toBe(true)
     browser = await chromium.launch()
@@ -82,7 +82,7 @@ describe('web snapshot: standalone string editor through PTC', () => {
 
   it.skipIf(MODE !== 'replay')('keeps the owned fixture artifacts closed', async () => {
     await assertFixtureInventory(DIR, [
-      'session.v4.jsonl', 'system-prompt.expected.md', 'tool-schemas.expected.json', 'ui.expected.md', 'workspace.expected',
+      'session.v4.jsonl', 'system-prompt.expected.md', 'tool-schemas.expected.json', 'ui.expected.md', 'workspace.expected', 'replay.override.json',
     ])
   })
 })

@@ -103,11 +103,12 @@ const CONSOLE_LEVELS = ['log', 'info', 'warn', 'error', 'debug'] as const
  * @returns the five-method console object handed to the program.
  */
 export function makeConsoleShim(logs: Pick<LogBuffer, 'push'>): Record<(typeof CONSOLE_LEVELS)[number], (...args: unknown[]) => void> {
-  const render = (args: unknown[]): string =>
-    args.map(arg => typeof arg === 'string' ? arg : inspect(arg, INSPECT_OPTIONS)).join(' ')
+  const output = (...args: unknown[]): void => {
+    logs.push(args.map(arg => typeof arg === 'string' ? arg : inspect(arg, INSPECT_OPTIONS)).join(' '))
+  }
   const shim = Object.create(null) as Record<(typeof CONSOLE_LEVELS)[number], (...args: unknown[]) => void>
   for (const level of CONSOLE_LEVELS) {
-    shim[level] = (...args: unknown[]) => { logs.push(render(args)) }
+    shim[level] = output
   }
   return shim
 }

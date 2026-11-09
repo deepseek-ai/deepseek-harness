@@ -1,0 +1,21 @@
+[
+  {
+    "kind": "chunks",
+    "chunks": [
+      {"type":"block-start","index":0,"blockType":"tool-call"},
+      {"type":"tool-call-delta","index":0,"id":"optional-string-editor-code","name":"run_code","argumentsDelta":"{\"description\":\"Create a file with the optional editor\",\"code\":\"const path = (await import(\\\"node:path\\\")).join(process.cwd(), \\\"edited.txt\\\");\\nHarness.inspect(await tools.str_replace_editor({ command: \\\"create\\\", path, file_text: \\\"PTC_EDITOR_OK\\\\n\\\" }));\"}"},
+      {"type":"block-end","index":0,"block":{"type":"tool-call","id":"optional-string-editor-code","name":"run_code","arguments":"{\"description\":\"Create a file with the optional editor\",\"code\":\"const path = (await import(\\\"node:path\\\")).join(process.cwd(), \\\"edited.txt\\\");\\nHarness.inspect(await tools.str_replace_editor({ command: \\\"create\\\", path, file_text: \\\"PTC_EDITOR_OK\\\\n\\\" }));\"}"}},
+      {"type":"usage","usage":{"inputTokens":10,"outputTokens":4}},
+      {"type":"finish","reason":{"kind":"tool-calls"}}
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {"type":"block-start","index":0,"blockType":"text"},
+      {"type":"block-end","index":0,"block":{"type":"text","text":"DONE"}},
+      {"type":"usage","usage":{"inputTokens":10,"outputTokens":4}},
+      {"type":"finish","reason":{"kind":"stop"}}
+    ]
+  }
+]

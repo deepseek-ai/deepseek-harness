@@ -1,0 +1,24 @@
+[
+  {
+    "kind": "chunks",
+    "chunks": [
+      {"type":"block-start","index":0,"blockType":"reasoning"},
+      {"type":"block-start","index":1,"blockType":"tool-call"},
+      {"type":"block-end","index":0,"block":{"type":"reasoning","text":"The user wants me to write a single run_code program that:\n1. Calls bash tool twice: `echo CODE_ONE` and `echo CODE_TWO`\n2. console.log exactly `captured output`\n3. Return the two outputs joined with a plus sign\n\nLet me write this."}},
+      {"type":"block-end","index":1,"block":{"type":"tool-call","id":"call_00_UiQPVqoELyzBZCY5pm1z7875","name":"run_code","arguments":"{\"code\":\"\\nconst out1 = await tools.bash({command: \\\"echo CODE_ONE\\\", description: \\\"Print CODE_ONE\\\"});\\nconst out2 = await tools.bash({command: \\\"echo CODE_TWO\\\", description: \\\"Print CODE_TWO\\\"});\\nHarness.inspect(\\\"captured output\\\");\\nconst text1 = out1.stdout.text.trim();\\nconst text2 = out2.stdout.text.trim();\\nHarness.inspect(text1 + \\\"+\\\" + text2); return;\\n\",\"description\":\"Run two echo commands and join outputs\"}"}},
+      {"type":"usage","usage":{"inputTokens":6152,"outputTokens":214,"cacheReadTokens":0,"reasoningTokens":60}},
+      {"type":"finish","reason":{"kind":"tool-calls"}}
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {"type":"block-start","index":0,"blockType":"reasoning"},
+      {"type":"block-start","index":1,"blockType":"text"},
+      {"type":"block-end","index":0,"block":{"type":"reasoning","text":"The program ran successfully. The console.log output \"captured output\" appeared, and the return value is \"CODE_ONE+CODE_TWO\". The user asked me to reply with that joined string only."}},
+      {"type":"block-end","index":1,"block":{"type":"text","text":"CODE_ONE+CODE_TWO"}},
+      {"type":"usage","usage":{"inputTokens":117,"outputTokens":50,"cacheReadTokens":6272,"reasoningTokens":42}},
+      {"type":"finish","reason":{"kind":"stop"}}
+    ]
+  }
+]

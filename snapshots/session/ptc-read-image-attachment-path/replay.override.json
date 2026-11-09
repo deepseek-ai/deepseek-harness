@@ -3,7 +3,7 @@
     "kind": "chunks",
     "chunks": [
       { "type": "block-start", "index": 0, "blockType": "tool-call" },
-      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "code-image-source", "name": "run_code", "arguments": "{\"code\":\"return await tools.read_image({ file_path: 'red.png' })\",\"description\":\"Read the source image\"}" } },
+      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "code-image-source", "name": "run_code", "arguments": "{\"code\":\"Harness.inspect(await tools.read_image({ file_path: 'red.png' })); return;\",\"description\":\"Read the source image\"}" } },
       { "type": "usage", "usage": { "inputTokens": 3, "outputTokens": 3 } },
       { "type": "finish", "reason": { "kind": "tool-calls" } }
     ]

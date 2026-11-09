@@ -31,6 +31,8 @@ Choose this package when you compose a deployment that executes model-written pr
 
 Call `resolve(request)` followed by `run(spec)` with a program and binding namespaces. Resolution validates cwd, timeout and sandbox choices and applies provider defaults. `programFormat: PtcProgramFormat` selects an async function body with top-level `await` and `return`, or REPL/Script statements with top-level declarations, `await`, and a final expression. The Node Script provider lowers top-level await and awaits the completion value; its [declaration limitations](../ptc-runtime-node/README.md#known-limitations-and-deferred-work) apply to transformed programs. Lossless-JSON completion becomes `result.value`, text becomes `result.logs`, and failures become `result.error`.
 
+Set `discardCompletion: true` to omit the successful completion without JSON validation or serialization; captured logs and failures are still returned. The TypeScript tool executor selects this option for explicit program output, while workflow consumers retain completion values.
+
 ```text
 const spec = ctx.ptcRuntime.resolve({
   program: 'return await tools.add({ a: 1, b: 2 })',
@@ -48,7 +50,7 @@ For the optional [Node in-memory mode](../ptc-runtime-node/README.md#persistent-
 
 ### Name your bindings portably
 
-Binding-global and error-class names are language-portable: they must match `[A-Za-z_][A-Za-z0-9_]*`, avoid every portable target language's reserved words, and avoid backend-owned slots, so one namespace list is valid against every backend. A name like `$tools`, `lambda`, or `console` fails the run before it starts; the exact exclusion sets are part of the seam contract.
+Binding-global and error-class names are language-portable: they must match `[A-Za-z_][A-Za-z0-9_]*`, avoid every portable target language's reserved words, and avoid backend-owned slots, so one namespace list is valid against every backend. A name like `$tools`, `lambda`, `console`, or `Harness` fails the run before it starts; the exact exclusion sets are part of the seam contract.
 
 ### What can go wrong
 
@@ -84,7 +86,7 @@ The exhaustive semantics live in the [PTC runtime subsystem reference](../../../
 
 ### Portable identifiers
 
-Binding-global and error-class names are language-portable: they must match the identifier subset `[A-Za-z_][A-Za-z0-9_]*` (no JS-only `$`) and clear the seam-exported exclusion sets, so one `bindings` list is valid against every backend. The package exports the contract every backend enforces — `PORTABLE_RESERVED_WORDS` (ECMAScript ∪ Python reserved words), `RESERVED_BINDING_GLOBALS` (backend-owned globals such as `console` and `__dsh_main__`), `RESERVED_ERROR_MEMBERS` and `DUNDER_MEMBER` (error-member exclusions) — so a name like `$tools`, `lambda`, or `__dsh_main__` makes `run()` reject as seam misuse on any backend. See `src/index.ts` for the exact sets.
+Binding-global and error-class names are language-portable: they must match the identifier subset `[A-Za-z_][A-Za-z0-9_]*` (no JS-only `$`) and clear the seam-exported exclusion sets, so one `bindings` list is valid against every backend. The package exports the contract every backend enforces — `PORTABLE_RESERVED_WORDS` (ECMAScript ∪ Python reserved words), `RESERVED_BINDING_GLOBALS` (backend-owned globals such as `console`, `Harness` and `__dsh_main__`), `RESERVED_ERROR_MEMBERS` and `DUNDER_MEMBER` (error-member exclusions) — so a name like `$tools`, `lambda`, or `__dsh_main__` makes `run()` reject as seam misuse on any backend. See `src/index.ts` for the exact sets.
 
 ### Source map
 

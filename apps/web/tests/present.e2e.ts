@@ -57,7 +57,7 @@ fs.appendFileSync(${JSON.stringify(openLog)}, JSON.stringify({ path, action, con
       openInAppEnvironment: createLaunchEnvironmentSnapshot([{ source: 'process', values: { SSH_CONNECTION: '10.0.0.2 55000 10.0.0.9 22' } }]),
       extraOverlayPath: fileURLToPath(new URL('./present.overlay.yml', import.meta.url)),
       agentPresets: { default: 'ptc' }, compareReplaySession: true,
-      ...(MODE === 'record' ? {} : { replayFixture: FIXTURE }),
+      ...(MODE === 'record' ? {} : { replayFixture: FIXTURE, replayOverride: fileURLToPath(new URL('../../../snapshots/web/present/replay.override.json', import.meta.url)) }),
     })
     // File associations belong to the desktop rather than the recorded Session.
     const controller = scaffold.ctx.get('sessionController')

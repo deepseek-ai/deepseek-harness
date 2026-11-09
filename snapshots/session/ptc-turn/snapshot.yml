@@ -6,3 +6,5 @@ recording: live
 header:
   class: ptc
   pin: true
+replay:
+  override: true

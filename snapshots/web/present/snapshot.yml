@@ -7,3 +7,5 @@ header:
   class: web-ptc
 workspace:
   final: true
+replay:
+  override: true

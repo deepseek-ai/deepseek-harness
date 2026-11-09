@@ -64,7 +64,7 @@ it('keeps an environment while capturing each evaluation and binding replies sep
   const h = await setup(diagnosticBudget)
   const declarations = [{ global: 'tools', names: ['echo'], errorClass: { name: 'ToolCallError', memberNameProperty: 'toolName' } }]
   expect(await h.run('let count = 1; const saved = tools.echo;', declarations)).toEqual({})
-  const result = await h.run('count++; process.stdout.write("raw"); console.log("value", count); await saved({})', declarations)
+  const result = await h.run('count++; process.stdout.write("raw"); Harness.inspect("value", count); await saved({})', declarations)
   expect(decodePtcJsonWire(result.value)).toBe(42)
   expect(h.seen.filter(item => item.type === 'log').map(item => item.text)).toEqual(['raw', 'value 2'])
   expect(h.state.env).toEqual({})
@@ -108,7 +108,7 @@ it('contains directory failures and output overflow in the active evaluation', a
   expect(failed).toMatchObject({ error: { kind: 'exception' } })
   expect((failed.error as { message: string }).message).toContain('directory missing')
   const h = await setup()
-  await h.run('console.log("x".repeat(100))', [], 20)
+  await h.run('Harness.inspect("x".repeat(100))', [], 20)
   expect(h.seen.some(item => item.type === 'output-limit')).toBe(true)
 })
 
@@ -121,7 +121,7 @@ it('closes the process channel when a terminal result cannot fit its write budge
 it('ignores output and rejects new tool calls from a completed evaluation', async () => {
   const h = await setup()
   const declarations = [{ global: 'tools', names: ['echo'] }]
-  await h.run('let finish; let old; const trigger = new Promise(resolve => { finish = resolve }); void trigger.then(async () => { console.log("late"); try { await tools.echo({}) } catch (error) { old = error.message } });', declarations)
+  await h.run('let finish; let old; const trigger = new Promise(resolve => { finish = resolve }); void trigger.then(async () => { Harness.inspect("late"); try { await tools.echo({}) } catch (error) { old = error.message } });', declarations)
   const result = await h.run('finish(); await new Promise(resolve => setImmediate(resolve)); old', declarations)
   expect(decodePtcJsonWire(result.value)).toBe('PTC evaluation ended')
   expect(h.seen.some(item => item.type === 'log' || item.type === 'call')).toBe(false)
@@ -194,7 +194,7 @@ it.each(['repl', 'script'] as const)('keeps run pending until an arbitrary user 
   const started = Promise.withResolvers<undefined>()
   // A host-controlled Promise models asynchronous work outside the managed binding wait.
   Object.defineProperty(h.state, 'wait', { value: () => { started.resolve(undefined); return resume.promise } })
-  const first = h.run('var mutation = 0; var serialized = 0; await process.wait(); mutation++; console.log("late"); ({ get value() { serialized++; return 1 } })')
+  const first = h.run('var mutation = 0; var serialized = 0; await process.wait(); mutation++; Harness.inspect("late"); ({ get value() { serialized++; return 1 } })')
   await started.promise
   const settled = vi.fn()
   void first.then(settled)

@@ -1,0 +1,47 @@
+[
+  {
+    "kind": "chunks",
+    "chunks": [
+      {"type":"block-start","index":0,"blockType":"tool-call"},
+      {"type":"block-end","index":0,"block":{"type":"tool-call","id":"script_declare","name":"run_code","arguments":"{\"code\":\"let counter: number = 1; const alias = { value: counter }; function increment() { return ++counter }; class Box { [await Promise.resolve(\\\"read\\\")]() { return counter } };\",\"description\":\"Declare Script state with computed await\"}"}},
+      {"type":"usage","usage":{"inputTokens":10,"outputTokens":5}},
+      {"type":"finish","reason":{"kind":"tool-calls"}}
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {"type":"block-start","index":0,"blockType":"tool-call"},
+      {"type":"block-end","index":0,"block":{"type":"tool-call","id":"script_fresh","name":"run_code","arguments":"{\"code\":\"for (var{answer} of [{answer:42}]) { await 0 }; Harness.inspect(JSON.stringify(({ previous: typeof counter, answer: await(Promise.resolve(answer)) }), null, 2))\",\"description\":\"Verify compact var patterns and fresh Script state\"}"}},
+      {"type":"usage","usage":{"inputTokens":10,"outputTokens":5}},
+      {"type":"finish","reason":{"kind":"tool-calls"}}
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {"type":"block-start","index":0,"blockType":"tool-call"},
+      {"type":"block-end","index":0,"block":{"type":"tool-call","id":"script_binding","name":"run_code","arguments":"{\"code\":\"const result = await tools.bash({command:\\\"pwd\\\",description:\\\"Read working directory\\\"}); Harness.inspect(result.stdout.text.trim() === process.cwd())\",\"description\":\"Call a host binding from a fresh Script\"}"}},
+      {"type":"usage","usage":{"inputTokens":10,"outputTokens":5}},
+      {"type":"finish","reason":{"kind":"tool-calls"}}
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {"type":"block-start","index":0,"blockType":"tool-call"},
+      {"type":"block-end","index":0,"block":{"type":"tool-call","id":"script_native_syntax","name":"run_code","arguments":"{\"code\":\"let duplicate; let duplicate;\",\"description\":\"Inspect native Script syntax diagnostics\"}"}},
+      {"type":"usage","usage":{"inputTokens":10,"outputTokens":5}},
+      {"type":"finish","reason":{"kind":"tool-calls"}}
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {"type":"block-start","index":0,"blockType":"text"},
+      {"type":"block-end","index":0,"block":{"type":"text","text":"Verified Script completion, compact var declarations, native syntax diagnostics, host bindings, and fresh state between calls."}},
+      {"type":"usage","usage":{"inputTokens":10,"outputTokens":2}},
+      {"type":"finish","reason":{"kind":"stop"}}
+    ]
+  }
+]

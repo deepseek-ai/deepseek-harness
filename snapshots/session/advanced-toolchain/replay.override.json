@@ -1,0 +1,56 @@
+[
+  {
+    "kind": "chunks",
+    "chunks": [
+      {"type":"block-start","index":0,"blockType":"tool-call"},
+      {"type":"block-end","index":0,"block":{"type":"tool-call","id":"advanced-inspect-before","name":"cordis_inspect_list","arguments":"{}"}},
+      {"type":"usage","usage":{"inputTokens":3,"outputTokens":3}},
+      {"type":"finish","reason":{"kind":"tool-calls"}}
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {"type":"block-start","index":0,"blockType":"tool-call"},
+      {"type":"block-end","index":0,"block":{"type":"tool-call","id":"advanced-code","name":"run_code","arguments":"{\"code\":\"const inspected = await tools.cordis_inspect_list({}); Harness.inspect(JSON.stringify(inspected.providers.map(provider => provider.id), null, 2)); return;\",\"description\":\"Discover runtime APIs through PTC\"}"}},
+      {"type":"usage","usage":{"inputTokens":3,"outputTokens":3}},
+      {"type":"finish","reason":{"kind":"tool-calls"}}
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {"type":"block-start","index":0,"blockType":"tool-call"},
+      {"type":"block-end","index":0,"block":{"type":"tool-call","id":"advanced-direct-child","name":"subagent","arguments":"{\"description\":\"Check direct child\",\"prompt\":\"Reply with exactly DIRECT_CHILD_OK and nothing else.\",\"run_in_background\":false}"}},
+      {"type":"usage","usage":{"inputTokens":3,"outputTokens":3}},
+      {"type":"finish","reason":{"kind":"tool-calls"}}
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {"type":"block-start","index":0,"blockType":"tool-call"},
+      {"type":"block-end","index":0,"block":{"type":"tool-call","id":"advanced-workflow","name":"workflow","arguments":"{\"script\":\"phase('Delegate')\\nconst reply = await agent('Reply with exactly WORKFLOW_CHILD_OK and nothing else.', { label: 'workflow-child' })\\nreturn { reply }\",\"meta\":{\"name\":\"advanced-headless-snapshot\",\"description\":\"exercise one workflow child through the headless agent\"}}"}},
+      {"type":"usage","usage":{"inputTokens":3,"outputTokens":3}},
+      {"type":"finish","reason":{"kind":"tool-calls"}}
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {"type":"block-start","index":0,"blockType":"tool-call"},
+      {"type":"block-end","index":0,"block":{"type":"tool-call","id":"advanced-inspect-after","name":"cordis_inspect_list","arguments":"{}"}},
+      {"type":"usage","usage":{"inputTokens":3,"outputTokens":3}},
+      {"type":"finish","reason":{"kind":"tool-calls"}}
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {"type":"block-start","index":0,"blockType":"text"},
+      {"type":"block-end","index":0,"block":{"type":"text","text":"ADVANCED_HEADLESS_OK"}},
+      {"type":"usage","usage":{"inputTokens":3,"outputTokens":3}},
+      {"type":"finish","reason":{"kind":"stop"}}
+    ]
+  }
+]

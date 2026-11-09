@@ -9,3 +9,5 @@ header:
   changes: 2
   promptChanges: 2
   childSystemPrompts: [1, 2]
+replay:
+  override: true

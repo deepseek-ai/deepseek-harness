@@ -163,14 +163,14 @@ describe('renderToolsSdk', () => {
     const text = renderToolsSdk([bash])
     expect(text).toContain('A declaration does not make its name a directly callable tool')
     expect(text).toContain('only names supplied as separate tool schemas may be called directly')
-    expect(text).toContain('`run_code({ code: "return await tools.bash({ description: \'Show current directory\', command: \'pwd\' })", description: "Show current directory" })`')
+    expect(text).toContain('`run_code({ code: "Harness.inspect(await tools.bash({ description: \'Show current directory\', command: \'pwd\' }))", description: "Show current directory" })`')
     expect(text).toContain('Program-only SDK bindings:')
     expect(text).not.toContain('The available tools:')
   })
 
   it('keeps REPL output syntax distinct from function bodies', () => {
     const text = renderToolsSdk([bash], 'repl')
-    expect(text).toContain('run_code({ code: "console.log(await tools.bash(')
+    expect(text).toContain('run_code({ code: "Harness.inspect(await tools.bash(')
     expect(text).not.toContain('return await tools.bash(')
     expect(text).not.toContain('the body of an async TypeScript function')
     expect(text).not.toContain('Emit results with `return`')
@@ -222,9 +222,9 @@ describe('renderToolsSdk', () => {
     expect(renderToolsSdk([constrained])).toContain('tools.bash({ command: \'pwd\' })')
   })
 
-  it('uses a returned result in function-body mode', () => {
+  it('uses explicit inspection in function-body mode', () => {
     const text = renderToolsSdk([bash])
-    expect(text).toContain('return await tools.bash(')
+    expect(text).toContain('Harness.inspect(await tools.bash(')
     expect(text).toContain('body of an async TypeScript function')
     expect(text).not.toContain('TypeScript REPL statements')
   })

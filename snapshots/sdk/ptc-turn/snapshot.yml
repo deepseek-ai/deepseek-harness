@@ -5,3 +5,5 @@ composition: ptc
 recording: live
 header:
   class: ptc
+replay:
+  override: true

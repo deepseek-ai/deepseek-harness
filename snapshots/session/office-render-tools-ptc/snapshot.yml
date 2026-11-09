@@ -12,3 +12,5 @@ header:
   class: office-render-tools-ptc
 workspace:
   setup: office-retired-ptc
+replay:
+  override: true

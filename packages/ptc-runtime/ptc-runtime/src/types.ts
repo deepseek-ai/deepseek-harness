@@ -84,6 +84,8 @@ export interface PtcRunRequest {
    * becomes {@link PtcRunResult.value}.
    */
   program: string
+  /** Discard the completion without JSON validation when true; omission preserves the completion value. */
+  discardCompletion?: boolean
   /**
    * Object-identity owner for optional in-memory state. Omission requests a fresh
    * environment. Consumers must await runtime.release(owner) when the owner ends.

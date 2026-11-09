@@ -11,3 +11,5 @@ header:
   promptChanges: 1
 workspace:
   setup: office-retired-ptc
+replay:
+  override: true

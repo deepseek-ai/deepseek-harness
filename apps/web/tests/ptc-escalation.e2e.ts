@@ -34,7 +34,7 @@ describe('web e2e: PTC program sandbox escalation', () => {
     scaffold = await launchWebScaffold({
       agentPresets: { default: 'ptc' },
       compareReplaySession: true,
-      ...(MODE === 'record' ? {} : { replayFixture: FIXTURE, paceMs: 15 }),
+      ...(MODE === 'record' ? {} : { replayFixture: FIXTURE, replayOverride: join(SNAPSHOT_DIR, 'replay.override.json'), paceMs: 15 }),
     })
     scaffold.ctx.on('session/event', (_session, event: SessionEvent) => { events.push(event) })
     browser = await chromium.launch()
@@ -90,6 +90,6 @@ describe('web e2e: PTC program sandbox escalation', () => {
   }, 300_000)
 
   it.skipIf(MODE === 'record')('keeps the fixture inventory closed', async () => {
-    await assertFixtureInventory(SNAPSHOT_DIR, ['session.v3.jsonl', 'approval.expected.md', 'workspace.expected'])
+    await assertFixtureInventory(SNAPSHOT_DIR, ['session.v3.jsonl', 'approval.expected.md', 'workspace.expected', 'replay.override.json'])
   })
 })

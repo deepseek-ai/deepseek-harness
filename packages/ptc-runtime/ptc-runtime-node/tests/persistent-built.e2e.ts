@@ -22,7 +22,7 @@ describe.skipIf(!built)('persistent PTC published exports', () => {
         const stateOwner = {}
         const run = (program, timeoutMs, bindings = []) => ctx.ptcRuntime.run(ctx.ptcRuntime.resolve({program, timeoutMs, bindings, stateOwner}))
         const first = await run('let count: number = 40; const path = await import("node:path");')
-        const second = await run('count += 2; console.log(path.basename("/a/b")); count')
+        const second = await run('count += 2; Harness.inspect(path.basename("/a/b")); count')
         const interrupted = await run('try { await tools.wait({}) } catch {} finally { count++ }', 200, [{ global: 'tools', functions: { wait: () => new Promise(() => {}) } }])
         const preserved = await run('count')
         await ctx.ptcRuntime.release(stateOwner)
