@@ -14,6 +14,7 @@ CUA、browser-use、Cua Driver、worktree、Ralph、终端、OAR 子 agent、Liv
 在进程内处理这些失败的代码会看到以下变化：
 
 - `@deepseek-ai/dsh-cua` 的 `NativeError` 与 `@deepseek-ai/dsh-experimental-subagent-oar` 的 `OarFailure` 现在继承 `@deepseek-ai/dsh-error` 的 `HarnessError`。`NativeError` 的 name、code 与 `CODE: message` 文本不变。`OarFailure` 去掉了 `stage` 与 `category` 字段；同样的摘要保留在 `message` 中，`code` 标明阶段。OAR 运行开始前的取消改为以 name 为 `AbortError` 的 `DOMException` 拒绝，不再是 `OarFailure`。
+- `@deepseek-ai/dsh-experimental-ptc-runtime-python` 的 `PythonPtcRuntime` 对调用方误用改为以 `@deepseek-ai/dsh-ptc-runtime` 的 `PtcRuntimeError`（`PTC_RUNTIME_INVALID_ARGUMENT` 或 `PTC_RUNTIME_UNAVAILABLE`）拒绝，不再是普通 `Error`；message 不变。
 - `@deepseek-ai/dsh-experimental-browser-use-stagehand-native` 的 `StagehandDrainError` 现在继承 `StagehandError`，code 为 `STAGEHAND_CLEANUP_FAILED`。
 - `@deepseek-ai/dsh-experimental-browser-use-runtime` 的 `SessionResources.dispose()` 改为以 `BrowserSessionError`（`BROWSER_CLEANUP_FAILED`）拒绝，其 `cause` 是此前直接抛出的 `AggregateError`；`instanceof AggregateError` 不再成立。
 - Liveshare 的 guard 函数改为返回 `{ reason, info }`，不再返回原因字符串。

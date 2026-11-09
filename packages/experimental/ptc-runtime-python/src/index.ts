@@ -18,7 +18,7 @@ import { getHeapStatistics } from 'node:v8'
 import type { Duplex } from 'node:stream'
 import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { PtcRuntime, DUNDER_MEMBER, PORTABLE_RESERVED_WORDS, RESERVED_BINDING_GLOBALS, RESERVED_ERROR_MEMBERS } from '@deepseek-ai/dsh-ptc-runtime'
+import { PtcRuntime, PtcRuntimeError, DUNDER_MEMBER, PORTABLE_RESERVED_WORDS, RESERVED_BINDING_GLOBALS, RESERVED_ERROR_MEMBERS } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcBindingErrorClass, PtcBindingFunction, PtcJsonValue, PtcRunFailure, PtcRunRequest, PtcRunResult, PtcRunSandbox, PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
 import { snapshotJsonValue } from '@deepseek-ai/dsh-util-values'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
@@ -977,11 +977,11 @@ export class PythonPtcRuntime extends PtcRuntime {
    * @throws When a requested timeout is unsupported, cwd is relative, or the provider is disposed.
    */
   resolve(request: PtcRunRequest): PtcRunSpec {
-    if (this.disposed) throw new Error('dsh-ptc-runtime-python: resolve() after disposal')
-    if (request.timeoutMs !== undefined) throw new Error('dsh-ptc-runtime-python: per-call timeout is unsupported')
+    if (this.disposed) throw new PtcRuntimeError('dsh-ptc-runtime-python: resolve() after disposal', 'PTC_RUNTIME_UNAVAILABLE')
+    if (request.timeoutMs !== undefined) throw new PtcRuntimeError('dsh-ptc-runtime-python: per-call timeout is unsupported', 'PTC_RUNTIME_INVALID_ARGUMENT')
     const sandboxPolicy = request.sandboxPolicy ?? this.ctx.sandboxPolicy.resolve()
     const cwd = request.cwd ?? sandboxPolicy.workspaceRoot
-    if (!isAbsolute(cwd)) throw new Error('dsh-ptc-runtime-python: cwd must be absolute')
+    if (!isAbsolute(cwd)) throw new PtcRuntimeError('dsh-ptc-runtime-python: cwd must be absolute', 'PTC_RUNTIME_INVALID_ARGUMENT')
     return { ...request, cwd, sandboxPolicy, timeoutMs: this.config.maxWallMs }
   }
 
@@ -991,10 +991,10 @@ export class PythonPtcRuntime extends PtcRuntime {
    * @returns Captured output, confinement facts, and the program outcome.
    */
   async run(request: PtcRunSpec): Promise<PtcRunResult> {
-    if (request.sandboxPolicy === undefined) throw new Error('dsh-ptc-runtime-python: run requires a resolved sandbox policy')
-    if (request.timeoutMs !== this.config.maxWallMs) throw new Error('dsh-ptc-runtime-python: unsupported execution timeout')
-    if (!isAbsolute(request.cwd)) throw new Error('dsh-ptc-runtime-python: cwd must be absolute')
-    if (this.disposed) throw new Error('dsh-ptc-runtime-python: run() after disposal')
+    if (request.sandboxPolicy === undefined) throw new PtcRuntimeError('dsh-ptc-runtime-python: run requires a resolved sandbox policy', 'PTC_RUNTIME_INVALID_ARGUMENT')
+    if (request.timeoutMs !== this.config.maxWallMs) throw new PtcRuntimeError('dsh-ptc-runtime-python: unsupported execution timeout', 'PTC_RUNTIME_INVALID_ARGUMENT')
+    if (!isAbsolute(request.cwd)) throw new PtcRuntimeError('dsh-ptc-runtime-python: cwd must be absolute', 'PTC_RUNTIME_INVALID_ARGUMENT')
+    if (this.disposed) throw new PtcRuntimeError('dsh-ptc-runtime-python: run() after disposal', 'PTC_RUNTIME_UNAVAILABLE')
     const bindings = this.validateBindings(request)
     const policy = request.sandboxPolicy
     const sandbox: PtcRunSandbox = { mode: policy.mode, denied: false }
@@ -1071,10 +1071,10 @@ export class PythonPtcRuntime extends PtcRuntime {
     const injectedGlobals = new Set<string>()
     const claimGlobal = (name: string, role: string): void => {
       if (RUNTIME_OWNED_GLOBALS.has(name)) {
-        throw new Error(`dsh-ptc-runtime-python: ${role} ${JSON.stringify(name)} collides with a runtime-owned global`)
+        throw new PtcRuntimeError(`dsh-ptc-runtime-python: ${role} ${JSON.stringify(name)} collides with a runtime-owned global`, 'PTC_RUNTIME_INVALID_ARGUMENT')
       }
       if (injectedGlobals.has(name)) {
-        throw new Error(`dsh-ptc-runtime-python: ${role} ${JSON.stringify(name)} collides with another injected global`)
+        throw new PtcRuntimeError(`dsh-ptc-runtime-python: ${role} ${JSON.stringify(name)} collides with another injected global`, 'PTC_RUNTIME_INVALID_ARGUMENT')
       }
       injectedGlobals.add(name)
     }
@@ -1090,10 +1090,10 @@ export class PythonPtcRuntime extends PtcRuntime {
       // the plain copy makes validation and the boot frame agree.
       const global = namespace.global
       if (!IDENTIFIER.test(global) || RESERVED_NAMES.has(global)) {
-        throw new Error(`dsh-ptc-runtime-python: binding global ${JSON.stringify(global)} is not a usable Python identifier`)
+        throw new PtcRuntimeError(`dsh-ptc-runtime-python: binding global ${JSON.stringify(global)} is not a usable Python identifier`, 'PTC_RUNTIME_INVALID_ARGUMENT')
       }
       if (bindings.has(global)) {
-        throw new Error(`dsh-ptc-runtime-python: duplicate binding global ${JSON.stringify(global)}`)
+        throw new PtcRuntimeError(`dsh-ptc-runtime-python: duplicate binding global ${JSON.stringify(global)}`, 'PTC_RUNTIME_INVALID_ARGUMENT')
       }
       claimGlobal(global, 'binding global')
       // The error class becomes a program global and its member property an
@@ -1105,17 +1105,17 @@ export class PythonPtcRuntime extends PtcRuntime {
         const name = errorClass.name
         const memberNameProperty = errorClass.memberNameProperty
         if (!IDENTIFIER.test(name) || RESERVED_NAMES.has(name)) {
-          throw new Error(`dsh-ptc-runtime-python: errorClass.name ${JSON.stringify(name)} is not a usable Python identifier`)
+          throw new PtcRuntimeError(`dsh-ptc-runtime-python: errorClass.name ${JSON.stringify(name)} is not a usable Python identifier`, 'PTC_RUNTIME_INVALID_ARGUMENT')
         }
         // Any non-empty own attribute name is settable via setattr (the
         // program reads exotic names like `tool-name` with getattr), matching
         // the seam contract and the Node backend — only the seam-excluded
         // and protocol-reserved members below are refused.
         if (memberNameProperty.length === 0) {
-          throw new Error('dsh-ptc-runtime-python: errorClass.memberNameProperty must be a non-empty attribute name')
+          throw new PtcRuntimeError('dsh-ptc-runtime-python: errorClass.memberNameProperty must be a non-empty attribute name', 'PTC_RUNTIME_INVALID_ARGUMENT')
         }
         if (EXCEPTION_RESERVED_MEMBERS.has(memberNameProperty) || DUNDER.test(memberNameProperty)) {
-          throw new Error(`dsh-ptc-runtime-python: errorClass.memberNameProperty ${JSON.stringify(memberNameProperty)} is a reserved error member and cannot be assigned`)
+          throw new PtcRuntimeError(`dsh-ptc-runtime-python: errorClass.memberNameProperty ${JSON.stringify(memberNameProperty)} is a reserved error member and cannot be assigned`, 'PTC_RUNTIME_INVALID_ARGUMENT')
         }
         claimGlobal(name, 'errorClass.name')
         validatedErrorClass = { name, memberNameProperty }

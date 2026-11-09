@@ -14,6 +14,7 @@ Tool failures from the CUA, browser-use, Cua Driver, worktree, Ralph, terminal, 
 Code that handles these failures in-process sees these changes:
 
 - `NativeError` from `@deepseek-ai/dsh-cua` and `OarFailure` from `@deepseek-ai/dsh-experimental-subagent-oar` now extend `HarnessError` from `@deepseek-ai/dsh-error`. `NativeError` keeps its name, codes, and `CODE: message` text. `OarFailure` drops its `stage` and `category` fields; the same summary stays in `message`, and `code` names the stage. Cancellation before an OAR run starts rejects with a `DOMException` named `AbortError` instead of an `OarFailure`.
+- `PythonPtcRuntime` from `@deepseek-ai/dsh-experimental-ptc-runtime-python` rejects caller misuse with `PtcRuntimeError` from `@deepseek-ai/dsh-ptc-runtime` (`PTC_RUNTIME_INVALID_ARGUMENT` or `PTC_RUNTIME_UNAVAILABLE`) instead of a plain `Error`; messages are unchanged.
 - `StagehandDrainError` from `@deepseek-ai/dsh-experimental-browser-use-stagehand-native` now extends `StagehandError` and has the code `STAGEHAND_CLEANUP_FAILED`.
 - `SessionResources.dispose()` from `@deepseek-ai/dsh-experimental-browser-use-runtime` rejects with `BrowserSessionError` (`BROWSER_CLEANUP_FAILED`) whose `cause` is the `AggregateError` it previously threw; `instanceof AggregateError` no longer matches.
 - Liveshare guard functions return `{ reason, info }` instead of a reason string.

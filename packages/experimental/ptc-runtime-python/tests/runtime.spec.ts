@@ -85,15 +85,15 @@ describe('PythonPtcRuntime — seam descriptors and misuse', () => {
       const cwd = await makeTempDir('dsh-py-resolved-cwd-')
       const spec = runtime.resolve({ ...request, cwd })
       expect(spec.cwd).toBe(cwd)
-      expect(() => runtime.resolve({ ...request, cwd: 'relative' })).toThrow('cwd must be absolute')
-      expect(() => runtime.resolve({ ...request, timeoutMs: 1 })).toThrow('per-call timeout is unsupported')
-      expect(() => runtime.resolve({ ...request, timeoutMs: null })).toThrow('per-call timeout is unsupported')
+      expect(() => runtime.resolve({ ...request, cwd: 'relative' })).toThrow(expect.objectContaining({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_INVALID_ARGUMENT', message: expect.stringContaining('cwd must be absolute') as string }))
+      expect(() => runtime.resolve({ ...request, timeoutMs: 1 })).toThrow(expect.objectContaining({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_INVALID_ARGUMENT', message: expect.stringContaining('per-call timeout is unsupported') as string }))
+      expect(() => runtime.resolve({ ...request, timeoutMs: null })).toThrow(expect.objectContaining({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_INVALID_ARGUMENT', message: expect.stringContaining('per-call timeout is unsupported') as string }))
       const sandboxPolicy = { mode: 'danger-full-access' as const, workspaceRoot: cwd }
       expect(runtime.resolve({ ...request, sandboxPolicy }).sandboxPolicy).toBe(sandboxPolicy)
-      await expect(runtime.run({ ...request, cwd, timeoutMs: 30_000 })).rejects.toThrow('run requires a resolved sandbox policy')
-      await expect(runtime.run({ ...spec, cwd: 'relative' })).rejects.toThrow('cwd must be absolute')
-      await expect(runtime.run({ ...spec, timeoutMs: 1 })).rejects.toThrow('unsupported execution timeout')
-      await expect(runtime.run({ ...spec, timeoutMs: null })).rejects.toThrow('unsupported execution timeout')
+      await expect(runtime.run({ ...request, cwd, timeoutMs: 30_000 })).rejects.toThrow(expect.objectContaining({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_INVALID_ARGUMENT', message: expect.stringContaining('run requires a resolved sandbox policy') as string }))
+      await expect(runtime.run({ ...spec, cwd: 'relative' })).rejects.toThrow(expect.objectContaining({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_INVALID_ARGUMENT', message: expect.stringContaining('cwd must be absolute') as string }))
+      await expect(runtime.run({ ...spec, timeoutMs: 1 })).rejects.toThrow(expect.objectContaining({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_INVALID_ARGUMENT', message: expect.stringContaining('unsupported execution timeout') as string }))
+      await expect(runtime.run({ ...spec, timeoutMs: null })).rejects.toThrow(expect.objectContaining({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_INVALID_ARGUMENT', message: expect.stringContaining('unsupported execution timeout') as string }))
       const result = await runtime.run(runtime.resolve({ ...request, cwd, program: 'import os\nreturn os.getcwd()' }))
       expect(result.error).toBeUndefined()
       expect(result.value).toBe(realpathSync(cwd))
@@ -527,11 +527,11 @@ describe('PythonPtcRuntime — seam descriptors and misuse', () => {
     await expect(runtime.run(runtime.resolve({
       program: 'return 1',
       bindings: [{ global: '1bad', functions: {} }],
-    }))).rejects.toThrow(/is not a usable Python identifier/)
+    }))).rejects.toThrow(expect.objectContaining({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_INVALID_ARGUMENT', message: expect.stringMatching(/is not a usable Python identifier/) as string }))
     await expect(runtime.run(runtime.resolve({
       program: 'return 1',
       bindings: [{ global: 'class', functions: {} }],
-    }))).rejects.toThrow(/is not a usable Python identifier/)
+    }))).rejects.toThrow(expect.objectContaining({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_INVALID_ARGUMENT', message: expect.stringMatching(/is not a usable Python identifier/) as string }))
   })
 
   it('rejects duplicate binding namespaces', async () => {
@@ -542,15 +542,15 @@ describe('PythonPtcRuntime — seam descriptors and misuse', () => {
         { global: 'tools', functions: {} },
         { global: 'tools', functions: {} },
       ],
-    }))).rejects.toThrow(/duplicate binding global/)
+    }))).rejects.toThrow(expect.objectContaining({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_INVALID_ARGUMENT', message: expect.stringMatching(/duplicate binding global/) as string }))
   })
 
   it('rejects run() after disposal, and unregisters ctx.ptcRuntime', async () => {
     const { ctx, fiber, runtime } = await setup()
     const spec = runtime.resolve({ program: 'return 1', bindings: [] })
     await fiber.dispose()
-    await expect(runtime.run(spec)).rejects.toThrow(/after disposal/)
-    expect(() => runtime.resolve({ program: 'return 1', bindings: [] })).toThrow(/after disposal/)
+    await expect(runtime.run(spec)).rejects.toThrow(expect.objectContaining({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_UNAVAILABLE', message: expect.stringMatching(/after disposal/) as string }))
+    expect(() => runtime.resolve({ program: 'return 1', bindings: [] })).toThrow(expect.objectContaining({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_UNAVAILABLE', message: expect.stringMatching(/after disposal/) as string }))
     expect(ctx.get('ptcRuntime')).toBeUndefined()
   })
 
@@ -2605,7 +2605,7 @@ describe('PythonPtcRuntime — programs and bindings', () => {
     await expect(runtime.run(runtime.resolve({
       program: 'return 1',
       bindings: [{ global: 'tools', functions: {}, errorClass: { name: 'tools', memberNameProperty: 'toolName' } }],
-    }))).rejects.toThrow(/collides with another injected global/)
+    }))).rejects.toThrow(expect.objectContaining({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_INVALID_ARGUMENT', message: expect.stringMatching(/collides with another injected global/) as string }))
   })
 
   it('rejects a namespace global colliding with a runtime-owned name at the seam', async () => {
@@ -2622,7 +2622,7 @@ describe('PythonPtcRuntime — programs and bindings', () => {
       await expect(runtime.run(runtime.resolve({
         program: 'x = 1',
         bindings: [{ global, functions: {} }],
-      }))).rejects.toThrow(/collides with a runtime-owned global/)
+      }))).rejects.toThrow(expect.objectContaining({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_INVALID_ARGUMENT', message: expect.stringMatching(/collides with a runtime-owned global/) as string }))
     }
   })
 
@@ -2649,7 +2649,7 @@ describe('PythonPtcRuntime — programs and bindings', () => {
     await expect(runtime.run(runtime.resolve({
       program: 'return 1',
       bindings: [{ global: 'tools', functions: {}, errorClass: { name: 'ToolCallError', memberNameProperty: '' } }],
-    }))).rejects.toThrow(/memberNameProperty must be a non-empty attribute name/)
+    }))).rejects.toThrow(expect.objectContaining({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_INVALID_ARGUMENT', message: expect.stringMatching(/memberNameProperty must be a non-empty attribute name/) as string }))
   })
 
   it('resolves a basename pythonBin to an absolute path (runs a real program)', async () => {
@@ -2793,7 +2793,7 @@ describe('PythonPtcRuntime — programs and bindings', () => {
         functions: {},
         errorClass: { name: 'class', memberNameProperty: 'toolName' },
       }],
-    }))).rejects.toThrow(/errorClass.name "class" is not a usable Python identifier/)
+    }))).rejects.toThrow(expect.objectContaining({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_INVALID_ARGUMENT', message: expect.stringMatching(/errorClass.name "class" is not a usable Python identifier/) as string }))
   })
 
   it('routes a declared inherited-attribute name through the bridge via subscript', async () => {
@@ -5431,7 +5431,7 @@ describe('PythonPtcRuntime — hostile peer', () => {
       await expect(runtime.run(runtime.resolve({
         program: 'return 1',
         bindings: [{ global, functions: {} }],
-      }))).rejects.toThrow(/is not a usable Python identifier/)
+      }))).rejects.toThrow(expect.objectContaining({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_INVALID_ARGUMENT', message: expect.stringMatching(/is not a usable Python identifier/) as string }))
     }
   })
 
