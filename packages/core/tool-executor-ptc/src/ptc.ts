@@ -61,7 +61,7 @@ function runCodeFlavor(language: string, execution = {
 const TYPESCRIPT_FLAVOR = runCodeFlavor('TypeScript')
 const TYPESCRIPT_FUNCTION_FLAVOR = runCodeFlavor('TypeScript', {
   programDescription: 'the BODY of an async function (erasable syntax only; top-level `await` and `return` work)',
-  outputInstruction: 'Show selected results with inspect(...values). Return values are not displayed.',
+  outputInstruction: 'Show selected results with inspect(...values).',
   codeDescription: 'The program: the body of an async TypeScript function.',
 })
 const PYTHON_FLAVOR = runCodeFlavor('Python')
