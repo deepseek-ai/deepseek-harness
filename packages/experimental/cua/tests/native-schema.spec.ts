@@ -33,14 +33,10 @@ it('retains optional resource fields and tuple-valued parameters without inventi
 })
 
 it('generates opaque string admission for native window targets', () => {
-  expect(JSON.parse(nativeProtocol().json)).toMatchObject({ oneOf: expect.arrayContaining([
-    expect.objectContaining({ properties: expect.objectContaining({
-      method: { const: 'screenshot', type: 'string' },
-      params: expect.objectContaining({ properties: expect.objectContaining({
-        windowId: { type: 'string' },
-      }) }),
-    }) }),
-  ]) })
+  const index = Request.options.findIndex(schema => schema.shape.method.value === 'screenshot')
+  expect(JSON.parse(nativeProtocol().json)).toHaveProperty(
+    ['oneOf', index, 'properties', 'params', 'properties', 'windowId'], { type: 'string' },
+  )
 })
 
 it('admits only locator fields for default invocation', () => {

@@ -16,7 +16,7 @@ it.skipIf(!helperPath)('admits Windows desktop requests through managed WSL or n
   const client = new NativeClient(ctx, { ...Config({}), helperPath: helperPath!, cwd: process.cwd() },
     (_owner, config) => runtime.connect(config))
   onTestFinished(() => client.dispose())
-  expect(await client.request('getCapabilities', {}, new AbortController().signal)).toMatchObject({
-    permissions: { accessibility: expect.any(Boolean), screenRecording: expect.any(Boolean) },
-  })
+  const capabilities = await client.request('getCapabilities', {}, new AbortController().signal)
+  expect(capabilities).toHaveProperty('permissions.accessibility', expect.any(Boolean))
+  expect(capabilities).toHaveProperty('permissions.screenRecording', expect.any(Boolean))
 }, 60_000)

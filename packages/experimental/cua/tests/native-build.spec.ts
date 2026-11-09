@@ -9,10 +9,10 @@ import { buildNativeExecutable } from '../src/native-build.ts'
 async function fixture(exitCode = 0, exited = true) {
   const root = await mkdtemp(join(tmpdir(), 'cua-build-'))
   onTestFinished(() => rm(root, { recursive: true, force: true }))
-  const handle: SubprocessHandle = {
+  const handle = {
     stdin: undefined, stdout: undefined, stderr: undefined, control: undefined, collected: {},
     done: Promise.resolve({ exitCode, signal: null }), terminate: vi.fn(), waitForExit: vi.fn(async () => exited),
-  }
+  } satisfies SubprocessHandle
   const executable = join(root, 'bin', 'helper.exe')
   const resolveExecutable = vi.fn(async () => {
     expect(handle.waitForExit).toHaveBeenCalledOnce()
