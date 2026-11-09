@@ -1,6 +1,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import ForgeService, { changeRequestKey } from '../src/index.ts'
+import type { ForgeReviewData } from '../src/types.ts'
 import { demo, FakeProvider, forgeContext, provide, ref, snapshot } from './fake-provider.ts'
 
 let ctx: Context | undefined
@@ -102,6 +103,42 @@ describe('forge registry', () => {
     await expect(ctx.forge.fileText(ref(3), 'b'.repeat(40), 'src/a.ts', signal)).resolves.toEqual({ code: 'not-found', message: 'gone' })
     expect(ctx.forge.fileUrl(ref(3), 'b'.repeat(40), 'src/a.ts')).toBe(`https://fake.test/Octo/Demo/file/${'b'.repeat(40)}/src/a.ts`)
     expect(provider.actions).toEqual([`diff 3 ${'a'.repeat(40)}`, `text 3 ${'b'.repeat(40)} src/a.ts`])
+  })
+
+  it('reads commits and commit ranges only from a provider that implements both', async () => {
+    ctx = await forgeContext()
+    const provider = new FakeProvider()
+    await provide(ctx, provider)
+    const signal = new AbortController().signal
+    const list = { headSha: 'b'.repeat(40), truncated: false, commits: [] }
+
+    await expect(ctx.forge.commits(ref(3), signal)).resolves.toBeUndefined()
+    await expect(ctx.forge.compare(ref(3), 'a'.repeat(40), 'b'.repeat(40), signal))
+      .resolves.toEqual({ code: 'unavailable', message: 'This provider does not read commits' })
+    const commits = vi.fn(async () => list)
+    Object.assign(provider, { commits })
+    await expect(ctx.forge.commits(ref(3), signal)).resolves.toBeUndefined()
+    const compare = vi.fn(async () => 'diff --git a/x b/x')
+    Object.assign(provider, { compare })
+    await expect(ctx.forge.commits(ref(3), signal)).resolves.toBe(list)
+    await expect(ctx.forge.compare(ref(3), 'a'.repeat(40), 'b'.repeat(40), signal)).resolves.toBe('diff --git a/x b/x')
+    expect(commits).toHaveBeenCalledWith(ref(3), expect.any(AbortSignal))
+    expect(compare).toHaveBeenCalledWith(ref(3), 'a'.repeat(40), 'b'.repeat(40), expect.any(AbortSignal))
+  })
+
+  it('delegates review reads to the provider of their forge and reports a provider without them as unsupported', async () => {
+    ctx = await forgeContext()
+    const provider = new FakeProvider()
+    await provide(ctx, provider)
+    const signal = new AbortController().signal
+
+    await expect(ctx.forge.readReview(ref(3), 'a'.repeat(40), signal))
+      .resolves.toEqual({ code: 'unsupported', message: 'This provider does not support review reads' })
+    const review: ForgeReviewData = { headSha: 'a'.repeat(40), threads: [], truncated: false }
+    const readReview = vi.fn(async () => review)
+    Object.assign(provider, { readReview })
+    await expect(ctx.forge.readReview(ref(3), 'a'.repeat(40), signal)).resolves.toBe(review)
+    expect(readReview).toHaveBeenCalledWith(ref(3), 'a'.repeat(40), expect.any(AbortSignal))
   })
 
   it('delegates change request actions to the provider of their forge and returns its outcome', async () => {

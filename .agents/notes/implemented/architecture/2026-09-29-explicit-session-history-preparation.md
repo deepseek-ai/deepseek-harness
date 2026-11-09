@@ -18,7 +18,7 @@ Other fork callers omit that option and allow automatic migration.
 
 The `formatStatus` returned by `stat` carries the migration library's existing classification; `header` remains the current logical format. It describes the stored format, not migration-task progress or prepared in-memory history.
 
-When migration is required and `subagentCatalog` is absent, Web marks the Session's row “Migration required” and keeps its history-opening actions without descendant expansion or changing its subagent mode. Opening the Session supplies its catalog through history and control projections. Available catalogs remain usable, including empty catalogs. Session-list lineage resolves navigation addresses, not missing catalog membership. Ordinary loading, cancellation, and storage errors do not become this migration branch.
+When migration is required and `subagentCatalog` is absent, Web keeps the Session row's history-opening actions without a format notice, descendant expansion, or changing its subagent mode. Opening the Session supplies its catalog through history and control projections. Available catalogs remain usable, including empty catalogs. Session-list lineage resolves navigation addresses, not missing catalog membership. Ordinary loading, cancellation, and storage errors do not become this migration branch.
 
 Create/adopt, full-text search, and ordinary history opening allow automatic migration.
 

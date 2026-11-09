@@ -829,8 +829,13 @@ describe('tool-pwsh-persistent', () => {
 
   it('rejects invalid config and invalid calls', async () => {
     const { ctx, owner, stub } = await setup()
-    expect((await call(ctx, undefined, 'pwd')).isError).toBe(true)
-    expect(text(await call(ctx, owner, ' '))).toContain('command must be a non-empty string')
+    expect(await call(ctx, undefined, 'pwd')).toMatchObject({
+      isError: true,
+      error: { info: { name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' } },
+    })
+    const blank = await call(ctx, owner, ' ')
+    expect(text(blank)).toContain('command must be a non-empty string')
+    expect(blank).toMatchObject({ isError: true, error: { info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } } })
 
     const controller = new AbortController()
     controller.abort(new Error('caller stopped'))

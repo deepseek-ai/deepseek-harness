@@ -13,7 +13,10 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-system-prompt'
+import { WorkingDirectoryError } from './error.ts'
 import { within } from './within.ts'
+
+export { WorkingDirectoryError, type WorkingDirectoryErrorCode } from './error.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Events {
@@ -203,7 +206,7 @@ export class WorkingDirectoryService extends Service {
       return assembly
     }, { prepend: true })
     ctx.effect(() => async () => {
-      this.lifecycle.abort(new Error('working-directory service disposed'))
+      this.lifecycle.abort(new WorkingDirectoryError('working-directory service disposed', 'WORKING_DIRECTORY_UNAVAILABLE'))
       await Promise.allSettled(this.operations)
     })
   }
@@ -243,7 +246,8 @@ export class WorkingDirectoryService extends Service {
    * A Session without a recorded project records the deployment fallback as its first anchor on its
    * first validation, and a recovery destination outside every anchor joins the anchors.
    * A notice failure is warned without reverting the committed state.
-   * @throws when the original project is also unavailable, or when a `working-directory/access` listener rejects.
+   * @throws {@link WorkingDirectoryError} `WORKING_DIRECTORY_UNAVAILABLE` when the original project is also
+   *   unavailable or the service is disposed, or the rejection of a `working-directory/access` listener.
    */
   ensure(agent: Agent, signal?: AbortSignal): Promise<string> {
     return this.serialize(agent, signal, control => this.ctx.waterfall('working-directory/access', { agent, path: null, signal: control }, async () => {
@@ -262,7 +266,10 @@ export class WorkingDirectoryService extends Service {
         return current
       }
       const original = agent.session.header.cwd ?? this.defaultDirectory
-      const restored = await this.directory(original, original, control)
+      const restored = await this.directory(original, original, control, () => new WorkingDirectoryError(
+        `working-directory: directory does not exist: ${JSON.stringify(original)}; the current working directory ${JSON.stringify(current)} is also unavailable`,
+        'WORKING_DIRECTORY_UNAVAILABLE',
+      ))
       // A destination no anchor contains, such as a header recorded by another spelling, becomes one.
       const anchor = anchorContaining(this.anchorsOf(agent.session), restored) === undefined ? restored : undefined
       this.commit(agent, restored, true, control, anchor)
@@ -280,11 +287,13 @@ export class WorkingDirectoryService extends Service {
    * @param signal - cancellation before the durable change.
    * @returns the canonical absolute directory, committed before fulfillment.
    * A notice failure is warned; the next request still receives the committed directory.
-   * @throws when the requested path is not an existing directory.
+   * @throws {@link WorkingDirectoryError} `WORKING_DIRECTORY_INVALID` for an empty path and
+   *   `WORKING_DIRECTORY_NOT_FOUND` when the path is not an existing directory, or the rejection of a
+   *   `working-directory/access` listener.
    */
   set(agent: Agent, path: string, signal?: AbortSignal): Promise<string> {
     return this.serialize(agent, signal, control => this.ctx.waterfall('working-directory/access', { agent, path, signal: control }, async () => {
-      if (path.length === 0) throw new Error('working-directory: cd must not be empty')
+      if (path.length === 0) throw new WorkingDirectoryError('working-directory: cd must not be empty', 'WORKING_DIRECTORY_INVALID')
       const directory = await this.directory(path, this.get(agent.session), control)
       this.commit(agent, directory, false, control)
       return directory
@@ -301,16 +310,21 @@ export class WorkingDirectoryService extends Service {
    * @returns the committed current directory and the workspace root selected after the commit;
    * the registered root is that root unless a more specific anchor already contains the directory.
    * A notice failure is warned; the next request still receives the committed directories.
-   * @throws when either path is not an existing directory or the directory lies outside the root.
+   * @throws {@link WorkingDirectoryError} `WORKING_DIRECTORY_INVALID` for an empty path or a directory outside
+   *   the root and `WORKING_DIRECTORY_NOT_FOUND` when either path is not an existing directory.
    */
   relocate(agent: Agent, root: string, options: RelocateOptions = {}): Promise<RelocatedDirectories> {
     return this.serialize(agent, options.signal, async (control) => {
-      if (root.length === 0) throw new Error('working-directory: root must not be empty')
-      if (options.cwd !== undefined && options.cwd.length === 0) throw new Error('working-directory: cwd must not be empty')
+      if (root.length === 0) throw new WorkingDirectoryError('working-directory: root must not be empty', 'WORKING_DIRECTORY_INVALID')
+      if (options.cwd !== undefined && options.cwd.length === 0) {
+        throw new WorkingDirectoryError('working-directory: cwd must not be empty', 'WORKING_DIRECTORY_INVALID')
+      }
       const anchor = await this.directory(root, this.get(agent.session), control)
       const cwd = options.cwd === undefined ? anchor : await this.directory(options.cwd, anchor, control)
       if (!within(anchor, cwd)) {
-        throw new Error(`working-directory: ${JSON.stringify(cwd)} lies outside the workspace root ${JSON.stringify(anchor)}`)
+        throw new WorkingDirectoryError(
+          `working-directory: ${JSON.stringify(cwd)} lies outside the workspace root ${JSON.stringify(anchor)}`, 'WORKING_DIRECTORY_INVALID',
+        )
       }
       if (agent.session.header.cwd === undefined && this.anchorsOf(agent.session).length === 0) {
         // The deployment fallback is the recovery destination; registering it first lets leaving the checkout select it.
@@ -332,7 +346,8 @@ export class WorkingDirectoryService extends Service {
    * @param source - Session whose current root may be passed on; the call leaves it unchanged.
    * @param options - canonical absolute directory to start in and cancellation before the durable change.
    * @returns the committed current directory and the workspace root selected after the commit.
-   * @throws when `options.cwd` is not an existing directory, or when a `working-directory/access` listener rejects.
+   * @throws {@link WorkingDirectoryError} `WORKING_DIRECTORY_NOT_FOUND` when `options.cwd` is not an existing
+   *   directory, or the rejection of a `working-directory/access` listener.
    */
   async inherit(agent: Agent, source: Session, options: InheritOptions): Promise<RelocatedDirectories> {
     const root = this.rootOf(source)
@@ -351,13 +366,19 @@ export class WorkingDirectoryService extends Service {
     return root === cwd ? current : `${current}\nWorkspace root: ${JSON.stringify(root)}.`
   }
 
-  private async directory(path: string, cwd: string, signal: AbortSignal): Promise<string> {
+  private async directory(
+    path: string,
+    cwd: string,
+    signal: AbortSignal,
+    missing = (): WorkingDirectoryError => new WorkingDirectoryError(
+      `working-directory: directory does not exist: ${JSON.stringify(path)}`,
+      'WORKING_DIRECTORY_NOT_FOUND',
+    ),
+  ): Promise<string> {
     const target = await this.ctx.fs.resolve(path, { cwd, signal })
     const info = await this.ctx.fs.stat(target, signal)
     signal.throwIfAborted()
-    if (info?.type !== 'directory') {
-      throw new Error(`working-directory: directory does not exist: ${JSON.stringify(path)}`)
-    }
+    if (info?.type !== 'directory') throw missing()
     return this.ctx.fs.processPath(target)
   }
 

@@ -52,6 +52,8 @@ A subprocess backend, then the tools; the spill backend is optional and makes ca
 
 Routine budgets stay out of the model-facing schema: a model that needs surrounding context reads the matched file with `read`, and one that needs later results follows the returned spill locator's retrieval hint.
 
+Both tools opt into concurrent scheduling with sibling parallel-safe calls. A search records no file observation, over-cap spilling runs in the model-ordered post-execute phase, and working-directory recovery is serialized per Session by the working-directory service.
+
 ### Configuration
 
 `sampleOverCapGlobResults` is required; the remaining keys are optional search caps with the defaults below.
@@ -76,7 +78,7 @@ Node deployments receive the `@vscode/ripgrep` platform package on supported mac
 
 ### Failures and recovery
 
-Search failures carry the package-owned codes `SEARCH_INVALID_PATTERN` (ripgrep rejected the regex or glob), `SEARCH_FAILED` (a failed launch, inaccessible target, signal kill, or malformed `--json` output), `SEARCH_RAW_OUTPUT_OVERFLOW` (raw output over the cap), and `SEARCH_ABORTED` (cooperative timeout or caller cancellation). Exit 0 is success with results and exit 1 is a successful empty search; model argument mistakes stay ordinary tool argument errors.
+Search failures carry the package-owned codes `SEARCH_INVALID_PATTERN` (ripgrep rejected the regex or glob), `SEARCH_FAILED` (a failed launch, inaccessible target, signal kill, or malformed `--json` output), `SEARCH_RAW_OUTPUT_OVERFLOW` (raw output over the cap), and `SEARCH_ABORTED` (cooperative timeout or caller cancellation). Exit 0 is success with results and exit 1 is a successful empty search; model argument mistakes throw `ToolArgsError` with `INVALID_ARGS`.
 
 -----
 

@@ -30,13 +30,15 @@
   ],
   "license": "MIT",
   "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:~"
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-error": "workspace:*"
   },
   "dependencies": {
     "@deepseek-ai/dsh-lazy-require": "workspace:*",
     "koffi": "3.1.1"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "workspace:~"
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-error": "workspace:*"
   }
 }

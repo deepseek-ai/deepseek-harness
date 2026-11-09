@@ -2,13 +2,6 @@
 import ApplicationServices
 
 final class AXHover {
-    /// Only diagnostic clients without a connection policy may opt in per request.
-    static func requireSystemPointer(connectionSetting: Bool?, requestSetting: Bool?) throws {
-        guard connectionSetting ?? requestSetting ?? false else {
-            throw NativeFailure(code: "HOVER_UNAVAILABLE", message: "No enabled element at this target or in its ancestors offers both AXShowAlternateUI and AXShowDefaultUI. System-pointer hover is disabled; this provider has no other pointer-free hover route. No input was sent and the pointer did not move. Use click on an available control or performAction with an action from listActions.")
-        }
-    }
-
     private var revealed: (element: AXUIElement, windowID: UInt32)?
 
     /// Entering revealed descendants preserves their parent UI; leaving restores it once.

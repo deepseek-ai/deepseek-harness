@@ -12,7 +12,7 @@ const element = (id: string): CuaElementId => brandString<CuaElementId>(id)
 
 const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC'
 const capabilities: CuaCapabilities = {
-  platform: 'macos', permissions: { accessibility: true, screenRecording: true }, appLevelAccessibility: true,
+  platform: 'macos', systemPointer: true, permissions: { accessibility: true, screenRecording: true }, appLevelAccessibility: true,
   keyboard: ['app'], sessionLocked: false, methods: ['getCapabilities', 'getApp', 'getState', 'screenshot'],
   coordinateSpace: 'screenshot-pixels', browser: false,
 }

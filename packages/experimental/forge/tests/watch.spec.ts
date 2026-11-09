@@ -1,7 +1,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ForgeService, { changeRequestKey } from '../src/index.ts'
-import type { ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ChangeRequestUpdate, ForgeFailure, ForgeRepository } from '../src/types.ts'
+import type { ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ChangeRequestUpdate, ForgeFailure, ForgeRepository, ForgeReviewData } from '../src/types.ts'
 import { FakeProvider, forgeContext, provide, ref, snapshot } from './fake-provider.ts'
 
 const config = { activeIntervalMs: 1_000, idleIntervalMs: 5_000, maxBackoffMs: 6_000, fetchTimeoutMs: 500 }
@@ -223,6 +223,22 @@ describe('forge watch', () => {
     expect(provider.fetches).toHaveLength(3)
   })
 
+  it('passes the base commit of the latest status to a diff read at its head only', async () => {
+    const provider = new FakeProvider()
+    provider.results.set(key, snapshot(ref(1), { baseSha: 'e'.repeat(40) }))
+    const context = await setup(provider)
+    collect(context)
+    await vi.advanceTimersByTimeAsync(0)
+    const diff = vi.spyOn(provider, 'diff')
+    const signal = new AbortController().signal
+
+    await context.forge.diff(ref(1), 'a'.repeat(40), signal)
+    await context.forge.diff(ref(1), 'f'.repeat(40), signal)
+    await context.forge.diff(ref(2), 'a'.repeat(40), signal)
+
+    expect(diff.mock.calls.map(call => call[3])).toEqual(['e'.repeat(40), undefined, undefined])
+  })
+
   it('polls a watched change request at once after a diff read finds a newer head, and only then', async () => {
     const provider = new FakeProvider()
     provider.results.set(key, snapshot(ref(1)))
@@ -264,6 +280,29 @@ describe('forge watch', () => {
     await context.forge.diff(ref(1), 'b'.repeat(40), signal)
     await vi.advanceTimersByTimeAsync(0)
     expect(provider.fetches).toHaveLength(4)
+  })
+
+  it('polls at once after a review read finds a newer head, sharing the once-per-head bound with diff reads', async () => {
+    const provider = new FakeProvider()
+    provider.results.set(key, snapshot(ref(1)))
+    const readReview = vi.fn(async (): Promise<ForgeReviewData | ForgeFailure> => ({ code: 'unavailable', message: 'down' }))
+    Object.assign(provider, { readReview })
+    const context = await setup(provider)
+    collect(context)
+    await vi.advanceTimersByTimeAsync(0)
+    const signal = new AbortController().signal
+
+    await context.forge.readReview(ref(1), 'a'.repeat(40), signal)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.fetches).toHaveLength(1)
+    readReview.mockResolvedValue({ code: 'stale', message: 'the head moved' })
+    await expect(context.forge.readReview(ref(1), 'a'.repeat(40), signal)).resolves.toEqual({ code: 'stale', message: 'the head moved' })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.fetches).toHaveLength(2)
+    provider.readResult = { code: 'stale', message: 'the head moved' }
+    await context.forge.diff(ref(1), 'a'.repeat(40), signal)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.fetches).toHaveLength(2)
   })
 
   it('coalesces refreshes during a fetch into one immediate subsequent fetch', async () => {

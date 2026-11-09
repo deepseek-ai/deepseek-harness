@@ -47,6 +47,12 @@ interface ForgeProvider {
   readonly forge: string
   /** Publish a comment or completed review. Omission declares that this provider cannot write reviews. */
   submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>
+  /**
+   * Read the review threads of a change request at head commit `headSha`. The threads are returned only when the
+   * read names `headSha` as the head; once the head is another commit, the read resolves to a `stale` failure.
+   * Omission declares that this provider cannot read reviews.
+   */
+  readReview?(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeReviewData | ForgeFailure>
   /** Map a Git remote URL to its repository, or undefined when this provider does not serve it. */
   repositoryFromRemote(url: string): ForgeRepository | undefined
   /** Map a change request web URL to its reference, or undefined when this provider does not serve it. */
@@ -71,15 +77,56 @@ interface ForgeProvider {
   /**
    * Read the changes of a change request at head commit `headSha` as the host computes them, as one unified
    * patch with `a/` and `b/` path prefixes. A patch is returned only when it describes `headSha`; once the
-   * head is another commit, the read resolves to a `stale` failure.
+   * head is another commit, the read resolves to a `stale` failure. `base`, when given, is the `baseSha` the
+   * latest status recorded with `headSha`; a provider may start reading from it before it confirms the head.
    */
-  diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<string | ForgeFailure>
+  diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal, base?: string): Promise<string | ForgeFailure>
   /** Read the text of `path` at `commit` in the change request's repository. */
   fileText(ref: ChangeRequestRef, commit: string, path: string, signal: AbortSignal): Promise<string | ForgeFailure>
   /** Build the web page of `path` at `commit` in the change request's repository. */
   fileUrl(ref: ChangeRequestRef, commit: string, path: string): string
+  /**
+   * List the commits of a change request at its current head. A provider implements `commits` and `compare`
+   * together; omitting either declares that the change request can be read only as a whole.
+   */
+  commits?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeCommitList | ForgeFailure>
+  /**
+   * Read the changes from commit `base` to commit `head` in the change request's repository, as one unified patch
+   * with `a/` and `b/` path prefixes. Both are full object names; `head` descends from `base`.
+   */
+  compare?(ref: ChangeRequestRef, base: string, head: string, signal: AbortSignal): Promise<string | ForgeFailure>
 }
 ```
+
+```ts type-equiv
+/** One commit of a change request. */
+interface ForgeCommit {
+  /** Full commit object name. */
+  readonly sha: string
+  /** Full object name of the first parent, or null for a root commit. */
+  readonly parent: string | null
+  /** First line of the commit message. */
+  readonly title: string
+  /** Author name or login as the host reports it, or null when it reports none. */
+  readonly author: string | null
+  /** ISO 8601 time the commit was authored. */
+  readonly authoredAt: string
+}
+```
+
+```ts type-equiv
+/** The commits of a change request at one head commit. */
+interface ForgeCommitList {
+  /** Head commit the list was read at. */
+  readonly headSha: string
+  /** Commits oldest first, ending with the head commit unless `truncated`. */
+  readonly commits: readonly ForgeCommit[]
+  /** Whether the change request has more commits than the provider lists; the listed ones are the oldest. */
+  readonly truncated: boolean
+}
+```
+
+`ctx.forge.commits` and `ctx.forge.compare` delegate to a provider that implements both; otherwise `commits` resolves to undefined and `compare` to an `unavailable` failure, so the forge panel offers its commit picker only where the provider reads commits.
 
 ```ts type-equiv
 /** Whether a provider can reach one host with the current credentials. */
@@ -159,6 +206,11 @@ interface ChangeRequestSnapshot {
   readonly headSha: string
   /** Branch the change request merges into. */
   readonly baseBranch: string
+  /**
+   * Base commit the host recorded with `headSha`, whose merge base with the head starts the change request's diff;
+   * omitted when the provider does not report it.
+   */
+  readonly baseSha?: string
   /** Lines the change request adds. */
   readonly additions: number
   /** Lines the change request deletes. */
@@ -198,9 +250,9 @@ interface ForgeFailure {
    * `not-found`: the host does not expose it; `unauthenticated`: credentials are missing or rejected;
    * `too-large`: the host or the provider refuses an answer over its size limit, so reading again fails
    * the same way; `stale`: the head is no longer the commit the read named, so reading again at the head of
-   * a later status can succeed; `unavailable`: any other failure.
+   * a later status can succeed; `unsupported`: the provider does not offer the read; `unavailable`: any other failure.
    */
-  readonly code: 'not-found' | 'unauthenticated' | 'too-large' | 'stale' | 'unavailable'
+  readonly code: 'not-found' | 'unauthenticated' | 'too-large' | 'stale' | 'unsupported' | 'unavailable'
   /** Human-readable cause. */
   readonly message: string
 }
@@ -286,6 +338,105 @@ type ForgeReviewRequest = {
 type ForgeReviewResult =
   | { readonly ok: true; readonly url: string }
   | { readonly ok: false; readonly code: 'unsupported' | 'stale' | 'failed' | 'unknown'; readonly message: string }
+```
+
+## Review threads
+
+`ctx.forge.readReview(ref, headSha, signal)` reads the review threads of a change request at one head commit. The provider returns `ForgeReviewData` only when the read names `headSha` as the head; otherwise it returns `stale`, which polls a watched change request again at once, as a stale diff read does. For a provider without `readReview` the service returns `unsupported`, so consumers show no threads instead of a failure. A line thread has two positions: `original` on the commit it was written on, and `current` on the head of the read, which is null once the host no longer places the thread on that commit. A consumer that shows the head's diff places a thread at `current` and shows the others with their `diffHunk`; reading the file at `original.commit` through `fileText` shows the whole file the thread was written on. The [GitHub provider README](../../packages/experimental/forge-github/README.md#use-this-package) owns how GitHub's fields map onto these positions.
+
+```ts type-equiv
+/** Opaque host identity of one review thread. */
+type ForgeThreadId = Branded<'ForgeThreadId'>
+```
+
+```ts type-equiv
+/** Opaque host identity of one review comment. */
+type ForgeCommentId = Branded<'ForgeCommentId'>
+```
+
+```ts type-equiv
+/** Consecutive lines on one side of a diff whose new side is one commit. */
+interface ForgeAnchor {
+  /**
+   * Full object name of the commit the diff's new side shows: new-side (`R`) lines number this commit's file, and
+   * old-side (`L`) lines number the file at the diff's base.
+   */
+  readonly commit: string
+  /** First line, inclusive. */
+  readonly startLine: number
+  /** Last line, inclusive. */
+  readonly endLine: number
+}
+```
+
+```ts type-equiv
+/** Account that wrote a review comment. */
+interface ForgeCommentAuthor {
+  /** Login as the host spells it. */
+  readonly login: string
+  /** Avatar image URL, or null when the host reports none. */
+  readonly avatarUrl: string | null
+  /** Whether the account is an app or bot rather than a person. */
+  readonly bot: boolean
+}
+```
+
+```ts type-equiv
+/** One comment of a review thread. */
+interface ForgeReviewComment {
+  /** Host identity of the comment. */
+  readonly id: ForgeCommentId
+  /** Author, or null when the account no longer exists. */
+  readonly author: ForgeCommentAuthor | null
+  /** Markdown source as the author wrote it; it may contain raw HTML, which readers must not render as HTML. */
+  readonly body: string
+  /** ISO 8601 time the comment was created. */
+  readonly createdAt: string
+  /** Whether the comment belongs to the signed-in user's review that is not submitted yet, which only that user sees. */
+  readonly pending: boolean
+  /** Web page of the comment, or null when the host reports none. */
+  readonly url: string | null
+}
+```
+
+```ts type-equiv
+/**
+ * One review thread on a file of a change request. A line thread has two positions: `original` on the commit it was
+ * written on, and `current` on the head commit of the read. `current` is null once the host no longer places the
+ * thread on the head commit, as after later commits changed its lines.
+ */
+interface ForgeReviewThread {
+  /** Host identity of the thread. */
+  readonly id: ForgeThreadId
+  /** Repository-relative path the thread is on. */
+  readonly path: string
+  /** Old (`L`) or new (`R`) side of the diff the lines number. */
+  readonly side: 'L' | 'R'
+  /** Whether the thread is on lines or on the whole file. */
+  readonly subject: 'line' | 'file'
+  /** Lines in the diff that ends at the head commit of the read, whose `commit` is that head; null for an outdated or file thread. */
+  readonly current: ForgeAnchor | null
+  /** Lines in the diff that ended at the commit the thread was written on; null for a file thread. */
+  readonly original: ForgeAnchor | null
+  /** Diff hunk the host recorded when the thread was written, ending at its last line; null when it recorded none. */
+  readonly diffHunk: string | null
+  /** Whether the thread is marked resolved. */
+  readonly resolved: boolean
+  /** Comments oldest first; the first starts the thread. */
+  readonly comments: readonly ForgeReviewComment[]
+}
+```
+
+```ts type-equiv
+/** Review threads of a change request read at one head commit. */
+interface ForgeReviewData {
+  /** Head commit the threads were read at; `current` positions number its files. */
+  readonly headSha: string
+  /** Threads in host order, at most the provider's limit. */
+  readonly threads: readonly ForgeReviewThread[]
+  /** Whether the change request has more threads than `threads` holds. */
+  readonly truncated: boolean
+}
 ```
 
 ## Session bindings
@@ -575,7 +726,22 @@ type ForgeChangeRequestStatesFrame =
   | { readonly type: 'changed'; readonly states: readonly ForgeChangeRequestListState[] }
 ```
 
-The changes view reads through the same Remote. `localDiff` reads one `ForgeLocalScope` of the Session's checkout, and `changeRequestDiff` reads a bound change request at the head of its latest status through the provider's `diff`, which returns a patch only for that head commit; both return files that the Host parsed into `ForgeDiffFile` hunks. `localText` and `changeRequestText` read the new side of one file, which supplies the unchanged lines between hunks. Each inspection also sizes the `branch` scope as `ForgePanelState.local` for the panel's local changes card, always against the automatic fork point. A `branch` scope whose `base` names a ref compares with the merge base of HEAD and that branch instead; `diffBases` lists the branches the view offers, with the automatic fork point. When the head moved past the latest status, the provider returns `stale` and `ctx.forge.diff` polls the change request at once, once per head commit; `changeRequestDiff` rejects with `forgePanel/stale-head` and caches nothing, and the changes view keeps loading until a later status arrives, then reads again at that status's head. Review comments therefore always address the commit whose lines the view shows.
+The changes view reads through the same Remote. `localDiff` reads one `ForgeLocalScope` of the Session's checkout, and `changeRequestDiff` reads a bound change request at the head of its latest status through the provider's `diff`, which returns a patch only for that head commit, or the `ForgeCommitRange` it names through the provider's `compare`; both return files that the Host parsed into `ForgeDiffFile` hunks, each with its review layer and change digest. `localCommits` and `changeRequestCommits` list the commits a range can name, the latter as null when the provider does not read commits. `localText` and `changeRequestText` read the new side of one file, which supplies the unchanged lines between hunks. Each inspection also sizes the `branch` scope as `ForgePanelState.local` for the panel's local changes card, always against the automatic fork point. A `branch` scope whose `base` names a ref compares with the merge base of HEAD and that branch instead; `diffBases` lists the branches the view offers, with the automatic fork point. When the head moved past the latest status, the provider returns `stale` and `ctx.forge.diff` polls the change request at once, once per head commit; `changeRequestDiff` rejects with `forgePanel/stale-head` and caches nothing, and the changes view keeps loading until a later status arrives, then reads again at that status's head. Review comments therefore always address the commit whose lines the view shows.
+
+`changeRequestReview(session, url, headSha, fresh)` reads the threads of a bound change request at the head of the diff the view shows and refuses another head with `forgePanel/stale-head`, `forgePanel/review-unsupported` for a provider without review reads, and `forgePanel/review-failed` otherwise. It keeps one read per change request in memory, keyed by head commit and the status's update time and bounded by `maxCachedReviewBytes`, and reads again once the kept read is `reviewRefreshMs` old or when `fresh` asks for it, as the first read after the reader refreshes the view does: on GitHub a new comment or reply changes a pull request's update time, but resolving a thread does not. The changes view asks again at every status it receives while visible, and overlays the threads on the files the [panel README](../../packages/experimental/client-ui-forge/README.md#use-this-package) describes.
+
+```ts type-equiv
+/**
+ * Consecutive commits a changes view shows instead of its whole comparison, named by full object names in the order
+ * the commit list shows them, oldest first; the view shows the changes from the first commit's first parent to the last.
+ */
+interface ForgeCommitRange {
+  /** First, oldest commit shown. */
+  readonly from: string
+  /** Last, newest commit shown; equal to `from` for one commit. */
+  readonly to: string
+}
+```
 
 ```ts type-equiv
 /** Which local changes a diff covers; each reads the Session's checkout through Git. */
@@ -583,9 +749,10 @@ type ForgeLocalScope =
   /**
    * The working tree and untracked files against a fork point: the merge base of HEAD with the
    * `base` ref, or while `base` is null, the base commit of the worktree the Session created,
-   * else the merge base of HEAD with the default branch of the code host remote.
+   * else the merge base of HEAD with the default branch of the code host remote. With `commits`, only the changes
+   * of those commits between the fork point and HEAD, without uncommitted or untracked files.
    */
-  | { readonly kind: 'branch'; readonly base: string | null }
+  | { readonly kind: 'branch'; readonly base: string | null; readonly commits: ForgeCommitRange | null }
   /** The working tree and untracked files against HEAD. */
   | { readonly kind: 'uncommitted' }
   /** The working tree and untracked files against the index. */
@@ -648,6 +815,15 @@ type ForgeDiffStatus = 'added' | 'deleted' | 'modified' | 'renamed'
 ```
 
 ```ts type-equiv
+/**
+ * Review layer of a changed file: the layer the repository's root `.gitattributes` names with `dsh-review-layer`, else
+ * `test` for a file it marks `linguist-generated`, else the first of `testPaths`, `interfacePaths`, and the built-in
+ * test and interface rules that the path matches, else `implementation`.
+ */
+type ForgeFileLayer = 'interface' | 'implementation' | 'test'
+```
+
+```ts type-equiv
 /** One changed file of a diff. */
 interface ForgeDiffFile {
   /** Path relative to the repository root after the change, or before it for a deleted file. */
@@ -668,6 +844,13 @@ interface ForgeDiffFile {
   readonly deletions: number
   /** Hunks in file order; none for a binary file or a change of mode or name only. */
   readonly hunks: readonly ForgeDiffHunk[]
+  /** Review layer the path falls in. */
+  readonly layer: ForgeFileLayer
+  /**
+   * Digest of the file's change: its paths, status, and hunks, plus the blob names of a binary change, or the content
+   * of an untracked binary file. Equal digests describe the same change; reading the same comparison again keeps it.
+   */
+  readonly digest: string
 }
 ```
 
@@ -684,19 +867,31 @@ interface ForgeLocalDiff {
 ```
 
 ```ts type-equiv
-/** Changes of a change request as its code host computes them. */
+/** Changes of a change request, or of consecutive commits of it, as its code host computes them. */
 interface ForgeChangeRequestDiff {
-  /** Head commit the diff describes. */
+  /** Commit whose new side the diff describes: the head, or the last chosen commit. */
   readonly headSha: string
   /** Changed files in the host's order. */
   readonly files: readonly ForgeDiffFile[]
   /**
    * Commits the checkout's branch has beyond the head when that branch is the change request's head
-   * branch and the head commit is present locally; null otherwise.
+   * branch and the head commit is present locally; null otherwise and for chosen commits.
    */
   readonly localAhead: number | null
-  /** Web page of each changed file at the head commit, by path. */
+  /** Web page of each changed file at `headSha`, by path. */
   readonly fileUrls: Readonly<Record<string, string>>
+}
+```
+
+```ts type-equiv
+/** Commits of the `branch` scope at one HEAD commit, which the changes view can show one or several of. */
+interface ForgeLocalCommits {
+  /** HEAD commit the list was read at. */
+  readonly headSha: string
+  /** Commits oldest first, ending with HEAD's commit. */
+  readonly commits: readonly ForgeCommit[]
+  /** Whether the branch has more commits than `maxCommits`; the listed ones are the newest. */
+  readonly truncated: boolean
 }
 ```
 
@@ -825,7 +1020,8 @@ async fetchChecks(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeReq
  * computes them. The first `stale` failure at a head commit polls a watched
  * change request again at once, so its next status names the current head;
  * later stale reads at the same commit wait for the regular poll, which
- * bounds the reads while the host's answers disagree.
+ * bounds the reads while the host's answers disagree. When the latest status of a watched change request names
+ * `headSha`, its `baseSha` goes to the provider, which may then read the patch while it confirms the head.
  * @param ref - change request served by a registered provider.
  * @param headSha - head commit the patch must describe, usually the head of the latest status.
  * @param signal - cancellation of the read.
@@ -833,6 +1029,38 @@ async fetchChecks(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeReq
  * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
  */
 async diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<string | ForgeFailure>
+
+/**
+ * Read the review threads of a change request at one head commit. A
+ * `stale` failure polls a watched change request again as {@link ForgeService.diff} does.
+ * @param ref - change request served by a registered provider.
+ * @param headSha - head commit the threads must be read at, usually the head of the displayed diff.
+ * @param signal - cancellation of the read.
+ * @returns the threads read at `headSha`, or why the host did not provide them; `unsupported` when the provider cannot read reviews.
+ * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+ */
+async readReview(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeReviewData | ForgeFailure>
+
+/**
+ * List the commits of a change request at its current head.
+ * @param ref - change request served by a registered provider.
+ * @param signal - cancellation of the read.
+ * @returns the commits, why the host did not provide them, or undefined when the provider does not read commits.
+ * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+ */
+async commits(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeCommitList | ForgeFailure | undefined>
+
+/**
+ * Read the changes between two commits of a change request's repository.
+ * @param ref - change request served by a registered provider.
+ * @param base - full object name of the commit compared from.
+ * @param head - full object name of a commit that descends from `base`.
+ * @param signal - cancellation of the read.
+ * @returns one unified patch with `a/` and `b/` path prefixes, or why the host did not provide it; a provider that
+ * does not read commits returns `unavailable`.
+ * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+ */
+async compare(ref: ChangeRequestRef, base: string, head: string, signal: AbortSignal): Promise<string | ForgeFailure>
 
 /**
  * Publish one comment or a completed review, then refresh the watched status.
@@ -987,21 +1215,37 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * @returns the files, the base of the `branch` scope, and the untracked files left out.
  * @throws `forgePanel/not-a-checkout` outside a checkout; `forgePanel/base-missing` when the base branch
  * chosen for the `branch` scope does not exist; `forgePanel/no-fork-point` for the `branch` scope without
- * a fork point; `forgePanel/filter-config-failed` when filter configuration cannot be read completely, before
+ * a fork point; `forgePanel/commits-missing` when chosen commits are not between the fork point and HEAD in order;
+ * `forgePanel/commits-not-linear` when a chosen commit's first parent is not the commit listed before it;
+ * `forgePanel/filter-config-failed` when filter configuration cannot be read completely, before
  * any comparison; `forgePanel/diff-too-large` over `maxDiffBytes`; the Git error when Git fails.
  */
 @Remote async localDiff(session: Session, scope: ForgeLocalScope, signal: AbortSignal): Promise<ForgeLocalDiff>
 
 /**
+ * List the commits of the `branch` scope of the Session's current checkout, which the changes view can show one or
+ * several of instead of the whole scope.
+ * @param session - Session whose checkout is read.
+ * @param base - the base ref of the `branch` scope, or null for its automatic fork point.
+ * @param signal - request cancellation.
+ * @returns the newest `maxCommits` commits between the fork point and HEAD, oldest first, and HEAD's commit.
+ * @throws `forgePanel/not-a-checkout` outside a checkout; `forgePanel/base-missing` when the base branch does not
+ * exist; `forgePanel/no-fork-point` without a fork point; the Git error when Git fails or the listing exceeds `maxDiffBytes`.
+ */
+@Remote async localCommits(session: Session, base: string | null, signal: AbortSignal): Promise<ForgeLocalCommits>
+
+/**
  * Read the new side of one changed file in a scope, which supplies the
- * unchanged lines between its hunks: the index for `staged`, else the working tree.
+ * unchanged lines between its hunks: the index for `staged`, the last chosen commit for chosen commits of
+ * the `branch` scope, else the working tree.
  * @param session - Session whose checkout is read.
  * @param scope - the scope the diff was read in.
  * @param path - path relative to the checkout's top-level directory, as the diff names it.
  * @param signal - request cancellation.
  * @returns the text.
  * @throws `forgePanel/not-a-checkout` outside a checkout; `forgePanel/diff-too-large` over `maxDiffBytes`;
- * an error for a path outside the checkout, binary content, or a failed read.
+ * `forgePanel/commits-missing` for a chosen commit that is not a full object name; an error for a path outside
+ * the checkout, binary content, or a failed read.
  */
 @Remote async localText(session: Session, scope: ForgeLocalScope, path: string, signal: AbortSignal): Promise<string>
 
@@ -1018,20 +1262,39 @@ Serves the forge panel. Following a Session inspects the checkout of its current
 @Remote async changeRequestChecks(session: Session, url: string, headSha: string, signal: AbortSignal): Promise<ChangeRequestSnapshot>
 
 /**
- * Read the changes of a change request of a Session as its code host
- * computes them, at the head commit of its latest status. A patch already
- * read at the same head commit and base branch is reused from memory, for
- * any Session, until `maxCachedDiffBytes` evicts it.
+ * List the commits of a change request of a Session at its current head, which the changes view can show one or
+ * several of instead of the whole change request.
  * @param session - Session the change request is bound to.
  * @param url - binding URL of the change request.
  * @param signal - request cancellation.
- * @returns the files, the head commit, each file's web page, and the commits the checkout has beyond the head.
+ * @returns the commits oldest first with the head they were read at, or null when the provider does not read commits.
  * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
- * `forgePanel/stale-head` when the head moved past the latest status, which is then polled again;
- * `forgePanel/diff-too-large` when the host or its provider refuses the diff over a size limit;
- * `forgePanel/diff-failed` before its status was read and when the host does not provide the diff otherwise.
+ * `forgePanel/diff-failed` when the host does not list them.
  */
-@Remote async changeRequestDiff(session: Session, url: string, signal: AbortSignal): Promise<ForgeChangeRequestDiff>
+@Remote async changeRequestCommits(session: Session, url: string, signal: AbortSignal): Promise<ForgeCommitList | null>
+
+/**
+ * Read the changes of a change request of a Session as its code host
+ * computes them, with each file's layer following the root `.gitattributes`
+ * of the commit the diff ends at. Without `commits` the diff covers the change
+ * request at the head commit of its latest status; a patch already read at the
+ * same head commit and base branch is reused from memory with its attributes, for
+ * any Session, until `maxCachedDiffBytes` evicts it. With `commits`, it covers those
+ * commits, from the first one's first parent to the last, and is read every time.
+ * @param session - Session the change request is bound to.
+ * @param url - binding URL of the change request.
+ * @param commits - consecutive commits of the change request, or null for all of it.
+ * @param signal - request cancellation.
+ * @returns the files, the commit they end at, each file's web page, and the commits the checkout has beyond the head.
+ * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+ * `forgePanel/commits-missing` when chosen commits are not among the change request's commits in order;
+ * `forgePanel/commits-not-linear` when a chosen commit's first parent is not the commit listed before it;
+ * `forgePanel/stale-head` without `commits` when the head moved past the latest status, which is then polled again;
+ * `forgePanel/diff-too-large` when the host or its provider refuses the diff over a size limit;
+ * `forgePanel/diff-failed` before its status was read, for a first chosen commit without a parent, and when the host
+ * does not provide the commits, the diff, or an existing `.gitattributes` otherwise.
+ */
+@Remote async changeRequestDiff( session: Session, url: string, commits: ForgeCommitRange | null, signal: AbortSignal, ): Promise<ForgeChangeRequestDiff>
 
 /**
  * Read one file of a change request's repository at a commit, which
@@ -1047,6 +1310,25 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * `forgePanel/diff-failed` when the host does not provide the file otherwise.
  */
 @Remote async changeRequestText(session: Session, url: string, commit: string, path: string, signal: AbortSignal): Promise<string>
+
+/**
+ * Read the review threads of a change request of a Session at the head commit of its displayed diff. Threads read
+ * at the same head commit and update time are reused from memory, for any Session, until they are
+ * `reviewRefreshMs` old or `maxCachedReviewBytes` evicts them; a read again after that age, or a `fresh` read,
+ * shows threads resolved since, which do not change a GitHub pull request's update time.
+ * @param session - Session the change request is bound to.
+ * @param url - binding URL of the change request.
+ * @param headSha - head commit of the displayed diff.
+ * @param fresh - whether to read from the host even when threads at this head and update time are kept, as after the
+ * reader refreshes the view; the result replaces the kept threads.
+ * @param signal - request cancellation.
+ * @returns the threads at `headSha`, with `current` positions numbering the files of that diff.
+ * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+ * `forgePanel/stale-head` when the latest status or the host names another head, which a host answer polls again;
+ * `forgePanel/review-unsupported` when the provider cannot read reviews; `forgePanel/review-failed` before the
+ * status was read and when the host does not provide the threads otherwise.
+ */
+@Remote async changeRequestReview(session: Session, url: string, headSha: string, fresh: boolean, signal: AbortSignal): Promise<ForgeReviewData>
 
 /**
  * Publish a line comment or completed review for a visible Session binding.

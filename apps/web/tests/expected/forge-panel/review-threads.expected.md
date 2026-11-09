@@ -1,0 +1,82 @@
+- button "收起 panel.ts" [expanded]
+- text: src/panel.ts
+- button "panel.ts 有 3 条未解决的讨论，跳到下一条": 3 条未解决
+- text: +2 −2
+- checkbox "将 panel.ts 标记为已审阅"
+- button "panel.ts 的更多操作"
+- button "选择第 L1 行": "1"
+- text: export const n1 = 1
+- button "选择第 R1 行": "1"
+- text: export const n1 = 1
+- button "选择第 L2 行": "2"
+- text: export const n2 = 2
+- button "选择第 R2 行": "2"
+- text: export const n2 = 'two'
+- region "R2":
+  - text: R2 · 在 aaaaaaa 上 lin 2 小时前
+  - paragraph:
+    - text: Why
+    - strong: two
+    - text: "?"
+  - text: octo 2 小时前 作者
+  - paragraph: It reads better.
+  - button "添加到输入框"
+  - button "在 GitHub 中查看"
+- button "选择第 L3 行": "3"
+- text: export const n3 = 3
+- button "选择第 R3 行": "3"
+- text: export const n3 = 3
+- button "选择第 L4 行": "4"
+- text: export const n4 = 4
+- button "选择第 R4 行": "4"
+- text: export const n4 = 4
+- button "选择第 L5 行": "5"
+- text: export const n5 = 5
+- button "选择第 R5 行": "5"
+- text: export const n5 = 5
+- button "6 行未变更"
+- button "选择第 L12 行": "12"
+- text: export const n12 = 12
+- button "选择第 R12 行": "12"
+- text: export const n12 = 12
+- button "选择第 L13 行": "13"
+- text: export const n13 = 13
+- button "选择第 R13 行": "13"
+- text: export const n13 = 13
+- button "选择第 L14 行": "14"
+- text: export const n14 = 14
+- button "选择第 R14 行": "14"
+- text: export const n14 = 14
+- button "选择第 L15 行": "15"
+- text: export const n15 = 15
+- button "选择第 R15 行": "15"
+- text: export const n15 = 'fifteen'
+- region "L15":
+  - text: L15 · 在 aaaaaaa 上 lin 2 小时前
+  - paragraph: The old fifteen was a number.
+  - button "添加到输入框"
+  - button "在 GitHub 中查看"
+- text: 已解决的讨论 · lin
+- button "展开"
+- button "选择第 L16 行": "16"
+- text: export const n16 = 16
+- button "选择第 R16 行": "16"
+- text: export const n16 = 16
+- button "选择第 L17 行": "17"
+- text: export const n17 = 17
+- button "选择第 R17 行": "17"
+- text: export const n17 = 17
+- button "选择第 L18 行": "18"
+- text: export const n18 = 18
+- button "选择第 R18 行": "18"
+- text: export const n18 = 18
+- button "其余未变更的行"
+- text: 1 条讨论已过期：所在代码已被后续提交修改
+- button "收起" [expanded]
+- region "原在 R9":
+  - text: 原在 R9 · 在 fffffff 上 已过期
+  - button "查看当时的文件"
+  - text: "@@ -1,5 +1,5 @@ export const n1 = 1 -export const n2 = 2 +export const n2 = 'two' lin 2 小时前"
+  - paragraph: This line moved.
+  - button "添加到输入框"
+  - button "在 GitHub 中查看"

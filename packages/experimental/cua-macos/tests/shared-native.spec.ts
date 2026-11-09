@@ -133,8 +133,8 @@ async function fixture(options: {
     timeoutMs: 30_000, graceMs: options.graceMs ?? 1000, axTimeoutMs: 3000,
     maxRequestBytes: 65536, maxResponseBytes: 1048576, textEventIntervalMs: 0.5, maxClickHoldMs: 7000,
   }
-  function open(systemPointerHover = false): NativeChannel {
-    const channel = createSharedNativeChannel({ subprocess: { spawn } }, config, systemPointerHover)
+  function open(): NativeChannel {
+    const channel = createSharedNativeChannel({ subprocess: { spawn } }, config)
     channels.push(channel)
     return channel
   }
@@ -172,7 +172,7 @@ describe.skipIf(process.platform === 'win32')('shared native Unix connection', (
   it('keeps concurrent Agent scopes independent and leaves other sockets alive when one closes', async () => {
     const f = await fixture()
     const first = f.open()
-    const second = f.open(true)
+    const second = f.open()
     const firstReply = nextBytes(first)
     const secondReply = nextBytes(second)
     await Promise.all([write(first, 'one\n'), write(second, 'two\n')])
@@ -191,9 +191,7 @@ describe.skipIf(process.platform === 'win32')('shared native Unix connection', (
       maxRequestBytes: 65536, maxResponseBytes: 1048576, textEventIntervalMs: 0.5, maxClickHoldMs: 7000,
     }
     expect(f.hellos).toHaveLength(2)
-    for (const systemPointerHover of [true, false]) {
-      expect(f.hellos).toContainEqual(expect.objectContaining({ type: 'hello', protocol: 1, config: { ...limits, systemPointerHover } }))
-    }
+    for (const hello of f.hellos) expect(hello).toMatchObject({ type: 'hello', protocol: 1, config: limits })
   })
 
   it('waits for both launcher outcome and managed range release before sending any bytes', async () => {

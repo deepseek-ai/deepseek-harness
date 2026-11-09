@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { fileURLToPath } from 'node:url'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import { LspConnection } from '@deepseek-ai/dsh-lsp-stdio'
 import type { ConnectionWriter } from '@deepseek-ai/dsh-lsp-stdio/src/connection.ts'
 import { scrubbedParentEnv } from '@deepseek-ai/dsh-subprocess'
@@ -62,7 +63,11 @@ describe('LspConnection', () => {
   it('rejects a request when the server replies with an error', async () => {
     const conn = connect({ LSP_FAKE_ERROR: '1' })
     await conn.request('initialize', { capabilities: {} })
-    await expect(conn.request('textDocument/hover', {})).rejects.toThrow(/server refused the request/)
+    await expect(conn.request('textDocument/hover', {})).rejects.toMatchObject({
+      name: 'LspError',
+      code: 'LSP_SERVER_ERROR',
+      message: 'language server rejected textDocument/hover with JSON-RPC error -32000: server refused the request',
+    })
   })
 
   it('treats terminating an already-closed child as a teardown race', async () => {
@@ -124,7 +129,11 @@ describe('LspConnection', () => {
     await conn.request('initialize', { capabilities: {} })
     conn.terminate()
     await conn.closed
-    await expect(conn.request('textDocument/hover', {})).rejects.toThrow(/exited|closed/)
+    await expect(conn.request('textDocument/hover', {})).rejects.toMatchObject({
+      name: 'LspError',
+      code: 'LSP_SERVER_EXITED',
+      message: expect.stringMatching(/^language server exited/) as string,
+    })
   })
 
   it('cancel is a no-op-safe write after close', async () => {
@@ -171,13 +180,52 @@ describe('LspConnection edge behavior', () => {
       configuration: null,
     }, spawnSubprocess, () => Promise.resolve(null))
     open.push(conn)
-    await expect(conn.request('initialize', {})).rejects.toThrow()
+    // The failed launch usually surfaces first as a stdin write failure; once the process settles,
+    // the connection reports the provider's launch failure for it.
+    const failure: unknown = await conn.request('initialize', {}).catch((error: unknown) => error)
+    expect(failure).toMatchObject({ name: 'LspError', code: expect.stringMatching(/^LSP_(SERVER_EXITED|SPAWN_FAILED)$/) as string })
+    await conn.closed
+    expect(conn.failedWith(failure)).toBe(true)
+    expect(conn.settledFailure(failure)).toMatchObject({
+      name: 'LspError',
+      code: 'LSP_SPAWN_FAILED',
+      message: expect.stringMatching(/^language server process failed: .*ENOENT/) as string,
+      cause: expect.any(Error) as Error,
+    })
+    const unrelated = new Error('unrelated')
+    expect(conn.settledFailure(unrelated)).toBe(unrelated)
+  })
+
+  it('keeps a subprocess provider HarnessError as the spawn failure', async () => {
+    const providerFailure = new HarnessError('sandbox refused the launch', 'SANDBOX_DENIED')
+    const conn = new LspConnection({
+      command: process.execPath,
+      args: ['-e', 'setInterval(()=>{}, 1000)'],
+      cwd: process.cwd(),
+      env: scrubbedParentEnv(),
+      maxMessageBytes: 1000,
+      maxStderrBytes: 1000,
+      killGraceMs: 3_000,
+      configuration: null,
+    }, (spec) => {
+      const handle = spawnSubprocess(spec)
+      return Object.assign(Object.create(handle) as typeof handle, {
+        done: handle.done.then(() => { throw providerFailure }),
+      })
+    }, () => Promise.resolve(null))
+    open.push(conn)
+    const failure: unknown = await Promise.all([
+      conn.request('initialize', {}).catch((error: unknown) => error),
+      Promise.resolve().then(() => { conn.terminate() }),
+    ]).then(([error]) => error)
+    await conn.closed
+    expect(conn.settledFailure(failure)).toBe(providerFailure)
   })
 
   it('kills the process and fails pending requests on a framing error', async () => {
     // Emit an invalid Content-Length header, corrupting the stream irrecoverably.
     const conn = connectScript('process.stdout.write("Content-Length: abc\\r\\n\\r\\n{}"); setInterval(()=>{}, 1000)')
-    await expect(conn.request('initialize', {})).rejects.toThrow()
+    await expect(conn.request('initialize', {})).rejects.toMatchObject({ name: 'LspError', code: 'LSP_PROTOCOL_ERROR' })
   })
 
   it('ignores a framed non-object message', async () => {
@@ -215,18 +263,25 @@ describe('LspConnection edge behavior', () => {
     expect(Buffer.byteLength(conn.stderrTail)).toBe(4)
   })
 
-  it('rejects with a fallback message when the error response has no message string', async () => {
+  it.each([
+    ['no message string', '{code:-1}', 'language server rejected initialize with JSON-RPC error -1: no message'],
+    ['no numeric code', '{message:"refused"}', 'language server rejected initialize with JSON-RPC error: refused'],
+  ])('rejects with LSP_SERVER_ERROR when the error response has %s', async (_label, error, message) => {
     const script = 'let b=Buffer.alloc(0);'
       + 'const fr=(s)=>{const x=Buffer.from(s);return Buffer.concat([Buffer.from(`Content-Length: ${x.length}\\r\\n\\r\\n`),x]);};'
-      + 'process.stdin.on("data",c=>{b=Buffer.concat([b,c]);const s=b.indexOf("\\r\\n\\r\\n");if(s<0)return;const len=Number(/(\\d+)/.exec(b.toString("ascii",0,s))[1]);const body=JSON.parse(b.toString("utf8",s+4,s+4+len));process.stdout.write(fr(JSON.stringify({jsonrpc:"2.0",id:body.id,error:{code:-1}})));});'
+      + `process.stdin.on("data",c=>{b=Buffer.concat([b,c]);const s=b.indexOf("\\r\\n\\r\\n");if(s<0)return;const len=Number(/(\\d+)/.exec(b.toString("ascii",0,s))[1]);const body=JSON.parse(b.toString("utf8",s+4,s+4+len));process.stdout.write(fr(JSON.stringify({jsonrpc:"2.0",id:body.id,error:${error}})));});`
     const conn = connectScript(script)
-    await expect(conn.request('initialize', {})).rejects.toThrow(/LSP error response/)
+    await expect(conn.request('initialize', {})).rejects.toMatchObject({ name: 'LspError', code: 'LSP_SERVER_ERROR', message })
   })
 
   it('rejects a pending request when the process exits mid-flight', async () => {
     // Never responds, then exits shortly: the pending request must reject on close.
     const conn = connectScript('setTimeout(()=>process.exit(0), 100)')
-    await expect(conn.request('initialize', {})).rejects.toThrow(/exited|closed/)
+    await expect(conn.request('initialize', {})).rejects.toMatchObject({
+      name: 'LspError',
+      code: 'LSP_SERVER_EXITED',
+      message: 'language server exited',
+    })
   })
 
   it('rejects a pending request when child stdin fails but the process stays alive', async () => {
@@ -235,7 +290,27 @@ describe('LspConnection edge behavior', () => {
       queueMicrotask(() => { done(failure) })
     }
     const conn = connectScript('setInterval(()=>{}, 1000)', 100_000, writer)
-    await expect(conn.request('initialize', {})).rejects.toThrow(/fixture stdin failure/)
+    await expect(conn.request('initialize', {})).rejects.toMatchObject({
+      name: 'LspError',
+      code: 'LSP_SERVER_EXITED',
+      message: 'language server stopped accepting input: fixture stdin failure',
+      cause: failure,
+    })
+  })
+
+  it('reports one stdin failure from the error event and the write callback as one transport failure', async () => {
+    const failure = new Error('fixture stdin failure')
+    const writer: ConnectionWriter = (stdin, _message, done) => {
+      queueMicrotask(() => {
+        stdin.emit('error', failure)
+        done(failure)
+      })
+    }
+    const conn = connectScript('setInterval(()=>{}, 1000)', 100_000, writer)
+    const rejection: unknown = await conn.request('initialize', {}).catch((error: unknown) => error)
+    expect(rejection).toMatchObject({ name: 'LspError', code: 'LSP_SERVER_EXITED', cause: failure })
+    expect(conn.failedWith(rejection)).toBe(true)
+    await expect(conn.notify('initialized', {})).rejects.toBe(rejection)
   })
 
   it('ignores a frame that is neither a valid request nor a numeric-id response', async () => {

@@ -53,6 +53,8 @@ kind: "package-bundle"
 
 此 bundle 还挂载 [Agent Teams](../../team/agent-team/README.zh.md) 及其任务工具。每个根 Session 的 Team 模式默认关闭；根会话菜单中的**使用智能体团队**开关为当前树开启协作，无需修改 profile。
 
+`tool-subagent-control` 行显式设置 `interrupt: false`，因此普通 subagent 和 Team 模式均不提供 `interrupt_agent`。在后续 patch 中为该行设置 `config.interrupt: true` 可启用它。插件自身的默认值仍为 `true`。
+
 内置 `working_directory` 工具改变后续操作使用的目录，已有进程与写权限保持独立。当前目录信息出现在用户上下文中。默认文件编辑使用 `read`、`write` 和 `edit`。`str_replace_editor` 工具仍可显式启用。要将它加入基于 base 的 profile，请在 profile、home 或逐次调用 patch 中添加以下条目：
 
 ```yaml

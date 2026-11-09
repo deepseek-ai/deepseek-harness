@@ -37,6 +37,7 @@ class DragPad: NSView {
     }
 }
 final class AlternateHoverPad: DragPad {
+    private(set) var defaultUIRequests = 0
     override func isAccessibilityElement() -> Bool { true }
     override func accessibilityRole() -> NSAccessibility.Role? { .group }
     override func accessibilityLabel() -> String? { "Alternate hover controls" }
@@ -44,6 +45,7 @@ final class AlternateHoverPad: DragPad {
         hoverButton.isHidden = false; changed?(); return true
     }
     override func accessibilityPerformShowDefaultUI() -> Bool {
+        defaultUIRequests += 1
         hoverButton.isHidden = true; changed?(); return true
     }
 }
@@ -212,6 +214,7 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
             "rowCount": rowCount, "primaryWindowId": window.windowNumber,
             "dragDownCount": dragPad.dragDownCount, "dragCount": dragPad.dragCount, "dragPoint": [dragPad.lastPoint.x, dragPad.lastPoint.y],
             "hoverVisible": !dragPad.hoverButton.isHidden, "hoverClicks": dragPad.hoverClicks,
+            "defaultUIRequests": (dragPad as? AlternateHoverPad)?.defaultUIRequests ?? 0,
             "cursorSamples": cursorSamples, "cursorChanges": cursorChanges,
             "overlayMode": overlayMode, "overlayWindowId": inputOverlay?.windowNumber ?? 0,
             "overlayOnScreen": overlayOnScreen, "hoverHitWindow": hoverHitWindow,

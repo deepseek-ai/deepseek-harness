@@ -2,7 +2,7 @@
 import { Buffer } from 'node:buffer'
 import type { z } from 'zod'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import { ActionNamesResult, ActionResult, AppResult, AppsResult, CapabilitiesResult, FoundAppsResult, HoverResult, Request, ScreenshotResult, ShowResult, StateResult, WindowsResult } from './protocol.ts'
+import { ActionNamesResult, ActionResult, AppResult, AppsResult, CapabilitiesResult, FoundAppsResult, HoverResult, MouseMoveTargets, Request, ScreenshotResult, ShowResult, StateResult, WindowsResult } from './protocol.ts'
 import type { CuaApi, CuaApp, CuaAppHandle, CuaCapabilities, CuaDispatch, CuaObservationOptions, CuaObservationSink, CuaOperation, CuaScreenshot, CuaSurface, CuaWindow } from './types.ts'
 export type * from './types.ts'
 
@@ -24,9 +24,15 @@ function requestIssueMessage(issues: readonly z.core.$ZodIssue[], parent: readon
 }
 
 function validatedCall(dispatch: CuaDispatch) {
-  return (method: CuaOperation['method'], params: Record<string, JsonValue>) => {
+  return (method: CuaOperation['method'], params: Record<string, JsonValue>, options?: object) => {
     const request = Request.safeParse({ method, params })
     if (!request.success) throw new Error(`${method} ${requestIssueMessage(request.error.issues)}`)
+    if (options) {
+      // The facade owns the target and coordinates. The Host validates additional options against its provider schema.
+      const extra = Object.entries(options).filter(([key, value]) =>
+        value !== undefined && !MouseMoveTargets.some(target => Object.hasOwn(target.shape, key)))
+      Object.assign(request.data.params, Object.fromEntries(extra))
+    }
     return dispatch(request.data)
   }
 }
@@ -109,8 +115,8 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>, sink: CuaObser
     requireAccessibility: () => void,
     requireKeyboard: () => void,
   ) {
-    const scopedCall = (method: CuaOperation['method'], params: Record<string, JsonValue>) =>
-      call(method, paramsFor(params))
+    const scopedCall = (method: CuaOperation['method'], params: Record<string, JsonValue>, options?: object) =>
+      call(method, paramsFor(params), options)
     const action = async (method: CuaOperation['method'], params: Record<string, JsonValue>) =>
       ActionResult.parse(await scopedCall(method, params))
     const elementParams = (): Record<string, JsonValue> => ({ snapshotId: currentSnapshot(target.appHandle) })
@@ -202,10 +208,10 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>, sink: CuaObser
       async mouseMove(targetPoint, options) {
         const relative = options?.relative === undefined ? {} : { relative: options.relative }
         if (typeof targetPoint === 'string') {
-          return HoverResult.parse(await base.call('mouseMove', { ...base.elementParams(), elementId: targetPoint, ...relative }))
+          return HoverResult.parse(await base.call('mouseMove', { ...base.elementParams(), elementId: targetPoint, ...relative }, options))
         }
         const [x, y] = targetPoint
-        return HoverResult.parse(await base.call('mouseMove', { ...coordinateParams(appHandle, windowId), x, y, ...relative }))
+        return HoverResult.parse(await base.call('mouseMove', { ...coordinateParams(appHandle, windowId), x, y, ...relative }, options))
       },
       async click(targetPoint, options) {
         const mouseButton = options?.mouseButton ?? 'left'
