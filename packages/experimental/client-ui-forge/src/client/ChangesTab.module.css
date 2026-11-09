@@ -125,10 +125,10 @@
   border-inline-end: 0;
 }
 
+/* One line of controls, never wrapped; the fold rules after `.tool` move controls into the More menu as it narrows. */
 .toolbarMain {
   display: flex;
   flex: 1;
-  flex-wrap: wrap;
   align-items: center;
   gap: 0 4px;
   box-sizing: border-box;
@@ -155,30 +155,12 @@
   flex: 1;
 }
 
-.progressSlot {
+.progressSlot,
+.foldTests,
+.filesSlot {
   display: inline-flex;
-}
-
-/* Breaks the toolbar's review controls onto a second row where one row is too narrow for them. */
-.rowBreak {
-  display: none;
-}
-
-@container forge-changes (max-width: 640px) {
-  .reviewRow {
-    order: 2;
-  }
-
-  .rowBreak {
-    display: block;
-    flex-basis: 100%;
-    order: 1;
-    height: 4px;
-  }
-
-  .progressSlot {
-    margin-left: auto;
-  }
+  flex: none;
+  min-width: 0;
 }
 
 .select {
@@ -291,6 +273,36 @@
 
 .tool[aria-pressed='true'] .compareIcon {
   transform: rotate(90deg);
+}
+
+/* `observeToolbarFold` sets `data-fold` on the toolbar row to the shallowest level whose items fit on one line: level 1
+   folds the line totals, expansion, side by side, and wrapping into the More menu; level 2 the test switch, with the
+   progress shown as a ring; level 3 refresh. */
+.more {
+  display: none;
+}
+
+.toolbarMain:is([data-fold='1'], [data-fold='2'], [data-fold='3']) .foldViews,
+.toolbarMain:is([data-fold='2'], [data-fold='3']) .foldTests,
+.toolbarMain[data-fold='3'] .foldRefresh {
+  display: none;
+}
+
+/* With every control folded, the file list entry shortens its label before the row overflows. */
+.toolbarMain[data-fold='3'] .filesSlot {
+  flex-shrink: 1;
+}
+
+.toolbarMain:is([data-fold='1'], [data-fold='2'], [data-fold='3']) .more {
+  display: inline-flex;
+}
+
+.toolbarMain:is([data-fold='2'], [data-fold='3']) .progressSlot [data-forge-progress='full'] {
+  display: none;
+}
+
+.toolbarMain:is([data-fold='2'], [data-fold='3']) .progressSlot [data-forge-progress='compact'] {
+  display: inline-flex;
 }
 
 /* A menu row with a path that shortens and its counts. */
@@ -679,6 +691,36 @@
   background: var(--forge-diff-empty);
 }
 
+/* Comments under a side-by-side row: one cell per column, each continuing its line's gutter and background, with the
+   comments aligned to the code text. Either side holds its own comments, so both sides can show one at once. */
+.notes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  white-space: normal;
+}
+
+.noteCell {
+  display: grid;
+  grid-template-columns: var(--forge-number-width, 3.5em) minmax(0, 1fr);
+  min-width: 0;
+}
+
+.noteCell + .noteCell {
+  border-left: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.noteStack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 12px 10px calc(1.4em + 6px);
+}
+
+.noteStack:empty {
+  padding: 0;
+}
+
 /* Collapsed unchanged lines; the row expands them. */
 /* Collapsed unchanged lines, a collapsed large file, and a file whose lines cannot be drawn share one strip;
    only the first two open on a click. */
@@ -860,7 +902,8 @@
 .code[data-split][data-native-side="L"] [data-diff-side="R"] *,
 .code[data-split][data-native-side="R"] [data-diff-side="L"],
 .code[data-split][data-native-side="R"] [data-diff-side="L"] * { user-select: none; }
-.reviewSubmit { flex: none; white-space: nowrap; }
+/* A header button keeps its label on one line; the menus and the title before it shorten instead. */
+.headerAction { flex: none; white-space: nowrap; }
 
 .code[data-single-side] .line { grid-template-columns: var(--forge-number-width) 1.4em minmax(0, 1fr); }
 .code[data-single-side]:not([data-wrap]) .line { grid-template-columns: var(--forge-number-width) 1.4em max-content; }
