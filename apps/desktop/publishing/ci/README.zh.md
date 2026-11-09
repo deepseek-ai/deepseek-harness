@@ -28,7 +28,7 @@ description: "在专用 macOS 和 Windows runner 上发布留存的 Desktop 安�
 
 1. 准备 runner 专用 checkout 和仓库外的配置目录。按 [Windows 机器与签名配置](../../windows-signing/README.zh.md#machine-setup)或 [macOS runner 与签名配置](../../packaging/README.zh.md#macos-actions)准备工具、模板和平台凭据。
 2. 通过 GitHub **Settings → Actions → Runners** 或组织的 runner 管理页面注册 runner。记录准确的注册名称，允许本仓库访问其 runner group，并分配[必需标签](#runner-labels)。注册时保留默认标签。
-3. 按平台指南安装并启动守护任务。Windows 计划任务和 macOS LaunchAgent 都要求配置的用户登录，不能在登录前无人值守启动。确认已连接 GitHub 且出现 `Listening for Jobs`，再检查 GitHub 中 runner 在线。
+3. 按平台指南安装并启动守护任务。Windows 可选 Boot 任务支持登录前启动；默认 Interactive 任务和 macOS LaunchAgent 仍要求配置的用户登录桌面。确认已连接 GitHub 且出现 `Listening for Jobs`，再检查 GitHub 中 runner 在线。
 4. 完成[本机发布配置](#machine-setup)、仓库变量 `DESKTOP_PUBLISH_RUNNERS` 和两个部署 Environment。仓库管理员负责路由与审批人；COS 管理员负责桶配置及对象读写权限；production 还需要配置 GitHub App。
 5. 按[打包与发布](#package-and-publish)完成一次 Windows 已签名或 macOS 已公证的 **test** 打包。确认打包 job 使用预期的注册 runner 并留存文件。从 `master` 发起发布，填写该 run ID 和 attempt；确认 `prepare` 确实在同一台机器上启动并生成审批摘要。
 6. 审核摘要中的环境、版本、频道和 URL 后，再批准测试上传。验证发布记录、公开安装包下载和升级 feed。test 验收不能证明 production 权限可用：production 需独立配置与审批。保留 run/attempt 和验收结果，供故障恢复使用。
