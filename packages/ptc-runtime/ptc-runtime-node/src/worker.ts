@@ -142,7 +142,6 @@ export class ProgramWorker {
       data: {
         code: '', programFormat: this.mode.format, retainsState: this.retainsState,
         maxOutputBytes: this.config.maxOutputBytes,
-        enableConsole: this.config.enableConsole,
         discardCompletion: spec.discardCompletion === true,
         namespaces: [...bindings.values()].map(binding => ({
           global: binding.global, names: Object.keys(binding.functions), ...binding.errorClass ? { errorClass: binding.errorClass } : {},

@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.1/ptc-inspect-output/guide.md
 /:
-  en: 3dae310ee08f6ea5
-  zh: 28c2b67843fcbf4d
+  en: aa6195ec0952307e
+  zh: 1d80177284309ac6
 /explicit-output-in-typescript-ptc-programs:
   en: 064ec0081b5c2946
   zh: 4b67a513ea949220
 /explicit-output-in-typescript-ptc-programs/change:
-  en: 3c69ee58e2670c62
-  zh: 5876ec7a7d7d66a6
+  en: a8c5a8a0303f3098
+  zh: b1cb9cb2653daadb
 /explicit-output-in-typescript-ptc-programs/migration:
-  en: c9f77e7cf6d8c14f
-  zh: aea760b8fefc9884
+  en: c97a9206f3d6514a
+  zh: 7603679e78ca2942

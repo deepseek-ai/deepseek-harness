@@ -1,9 +1,10 @@
 /** Node child evaluation over typed RPC; the host owns process lifetime. */
 import { AsyncLocalStorage } from 'node:async_hooks'
+import console from 'node:console'
 import type { Duplex } from 'node:stream'
 import type { PtcProgramFormat, PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
 import { createProcessRpc } from './rpc.ts'
-import { captureStreamWrites, LogBuffer, makeConsoleShim, makeBindingErrorClass, makeNamespaces, prepareCompletion, prepareException } from './bootstrap.ts'
+import { captureStreamWrites, LogBuffer, makeInspect, makeBindingErrorClass, makeNamespaces, prepareCompletion, prepareException } from './bootstrap.ts'
 import type { BindingErrorConstructor, PatchableStream } from './bootstrap.ts'
 import type { PtcImageWire } from './json-wire.ts'
 import { clearProgramEnvironment } from './environment.ts'
@@ -144,18 +145,13 @@ export async function runNodeMain(
             })
             // Context access must not reserve a function-body parameter named process.
             Object.defineProperty(evaluator.globals, 'process', { configurable: true, writable: true, value: processState })
-            const console = makeConsoleShim(logSink, images, imageSink)
             Object.defineProperty(evaluator.globals, 'inspect', {
-              configurable: true, enumerable: true, value: console.log,
+              configurable: true, enumerable: true, value: makeInspect(logSink, images, imageSink),
             })
             Object.defineProperty(evaluator.globals, 'Image', { configurable: true, enumerable: true, value: Image })
-            const programGlobals = processState === process && format === 'function-body' ? [evaluator.globals, globalThis] : [evaluator.globals]
-            for (const globals of programGlobals) {
-              if (data.enableConsole) Object.defineProperty(globals, 'console', {
-                configurable: true, enumerable: true, writable: true, value: console,
-              })
-              else Reflect.deleteProperty(globals, 'console')
-            }
+            if (format !== 'function-body') Object.defineProperty(evaluator.globals, 'console', {
+              configurable: true, enumerable: true, writable: true, value: console,
+            })
           }
           for (const namespace of data.namespaces) {
             const descriptor = namespace.errorClass

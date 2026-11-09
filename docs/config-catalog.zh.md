@@ -2869,8 +2869,6 @@ export interface Config {
   executionMode?: 'per-call' | 'persistent-in-memory' | 'vm-script'
   /** Retain a Script process and context per stateOwner; only supported with executionMode: vm-script. */
   scriptPersistence?: boolean
-  /** Expose console with log, info, warn, error and debug using inspect output; otherwise omit the global. */
-  enableConsole?: boolean
   /** Default elapsed deadline, including nested tool and approval waits. */
   timeoutMs?: number
   /** Maximum numeric elapsed budget accepted by resolve. */

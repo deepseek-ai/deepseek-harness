@@ -1,6 +1,6 @@
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it, vi } from 'vitest'
-import { LogBuffer, makeBindingErrorClass, makeConsoleShim, makeNamespaces, captureStreamWrites, prepareCompletion, prepareException } from '../src/bootstrap.ts'
+import { LogBuffer, makeBindingErrorClass, makeInspect, makeNamespaces, captureStreamWrites, prepareCompletion, prepareException } from '../src/bootstrap.ts'
 import type { BindingErrorConstructor, PatchableStream } from '../src/bootstrap.ts'
 import type { HostMethods } from '../src/protocol.ts'
 import { encodePtcJsonWire } from '../src/json-wire.ts'
@@ -31,16 +31,12 @@ describe('LogBuffer', () => {
   })
 })
 
-describe('makeConsoleShim', () => {
-  it('captures the five methods and renders non-strings inspect-style', () => {
+describe('makeInspect', () => {
+  it('renders inspected arguments into captured output', () => {
     const seen: string[] = []
-    const shim = makeConsoleShim(new LogBuffer(1_000, text => seen.push(text)))
-    shim.log('plain', { a: 1 })
-    shim.info('i')
-    shim.warn('w')
-    shim.error('e')
-    shim.debug('d')
-    expect(seen).toEqual(['plain { a: 1 }', 'i', 'w', 'e', 'd'])
+    const inspect = makeInspect(new LogBuffer(1_000, text => seen.push(text)))
+    inspect('plain', { a: 1 })
+    expect(seen).toEqual(['plain { a: 1 }'])
   })
 
   it('renders binary views alongside selected sibling images', () => {
@@ -49,8 +45,8 @@ describe('makeConsoleShim', () => {
     const bytes = new Uint8Array([1, 2, 3])
     const text: string[] = []
     const selected: string[] = []
-    const shim = makeConsoleShim({ push: line => text.push(line) }, images, id => selected.push(id))
-    shim.log({ bytes, view: new DataView(bytes.buffer), image })
+    const inspect = makeInspect({ push: line => text.push(line) }, images, id => selected.push(id))
+    inspect({ bytes, view: new DataView(bytes.buffer), image })
     expect(text[0]).toContain('Uint8Array(3)')
     expect(text[0]).toContain('DataView')
     expect(selected).toEqual(['image'])
@@ -64,17 +60,17 @@ describe('makeConsoleShim', () => {
     value.cycle = value
     const text: string[] = []
     const selected: string[] = []
-    const shim = makeConsoleShim({ push: line => text.push(line) }, images, id => selected.push(id))
-    shim.log('before', value, 'after', one)
+    const inspect = makeInspect({ push: line => text.push(line) }, images, id => selected.push(id))
+    inspect('before', value, 'after', one)
     expect(selected).toEqual(['one', 'two', 'one'])
     expect(text[0]).toContain('before')
     expect(text[0]).toContain('[Getter]')
     expect(text[1]).toBe('after')
-    shim.log({ path: '/fake.png', width: 1, height: 1 }, null)
-    shim.log()
+    inspect({ path: '/fake.png', width: 1, height: 1 }, null)
+    inspect()
     expect(selected).toEqual(['one', 'two', 'one'])
     expect(text.slice(2)).toEqual(["{ path: '/fake.png', width: 1, height: 1 } null", ''])
-    makeConsoleShim({ push: line => text.push(line) }, images).log(one)
+    makeInspect({ push: line => text.push(line) }, images)(one)
     expect(text.at(-1)).toBe("{ path: '/one.png', width: 8, height: 4 }")
   })
 })

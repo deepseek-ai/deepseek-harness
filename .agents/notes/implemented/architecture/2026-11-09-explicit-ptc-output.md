@@ -14,7 +14,7 @@ TypeScript `run_code` programs select text, objects and images through top-level
 
 The tool executor requests `discardCompletion: true`, so completion values are discarded before JSON validation and serialization. This is a consumer choice: direct runtime and workflow consumers retain completion values when their protocols require them. The [PTC foundation](../feature/2026-06-15-ptc.md) owns dispatch and settlement. The [typed-return decision](../feature/2026-07-20-ptc-typed-tool-returns.md) continues to own ordinary JSON binding values, failures and output accounting; this note owns TypeScript output selection and image projection.
 
-The Node environment supplies `inspect` and starts without a `console` binding. Ordinary JavaScript name resolution applies, including local declarations. `enableConsole: true` binds console methods to the same inspection function, giving integrations one rendering and ordering rule.
+The Node environment supplies `inspect` alongside the complete native console. Native console methods remain available to programs and imported libraries, and their stdout and stderr writes share the captured output sequence. Model instructions direct programs to select output through `inspect`.
 
 `read_image` and CUA screenshot bindings expose stored `Image` values. Readonly `attachmentId`, `path`, `width` and `height` identify the stored image and its readable execution-world file. The dimensions describe that file's pixels, including the image used for CUA coordinate mapping. The [CUA object API](2026-09-17-experimental-cua-object-api.md) returns the program Image directly and routes text observations through its caller's callback.
 
@@ -30,7 +30,7 @@ Nested tool dispatches retain their complete rendered content in the Session log
 
 **Keep a CUA byte-returning facade and image sink.** This maintains a separate screenshot representation and a second image-emission path. Returning the runtime's Image lets file reads and screenshots share inspection and preserves the stored attachment reference through display.
 
-**Intercept access to console.** A throwing accessor or scope wrapper adds lookup behavior beyond an absent global. Omitting the binding provides ordinary JavaScript scope semantics; optional console support reuses the established output function.
+**Restrict console availability.** Missing bindings and incomplete replacements can break program code and imported libraries. The native console preserves Node methods while prompt guidance directs output selection through `inspect`.
 
 ## Consequences
 

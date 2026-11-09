@@ -37,7 +37,6 @@ kind: "package-reference"
 - name: '@deepseek-ai/dsh-ptc-runtime-node'
   config:
     executionMode: per-call
-    enableConsole: false
     timeoutMs: 120000
     maxTimeoutMs: 600000
     maxOutputBytes: 67108864
@@ -52,7 +51,6 @@ kind: "package-reference"
 |---|---|---|
 | `executionMode` | `per-call` | `per-call` 在全新进程中运行异步函数体；`vm-script` 求值 Script；`persistent-in-memory` 为每个所有者保留受限 REPL |
 | `scriptPersistence` | `false` | 在 `executionMode: vm-script` 下，为每个所有者复用进程与 context；其他模式下设为 `true` 会在加载时拒绝 |
-| `enableConsole` | `false` | 通过 `inspect` 提供 `console.log`、`info`、`warn`、`error` 与 `debug`；否则不提供 console 全局变量。输出指引统一推荐 `inspect` |
 | `timeoutMs` | `120,000` | 默认经过时间截止，包括嵌套工具与审批等待 |
 | `maxTimeoutMs` | `600,000` | 解析器应用的经过时间截止上限 |
 | `maxOutputBytes` | `67,108,864` | 序列化日志与完成值或诊断的合计预算 |
@@ -71,7 +69,7 @@ profile 编辑器可从 `@deepseek-ai/dsh-ptc-runtime-node/configuration` 导入
 
 `per-call` 模式中的程序是异步函数体：支持顶层 `await` 与 `return`，且只接受可擦除 TypeScript。Node 全局变量仍然可用，函数体可声明局部 `process`，例如 `const process = await import("node:process")`。成功调用以 `result.value` 返回无损 JSON 值，以 `result.output` 按顺序返回捕获的文本和图片。`result.sandbox` 独立于程序结果报告所选模式、观察到的拒绝，以及后端完整或部分的强制能力。
 
-`inspect(...values)` 独立渲染各个参数，以空格连接后追加一条捕获日志。默认没有 console 全局变量：直接访问会抛出 `ReferenceError`，而 `typeof console` 返回 `"undefined"`。设置 `enableConsole: true` 可通过同一个 inspection 函数提供五个 console 方法。默认配置下，程序可以自行声明 console 变量。
+`inspect(...values)` 独立渲染参数，并按参数顺序输出文本和选中的图片。所有执行模式都提供完整的 Node 原生 console，其 stdout 和 stderr 写入会进入捕获输出。模型指引要求：“使用 inspect(...values) 展示输出，不要使用 console。”
 
 `run_code` 设置 `discardCompletion: true`：函数返回值和末尾表达式的值不经过 JSON 序列化，也不出现在结果中，显式 inspect 的输出仍然可见。直接调用运行时的消费方在未设置此选项时，仍可取得原有的无损 JSON 完成值。
 
@@ -234,8 +232,6 @@ AsyncFunction 和 Node REPL 共用同步 `registerHooks` 和以 symbol 为键的
 - **输出上限拒绝超量内容，而不保留每个字节**——溢出只能保存本提供方交付的有界结果。
 - **绑定在传输接纳时受限**——控制限制不约束 Host 绑定生成结果期间分配的内存。
 - **预装 bootstrap 需要兼容的协议版本**——就绪握手会在派发代码前拒绝缺失或不匹配的版本。请将 `launch.bootstrapPath` 与宿主一同升级；运行时不会安装远端 bootstrap 更新。
-- **console 按求值 realm 配置**——per-call 程序及其原生导入模块共用所配置的 console；REPL／Script 程序使用各自 realm，原生加载的依赖使用 Node console。
-- **启用后的 console shim 有五个方法**——`log`、`info`、`warn`、`error` 与 `debug`。
 - **图片引用随进程保留**——每张已获取图片的宿主元数据保留到进程终止或所有者释放，包括程序尚未展示的图片。保留环境中的长截图循环会累积这些引用。
 - **图片查找范围超出文本预览**——对象文本最多展示四层深度、100 个数组条目及每个字符串的 10,000 个字符。二进制视图按文本预览展示。图片查找沿其他容器的可枚举数据属性遍历，包括文本预览省略的位置。需要明确对应关系时，将所选图片直接与说明文字一起传入。
 

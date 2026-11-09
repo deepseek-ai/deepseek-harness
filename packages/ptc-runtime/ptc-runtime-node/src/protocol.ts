@@ -13,8 +13,6 @@ export interface ProgramBootData {
   programFormat?: PtcProgramFormat
   /** Whether the host will reuse this process after the evaluation. */
   retainsState: boolean
-  /** Allow the five console methods to emit inspected output; omission disables console access. */
-  enableConsole?: boolean
   /** Await successful completion without serializing its value. */
   discardCompletion?: boolean
   /** Globals and callable names injected into the program. */

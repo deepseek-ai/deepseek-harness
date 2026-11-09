@@ -149,7 +149,7 @@ describe('Node program process', () => {
   it('uses the default deadline and caps explicit requests', async () => {
     const { runtime } = await setup()
     expect(runtime.timeout).toEqual({ defaultMs: 120_000, maxMs: 600_000 })
-    expect(runtime.executionInstructions).toBe('The program is the body of an async TypeScript function; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. Top-level await and return are supported. Console is unavailable. Use inspect(...values) for output. Each call runs in a fresh Node process. Node APIs are available through await import(...). Relative paths use the supplied working directory; process.env starts empty. Direct filesystem access follows this execution\'s sandbox policy.')
+    expect(runtime.executionInstructions).toBe('The program is the body of an async TypeScript function; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. Top-level await and return are supported. Use inspect(...values) to display output. Do not use console. Each call runs in a fresh Node process. Node APIs are available through await import(...). Relative paths use the supplied working directory; process.env starts empty. Direct filesystem access follows this execution\'s sandbox policy.')
     expect(runtime.resolve({ program: '', bindings: [] }).timeoutMs).toBe(120_000)
     expect(runtime.resolve({ program: '', bindings: [], timeoutMs: 900_000 }).timeoutMs).toBe(600_000)
     expect(runtime.resolve({ program: '', bindings: [], timeoutMs: null }).timeoutMs).toBeNull()

@@ -94,24 +94,17 @@ export class LogBuffer {
   }
 }
 
-/** The five console methods the shim captures, in the seam's level vocabulary. */
-const CONSOLE_LEVELS = ['log', 'info', 'warn', 'error', 'debug'] as const
-
 /**
- * A `console` replacement whose five leveled methods render their arguments
- * `util.inspect`-style (matching real console formatting closely enough for
- * a model to recognize its own output) into the buffer. Only these five
- * exist — the program gets a deliberately small console, not Node's full
- * console API.
+ * Render each argument independently and emit registered images in order.
  * @param logs - the buffer every rendered line is pushed into.
  * @param images - Image identities owned by the execution process.
  * @param emitImage - Emits a registered image in the current evaluation.
- * @returns the five-method console object handed to the program.
+ * @returns The program's inspect function.
  */
-export function makeConsoleShim(
+export function makeInspect(
   logs: Pick<LogBuffer, 'push'>, images?: Pick<WeakMap<object, string>, 'get'>, emitImage?: (id: string) => void,
-): Record<(typeof CONSOLE_LEVELS)[number], (...args: unknown[]) => void> {
-  const output = (...args: unknown[]): void => {
+): (...args: unknown[]) => void {
+  return (...args: unknown[]): void => {
     const pending: string[] = []
     const flush = (): void => {
       if (pending.length === 0) return
@@ -147,11 +140,6 @@ export function makeConsoleShim(
     flush()
     if (args.length === 0) logs.push('')
   }
-  const shim = Object.create(null) as Record<(typeof CONSOLE_LEVELS)[number], (...args: unknown[]) => void>
-  for (const level of CONSOLE_LEVELS) {
-    shim[level] = output
-  }
-  return shim
 }
 
 /**

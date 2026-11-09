@@ -14,7 +14,7 @@ TypeScript `run_code` 程序通过顶层 `inspect(...values)` 选择文本、对
 
 工具执行器请求 `discardCompletion: true`，在 JSON 校验和序列化前丢弃完成值。这是消费方的选择：直接运行时调用方和工作流消费方在其协议需要时保留完成值。[PTC 基础](../feature/2026-06-15-ptc.zh.md)负责分发与结算。[类型化返回值决策](../feature/2026-07-20-ptc-typed-tool-returns.zh.md)继续负责普通 JSON 绑定值、失败和输出计量；本记录负责 TypeScript 输出选择与图片投影。
 
-Node 环境提供 `inspect`，并在启动时省略 `console` 绑定。名称解析遵循普通 JavaScript 规则，包括局部声明。`enableConsole: true` 将 console 方法绑定到同一个展示函数，使集成使用统一的渲染和排序规则。
+Node 环境同时提供 `inspect` 和完整的原生 console。程序与导入的库均可使用原生 console 方法，其 stdout 和 stderr 写入共用捕获输出序列。模型指引要求程序通过 `inspect` 选择输出。
 
 `read_image` 和 CUA 截图绑定提供已存储的 `Image` 值。只读的 `attachmentId`、`path`、`width` 和 `height` 标识已存储图片及其在执行环境中可读取的文件。尺寸描述该文件的像素，也对应 CUA 坐标换算所用的图片。[CUA 对象 API](2026-09-17-experimental-cua-object-api.zh.md)直接返回程序 Image，并通过调用方的回调输出文本观察。
 
@@ -30,7 +30,7 @@ Node 环境提供 `inspect`，并在启动时省略 `console` 绑定。名称解
 
 **保留返回字节的 CUA 对象接口和图片输出回调。** 这会维护独立的截图表示和第二条图片输出路径。返回运行时 Image，使文件读取和截图共用展示方式，并在展示过程中保留已存储附件引用。
 
-**拦截 console 访问。** 抛异常的访问器或作用域包装会增加缺席全局变量之外的名称查找行为。省略绑定即可提供普通 JavaScript 作用域语义；可选 console 支持则复用已有输出函数。
+**限制 console 的可用性。** 缺失的绑定和不完整的替代实现可能使程序及导入的库出错。原生 console 保留 Node 方法，提示词指引程序通过 `inspect` 选择输出。
 
 ## 后果
 

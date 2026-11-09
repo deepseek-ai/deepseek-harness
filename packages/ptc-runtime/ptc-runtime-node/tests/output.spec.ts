@@ -12,8 +12,8 @@ const modes = [
 ] as const
 
 describe.each(modes)('program output in $executionMode with retention $scriptPersistence', (mode) => {
-  async function setup(enableConsole = false) {
-    const { runtime } = await mountRuntime(new Context(), enableConsole ? { ...mode, enableConsole: true } : mode)
+  async function setup() {
+    const { runtime } = await mountRuntime(new Context(), mode)
     const stateOwner = {}
     const run = (program: string, discardCompletion = true) => runtime.run(runtime.resolve({
       program, bindings: [], stateOwner, discardCompletion,
@@ -146,21 +146,27 @@ describe.each(modes)('program output in $executionMode with retention $scriptPer
     expect(captured.value).toBeUndefined()
   })
 
-  it('omits the console global and preserves ordinary undefined-variable behavior', async () => {
+  it('captures native console methods alongside inspected output', async () => {
     const { runtime, run } = await setup()
-    const caught = await run(`
-      inspect(typeof console, globalThis.console, Object.hasOwn(globalThis, 'console'));
-      for (const read of [() => console, () => console.log]) {
-        try { read() } catch (error) { inspect(error.name, error.message) }
+    const result = await run(`
+      inspect(typeof console, console === globalThis.console);
+      for (const method of ['log', 'info', 'warn', 'error', 'debug']) {
+        console[method](method);
       }
+      console.dir({ native: true });
+      inspect("after");
     `)
-    expect(caught.error).toBeUndefined()
-    expect(caught.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['undefined undefined false', ...Array<string>(2).fill('ReferenceError console is not defined')])
-    const failed = await run('void console')
-    expect(failed.error?.kind).toBe('exception')
-    expect(failed.error?.message).toContain('ReferenceError: console is not defined')
-    expect(runtime.executionInstructions).toContain('Console is unavailable. Use inspect(...values) for output.')
-    const local = await run('{ const console = { value: 42 }; inspect(console.value) }')
+    expect(result.error).toBeUndefined()
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual([
+      'object true', 'log\n', 'info\n', 'warn\n', 'error\n', 'debug\n', '{ native: true }\n', 'after',
+    ])
+    expect(runtime.executionInstructions).toContain('Use inspect(...values) to display output. Do not use console.')
+  })
+
+  it('allows local console declarations and retains a program-owned console', async () => {
+    const { runtime, run } = await setup()
+    const source = 'const console = { value: 42 }; inspect(console.value)'
+    const local = await run(mode.executionMode === 'per-call' ? source : `{ ${source} }`)
     expect(local.error).toBeUndefined()
     expect(local.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['42'])
     if (runtime.retainsState) {
@@ -169,33 +175,33 @@ describe.each(modes)('program output in $executionMode with retention $scriptPer
     }
   })
 
-  it('routes all enabled console methods through inspect with independent arguments', async () => {
-    const { runtime, run } = await setup(true)
+  it('provides the remaining native console methods', async () => {
+    const { run } = await setup()
     const result = await run(`
-      inspect("selected", { n: 1 });
-      for (const method of ['log', 'info', 'warn', 'error', 'debug']) {
-        inspect(console[method] === inspect);
-        console[method]("%s", method);
-      }
+      console.table({ native: 42 });
+      console.assert(false, "assertion");
+      console.count("counter");
+      console.countReset("counter");
+      console.group("group");
+      console.groupEnd();
+      console.time("timer");
+      console.timeEnd("timer");
     `)
     expect(result.error).toBeUndefined()
-    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['selected { n: 1 }', 'true', '%s log', 'true', '%s info', 'true', '%s warn', 'true', '%s error', 'true', '%s debug'])
-    expect(runtime.executionInstructions).toContain('Use inspect(...values) for output.')
-    expect(runtime.executionInstructions).not.toContain('console')
+    const text = result.output.filter(block => block.type === 'text').map(block => block.text).join('')
+    for (const expected of ['native', '42', 'Assertion failed: assertion', 'counter: 1', 'group', 'timer:']) {
+      expect(text).toContain(expected)
+    }
   })
 
-  it.each([false, true])('keeps imported modules in the native realm with console enabled %s', async (enabled) => {
-    const { run } = await setup(enabled)
+  it('captures console output from imported modules', async () => {
+    const { run } = await setup()
     const source = 'console.warn("module warning"); console.dir({ dependency: true });'
     const result = await run(`await import(${JSON.stringify(`data:text/javascript,${encodeURIComponent(source)}`)})`)
-    if (mode.executionMode === 'per-call') {
-      expect(result.error?.kind).toBe('exception')
-      expect(result.error?.message).toContain(enabled ? 'console.dir is not a function' : 'console is not defined')
-    } else {
-      expect(result.error).toBeUndefined()
-      expect(result.output.filter(block => block.type === 'text').map(block => block.text).join('\n')).toContain('module warning')
-      expect(result.output.filter(block => block.type === 'text').map(block => block.text).join('\n')).toContain('dependency: true')
-    }
+    expect(result.error).toBeUndefined()
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual([
+      'module warning\n', '{ dependency: true }\n',
+    ])
   })
 
   it('preserves completion values for direct runtime consumers that request them', async () => {

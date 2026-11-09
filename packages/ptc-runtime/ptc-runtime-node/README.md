@@ -37,7 +37,6 @@ Configure the provider row after its required services are available:
 - name: '@deepseek-ai/dsh-ptc-runtime-node'
   config:
     executionMode: per-call
-    enableConsole: false
     timeoutMs: 120000
     maxTimeoutMs: 600000
     maxOutputBytes: 67108864
@@ -52,7 +51,6 @@ Configure the provider row after its required services are available:
 |---|---|---|
 | `executionMode` | `per-call` | `per-call` runs async function bodies in fresh processes; `vm-script` evaluates Scripts; `persistent-in-memory` retains a confined REPL per owner |
 | `scriptPersistence` | `false` | With `executionMode: vm-script`, reuse a process and context per owner; `true` with another mode rejects at load |
-| `enableConsole` | `false` | Expose `console.log`, `info`, `warn`, `error` and `debug` through `inspect`; otherwise omit the console global. Output instructions recommend `inspect` in both settings |
 | `timeoutMs` | `120,000` | Default elapsed execution deadline, including nested tool and approval waits |
 | `maxTimeoutMs` | `600,000` | Elapsed deadline ceiling applied by the resolver |
 | `maxOutputBytes` | `67,108,864` | Combined serialized logs and completion or diagnostic budget |
@@ -71,7 +69,7 @@ Profile editors can import `resolvePersistentExecution` from `@deepseek-ai/dsh-p
 
 In `per-call` mode, programs are async function bodies: top-level `await` and `return` work, and only erasable TypeScript is accepted. Node globals remain available, and a function body may declare a local `process`, including `const process = await import("node:process")`. A successful call returns its lossless-JSON value as `result.value` and captured text and images as ordered `result.output` entries. `result.sandbox` reports the selected mode, observed denial and the backend's full or partial enforcement independently of the program outcome.
 
-`inspect(...values)` renders each argument independently, joins them with spaces, and appends one captured log entry. The console global is absent by default: direct access raises `ReferenceError`, while `typeof console` returns `"undefined"`. Set `enableConsole: true` to expose its five methods through the same inspection function. With the default configuration, programs may declare their own console variables.
+`inspect(...values)` renders arguments independently and emits text and selected images in argument order. All execution modes provide the complete native Node console, whose stdout and stderr writes enter the captured output. Model instructions say: "Use inspect(...values) to display output. Do not use console."
 
 `run_code` sets `discardCompletion: true`: function return values and final expression values are omitted without JSON serialization, while inspected output remains visible. Direct runtime consumers receive the usual lossless-JSON completion unless they set this option.
 
@@ -234,8 +232,6 @@ These limits qualify the execution guarantees and retained output.
 - **Output caps reject rather than retain every byte** — spill can preserve only the bounded result delivered by this provider.
 - **Bindings are bounded at transport admission** — control limits do not bound the memory a host binding allocates while producing its result.
 - **Preinstalled bootstraps require a compatible protocol revision** — readiness rejects a missing or mismatched revision before dispatching code. Upgrade `launch.bootstrapPath` with the host; the runtime does not install remote bootstrap updates.
-- **Console configuration follows the evaluation realm** — per-call programs and their native imports share the configured console; REPL/Script programs use their own realm, while native-loaded dependencies use Node console.
-- **The enabled console shim has five methods** — `log`, `info`, `warn`, `error` and `debug`.
 - **Image references live with the process** — every acquired image retains host metadata until the process terminates or its owner is released, including images that the program never displays. Long capture loops in retained environments accumulate these references.
 - **Image discovery traverses beyond the text preview** — object text uses depth 4, at most 100 array entries and 10,000 characters per string. Binary views render as text previews. Image discovery follows enumerable data properties through other containers, including positions omitted from the text preview. Pass selected images directly with labels when their association must be explicit.
 

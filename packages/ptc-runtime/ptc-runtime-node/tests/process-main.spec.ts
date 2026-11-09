@@ -37,7 +37,7 @@ async function setup(limit = 4096, namespaces: ProgramBootData['namespaces'] = [
   const main = runNodeMain(child, limit, state)
   onTestFinished(async () => { peer.$close(); child.destroy(); await main })
   await ready.promise
-  const run = (code: string, maxOutputBytes = 1024, programFormat?: PtcProgramFormat, options: Pick<ProgramBootData, 'enableConsole' | 'discardCompletion'> = {}) => peer.run('/', {
+  const run = (code: string, maxOutputBytes = 1024, programFormat?: PtcProgramFormat, options: Pick<ProgramBootData, 'discardCompletion'> = {}) => peer.run('/', {
     code, ...programFormat === undefined ? {} : { programFormat },
     namespaces, maxOutputBytes, retainsState: false, ...options,
   })
@@ -62,27 +62,14 @@ it('clears the environment and returns a binding result after captured output', 
   expect(h.state.exitCode).toBeUndefined()
 })
 
-it.each(['function-body', 'repl', 'script'] as const)('installs output in the owning %s realm', async (format) => {
+it.each(['function-body', 'repl', 'script'] as const)('provides console in the owning %s realm without replacing the host console', async (format) => {
   const h = await setup()
   const nativeConsole = Object.getOwnPropertyDescriptor(globalThis, 'console')!
-  const restore = () => {
-    vi.unstubAllGlobals()
-    Object.defineProperty(globalThis, 'console', nativeConsole)
-  }
-  onTestFinished(restore)
-  let installed: Console | undefined
-  let result: Awaited<ReturnType<typeof h.run>>
-  const cwd = process.cwd()
-  Object.assign(h.state, { cwd: () => cwd })
-  vi.stubGlobal('process', h.state)
-  try {
-    result = await h.run('console.log("%s", 42); inspect(console.log === inspect);', 1024, format,
-      { enableConsole: true, discardCompletion: true })
-    installed = globalThis.console
-  } finally { restore() }
+  const result = await h.run('inspect(typeof console.log, typeof console.dir, typeof console.table);', 1024, format,
+    { discardCompletion: true })
   expect(result).toEqual({})
-  expect(h.logs).toEqual(['%s 42', 'true'])
-  expect(installed === nativeConsole.value).toBe(format !== 'function-body')
+  expect(h.logs).toEqual(['function function function'])
+  expect(Object.getOwnPropertyDescriptor(globalThis, 'console')).toEqual(nativeConsole)
 })
 
 it('keeps unfinished temporary calls pending and suppresses later logs while awaiting host shutdown', async () => {

@@ -33,9 +33,8 @@ function createScriptContext(): Context {
   const globals = Object.create(null) as Record<string, unknown>
   const context = createContext(globals)
   const realm = new Script('globalThis').runInContext(context) as Record<string, unknown>
-  Reflect.deleteProperty(realm, 'console')
   for (const key of Reflect.ownKeys(globalThis)) {
-    if (key === 'global' || key === 'console' || Object.hasOwn(realm, key)) continue
+    if (key === 'global' || Object.hasOwn(realm, key)) continue
     Object.defineProperty(globals, key, Object.getOwnPropertyDescriptor(globalThis, key) as PropertyDescriptor)
   }
   globals.global = realm
