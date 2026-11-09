@@ -168,8 +168,7 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "string",
-              "minLength": 1
+              "type": "string"
             }
           },
           "required": [
@@ -234,8 +233,7 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "string",
-              "minLength": 1
+              "type": "string"
             },
             "includeMenus": {
               "description": "Expand menu contents; omitted or false shows menu-bar entries only.",
@@ -289,8 +287,7 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "string",
-              "minLength": 1
+              "type": "string"
             },
             "snapshotId": {
               "type": "string",
@@ -335,8 +332,7 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "string",
-              "minLength": 1
+              "type": "string"
             },
             "snapshotId": {
               "type": "string",
@@ -423,8 +419,7 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "string",
-              "minLength": 1
+              "type": "string"
             },
             "snapshotId": {
               "type": "string",
@@ -471,8 +466,7 @@
                   "minLength": 1
                 },
                 "windowId": {
-                  "type": "string",
-                  "minLength": 1
+                  "type": "string"
                 },
                 "snapshotId": {
                   "type": "string",
@@ -499,8 +493,7 @@
                   "minLength": 1
                 },
                 "windowId": {
-                  "type": "string",
-                  "minLength": 1
+                  "type": "string"
                 },
                 "snapshotId": {
                   "type": "string",
@@ -553,8 +546,7 @@
                   "minLength": 1
                 },
                 "windowId": {
-                  "type": "string",
-                  "minLength": 1
+                  "type": "string"
                 },
                 "snapshotId": {
                   "type": "string",
@@ -620,8 +612,7 @@
                   "minLength": 1
                 },
                 "windowId": {
-                  "type": "string",
-                  "minLength": 1
+                  "type": "string"
                 },
                 "snapshotId": {
                   "type": "string",
@@ -711,8 +702,7 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "string",
-              "minLength": 1
+              "type": "string"
             },
             "snapshotId": {
               "type": "string",
@@ -795,8 +785,7 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "string",
-              "minLength": 1
+              "type": "string"
             },
             "snapshotId": {
               "type": "string",
@@ -860,8 +849,7 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "string",
-              "minLength": 1
+              "type": "string"
             },
             "text": {
               "type": "string"
@@ -899,8 +887,7 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "string",
-              "minLength": 1
+              "type": "string"
             },
             "text": {
               "type": "string"
@@ -969,8 +956,7 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "string",
-              "minLength": 1
+              "type": "string"
             },
             "key": {
               "type": "string",
@@ -1015,8 +1001,7 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "string",
-              "minLength": 1
+              "type": "string"
             },
             "key": {
               "type": "string",
@@ -1063,8 +1048,7 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "string",
-              "minLength": 1
+              "type": "string"
             },
             "snapshotId": {
               "type": "string",
@@ -1125,8 +1109,7 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "string",
-              "minLength": 1
+              "type": "string"
             },
             "mouseButton": {
               "type": "string",
@@ -1218,8 +1201,7 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "string",
-              "minLength": 1
+              "type": "string"
             }
           },
           "required": [

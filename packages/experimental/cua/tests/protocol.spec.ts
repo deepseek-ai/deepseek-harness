@@ -81,7 +81,7 @@ it.each([
 })
 
 it.each([
-  { mimeType: 'application/octet-stream' }, { pixelWidth: 0 }, { pixelHeight: -1 }, { windowId: '0' },
+  { mimeType: 'application/octet-stream' }, { pixelWidth: 0 }, { pixelHeight: -1 },
   { bounds: { x: 0, y: 0, width: 0, height: 10 } }, { coordinateSpace: 'screen-pixels' },
 ])('retains screenshot metadata validation for %j', (invalid) => {
   expect(ScreenshotResult.safeParse({

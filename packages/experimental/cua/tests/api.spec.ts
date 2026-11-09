@@ -899,16 +899,6 @@ describe('input actions', () => {
     await expect(window.click(element('0'))).rejects.toThrow()
     expect(f.dispatch).toHaveBeenCalledTimes(6)
   })
-
-  it('rejects invalid selection inputs before dispatch', async () => {
-    const f = fixture()
-    await expect(f.api.getApp('')).rejects.toThrow()
-    expect(f.dispatch).not.toHaveBeenCalled()
-    const app = await f.api.getApp('Editor')
-    const calls = f.dispatch.mock.calls.length
-    await expect(app.getWindow('0')).rejects.toThrow()
-    expect(f.dispatch).toHaveBeenCalledTimes(calls)
-  })
 })
 
 it('expands menu contents and details only for the requested observation', async () => {

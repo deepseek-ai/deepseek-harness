@@ -3,7 +3,7 @@ import { Buffer } from 'node:buffer'
 import { z } from 'zod'
 import type { CuaAppHandle, CuaSnapshotId } from './types.ts'
 
-const windowId = z.string().min(1)
+const windowId = z.string()
 const pixelDimension = z.number().int().positive().max(2 ** 32 - 1)
 const point = z.number().nonnegative()
 const relativePoint = z.number().int().min(0).max(999)
