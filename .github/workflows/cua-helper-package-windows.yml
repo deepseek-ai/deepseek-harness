@@ -42,27 +42,54 @@ jobs:
           --runtime win-x64
           --self-contained true
           --output dist/cua-helper-win-x64
+      # Standalone helper zip contract: flat root with cua-helper.json,
+      # dsh-cua-windows.exe, and its runtime files. Installed providers place
+      # the same payload under native/bin/win-x64.
       - name: Add helper metadata
         id: metadata
+        env:
+          GITHUB_SHA: ${{ github.sha }}
         run: |
           $ErrorActionPreference = 'Stop'
           $directory = 'dist/cua-helper-win-x64'
           $exe = Join-Path $directory 'dsh-cua-windows.exe'
           if (-not (Test-Path $exe -PathType Leaf)) { throw "helper executable is missing: $exe" }
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
-          $commit = '${{ github.sha }}'
+          $commit = $env:GITHUB_SHA
           $sdk = (& dotnet --version).Trim()
-          $keyBytes = [Text.Encoding]::UTF8.GetBytes("$commit`n$sdk`nwin-x64")
+          $sourceFiles = @(
+            & git ls-files -- `
+              'packages/experimental/cua-windows/native' `
+              'packages/experimental/cua-windows/package.json' `
+              'scripts/cua-helper-windows' `
+              '.github/workflows/cua-helper-package-windows.yml' `
+              'package.json' 'pnpm-lock.yaml' 'pnpm-workspace.yaml'
+          ) | Sort-Object
+          $sourceBytes = [Collections.Generic.List[byte]]::new()
+          foreach ($file in $sourceFiles) {
+            $sourceBytes.AddRange([Text.Encoding]::UTF8.GetBytes("$file`0"))
+            $sourceBytes.AddRange([IO.File]::ReadAllBytes((Join-Path $PWD $file)))
+          }
+          $sourceDigest = [Convert]::ToHexString(
+            [Security.Cryptography.SHA256]::HashData($sourceBytes.ToArray())
+          ).ToLowerInvariant()
+          $keyBytes = [Text.Encoding]::UTF8.GetBytes("$sourceDigest`n$sdk`nwin-x64")
           $buildKey = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($keyBytes)).ToLowerInvariant()
-          $files = @{}
-          Get-ChildItem $directory -Recurse -File | ForEach-Object {
+          $files = [ordered]@{}
+          Get-ChildItem $directory -Recurse -File | Sort-Object FullName | ForEach-Object {
+            if ($_.Name -eq 'cua-helper.json') { return }
             $relative = [IO.Path]::GetRelativePath($directory, $_.FullName).Replace('\', '/')
             $files[$relative] = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
           }
-          $metadata = @{
+          # sha256 is the executable alias of files[dsh-cua-windows.exe].
+          # signing is an enum: unsigned or authenticode.
+          $metadata = [ordered]@{
+            schemaVersion = 1
+            platform = 'windows'
+            sourceDigest = $sourceDigest
+            buildKey = $buildKey
             version = $version
             commit = $commit
-            buildKey = $buildKey
             architecture = 'x64'
             executable = 'dsh-cua-windows.exe'
             sha256 = $files['dsh-cua-windows.exe']
@@ -71,16 +98,40 @@ jobs:
           }
           $metadataPath = Join-Path $directory 'cua-helper.json'
           $json = $metadata | ConvertTo-Json -Depth 5
-          Set-Content -Path $metadataPath -Value $json -Encoding utf8NoBOM
+          [IO.File]::WriteAllText($metadataPath, "$json`n", [Text.UTF8Encoding]::new($false))
           $outputPath = $env:GITHUB_OUTPUT
           $outputLine = "build-key=$buildKey"
           Add-Content -Path $outputPath -Value $outputLine -Encoding utf8
       - name: Archive publish output
         run: Compress-Archive -Path dist/cua-helper-win-x64/* -DestinationPath dist/cua-helper-win-x64.zip
+      - name: Verify helper archive
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $verify = Join-Path $env:RUNNER_TEMP 'cua-helper-verify'
+          if (Test-Path $verify) { Remove-Item $verify -Recurse -Force }
+          Expand-Archive -Path 'dist/cua-helper-win-x64.zip' -DestinationPath $verify
+          $manifestPath = Join-Path $verify 'cua-helper.json'
+          if (-not (Test-Path $manifestPath -PathType Leaf)) { throw 'helper archive has no cua-helper.json' }
+          $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+          if ($manifest.schemaVersion -ne 1 -or $manifest.platform -ne 'windows') { throw 'helper metadata version or platform is invalid' }
+          if (-not $manifest.sourceDigest -or -not $manifest.buildKey) { throw 'helper metadata lacks sourceDigest or buildKey' }
+          $exe = Join-Path $verify 'dsh-cua-windows.exe'
+          if (-not (Test-Path $exe -PathType Leaf)) { throw 'helper archive has no executable' }
+          $exeHash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($exeHash -ne $manifest.sha256) { throw 'helper executable hash differs from metadata' }
+          $actual = @(Get-ChildItem $verify -Recurse -File | Where-Object Name -ne 'cua-helper.json')
+          if ($actual.Count -ne $manifest.files.PSObject.Properties.Count) { throw 'helper archive file count differs from metadata' }
+          foreach ($property in $manifest.files.PSObject.Properties) {
+            $file = Join-Path $verify $property.Name
+            if (-not (Test-Path $file -PathType Leaf)) { throw "helper archive is missing $($property.Name)" }
+            $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($hash -ne $property.Value) { throw "helper archive hash differs for $($property.Name)" }
+          }
+          Remove-Item $verify -Recurse -Force
       - uses: actions/upload-artifact@v7.0.1
         id: upload
         with:
-          name: cua-helper-win-x64-${{ github.run_id }}-${{ github.run_attempt }}
+          name: cua-helper-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.metadata.outputs.build-key }}
           path: dist/cua-helper-win-x64.zip
           if-no-files-found: error
           compression-level: 0
